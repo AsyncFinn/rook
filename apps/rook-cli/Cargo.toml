@@ -1,0 +1,32 @@
+[package]
+name = "rook-cli"
+description = "Command-line tools for the Rook engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "rook"
+path = "src/main.rs"
+
+[dependencies]
+rook-types.workspace = true
+rook-reflection.workspace = true
+rook-formats.workspace = true
+rook-engine.workspace = true
+rbx_dom_weak.workspace = true
+rbx_types.workspace = true
+full_moon.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+rayon.workspace = true
+walkdir.workspace = true
+blake3.workspace = true
+
+[lints]
+workspace = true

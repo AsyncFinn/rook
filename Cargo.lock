@@ -702,116 +702,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "raven-cli"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "blake3",
- "clap",
- "full_moon",
- "raven-engine",
- "raven-formats",
- "raven-reflection",
- "raven-types",
- "rayon",
- "rbx_dom_weak",
- "rbx_types",
- "serde",
- "serde_json",
- "walkdir",
-]
-
-[[package]]
-name = "raven-dom"
-version = "0.1.0"
-dependencies = [
- "raven-reflection",
- "raven-types",
- "rbx_types",
- "slotmap",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "raven-engine"
-version = "0.1.0"
-dependencies = [
- "mlua",
- "raven-dom",
- "raven-formats",
- "raven-lua",
- "raven-reflection",
- "raven-scheduler",
- "raven-types",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "raven-formats"
-version = "0.1.0"
-dependencies = [
- "base64 0.23.1",
- "quick-xml",
- "raven-dom",
- "raven-reflection",
- "raven-types",
- "rbx_binary",
- "rbx_dom_weak",
- "rbx_types",
- "rbx_xml",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "raven-lua"
-version = "0.1.0"
-dependencies = [
- "glam",
- "mlua",
- "raven-dom",
- "raven-reflection",
- "raven-scheduler",
- "raven-signal",
- "raven-types",
- "rbx_types",
- "serde_json",
-]
-
-[[package]]
-name = "raven-reflection"
-version = "0.1.0"
-dependencies = [
- "rbx_reflection",
- "rbx_reflection_database",
- "rbx_types",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "raven-scheduler"
-version = "0.1.0"
-
-[[package]]
-name = "raven-signal"
-version = "0.1.0"
-dependencies = [
- "raven-dom",
- "raven-reflection",
- "slotmap",
-]
-
-[[package]]
-name = "raven-types"
-version = "0.1.0"
-dependencies = [
- "glam",
- "rbx_types",
- "thiserror 2.0.21",
-]
-
-[[package]]
 name = "rayon"
 version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -950,6 +840,116 @@ checksum = "72f81bee8c8ef9b577d1681a70ebbc962c232461e397b22c208c43c04b67a155"
 dependencies = [
  "rmp",
  "serde",
+]
+
+[[package]]
+name = "rook-cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "blake3",
+ "clap",
+ "full_moon",
+ "rayon",
+ "rbx_dom_weak",
+ "rbx_types",
+ "rook-engine",
+ "rook-formats",
+ "rook-reflection",
+ "rook-types",
+ "serde",
+ "serde_json",
+ "walkdir",
+]
+
+[[package]]
+name = "rook-dom"
+version = "0.1.0"
+dependencies = [
+ "rbx_types",
+ "rook-reflection",
+ "rook-types",
+ "slotmap",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "rook-engine"
+version = "0.1.0"
+dependencies = [
+ "mlua",
+ "rook-dom",
+ "rook-formats",
+ "rook-lua",
+ "rook-reflection",
+ "rook-scheduler",
+ "rook-types",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "rook-formats"
+version = "0.1.0"
+dependencies = [
+ "base64 0.23.1",
+ "quick-xml",
+ "rbx_binary",
+ "rbx_dom_weak",
+ "rbx_types",
+ "rbx_xml",
+ "rook-dom",
+ "rook-reflection",
+ "rook-types",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "rook-lua"
+version = "0.1.0"
+dependencies = [
+ "glam",
+ "mlua",
+ "rbx_types",
+ "rook-dom",
+ "rook-reflection",
+ "rook-scheduler",
+ "rook-signal",
+ "rook-types",
+ "serde_json",
+]
+
+[[package]]
+name = "rook-reflection"
+version = "0.1.0"
+dependencies = [
+ "rbx_reflection",
+ "rbx_reflection_database",
+ "rbx_types",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "rook-scheduler"
+version = "0.1.0"
+
+[[package]]
+name = "rook-signal"
+version = "0.1.0"
+dependencies = [
+ "rook-dom",
+ "rook-reflection",
+ "slotmap",
+]
+
+[[package]]
+name = "rook-types"
+version = "0.1.0"
+dependencies = [
+ "glam",
+ "rbx_types",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

@@ -1,0 +1,19 @@
+[package]
+name = "rook-dom"
+description = "Runtime instance tree for the Rook engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+rook-types.workspace = true
+rook-reflection.workspace = true
+rbx_types.workspace = true
+slotmap.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

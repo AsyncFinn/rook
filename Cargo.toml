@@ -7,19 +7,19 @@ version = "0.1.0"
 edition = "2024"
 license = "Apache-2.0"
 authors = ["AsyncFinn"]
-repository = "https://github.com/raven-engine/raven"
+repository = "https://github.com/AsyncFinn/rook"
 rust-version = "1.85"
 
 [workspace.dependencies]
-# Raven crates
-raven-types = { path = "crates/raven-types" }
-raven-reflection = { path = "crates/raven-reflection" }
-raven-formats = { path = "crates/raven-formats" }
-raven-dom = { path = "crates/raven-dom" }
-raven-signal = { path = "crates/raven-signal" }
-raven-scheduler = { path = "crates/raven-scheduler" }
-raven-lua = { path = "crates/raven-lua" }
-raven-engine = { path = "crates/raven-engine" }
+# Rook crates
+rook-types = { path = "crates/rook-types" }
+rook-reflection = { path = "crates/rook-reflection" }
+rook-formats = { path = "crates/rook-formats" }
+rook-dom = { path = "crates/rook-dom" }
+rook-signal = { path = "crates/rook-signal" }
+rook-scheduler = { path = "crates/rook-scheduler" }
+rook-lua = { path = "crates/rook-lua" }
+rook-engine = { path = "crates/rook-engine" }
 
 # Roblox formats and data (rbx-dom ecosystem)
 rbx_dom_weak = "4.2"

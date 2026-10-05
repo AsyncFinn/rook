@@ -1,6 +1,6 @@
-# Raven — Research Findings
+# Rook — Research Findings
 
-Status: initial survey, 2026-10-04. This document records what exists (prior Raven experiments, competing projects, Rust libraries, Roblox data sources) so that architectural decisions are made from knowledge rather than guesswork. The companion document is [architecture.md](architecture.md).
+Status: initial survey, 2026-10-04. This document records what exists (prior experiments, competing projects, Rust libraries, Roblox data sources) so that architectural decisions are made from knowledge rather than guesswork. The companion document is [architecture.md](architecture.md).
 
 Confidence labels used throughout:
 
@@ -12,24 +12,24 @@ Confidence labels used throughout:
 
 ## 1. Compatibility target
 
-**Decision:** Raven targets **modern Roblox**, pinned to a specific API snapshot. Old archived content must also work, *to the extent that modern Roblox itself still runs it*.
+**Decision:** Rook targets **modern Roblox**, pinned to a specific API snapshot. Old archived content must also work, *to the extent that modern Roblox itself still runs it*.
 
 - Modern Roblox's behavior is the single source of truth, including when it loads old content. There is no separate "2016 mode".
 - Deprecated members are part of the modern API (the current API dump still lists `FormFactor`, `Instance:remove()`, `:connect()`, BodyMovers, `wait()`/`spawn()` and so on, tagged `Deprecated`). They are implemented as modern Roblox implements them, and their priority comes from how often archived content uses them.
-- Behavior that modern Roblox broke or removed stays broken by default. Bringing any of it back is a separate, opt-in Raven extension.
+- Behavior that modern Roblox broke or removed stays broken by default. Bringing any of it back is a separate, opt-in Rook extension.
 - The test oracle is live Roblox Studio. Every behavior can be checked against it, which a 2016 target could not offer.
 
 Why 2016 was dropped (all **Confirmed** from the RobloxAPI build archive):
 
 - "2016" is not one target. The January 2016 dump (0.225) has 329 classes and the December dump (0.271) has 370. MeshPart, Attachment, the constraints, R15 (`HumanoidRigType`), Accessory and `AnchorPoint` all arrived during that year.
 - 2016 client content packages are no longer downloadable: the setup CDN returns 403 for the December 2016 manifest.
-- 2016 behavior cannot be observed anymore. Its only detailed record is leaked source, which Raven must not use (see §6).
+- 2016 behavior cannot be observed anymore. Its only detailed record is leaked source, which Rook must not use (see §6).
 
 The modern snapshot has roughly 682 classes (rbx-native's count from the current dump). The pinned version is the one bundled in `rbx_reflection_database` (currently `3.0.1+roblox-741`).
 
 ---
 
-## 2. Prior Raven experiments
+## 2. Prior experiments
 
 ### Mortar
 
@@ -37,7 +37,7 @@ Rust; wgpu 0.16, winit 0.28, rbx_dom_weak 1.10 / rbx_xml 0.6, cdylib with a C AB
 
 | Area | Assessment |
 |---|---|
-| File loading (`modules/rbx_dom_wrapper/rbx_file.rs`) | Flattens every instance into a `ParsedItem` (position, size, color...) and discards the hierarchy. A fallback scans the XML text with `find("<tag")`. **Do not reuse.** It is the opposite of the instance-first pipeline Raven needs. |
+| File loading (`modules/rbx_dom_wrapper/rbx_file.rs`) | Flattens every instance into a `ParsedItem` (position, size, color...) and discards the hierarchy. A fallback scans the XML text with `find("<tag")`. **Do not reuse.** It is the opposite of the instance-first pipeline Rook needs. |
 | CFrame parsing (`coordinate_frame.rs`) | String-scanning helpers. Superseded by rbx_types. |
 | Renderer (`core/engine.rs`, ~100 KB) | Monolithic: sky cubemap, triplanar texturing, DXT1/DXT5 decoding, readback. Useful as a reminder of the features needed; **code not reused** (wgpu API is 14 major versions behind). |
 | Runtime (`runtime/`) | C ABI, viewport readback, background render thread behind global statics. Physics and Luau are empty stubs. |
@@ -49,11 +49,11 @@ Lessons: build the instance model first; never hand-parse formats a crate alread
 
 - `BrickXML-old-Python`: PyQt + OpenGL viewer built on `pyrbxm`. Historical only.
 - `BrickXML-Prototype-Rust`: roxmltree RBXLX parser with its own `Instance` list, an egui Studio-style UI, and Luau run as an **external `luau.exe` process** (`luau_pipe/luau_bridge.rs`). Lesson: embed the VM. A subprocess cannot share the DataModel.
-- Its `content/` folder is a copy of a modern Roblox client content folder. Those are copyrighted Roblox assets: never committed to Raven, usable only as local test input.
+- Its `content/` folder is a copy of a modern Roblox client content folder. Those are copyrighted Roblox assets: never committed to Rook, usable only as local test input.
 
 ### BrikNet
 
-A RakNet-style UDP library (tokio): bitstream, 6 reliability modes, 4 priorities, 32 ordering channels, 5-step handshake, RTT, retransmission. ACK/NACK sending is unfinished ("Phase 4"). **A candidate for Raven's networking transport**, to be weighed against `quinn` (QUIC) and `renet` when networking begins. Its design follows RakNet's public documentation.
+A RakNet-style UDP library (tokio): bitstream, 6 reliability modes, 4 priorities, 32 ordering channels, 5-step handshake, RTT, retransmission. ACK/NACK sending is unfinished ("Phase 4"). **A candidate for Rook's networking transport**, to be weighed against `quinn` (QUIC) and `renet` when networking begins. Its design follows RakNet's public documentation.
 
 ---
 
@@ -70,13 +70,13 @@ A RakNet-style UDP library (tokio): bitstream, 6 reliability modes, 4 priorities
 | **libreblox-roblox** | C++ | — | — | Appears to be a build of the **leaked** client source tree (RCCService, CoreScriptConverter, ShaderCompiler). **Must not be referenced.** |
 | **Lune** (lune-org) — MPL-2.0 | Rust; mlua/Luau | Standalone Luau runtime | `lune-roblox` crate: Roblox datatypes as mlua userdata, a DataModel facade over rbx_dom_weak, place/model read/write | A scripting tool, not an engine. Very useful reference for datatype semantics. |
 
-**Where Raven can be clearly ahead:** nobody has a modern-API **runtime**: scheduler, events, physics, Humanoid, Play mode, replication. rbx-native has the best file layer and editor but declares the runtime out of scope. RNR had a runtime but for 2008 and is dead. OpenRBLX's threading model can't be fixed incrementally. Raven's differentiators:
+**Where Rook can be clearly ahead:** nobody has a modern-API **runtime**: scheduler, events, physics, Humanoid, Play mode, replication. rbx-native has the best file layer and editor but declares the runtime out of scope. RNR had a runtime but for 2008 and is dead. OpenRBLX's threading model can't be fixed incrementally. Rook's differentiators:
 
 1. A correct single-threaded cooperative scheduler with Immediate and Deferred signal semantics.
 2. Physics and Humanoid behavior, checked against Studio.
 3. Every class in the reflection database exists and round-trips, even before it has behavior.
 4. Conformance tests against recorded Studio values, plus a corpus scanner that measures how much of the archive actually runs.
-5. A headless server mode and, later, Raven-to-Raven replication.
+5. A headless server mode and, later, Rook-to-Rook replication.
 
 ---
 
@@ -84,12 +84,12 @@ A RakNet-style UDP library (tokio): bitstream, 6 reliability modes, 4 priorities
 
 Versions are as of 2026-10-04 (crates.io).
 
-| Need | Crate | Version | Use in Raven |
+| Need | Crate | Version | Use in Rook |
 |---|---|---|---|
 | Binary formats | `rbx_binary` | 3.0.1 | Load/save `.rbxl`/`.rbxm`. Use as-is. |
 | XML formats | `rbx_xml` | 3.0.1 | Load/save `.rbxlx`/`.rbxmx`. Use as-is. |
-| Interchange DOM | `rbx_dom_weak` | 4.2.0 | I/O-boundary tree only. Converted to and from Raven's runtime DOM (see architecture). |
-| Value types | `rbx_types` | 3.1.0 | `Variant` interchange and the BrickColor table; Raven wraps these in its own math types. |
+| Interchange DOM | `rbx_dom_weak` | 4.2.0 | I/O-boundary tree only. Converted to and from Rook's runtime DOM (see architecture). |
+| Value types | `rbx_types` | 3.1.0 | `Variant` interchange and the BrickColor table; Rook wraps these in its own math types. |
 | Reflection | `rbx_reflection` + `rbx_reflection_database` | 7.0.0 / 3.0.1+roblox-741 | Classes, properties, enums, defaults. Pin the version. |
 | Luau VM | `mlua` | 0.12.2 | Features `luau` (+ `luau-jit` later), `vendored`. Provides interrupts, threads (coroutines) and userdata. |
 | Lua parsing | `full_moon` | 3.0.0 | Corpus scanner: parse scripts to find which APIs they use. |
@@ -99,7 +99,7 @@ Versions are as of 2026-10-04 (crates.io).
 | GPU | `wgpu` | 30.0.1 | Renderer. |
 | Windowing | `winit` | 0.30.13 | Player window and input. |
 | Text | `cosmic-text` (+ `glyphon`) | 0.19 / 0.12 | GUI text shaping, layout and rasterisation. |
-| Physics | `rapier3d` | 0.36.0 | Rigid bodies, colliders, joints and queries underneath Raven's own Roblox-semantics layer. |
+| Physics | `rapier3d` | 0.36.0 | Rigid bodies, colliders, joints and queries underneath Rook's own Roblox-semantics layer. |
 | Audio | `kira` (preferred) or `rodio` | 0.12.5 / 0.22.2 | Kira's tweening, mixer tracks and spatial audio map well onto Sound and SoundGroup. |
 | Datatype reference | `lune-roblox` | 0.3.5 (MPL-2.0) | Reference for datatype edge cases. Taking files from it means those files stay MPL. |
 
@@ -133,20 +133,20 @@ Only public, citable sources. Primary source: Arseny Kapoulkine ("zeux", Roblox 
 
 ### Third-party components
 
-| Component | What Roblox used it for | Source | Status | Implication for Raven |
+| Component | What Roblox used it for | Source | Status | Implication for Rook |
 |---|---|---|---|---|
 | **OGRE** 1.6→1.8 | Rendering, 2006-era to 2014; removed in 2014 for an in-house D3D9/GL renderer | [zeux] | Confirmed | History only; modern behavior comes from the in-house renderer. |
 | **Bullet** (collision pipeline) | CSG and the collision pipeline; cylinder collision since Aug 2015; custom KD-tree for terrain triangle meshes | [zeux] | Confirmed | Rapier's collision library (`parry`) is also GJK/EPA-based, so primitive contact behavior should be close. |
-| **PGS solver** (in-house) | Optional from mid-2015, plus a hybrid LDL-PGS in 2018; the legacy spring solver was **removed March 4, 2019** | Roblox newsroom (Aug 2020); DevForum announcements | Confirmed | Modern means PGS only. Old places no longer get spring-solver behavior, so Raven never implements it. Rapier's impulse-based solver is the same family. |
-| **RakNet** (modified) | Transport under the Replicator | Developer Console memory categories `network/raknet` and `network/replicator`, discussed widely on DevForum | Confirmed (observable) | BrikNet's RakNet-style design fits. Raven doesn't need wire compatibility. |
+| **PGS solver** (in-house) | Optional from mid-2015, plus a hybrid LDL-PGS in 2018; the legacy spring solver was **removed March 4, 2019** | Roblox newsroom (Aug 2020); DevForum announcements | Confirmed | Modern means PGS only. Old places no longer get spring-solver behavior, so Rook never implements it. Rapier's impulse-based solver is the same family. |
+| **RakNet** (modified) | Transport under the Replicator | Developer Console memory categories `network/raknet` and `network/replicator`, discussed widely on DevForum | Confirmed (observable) | BrikNet's RakNet-style design fits. Rook doesn't need wire compatibility. |
 | **FMOD** | Audio engine | Studio About dialog (0.741.19, checked 2026-10-04): "Uses 'FMOD Studio' from 'Firelight Technologies'"; also FMOD error codes on DevForum | Confirmed (observed directly) | `Sound` rolloff modes and attenuation likely follow FMOD's publicly documented 3D rolloff models. Implement those curves in kira. **Inference** until checked in Studio. |
 | **HarfBuzz** | Unicode text shaping, plus dynamic TTF rasterisation (both after 2013) | [zeux] | Confirmed | cosmic-text shapes with a HarfBuzz port, so glyph advances and kerning should match closely. |
 | **pugixml** | XML place/model parsing since 2019 | [zeux] | Confirmed | XML whitespace and entity behavior follow pugixml. Note it if rbx_xml ever disagrees. |
 | **LZ4** | Per-chunk compression in the binary format (designed 2013) | [zeux] | Confirmed | Already handled by rbx_binary. |
 | **Recast + Detour** | PathfindingService navmesh (≈2018–2019, replacing voxel pathfinding) | [zeux] | Confirmed | Use a Recast/Detour port or binding for `PathfindingService`. |
-| **microprofile** | In-client profiler (MicroProfiler) since 2015 | [zeux] | Confirmed | A Raven-side equivalent (e.g. `puffin`/Tracy) is a natural extension. |
-| hlsl2glsl → hlslparser → SPIR-V | Shader translation pipeline over time | [zeux] | Confirmed | Context only. Raven writes its own WGSL. |
-| **Luau** | Lua VM rewrite (2019), now open source (MIT) | Public repo | Confirmed | Raven uses the real Luau via mlua, so language behavior matches exactly. |
+| **microprofile** | In-client profiler (MicroProfiler) since 2015 | [zeux] | Confirmed | A Rook-side equivalent (e.g. `puffin`/Tracy) is a natural extension. |
+| hlsl2glsl → hlslparser → SPIR-V | Shader translation pipeline over time | [zeux] | Confirmed | Context only. Rook writes its own WGSL. |
+| **Luau** | Lua VM rewrite (2019), now open source (MIT) | Public repo | Confirmed | Rook uses the real Luau via mlua, so language behavior matches exactly. |
 | Lua 5.1 | Scripting base before Luau | [zeux] | Confirmed | Explains why old scripts are 5.1-style; Luau runs them. |
 
 Not established from public sources: anything beyond the above. Studio's About dialog (0.741.19) names only FMOD. Its "Third Party Notices" heading is plain text, not a link, so it gives no full list. The table above is the extent of what's publicly known.
@@ -157,15 +157,15 @@ Not established from public sources: anything beyond the above. Studio's About d
 - **Terrain:** sparse voxel storage (2013), smooth terrain as a voxel distance field with geometric LOD (2014), cascaded LOD and a new in-memory format (2016). [zeux]
 - **Binary format:** chunk-based, per-chunk LZ4, binary filters before compression. [zeux]
 - **Remote events:** fire-and-forget events and coroutine-based remote functions (Sep 2013). [zeux]
-- **Accurate Play Solo** (2018): server and client in one process with full replication. This **confirms** Raven's planned Play-mode design (architecture §8). [zeux]
+- **Accurate Play Solo** (2018): server and client in one process with full replication. This **confirms** Rook's planned Play-mode design (architecture §8). [zeux]
 - **Physics threading** (2019–2020): simulation split into jobs per connected island; multi-core narrowphase. [zeux; Roblox newsroom]
 - **PGS stabilisation:** warm starting, post-stabilisation, compliance regularisation, LDL preconditioning. [Roblox newsroom, Aug 2020]
 
-### Roblox-licensed code Raven can use
+### Roblox-licensed code Rook can use
 
 | Repo | License | Contents | Use |
 |---|---|---|---|
-| [Roblox/Core-Scripts](https://github.com/Roblox/Core-Scripts) (archived; last commit Aug 2018) | **Apache-2.0** | CameraScript, ControlScript (incl. ClickToMove, DynamicThumbstick), character Sound scripts, CoreGui scripts (Topbar, HealthScript, chat, prompts) | Can ship as Raven's default player and character scripts, with Apache-2.0 attribution. Era-appropriate for archived content. **No Animate script** is included, so Raven writes its own. |
+| [Roblox/Core-Scripts](https://github.com/Roblox/Core-Scripts) (archived; last commit Aug 2018) | **Apache-2.0** | CameraScript, ControlScript (incl. ClickToMove, DynamicThumbstick), character Sound scripts, CoreGui scripts (Topbar, HealthScript, chat, prompts) | Can ship as Rook's default player and character scripts, with Apache-2.0 attribution. Era-appropriate for archived content. **No Animate script** is included, so Rook writes its own. |
 | Roblox/Studio-Tools (archived) | Apache-2.0 | Old built-in Studio Lua plugins | Reference for future Studio tooling. |
 | Roblox/Wiki-Lua-Libraries | **No license** | `LoadLibrary` libraries (RbxUtility, ...) | **Not usable.** |
 | Roblox/luau and the Luau library mirrors | MIT | Language and utility libraries | Use freely. |
@@ -178,7 +178,7 @@ Decompiling or disassembling Roblox binaries or `shaders.zip`, even though some 
 
 ## 6. Clean-implementation policy
 
-Raven is an independent implementation.
+Rook is an independent implementation.
 
 - Allowed sources: public documentation (creator-docs, API dumps, DevForum, Roblox blog posts), black-box observation of Roblox Studio and clients, open-source projects under compatible licenses, and our own experiments.
 - Not allowed: leaked Roblox source or documents derived from it, decompiled or disassembled Roblox binaries, and projects built from either (e.g. libreblox-roblox).
@@ -187,7 +187,7 @@ Raven is an independent implementation.
 - Community knowledge (revival communities, forums, word of mouth) is a lead, not a source. Before relying on it, verify it in Studio or find a public citation.
 - **Files shipped in official Roblox builds** (for example the plain-text shader sources in some 2016 player builds) were published by Roblox, but they carry no licence. They may serve as a lead only, through a split process:
   1. The maintainer reads them and writes a private facts-only note: formulas in maths notation, constants, which inputs feed which terms, and per-pixel versus per-vertex work. The note contains no code and no pasted snippets.
-  2. The Raven implementation is written from that note by someone who has not opened the original files.
+  2. The Rook implementation is written from that note by someone who has not opened the original files.
   3. The behavior counts as Confirmed only after it matches Studio (golden images or conformance recordings). Until then it is an Inference.
 
   The original files and the notes stay out of the repository and are never linked from it. Binary or packed builds (`.pack`, `shaders.zip`) remain under "Not to be used" (§5a). Content from a user's Roblox install may still be loaded at runtime (§7).
@@ -196,27 +196,27 @@ Raven is an independent implementation.
 
 ## 7. Content and asset policy
 
-- Raven ships **its own default content** (skybox, part textures, cursors, open-licensed fonts) so it runs with no Roblox files at all.
+- Rook ships **its own default content** (skybox, part textures, cursors, open-licensed fonts) so it runs with no Roblox files at all.
 - Optional: read the user's installed Roblox content folder, or download Roblox's `content-*.zip` packages the way Bloxstrap does. Content packages only, never `RobloxApp.zip` or `shaders.zip`. Downloads are hash-verified and cached, and the version is recorded.
 - Public `rbxassetid://` assets are fetched anonymously, cached and rate-limited.
 - Restricted assets: an Open Cloud API key is preferred (scoped, revocable). Whether it unlocks place files is **Unverified**. An opt-in `.ROBLOSECURITY` cookie is possible as a fallback: stored in the OS credential store, never logged, and only ever sent to roblox.com.
-- Nothing Roblox-owned is committed to the Raven repository. Tests that need real files download them at test time or read a path from an environment variable.
+- Nothing Roblox-owned is committed to the Rook repository. Tests that need real files download them at test time or read a path from an environment variable.
 
 ---
 
 ## 8. Open questions
 
-1. **License** for Raven (MIT OR Apache-2.0 would match the Rust ecosystem and the archives).
+1. **License** for Rook (MIT OR Apache-2.0 would match the Rust ecosystem and the archives).
 2. **Corpus**: where the archived places live, and how many there are. This drives the corpus scanner and priorities.
-3. **Default player scripts**: partly answered. Roblox/Core-Scripts (Apache-2.0) provides CameraScript, ControlScript, character sounds and CoreGui from up to 2018, and Raven can ship those. Still open: the Animate script (not included; write our own) and the modern PlayerModule (not open-licensed; write our own, or load from the user's install). Decide before M4.
+3. **Default player scripts**: partly answered. Roblox/Core-Scripts (Apache-2.0) provides CameraScript, ControlScript, character sounds and CoreGui from up to 2018, and Rook can ship those. Still open: the Animate script (not included; write our own) and the modern PlayerModule (not open-licensed; write our own, or load from the user's install). Decide before M4.
 4. **Physics fidelity bar**: how closely Rapier-backed behavior must match Roblox's solver (stacking, friction, joint stiffness), and how we measure it.
-5. **Networking**: Raven-to-Raven replication only (assumed). Wire compatibility with real Roblox clients is not a goal.
+5. **Networking**: Rook-to-Rook replication only (assumed). Wire compatibility with real Roblox clients is not a goal.
 
 ---
 
 ## 9. Archive scan (2026-10-05)
 
-First full `raven corpus-scan` of the maintainer's archive of places and models. Only aggregate figures are recorded here.
+First full `rook corpus-scan` of the maintainer's archive of places and models. Only aggregate figures are recorded here.
 
 - **4,605 files, 3,077 unique** (12.7 GB). **3,056 load (99.3%).** Before the legacy XML upgrade the figure was 55.6%.
 - **1,346 files needed the legacy XML upgrade**: 27,096 `<External>` entries dropped, 1,456 embedded assets and 5,906 `<hash>` references (both load empty, as modern Studio does; the data is kept in the upgrade report), 19.1 million control characters restored (almost all legacy `Terrain.ClusterGrid`/`ClusterGridV2` data), 6 MSVC float values, 3 `null` numbers.

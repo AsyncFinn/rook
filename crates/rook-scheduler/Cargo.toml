@@ -1,0 +1,14 @@
+[package]
+name = "rook-scheduler"
+description = "Thread scheduling and frame timing for the Rook engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

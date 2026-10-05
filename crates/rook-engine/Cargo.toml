@@ -1,0 +1,22 @@
+[package]
+name = "rook-engine"
+description = "Assembles a Rook DataModel: services, scripts, frame loop"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+rook-types.workspace = true
+rook-reflection.workspace = true
+rook-dom.workspace = true
+rook-formats.workspace = true
+rook-scheduler.workspace = true
+rook-lua.workspace = true
+mlua.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

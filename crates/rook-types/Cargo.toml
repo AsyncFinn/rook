@@ -1,0 +1,17 @@
+[package]
+name = "rook-types"
+description = "Roblox datatypes for the Rook engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+rbx_types.workspace = true
+glam.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true
