@@ -1,0 +1,10 @@
+-- studio 0.741.19.7411056
+-- signals: deferred
+after Fire
+once first
+handler 3 first
+handler 2 first
+handler 1 first
+handler 3 second
+handler 2 second
+handler 1 second

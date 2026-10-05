@@ -108,7 +108,11 @@ impl Runtime {
 
     /// Start a Script. Returns false if it was already started or didn't compile.
     pub fn run_script(&self, script: InstanceId) -> bool {
-        self.guarded(|| api::scripts::run_script(&self.lua, script))
+        self.guarded(|| {
+            let started = api::scripts::run_script(&self.lua, script);
+            threads::drain_deferred(&self.lua);
+            started
+        })
     }
 
     /// Whether a script has been started.
@@ -123,8 +127,12 @@ impl Runtime {
         source: &str,
         script: Option<InstanceId>,
     ) -> Result<(), ScriptError> {
-        self.guarded(|| api::scripts::run_source(&self.lua, chunk_name, source, script))
-            .map_err(ScriptError::from)
+        self.guarded(|| {
+            let r = api::scripts::run_source(&self.lua, chunk_name, source, script);
+            threads::drain_deferred(&self.lua);
+            r
+        })
+        .map_err(ScriptError::from)
     }
 
     /// Fire an instance's event with arguments (for engine events such as
@@ -150,10 +158,12 @@ impl Runtime {
     pub fn resume_due(&self, queue: Queue) {
         let jobs = self.world_mut().scheduler.take_due(queue);
         self.guarded(|| {
+            // Deferred handlers run when the thread that caused them yields
+            // or finishes, so drain after every resumed job.
             for job in jobs {
                 threads::run_job(&self.lua, job);
+                threads::drain_deferred(&self.lua);
             }
-            threads::drain_deferred(&self.lua);
         });
     }
 

@@ -31,11 +31,14 @@ pub struct Firing {
 /// The firings one journal entry causes, limited to signals with
 /// connections.
 ///
-/// Order within a move (Inference, pinned by the conformance suite):
-/// `DescendantRemoving` on the old ancestors, `ChildRemoved`, `ChildAdded`,
-/// `DescendantAdded` on the new ancestors, `AncestryChanged` on the moved
-/// instance and each descendant; the `Parent` property change follows as
-/// its own journal entry.
+/// Order within a move, observed in Studio 0.741.19 (conformance case
+/// `signals/reparent_order`): `ChildRemoved`, `ChildAdded`, then
+/// `AncestryChanged` on the subtree in post-order (children before their
+/// parent); the `Parent` property change follows as its own journal entry.
+/// `DescendantRemoving`/`DescendantAdded` fire only on ancestors the
+/// instance actually leaves or joins; an ancestor of both the old and new
+/// parent sees neither (Confirmed). Their position in the order relative
+/// to the child events is Inference.
 pub fn expand<H: Clone>(change: &Change, signals: &Signals<H>) -> Vec<Firing> {
     let mut out = Vec::new();
     let mut push = |instance: InstanceId, kind: SignalKind, args: FireArgs| {
@@ -72,8 +75,9 @@ pub fn expand<H: Clone>(change: &Change, signals: &Signals<H>) -> Vec<Firing> {
             old_ancestors,
             new_ancestors,
             subtree,
+            subtree_post_order,
         } => {
-            for &ancestor in old_ancestors {
+            for &ancestor in old_ancestors.iter().filter(|a| !new_ancestors.contains(a)) {
                 for &d in subtree {
                     push(
                         ancestor,
@@ -92,7 +96,7 @@ pub fn expand<H: Clone>(change: &Change, signals: &Signals<H>) -> Vec<Firing> {
             if let Some(p) = new_parent {
                 push(*p, SignalKind::Event("ChildAdded"), FireArgs::Instance(*id));
             }
-            for &ancestor in new_ancestors {
+            for &ancestor in new_ancestors.iter().filter(|a| !old_ancestors.contains(a)) {
                 for &d in subtree {
                     push(
                         ancestor,
@@ -101,7 +105,7 @@ pub fn expand<H: Clone>(change: &Change, signals: &Signals<H>) -> Vec<Firing> {
                     );
                 }
             }
-            for &d in subtree {
+            for &d in subtree_post_order {
                 push(
                     d,
                     SignalKind::Event("AncestryChanged"),

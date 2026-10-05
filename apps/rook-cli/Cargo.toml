@@ -17,6 +17,7 @@ rook-types.workspace = true
 rook-reflection.workspace = true
 rook-formats.workspace = true
 rook-engine.workspace = true
+rook-lua.workspace = true
 rbx_dom_weak.workspace = true
 rbx_types.workspace = true
 full_moon.workspace = true

@@ -241,6 +241,13 @@ impl Dom {
         }
     }
 
+    fn collect_post_order(&self, id: InstanceId, out: &mut Vec<InstanceId>) {
+        for &child in self.children(id) {
+            self.collect_post_order(child, out);
+        }
+        out.push(id);
+    }
+
     /// Parent first, up to the topmost ancestor.
     pub fn ancestors(&self, id: InstanceId) -> impl Iterator<Item = InstanceId> + '_ {
         let mut cur = self.parent(id);
@@ -350,6 +357,8 @@ impl Dom {
                 .collect();
             let mut subtree = vec![id];
             self.collect_descendants(id, &mut subtree);
+            let mut subtree_post_order = Vec::with_capacity(subtree.len());
+            self.collect_post_order(id, &mut subtree_post_order);
             self.journal.push(Change::Reparented {
                 id,
                 old_parent,
@@ -357,6 +366,7 @@ impl Dom {
                 old_ancestors,
                 new_ancestors,
                 subtree,
+                subtree_post_order,
             });
             let property = self.parent_prop;
             self.journal.push(Change::Property { id, property });

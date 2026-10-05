@@ -1,0 +1,12 @@
+-- studio 0.741.19.7411056
+-- signals: deferred
+false Nope is not a valid member of Workspace "Workspace"
+true nil
+false Unable to create an Instance of type "NotAClass"
+false The Parent property of Workspace is locked, current parent: Game, new parent NULL
+false Attempt to set Folder as its own parent
+false Attempt to set parent of Folder to Folder.Folder would result in circular reference
+false The Parent property of Folder is locked, current parent: NULL, new parent Workspace
+false 'NotAService' is not a valid Service name
+false Argument 1 missing or nil
+false Expected ':' not '.' calling member function FindFirstChild

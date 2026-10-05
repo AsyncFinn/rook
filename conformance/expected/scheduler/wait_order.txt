@@ -1,0 +1,10 @@
+-- studio 0.741.19.7411056
+-- signals: deferred
+start
+spawn
+before wait
+defer
+delay 0
+legacy spawn
+legacy delay 0
+after wait

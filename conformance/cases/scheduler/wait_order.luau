@@ -1,0 +1,10 @@
+-- Relative order of task.spawn, task.defer, task.delay and wait.
+log("start")
+task.defer(function() log("defer") end)
+task.spawn(function() log("spawn") end)
+task.delay(0, function() log("delay 0") end)
+spawn(function() log("legacy spawn") end)
+delay(0, function() log("legacy delay 0") end)
+log("before wait")
+task.wait(0.5)
+log("after wait")

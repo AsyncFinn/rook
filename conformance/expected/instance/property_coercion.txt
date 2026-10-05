@@ -1,0 +1,21 @@
+-- studio 0.741.19.7411056
+-- signals: deferred
+Anchored = string yes true true
+Anchored = string  true true
+Anchored = number 0 true true
+Anchored = number 1 true true
+Anchored = boolean false true false
+Anchored = nil true false
+Anchored = table true true
+Transparency = '0.5' true 0.5
+Transparency = 'abc' true 0
+Transparency = true true 0
+Name = 5 true 5
+Name = nil false Unable to assign property Name. string expected, got nil
+Name = true false Unable to assign property Name. string expected, got boolean
+Material = 'Neon' true Enum.Material.Neon
+Material = 288 true Enum.Material.Neon
+Material = 'Nope' false Unable to assign property Material. Invalid value "Nope" for enum Material
+Material = 9999 false Unable to assign property Material. Invalid value 9999 for enum Material
+Size = nil false Unable to assign property Size. Vector3 expected, got nil
+CFrame = Vector3 false Unable to assign property CFrame. CoordinateFrame expected, got Vector3

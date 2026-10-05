@@ -80,16 +80,17 @@ pub(crate) fn from_lua(lua: &Lua, v: &LuaValue, ty: PropertyType) -> Result<Valu
         PropertyType::Value(vt) => {
             let fail = || expected(variant_name(vt), v);
             Ok(match vt {
-                VariantType::Bool => match v {
-                    LuaValue::Boolean(b) => Value::Bool(*b),
-                    _ => return Err(fail()),
-                },
-                VariantType::Float32 => Value::Float32(number_of(v).ok_or_else(fail)? as f32),
-                VariantType::Float64 => Value::Float64(number_of(v).ok_or_else(fail)?),
-                VariantType::Int32 => {
-                    Value::Int32(number_of(v).ok_or_else(fail)?.clamp(-2.1e9, 2.1e9) as i32)
+                // Confirmed (conformance instance/property_coercion): booleans
+                // take Lua truthiness, so "", 0 and {} are true, nil is false.
+                VariantType::Bool => {
+                    Value::Bool(!matches!(v, LuaValue::Nil | LuaValue::Boolean(false)))
                 }
-                VariantType::Int64 => Value::Int64(number_of(v).ok_or_else(fail)? as i64),
+                VariantType::Float32 => Value::Float32(loose_number(v).ok_or_else(fail)? as f32),
+                VariantType::Float64 => Value::Float64(loose_number(v).ok_or_else(fail)?),
+                VariantType::Int32 => {
+                    Value::Int32(loose_number(v).ok_or_else(fail)?.clamp(-2.1e9, 2.1e9) as i32)
+                }
+                VariantType::Int64 => Value::Int64(loose_number(v).ok_or_else(fail)? as i64),
                 VariantType::String => Value::String(lua_string(v).ok_or_else(fail)?),
                 VariantType::ContentId => Value::ContentId(lua_string(v).ok_or_else(fail)?.into()),
                 VariantType::BinaryString => {
@@ -136,6 +137,17 @@ pub(crate) fn from_lua(lua: &Lua, v: &LuaValue, ty: PropertyType) -> Result<Valu
                 }
             })
         }
+    }
+}
+
+/// Numbers for number properties. Confirmed (conformance
+/// instance/property_coercion): unparsable strings and booleans become 0.
+/// Whether nil and other types also do is Inference; they raise for now.
+fn loose_number(v: &LuaValue) -> Option<f64> {
+    match v {
+        LuaValue::String(_) => Some(number_of(v).unwrap_or(0.0)),
+        LuaValue::Boolean(_) => Some(0.0),
+        _ => number_of(v),
     }
 }
 
@@ -194,7 +206,8 @@ pub(crate) fn variant_name(vt: VariantType) -> &'static str {
         VariantType::Content => "Content",
         VariantType::Vector3 => "Vector3",
         VariantType::Vector2 => "Vector2",
-        VariantType::CFrame | VariantType::OptionalCFrame => "CFrame",
+        // Confirmed: Roblox still calls it CoordinateFrame in these messages.
+        VariantType::CFrame | VariantType::OptionalCFrame => "CoordinateFrame",
         VariantType::Color3 | VariantType::Color3uint8 => "Color3",
         VariantType::BrickColor => "BrickColor",
         VariantType::UDim => "UDim",

@@ -28,6 +28,9 @@ pub enum Change {
         new_ancestors: Vec<InstanceId>,
         /// `id` and its descendants, in pre-order.
         subtree: Vec<InstanceId>,
+        /// The same instances in post-order (children before their parent),
+        /// the order `AncestryChanged` fires in.
+        subtree_post_order: Vec<InstanceId>,
     },
     /// Recorded before `Destroy` changes anything.
     Destroying(InstanceId),

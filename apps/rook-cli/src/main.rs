@@ -1,5 +1,6 @@
 //! `rook`: command-line tools for the Rook engine.
 
+mod conformance;
 mod corpus;
 mod corpus_run;
 mod dump;
@@ -80,6 +81,18 @@ enum Command {
         #[arg(long)]
         jobs: Option<usize>,
     },
+    /// Record conformance cases in Roblox Studio (through Studio's MCP
+    /// server), or run them in Rook and compare.
+    Conformance {
+        #[command(subcommand)]
+        action: ConformanceAction,
+        /// The conformance folder.
+        #[arg(long, default_value = "conformance", global = true)]
+        dir: PathBuf,
+        /// Only cases whose `group/name` contains this text.
+        #[arg(long, global = true)]
+        filter: Option<String>,
+    },
     /// Regenerate crates/rook-reflection/data/members.json from a Full API dump.
     ///
     /// The dump must match the pinned Roblox version; Roblox-Client-Tracker
@@ -93,6 +106,14 @@ enum Command {
         #[arg(long, default_value = "crates/rook-reflection/data/members.json")]
         out: PathBuf,
     },
+}
+
+#[derive(Debug, Subcommand)]
+enum ConformanceAction {
+    /// Run every case in a Studio playtest and save the results as expectations.
+    Record,
+    /// Run every case in Rook and compare with the expectations.
+    Run,
 }
 
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
@@ -126,6 +147,14 @@ fn main() -> anyhow::Result<()> {
             large_mb,
         } => corpus::run(&dir, &out, jobs, large_mb),
         Command::GenMembers { dump, source, out } => gen_members::run(&dump, &source, &out),
+        Command::Conformance {
+            action,
+            dir,
+            filter,
+        } => match action {
+            ConformanceAction::Record => conformance::record(&dir, filter.as_deref()),
+            ConformanceAction::Run => conformance::run(&dir, filter.as_deref()),
+        },
         Command::CorpusRun {
             dir,
             out,

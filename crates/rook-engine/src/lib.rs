@@ -95,6 +95,16 @@ impl Server {
         }
         dom.journal_mut().set_enabled(true);
         let run_service = dom.get_service("RunService").expect("RunService class");
+        // Workspace.SignalBehavior: Default currently means Immediate
+        // (creator-docs SignalBehavior); new template places save Deferred.
+        // AncestryDeferred is treated as Deferred (Approximation).
+        let signal_behavior = match dom
+            .find_service("Workspace")
+            .and_then(|w| dom.property_by_name(w, "SignalBehavior"))
+        {
+            Some(Value::Enum(2 | 3)) => rook_lua::SignalBehavior::Deferred,
+            _ => rook_lua::SignalBehavior::Immediate,
+        };
         let loadstring_enabled = dom
             .find_service("ServerScriptService")
             .and_then(|s| dom.property_by_name(s, "LoadStringEnabled"))
@@ -108,6 +118,7 @@ impl Server {
         )
         .map_err(|e| EngineError::Lua(e.to_string()))?;
         runtime.set_script_timeout(options.script_timeout);
+        runtime.world_mut().signal_behavior = signal_behavior;
         let _ = runtime.lua().set_memory_limit(options.memory_limit);
         if !loadstring_enabled {
             // Confirmed: creator-docs ServerScriptService.LoadStringEnabled.

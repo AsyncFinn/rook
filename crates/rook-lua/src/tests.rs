@@ -58,7 +58,7 @@ fn errors_are_plain_strings() {
         r#"
         local ok, e = pcall(function() return workspace.Nope end)
         print(ok, type(e), e)
-        ok, e = pcall(function() Instance.new("Part").Anchored = "yes" end)
+        ok, e = pcall(function() Instance.new("Part").Size = "big" end)
         print(e)
         ok, e = pcall(function() Instance.new("NotAClass") end)
         print(e)
@@ -68,7 +68,7 @@ fn errors_are_plain_strings() {
         0,
         &[
             "false string Nope is not a valid member of Workspace \"Workspace\"",
-            "Unable to assign property Anchored. bool expected, got string",
+            "Unable to assign property Size. Vector3 expected, got string",
             "Unable to create an Instance of type \"NotAClass\"",
             "The Parent property of Workspace is locked, current parent: Game, new parent NULL",
         ],

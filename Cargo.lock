@@ -855,6 +855,7 @@ dependencies = [
  "rbx_types",
  "rook-engine",
  "rook-formats",
+ "rook-lua",
  "rook-reflection",
  "rook-types",
  "serde",

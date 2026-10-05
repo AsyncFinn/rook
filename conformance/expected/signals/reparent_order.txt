@@ -1,0 +1,23 @@
+-- studio 0.741.19.7411056
+-- signals: deferred
+set parent
+after set parent
+A.ChildRemoved M
+B.ChildAdded M
+Q.AncestryChanged M B
+P.AncestryChanged M B
+R.AncestryChanged M B
+M.AncestryChanged M B
+M.Changed Parent
+M.PropertyChangedSignal(Parent)
+-- leave the shared ancestor
+root.DescendantRemoving M
+root.DescendantRemoving P
+root.DescendantRemoving Q
+root.DescendantRemoving R
+Q.AncestryChanged M nil
+P.AncestryChanged M nil
+R.AncestryChanged M nil
+M.AncestryChanged M nil
+M.Changed Parent
+M.PropertyChangedSignal(Parent)

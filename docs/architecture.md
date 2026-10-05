@@ -191,7 +191,7 @@ DataModel, Workspace, Players, Lighting, ReplicatedStorage, ReplicatedFirst, Ser
 
 1. **Unit tests** per crate.
 2. **Format round-trip**: `rojo-rbx/rbx-test-files` plus local fixtures supplied via environment variables (never committed).
-3. **Conformance suite** (`conformance/`): small Luau cases that print JSON (property values after operations, event orderings with timestamps, GUI absolute rects, CFrame math, physics positions after N steps). Each case is run once in Studio via a recorder plugin, and the output is committed as the expectation. `rook-cli conformance` runs the same cases headless with the fixed time source and compares with tolerances.
+3. **Conformance suite** (`conformance/`): small Luau cases that log what they observe (event orderings, error messages, property coercion, scheduler order, and later GUI rects, CFrame math and physics positions). `rook conformance record` runs each case in a Studio playtest through Studio's built-in MCP server and commits the output as the expectation; `rook conformance run` runs the same cases in Rook and diffs them. See `conformance/README.md`.
 4. **Corpus scanner** (`rook-cli corpus-scan <dir>`): parses every place (rbx formats) and script (`full_moon`), and reports class, member and enum usage frequency, plus "loads / runs N seconds without error / errors by cause". This drives priorities and is Rook's headline progress metric.
 5. **Render golden images** (later): Rook frames compared against Studio screenshots with perceptual tolerance.
 
@@ -221,7 +221,7 @@ Each milestone is a vertical slice with a measurable exit criterion. The order w
 | # | Slice | Exit criterion |
 |---|---|---|
 | M0 ✅ | Workspace, `rook-types`, `rook-reflection`, `rook-formats` (incl. the legacy XML upgrade), `rook dump/roundtrip/corpus-scan` | All rbx-test-files fixtures round-trip; corpus report produced. Achieved: 99.3% of the archive loads. |
-| M1 | `rook-dom`, signals, scheduler, Luau bridge, core Instance API, the methods/events list, headless runs of **server Scripts**, Studio conformance plugin | First conformance batch (Instance API, signals, `wait`/`task` ordering) passes; baseline % of archive scripts running N seconds without error |
+| M1 | `rook-dom`, signals, scheduler, Luau bridge, core Instance API, the methods/events list, headless runs of **server Scripts**, conformance recording through Studio's MCP server | First conformance batch (Instance API, signals, `wait`/`task` ordering) passes; baseline % of archive scripts running N seconds without error |
 | M2 | Renderer v0 (parts, primitive meshes, camera, basic lighting, sky) in `rook-player`; **client/server split** with the in-process replicator; a `Player` without a character; **LocalScripts** (PlayerScripts, ReplicatedFirst, PlayerGui as data); basic input (`UserInputService`, `Mouse`) | Archived places render recognisably; client-side scripts run alongside server scripts |
 | M3 | Physics v0: assemblies, anchoring, collisions, welds/Motor6D/legacy surface joints, BodyMovers, Touched, queries | Physics conformance batch; unanchored places settle plausibly |
 | M4 | Characters: spawning, Humanoid, tools, default camera/control scripts (Core-Scripts, Apache-2.0) and Rook's own Animate | Walk around and use tools in an archived place |
