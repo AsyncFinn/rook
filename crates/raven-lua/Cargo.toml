@@ -1,0 +1,22 @@
+[package]
+name = "raven-lua"
+description = "Luau scripting for the Raven engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+raven-types.workspace = true
+raven-reflection.workspace = true
+raven-dom.workspace = true
+raven-signal.workspace = true
+raven-scheduler.workspace = true
+rbx_types.workspace = true
+mlua.workspace = true
+glam.workspace = true
+
+[lints]
+workspace = true
