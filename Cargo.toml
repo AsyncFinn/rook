@@ -15,6 +15,11 @@ rust-version = "1.85"
 raven-types = { path = "crates/raven-types" }
 raven-reflection = { path = "crates/raven-reflection" }
 raven-formats = { path = "crates/raven-formats" }
+raven-dom = { path = "crates/raven-dom" }
+raven-signal = { path = "crates/raven-signal" }
+raven-scheduler = { path = "crates/raven-scheduler" }
+raven-lua = { path = "crates/raven-lua" }
+raven-engine = { path = "crates/raven-engine" }
 
 # Roblox formats and data (rbx-dom ecosystem)
 rbx_dom_weak = "4.2"
@@ -42,6 +47,10 @@ clap = { version = "4", features = ["derive"] }
 rayon = "1"
 walkdir = "2"
 blake3 = "1"
+slotmap = "1.1"
+
+# Luau
+mlua = { version = "0.12", features = ["luau", "vendored"] }
 
 [workspace.lints.rust]
 unsafe_code = "deny"

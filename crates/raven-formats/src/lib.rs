@@ -13,9 +13,11 @@
 //! [`LoadError`], never a crash.
 
 mod compare;
+mod convert;
 pub mod legacy;
 
 pub use compare::{CompareOptions, Difference, compare, compare_with};
+pub use convert::{from_dom, into_dom};
 pub use legacy::{EmbeddedAsset, HashReference, LegacyUpgrade};
 
 use std::io::Cursor;

@@ -82,6 +82,8 @@ pub fn compare_with(a: &WeakDom, b: &WeakDom, options: CompareOptions) -> Vec<Di
         keys.dedup();
         for key in keys {
             match (ia.properties.get(key), ib.properties.get(key)) {
+                // An empty attribute or tag list means the same as none.
+                (Some(v), None) | (None, Some(v)) if is_empty_collection(v) => {}
                 (Some(_), None) => diffs.push(Difference::PropertyMissing {
                     path: path.clone(),
                     property: key.to_string(),
@@ -105,6 +107,14 @@ pub fn compare_with(a: &WeakDom, b: &WeakDom, options: CompareOptions) -> Vec<Di
         }
     }
     diffs
+}
+
+fn is_empty_collection(v: &Variant) -> bool {
+    match v {
+        Variant::Attributes(a) => a.iter().next().is_none(),
+        Variant::Tags(t) => t.is_empty(),
+        _ => false,
+    }
 }
 
 fn pair_children(

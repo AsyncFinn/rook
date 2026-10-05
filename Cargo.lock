@@ -653,12 +653,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "raven-dom"
+version = "0.1.0"
+dependencies = [
+ "raven-reflection",
+ "raven-types",
+ "rbx_types",
+ "slotmap",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "raven-formats"
 version = "0.1.0"
 dependencies = [
  "base64 0.23.1",
  "quick-xml",
+ "raven-dom",
  "raven-reflection",
+ "raven-types",
  "rbx_binary",
  "rbx_dom_weak",
  "rbx_types",
@@ -891,6 +904,15 @@ name = "shlex"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
+
+[[package]]
+name = "slotmap"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bdd58c3c93c3d278ca835519292445cb4b0d4dc59ccfdf7ceadaab3f8aeb4038"
+dependencies = [
+ "version_check",
+]
 
 [[package]]
 name = "smallvec"

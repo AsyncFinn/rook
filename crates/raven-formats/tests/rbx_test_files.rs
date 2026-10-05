@@ -175,3 +175,41 @@ fn binary_and_xml_agree() {
         failures.join("\n")
     );
 }
+
+/// Every fixture converts into Raven's runtime DOM and back unchanged.
+#[test]
+fn every_fixture_survives_the_runtime_dom() {
+    let Some(dir) = fixtures_dir() else { return };
+    let mut failures = Vec::new();
+    for path in fixture_files(&dir) {
+        let rel = path.strip_prefix(&dir).unwrap().display().to_string();
+        let Ok(loaded) = load(&fs::read(&path).unwrap()) else {
+            continue;
+        };
+        let mut dom = raven_dom::Dom::new();
+        let db = dom.database();
+        let is_place = loaded.dom.root().children().iter().all(|r| {
+            let class = &loaded.dom.get_by_ref(*r).unwrap().class;
+            db.class_by_name(class).is_some_and(|c| c.flags.service)
+        });
+        let parent = if is_place {
+            dom.root()
+        } else {
+            let folder = dom.create_by_name("Folder").unwrap();
+            let root = dom.root();
+            dom.attach_unchecked(folder, root);
+            folder
+        };
+        let top = raven_formats::into_dom(&loaded.dom, &mut dom, parent);
+        let back = raven_formats::from_dom(&dom, &top);
+        let diffs = compare(&loaded.dom, &back);
+        if !diffs.is_empty() {
+            failures.push(format!(
+                "{rel}: {} differences, first: {:?}",
+                diffs.len(),
+                diffs[0]
+            ));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}

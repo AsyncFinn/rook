@@ -10,6 +10,8 @@ rust-version.workspace = true
 
 [dependencies]
 raven-reflection.workspace = true
+raven-types.workspace = true
+raven-dom.workspace = true
 rbx_dom_weak.workspace = true
 rbx_types.workspace = true
 rbx_binary.workspace = true
