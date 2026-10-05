@@ -6,12 +6,17 @@
 //! Studio upgrades old files on load. Properties neither decoder recognises
 //! are kept, so saving a file never silently drops data.
 //!
+//! Legacy XML (roughly 2006–2010) that `rbx_xml` rejects is retried through
+//! the [`legacy`] upgrade pass. Files that load normally are never rewritten.
+//!
 //! Decoders are run behind a panic guard: a corrupt file produces a
 //! [`LoadError`], never a crash.
 
 mod compare;
+pub mod legacy;
 
 pub use compare::{CompareOptions, Difference, compare, compare_with};
+pub use legacy::{EmbeddedAsset, LegacyUpgrade};
 
 use std::io::Cursor;
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -80,13 +85,51 @@ pub struct Loaded {
     /// The decoded tree. Its root is a placeholder; the file's top-level
     /// instances are the root's children.
     pub dom: WeakDom,
+    /// Set when the file needed the legacy XML upgrade pass to load.
+    pub legacy: Option<LegacyUpgrade>,
 }
 
 /// Load a place or model file from memory.
 pub fn load(bytes: &[u8]) -> Result<Loaded, LoadError> {
     let format = Format::detect(bytes).ok_or(LoadError::UnknownFormat)?;
+    match decode(bytes, format) {
+        Ok(dom) => Ok(Loaded {
+            format,
+            dom,
+            legacy: None,
+        }),
+        Err(LoadError::Xml(original)) => load_legacy_xml(bytes).map_err(|retry| {
+            // Report the original failure; mention the retry only if it got further.
+            match retry {
+                Some(e) => LoadError::Xml(format!("{original} (legacy upgrade also failed: {e})")),
+                None => LoadError::Xml(original),
+            }
+        }),
+        Err(e) => Err(e),
+    }
+}
+
+/// Retry an XML file through the legacy upgrade. `Err(None)` means the file
+/// had nothing to upgrade, so the original error stands.
+fn load_legacy_xml(bytes: &[u8]) -> Result<Loaded, Option<String>> {
+    let (upgraded, report) = guard(|| legacy::upgrade(bytes))
+        .map_err(Some)?
+        .map_err(|e| Some(e.to_string()))?;
+    if !report.changed_anything() {
+        return Err(None);
+    }
+    let mut dom = decode(&upgraded, Format::Xml).map_err(|e| Some(e.to_string()))?;
+    legacy::restore_control_chars(&mut dom, &report);
+    Ok(Loaded {
+        format: Format::Xml,
+        dom,
+        legacy: Some(report),
+    })
+}
+
+fn decode(bytes: &[u8], format: Format) -> Result<WeakDom, LoadError> {
     let db = raven_reflection::rbx_database();
-    let dom = guard(|| match format {
+    guard(|| match format {
         Format::Binary => rbx_binary::Deserializer::new()
             .reflection_database(db)
             .deserialize(Cursor::new(bytes))
@@ -99,8 +142,7 @@ pub fn load(bytes: &[u8]) -> Result<Loaded, LoadError> {
                 .map_err(|e| LoadError::Xml(e.to_string()))
         }
     })
-    .map_err(LoadError::Panicked)??;
-    Ok(Loaded { format, dom })
+    .map_err(LoadError::Panicked)?
 }
 
 /// Save the root's children of `dom` in the given format.

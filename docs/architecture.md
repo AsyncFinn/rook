@@ -184,7 +184,7 @@ DataModel, Workspace, Players, Lighting, ReplicatedStorage, ReplicatedFirst, Ser
 ### Run modes and replication (`raven-net`)
 
 - Modes: **Edit** (no scripts), **Run** (server simulation, no player), **Play** (server + client), **Server** (headless).
-- Modern Play runs **separate server and client DataModels**. Raven does the same from the start, connected by an **in-process loopback replicator**. That makes `LocalScript` vs `Script`, RemoteEvents/RemoteFunctions and replication filtering correct early. A real network transport (BrikNet, quinn or renet, to be evaluated) plugs in later behind the same interface.
+- Modern Play runs **separate server and client DataModels**. Raven does the same from M2 on, connected by an **in-process loopback replicator**. That makes `LocalScript` vs `Script`, RemoteEvents/RemoteFunctions and replication filtering correct early. A real network transport (BrikNet, quinn or renet, to be evaluated) plugs in later behind the same interface.
 - Replication is Raven-to-Raven. Wire compatibility with real Roblox clients is not a goal.
 
 ## 9. Testing and measurement
@@ -215,23 +215,25 @@ Status is one of **Confirmed**, **Inference**, **Approximation** or **Raven exte
 
 ## 12. Milestones
 
-Each milestone is a vertical slice with a measurable exit criterion.
+Each milestone is a vertical slice with a measurable exit criterion. The order was revised after the first corpus scan (see research.md §9).
 
 | # | Slice | Exit criterion |
 |---|---|---|
-| M0 | Workspace, `raven-types`, `raven-reflection`, `raven-formats`, `raven-cli dump/roundtrip`, corpus scanner v0 | Round-trips the rbx-test-files corpus; corpus report on the user's archive |
-| M1 | `raven-dom`, signals, scheduler, Luau bridge, core Instance API, headless run, conformance harness | First conformance batch (Instance API, signals, wait/task ordering) passes |
-| M2 | Renderer v0: parts, primitive meshes, camera, basic lighting, sky; `raven-player` free-cam viewer | Archived places render recognisably |
-| M3 | Physics v0: assemblies, anchoring, collisions, welds/Motor6D, Touched, queries | Physics conformance batch; unanchored places settle plausibly |
-| M4 | Play mode: Players, character spawn, Humanoid, input, Raven's default camera/control scripts, loopback replication | Walk around in an archived place |
-| M5 | GUI (layout, text, images, input) | GUI conformance batch |
-| M6 | Content: MeshParts, SpecialMesh, textures, decals, materials; audio | Corpus places render with meshes and sound |
+| M0 ✅ | Workspace, `raven-types`, `raven-reflection`, `raven-formats` (incl. the legacy XML upgrade), `raven dump/roundtrip/corpus-scan` | All rbx-test-files fixtures round-trip; corpus report produced. Achieved: 99.3% of the archive loads. |
+| M1 | `raven-dom`, signals, scheduler, Luau bridge, core Instance API, the methods/events list, headless runs of **server Scripts**, Studio conformance plugin | First conformance batch (Instance API, signals, `wait`/`task` ordering) passes; baseline % of archive scripts running N seconds without error |
+| M2 | Renderer v0 (parts, primitive meshes, camera, basic lighting, sky) in `raven-player`; **client/server split** with the in-process replicator; a `Player` without a character; **LocalScripts** (PlayerScripts, ReplicatedFirst, PlayerGui as data); basic input (`UserInputService`, `Mouse`) | Archived places render recognisably; client-side scripts run alongside server scripts |
+| M3 | Physics v0: assemblies, anchoring, collisions, welds/Motor6D/legacy surface joints, BodyMovers, Touched, queries | Physics conformance batch; unanchored places settle plausibly |
+| M4 | Characters: spawning, Humanoid, tools, default camera/control scripts (Core-Scripts, Apache-2.0) and Raven's own Animate | Walk around and use tools in an archived place |
+| M5 | GUI (layout, text, images, GUI input) | GUI conformance batch |
+| M6 | Content: MeshParts, SpecialMesh, textures, decals (incl. embedded legacy assets), materials; audio | Corpus places render with meshes and sound |
 | M7 | Network transport, headless server, multi-client | Two clients play together |
-| M8+ | Terrain, animation, particles, advanced lighting, Studio tooling, extensions | — |
+| M8+ | Terrain (incl. legacy `ClusterGrid` data), animation, particles, advanced lighting, Studio tooling, extensions | — |
 
-## 13. Decisions needed before M0
+Why this order: the client/server split moves forward to M2 so LocalScripts run as soon as there's a window. Characters stay in M4 because they need physics (M3) first. Physics comes before GUI because the corpus is dominated by physical content (Parts in 1,227 files, BodyMovers in about 200, welds and Snaps in hundreds).
 
-1. Approve or change the overall structure (§2, §5, §8).
-2. Where the archived place corpus lives.
+## 13. Open decisions
 
-Settled: license is Apache-2.0 with a `NOTICE` file crediting AsyncFinn. The repository is initialised, with a `.gitignore` that excludes Roblox files, caches and credentials.
+1. **HopperBin** (229 files): modern Roblox no longer runs it. Decide before M4 whether to follow modern behavior or offer it as an opt-in extension.
+2. **`null` numbers in legacy XML** (3 values in the archive) are read as 0; verify against Studio.
+
+Settled: license is Apache-2.0 with a `NOTICE` file crediting AsyncFinn. The repository is initialised, with a `.gitignore` that excludes Roblox files, caches, reports and credentials. The methods/events list is committed as a compact generated file inside `raven-reflection`.

@@ -15,6 +15,9 @@ rbx_types.workspace = true
 rbx_binary.workspace = true
 rbx_xml.workspace = true
 thiserror.workspace = true
+quick-xml.workspace = true
+base64.workspace = true
+blake3.workspace = true
 
 [lints]
 workspace = true

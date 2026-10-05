@@ -56,6 +56,54 @@ pub fn summary_markdown(agg: &Aggregate, records: &[FileRecord], elapsed: Durati
         pct(agg.scripts_with_parse_errors, agg.scripts)
     );
 
+    if agg.legacy_upgraded_files > 0 {
+        let t = &agg.legacy_totals;
+        let _ = writeln!(
+            md,
+            "## Legacy XML upgrade
+"
+        );
+        let _ = writeln!(
+            md,
+            "{} files needed the legacy XML upgrade to load.
+",
+            agg.legacy_upgraded_files
+        );
+        let _ = writeln!(
+            md,
+            "| Upgrade | Total |
+|---|---:|"
+        );
+        let _ = writeln!(
+            md,
+            "| `<External>` entries dropped | {} |",
+            t.externals_dropped
+        );
+        let _ = writeln!(
+            md,
+            "| Embedded assets kept | {} ({:.1} MB) |",
+            t.embedded_assets,
+            t.embedded_bytes as f64 / 1e6
+        );
+        let _ = writeln!(md, "| `<hash>` references | {} |", t.hash_references);
+        let _ = writeln!(
+            md,
+            "| Control characters restored | {} |",
+            t.control_characters
+        );
+        let _ = writeln!(
+            md,
+            "| MSVC float values (`1.#QNAN`, ...) | {} |",
+            t.msvc_floats
+        );
+        let _ = writeln!(
+            md,
+            "| `null` numbers read as 0 (unverified) | {} |
+",
+            t.null_numbers
+        );
+    }
+
     if agg.files_failed > 0 {
         let _ = writeln!(md, "## Load failures\n");
         for (kind, n) in &agg.failures_by_kind {

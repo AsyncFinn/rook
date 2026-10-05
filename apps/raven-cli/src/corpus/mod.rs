@@ -19,6 +19,9 @@ use scripts::ScriptUsage;
 
 const EXTENSIONS: [&str; 4] = ["rbxl", "rbxlx", "rbxm", "rbxmx"];
 
+/// Stack size for scan workers (see `run`).
+const WORKER_STACK: usize = 256 * 1024 * 1024;
+
 /// Usage of one name across the corpus.
 #[derive(Debug, Default, Clone, Copy, Serialize)]
 pub struct Usage {
@@ -47,6 +50,20 @@ pub struct FileRecord {
     pub format: Option<String>,
     pub instances: u64,
     pub scripts: u64,
+    /// Present when the legacy XML upgrade was needed to load the file.
+    pub legacy_upgrade: Option<LegacyCounts>,
+}
+
+/// What the legacy XML upgrade changed in one file.
+#[derive(Debug, Default, Clone, Copy, Serialize)]
+pub struct LegacyCounts {
+    pub externals_dropped: u64,
+    pub embedded_assets: u64,
+    pub embedded_bytes: u64,
+    pub hash_references: u64,
+    pub control_characters: u64,
+    pub msvc_floats: u64,
+    pub null_numbers: u64,
 }
 
 /// Everything learned from one unique, successfully loaded file.
@@ -76,6 +93,9 @@ pub struct Aggregate {
     pub script_bytes: u64,
     pub scripts_with_parse_errors: u64,
     pub formats: BTreeMap<String, u64>,
+    /// Files that needed the legacy XML upgrade, and what it changed in total.
+    pub legacy_upgraded_files: u64,
+    pub legacy_totals: LegacyCounts,
     pub failures_by_kind: BTreeMap<String, u64>,
     pub failure_messages: UsageMap,
     pub classes: UsageMap,
@@ -135,13 +155,21 @@ pub fn run(dir: &Path, out: &Path, jobs: Option<usize>, large_mb: u64) -> anyhow
 
     let threads =
         jobs.unwrap_or_else(|| std::thread::available_parallelism().map_or(4, |n| n.get().min(8)));
+    // Parsers recurse on deeply nested scripts and instance trees, and a stack
+    // overflow aborts the process (it can't be caught like a panic), so give
+    // every worker a large stack.
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(threads)
+        .stack_size(WORKER_STACK)
         .build()?;
     let mut outcomes: Vec<(FileRecord, Option<FileSummary>)> =
         pool.install(|| small.par_iter().map(|c| process(c)).collect());
     eprintln!("processing {} large files one at a time", large.len());
-    outcomes.extend(large.iter().map(|c| process(c)));
+    let single = rayon::ThreadPoolBuilder::new()
+        .num_threads(1)
+        .stack_size(WORKER_STACK)
+        .build()?;
+    outcomes.extend(single.install(|| large.iter().map(|c| process(c)).collect::<Vec<_>>()));
 
     std::panic::set_hook(default_hook);
 
@@ -206,6 +234,7 @@ fn process_file(
         format: None,
         instances: 0,
         scripts: 0,
+        legacy_upgrade: None,
     };
     let bytes = match std::fs::read(path) {
         Ok(b) => b,
@@ -242,6 +271,15 @@ fn process_file(
     };
     drop(bytes);
     record.format = Some(format!("{:?}", loaded.format));
+    record.legacy_upgrade = loaded.legacy.as_ref().map(|u| LegacyCounts {
+        externals_dropped: u64::from(u.externals_dropped),
+        embedded_assets: u.embedded_assets.len() as u64,
+        embedded_bytes: u.embedded_assets.iter().map(|a| a.data.len() as u64).sum(),
+        hash_references: u64::from(u.hash_references),
+        control_characters: u64::from(u.control_characters),
+        msvc_floats: u64::from(u.msvc_floats),
+        null_numbers: u64::from(u.null_numbers),
+    });
     let summary = summarise(&loaded.dom);
     record.instances = summary.classes.values().sum();
     record.scripts = summary.script_classes.values().sum();
@@ -308,6 +346,17 @@ fn merge_record(agg: &mut Aggregate, record: &FileRecord) {
             agg.scripts += record.scripts;
             if let Some(f) = &record.format {
                 *agg.formats.entry(f.clone()).or_insert(0) += 1;
+            }
+            if let Some(l) = record.legacy_upgrade {
+                let t = &mut agg.legacy_totals;
+                agg.legacy_upgraded_files += 1;
+                t.externals_dropped += l.externals_dropped;
+                t.embedded_assets += l.embedded_assets;
+                t.embedded_bytes += l.embedded_bytes;
+                t.hash_references += l.hash_references;
+                t.control_characters += l.control_characters;
+                t.msvc_floats += l.msvc_floats;
+                t.null_numbers += l.null_numbers;
             }
         }
         Status::Failed { kind, message } => {

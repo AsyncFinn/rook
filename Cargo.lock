@@ -90,6 +90,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9e1b586273c5702936fe7b7d6896644d8be71e6314cfe09d3167c95f712589e8"
 
 [[package]]
+name = "base64"
+version = "0.23.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac07cdecf99051d9a5238b80f35af32cdeba5b336e55d957b318b50137e18da5"
+
+[[package]]
 name = "bitflags"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -568,6 +574,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "quick-xml"
+version = "0.42.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "41b1177fdf999d2321d3fb46ff47159d9c1fb9ad66a4879f8c50a0b504615e9b"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
 name = "quote"
 version = "1.0.47"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -641,6 +656,9 @@ dependencies = [
 name = "raven-formats"
 version = "0.1.0"
 dependencies = [
+ "base64 0.23.1",
+ "blake3",
+ "quick-xml",
  "raven-reflection",
  "rbx_binary",
  "rbx_dom_weak",
@@ -749,7 +767,7 @@ version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "de3b89eefdd71f5e2a25543b1ead9f6ea2ed3fdfba8b397cbdb0de053eb2463e"
 dependencies = [
- "base64",
+ "base64 0.13.1",
  "bitflags 1.3.2",
  "blake3",
  "lazy_static",
@@ -765,7 +783,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df4dba3154bef50fe1ba41cf06a066b9cd33bcfbf1c103e8db0818d8b4528b31"
 dependencies = [
  "ahash",
- "base64",
+ "base64 0.13.1",
  "log",
  "rbx_dom_weak",
  "rbx_reflection",

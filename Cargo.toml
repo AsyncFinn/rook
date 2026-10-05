@@ -28,6 +28,10 @@ rbx_reflection_database = "=3.0.1"
 # Default features stay on: full_moon 3.0.0 fails to build without `serde`.
 full_moon = { version = "3.0", features = ["luau"] }
 
+# Legacy XML upgrade
+quick-xml = "0.42"
+base64 = "0.23"
+
 # General
 glam = "0.34"
 thiserror = "2"
