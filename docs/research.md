@@ -185,6 +185,12 @@ Raven is an independent implementation.
 - Each subsystem's design note records where its behavior came from (see architecture §10).
 - **GUI is citation-only.** Every GUI behavior entry must cite creator-docs or a committed Studio conformance recording. No GUI behavior is accepted on recall or "known behavior" alone.
 - Community knowledge (revival communities, forums, word of mouth) is a lead, not a source. Before relying on it, verify it in Studio or find a public citation.
+- **Files shipped in official Roblox builds** (for example the plain-text shader sources in some 2016 player builds) were published by Roblox, but they carry no licence. They may serve as a lead only, through a split process:
+  1. The maintainer reads them and writes a private facts-only note: formulas in maths notation, constants, which inputs feed which terms, and per-pixel versus per-vertex work. The note contains no code and no pasted snippets.
+  2. The Raven implementation is written from that note by someone who has not opened the original files.
+  3. The behavior counts as Confirmed only after it matches Studio (golden images or conformance recordings). Until then it is an Inference.
+
+  The original files and the notes stay out of the repository and are never linked from it. Binary or packed builds (`.pack`, `shaders.zip`) remain under "Not to be used" (§5a). Content from a user's Roblox install may still be loaded at runtime (§7).
 
 ---
 
