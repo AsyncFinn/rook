@@ -16,7 +16,7 @@ mod compare;
 pub mod legacy;
 
 pub use compare::{CompareOptions, Difference, compare, compare_with};
-pub use legacy::{EmbeddedAsset, LegacyUpgrade};
+pub use legacy::{EmbeddedAsset, HashReference, LegacyUpgrade};
 
 use std::io::Cursor;
 use std::panic::{AssertUnwindSafe, catch_unwind};

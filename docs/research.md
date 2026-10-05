@@ -213,7 +213,8 @@ Raven is an independent implementation.
 First full `raven corpus-scan` of the maintainer's archive of places and models. Only aggregate figures are recorded here.
 
 - **4,605 files, 3,077 unique** (12.7 GB). **3,056 load (99.3%).** Before the legacy XML upgrade the figure was 55.6%.
-- **1,346 files needed the legacy XML upgrade**: 27,096 `<External>` entries dropped, 1,456 embedded assets kept (252.7 MB), 5,906 `<hash>` references, 19.1 million control characters restored (almost all legacy `Terrain.ClusterGrid`/`ClusterGridV2` data), 6 MSVC float values, 3 `null` numbers.
+- **1,346 files needed the legacy XML upgrade**: 27,096 `<External>` entries dropped, 1,456 embedded assets and 5,906 `<hash>` references (both load empty, as modern Studio does; the data is kept in the upgrade report), 19.1 million control characters restored (almost all legacy `Terrain.ClusterGrid`/`ClusterGridV2` data), 6 MSVC float values, 3 `null` numbers.
+- **Embedded assets in Studio (Confirmed, 2026-10-05):** a December 2008 place opens in modern Studio, and the SpecialMesh whose texture was embedded in the file has an empty `TextureId`/`TextureContent`. `<hash>` references are assumed to behave the same (Inference).
 - The 21 remaining failures: 3 non-Roblox or empty files, 2 binary files with bad headers, 2 binary files where rbx_binary rejects a `Color3uint8` stored as `Part.Color3uint8Internal` (an upstream issue), 3 XML files that aren't valid UTF-8, and a handful of malformed XML files.
 - **11.5 million instances and 287,000 scripts.** About 1.0% of scripts have syntax errors. Nearly all of the rest of the raw total comes from one place holding 44,000 broken copies of a 2008 "anti-lag" script, which real Lua rejects too.
 - **Legacy API use is pervasive:** `:connect` (861 files), `:findFirstChild` (611), `:clone` (558), `:remove` (506), `:disconnect` (491), `game:service` (465); global `wait()` in 997 files.

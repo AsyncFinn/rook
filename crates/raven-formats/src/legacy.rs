@@ -8,11 +8,16 @@
 //! | Legacy construct | Upgrade |
 //! |---|---|
 //! | `<External>…</External>` | Dropped. They declare referents of objects that weren't saved; nothing in the file defines them. |
-//! | `<Content><binary>…</binary></Content>` | Decoded and kept as an [`EmbeddedAsset`]; the property becomes `raven-embedded://<hash>`. |
-//! | `<Content><hash>H</hash></Content>` | The legacy URL form `http://www.roblox.com/asset/?hash=H`. |
+//! | `<Content><binary>…</binary></Content>` | The property loads **empty**, as in modern Studio (Confirmed). The decoded data is kept in the report as an [`EmbeddedAsset`]. |
+//! | `<Content><hash>H</hash></Content>` | The property loads **empty** (Inference: same era and treatment as embedded data). The value is kept in the report as a [`HashReference`]. |
 //! | `&#0;` and other characters XML 1.0 forbids | Mapped to private-use characters for parsing, then restored exactly afterwards. |
 //! | `1.#QNAN`, `1.#IND`, `1.#INF` (MSVC float text) | NaN or ±infinity, inside numeric elements only. |
 //! | `null` where a number belongs | `0`, inside numeric elements only. Unverified against Roblox. |
+//!
+//! Embedded assets and hash references are dropped from the loaded tree
+//! because modern Roblox drops them. The report keeps them, tagged with the
+//! file referent and property, so an opt-in Raven extension could restore
+//! them later without affecting compatibility mode.
 
 use base64::Engine;
 use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
@@ -20,20 +25,28 @@ use quick_xml::{Reader, Writer};
 use rbx_dom_weak::WeakDom;
 use rbx_types::Variant;
 
-/// URI scheme for assets embedded in a legacy file.
-pub const EMBEDDED_SCHEME: &str = "raven-embedded://";
-
 /// Private-use block used to carry forbidden control characters through parsing.
 const PUA_BASE: u32 = 0xE000;
 
 /// An asset stored inside a legacy file rather than referenced by ID.
+/// Not loaded into the tree; kept for a possible opt-in restore.
 #[derive(Debug, Clone)]
 pub struct EmbeddedAsset {
-    /// `raven-embedded://<blake3 hex>`, as written into the property.
-    pub uri: String,
+    /// The `referent` attribute of the `<Item>` it belonged to in the file.
+    pub item_referent: Option<String>,
+    /// The Content property it was stored in, as named in the file.
+    pub property: Option<String>,
     /// MIME type from the file, if it gave one.
     pub mime_type: Option<String>,
     pub data: Vec<u8>,
+}
+
+/// A legacy hash-based asset reference. Not loaded into the tree.
+#[derive(Debug, Clone)]
+pub struct HashReference {
+    pub item_referent: Option<String>,
+    pub property: Option<String>,
+    pub hash: String,
 }
 
 /// What the upgrade pass changed.
@@ -41,7 +54,7 @@ pub struct EmbeddedAsset {
 pub struct LegacyUpgrade {
     pub externals_dropped: u32,
     pub embedded_assets: Vec<EmbeddedAsset>,
-    pub hash_references: u32,
+    pub hash_references: Vec<HashReference>,
     /// Forbidden control characters carried through and restored.
     pub control_characters: u32,
     /// True if the file already used the private-use range, so control
@@ -55,7 +68,7 @@ impl LegacyUpgrade {
     pub fn changed_anything(&self) -> bool {
         self.externals_dropped > 0
             || !self.embedded_assets.is_empty()
-            || self.hash_references > 0
+            || !self.hash_references.is_empty()
             || self.control_characters > 0
             || self.msvc_floats > 0
             || self.null_numbers > 0
@@ -86,6 +99,9 @@ pub fn upgrade(xml: &[u8]) -> Result<(Vec<u8>, LegacyUpgrade), UpgradeError> {
     config.check_end_names = false;
     let mut writer = Writer::new(Vec::with_capacity(xml.len()));
     let mut stack: Vec<String> = Vec::new();
+    // `referent` of each open <Item>, and the name of the open <Content>.
+    let mut items: Vec<Option<String>> = Vec::new();
+    let mut content_name: Option<String> = None;
     let mut skip_depth = 0usize;
 
     loop {
@@ -118,32 +134,48 @@ pub fn upgrade(xml: &[u8]) -> Result<(Vec<u8>, LegacyUpgrade), UpgradeError> {
                 let is_binary = start.local_name().as_ref() == "binary";
                 let mime = attribute(&start, "contentType");
                 let inner = read_until_end(&mut reader)?;
-                let url = if is_binary {
+                let item_referent = items.last().cloned().flatten();
+                let property = content_name.clone();
+                if is_binary {
                     let cleaned: String = inner.chars().filter(|c| !c.is_whitespace()).collect();
                     let data = base64::engine::general_purpose::STANDARD
                         .decode(cleaned.as_bytes())
                         .unwrap_or_else(|_| inner.clone().into_bytes());
-                    let uri = format!("{EMBEDDED_SCHEME}{}", blake3::hash(&data).to_hex());
                     report.embedded_assets.push(EmbeddedAsset {
-                        uri: uri.clone(),
+                        item_referent,
+                        property,
                         mime_type: mime,
                         data,
                     });
-                    uri
                 } else {
-                    report.hash_references += 1;
-                    format!("http://www.roblox.com/asset/?hash={}", inner.trim())
-                };
-                write(&mut writer, Event::Start(BytesStart::new("url")))?;
-                write(&mut writer, Event::Text(BytesText::new(&url)))?;
-                write(&mut writer, Event::End(BytesEnd::new("url")))?;
+                    report.hash_references.push(HashReference {
+                        item_referent,
+                        property,
+                        hash: inner.trim().to_owned(),
+                    });
+                }
+                // Modern Roblox loads these properties empty.
+                write(&mut writer, Event::Start(BytesStart::new("null")))?;
+                write(&mut writer, Event::End(BytesEnd::new("null")))?;
             }
             Event::Start(start) => {
-                stack.push(start.local_name().as_ref().to_owned());
+                let name = start.local_name().as_ref().to_owned();
+                match name.as_str() {
+                    "Item" => items.push(attribute(&start, "referent")),
+                    "Content" => content_name = attribute(&start, "name"),
+                    _ => {}
+                }
+                stack.push(name);
                 write(&mut writer, Event::Start(start))?;
             }
             Event::End(end) => {
-                stack.pop();
+                match stack.pop().as_deref() {
+                    Some("Item") => {
+                        items.pop();
+                    }
+                    Some("Content") => content_name = None,
+                    _ => {}
+                }
                 write(&mut writer, Event::End(end))?;
             }
             Event::Text(t) => {
@@ -364,7 +396,16 @@ bG8=</binary></Content>
         let loaded = crate::load(LEGACY.as_bytes()).expect("legacy file loads after upgrade");
         let report = loaded.legacy.expect("upgrade ran");
         assert_eq!(report.externals_dropped, 3);
-        assert_eq!(report.hash_references, 1);
+        assert_eq!(report.hash_references.len(), 1);
+        assert_eq!(report.hash_references[0].hash, "abc123");
+        assert_eq!(
+            report.hash_references[0].item_referent.as_deref(),
+            Some("RBX2")
+        );
+        assert_eq!(
+            report.hash_references[0].property.as_deref(),
+            Some("TextureId")
+        );
         assert_eq!(report.control_characters, 2);
         assert_eq!(report.msvc_floats, 2);
         assert_eq!(report.null_numbers, 1);
@@ -373,6 +414,14 @@ bG8=</binary></Content>
         assert_eq!(
             report.embedded_assets[0].mime_type.as_deref(),
             Some("image/png")
+        );
+        assert_eq!(
+            report.embedded_assets[0].item_referent.as_deref(),
+            Some("RBX1")
+        );
+        assert_eq!(
+            report.embedded_assets[0].property.as_deref(),
+            Some("Texture")
         );
 
         let dom = &loaded.dom;
@@ -391,6 +440,17 @@ bG8=</binary></Content>
         // `null` as a *string* is left alone.
         let decal = dom.descendants().find(|i| i.class == "Decal").unwrap();
         assert_eq!(decal.name, "null");
+
+        // Like modern Studio, embedded and hash-referenced content loads empty.
+        for inst in dom
+            .descendants()
+            .filter(|i| matches!(i.class.as_str(), "Decal" | "SpecialMesh"))
+        {
+            for value in inst.properties.values() {
+                let text = format!("{value:?}");
+                assert!(!text.contains("abc123") && !text.contains("aGVs"), "{text}");
+            }
+        }
     }
 
     #[test]

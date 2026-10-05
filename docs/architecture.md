@@ -212,6 +212,7 @@ Status is one of **Confirmed**, **Inference**, **Approximation** or **Raven exte
 - Extension classes and members are marked in the reflection overlay and only exist when the engine runs with the `extensions` profile. The default profile is strict compatibility.
 - Engine-side extensions (better lighting, debugging tools, performance options) are configuration flags that are off in strict mode.
 - Saving a file that contains extension classes warns, because Studio can't read them back.
+- Candidate extension: **restore legacy embedded assets.** Modern Roblox loads `<Content><binary>` data from old XML files as empty (Confirmed in Studio, 2026-10-05). Raven matches that by default, but the legacy upgrade keeps the data, tagged by object and property, so an opt-in extension could show those textures again.
 
 ## 12. Milestones
 
@@ -225,7 +226,7 @@ Each milestone is a vertical slice with a measurable exit criterion. The order w
 | M3 | Physics v0: assemblies, anchoring, collisions, welds/Motor6D/legacy surface joints, BodyMovers, Touched, queries | Physics conformance batch; unanchored places settle plausibly |
 | M4 | Characters: spawning, Humanoid, tools, default camera/control scripts (Core-Scripts, Apache-2.0) and Raven's own Animate | Walk around and use tools in an archived place |
 | M5 | GUI (layout, text, images, GUI input) | GUI conformance batch |
-| M6 | Content: MeshParts, SpecialMesh, textures, decals (incl. embedded legacy assets), materials; audio | Corpus places render with meshes and sound |
+| M6 | Content: MeshParts, SpecialMesh, textures, decals, materials; audio | Corpus places render with meshes and sound |
 | M7 | Network transport, headless server, multi-client | Two clients play together |
 | M8+ | Terrain (incl. legacy `ClusterGrid` data), animation, particles, advanced lighting, Studio tooling, extensions | — |
 

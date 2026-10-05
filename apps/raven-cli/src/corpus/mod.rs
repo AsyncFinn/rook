@@ -275,7 +275,7 @@ fn process_file(
         externals_dropped: u64::from(u.externals_dropped),
         embedded_assets: u.embedded_assets.len() as u64,
         embedded_bytes: u.embedded_assets.iter().map(|a| a.data.len() as u64).sum(),
-        hash_references: u64::from(u.hash_references),
+        hash_references: u.hash_references.len() as u64,
         control_characters: u64::from(u.control_characters),
         msvc_floats: u64::from(u.msvc_floats),
         null_numbers: u64::from(u.null_numbers),

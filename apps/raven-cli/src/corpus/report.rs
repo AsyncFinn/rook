@@ -81,11 +81,15 @@ pub fn summary_markdown(agg: &Aggregate, records: &[FileRecord], elapsed: Durati
         );
         let _ = writeln!(
             md,
-            "| Embedded assets kept | {} ({:.1} MB) |",
+            "| Embedded assets (loaded empty, as in Studio) | {} ({:.1} MB) |",
             t.embedded_assets,
             t.embedded_bytes as f64 / 1e6
         );
-        let _ = writeln!(md, "| `<hash>` references | {} |", t.hash_references);
+        let _ = writeln!(
+            md,
+            "| `<hash>` references (loaded empty) | {} |",
+            t.hash_references
+        );
         let _ = writeln!(
             md,
             "| Control characters restored | {} |",

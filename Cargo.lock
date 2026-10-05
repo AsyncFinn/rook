@@ -657,7 +657,6 @@ name = "raven-formats"
 version = "0.1.0"
 dependencies = [
  "base64 0.23.1",
- "blake3",
  "quick-xml",
  "raven-reflection",
  "rbx_binary",
