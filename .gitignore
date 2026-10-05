@@ -1,0 +1,29 @@
+# Rust build output
+/target/
+**/*.rs.bk
+
+# Local Roblox files: places, models and client content are never committed.
+# Tests read real fixtures from paths given in environment variables.
+*.rbxl
+*.rbxlx
+*.rbxm
+*.rbxmx
+/fixtures/
+/content-cache/
+/asset-cache/
+
+# Credentials
+*.key
+api_key
+.env
+cookie.txt
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Local reports (corpus scans contain local file paths)
+/reports/

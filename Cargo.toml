@@ -1,0 +1,56 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "apps/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+authors = ["AsyncFinn"]
+repository = "https://github.com/raven-engine/raven"
+rust-version = "1.85"
+
+[workspace.dependencies]
+# Raven crates
+raven-types = { path = "crates/raven-types" }
+raven-reflection = { path = "crates/raven-reflection" }
+raven-formats = { path = "crates/raven-formats" }
+
+# Roblox formats and data (rbx-dom ecosystem)
+rbx_dom_weak = "4.2"
+rbx_types = "3.1"
+rbx_binary = "3.0"
+rbx_xml = "3.0"
+rbx_reflection = "7.0"
+rbx_reflection_database = "=3.0.1"
+
+# Lua parsing (corpus scanner)
+# Default features stay on: full_moon 3.0.0 fails to build without `serde`.
+full_moon = { version = "3.0", features = ["luau"] }
+
+# General
+glam = "0.34"
+thiserror = "2"
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+clap = { version = "4", features = ["derive"] }
+rayon = "1"
+walkdir = "2"
+blake3 = "1"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+unsafe_op_in_unsafe_fn = "deny"
+unused_lifetimes = "warn"
+missing_debug_implementations = "warn"
+
+[workspace.lints.clippy]
+dbg_macro = "warn"
+todo = "warn"
+unimplemented = "warn"
+redundant_clone = "warn"
+needless_borrow = "warn"
+
+[profile.release]
+debug = "line-tables-only"

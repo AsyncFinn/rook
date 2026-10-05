@@ -1,0 +1,31 @@
+[package]
+name = "raven-cli"
+description = "Command-line tools for the Raven engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "raven"
+path = "src/main.rs"
+
+[dependencies]
+raven-types.workspace = true
+raven-reflection.workspace = true
+raven-formats.workspace = true
+rbx_dom_weak.workspace = true
+rbx_types.workspace = true
+full_moon.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+rayon.workspace = true
+walkdir.workspace = true
+blake3.workspace = true
+
+[lints]
+workspace = true

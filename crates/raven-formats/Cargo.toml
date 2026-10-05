@@ -1,0 +1,20 @@
+[package]
+name = "raven-formats"
+description = "Roblox place and model file loading and saving for the Raven engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+raven-reflection.workspace = true
+rbx_dom_weak.workspace = true
+rbx_types.workspace = true
+rbx_binary.workspace = true
+rbx_xml.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true
