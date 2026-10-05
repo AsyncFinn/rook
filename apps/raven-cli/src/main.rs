@@ -2,6 +2,7 @@
 
 mod corpus;
 mod dump;
+mod gen_members;
 mod roundtrip;
 
 use std::path::PathBuf;
@@ -48,6 +49,19 @@ enum Command {
         #[arg(long, default_value_t = 64)]
         large_mb: u64,
     },
+    /// Regenerate crates/raven-reflection/data/members.json from a Full API dump.
+    ///
+    /// The dump must match the pinned Roblox version; Roblox-Client-Tracker
+    /// keeps one per version.
+    GenMembers {
+        /// Path to Full-API-Dump.json.
+        dump: PathBuf,
+        /// Where the dump came from, recorded in the output.
+        #[arg(long)]
+        source: String,
+        #[arg(long, default_value = "crates/raven-reflection/data/members.json")]
+        out: PathBuf,
+    },
 }
 
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
@@ -79,5 +93,6 @@ fn main() -> anyhow::Result<()> {
             jobs,
             large_mb,
         } => corpus::run(&dir, &out, jobs, large_mb),
+        Command::GenMembers { dump, source, out } => gen_members::run(&dump, &source, &out),
     }
 }
