@@ -1,0 +1,17 @@
+[package]
+name = "raven-signal"
+description = "RBXScriptSignal connections and dispatch for the Raven engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+raven-dom.workspace = true
+raven-reflection.workspace = true
+slotmap.workspace = true
+
+[lints]
+workspace = true

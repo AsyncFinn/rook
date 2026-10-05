@@ -692,6 +692,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "raven-scheduler"
+version = "0.1.0"
+
+[[package]]
+name = "raven-signal"
+version = "0.1.0"
+dependencies = [
+ "raven-dom",
+ "raven-reflection",
+ "slotmap",
+]
+
+[[package]]
 name = "raven-types"
 version = "0.1.0"
 dependencies = [
