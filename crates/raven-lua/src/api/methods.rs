@@ -35,6 +35,11 @@ const INERT: &[(&str, &str)] = &[
     ("Model", "BreakJoints"),
     ("ContentProvider", "Preload"),
     ("ContentProvider", "PreloadAsync"),
+    // FunctionalTest reports results to Roblox's internal test harness.
+    ("FunctionalTest", "Passed"),
+    ("FunctionalTest", "Failed"),
+    ("FunctionalTest", "Error"),
+    ("FunctionalTest", "Warn"),
 ];
 
 pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
@@ -92,10 +97,12 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("Model", "GetExtentsSize" | "GetModelSize") => get_extents_size,
         ("Model", "GetBoundingBox") => get_bounding_box,
         ("BasePart", "GetMass") => get_mass,
+        ("Lighting", "GetMinutesAfterMidnight") => get_minutes_after_midnight,
+        ("Lighting", "SetMinutesAfterMidnight") => set_minutes_after_midnight,
         ("Sound", "Play" | "Resume") => sound_play,
         ("Sound", "Stop") => sound_stop,
         ("Sound", "Pause") => sound_pause,
-        _ => return None,
+        _ => return super::services::native(owner, name),
     })
 }
 
@@ -110,7 +117,8 @@ pub(crate) fn luau_source(owner: &str, name: &str) -> Option<&'static str> {
         // 5 seconds). Warning text is Inference.
         ("Instance", "WaitForChild") => Some(
             r#"
-            local task, coroutine, warn, error, type = ...
+            local std = ...
+            local task, coroutine, warn, error, type = std.task, std.coroutine, std.warn, std.error, std.type
             return function(self, name, timeOut)
                 if type(name) ~= "string" then
                     error("Argument 1 missing or nil", 2)
@@ -149,7 +157,7 @@ pub(crate) fn luau_source(owner: &str, name: &str) -> Option<&'static str> {
             end
             "#,
         ),
-        _ => None,
+        _ => super::services::luau_source(owner, name),
     }
 }
 
@@ -847,6 +855,21 @@ fn get_mass(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
         _ => Vector3::ONE,
     });
     Outcome::ret(lua, f64::from(size.x() * size.y() * size.z()) * 0.7)
+}
+
+// ---- Lighting ------------------------------------------------------------------------------------
+
+fn get_minutes_after_midnight(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
+    let hours = with_world(lua, |w| super::properties::lighting_hours(w, this));
+    Outcome::ret(lua, hours * 60.0)
+}
+
+fn set_minutes_after_midnight(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
+    let minutes = a.number(0)?;
+    mutate(lua, |w| {
+        super::properties::set_lighting_hours(w, this, minutes / 60.0)
+    })?;
+    Outcome::ret(lua, ())
 }
 
 // ---- Sound (state only until audio, M6) --------------------------------------------------------

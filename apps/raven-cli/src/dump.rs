@@ -60,3 +60,37 @@ fn print_properties(inst: &Instance, indent: &str) {
         println!("{indent}  . {name} = {text}");
     }
 }
+
+/// Print the source of every script whose full name (as `GetFullName`
+/// reports it, without `Game.`) contains `name`.
+pub fn print_source(path: &Path, name: &str) -> anyhow::Result<()> {
+    let bytes = std::fs::read(path).with_context(|| format!("reading {}", path.display()))?;
+    let loaded = raven_formats::load(&bytes)?;
+    let mut stack: Vec<(rbx_types::Ref, String)> = loaded
+        .dom
+        .root()
+        .children()
+        .iter()
+        .map(|r| (*r, String::new()))
+        .collect();
+    let mut found = 0;
+    while let Some((r, prefix)) = stack.pop() {
+        let inst = loaded.dom.get_by_ref(r).expect("referent exists");
+        let full = if prefix.is_empty() {
+            inst.name.clone()
+        } else {
+            format!("{prefix}.{}", inst.name)
+        };
+        if full.contains(name)
+            && let Some(rbx_types::Variant::String(src)) = inst.properties.get(&"Source".into())
+        {
+            found += 1;
+            println!("-- {full} [{}]\n{src}\n", inst.class);
+        }
+        for c in inst.children().iter().rev() {
+            stack.push((*c, full.clone()));
+        }
+    }
+    anyhow::ensure!(found > 0, "no script matching {name:?}");
+    Ok(())
+}

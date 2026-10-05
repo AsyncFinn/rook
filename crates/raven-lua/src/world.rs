@@ -136,6 +136,11 @@ impl World {
         *self.unimplemented.entry(what).or_default() += 1;
     }
 
+    /// Number of scripts started so far.
+    pub fn started_count(&self) -> usize {
+        self.started.len()
+    }
+
     pub(crate) fn count_inert(&mut self, what: String) {
         *self.inert.entry(what).or_default() += 1;
     }

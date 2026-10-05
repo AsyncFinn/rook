@@ -20,7 +20,7 @@ pub use journal::{Change, Journal};
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-use raven_reflection::{ClassId, Database, PropertyId};
+use raven_reflection::{ClassId, Database, PropertyId, PropertyType};
 use raven_types::{InstanceRef, Value};
 use slotmap::{Key, KeyData, SlotMap};
 
@@ -553,6 +553,7 @@ impl Dom {
         value: Value,
     ) -> Result<(), DomError> {
         debug_assert!(property != self.name_prop && property != self.parent_prop);
+        let value = coerce(self.db.property(property).ty, value);
         let current = self.property(id, property);
         if current.as_ref() == Some(&value) {
             return Ok(());
@@ -564,6 +565,7 @@ impl Dom {
 
     /// Store a property from a file without recording a change.
     pub fn load_property(&mut self, id: InstanceId, property: PropertyId, value: Value) {
+        let value = coerce(self.db.property(property).ty, value);
         if let Some(inst) = self.instances.get_mut(id) {
             inst.properties.insert(property, value);
         }
@@ -653,9 +655,77 @@ impl Default for Dom {
     }
 }
 
+/// The class default from the database, or the zero value of the
+/// property's type when the database has none (Approximation: the
+/// database lists defaults only for properties that serialize).
 fn convert_default(db: &Database, class: ClassId, property: PropertyId) -> Option<Value> {
-    let variant = db.default_value(class, property)?.clone();
-    Value::from_variant(variant, |_| None).ok()
+    let ty = db.property(property).ty;
+    match db.default_value(class, property) {
+        Some(variant) => Value::from_variant(variant.clone(), |_| None)
+            .ok()
+            .map(|v| coerce(ty, v)),
+        None => zero_value(db, ty),
+    }
+}
+
+/// Store values in the property's declared type. Files and the database
+/// sometimes hold an equivalent encoding (`Color3uint8` for a `Color3`
+/// property, `Int32` for an `Int64` one).
+pub fn coerce(ty: PropertyType, value: Value) -> Value {
+    use rbx_types::VariantType as T;
+    let PropertyType::Value(target) = ty else {
+        return value;
+    };
+    let number = |v: &Value| match v {
+        Value::Float32(n) => Some(f64::from(*n)),
+        Value::Float64(n) => Some(*n),
+        Value::Int32(n) => Some(f64::from(*n)),
+        Value::Int64(n) => Some(*n as f64),
+        _ => None,
+    };
+    match (target, &value) {
+        (T::Color3, Value::Color3uint8(c)) => Value::Color3((*c).into()),
+        (T::Float32, v) if !matches!(v, Value::Float32(_)) => {
+            number(v).map_or(value, |n| Value::Float32(n as f32))
+        }
+        (T::Float64, v) if !matches!(v, Value::Float64(_)) => {
+            number(v).map_or(value, Value::Float64)
+        }
+        (T::Int32, v) if !matches!(v, Value::Int32(_)) => {
+            number(v).map_or(value, |n| Value::Int32(n as i32))
+        }
+        (T::Int64, v) if !matches!(v, Value::Int64(_)) => {
+            number(v).map_or(value, |n| Value::Int64(n as i64))
+        }
+        _ => value,
+    }
+}
+
+fn zero_value(db: &Database, ty: PropertyType) -> Option<Value> {
+    use raven_types::{CFrame, Color3, UDim, UDim2, Vector2, Vector3};
+    use rbx_types::VariantType as T;
+    Some(match ty {
+        PropertyType::Enum(e) => Value::Enum(db.enum_info(e).items.first().map_or(0, |(_, v)| *v)),
+        PropertyType::Value(t) => match t {
+            T::Bool => Value::Bool(false),
+            T::Float32 => Value::Float32(0.0),
+            T::Float64 => Value::Float64(0.0),
+            T::Int32 => Value::Int32(0),
+            T::Int64 => Value::Int64(0),
+            T::String => Value::String(String::new()),
+            T::ContentId => Value::ContentId(String::new().into()),
+            T::Vector3 => Value::Vector3(Vector3::ZERO),
+            T::Vector2 => Value::Vector2(Vector2::ZERO),
+            T::CFrame => Value::CFrame(CFrame::IDENTITY),
+            T::Color3 => Value::Color3(Color3::new(0.0, 0.0, 0.0)),
+            T::UDim => Value::UDim(UDim::default()),
+            T::UDim2 => Value::UDim2(UDim2::default()),
+            T::Ref => Value::Ref(None),
+            T::BrickColor => Value::BrickColor(rbx_types::BrickColor::from_number(194)?),
+            T::NumberRange => Value::NumberRange(rbx_types::NumberRange::new(0.0, 0.0)),
+            _ => return None,
+        },
+    })
 }
 
 #[cfg(test)]

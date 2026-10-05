@@ -709,6 +709,7 @@ dependencies = [
  "blake3",
  "clap",
  "full_moon",
+ "raven-engine",
  "raven-formats",
  "raven-reflection",
  "raven-types",
@@ -728,6 +729,20 @@ dependencies = [
  "raven-types",
  "rbx_types",
  "slotmap",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "raven-engine"
+version = "0.1.0"
+dependencies = [
+ "mlua",
+ "raven-dom",
+ "raven-formats",
+ "raven-lua",
+ "raven-reflection",
+ "raven-scheduler",
+ "raven-types",
  "thiserror 2.0.21",
 ]
 
@@ -759,6 +774,7 @@ dependencies = [
  "raven-signal",
  "raven-types",
  "rbx_types",
+ "serde_json",
 ]
 
 [[package]]

@@ -137,6 +137,7 @@ pub fn from_dom(dom: &Dom, roots: &[InstanceId]) -> WeakDom {
         };
         let mut props: Vec<(String, Variant)> = Vec::new();
         for (pid, value) in &inst.properties {
+            let value = file_encoding(db, inst.class, *pid, value);
             props.push((db.property(*pid).name.to_owned(), value.to_variant(to_ref)));
         }
         for (name, value) in &inst.unknown_properties {
@@ -162,6 +163,28 @@ pub fn from_dom(dom: &Dom, roots: &[InstanceId]) -> WeakDom {
         }
     }
     weak
+}
+
+/// The DOM stores values in the property's scripting type; files may use
+/// another encoding (`Color` is saved as `Color3uint8`).
+fn file_encoding(
+    db: &raven_reflection::Database,
+    class: raven_reflection::ClassId,
+    pid: raven_reflection::PropertyId,
+    value: &Value,
+) -> Value {
+    use raven_reflection::{PropertyKind, PropertyType, Serialization};
+    let PropertyKind::Canonical(Serialization::SerializesAs(name)) = &db.property(pid).kind else {
+        return value.clone();
+    };
+    let target = db.find_property(class, name).map(|p| p.ty);
+    match (target, value) {
+        (Some(PropertyType::Value(rbx_types::VariantType::Color3uint8)), Value::Color3(c)) => {
+            let (r, g, b) = c.to_rgb();
+            Value::Color3uint8(rbx_types::Color3uint8::new(r, g, b))
+        }
+        _ => value.clone(),
+    }
 }
 
 fn build_rec(

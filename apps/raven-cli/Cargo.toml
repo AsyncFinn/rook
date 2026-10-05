@@ -16,6 +16,7 @@ path = "src/main.rs"
 raven-types.workspace = true
 raven-reflection.workspace = true
 raven-formats.workspace = true
+raven-engine.workspace = true
 rbx_dom_weak.workspace = true
 rbx_types.workspace = true
 full_moon.workspace = true

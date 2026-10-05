@@ -246,7 +246,14 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     task.set("desynchronize", noop)?;
     g.set("task", task.clone())?;
     std.set("task", task)?;
-    lua.set_named_registry_value("raven.std", std)?;
+    std.set(
+        "get_callback",
+        lua.create_function(|lua, (inst, name): (mlua::AnyUserData, String)| {
+            let id = inst.borrow::<super::instance::LuaInstance>()?.0;
+            super::methods::get_callback(lua, id, &name)
+        })?,
+    )?;
+    lua.set_named_registry_value("raven.std", std.clone())?;
 
     let time_fn = api_ret(lua, |lua, _| Ok(now(lua)))?;
     g.set("time", time_fn.clone())?;
@@ -261,6 +268,7 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
         api_ret(lua, move |lua, _| Ok(start_epoch + now(lua)))?,
     )?;
     g.set("typeof", api_ret(lua, typeof_)?)?;
+    std.set("datastore", super::services::datastore_helpers(lua)?)?;
     g.set(
         "version",
         lua.create_function(|_, ()| Ok(raven_reflection::roblox_version()))?,

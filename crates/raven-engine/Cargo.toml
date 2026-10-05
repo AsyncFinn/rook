@@ -1,0 +1,22 @@
+[package]
+name = "raven-engine"
+description = "Assembles a Raven DataModel: services, scripts, frame loop"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+raven-types.workspace = true
+raven-reflection.workspace = true
+raven-dom.workspace = true
+raven-formats.workspace = true
+raven-scheduler.workspace = true
+raven-lua.workspace = true
+mlua.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

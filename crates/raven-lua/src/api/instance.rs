@@ -366,28 +366,35 @@ fn method_function(
         let f: Function = lua
             .load(source)
             .set_name(format!("=[raven] {owner}.{name}"))
-            .call((
-                std.get::<LuaValue>("task")?,
-                std.get::<LuaValue>("coroutine")?,
-                std.get::<LuaValue>("warn")?,
-                std.get::<LuaValue>("error")?,
-                std.get::<LuaValue>("type")?,
-            ))?;
+            .call(std)?;
         c.methods.borrow_mut().insert(key, f.clone());
         return Ok(f);
     }
-    let native = methods::native(owner, name).or_else(|| {
-        // A deprecated spelling (`findFirstChild`) behaves as the preferred one.
-        preferred
-            .filter(|p| p.eq_ignore_ascii_case(name))
-            .and_then(|p| methods::native(owner, p))
-    });
-    let inert = native.is_some() && methods::is_inert(owner, name);
+    // A deprecated lowercase spelling (`findFirstChild`, `makeJoints`)
+    // behaves as the capitalized member.
+    let capitalized = preferred
+        .filter(|p| p.eq_ignore_ascii_case(name))
+        .map(str::to_owned)
+        .or_else(|| {
+            let mut chars = name.chars();
+            let first = chars.next()?;
+            first
+                .is_ascii_lowercase()
+                .then(|| first.to_ascii_uppercase().to_string() + chars.as_str())
+        });
+    let resolved = if methods::native(owner, name).is_some() {
+        name.to_owned()
+    } else {
+        capitalized.unwrap_or_else(|| name.to_owned())
+    };
+    let native = methods::native(owner, &resolved);
+    let inert = native.is_some() && methods::is_inert(owner, &resolved);
+    let resolved: &'static str = Box::leak(resolved.into_boxed_str());
     let f = match native {
         Some(raw) => api_fn(lua, move |lua, args| {
             let (this, args) = Args::method(args, name)?;
             if inert {
-                with_world(lua, |w| w.count_inert(format!("{owner}.{name}")));
+                with_world(lua, |w| w.count_inert(format!("{owner}.{resolved}")));
             }
             raw(lua, this, args)
         })?,

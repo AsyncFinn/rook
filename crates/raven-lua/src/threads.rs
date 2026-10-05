@@ -38,7 +38,11 @@ pub(crate) fn resume(lua: &Lua, thread: &Thread, args: impl IntoLuaMulti) {
 pub(crate) fn report_error(lua: &Lua, thread: &Thread, e: &mlua::Error) {
     let message = lua_error_message(e);
     let mut text = message;
-    if let Some(stack) = stack_lines(lua, thread) {
+    let stack = mlua_traceback(e)
+        .map(|tb| parse_traceback(&tb))
+        .filter(|l| !l.is_empty())
+        .or_else(|| stack_lines(lua, thread));
+    if let Some(stack) = stack {
         text.push_str("\nStack Begin");
         for line in stack {
             text.push('\n');
@@ -50,6 +54,45 @@ pub(crate) fn report_error(lua: &Lua, thread: &Thread, e: &mlua::Error) {
         w.errors += 1;
         w.push_log(MessageType::Error, text);
     });
+}
+
+/// The traceback mlua attached to an error, if any.
+fn mlua_traceback(e: &mlua::Error) -> Option<String> {
+    match e {
+        mlua::Error::RuntimeError(s) => s
+            .split_once(
+                "
+stack traceback:",
+            )
+            .map(|(_, tb)| tb.to_owned()),
+        mlua::Error::CallbackError { traceback, cause } => {
+            mlua_traceback(cause).or_else(|| (!traceback.is_empty()).then(|| traceback.clone()))
+        }
+        mlua::Error::WithContext { cause, .. } => mlua_traceback(cause),
+        _ => None,
+    }
+}
+
+/// Parse Lua-style traceback lines (`chunk:3: in function 'f'`) into
+/// Roblox's `Script 'chunk', Line 3 - function f`. Engine frames are dropped.
+fn parse_traceback(tb: &str) -> Vec<String> {
+    tb.lines()
+        .filter_map(|line| {
+            let line = line.trim();
+            let (location, rest) = line.split_once(": in ")?;
+            let (chunk, number) = location.rsplit_once(':')?;
+            if chunk.starts_with('[') {
+                return None;
+            }
+            let number: u32 = number.parse().ok()?;
+            let suffix = rest
+                .strip_prefix("function '")
+                .and_then(|f| f.strip_suffix('\''))
+                .map(|f| format!(" - function {f}"))
+                .unwrap_or_default();
+            Some(format!("Script '{chunk}', Line {number}{suffix}"))
+        })
+        .collect()
 }
 
 /// Turn Luau's `debug.traceback(thread)` into Roblox's stack lines.

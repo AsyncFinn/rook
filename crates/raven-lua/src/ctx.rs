@@ -150,7 +150,16 @@ impl From<&str> for ScriptError {
 /// The message a script would see for an mlua error.
 pub fn lua_error_message(e: &mlua::Error) -> String {
     match e {
-        mlua::Error::RuntimeError(s) | mlua::Error::SyntaxError { message: s, .. } => s.clone(),
+        mlua::Error::RuntimeError(s) | mlua::Error::SyntaxError { message: s, .. } => {
+            // mlua appends a traceback to errors from resumed threads.
+            s.split(
+                "
+stack traceback:",
+            )
+            .next()
+            .unwrap_or(s)
+            .to_owned()
+        }
         mlua::Error::CallbackError { cause, .. } => lua_error_message(cause),
         mlua::Error::WithContext { cause, .. } => lua_error_message(cause),
         mlua::Error::FromLuaConversionError { from, to, .. } => {
