@@ -9,11 +9,13 @@ mod api;
 mod args;
 mod convert;
 mod ctx;
+mod net;
 mod threads;
 mod types;
 mod world;
 
 pub use ctx::{ScriptError, lua_error_message};
+pub use net::{NetValue, RemoteKind, RemoteMessage};
 pub use world::{Handler, Job, LogEntry, MessageType, SignalBehavior, WaitKind, World};
 
 use std::cell::{Cell, Ref, RefCell, RefMut};
@@ -175,6 +177,100 @@ impl Runtime {
     /// The script-side handle for an instance.
     pub fn push_instance(&self, id: InstanceId) -> mlua::Result<mlua::AnyUserData> {
         api::instance::push_instance(&self.lua, id)
+    }
+
+    /// Remote calls made since the last call, for the session to deliver.
+    pub fn take_outbox(&self) -> Vec<RemoteMessage> {
+        std::mem::take(&mut self.world_mut().outbox)
+    }
+
+    /// Deliver a RemoteEvent firing: `OnServerEvent(player, ...)` on a
+    /// server, `OnClientEvent(...)` on a client.
+    pub fn deliver_event(&self, remote: InstanceId, player: Option<InstanceId>, args: &[NetValue]) {
+        let event = if self.world().is_client {
+            "OnClientEvent"
+        } else {
+            "OnServerEvent"
+        };
+        let lua = &self.lua;
+        let mut values = Vec::with_capacity(args.len() + 1);
+        if let Some(p) = player {
+            match api::instance::push_instance(lua, p) {
+                Ok(ud) => values.push(mlua::Value::UserData(ud)),
+                Err(_) => return,
+            }
+        }
+        for a in args {
+            values.push(net::from_net(lua, a).unwrap_or(mlua::Value::Nil));
+        }
+        self.guarded(|| {
+            threads::fire(lua, &SignalKey::event(remote, event), values);
+            threads::drain_deferred(lua);
+        });
+    }
+
+    /// Run an incoming invoke against the remote's callback; the reply goes
+    /// to this DataModel's outbox.
+    pub fn deliver_invoke(
+        &self,
+        remote: InstanceId,
+        player: Option<InstanceId>,
+        call: u64,
+        args: &[NetValue],
+    ) {
+        let lua = &self.lua;
+        let callback = if self.world().is_client {
+            "OnClientInvoke"
+        } else {
+            "OnServerInvoke"
+        };
+        let Ok(runner) = lua.named_registry_value::<mlua::Function>("rook.remote_runner") else {
+            return;
+        };
+        let Ok(remote_ud) = api::instance::push_instance(lua, remote) else {
+            return;
+        };
+        let mut values = vec![
+            mlua::Value::UserData(remote_ud),
+            mlua::Value::String(lua.create_string(callback).expect("short string")),
+            mlua::Value::Number(call as f64),
+        ];
+        if let Some(p) = player
+            && let Ok(ud) = api::instance::push_instance(lua, p)
+        {
+            values.push(mlua::Value::UserData(ud));
+        }
+        for a in args {
+            values.push(net::from_net(lua, a).unwrap_or(mlua::Value::Nil));
+        }
+        self.guarded(|| {
+            let _ = threads::spawn(lua, runner, mlua::MultiValue::from_vec(values));
+            threads::drain_deferred(lua);
+        });
+    }
+
+    /// Resume the thread waiting on `call` with `(ok, results)`.
+    pub fn deliver_reply(&self, call: u64, ok: bool, args: &[NetValue]) {
+        let lua = &self.lua;
+        let Some(thread) = self.world_mut().pending_calls.remove(&call) else {
+            return;
+        };
+        let packed = (|| -> mlua::Result<mlua::Value> {
+            if !ok {
+                return net::from_net(lua, args.first().unwrap_or(&NetValue::Nil));
+            }
+            let t = lua.create_table()?;
+            for (i, a) in args.iter().enumerate() {
+                t.raw_set(i + 1, net::from_net(lua, a)?)?;
+            }
+            t.raw_set("n", args.len())?;
+            Ok(mlua::Value::Table(t))
+        })()
+        .unwrap_or(mlua::Value::Nil);
+        self.guarded(|| {
+            threads::resume(lua, &thread, (ok, packed));
+            threads::drain_deferred(lua);
+        });
     }
 
     /// Take everything logged so far.

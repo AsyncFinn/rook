@@ -1,7 +1,10 @@
 //! A play session: one server DataModel and the clients connected to it,
 //! kept in sync by the in-process replicator (architecture §8, Play mode).
 
+use std::collections::HashMap;
+
 use rook_dom::{Dom, InstanceId};
+use rook_lua::{NetValue, RemoteKind, RemoteMessage};
 use rook_net::Replicator;
 use rook_types::Value;
 
@@ -20,6 +23,16 @@ pub struct Session {
     server: DataModel,
     clients: Vec<ClientSlot>,
     options: Options,
+    /// Invokes in flight, by session-wide id: who asked, and their own id.
+    calls: HashMap<u64, (Origin, u64)>,
+    next_call: u64,
+}
+
+/// Which DataModel made an invoke.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Origin {
+    Server,
+    Client(usize),
 }
 
 fn set(dom: &mut Dom, id: InstanceId, name: &str, value: Value) {
@@ -52,6 +65,8 @@ impl Session {
             server,
             clients: Vec::new(),
             options,
+            calls: HashMap::new(),
+            next_call: 0,
         }
     }
 
@@ -176,6 +191,7 @@ impl Session {
     /// then each client steps.
     pub fn step(&mut self) {
         self.server.step();
+        self.route();
         for slot in &mut self.clients {
             let start = {
                 let server_world = self.server.runtime().world();
@@ -188,7 +204,137 @@ impl Session {
             slot.client.runtime().dispatch_since(start);
             slot.client.step();
         }
+        self.route();
         self.server.trim_journal();
+    }
+
+    fn new_call(&mut self, origin: Origin, call: u64) -> u64 {
+        self.next_call += 1;
+        self.calls.insert(self.next_call, (origin, call));
+        self.next_call
+    }
+
+    /// Deliver queued remote calls in both directions. Messages arrive in
+    /// the order they were sent; each crosses within the same session frame
+    /// (Approximation: Roblox delivers on the next network tick).
+    fn route(&mut self) {
+        for msg in self.server.runtime().take_outbox() {
+            self.route_from_server(msg);
+        }
+        for index in 0..self.clients.len() {
+            let outbox = self.clients[index].client.runtime().take_outbox();
+            for msg in outbox {
+                self.route_from_client(index, msg);
+            }
+        }
+    }
+
+    fn route_from_server(&mut self, msg: RemoteMessage) {
+        let RemoteMessage { remote, kind, args } = msg;
+        let to_client = |slot: &ClientSlot, args: &[NetValue]| -> Vec<NetValue> {
+            args.iter()
+                .cloned()
+                .map(|mut a| {
+                    a.map_instances(&|id| slot.replicator.client_id(id));
+                    a
+                })
+                .collect()
+        };
+        match kind {
+            RemoteKind::FireClient { player } => {
+                for slot in self.clients.iter().filter(|s| s.player == player) {
+                    if let Some(r) = remote.and_then(|r| slot.replicator.client_id(r)) {
+                        slot.client
+                            .runtime()
+                            .deliver_event(r, None, &to_client(slot, &args));
+                    }
+                }
+            }
+            RemoteKind::FireAllClients => {
+                for slot in &self.clients {
+                    if let Some(r) = remote.and_then(|r| slot.replicator.client_id(r)) {
+                        slot.client
+                            .runtime()
+                            .deliver_event(r, None, &to_client(slot, &args));
+                    }
+                }
+            }
+            RemoteKind::InvokeClient { player, call } => {
+                let Some(index) = self.clients.iter().position(|s| s.player == player) else {
+                    self.server.runtime().deliver_reply(
+                        call,
+                        false,
+                        &[NetValue::String(b"Player is not connected".to_vec())],
+                    );
+                    return;
+                };
+                let id = self.new_call(Origin::Server, call);
+                let slot = &self.clients[index];
+                if let Some(r) = remote.and_then(|r| slot.replicator.client_id(r)) {
+                    slot.client
+                        .runtime()
+                        .deliver_invoke(r, None, id, &to_client(slot, &args));
+                }
+            }
+            RemoteKind::Reply { call, ok } => {
+                if let Some((Origin::Client(index), original)) = self.calls.remove(&call)
+                    && let Some(slot) = self.clients.get(index)
+                {
+                    slot.client
+                        .runtime()
+                        .deliver_reply(original, ok, &to_client(slot, &args));
+                }
+            }
+            RemoteKind::FireServer | RemoteKind::InvokeServer { .. } => {}
+        }
+    }
+
+    fn route_from_client(&mut self, index: usize, msg: RemoteMessage) {
+        let RemoteMessage { remote, kind, args } = msg;
+        let slot = &self.clients[index];
+        let args: Vec<NetValue> = args
+            .into_iter()
+            .map(|mut a| {
+                a.map_instances(&|id| slot.replicator.server_id(id));
+                a
+            })
+            .collect();
+        let remote = remote.and_then(|r| slot.replicator.server_id(r));
+        let player = slot.player;
+        match kind {
+            RemoteKind::FireServer => {
+                if let Some(r) = remote {
+                    self.server.runtime().deliver_event(r, Some(player), &args);
+                }
+            }
+            RemoteKind::InvokeServer { call } => {
+                let id = self.new_call(Origin::Client(index), call);
+                match remote {
+                    Some(r) => self
+                        .server
+                        .runtime()
+                        .deliver_invoke(r, Some(player), id, &args),
+                    None => {
+                        self.calls.remove(&id);
+                        self.clients[index].client.runtime().deliver_reply(
+                            call,
+                            false,
+                            &[NetValue::String(
+                                b"RemoteFunction is not replicated".to_vec(),
+                            )],
+                        );
+                    }
+                }
+            }
+            RemoteKind::Reply { call, ok } => {
+                if let Some((Origin::Server, original)) = self.calls.remove(&call) {
+                    self.server.runtime().deliver_reply(original, ok, &args);
+                }
+            }
+            RemoteKind::FireClient { .. }
+            | RemoteKind::FireAllClients
+            | RemoteKind::InvokeClient { .. } => {}
+        }
     }
 
     /// Run frames until `seconds` of server time have passed.

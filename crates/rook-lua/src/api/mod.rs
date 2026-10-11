@@ -4,6 +4,7 @@ pub(crate) mod globals;
 pub(crate) mod instance;
 pub(crate) mod methods;
 pub(crate) mod properties;
+pub(crate) mod remotes;
 pub(crate) mod scripts;
 pub(crate) mod services;
 pub(crate) mod signal;
@@ -15,5 +16,6 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     signal::install(lua)?;
     globals::install(lua)?;
     scripts::install(lua)?;
+    remotes::install(lua)?;
     Ok(())
 }

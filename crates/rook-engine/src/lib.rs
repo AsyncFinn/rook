@@ -679,6 +679,89 @@ mod tests {
     }
 
     #[test]
+    fn remote_events_and_functions_cross_the_session() {
+        let mut server = Server::new(&Options::default()).unwrap();
+        let rs = service(&server, "ReplicatedStorage");
+        add_under(&server, rs, "RemoteEvent", "Ping", "");
+        add_under(&server, rs, "RemoteFunction", "Ask", "");
+        let ws = service(&server, "Workspace");
+        add_under(&server, ws, "Part", "Target", "");
+        add_script(
+            &server,
+            "ServerScriptService",
+            "Main",
+            r#"
+            local rs = game:GetService("ReplicatedStorage")
+            rs.Ping.OnServerEvent:Connect(function(player, data, part, fn)
+                print("server got", player.Name, data.a, data.list[2], part == workspace.Target, fn)
+                rs.Ping:FireClient(player, "pong", workspace.Target)
+            end)
+            rs.Ask.OnServerInvoke = function(player, n)
+                if n < 0 then error("negative!") end
+                task.wait(0.1)
+                return n * 2, player.Name
+            end
+            print(pcall(function() rs.Ping:FireServer() end))
+            "#,
+        );
+        let sp = service(&server, "StarterPlayer");
+        let sps = add_under(
+            &server,
+            sp,
+            "StarterPlayerScripts",
+            "StarterPlayerScripts",
+            "",
+        );
+        add_under(
+            &server,
+            sps,
+            "LocalScript",
+            "Client",
+            r#"
+            local rs = game:GetService("ReplicatedStorage")
+            rs.Ping.OnClientEvent:Connect(function(word, part)
+                print("client got", word, part == workspace.Target)
+            end)
+            rs.Ping:FireServer({ a = 1, list = { 10, 20 } }, workspace.Target, function() end)
+            print("invoke", rs.Ask:InvokeServer(21))
+            print("invoke error", pcall(function() return rs.Ask:InvokeServer(-1) end))
+            "#,
+        );
+        server.start();
+        let mut session = Session::new(server, Options::default());
+        let index = session.join("Player1", 1).unwrap();
+        session.run_for(1.0);
+        let server_log: Vec<String> = session
+            .server()
+            .take_log()
+            .into_iter()
+            .map(|e| e.message)
+            .collect();
+        let client_log: Vec<String> = session
+            .client(index)
+            .unwrap()
+            .take_log()
+            .into_iter()
+            .map(|e| e.message)
+            .collect();
+        assert_eq!(
+            server_log,
+            [
+                "false FireServer can only be called from the client",
+                "server got Player1 1 20 true nil",
+            ]
+        );
+        assert_eq!(
+            client_log,
+            [
+                "client got pong true",
+                "invoke 42 Player1",
+                "invoke error false ServerScriptService.Main:8: negative!",
+            ]
+        );
+    }
+
+    #[test]
     fn scripts_moved_into_workspace_start() {
         let mut s = Server::new(&Options::default()).unwrap();
         add_script(&s, "ServerStorage", "Inner", "print('inner started')");
