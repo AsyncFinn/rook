@@ -15,13 +15,15 @@ fn style(kind: MessageType) -> Style {
     Style::new().fg_color(Some(color.into()))
 }
 
-/// Print one entry as `[side   12.34] message`, coloured.
+/// Print one entry, coloured, with a short dimmed `server`/`client` tag
+/// when output from several DataModels is mixed.
 pub fn print_entry(side: Option<&str>, entry: &LogEntry) {
-    let dim = Style::new().dimmed();
-    let tag = match side {
-        Some(side) => format!("[{side} {:>8.2}]", entry.time),
-        None => format!("[{:>8.2}]", entry.time),
-    };
     let s = style(entry.kind);
-    anstream::println!("{dim}{tag}{dim:#} {s}{}{s:#}", entry.message);
+    match side {
+        Some(side) => {
+            let dim = Style::new().dimmed();
+            anstream::println!("{dim}{side}{dim:#} {s}{}{s:#}", entry.message);
+        }
+        None => anstream::println!("{s}{}{s:#}", entry.message),
+    }
 }
