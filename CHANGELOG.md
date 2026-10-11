@@ -2,10 +2,11 @@
 
 ## Versioning
 
-Rook follows [Semantic Versioning](https://semver.org). Until 1.0:
+Rook follows [Semantic Versioning](https://semver.org):
 
-- **Minor** (`0.x.0`) — a milestone is finished. The minor number is the milestone: 0.2.0 is M2, 0.3.0 will be M3.
-- **Patch** (`0.x.y`) — fixes and additions between milestones.
+- **Minor** (`0.x.0`): a release with new features. Finishing a milestone is a natural time for one, but releases aren't tied to milestones, and each entry below says which milestone, if any, it finishes.
+- **Patch** (`0.x.y`): fixes only.
+- Before 1.0, a minor release may also break things, as semver allows.
 
 Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z` in git. The pinned Roblox version (currently 0.741.19) is separate and listed under each release.
 
