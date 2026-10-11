@@ -172,6 +172,11 @@ impl Runtime {
         self.guarded(|| threads::drain_deferred(&self.lua));
     }
 
+    /// The script-side handle for an instance.
+    pub fn push_instance(&self, id: InstanceId) -> mlua::Result<mlua::AnyUserData> {
+        api::instance::push_instance(&self.lua, id)
+    }
+
     /// Take everything logged so far.
     pub fn take_log(&self) -> Vec<LogEntry> {
         std::mem::take(&mut self.world_mut().log)

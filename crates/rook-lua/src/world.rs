@@ -95,6 +95,8 @@ pub struct World {
     pub signals: Signals<Handler>,
     pub scheduler: Scheduler<Job>,
     pub signal_behavior: SignalBehavior,
+    /// Whether this DataModel is a client (RunService:IsClient).
+    pub is_client: bool,
     pub log: Vec<LogEntry>,
     /// Calls to Roblox members Rook doesn't implement yet, by `Class.Member`.
     pub unimplemented: BTreeMap<String, u64>,
@@ -114,6 +116,7 @@ impl World {
             signals: Signals::default(),
             scheduler: Scheduler::new(clock),
             signal_behavior: SignalBehavior::Immediate,
+            is_client: false,
             log: Vec::new(),
             unimplemented: BTreeMap::new(),
             inert: BTreeMap::new(),
