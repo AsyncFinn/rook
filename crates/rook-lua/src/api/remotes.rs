@@ -173,7 +173,7 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
             "#,
         )
         .set_name("=[rook] Remote")
-        .call(std.clone())?;
+        .call(std)?;
     lua.set_named_registry_value("rook.remote_runner", runner)?;
     Ok(())
 }
