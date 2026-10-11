@@ -2207,7 +2207,7 @@ dependencies = [
 
 [[package]]
 name = "rook-cli"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "blake3",
@@ -2228,7 +2228,7 @@ dependencies = [
 
 [[package]]
 name = "rook-dom"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "rbx_types",
  "rook-reflection",
@@ -2239,7 +2239,7 @@ dependencies = [
 
 [[package]]
 name = "rook-engine"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anstream",
  "anstyle",
@@ -2259,7 +2259,7 @@ dependencies = [
 
 [[package]]
 name = "rook-formats"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "base64 0.23.1",
  "quick-xml 0.42.0",
@@ -2275,7 +2275,7 @@ dependencies = [
 
 [[package]]
 name = "rook-lua"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "glam",
  "mlua",
@@ -2291,7 +2291,7 @@ dependencies = [
 
 [[package]]
 name = "rook-net"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "profiling",
  "rook-dom",
@@ -2301,7 +2301,7 @@ dependencies = [
 
 [[package]]
 name = "rook-player"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2321,7 +2321,7 @@ dependencies = [
 
 [[package]]
 name = "rook-reflection"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "rbx_reflection",
  "rbx_reflection_database",
@@ -2333,7 +2333,7 @@ dependencies = [
 
 [[package]]
 name = "rook-render"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "bytemuck",
  "glam",
@@ -2345,11 +2345,11 @@ dependencies = [
 
 [[package]]
 name = "rook-scheduler"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "rook-signal"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "rook-dom",
  "rook-reflection",
@@ -2358,7 +2358,7 @@ dependencies = [
 
 [[package]]
 name = "rook-types"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "glam",
  "rbx_types",
