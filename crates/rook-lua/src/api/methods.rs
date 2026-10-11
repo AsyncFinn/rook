@@ -25,7 +25,9 @@ use crate::world::{Job, World};
 
 pub(crate) type RawMethod = fn(&Lua, InstanceId, Args) -> ApiResult<Outcome>;
 
-/// Members that are accepted and ignored for now (see module docs).
+/// Members that are accepted and ignored for now (see module docs). Each
+/// one is documented in `docs/behavior/stubs.md` with what will take it over;
+/// a test enforces that.
 const INERT: &[(&str, &str)] = &[
     ("BasePart", "MakeJoints"),
     ("BasePart", "BreakJoints"),
@@ -35,6 +37,9 @@ const INERT: &[(&str, &str)] = &[
     ("Model", "BreakJoints"),
     ("ContentProvider", "Preload"),
     ("ContentProvider", "PreloadAsync"),
+    // Pre-approves an asset for LoadAsset; only matters once assets load.
+    ("InsertService", "ApproveAssetId"),
+    ("InsertService", "ApproveAssetVersionId"),
     // FunctionalTest reports results to Roblox's internal test harness.
     ("FunctionalTest", "Passed"),
     ("FunctionalTest", "Failed"),
@@ -909,6 +914,10 @@ fn sound_pause(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
     mutate(lua, |w| set_bool(w, this, "Playing", false))?;
     fire(lua, &SignalKey::event(this, "Paused"), vec![]);
     Outcome::ret(lua, ())
+}
+
+pub(crate) fn inert_members() -> &'static [(&'static str, &'static str)] {
+    INERT
 }
 
 /// Whether a member is inert, for reports.
