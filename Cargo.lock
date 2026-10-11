@@ -2175,6 +2175,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rook-net"
+version = "0.1.0"
+dependencies = [
+ "rook-dom",
+ "rook-reflection",
+ "rook-types",
+]
+
+[[package]]
 name = "rook-player"
 version = "0.1.0"
 dependencies = [

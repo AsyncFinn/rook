@@ -1,0 +1,17 @@
+[package]
+name = "rook-net"
+description = "Replication between Rook DataModels"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+rook-types.workspace = true
+rook-reflection.workspace = true
+rook-dom.workspace = true
+
+[lints]
+workspace = true
