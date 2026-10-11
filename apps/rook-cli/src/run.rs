@@ -34,13 +34,7 @@ pub fn run(
     let errors = log.iter().filter(|e| e.kind == MessageType::Error).count();
     if !quiet {
         for entry in &log {
-            let tag = match entry.kind {
-                MessageType::Error => "ERROR ",
-                MessageType::Warning => "WARN  ",
-                MessageType::Info => "INFO  ",
-                MessageType::Output => "",
-            };
-            println!("[{:>7.2}] {tag}{}", entry.time, entry.message);
+            rook_engine::console::print_entry(None, entry);
         }
     }
     let world = server.runtime().world();

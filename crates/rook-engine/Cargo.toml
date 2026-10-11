@@ -20,6 +20,8 @@ mlua.workspace = true
 thiserror.workspace = true
 profiling.workspace = true
 glam.workspace = true
+anstream.workspace = true
+anstyle.workspace = true
 
 [lints]
 workspace = true

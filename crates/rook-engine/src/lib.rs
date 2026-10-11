@@ -4,6 +4,7 @@
 //! M1 runs headless server Scripts only: no physics, rendering, players or
 //! LocalScripts yet. See `docs/architecture.md` §6 for the frame order.
 
+pub mod console;
 mod input;
 pub mod raycast;
 mod session;
