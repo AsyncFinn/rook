@@ -916,6 +916,7 @@ fn sound_pause(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
     Outcome::ret(lua, ())
 }
 
+#[cfg(test)]
 pub(crate) fn inert_members() -> &'static [(&'static str, &'static str)] {
     INERT
 }
