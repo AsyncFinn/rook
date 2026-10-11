@@ -4,7 +4,7 @@
 use std::path::Path;
 
 use anyhow::Context;
-use rook_engine::{DataModel, InputEvent, MessageType, Options, Server, Session};
+use rook_engine::{DataModel, InputEvent, Options, Server, Session};
 
 pub struct Game {
     session: Session,
@@ -83,12 +83,7 @@ impl Game {
             .chain(self.session.clients().map(|c| ("client", c)));
         for (side, dm) in sides {
             for entry in dm.take_log() {
-                let tag = match entry.kind {
-                    MessageType::Error => "ERROR ",
-                    MessageType::Warning => "WARN  ",
-                    _ => "",
-                };
-                println!("[{side} {:>8.2}] {tag}{}", entry.time, entry.message);
+                rook_engine::console::print_entry(Some(side), &entry);
             }
         }
     }
