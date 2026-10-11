@@ -414,3 +414,17 @@ fn tweens() {
         ],
     );
 }
+
+/// Every no-op member must be documented with what will take it over.
+#[test]
+fn inert_members_are_documented() {
+    let doc = include_str!("../../../docs/behavior/stubs.md");
+    for (owner, name) in crate::api::methods::inert_members() {
+        let row = format!("`{owner}:{name}`");
+        let grouped = format!("`{owner}:");
+        assert!(
+            doc.contains(&row) || (doc.contains(&grouped) && doc.contains(&format!("`{name}`"))),
+            "{owner}:{name} is inert but not listed in docs/behavior/stubs.md"
+        );
+    }
+}
