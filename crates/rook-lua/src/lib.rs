@@ -16,7 +16,7 @@ mod world;
 
 pub use ctx::{ScriptError, lua_error_message};
 pub use net::{NetValue, RemoteKind, RemoteMessage};
-pub use world::{Handler, Job, LogEntry, MessageType, SignalBehavior, WaitKind, World};
+pub use world::{Handler, InputState, Job, LogEntry, MessageType, SignalBehavior, WaitKind, World};
 
 use std::cell::{Cell, Ref, RefCell, RefMut};
 use std::rc::Rc;
@@ -26,6 +26,43 @@ use mlua::{IntoLuaMulti, Lua, Value as LuaValue, VmState};
 use rook_dom::{Dom, InstanceId};
 use rook_scheduler::{Clock, Queue};
 use rook_signal::SignalKey;
+
+/// Create an `InputObject` describing one input (`Enum.KeyCode`,
+/// `Enum.UserInputType` and `Enum.UserInputState` values; position and
+/// delta in pixels). Used by the engine when firing input events and by
+/// UserInputService queries.
+pub fn input_object(
+    dom: &mut Dom,
+    key_code: u32,
+    input_type: u32,
+    state: u32,
+    position: (f32, f32),
+    delta: (f32, f32),
+) -> Option<InstanceId> {
+    use rook_types::{Value, Vector3};
+    let id = dom.create_by_name("InputObject").ok()?;
+    let class = dom.get(id)?.class;
+    let db = dom.database();
+    let set = |dom: &mut Dom, name: &str, value: Value| {
+        if let Some(p) = db.find_property(class, name) {
+            dom.load_property(id, p.id, value);
+        }
+    };
+    set(dom, "KeyCode", Value::Enum(key_code));
+    set(dom, "UserInputType", Value::Enum(input_type));
+    set(dom, "UserInputState", Value::Enum(state));
+    set(
+        dom,
+        "Position",
+        Value::Vector3(Vector3::new(position.0, position.1, 0.0)),
+    );
+    set(
+        dom,
+        "Delta",
+        Value::Vector3(Vector3::new(delta.0, delta.1, 0.0)),
+    );
+    Some(id)
+}
 
 /// Roblox Studio's default script timeout: a script that runs this long
 /// without yielding is stopped with an error.

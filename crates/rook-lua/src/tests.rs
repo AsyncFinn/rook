@@ -428,3 +428,22 @@ fn inert_members_are_documented() {
         );
     }
 }
+
+#[test]
+fn legacy_enum_names_resolve() {
+    expect(
+        r#"
+        print(Enum.KeyCode.Unknown == Enum.KeyCode.None, Enum.KeyCode.Unknown.Name)
+        print(Enum.SurfaceType.Bumps)
+        local p = Instance.new("Part")
+        p.TopSurface = "Spawn"
+        print(p.TopSurface)
+        "#,
+        0,
+        &[
+            "true None",
+            "Enum.SurfaceType.Glue",
+            "Enum.SurfaceType.Smooth",
+        ],
+    );
+}

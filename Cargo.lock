@@ -2206,6 +2206,7 @@ dependencies = [
 name = "rook-engine"
 version = "0.1.0"
 dependencies = [
+ "glam",
  "mlua",
  "profiling",
  "rook-dom",

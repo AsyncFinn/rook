@@ -4,7 +4,7 @@
 use std::path::Path;
 
 use anyhow::Context;
-use rook_engine::{DataModel, MessageType, Options, Server, Session};
+use rook_engine::{DataModel, InputEvent, MessageType, Options, Server, Session};
 
 pub struct Game {
     session: Session,
@@ -46,6 +46,17 @@ impl Game {
             Some(i) => self.session.client_mut(i).expect("client exists"),
             None => self.session.server_mut(),
         }
+    }
+
+    /// Send window input to the local player's client (Run mode has no player).
+    pub fn input(&mut self, event: InputEvent) {
+        if let Some(i) = self.view {
+            self.session.input(i, event);
+        }
+    }
+
+    pub fn set_viewport(&mut self, width: u32, height: u32) {
+        self.view_mut().set_viewport(width, height);
     }
 
     pub fn step(&mut self) {

@@ -23,6 +23,10 @@ pub struct Members {
     /// Where the API dump came from.
     pub source: String,
     pub classes: BTreeMap<String, ClassMembers>,
+    /// Old enum item names that still resolve, as enum → old name → item
+    /// (`Enum.KeyCode.Unknown` is `Enum.KeyCode.None` today).
+    #[serde(default)]
+    pub enum_legacy_names: BTreeMap<String, BTreeMap<String, String>>,
 }
 
 /// Members declared directly on one class (not inherited ones).
@@ -274,10 +278,22 @@ impl Members {
             }
             classes.insert(class.name, out);
         }
+        let mut enum_legacy_names: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
+        for e in dump.enums {
+            for item in e.items {
+                for legacy in item.legacy_names {
+                    enum_legacy_names
+                        .entry(e.name.clone())
+                        .or_default()
+                        .insert(legacy, item.name.clone());
+                }
+            }
+        }
         Ok(Members {
             version: version.to_owned(),
             source: source.to_owned(),
             classes,
+            enum_legacy_names,
         })
     }
 
@@ -292,7 +308,9 @@ impl Members {
             let comma = if i + 1 < n { "," } else { "" };
             out += &format!("{}: {}{comma}\n", json(name), json(members));
         }
-        out += "}\n}\n";
+        out += "},\n";
+        out += &format!("\"enum_legacy_names\": {}\n", json(&self.enum_legacy_names));
+        out += "}\n";
         out
     }
 }
@@ -310,6 +328,23 @@ mod dump {
     #[serde(rename_all = "PascalCase")]
     pub struct Root {
         pub classes: Vec<Class>,
+        #[serde(default)]
+        pub enums: Vec<Enum>,
+    }
+
+    #[derive(Deserialize)]
+    #[serde(rename_all = "PascalCase")]
+    pub struct Enum {
+        pub name: String,
+        pub items: Vec<EnumItem>,
+    }
+
+    #[derive(Deserialize)]
+    #[serde(rename_all = "PascalCase")]
+    pub struct EnumItem {
+        pub name: String,
+        #[serde(default)]
+        pub legacy_names: Vec<String>,
     }
 
     #[derive(Deserialize)]
