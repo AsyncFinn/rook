@@ -77,6 +77,17 @@ pub struct LogEntry {
     pub message: String,
     /// `time()` when it was logged.
     pub time: f64,
+    /// Wall-clock time when it was logged.
+    pub wall: std::time::SystemTime,
+    /// Where it came from, as Studio shows it: `Script:3` (the script's
+    /// name and line).
+    pub source: Option<String>,
+}
+
+/// `Workspace.Model.Script` and line 3 → `Script:3`.
+pub fn short_source(chunk: &str, line: usize) -> String {
+    let name = chunk.rsplit('.').next().unwrap_or(chunk);
+    format!("{name}:{line}")
 }
 
 /// Input devices as the client sees them (UserInputService state).
@@ -153,11 +164,17 @@ impl World {
     }
 
     pub fn push_log(&mut self, kind: MessageType, message: String) {
+        self.push_log_from(kind, message, None);
+    }
+
+    pub fn push_log_from(&mut self, kind: MessageType, message: String, source: Option<String>) {
         let time = self.scheduler.now();
         self.log.push(LogEntry {
             kind,
             message,
             time,
+            wall: std::time::SystemTime::now(),
+            source,
         });
     }
 

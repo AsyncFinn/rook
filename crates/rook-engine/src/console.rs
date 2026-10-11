@@ -15,15 +15,24 @@ fn style(kind: MessageType) -> Style {
     Style::new().fg_color(Some(color.into()))
 }
 
-/// Print one entry, coloured, with a short dimmed `server`/`client` tag
-/// when output from several DataModels is mixed.
-pub fn print_entry(side: Option<&str>, entry: &LogEntry) {
+/// Print one entry the way Roblox Studio's Output window shows it:
+/// `19:25:03.100  message  -  Server - Script:3`. The time and the context
+/// are dimmed; the message is coloured by type.
+pub fn print_entry(side: &str, entry: &LogEntry) {
+    let dim = Style::new().dimmed();
     let s = style(entry.kind);
-    match side {
-        Some(side) => {
-            let dim = Style::new().dimmed();
-            anstream::println!("{dim}{side}{dim:#} {s}{}{s:#}", entry.message);
-        }
-        None => anstream::println!("{s}{}{s:#}", entry.message),
+    let time = chrono::DateTime::<chrono::Local>::from(entry.wall).format("%H:%M:%S%.3f");
+    let context = match &entry.source {
+        Some(source) => format!("{side} - {source}"),
+        None => side.to_owned(),
+    };
+    let mut lines = entry.message.lines();
+    let first = lines.next().unwrap_or("");
+    anstream::println!("{dim}{time}{dim:#}  {s}{first}{s:#}  {dim}-  {context}{dim:#}");
+    // Further lines (an error's stack trace) print as their own entries in
+    // the info colour, as Studio does.
+    let info = style(MessageType::Info);
+    for line in lines {
+        anstream::println!("{dim}{time}{dim:#}  {info}{line}{info:#}  {dim}-  {side}{dim:#}");
     }
 }

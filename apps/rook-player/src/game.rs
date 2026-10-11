@@ -79,11 +79,11 @@ impl Game {
 
     /// Print new output from the server and every client.
     pub fn print_logs(&self) {
-        let sides = std::iter::once(("server", self.session.server()))
-            .chain(self.session.clients().map(|c| ("client", c)));
+        let sides = std::iter::once(("Server", self.session.server()))
+            .chain(self.session.clients().map(|c| ("Client", c)));
         for (side, dm) in sides {
             for entry in dm.take_log() {
-                rook_engine::console::print_entry(Some(side), &entry);
+                rook_engine::console::print_entry(side, &entry);
             }
         }
     }
