@@ -1,0 +1,19 @@
+[package]
+name = "rook-render"
+description = "wgpu renderer for the Rook engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+wgpu.workspace = true
+glam.workspace = true
+bytemuck.workspace = true
+thiserror.workspace = true
+pollster.workspace = true
+
+[lints]
+workspace = true

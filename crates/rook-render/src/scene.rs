@@ -1,0 +1,114 @@
+//! What the renderer draws: a snapshot built by the engine side. The
+//! renderer never sees the DOM (architecture §8).
+
+use glam::{Mat3, Vec3};
+
+/// Primitive part shapes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Shape {
+    Block,
+    Wedge,
+    CornerWedge,
+    /// Axis along the part's X axis (Confirmed: creator-docs PartType).
+    Cylinder,
+    Ball,
+}
+
+impl Shape {
+    pub const ALL: [Shape; 5] = [
+        Shape::Block,
+        Shape::Wedge,
+        Shape::CornerWedge,
+        Shape::Cylinder,
+        Shape::Ball,
+    ];
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PartInstance {
+    pub shape: Shape,
+    pub position: Vec3,
+    /// Columns are the part's right, up and back vectors.
+    pub rotation: Mat3,
+    pub size: Vec3,
+    /// sRGB colour, 0..1.
+    pub color: [f32; 3],
+    /// 0 is opaque, 1 invisible.
+    pub transparency: f32,
+}
+
+/// Scene lighting, mapped from the Lighting service.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Lighting {
+    /// Unit vector pointing towards the sun.
+    pub sun_direction: Vec3,
+    /// sRGB colours.
+    pub ambient: [f32; 3],
+    pub outdoor_ambient: [f32; 3],
+    pub brightness: f32,
+    pub fog_color: [f32; 3],
+    pub fog_start: f32,
+    pub fog_end: f32,
+    pub sky_top: [f32; 3],
+    pub sky_horizon: [f32; 3],
+}
+
+impl Default for Lighting {
+    fn default() -> Self {
+        Self {
+            sun_direction: Vec3::new(0.3, 0.8, 0.5).normalize(),
+            ambient: [0.27; 3],
+            outdoor_ambient: [0.27; 3],
+            brightness: 2.0,
+            fog_color: [0.75; 3],
+            fog_start: 0.0,
+            fog_end: 100_000.0,
+            sky_top: [0.36, 0.56, 0.86],
+            sky_horizon: [0.75, 0.84, 0.95],
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Scene {
+    pub parts: Vec<PartInstance>,
+    pub lighting: Lighting,
+}
+
+/// A camera: Roblox convention, looking down its -Z axis, Y up.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Camera {
+    pub position: Vec3,
+    pub rotation: Mat3,
+    /// Vertical field of view in degrees (Roblox's default is 70).
+    pub fov_y: f32,
+}
+
+impl Camera {
+    pub fn look_at(position: Vec3, target: Vec3) -> Self {
+        let forward = (target - position).normalize_or(Vec3::NEG_Z);
+        let right = forward.cross(Vec3::Y).normalize_or(Vec3::X);
+        let up = right.cross(forward);
+        Self {
+            position,
+            rotation: Mat3::from_cols(right, up, -forward),
+            fov_y: 70.0,
+        }
+    }
+
+    pub fn forward(&self) -> Vec3 {
+        -self.rotation.z_axis
+    }
+
+    pub(crate) fn view_projection(&self, aspect: f32) -> glam::Mat4 {
+        let view = glam::Mat4::from_mat3(self.rotation.transpose())
+            * glam::Mat4::from_translation(-self.position);
+        let proj = glam::camera::rh::proj::directx::perspective(
+            self.fov_y.to_radians(),
+            aspect,
+            0.1,
+            10_000.0,
+        );
+        proj * view
+    }
+}

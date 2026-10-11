@@ -20,6 +20,7 @@ rook-signal = { path = "crates/rook-signal" }
 rook-scheduler = { path = "crates/rook-scheduler" }
 rook-lua = { path = "crates/rook-lua" }
 rook-engine = { path = "crates/rook-engine" }
+rook-render = { path = "crates/rook-render" }
 
 # Roblox formats and data (rbx-dom ecosystem)
 rbx_dom_weak = "4.2"
@@ -48,6 +49,13 @@ rayon = "1"
 walkdir = "2"
 blake3 = "1"
 slotmap = "1.1"
+
+# Rendering
+wgpu = "30"
+winit = "0.30"
+pollster = "1"
+bytemuck = { version = "1", features = ["derive"] }
+image = { version = "0.25", default-features = false, features = ["png"] }
 
 # Luau
 mlua = { version = "0.12", features = ["luau", "vendored"] }
