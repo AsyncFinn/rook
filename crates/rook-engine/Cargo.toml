@@ -22,6 +22,7 @@ profiling.workspace = true
 glam.workspace = true
 anstream.workspace = true
 anstyle.workspace = true
+chrono.workspace = true
 
 [lints]
 workspace = true

@@ -50,10 +50,32 @@ pub(crate) fn report_error(lua: &Lua, thread: &Thread, e: &mlua::Error) {
         }
         text.push_str("\nStack End");
     }
+    let source = error_source(&text);
     with_world(lua, |w| {
         w.errors += 1;
-        w.push_log(MessageType::Error, text);
+        w.push_log_from(MessageType::Error, text, source);
     });
+}
+
+/// `Workspace.Script:3: message` → `Script:3`; otherwise the first stack line.
+fn error_source(text: &str) -> Option<String> {
+    let first = text.lines().next()?;
+    if let Some((loc, _)) = first.split_once(": ")
+        && let Some((chunk, line)) = loc.rsplit_once(':')
+        && let Ok(line) = line.parse()
+    {
+        return Some(crate::world::short_source(chunk, line));
+    }
+    let frame = text.lines().find(|l| l.starts_with("Script '"))?;
+    let chunk = frame.strip_prefix("Script '")?.split('\'').next()?;
+    let line = frame
+        .rsplit_once("Line ")?
+        .1
+        .split(' ')
+        .next()?
+        .parse()
+        .ok()?;
+    Some(crate::world::short_source(chunk, line))
 }
 
 /// The traceback mlua attached to an error, if any.

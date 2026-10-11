@@ -34,7 +34,7 @@ pub fn run(
     let errors = log.iter().filter(|e| e.kind == MessageType::Error).count();
     if !quiet {
         for entry in &log {
-            rook_engine::console::print_entry(None, entry);
+            rook_engine::console::print_entry("Server", entry);
         }
     }
     let world = server.runtime().world();
