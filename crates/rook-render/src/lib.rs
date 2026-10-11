@@ -268,6 +268,7 @@ impl Renderer {
     /// Replace the scene. Opaque parts are grouped per shape and uploaded
     /// once; transparent parts are kept for per-frame sorting.
     pub fn set_scene(&mut self, scene: &Scene) {
+        profiling::scope!("Renderer::set_scene");
         self.lighting = scene.lighting;
         self.transparent_parts.clear();
         let mut groups: Vec<(Shape, Vec<Instance>)> =
@@ -330,6 +331,7 @@ impl Renderer {
 
     /// Draw the scene into `target` (a view of a `color_format` texture).
     pub fn render(&mut self, target: &wgpu::TextureView, width: u32, height: u32, camera: &Camera) {
+        profiling::scope!("Renderer::render");
         let l = self.lighting;
         let rgb = |c: [f32; 3], w: f32| [c[0], c[1], c[2], w];
         let globals = Globals {

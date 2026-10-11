@@ -50,6 +50,7 @@ rayon = "1"
 walkdir = "2"
 blake3 = "1"
 slotmap = "1.1"
+profiling = "1"
 
 # Rendering
 wgpu = "30"
@@ -74,5 +75,24 @@ unimplemented = "warn"
 redundant_clone = "warn"
 needless_borrow = "warn"
 
+# Build profiles:
+#   dev        `cargo build`: Rook's own code lightly optimised (fast to
+#              rebuild, keeps debug assertions); every dependency fully
+#              optimised so Luau, wgpu and the file decoders run at speed.
+#   release    `cargo build --release`: what players use.
+#   profiling  `cargo build --profile profiling`: release speed plus full
+#              debug info for profilers. Builds into target/profiling, so
+#              it never collides with a running release build. Add
+#              `--features tracy` to rook-player for a live Tracy timeline.
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+
 [profile.release]
 debug = "line-tables-only"
+
+[profile.profiling]
+inherits = "release"
+debug = true

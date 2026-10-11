@@ -1,7 +1,10 @@
 //! Build a render [`Scene`] from a DataModel.
 
+use std::collections::HashMap;
+
 use glam::{Mat3, Vec3};
 use rook_dom::{Dom, InstanceId};
+use rook_engine::RenderChanges;
 use rook_render::{Camera, Lighting, PartInstance, Scene, Shape};
 use rook_types::Value;
 
@@ -128,21 +131,67 @@ fn lighting(dom: &Dom) -> Lighting {
     l
 }
 
-pub fn build(dom: &Dom) -> Scene {
-    let mut parts = Vec::new();
-    if let Some(ws) = dom.find_service("Workspace") {
-        for id in dom.descendants(ws) {
-            if dom.is_a(id, "BasePart")
-                && dom.class_name(id) != "Terrain"
-                && let Some(p) = part(dom, id)
-            {
-                parts.push(p);
+/// The render scene for a DataModel, kept between frames so that only the
+/// parts scripts changed are rebuilt.
+#[derive(Debug, Default)]
+pub struct SceneCache {
+    pub scene: Scene,
+    /// Where each drawn part is in `scene.parts`.
+    index: HashMap<InstanceId, usize>,
+}
+
+impl SceneCache {
+    pub fn new(dom: &Dom) -> Self {
+        let mut cache = Self::default();
+        cache.rebuild(dom);
+        cache
+    }
+
+    /// Rebuild everything (parts added, removed or moved).
+    pub fn rebuild(&mut self, dom: &Dom) {
+        profiling::scope!("SceneCache::rebuild");
+        self.scene.parts.clear();
+        self.index.clear();
+        if let Some(ws) = dom.find_service("Workspace") {
+            for id in dom.descendants(ws) {
+                if dom.is_a(id, "BasePart")
+                    && dom.class_name(id) != "Terrain"
+                    && let Some(p) = part(dom, id)
+                {
+                    self.index.insert(id, self.scene.parts.len());
+                    self.scene.parts.push(p);
+                }
             }
         }
+        self.scene.lighting = lighting(dom);
     }
-    Scene {
-        parts,
-        lighting: lighting(dom),
+
+    /// Apply a frame's changes. Returns whether anything changed.
+    pub fn apply(&mut self, dom: &Dom, changes: &RenderChanges) -> bool {
+        profiling::scope!("SceneCache::apply");
+        if changes.full {
+            self.rebuild(dom);
+            return true;
+        }
+        if changes.lighting {
+            self.scene.lighting = lighting(dom);
+        }
+        let mut changed = changes.lighting;
+        for id in &changes.parts {
+            // Parts outside Workspace aren't drawn.
+            let Some(&i) = self.index.get(id) else {
+                continue;
+            };
+            match part(dom, *id) {
+                Some(p) => self.scene.parts[i] = p,
+                None => {
+                    self.rebuild(dom);
+                    return true;
+                }
+            }
+            changed = true;
+        }
+        changed
     }
 }
 

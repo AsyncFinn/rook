@@ -18,8 +18,9 @@ use clap::Parser;
 use game::Game;
 use glam::{EulerRot, Mat3, Vec3};
 use rook_engine::DataModel;
-use rook_render::{Camera, Renderer, Scene};
+use rook_render::{Camera, Renderer};
 use rook_types::{CFrame, Value};
+use snapshot::SceneCache;
 
 /// Simulation step: 60 Hz, like Roblox's frame-based scheduler.
 const STEP: f64 = 1.0 / 60.0;
@@ -58,6 +59,9 @@ struct Args {
     /// Show the server only, without a player (Studio's Run mode).
     #[arg(long)]
     run: bool,
+    /// Run this many frames offscreen and print where the time goes.
+    #[arg(long)]
+    bench: Option<u32>,
 }
 
 fn parse_vec3(s: &str) -> Result<Vec3, String> {
@@ -71,13 +75,29 @@ fn parse_vec3(s: &str) -> Result<Vec3, String> {
     }
 }
 
-fn scene_of(dm: &DataModel) -> Scene {
-    snapshot::build(&dm.runtime().world().dom)
+fn scene_of(dm: &DataModel) -> SceneCache {
+    SceneCache::new(&dm.runtime().world().dom)
+}
+
+/// Bring a cached scene up to date with a DataModel's changes.
+fn refresh(cache: &mut SceneCache, dm: &mut DataModel) -> bool {
+    let changes = dm.take_render_changes();
+    if changes.is_empty() {
+        return false;
+    }
+    cache.apply(&dm.runtime().world().dom, &changes)
 }
 
 fn main() -> anyhow::Result<()> {
+    #[cfg(feature = "tracy")]
+    profiling::tracy_client::Client::start();
     let args = Args::parse();
+    let load_start = Instant::now();
     let mut game = Game::load(&args.place, !args.run)?;
+    eprintln!(
+        "loaded and started in {:.2}s",
+        load_start.elapsed().as_secs_f64()
+    );
     if let Some(script) = &args.script {
         let source = std::fs::read_to_string(script)
             .with_context(|| format!("reading {}", script.display()))?;
@@ -90,7 +110,7 @@ fn main() -> anyhow::Result<()> {
     let scene = scene_of(game.view());
     // The camera the place was saved with (clients start with a fresh one).
     let mut camera = snapshot::initial_camera(&game.server().runtime().world().dom);
-    eprintln!("{} parts", scene.parts.len());
+    eprintln!("{} parts", scene.scene.parts.len());
     if let Some(pos) = args.camera {
         let target = args.look_at.unwrap_or(pos + camera.forward());
         camera = Camera {
@@ -104,9 +124,13 @@ fn main() -> anyhow::Result<()> {
         };
     }
 
+    if let Some(frames) = args.bench {
+        return bench(&mut game, frames, &camera, args.width, args.height);
+    }
+
     if let Some(out) = args.screenshot {
         let mut renderer = Renderer::headless()?;
-        renderer.set_scene(&scene);
+        renderer.set_scene(&scene.scene);
         let pixels = renderer.render_to_image(args.width, args.height, &camera)?;
         image::save_buffer(
             &out,
@@ -133,6 +157,54 @@ fn main() -> anyhow::Result<()> {
         last_frame: Instant::now(),
     };
     event_loop.run_app(&mut app)?;
+    Ok(())
+}
+
+/// Time each stage of a frame, offscreen.
+fn bench(
+    game: &mut Game,
+    frames: u32,
+    camera: &Camera,
+    width: u32,
+    height: u32,
+) -> anyhow::Result<()> {
+    let mut renderer = Renderer::headless()?;
+    let mut cache = scene_of(game.view());
+    renderer.set_scene(&cache.scene);
+    let (mut sim, mut build, mut upload, mut render) = (0.0, 0.0, 0.0, 0.0);
+    let mut updates = 0;
+    let secs = |t: Instant| t.elapsed().as_secs_f64();
+    for _ in 0..frames {
+        let t = Instant::now();
+        game.step();
+        sim += secs(t);
+        let t = Instant::now();
+        let changed = refresh(&mut cache, game.view_mut());
+        build += secs(t);
+        if changed {
+            updates += 1;
+            let t = Instant::now();
+            renderer.set_scene(&cache.scene);
+            upload += secs(t);
+        }
+        let t = Instant::now();
+        renderer.render_to_image(width, height, camera)?;
+        render += secs(t);
+        profiling::finish_frame!();
+    }
+    game.print_logs();
+    let ms = |total: f64| total / f64::from(frames) * 1000.0;
+    eprintln!(
+        "{frames} frames, {} parts, scene updated on {updates} frames",
+        cache.scene.parts.len()
+    );
+    eprintln!(
+        "per frame: simulate {:.2} ms, scene update {:.2} ms, upload {:.2} ms, render+readback {:.2} ms",
+        ms(sim),
+        ms(build),
+        ms(upload),
+        ms(render)
+    );
     Ok(())
 }
 
@@ -172,7 +244,7 @@ struct Gfx {
 
 struct App {
     title: String,
-    scene: Scene,
+    scene: SceneCache,
     game: Game,
     /// Real time not yet simulated, in seconds.
     accumulator: f64,
@@ -216,7 +288,7 @@ impl App {
         config.present_mode = wgpu::PresentMode::AutoVsync;
         surface.configure(&device, &config);
         let mut renderer = Renderer::new(device, queue, config.format);
-        renderer.set_scene(&self.scene);
+        renderer.set_scene(&self.scene.scene);
         self.gfx = Some(Gfx {
             window,
             surface,
@@ -274,11 +346,10 @@ impl App {
             self.accumulator = 0.0;
         }
         self.game.print_logs();
-        if self.game.view_mut().take_render_dirty() {
-            self.scene = scene_of(self.game.view());
-            if let Some(gfx) = &mut self.gfx {
-                gfx.renderer.set_scene(&self.scene);
-            }
+        if refresh(&mut self.scene, self.game.view_mut())
+            && let Some(gfx) = &mut self.gfx
+        {
+            gfx.renderer.set_scene(&self.scene.scene);
         }
     }
 
@@ -367,6 +438,7 @@ impl ApplicationHandler for App {
                 self.last_frame = now;
                 self.update(dt);
                 self.draw();
+                profiling::finish_frame!();
             }
             _ => {}
         }

@@ -89,8 +89,8 @@ pub struct DataModel {
     script_cursor: u64,
     /// Journal position up to which render-relevant changes have been checked.
     render_cursor: u64,
-    /// Whether anything a renderer draws changed since the last check.
-    render_dirty: bool,
+    /// What a renderer draws that changed since it last asked.
+    render_changes: RenderChanges,
 }
 
 impl DataModel {
@@ -121,7 +121,7 @@ impl DataModel {
         let end = self.runtime.world().dom.journal().end();
         self.script_cursor = end;
         self.render_cursor = end;
-        self.render_dirty = true;
+        self.render_changes = RenderChanges::everything();
     }
 
     /// Drop journal entries every reader has seen.
@@ -190,7 +190,7 @@ impl DataModel {
             run_service,
             script_cursor,
             render_cursor: script_cursor,
-            render_dirty: true,
+            render_changes: RenderChanges::everything(),
         })
     }
 
@@ -266,6 +266,7 @@ impl DataModel {
     /// Start scripts that became runnable since the last check: moved into
     /// a running location or enabled.
     fn start_new_scripts(&mut self) {
+        profiling::scope!("start_new_scripts");
         let end = self.runtime.world().dom.journal().end();
         let candidates: Vec<InstanceId> = {
             let world = self.runtime.world();
@@ -304,6 +305,7 @@ impl DataModel {
     /// legacy resumption (`wait`, `spawn`, `delay`), Stepped/PreSimulation,
     /// [physics], PostSimulation, Heartbeat, `task` resumption.
     pub fn step(&mut self) {
+        profiling::scope!("DataModel::step");
         let (now, dt) = {
             let mut w = self.runtime.world_mut();
             let dt = w.scheduler.begin_frame();
@@ -333,30 +335,42 @@ impl DataModel {
     /// parts, their ancestry, or Lighting. Camera moves don't count; the
     /// renderer reads the camera every frame anyway.
     fn check_render_changes(&mut self) {
+        profiling::scope!("check_render_changes");
         let world = self.runtime.world();
         let dom = &world.dom;
         let lighting = dom.find_service("Lighting");
-        let drawn = |id: InstanceId| dom.is_a(id, "BasePart") || Some(id) == lighting;
-        let dirty = dom
-            .journal()
-            .since(self.render_cursor)
-            .iter()
-            .any(|c| match c {
-                Change::Property { id, .. } => drawn(*id),
-                Change::Reparented { subtree, .. } => subtree.iter().any(|i| drawn(*i)),
-                Change::Destroying(id) | Change::Created(id) => drawn(*id),
-                _ => false,
-            });
+        let changes = &mut self.render_changes;
+        for c in dom.journal().since(self.render_cursor) {
+            match c {
+                Change::Property { id, .. } => {
+                    if Some(*id) == lighting {
+                        changes.lighting = true;
+                    } else if !changes.full && dom.is_a(*id, "BasePart") {
+                        changes.parts.insert(*id);
+                    }
+                }
+                Change::Reparented { subtree, .. } => {
+                    if subtree.iter().any(|i| dom.is_a(*i, "BasePart")) {
+                        changes.full = true;
+                    }
+                }
+                Change::Destroying(id) | Change::Created(id) if dom.is_a(*id, "BasePart") => {
+                    changes.full = true;
+                }
+                _ => {}
+            }
+        }
+        if changes.full {
+            changes.parts.clear();
+        }
         self.render_cursor = dom.journal().end();
-        drop(world);
-        self.render_dirty |= dirty;
     }
 
-    /// Whether anything drawn changed since the last call. Also covers
-    /// changes made between frames (by the caller).
-    pub fn take_render_dirty(&mut self) -> bool {
+    /// What changed for a renderer since the last call, including changes
+    /// made between frames (by the caller).
+    pub fn take_render_changes(&mut self) -> RenderChanges {
         self.check_render_changes();
-        std::mem::take(&mut self.render_dirty)
+        std::mem::take(&mut self.render_changes)
     }
 
     /// `Workspace.CurrentCamera`.
@@ -412,6 +426,30 @@ impl DataModel {
     /// Scripts that have been started.
     pub fn started_scripts(&self) -> usize {
         self.runtime.world().started_count()
+    }
+}
+
+/// Changes a renderer needs to apply. When `full` is set (parts were
+/// added, removed or moved between parents) the whole scene should be
+/// rebuilt; otherwise only `parts` changed, plus Lighting if `lighting`.
+#[derive(Debug, Clone, Default)]
+pub struct RenderChanges {
+    pub full: bool,
+    pub lighting: bool,
+    pub parts: std::collections::HashSet<InstanceId>,
+}
+
+impl RenderChanges {
+    fn everything() -> Self {
+        Self {
+            full: true,
+            lighting: true,
+            parts: Default::default(),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        !self.full && !self.lighting && self.parts.is_empty()
     }
 }
 

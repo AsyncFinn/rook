@@ -190,6 +190,7 @@ impl Session {
     /// One frame: the server steps, its changes replicate to every client,
     /// then each client steps.
     pub fn step(&mut self) {
+        profiling::scope!("Session::step");
         self.server.step();
         self.route();
         for slot in &mut self.clients {
@@ -218,6 +219,7 @@ impl Session {
     /// the order they were sent; each crosses within the same session frame
     /// (Approximation: Roblox delivers on the next network tick).
     fn route(&mut self) {
+        profiling::scope!("Session::route");
         for msg in self.server.runtime().take_outbox() {
             self.route_from_server(msg);
         }

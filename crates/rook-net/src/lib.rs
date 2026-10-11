@@ -153,6 +153,7 @@ impl Replicator {
     /// Apply every server change since the last call. The caller fires
     /// client signals for the client journal entries this produces.
     pub fn sync(&mut self, server: &Dom, client: &mut Dom) {
+        profiling::scope!("Replicator::sync");
         let changes: Vec<Change> = server.journal().since(self.cursor).to_vec();
         self.cursor = server.journal().end();
         for change in changes {

@@ -145,6 +145,7 @@ impl Runtime {
         event: &'static str,
         args: impl IntoLuaMulti,
     ) -> mlua::Result<()> {
+        profiling::scope!("fire_event");
         let args: Vec<LuaValue> = args.into_lua_multi(&self.lua)?.into_vec();
         self.guarded(|| threads::fire(&self.lua, &SignalKey::event(instance, event), args));
         Ok(())
@@ -153,11 +154,13 @@ impl Runtime {
     /// Fire signals for journal entries recorded since `start` by code
     /// outside Lua (engine systems).
     pub fn dispatch_since(&self, start: u64) {
+        profiling::scope!("dispatch_since");
         self.guarded(|| threads::dispatch(&self.lua, start));
     }
 
     /// Resume due jobs on one queue, then drain the deferred queue.
     pub fn resume_due(&self, queue: Queue) {
+        profiling::scope!("resume_due");
         let jobs = self.world_mut().scheduler.take_due(queue);
         self.guarded(|| {
             // Deferred handlers run when the thread that caused them yields
@@ -171,6 +174,7 @@ impl Runtime {
 
     /// Drain the deferred queue (a resumption point).
     pub fn drain_deferred(&self) {
+        profiling::scope!("drain_deferred");
         self.guarded(|| threads::drain_deferred(&self.lua));
     }
 
