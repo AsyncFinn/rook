@@ -15,6 +15,21 @@ fn style(kind: MessageType) -> Style {
     Style::new().fg_color(Some(color.into()))
 }
 
+/// Print a message from Rook itself (not a script) in the same layout,
+/// e.g. `19:25:03.100  Loaded place.rbxl in 1.20 s  -  Rook`.
+pub fn print_message(kind: MessageType, message: &str) {
+    print_entry(
+        "Rook",
+        &LogEntry {
+            kind,
+            message: message.to_owned(),
+            time: 0.0,
+            wall: std::time::SystemTime::now(),
+            source: None,
+        },
+    );
+}
+
 /// Print one entry the way Roblox Studio's Output window shows it:
 /// `19:25:03.100  message  -  Server - Script:3`. The time and the context
 /// are dimmed; the message is coloured by type.

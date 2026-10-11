@@ -18,7 +18,7 @@ use anyhow::Context;
 use clap::Parser;
 use game::Game;
 use glam::{EulerRot, Mat3, Vec3};
-use rook_engine::{DataModel, InputEvent};
+use rook_engine::{DataModel, InputEvent, MessageType, console};
 use rook_render::{Camera, Renderer};
 use rook_types::{CFrame, Value};
 use snapshot::SceneCache;
@@ -95,10 +95,7 @@ fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     let load_start = Instant::now();
     let mut game = Game::load(&args.place, !args.run)?;
-    eprintln!(
-        "loaded and started in {:.2}s",
-        load_start.elapsed().as_secs_f64()
-    );
+    let load_time = load_start.elapsed().as_secs_f64();
     if let Some(script) = &args.script {
         let source = std::fs::read_to_string(script)
             .with_context(|| format!("reading {}", script.display()))?;
@@ -111,7 +108,14 @@ fn main() -> anyhow::Result<()> {
     let scene = scene_of(game.view());
     // The camera the place was saved with (clients start with a fresh one).
     let mut camera = snapshot::initial_camera(&game.server().runtime().world().dom);
-    eprintln!("{} parts", scene.scene.parts.len());
+    let name = args.place.file_name().unwrap_or_default().to_string_lossy();
+    console::print_message(
+        MessageType::Info,
+        &format!(
+            "Loaded {name} in {load_time:.2} s ({} parts)",
+            thousands(scene.scene.parts.len())
+        ),
+    );
     if let Some(pos) = args.camera {
         let target = args.look_at.unwrap_or(pos + camera.forward());
         camera = Camera {
@@ -140,7 +144,10 @@ fn main() -> anyhow::Result<()> {
             args.height,
             image::ColorType::Rgba8,
         )?;
-        eprintln!("wrote {}", out.display());
+        console::print_message(
+            MessageType::Info,
+            &format!("Saved screenshot to {}", out.display()),
+        );
         return Ok(());
     }
 
@@ -160,6 +167,19 @@ fn main() -> anyhow::Result<()> {
     };
     event_loop.run_app(&mut app)?;
     Ok(())
+}
+
+/// `29436` → `29,436`.
+fn thousands(n: usize) -> String {
+    let digits = n.to_string();
+    let mut out = String::new();
+    for (i, c) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i) % 3 == 0 {
+            out.push(',');
+        }
+        out.push(c);
+    }
+    out
 }
 
 /// Time each stage of a frame, offscreen.
@@ -403,7 +423,10 @@ impl ApplicationHandler for App {
         if self.gfx.is_none()
             && let Err(e) = self.init_gfx(event_loop)
         {
-            eprintln!("could not start the renderer: {e:#}");
+            console::print_message(
+                MessageType::Error,
+                &format!("Could not start the renderer: {e:#}"),
+            );
             event_loop.exit();
         }
     }
