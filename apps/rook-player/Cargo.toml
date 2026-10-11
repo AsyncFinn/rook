@@ -26,6 +26,11 @@ glam.workspace = true
 image.workspace = true
 anyhow.workspace = true
 clap.workspace = true
+profiling.workspace = true
+
+[features]
+# Live per-frame timeline in the Tracy profiler (https://github.com/wolfpld/tracy).
+tracy = ["profiling/profile-with-tracy"]
 
 [lints]
 workspace = true

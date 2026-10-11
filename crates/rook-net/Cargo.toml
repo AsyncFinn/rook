@@ -12,6 +12,7 @@ rust-version.workspace = true
 rook-types.workspace = true
 rook-reflection.workspace = true
 rook-dom.workspace = true
+profiling.workspace = true
 
 [lints]
 workspace = true
