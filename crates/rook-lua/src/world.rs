@@ -97,6 +97,11 @@ pub struct World {
     pub signal_behavior: SignalBehavior,
     /// Whether this DataModel is a client (RunService:IsClient).
     pub is_client: bool,
+    /// Remote calls waiting for the session to deliver them.
+    pub outbox: Vec<crate::net::RemoteMessage>,
+    /// Threads waiting for an invoke's reply, by call id.
+    pub(crate) pending_calls: HashMap<u64, Thread>,
+    pub(crate) next_call: u64,
     pub log: Vec<LogEntry>,
     /// Calls to Roblox members Rook doesn't implement yet, by `Class.Member`.
     pub unimplemented: BTreeMap<String, u64>,
@@ -117,6 +122,9 @@ impl World {
             scheduler: Scheduler::new(clock),
             signal_behavior: SignalBehavior::Immediate,
             is_client: false,
+            outbox: Vec::new(),
+            pending_calls: HashMap::new(),
+            next_call: 0,
             log: Vec::new(),
             unimplemented: BTreeMap::new(),
             inert: BTreeMap::new(),

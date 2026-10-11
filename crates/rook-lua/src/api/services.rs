@@ -19,7 +19,7 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("HttpService", "GenerateGUID") => generate_guid,
         ("HttpService", "UrlEncode") => url_encode,
         ("HttpService", "GetAsync" | "PostAsync" | "RequestAsync") => http_disabled,
-        _ => return None,
+        _ => return super::remotes::native(owner, name),
     })
 }
 
@@ -170,7 +170,7 @@ pub(crate) fn luau_source(owner: &str, name: &str) -> Option<&'static str> {
             end
             "#
         }
-        _ => return None,
+        _ => return super::remotes::luau_source(owner, name),
     })
 }
 
