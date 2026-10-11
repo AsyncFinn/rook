@@ -6,6 +6,7 @@
 //! `--screenshot out.png` renders one frame offscreen instead.
 
 mod game;
+mod keys;
 mod snapshot;
 
 use std::collections::HashSet;
@@ -17,7 +18,7 @@ use anyhow::Context;
 use clap::Parser;
 use game::Game;
 use glam::{EulerRot, Mat3, Vec3};
-use rook_engine::DataModel;
+use rook_engine::{DataModel, InputEvent};
 use rook_render::{Camera, Renderer};
 use rook_types::{CFrame, Value};
 use snapshot::SceneCache;
@@ -155,6 +156,7 @@ fn main() -> anyhow::Result<()> {
         keys: HashSet::new(),
         looking: false,
         last_frame: Instant::now(),
+        pending_mouse: None,
     };
     event_loop.run_app(&mut app)?;
     Ok(())
@@ -174,7 +176,17 @@ fn bench(
     let (mut sim, mut build, mut upload, mut render) = (0.0, 0.0, 0.0, 0.0);
     let mut updates = 0;
     let secs = |t: Instant| t.elapsed().as_secs_f64();
-    for _ in 0..frames {
+    game.set_viewport(width, height);
+    let mut mouse = 0.0;
+    for frame in 0..frames {
+        // A moving cursor, as when someone plays: each move casts the mouse ray.
+        let t = Instant::now();
+        let x = (frame % 100) as f32 / 100.0 * width as f32;
+        game.input(InputEvent::MouseMove {
+            x,
+            y: height as f32 / 2.0,
+        });
+        mouse += secs(t);
         let t = Instant::now();
         game.step();
         sim += secs(t);
@@ -199,7 +211,8 @@ fn bench(
         cache.scene.parts.len()
     );
     eprintln!(
-        "per frame: simulate {:.2} ms, scene update {:.2} ms, upload {:.2} ms, render+readback {:.2} ms",
+        "per frame: mouse {:.2} ms, simulate {:.2} ms, scene update {:.2} ms, upload {:.2} ms, render+readback {:.2} ms",
+        ms(mouse),
         ms(sim),
         ms(build),
         ms(upload),
@@ -253,6 +266,9 @@ struct App {
     keys: HashSet<KeyCode>,
     looking: bool,
     last_frame: Instant,
+    /// The latest cursor position not yet sent to the game. Moves are sent
+    /// once per frame because each costs a mouse raycast.
+    pending_mouse: Option<(f32, f32)>,
 }
 
 impl App {
@@ -289,6 +305,7 @@ impl App {
         surface.configure(&device, &config);
         let mut renderer = Renderer::new(device, queue, config.format);
         renderer.set_scene(&self.scene.scene);
+        self.game.set_viewport(config.width, config.height);
         self.gfx = Some(Gfx {
             window,
             surface,
@@ -332,6 +349,10 @@ impl App {
                     rotation: c.rotation,
                 }),
             );
+        }
+
+        if let Some((x, y)) = self.pending_mouse.take() {
+            self.game.input(InputEvent::MouseMove { x, y });
         }
 
         // Simulate in fixed 60 Hz steps, catching up at most a few per frame.
@@ -398,10 +419,22 @@ impl ApplicationHandler for App {
                     gfx.config.width = size.width;
                     gfx.config.height = size.height;
                     gfx.surface.configure(&gfx.renderer.device, &gfx.config);
+                    self.game.set_viewport(size.width, size.height);
                 }
+            }
+            WindowEvent::CursorMoved { position, .. } => {
+                self.pending_mouse = Some((position.x as f32, position.y as f32));
             }
             WindowEvent::KeyboardInput { event, .. } => {
                 if let PhysicalKey::Code(code) = event.physical_key {
+                    if !event.repeat
+                        && let Some(name) = keys::roblox_key(code)
+                    {
+                        self.game.input(InputEvent::Key {
+                            code: name.to_owned(),
+                            down: event.state == ElementState::Pressed,
+                        });
+                    }
                     match event.state {
                         ElementState::Pressed => {
                             if code == KeyCode::Escape {
@@ -415,14 +448,25 @@ impl ApplicationHandler for App {
                     }
                 }
             }
-            WindowEvent::MouseInput {
-                button: MouseButton::Right,
-                state,
-                ..
-            } => {
-                self.looking = state == ElementState::Pressed;
-                if let Some(gfx) = &self.gfx {
-                    gfx.window.set_cursor_visible(!self.looking);
+            WindowEvent::MouseInput { button, state, .. } => {
+                let down = state == ElementState::Pressed;
+                if let Some((x, y)) = self.pending_mouse.take() {
+                    self.game.input(InputEvent::MouseMove { x, y });
+                }
+                let number = match button {
+                    MouseButton::Left => Some(1),
+                    MouseButton::Right => Some(2),
+                    MouseButton::Middle => Some(3),
+                    _ => None,
+                };
+                if let Some(button) = number {
+                    self.game.input(InputEvent::MouseButton { button, down });
+                }
+                if button == MouseButton::Right {
+                    self.looking = down;
+                    if let Some(gfx) = &self.gfx {
+                        gfx.window.set_cursor_visible(!self.looking);
+                    }
                 }
             }
             WindowEvent::MouseWheel { delta, .. } => {
@@ -431,6 +475,7 @@ impl ApplicationHandler for App {
                     MouseScrollDelta::PixelDelta(p) => p.y as f32 / 40.0,
                 };
                 self.camera.speed = (self.camera.speed * 1.2f32.powf(steps)).clamp(1.0, 2000.0);
+                self.game.input(InputEvent::Wheel { delta: steps });
             }
             WindowEvent::RedrawRequested => {
                 let now = Instant::now();

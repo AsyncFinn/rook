@@ -178,6 +178,7 @@ impl Session {
             dom.journal_mut().set_enabled(true);
         }
         client.reset_cursors();
+        client.ensure_mouse();
         client.start();
         self.clients.push(ClientSlot {
             client,
@@ -344,6 +345,37 @@ impl Session {
         let target = self.server.now() + seconds;
         while self.server.now() + 1e-9 < target {
             self.step();
+        }
+    }
+
+    /// Feed a window input event to a client. ClickDetector interactions
+    /// fire on the client with its LocalPlayer and on the server with the
+    /// server's Player (creator-docs ClickDetector: the events fire on both).
+    pub fn input(&mut self, index: usize, event: crate::InputEvent) {
+        let Some(slot) = self.clients.get_mut(index) else {
+            return;
+        };
+        let clicks = slot.client.input(event);
+        for click in clicks {
+            let event = click.kind.event();
+            let local = {
+                let w = slot.client.runtime().world();
+                w.dom
+                    .find_service("Players")
+                    .and_then(|p| w.dom.property_by_name(p, "LocalPlayer"))
+            };
+            if let Some(Value::Ref(Some(r))) = local
+                && let Ok(ud) = slot.client.runtime().push_instance(InstanceId::from_ref(r))
+            {
+                let _ = slot.client.runtime().fire_event(click.detector, event, ud);
+                slot.client.runtime().drain_deferred();
+            }
+            if let Some(server_detector) = slot.replicator.server_id(click.detector)
+                && let Ok(ud) = self.server.runtime().push_instance(slot.player)
+            {
+                let _ = self.server.runtime().fire_event(server_detector, event, ud);
+                self.server.runtime().drain_deferred();
+            }
         }
     }
 

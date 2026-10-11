@@ -4,7 +4,11 @@
 //! M1 runs headless server Scripts only: no physics, rendering, players or
 //! LocalScripts yet. See `docs/architecture.md` §6 for the frame order.
 
+mod input;
+pub mod raycast;
 mod session;
+
+pub use input::{ClickEvent, ClickKind, InputEvent};
 
 pub use session::Session;
 
@@ -91,6 +95,10 @@ pub struct DataModel {
     render_cursor: u64,
     /// What a renderer draws that changed since it last asked.
     render_changes: RenderChanges,
+    /// Keyboard and mouse bookkeeping (clients).
+    input: input::InputTracker,
+    /// Workspace part geometry for ray queries.
+    pub(crate) parts: raycast::PartCache,
 }
 
 impl DataModel {
@@ -191,6 +199,8 @@ impl DataModel {
             script_cursor,
             render_cursor: script_cursor,
             render_changes: RenderChanges::everything(),
+            input: Default::default(),
+            parts: Default::default(),
         })
     }
 
@@ -345,17 +355,22 @@ impl DataModel {
                 Change::Property { id, .. } => {
                     if Some(*id) == lighting {
                         changes.lighting = true;
-                    } else if !changes.full && dom.is_a(*id, "BasePart") {
-                        changes.parts.insert(*id);
+                    } else if dom.is_a(*id, "BasePart") {
+                        self.parts.part_changed(dom, *id);
+                        if !changes.full {
+                            changes.parts.insert(*id);
+                        }
                     }
                 }
                 Change::Reparented { subtree, .. } => {
                     if subtree.iter().any(|i| dom.is_a(*i, "BasePart")) {
                         changes.full = true;
+                        self.parts.invalidate();
                     }
                 }
                 Change::Destroying(id) | Change::Created(id) if dom.is_a(*id, "BasePart") => {
                     changes.full = true;
+                    self.parts.invalidate();
                 }
                 _ => {}
             }
@@ -797,6 +812,143 @@ mod tests {
                 "invoke error false ServerScriptService.Main:8: negative!",
             ]
         );
+    }
+
+    #[test]
+    fn input_mouse_and_click_detectors() {
+        let mut server = Server::new(&Options::default()).unwrap();
+        let ws = service(&server, "Workspace");
+        let button = add_under(&server, ws, "Part", "Button", "");
+        {
+            let mut w = server.runtime.world_mut();
+            let c = w.dom.get(button).unwrap().class;
+            let db = w.dom.database();
+            let cf = db.find_property(c, "CFrame").unwrap().id;
+            let size = db.find_property(c, "Size").unwrap().id;
+            w.dom
+                .set_property(
+                    button,
+                    cf,
+                    Value::CFrame(rook_types::CFrame::from_position(glam::Vec3::new(
+                        0.0, 0.0, -10.0,
+                    ))),
+                )
+                .unwrap();
+            w.dom
+                .set_property(
+                    button,
+                    size,
+                    Value::Vector3(rook_types::Vector3::new(4.0, 4.0, 1.0)),
+                )
+                .unwrap();
+        }
+        add_under(&server, button, "ClickDetector", "ClickDetector", "");
+        add_script(
+            &server,
+            "ServerScriptService",
+            "Main",
+            "workspace.Button.ClickDetector.MouseClick:Connect(function(p) print('server click', p.Name) end)",
+        );
+        let sp = service(&server, "StarterPlayer");
+        let sps = add_under(
+            &server,
+            sp,
+            "StarterPlayerScripts",
+            "StarterPlayerScripts",
+            "",
+        );
+        add_under(
+            &server,
+            sps,
+            "LocalScript",
+            "Input",
+            r#"
+            local uis = game:GetService("UserInputService")
+            local mouse = game.Players.LocalPlayer:GetMouse()
+            uis.InputBegan:Connect(function(input, processed)
+                print("began", input.UserInputType.Name, input.KeyCode.Name, processed)
+            end)
+            uis.InputEnded:Connect(function(input)
+                print("ended", input.UserInputType.Name, input.KeyCode.Name, input.UserInputState.Name)
+            end)
+            mouse.KeyDown:Connect(function(key) print("keydown", key, uis:IsKeyDown(Enum.KeyCode.W)) end)
+            mouse.Button1Down:Connect(function() print("button1", mouse.Target and mouse.Target.Name, math.round(mouse.Hit.Position.Z)) end)
+            local cd = workspace:WaitForChild("Button"):WaitForChild("ClickDetector")
+            cd.MouseHoverEnter:Connect(function(p) print("hover", p.Name) end)
+            cd.MouseClick:Connect(function(p) print("client click", p.Name) end)
+            "#,
+        );
+        server.start();
+        let mut session = Session::new(server, Options::default());
+        let index = session.join("Clicker", 7).unwrap();
+        {
+            let client = session.client_mut(index).unwrap();
+            client.set_viewport(800, 600);
+            let camera = client.current_camera().unwrap();
+            client.set_property(
+                camera,
+                "CFrame",
+                Value::CFrame(rook_types::CFrame::IDENTITY),
+            );
+        }
+        session.run_for(0.1);
+        session.input(
+            index,
+            InputEvent::Key {
+                code: "W".into(),
+                down: true,
+            },
+        );
+        session.input(
+            index,
+            InputEvent::Key {
+                code: "W".into(),
+                down: false,
+            },
+        );
+        session.input(index, InputEvent::MouseMove { x: 400.0, y: 300.0 });
+        session.input(
+            index,
+            InputEvent::MouseButton {
+                button: 1,
+                down: true,
+            },
+        );
+        session.input(
+            index,
+            InputEvent::MouseButton {
+                button: 1,
+                down: false,
+            },
+        );
+        session.run_for(0.1);
+        let client: Vec<String> = session
+            .client(index)
+            .unwrap()
+            .take_log()
+            .into_iter()
+            .map(|e| e.message)
+            .collect();
+        let server_log: Vec<String> = session
+            .server()
+            .take_log()
+            .into_iter()
+            .map(|e| e.message)
+            .collect();
+        assert_eq!(
+            client,
+            [
+                "began Keyboard W false",
+                "keydown w true",
+                "ended Keyboard W End",
+                "hover Clicker",
+                "began MouseButton1 None false",
+                "button1 Button -10",
+                "ended MouseButton1 None End",
+                "client click Clicker",
+            ]
+        );
+        assert_eq!(server_log, ["server click Clicker"]);
     }
 
     #[test]

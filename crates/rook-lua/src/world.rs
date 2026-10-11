@@ -79,6 +79,21 @@ pub struct LogEntry {
     pub time: f64,
 }
 
+/// Input devices as the client sees them (UserInputService state).
+#[derive(Debug, Default, Clone)]
+pub struct InputState {
+    /// Held keys, as `Enum.KeyCode` values.
+    pub keys: std::collections::HashSet<u32>,
+    /// Mouse buttons 1-3 held.
+    pub buttons: [bool; 3],
+    /// Cursor position in pixels from the viewport's top left.
+    pub mouse: (f32, f32),
+    /// Cursor movement during the last event.
+    pub mouse_delta: (f32, f32),
+    /// The local player's Mouse (`Player:GetMouse()`).
+    pub mouse_object: Option<InstanceId>,
+}
+
 /// A script's run state.
 #[derive(Debug, Default)]
 pub(crate) struct ModuleState {
@@ -97,6 +112,8 @@ pub struct World {
     pub signal_behavior: SignalBehavior,
     /// Whether this DataModel is a client (RunService:IsClient).
     pub is_client: bool,
+    /// Keyboard and mouse state (clients only).
+    pub input: InputState,
     /// Remote calls waiting for the session to deliver them.
     pub outbox: Vec<crate::net::RemoteMessage>,
     /// Threads waiting for an invoke's reply, by call id.
@@ -122,6 +139,7 @@ impl World {
             scheduler: Scheduler::new(clock),
             signal_behavior: SignalBehavior::Immediate,
             is_client: false,
+            input: InputState::default(),
             outbox: Vec::new(),
             pending_calls: HashMap::new(),
             next_call: 0,

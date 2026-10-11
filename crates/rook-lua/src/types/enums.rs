@@ -48,13 +48,18 @@ pub(crate) fn push_item(lua: &Lua, enum_id: EnumId, value: u32) -> mlua::Result<
     Ok(LuaValue::UserData(ud))
 }
 
+/// An item by name, accepting the legacy names Roblox still resolves
+/// (`Enum.KeyCode.Unknown` is `Enum.KeyCode.None`).
 fn find_item(enum_id: EnumId, name: &str) -> Option<u32> {
-    database()
-        .enum_info(enum_id)
-        .items
-        .iter()
-        .find(|(n, _)| *n == name)
-        .map(|(_, v)| *v)
+    let info = database().enum_info(enum_id);
+    let lookup = |n: &str| info.items.iter().find(|(i, _)| *i == n).map(|(_, v)| *v);
+    lookup(name).or_else(|| {
+        let current = rook_reflection::members()
+            .enum_legacy_names
+            .get(info.name)?
+            .get(name)?;
+        lookup(current)
+    })
 }
 
 fn has_value(enum_id: EnumId, value: u32) -> bool {

@@ -17,7 +17,7 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("RemoteEvent" | "UnreliableRemoteEvent", "FireServer") => fire_server,
         ("RemoteEvent" | "UnreliableRemoteEvent", "FireClient") => fire_client,
         ("RemoteEvent" | "UnreliableRemoteEvent", "FireAllClients") => fire_all_clients,
-        _ => return None,
+        _ => return super::input::native(owner, name),
     })
 }
 
