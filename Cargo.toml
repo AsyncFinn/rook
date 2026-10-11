@@ -21,6 +21,7 @@ rook-scheduler = { path = "crates/rook-scheduler" }
 rook-lua = { path = "crates/rook-lua" }
 rook-engine = { path = "crates/rook-engine" }
 rook-render = { path = "crates/rook-render" }
+rook-net = { path = "crates/rook-net" }
 
 # Roblox formats and data (rbx-dom ecosystem)
 rbx_dom_weak = "4.2"
