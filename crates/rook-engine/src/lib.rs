@@ -4,6 +4,10 @@
 //! M1 runs headless server Scripts only: no physics, rendering, players or
 //! LocalScripts yet. See `docs/architecture.md` §6 for the frame order.
 
+mod session;
+
+pub use session::Session;
+
 use std::time::Duration;
 
 use rook_dom::{Change, Dom, InstanceId};
@@ -62,10 +66,24 @@ impl Default for Options {
     }
 }
 
-/// A server DataModel running headless.
+/// Which side of a game a DataModel is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Role {
+    Server,
+    Client,
+}
+
+/// A server DataModel (the usual case, and what headless runs use).
+pub type Server = DataModel;
+
+/// One DataModel with its scripts: a server or a client.
 #[derive(Debug)]
-pub struct Server {
+pub struct DataModel {
     runtime: Runtime,
+    role: Role,
+    /// Trim the journal at the end of each frame. A session turns this off
+    /// for the server so the replicator can read the frame's changes first.
+    auto_trim: bool,
     run_service: InstanceId,
     /// Journal position up to which new scripts have been looked for.
     script_cursor: u64,
@@ -75,10 +93,42 @@ pub struct Server {
     render_dirty: bool,
 }
 
-impl Server {
+impl DataModel {
     /// An empty place.
     pub fn new(options: &Options) -> Result<Self, EngineError> {
         Self::with_dom(Dom::new(), options)
+    }
+
+    /// An empty client DataModel, filled by replication.
+    pub fn new_client(options: &Options) -> Result<Self, EngineError> {
+        let mut dm = Self::with_dom(Dom::new(), options)?;
+        dm.role = Role::Client;
+        dm.runtime.world_mut().is_client = true;
+        Ok(dm)
+    }
+
+    pub fn role(&self) -> Role {
+        self.role
+    }
+
+    pub fn set_auto_trim(&mut self, on: bool) {
+        self.auto_trim = on;
+    }
+
+    /// Treat everything in the journal so far as already handled (after
+    /// building the DataModel by hand, as a session does for clients).
+    pub fn reset_cursors(&mut self) {
+        let end = self.runtime.world().dom.journal().end();
+        self.script_cursor = end;
+        self.render_cursor = end;
+        self.render_dirty = true;
+    }
+
+    /// Drop journal entries every reader has seen.
+    pub fn trim_journal(&self) {
+        let mut w = self.runtime.world_mut();
+        let end = w.dom.journal().end();
+        w.dom.journal_mut().trim(end);
     }
 
     /// Load a place file.
@@ -135,6 +185,8 @@ impl Server {
         let script_cursor = runtime.world().dom.journal().end();
         Ok(Self {
             runtime,
+            role: Role::Server,
+            auto_trim: true,
             run_service,
             script_cursor,
             render_cursor: script_cursor,
@@ -163,15 +215,35 @@ impl Server {
         }
     }
 
-    /// Whether a Script runs on the server where it is.
+    /// Whether a script runs here.
     ///
-    /// Legacy run context: under Workspace or ServerScriptService
-    /// (Confirmed: creator-docs Script). Server run context: anywhere
-    /// except ServerStorage and the Starter containers (Inference).
+    /// Server: legacy-context Scripts under Workspace or
+    /// ServerScriptService (Confirmed: creator-docs Script); Server-context
+    /// Scripts anywhere except ServerStorage and the Starter containers
+    /// (Inference).
+    ///
+    /// Client: LocalScripts under the player's Backpack, character,
+    /// PlayerGui or PlayerScripts, or under ReplicatedFirst (Confirmed:
+    /// creator-docs LocalScript); Client-context Scripts anywhere the client
+    /// sees except the Starter containers (Inference).
     fn should_run(&self, id: InstanceId) -> bool {
         let world = self.runtime.world();
         let dom = &world.dom;
-        if dom.class_name(id) != "Script" || self.runtime.is_started(id) {
+        if self.runtime.is_started(id) {
+            return false;
+        }
+        let class = dom.class_name(id);
+        if !matches!(class, "Script" | "LocalScript") {
+            return false;
+        }
+        let disabled = dom.property_by_name(id, "Disabled") == Some(Value::Bool(true));
+        if disabled {
+            return false;
+        }
+        if self.role == Role::Client {
+            return client_should_run(dom, id, class);
+        }
+        if class != "Script" {
             return false;
         }
         if dom.property_by_name(id, "Disabled") == Some(Value::Bool(true)) {
@@ -238,6 +310,12 @@ impl Server {
             (w.scheduler.now(), dt)
         };
         let rs = self.run_service;
+        if self.role == Role::Client {
+            // Before the frame is drawn (creator-docs RunService.PreRender;
+            // RenderStepped is its older name).
+            self.fire(rs, "RenderStepped", dt);
+            self.fire(rs, "PreRender", dt);
+        }
         self.runtime.resume_due(Queue::Legacy);
         self.fire(rs, "Stepped", (now, dt));
         self.fire(rs, "PreSimulation", dt);
@@ -246,9 +324,9 @@ impl Server {
         self.runtime.resume_due(Queue::Task);
         self.start_new_scripts();
         self.check_render_changes();
-        let mut w = self.runtime.world_mut();
-        let end = w.dom.journal().end();
-        w.dom.journal_mut().trim(end);
+        if self.auto_trim {
+            self.trim_journal();
+        }
     }
 
     /// Note whether the journal since the last check touched anything drawn:
@@ -364,6 +442,47 @@ fn ensure_camera(dom: &mut Dom) {
     }
 }
 
+fn client_should_run(dom: &Dom, id: InstanceId, class: &str) -> bool {
+    let local_player = dom
+        .find_service("Players")
+        .and_then(|p| dom.property_by_name(p, "LocalPlayer"))
+        .and_then(|v| match v {
+            Value::Ref(Some(r)) => Some(InstanceId::from_ref(r)),
+            _ => None,
+        });
+    let character = local_player
+        .and_then(|p| dom.property_by_name(p, "Character"))
+        .and_then(|v| match v {
+            Value::Ref(Some(r)) => Some(InstanceId::from_ref(r)),
+            _ => None,
+        });
+    let Some(top) = top_level(dom, id) else {
+        return false;
+    };
+    let top_class = dom.class_name(top);
+    if class == "LocalScript" {
+        if top_class == "ReplicatedFirst" {
+            return true;
+        }
+        return dom.ancestors(id).any(|a| {
+            Some(a) == character
+                || (matches!(
+                    dom.class_name(a),
+                    "Backpack" | "PlayerGui" | "PlayerScripts"
+                ) && dom.parent(a) == local_player)
+        });
+    }
+    matches!(dom.property_by_name(id, "RunContext"), Some(Value::Enum(2)))
+        && !matches!(
+            top_class,
+            "StarterGui"
+                | "StarterPack"
+                | "StarterPlayer"
+                | "ServerStorage"
+                | "ServerScriptService"
+        )
+}
+
 /// The child of the DataModel that contains `id`.
 fn top_level(dom: &Dom, id: InstanceId) -> Option<InstanceId> {
     let root = dom.root();
@@ -428,6 +547,135 @@ mod tests {
         s.start();
         s.run_for(1.0);
         assert_eq!(lines(&s), ["30"]);
+    }
+
+    fn add_under(
+        server: &Server,
+        parent: InstanceId,
+        class: &str,
+        name: &str,
+        source: &str,
+    ) -> InstanceId {
+        let mut w = server.runtime.world_mut();
+        let id = w.dom.create_by_name(class).unwrap();
+        w.dom.set_name(id, name.into()).unwrap();
+        if !source.is_empty() {
+            let c = w.dom.get(id).unwrap().class;
+            let pid = w.dom.database().find_property(c, "Source").unwrap().id;
+            w.dom
+                .set_property(id, pid, Value::String(source.into()))
+                .unwrap();
+        }
+        w.dom.set_parent(id, Some(parent)).unwrap();
+        id
+    }
+
+    fn service(server: &Server, name: &str) -> InstanceId {
+        server.runtime.world_mut().dom.get_service(name).unwrap()
+    }
+
+    #[test]
+    fn session_join_runs_local_scripts_where_roblox_does() {
+        let mut server = Server::new(&Options::default()).unwrap();
+        add_script(
+            &server,
+            "ServerScriptService",
+            "Main",
+            r#"
+            game.Players.PlayerAdded:Connect(function(p)
+                print("server: joined", p.Name, p.UserId, #p.PlayerGui:GetChildren())
+            end)
+            task.wait(0.2)
+            local part = Instance.new("Part")
+            part.Name = "Late"
+            part.Parent = workspace
+            "#,
+        );
+        let ss = service(&server, "ServerStorage");
+        add_under(&server, ss, "Folder", "Secret", "");
+        let gui = service(&server, "StarterGui");
+        let screen = add_under(&server, gui, "ScreenGui", "Hud", "");
+        add_under(
+            &server,
+            screen,
+            "LocalScript",
+            "HudScript",
+            r#"
+            local rs = game:GetService("RunService")
+            print("gui:", game.Players.LocalPlayer.Name, rs:IsClient(), rs:IsServer(), script:GetFullName())
+            print("gui: secret visible?", game:GetService("ServerStorage"):FindFirstChild("Secret") ~= nil)
+            print("gui: late part", workspace:WaitForChild("Late").ClassName)
+            "#,
+        );
+        let sp = service(&server, "StarterPlayer");
+        let sps = server
+            .runtime
+            .world()
+            .dom
+            .find_first_child(sp, "StarterPlayerScripts", false);
+        let sps = sps.unwrap_or_else(|| {
+            add_under(
+                &server,
+                sp,
+                "StarterPlayerScripts",
+                "StarterPlayerScripts",
+                "",
+            )
+        });
+        add_under(
+            &server,
+            sps,
+            "LocalScript",
+            "Control",
+            "print('player scripts:', script.Parent.ClassName)",
+        );
+        let rf = service(&server, "ReplicatedFirst");
+        add_under(
+            &server,
+            rf,
+            "LocalScript",
+            "Loading",
+            "print('replicated first')",
+        );
+        let ws = service(&server, "Workspace");
+        add_under(
+            &server,
+            ws,
+            "LocalScript",
+            "Nope",
+            "print('workspace local script must not run')",
+        );
+        server.start();
+
+        let mut session = Session::new(server, Options::default());
+        let index = session.join("Builderman", 156).unwrap();
+        session.run_for(1.0);
+
+        let server_log: Vec<String> = session
+            .server()
+            .take_log()
+            .into_iter()
+            .map(|e| e.message)
+            .collect();
+        assert_eq!(server_log, ["server: joined Builderman 156 1"]);
+        let mut client_log: Vec<String> = session
+            .client(index)
+            .unwrap()
+            .take_log()
+            .into_iter()
+            .map(|e| e.message)
+            .collect();
+        client_log.sort();
+        assert_eq!(
+            client_log,
+            [
+                "gui: Builderman true false Players.Builderman.PlayerGui.Hud.HudScript",
+                "gui: late part Part",
+                "gui: secret visible? false",
+                "player scripts: PlayerScripts",
+                "replicated first",
+            ]
+        );
     }
 
     #[test]

@@ -84,8 +84,10 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("DataModel", "IsLoaded") => true_,
         ("DataModel", "BindToClose") => bind_to_close,
         ("Debris", "AddItem" | "addItem") => debris_add_item,
-        ("RunService", "IsServer" | "IsRunning") => true_,
-        ("RunService", "IsClient" | "IsStudio" | "IsRunMode") => false_,
+        ("RunService", "IsRunning") => true_,
+        ("RunService", "IsStudio" | "IsRunMode") => false_,
+        ("RunService", "IsServer") => is_server,
+        ("RunService", "IsClient") => is_client,
         ("BindableEvent", "Fire") => bindable_fire,
         ("BindableFunction", "Invoke") => bindable_invoke,
         ("Players", "GetPlayers" | "getPlayers" | "players") => get_players,
@@ -208,6 +210,14 @@ fn true_(lua: &Lua, _: InstanceId, _: Args) -> ApiResult<Outcome> {
 
 fn false_(lua: &Lua, _: InstanceId, _: Args) -> ApiResult<Outcome> {
     Outcome::ret(lua, false)
+}
+
+fn is_server(lua: &Lua, _: InstanceId, _: Args) -> ApiResult<Outcome> {
+    Outcome::ret(lua, !with_world(lua, |w| w.is_client))
+}
+
+fn is_client(lua: &Lua, _: InstanceId, _: Args) -> ApiResult<Outcome> {
+    Outcome::ret(lua, with_world(lua, |w| w.is_client))
 }
 
 // ---- Object / Instance ------------------------------------------------------------

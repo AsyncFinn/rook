@@ -229,14 +229,26 @@ fn withheld(server: &Dom, id: InstanceId, property: PropertyId) -> bool {
     }
     if prop.name == "Source" && server.class_name(id) == "Script" {
         // RunContext Client scripts run on the client, so their source goes.
-        return !matches!(server.property_by_name(id, "RunContext"), Some(Value::Enum(2)));
+        return !matches!(
+            server.property_by_name(id, "RunContext"),
+            Some(Value::Enum(2))
+        );
     }
     // Properties that only exist to carry another one in files.
     matches!(prop.kind, PropertyKind::Alias { .. })
-        || matches!(prop.kind, PropertyKind::Canonical(Serialization::Migrate { .. }))
+        || matches!(
+            prop.kind,
+            PropertyKind::Canonical(Serialization::Migrate { .. })
+        )
 }
 
-fn copy_properties(server: &Dom, id: InstanceId, client: &mut Dom, cid: InstanceId, r: &Replicator) {
+fn copy_properties(
+    server: &Dom,
+    id: InstanceId,
+    client: &mut Dom,
+    cid: InstanceId,
+    r: &Replicator,
+) {
     let Some(inst) = server.get(id) else {
         return;
     };
@@ -316,15 +328,24 @@ mod tests {
         part(&mut server, "Secret", ss);
         let v = server.create_by_name("ObjectValue").unwrap();
         server.set_parent(v, Some(ws)).unwrap();
-        let pid = server.database().find_property(server.get(v).unwrap().class, "Value").unwrap().id;
-        server.set_property(v, pid, Value::Ref(Some(a.to_ref()))).unwrap();
+        let pid = server
+            .database()
+            .find_property(server.get(v).unwrap().class, "Value")
+            .unwrap()
+            .id;
+        server
+            .set_property(v, pid, Value::Ref(Some(a.to_ref())))
+            .unwrap();
 
         r.initial(&server, &mut client);
         let cws = client.find_service("Workspace").unwrap();
         let ca = client.find_first_child(cws, "A", false).unwrap();
         assert!(client.find_service("ServerStorage").is_none());
         let cv = client.find_first_child(cws, "ObjectValue", false).unwrap();
-        assert_eq!(client.property(cv, pid), Some(Value::Ref(Some(ca.to_ref()))));
+        assert_eq!(
+            client.property(cv, pid),
+            Some(Value::Ref(Some(ca.to_ref())))
+        );
     }
 
     #[test]
@@ -349,8 +370,14 @@ mod tests {
 
         // Property changes and renames.
         let inner = server.find_first_child(model, "Inner", false).unwrap();
-        let anchored = server.database().find_property(server.get(inner).unwrap().class, "Anchored").unwrap().id;
-        server.set_property(inner, anchored, Value::Bool(true)).unwrap();
+        let anchored = server
+            .database()
+            .find_property(server.get(inner).unwrap().class, "Anchored")
+            .unwrap()
+            .id;
+        server
+            .set_property(inner, anchored, Value::Bool(true))
+            .unwrap();
         server.set_name(model, "Renamed".into()).unwrap();
         r.sync(&server, &mut client);
         let ci = client.find_first_child(cm, "Inner", false).unwrap();
@@ -376,15 +403,27 @@ mod tests {
         let ws = server.find_service("Workspace").unwrap();
         for class in ["Script", "LocalScript"] {
             let s = server.create_by_name(class).unwrap();
-            let pid = server.database().find_property(server.get(s).unwrap().class, "Source").unwrap().id;
-            server.set_property(s, pid, Value::String("print(1)".into())).unwrap();
+            let pid = server
+                .database()
+                .find_property(server.get(s).unwrap().class, "Source")
+                .unwrap()
+                .id;
+            server
+                .set_property(s, pid, Value::String("print(1)".into()))
+                .unwrap();
             server.set_parent(s, Some(ws)).unwrap();
         }
         r.initial(&server, &mut client);
         let cws = client.find_service("Workspace").unwrap();
         let script = client.find_first_child(cws, "Script", false).unwrap();
         let local = client.find_first_child(cws, "LocalScript", false).unwrap();
-        assert_eq!(client.property_by_name(script, "Source"), Some(Value::String(String::new())));
-        assert_eq!(client.property_by_name(local, "Source"), Some(Value::String("print(1)".into())));
+        assert_eq!(
+            client.property_by_name(script, "Source"),
+            Some(Value::String(String::new()))
+        );
+        assert_eq!(
+            client.property_by_name(local, "Source"),
+            Some(Value::String("print(1)".into()))
+        );
     }
 }

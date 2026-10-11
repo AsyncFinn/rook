@@ -2137,6 +2137,7 @@ dependencies = [
  "rook-dom",
  "rook-formats",
  "rook-lua",
+ "rook-net",
  "rook-reflection",
  "rook-scheduler",
  "rook-types",
