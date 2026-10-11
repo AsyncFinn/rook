@@ -19,8 +19,13 @@ fn run(source: &str, frames: u32) -> Vec<String> {
 }
 
 fn step(rt: &Runtime) {
-    rt.world_mut().scheduler.begin_frame();
+    let dt = rt.world_mut().scheduler.begin_frame();
     rt.resume_due(Queue::Legacy);
+    let rs = rt.world().dom.find_service("RunService");
+    if let Some(rs) = rs {
+        rt.fire_event(rs, "Heartbeat", dt).unwrap();
+        rt.drain_deferred();
+    }
     rt.resume_due(Queue::Task);
 }
 
@@ -366,6 +371,46 @@ fn services_datastore_http_bindables() {
             "38 36 a%20b%26c",
             "invoke 42",
             "false OnInvoke is a callback member of BindableFunction; you can only set the callback value, get is not available",
+        ],
+    );
+}
+
+#[test]
+fn tweens() {
+    expect(
+        r#"
+        local TweenService = game:GetService("TweenService")
+        print(TweenService:GetValue(0.5, Enum.EasingStyle.Linear, Enum.EasingDirection.In))
+        print(TweenService:GetValue(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.In))
+        print(TweenService:GetValue(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out))
+        local p = Instance.new("Part")
+        p.Transparency = 0
+        local tw = TweenService:Create(p, TweenInfo.new(1, Enum.EasingStyle.Linear), { Transparency = 1, Position = Vector3.new(10, 0, 0) })
+        print(tw.ClassName, tw.Instance == p, tw.PlaybackState)
+        tw.Completed:Connect(function(state) print("completed", state, p.Transparency, p.Position) end)
+        tw:Play()
+        print(tw.PlaybackState)
+        task.wait(0.5)
+        print("half", math.round(p.Transparency * 10) / 10)
+        print(pcall(function() TweenService:Create(p, TweenInfo.new(), { Anchored = 5 }) end))
+        task.wait(1)
+        local f = Instance.new("Frame")
+        print(f:TweenPosition(UDim2.new(1, 0, 0, 0), "Out", "Quad", 0.2, false, function(status) print("gui", status, f.Position) end))
+        print(f:TweenPosition(UDim2.new(0, 5, 0, 0)))
+        "#,
+        120,
+        &[
+            "0.5",
+            "0.25",
+            "0.75",
+            "Tween true Enum.PlaybackState.Begin",
+            "Enum.PlaybackState.Playing",
+            "half 0.5",
+            "false TweenService:Create property named 'Anchored' cannot be tweened due to type mismatch (property is a 'boolean', but given type is 'number')",
+            "completed Enum.PlaybackState.Completed 1 10, 0, 0",
+            "true",
+            "false",
+            "gui Enum.TweenStatus.Completed {1, 0}, {0, 0}",
         ],
     );
 }

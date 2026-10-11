@@ -26,6 +26,33 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
 /// Methods written in Luau. Each source gets the engine's `std` table.
 pub(crate) fn luau_source(owner: &str, name: &str) -> Option<&'static str> {
     Some(match (owner, name) {
+        ("TweenService", "Create") => {
+            "local t = (...).tween return function(self, ...) return t.create(...) end"
+        }
+        ("TweenService", "GetValue") => {
+            "local t = (...).tween return function(self, alpha, style, direction) return t.getValue(alpha, style, direction) end"
+        }
+        ("TweenBase", "Play") => "local t = (...).tween return function(self) t.play(self) end",
+        ("TweenBase", "Pause") => "local t = (...).tween return function(self) t.pause(self) end",
+        ("TweenBase", "Cancel") => "local t = (...).tween return function(self) t.cancel(self) end",
+        ("GuiObject", "TweenPosition") => {
+            r#"local t = (...).tween
+            return function(self, position, direction, style, time, override, callback)
+                return t.gui(self, { Position = position }, direction, style, time, override, callback)
+            end"#
+        }
+        ("GuiObject", "TweenSize") => {
+            r#"local t = (...).tween
+            return function(self, size, direction, style, time, override, callback)
+                return t.gui(self, { Size = size }, direction, style, time, override, callback)
+            end"#
+        }
+        ("GuiObject", "TweenSizeAndPosition") => {
+            r#"local t = (...).tween
+            return function(self, size, position, direction, style, time, override, callback)
+                return t.gui(self, { Size = size, Position = position }, direction, style, time, override, callback)
+            end"#
+        }
         // Invoke waits until a callback is set (creator-docs
         // BindableFunction.OnInvoke); Rook checks once per frame.
         ("BindableFunction", "Invoke") => {

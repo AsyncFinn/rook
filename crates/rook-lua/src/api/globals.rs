@@ -306,5 +306,92 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
         g.set("workspace", ws.clone())?;
         g.set("Workspace", ws)?;
     }
+    install_engine_helpers(lua)?;
+    Ok(())
+}
+
+/// Helpers for engine features written in Luau (tweens). They bypass the
+/// rules game scripts follow, so they live only in the registry.
+fn install_engine_helpers(lua: &Lua) -> mlua::Result<()> {
+    use mlua::AnyUserData;
+    let std: Table = lua.named_registry_value("rook.std")?;
+    let g = lua.globals();
+    for name in ["typeof", "pairs", "setmetatable", "math", "tostring"] {
+        std.set(name, g.get::<LuaValue>(name)?)?;
+    }
+    std.set(
+        "set_internal",
+        lua.create_function(
+            |lua, (inst, name, value): (AnyUserData, String, LuaValue)| {
+                let id = inst.borrow::<super::instance::LuaInstance>()?.0;
+                let known = with_world(lua, |w| {
+                    w.dom
+                        .get(id)
+                        .and_then(|i| w.dom.database().find_canonical_property(i.class, &name))
+                        .is_some()
+                });
+                if !known {
+                    // Not a stored property: keep it as a runtime value.
+                    let all = super::instance::runtime_properties(lua)?;
+                    let t: Table = match all.raw_get::<Option<Table>>(inst.clone())? {
+                        Some(t) => t,
+                        None => {
+                            let t = lua.create_table()?;
+                            all.raw_set(inst, t.clone())?;
+                            t
+                        }
+                    };
+                    return t.raw_set(name, value);
+                }
+                match super::instance::write_property(lua, id, &name, &value) {
+                    Ok(Ok(())) => Ok(()),
+                    Ok(Err(e)) => Err(mlua::Error::RuntimeError(e.0)),
+                    Err(e) => Err(mlua::Error::RuntimeError(e)),
+                }
+            },
+        )?,
+    )?;
+    std.set(
+        "fire",
+        lua.create_function(
+            |lua, (inst, name, args): (AnyUserData, String, mlua::Variadic<LuaValue>)| {
+                let id = inst.borrow::<super::instance::LuaInstance>()?.0;
+                // Only engine events raised from Luau are listed here.
+                let event: &'static str = match name.as_str() {
+                    "Completed" => "Completed",
+                    _ => {
+                        return Err(mlua::Error::RuntimeError(format!(
+                            "unknown engine event {name}"
+                        )));
+                    }
+                };
+                crate::threads::fire(
+                    lua,
+                    &rook_signal::SignalKey::event(id, event),
+                    args.into_iter().collect(),
+                );
+                Ok(())
+            },
+        )?,
+    )?;
+    std.set(
+        "new_instance",
+        lua.create_function(|lua, class: String| {
+            let id = with_world(lua, |w| w.dom.create_by_name(&class))
+                .map_err(|e| mlua::Error::RuntimeError(e.to_string()))?;
+            push_instance(lua, id)
+        })?,
+    )?;
+    let run_service = with_world(lua, |w| w.dom.get_service("RunService").ok());
+    if let Some(rs) = run_service {
+        let heartbeat = super::instance::get_member(lua, rs, "Heartbeat")
+            .map_err(|e| mlua::Error::RuntimeError(e.0))?;
+        std.set("heartbeat", heartbeat)?;
+        let tween: Table = lua
+            .load(include_str!("tween.luau"))
+            .set_name("=[rook] Tween")
+            .call(std.clone())?;
+        std.set("tween", tween)?;
+    }
     Ok(())
 }

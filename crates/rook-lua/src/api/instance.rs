@@ -152,7 +152,29 @@ fn find_property(lua: &Lua, id: InstanceId, key: &str) -> Option<PropInfo> {
 }
 
 /// `inst[key]` for scripts.
+/// Runtime-only property values set by engine Luau code (for example
+/// `Tween.TweenInfo`, whose type isn't a stored value type).
+pub(crate) fn runtime_properties(lua: &Lua) -> mlua::Result<mlua::Table> {
+    if let Some(t) = lua.named_registry_value::<Option<mlua::Table>>("rook.runtime_props")? {
+        return Ok(t);
+    }
+    let t = crate::ctx::weak_table(lua, "k")?;
+    lua.set_named_registry_value("rook.runtime_props", t.clone())?;
+    Ok(t)
+}
+
+fn runtime_property(lua: &Lua, id: InstanceId, key: &str) -> mlua::Result<Option<LuaValue>> {
+    let ud = push_instance(lua, id)?;
+    match runtime_properties(lua)?.raw_get::<Option<mlua::Table>>(ud)? {
+        Some(t) => Ok(t.raw_get::<Option<LuaValue>>(key)?),
+        None => Ok(None),
+    }
+}
+
 pub(crate) fn get_member(lua: &Lua, id: InstanceId, key: &str) -> ApiResult<LuaValue> {
+    if let Some(v) = runtime_property(lua, id, key)? {
+        return Ok(v);
+    }
     if key == "ClassName" {
         let name = with_world(lua, |w| w.dom.class_name(id).to_owned());
         return Ok(LuaValue::String(lua.create_string(name)?));
