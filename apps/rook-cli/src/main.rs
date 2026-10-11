@@ -66,6 +66,9 @@ enum Command {
         /// Print only the summary.
         #[arg(long, short)]
         quiet: bool,
+        /// Also run this Luau file as a server script after the place starts.
+        #[arg(long)]
+        script: Option<PathBuf>,
     },
     /// Run every place in a folder headless and report how many run cleanly.
     CorpusRun {
@@ -167,6 +170,7 @@ fn main() -> anyhow::Result<()> {
             seconds,
             timeout,
             quiet,
-        } => run::run(&file, seconds, timeout, quiet),
+            script,
+        } => run::run(&file, seconds, timeout, quiet, script.as_deref()),
     }
 }

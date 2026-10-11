@@ -6,7 +6,13 @@ use std::time::{Duration, Instant};
 use anyhow::Context;
 use rook_engine::{MessageType, Options, Server};
 
-pub fn run(file: &Path, seconds: f64, timeout: f64, quiet: bool) -> anyhow::Result<()> {
+pub fn run(
+    file: &Path,
+    seconds: f64,
+    timeout: f64,
+    quiet: bool,
+    script: Option<&Path>,
+) -> anyhow::Result<()> {
     let bytes = std::fs::read(file).with_context(|| format!("reading {}", file.display()))?;
     let options = Options {
         script_timeout: Duration::from_secs_f64(timeout),
@@ -15,6 +21,14 @@ pub fn run(file: &Path, seconds: f64, timeout: f64, quiet: bool) -> anyhow::Resu
     let started = Instant::now();
     let mut server = Server::load_place(&bytes, &options)?;
     server.start();
+    if let Some(script) = script {
+        let source = std::fs::read_to_string(script)
+            .with_context(|| format!("reading {}", script.display()))?;
+        server
+            .runtime()
+            .run_source("ServerScriptService.RookProbe", &source, None)
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
+    }
     server.run_for(seconds);
     let log = server.take_log();
     let errors = log.iter().filter(|e| e.kind == MessageType::Error).count();
