@@ -224,7 +224,15 @@ impl Replicator {
 fn withheld(server: &Dom, id: InstanceId, property: PropertyId) -> bool {
     let db = server.database();
     let prop = db.property(property);
-    if prop.flags.not_replicated {
+    // Properties that serialize under another name (`Size` as `size`,
+    // `Color` as `Color3uint8`, `Shape` as `shape`) are marked NotReplicated
+    // in the API dump because Roblox replicates them under that other name.
+    // The value still reaches clients.
+    let replicated_as_other = matches!(
+        prop.kind,
+        PropertyKind::Canonical(Serialization::SerializesAs(_))
+    );
+    if prop.flags.not_replicated && !replicated_as_other {
         return true;
     }
     if prop.name == "Source" && server.class_name(id) == "Script" {
@@ -395,6 +403,36 @@ mod tests {
         r.sync(&server, &mut client);
         assert!(client.is_destroyed(cm));
         assert_eq!(r.client_id(model), None);
+    }
+
+    #[test]
+    fn properties_serialized_under_other_names_replicate() {
+        let (mut server, mut client, mut r) = setup();
+        let ws = server.find_service("Workspace").unwrap();
+        let p = part(&mut server, "P", ws);
+        let class = server.get(p).unwrap().class;
+        let db = server.database();
+        let size = db.find_property(class, "Size").unwrap().id;
+        let color = db.find_property(class, "Color").unwrap().id;
+        server
+            .set_property(
+                p,
+                size,
+                Value::Vector3(rook_types::Vector3::new(9.0, 8.0, 7.0)),
+            )
+            .unwrap();
+        server
+            .set_property(
+                p,
+                color,
+                Value::Color3(rook_types::Color3::new(1.0, 0.0, 0.0)),
+            )
+            .unwrap();
+        r.initial(&server, &mut client);
+        let cws = client.find_service("Workspace").unwrap();
+        let cp = client.find_first_child(cws, "P", false).unwrap();
+        assert_eq!(client.property(cp, size), server.property(p, size));
+        assert_eq!(client.property(cp, color), server.property(p, color));
     }
 
     #[test]
