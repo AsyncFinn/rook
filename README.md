@@ -11,7 +11,7 @@ Early development. M0 (file formats and data) is done, M1 (scripting) is nearly 
 - 99.3% of a 3,000-place archive loads.
 - 60% of archived places with server scripts run 10 seconds without a script error.
 - Behaviour is checked against Roblox Studio with recorded conformance cases (`conformance/`).
-- `rook-player` draws a place's parts in a window.
+- `rook-player` runs a place's server scripts and draws its parts live in a window, like Studio's Run mode.
 
 | Crate | What it does |
 |---|---|
@@ -24,7 +24,7 @@ Early development. M0 (file formats and data) is done, M1 (scripting) is nearly 
 | `rook-engine` | A server DataModel: services, script start rules, the frame loop |
 | `rook-render` | The wgpu renderer |
 | `rook-cli` | The `rook` command-line tool |
-| `rook-player` | The windowed player (currently a viewer) |
+| `rook-player` | The windowed player: runs a place and draws it |
 
 See [docs/architecture.md](docs/architecture.md) for the design and milestones, and [docs/research.md](docs/research.md) for background.
 
@@ -42,7 +42,10 @@ cargo build --release
 rook-player place.rbxl                                  # open a window
 rook-player place.rbxl --screenshot out.png             # render one frame
 rook-player place.rbxl --camera 100,80,100 --look-at 0,0,0 --screenshot out.png
+rook-player place.rbxl --seconds 5 --screenshot out.png  # run scripts first
 ```
+
+The player runs the place's server scripts while you watch, as Studio's Run mode does, and the camera moves `Workspace.CurrentCamera`.
 
 Hold the right mouse button to look around, WASD to move, Q/E for down/up, Shift to go faster, and the mouse wheel to change speed.
 

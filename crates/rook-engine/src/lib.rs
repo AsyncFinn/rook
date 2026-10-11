@@ -69,6 +69,10 @@ pub struct Server {
     run_service: InstanceId,
     /// Journal position up to which new scripts have been looked for.
     script_cursor: u64,
+    /// Journal position up to which render-relevant changes have been checked.
+    render_cursor: u64,
+    /// Whether anything a renderer draws changed since the last check.
+    render_dirty: bool,
 }
 
 impl Server {
@@ -93,6 +97,7 @@ impl Server {
             // problem with the place; skip it rather than fail.
             let _ = dom.get_service(service);
         }
+        ensure_camera(&mut dom);
         dom.journal_mut().set_enabled(true);
         let run_service = dom.get_service("RunService").expect("RunService class");
         // Workspace.SignalBehavior: Default currently means Immediate
@@ -132,6 +137,8 @@ impl Server {
             runtime,
             run_service,
             script_cursor,
+            render_cursor: script_cursor,
+            render_dirty: true,
         })
     }
 
@@ -238,9 +245,69 @@ impl Server {
         self.fire(rs, "Heartbeat", dt);
         self.runtime.resume_due(Queue::Task);
         self.start_new_scripts();
+        self.check_render_changes();
         let mut w = self.runtime.world_mut();
         let end = w.dom.journal().end();
         w.dom.journal_mut().trim(end);
+    }
+
+    /// Note whether the journal since the last check touched anything drawn:
+    /// parts, their ancestry, or Lighting. Camera moves don't count; the
+    /// renderer reads the camera every frame anyway.
+    fn check_render_changes(&mut self) {
+        let world = self.runtime.world();
+        let dom = &world.dom;
+        let lighting = dom.find_service("Lighting");
+        let drawn = |id: InstanceId| dom.is_a(id, "BasePart") || Some(id) == lighting;
+        let dirty = dom
+            .journal()
+            .since(self.render_cursor)
+            .iter()
+            .any(|c| match c {
+                Change::Property { id, .. } => drawn(*id),
+                Change::Reparented { subtree, .. } => subtree.iter().any(|i| drawn(*i)),
+                Change::Destroying(id) | Change::Created(id) => drawn(*id),
+                _ => false,
+            });
+        self.render_cursor = dom.journal().end();
+        drop(world);
+        self.render_dirty |= dirty;
+    }
+
+    /// Whether anything drawn changed since the last call. Also covers
+    /// changes made between frames (by the caller).
+    pub fn take_render_dirty(&mut self) -> bool {
+        self.check_render_changes();
+        std::mem::take(&mut self.render_dirty)
+    }
+
+    /// `Workspace.CurrentCamera`.
+    pub fn current_camera(&self) -> Option<InstanceId> {
+        let world = self.runtime.world();
+        let ws = world.dom.find_service("Workspace")?;
+        match world.dom.property_by_name(ws, "CurrentCamera")? {
+            Value::Ref(Some(r)) => Some(InstanceId::from_ref(r)),
+            _ => None,
+        }
+    }
+
+    /// Set a property from the host (an editor camera, input) and fire the
+    /// signals scripts connected to it.
+    pub fn set_property(&self, id: InstanceId, name: &str, value: Value) {
+        let start = {
+            let mut w = self.runtime.world_mut();
+            let start = w.dom.journal().end();
+            let pid = w
+                .dom
+                .get(id)
+                .and_then(|i| w.dom.database().find_canonical_property(i.class, name))
+                .map(|p| p.id);
+            if let Some(pid) = pid {
+                let _ = w.dom.set_property(id, pid, value);
+            }
+            start
+        };
+        self.runtime.dispatch_since(start);
     }
 
     fn fire(&self, instance: InstanceId, event: &'static str, args: impl mlua::IntoLuaMulti) {
@@ -267,6 +334,33 @@ impl Server {
     /// Scripts that have been started.
     pub fn started_scripts(&self) -> usize {
         self.runtime.world().started_count()
+    }
+}
+
+/// Workspace always has a current camera: Roblox creates one if the place
+/// was saved without (Inference: observed behaviour, not documented).
+fn ensure_camera(dom: &mut Dom) {
+    let Ok(ws) = dom.get_service("Workspace") else {
+        return;
+    };
+    let current = match dom.property_by_name(ws, "CurrentCamera") {
+        Some(Value::Ref(Some(r))) => dom.get(InstanceId::from_ref(r)).map(|_| ()),
+        _ => None,
+    };
+    if current.is_some() {
+        return;
+    }
+    let Ok(camera) = dom.create_by_name("Camera") else {
+        return;
+    };
+    let _ = dom.set_name(camera, "Camera".into());
+    dom.attach_unchecked(camera, ws);
+    if let Some(p) = dom
+        .get(ws)
+        .and_then(|i| dom.database().find_property(i.class, "CurrentCamera"))
+        .map(|p| p.id)
+    {
+        dom.load_property(ws, p, Value::Ref(Some(camera.to_ref())));
     }
 }
 

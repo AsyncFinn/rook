@@ -15,7 +15,12 @@ use std::time::Instant;
 use anyhow::Context;
 use clap::Parser;
 use glam::{EulerRot, Mat3, Vec3};
+use rook_engine::{MessageType, Options, Server};
 use rook_render::{Camera, Renderer, Scene};
+use rook_types::{CFrame, Value};
+
+/// Simulation step: 60 Hz, like Roblox's frame-based scheduler.
+const STEP: f64 = 1.0 / 60.0;
 use winit::application::ApplicationHandler;
 use winit::event::{
     DeviceEvent, DeviceId, ElementState, MouseButton, MouseScrollDelta, WindowEvent,
@@ -42,6 +47,12 @@ struct Args {
     /// Point the camera looks at, as x,y,z.
     #[arg(long, value_parser = parse_vec3, allow_hyphen_values = true)]
     look_at: Option<Vec3>,
+    /// Run the place's scripts for this many seconds before showing it.
+    #[arg(long, default_value_t = 0.0)]
+    seconds: f64,
+    /// Also run this Luau file as a server script.
+    #[arg(long)]
+    script: Option<PathBuf>,
 }
 
 fn parse_vec3(s: &str) -> Result<Vec3, String> {
@@ -55,18 +66,50 @@ fn parse_vec3(s: &str) -> Result<Vec3, String> {
     }
 }
 
-fn load(path: &PathBuf) -> anyhow::Result<(Scene, Camera)> {
+/// Load a place into a running server DataModel and start its scripts.
+/// Rook plays places the way Studio's Run mode does: the server simulates
+/// and the viewport shows it through an editor camera.
+fn load(path: &PathBuf) -> anyhow::Result<Server> {
     let bytes = std::fs::read(path).with_context(|| format!("reading {}", path.display()))?;
-    let loaded = rook_formats::load(&bytes)?;
-    let mut dom = rook_dom::Dom::new();
-    let root = dom.root();
-    rook_formats::into_dom(&loaded.dom, &mut dom, root);
-    Ok((snapshot::build(&dom), snapshot::initial_camera(&dom)))
+    let mut server = Server::load_place(&bytes, &Options::default())?;
+    server.start();
+    print_log(&server);
+    Ok(server)
+}
+
+fn print_log(server: &Server) {
+    for entry in server.take_log() {
+        let tag = match entry.kind {
+            MessageType::Error => "ERROR ",
+            MessageType::Warning => "WARN  ",
+            _ => "",
+        };
+        println!("[{:>8.2}] {tag}{}", entry.time, entry.message);
+    }
+}
+
+fn scene_of(server: &Server) -> Scene {
+    snapshot::build(&server.runtime().world().dom)
 }
 
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
-    let (scene, mut camera) = load(&args.place)?;
+    let mut server = load(&args.place)?;
+    if let Some(script) = &args.script {
+        let source = std::fs::read_to_string(script)
+            .with_context(|| format!("reading {}", script.display()))?;
+        server
+            .runtime()
+            .run_source("ServerScriptService.RookScript", &source, None)
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
+        print_log(&server);
+    }
+    if args.seconds > 0.0 {
+        server.run_for(args.seconds);
+        print_log(&server);
+    }
+    let scene = scene_of(&server);
+    let mut camera = snapshot::initial_camera(&server.runtime().world().dom);
     eprintln!("{} parts", scene.parts.len());
     if let Some(pos) = args.camera {
         let target = args.look_at.unwrap_or(pos + camera.forward());
@@ -101,6 +144,8 @@ fn main() -> anyhow::Result<()> {
     let mut app = App {
         title: format!("Rook - {}", args.place.display()),
         scene,
+        server,
+        accumulator: 0.0,
         camera: FlyCamera::new(camera),
         gfx: None,
         keys: HashSet::new(),
@@ -148,6 +193,9 @@ struct Gfx {
 struct App {
     title: String,
     scene: Scene,
+    server: Server,
+    /// Real time not yet simulated, in seconds.
+    accumulator: f64,
     camera: FlyCamera,
     gfx: Option<Gfx>,
     keys: HashSet<KeyCode>,
@@ -220,6 +268,38 @@ impl App {
             1.0
         };
         self.camera.camera.position += dir.normalize_or_zero() * self.camera.speed * boost * dt;
+
+        // The editor camera drives Workspace.CurrentCamera, as Studio's does.
+        if let Some(cam) = self.server.current_camera() {
+            let c = &self.camera.camera;
+            self.server.set_property(
+                cam,
+                "CFrame",
+                Value::CFrame(CFrame {
+                    position: c.position,
+                    rotation: c.rotation,
+                }),
+            );
+        }
+
+        // Simulate in fixed 60 Hz steps, catching up at most a few per frame.
+        self.accumulator += f64::from(dt);
+        let mut steps = 0;
+        while self.accumulator >= STEP && steps < 4 {
+            self.server.step();
+            self.accumulator -= STEP;
+            steps += 1;
+        }
+        if steps == 4 {
+            self.accumulator = 0.0;
+        }
+        print_log(&self.server);
+        if self.server.take_render_dirty() {
+            self.scene = scene_of(&self.server);
+            if let Some(gfx) = &mut self.gfx {
+                gfx.renderer.set_scene(&self.scene);
+            }
+        }
     }
 
     fn draw(&mut self) {

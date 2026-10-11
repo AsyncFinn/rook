@@ -2184,6 +2184,7 @@ dependencies = [
  "image",
  "pollster",
  "rook-dom",
+ "rook-engine",
  "rook-formats",
  "rook-reflection",
  "rook-render",
