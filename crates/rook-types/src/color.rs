@@ -93,6 +93,14 @@ impl From<rbx_types::Color3uint8> for Color3 {
     }
 }
 
+/// Rounded and clamped to 0..=255 ([`Color3::to_rgb`]).
+impl From<Color3> for rbx_types::Color3uint8 {
+    fn from(c: Color3) -> Self {
+        let (r, g, b) = c.to_rgb();
+        Self::new(r, g, b)
+    }
+}
+
 impl From<rbx_types::BrickColor> for Color3 {
     fn from(c: rbx_types::BrickColor) -> Self {
         c.to_color3uint8().into()

@@ -180,8 +180,7 @@ fn file_encoding(
     let target = db.find_property(class, name).map(|p| p.ty);
     match (target, value) {
         (Some(PropertyType::Value(rbx_types::VariantType::Color3uint8)), Value::Color3(c)) => {
-            let (r, g, b) = c.to_rgb();
-            Value::Color3uint8(rbx_types::Color3uint8::new(r, g, b))
+            Value::Color3uint8((*c).into())
         }
         _ => value.clone(),
     }
