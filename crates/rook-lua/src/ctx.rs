@@ -34,6 +34,9 @@ pub(crate) struct Ctx {
     error_marker: Table,
     call_marker: Table,
     multi_marker: Table,
+    /// Returned for no results, which the shim turns back into none (one
+    /// nil would change `select('#', ...)`).
+    none_marker: Table,
     /// Results or call arguments the shim fetches after seeing a marker.
     pending: RefCell<MultiValue>,
     /// Wraps a raw function in the shim.
@@ -72,8 +75,15 @@ impl Ctx {
         let error_marker = lua.create_table()?;
         let call_marker = lua.create_table()?;
         let multi_marker = lua.create_table()?;
+        let none_marker = lua.create_table()?;
         let markers = lua.create_table()?;
-        for m in [&yield_marker, &error_marker, &call_marker, &multi_marker] {
+        for m in [
+            &yield_marker,
+            &error_marker,
+            &call_marker,
+            &multi_marker,
+            &none_marker,
+        ] {
             markers.raw_set(m, true)?;
         }
         let take = lua.create_function(|lua, ()| Ok(ctx(lua).pending.take()))?;
@@ -81,12 +91,14 @@ impl Ctx {
         let wrap: Function = lua
             .load(
                 r#"
-                local MARKERS, YIELD, CALL, MULTI, take, yield, error = ...
+                local MARKERS, YIELD, CALL, MULTI, NONE, take, yield, error = ...
                 return function(f)
                     return function(...)
                         local r, x = f(...)
                         if MARKERS[r] then
-                            if r == MULTI then
+                            if r == NONE then
+                                return
+                            elseif r == MULTI then
                                 return take()
                             elseif r == YIELD then
                                 return yield()
@@ -106,6 +118,7 @@ impl Ctx {
                 yield_marker.clone(),
                 call_marker.clone(),
                 multi_marker.clone(),
+                none_marker.clone(),
                 take,
                 co.get::<Function>("yield")?,
                 lua.globals().get::<Function>("error")?,
@@ -119,6 +132,7 @@ impl Ctx {
             error_marker,
             call_marker,
             multi_marker,
+            none_marker,
             pending: RefCell::default(),
             wrap,
             instances,
@@ -228,8 +242,10 @@ where
         let c = ctx(lua);
         let marker = |m: &Table| LuaValue::Table(m.clone());
         Ok(match f(lua, args) {
-            // Zero results reach the script as one nil (the shim returns `r`).
-            Ok(Outcome::Return(v)) if v.len() <= 1 => v,
+            Ok(Outcome::Return(v)) if v.is_empty() => {
+                MultiValue::from_iter([marker(&c.none_marker)])
+            }
+            Ok(Outcome::Return(v)) if v.len() == 1 => v,
             Ok(Outcome::Return(v)) => {
                 *c.pending.borrow_mut() = v;
                 MultiValue::from_iter([marker(&c.multi_marker)])
