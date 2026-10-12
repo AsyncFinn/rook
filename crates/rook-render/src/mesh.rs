@@ -68,17 +68,18 @@ fn wedge() -> MeshData {
     m
 }
 
-/// A pyramid over the bottom square with its apex above the +X, +Z
-/// corner (Inference, to be checked against Studio).
+/// A pyramid over the bottom square with its apex above the +X, -Z
+/// corner: vertical faces on +X and -Z, slopes facing -X and +Z (checked by
+/// eye against Roblox places, 2026-10-11).
 fn corner_wedge() -> MeshData {
     let mut m = MeshData::default();
     let h = 0.5;
-    let apex = v(h, h, h);
+    let apex = v(h, h, -h);
     m.polygon(&[v(-h, -h, -h), v(h, -h, -h), v(h, -h, h), v(-h, -h, h)]); // bottom
     m.polygon(&[v(h, -h, h), v(h, -h, -h), apex]); // +X
-    m.polygon(&[v(-h, -h, h), v(h, -h, h), apex]); // +Z
-    m.polygon(&[v(h, -h, -h), v(-h, -h, -h), apex]); // front slope
-    m.polygon(&[v(-h, -h, -h), v(-h, -h, h), apex]); // left slope
+    m.polygon(&[v(h, -h, -h), v(-h, -h, -h), apex]); // -Z
+    m.polygon(&[v(-h, -h, h), v(h, -h, h), apex]); // +Z slope
+    m.polygon(&[v(-h, -h, -h), v(-h, -h, h), apex]); // -X slope
     m
 }
 

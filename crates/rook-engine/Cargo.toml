@@ -16,6 +16,7 @@ rook-formats.workspace = true
 rook-scheduler.workspace = true
 rook-lua.workspace = true
 rook-net.workspace = true
+rook-physics.workspace = true
 mlua.workspace = true
 thiserror.workspace = true
 profiling.workspace = true

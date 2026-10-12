@@ -2,39 +2,13 @@
 //!
 //! A brute-force test over Workspace's parts, used by the mouse
 //! (`Mouse.Hit`, `Mouse.Target`), ClickDetectors and (later) WorldRoot
-//! queries. Physics (M3) will replace the brute force with its broadphase;
-//! the shape tests stay.
+//! queries. M3 step 5 replaces it with Rapier queries.
 
 use glam::{Mat3, Vec3};
 use rook_dom::{Dom, InstanceId};
 use rook_types::Value;
 
-/// A part's collision shape, from its class and `Shape`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PartShape {
-    Block,
-    Wedge,
-    CornerWedge,
-    /// Along the part's X axis.
-    Cylinder,
-    Ball,
-}
-
-/// `Enum.PartType`: Ball 0, Block 1, Cylinder 2, Wedge 3, CornerWedge 4.
-/// MeshParts, unions and trusses count as blocks until meshes exist.
-pub fn part_shape(dom: &Dom, id: InstanceId) -> PartShape {
-    match dom.class_name(id) {
-        "WedgePart" => PartShape::Wedge,
-        "CornerWedgePart" => PartShape::CornerWedge,
-        _ => match dom.property_by_name(id, "Shape") {
-            Some(Value::Enum(0)) => PartShape::Ball,
-            Some(Value::Enum(2)) => PartShape::Cylinder,
-            Some(Value::Enum(3)) => PartShape::Wedge,
-            Some(Value::Enum(4)) => PartShape::CornerWedge,
-            _ => PartShape::Block,
-        },
-    }
-}
+pub use rook_physics::{PartShape, part_shape};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RayHit {
@@ -112,13 +86,13 @@ fn shape_planes(shape: PartShape, h: Vec3) -> Vec<(Vec3, f32)> {
             ),
         ],
         PartShape::CornerWedge => {
-            let apex = v(1.0, 1.0, 1.0);
-            let inside = Vec3::new(h.x * 0.5, -h.y * 0.5, h.z * 0.5);
+            let apex = v(1.0, 1.0, -1.0);
+            let inside = Vec3::new(h.x * 0.5, -h.y * 0.5, -h.z * 0.5);
             vec![
                 (-Vec3::Y, h.y),
                 (Vec3::X, h.x),
-                (Vec3::Z, h.z),
-                plane(v(-1.0, -1.0, -1.0), v(1.0, -1.0, -1.0), apex, inside),
+                (-Vec3::Z, h.z),
+                plane(v(-1.0, -1.0, 1.0), v(1.0, -1.0, 1.0), apex, inside),
                 plane(v(-1.0, -1.0, -1.0), v(-1.0, -1.0, 1.0), apex, inside),
             ]
         }
@@ -423,6 +397,26 @@ mod tests {
         })
         .unwrap();
         assert!((far.distance - 19.0).abs() < 1e-4);
+    }
+
+    /// A corner wedge is tall above its +X -Z corner and flat at -X +Z.
+    #[test]
+    fn corner_wedge_apex_is_at_plus_x_minus_z() {
+        let mut dom = Dom::new();
+        part(&mut dom, "CornerWedgePart", Vec3::ZERO, Vec3::splat(2.0));
+        let down = |x: f32, z: f32| {
+            raycast(
+                &dom,
+                Vec3::new(x, 10.0, z),
+                Vec3::new(0.0, -20.0, 0.0),
+                &|_| true,
+            )
+            .unwrap()
+            .position
+            .y
+        };
+        assert!(down(0.9, -0.9) > 0.7);
+        assert!(down(-0.9, 0.9) < -0.7);
     }
 
     #[test]
