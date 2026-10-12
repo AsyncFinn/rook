@@ -13,7 +13,6 @@ mod studio;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use anyhow::Context;
 use rook_engine::{Options, Server};
 
 /// Wraps a case. Both sides run exactly this code; Rook's copy reports the
@@ -70,8 +69,7 @@ fn cases(root: &Path, filter: Option<&str>) -> anyhow::Result<Vec<Case>> {
         if filter.is_some_and(|f| !id.contains(f)) {
             continue;
         }
-        let source =
-            std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+        let source = fs_err::read_to_string(path)?;
         out.push(Case { id, source });
     }
     anyhow::ensure!(!out.is_empty(), "no cases found under {}", dir.display());

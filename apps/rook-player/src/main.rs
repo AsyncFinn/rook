@@ -97,8 +97,7 @@ fn main() -> anyhow::Result<()> {
     let mut game = Game::load(&args.place, !args.run)?;
     let load_time = load_start.elapsed().as_secs_f64();
     if let Some(script) = &args.script {
-        let source = std::fs::read_to_string(script)
-            .with_context(|| format!("reading {}", script.display()))?;
+        let source = fs_err::read_to_string(script)?;
         game.run_server_script(&source)?;
         game.print_logs();
     }

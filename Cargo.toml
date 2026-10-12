@@ -45,6 +45,8 @@ glam = "0.34"
 # Physics
 rapier3d = "0.36"
 thiserror = "2"
+# std::fs with the path in error messages
+fs-err = "3.3"
 anyhow = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

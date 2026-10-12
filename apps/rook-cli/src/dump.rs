@@ -1,10 +1,9 @@
 use std::path::Path;
 
-use anyhow::Context;
 use rbx_dom_weak::{Instance, WeakDom};
 
 pub fn run(file: &Path, properties: bool, depth: Option<usize>) -> anyhow::Result<()> {
-    let bytes = std::fs::read(file).with_context(|| format!("reading {}", file.display()))?;
+    let bytes = fs_err::read(file)?;
     let loaded = rook_formats::load(&bytes)?;
     println!(
         "{} ({:?}, {} instances)",
@@ -64,7 +63,7 @@ fn print_properties(inst: &Instance, indent: &str) {
 /// Print the source of every script whose full name (as `GetFullName`
 /// reports it, without `Game.`) contains `name`.
 pub fn print_source(path: &Path, name: &str) -> anyhow::Result<()> {
-    let bytes = std::fs::read(path).with_context(|| format!("reading {}", path.display()))?;
+    let bytes = fs_err::read(path)?;
     let loaded = rook_formats::load(&bytes)?;
     let mut stack: Vec<(rbx_types::Ref, String)> = loaded
         .dom

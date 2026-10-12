@@ -13,6 +13,7 @@ name = "rook"
 path = "src/main.rs"
 
 [dependencies]
+fs-err.workspace = true
 rook-types.workspace = true
 rook-reflection.workspace = true
 rook-formats.workspace = true

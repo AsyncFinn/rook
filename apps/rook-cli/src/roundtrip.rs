@@ -1,10 +1,9 @@
 use std::path::Path;
 
-use anyhow::Context;
 use rook_formats::{CompareOptions, Format, compare_with, load, save};
 
 pub fn run(file: &Path, to: Option<Format>) -> anyhow::Result<()> {
-    let bytes = std::fs::read(file).with_context(|| format!("reading {}", file.display()))?;
+    let bytes = fs_err::read(file)?;
     let first = load(&bytes)?;
     let target = to.unwrap_or(first.format);
     let saved = save(&first.dom, target)?;
