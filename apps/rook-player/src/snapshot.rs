@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use glam::{Mat3, Vec3};
 use rook_dom::{Dom, InstanceId};
 use rook_engine::RenderChanges;
-use rook_engine::raycast::{is_part, part_shape};
+use rook_engine::raycast::{part_shape, workspace_parts};
 use rook_render::{Camera, Lighting, PartInstance, Scene};
 use rook_types::Value;
 
@@ -128,14 +128,10 @@ impl SceneCache {
         profiling::scope!("SceneCache::rebuild");
         self.scene.parts.clear();
         self.index.clear();
-        if let Some(ws) = dom.find_service("Workspace") {
-            for id in dom.descendants(ws) {
-                if is_part(dom, id)
-                    && let Some(p) = part(dom, id)
-                {
-                    self.index.insert(id, self.scene.parts.len());
-                    self.scene.parts.push(p);
-                }
+        for id in workspace_parts(dom) {
+            if let Some(p) = part(dom, id) {
+                self.index.insert(id, self.scene.parts.len());
+                self.scene.parts.push(p);
             }
         }
         self.scene.lighting = lighting(dom);
