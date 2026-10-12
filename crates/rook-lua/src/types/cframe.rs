@@ -100,19 +100,16 @@ fn angles_yxz(
     _: &Lua,
     (x, y, z): (Option<f32>, Option<f32>, Option<f32>),
 ) -> mlua::Result<LCFrame> {
-    let m = Mat3::from_euler(
-        EulerRot::YXZ,
-        y.unwrap_or(0.0),
+    Ok(LCFrame(CFrame::from_orientation(
         x.unwrap_or(0.0),
+        y.unwrap_or(0.0),
         z.unwrap_or(0.0),
-    );
-    Ok(cf(Vec3::ZERO, m))
+    )))
 }
 
 impl LCFrame {
     fn to_yxz(self) -> (f32, f32, f32) {
-        let (y, x, z) = self.0.rotation.to_euler(EulerRot::YXZ);
-        (x, y, z)
+        self.0.to_orientation()
     }
 
     fn to_axis_angle(self) -> (Vector, f32) {

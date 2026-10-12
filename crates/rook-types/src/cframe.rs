@@ -89,6 +89,22 @@ impl CFrame {
         (rx, ry, rz)
     }
 
+    /// `CFrame.fromOrientation` / `CFrame.fromEulerAnglesYXZ`: the matrix is
+    /// `Ry * Rx * Rz` (Confirmed: creator-docs BasePart.Orientation).
+    pub fn from_orientation(rx: f32, ry: f32, rz: f32) -> Self {
+        Self {
+            position: Vec3::ZERO,
+            rotation: Mat3::from_euler(glam::EulerRot::YXZ, ry, rx, rz),
+        }
+    }
+
+    /// `CFrame:ToOrientation()`, the inverse of [`CFrame::from_orientation`],
+    /// as `(rx, ry, rz)` in radians.
+    pub fn to_orientation(&self) -> (f32, f32, f32) {
+        let (ry, rx, rz) = self.rotation.to_euler(glam::EulerRot::YXZ);
+        (rx, ry, rz)
+    }
+
     /// `CFrame.lookAt(at, target, up)`.
     pub fn look_at(at: Vec3, target: Vec3, up: Vec3) -> Self {
         let look = (target - at).normalize();

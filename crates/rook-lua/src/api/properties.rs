@@ -1,7 +1,6 @@
 //! Derived properties: values computed from other properties rather than
 //! stored. `get` and `set` return `None` for properties stored normally.
 
-use glam::{EulerRot, Mat3};
 use rook_dom::{DomError, InstanceId};
 use rook_types::{CFrame, Color3, Value, Vector3};
 
@@ -33,8 +32,7 @@ fn degrees(v: (f32, f32, f32)) -> Vector3 {
 /// `Orientation`: degrees, applied in Y, X, Z order (Confirmed: creator-docs
 /// BasePart.Orientation).
 fn orientation(c: &CFrame) -> Vector3 {
-    let (y, x, z) = c.rotation.to_euler(EulerRot::YXZ);
-    degrees((x, y, z))
+    degrees(c.to_orientation())
 }
 
 /// `Rotation`: degrees, the XYZ Euler angles (Confirmed: creator-docs
@@ -213,7 +211,7 @@ pub(crate) fn set(
         ("Orientation", Value::Vector3(v)) if w.dom.is_a(id, "BasePart") => {
             let mut c = cframe(w, id);
             let r = |d: f32| d.to_radians();
-            c.rotation = Mat3::from_euler(EulerRot::YXZ, r(v.y()), r(v.x()), r(v.z()));
+            c.rotation = CFrame::from_orientation(r(v.x()), r(v.y()), r(v.z())).rotation;
             Some(set_cframe(w, id, c))
         }
         ("Rotation", Value::Vector3(v)) if w.dom.is_a(id, "BasePart") => {
