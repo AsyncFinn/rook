@@ -261,8 +261,7 @@ fn require_modules() {
         let ws = w.dom.get_service("Workspace").unwrap();
         let module = w.dom.create_by_name("ModuleScript").unwrap();
         w.dom.set_name(module, "Lib".into()).unwrap();
-        let class = w.dom.get(module).unwrap().class;
-        let source = w.dom.database().find_property(class, "Source").unwrap().id;
+        let source = w.dom.property_id(module, "Source").unwrap();
         w.dom
             .set_property(
                 module,

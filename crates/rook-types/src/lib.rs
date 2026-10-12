@@ -9,6 +9,7 @@
 //! one-to-one so conversion in either direction is lossless.
 
 mod cframe;
+mod clock;
 mod color;
 mod shape;
 mod udim;
@@ -16,6 +17,7 @@ mod value;
 mod vector;
 
 pub use cframe::CFrame;
+pub use clock::{clock_hours, time_of_day};
 pub use color::Color3;
 pub use shape::PartShape;
 pub use udim::{UDim, UDim2};

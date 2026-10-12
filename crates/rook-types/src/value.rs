@@ -177,6 +177,18 @@ impl Value {
             Self::Attributes(v) => Variant::Attributes(v.clone()),
         }
     }
+
+    /// The value of a numeric variant (`Float32`, `Float64`, `Int32`,
+    /// `Int64`) as an `f64`.
+    pub fn as_number(&self) -> Option<f64> {
+        match self {
+            Self::Float32(n) => Some(f64::from(*n)),
+            Self::Float64(n) => Some(*n),
+            Self::Int32(n) => Some(f64::from(*n)),
+            Self::Int64(n) => Some(*n as f64),
+            _ => None,
+        }
+    }
 }
 
 #[cfg(test)]

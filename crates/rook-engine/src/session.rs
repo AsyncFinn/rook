@@ -143,11 +143,7 @@ impl Session {
             if let (Some(local), Some(players)) =
                 (replicator.client_id(player), dom.find_service("Players"))
             {
-                if let Some(pid) = dom
-                    .get(players)
-                    .and_then(|i| dom.database().find_property(i.class, "LocalPlayer"))
-                    .map(|p| p.id)
-                {
+                if let Some(pid) = dom.property_id(players, "LocalPlayer") {
                     dom.load_property(players, pid, Value::Ref(Some(local.to_ref())));
                 }
                 // PlayerScripts exists only on the client.

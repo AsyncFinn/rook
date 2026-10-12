@@ -6,13 +6,6 @@ fn part(dom: &mut Dom, name: &str) -> InstanceId {
     id
 }
 
-fn prop(dom: &Dom, id: InstanceId, name: &str) -> PropertyId {
-    dom.database()
-        .find_property(dom.get(id).unwrap().class, name)
-        .unwrap()
-        .id
-}
-
 #[test]
 fn services_and_full_names() {
     let mut dom = Dom::new();
@@ -93,10 +86,10 @@ fn clone_skips_non_archivable_and_remaps_refs() {
     let b = part(&mut dom, "B");
     dom.set_parent(a, Some(model)).unwrap();
     dom.set_parent(b, Some(model)).unwrap();
-    let primary = prop(&dom, model, "PrimaryPart");
+    let primary = dom.property_id(model, "PrimaryPart").unwrap();
     dom.set_property(model, primary, Value::Ref(Some(a.to_ref())))
         .unwrap();
-    let archivable = prop(&dom, b, "Archivable");
+    let archivable = dom.property_id(b, "Archivable").unwrap();
     dom.set_property(b, archivable, Value::Bool(false)).unwrap();
 
     let copy = dom.clone_instance(model).unwrap();

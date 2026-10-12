@@ -244,7 +244,7 @@ impl DataModel {
             let Some(obj) = obj else {
                 return;
             };
-            self.set_and_dispatch(obj, "UserInputState", Value::Enum(STATE_END));
+            self.set_property(obj, "UserInputState", Value::Enum(STATE_END));
             self.fire_input("InputEnded", obj);
         }
         if let (Some(m), Some(s)) = (self.mouse_object(), legacy_key_string(code)) {
@@ -297,10 +297,6 @@ impl DataModel {
                 });
             }
         }
-    }
-
-    fn set_and_dispatch(&self, id: InstanceId, name: &str, value: Value) {
-        self.set_property(id, name, value);
     }
 
     /// The ray from the camera through the cursor (unit direction).
@@ -390,12 +386,7 @@ impl DataModel {
     fn detector_for(&self, part: InstanceId, distance: f32) -> Option<InstanceId> {
         let w = self.runtime.world();
         let dom = &w.dom;
-        let find = |owner: InstanceId| {
-            dom.children(owner)
-                .iter()
-                .copied()
-                .find(|c| dom.class_name(*c) == "ClickDetector")
-        };
+        let find = |owner: InstanceId| dom.find_first_child_of_class(owner, "ClickDetector");
         let detector = find(part).or_else(|| {
             dom.ancestors(part)
                 .filter(|a| dom.is_a(*a, "Model"))

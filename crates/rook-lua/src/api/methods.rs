@@ -15,6 +15,7 @@ use rook_signal::{SignalKey, SignalKind};
 use rook_types::{CFrame, Value, Vector3};
 
 use super::instance::push_instance;
+use super::properties::{cframe, set_cframe};
 use super::signal::LSignal;
 use crate::args::Args;
 use crate::convert::{to_lua, vector3_to_lua};
@@ -268,7 +269,10 @@ fn find_child_by(
 
 fn find_first_child_of_class(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
     let class = a.string(0)?;
-    find_child_by(lua, this, false, |w, c| w.dom.class_name(c) == class)
+    ret_instance(
+        lua,
+        with_world(lua, |w| w.dom.find_first_child_of_class(this, &class)),
+    )
 }
 
 fn find_first_child_which_is_a(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
@@ -653,13 +657,7 @@ fn take_damage(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
             Some(Value::Float32(h)) => f64::from(h),
             _ => 0.0,
         };
-        let class = w.dom.get(this).ok_or(DomError::Stale)?.class;
-        let pid = w
-            .dom
-            .database()
-            .find_property(class, "Health")
-            .expect("Humanoid.Health")
-            .id;
+        let pid = w.dom.property_id(this, "Health").ok_or(DomError::Stale)?;
         w.dom
             .set_property(this, pid, Value::Float32((health - amount).max(0.0) as f32))
     })?;
@@ -667,24 +665,6 @@ fn take_damage(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
 }
 
 // ---- pivots and models ----------------------------------------------------------------------
-
-fn part_cframe(w: &World, id: InstanceId) -> CFrame {
-    match w.dom.property_by_name(id, "CFrame") {
-        Some(Value::CFrame(c)) => c,
-        _ => CFrame::IDENTITY,
-    }
-}
-
-fn set_part_cframe(w: &mut World, id: InstanceId, c: CFrame) -> Result<(), DomError> {
-    let class = w.dom.get(id).ok_or(DomError::Stale)?.class;
-    let pid = w
-        .dom
-        .database()
-        .find_property(class, "CFrame")
-        .expect("CFrame")
-        .id;
-    w.dom.set_property(id, pid, Value::CFrame(c))
-}
 
 fn parts_of(w: &World, model: InstanceId) -> Vec<InstanceId> {
     w.dom
@@ -708,7 +688,7 @@ fn pivot_of(w: &World, id: InstanceId) -> CFrame {
             Some(Value::CFrame(c)) => c,
             _ => CFrame::IDENTITY,
         };
-        return part_cframe(w, id) * offset;
+        return cframe(w, id) * offset;
     }
     match super::properties::get(w, id, "WorldPivot") {
         Some(Value::CFrame(c))
@@ -727,17 +707,14 @@ fn pivot_of(w: &World, id: InstanceId) -> CFrame {
 /// Move every part of a model rigidly by `delta` (applied in world space).
 fn transform_model(w: &mut World, model: InstanceId, delta: CFrame) -> Result<(), DomError> {
     for part in parts_of(w, model) {
-        let c = part_cframe(w, part);
-        set_part_cframe(w, part, delta * c)?;
+        let c = cframe(w, part);
+        set_cframe(w, part, delta * c)?;
     }
     if let Some(Value::OptionalCFrame(Some(p))) = w.dom.property_by_name(model, "WorldPivotData") {
-        let class = w.dom.get(model).ok_or(DomError::Stale)?.class;
         let pid = w
             .dom
-            .database()
-            .find_property(class, "WorldPivotData")
-            .expect("pivot")
-            .id;
+            .property_id(model, "WorldPivotData")
+            .ok_or(DomError::Stale)?;
         w.dom
             .set_property(model, pid, Value::OptionalCFrame(Some(delta * p)))?;
     }
@@ -754,8 +731,8 @@ fn pivot_to(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
         let current = pivot_of(w, this);
         let delta = target.0 * current.inverse();
         if w.dom.is_a(this, "BasePart") {
-            let c = part_cframe(w, this);
-            set_part_cframe(w, this, delta * c)
+            let c = cframe(w, this);
+            set_cframe(w, this, delta * c)
         } else {
             transform_model(w, this, delta)
         }
@@ -770,7 +747,7 @@ fn no_primary_part(method: &str) -> ScriptError {
 }
 
 fn get_primary_part_cframe(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
-    let c = with_world(lua, |w| primary_part(w, this).map(|p| part_cframe(w, p)))
+    let c = with_world(lua, |w| primary_part(w, this).map(|p| cframe(w, p)))
         .ok_or_else(|| no_primary_part("GetPrimaryPartCFrame"))?;
     Outcome::ret(lua, LCFrame(c))
 }
@@ -780,7 +757,7 @@ fn set_primary_part_cframe(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Ou
     let primary = with_world(lua, |w| primary_part(w, this))
         .ok_or_else(|| no_primary_part("SetPrimaryPartCFrame"))?;
     mutate(lua, |w| {
-        let delta = target.0 * part_cframe(w, primary).inverse();
+        let delta = target.0 * cframe(w, primary).inverse();
         transform_model(w, this, delta)
     })?;
     Outcome::ret(lua, ())
@@ -790,7 +767,7 @@ fn set_primary_part_cframe(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Ou
 /// (Approximation: Roblox's legacy calculation is undocumented).
 fn get_model_cframe(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
     let c = with_world(lua, |w| match primary_part(w, this) {
-        Some(p) => part_cframe(w, p),
+        Some(p) => cframe(w, p),
         None => bounding_box(w, this).0,
     });
     Outcome::ret(lua, LCFrame(c))
@@ -811,7 +788,7 @@ fn model_move_to(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
     let target = a.vector3(0)?;
     mutate(lua, |w| {
         let from = match primary_part(w, this) {
-            Some(p) => part_cframe(w, p).position,
+            Some(p) => cframe(w, p).position,
             None => bounding_box(w, this).0.position,
         };
         transform_model(w, this, CFrame::from_position(target.0 - from))
@@ -826,7 +803,7 @@ fn bounding_box(w: &World, model: InstanceId) -> (CFrame, Vector3) {
     let mut min = glam::Vec3::splat(f32::INFINITY);
     let mut max = glam::Vec3::splat(f32::NEG_INFINITY);
     for part in parts_of(w, model) {
-        let c = part_cframe(w, part);
+        let c = cframe(w, part);
         let size = match w.dom.property_by_name(part, "Size") {
             Some(Value::Vector3(s)) => s.0,
             _ => glam::Vec3::ONE,
@@ -866,7 +843,7 @@ fn get_mass(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
 // ---- Lighting ------------------------------------------------------------------------------------
 
 fn get_minutes_after_midnight(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
-    let hours = with_world(lua, |w| super::properties::lighting_hours(w, this));
+    let hours = with_world(lua, |w| w.dom.clock_time(this));
     Outcome::ret(lua, hours * 60.0)
 }
 
