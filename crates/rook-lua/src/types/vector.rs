@@ -321,7 +321,7 @@ impl UserData for LVector3int16 {
         m.add_meta_method(MetaMethod::Add, op(i16::wrapping_add));
         m.add_meta_method(MetaMethod::Sub, op(i16::wrapping_sub));
         m.add_meta_method(MetaMethod::Mul, op(i16::wrapping_mul));
-        m.add_meta_method(MetaMethod::Div, op(|a, b| if b == 0 { 0 } else { a / b }));
+        m.add_meta_method(MetaMethod::Div, op(int16_div));
         m.add_meta_method(MetaMethod::Eq, |_, t, o: UserDataRef<LVector3int16>| {
             Ok(t.0 == o.0)
         });
@@ -329,6 +329,12 @@ impl UserData for LVector3int16 {
             Ok(format!("{}, {}, {}", t.0.x, t.0.y, t.0.z))
         });
     }
+}
+
+/// Integer division for Vector2int16 and Vector3int16; dividing by zero
+/// gives 0 (Inference: Rook avoids the panic; Roblox's result is untested).
+fn int16_div(a: i16, b: i16) -> i16 {
+    a.checked_div(b).unwrap_or(0)
 }
 
 impl UserData for LVector2int16 {
@@ -350,7 +356,7 @@ impl UserData for LVector2int16 {
         m.add_meta_method(MetaMethod::Add, op(i16::wrapping_add));
         m.add_meta_method(MetaMethod::Sub, op(i16::wrapping_sub));
         m.add_meta_method(MetaMethod::Mul, op(i16::wrapping_mul));
-        m.add_meta_method(MetaMethod::Div, op(|a, b| if b == 0 { 0 } else { a / b }));
+        m.add_meta_method(MetaMethod::Div, op(int16_div));
         m.add_meta_method(MetaMethod::Eq, |_, t, o: UserDataRef<LVector2int16>| {
             Ok(t.0 == o.0)
         });
