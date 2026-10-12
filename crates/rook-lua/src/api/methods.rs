@@ -646,7 +646,7 @@ fn player_by_user_id(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome>
 // ---- Humanoid -----------------------------------------------------------------------------
 
 /// Health goes down unless the character has a ForceField (creator-docs
-/// Humanoid:TakeDamage). Death handling arrives with characters (M4).
+/// Humanoid:TakeDamage). Death handling arrives with characters.
 fn take_damage(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
     let amount = a.number(0)?;
     mutate(lua, |w| {
@@ -964,7 +964,7 @@ fn set_minutes_after_midnight(lua: &Lua, this: InstanceId, a: Args) -> ApiResult
     Outcome::ret(lua, ())
 }
 
-// ---- Sound (state only until audio, M6) --------------------------------------------------------
+// ---- Sound (state only until audio) --------------------------------------------------------
 
 fn set_bool(w: &mut World, id: InstanceId, name: &str, v: bool) -> Result<(), DomError> {
     w.dom.set_property_by_name(id, name, Value::Bool(v))

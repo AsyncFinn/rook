@@ -87,7 +87,7 @@ impl Session {
     /// LocalScripts. Returns the client's index.
     ///
     /// Roblox copies StarterGui and StarterPack when the character spawns;
-    /// without characters (M4) Rook copies them on join (Approximation).
+    /// without characters Rook copies them on join (Approximation).
     pub fn join(&mut self, name: &str, user_id: i64) -> Result<usize, EngineError> {
         let (player, start) = {
             let mut w = self.server.runtime().world_mut();

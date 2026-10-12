@@ -211,19 +211,7 @@ Every behaviour Rook implements is recorded with its source and one of four stat
 
 ## Roadmap
 
-Each milestone is a vertical slice with a measurable exit criterion. The order follows what the archive actually uses.
-
-| | Milestone | Exit criterion |
-|---|---|---|
-| ✅ | **M0** File formats, datatypes, reflection, CLI | All test fixtures round-trip; 99.3% of the archive loads |
-| 🟡 | **M1** Instance tree, signals, scheduler, Luau, conformance | First conformance batch passes; baseline of archive scripts running |
-| 🟡 | **M2** Renderer v0, client/server split, LocalScripts, basic input | Archived places render recognisably; client scripts run alongside server scripts |
-| ⬜ | **M3** Physics: assemblies, collisions, joints, BodyMovers, Touched, queries | Unanchored places settle plausibly |
-| ⬜ | **M4** Characters: Humanoid, tools, default camera and control scripts | Walk around and use tools in an archived place |
-| ⬜ | **M5** GUI: layout, text, images, GUI input | GUI conformance batch passes |
-| ⬜ | **M6** Content: meshes, textures, decals, materials, audio | Archive places render with meshes and sound |
-| ⬜ | **M7** Network transport, headless server, multiple clients | Two clients play together |
-| ⬜ | **M8+** Terrain, animation, particles, advanced lighting, Studio tooling | — |
+Physics (M3) is nearly done; content (meshes, textures, decals) is next, then characters. The full plan, its order and why, is in [ROADMAP.md](ROADMAP.md).
 
 ## Development
 

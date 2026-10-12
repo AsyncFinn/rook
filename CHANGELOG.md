@@ -29,6 +29,7 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 - HingeConstraint (free, Motor, Servo, limits, `CurrentAngle`), BallSocketConstraint, RopeConstraint and RodConstraint become Rapier joints between attachments; SpringConstraint, VectorForce and Torque apply forces.
 - Fixed: the deprecated `Velocity` and `RotVelocity` were stored apart from the velocities physics uses, so scripts launching parts with them (a small place's volcano, meteors, tornado) did nothing. They're now views of `AssemblyLinearVelocity`/`AssemblyAngularVelocity` (`Velocity` reads the assembly's velocity at the part), velocities saved in files are adopted at load, and setting any of them sets the whole assembly's. Anchored parts keep their velocity and carry what rests on them, like Roblox's conveyors.
 - Physics conformance cases `physics/movers`, `physics/constraints` and `physics/velocity`. `rook conformance record` picks the Studio window whose place name contains `ROOK_STUDIO` when several are open.
+- `ROADMAP.md`: the one place for the plan. Content (meshes, textures, decals) moves ahead of characters, which need the head mesh; then GUI, audio and networking. Other docs name milestones instead of numbering them.
 - Tracy zones per resumed script (`script: <chunk>:<line>`), per `Instance.__index`/`__newindex` (key as zone text), per native Instance method, and around all engine functions (`api`).
 
 ## [0.2.0] — 2026-10-11 — M2: client side, renderer, input
