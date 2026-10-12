@@ -3,7 +3,6 @@
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use anyhow::Context;
 use rook_engine::{MessageType, Options, Server};
 
 pub fn run(
@@ -13,7 +12,7 @@ pub fn run(
     quiet: bool,
     script: Option<&Path>,
 ) -> anyhow::Result<()> {
-    let bytes = std::fs::read(file).with_context(|| format!("reading {}", file.display()))?;
+    let bytes = fs_err::read(file)?;
     let options = Options {
         script_timeout: Duration::from_secs_f64(timeout),
         ..Options::default()
@@ -22,8 +21,7 @@ pub fn run(
     let mut server = Server::load_place(&bytes, &options)?;
     server.start();
     if let Some(script) = script {
-        let source = std::fs::read_to_string(script)
-            .with_context(|| format!("reading {}", script.display()))?;
+        let source = fs_err::read_to_string(script)?;
         server
             .run_extra_script(&source)
             .map_err(anyhow::Error::msg)?;

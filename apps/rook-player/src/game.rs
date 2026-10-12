@@ -3,7 +3,6 @@
 
 use std::path::Path;
 
-use anyhow::Context;
 use rook_engine::{DataModel, InputEvent, Options, Server, Session};
 
 pub struct Game {
@@ -16,7 +15,7 @@ impl Game {
     /// Load a place and start it. With `play`, a local player joins and the
     /// window shows that player's client, as in Studio's Play mode.
     pub fn load(path: &Path, play: bool) -> anyhow::Result<Self> {
-        let bytes = std::fs::read(path).with_context(|| format!("reading {}", path.display()))?;
+        let bytes = fs_err::read(path)?;
         let mut server = Server::load_place(&bytes, &Options::default())?;
         server.start();
         let mut session = Session::new(server, Options::default());
