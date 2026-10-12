@@ -200,11 +200,7 @@ fn ret_instance(lua: &Lua, id: Option<InstanceId>) -> ApiResult<Outcome> {
 }
 
 fn ret_instances(lua: &Lua, ids: Vec<InstanceId>) -> ApiResult<Outcome> {
-    let t = lua.create_table_with_capacity(ids.len(), 0)?;
-    for (i, id) in ids.into_iter().enumerate() {
-        t.raw_set(i + 1, push_instance(lua, id)?)?;
-    }
-    Outcome::ret(lua, t)
+    super::instance::ret_instance_array(lua, &ids)
 }
 
 fn inert(lua: &Lua, _: InstanceId, _: Args) -> ApiResult<Outcome> {

@@ -4,12 +4,16 @@
 //! from Rust through async functions. Roblox scripts expect error values to
 //! be plain strings, and engine functions like `wait` to yield the calling
 //! coroutine. So every engine function is a raw Rust function wrapped in a
-//! small Luau shim. The Rust side returns its results, or a private marker
-//! followed by an error message (the shim calls `error(msg, 0)`), a
-//! yield marker (the shim calls `coroutine.yield()`; the Rust side has
-//! already registered the current thread with whatever resumes it), or a
-//! call marker followed by a function and its arguments (the shim calls it
-//! from Lua, so it may yield; used by `require` and `Invoke`).
+//! small Luau shim. The Rust side returns its single result directly, or a
+//! private marker: an error marker followed by the message (the shim calls
+//! `error(msg, 0)`), a yield marker (the shim calls `coroutine.yield()`;
+//! the Rust side has already registered the current thread with whatever
+//! resumes it), a call marker followed by a function whose arguments are
+//! pending (the shim calls it from Lua, so it may yield; used by `require`
+//! and `Invoke`), or a multi marker when there are several results pending.
+//! Pending values are fetched with a second call. The shim only takes two
+//! results, never a vararg list: forwarding varargs through a helper
+//! costs more than most engine functions themselves.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -17,21 +21,34 @@ use std::rc::Rc;
 
 use mlua::{Function, IntoLuaMulti, Lua, MultiValue, Table, Value as LuaValue};
 
+use rook_reflection::ClassId;
+
+use crate::api::instance::MemberTable;
 use crate::world::World;
 
 /// Shared state reachable from every callback.
 #[derive(Debug)]
 pub(crate) struct Ctx {
     pub(crate) world: Rc<RefCell<World>>,
-    pub(crate) yield_marker: Table,
-    pub(crate) error_marker: Table,
-    pub(crate) call_marker: Table,
+    yield_marker: Table,
+    error_marker: Table,
+    call_marker: Table,
+    multi_marker: Table,
+    /// Results or call arguments the shim fetches after seeing a marker.
+    pending: RefCell<MultiValue>,
     /// Wraps a raw function in the shim.
     pub(crate) wrap: Function,
     /// Instance userdata by ID (weak values): one userdata per instance.
     pub(crate) instances: Table,
+    /// The reverse (weak keys): each instance userdata's light userdata key.
+    pub(crate) instance_keys: Table,
     /// Method functions by `(owning class, name)`, so `a.Destroy == b.Destroy`.
-    pub(crate) methods: RefCell<HashMap<(String, String), Function>>,
+    pub(crate) methods: RefCell<HashMap<(&'static str, &'static str), Function>>,
+    /// Member tables by class, and whether the class is known.
+    pub(crate) member_tables: RefCell<HashMap<(ClassId, bool), MemberTable>>,
+    /// Runtime-only property values by instance userdata (weak keys),
+    /// created when engine Luau code first sets one.
+    pub(crate) runtime_props: RefCell<Option<Table>>,
     /// EnumItem userdata by `(enum, value)`.
     pub(crate) enum_items: Table,
 }
@@ -54,50 +71,61 @@ impl Ctx {
         let yield_marker = lua.create_table()?;
         let error_marker = lua.create_table()?;
         let call_marker = lua.create_table()?;
+        let multi_marker = lua.create_table()?;
+        let markers = lua.create_table()?;
+        for m in [&yield_marker, &error_marker, &call_marker, &multi_marker] {
+            markers.raw_set(m, true)?;
+        }
+        let take = lua.create_function(|lua, ()| Ok(ctx(lua).pending.take()))?;
         let co: Table = lua.globals().get("coroutine")?;
         let wrap: Function = lua
             .load(
                 r#"
-                local YIELD, ERR, CALL, yield, rawequal, error = ...
-                local function call(f, ...)
-                    return f(...)
-                end
-                local function finish(first, ...)
-                    if rawequal(first, YIELD) then
-                        return yield()
-                    elseif rawequal(first, ERR) then
-                        error((...), 0)
-                    elseif rawequal(first, CALL) then
-                        return call(...)
-                    end
-                    return first, ...
-                end
+                local MARKERS, YIELD, CALL, MULTI, take, yield, error = ...
                 return function(f)
                     return function(...)
-                        return finish(f(...))
+                        local r, x = f(...)
+                        if MARKERS[r] then
+                            if r == MULTI then
+                                return take()
+                            elseif r == YIELD then
+                                return yield()
+                            elseif r == CALL then
+                                return x(take())
+                            end
+                            error(x, 0)
+                        end
+                        return r
                     end
                 end
                 "#,
             )
             .set_name("=[rook]")
             .call((
+                markers,
                 yield_marker.clone(),
-                error_marker.clone(),
                 call_marker.clone(),
+                multi_marker.clone(),
+                take,
                 co.get::<Function>("yield")?,
-                lua.globals().get::<Function>("rawequal")?,
                 lua.globals().get::<Function>("error")?,
             ))?;
         let instances = weak_table(lua, "v")?;
+        let instance_keys = weak_table(lua, "k")?;
         let enum_items = lua.create_table()?;
         let ctx = Rc::new(Self {
             world,
             yield_marker,
             error_marker,
             call_marker,
+            multi_marker,
+            pending: RefCell::default(),
             wrap,
             instances,
+            instance_keys,
             methods: RefCell::default(),
+            member_tables: RefCell::default(),
+            runtime_props: RefCell::default(),
             enum_items,
         });
         lua.set_app_data(ctx.clone());
@@ -196,20 +224,23 @@ where
     F: Fn(&Lua, MultiValue) -> ApiResult<Outcome> + 'static,
 {
     let raw = lua.create_function(move |lua, args: MultiValue| {
+        profiling::scope!("api");
         let c = ctx(lua);
+        let marker = |m: &Table| LuaValue::Table(m.clone());
         Ok(match f(lua, args) {
-            Ok(Outcome::Return(v)) => v,
-            Ok(Outcome::Yield) => MultiValue::from_iter([LuaValue::Table(c.yield_marker.clone())]),
+            // Zero results reach the script as one nil (the shim returns `r`).
+            Ok(Outcome::Return(v)) if v.len() <= 1 => v,
+            Ok(Outcome::Return(v)) => {
+                *c.pending.borrow_mut() = v;
+                MultiValue::from_iter([marker(&c.multi_marker)])
+            }
+            Ok(Outcome::Yield) => MultiValue::from_iter([marker(&c.yield_marker)]),
             Ok(Outcome::Call(f, args)) => {
-                let mut out = MultiValue::from_iter([
-                    LuaValue::Table(c.call_marker.clone()),
-                    LuaValue::Function(f),
-                ]);
-                out.extend(args);
-                out
+                *c.pending.borrow_mut() = args;
+                MultiValue::from_iter([marker(&c.call_marker), LuaValue::Function(f)])
             }
             Err(e) => MultiValue::from_iter([
-                LuaValue::Table(c.error_marker.clone()),
+                marker(&c.error_marker),
                 LuaValue::String(lua.create_string(&e.0)?),
             ]),
         })
