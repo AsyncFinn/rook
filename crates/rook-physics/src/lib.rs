@@ -679,9 +679,13 @@ impl Physics {
                 asm,
                 colliders,
                 motors,
+            // Rapier caps spin at a quarter turn per step (for CCD, which
+            // Rook doesn't use); Roblox spins a RotateV rotor at 1,550
+            // rad/s (observed).
             },
         );
         handle
+                .allow_fast_rotation(true)
     }
 
     fn add_collider(
@@ -939,7 +943,7 @@ impl Physics {
                     } else {
                         Drive::Speed {
                             speed: joints::ROTATE_V_SPEED * value.unwrap_or(0.0),
-                            max_torque: Real::MAX,
+                            max_torque: value.map_or(Real::MAX, |v| input.strength * v.abs()),
                         }
                     }
                 }
@@ -964,6 +968,7 @@ impl Physics {
                 && let Some(col) = self.world.colliders.get_mut(*collider)
             {
                 col.set_position_wrt_parent(pose_of(&m.offset) * *shape_pose);
+                        // NoInput holds the hinge against anything.
             }
         }
         let root = cframe_of(self.world.bodies[h].position());

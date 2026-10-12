@@ -79,6 +79,62 @@ fn rotate_v_turns_at_31_per_unit_of_param_b() {
     }
 }
 
+/// A 40 × 1 × 4 bar (inertia 15,083) on an anchored cube of side `motor`
+/// whose top is a Motor surface at ParamB `b`.
+fn rotor_on_motor(dom: &mut Dom, motor: f32, b: f32) -> InstanceId {
+    let base = part(
+        dom,
+        "Part",
+        Vec3::new(0.0, 1000.0, 0.0),
+        Vec3::splat(motor),
+        true,
+    );
+    let bar = part(
+        dom,
+        "Part",
+        Vec3::new(0.0, 1000.5 + motor / 2.0, 0.0),
+        Vec3::new(40.0, 1.0, 4.0),
+        false,
+    );
+    smooth(dom, base);
+    smooth(dom, bar);
+    set(dom, base, "TopSurface", Value::Enum(MOTOR));
+    set(dom, base, "TopSurfaceInput", Value::Enum(CONSTANT));
+    set(dom, base, "TopParamB", Value::Float32(b));
+    crate::surfaces::make_joints(dom, &[bar]).unwrap();
+    bar
+}
+
+#[test]
+fn rotate_v_torque_is_limited_by_the_smaller_part() {
+    // Observed: on a 2-stud cube at ParamB 10 the bar gains 1,880 rad/s²
+    // until it reaches 310; on a 1-stud cube, 32 times less.
+    let spin = |motor, seconds| {
+        let mut dom = Dom::new();
+        let bar = rotor_on_motor(&mut dom, motor, 10.0);
+        let mut physics = Physics::new();
+        run(&mut physics, &mut dom, seconds);
+        vector(&dom, bar, "AssemblyAngularVelocity").y
+    };
+    let w = spin(2.0, 0.1);
+    assert!((w - 178.0).abs() < 25.0, "{w}");
+    let w = spin(2.0, 0.5);
+    assert!((w - 310.0).abs() < 1.0, "{w}");
+    let w = spin(1.0, 1.0);
+    assert!((w - 55.0).abs() < 8.0, "{w}");
+}
+
+#[test]
+fn rotate_v_spins_faster_than_a_quarter_turn_per_step() {
+    // Observed: ParamB 50 turns a small part at 1,550 rad/s.
+    let mut dom = Dom::new();
+    let (_, wheel) = surface_hinge(&mut dom, MOTOR, CONSTANT, 0.0, 50.0);
+    let mut physics = Physics::new();
+    run(&mut physics, &mut dom, 0.25);
+    let w = vector(&dom, wheel, "AssemblyAngularVelocity").y;
+    assert!((w - 1550.0).abs() < 10.0, "{w}");
+}
+
 #[test]
 fn rotate_v_sin_input() {
     // ω = 31 · A · sin(B · t): A 2, B 3 peaks at 62 near 0.52 s.
