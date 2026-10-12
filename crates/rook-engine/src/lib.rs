@@ -453,14 +453,7 @@ impl DataModel {
         let start = {
             let mut w = self.runtime.world_mut();
             let start = w.dom.journal().end();
-            let pid = w
-                .dom
-                .get(id)
-                .and_then(|i| w.dom.database().find_canonical_property(i.class, name))
-                .map(|p| p.id);
-            if let Some(pid) = pid {
-                let _ = w.dom.set_property(id, pid, value);
-            }
+            let _ = w.dom.set_property_by_name(id, name, value);
             start
         };
         self.runtime.dispatch_since(start);
@@ -603,16 +596,8 @@ mod tests {
     use super::*;
 
     fn add_script(server: &Server, location: &str, name: &str, source: &str) {
-        let mut w = server.runtime.world_mut();
-        let parent = w.dom.get_service(location).unwrap();
-        let script = w.dom.create_by_name("Script").unwrap();
-        w.dom.set_name(script, name.into()).unwrap();
-        let class = w.dom.get(script).unwrap().class;
-        let pid = w.dom.database().find_property(class, "Source").unwrap().id;
-        w.dom
-            .set_property(script, pid, Value::String(source.into()))
-            .unwrap();
-        w.dom.set_parent(script, Some(parent)).unwrap();
+        let parent = service(server, location);
+        add_under(server, parent, "Script", name, source);
     }
 
     fn lines(server: &Server) -> Vec<String> {
@@ -662,10 +647,8 @@ mod tests {
         let id = w.dom.create_by_name(class).unwrap();
         w.dom.set_name(id, name.into()).unwrap();
         if !source.is_empty() {
-            let c = w.dom.get(id).unwrap().class;
-            let pid = w.dom.database().find_property(c, "Source").unwrap().id;
             w.dom
-                .set_property(id, pid, Value::String(source.into()))
+                .set_property_by_name(id, "Source", Value::String(source.into()))
                 .unwrap();
         }
         w.dom.set_parent(id, Some(parent)).unwrap();
@@ -870,23 +853,14 @@ mod tests {
         let button = add_under(&server, ws, "Part", "Button", "");
         {
             let mut w = server.runtime.world_mut();
-            let c = w.dom.get(button).unwrap().class;
-            let db = w.dom.database();
-            let cf = db.find_property(c, "CFrame").unwrap().id;
-            let size = db.find_property(c, "Size").unwrap().id;
+            let cf = rook_types::CFrame::from_position(glam::Vec3::new(0.0, 0.0, -10.0));
             w.dom
-                .set_property(
-                    button,
-                    cf,
-                    Value::CFrame(rook_types::CFrame::from_position(glam::Vec3::new(
-                        0.0, 0.0, -10.0,
-                    ))),
-                )
+                .set_property_by_name(button, "CFrame", Value::CFrame(cf))
                 .unwrap();
             w.dom
-                .set_property(
+                .set_property_by_name(
                     button,
-                    size,
+                    "Size",
                     Value::Vector3(rook_types::Vector3::new(4.0, 4.0, 1.0)),
                 )
                 .unwrap();

@@ -413,11 +413,7 @@ impl DataModel {
 }
 
 fn set(dom: &mut rook_dom::Dom, id: InstanceId, name: &str, value: Value) {
-    if let Some(p) = dom
-        .get(id)
-        .and_then(|i| dom.database().find_canonical_property(i.class, name))
-        .map(|p| p.id)
-    {
+    if let Some(p) = dom.property_id(id, name) {
         dom.load_property(id, p, value);
     }
 }

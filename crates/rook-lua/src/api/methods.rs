@@ -229,14 +229,8 @@ fn is_a(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
 
 fn property_changed_signal(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
     let name = a.string(0)?;
-    let pid = with_world(lua, |w| {
-        let class = w.dom.get(this)?.class;
-        w.dom
-            .database()
-            .find_canonical_property(class, &name)
-            .map(|p| p.id)
-    })
-    .ok_or_else(|| ScriptError(format!("{name} is not a valid property name.")))?;
+    let pid = with_world(lua, |w| w.dom.property_id(this, &name))
+        .ok_or_else(|| ScriptError(format!("{name} is not a valid property name.")))?;
     Outcome::ret(
         lua,
         LSignal {
@@ -890,11 +884,7 @@ fn set_minutes_after_midnight(lua: &Lua, this: InstanceId, a: Args) -> ApiResult
 // ---- Sound (state only until audio, M6) --------------------------------------------------------
 
 fn set_bool(w: &mut World, id: InstanceId, name: &str, v: bool) -> Result<(), DomError> {
-    let class = w.dom.get(id).ok_or(DomError::Stale)?.class;
-    match w.dom.database().find_canonical_property(class, name) {
-        Some(p) => w.dom.set_property(id, p.id, Value::Bool(v)),
-        None => Ok(()),
-    }
+    w.dom.set_property_by_name(id, name, Value::Bool(v))
 }
 
 fn sound_play(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
@@ -906,15 +896,8 @@ fn sound_play(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
 fn sound_stop(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
     mutate(lua, |w| {
         set_bool(w, this, "Playing", false)?;
-        let class = w.dom.get(this).ok_or(DomError::Stale)?.class;
-        if let Some(p) = w
-            .dom
-            .database()
-            .find_canonical_property(class, "TimePosition")
-        {
-            w.dom.set_property(this, p.id, Value::Float64(0.0))?;
-        }
-        Ok(())
+        w.dom
+            .set_property_by_name(this, "TimePosition", Value::Float64(0.0))
     })?;
     fire(lua, &SignalKey::event(this, "Stopped"), vec![]);
     Outcome::ret(lua, ())

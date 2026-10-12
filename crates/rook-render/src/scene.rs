@@ -3,30 +3,11 @@
 
 use glam::{Mat3, Vec3};
 
-/// Primitive part shapes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Shape {
-    Block,
-    Wedge,
-    CornerWedge,
-    /// Axis along the part's X axis (Confirmed: creator-docs PartType).
-    Cylinder,
-    Ball,
-}
-
-impl Shape {
-    pub const ALL: [Shape; 5] = [
-        Shape::Block,
-        Shape::Wedge,
-        Shape::CornerWedge,
-        Shape::Cylinder,
-        Shape::Ball,
-    ];
-}
+pub use rook_types::PartShape;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PartInstance {
-    pub shape: Shape,
+    pub shape: PartShape,
     pub position: Vec3,
     /// Columns are the part's right, up and back vectors.
     pub rotation: Mat3,

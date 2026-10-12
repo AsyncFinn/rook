@@ -5,13 +5,7 @@ use rook_types::{CFrame, Value, Vector3};
 use super::*;
 
 fn set(dom: &mut Dom, id: InstanceId, name: &str, value: Value) {
-    let class = dom.get(id).unwrap().class;
-    let pid = dom
-        .database()
-        .find_canonical_property(class, name)
-        .unwrap()
-        .id;
-    dom.set_property(id, pid, value).unwrap();
+    dom.set_property_by_name(id, name, value).unwrap();
 }
 
 fn part(dom: &mut Dom, class: &str, position: Vec3, size: Vec3, anchored: bool) -> InstanceId {

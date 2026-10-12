@@ -35,16 +35,6 @@ enum Origin {
     Client(usize),
 }
 
-fn set(dom: &mut Dom, id: InstanceId, name: &str, value: Value) {
-    let pid = dom
-        .get(id)
-        .and_then(|i| dom.database().find_canonical_property(i.class, name))
-        .map(|p| p.id);
-    if let Some(pid) = pid {
-        let _ = dom.set_property(id, pid, value);
-    }
-}
-
 /// Copies of `from`'s archivable children placed under `to`.
 fn copy_children(dom: &mut Dom, from: Option<InstanceId>, to: InstanceId) {
     let Some(from) = from else {
@@ -110,8 +100,8 @@ impl Session {
                 .create_by_name("Player")
                 .map_err(|e| EngineError::Lua(e.to_string()))?;
             dom.set_name(player, name.to_owned()).ok();
-            set(dom, player, "UserId", Value::Int64(user_id));
-            set(dom, player, "DisplayName", Value::String(name.to_owned()));
+            let _ = dom.set_property_by_name(player, "UserId", Value::Int64(user_id));
+            let _ = dom.set_property_by_name(player, "DisplayName", Value::String(name.to_owned()));
             for container in ["Backpack", "PlayerGui"] {
                 if let Ok(c) = dom.create_by_name(container) {
                     let _ = dom.set_parent(c, Some(player));

@@ -2589,6 +2589,7 @@ dependencies = [
  "glam 0.34.0",
  "pollster",
  "profiling",
+ "rook-types",
  "thiserror 2.0.21",
  "wgpu",
 ]
