@@ -10,7 +10,7 @@ use crate::convert::to_rapier;
 pub(crate) const MIN_PART_SIZE: f32 = 0.001;
 
 /// A BasePart with a shape of its own: everything but Terrain, which is
-/// drawn and simulated separately (M8).
+/// drawn and simulated separately (later; see ROADMAP.md).
 pub fn is_part(dom: &Dom, id: InstanceId) -> bool {
     dom.is_a(id, "BasePart") && dom.class_name(id) != "Terrain"
 }

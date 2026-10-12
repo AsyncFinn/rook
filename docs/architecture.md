@@ -216,27 +216,11 @@ Status is one of **Confirmed**, **Inference**, **Approximation** or **Rook exten
 
 ## 12. Milestones
 
-Each milestone is a vertical slice with a measurable exit criterion. The order was revised after the first corpus scan (see research.md §9).
-
-| # | Slice | Exit criterion |
-|---|---|---|
-| M0 ✅ | Workspace, `rook-types`, `rook-reflection`, `rook-formats` (incl. the legacy XML upgrade), `rook dump/roundtrip/corpus-scan` | All rbx-test-files fixtures round-trip; corpus report produced. Achieved: 99.3% of the archive loads. |
-| M1 | `rook-dom`, signals, scheduler, Luau bridge, core Instance API, the methods/events list, headless runs of **server Scripts**, conformance recording through Studio's MCP server | First conformance batch (Instance API, signals, `wait`/`task` ordering) passes; baseline % of archive scripts running N seconds without error |
-| M2 | Renderer v0 (parts, primitive meshes, camera, basic lighting, sky) in `rook-player`; **client/server split** with the in-process replicator; a `Player` without a character; **LocalScripts** (PlayerScripts, ReplicatedFirst, PlayerGui as data); basic input (`UserInputService`, `Mouse`) | Archived places render recognisably; client-side scripts run alongside server scripts |
-| M3 | Physics v0: assemblies, anchoring, collisions, welds/Motor6D/legacy surface joints, BodyMovers, Touched, queries | Physics conformance batch; unanchored places settle plausibly |
-| M4 | Characters: spawning, Humanoid, tools, default camera/control scripts (Core-Scripts, Apache-2.0) and Rook's own Animate | Walk around and use tools in an archived place |
-| M5 | GUI (layout, text, images, GUI input) | GUI conformance batch |
-| M6 | Content: MeshParts, SpecialMesh, textures, decals, materials; audio | Corpus places render with meshes and sound |
-| M7 | Network transport, headless server, multi-client | Two clients play together |
-| M8+ | Terrain (incl. legacy `ClusterGrid` data), animation, particles, advanced lighting, Studio tooling, extensions | — |
-
-M3 is done in five steps: (1) Rapier world, anchoring, write-back; (2) joints and assemblies; (3) contacts, Touched, collision groups, materials; (4) BodyMovers and the most-used constraints; (5) queries: `Workspace:Raycast`, `FindPartOnRay` and spatial queries on Rapier, with the mouse and ClickDetectors moved over. **Step 5 deletes `crates/rook-engine/src/raycast.rs`'s own geometry (`PartGeometry`, `PartCache`, the shape tests)**, which duplicates what physics reads.
-
-Why this order: the client/server split moves forward to M2 so LocalScripts run as soon as there's a window. Characters stay in M4 because they need physics (M3) first. Physics comes before GUI because the corpus is dominated by physical content (Parts in 1,227 files, BodyMovers in about 200, welds and Snaps in hundreds).
+The milestones, their order and exit criteria are in [ROADMAP.md](../ROADMAP.md).
 
 ## 13. Open decisions
 
-1. **HopperBin** (229 files): modern Roblox no longer runs it. Decide before M4 whether to follow modern behavior or offer it as an opt-in extension.
+1. **HopperBin** (1,107 files): modern Roblox no longer runs it. Decide before Characters whether to follow modern behavior or offer it as an opt-in extension.
 2. **`null` numbers in legacy XML** (3 values in the archive) are read as 0; verify against Studio.
 
 Settled: license is Apache-2.0 with a `NOTICE` file crediting AsyncFinn. The repository is initialised, with a `.gitignore` that excludes Roblox files, caches, reports and credentials. The methods/events list is committed as a compact generated file inside `rook-reflection`.
