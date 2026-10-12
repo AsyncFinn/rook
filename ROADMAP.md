@@ -55,11 +55,12 @@ The most visible gap: **SpecialMesh is in 65% of files** (1,988 files,
 renderer draws all of these as their part's plain box.
 
 1. **Built-in mesh shapes**, no downloads needed: SpecialMesh's `MeshType`
-   shapes (Brick, Sphere, Cylinder, Wedge, Head, Torso, ...), BlockMesh
-   and CylinderMesh, with `Scale`, `Offset` and `VertexColor`. Rook
-   generates the shapes itself. The head is modelled to match Roblox's from
-   measurements of an exported reference, which is never committed (see
-   "Content and assets" below).
+   shapes, BlockMesh and CylinderMesh, with `Scale`, `Offset` and
+   `VertexColor`. Every type but Head reuses a shape Rook already has
+   (see the table below). Head is a mesh file in Roblox, so Rook draws its
+   own head mesh, built to match measurements of the user's copy, which is
+   never committed (see "Content and assets" below); from step 2 on, the
+   user's install can supply the real file instead.
 2. **Asset fetching**: `rbxasset://`, `rbxassetid://` and legacy asset URLs
    through the provider chain (Rook defaults, the user's Roblox install,
    downloaded content packages, asset delivery), cached and hash-checked.
@@ -70,6 +71,85 @@ renderer draws all of these as their part's plain box.
 
 Physics picks up the real shapes and volumes of MeshParts here too
 (collision fidelity), replacing today's boxes.
+
+**What each SpecialMesh `MeshType` draws** (observed in Studio 0.742,
+2026-10-12, one 4 × 4 × 4 part per type, set by script because the
+Properties panel hides the deprecated types):
+
+| MeshType | Drawn as | Rook geometry |
+|---|---|---|
+| Brick | The part's box | The existing block |
+| Torso | Identical to Brick (Roblox made it so in 2018; the old sloped torso is gone) | The existing block |
+| Wedge | A wedge | The existing wedge |
+| CornerWedge (deprecated) | The same shape as a CornerWedge part (checked by overlapping the two) | The existing corner wedge |
+| Cylinder | A cylinder along X, like a Cylinder part | The existing cylinder |
+| Sphere | A sphere (creator-docs: unlike a Ball part, it stretches on every axis) | The existing ball, scaled per axis |
+| Head | The head mesh (below), fitted to the part | Rook's own head mesh, matching the measured one |
+| Prism, Pyramid, ParallelRamp, RightAngleRamp (deprecated) | Nothing | None: draw nothing |
+
+The existing shapes live in `rook-types/src/shape.rs` (`PartShape`), so
+SpecialMesh types reuse them rather than defining their own. A SpecialMesh
+changes only how a part looks: the invisible types still collide and are
+hit by queries. Sphere and Cylinder meshes showed the part's surface studs,
+which matters for the textures step.
+
+**The Head MeshType**, everything measured so far:
+
+- *What it draws:* the mesh file `content/avatar/heads/head.mesh` in
+  Studio's install (a version 2.00 mesh, 28,789 bytes, about 1.2 studs each
+  way at its own size). Proof: with that file renamed, setting `MeshType`
+  to Head changed the enum but not the drawing (a Sphere stayed a sphere,
+  with no error), and the executable names `rbxasset://avatar/heads/head.mesh`
+  among the render mesh manager's strings.
+- *How it's sized:* the mesh is scaled by (min(X, Z), Y, min(X, Z)) / 1.25
+  of the part's Size. So it's round from above and never stretched along the
+  longer of X and Z (on 2 × 1 × 50 and 50 × 1 × 2 it is a 2-stud head).
+  Found by overlapping it with a FileMesh of the same mesh: on 2 × 2 × 2 the
+  file at scale 1.60 sat just inside it and at 1.61 just covered it, with
+  no rim anywhere; on 3 × 1 × 2 and 10 × 1 × 2 the file at
+  (1.61, 0.805, 1.61) covered it the same way, seen from the side and from
+  above.
+- *Its shape:* low-poly with smooth shading (its outline shows straight
+  segments), so Rook's own head must match its vertex layout, not just a
+  rounded outline. Measure it from the user's copy with a small tool and
+  record only the numbers.
+- *Still to measure:* how the mesh's own `Scale` combines with the Size
+  rule. The classic R6 head (a 2 × 1 × 1 part with Scale 1.25) suggests it
+  multiplies on top, which would draw the head at its own 1.2 studs
+  (Inference).
+
+**`rbxasset://fonts/*.mesh`**, the legacy paths archived places use for
+the character meshes (head, torso, arms, legs, VikingHelmet, the Composit*
+clothing meshes): these are no longer files in the install. Roblox
+uploaded each one in 2009 as an ordinary asset by @Roblox whose
+description is its old path (`head.mesh`, asset 12221462, description
+`\fonts\head.mesh`, created 2009-06-24, updated 2017-08-23; `leftarm.mesh`
+12221505, `rightleg.mesh` 12221626), and Studio's executable holds a table
+pairing each old path with its asset id (the id comes just before its
+path). Asset 12221462 is byte-identical to the install's `head.mesh`: two
+entries in Studio's download cache (`rbx-storage`) are a 37-byte `RBXH`
+header followed by exactly that file. One of them was written while
+`fonts/head.mesh` FileMeshes were first loaded, with the local file still
+present, and `fonts/head.mesh` kept loading after the local file was
+renamed, so the old path is fetched as its asset (Inference from the
+timing; not yet proved by forcing a fresh download). Asset fetching
+(step 2) needs Rook's own path → asset id table for these.
+
+So the Head MeshType, `rbxasset://fonts/head.mesh` and asset 12221462 are
+the same mesh. They differ only in sizing: the Head type is fitted to the
+part's Size as above, while a FileMesh ignores Size and is sized by `Scale`
+alone.
+
+Two traps when comparing meshes in Studio: a FileMesh ignores the part's
+Size (only `Scale` sizes it, so `head.mesh` stays about 1.2 studs on any
+part), and an unexpected `Scale` on the mesh (one test had X at about 3.07)
+changes the shape completely. Check both before concluding two meshes
+differ. To compare shapes, size the FileMesh by hand to where the other one
+should be and overlap them in two colours; to compare sizing, give both the
+same Size and Scale.
+
+Still to measure before building step 1: how `Scale` stretches each type
+(the docs say it differs per type), the Head's included.
 
 ### M5 Characters
 
