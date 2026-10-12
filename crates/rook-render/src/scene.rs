@@ -5,12 +5,35 @@ use glam::{Mat3, Vec3};
 
 pub use rook_types::PartShape;
 
+/// A mesh the renderer draws: a primitive part shape, or a built-in mesh
+/// that isn't one (the SpecialMesh Head).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DrawShape {
+    Part(PartShape),
+    /// Rook's own head mesh, at its own size (about 1.2 studs each way).
+    Head,
+}
+
+impl DrawShape {
+    pub const ALL: [DrawShape; 6] = [
+        DrawShape::Part(PartShape::Block),
+        DrawShape::Part(PartShape::Wedge),
+        DrawShape::Part(PartShape::CornerWedge),
+        DrawShape::Part(PartShape::Cylinder),
+        DrawShape::Part(PartShape::Ball),
+        DrawShape::Head,
+    ];
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PartInstance {
-    pub shape: PartShape,
+    pub shape: DrawShape,
     pub position: Vec3,
-    /// Columns are the part's right, up and back vectors.
+    /// Columns are the mesh's right, up and back vectors (the part's, unless
+    /// the mesh is turned, as a CylinderMesh is).
     pub rotation: Mat3,
+    /// Multiplies the mesh's vertices: the drawn size for the unit part
+    /// shapes, a scale for the head.
     pub size: Vec3,
     /// sRGB colour, 0..1.
     pub color: [f32; 3],

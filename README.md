@@ -80,9 +80,10 @@ The archive is scanned with `rook corpus-scan` and run with `rook corpus-run`. B
 
 - A **wgpu** renderer (Vulkan, Metal, DirectX 12) that draws snapshots of the scene and never touches the instance tree.
 - Primitive parts (blocks, spheres, cylinders, wedges, corner wedges) with colour and transparency, a sky colour, sun, ambient light and fog.
+- The built-in mesh shapes (SpecialMesh types, BlockMesh, CylinderMesh) at the sizes Roblox draws them, including Rook's own version of the classic head.
 - `rook-player` runs the place live in a window with a fly camera that drives `Workspace.CurrentCamera`, or renders a single frame to PNG offscreen.
 
-Meshes, textures, decals, terrain and shadows are on the [roadmap](#roadmap).
+File meshes, textures, decals, terrain and shadows are on the [roadmap](#roadmap).
 
 ### Tooling
 

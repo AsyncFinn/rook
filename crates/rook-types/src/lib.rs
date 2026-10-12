@@ -11,6 +11,7 @@
 mod cframe;
 mod clock;
 mod color;
+mod mesh;
 mod shape;
 mod udim;
 mod value;
@@ -19,6 +20,7 @@ mod vector;
 pub use cframe::CFrame;
 pub use clock::{clock_hours, time_of_day};
 pub use color::Color3;
+pub use mesh::{MeshKind, MeshLook, head_scale};
 pub use shape::PartShape;
 pub use udim::{UDim, UDim2};
 pub use value::{InstanceRef, Value, ValueError};
