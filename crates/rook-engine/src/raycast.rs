@@ -8,7 +8,7 @@ use glam::{Mat3, Vec3};
 use rook_dom::{Dom, InstanceId};
 use rook_types::Value;
 
-pub use rook_physics::{PartShape, is_part, part_shape};
+pub use rook_physics::{PartShape, is_part, part_shape, workspace_parts};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RayHit {
@@ -244,14 +244,10 @@ impl PartCache {
         profiling::scope!("PartCache::rebuild");
         self.parts.clear();
         self.index.clear();
-        if let Some(ws) = dom.find_service("Workspace") {
-            for id in dom.descendants(ws) {
-                if is_part(dom, id)
-                    && let Some(g) = PartGeometry::read(dom, id)
-                {
-                    self.index.insert(id, self.parts.len());
-                    self.parts.push(g);
-                }
+        for id in workspace_parts(dom) {
+            if let Some(g) = PartGeometry::read(dom, id) {
+                self.index.insert(id, self.parts.len());
+                self.parts.push(g);
             }
         }
         self.built = true;
@@ -293,12 +289,8 @@ pub fn raycast(
     include: &dyn Fn(InstanceId) -> bool,
 ) -> Option<RayHit> {
     profiling::scope!("raycast");
-    let ws = dom.find_service("Workspace")?;
     let mut best: Option<RayHit> = None;
-    for id in dom.descendants(ws) {
-        if !is_part(dom, id) {
-            continue;
-        }
+    for id in workspace_parts(dom) {
         if dom.property_by_name(id, "CanQuery") == Some(Value::Bool(false)) || !include(id) {
             continue;
         }

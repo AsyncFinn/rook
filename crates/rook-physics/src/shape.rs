@@ -12,6 +12,16 @@ pub fn is_part(dom: &Dom, id: InstanceId) -> bool {
     dom.is_a(id, "BasePart") && dom.class_name(id) != "Terrain"
 }
 
+/// Every part in Workspace, in tree order.
+pub fn workspace_parts(dom: &Dom) -> Vec<InstanceId> {
+    let Some(ws) = dom.find_service("Workspace") else {
+        return Vec::new();
+    };
+    let mut parts = dom.descendants(ws);
+    parts.retain(|id| is_part(dom, *id));
+    parts
+}
+
 /// A part's shape, from its class and `Shape` property.
 pub fn part_shape(dom: &Dom, id: InstanceId) -> PartShape {
     let part_type = match dom.property_by_name(id, "Shape") {

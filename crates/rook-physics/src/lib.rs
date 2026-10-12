@@ -19,7 +19,7 @@ use rook_reflection::PropertyId;
 use rook_types::{CFrame, Value, Vector3};
 
 pub use rook_types::PartShape;
-pub use shape::{is_part, part_shape};
+pub use shape::{is_part, part_shape, workspace_parts};
 
 use convert::{cframe_of, pose_of, to_glam, to_rapier};
 
@@ -191,12 +191,8 @@ impl Physics {
     fn build(&mut self, dom: &Dom, props: &Props) {
         profiling::scope!("Physics::build");
         self.read_workspace(dom, props);
-        if let Some(ws) = dom.find_service("Workspace") {
-            for id in dom.descendants(ws) {
-                if is_part(dom, id) {
-                    self.add(dom, props, id);
-                }
-            }
+        for id in workspace_parts(dom) {
+            self.add(dom, props, id);
         }
         self.built = true;
     }
