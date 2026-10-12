@@ -27,7 +27,7 @@ made inert without an entry in the first table.
 | Member or behavior | What Rook does now | What is missing | Taken over by |
 |---|---|---|---|
 | `Sound:Play`, `Stop`, `Pause`, `Resume` | Sets `Playing`/`TimePosition`, fires `Played`/`Stopped`/`Paused` | Audio output, `Ended`, `Loaded`, time advancing | Audio |
-| `Model:MoveTo` | Moves the model to the target | Moving up out of obstructions | Physics queries |
+| `Model:MoveTo` | Moves the model to the target | Moving up out of obstructions | Physics, later (the queries it needs exist) |
 | `Model:GetBoundingBox`, `GetExtentsSize`, `GetModelCFrame` | World-axis-aligned box of the parts | Box aligned to the primary part; exact legacy `GetModelCFrame` | Physics/geometry |
 | `DataStoreService` | In-memory stores for one run; `GetSortedAsync` returns a plain table, not a `DataStorePages` | Persistence (local files), versions, `ListKeysAsync`, budgets | Server hosting, Networking |
 | `HttpService:GetAsync`, `PostAsync`, `RequestAsync` | Raise "Http requests are not enabled" | Opt-in HTTP for places that enable it | Opt-in, later |
@@ -38,7 +38,7 @@ made inert without an entry in the first table.
 | `ConnectParallel`, `task.synchronize`/`desynchronize` | Serial | Actors and parallel Luau | Later |
 | `Workspace.SignalBehavior.AncestryDeferred` | Treated as Deferred | Its own rules | Conformance |
 | `Random` | PCG32, own seeding | Roblox's exact sequence for a seed | Unknown; may stay an Approximation |
-| Error messages from datatype methods | Reach `pcall` as mlua error objects | Plain strings like Instance members | Lua bridge |
+| Error messages from datatype methods | Reach `pcall` as mlua error objects (except RaycastParams, OverlapParams and RaycastResult, whose members go through the engine-function shim) | Plain strings like Instance members | Lua bridge |
 | Terrain, MeshParts, unions, SpecialMesh, decals in the renderer | Not drawn, or drawn as their bounding box | Real geometry and textures | Content; terrain later |
 | Wedge and corner-wedge orientation, sun direction, lighting model | Corner wedges checked by eye against archived places; the rest are best guesses | Checks against Studio | Renderer, with Studio screenshots |
 | RotateV and RotateP | Rapier motors: RotateV at 31 × input rad/s, its torque limited to 5e5 × input × the smaller part's moment of inertia about the axis at unit density; RotateP held by a stiff position motor whose angle steps 0.01 rad per step. The input comes from Part0's face that C0's Z axis points out of; Sin time restarts when the joint is rebuilt | RotateV's real torque rule: it depends on the smaller part's size alone but grows in steps (cubes from 0.5 to 8 studs measured 0.25 to 3.5 times Rook's); RotateP moves kinematically in Roblox (its part reports no angular velocity); which surface Roblox reads for hand-made joints | Conformance |
@@ -60,9 +60,17 @@ made inert without an entry in the first table.
 | Physics: mass of MeshParts, unions and trusses | Their Size as a box | Their real volumes | Content |
 | Physics: when touches start and end | Rapier's contacts, which start just before parts meet and end just after | Roblox ends a touch when parts stop overlapping, so a part resting exactly on another gets TouchEnded at once | Conformance |
 | Physics: order of a touch's two events | The part with the lower internal id fires first (in Studio the part made first fired first) | Roblox's rule | Conformance |
-| `BasePart:GetTouchingParts`, `GetNoCollisionConstraints` | Not implemented | Contact queries | Physics queries |
 | Collision groups in older files | Places with only the old `Workspace.CollisionGroups` string get just `Default` | Reading that string's groups; the archive's samples list only `Default` | Conformance |
 | `Workspace.TouchEventsUseCollisionGroups` | Not read; `TouchesUseCollisionGroups` decides whether groups that don't collide also don't touch | The newer enum's meaning | Conformance |
 | Physics: timestep | Always 240 Hz | Adaptive 240/120/60 Hz per assembly | Physics, later |
-| Physics: who simulates | The server simulates every part; clients only see replicated results | Network ownership | Characters |
-| Physics: MeshParts, unions, trusses | Box colliders | Their real shapes and `CollisionFidelity` | Content |
+| Physics: who simulates | The server simulates every part; clients only see replicated results, and their physics world only answers queries | Network ownership | Characters |
+| Physics: MeshParts, unions, trusses | Box colliders, in queries too | Their real shapes and `CollisionFidelity` | Content |
+| Physics queries: result order | Regions and overlaps list parts in internal id order (usually creation order), so `maxParts`/`MaxParts` keeps the oldest | Roblox's own order (parts made in a row came back in that order, but three parts once came back as 1st, 3rd, 2nd) | Conformance |
+| `FindPartsInRegion3` and parts made this frame | Found at once, like every other query | Studio sometimes missed parts made in the same frame until the next step (other times found them); rays and `GetPartBoundsInBox` found them at once | Conformance |
+| Queries and terrain | No terrain: `terrainCellsAreCubes`, `ignoreWater` and `RaycastParams.IgnoreWater` change nothing | Hitting terrain, water | Terrain |
+| `OverlapParams.Tolerance`, `BruteForceAllSlow` | Stored and printed (Tolerance checks Studio's 0-0.05 range), not used | Their effect | Conformance |
+| Overlap tests | Shapes count as overlapping (`GetPartsInPart`, `GetTouchingParts`) past 0.001 studs of penetration (Inference: Studio counted 0.01, not faces that only meet). Bounds queries find candidates by collider bounds, so a cylinder whose `Size` box is much wider than its round shape can be missed near that box's corners | The exact rule | Conformance |
+| `GetTouchingParts` on a non-colliding part | Reports its overlaps while something is connected to its `Touched` | Roblox checks for a TouchInterest child, which Rook doesn't create | Conformance |
+| `Mouse.Hit`/`Target` | Legacy ray rules (`Default` group, `CanQuery` with `CanCollide` off), 1,000 studs from the camera, minus `TargetFilter` (Inference) | Checking the mouse's own rules in a client | Conformance |
+| `ScreenPointToRay`, `WorldToScreenPoint` | Same as their Viewport versions: Rook has no top bar | Roblox clients exclude the 58-pixel top bar (`GuiService:GetGuiInset`) | GUI |
+| `WorldRoot:Shapecast`, `ArePartsTouchingOthers` | Not implemented (no archive files use them) | Casting a part; the touching test | Physics, later |

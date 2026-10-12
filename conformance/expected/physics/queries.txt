@@ -1,0 +1,97 @@
+-- studio 0.742.0.7421053
+-- signals: deferred
+basic A 0.00,0.00,-9.00 0.00,0.00,1.00 Enum.Material.Plastic
+short nil 0.00,0.00,-5.00 0.00,0.00,0.00 Enum.Material.Air
+results 4
+lowercase A
+canquery off A 0.00,0.00,-9.00 0.00,0.00,1.00 Enum.Material.Plastic
+both off nil 0.00,0.00,-100.00 0.00,0.00,0.00 Enum.Material.Air
+cancollide off A 0.00,0.00,-9.00 0.00,0.00,1.00 Enum.Material.Plastic
+transparent A 0.00,0.00,-9.00 0.00,0.00,1.00 Enum.Material.Plastic
+inside nil 0.00,0.00,-110.00 0.00,0.00,0.00 Enum.Material.Air
+on surface nil 0.00,0.00,-109.00 0.00,0.00,0.00 Enum.Material.Air
+start in overlap P2 20.00,0.00,-1.00 0.00,0.00,1.00 Enum.Material.Plastic
+15000 Far 40.00,0.00,-14998.00 0.00,0.00,1.00 Enum.Material.Plastic
+15002 nil 40.00,0.00,-100000.00 0.00,0.00,0.00 Enum.Material.Air
+moved this frame B 50.00,0.00,-19.00 0.00,0.00,1.00 Enum.Material.Plastic
+ignore model D
+ignore list D
+whitelist C
+whitelist empty nil
+material Enum.Material.Wood
+ball Ball 151.00,0.00,-8.27 0.50,0.00,0.87 Enum.Material.Plastic
+ball corner nil 151.90,1.90,-100.00 0.00,0.00,0.00 Enum.Material.Air
+wedge W 200.00,0.90,0.90 0.00,0.71,-0.71 Enum.Material.Plastic
+no ray false Unable to cast double to Ray
+no list false Argument 2 missing or nil
+legacy group Plain 250.00,0.00,-14.00 0.00,0.00,1.00 Enum.Material.Plastic
+params RaycastParams{IgnoreWater=false, BruteForceAllSlow=false, RespectCanCollide=false, CollisionGroup=Default, FilterDescendantsInstances={}}
+fields Enum.RaycastFilterType.Exclude 0 false Default false false
+default NC
+no params NC
+respect Plain
+group G
+unknown group NC
+include NC
+nested exclude Plain
+blacklist Enum.RaycastFilterType.Exclude true
+one RaycastParams{IgnoreWater=false, BruteForceAllSlow=false, RespectCanCollide=false, CollisionGroup=Default, FilterDescendantsInstances={NC}}
+many RaycastParams{IgnoreWater=false, BruteForceAllSlow=false, RespectCanCollide=false, CollisionGroup=Default, FilterDescendantsInstances={3 instances...}} 3
+copied 0
+equal true
+bad member false Foo is not a valid member of RaycastParams
+enum number false Invalid value for enum 'RaycastFilterType'
+not a table false Invalid value type; expected a table
+not instances false Invalid value type; table must only contain Instances and other tables
+add bad false Expected a table or Instance
+truthy true
+result RaycastResult NC 250.00,0.00,-4.00 0.00,0.00,1.00 Enum.Material.Plastic 4.00
+result tostring RaycastResult{A @ 0, 1000, -9; normal = 0, 0, 1; material = Plastic}
+result member false 'Foo' is not a valid member of RaycastResult
+result write false Distance member of RaycastResult is read-only and cannot be assigned to
+miss nil
+raycast bad false Unable to cast double to Vector3
+raycast params bad false Unable to cast double to RaycastParams
+overlap OverlapParams{MaxParts=0, Tolerance=0, BruteForceAllSlow=false, RespectCanCollide=false, CollisionGroup=Default, FilterDescendantsInstances={}}
+maxparts 2
+tolerance false Tolerance outside bounds: Expected 0 - 0.050000, got 0.500000
+box [NC,Plain]
+box respect [Plain]
+box group [G]
+box max 1
+radius [NC,Plain]
+radius negative []
+radius corner [BP] []
+box ball corner [Ball]
+in part corner []
+in part [Ball] [Probe]
+in part bad false Part parameter must be BasePart
+sphere Wall 8.50 350.00,0.00,-9.50 0.00,0.00,1.00
+block Wall 8.50 0.00,0.00,1.00
+start inside nil
+radius false Attempt to spherecast with radius 600.000000. The maximum radius is 256.000000.
+side false Attempt to blockcast with side length 1600.000000. The maximum side length is 512.000000.
+distance false Attempt to shapecast with distance 2000.000000. The maximum distance is 1024.
+touching [Over,Shy] []
+touching listened [Over,T]
+touching outside [] []
+region [C,D]
+region lower [C,D]
+region face [C]
+region gap []
+region ball corner [Ball]
+region rotated [] [Rot]
+region flags [G,NC,Plain]
+region ignore [D]
+region lists [D] [C]
+region max 20 25 25 3
+region inverted 0
+empty false true
+empty ignore true true
+region bad false Unable to cast double to Region3
+center 10.00,20.00,29.50 0.00,0.00,-1.00
+depth 10.00,20.00,24.50 0.00,0.00,-1.00
+corner 9.65,20.35,29.50 -0.50,0.50,-0.71
+corner depth 4.67,25.33,22.39 -0.50,0.50,-0.71
+screen 10.35,19.65,29.50 0.50,-0.50,-0.71
+project 0.50,0.50,30.00 true false

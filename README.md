@@ -51,7 +51,7 @@ The archive is scanned with `rook corpus-scan` and run with `rook corpus-run`. B
 
 ### Data model
 
-- All the Roblox datatypes: `Vector2`, `Vector3`, `CFrame`, `Color3`, `BrickColor`, `UDim`, `UDim2`, `Rect`, `NumberSequence`, `ColorSequence`, `NumberRange`, `PhysicalProperties`, `Font`, `Faces`, `Axes`, enums, attributes and tags.
+- All the Roblox datatypes: `Vector2`, `Vector3`, `CFrame`, `Color3`, `BrickColor`, `UDim`, `UDim2`, `Rect`, `NumberSequence`, `ColorSequence`, `NumberRange`, `PhysicalProperties`, `RaycastParams`, `OverlapParams`, `RaycastResult`, `Font`, `Faces`, `Axes`, enums, attributes and tags.
 - A class, property and enum database compiled to dense numeric IDs, with inherited property layouts and per-class defaults.
 - A runtime instance tree with generational IDs, Roblox's hierarchy rules (locked parents, cycles, `Destroy`, `Clone` and `Archivable`) and a change journal that signals, replication and rendering each read at their own pace.
 - Several DataModels in one process, each with its own tree, Luau VM and scheduler, so a server and its clients run side by side.
@@ -211,7 +211,7 @@ Every behaviour Rook implements is recorded with its source and one of four stat
 
 ## Roadmap
 
-Physics (M3) is nearly done; content (meshes, textures, decals) is next, then characters. The full plan, its order and why, is in [ROADMAP.md](ROADMAP.md).
+Physics (M3) is done; content (meshes, textures, decals) is next, then characters. The full plan, its order and why, is in [ROADMAP.md](ROADMAP.md).
 
 ## Development
 

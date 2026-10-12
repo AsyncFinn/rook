@@ -19,7 +19,9 @@
 //! RotateV, RotateP and HingeConstraint actuators drive their joints'
 //! motors.
 //!
-//! Still to come: queries; see `docs/architecture.md` §12.
+//! Scripts' scene queries (rays, shape casts, regions, overlaps) run on
+//! the same world ([`query`]); each brings it up to date with the DOM
+//! first. A client's world only answers queries ([`Physics::for_queries`]).
 
 pub mod assembly;
 mod constraints;
@@ -29,6 +31,7 @@ pub mod groups;
 pub mod joints;
 pub mod materials;
 mod movers;
+pub mod query;
 mod read;
 mod shape;
 pub mod surfaces;
@@ -44,6 +47,7 @@ pub use rook_types::PartShape;
 pub use shape::{is_part, part_shape, workspace_parts};
 
 pub use contacts::Touch;
+pub use query::{CastShape, Filter, Hit, Region};
 
 use assembly::{Assembly, is_massless};
 use constraints::{Drive, Spec, apply_drive, hinge_constraint_drive, revolute_angle};
@@ -289,6 +293,11 @@ pub struct Physics {
     constraints: HashMap<InstanceId, BuiltConstraint>,
     /// Driven revolute joints: RotateV, RotateP and HingeConstraints.
     drives: HashMap<InstanceId, Driven>,
+    /// Bodies added or moved since the last step, whose colliders queries
+    /// must put in place first (Rapier does that when it steps).
+    stale: HashSet<RigidBodyHandle>,
+    /// The world only answers queries; it never steps (clients).
+    query_only: bool,
 }
 
 impl std::fmt::Debug for Physics {
@@ -343,7 +352,24 @@ impl Physics {
             all_dirty: false,
             constraints: HashMap::new(),
             drives: HashMap::new(),
+            stale: HashSet::new(),
+            query_only: false,
         }
+    }
+
+    /// A world that only answers queries, for a DataModel that doesn't
+    /// simulate (a client: the server simulates every part until network
+    /// ownership exists). Its parts stay where replication puts them.
+    pub fn for_queries() -> Self {
+        Self {
+            query_only: true,
+            ..Self::new()
+        }
+    }
+
+    /// Whether the world has been built from the DOM (by a sync).
+    pub fn is_built(&self) -> bool {
+        self.built
     }
 
     /// Carry out a script's request.
@@ -653,11 +679,16 @@ impl Physics {
             RigidBodyBuilder::fixed()
                 .user_data(contacts::pack_velocity(vector(props.linear_velocity)))
         } else {
+            // Rapier caps spin at a quarter turn per step (for CCD, which
+            // Rook doesn't use); Roblox spins a RotateV rotor at 1,550
+            // rad/s (observed).
             RigidBodyBuilder::dynamic()
                 .linvel(vector(props.linear_velocity))
                 .angvel(vector(props.angular_velocity))
+                .allow_fast_rotation(true)
         };
         let handle = self.world.insert_body(builder.pose(pose_of(&root_cf)));
+        self.stale.insert(handle);
         let mut colliders = Vec::with_capacity(asm.members.len());
         for (i, m) in asm.members.iter().enumerate() {
             self.parts.insert(m.part, handle);
@@ -679,13 +710,9 @@ impl Physics {
                 asm,
                 colliders,
                 motors,
-            // Rapier caps spin at a quarter turn per step (for CCD, which
-            // Rook doesn't use); Roblox spins a RotateV rotor at 1,550
-            // rad/s (observed).
             },
         );
         handle
-                .allow_fast_rotation(true)
     }
 
     fn add_collider(
@@ -941,6 +968,7 @@ impl Physics {
                         d.angle = Some(next);
                         Drive::Angle { angle: next }
                     } else {
+                        // NoInput holds the hinge against anything.
                         Drive::Speed {
                             speed: joints::ROTATE_V_SPEED * value.unwrap_or(0.0),
                             max_torque: value.map_or(Real::MAX, |v| input.strength * v.abs()),
@@ -968,12 +996,12 @@ impl Physics {
                 && let Some(col) = self.world.colliders.get_mut(*collider)
             {
                 col.set_position_wrt_parent(pose_of(&m.offset) * *shape_pose);
-                        // NoInput holds the hinge against anything.
             }
         }
         let root = cframe_of(self.world.bodies[h].position());
         let _ = body.asm.place(dom, root);
         self.world.wake_up(h, true);
+        self.stale.insert(h);
     }
 
     /// A script moved `part` (or set its velocity): move its body to match.
@@ -990,6 +1018,7 @@ impl Physics {
             Some(Value::Vector3(v)) => to_rapier(v.0),
             _ => Vector::ZERO,
         };
+        self.stale.insert(h);
         let rb = &mut self.world.bodies[h];
         rb.set_position(pose_of(&root), true);
         if rb.is_dynamic() {
@@ -1006,7 +1035,7 @@ impl Physics {
     pub fn step(&mut self, dt: f64) {
         profiling::scope!("Physics::step");
         self.last_dt = dt;
-        if self.bodies.values().all(|b| b.asm.anchored) {
+        if self.query_only || self.bodies.values().all(|b| b.asm.anchored) {
             return;
         }
         let steps = (dt * STEP_HZ).round().max(1.0) as u32;
@@ -1019,6 +1048,8 @@ impl Physics {
             }
             self.world.step_with_events(&contacts::Mixer, &events);
         }
+        // Stepping put every collider in place.
+        self.stale.clear();
         for m in self.movers.values() {
             if let Some(inside) = movers::rocket_arrived(&self.world, m)
                 && let Some(was) = self.rockets.get_mut(&m.id)

@@ -5,7 +5,7 @@
 //! InputObject, Mouse, ClickDetector). Rook has no GUI yet, so
 //! `gameProcessedEvent` is always false.
 
-use glam::{Mat3, Vec3};
+use glam::Vec3;
 use rook_dom::InstanceId;
 use rook_types::{CFrame, Value, Vector3};
 
@@ -106,6 +106,21 @@ impl DataModel {
     /// The window's size in pixels (for the mouse ray and Mouse.ViewSize).
     pub fn set_viewport(&mut self, width: u32, height: u32) {
         self.input.viewport = (width.max(1), height.max(1));
+        self.sync_viewport_size();
+    }
+
+    /// Give the current camera the window's size as its ViewportSize, which
+    /// `Camera:ViewportPointToRay` and friends read.
+    fn sync_viewport_size(&self) {
+        let Some(camera) = self.current_camera() else {
+            return;
+        };
+        let (w, h) = self.input.viewport;
+        let size = Value::Vector2(rook_types::Vector2::new(w as f32, h as f32));
+        let mut world = self.runtime.world_mut();
+        if world.dom.property_by_name(camera, "ViewportSize").as_ref() != Some(&size) {
+            set(&mut world.dom, camera, "ViewportSize", size);
+        }
     }
 
     /// Create the local player's Mouse if it doesn't exist yet.
@@ -299,43 +314,41 @@ impl DataModel {
         }
     }
 
-    /// The ray from the camera through the cursor (unit direction).
+    /// The ray from the camera through the cursor (unit direction), the
+    /// same as `Camera:ViewportPointToRay` but starting at the camera.
     fn mouse_ray(&self) -> Option<(Vec3, Vec3, CFrame)> {
         let camera = self.current_camera()?;
         let w = self.runtime.world();
-        let cf = match w.dom.property_by_name(camera, "CFrame")? {
-            Value::CFrame(c) => c,
-            _ => return None,
-        };
-        let fov = match w.dom.property_by_name(camera, "FieldOfView") {
-            Some(Value::Float32(f)) => f,
-            _ => 70.0,
-        };
         let (vw, vh) = self.input.viewport;
+        let lens = rook_lua::Lens {
+            viewport: glam::Vec2::new(vw as f32, vh as f32),
+            ..rook_lua::Lens::of(&w.dom, camera)
+        };
         let (mx, my) = w.input.mouse;
-        let aspect = vw as f32 / vh as f32;
-        let tan = (fov.to_radians() * 0.5).tan();
-        let nx = 2.0 * mx / vw as f32 - 1.0;
-        let ny = 1.0 - 2.0 * my / vh as f32;
-        let local = Vec3::new(nx * tan * aspect, ny * tan, -1.0).normalize();
-        let rot: Mat3 = cf.rotation;
-        Some((cf.position, (rot * local).normalize(), cf))
+        let (_, dir) = rook_lua::viewport_ray(&lens, mx, my);
+        Some((lens.cframe.position, dir, lens.cframe))
     }
 
     /// Update Mouse.Hit, Target and the rest from the cursor and camera,
     /// and track which ClickDetector is under the cursor. Returns it.
     pub(crate) fn refresh_mouse(&mut self, clicks: &mut Vec<ClickEvent>) -> Option<InstanceId> {
         let mouse = self.mouse_object()?;
+        // The camera may have been replaced since the window last resized.
+        self.sync_viewport_size();
         let (origin, dir, camera) = self.mouse_ray()?;
-        // Bring the part cache up to date with changes since the last frame.
-        self.check_render_changes();
         let hit = {
-            let w = self.runtime.world();
-            let dom = &w.dom;
-            let filter = dom.ref_property(mouse, "TargetFilter");
-            self.parts.raycast(dom, origin, dir * MOUSE_RANGE, &|id| {
-                filter.is_none_or(|f| id != f && !dom.is_ancestor_of(f, id))
-            })
+            let mut w = self.runtime.world_mut();
+            let w = &mut *w;
+            // TargetFilter and what it contains are ignored; otherwise the
+            // mouse sees what legacy rays see (Inference).
+            let ignore = w
+                .dom
+                .ref_property(mouse, "TargetFilter")
+                .into_iter()
+                .collect();
+            let filter = rook_physics::Filter::legacy_ray(ignore, false);
+            w.physics
+                .raycast(&mut w.dom, origin, dir * MOUSE_RANGE, &filter)
         };
         let point = hit.map_or(origin + dir * MOUSE_RANGE, |h| h.position);
         let (mx, my) = self.runtime.world().input.mouse;

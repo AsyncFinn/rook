@@ -20,6 +20,7 @@ rook-dom.workspace = true
 rook-formats.workspace = true
 rook-render.workspace = true
 rook-engine.workspace = true
+rook-physics.workspace = true
 wgpu.workspace = true
 winit.workspace = true
 pollster.workspace = true

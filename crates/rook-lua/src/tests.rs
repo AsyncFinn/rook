@@ -359,11 +359,11 @@ fn runaway_scripts_time_out() {
 fn unimplemented_members_are_counted() {
     expect(
         r#"
-        local ok, e = pcall(function() return workspace:Raycast(Vector3.zero, Vector3.yAxis) end)
+        local ok, e = pcall(function() return workspace:ArePartsTouchingOthers({}) end)
         print(e)
         "#,
         0,
-        &["Workspace:Raycast is not implemented in Rook yet"],
+        &["Workspace:ArePartsTouchingOthers is not implemented in Rook yet"],
     );
 }
 

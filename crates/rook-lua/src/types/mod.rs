@@ -15,6 +15,7 @@ pub(crate) mod color;
 pub(crate) mod enums;
 pub(crate) mod geometry;
 pub(crate) mod misc;
+pub(crate) mod query;
 pub(crate) mod sequences;
 pub(crate) mod udim;
 pub(crate) mod vector;
@@ -38,6 +39,7 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     geometry::install(lua)?;
     enums::install(lua)?;
     misc::install(lua)?;
+    query::install(lua)?;
     Ok(())
 }
 

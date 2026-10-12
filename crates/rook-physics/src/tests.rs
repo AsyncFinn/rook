@@ -8,6 +8,7 @@ mod constraints;
 mod contacts;
 mod joints;
 mod movers;
+mod queries;
 
 fn set(dom: &mut Dom, id: InstanceId, name: &str, value: Value) {
     dom.set_property_by_name(id, name, value).unwrap();

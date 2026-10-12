@@ -2603,6 +2603,7 @@ dependencies = [
  "rook-dom",
  "rook-engine",
  "rook-formats",
+ "rook-physics",
  "rook-reflection",
  "rook-render",
  "rook-types",

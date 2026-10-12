@@ -32,7 +32,7 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("BasePart", "CanCollideWith") => can_collide_with,
         ("RocketPropulsion", "Fire" | "fire") => fire_rocket,
         ("RocketPropulsion", "Abort") => abort_rocket,
-        _ => return None,
+        _ => return super::queries::native(owner, name),
     })
 }
 
@@ -190,11 +190,11 @@ fn can_collide_with(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> 
 
 /// Starts the rocket flying toward its target at the next physics step.
 fn fire_rocket(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
-    with_world(lua, |w| w.physics_commands.push(Command::FireRocket(this)));
+    with_world(lua, |w| w.physics.command(Command::FireRocket(this)));
     Outcome::ret(lua, ())
 }
 
 fn abort_rocket(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
-    with_world(lua, |w| w.physics_commands.push(Command::AbortRocket(this)));
+    with_world(lua, |w| w.physics.command(Command::AbortRocket(this)));
     Outcome::ret(lua, ())
 }
