@@ -18,6 +18,8 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 - Places saved before `Workspace.ExplicitAutoJoints` existed have their parts joined by surfaces when they load, as Roblox did then (Inference: such places save almost no joints).
 - `rook-dom` indexes reference properties both ways (`Dom::referrers`).
 - First physics conformance case (`physics/joints`).
+- Faster scripting: member lookups are resolved once per class, `inst.Key` and `inst.Key = v` take a dedicated path into Rust, the engine-function shim no longer forwards results through a vararg helper, `GetChildren`/`GetDescendants` build their arrays in Luau, and the script-timeout check reads the clock every 1024th interrupt. A large modern place's 10 s run drops from about 46 s to 32 s, with identical output.
+- Tracy zones per resumed script (`script: <chunk>:<line>`), per `Instance.__index`/`__newindex` (key as zone text), per native Instance method, and around all engine functions (`api`).
 
 ## [0.2.0] — 2026-10-11 — M2: client side, renderer, input
 

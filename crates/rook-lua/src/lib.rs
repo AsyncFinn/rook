@@ -73,6 +73,8 @@ pub const DEFAULT_SCRIPT_TIMEOUT: Duration = Duration::from_secs(10);
 struct Watchdog {
     deadline: Cell<Option<Instant>>,
     timeout: Cell<Duration>,
+    /// Interrupts since the clock was last read.
+    ticks: Cell<u32>,
 }
 
 /// One DataModel's scripting state.
@@ -98,10 +100,17 @@ impl Runtime {
         let watchdog = Rc::new(Watchdog {
             deadline: Cell::new(None),
             timeout: Cell::new(DEFAULT_SCRIPT_TIMEOUT),
+            ticks: Cell::new(0),
         });
         let wd = watchdog.clone();
         lua.set_interrupt(move |_| {
-            if let Some(deadline) = wd.deadline.get()
+            // Luau interrupts at every call and loop iteration, and reading
+            // the clock costs more than the rest of a loop body: read it
+            // every 1024th time (still thousands of times a millisecond).
+            let ticks = wd.ticks.get().wrapping_add(1);
+            wd.ticks.set(ticks);
+            if ticks % 1024 == 0
+                && let Some(deadline) = wd.deadline.get()
                 && Instant::now() > deadline
             {
                 // Reset so the error itself can unwind.
@@ -211,7 +220,11 @@ impl Runtime {
             // Deferred handlers run when the thread that caused them yields
             // or finishes, so drain after every resumed job.
             for job in jobs {
-                threads::run_job(&self.lua, job);
+                {
+                    profiling::scope!(&*threads::job_label(&self.lua, &job));
+                    threads::run_job(&self.lua, job);
+                }
+                profiling::scope!("drain_deferred");
                 threads::drain_deferred(&self.lua);
             }
         });

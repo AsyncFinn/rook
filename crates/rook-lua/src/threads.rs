@@ -144,6 +144,66 @@ fn stack_lines(lua: &Lua, thread: &Thread) -> Option<Vec<String>> {
 
 // ---- jobs ---------------------------------------------------------------
 
+/// Where a job's code lives (`script: Workspace.Script:12`), naming its
+/// profiler zone. Only evaluated in profiling builds.
+#[allow(dead_code)]
+pub(crate) fn job_label(lua: &Lua, job: &Job) -> String {
+    let function_label = |f: &Function| {
+        let info = f.info();
+        format!(
+            "script: {}:{}",
+            info.short_src.unwrap_or_default(),
+            info.line_defined.unwrap_or(0)
+        )
+    };
+    match job {
+        Job::Resume { thread, .. }
+        | Job::Fire {
+            handler: Handler::Resume(thread),
+            ..
+        } => thread_label(lua, thread),
+        Job::Call { func, .. }
+        | Job::Fire {
+            handler: Handler::Call(func),
+            ..
+        } => function_label(func),
+        Job::Destroy(_) => "Debris destroy".into(),
+    }
+}
+
+/// The innermost script frame of a suspended thread.
+fn thread_label(lua: &Lua, thread: &Thread) -> String {
+    let find = || -> mlua::Result<String> {
+        let f: Function = match lua.named_registry_value::<Option<Function>>("rook.thread_label")? {
+            Some(f) => f,
+            None => {
+                let f: Function = lua
+                    .load(
+                        r#"
+                        local info = debug.info
+                        return function(co)
+                            for level = 0, 30 do
+                                local s, l = info(co, level, "sl")
+                                if s == nil then break end
+                                if s ~= "[C]" and string.sub(s, 1, 6) ~= "[rook]" then
+                                    return s .. ":" .. l
+                                end
+                            end
+                            return "?"
+                        end
+                        "#,
+                    )
+                    .set_name("=[rook] thread_label")
+                    .call(())?;
+                lua.set_named_registry_value("rook.thread_label", f.clone())?;
+                f
+            }
+        };
+        f.call(thread.clone())
+    };
+    format!("script: {}", find().unwrap_or_else(|_| "?".into()))
+}
+
 /// Run one scheduled job.
 pub(crate) fn run_job(lua: &Lua, job: Job) {
     match job {

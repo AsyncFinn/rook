@@ -95,6 +95,39 @@ fn uncaught_errors_report_with_stack() {
 }
 
 #[test]
+fn engine_calls_pass_results_and_errors_through() {
+    // Several results, a callback's results (the shim calls it from Lua),
+    // instance arrays, and string errors from `inst.Key` both ways.
+    expect(
+        r##"
+        local m = Instance.new("Model")
+        local p = Instance.new("Part")
+        p.Parent = m
+        print(select("#", m:GetBoundingBox()))
+        local f = Instance.new("BindableFunction")
+        f.OnInvoke = function(a, b) return b, a, nil end
+        print(select("#", f:Invoke(1, 2)), f:Invoke(1, 2))
+        local kids = m:GetChildren()
+        print(#kids, kids[1] == p, m:GetChildren()[1] == kids[1])
+        print(pcall(function() return m.Nope end))
+        print(pcall(function() m.Nope = 1 end))
+        print(pcall(function() return m[1] end))
+        print(m["Part"] == p, rawequal(m.Destroy, p.Destroy))
+        "##,
+        0,
+        &[
+            "2",
+            "3 2 1 nil",
+            "1 true true",
+            "false Nope is not a valid member of Model \"Model\"",
+            "false Nope is not a valid member of Model \"Model\"",
+            "false 1 is not a valid member of Model \"Model\"",
+            "true true",
+        ],
+    );
+}
+
+#[test]
 fn legacy_lowercase_members() {
     expect(
         r#"
