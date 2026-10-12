@@ -110,11 +110,9 @@ pub struct Aggregate {
     pub game_index: UsageMap,
 }
 
-pub fn run(dir: &Path, out: &Path, jobs: Option<usize>, large_mb: u64) -> anyhow::Result<()> {
-    anyhow::ensure!(dir.is_dir(), "{} is not a folder", dir.display());
-    let started = Instant::now();
-
-    let mut candidates: Vec<(PathBuf, u64)> = walkdir::WalkDir::new(dir)
+/// Files under `dir` with one of `extensions` (any case), sorted by path.
+pub fn find_files(dir: &Path, extensions: &[&str]) -> Vec<walkdir::DirEntry> {
+    let mut files: Vec<walkdir::DirEntry> = walkdir::WalkDir::new(dir)
         .into_iter()
         .filter_map(Result::ok)
         .filter(|e| e.file_type().is_file())
@@ -122,14 +120,24 @@ pub fn run(dir: &Path, out: &Path, jobs: Option<usize>, large_mb: u64) -> anyhow
             e.path()
                 .extension()
                 .and_then(|x| x.to_str())
-                .is_some_and(|x| EXTENSIONS.iter().any(|ext| x.eq_ignore_ascii_case(ext)))
+                .is_some_and(|x| extensions.iter().any(|ext| x.eq_ignore_ascii_case(ext)))
         })
+        .collect();
+    files.sort_by(|a, b| a.path().cmp(b.path()));
+    files
+}
+
+pub fn run(dir: &Path, out: &Path, jobs: Option<usize>, large_mb: u64) -> anyhow::Result<()> {
+    anyhow::ensure!(dir.is_dir(), "{} is not a folder", dir.display());
+    let started = Instant::now();
+
+    let candidates: Vec<(PathBuf, u64)> = find_files(dir, &EXTENSIONS)
+        .into_iter()
         .map(|e| {
             let len = e.metadata().map(|m| m.len()).unwrap_or(0);
             (e.into_path(), len)
         })
         .collect();
-    candidates.sort();
     eprintln!("found {} place/model files", candidates.len());
 
     let large_threshold = large_mb * 1024 * 1024;

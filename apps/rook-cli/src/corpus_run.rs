@@ -54,19 +54,10 @@ pub fn run(
 ) -> anyhow::Result<()> {
     anyhow::ensure!(dir.is_dir(), "{} is not a folder", dir.display());
     let started = Instant::now();
-    let mut places: Vec<PathBuf> = walkdir::WalkDir::new(dir)
+    let places: Vec<PathBuf> = crate::corpus::find_files(dir, &["rbxl", "rbxlx"])
         .into_iter()
-        .filter_map(Result::ok)
-        .filter(|e| e.file_type().is_file())
-        .filter(|e| {
-            e.path()
-                .extension()
-                .and_then(|x| x.to_str())
-                .is_some_and(|x| x.eq_ignore_ascii_case("rbxl") || x.eq_ignore_ascii_case("rbxlx"))
-        })
         .map(walkdir::DirEntry::into_path)
         .collect();
-    places.sort();
     eprintln!("found {} place files", places.len());
 
     let default_hook = std::panic::take_hook();
