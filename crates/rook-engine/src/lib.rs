@@ -257,17 +257,13 @@ impl DataModel {
         if !matches!(class, "Script" | "LocalScript") {
             return false;
         }
-        let disabled = dom.property_by_name(id, "Disabled") == Some(Value::Bool(true));
-        if disabled {
+        if dom.property_by_name(id, "Disabled") == Some(Value::Bool(true)) {
             return false;
         }
         if self.role == Role::Client {
             return client_should_run(dom, id, class);
         }
         if class != "Script" {
-            return false;
-        }
-        if dom.property_by_name(id, "Disabled") == Some(Value::Bool(true)) {
             return false;
         }
         let Some(top) = top_level(dom, id) else {
