@@ -49,6 +49,17 @@ pub fn members() -> &'static Members {
     &MEMBERS
 }
 
+/// The value of an enum's item by name, accepting the legacy names Roblox
+/// still resolves (`Enum.KeyCode.Unknown` is `Enum.KeyCode.None`).
+pub fn enum_item_value(id: EnumId, name: &str) -> Option<u32> {
+    let info = database().enum_info(id);
+    let lookup = |n: &str| info.items.iter().find(|(i, _)| *i == n).map(|(_, v)| *v);
+    lookup(name).or_else(|| {
+        let current = members().enum_legacy_names.get(info.name)?.get(name)?;
+        lookup(current)
+    })
+}
+
 /// The pinned Roblox version, as `major.minor.patch.build`.
 pub fn roblox_version() -> String {
     let [a, b, c, d] = rbx_database().version;

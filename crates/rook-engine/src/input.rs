@@ -99,7 +99,7 @@ fn legacy_key_string(code: &str) -> Option<String> {
 
 fn key_code_value(code: &str) -> Option<u32> {
     let e = rook_reflection::database().enum_by_name("KeyCode")?;
-    e.items.iter().find(|(n, _)| *n == code).map(|(_, v)| *v)
+    rook_reflection::enum_item_value(e.id, code)
 }
 
 impl DataModel {
