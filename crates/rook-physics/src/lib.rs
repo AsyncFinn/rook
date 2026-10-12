@@ -4,12 +4,20 @@
 //! DOM's change journal to keep up with scripts, steps the simulation, and
 //! writes simulated parts' CFrame and velocities back into the DOM.
 //!
-//! What exists so far (M3 step 1): anchored parts are fixed colliders and
-//! every unanchored part is its own rigid body. Joints, assemblies, contact
-//! events and BodyMovers come next; see `docs/architecture.md` §8.
+//! Parts joined by rigid joints form an assembly ([`assembly`]), which is
+//! one Rapier body with a collider per part; anchored assemblies are fixed
+//! bodies. Hinge joints connect bodies with Rapier revolute joints.
+//! [`joints`], [`assembly`] and [`surfaces`] work on the DOM alone, so
+//! scripts can use them synchronously.
+//!
+//! Still to come: contact events and materials, BodyMovers and
+//! constraints, and queries; see `docs/architecture.md` §12.
 
+pub mod assembly;
 mod convert;
+pub mod joints;
 mod shape;
+pub mod surfaces;
 
 use std::collections::{HashMap, HashSet};
 
@@ -21,7 +29,9 @@ use rook_types::{CFrame, Value, Vector3};
 pub use rook_types::PartShape;
 pub use shape::{is_part, part_shape, workspace_parts};
 
+use assembly::{Assembly, is_massless};
 use convert::{cframe_of, pose_of, to_glam, to_rapier};
+use joints::{Joint, JointKind, active_joint, endpoints, is_joint};
 
 /// Roblox simulates at 240 Hz (creator-docs "Adaptive timestepping": 240,
 /// 120 or 60 Hz per assembly; Rook always uses 240, an Approximation).
@@ -40,6 +50,23 @@ const PLASTIC_DENSITY: f32 = 0.7;
 const PLASTIC_FRICTION: f32 = 0.3;
 const PLASTIC_ELASTICITY: f32 = 0.5;
 
+/// A part's volume, from its Size as a box whatever its shape
+/// (Approximation).
+pub fn part_volume(dom: &Dom, part: InstanceId) -> f32 {
+    match dom.property_by_name(part, "Size") {
+        Some(Value::Vector3(s)) => {
+            s.0.max(glam::Vec3::splat(shape::MIN_PART_SIZE))
+                .element_product()
+        }
+        _ => 0.0,
+    }
+}
+
+/// `BasePart:GetMass()`: volume × Plastic's density for every part.
+pub fn part_mass(dom: &Dom, part: InstanceId) -> f32 {
+    part_volume(dom, part) * PLASTIC_DENSITY
+}
+
 /// The physics properties [`Physics`] watches, resolved once.
 #[derive(Debug)]
 struct Props {
@@ -47,6 +74,8 @@ struct Props {
     size: PropertyId,
     anchored: PropertyId,
     can_collide: PropertyId,
+    massless: PropertyId,
+    root_priority: PropertyId,
     shape: Option<PropertyId>,
     linear_velocity: PropertyId,
     angular_velocity: PropertyId,
@@ -66,6 +95,8 @@ impl Props {
             size: p(base, "Size")?,
             anchored: p(base, "Anchored")?,
             can_collide: p(base, "CanCollide")?,
+            massless: p(base, "Massless")?,
+            root_priority: p(base, "RootPriority")?,
             shape: p(part, "Shape"),
             linear_velocity: p(base, "AssemblyLinearVelocity")?,
             angular_velocity: p(base, "AssemblyAngularVelocity")?,
@@ -74,35 +105,48 @@ impl Props {
         })
     }
 
-    fn is_physical(&self, p: PropertyId) -> bool {
-        p == self.cframe
-            || p == self.size
+    /// Changes that alter which bodies and colliders exist.
+    fn is_structural(&self, p: PropertyId) -> bool {
+        p == self.size
             || p == self.anchored
             || p == self.can_collide
+            || p == self.massless
+            || p == self.root_priority
             || Some(p) == self.shape
-            || p == self.linear_velocity
-            || p == self.angular_velocity
+    }
+
+    /// Changes that move a body.
+    fn is_pose(&self, p: PropertyId) -> bool {
+        p == self.cframe || p == self.linear_velocity || p == self.angular_velocity
     }
 }
 
-/// One part in the Rapier world.
-#[derive(Debug, Clone, Copy)]
-struct PartBody {
-    collider: ColliderHandle,
-    /// `None` for anchored parts: their colliders sit in the world directly.
-    body: Option<RigidBodyHandle>,
+/// One assembly in the Rapier world.
+#[derive(Debug)]
+struct Body {
+    asm: Assembly,
+    /// Per member: its collider and the collider's pose in the part.
+    colliders: Vec<Option<(ColliderHandle, Pose)>>,
+    /// Motors inside the assembly, stepped every frame.
+    motors: Vec<Joint>,
 }
 
 /// A DataModel's physics world.
 pub struct Physics {
     world: PhysicsWorld,
     props: Option<Props>,
-    parts: HashMap<InstanceId, PartBody>,
-    bodies: HashMap<RigidBodyHandle, InstanceId>,
+    bodies: HashMap<RigidBodyHandle, Body>,
+    parts: HashMap<InstanceId, RigidBodyHandle>,
+    /// Joints in the world and the parts they joined, so a changed joint's
+    /// former parts are rebuilt too.
+    joints: HashMap<InstanceId, [InstanceId; 2]>,
+    hinges: HashMap<InstanceId, ImpulseJointHandle>,
     /// Journal position up to which changes have been applied.
     cursor: u64,
     built: bool,
     fallen_height: f32,
+    /// The last step's length, for advancing motors.
+    last_dt: f64,
 }
 
 impl std::fmt::Debug for Physics {
@@ -121,6 +165,12 @@ impl Default for Physics {
     }
 }
 
+/// Rapier's revolute joints turn about their frames' X axis; a Roblox
+/// hinge turns about its C0/C1 Z axis.
+fn hinge_pose(cf: CFrame) -> Pose {
+    pose_of(&cf) * Pose::from_rotation(Rotation::from_rotation_y(-std::f32::consts::FRAC_PI_2))
+}
+
 impl Physics {
     pub fn new() -> Self {
         let mut world = PhysicsWorld::new();
@@ -129,11 +179,14 @@ impl Physics {
         Self {
             world,
             props: None,
-            parts: HashMap::new(),
             bodies: HashMap::new(),
+            parts: HashMap::new(),
+            joints: HashMap::new(),
+            hinges: HashMap::new(),
             cursor: 0,
             built: false,
             fallen_height: DEFAULT_FALLEN_HEIGHT,
+            last_dt: 0.0,
         }
     }
 
@@ -142,14 +195,20 @@ impl Physics {
         self.parts.len()
     }
 
-    /// Simulated (unanchored) parts.
+    /// Simulated (unanchored) assemblies.
     pub fn body_count(&self) -> usize {
-        self.bodies.len()
+        self.bodies.values().filter(|b| !b.asm.anchored).count()
+    }
+
+    /// The root part of the assembly `part` is simulated in.
+    pub fn root_of(&self, part: InstanceId) -> Option<InstanceId> {
+        Some(self.bodies[self.parts.get(&part)?].asm.root())
     }
 
     /// Bring the world up to date with the DOM: on the first call, add
     /// every Workspace part; after that, apply the journal since last time.
-    pub fn sync(&mut self, dom: &Dom) {
+    /// Parts are snapped to where their joints hold them.
+    pub fn sync(&mut self, dom: &mut Dom) {
         profiling::scope!("Physics::sync");
         if self.props.is_none() {
             self.props = Props::resolve(dom);
@@ -157,44 +216,104 @@ impl Physics {
         let Some(props) = self.props.take() else {
             return;
         };
-        let end = dom.journal().end();
         if !self.built {
             self.build(dom, &props);
         } else {
-            let mut dirty: HashSet<InstanceId> = HashSet::new();
-            let mut workspace_changed = false;
-            for change in dom.journal().since(self.cursor) {
-                match change {
-                    Change::Property { id, property } => {
-                        if props.is_physical(*property) {
-                            dirty.insert(*id);
-                        } else if *property == props.gravity || *property == props.fallen_height {
-                            workspace_changed = true;
-                        }
-                    }
-                    Change::Reparented { subtree, .. } => dirty.extend(subtree.iter().copied()),
-                    _ => {}
-                }
-            }
-            if workspace_changed {
-                self.read_workspace(dom, &props);
-            }
-            let workspace = dom.find_service("Workspace");
-            for id in dirty {
-                self.refresh(dom, &props, workspace, id);
-            }
+            self.apply_changes(dom, &props);
         }
-        self.cursor = end;
+        // Our own snapping writes aren't changes to apply next time.
+        self.cursor = dom.journal().end();
         self.props = Some(props);
     }
 
-    fn build(&mut self, dom: &Dom, props: &Props) {
+    fn build(&mut self, dom: &mut Dom, props: &Props) {
         profiling::scope!("Physics::build");
         self.read_workspace(dom, props);
-        for id in workspace_parts(dom) {
-            self.add(dom, props, id);
-        }
+        let parts = workspace_parts(dom);
+        self.rebuild(dom, props, parts);
         self.built = true;
+    }
+
+    fn apply_changes(&mut self, dom: &mut Dom, props: &Props) {
+        let mut structural: Vec<InstanceId> = Vec::new();
+        let mut changed_joints: Vec<InstanceId> = Vec::new();
+        let mut moved_joints: Vec<InstanceId> = Vec::new();
+        let mut posed: Vec<InstanceId> = Vec::new();
+        let mut workspace_changed = false;
+        let db = dom.database();
+        for change in dom.journal().since(self.cursor) {
+            match change {
+                Change::Property { id, property } => {
+                    let p = *property;
+                    if props.is_structural(p) {
+                        structural.push(*id);
+                    } else if props.is_pose(p) {
+                        posed.push(*id);
+                    } else if p == props.gravity || p == props.fallen_height {
+                        workspace_changed = true;
+                    } else if self.joints.contains_key(id) || is_joint(dom, *id) {
+                        match db.property(p).name {
+                            "Part0" | "Part1" | "Enabled" => changed_joints.push(*id),
+                            "C0" | "C1" | "Transform" | "CurrentAngle" => moved_joints.push(*id),
+                            _ => {}
+                        }
+                    }
+                }
+                Change::Reparented { subtree, .. } => {
+                    for &i in subtree {
+                        if self.parts.contains_key(&i) || is_part(dom, i) {
+                            structural.push(i);
+                        } else if self.joints.contains_key(&i) || is_joint(dom, i) {
+                            changed_joints.push(i);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        if workspace_changed {
+            self.read_workspace(dom, props);
+        }
+        // A hinge's frames are fixed when it's created, so moving one
+        // recreates it.
+        moved_joints.retain(|j| {
+            let hinge = self.hinges.contains_key(j);
+            if hinge {
+                changed_joints.push(*j);
+            }
+            !hinge
+        });
+        for j in changed_joints {
+            if let Some(old) = self.joints.get(&j) {
+                structural.extend(old);
+            }
+            structural.extend(endpoints(dom, j).into_iter().flatten());
+        }
+        let rebuilt = if structural.is_empty() {
+            HashSet::new()
+        } else {
+            self.rebuild(dom, props, structural)
+        };
+
+        let mut done = rebuilt.clone();
+        for j in moved_joints {
+            let Some(&[p0, _]) = self.joints.get(&j) else {
+                continue;
+            };
+            if let Some(&h) = self.parts.get(&p0)
+                && done.insert(h)
+            {
+                self.refresh_offsets(dom, h);
+            }
+        }
+        let mut posed_bodies = rebuilt;
+        for part in posed {
+            if let Some(&h) = self.parts.get(&part)
+                && posed_bodies.insert(h)
+            {
+                self.teleport(dom, props, h, part);
+            }
+        }
     }
 
     fn read_workspace(&mut self, dom: &Dom, props: &Props) {
@@ -209,87 +328,217 @@ impl Physics {
         }
     }
 
-    /// Re-read one instance: drop what the world has for it, then add it
-    /// again if it's a part in Workspace.
-    fn refresh(&mut self, dom: &Dom, props: &Props, ws: Option<InstanceId>, id: InstanceId) {
-        self.remove(id);
-        let in_workspace = ws.is_some_and(|ws| dom.is_ancestor_of(ws, id));
-        if in_workspace && is_part(dom, id) {
-            self.add(dom, props, id);
+    /// Rebuild the assemblies of `seeds` and of every part that shared an
+    /// assembly with one. Returns the new bodies.
+    fn rebuild(
+        &mut self,
+        dom: &mut Dom,
+        props: &Props,
+        seeds: Vec<InstanceId>,
+    ) -> HashSet<RigidBodyHandle> {
+        profiling::scope!("Physics::rebuild");
+        // A part's neighbours may change assembly with it (anchoring a part
+        // splits its assembly; unanchoring one joins a neighbour's).
+        let mut seeds_and_neighbours = Vec::with_capacity(seeds.len());
+        for part in seeds {
+            seeds_and_neighbours.push(part);
+            seeds_and_neighbours
+                .extend(joints::part_joints(dom, part).iter().map(|j| j.other(part)));
         }
+        let mut todo = Vec::with_capacity(seeds_and_neighbours.len());
+        for part in seeds_and_neighbours {
+            if let Some(&h) = self.parts.get(&part)
+                && let Some(body) = self.remove_body(h)
+            {
+                todo.extend(body.asm.members.iter().map(|m| m.part));
+            }
+            todo.push(part);
+        }
+        let mut added = HashSet::new();
+        let mut hinges = Vec::new();
+        for part in todo {
+            if self.parts.contains_key(&part) {
+                continue;
+            }
+            if let Some(asm) = Assembly::of(dom, part) {
+                hinges.extend(asm.hinges.iter().map(|h| h.id));
+                added.insert(self.add(dom, props, asm));
+            }
+        }
+        for joint in hinges {
+            if !self.hinges.contains_key(&joint) {
+                self.add_hinge(dom, joint);
+            }
+        }
+        added
     }
 
-    fn remove(&mut self, id: InstanceId) {
-        let Some(part) = self.parts.remove(&id) else {
-            return;
-        };
-        match part.body {
-            Some(body) => {
-                self.bodies.remove(&body);
-                self.world.remove_body(body);
-            }
-            None => {
-                self.world.remove_collider(part.collider);
-            }
+    fn remove_body(&mut self, h: RigidBodyHandle) -> Option<Body> {
+        let body = self.bodies.remove(&h)?;
+        // Removing the Rapier body removes its colliders and joints.
+        self.world.remove_body(h);
+        for m in &body.asm.members {
+            self.parts.remove(&m.part);
         }
+        for j in body.asm.joints() {
+            self.joints.remove(&j.id);
+        }
+        for j in &body.asm.hinges {
+            self.joints.remove(&j.id);
+            self.hinges.remove(&j.id);
+        }
+        Some(body)
     }
 
-    fn add(&mut self, dom: &Dom, props: &Props, id: InstanceId) {
-        let Some(Value::CFrame(cf)) = dom.property(id, props.cframe) else {
-            return;
+    fn add(&mut self, dom: &mut Dom, props: &Props, asm: Assembly) -> RigidBodyHandle {
+        let root = asm.root();
+        let root_cf = match dom.property(root, props.cframe) {
+            Some(Value::CFrame(cf)) => cf,
+            _ => CFrame::IDENTITY,
         };
-        let Some(Value::Vector3(size)) = dom.property(id, props.size) else {
-            return;
-        };
-        let shape = part_shape(dom, id);
-        let Some((shape, offset)) = shape::collider_shape(shape, size.0) else {
-            return;
-        };
-        let can_collide = dom.property(id, props.can_collide) != Some(Value::Bool(false));
-        let anchored = dom.property(id, props.anchored) == Some(Value::Bool(true));
-        let pose = pose_of(&cf);
-        let collider = ColliderBuilder::new(shape)
-            .density(PLASTIC_DENSITY)
-            .friction(PLASTIC_FRICTION)
-            .restitution(PLASTIC_ELASTICITY)
-            // Non-colliding parts still fall; they just don't push anything.
-            .sensor(!can_collide);
-        if anchored {
-            let handle = self
-                .world
-                .insert_collider(collider.position(pose * offset), None);
-            self.parts.insert(
-                id,
-                PartBody {
-                    collider: handle,
-                    body: None,
-                },
-            );
-            return;
-        }
-        let vector = |p| match dom.property(id, p) {
+        let vector = |p| match dom.property(root, p) {
             Some(Value::Vector3(v)) => to_rapier(v.0),
             _ => Vector::ZERO,
         };
-        let body = RigidBodyBuilder::dynamic()
-            .pose(pose)
-            .linvel(vector(props.linear_velocity))
-            .angvel(vector(props.angular_velocity));
-        let (body, collider) = self.world.insert(body, collider.position(offset));
-        self.bodies.insert(body, id);
-        self.parts.insert(
-            id,
-            PartBody {
-                collider,
-                body: Some(body),
+        let builder = if asm.anchored {
+            RigidBodyBuilder::fixed()
+        } else {
+            RigidBodyBuilder::dynamic()
+                .linvel(vector(props.linear_velocity))
+                .angvel(vector(props.angular_velocity))
+        };
+        let handle = self.world.insert_body(builder.pose(pose_of(&root_cf)));
+        let mut colliders = Vec::with_capacity(asm.members.len());
+        for (i, m) in asm.members.iter().enumerate() {
+            self.parts.insert(m.part, handle);
+            colliders.push(self.add_collider(dom, props, handle, m.part, m.offset, i == 0));
+        }
+        for j in asm.joints().chain(&asm.hinges) {
+            self.joints.insert(j.id, [j.part0, j.part1]);
+        }
+        let motors = asm
+            .joints()
+            .filter(|j| matches!(j.kind, JointKind::Motor | JointKind::Motor6D))
+            .copied()
+            .collect();
+        // Snap the members to where the joints hold them.
+        let _ = asm.place(dom, root_cf);
+        self.bodies.insert(
+            handle,
+            Body {
+                asm,
+                colliders,
+                motors,
             },
         );
+        handle
+    }
+
+    fn add_collider(
+        &mut self,
+        dom: &Dom,
+        props: &Props,
+        body: RigidBodyHandle,
+        part: InstanceId,
+        offset: CFrame,
+        is_root: bool,
+    ) -> Option<(ColliderHandle, Pose)> {
+        let Some(Value::Vector3(size)) = dom.property(part, props.size) else {
+            return None;
+        };
+        let (shape, shape_pose) = shape::collider_shape(part_shape(dom, part), size.0)?;
+        let can_collide = dom.property(part, props.can_collide) != Some(Value::Bool(false));
+        // Massless parts add no mass unless they're the root (creator-docs
+        // BasePart.Massless).
+        let mass = if !is_root && is_massless(dom, part) {
+            0.0
+        } else {
+            part_mass(dom, part)
+        };
+        let collider = ColliderBuilder::new(shape)
+            .mass(mass)
+            .friction(PLASTIC_FRICTION)
+            .restitution(PLASTIC_ELASTICITY)
+            // Non-colliding parts still fall; they just don't push anything.
+            .sensor(!can_collide)
+            .position(pose_of(&offset) * shape_pose);
+        let handle = self.world.insert_collider(collider, Some(body));
+        Some((handle, shape_pose))
+    }
+
+    /// Join two bodies with a hinge (Rotate, RotateP, RotateV).
+    fn add_hinge(&mut self, dom: &Dom, id: InstanceId) {
+        let Some(j) = active_joint(dom, id).filter(|j| j.kind == JointKind::Hinge) else {
+            return;
+        };
+        let (Some(&b0), Some(&b1)) = (self.parts.get(&j.part0), self.parts.get(&j.part1)) else {
+            return;
+        };
+        if b0 == b1 {
+            return;
+        }
+        let off0 = self.bodies[&b0].asm.offset_of(j.part0).unwrap_or_default();
+        let off1 = self.bodies[&b1].asm.offset_of(j.part1).unwrap_or_default();
+        let (c0, c1) = joints::hinge_frames(dom, &j);
+        let joint = GenericJointBuilder::new(JointAxesMask::LOCKED_REVOLUTE_AXES)
+            .local_frame1(hinge_pose(off0 * c0))
+            .local_frame2(hinge_pose(off1 * c1))
+            // Inference: hinged parts touch face to face and still turn
+            // freely in Roblox, so they mustn't rub.
+            .contacts_enabled(false);
+        let handle = self.world.insert_impulse_joint(b0, b1, joint);
+        self.hinges.insert(id, handle);
+        self.joints.insert(id, [j.part0, j.part1]);
+    }
+
+    /// Re-read a body's joint offsets, move its colliders and write its
+    /// parts' CFrames.
+    fn refresh_offsets(&mut self, dom: &mut Dom, h: RigidBodyHandle) {
+        let Some(body) = self.bodies.get_mut(&h) else {
+            return;
+        };
+        body.asm.refresh_offsets(dom);
+        for (m, c) in body.asm.members.iter().zip(&body.colliders) {
+            if let Some((collider, shape_pose)) = c
+                && let Some(col) = self.world.colliders.get_mut(*collider)
+            {
+                col.set_position_wrt_parent(pose_of(&m.offset) * *shape_pose);
+            }
+        }
+        let root = cframe_of(self.world.bodies[h].position());
+        let _ = body.asm.place(dom, root);
+        self.world.wake_up(h, true);
+    }
+
+    /// A script moved `part` (or set its velocity): move its body to match.
+    fn teleport(&mut self, dom: &mut Dom, props: &Props, h: RigidBodyHandle, part: InstanceId) {
+        let Some(body) = self.bodies.get(&h) else {
+            return;
+        };
+        let Some(Value::CFrame(cf)) = dom.property(part, props.cframe) else {
+            return;
+        };
+        let offset = body.asm.offset_of(part).unwrap_or_default();
+        let root = cf * offset.inverse();
+        let vector = |p| match dom.property(part, p) {
+            Some(Value::Vector3(v)) => to_rapier(v.0),
+            _ => Vector::ZERO,
+        };
+        let rb = &mut self.world.bodies[h];
+        rb.set_position(pose_of(&root), true);
+        if rb.is_dynamic() {
+            rb.set_linvel(vector(props.linear_velocity), true);
+            rb.set_angvel(vector(props.angular_velocity), true);
+        }
+        // Keep the rest of the assembly with it.
+        let _ = body.asm.place(dom, root);
     }
 
     /// Advance the simulation by `dt` seconds in fixed 240 Hz steps.
     pub fn step(&mut self, dt: f64) {
         profiling::scope!("Physics::step");
-        if self.bodies.is_empty() {
+        self.last_dt = dt;
+        if self.bodies.values().all(|b| b.asm.anchored) {
             return;
         }
         let steps = (dt * STEP_HZ).round().max(1.0) as u32;
@@ -298,43 +547,61 @@ impl Physics {
         }
     }
 
-    /// Write moving parts' CFrame and velocities into the DOM, and return
-    /// the parts that fell below Workspace.FallenPartsDestroyHeight (the
-    /// caller destroys them, as Roblox does).
+    /// Turn motors toward their DesiredAngle, then write moving parts'
+    /// CFrame and velocities into the DOM. Returns the parts that fell
+    /// below Workspace.FallenPartsDestroyHeight (the caller destroys them,
+    /// as Roblox does).
     ///
     /// The writes don't fire Changed: Roblox doesn't fire property signals
     /// for physics-driven CFrame and velocity changes (Inference from the
     /// creator-docs note on GetPropertyChangedSignal and physics).
     pub fn write_back(&mut self, dom: &mut Dom) -> Vec<InstanceId> {
         profiling::scope!("Physics::write_back");
-        let Some(props) = &self.props else {
+        let Some(props) = self.props.take() else {
             return Vec::new();
         };
+        self.step_motors(dom);
         let mut fallen = Vec::new();
         for handle in self.world.islands.active_bodies() {
-            let Some(&id) = self.bodies.get(&handle) else {
+            let Some(body) = self.bodies.get(&handle) else {
                 continue;
             };
-            let body = &self.world.bodies[handle];
-            let cf: CFrame = cframe_of(body.position());
-            if cf.position.y < self.fallen_height {
-                fallen.push(id);
+            let rb = &self.world.bodies[handle];
+            let root = cframe_of(rb.position());
+            let linvel = Value::Vector3(Vector3(to_glam(rb.linvel())));
+            let angvel = Value::Vector3(Vector3(to_glam(rb.angvel())));
+            for m in &body.asm.members {
+                let cf = root * m.offset;
+                if cf.position.y < self.fallen_height {
+                    fallen.push(m.part);
+                }
+                let _ = dom.set_property(m.part, props.cframe, Value::CFrame(cf));
+                let _ = dom.set_property(m.part, props.linear_velocity, linvel.clone());
+                let _ = dom.set_property(m.part, props.angular_velocity, angvel.clone());
             }
-            let _ = dom.set_property(id, props.cframe, Value::CFrame(cf));
-            let _ = dom.set_property(
-                id,
-                props.linear_velocity,
-                Value::Vector3(Vector3(to_glam(body.linvel()))),
-            );
-            let _ = dom.set_property(
-                id,
-                props.angular_velocity,
-                Value::Vector3(Vector3(to_glam(body.angvel()))),
-            );
         }
         // Our own writes aren't changes to apply next time.
         self.cursor = dom.journal().end();
+        self.props = Some(props);
         fallen
+    }
+
+    fn step_motors(&mut self, dom: &mut Dom) {
+        let dt = self.last_dt;
+        let turned: Vec<RigidBodyHandle> = self
+            .bodies
+            .iter()
+            .filter(|(_, b)| {
+                // Every motor steps, even after one has turned.
+                b.motors
+                    .iter()
+                    .fold(false, |any, j| joints::step_motor(dom, j, dt) | any)
+            })
+            .map(|(h, _)| *h)
+            .collect();
+        for h in turned {
+            self.refresh_offsets(dom, h);
+        }
     }
 }
 

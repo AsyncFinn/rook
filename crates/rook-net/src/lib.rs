@@ -261,7 +261,7 @@ fn copy_properties(
     let Some(inst) = server.get(id) else {
         return;
     };
-    let props: Vec<PropertyId> = inst.properties.keys().copied().collect();
+    let props: Vec<PropertyId> = inst.properties().keys().copied().collect();
     for p in props {
         copy_property(server, id, client, cid, p, r, false);
     }

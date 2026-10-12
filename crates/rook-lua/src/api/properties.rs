@@ -2,6 +2,8 @@
 //! stored. `get` and `set` return `None` for properties stored normally.
 
 use rook_dom::{DomError, InstanceId};
+use rook_physics::assembly::{self, Assembly};
+use rook_physics::joints;
 use rook_types::{CFrame, Color3, Value, Vector3};
 
 use crate::types::color::closest_brick_color;
@@ -15,9 +17,17 @@ pub(crate) fn cframe(w: &World, id: InstanceId) -> CFrame {
     }
 }
 
+/// Set a part's CFrame as a script does: its assembly moves with it.
 pub(crate) fn set_cframe(w: &mut World, id: InstanceId, c: CFrame) -> Result<(), DomError> {
+    assembly::move_part(&mut w.dom, id, c)
+}
+
+/// Move one part on its own, as setting Position, Orientation or Rotation
+/// does: its joints are rewritten to hold it where it now is (observed).
+fn set_cframe_alone(w: &mut World, id: InstanceId, c: CFrame) -> Result<(), DomError> {
     let pid = w.dom.property_id(id, "CFrame").ok_or(DomError::Stale)?;
-    w.dom.set_property(id, pid, Value::CFrame(c))
+    w.dom.set_property(id, pid, Value::CFrame(c))?;
+    joints::reseat(&mut w.dom, id)
 }
 
 fn degrees(v: (f32, f32, f32)) -> Vector3 {
@@ -119,6 +129,14 @@ pub(crate) fn get(w: &World, id: InstanceId, name: &str) -> Option<Value> {
             dom.find_first_child_of_class(id, "Terrain")
                 .map(InstanceId::to_ref),
         )),
+        // Observed: a part outside Workspace has no root, and an anchored
+        // assembly's mass is infinite.
+        "AssemblyRootPart" if dom.is_a(id, "BasePart") => {
+            Some(Value::Ref(Assembly::of(dom, id).map(|a| a.root().to_ref())))
+        }
+        "AssemblyMass" if dom.is_a(id, "BasePart") => Some(Value::Float32(
+            Assembly::of(dom, id).map_or_else(|| rook_physics::part_mass(dom, id), |a| a.mass(dom)),
+        )),
         "Position" | "Orientation" | "Rotation" if dom.is_a(id, "BasePart") => {
             let c = cframe(w, id);
             Some(Value::Vector3(match name {
@@ -167,22 +185,23 @@ pub(crate) fn set(
         ("ClockTime", Value::Float32(h)) if w.dom.is_a(id, "Lighting") => {
             Some(set_lighting_hours(w, id, f64::from(*h)))
         }
+        ("CFrame", Value::CFrame(c)) if w.dom.is_a(id, "BasePart") => Some(set_cframe(w, id, *c)),
         ("Position", Value::Vector3(p)) if w.dom.is_a(id, "BasePart") => {
             let mut c = cframe(w, id);
             c.position = p.0;
-            Some(set_cframe(w, id, c))
+            Some(set_cframe_alone(w, id, c))
         }
         ("Orientation", Value::Vector3(v)) if w.dom.is_a(id, "BasePart") => {
             let mut c = cframe(w, id);
             let r = |d: f32| d.to_radians();
             c.rotation = CFrame::from_orientation(r(v.x()), r(v.y()), r(v.z())).rotation;
-            Some(set_cframe(w, id, c))
+            Some(set_cframe_alone(w, id, c))
         }
         ("Rotation", Value::Vector3(v)) if w.dom.is_a(id, "BasePart") => {
             let mut c = cframe(w, id);
             let r = |d: f32| d.to_radians();
             c.rotation = CFrame::angles(r(v.x()), r(v.y()), r(v.z())).rotation;
-            Some(set_cframe(w, id, c))
+            Some(set_cframe_alone(w, id, c))
         }
         ("Enabled", Value::Bool(b)) if w.dom.is_a(id, "BaseScript") => {
             let pid = w.dom.property_id(id, "Disabled")?;

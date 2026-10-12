@@ -3,8 +3,8 @@
 //! `native(owner, name)` maps a member (by the class that declares it in
 //! the API dump) to its implementation. Members without one raise
 //! "not implemented in Rook yet" and are counted. A short list of members
-//! whose effect only matters to systems Rook doesn't have yet (joints,
-//! network ownership, preloading) are *inert*: they do nothing, return nil
+//! whose effect only matters to systems Rook doesn't have yet (network
+//! ownership, preloading) are *inert*: they do nothing, return nil
 //! and are counted separately, so scripts keep running.
 
 use mlua::{Function, Lua, MultiValue, Value as LuaValue};
@@ -15,6 +15,9 @@ use rook_signal::{SignalKey, SignalKind};
 use rook_types::{CFrame, Value, Vector3};
 
 use super::instance::push_instance;
+use rook_physics::assembly::{self, Assembly};
+use rook_physics::{joints, surfaces};
+
 use super::properties::{cframe, set_cframe};
 use super::signal::LSignal;
 use crate::args::Args;
@@ -30,12 +33,8 @@ pub(crate) type RawMethod = fn(&Lua, InstanceId, Args) -> ApiResult<Outcome>;
 /// one is documented in `docs/behavior/stubs.md` with what will take it over;
 /// a test enforces that.
 const INERT: &[(&str, &str)] = &[
-    ("BasePart", "MakeJoints"),
-    ("BasePart", "BreakJoints"),
     ("BasePart", "SetNetworkOwner"),
     ("BasePart", "SetNetworkOwnershipAuto"),
-    ("Model", "MakeJoints"),
-    ("Model", "BreakJoints"),
     ("ContentProvider", "Preload"),
     ("ContentProvider", "PreloadAsync"),
     // Pre-approves an asset for LoadAsset; only matters once assets load.
@@ -104,7 +103,18 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("Model", "MoveTo" | "move" | "moveTo") => model_move_to,
         ("Model", "GetExtentsSize" | "GetModelSize") => get_extents_size,
         ("Model", "GetBoundingBox") => get_bounding_box,
-        ("BasePart", "GetMass") => get_mass,
+        ("BasePart", "GetMass" | "getMass") => get_mass,
+        ("BasePart", "GetJoints") => get_joints,
+        ("BasePart", "GetConnectedParts") => get_connected_parts,
+        ("BasePart", "GetRootPart") => get_root_part,
+        ("BasePart", "IsGrounded") => is_grounded,
+        ("BasePart", "MakeJoints" | "makeJoints") => part_make_joints,
+        ("BasePart", "BreakJoints" | "breakJoints") => part_break_joints,
+        ("Model", "MakeJoints" | "makeJoints") => model_make_joints,
+        ("Model", "BreakJoints" | "breakJoints") => model_break_joints,
+        ("Workspace", "MakeJoints") => workspace_make_joints,
+        ("Workspace", "BreakJoints") => workspace_break_joints,
+        ("Motor", "SetDesiredAngle") => set_desired_angle,
         ("Lighting", "GetMinutesAfterMidnight") => get_minutes_after_midnight,
         ("Lighting", "SetMinutesAfterMidnight") => set_minutes_after_midnight,
         ("Sound", "Play" | "Resume") => sound_play,
@@ -704,12 +714,14 @@ fn pivot_of(w: &World, id: InstanceId) -> CFrame {
     }
 }
 
-/// Move every part of a model rigidly by `delta` (applied in world space).
+/// Move every part of a model rigidly by `delta` (applied in world space),
+/// taking along whatever they're joined to.
 fn transform_model(w: &mut World, model: InstanceId, delta: CFrame) -> Result<(), DomError> {
-    for part in parts_of(w, model) {
-        let c = cframe(w, part);
-        set_cframe(w, part, delta * c)?;
-    }
+    let moves: Vec<_> = parts_of(w, model)
+        .into_iter()
+        .map(|part| (part, delta * cframe(w, part)))
+        .collect();
+    assembly::move_parts(&mut w.dom, moves)?;
     if let Some(Value::OptionalCFrame(Some(p))) = w.dom.property_by_name(model, "WorldPivotData") {
         let pid = w
             .dom
@@ -808,9 +820,7 @@ fn bounding_box(w: &World, model: InstanceId) -> (CFrame, Vector3) {
             Some(Value::Vector3(s)) => s.0,
             _ => glam::Vec3::ONE,
         };
-        let half = size * 0.5;
-        let r = c.rotation;
-        let extent = r.x_axis.abs() * half.x + r.y_axis.abs() * half.y + r.z_axis.abs() * half.z;
+        let extent = c.box_reach(size);
         min = min.min(c.position - extent);
         max = max.max(c.position + extent);
     }
@@ -830,14 +840,117 @@ fn get_bounding_box(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> 
     Outcome::ret(lua, (LCFrame(c), vector3_to_lua(s)))
 }
 
-/// Volume times density. Plastic's density, 0.7, is used for every
-/// material until the material table lands with physics (Approximation).
 fn get_mass(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
-    let size = with_world(lua, |w| match w.dom.property_by_name(this, "Size") {
-        Some(Value::Vector3(s)) => s,
-        _ => Vector3::ONE,
+    let mass = with_world(lua, |w| rook_physics::part_mass(&w.dom, this));
+    Outcome::ret(lua, f64::from(mass))
+}
+
+// ---- joints and assemblies (observed in Studio 0.741) -----------------------------------------
+
+/// Active JointInstances and WeldConstraints attached to the part.
+fn get_joints(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
+    let ids = with_world(lua, |w| {
+        joints::part_joints(&w.dom, this)
+            .iter()
+            .map(|j| j.id)
+            .collect()
     });
-    Outcome::ret(lua, f64::from(size.x() * size.y() * size.z()) * 0.7)
+    ret_instances(lua, ids)
+}
+
+fn get_connected_parts(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
+    let recursive = a.truthy(0);
+    ret_instances(
+        lua,
+        with_world(lua, |w| assembly::connected_parts(&w.dom, this, recursive)),
+    )
+}
+
+fn get_root_part(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
+    ret_instance(
+        lua,
+        with_world(lua, |w| Assembly::of(&w.dom, this).map(|a| a.root())),
+    )
+}
+
+/// Whether the part's own assembly is anchored; a hinge to an anchored
+/// assembly doesn't count.
+fn is_grounded(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
+    let grounded = with_world(lua, |w| {
+        Assembly::of(&w.dom, this).is_some_and(|a| a.anchored)
+    });
+    Outcome::ret(lua, grounded)
+}
+
+/// Parts in `ids` and their descendants, in order.
+fn parts_in(w: &World, ids: &[InstanceId]) -> Vec<InstanceId> {
+    let mut parts = Vec::new();
+    for &id in ids {
+        if w.dom.is_a(id, "BasePart") {
+            parts.push(id);
+        }
+        parts.extend(parts_of(w, id));
+    }
+    parts
+}
+
+fn make_joints(lua: &Lua, parts: impl FnOnce(&World) -> Vec<InstanceId>) -> ApiResult<Outcome> {
+    mutate(lua, |w| {
+        let parts = parts(w);
+        surfaces::make_joints(&mut w.dom, &parts)
+    })?;
+    Outcome::ret(lua, ())
+}
+
+/// Destroys every joint `GetJoints` lists for each part, WeldConstraints
+/// included.
+fn break_joints(lua: &Lua, parts: impl FnOnce(&World) -> Vec<InstanceId>) -> ApiResult<Outcome> {
+    mutate(lua, |w| {
+        for part in parts(w) {
+            for j in joints::part_joints(&w.dom, part) {
+                w.dom.destroy(j.id)?;
+            }
+        }
+        Ok(())
+    })?;
+    Outcome::ret(lua, ())
+}
+
+fn part_make_joints(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
+    make_joints(lua, |_| vec![this])
+}
+
+fn part_break_joints(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
+    break_joints(lua, |_| vec![this])
+}
+
+fn model_make_joints(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
+    make_joints(lua, |w| parts_of(w, this))
+}
+
+fn model_break_joints(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
+    break_joints(lua, |w| parts_of(w, this))
+}
+
+/// Deprecated `Workspace:MakeJoints(objects)`: the parts among `objects`
+/// and their descendants.
+fn workspace_make_joints(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
+    let objects = a.instances(0)?;
+    make_joints(lua, |w| parts_in(w, &objects))
+}
+
+fn workspace_break_joints(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
+    let objects = a.instances(0)?;
+    break_joints(lua, |w| parts_in(w, &objects))
+}
+
+fn set_desired_angle(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
+    let angle = a.number(0)?;
+    mutate(lua, |w| {
+        w.dom
+            .set_property_by_name(this, "DesiredAngle", Value::Float32(angle as f32))
+    })?;
+    Outcome::ret(lua, ())
 }
 
 // ---- Lighting ------------------------------------------------------------------------------------

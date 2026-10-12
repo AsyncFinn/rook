@@ -2530,6 +2530,7 @@ dependencies = [
  "profiling",
  "rbx_types",
  "rook-dom",
+ "rook-physics",
  "rook-reflection",
  "rook-scheduler",
  "rook-signal",

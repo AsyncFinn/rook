@@ -141,10 +141,10 @@ impl DataModel {
     /// so changes made after its step (by Heartbeat, or by remotes routed
     /// between frames) aren't lost.
     pub fn trim_journal(&mut self) {
-        if let Some(physics) = &mut self.physics {
-            physics.sync(&self.runtime.world().dom);
-        }
         let mut w = self.runtime.world_mut();
+        if let Some(physics) = &mut self.physics {
+            physics.sync(&mut w.dom);
+        }
         let end = w.dom.journal().end();
         w.dom.journal_mut().trim(end);
     }
@@ -155,6 +155,14 @@ impl DataModel {
         let mut dom = Dom::new();
         let root = dom.root();
         rook_formats::into_dom(&loaded.dom, &mut dom, root);
+        if rook_physics::surfaces::joins_on_load(&dom) {
+            // Part of loading the place, not a change for anyone to replay.
+            let journaling = dom.journal().is_enabled();
+            dom.journal_mut().set_enabled(false);
+            let parts = rook_physics::workspace_parts(&dom);
+            let _ = rook_physics::surfaces::make_joints(&mut dom, &parts);
+            dom.journal_mut().set_enabled(journaling);
+        }
         Self::with_dom(dom, options)
     }
 
@@ -347,24 +355,9 @@ impl DataModel {
         };
         let fallen = {
             let mut w = self.runtime.world_mut();
-            let t0 = std::time::Instant::now();
-            physics.sync(&w.dom);
-            let t1 = std::time::Instant::now();
+            physics.sync(&mut w.dom);
             physics.step(dt);
-            let t2 = std::time::Instant::now();
-            let r = physics.write_back(&mut w.dom);
-            let t3 = std::time::Instant::now();
-            if std::env::var("ROOK_TMP").is_ok() {
-                eprintln!(
-                    "TMP sync {:?} step {:?} wb {:?} parts {} bodies {}",
-                    t1 - t0,
-                    t2 - t1,
-                    t3 - t2,
-                    physics.part_count(),
-                    physics.body_count()
-                );
-            }
-            r
+            physics.write_back(&mut w.dom)
         };
         for id in fallen {
             self.runtime.destroy(id);

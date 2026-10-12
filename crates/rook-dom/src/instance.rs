@@ -57,7 +57,8 @@ pub struct Instance {
     pub(crate) parent_locked: bool,
     pub(crate) destroyed: bool,
     /// Explicitly set properties. Missing ones read the class default.
-    pub properties: HashMap<PropertyId, Value>,
+    /// Written only through [`crate::Dom`], which indexes references.
+    pub(crate) properties: HashMap<PropertyId, Value>,
     /// Properties from files that the database doesn't describe, kept so
     /// saving doesn't lose them.
     pub unknown_properties: Vec<(String, Value)>,
@@ -96,5 +97,10 @@ impl Instance {
 
     pub fn is_destroyed(&self) -> bool {
         self.destroyed
+    }
+
+    /// Explicitly set properties.
+    pub fn properties(&self) -> &HashMap<PropertyId, Value> {
+        &self.properties
     }
 }
