@@ -59,14 +59,20 @@ impl UserData for LNumberSequenceKeypoint {
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
         m.add_meta_method(MetaMethod::Eq, |_, t, o: UserDataRef<Self>| Ok(t.0 == o.0));
         m.add_meta_method(MetaMethod::ToString, |_, t, ()| {
-            Ok(format!(
-                "{} {} {} ",
-                fmt_f32(t.0.time),
-                fmt_f32(t.0.value),
-                fmt_f32(t.0.envelope)
-            ))
+            Ok(number_keypoint_string(&t.0))
         });
     }
+}
+
+/// `tostring` of a NumberSequenceKeypoint, which a NumberSequence's is
+/// made of: `"time value envelope "`.
+fn number_keypoint_string(k: &rbx_types::NumberSequenceKeypoint) -> String {
+    format!(
+        "{} {} {} ",
+        fmt_f32(k.time),
+        fmt_f32(k.value),
+        fmt_f32(k.envelope)
+    )
 }
 
 impl UserData for LNumberSequence {
@@ -83,14 +89,7 @@ impl UserData for LNumberSequence {
             Ok(t.0
                 .keypoints
                 .iter()
-                .map(|k| {
-                    format!(
-                        "{} {} {} ",
-                        fmt_f32(k.time),
-                        fmt_f32(k.value),
-                        fmt_f32(k.envelope)
-                    )
-                })
+                .map(number_keypoint_string)
                 .collect::<String>())
         });
     }
