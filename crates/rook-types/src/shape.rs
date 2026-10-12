@@ -55,6 +55,20 @@ impl PartShape {
         }
     }
 
+    /// The volume of a part of `size` (observed through `GetMass`: a wedge
+    /// is half its box, a corner wedge a third).
+    pub fn volume(self, size: Vec3) -> f32 {
+        let e = self.extent(size);
+        let boxed = e.x * e.y * e.z;
+        match self {
+            Self::Block => boxed,
+            Self::Wedge => boxed / 2.0,
+            Self::CornerWedge => boxed / 3.0,
+            Self::Cylinder => std::f32::consts::FRAC_PI_4 * boxed,
+            Self::Ball => std::f32::consts::FRAC_PI_6 * boxed,
+        }
+    }
+
     /// The faces of a flat-sided shape at unit size (extents -0.5..0.5),
     /// each a convex polygon wound counter-clockwise seen from outside.
     /// `None` for the round shapes.

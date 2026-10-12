@@ -1,0 +1,28 @@
+-- studio 0.742.0.7421053
+-- signals: deferred
+wood 0.349999994, 0.479999989, 0.200000003, 1, 1, 0.25
+rubber 1.29999995, 1.5, 0.949999988, 3, 2, 0.5
+clamped 100, 0, 1, 100, 0, 1
+five 1, 0.5, 0.25, 2, 3, 1
+fields 0.9190000295639038 0.019999999552965164 0.15000000596046448 3 1 0.2000
+two args false
+plastic 5.6000
+metal 62.8000
+custom 16.0000 2, 0.100000001, 0.899999976, 1, 1, 1
+ball 8.3776
+wedges 2.8000 1.8667
+groups Default/-1 32
+set Default/-1 RookA/-5 RookB/-3
+collidable false true true
+unknown false Both collision groups must be registered.
+default false Can not use/change the Default collision group.
+empty false Collision group requires a valid name.
+dup create false Could not register collision group, the name already exists.
+missing id false Collision group not found.
+id 2 name RookB none []
+outside world false CanCollideWith expects both parts to be descendants of the same WorldRoot.
+parts RookA RookB true false true
+after Default/-1 RookA/-1 RookB
+first Floor touched Drop Drop touched Floor
+seen Floor ended Ghost, Floor touched Ghost, Ghost ended Floor, Ghost touched Floor
+ghost fell true drop rests true

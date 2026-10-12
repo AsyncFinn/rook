@@ -26,10 +26,8 @@ made inert without an entry in the first table.
 | Member or behavior | What Rook does now | What is missing | Taken over by |
 |---|---|---|---|
 | `Sound:Play`, `Stop`, `Pause`, `Resume` | Sets `Playing`/`TimePosition`, fires `Played`/`Stopped`/`Paused` | Audio output, `Ended`, `Loaded`, time advancing | Audio, M6 |
-| `BasePart:GetMass` | Volume × 0.7 (Plastic's density) for every material | Per-material density, `CustomPhysicalProperties` | Physics, M3 |
 | `Model:MoveTo` | Moves the model to the target | Moving up out of obstructions | Physics queries, M3 |
 | `Model:GetBoundingBox`, `GetExtentsSize`, `GetModelCFrame` | World-axis-aligned box of the parts | Box aligned to the primary part; exact legacy `GetModelCFrame` | Physics/geometry, M3 |
-| `PhysicalProperties.new(material)` | Returns default properties | The per-material table | Physics, M3 |
 | `DataStoreService` | In-memory stores for one run; `GetSortedAsync` returns a plain table, not a `DataStorePages` | Persistence (local files), versions, `ListKeysAsync`, budgets | Player/server hosting, M2/M7 |
 | `HttpService:GetAsync`, `PostAsync`, `RequestAsync` | Raise "Http requests are not enabled" | Opt-in HTTP for places that enable it | Opt-in, later |
 | `require(assetId)` | Raises an error | Loading published modules | Content, M6 |
@@ -50,7 +48,12 @@ made inert without an entry in the first table.
 | `MakeJoints` on balls and cylinders | No surfaces; other parts are treated as boxes, wedges included | Their real surfaces | Physics, later |
 | Motor6D `Transform` and `DesiredAngle` together | Both apply: `C0 · Transform · Rz(CurrentAngle) · C1⁻¹` | Studio resets `CurrentAngle` when `Transform` is set; the interaction is unverified | Animation, M8 |
 | `WeldConstraint` state in files | `Enabled` defaults to true; the saved `State` isn't read | A disabled WeldConstraint saved in a file loads enabled | Conformance |
-| Physics: materials | Every part is Plastic (density 0.7, friction 0.3, elasticity 0.5) | Per-material table, `CustomPhysicalProperties` | Physics, M3 step 3 |
+| Physics: mass of MeshParts, unions and trusses | Their Size as a box | Their real volumes | Content, M6 |
+| Physics: when touches start and end | Rapier's contacts, which start just before parts meet and end just after | Roblox ends a touch when parts stop overlapping, so a part resting exactly on another gets TouchEnded at once | Conformance |
+| Physics: order of a touch's two events | The part with the lower internal id fires first (in Studio the part made first fired first) | Roblox's rule | Conformance |
+| `BasePart:GetTouchingParts`, `GetNoCollisionConstraints` | Not implemented | Contact queries | Physics queries, M3 step 5 |
+| Collision groups in older files | Places with only the old `Workspace.CollisionGroups` string get just `Default` | Reading that string's groups; the archive's samples list only `Default` | Conformance |
+| `Workspace.TouchEventsUseCollisionGroups` | Not read; `TouchesUseCollisionGroups` decides whether groups that don't collide also don't touch | The newer enum's meaning | Conformance |
 | Physics: timestep | Always 240 Hz | Adaptive 240/120/60 Hz per assembly | Physics, later |
 | Physics: who simulates | The server simulates every part; clients only see replicated results | Network ownership | Characters, M4 |
 | Physics: MeshParts, unions, trusses | Box colliders | Their real shapes and `CollisionFidelity` | Content, M6 |

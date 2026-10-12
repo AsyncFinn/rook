@@ -27,7 +27,7 @@ pub use vector::{Vector2, Vector3};
 /// Plain-data Roblox types reused from `rbx_types`.
 pub use rbx_types::{
     Attributes, Axes, BinaryString, BrickColor, Color3uint8, ColorSequence, ColorSequenceKeypoint,
-    Content, ContentId, Faces, Font, MaterialColors, NetAssetRef, NumberRange, NumberSequence,
-    NumberSequenceKeypoint, PhysicalProperties, Ray, Rect, Region3, Region3int16,
-    SecurityCapabilities, SharedString, Tags, UniqueId, Vector2int16, Vector3int16,
+    Content, ContentId, CustomPhysicalProperties, Faces, Font, MaterialColors, NetAssetRef,
+    NumberRange, NumberSequence, NumberSequenceKeypoint, PhysicalProperties, Ray, Rect, Region3,
+    Region3int16, SecurityCapabilities, SharedString, Tags, UniqueId, Vector2int16, Vector3int16,
 };
