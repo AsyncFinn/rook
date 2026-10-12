@@ -25,9 +25,8 @@ pub fn run(
         let source = std::fs::read_to_string(script)
             .with_context(|| format!("reading {}", script.display()))?;
         server
-            .runtime()
-            .run_source("ServerScriptService.RookProbe", &source, None)
-            .map_err(|e| anyhow::anyhow!("{e}"))?;
+            .run_extra_script(&source)
+            .map_err(anyhow::Error::msg)?;
     }
     server.run_for(seconds);
     let log = server.take_log();

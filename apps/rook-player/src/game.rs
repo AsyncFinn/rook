@@ -72,9 +72,8 @@ impl Game {
     pub fn run_server_script(&self, source: &str) -> anyhow::Result<()> {
         self.session
             .server()
-            .runtime()
-            .run_source("ServerScriptService.RookScript", source, None)
-            .map_err(|e| anyhow::anyhow!("{e}"))
+            .run_extra_script(source)
+            .map_err(anyhow::Error::msg)
     }
 
     /// Print new output from the server and every client.

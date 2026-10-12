@@ -464,6 +464,14 @@ impl DataModel {
         self.runtime.drain_deferred();
     }
 
+    /// Run a Luau file given on the command line (`--script`) as if it were
+    /// a Script in ServerScriptService. Its output names it `RookScript`.
+    pub fn run_extra_script(&self, source: &str) -> Result<(), String> {
+        self.runtime
+            .run_source("ServerScriptService.RookScript", source, None)
+            .map_err(|e| e.to_string())
+    }
+
     /// Run frames until `seconds` of game time have passed.
     pub fn run_for(&mut self, seconds: f64) {
         let target = self.runtime.world().scheduler.now() + seconds;
