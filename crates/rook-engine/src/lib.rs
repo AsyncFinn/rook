@@ -7,6 +7,8 @@
 pub mod console;
 mod input;
 pub mod raycast;
+#[cfg(feature = "repl")]
+pub mod repl;
 mod session;
 
 pub use input::{ClickEvent, ClickKind, InputEvent};

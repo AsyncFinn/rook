@@ -33,11 +33,14 @@ impl Game {
         self.session.server()
     }
 
+    /// The local player's client (`None` in Run mode).
+    pub fn client(&self) -> Option<&DataModel> {
+        self.view.and_then(|i| self.session.client(i))
+    }
+
     /// The DataModel the window shows.
     pub fn view(&self) -> &DataModel {
-        self.view
-            .and_then(|i| self.session.client(i))
-            .unwrap_or_else(|| self.session.server())
+        self.client().unwrap_or_else(|| self.session.server())
     }
 
     pub fn view_mut(&mut self) -> &mut DataModel {

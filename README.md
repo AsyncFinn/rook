@@ -131,6 +131,23 @@ By default the player starts a session with one local player and draws what that
 | Shift | Move faster |
 | Mouse wheel | Change speed |
 
+### Command bar
+
+When the player runs in an interactive terminal, that terminal shows a `>` prompt, like Studio's command bar with the feel of Luau's own REPL. Each entry runs as Luau in the open place; an expression prints its value, and globals you set stay set. An unfinished statement continues on a `>>` line. The arrow keys edit the line and recall earlier entries, and output prints above the prompt without disturbing what you're typing.
+
+```text
+> workspace.Gravity
+196.2
+> for _, p in workspace:GetChildren() do
+>>     if p:IsA("BasePart") then p.Anchored = false end
+>> end
+> :client
+```
+
+`:server` and `:client` choose where entries run (the server by default), and `:help` lists the commands. Ctrl+C clears the line; on an empty line it, or Ctrl+D, ends input. `rook run-headless place.rbxl --repl` gives the same prompt without a window, after `--seconds`, until input ends. `--no-repl` turns the prompt off.
+
+The prompt is the `repl` Cargo feature, on by default. Build with `--no-default-features` to leave it out of a build you hand to others. It reads only the local terminal, never the network.
+
 ### Inspecting and testing files
 
 ```sh

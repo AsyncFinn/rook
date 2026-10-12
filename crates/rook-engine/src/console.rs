@@ -1,9 +1,36 @@
 //! Printing script output to a terminal, coloured by message type: blue
 //! for print, yellow for warn, red for errors, cyan for info. Colours are
 //! dropped automatically when output isn't a terminal or `NO_COLOR` is set.
+//!
+//! Output normally goes straight to stdout. While a prompt owns the
+//! terminal line (the `repl` feature), [`set_output`] routes it there
+//! instead, so it prints above the prompt.
+
+use std::sync::Mutex;
 
 use anstyle::{AnsiColor, Style};
 use rook_lua::{LogEntry, MessageType};
+
+type Output = Box<dyn FnMut(String) + Send>;
+
+static OUTPUT: Mutex<Option<Output>> = Mutex::new(None);
+
+/// Send every printed line to `output` instead of stdout (`None` restores
+/// stdout). Lines keep their colour codes unless `NO_COLOR` is set.
+pub fn set_output(output: Option<Output>) {
+    *OUTPUT.lock().unwrap_or_else(|e| e.into_inner()) = output;
+}
+
+fn emit(line: String) {
+    let mut output = OUTPUT.lock().unwrap_or_else(|e| e.into_inner());
+    match output.as_mut() {
+        Some(f) if std::env::var_os("NO_COLOR").is_some() => {
+            f(anstream::adapter::strip_str(&line).to_string());
+        }
+        Some(f) => f(line),
+        None => anstream::println!("{line}"),
+    }
+}
 
 fn style(kind: MessageType) -> Style {
     let color = match kind {
@@ -43,11 +70,15 @@ pub fn print_entry(side: &str, entry: &LogEntry) {
     };
     let mut lines = entry.message.lines();
     let first = lines.next().unwrap_or("");
-    anstream::println!("{dim}{time}{dim:#}  {s}{first}{s:#}  {dim}-  {context}{dim:#}");
+    emit(format!(
+        "{dim}{time}{dim:#}  {s}{first}{s:#}  {dim}-  {context}{dim:#}"
+    ));
     // Further lines (an error's stack trace) print as their own entries in
     // the info colour, as Studio does.
     let info = style(MessageType::Info);
     for line in lines {
-        anstream::println!("{dim}{time}{dim:#}  {info}{line}{info:#}  {dim}-  {side}{dim:#}");
+        emit(format!(
+            "{dim}{time}{dim:#}  {info}{line}{info:#}  {dim}-  {side}{dim:#}"
+        ));
     }
 }

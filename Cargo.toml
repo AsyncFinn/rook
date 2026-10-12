@@ -55,6 +55,7 @@ rayon = "1"
 anstream = "1"
 anstyle = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+rustyline = { version = "18", default-features = false }
 walkdir = "2"
 blake3 = "1"
 slotmap = "1.1"

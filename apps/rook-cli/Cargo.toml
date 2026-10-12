@@ -30,5 +30,10 @@ rayon.workspace = true
 walkdir.workspace = true
 blake3.workspace = true
 
+[features]
+default = ["repl"]
+# `run-headless --repl`: type Luau into the running place.
+repl = ["rook-engine/repl"]
+
 [lints]
 workspace = true

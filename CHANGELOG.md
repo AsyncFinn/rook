@@ -22,6 +22,8 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 - Collision groups: `BasePart.CollisionGroup`, `CanCollideWith` and PhysicsService's group methods (current and deprecated), stored in Workspace's `CollisionGroupData` as Roblox saves it; `TouchesUseCollisionGroups` is honoured.
 - Physics conformance cases (`physics/joints`, `physics/contacts`).
 - Faster scripting: member lookups are resolved once per class, `inst.Key` and `inst.Key = v` take a dedicated path into Rust, the engine-function shim no longer forwards results through a vararg helper, `GetChildren`/`GetDescendants` build their arrays in Luau, and the script-timeout check reads the clock every 1024th interrupt. A modern core place's 10 s run drops from about 46 s to 32 s, with identical output.
+- Command bar: in an interactive terminal, `rook-player` shows a `>` prompt that runs Luau in the open place, like Luau's REPL (expressions print their value, globals persist, unfinished statements continue on `>>` lines, line editing and history, output above the prompt; `:server`/`:client` pick the side); `rook run-headless --repl` does the same without a window. It is the `repl` Cargo feature, on by default; `--no-repl` turns the prompt off.
+- Fixed: engine functions that return nothing (`print`, `Destroy`, ...) returned one `nil` since the faster engine-function shim, which changed `select("#", ...)`.
 - Tracy zones per resumed script (`script: <chunk>:<line>`), per `Instance.__index`/`__newindex` (key as zone text), per native Instance method, and around all engine functions (`api`).
 
 ## [0.2.0] — 2026-10-11 — M2: client side, renderer, input

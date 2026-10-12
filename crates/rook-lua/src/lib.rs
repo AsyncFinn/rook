@@ -183,6 +183,22 @@ impl Runtime {
         .map_err(ScriptError::from)
     }
 
+    /// Run Luau source on a new thread in an environment kept under `name`
+    /// between calls (the command bar's: its globals persist).
+    pub fn run_source_in(
+        &self,
+        name: &str,
+        chunk_name: &str,
+        source: &str,
+    ) -> Result<(), ScriptError> {
+        self.guarded(|| {
+            let r = api::scripts::run_source_in(&self.lua, name, chunk_name, source);
+            threads::drain_deferred(&self.lua);
+            r
+        })
+        .map_err(ScriptError::from)
+    }
+
     /// Fire an instance's event with arguments (for engine events such as
     /// `RunService.Heartbeat` or `Players.PlayerAdded`).
     pub fn fire_event(
