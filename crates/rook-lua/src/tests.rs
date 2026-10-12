@@ -96,14 +96,14 @@ fn uncaught_errors_report_with_stack() {
 
 #[test]
 fn engine_calls_pass_results_and_errors_through() {
-    // Several results, a callback's results (the shim calls it from Lua),
-    // instance arrays, and string errors from `inst.Key` both ways.
+    // No results, several results, a callback's results (the shim calls it
+    // from Lua), instance arrays, and string errors from `inst.Key` both ways.
     expect(
         r##"
         local m = Instance.new("Model")
         local p = Instance.new("Part")
         p.Parent = m
-        print(select("#", m:GetBoundingBox()))
+        print(select("#", m:GetBoundingBox()), select("#", Instance.new("Folder"):Destroy()), select("#", warn()))
         local f = Instance.new("BindableFunction")
         f.OnInvoke = function(a, b) return b, a, nil end
         print(select("#", f:Invoke(1, 2)), f:Invoke(1, 2))
@@ -116,7 +116,8 @@ fn engine_calls_pass_results_and_errors_through() {
         "##,
         0,
         &[
-            "2",
+            "WARN ",
+            "2 0 0",
             "3 2 1 nil",
             "1 true true",
             "false Nope is not a valid member of Model \"Model\"",
