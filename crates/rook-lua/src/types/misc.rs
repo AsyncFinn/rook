@@ -7,7 +7,7 @@ use mlua::{
 };
 use rook_types::Value;
 
-use super::enums::{LEnumItem, item_value};
+use super::enums::item_value;
 use crate::args::number_of;
 
 /// A property value Rook can't yet show as a proper datatype. It still
@@ -34,7 +34,22 @@ impl UserData for Opaque {
             MetaMethod::Eq,
             |_, t, o: UserDataRef<Opaque>| Ok(t.0 == o.0),
         );
-        m.add_meta_method(MetaMethod::ToString, |_, t, ()| Ok(t.type_name()));
+        m.add_meta_method(MetaMethod::ToString, |_, t, ()| {
+            Ok(match &t.0 {
+                // Observed: the six values as `%.9g`, comma-separated.
+                Value::PhysicalProperties(rbx_types::PhysicalProperties::Custom(p)) => [
+                    p.density(),
+                    p.friction(),
+                    p.elasticity(),
+                    p.friction_weight(),
+                    p.elasticity_weight(),
+                    p.acoustic_absorption(),
+                ]
+                .map(super::fmt_f32)
+                .join(", "),
+                _ => t.type_name().to_owned(),
+            })
+        });
         m.add_meta_method(MetaMethod::Type, |_, t, ()| Ok(t.type_name()));
         m.add_meta_method(MetaMethod::Index, |_, t, key: String| {
             if let Value::PhysicalProperties(rbx_types::PhysicalProperties::Custom(p)) = &t.0 {
@@ -44,6 +59,7 @@ impl UserData for Opaque {
                     "Elasticity" => p.elasticity(),
                     "FrictionWeight" => p.friction_weight(),
                     "ElasticityWeight" => p.elasticity_weight(),
+                    "AcousticAbsorption" => p.acoustic_absorption(),
                     _ => {
                         return Err(mlua::Error::RuntimeError(format!(
                             "{key} is not a valid member of PhysicalProperties"
@@ -239,24 +255,45 @@ fn axes_new(lua: &Lua, args: MultiValue) -> mlua::Result<Opaque> {
     Ok(Opaque(Value::Axes(axes)))
 }
 
-fn physical_properties_new(_: &Lua, args: MultiValue) -> mlua::Result<Opaque> {
+/// `PhysicalProperties.new(material)` or `(density, friction, elasticity
+/// [, frictionWeight, elasticityWeight [, acousticAbsorption]])`, with the
+/// values clamped (observed).
+fn physical_properties_new(lua: &Lua, args: MultiValue) -> mlua::Result<Opaque> {
+    use rook_physics::materials::{self, Properties};
     let a = args.into_vec();
-    if let Some(LuaValue::UserData(u)) = a.first()
-        && u.borrow::<LEnumItem>().is_ok()
+    let p = if a.len() == 1
+        && let Some(material) = item_value(lua, &a[0], "Material")
     {
-        // Per-material defaults need the material table (M3, physics).
-        return Ok(Opaque(Value::PhysicalProperties(
-            rbx_types::PhysicalProperties::Default,
-        )));
-    }
-    let n = |i: usize, d: f32| a.get(i).and_then(number_of).map_or(d, |v| v as f32);
+        materials::of_material(material)
+    } else {
+        if !matches!(a.len(), 3 | 5 | 6) {
+            return Err(mlua::Error::RuntimeError(format!(
+                "Invalid number of arguments: {}. Four ways to call PhysicalProperties.new:\n\
+                 \t\t\t\t\t1. new(material: Material)  -- returns default properties for the given material\n\
+                 \t\t\t\t\t2. new(density: number, friction: number, elasticity: number)\n\
+                 \t\t\t\t\t3. new(density: number, friction: number, elasticity: number, frictionWeight: number, elasticityWeight: number)\n\
+                 \t\t\t\t\t4. new(density: number, friction: number, elasticity: number, frictionWeight: number, elasticityWeight: number, acousticAbsorption: number)\n",
+                a.len()
+            )));
+        }
+        let n = |i: usize, d: f32| a.get(i).and_then(number_of).map_or(d, |v| v as f32);
+        Properties {
+            density: n(0, 0.7),
+            friction: n(1, 0.3),
+            elasticity: n(2, 0.5),
+            friction_weight: n(3, 1.0),
+            elasticity_weight: n(4, 1.0),
+            acoustic_absorption: n(5, 1.0),
+        }
+        .clamped()
+    };
     let custom = rbx_types::CustomPhysicalProperties::new(
-        n(0, 0.7),
-        n(1, 0.3),
-        n(2, 0.5),
-        n(3, 1.0),
-        n(4, 1.0),
-        n(5, 1.0),
+        p.density,
+        p.friction,
+        p.elasticity,
+        p.friction_weight,
+        p.elasticity_weight,
+        p.acoustic_absorption,
     );
     Ok(Opaque(Value::PhysicalProperties(
         rbx_types::PhysicalProperties::Custom(custom),

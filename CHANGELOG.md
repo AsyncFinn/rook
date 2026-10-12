@@ -17,7 +17,10 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 - Scripts: `MakeJoints` and `BreakJoints` (BasePart, Model, Workspace) follow Studio's surface rules. Also added: `GetJoints`, `GetConnectedParts`, `GetRootPart`, `IsGrounded`, `AssemblyRootPart`, `AssemblyMass`, `Motor:SetDesiredAngle` and `getMass`. Setting a part's `CFrame` moves its whole assembly; setting `Position`/`Orientation`/`Rotation` moves only that part and rewrites its side of its joints.
 - Places saved before `Workspace.ExplicitAutoJoints` existed have their parts joined by surfaces when they load, as Roblox did then (Inference: such places save almost no joints).
 - `rook-dom` indexes reference properties both ways (`Dom::referrers`).
-- First physics conformance case (`physics/joints`).
+- Contacts and materials (M3 step 3): every material's density, friction and elasticity (`PhysicalProperties.new(material)`), and `CustomPhysicalProperties`; touching parts mix friction and elasticity by their weights, as measured in Studio. `GetMass` uses the real shape volume (balls, cylinders, wedges).
+- `Touched` and `TouchEnded` fire from contacts, on both parts; `CanTouch` turns them off.
+- Collision groups: `BasePart.CollisionGroup`, `CanCollideWith` and PhysicsService's group methods (current and deprecated), stored in Workspace's `CollisionGroupData` as Roblox saves it; `TouchesUseCollisionGroups` is honoured.
+- Physics conformance cases (`physics/joints`, `physics/contacts`).
 - Faster scripting: member lookups are resolved once per class, `inst.Key` and `inst.Key = v` take a dedicated path into Rust, the engine-function shim no longer forwards results through a vararg helper, `GetChildren`/`GetDescendants` build their arrays in Luau, and the script-timeout check reads the clock every 1024th interrupt. A large modern place's 10 s run drops from about 46 s to 32 s, with identical output.
 - Tracy zones per resumed script (`script: <chunk>:<line>`), per `Instance.__index`/`__newindex` (key as zone text), per native Instance method, and around all engine functions (`api`).
 

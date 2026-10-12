@@ -2558,6 +2558,7 @@ dependencies = [
  "rook-dom",
  "rook-reflection",
  "rook-types",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

@@ -10,12 +10,19 @@
 //! [`joints`], [`assembly`] and [`surfaces`] work on the DOM alone, so
 //! scripts can use them synchronously.
 //!
-//! Still to come: contact events and materials, BodyMovers and
-//! constraints, and queries; see `docs/architecture.md` §12.
+//! Parts simulate with their material's properties ([`materials`]), in
+//! their collision group ([`groups`]), and their contacts become Touched
+//! and TouchEnded ([`Physics::take_touches`]).
+//!
+//! Still to come: BodyMovers and constraints, and queries; see
+//! `docs/architecture.md` §12.
 
 pub mod assembly;
+mod contacts;
 mod convert;
+pub mod groups;
 pub mod joints;
+pub mod materials;
 mod shape;
 pub mod surfaces;
 
@@ -29,8 +36,11 @@ use rook_types::{CFrame, Value, Vector3};
 pub use rook_types::PartShape;
 pub use shape::{is_part, part_shape, workspace_parts};
 
+pub use contacts::Touch;
+
 use assembly::{Assembly, is_massless};
 use convert::{cframe_of, pose_of, to_glam, to_rapier};
+use groups::CollisionGroups;
 use joints::{Joint, JointKind, active_joint, endpoints, is_joint};
 
 /// Roblox simulates at 240 Hz (creator-docs "Adaptive timestepping": 240,
@@ -43,28 +53,20 @@ const DEFAULT_GRAVITY: f32 = 196.2;
 /// Workspace.FallenPartsDestroyHeight's default (creator-docs).
 const DEFAULT_FALLEN_HEIGHT: f32 = -500.0;
 
-/// Plastic, the default material (creator-docs "Physical properties":
-/// density 0.7, friction 0.3, elasticity 0.5). Every part uses it until
-/// materials and CustomPhysicalProperties are read (an Approximation).
-const PLASTIC_DENSITY: f32 = 0.7;
-const PLASTIC_FRICTION: f32 = 0.3;
-const PLASTIC_ELASTICITY: f32 = 0.5;
-
-/// A part's volume, from its Size as a box whatever its shape
-/// (Approximation).
+/// A part's volume, from its shape and Size. MeshParts, unions and
+/// trusses count as blocks until meshes exist.
 pub fn part_volume(dom: &Dom, part: InstanceId) -> f32 {
     match dom.property_by_name(part, "Size") {
         Some(Value::Vector3(s)) => {
-            s.0.max(glam::Vec3::splat(shape::MIN_PART_SIZE))
-                .element_product()
+            part_shape(dom, part).volume(s.0.max(glam::Vec3::splat(shape::MIN_PART_SIZE)))
         }
         _ => 0.0,
     }
 }
 
-/// `BasePart:GetMass()`: volume × Plastic's density for every part.
+/// `BasePart:GetMass()`: volume × density (observed in Studio).
 pub fn part_mass(dom: &Dom, part: InstanceId) -> f32 {
-    part_volume(dom, part) * PLASTIC_DENSITY
+    part_volume(dom, part) * materials::of_part(dom, part).density
 }
 
 /// The physics properties [`Physics`] watches, resolved once.
@@ -76,11 +78,17 @@ struct Props {
     can_collide: PropertyId,
     massless: PropertyId,
     root_priority: PropertyId,
+    material: PropertyId,
+    custom_properties: PropertyId,
+    collision_group: PropertyId,
+    can_touch: PropertyId,
     shape: Option<PropertyId>,
     linear_velocity: PropertyId,
     angular_velocity: PropertyId,
     gravity: PropertyId,
     fallen_height: PropertyId,
+    group_data: PropertyId,
+    touches_use_groups: PropertyId,
 }
 
 impl Props {
@@ -97,11 +105,17 @@ impl Props {
             can_collide: p(base, "CanCollide")?,
             massless: p(base, "Massless")?,
             root_priority: p(base, "RootPriority")?,
+            material: p(base, "Material")?,
+            custom_properties: p(base, "CustomPhysicalProperties")?,
+            collision_group: p(base, "CollisionGroup")?,
+            can_touch: p(base, "CanTouch")?,
             shape: p(part, "Shape"),
             linear_velocity: p(base, "AssemblyLinearVelocity")?,
             angular_velocity: p(base, "AssemblyAngularVelocity")?,
             gravity: p(ws, "Gravity")?,
             fallen_height: p(ws, "FallenPartsDestroyHeight")?,
+            group_data: p(ws, "CollisionGroupData")?,
+            touches_use_groups: p(ws, "TouchesUseCollisionGroups")?,
         })
     }
 
@@ -112,7 +126,19 @@ impl Props {
             || p == self.can_collide
             || p == self.massless
             || p == self.root_priority
+            || p == self.material
+            || p == self.custom_properties
+            || p == self.collision_group
+            || p == self.can_touch
             || Some(p) == self.shape
+    }
+
+    /// Workspace properties physics reads.
+    fn is_workspace(&self, p: PropertyId) -> bool {
+        p == self.gravity
+            || p == self.fallen_height
+            || p == self.group_data
+            || p == self.touches_use_groups
     }
 
     /// Changes that move a body.
@@ -147,6 +173,13 @@ pub struct Physics {
     fallen_height: f32,
     /// The last step's length, for advancing motors.
     last_dt: f64,
+    /// Which part each collider belongs to.
+    colliders: HashMap<ColliderHandle, InstanceId>,
+    groups: CollisionGroups,
+    /// Workspace.TouchesUseCollisionGroups: whether groups that don't
+    /// collide also don't touch.
+    touches_use_groups: bool,
+    touch: contacts::Tracker,
 }
 
 impl std::fmt::Debug for Physics {
@@ -187,7 +220,16 @@ impl Physics {
             built: false,
             fallen_height: DEFAULT_FALLEN_HEIGHT,
             last_dt: 0.0,
+            colliders: HashMap::new(),
+            groups: CollisionGroups::default(),
+            touches_use_groups: false,
+            touch: contacts::Tracker::default(),
         }
+    }
+
+    /// Touched and TouchEnded events since the last call, in order.
+    pub fn take_touches(&mut self) -> Vec<Touch> {
+        self.touch.take()
     }
 
     /// Parts in the world.
@@ -249,7 +291,7 @@ impl Physics {
                         structural.push(*id);
                     } else if props.is_pose(p) {
                         posed.push(*id);
-                    } else if p == props.gravity || p == props.fallen_height {
+                    } else if props.is_workspace(p) {
                         workspace_changed = true;
                     } else if self.joints.contains_key(id) || is_joint(dom, *id) {
                         match db.property(p).name {
@@ -326,6 +368,21 @@ impl Physics {
         if let Some(Value::Float32(h)) = dom.property(ws, props.fallen_height) {
             self.fallen_height = h;
         }
+        let groups = CollisionGroups::read(dom);
+        let touches_use_groups =
+            dom.property(ws, props.touches_use_groups) == Some(Value::Bool(true));
+        if groups != self.groups || touches_use_groups != self.touches_use_groups {
+            self.groups = groups;
+            self.touches_use_groups = touches_use_groups;
+            let colliders: Vec<_> = self.colliders.iter().map(|(h, p)| (*h, *p)).collect();
+            for (handle, part) in colliders {
+                let (solver, collision) = self.interaction_groups(dom, part);
+                if let Some(c) = self.world.colliders.get_mut(handle) {
+                    c.set_solver_groups(solver);
+                    c.set_collision_groups(collision);
+                }
+            }
+        }
     }
 
     /// Rebuild the assemblies of `seeds` and of every part that shared an
@@ -377,8 +434,13 @@ impl Physics {
         let body = self.bodies.remove(&h)?;
         // Removing the Rapier body removes its colliders and joints.
         self.world.remove_body(h);
-        for m in &body.asm.members {
+        for (m, c) in body.asm.members.iter().zip(&body.colliders) {
             self.parts.remove(&m.part);
+            self.touch.forget(m.part);
+            if let Some((collider, _)) = c {
+                self.colliders.remove(collider);
+                self.touch.retire(*collider, m.part);
+            }
         }
         for j in body.asm.joints() {
             self.joints.remove(&j.id);
@@ -448,6 +510,9 @@ impl Physics {
         };
         let (shape, shape_pose) = shape::collider_shape(part_shape(dom, part), size.0)?;
         let can_collide = dom.property(part, props.can_collide) != Some(Value::Bool(false));
+        if dom.property(part, props.can_touch) == Some(Value::Bool(false)) {
+            self.touch.untouchable.insert(part);
+        }
         // Massless parts add no mass unless they're the root (creator-docs
         // BasePart.Massless).
         let mass = if !is_root && is_massless(dom, part) {
@@ -455,15 +520,46 @@ impl Physics {
         } else {
             part_mass(dom, part)
         };
+        let material = materials::of_part(dom, part);
+        let (solver, collision) = self.interaction_groups(dom, part);
         let collider = ColliderBuilder::new(shape)
             .mass(mass)
-            .friction(PLASTIC_FRICTION)
-            .restitution(PLASTIC_ELASTICITY)
+            .friction(material.friction)
+            .restitution(material.elasticity)
+            .user_data(contacts::pack(&material))
+            .active_hooks(ActiveHooks::MODIFY_SOLVER_CONTACTS)
+            .active_events(ActiveEvents::COLLISION_EVENTS)
+            .solver_groups(solver)
+            .collision_groups(collision)
             // Non-colliding parts still fall; they just don't push anything.
             .sensor(!can_collide)
             .position(pose_of(&offset) * shape_pose);
         let handle = self.world.insert_collider(collider, Some(body));
+        self.colliders.insert(handle, part);
         Some((handle, shape_pose))
+    }
+
+    /// The solver and collision groups for a part's collider. Groups that
+    /// don't collide don't push each other; they still touch unless
+    /// Workspace.TouchesUseCollisionGroups is on (creator-docs).
+    fn interaction_groups(
+        &self,
+        dom: &Dom,
+        part: InstanceId,
+    ) -> (InteractionGroups, InteractionGroups) {
+        let id = self.groups.id_of(&groups::part_group(dom, part));
+        let mask = self.groups.mask_of(id) as u32;
+        let solver = InteractionGroups::new(
+            Group::from_bits_truncate(1 << id),
+            Group::from_bits_truncate(mask),
+            InteractionTestMode::And,
+        );
+        let collision = if self.touches_use_groups {
+            solver
+        } else {
+            InteractionGroups::all()
+        };
+        (solver, collision)
     }
 
     /// Join two bodies with a hinge (Rotate, RotateP, RotateV).
@@ -542,9 +638,13 @@ impl Physics {
             return;
         }
         let steps = (dt * STEP_HZ).round().max(1.0) as u32;
+        let events = contacts::Collector::default();
         for _ in 0..steps {
-            self.world.step();
+            self.world.step_with_events(&contacts::Mixer, &events);
         }
+        let parts = &self.parts;
+        self.touch
+            .record(events.take(), &self.colliders, |p| parts.contains_key(&p));
     }
 
     /// Turn motors toward their DesiredAngle, then write moving parts'

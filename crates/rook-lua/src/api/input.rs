@@ -22,7 +22,7 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("UserInputService", "GetFocusedTextBox") => nil,
         ("UserInputService", "GetLastInputType") => last_input_type,
         ("Player", "GetMouse") => get_mouse,
-        _ => return None,
+        _ => return super::physics::native(owner, name),
     })
 }
 

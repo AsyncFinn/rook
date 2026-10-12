@@ -4,6 +4,7 @@ use rook_types::{CFrame, Value, Vector3};
 
 use super::*;
 
+mod contacts;
 mod joints;
 
 fn set(dom: &mut Dom, id: InstanceId, name: &str, value: Value) {

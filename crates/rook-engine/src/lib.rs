@@ -359,6 +359,17 @@ impl DataModel {
             physics.step(dt);
             physics.write_back(&mut w.dom)
         };
+        // Both parts fire, the lower id first (observed: the part made
+        // first fired first in Studio; the real order is unknown).
+        for t in physics.take_touches() {
+            let event = if t.began { "Touched" } else { "TouchEnded" };
+            for (part, other) in [(t.part, t.other), (t.other, t.part)] {
+                if let Ok(other) = self.runtime.push_instance(other) {
+                    let _ = self.runtime.fire_event(part, event, other);
+                }
+            }
+        }
+        self.runtime.drain_deferred();
         for id in fallen {
             self.runtime.destroy(id);
         }
