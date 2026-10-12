@@ -230,6 +230,8 @@ Each milestone is a vertical slice with a measurable exit criterion. The order w
 | M7 | Network transport, headless server, multi-client | Two clients play together |
 | M8+ | Terrain (incl. legacy `ClusterGrid` data), animation, particles, advanced lighting, Studio tooling, extensions | — |
 
+M3 is done in five steps: (1) Rapier world, anchoring, write-back; (2) joints and assemblies; (3) contacts, Touched, collision groups, materials; (4) BodyMovers and the most-used constraints; (5) queries: `Workspace:Raycast`, `FindPartOnRay` and spatial queries on Rapier, with the mouse and ClickDetectors moved over. **Step 5 deletes `crates/rook-engine/src/raycast.rs`'s own geometry (`PartGeometry`, `PartCache`, the shape tests)**, which duplicates what physics reads.
+
 Why this order: the client/server split moves forward to M2 so LocalScripts run as soon as there's a window. Characters stay in M4 because they need physics (M3) first. Physics comes before GUI because the corpus is dominated by physical content (Parts in 1,227 files, BodyMovers in about 200, welds and Snaps in hundreds).
 
 ## 13. Open decisions
