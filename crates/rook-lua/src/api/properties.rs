@@ -90,11 +90,7 @@ fn view<'a>(
 }
 
 fn set_named(w: &mut World, id: InstanceId, name: &str, value: Value) -> Result<(), DomError> {
-    let class = w.dom.get(id).ok_or(DomError::Stale)?.class;
-    match w.dom.database().find_canonical_property(class, name) {
-        Some(p) => w.dom.set_property(id, p.id, value),
-        None => Ok(()),
-    }
+    w.dom.set_property_by_name(id, name, value)
 }
 
 /// `Lighting.TimeOfDay` is "HH:MM:SS"; `ClockTime` is hours as a number.

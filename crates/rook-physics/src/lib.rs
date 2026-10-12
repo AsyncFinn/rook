@@ -18,7 +18,8 @@ use rook_dom::{Change, Dom, InstanceId};
 use rook_reflection::PropertyId;
 use rook_types::{CFrame, Value, Vector3};
 
-pub use shape::{PartShape, part_shape};
+pub use rook_types::PartShape;
+pub use shape::{is_part, part_shape};
 
 use convert::{cframe_of, pose_of, to_glam, to_rapier};
 
@@ -192,7 +193,7 @@ impl Physics {
         self.read_workspace(dom, props);
         if let Some(ws) = dom.find_service("Workspace") {
             for id in dom.descendants(ws) {
-                if is_simulated_part(dom, id) {
+                if is_part(dom, id) {
                     self.add(dom, props, id);
                 }
             }
@@ -217,7 +218,7 @@ impl Physics {
     fn refresh(&mut self, dom: &Dom, props: &Props, ws: Option<InstanceId>, id: InstanceId) {
         self.remove(id);
         let in_workspace = ws.is_some_and(|ws| dom.is_ancestor_of(ws, id));
-        if in_workspace && is_simulated_part(dom, id) {
+        if in_workspace && is_part(dom, id) {
             self.add(dom, props, id);
         }
     }
@@ -339,10 +340,6 @@ impl Physics {
         self.cursor = dom.journal().end();
         fallen
     }
-}
-
-fn is_simulated_part(dom: &Dom, id: InstanceId) -> bool {
-    dom.is_a(id, "BasePart") && dom.class_name(id) != "Terrain"
 }
 
 #[cfg(test)]

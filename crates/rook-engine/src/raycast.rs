@@ -8,7 +8,7 @@ use glam::{Mat3, Vec3};
 use rook_dom::{Dom, InstanceId};
 use rook_types::Value;
 
-pub use rook_physics::{PartShape, part_shape};
+pub use rook_physics::{PartShape, is_part, part_shape};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RayHit {
@@ -49,55 +49,17 @@ fn convex(o: Vec3, d: Vec3, planes: &[(Vec3, f32)]) -> Option<(f32, Vec3)> {
     normal.map(|n| (t_in, n))
 }
 
-fn plane(a: Vec3, b: Vec3, c: Vec3, inside: Vec3) -> (Vec3, f32) {
-    let mut n = (b - a).cross(c - a).normalize();
-    if n.dot(inside - a) > 0.0 {
-        n = -n;
-    }
-    (n, n.dot(a))
-}
-
-fn box_planes(h: Vec3) -> Vec<(Vec3, f32)> {
-    vec![
-        (Vec3::X, h.x),
-        (-Vec3::X, h.x),
-        (Vec3::Y, h.y),
-        (-Vec3::Y, h.y),
-        (Vec3::Z, h.z),
-        (-Vec3::Z, h.z),
-    ]
-}
-
-fn shape_planes(shape: PartShape, h: Vec3) -> Vec<(Vec3, f32)> {
-    let centre = Vec3::new(0.0, -h.y * 0.5, h.z * 0.25);
-    let v = |x: f32, y: f32, z: f32| Vec3::new(x * h.x, y * h.y, z * h.z);
-    match shape {
-        PartShape::Wedge => vec![
-            (-Vec3::Y, h.y),
-            (Vec3::Z, h.z),
-            (Vec3::X, h.x),
-            (-Vec3::X, h.x),
-            // Slope from the front bottom edge to the back top edge.
-            plane(
-                v(-1.0, -1.0, -1.0),
-                v(1.0, -1.0, -1.0),
-                v(1.0, 1.0, 1.0),
-                centre,
-            ),
-        ],
-        PartShape::CornerWedge => {
-            let apex = v(1.0, 1.0, -1.0);
-            let inside = Vec3::new(h.x * 0.5, -h.y * 0.5, -h.z * 0.5);
-            vec![
-                (-Vec3::Y, h.y),
-                (Vec3::X, h.x),
-                (-Vec3::Z, h.z),
-                plane(v(-1.0, -1.0, 1.0), v(1.0, -1.0, 1.0), apex, inside),
-                plane(v(-1.0, -1.0, -1.0), v(-1.0, -1.0, 1.0), apex, inside),
-            ]
-        }
-        _ => box_planes(h),
-    }
+/// A flat-sided shape's faces as planes `n·x <= k`, at `size`.
+fn shape_planes(shape: PartShape, size: Vec3) -> Vec<(Vec3, f32)> {
+    let faces = shape.faces().unwrap_or_default();
+    faces
+        .iter()
+        .map(|face| {
+            let [a, b, c] = [face[0], face[1], face[2]].map(|p| p * size);
+            let n = (b - a).cross(c - a).normalize();
+            (n, n.dot(a))
+        })
+        .collect()
 }
 
 fn sphere(o: Vec3, d: Vec3, r: f32) -> Option<(f32, Vec3)> {
@@ -231,11 +193,11 @@ fn geometry_hit(
     let inv = rot.transpose();
     let o = inv * (origin - position);
     let d = inv * dir;
-    let h = size * 0.5;
+    let h = shape.extent(size) * 0.5;
     let hit = match shape {
-        PartShape::Ball => sphere(o, d, h.min_element()),
-        PartShape::Cylinder => cylinder(o, d, h.y.min(h.z), h.x),
-        _ => convex(o, d, &shape_planes(shape, h)),
+        PartShape::Ball => sphere(o, d, h.x),
+        PartShape::Cylinder => cylinder(o, d, h.y, h.x),
+        _ => convex(o, d, &shape_planes(shape, size)),
     }?;
     let (t, n) = hit;
     Some(RayHit {
@@ -284,8 +246,7 @@ impl PartCache {
         self.index.clear();
         if let Some(ws) = dom.find_service("Workspace") {
             for id in dom.descendants(ws) {
-                if dom.is_a(id, "BasePart")
-                    && dom.class_name(id) != "Terrain"
+                if is_part(dom, id)
                     && let Some(g) = PartGeometry::read(dom, id)
                 {
                     self.index.insert(id, self.parts.len());
@@ -335,7 +296,7 @@ pub fn raycast(
     let ws = dom.find_service("Workspace")?;
     let mut best: Option<RayHit> = None;
     for id in dom.descendants(ws) {
-        if !dom.is_a(id, "BasePart") || dom.class_name(id) == "Terrain" {
+        if !is_part(dom, id) {
             continue;
         }
         if dom.property_by_name(id, "CanQuery") == Some(Value::Bool(false)) || !include(id) {
@@ -358,13 +319,9 @@ mod tests {
     fn part(dom: &mut Dom, class: &str, pos: Vec3, size: Vec3) -> InstanceId {
         let ws = dom.get_service("Workspace").unwrap();
         let p = dom.create_by_name(class).unwrap();
-        let c = dom.get(p).unwrap().class;
-        let db = dom.database();
-        let cf = db.find_property(c, "CFrame").unwrap().id;
-        let sz = db.find_property(c, "Size").unwrap().id;
-        dom.set_property(p, cf, Value::CFrame(CFrame::from_position(pos)))
+        dom.set_property_by_name(p, "CFrame", Value::CFrame(CFrame::from_position(pos)))
             .unwrap();
-        dom.set_property(p, sz, Value::Vector3(Vector3(size)))
+        dom.set_property_by_name(p, "Size", Value::Vector3(Vector3(size)))
             .unwrap();
         dom.set_parent(p, Some(ws)).unwrap();
         p
@@ -428,9 +385,8 @@ mod tests {
             Vec3::new(0.0, 0.0, -10.0),
             Vec3::splat(4.0),
         );
-        let c = dom.get(ball).unwrap().class;
-        let shape = dom.database().find_property(c, "Shape").unwrap().id;
-        dom.set_property(ball, shape, Value::Enum(0)).unwrap();
+        dom.set_property_by_name(ball, "Shape", Value::Enum(0))
+            .unwrap();
         // Grazing the box's corner misses the sphere.
         assert!(
             raycast(

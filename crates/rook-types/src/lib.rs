@@ -10,12 +10,14 @@
 
 mod cframe;
 mod color;
+mod shape;
 mod udim;
 mod value;
 mod vector;
 
 pub use cframe::CFrame;
 pub use color::Color3;
+pub use shape::PartShape;
 pub use udim::{UDim, UDim2};
 pub use value::{InstanceRef, Value, ValueError};
 pub use vector::{Vector2, Vector3};

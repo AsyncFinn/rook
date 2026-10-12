@@ -4,7 +4,7 @@
 use bytemuck::{Pod, Zeroable};
 use glam::Vec3;
 
-use crate::scene::Shape;
+use crate::scene::PartShape;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
@@ -39,47 +39,12 @@ impl MeshData {
     }
 }
 
-fn v(x: f32, y: f32, z: f32) -> Vec3 {
-    Vec3::new(x, y, z)
-}
-
-fn block() -> MeshData {
+/// A flat-sided shape from its faces (shared with ray tests and physics).
+fn polyhedron(shape: PartShape) -> MeshData {
     let mut m = MeshData::default();
-    let h = 0.5;
-    m.polygon(&[v(h, -h, h), v(h, -h, -h), v(h, h, -h), v(h, h, h)]); // +X
-    m.polygon(&[v(-h, -h, -h), v(-h, -h, h), v(-h, h, h), v(-h, h, -h)]); // -X
-    m.polygon(&[v(-h, h, h), v(h, h, h), v(h, h, -h), v(-h, h, -h)]); // +Y
-    m.polygon(&[v(-h, -h, -h), v(h, -h, -h), v(h, -h, h), v(-h, -h, h)]); // -Y
-    m.polygon(&[v(-h, -h, h), v(h, -h, h), v(h, h, h), v(-h, h, h)]); // +Z
-    m.polygon(&[v(h, -h, -h), v(-h, -h, -h), v(-h, h, -h), v(h, h, -h)]); // -Z
-    m
-}
-
-/// The slope faces the front (-Z) and rises to the top back edge
-/// (Inference, to be checked against Studio).
-fn wedge() -> MeshData {
-    let mut m = MeshData::default();
-    let h = 0.5;
-    m.polygon(&[v(-h, -h, -h), v(h, -h, -h), v(h, -h, h), v(-h, -h, h)]); // bottom
-    m.polygon(&[v(-h, -h, h), v(h, -h, h), v(h, h, h), v(-h, h, h)]); // back
-    m.polygon(&[v(h, -h, -h), v(-h, -h, -h), v(-h, h, h), v(h, h, h)]); // slope
-    m.polygon(&[v(h, -h, h), v(h, -h, -h), v(h, h, h)]); // +X side
-    m.polygon(&[v(-h, -h, -h), v(-h, -h, h), v(-h, h, h)]); // -X side
-    m
-}
-
-/// A pyramid over the bottom square with its apex above the +X, -Z
-/// corner: vertical faces on +X and -Z, slopes facing -X and +Z (checked by
-/// eye against Roblox places, 2026-10-11).
-fn corner_wedge() -> MeshData {
-    let mut m = MeshData::default();
-    let h = 0.5;
-    let apex = v(h, h, -h);
-    m.polygon(&[v(-h, -h, -h), v(h, -h, -h), v(h, -h, h), v(-h, -h, h)]); // bottom
-    m.polygon(&[v(h, -h, h), v(h, -h, -h), apex]); // +X
-    m.polygon(&[v(h, -h, -h), v(-h, -h, -h), apex]); // -Z
-    m.polygon(&[v(-h, -h, h), v(h, -h, h), apex]); // +Z slope
-    m.polygon(&[v(-h, -h, -h), v(-h, -h, h), apex]); // -X slope
+    for face in shape.faces().unwrap_or_default() {
+        m.polygon(face);
+    }
     m
 }
 
@@ -112,11 +77,15 @@ fn cylinder() -> MeshData {
     let caps: Vec<Vec3> = (0..SEGMENTS)
         .map(|i| {
             let (y, z) = ring(i);
-            v(0.5, y, z)
+            Vec3::new(0.5, y, z)
         })
         .collect();
     m.polygon(&caps);
-    let back: Vec<Vec3> = caps.iter().rev().map(|p| v(-0.5, p.y, p.z)).collect();
+    let back: Vec<Vec3> = caps
+        .iter()
+        .rev()
+        .map(|p| Vec3::new(-0.5, p.y, p.z))
+        .collect();
     m.polygon(&back);
     m
 }
@@ -149,13 +118,11 @@ fn ball() -> MeshData {
     m
 }
 
-pub(crate) fn build(shape: Shape) -> MeshData {
+pub(crate) fn build(shape: PartShape) -> MeshData {
     match shape {
-        Shape::Block => block(),
-        Shape::Wedge => wedge(),
-        Shape::CornerWedge => corner_wedge(),
-        Shape::Cylinder => cylinder(),
-        Shape::Ball => ball(),
+        PartShape::Block | PartShape::Wedge | PartShape::CornerWedge => polyhedron(shape),
+        PartShape::Cylinder => cylinder(),
+        PartShape::Ball => ball(),
     }
 }
 
@@ -166,7 +133,7 @@ mod tests {
     /// Every face's normal points away from the centre.
     #[test]
     fn normals_point_outward() {
-        for shape in Shape::ALL {
+        for shape in PartShape::ALL {
             let m = build(shape);
             for tri in m.indices.chunks(3) {
                 let [a, b, c] =

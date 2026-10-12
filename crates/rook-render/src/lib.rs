@@ -8,7 +8,7 @@
 mod mesh;
 mod scene;
 
-pub use scene::{Camera, Lighting, PartInstance, Scene, Shape};
+pub use scene::{Camera, Lighting, PartInstance, PartShape, Scene};
 
 use bytemuck::{Pod, Zeroable};
 use glam::Vec3;
@@ -72,7 +72,7 @@ struct GpuMesh {
 /// Instances of one shape, uploaded for drawing.
 #[derive(Debug)]
 struct Batch {
-    shape: Shape,
+    shape: PartShape,
     buffer: wgpu::Buffer,
     count: u32,
 }
@@ -87,7 +87,7 @@ pub struct Renderer {
     transparent: wgpu::RenderPipeline,
     globals: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
-    meshes: Vec<(Shape, GpuMesh)>,
+    meshes: Vec<(PartShape, GpuMesh)>,
     opaque_batches: Vec<Batch>,
     /// Transparent parts, sorted back to front every frame.
     transparent_parts: Vec<PartInstance>,
@@ -198,7 +198,7 @@ impl Renderer {
             false,
         );
 
-        let meshes = Shape::ALL
+        let meshes = PartShape::ALL
             .iter()
             .map(|&shape| {
                 let data = mesh::build(shape);
@@ -271,8 +271,8 @@ impl Renderer {
         profiling::scope!("Renderer::set_scene");
         self.lighting = scene.lighting;
         self.transparent_parts.clear();
-        let mut groups: Vec<(Shape, Vec<Instance>)> =
-            Shape::ALL.iter().map(|s| (*s, Vec::new())).collect();
+        let mut groups: Vec<(PartShape, Vec<Instance>)> =
+            PartShape::ALL.iter().map(|s| (*s, Vec::new())).collect();
         for part in &scene.parts {
             if part.transparency >= 1.0 {
                 continue;

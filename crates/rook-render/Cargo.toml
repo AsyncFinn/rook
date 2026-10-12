@@ -9,6 +9,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+rook-types.workspace = true
 wgpu.workspace = true
 glam.workspace = true
 bytemuck.workspace = true

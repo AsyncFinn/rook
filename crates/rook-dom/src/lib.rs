@@ -542,6 +542,26 @@ impl Dom {
         self.property(id, prop.id)
     }
 
+    /// The id of the property `name` (aliases resolved) on `id`'s class.
+    pub fn property_id(&self, id: InstanceId, name: &str) -> Option<PropertyId> {
+        let inst = self.instances.get(id)?;
+        Some(self.db.find_canonical_property(inst.class, name)?.id)
+    }
+
+    /// Like [`Dom::set_property`], looked up by name (aliases resolved). A
+    /// name the class doesn't have is ignored.
+    pub fn set_property_by_name(
+        &mut self,
+        id: InstanceId,
+        name: &str,
+        value: Value,
+    ) -> Result<(), DomError> {
+        match self.property_id(id, name) {
+            Some(p) => self.set_property(id, p, value),
+            None => Ok(()),
+        }
+    }
+
     fn default_value(&self, class: ClassId, property: PropertyId) -> Option<Value> {
         if let Some(v) = self.defaults.borrow().get(&(class, property)) {
             return Some(v.clone());

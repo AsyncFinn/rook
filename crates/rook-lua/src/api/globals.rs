@@ -342,12 +342,7 @@ fn install_engine_helpers(lua: &Lua) -> mlua::Result<()> {
         lua.create_function(
             |lua, (inst, name, value): (AnyUserData, String, LuaValue)| {
                 let id = inst.borrow::<super::instance::LuaInstance>()?.0;
-                let known = with_world(lua, |w| {
-                    w.dom
-                        .get(id)
-                        .and_then(|i| w.dom.database().find_canonical_property(i.class, &name))
-                        .is_some()
-                });
+                let known = with_world(lua, |w| w.dom.property_id(id, &name).is_some());
                 if !known {
                     // Not a stored property: keep it as a runtime value.
                     let all = super::instance::runtime_properties(lua)?;

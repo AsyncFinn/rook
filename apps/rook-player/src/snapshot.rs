@@ -5,7 +5,8 @@ use std::collections::HashMap;
 use glam::{Mat3, Vec3};
 use rook_dom::{Dom, InstanceId};
 use rook_engine::RenderChanges;
-use rook_render::{Camera, Lighting, PartInstance, Scene, Shape};
+use rook_engine::raycast::{is_part, part_shape};
+use rook_render::{Camera, Lighting, PartInstance, Scene};
 use rook_types::Value;
 
 fn number(dom: &Dom, id: InstanceId, name: &str) -> Option<f32> {
@@ -25,23 +26,6 @@ fn color(dom: &Dom, id: InstanceId, name: &str) -> Option<[f32; 3]> {
     }
 }
 
-/// `Enum.PartType`: Ball 0, Block 1, Cylinder 2, Wedge 3, CornerWedge 4.
-fn shape(dom: &Dom, id: InstanceId) -> Shape {
-    match dom.class_name(id) {
-        "WedgePart" => Shape::Wedge,
-        "CornerWedgePart" => Shape::CornerWedge,
-        _ => match dom.property_by_name(id, "Shape") {
-            Some(Value::Enum(0)) => Shape::Ball,
-            Some(Value::Enum(2)) => Shape::Cylinder,
-            Some(Value::Enum(3)) => Shape::Wedge,
-            Some(Value::Enum(4)) => Shape::CornerWedge,
-            // MeshParts, unions and trusses draw as their bounding box
-            // until meshes are supported.
-            _ => Shape::Block,
-        },
-    }
-}
-
 fn part(dom: &Dom, id: InstanceId) -> Option<PartInstance> {
     let Value::CFrame(cf) = dom.property_by_name(id, "CFrame")? else {
         return None;
@@ -49,19 +33,8 @@ fn part(dom: &Dom, id: InstanceId) -> Option<PartInstance> {
     let Value::Vector3(size) = dom.property_by_name(id, "Size")? else {
         return None;
     };
-    let shape = shape(dom, id);
-    let mut size = size.0;
-    match shape {
-        // Balls are spheres of the smallest dimension; cylinders run along X
-        // with the smaller of Y and Z as diameter (Confirmed: creator-docs
-        // PartType).
-        Shape::Ball => size = Vec3::splat(size.min_element()),
-        Shape::Cylinder => {
-            let d = size.y.min(size.z);
-            size = Vec3::new(size.x, d, d);
-        }
-        _ => {}
-    }
+    let shape = part_shape(dom, id);
+    let size = shape.extent(size.0);
     Some(PartInstance {
         shape,
         position: cf.position,
@@ -154,8 +127,7 @@ impl SceneCache {
         self.index.clear();
         if let Some(ws) = dom.find_service("Workspace") {
             for id in dom.descendants(ws) {
-                if dom.is_a(id, "BasePart")
-                    && dom.class_name(id) != "Terrain"
+                if is_part(dom, id)
                     && let Some(p) = part(dom, id)
                 {
                     self.index.insert(id, self.scene.parts.len());
