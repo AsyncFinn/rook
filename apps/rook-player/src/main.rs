@@ -107,7 +107,7 @@ fn main() -> anyhow::Result<()> {
     }
     let scene = scene_of(game.view());
     // The camera the place was saved with (clients start with a fresh one).
-    let mut camera = snapshot::initial_camera(&game.server().runtime().world().dom);
+    let mut camera = snapshot::initial_camera(game.server());
     let name = args.place.file_name().unwrap_or_default().to_string_lossy();
     console::print_message(
         MessageType::Info,

@@ -4,8 +4,8 @@ use std::collections::HashMap;
 
 use glam::{Mat3, Vec3};
 use rook_dom::{Dom, InstanceId};
-use rook_engine::RenderChanges;
 use rook_engine::raycast::{part_shape, workspace_parts};
+use rook_engine::{DataModel, RenderChanges};
 use rook_render::{Camera, Lighting, PartInstance, Scene};
 use rook_types::Value;
 
@@ -167,12 +167,10 @@ impl SceneCache {
 }
 
 /// The camera the place was saved with, or a view of the origin.
-pub fn initial_camera(dom: &Dom) -> Camera {
-    let saved = dom.find_service("Workspace").and_then(|ws| {
-        let Value::Ref(Some(r)) = dom.property_by_name(ws, "CurrentCamera")? else {
-            return None;
-        };
-        let cam = InstanceId::from_ref(r);
+pub fn initial_camera(dm: &DataModel) -> Camera {
+    let world = dm.runtime().world();
+    let dom = &world.dom;
+    let saved = dm.current_camera().and_then(|cam| {
         let Value::CFrame(cf) = dom.property_by_name(cam, "CFrame")? else {
             return None;
         };
