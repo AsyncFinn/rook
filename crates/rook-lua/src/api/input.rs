@@ -100,11 +100,7 @@ fn last_input_type(lua: &Lua, _: InstanceId, _: Args) -> ApiResult<Outcome> {
 /// The local player's Mouse on a client; nil on the server.
 fn get_mouse(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
     let mouse = with_world(lua, |w| {
-        let players = w.dom.find_service("Players")?;
-        let local = match w.dom.property_by_name(players, "LocalPlayer")? {
-            rook_types::Value::Ref(Some(r)) => InstanceId::from_ref(r),
-            _ => return None,
-        };
+        let local = w.dom.local_player()?;
         (local == this).then_some(w.input.mouse_object).flatten()
     });
     match mouse {

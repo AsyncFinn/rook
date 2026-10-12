@@ -336,10 +336,7 @@ impl DataModel {
         let hit = {
             let w = self.runtime.world();
             let dom = &w.dom;
-            let filter = match dom.property_by_name(mouse, "TargetFilter") {
-                Some(Value::Ref(Some(r))) => Some(InstanceId::from_ref(r)),
-                _ => None,
-            };
+            let filter = dom.ref_property(mouse, "TargetFilter");
             self.parts.raycast(dom, origin, dir * MOUSE_RANGE, &|id| {
                 filter.is_none_or(|f| id != f && !dom.is_ancestor_of(f, id))
             })
