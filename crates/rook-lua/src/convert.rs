@@ -132,8 +132,7 @@ pub(crate) fn from_lua(lua: &Lua, v: &LuaValue, ty: PropertyType) -> Result<Valu
                         .and_then(|u| borrow_clone::<LColor3>(&u))
                         .ok_or_else(fail)?
                         .0
-                        .to_rgb()
-                        .into_rbx(),
+                        .into(),
                 ),
                 _ => {
                     let u = ud(v).ok_or_else(fail)?;
@@ -234,15 +233,5 @@ pub(crate) fn variant_name(vt: VariantType) -> &'static str {
         VariantType::Vector3int16 => "Vector3int16",
         VariantType::Vector2int16 => "Vector2int16",
         _ => "value",
-    }
-}
-
-trait IntoRbx {
-    fn into_rbx(self) -> rbx_types::Color3uint8;
-}
-
-impl IntoRbx for (u8, u8, u8) {
-    fn into_rbx(self) -> rbx_types::Color3uint8 {
-        rbx_types::Color3uint8::new(self.0, self.1, self.2)
     }
 }
