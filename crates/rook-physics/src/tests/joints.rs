@@ -586,6 +586,117 @@ fn many_callers_sweep_the_world_with_the_same_result() {
 }
 
 #[test]
+fn wedge_slopes_join_like_studio() {
+    // A 2×4×4 wedge with a 2×1×√32 slab lying on its slope, everything
+    // Smooth except `on_wedge` and the slab's bottom. Returns the joint's
+    // class, whether the wedge is Part0, and C0's position.
+    let trial = |on_wedge: &[(&str, &str)],
+                 slab_bottom: &str,
+                 wedge_calls: bool|
+     -> Option<(String, bool, Vec3)> {
+        let mut dom = Dom::new();
+        let size = Vec3::new(2.0, 4.0, 4.0);
+        let wedge = part(&mut dom, "WedgePart", Vec3::ZERO, size, true);
+        let slab_size = Vec3::new(2.0, 1.0, 32f32.sqrt());
+        let slab = part(&mut dom, "Part", Vec3::ZERO, slab_size, true);
+        let on_slope = Vec3::new(0.0, 1.0, -1.0).normalize() * 0.5;
+        let cf =
+            at(on_slope.x, on_slope.y, on_slope.z) * CFrame::angles(-45f32.to_radians(), 0.0, 0.0);
+        set(&mut dom, slab, "CFrame", Value::CFrame(cf));
+        surfaces(&mut dom, wedge, "Smooth");
+        surfaces(&mut dom, slab, "Smooth");
+        let e = dom.database().enum_by_name("SurfaceType").unwrap();
+        let n = |s: &str| Value::Enum(e.items.iter().find(|(name, _)| *name == s).unwrap().1);
+        let wedge_surfaces: Vec<_> = on_wedge.iter().map(|&(f, s)| (f, n(s))).collect();
+        let bottom = n(slab_bottom);
+        for (face, v) in wedge_surfaces {
+            set(&mut dom, wedge, &format!("{face}Surface"), v);
+        }
+        set(&mut dom, slab, "BottomSurface", bottom);
+        let caller = if wedge_calls { wedge } else { slab };
+        surfaces::make_joints(&mut dom, &[caller]).unwrap();
+        let js = joints::part_joints(&dom, wedge);
+        assert!(js.len() <= 1);
+        let j = js.first()?;
+        let Some(Value::CFrame(c0)) = dom.property_by_name(j.id, "C0") else {
+            panic!("no C0")
+        };
+        Some((
+            dom.class_name(j.id).to_owned(),
+            j.part0 == wedge,
+            c0.position,
+        ))
+    };
+    let joined = |class: &str, wedge_is_part0, c0: [f32; 3]| {
+        Some((class.to_owned(), wedge_is_part0, Vec3::from(c0)))
+    };
+    let slab_face = [0.0, -0.5, 0.0];
+
+    // The wedge calling: only its own Weld, Top before Front.
+    let top = [0.0, 2.0, 0.0];
+    let front = [0.0, 0.0, -2.0];
+    assert_eq!(
+        trial(&[("Top", "Weld")], "Smooth", true),
+        joined("Weld", true, top)
+    );
+    assert_eq!(
+        trial(&[("Front", "Weld")], "Smooth", true),
+        joined("Weld", true, front)
+    );
+    let both = [("Top", "Weld"), ("Front", "Weld")];
+    assert_eq!(trial(&both, "Smooth", true), joined("Weld", true, top));
+    let glue_top = [("Top", "Glue"), ("Front", "Weld")];
+    assert_eq!(
+        trial(&glue_top, "Smooth", true),
+        joined("Weld", true, front)
+    );
+    assert_eq!(trial(&[], "Weld", true), None);
+    assert_eq!(trial(&[("Front", "Universal")], "Universal", true), None);
+    assert_eq!(trial(&[("Front", "Hinge")], "Weld", true), None);
+
+    // The slab calling: the slope is the wedge's Front.
+    assert_eq!(trial(&[], "Weld", false), joined("Weld", false, slab_face));
+    assert_eq!(
+        trial(&[("Front", "Weld")], "Smooth", false),
+        joined("Weld", false, slab_face)
+    );
+    assert_eq!(trial(&[("Top", "Weld")], "Smooth", false), None);
+    assert_eq!(
+        trial(&[("Front", "Studs")], "Inlet", false),
+        joined("Snap", false, slab_face)
+    );
+    assert_eq!(trial(&[("Top", "Studs")], "Inlet", false), None);
+    assert_eq!(trial(&[], "Hinge", false), None);
+
+    // The box's top and front aren't faces.
+    let mut dom = Dom::new();
+    let wedge = part(
+        &mut dom,
+        "WedgePart",
+        Vec3::ZERO,
+        Vec3::new(2.0, 4.0, 4.0),
+        true,
+    );
+    part(
+        &mut dom,
+        "Part",
+        Vec3::new(0.0, 2.5, 0.0),
+        Vec3::new(2.0, 1.0, 4.0),
+        true,
+    );
+    part(
+        &mut dom,
+        "Part",
+        Vec3::new(0.0, 0.0, -2.5),
+        Vec3::new(2.0, 4.0, 1.0),
+        true,
+    );
+    surfaces(&mut dom, wedge, "Weld");
+    surfaces::make_joints(&mut dom, &[wedge]).unwrap();
+    assert!(joints::part_joints(&dom, wedge).is_empty());
+}
+
+#[test]
 fn surface_type_numbers_match_the_database() {
     let e = rook_reflection::database()
         .enum_by_name("SurfaceType")

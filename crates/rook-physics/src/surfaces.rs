@@ -14,9 +14,15 @@
 //!   the part whose rotating surface decided the type, otherwise the
 //!   calling part. Parts already joined aren't joined again.
 //! - Only parts in Workspace join; they may join parts anywhere in it.
+//! - A wedge's slope is a face; its box's top and front aren't. A wedge
+//!   calling MakeJoints joins what's on its slope only through its own
+//!   Weld surfaces, TopSurface before FrontSurface, framed at that box
+//!   face. A part calling it on a slope sees the wedge's FrontSurface
+//!   there. Rotating surfaces on either side of a slope join nothing.
 //!
-//! Every part is treated as its box, except balls and cylinders, which
-//! have no surfaces here (Approximation).
+//! Every other part is treated as its box (a wedge's side triangles as
+//! rectangles), except balls and cylinders, which have no surfaces here
+//! (Approximation). Corner wedges are boxes too.
 
 use std::collections::HashMap;
 
@@ -37,6 +43,13 @@ const FACES: [(&str, [[f32; 3]; 3]); 6] = [
     ("BottomSurface", [[1., 0., 0.], [0., 0., 1.], [0., -1., 0.]]),
     ("FrontSurface", [[-1., 0., 0.], [0., 1., 0.], [0., 0., -1.]]),
 ];
+
+const TOP: usize = 1;
+const FRONT: usize = 5;
+/// A wedge's slope, numbered after the six box faces.
+const SLOPE: usize = 6;
+const BOX_FACES: &[usize] = &[0, 1, 2, 3, 4, 5];
+const WEDGE_FACES: &[usize] = &[0, 2, 3, 4, SLOPE];
 
 /// Faces closer than this (either way) touch.
 const DISTANCE: f32 = 0.01;
@@ -118,13 +131,16 @@ struct Box {
     half: Vec3,
     min: Vec3,
     max: Vec3,
+    faces: &'static [usize],
 }
 
 impl Box {
     fn of(dom: &Dom, id: InstanceId) -> Option<Self> {
-        if matches!(part_shape(dom, id), PartShape::Ball | PartShape::Cylinder) {
-            return None;
-        }
+        let faces = match part_shape(dom, id) {
+            PartShape::Ball | PartShape::Cylinder => return None,
+            PartShape::Wedge => WEDGE_FACES,
+            PartShape::Block | PartShape::CornerWedge => BOX_FACES,
+        };
         let (Some(Value::CFrame(cf)), Some(Value::Vector3(size))) = (
             dom.property_by_name(id, "CFrame"),
             dom.property_by_name(id, "Size"),
@@ -138,6 +154,7 @@ impl Box {
             half: size.0 * 0.5,
             min: cf.position - reach,
             max: cf.position + reach,
+            faces,
         })
     }
 
@@ -148,9 +165,20 @@ impl Box {
     /// Face `f`'s outward normal, its centre and its two tangent axes with
     /// their half extents, in world space.
     fn face(&self, f: usize) -> (Vec3, Vec3, [(Vec3, f32); 2]) {
+        let r = self.cf.rotation;
+        if f == SLOPE {
+            // From the bottom front edge up to the top back one, through
+            // the centre; it faces up and forward.
+            let h = self.half;
+            let up = Vec3::new(0.0, h.y, h.z);
+            return (
+                r * Vec3::new(0.0, h.z, -h.y).normalize(),
+                self.cf.position,
+                [(r.col(0), h.x), (r * up.normalize(), up.length())],
+            );
+        }
         let axis = f % 3;
         let sign = if f < 3 { 1.0 } else { -1.0 };
-        let r = self.cf.rotation;
         let normal = r.col(axis) * sign;
         let centre = self.cf.position + normal * self.half[axis];
         let (a, b) = ((axis + 1) % 3, (axis + 2) % 3);
@@ -292,21 +320,43 @@ pub fn joins_on_load(dom: &Dom) -> bool {
 }
 
 fn touching_faces(a: &Box, b: &Box) -> Option<(usize, usize)> {
-    (0..6)
-        .flat_map(|fa| (0..6).map(move |fb| (fa, fb)))
+    a.faces
+        .iter()
+        .flat_map(|&fa| b.faces.iter().map(move |&fb| (fa, fb)))
         .find(|&(fa, fb)| faces_touch(a, fa, b, fb))
 }
 
-fn join(dom: &mut Dom, me: &Box, fa: usize, other: &Box, fb: usize) -> Result<(), DomError> {
+/// The joint class `me`'s face `fa` makes with `other`'s face `fb`, and
+/// Part0 with the face its joint is framed at, then Part1.
+fn joint_between<'a>(
+    dom: &Dom,
+    me: &'a Box,
+    fa: usize,
+    other: &'a Box,
+    fb: usize,
+) -> Option<(&'static str, &'a Box, usize, &'a Box)> {
+    if fa == SLOPE {
+        let f = [TOP, FRONT]
+            .into_iter()
+            .find(|&f| Surface::of(dom, me.id, FACES[f].0) == Surface::Weld)?;
+        return Some(("Weld", me, f, other));
+    }
     let mine = Surface::of(dom, me.id, FACES[fa].0);
-    let theirs = Surface::of(dom, other.id, FACES[fb].0);
-    let Some((class, swapped)) = joint_class(mine, theirs) else {
-        return Ok(());
-    };
-    let (p0, f0, p1) = if swapped {
-        (other, fb, me)
+    let theirs = Surface::of(dom, other.id, FACES[if fb == SLOPE { FRONT } else { fb }].0);
+    if fb == SLOPE && (mine.rotating_joint().is_some() || theirs.rotating_joint().is_some()) {
+        return None;
+    }
+    let (class, swapped) = joint_class(mine, theirs)?;
+    Some(if swapped {
+        (class, other, fb, me)
     } else {
-        (me, fa, other)
+        (class, me, fa, other)
+    })
+}
+
+fn join(dom: &mut Dom, me: &Box, fa: usize, other: &Box, fb: usize) -> Result<(), DomError> {
+    let Some((class, p0, f0, p1)) = joint_between(dom, me, fa, other, fb) else {
+        return Ok(());
     };
     let frame = face_frame(f0);
     let c0 = CFrame {
