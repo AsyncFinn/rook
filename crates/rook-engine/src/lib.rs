@@ -440,11 +440,9 @@ impl DataModel {
     /// `Workspace.CurrentCamera`.
     pub fn current_camera(&self) -> Option<InstanceId> {
         let world = self.runtime.world();
-        let ws = world.dom.find_service("Workspace")?;
-        match world.dom.property_by_name(ws, "CurrentCamera")? {
-            Value::Ref(Some(r)) => Some(InstanceId::from_ref(r)),
-            _ => None,
-        }
+        world
+            .dom
+            .ref_property(world.dom.find_service("Workspace")?, "CurrentCamera")
     }
 
     /// Set a property from the host (an editor camera, input) and fire the
@@ -524,11 +522,10 @@ fn ensure_camera(dom: &mut Dom) {
     let Ok(ws) = dom.get_service("Workspace") else {
         return;
     };
-    let current = match dom.property_by_name(ws, "CurrentCamera") {
-        Some(Value::Ref(Some(r))) => dom.get(InstanceId::from_ref(r)).map(|_| ()),
-        _ => None,
-    };
-    if current.is_some() {
+    if dom
+        .ref_property(ws, "CurrentCamera")
+        .is_some_and(|c| dom.get(c).is_some())
+    {
         return;
     }
     let Ok(camera) = dom.create_by_name("Camera") else {
@@ -536,29 +533,14 @@ fn ensure_camera(dom: &mut Dom) {
     };
     let _ = dom.set_name(camera, "Camera".into());
     dom.attach_unchecked(camera, ws);
-    if let Some(p) = dom
-        .get(ws)
-        .and_then(|i| dom.database().find_property(i.class, "CurrentCamera"))
-        .map(|p| p.id)
-    {
+    if let Some(p) = dom.property_id(ws, "CurrentCamera") {
         dom.load_property(ws, p, Value::Ref(Some(camera.to_ref())));
     }
 }
 
 fn client_should_run(dom: &Dom, id: InstanceId, class: &str) -> bool {
-    let local_player = dom
-        .find_service("Players")
-        .and_then(|p| dom.property_by_name(p, "LocalPlayer"))
-        .and_then(|v| match v {
-            Value::Ref(Some(r)) => Some(InstanceId::from_ref(r)),
-            _ => None,
-        });
-    let character = local_player
-        .and_then(|p| dom.property_by_name(p, "Character"))
-        .and_then(|v| match v {
-            Value::Ref(Some(r)) => Some(InstanceId::from_ref(r)),
-            _ => None,
-        });
+    let local_player = dom.local_player();
+    let character = local_player.and_then(|p| dom.ref_property(p, "Character"));
     let Some(top) = top_level(dom, id) else {
         return false;
     };

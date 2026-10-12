@@ -542,6 +542,20 @@ impl Dom {
         self.property(id, prop.id)
     }
 
+    /// The instance a reference property (`PrimaryPart`, `CurrentCamera`,
+    /// ...) points at, if it's set.
+    pub fn ref_property(&self, id: InstanceId, name: &str) -> Option<InstanceId> {
+        match self.property_by_name(id, name)? {
+            Value::Ref(Some(r)) => Some(InstanceId::from_ref(r)),
+            _ => None,
+        }
+    }
+
+    /// `Players.LocalPlayer` (set on clients only).
+    pub fn local_player(&self) -> Option<InstanceId> {
+        self.ref_property(self.find_service("Players")?, "LocalPlayer")
+    }
+
     /// The id of the property `name` (aliases resolved) on `id`'s class.
     pub fn property_id(&self, id: InstanceId, name: &str) -> Option<PropertyId> {
         let inst = self.instances.get(id)?;

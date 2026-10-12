@@ -176,11 +176,9 @@ pub(crate) fn get(w: &World, id: InstanceId, name: &str) -> Option<Value> {
             // Without stored pivot data, the pivot is the PrimaryPart's CFrame
             // (Confirmed: creator-docs PVInstance pivots). The bounding-box
             // fallback needs part geometry and arrives with physics.
-            match dom.property_by_name(id, "PrimaryPart") {
-                Some(Value::Ref(Some(r))) => {
-                    Some(Value::CFrame(cframe(w, InstanceId::from_ref(r))))
-                }
-                _ => Some(Value::CFrame(CFrame::IDENTITY)),
+            match dom.ref_property(id, "PrimaryPart") {
+                Some(part) => Some(Value::CFrame(cframe(w, part))),
+                None => Some(Value::CFrame(CFrame::IDENTITY)),
             }
         }
         _ => None,

@@ -348,14 +348,9 @@ impl Session {
         let clicks = slot.client.input(event);
         for click in clicks {
             let event = click.kind.event();
-            let local = {
-                let w = slot.client.runtime().world();
-                w.dom
-                    .find_service("Players")
-                    .and_then(|p| w.dom.property_by_name(p, "LocalPlayer"))
-            };
-            if let Some(Value::Ref(Some(r))) = local
-                && let Ok(ud) = slot.client.runtime().push_instance(InstanceId::from_ref(r))
+            let local = { slot.client.runtime().world().dom.local_player() };
+            if let Some(local) = local
+                && let Ok(ud) = slot.client.runtime().push_instance(local)
             {
                 let _ = slot.client.runtime().fire_event(click.detector, event, ud);
                 slot.client.runtime().drain_deferred();

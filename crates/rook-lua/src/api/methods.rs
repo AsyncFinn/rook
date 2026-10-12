@@ -695,12 +695,9 @@ fn parts_of(w: &World, model: InstanceId) -> Vec<InstanceId> {
 }
 
 fn primary_part(w: &World, model: InstanceId) -> Option<InstanceId> {
-    match w.dom.property_by_name(model, "PrimaryPart") {
-        Some(Value::Ref(Some(r))) => {
-            let id = InstanceId::from_ref(r);
-            w.dom.get(id).is_some().then_some(id)
-        }
-        _ => None,
+    match w.dom.ref_property(model, "PrimaryPart") {
+        Some(id) => w.dom.get(id).is_some().then_some(id),
+        None => None,
     }
 }
 
