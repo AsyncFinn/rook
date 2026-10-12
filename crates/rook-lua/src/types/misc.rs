@@ -156,10 +156,10 @@ impl UserData for LTweenInfo {
         f.add_meta_field("__type", "TweenInfo");
         f.add_field_method_get("Time", |_, t| Ok(t.time));
         f.add_field_method_get("EasingStyle", |lua, t| {
-            enum_item(lua, "EasingStyle", t.easing_style)
+            super::enums::enum_item(lua, "EasingStyle", t.easing_style)
         });
         f.add_field_method_get("EasingDirection", |lua, t| {
-            enum_item(lua, "EasingDirection", t.easing_direction)
+            super::enums::enum_item(lua, "EasingDirection", t.easing_direction)
         });
         f.add_field_method_get("RepeatCount", |_, t| Ok(t.repeat_count));
         f.add_field_method_get("Reverses", |_, t| Ok(t.reverses));
@@ -181,13 +181,6 @@ impl UserData for LTweenInfo {
                 t.easing_style
             ))
         });
-    }
-}
-
-fn enum_item(lua: &Lua, enum_name: &str, value: u32) -> mlua::Result<LuaValue> {
-    match rook_reflection::database().enum_by_name(enum_name) {
-        Some(e) => super::enums::push_item(lua, e.id, value),
-        None => Ok(LuaValue::Nil),
     }
 }
 

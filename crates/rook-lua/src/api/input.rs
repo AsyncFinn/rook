@@ -90,13 +90,11 @@ fn sequence(lua: &Lua, ids: Vec<InstanceId>) -> ApiResult<Outcome> {
 
 /// Keyboard and mouse is the only input Rook has so far.
 fn last_input_type(lua: &Lua, _: InstanceId, _: Args) -> ApiResult<Outcome> {
-    let e = rook_reflection::database()
-        .enum_by_name("UserInputType")
-        .map(|e| e.id);
-    match e {
-        Some(e) => Outcome::ret(lua, crate::types::enums::push_item(lua, e, 8)?),
-        None => Outcome::ret(lua, LuaValue::Nil),
-    }
+    // MouseMovement.
+    Outcome::ret(
+        lua,
+        crate::types::enums::enum_item(lua, "UserInputType", 8)?,
+    )
 }
 
 /// The local player's Mouse on a client; nil on the server.
