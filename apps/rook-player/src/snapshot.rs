@@ -21,7 +21,10 @@ fn number(dom: &Dom, id: InstanceId, name: &str) -> Option<f32> {
 fn color(dom: &Dom, id: InstanceId, name: &str) -> Option<[f32; 3]> {
     match dom.property_by_name(id, name)? {
         Value::Color3(c) => Some([c.r, c.g, c.b]),
-        Value::Color3uint8(c) => Some([c.r, c.g, c.b].map(|x| f32::from(x) / 255.0)),
+        Value::Color3uint8(c) => {
+            let c = rook_types::Color3::from_rgb(c.r, c.g, c.b);
+            Some([c.r, c.g, c.b])
+        }
         _ => None,
     }
 }
