@@ -200,6 +200,13 @@ impl CollisionGroups {
         Ok(())
     }
 
+    /// Whether parts in groups `a` and `b` collide. Unknown names act as
+    /// `Default`, as for parts (observed for `RaycastParams.CollisionGroup`).
+    pub fn groups_collide(&self, a: &str, b: &str) -> bool {
+        let (ia, ib) = (self.id_of(a), self.id_of(b));
+        self.mask_of(ia) & (1 << ib) != 0 && self.mask_of(ib) & (1 << ia) != 0
+    }
+
     /// `CollisionGroupsAreCollidable`; unknown groups collide.
     pub fn collidable(&self, a: &str, b: &str) -> bool {
         match (self.get(a), self.get(b)) {

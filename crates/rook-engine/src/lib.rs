@@ -1,12 +1,12 @@
 //! Assembles a DataModel: loads a place, creates the services scripts
 //! expect, starts server Scripts, and runs the frame loop.
 //!
-//! A server DataModel also owns the physics world (`rook-physics`); clients
-//! don't simulate yet. See `docs/architecture.md` §6 for the frame order.
+//! Every DataModel has a physics world (`rook-physics`, kept in the
+//! scripting world so script queries reach it). Servers simulate; clients
+//! only query theirs. See `docs/architecture.md` §6 for the frame order.
 
 pub mod console;
 mod input;
-pub mod raycast;
 #[cfg(feature = "repl")]
 pub mod repl;
 mod session;
@@ -100,11 +100,6 @@ pub struct DataModel {
     render_changes: RenderChanges,
     /// Keyboard and mouse bookkeeping (clients).
     input: input::InputTracker,
-    /// Workspace part geometry for ray queries.
-    pub(crate) parts: raycast::PartCache,
-    /// The physics world. Only the server simulates for now: it owns every
-    /// part (network ownership comes with characters).
-    physics: Option<rook_physics::Physics>,
 }
 
 impl DataModel {
@@ -117,8 +112,13 @@ impl DataModel {
     pub fn new_client(options: &Options) -> Result<Self, EngineError> {
         let mut dm = Self::with_dom(Dom::new(), options)?;
         dm.role = Role::Client;
-        dm.physics = None;
-        dm.runtime.world_mut().is_client = true;
+        let mut w = dm.runtime.world_mut();
+        w.is_client = true;
+        // Only the server simulates for now: it owns every part (network
+        // ownership comes with characters). The client's world answers its
+        // LocalScripts' and the mouse's queries.
+        w.physics = rook_physics::Physics::for_queries();
+        drop(w);
         Ok(dm)
     }
 
@@ -141,11 +141,13 @@ impl DataModel {
 
     /// Drop journal entries every reader has seen. Physics catches up first
     /// so changes made after its step (by Heartbeat, or by remotes routed
-    /// between frames) aren't lost.
+    /// between frames) aren't lost. A world no query has built yet (a
+    /// client's) reads the whole DOM when it is first built instead.
     pub fn trim_journal(&mut self) {
         let mut w = self.runtime.world_mut();
-        if let Some(physics) = &mut self.physics {
-            physics.sync(&mut w.dom);
+        let w = &mut *w;
+        if w.physics.is_built() {
+            w.physics.sync(&mut w.dom);
         }
         let end = w.dom.journal().end();
         w.dom.journal_mut().trim(end);
@@ -221,8 +223,6 @@ impl DataModel {
             render_cursor: script_cursor,
             render_changes: RenderChanges::everything(),
             input: Default::default(),
-            parts: Default::default(),
-            physics: Some(rook_physics::Physics::new()),
         })
     }
 
@@ -353,22 +353,20 @@ impl DataModel {
     /// Step physics and write the results into the DOM. Parts that fell
     /// below Workspace.FallenPartsDestroyHeight are destroyed.
     fn simulate(&mut self, dt: f64) {
-        let commands = std::mem::take(&mut self.runtime.world_mut().physics_commands);
-        let Some(physics) = &mut self.physics else {
+        if self.role == Role::Client {
             return;
-        };
-        for c in commands {
-            physics.command(c);
         }
-        let fallen = {
+        let (fallen, touches, reached) = {
             let mut w = self.runtime.world_mut();
-            physics.sync(&mut w.dom);
-            physics.step(dt);
-            physics.write_back(&mut w.dom)
+            let w = &mut *w;
+            w.physics.sync(&mut w.dom);
+            w.physics.step(dt);
+            let fallen = w.physics.write_back(&mut w.dom);
+            (fallen, w.physics.take_touches(), w.physics.take_reached())
         };
         // Both parts fire, the lower id first (observed: the part made
         // first fired first in Studio; the real order is unknown).
-        for t in physics.take_touches() {
+        for t in touches {
             let event = if t.began { "Touched" } else { "TouchEnded" };
             for (part, other) in [(t.part, t.other), (t.other, t.part)] {
                 if let Ok(other) = self.runtime.push_instance(other) {
@@ -376,18 +374,13 @@ impl DataModel {
                 }
             }
         }
-        for rocket in physics.take_reached() {
+        for rocket in reached {
             let _ = self.runtime.fire_event(rocket, "ReachedTarget", ());
         }
         self.runtime.drain_deferred();
         for id in fallen {
             self.runtime.destroy(id);
         }
-    }
-
-    /// The physics world (servers only).
-    pub fn physics(&self) -> Option<&rook_physics::Physics> {
-        self.physics.as_ref()
     }
 
     /// Note whether the journal since the last check touched anything drawn:
@@ -404,22 +397,17 @@ impl DataModel {
                 Change::Property { id, .. } => {
                     if Some(*id) == lighting {
                         changes.lighting = true;
-                    } else if dom.is_a(*id, "BasePart") {
-                        self.parts.part_changed(dom, *id);
-                        if !changes.full {
-                            changes.parts.insert(*id);
-                        }
+                    } else if !changes.full && dom.is_a(*id, "BasePart") {
+                        changes.parts.insert(*id);
                     }
                 }
                 Change::Reparented { subtree, .. } => {
                     if subtree.iter().any(|i| dom.is_a(*i, "BasePart")) {
                         changes.full = true;
-                        self.parts.invalidate();
                     }
                 }
                 Change::Destroying(id) | Change::Created(id) if dom.is_a(*id, "BasePart") => {
                     changes.full = true;
-                    self.parts.invalidate();
                 }
                 _ => {}
             }

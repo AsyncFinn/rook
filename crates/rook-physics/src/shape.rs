@@ -4,7 +4,7 @@ use rapier3d::prelude::*;
 use rook_dom::{Dom, InstanceId};
 use rook_types::{PartShape, Value};
 
-use crate::convert::to_rapier;
+use crate::convert::{pose_of, to_rapier};
 
 /// Roblox parts are at least this many studs on each side.
 pub(crate) const MIN_PART_SIZE: f32 = 0.001;
@@ -56,4 +56,29 @@ pub(crate) fn collider_shape(shape: PartShape, size: glam::Vec3) -> Option<(Shar
             (SharedShape::convex_hull(&points)?, Pose::IDENTITY)
         }
     })
+}
+
+/// A part's collider shape placed in the world, read from the DOM.
+pub(crate) fn world_shape(dom: &Dom, part: InstanceId) -> Option<(SharedShape, Pose)> {
+    let Some(Value::Vector3(size)) = dom.property_by_name(part, "Size") else {
+        return None;
+    };
+    let (shape, local) = collider_shape(part_shape(dom, part), size.0)?;
+    Some((
+        shape,
+        pose_of(&crate::read::cframe(dom, part, "CFrame")) * local,
+    ))
+}
+
+/// A part's `Size` box placed in the world, whatever its shape: what
+/// Region3 and the `GetPartBounds*` queries test against (observed: a
+/// ball counts in its box's corners, and a rotated block doesn't count in
+/// its world bounding box's corners).
+pub(crate) fn world_box(dom: &Dom, part: InstanceId) -> Option<(SharedShape, Pose)> {
+    let Some(Value::Vector3(size)) = dom.property_by_name(part, "Size") else {
+        return None;
+    };
+    let h = size.0.max(glam::Vec3::splat(MIN_PART_SIZE)) * 0.5;
+    let cf = crate::read::cframe(dom, part, "CFrame");
+    Some((SharedShape::cuboid(h.x, h.y, h.z), pose_of(&cf)))
 }

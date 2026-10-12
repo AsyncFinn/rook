@@ -1,0 +1,437 @@
+//! Scene queries: every way scripts ask "what's there?" (rays, shape
+//! casts, regions, overlaps and touching parts), answered by Rapier's
+//! query pipeline over the same colliders the simulation uses.
+//!
+//! Queries see the current DOM, not last frame's physics: scripts often
+//! create or move a part and query in the same frame (observed: a ray
+//! hits a part created or moved just before it). So every query first
+//! brings the world up to date ([`Physics::sync`] applies the journal),
+//! then puts the colliders of bodies moved or rebuilt since the last step
+//! where they are now, in the broad phase too (Rapier only does that when
+//! it steps). Filters (`CanQuery`, ignore lists, collision groups) are read
+//! from the DOM per candidate, so they're always current as well.
+//!
+//! Rules observed in Studio 0.742 unless noted:
+//! - A part is skipped when both `CanCollide` and `CanQuery` are off
+//!   (`CanQuery` alone does nothing while `CanCollide` is on).
+//!   `Transparency` doesn't matter; anchored and unanchored parts count.
+//! - Rays don't hit a part they start inside (or on the surface of), and
+//!   reach at most [`MAX_RAY_LENGTH`] studs.
+//! - Region3 and the `GetPartBounds*` queries test each part's `Size` box
+//!   (see [`shape::world_box`]); touching faces count. `GetPartsInPart`
+//!   and `GetTouchingParts` test real shapes and need the parts to overlap.
+
+use std::collections::HashSet;
+
+use glam::Vec3;
+use rapier3d::parry::query::{self as parry, ShapeCastOptions};
+use rapier3d::prelude::*;
+use rook_dom::{Dom, InstanceId};
+use rook_types::CFrame;
+
+use crate::convert::{pose_of, to_glam, to_rapier};
+use crate::read::{boolean, enum_value};
+use crate::{Physics, groups, shape};
+
+/// Rays find nothing further than this many studs from their origin
+/// (observed for `FindPartOnRay` and `Raycast`, whatever the ray's
+/// length); a missed legacy ray still reports its full end point.
+pub const MAX_RAY_LENGTH: f32 = 15_000.0;
+
+/// `Spherecast`'s largest radius, `Blockcast`'s largest side and the
+/// longest distance either sweeps (observed; larger values raise errors).
+pub const MAX_CAST_RADIUS: f32 = 256.0;
+pub const MAX_CAST_SIDE: f32 = 512.0;
+pub const MAX_CAST_DISTANCE: f32 = 1024.0;
+
+/// How far shapes must overlap to count as touching, in studs, so faces
+/// that only meet (within float error, far from the origin) don't.
+/// Inference: Studio counts 0.01 studs of overlap and not faces that meet.
+const OVERLAP: f32 = 1e-3;
+
+/// Which parts a query considers.
+#[derive(Debug, Clone, Default)]
+pub struct Filter {
+    /// Parts in or under these instances are skipped (or, with
+    /// `include`, the only ones considered).
+    pub instances: Vec<InstanceId>,
+    pub include: bool,
+    /// The collision group the query acts as: parts in groups that don't
+    /// collide with it are skipped. `None` ignores groups (Region3).
+    pub group: Option<String>,
+    /// Skip parts with `CanCollide` off.
+    pub respect_can_collide: bool,
+}
+
+impl Filter {
+    /// Legacy rays: they act as the `Default` group (observed: a part in
+    /// a group that doesn't collide with `Default` is invisible to them).
+    pub fn legacy_ray(ignore: Vec<InstanceId>, include: bool) -> Self {
+        Self {
+            instances: ignore,
+            include,
+            group: Some(groups::DEFAULT.to_owned()),
+            respect_can_collide: false,
+        }
+    }
+
+    /// Legacy regions ignore collision groups (observed).
+    pub fn legacy_region(ignore: Vec<InstanceId>, include: bool) -> Self {
+        Self {
+            instances: ignore,
+            include,
+            group: None,
+            respect_can_collide: false,
+        }
+    }
+
+    fn accepts(&self, dom: &Dom, groups: &groups::CollisionGroups, part: InstanceId) -> bool {
+        let collides = boolean(dom, part, "CanCollide", true);
+        if !collides && (self.respect_can_collide || !boolean(dom, part, "CanQuery", true)) {
+            return false;
+        }
+        if let Some(g) = &self.group
+            && !groups.groups_collide(g, &groups::part_group(dom, part))
+        {
+            return false;
+        }
+        let listed = self
+            .instances
+            .iter()
+            .any(|&i| i == part || dom.is_ancestor_of(i, part));
+        listed == self.include
+    }
+}
+
+/// What a ray or shape cast hit.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Hit {
+    pub part: InstanceId,
+    pub position: Vec3,
+    /// Out of the surface hit.
+    pub normal: Vec3,
+    /// How far the ray (or the swept shape) travelled.
+    pub distance: f32,
+    /// The part's `Enum.Material` value.
+    pub material: u32,
+}
+
+/// The space a bounds query covers.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Region {
+    /// A box of `size` at `cframe` (Region3: axis-aligned).
+    Box {
+        cframe: CFrame,
+        size: Vec3,
+    },
+    Sphere {
+        center: Vec3,
+        radius: f32,
+    },
+}
+
+impl Region {
+    fn shape(&self) -> (SharedShape, Pose) {
+        match *self {
+            Region::Box { cframe, size } => {
+                let h = size.abs() * 0.5;
+                (SharedShape::cuboid(h.x, h.y, h.z), pose_of(&cframe))
+            }
+            Region::Sphere { center, radius } => (
+                SharedShape::ball(radius.max(0.0)),
+                pose_of(&CFrame::from_position(center)),
+            ),
+        }
+    }
+}
+
+/// The shape a `Blockcast` or `Spherecast` sweeps.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum CastShape {
+    Sphere(f32),
+    /// A box of this size.
+    Block(Vec3),
+}
+
+impl Physics {
+    /// Bring the world up to the current DOM for a query (see the module
+    /// docs).
+    fn prepare(&mut self, dom: &mut Dom) {
+        profiling::scope!("Physics::prepare_query");
+        self.sync(dom);
+        if self.stale.is_empty() {
+            return;
+        }
+        let params = self.world.integration_parameters;
+        for h in std::mem::take(&mut self.stale) {
+            let Some(body) = self.bodies.get(&h) else {
+                continue;
+            };
+            let pose = *self.world.bodies[h].position();
+            for (collider, _) in body.colliders.iter().flatten() {
+                if let Some(co) = self.world.colliders.get_mut(*collider) {
+                    let local = co.position_wrt_parent().copied().unwrap_or_default();
+                    co.set_position(pose * local);
+                    let aabb = co.compute_broad_phase_aabb(&params, &self.world.bodies);
+                    self.world.broad_phase.set_aabb(&params, *collider, aabb);
+                }
+            }
+        }
+        // The broad phase keeps what `set_aabb` changed until its next
+        // update, which a step does. A world that isn't stepping (a
+        // client's, or a server's with nothing unanchored) updates it here
+        // so the list doesn't grow. The pairs it reports are dropped:
+        // fixed bodies don't touch each other, and parts that start
+        // simulating get new colliders, whose pairs are reported then.
+        if self.query_only || self.bodies.values().all(|b| b.asm.anchored) {
+            let mut pairs = Vec::new();
+            self.world.broad_phase.update(
+                &params,
+                &self.world.colliders,
+                &self.world.bodies,
+                &[],
+                &[],
+                &mut pairs,
+            );
+        }
+    }
+
+    /// The part of each collider `filter` accepts.
+    fn part_filter<'a>(
+        &'a self,
+        dom: &'a Dom,
+        filter: &'a Filter,
+    ) -> impl Fn(ColliderHandle) -> Option<InstanceId> + 'a {
+        move |h| {
+            let part = *self.colliders.get(&h)?;
+            filter.accepts(dom, &self.groups, part).then_some(part)
+        }
+    }
+
+    /// The first part along a ray from `origin` covering `direction` (its
+    /// length is the maximum distance, up to [`MAX_RAY_LENGTH`]).
+    pub fn raycast(
+        &mut self,
+        dom: &mut Dom,
+        origin: Vec3,
+        direction: Vec3,
+        filter: &Filter,
+    ) -> Option<Hit> {
+        profiling::scope!("Physics::raycast");
+        self.prepare(dom);
+        let dom = &*dom;
+        let length = direction.length();
+        if !length.is_finite() || length <= 0.0 || !origin.is_finite() {
+            return None;
+        }
+        let dir = direction / length;
+        let max = length.min(MAX_RAY_LENGTH);
+        let ray = Ray::new(to_rapier(origin), to_rapier(dir));
+        let accept = self.part_filter(dom, filter);
+        let pipeline = self.world.query_pipeline();
+        // Solid, so a ray starting inside a part hits it at 0 and is
+        // skipped, then hits the next part along.
+        let (part, hit) = pipeline
+            .intersect_ray(ray, max, true)
+            .filter(|(_, _, hit)| hit.time_of_impact > 0.0)
+            .filter_map(|(h, _, hit)| Some((accept(h)?, hit)))
+            .min_by(|a, b| a.1.time_of_impact.total_cmp(&b.1.time_of_impact))?;
+        let distance = hit.time_of_impact;
+        Some(Hit {
+            part,
+            position: origin + dir * distance,
+            normal: surface_normal(to_glam(hit.normal)),
+            distance,
+            material: enum_value(dom, part, "Material"),
+        })
+    }
+
+    /// The first part a shape at `cframe` hits moving along `direction`
+    /// (its length is the distance). Parts the shape starts in are skipped
+    /// (observed).
+    pub fn shapecast(
+        &mut self,
+        dom: &mut Dom,
+        shape: CastShape,
+        cframe: CFrame,
+        direction: Vec3,
+        filter: &Filter,
+    ) -> Option<Hit> {
+        profiling::scope!("Physics::shapecast");
+        self.prepare(dom);
+        let dom = &*dom;
+        let length = direction.length();
+        if !length.is_finite() || length <= 0.0 {
+            return None;
+        }
+        let cast: SharedShape = match shape {
+            CastShape::Sphere(r) => SharedShape::ball(r.max(shape::MIN_PART_SIZE)),
+            CastShape::Block(size) => {
+                let h = size.max(Vec3::splat(shape::MIN_PART_SIZE)) * 0.5;
+                SharedShape::cuboid(h.x, h.y, h.z)
+            }
+        };
+        let start = pose_of(&cframe);
+        let accept = self.part_filter(dom, filter);
+        let predicate = |h: ColliderHandle, co: &Collider| {
+            accept(h).is_some()
+                && !parry::intersection_test(&start, &*cast, co.position(), co.shape())
+                    .is_ok_and(|t| t.intersecting)
+        };
+        let pipeline = self
+            .world
+            .query_pipeline_with_filter(QueryFilter::new().predicate(&predicate));
+        let options = ShapeCastOptions {
+            max_time_of_impact: length,
+            target_distance: 0.0,
+            stop_at_penetration: false,
+            compute_impact_geometry_on_penetration: true,
+        };
+        let dir = direction / length;
+        let (h, hit) = pipeline.cast_shape(&start, to_rapier(dir), &*cast, options)?;
+        let part = *self.colliders.get(&h)?;
+        // witness1 and normal1 are on the part hit, in world space.
+        Some(Hit {
+            part,
+            position: to_glam(hit.witness1),
+            normal: surface_normal(to_glam(hit.normal1)),
+            distance: hit.time_of_impact,
+            material: enum_value(dom, part, "Material"),
+        })
+    }
+
+    /// Parts whose collider overlaps `shape` at `pose` by `test`, in id
+    /// order (Approximation: Roblox's order is its own; parts made in
+    /// order came back in that order), at most `max` of them (0: all).
+    fn overlapping(
+        &self,
+        dom: &Dom,
+        query: (&dyn Shape, Pose),
+        filter: &Filter,
+        max: usize,
+        skip: Option<InstanceId>,
+        test: impl Fn(InstanceId, &Collider) -> bool,
+    ) -> Vec<InstanceId> {
+        let (shape, pose) = query;
+        let accept = self.part_filter(dom, filter);
+        let aabb = shape.compute_aabb(&pose);
+        let mut found: Vec<InstanceId> = self
+            .world
+            .query_pipeline()
+            .intersect_aabb_conservative(aabb)
+            .filter_map(|(h, co)| {
+                let part = accept(h).filter(|p| Some(*p) != skip)?;
+                test(part, co).then_some(part)
+            })
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect();
+        found.sort_unstable();
+        if max > 0 {
+            found.truncate(max);
+        }
+        found
+    }
+
+    /// Parts whose `Size` box meets `shape` at `pose`: Region3 (an
+    /// axis-aligned box), `GetPartBoundsInBox` and `GetPartBoundsInRadius`.
+    ///
+    /// Approximation: candidates come from the colliders' bounds, so a
+    /// cylinder whose box is much wider than its round shape can be missed
+    /// near its box's corners.
+    pub fn parts_in_bounds(
+        &mut self,
+        dom: &mut Dom,
+        region: Region,
+        filter: &Filter,
+        max: usize,
+    ) -> Vec<InstanceId> {
+        profiling::scope!("Physics::parts_in_bounds");
+        self.prepare(dom);
+        let dom = &*dom;
+        let (shape, pose) = region.shape();
+        self.overlapping(dom, (&*shape, pose), filter, max, None, |part, _| {
+            shape::world_box(dom, part).is_some_and(|(b, at)| {
+                parry::intersection_test(&pose, &*shape, &at, &*b).is_ok_and(|t| t.intersecting)
+            })
+        })
+    }
+
+    /// `WorldRoot:GetPartsInPart`: parts whose shape overlaps `part`'s.
+    /// The part needn't be in Workspace (observed).
+    pub fn parts_in_part(
+        &mut self,
+        dom: &mut Dom,
+        part: InstanceId,
+        filter: &Filter,
+        max: usize,
+    ) -> Vec<InstanceId> {
+        profiling::scope!("Physics::parts_in_part");
+        self.prepare(dom);
+        let Some((shape, pose)) = shape::world_shape(dom, part) else {
+            return Vec::new();
+        };
+        self.overlapping(dom, (&*shape, pose), filter, max, Some(part), |_, co| {
+            overlaps(&*shape, &pose, co)
+        })
+    }
+
+    /// `BasePart:GetTouchingParts`: Workspace parts overlapping `part`,
+    /// its own assembly's included. A colliding part only reports
+    /// colliding parts; one with `CanCollide` off reports nothing unless
+    /// `touch_listened` (something is connected to its Touched, which
+    /// gives it a TouchInterest), and then every part it overlaps
+    /// (observed; creator-docs says the same). `CanQuery` doesn't matter.
+    pub fn touching_parts(
+        &mut self,
+        dom: &mut Dom,
+        part: InstanceId,
+        touch_listened: bool,
+    ) -> Vec<InstanceId> {
+        profiling::scope!("Physics::touching_parts");
+        self.prepare(dom);
+        if !self.parts.contains_key(&part) {
+            return Vec::new();
+        }
+        let collides = |p| boolean(dom, p, "CanCollide", true);
+        let all = if collides(part) {
+            false
+        } else if touch_listened {
+            true
+        } else {
+            return Vec::new();
+        };
+        let Some((shape, pose)) = shape::world_shape(dom, part) else {
+            return Vec::new();
+        };
+        let aabb = shape.compute_aabb(&pose);
+        let mut found: Vec<InstanceId> = self
+            .world
+            .query_pipeline()
+            .intersect_aabb_conservative(aabb)
+            .filter_map(|(h, co)| {
+                let other = *self.colliders.get(&h)?;
+                (other != part && (all || collides(other)) && overlaps(&*shape, &pose, co))
+                    .then_some(other)
+            })
+            .collect();
+        found.sort_unstable();
+        found.dedup();
+        found
+    }
+}
+
+/// Whether `shape` at `pose` overlaps a collider by more than [`OVERLAP`].
+fn overlaps(shape: &dyn Shape, pose: &Pose, co: &Collider) -> bool {
+    parry::contact(pose, shape, co.position(), co.shape(), 0.0)
+        .ok()
+        .flatten()
+        .is_some_and(|c| c.dist < -OVERLAP)
+}
+
+/// A unit normal with float noise around zero removed, so a face's
+/// normal reads (0, 0.71, -0.71) as in Roblox, not (-0, 0.71, -0.71).
+fn surface_normal(n: Vec3) -> Vec3 {
+    let n = n.normalize_or_zero();
+    Vec3::select(n.abs().cmplt(Vec3::splat(1e-4)), Vec3::ZERO, n)
+}

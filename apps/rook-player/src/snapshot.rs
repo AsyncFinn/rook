@@ -4,8 +4,8 @@ use std::collections::HashMap;
 
 use glam::{Mat3, Vec3};
 use rook_dom::{Dom, InstanceId};
-use rook_engine::raycast::{part_shape, workspace_parts};
 use rook_engine::{DataModel, RenderChanges};
+use rook_physics::{part_shape, workspace_parts};
 use rook_render::{Camera, Lighting, PartInstance, Scene};
 use rook_types::{Color3, Value};
 

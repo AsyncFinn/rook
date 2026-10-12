@@ -17,9 +17,9 @@ each release says which milestone it finishes (see `CHANGELOG.md`).
 
 ## Now, next, later
 
-- **Now:** M3 step 5, physics queries.
-- **Next:** M4 Content, starting with the built-in mesh shapes.
-- **Later:** M5 Characters, then M6 GUI, M7 Audio and M8 Networking.
+- **Now:** M4 Content, starting with the built-in mesh shapes.
+- **Next:** M5 Characters.
+- **Later:** M6 GUI, M7 Audio and M8 Networking.
 
 ## Milestones
 
@@ -28,7 +28,7 @@ each release says which milestone it finishes (see `CHANGELOG.md`).
 | ✅ | **M0** File formats, datatypes, reflection, CLI | All test fixtures round-trip; 99.3% of the archive loads (v0.1.0) |
 | ✅ | **M1** Instance tree, signals, scheduler, Luau, server Scripts, conformance | First conformance batch passes; baseline of archive scripts running (v0.1.0) |
 | ✅ | **M2** Renderer v0, client/server split, LocalScripts, basic input | Archived places render recognisably; client scripts run alongside server scripts (v0.2.0) |
-| 🟡 | **M3** Physics | Physics conformance batch passes; unanchored places settle plausibly |
+| ✅ | **M3** Physics | Physics conformance batch passes; unanchored places settle plausibly |
 | ⬜ | **M4** Content: meshes, textures, decals | Archived places render with their meshes, decals and textures |
 | ⬜ | **M5** Characters | Walk around and use tools in an archived place |
 | ⬜ | **M6** GUI | GUI conformance batch passes |
@@ -44,7 +44,9 @@ Rapier underneath, Roblox's rules on top, every rule checked in Studio.
 2. ✅ Joints and assemblies (welds, Snaps, Motor6D, legacy surface joints, `MakeJoints`).
 3. ✅ Contacts, `Touched`, collision groups, materials.
 4. ✅ BodyMovers, driven hinges (RotateV, RotateP), the most-used constraints, `Velocity` and conveyors.
-5. Queries on Rapier, legacy first, by files using them: `FindPartOnRay` (205), `FindPartsInRegion3` (135), `FindPartOnRayWithIgnoreList` (123), `GetTouchingParts` (27), `FindPartOnRayWithWhitelist` (15), `Workspace:Raycast` with `RaycastParams`/`RaycastResult` (15), `FindPartsInRegion3WithIgnoreList`/`WithWhiteList` (17), `GetPartBoundsInBox`, `GetPartsInPart` and `GetPartBoundsInRadius` with `OverlapParams` (12), `Blockcast` and `Spherecast` (8); also Camera `ScreenPointToRay`/`ViewportPointToRay` (51), which scripts pair with raycasts. The mouse and ClickDetectors move over, and this step deletes `crates/rook-engine/src/raycast.rs`'s own geometry (`PartGeometry`, `PartCache`, the shape tests), which duplicates what physics reads.
+5. ✅ Queries on Rapier, legacy first, by files using them: `FindPartOnRay` (205), `FindPartsInRegion3` (135), `FindPartOnRayWithIgnoreList` (123), `GetTouchingParts` (27), `FindPartOnRayWithWhitelist` (15), `Workspace:Raycast` with `RaycastParams`/`RaycastResult` (15), `FindPartsInRegion3WithIgnoreList`/`WithWhiteList` (17), `GetPartBoundsInBox`, `GetPartsInPart` and `GetPartBoundsInRadius` with `OverlapParams` (12), `Blockcast` and `Spherecast` (8); also Camera `ScreenPointToRay`/`ViewportPointToRay` (51), which scripts pair with raycasts. The mouse and ClickDetectors moved over, and `crates/rook-engine/src/raycast.rs`'s own geometry is gone. Clients got a physics world that only answers queries.
+
+M3's exit criterion is met: the physics conformance batch (`physics/*`, six cases) passes, and unanchored places settle plausibly.
 
 ### M4 Content: meshes, textures, decals
 
