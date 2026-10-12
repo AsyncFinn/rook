@@ -177,6 +177,8 @@ pub struct HingeInput {
     pub input: SurfaceInput,
     pub param_a: f32,
     pub param_b: f32,
+    /// RotateV's torque limit per unit of input ([`rotate_v_strength`]).
+    pub strength: f32,
 }
 
 impl HingeInput {
@@ -195,6 +197,35 @@ impl HingeInput {
 /// RotateV turns at this many radians per second per unit of input
 /// (observed: ParamB 0.1, 0.5, 1 and 2 turn at 3.1, 15.5, 31 and 62).
 pub const ROTATE_V_SPEED: f32 = 31.0;
+
+/// RotateV's torque limit per unit of input per unit of [`rotate_v_strength`]'s
+/// geometric inertia (observed with a 1 and a 2 stud cube: 8.3e5 and
+/// 2.7e7 at ParamB 10).
+pub const ROTATE_V_TORQUE: f32 = 5.0e5;
+
+/// RotateV's torque limit per unit of input. A rotor gains speed steadily
+/// at this torque until it turns at its input's speed, so a heavy one
+/// spins up over seconds (observed). The limit comes from the smaller of
+/// the two parts, by size alone: the same with either part's density
+/// changed, and the same whichever part is the small one (observed).
+///
+/// Inference: modelled as the part's moment of inertia about the hinge
+/// axis at unit density. That is exact for 1 and 2 stud cubes and for
+/// plates up to 1 stud thick (the limit grows with thickness, observed
+/// from 0.2 to 2 studs), but Roblox's limit grows in steps with size:
+/// cubes from 0.5 to 8 studs measured from a quarter to three and a half
+/// times this.
+pub fn rotate_v_strength(dom: &Dom, j: &Joint) -> f32 {
+    let inertia = |part, frame: &str| {
+        let size = crate::read::vector(dom, part, "Size");
+        let axis = cframe(dom, j.id, frame).rotation.z_axis;
+        let volume = size.x * size.y * size.z;
+        let sq = size * size;
+        let diagonal = glam::Vec3::new(sq.y + sq.z, sq.x + sq.z, sq.x + sq.y) * (volume / 12.0);
+        (axis * axis).dot(diagonal)
+    };
+    ROTATE_V_TORQUE * inertia(j.part0, "C0").min(inertia(j.part1, "C1"))
+}
 
 /// RotateP moves its angle this many radians per 240 Hz step toward the
 /// input (observed: 2.4 rad/s, in 0.01 rad steps, whatever the distance).
@@ -228,6 +259,7 @@ pub fn hinge_input(dom: &Dom, j: &Joint) -> Option<HingeInput> {
         input,
         param_a: float(dom, j.part0, &format!("{face}ParamA")),
         param_b: float(dom, j.part0, &format!("{face}ParamB")),
+        strength: rotate_v_strength(dom, j),
     })
 }
 
