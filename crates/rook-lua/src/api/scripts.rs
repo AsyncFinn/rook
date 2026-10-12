@@ -74,14 +74,36 @@ pub fn run_source(
 ) -> mlua::Result<()> {
     let env = match script {
         Some(id) => environment(lua, id)?,
+        None => fresh_environment(lua)?,
+    };
+    run_in(lua, chunk_name, source, env)
+}
+
+/// An environment that reads the shared globals and keeps its own writes.
+fn fresh_environment(lua: &Lua) -> mlua::Result<Table> {
+    let env = lua.create_table()?;
+    let mt = lua.create_table()?;
+    mt.raw_set("__index", lua.globals())?;
+    env.set_metatable(Some(mt))?;
+    Ok(env)
+}
+
+/// Run `source` in the environment kept under `name` across calls, so
+/// globals one call sets the next one sees.
+pub fn run_source_in(lua: &Lua, name: &str, chunk_name: &str, source: &str) -> mlua::Result<()> {
+    let key = format!("rook.env.{name}");
+    let env = match lua.named_registry_value::<Option<Table>>(&key)? {
+        Some(env) => env,
         None => {
-            let env = lua.create_table()?;
-            let mt = lua.create_table()?;
-            mt.raw_set("__index", lua.globals())?;
-            env.set_metatable(Some(mt))?;
+            let env = fresh_environment(lua)?;
+            lua.set_named_registry_value(&key, &env)?;
             env
         }
     };
+    run_in(lua, chunk_name, source, env)
+}
+
+fn run_in(lua: &Lua, chunk_name: &str, source: &str, env: Table) -> mlua::Result<()> {
     let f = lua
         .load(source)
         .set_name(format!("={chunk_name}"))

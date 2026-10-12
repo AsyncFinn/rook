@@ -24,6 +24,13 @@ glam.workspace = true
 anstream.workspace = true
 anstyle.workspace = true
 chrono.workspace = true
+rustyline = { workspace = true, optional = true }
+
+[features]
+# The terminal command bar (`repl` module): Luau typed at the terminal runs
+# in the game. Apps turn it on by default; leave it out of builds you hand
+# to others.
+repl = ["dep:rustyline"]
 
 [lints]
 workspace = true

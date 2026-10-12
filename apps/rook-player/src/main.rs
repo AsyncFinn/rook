@@ -4,6 +4,9 @@
 //! server alone with `--run`), and draws what that player's client sees. Hold the right mouse button to look, WASD to move, Q/E to go
 //! down/up, Shift to move faster, and the mouse wheel to change speed.
 //! `--screenshot out.png` renders one frame offscreen instead.
+//!
+//! With the `repl` feature (default) and an interactive terminal, the
+//! terminal shows a `> ` prompt that runs Luau in the open place.
 
 mod game;
 mod keys;
@@ -63,6 +66,10 @@ struct Args {
     /// Run this many frames offscreen and print where the time goes.
     #[arg(long)]
     bench: Option<u32>,
+    /// Don't show the `>` command prompt in the terminal.
+    #[cfg(feature = "repl")]
+    #[arg(long)]
+    no_repl: bool,
 }
 
 fn parse_vec3(s: &str) -> Result<Vec3, String> {
@@ -163,6 +170,12 @@ fn main() -> anyhow::Result<()> {
         looking: false,
         last_frame: Instant::now(),
         pending_mouse: None,
+        #[cfg(feature = "repl")]
+        repl: if args.no_repl {
+            None
+        } else {
+            rook_engine::repl::Repl::start()
+        },
     };
     event_loop.run_app(&mut app)?;
     Ok(())
@@ -288,6 +301,9 @@ struct App {
     /// The latest cursor position not yet sent to the game. Moves are sent
     /// once per frame because each costs a mouse raycast.
     pending_mouse: Option<(f32, f32)>,
+    /// The terminal command prompt, when the terminal is interactive.
+    #[cfg(feature = "repl")]
+    repl: Option<rook_engine::repl::Repl>,
 }
 
 impl App {
@@ -372,6 +388,11 @@ impl App {
 
         if let Some((x, y)) = self.pending_mouse.take() {
             self.game.input(InputEvent::MouseMove { x, y });
+        }
+
+        #[cfg(feature = "repl")]
+        if let Some(repl) = &mut self.repl {
+            repl.poll(self.game.server(), self.game.client());
         }
 
         // Simulate in fixed 60 Hz steps, catching up at most a few per frame.

@@ -11,6 +11,7 @@ pub fn run(
     timeout: f64,
     quiet: bool,
     script: Option<&Path>,
+    #[cfg(feature = "repl")] repl: bool,
 ) -> anyhow::Result<()> {
     let bytes = fs_err::read(file)?;
     let options = Options {
@@ -28,12 +29,18 @@ pub fn run(
     }
     server.run_for(seconds);
     let log = server.take_log();
-    let errors = log.iter().filter(|e| e.kind == MessageType::Error).count();
     if !quiet {
         for entry in &log {
             rook_engine::console::print_entry("Server", entry);
         }
     }
+    #[cfg(feature = "repl")]
+    let log = if repl {
+        [log, interactive(&mut server)].concat()
+    } else {
+        log
+    };
+    let errors = log.iter().filter(|e| e.kind == MessageType::Error).count();
     let world = server.runtime().world();
     println!(
         "\n{} scripts started, {} log lines, {errors} errors, {:.1}s simulated in {:.2}s",
@@ -57,4 +64,34 @@ pub fn run(
         }
     }
     Ok(())
+}
+
+/// Run in real time at 60 Hz with the command prompt until input ends,
+/// printing output as it comes. Returns the output.
+#[cfg(feature = "repl")]
+fn interactive(server: &mut Server) -> Vec<rook_lua::LogEntry> {
+    let Some(mut repl) = rook_engine::repl::Repl::start() else {
+        rook_engine::console::print_message(
+            MessageType::Warning,
+            "--repl needs an interactive terminal",
+        );
+        return Vec::new();
+    };
+    let frame = Duration::from_secs_f64(1.0 / 60.0);
+    let mut next = Instant::now();
+    let mut log = Vec::new();
+    while !repl.closed() {
+        repl.poll(server, None);
+        server.step();
+        for entry in server.take_log() {
+            rook_engine::console::print_entry("Server", &entry);
+            log.push(entry);
+        }
+        next += frame;
+        match next.checked_duration_since(Instant::now()) {
+            Some(wait) => std::thread::sleep(wait),
+            None => next = Instant::now(),
+        }
+    }
+    log
 }

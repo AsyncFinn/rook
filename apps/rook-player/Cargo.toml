@@ -30,6 +30,10 @@ clap.workspace = true
 profiling.workspace = true
 
 [features]
+default = ["repl"]
+# A `>` prompt in the terminal that runs Luau in the open place (on when
+# the terminal is interactive; `--no-repl` turns it off).
+repl = ["rook-engine/repl"]
 # Live per-frame timeline in the Tracy profiler (https://github.com/wolfpld/tracy).
 tracy = ["profiling/profile-with-tracy"]
 

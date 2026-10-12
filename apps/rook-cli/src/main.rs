@@ -69,6 +69,12 @@ enum Command {
         /// Also run this Luau file as a server script after the place starts.
         #[arg(long)]
         script: Option<PathBuf>,
+        /// After `--seconds`, keep running in real time with a `>` prompt
+        /// that runs Luau on the server, until input ends (Ctrl+C on an
+        /// empty line, or Ctrl+D).
+        #[cfg(feature = "repl")]
+        #[arg(long)]
+        repl: bool,
     },
     /// Run every place in a folder headless and report how many run cleanly.
     CorpusRun {
@@ -171,6 +177,16 @@ fn main() -> anyhow::Result<()> {
             timeout,
             quiet,
             script,
-        } => run::run(&file, seconds, timeout, quiet, script.as_deref()),
+            #[cfg(feature = "repl")]
+            repl,
+        } => run::run(
+            &file,
+            seconds,
+            timeout,
+            quiet,
+            script.as_deref(),
+            #[cfg(feature = "repl")]
+            repl,
+        ),
     }
 }
