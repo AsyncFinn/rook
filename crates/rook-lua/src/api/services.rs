@@ -53,19 +53,12 @@ pub(crate) fn luau_source(owner: &str, name: &str) -> Option<&'static str> {
                 return t.gui(self, { Size = size, Position = position }, direction, style, time, override, callback)
             end"#
         }
-        // Invoke waits until a callback is set (creator-docs
-        // BindableFunction.OnInvoke); Rook checks once per frame.
+        // Invoke waits until a callback is set.
         ("BindableFunction", "Invoke") => {
             r#"
-            local std = ...
-            local wait, get_callback = std.task.wait, std.get_callback
+            local wait_for_callback = (...).wait_for_callback
             return function(self, ...)
-                local callback = get_callback(self, "OnInvoke")
-                while not callback do
-                    wait()
-                    callback = get_callback(self, "OnInvoke")
-                end
-                return callback(...)
+                return wait_for_callback(self, "OnInvoke")(...)
             end
             "#
         }

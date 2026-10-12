@@ -152,21 +152,37 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
             },
         )?,
     )?;
-    // Runs an incoming invoke on the receiving side: waits for the callback
-    // to be set (creator-docs: invokes queue until it is), calls it, and
-    // sends back the results or the error.
+    // `std.wait_for_callback(object, name)`: the callback, once one is set.
+    // Invokes queue until then (creator-docs BindableFunction.OnInvoke,
+    // RemoteFunction.OnServerInvoke); Rook checks once per frame.
+    let wait_for_callback: mlua::Function = lua
+        .load(
+            r#"
+            local std = ...
+            local get_callback, wait = std.get_callback, std.task.wait
+            return function(object, name)
+                local callback = get_callback(object, name)
+                while not callback do
+                    wait()
+                    callback = get_callback(object, name)
+                end
+                return callback
+            end
+            "#,
+        )
+        .set_name("=[rook] wait_for_callback")
+        .call(std.clone())?;
+    std.set("wait_for_callback", wait_for_callback)?;
+    // Runs an incoming invoke on the receiving side: waits for the callback,
+    // calls it, and sends back the results or the error.
     let runner: mlua::Function = lua
         .load(
             r#"
             local std = ...
-            local get_callback, reply, wait, pcall, pack, unpack =
-                std.get_callback, std.reply, std.task.wait, std.pcall, std.table.pack, std.table.unpack
+            local wait_for_callback, reply, pcall, pack, unpack =
+                std.wait_for_callback, std.reply, std.pcall, std.table.pack, std.table.unpack
             return function(remote, name, call, ...)
-                local callback = get_callback(remote, name)
-                while not callback do
-                    wait()
-                    callback = get_callback(remote, name)
-                end
+                local callback = wait_for_callback(remote, name)
                 local results = pack(pcall(callback, ...))
                 reply(call, unpack(results, 1, results.n))
             end
