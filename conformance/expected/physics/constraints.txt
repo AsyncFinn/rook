@@ -1,0 +1,14 @@
+-- studio 0.742.0.7421053
+-- signals: deferred
+joints RotateV RotateP
+RotateV 15.5
+RotateP 1.00
+NoInput 0.00
+motor 5.0
+servo 90 90
+limited true
+RotateP changed -0.50
+spring -4.5
+rope true true
+rod -3.5
+ball socket -1.5

@@ -45,17 +45,43 @@ fn unpack(data: u128) -> [f32; 4] {
     std::array::from_fn(|i| f32::from_bits((data >> (32 * i)) as u32))
 }
 
+/// An anchored body's `user_data`: its surface velocity, for conveyors.
+pub(crate) fn pack_velocity(v: Vector) -> u128 {
+    [v.x, v.y, v.z]
+        .iter()
+        .enumerate()
+        .fold(0, |acc, (i, f)| acc | (u128::from(f.to_bits()) << (32 * i)))
+}
+
+fn surface_velocity(context: &ContactModificationContext, body: Option<RigidBodyHandle>) -> Vector {
+    let Some(rb) = body.and_then(|b| context.bodies.get(b)) else {
+        return Vector::ZERO;
+    };
+    let [x, y, z, _] = unpack(rb.user_data);
+    Vector::new(x, y, z)
+}
+
 /// Sets each contact's friction and elasticity to the two parts' values
-/// averaged by their weights (measured in Studio).
+/// averaged by their weights (measured in Studio), and makes anchored parts
+/// with a velocity carry what touches them along.
 pub(crate) struct Mixer;
 
 impl PhysicsHooks for Mixer {
     fn modify_solver_contacts(&self, context: &mut ContactModificationContext) {
         let [f1, fw1, e1, ew1] = unpack(context.colliders[context.collider1].user_data);
         let [f2, fw2, e2, ew2] = unpack(context.colliders[context.collider2].user_data);
+        let belt = surface_velocity(context, context.rigid_body1)
+            - surface_velocity(context, context.rigid_body2);
         if let Some(m) = context.rigid_mut() {
             *m.friction = mix(f1, fw1, f2, fw2);
             *m.restitution = mix(e1, ew1, e2, ew2);
+            if belt != Vector::ZERO {
+                let n = *m.normal;
+                let tangent = belt - n * belt.dot(n);
+                for c in m.solver_contacts.iter_mut() {
+                    c.tangent_velocity = tangent;
+                }
+            }
         }
     }
 }

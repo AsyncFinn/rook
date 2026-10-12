@@ -14,19 +14,26 @@
 //! their collision group ([`groups`]), and their contacts become Touched
 //! and TouchEnded ([`Physics::take_touches`]).
 //!
-//! Still to come: BodyMovers and constraints, and queries; see
-//! `docs/architecture.md` §12.
+//! BodyMovers and force constraints push bodies every step ([`movers`]);
+//! attachment constraints become Rapier joints ([`constraints`]), and
+//! RotateV, RotateP and HingeConstraint actuators drive their joints'
+//! motors.
+//!
+//! Still to come: queries; see `docs/architecture.md` §12.
 
 pub mod assembly;
+mod constraints;
 mod contacts;
 mod convert;
 pub mod groups;
 pub mod joints;
 pub mod materials;
+mod movers;
+mod read;
 mod shape;
 pub mod surfaces;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use rapier3d::prelude::*;
 use rook_dom::{Change, Dom, InstanceId};
@@ -39,9 +46,11 @@ pub use shape::{is_part, part_shape, workspace_parts};
 pub use contacts::Touch;
 
 use assembly::{Assembly, is_massless};
+use constraints::{Drive, Spec, apply_drive, hinge_constraint_drive, revolute_angle};
 use convert::{cframe_of, pose_of, to_glam, to_rapier};
 use groups::CollisionGroups;
-use joints::{Joint, JointKind, active_joint, endpoints, is_joint};
+use joints::{HingeInput, Joint, JointKind, active_joint, endpoints, is_joint};
+use movers::Mover;
 
 /// Roblox simulates at 240 Hz (creator-docs "Adaptive timestepping": 240,
 /// 120 or 60 Hz per assembly; Rook always uses 240, an Approximation).
@@ -69,6 +78,38 @@ pub fn part_mass(dom: &Dom, part: InstanceId) -> f32 {
     part_volume(dom, part) * materials::of_part(dom, part).density
 }
 
+/// Move the velocities files save (the deprecated `Velocity` and
+/// `RotVelocity`) into `AssemblyLinearVelocity` and
+/// `AssemblyAngularVelocity`, which aren't saved and are the ones physics
+/// and scripts use. Scripts see `Velocity` and `RotVelocity` as views of
+/// them (observed: setting either sets the assembly's velocity at once).
+pub fn adopt_saved_velocities(dom: &mut Dom) {
+    let db = dom.database();
+    let Some(base) = db.class_by_name("BasePart").map(|c| c.id) else {
+        return;
+    };
+    let p = |name| db.find_canonical_property(base, name).map(|p| p.id);
+    let pairs = [
+        (p("Velocity"), p("AssemblyLinearVelocity")),
+        (p("RotVelocity"), p("AssemblyAngularVelocity")),
+    ];
+    for id in dom.descendants(dom.root()) {
+        if !dom.is_a(id, "BasePart") {
+            continue;
+        }
+        for (saved, used) in pairs {
+            let (Some(saved), Some(used)) = (saved, used) else {
+                continue;
+            };
+            if let Some(Value::Vector3(v)) = dom.property(id, saved)
+                && v.0 != glam::Vec3::ZERO
+            {
+                let _ = dom.set_property(id, used, Value::Vector3(v));
+            }
+        }
+    }
+}
+
 /// The physics properties [`Physics`] watches, resolved once.
 #[derive(Debug)]
 struct Props {
@@ -89,6 +130,9 @@ struct Props {
     fallen_height: PropertyId,
     group_data: PropertyId,
     touches_use_groups: PropertyId,
+    /// Each face's ParamA, ParamB and SurfaceInput, which drive RotateV
+    /// and RotateP.
+    surface_inputs: Vec<PropertyId>,
 }
 
 impl Props {
@@ -97,7 +141,7 @@ impl Props {
         let base = db.class_by_name("BasePart")?.id;
         let part = db.class_by_name("Part")?.id;
         let ws = db.class_by_name("Workspace")?.id;
-        let p = |class, name| db.find_canonical_property(class, name).map(|p| p.id);
+        let p = |class, name: &str| db.find_canonical_property(class, name).map(|p| p.id);
         Some(Self {
             cframe: p(base, "CFrame")?,
             size: p(base, "Size")?,
@@ -116,6 +160,13 @@ impl Props {
             fallen_height: p(ws, "FallenPartsDestroyHeight")?,
             group_data: p(ws, "CollisionGroupData")?,
             touches_use_groups: p(ws, "TouchesUseCollisionGroups")?,
+            surface_inputs: ["Top", "Bottom", "Left", "Right", "Front", "Back"]
+                .iter()
+                .flat_map(|face| {
+                    ["ParamA", "ParamB", "SurfaceInput"]
+                        .map(|input| p(base, &format!("{face}{input}")))
+                })
+                .collect::<Option<_>>()?,
         })
     }
 
@@ -145,6 +196,45 @@ impl Props {
     fn is_pose(&self, p: PropertyId) -> bool {
         p == self.cframe || p == self.linear_velocity || p == self.angular_velocity
     }
+}
+
+/// Script requests physics carries out at its next step.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Command {
+    /// `RocketPropulsion:Fire()`.
+    FireRocket(InstanceId),
+    /// `RocketPropulsion:Abort()`.
+    AbortRocket(InstanceId),
+}
+
+/// What sets a driven revolute joint's motor.
+#[derive(Debug, Clone, Copy)]
+enum DriveSource {
+    /// RotateV or RotateP.
+    Surface(HingeInput),
+    /// A HingeConstraint's actuator.
+    Actuator(Drive),
+}
+
+/// A revolute joint with a motor.
+#[derive(Debug)]
+struct Driven {
+    joint: ImpulseJointHandle,
+    source: DriveSource,
+    /// How long a Sin input has run.
+    time: f64,
+    /// RotateP's angle, which steps toward its input; `None` until the
+    /// joint's angle is first read.
+    angle: Option<f32>,
+}
+
+/// An attachment constraint in the world.
+#[derive(Debug)]
+struct BuiltConstraint {
+    spec: Spec,
+    bodies: [RigidBodyHandle; 2],
+    offsets: [CFrame; 2],
+    joint: ImpulseJointHandle,
 }
 
 /// One assembly in the Rapier world.
@@ -180,6 +270,25 @@ pub struct Physics {
     /// collide also don't touch.
     touches_use_groups: bool,
     touch: contacts::Tracker,
+    /// Mover instances seen in the world (some may have left it since).
+    mover_ids: HashSet<InstanceId>,
+    /// Movers acting now, in a stable order so forces add up the same
+    /// way every run.
+    movers: BTreeMap<InstanceId, Mover>,
+    /// Bodies the movers pushed last step.
+    forced: Vec<RigidBodyHandle>,
+    /// Fired rockets, and whether each is within its target's radius.
+    rockets: HashMap<InstanceId, bool>,
+    /// Rockets that reached their target since the last call.
+    reached: Vec<InstanceId>,
+    /// Attachment constraints seen in the world.
+    constraint_ids: HashSet<InstanceId>,
+    /// Movers and constraints to re-read at the next sync, or all of them.
+    dirty: HashSet<InstanceId>,
+    all_dirty: bool,
+    constraints: HashMap<InstanceId, BuiltConstraint>,
+    /// Driven revolute joints: RotateV, RotateP and HingeConstraints.
+    drives: HashMap<InstanceId, Driven>,
 }
 
 impl std::fmt::Debug for Physics {
@@ -224,7 +333,38 @@ impl Physics {
             groups: CollisionGroups::default(),
             touches_use_groups: false,
             touch: contacts::Tracker::default(),
+            mover_ids: HashSet::new(),
+            movers: BTreeMap::new(),
+            forced: Vec::new(),
+            rockets: HashMap::new(),
+            reached: Vec::new(),
+            constraint_ids: HashSet::new(),
+            dirty: HashSet::new(),
+            all_dirty: false,
+            constraints: HashMap::new(),
+            drives: HashMap::new(),
         }
+    }
+
+    /// Carry out a script's request.
+    pub fn command(&mut self, command: Command) {
+        match command {
+            Command::FireRocket(id) => {
+                self.rockets.insert(id, false);
+                self.mover_ids.insert(id);
+                self.dirty.insert(id);
+            }
+            Command::AbortRocket(id) => {
+                self.rockets.remove(&id);
+                self.dirty.insert(id);
+            }
+        }
+    }
+
+    /// Rockets that reached their target since the last call, for their
+    /// ReachedTarget events.
+    pub fn take_reached(&mut self) -> Vec<InstanceId> {
+        std::mem::take(&mut self.reached)
     }
 
     /// Touched and TouchEnded events since the last call, in order.
@@ -263,6 +403,10 @@ impl Physics {
         } else {
             self.apply_changes(dom, &props);
         }
+        let all = std::mem::take(&mut self.all_dirty);
+        let dirty = std::mem::take(&mut self.dirty);
+        self.refresh_constraints(dom, all, &dirty);
+        self.refresh_movers(dom, all, &dirty);
         // Our own snapping writes aren't changes to apply next time.
         self.cursor = dom.journal().end();
         self.props = Some(props);
@@ -273,14 +417,22 @@ impl Physics {
         self.read_workspace(dom, props);
         let parts = workspace_parts(dom);
         self.rebuild(dom, props, parts);
+        if let Some(ws) = dom.find_service("Workspace") {
+            for id in dom.descendants(ws) {
+                self.notice(dom, id);
+            }
+        }
         self.built = true;
     }
 
     fn apply_changes(&mut self, dom: &mut Dom, props: &Props) {
+        profiling::scope!("Physics::apply_changes");
         let mut structural: Vec<InstanceId> = Vec::new();
         let mut changed_joints: Vec<InstanceId> = Vec::new();
         let mut moved_joints: Vec<InstanceId> = Vec::new();
         let mut posed: Vec<InstanceId> = Vec::new();
+        let mut surfaces: Vec<InstanceId> = Vec::new();
+        let mut attachments: Vec<InstanceId> = Vec::new();
         let mut workspace_changed = false;
         let db = dom.database();
         for change in dom.journal().since(self.cursor) {
@@ -299,6 +451,16 @@ impl Physics {
                             "C0" | "C1" | "Transform" | "CurrentAngle" => moved_joints.push(*id),
                             _ => {}
                         }
+                    } else if self.constraint_ids.contains(id) || self.mover_ids.contains(id) {
+                        self.dirty.insert(*id);
+                    } else if props.surface_inputs.contains(&p) {
+                        if !self.drives.is_empty() && self.parts.contains_key(id) {
+                            surfaces.push(*id);
+                        }
+                    } else if !(self.constraint_ids.is_empty() && self.mover_ids.is_empty())
+                        && dom.class_name(*id) == "Attachment"
+                    {
+                        attachments.push(*id);
                     }
                 }
                 Change::Reparented { subtree, .. } => {
@@ -307,6 +469,10 @@ impl Physics {
                             structural.push(i);
                         } else if self.joints.contains_key(&i) || is_joint(dom, i) {
                             changed_joints.push(i);
+                        } else if dom.class_name(i) == "Attachment" {
+                            attachments.push(i);
+                        } else {
+                            self.notice(dom, i);
                         }
                     }
                 }
@@ -331,11 +497,29 @@ impl Physics {
             }
             structural.extend(endpoints(dom, j).into_iter().flatten());
         }
+        for att in attachments {
+            for &(holder, _) in dom.referrers(att) {
+                if self.constraint_ids.contains(&holder) || self.mover_ids.contains(&holder) {
+                    self.dirty.insert(holder);
+                }
+            }
+        }
         let rebuilt = if structural.is_empty() {
             HashSet::new()
         } else {
+            // Bodies the movers pushed and constraints joined may be gone.
+            self.all_dirty = true;
             self.rebuild(dom, props, structural)
         };
+        for part in surfaces {
+            for j in joints::part_joints(dom, part) {
+                if let (Some(d), Some(input)) =
+                    (self.drives.get_mut(&j.id), joints::hinge_input(dom, &j))
+                {
+                    d.source = DriveSource::Surface(input);
+                }
+            }
+        }
 
         let mut done = rebuilt.clone();
         for j in moved_joints {
@@ -448,6 +632,7 @@ impl Physics {
         for j in &body.asm.hinges {
             self.joints.remove(&j.id);
             self.hinges.remove(&j.id);
+            self.drives.remove(&j.id);
         }
         Some(body)
     }
@@ -463,7 +648,10 @@ impl Physics {
             _ => Vector::ZERO,
         };
         let builder = if asm.anchored {
+            // An anchored part keeps its velocity and carries what touches
+            // it along: a conveyor (observed).
             RigidBodyBuilder::fixed()
+                .user_data(contacts::pack_velocity(vector(props.linear_velocity)))
         } else {
             RigidBodyBuilder::dynamic()
                 .linvel(vector(props.linear_velocity))
@@ -585,6 +773,183 @@ impl Physics {
         let handle = self.world.insert_impulse_joint(b0, b1, joint);
         self.hinges.insert(id, handle);
         self.joints.insert(id, [j.part0, j.part1]);
+        if let Some(input) = joints::hinge_input(dom, &j) {
+            self.drives.insert(
+                id,
+                Driven {
+                    joint: handle,
+                    source: DriveSource::Surface(input),
+                    time: 0.0,
+                    angle: None,
+                },
+            );
+        }
+    }
+
+    /// Note an instance that may be a mover or a constraint.
+    fn notice(&mut self, dom: &Dom, id: InstanceId) {
+        let class = dom.class_name(id);
+        if movers::is_mover(class) {
+            self.mover_ids.insert(id);
+        } else if constraints::is_constraint(class) {
+            self.constraint_ids.insert(id);
+        } else {
+            return;
+        }
+        self.dirty.insert(id);
+    }
+
+    /// A part's body and its pose in it.
+    fn frame_of(&self, part: InstanceId) -> Option<(RigidBodyHandle, CFrame)> {
+        let h = *self.parts.get(&part)?;
+        Some((h, self.bodies.get(&h)?.asm.offset_of(part)?))
+    }
+
+    /// Re-read the movers that changed (`all` after a rebuild), and every
+    /// fired rocket, whose target may have moved.
+    fn refresh_movers(&mut self, dom: &Dom, all: bool, dirty: &HashSet<InstanceId>) {
+        profiling::scope!("Physics::refresh_movers");
+        let ids: Vec<InstanceId> = if all {
+            self.mover_ids.iter().copied().collect()
+        } else {
+            let changed = dirty.iter().filter(|i| self.mover_ids.contains(i));
+            changed.chain(self.rockets.keys()).copied().collect()
+        };
+        let ws = dom.find_service("Workspace");
+        for id in ids {
+            if dom.is_destroyed(id) {
+                self.mover_ids.remove(&id);
+                self.rockets.remove(&id);
+                self.movers.remove(&id);
+                continue;
+            }
+            let fired = self.rockets.contains_key(&id);
+            let mover = ws
+                .filter(|ws| dom.is_ancestor_of(*ws, id))
+                .and_then(|_| Mover::read(dom, id, fired, |p| self.frame_of(p)));
+            match mover {
+                Some(m) => self.movers.insert(id, m),
+                None => self.movers.remove(&id),
+            };
+        }
+    }
+
+    /// Build, rebuild or remove the joints of constraints that changed.
+    fn refresh_constraints(&mut self, dom: &Dom, all: bool, dirty: &HashSet<InstanceId>) {
+        profiling::scope!("Physics::refresh_constraints");
+        let ids: Vec<InstanceId> = if all {
+            self.constraint_ids.iter().copied().collect()
+        } else {
+            let changed = dirty.iter().filter(|i| self.constraint_ids.contains(i));
+            changed.copied().collect()
+        };
+        let ws = dom.find_service("Workspace");
+        for id in ids {
+            if dom.is_destroyed(id) {
+                self.constraint_ids.remove(&id);
+            }
+            let wanted = ws
+                .filter(|ws| dom.is_ancestor_of(*ws, id))
+                .and_then(|_| Spec::read(dom, id))
+                .and_then(|spec| {
+                    let (b0, o0) = self.frame_of(spec.parts[0])?;
+                    let (b1, o1) = self.frame_of(spec.parts[1])?;
+                    (b0 != b1).then_some((spec, [b0, b1], [o0, o1]))
+                });
+            let current = self.constraints.get(&id).filter(|c| {
+                self.world.impulse_joints.get(c.joint).is_some()
+                    && wanted.as_ref().is_some_and(|(spec, bodies, offsets)| {
+                        c.spec == *spec && c.bodies == *bodies && c.offsets == *offsets
+                    })
+            });
+            let joint = match (current, wanted) {
+                (Some(c), _) => Some(c.joint),
+                (None, wanted) => {
+                    if let Some(old) = self.constraints.remove(&id) {
+                        self.world.remove_impulse_joint(old.joint);
+                    }
+                    wanted.map(|(spec, bodies, offsets)| {
+                        let joint = self.world.insert_impulse_joint(
+                            bodies[0],
+                            bodies[1],
+                            spec.joint(offsets),
+                        );
+                        self.constraints.insert(
+                            id,
+                            BuiltConstraint {
+                                spec,
+                                bodies,
+                                offsets,
+                                joint,
+                            },
+                        );
+                        joint
+                    })
+                }
+            };
+            match joint.filter(|_| dom.class_name(id) == "HingeConstraint") {
+                Some(joint) => {
+                    let source = DriveSource::Actuator(hinge_constraint_drive(dom, id));
+                    let d = self.drives.entry(id).or_insert(Driven {
+                        joint,
+                        source,
+                        time: 0.0,
+                        angle: None,
+                    });
+                    d.joint = joint;
+                    d.source = source;
+                }
+                None => {
+                    self.drives.remove(&id);
+                }
+            }
+        }
+    }
+
+    /// Set each driven joint's motor for this frame of `dt` seconds and
+    /// `steps` steps.
+    fn drive_joints(&mut self, dt: f64, steps: u32) {
+        profiling::scope!("Physics::drive_joints");
+        for d in self.drives.values_mut() {
+            let Some(j) = self.world.impulse_joints.get(d.joint) else {
+                continue;
+            };
+            let (Some(rb1), Some(rb2)) = (
+                self.world.bodies.get(j.body1()),
+                self.world.bodies.get(j.body2()),
+            ) else {
+                continue;
+            };
+            let angle = revolute_angle(&j.data, rb1.position(), rb2.position());
+            let drive = match d.source {
+                DriveSource::Actuator(drive) => drive,
+                DriveSource::Surface(input) => {
+                    d.time = if input.input == joints::SurfaceInput::Sin {
+                        d.time + dt
+                    } else {
+                        0.0
+                    };
+                    let value = input.value(d.time);
+                    if input.stepping {
+                        let held = *d.angle.get_or_insert(angle);
+                        let max = joints::ROTATE_P_STEP * steps as f32;
+                        let next = value.map_or(held, |v| held + (v - held).clamp(-max, max));
+                        d.angle = Some(next);
+                        Drive::Angle { angle: next }
+                    } else {
+                        Drive::Speed {
+                            speed: joints::ROTATE_V_SPEED * value.unwrap_or(0.0),
+                            max_torque: Real::MAX,
+                        }
+                    }
+                }
+            };
+            if let Some(new) = apply_drive(&j.data, drive, angle)
+                && let Some(j) = self.world.impulse_joints.get_mut(d.joint, true)
+            {
+                j.data = new;
+            }
+        }
     }
 
     /// Re-read a body's joint offsets, move its colliders and write its
@@ -625,6 +990,8 @@ impl Physics {
         if rb.is_dynamic() {
             rb.set_linvel(vector(props.linear_velocity), true);
             rb.set_angvel(vector(props.angular_velocity), true);
+        } else {
+            rb.user_data = contacts::pack_velocity(vector(props.linear_velocity));
         }
         // Keep the rest of the assembly with it.
         let _ = body.asm.place(dom, root);
@@ -638,9 +1005,24 @@ impl Physics {
             return;
         }
         let steps = (dt * STEP_HZ).round().max(1.0) as u32;
+        self.drive_joints(dt, steps);
         let events = contacts::Collector::default();
+        let h = self.world.integration_parameters.dt;
         for _ in 0..steps {
+            if !self.movers.is_empty() || !self.forced.is_empty() {
+                movers::apply(&mut self.world, self.movers.values(), h, &mut self.forced);
+            }
             self.world.step_with_events(&contacts::Mixer, &events);
+        }
+        for m in self.movers.values() {
+            if let Some(inside) = movers::rocket_arrived(&self.world, m)
+                && let Some(was) = self.rockets.get_mut(&m.id)
+            {
+                if inside && !*was {
+                    self.reached.push(m.id);
+                }
+                *was = inside;
+            }
         }
         let parts = &self.parts;
         self.touch
@@ -661,6 +1043,7 @@ impl Physics {
             return Vec::new();
         };
         self.step_motors(dom);
+        self.write_hinge_angles(dom);
         let mut fallen = Vec::new();
         for handle in self.world.islands.active_bodies() {
             let Some(body) = self.bodies.get(&handle) else {
@@ -684,6 +1067,25 @@ impl Physics {
         self.cursor = dom.journal().end();
         self.props = Some(props);
         fallen
+    }
+
+    /// HingeConstraint.CurrentAngle, in degrees.
+    fn write_hinge_angles(&self, dom: &mut Dom) {
+        for (&id, c) in &self.constraints {
+            if !matches!(c.spec.kind, constraints::Kind::Hinge { .. }) {
+                continue;
+            }
+            let (Some(j), Some(rb1), Some(rb2)) = (
+                self.world.impulse_joints.get(c.joint),
+                self.world.bodies.get(c.bodies[0]),
+                self.world.bodies.get(c.bodies[1]),
+            ) else {
+                continue;
+            };
+            let angle = revolute_angle(&j.data, rb1.position(), rb2.position());
+            let _ =
+                dom.set_property_by_name(id, "CurrentAngle", Value::Float32(angle.to_degrees()));
+        }
     }
 
     fn step_motors(&mut self, dom: &mut Dom) {

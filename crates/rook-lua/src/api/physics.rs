@@ -1,9 +1,11 @@
-//! PhysicsService collision groups and `BasePart:CanCollideWith`.
-//! Behavior and messages observed in Studio 0.742; the groups themselves
-//! live on Workspace (see `rook_physics::groups`).
+//! PhysicsService collision groups, `BasePart:CanCollideWith` and
+//! RocketPropulsion's Fire and Abort. Behavior and messages observed in
+//! Studio 0.742; the groups themselves live on Workspace (see
+//! `rook_physics::groups`).
 
 use mlua::Lua;
 use rook_dom::InstanceId;
+use rook_physics::Command;
 use rook_physics::groups::{self, CollisionGroups, GroupError, MAX_GROUPS};
 use rook_types::Value;
 
@@ -28,6 +30,8 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("PhysicsService", "SetPartCollisionGroup") => set_part_group,
         ("PhysicsService", "CollisionGroupContainsPart") => contains_part,
         ("BasePart", "CanCollideWith") => can_collide_with,
+        ("RocketPropulsion", "Fire" | "fire") => fire_rocket,
+        ("RocketPropulsion", "Abort") => abort_rocket,
         _ => return None,
     })
 }
@@ -182,4 +186,15 @@ fn can_collide_with(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> 
             )
     });
     Outcome::ret(lua, result)
+}
+
+/// Starts the rocket flying toward its target at the next physics step.
+fn fire_rocket(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
+    with_world(lua, |w| w.physics_commands.push(Command::FireRocket(this)));
+    Outcome::ret(lua, ())
+}
+
+fn abort_rocket(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
+    with_world(lua, |w| w.physics_commands.push(Command::AbortRocket(this)));
+    Outcome::ret(lua, ())
 }

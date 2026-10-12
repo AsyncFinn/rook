@@ -1,0 +1,10 @@
+-- studio 0.742.0.7421053
+-- signals: deferred
+BodyVelocity 10.0,0.0,0.0
+BodyVelocity X only 10.0 true
+rocket flying 0 true true
+BodyPosition 210.0,1005.0,3.0 220.0,1005.0,3.0
+BodyGyro 0.00,1.00,0.00
+anchored 400.0,1000.0,0.0
+rocket 1 true 0.0
+aborted true

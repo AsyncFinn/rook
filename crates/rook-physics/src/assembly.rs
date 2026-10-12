@@ -201,6 +201,66 @@ impl Assembly {
     }
 }
 
+/// The deprecated `BasePart.Velocity`: the assembly's velocity at the
+/// part's position, `AssemblyLinearVelocity + AssemblyAngularVelocity ×
+/// (position − centre of mass)` (observed: a part 3.56 studs from the
+/// centre of mass of an assembly spinning at 2 rad/s reads 7.11). An
+/// anchored part reads its own AssemblyLinearVelocity, which it keeps.
+pub fn part_velocity(dom: &Dom, part: InstanceId) -> glam::Vec3 {
+    let vector = |id, name| match dom.property_by_name(id, name) {
+        Some(Value::Vector3(v)) => v.0,
+        _ => glam::Vec3::ZERO,
+    };
+    let linear = vector(part, "AssemblyLinearVelocity");
+    let angular = vector(part, "AssemblyAngularVelocity");
+    if angular == glam::Vec3::ZERO {
+        return linear;
+    }
+    let position = |id| match dom.property_by_name(id, "CFrame") {
+        Some(Value::CFrame(c)) => c.position,
+        _ => glam::Vec3::ZERO,
+    };
+    let com = match Assembly::of(dom, part) {
+        Some(asm) if !asm.anchored && asm.members.len() > 1 => {
+            let (mut sum, mut mass) = (glam::Vec3::ZERO, 0.0);
+            for (i, m) in asm.members.iter().enumerate() {
+                if i == 0 || !is_massless(dom, m.part) {
+                    let w = crate::part_mass(dom, m.part);
+                    sum += position(m.part) * w;
+                    mass += w;
+                }
+            }
+            if mass > 0.0 {
+                sum / mass
+            } else {
+                position(part)
+            }
+        }
+        _ => position(part),
+    };
+    linear + angular.cross(position(part) - com)
+}
+
+/// Set `AssemblyLinearVelocity` or `AssemblyAngularVelocity` (`name`) the
+/// way a script does: it's the whole assembly's, so every member reads it
+/// back at once (observed, also through `Velocity` on a welded part).
+pub fn set_velocity(
+    dom: &mut Dom,
+    part: InstanceId,
+    name: &str,
+    value: glam::Vec3,
+) -> Result<(), DomError> {
+    let members = match Assembly::of(dom, part) {
+        Some(asm) => asm.members.iter().map(|m| m.part).collect(),
+        None => vec![part],
+    };
+    let value = Value::Vector3(rook_types::Vector3(value));
+    for m in members {
+        dom.set_property_by_name(m, name, value.clone())?;
+    }
+    Ok(())
+}
+
 /// Set a part's CFrame the way a script does: its whole assembly moves
 /// with it (observed, even when another part is anchored).
 pub fn move_part(dom: &mut Dom, part: InstanceId, cf: CFrame) -> Result<(), DomError> {

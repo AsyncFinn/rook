@@ -157,14 +157,15 @@ impl DataModel {
         let mut dom = Dom::new();
         let root = dom.root();
         rook_formats::into_dom(&loaded.dom, &mut dom, root);
+        // Part of loading the place, not changes for anyone to replay.
+        let journaling = dom.journal().is_enabled();
+        dom.journal_mut().set_enabled(false);
+        rook_physics::adopt_saved_velocities(&mut dom);
         if rook_physics::surfaces::joins_on_load(&dom) {
-            // Part of loading the place, not a change for anyone to replay.
-            let journaling = dom.journal().is_enabled();
-            dom.journal_mut().set_enabled(false);
             let parts = rook_physics::workspace_parts(&dom);
             let _ = rook_physics::surfaces::make_joints(&mut dom, &parts);
-            dom.journal_mut().set_enabled(journaling);
         }
+        dom.journal_mut().set_enabled(journaling);
         Self::with_dom(dom, options)
     }
 
@@ -352,9 +353,13 @@ impl DataModel {
     /// Step physics and write the results into the DOM. Parts that fell
     /// below Workspace.FallenPartsDestroyHeight are destroyed.
     fn simulate(&mut self, dt: f64) {
+        let commands = std::mem::take(&mut self.runtime.world_mut().physics_commands);
         let Some(physics) = &mut self.physics else {
             return;
         };
+        for c in commands {
+            physics.command(c);
+        }
         let fallen = {
             let mut w = self.runtime.world_mut();
             physics.sync(&mut w.dom);
@@ -370,6 +375,9 @@ impl DataModel {
                     let _ = self.runtime.fire_event(part, event, other);
                 }
             }
+        }
+        for rocket in physics.take_reached() {
+            let _ = self.runtime.fire_event(rocket, "ReachedTarget", ());
         }
         self.runtime.drain_deferred();
         for id in fallen {

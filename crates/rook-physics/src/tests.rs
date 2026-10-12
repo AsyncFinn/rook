@@ -4,11 +4,41 @@ use rook_types::{CFrame, Value, Vector3};
 
 use super::*;
 
+mod constraints;
 mod contacts;
 mod joints;
+mod movers;
 
 fn set(dom: &mut Dom, id: InstanceId, name: &str, value: Value) {
     dom.set_property_by_name(id, name, value).unwrap();
+}
+
+/// A new `class` under `parent` with `props` set first.
+fn child(dom: &mut Dom, class: &str, parent: InstanceId, props: &[(&str, Value)]) -> InstanceId {
+    let id = dom.create_by_name(class).unwrap();
+    for (name, value) in props {
+        set(dom, id, name, value.clone());
+    }
+    dom.set_parent(id, Some(parent)).unwrap();
+    id
+}
+
+fn v3(x: f32, y: f32, z: f32) -> Value {
+    Value::Vector3(Vector3(Vec3::new(x, y, z)))
+}
+
+fn vector(dom: &Dom, id: InstanceId, name: &str) -> Vec3 {
+    match dom.property_by_name(id, name) {
+        Some(Value::Vector3(v)) => v.0,
+        other => panic!("{other:?}"),
+    }
+}
+
+fn cframe(dom: &Dom, id: InstanceId) -> CFrame {
+    match dom.property_by_name(id, "CFrame") {
+        Some(Value::CFrame(cf)) => cf,
+        other => panic!("{other:?}"),
+    }
 }
 
 fn part(dom: &mut Dom, class: &str, position: Vec3, size: Vec3, anchored: bool) -> InstanceId {

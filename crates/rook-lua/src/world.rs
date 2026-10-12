@@ -127,6 +127,9 @@ pub struct World {
     pub input: InputState,
     /// Remote calls waiting for the session to deliver them.
     pub outbox: Vec<crate::net::RemoteMessage>,
+    /// Requests for physics (RocketPropulsion Fire and Abort), taken by
+    /// the engine before its next step.
+    pub physics_commands: Vec<rook_physics::Command>,
     /// Threads waiting for an invoke's reply, by call id.
     pub(crate) pending_calls: HashMap<u64, Thread>,
     pub(crate) next_call: u64,
@@ -152,6 +155,7 @@ impl World {
             is_client: false,
             input: InputState::default(),
             outbox: Vec::new(),
+            physics_commands: Vec::new(),
             pending_calls: HashMap::new(),
             next_call: 0,
             log: Vec::new(),
