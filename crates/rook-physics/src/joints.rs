@@ -9,6 +9,7 @@
 use rook_dom::{Dom, DomError, InstanceId};
 use rook_types::{CFrame, Value};
 
+use crate::read::{cframe, float};
 use crate::shape::is_part;
 
 /// How a joint relates its two parts.
@@ -23,9 +24,9 @@ pub enum JointKind {
     Motor6D,
     /// Keeps the parts' relative pose from when it became active.
     WeldConstraint,
-    /// Rotate, RotateP and RotateV: free rotation about C0's Z axis (the
-    /// surface normal for joints MakeJoints creates). RotateP and RotateV
-    /// don't drive their rotation yet (M3 step 4).
+    /// Rotate, RotateP and RotateV: rotation about C0's Z axis (the
+    /// surface normal for joints MakeJoints creates). Rotate turns freely;
+    /// RotateV and RotateP are driven ([`hinge_drive`]).
     Hinge,
 }
 
@@ -125,20 +126,6 @@ pub fn part_joints(dom: &Dom, part: InstanceId) -> Vec<Joint> {
     out
 }
 
-fn cframe(dom: &Dom, id: InstanceId, name: &str) -> CFrame {
-    match dom.property_by_name(id, name) {
-        Some(Value::CFrame(c)) => c,
-        _ => CFrame::IDENTITY,
-    }
-}
-
-fn float(dom: &Dom, id: InstanceId, name: &str) -> f32 {
-    match dom.property_by_name(id, name) {
-        Some(Value::Float32(f)) => f,
-        _ => 0.0,
-    }
-}
-
 /// What sits between `C0` and `C1`: `Part0 * C0 * middle = Part1 * C1`.
 fn middle(dom: &Dom, j: &Joint) -> CFrame {
     let angle = || CFrame::angles(0.0, 0.0, float(dom, j.id, "CurrentAngle"));
@@ -163,6 +150,85 @@ pub fn offset(dom: &Dom, j: &Joint) -> CFrame {
 /// The hinge frames on Part0 and Part1 (their Z axes are the hinge axis).
 pub fn hinge_frames(dom: &Dom, j: &Joint) -> (CFrame, CFrame) {
     (cframe(dom, j.id, "C0"), cframe(dom, j.id, "C1"))
+}
+
+/// `Enum.InputType`: how a motor surface drives its hinge.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum SurfaceInput {
+    /// Holds still (observed: an impulse doesn't turn it).
+    NoInput,
+    /// ParamB.
+    Constant,
+    /// `ParamA · sin(ParamB · t)`, t counted from when the input became
+    /// Sin (observed).
+    Sin,
+}
+
+/// What drives a RotateV or RotateP: the inputs of Part0's surface that
+/// the joint sits on, the face C0's Z axis points out of (Inference: for
+/// joints MakeJoints creates, that's the Motor or SteppingMotor surface,
+/// as Part0 is the part whose surface decided the joint). Changes apply
+/// live (observed).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct HingeInput {
+    /// RotateP (a stepping motor, driven to an angle) rather than RotateV
+    /// (driven at a speed).
+    pub stepping: bool,
+    pub input: SurfaceInput,
+    pub param_a: f32,
+    pub param_b: f32,
+}
+
+impl HingeInput {
+    /// The input's value `t` seconds after it became Sin: RotateV's speed
+    /// in units of [`ROTATE_V_SPEED`], or RotateP's angle in radians.
+    /// `None` holds the hinge where it is.
+    pub fn value(&self, t: f64) -> Option<f32> {
+        match self.input {
+            SurfaceInput::NoInput => None,
+            SurfaceInput::Constant => Some(self.param_b),
+            SurfaceInput::Sin => Some(self.param_a * (f64::from(self.param_b) * t).sin() as f32),
+        }
+    }
+}
+
+/// RotateV turns at this many radians per second per unit of input
+/// (observed: ParamB 0.1, 0.5, 1 and 2 turn at 3.1, 15.5, 31 and 62).
+pub const ROTATE_V_SPEED: f32 = 31.0;
+
+/// RotateP moves its angle this many radians per 240 Hz step toward the
+/// input (observed: 2.4 rad/s, in 0.01 rad steps, whatever the distance).
+pub const ROTATE_P_STEP: f32 = 0.01;
+
+/// The input driving `j` if it's a RotateV or RotateP.
+pub fn hinge_input(dom: &Dom, j: &Joint) -> Option<HingeInput> {
+    let stepping = match dom.class_name(j.id) {
+        "RotateV" => false,
+        "RotateP" => true,
+        _ => return None,
+    };
+    let z = cframe(dom, j.id, "C0").rotation.z_axis;
+    let a = z.abs();
+    let face = if a.x >= a.y && a.x >= a.z {
+        if z.x > 0.0 { "Right" } else { "Left" }
+    } else if a.y >= a.z {
+        if z.y > 0.0 { "Top" } else { "Bottom" }
+    } else if z.z > 0.0 {
+        "Back"
+    } else {
+        "Front"
+    };
+    let input = match crate::read::enum_value(dom, j.part0, &format!("{face}SurfaceInput")) {
+        12 => SurfaceInput::Constant,
+        13 => SurfaceInput::Sin,
+        _ => SurfaceInput::NoInput,
+    };
+    Some(HingeInput {
+        stepping,
+        input,
+        param_a: float(dom, j.part0, &format!("{face}ParamA")),
+        param_b: float(dom, j.part0, &format!("{face}ParamB")),
+    })
 }
 
 /// After `part` moved on its own (its Position or Orientation was set),

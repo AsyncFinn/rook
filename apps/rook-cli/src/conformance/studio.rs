@@ -73,7 +73,17 @@ impl Studio {
             let text =
                 studio.tool_raw("list_roblox_studios", json!({}), Duration::from_secs(30))?;
             let list: Value = serde_json::from_str(&text).unwrap_or(Value::Null);
-            if let Some(id) = list["studios"][0]["id"].as_str() {
+            // With several Studio windows open, ROOK_STUDIO picks the one
+            // whose name (its place) contains that text.
+            let wanted = std::env::var("ROOK_STUDIO").unwrap_or_default();
+            let chosen = list["studios"].as_array().and_then(|all| {
+                all.iter().find(|s| {
+                    s["name"]
+                        .as_str()
+                        .is_some_and(|name| name.contains(wanted.as_str()))
+                })
+            });
+            if let Some(id) = chosen.and_then(|s| s["id"].as_str()) {
                 studio.studio_id = id.to_owned();
                 return Ok(studio);
             }

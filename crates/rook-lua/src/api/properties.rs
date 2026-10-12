@@ -137,6 +137,12 @@ pub(crate) fn get(w: &World, id: InstanceId, name: &str) -> Option<Value> {
         "AssemblyMass" if dom.is_a(id, "BasePart") => Some(Value::Float32(
             Assembly::of(dom, id).map_or_else(|| rook_physics::part_mass(dom, id), |a| a.mass(dom)),
         )),
+        "Velocity" if dom.is_a(id, "BasePart") => Some(Value::Vector3(Vector3(
+            rook_physics::assembly::part_velocity(dom, id),
+        ))),
+        "RotVelocity" if dom.is_a(id, "BasePart") => {
+            dom.property_by_name(id, "AssemblyAngularVelocity")
+        }
         "Position" | "Orientation" | "Rotation" if dom.is_a(id, "BasePart") => {
             let c = cframe(w, id);
             Some(Value::Vector3(match name {
@@ -186,6 +192,21 @@ pub(crate) fn set(
             Some(set_lighting_hours(w, id, f64::from(*h)))
         }
         ("CFrame", Value::CFrame(c)) if w.dom.is_a(id, "BasePart") => Some(set_cframe(w, id, *c)),
+        // Assembly velocities belong to the whole assembly; the deprecated
+        // Velocity and RotVelocity set them too (observed). Files save
+        // those two; rook_physics::adopt_saved_velocities moves them.
+        (
+            "AssemblyLinearVelocity" | "AssemblyAngularVelocity" | "Velocity" | "RotVelocity",
+            Value::Vector3(v),
+        ) if w.dom.is_a(id, "BasePart") => {
+            let target = match name {
+                "Velocity" | "AssemblyLinearVelocity" => "AssemblyLinearVelocity",
+                _ => "AssemblyAngularVelocity",
+            };
+            Some(rook_physics::assembly::set_velocity(
+                &mut w.dom, id, target, v.0,
+            ))
+        }
         ("Position", Value::Vector3(p)) if w.dom.is_a(id, "BasePart") => {
             let mut c = cframe(w, id);
             c.position = p.0;

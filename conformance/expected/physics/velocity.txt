@@ -1,0 +1,10 @@
+-- studio 0.742.0.7421053
+-- signals: deferred
+Velocity 50.0,0.0,0.0 50.0,0.0,0.0
+RotVelocity 0.0,3.0,0.0 0.0,3.0,0.0
+AssemblyLinearVelocity 0.0,0.0,20.0
+welded 0.0,0.0,7.0 0.0,0.0,7.0
+spinning 0.0,0.0,-7.1 0.0,0.0,0.0 0.0,2.0,0.0
+launched true
+belt 10.0,0.0,0.0 0.0,0.0,0.0
+box true true true

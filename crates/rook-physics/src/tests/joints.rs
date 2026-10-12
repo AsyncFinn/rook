@@ -5,15 +5,8 @@ use glam::Vec3;
 use rook_dom::{Dom, InstanceId};
 use rook_types::{CFrame, Value};
 
-use super::{part, position, run, set};
+use super::{cframe, part, position, run, set};
 use crate::{Physics, assembly, joints, surfaces};
-
-fn cframe(dom: &Dom, id: InstanceId) -> CFrame {
-    match dom.property_by_name(id, "CFrame") {
-        Some(Value::CFrame(cf)) => cf,
-        other => panic!("{other:?}"),
-    }
-}
 
 fn joint(
     dom: &mut Dom,
