@@ -337,13 +337,8 @@ mod tests {
         part(&mut server, "Secret", ss);
         let v = server.create_by_name("ObjectValue").unwrap();
         server.set_parent(v, Some(ws)).unwrap();
-        let pid = server
-            .database()
-            .find_property(server.get(v).unwrap().class, "Value")
-            .unwrap()
-            .id;
         server
-            .set_property(v, pid, Value::Ref(Some(a.to_ref())))
+            .set_property_by_name(v, "Value", Value::Ref(Some(a.to_ref())))
             .unwrap();
 
         r.initial(&server, &mut client);
@@ -352,7 +347,7 @@ mod tests {
         assert!(client.find_service("ServerStorage").is_none());
         let cv = client.find_first_child(cws, "ObjectValue", false).unwrap();
         assert_eq!(
-            client.property(cv, pid),
+            client.property_by_name(cv, "Value"),
             Some(Value::Ref(Some(ca.to_ref())))
         );
     }
@@ -379,18 +374,16 @@ mod tests {
 
         // Property changes and renames.
         let inner = server.find_first_child(model, "Inner", false).unwrap();
-        let anchored = server
-            .database()
-            .find_property(server.get(inner).unwrap().class, "Anchored")
-            .unwrap()
-            .id;
         server
-            .set_property(inner, anchored, Value::Bool(true))
+            .set_property_by_name(inner, "Anchored", Value::Bool(true))
             .unwrap();
         server.set_name(model, "Renamed".into()).unwrap();
         r.sync(&server, &mut client);
         let ci = client.find_first_child(cm, "Inner", false).unwrap();
-        assert_eq!(client.property(ci, anchored), Some(Value::Bool(true)));
+        assert_eq!(
+            client.property_by_name(ci, "Anchored"),
+            Some(Value::Bool(true))
+        );
         assert_eq!(client.name(cm), "Renamed");
 
         // Moving between replicated containers keeps the same client object.
@@ -411,10 +404,8 @@ mod tests {
         let (mut server, mut client, mut r) = setup();
         let ws = server.find_service("Workspace").unwrap();
         let p = part(&mut server, "P", ws);
-        let class = server.get(p).unwrap().class;
-        let db = server.database();
-        let size = db.find_property(class, "Size").unwrap().id;
-        let color = db.find_property(class, "Color").unwrap().id;
+        let size = server.property_id(p, "Size").unwrap();
+        let color = server.property_id(p, "Color").unwrap();
         server
             .set_property(
                 p,
@@ -442,13 +433,8 @@ mod tests {
         let ws = server.find_service("Workspace").unwrap();
         for class in ["Script", "LocalScript"] {
             let s = server.create_by_name(class).unwrap();
-            let pid = server
-                .database()
-                .find_property(server.get(s).unwrap().class, "Source")
-                .unwrap()
-                .id;
             server
-                .set_property(s, pid, Value::String("print(1)".into()))
+                .set_property_by_name(s, "Source", Value::String("print(1)".into()))
                 .unwrap();
             server.set_parent(s, Some(ws)).unwrap();
         }

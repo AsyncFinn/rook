@@ -7,21 +7,16 @@ use rook_types::{CFrame, Color3, Value, Vector3};
 use crate::types::color::closest_brick_color;
 use crate::world::World;
 
-fn cframe(w: &World, id: InstanceId) -> CFrame {
+/// A part's CFrame.
+pub(crate) fn cframe(w: &World, id: InstanceId) -> CFrame {
     match w.dom.property_by_name(id, "CFrame") {
         Some(Value::CFrame(c)) => c,
         _ => CFrame::IDENTITY,
     }
 }
 
-fn set_cframe(w: &mut World, id: InstanceId, c: CFrame) -> Result<(), DomError> {
-    let class = w.dom.get(id).ok_or(DomError::Stale)?.class;
-    let pid = w
-        .dom
-        .database()
-        .find_property(class, "CFrame")
-        .expect("BasePart.CFrame")
-        .id;
+pub(crate) fn set_cframe(w: &mut World, id: InstanceId, c: CFrame) -> Result<(), DomError> {
+    let pid = w.dom.property_id(id, "CFrame").ok_or(DomError::Stale)?;
     w.dom.set_property(id, pid, Value::CFrame(c))
 }
 
@@ -91,41 +86,17 @@ fn set_named(w: &mut World, id: InstanceId, name: &str, value: Value) -> Result<
     w.dom.set_property_by_name(id, name, value)
 }
 
-/// `Lighting.TimeOfDay` is "HH:MM:SS"; `ClockTime` is hours as a number.
-fn clock_hours(time_of_day: &str) -> f64 {
-    let mut parts = time_of_day
-        .split(':')
-        .map(|p| p.trim().parse::<f64>().unwrap_or(0.0));
-    let h = parts.next().unwrap_or(0.0);
-    let m = parts.next().unwrap_or(0.0);
-    let s = parts.next().unwrap_or(0.0);
-    (h + m / 60.0 + s / 3600.0).rem_euclid(24.0)
-}
-
-pub(crate) fn time_of_day(hours: f64) -> String {
-    let total = (hours.rem_euclid(24.0) * 3600.0).round() as u64;
-    format!(
-        "{:02}:{:02}:{:02}",
-        total / 3600 % 24,
-        total / 60 % 60,
-        total % 60
-    )
-}
-
-/// Lighting's clock in hours.
-pub(crate) fn lighting_hours(w: &World, id: InstanceId) -> f64 {
-    match w.dom.property_by_name(id, "TimeOfDay") {
-        Some(Value::String(s)) => clock_hours(&s),
-        _ => 14.0,
-    }
-}
-
 pub(crate) fn set_lighting_hours(
     w: &mut World,
     id: InstanceId,
     hours: f64,
 ) -> Result<(), DomError> {
-    set_named(w, id, "TimeOfDay", Value::String(time_of_day(hours)))
+    set_named(
+        w,
+        id,
+        "TimeOfDay",
+        Value::String(rook_types::time_of_day(hours)),
+    )
 }
 
 pub(crate) fn get(w: &World, id: InstanceId, name: &str) -> Option<Value> {
@@ -140,17 +111,12 @@ pub(crate) fn get(w: &World, id: InstanceId, name: &str) -> Option<Value> {
         };
     }
     match name {
-        "ClockTime" if dom.is_a(id, "Lighting") => {
-            Some(Value::Float32(lighting_hours(w, id) as f32))
-        }
+        "ClockTime" if dom.is_a(id, "Lighting") => Some(Value::Float32(dom.clock_time(id) as f32)),
         "Workspace" if id == dom.root() => Some(Value::Ref(
             dom.find_service("Workspace").map(InstanceId::to_ref),
         )),
         "Terrain" if dom.is_a(id, "Workspace") => Some(Value::Ref(
-            dom.children(id)
-                .iter()
-                .copied()
-                .find(|c| dom.class_name(*c) == "Terrain")
+            dom.find_first_child_of_class(id, "Terrain")
                 .map(InstanceId::to_ref),
         )),
         "Position" | "Orientation" | "Rotation" if dom.is_a(id, "BasePart") => {
@@ -219,13 +185,11 @@ pub(crate) fn set(
             Some(set_cframe(w, id, c))
         }
         ("Enabled", Value::Bool(b)) if w.dom.is_a(id, "BaseScript") => {
-            let class = w.dom.get(id)?.class;
-            let pid = w.dom.database().find_property(class, "Disabled")?.id;
+            let pid = w.dom.property_id(id, "Disabled")?;
             Some(w.dom.set_property(id, pid, Value::Bool(!b)))
         }
         ("WorldPivot", Value::CFrame(c)) if w.dom.is_a(id, "Model") => {
-            let class = w.dom.get(id)?.class;
-            let pid = w.dom.database().find_property(class, "WorldPivotData")?.id;
+            let pid = w.dom.property_id(id, "WorldPivotData")?;
             Some(w.dom.set_property(id, pid, Value::OptionalCFrame(Some(*c))))
         }
         _ => None,

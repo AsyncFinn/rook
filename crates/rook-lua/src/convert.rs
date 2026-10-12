@@ -31,12 +31,11 @@ pub(crate) fn vector3_to_lua(v: rook_types::Vector3) -> LuaValue {
 /// for values stored as a bare `Value::Enum`.
 pub(crate) fn to_lua(lua: &Lua, value: &Value, enum_id: Option<EnumId>) -> mlua::Result<LuaValue> {
     use mlua::IntoLua;
+    if let Some(n) = value.as_number() {
+        return Ok(LuaValue::Number(n));
+    }
     Ok(match value {
         Value::Bool(b) => LuaValue::Boolean(*b),
-        Value::Float32(n) => LuaValue::Number(f64::from(*n)),
-        Value::Float64(n) => LuaValue::Number(*n),
-        Value::Int32(n) => LuaValue::Number(f64::from(*n)),
-        Value::Int64(n) => LuaValue::Number(*n as f64),
         Value::String(s) => LuaValue::String(lua.create_string(s)?),
         Value::BinaryString(b) => LuaValue::String(lua.create_string(AsRef::<[u8]>::as_ref(b))?),
         Value::ContentId(c) => LuaValue::String(lua.create_string(c.as_str())?),

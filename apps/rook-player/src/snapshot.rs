@@ -7,26 +7,21 @@ use rook_dom::{Dom, InstanceId};
 use rook_engine::raycast::{part_shape, workspace_parts};
 use rook_engine::{DataModel, RenderChanges};
 use rook_render::{Camera, Lighting, PartInstance, Scene};
-use rook_types::Value;
+use rook_types::{Color3, Value};
 
 fn number(dom: &Dom, id: InstanceId, name: &str) -> Option<f32> {
-    match dom.property_by_name(id, name)? {
-        Value::Float32(n) => Some(n),
-        Value::Float64(n) => Some(n as f32),
-        Value::Int32(n) => Some(n as f32),
-        _ => None,
-    }
+    dom.property_by_name(id, name)?
+        .as_number()
+        .map(|n| n as f32)
 }
 
 fn color(dom: &Dom, id: InstanceId, name: &str) -> Option<[f32; 3]> {
-    match dom.property_by_name(id, name)? {
-        Value::Color3(c) => Some([c.r, c.g, c.b]),
-        Value::Color3uint8(c) => {
-            let c = rook_types::Color3::from_rgb(c.r, c.g, c.b);
-            Some([c.r, c.g, c.b])
-        }
-        _ => None,
-    }
+    let c: Color3 = match dom.property_by_name(id, name)? {
+        Value::Color3(c) => c,
+        Value::Color3uint8(c) => c.into(),
+        _ => return None,
+    };
+    Some([c.r, c.g, c.b])
 }
 
 fn part(dom: &Dom, id: InstanceId) -> Option<PartInstance> {
@@ -48,18 +43,6 @@ fn part(dom: &Dom, id: InstanceId) -> Option<PartInstance> {
     })
 }
 
-/// Hours on Lighting's clock.
-fn clock_time(dom: &Dom, lighting: InstanceId) -> f32 {
-    if let Some(Value::String(t)) = dom.property_by_name(lighting, "TimeOfDay") {
-        let mut parts = t.split(':').map(|p| p.trim().parse::<f32>().unwrap_or(0.0));
-        let h = parts.next().unwrap_or(14.0);
-        let m = parts.next().unwrap_or(0.0);
-        let s = parts.next().unwrap_or(0.0);
-        return (h + m / 60.0 + s / 3600.0).rem_euclid(24.0);
-    }
-    14.0
-}
-
 /// Direction to the sun for a clock time and latitude, from the standard
 /// solar position formula with zero declination. Which world axis is east
 /// is Inference until checked against `Lighting:GetSunDirection()` in Studio.
@@ -78,7 +61,7 @@ fn lighting(dom: &Dom) -> Lighting {
     let Some(id) = dom.find_service("Lighting") else {
         return l;
     };
-    let hours = clock_time(dom, id);
+    let hours = dom.clock_time(id) as f32;
     let latitude = number(dom, id, "GeographicLatitude").unwrap_or(41.733);
     l.sun_direction = sun_direction(hours, latitude);
     if let Some(c) = color(dom, id, "Ambient") {

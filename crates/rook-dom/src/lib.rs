@@ -280,6 +280,14 @@ impl Dom {
         }
     }
 
+    /// `Instance:FindFirstChildOfClass()`.
+    pub fn find_first_child_of_class(&self, id: InstanceId, class: &str) -> Option<InstanceId> {
+        self.children(id)
+            .iter()
+            .copied()
+            .find(|c| self.class_name(*c) == class)
+    }
+
     pub fn is_parent_locked(&self, id: InstanceId) -> bool {
         self.instances.get(id).is_some_and(|i| i.parent_locked)
     }
@@ -494,10 +502,7 @@ impl Dom {
 
     /// `DataModel:FindService()`.
     pub fn find_service(&self, class: &str) -> Option<InstanceId> {
-        self.children(self.root)
-            .iter()
-            .copied()
-            .find(|c| self.class_name(*c) == class)
+        self.find_first_child_of_class(self.root, class)
     }
 
     /// `DataModel:GetService()`: find the service, creating it if needed.
@@ -554,6 +559,14 @@ impl Dom {
     /// `Players.LocalPlayer` (set on clients only).
     pub fn local_player(&self) -> Option<InstanceId> {
         self.ref_property(self.find_service("Players")?, "LocalPlayer")
+    }
+
+    /// `Lighting.ClockTime`: Lighting's clock in hours, from `TimeOfDay`.
+    pub fn clock_time(&self, lighting: InstanceId) -> f64 {
+        match self.property_by_name(lighting, "TimeOfDay") {
+            Some(Value::String(s)) => rook_types::clock_hours(&s),
+            _ => 14.0,
+        }
     }
 
     /// The id of the property `name` (aliases resolved) on `id`'s class.
@@ -720,26 +733,19 @@ pub fn coerce(ty: PropertyType, value: Value) -> Value {
     let PropertyType::Value(target) = ty else {
         return value;
     };
-    let number = |v: &Value| match v {
-        Value::Float32(n) => Some(f64::from(*n)),
-        Value::Float64(n) => Some(*n),
-        Value::Int32(n) => Some(f64::from(*n)),
-        Value::Int64(n) => Some(*n as f64),
-        _ => None,
-    };
     match (target, &value) {
         (T::Color3, Value::Color3uint8(c)) => Value::Color3((*c).into()),
         (T::Float32, v) if !matches!(v, Value::Float32(_)) => {
-            number(v).map_or(value, |n| Value::Float32(n as f32))
+            v.as_number().map_or(value, |n| Value::Float32(n as f32))
         }
         (T::Float64, v) if !matches!(v, Value::Float64(_)) => {
-            number(v).map_or(value, Value::Float64)
+            v.as_number().map_or(value, Value::Float64)
         }
         (T::Int32, v) if !matches!(v, Value::Int32(_)) => {
-            number(v).map_or(value, |n| Value::Int32(n as i32))
+            v.as_number().map_or(value, |n| Value::Int32(n as i32))
         }
         (T::Int64, v) if !matches!(v, Value::Int64(_)) => {
-            number(v).map_or(value, |n| Value::Int64(n as i64))
+            v.as_number().map_or(value, |n| Value::Int64(n as i64))
         }
         _ => value,
     }

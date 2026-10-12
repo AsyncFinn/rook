@@ -285,14 +285,7 @@ impl DataModel {
         let candidates: Vec<InstanceId> = {
             let world = self.runtime.world();
             let journal = world.dom.journal();
-            let disabled = |id: InstanceId| {
-                world
-                    .dom
-                    .get(id)
-                    .map(|i| i.class)
-                    .and_then(|c| world.dom.database().find_property(c, "Disabled"))
-                    .map(|p| p.id)
-            };
+            let disabled = |id: InstanceId| world.dom.property_id(id, "Disabled");
             journal
                 .since(self.script_cursor)
                 .iter()
