@@ -13,8 +13,18 @@ use crate::types::{
     LRegion3, LUDim, LUDim2, LVector2, LVector2int16, LVector3int16, Opaque, enums,
 };
 
+/// Luau's native `vector` → `Vector3`.
+pub(crate) fn from_lua_vector(v: mlua::Vector) -> rook_types::Vector3 {
+    rook_types::Vector3::new(v.x(), v.y(), v.z())
+}
+
+/// `Vector3` → Luau's native `vector`.
+pub(crate) fn lua_vector(v: rook_types::Vector3) -> mlua::Vector {
+    mlua::Vector::new(v.x(), v.y(), v.z())
+}
+
 pub(crate) fn vector3_to_lua(v: rook_types::Vector3) -> LuaValue {
-    LuaValue::Vector(mlua::Vector::new(v.x(), v.y(), v.z()))
+    LuaValue::Vector(lua_vector(v))
 }
 
 /// Convert a stored value for scripts. `enum_id` is the property's enum,
@@ -97,9 +107,7 @@ pub(crate) fn from_lua(lua: &Lua, v: &LuaValue, ty: PropertyType) -> Result<Valu
                     Value::BinaryString(lua_string(v).ok_or_else(fail)?.into_bytes().into())
                 }
                 VariantType::Vector3 => match v {
-                    LuaValue::Vector(v) => {
-                        Value::Vector3(rook_types::Vector3::new(v.x(), v.y(), v.z()))
-                    }
+                    LuaValue::Vector(v) => Value::Vector3(from_lua_vector(*v)),
                     _ => return Err(fail()),
                 },
                 VariantType::Ref => match v {

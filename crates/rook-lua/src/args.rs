@@ -189,7 +189,7 @@ impl Args {
 
     pub(crate) fn vector3(&self, i: usize) -> ApiResult<rook_types::Vector3> {
         match self.get(i) {
-            LuaValue::Vector(v) => Ok(rook_types::Vector3::new(v.x(), v.y(), v.z())),
+            LuaValue::Vector(v) => Ok(crate::convert::from_lua_vector(*v)),
             LuaValue::Nil => Err(self.missing(i)),
             _ => Err(self.wrong(i, "Vector3")),
         }

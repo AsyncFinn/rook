@@ -23,13 +23,7 @@ fn r3(v: rbx_types::Vector3) -> Vector3 {
     v.into()
 }
 
-fn lv(v: Vector3) -> Vector {
-    Vector::new(v.x(), v.y(), v.z())
-}
-
-fn from_lv(v: Vector) -> Vector3 {
-    Vector3::new(v.x(), v.y(), v.z())
-}
+use crate::convert::{from_lua_vector as from_lv, lua_vector as lv};
 
 fn fmt_v3(v: Vector3) -> String {
     format!("{}, {}, {}", fmt_f32(v.x()), fmt_f32(v.y()), fmt_f32(v.z()))
