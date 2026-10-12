@@ -389,7 +389,7 @@ fn attribute_value(lua: &Lua, v: &LuaValue) -> ApiResult<Option<Value>> {
             Some(Value::Float64(crate::args::number_of(v).unwrap_or(0.0)))
         }
         LuaValue::String(s) => Some(Value::String(s.to_string_lossy())),
-        LuaValue::Vector(v) => Some(Value::Vector3(Vector3::new(v.x(), v.y(), v.z()))),
+        LuaValue::Vector(v) => Some(Value::Vector3(crate::convert::from_lua_vector(*v))),
         LuaValue::UserData(u) => {
             if let Ok(item) = u.borrow::<crate::types::enums::LEnumItem>() {
                 return Ok(Some(Value::EnumItem {

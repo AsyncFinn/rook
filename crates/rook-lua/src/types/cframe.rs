@@ -13,20 +13,14 @@ use crate::args::number_of;
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct LCFrame(pub CFrame);
 
-fn v3(v: Vector) -> Vector3 {
-    Vector3::new(v.x(), v.y(), v.z())
-}
+use crate::convert::{from_lua_vector as v3, lua_vector as lv3};
 
 fn g(v: Vector) -> Vec3 {
-    Vec3::new(v.x(), v.y(), v.z())
+    v3(v).0
 }
 
 fn lv(v: Vec3) -> Vector {
-    Vector::new(v.x, v.y, v.z)
-}
-
-fn lv3(v: Vector3) -> Vector {
-    Vector::new(v.x(), v.y(), v.z())
+    lv3(Vector3(v))
 }
 
 fn cf(position: Vec3, rotation: Mat3) -> LCFrame {

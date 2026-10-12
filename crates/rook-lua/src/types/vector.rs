@@ -9,13 +9,7 @@ use rook_types::{Vector2, Vector3};
 use super::fmt_f32;
 use crate::args::number_of;
 
-fn v3(v: Vector) -> Vector3 {
-    Vector3::new(v.x(), v.y(), v.z())
-}
-
-fn lua_v3(v: Vector3) -> Vector {
-    Vector::new(v.x(), v.y(), v.z())
-}
+use crate::convert::{from_lua_vector as v3, lua_vector as lua_v3};
 
 fn map3(v: Vector, f: impl Fn(f32) -> f32) -> Vector {
     Vector::new(f(v.x()), f(v.y()), f(v.z()))
