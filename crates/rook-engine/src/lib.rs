@@ -1,8 +1,8 @@
 //! Assembles a DataModel: loads a place, creates the services scripts
 //! expect, starts server Scripts, and runs the frame loop.
 //!
-//! M1 runs headless server Scripts only: no physics, rendering, players or
-//! LocalScripts yet. See `docs/architecture.md` §6 for the frame order.
+//! A server DataModel also owns the physics world (`rook-physics`); clients
+//! don't simulate yet. See `docs/architecture.md` §6 for the frame order.
 
 pub mod console;
 mod input;
@@ -100,6 +100,9 @@ pub struct DataModel {
     input: input::InputTracker,
     /// Workspace part geometry for ray queries.
     pub(crate) parts: raycast::PartCache,
+    /// The physics world. Only the server simulates for now: it owns every
+    /// part (network ownership comes with characters).
+    physics: Option<rook_physics::Physics>,
 }
 
 impl DataModel {
@@ -112,6 +115,7 @@ impl DataModel {
     pub fn new_client(options: &Options) -> Result<Self, EngineError> {
         let mut dm = Self::with_dom(Dom::new(), options)?;
         dm.role = Role::Client;
+        dm.physics = None;
         dm.runtime.world_mut().is_client = true;
         Ok(dm)
     }
@@ -133,8 +137,13 @@ impl DataModel {
         self.render_changes = RenderChanges::everything();
     }
 
-    /// Drop journal entries every reader has seen.
-    pub fn trim_journal(&self) {
+    /// Drop journal entries every reader has seen. Physics catches up first
+    /// so changes made after its step (by Heartbeat, or by remotes routed
+    /// between frames) aren't lost.
+    pub fn trim_journal(&mut self) {
+        if let Some(physics) = &mut self.physics {
+            physics.sync(&self.runtime.world().dom);
+        }
         let mut w = self.runtime.world_mut();
         let end = w.dom.journal().end();
         w.dom.journal_mut().trim(end);
@@ -202,6 +211,7 @@ impl DataModel {
             render_changes: RenderChanges::everything(),
             input: Default::default(),
             parts: Default::default(),
+            physics: Some(rook_physics::Physics::new()),
         })
     }
 
@@ -332,6 +342,7 @@ impl DataModel {
         self.runtime.resume_due(Queue::Legacy);
         self.fire(rs, "Stepped", (now, dt));
         self.fire(rs, "PreSimulation", dt);
+        self.simulate(dt);
         self.fire(rs, "PostSimulation", dt);
         self.fire(rs, "Heartbeat", dt);
         self.runtime.resume_due(Queue::Task);
@@ -340,6 +351,43 @@ impl DataModel {
         if self.auto_trim {
             self.trim_journal();
         }
+    }
+
+    /// Step physics and write the results into the DOM. Parts that fell
+    /// below Workspace.FallenPartsDestroyHeight are destroyed.
+    fn simulate(&mut self, dt: f64) {
+        let Some(physics) = &mut self.physics else {
+            return;
+        };
+        let fallen = {
+            let mut w = self.runtime.world_mut();
+            let t0 = std::time::Instant::now();
+            physics.sync(&w.dom);
+            let t1 = std::time::Instant::now();
+            physics.step(dt);
+            let t2 = std::time::Instant::now();
+            let r = physics.write_back(&mut w.dom);
+            let t3 = std::time::Instant::now();
+            if std::env::var("ROOK_TMP").is_ok() {
+                eprintln!(
+                    "TMP sync {:?} step {:?} wb {:?} parts {} bodies {}",
+                    t1 - t0,
+                    t2 - t1,
+                    t3 - t2,
+                    physics.part_count(),
+                    physics.body_count()
+                );
+            }
+            r
+        };
+        for id in fallen {
+            self.runtime.destroy(id);
+        }
+    }
+
+    /// The physics world (servers only).
+    pub fn physics(&self) -> Option<&rook_physics::Physics> {
+        self.physics.as_ref()
     }
 
     /// Note whether the journal since the last check touched anything drawn:

@@ -45,4 +45,9 @@ made inert without an entry in the first table.
 | `Random` | PCG32, own seeding | Roblox's exact sequence for a seed | Unknown; may stay an Approximation |
 | Error messages from datatype methods | Reach `pcall` as mlua error objects | Plain strings like Instance members | Lua bridge |
 | Terrain, MeshParts, unions, SpecialMesh, decals in the renderer | Not drawn, or drawn as their bounding box | Real geometry and textures | Content M6, terrain M8 |
-| Wedge and corner-wedge orientation, sun direction, lighting model | Best guesses | Checks against Studio | Renderer, with Studio screenshots |
+| Wedge and corner-wedge orientation, sun direction, lighting model | Corner wedges checked by eye against archived places; the rest are best guesses | Checks against Studio | Renderer, with Studio screenshots |
+| Physics: joints and assemblies | Every unanchored part is its own body; welded models fall apart | Welds, Motor6D, surface joints as assemblies | Physics, M3 step 2 |
+| Physics: materials | Every part is Plastic (density 0.7, friction 0.3, elasticity 0.5) | Per-material table, `CustomPhysicalProperties` | Physics, M3 step 3 |
+| Physics: timestep | Always 240 Hz | Adaptive 240/120/60 Hz per assembly | Physics, later |
+| Physics: who simulates | The server simulates every part; clients only see replicated results | Network ownership | Characters, M4 |
+| Physics: MeshParts, unions, trusses | Box colliders | Their real shapes and `CollisionFidelity` | Content, M6 |

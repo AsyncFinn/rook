@@ -1,0 +1,20 @@
+[package]
+name = "rook-physics"
+description = "Roblox physics semantics over Rapier"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+rook-types.workspace = true
+rook-dom.workspace = true
+rook-reflection.workspace = true
+rapier3d.workspace = true
+glam.workspace = true
+profiling.workspace = true
+
+[lints]
+workspace = true

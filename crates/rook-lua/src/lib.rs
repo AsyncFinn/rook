@@ -195,6 +195,14 @@ impl Runtime {
         self.guarded(|| threads::dispatch(&self.lua, start));
     }
 
+    /// `Instance:Destroy()` from the engine (fallen parts), firing the
+    /// signals it causes.
+    pub fn destroy(&self, id: InstanceId) {
+        let start = self.world().dom.journal().end();
+        let _ = self.world_mut().dom.destroy(id);
+        self.dispatch_since(start);
+    }
+
     /// Resume due jobs on one queue, then drain the deferred queue.
     pub fn resume_due(&self, queue: Queue) {
         profiling::scope!("resume_due");

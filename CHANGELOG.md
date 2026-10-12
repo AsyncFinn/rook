@@ -12,6 +12,9 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 
 ## [Unreleased]
 
+- `rook-physics`: Workspace parts are simulated with Rapier on the server at 240 Hz. Anchored parts are fixed; each unanchored part is its own body for now. Workspace.Gravity and FallenPartsDestroyHeight apply; CFrame and assembly velocities are written back and replicate.
+- Fixed: corner wedges were rotated 90°; the apex is now above the +X −Z corner (renderer, ray tests and physics).
+
 ## [0.2.0] — 2026-10-11 — M2: client side, renderer, input
 
 Pinned Roblox version: 0.741.19.
