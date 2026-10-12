@@ -384,26 +384,47 @@ impl DataModel {
     }
 
     /// Note whether the journal since the last check touched anything drawn:
-    /// parts, their ancestry, or Lighting. Camera moves don't count; the
-    /// renderer reads the camera every frame anyway.
+    /// parts, their meshes, their ancestry, or Lighting. Camera moves don't
+    /// count; the renderer reads the camera every frame anyway.
     fn check_render_changes(&mut self) {
         profiling::scope!("check_render_changes");
         let world = self.runtime.world();
         let dom = &world.dom;
         let lighting = dom.find_service("Lighting");
         let changes = &mut self.render_changes;
+        // A mesh decides how its parent part looks (SpecialMesh, BlockMesh,
+        // CylinderMesh, FileMesh).
+        let mark_part = |changes: &mut RenderChanges, part: Option<InstanceId>| {
+            if let Some(part) = part
+                && !changes.full
+                && dom.is_a(part, "BasePart")
+            {
+                changes.parts.insert(part);
+            }
+        };
         for c in dom.journal().since(self.render_cursor) {
             match c {
                 Change::Property { id, .. } => {
                     if Some(*id) == lighting {
                         changes.lighting = true;
-                    } else if !changes.full && dom.is_a(*id, "BasePart") {
-                        changes.parts.insert(*id);
+                    } else if dom.is_a(*id, "DataModelMesh") {
+                        mark_part(changes, dom.parent(*id));
+                    } else {
+                        mark_part(changes, Some(*id));
                     }
                 }
-                Change::Reparented { subtree, .. } => {
+                Change::Reparented {
+                    id,
+                    old_parent,
+                    new_parent,
+                    subtree,
+                    ..
+                } => {
                     if subtree.iter().any(|i| dom.is_a(*i, "BasePart")) {
                         changes.full = true;
+                    } else if dom.is_a(*id, "DataModelMesh") {
+                        mark_part(changes, *old_parent);
+                        mark_part(changes, *new_parent);
                     }
                 }
                 Change::Destroying(id) | Change::Created(id) if dom.is_a(*id, "BasePart") => {
@@ -634,6 +655,49 @@ mod tests {
 
     fn service(server: &Server, name: &str) -> InstanceId {
         server.runtime.world_mut().dom.get_service(name).unwrap()
+    }
+
+    /// A script changing a part's mesh (its type or Scale, or adding or
+    /// removing one) changes how the part looks, so the part is redrawn.
+    #[test]
+    fn mesh_changes_mark_their_part() {
+        let mut s = Server::new(&Options::default()).unwrap();
+        let ws = service(&s, "Workspace");
+        let part = add_under(&s, ws, "Part", "Part", "");
+        add_under(&s, part, "SpecialMesh", "Mesh", "");
+        let other = add_under(&s, ws, "Part", "Other", "");
+        s.start();
+        s.take_render_changes();
+        let changed = |s: &mut Server, source: &str| {
+            s.run_extra_script(source).unwrap();
+            let changes = s.take_render_changes();
+            assert!(!changes.full, "{source}");
+            changes.parts
+        };
+        let only_part = std::collections::HashSet::from([part]);
+        for source in [
+            "workspace.Part.Mesh.MeshType = Enum.MeshType.Sphere",
+            "workspace.Part.Mesh.Scale = Vector3.new(1, 2, 1)",
+            "Instance.new('CylinderMesh', workspace.Part)",
+            "workspace.Part.CylinderMesh.Parent = nil",
+            "workspace.Part.Mesh:Destroy()",
+        ] {
+            assert_eq!(changed(&mut s, source), only_part, "{source}");
+        }
+        // Moving a mesh between parts redraws both; other children don't
+        // count.
+        let block = add_under(&s, other, "BlockMesh", "Block", "");
+        s.take_render_changes();
+        s.runtime
+            .world_mut()
+            .dom
+            .set_parent(block, Some(part))
+            .unwrap();
+        assert_eq!(
+            s.take_render_changes().parts,
+            std::collections::HashSet::from([part, other])
+        );
+        assert!(changed(&mut s, "Instance.new('Folder', workspace.Part)").is_empty());
     }
 
     #[test]

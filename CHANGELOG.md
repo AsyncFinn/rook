@@ -37,6 +37,9 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 - Camera: `ViewportPointToRay`, `ScreenPointToRay`, `WorldToViewportPoint` and `WorldToScreenPoint`; the client's camera gets the window size as `ViewportSize`.
 - Clients have a physics world too, built on their first query and never stepped, so LocalScripts can raycast. The mouse (`Mouse.Hit`, `Target`, `TargetFilter`) and ClickDetectors use the same queries, and `rook-engine`'s separate ray geometry (`raycast.rs`) is gone: part shapes are defined once, in `rook-physics`.
 - Physics conformance case `physics/queries`.
+- Built-in mesh shapes (M4 step 1), measured in Studio: parts with a SpecialMesh, BlockMesh or CylinderMesh draw the mesh's shape instead of their own. Brick, Torso and BlockMesh draw a block, Wedge and CornerWedge their wedges, Sphere a ball stretched on every axis, SpecialMesh Cylinder a cylinder along X and CylinderMesh one standing along Y; the deprecated Prism, Pyramid, ParallelRamp and RightAngleRamp draw nothing. `Scale` multiplies the part's Size before each type's rule, and `Offset` moves the mesh in the part's axes. Of several meshes, the last child counts; a file mesh with no `MeshId` is a 1-stud box times `Scale`. Physics and queries keep the part's own shape. The size rules live once in `rook-types` (`MeshKind`, `MeshLook`).
+- The Head MeshType draws Rook's own head mesh, built in code to match the vertex layout measured from the user's Roblox install (36 segments, rounded rims in four steps, smooth shading), fitted to the part as Roblox fits it. No Roblox file or data is included.
+- Changing a mesh (its type, `Scale` or any property, or adding, removing or moving one) redraws its part.
 
 ## [0.2.0] — 2026-10-11 — M2: client side, renderer, input
 

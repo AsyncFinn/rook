@@ -168,6 +168,7 @@ Built from creator-docs and Studio observation only. Covers LayerCollectors (Scr
 
 - Render proxies per visual instance (parts, MeshParts, SpecialMeshes, Decals/Textures, lights, particles, beams), built from snapshot deltas.
 - Primitive meshes generated in code. Mesh and texture caches are fed by `rook-content`.
+- Built-in mesh shapes (SpecialMesh `MeshType`, BlockMesh, CylinderMesh) reuse the part shapes: `rook-types` decides what a part's mesh draws and at what size (`MeshKind::look`), and the snapshot turns that into a draw shape (`DrawShape`: a part shape or the head), a size and, for the upright CylinderMesh, a turned rotation. The only new geometry is Rook's own head mesh. Meshes change only how a part looks; physics keeps the part's shape.
 - Materials: `Enum.Material` → Rook's default material set, or optionally the user's Roblox content.
 - Lighting: Lighting service properties (ClockTime → sun, Ambient/OutdoorAmbient, Brightness, Atmosphere, Sky, post effects). Start with a forward renderer and shadow maps that approximate ShadowMap/Voxel. Future (clustered) lighting comes later.
 - Every lighting and material formula is documented with its source and confidence.

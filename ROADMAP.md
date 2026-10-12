@@ -17,7 +17,7 @@ each release says which milestone it finishes (see `CHANGELOG.md`).
 
 ## Now, next, later
 
-- **Now:** M4 Content, starting with the built-in mesh shapes.
+- **Now:** M4 Content: the built-in mesh shapes are done; asset fetching is next.
 - **Next:** M5 Characters.
 - **Later:** M6 GUI, M7 Audio and M8 Networking.
 
@@ -54,13 +54,15 @@ The most visible gap: **SpecialMesh is in 65% of files** (1,988 files,
 494k instances), CylinderMesh in 723 and BlockMesh in 574. Today the
 renderer draws all of these as their part's plain box.
 
-1. **Built-in mesh shapes**, no downloads needed: SpecialMesh's `MeshType`
-   shapes, BlockMesh and CylinderMesh, with `Scale`, `Offset` and
-   `VertexColor`. Every type but Head reuses a shape Rook already has
-   (see the table below). Head is a mesh file in Roblox, so Rook draws its
-   own head mesh, built to match measurements of the user's copy, which is
-   never committed (see "Content and assets" below); from step 2 on, the
-   user's install can supply the real file instead.
+1. ✅ **Built-in mesh shapes**, no downloads needed: SpecialMesh's `MeshType`
+   shapes, BlockMesh and CylinderMesh, with `Scale` and `Offset`
+   (`VertexColor` waits for textures). Every type but Head reuses a shape
+   Rook already has (see the table below); the size rules are defined once
+   in `rook-types` (`MeshKind`, `MeshLook`). Head is a mesh file in Roblox,
+   so Rook draws its own head mesh, built in `rook-render` from
+   measurements of the user's copy, which is never committed (see "Content
+   and assets" below); from step 2 on, the user's install can supply the
+   real file instead.
 2. **Asset fetching**: `rbxasset://`, `rbxassetid://` and legacy asset URLs
    through the provider chain (Rook defaults, the user's Roblox install,
    downloaded content packages, asset delivery), cached and hash-checked.
@@ -109,14 +111,18 @@ which matters for the textures step.
   no rim anywhere; on 3 × 1 × 2 and 10 × 1 × 2 the file at
   (1.61, 0.805, 1.61) covered it the same way, seen from the side and from
   above.
-- *Its shape:* low-poly with smooth shading (its outline shows straight
-  segments), so Rook's own head must match its vertex layout, not just a
-  rounded outline. Measure it from the user's copy with a small tool and
-  record only the numbers.
-- *Still to measure:* how the mesh's own `Scale` combines with the Size
-  rule. The classic R6 head (a 2 × 1 × 1 part with Scale 1.25) suggests it
-  multiplies on top, which would draw the head at its own 1.2 studs
-  (Inference).
+- *Its shape* (measured from the user's copy with a throwaway tool,
+  2026-10-12; 517 vertices, 846 triangles): a solid of revolution about Y
+  with 36 segments, the first 5 degrees from +X. Its profile is a cylinder
+  of radius R = 0.6012 whose straight side runs from -R/2 to R/2, each rim
+  rounded by a quarter circle of radius R/2 in 4 steps of 22.5 degrees,
+  and flat round caps (the top a fan, the bottom a grid). Normals are
+  smooth around and all along the profile, so the rims blend into the
+  caps. Rook's head is built from exactly these facts.
+- *With `Scale`:* the Size rule applies to Size × Scale (see below). The
+  classic R6 head, a 2 × 1 × 1 part with Scale 1.25, is therefore
+  min(2.5, 1.25) = 1.25 wide and 1.25 tall before the ÷ 1.25, so it draws
+  at the mesh's own 1.2 studs.
 
 **`rbxasset://fonts/*.mesh`**, the legacy paths archived places use for
 the character meshes (head, torso, arms, legs, VikingHelmet, the Composit*
@@ -148,8 +154,49 @@ differ. To compare shapes, size the FileMesh by hand to where the other one
 should be and overlap them in two colours; to compare sizing, give both the
 same Size and Scale.
 
-Still to measure before building step 1: how `Scale` stretches each type
-(the docs say it differs per type), the Head's included.
+**How `Scale` combines with Size** (measured 2026-10-12: every type on a
+2 × 3 × 4 part, at Scale 1 and at Scale (0.5, 1.5, 0.75), front and top
+views): Scale multiplies the part's Size per axis first, and each type's
+shape rule then works on that scaled size. With S = Size × Scale:
+
+| Type | Drawn size | Measured at Scale (0.5, 1.5, 0.75): S = (1, 4.5, 3) |
+|---|---|---|
+| Brick, Wedge, CornerWedge, Sphere, BlockMesh | S | 1 × 4.5 × 3 |
+| Cylinder (SpecialMesh; along X) | length S.X, diameter min(S.Y, S.Z) | 1 long, 3 across, round |
+| CylinderMesh (along Y) | height S.Y, diameter min(S.X, S.Z) | 4.5 tall, 1 across, round |
+| Head | the mesh × (min(S.X, S.Z), S.Y, min(S.X, S.Z)) / 1.25 | 0.95 × 4.29 × 0.95 (predicted 0.96 × 4.32 × 0.96) |
+
+Applying Scale after the shape rule would have given a 1.5-stud CylinderMesh
+across Z and a 1.44-stud Head across Z, so the order is settled. Note the
+two cylinders differ: SpecialMesh `Cylinder` lies along X like a Cylinder
+part; `CylinderMesh` stands along Y. At Scale 1, every type's sizes equal
+the part's Size (2 × 3 × 4, Cylinder 3 across, CylinderMesh 2 across, Head
+1.9 × 2.9 × 1.9).
+
+**More rules found while building step 1** (Studio, 2026-10-12):
+
+- *Several meshes on one part:* the last child counts. A SpecialMesh
+  Sphere then a CylinderMesh drew the cylinder; the other order drew the
+  sphere; changing the losing mesh changed nothing; removing the winner let
+  the other draw.
+- *A mesh replaces the part's own shape:* a Brick SpecialMesh on a
+  Cylinder part draws a box.
+- *A file mesh with an empty `MeshId`* (the FileMesh class, or SpecialMesh
+  `MeshType` FileMesh) draws a 1 × 1 × 1 box times `Scale`, whatever the
+  part's Size, without the part's Neon glow.
+- *`Offset`* moves the mesh in the part's own axes (a part turned 90
+  degrees about Z with Offset (0, 2, 0) drew 2 studs along world -X), as
+  documented. `VertexColor` wasn't measured; it waits for textures.
+
+**Checked against Studio** (2026-10-12): every type at Scale 1 and at
+(0.5, 1.5, 0.75) on 2 × 3 × 4 parts, plus Heads on
+2 × 1 × 2, 2 × 1 × 50 and the R6 head, rendered in Studio and in
+`rook-player --screenshot` with the same cameras (FieldOfView 2, 600 studs
+away, about 26 px/stud, front and top) and compared as red silhouette
+masks: no pixel differs more than 2 px from the silhouette edges (the rest
+are one-pixel rasterisation rims, about 2,700 px over six 308 × 538
+views). Close-ups of the three Heads (about 103 px/stud) match Studio's
+outline to a pixel in width and height.
 
 ### M5 Characters
 

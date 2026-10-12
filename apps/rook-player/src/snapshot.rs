@@ -6,8 +6,8 @@ use glam::{Mat3, Vec3};
 use rook_dom::{Dom, InstanceId};
 use rook_engine::{DataModel, RenderChanges};
 use rook_physics::{part_shape, workspace_parts};
-use rook_render::{Camera, Lighting, PartInstance, Scene};
-use rook_types::{Color3, Value};
+use rook_render::{Camera, DrawShape, Lighting, PartInstance, Scene};
+use rook_types::{Color3, MeshKind, MeshLook, Value};
 
 fn number(dom: &Dom, id: InstanceId, name: &str) -> Option<f32> {
     dom.property_by_name(id, name)?
@@ -24,23 +24,83 @@ fn color(dom: &Dom, id: InstanceId, name: &str) -> Option<[f32; 3]> {
     Some([c.r, c.g, c.b])
 }
 
+fn vector3(dom: &Dom, id: InstanceId, name: &str) -> Option<Vec3> {
+    match dom.property_by_name(id, name)? {
+        Value::Vector3(v) => Some(v.0),
+        _ => None,
+    }
+}
+
+/// The mesh that decides how a part looks: of several, the one added last
+/// (observed: a part with a SpecialMesh Sphere and a CylinderMesh drew
+/// whichever was parented second).
+fn part_mesh(dom: &Dom, id: InstanceId) -> Option<(MeshKind, InstanceId)> {
+    dom.children(id).iter().rev().find_map(|&child| {
+        let mesh_type = match dom.property_by_name(child, "MeshType") {
+            Some(Value::Enum(n)) => Some(n),
+            _ => None,
+        };
+        let mesh_id = match dom.property_by_name(child, "MeshId") {
+            Some(Value::ContentId(id)) => id.as_str().to_owned(),
+            Some(Value::String(id)) => id,
+            _ => String::new(),
+        };
+        let kind = MeshKind::of(dom.class_name(child), mesh_type, &mesh_id)?;
+        Some((kind, child))
+    })
+}
+
+/// Turns a shape's X axis onto Y, for a CylinderMesh.
+const UPRIGHT: Mat3 = Mat3::from_cols(Vec3::Y, Vec3::NEG_X, Vec3::Z);
+
+/// What a part draws (`None` without a CFrame or Size). A mesh type that
+/// draws nothing leaves the part fully transparent, so it stays in the
+/// scene for a script to change back.
 fn part(dom: &Dom, id: InstanceId) -> Option<PartInstance> {
     let Value::CFrame(cf) = dom.property_by_name(id, "CFrame")? else {
         return None;
     };
-    let Value::Vector3(size) = dom.property_by_name(id, "Size")? else {
-        return None;
-    };
-    let shape = part_shape(dom, id);
-    let size = shape.extent(size.0);
-    Some(PartInstance {
-        shape,
+    let size = vector3(dom, id, "Size")?;
+    let own = part_shape(dom, id);
+    let mut out = PartInstance {
+        shape: DrawShape::Part(own),
         position: cf.position,
         rotation: cf.rotation,
-        size,
+        size: own.extent(size),
         color: color(dom, id, "Color").unwrap_or([0.64, 0.64, 0.65]),
         transparency: number(dom, id, "Transparency").unwrap_or(0.0),
-    })
+    };
+    let Some((kind, mesh)) = part_mesh(dom, id) else {
+        return Some(out);
+    };
+    let scale = vector3(dom, mesh, "Scale").unwrap_or(Vec3::ONE);
+    match kind.look(size, scale) {
+        MeshLook::Shape {
+            shape,
+            size,
+            upright,
+        } => {
+            out.shape = DrawShape::Part(shape);
+            out.size = size;
+            if upright {
+                out.rotation = cf.rotation * UPRIGHT;
+            }
+        }
+        MeshLook::Head { scale } => {
+            out.shape = DrawShape::Head;
+            out.size = scale;
+        }
+        MeshLook::Nothing => {
+            out.transparency = 1.0;
+            return Some(out);
+        }
+        MeshLook::PartShape => return Some(out),
+    }
+    // Moves the mesh in the part's own axes (Confirmed: creator-docs
+    // DataModelMesh.Offset).
+    let offset = vector3(dom, mesh, "Offset").unwrap_or(Vec3::ZERO);
+    out.position += cf.rotation * offset;
+    Some(out)
 }
 
 /// Direction to the sun for a clock time and latitude, from the standard

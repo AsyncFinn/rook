@@ -1,10 +1,11 @@
-//! Unit primitive meshes (extents -0.5..0.5) with flat or smooth normals.
-//! Each is scaled by the part's size in the vertex shader.
+//! Unit primitive meshes (extents -0.5..0.5) with flat or smooth normals,
+//! and Rook's own head mesh. Each is scaled by the instance's size in the
+//! vertex shader.
 
 use bytemuck::{Pod, Zeroable};
 use glam::Vec3;
 
-use crate::scene::PartShape;
+use crate::scene::{DrawShape, PartShape};
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
@@ -118,11 +119,88 @@ fn ball() -> MeshData {
     m
 }
 
-pub(crate) fn build(shape: PartShape) -> MeshData {
+/// The head's radius and half height (about 1.2 studs across and tall).
+const HEAD_RADIUS: f32 = 0.6012;
+/// Around the Y axis: the first at 5 degrees from +X towards +Z, then every
+/// 10 degrees.
+const HEAD_SEGMENTS: u32 = 36;
+/// Steps in each rounded edge, 22.5 degrees apart.
+const HEAD_EDGE_STEPS: u32 = 4;
+
+/// Rook's own head, built from measurements of the `head.mesh` in the
+/// user's Roblox install (the Head MeshType draws that file; ROADMAP M4).
+/// The facts measured, and nothing else from the file, are these: a solid
+/// of revolution about Y with 36 segments starting 5 degrees off +X; its
+/// profile is a cylinder of radius R = 0.6012 whose straight side runs
+/// from -R/2 to R/2, with each rim rounded by a quarter circle of radius R/2
+/// in 4 steps, and flat round caps. Normals are smooth around and along the
+/// whole profile, so the rim blends into the caps. Its UVs and the caps'
+/// triangulation (a fan here, a grid in the file) don't change its look
+/// until textures exist.
+///
+/// From asset fetching on (M4 steps 2 and 3), the user's own install can
+/// supply the real file: load it with the mesh reader and use it in place
+/// of this for [`DrawShape::Head`].
+fn head() -> MeshData {
+    use std::f32::consts::{FRAC_PI_2, TAU};
+    let mut m = MeshData::default();
+    let r = HEAD_RADIUS;
+    // The profile from the bottom rim to the top rim: (radius, y, normal
+    // angle above the horizontal).
+    let mut profile = Vec::new();
+    for (centre_y, from) in [(-r / 2.0, -FRAC_PI_2), (r / 2.0, 0.0)] {
+        for i in 0..=HEAD_EDGE_STEPS {
+            let a = from + i as f32 / HEAD_EDGE_STEPS as f32 * FRAC_PI_2;
+            profile.push((r / 2.0 + r / 2.0 * a.cos(), centre_y + r / 2.0 * a.sin(), a));
+        }
+    }
+    let around = |k: u32| (5.0f32.to_radians() + k as f32 / HEAD_SEGMENTS as f32 * TAU).sin_cos();
+    for &(radius, y, a) in &profile {
+        for k in 0..=HEAD_SEGMENTS {
+            let (sin, cos) = around(k);
+            m.vertices.push(Vertex {
+                position: [radius * cos, y, radius * sin],
+                normal: [a.cos() * cos, a.sin(), a.cos() * sin],
+            });
+        }
+    }
+    let row = HEAD_SEGMENTS + 1;
+    for ring in 0..profile.len() as u32 - 1 {
+        for k in 0..HEAD_SEGMENTS {
+            let a = ring * row + k;
+            let b = a + row;
+            m.indices.extend_from_slice(&[a, b, a + 1, a + 1, b, b + 1]);
+        }
+    }
+    // Caps: fans from the centre, sharing the rims' normals (straight up
+    // and down there).
+    for (ring, y, ny) in [(0, -r, -1.0), (profile.len() as u32 - 1, r, 1.0)] {
+        let centre = m.vertices.len() as u32;
+        m.vertices.push(Vertex {
+            position: [0.0, y, 0.0],
+            normal: [0.0, ny, 0.0],
+        });
+        for k in 0..HEAD_SEGMENTS {
+            let (a, b) = (ring * row + k, ring * row + k + 1);
+            let tri = if ny < 0.0 {
+                [centre, a, b]
+            } else {
+                [centre, b, a]
+            };
+            m.indices.extend_from_slice(&tri);
+        }
+    }
+    m
+}
+
+pub(crate) fn build(shape: DrawShape) -> MeshData {
     match shape {
-        PartShape::Block | PartShape::Wedge | PartShape::CornerWedge => polyhedron(shape),
-        PartShape::Cylinder => cylinder(),
-        PartShape::Ball => ball(),
+        DrawShape::Part(shape @ (PartShape::Block | PartShape::Wedge | PartShape::CornerWedge)) => {
+            polyhedron(shape)
+        }
+        DrawShape::Part(PartShape::Cylinder) => cylinder(),
+        DrawShape::Part(PartShape::Ball) => ball(),
+        DrawShape::Head => head(),
     }
 }
 
@@ -133,7 +211,7 @@ mod tests {
     /// Every face's normal points away from the centre.
     #[test]
     fn normals_point_outward() {
-        for shape in PartShape::ALL {
+        for shape in DrawShape::ALL {
             let m = build(shape);
             for tri in m.indices.chunks(3) {
                 let [a, b, c] =
@@ -145,6 +223,29 @@ mod tests {
                     "{shape:?}: inward-facing triangle"
                 );
             }
+        }
+    }
+
+    /// The head's measured outline: 1.2024 studs tall, and as wide as its
+    /// 36 segments allow (R cos 5 degrees seen from the front or side).
+    #[test]
+    fn head_matches_the_measured_bounds() {
+        let m = build(DrawShape::Head);
+        let (mut lo, mut hi) = (Vec3::splat(f32::MAX), Vec3::splat(f32::MIN));
+        for v in &m.vertices {
+            lo = lo.min(Vec3::from(v.position));
+            hi = hi.max(Vec3::from(v.position));
+        }
+        let wide = HEAD_RADIUS * 5.0f32.to_radians().cos();
+        assert!(
+            (hi - Vec3::new(wide, HEAD_RADIUS, wide))
+                .abs()
+                .max_element()
+                < 1e-5
+        );
+        assert!((lo + hi).abs().max_element() < 1e-5);
+        for v in &m.vertices {
+            assert!((Vec3::from(v.normal).length() - 1.0).abs() < 1e-5);
         }
     }
 }
