@@ -1,0 +1,22 @@
+-- studio 0.742.0.7421053
+-- signals: deferred
+weld Weld Weld B B A
+C0 0.00 -1.00 0.00 1.00 0.00 0.00 0.00 0.00 -1.00 0.00 1.00 0.00
+C1 0.00 1.00 0.00 1.00 0.00 0.00 0.00 0.00 -1.00 0.00 1.00 0.00
+again 1
+studs-inlet Snap(D-C)@D
+hinge Rotate(C-D)@C
+connected E,F E,F,G
+root F F grounded false
+mass 5.60 56.00
+anchored root E grounded true mass inf
+after CFrame 20.00,10.00,0.00 23.00,10.00,0.00 26.00,10.00,0.00
+after Position 20.00,10.00,0.00 23.00,15.00,0.00 26.00,10.00,0.00 C0 3.00 0.00 0.00 1.00 0.00 0.00 0.00 1.00 0.00 0.00 0.00 1.00 C1 0.00 -5.00 0.00 1.00 0.00 0.00 0.00 1.00 0.00 0.00 0.00 1.00
+broken 0 0 nil nil
+model Weld(H-I)@H,Weld(H-K)@H | Weld(H-K)@H
+model broken 0 0
+anchored roots Q T T 3
+moved T 80.00,0.00,0.00 82.00,10.00,0.00 84.00,10.00,0.00
+outside nil nil 1 0
+desired 1.00 0.00
+turned 1.00 P1 4.84 -0.54 0.00 0.54 -0.84 0.00 0.84 0.54 0.00 0.00 0.00 1.00

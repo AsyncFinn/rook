@@ -6,6 +6,9 @@ use rook_types::{PartShape, Value};
 
 use crate::convert::to_rapier;
 
+/// Roblox parts are at least this many studs on each side.
+pub(crate) const MIN_PART_SIZE: f32 = 0.001;
+
 /// A BasePart with a shape of its own: everything but Terrain, which is
 /// drawn and simulated separately (M8).
 pub fn is_part(dom: &Dom, id: InstanceId) -> bool {
@@ -34,8 +37,7 @@ pub fn part_shape(dom: &Dom, id: InstanceId) -> PartShape {
 /// The collider shape for a part of this shape and size, and its pose
 /// relative to the part. `None` for a degenerate (zero-size) part.
 pub(crate) fn collider_shape(shape: PartShape, size: glam::Vec3) -> Option<(SharedShape, Pose)> {
-    // Roblox parts are at least 0.001 studs on each side.
-    let size = shape.extent(size.max(glam::Vec3::splat(0.001)));
+    let size = shape.extent(size.max(glam::Vec3::splat(MIN_PART_SIZE)));
     let h = size * 0.5;
     Some(match shape {
         PartShape::Block => (SharedShape::cuboid(h.x, h.y, h.z), Pose::IDENTITY),

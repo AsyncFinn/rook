@@ -8,6 +8,9 @@
 //! engine systems read the journal afterwards, each with its own cursor.
 //! See `docs/architecture.md` §5.
 //!
+//! Reference properties are indexed both ways: [`Dom::referrers`] lists
+//! what points at an instance (the joints holding a part, for example).
+//!
 //! Hierarchy rules (locked parents, cycles, `Destroy`, `Clone`) follow
 //! Roblox. Error texts are Inference until the conformance suite pins them.
 
@@ -70,6 +73,8 @@ pub struct Dom {
     journal: Journal,
     /// Default values converted from the reflection database, cached per class.
     defaults: RefCell<HashMap<(ClassId, PropertyId), Value>>,
+    /// For each instance, the reference properties pointing at it.
+    referrers: HashMap<InstanceId, Vec<(InstanceId, PropertyId)>>,
     name_prop: PropertyId,
     parent_prop: PropertyId,
 }
@@ -91,6 +96,7 @@ impl Dom {
             root,
             journal: Journal::default(),
             defaults: RefCell::default(),
+            referrers: HashMap::new(),
             name_prop: prop("Name"),
             parent_prop: prop("Parent"),
         }
@@ -439,7 +445,12 @@ impl Dom {
         let mut doomed = vec![id];
         self.collect_descendants(id, &mut doomed);
         for d in doomed {
-            self.instances.remove(d);
+            if let Some(inst) = self.instances.remove(d) {
+                for (property, value) in &inst.properties {
+                    self.unlink(d, *property, value);
+                }
+            }
+            self.referrers.remove(&d);
         }
     }
 
@@ -459,6 +470,17 @@ impl Dom {
                 {
                     *r = mapped.to_ref();
                 }
+            }
+            let refs: Vec<_> = self.instances[copy]
+                .properties
+                .iter()
+                .filter_map(|(p, v)| ref_target(v).map(|t| (*p, t)))
+                .collect();
+            for (property, target) in refs {
+                self.referrers
+                    .entry(target)
+                    .or_default()
+                    .push((copy, property));
             }
         }
         Some(new)
@@ -547,6 +569,13 @@ impl Dom {
         self.property(id, prop.id)
     }
 
+    /// The reference properties pointing at `id`, as (holder, property)
+    /// pairs. Holders may be destroyed; ones removed from the arena aren't
+    /// listed.
+    pub fn referrers(&self, id: InstanceId) -> &[(InstanceId, PropertyId)] {
+        self.referrers.get(&id).map_or(&[], Vec::as_slice)
+    }
+
     /// The instance a reference property (`PrimaryPart`, `CurrentCamera`,
     /// ...) points at, if it's set.
     pub fn ref_property(&self, id: InstanceId, name: &str) -> Option<InstanceId> {
@@ -615,7 +644,7 @@ impl Dom {
         if current.as_ref() == Some(&value) {
             return Ok(());
         }
-        self.inst_mut(id)?.properties.insert(property, value);
+        self.store(id, property, value)?;
         self.journal.push(Change::Property { id, property });
         Ok(())
     }
@@ -623,8 +652,38 @@ impl Dom {
     /// Store a property from a file without recording a change.
     pub fn load_property(&mut self, id: InstanceId, property: PropertyId, value: Value) {
         let value = coerce(self.db.property(property).ty, value);
-        if let Some(inst) = self.instances.get_mut(id) {
-            inst.properties.insert(property, value);
+        let _ = self.store(id, property, value);
+    }
+
+    /// Store a value, keeping the reference index up to date.
+    fn store(
+        &mut self,
+        id: InstanceId,
+        property: PropertyId,
+        value: Value,
+    ) -> Result<(), DomError> {
+        let target = ref_target(&value);
+        if let Some(old) = self.inst_mut(id)?.properties.insert(property, value) {
+            self.unlink(id, property, &old);
+        }
+        if let Some(target) = target {
+            self.referrers
+                .entry(target)
+                .or_default()
+                .push((id, property));
+        }
+        Ok(())
+    }
+
+    fn unlink(&mut self, holder: InstanceId, property: PropertyId, old: &Value) {
+        let Some(target) = ref_target(old) else {
+            return;
+        };
+        if let Some(list) = self.referrers.get_mut(&target) {
+            list.retain(|r| *r != (holder, property));
+            if list.is_empty() {
+                self.referrers.remove(&target);
+            }
         }
     }
 
@@ -712,17 +771,38 @@ impl Default for Dom {
     }
 }
 
-/// The class default from the database, or the zero value of the
-/// property's type when the database has none (Approximation: the
+fn ref_target(value: &Value) -> Option<InstanceId> {
+    match value {
+        Value::Ref(Some(r)) => Some(InstanceId::from_ref(*r)),
+        _ => None,
+    }
+}
+
+/// Defaults of properties that don't serialize, which the database
+/// doesn't list, where the zero value is wrong. Keyed by the class that
+/// declares the property.
+const UNSERIALIZED_DEFAULTS: &[(&str, &str, Value)] = &[
+    // Confirmed: creator-docs WeldConstraint.Enabled.
+    ("WeldConstraint", "Enabled", Value::Bool(true)),
+];
+
+/// The class default from the database, then [`UNSERIALIZED_DEFAULTS`],
+/// then the zero value of the property's type (Approximation: the
 /// database lists defaults only for properties that serialize).
 fn convert_default(db: &Database, class: ClassId, property: PropertyId) -> Option<Value> {
-    let ty = db.property(property).ty;
-    match db.default_value(class, property) {
-        Some(variant) => Value::from_variant(variant.clone(), |_| None)
+    let prop = db.property(property);
+    let ty = prop.ty;
+    if let Some(variant) = db.default_value(class, property) {
+        return Value::from_variant(variant.clone(), |_| None)
             .ok()
-            .map(|v| coerce(ty, v)),
-        None => zero_value(db, ty),
+            .map(|v| coerce(ty, v));
     }
+    let owner = db.class(prop.owner).name;
+    UNSERIALIZED_DEFAULTS
+        .iter()
+        .find(|(c, p, _)| *c == owner && *p == prop.name)
+        .map(|(_, _, v)| v.clone())
+        .or_else(|| zero_value(db, ty))
 }
 
 /// Store values in the property's declared type. Files and the database

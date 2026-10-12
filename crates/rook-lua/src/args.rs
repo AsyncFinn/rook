@@ -156,6 +156,22 @@ impl Args {
         }
     }
 
+    /// An array of instances (`Instances` in the API dump).
+    pub(crate) fn instances(&self, i: usize) -> ApiResult<Vec<InstanceId>> {
+        let LuaValue::Table(t) = self.get(i) else {
+            return Err(self.wrong(i, "table"));
+        };
+        t.sequence_values::<LuaValue>()
+            .map(|v| match v? {
+                LuaValue::UserData(ud) => ud
+                    .borrow::<LuaInstance>()
+                    .map(|inst| inst.0)
+                    .map_err(|_| ScriptError("Unable to cast value to Object".into())),
+                _ => Err(ScriptError("Unable to cast value to Object".into())),
+            })
+            .collect()
+    }
+
     pub(crate) fn function(&self, i: usize) -> ApiResult<Function> {
         match self.get(i) {
             LuaValue::Function(f) => Ok(f.clone()),

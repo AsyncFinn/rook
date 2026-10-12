@@ -4,6 +4,8 @@ use rook_types::{CFrame, Value, Vector3};
 
 use super::*;
 
+mod joints;
+
 fn set(dom: &mut Dom, id: InstanceId, name: &str, value: Value) {
     dom.set_property_by_name(id, name, value).unwrap();
 }
@@ -65,7 +67,7 @@ fn unanchored_part_falls_and_lands_on_an_anchored_one() {
         false,
     );
     let mut physics = Physics::new();
-    physics.sync(&dom);
+    physics.sync(&mut dom);
     assert_eq!(physics.part_count(), 2);
     assert_eq!(physics.body_count(), 1);
 
@@ -96,7 +98,7 @@ fn script_changes_reach_the_world() {
     // Moving it out of Workspace takes it out of the simulation.
     let storage = dom.get_service("ReplicatedStorage").unwrap();
     dom.set_parent(brick, Some(storage)).unwrap();
-    physics.sync(&dom);
+    physics.sync(&mut dom);
     assert_eq!(physics.part_count(), 0);
 }
 

@@ -154,3 +154,36 @@ fn stale_ids_never_alias() {
     assert_ne!(a, b);
     assert_eq!(InstanceId::from_ref(b.to_ref()), b);
 }
+
+#[test]
+fn referrers_follow_reference_writes_clones_and_removal() {
+    let mut dom = Dom::new();
+    let a = part(&mut dom, "A");
+    let b = part(&mut dom, "B");
+    let weld = dom.create_by_name("Weld").unwrap();
+    let part0 = dom.property_id(weld, "Part0").unwrap();
+    let part1 = dom.property_id(weld, "Part1").unwrap();
+    dom.set_property(weld, part0, Value::Ref(Some(a.to_ref())))
+        .unwrap();
+    dom.load_property(weld, part1, Value::Ref(Some(b.to_ref())));
+    assert_eq!(dom.referrers(a), &[(weld, part0)]);
+    assert_eq!(dom.referrers(b), &[(weld, part1)]);
+
+    // Retargeting moves the entry.
+    dom.set_property(weld, part1, Value::Ref(Some(a.to_ref())))
+        .unwrap();
+    assert!(dom.referrers(b).is_empty());
+    assert_eq!(dom.referrers(a).len(), 2);
+
+    // A clone's references are indexed under their (remapped) targets.
+    let model = dom.create_by_name("Model").unwrap();
+    dom.set_parent(a, Some(model)).unwrap();
+    dom.set_parent(weld, Some(model)).unwrap();
+    let copy = dom.clone_instance(model).unwrap();
+    let copied_a = dom.find_first_child(copy, "A", false).unwrap();
+    assert_eq!(dom.referrers(copied_a).len(), 2);
+    assert_eq!(dom.referrers(a).len(), 2);
+
+    dom.remove(model);
+    assert!(dom.referrers(a).is_empty());
+}

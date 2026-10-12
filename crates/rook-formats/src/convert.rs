@@ -136,7 +136,7 @@ pub fn from_dom(dom: &Dom, roots: &[InstanceId]) -> WeakDom {
                 .unwrap_or_else(Ref::none)
         };
         let mut props: Vec<(String, Variant)> = Vec::new();
-        for (pid, value) in &inst.properties {
+        for (pid, value) in inst.properties() {
             let value = file_encoding(db, inst.class, *pid, value);
             props.push((db.property(*pid).name.to_owned(), value.to_variant(to_ref)));
         }
