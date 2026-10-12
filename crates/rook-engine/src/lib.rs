@@ -271,10 +271,7 @@ impl DataModel {
         };
         let top_class = dom.class_name(top);
         match dom.property_by_name(id, "RunContext") {
-            Some(Value::Enum(1)) => !matches!(
-                top_class,
-                "ServerStorage" | "StarterGui" | "StarterPack" | "StarterPlayer"
-            ),
+            Some(Value::Enum(1)) => !(is_starter(top_class) || top_class == "ServerStorage"),
             Some(Value::Enum(2 | 3)) => false,
             _ => matches!(top_class, "Workspace" | "ServerScriptService"),
         }
@@ -554,14 +551,13 @@ fn client_should_run(dom: &Dom, id: InstanceId, class: &str) -> bool {
         });
     }
     matches!(dom.property_by_name(id, "RunContext"), Some(Value::Enum(2)))
-        && !matches!(
-            top_class,
-            "StarterGui"
-                | "StarterPack"
-                | "StarterPlayer"
-                | "ServerStorage"
-                | "ServerScriptService"
-        )
+        && !(is_starter(top_class) || matches!(top_class, "ServerStorage" | "ServerScriptService"))
+}
+
+/// Containers whose contents are templates copied to players, so scripts
+/// in them never run in place.
+fn is_starter(class: &str) -> bool {
+    matches!(class, "StarterGui" | "StarterPack" | "StarterPlayer")
 }
 
 /// The child of the DataModel that contains `id`.
