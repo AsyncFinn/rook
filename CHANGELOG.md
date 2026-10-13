@@ -81,6 +81,8 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 - Fixed: physics kept bodies, motors and constraints in hash maps with a random order, so a round of light sequence played out differently on every run. It now uses deterministic maps.
 - Fixed: holding the right mouse button to look around left the cursor visible and free to wander out of the window. It now hides and stays where it was pressed (held in place, or put back after each move where the platform can only confine it to the window).
 - Fixed: changes a server script made while handling a client's message at the end of a frame were trimmed from the journal before the next frame's script and render checks saw them, so a script it parented never started.
+- Sun shadows: the renderer draws a 2048² shadow map from the sun (depth only, reverse Z like the main pass) over the opaque parts, fitted around the camera's view out to 300 studs and moved in whole texels so edges don't shimmer. Only the sun's light is shadowed; Ambient and OutdoorAmbient still light shadowed areas. Edges are softened by 3×3 filtered comparison samples. `Lighting.GlobalShadows` off skips the pass entirely, as does a sun below the horizon; `BasePart.CastShadow` off keeps a part from casting while it still receives. Transparent and invisible parts don't cast.
+- Fixed: the sun was placed by a textbook solar formula, too low and too far towards +Z (at 14:00 and the default latitude, 33° up instead of 55°). It now follows `Lighting:GetSunDirection()` as measured in Studio: the sun circles the Z axis once a day, rising at +X, on a circle tilted by the latitude less 23.5°.
 
 ## [0.2.0] — 2026-10-11 — M2: client side, renderer, input
 

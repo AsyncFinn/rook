@@ -3,10 +3,12 @@
 //! The renderer draws a [`Scene`] snapshot: it never touches the DOM
 //! (architecture §8). It draws primitive parts, the built-in mesh shapes
 //! and mesh files with their colour and transparency, a sky colour, a sun,
-//! ambient light and fog. Textures, decals, terrain and shadows come later.
+//! ambient light, fog and the sun's shadows. Textures, decals and terrain
+//! come later.
 
 mod mesh;
 mod scene;
+mod shadow;
 
 pub use scene::{Camera, DrawShape, Lighting, Mesh, MeshHash, PartInstance, PartShape, Scene};
 
@@ -15,6 +17,8 @@ use std::collections::HashMap;
 use bytemuck::{Pod, Zeroable};
 use glam::Vec3;
 use wgpu::util::DeviceExt;
+
+use shadow::{SHADOW_DISTANCE, SHADOW_SIZE, ShadowView};
 
 pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
@@ -38,6 +42,10 @@ struct Globals {
     outdoor_ambient: [f32; 4],
     fog_color: [f32; 4],
     fog_range: [f32; 4],
+    shadow_view_proj: [[f32; 4]; 4],
+    /// A texel in uv, the normal offset, the depth bias, and how far
+    /// shadows reach (0 for none).
+    shadow: [f32; 4],
 }
 
 #[repr(C)]
@@ -49,6 +57,8 @@ struct Instance {
     back: [f32; 3],
     size: [f32; 3],
     color: [f32; 4],
+    /// 1 when the part casts a shadow.
+    cast: f32,
 }
 
 impl Instance {
@@ -60,6 +70,7 @@ impl Instance {
             back: p.rotation.z_axis.to_array(),
             size: p.size.to_array(),
             color: [p.color[0], p.color[1], p.color[2], 1.0 - p.transparency],
+            cast: if p.cast_shadow { 1.0 } else { 0.0 },
         }
     }
 }
@@ -145,8 +156,14 @@ pub struct Renderer {
     color_format: wgpu::TextureFormat,
     opaque: wgpu::RenderPipeline,
     transparent: wgpu::RenderPipeline,
+    /// Depth only, from the sun, over the opaque batches.
+    shadow: wgpu::RenderPipeline,
     globals: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
+    /// The shadow map, drawn by `shadow` and sampled by the main pass
+    /// through `shadow_bind_group`.
+    shadow_view: wgpu::TextureView,
+    shadow_bind_group: wgpu::BindGroup,
     /// The built-in shapes, and each mesh file a part has drawn, uploaded
     /// once by content hash (kept for the renderer's life).
     meshes: HashMap<DrawShape, GpuMesh>,
@@ -204,15 +221,81 @@ impl Renderer {
                 resource: globals.as_entire_binding(),
             }],
         });
+        let shadow_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("rook shadow map"),
+            size: wgpu::Extent3d {
+                width: SHADOW_SIZE,
+                height: SHADOW_SIZE,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: DEPTH_FORMAT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+        let shadow_view = shadow_texture.create_view(&Default::default());
+        let shadow_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("rook shadow map"),
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            // Reverse Z: lit when the point is at least as near the sun as
+            // what the map holds.
+            compare: Some(wgpu::CompareFunction::GreaterEqual),
+            ..Default::default()
+        });
+        let shadow_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("rook shadow map"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Depth,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison),
+                    count: None,
+                },
+            ],
+        });
+        let shadow_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("rook shadow map"),
+            layout: &shadow_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&shadow_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&shadow_sampler),
+                },
+            ],
+        });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("rook parts"),
-            bind_group_layouts: &[Some(&layout)],
+            bind_group_layouts: &[Some(&layout), Some(&shadow_layout)],
             immediate_size: 0,
         });
+        // The shadow pass writes the map, so it can't bind it.
+        let shadow_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("rook shadow map"),
+                bind_group_layouts: &[Some(&layout)],
+                immediate_size: 0,
+            });
         let vertex_attrs = wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3];
         let instance_attrs = wgpu::vertex_attr_array![
             2 => Float32x3, 3 => Float32x3, 4 => Float32x3,
-            5 => Float32x3, 6 => Float32x3, 7 => Float32x4
+            5 => Float32x3, 6 => Float32x3, 7 => Float32x4, 8 => Float32
         ];
         let buffers = [
             Some(wgpu::VertexBufferLayout {
@@ -263,6 +346,38 @@ impl Renderer {
                 cache: None,
             })
         };
+        let shadow = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("rook shadow map"),
+            layout: Some(&shadow_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_shadow"),
+                compilation_options: Default::default(),
+                buffers: &buffers,
+            },
+            primitive: wgpu::PrimitiveState {
+                cull_mode: Some(wgpu::Face::Back),
+                ..Default::default()
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: DEPTH_FORMAT,
+                depth_write_enabled: Some(true),
+                depth_compare: Some(wgpu::CompareFunction::Greater),
+                stencil: Default::default(),
+                // Pushes casters away from the sun (smaller in reverse Z)
+                // where they slope across its view, against acne on faces
+                // the sun grazes; the normal offset handles the rest.
+                bias: wgpu::DepthBiasState {
+                    constant: 0,
+                    slope_scale: -1.5,
+                    clamp: 0.0,
+                },
+            }),
+            multisample: Default::default(),
+            fragment: None,
+            multiview_mask: None,
+            cache: None,
+        });
         let opaque = make("rook opaque", None, true);
         let transparent = make(
             "rook transparent",
@@ -281,8 +396,11 @@ impl Renderer {
             color_format,
             opaque,
             transparent,
+            shadow,
             globals,
             bind_group,
+            shadow_view,
+            shadow_bind_group,
             meshes,
             opaque_batches: Vec::new(),
             batch_of: HashMap::new(),
@@ -565,17 +683,33 @@ impl Renderer {
     pub fn render(&mut self, target: &wgpu::TextureView, width: u32, height: u32, camera: &Camera) {
         profiling::scope!("Renderer::render");
         let l = self.lighting;
+        let aspect = width as f32 / height.max(1) as f32;
+        let sun = l.sun_direction.normalize_or(Vec3::Y);
+        // No shadow pass at all with GlobalShadows off, or with the sun
+        // below the horizon, where it lights nothing from above.
+        let shadow =
+            (l.global_shadows && sun.y > 0.0).then(|| ShadowView::fit(camera, aspect, sun));
         let rgb = |c: [f32; 3], w: f32| [c[0], c[1], c[2], w];
         let globals = Globals {
-            view_proj: camera
-                .view_projection(width as f32 / height.max(1) as f32)
-                .to_cols_array_2d(),
+            view_proj: camera.view_projection(aspect).to_cols_array_2d(),
             camera_pos: rgb(camera.position.to_array(), 1.0),
-            sun_dir: rgb(l.sun_direction.normalize_or(Vec3::Y).to_array(), 0.0),
+            sun_dir: rgb(sun.to_array(), 0.0),
             ambient: rgb(l.ambient, 0.0),
             outdoor_ambient: rgb(l.outdoor_ambient, 0.0),
             fog_color: rgb(l.fog_color, l.brightness),
             fog_range: [l.fog_start, l.fog_end, 0.0, 0.0],
+            shadow_view_proj: shadow
+                .map_or(glam::Mat4::IDENTITY, |s| s.view_proj)
+                .to_cols_array_2d(),
+            shadow: match shadow {
+                Some(s) => [
+                    1.0 / SHADOW_SIZE as f32,
+                    s.normal_offset,
+                    s.depth_bias,
+                    SHADOW_DISTANCE,
+                ],
+                None => [0.0; 4],
+            },
         };
         self.queue
             .write_buffer(&self.globals, 0, bytemuck::bytes_of(&globals));
@@ -589,6 +723,37 @@ impl Renderer {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("rook frame"),
             });
+        let opaque: Vec<_> = self
+            .opaque_batches
+            .iter()
+            .filter_map(|b| {
+                let (buffer, _) = b.buffer.as_ref()?;
+                Some((b.shape, buffer, 0..b.instances.len() as u32))
+            })
+            .collect();
+        if shadow.is_some() {
+            profiling::scope!("shadow pass");
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("rook shadow map"),
+                color_attachments: &[],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &self.shadow_view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(0.0),
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+            pass.set_bind_group(0, &self.bind_group, &[]);
+            pass.set_pipeline(&self.shadow);
+            for (shape, buffer, instances) in &opaque {
+                self.draw(&mut pass, *shape, buffer, instances.clone());
+            }
+        }
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("rook parts"),
@@ -619,10 +784,7 @@ impl Renderer {
                 multiview_mask: None,
             });
             pass.set_bind_group(0, &self.bind_group, &[]);
-            let opaque = self.opaque_batches.iter().filter_map(|b| {
-                let (buffer, _) = b.buffer.as_ref()?;
-                Some((b.shape, buffer, 0..b.instances.len() as u32))
-            });
+            pass.set_bind_group(1, &self.shadow_bind_group, &[]);
             let transparent =
                 self.transparent_buffer
                     .as_ref()
@@ -633,23 +795,34 @@ impl Renderer {
                             .map(move |(shape, range)| (*shape, buffer, range.clone()))
                     });
             for (pipeline, draws) in [
-                (&self.opaque, opaque.collect::<Vec<_>>()),
+                (&self.opaque, opaque),
                 (&self.transparent, transparent.collect::<Vec<_>>()),
             ] {
                 pass.set_pipeline(pipeline);
                 for (shape, buffer, instances) in draws {
-                    // Parts are only drawn for shapes with a mesh.
-                    let Some(mesh) = self.meshes.get(&shape) else {
-                        continue;
-                    };
-                    pass.set_vertex_buffer(0, mesh.vertices.slice(..));
-                    pass.set_vertex_buffer(1, buffer.slice(..));
-                    pass.set_index_buffer(mesh.indices.slice(..), wgpu::IndexFormat::Uint32);
-                    pass.draw_indexed(0..mesh.index_count, 0, instances);
+                    self.draw(&mut pass, shape, buffer, instances);
                 }
             }
         }
         self.queue.submit([encoder.finish()]);
+    }
+
+    /// Draw `instances` of `buffer` as `shape`.
+    fn draw(
+        &self,
+        pass: &mut wgpu::RenderPass<'_>,
+        shape: DrawShape,
+        buffer: &wgpu::Buffer,
+        instances: std::ops::Range<u32>,
+    ) {
+        // Parts are only drawn for shapes with a mesh.
+        let Some(mesh) = self.meshes.get(&shape) else {
+            return;
+        };
+        pass.set_vertex_buffer(0, mesh.vertices.slice(..));
+        pass.set_vertex_buffer(1, buffer.slice(..));
+        pass.set_index_buffer(mesh.indices.slice(..), wgpu::IndexFormat::Uint32);
+        pass.draw_indexed(0..mesh.index_count, 0, instances);
     }
 
     /// Render offscreen and return tightly packed RGBA8 (sRGB) pixels.
@@ -750,6 +923,7 @@ mod tests {
             size: Vec3::splat(2.0),
             color,
             transparency,
+            cast_shadow: true,
         }
     }
 
