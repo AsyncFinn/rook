@@ -2,7 +2,7 @@
 
 ## Building
 
-Rook needs a recent stable Rust toolchain (1.85 or later).
+Rook needs a recent stable Rust toolchain (1.94 or later).
 
 ```sh
 git clone https://github.com/AsyncFinn/rook

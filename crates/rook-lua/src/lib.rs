@@ -110,7 +110,7 @@ impl Runtime {
             // every 1024th time (still thousands of times a millisecond).
             let ticks = wd.ticks.get().wrapping_add(1);
             wd.ticks.set(ticks);
-            if ticks % 1024 == 0
+            if ticks.is_multiple_of(1024)
                 && let Some(deadline) = wd.deadline.get()
                 && Instant::now() > deadline
             {

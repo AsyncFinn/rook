@@ -1,13 +1,20 @@
-//! Reading Roblox mesh files. Only version 2.00, the version of the head
-//! mesh, is read so far; M4 step 3 (file meshes) adds versions 1 and 3-5.
+//! Reading Roblox mesh files, through the `rbx_mesh` crate (versions 1.00
+//! to 5.00; 6.00 and 7.00 aren't read yet), into the one layout Rook draws.
 //!
-//! Version 2.00, as documented by Maximum_ADHD's "Roblox Mesh Format"
-//! (DevForum, 2019) and checked against the user's `head.mesh` (517
-//! vertices, 846 triangles, ROADMAP M4): the line `version 2.00\n`, then a
-//! little-endian header (u16 header size, u8 vertex size, u8 face size, u32
-//! vertex count, u32 face count), the vertices (position, normal and UV as
-//! f32s, then 4 tangent bytes and, in 40-byte vertices, 4 colour bytes),
-//! then the faces (three u32 vertex indices each).
+//! `rbx_mesh` already corrects version 1.00's positions (stored at twice
+//! their size) and the upside-down V of version 1 UVs. What Rook adds:
+//!
+//! - From version 3.00 on, a file holds every level of detail in one face
+//!   list, and its LOD table gives where each starts. Only the first
+//!   (highest-detail) range is kept (Inference from the community format
+//!   specification, Maximum_ADHD's "Roblox Mesh Format", DevForum).
+//! - Faces pointing past the vertex list are rejected, so a damaged file
+//!   can't reach the renderer.
+//!
+//! Checked against the user's `head.mesh` (version 2.00, 517 vertices, 846
+//! triangles, ROADMAP M4) when an install is found.
+
+use rbx_mesh::mesh::{Face2, Mesh as Versioned, Vertices2};
 
 /// A decoded mesh, in the file's own units and axes.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -25,26 +32,48 @@ pub enum MeshError {
     NotAMesh,
     #[error("mesh version {0} is not supported yet")]
     Unsupported(String),
-    #[error("mesh file is cut short or damaged")]
-    Truncated,
+    #[error("mesh file is damaged: {0}")]
+    Damaged(String),
 }
+
+/// The versions `rbx_mesh` reads.
+const VERSIONS: [&str; 8] = [
+    "1.00", "1.01", "2.00", "3.00", "3.01", "4.00", "4.01", "5.00",
+];
 
 impl Mesh {
     /// Decode a mesh file.
     pub fn decode(bytes: &[u8]) -> Result<Self, MeshError> {
-        let line_end = bytes
-            .iter()
-            .take(32)
-            .position(|&b| b == b'\n')
-            .ok_or(MeshError::NotAMesh)?;
-        let line = std::str::from_utf8(&bytes[..line_end])
-            .map_err(|_| MeshError::NotAMesh)?
-            .trim_end_matches('\r');
-        let version = line.strip_prefix("version ").ok_or(MeshError::NotAMesh)?;
-        match version {
-            "2.00" => decode_v2(&bytes[line_end + 1..]),
-            other => Err(MeshError::Unsupported(other.to_owned())),
+        let version = version(bytes).ok_or(MeshError::NotAMesh)?;
+        if !VERSIONS.contains(&version) {
+            return Err(MeshError::Unsupported(version.to_owned()));
         }
+        let mesh = rbx_mesh::read_mesh_versioned(std::io::Cursor::new(bytes))
+            .map_err(|e| MeshError::Damaged(e.to_string()))?;
+        let out = match mesh {
+            Versioned::V1(m) => {
+                let mut out = Self::default();
+                for v in &m.vertices {
+                    out.positions.push(v.pos);
+                    out.normals.push(v.norm);
+                    out.uvs.push([v.tex[0], v.tex[1]]);
+                }
+                // Version 1 lists each triangle's three corners in turn.
+                out.indices = (0..out.positions.len() as u32).collect();
+                out
+            }
+            Versioned::V2(m) => from_parts(&m.vertices, &m.faces, &[]),
+            Versioned::V3(m) => from_parts(&m.vertices, &m.faces, &lods(&m.lods)),
+            Versioned::V4(m) => from_parts(&Vertices2::Full(m.vertices), &m.faces, &lods(&m.lods)),
+            Versioned::V5(m) => from_parts(&Vertices2::Full(m.vertices), &m.faces, &lods(&m.lods)),
+        };
+        let count = out.positions.len() as u32;
+        if let Some(bad) = out.indices.iter().find(|&&i| i >= count) {
+            return Err(MeshError::Damaged(format!(
+                "face uses vertex {bad} of {count}"
+            )));
+        }
+        Ok(out)
     }
 
     /// The smallest box holding every vertex: (min, max).
@@ -61,73 +90,41 @@ impl Mesh {
     }
 }
 
-struct Reader<'a>(&'a [u8]);
-
-impl Reader<'_> {
-    fn take<const N: usize>(&mut self) -> Result<[u8; N], MeshError> {
-        let (head, rest) = self.0.split_first_chunk().ok_or(MeshError::Truncated)?;
-        self.0 = rest;
-        Ok(*head)
-    }
-
-    fn skip(&mut self, n: usize) -> Result<(), MeshError> {
-        self.0 = self.0.get(n..).ok_or(MeshError::Truncated)?;
-        Ok(())
-    }
-
-    fn u32(&mut self) -> Result<u32, MeshError> {
-        self.take().map(u32::from_le_bytes)
-    }
-
-    fn f32(&mut self) -> Result<f32, MeshError> {
-        self.take().map(f32::from_le_bytes)
-    }
-
-    fn vec3(&mut self) -> Result<[f32; 3], MeshError> {
-        Ok([self.f32()?, self.f32()?, self.f32()?])
-    }
+/// The version in a mesh file's first line (`version 2.00`).
+fn version(bytes: &[u8]) -> Option<&str> {
+    let line = bytes.split(|&b| b == b'\n').next()?;
+    let line = std::str::from_utf8(line.get(..line.len().min(32))?).ok()?;
+    line.trim_end_matches('\r').strip_prefix("version ")
 }
 
-fn decode_v2(body: &[u8]) -> Result<Mesh, MeshError> {
-    let mut r = Reader(body);
-    let header_size = usize::from(u16::from_le_bytes(r.take()?));
-    let [vertex_size] = r.take()?;
-    let [face_size] = r.take()?;
-    let vertices = r.u32()? as usize;
-    let faces = r.u32()? as usize;
-    // The header counts its own 12 bytes; vertices hold at least position,
-    // normal and UV (32 bytes), faces three indices.
-    if header_size < 12 || vertex_size < 32 || face_size < 12 {
-        return Err(MeshError::NotAMesh);
-    }
-    r.skip(header_size - 12)?;
-    let needed = vertices * usize::from(vertex_size) + faces * usize::from(face_size);
-    if r.0.len() < needed {
-        return Err(MeshError::Truncated);
-    }
-    let mut mesh = Mesh {
-        positions: Vec::with_capacity(vertices),
-        normals: Vec::with_capacity(vertices),
-        uvs: Vec::with_capacity(vertices),
-        indices: Vec::with_capacity(faces * 3),
+fn lods(lods: &[rbx_mesh::mesh::Lod3]) -> Vec<u32> {
+    lods.iter().map(|l| l.0).collect()
+}
+
+/// Vertices and the faces of the first level of detail (`lods` gives each
+/// level's first face; none means every face).
+fn from_parts(vertices: &Vertices2, faces: &[Face2], lods: &[u32]) -> Mesh {
+    let mut out = Mesh::default();
+    let mut push = |pos: [f32; 3], norm: [f32; 3], tex: [f32; 2]| {
+        out.positions.push(pos);
+        out.normals.push(norm);
+        out.uvs.push(tex);
     };
-    for _ in 0..vertices {
-        mesh.positions.push(r.vec3()?);
-        mesh.normals.push(r.vec3()?);
-        mesh.uvs.push([r.f32()?, r.f32()?]);
-        r.skip(usize::from(vertex_size) - 32)?;
+    match vertices {
+        Vertices2::Full(all) => all.iter().for_each(|v| push(v.pos, v.norm, v.tex)),
+        Vertices2::Truncated(all) => all.iter().for_each(|v| push(v.pos, v.norm, v.tex)),
     }
-    for _ in 0..faces {
-        for _ in 0..3 {
-            let index = r.u32()?;
-            if index as usize >= vertices {
-                return Err(MeshError::Truncated);
-            }
-            mesh.indices.push(index);
+    let first = match lods {
+        [start, end, ..] if start <= end => {
+            (*start as usize).min(faces.len())..(*end as usize).min(faces.len())
         }
-        r.skip(usize::from(face_size) - 12)?;
-    }
-    Ok(mesh)
+        _ => 0..faces.len(),
+    };
+    out.indices = faces[first]
+        .iter()
+        .flat_map(|f| f.0.iter().map(|v| v.0))
+        .collect();
+    out
 }
 
 #[cfg(test)]
@@ -163,22 +160,39 @@ mod tests {
         assert_eq!(mesh.bounds(), ([0.0; 3], [2.0, 0.0, 0.0]));
     }
 
+    /// Version 1.00 is text at twice the size, with V upside down.
+    #[test]
+    fn reads_version_1() {
+        let text =
+            "version 1.00\n1\n[2,0,0][0,1,0][0,0.25,0][0,2,0][0,1,0][1,1,0][0,0,2][0,1,0][0,0,0]\n";
+        let mesh = Mesh::decode(text.as_bytes()).unwrap();
+        assert_eq!(
+            mesh.positions,
+            [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+        );
+        assert_eq!(mesh.uvs, [[0.0, 0.75], [1.0, 0.0], [0.0, 1.0]]);
+        assert_eq!(mesh.indices, [0, 1, 2]);
+    }
+
     #[test]
     fn rejects_damaged_files() {
         let full = triangle();
-        assert_eq!(
+        assert!(matches!(
             Mesh::decode(&full[..full.len() - 1]),
-            Err(MeshError::Truncated)
-        );
-        assert_eq!(Mesh::decode(b"PNG"), Err(MeshError::NotAMesh));
+            Err(MeshError::Damaged(_))
+        ));
+        assert_eq!(Mesh::decode(b"\x89PNG"), Err(MeshError::NotAMesh));
         assert_eq!(
-            Mesh::decode(b"version 4.00\n...."),
-            Err(MeshError::Unsupported("4.00".into()))
+            Mesh::decode(b"version 7.00\n...."),
+            Err(MeshError::Unsupported("7.00".into()))
         );
         let mut bad_index = full;
         let n = bad_index.len();
         bad_index[n - 4..].copy_from_slice(&9u32.to_le_bytes());
-        assert_eq!(Mesh::decode(&bad_index), Err(MeshError::Truncated));
+        assert!(matches!(
+            Mesh::decode(&bad_index),
+            Err(MeshError::Damaged(_))
+        ));
     }
 
     /// The user's own head mesh, when an install is found: the facts
