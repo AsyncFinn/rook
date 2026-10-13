@@ -38,6 +38,21 @@ end
 d.ColorMap = "http://www.roblox.com/asset/?id=7"
 log("ColorMap", d.ColorMap)
 
+-- A SpecialMesh given a MeshId or TextureId becomes a FileMesh.
+for _, property in { "TextureId", "MeshId" } do
+    for _, value in { "rbxasset://x.png", "" } do
+        local s = Instance.new("SpecialMesh")
+        s.MeshType = Enum.MeshType.Head
+        s[property] = value
+        log(property, string.format("%q", value), s.MeshType)
+        s:Destroy()
+    end
+end
+local s = Instance.new("SpecialMesh")
+s.TextureId = "rbxasset://x.png"
+s.MeshType = Enum.MeshType.Sphere
+log("type after texture", s.MeshType, s.TextureId)
+s:Destroy()
 d:Destroy()
 t:Destroy()
 m:Destroy()

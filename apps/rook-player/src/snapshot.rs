@@ -84,6 +84,11 @@ fn mesh_id(dom: &Dom, id: InstanceId) -> String {
     content_url(dom, id, &["MeshContent", "MeshID"])
 }
 
+/// A mesh's `TextureId` or a MeshPart's `TextureID`.
+fn texture_id(dom: &Dom, id: InstanceId) -> String {
+    content_url(dom, id, &["TextureContent", "TextureID"])
+}
+
 /// Turns a shape's X axis onto Y, for a CylinderMesh.
 const UPRIGHT: Mat3 = Mat3::from_cols(Vec3::Y, Vec3::NEG_X, Vec3::Z);
 
@@ -494,6 +499,7 @@ impl SceneCache {
                 FileDraw::Mesh(hash) => {
                     out.shape = DrawShape::File(hash);
                     out.size = scale;
+                    self.mesh_texture(dom, id, id, &mut out, [1.0; 3]);
                 }
                 FileDraw::Empty => {}
                 FileDraw::Nothing => {
@@ -551,6 +557,10 @@ impl SceneCache {
             }
             MeshLook::PartShape => return Some((out, Decals::Faces)),
         }
+        if kind.takes_texture() {
+            let tint = vector3(dom, mesh, "VertexColor").unwrap_or(Vec3::ONE);
+            self.mesh_texture(dom, id, mesh, &mut out, tint.to_array());
+        }
         // Moves the mesh in the part's own axes (Confirmed: creator-docs
         // DataModelMesh.Offset).
         let offset = vector3(dom, mesh, "Offset").unwrap_or(Vec3::ZERO);
@@ -562,6 +572,33 @@ impl SceneCache {
             Decals::Faces
         };
         Some((out, decals))
+    }
+
+    /// A mesh's texture (`TextureId` of `mesh`, a MeshPart's `TextureID`),
+    /// observed in Studio 0.742 (2026-10-13): once loaded it replaces the
+    /// part's colour, times `tint` (the mesh's `VertexColor`); while it
+    /// loads the mesh is black; if it fails, or there is none, the mesh
+    /// keeps the part's colour.
+    fn mesh_texture(
+        &mut self,
+        dom: &Dom,
+        part: InstanceId,
+        mesh: InstanceId,
+        out: &mut PartInstance,
+        tint: [f32; 3],
+    ) {
+        let url = texture_id(dom, mesh);
+        if url.is_empty() {
+            return;
+        }
+        match self.file_state(part, &url, Want::Image) {
+            FileState::Loaded(hash) => {
+                out.texture = Some(ImageHash(hash));
+                out.color = tint;
+            }
+            FileState::Loading => out.color = [0.0; 3],
+            FileState::Failed => {}
+        }
     }
 
     /// A part's Decals and Textures, in child order, each drawn over `part`

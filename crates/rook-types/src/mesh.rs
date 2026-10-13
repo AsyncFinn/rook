@@ -67,6 +67,16 @@ impl MeshKind {
         })
     }
 
+    /// Whether the mesh's `TextureId` is drawn: only on file meshes, the
+    /// empty-`MeshId` box included (observed in Studio 0.742, 2026-10-13:
+    /// a Head, Sphere or Brick SpecialMesh with a `TextureId` stayed plain;
+    /// a FileMesh with an empty `MeshId` drew its box with the image on
+    /// every face). The texture replaces the part's colour, `VertexColor`
+    /// multiplies it, and its alpha is ignored (observed).
+    pub fn takes_texture(self) -> bool {
+        matches!(self, Self::File | Self::EmptyFile)
+    }
+
     /// Whether Decals on the part are drawn through the mesh's own UVs,
     /// whatever their `Face`, instead of projected onto a face (observed: a
     /// Decal on the Head, or on a FileMesh of the head or of a cube, covered
