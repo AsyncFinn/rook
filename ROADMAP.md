@@ -290,10 +290,12 @@ Decals on the front of blue parts). Two checks:
 
 Old Studio did differ. The same test in a 2013 Studio (run by the
 maintainer) drew a black and white checkerboard for a local `.mesh` and
-`.wav` used as a texture, but nothing for the two malformed PNGs or the
-missing file. So the old client seems to have shown a placeholder for
-files it didn't recognise as images at all; modern Roblox draws nothing
-in every case.
+`.wav` used as a texture, and no checkerboard for the two malformed PNGs
+or the missing file. (Its parts drew black, which hides the black-lined
+face, so whether those cleared or kept the face needs a recheck on a
+light-coloured part.) So the old client seems to have shown a placeholder
+for files it didn't recognise as images at all; modern Roblox draws
+nothing in every case.
 
 *Setting content properties* (observed): every content property turns
 backslashes in an `rbxasset://` path into slashes, keeping the case.
