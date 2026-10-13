@@ -174,18 +174,23 @@ impl Props {
         })
     }
 
-    /// Changes that alter which bodies and colliders exist.
+    /// Changes that alter which bodies and colliders exist, or which
+    /// colliders interact (`CanCollide` and `CollisionGroup` change contact
+    /// pairs, and with them touch events, so they rebuild too).
     fn is_structural(&self, p: PropertyId) -> bool {
         p == self.size
             || p == self.anchored
             || p == self.can_collide
             || p == self.massless
             || p == self.root_priority
-            || p == self.material
-            || p == self.custom_properties
             || p == self.collision_group
-            || p == self.can_touch
             || Some(p) == self.shape
+    }
+
+    /// Changes to a collider's mass, friction, elasticity or touchability
+    /// alone, which update it in place.
+    fn is_surface(&self, p: PropertyId) -> bool {
+        p == self.material || p == self.custom_properties || p == self.can_touch
     }
 
     /// Workspace properties physics reads.
@@ -314,6 +319,17 @@ impl Default for Physics {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// A part's collider mass and material. Massless parts add no mass unless
+/// they're the root (creator-docs BasePart.Massless).
+fn collider_surface(dom: &Dom, part: InstanceId, is_root: bool) -> (f32, materials::Properties) {
+    let mass = if !is_root && is_massless(dom, part) {
+        0.0
+    } else {
+        part_mass(dom, part)
+    };
+    (mass, materials::of_part(dom, part))
 }
 
 /// Rapier's revolute joints turn about their frames' X axis; a Roblox
@@ -458,6 +474,7 @@ impl Physics {
         let mut moved_joints: Vec<InstanceId> = Vec::new();
         let mut posed: Vec<InstanceId> = Vec::new();
         let mut surfaces: Vec<InstanceId> = Vec::new();
+        let mut materials: Vec<InstanceId> = Vec::new();
         let mut attachments: Vec<InstanceId> = Vec::new();
         let mut workspace_changed = false;
         let db = dom.database();
@@ -467,6 +484,8 @@ impl Physics {
                     let p = *property;
                     if props.is_structural(p) {
                         structural.push(*id);
+                    } else if props.is_surface(p) {
+                        materials.push(*id);
                     } else if props.is_pose(p) {
                         posed.push(*id);
                     } else if props.is_workspace(p) {
@@ -546,6 +565,16 @@ impl Physics {
                 }
             }
         }
+        let mut refreshed = HashSet::new();
+        for part in materials {
+            // A rebuilt body's colliders already read the new values.
+            if let Some(&h) = self.parts.get(&part)
+                && !rebuilt.contains(&h)
+                && refreshed.insert(part)
+            {
+                self.refresh_surface(dom, props, h, part);
+            }
+        }
 
         let mut done = rebuilt.clone();
         for j in moved_joints {
@@ -603,7 +632,7 @@ impl Physics {
         props: &Props,
         seeds: Vec<InstanceId>,
     ) -> HashSet<RigidBodyHandle> {
-        profiling::scope!("Physics::rebuild");
+        profiling::scope!("Physics::rebuild", &format!("{} seeds", seeds.len()));
         // A part's neighbours may change assembly with it (anchoring a part
         // splits its assembly; unanchoring one joins a neighbour's).
         let mut seeds_and_neighbours = Vec::with_capacity(seeds.len());
@@ -623,11 +652,16 @@ impl Physics {
         }
         let mut added = HashSet::new();
         let mut hinges = Vec::new();
+        let mut clusters = assembly::Clusters::default();
         for part in todo {
             if self.parts.contains_key(&part) {
                 continue;
             }
-            if let Some(asm) = Assembly::of(dom, part) {
+            let asm = {
+                profiling::scope!("Assembly::of");
+                Assembly::of_with(dom, part, &mut clusters)
+            };
+            if let Some(asm) = asm {
                 hinges.extend(asm.hinges.iter().map(|h| h.id));
                 added.insert(self.add(dom, props, asm));
             }
@@ -641,6 +675,7 @@ impl Physics {
     }
 
     fn remove_body(&mut self, h: RigidBodyHandle) -> Option<Body> {
+        profiling::scope!("Physics::remove_body");
         let body = self.bodies.remove(&h)?;
         // Removing the Rapier body removes its colliders and joints.
         self.world.remove_body(h);
@@ -664,6 +699,7 @@ impl Physics {
     }
 
     fn add(&mut self, dom: &mut Dom, props: &Props, asm: Assembly) -> RigidBodyHandle {
+        profiling::scope!("Physics::add");
         let root = asm.root();
         let root_cf = match dom.property(root, props.cframe) {
             Some(Value::CFrame(cf)) => cf,
@@ -703,7 +739,10 @@ impl Physics {
             .copied()
             .collect();
         // Snap the members to where the joints hold them.
-        let _ = asm.place(dom, root_cf);
+        {
+            profiling::scope!("Assembly::place");
+            let _ = asm.place(dom, root_cf);
+        }
         self.bodies.insert(
             handle,
             Body {
@@ -729,17 +768,8 @@ impl Physics {
         };
         let (shape, shape_pose) = shape::collider_shape(part_shape(dom, part), size.0)?;
         let can_collide = dom.property(part, props.can_collide) != Some(Value::Bool(false));
-        if dom.property(part, props.can_touch) == Some(Value::Bool(false)) {
-            self.touch.untouchable.insert(part);
-        }
-        // Massless parts add no mass unless they're the root (creator-docs
-        // BasePart.Massless).
-        let mass = if !is_root && is_massless(dom, part) {
-            0.0
-        } else {
-            part_mass(dom, part)
-        };
-        let material = materials::of_part(dom, part);
+        self.read_can_touch(dom, props, part);
+        let (mass, material) = collider_surface(dom, part, is_root);
         let (solver, collision) = self.interaction_groups(dom, part);
         let collider = ColliderBuilder::new(shape)
             .mass(mass)
@@ -756,6 +786,61 @@ impl Physics {
         let handle = self.world.insert_collider(collider, Some(body));
         self.colliders.insert(handle, part);
         Some((handle, shape_pose))
+    }
+
+    fn read_can_touch(&mut self, dom: &Dom, props: &Props, part: InstanceId) {
+        if dom.property(part, props.can_touch) == Some(Value::Bool(false)) {
+            self.touch.untouchable.insert(part);
+        } else {
+            self.touch.untouchable.remove(&part);
+        }
+    }
+
+    /// A part's Material, CustomPhysicalProperties or CanTouch changed:
+    /// update its collider in place, since its body and joints are the
+    /// same. What rests on it reacts at once (observed in Studio 0.742: a
+    /// part at rest on a 30° ramp slid as soon as its friction was set to
+    /// 0), so its body and everything touching it wake up.
+    fn refresh_surface(&mut self, dom: &Dom, props: &Props, h: RigidBodyHandle, part: InstanceId) {
+        let Some(body) = self.bodies.get(&h) else {
+            return;
+        };
+        let Some(i) = body.asm.members.iter().position(|m| m.part == part) else {
+            return;
+        };
+        let Some((collider, _)) = body.colliders[i] else {
+            return;
+        };
+        self.read_can_touch(dom, props, part);
+        let (mass, material) = collider_surface(dom, part, i == 0);
+        let Some(c) = self.world.colliders.get_mut(collider) else {
+            return;
+        };
+        c.set_mass(mass);
+        c.set_friction(material.friction);
+        c.set_restitution(material.elasticity);
+        c.user_data = contacts::pack(&material);
+        // Movers read the mass before the next step would recompute it.
+        if let Some(rb) = self.world.bodies.get_mut(h) {
+            rb.recompute_mass_properties_from_colliders(&self.world.colliders);
+        }
+        let touching: Vec<RigidBodyHandle> = self
+            .world
+            .narrow_phase
+            .contact_pairs_with(collider)
+            .filter_map(|pair| {
+                let other = if pair.collider1 == collider {
+                    pair.collider2
+                } else {
+                    pair.collider1
+                };
+                self.world.colliders.get(other)?.parent()
+            })
+            .collect();
+        self.world.wake_up(h, true);
+        for b in touching {
+            self.world.wake_up(b, true);
+        }
     }
 
     /// The solver and collision groups for a part's collider. Groups that

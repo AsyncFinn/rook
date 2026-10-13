@@ -3,7 +3,7 @@
 
 use glam::Vec3;
 use rook_dom::{Dom, InstanceId};
-use rook_types::{CustomPhysicalProperties, PhysicalProperties, Value};
+use rook_types::{CFrame, CustomPhysicalProperties, PhysicalProperties, Value};
 
 use super::{part, position, set};
 use crate::groups::{CollisionGroups, GroupError};
@@ -348,4 +348,54 @@ fn groups_that_dont_collide_pass_through_but_still_touch() {
     let mut physics = Physics::new();
     let touches = run(&mut physics, &mut dom, 1.0);
     assert!(touches.is_empty(), "{touches:?}");
+}
+
+/// A rubber block at rest on a rubber ramp at 30°, which holds it.
+fn block_on_ramp(dom: &mut Dom) -> (InstanceId, InstanceId) {
+    let tilt = CFrame::from_position(Vec3::new(0.0, 30.0, 0.0))
+        * CFrame::angles(0.0, 0.0, 30f32.to_radians());
+    let ramp = part(dom, "Part", Vec3::ZERO, Vec3::new(20.0, 1.0, 20.0), true);
+    set(dom, ramp, "CFrame", Value::CFrame(tilt));
+    let block = part(dom, "Part", Vec3::ZERO, Vec3::splat(2.0), false);
+    let on_top = tilt * CFrame::from_position(Vec3::new(0.0, 1.5, 0.0));
+    set(dom, block, "CFrame", Value::CFrame(on_top));
+    material(dom, ramp, "Rubber");
+    material(dom, block, "Rubber");
+    (ramp, block)
+}
+
+#[test]
+fn friction_changes_act_at_once_on_resting_parts() {
+    // Observed in Studio 0.742: a part at rest on a 30° ramp slid as soon
+    // as its friction (or, here, the ramp's) was set to 0. The density
+    // stays the same, so only the friction changes.
+    for change_ramp in [false, true] {
+        let mut dom = Dom::new();
+        let (ramp, block) = block_on_ramp(&mut dom);
+        let mut physics = Physics::new();
+        run(&mut physics, &mut dom, 3.0);
+        let rested = position(&dom, block);
+        run(&mut physics, &mut dom, 0.5);
+        assert!(
+            (position(&dom, block) - rested).length() < 0.01,
+            "rubber holds"
+        );
+        let root = physics.root_of(block);
+        let density = materials::of_part(&dom, block).density;
+        custom(
+            &mut dom,
+            if change_ramp { ramp } else { block },
+            density,
+            0.0,
+            0.5,
+            100.0,
+            1.0,
+        );
+        run(&mut physics, &mut dom, 0.5);
+        assert!(
+            (position(&dom, block) - rested).length() > 1.0,
+            "slides once friction is 0 (ramp changed: {change_ramp})"
+        );
+        assert_eq!(physics.root_of(block), root);
+    }
 }

@@ -11,6 +11,7 @@
 //! assembly of one of them, the one whose joint is newest in Studio.
 
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::rc::Rc;
 
 use rook_dom::{Dom, DomError, InstanceId};
 use rook_types::{CFrame, Value};
@@ -42,6 +43,7 @@ pub struct Assembly {
 
 /// Unanchored parts joined to each other, and the anchored parts they're
 /// joined to.
+#[derive(Debug)]
 struct Cluster {
     parts: Vec<InstanceId>,
     /// (anchored part, joint to it).
@@ -82,20 +84,49 @@ impl Cluster {
     }
 }
 
+/// Clusters already walked, by every part in them. A cluster is the same
+/// whichever of its parts the walk starts from (its anchor is the newest
+/// joint whatever order they're found in), so finding the assemblies of
+/// many parts at once (a rebuild) walks each cluster once instead of once
+/// per part or per joint into it. Valid while joints and `Anchored` don't
+/// change.
+#[derive(Debug, Default)]
+pub struct Clusters {
+    of: HashMap<InstanceId, Rc<Cluster>>,
+}
+
+impl Clusters {
+    fn get(&mut self, dom: &Dom, part: InstanceId) -> Rc<Cluster> {
+        if let Some(c) = self.of.get(&part) {
+            return c.clone();
+        }
+        let cluster = Rc::new(Cluster::from(dom, part));
+        for &p in &cluster.parts {
+            self.of.insert(p, cluster.clone());
+        }
+        cluster
+    }
+}
+
 impl Assembly {
     /// The assembly `part` belongs to. Parts outside Workspace have none.
     pub fn of(dom: &Dom, part: InstanceId) -> Option<Self> {
+        Self::of_with(dom, part, &mut Clusters::default())
+    }
+
+    /// [`Assembly::of`], reusing clusters found for earlier parts.
+    pub fn of_with(dom: &Dom, part: InstanceId, clusters: &mut Clusters) -> Option<Self> {
         let ws = dom.find_service("Workspace")?;
         if !is_part(dom, part) || !dom.is_ancestor_of(ws, part) {
             return None;
         }
         let (root, parts) = if is_anchored(dom, part) {
-            (part, anchored_members(dom, part))
+            (part, anchored_members(dom, part, clusters))
         } else {
-            let cluster = Cluster::from(dom, part);
+            let cluster = clusters.get(dom, part);
             match cluster.anchor() {
-                Some(anchor) => (anchor, anchored_members(dom, anchor)),
-                None => (root_of(dom, &cluster.parts), cluster.parts),
+                Some(anchor) => (anchor, anchored_members(dom, anchor, clusters)),
+                None => (root_of(dom, &cluster.parts), cluster.parts.clone()),
             }
         };
         Some(Self::build(dom, root, &parts))
@@ -292,16 +323,18 @@ pub fn move_parts(
 }
 
 /// An anchored part and the clusters that join its assembly.
-fn anchored_members(dom: &Dom, anchored: InstanceId) -> Vec<InstanceId> {
+fn anchored_members(dom: &Dom, anchored: InstanceId, clusters: &mut Clusters) -> Vec<InstanceId> {
     let mut parts = vec![anchored];
+    let mut joined: HashSet<InstanceId> = HashSet::new();
     for j in part_joints(dom, anchored) {
         let other = j.other(anchored);
-        if !j.kind.is_rigid() || is_anchored(dom, other) || parts.contains(&other) {
+        if !j.kind.is_rigid() || is_anchored(dom, other) || joined.contains(&other) {
             continue;
         }
-        let cluster = Cluster::from(dom, other);
+        let cluster = clusters.get(dom, other);
         if cluster.anchor() == Some(anchored) {
-            parts.extend(cluster.parts);
+            joined.extend(cluster.parts.iter().copied());
+            parts.extend(cluster.parts.iter().copied());
         }
     }
     parts

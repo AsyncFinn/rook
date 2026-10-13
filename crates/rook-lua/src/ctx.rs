@@ -16,12 +16,13 @@
 //! costs more than most engine functions themselves.
 
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::rc::Rc;
 
 use mlua::{Function, IntoLuaMulti, Lua, MultiValue, Table, Value as LuaValue};
 
+use rook_dom::InstanceId;
 use rook_reflection::ClassId;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::api::instance::MemberTable;
 use crate::world::World;
@@ -46,12 +47,21 @@ pub(crate) struct Ctx {
     /// The reverse (weak keys): each instance userdata's light userdata key.
     pub(crate) instance_keys: Table,
     /// Method functions by `(owning class, name)`, so `a.Destroy == b.Destroy`.
-    pub(crate) methods: RefCell<HashMap<(&'static str, &'static str), Function>>,
+    pub(crate) methods: RefCell<FxHashMap<(&'static str, &'static str), Function>>,
     /// Member tables by class, and whether the class is known.
-    pub(crate) member_tables: RefCell<HashMap<(ClassId, bool), MemberTable>>,
+    pub(crate) member_tables: RefCell<FxHashMap<(ClassId, bool), MemberTable>>,
+    /// Each instance userdata's method cache (weak keys): a table shared by
+    /// every instance of its class (and whether the class is known), which
+    /// `__index` fills with the class's methods as scripts look them up.
+    pub(crate) method_caches: Table,
+    /// The shared method cache tables, by class.
+    pub(crate) class_method_caches: RefCell<FxHashMap<(ClassId, bool), Table>>,
     /// Runtime-only property values by instance userdata (weak keys),
     /// created when engine Luau code first sets one.
     pub(crate) runtime_props: RefCell<Option<Table>>,
+    /// The instances that have runtime-only values, so reads of every
+    /// other instance skip the table above.
+    pub(crate) runtime_prop_ids: RefCell<FxHashSet<InstanceId>>,
     /// EnumItem userdata by `(enum, value)`.
     pub(crate) enum_items: Table,
 }
@@ -125,6 +135,7 @@ impl Ctx {
             ))?;
         let instances = weak_table(lua, "v")?;
         let instance_keys = weak_table(lua, "k")?;
+        let method_caches = weak_table(lua, "k")?;
         let enum_items = lua.create_table()?;
         let ctx = Rc::new(Self {
             world,
@@ -139,7 +150,10 @@ impl Ctx {
             instance_keys,
             methods: RefCell::default(),
             member_tables: RefCell::default(),
+            method_caches,
+            class_method_caches: RefCell::default(),
             runtime_props: RefCell::default(),
+            runtime_prop_ids: RefCell::default(),
             enum_items,
         });
         lua.set_app_data(ctx.clone());

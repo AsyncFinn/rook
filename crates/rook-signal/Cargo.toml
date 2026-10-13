@@ -9,6 +9,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+rustc-hash.workspace = true
 rook-dom.workspace = true
 rook-reflection.workspace = true
 slotmap.workspace = true

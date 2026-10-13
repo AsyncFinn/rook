@@ -4,7 +4,6 @@
 //! events, then children named `Key`. Unknown keys raise
 //! `Key is not a valid member of Class "Full.Name"`.
 
-use std::collections::HashMap;
 use std::ffi::c_void;
 
 use mlua::{
@@ -18,11 +17,12 @@ use rook_reflection::{
 };
 use rook_signal::SignalKind;
 use rook_types::InstanceRef;
+use rustc_hash::FxHashMap;
 
 use super::{methods, properties, signal::LSignal};
 use crate::args::{Args, display_value};
 use crate::convert::{from_lua, to_lua};
-use crate::ctx::{ApiResult, Outcome, ScriptError, api_fn, ctx, with_world};
+use crate::ctx::{ApiResult, Ctx, Outcome, ScriptError, api_fn, ctx, with_world};
 use crate::threads::dispatch;
 
 /// A script's handle to an instance. There is one userdata per instance,
@@ -63,6 +63,21 @@ pub(crate) fn push_instance(lua: &Lua, id: InstanceId) -> mlua::Result<AnyUserDa
     let ud = lua.create_userdata(LuaInstance(id))?;
     c.instances.raw_set(key, ud.clone())?;
     c.instance_keys.raw_set(ud.clone(), key)?;
+    let class = with_world(lua, |w| {
+        w.dom.get(id).map(|i| (i.class, i.unknown_class.is_none()))
+    });
+    if let Some(class) = class {
+        let cache = c.class_method_caches.borrow().get(&class).cloned();
+        let cache = match cache {
+            Some(t) => t,
+            None => {
+                let t = lua.create_table()?;
+                c.class_method_caches.borrow_mut().insert(class, t.clone());
+                t
+            }
+        };
+        c.method_caches.raw_set(ud.clone(), cache)?;
+    }
     Ok(ud)
 }
 
@@ -81,18 +96,23 @@ pub(crate) fn ret_instance_array(lua: &Lua, ids: &[InstanceId]) -> ApiResult<Out
 pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     // `inst.Key` and `inst.Key = v` run more than any other engine code, so
     // they skip the general shim: the shim finds the instance's light
-    // userdata key in Luau, the key arrives as a plain string, and an error
-    // comes back as a second result. Each of these saves a conversion that
-    // costs more than the member lookup itself.
-    let index = lua.create_function(|lua, (key, name): (LightUserData, String)| {
+    // userdata key in Luau, the key arrives as a borrowed string, and an
+    // error comes back as a second result. Each of these saves a conversion
+    // that costs more than the member lookup itself. A method is the same
+    // function for every instance of a class (and methods come before
+    // children in the lookup order), so a third result tells the shim to
+    // keep it in the class's method cache, which it reads first next time.
+    let index = lua.create_function(|lua, (key, name): (LightUserData, mlua::LuaString)| {
+        let name = name.to_str()?;
         profiling::scope!("Instance.__index", &name);
         Ok(match get_member(lua, id_of(key), &name) {
-            Ok(v) => (v, None),
-            Err(e) => (LuaValue::Nil, Some(e.0)),
+            Ok((v, method)) => (v, None, method),
+            Err(e) => (LuaValue::Nil, Some(e.0), false),
         })
     })?;
     let newindex = lua.create_function(
-        |lua, (key, name, value): (LightUserData, String, LuaValue)| {
+        |lua, (key, name, value): (LightUserData, mlua::LuaString, LuaValue)| {
+            let name = name.to_str()?;
             profiling::scope!("Instance.__newindex", &name);
             Ok(set_member(lua, id_of(key), &name, value).err().map(|e| e.0))
         },
@@ -100,7 +120,7 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     // Keys that aren't strings (`inst[1]`) go the general way.
     let index_other = api_fn(lua, |lua, args| {
         let (id, key) = this_and_key(lua, &args)?;
-        Outcome::ret(lua, get_member(lua, id, &key)?)
+        Outcome::ret(lua, get_member(lua, id, &key)?.0)
     })?;
     let newindex_other = api_fn(lua, |lua, args| {
         let (id, key) = this_and_key(lua, &args)?;
@@ -111,15 +131,29 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     let (get, set): (Function, Function) = lua
         .load(
             r#"
-            local keys, index, newindex, index_other, newindex_other = ...
+            local keys, methods, index, newindex, index_other, newindex_other = ...
+            -- Keys some class has as a method. Property reads skip the
+            -- per-instance cache lookup below, which costs a table miss
+            -- per instance when a script reads thousands of them.
+            local method_names = {}
             local function get(self, key)
                 local k = keys[self]
                 if k == nil or type(key) ~= "string" then
                     return index_other(self, key)
                 end
-                local value, err = index(k, key)
+                if method_names[key] then
+                    local method = methods[self][key]
+                    if method ~= nil then
+                        return method
+                    end
+                end
+                local value, err, is_method = index(k, key)
                 if err then
                     error(err, 0)
+                end
+                if is_method then
+                    method_names[key] = true
+                    methods[self][key] = value
                 end
                 return value
             end
@@ -138,8 +172,10 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
             "#,
         )
         .set_name("=[rook] instance")
+        .set_environment(builtins_env(lua, &["type", "error"])?)
         .call((
             ctx(lua).instance_keys.clone(),
+            ctx(lua).method_caches.clone(),
             index,
             newindex,
             index_other,
@@ -172,6 +208,21 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
         .call((ctx(lua).instances.clone(), create))?;
     lua.set_named_registry_value("rook.instance.fill_array", fill_array)?;
     Ok(())
+}
+
+/// An environment holding only the named standard builtins, marked
+/// `safeenv` so Luau runs them on its fast paths (`type(key)` in the shim
+/// above runs on every `inst.Key`). Engine chunks never change their
+/// globals, which is what `safeenv` assumes; game scripts keep the shared
+/// environment.
+fn builtins_env(lua: &Lua, names: &[&str]) -> mlua::Result<mlua::Table> {
+    let env = lua.create_table()?;
+    let globals = lua.globals();
+    for name in names {
+        env.raw_set(*name, globals.raw_get::<LuaValue>(*name)?)?;
+    }
+    env.set_safeenv(true);
+    Ok(env)
 }
 
 /// The instance and key of an `__index`/`__newindex` call.
@@ -249,13 +300,13 @@ pub(crate) enum Member {
 /// Every member of a class by name, resolved the way Roblox looks keys up:
 /// properties, then methods and events from the class up through its
 /// superclasses, then callbacks.
-pub(crate) type MemberTable = HashMap<&'static str, Member>;
+pub(crate) type MemberTable = FxHashMap<&'static str, Member>;
 
 /// Build a class's member table. `known` is false for instances of classes
 /// the database doesn't have, which get no properties.
 fn member_table(class: ClassId, known: bool) -> MemberTable {
     let db = database();
-    let mut table = MemberTable::new();
+    let mut table = MemberTable::default();
     if known {
         for &pid in &db.class(class).all_properties {
             let name = db.property(pid).name;
@@ -337,10 +388,18 @@ fn member_table(class: ClassId, known: bool) -> MemberTable {
 
 /// What `key` names on an instance's class, if anything.
 fn find_member(lua: &Lua, id: InstanceId, key: &str) -> Option<Member> {
-    let (class, known) = with_world(lua, |w| {
-        w.dom.get(id).map(|i| (i.class, i.unknown_class.is_none()))
-    })?;
-    let c = ctx(lua);
+    find_member_in(&ctx(lua), id, key)
+}
+
+/// [`find_member`] with the context already fetched (fetching it costs
+/// as much as a lookup, and `inst.Key` needs it several times).
+fn find_member_in(c: &Ctx, id: InstanceId, key: &str) -> Option<Member> {
+    let (class, known) = c
+        .world
+        .borrow()
+        .dom
+        .get(id)
+        .map(|i| (i.class, i.unknown_class.is_none()))?;
     if let Some(table) = c.member_tables.borrow().get(&(class, known)) {
         return table.get(key).copied();
     }
@@ -362,8 +421,16 @@ pub(crate) fn runtime_properties(lua: &Lua) -> mlua::Result<mlua::Table> {
     Ok(t)
 }
 
-fn runtime_property(lua: &Lua, id: InstanceId, key: &str) -> mlua::Result<Option<LuaValue>> {
-    let Some(all) = ctx(lua).runtime_props.borrow().clone() else {
+fn runtime_property(
+    lua: &Lua,
+    c: &Ctx,
+    id: InstanceId,
+    key: &str,
+) -> mlua::Result<Option<LuaValue>> {
+    if !c.runtime_prop_ids.borrow().contains(&id) {
+        return Ok(None);
+    }
+    let Some(all) = c.runtime_props.borrow().clone() else {
         return Ok(None);
     };
     match all.raw_get::<Option<mlua::Table>>(push_instance(lua, id)?)? {
@@ -372,16 +439,20 @@ fn runtime_property(lua: &Lua, id: InstanceId, key: &str) -> mlua::Result<Option
     }
 }
 
-/// `inst[key]` for scripts.
-pub(crate) fn get_member(lua: &Lua, id: InstanceId, key: &str) -> ApiResult<LuaValue> {
-    if let Some(v) = runtime_property(lua, id, key)? {
-        return Ok(v);
+/// `inst[key]` for scripts, and whether it's a method (the same function
+/// for every instance of the class, so the caller may cache it).
+pub(crate) fn get_member(lua: &Lua, id: InstanceId, key: &str) -> ApiResult<(LuaValue, bool)> {
+    let c = ctx(lua);
+    if let Some(v) = runtime_property(lua, &c, id, key)? {
+        return Ok((v, false));
     }
     if key == "ClassName" {
         let name = with_world(lua, |w| w.dom.class_name(id).to_owned());
-        return Ok(LuaValue::String(lua.create_string(name)?));
+        return Ok((LuaValue::String(lua.create_string(name)?), false));
     }
-    match find_member(lua, id, key) {
+    let member = find_member_in(&c, id, key);
+    let method = matches!(member, Some(Member::Method { .. }));
+    let value = match member {
         Some(Member::Property(p)) => {
             if !allowed(p.security[0]) {
                 return Err(ScriptError(format!(
@@ -392,7 +463,7 @@ pub(crate) fn get_member(lua: &Lua, id: InstanceId, key: &str) -> ApiResult<LuaV
             if p.flags.write_only {
                 return Err(ScriptError(format!("{key} is a write-only member")));
             }
-            read(lua, id, p.name, Some((p.id, p.enum_id)))
+            read(lua, &c, id, p.name, Some((p.id, p.enum_id)))
         }
         Some(Member::Method {
             owner,
@@ -424,7 +495,8 @@ pub(crate) fn get_member(lua: &Lua, id: InstanceId, key: &str) -> ApiResult<LuaV
                 None => Err(not_a_member(lua, id, key)),
             }
         }
-    }
+    }?;
+    Ok((value, method))
 }
 
 /// Read a property by canonical name, including derived ones.
@@ -438,20 +510,22 @@ pub(crate) fn read_property(lua: &Lua, id: InstanceId, name: &str) -> ApiResult<
         };
         Some((p.id, enum_id))
     });
-    read(lua, id, name, prop)
+    read(lua, &ctx(lua), id, name, prop)
 }
 
 /// Read a property given its canonical name and, when the database has
 /// it, its ID and enum.
 fn read(
     lua: &Lua,
+    c: &Ctx,
     id: InstanceId,
     name: &str,
     prop: Option<(PropertyId, Option<EnumId>)>,
 ) -> ApiResult<LuaValue> {
-    let value = with_world(lua, |w| {
-        properties::get(w, id, name).or_else(|| prop.and_then(|(pid, _)| w.dom.property(id, pid)))
-    });
+    let value = {
+        let w = c.world.borrow();
+        properties::get(&w, id, name).or_else(|| prop.and_then(|(pid, _)| w.dom.property(id, pid)))
+    };
     match value {
         Some(v) => Ok(to_lua(lua, &v, prop.and_then(|(_, e)| e))?),
         None => Ok(LuaValue::Nil),

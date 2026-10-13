@@ -9,6 +9,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+rustc-hash.workspace = true
 rbx_reflection.workspace = true
 rbx_reflection_database.workspace = true
 rbx_types.workspace = true
