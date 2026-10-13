@@ -189,6 +189,17 @@ impl Value {
             _ => None,
         }
     }
+
+    /// The URL a content value holds: a `ContentId`'s string or a
+    /// `Content`'s URI (empty when it holds none, or an object). `None` for
+    /// other variants.
+    pub fn content_url(&self) -> Option<&str> {
+        match self {
+            Self::ContentId(c) => Some(c.as_str()),
+            Self::Content(c) => Some(c.as_uri().unwrap_or("")),
+            _ => None,
+        }
+    }
 }
 
 #[cfg(test)]

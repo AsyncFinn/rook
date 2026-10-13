@@ -23,6 +23,7 @@ rook-engine = { path = "crates/rook-engine" }
 rook-render = { path = "crates/rook-render" }
 rook-net = { path = "crates/rook-net" }
 rook-physics = { path = "crates/rook-physics" }
+rook-content = { path = "crates/rook-content" }
 
 # Roblox formats and data (rbx-dom ecosystem)
 rbx_dom_weak = "4.2"
@@ -58,6 +59,8 @@ chrono = { version = "0.4", default-features = false, features = ["clock", "std"
 rustyline = { version = "18", default-features = false }
 walkdir = "2"
 blake3 = "1"
+# Asset delivery (rook-content): rustls and gzip, no async runtime
+ureq = "3"
 slotmap = "1.1"
 # Fast, deterministic hashing for engine-internal maps keyed by ids and names
 rustc-hash = "2.1"

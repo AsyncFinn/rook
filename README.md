@@ -70,7 +70,8 @@ The numbers come from running an archive of real places through Rook ([how](docs
 - **Client and server:** Play mode as on modern Roblox, with replication, FilteringEnabled, LocalScripts and remotes.
 - **Physics:** Rapier at 240 Hz with Roblox's joints, assemblies, materials, BodyMovers, constraints and raycasts.
 - **Rendering:** a wgpu renderer for parts and the built-in mesh shapes, live in a window or to a PNG.
-- **Tools:** dump, round-trip, run headless, scan an archive and check behaviour against Studio.
+- **Content:** `rbxasset://`, `rbxassetid://` and legacy asset URLs resolve from your own Roblox install, content folders, a disk cache and Roblox's asset delivery.
+- **Tools:** dump, round-trip, run headless, scan an archive, trace where content comes from and check behaviour against Studio.
 
 The full list is in [docs/features.md](docs/features.md).
 

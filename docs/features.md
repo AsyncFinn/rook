@@ -49,10 +49,17 @@ Everything Rook supports today. What's coming next is in [ROADMAP.md](../ROADMAP
 
 - A **wgpu** renderer (Vulkan, Metal, DirectX 12) that draws snapshots of the scene and never touches the instance tree.
 - Primitive parts (blocks, spheres, cylinders, wedges, corner wedges) with colour and transparency, a sky colour, sun, ambient light and fog.
-- The built-in mesh shapes (SpecialMesh types, BlockMesh, CylinderMesh) at the sizes Roblox draws them, including Rook's own version of the classic head.
+- The built-in mesh shapes (SpecialMesh types, BlockMesh, CylinderMesh) at the sizes Roblox draws them. The classic head comes from your Roblox install when there is one, and is Rook's own version otherwise.
 - `rook-player` runs the place live in a window with a fly camera that drives `Workspace.CurrentCamera`, or renders a single frame to PNG offscreen.
 
 File meshes, textures, decals, terrain and shadows are on the [roadmap](../ROADMAP.md).
+
+## Content
+
+- Content references in every form places use, parsed by Studio's rules: `rbxasset://` paths, `rbxassetid://` ids and the legacy `http://www.roblox.com/asset/?id=` URLs with their case, slash and spacing variants.
+- They resolve through a chain of providers: **your own Roblox install** (found automatically, newest version first), folders you point Rook at, and Roblox's **asset delivery** for asset ids, anonymous and easy to turn off. Old 2009 client paths such as `rbxasset://fonts/sword.mesh` resolve to the assets Roblox uploaded for them.
+- Downloads go to a hash-checked disk cache outside the repository, so a second run needs no network, and missing or forbidden assets are remembered for a day.
+- `ContentProvider:PreloadAsync` and `RequestQueueSize`, resolved off the engine thread.
 
 ## Tooling
 
@@ -60,6 +67,7 @@ File meshes, textures, decals, terrain and shadows are on the [roadmap](../ROADM
 - `rook roundtrip`: load, save and reload a file and report every difference.
 - `rook corpus-scan`: scan a folder of places for what loads and which classes, properties and script APIs they use.
 - `rook run-headless` and `rook corpus-run`: run server scripts without a window and report what works.
+- `rook content`: show where a content reference, or every reference in a place, comes from and why any fail.
 - `rook conformance record` / `run`: record behaviour in Roblox Studio and check Rook against it.
 
 Usage for each is in [tools.md](tools.md).

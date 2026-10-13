@@ -226,6 +226,67 @@ pub fn summary_markdown(agg: &Aggregate, records: &[FileRecord], elapsed: Durati
         &agg.game_index,
         40,
     );
+    let _ = writeln!(
+        md,
+        "## Content references
+
+{} non-empty references ({} distinct values); {} empty.
+",
+        agg.content_shapes.values().map(|u| u.count).sum::<u64>(),
+        agg.content_distinct,
+        agg.content_empty
+    );
+    usage_table(
+        &mut md,
+        "Content references by kind",
+        "Kind",
+        &agg.content_kinds,
+        20,
+    );
+    usage_table(
+        &mut md,
+        "`rbxasset://` paths the install lacks",
+        "Kind: path",
+        &agg.content_paths,
+        200,
+    );
+    usage_table(
+        &mut md,
+        "Content properties",
+        "Class.Property",
+        &agg.content_properties,
+        60,
+    );
+    usage_table(
+        &mut md,
+        "Content URL shapes",
+        "Shape",
+        &agg.content_shapes,
+        80,
+    );
+    usage_table(
+        &mut md,
+        "Content URL shapes by property",
+        "Property shape",
+        &agg.content_by_property,
+        120,
+    );
+    usage_table(
+        &mut md,
+        "Content URLs in script sources",
+        "Shape",
+        &agg.content_script_shapes,
+        60,
+    );
+    let _ = writeln!(
+        md,
+        "## Content URL samples
+"
+    );
+    for (shape, sample) in &agg.content_samples {
+        let _ = writeln!(md, "- `{shape}`: `{sample}`");
+    }
+    let _ = writeln!(md);
     md
 }
 

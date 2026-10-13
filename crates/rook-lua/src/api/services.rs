@@ -19,7 +19,7 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("HttpService", "GenerateGUID") => generate_guid,
         ("HttpService", "UrlEncode") => url_encode,
         ("HttpService", "GetAsync" | "PostAsync" | "RequestAsync") => http_disabled,
-        _ => return super::remotes::native(owner, name),
+        _ => return super::content::native(owner, name),
     })
 }
 

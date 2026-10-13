@@ -16,7 +16,7 @@ use rook_reflection::{
     ClassId, EnumId, PropertyFlags, PropertyId, PropertyType, Scriptability, database, members,
 };
 use rook_signal::SignalKind;
-use rook_types::InstanceRef;
+use rook_types::{InstanceRef, Value};
 use rustc_hash::FxHashMap;
 
 use super::{methods, properties, signal::LSignal};
@@ -524,7 +524,14 @@ fn read(
 ) -> ApiResult<LuaValue> {
     let value = {
         let w = c.world.borrow();
-        properties::get(&w, id, name).or_else(|| prop.and_then(|(pid, _)| w.dom.property(id, pid)))
+        match prop.and_then(|(pid, _)| properties::content_view(pid)) {
+            Some(target) => w
+                .dom
+                .property(id, target)
+                .map(|v| Value::ContentId(v.content_url().unwrap_or_default().to_owned().into())),
+            None => properties::get(&w, id, name)
+                .or_else(|| prop.and_then(|(pid, _)| w.dom.property(id, pid))),
+        }
     };
     match value {
         Some(v) => Ok(to_lua(lua, &v, prop.and_then(|(_, e)| e))?),
@@ -589,6 +596,13 @@ pub(crate) fn write_property(
         .ok_or_else(|| format!("{name} is not a property"))?;
     let converted = from_lua(lua, value, prop.ty)?;
     let result = with_world(lua, |w| {
+        if let (Some(target), Some(url)) =
+            (properties::content_view(prop.id), converted.content_url())
+        {
+            return w
+                .dom
+                .set_property(id, target, properties::content_value(url));
+        }
         if let Some(r) = properties::set(w, id, name, &converted) {
             return r;
         }

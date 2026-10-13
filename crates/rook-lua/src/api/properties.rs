@@ -1,9 +1,13 @@
 //! Derived properties: values computed from other properties rather than
 //! stored. `get` and `set` return `None` for properties stored normally.
 
+use std::sync::LazyLock;
+
+use rbx_types::VariantType;
 use rook_dom::{DomError, InstanceId};
 use rook_physics::assembly::{self, Assembly};
 use rook_physics::joints;
+use rook_reflection::{PropertyId, PropertyKind, PropertyType, Serialization};
 use rook_types::{CFrame, Color3, Value, Vector3};
 
 use crate::types::color::closest_brick_color;
@@ -80,6 +84,49 @@ const BRICK_COLOR_OF: &[(&str, &str, &str)] = &[
     ("GuiBase3d", "Color", "Color3"),
 ];
 
+/// The `Content` property a legacy string content property is a view of:
+/// `MeshId` of `MeshContent`, `Texture` of `TextureContent`, `SoundId` of
+/// `AudioContent` and so on. Files store only the `Content` one (the
+/// database marks each legacy property as migrating to it), and in Studio
+/// both read the same value. A table by property id, so the check costs
+/// one lookup per read.
+pub(crate) fn content_view(property: PropertyId) -> Option<PropertyId> {
+    static VIEWS: LazyLock<Vec<Option<PropertyId>>> = LazyLock::new(|| {
+        let db = rook_reflection::database();
+        (0..db.property_count())
+            .map(|i| {
+                let p = db.property(PropertyId(i as u32));
+                let PropertyKind::Canonical(Serialization::Migrate { to }) = &p.kind else {
+                    return None;
+                };
+                let [target] = to.as_slice() else {
+                    return None;
+                };
+                let target = db.find_canonical_property(p.owner, target)?;
+                let content = PropertyType::Value(VariantType::Content);
+                (p.ty == PropertyType::Value(VariantType::ContentId) && target.ty == content)
+                    .then_some(target.id)
+            })
+            .collect()
+    });
+    VIEWS.get(property.0 as usize).copied().flatten()
+}
+
+/// What setting a legacy content property stores: backslashes in an
+/// `rbxasset://` path become slashes (observed in Studio 0.742 for every
+/// content property tried: `rbxasset://Textures\Face.PNG` reads back as
+/// `rbxasset://Textures/Face.PNG`), and an empty string is no content.
+pub(crate) fn content_value(url: &str) -> Value {
+    if url.is_empty() {
+        return Value::Content(rook_types::Content::none());
+    }
+    let url = match url.strip_prefix("rbxasset://") {
+        Some(path) => format!("rbxasset://{}", path.replace('\\', "/")),
+        None => url.to_owned(),
+    };
+    Value::Content(rook_types::Content::from_uri(url))
+}
+
 fn view<'a>(
     w: &World,
     id: InstanceId,
@@ -150,6 +197,9 @@ pub(crate) fn get(w: &World, id: InstanceId, name: &str) -> Option<Value> {
                 "Orientation" => orientation(&c),
                 _ => rotation(&c),
             }))
+        }
+        "RequestQueueSize" if dom.is_a(id, "ContentProvider") => {
+            Some(Value::Int32(w.content.queue_size() as i32))
         }
         "Enabled" if dom.is_a(id, "BaseScript") => {
             let disabled = matches!(
