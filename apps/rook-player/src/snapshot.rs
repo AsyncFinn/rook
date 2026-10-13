@@ -28,6 +28,13 @@ fn color(dom: &Dom, id: InstanceId, name: &str) -> Option<[f32; 3]> {
     Some([c.r, c.g, c.b])
 }
 
+fn boolean(dom: &Dom, id: InstanceId, name: &str) -> Option<bool> {
+    match dom.property_by_name(id, name)? {
+        Value::Bool(b) => Some(b),
+        _ => None,
+    }
+}
+
 fn vector3(dom: &Dom, id: InstanceId, name: &str) -> Option<Vec3> {
     match dom.property_by_name(id, name)? {
         Value::Vector3(v) => Some(v.0),
@@ -93,17 +100,14 @@ enum FileDraw {
     Nothing,
 }
 
-/// Direction to the sun for a clock time and latitude, from the standard
-/// solar position formula with zero declination. Which world axis is east
-/// is Inference until checked against `Lighting:GetSunDirection()` in Studio.
+/// Direction to the sun for a clock time and latitude. Roblox turns the sun
+/// around the Z axis once a day, rising at +X, on a circle tilted towards
+/// +Z by the latitude less 23.5° (Confirmed: `Lighting:GetSunDirection()`
+/// in Studio 0.742 for latitudes 0, 41.733 and -30, 2026-10-13).
 pub fn sun_direction(hours: f32, latitude_degrees: f32) -> Vec3 {
     let h = (hours - 12.0) / 24.0 * std::f32::consts::TAU;
-    let lat = latitude_degrees.to_radians();
-    let up = lat.cos() * h.cos();
-    let east = -h.sin();
-    let north = -lat.sin() * h.cos();
-    // East = +X, north = -Z (Inference).
-    Vec3::new(east, up, -north).normalize_or(Vec3::Y)
+    let tilt = (latitude_degrees - 23.5).to_radians();
+    Vec3::new(-h.sin() * tilt.cos(), h.cos() * tilt.cos(), tilt.sin())
 }
 
 fn lighting(dom: &Dom) -> Lighting {
@@ -131,6 +135,11 @@ fn lighting(dom: &Dom) -> Lighting {
     }
     if let Some(e) = number(dom, id, "FogEnd") {
         l.fog_end = e;
+    }
+    // Off draws no shadows (Confirmed: creator-docs Lighting.GlobalShadows;
+    // defaults to on).
+    if let Some(s) = boolean(dom, id, "GlobalShadows") {
+        l.global_shadows = s;
     }
     // A night sky darkens towards black as the sun sets (Approximation
     // until skyboxes are supported).
@@ -348,6 +357,9 @@ impl SceneCache {
             size: own.extent(size),
             color: color(dom, id, "Color").unwrap_or([0.64, 0.64, 0.65]),
             transparency: number(dom, id, "Transparency").unwrap_or(0.0),
+            // Confirmed: creator-docs BasePart.CastShadow, on by default;
+            // places saved before it existed cast.
+            cast_shadow: boolean(dom, id, "CastShadow").unwrap_or(true),
         };
         let class = dom.class_name(id);
         if class == "MeshPart" {
@@ -495,5 +507,18 @@ mod tests {
         assert!(sun_direction(12.0, 41.733).y > 0.7);
         assert!(sun_direction(0.0, 41.733).y < 0.0);
         assert!(sun_direction(6.0, 0.0).y.abs() < 1e-4);
+    }
+
+    /// `Lighting:GetSunDirection()` in Studio.
+    #[test]
+    fn sun_matches_studio() {
+        for (hours, latitude, studio) in [
+            (14.0, 41.733, Vec3::new(-0.4749, 0.8225, 0.3129)),
+            (9.0, 0.0, Vec3::new(0.6485, 0.6485, -0.3987)),
+            (14.0, -30.0, Vec3::new(-0.2974, 0.5151, -0.8038)),
+        ] {
+            let d = sun_direction(hours, latitude);
+            assert!(d.distance(studio) < 1e-3, "{hours} {latitude}: {d}");
+        }
     }
 }

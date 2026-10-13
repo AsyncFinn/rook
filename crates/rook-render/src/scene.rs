@@ -50,6 +50,9 @@ pub struct PartInstance {
     pub color: [f32; 3],
     /// 0 is opaque, 1 invisible.
     pub transparency: f32,
+    /// `BasePart.CastShadow`: whether it casts a sun shadow. Every part
+    /// receives shadows either way. Only opaque parts cast (Inference).
+    pub cast_shadow: bool,
 }
 
 /// Scene lighting, mapped from the Lighting service.
@@ -66,6 +69,8 @@ pub struct Lighting {
     pub fog_end: f32,
     pub sky_top: [f32; 3],
     pub sky_horizon: [f32; 3],
+    /// `Lighting.GlobalShadows`: false draws no shadows at all.
+    pub global_shadows: bool,
 }
 
 impl Default for Lighting {
@@ -80,6 +85,7 @@ impl Default for Lighting {
             fog_end: 100_000.0,
             sky_top: [0.36, 0.56, 0.86],
             sky_horizon: [0.75, 0.84, 0.95],
+            global_shadows: true,
         }
     }
 }
