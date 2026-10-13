@@ -16,6 +16,8 @@
 //!   `MeshId` was a PNG reported `Failure`, while mesh files (versions
 //!   1.00 and 2.00, by path or asset id) reported `Success` (observed
 //!   2026-10-13).
+//! - An image property must hold an image: a mesh, a sound or a damaged
+//!   PNG in a Decal's `Texture` reported `Failure` (observed 2026-10-13).
 //! - Strings are loaded as images: `rbxasset://` image files succeeded,
 //!   `.mesh` and `.wav` paths failed, and so did every `rbxassetid://` and
 //!   asset URL string, even an image that loaded as a Decal's texture.
@@ -88,18 +90,10 @@ fn cast_name(v: &LuaValue) -> String {
     }
 }
 
-/// Image files, the only strings PreloadAsync loads (see module docs).
-fn is_image_path(path: &str) -> bool {
-    let ext = path.rsplit_once('.').map_or("", |(_, e)| e);
-    ["png", "jpg", "jpeg", "bmp", "tga", "dds", "gif"]
-        .iter()
-        .any(|e| ext.eq_ignore_ascii_case(e))
-}
-
-/// Whether a content property holds a mesh: `MeshContent` of the mesh
-/// classes and MeshPart.
-fn holds_mesh(w: &World, id: InstanceId, property: &str) -> bool {
-    property == "MeshContent" && (w.dom.is_a(id, "DataModelMesh") || w.dom.is_a(id, "MeshPart"))
+/// What a content property must load as (`Want::for_property`).
+fn wants(w: &World, id: InstanceId, property: &str) -> Want {
+    let mesh_owner = w.dom.is_a(id, "DataModelMesh") || w.dom.is_a(id, "MeshPart");
+    Want::for_property(property, mesh_owner)
 }
 
 /// The non-empty content strings of an instance and its descendants, with
@@ -125,12 +119,7 @@ fn instance_content(w: &World, root: InstanceId, out: &mut Vec<(String, Want)>) 
                 .property(id, pid)
                 .and_then(|v| v.content_url().filter(|u| !u.is_empty()).map(str::to_owned))
             {
-                let want = if holds_mesh(w, id, p.name) {
-                    Want::Mesh
-                } else {
-                    Want::Bytes
-                };
-                out.push((url, want));
+                out.push((url, wants(w, id, p.name)));
             }
         }
     }
@@ -160,7 +149,7 @@ fn preload_async(lua: &Lua, _this: InstanceId, a: Args) -> ApiResult<Outcome> {
             LuaValue::String(s) => {
                 let s = s.to_string_lossy();
                 if !s.is_empty() {
-                    entries.push((s, true, Want::Bytes));
+                    entries.push((s, true, Want::Image));
                 }
             }
             LuaValue::UserData(ud) => {
@@ -203,10 +192,9 @@ fn preload_async(lua: &Lua, _this: InstanceId, a: Args) -> ApiResult<Outcome> {
         );
         for (text, as_string, want) in entries {
             let request = c.id();
-            let target = ContentRef::parse(&text).filter(|r| match r {
-                ContentRef::File(path) => !as_string || is_image_path(path),
-                _ => !as_string,
-            });
+            // Strings load only `rbxasset://` files (as images).
+            let target =
+                ContentRef::parse(&text).filter(|r| !as_string || matches!(r, ContentRef::File(_)));
             match target {
                 Some(r) => c.outbox.push((request, r, want)),
                 None => c.answered.push((request, false)),

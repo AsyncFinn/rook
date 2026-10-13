@@ -6,13 +6,52 @@ use std::sync::Arc;
 
 use glam::{Mat3, Vec3};
 
+pub use rook_content::image::Image;
 pub use rook_content::mesh::Mesh;
-pub use rook_types::PartShape;
+pub use rook_types::{NormalId, PartShape, Tiling};
 
 /// A mesh file, by the BLAKE3 hash of its bytes: parts that use the same
 /// file share one GPU mesh, however they refer to it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct MeshHash(pub [u8; 32]);
+
+/// An image (a decal, texture or mesh texture), by the BLAKE3 hash of its
+/// file: parts using the same image share one GPU texture.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct ImageHash(pub [u8; 32]);
+
+/// What a scene entry draws: a part, or an image on a part.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Layer {
+    /// The part (or its mesh) itself.
+    Base,
+    /// A Decal or Texture: `image` drawn over the part's shape, in
+    /// `color` (its `Color3`) and `transparency`, whatever the part's own
+    /// transparency (observed: decals on invisible parts show, and on a
+    /// half-transparent part a decal isn't seen through the part). Images
+    /// never cast shadows, and higher `z` (`ZIndex`) draws later.
+    Image {
+        image: ImageHash,
+        placement: ImagePlacement,
+        z: i32,
+        /// Its part is partly transparent: the image is sorted with the
+        /// transparent parts and drawn just after its own.
+        on_transparent: bool,
+    },
+}
+
+/// Where an image goes on a part's shape (`rook_types::NormalId` has the
+/// face rules).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ImagePlacement {
+    /// Stretched over one face (a Decal).
+    Face(NormalId),
+    /// Repeated over one face (a Texture).
+    Tiled(NormalId, Tiling),
+    /// Over the whole mesh through its own UVs, as Decals on file meshes
+    /// and the Head are.
+    MeshUv,
+}
 
 /// A mesh the renderer draws: a primitive part shape, a built-in mesh
 /// that isn't one (the SpecialMesh Head), or a mesh file.
@@ -53,6 +92,27 @@ pub struct PartInstance {
     /// `BasePart.CastShadow`: whether it casts a sun shadow. Every part
     /// receives shadows either way. Only opaque parts cast (Inference).
     pub cast_shadow: bool,
+    /// A texture drawn through the mesh's UVs (a mesh's `TextureId`),
+    /// multiplied by `color`.
+    pub texture: Option<ImageHash>,
+    pub layer: Layer,
+}
+
+impl PartInstance {
+    /// A plain part: no texture or images.
+    pub fn plain(shape: DrawShape, position: Vec3, rotation: Mat3, size: Vec3) -> Self {
+        Self {
+            shape,
+            position,
+            rotation,
+            size,
+            color: [1.0; 3],
+            transparency: 0.0,
+            cast_shadow: true,
+            texture: None,
+            layer: Layer::Base,
+        }
+    }
 }
 
 /// Scene lighting, mapped from the Lighting service.
@@ -97,6 +157,9 @@ pub struct Scene {
     /// The mesh files parts may draw ([`DrawShape::File`]). The renderer
     /// uploads each the first time a part draws it.
     pub meshes: HashMap<MeshHash, Arc<Mesh>>,
+    /// The images parts and their layers may draw. The renderer uploads
+    /// each the first time something draws it, a few per frame.
+    pub images: HashMap<ImageHash, Arc<Image>>,
 }
 
 /// A camera: Roblox convention, looking down its -Z axis, Y up.

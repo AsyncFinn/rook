@@ -81,6 +81,8 @@ struct FileSummary {
     content: ContentUsage,
     /// Mesh instances by kind (`content::mesh_kind`).
     meshes: BTreeMap<String, u64>,
+    /// Materials, surfaces, decals and textures (`content::looks`).
+    looks: BTreeMap<String, u64>,
 }
 
 /// Content references in one file (see `content.rs`).
@@ -151,6 +153,9 @@ pub struct Aggregate {
     /// first file (by path) with each kind.
     pub meshes: UsageMap,
     pub mesh_examples: BTreeMap<String, PathBuf>,
+    /// Materials, surfaces, decals, textures and mesh tints
+    /// (`content::looks`).
+    pub looks: UsageMap,
     #[serde(skip)]
     content_values: HashSet<String>,
 }
@@ -355,6 +360,9 @@ fn summarise(dom: &WeakDom) -> FileSummary {
         for kind in content::mesh_kinds(dom, inst) {
             *s.meshes.entry(kind).or_insert(0) += 1;
         }
+        for look in content::looks(dom, inst) {
+            *s.looks.entry(look).or_insert(0) += 1;
+        }
         let Some(info) = db.class_by_name(class) else {
             *s.unknown_classes.entry(class.to_owned()).or_insert(0) += 1;
             continue;
@@ -496,6 +504,7 @@ fn merge_summary(agg: &mut Aggregate, s: FileSummary) {
         (&mut agg.content_kinds, s.content.kinds),
         (&mut agg.content_paths, s.content.paths),
         (&mut agg.meshes, s.meshes),
+        (&mut agg.looks, s.looks),
     ] {
         for (name, count) in src {
             let u = dst.entry(name).or_default();

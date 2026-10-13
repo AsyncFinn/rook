@@ -130,6 +130,32 @@ impl fmt::Display for ContentRef {
     }
 }
 
+/// What Studio stores when a script sets a Decal's or Texture's `Texture`
+/// (or a Decal's `ColorMap`) to a web URL: `rbxassetid://` and the URL's
+/// first `id` value, kept as written; `None` leaves the URL as it is. Other
+/// content properties (`TextureId`, `MeshId`, `Image`, ...) keep the URL.
+///
+/// Observed in Studio 0.742 (conformance case `content/decal`): any URL
+/// starting with a lower-case `http://` or `https://` with a non-empty `id`
+/// query value (the key in any case) is rewritten, whatever its host and
+/// path (`example.com/foo?id=5`, `asset.aspx`, `v1/asset`) and dropping
+/// `version`; `?id=5abc` becomes `rbxassetid://5abc`, `?id= 5`
+/// `rbxassetid:// 5`, and `?id=5&id=6` `rbxassetid://5`. An upper-case
+/// scheme, a leading space or an empty id is kept.
+pub fn image_url_rewrite(url: &str) -> Option<String> {
+    let rest = url
+        .strip_prefix("http://")
+        .or_else(|| url.strip_prefix("https://"))?;
+    let (_, query) = rest.split_once('?')?;
+    let id = query
+        .split('&')
+        .filter_map(|pair| pair.split_once('='))
+        .find(|(k, _)| k.eq_ignore_ascii_case("id"))
+        .map(|(_, v)| v)
+        .filter(|v| !v.is_empty())?;
+    Some(format!("rbxassetid://{id}"))
+}
+
 /// An id as Studio reads it: spaces around it, an optional `+` and
 /// leading zeros are fine; anything else isn't.
 fn id_value(value: &str) -> Option<u64> {
@@ -181,6 +207,32 @@ fn thumbnail(rest: &str) -> Option<Thumbnail> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn image_url_rewrite() {
+        use super::image_url_rewrite as rw;
+        let id = |s: &str| Some(s.to_owned());
+        assert_eq!(
+            rw("http://www.roblox.com/asset/?id=5"),
+            id("rbxassetid://5")
+        );
+        assert_eq!(
+            rw("https://roblox.com/Asset/?ID=5&version=2"),
+            id("rbxassetid://5")
+        );
+        assert_eq!(
+            rw("http://example.com/foo?version=1&id=5&id=6"),
+            id("rbxassetid://5")
+        );
+        assert_eq!(
+            rw("http://www.roblox.com/asset/?id= 5"),
+            id("rbxassetid:// 5")
+        );
+        assert_eq!(rw("HTTP://WWW.ROBLOX.COM/ASSET/?ID=5"), None);
+        assert_eq!(rw(" http://www.roblox.com/asset/?id=5"), None);
+        assert_eq!(rw("http://www.roblox.com/asset/?id="), None);
+        assert_eq!(rw("rbxassetid://5"), None);
+    }
+
     use super::*;
 
     fn asset(id: u64) -> Option<ContentRef> {

@@ -1,17 +1,20 @@
 //! Unit primitive meshes (extents -0.5..0.5) with flat or smooth normals,
 //! and Rook's own head mesh. Each is scaled by the instance's size in the
-//! vertex shader.
+//! vertex shader. UVs matter for the block (the empty-`MeshId` box draws a
+//! mesh texture on every face) and the head (its face decal); the other
+//! shapes only ever get images projected onto them.
 
 use bytemuck::{Pod, Zeroable};
 use glam::Vec3;
 
-use crate::scene::{DrawShape, PartShape};
+use crate::scene::{DrawShape, NormalId, PartShape};
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub(crate) struct Vertex {
     pub position: [f32; 3],
     pub normal: [f32; 3],
+    pub uv: [f32; 2],
 }
 
 #[derive(Debug, Default)]
@@ -21,16 +24,21 @@ pub(crate) struct MeshData {
 }
 
 impl MeshData {
-    /// A flat polygon (convex, counter-clockwise seen from outside).
+    /// A flat polygon (convex, counter-clockwise seen from outside). Its UVs
+    /// put the whole image on the face its normal belongs to, oriented as
+    /// Studio orients images on that face (`rook_types::NormalId`).
     fn polygon(&mut self, points: &[Vec3]) {
         let normal = (points[1] - points[0])
             .cross(points[2] - points[0])
             .normalize();
+        let face = NormalId::of_normal(normal);
         let base = self.vertices.len() as u32;
         for p in points {
+            let (at, extent) = face.image_position(*p, Vec3::ONE);
             self.vertices.push(Vertex {
                 position: p.to_array(),
                 normal: normal.to_array(),
+                uv: (at / extent).to_array(),
             });
         }
         for i in 1..points.len() as u32 - 1 {
@@ -66,6 +74,7 @@ fn cylinder() -> MeshData {
             m.vertices.push(Vertex {
                 position: [x, y, z],
                 normal: n.to_array(),
+                uv: [0.0; 2],
             });
         }
     }
@@ -106,6 +115,7 @@ fn ball() -> MeshData {
             m.vertices.push(Vertex {
                 position: (n * 0.5).to_array(),
                 normal: n.to_array(),
+                uv: [0.0; 2],
             });
         }
     }
@@ -127,6 +137,18 @@ const HEAD_SEGMENTS: u32 = 36;
 /// Steps in each rounded edge, 22.5 degrees apart.
 const HEAD_EDGE_STEPS: u32 = 4;
 
+/// The head's UVs: segments facing within 45 degrees of -Z (the front
+/// quarter, from 225 to 315 degrees) map the image straight on, across
+/// the head's 2R x 2R front; every other vertex has UV (0, 0), so a face
+/// decal's top-left pixel covers the back and sides.
+fn head_uv(front: bool, position: [f32; 3]) -> [f32; 2] {
+    if !front {
+        return [0.0; 2];
+    }
+    let span = 2.0 * HEAD_RADIUS;
+    [0.5 - position[0] / span, 0.5 - position[1] / span]
+}
+
 /// Rook's own head, built from measurements of the `head.mesh` in the
 /// user's Roblox install (the Head MeshType draws that file; ROADMAP M4).
 /// The facts measured, and nothing else from the file, are these: a solid
@@ -134,9 +156,12 @@ const HEAD_EDGE_STEPS: u32 = 4;
 /// profile is a cylinder of radius R = 0.6012 whose straight side runs
 /// from -R/2 to R/2, with each rim rounded by a quarter circle of radius R/2
 /// in 4 steps, and flat round caps. Normals are smooth around and along the
-/// whole profile, so the rim blends into the caps. Its UVs and the caps'
-/// triangulation (a fan here, a grid in the file) don't change its look
-/// until textures exist.
+/// whole profile, so the rim blends into the caps. Its UVs (measured in
+/// M4 step 4): the vertices of the front quarter, facing within 45 degrees
+/// of -Z, have UV (0.5 - x / 2R, 0.5 - y / 2R), a straight projection onto
+/// the front; the other 417 of its 517 vertices have (0, 0), and the
+/// quarter's edges are seams with both. Rook keeps those rules and
+/// triangulates the caps as fans (a grid in the file).
 ///
 /// From asset fetching on (M4 steps 2 and 3), the user's own install can
 /// supply the real file: load it with the mesh reader and use it in place
@@ -155,33 +180,42 @@ fn head() -> MeshData {
         }
     }
     let around = |k: u32| (5.0f32.to_radians() + k as f32 / HEAD_SEGMENTS as f32 * TAU).sin_cos();
-    for &(radius, y, a) in &profile {
-        for k in 0..=HEAD_SEGMENTS {
-            let (sin, cos) = around(k);
-            m.vertices.push(Vertex {
-                position: [radius * cos, y, radius * sin],
-                normal: [a.cos() * cos, a.sin(), a.cos() * sin],
-            });
+    // Segments 22 to 30 run from 225 to 315 degrees: the front quarter.
+    let is_front = |k: u32| (22..31).contains(&k);
+    let vertex = |&(radius, y, a): &(f32, f32, f32), k: u32, front: bool| {
+        let (sin, cos) = around(k);
+        let position = [radius * cos, y, radius * sin];
+        Vertex {
+            position,
+            normal: [a.cos() * cos, a.sin(), a.cos() * sin],
+            uv: head_uv(front, position),
         }
-    }
-    let row = HEAD_SEGMENTS + 1;
-    for ring in 0..profile.len() as u32 - 1 {
-        for k in 0..HEAD_SEGMENTS {
-            let a = ring * row + k;
-            let b = a + row;
+    };
+    // Each segment has its own vertices, so the front quarter's edges are
+    // seams; the normals stay smooth.
+    for k in 0..HEAD_SEGMENTS {
+        let front = is_front(k);
+        let base = m.vertices.len() as u32;
+        for ring in &profile {
+            m.vertices.push(vertex(ring, k, front));
+            m.vertices.push(vertex(ring, k + 1, front));
+        }
+        for ring in 0..profile.len() as u32 - 1 {
+            let a = base + ring * 2;
+            let b = a + 2;
             m.indices.extend_from_slice(&[a, b, a + 1, a + 1, b, b + 1]);
         }
-    }
-    // Caps: fans from the centre, sharing the rims' normals (straight up
-    // and down there).
-    for (ring, y, ny) in [(0, -r, -1.0), (profile.len() as u32 - 1, r, 1.0)] {
-        let centre = m.vertices.len() as u32;
-        m.vertices.push(Vertex {
-            position: [0.0, y, 0.0],
-            normal: [0.0, ny, 0.0],
-        });
-        for k in 0..HEAD_SEGMENTS {
-            let (a, b) = (ring * row + k, ring * row + k + 1);
+        // Caps: a fan triangle from the centre, sharing the rims' normals
+        // (straight up and down there).
+        for (ring, ny) in [(0u32, -1.0f32), (profile.len() as u32 - 1, 1.0)] {
+            let centre = m.vertices.len() as u32;
+            let position = [0.0, ny * r, 0.0];
+            m.vertices.push(Vertex {
+                position,
+                normal: [0.0, ny, 0.0],
+                uv: head_uv(front, position),
+            });
+            let (a, b) = (base + ring * 2, base + ring * 2 + 1);
             let tri = if ny < 0.0 {
                 [centre, a, b]
             } else {
@@ -200,9 +234,30 @@ pub(crate) fn from_file(m: &rook_content::mesh::Mesh) -> MeshData {
             .positions
             .iter()
             .zip(&m.normals)
-            .map(|(&position, &normal)| Vertex { position, normal })
+            .zip(&m.uvs)
+            .map(|((&position, &normal), &uv)| Vertex {
+                position,
+                normal,
+                uv,
+            })
             .collect(),
         indices: m.indices.clone(),
+    }
+}
+
+impl MeshData {
+    /// The smallest box holding every vertex: (min, max).
+    pub fn bounds(&self) -> (Vec3, Vec3) {
+        if self.vertices.is_empty() {
+            return (Vec3::ZERO, Vec3::ZERO);
+        }
+        let mut lo = Vec3::splat(f32::MAX);
+        let mut hi = Vec3::splat(f32::MIN);
+        for v in &self.vertices {
+            lo = lo.min(Vec3::from(v.position));
+            hi = hi.max(Vec3::from(v.position));
+        }
+        (lo, hi)
     }
 }
 
@@ -270,6 +325,42 @@ mod tests {
             hi = hi.max(Vec3::from(v.position));
         }
         assert!((lo + hi).abs().max_element() < 1e-3, "{lo} {hi}");
+    }
+
+    /// The head's UVs: the front quarter projected straight on, the rest
+    /// at (0, 0).
+    #[test]
+    fn head_uvs_project_the_front_quarter() {
+        let m = build(DrawShape::Head);
+        let mut front = 0;
+        for v in &m.vertices {
+            if v.uv == [0.0; 2] {
+                continue;
+            }
+            front += 1;
+            let [x, y, z] = v.position;
+            // In the front quarter, or a cap's centre.
+            assert!(x.abs() <= -z + 1e-4, "{:?}", v.position);
+            let span = 2.0 * HEAD_RADIUS;
+            assert!((v.uv[0] - (0.5 - x / span)).abs() < 1e-6);
+            assert!((v.uv[1] - (0.5 - y / span)).abs() < 1e-6);
+        }
+        assert!(front > 0);
+        // The middle of the front maps to the middle of the image.
+        assert!(m.vertices.iter().any(|v| v.uv[0] > 0.45 && v.uv[0] < 0.55));
+    }
+
+    /// The block's front face shows the image upright, unmirrored from the
+    /// front: its top-left at +X, +Y.
+    #[test]
+    fn block_uvs_follow_studios_faces() {
+        let m = build(DrawShape::Part(PartShape::Block));
+        let front = m
+            .vertices
+            .iter()
+            .find(|v| v.normal == [0.0, 0.0, -1.0] && v.position == [0.5, 0.5, -0.5])
+            .unwrap();
+        assert_eq!(front.uv, [0.0, 0.0]);
     }
 
     /// The head's measured outline: 1.2024 studs tall, and as wide as its

@@ -746,6 +746,12 @@ pub(crate) fn write_property(
         if let (Some(target), Some(url)) =
             (properties::content_view(prop.id), converted.content_url())
         {
+            // A Decal's or Texture's image set to a web URL is stored as its
+            // asset id (`rook_content::image_url_rewrite`).
+            let rewritten = (matches!(name, "Texture" | "ColorMap") && w.dom.is_a(id, "Decal"))
+                .then(|| rook_content::image_url_rewrite(url))
+                .flatten();
+            let url = rewritten.as_deref().unwrap_or(url);
             return w
                 .dom
                 .set_property(id, target, properties::content_value(url));
