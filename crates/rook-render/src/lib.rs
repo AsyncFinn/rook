@@ -2,18 +2,19 @@
 //!
 //! The renderer draws a [`Scene`] snapshot: it never touches the DOM
 //! (architecture §8). It draws primitive parts, the built-in mesh shapes
-//! and mesh files with their colour, transparency and mesh textures, Decals
-//! and Textures over them, a sky colour, a sun, ambient light, fog and the
-//! sun's shadows. Materials and terrain come later.
+//! and mesh files with their colour, transparency, mesh textures, Plastic's
+//! surface patterns and Neon, Decals and Textures over them, a sky colour,
+//! a sun, ambient light, fog and the sun's shadows. Terrain comes later.
 
 mod cache;
 mod mesh;
 mod scene;
 mod shadow;
+mod surfaces;
 
 pub use scene::{
-    Camera, DrawShape, Image, ImageHash, ImagePlacement, Layer, Lighting, Mesh, MeshHash, NormalId,
-    PartInstance, PartShape, Scene, Tiling,
+    Camera, DrawShape, Image, ImageHash, ImagePlacement, Layer, Lighting, MaterialLook, Mesh,
+    MeshHash, NormalId, PartInstance, PartShape, Scene, SurfacePattern, Tiling,
 };
 
 use std::collections::HashMap;
@@ -52,12 +53,15 @@ struct Globals {
     /// shadows reach (0 for none).
     shadow: [f32; 4],
     /// Each face's image right and up (`NormalId::image_axes`), in
-    /// `NormalId` order.
+    /// `NormalId` order; w holds the studs per surface pattern tile.
     faces: [[f32; 4]; 12],
+    /// The sky's horizon colour (sRGB), which reflective parts take on.
+    sky: [f32; 4],
 }
 
 /// Instance flags (see `shader.wgsl`).
 const CAST: u32 = 1;
+const NEON: u32 = 2;
 const MODE_FACE: u32 = 1;
 const MODE_TILED: u32 = 2;
 const MODE_MESH_UV: u32 = 3;
@@ -77,18 +81,35 @@ struct Instance {
     box_max: [f32; 3],
     /// A Texture's studs per tile and offset.
     tile: [f32; 4],
-    /// CAST, and an image layer's mode (bits 2-3) and face (4-6).
+    /// CAST, NEON, and an image layer's mode (bits 2-3) and face (4-6).
     flags: u32,
+    /// Each face's surface pattern + 1, four bits per face.
+    surfaces: u32,
+    /// A part's `Reflectance`.
+    reflectance: f32,
 }
 
 impl Instance {
     fn new(p: &PartInstance, (box_min, box_max): (Vec3, Vec3)) -> Self {
         let mut flags = 0;
         let mut tile = [1.0, 1.0, 0.0, 0.0];
+        let mut surfaces = 0;
+        let mut reflectance = 0.0;
         match p.layer {
             Layer::Base => {
                 if p.cast_shadow {
                     flags |= CAST;
+                }
+                if p.material == MaterialLook::Neon {
+                    flags |= NEON;
+                }
+                reflectance = p.reflectance.clamp(0.0, 1.0);
+                if p.material == MaterialLook::Plastic {
+                    for (face, pattern) in p.surfaces.iter().enumerate() {
+                        if let Some(pattern) = pattern {
+                            surfaces |= (*pattern as u32 + 1) << (face * 4);
+                        }
+                    }
                 }
             }
             Layer::Image { placement, .. } => {
@@ -119,6 +140,8 @@ impl Instance {
             box_max: box_max.to_array(),
             tile,
             flags,
+            surfaces,
+            reflectance,
         }
     }
 }
@@ -459,8 +482,10 @@ pub struct Renderer {
     globals: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
     /// The shadow map, drawn by the shadow pass and sampled by the main
-    /// pass through `main_bind_group`.
+    /// pass through `main_bind_group`, with the surface patterns.
     shadow_view: wgpu::TextureView,
+    shadow_sampler: wgpu::Sampler,
+    main_layout: wgpu::BindGroupLayout,
     main_bind_group: wgpu::BindGroup,
     image_layout: wgpu::BindGroupLayout,
     image_sampler: wgpu::Sampler,
@@ -569,7 +594,7 @@ impl Renderer {
             count: None,
         };
         let main_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("rook shadow map"),
+            label: Some("rook shadow map and surfaces"),
             entries: &[
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
@@ -587,6 +612,7 @@ impl Renderer {
                     ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison),
                     count: None,
                 },
+                texture_entry(2, wgpu::TextureViewDimension::D2Array),
                 wgpu::BindGroupLayoutEntry {
                     binding: 3,
                     visibility: wgpu::ShaderStages::FRAGMENT,
@@ -615,7 +641,7 @@ impl Renderer {
         let instance_attrs = wgpu::vertex_attr_array![
             3 => Float32x3, 4 => Float32x3, 5 => Float32x3, 6 => Float32x3,
             7 => Float32x3, 8 => Float32x4, 9 => Float32x3, 10 => Float32x3,
-            11 => Float32x4, 12 => Uint32
+            11 => Float32x4, 12 => Uint32, 13 => Uint32, 14 => Float32
         ];
         let buffers = [
             Some(wgpu::VertexBufferLayout {
@@ -743,7 +769,13 @@ impl Renderer {
         let white = GpuImage {
             bind_group: image_bind_group(&cx, &white_view),
         };
-        let main_bind_group = main_bind_group(&cx, &main_layout, &shadow_view, &shadow_sampler);
+        let main_bind_group = surface_bind_group(
+            &cx,
+            &main_layout,
+            &shadow_view,
+            &shadow_sampler,
+            &surfaces::rooks_own(),
+        );
         let mut meshes = GpuCache::new();
         for shape in DrawShape::ALL {
             meshes.insert(shape, GpuMesh::upload(&device, &mesh::build(shape)));
@@ -760,6 +792,8 @@ impl Renderer {
             globals,
             bind_group,
             shadow_view,
+            shadow_sampler,
+            main_layout,
             main_bind_group,
             image_layout,
             image_sampler,
@@ -778,7 +812,6 @@ impl Renderer {
         }
     }
 
-    #[cfg(test)]
     fn upload_context(&self) -> UploadContext<'_> {
         UploadContext {
             device: &self.device,
@@ -794,6 +827,23 @@ impl Renderer {
     pub fn set_head_mesh(&mut self, head: &Mesh) {
         let gpu = GpuMesh::upload(&self.device, &mesh::from_file(head));
         self.meshes.insert(DrawShape::Head, gpu);
+    }
+
+    /// Draw the surface patterns from this atlas (the user's own
+    /// `textures/studs.dds`) instead of Rook's. Returns false, keeping
+    /// Rook's, when it isn't laid out as that file is.
+    pub fn set_surface_atlas(&mut self, atlas: &Image) -> bool {
+        let Some(patterns) = surfaces::from_studs_atlas(atlas) else {
+            return false;
+        };
+        self.main_bind_group = surface_bind_group(
+            &self.upload_context(),
+            &self.main_layout,
+            &self.shadow_view,
+            &self.shadow_sampler,
+            &patterns,
+        );
+        true
     }
 
     /// A renderer without a window, for screenshots and tests.
@@ -1137,7 +1187,7 @@ impl Renderer {
         let mut faces = [[0.0; 4]; 12];
         for face in NormalId::ALL {
             let (right, up) = face.image_axes();
-            faces[face.index() * 2] = rgb(right.to_array(), 0.0);
+            faces[face.index() * 2] = rgb(right.to_array(), rook_types::SURFACE_TILE_STUDS);
             faces[face.index() * 2 + 1] = rgb(up.to_array(), 0.0);
         }
         let globals = Globals {
@@ -1161,6 +1211,7 @@ impl Renderer {
                 None => [0.0; 4],
             },
             faces,
+            sky: rgb(l.sky_horizon, 0.0),
         };
         self.queue
             .write_buffer(&self.globals, 0, bytemuck::bytes_of(&globals));
@@ -1364,15 +1415,26 @@ impl Renderer {
     }
 }
 
-/// The main pass's group 1: the shadow map and the image sampler.
-fn main_bind_group(
+/// The main pass's group 1: the shadow map and the surface patterns.
+fn surface_bind_group(
     cx: &UploadContext<'_>,
     layout: &wgpu::BindGroupLayout,
     shadow_view: &wgpu::TextureView,
     shadow_sampler: &wgpu::Sampler,
+    patterns: &surfaces::Patterns,
 ) -> wgpu::BindGroup {
+    let layers: Vec<&[Vec<u8>]> = patterns.layers.iter().map(Vec::as_slice).collect();
+    // Linear: grey 0.5 is a factor of 1 after doubling.
+    let atlas = texture_with_mips(
+        cx,
+        "rook surface patterns",
+        wgpu::TextureFormat::Rgba8Unorm,
+        patterns.size,
+        patterns.size,
+        &layers,
+    );
     cx.device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("rook shadow map"),
+        label: Some("rook shadow map and surfaces"),
         layout,
         entries: &[
             wgpu::BindGroupEntry {
@@ -1382,6 +1444,10 @@ fn main_bind_group(
             wgpu::BindGroupEntry {
                 binding: 1,
                 resource: wgpu::BindingResource::Sampler(shadow_sampler),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: wgpu::BindingResource::TextureView(&atlas),
             },
             wgpu::BindGroupEntry {
                 binding: 3,
@@ -1477,6 +1543,8 @@ mod tests {
             images: HashMap::from([(hash, image())]),
             ..Scene::default()
         };
+        scene.parts[3].material = MaterialLook::Plastic;
+        scene.parts[3].surfaces = [Some(SurfacePattern::Studs); 6];
         incremental.set_scene(&scene);
         let camera = Camera::look_at(Vec3::new(0.0, 3.0, 16.0), Vec3::ZERO);
         incremental.render_to_image(64, 32, &camera).unwrap();

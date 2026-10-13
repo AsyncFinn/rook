@@ -29,6 +29,7 @@ use anyhow::Context;
 use clap::Parser;
 use game::Game;
 use glam::{EulerRot, Mat3, Vec3};
+use rook_content::image::Image;
 use rook_content::mesh::Mesh;
 use rook_content::{ContentRef, Resolver};
 use rook_engine::{DataModel, InputEvent, MessageType, console};
@@ -254,10 +255,12 @@ fn main() -> anyhow::Result<()> {
 }
 
 /// What the renderer takes from the user's Roblox install, read from disk
-/// at startup: the Head MeshType's mesh. Without an install (or the file),
-/// Rook draws its own.
+/// at startup: the Head MeshType's mesh and the surface patterns. Without
+/// an install (or the files), Rook draws its own.
 struct Installed {
     head: Option<Mesh>,
+    /// `textures/studs.dds`: the studs, lattice, inlet and universal tiles.
+    surfaces: Option<Image>,
 }
 
 impl Installed {
@@ -274,12 +277,25 @@ impl Installed {
         };
         let head = read("avatar/heads/head.mesh")
             .and_then(|(at, bytes)| Mesh::decode(&bytes).map_err(|e| warn(&at, &e, "head")).ok());
-        Self { head }
+        let surfaces = read("textures/studs.dds").and_then(|(at, bytes)| {
+            Image::decode(&bytes)
+                .map_err(|e| warn(&at, &e, "surfaces"))
+                .ok()
+        });
+        Self { head, surfaces }
     }
 
     fn apply(&self, renderer: &mut Renderer) {
         if let Some(head) = &self.head {
             renderer.set_head_mesh(head);
+        }
+        if let Some(atlas) = &self.surfaces
+            && !renderer.set_surface_atlas(atlas)
+        {
+            console::print_message(
+                MessageType::Warning,
+                "textures/studs.dds isn't laid out as expected; drawing Rook's own surfaces",
+            );
         }
     }
 }

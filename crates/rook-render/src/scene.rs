@@ -8,7 +8,7 @@ use glam::{Mat3, Vec3};
 
 pub use rook_content::image::Image;
 pub use rook_content::mesh::Mesh;
-pub use rook_types::{NormalId, PartShape, Tiling};
+pub use rook_types::{MaterialLook, NormalId, PartShape, SurfacePattern, Tiling};
 
 /// A mesh file, by the BLAKE3 hash of its bytes: parts that use the same
 /// file share one GPU mesh, however they refer to it.
@@ -95,11 +95,17 @@ pub struct PartInstance {
     /// A texture drawn through the mesh's UVs (a mesh's `TextureId`),
     /// multiplied by `color`.
     pub texture: Option<ImageHash>,
+    pub material: MaterialLook,
+    /// `BasePart.Reflectance`, 0 to 1.
+    pub reflectance: f32,
+    /// Each face's pattern (by `NormalId` index), drawn when the material
+    /// is Plastic.
+    pub surfaces: [Option<SurfacePattern>; 6],
     pub layer: Layer,
 }
 
 impl PartInstance {
-    /// A plain part: no texture or images.
+    /// A plain part: no texture, surfaces or images.
     pub fn plain(shape: DrawShape, position: Vec3, rotation: Mat3, size: Vec3) -> Self {
         Self {
             shape,
@@ -110,6 +116,9 @@ impl PartInstance {
             transparency: 0.0,
             cast_shadow: true,
             texture: None,
+            material: MaterialLook::Plain,
+            reflectance: 0.0,
+            surfaces: [None; 6],
             layer: Layer::Base,
         }
     }

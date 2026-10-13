@@ -9,10 +9,10 @@ use rook_dom::{Dom, InstanceId};
 use rook_engine::{DataModel, RenderChanges};
 use rook_physics::{is_part, part_shape, workspace_parts};
 use rook_render::{
-    Camera, DrawShape, ImageHash, ImagePlacement, Layer, Lighting, MeshHash, NormalId,
-    PartInstance, Scene, Tiling,
+    Camera, DrawShape, ImageHash, ImagePlacement, Layer, Lighting, MaterialLook, MeshHash,
+    NormalId, PartInstance, Scene, Tiling,
 };
-use rook_types::{Color3, MeshKind, MeshLook, Value, mesh_part_scale};
+use rook_types::{Color3, MeshKind, MeshLook, SurfaceType, Value, mesh_part_scale};
 
 use crate::files::{FileRef, FileState, Files, Loaded};
 
@@ -91,6 +91,16 @@ fn texture_id(dom: &Dom, id: InstanceId) -> String {
 
 /// Turns a shape's X axis onto Y, for a CylinderMesh.
 const UPRIGHT: Mat3 = Mat3::from_cols(Vec3::Y, Vec3::NEG_X, Vec3::Z);
+
+/// Each face's surface property, in `NormalId` order.
+const SURFACES: [&str; 6] = [
+    "RightSurface",
+    "TopSurface",
+    "BackSurface",
+    "LeftSurface",
+    "BottomSurface",
+    "FrontSurface",
+];
 
 /// What a part's mesh file last settled on.
 #[derive(Debug, Clone, Copy)]
@@ -478,12 +488,32 @@ impl SceneCache {
             // Confirmed: creator-docs BasePart.CastShadow, on by default;
             // places saved before it existed cast.
             cast_shadow: boolean(dom, id, "CastShadow").unwrap_or(true),
+            material: MaterialLook::of(enum_value(dom, id, "Material")),
+            reflectance: number(dom, id, "Reflectance").unwrap_or(0.0),
             ..PartInstance::plain(
                 DrawShape::Part(own),
                 cf.position,
                 cf.rotation,
                 own.extent(size),
             )
+        };
+        // Unions (drawn as their box for now), trusses and MeshParts have
+        // no surface patterns of their own (Inference for unions and
+        // trusses).
+        let has_surfaces = !matches!(
+            class,
+            "MeshPart"
+                | "TrussPart"
+                | "UnionOperation"
+                | "NegateOperation"
+                | "IntersectOperation"
+                | "PartOperation"
+        );
+        let surfaces = |out: &mut PartInstance| {
+            for face in NormalId::ALL {
+                out.surfaces[face.index()] = enum_value(dom, id, SURFACES[face.index()])
+                    .and_then(|s| SurfaceType::from_u32(s).pattern());
+            }
         };
         if class == "MeshPart" {
             // Its own mesh file, scaled by Size / InitialSize; with an empty
@@ -511,10 +541,16 @@ impl SceneCache {
             return Some((out, Decals::Faces));
         }
         let Some((kind, mesh, url)) = part_mesh(dom, id) else {
+            if has_surfaces {
+                surfaces(&mut out);
+            }
             return Some((out, Decals::Faces));
         };
         let scale = vector3(dom, mesh, "Scale").unwrap_or(Vec3::ONE);
         let Some(mut look) = kind.look_on(class, size, scale) else {
+            if has_surfaces {
+                surfaces(&mut out);
+            }
             return Some((out, Decals::Faces));
         };
         if kind == MeshKind::EmptyFile {
@@ -532,6 +568,9 @@ impl SceneCache {
                     .unwrap_or(MeshLook::PartShape),
                 FileDraw::Nothing => MeshLook::Nothing,
             };
+        }
+        if kind.shows_surfaces() && has_surfaces {
+            surfaces(&mut out);
         }
         match look {
             MeshLook::Shape {
@@ -558,6 +597,11 @@ impl SceneCache {
             MeshLook::PartShape => return Some((out, Decals::Faces)),
         }
         if kind.takes_texture() {
+            // The empty-MeshId box drew without the part's Neon glow
+            // (observed); its material is otherwise unchecked.
+            if out.material == MaterialLook::Neon {
+                out.material = MaterialLook::Plain;
+            }
             let tint = vector3(dom, mesh, "VertexColor").unwrap_or(Vec3::ONE);
             self.mesh_texture(dom, id, mesh, &mut out, tint.to_array());
         }
@@ -649,6 +693,8 @@ impl SceneCache {
                 color: color(dom, child, "Color3").unwrap_or([1.0; 3]),
                 transparency: number(dom, child, "Transparency").unwrap_or(0.0),
                 texture: None,
+                surfaces: [None; 6],
+                material: MaterialLook::Plain,
                 layer: Layer::Image {
                     image: ImageHash(hash),
                     placement,
