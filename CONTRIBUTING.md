@@ -1,0 +1,68 @@
+# Contributing to Rook
+
+Rook is maintained by [AsyncFinn](https://github.com/AsyncFinn). Rook gets better with every place people throw at it, and bug reports are the most useful contribution there is. Pull requests are by invitation.
+
+## Reporting a problem
+
+The most valuable reports are:
+
+- **Places that fail to load.**
+- **Scripts that behave differently from Roblox**: a wrong value, a missing event, a different error message, things happening in a different order.
+- **Crashes.** Rook should never crash on a place, so any crash is a bug.
+
+Please include:
+
+- The `rook run-headless place.rbxl` output (see [docs/tools.md](docs/tools.md)).
+- If you can, a minimal place that reproduces it. Only share places you have the rights to share.
+- For a behaviour difference, what Roblox does and what Rook does.
+
+Calling a member that Rook doesn't support yet gives an `"is not implemented in Rook yet"` error. Reports of which ones your places hit are welcome too: they help decide what comes next. The known ones are listed in [docs/behavior/stubs.md](docs/behavior/stubs.md).
+
+## Finding your way around
+
+Rook is a Cargo workspace of small crates whose dependencies only point downward. Everything goes through one runtime DataModel: `file → instances → properties → change journal → replication / rendering → scripts → events`. The full design is in [docs/architecture.md](docs/architecture.md), and background and sources are in [docs/research.md](docs/research.md).
+
+| Crate | What it does |
+|---|---|
+| [`rook-types`](crates/rook-types) | Roblox datatypes and the lossless dynamic `Value` |
+| [`rook-reflection`](crates/rook-reflection) | Class, property and enum database, plus the member list for the pinned Roblox version |
+| [`rook-formats`](crates/rook-formats) | Loading and saving `.rbxl`, `.rbxm`, `.rbxlx`, `.rbxmx`, including legacy XML |
+| [`rook-dom`](crates/rook-dom) | The runtime instance tree and its change journal |
+| [`rook-signal`](crates/rook-signal), [`rook-scheduler`](crates/rook-scheduler) | Signals, connections, timers and the deferred queue |
+| [`rook-lua`](crates/rook-lua) | The Luau bridge: Instance API, datatypes, globals, `require` |
+| [`rook-net`](crates/rook-net) | Server-to-client replication |
+| [`rook-physics`](crates/rook-physics) | Assemblies, joints, constraints, contacts and scene queries over Rapier |
+| [`rook-engine`](crates/rook-engine) | DataModels, services, script start rules, play sessions and the frame loop |
+| [`rook-render`](crates/rook-render) | The wgpu renderer |
+| [`rook-cli`](apps/rook-cli) | The `rook` command-line tool |
+| [`rook-player`](apps/rook-player) | The windowed player |
+
+### Behaviour provenance
+
+Every behaviour Rook implements is recorded with its source and one of four statuses: **Confirmed** (creator-docs or a Studio recording), **Inference**, **Approximation** or **Rook extension**. This is both the record of a clean implementation and a map of how compatible Rook is. Rook-specific extensions sit behind an explicit profile and are off by default. See [docs/architecture.md](docs/architecture.md#10-behavior-provenance).
+
+## Development
+
+Run the full check (format, lints and tests):
+
+```sh
+./scripts/check.sh
+```
+
+On Windows, use `scripts\check.ps1`.
+
+Format tests use [rojo-rbx/rbx-test-files](https://github.com/rojo-rbx/rbx-test-files), which isn't committed:
+
+```sh
+git clone --depth 1 https://github.com/rojo-rbx/rbx-test-files fixtures/rbx-test-files
+```
+
+Build profiles:
+
+| Command | Use |
+|---|---|
+| `cargo build` | Development. Rook's code is lightly optimised; dependencies are fully optimised so Luau and wgpu run at speed |
+| `cargo build --release` | What players use |
+| `cargo build --profile profiling` | Release speed with full debug info. Add `--features tracy` to `rook-player` for a live Tracy timeline |
+
+Behaviour changes are checked against Roblox Studio with the conformance suite; see [conformance/README.md](conformance/README.md).
