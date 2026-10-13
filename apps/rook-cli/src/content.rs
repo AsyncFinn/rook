@@ -65,7 +65,19 @@ fn describe(bytes: &[u8]) -> String {
     if starts(b"version ") {
         let line = bytes.iter().take(16).take_while(|&&b| b != b'\n');
         let line: String = line.map(|&b| b as char).collect();
-        return format!("mesh, {}", line.trim_end());
+        let detail = match rook_content::mesh::Mesh::decode(bytes) {
+            Ok(m) => {
+                let (lo, hi) = m.bounds();
+                let size = [0, 1, 2].map(|i| format!("{:.2}", hi[i] - lo[i]));
+                format!(
+                    "{} triangles, {} studs",
+                    m.indices.len() / 3,
+                    size.join(" x ")
+                )
+            }
+            Err(e) => e.to_string(),
+        };
+        return format!("mesh, {}, {detail}", line.trim_end());
     }
     let kind = if starts(b"\x89PNG") {
         "PNG image"

@@ -194,7 +194,7 @@ pub fn run(dir: &Path, out: &Path, jobs: Option<usize>, large_mb: u64) -> anyhow
     let process = |(path, len): &(PathBuf, u64)| {
         let outcome = process_file(path, *len, &seen);
         let n = done.fetch_add(1, Ordering::Relaxed) + 1;
-        if n % 250 == 0 || n == total {
+        if n.is_multiple_of(250) || n == total {
             eprintln!("  {n}/{total} ({:.0}s)", started.elapsed().as_secs_f32());
         }
         outcome

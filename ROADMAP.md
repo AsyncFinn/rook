@@ -333,14 +333,20 @@ above) come anonymously.
 Most refusals are "Authentication required" (a core place: 7,471 uses, 1,141
 assets). A second run needs no network: a core place resolved all 1,655 targets
 from the install and cache in 0.2 s. The player draws the Head MeshType
-with the install's `head.mesh` (decoded by `rook-content`, mesh version
-2.00 only so far), and `rook run-headless --seconds 10` on a modern core place, a disaster place
+with the install's `head.mesh`, and `rook run-headless --seconds 10` on a modern core place, a disaster place
 and a 2008 place gave identical output in the same time as before (a core place
 22.3 s against 22.5 s, four alternating runs each).
 
-*Left for steps 3 and 4:* mesh versions 1.00, 1.01 and 3-5 (`sword.mesh`
-and version 1 of the head asset are 1.00 files), drawing file meshes at
-`Scale` and drawing nothing when one fails to load; image decoding
+*Mesh files are read with the `rbx_mesh` crate* (krakow10, MIT or
+Apache-2.0, a Rojo contributor's), versions 1.00 to 5.00; Rook keeps only
+the highest level of detail and checks face indices. 6.00 and 7.00 aren't
+read yet. `rook content` decodes meshes it shows: `fonts/sword.mesh` (1.00)
+is 198 triangles, 1.15 x 0.34 x 4.37 studs; version 1 of asset 12221462
+(1.00) is 56 x 40 x 45 studs, the giant mesh Studio drew for it.
+
+*Left for steps 3 and 4:* drawing file meshes at `Scale` and drawing
+nothing when one fails to load (checking 1.00's halved size and the V flip
+against Studio while at it), mesh versions 6.00 and 7.00; image decoding
 (PNG, JPEG, DDS, the old `.tex`) and textures, decals and materials;
 `VertexColor`. Also open: thumbnails (`rbxthumb://`), the old paths outside
 Rook's table, Decal's URL rewrite, `require(assetId)` and

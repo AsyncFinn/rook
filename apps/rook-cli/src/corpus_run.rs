@@ -87,7 +87,7 @@ pub fn run(
                 }
                 let record = run_place(path, &bytes, seconds, &options);
                 let n = done.fetch_add(1, Ordering::Relaxed) + 1;
-                if n % 100 == 0 {
+                if n.is_multiple_of(100) {
                     eprintln!("  {n} places ({:.0}s)", started.elapsed().as_secs_f32());
                 }
                 Some(record)
