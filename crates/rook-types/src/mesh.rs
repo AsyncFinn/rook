@@ -87,6 +87,14 @@ impl MeshKind {
         matches!(self, Self::Head | Self::File | Self::EmptyFile)
     }
 
+    /// Whether the part's surfaces (studs, inlets) are drawn on the mesh:
+    /// on the primitive SpecialMesh shapes, projected like decals (observed
+    /// for Sphere and Cylinder; BlockMesh is Inference), but not on a
+    /// CylinderMesh, the Head or file meshes (observed).
+    pub fn shows_surfaces(self) -> bool {
+        matches!(self, Self::Shape(_))
+    }
+
     /// What a mesh child draws on a part of class `class` and `size`, or
     /// `None` when the part ignores it (observed in Studio 0.742,
     /// 2026-10-13):

@@ -27,20 +27,25 @@ struct Globals {
     // w = how far shadows reach (0: no shadows this frame)
     shadow: vec4<f32>,
     // Each face's image right (even) and up (odd) in part axes, in
-    // `NormalId` order.
+    // `NormalId` order; w = studs per surface pattern tile.
     faces: array<vec4<f32>, 12>,
+    // The sky's horizon colour (sRGB), which reflective parts take on.
+    sky: vec4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> g: Globals;
 @group(1) @binding(0) var shadow_map: texture_depth_2d;
 @group(1) @binding(1) var shadow_sampler: sampler_comparison;
-// Linear, mipmapped, repeating: images.
+// The surface patterns (studs, lattice, inlet, universal), one per layer.
+@group(1) @binding(2) var surface_atlas: texture_2d_array<f32>;
+// Linear, mipmapped, repeating: images and the surface patterns.
 @group(1) @binding(3) var image_sampler: sampler;
 // The batch's image: a mesh texture or a decal (white when none).
 @group(2) @binding(0) var image: texture_2d<f32>;
 
 // Instance flags.
 const CAST: u32 = 1u;
+const NEON: u32 = 2u;
 // Bits 2-3: how a layer places its image.
 const MODE_FACE: u32 = 1u;
 const MODE_TILED: u32 = 2u;
@@ -62,8 +67,11 @@ struct VertexIn {
     @location(10) i_box_max: vec3<f32>,
     // A Texture's studs per tile (xy) and offset (zw).
     @location(11) i_tile: vec4<f32>,
-    // CAST, the layer's mode (bits 2-3) and face (bits 4-6).
+    // CAST, NEON, the layer's mode (bits 2-3) and face (bits 4-6).
     @location(12) i_flags: u32,
+    // Each face's surface pattern + 1 (0: none), 4 bits per face.
+    @location(13) i_surfaces: u32,
+    @location(14) i_reflectance: f32,
 };
 
 struct VertexOut {
@@ -80,6 +88,8 @@ struct VertexOut {
     @location(7) @interpolate(flat) box_size: vec3<f32>,
     @location(8) @interpolate(flat) tile: vec4<f32>,
     @location(9) @interpolate(flat) flags: u32,
+    @location(10) @interpolate(flat) surfaces: u32,
+    @location(11) @interpolate(flat) reflectance: f32,
 };
 
 fn srgb_to_linear(c: vec3<f32>) -> vec3<f32> {
@@ -114,6 +124,8 @@ fn vs_main(v: VertexIn) -> VertexOut {
     out.box_size = abs(hi - lo);
     out.tile = v.i_tile;
     out.flags = v.i_flags;
+    out.surfaces = v.i_surfaces;
+    out.reflectance = v.i_reflectance;
     return out;
 }
 
@@ -195,8 +207,32 @@ fn fog(color: vec3<f32>, world: vec3<f32>) -> vec3<f32> {
 // Parts and their mesh textures. A texture's alpha is ignored (observed).
 @fragment
 fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
-    let albedo = in.color.rgb * textureSample(image, image_sampler, in.uv).rgb;
-    return vec4(shade(albedo, in.world, in.normal), in.color.a);
+    var albedo = in.color.rgb * textureSample(image, image_sampler, in.uv).rgb;
+    let face = face_of(in.local_normal);
+    let tile = g.faces[0].w;
+    let st = face_position(face, in.local, in.box_center, in.box_size).xy / tile;
+    let dx = dpdx(st);
+    let dy = dpdy(st);
+    if in.surfaces != 0u {
+        let pattern = (in.surfaces >> (face * 4u)) & 15u;
+        if pattern != 0u {
+            // The patterns are grey around 0.5: twice them leaves the
+            // colour as it is between the studs.
+            let s = textureSampleGrad(surface_atlas, image_sampler, st, i32(pattern - 1u), dx, dy);
+            albedo *= s.rgb * 2.0;
+        }
+    }
+    if (in.flags & NEON) != 0u {
+        return vec4(fog(albedo, in.world), in.color.a);
+    }
+    var lit = shade(albedo, in.world, in.normal);
+    // Reflectance: the part takes on its surroundings, here the sky's
+    // colour (Approximation: Studio reflects the skybox, so a red part at
+    // 0.2 looks pink and at 0.5 lavender under a blue sky; observed).
+    if in.reflectance > 0.0 {
+        lit = mix(lit, fog(srgb_to_linear(g.sky.rgb), in.world), in.reflectance);
+    }
+    return vec4(lit, in.color.a);
 }
 
 // Decals and Textures, blended over what's drawn.

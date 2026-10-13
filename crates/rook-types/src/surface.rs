@@ -1,4 +1,4 @@
-//! How images map onto a part's faces: the one definition the
+//! How images and surfaces map onto a part's faces: the one definition the
 //! renderer's shaders and the scene builder follow. Measured in Studio
 //! 0.742 on 2026-10-13 with a labelled test image (ROADMAP M4 "Textures and
 //! decals (step 4)").
@@ -6,7 +6,8 @@
 //! - Each face has an image frame: seen from outside, the image is never
 //!   mirrored; on the four sides its up is the part's +Y; on Top and Bottom
 //!   its up is the part's +Z (Back). A Decal stretches the image over the
-//!   face; a Texture tiles from the frame's top-left corner.
+//!   face; a Texture and the surface types tile from the frame's top-left
+//!   corner.
 //! - On round and sloped shapes each point belongs to the face whose axis
 //!   its normal is closest to, and the face's image is projected straight
 //!   along that axis (a Front decal on a ball covers the front of it; a
@@ -114,6 +115,101 @@ impl Tiling {
     }
 }
 
+/// `Enum.SurfaceType`, as far as drawing goes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SurfaceType {
+    Smooth,
+    Glue,
+    Weld,
+    Studs,
+    Inlet,
+    Universal,
+    Hinge,
+    Motor,
+    SteppingMotor,
+    SmoothNoOutlines,
+    /// A value the enum no longer has (old files saved 9).
+    Other,
+}
+
+impl SurfaceType {
+    pub fn from_u32(value: u32) -> Self {
+        match value {
+            0 => Self::Smooth,
+            1 => Self::Glue,
+            2 => Self::Weld,
+            3 => Self::Studs,
+            4 => Self::Inlet,
+            5 => Self::Universal,
+            6 => Self::Hinge,
+            7 => Self::Motor,
+            8 => Self::SteppingMotor,
+            10 => Self::SmoothNoOutlines,
+            _ => Self::Other,
+        }
+    }
+
+    /// The pattern drawn on the face, if any. Studio draws studs, inlets,
+    /// alternating studs and inlets (Universal), and one diagonal lattice
+    /// for both Weld and Glue; Hinge and Motor draw a small yellow pin
+    /// instead, which Rook doesn't draw yet (observed).
+    pub fn pattern(self) -> Option<SurfacePattern> {
+        Some(match self {
+            Self::Studs => SurfacePattern::Studs,
+            Self::Weld | Self::Glue => SurfacePattern::Lattice,
+            Self::Inlet => SurfacePattern::Inlet,
+            Self::Universal => SurfacePattern::Universal,
+            _ => return None,
+        })
+    }
+}
+
+/// A surface type's tiled pattern. The discriminant is its layer in the
+/// renderer's surface texture (and the 128-pixel tile group in the install's
+/// `studs.dds`, whose sixteen tiles are four variants each of studs, the
+/// lattice, inlets and universal, in that order; measured).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SurfacePattern {
+    Studs = 0,
+    Lattice = 1,
+    Inlet = 2,
+    Universal = 3,
+}
+
+impl SurfacePattern {
+    pub const ALL: [SurfacePattern; 4] = [Self::Studs, Self::Lattice, Self::Inlet, Self::Universal];
+}
+
+/// Studs per repeat of a surface pattern: each tile of `studs.dds` holds
+/// 2 × 2 studs, one stud per stud of the face (measured), tiling from the
+/// face's top-left corner like a Texture (observed on a 3.5 × 1.5 face).
+pub const SURFACE_TILE_STUDS: f32 = 2.0;
+
+/// How a part's `Material` looks. Only Plastic shows surface patterns
+/// (observed: Studs and Inlet on every 2022 material, SmoothPlastic
+/// included, drew nothing but on Plastic). Neon is drawn unlit at full
+/// colour (observed). Every other material's texture is downloaded by
+/// Studio at runtime and isn't in the install, so Rook draws it plain
+/// (Approximation).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum MaterialLook {
+    Plastic,
+    Neon,
+    Plain,
+}
+
+impl MaterialLook {
+    /// The look of an `Enum.Material` value (Plastic 256, Neon 288). Parts
+    /// saved without a Material are Plastic, its default.
+    pub fn of(material: Option<u32>) -> Self {
+        match material {
+            None | Some(256) => Self::Plastic,
+            Some(288) => Self::Neon,
+            Some(_) => Self::Plain,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -160,5 +256,22 @@ mod tests {
             offset: Vec2::new(0.5, 0.0),
         };
         assert_eq!(t.uv(Vec2::new(1.5, 3.0)), Vec2::new(1.0, 2.0));
+    }
+
+    #[test]
+    fn surfaces_and_materials() {
+        assert_eq!(
+            SurfaceType::from_u32(3).pattern(),
+            Some(SurfacePattern::Studs)
+        );
+        assert_eq!(
+            SurfaceType::from_u32(2).pattern(),
+            Some(SurfacePattern::Lattice)
+        );
+        assert_eq!(SurfaceType::from_u32(9), SurfaceType::Other);
+        assert_eq!(SurfaceType::from_u32(6).pattern(), None);
+        assert_eq!(MaterialLook::of(None), MaterialLook::Plastic);
+        assert_eq!(MaterialLook::of(Some(272)), MaterialLook::Plain);
+        assert_eq!(MaterialLook::of(Some(288)), MaterialLook::Neon);
     }
 }
