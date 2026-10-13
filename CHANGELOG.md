@@ -78,6 +78,7 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
   - A physics rebuild looks up each part's joints once instead of up to four times, and services are found by class id instead of by comparing names.
   - Drawing: a part that only moved takes its new place from its CFrame; the renderer rewrites just the changed instances and uploads each batch once a frame; transparent parts share one buffer instead of one per part per frame; a part added or removed takes or frees a slot instead of rebuilding the scene (a core place rebuilt all 29,436 parts about once a second, a 45 ms frame).
 - Fixed: physics kept bodies, motors and constraints in hash maps with a random order, so a round of Acid Rain played out differently on every run. It now uses deterministic maps.
+- Fixed: holding the right mouse button to look around left the cursor visible and free to wander out of the window. It now hides and stays where it was pressed (held in place, or put back after each move where the platform can only confine it to the window).
 - Fixed: changes a server script made while handling a client's message at the end of a frame were trimmed from the journal before the next frame's script and render checks saw them, so a script it parented never started.
 
 ## [0.2.0] — 2026-10-11 — M2: client side, renderer, input

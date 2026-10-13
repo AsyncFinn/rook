@@ -39,12 +39,13 @@ use snapshot::{SceneCache, SceneChange};
 /// Simulation step: 60 Hz, like Roblox's frame-based scheduler.
 const STEP: f64 = 1.0 / 60.0;
 use winit::application::ApplicationHandler;
+use winit::dpi::PhysicalPosition;
 use winit::event::{
     DeviceEvent, DeviceId, ElementState, MouseButton, MouseScrollDelta, WindowEvent,
 };
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::{KeyCode, PhysicalKey};
-use winit::window::{Window, WindowId};
+use winit::window::{CursorGrabMode, Window, WindowId};
 
 #[derive(Debug, Parser)]
 #[command(name = "rook-player", version, about = "Open a Roblox place in Rook")]
@@ -229,6 +230,8 @@ fn main() -> anyhow::Result<()> {
         gfx: None,
         keys: HashSet::new(),
         looking: false,
+        look_anchor: None,
+        cursor: PhysicalPosition::new(0.0, 0.0),
         last_frame: Instant::now(),
         pending_mouse: None,
         head,
@@ -398,6 +401,11 @@ struct App {
     gfx: Option<Gfx>,
     keys: HashSet<KeyCode>,
     looking: bool,
+    /// Where the cursor was when looking started; it stays there (see
+    /// [`App::look`]).
+    look_anchor: Option<PhysicalPosition<f64>>,
+    /// The cursor's last position in the window.
+    cursor: PhysicalPosition<f64>,
     last_frame: Instant,
     /// The latest cursor position not yet sent to the game. Moves are sent
     /// once per frame because each costs a mouse raycast.
@@ -550,6 +558,31 @@ impl App {
     }
 }
 
+impl App {
+    /// Start or stop looking around with the right mouse button: the
+    /// cursor hides and stays where it was, as in Studio, instead of
+    /// wandering out of the window while the camera turns.
+    fn look(&mut self, on: bool) {
+        self.looking = on;
+        self.look_anchor = None;
+        let Some(gfx) = &self.gfx else {
+            return;
+        };
+        let window = &gfx.window;
+        window.set_cursor_visible(!on);
+        if !on {
+            let _ = window.set_cursor_grab(CursorGrabMode::None);
+            return;
+        }
+        // Locked holds the cursor still where the platform can; otherwise
+        // confine it and warp it back after each move.
+        if window.set_cursor_grab(CursorGrabMode::Locked).is_err() {
+            let _ = window.set_cursor_grab(CursorGrabMode::Confined);
+            self.look_anchor = Some(self.cursor);
+        }
+    }
+}
+
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.gfx.is_none()
@@ -578,8 +611,14 @@ impl ApplicationHandler for App {
                 }
             }
             WindowEvent::CursorMoved { position, .. } => {
-                self.pending_mouse = Some((position.x as f32, position.y as f32));
+                // While looking around the cursor is held in place; its
+                // moves (and our own warps back) aren't mouse moves.
+                if !self.looking {
+                    self.cursor = position;
+                    self.pending_mouse = Some((position.x as f32, position.y as f32));
+                }
             }
+            WindowEvent::Focused(false) if self.looking => self.look(false),
             WindowEvent::KeyboardInput { event, .. } => {
                 if let PhysicalKey::Code(code) = event.physical_key {
                     if !event.repeat
@@ -618,10 +657,7 @@ impl ApplicationHandler for App {
                     self.game.input(InputEvent::MouseButton { button, down });
                 }
                 if button == MouseButton::Right {
-                    self.looking = down;
-                    if let Some(gfx) = &self.gfx {
-                        gfx.window.set_cursor_visible(!self.looking);
-                    }
+                    self.look(down);
                 }
             }
             WindowEvent::MouseWheel { delta, .. } => {
@@ -657,6 +693,11 @@ impl ApplicationHandler for App {
             self.camera.yaw -= delta.0 as f32 * 0.003;
             self.camera.pitch -= delta.1 as f32 * 0.003;
             self.camera.update_rotation();
+            // Where the cursor can only be confined to the window (Windows),
+            // put it back after each move.
+            if let (Some(anchor), Some(gfx)) = (self.look_anchor, &self.gfx) {
+                let _ = gfx.window.set_cursor_position(anchor);
+            }
         }
     }
 
