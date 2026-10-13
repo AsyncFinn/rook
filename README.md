@@ -4,7 +4,7 @@
 
 **An open-source reimplementation of the Roblox engine, written in Rust.**
 
-Load Roblox places and models, run their Luau scripts, replicate them to a client and draw them in a window, including the archive of older content that modern Roblox still runs.
+An open engine for Roblox places: run them offline, host them yourself, mod them, and keep them alive. Built to match modern Roblox.
 
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Rust 1.85+](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](https://www.rust-lang.org)
@@ -19,16 +19,40 @@ Load Roblox places and models, run their Luau scripts, replicate them to a clien
 
 ## Why Rook?
 
-Millions of Roblox places have been made since 2006. Rook is built to open them outside Roblox, to study, preserve and test them, and to run them the way **modern Roblox** does.
+Millions of places have been built on Roblox since 2006, and today they run in exactly one place. Rook is an open engine in the spirit of Xash3D and OpenMW: bring your own places, and run them on an engine anyone can read, fix and extend.
 
-- **Modern Roblox is the reference.** Rook is pinned to one Roblox API snapshot (0.741.19). Old content works as far as modern Roblox runs it. There is no separate "legacy mode".
-- **Every class exists.** Every class in the reflection database can be created, parented, read, written, saved and scripted, even before Rook gives it any behaviour.
-- **Checked against Studio.** Behaviour is compared with output recorded from real Roblox Studio, and every behaviour Rook implements has a documented source and confidence level.
-- **Measured on real content.** Progress is tracked by running an archive of about 3,000 real places, not by hand-picked demos.
+**What you get**
+
+- **Singleplayer that works offline.** The server runs inside the player, so a place plays on your machine with nothing to connect to.
+- **Your own servers** *(planned, M8)*. Host a place yourself and invite your friends.
+- **Preservation.** Old places keep running as long as someone has the file, with no account and nothing that can be switched off.
+- **Modding.** The whole engine is open, so any behaviour can be inspected, patched and extended.
+- **Fewer restrictions** *(planned)*. [Opt-in extensions](ROADMAP.md#rook-extensions-unscheduled) such as WebSockets for any script, and EditableImage and EditableMesh with no platform gating. They're off by default, so modern Roblox stays the reference.
+- **A platform you already know.** The same Luau, Instance API and services. Scripts written for Roblox are scripts for Rook, and places saved from Studio open as they are.
+
+**Why you can trust it**
+
+- **Modern Roblox is the reference.** Pinned to API 0.741.19, with no separate legacy mode. Old content works as far as modern Roblox runs it.
+- **Checked against Studio.** Behaviour is diffed against real Studio recordings, and each behaviour cites its source.
+- **Measured on real places.** Progress is tracked on an archive of about 3,000 places, not hand-picked demos.
+
+## Standing on the shoulders of giants
+
+Rook doesn't reinvent what the community has already solved. It builds on projects proven on years of real Roblox files and puts its own effort into the engine between them.
+
+- [**rbx-dom**](https://github.com/rojo-rbx/rbx-dom): file formats and the reflection database, the same foundation Rojo is built on
+- [**rbx-test-files**](https://github.com/rojo-rbx/rbx-test-files): format test fixtures
+- [**Luau**](https://luau.org) and [**mlua**](https://github.com/mlua-rs/mlua): Roblox's own open-source language, so scripts run on the real VM, not an imitation
+- [**Rapier**](https://rapier.rs): physics
+- [**wgpu**](https://wgpu.rs) and [**winit**](https://github.com/rust-windowing/winit): rendering on Vulkan, Metal and DirectX 12, and windowing
+- [**full_moon**](https://github.com/Kampfkarren/full-moon): Luau parsing for the corpus scanner
+- [**glam**](https://github.com/bitshifter/glam-rs): vector maths
+
+What Rook adds is the engine itself: the DataModel, the scheduler, replication and Studio-checked behaviour.
 
 ## Status
 
-Rook is in **early development**. File formats and data (M0) are done, scripting (M1) is nearly done, and the client/server split and first renderer (M2) are in progress.
+Rook is in **early development**. File formats (M0), scripting (M1), the client/server split with the first renderer (M2) and physics (M3) are done. Content (M4: meshes, textures, decals) is in progress.
 
 | Measure | Result |
 |---|---|
@@ -241,7 +265,7 @@ Build profiles:
 ## FAQ
 
 **Can Rook connect to Roblox servers or join Roblox games?**
-No. Replication is Rook to Rook. Wire compatibility with Roblox clients or servers isn't a goal.
+No. Replication is Rook to Rook. Wire compatibility with Roblox clients or servers isn't a goal. Instead, you'll be able to host your own Rook servers (M8 on the [roadmap](ROADMAP.md)).
 
 **Where do I get places to open?**
 Use places you made or have the rights to, for example saved from Roblox Studio with *File → Save to File*. Rook ships no Roblox content.
@@ -254,18 +278,9 @@ Rook matches what modern Roblox does with old content. For example, modern Roblo
 
 ## Contributing
 
-Rook is maintained by [AsyncFinn](https://github.com/AsyncFinn). **Bug reports are welcome**, especially places that fail to load or scripts that behave differently from Roblox. Please include the `rook run-headless` output and, if you can, a minimal place that reproduces it. Pull requests are by invitation.
+Rook gets better with every place people throw at it. The most useful thing you can do is run your places through Rook and report what breaks: places that fail to load, and scripts that behave differently from Roblox. Please include the `rook run-headless` output and, if you can, a minimal place that reproduces it. Star the repo to follow along.
 
-## Acknowledgements
-
-Rook stands on the work of:
-
-- [rbx-dom](https://github.com/rojo-rbx/rbx-dom): Roblox file formats and the reflection database
-- [rbx-test-files](https://github.com/rojo-rbx/rbx-test-files): format test fixtures
-- [Luau](https://luau.org) and [mlua](https://github.com/mlua-rs/mlua): the scripting runtime
-- [full_moon](https://github.com/Kampfkarren/full-moon): Luau parsing for the corpus scanner
-- [wgpu](https://wgpu.rs) and [winit](https://github.com/rust-windowing/winit): rendering and windowing
-- [glam](https://github.com/bitshifter/glam-rs): vector maths
+Rook is maintained by [AsyncFinn](https://github.com/AsyncFinn). Pull requests are by invitation.
 
 ## License
 

@@ -12,6 +12,7 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 
 ## [Unreleased]
 
+- README: a new pitch (offline singleplayer, self-hosting, preservation, modding, opt-in extensions), credits moved up as "Standing on the shoulders of giants" with Rapier added, and the status brought up to M3. ROADMAP lists the planned Rook extensions (unscheduled).
 - `rook-physics`: Workspace parts are simulated with Rapier on the server at 240 Hz. Anchored parts are fixed; each unanchored part is its own body for now. Workspace.Gravity and FallenPartsDestroyHeight apply; CFrame and assembly velocities are written back and replicate.
 - Joints and assemblies (M3 step 2): Weld, ManualWeld, Snap, Glue, ManualGlue, Motor, Motor6D and WeldConstraint join parts into assemblies, each simulated as one body. As in Roblox, every anchored part roots its own assembly, which takes along the unanchored parts joined to it; anchored parts joined to each other stay separate. Rotate, RotateP and RotateV are free hinges between assemblies. Motors turn toward `DesiredAngle`, and Motor6D applies `Transform`.
 - Scripts: `MakeJoints` and `BreakJoints` (BasePart, Model, Workspace) follow Studio's surface rules. Also added: `GetJoints`, `GetConnectedParts`, `GetRootPart`, `IsGrounded`, `AssemblyRootPart`, `AssemblyMass`, `Motor:SetDesiredAngle` and `getMass`. Setting a part's `CFrame` moves its whole assembly; setting `Position`/`Orientation`/`Rotation` moves only that part and rewrites its side of its joints.

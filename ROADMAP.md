@@ -21,6 +21,15 @@ each release says which milestone it finishes (see `CHANGELOG.md`).
 - **Next:** M5 Characters.
 - **Later:** M6 GUI, M7 Audio and M8 Networking.
 
+### Rook extensions (unscheduled)
+
+Opt-in features beyond what Roblox allows, behind an explicit profile and off by default.
+None are scheduled; each comes after the milestone it depends on.
+
+- WebSockets available to any script (after M8 Networking)
+- EditableImage and EditableMesh without platform gating (after M4 Content)
+- Restoring embedded legacy textures that modern Roblox loads as empty
+
 ## Milestones
 
 | | Milestone | Exit criterion |
