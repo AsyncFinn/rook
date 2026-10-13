@@ -282,9 +282,18 @@ Decals on the front of blue parts). Two checks:
   (the two malformed PNGs, a missing asset, a mesh, a missing file). Every
   one cleared to the plain face within the same check, while an unchanged
   control kept its face. A failed image replaces the old one with nothing;
-  it doesn't keep it, and there's no placeholder or checkerboard. (Clients
-  from around 2013-2015 drew a black and white checkerboard for failed
-  images, as seen in a revival built on one; modern Roblox doesn't.)
+  it doesn't keep it, and there's no placeholder or checkerboard.
+- *Non-image local files* (`rbxasset://avatar/heads/head.mesh`, an `.mp3`,
+  an `.ogg`, a `.ttf`): blank and `Failure` too, both fresh and replacing
+  a loaded face. Neither a local file nor an asset id brings back the
+  checkerboard.
+
+Old Studio did differ. The same test in a 2013 Studio (run by the
+maintainer) drew a black and white checkerboard for a local `.mesh` and
+`.wav` used as a texture, but nothing for the two malformed PNGs or the
+missing file. So the old client seems to have shown a placeholder for
+files it didn't recognise as images at all; modern Roblox draws nothing
+in every case.
 
 *Setting content properties* (observed): every content property turns
 backslashes in an `rbxasset://` path into slashes, keeping the case.
