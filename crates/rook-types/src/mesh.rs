@@ -15,11 +15,14 @@ use crate::PartShape;
 /// `SpecialMesh`, its `MeshType`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MeshKind {
-    /// A primitive shape fitted to the scaled size. Brick and Torso (the
-    /// same since 2018) and `BlockMesh` are blocks; Sphere is a ball
-    /// stretched on every axis (creator-docs); CornerWedge is the same shape
-    /// as a CornerWedgePart (observed by overlapping the two).
+    /// A primitive SpecialMesh shape fitted to the scaled size. Brick and
+    /// Torso (the same since 2018) are blocks; Sphere is a ball stretched on
+    /// every axis (creator-docs); CornerWedge is the same shape as a
+    /// CornerWedgePart (observed by overlapping the two).
     Shape(PartShape),
+    /// `BlockMesh`: a block fitted to the scaled size, like the Brick type,
+    /// but without the part's surfaces (observed).
+    BlockMesh,
     /// `CylinderMesh`: a cylinder standing along the part's Y axis, unlike
     /// the SpecialMesh Cylinder, which lies along X (observed).
     UprightCylinder,
@@ -50,7 +53,7 @@ impl MeshKind {
             Self::File
         };
         Some(match class {
-            "BlockMesh" => Self::Shape(PartShape::Block),
+            "BlockMesh" => Self::BlockMesh,
             "CylinderMesh" => Self::UprightCylinder,
             "FileMesh" => file,
             "SpecialMesh" => match mesh_type.unwrap_or(0) {
@@ -89,8 +92,10 @@ impl MeshKind {
 
     /// Whether the part's surfaces (studs, inlets) are drawn on the mesh:
     /// on the primitive SpecialMesh shapes, projected like decals (observed
-    /// for Sphere and Cylinder; BlockMesh is Inference), but not on a
-    /// CylinderMesh, the Head or file meshes (observed).
+    /// for Brick, Sphere and Cylinder), but not on a BlockMesh (at any
+    /// Scale), a CylinderMesh, the Head or file meshes (observed in Studio
+    /// 0.742, 2026-10-13: a studded Plastic part with a BlockMesh drew
+    /// plain, the same part with a Brick SpecialMesh drew its studs).
     pub fn shows_surfaces(self) -> bool {
         matches!(self, Self::Shape(_))
     }
@@ -140,6 +145,11 @@ impl MeshKind {
             Self::Shape(shape) => MeshLook::Shape {
                 shape,
                 size: shape.extent(shape_size),
+                upright: false,
+            },
+            Self::BlockMesh => MeshLook::Shape {
+                shape: PartShape::Block,
+                size: shape_size,
                 upright: false,
             },
             // The X-axis cylinder turned onto Y: its length is S.Y and its
@@ -351,6 +361,15 @@ mod tests {
             MeshKind::File.look(SIZE, flipped),
             MeshLook::File { scale: flipped }
         );
+    }
+
+    /// A BlockMesh draws the Brick type's block, without surfaces.
+    #[test]
+    fn block_mesh_hides_surfaces() {
+        let block_mesh = MeshKind::of("BlockMesh", None, "").unwrap();
+        let brick = MeshKind::of("SpecialMesh", Some(6), "").unwrap();
+        assert_eq!(block_mesh.look(SIZE, SCALE), brick.look(SIZE, SCALE));
+        assert!(brick.shows_surfaces() && !block_mesh.shows_surfaces());
     }
 
     #[test]

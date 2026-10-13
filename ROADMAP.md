@@ -608,8 +608,10 @@ marked):
   materials show none. Hinge, Motor and SteppingMotor draw a small yellow
   pin instead (SmoothPlastic too). On balls, cylinders, wedge slopes and the
   Sphere and Cylinder SpecialMeshes the patterns follow the surface (more
-  studs across a ball than a projection gives); a CylinderMesh, file meshes
-  and MeshParts show none.
+  studs across a ball than a projection gives); a BlockMesh (at any
+  `Scale`), a CylinderMesh, file meshes and MeshParts show none, while a
+  Brick SpecialMesh keeps them (checked after release, when a modern core place's
+  BlockMesh parts showed studs in Rook but not in Studio).
 - *Where the textures live:* Studio's install holds only Plastic's material
   textures (`PlatformContent/pc/textures/plastic/diffuse.dds`, `normal.dds`,
   `normaldetail.dds`) and `PlatformContent/pc/textures/studs.dds`: a
