@@ -82,9 +82,26 @@ renderer draws all of these as their part's plain box.
    sizes. Counts and findings are under "File meshes" below.
 4. **Textures and decals**: `TextureId`, Decal (1,756 files), Texture (459),
    part materials.
+5. **Unions**: draw UnionOperations with their own geometry instead of
+   their bounding box (`UnionOperation.Content`, the union's geometry
+   asset, is set on 70,944 unions in 99 files; `NegateOperation` 6 in 2).
+   The `rbx_mesh` crate Rook already uses decodes union geometry too: its
+   `union_graphics` module reads the `MeshData` a union's asset holds
+   (versions 2, 4 and 5, plus the old `CSGK` stub), and `union_physics`
+   reads `PhysicsData` (versions 3 to 8; version 8 needs zstd, for which
+   the crate offers the pure-Rust `ruzstd`). Turning on those features
+   adds no new dependency. First count which forms the archive uses
+   (geometry in the file or behind an asset id, and whether those assets
+   load anonymously), then decode through `rook_content::mesh` and draw
+   through step 3's mesh loader and GPU cache. Check in Studio how a
+   union's geometry is sized against its Size (unions can be resized),
+   `UsePartColor`, and what a union draws while loading or after failing.
+   Unions' collision hulls from `PhysicsData` go with MeshPart collision
+   fidelity (below).
 
 Physics is to pick up the real shapes and volumes of MeshParts
-(collision fidelity), replacing today's boxes; it wasn't done in step 3.
+(collision fidelity) and unions (`PhysicsData`), replacing today's boxes;
+it wasn't done in step 3.
 
 **What each SpecialMesh `MeshType` draws** (observed in Studio 0.742,
 2026-10-12, one 4 × 4 × 4 part per type, set by script because the
@@ -484,7 +501,7 @@ grew by about 2.8 ms (upload 3.6 to 4.9 ms, render 11.8 to 12.9 ms).
 
 *Left for step 4 and later:* textures on meshes (`TextureId`, MeshPart
 `TextureID`), `VertexColor` and per-vertex colours, materials and the
-checker on empty MeshParts; unions' own geometry; MeshPart collision and
+checker on empty MeshParts; unions' own geometry (step 5); MeshPart collision and
 mass per `CollisionFidelity` (the loader can now hand physics a mesh);
 CharacterMesh (with characters); mesh versions 6.00 and 7.00 if they turn
 up; meshes that need an account.
