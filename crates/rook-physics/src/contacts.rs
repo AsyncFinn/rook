@@ -10,7 +10,7 @@
 //! parts meet and end slightly after, where Roblox ends a touch as soon as
 //! parts stop overlapping (Approximation).
 
-use std::collections::{HashMap, HashSet};
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::sync::Mutex;
 
 use rapier3d::prelude::*;

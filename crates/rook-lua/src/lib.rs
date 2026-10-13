@@ -12,6 +12,7 @@ mod ctx;
 mod net;
 mod threads;
 mod types;
+mod watchdog;
 mod world;
 
 pub use api::camera::{Lens, viewport_ray};
@@ -21,9 +22,9 @@ pub use world::{Handler, InputState, Job, LogEntry, MessageType, SignalBehavior,
 
 use std::cell::{Cell, Ref, RefCell, RefMut};
 use std::rc::Rc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
-use mlua::{IntoLuaMulti, Lua, Value as LuaValue, VmState};
+use mlua::{IntoLuaMulti, Lua, Value as LuaValue};
 use rook_dom::{Dom, InstanceId};
 use rook_scheduler::{Clock, Queue};
 use rook_signal::SignalKey;
@@ -69,21 +70,13 @@ pub fn input_object(
 /// without yielding is stopped with an error.
 pub const DEFAULT_SCRIPT_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// Deadline for the code currently running, checked by the VM interrupt.
-#[derive(Debug, Default)]
-struct Watchdog {
-    deadline: Cell<Option<Instant>>,
-    timeout: Cell<Duration>,
-    /// Interrupts since the clock was last read.
-    ticks: Cell<u32>,
-}
-
 /// One DataModel's scripting state.
 #[derive(Debug)]
 pub struct Runtime {
     lua: Lua,
     world: Rc<RefCell<World>>,
-    watchdog: Rc<Watchdog>,
+    /// How long code may run without yielding.
+    timeout: Cell<Duration>,
 }
 
 impl Runtime {
@@ -98,35 +91,12 @@ impl Runtime {
         types::install(&lua)?;
         api::install(&lua)?;
 
-        let watchdog = Rc::new(Watchdog {
-            deadline: Cell::new(None),
-            timeout: Cell::new(DEFAULT_SCRIPT_TIMEOUT),
-            ticks: Cell::new(0),
-        });
-        let wd = watchdog.clone();
-        lua.set_interrupt(move |_| {
-            // Luau interrupts at every call and loop iteration, and reading
-            // the clock costs more than the rest of a loop body: read it
-            // every 1024th time (still thousands of times a millisecond).
-            let ticks = wd.ticks.get().wrapping_add(1);
-            wd.ticks.set(ticks);
-            if ticks.is_multiple_of(1024)
-                && let Some(deadline) = wd.deadline.get()
-                && Instant::now() > deadline
-            {
-                // Reset so the error itself can unwind.
-                wd.deadline.set(None);
-                return Err(mlua::Error::RuntimeError(
-                    "Script timeout: exhausted allowed execution time".into(),
-                ));
-            }
-            Ok(VmState::Continue)
-        });
+        watchdog::install(&lua)?;
 
         Ok(Self {
             lua,
             world,
-            watchdog,
+            timeout: Cell::new(DEFAULT_SCRIPT_TIMEOUT),
         })
     }
 
@@ -143,16 +113,11 @@ impl Runtime {
     }
 
     pub fn set_script_timeout(&self, timeout: Duration) {
-        self.watchdog.timeout.set(timeout);
+        self.timeout.set(timeout);
     }
 
     fn guarded<R>(&self, f: impl FnOnce() -> R) -> R {
-        self.watchdog
-            .deadline
-            .set(Some(Instant::now() + self.watchdog.timeout.get()));
-        let r = f();
-        self.watchdog.deadline.set(None);
-        r
+        watchdog::guarded(self.timeout.get(), f)
     }
 
     /// Start a Script. Returns false if it was already started or didn't compile.

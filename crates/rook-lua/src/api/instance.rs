@@ -106,8 +106,8 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
         let name = name.to_str()?;
         profiling::scope!("Instance.__index", &name);
         Ok(match get_member(lua, id_of(key), &name) {
-            Ok((v, method)) => (v, None, method),
-            Err(e) => (LuaValue::Nil, Some(e.0), false),
+            Ok((v, method, fast)) => (v, None, method, fast),
+            Err(e) => (LuaValue::Nil, Some(e.0), false, None),
         })
     })?;
     let newindex = lua.create_function(
@@ -128,10 +128,18 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
         set_member(lua, id, &key, value)?;
         Outcome::ret(lua, ())
     })?;
+    let create = lua.create_function(|lua, key: LightUserData| push_instance(lua, id_of(key)))?;
+    let fast_index = {
+        let c = ctx(lua);
+        lua.create_function(move |lua, (key, member): (LightUserData, u32)| {
+            fast_read(lua, &c, id_of(key), member)
+        })?
+    };
     let (get, set): (Function, Function) = lua
         .load(
             r#"
-            local keys, methods, index, newindex, index_other, newindex_other = ...
+            local keys, methods, index, newindex, index_other, newindex_other,
+                fast_index, member_ids, instances, create = ...
             -- Keys some class has as a method. Property reads skip the
             -- per-instance cache lookup below, which costs a table miss
             -- per instance when a script reads thousands of them.
@@ -147,13 +155,26 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
                         return method
                     end
                 end
-                local value, err, is_method = index(k, key)
+                -- A plain stored property read before on this class:
+                -- read it by id. Instances come back as their keys.
+                local id = member_ids[key]
+                if id ~= nil then
+                    local value, tag = fast_index(k, id)
+                    if tag == nil then
+                        return value
+                    elseif tag == 1 then
+                        return instances[value] or create(value)
+                    end
+                end
+                local value, err, is_method, fast_id = index(k, key)
                 if err then
                     error(err, 0)
                 end
                 if is_method then
                     method_names[key] = true
                     methods[self][key] = value
+                elseif fast_id ~= nil then
+                    member_ids[key] = fast_id
                 end
                 return value
             end
@@ -180,6 +201,10 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
             newindex,
             index_other,
             newindex_other,
+            fast_index,
+            lua.create_table()?,
+            ctx(lua).instances.clone(),
+            create.clone(),
         ))?;
     lua.set_named_registry_value("rook.instance.index", get)?;
     lua.set_named_registry_value("rook.instance.newindex", set)?;
@@ -190,7 +215,6 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     })?;
     lua.set_named_registry_value("rook.instance.tostring", tostring)?;
 
-    let create = lua.create_function(|lua, key: LightUserData| push_instance(lua, id_of(key)))?;
     let fill_array: Function = lua
         .load(
             r#"
@@ -205,8 +229,54 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
             "#,
         )
         .set_name("=[rook] instance_array")
-        .call((ctx(lua).instances.clone(), create))?;
+        .call((ctx(lua).instances.clone(), create.clone()))?;
     lua.set_named_registry_value("rook.instance.fill_array", fill_array)?;
+
+    // Wrappers for methods with a fast form. Results come back as values,
+    // an instance's key (1) or an array of keys (2).
+    let fast_method: Function = lua
+        .load(
+            r#"
+            local keys, instances, create = ...
+            local function result(r, tag)
+                if tag == 1 then
+                    return instances[r] or create(r)
+                elseif tag == 2 then
+                    for i = 1, #r do
+                        local key = r[i]
+                        r[i] = instances[key] or create(key)
+                    end
+                end
+                return r
+            end
+            return function(fast, general, takes_string)
+                if takes_string then
+                    return function(self, a, ...)
+                        local k = keys[self]
+                        if k ~= nil and type(a) == "string" then
+                            return result(fast(k, a, (...)))
+                        end
+                        return general(self, a, ...)
+                    end
+                end
+                return function(self, ...)
+                    local k = keys[self]
+                    if k ~= nil then
+                        return result(fast(k))
+                    end
+                    return general(self, ...)
+                end
+            end
+            "#,
+        )
+        .set_name("=[rook] fast_method")
+        .set_environment(builtins_env(lua, &["type"])?)
+        .call((
+            ctx(lua).instance_keys.clone(),
+            ctx(lua).instances.clone(),
+            create,
+        ))?;
+    lua.set_named_registry_value("rook.instance.fast_method", fast_method)?;
     Ok(())
 }
 
@@ -388,25 +458,27 @@ fn member_table(class: ClassId, known: bool) -> MemberTable {
 
 /// What `key` names on an instance's class, if anything.
 fn find_member(lua: &Lua, id: InstanceId, key: &str) -> Option<Member> {
-    find_member_in(&ctx(lua), id, key)
+    find_member_in(&ctx(lua), id, key).map(|(_, m)| m)
 }
 
 /// [`find_member`] with the context already fetched (fetching it costs
 /// as much as a lookup, and `inst.Key` needs it several times).
-fn find_member_in(c: &Ctx, id: InstanceId, key: &str) -> Option<Member> {
+/// Also gives the member table's own (static) copy of the key.
+fn find_member_in(c: &Ctx, id: InstanceId, key: &str) -> Option<(&'static str, Member)> {
     let (class, known) = c
         .world
         .borrow()
         .dom
         .get(id)
         .map(|i| (i.class, i.unknown_class.is_none()))?;
+    let found = |table: &MemberTable| table.get_key_value(key).map(|(k, m)| (*k, *m));
     if let Some(table) = c.member_tables.borrow().get(&(class, known)) {
-        return table.get(key).copied();
+        return found(table);
     }
     let table = member_table(class, known);
-    let found = table.get(key).copied();
+    let result = found(&table);
     c.member_tables.borrow_mut().insert((class, known), table);
-    found
+    result
 }
 
 /// Runtime-only property values set by engine Luau code (for example
@@ -439,19 +511,26 @@ fn runtime_property(
     }
 }
 
-/// `inst[key]` for scripts, and whether it's a method (the same function
-/// for every instance of the class, so the caller may cache it).
-pub(crate) fn get_member(lua: &Lua, id: InstanceId, key: &str) -> ApiResult<(LuaValue, bool)> {
+/// `inst[key]` for scripts; whether it's a method (the same function for
+/// every instance of the class, so the caller may cache it); and, for a
+/// plain stored property, the member id [`fast_read`] reads it by.
+pub(crate) fn get_member(
+    lua: &Lua,
+    id: InstanceId,
+    key: &str,
+) -> ApiResult<(LuaValue, bool, Option<u32>)> {
     let c = ctx(lua);
     if let Some(v) = runtime_property(lua, &c, id, key)? {
-        return Ok((v, false));
+        return Ok((v, false, None));
     }
     if key == "ClassName" {
         let name = with_world(lua, |w| w.dom.class_name(id).to_owned());
-        return Ok((LuaValue::String(lua.create_string(name)?), false));
+        return Ok((LuaValue::String(lua.create_string(name)?), false, None));
     }
-    let member = find_member_in(&c, id, key);
+    let found = find_member_in(&c, id, key);
+    let member = found.map(|(_, m)| m);
     let method = matches!(member, Some(Member::Method { .. }));
+    let mut fast = None;
     let value = match member {
         Some(Member::Property(p)) => {
             if !allowed(p.security[0]) {
@@ -463,7 +542,11 @@ pub(crate) fn get_member(lua: &Lua, id: InstanceId, key: &str) -> ApiResult<(Lua
             if p.flags.write_only {
                 return Err(ScriptError(format!("{key} is a write-only member")));
             }
-            read(lua, &c, id, p.name, Some((p.id, p.enum_id)))
+            let (value, plain) = read(lua, &c, id, p.name, Some((p.id, p.enum_id)))?;
+            if plain && let Some((static_key, _)) = found {
+                fast = Some(register_fast_read(&c, id, static_key, p));
+            }
+            Ok(value)
         }
         Some(Member::Method {
             owner,
@@ -497,7 +580,61 @@ pub(crate) fn get_member(lua: &Lua, id: InstanceId, key: &str) -> ApiResult<(Lua
             }
         }
     }?;
-    Ok((value, method))
+    Ok((value, method, fast))
+}
+
+/// Remember that reading `key` on `id`'s class is a plain read of `p`,
+/// and give `key` its member id. Derived properties (`properties::get`)
+/// depend only on the class, so what holds for one instance holds for
+/// every instance of its class.
+fn register_fast_read(c: &Ctx, id: InstanceId, key: &'static str, p: PropInfo) -> u32 {
+    let member = {
+        let mut ids = c.member_ids.borrow_mut();
+        let next = ids.len() as u32;
+        *ids.entry(key).or_insert(next)
+    };
+    if let Some(class) = c.world.borrow().dom.get(id).map(|i| i.class) {
+        c.fast_reads
+            .borrow_mut()
+            .insert((class, member), (p.id, p.enum_id));
+    }
+    member
+}
+
+/// `inst.Key` by member id, for keys [`get_member`] found to be plain
+/// stored properties of the instance's class. The second result is `None`
+/// for a value, 1 when the value is an instance's key (the shim turns it
+/// into the instance's userdata without a trip through Rust), and 0 when
+/// the read must take the general path: another class, an unknown class,
+/// or an instance with runtime-only values.
+fn fast_read(
+    lua: &Lua,
+    c: &Ctx,
+    id: InstanceId,
+    member: u32,
+) -> mlua::Result<(LuaValue, Option<u8>)> {
+    const SLOW: (LuaValue, Option<u8>) = (LuaValue::Nil, Some(0));
+    let value = {
+        let w = c.world.borrow();
+        let Some(inst) = w.dom.get(id).filter(|i| i.unknown_class.is_none()) else {
+            return Ok(SLOW);
+        };
+        let Some(&(pid, enum_id)) = c.fast_reads.borrow().get(&(inst.class, member)) else {
+            return Ok(SLOW);
+        };
+        if c.runtime_prop_ids.borrow().contains(&id) {
+            return Ok(SLOW);
+        }
+        (w.dom.property(id, pid), enum_id)
+    };
+    Ok(match value {
+        (Some(Value::Ref(Some(r))), _) => (
+            LuaValue::LightUserData(key_of(InstanceId::from_ref(r))),
+            Some(1),
+        ),
+        (Some(v), enum_id) => (to_lua(lua, &v, enum_id)?, None),
+        (None, _) => (LuaValue::Nil, None),
+    })
 }
 
 /// Read a property by canonical name, including derived ones.
@@ -511,33 +648,42 @@ pub(crate) fn read_property(lua: &Lua, id: InstanceId, name: &str) -> ApiResult<
         };
         Some((p.id, enum_id))
     });
-    read(lua, &ctx(lua), id, name, prop)
+    Ok(read(lua, &ctx(lua), id, name, prop)?.0)
 }
 
 /// Read a property given its canonical name and, when the database has
-/// it, its ID and enum.
+/// it, its ID and enum. Also says whether this was a plain read of the
+/// stored value (not a derived property or a view of another).
 fn read(
     lua: &Lua,
     c: &Ctx,
     id: InstanceId,
     name: &str,
     prop: Option<(PropertyId, Option<EnumId>)>,
-) -> ApiResult<LuaValue> {
-    let value = {
+) -> ApiResult<(LuaValue, bool)> {
+    let (value, plain) = {
         let w = c.world.borrow();
         match prop.and_then(|(pid, _)| properties::content_view(pid)) {
-            Some(target) => w
-                .dom
-                .property(id, target)
-                .map(|v| Value::ContentId(v.content_url().unwrap_or_default().to_owned().into())),
-            None => properties::get(&w, id, name)
-                .or_else(|| prop.and_then(|(pid, _)| w.dom.property(id, pid))),
+            Some(target) => (
+                w.dom.property(id, target).map(|v| {
+                    Value::ContentId(v.content_url().unwrap_or_default().to_owned().into())
+                }),
+                false,
+            ),
+            None => match properties::get(&w, id, name) {
+                Some(v) => (Some(v), false),
+                None => (
+                    prop.and_then(|(pid, _)| w.dom.property(id, pid)),
+                    prop.is_some(),
+                ),
+            },
         }
     };
-    match value {
-        Some(v) => Ok(to_lua(lua, &v, prop.and_then(|(_, e)| e))?),
-        None => Ok(LuaValue::Nil),
-    }
+    let value = match value {
+        Some(v) => to_lua(lua, &v, prop.and_then(|(_, e)| e))?,
+        None => LuaValue::Nil,
+    };
+    Ok((value, plain))
 }
 
 /// `inst[key] = value` for scripts.
@@ -689,6 +835,44 @@ fn method_function(
             )))
         })?,
     };
+    let f = match methods::fast(owner, resolved) {
+        Some((core, takes_string)) => fast_method(lua, core, takes_string, f)?,
+        None => f,
+    };
     c.methods.borrow_mut().insert(key, f.clone());
     Ok(f)
+}
+
+/// A method with a fast form (see [`methods::fast`]): a Luau wrapper calls
+/// `core` with the instance's key, and `general` for anything else.
+fn fast_method(
+    lua: &Lua,
+    core: methods::Core,
+    takes_string: bool,
+    general: Function,
+) -> mlua::Result<Function> {
+    let c = ctx(lua);
+    let fast = lua.create_function(
+        move |lua, (key, arg, flag): (LightUserData, Option<String>, LuaValue)| {
+            let found = core(
+                &c.world.borrow(),
+                id_of(key),
+                arg.as_deref().unwrap_or_default(),
+                !matches!(flag, LuaValue::Nil | LuaValue::Boolean(false)),
+            );
+            Ok(match found {
+                methods::Found::Bool(b) => (LuaValue::Boolean(b), None),
+                methods::Found::Instance(Some(id)) => {
+                    (LuaValue::LightUserData(key_of(id)), Some(1))
+                }
+                methods::Found::Instance(None) => (LuaValue::Nil, None),
+                methods::Found::Instances(ids) => (
+                    LuaValue::Table(lua.create_sequence_from(ids.into_iter().map(key_of))?),
+                    Some(2),
+                ),
+            })
+        },
+    )?;
+    let wrap: Function = lua.named_registry_value("rook.instance.fast_method")?;
+    wrap.call((fast, general, takes_string))
 }

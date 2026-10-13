@@ -61,6 +61,24 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 - Permission errors name the capability as Roblox does (`lacking capability NotAccessible`, not `NotAccessibleSecurity`).
 - `rook content --place` decodes every mesh reference and totals them by version and failure; `rook corpus-scan` counts mesh instances by kind; `rook-player --fov` sets the field of view.
 - Rendering uses reverse Z with an infinitely far plane, so distant surfaces no longer z-fight from depth-buffer imprecision (with the old 0.1–10,000 stud range, depth resolved only to about 0.15 studs at 500 studs away).
+- Smoother play: the server runs on its own thread, and simulating and drawing cost much less. Measured on a 2016 core place in normal play (30 s from the start) and on a 2017 disaster place forced through its own round code into the Blizzard and Acid Rain (the place's `math.randomseed` fixed so every run plays the same round; t = 60–160 s). A step is one 60 Hz frame of server and client, in lockstep (`rook-player --bench`); window frames are 30 s of live play, uncapped:
+
+  | | step median | step slowest 1% | longest step | window before (vsync / uncapped) | window after, uncapped |
+  |---|---|---|---|---|---|
+  | A core place | 13.5 → 9.9 ms | 39.1 → 34.5 ms | 233 → 249 ms (loading) | 22 / 22 FPS, longest frame 107 ms | 1,590 FPS, longest 7.7 ms, 0 over 16.7 ms |
+  | Blizzard | 23.2 → 12.0 ms | 59.9 → 36.8 ms | 82 → 93 ms | 23 / 117 FPS, longest 158 ms | 3,010 FPS, longest 4.0 ms, 0 over 16.7 ms |
+  | Acid Rain | 2.9 → 2.4 ms | 17.9 → 14.1 ms | 29.8 → 23.8 ms | 60 / 688 FPS, longest 24 ms | 3,100 FPS, longest 4.4 ms, 0 over 16.7 ms |
+
+  Output is identical in all three: console logs, a per-10-second digest of every part's position, velocity, material and colour, and a screenshot; so is `rook run-headless` on a modern core place, a disaster place and a 2008 place. Every conformance case passes. A modern core place's 10 s headless run drops from 33.0 s to 25.9 s; small places run about 0.1 s slower per 10 s (a 2008 place 0.30 → 0.40 s), Rapier's per-step cost for running in parallel.
+  - The server steps on its own thread at 60 Hz, so the window waits only on its client and the renderer and draws as often as the display allows. `rook-engine`'s `host::ServerHost` and `ClientHost` only exchange messages; `Session` runs them on one thread. Replication is split into a server `Source`, which describes each change as a self-contained update (current values, new subtrees in full), and a client `Sink`, which maps ids and applies it. `--seconds`, `--bench` and screenshots keep the client in lockstep, so they give the same results every run.
+  - `--uncapped` presents without waiting for the display. The window title shows the last second's frame times (FPS, median, slowest 1%, longest, frames over 16.7 ms, server and client steps); `--frame-times` prints them too, with a summary at exit. `--bench` reports server, client and total steps by median, slowest 1% and longest.
+  - Collision detection and the solver run on half the cores (Rapier's `parallel` feature, whose results don't depend on the number of threads).
+  - The script timeout is checked by a plain C interrupt instead of an mlua closure, which had made every Luau loop iteration three times slower and every call 2.7 times slower. It is the only `unsafe` code in Rook, confined to `rook-lua/src/watchdog.rs`.
+  - Reading a plain stored property (`.Parent`, `.Anchored`, `.Name`, ...) and calling `IsA`, `FindFirstChild` or `GetChildren` take a fast path once the class has been seen: the property by a small id, instances returned as keys that the Luau shim turns into userdata. Per call: `.Parent` 0.65 → 0.30 µs, `IsA` 0.82 → 0.48, `FindFirstChild` 0.77 → 0.40, `GetChildren` 2.6 → 1.3. The general path stays the reference for everything unusual.
+  - A physics rebuild looks up each part's joints once instead of up to four times, and services are found by class id instead of by comparing names.
+  - Drawing: a part that only moved takes its new place from its CFrame; the renderer rewrites just the changed instances and uploads each batch once a frame; transparent parts share one buffer instead of one per part per frame; a part added or removed takes or frees a slot instead of rebuilding the scene (a core place rebuilt all 29,436 parts about once a second, a 45 ms frame).
+- Fixed: physics kept bodies, motors and constraints in hash maps with a random order, so a round of Acid Rain played out differently on every run. It now uses deterministic maps.
+- Fixed: changes a server script made while handling a client's message at the end of a frame were trimmed from the journal before the next frame's script and render checks saw them, so a script it parented never started.
 
 ## [0.2.0] — 2026-10-11 — M2: client side, renderer, input
 

@@ -36,7 +36,9 @@ mod read;
 mod shape;
 pub mod surfaces;
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::BTreeMap;
+
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use rapier3d::prelude::*;
 use rook_dom::{Change, Dom, InstanceId};
@@ -59,6 +61,26 @@ use movers::Mover;
 /// Roblox simulates at 240 Hz (creator-docs "Adaptive timestepping": 240,
 /// 120 or 60 Hz per assembly; Rook always uses 240, an Approximation).
 pub const STEP_HZ: f64 = 240.0;
+
+/// Size the worker threads collision detection and the solver use: half
+/// the logical cores, so a server stepping physics leaves the rest to the
+/// client, the renderer and everything else. It's Rayon's global pool, not
+/// a pool of the world's own: Rapier hands a whole step to a world's own
+/// pool, a cross-thread wake-up per 240 Hz step that made small places
+/// slower. Rapier lays the parallel work out the same whatever the pool's
+/// size, so results don't depend on it.
+fn size_worker_pool() {
+    static SIZED: std::sync::Once = std::sync::Once::new();
+    SIZED.call_once(|| {
+        let cores = std::thread::available_parallelism().map_or(2, usize::from);
+        // Fails only if something else built the global pool first; then
+        // that size stands.
+        let _ = rapier3d::rayon::ThreadPoolBuilder::new()
+            .num_threads((cores / 2).max(1))
+            .thread_name(|i| format!("physics-{i}"))
+            .build_global();
+    });
+}
 
 /// Workspace.Gravity's default, in studs/s² (creator-docs Workspace.Gravity).
 const DEFAULT_GRAVITY: f32 = 196.2;
@@ -343,32 +365,33 @@ impl Physics {
         let mut world = PhysicsWorld::new();
         world.gravity = Vector::new(0.0, -DEFAULT_GRAVITY, 0.0);
         world.integration_parameters.dt = (1.0 / STEP_HZ) as f32;
+        size_worker_pool();
         Self {
             world,
             props: None,
-            bodies: HashMap::new(),
-            parts: HashMap::new(),
-            joints: HashMap::new(),
-            hinges: HashMap::new(),
+            bodies: HashMap::default(),
+            parts: HashMap::default(),
+            joints: HashMap::default(),
+            hinges: HashMap::default(),
             cursor: 0,
             built: false,
             fallen_height: DEFAULT_FALLEN_HEIGHT,
             last_dt: 0.0,
-            colliders: HashMap::new(),
+            colliders: HashMap::default(),
             groups: CollisionGroups::default(),
             touches_use_groups: false,
             touch: contacts::Tracker::default(),
-            mover_ids: HashSet::new(),
+            mover_ids: HashSet::default(),
             movers: BTreeMap::new(),
             forced: Vec::new(),
-            rockets: HashMap::new(),
+            rockets: HashMap::default(),
             reached: Vec::new(),
-            constraint_ids: HashSet::new(),
-            dirty: HashSet::new(),
+            constraint_ids: HashSet::default(),
+            dirty: HashSet::default(),
             all_dirty: false,
-            constraints: HashMap::new(),
-            drives: HashMap::new(),
-            stale: HashSet::new(),
+            constraints: HashMap::default(),
+            drives: HashMap::default(),
+            stale: HashSet::default(),
             query_only: false,
         }
     }
@@ -550,7 +573,7 @@ impl Physics {
             }
         }
         let rebuilt = if structural.is_empty() {
-            HashSet::new()
+            HashSet::default()
         } else {
             // Bodies the movers pushed and constraints joined may be gone.
             self.all_dirty = true;
@@ -565,7 +588,7 @@ impl Physics {
                 }
             }
         }
-        let mut refreshed = HashSet::new();
+        let mut refreshed = HashSet::default();
         for part in materials {
             // A rebuilt body's colliders already read the new values.
             if let Some(&h) = self.parts.get(&part)
@@ -650,7 +673,7 @@ impl Physics {
             }
             todo.push(part);
         }
-        let mut added = HashSet::new();
+        let mut added = HashSet::default();
         let mut hinges = Vec::new();
         let mut clusters = assembly::Clusters::default();
         for part in todo {

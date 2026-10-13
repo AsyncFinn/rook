@@ -21,11 +21,14 @@ use std::rc::Rc;
 use mlua::{Function, IntoLuaMulti, Lua, MultiValue, Table, Value as LuaValue};
 
 use rook_dom::InstanceId;
-use rook_reflection::ClassId;
+use rook_reflection::{ClassId, EnumId, PropertyId};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::api::instance::MemberTable;
 use crate::world::World;
+
+/// A plain stored property read: the property and its enum, if any.
+pub(crate) type FastRead = (PropertyId, Option<EnumId>);
 
 /// Shared state reachable from every callback.
 #[derive(Debug)]
@@ -64,6 +67,12 @@ pub(crate) struct Ctx {
     pub(crate) runtime_prop_ids: RefCell<FxHashSet<InstanceId>>,
     /// EnumItem userdata by `(enum, value)`.
     pub(crate) enum_items: Table,
+    /// Small ids for member names that are plain stored properties on
+    /// some class, which the `inst.Key` shim passes instead of the name.
+    pub(crate) member_ids: RefCell<FxHashMap<&'static str, u32>>,
+    /// For each class and member id read so far: the stored property it
+    /// reads (and its enum), when reading it is a plain DOM read.
+    pub(crate) fast_reads: RefCell<FxHashMap<(ClassId, u32), FastRead>>,
 }
 
 pub(crate) fn ctx(lua: &Lua) -> Rc<Ctx> {
@@ -155,6 +164,8 @@ impl Ctx {
             runtime_props: RefCell::default(),
             runtime_prop_ids: RefCell::default(),
             enum_items,
+            member_ids: RefCell::default(),
+            fast_reads: RefCell::default(),
         });
         lua.set_app_data(ctx.clone());
         Ok(ctx)

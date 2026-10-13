@@ -99,7 +99,7 @@ rook-types ← rook-reflection ← rook-dom ← rook-signal ← rook-scheduler �
 
 ### Scheduler
 
-- Single engine thread. Luau, the DOM and physics run on it. This matches Roblox's cooperative model, and it is where OpenRBLX went wrong.
+- One thread per DataModel. Its Luau, DOM and physics run on it. This matches Roblox's cooperative model, and it is where OpenRBLX went wrong. A server and its client are separate DataModels, so they may run on separate threads (§8).
 - Frame pipeline. The order is an **Inference** from the creator-docs diagram, to be confirmed in Studio before it's locked in:
 
   ```
@@ -135,20 +135,29 @@ rook-types ← rook-reflection ← rook-dom ← rook-signal ← rook-scheduler �
 
 ### Threading and data flow
 
+Each DataModel's Luau, DOM and physics stay on one thread (§6). In singleplayer Play the player runs two DataModels on two threads, so the window waits only on its client and the renderer:
+
 ```
-            engine thread (per DataModel)                         render thread
-  ┌───────────────────────────────────────────────────┐      ┌──────────────────────┐
-  │ formats → DOM ⇄ Luau (scripts)                    │      │ render world         │
-  │            │ change journal                       │      │  (proxies, meshes,   │
-  │            ├─→ physics (assemblies, Rapier)       │ ───→ │   materials, lights, │
-  │            ├─→ humanoid                           │ snap │   GUI draw lists)    │
-  │            ├─→ GUI layout + text measurement      │ shot │ wgpu                 │
-  │            ├─→ audio commands                     │      └──────────────────────┘
-  │            └─→ render sync (builds snapshot delta)│
-  └───────────────────────────────────────────────────┘
+   server thread                                   main thread (window)
+  ┌──────────────────────────────────┐            ┌─────────────────────────────────────┐
+  │ server DataModel                 │  updates,  │ client DataModel                    │
+  │  formats → DOM ⇄ Luau (scripts)  │  remotes   │  DOM ⇄ Luau (LocalScripts), input   │
+  │   │ change journal               │ ─────────→ │   │ change journal                  │
+  │   ├─→ physics (Rapier) ──┐       │            │   ├─→ queries (mouse, raycasts)     │
+  │   └─→ replication source │       │ ←───────── │   └─→ scene cache ──→ renderer      │
+  │ steps at 60 Hz of real time      │  remotes,  │ steps at 60 Hz; draws as often as   │
+  └──────────────────────────│───────┘  clicks    │ the display allows (or uncapped)    │
+                     physics workers (half the     └─────────────────────────────────────┘
+                     cores: collision detection
+                     and the solver, in parallel)
 ```
 
-Scripts read some derived values synchronously: `AbsolutePosition`, `AbsoluteSize`, `TextBounds`, `TextFits`, raycasts, `GetPartsInPart`. So **GUI layout, text measurement and physics queries live on the engine thread**. The renderer only consumes snapshots, so the tree is never shared between threads behind a lock.
+- The ends are `rook-engine`'s `ServerHost` and `ClientHost`, which only exchange messages (`host::ToClient`, `host::ToServer`) with Rook-to-Rook replication: the server's replication `Source` describes each change as a self-contained update (its current values, a new subtree in full) and the client's `Sink` maps server ids to its own instances and applies it. Remote events, invokes and ClickDetector clicks travel the same way, with instance ids translated by the client.
+- The server's DataModel is made on its thread and never leaves it (a Luau VM isn't `Send`). It steps by itself at 60 Hz in live play, and only when told to for `--seconds`, `--bench` and screenshots, which keep the client in lockstep so results are the same every run. `Session` runs both ends on one thread, delivering every message at once (headless runs, tests, conformance).
+- Physics parallelises inside a step on a shared pool of worker threads, half the logical cores. Rapier lays the work out the same whatever the pool's size, so results don't depend on it.
+- Run mode (no player) keeps the server on the main thread, since the window draws it.
+
+Scripts read some derived values synchronously: `AbsolutePosition`, `AbsoluteSize`, `TextBounds`, `TextFits`, raycasts, `GetPartsInPart`. So **GUI layout, text measurement and physics queries live on their DataModel's thread**. The renderer only consumes the client's scene, so no tree is ever shared between threads behind a lock.
 
 ### Physics (`rook-physics`, `rook-humanoid`)
 

@@ -10,7 +10,9 @@
 //! other form a cluster; a cluster joined to anchored parts belongs to the
 //! assembly of one of them, the one whose joint is newest in Studio.
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::VecDeque;
+
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::rc::Rc;
 
 use rook_dom::{Dom, DomError, InstanceId};
@@ -51,14 +53,14 @@ struct Cluster {
 }
 
 impl Cluster {
-    fn from(dom: &Dom, start: InstanceId) -> Self {
+    fn from(dom: &Dom, start: InstanceId, joints: &mut Joints) -> Self {
         let mut parts = vec![start];
-        let mut seen = HashSet::from([start]);
+        let mut seen = HashSet::from_iter([start]);
         let mut anchors = Vec::new();
         let mut next = 0;
         while next < parts.len() {
             let p = parts[next];
-            for j in part_joints(dom, p) {
+            for &j in joints.of(dom, p).iter() {
                 if !j.kind.is_rigid() {
                     continue;
                 }
@@ -84,15 +86,33 @@ impl Cluster {
     }
 }
 
-/// Clusters already walked, by every part in them. A cluster is the same
-/// whichever of its parts the walk starts from (its anchor is the newest
-/// joint whatever order they're found in), so finding the assemblies of
-/// many parts at once (a rebuild) walks each cluster once instead of once
-/// per part or per joint into it. Valid while joints and `Anchored` don't
+/// Each part's active joints, found once. Checking a joint is active takes
+/// a dozen lookups, and a rebuild would otherwise check every joint of a
+/// big assembly four times (from both its parts, walking the cluster and
+/// then laying out the assembly).
+#[derive(Debug, Default)]
+struct Joints(HashMap<InstanceId, Rc<[Joint]>>);
+
+impl Joints {
+    fn of(&mut self, dom: &Dom, part: InstanceId) -> Rc<[Joint]> {
+        self.0
+            .entry(part)
+            .or_insert_with(|| part_joints(dom, part).into())
+            .clone()
+    }
+}
+
+/// Clusters already walked, by every part in them, and the joints found
+/// on the way. A cluster is the same whichever of its parts the walk
+/// starts from (its anchor is the newest joint whatever order they're
+/// found in), so finding the assemblies of many parts at once (a rebuild)
+/// walks each cluster once instead of once per part or per joint into it.
+/// Valid while joints, parts' places in the tree and `Anchored` don't
 /// change.
 #[derive(Debug, Default)]
 pub struct Clusters {
     of: HashMap<InstanceId, Rc<Cluster>>,
+    joints: Joints,
 }
 
 impl Clusters {
@@ -100,7 +120,7 @@ impl Clusters {
         if let Some(c) = self.of.get(&part) {
             return c.clone();
         }
-        let cluster = Rc::new(Cluster::from(dom, part));
+        let cluster = Rc::new(Cluster::from(dom, part, &mut self.joints));
         for &p in &cluster.parts {
             self.of.insert(p, cluster.clone());
         }
@@ -129,23 +149,23 @@ impl Assembly {
                 None => (root_of(dom, &cluster.parts), cluster.parts.clone()),
             }
         };
-        Some(Self::build(dom, root, &parts))
+        Some(Self::build(dom, root, &parts, &mut clusters.joints))
     }
 
     /// Lay out `parts` from `root` through the rigid joints between them.
-    fn build(dom: &Dom, root: InstanceId, parts: &[InstanceId]) -> Self {
+    fn build(dom: &Dom, root: InstanceId, parts: &[InstanceId], joints: &mut Joints) -> Self {
         let inside: HashSet<InstanceId> = parts.iter().copied().collect();
         let mut members = vec![Member {
             part: root,
             offset: CFrame::IDENTITY,
             link: None,
         }];
-        let mut placed = HashMap::from([(root, 0)]);
+        let mut placed = HashMap::from_iter([(root, 0)]);
         let mut queue = VecDeque::from([root]);
         let mut hinges: Vec<Joint> = Vec::new();
         while let Some(p) = queue.pop_front() {
             let from = placed[&p];
-            for j in part_joints(dom, p) {
+            for &j in joints.of(dom, p).iter() {
                 if !j.kind.is_rigid() {
                     if !hinges.iter().any(|h| h.id == j.id) {
                         hinges.push(j);
@@ -305,7 +325,7 @@ pub fn move_parts(
     dom: &mut Dom,
     moves: impl IntoIterator<Item = (InstanceId, CFrame)>,
 ) -> Result<(), DomError> {
-    let mut moved = std::collections::HashSet::new();
+    let mut moved = HashSet::default();
     for (part, cf) in moves {
         if moved.contains(&part) {
             continue;
@@ -325,8 +345,8 @@ pub fn move_parts(
 /// An anchored part and the clusters that join its assembly.
 fn anchored_members(dom: &Dom, anchored: InstanceId, clusters: &mut Clusters) -> Vec<InstanceId> {
     let mut parts = vec![anchored];
-    let mut joined: HashSet<InstanceId> = HashSet::new();
-    for j in part_joints(dom, anchored) {
+    let mut joined: HashSet<InstanceId> = HashSet::default();
+    for &j in clusters.joints.of(dom, anchored).iter() {
         let other = j.other(anchored);
         if !j.kind.is_rigid() || is_anchored(dom, other) || joined.contains(&other) {
             continue;
@@ -345,7 +365,7 @@ fn anchored_members(dom: &Dom, anchored: InstanceId, clusters: &mut Clusters) ->
 /// parts too (observed), so it can be more than the assembly.
 pub fn connected_parts(dom: &Dom, part: InstanceId, recursive: bool) -> Vec<InstanceId> {
     let mut parts = vec![part];
-    let mut seen = HashSet::from([part]);
+    let mut seen = HashSet::from_iter([part]);
     let mut next = 0;
     while next < parts.len() && (recursive || next == 0) {
         let p = parts[next];
