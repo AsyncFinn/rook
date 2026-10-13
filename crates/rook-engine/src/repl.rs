@@ -66,12 +66,13 @@ impl Repl {
         self.closed
     }
 
-    /// Run everything entered since the last call, on the server or the
-    /// client (`None` when there is no client).
-    pub fn poll(&mut self, server: &DataModel, client: Option<&DataModel>) {
+    /// Hand everything entered since the last call to `run`, with the side
+    /// it should run on (see [`run_line`]); the caller may run the server
+    /// on another thread. `has_client` is false in Run mode.
+    pub fn poll(&mut self, has_client: bool, mut run: impl FnMut(Side, &str)) {
         loop {
             match self.chunks.try_recv() {
-                Ok(chunk) => self.command(chunk.trim(), server, client),
+                Ok(chunk) => self.command(chunk.trim(), has_client, &mut run),
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => {
                     self.closed = true;
@@ -81,7 +82,7 @@ impl Repl {
         }
     }
 
-    fn command(&mut self, line: &str, server: &DataModel, client: Option<&DataModel>) {
+    fn command(&mut self, line: &str, has_client: bool, run: &mut impl FnMut(Side, &str)) {
         match line {
             "" => {}
             ":help" => print_message(MessageType::Info, HELP),
@@ -89,22 +90,12 @@ impl Repl {
                 self.side = Side::Server;
                 print_message(MessageType::Info, "Commands run on the server");
             }
-            ":client" => match client {
-                Some(_) => {
-                    self.side = Side::Client;
-                    print_message(MessageType::Info, "Commands run on the client");
-                }
-                None => print_message(MessageType::Warning, "There is no client (Run mode)"),
-            },
-            _ => {
-                let dm = match (self.side, client) {
-                    (Side::Client, Some(c)) => c,
-                    _ => server,
-                };
-                if let Err(e) = run_line(dm, line) {
-                    print_message(MessageType::Error, &e);
-                }
+            ":client" if has_client => {
+                self.side = Side::Client;
+                print_message(MessageType::Info, "Commands run on the client");
             }
+            ":client" => print_message(MessageType::Warning, "There is no client (Run mode)"),
+            _ => run(self.side, line),
         }
     }
 }

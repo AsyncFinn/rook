@@ -26,7 +26,7 @@
 //!   and its thrust's (0). Within TargetRadius it fires ReachedTarget and
 //!   holds still until Abort.
 
-use std::collections::HashMap;
+use rustc_hash::FxHashMap as HashMap;
 
 use glam::{Mat3, Vec3};
 use rapier3d::prelude::*;
@@ -337,7 +337,7 @@ pub(crate) fn apply<'a>(
         }
     }
     let gravity = to_glam(world.gravity);
-    let mut states: HashMap<RigidBodyHandle, State> = HashMap::new();
+    let mut states: HashMap<RigidBodyHandle, State> = HashMap::default();
     for b in movers.clone().flat_map(Mover::bodies) {
         if !states.contains_key(&b)
             && let Some(rb) = world.bodies.get(b)
@@ -349,7 +349,7 @@ pub(crate) fn apply<'a>(
         Some((b, f)) => states.get(&b).map(|s| (s.pose * f).rotation),
         None => Some(Mat3::IDENTITY),
     };
-    let mut pushes: HashMap<RigidBodyHandle, Push> = HashMap::new();
+    let mut pushes: HashMap<RigidBodyHandle, Push> = HashMap::default();
     for m in movers {
         let (body, frame) = m.at;
         let Some(s) = states.get(&body) else {

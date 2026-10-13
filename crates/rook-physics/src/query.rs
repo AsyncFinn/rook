@@ -21,7 +21,7 @@
 //!   (see [`shape::world_box`]); touching faces count. `GetPartsInPart`
 //!   and `GetTouchingParts` test real shapes and need the parts to overlap.
 
-use std::collections::HashSet;
+use rustc_hash::FxHashSet as HashSet;
 
 use glam::Vec3;
 use rapier3d::parry::query::{self as parry, ShapeCastOptions};

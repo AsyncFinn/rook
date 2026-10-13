@@ -26,9 +26,18 @@ rook-player place.rbxl --camera 100,80,100 --look-at 0,0,0 --screenshot out.png
 rook-player place.rbxl --camera 0,500,0.01 --look-at 0,0,0 --fov 20 --screenshot top.png  # narrow field of view
 rook-player place.rbxl --seconds 5 --screenshot out.png   # run scripts for 5 s first
 rook-player place.rbxl --script extra.luau                # also run a Luau file as a server script
+rook-player place.rbxl --uncapped                         # draw as fast as possible, not at the monitor's refresh rate
+rook-player place.rbxl --frame-times                      # print frame and step times every second, and a summary at exit
+rook-player place.rbxl --seconds 60 --bench 600           # run 600 frames offscreen and print where the time goes
 ```
 
-By default the player starts a session with one local player and draws what that player's client sees, as Studio's Play mode does. The server runs inside the player, so nothing needs to be online. Output is tagged by the side (server or client) that printed it.
+By default the player starts a session with one local player and draws what that player's client sees, as Studio's Play mode does. The server runs inside the player, on its own thread, so nothing needs to be online and a slow server frame doesn't hold up drawing. Output is tagged by the side (server or client) that printed it.
+
+### Frame times
+
+The window title shows, for the last second: frames per second, the median frame time, the slowest 1% of frames (their average), the longest frame, how many frames took longer than 16.7 ms (a 60 Hz frame), and the median and longest server and client steps. `--frame-times` prints the same line to the terminal every second and a summary of the whole run when the window closes. Scripts always run at 60 steps a second, as on Roblox; the frame rate is separate. Without `--uncapped` the window presents at the monitor's refresh rate.
+
+`--bench N` runs N frames offscreen with the server and client in lockstep (the same every run) and prints the time per stage, then the median, slowest 1% and longest server step, client step and both together.
 
 | Control | Action |
 |---|---|

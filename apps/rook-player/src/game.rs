@@ -1,69 +1,110 @@
-//! The game the player shows: a play session with one local player, or
-//! the server alone (Studio's Run mode).
+//! The game the player shows: a play session with one local player, whose
+//! server runs on its own thread, or the server alone (Studio's Run mode),
+//! which the window draws itself.
 
 use std::path::Path;
 use std::sync::Arc;
 
-use rook_engine::{DataModel, InputEvent, Options, Server, Session};
+use rook_engine::host::{ClientHost, ServerHost};
+use rook_engine::repl::Side;
+use rook_engine::{DataModel, InputEvent, MessageType, Options, console};
+use rook_render::Camera;
+
+use crate::server::ServerThread;
+use crate::stats::Times;
+
+enum Mode {
+    /// Play: the server on its thread, the local player's client here.
+    Play {
+        server: ServerThread,
+        client: Box<ClientHost>,
+    },
+    /// Run: the server alone, here, since the window draws it.
+    Run(Box<ServerHost>),
+}
 
 pub struct Game {
-    session: Session,
-    /// The client whose view is shown; `None` shows the server (Run mode).
-    view: Option<usize>,
+    mode: Mode,
+    /// The camera the place was saved with.
+    pub saved_camera: Camera,
+    /// Server and client step times, for `--bench` and the readout.
+    pub server_steps: Times,
+    pub client_steps: Times,
+    /// Time spent applying server frames since the last client step.
+    delivering: std::time::Duration,
 }
 
 impl Game {
     /// Load a place and start it. With `play`, a local player joins and the
     /// window shows that player's client, as in Studio's Play mode.
-    /// Content requests resolve through `content`.
+    /// Content requests resolve through `content`; `script` (the
+    /// `--script` file) runs as a server script once the place starts.
     pub fn load(
         path: &Path,
         play: bool,
         content: Arc<rook_content::Resolver>,
+        script: Option<String>,
     ) -> anyhow::Result<Self> {
         let bytes = fs_err::read(path)?;
         let options = Options {
             content: Some(content),
             ..Options::default()
         };
-        let mut server = Server::load_place(&bytes, &options)?;
-        server.start();
-        let mut session = Session::new(server, options);
-        let view = if play {
-            Some(session.join("Player1", 1)?)
+        let (mode, saved_camera) = if play {
+            let (server, started) =
+                ServerThread::start(bytes, options.clone(), script, ("Player1", 1))?;
+            let client = ClientHost::new(&started.joined, &options)?;
+            (
+                Mode::Play {
+                    server,
+                    client: Box::new(client),
+                },
+                started.camera,
+            )
         } else {
-            None
+            let mut server = DataModel::load_place(&bytes, &options)?;
+            server.start();
+            let host = ServerHost::new(server);
+            if let Some(source) = &script {
+                host.server()
+                    .run_extra_script(source)
+                    .map_err(anyhow::Error::msg)?;
+            }
+            let camera = crate::snapshot::initial_camera(host.server());
+            (Mode::Run(Box::new(host)), camera)
         };
-        let game = Self { session, view };
+        let game = Self {
+            mode,
+            saved_camera,
+            server_steps: Times::default(),
+            client_steps: Times::default(),
+            delivering: std::time::Duration::ZERO,
+        };
         game.print_logs();
         Ok(game)
     }
 
-    pub fn server(&self) -> &DataModel {
-        self.session.server()
-    }
-
-    /// The local player's client (`None` in Run mode).
-    pub fn client(&self) -> Option<&DataModel> {
-        self.view.and_then(|i| self.session.client(i))
-    }
-
     /// The DataModel the window shows.
     pub fn view(&self) -> &DataModel {
-        self.client().unwrap_or_else(|| self.session.server())
+        match &self.mode {
+            Mode::Play { client, .. } => client.client(),
+            Mode::Run(host) => host.server(),
+        }
     }
 
     pub fn view_mut(&mut self) -> &mut DataModel {
-        match self.view {
-            Some(i) => self.session.client_mut(i).expect("client exists"),
-            None => self.session.server_mut(),
+        match &mut self.mode {
+            Mode::Play { client, .. } => client.client_mut(),
+            Mode::Run(host) => host.server_mut(),
         }
     }
 
     /// Send window input to the local player's client (Run mode has no player).
     pub fn input(&mut self, event: InputEvent) {
-        if let Some(i) = self.view {
-            self.session.input(i, event);
+        if let Mode::Play { server, client } = &mut self.mode {
+            for msg in client.input(event) {
+                server.deliver(msg);
+            }
         }
     }
 
@@ -71,31 +112,116 @@ impl Game {
         self.view_mut().set_viewport(width, height);
     }
 
+    /// One frame of the whole game in lockstep: the server steps, its
+    /// changes reach the client, then the client steps. Results are the
+    /// same every run.
     pub fn step(&mut self) {
-        self.session.step();
-    }
-
-    pub fn run_for(&mut self, seconds: f64) {
-        self.session.run_for(seconds);
+        match &mut self.mode {
+            Mode::Play { server, client } => {
+                let frame = server.step();
+                self.server_steps.push(frame.took);
+                let start = std::time::Instant::now();
+                for msg in &frame.messages {
+                    client.deliver(msg);
+                }
+                client.step();
+                for msg in client.outgoing() {
+                    server.deliver(msg);
+                }
+                self.client_steps.push(start.elapsed());
+            }
+            Mode::Run(host) => {
+                let start = std::time::Instant::now();
+                host.step();
+                host.updates();
+                self.server_steps.push(start.elapsed());
+            }
+        }
         self.print_logs();
     }
 
-    /// Run extra Luau as a server script.
-    pub fn run_server_script(&self, source: &str) -> anyhow::Result<()> {
-        self.session
-            .server()
-            .run_extra_script(source)
-            .map_err(anyhow::Error::msg)
+    /// Let the server keep its own 60 Hz pace (Play mode), for live play.
+    pub fn free_run(&mut self) {
+        if let Mode::Play { server, .. } = &self.mode {
+            server.run(true);
+        }
     }
 
-    /// Print new output from the server and every client.
-    pub fn print_logs(&self) {
-        let sides = std::iter::once(("Server", self.session.server()))
-            .chain(self.session.clients().map(|c| ("Client", c)));
-        for (side, dm) in sides {
-            for entry in dm.take_log() {
-                rook_engine::console::print_entry(side, &entry);
+    /// Live play: apply what the running server sent, then step the client
+    /// `steps` times. In Run mode the server steps here.
+    pub fn advance(&mut self, steps: u32) {
+        match &mut self.mode {
+            Mode::Play { server, client } => {
+                let start = std::time::Instant::now();
+                for frame in server.frames() {
+                    self.server_steps.push(frame.took);
+                    for msg in &frame.messages {
+                        client.deliver(msg);
+                    }
+                }
+                // Applying the server's changes counts towards the client's
+                // next step, as it does in lockstep.
+                self.delivering += start.elapsed();
+                for _ in 0..steps {
+                    let start = std::time::Instant::now();
+                    client.step();
+                    for msg in client.outgoing() {
+                        server.deliver(msg);
+                    }
+                    let took = start.elapsed() + std::mem::take(&mut self.delivering);
+                    self.client_steps.push(took);
+                }
+                self.print_logs();
+            }
+            Mode::Run(_) => {
+                for _ in 0..steps {
+                    self.step();
+                }
             }
         }
+    }
+
+    pub fn run_for(&mut self, seconds: f64) {
+        let target = self.view().now() + seconds;
+        while self.view().now() + 1e-9 < target {
+            self.step();
+        }
+    }
+
+    /// Run a command-bar entry on the server or the client.
+    pub fn repl(&self, side: Side, line: &str) {
+        let dm = match (&self.mode, side) {
+            (Mode::Play { server, .. }, Side::Server) => {
+                server.repl(line);
+                return;
+            }
+            (Mode::Play { client, .. }, Side::Client) => client.client(),
+            (Mode::Run(host), _) => host.server(),
+        };
+        if let Err(e) = rook_engine::repl::run_line(dm, line) {
+            console::print_message(MessageType::Error, &e);
+        }
+    }
+
+    pub fn has_client(&self) -> bool {
+        matches!(self.mode, Mode::Play { .. })
+    }
+
+    /// Print new output from this thread's DataModel (the server thread
+    /// prints its own).
+    pub fn print_logs(&self) {
+        let side = if self.has_client() {
+            "Client"
+        } else {
+            "Server"
+        };
+        for entry in self.view().take_log() {
+            console::print_entry(side, &entry);
+        }
+    }
+
+    /// What lockstep steps took, server and client together.
+    pub fn total_steps(&self) -> Times {
+        self.server_steps.sum_with(&self.client_steps)
     }
 }

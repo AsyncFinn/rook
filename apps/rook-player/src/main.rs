@@ -5,18 +5,25 @@
 //! down/up, Shift to move faster, and the mouse wheel to change speed.
 //! `--screenshot out.png` renders one frame offscreen instead.
 //!
+//! In Play mode the server runs on its own thread at 60 Hz, so the window
+//! waits only on its client and the renderer. `--uncapped` draws as fast
+//! as it can instead of at the monitor's refresh rate; the window title
+//! shows frame times (`--frame-times` prints them too).
+//!
 //! With the `repl` feature (default) and an interactive terminal, the
 //! terminal shows a `> ` prompt that runs Luau in the open place.
 
 mod game;
 mod keys;
 mod meshes;
+mod server;
 mod snapshot;
+mod stats;
 
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use anyhow::Context;
 use clap::Parser;
@@ -27,7 +34,7 @@ use rook_content::{ContentRef, Resolver};
 use rook_engine::{DataModel, InputEvent, MessageType, console};
 use rook_render::{Camera, Renderer};
 use rook_types::{CFrame, Value};
-use snapshot::SceneCache;
+use snapshot::{SceneCache, SceneChange};
 
 /// Simulation step: 60 Hz, like Roblox's frame-based scheduler.
 const STEP: f64 = 1.0 / 60.0;
@@ -72,6 +79,13 @@ struct Args {
     /// Run this many frames offscreen and print where the time goes.
     #[arg(long)]
     bench: Option<u32>,
+    /// Present frames as fast as they're drawn instead of at the monitor's
+    /// refresh rate.
+    #[arg(long)]
+    uncapped: bool,
+    /// Print frame times to the terminal every second, and a summary at exit.
+    #[arg(long)]
+    frame_times: bool,
     /// Don't show the `>` command prompt in the terminal.
     #[cfg(feature = "repl")]
     #[arg(long)]
@@ -94,12 +108,32 @@ fn scene_of(dm: &DataModel, content: &Arc<Resolver>) -> SceneCache {
 }
 
 /// Bring a cached scene up to date with a DataModel's changes and the mesh
-/// files that finished loading since the last frame.
-fn refresh(cache: &mut SceneCache, dm: &mut DataModel) -> bool {
+/// files that finished loading since the last frame, then the renderer
+/// with the scene. Returns whether anything changed.
+fn refresh(cache: &mut SceneCache, dm: &mut DataModel, renderer: &mut Renderer) -> bool {
     let changes = dm.take_render_changes();
     let dom = &dm.runtime().world().dom;
-    let changed = !changes.is_empty() && cache.apply(dom, &changes);
-    cache.poll_meshes(dom, false) || changed
+    let change = if changes.is_empty() {
+        SceneChange::None
+    } else {
+        cache.apply(dom, &changes)
+    };
+    let loaded = cache.poll_meshes(dom, false);
+    let change = match change {
+        _ if loaded.is_empty() => change,
+        SceneChange::None => SceneChange::Parts(loaded),
+        SceneChange::Parts(mut parts) => {
+            parts.extend(loaded);
+            SceneChange::Parts(parts)
+        }
+        SceneChange::Full => SceneChange::Full,
+    };
+    match &change {
+        SceneChange::None => return false,
+        SceneChange::Parts(parts) => renderer.update_parts(&cache.scene, parts),
+        SceneChange::Full => renderer.set_scene(&cache.scene),
+    }
+    true
 }
 
 fn main() -> anyhow::Result<()> {
@@ -111,19 +145,18 @@ fn main() -> anyhow::Result<()> {
     // ROOK_ASSET_DELIVERY=off turns it off.
     let content = Arc::new(Resolver::new(rook_content::Config::from_env(true)));
     let head = installed_head(&content);
-    let mut game = Game::load(&args.place, !args.run, content.clone())?;
+    let script = match &args.script {
+        Some(path) => Some(fs_err::read_to_string(path)?),
+        None => None,
+    };
+    let mut game = Game::load(&args.place, !args.run, content.clone(), script)?;
     let load_time = load_start.elapsed().as_secs_f64();
-    if let Some(script) = &args.script {
-        let source = fs_err::read_to_string(script)?;
-        game.run_server_script(&source)?;
-        game.print_logs();
-    }
     if args.seconds > 0.0 {
         game.run_for(args.seconds);
     }
     let mut scene = scene_of(game.view(), &content);
     // The camera the place was saved with (clients start with a fresh one).
-    let mut camera = snapshot::initial_camera(game.server());
+    let mut camera = game.saved_camera;
     let name = args.place.file_name().unwrap_or_default().to_string_lossy();
     console::print_message(
         MessageType::Info,
@@ -186,6 +219,7 @@ fn main() -> anyhow::Result<()> {
 
     let event_loop = EventLoop::new()?;
     event_loop.set_control_flow(ControlFlow::Poll);
+    game.free_run();
     let mut app = App {
         title: format!("Rook - {}", args.place.display()),
         scene,
@@ -198,6 +232,8 @@ fn main() -> anyhow::Result<()> {
         last_frame: Instant::now(),
         pending_mouse: None,
         head,
+        uncapped: args.uncapped,
+        readout: Readout::new(args.frame_times),
         #[cfg(feature = "repl")]
         repl: if args.no_repl {
             None
@@ -206,6 +242,9 @@ fn main() -> anyhow::Result<()> {
         },
     };
     event_loop.run_app(&mut app)?;
+    if args.frame_times {
+        app.readout.print_run(&app.game);
+    }
     Ok(())
 }
 
@@ -254,12 +293,16 @@ fn bench(
     }
     let mut cache = scene_of(game.view(), content);
     renderer.set_scene(&cache.scene);
-    let (mut sim, mut build, mut upload, mut render) = (0.0, 0.0, 0.0, 0.0);
+    let (mut sim, mut build, mut render) = (0.0, 0.0, 0.0);
     let mut updates = 0;
     let secs = |t: Instant| t.elapsed().as_secs_f64();
     game.set_viewport(width, height);
     let mut mouse = 0.0;
+    let mut whole = stats::Times::default();
+    game.server_steps.clear();
+    game.client_steps.clear();
     for frame in 0..frames {
+        let frame_start = Instant::now();
         // A moving cursor, as when someone plays: each move casts the mouse ray.
         let t = Instant::now();
         let x = (frame % 100) as f32 / 100.0 * width as f32;
@@ -272,17 +315,14 @@ fn bench(
         game.step();
         sim += secs(t);
         let t = Instant::now();
-        let changed = refresh(&mut cache, game.view_mut());
-        build += secs(t);
-        if changed {
+        if refresh(&mut cache, game.view_mut(), &mut renderer) {
             updates += 1;
-            let t = Instant::now();
-            renderer.set_scene(&cache.scene);
-            upload += secs(t);
         }
+        build += secs(t);
         let t = Instant::now();
         renderer.render_to_image(width, height, camera)?;
         render += secs(t);
+        whole.push(frame_start.elapsed());
         profiling::finish_frame!();
     }
     game.print_logs();
@@ -293,12 +333,23 @@ fn bench(
         cache.scene.meshes.len()
     );
     eprintln!(
-        "per frame: mouse {:.2} ms, simulate {:.2} ms, scene update {:.2} ms, upload {:.2} ms, render+readback {:.2} ms",
+        "per frame: mouse {:.2} ms, simulate {:.2} ms, scene update and upload {:.2} ms, render+readback {:.2} ms",
         ms(mouse),
         ms(sim),
         ms(build),
-        ms(upload),
         ms(render)
+    );
+    eprintln!("server step: {}", game.server_steps.summary());
+    if !game.client_steps.is_empty() {
+        eprintln!("client step: {}", game.client_steps.summary());
+    }
+    eprintln!(
+        "simulation step (server + client): {}",
+        game.total_steps().summary()
+    );
+    eprintln!(
+        "whole frame (offscreen, with readback): {}",
+        whole.summary()
     );
     Ok(())
 }
@@ -353,6 +404,9 @@ struct App {
     pending_mouse: Option<(f32, f32)>,
     /// The install's head mesh, if any (see `installed_head`).
     head: Option<Mesh>,
+    /// Present without waiting for the display (`--uncapped`).
+    uncapped: bool,
+    readout: Readout,
     /// The terminal command prompt, when the terminal is interactive.
     #[cfg(feature = "repl")]
     repl: Option<rook_engine::repl::Repl>,
@@ -388,7 +442,11 @@ impl App {
         if let Some(srgb) = caps.formats.iter().find(|f| f.is_srgb()) {
             config.format = *srgb;
         }
-        config.present_mode = wgpu::PresentMode::AutoVsync;
+        config.present_mode = if self.uncapped {
+            wgpu::PresentMode::AutoNoVsync
+        } else {
+            wgpu::PresentMode::AutoVsync
+        };
         surface.configure(&device, &config);
         let mut renderer = Renderer::new(device, queue, config.format);
         if let Some(head) = &self.head {
@@ -447,25 +505,24 @@ impl App {
 
         #[cfg(feature = "repl")]
         if let Some(repl) = &mut self.repl {
-            repl.poll(self.game.server(), self.game.client());
+            let game = &self.game;
+            repl.poll(game.has_client(), |side, line| game.repl(side, line));
         }
 
-        // Simulate in fixed 60 Hz steps, catching up at most a few per frame.
+        // The client steps at 60 Hz, catching up at most a few per frame;
+        // the server keeps its own pace on its thread.
         self.accumulator += f64::from(dt);
         let mut steps = 0;
         while self.accumulator >= STEP && steps < 4 {
-            self.game.step();
             self.accumulator -= STEP;
             steps += 1;
         }
         if steps == 4 {
             self.accumulator = 0.0;
         }
-        self.game.print_logs();
-        if refresh(&mut self.scene, self.game.view_mut())
-            && let Some(gfx) = &mut self.gfx
-        {
-            gfx.renderer.set_scene(&self.scene.scene);
+        self.game.advance(steps);
+        if let Some(gfx) = &mut self.gfx {
+            refresh(&mut self.scene, self.game.view_mut(), &mut gfx.renderer);
         }
     }
 
@@ -577,10 +634,16 @@ impl ApplicationHandler for App {
             }
             WindowEvent::RedrawRequested => {
                 let now = Instant::now();
-                let dt = (now - self.last_frame).as_secs_f32().min(0.1);
+                let elapsed = now - self.last_frame;
+                let dt = elapsed.as_secs_f32().min(0.1);
                 self.last_frame = now;
                 self.update(dt);
                 self.draw();
+                if let Some(title) = self.readout.frame(elapsed, &self.game)
+                    && let Some(gfx) = &self.gfx
+                {
+                    gfx.window.set_title(&format!("{}  |  {title}", self.title));
+                }
                 profiling::finish_frame!();
             }
             _ => {}
@@ -602,4 +665,88 @@ impl ApplicationHandler for App {
             gfx.window.request_redraw();
         }
     }
+}
+
+/// Frame times as players feel them, over each second of play: in the
+/// window title, and with `--frame-times` in the terminal too.
+struct Readout {
+    print: bool,
+    frames: stats::Times,
+    run: stats::Times,
+    since: Instant,
+    /// Step samples already counted in earlier seconds.
+    server_seen: usize,
+    client_seen: usize,
+}
+
+impl Readout {
+    fn new(print: bool) -> Self {
+        Self {
+            print,
+            frames: stats::Times::default(),
+            run: stats::Times::default(),
+            since: Instant::now(),
+            server_seen: 0,
+            client_seen: 0,
+        }
+    }
+
+    /// Count a frame; once a second, the line to show.
+    fn frame(&mut self, took: Duration, game: &Game) -> Option<String> {
+        self.frames.push(took);
+        // Only the exit summary needs every frame of the run.
+        if self.print {
+            self.run.push(took);
+        }
+        if self.since.elapsed() < Duration::from_secs(1) {
+            return None;
+        }
+        self.since = Instant::now();
+        let f = self.frames.summary();
+        self.frames.clear();
+        let server = game.server_steps.since(self.server_seen).summary();
+        let client = game.client_steps.since(self.client_seen).summary();
+        self.server_seen = game.server_steps.len();
+        self.client_seen = game.client_steps.len();
+        let line = format!(
+            "{:.0} FPS, frame median {:.2} ms, slowest 1% {:.2} ms, longest {:.2} ms, {} over 16.7 ms  |  \
+             steps: server median {:.2} ms (longest {:.2}), client median {:.2} ms (longest {:.2})",
+            f.fps(),
+            ms(f.median),
+            ms(f.slowest_1pct),
+            ms(f.longest),
+            f.over_budget,
+            ms(server.median),
+            ms(server.longest),
+            ms(client.median),
+            ms(client.longest),
+        );
+        if self.print {
+            console::print_message(MessageType::Info, &line);
+        }
+        Some(line)
+    }
+
+    /// The whole run's frame and step times.
+    fn print_run(&self, game: &Game) {
+        let frames = self.run.summary();
+        console::print_message(
+            MessageType::Info,
+            &format!("frames: {:.0} FPS, {frames}", frames.fps()),
+        );
+        console::print_message(
+            MessageType::Info,
+            &format!("server steps: {}", game.server_steps.summary()),
+        );
+        if !game.client_steps.is_empty() {
+            console::print_message(
+                MessageType::Info,
+                &format!("client steps: {}", game.client_steps.summary()),
+            );
+        }
+    }
+}
+
+fn ms(d: Duration) -> f64 {
+    d.as_secs_f64() * 1000.0
 }

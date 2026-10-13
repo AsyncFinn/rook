@@ -81,7 +81,11 @@ fn interactive(server: &mut Server) -> Vec<rook_lua::LogEntry> {
     let mut next = Instant::now();
     let mut log = Vec::new();
     while !repl.closed() {
-        repl.poll(server, None);
+        repl.poll(false, |_, line| {
+            if let Err(e) = rook_engine::repl::run_line(server, line) {
+                rook_engine::console::print_message(MessageType::Error, &e);
+            }
+        });
         server.step();
         for entry in server.take_log() {
             rook_engine::console::print_entry("Server", &entry);

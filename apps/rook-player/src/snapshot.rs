@@ -7,7 +7,7 @@ use glam::{Mat3, Vec3};
 use rook_content::{ContentRef, Resolver};
 use rook_dom::{Dom, InstanceId};
 use rook_engine::{DataModel, RenderChanges};
-use rook_physics::{part_shape, workspace_parts};
+use rook_physics::{is_part, part_shape, workspace_parts};
 use rook_render::{Camera, DrawShape, Lighting, MeshHash, PartInstance, Scene};
 use rook_types::{Color3, MeshKind, MeshLook, Value, mesh_part_scale};
 
@@ -140,6 +140,25 @@ fn lighting(dom: &Dom) -> Lighting {
     l
 }
 
+/// How a part's CFrame places what it draws: its mesh's `Offset` in the
+/// part's axes, and whether the shape is turned upright (a CylinderMesh).
+#[derive(Debug, Clone, Copy, Default)]
+struct Pose {
+    offset: Vec3,
+    upright: bool,
+}
+
+/// What [`SceneCache::apply`] changed in the scene.
+#[derive(Debug, PartialEq, Eq)]
+pub enum SceneChange {
+    None,
+    /// These parts (indices into `scene.parts`, which may have grown), and
+    /// maybe the lighting.
+    Parts(Vec<usize>),
+    /// Everything was rebuilt.
+    Full,
+}
+
 /// The render scene for a DataModel, kept between frames so that only the
 /// parts scripts changed are rebuilt.
 #[derive(Debug)]
@@ -147,6 +166,11 @@ pub struct SceneCache {
     pub scene: Scene,
     /// Where each drawn part is in `scene.parts`.
     index: HashMap<InstanceId, usize>,
+    /// How each drawn part's CFrame places it, by index.
+    poses: Vec<Pose>,
+    /// Indices of parts no longer drawn (hidden), reused for new parts so
+    /// indices stay put and the renderer can update parts one by one.
+    free: Vec<usize>,
     /// Mesh files, loaded as parts need them.
     files: MeshFiles,
     /// Parts waiting for each mesh file, redrawn when it arrives.
@@ -164,6 +188,8 @@ impl SceneCache {
             files: MeshFiles::new(content),
             waiting: HashMap::new(),
             shown: HashMap::new(),
+            poses: Vec::new(),
+            free: Vec::new(),
         };
         cache.rebuild(dom);
         cache
@@ -173,11 +199,14 @@ impl SceneCache {
     pub fn rebuild(&mut self, dom: &Dom) {
         profiling::scope!("SceneCache::rebuild");
         self.scene.parts.clear();
+        self.poses.clear();
+        self.free.clear();
         self.index.clear();
         for id in workspace_parts(dom) {
-            if let Some(p) = self.part(dom, id) {
+            if let Some((p, pose)) = self.part(dom, id) {
                 self.index.insert(id, self.scene.parts.len());
                 self.scene.parts.push(p);
+                self.poses.push(pose);
             }
         }
         let index = &self.index;
@@ -185,41 +214,99 @@ impl SceneCache {
         self.scene.lighting = lighting(dom);
     }
 
-    /// Apply a frame's changes. Returns whether anything changed.
-    pub fn apply(&mut self, dom: &Dom, changes: &RenderChanges) -> bool {
+    /// Apply a frame's changes.
+    pub fn apply(&mut self, dom: &Dom, changes: &RenderChanges) -> SceneChange {
         profiling::scope!("SceneCache::apply");
         if changes.full {
             self.rebuild(dom);
-            return true;
+            return SceneChange::Full;
         }
         if changes.lighting {
             self.scene.lighting = lighting(dom);
         }
-        let mut changed = changes.lighting;
+        let mut changed = Vec::new();
+        let workspace = dom.find_service("Workspace");
+        for id in &changes.placed {
+            // Only parts in Workspace are drawn.
+            let drawn =
+                workspace.is_some_and(|ws| is_part(dom, *id) && dom.is_ancestor_of(ws, *id));
+            changed.extend(self.place(dom, *id, drawn));
+        }
         for id in &changes.parts {
             // Parts outside Workspace aren't drawn.
+            if self.index.contains_key(id) {
+                changed.extend(self.place(dom, *id, true));
+            }
+        }
+        // Parts that only moved keep their look: place it at the new CFrame.
+        for id in &changes.moved {
             let Some(&i) = self.index.get(id) else {
                 continue;
             };
-            match self.part(dom, *id) {
-                Some(p) => self.scene.parts[i] = p,
-                None => {
-                    self.rebuild(dom);
-                    return true;
-                }
-            }
-            changed = true;
+            let Some(Value::CFrame(cf)) = dom.property_by_name(*id, "CFrame") else {
+                continue;
+            };
+            let pose = self.poses[i];
+            let part = &mut self.scene.parts[i];
+            part.position = cf.position + cf.rotation * pose.offset;
+            part.rotation = if pose.upright {
+                cf.rotation * UPRIGHT
+            } else {
+                cf.rotation
+            };
+            changed.push(i);
         }
-        changed
+        if changed.is_empty() && !changes.lighting {
+            SceneChange::None
+        } else {
+            SceneChange::Parts(changed)
+        }
+    }
+
+    /// Draw `id` (when `drawn`) or stop drawing it. Returns the index that
+    /// changed, if any.
+    fn place(&mut self, dom: &Dom, id: InstanceId, drawn: bool) -> Option<usize> {
+        let look = if drawn { self.part(dom, id) } else { None };
+        match (self.index.get(&id).copied(), look) {
+            (Some(i), Some((p, pose))) => {
+                self.scene.parts[i] = p;
+                self.poses[i] = pose;
+                Some(i)
+            }
+            (Some(i), None) => {
+                self.index.remove(&id);
+                self.shown.remove(&id);
+                self.scene.parts[i].transparency = 1.0;
+                self.free.push(i);
+                Some(i)
+            }
+            (None, Some((p, pose))) => {
+                let i = match self.free.pop() {
+                    Some(i) => {
+                        self.scene.parts[i] = p;
+                        self.poses[i] = pose;
+                        i
+                    }
+                    None => {
+                        self.scene.parts.push(p);
+                        self.poses.push(pose);
+                        self.scene.parts.len() - 1
+                    }
+                };
+                self.index.insert(id, i);
+                Some(i)
+            }
+            (None, None) => None,
+        }
     }
 
     /// Take the mesh files that finished loading and redraw the parts
     /// waiting for them; with `wait`, first wait until none is loading.
-    /// Returns whether anything changed.
-    pub fn poll_meshes(&mut self, dom: &Dom, wait: bool) -> bool {
+    /// Returns the parts that changed.
+    pub fn poll_meshes(&mut self, dom: &Dom, wait: bool) -> Vec<usize> {
         let finished = self.files.poll(wait);
         if finished.is_empty() {
-            return false;
+            return Vec::new();
         }
         profiling::scope!("SceneCache::poll_meshes");
         let mut parts = HashSet::new();
@@ -229,21 +316,26 @@ impl SceneCache {
             }
             parts.extend(self.waiting.remove(&r).unwrap_or_default());
         }
+        let mut changed = Vec::new();
         for id in parts {
-            let Some(&i) = self.index.get(&id) else {
-                continue;
-            };
-            if let Some(p) = self.part(dom, id) {
-                self.scene.parts[i] = p;
+            if self.index.contains_key(&id) {
+                changed.extend(self.place(dom, id, true));
             }
         }
-        true
+        changed
     }
 
-    /// What a part draws (`None` without a CFrame or Size). A mesh that
-    /// draws nothing leaves the part fully transparent, so it stays in the
-    /// scene for a script to change back.
-    fn part(&mut self, dom: &Dom, id: InstanceId) -> Option<PartInstance> {
+    /// What a part draws (`None` without a CFrame or Size), and how its
+    /// CFrame places it. A mesh that draws nothing leaves the part fully
+    /// transparent, so it stays in the scene for a script to change back.
+    fn part(&mut self, dom: &Dom, id: InstanceId) -> Option<(PartInstance, Pose)> {
+        let mut pose = Pose::default();
+        let out = self.look(dom, id, &mut pose)?;
+        Some((out, pose))
+    }
+
+    /// [`SceneCache::part`]'s look, filling in `pose` as it goes.
+    fn look(&mut self, dom: &Dom, id: InstanceId, pose: &mut Pose) -> Option<PartInstance> {
         let Value::CFrame(cf) = dom.property_by_name(id, "CFrame")? else {
             return None;
         };
@@ -311,6 +403,7 @@ impl SceneCache {
                 out.size = size;
                 if upright {
                     out.rotation = cf.rotation * UPRIGHT;
+                    pose.upright = true;
                 }
             }
             MeshLook::Head { scale } => {
@@ -328,6 +421,7 @@ impl SceneCache {
         // DataModelMesh.Offset).
         let offset = vector3(dom, mesh, "Offset").unwrap_or(Vec3::ZERO);
         out.position += cf.rotation * offset;
+        pose.offset = offset;
         Some(out)
     }
 

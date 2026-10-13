@@ -24,7 +24,7 @@
 //! rectangles), except balls and cylinders, which have no surfaces here
 //! (Approximation). Corner wedges are boxes too.
 
-use std::collections::HashMap;
+use rustc_hash::FxHashMap as HashMap;
 
 use glam::{Mat3, Vec3};
 use rook_dom::{Dom, DomError, InstanceId};
@@ -228,7 +228,7 @@ pub fn make_joints(dom: &mut Dom, parts: &[InstanceId]) -> Result<(), DomError> 
     let index: HashMap<InstanceId, usize> =
         world.iter().enumerate().map(|(i, b)| (b.id, i)).collect();
     // Each caller's place in `parts`; a part listed twice calls once.
-    let mut rank = HashMap::new();
+    let mut rank = HashMap::default();
     for (r, p) in parts.iter().enumerate() {
         if let Some(&i) = index.get(p) {
             rank.entry(i).or_insert(r);

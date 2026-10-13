@@ -228,9 +228,47 @@ fn is_client(lua: &Lua, _: InstanceId, _: Args) -> ApiResult<Outcome> {
 
 // ---- Object / Instance ------------------------------------------------------------
 
+/// What a method with a fast form found.
+pub(crate) enum Found {
+    Bool(bool),
+    Instance(Option<InstanceId>),
+    Instances(Vec<InstanceId>),
+}
+
+/// The DOM work of a method with a fast form: the instance, its string
+/// argument and the truthiness of the one after.
+pub(crate) type Core = fn(&World, InstanceId, &str, bool) -> Found;
+
+/// Methods scripts call so often (a small place walks whole maps with them several
+/// times a second) that they also have a fast form, which takes the
+/// instance's key and the string argument (when `takes_string`) instead of
+/// going through the general shim. Both forms run the same [`Core`]; the
+/// general one still handles everything unusual (wrong argument types,
+/// calls with `.`).
+pub(crate) fn fast(owner: &str, name: &str) -> Option<(Core, bool)> {
+    Some(match (owner, name) {
+        ("Object", "IsA") => (is_a_core, true),
+        ("Instance", "FindFirstChild") => (find_first_child_core, true),
+        ("Instance", "GetChildren" | "children") => (children_core, false),
+        _ => return None,
+    })
+}
+
+fn ret_found(lua: &Lua, found: Found) -> ApiResult<Outcome> {
+    match found {
+        Found::Bool(b) => Outcome::ret(lua, b),
+        Found::Instance(id) => ret_instance(lua, id),
+        Found::Instances(ids) => ret_instances(lua, ids),
+    }
+}
+
+fn is_a_core(w: &World, this: InstanceId, class: &str, _: bool) -> Found {
+    Found::Bool(w.dom.is_a(this, class))
+}
+
 fn is_a(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
     let class = a.string(0)?;
-    Outcome::ret(lua, with_world(lua, |w| w.dom.is_a(this, &class)))
+    ret_found(lua, with_world(lua, |w| is_a_core(w, this, &class, false)))
 }
 
 fn property_changed_signal(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
@@ -246,12 +284,16 @@ fn property_changed_signal(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Ou
     )
 }
 
+fn find_first_child_core(w: &World, this: InstanceId, name: &str, recursive: bool) -> Found {
+    Found::Instance(w.dom.find_first_child(this, name, recursive))
+}
+
 fn find_first_child(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
     let name = a.string(0)?;
     let recursive = a.truthy(1);
-    ret_instance(
+    ret_found(
         lua,
-        with_world(lua, |w| w.dom.find_first_child(this, &name, recursive)),
+        with_world(lua, |w| find_first_child_core(w, this, &name, recursive)),
     )
 }
 
@@ -317,8 +359,12 @@ fn find_first_ancestor_which_is_a(lua: &Lua, this: InstanceId, a: Args) -> ApiRe
     find_ancestor_by(lua, this, |w, c| w.dom.is_a(c, &class))
 }
 
+fn children_core(w: &World, this: InstanceId, _: &str, _: bool) -> Found {
+    Found::Instances(w.dom.children(this).to_vec())
+}
+
 fn get_children(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
-    ret_instances(lua, with_world(lua, |w| w.dom.children(this).to_vec()))
+    ret_found(lua, with_world(lua, |w| children_core(w, this, "", false)))
 }
 
 fn get_descendants(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {

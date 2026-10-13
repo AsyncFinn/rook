@@ -290,10 +290,17 @@ impl Dom {
 
     /// `Instance:FindFirstChildOfClass()`.
     pub fn find_first_child_of_class(&self, id: InstanceId, class: &str) -> Option<InstanceId> {
-        self.children(id)
-            .iter()
-            .copied()
-            .find(|c| self.class_name(*c) == class)
+        // Compare class ids, not names: engine code finds services this way
+        // in its inner loops (every joint checks it's in Workspace).
+        let mut children = self.children(id).iter().copied();
+        let Some(known) = self.db.class_by_name(class) else {
+            return children.find(|c| self.class_name(*c) == class);
+        };
+        children.find(|c| {
+            self.instances
+                .get(*c)
+                .is_some_and(|i| i.class == known.id && i.unknown_class.is_none())
+        })
     }
 
     pub fn is_parent_locked(&self, id: InstanceId) -> bool {

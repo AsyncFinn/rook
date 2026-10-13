@@ -17,57 +17,101 @@
 //! Changes made on the client stay on the client (FilteringEnabled, which
 //! modern Roblox always uses).
 //!
-//! The replicator reads the server's journal and mirrors the server's
-//! *current* state of each instance a change touched, so several changes in
-//! one frame collapse into one update. New subtrees are built detached and
-//! parented last, so the client sees them arrive at once.
+//! Replication has two halves, so the server and a client can run on
+//! different threads (or, later, machines). A [`Source`] reads the server's
+//! journal and describes the server's *current* state of each instance a
+//! change touched as self-contained [`Update`]s, so several changes in one
+//! frame collapse into one update; a [`Sink`] applies them to the client,
+//! which alone knows which of its instances copy which server ones. New
+//! subtrees are built detached and parented last, so the client sees them
+//! arrive at once. [`Replicator`] is the two halves joined directly.
 
 use std::collections::HashMap;
 
-use rook_dom::{Change, Dom, InstanceId};
-use rook_reflection::{PropertyId, PropertyKind, Serialization};
+use rook_dom::{Attributes, Change, Dom, InstanceId};
+use rook_reflection::{ClassId, PropertyId, PropertyKind, Serialization};
 use rook_types::Value;
 
+/// One server instance and its visible subtree, as the server has it now.
+/// Ids are the server's; references in property values point at server
+/// instances too.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Node {
+    pub id: InstanceId,
+    pub class: NodeClass,
+    pub name: String,
+    /// Explicitly set properties a client may see.
+    pub properties: Vec<(PropertyId, Value)>,
+    pub attributes: Attributes,
+    pub tags: Vec<String>,
+    pub children: Vec<Node>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum NodeClass {
+    Known(ClassId),
+    /// A class Rook's database doesn't have, by name.
+    Unknown(String),
+}
+
+/// One change for a client, in journal order.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Update {
+    /// `tree.id` is visible: it belongs under `parent` (the server's
+    /// parent). `tree` builds it if the client doesn't have it yet.
+    Place {
+        parent: InstanceId,
+        tree: Node,
+    },
+    /// The instance left what this client sees (parented to nil or to a
+    /// server-only container): it disappears on the client.
+    Hide(InstanceId),
+    Destroying(InstanceId),
+    Name {
+        id: InstanceId,
+        name: String,
+    },
+    Property {
+        id: InstanceId,
+        property: PropertyId,
+        value: Value,
+    },
+    Attribute {
+        id: InstanceId,
+        name: String,
+        value: Option<Value>,
+    },
+    TagAdded {
+        id: InstanceId,
+        tag: String,
+    },
+    TagRemoved {
+        id: InstanceId,
+        tag: String,
+    },
+}
+
+/// What a new client receives first: the replicated part of every service.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Snapshot {
+    /// The DataModel itself, without children.
+    pub root: Node,
+    /// Each service by class name, with its visible children.
+    pub services: Vec<(String, Node)>,
+}
+
+/// The server half: what one client should see.
 #[derive(Debug, Default)]
-pub struct Replicator {
-    to_client: HashMap<InstanceId, InstanceId>,
-    to_server: HashMap<InstanceId, InstanceId>,
-    /// Server journal position already replicated.
+pub struct Source {
+    /// Server journal position already described.
     cursor: u64,
     /// The server-side Player this client is, for PlayerReplicated containers.
     player: Option<InstanceId>,
 }
 
-impl Replicator {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn set_player(&mut self, server_player: Option<InstanceId>) {
-        self.player = server_player;
-    }
-
-    pub fn client_id(&self, server: InstanceId) -> Option<InstanceId> {
-        self.to_client.get(&server).copied()
-    }
-
-    pub fn server_id(&self, client: InstanceId) -> Option<InstanceId> {
-        self.to_server.get(&client).copied()
-    }
-
-    fn map(&mut self, server: InstanceId, client: InstanceId) {
-        self.to_client.insert(server, client);
-        self.to_server.insert(client, server);
-    }
-
-    fn unmap_subtree(&mut self, client: &Dom, root: InstanceId) {
-        let mut ids = vec![root];
-        ids.extend(client.descendants(root));
-        for c in ids {
-            if let Some(s) = self.to_server.remove(&c) {
-                self.to_client.remove(&s);
-            }
-        }
+impl Source {
+    pub fn new(player: Option<InstanceId>) -> Self {
+        Self { cursor: 0, player }
     }
 
     /// Whether `id` and all its ancestors may be seen by this client.
@@ -97,127 +141,317 @@ impl Replicator {
         false
     }
 
-    /// Copy the replicated part of the server tree into a fresh client
-    /// DataModel. The client's journal is not touched (like loading a file).
-    pub fn initial(&mut self, server: &Dom, client: &mut Dom) {
+    /// Everything a new client starts with. Later [`Source::updates`]
+    /// describe changes after this.
+    pub fn snapshot(&mut self, server: &Dom) -> Snapshot {
+        let services = server
+            .children(server.root())
+            .iter()
+            .filter(|s| self.visible(server, **s))
+            .map(|&s| (server.class_name(s).to_owned(), self.node(server, s)))
+            .collect();
+        self.cursor = server.journal().end();
+        let mut root = self.node(server, server.root());
+        root.children.clear();
+        Snapshot { root, services }
+    }
+
+    /// The server's changes since the last call.
+    pub fn updates(&mut self, server: &Dom) -> Vec<Update> {
+        profiling::scope!("Source::updates");
+        let mut out = Vec::new();
+        let visible = |id| self.visible(server, id);
+        for change in server.journal().since(self.cursor) {
+            match change {
+                Change::Reparented { id, .. } => out.push(match server.parent(*id) {
+                    Some(parent) if visible(*id) => Update::Place {
+                        parent,
+                        tree: self.node(server, *id),
+                    },
+                    _ => Update::Hide(*id),
+                }),
+                Change::Destroying(id) => out.push(Update::Destroying(*id)),
+                Change::Property { id, property } if visible(*id) => {
+                    if *property == server.name_property() {
+                        out.push(Update::Name {
+                            id: *id,
+                            name: server.name(*id).to_owned(),
+                        });
+                    } else if *property != server.parent_property()
+                        && let Some(value) = replicated_value(server, *id, *property)
+                    {
+                        out.push(Update::Property {
+                            id: *id,
+                            property: *property,
+                            value,
+                        });
+                    }
+                }
+                Change::Attribute { id, name } if visible(*id) => out.push(Update::Attribute {
+                    id: *id,
+                    name: name.clone(),
+                    value: server.attribute(*id, name).cloned(),
+                }),
+                Change::TagAdded { id, tag } if visible(*id) => out.push(Update::TagAdded {
+                    id: *id,
+                    tag: tag.clone(),
+                }),
+                Change::TagRemoved { id, tag } if visible(*id) => out.push(Update::TagRemoved {
+                    id: *id,
+                    tag: tag.clone(),
+                }),
+                _ => {}
+            }
+        }
+        self.cursor = server.journal().end();
+        out
+    }
+
+    /// `id` and its visible subtree as the server has it now.
+    fn node(&self, server: &Dom, id: InstanceId) -> Node {
+        let inst = server.get(id).expect("visible instance exists");
+        let mut properties: Vec<(PropertyId, Value)> = inst
+            .properties()
+            .keys()
+            .filter_map(|&p| Some((p, replicated_value(server, id, p)?)))
+            .collect();
+        properties.shrink_to_fit();
+        Node {
+            id,
+            class: match &inst.unknown_class {
+                Some(name) => NodeClass::Unknown(name.to_string()),
+                None => NodeClass::Known(inst.class),
+            },
+            name: inst.name().to_owned(),
+            properties,
+            attributes: inst.attributes.clone(),
+            tags: inst.tags.clone(),
+            children: server
+                .children(id)
+                .iter()
+                .filter(|c| self.visible(server, **c))
+                .map(|&c| self.node(server, c))
+                .collect(),
+        }
+    }
+}
+
+/// A property's value as a client receives it, or `None` if it's withheld.
+fn replicated_value(server: &Dom, id: InstanceId, property: PropertyId) -> Option<Value> {
+    if withheld(server, id, property) {
+        return None;
+    }
+    server.property(id, property)
+}
+
+/// The client half: which client instance copies which server one.
+#[derive(Debug, Default)]
+pub struct Sink {
+    to_client: HashMap<InstanceId, InstanceId>,
+    to_server: HashMap<InstanceId, InstanceId>,
+}
+
+impl Sink {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn client_id(&self, server: InstanceId) -> Option<InstanceId> {
+        self.to_client.get(&server).copied()
+    }
+
+    pub fn server_id(&self, client: InstanceId) -> Option<InstanceId> {
+        self.to_server.get(&client).copied()
+    }
+
+    fn map(&mut self, server: InstanceId, client: InstanceId) {
+        self.to_client.insert(server, client);
+        self.to_server.insert(client, server);
+    }
+
+    fn unmap_subtree(&mut self, client: &Dom, root: InstanceId) {
+        let mut ids = vec![root];
+        ids.extend(client.descendants(root));
+        for c in ids {
+            if let Some(s) = self.to_server.remove(&c) {
+                self.to_client.remove(&s);
+            }
+        }
+    }
+
+    /// Fill a fresh client DataModel. The client's journal is not touched
+    /// (like loading a file).
+    pub fn snapshot(&mut self, snapshot: &Snapshot, client: &mut Dom) {
         let was = client.journal().is_enabled();
         client.journal_mut().set_enabled(false);
-        self.map(server.root(), client.root());
-        for &service in server.children(server.root()) {
-            if !self.visible(server, service) {
+        self.map(snapshot.root.id, client.root());
+        for (class, service) in &snapshot.services {
+            let Ok(cid) = client.get_service(class) else {
                 continue;
-            }
-            let class = server.class_name(service).to_owned();
-            let cid = match client.get_service(&class) {
-                Ok(id) => id,
-                Err(_) => continue,
             };
-            self.map(service, cid);
-            copy_properties(server, service, client, cid, self);
-            for &child in server.children(service) {
-                if self.visible(server, child) {
-                    let c = self.build(server, child, client);
-                    client.attach_unchecked(c, cid);
+            self.map(service.id, cid);
+            self.copy_data(service, client, cid, false);
+            for child in &service.children {
+                let c = self.build(child, client);
+                client.attach_unchecked(c, cid);
+            }
+        }
+        // References to instances created later in the walk.
+        self.copy_data(&snapshot.root, client, client.root(), false);
+        for (_, service) in &snapshot.services {
+            self.copy_tree(service, client);
+        }
+        client.journal_mut().set_enabled(was);
+    }
+
+    fn copy_tree(&self, node: &Node, client: &mut Dom) {
+        if let Some(c) = self.client_id(node.id) {
+            self.copy_data(node, client, c, false);
+        }
+        for child in &node.children {
+            self.copy_tree(child, client);
+        }
+    }
+
+    /// Apply updates from the server. The caller fires client signals for
+    /// the client journal entries this produces.
+    pub fn apply(&mut self, updates: &[Update], client: &mut Dom) {
+        profiling::scope!("Sink::apply");
+        for update in updates {
+            match update {
+                Update::Place { parent, tree } => {
+                    let Some(parent) = self.client_id(*parent) else {
+                        continue;
+                    };
+                    let c = match self.client_id(tree.id) {
+                        Some(c) => c,
+                        None => self.build(tree, client),
+                    };
+                    let _ = client.set_parent(c, Some(parent));
+                }
+                Update::Hide(id) | Update::Destroying(id) => {
+                    if let Some(c) = self.client_id(*id) {
+                        self.unmap_subtree(client, c);
+                        let _ = client.destroy(c);
+                    }
+                }
+                Update::Name { id, name } => {
+                    if let Some(c) = self.client_id(*id) {
+                        let _ = client.set_name(c, name.clone());
+                    }
+                }
+                Update::Property {
+                    id,
+                    property,
+                    value,
+                } => {
+                    if let Some(c) = self.client_id(*id) {
+                        let _ = client.set_property(c, *property, self.to_client_value(value));
+                    }
+                }
+                Update::Attribute { id, name, value } => {
+                    if let Some(c) = self.client_id(*id) {
+                        let _ = client.set_attribute(c, name, value.clone());
+                    }
+                }
+                Update::TagAdded { id, tag } => {
+                    if let Some(c) = self.client_id(*id) {
+                        let _ = client.add_tag(c, tag);
+                    }
+                }
+                Update::TagRemoved { id, tag } => {
+                    if let Some(c) = self.client_id(*id) {
+                        let _ = client.remove_tag(c, tag);
+                    }
                 }
             }
         }
-        // Refs pointing at instances created later in the walk.
-        let pairs: Vec<_> = self.to_client.iter().map(|(s, c)| (*s, *c)).collect();
-        for (s, c) in pairs {
-            copy_properties(server, s, client, c, self);
-        }
-        client.journal_mut().set_enabled(was);
-        self.cursor = server.journal().end();
     }
 
-    /// Build a detached copy of `id`'s visible subtree on the client.
-    fn build(&mut self, server: &Dom, id: InstanceId, client: &mut Dom) -> InstanceId {
-        let inst = server.get(id).expect("visible instance exists");
-        let cid = match &inst.unknown_class {
-            Some(name) => client.create_unknown(name),
-            None => client.create(inst.class),
+    /// Build a detached copy of a server subtree on the client.
+    fn build(&mut self, node: &Node, client: &mut Dom) -> InstanceId {
+        let cid = match &node.class {
+            NodeClass::Unknown(name) => client.create_unknown(name),
+            NodeClass::Known(class) => client.create(*class),
         };
-        let _ = client.set_name(cid, inst.name().to_owned());
-        self.map(id, cid);
-        for &child in server.children(id) {
-            if self.visible(server, child) {
-                let c = self.build(server, child, client);
-                // Detached parent: no checks needed, no one is listening.
-                let _ = client.set_parent(c, Some(cid));
+        let _ = client.set_name(cid, node.name.clone());
+        self.map(node.id, cid);
+        for child in &node.children {
+            let c = self.build(child, client);
+            // Detached parent: no checks needed, no one is listening.
+            let _ = client.set_parent(c, Some(cid));
+        }
+        self.copy_data(node, client, cid, false);
+        cid
+    }
+
+    /// Store a node's properties, attributes and tags on its copy.
+    fn copy_data(&self, node: &Node, client: &mut Dom, cid: InstanceId, journaled: bool) {
+        for (property, value) in &node.properties {
+            let value = self.to_client_value(value);
+            if journaled {
+                let _ = client.set_property(cid, *property, value);
+            } else {
+                client.load_property(cid, *property, value);
             }
         }
-        copy_properties(server, id, client, cid, self);
-        cid
+        if let Some(c) = client.instance_mut(cid) {
+            for (k, v) in node.attributes.iter() {
+                c.attributes.insert(k.to_owned(), v.clone());
+            }
+            c.tags.clone_from(&node.tags);
+        }
+    }
+
+    /// References follow the instance to its client copy, or become nil if
+    /// the client can't see it.
+    fn to_client_value(&self, value: &Value) -> Value {
+        match value {
+            Value::Ref(Some(target)) => Value::Ref(
+                self.client_id(InstanceId::from_ref(*target))
+                    .map(InstanceId::to_ref),
+            ),
+            other => other.clone(),
+        }
+    }
+}
+
+/// Both halves joined directly, for a server and client in one thread.
+#[derive(Debug, Default)]
+pub struct Replicator {
+    source: Source,
+    sink: Sink,
+}
+
+impl Replicator {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn set_player(&mut self, server_player: Option<InstanceId>) {
+        self.source.player = server_player;
+    }
+
+    pub fn client_id(&self, server: InstanceId) -> Option<InstanceId> {
+        self.sink.client_id(server)
+    }
+
+    pub fn server_id(&self, client: InstanceId) -> Option<InstanceId> {
+        self.sink.server_id(client)
+    }
+
+    /// Copy the replicated part of the server tree into a fresh client
+    /// DataModel. The client's journal is not touched (like loading a file).
+    pub fn initial(&mut self, server: &Dom, client: &mut Dom) {
+        let snapshot = self.source.snapshot(server);
+        self.sink.snapshot(&snapshot, client);
     }
 
     /// Apply every server change since the last call. The caller fires
     /// client signals for the client journal entries this produces.
     pub fn sync(&mut self, server: &Dom, client: &mut Dom) {
-        profiling::scope!("Replicator::sync");
-        let changes: Vec<Change> = server.journal().since(self.cursor).to_vec();
-        self.cursor = server.journal().end();
-        for change in changes {
-            match change {
-                Change::Reparented { id, .. } => self.place(server, client, id),
-                Change::Destroying(id) => {
-                    if let Some(c) = self.client_id(id) {
-                        self.unmap_subtree(client, c);
-                        let _ = client.destroy(c);
-                    }
-                }
-                Change::Property { id, property } => {
-                    if let Some(c) = self.client_id(id) {
-                        if property == server.name_property() {
-                            let _ = client.set_name(c, server.name(id).to_owned());
-                        } else if property != server.parent_property() {
-                            copy_property(server, id, client, c, property, self, true);
-                        }
-                    }
-                }
-                Change::Attribute { id, name } => {
-                    if let Some(c) = self.client_id(id) {
-                        let value = server.attribute(id, &name).cloned();
-                        let _ = client.set_attribute(c, &name, value);
-                    }
-                }
-                Change::TagAdded { id, tag } => {
-                    if let Some(c) = self.client_id(id) {
-                        let _ = client.add_tag(c, &tag);
-                    }
-                }
-                Change::TagRemoved { id, tag } => {
-                    if let Some(c) = self.client_id(id) {
-                        let _ = client.remove_tag(c, &tag);
-                    }
-                }
-                Change::Created(_) => {}
-            }
-        }
-    }
-
-    /// Make the client's copy of `id` match the server's current placement.
-    fn place(&mut self, server: &Dom, client: &mut Dom, id: InstanceId) {
-        let visible = self.visible(server, id);
-        let existing = self.client_id(id);
-        match (visible, existing) {
-            (false, Some(c)) => {
-                // Left the replicated tree (parented to nil or to a server-only
-                // container): it disappears on the client.
-                self.unmap_subtree(client, c);
-                let _ = client.destroy(c);
-            }
-            (true, existing) => {
-                let Some(parent) = server.parent(id).and_then(|p| self.client_id(p)) else {
-                    return;
-                };
-                let c = match existing {
-                    Some(c) => c,
-                    None => self.build(server, id, client),
-                };
-                let _ = client.set_parent(c, Some(parent));
-            }
-            (false, None) => {}
-        }
+        let updates = self.source.updates(server);
+        self.sink.apply(&updates, client);
     }
 }
 
@@ -249,64 +483,6 @@ fn withheld(server: &Dom, id: InstanceId, property: PropertyId) -> bool {
             prop.kind,
             PropertyKind::Canonical(Serialization::Migrate { .. })
         )
-}
-
-fn copy_properties(
-    server: &Dom,
-    id: InstanceId,
-    client: &mut Dom,
-    cid: InstanceId,
-    r: &Replicator,
-) {
-    let Some(inst) = server.get(id) else {
-        return;
-    };
-    let props: Vec<PropertyId> = inst.properties().keys().copied().collect();
-    for p in props {
-        copy_property(server, id, client, cid, p, r, false);
-    }
-    let attrs: Vec<(String, Value)> = inst
-        .attributes
-        .iter()
-        .map(|(k, v)| (k.to_owned(), v.clone()))
-        .collect();
-    let tags = inst.tags.clone();
-    if let Some(c) = client.instance_mut(cid) {
-        for (k, v) in attrs {
-            c.attributes.insert(k, v);
-        }
-        c.tags = tags;
-    }
-}
-
-fn copy_property(
-    server: &Dom,
-    id: InstanceId,
-    client: &mut Dom,
-    cid: InstanceId,
-    property: PropertyId,
-    r: &Replicator,
-    journaled: bool,
-) {
-    if withheld(server, id, property) {
-        return;
-    }
-    let Some(mut value) = server.property(id, property) else {
-        return;
-    };
-    // References follow the instance to its client copy, or become nil if
-    // the client can't see it.
-    if let Value::Ref(Some(target)) = value {
-        value = Value::Ref(
-            r.client_id(InstanceId::from_ref(target))
-                .map(InstanceId::to_ref),
-        );
-    }
-    if journaled {
-        let _ = client.set_property(cid, property, value);
-    } else {
-        client.load_property(cid, property, value);
-    }
 }
 
 #[cfg(test)]
