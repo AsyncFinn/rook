@@ -16,8 +16,7 @@ made inert without an entry in the first table.
 |---|---|---|
 | `BasePart:SetNetworkOwner` | Chooses which machine simulates the part's assembly | Networking (single machine until then) |
 | `BasePart:SetNetworkOwnershipAuto` | Returns network ownership to the engine | Networking |
-| `ContentProvider:Preload` | Queues an asset for download (deprecated) | Content |
-| `ContentProvider:PreloadAsync` | Downloads assets and yields until they are loaded | Content. It should yield then; it returns at once now |
+| `ContentProvider:Preload` | Queues an asset for download (deprecated; not checked in Studio) | Content |
 | `InsertService:ApproveAssetId` | Allowed a place to `LoadAsset` a specific asset (legacy) | Content, together with `InsertService:LoadAsset` |
 | `InsertService:ApproveAssetVersionId` | Same, for one asset version | Content |
 | `FunctionalTest:Passed`, `Failed`, `Error`, `Warn` | Report results to Roblox's internal test harness | Possibly the conformance tooling; otherwise stays inert |
@@ -31,7 +30,12 @@ made inert without an entry in the first table.
 | `Model:GetBoundingBox`, `GetExtentsSize`, `GetModelCFrame` | World-axis-aligned box of the parts | Box aligned to the primary part; exact legacy `GetModelCFrame` | Physics/geometry |
 | `DataStoreService` | In-memory stores for one run; `GetSortedAsync` returns a plain table, not a `DataStorePages` | Persistence (local files), versions, `ListKeysAsync`, budgets | Server hosting, Networking |
 | `HttpService:GetAsync`, `PostAsync`, `RequestAsync` | Raise "Http requests are not enabled" | Opt-in HTTP for places that enable it | Opt-in, later |
-| `require(assetId)` | Raises an error | Loading published modules | Content |
+| `require(assetId)` | Raises an error | Loading published modules | Content, later: asset fetching can fetch the model, but loading it as a module isn't done |
+| `ContentProvider:PreloadAsync` | On a client: resolves entries through the provider chain and calls back with `Enum.AssetFetchStatus` Success or Failure as each finishes, then returns; instances stand for their and their descendants' content properties; strings load only `rbxasset://` images (as in Studio). On a server: never returns once there is anything to fetch (as in Studio) | Which statuses Studio gives for an asset of the wrong type (a sound id in a Decal); `Loading`/`TimedOut`; exact frame timing | Conformance |
+| `ContentProvider.RequestQueueSize` | Requests a DataModel is waiting on | Studio's own count, which didn't follow one call's entries exactly | Conformance |
+| Other ContentProvider members (`GetAssetFetchStatus`, `AssetFetchFailed`, `ListEncryptedAssets`, ...) | Not implemented | Each, if places use it | Content |
+| `MeshId`, `TextureId`, `Texture`, `SoundId`, `Image` and the other legacy content strings | Views of the `Content` properties files store (`MeshContent`, `TextureContent`, ...); setting one turns `\` into `/` in `rbxasset://` paths, as Studio does | `Changed` and `GetPropertyChangedSignal` fire for the `Content` name only; Studio rewrites lowercase `http://www.roblox.com/asset/?id=` URLs set on a Decal's or Texture's `Texture` (and `ColorMap`) to `rbxassetid://` (dropping `version`), which Rook doesn't | Conformance |
+| Asset delivery | Anonymous requests; an Open Cloud API key (`ROOK_OPEN_CLOUD_API_KEY`) for assets refused anonymously | Assets that now need an account fail anonymously (most of a modern core place's); the key path is untested; `rbxthumb://` thumbnails and asset version ids don't resolve; old `rbxasset://` paths outside Rook's table (Studio resolves more of them) | Content |
 | `BindableFunction:Invoke` with no callback | Checks for a callback once per frame | Exact resumption timing | Conformance |
 | Bindable arguments | Passed by reference | Roblox copies tables passed through bindables | Conformance |
 | `RunService:IsClient`/`IsServer`/`IsStudio`/`IsRunMode` | Fixed server answers | Correct answers per DataModel | Client/server split |
@@ -40,8 +44,8 @@ made inert without an entry in the first table.
 | `Random` | PCG32, own seeding | Roblox's exact sequence for a seed | Unknown; may stay an Approximation |
 | Error messages from datatype methods | Reach `pcall` as mlua error objects (except RaycastParams, OverlapParams and RaycastResult, whose members go through the engine-function shim) | Plain strings like Instance members | Lua bridge |
 | Terrain, MeshParts, unions, decals in the renderer | Not drawn, or drawn as their bounding box | Real geometry and textures | Content; terrain later |
-| File meshes in the renderer (`FileMesh`, SpecialMesh `MeshType` FileMesh with a `MeshId`) | Drawn as the part's own shape, as if there were no mesh (one with an empty `MeshId` draws Roblox's 1-stud box times `Scale`) | Loading `MeshId` and drawing the file at `Scale` (a FileMesh ignores the part's Size) | M4 step 3 (file meshes) |
-| Head MeshType | Rook's own head mesh, matching the measured silhouette and vertex layout of Roblox's `head.mesh`; caps triangulated as fans | The real file's UVs (for face decals and textures) and cap triangulation; from asset fetching on, the user's install can supply the file | M4 steps 2 and 3 |
+| File meshes in the renderer (`FileMesh`, SpecialMesh `MeshType` FileMesh with a `MeshId`) | Drawn as the part's own shape, as if there were no mesh (one with an empty `MeshId` draws Roblox's 1-stud box times `Scale`) | Decoding the fetched file and drawing it at `Scale` (a FileMesh ignores the part's Size); a `MeshId` that can't be loaded (not found, forbidden, a missing file, junk) draws nothing in Studio (observed) | M4 step 3 (file meshes) |
+| Head MeshType | The `head.mesh` of the user's Roblox install when the player finds one; otherwise Rook's own, matching the measured silhouette and vertex layout, caps triangulated as fans | Rook's own head has no UVs (for face decals and textures) | M4 step 4 (textures) |
 | Mesh `VertexColor` | Ignored (documented to tint the mesh's texture; not measured) | Its effect | M4 step 4 (textures) |
 | Surface studs and materials on meshes | Meshes take the part's colour and transparency only. Studio drew the part's studs on Sphere and Cylinder meshes, and an empty-`MeshId` box without its Neon glow | Surfaces, studs and materials on meshes | M4 step 4 (textures) |
 | Meshes under MeshParts, unions and trusses | A mesh child changes how these look like any other part (Inference; unchecked) | Checking them in Studio | M4 step 3 |

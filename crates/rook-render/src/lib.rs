@@ -69,6 +69,26 @@ struct GpuMesh {
     index_count: u32,
 }
 
+impl GpuMesh {
+    fn upload(device: &wgpu::Device, data: &mesh::MeshData) -> Self {
+        let vertices = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("rook mesh vertices"),
+            contents: bytemuck::cast_slice(&data.vertices),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+        let indices = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("rook mesh indices"),
+            contents: bytemuck::cast_slice(&data.indices),
+            usage: wgpu::BufferUsages::INDEX,
+        });
+        Self {
+            vertices,
+            indices,
+            index_count: data.indices.len() as u32,
+        }
+    }
+}
+
 /// Instances of one shape, uploaded for drawing.
 #[derive(Debug)]
 struct Batch {
@@ -200,27 +220,7 @@ impl Renderer {
 
         let meshes = DrawShape::ALL
             .iter()
-            .map(|&shape| {
-                let data = mesh::build(shape);
-                let vertices = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("rook mesh vertices"),
-                    contents: bytemuck::cast_slice(&data.vertices),
-                    usage: wgpu::BufferUsages::VERTEX,
-                });
-                let indices = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("rook mesh indices"),
-                    contents: bytemuck::cast_slice(&data.indices),
-                    usage: wgpu::BufferUsages::INDEX,
-                });
-                (
-                    shape,
-                    GpuMesh {
-                        vertices,
-                        indices,
-                        index_count: data.indices.len() as u32,
-                    },
-                )
-            })
+            .map(|&shape| (shape, GpuMesh::upload(&device, &mesh::build(shape))))
             .collect();
 
         Self {
@@ -236,6 +236,16 @@ impl Renderer {
             transparent_parts: Vec::new(),
             lighting: Lighting::default(),
             depth: None,
+        }
+    }
+
+    /// Draw the Head MeshType with this mesh (the user's own `head.mesh`)
+    /// instead of Rook's. It must be the head at its own size, as Roblox's
+    /// file is.
+    pub fn set_head_mesh(&mut self, head: &rook_content::mesh::Mesh) {
+        let gpu = GpuMesh::upload(&self.device, &mesh::from_file(head));
+        if let Some(slot) = self.meshes.iter_mut().find(|(s, _)| *s == DrawShape::Head) {
+            slot.1 = gpu;
         }
     }
 

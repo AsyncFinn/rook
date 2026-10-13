@@ -127,6 +127,8 @@ pub struct World {
     pub input: InputState,
     /// Remote calls waiting for the session to deliver them.
     pub outbox: Vec<crate::net::RemoteMessage>,
+    /// ContentProvider requests waiting for the engine to resolve them.
+    pub content: crate::api::content::ContentRequests,
     /// The physics world. Scripts query it (raycasts, regions), which
     /// brings it up to date with the DOM first, so it lives here with the
     /// DOM. Servers step it; a client's only answers queries (see
@@ -157,6 +159,7 @@ impl World {
             is_client: false,
             input: InputState::default(),
             outbox: Vec::new(),
+            content: Default::default(),
             physics: rook_physics::Physics::new(),
             pending_calls: HashMap::new(),
             next_call: 0,

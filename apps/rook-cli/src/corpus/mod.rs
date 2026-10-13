@@ -1,9 +1,10 @@
 //! `rook corpus-scan`: measure what a folder of places and models uses.
 
+mod content;
 mod report;
 mod scripts;
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -77,6 +78,29 @@ struct FileSummary {
     script_parse_errors: u64,
     scripts_with_errors: u64,
     usage: ScriptUsage,
+    content: ContentUsage,
+}
+
+/// Content references in one file (see `content.rs`).
+#[derive(Debug, Default)]
+struct ContentUsage {
+    /// `Class.Property` holding a non-empty reference.
+    properties: BTreeMap<String, u64>,
+    /// URL shapes of non-empty property values.
+    shapes: BTreeMap<String, u64>,
+    /// `Property shape`, for the properties that matter to rendering.
+    by_property: BTreeMap<String, u64>,
+    /// URL shapes written in script sources.
+    script_shapes: BTreeMap<String, u64>,
+    /// An example value for each shape.
+    samples: BTreeMap<String, String>,
+    /// Every distinct non-empty value, trimmed.
+    values: BTreeSet<String>,
+    /// What `rook-content` makes of each value (`content::classify`).
+    kinds: BTreeMap<String, u64>,
+    /// `rbxasset://` paths not in the install, by kind.
+    paths: BTreeMap<String, u64>,
+    empty: u64,
 }
 
 /// Corpus-wide totals.
@@ -108,6 +132,21 @@ pub struct Aggregate {
     pub instance_new: UsageMap,
     pub get_service: UsageMap,
     pub game_index: UsageMap,
+    /// Content references: non-empty property values by `Class.Property`,
+    /// by URL shape, by `Property shape`, and URL shapes in scripts.
+    pub content_properties: UsageMap,
+    pub content_shapes: UsageMap,
+    pub content_by_property: UsageMap,
+    pub content_script_shapes: UsageMap,
+    pub content_samples: BTreeMap<String, String>,
+    /// Non-empty property values by what `rook-content` makes of them, and
+    /// `rbxasset://` paths the user's install doesn't have.
+    pub content_kinds: UsageMap,
+    pub content_paths: UsageMap,
+    pub content_empty: u64,
+    pub content_distinct: u64,
+    #[serde(skip)]
+    content_values: HashSet<String>,
 }
 
 /// Files under `dir` with one of `extensions` (any case), sorted by path.
@@ -312,10 +351,43 @@ fn summarise(dom: &WeakDom) -> FileSummary {
                     .or_insert(0) += 1;
             }
         }
+        for (key, value) in &inst.properties {
+            let url = match value {
+                Variant::ContentId(c) => c.as_str(),
+                Variant::Content(c) => c.as_uri().unwrap_or(""),
+                _ => continue,
+            };
+            let c = &mut s.content;
+            if url.is_empty() {
+                c.empty += 1;
+                continue;
+            }
+            let shape = content::shape(url);
+            *c.properties.entry(format!("{class}.{key}")).or_insert(0) += 1;
+            *c.by_property.entry(format!("{key} {shape}")).or_insert(0) += 1;
+            c.samples
+                .entry(shape.clone())
+                .or_insert_with(|| url.to_owned());
+            *c.shapes.entry(shape).or_insert(0) += 1;
+            c.values.insert(url.trim().to_owned());
+            let (kind, path) = content::classify(url);
+            *c.kinds.entry(kind.to_owned()).or_insert(0) += 1;
+            if let Some(path) = path {
+                *c.paths.entry(format!("{kind}: {path}")).or_insert(0) += 1;
+            }
+        }
         if source_container.is_some_and(|sc| db.is_a(info.id, sc)) {
             *s.script_classes.entry(class.to_owned()).or_insert(0) += 1;
             if let Some(Variant::String(source)) = inst.properties.get(&"Source".into()) {
                 s.script_bytes += source.len() as u64;
+                for url in content::urls_in_source(source) {
+                    let shape = content::shape(url);
+                    s.content
+                        .samples
+                        .entry(format!("script {shape}"))
+                        .or_insert_with(|| url.to_owned());
+                    *s.content.script_shapes.entry(shape).or_insert(0) += 1;
+                }
                 let analysis = scripts::analyse(source);
                 if analysis.parse_errors > 0 {
                     s.scripts_with_errors += 1;
@@ -385,6 +457,12 @@ fn merge_record(agg: &mut Aggregate, record: &FileRecord) {
 fn merge_summary(agg: &mut Aggregate, s: FileSummary) {
     agg.script_bytes += s.script_bytes;
     agg.scripts_with_parse_errors += s.scripts_with_errors;
+    agg.content_empty += s.content.empty;
+    for (shape, sample) in s.content.samples {
+        agg.content_samples.entry(shape).or_insert(sample);
+    }
+    agg.content_values.extend(s.content.values);
+    agg.content_distinct = agg.content_values.len() as u64;
     for (dst, src) in [
         (&mut agg.classes, s.classes),
         (&mut agg.unknown_classes, s.unknown_classes),
@@ -396,6 +474,12 @@ fn merge_summary(agg: &mut Aggregate, s: FileSummary) {
         (&mut agg.instance_new, s.usage.instance_new),
         (&mut agg.get_service, s.usage.get_service),
         (&mut agg.game_index, s.usage.game_index),
+        (&mut agg.content_properties, s.content.properties),
+        (&mut agg.content_shapes, s.content.shapes),
+        (&mut agg.content_by_property, s.content.by_property),
+        (&mut agg.content_script_shapes, s.content.script_shapes),
+        (&mut agg.content_kinds, s.content.kinds),
+        (&mut agg.content_paths, s.content.paths),
     ] {
         for (name, count) in src {
             let u = dst.entry(name).or_default();

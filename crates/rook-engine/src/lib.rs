@@ -15,6 +15,8 @@ pub use input::{ClickEvent, ClickKind, InputEvent};
 
 pub use session::Session;
 
+use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
 
 use rook_dom::{Change, Dom, InstanceId};
@@ -61,6 +63,11 @@ pub struct Options {
     pub script_timeout: Duration,
     /// Luau heap limit in bytes.
     pub memory_limit: usize,
+    /// Where content requests (`ContentProvider:PreloadAsync`) resolve.
+    /// `None` uses `rook_content::Config::from_env(false)`: the install,
+    /// content folders and the cache, with asset delivery off unless
+    /// `ROOK_ASSET_DELIVERY=on`. Shared by a session's DataModels.
+    pub content: Option<Arc<rook_content::Resolver>>,
 }
 
 impl Default for Options {
@@ -69,6 +76,7 @@ impl Default for Options {
             hz: 60.0,
             script_timeout: rook_lua::DEFAULT_SCRIPT_TIMEOUT,
             memory_limit: 1 << 30,
+            content: None,
         }
     }
 }
@@ -100,6 +108,17 @@ pub struct DataModel {
     render_changes: RenderChanges,
     /// Keyboard and mouse bookkeeping (clients).
     input: input::InputTracker,
+    content: Content,
+}
+
+/// Content requests from scripts, resolved off the engine thread.
+#[derive(Debug, Default)]
+struct Content {
+    resolver: Option<Arc<rook_content::Resolver>>,
+    /// Made on the first request, so places that never ask cost nothing.
+    loader: Option<rook_content::Loader>,
+    /// Loader tickets to the scripts' request ids.
+    tickets: HashMap<rook_content::Ticket, u64>,
 }
 
 impl DataModel {
@@ -223,6 +242,10 @@ impl DataModel {
             render_cursor: script_cursor,
             render_changes: RenderChanges::everything(),
             input: Default::default(),
+            content: Content {
+                resolver: options.content.clone(),
+                ..Content::default()
+            },
         })
     }
 
@@ -336,6 +359,7 @@ impl DataModel {
             self.fire(rs, "RenderStepped", dt);
             self.fire(rs, "PreRender", dt);
         }
+        self.update_content();
         self.runtime.resume_due(Queue::Legacy);
         self.fire(rs, "Stepped", (now, dt));
         self.fire(rs, "PreSimulation", dt);
@@ -348,6 +372,37 @@ impl DataModel {
         if self.auto_trim {
             self.trim_journal();
         }
+    }
+
+    /// Hand scripts' new content requests to the loader and deliver what
+    /// finished, just before `wait()` resumption: PreloadAsync callbacks
+    /// run and finished calls return on the engine thread (architecture §8
+    /// "Content"). Nothing happens unless scripts asked for content.
+    fn update_content(&mut self) {
+        let requests = self.runtime.take_content_requests();
+        let mut results = self.runtime.take_content_answers();
+        let content = &mut self.content;
+        if requests.is_empty() && results.is_empty() && content.tickets.is_empty() {
+            return;
+        }
+        profiling::scope!("update_content");
+        let loader = content.loader.get_or_insert_with(|| {
+            let resolver = content.resolver.clone().unwrap_or_else(|| {
+                Arc::new(rook_content::Resolver::new(rook_content::Config::from_env(
+                    false,
+                )))
+            });
+            rook_content::Loader::new(resolver)
+        });
+        for (request, reference) in requests {
+            content.tickets.insert(loader.request(reference), request);
+        }
+        for (ticket, outcome) in loader.poll() {
+            if let Some(request) = content.tickets.remove(&ticket) {
+                results.push((request, outcome.is_ok()));
+            }
+        }
+        self.runtime.deliver_content(&results);
     }
 
     /// Step physics and write the results into the DOM. Parts that fell
@@ -698,6 +753,113 @@ mod tests {
             std::collections::HashSet::from([part, other])
         );
         assert!(changed(&mut s, "Instance.new('Folder', workspace.Part)").is_empty());
+    }
+
+    /// Options whose content comes from a synthetic install holding
+    /// `textures/face.png` and `sounds/hit.wav`, with no network or cache.
+    fn content_options(name: &str) -> Options {
+        let dir = std::env::temp_dir()
+            .join("rook-engine-tests")
+            .join(format!("{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("content/textures")).unwrap();
+        std::fs::create_dir_all(dir.join("content/sounds")).unwrap();
+        std::fs::write(dir.join("content/textures/face.png"), b"png").unwrap();
+        std::fs::write(dir.join("content/sounds/hit.wav"), b"wav").unwrap();
+        let mut config = rook_content::Config::empty();
+        config.install = rook_content::Install::at(&dir, rook_content::InstallKind::Custom);
+        Options {
+            content: Some(Arc::new(rook_content::Resolver::new(config))),
+            ..Options::default()
+        }
+    }
+
+    /// Step until `done` holds (content resolves on other threads).
+    fn step_until(dm: &mut DataModel, mut done: impl FnMut(&[String]) -> bool) -> Vec<String> {
+        let mut out = Vec::new();
+        for _ in 0..500 {
+            dm.step();
+            out.extend(lines(dm));
+            if done(&out) {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        out
+    }
+
+    /// PreloadAsync on a client, as observed in Studio: instances stand for
+    /// their (and their descendants') content, strings load as images,
+    /// asset id strings fail, empty strings are skipped, and the call
+    /// returns after the last callback.
+    #[test]
+    fn preload_async_on_a_client() {
+        let mut client = DataModel::new_client(&content_options("preload")).unwrap();
+        client
+            .run_extra_script(
+                r#"
+                local CP = game:GetService("ContentProvider")
+                local model = Instance.new("Model")
+                Instance.new("Decal", model).Texture = "rbxasset://textures/face.png"
+                local results = {}
+                task.spawn(function()
+                    CP:PreloadAsync({"rbxasset://textures/face.png", "rbxasset://sounds/hit.wav",
+                        "", "rbxassetid://5", "abc", model}, function(id, status)
+                        table.insert(results, id .. " " .. status.Name)
+                    end)
+                    table.sort(results)
+                    print(table.concat(results, ", "))
+                    print("returned", CP.RequestQueueSize)
+                end)
+                print("waiting", CP.RequestQueueSize)
+                "#,
+            )
+            .unwrap();
+        let out = step_until(&mut client, |out| {
+            out.iter().any(|l| l.starts_with("returned"))
+        });
+        assert_eq!(
+            out,
+            [
+                "waiting 5",
+                "abc Failure, rbxasset://sounds/hit.wav Failure, \
+                 rbxasset://textures/face.png Success, rbxasset://textures/face.png Success, \
+                 rbxassetid://5 Failure",
+                "returned 0",
+            ]
+        );
+    }
+
+    /// On a server PreloadAsync never returns once there is anything to
+    /// fetch, and returns at once when there isn't (observed).
+    #[test]
+    fn preload_async_on_a_server() {
+        let mut s = Server::new(&content_options("preload-server")).unwrap();
+        s.run_extra_script(
+            r#"
+            local CP = game:GetService("ContentProvider")
+            task.spawn(function() CP:PreloadAsync({"abc"}) print("never") end)
+            CP:PreloadAsync({"", Instance.new("Folder")})
+            print("nothing to fetch")
+            for _, bad in {"abc", 5} do
+                print(pcall(CP.PreloadAsync, CP, bad))
+            end
+            print(pcall(CP.PreloadAsync, CP, {true}))
+            print(pcall(CP.PreloadAsync, CP, {}, 5))
+            "#,
+        )
+        .unwrap();
+        s.run_for(0.5);
+        assert_eq!(
+            lines(&s),
+            [
+                "nothing to fetch",
+                "false Unable to cast string to Array",
+                "false Unable to cast double to Array",
+                "false Unable to cast bool to ContentId",
+                "false Unable to cast double to Function",
+            ]
+        );
     }
 
     #[test]

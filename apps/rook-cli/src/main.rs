@@ -1,6 +1,7 @@
 //! `rook`: command-line tools for the Rook engine.
 
 mod conformance;
+mod content;
 mod corpus;
 mod corpus_run;
 mod dump;
@@ -102,6 +103,29 @@ enum Command {
         #[arg(long, global = true)]
         filter: Option<String>,
     },
+    /// Show how content references resolve: what each means, which
+    /// provider has it (Rook's defaults, the Roblox install, content
+    /// folders, the cache or asset delivery), and why one fails.
+    ///
+    /// Asset delivery is on here unless `--offline` or
+    /// ROOK_ASSET_DELIVERY=off; downloads go to the cache.
+    Content {
+        /// References to resolve (`rbxassetid://5`, `rbxasset://textures/face.png`, ...).
+        #[arg(required_unless_present = "place")]
+        references: Vec<String>,
+        /// Resolve every content reference in this place or model instead.
+        #[arg(long, conflicts_with = "references")]
+        place: Option<PathBuf>,
+        /// Don't use the network: only the install, folders and the cache.
+        #[arg(long)]
+        offline: bool,
+        /// Forget cached answers for these references first.
+        #[arg(long)]
+        refresh: bool,
+        /// With `--place`, list every reference, not just failures.
+        #[arg(long, short)]
+        verbose: bool,
+    },
     /// Regenerate crates/rook-reflection/data/members.json from a Full API dump.
     ///
     /// The dump must match the pinned Roblox version; Roblox-Client-Tracker
@@ -156,6 +180,23 @@ fn main() -> anyhow::Result<()> {
             large_mb,
         } => corpus::run(&dir, &out, jobs, large_mb),
         Command::GenMembers { dump, source, out } => gen_members::run(&dump, &source, &out),
+        Command::Content {
+            references,
+            place,
+            offline,
+            refresh,
+            verbose,
+        } => {
+            let options = content::Options {
+                offline,
+                refresh,
+                verbose,
+            };
+            match place {
+                Some(file) => content::place(&file, &options),
+                None => content::references(&references, &options),
+            }
+        }
         Command::Conformance {
             action,
             dir,

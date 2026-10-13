@@ -9,6 +9,7 @@
 | `rook run-headless` | Run server scripts without a window and print their output |
 | `rook corpus-scan` | Scan a folder of places for what loads and which classes, properties and script APIs they use |
 | `rook corpus-run` | Run every place in a folder headless and rank the most common script errors |
+| `rook content` | Show how content references resolve: from the Roblox install, content folders, the cache or asset delivery, and why any fail |
 | `rook conformance record` / `run` | Record behaviour in Roblox Studio and check Rook against it |
 
 ## Inspecting and testing files
@@ -20,6 +21,27 @@ rook roundtrip place.rbxl --to xml         # same, converting to XML
 rook run-headless place.rbxl --seconds 10  # run server scripts, print output
 rook run-headless place.rbxl --repl        # then open a command bar (see getting-started.md)
 ```
+
+## Content and assets
+
+```sh
+rook content rbxassetid://12221462               # what it is, where it comes from, size, hash
+rook content --place place.rbxl                  # every reference in a place: what resolves, from where, what fails and why
+rook content --place place.rbxl --offline        # only the install, folders and cache
+```
+
+Rook finds your Roblox install by itself. These environment variables change what it uses (for `rook`, `rook-player` and headless runs alike):
+
+| Variable | Effect |
+|---|---|
+| `ROOK_ROBLOX_INSTALL` | A Roblox version folder or `content` folder to use instead, or `off` |
+| `ROOK_CONTENT_DIRS` | Extra folders laid out like `content` (content packages, local overrides) |
+| `ROOK_CONTENT_ORDER` | Provider order, default `defaults,install,folders,delivery` |
+| `ROOK_ASSET_DELIVERY` | `on` or `off`. On by default in `rook-player` and `rook content`, off in headless runs |
+| `ROOK_OPEN_CLOUD_API_KEY` | An Open Cloud key, tried for assets refused anonymously (needs the `legacy-asset:manage` scope) |
+| `ROOK_CACHE_DIR` | Where downloads are cached (default `%LOCALAPPDATA%\Rook\cache` or the platform cache folder) |
+
+Asset delivery only talks to Roblox's asset endpoints. Rook never reads browser cookies or stored credentials.
 
 ## Working with an archive
 

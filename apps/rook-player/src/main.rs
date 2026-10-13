@@ -21,6 +21,8 @@ use anyhow::Context;
 use clap::Parser;
 use game::Game;
 use glam::{EulerRot, Mat3, Vec3};
+use rook_content::mesh::Mesh;
+use rook_content::{ContentRef, Resolver};
 use rook_engine::{DataModel, InputEvent, MessageType, console};
 use rook_render::{Camera, Renderer};
 use rook_types::{CFrame, Value};
@@ -101,7 +103,11 @@ fn main() -> anyhow::Result<()> {
     profiling::tracy_client::Client::start();
     let args = Args::parse();
     let load_start = Instant::now();
-    let mut game = Game::load(&args.place, !args.run)?;
+    // Asset delivery is on in the player, which exists to show places;
+    // ROOK_ASSET_DELIVERY=off turns it off.
+    let content = Arc::new(Resolver::new(rook_content::Config::from_env(true)));
+    let head = installed_head(&content);
+    let mut game = Game::load(&args.place, !args.run, content)?;
     let load_time = load_start.elapsed().as_secs_f64();
     if let Some(script) = &args.script {
         let source = fs_err::read_to_string(script)?;
@@ -136,11 +142,21 @@ fn main() -> anyhow::Result<()> {
     }
 
     if let Some(frames) = args.bench {
-        return bench(&mut game, frames, &camera, args.width, args.height);
+        return bench(
+            &mut game,
+            frames,
+            &camera,
+            args.width,
+            args.height,
+            head.as_ref(),
+        );
     }
 
     if let Some(out) = args.screenshot {
         let mut renderer = Renderer::headless()?;
+        if let Some(head) = &head {
+            renderer.set_head_mesh(head);
+        }
         renderer.set_scene(&scene.scene);
         let pixels = renderer.render_to_image(args.width, args.height, &camera)?;
         image::save_buffer(
@@ -170,6 +186,7 @@ fn main() -> anyhow::Result<()> {
         looking: false,
         last_frame: Instant::now(),
         pending_mouse: None,
+        head,
         #[cfg(feature = "repl")]
         repl: if args.no_repl {
             None
@@ -179,6 +196,22 @@ fn main() -> anyhow::Result<()> {
     };
     event_loop.run_app(&mut app)?;
     Ok(())
+}
+
+/// The Head MeshType's mesh from the user's Roblox install, read from disk
+/// at startup; `None` (Rook draws its own) without an install or the file.
+fn installed_head(content: &Resolver) -> Option<Mesh> {
+    let fetched = content.resolve_local(&ContentRef::File("avatar/heads/head.mesh".into()))?;
+    match Mesh::decode(&fetched.bytes) {
+        Ok(mesh) => Some(mesh),
+        Err(e) => {
+            console::print_message(
+                MessageType::Warning,
+                &format!("{}: {e}; drawing Rook's own head", fetched.source.location),
+            );
+            None
+        }
+    }
 }
 
 /// `29436` → `29,436`.
@@ -201,8 +234,12 @@ fn bench(
     camera: &Camera,
     width: u32,
     height: u32,
+    head: Option<&Mesh>,
 ) -> anyhow::Result<()> {
     let mut renderer = Renderer::headless()?;
+    if let Some(head) = head {
+        renderer.set_head_mesh(head);
+    }
     let mut cache = scene_of(game.view());
     renderer.set_scene(&cache.scene);
     let (mut sim, mut build, mut upload, mut render) = (0.0, 0.0, 0.0, 0.0);
@@ -301,6 +338,8 @@ struct App {
     /// The latest cursor position not yet sent to the game. Moves are sent
     /// once per frame because each costs a mouse raycast.
     pending_mouse: Option<(f32, f32)>,
+    /// The install's head mesh, if any (see `installed_head`).
+    head: Option<Mesh>,
     /// The terminal command prompt, when the terminal is interactive.
     #[cfg(feature = "repl")]
     repl: Option<rook_engine::repl::Repl>,
@@ -339,6 +378,9 @@ impl App {
         config.present_mode = wgpu::PresentMode::AutoVsync;
         surface.configure(&device, &config);
         let mut renderer = Renderer::new(device, queue, config.format);
+        if let Some(head) = &self.head {
+            renderer.set_head_mesh(head);
+        }
         renderer.set_scene(&self.scene.scene);
         self.game.set_viewport(config.width, config.height);
         self.gfx = Some(Gfx {

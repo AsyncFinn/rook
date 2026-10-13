@@ -36,7 +36,6 @@ const INERT: &[(&str, &str)] = &[
     ("BasePart", "SetNetworkOwner"),
     ("BasePart", "SetNetworkOwnershipAuto"),
     ("ContentProvider", "Preload"),
-    ("ContentProvider", "PreloadAsync"),
     // Pre-approves an asset for LoadAsset; only matters once assets load.
     ("InsertService", "ApproveAssetId"),
     ("InsertService", "ApproveAssetVersionId"),

@@ -2,6 +2,7 @@
 //! the server alone (Studio's Run mode).
 
 use std::path::Path;
+use std::sync::Arc;
 
 use rook_engine::{DataModel, InputEvent, Options, Server, Session};
 
@@ -14,11 +15,20 @@ pub struct Game {
 impl Game {
     /// Load a place and start it. With `play`, a local player joins and the
     /// window shows that player's client, as in Studio's Play mode.
-    pub fn load(path: &Path, play: bool) -> anyhow::Result<Self> {
+    /// Content requests resolve through `content`.
+    pub fn load(
+        path: &Path,
+        play: bool,
+        content: Arc<rook_content::Resolver>,
+    ) -> anyhow::Result<Self> {
         let bytes = fs_err::read(path)?;
-        let mut server = Server::load_place(&bytes, &Options::default())?;
+        let options = Options {
+            content: Some(content),
+            ..Options::default()
+        };
+        let mut server = Server::load_place(&bytes, &options)?;
         server.start();
-        let mut session = Session::new(server, Options::default());
+        let mut session = Session::new(server, options);
         let view = if play {
             Some(session.join("Player1", 1)?)
         } else {

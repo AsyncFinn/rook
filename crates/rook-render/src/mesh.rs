@@ -193,6 +193,19 @@ fn head() -> MeshData {
     m
 }
 
+/// A mesh read from a file, as drawn.
+pub(crate) fn from_file(m: &rook_content::mesh::Mesh) -> MeshData {
+    MeshData {
+        vertices: m
+            .positions
+            .iter()
+            .zip(&m.normals)
+            .map(|(&position, &normal)| Vertex { position, normal })
+            .collect(),
+        indices: m.indices.clone(),
+    }
+}
+
 pub(crate) fn build(shape: DrawShape) -> MeshData {
     match shape {
         DrawShape::Part(shape @ (PartShape::Block | PartShape::Wedge | PartShape::CornerWedge)) => {
@@ -224,6 +237,37 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// The user's own head mesh, when an install is found, faces outward
+    /// like Rook's (same winding) and is centred like it.
+    #[test]
+    fn installed_head_matches_rooks_frame() {
+        let Some(install) = rook_content::install::newest() else {
+            eprintln!("skipped: no Roblox install found");
+            return;
+        };
+        let Ok(bytes) = std::fs::read(install.content[0].join("avatar/heads/head.mesh")) else {
+            eprintln!("skipped: no head.mesh in the install");
+            return;
+        };
+        let m = from_file(&rook_content::mesh::Mesh::decode(&bytes).unwrap());
+        let outward = m
+            .indices
+            .chunks(3)
+            .filter(|tri| {
+                let [a, b, c] =
+                    [tri[0], tri[1], tri[2]].map(|i| Vec3::from(m.vertices[i as usize].position));
+                (b - a).cross(c - a).dot((a + b + c) / 3.0) > -1e-6
+            })
+            .count();
+        assert_eq!(outward, m.indices.len() / 3);
+        let (mut lo, mut hi) = (Vec3::splat(f32::MAX), Vec3::splat(f32::MIN));
+        for v in &m.vertices {
+            lo = lo.min(Vec3::from(v.position));
+            hi = hi.max(Vec3::from(v.position));
+        }
+        assert!((lo + hi).abs().max_element() < 1e-3, "{lo} {hi}");
     }
 
     /// The head's measured outline: 1.2024 studs tall, and as wide as its

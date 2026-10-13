@@ -1,6 +1,7 @@
 //! The Roblox API surface: Instance, signals, globals, scripts.
 
 pub mod camera;
+pub(crate) mod content;
 pub(crate) mod globals;
 pub(crate) mod input;
 pub(crate) mod instance;

@@ -1,0 +1,18 @@
+-- studio 0.742.0.7421053
+-- signals: deferred
+RequestQueueSize 0
+nothing to fetch returned
+server preload finished false
+string false Unable to cast string to Array
+number false Unable to cast double to Array
+bool element false Unable to cast bool to ContentId
+number element false Unable to cast double to ContentId
+Vector3 element false Unable to cast Vector3 to ContentId
+nil false Argument 1 missing or nil
+number callback false Unable to cast double to Function
+"rbxasset://Fonts\\Head.mesh" -> "rbxasset://Fonts/Head.mesh" "rbxasset://Fonts/Head.mesh"
+"rbxassetid://12221462" -> "rbxassetid://12221462" "rbxassetid://12221462"
+"http://www.roblox.com/asset/?id=12221462" -> "http://www.roblox.com/asset/?id=12221462" "http://www.roblox.com/asset/?id=12221462"
+"  rbxassetid://5 " -> "  rbxassetid://5 " "  rbxassetid://5 "
+"abc" -> "abc" "abc"
+"" -> "" ""

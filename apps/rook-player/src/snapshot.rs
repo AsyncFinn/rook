@@ -40,11 +40,11 @@ fn part_mesh(dom: &Dom, id: InstanceId) -> Option<(MeshKind, InstanceId)> {
             Some(Value::Enum(n)) => Some(n),
             _ => None,
         };
-        let mesh_id = match dom.property_by_name(child, "MeshId") {
-            Some(Value::ContentId(id)) => id.as_str().to_owned(),
-            Some(Value::String(id)) => id,
-            _ => String::new(),
-        };
+        // Files store the mesh in `MeshContent`; `MeshId` is a view of it.
+        let mesh_id = dom
+            .property_by_name(child, "MeshContent")
+            .and_then(|v| v.content_url().map(str::to_owned))
+            .unwrap_or_default();
         let kind = MeshKind::of(dom.class_name(child), mesh_type, &mesh_id)?;
         Some((kind, child))
     })

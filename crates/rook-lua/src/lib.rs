@@ -352,6 +352,30 @@ impl Runtime {
         });
     }
 
+    /// ContentProvider references to resolve, by request id, asked for
+    /// since the last call.
+    pub fn take_content_requests(&self) -> Vec<(u64, rook_content::ContentRef)> {
+        std::mem::take(&mut self.world_mut().content.outbox)
+    }
+
+    /// ContentProvider requests answered without resolving anything
+    /// (`(request, succeeded)`), to deliver with the next results.
+    pub fn take_content_answers(&self) -> Vec<(u64, bool)> {
+        std::mem::take(&mut self.world_mut().content.answered)
+    }
+
+    /// Deliver finished content requests (`(request, succeeded)`): their
+    /// PreloadAsync callbacks run, and finished PreloadAsync calls return.
+    pub fn deliver_content(&self, results: &[(u64, bool)]) {
+        if results.is_empty() {
+            return;
+        }
+        self.guarded(|| {
+            api::content::deliver(&self.lua, results);
+            threads::drain_deferred(&self.lua);
+        });
+    }
+
     /// Take everything logged so far.
     pub fn take_log(&self) -> Vec<LogEntry> {
         std::mem::take(&mut self.world_mut().log)
