@@ -57,6 +57,20 @@ pub struct Config {
     pub api_key: Option<String>,
     /// `None` keeps nothing on disk.
     pub cache_dir: Option<PathBuf>,
+    /// The cache's size limit, kept by a trim in the background when the
+    /// resolver opens it; `None` never trims.
+    pub cache_max: Option<u64>,
+}
+
+/// The default cache folder, after moving a cache left in the old
+/// Windows location (`%LOCALAPPDATA%\Rook\cache`) into it, once.
+fn default_cache_dir() -> Option<PathBuf> {
+    let dir = Cache::default_dir()?;
+    if let Some(old) = Cache::legacy_dir() {
+        // A failed move leaves the old cache where it is; nothing is lost.
+        let _ = Cache::move_legacy(&old, &dir);
+    }
+    Some(dir)
 }
 
 impl Config {
@@ -91,7 +105,8 @@ impl Config {
             api_key: std::env::var(delivery::API_KEY_VAR)
                 .ok()
                 .filter(|k| !k.trim().is_empty()),
-            cache_dir: Cache::default_dir(),
+            cache_dir: default_cache_dir(),
+            cache_max: Some(Cache::max_from_env()),
         }
     }
 
@@ -104,6 +119,7 @@ impl Config {
             network: false,
             api_key: None,
             cache_dir: None,
+            cache_max: None,
         }
     }
 }
@@ -129,7 +145,20 @@ impl Resolver {
             install: config.install,
             folders: config.folders,
             delivery: config.network.then(|| Delivery::new(config.api_key)),
-            cache: config.cache_dir.and_then(|dir| Cache::open(dir).ok()),
+            cache: config.cache_dir.and_then(|dir| {
+                let cache = Cache::open(dir).ok()?;
+                if let Some(max) = config.cache_max {
+                    // Off the caller's thread: walking a big cache takes a
+                    // while, and nothing waits on it. Blobs a resolution is
+                    // reading can't be deleted on Windows, and a deleted one
+                    // is fetched again.
+                    let trimmed = cache.clone();
+                    let _ = std::thread::Builder::new()
+                        .name("rook-cache-trim".into())
+                        .spawn(move || trimmed.trim(max));
+                }
+                Some(cache)
+            }),
             failed: Mutex::new(HashMap::new()),
         }
     }

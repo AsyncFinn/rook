@@ -10,6 +10,7 @@
 | `rook corpus-scan` | Scan a folder of places for what loads and which classes, properties and script APIs they use |
 | `rook corpus-run` | Run every place in a folder headless and rank the most common script errors |
 | `rook content` | Show how content references resolve: from the Roblox install, content folders, the cache or asset delivery, and why any fail |
+| `rook cache` | Show the download cache's folder and size; `prune --older-than <days>`, `trim` or `clear` it |
 | `rook conformance record` / `run` | Record behaviour in Roblox Studio and check Rook against it |
 
 ## Inspecting and testing files
@@ -28,7 +29,9 @@ rook run-headless place.rbxl --repl        # then open a command bar (see gettin
 rook content rbxassetid://12221462               # what it is, where it comes from, size, hash
 rook content --place place.rbxl                  # every reference in a place: what resolves, from where, what fails and why
 rook content --place place.rbxl --offline        # only the install, folders and cache
-                                                 # (--place also totals mesh references: which decode, by version, and why others fail)
+                                                 # (--place also totals mesh and image references: which decode, by version or format, and why others fail)
+rook cache                                       # where downloads are cached and how much
+rook cache prune --older-than 30                 # delete what hasn't been used for 30 days
 ```
 
 Rook finds your Roblox install by itself. These environment variables change what it uses (for `rook`, `rook-player` and headless runs alike):
@@ -40,7 +43,8 @@ Rook finds your Roblox install by itself. These environment variables change wha
 | `ROOK_CONTENT_ORDER` | Provider order, default `defaults,install,folders,delivery` |
 | `ROOK_ASSET_DELIVERY` | `on` or `off`. On by default in `rook-player` and `rook content`, off in headless runs |
 | `ROOK_OPEN_CLOUD_API_KEY` | An Open Cloud key, tried for assets refused anonymously (needs the `legacy-asset:manage` scope) |
-| `ROOK_CACHE_DIR` | Where downloads are cached (default `%LOCALAPPDATA%\Rook\cache` or the platform cache folder) |
+| `ROOK_CACHE_DIR` | Where downloads are cached (default `%TEMP%\Rook\cache` on Windows, `~/Library/Caches/Rook` on macOS, `$XDG_CACHE_HOME/rook` elsewhere) |
+| `ROOK_CACHE_MAX` | The cache's size limit (`2GB` by default; `500MB`, `5GB`, ...). Rook drops what was used least recently when it starts |
 
 Asset delivery only talks to Roblox's asset endpoints. Rook never reads browser cookies or stored credentials.
 

@@ -33,6 +33,53 @@ fn resolver(options: &Options) -> Arc<Resolver> {
     Arc::new(resolver)
 }
 
+/// What `rook cache` does.
+pub enum CacheCommand {
+    Show,
+    /// Delete what hasn't been used for this many days.
+    Prune(u64),
+    Trim,
+    Clear,
+}
+
+/// `rook cache`: the download cache's folder and size, or a clean-up.
+pub fn cache(command: CacheCommand) -> anyhow::Result<()> {
+    // Making the config moves a cache left in the old place first.
+    let config = rook_content::Config::from_env(false);
+    let dir = config.cache_dir.ok_or_else(|| {
+        anyhow::anyhow!("no cache folder (set {})", rook_content::cache::CACHE_VAR)
+    })?;
+    let cache = rook_content::Cache::open(&dir)?;
+    let mb = |bytes: u64| bytes as f64 / (1 << 20) as f64;
+    let freed = match command {
+        CacheCommand::Show => None,
+        CacheCommand::Prune(days) => {
+            Some(cache.prune_older_than(std::time::Duration::from_secs(days * 24 * 60 * 60)))
+        }
+        CacheCommand::Trim => Some(cache.trim(rook_content::Cache::max_from_env())),
+        CacheCommand::Clear => {
+            let (blobs, bytes, _) = cache.stats();
+            cache.clear()?;
+            Some((blobs, bytes))
+        }
+    };
+    if let Some((blobs, bytes)) = freed {
+        println!("deleted {blobs} files, {:.1} MB", mb(bytes));
+    }
+    let (blobs, bytes, refs) = cache.stats();
+    println!("cache:  {}", dir.display());
+    println!(
+        "holds:  {blobs} files, {:.1} MB, for {refs} references",
+        mb(bytes)
+    );
+    println!(
+        "limit:  {:.0} MB ({})",
+        mb(rook_content::Cache::max_from_env()),
+        rook_content::cache::MAX_VAR
+    );
+    Ok(())
+}
+
 fn print_setup(r: &Resolver) {
     match r.install() {
         Some(i) => println!("Roblox install: {} ({:?})", i.root.display(), i.kind),
