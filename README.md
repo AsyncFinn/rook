@@ -10,7 +10,7 @@ An open engine for Roblox places: run them offline, host them yourself, mod them
 [![Rust 1.85+](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](https://www.rust-lang.org)
 ![Status: early development](https://img.shields.io/badge/status-early%20development-yellow.svg)
 
-[Features](#features) · [Quick start](#quick-start) · [Usage](#usage) · [Architecture](#architecture) · [Roadmap](#roadmap) · [FAQ](#faq)
+[Getting started](docs/getting-started.md) · [Features](docs/features.md) · [Tools](docs/tools.md) · [Roadmap](ROADMAP.md) · [Contributing](CONTRIBUTING.md) · [FAQ](#faq)
 
 </div>
 
@@ -52,7 +52,7 @@ What Rook adds is the engine itself: the DataModel, the scheduler, replication a
 
 ## Status
 
-Rook is in **early development**. File formats (M0), scripting (M1), the client/server split with the first renderer (M2) and physics (M3) are done. Content (M4: meshes, textures, decals) is in progress.
+Rook is in **early development**. File formats (M0), scripting (M1), the client/server split with the first renderer (M2) and physics (M3) are done. Content (M4: meshes, textures, decals) is in progress. The full plan, its order and why, is in [ROADMAP.md](ROADMAP.md).
 
 | Measure | Result |
 |---|---|
@@ -61,214 +61,37 @@ Rook is in **early development**. File formats (M0), scripting (M1), the client/
 | Places that crash Rook | **0** |
 | Studio conformance cases | Instance API, property coercion, error messages, signal order, `wait`/`task` order, tweens |
 
-The archive is scanned with `rook corpus-scan` and run with `rook corpus-run`. Both reports list exactly what fails and why, and that list sets the priorities.
+The numbers come from running an archive of real places through Rook ([how](docs/tools.md#working-with-an-archive)). The failures they list set the priorities.
 
 ## Features
 
-### File formats
+- **Files:** loads and saves `.rbxl`, `.rbxm`, `.rbxlx` and `.rbxmx`, including 2006-era XML that other parsers reject, without dropping data.
+- **Scripting:** Luau with the Instance API, Roblox's datatypes, signals in both Immediate and Deferred modes, `wait` and `task`, `require` and Roblox's error messages.
+- **Client and server:** Play mode as on modern Roblox, with replication, FilteringEnabled, LocalScripts and remotes.
+- **Physics:** Rapier at 240 Hz with Roblox's joints, assemblies, materials, BodyMovers, constraints and raycasts.
+- **Rendering:** a wgpu renderer for parts and the built-in mesh shapes, live in a window or to a PNG.
+- **Tools:** dump, round-trip, run headless, scan an archive and check behaviour against Studio.
 
-- Loads and saves **`.rbxl`, `.rbxm`, `.rbxlx` and `.rbxmx`**, binary and XML.
-- **Legacy XML upgrade** for roughly 2006–2010 files that standard parsers reject: dropped `<External>` entries, `<hash>` content, control characters, MSVC float values like `1.#QNAN`. Files that already load normally are never rewritten.
-- Legacy property names (`size` → `Size`) and the database's migrations are applied on load, the way Studio upgrades old files.
-- Unknown properties are kept, so saving never silently drops data, and `rook roundtrip` proves it.
-- A corrupt file produces an error, never a crash.
+The full list is in [docs/features.md](docs/features.md).
 
-### Data model
+## Documentation
 
-- All the Roblox datatypes: `Vector2`, `Vector3`, `CFrame`, `Color3`, `BrickColor`, `UDim`, `UDim2`, `Rect`, `NumberSequence`, `ColorSequence`, `NumberRange`, `PhysicalProperties`, `RaycastParams`, `OverlapParams`, `RaycastResult`, `Font`, `Faces`, `Axes`, enums, attributes and tags.
-- A class, property and enum database compiled to dense numeric IDs, with inherited property layouts and per-class defaults.
-- A runtime instance tree with generational IDs, Roblox's hierarchy rules (locked parents, cycles, `Destroy`, `Clone` and `Archivable`) and a change journal that signals, replication and rendering each read at their own pace.
-- Several DataModels in one process, each with its own tree, Luau VM and scheduler, so a server and its clients run side by side.
+New here? Start with [Getting started](docs/getting-started.md): build Rook and open your first place in three commands.
 
-### Scripting
 
-- **Luau** through `mlua`, one VM per DataModel, each script on its own thread with its own environment (`getfenv`/`setfenv` work).
-- The Instance API: properties, methods, events, children by name, `GetService`, `FindFirstChild`, `WaitForChild` and the rest. One userdata per instance, so `==` and table keys behave as on Roblox.
-- Roblox datatypes as userdata with their constructors, operators and methods.
-- `RBXScriptSignal` with `Connect`, `Once`, `Wait` and the legacy lowercase aliases, in both **Immediate** and **Deferred** signal modes.
-- A scheduler for `wait`, `delay`, `spawn` and the `task` library, with deterministic simulated time for headless runs and tests.
-- `require` for ModuleScripts, with per-DataModel caching and Roblox's cyclic-require and load-error messages.
-- Roblox-style error messages and chunk names (`Workspace.Script:3: ...`), output through `LogService`.
-- Security levels: members tagged above game identity raise Roblox's permission error.
-- Services including `RunService`, `TweenService` (and the legacy GUI tweens), `Players`, `Debris`, `DataStoreService` (in memory for now) and `HttpService` (JSON and GUIDs; requests off).
-- Unfinished members are either clear `"is not implemented in Rook yet"` errors or listed, inert stubs. Every stub is documented in [docs/behavior/stubs.md](docs/behavior/stubs.md), and a test fails if one is added without an entry.
-
-### Client and server
-
-- **Play mode as on modern Roblox**: a server DataModel and separate client DataModels, connected by an in-process replicator.
-- Replication follows Roblox's rules: `NotReplicated` classes and properties stay on the server, a `PlayerGui` reaches only its player, server `Script` source is withheld, references are remapped, attributes and tags replicate, and client changes stay on the client (FilteringEnabled).
-- Joining creates the `Player`, `Backpack` and `PlayerGui` from `StarterPack` and `StarterGui`, fires `PlayerAdded`, sets `Players.LocalPlayer` and starts **LocalScripts** where Roblox allows them.
-- `RemoteEvent`, `UnreliableRemoteEvent` and `RemoteFunction`: arguments are copied between VMs the way Roblox copies them, and invokes yield until the reply.
-
-### Rendering
-
-- A **wgpu** renderer (Vulkan, Metal, DirectX 12) that draws snapshots of the scene and never touches the instance tree.
-- Primitive parts (blocks, spheres, cylinders, wedges, corner wedges) with colour and transparency, a sky colour, sun, ambient light and fog.
-- The built-in mesh shapes (SpecialMesh types, BlockMesh, CylinderMesh) at the sizes Roblox draws them, including Rook's own version of the classic head.
-- `rook-player` runs the place live in a window with a fly camera that drives `Workspace.CurrentCamera`, or renders a single frame to PNG offscreen.
-
-File meshes, textures, decals, terrain and shadows are on the [roadmap](#roadmap).
-
-### Tooling
-
-- `rook dump`: print a place's instance tree and properties.
-- `rook roundtrip`: load, save and reload a file and report every difference.
-- `rook corpus-scan`: scan a folder of places for what loads and which classes, properties and script APIs they use.
-- `rook run-headless` and `rook corpus-run`: run server scripts without a window and report what works.
-- `rook conformance record` / `run`: record behaviour in Roblox Studio and check Rook against it.
-
-## Quick start
-
-Rook needs a recent stable Rust toolchain (1.85 or later).
-
-```sh
-git clone https://github.com/AsyncFinn/rook
-cd rook
-cargo build --release
-```
-
-This builds two programs in `target/release`: `rook-player` (the windowed player) and `rook` (the command-line tool). Then open a place you have saved from Studio:
-
-```sh
-rook-player place.rbxl
-```
-
-## Usage
-
-### Playing a place
-
-```sh
-rook-player place.rbxl                                    # play as a local player
-rook-player place.rbxl --run                              # show the server alone (Studio's Run mode)
-rook-player place.rbxl --screenshot out.png               # render one frame to a PNG
-rook-player place.rbxl --camera 100,80,100 --look-at 0,0,0 --screenshot out.png
-rook-player place.rbxl --seconds 5 --screenshot out.png   # run scripts for 5 s first
-rook-player place.rbxl --script extra.luau                # also run a Luau file as a server script
-```
-
-By default the player starts a session with one local player and draws what that player's client sees, as Studio's Play mode does. Output is tagged by the side (server or client) that printed it.
-
-| Control | Action |
+| | |
 |---|---|
-| Right mouse button (hold) | Look around |
-| W A S D | Move |
-| Q / E | Down / up |
-| Shift | Move faster |
-| Mouse wheel | Change speed |
-
-### Command bar
-
-When the player runs in an interactive terminal, that terminal shows a `>` prompt, like Studio's command bar with the feel of Luau's own REPL. Each entry runs as Luau in the open place; an expression prints its value, and globals you set stay set. An unfinished statement continues on a `>>` line. The arrow keys edit the line and recall earlier entries, and output prints above the prompt without disturbing what you're typing.
-
-```text
-> workspace.Gravity
-196.2
-> for _, p in workspace:GetChildren() do
->>     if p:IsA("BasePart") then p.Anchored = false end
->> end
-> :client
-```
-
-`:server` and `:client` choose where entries run (the server by default), and `:help` lists the commands. Ctrl+C clears the line; on an empty line it, or Ctrl+D, ends input. `rook run-headless place.rbxl --repl` gives the same prompt without a window, after `--seconds`, until input ends. `--no-repl` turns the prompt off.
-
-The prompt is the `repl` Cargo feature, on by default. Build with `--no-default-features` to leave it out of a build you hand to others. It reads only the local terminal, never the network.
-
-### Inspecting and testing files
-
-```sh
-rook dump place.rbxl --properties --depth 3
-rook roundtrip place.rbxl                  # load, save, reload, report differences
-rook roundtrip place.rbxl --to xml         # same, converting to XML
-rook run-headless place.rbxl --seconds 10  # run server scripts, print output
-```
-
-### Working with an archive
-
-```sh
-rook corpus-scan path/to/places --out reports/corpus
-rook corpus-run path/to/places
-```
-
-`corpus-scan` skips duplicates and writes `corpus.json` and `summary.md`: what loads, what fails and why, and which classes, properties and script APIs the files use. `corpus-run` runs every place headless and ranks the most common script errors.
-
-### Conformance against Roblox Studio
-
-```sh
-rook conformance record   # run the cases in a Studio playtest and save the output
-rook conformance run      # run the same cases in Rook and diff them
-```
-
-Recording uses Roblox Studio's built-in MCP server, so Studio is only observed through its public scripting API. See [conformance/README.md](conformance/README.md).
-
-## Architecture
-
-Rook is a Cargo workspace of small crates whose dependencies only point downward. Everything goes through one runtime DataModel: `file → instances → properties → change journal → replication / rendering → scripts → events`.
-
-```
-rook-types ← rook-reflection ← rook-dom ← rook-signal ← rook-scheduler ← rook-lua
-                                   ↑                                        ↑
-                    rook-formats ──┘                       rook-net ────────┤
-                                                                            │
-                                                          rook-engine ──────┘ ← apps
-                                                               │
-                                                               └─ scene snapshots → rook-render
-```
-
-| Crate | What it does |
-|---|---|
-| [`rook-types`](crates/rook-types) | Roblox datatypes and the lossless dynamic `Value` |
-| [`rook-reflection`](crates/rook-reflection) | Class, property and enum database, plus the member list for the pinned Roblox version |
-| [`rook-formats`](crates/rook-formats) | Loading and saving `.rbxl`, `.rbxm`, `.rbxlx`, `.rbxmx`, including legacy XML |
-| [`rook-dom`](crates/rook-dom) | The runtime instance tree and its change journal |
-| [`rook-signal`](crates/rook-signal), [`rook-scheduler`](crates/rook-scheduler) | Signals, connections, timers and the deferred queue |
-| [`rook-lua`](crates/rook-lua) | The Luau bridge: Instance API, datatypes, globals, `require` |
-| [`rook-net`](crates/rook-net) | Server-to-client replication |
-| [`rook-engine`](crates/rook-engine) | DataModels, services, script start rules, play sessions and the frame loop |
-| [`rook-render`](crates/rook-render) | The wgpu renderer |
-| [`rook-cli`](apps/rook-cli) | The `rook` command-line tool |
-| [`rook-player`](apps/rook-player) | The windowed player |
-
-Read [docs/architecture.md](docs/architecture.md) for the full design and [docs/research.md](docs/research.md) for background and sources.
-
-### Behaviour provenance
-
-Every behaviour Rook implements is recorded with its source and one of four statuses: **Confirmed** (creator-docs or a Studio recording), **Inference**, **Approximation** or **Rook extension**. This is both the record of a clean implementation and a map of how compatible Rook is. Rook-specific extensions sit behind an explicit profile and are off by default.
-
-## Roadmap
-
-Physics (M3) is done; content (meshes, textures, decals) is next, then characters. The full plan, its order and why, is in [ROADMAP.md](ROADMAP.md).
-
-## Development
-
-Run the full check (format, lints and tests):
-
-```sh
-./scripts/check.sh
-```
-
-On Windows, use `scripts\check.ps1`.
-
-Format tests use [rojo-rbx/rbx-test-files](https://github.com/rojo-rbx/rbx-test-files), which isn't committed:
-
-```sh
-git clone --depth 1 https://github.com/rojo-rbx/rbx-test-files fixtures/rbx-test-files
-```
-
-Build profiles:
-
-| Command | Use |
-|---|---|
-| `cargo build` | Development. Rook's code is lightly optimised; dependencies are fully optimised so Luau and wgpu run at speed |
-| `cargo build --release` | What players use |
-| `cargo build --profile profiling` | Release speed with full debug info. Add `--features tracy` to `rook-player` for a live Tracy timeline |
+| [Getting started](docs/getting-started.md) | Build Rook, open a place, controls and the command bar |
+| [Features](docs/features.md) | Everything Rook supports today |
+| [Tools](docs/tools.md) | The `rook` command-line tool: inspect, run headless, scan archives, conformance |
+| [Roadmap](ROADMAP.md) | What's next, in what order, and why |
+| [Architecture](docs/architecture.md) | How Rook is built, and the rules every behaviour follows |
+| [Contributing](CONTRIBUTING.md) | Reporting problems, finding your way around the code, running the checks |
 
 ## FAQ
 
 **Can Rook connect to Roblox servers or join Roblox games?**
 No. Replication is Rook to Rook. Wire compatibility with Roblox clients or servers isn't a goal. Instead, you'll be able to host your own Rook servers (M8 on the [roadmap](ROADMAP.md)).
-
-**Where do I get places to open?**
-Use places you made or have the rights to, for example saved from Roblox Studio with *File → Save to File*. Rook ships no Roblox content.
 
 **Does Rook use Roblox's code or assets?**
 No. Rook is written from public documentation, the public API dump and observation of Studio through its scripting API. Each behaviour cites its source.
@@ -278,9 +101,7 @@ Rook matches what modern Roblox does with old content. For example, modern Roblo
 
 ## Contributing
 
-Rook gets better with every place people throw at it. The most useful thing you can do is run your places through Rook and report what breaks: places that fail to load, and scripts that behave differently from Roblox. Please include the `rook run-headless` output and, if you can, a minimal place that reproduces it. Star the repo to follow along.
-
-Rook is maintained by [AsyncFinn](https://github.com/AsyncFinn). Pull requests are by invitation.
+Rook gets better with every place people throw at it. The most useful thing you can do is run your places through Rook and [report what breaks](CONTRIBUTING.md#reporting-a-problem). Star the repo to follow along.
 
 ## License
 
