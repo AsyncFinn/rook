@@ -2,15 +2,19 @@
 //!
 //! The renderer draws a [`Scene`] snapshot: it never touches the DOM
 //! (architecture §8). It draws primitive parts, the built-in mesh shapes
-//! and mesh files with their colour and transparency, a sky colour, a sun,
-//! ambient light, fog and the sun's shadows. Textures, decals and terrain
-//! come later.
+//! and mesh files with their colour, transparency and mesh textures, Decals
+//! and Textures over them, a sky colour, a sun, ambient light, fog and the
+//! sun's shadows. Materials and terrain come later.
 
+mod cache;
 mod mesh;
 mod scene;
 mod shadow;
 
-pub use scene::{Camera, DrawShape, Lighting, Mesh, MeshHash, PartInstance, PartShape, Scene};
+pub use scene::{
+    Camera, DrawShape, Image, ImageHash, ImagePlacement, Layer, Lighting, Mesh, MeshHash, NormalId,
+    PartInstance, PartShape, Scene, Tiling,
+};
 
 use std::collections::HashMap;
 
@@ -18,6 +22,7 @@ use bytemuck::{Pod, Zeroable};
 use glam::Vec3;
 use wgpu::util::DeviceExt;
 
+use cache::{FRAME_UPLOAD_BYTES, GpuCache, Upload, UploadContext};
 use shadow::{SHADOW_DISTANCE, SHADOW_SIZE, ShadowView};
 
 pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
@@ -46,7 +51,16 @@ struct Globals {
     /// A texel in uv, the normal offset, the depth bias, and how far
     /// shadows reach (0 for none).
     shadow: [f32; 4],
+    /// Each face's image right and up (`NormalId::image_axes`), in
+    /// `NormalId` order.
+    faces: [[f32; 4]; 12],
 }
+
+/// Instance flags (see `shader.wgsl`).
+const CAST: u32 = 1;
+const MODE_FACE: u32 = 1;
+const MODE_TILED: u32 = 2;
+const MODE_MESH_UV: u32 = 3;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
@@ -57,12 +71,43 @@ struct Instance {
     back: [f32; 3],
     size: [f32; 3],
     color: [f32; 4],
-    /// 1 when the part casts a shadow.
-    cast: f32,
+    /// The mesh's bounds in its own units: images on faces cover this box
+    /// scaled by `size`.
+    box_min: [f32; 3],
+    box_max: [f32; 3],
+    /// A Texture's studs per tile and offset.
+    tile: [f32; 4],
+    /// CAST, and an image layer's mode (bits 2-3) and face (4-6).
+    flags: u32,
 }
 
 impl Instance {
-    fn from_part(p: &PartInstance) -> Self {
+    fn new(p: &PartInstance, (box_min, box_max): (Vec3, Vec3)) -> Self {
+        let mut flags = 0;
+        let mut tile = [1.0, 1.0, 0.0, 0.0];
+        match p.layer {
+            Layer::Base => {
+                if p.cast_shadow {
+                    flags |= CAST;
+                }
+            }
+            Layer::Image { placement, .. } => {
+                let (mode, face) = match placement {
+                    ImagePlacement::Face(face) => (MODE_FACE, face.index() as u32),
+                    ImagePlacement::Tiled(face, t) => {
+                        tile = [
+                            t.studs_per_tile.x,
+                            t.studs_per_tile.y,
+                            t.offset.x,
+                            t.offset.y,
+                        ];
+                        (MODE_TILED, face.index() as u32)
+                    }
+                    ImagePlacement::MeshUv => (MODE_MESH_UV, 0),
+                };
+                flags |= mode << 2 | face << 4;
+            }
+        }
         Self {
             position: p.position.to_array(),
             right: p.rotation.x_axis.to_array(),
@@ -70,7 +115,10 @@ impl Instance {
             back: p.rotation.z_axis.to_array(),
             size: p.size.to_array(),
             color: [p.color[0], p.color[1], p.color[2], 1.0 - p.transparency],
-            cast: if p.cast_shadow { 1.0 } else { 0.0 },
+            box_min: box_min.to_array(),
+            box_max: box_max.to_array(),
+            tile,
+            flags,
         }
     }
 }
@@ -80,6 +128,8 @@ struct GpuMesh {
     vertices: wgpu::Buffer,
     indices: wgpu::Buffer,
     index_count: u32,
+    /// The mesh's bounds in its own units.
+    bounds: (Vec3, Vec3),
 }
 
 impl GpuMesh {
@@ -98,16 +148,142 @@ impl GpuMesh {
             vertices,
             indices,
             index_count: data.indices.len() as u32,
+            bounds: data.bounds(),
         }
     }
 }
 
-/// Opaque parts of one shape, drawn instanced. A part keeps its slot while
-/// it draws this shape; a slot it leaves holds a zeroed instance (which
-/// draws nothing) until another part takes it.
+impl Upload for Mesh {
+    type Gpu = GpuMesh;
+
+    fn upload_size(&self) -> usize {
+        self.positions.len() * std::mem::size_of::<mesh::Vertex>() + self.indices.len() * 4
+    }
+
+    fn upload(&self, cx: &UploadContext<'_>) -> GpuMesh {
+        profiling::scope!("upload mesh");
+        GpuMesh::upload(cx.device, &mesh::from_file(self))
+    }
+}
+
+/// An image on the GPU: its bind group (group 2) holds the texture.
+#[derive(Debug)]
+struct GpuImage {
+    bind_group: wgpu::BindGroup,
+}
+
+impl Upload for Image {
+    type Gpu = GpuImage;
+
+    fn upload_size(&self) -> usize {
+        self.byte_len()
+    }
+
+    fn upload(&self, cx: &UploadContext<'_>) -> GpuImage {
+        profiling::scope!("upload image");
+        let view = texture_with_mips(
+            cx,
+            "rook image",
+            wgpu::TextureFormat::Rgba8UnormSrgb,
+            self.width,
+            self.height,
+            &[self.mips.as_slice()],
+        );
+        GpuImage {
+            bind_group: image_bind_group(cx, &view),
+        }
+    }
+}
+
+/// A texture of `layers`, each a mip chain (largest first) of RGBA8
+/// `width` × `height`; one layer is a plain 2D texture.
+fn texture_with_mips(
+    cx: &UploadContext<'_>,
+    label: &str,
+    format: wgpu::TextureFormat,
+    width: u32,
+    height: u32,
+    layers: &[&[Vec<u8>]],
+) -> wgpu::TextureView {
+    let mip_count = layers[0].len() as u32;
+    let texture = cx.device.create_texture(&wgpu::TextureDescriptor {
+        label: Some(label),
+        size: wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: layers.len() as u32,
+        },
+        mip_level_count: mip_count,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+    for (layer, levels) in layers.iter().enumerate() {
+        for (level, pixels) in levels.iter().enumerate() {
+            let (w, h) = ((width >> level).max(1), (height >> level).max(1));
+            cx.queue.write_texture(
+                wgpu::TexelCopyTextureInfo {
+                    texture: &texture,
+                    mip_level: level as u32,
+                    origin: wgpu::Origin3d {
+                        x: 0,
+                        y: 0,
+                        z: layer as u32,
+                    },
+                    aspect: wgpu::TextureAspect::All,
+                },
+                pixels,
+                wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(w * 4),
+                    rows_per_image: Some(h),
+                },
+                wgpu::Extent3d {
+                    width: w,
+                    height: h,
+                    depth_or_array_layers: 1,
+                },
+            );
+        }
+    }
+    let dimension = if layers.len() > 1 {
+        wgpu::TextureViewDimension::D2Array
+    } else {
+        wgpu::TextureViewDimension::D2
+    };
+    texture.create_view(&wgpu::TextureViewDescriptor {
+        dimension: Some(dimension),
+        ..Default::default()
+    })
+}
+
+fn image_bind_group(cx: &UploadContext<'_>, view: &wgpu::TextureView) -> wgpu::BindGroup {
+    cx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("rook image"),
+        layout: cx.image_layout,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: wgpu::BindingResource::TextureView(view),
+        }],
+    })
+}
+
+/// What an instanced draw shares: its mesh and its image (a mesh texture,
+/// or a layer's decal).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct BatchKey {
+    shape: DrawShape,
+    image: Option<ImageHash>,
+}
+
+/// Instances of one key, drawn instanced. An instance keeps its slot while
+/// it draws this key; a slot it leaves holds a zeroed instance (which
+/// draws nothing) until another takes it.
 #[derive(Debug)]
 struct Batch {
-    shape: DrawShape,
+    key: BatchKey,
     instances: Vec<Instance>,
     free: Vec<usize>,
     /// The GPU copy and how many instances it has room for (made or grown
@@ -127,25 +303,145 @@ impl Batch {
     }
 }
 
-/// How a part should be drawn.
+/// A set of batches, drawn in order of their `z` (`ZIndex` for image
+/// layers, 0 for parts), then in the order they were made, so the draw
+/// order is the same every run.
+#[derive(Debug, Default)]
+struct Batches {
+    list: Vec<Batch>,
+    of: HashMap<(i32, BatchKey), usize>,
+    /// Indices into `list` in drawing order.
+    order: Vec<usize>,
+    /// Each batch's z.
+    z: Vec<i32>,
+}
+
+impl Batches {
+    fn clear(&mut self) {
+        *self = Self::default();
+    }
+
+    /// Take a slot for `instance` in the batch of `(z, key)`.
+    fn occupy(&mut self, z: i32, key: BatchKey, instance: Instance) -> (usize, usize) {
+        let batch = match self.of.get(&(z, key)) {
+            Some(&b) => b,
+            None => {
+                let b = self.list.len();
+                self.list.push(Batch {
+                    key,
+                    instances: Vec::new(),
+                    free: Vec::new(),
+                    buffer: None,
+                    dirty: None,
+                });
+                self.z.push(z);
+                self.of.insert((z, key), b);
+                let at = self.order.partition_point(|&o| self.z[o] <= z);
+                self.order.insert(at, b);
+                b
+            }
+        };
+        let b = &mut self.list[batch];
+        let slot = match b.free.pop() {
+            Some(slot) => slot,
+            None => {
+                b.instances.push(Instance::zeroed());
+                b.instances.len() - 1
+            }
+        };
+        b.set(slot, instance);
+        (batch, slot)
+    }
+
+    fn vacate(&mut self, batch: usize, slot: usize) {
+        let b = &mut self.list[batch];
+        b.set(slot, Instance::zeroed());
+        b.free.push(slot);
+    }
+
+    /// Bring the batches' GPU copies up to date.
+    fn upload(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {
+        let size = std::mem::size_of::<Instance>();
+        for b in &mut self.list {
+            let len = b.instances.len();
+            match &b.buffer {
+                Some((buffer, capacity)) if *capacity >= len => {
+                    if let Some(r) = b.dirty.take() {
+                        queue.write_buffer(
+                            buffer,
+                            (r.start * size) as u64,
+                            bytemuck::cast_slice(&b.instances[r]),
+                        );
+                    }
+                }
+                // New, or grown past its buffer: room to grow again.
+                _ => {
+                    let capacity = len + len / 2 + 16;
+                    b.buffer = Some((instance_buffer(device, &b.instances, capacity), capacity));
+                    b.dirty = None;
+                }
+            }
+        }
+    }
+
+    /// (key, buffer, instances) in drawing order.
+    fn draws(&self) -> Vec<(BatchKey, &wgpu::Buffer, std::ops::Range<u32>)> {
+        self.order
+            .iter()
+            .filter_map(|&i| {
+                let b = &self.list[i];
+                let (buffer, _) = b.buffer.as_ref()?;
+                Some((b.key, buffer, 0..b.instances.len() as u32))
+            })
+            .collect()
+    }
+}
+
+/// A buffer holding `list` with room for `capacity` instances.
+fn instance_buffer(device: &wgpu::Device, list: &[Instance], capacity: usize) -> wgpu::Buffer {
+    let mut padded = list.to_vec();
+    padded.resize(capacity.max(list.len()), Instance::zeroed());
+    device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("rook instances"),
+        contents: bytemuck::cast_slice(&padded),
+        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+    })
+}
+
+/// How a scene entry should be drawn now.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Target {
     Hidden,
-    Opaque(DrawShape),
+    /// Its mesh or image is still being uploaded.
+    Waiting,
+    Opaque(BatchKey),
     Transparent,
+    Layer(i32, BatchKey),
 }
 
-/// Where a scene part is drawn, by its index in [`Scene::parts`].
+/// Where a scene entry is drawn, by its index in [`Scene::parts`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Placement {
-    /// Invisible, or a shape without a mesh.
+    /// Invisible, a shape without a mesh, or waiting for an upload.
     Hidden,
     Opaque {
         batch: usize,
         slot: usize,
     },
+    Layer {
+        batch: usize,
+        slot: usize,
+    },
     /// An index into the transparent parts, which are sorted every frame.
     Transparent(usize),
+}
+
+/// Whether what an entry needs on the GPU is there.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Readiness {
+    Ready,
+    Waiting,
+    Missing,
 }
 
 /// GPU objects shared by windowed and offscreen rendering.
@@ -154,28 +450,35 @@ pub struct Renderer {
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
     color_format: wgpu::TextureFormat,
-    opaque: wgpu::RenderPipeline,
-    transparent: wgpu::RenderPipeline,
+    opaque_pipeline: wgpu::RenderPipeline,
+    transparent_pipeline: wgpu::RenderPipeline,
+    /// Decals and Textures over what's drawn.
+    layer_pipeline: wgpu::RenderPipeline,
     /// Depth only, from the sun, over the opaque batches.
-    shadow: wgpu::RenderPipeline,
+    shadow_pipeline: wgpu::RenderPipeline,
     globals: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
-    /// The shadow map, drawn by `shadow` and sampled by the main pass
-    /// through `shadow_bind_group`.
+    /// The shadow map, drawn by the shadow pass and sampled by the main
+    /// pass through `main_bind_group`.
     shadow_view: wgpu::TextureView,
-    shadow_bind_group: wgpu::BindGroup,
-    /// The built-in shapes, and each mesh file a part has drawn, uploaded
-    /// once by content hash (kept for the renderer's life).
-    meshes: HashMap<DrawShape, GpuMesh>,
-    opaque_batches: Vec<Batch>,
-    /// Each shape's batch.
-    batch_of: HashMap<DrawShape, usize>,
-    /// How each part of the scene is drawn, by its index in the scene.
+    main_bind_group: wgpu::BindGroup,
+    image_layout: wgpu::BindGroupLayout,
+    image_sampler: wgpu::Sampler,
+    /// A 1 × 1 white image, for draws without one.
+    white: GpuImage,
+    /// The built-in shapes and each mesh file a part has drawn, by shape.
+    meshes: GpuCache<DrawShape, Mesh>,
+    /// Each image something has drawn, by content hash.
+    images: GpuCache<ImageHash, Image>,
+    opaque: Batches,
+    layers: Batches,
+    /// How each entry of the scene is drawn, by its index in the scene.
     placements: Vec<Placement>,
+    /// Entries waiting for an upload, placed once it's done.
+    waiting: HashMap<usize, PartInstance>,
     /// The sorted transparent parts' instances, rewritten every frame, and
     /// how many it holds.
     transparent_buffer: Option<(wgpu::Buffer, usize)>,
-    /// Transparent parts, sorted back to front every frame.
     /// Slots for transparent parts (`None` when free), sorted every frame.
     transparent_parts: Vec<Option<PartInstance>>,
     transparent_free: Vec<usize>,
@@ -245,7 +548,27 @@ impl Renderer {
             compare: Some(wgpu::CompareFunction::GreaterEqual),
             ..Default::default()
         });
-        let shadow_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        let image_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("rook images"),
+            address_mode_u: wgpu::AddressMode::Repeat,
+            address_mode_v: wgpu::AddressMode::Repeat,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::MipmapFilterMode::Linear,
+            anisotropy_clamp: 8,
+            ..Default::default()
+        });
+        let texture_entry = |binding, dimension| wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Texture {
+                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                view_dimension: dimension,
+                multisampled: false,
+            },
+            count: None,
+        };
+        let main_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("rook shadow map"),
             entries: &[
                 wgpu::BindGroupLayoutEntry {
@@ -264,25 +587,21 @@ impl Renderer {
                     ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison),
                     count: None,
                 },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
             ],
         });
-        let shadow_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("rook shadow map"),
-            layout: &shadow_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&shadow_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&shadow_sampler),
-                },
-            ],
+        let image_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("rook image"),
+            entries: &[texture_entry(0, wgpu::TextureViewDimension::D2)],
         });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("rook parts"),
-            bind_group_layouts: &[Some(&layout), Some(&shadow_layout)],
+            bind_group_layouts: &[Some(&layout), Some(&main_layout), Some(&image_layout)],
             immediate_size: 0,
         });
         // The shadow pass writes the map, so it can't bind it.
@@ -292,10 +611,11 @@ impl Renderer {
                 bind_group_layouts: &[Some(&layout)],
                 immediate_size: 0,
             });
-        let vertex_attrs = wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3];
+        let vertex_attrs = wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Float32x2];
         let instance_attrs = wgpu::vertex_attr_array![
-            2 => Float32x3, 3 => Float32x3, 4 => Float32x3,
-            5 => Float32x3, 6 => Float32x3, 7 => Float32x4, 8 => Float32
+            3 => Float32x3, 4 => Float32x3, 5 => Float32x3, 6 => Float32x3,
+            7 => Float32x3, 8 => Float32x4, 9 => Float32x3, 10 => Float32x3,
+            11 => Float32x4, 12 => Uint32
         ];
         let buffers = [
             Some(wgpu::VertexBufferLayout {
@@ -309,7 +629,11 @@ impl Renderer {
                 attributes: &instance_attrs,
             }),
         ];
-        let make = |label, blend: Option<wgpu::BlendState>, depth_write: bool| {
+        let make = |label,
+                    fragment,
+                    blend: Option<wgpu::BlendState>,
+                    depth_write: bool,
+                    compare: wgpu::CompareFunction| {
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some(label),
                 layout: Some(&pipeline_layout),
@@ -326,15 +650,14 @@ impl Renderer {
                 depth_stencil: Some(wgpu::DepthStencilState {
                     format: DEPTH_FORMAT,
                     depth_write_enabled: Some(depth_write),
-                    // Reverse Z: nearer is greater.
-                    depth_compare: Some(wgpu::CompareFunction::Greater),
+                    depth_compare: Some(compare),
                     stencil: Default::default(),
                     bias: Default::default(),
                 }),
                 multisample: Default::default(),
                 fragment: Some(wgpu::FragmentState {
                     module: &shader,
-                    entry_point: Some("fs_main"),
+                    entry_point: Some(fragment),
                     compilation_options: Default::default(),
                     targets: &[Some(wgpu::ColorTargetState {
                         format: color_format,
@@ -346,7 +669,7 @@ impl Renderer {
                 cache: None,
             })
         };
-        let shadow = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        let shadow_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("rook shadow map"),
             layout: Some(&shadow_pipeline_layout),
             vertex: wgpu::VertexState {
@@ -378,33 +701,75 @@ impl Renderer {
             multiview_mask: None,
             cache: None,
         });
-        let opaque = make("rook opaque", None, true);
-        let transparent = make(
+        // Reverse Z: nearer is greater.
+        let opaque_pipeline = make(
+            "rook opaque",
+            "fs_main",
+            None,
+            true,
+            wgpu::CompareFunction::Greater,
+        );
+        let transparent_pipeline = make(
             "rook transparent",
+            "fs_main",
             Some(wgpu::BlendState::ALPHA_BLENDING),
             false,
+            wgpu::CompareFunction::Greater,
+        );
+        // Images lie exactly on their part's surface: the same vertices
+        // through the same (invariant) maths give the same depth.
+        let layer_pipeline = make(
+            "rook images",
+            "fs_layer",
+            Some(wgpu::BlendState::ALPHA_BLENDING),
+            false,
+            wgpu::CompareFunction::GreaterEqual,
         );
 
-        let meshes = DrawShape::ALL
-            .iter()
-            .map(|&shape| (shape, GpuMesh::upload(&device, &mesh::build(shape))))
-            .collect();
+        let cx = UploadContext {
+            device: &device,
+            queue: &queue,
+            image_layout: &image_layout,
+            sampler: &image_sampler,
+        };
+        let white_view = texture_with_mips(
+            &cx,
+            "rook white",
+            wgpu::TextureFormat::Rgba8UnormSrgb,
+            1,
+            1,
+            &[&[vec![255; 4]]],
+        );
+        let white = GpuImage {
+            bind_group: image_bind_group(&cx, &white_view),
+        };
+        let main_bind_group = main_bind_group(&cx, &main_layout, &shadow_view, &shadow_sampler);
+        let mut meshes = GpuCache::new();
+        for shape in DrawShape::ALL {
+            meshes.insert(shape, GpuMesh::upload(&device, &mesh::build(shape)));
+        }
 
         Self {
             device,
             queue,
             color_format,
-            opaque,
-            transparent,
-            shadow,
+            opaque_pipeline,
+            transparent_pipeline,
+            layer_pipeline,
+            shadow_pipeline,
             globals,
             bind_group,
             shadow_view,
-            shadow_bind_group,
+            main_bind_group,
+            image_layout,
+            image_sampler,
+            white,
             meshes,
-            opaque_batches: Vec::new(),
-            batch_of: HashMap::new(),
+            images: GpuCache::new(),
+            opaque: Batches::default(),
+            layers: Batches::default(),
             placements: Vec::new(),
+            waiting: HashMap::new(),
             transparent_free: Vec::new(),
             transparent_buffer: None,
             transparent_parts: Vec::new(),
@@ -413,10 +778,20 @@ impl Renderer {
         }
     }
 
+    #[cfg(test)]
+    fn upload_context(&self) -> UploadContext<'_> {
+        UploadContext {
+            device: &self.device,
+            queue: &self.queue,
+            image_layout: &self.image_layout,
+            sampler: &self.image_sampler,
+        }
+    }
+
     /// Draw the Head MeshType with this mesh (the user's own `head.mesh`)
     /// instead of Rook's. It must be the head at its own size, as Roblox's
     /// file is.
-    pub fn set_head_mesh(&mut self, head: &rook_content::mesh::Mesh) {
+    pub fn set_head_mesh(&mut self, head: &Mesh) {
         let gpu = GpuMesh::upload(&self.device, &mesh::from_file(head));
         self.meshes.insert(DrawShape::Head, gpu);
     }
@@ -447,22 +822,23 @@ impl Renderer {
         self.color_format
     }
 
-    /// Replace the scene. Opaque parts are grouped per shape (each mesh
-    /// file its own group, drawn instanced) and uploaded once; transparent
-    /// parts are kept for per-frame sorting.
+    /// Replace the scene. Opaque parts are grouped per (shape, image), each
+    /// group drawn instanced, and uploaded once; image layers likewise;
+    /// transparent parts are kept for per-frame sorting.
     pub fn set_scene(&mut self, scene: &Scene) {
         profiling::scope!("Renderer::set_scene");
-        self.opaque_batches.clear();
-        self.batch_of.clear();
+        self.opaque.clear();
+        self.layers.clear();
         self.placements.clear();
+        self.waiting.clear();
         self.transparent_parts.clear();
         self.transparent_free.clear();
         self.update_parts(scene, &(0..scene.parts.len()).collect::<Vec<_>>());
     }
 
-    /// Update the parts at `changed` (indices into `scene.parts`) and the
-    /// lighting. Indices must stay with their parts from one call to the
-    /// next; the scene may grow, and a part that's no longer drawn should
+    /// Update the entries at `changed` (indices into `scene.parts`) and the
+    /// lighting. Indices must stay with their entries from one call to the
+    /// next; the scene may grow, and an entry that's no longer drawn should
     /// stay as a hidden one (fully transparent).
     pub fn update_parts(&mut self, scene: &Scene, changed: &[usize]) {
         profiling::scope!("Renderer::update_parts");
@@ -471,41 +847,165 @@ impl Renderer {
             self.placements.resize(scene.parts.len(), Placement::Hidden);
         }
         for &i in changed {
-            let part = &scene.parts[i];
-            let target = if part.transparency >= 1.0 || !self.has_mesh(part.shape, scene) {
-                Target::Hidden
-            } else if part.transparency > 0.0 {
-                Target::Transparent
-            } else {
-                Target::Opaque(part.shape)
-            };
-            match (self.placements[i], target) {
-                (Placement::Hidden, Target::Hidden) => {}
-                (Placement::Transparent(t), Target::Transparent) => {
-                    self.transparent_parts[t] = Some(*part);
+            let part = scene.parts[i];
+            self.waiting.remove(&i);
+            let target = self.target(&part, Some(scene));
+            self.place(i, &part, target);
+        }
+    }
+
+    /// Whether uploads are still queued (entries waiting on them draw
+    /// nothing yet).
+    pub fn is_uploading(&self) -> bool {
+        self.meshes.has_queued() || self.images.has_queued()
+    }
+
+    /// Upload everything queued now, and place what waited on it
+    /// (screenshots, which shouldn't miss what a few more frames would
+    /// show).
+    pub fn finish_uploads(&mut self) {
+        self.upload_files(usize::MAX);
+    }
+
+    /// Upload queued files within `budget` bytes, then place the entries
+    /// whose files are all there.
+    fn upload_files(&mut self, mut budget: usize) {
+        if !self.is_uploading() {
+            return;
+        }
+        profiling::scope!("Renderer::upload_files");
+        let cx = UploadContext {
+            device: &self.device,
+            queue: &self.queue,
+            image_layout: &self.image_layout,
+            sampler: &self.image_sampler,
+        };
+        let mut first = true;
+        let meshes = self.meshes.upload(&cx, &mut budget, &mut first);
+        let images = self.images.upload(&cx, &mut budget, &mut first);
+        if !meshes && !images {
+            return;
+        }
+        let waiting: Vec<(usize, PartInstance)> = self.waiting.drain().collect();
+        for (i, part) in waiting {
+            let target = self.target(&part, None);
+            self.place(i, &part, target);
+        }
+    }
+
+    /// Draw entry `i` as `target`, leaving where it was drawn before.
+    fn place(&mut self, i: usize, part: &PartInstance, target: Target) {
+        match (self.placements[i], target) {
+            (Placement::Hidden, Target::Hidden) => {}
+            (Placement::Transparent(t), Target::Transparent) => {
+                self.transparent_parts[t] = Some(*part);
+            }
+            (Placement::Opaque { batch, slot }, Target::Opaque(key))
+                if self.opaque.list[batch].key == key =>
+            {
+                let instance = Instance::new(part, self.bounds(part.shape));
+                self.opaque.list[batch].set(slot, instance);
+            }
+            (Placement::Layer { batch, slot }, Target::Layer(z, key))
+                if self.layers.list[batch].key == key && self.layers.z[batch] == z =>
+            {
+                let instance = Instance::new(part, self.bounds(part.shape));
+                self.layers.list[batch].set(slot, instance);
+            }
+            (old, _) => {
+                self.vacate(old);
+                if target == Target::Waiting {
+                    self.waiting.insert(i, *part);
                 }
-                (Placement::Opaque { batch, slot }, Target::Opaque(shape))
-                    if self.opaque_batches[batch].shape == shape =>
-                {
-                    self.opaque_batches[batch].set(slot, Instance::from_part(part));
-                }
-                (old, _) => {
-                    self.vacate(old);
-                    self.placements[i] = self.occupy(part, target);
-                }
+                self.placements[i] = self.occupy(part, target);
             }
         }
     }
 
-    /// Free the slot a part was drawn in.
+    /// The bounds of a shape's mesh, in its own units.
+    fn bounds(&self, shape: DrawShape) -> (Vec3, Vec3) {
+        self.meshes
+            .get(&shape)
+            .map_or((Vec3::splat(-0.5), Vec3::splat(0.5)), |m| m.bounds)
+    }
+
+    /// How an entry should be drawn. With the scene, files it needs that
+    /// aren't on the GPU are queued; without, they're only waited for.
+    fn target(&mut self, part: &PartInstance, scene: Option<&Scene>) -> Target {
+        let (image, z) = match part.layer {
+            Layer::Base => (part.texture, None),
+            Layer::Image {
+                on_transparent: true,
+                image,
+                ..
+            } => (Some(image), None),
+            Layer::Image { image, z, .. } => (Some(image), Some(z)),
+        };
+        if part.transparency >= 1.0 {
+            return Target::Hidden;
+        }
+        let mesh = self.mesh_readiness(part.shape, scene);
+        let image_ready = image.map_or(Readiness::Ready, |hash| self.image_readiness(hash, scene));
+        match (mesh, image_ready) {
+            (Readiness::Missing, _) | (_, Readiness::Missing) => return Target::Hidden,
+            (Readiness::Waiting, _) | (_, Readiness::Waiting) => return Target::Waiting,
+            _ => {}
+        }
+        let key = BatchKey {
+            shape: part.shape,
+            image,
+        };
+        match z {
+            Some(z) => Target::Layer(z, key),
+            None if part.transparency > 0.0 || part.layer != Layer::Base => Target::Transparent,
+            None => Target::Opaque(key),
+        }
+    }
+
+    /// Whether a shape's mesh is on the GPU, queueing a mesh file the
+    /// first time one is drawn. A file the scene doesn't hold, or one
+    /// without triangles, draws nothing.
+    fn mesh_readiness(&mut self, shape: DrawShape, scene: Option<&Scene>) -> Readiness {
+        if self.meshes.contains(&shape) {
+            return Readiness::Ready;
+        }
+        if self.meshes.is_queued(&shape) {
+            return Readiness::Waiting;
+        }
+        let DrawShape::File(hash) = shape else {
+            return Readiness::Missing;
+        };
+        match scene.and_then(|s| s.meshes.get(&hash)) {
+            Some(file) if !file.indices.is_empty() => {
+                self.meshes.request(shape, file);
+                Readiness::Waiting
+            }
+            _ => Readiness::Missing,
+        }
+    }
+
+    fn image_readiness(&mut self, hash: ImageHash, scene: Option<&Scene>) -> Readiness {
+        if self.images.contains(&hash) {
+            return Readiness::Ready;
+        }
+        if self.images.is_queued(&hash) {
+            return Readiness::Waiting;
+        }
+        match scene.and_then(|s| s.images.get(&hash)) {
+            Some(file) => {
+                self.images.request(hash, file);
+                Readiness::Waiting
+            }
+            None => Readiness::Missing,
+        }
+    }
+
+    /// Free the slot an entry was drawn in.
     fn vacate(&mut self, placement: Placement) {
         match placement {
             Placement::Hidden => {}
-            Placement::Opaque { batch, slot } => {
-                let b = &mut self.opaque_batches[batch];
-                b.set(slot, Instance::zeroed());
-                b.free.push(slot);
-            }
+            Placement::Opaque { batch, slot } => self.opaque.vacate(batch, slot),
+            Placement::Layer { batch, slot } => self.layers.vacate(batch, slot),
             Placement::Transparent(t) => {
                 self.transparent_parts[t] = None;
                 self.transparent_free.push(t);
@@ -513,10 +1013,11 @@ impl Renderer {
         }
     }
 
-    /// Take a slot to draw a part in.
+    /// Take a slot to draw an entry in.
     fn occupy(&mut self, part: &PartInstance, target: Target) -> Placement {
+        let instance = Instance::new(part, self.bounds(part.shape));
         match target {
-            Target::Hidden => Placement::Hidden,
+            Target::Hidden | Target::Waiting => Placement::Hidden,
             Target::Transparent => {
                 let t = match self.transparent_free.pop() {
                     Some(t) => t,
@@ -528,111 +1029,51 @@ impl Renderer {
                 self.transparent_parts[t] = Some(*part);
                 Placement::Transparent(t)
             }
-            Target::Opaque(shape) => {
-                // Batches in the order their shapes first appear, so the
-                // draw order is the same every run.
-                let batch = *self.batch_of.entry(shape).or_insert_with(|| {
-                    self.opaque_batches.push(Batch {
-                        shape,
-                        instances: Vec::new(),
-                        free: Vec::new(),
-                        buffer: None,
-                        dirty: None,
-                    });
-                    self.opaque_batches.len() - 1
-                });
-                let b = &mut self.opaque_batches[batch];
-                let slot = match b.free.pop() {
-                    Some(slot) => slot,
-                    None => {
-                        b.instances.push(Instance::zeroed());
-                        b.instances.len() - 1
-                    }
-                };
-                b.set(slot, Instance::from_part(part));
+            Target::Opaque(key) => {
+                let (batch, slot) = self.opaque.occupy(0, key, instance);
                 Placement::Opaque { batch, slot }
             }
-        }
-    }
-
-    /// Whether a shape can be drawn, uploading a mesh file the first time
-    /// one is used. A file the scene doesn't hold, or one without
-    /// triangles, draws nothing.
-    fn has_mesh(&mut self, shape: DrawShape, scene: &Scene) -> bool {
-        if self.meshes.contains_key(&shape) {
-            return true;
-        }
-        let DrawShape::File(hash) = shape else {
-            return false;
-        };
-        let Some(file) = scene.meshes.get(&hash).filter(|m| !m.indices.is_empty()) else {
-            return false;
-        };
-        profiling::scope!("upload mesh");
-        let gpu = GpuMesh::upload(&self.device, &mesh::from_file(file));
-        self.meshes.insert(shape, gpu);
-        true
-    }
-
-    fn instance_buffer(&self, list: &[Instance]) -> wgpu::Buffer {
-        self.device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("rook instances"),
-                contents: bytemuck::cast_slice(list),
-                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-            })
-    }
-
-    /// A buffer holding `list` with room for `capacity` instances.
-    fn instance_buffer_with_room(&self, list: &[Instance], capacity: usize) -> wgpu::Buffer {
-        let mut padded = list.to_vec();
-        padded.resize(capacity.max(list.len()), Instance::zeroed());
-        self.instance_buffer(&padded)
-    }
-
-    /// Upload the opaque instances changed since the last frame, and the
-    /// transparent ones sorted back to front for `camera`. Returns the
-    /// transparent draws: (shape, instance range) runs in that order.
-    fn upload(&mut self, camera: &Camera) -> Vec<(DrawShape, std::ops::Range<u32>)> {
-        let size = std::mem::size_of::<Instance>();
-        for i in 0..self.opaque_batches.len() {
-            let b = &self.opaque_batches[i];
-            let len = b.instances.len();
-            match &b.buffer {
-                Some((_, capacity)) if *capacity >= len => {
-                    let b = &mut self.opaque_batches[i];
-                    if let (Some(r), Some((buffer, _))) = (b.dirty.take(), &b.buffer) {
-                        self.queue.write_buffer(
-                            buffer,
-                            (r.start * size) as u64,
-                            bytemuck::cast_slice(&b.instances[r]),
-                        );
-                    }
-                }
-                // New, or grown past its buffer: room to grow again.
-                _ => {
-                    let capacity = len + len / 2 + 16;
-                    let buffer = self.instance_buffer_with_room(&b.instances, capacity);
-                    let b = &mut self.opaque_batches[i];
-                    b.buffer = Some((buffer, capacity));
-                    b.dirty = None;
-                }
+            Target::Layer(z, key) => {
+                let (batch, slot) = self.layers.occupy(z, key, instance);
+                Placement::Layer { batch, slot }
             }
         }
+    }
+
+    /// Upload the instances changed since the last frame, and the
+    /// transparent ones sorted back to front for `camera` (an image on a
+    /// transparent part just after its part). Returns the transparent
+    /// draws: (key, whether they're images, instance range) runs in that
+    /// order.
+    fn upload_instances(&mut self, camera: &Camera) -> Vec<(BatchKey, bool, std::ops::Range<u32>)> {
+        self.opaque.upload(&self.device, &self.queue);
+        self.layers.upload(&self.device, &self.queue);
         // Back to front for blending.
         let mut order: Vec<&PartInstance> = self.transparent_parts.iter().flatten().collect();
         order.sort_by(|a, b| {
             let da = a.position.distance_squared(camera.position);
             let db = b.position.distance_squared(camera.position);
-            db.total_cmp(&da)
+            let image = |p: &PartInstance| p.layer != Layer::Base;
+            db.total_cmp(&da).then(image(a).cmp(&image(b)))
         });
-        let instances: Vec<Instance> = order.iter().map(|p| Instance::from_part(p)).collect();
-        let mut runs: Vec<(DrawShape, std::ops::Range<u32>)> = Vec::new();
+        let instances: Vec<Instance> = order
+            .iter()
+            .map(|p| Instance::new(p, self.bounds(p.shape)))
+            .collect();
+        let mut runs: Vec<(BatchKey, bool, std::ops::Range<u32>)> = Vec::new();
         for (i, p) in order.iter().enumerate() {
             let i = i as u32;
+            let (image, is_layer) = match p.layer {
+                Layer::Base => (p.texture, false),
+                Layer::Image { image, .. } => (Some(image), true),
+            };
+            let key = BatchKey {
+                shape: p.shape,
+                image,
+            };
             match runs.last_mut() {
-                Some((shape, r)) if *shape == p.shape => r.end = i + 1,
-                _ => runs.push((p.shape, i..i + 1)),
+                Some((k, l, r)) if *k == key && *l == is_layer => r.end = i + 1,
+                _ => runs.push((key, is_layer, i..i + 1)),
             }
         }
         if instances.is_empty() {
@@ -646,7 +1087,7 @@ impl Renderer {
             _ => {
                 // Room to grow, so a few more parts don't make a new buffer.
                 let capacity = instances.len() * 2;
-                let buffer = self.instance_buffer_with_room(&instances, capacity);
+                let buffer = instance_buffer(&self.device, &instances, capacity);
                 self.transparent_buffer = Some((buffer, capacity));
             }
         }
@@ -680,8 +1121,11 @@ impl Renderer {
     }
 
     /// Draw the scene into `target` (a view of a `color_format` texture).
+    /// Mesh files and images queued for upload go up first, within a
+    /// per-frame budget.
     pub fn render(&mut self, target: &wgpu::TextureView, width: u32, height: u32, camera: &Camera) {
         profiling::scope!("Renderer::render");
+        self.upload_files(FRAME_UPLOAD_BYTES);
         let l = self.lighting;
         let aspect = width as f32 / height.max(1) as f32;
         let sun = l.sun_direction.normalize_or(Vec3::Y);
@@ -690,6 +1134,12 @@ impl Renderer {
         let shadow =
             (l.global_shadows && sun.y > 0.0).then(|| ShadowView::fit(camera, aspect, sun));
         let rgb = |c: [f32; 3], w: f32| [c[0], c[1], c[2], w];
+        let mut faces = [[0.0; 4]; 12];
+        for face in NormalId::ALL {
+            let (right, up) = face.image_axes();
+            faces[face.index() * 2] = rgb(right.to_array(), 0.0);
+            faces[face.index() * 2 + 1] = rgb(up.to_array(), 0.0);
+        }
         let globals = Globals {
             view_proj: camera.view_projection(aspect).to_cols_array_2d(),
             camera_pos: rgb(camera.position.to_array(), 1.0),
@@ -710,11 +1160,12 @@ impl Renderer {
                 ],
                 None => [0.0; 4],
             },
+            faces,
         };
         self.queue
             .write_buffer(&self.globals, 0, bytemuck::bytes_of(&globals));
 
-        let transparent_runs = self.upload(camera);
+        let transparent_runs = self.upload_instances(camera);
 
         let depth = self.depth_view(width, height);
         let sky = srgb_to_linear(l.sky_horizon);
@@ -723,14 +1174,7 @@ impl Renderer {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("rook frame"),
             });
-        let opaque: Vec<_> = self
-            .opaque_batches
-            .iter()
-            .filter_map(|b| {
-                let (buffer, _) = b.buffer.as_ref()?;
-                Some((b.shape, buffer, 0..b.instances.len() as u32))
-            })
-            .collect();
+        let opaque = self.opaque.draws();
         if shadow.is_some() {
             profiling::scope!("shadow pass");
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -749,9 +1193,9 @@ impl Renderer {
                 multiview_mask: None,
             });
             pass.set_bind_group(0, &self.bind_group, &[]);
-            pass.set_pipeline(&self.shadow);
-            for (shape, buffer, instances) in &opaque {
-                self.draw(&mut pass, *shape, buffer, instances.clone());
+            pass.set_pipeline(&self.shadow_pipeline);
+            for (key, buffer, instances) in &opaque {
+                self.draw(&mut pass, key.shape, None, buffer, instances.clone());
             }
         }
         {
@@ -784,41 +1228,62 @@ impl Renderer {
                 multiview_mask: None,
             });
             pass.set_bind_group(0, &self.bind_group, &[]);
-            pass.set_bind_group(1, &self.shadow_bind_group, &[]);
-            let transparent =
-                self.transparent_buffer
-                    .as_ref()
-                    .into_iter()
-                    .flat_map(|(buffer, _)| {
-                        transparent_runs
-                            .iter()
-                            .map(move |(shape, range)| (*shape, buffer, range.clone()))
-                    });
+            pass.set_bind_group(1, &self.main_bind_group, &[]);
+            // Opaque parts, then images on them (before transparent parts,
+            // so a window in front of a decal covers it), then transparent
+            // parts back to front.
             for (pipeline, draws) in [
-                (&self.opaque, opaque),
-                (&self.transparent, transparent.collect::<Vec<_>>()),
+                (&self.opaque_pipeline, opaque),
+                (&self.layer_pipeline, self.layers.draws()),
             ] {
+                if draws.is_empty() {
+                    continue;
+                }
                 pass.set_pipeline(pipeline);
-                for (shape, buffer, instances) in draws {
-                    self.draw(&mut pass, shape, buffer, instances);
+                for (key, buffer, instances) in draws {
+                    let image = Some(self.image_group(key.image));
+                    self.draw(&mut pass, key.shape, image, buffer, instances);
+                }
+            }
+            if let Some((buffer, _)) = &self.transparent_buffer {
+                for (key, is_layer, instances) in transparent_runs {
+                    pass.set_pipeline(if is_layer {
+                        &self.layer_pipeline
+                    } else {
+                        &self.transparent_pipeline
+                    });
+                    let image = Some(self.image_group(key.image));
+                    self.draw(&mut pass, key.shape, image, buffer, instances);
                 }
             }
         }
         self.queue.submit([encoder.finish()]);
     }
 
-    /// Draw `instances` of `buffer` as `shape`.
+    /// The bind group of a draw's image (white when it has none).
+    fn image_group(&self, image: Option<ImageHash>) -> &wgpu::BindGroup {
+        image
+            .and_then(|hash| self.images.get(&hash))
+            .map_or(&self.white.bind_group, |g| &g.bind_group)
+    }
+
+    /// Draw `instances` of `buffer` as `shape`, with `image` bound as
+    /// group 2 (not in the shadow pass).
     fn draw(
         &self,
         pass: &mut wgpu::RenderPass<'_>,
         shape: DrawShape,
+        image: Option<&wgpu::BindGroup>,
         buffer: &wgpu::Buffer,
         instances: std::ops::Range<u32>,
     ) {
-        // Parts are only drawn for shapes with a mesh.
+        // Entries are only drawn for shapes with a mesh.
         let Some(mesh) = self.meshes.get(&shape) else {
             return;
         };
+        if let Some(group) = image {
+            pass.set_bind_group(2, group, &[]);
+        }
         pass.set_vertex_buffer(0, mesh.vertices.slice(..));
         pass.set_vertex_buffer(1, buffer.slice(..));
         pass.set_index_buffer(mesh.indices.slice(..), wgpu::IndexFormat::Uint32);
@@ -899,6 +1364,33 @@ impl Renderer {
     }
 }
 
+/// The main pass's group 1: the shadow map and the image sampler.
+fn main_bind_group(
+    cx: &UploadContext<'_>,
+    layout: &wgpu::BindGroupLayout,
+    shadow_view: &wgpu::TextureView,
+    shadow_sampler: &wgpu::Sampler,
+) -> wgpu::BindGroup {
+    cx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("rook shadow map"),
+        layout,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(shadow_view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::Sampler(shadow_sampler),
+            },
+            wgpu::BindGroupEntry {
+                binding: 3,
+                resource: wgpu::BindingResource::Sampler(cx.sampler),
+            },
+        ],
+    })
+}
+
 fn srgb_to_linear(c: [f32; 3]) -> [f32; 3] {
     c.map(|x| {
         if x <= 0.04045 {
@@ -911,25 +1403,46 @@ fn srgb_to_linear(c: [f32; 3]) -> [f32; 3] {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use glam::Mat3;
 
     use super::*;
 
     fn part(shape: PartShape, x: f32, color: [f32; 3], transparency: f32) -> PartInstance {
         PartInstance {
-            shape: DrawShape::Part(shape),
-            position: Vec3::new(x, 0.0, 0.0),
-            rotation: Mat3::IDENTITY,
-            size: Vec3::splat(2.0),
             color,
             transparency,
-            cast_shadow: true,
+            ..PartInstance::plain(
+                DrawShape::Part(shape),
+                Vec3::new(x, 0.0, 0.0),
+                Mat3::IDENTITY,
+                Vec3::splat(2.0),
+            )
         }
+    }
+
+    /// A 2 × 2 image: red, green / blue, white.
+    fn image() -> Arc<Image> {
+        let pixels = [
+            [255, 0, 0, 255],
+            [0, 255, 0, 255],
+            [0, 0, 255, 255],
+            [255; 4],
+        ];
+        Arc::new(Image {
+            width: 2,
+            height: 2,
+            format: rook_content::image::ImageFormat::Png,
+            mips: rook_content::image::mips(pixels.concat(), 2, 2),
+            translucent: false,
+        })
     }
 
     /// Updating parts one by one draws what setting the whole scene draws:
     /// moves, recolours, a shape change, opaque to transparent and back,
-    /// a part hidden, and a new part in the slot it left.
+    /// a part hidden, a new part in the slot it left, and decals and mesh
+    /// textures coming and going.
     #[test]
     fn updating_parts_draws_what_a_new_scene_draws() {
         // Rendering needs a GPU adapter; machines without one skip this.
@@ -942,6 +1455,16 @@ mod tests {
         let red = [1.0, 0.0, 0.0];
         let green = [0.0, 1.0, 0.0];
         let blue = [0.0, 0.0, 1.0];
+        let hash = ImageHash([7; 32]);
+        let decal = |x: f32| PartInstance {
+            layer: Layer::Image {
+                image: hash,
+                placement: ImagePlacement::Face(NormalId::Back),
+                z: 1,
+                on_transparent: x > 0.0,
+            },
+            ..part(PartShape::Block, x, [1.0; 3], 0.0)
+        };
         let mut scene = Scene {
             parts: vec![
                 part(PartShape::Block, -6.0, red, 0.0),
@@ -949,7 +1472,9 @@ mod tests {
                 part(PartShape::Block, 0.0, blue, 0.5),
                 part(PartShape::Cylinder, 3.0, red, 0.0),
                 part(PartShape::Block, 6.0, green, 0.0),
+                decal(-6.0),
             ],
+            images: HashMap::from([(hash, image())]),
             ..Scene::default()
         };
         incremental.set_scene(&scene);
@@ -959,19 +1484,80 @@ mod tests {
         scene.parts[0].position.y = 1.0;
         scene.parts[0].color = blue;
         scene.parts[1].shape = DrawShape::Part(PartShape::Block);
+        scene.parts[1].texture = Some(hash);
         scene.parts[2].transparency = 0.0;
         scene.parts[3].transparency = 0.25;
         scene.parts[4].transparency = 1.0;
+        scene.parts[5] = decal(3.0);
         scene.parts.push(part(PartShape::Wedge, 9.0, red, 0.0));
-        incremental.update_parts(&scene, &[0, 1, 2, 3, 4, 5]);
+        incremental.update_parts(&scene, &[0, 1, 2, 3, 4, 5, 6]);
         // The hidden part's slot is taken by a new one.
         scene.parts[4] = part(PartShape::Ball, -9.0, blue, 0.0);
         incremental.update_parts(&scene, &[4]);
+        incremental.finish_uploads();
 
         fresh.set_scene(&scene);
+        fresh.finish_uploads();
         assert_eq!(
             incremental.render_to_image(64, 32, &camera).unwrap(),
             fresh.render_to_image(64, 32, &camera).unwrap()
         );
+    }
+
+    /// A decal shows its image on its face, and a part waiting for its
+    /// image draws nothing until the upload.
+    #[test]
+    fn decals_draw_on_their_face() {
+        let Ok(mut r) = Renderer::headless() else {
+            return;
+        };
+        let hash = ImageHash([1; 32]);
+        let mut base = part(PartShape::Block, 0.0, [0.5; 3], 0.0);
+        base.size = Vec3::new(4.0, 4.0, 1.0);
+        let decal = PartInstance {
+            layer: Layer::Image {
+                image: hash,
+                placement: ImagePlacement::Face(NormalId::Back),
+                z: 1,
+                on_transparent: false,
+            },
+            color: [1.0; 3],
+            ..base
+        };
+        let scene = Scene {
+            parts: vec![base, decal],
+            images: HashMap::from([(hash, image())]),
+            lighting: Lighting {
+                ambient: [1.0; 3],
+                outdoor_ambient: [0.0; 3],
+                brightness: 0.0,
+                ..Lighting::default()
+            },
+            ..Scene::default()
+        };
+        r.set_scene(&scene);
+        assert!(r.is_uploading());
+        // From +Z the Back face's image is upright: red top left, white
+        // bottom right.
+        let camera = Camera {
+            fov_y: 20.0,
+            ..Camera::look_at(Vec3::new(0.0, 0.0, 20.0), Vec3::ZERO)
+        };
+        let (w, h) = (64, 64);
+        let pixels = r.render_to_image(w, h, &camera).unwrap();
+        assert!(!r.is_uploading());
+        let at = |pixels: &[u8], x: u32, y: u32| {
+            let i = ((y * w + x) * 4) as usize;
+            [pixels[i], pixels[i + 1], pixels[i + 2]]
+        };
+        let pixels_after = r.render_to_image(w, h, &camera).unwrap();
+        // The first frame uploaded the image, then drew it.
+        assert_eq!(pixels, pixels_after);
+        let top_left = at(&pixels_after, 24, 24);
+        let bottom_right = at(&pixels_after, 40, 40);
+        // Mostly red, mostly white (the 2 x 2 image is filtered).
+        assert!(top_left[0] > top_left[1] + 100, "{top_left:?}");
+        assert!(top_left[0] > top_left[2] + 100, "{top_left:?}");
+        assert!(bottom_right.iter().all(|&c| c > 150), "{bottom_right:?}");
     }
 }

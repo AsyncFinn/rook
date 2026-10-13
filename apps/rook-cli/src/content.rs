@@ -151,19 +151,21 @@ struct Use {
     count: usize,
     /// Uses as a mesh (`MeshId` of a mesh class or MeshPart).
     mesh: usize,
+    /// Uses as an image (textures, decals, images, sky faces).
+    image: usize,
     /// `Class.Property` of the first use.
     property: String,
     /// Full name of the first instance using it.
     instance: String,
 }
 
-/// Properties that hold a mesh: `MeshId` (`MeshContent` in newer files,
-/// `MeshID` in some 2016 MeshParts) of the mesh classes and MeshPart.
-fn is_mesh_property(class: &str, key: &str) -> bool {
-    matches!(
+/// What a property of `class` holds (`Want::for_property`).
+fn property_want(class: &str, key: &str) -> Want {
+    let mesh_owner = matches!(
         class,
         "SpecialMesh" | "FileMesh" | "CharacterMesh" | "MeshPart"
-    ) && matches!(key, "MeshId" | "MeshContent" | "MeshID")
+    );
+    Want::for_property(key, mesh_owner)
 }
 
 /// The mesh version a file starts with (`version 2.00`).
@@ -174,27 +176,40 @@ fn mesh_version(bytes: &[u8]) -> Option<String> {
     Some(line.trim_end().strip_prefix("version ")?.to_owned())
 }
 
-/// The mesh references in a place: how many decode, by version, and which
-/// fail and why.
-fn print_meshes(
+/// The mesh or image references in a place: how many decode, by version
+/// or format, and which fail and why.
+fn print_decoded(
+    what: &str,
     refs: &BTreeMap<ContentRef, Vec<&str>>,
     uses: &BTreeMap<String, Use>,
-    meshes: &BTreeMap<ContentRef, Result<Fetched, Failure>>,
+    decoded: &BTreeMap<ContentRef, Result<Fetched, Failure>>,
     first_use: &dyn Fn(&[&str]) -> String,
 ) {
-    if meshes.is_empty() {
+    if decoded.is_empty() {
         return;
     }
     let mut by_result: BTreeMap<String, (usize, usize)> = BTreeMap::new();
     let mut failed = Vec::new();
-    for (r, outcome) in meshes {
+    for (r, outcome) in decoded {
         let texts = &refs[r];
-        let n: usize = texts.iter().map(|t| uses[*t].mesh).sum();
+        let n: usize = texts
+            .iter()
+            .map(|t| {
+                if what == "Meshes" {
+                    uses[*t].mesh
+                } else {
+                    uses[*t].image
+                }
+            })
+            .sum();
         let key = match outcome {
-            Ok(f) => format!(
-                "decoded, version {}",
-                mesh_version(&f.bytes).unwrap_or_default()
-            ),
+            Ok(f) => match &f.image {
+                Some(image) => format!("decoded, {}", image.format.name()),
+                None => format!(
+                    "decoded, version {}",
+                    mesh_version(&f.bytes).unwrap_or_default()
+                ),
+            },
             Err(e) if e.kind == FailureKind::Invalid => {
                 failed.push((r, texts, e));
                 format!("not decoded: {}", e.message)
@@ -206,13 +221,13 @@ fn print_meshes(
         slot.1 += 1;
     }
     let total: usize = by_result.values().map(|v| v.0).sum();
-    println!("\nMeshes: {total} uses, {} distinct targets", meshes.len());
+    println!("\n{what}: {total} uses, {} distinct targets", decoded.len());
     println!("{:>8} {:>9}", "uses", "distinct");
     for (what, (n, d)) in &by_result {
         println!("{n:>8} {d:>9}  {what}");
     }
     if !failed.is_empty() {
-        println!("\nMeshes that load but don't decode:");
+        println!("\n{what} that load but don't decode:");
         for (r, texts, e) in failed {
             println!("  {r}  {}\n      {}", e.message, first_use(texts));
         }
@@ -254,8 +269,10 @@ pub fn place(file: &Path, options: &Options) -> anyhow::Result<()> {
                 u.instance = full_name(dom, inst.referent());
             }
             u.count += 1;
-            if is_mesh_property(&inst.class, key) {
-                u.mesh += 1;
+            match property_want(&inst.class, key) {
+                Want::Mesh => u.mesh += 1,
+                Want::Image => u.image += 1,
+                Want::Bytes => {}
             }
         }
     }
@@ -274,6 +291,7 @@ pub fn place(file: &Path, options: &Options) -> anyhow::Result<()> {
     let mut loader = Loader::new(resolver.clone());
     let mut tickets = BTreeMap::new();
     let mut mesh_tickets = BTreeMap::new();
+    let mut image_tickets = BTreeMap::new();
     for (r, texts) in &refs {
         if options.refresh {
             forget(&resolver, r);
@@ -282,15 +300,21 @@ pub fn place(file: &Path, options: &Options) -> anyhow::Result<()> {
         if texts.iter().any(|t| uses[*t].mesh > 0) {
             mesh_tickets.insert(loader.request_as(r.clone(), Want::Mesh), r.clone());
         }
+        if texts.iter().any(|t| uses[*t].image > 0) {
+            image_tickets.insert(loader.request_as(r.clone(), Want::Image), r.clone());
+        }
     }
     let started = std::time::Instant::now();
     let mut results: BTreeMap<ContentRef, Result<Fetched, Failure>> = BTreeMap::new();
     let mut meshes: BTreeMap<ContentRef, Result<Fetched, Failure>> = BTreeMap::new();
+    let mut images: BTreeMap<ContentRef, Result<Fetched, Failure>> = BTreeMap::new();
     for (t, outcome) in loader.wait_all() {
         if let Some(r) = tickets.remove(&t) {
             results.insert(r, outcome);
         } else if let Some(r) = mesh_tickets.remove(&t) {
             meshes.insert(r, outcome);
+        } else if let Some(r) = image_tickets.remove(&t) {
+            images.insert(r, outcome);
         }
     }
 
@@ -349,7 +373,8 @@ pub fn place(file: &Path, options: &Options) -> anyhow::Result<()> {
             println!("  {text:?}  no content\n      {}", first_use(&[text]));
         }
     }
-    print_meshes(&refs, &uses, &meshes, &first_use);
+    print_decoded("Meshes", &refs, &uses, &meshes, &first_use);
+    print_decoded("Images", &refs, &uses, &images, &first_use);
     if options.verbose {
         println!("\nResolved:");
         for (r, texts) in &refs {

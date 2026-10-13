@@ -241,6 +241,120 @@ pub fn mesh_kinds(dom: &rbx_dom_weak::WeakDom, inst: &rbx_dom_weak::Instance) ->
     out
 }
 
+/// What decides how an instance looks beyond its shape, for the scan's
+/// appearance counts (M4 step 4): a part's `Material` and each face's
+/// surface type (counted per face); a Decal's or Texture's face, tint,
+/// transparency and `ZIndex`, a Texture's tiling, and whether its part is
+/// invisible; a mesh's `VertexColor` and `TextureId`, and MeshPart
+/// `TextureID`.
+pub fn looks(dom: &rbx_dom_weak::WeakDom, inst: &rbx_dom_weak::Instance) -> Vec<String> {
+    use rbx_types::Variant;
+    let db = rook_reflection::database();
+    let item = |enum_name: &str, value: u32| {
+        db.enum_by_name(enum_name)
+            .and_then(|e| e.items.iter().find(|(_, v)| *v == value))
+            .map_or_else(|| format!("#{value}"), |(name, _)| (*name).to_owned())
+    };
+    let prop = |name: &str| inst.properties.get(&name.into());
+    let number = |name: &str| match prop(name) {
+        Some(Variant::Float32(f)) => Some(f64::from(*f)),
+        Some(Variant::Float64(f)) => Some(*f),
+        Some(Variant::Int32(i)) => Some(f64::from(*i)),
+        _ => None,
+    };
+    let enum_value = |name: &str| match prop(name) {
+        Some(Variant::Enum(e)) => Some(e.to_u32()),
+        _ => None,
+    };
+    let content = |name: &str| match prop(name) {
+        Some(Variant::ContentId(c)) => !c.as_str().is_empty(),
+        Some(Variant::Content(c)) => c.as_uri().is_some_and(|u| !u.is_empty()),
+        _ => false,
+    };
+    let class = inst.class.as_str();
+    let mut out = Vec::new();
+    let is_part = db
+        .class_by_name(class)
+        .zip(db.class_by_name("BasePart"))
+        .is_some_and(|(c, part)| db.is_a(c.id, part.id));
+    if is_part {
+        match enum_value("Material") {
+            Some(m) => out.push(format!("Material {}", item("Material", m))),
+            None => out.push("Material (not saved)".into()),
+        }
+        for face in ["Top", "Bottom", "Front", "Back", "Left", "Right"] {
+            if let Some(s) = enum_value(&format!("{face}Surface")) {
+                out.push(format!("Surface {}", item("SurfaceType", s)));
+                out.push(format!("Surface {} on {face}", item("SurfaceType", s)));
+            }
+        }
+        if class == "MeshPart" && (content("TextureID") || content("TextureContent")) {
+            out.push("MeshPart with TextureID".into());
+        }
+        if number("Reflectance").is_some_and(|r| r > 0.0) {
+            out.push("Reflectance above 0".into());
+        }
+    }
+    if matches!(class, "Decal" | "Texture") {
+        if let Some(face) = enum_value("Face") {
+            out.push(format!("{class} Face {}", item("NormalId", face)));
+        }
+        if let Some(z) = number("ZIndex") {
+            out.push(format!("{class} ZIndex {z}"));
+        }
+        if number("Transparency").is_some_and(|t| t != 0.0) {
+            out.push(format!("{class} Transparency not 0"));
+        }
+        let tint = match prop("Color3") {
+            Some(Variant::Color3(c)) => [c.r, c.g, c.b] != [1.0; 3],
+            _ => false,
+        };
+        if tint {
+            out.push(format!("{class} Color3 not white"));
+        }
+        if let Some(parent) = dom.get_by_ref(inst.parent()) {
+            let invisible = match parent.properties.get(&"Transparency".into()) {
+                Some(Variant::Float32(t)) => *t >= 1.0,
+                _ => false,
+            };
+            if invisible {
+                out.push(format!("{class} on an invisible part"));
+            }
+            out.push(format!("{class} on {}", parent.class));
+        }
+        if class == "Texture" {
+            let (u, v) = (number("StudsPerTileU"), number("StudsPerTileV"));
+            if let (Some(u), Some(v)) = (u, v) {
+                out.push(format!("Texture StudsPerTile {u} x {v}"));
+            }
+            if ["OffsetStudsU", "OffsetStudsV"]
+                .iter()
+                .any(|k| number(k).is_some_and(|o| o != 0.0))
+            {
+                out.push("Texture Offset not 0".into());
+            }
+        }
+    }
+    if matches!(
+        class,
+        "SpecialMesh" | "FileMesh" | "BlockMesh" | "CylinderMesh"
+    ) {
+        if let Some(Variant::Vector3(c)) = prop("VertexColor")
+            && [c.x, c.y, c.z] != [1.0; 3]
+        {
+            out.push(format!("{class} VertexColor not (1, 1, 1)"));
+        }
+        if content("TextureId") || content("TextureContent") {
+            let kind = match (class, enum_value("MeshType")) {
+                ("SpecialMesh", Some(t)) => format!("SpecialMesh {}", item("MeshType", t)),
+                _ => class.to_owned(),
+            };
+            out.push(format!("{kind} with TextureId"));
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

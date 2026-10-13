@@ -246,6 +246,13 @@ pub fn summary_markdown(agg: &Aggregate, records: &[FileRecord], elapsed: Durati
     usage_table(&mut md, "Meshes", "Kind", &agg.meshes, 60);
     usage_table(
         &mut md,
+        "Materials, surfaces, decals and textures",
+        "Kind",
+        &agg.looks,
+        300,
+    );
+    usage_table(
+        &mut md,
         "`rbxasset://` paths the install lacks",
         "Kind: path",
         &agg.content_paths,

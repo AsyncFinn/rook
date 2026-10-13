@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex};
 
+use crate::image::Image;
 use crate::mesh::Mesh;
 use crate::{ContentRef, Failure, FailureKind, Fetched, Resolver};
 
@@ -32,6 +33,30 @@ pub enum Want {
     /// A mesh: the worker decodes it into [`Fetched::mesh`], and bytes that
     /// don't decode fail with [`FailureKind::Invalid`].
     Mesh,
+    /// An image: the worker decodes it to RGBA8 with mips into
+    /// [`Fetched::image`]; bytes that aren't an image fail with
+    /// [`FailureKind::Invalid`].
+    Image,
+}
+
+impl Want {
+    /// What a content property must hold: a mesh for the `MeshId` of a
+    /// mesh class or MeshPart (`mesh_owner`; files store it as
+    /// `MeshContent`, some old MeshParts as `MeshID`), an image for the
+    /// image properties (textures, images, sky faces, the sun and moon),
+    /// and anything for the rest (sounds, animations, scripts).
+    pub fn for_property(name: &str, mesh_owner: bool) -> Self {
+        if mesh_owner && matches!(name, "MeshContent" | "MeshId" | "MeshID") {
+            Self::Mesh
+        } else if ["Texture", "Image", "ColorMap", "Skybox", "Sun", "Moon"]
+            .iter()
+            .any(|k| name.contains(k))
+        {
+            Self::Image
+        } else {
+            Self::Bytes
+        }
+    }
 }
 
 type Job = (ContentRef, Want);
@@ -130,14 +155,22 @@ impl Loader {
     }
 }
 
-/// Resolve a job and, for a mesh, decode it.
+/// Resolve a job and, for a mesh or an image, decode it.
 fn run(resolver: &Resolver, (r, want): &Job) -> Outcome {
     let mut fetched = resolver.resolve(r)?;
-    if *want == Want::Mesh {
-        profiling::scope!("decode mesh");
-        let mesh = Mesh::decode(&fetched.bytes)
-            .map_err(|e| Failure::new(FailureKind::Invalid, e.to_string()))?;
-        fetched.mesh = Some(Arc::new(mesh));
+    let invalid = |e: &dyn std::fmt::Display| Failure::new(FailureKind::Invalid, e.to_string());
+    match want {
+        Want::Bytes => {}
+        Want::Mesh => {
+            profiling::scope!("decode mesh");
+            let mesh = Mesh::decode(&fetched.bytes).map_err(|e| invalid(&e))?;
+            fetched.mesh = Some(Arc::new(mesh));
+        }
+        Want::Image => {
+            profiling::scope!("decode image");
+            let image = Image::decode(&fetched.bytes).map_err(|e| invalid(&e))?;
+            fetched.image = Some(Arc::new(image));
+        }
     }
     Ok(fetched)
 }

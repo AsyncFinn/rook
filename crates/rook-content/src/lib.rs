@@ -13,13 +13,14 @@
 //!   back when the engine asks, so the engine thread never waits for disk
 //!   or network.
 //!
-//! Decoders for what the bytes hold come with their users: [`mesh`] reads
-//! the mesh versions the renderer needs so far. See `docs/architecture.md`
+//! Decoders for what the bytes hold live here too, one per kind: [`mesh`]
+//! reads mesh files and [`image`] image files. See `docs/architecture.md`
 //! §8 "Content" and ROADMAP M4.
 
 pub mod cache;
 pub mod defaults;
 pub mod delivery;
+pub mod image;
 pub mod install;
 mod loader;
 pub mod mesh;
@@ -29,7 +30,7 @@ mod resolver;
 pub use cache::Cache;
 pub use install::{Install, InstallKind};
 pub use loader::{Loader, Ticket, Want};
-pub use reference::{ContentRef, Thumbnail};
+pub use reference::{ContentRef, Thumbnail, image_url_rewrite};
 pub use resolver::{Config, ProviderKind, Resolver};
 
 use std::fmt;
@@ -81,6 +82,9 @@ pub struct Fetched {
     /// The decoded mesh, when a [`Loader`] was asked for a mesh
     /// ([`Want::Mesh`]); decoding happens on its worker threads.
     pub mesh: Option<Arc<mesh::Mesh>>,
+    /// The decoded image, when a [`Loader`] was asked for an image
+    /// ([`Want::Image`]).
+    pub image: Option<Arc<image::Image>>,
 }
 
 impl Fetched {
@@ -91,6 +95,7 @@ impl Fetched {
             bytes,
             source: Source { kind, location },
             mesh: None,
+            image: None,
         }
     }
 }
@@ -109,8 +114,8 @@ pub enum FailureKind {
     Offline,
     /// The network failed (no connection, timeout, an unexpected answer).
     Network,
-    /// The bytes aren't what was asked for: not a mesh, or a mesh that is
-    /// damaged or of a version Rook doesn't read yet.
+    /// The bytes aren't what was asked for: not a mesh or an image, or one
+    /// that is damaged or of a version Rook doesn't read yet.
     Invalid,
 }
 

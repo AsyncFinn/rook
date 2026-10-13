@@ -452,7 +452,9 @@ impl DataModel {
         let props = RenderProps::get();
         let changes = &mut self.render_changes;
         // A mesh decides how its parent part looks (SpecialMesh, BlockMesh,
-        // CylinderMesh, FileMesh).
+        // CylinderMesh, FileMesh), and decals and textures draw on it.
+        let decorates =
+            |id: InstanceId| dom.is_a(id, "DataModelMesh") || dom.is_a(id, "FaceInstance");
         let mark_part = |changes: &mut RenderChanges, part: Option<InstanceId>| {
             if let Some(part) = part
                 && !changes.full
@@ -474,7 +476,7 @@ impl DataModel {
                         {
                             changes.moved.insert(*id);
                         }
-                    } else if dom.is_a(*id, "DataModelMesh") {
+                    } else if decorates(*id) {
                         mark_part(changes, dom.parent(*id));
                     } else {
                         mark_part(changes, Some(*id));
@@ -490,7 +492,7 @@ impl DataModel {
                     let parts = subtree.iter().filter(|i| dom.is_a(**i, "BasePart"));
                     let before = changes.placed.len();
                     changes.placed.extend(parts);
-                    if changes.placed.len() == before && dom.is_a(*id, "DataModelMesh") {
+                    if changes.placed.len() == before && decorates(*id) {
                         mark_part(changes, *old_parent);
                         mark_part(changes, *new_parent);
                     }
@@ -768,7 +770,7 @@ mod tests {
     /// A script changing a part's mesh (its type or Scale, or adding or
     /// removing one) changes how the part looks, so the part is redrawn.
     #[test]
-    fn mesh_changes_mark_their_part() {
+    fn mesh_and_decal_changes_mark_their_part() {
         let mut s = Server::new(&Options::default()).unwrap();
         let ws = service(&s, "Workspace");
         let part = add_under(&s, ws, "Part", "Part", "");
@@ -789,6 +791,10 @@ mod tests {
             "Instance.new('CylinderMesh', workspace.Part)",
             "workspace.Part.CylinderMesh.Parent = nil",
             "workspace.Part.Mesh:Destroy()",
+            "Instance.new('Decal', workspace.Part)",
+            "workspace.Part.Decal.Transparency = 0.5",
+            "Instance.new('Texture', workspace.Part).StudsPerTileU = 3",
+            "workspace.Part.Decal:Destroy()",
         ] {
             assert_eq!(changed(&mut s, source), only_part, "{source}");
         }
@@ -808,6 +814,13 @@ mod tests {
         assert!(changed(&mut s, "Instance.new('Folder', workspace.Part)").is_empty());
     }
 
+    /// A 1 x 1 red PNG.
+    const PNG: [u8; 70] = [
+        137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6,
+        0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 13, 73, 68, 65, 84, 120, 156, 99, 248, 207, 192, 240,
+        31, 0, 5, 0, 1, 255, 137, 153, 61, 29, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130,
+    ];
+
     /// Options whose content comes from a synthetic install holding
     /// `textures/face.png` and `sounds/hit.wav`, with no network or cache.
     fn content_options(name: &str) -> Options {
@@ -817,7 +830,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join("content/textures")).unwrap();
         std::fs::create_dir_all(dir.join("content/sounds")).unwrap();
-        std::fs::write(dir.join("content/textures/face.png"), b"png").unwrap();
+        std::fs::write(dir.join("content/textures/face.png"), PNG).unwrap();
         std::fs::write(dir.join("content/sounds/hit.wav"), b"wav").unwrap();
         let mut config = rook_content::Config::empty();
         config.install = rook_content::Install::at(&dir, rook_content::InstallKind::Custom);
@@ -843,8 +856,8 @@ mod tests {
 
     /// PreloadAsync on a client, as observed in Studio: instances stand for
     /// their (and their descendants') content, strings load as images,
-    /// asset id strings fail, empty strings are skipped, and the call
-    /// returns after the last callback.
+    /// asset id strings fail, empty strings are skipped, an image property
+    /// holding a sound fails, and the call returns after the last callback.
     #[test]
     fn preload_async_on_a_client() {
         let mut client = DataModel::new_client(&content_options("preload")).unwrap();
@@ -854,10 +867,12 @@ mod tests {
                 local CP = game:GetService("ContentProvider")
                 local model = Instance.new("Model")
                 Instance.new("Decal", model).Texture = "rbxasset://textures/face.png"
+                local sound = Instance.new("Decal")
+                sound.Texture = "rbxasset://sounds/hit.wav"
                 local results = {}
                 task.spawn(function()
                     CP:PreloadAsync({"rbxasset://textures/face.png", "rbxasset://sounds/hit.wav",
-                        "", "rbxassetid://5", "abc", model}, function(id, status)
+                        "", "rbxassetid://5", "abc", model, sound}, function(id, status)
                         table.insert(results, id .. " " .. status.Name)
                     end)
                     table.sort(results)
@@ -874,8 +889,9 @@ mod tests {
         assert_eq!(
             out,
             [
-                "waiting 5",
+                "waiting 6",
                 "abc Failure, rbxasset://sounds/hit.wav Failure, \
+                 rbxasset://sounds/hit.wav Failure, \
                  rbxasset://textures/face.png Success, rbxasset://textures/face.png Success, \
                  rbxassetid://5 Failure",
                 "returned 0",

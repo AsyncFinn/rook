@@ -13,9 +13,9 @@
 //! With the `repl` feature (default) and an interactive terminal, the
 //! terminal shows a `> ` prompt that runs Luau in the open place.
 
+mod files;
 mod game;
 mod keys;
-mod meshes;
 mod server;
 mod snapshot;
 mod stats;
@@ -109,8 +109,8 @@ fn scene_of(dm: &DataModel, content: &Arc<Resolver>) -> SceneCache {
 }
 
 /// Bring a cached scene up to date with a DataModel's changes and the mesh
-/// files that finished loading since the last frame, then the renderer
-/// with the scene. Returns whether anything changed.
+/// files and images that finished loading since the last frame, then the
+/// renderer with the scene. Returns whether anything changed.
 fn refresh(cache: &mut SceneCache, dm: &mut DataModel, renderer: &mut Renderer) -> bool {
     let changes = dm.take_render_changes();
     let dom = &dm.runtime().world().dom;
@@ -119,7 +119,7 @@ fn refresh(cache: &mut SceneCache, dm: &mut DataModel, renderer: &mut Renderer) 
     } else {
         cache.apply(dom, &changes)
     };
-    let loaded = cache.poll_meshes(dom, false);
+    let loaded = cache.poll_files(dom, false);
     let change = match change {
         _ if loaded.is_empty() => change,
         SceneChange::None => SceneChange::Parts(loaded),
@@ -145,7 +145,7 @@ fn main() -> anyhow::Result<()> {
     // Asset delivery is on in the player, which exists to show places;
     // ROOK_ASSET_DELIVERY=off turns it off.
     let content = Arc::new(Resolver::new(rook_content::Config::from_env(true)));
-    let head = installed_head(&content);
+    let install = Installed::find(&content);
     let script = match &args.script {
         Some(path) => Some(fs_err::read_to_string(path)?),
         None => None,
@@ -190,19 +190,21 @@ fn main() -> anyhow::Result<()> {
             &camera,
             args.width,
             args.height,
-            head.as_ref(),
+            &install,
             &content,
         );
     }
 
     if let Some(out) = args.screenshot {
-        // A screenshot isn't a frame: it waits for the place's mesh files.
-        scene.poll_meshes(&game.view().runtime().world().dom, true);
+        // A screenshot isn't a frame: it waits for the place's mesh files
+        // and images, and their uploads.
+        let dom = &game.view().runtime().world().dom;
+        // Images on a mesh are asked for once its file has loaded.
+        while !scene.poll_files(dom, true).is_empty() {}
         let mut renderer = Renderer::headless()?;
-        if let Some(head) = &head {
-            renderer.set_head_mesh(head);
-        }
+        install.apply(&mut renderer);
         renderer.set_scene(&scene.scene);
+        renderer.finish_uploads();
         let pixels = renderer.render_to_image(args.width, args.height, &camera)?;
         image::save_buffer(
             &out,
@@ -234,7 +236,7 @@ fn main() -> anyhow::Result<()> {
         cursor: PhysicalPosition::new(0.0, 0.0),
         last_frame: Instant::now(),
         pending_mouse: None,
-        head,
+        install,
         uncapped: args.uncapped,
         readout: Readout::new(args.frame_times),
         #[cfg(feature = "repl")]
@@ -251,18 +253,33 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// The Head MeshType's mesh from the user's Roblox install, read from disk
-/// at startup; `None` (Rook draws its own) without an install or the file.
-fn installed_head(content: &Resolver) -> Option<Mesh> {
-    let fetched = content.resolve_local(&ContentRef::File("avatar/heads/head.mesh".into()))?;
-    match Mesh::decode(&fetched.bytes) {
-        Ok(mesh) => Some(mesh),
-        Err(e) => {
+/// What the renderer takes from the user's Roblox install, read from disk
+/// at startup: the Head MeshType's mesh. Without an install (or the file),
+/// Rook draws its own.
+struct Installed {
+    head: Option<Mesh>,
+}
+
+impl Installed {
+    fn find(content: &Resolver) -> Self {
+        let read = |path: &str| {
+            let fetched = content.resolve_local(&ContentRef::File(path.into()))?;
+            Some((fetched.source.location, fetched.bytes))
+        };
+        let warn = |location: &str, e: &dyn std::fmt::Display, what: &str| {
             console::print_message(
                 MessageType::Warning,
-                &format!("{}: {e}; drawing Rook's own head", fetched.source.location),
+                &format!("{location}: {e}; drawing Rook's own {what}"),
             );
-            None
+        };
+        let head = read("avatar/heads/head.mesh")
+            .and_then(|(at, bytes)| Mesh::decode(&bytes).map_err(|e| warn(&at, &e, "head")).ok());
+        Self { head }
+    }
+
+    fn apply(&self, renderer: &mut Renderer) {
+        if let Some(head) = &self.head {
+            renderer.set_head_mesh(head);
         }
     }
 }
@@ -287,13 +304,11 @@ fn bench(
     camera: &Camera,
     width: u32,
     height: u32,
-    head: Option<&Mesh>,
+    install: &Installed,
     content: &Arc<Resolver>,
 ) -> anyhow::Result<()> {
     let mut renderer = Renderer::headless()?;
-    if let Some(head) = head {
-        renderer.set_head_mesh(head);
-    }
+    install.apply(&mut renderer);
     let mut cache = scene_of(game.view(), content);
     renderer.set_scene(&cache.scene);
     let (mut sim, mut build, mut render) = (0.0, 0.0, 0.0);
@@ -331,9 +346,10 @@ fn bench(
     game.print_logs();
     let ms = |total: f64| total / f64::from(frames) * 1000.0;
     eprintln!(
-        "{frames} frames, {} parts, {} mesh files, scene updated on {updates} frames",
+        "{frames} frames, {} entries, {} mesh files, {} images, scene updated on {updates} frames",
         cache.scene.parts.len(),
-        cache.scene.meshes.len()
+        cache.scene.meshes.len(),
+        cache.scene.images.len()
     );
     eprintln!(
         "per frame: mouse {:.2} ms, simulate {:.2} ms, scene update and upload {:.2} ms, render+readback {:.2} ms",
@@ -410,8 +426,8 @@ struct App {
     /// The latest cursor position not yet sent to the game. Moves are sent
     /// once per frame because each costs a mouse raycast.
     pending_mouse: Option<(f32, f32)>,
-    /// The install's head mesh, if any (see `installed_head`).
-    head: Option<Mesh>,
+    /// What the renderer takes from the user's install.
+    install: Installed,
     /// Present without waiting for the display (`--uncapped`).
     uncapped: bool,
     readout: Readout,
@@ -457,9 +473,7 @@ impl App {
         };
         surface.configure(&device, &config);
         let mut renderer = Renderer::new(device, queue, config.format);
-        if let Some(head) = &self.head {
-            renderer.set_head_mesh(head);
-        }
+        self.install.apply(&mut renderer);
         renderer.set_scene(&self.scene.scene);
         self.game.set_viewport(config.width, config.height);
         self.gfx = Some(Gfx {

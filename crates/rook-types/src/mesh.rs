@@ -67,6 +67,16 @@ impl MeshKind {
         })
     }
 
+    /// Whether Decals on the part are drawn through the mesh's own UVs,
+    /// whatever their `Face`, instead of projected onto a face (observed: a
+    /// Decal on the Head, or on a FileMesh of the head or of a cube, covered
+    /// the whole mesh through its UVs, and a Top or Right decal drew the
+    /// same as a Front one). The empty-`MeshId` box follows the file meshes
+    /// (Inference).
+    pub fn decals_follow_uvs(self) -> bool {
+        matches!(self, Self::Head | Self::File | Self::EmptyFile)
+    }
+
     /// What a mesh child draws on a part of class `class` and `size`, or
     /// `None` when the part ignores it (observed in Studio 0.742,
     /// 2026-10-13):

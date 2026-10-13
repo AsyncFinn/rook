@@ -256,6 +256,10 @@ impl Resolver {
                     format!("{} {url}", path.display()),
                 ));
             }
+            // An anonymous refusal doesn't stand once there is a key to try.
+            Some(Cached::Failed(f))
+                if f.kind == FailureKind::Forbidden
+                    && self.delivery.as_ref().is_some_and(Delivery::has_api_key) => {}
             Some(Cached::Failed(f)) => return Err(f),
             Some(Cached::Miss) | None => {}
         }
