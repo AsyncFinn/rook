@@ -107,11 +107,13 @@ impl Camera {
     pub(crate) fn view_projection(&self, aspect: f32) -> glam::Mat4 {
         let view = glam::Mat4::from_mat3(self.rotation.transpose())
             * glam::Mat4::from_translation(-self.position);
-        let proj = glam::camera::rh::proj::directx::perspective(
+        // Reverse Z (near at depth 1, infinitely far at 0) keeps a float
+        // depth buffer precise far away; with ordinary Z, surfaces a few
+        // hundred studs off z-fight where they meet.
+        let proj = glam::camera::rh::proj::directx::perspective_infinite_reverse(
             self.fov_y.to_radians(),
             aspect,
             0.1,
-            10_000.0,
         );
         proj * view
     }

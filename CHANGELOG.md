@@ -56,6 +56,7 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 - The player draws the Head MeshType with the `head.mesh` from the user's Roblox install when there is one (decoded by `rook-content` through the `rbx_mesh` crate, which reads mesh versions 1.00 to 5.00), and Rook's own head otherwise.
 - Fixed: places store their content in the `Content` properties (`MeshContent`, `TextureContent`, `AudioContent`, ...), so `MeshId`, `Texture`, `SoundId` and the other string properties read empty in scripts, and every file mesh from a file drew as a 1-stud box. They're now views of the `Content` properties, and setting one turns backslashes in `rbxasset://` paths into slashes, as Studio does.
 - Rook now needs Rust 1.94 or later (for `rbx_mesh`; the code already needed 1.88 for `if let` chains, though 1.85 was declared).
+- Rendering uses reverse Z with an infinitely far plane, so distant surfaces no longer z-fight from depth-buffer imprecision (with the old 0.1–10,000 stud range, depth resolved only to about 0.15 studs at 500 studs away).
 
 ## [0.2.0] — 2026-10-11 — M2: client side, renderer, input
 
