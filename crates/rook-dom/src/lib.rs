@@ -23,6 +23,8 @@ pub use journal::{Change, Journal};
 use std::cell::RefCell;
 use std::collections::HashMap;
 
+use rustc_hash::FxHashMap;
+
 use rook_reflection::{ClassId, Database, PropertyId, PropertyType};
 use rook_types::{InstanceRef, Value};
 use slotmap::{Key, KeyData, SlotMap};
@@ -72,9 +74,9 @@ pub struct Dom {
     root: InstanceId,
     journal: Journal,
     /// Default values converted from the reflection database, cached per class.
-    defaults: RefCell<HashMap<(ClassId, PropertyId), Value>>,
+    defaults: RefCell<FxHashMap<(ClassId, PropertyId), Value>>,
     /// For each instance, the reference properties pointing at it.
-    referrers: HashMap<InstanceId, Vec<(InstanceId, PropertyId)>>,
+    referrers: FxHashMap<InstanceId, Vec<(InstanceId, PropertyId)>>,
     name_prop: PropertyId,
     parent_prop: PropertyId,
 }
@@ -96,7 +98,7 @@ impl Dom {
             root,
             journal: Journal::default(),
             defaults: RefCell::default(),
-            referrers: HashMap::new(),
+            referrers: FxHashMap::default(),
             name_prop: prop("Name"),
             parent_prop: prop("Parent"),
         }

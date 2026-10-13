@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 use rbx_reflection::{
     ClassTag, DataType, PropertyKind as RbxPropertyKind, PropertySerialization, PropertyTag,
@@ -98,8 +98,8 @@ pub struct Class {
     pub own_properties: Vec<PropertyId>,
     /// All properties, root ancestor's first, then this class's own.
     pub all_properties: Vec<PropertyId>,
-    lookup: HashMap<&'static str, PropertyId>,
-    defaults: HashMap<PropertyId, &'static Variant>,
+    lookup: FxHashMap<&'static str, PropertyId>,
+    defaults: FxHashMap<PropertyId, &'static Variant>,
 }
 
 #[derive(Debug)]
@@ -117,8 +117,8 @@ pub struct Database {
     classes: Vec<Class>,
     properties: Vec<Property>,
     enums: Vec<EnumInfo>,
-    class_by_name: HashMap<&'static str, ClassId>,
-    enum_by_name: HashMap<&'static str, EnumId>,
+    class_by_name: FxHashMap<&'static str, ClassId>,
+    enum_by_name: FxHashMap<&'static str, EnumId>,
 }
 
 impl Database {
@@ -127,7 +127,8 @@ impl Database {
         let mut enum_names: Vec<&'static str> = source.enums.keys().copied().collect();
         enum_names.sort_unstable();
         let mut enums = Vec::with_capacity(enum_names.len());
-        let mut enum_by_name = HashMap::with_capacity(enum_names.len());
+        let mut enum_by_name =
+            FxHashMap::with_capacity_and_hasher(enum_names.len(), Default::default());
         for (i, name) in enum_names.iter().enumerate() {
             let id = EnumId(u16::try_from(i).expect("too many enums"));
             let mut items: Vec<(&'static str, u32)> = source.enums[name]
@@ -143,7 +144,7 @@ impl Database {
         // Classes sorted by name for stable IDs.
         let mut class_names: Vec<&'static str> = source.classes.keys().copied().collect();
         class_names.sort_unstable();
-        let class_by_name: HashMap<&'static str, ClassId> = class_names
+        let class_by_name: FxHashMap<&'static str, ClassId> = class_names
             .iter()
             .enumerate()
             .map(|(i, n)| (*n, ClassId(u16::try_from(i).expect("too many classes"))))
@@ -187,8 +188,8 @@ impl Database {
                 flags: class_flags(&desc.tags),
                 own_properties,
                 all_properties: Vec::new(),
-                lookup: HashMap::new(),
-                defaults: HashMap::new(),
+                lookup: FxHashMap::default(),
+                defaults: FxHashMap::default(),
             });
         }
 
@@ -201,7 +202,7 @@ impl Database {
                 cur = classes[usize::from(c.0)].superclass;
             }
             let mut all = Vec::new();
-            let mut lookup = HashMap::new();
+            let mut lookup = FxHashMap::default();
             for c in chain.iter().rev() {
                 for &pid in &classes[usize::from(c.0)].own_properties {
                     all.push(pid);
@@ -209,7 +210,7 @@ impl Database {
                 }
             }
             // Defaults: the most derived class that states one wins.
-            let mut defaults = HashMap::new();
+            let mut defaults = FxHashMap::default();
             for &pid in &all {
                 let pname = properties[pid.0 as usize].name;
                 for c in &chain {

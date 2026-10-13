@@ -9,10 +9,9 @@ mod expand;
 
 pub use expand::{FireArgs, Firing, expand};
 
-use std::collections::HashMap;
-
 use rook_dom::InstanceId;
 use rook_reflection::PropertyId;
+use rustc_hash::FxHashMap;
 use slotmap::SlotMap;
 
 /// Which signal of an instance.
@@ -62,9 +61,9 @@ pub const MAX_REENTRANCY: u32 = 10;
 pub struct Signals<H> {
     connections: SlotMap<ConnectionId, Connection<H>>,
     /// Connections per signal, in connection order.
-    by_key: HashMap<SignalKey, Vec<ConnectionId>>,
+    by_key: FxHashMap<SignalKey, Vec<ConnectionId>>,
     /// Signals per instance with live connections, for `Destroy`.
-    by_instance: HashMap<InstanceId, Vec<SignalKey>>,
+    by_instance: FxHashMap<InstanceId, Vec<SignalKey>>,
     depth: u32,
 }
 
@@ -72,8 +71,8 @@ impl<H> Default for Signals<H> {
     fn default() -> Self {
         Self {
             connections: SlotMap::with_key(),
-            by_key: HashMap::new(),
-            by_instance: HashMap::new(),
+            by_key: FxHashMap::default(),
+            by_instance: FxHashMap::default(),
             depth: 0,
         }
     }

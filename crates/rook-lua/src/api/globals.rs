@@ -346,6 +346,10 @@ fn install_engine_helpers(lua: &Lua) -> mlua::Result<()> {
                 if !known {
                     // Not a stored property: keep it as a runtime value.
                     let all = super::instance::runtime_properties(lua)?;
+                    crate::ctx::ctx(lua)
+                        .runtime_prop_ids
+                        .borrow_mut()
+                        .insert(id);
                     let t: Table = match all.raw_get::<Option<Table>>(inst.clone())? {
                         Some(t) => t,
                         None => {
@@ -398,7 +402,8 @@ fn install_engine_helpers(lua: &Lua) -> mlua::Result<()> {
     let run_service = with_world(lua, |w| w.dom.get_service("RunService").ok());
     if let Some(rs) = run_service {
         let heartbeat = super::instance::get_member(lua, rs, "Heartbeat")
-            .map_err(|e| mlua::Error::RuntimeError(e.0))?;
+            .map_err(|e| mlua::Error::RuntimeError(e.0))?
+            .0;
         std.set("heartbeat", heartbeat)?;
         let tween: Table = lua
             .load(include_str!("tween.luau"))
