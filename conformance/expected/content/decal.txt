@@ -24,3 +24,8 @@ http://www.roblox.com/asset.aspx?id=5 rbxassetid://5 rbxassetid://5 http://www.r
  http://www.roblox.com/asset/?id=5  http://www.roblox.com/asset/?id=5  http://www.roblox.com/asset/?id=5  http://www.roblox.com/asset/?id=5
 rbxasset://textures\face.png rbxasset://textures/face.png rbxasset://textures/face.png rbxasset://textures/face.png
 ColorMap rbxassetid://7
+TextureId "rbxasset://x.png" Enum.MeshType.FileMesh
+TextureId "" Enum.MeshType.Head
+MeshId "rbxasset://x.png" Enum.MeshType.FileMesh
+MeshId "" Enum.MeshType.Head
+type after texture Enum.MeshType.Sphere rbxasset://x.png

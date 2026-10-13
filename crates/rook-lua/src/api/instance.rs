@@ -752,6 +752,15 @@ pub(crate) fn write_property(
                 .then(|| rook_content::image_url_rewrite(url))
                 .flatten();
             let url = rewritten.as_deref().unwrap_or(url);
+            // A SpecialMesh given a mesh or a texture becomes a FileMesh
+            // (observed in Studio 0.742; conformance case `content/decal`).
+            if matches!(name, "MeshId" | "TextureId")
+                && !url.is_empty()
+                && w.dom.class_name(id) == "SpecialMesh"
+            {
+                w.dom
+                    .set_property_by_name(id, "MeshType", rook_types::Value::Enum(5))?;
+            }
             return w
                 .dom
                 .set_property(id, target, properties::content_value(url));
