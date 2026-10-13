@@ -93,25 +93,36 @@ impl MeshKind {
     /// multiplies the part's Size per axis first, and the type's own rule
     /// then works on that scaled size (observed: a CylinderMesh on a
     /// 2 × 3 × 4 part at Scale (0.5, 1.5, 0.75) was 1 stud across, not 1.5).
+    ///
+    /// A negative `Scale` doesn't mirror the primitive shapes (observed in
+    /// Studio 0.742, 2026-10-13: a Wedge at Scale (1, 1, -1) drew the same
+    /// wedge as at Scale 1), so they use its size. A mesh file is mirrored
+    /// (a mesh at Scale (1, 1, -1) drew flipped and inside-out), so it
+    /// keeps the sign.
     pub fn look(self, size: Vec3, scale: Vec3) -> MeshLook {
         let s = size * scale;
+        let shape_size = s.abs();
         match self {
             // A Sphere stretches, so it skips the ball's own extent rule.
             Self::Shape(PartShape::Ball) => MeshLook::Shape {
                 shape: PartShape::Ball,
-                size: s,
+                size: shape_size,
                 upright: false,
             },
             Self::Shape(shape) => MeshLook::Shape {
                 shape,
-                size: shape.extent(s),
+                size: shape.extent(shape_size),
                 upright: false,
             },
             // The X-axis cylinder turned onto Y: its length is S.Y and its
             // diameter min(S.X, S.Z).
             Self::UprightCylinder => MeshLook::Shape {
                 shape: PartShape::Cylinder,
-                size: PartShape::Cylinder.extent(Vec3::new(s.y, s.x, s.z)),
+                size: PartShape::Cylinder.extent(Vec3::new(
+                    shape_size.y,
+                    shape_size.x,
+                    shape_size.z,
+                )),
                 upright: true,
             },
             Self::Head => MeshLook::Head {
@@ -292,6 +303,26 @@ mod tests {
             );
         }
         assert_eq!(MeshKind::of("Part", None, ""), None);
+    }
+
+    /// A negative Scale doesn't mirror a primitive shape, but does a file.
+    #[test]
+    fn negative_scale() {
+        let flipped = Vec3::new(1.0, 1.0, -1.0);
+        for mesh_type in [2, 3, 4] {
+            assert_eq!(
+                look("SpecialMesh", Some(mesh_type), flipped),
+                look("SpecialMesh", Some(mesh_type), Vec3::ONE)
+            );
+        }
+        assert_eq!(
+            look("CylinderMesh", None, -Vec3::ONE),
+            look("CylinderMesh", None, Vec3::ONE)
+        );
+        assert_eq!(
+            MeshKind::File.look(SIZE, flipped),
+            MeshLook::File { scale: flipped }
+        );
     }
 
     #[test]
