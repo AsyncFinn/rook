@@ -413,7 +413,9 @@ server and several clients.
 Terrain (including legacy `ClusterGrid` data; 975 files), animation
 (Animation 269 files), effects (Fire 255, Smoke 249, Sparkles 303,
 ParticleEmitter 84), lights (PointLight 226, SpotLight 210) and advanced
-lighting, Studio tooling, and opt-in extensions.
+lighting, antialiasing (MSAA by quality level, measured in
+[`docs/behavior/antialiasing.md`](docs/behavior/antialiasing.md)), Studio
+tooling, and opt-in extensions.
 
 ## Content and assets
 
