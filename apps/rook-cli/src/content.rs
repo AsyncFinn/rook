@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use rbx_dom_weak::WeakDom;
 use rbx_types::{Ref, Variant};
-use rook_content::{ContentRef, Failure, Fetched, Loader, Resolver, SourceKind};
+use rook_content::{ContentRef, Failure, FailureKind, Fetched, Loader, Resolver, SourceKind, Want};
 
 pub struct Options {
     /// Never use the network: only the install, folders and the cache.
@@ -69,10 +69,12 @@ fn describe(bytes: &[u8]) -> String {
             Ok(m) => {
                 let (lo, hi) = m.bounds();
                 let size = [0, 1, 2].map(|i| format!("{:.2}", hi[i] - lo[i]));
+                let centre = [0, 1, 2].map(|i| format!("{:.2}", (hi[i] + lo[i]) / 2.0));
                 format!(
-                    "{} triangles, {} studs",
+                    "{} triangles, {} studs, centred at ({})",
                     m.indices.len() / 3,
-                    size.join(" x ")
+                    size.join(" x "),
+                    centre.join(", ")
                 )
             }
             Err(e) => e.to_string(),
@@ -147,10 +149,74 @@ fn forget(resolver: &Resolver, r: &ContentRef) {
 #[derive(Default)]
 struct Use {
     count: usize,
+    /// Uses as a mesh (`MeshId` of a mesh class or MeshPart).
+    mesh: usize,
     /// `Class.Property` of the first use.
     property: String,
     /// Full name of the first instance using it.
     instance: String,
+}
+
+/// Properties that hold a mesh: `MeshId` (`MeshContent` in newer files,
+/// `MeshID` in some 2016 MeshParts) of the mesh classes and MeshPart.
+fn is_mesh_property(class: &str, key: &str) -> bool {
+    matches!(
+        class,
+        "SpecialMesh" | "FileMesh" | "CharacterMesh" | "MeshPart"
+    ) && matches!(key, "MeshId" | "MeshContent" | "MeshID")
+}
+
+/// The mesh version a file starts with (`version 2.00`).
+fn mesh_version(bytes: &[u8]) -> Option<String> {
+    let head = bytes.get(..bytes.len().min(16))?;
+    let line = head.split(|&b| b == b'\n').next()?;
+    let line = std::str::from_utf8(line).ok()?;
+    Some(line.trim_end().strip_prefix("version ")?.to_owned())
+}
+
+/// The mesh references in a place: how many decode, by version, and which
+/// fail and why.
+fn print_meshes(
+    refs: &BTreeMap<ContentRef, Vec<&str>>,
+    uses: &BTreeMap<String, Use>,
+    meshes: &BTreeMap<ContentRef, Result<Fetched, Failure>>,
+    first_use: &dyn Fn(&[&str]) -> String,
+) {
+    if meshes.is_empty() {
+        return;
+    }
+    let mut by_result: BTreeMap<String, (usize, usize)> = BTreeMap::new();
+    let mut failed = Vec::new();
+    for (r, outcome) in meshes {
+        let texts = &refs[r];
+        let n: usize = texts.iter().map(|t| uses[*t].mesh).sum();
+        let key = match outcome {
+            Ok(f) => format!(
+                "decoded, version {}",
+                mesh_version(&f.bytes).unwrap_or_default()
+            ),
+            Err(e) if e.kind == FailureKind::Invalid => {
+                failed.push((r, texts, e));
+                format!("not decoded: {}", e.message)
+            }
+            Err(e) => format!("not loaded: {}", e.kind.name()),
+        };
+        let slot = by_result.entry(key).or_default();
+        slot.0 += n;
+        slot.1 += 1;
+    }
+    let total: usize = by_result.values().map(|v| v.0).sum();
+    println!("\nMeshes: {total} uses, {} distinct targets", meshes.len());
+    println!("{:>8} {:>9}", "uses", "distinct");
+    for (what, (n, d)) in &by_result {
+        println!("{n:>8} {d:>9}  {what}");
+    }
+    if !failed.is_empty() {
+        println!("\nMeshes that load but don't decode:");
+        for (r, texts, e) in failed {
+            println!("  {r}  {}\n      {}", e.message, first_use(texts));
+        }
+    }
 }
 
 fn full_name(dom: &WeakDom, mut id: Ref) -> String {
@@ -188,6 +254,9 @@ pub fn place(file: &Path, options: &Options) -> anyhow::Result<()> {
                 u.instance = full_name(dom, inst.referent());
             }
             u.count += 1;
+            if is_mesh_property(&inst.class, key) {
+                u.mesh += 1;
+            }
         }
     }
     println!("{}", file.display());
@@ -204,18 +273,26 @@ pub fn place(file: &Path, options: &Options) -> anyhow::Result<()> {
     }
     let mut loader = Loader::new(resolver.clone());
     let mut tickets = BTreeMap::new();
-    for r in refs.keys() {
+    let mut mesh_tickets = BTreeMap::new();
+    for (r, texts) in &refs {
         if options.refresh {
             forget(&resolver, r);
         }
         tickets.insert(loader.request(r.clone()), r.clone());
+        if texts.iter().any(|t| uses[*t].mesh > 0) {
+            mesh_tickets.insert(loader.request_as(r.clone(), Want::Mesh), r.clone());
+        }
     }
     let started = std::time::Instant::now();
-    let results: BTreeMap<ContentRef, Result<Fetched, Failure>> = loader
-        .wait_all()
-        .into_iter()
-        .filter_map(|(t, outcome)| Some((tickets.remove(&t)?, outcome)))
-        .collect();
+    let mut results: BTreeMap<ContentRef, Result<Fetched, Failure>> = BTreeMap::new();
+    let mut meshes: BTreeMap<ContentRef, Result<Fetched, Failure>> = BTreeMap::new();
+    for (t, outcome) in loader.wait_all() {
+        if let Some(r) = tickets.remove(&t) {
+            results.insert(r, outcome);
+        } else if let Some(r) = mesh_tickets.remove(&t) {
+            meshes.insert(r, outcome);
+        }
+    }
 
     // Totals over uses (property values), with distinct references in
     // brackets.
@@ -272,6 +349,7 @@ pub fn place(file: &Path, options: &Options) -> anyhow::Result<()> {
             println!("  {text:?}  no content\n      {}", first_use(&[text]));
         }
     }
+    print_meshes(&refs, &uses, &meshes, &first_use);
     if options.verbose {
         println!("\nResolved:");
         for (r, texts) in &refs {

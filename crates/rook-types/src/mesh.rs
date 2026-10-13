@@ -1,9 +1,11 @@
-//! Built-in mesh shapes: what a part with a `SpecialMesh`, `BlockMesh` or
-//! `CylinderMesh` child draws, and at what size. A mesh changes only how a
-//! part looks; physics and queries keep the part's own shape.
+//! What a part with a mesh draws, and at what size: a `SpecialMesh`,
+//! `BlockMesh`, `CylinderMesh` or `FileMesh` child, or a MeshPart's own
+//! mesh. A mesh changes only how a part looks; physics and queries keep the
+//! part's own shape.
 //!
 //! The rules were measured in Studio (ROADMAP.md, M4: "What each
-//! SpecialMesh MeshType draws" and "How `Scale` combines with Size").
+//! SpecialMesh MeshType draws", "How `Scale` combines with Size" and "File
+//! meshes (step 3)").
 
 use glam::Vec3;
 
@@ -26,8 +28,8 @@ pub enum MeshKind {
     /// Prism, Pyramid, ParallelRamp and RightAngleRamp draw nothing
     /// (observed: the part disappears but still collides).
     Nothing,
-    /// A mesh file (`FileMesh`, or `MeshType` FileMesh). Not loaded yet:
-    /// the part keeps its own shape (stubs.md).
+    /// A mesh file (`FileMesh`, or `MeshType` FileMesh), sized by `Scale`
+    /// alone (observed: it ignores the part's Size).
     File,
     /// A mesh file with an empty `MeshId`: a 1 × 1 × 1 box times `Scale`,
     /// whatever the part's Size (observed for both the FileMesh class and
@@ -65,6 +67,28 @@ impl MeshKind {
         })
     }
 
+    /// What a mesh child draws on a part of class `class` and `size`, or
+    /// `None` when the part ignores it (observed in Studio 0.742,
+    /// 2026-10-13):
+    ///
+    /// - A MeshPart ignores mesh children: a Sphere SpecialMesh under one
+    ///   left its own mesh drawn.
+    /// - On a union the mesh is drawn as if Size and `Scale` were 1: a
+    ///   Sphere mesh on a 4 × 4 × 4 union, and a Brick mesh at Scale
+    ///   (2, 3, 1), each drew a 1-stud shape (Studio also left it untinted,
+    ///   which Rook doesn't copy).
+    /// - Every other part, trusses included, follows [`look`](Self::look)
+    ///   (a Sphere mesh filled a 2 × 10 × 2 truss).
+    pub fn look_on(self, class: &str, size: Vec3, scale: Vec3) -> Option<MeshLook> {
+        match class {
+            "MeshPart" => None,
+            "UnionOperation" | "NegateOperation" | "IntersectOperation" | "PartOperation" => {
+                Some(self.look(Vec3::ONE, Vec3::ONE))
+            }
+            _ => Some(self.look(size, scale)),
+        }
+    }
+
     /// What a part of `size` draws with this mesh at `scale`. `Scale`
     /// multiplies the part's Size per axis first, and the type's own rule
     /// then works on that scaled size (observed: a CylinderMesh on a
@@ -94,7 +118,7 @@ impl MeshKind {
                 scale: head_scale(s),
             },
             Self::Nothing => MeshLook::Nothing,
-            Self::File => MeshLook::PartShape,
+            Self::File => MeshLook::File { scale },
             Self::EmptyFile => MeshLook::Shape {
                 shape: PartShape::Block,
                 size: scale,
@@ -113,6 +137,22 @@ pub fn head_scale(size: Vec3) -> Vec3 {
     Vec3::new(across, size.y, across) / 1.25
 }
 
+/// How a MeshPart's mesh file is scaled: by Size / `InitialSize` per axis
+/// (`InitialSize` is what scripts read as `MeshSize`: the mesh's size when
+/// it was imported). Observed in Studio 0.742: a MeshPart made from a mesh
+/// had Size and MeshSize equal to the mesh's bounds; setting Size to
+/// (0.5, 0.5, 0.25) of it shrank the drawing by exactly that, about the
+/// mesh's own origin. A MeshPart saved without `InitialSize` (it reads
+/// (0, 0, 0)) draws the mesh at Size times its own size, as if `InitialSize`
+/// were 1: a 1.2-stud mesh on a 2 × 4 × 8 part drew 2.4 × 4.8 × 9.6.
+pub fn mesh_part_scale(size: Vec3, initial_size: Vec3) -> Vec3 {
+    if initial_size.cmpgt(Vec3::ZERO).all() {
+        size / initial_size
+    } else {
+        size
+    }
+}
+
 /// What a part with a mesh draws.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum MeshLook {
@@ -125,6 +165,11 @@ pub enum MeshLook {
     },
     /// The head mesh, at its own size times `scale`.
     Head { scale: Vec3 },
+    /// A mesh file, its vertices times `scale`, with the mesh's own origin
+    /// at the part's position (observed: a mesh whose bounds are centred 11
+    /// studs off its origin drew 11 studs off the part, for a FileMesh and a
+    /// MeshPart alike).
+    File { scale: Vec3 },
     /// Nothing at all.
     Nothing,
     /// The part's own shape, as if it had no mesh.
@@ -238,7 +283,8 @@ mod tests {
         let id = "rbxasset://fonts/head.mesh";
         for (class, mesh_type) in [("SpecialMesh", Some(5)), ("FileMesh", None)] {
             let kind = MeshKind::of(class, mesh_type, id).unwrap();
-            assert_eq!(kind.look(SIZE, Vec3::ONE), MeshLook::PartShape);
+            // Scale alone, Size ignored.
+            assert_eq!(kind.look(SIZE, SCALE), MeshLook::File { scale: SCALE });
             // Without a MeshId: a unit box times Scale, Size ignored.
             assert_eq!(
                 look(class, mesh_type, SCALE),
@@ -246,5 +292,34 @@ mod tests {
             );
         }
         assert_eq!(MeshKind::of("Part", None, ""), None);
+    }
+
+    #[test]
+    fn hosts() {
+        let sphere = MeshKind::of("SpecialMesh", Some(3), "").unwrap();
+        assert_eq!(sphere.look_on("MeshPart", SIZE, SCALE), None);
+        assert_eq!(
+            sphere.look_on("UnionOperation", SIZE, SCALE),
+            Some(shape(PartShape::Ball, Vec3::ONE, false))
+        );
+        assert_eq!(
+            sphere.look_on("TrussPart", SIZE, SCALE),
+            Some(shape(PartShape::Ball, SIZE * SCALE, false))
+        );
+    }
+
+    #[test]
+    fn mesh_parts_scale_by_size_over_initial_size() {
+        let head = Vec3::new(1.2, 1.2, 1.2);
+        assert_eq!(mesh_part_scale(head, head), Vec3::ONE);
+        assert_eq!(
+            mesh_part_scale(Vec3::new(0.6, 0.6, 0.3), head),
+            Vec3::new(0.5, 0.5, 0.25)
+        );
+        // No InitialSize: Size itself.
+        assert_eq!(
+            mesh_part_scale(Vec3::new(2.0, 4.0, 8.0), Vec3::ZERO),
+            Vec3::new(2.0, 4.0, 8.0)
+        );
     }
 }

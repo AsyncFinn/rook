@@ -214,6 +214,8 @@ pub(crate) fn build(shape: DrawShape) -> MeshData {
         DrawShape::Part(PartShape::Cylinder) => cylinder(),
         DrawShape::Part(PartShape::Ball) => ball(),
         DrawShape::Head => head(),
+        // Mesh files come with the scene (`Renderer::has_mesh`).
+        DrawShape::File(_) => MeshData::default(),
     }
 }
 

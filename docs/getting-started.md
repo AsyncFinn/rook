@@ -23,6 +23,7 @@ rook-player place.rbxl                                    # play as a local play
 rook-player place.rbxl --run                              # show the server alone (Studio's Run mode)
 rook-player place.rbxl --screenshot out.png               # render one frame to a PNG
 rook-player place.rbxl --camera 100,80,100 --look-at 0,0,0 --screenshot out.png
+rook-player place.rbxl --camera 0,500,0.01 --look-at 0,0,0 --fov 20 --screenshot top.png  # narrow field of view
 rook-player place.rbxl --seconds 5 --screenshot out.png   # run scripts for 5 s first
 rook-player place.rbxl --script extra.luau                # also run a Luau file as a server script
 ```

@@ -1,17 +1,28 @@
 //! What the renderer draws: a snapshot built by the engine side. The
 //! renderer never sees the DOM (architecture §8).
 
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use glam::{Mat3, Vec3};
 
+pub use rook_content::mesh::Mesh;
 pub use rook_types::PartShape;
 
-/// A mesh the renderer draws: a primitive part shape, or a built-in mesh
-/// that isn't one (the SpecialMesh Head).
+/// A mesh file, by the BLAKE3 hash of its bytes: parts that use the same
+/// file share one GPU mesh, however they refer to it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct MeshHash(pub [u8; 32]);
+
+/// A mesh the renderer draws: a primitive part shape, a built-in mesh
+/// that isn't one (the SpecialMesh Head), or a mesh file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DrawShape {
     Part(PartShape),
     /// Rook's own head mesh, at its own size (about 1.2 studs each way).
     Head,
+    /// A mesh file from [`Scene::meshes`], at its own size.
+    File(MeshHash),
 }
 
 impl DrawShape {
@@ -33,7 +44,7 @@ pub struct PartInstance {
     /// the mesh is turned, as a CylinderMesh is).
     pub rotation: Mat3,
     /// Multiplies the mesh's vertices: the drawn size for the unit part
-    /// shapes, a scale for the head.
+    /// shapes, a scale for the head and mesh files.
     pub size: Vec3,
     /// sRGB colour, 0..1.
     pub color: [f32; 3],
@@ -77,6 +88,9 @@ impl Default for Lighting {
 pub struct Scene {
     pub parts: Vec<PartInstance>,
     pub lighting: Lighting,
+    /// The mesh files parts may draw ([`DrawShape::File`]). The renderer
+    /// uploads each the first time a part draws it.
+    pub meshes: HashMap<MeshHash, Arc<Mesh>>,
 }
 
 /// A camera: Roblox convention, looking down its -Z axis, Y up.

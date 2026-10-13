@@ -212,6 +212,20 @@ impl Security {
     pub fn is_none(&self) -> bool {
         *self == Self::None
     }
+
+    /// The capability Roblox's permission errors name: the level without
+    /// "Security" (observed: "lacking capability NotAccessible" for
+    /// MeshPart.MeshId, "RobloxScript" for InsertService:LoadLocalAsset).
+    pub fn capability(self) -> &'static str {
+        match self {
+            Self::None => "None",
+            Self::PluginSecurity => "Plugin",
+            Self::LocalUserSecurity => "LocalUser",
+            Self::RobloxScriptSecurity => "RobloxScript",
+            Self::RobloxSecurity => "Roblox",
+            Self::NotAccessibleSecurity => "NotAccessible",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

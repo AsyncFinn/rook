@@ -1,16 +1,17 @@
 //! Resolving off the engine thread.
 //!
 //! The engine asks a [`Loader`] for references and collects the results at
-//! a fixed point in its frame ([`Loader::poll`]), so disk and network never
-//! hold up a frame and completions reach scripts on the engine thread
-//! (architecture §8 "Content"). Worker threads start with the first
-//! request: a place that never asks for content costs nothing.
+//! a fixed point in its frame ([`Loader::poll`]), so disk, network and
+//! decoding never hold up a frame and completions reach scripts on the
+//! engine thread (architecture §8 "Content"). Worker threads start with the
+//! first request: a place that never asks for content costs nothing.
 
 use std::collections::HashMap;
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex};
 
-use crate::{ContentRef, Failure, Fetched, Resolver};
+use crate::mesh::Mesh;
+use crate::{ContentRef, Failure, FailureKind, Fetched, Resolver};
 
 /// Worker threads per loader. Asset delivery answers in a few hundred
 /// milliseconds per request, so a few in flight keep a place with hundreds
@@ -23,10 +24,22 @@ pub struct Ticket(pub u64);
 
 type Outcome = Result<Fetched, Failure>;
 
+/// What a request wants from the bytes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum Want {
+    /// The bytes as they are.
+    Bytes,
+    /// A mesh: the worker decodes it into [`Fetched::mesh`], and bytes that
+    /// don't decode fail with [`FailureKind::Invalid`].
+    Mesh,
+}
+
+type Job = (ContentRef, Want);
+
 #[derive(Debug)]
 struct Workers {
-    jobs: Sender<ContentRef>,
-    done: Receiver<(ContentRef, Outcome)>,
+    jobs: Sender<Job>,
+    done: Receiver<(Job, Outcome)>,
 }
 
 /// Queues references for the worker threads and hands back results.
@@ -37,7 +50,7 @@ pub struct Loader {
     next: u64,
     /// Tickets waiting on each reference in flight (one resolution serves
     /// them all).
-    waiting: HashMap<ContentRef, Vec<Ticket>>,
+    waiting: HashMap<Job, Vec<Ticket>>,
 }
 
 impl Loader {
@@ -54,18 +67,25 @@ impl Loader {
         &self.resolver
     }
 
-    /// Queue a reference; its result comes from [`poll`](Self::poll).
+    /// Queue a reference for its bytes; the result comes from
+    /// [`poll`](Self::poll).
     pub fn request(&mut self, r: ContentRef) -> Ticket {
+        self.request_as(r, Want::Bytes)
+    }
+
+    /// Queue a reference, asking for `want`.
+    pub fn request_as(&mut self, r: ContentRef, want: Want) -> Ticket {
         self.next += 1;
         let ticket = Ticket(self.next);
-        if let Some(tickets) = self.waiting.get_mut(&r) {
+        let job = (r, want);
+        if let Some(tickets) = self.waiting.get_mut(&job) {
             tickets.push(ticket);
             return ticket;
         }
-        self.waiting.insert(r.clone(), vec![ticket]);
+        self.waiting.insert(job.clone(), vec![ticket]);
         let workers = self.workers.get_or_insert_with(|| spawn(&self.resolver));
         // The workers live as long as `jobs`, so the send can't fail.
-        let _ = workers.jobs.send(r);
+        let _ = workers.jobs.send(job);
         ticket
     }
 
@@ -84,8 +104,8 @@ impl Loader {
         let Some(workers) = &self.workers else {
             return out;
         };
-        while let Ok((r, outcome)) = workers.done.try_recv() {
-            for ticket in self.waiting.remove(&r).unwrap_or_default() {
+        while let Ok((job, outcome)) = workers.done.try_recv() {
+            for ticket in self.waiting.remove(&job).unwrap_or_default() {
                 out.push((ticket, outcome.clone()));
             }
         }
@@ -98,10 +118,10 @@ impl Loader {
         let mut out = Vec::new();
         while !self.waiting.is_empty() {
             let Some(workers) = &self.workers else { break };
-            let Ok((r, outcome)) = workers.done.recv() else {
+            let Ok((job, outcome)) = workers.done.recv() else {
                 break;
             };
-            for ticket in self.waiting.remove(&r).unwrap_or_default() {
+            for ticket in self.waiting.remove(&job).unwrap_or_default() {
                 out.push((ticket, outcome.clone()));
             }
         }
@@ -110,8 +130,20 @@ impl Loader {
     }
 }
 
+/// Resolve a job and, for a mesh, decode it.
+fn run(resolver: &Resolver, (r, want): &Job) -> Outcome {
+    let mut fetched = resolver.resolve(r)?;
+    if *want == Want::Mesh {
+        profiling::scope!("decode mesh");
+        let mesh = Mesh::decode(&fetched.bytes)
+            .map_err(|e| Failure::new(FailureKind::Invalid, e.to_string()))?;
+        fetched.mesh = Some(Arc::new(mesh));
+    }
+    Ok(fetched)
+}
+
 fn spawn(resolver: &Arc<Resolver>) -> Workers {
-    let (jobs, job_rx) = channel::<ContentRef>();
+    let (jobs, job_rx) = channel::<Job>();
     let (done_tx, done) = channel();
     let job_rx = Arc::new(Mutex::new(job_rx));
     for i in 0..WORKERS {
@@ -121,11 +153,11 @@ fn spawn(resolver: &Arc<Resolver>) -> Workers {
             .spawn(move || {
                 loop {
                     // Ends when the loader (and its sender) is dropped.
-                    let Ok(r) = jobs.lock().expect("job queue").recv() else {
+                    let Ok(job) = jobs.lock().expect("job queue").recv() else {
                         return;
                     };
-                    let outcome = resolver.resolve(&r);
-                    if done.send((r, outcome)).is_err() {
+                    let outcome = run(&resolver, &job);
+                    if done.send((job, outcome)).is_err() {
                         return;
                     }
                 }
@@ -173,5 +205,32 @@ mod tests {
             results[2].1.as_ref().unwrap_err().kind,
             FailureKind::Offline
         );
+    }
+
+    /// Asked for a mesh, the worker decodes it; bytes that aren't one fail
+    /// as invalid, and the same file asked for as bytes still resolves.
+    #[test]
+    fn decodes_meshes_on_the_workers() {
+        let dir = crate::tests::temp_dir("loader-mesh");
+        std::fs::create_dir_all(dir.join("content/meshes")).unwrap();
+        let text =
+            "version 1.00\n1\n[2,0,0][0,1,0][0,0,0][0,2,0][0,1,0][0,0,0][0,0,2][0,1,0][0,0,0]\n";
+        std::fs::write(dir.join("content/meshes/tri.mesh"), text).unwrap();
+        std::fs::write(dir.join("content/meshes/face.png"), b"\x89PNG").unwrap();
+        let mut config = Config::empty();
+        config.install = Install::at(&dir, InstallKind::Custom);
+        let mut loader = Loader::new(Arc::new(Resolver::new(config)));
+        let tri = ContentRef::File("meshes/tri.mesh".into());
+        loader.request_as(tri.clone(), Want::Mesh);
+        loader.request_as(ContentRef::File("meshes/face.png".into()), Want::Mesh);
+        loader.request(tri);
+        let results = loader.wait_all();
+        let mesh = results[0].1.as_ref().unwrap().mesh.as_ref().unwrap();
+        assert_eq!(mesh.indices, [0, 1, 2]);
+        assert_eq!(
+            results[1].1.as_ref().unwrap_err().kind,
+            FailureKind::Invalid
+        );
+        assert!(results[2].1.as_ref().unwrap().mesh.is_none());
     }
 }

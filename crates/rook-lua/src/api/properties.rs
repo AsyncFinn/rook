@@ -66,6 +66,10 @@ const SAME_AS: &[(&str, &str, &str)] = &[
         "MaxFrictionTorque",
         "MaxFrictionTorqueXml",
     ),
+    // Read-only for scripts. Observed in Studio 0.742: a MeshPart saved
+    // with InitialSize reads it as MeshSize, and one saved without reads
+    // (0, 0, 0) even after its mesh loads.
+    ("MeshPart", "MeshSize", "InitialSize"),
 ];
 
 /// BrickColor views of Color3 properties: reads give the nearest

@@ -243,6 +243,7 @@ pub fn summary_markdown(agg: &Aggregate, records: &[FileRecord], elapsed: Durati
         &agg.content_kinds,
         20,
     );
+    usage_table(&mut md, "Meshes", "Kind", &agg.meshes, 60);
     usage_table(
         &mut md,
         "`rbxasset://` paths the install lacks",

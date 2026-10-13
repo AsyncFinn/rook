@@ -28,7 +28,7 @@ mod resolver;
 
 pub use cache::Cache;
 pub use install::{Install, InstallKind};
-pub use loader::{Loader, Ticket};
+pub use loader::{Loader, Ticket, Want};
 pub use reference::{ContentRef, Thumbnail};
 pub use resolver::{Config, ProviderKind, Resolver};
 
@@ -78,6 +78,9 @@ pub struct Fetched {
     /// BLAKE3 of the bytes.
     pub hash: blake3::Hash,
     pub source: Source,
+    /// The decoded mesh, when a [`Loader`] was asked for a mesh
+    /// ([`Want::Mesh`]); decoding happens on its worker threads.
+    pub mesh: Option<Arc<mesh::Mesh>>,
 }
 
 impl Fetched {
@@ -87,6 +90,7 @@ impl Fetched {
             hash: blake3::hash(&bytes),
             bytes,
             source: Source { kind, location },
+            mesh: None,
         }
     }
 }
@@ -105,6 +109,9 @@ pub enum FailureKind {
     Offline,
     /// The network failed (no connection, timeout, an unexpected answer).
     Network,
+    /// The bytes aren't what was asked for: not a mesh, or a mesh that is
+    /// damaged or of a version Rook doesn't read yet.
+    Invalid,
 }
 
 impl FailureKind {
@@ -115,6 +122,7 @@ impl FailureKind {
             Self::Unsupported => "unsupported",
             Self::Offline => "offline",
             Self::Network => "network",
+            Self::Invalid => "invalid",
         }
     }
 
@@ -125,6 +133,7 @@ impl FailureKind {
             Self::Unsupported,
             Self::Offline,
             Self::Network,
+            Self::Invalid,
         ]
         .into_iter()
         .find(|k| k.name() == name)
@@ -132,7 +141,10 @@ impl FailureKind {
 
     /// Whether the answer will hold for a while, so the cache remembers it.
     pub fn is_lasting(self) -> bool {
-        matches!(self, Self::NotFound | Self::Forbidden | Self::Unsupported)
+        matches!(
+            self,
+            Self::NotFound | Self::Forbidden | Self::Unsupported | Self::Invalid
+        )
     }
 }
 

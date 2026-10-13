@@ -12,6 +12,10 @@
 //!   that need no download came within a few frames.
 //! - Instances in the list stand for their content properties and their
 //!   descendants' (a Model holding a Decal reported the Decal's texture).
+//! - A mesh's `MeshId` loads as a mesh: on a client a SpecialMesh whose
+//!   `MeshId` was a PNG reported `Failure`, while mesh files (versions
+//!   1.00 and 2.00, by path or asset id) reported `Success` (observed
+//!   2026-10-13).
 //! - Strings are loaded as images: `rbxasset://` image files succeeded,
 //!   `.mesh` and `.wav` paths failed, and so did every `rbxassetid://` and
 //!   asset URL string, even an image that loaded as a Decal's texture.
@@ -24,7 +28,7 @@ use std::collections::HashMap;
 
 use mlua::{Function, Lua, Thread, Value as LuaValue};
 use rbx_types::VariantType;
-use rook_content::ContentRef;
+use rook_content::{ContentRef, Want};
 use rook_dom::InstanceId;
 use rook_reflection::{PropertyType, database};
 
@@ -38,7 +42,7 @@ use crate::world::World;
 #[derive(Debug, Default)]
 pub struct ContentRequests {
     /// References to fetch, by request id, since the engine last took them.
-    pub(crate) outbox: Vec<(u64, ContentRef)>,
+    pub(crate) outbox: Vec<(u64, ContentRef, Want)>,
     /// Requests answered without fetching, delivered with the next results.
     pub(crate) answered: Vec<(u64, bool)>,
     /// Requests not delivered yet: their preload and content string.
@@ -92,8 +96,15 @@ fn is_image_path(path: &str) -> bool {
         .any(|e| ext.eq_ignore_ascii_case(e))
 }
 
-/// The non-empty content strings of an instance and its descendants.
-fn instance_content(w: &World, root: InstanceId, out: &mut Vec<String>) {
+/// Whether a content property holds a mesh: `MeshContent` of the mesh
+/// classes and MeshPart.
+fn holds_mesh(w: &World, id: InstanceId, property: &str) -> bool {
+    property == "MeshContent" && (w.dom.is_a(id, "DataModelMesh") || w.dom.is_a(id, "MeshPart"))
+}
+
+/// The non-empty content strings of an instance and its descendants, with
+/// what each must load as.
+fn instance_content(w: &World, root: InstanceId, out: &mut Vec<(String, Want)>) {
     let db = database();
     for id in std::iter::once(root).chain(w.dom.descendants(root)) {
         let Some(class) = w.dom.get(id).map(|i| i.class) else {
@@ -114,7 +125,12 @@ fn instance_content(w: &World, root: InstanceId, out: &mut Vec<String>) {
                 .property(id, pid)
                 .and_then(|v| v.content_url().filter(|u| !u.is_empty()).map(str::to_owned))
             {
-                out.push(url);
+                let want = if holds_mesh(w, id, p.name) {
+                    Want::Mesh
+                } else {
+                    Want::Bytes
+                };
+                out.push((url, want));
             }
         }
     }
@@ -137,14 +153,14 @@ fn preload_async(lua: &Lua, _this: InstanceId, a: Args) -> ApiResult<Outcome> {
             )));
         }
     };
-    // (content string, whether it came as a string).
-    let mut entries: Vec<(String, bool)> = Vec::new();
+    // (content string, whether it came as a string, what it loads as).
+    let mut entries: Vec<(String, bool, Want)> = Vec::new();
     for value in list.sequence_values::<LuaValue>() {
         match value? {
             LuaValue::String(s) => {
                 let s = s.to_string_lossy();
                 if !s.is_empty() {
-                    entries.push((s, true));
+                    entries.push((s, true, Want::Bytes));
                 }
             }
             LuaValue::UserData(ud) => {
@@ -156,7 +172,7 @@ fn preload_async(lua: &Lua, _this: InstanceId, a: Args) -> ApiResult<Outcome> {
                 };
                 let mut urls = Vec::new();
                 with_world(lua, |w| instance_content(w, id, &mut urls));
-                entries.extend(urls.into_iter().map(|u| (u, false)));
+                entries.extend(urls.into_iter().map(|(u, want)| (u, false, want)));
             }
             v => {
                 return Err(ScriptError(format!(
@@ -185,14 +201,14 @@ fn preload_async(lua: &Lua, _this: InstanceId, a: Args) -> ApiResult<Outcome> {
                 remaining: entries.len(),
             },
         );
-        for (text, as_string) in entries {
+        for (text, as_string, want) in entries {
             let request = c.id();
             let target = ContentRef::parse(&text).filter(|r| match r {
                 ContentRef::File(path) => !as_string || is_image_path(path),
                 _ => !as_string,
             });
             match target {
-                Some(r) => c.outbox.push((request, r)),
+                Some(r) => c.outbox.push((request, r, want)),
                 None => c.answered.push((request, false)),
             }
             c.pending.insert(request, (preload, text));

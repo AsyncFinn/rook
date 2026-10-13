@@ -50,16 +50,17 @@ Everything Rook supports today. What's coming next is in [ROADMAP.md](../ROADMAP
 - A **wgpu** renderer (Vulkan, Metal, DirectX 12) that draws snapshots of the scene and never touches the instance tree.
 - Primitive parts (blocks, spheres, cylinders, wedges, corner wedges) with colour and transparency, a sky colour, sun, ambient light and fog.
 - The built-in mesh shapes (SpecialMesh types, BlockMesh, CylinderMesh) at the sizes Roblox draws them. The classic head comes from your Roblox install when there is one, and is Rook's own version otherwise.
+- **Mesh files**: SpecialMesh and FileMesh `MeshId`s and MeshParts, in Roblox mesh versions 1.00 to 5.00, at the sizes Studio draws them, in the part's colour. They load in the background and appear when they arrive, as in Roblox; parts sharing a mesh share one copy on the GPU.
 - `rook-player` runs the place live in a window with a fly camera that drives `Workspace.CurrentCamera`, or renders a single frame to PNG offscreen.
 
-File meshes, textures, decals, terrain and shadows are on the [roadmap](../ROADMAP.md).
+Textures, decals, unions' own shapes, terrain and shadows are on the [roadmap](../ROADMAP.md).
 
 ## Content
 
 - Content references in every form places use, parsed by Studio's rules: `rbxasset://` paths, `rbxassetid://` ids and the legacy `http://www.roblox.com/asset/?id=` URLs with their case, slash and spacing variants.
 - They resolve through a chain of providers: **your own Roblox install** (found automatically, newest version first), folders you point Rook at, and Roblox's **asset delivery** for asset ids, anonymous and easy to turn off. Old 2009 client paths such as `rbxasset://fonts/sword.mesh` resolve to the assets Roblox uploaded for them.
 - Downloads go to a hash-checked disk cache outside the repository, so a second run needs no network, and missing or forbidden assets are remembered for a day.
-- `ContentProvider:PreloadAsync` and `RequestQueueSize`, resolved off the engine thread.
+- `ContentProvider:PreloadAsync` and `RequestQueueSize`, resolved off the engine thread; a mesh's `MeshId` must hold a mesh to succeed, as in Studio.
 
 ## Tooling
 
