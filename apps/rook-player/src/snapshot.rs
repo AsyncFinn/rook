@@ -582,6 +582,7 @@ impl SceneCache {
                 out.size = size;
                 if upright {
                     out.rotation = cf.rotation * UPRIGHT;
+                    out.upright = true;
                     pose.upright = true;
                 }
             }

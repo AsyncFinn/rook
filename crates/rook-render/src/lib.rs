@@ -65,6 +65,7 @@ const NEON: u32 = 2;
 const MODE_FACE: u32 = 1;
 const MODE_TILED: u32 = 2;
 const MODE_MESH_UV: u32 = 3;
+const UPRIGHT: u32 = 1 << 7;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
@@ -81,7 +82,8 @@ struct Instance {
     box_max: [f32; 3],
     /// A Texture's studs per tile and offset.
     tile: [f32; 4],
-    /// CAST, NEON, and an image layer's mode (bits 2-3) and face (4-6).
+    /// CAST, NEON, an image layer's mode (bits 2-3) and face (4-6), and
+    /// UPRIGHT (bit 7).
     flags: u32,
     /// Each face's surface pattern + 1, four bits per face.
     surfaces: u32,
@@ -95,6 +97,9 @@ impl Instance {
         let mut tile = [1.0, 1.0, 0.0, 0.0];
         let mut surfaces = 0;
         let mut reflectance = 0.0;
+        if p.upright {
+            flags |= UPRIGHT;
+        }
         match p.layer {
             Layer::Base => {
                 if p.cast_shadow {
@@ -659,7 +664,8 @@ impl Renderer {
                     fragment,
                     blend: Option<wgpu::BlendState>,
                     depth_write: bool,
-                    compare: wgpu::CompareFunction| {
+                    compare: wgpu::CompareFunction,
+                    bias: wgpu::DepthBiasState| {
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some(label),
                 layout: Some(&pipeline_layout),
@@ -678,7 +684,7 @@ impl Renderer {
                     depth_write_enabled: Some(depth_write),
                     depth_compare: Some(compare),
                     stencil: Default::default(),
-                    bias: Default::default(),
+                    bias,
                 }),
                 multisample: Default::default(),
                 fragment: Some(wgpu::FragmentState {
@@ -734,6 +740,7 @@ impl Renderer {
             None,
             true,
             wgpu::CompareFunction::Greater,
+            Default::default(),
         );
         let transparent_pipeline = make(
             "rook transparent",
@@ -741,6 +748,7 @@ impl Renderer {
             Some(wgpu::BlendState::ALPHA_BLENDING),
             false,
             wgpu::CompareFunction::Greater,
+            Default::default(),
         );
         // Images lie exactly on their part's surface: the same vertices
         // through the same (invariant) maths give the same depth.
@@ -750,6 +758,14 @@ impl Renderer {
             Some(wgpu::BlendState::ALPHA_BLENDING),
             false,
             wgpu::CompareFunction::GreaterEqual,
+            // Towards the camera (greater in reverse Z), so an image also
+            // wins over another part's face lying in the same plane, as in
+            // Roblox, instead of fighting it.
+            wgpu::DepthBiasState {
+                constant: 4,
+                slope_scale: 1.0,
+                clamp: 0.0,
+            },
         );
 
         let cx = UploadContext {

@@ -89,6 +89,11 @@ pub struct PartInstance {
     pub color: [f32; 3],
     /// 0 is opaque, 1 invisible.
     pub transparency: f32,
+    /// The shape is turned onto the part's Y axis (a CylinderMesh, whose
+    /// `rotation` includes the turn). Images and surfaces still go by the
+    /// part's own faces: a Front decal on a CylinderMesh barrel stands
+    /// upright on its side (observed).
+    pub upright: bool,
     /// `BasePart.CastShadow`: whether it casts a sun shadow. Every part
     /// receives shadows either way. Only opaque parts cast (Inference).
     pub cast_shadow: bool,
@@ -114,6 +119,7 @@ impl PartInstance {
             size,
             color: [1.0; 3],
             transparency: 0.0,
+            upright: false,
             cast_shadow: true,
             texture: None,
             material: MaterialLook::Plain,
