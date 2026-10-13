@@ -1,14 +1,16 @@
 //! wgpu renderer for Rook.
 //!
 //! The renderer draws a [`Scene`] snapshot: it never touches the DOM
-//! (architecture §8). It draws primitive parts and the built-in mesh shapes
-//! with their colour and transparency, a sky colour, a sun, ambient light
-//! and fog. File meshes, textures, decals, terrain and shadows come later.
+//! (architecture §8). It draws primitive parts, the built-in mesh shapes
+//! and mesh files with their colour and transparency, a sky colour, a sun,
+//! ambient light and fog. Textures, decals, terrain and shadows come later.
 
 mod mesh;
 mod scene;
 
-pub use scene::{Camera, DrawShape, Lighting, PartInstance, PartShape, Scene};
+pub use scene::{Camera, DrawShape, Lighting, Mesh, MeshHash, PartInstance, PartShape, Scene};
+
+use std::collections::HashMap;
 
 use bytemuck::{Pod, Zeroable};
 use glam::Vec3;
@@ -107,7 +109,9 @@ pub struct Renderer {
     transparent: wgpu::RenderPipeline,
     globals: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
-    meshes: Vec<(DrawShape, GpuMesh)>,
+    /// The built-in shapes, and each mesh file a part has drawn, uploaded
+    /// once by content hash (kept for the renderer's life).
+    meshes: HashMap<DrawShape, GpuMesh>,
     opaque_batches: Vec<Batch>,
     /// Transparent parts, sorted back to front every frame.
     transparent_parts: Vec<PartInstance>,
@@ -245,9 +249,7 @@ impl Renderer {
     /// file is.
     pub fn set_head_mesh(&mut self, head: &rook_content::mesh::Mesh) {
         let gpu = GpuMesh::upload(&self.device, &mesh::from_file(head));
-        if let Some(slot) = self.meshes.iter_mut().find(|(s, _)| *s == DrawShape::Head) {
-            slot.1 = gpu;
-        }
+        self.meshes.insert(DrawShape::Head, gpu);
     }
 
     /// A renderer without a window, for screenshots and tests.
@@ -276,33 +278,54 @@ impl Renderer {
         self.color_format
     }
 
-    /// Replace the scene. Opaque parts are grouped per shape and uploaded
-    /// once; transparent parts are kept for per-frame sorting.
+    /// Replace the scene. Opaque parts are grouped per shape (each mesh
+    /// file its own group, drawn instanced) and uploaded once; transparent
+    /// parts are kept for per-frame sorting.
     pub fn set_scene(&mut self, scene: &Scene) {
         profiling::scope!("Renderer::set_scene");
         self.lighting = scene.lighting;
         self.transparent_parts.clear();
-        let mut groups: Vec<(DrawShape, Vec<Instance>)> =
-            DrawShape::ALL.iter().map(|s| (*s, Vec::new())).collect();
+        let mut groups: HashMap<DrawShape, Vec<Instance>> = HashMap::new();
         for part in &scene.parts {
-            if part.transparency >= 1.0 {
+            if part.transparency >= 1.0 || !self.has_mesh(part.shape, scene) {
                 continue;
             }
             if part.transparency > 0.0 {
                 self.transparent_parts.push(*part);
-            } else if let Some(g) = groups.iter_mut().find(|g| g.0 == part.shape) {
-                g.1.push(Instance::from_part(part));
+            } else {
+                groups
+                    .entry(part.shape)
+                    .or_default()
+                    .push(Instance::from_part(part));
             }
         }
         self.opaque_batches = groups
             .into_iter()
-            .filter(|(_, list)| !list.is_empty())
             .map(|(shape, list)| Batch {
                 shape,
                 buffer: self.instance_buffer(&list),
                 count: list.len() as u32,
             })
             .collect();
+    }
+
+    /// Whether a shape can be drawn, uploading a mesh file the first time
+    /// one is used. A file the scene doesn't hold, or one without
+    /// triangles, draws nothing.
+    fn has_mesh(&mut self, shape: DrawShape, scene: &Scene) -> bool {
+        if self.meshes.contains_key(&shape) {
+            return true;
+        }
+        let DrawShape::File(hash) = shape else {
+            return false;
+        };
+        let Some(file) = scene.meshes.get(&hash).filter(|m| !m.indices.is_empty()) else {
+            return false;
+        };
+        profiling::scope!("upload mesh");
+        let gpu = GpuMesh::upload(&self.device, &mesh::from_file(file));
+        self.meshes.insert(shape, gpu);
+        true
     }
 
     fn instance_buffer(&self, list: &[Instance]) -> wgpu::Buffer {
@@ -418,12 +441,10 @@ impl Renderer {
             ] {
                 pass.set_pipeline(pipeline);
                 for batch in batches.iter() {
-                    let mesh = &self
-                        .meshes
-                        .iter()
-                        .find(|m| m.0 == batch.shape)
-                        .expect("every shape has a mesh")
-                        .1;
+                    // Batches are only made for shapes with a mesh.
+                    let Some(mesh) = self.meshes.get(&batch.shape) else {
+                        continue;
+                    };
                     pass.set_vertex_buffer(0, mesh.vertices.slice(..));
                     pass.set_vertex_buffer(1, batch.buffer.slice(..));
                     pass.set_index_buffer(mesh.indices.slice(..), wgpu::IndexFormat::Uint32);

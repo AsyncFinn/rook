@@ -69,7 +69,7 @@ The numbers come from running an archive of real places through Rook ([how](docs
 - **Scripting:** Luau with the Instance API, Roblox's datatypes, signals in both Immediate and Deferred modes, `wait` and `task`, `require` and Roblox's error messages.
 - **Client and server:** Play mode as on modern Roblox, with replication, FilteringEnabled, LocalScripts and remotes.
 - **Physics:** Rapier at 240 Hz with Roblox's joints, assemblies, materials, BodyMovers, constraints and raycasts.
-- **Rendering:** a wgpu renderer for parts and the built-in mesh shapes, live in a window or to a PNG.
+- **Rendering:** a wgpu renderer for parts, the built-in mesh shapes, mesh files and MeshParts, live in a window or to a PNG.
 - **Content:** `rbxasset://`, `rbxassetid://` and legacy asset URLs resolve from your own Roblox install, content folders, a disk cache and Roblox's asset delivery.
 - **Tools:** dump, round-trip, run headless, scan an archive, trace where content comes from and check behaviour against Studio.
 

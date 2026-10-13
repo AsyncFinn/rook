@@ -176,6 +176,71 @@ pub fn classify(url: &str) -> (&'static str, Option<String>) {
     (kind, None)
 }
 
+/// What a mesh instance is, for the scan's mesh counts (none for other
+/// classes): its class and, for a SpecialMesh, whether its `MeshType` is
+/// FileMesh, with or without a `MeshId`; for a MeshPart, also whether it
+/// saved `InitialSize` (what scripts read as `MeshSize`) and its
+/// `CollisionFidelity`; and the class of the part a mesh is under when that
+/// isn't a plain part.
+pub fn mesh_kinds(dom: &rbx_dom_weak::WeakDom, inst: &rbx_dom_weak::Instance) -> Vec<String> {
+    use rbx_types::Variant;
+    let class = inst.class.as_str();
+    let prop = |name: &str| inst.properties.get(&name.into());
+    let mesh_id = ["MeshContent", "MeshId", "MeshID"]
+        .iter()
+        .filter_map(|k| match prop(k)? {
+            Variant::ContentId(c) => Some(c.as_str().to_owned()),
+            Variant::Content(c) => c.as_uri().map(str::to_owned),
+            _ => None,
+        })
+        .find(|s| !s.is_empty());
+    let id = if mesh_id.is_some() {
+        "with MeshId"
+    } else {
+        "empty MeshId"
+    };
+    let mut out = Vec::new();
+    match class {
+        "SpecialMesh" => {
+            let mesh_type = match prop("MeshType") {
+                Some(Variant::Enum(e)) => e.to_u32(),
+                _ => 0,
+            };
+            if mesh_type == 5 {
+                out.push(format!("SpecialMesh FileMesh {id}"));
+            } else {
+                out.push(format!("SpecialMesh type {mesh_type} {id}"));
+            }
+        }
+        "FileMesh" | "CharacterMesh" => out.push(format!("{class} {id}")),
+        "MeshPart" => {
+            out.push(format!("MeshPart {id}"));
+            if prop("InitialSize").is_none() {
+                out.push("MeshPart without InitialSize".into());
+            }
+            if prop("MeshID").is_some() {
+                out.push("MeshPart saved as MeshID".into());
+            }
+            if let Some(Variant::Enum(e)) = prop("CollisionFidelity") {
+                out.push(format!("MeshPart CollisionFidelity {}", e.to_u32()));
+            }
+        }
+        _ => {}
+    }
+    if matches!(
+        class,
+        "SpecialMesh" | "FileMesh" | "BlockMesh" | "CylinderMesh"
+    ) && let Some(parent) = dom.get_by_ref(inst.parent())
+        && matches!(
+            parent.class.as_str(),
+            "MeshPart" | "UnionOperation" | "NegateOperation" | "TrussPart" | "PartOperation"
+        )
+    {
+        out.push(format!("{class} under {}", parent.class));
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

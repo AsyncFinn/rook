@@ -28,6 +28,7 @@ rook run-headless place.rbxl --repl        # then open a command bar (see gettin
 rook content rbxassetid://12221462               # what it is, where it comes from, size, hash
 rook content --place place.rbxl                  # every reference in a place: what resolves, from where, what fails and why
 rook content --place place.rbxl --offline        # only the install, folders and cache
+                                                 # (--place also totals mesh references: which decode, by version, and why others fail)
 ```
 
 Rook finds your Roblox install by itself. These environment variables change what it uses (for `rook`, `rook-player` and headless runs alike):

@@ -394,8 +394,10 @@ impl DataModel {
             });
             rook_content::Loader::new(resolver)
         });
-        for (request, reference) in requests {
-            content.tickets.insert(loader.request(reference), request);
+        for (request, reference, want) in requests {
+            content
+                .tickets
+                .insert(loader.request_as(reference, want), request);
         }
         for (ticket, outcome) in loader.poll() {
             if let Some(request) = content.tickets.remove(&ticket) {

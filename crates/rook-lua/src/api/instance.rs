@@ -456,8 +456,8 @@ pub(crate) fn get_member(lua: &Lua, id: InstanceId, key: &str) -> ApiResult<(Lua
         Some(Member::Property(p)) => {
             if !allowed(p.security[0]) {
                 return Err(ScriptError(format!(
-                    "The current thread cannot access '{key}' (lacking capability {:?})",
-                    p.security[0]
+                    "The current thread cannot access '{key}' (lacking capability {})",
+                    p.security[0].capability()
                 )));
             }
             if p.flags.write_only {
@@ -480,7 +480,8 @@ pub(crate) fn get_member(lua: &Lua, id: InstanceId, key: &str) -> ApiResult<(Lua
             lua,
         )?),
         Some(Member::Denied { verb, security }) => Err(ScriptError(format!(
-            "The current thread cannot {verb} '{key}' (lacking capability {security:?})"
+            "The current thread cannot {verb} '{key}' (lacking capability {})",
+            security.capability()
         ))),
         Some(Member::Callback(_)) => {
             let class = with_world(lua, |w| w.dom.class_name(id).to_owned());
@@ -561,8 +562,8 @@ pub(crate) fn set_member(lua: &Lua, id: InstanceId, key: &str, value: LuaValue) 
     };
     if !allowed(p.security[1]) {
         return Err(ScriptError(format!(
-            "The current thread cannot write '{key}' (lacking capability {:?})",
-            p.security[1]
+            "The current thread cannot write '{key}' (lacking capability {})",
+            p.security[1].capability()
         )));
     }
     if p.flags.read_only || p.scriptability == Scriptability::Read {

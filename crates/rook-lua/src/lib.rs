@@ -353,8 +353,10 @@ impl Runtime {
     }
 
     /// ContentProvider references to resolve, by request id, asked for
-    /// since the last call.
-    pub fn take_content_requests(&self) -> Vec<(u64, rook_content::ContentRef)> {
+    /// since the last call, with what each must load as.
+    pub fn take_content_requests(
+        &self,
+    ) -> Vec<(u64, rook_content::ContentRef, rook_content::Want)> {
         std::mem::take(&mut self.world_mut().content.outbox)
     }
 

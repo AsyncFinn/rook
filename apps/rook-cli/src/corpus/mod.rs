@@ -79,6 +79,8 @@ struct FileSummary {
     scripts_with_errors: u64,
     usage: ScriptUsage,
     content: ContentUsage,
+    /// Mesh instances by kind (`content::mesh_kind`).
+    meshes: BTreeMap<String, u64>,
 }
 
 /// Content references in one file (see `content.rs`).
@@ -145,6 +147,10 @@ pub struct Aggregate {
     pub content_paths: UsageMap,
     pub content_empty: u64,
     pub content_distinct: u64,
+    /// Mesh instances by what they draw (`content::mesh_kind`), and the
+    /// first file (by path) with each kind.
+    pub meshes: UsageMap,
+    pub mesh_examples: BTreeMap<String, PathBuf>,
     #[serde(skip)]
     content_values: HashSet<String>,
 }
@@ -228,6 +234,12 @@ pub fn run(dir: &Path, out: &Path, jobs: Option<usize>, large_mb: u64) -> anyhow
     for (record, summary) in outcomes {
         merge_record(&mut aggregate, &record);
         if let Some(summary) = summary {
+            for kind in summary.meshes.keys() {
+                aggregate
+                    .mesh_examples
+                    .entry(kind.clone())
+                    .or_insert_with(|| record.path.clone());
+            }
             merge_summary(&mut aggregate, summary);
         }
         records.push(record);
@@ -340,6 +352,9 @@ fn summarise(dom: &WeakDom) -> FileSummary {
     for inst in dom.descendants().skip(1) {
         let class = inst.class.as_str();
         *s.classes.entry(class.to_owned()).or_insert(0) += 1;
+        for kind in content::mesh_kinds(dom, inst) {
+            *s.meshes.entry(kind).or_insert(0) += 1;
+        }
         let Some(info) = db.class_by_name(class) else {
             *s.unknown_classes.entry(class.to_owned()).or_insert(0) += 1;
             continue;
@@ -480,6 +495,7 @@ fn merge_summary(agg: &mut Aggregate, s: FileSummary) {
         (&mut agg.content_script_shapes, s.content.script_shapes),
         (&mut agg.content_kinds, s.content.kinds),
         (&mut agg.content_paths, s.content.paths),
+        (&mut agg.meshes, s.meshes),
     ] {
         for (name, count) in src {
             let u = dst.entry(name).or_default();

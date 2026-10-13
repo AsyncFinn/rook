@@ -1,0 +1,13 @@
+-- studio 0.742.0.7421053
+-- signals: deferred
+new 4, 1.2000000476837158, 2 0, 0, 0 ""
+set MeshId false The current thread cannot write 'MeshId' (lacking capability NotAccessible)
+MeshId after ""
+InitialSize false InitialSize is not a valid member of MeshPart "MeshPart"
+after Size 2, 3, 4 0, 0, 0
+set MeshSize false Unable to assign property MeshSize. Property is read only
+MeshSize after 0, 0, 0
+clone 2, 3, 4 0, 0, 0
+SpecialMesh "" 1, 1, 1 0, 0, 0 1, 1, 1
+FileMesh "" 1, 1, 1 0, 0, 0 1, 1, 1
+SpecialMesh type Enum.MeshType.Head

@@ -10,6 +10,7 @@
 
 mod game;
 mod keys;
+mod meshes;
 mod snapshot;
 
 use std::collections::HashSet;
@@ -56,6 +57,9 @@ struct Args {
     /// Point the camera looks at, as x,y,z.
     #[arg(long, value_parser = parse_vec3, allow_hyphen_values = true)]
     look_at: Option<Vec3>,
+    /// Vertical field of view in degrees (default: the saved camera's).
+    #[arg(long)]
+    fov: Option<f32>,
     /// Run the place's scripts for this many seconds before showing it.
     #[arg(long, default_value_t = 0.0)]
     seconds: f64,
@@ -85,17 +89,17 @@ fn parse_vec3(s: &str) -> Result<Vec3, String> {
     }
 }
 
-fn scene_of(dm: &DataModel) -> SceneCache {
-    SceneCache::new(&dm.runtime().world().dom)
+fn scene_of(dm: &DataModel, content: &Arc<Resolver>) -> SceneCache {
+    SceneCache::new(&dm.runtime().world().dom, content.clone())
 }
 
-/// Bring a cached scene up to date with a DataModel's changes.
+/// Bring a cached scene up to date with a DataModel's changes and the mesh
+/// files that finished loading since the last frame.
 fn refresh(cache: &mut SceneCache, dm: &mut DataModel) -> bool {
     let changes = dm.take_render_changes();
-    if changes.is_empty() {
-        return false;
-    }
-    cache.apply(&dm.runtime().world().dom, &changes)
+    let dom = &dm.runtime().world().dom;
+    let changed = !changes.is_empty() && cache.apply(dom, &changes);
+    cache.poll_meshes(dom, false) || changed
 }
 
 fn main() -> anyhow::Result<()> {
@@ -107,7 +111,7 @@ fn main() -> anyhow::Result<()> {
     // ROOK_ASSET_DELIVERY=off turns it off.
     let content = Arc::new(Resolver::new(rook_content::Config::from_env(true)));
     let head = installed_head(&content);
-    let mut game = Game::load(&args.place, !args.run, content)?;
+    let mut game = Game::load(&args.place, !args.run, content.clone())?;
     let load_time = load_start.elapsed().as_secs_f64();
     if let Some(script) = &args.script {
         let source = fs_err::read_to_string(script)?;
@@ -117,7 +121,7 @@ fn main() -> anyhow::Result<()> {
     if args.seconds > 0.0 {
         game.run_for(args.seconds);
     }
-    let scene = scene_of(game.view());
+    let mut scene = scene_of(game.view(), &content);
     // The camera the place was saved with (clients start with a fresh one).
     let mut camera = snapshot::initial_camera(game.server());
     let name = args.place.file_name().unwrap_or_default().to_string_lossy();
@@ -141,6 +145,10 @@ fn main() -> anyhow::Result<()> {
         };
     }
 
+    if let Some(fov) = args.fov {
+        camera.fov_y = fov;
+    }
+
     if let Some(frames) = args.bench {
         return bench(
             &mut game,
@@ -149,10 +157,13 @@ fn main() -> anyhow::Result<()> {
             args.width,
             args.height,
             head.as_ref(),
+            &content,
         );
     }
 
     if let Some(out) = args.screenshot {
+        // A screenshot isn't a frame: it waits for the place's mesh files.
+        scene.poll_meshes(&game.view().runtime().world().dom, true);
         let mut renderer = Renderer::headless()?;
         if let Some(head) = &head {
             renderer.set_head_mesh(head);
@@ -235,12 +246,13 @@ fn bench(
     width: u32,
     height: u32,
     head: Option<&Mesh>,
+    content: &Arc<Resolver>,
 ) -> anyhow::Result<()> {
     let mut renderer = Renderer::headless()?;
     if let Some(head) = head {
         renderer.set_head_mesh(head);
     }
-    let mut cache = scene_of(game.view());
+    let mut cache = scene_of(game.view(), content);
     renderer.set_scene(&cache.scene);
     let (mut sim, mut build, mut upload, mut render) = (0.0, 0.0, 0.0, 0.0);
     let mut updates = 0;
@@ -276,8 +288,9 @@ fn bench(
     game.print_logs();
     let ms = |total: f64| total / f64::from(frames) * 1000.0;
     eprintln!(
-        "{frames} frames, {} parts, scene updated on {updates} frames",
-        cache.scene.parts.len()
+        "{frames} frames, {} parts, {} mesh files, scene updated on {updates} frames",
+        cache.scene.parts.len(),
+        cache.scene.meshes.len()
     );
     eprintln!(
         "per frame: mouse {:.2} ms, simulate {:.2} ms, scene update {:.2} ms, upload {:.2} ms, render+readback {:.2} ms",

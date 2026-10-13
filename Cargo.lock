@@ -2592,6 +2592,7 @@ name = "rook-content"
 version = "0.2.0"
 dependencies = [
  "blake3",
+ "profiling",
  "rbx_mesh",
  "serde_json",
  "thiserror 2.0.21",
