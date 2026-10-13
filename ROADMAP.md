@@ -270,14 +270,21 @@ forbidden, a missing `rbxasset://` file and junk all drew no mesh and
 printed nothing), unlike an empty `MeshId`, which draws the 1-stud box.
 
 *An image that doesn't load draws nothing either* (observed 2026-10-13,
-Decals on the front of blue parts): a missing asset, a forbidden one, a
-missing `rbxasset://` file, junk, and an asset that isn't an image (a
-mesh or a sound in `Texture`, so bytes that don't decode) all left the
-part's face plain, with no placeholder or checkerboard, while the two
-valid images drew. `PreloadAsync` reported each of those as `Failure`, the
-undecodable ones included. (Clients from around 2013-2015 drew a black and
-white checkerboard for failed images, as seen in a revival built on one;
-modern Roblox no longer does.)
+Decals on the front of blue parts). Two checks:
+
+- *Malformed bytes:* two `rbxasset://` test files put in Studio's
+  `content/textures` (and removed afterwards): a PNG cut in half, and a
+  valid PNG signature and header followed by random bytes. Both drew
+  nothing, and `PreloadAsync` reported `Failure`. So did a missing asset,
+  a forbidden one, a missing file, junk, and a mesh used as a texture.
+- *Replacing a loaded image:* Decals first showed a face (loaded and drawn,
+  `PreloadAsync` `Success`), then had `Texture` set to each failing value
+  (the two malformed PNGs, a missing asset, a mesh, a missing file). Every
+  one cleared to the plain face within the same check, while an unchanged
+  control kept its face. A failed image replaces the old one with nothing;
+  it doesn't keep it, and there's no placeholder or checkerboard. (Clients
+  from around 2013-2015 drew a black and white checkerboard for failed
+  images, as seen in a revival built on one; modern Roblox doesn't.)
 
 *Setting content properties* (observed): every content property turns
 backslashes in an `rbxasset://` path into slashes, keeping the case.
