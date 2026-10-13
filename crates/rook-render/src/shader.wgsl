@@ -50,6 +50,8 @@ const NEON: u32 = 2u;
 const MODE_FACE: u32 = 1u;
 const MODE_TILED: u32 = 2u;
 const MODE_MESH_UV: u32 = 3u;
+// The shape is turned onto the part's Y axis (a CylinderMesh).
+const UPRIGHT: u32 = 128u;
 
 struct VertexIn {
     @location(0) position: vec3<f32>,
@@ -116,12 +118,25 @@ fn vs_main(v: VertexIn) -> VertexOut {
     out.normal = normalize(instance_rotation(v) * local_normal);
     out.color = vec4(srgb_to_linear(v.i_color.rgb), v.i_color.a);
     out.uv = v.uv;
-    out.local = v.position * v.i_size;
-    out.local_normal = local_normal;
     let lo = v.i_box_min * v.i_size;
     let hi = v.i_box_max * v.i_size;
-    out.box_center = (lo + hi) * 0.5;
-    out.box_size = abs(hi - lo);
+    var local = v.position * v.i_size;
+    var normal = local_normal;
+    var center = (lo + hi) * 0.5;
+    var size = abs(hi - lo);
+    // Images and surfaces go by the part's own axes, not the turned
+    // shape's: the turn takes the shape's (x, y, z) to the part's
+    // (-y, x, z).
+    if (v.i_flags & UPRIGHT) != 0u {
+        local = vec3(-local.y, local.x, local.z);
+        normal = vec3(-normal.y, normal.x, normal.z);
+        center = vec3(-center.y, center.x, center.z);
+        size = size.yxz;
+    }
+    out.local = local;
+    out.local_normal = normal;
+    out.box_center = center;
+    out.box_size = size;
     out.tile = v.i_tile;
     out.flags = v.i_flags;
     out.surfaces = v.i_surfaces;
