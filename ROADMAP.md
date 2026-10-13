@@ -269,6 +269,16 @@ exactly these rules (`reference.rs`, with each form as a test).
 forbidden, a missing `rbxasset://` file and junk all drew no mesh and
 printed nothing), unlike an empty `MeshId`, which draws the 1-stud box.
 
+*An image that doesn't load draws nothing either* (observed 2026-10-13,
+Decals on the front of blue parts): a missing asset, a forbidden one, a
+missing `rbxasset://` file, junk, and an asset that isn't an image (a
+mesh or a sound in `Texture`, so bytes that don't decode) all left the
+part's face plain, with no placeholder or checkerboard, while the two
+valid images drew. `PreloadAsync` reported each of those as `Failure`, the
+undecodable ones included. (Clients from around 2013-2015 drew a black and
+white checkerboard for failed images, as seen in a revival built on one;
+modern Roblox no longer does.)
+
 *Setting content properties* (observed): every content property turns
 backslashes in an `rbxasset://` path into slashes, keeping the case.
 Decal's and Texture's `Texture` and Decal's `ColorMap` also rewrite a
