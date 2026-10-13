@@ -62,7 +62,7 @@ Material textures, skyboxes, unions' own shapes, terrain and other lighting (poi
 
 - Content references in every form places use, parsed by Studio's rules: `rbxasset://` paths, `rbxassetid://` ids and the legacy `http://www.roblox.com/asset/?id=` URLs with their case, slash and spacing variants.
 - They resolve through a chain of providers: **your own Roblox install** (found automatically, newest version first), folders you point Rook at, and Roblox's **asset delivery** for asset ids, anonymous and easy to turn off, with an Open Cloud API key of your own (`ROOK_OPEN_CLOUD_API_KEY`) for assets that need an account. Old 2009 client paths such as `rbxasset://fonts/sword.mesh` resolve to the assets Roblox uploaded for them.
-- Downloads go to a hash-checked disk cache outside the repository, so a second run needs no network, and missing or forbidden assets are remembered for a day.
+- Downloads go to a hash-checked disk cache in your system's cache folder (`%TEMP%` on Windows), so a second run needs no network, and missing or forbidden assets are remembered for a day. Rook keeps it under 2 GB by dropping what was used least recently (`ROOK_CACHE_MAX`), and `rook cache` shows or cleans it.
 - `ContentProvider:PreloadAsync` and `RequestQueueSize`, resolved off the engine thread; a mesh's `MeshId` must hold a mesh and an image property an image to succeed, as in Studio.
 
 ## Tooling

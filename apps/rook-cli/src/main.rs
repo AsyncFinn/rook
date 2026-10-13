@@ -126,6 +126,16 @@ enum Command {
         #[arg(long, short)]
         verbose: bool,
     },
+    /// Show the download cache's folder and size, or clean it.
+    ///
+    /// The cache is `ROOK_CACHE_DIR`, else `%TEMP%\Rook\cache` on Windows,
+    /// `~/Library/Caches/Rook` on macOS and `$XDG_CACHE_HOME/rook`
+    /// elsewhere. Rook keeps it under `ROOK_CACHE_MAX` (2GB by default)
+    /// itself, dropping what was used least recently.
+    Cache {
+        #[command(subcommand)]
+        action: Option<CacheAction>,
+    },
     /// Regenerate crates/rook-reflection/data/members.json from a Full API dump.
     ///
     /// The dump must match the pinned Roblox version; Roblox-Client-Tracker
@@ -139,6 +149,20 @@ enum Command {
         #[arg(long, default_value = "crates/rook-reflection/data/members.json")]
         out: PathBuf,
     },
+}
+
+#[derive(Debug, Subcommand)]
+enum CacheAction {
+    /// Delete what hasn't been used for this many days.
+    Prune {
+        #[arg(long, value_name = "DAYS")]
+        older_than: u64,
+    },
+    /// Delete what was used least recently until the cache is under
+    /// `ROOK_CACHE_MAX` (what Rook does by itself when it starts).
+    Trim,
+    /// Delete everything.
+    Clear,
 }
 
 #[derive(Debug, Subcommand)]
@@ -197,6 +221,12 @@ fn main() -> anyhow::Result<()> {
                 None => content::references(&references, &options),
             }
         }
+        Command::Cache { action } => content::cache(match action {
+            None => content::CacheCommand::Show,
+            Some(CacheAction::Prune { older_than }) => content::CacheCommand::Prune(older_than),
+            Some(CacheAction::Trim) => content::CacheCommand::Trim,
+            Some(CacheAction::Clear) => content::CacheCommand::Clear,
+        }),
         Command::Conformance {
             action,
             dir,
