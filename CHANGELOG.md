@@ -13,6 +13,12 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 
 ## [Unreleased]
 
+## [0.6.2] — 2026-10-14 — MakeJoints: wedge slopes from either side
+
+Pinned Roblox version: 0.741.19.
+
+- Fixed: a model's `MakeJoints` tried each touching pair once, from whichever part came first. A wedge's slope joins differently from each side, so a part welded onto a slope came loose whenever the wedge came first. As in Studio, when both parts are being joined and the first makes no joint, the other tries too.
+
 ## [0.6.1] — 2026-10-14 — MakeJoints: balls and cylinders
 
 Pinned Roblox version: 0.741.19.

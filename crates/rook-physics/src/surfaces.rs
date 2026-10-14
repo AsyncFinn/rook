@@ -19,6 +19,9 @@
 //!   Weld surfaces, TopSurface before FrontSurface, framed at that box
 //!   face. A part calling it on a slope sees the wedge's FrontSurface
 //!   there. Rotating surfaces on either side of a slope join nothing.
+//! - When both parts of a pair call (a model's MakeJoints), the earlier
+//!   tries first and the later tries again if that made no joint, so a
+//!   slope joins if either side would (Part0 is then the later caller).
 //!
 //! Every other part is treated as its box (a wedge's side triangles as
 //! rectangles). Balls, cylinders and corner wedges are boxes too: in
@@ -160,6 +163,10 @@ impl Box {
         })
     }
 
+    fn has_slope(&self) -> bool {
+        self.faces.contains(&SLOPE)
+    }
+
     fn near(&self, other: &Self) -> bool {
         self.min.cmple(other.max).all() && other.min.cmple(self.max).all()
     }
@@ -236,7 +243,9 @@ pub fn make_joints(dom: &mut Dom, parts: &[InstanceId]) -> Result<(), DomError> 
             rank.entry(i).or_insert(r);
         }
     }
-    // The neighbours each caller tries, the earlier caller of a pair first.
+    // The neighbours each caller tries. When both parts of a pair call, the
+    // earlier tries first and the later tries again if that made no joint,
+    // as in Studio: a wedge's slope joins differently from each side.
     // A few callers (the usual script call) check the world directly;
     // many (a model, a whole place) sweep it once.
     let pairs = if rank.len() <= 16 {
@@ -257,8 +266,15 @@ pub fn make_joints(dom: &mut Dom, parts: &[InstanceId]) -> Result<(), DomError> 
     let mut neighbours: Vec<Vec<usize>> = vec![Vec::new(); world.len()];
     for (a, b) in pairs {
         match (rank.get(&a), rank.get(&b)) {
-            (Some(ra), Some(rb)) if rb < ra => neighbours[b].push(a),
-            (Some(_), _) => neighbours[a].push(b),
+            (Some(ra), Some(rb)) => {
+                let (first, second) = if ra <= rb { (a, b) } else { (b, a) };
+                neighbours[first].push(second);
+                // Only a slope joins differently from the other side.
+                if world[a].has_slope() || world[b].has_slope() {
+                    neighbours[second].push(first);
+                }
+            }
+            (Some(_), None) => neighbours[a].push(b),
             (None, Some(_)) => neighbours[b].push(a),
             (None, None) => {}
         }
