@@ -6,6 +6,7 @@
 //! change state and fire the events a call fires.
 
 use super::*;
+use crate::world::Listener;
 
 /// The `soundId` the Sound events pass: the `SoundId` string.
 pub(crate) fn sound_id(w: &World, id: InstanceId) -> String {
@@ -94,4 +95,37 @@ pub(super) fn sound_resume(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Ou
         w.dom
             .set_property_by_name(this, "Playing", Value::Bool(true))
     })
+}
+
+/// `SoundService:SetListener`: where 3D sounds are heard from
+/// (creator-docs; `Enum.ListenerType` Camera, CFrame, ObjectPosition,
+/// ObjectCFrame).
+pub(super) fn set_listener(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
+    let id = database()
+        .enum_by_name("ListenerType")
+        .expect("ListenerType enum")
+        .id;
+    let kind = crate::types::enums::coerce(lua, a.get(0), id).map_err(ScriptError)?;
+    let listener = match kind {
+        1 => Listener::CFrame(a.userdata::<LCFrame>(1, "CFrame")?.0),
+        2 => Listener::ObjectPosition(a.instance(1)?),
+        3 => Listener::ObjectCFrame(a.instance(1)?),
+        _ => Listener::Camera,
+    };
+    with_world(lua, |w| w.listener = listener);
+    Outcome::ret(lua, ())
+}
+
+/// `SoundService:GetListener`: the type and what goes with it (nil for
+/// Camera), as set.
+pub(super) fn get_listener(lua: &Lua, _: InstanceId, _: Args) -> ApiResult<Outcome> {
+    let listener = with_world(lua, |w| w.listener);
+    let (kind, value) = match listener {
+        Listener::Camera => (0, LuaValue::Nil),
+        Listener::CFrame(c) => (1, LuaValue::UserData(lua.create_userdata(LCFrame(c))?)),
+        Listener::ObjectPosition(i) => (2, LuaValue::UserData(push_instance(lua, i)?)),
+        Listener::ObjectCFrame(i) => (3, LuaValue::UserData(push_instance(lua, i)?)),
+    };
+    let item = crate::types::enums::enum_item(lua, "ListenerType", kind)?;
+    Outcome::ret(lua, (item, value))
 }

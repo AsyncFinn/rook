@@ -19,8 +19,9 @@ pub struct Play<K> {
     pub audio: Arc<Audio>,
     /// Seconds into the sound.
     pub position: f64,
-    /// Linear gain.
-    pub volume: f32,
+    /// Linear gain for the left and right of the output: `Volume`, with a
+    /// 3D sound's roll-off and panning ([`crate::spatial`]).
+    pub gains: [f32; 2],
     /// 1 is the sound's own rate.
     pub speed: f32,
     pub looped: bool,
@@ -34,7 +35,10 @@ struct Voice {
     audio: Arc<Audio>,
     /// Position in source frames.
     cursor: f64,
-    volume: f32,
+    /// The gains last mixed at, and the ones to reach by the end of the
+    /// next buffer: changes ramp over a buffer instead of clicking.
+    gains: [f32; 2],
+    target: [f32; 2],
     speed: f32,
     looped: bool,
     generation: u32,
@@ -80,7 +84,8 @@ impl<K: Hash + Eq + Copy> Mixer<K> {
             let voice = self.voices.entry(p.key).or_insert_with(|| Voice {
                 audio: p.audio.clone(),
                 cursor: p.position * rate,
-                volume: p.volume,
+                gains: p.gains,
+                target: p.gains,
                 speed: p.speed,
                 looped: p.looped,
                 generation: p.generation,
@@ -93,7 +98,7 @@ impl<K: Hash + Eq + Copy> Mixer<K> {
                 voice.cursor = p.position * rate;
                 voice.generation = p.generation;
             }
-            voice.volume = p.volume;
+            voice.target = p.gains;
             voice.speed = p.speed;
             voice.looped = p.looped;
         }
@@ -127,9 +132,13 @@ fn mix_voice(v: &mut Voice, out: &mut [f32], channels: usize, rate: f64) -> bool
     // Linear interpolation between neighbouring source frames: cheap, and
     // fine for the archive's mostly 8-48 kHz effects (Approximation).
     let step = f64::from(audio.sample_rate) * f64::from(v.speed.max(0.0)) / rate;
-    let gain = v.volume / 32768.0;
     let sample = |frame: usize, ch: usize| f32::from(audio.samples[frame * src_channels + ch]);
-    for frame in out.chunks_exact_mut(channels) {
+    let count = (out.len() / channels).max(1) as f32;
+    let (from, to) = (v.gains, v.target);
+    v.gains = to;
+    for (k, frame) in out.chunks_exact_mut(channels).enumerate() {
+        let f = k as f32 / count;
+        let gain = [0, 1].map(|c| (from[c] + (to[c] - from[c]) * f) / 32768.0);
         if v.cursor >= frames as f64 {
             if v.looped && step > 0.0 {
                 v.cursor %= frames as f64;
@@ -150,7 +159,14 @@ fn mix_voice(v: &mut Voice, out: &mut [f32], channels: usize, rate: f64) -> bool
             let ch = if c < src_channels { c } else { 0 };
             let a = sample(i, ch);
             let b = sample(next, ch);
-            *s += (a + (b - a) * t) * gain;
+            // A mono output takes both sides' average; channels past the
+            // second take the left (Approximation).
+            let g = match (channels, c) {
+                (1, _) => (gain[0] + gain[1]) / 2.0,
+                (_, 1) => gain[1],
+                _ => gain[0],
+            };
+            *s += (a + (b - a) * t) * g;
         }
         v.cursor += step;
     }
@@ -175,7 +191,7 @@ mod tests {
             key: 1,
             audio: audio.clone(),
             position,
-            volume: 1.0,
+            gains: [1.0, 1.0],
             speed: 1.0,
             looped: false,
             generation: 0,
@@ -235,5 +251,22 @@ mod tests {
         m.mix(&mut out, 1);
         assert_eq!((out[0], out[4], out[8]), (0.25, 0.25, 0.25));
         assert_eq!(m.len(), 1);
+    }
+
+    /// Gains move to new values over one buffer, per side.
+    #[test]
+    fn ramps_and_pans() {
+        let a = audio(4, vec![16384; 40]);
+        let mut m = Mixer::new(4);
+        m.sync(&[play(&a, 0.0)]);
+        m.sync(&[Play {
+            gains: [0.0, 1.0],
+            ..play(&a, 0.0)
+        }]);
+        let mut out = [0.0; 8];
+        m.mix(&mut out, 2);
+        assert_eq!(out, [0.5, 0.5, 0.375, 0.5, 0.25, 0.5, 0.125, 0.5]);
+        m.mix(&mut out, 2);
+        assert_eq!(out, [0.0, 0.5, 0.0, 0.5, 0.0, 0.5, 0.0, 0.5]);
     }
 }

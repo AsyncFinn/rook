@@ -20,7 +20,7 @@ pub use input::{ClickEvent, ClickKind, InputEvent};
 
 pub use render_changes::RenderChanges;
 pub use session::Session;
-pub use sounds::PlayingSound;
+pub use sounds::{Emitter, Listener as SoundListener, PlayingSound};
 
 use std::collections::HashMap;
 use std::sync::Arc;

@@ -13,7 +13,7 @@
 
 mod playback;
 
-pub use playback::PlayingSound;
+pub use playback::{Emitter, Listener, PlayingSound};
 
 use std::collections::HashSet;
 

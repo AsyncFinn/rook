@@ -104,17 +104,38 @@ impl Game {
 
     /// The sounds the window's DataModel is playing, for the mixer.
     pub fn sounds(&self) -> Vec<rook_audio::Play<rook_dom::InstanceId>> {
-        self.view()
-            .playing_sounds()
+        use rook_audio::spatial::{RollOff, attenuation, pan};
+        let view = self.view();
+        let listener = view.sound_listener();
+        let (at, facing) = (listener.cframe.position, listener.cframe.rotation);
+        view.playing_sounds()
             .into_iter()
-            .map(|s| rook_audio::Play {
-                key: s.id,
-                audio: s.audio,
-                position: s.position,
-                volume: s.volume,
-                speed: s.speed,
-                looped: s.looped,
-                generation: s.generation,
+            .map(|s| {
+                // A global sound is heard at its Volume on both sides; a 3D
+                // one by distance and direction from the listener.
+                let gains = match s.emitter {
+                    None => [s.volume; 2],
+                    Some(e) => {
+                        let offset = e.position - at;
+                        let fade = attenuation(
+                            RollOff::from_value(e.roll_off),
+                            offset.length(),
+                            e.min,
+                            e.max,
+                            listener.rolloff_scale,
+                        );
+                        pan(facing.transpose() * offset).map(|g| g * fade * s.volume)
+                    }
+                };
+                rook_audio::Play {
+                    key: s.id,
+                    audio: s.audio,
+                    position: s.position,
+                    gains,
+                    speed: s.speed,
+                    looped: s.looped,
+                    generation: s.generation,
+                }
             })
             .collect()
     }

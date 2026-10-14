@@ -6,6 +6,7 @@
 //! - [`Output`] owns the output device (through `cpal`) and a mixer the
 //!   device's thread pulls from. It opens the device the first time
 //!   something is to be heard, so a silent place never opens one.
+//! - [`spatial`] says how loud and on which side a 3D sound is heard.
 //!
 //! The engine keeps each sound's state (`Playing`, `TimePosition`); the
 //! player hands the playing ones to [`Output::sync`] every frame. See
@@ -13,6 +14,7 @@
 
 mod mixer;
 mod output;
+pub mod spatial;
 
 pub use mixer::{Mixer, Play};
 pub use output::Output;
