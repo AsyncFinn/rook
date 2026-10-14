@@ -45,6 +45,9 @@ pub(crate) const FORCE_FIELD: u32 = 1 << 28;
 /// A wedge or corner wedge, whose slopes take material textures in their
 /// own plane.
 pub(crate) const SLOPED: u32 = 1 << 29;
+/// The material textures go through the mesh's UVs (a SurfaceAppearance),
+/// with their alpha mode in the surfaces' bits (a MeshPart has none).
+pub(crate) const MAPS_UV: u32 = 1 << 30;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
@@ -66,7 +69,8 @@ pub(crate) struct Instance {
     /// UPRIGHT (bit 7), and from bit 8 each face's surface pattern + 1,
     /// three bits per face (wgpu allows 16 vertex attributes in all).
     flags: u32,
-    /// A part's `Reflectance`, roughness and metalness.
+    /// A part's `Reflectance`, roughness and metalness; w is the blue of
+    /// a SurfaceAppearance's tint, whose red and green are in `tile.zw`.
     material: [f32; 4],
 }
 
@@ -90,7 +94,7 @@ impl Instance {
                     _ => 0,
                 };
                 // A map gives the value itself; without one, the material's.
-                let shading = p.material.shading();
+                let shading = p.material.shading(p.material_set);
                 let maps = p.maps;
                 material = [
                     p.reflectance.clamp(0.0, 1.0),
@@ -106,7 +110,12 @@ impl Instance {
                     },
                     0.0,
                 ];
-                if maps.any() {
+                if maps.on_mesh_uv {
+                    flags |= MAPS | MAPS_UV | (maps.alpha as u32) << SURFACES_SHIFT;
+                    let t = maps.tint;
+                    tile = [1.0, 1.0, t[0], t[1]];
+                    material[3] = t[2];
+                } else if maps.any() {
                     flags |= MAPS;
                     if matches!(
                         p.shape,

@@ -6,15 +6,18 @@
 //! files; the textures themselves are read from the user's own cache.
 //!
 //! An empty entry has no texture of its own in Studio (a 4 × 4 placeholder:
-//! Foil's and Ice's colour, Granite's and Pebble's normal).
+//! in the legacy set Foil's and Ice's colour and Granite's and Pebble's
+//! normal, in the 2022 set Granite's normal). The materials added in 2022
+//! or later have one set of textures, shared by both sets.
 
-use rook_types::Material;
+use rook_types::{Material, MaterialSet};
 
 use crate::MaterialMap;
 
-/// Each textured material's colour, normal and roughness-metalness maps.
+/// Each textured material's colour, normal and roughness-metalness maps in
+/// the legacy set (and the materials both sets share).
 #[rustfmt::skip]
-const TABLE: &[(Material, [&str; 3])] = &[
+const LEGACY: &[(Material, [&str; 3])] = &[
     (Material::Wood, ["e4c89e04bd8bafa133218e475890d457", "22755f464089f2c0e7df0b84dc389611", "72599faed18666ffbb9e711170e6bd4c"]),
     (Material::WoodPlanks, ["db0b2d38998c49b49326c6bc0a389441", "025aa8fe54d30e543ebc165201f2b178", "74c2143d337c3906c0b447456c030068"]),
     (Material::Marble, ["6f09f886f2612a9011714bcdcebd31e0", "6462db1dec207210d69ca046b2b138a9", "e2f60316fac82962ca1ed1da779c0066"]),
@@ -56,16 +59,67 @@ const TABLE: &[(Material, [&str; 3])] = &[
     (Material::Rubber, ["be7ad5da9fc5c2ccd40f55e3fee73fbe", "1a03f7eb18617b6b906da6c48d53a24a", "8a34124e81336be815788bb1dd79b62d"]),
 ];
 
-/// The `contentHash` of `material`'s `map`, if Studio has one.
-pub fn content_hash(material: Material, map: MaterialMap) -> Option<&'static str> {
-    let (_, maps) = TABLE.iter().find(|(m, _)| *m == material)?;
+/// The same for the 2022 set, measured in a place saved with
+/// `Use2022Materials` on; materials it lacks share the legacy set's.
+#[rustfmt::skip]
+const MATERIALS_2022: &[(Material, [&str; 3])] = &[
+    (Material::Wood, ["068a17909aaf0cda44025db5de98e6aa", "0687a4bb2384706f174f9e1f0a4eb346", "a80f0da3065c06c0956a7837afcc2504"]),
+    (Material::WoodPlanks, ["4e45b4535587c465cf04e36f27d48de0", "a7f066b1b4d8e6ecc11d67d16009f6f5", "a4cfe74f71a55f8683b3cf2e1fec265f"]),
+    (Material::Marble, ["d710ba4ba083ddefe2ccf4bfe050bd51", "29d6a963bb3546d072ef6a73f500c541", "74057b45610380b5d9aad250ef0965b5"]),
+    (Material::Basalt, ["5b4cc8b10c2f452a9950a5ae8ac69c69", "b4734aa57869b52da8093d05ffcced65", "fad1510bd90589072e28a7b740c0645a"]),
+    (Material::Slate, ["b4c851837a54c9c7a62e6626bbb66ed8", "70f6091bbb039000ae77bf260dc2bbf2", "abf760caf6e66d934b74447eb124e8f0"]),
+    (Material::CrackedLava, ["4e6a59ccd7b8b250d6d10f9e8fe685ed", "e63f8de21e9a1b60a320d2c0389d6cff", "fe232a76ecc9032a0e9798384af7cd22"]),
+    (Material::Concrete, ["42b886f90c75cf400f14ded496f613fb", "9c20e8d08f168b9e755171de3c54b907", "cab2f410f1d7f514b8fd902f9d68c19f"]),
+    (Material::Limestone, ["f5ee741a9001b799ac10b339d009ac99", "84e19abd893d927ac61004164db256d8", "7bd687b8c62cbd5f7aeaf11e5119bfca"]),
+    (Material::Granite, ["38ab970f0db416036c264c41b73a032f", "", "d95c0b778ae3142132ac96741052930b"]),
+    (Material::Pavement, ["3ef20d7dca9658a86660940bdc2f8923", "e347d946a2c41a73859adf636db67023", "6578fc3ab9347a631f5be43a9f35c3ae"]),
+    (Material::Brick, ["9f1225c686c56dc8676571bed439a8a1", "e32c3fe37c9e470c1b4df781edb61218", "e0ee95c7c4c2b7291848f642818fc5d4"]),
+    (Material::Pebble, ["620b16e7b1d5e2c5f4ec4aac6a5f6723", "0c086d16a8ece14d5a0334cfc844b4b5", "27bb65db08f97b022f862721bdad908c"]),
+    (Material::Cobblestone, ["182fedba833db3ea7934df4dcd063934", "c837e19c0066620e4c63cdbc9d43ae3a", "e82fac613f80e8f5445fde03d5436f6f"]),
+    (Material::Rock, ["ce9a4ae3213c408d391dc85778e665f7", "f6a0c1c343aa0b75c7dfb4bd5c2974fd", "595b39dd8593a1e810c4d2ad6d376c69"]),
+    (Material::Sandstone, ["2853daf82c206c4bf22a334975fb7fb6", "40180bc221190c666727967ee92ae33f", "4f3755f269dfe4aab5846216467b45db"]),
+    (Material::CorrodedMetal, ["271761dc485bcb60ccdef46ccdce8722", "5ba2e5717b8c269a8c28e23ee9ec9f39", "e43abc975cdbcfb9fb5df5fcb18e02d9"]),
+    (Material::DiamondPlate, ["97fe1eadf64a4bf22a985525e3b45d73", "e53eeca9953bcdac3518a7a05c613092", "4dd0194e00135bc61d37eaa16963f68a"]),
+    (Material::Foil, ["d8b92321782b296dd6cbd11dcbb2ec32", "514722dbd44d770014448fea914bd737", "ef7e1b0b50f4b0163d83db83b63e3834"]),
+    (Material::Metal, ["3ef91b52a1bbd40427a329bef72797e8", "eacdca07909930e41054af6bd25612aa", "7a24339d123b514c9f8ea47eb69ccbf9"]),
+    (Material::Grass, ["b8a0f9601e2e7030971d41da92ba0c43", "325159d417faa2a95ba0ccb0ce900d34", "337db2890e8b47b57c9c1dba4a0bfd67"]),
+    (Material::LeafyGrass, ["57baec2f76ab60d4d3df7e8721b98844", "3eabef43a6963b66606c02156f02e03e", "96aac2d04122eae87176e249b2d6c9a9"]),
+    (Material::Sand, ["8acafa59782f47eed80a563255df5617", "e925667212c3b340888e90cf8013bb3d", "1284661ade3df24e97d90870bbcd266f"]),
+    (Material::Fabric, ["e7ee2d50dc541a82e5488cd9e621e1f7", "500a180e67e5067ea97b4c5be3e11bef", "44cce0f52300fd1862f8957b8d97efe1"]),
+    (Material::Snow, ["132de381f49de741f0ce22f8b908d56b", "cf18396e395812a18cb22baf5a2c8e87", "363796d25a2598d669ee391e1135701d"]),
+    (Material::Mud, ["90277aef2ad02ee9c8ebc32b13eadac4", "ee7240b4525c38371a37bda7d62cd0a1", "518e293887b906d5112cf89fd59deac3"]),
+    (Material::Ground, ["39de819b00c8cb32967632f195c10afb", "098f7ad7b3d8c38a11b49b685fdfea32", "22e3d41bd2b8f6fc79d307fa2b999dca"]),
+    (Material::Asphalt, ["a1e49deb66ef214fcaa3f6aa156e1dcc", "530c41775ab450bdbdd96fe04be07d10", "01f402eb05abfdd971b9a3e1c0b1402f"]),
+    (Material::Salt, ["64764ac199afa8057c20b6e82d3edc81", "99aea3a5c7c0847f50ebf16ba8e8d5ec", "ef4b97f847cca5db0a12a02c007678e6"]),
+    (Material::Ice, ["2905665ba31a43653a7340467f7f7181", "7d5d7edc638d0197bb2658f044c7c86a", "9ce0fd5ed5282b407cf38d7b3021e96c"]),
+    (Material::Glacier, ["36435e0dca3bebe69d380501ab6a9f04", "c7f090a3e82c793d143d29036d246c3f", "bf3464fcbb70404097fbb6bc2864b6a0"]),
+    (Material::Glass, ["28562b34d6265769acc6602e430f2ec4", "bb0a43139011255ed1b4d62ae1ec11f9", "26181b46d0039be04dd6ce6c89ea3753"]),
+];
+
+/// The `contentHash` of `material`'s `map` in `set`, if Studio has one.
+pub fn content_hash(
+    material: Material,
+    set: MaterialSet,
+    map: MaterialMap,
+) -> Option<&'static str> {
+    let find = |table: &'static [(Material, [&'static str; 3])]| {
+        table
+            .iter()
+            .find(|(m, _)| *m == material)
+            .map(|(_, maps)| maps)
+    };
+    let maps = match set {
+        MaterialSet::Materials2022 => find(MATERIALS_2022).or_else(|| find(LEGACY)),
+        MaterialSet::Legacy => find(LEGACY),
+    }?;
     Some(maps[map as usize]).filter(|h| !h.is_empty())
 }
 
-/// Every texture in the table.
+/// Every texture in both tables.
 pub(super) fn all() -> impl Iterator<Item = &'static str> {
-    TABLE
+    LEGACY
         .iter()
+        .chain(MATERIALS_2022)
         .flat_map(|(_, maps)| maps.iter().copied())
         .filter(|h| !h.is_empty())
 }

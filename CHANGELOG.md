@@ -13,6 +13,17 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-10-14 — M4 step 5: MaterialVariant, MaterialService and SurfaceAppearance
+
+Pinned Roblox version: 0.741.19. Finishes M4 step 5 (materials and PBR); M4 Content continues with unions.
+
+- MaterialVariants draw: a part's `MaterialVariant`, or the variant MaterialService's override names for its material (`WoodName`), replaces the material's textures with the variant's colour, normal, roughness and metalness maps, tiled at its `StudsPerTile` and tinted by the part's Color. Only a variant of the part's own material counts, as in Studio.
+- MaterialService's `GetBaseMaterialOverride`, `SetBaseMaterialOverride` and `GetMaterialVariant`, with Studio's answers and errors (conformance case `content/materialservice`). Changing MaterialService or a MaterialVariant redraws the scene.
+- SurfaceAppearance on MeshParts: its maps through the mesh's UVs, with `AlphaMode` Overlay (the part's Color through the map's see-through pixels), Transparency, TintMask and Opaque, and `Color` tinting the map.
+- Fixed: Studio draws a different set of built-in materials when `MaterialService.Use2022Materials` is on; 0.5.0 drew the legacy set for every place, having concluded Studio ignores the flag from places that turned out to be legacy ones. Places that save it on now draw the 2022 set (Studio's textures from your content cache, or Rook's own in its colours), at its own scale (8 studs) and shading; places that save it off, don't save it, or have no MaterialService keep the legacy set. Findings: `docs/behavior/materials.md`.
+- Fixed: a mesh file whose normals are all zero drew black; its vertices now take their triangle's normal, and it's lit as in Studio.
+- Fixed: Rook's index of Studio's content cache didn't notice when the textures it looks for changed, so it could miss ones it had read past before.
+
 ## [0.5.1] — 2026-10-14 — M4 step 5: material fixes
 
 Pinned Roblox version: 0.741.19.

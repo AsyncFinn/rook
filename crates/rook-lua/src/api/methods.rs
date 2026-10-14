@@ -31,6 +31,7 @@ mod assemblies;
 mod attributes;
 mod bindables;
 mod characters;
+mod materials;
 mod models;
 mod services;
 mod tree;
@@ -39,6 +40,7 @@ use assemblies::*;
 use attributes::*;
 use bindables::*;
 use characters::*;
+use materials::*;
 use models::*;
 use services::*;
 use tree::*;
@@ -102,6 +104,9 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("DataModel", "IsLoaded") => true_,
         ("DataModel", "BindToClose") => bind_to_close,
         ("Debris", "AddItem" | "addItem") => debris_add_item,
+        ("MaterialService", "GetBaseMaterialOverride") => get_base_material_override,
+        ("MaterialService", "SetBaseMaterialOverride") => set_base_material_override,
+        ("MaterialService", "GetMaterialVariant") => get_material_variant,
         ("RunService", "IsRunning") => true_,
         ("RunService", "IsStudio" | "IsRunMode") => false_,
         ("RunService", "IsServer") => is_server,

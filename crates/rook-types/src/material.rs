@@ -1,6 +1,10 @@
 //! `Enum.Material`: the one list of materials, their values and names,
 //! shared by physics (`rook-physics`'s density and friction table) and
-//! drawing (how each material shades).
+//! drawing (how each material looks, [`looks`]).
+
+mod looks;
+
+pub use looks::{MaterialSet, Shading};
 
 /// `Enum.Material`, by value (read from Studio 0.742's
 /// `Enum.Material:GetEnumItems()`).
@@ -51,14 +55,6 @@ pub enum Material {
     Leather = 2309,
     Plaster = 2310,
     Rubber = 2311,
-}
-
-/// How a material shades without textures: its roughness and metalness,
-/// 0 to 1.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Shading {
-    pub roughness: f32,
-    pub metalness: f32,
 }
 
 impl Material {
@@ -186,103 +182,20 @@ impl Material {
         Self::ALL.iter().copied().find(|m| m.name() == name)
     }
 
-    /// Only Plastic shows the surface patterns (observed in Studio 0.742:
-    /// Studs and Inlet on every other material, SmoothPlastic included,
-    /// drew nothing).
-    pub fn shows_surfaces(self) -> bool {
-        self == Self::Plastic
+    /// Whether MaterialVariants can stand in for it: every material but
+    /// Neon, Glass, ForceField, Air and Water, which have no override
+    /// property on MaterialService (observed in Studio 0.742: the
+    /// override methods fail with "Material 'Neon' is not supported.").
+    pub fn supports_variants(self) -> bool {
+        use Material::*;
+        !matches!(self, Neon | Glass | ForceField | Air | Water)
     }
 
-    /// Whether Studio draws the material with textures (every material
-    /// but these; Plastic's own subtle texture isn't drawn: Approximation).
-    pub fn has_textures(self) -> bool {
-        use Material::*;
-        !matches!(
-            self,
-            Plastic | SmoothPlastic | Neon | ForceField | Air | Water
-        )
-    }
-
-    /// Studs per repeat of the material's textures, across and down each
-    /// face, measured in Studio 0.742 (`docs/behavior/materials.md`):
-    /// matched against the textures themselves on 24-stud faces where
-    /// Studio repeats them plainly (Confirmed), and fitted from close-ups
-    /// by the size of their features where Studio breaks the repeats up
-    /// (its Organic pattern; Approximation: Cobblestone, Salt,
-    /// Grass, Foil, and Granite, CorrodedMetal, Slate and Basalt by eye);
-    /// 8 studs, most materials' size, where neither settled it
-    /// (Approximation).
-    pub fn studs_per_tile(self) -> f32 {
-        use Material::*;
-        match self {
-            Glass => 4.0,
-            Wood | DiamondPlate | Metal => 5.0,
-            Fabric => 20.0 / 3.0,
-            Marble | Pebble | Sand | Ice | Grass => 10.0,
-            Foil => 12.0,
-            Cobblestone | Slate | Basalt => 16.0,
-            Salt => 20.0,
-            Granite | CorrodedMetal => 24.0,
-            _ => 8.0,
-        }
-    }
-
-    /// Roughness and metalness without the material's textures: the
-    /// averages of the red (metalness) and green (roughness) channels of
-    /// Studio 0.742's own roughness-metalness map for each material, as
-    /// its files record them (`docs/behavior/materials.md`). Plastic,
-    /// SmoothPlastic, Neon, ForceField, Air and Water have no such map;
-    /// theirs are Approximations, tuned against Studio screenshots.
-    pub fn shading(self) -> Shading {
-        use Material::*;
-        let (metalness, roughness) = match self {
-            Plastic => (0.0, 0.75),
-            SmoothPlastic => (0.0, 0.5),
-            Neon | ForceField | Air | Water => (0.0, 1.0),
-            Wood => (0.09, 0.53),
-            WoodPlanks => (0.24, 0.65),
-            Marble => (0.0, 0.49),
-            Basalt => (0.0, 0.81),
-            Slate => (0.0, 0.55),
-            CrackedLava => (0.0, 0.74),
-            Concrete => (0.0, 0.51),
-            Limestone => (0.0, 0.67),
-            Granite => (0.0, 0.58),
-            Pavement => (0.0, 0.76),
-            Brick => (0.0, 0.96),
-            Pebble => (0.0, 0.6),
-            Cobblestone => (0.0, 0.5),
-            Rock => (0.2, 0.69),
-            Sandstone => (0.0, 0.76),
-            CorrodedMetal => (0.53, 0.73),
-            DiamondPlate => (0.66, 0.42),
-            Foil => (1.0, 0.17),
-            Metal => (0.79, 0.35),
-            Grass => (0.0, 0.83),
-            LeafyGrass => (0.0, 0.91),
-            Sand => (0.0, 0.53),
-            Fabric => (0.0, 0.94),
-            Snow => (0.0, 0.49),
-            Mud => (0.0, 0.54),
-            Ground => (0.0, 0.91),
-            Asphalt => (0.0, 0.88),
-            Salt => (0.0, 0.64),
-            Ice => (0.0, 0.18),
-            Glacier => (0.0, 0.39),
-            Glass => (0.0, 0.11),
-            Cardboard => (0.0, 0.67),
-            Carpet => (0.0, 0.81),
-            CeramicTiles => (0.0, 0.29),
-            ClayRoofTiles => (0.0, 0.57),
-            RoofShingles => (0.0, 0.78),
-            Leather => (0.0, 0.46),
-            Plaster => (0.0, 0.95),
-            Rubber => (0.18, 0.58),
-        };
-        Shading {
-            roughness,
-            metalness,
-        }
+    /// The MaterialService property naming the variant that overrides it
+    /// (`WoodName`), for materials that [support variants](Self::supports_variants).
+    pub fn override_property(self) -> Option<String> {
+        self.supports_variants()
+            .then(|| format!("{}Name", self.name()))
     }
 }
 

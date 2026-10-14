@@ -59,8 +59,11 @@ impl RenderProps {
 
 impl DataModel {
     /// Note whether the journal since the last check touched anything drawn:
-    /// parts, their meshes, their ancestry, or Lighting. Camera moves don't
-    /// count; the renderer reads the camera every frame anyway.
+    /// parts, their meshes, decals and SurfaceAppearances, their ancestry,
+    /// Lighting, or MaterialService and its MaterialVariants (which can
+    /// change any part: the whole scene is rebuilt, as they change rarely).
+    /// Camera moves don't count; the renderer reads the camera every frame
+    /// anyway.
     pub(crate) fn check_render_changes(&mut self) {
         profiling::scope!("check_render_changes");
         let world = self.runtime.world();
@@ -70,8 +73,13 @@ impl DataModel {
         let changes = &mut self.render_changes;
         // A mesh decides how its parent part looks (SpecialMesh, BlockMesh,
         // CylinderMesh, FileMesh), and decals and textures draw on it.
-        let decorates =
-            |id: InstanceId| dom.is_a(id, "DataModelMesh") || dom.is_a(id, "FaceInstance");
+        let decorates = |id: InstanceId| {
+            dom.is_a(id, "DataModelMesh")
+                || dom.is_a(id, "FaceInstance")
+                || dom.is_a(id, "SurfaceAppearance")
+        };
+        let materials =
+            |id: InstanceId| dom.is_a(id, "MaterialService") || dom.is_a(id, "MaterialVariant");
         let mark_part = |changes: &mut RenderChanges, part: Option<InstanceId>| {
             if let Some(part) = part
                 && !changes.full
@@ -85,6 +93,8 @@ impl DataModel {
                 Change::Property { id, property } => {
                     if Some(*id) == lighting {
                         changes.lighting = true;
+                    } else if materials(*id) {
+                        changes.full = true;
                     } else if props.velocities.contains(property) {
                         // Physics writes these for every moving part every
                         // step; nothing draws them.
@@ -106,6 +116,9 @@ impl DataModel {
                     subtree,
                     ..
                 } => {
+                    if subtree.iter().any(|i| dom.is_a(*i, "MaterialVariant")) {
+                        changes.full = true;
+                    }
                     let parts = subtree.iter().filter(|i| dom.is_a(**i, "BasePart"));
                     let before = changes.placed.len();
                     changes.placed.extend(parts);

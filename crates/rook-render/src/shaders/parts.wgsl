@@ -153,7 +153,8 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
     let dy = dpdy(st);
     // The material's textures tile like a Texture, from each face's
     // top-left corner (measured: unrotated, unmirrored).
-    let uv = material_position(in, face, at) / max(in.tile.xy, vec2(1e-3));
+    let on_uv = (in.flags & MAPS_UV) != 0u;
+    let uv = select(material_position(in, face, at) / max(in.tile.xy, vec2(1e-3)), in.uv, on_uv);
     let duv_x = dpdx(uv);
     let duv_y = dpdy(uv);
     let dp_x = dpdx(in.world);
@@ -161,14 +162,22 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
     var normal = in.normal;
     var roughness = in.material.y;
     var metalness = in.material.z;
-    if (in.flags & MAPS) != 0u {
+    var alpha = surface_alpha(in);
+    if on_uv {
+        let c = textureSampleGrad(color_map, image_sampler, uv, duv_x, duv_y);
+        let a = surface_appearance(in, c);
+        albedo = a.rgb;
+        alpha *= a.a;
+    } else if (in.flags & MAPS) != 0u {
         albedo *= textureSampleGrad(color_map, image_sampler, uv, duv_x, duv_y).rgb;
+    }
+    if (in.flags & MAPS) != 0u {
         roughness *= textureSampleGrad(roughness_map, image_sampler, uv, duv_x, duv_y).g;
         metalness *= textureSampleGrad(metalness_map, image_sampler, uv, duv_x, duv_y).r;
         let t = textureSampleGrad(normal_map, image_sampler, uv, duv_x, duv_y).xyz * 2.0 - 1.0;
         normal = perturb(in.normal, t, dp_x, dp_y, duv_x, duv_y);
     }
-    if in.surfaces != 0u {
+    if in.surfaces != 0u && (in.flags & MAPS_UV) == 0u {
         let pattern = (in.surfaces >> (face * 3u)) & 7u;
         if pattern != 0u {
             // The patterns are grey around 0.5: twice them leaves the
@@ -189,7 +198,28 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
     if reflectance > 0.0 {
         lit = mix(lit, fog(srgb_to_linear(g.sky.rgb), in.world), reflectance);
     }
-    return vec4(lit, surface_alpha(in));
+    return vec4(lit, alpha);
+}
+
+// A SurfaceAppearance's colour (linear) and opacity from its colour map
+// `c` (creator docs, checked in Studio 0.742 with a map whose see-through
+// pixels are white): the map times its tint (`Color`), where Overlay shows
+// the part's Color through the map's see-through pixels, Transparency
+// makes them see-through, TintMask tints only where the map is opaque,
+// and Opaque ignores the alpha. The part's Color counts only for Overlay.
+fn surface_appearance(in: VertexOut, c: vec4<f32>) -> vec4<f32> {
+    let tint = srgb_to_linear(vec3(in.tile.z, in.tile.w, in.material.w));
+    let mode = in.surfaces & 3u;
+    if mode == ALPHA_OVERLAY {
+        return vec4(mix(in.color.rgb, c.rgb * tint, c.a), 1.0);
+    }
+    if mode == ALPHA_TRANSPARENCY {
+        return vec4(c.rgb * tint, c.a);
+    }
+    if mode == ALPHA_TINT_MASK {
+        return vec4(c.rgb * mix(vec3(1.0), tint, c.a), 1.0);
+    }
+    return vec4(c.rgb * tint, 1.0);
 }
 
 // How much of a part's own surface shows. See-through Glass mostly

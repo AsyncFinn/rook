@@ -197,6 +197,13 @@ impl Value {
         }
     }
 
+    pub fn as_str(&self) -> Option<&str> {
+        match self {
+            Self::String(s) => Some(s),
+            _ => None,
+        }
+    }
+
     pub fn as_enum(&self) -> Option<u32> {
         match self {
             Self::Enum(n) => Some(*n),

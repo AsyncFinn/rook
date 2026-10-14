@@ -24,7 +24,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use rook_types::Material;
+use rook_types::{Material, MaterialSet};
 
 use crate::MaterialMap;
 use crate::image::{Image, ImageFormat, ktx2};
@@ -91,16 +91,16 @@ impl StudioCache {
         &self.root
     }
 
-    /// Whether the cache holds any of `material`'s textures.
-    pub fn has_material(&self, material: Material) -> bool {
+    /// Whether the cache holds any of `material`'s textures in `set`.
+    pub fn has_material(&self, material: Material, set: MaterialSet) -> bool {
         MaterialMap::ALL
             .into_iter()
-            .any(|map| !self.packs(material, map).is_empty())
+            .any(|map| !self.packs(material, set, map).is_empty())
     }
 
     /// The cached packs of `material`'s `map`, largest first.
-    fn packs(&self, material: Material, map: MaterialMap) -> Vec<Pack> {
-        let Some(hash) = content_hash(material, map) else {
+    fn packs(&self, material: Material, set: MaterialSet, map: MaterialMap) -> Vec<Pack> {
+        let Some(hash) = content_hash(material, set, map) else {
             return Vec::new();
         };
         let mut guard = self.index.lock().expect("studio cache index");
@@ -113,9 +113,14 @@ impl StudioCache {
 
     /// `material`'s `map`, decoded, and where it came from; `None` when
     /// Studio has no such texture or hasn't downloaded it.
-    pub fn material(&self, material: Material, map: MaterialMap) -> Option<(Image, String)> {
-        let hash = content_hash(material, map)?;
-        let packs = self.packs(material, map);
+    pub fn material(
+        &self,
+        material: Material,
+        set: MaterialSet,
+        map: MaterialMap,
+    ) -> Option<(Image, String)> {
+        let hash = content_hash(material, set, map)?;
+        let packs = self.packs(material, set, map);
         for pack in packs {
             let Some(body) = self.read(&pack.id, None) else {
                 continue;
@@ -228,8 +233,11 @@ impl StudioCache {
         let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) else {
             return Index::default();
         };
-        // An index of another cache folder doesn't apply.
-        if json["root"].as_str() != Some(&self.root.display().to_string()) {
+        // An index of another cache folder, or one that looked for other
+        // textures (an older Rook's table), doesn't apply.
+        if json["root"].as_str() != Some(&self.root.display().to_string())
+            || json["wanted"].as_str() != Some(&wanted_fingerprint())
+        {
             return Index::default();
         }
         let mut index = Index {
@@ -268,6 +276,7 @@ impl StudioCache {
             .collect();
         let json = serde_json::json!({
             "root": self.root.display().to_string(),
+            "wanted": wanted_fingerprint(),
             "rowid": index.rowid,
             "packs": packs,
         });
@@ -299,6 +308,14 @@ fn decode(ktx: &[u8], map: MaterialMap) -> Result<Image, crate::image::ImageErro
         }
     }
     Image::from_rgba(rgba, ImageFormat::Ktx2, MATERIAL_MAX_SIZE)
+}
+
+/// Names the textures an index looked for, so one made for another table
+/// is read again from the start.
+fn wanted_fingerprint() -> String {
+    let mut all: Vec<&str> = materials::all().collect();
+    all.sort_unstable();
+    blake3::hash(all.join(",").as_bytes()).to_hex()[..16].to_owned()
 }
 
 fn read_file(path: &Path, limit: Option<usize>) -> Option<Vec<u8>> {
@@ -339,8 +356,10 @@ mod tests {
              score INTEGER DEFAULT 0 NOT NULL, ttl INTEGER DEFAULT 0 NOT NULL)",
         )
         .unwrap();
-        let wood_color = content_hash(Material::Wood, MaterialMap::Color).unwrap();
-        let wood_normal = content_hash(Material::Wood, MaterialMap::Normal).unwrap();
+        let wood_color =
+            content_hash(Material::Wood, MaterialSet::Legacy, MaterialMap::Color).unwrap();
+        let wood_normal =
+            content_hash(Material::Wood, MaterialSet::Legacy, MaterialMap::Normal).unwrap();
         let entry = |ktx: Vec<u8>| [b"RBXH\x02\0\0\0\0\0\0\0".as_slice(), &ktx].concat();
         let inline = entry(ktx2::tests::bc1(0xF800, wood_color, true));
         db.execute(
@@ -360,17 +379,21 @@ mod tests {
 
         let index_dir = dir.join("index");
         let cache = StudioCache::at(&dir, Some(index_dir.clone())).unwrap();
-        let (color, _) = cache.material(Material::Wood, MaterialMap::Color).unwrap();
+        let (color, _) = cache
+            .material(Material::Wood, MaterialSet::Legacy, MaterialMap::Color)
+            .unwrap();
         assert_eq!(
             (color.width, &color.mips[0][..4]),
             (4, &[255, 0, 0, 255][..])
         );
         // Green 255 and alpha 255: Y and X both +1, flattened into RGB.
-        let (normal, _) = cache.material(Material::Wood, MaterialMap::Normal).unwrap();
+        let (normal, _) = cache
+            .material(Material::Wood, MaterialSet::Legacy, MaterialMap::Normal)
+            .unwrap();
         assert_eq!(&normal.mips[0][..4], &[255, 255, 128, 255]);
         assert!(
             cache
-                .material(Material::Brick, MaterialMap::Color)
+                .material(Material::Brick, MaterialSet::Legacy, MaterialMap::Color)
                 .is_none()
         );
         // A second cache reads the saved index instead of every row.
