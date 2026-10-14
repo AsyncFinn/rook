@@ -1,0 +1,9 @@
+-- studio 0.743.0.7431133
+-- signals: immediate
+before loading false 0
+ogg true 0.332290
+mp3 true 0.339592
+unparented false 0
+missing false true 0
+mp3 playing true true
+mp3 ended false 0

@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex};
 
+use crate::audio::Audio;
 use crate::image::Image;
 use crate::mesh::Mesh;
 use crate::{ContentRef, Failure, FailureKind, Fetched, Resolver};
@@ -37,6 +38,10 @@ pub enum Want {
     /// [`Fetched::image`]; bytes that aren't an image fail with
     /// [`FailureKind::Invalid`].
     Image,
+    /// A sound: the worker decodes it to 16-bit PCM into
+    /// [`Fetched::audio`]; bytes that aren't a WAV, Ogg or MP3 sound fail
+    /// with [`FailureKind::Invalid`].
+    Audio,
 }
 
 impl Want {
@@ -44,8 +49,9 @@ impl Want {
     /// mesh class or MeshPart (`mesh_owner`; files store it as
     /// `MeshContent`, some old MeshParts as `MeshID`) and for a union's
     /// `AssetId` (also `mesh_owner`; files save it as `AssetId`, Rook reads it as `Content`), an image for the image properties
-    /// (textures, images, sky faces, the sun and moon), and anything for
-    /// the rest (sounds, animations, scripts).
+    /// (textures, images, sky faces, the sun and moon), a sound for
+    /// Sound's `SoundId` (files store it as `AudioContent`), and anything
+    /// for the rest (animations, scripts).
     pub fn for_property(name: &str, mesh_owner: bool) -> Self {
         if mesh_owner
             && matches!(
@@ -54,6 +60,8 @@ impl Want {
             )
         {
             Self::Mesh
+        } else if matches!(name, "SoundId" | "AudioContent") {
+            Self::Audio
         } else if ["Texture", "Image", "ColorMap", "Skybox", "Sun", "Moon"]
             .iter()
             .any(|k| name.contains(k))
@@ -178,6 +186,11 @@ fn run(resolver: &Resolver, (r, want): &Job) -> Outcome {
             profiling::scope!("decode image");
             let image = Image::decode(&fetched.bytes).map_err(|e| invalid(&e))?;
             fetched.image = Some(Arc::new(image));
+        }
+        Want::Audio => {
+            profiling::scope!("decode audio");
+            let audio = Audio::decode(&fetched.bytes).map_err(|e| invalid(&e))?;
+            fetched.audio = Some(Arc::new(audio));
         }
     }
     Ok(fetched)

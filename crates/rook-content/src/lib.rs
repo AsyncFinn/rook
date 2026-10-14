@@ -14,9 +14,10 @@
 //!   or network.
 //!
 //! Decoders for what the bytes hold live here too, one per kind: [`mesh`]
-//! reads mesh files and [`image`] image files. See `docs/design/architecture.md`
+//! reads mesh files, [`image`] image files and [`audio`] sound files. See `docs/design/architecture.md`
 //! §8 "Content" and ROADMAP M4.
 
+pub mod audio;
 pub mod cache;
 pub mod defaults;
 pub mod delivery;
@@ -91,6 +92,9 @@ pub struct Fetched {
     /// The decoded image, when a [`Loader`] was asked for an image
     /// ([`Want::Image`]).
     pub image: Option<Arc<image::Image>>,
+    /// The decoded sound, when a [`Loader`] was asked for one
+    /// ([`Want::Audio`]).
+    pub audio: Option<Arc<audio::Audio>>,
 }
 
 impl Fetched {
@@ -102,6 +106,7 @@ impl Fetched {
             source: Source { kind, location },
             mesh: None,
             image: None,
+            audio: None,
         }
     }
 }

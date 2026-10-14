@@ -14,11 +14,13 @@ mod render_changes;
 pub mod repl;
 mod scripts;
 mod session;
+mod sounds;
 
 pub use input::{ClickEvent, ClickKind, InputEvent};
 
 pub use render_changes::RenderChanges;
 pub use session::Session;
+pub use sounds::PlayingSound;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -73,6 +75,11 @@ pub struct Options {
     /// content folders and the cache, with asset delivery off unless
     /// `ROOK_ASSET_DELIVERY=on`. Shared by a session's DataModels.
     pub content: Option<Arc<rook_content::Resolver>>,
+    /// Finish loading sound files within the frame that asks for them, so
+    /// simulated time can't run ahead of loading and runs repeat exactly
+    /// (headless runs, conformance, tests). The player loads in the
+    /// background instead, as Roblox does.
+    pub wait_for_sounds: bool,
 }
 
 impl Default for Options {
@@ -82,6 +89,7 @@ impl Default for Options {
             script_timeout: rook_lua::DEFAULT_SCRIPT_TIMEOUT,
             memory_limit: 1 << 30,
             content: None,
+            wait_for_sounds: true,
         }
     }
 }
@@ -114,6 +122,7 @@ pub struct DataModel {
     /// Keyboard and mouse bookkeeping (clients).
     input: input::InputTracker,
     content: Content,
+    sounds: sounds::Sounds,
 }
 
 /// Content requests from scripts, resolved off the engine thread.
@@ -124,6 +133,7 @@ struct Content {
     loader: Option<rook_content::Loader>,
     /// Loader tickets to the scripts' request ids.
     tickets: HashMap<rook_content::Ticket, u64>,
+    wait_for_sounds: bool,
 }
 
 impl DataModel {
@@ -161,6 +171,7 @@ impl DataModel {
         self.script_cursor = end;
         self.render_cursor = end;
         self.render_changes = RenderChanges::everything();
+        self.sounds.rescan(end);
     }
 
     /// Drop journal entries every reader has seen. Physics catches up first
@@ -249,8 +260,10 @@ impl DataModel {
             input: Default::default(),
             content: Content {
                 resolver: options.content.clone(),
+                wait_for_sounds: options.wait_for_sounds,
                 ..Content::default()
             },
+            sounds: Default::default(),
         })
     }
 

@@ -67,6 +67,11 @@ The sun and moon in the sky, terrain and other lighting (point and spot lights, 
 - Downloads go to a hash-checked disk cache in your system's cache folder (`%TEMP%` on Windows), so a second run needs no network, and missing or forbidden assets are remembered for a day. Rook keeps it under 2 GB by dropping what was used least recently (`ROOK_CACHE_MAX`), and `rook cache` shows or cleans it.
 - `ContentProvider:PreloadAsync` and `RequestQueueSize`, resolved off the engine thread; a mesh's `MeshId` must hold a mesh and an image property an image to succeed, as in Studio.
 
+## Audio
+
+- Sounds play: WAV, Ogg Vorbis and MP3 files load through the same content providers as everything else and decode in the background, `IsLoaded` and `TimeLength` read as in Studio, and `TimePosition` moves while a sound plays, on servers and clients alike. A sound stops and rewinds at its end, or starts over if `Looped`.
+- `rook-player` mixes every playing sound to your default output device (`ROOK_AUDIO=off` silences it); headless runs, `--bench` and `--screenshot` never open one. Sounds aren't positioned in 3D yet.
+
 ## Tooling
 
 - `rook dump`: print a place's instance tree and properties.

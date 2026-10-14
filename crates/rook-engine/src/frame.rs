@@ -23,6 +23,7 @@ impl DataModel {
             self.fire(rs, "PreRender", dt);
         }
         self.update_content();
+        self.advance_sounds(dt);
         self.runtime.resume_due(Queue::Legacy);
         self.fire(rs, "Stepped", (now, dt));
         self.fire(rs, "PreSimulation", dt);
@@ -32,6 +33,7 @@ impl DataModel {
         self.runtime.resume_due(Queue::Task);
         self.start_new_scripts();
         self.check_render_changes();
+        self.check_sounds();
         if self.auto_trim {
             self.trim_journal();
         }
@@ -40,12 +42,19 @@ impl DataModel {
     /// Hand scripts' new content requests to the loader and deliver what
     /// finished, just before `wait()` resumption: PreloadAsync callbacks
     /// run and finished calls return on the engine thread (architecture §8
-    /// "Content"). Nothing happens unless scripts asked for content.
+    /// "Content"). Sounds' files load the same way. Nothing happens unless
+    /// scripts or sounds asked for content.
     fn update_content(&mut self) {
         let requests = self.runtime.take_content_requests();
         let mut results = self.runtime.take_content_answers();
+        let sound_files = std::mem::take(&mut self.sounds.pending);
         let content = &mut self.content;
-        if requests.is_empty() && results.is_empty() && content.tickets.is_empty() {
+        if requests.is_empty()
+            && results.is_empty()
+            && sound_files.is_empty()
+            && content.tickets.is_empty()
+            && self.sounds.tickets.is_empty()
+        {
             return;
         }
         profiling::scope!("update_content");
@@ -62,10 +71,25 @@ impl DataModel {
                 .tickets
                 .insert(loader.request_as(reference, want), request);
         }
-        for (ticket, outcome) in loader.poll() {
+        for r in sound_files {
+            let ticket = loader.request_as(r.clone(), rook_content::Want::Audio);
+            self.sounds.tickets.insert(ticket, r);
+        }
+        let mut sounds_done = Vec::new();
+        let finished = if content.wait_for_sounds && !self.sounds.tickets.is_empty() {
+            loader.wait_all()
+        } else {
+            loader.poll()
+        };
+        for (ticket, outcome) in finished {
             if let Some(request) = content.tickets.remove(&ticket) {
                 results.push((request, outcome.is_ok()));
+            } else if let Some(r) = self.sounds.tickets.remove(&ticket) {
+                sounds_done.push((r, outcome));
             }
+        }
+        for (r, outcome) in sounds_done {
+            self.sound_loaded(r, outcome);
         }
         self.runtime.deliver_content(&results);
     }

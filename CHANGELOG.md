@@ -13,6 +13,14 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-10-14 — M5 step 1: audio decoding and playback
+
+Pinned Roblox version: 0.741.19. Finishes M5 step 1; M5 Audio continues with the Sound API.
+
+- Sounds are heard. A Sound's file loads through the content loader like meshes and images (`Want::Audio`), and WAV (PCM and ADPCM), Ogg Vorbis and MP3 decode on its workers, through Symphonia's pure-Rust decoders, to one 16-bit PCM layout; damaged files fail with an error. `rook-player` mixes every playing sound to the default output device through the new `rook-audio` crate, opening it only once something plays; headless runs, `--bench` and `--screenshot` never open one, and `ROOK_AUDIO=off` turns sound off.
+- As in Studio: a Sound in the DataModel loads whether or not it plays, and reads `IsLoaded` and its `TimeLength` once loaded (an Ogg's length is its last granule position; conformance case `content/sound`); `TimePosition` stays 0 while the file loads and then advances; a sound whose file fails stays `Playing` and silent at 0; a sound that ends stops and rewinds. A `Looped` sound wraps. Headless runs finish loading a sound within the frame, so runs repeat exactly. Findings: `docs/behavior/audio.md`.
+- `rook content` decodes sound files it shows (format, length, rate, channels), and `rook content --place` totals a place's sounds by format and rate.
+
 ## [0.7.0] — 2026-10-14 — M4 step 6: unions
 
 Pinned Roblox version: 0.741.19. Finishes M4 step 6 and M4 Content.

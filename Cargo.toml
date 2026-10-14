@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/*", "apps/*"]
 
 [workspace.package]
-version = "0.7.0"
+version = "0.8.0"
 edition = "2024"
 license = "Apache-2.0"
 authors = ["AsyncFinn"]
@@ -24,6 +24,7 @@ rook-render = { path = "crates/rook-render" }
 rook-net = { path = "crates/rook-net" }
 rook-physics = { path = "crates/rook-physics" }
 rook-content = { path = "crates/rook-content" }
+rook-audio = { path = "crates/rook-audio" }
 
 # Roblox formats and data (rbx-dom ecosystem)
 rbx_dom_weak = "4.2"
@@ -73,6 +74,11 @@ slotmap = "1.1"
 # Fast, deterministic hashing for engine-internal maps keyed by ids and names
 rustc-hash = "2.1"
 profiling = "1"
+# Sound files (rook-content): pure-Rust WAV (PCM, ADPCM), Ogg Vorbis and MP3
+# decoders, nothing else (docs/behavior/audio.md)
+symphonia = { version = "0.5", default-features = false, features = ["wav", "pcm", "adpcm", "ogg", "vorbis", "mp3"] }
+# Audio output device (rook-audio)
+cpal = "0.15"
 
 # Rendering
 wgpu = "30"
