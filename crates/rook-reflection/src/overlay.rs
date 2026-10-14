@@ -68,7 +68,7 @@ pub enum OverlayError {
 impl Overlay {
     /// Rook's built-in overlay.
     pub fn builtin() -> Result<Self, OverlayError> {
-        Self::parse(include_str!("../overlay.json"))
+        Self::parse(include_str!("../data/overlay.json"))
     }
 
     pub fn parse(json: &str) -> Result<Self, OverlayError> {

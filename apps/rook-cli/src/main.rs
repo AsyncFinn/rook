@@ -3,7 +3,6 @@
 mod conformance;
 mod content;
 mod corpus;
-mod corpus_run;
 mod dump;
 mod gen_members;
 mod roundtrip;
@@ -241,7 +240,7 @@ fn main() -> anyhow::Result<()> {
             seconds,
             timeout,
             jobs,
-        } => corpus_run::run(&dir, &out, seconds, timeout, jobs),
+        } => corpus::runner::run(&dir, &out, seconds, timeout, jobs),
         Command::RunHeadless {
             file,
             seconds,
