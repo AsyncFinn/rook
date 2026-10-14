@@ -19,7 +19,7 @@ each release says which milestone it finishes (see `CHANGELOG.md`).
 
 ## Now, next, later
 
-- **Now:** M4 Content: the built-in mesh shapes, asset fetching, file meshes, textures and decals and trusses are done; unions are next.
+- **Now:** M4 Content: the built-in mesh shapes, asset fetching, file meshes, textures and decals and trusses are done; materials are next, then unions.
 - **Next:** M5 Audio.
 - **Then:** M6 Terrain, M7 Lights and effects, M8 GUI, M9 Characters and, right after, M10 Networking.
 
@@ -36,7 +36,7 @@ directly, since a character is what makes playing together worth it.
 | ✅ | **M1** Instance tree, signals, scheduler, Luau, server Scripts, conformance | First conformance batch passes; baseline of archive scripts running (v0.1.0) |
 | ✅ | **M2** Renderer v0, client/server split, LocalScripts, basic input | Archived places render recognisably; client scripts run alongside server scripts (v0.2.0) |
 | ✅ | **M3** Physics | Physics conformance batch passes; unanchored places settle plausibly |
-| ⬜ | **M4** Content: meshes, textures, decals | Archived places render with their meshes, decals and textures |
+| ⬜ | **M4** Content: meshes, materials, textures, decals | Archived places render with their meshes, materials, decals and textures |
 | ⬜ | **M5** Audio | Archived places play their sounds, positioned in 3D; the audio conformance batch passes |
 | ⬜ | **M6** Terrain | Archived places with terrain show it, and parts and queries collide with it |
 | ⬜ | **M7** Lights and effects | Local lights light the scene; Fire, Smoke, Sparkles and ParticleEmitters draw as in Studio |
@@ -46,8 +46,12 @@ directly, since a character is what makes playing together worth it.
 | ⬜ | **M11** Avatars and animation | Players pick an avatar (no Roblox account) and see each other's, dressed and animated |
 | ⬜ | **M12** Server hosting | Host a place for friends over the internet; its saved data survives a restart |
 | ⬜ | **M13** Lighting and post-processing | Screenshots of reference places match Studio's lighting, sky and effects |
-| ⬜ | **M14** Studio | Open, edit and save a place that Roblox Studio opens again unchanged |
-| ⬜ | **M15** Extensions | The opt-in profile ships with its first extensions, off by default |
+| ⬜ | **M14** Scripting completeness | 90% of archive places with server scripts run without an error Rook causes |
+| ⬜ | **M15** Physics completeness | Second physics conformance batch passes; MeshParts and unions collide with their real shapes |
+| ⬜ | **M16** Input and platforms | Play with a gamepad; Rook builds and runs on Windows, Linux and macOS |
+| ⬜ | **M17** Performance and scale | The archive's largest places hold 60 FPS on a mid-range PC |
+| ⬜ | **M18** Release | Download Rook, pick a place from a library and play, without a terminal |
+| ⬜ | **M19** Extensions | The opt-in profile ships with its first extensions, off by default |
 
 ### M3 Physics
 
@@ -61,7 +65,7 @@ Rapier underneath, Roblox's rules on top, every rule checked in Studio.
 
 M3's exit criterion is met: the physics conformance batch (`physics/*`, six cases) passes, and unanchored places settle plausibly.
 
-### M4 Content: meshes, textures, decals
+### M4 Content: meshes, materials, textures, decals
 
 The most visible gap: **SpecialMesh is in 65% of files** (1,988 files,
 494k instances), CylinderMesh in 723 and BlockMesh in 574. Today the
@@ -89,7 +93,23 @@ renderer draws all of these as their part's plain box.
    `TextureId` and MeshPart `TextureID` with `VertexColor`, Plastic's surface
    patterns, Neon and Reflectance, drawn as Studio draws them. Counts and
    findings: [textures-decals.md](docs/behavior/textures-decals.md).
-5. **Unions**: draw UnionOperations with their own geometry instead of
+5. **Materials**: every material drawn as modern Roblox draws it; today
+   only Plastic (its surface patterns), Neon and Reflectance are, and the
+   rest are their plain colour. By files using them: Wood 531, Slate 502,
+   Concrete 366, Grass 358, Ice 353, DiamondPlate 351, CorrodedMetal 252,
+   SmoothPlastic 201, Foil 177, Brick 158, Sand 149, Granite 127, Marble
+   125, Metal 110 (703,662 parts), Pebble 105, Fabric 101, WoodPlanks 51,
+   Cobblestone 39, Glass 23, ForceField 18, and a few others. First find
+   where Studio keeps the material textures it downloads at runtime (they
+   aren't in the install), so Rook can load the user's copy the way it
+   loads `studs.dds`; without them Rook draws its own, never Roblox's
+   files committed. Measure in Studio for each material: texture scale in
+   studs, how Color tints it, normal and roughness, how much it reflects
+   (Metal, Foil, DiamondPlate), SmoothPlastic's lack of pattern, Glass
+   (transparency and reflection) and ForceField's animated look, and which
+   materials show surfaces (so far only Plastic does). MaterialVariant and
+   MaterialService (10 files) come last.
+6. **Unions**: draw UnionOperations with their own geometry instead of
    their bounding box (`UnionOperation.Content`, the union's geometry
    asset, is set on 70,944 unions in 99 files; `NegateOperation` 6 in 2).
    The `rbx_mesh` crate Rook already uses decodes union geometry too: its
@@ -104,11 +124,9 @@ renderer draws all of these as their part's plain box.
    union's geometry is sized against its Size (unions can be resized),
    `UsePartColor`, and what a union draws while loading or after failing.
    Unions' collision hulls from `PhysicsData` go with MeshPart collision
-   fidelity (below).
+   fidelity (M15).
 
-Physics is to pick up the real shapes and volumes of MeshParts
-(collision fidelity) and unions (`PhysicsData`), replacing today's boxes;
-it wasn't done in step 3.
+Physics picks up the real shapes of MeshParts and unions in M15.
 
 ### M5 Audio
 
@@ -233,16 +251,60 @@ Make archived places look the way Studio shows them today.
 4. Antialiasing (MSAA by quality level, measured in
    [`docs/behavior/antialiasing.md`](docs/behavior/antialiasing.md)).
 
-### M14 Studio
+### M14 Scripting completeness
 
-`rook-studio`, a place editor.
+Driven by the corpus run (`reports/run/`): today 60.4% of places with
+server scripts run 10 seconds without a script error. Many errors are the
+scripts' own (old syntax modern Roblox rejects too, missing children);
+the target counts only errors Rook causes, checked against Studio.
 
-1. Explorer and Properties, driven by the reflection database.
-2. Selecting, moving, scaling and rotating parts; inserting models.
-3. Play testing in the editor, server and client, as Studio does.
-4. Saving `.rbxl` and `.rbxlx` files that Roblox Studio opens unchanged.
+1. Classify the corpus run's errors: Rook's (unimplemented members,
+   wrong behaviour) against the scripts' own, with a sample of each
+   checked in Studio.
+2. The unimplemented members by places affected, starting with
+   `InsertService:LoadAsset` (54 places) and `require(assetId)` (17).
+3. Services that talk to Roblox's website, answered locally and
+   offline: MarketplaceService, BadgeService, GroupService, Players'
+   web lookups.
+4. TeleportService between places in one folder (multi-place games).
+5. HttpService, opt-in per place.
+6. Client scripts in the corpus run too, once characters and GUI exist.
 
-### M15 Extensions
+### M15 Physics completeness
+
+1. MeshPart and union collision with their real shapes (collision
+   fidelity, `PhysicsData`), replacing boxes.
+2. The remaining constraints by archive use (springs, ropes, rods,
+   prismatic, the Align and Linear/AngularVelocity movers).
+3. Sleeping and adaptive timestepping as Roblox does them.
+4. A second physics conformance batch, recorded in Studio.
+
+### M16 Input and platforms
+
+1. Gamepads, and ContextActionService and UserInputService in full.
+2. Rebindable controls and the keyboard and mouse settings Roblox has.
+3. Linux and macOS builds, checked in CI.
+4. Touch, if a platform that needs it is chosen.
+
+### M17 Performance and scale
+
+1. A benchmark set: the archive's largest and heaviest places, timed in
+   CI with `rook-player --bench`.
+2. Level of detail and culling for huge part counts.
+3. StreamingEnabled as Roblox does it, server and client.
+4. Script performance where the corpus run shows it matters.
+
+### M18 Release
+
+Rook for people who just want to play.
+
+1. A launcher: a library of places from a folder, with thumbnails, and
+   joining servers.
+2. The in-game menu: settings (graphics quality, volume, controls),
+   reset character, leave.
+3. Packaged releases for each platform, and updating.
+
+### M19 Extensions
 
 The opt-in profile from the architecture (§11), off by default, with its
 first extensions:
@@ -250,12 +312,6 @@ first extensions:
 - WebSockets available to any script (needs M10).
 - EditableImage and EditableMesh without platform gating.
 - Restoring embedded legacy textures that modern Roblox loads as empty.
-
-### Not yet placed
-
-Gamepad and touch input; packaged releases for Windows, Linux and macOS;
-performance work on the largest archived places as it's needed (each
-milestone keeps its own places fast).
 
 ## Content and assets
 
@@ -274,6 +330,9 @@ or downloaded content packages.
   before M9 Characters whether to follow modern behaviour or offer an extension.
 - **Wire compatibility with real Roblox clients** is not a goal;
   replication is Rook to Rook.
+- **A place editor** (`rook-studio`) is out of scope for now: Roblox
+  Studio edits the places Rook plays, and Rook saves files Studio opens.
+  Revisit after M19.
 
 What's partly done or accepted but ignored today is listed member by member
 in [`docs/behavior/stubs.md`](docs/behavior/stubs.md).

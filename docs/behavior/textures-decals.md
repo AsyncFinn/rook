@@ -1,6 +1,6 @@
 # Textures and decals
 
-What Rook found while building M4 step 4: images, Decals, Textures, mesh textures, surfaces and materials, observed in Studio. The plan itself is in [ROADMAP.md](../../ROADMAP.md#m4-content-meshes-textures-decals).
+What Rook found while building M4 step 4: images, Decals, Textures, mesh textures, surfaces and materials, observed in Studio. The plan itself is in [ROADMAP.md](../../ROADMAP.md#m4-content-meshes-materials-textures-decals).
 
 **Textures and decals (step 4)**, built 2026-10-13. How images load and
 draw is in `docs/architecture.md` §8 "Rendering" and "Content"; what's
