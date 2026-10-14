@@ -1,0 +1,11 @@
+-- studio 0.742.0.7421053
+-- signals: immediate
+UnionOperation Union 4, 1.2000000476837158, 2 false 1, 1, 1 0
+NegateOperation NegativePart 4, 1.2000000476837158, 2 false 1, 1, 1 0.10000000149011612
+IntersectOperation Intersection 4, 1.2000000476837158, 2 false 1, 1, 1 0
+after 8, 5, 2.5 true
+AssetId false AssetId is not a valid member of UnionOperation "Union"
+set AssetId false AssetId is not a valid member of UnionOperation "Union"
+MeshSize true 1, 1, 1
+IsA true true true
+clone 8, 5, 2.5 true

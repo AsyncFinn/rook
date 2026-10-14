@@ -4,6 +4,7 @@ mod content;
 mod report;
 pub mod runner;
 mod scripts;
+mod unions;
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
@@ -80,7 +81,8 @@ struct FileSummary {
     scripts_with_errors: u64,
     usage: ScriptUsage,
     content: ContentUsage,
-    /// Mesh instances by kind (`content::mesh_kind`).
+    /// Mesh and union instances by kind (`content::mesh_kinds`,
+    /// `unions::union_kinds`).
     meshes: BTreeMap<String, u64>,
     /// Materials, surfaces, decals and textures (`content::looks`).
     looks: BTreeMap<String, u64>,
@@ -345,7 +347,23 @@ fn process_file(
         msvc_floats: u64::from(u.msvc_floats),
         null_numbers: u64::from(u.null_numbers),
     });
-    let summary = summarise(&loaded.dom);
+    // A panic while counting is recorded for the file, like a decoder's.
+    let counted = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| summarise(&loaded.dom)));
+    let summary = match counted {
+        Ok(summary) => summary,
+        Err(panic) => {
+            let message = panic
+                .downcast_ref::<String>()
+                .cloned()
+                .or_else(|| panic.downcast_ref::<&str>().map(|s| (*s).to_owned()))
+                .unwrap_or_default();
+            record.status = Status::Failed {
+                kind: "scan panic".into(),
+                message,
+            };
+            return (record, None);
+        }
+    };
     record.instances = summary.classes.values().sum();
     record.scripts = summary.script_classes.values().sum();
     (record, Some(summary))
@@ -358,7 +376,10 @@ fn summarise(dom: &WeakDom) -> FileSummary {
     for inst in dom.descendants().skip(1) {
         let class = inst.class.as_str();
         *s.classes.entry(class.to_owned()).or_insert(0) += 1;
-        for kind in content::mesh_kinds(dom, inst) {
+        for kind in content::mesh_kinds(dom, inst)
+            .into_iter()
+            .chain(unions::union_kinds(dom, inst))
+        {
             *s.meshes.entry(kind).or_insert(0) += 1;
         }
         for look in content::looks(dom, inst) {

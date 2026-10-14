@@ -13,8 +13,14 @@
 //!
 //! Checked against the user's `head.mesh` (version 2.00, 517 vertices, 846
 //! triangles, ROADMAP M4) when an install is found.
+//!
+//! A union's geometry decodes into the same [`Mesh`] ([`union`]), so
+//! unions load, upload and draw through the same path as mesh files.
+
+pub mod union;
 
 use rbx_mesh::mesh::{Face2, Mesh as Versioned, Vertices2};
+use rook_types::NormalId;
 
 /// A decoded mesh, in the file's own units and axes.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -24,6 +30,12 @@ pub struct Mesh {
     pub uvs: Vec<[f32; 2]>,
     /// Three vertex indices per triangle.
     pub indices: Vec<u32>,
+    /// Union geometry only (empty for mesh files): each vertex's colour,
+    /// sRGB with alpha, the colour of the part it was cut from.
+    pub colors: Vec<[u8; 4]>,
+    /// Union geometry only: the box face each vertex was cut from, which
+    /// images and material textures go by.
+    pub faces: Vec<NormalId>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -42,8 +54,26 @@ const VERSIONS: [&str; 8] = [
 ];
 
 impl Mesh {
-    /// Decode a mesh file.
+    /// Decode a mesh file, a union's asset or its `MeshData`.
     pub fn decode(bytes: &[u8]) -> Result<Self, MeshError> {
+        let out = if union::is_union(bytes) {
+            union::decode(bytes)?
+        } else {
+            Self::decode_file(bytes)?
+        };
+        let count = out.positions.len() as u32;
+        if let Some(bad) = out.indices.iter().find(|&&i| i >= count) {
+            return Err(MeshError::Damaged(format!(
+                "face uses vertex {bad} of {count}"
+            )));
+        }
+        if out.indices.len() % 3 != 0 {
+            return Err(MeshError::Damaged("faces aren't whole triangles".into()));
+        }
+        Ok(out)
+    }
+
+    fn decode_file(bytes: &[u8]) -> Result<Self, MeshError> {
         let version = version(bytes).ok_or(MeshError::NotAMesh)?;
         if !VERSIONS.contains(&version) {
             return Err(MeshError::Unsupported(version.to_owned()));
@@ -67,12 +97,6 @@ impl Mesh {
             Versioned::V4(m) => from_parts(&Vertices2::Full(m.vertices), &m.faces, &lods(&m.lods)),
             Versioned::V5(m) => from_parts(&Vertices2::Full(m.vertices), &m.faces, &lods(&m.lods)),
         };
-        let count = out.positions.len() as u32;
-        if let Some(bad) = out.indices.iter().find(|&&i| i >= count) {
-            return Err(MeshError::Damaged(format!(
-                "face uses vertex {bad} of {count}"
-            )));
-        }
         Ok(out)
     }
 

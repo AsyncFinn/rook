@@ -92,7 +92,9 @@ fn cast_name(v: &LuaValue) -> String {
 
 /// What a content property must load as (`Want::for_property`).
 fn wants(w: &World, id: InstanceId, property: &str) -> Want {
-    let mesh_owner = w.dom.is_a(id, "DataModelMesh") || w.dom.is_a(id, "MeshPart");
+    let mesh_owner = w.dom.is_a(id, "DataModelMesh")
+        || w.dom.is_a(id, "MeshPart")
+        || w.dom.is_a(id, "PartOperation");
     Want::for_property(property, mesh_owner)
 }
 

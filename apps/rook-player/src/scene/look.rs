@@ -104,18 +104,9 @@ impl SceneCache {
                 own.extent(size),
             )
         };
-        // Unions (drawn as their box for now), trusses and MeshParts have
-        // no surface patterns of their own (observed for trusses; Inference
-        // for unions).
-        let has_surfaces = !matches!(
-            class,
-            "MeshPart"
-                | "TrussPart"
-                | "UnionOperation"
-                | "NegateOperation"
-                | "IntersectOperation"
-                | "PartOperation"
-        );
+        // Unions, trusses and MeshParts have no surface patterns of their
+        // own (observed for trusses; Inference for unions).
+        let has_surfaces = !matches!(class, "MeshPart" | "TrussPart") && !is_union(class);
         let surfaces = |out: &mut PartInstance| {
             for face in NormalId::ALL {
                 out.surfaces[face.index()] = enum_value(dom, id, SURFACES[face.index()])
@@ -159,6 +150,10 @@ impl SceneCache {
             return Some((out, Decals::Faces));
         }
         let Some((kind, mesh, url)) = part_mesh(dom, id) else {
+            if is_union(class) {
+                let decals = self.union(dom, id, size, &mut out);
+                return Some((out, decals));
+            }
             return Some(own(out, pose));
         };
         let scale = vector3(dom, mesh, "Scale").unwrap_or(Vec3::ONE);

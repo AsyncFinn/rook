@@ -64,6 +64,12 @@ const SLOPED: u32 = 536870912u;
 // The material textures go through the mesh's UVs (a SurfaceAppearance),
 // with its alpha mode in the surfaces' bits.
 const MAPS_UV: u32 = 1073741824u;
+// The vertices' own colours (in `face`'s upper bytes) replace the part's.
+const VERTEX_COLORS: u32 = 2147483648u;
+// A union vertex's face byte carries this bit (`mesh::UNION_FACE`).
+const UNION_FACE: u32 = 64u;
+// Set on `VertexOut::face` for union vertices: tile from the face's centre.
+const CENTRED: u32 = 256u;
 const ALPHA_OVERLAY: u32 = 1u;
 const ALPHA_TRANSPARENCY: u32 = 2u;
 const ALPHA_TINT_MASK: u32 = 3u;
@@ -74,7 +80,8 @@ struct VertexIn {
     @location(1) normal: vec3<f32>,
     @location(2) uv: vec2<f32>,
     // The point on the shape's box that images map from, and its face
-    // (255: none, found from the normal).
+    // (low byte; 255: none, found from the normal), with a union's vertex
+    // colour in the bytes above.
     @location(3) box_point: vec3<f32>,
     @location(4) face: u32,
     @location(5) i_position: vec3<f32>,

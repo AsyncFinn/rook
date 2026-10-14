@@ -13,6 +13,14 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-10-14 — M4 step 6: unions
+
+Pinned Roblox version: 0.741.19. Finishes M4 step 6 and M4 Content.
+
+- Unions draw their own geometry instead of their bounding box. The geometry is read from the asset a union's `AssetId` names (`MeshData` versions 2, 4 and 5, through `rbx_mesh`) and loads, uploads and draws through the same path as mesh files. As in Studio: it's sized by Size / `InitialSize`; with `UsePartColor` off it keeps the colours of the parts it was made from; Decals go on the geometry cut from their face, Textures tile from each face's centre, and surfaces don't show; a union whose asset fails, or that has none, draws nothing; NegateOperations draw in their fixed orange-red. Union assets of 2015-2016 places load anonymously; newer places' need an account and draw nothing without one. Findings: `docs/behavior/meshes.md`.
+- `Instance.new` names new unions `Union`, NegateOperations `NegativePart` and IntersectOperations `Intersection`, and unions read their `InitialSize` as `MeshSize`, as in Studio (conformance case `content/union`).
+- `rook corpus-scan` counts unions by where their geometry lives and which `MeshData`, `MeshData2` and `PhysicsData` forms they save; `rook content` describes union assets and totals their `MeshData` versions; a file that panics while being counted is recorded as failed instead of ending the scan.
+
 ## [0.6.2] — 2026-10-14 — MakeJoints: wedge slopes from either side
 
 Pinned Roblox version: 0.741.19.

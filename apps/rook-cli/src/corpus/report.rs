@@ -243,7 +243,7 @@ pub fn summary_markdown(agg: &Aggregate, records: &[FileRecord], elapsed: Durati
         &agg.content_kinds,
         20,
     );
-    usage_table(&mut md, "Meshes", "Kind", &agg.meshes, 60);
+    usage_table(&mut md, "Meshes and unions", "Kind", &agg.meshes, 100);
     usage_table(
         &mut md,
         "Materials, surfaces, decals and textures",

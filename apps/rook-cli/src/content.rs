@@ -113,20 +113,19 @@ fn describe(bytes: &[u8]) -> String {
         let line = bytes.iter().take(16).take_while(|&&b| b != b'\n');
         let line: String = line.map(|&b| b as char).collect();
         let detail = match rook_content::mesh::Mesh::decode(bytes) {
-            Ok(m) => {
-                let (lo, hi) = m.bounds();
-                let size = [0, 1, 2].map(|i| format!("{:.2}", hi[i] - lo[i]));
-                let centre = [0, 1, 2].map(|i| format!("{:.2}", (hi[i] + lo[i]) / 2.0));
-                format!(
-                    "{} triangles, {} studs, centred at ({})",
-                    m.indices.len() / 3,
-                    size.join(" x "),
-                    centre.join(", ")
-                )
-            }
+            Ok(m) => mesh_detail(&m),
             Err(e) => e.to_string(),
         };
         return format!("mesh, {}, {detail}", line.trim_end());
+    }
+    if starts(b"<roblox")
+        && let Ok(data) = rook_content::mesh::union::asset_mesh_data(bytes)
+    {
+        let kind = rook_content::mesh::union::MeshDataKind::of(&data).name();
+        return match rook_content::mesh::Mesh::decode(&data) {
+            Ok(m) => format!("union asset, MeshData {kind}, {}", mesh_detail(&m)),
+            Err(e) => format!("union asset, MeshData {kind}, {e}"),
+        };
     }
     let kind = if starts(b"\x89PNG") {
         "PNG image"
@@ -148,6 +147,32 @@ fn describe(bytes: &[u8]) -> String {
         "unknown"
     };
     kind.to_owned()
+}
+
+/// A decoded mesh's triangles, size and centre.
+fn mesh_detail(m: &rook_content::mesh::Mesh) -> String {
+    let (lo, hi) = m.bounds();
+    let size = [0, 1, 2].map(|i| format!("{:.3}", hi[i] - lo[i]));
+    let centre = [0, 1, 2].map(|i| format!("{:.3}", (hi[i] + lo[i]) / 2.0));
+    let mut uv = [f32::MAX, f32::MAX, f32::MIN, f32::MIN];
+    for t in &m.uvs {
+        uv = [
+            uv[0].min(t[0]),
+            uv[1].min(t[1]),
+            uv[2].max(t[0]),
+            uv[3].max(t[1]),
+        ];
+    }
+    format!(
+        "{} triangles, {} studs, centred at ({}), UVs {:.2}..{:.2} x {:.2}..{:.2}",
+        m.indices.len() / 3,
+        size.join(" x "),
+        centre.join(", "),
+        uv[0],
+        uv[2],
+        uv[1],
+        uv[3]
+    )
 }
 
 fn print_fetched(f: &Fetched) {
@@ -196,7 +221,8 @@ fn forget(resolver: &Resolver, r: &ContentRef) {
 #[derive(Default)]
 struct Use {
     count: usize,
-    /// Uses as a mesh (`MeshId` of a mesh class or MeshPart).
+    /// Uses as a mesh (`MeshId` of a mesh class or MeshPart, a union's
+    /// `AssetId`).
     mesh: usize,
     /// Uses as an image (textures, decals, images, sky faces).
     image: usize,
@@ -210,17 +236,30 @@ struct Use {
 fn property_want(class: &str, key: &str) -> Want {
     let mesh_owner = matches!(
         class,
-        "SpecialMesh" | "FileMesh" | "CharacterMesh" | "MeshPart"
+        "SpecialMesh"
+            | "FileMesh"
+            | "CharacterMesh"
+            | "MeshPart"
+            | "UnionOperation"
+            | "NegateOperation"
+            | "IntersectOperation"
+            | "PartOperation"
     );
     Want::for_property(key, mesh_owner)
 }
 
-/// The mesh version a file starts with (`version 2.00`).
-fn mesh_version(bytes: &[u8]) -> Option<String> {
-    let head = bytes.get(..bytes.len().min(16))?;
-    let line = head.split(|&b| b == b'\n').next()?;
-    let line = std::str::from_utf8(line).ok()?;
-    Some(line.trim_end().strip_prefix("version ")?.to_owned())
+/// What a decoded mesh was: a mesh file's version (`version 2.00`), or a
+/// union asset's `MeshData` form.
+fn mesh_version(bytes: &[u8]) -> String {
+    use rook_content::mesh::union::{MeshDataKind, asset_mesh_data};
+    if bytes.starts_with(b"<roblox") {
+        let data = asset_mesh_data(bytes).unwrap_or_default();
+        return format!("union MeshData {}", MeshDataKind::of(&data).name());
+    }
+    let head = &bytes[..bytes.len().min(16)];
+    let line = head.split(|&b| b == b'\n').next().unwrap_or_default();
+    let line = std::str::from_utf8(line).unwrap_or_default().trim_end();
+    line.strip_prefix("version ").unwrap_or(line).to_owned()
 }
 
 /// The mesh or image references in a place: how many decode, by version
@@ -252,10 +291,7 @@ fn print_decoded(
         let key = match outcome {
             Ok(f) => match &f.image {
                 Some(image) => format!("decoded, {}", image.format.name()),
-                None => format!(
-                    "decoded, version {}",
-                    mesh_version(&f.bytes).unwrap_or_default()
-                ),
+                None => format!("decoded, version {}", mesh_version(&f.bytes)),
             },
             Err(e) if e.kind == FailureKind::Invalid => {
                 failed.push((r, texts, e));

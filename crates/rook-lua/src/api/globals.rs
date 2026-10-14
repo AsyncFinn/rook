@@ -206,11 +206,29 @@ fn instance_new(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
                 "Unable to create an Instance of type \"{class_name}\""
             ))
         })?;
-    let id = with_world(lua, |w| w.dom.create(class.id));
+    let id = with_world(lua, |w| {
+        let id = w.dom.create(class.id);
+        if let Some(name) = new_name(class.name) {
+            // A new instance has no parent, so renaming it can't fail.
+            let _ = w.dom.set_name(id, name.to_owned());
+        }
+        id
+    });
     if let Some(p) = parent {
         super::methods::mutate(lua, |w| w.dom.set_parent(id, Some(p)))?;
     }
     Outcome::ret(lua, push_instance(lua, id)?)
+}
+
+/// The Name `Instance.new` gives a class whose new instances aren't named
+/// after it (observed in Studio 0.742; conformance case `content/union`).
+fn new_name(class: &str) -> Option<&'static str> {
+    Some(match class {
+        "UnionOperation" => "Union",
+        "NegateOperation" => "NegativePart",
+        "IntersectOperation" => "Intersection",
+        _ => return None,
+    })
 }
 
 fn instance_table(lua: &Lua) -> mlua::Result<Table> {

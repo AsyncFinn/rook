@@ -1,6 +1,6 @@
 # Meshes
 
-What Rook found while building M4's mesh steps: the built-in shapes (step 1), mesh files (step 3) and trusses. Each rule says where it was observed. The plan itself is in [ROADMAP.md](../../ROADMAP.md#m4-content-meshes-materials-textures-decals).
+What Rook found while building M4's mesh steps: the built-in shapes (step 1), mesh files (step 3) and trusses and unions (step 6). Each rule says where it was observed. The plan itself is in [ROADMAP.md](../../ROADMAP.md#m4-content-meshes-materials-textures-decals).
 
 ## Built-in shapes (step 1)
 
@@ -230,7 +230,7 @@ grew by about 2.8 ms (upload 3.6 to 4.9 ms, render 11.8 to 12.9 ms).
 
 *Left for step 4 and later:* textures on meshes (`TextureId`, MeshPart
 `TextureID`), `VertexColor` and per-vertex colours, materials and the
-checker on empty MeshParts; unions' own geometry (step 5); MeshPart collision and
+checker on empty MeshParts; unions' own geometry (step 6, below); MeshPart collision and
 mass per `CollisionFidelity` (the loader can now hand physics a mesh);
 CharacterMesh (with characters); mesh versions 6.00 and 7.00 if they turn
 up; meshes that need an account.
@@ -314,3 +314,109 @@ front, from above and at an angle: every bar's placement and every brace's
 direction match by eye, apart from lighting and the Sphere's holes.
 A large 2016 place draws its 596 trusses, its NoSupports ladders without
 braces.
+
+## Unions (step 6)
+
+**Unions (step 6)**, built 2026-10-14. A union (`UnionOperation`,
+`NegateOperation`, `IntersectOperation`) draws its own geometry, decoded
+by `rook_content::mesh::union` into the same `Mesh` as mesh files and
+loaded, uploaded and drawn through the same path (`Want::Mesh`, the GPU
+mesh cache). Physics keeps each union's box (hulls from `PhysicsData` are
+M15's).
+
+*What the archive uses* (`rook corpus-scan`, which now counts unions by
+form; 6,245 files loaded from a larger archive than step 3's, so the
+counts aren't comparable with the tables above):
+
+| Kind | Files | Uses |
+|---|---:|---:|
+| UnionOperation | 1,895 | 2,037,188 |
+| ... with an `AssetId` (the geometry's asset) | 1,751 | 2,020,095 |
+| ... without one | 407 | 17,093 |
+| ... `MeshData` in the file: empty | 1,818 | 2,030,554 |
+| ... `MeshData` in the file: `CSGK` (no geometry, only an id) | 158 | 6,616 |
+| ... `MeshData` in the file: `CSGMDL2` geometry | 6 | 18 |
+| ... geometry in the file and no `AssetId` | 1 | 1 |
+| ... `PhysicsData` `CSGK` / `CSGPHS` 3 and 5 | 582 / 1 / 2 | 446,243 / 1 / 2 |
+| ... with `ChildData` | 194 | 33,263 |
+| ... `UsePartColor` true | 1,617 | 1,142,650 |
+| ... resized (Size isn't `InitialSize`) | 1,634 | 996,075 |
+| ... under another union | 150 | 4,904 |
+| NegateOperation (with an `AssetId`) | 18 (17) | 108 (106) |
+| IntersectOperation | 7 | 36 |
+| Decals / Textures on unions | 669 / 590 | 44,031 / 109,428 |
+| SpecialMesh / BlockMesh / CylinderMesh under a union | 52 / 21 / 5 | 249 / 202 / 18 |
+
+Newer files also save `MeshData2` (a shared string) and
+`PhysicalConfigData`; the decoder reads `MeshData2` too, but the scan that
+counts it was stopped, so how often it holds geometry isn't known. Rook
+draws only geometry behind an `AssetId`: in-file geometry without one is a
+single union in the archive.
+
+*Which assets load* (`rook content --place`, which now decodes union
+assets; a sample of 3 named places and about 20 random ones, stopped
+partway): every union asset that loaded anonymously holds `CSGMDL2`
+geometry, from 2015-2016 places (a small place 4 of 4
+distinct, a large 2016 place 49, a third large place 50). Union assets of newer
+places are refused without an account (most of them
+of the random sample), so their `MeshData` versions are unknown. No Open
+Cloud key was available to count what a key unlocks. A union asset is a
+model holding one `PartOperationAsset` with `MeshData`, `PhysicsData`
+and `ChildData` (the parts it was made from).
+
+*The geometry* (`rook content` on a small place's assets): its bounds equal the
+union's `InitialSize`, centred on its origin. Each vertex carries a
+colour (that of the part it came from), the `NormalId` of the box face it
+was cut from, and UVs that are planar and in studs from the union's
+centre.
+
+*Checked in Studio 0.742* (2026-10-14, a test place of a small place's unions plus
+variants, opened in a fresh Studio and laid out by the same script in
+Studio and in `rook-player --script`, compared at FieldOfView 20 from the
+same cameras). Observed unless marked:
+
+- *Size:* the geometry is drawn at its vertices × Size / `InitialSize`
+  about the union's position, the MeshPart rule (`mesh_part_scale`): a
+  Turbine resized from (4, 5, 5) to (8, 5, 2.5), and a small place's rings saved at
+  sizes other than their `InitialSize`, matched Studio's outlines.
+  Scripts read `InitialSize` as `MeshSize`, and a new union reads
+  (1, 1, 1) (conformance case `content/union`).
+- *`UsePartColor`:* off, the union draws its vertices' colours whatever
+  its Color (a union set to red still drew its parts' gold); on, its
+  Color.
+- *No geometry:* a union whose asset isn't a union (asset 1) and one with
+  neither `AssetId` nor `MeshData` both draw nothing. While the asset
+  loads Rook draws nothing, as for a new mesh file (Inference: Studio
+  loads too fast to catch it). Assets that need an account draw nothing
+  in Rook; Studio, signed in, draws them.
+- *Decals* go on the geometry cut from their face's side of the box,
+  stretched over the box face (a face decal on a cylinder union covered
+  its front only, not its rims). *Textures* tile from each face's centre,
+  the origin of the union's UVs: on a Bar resized to 12.4 × 4.5 × 4.5 the
+  tiles sat a quarter stud from where corner tiling puts them, and moved
+  there when Rook tiled from the centre. Rook tiles material textures the
+  same way (Inference).
+- *Surfaces:* a Plastic union with Studs on its Front drew none.
+- *Materials* show on unions (a Wood union drew wood grain over its
+  faces); Studio's looks lighter and finer than Rook's (Approximation, as
+  for parts in step 5).
+- *NegateOperation:* draws its geometry in a fixed orange-red, whatever
+  its Color and `UsePartColor` (a gold one and a blue one alike; Neon made
+  it white, so its material still applies). The colour, (252, 140, 90),
+  is fitted against plain parts under the same light (Approximation). A
+  new NegateOperation is named `NegativePart`, a new union `Union` and an
+  IntersectOperation `Intersection` (conformance case).
+- *Unions inside unions* each draw their own geometry where they are.
+- *Mesh children* still replace the geometry with a 1-stud shape, as
+  observed in step 3.
+
+*Performance* (release builds, base = 0.6.2, one `rook-player --bench
+300` run each): whole-frame medians a small place 1.86 against 1.93 ms, a large 2016 place
+19.0 against 18.7 ms, a third large place (182 union uses) 17.7
+against 19.8 ms, where the server step, which unions don't touch, moved
+by as much (8.6 to 9.6 ms): within run-to-run noise.
+
+Left for later: unions whose assets need an account; in-file geometry
+without an asset; `MeshData` versions 4 and 5 are decoded but no archive
+asset Rook can fetch uses them, so they're unchecked against Studio; the
+NegateOperation colour's exact value; `PhysicsData` hulls (M15).
