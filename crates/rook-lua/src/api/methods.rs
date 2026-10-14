@@ -34,6 +34,7 @@ mod characters;
 mod materials;
 mod models;
 mod services;
+mod sound;
 mod tree;
 
 use assemblies::*;
@@ -140,9 +141,10 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("Motor", "SetDesiredAngle") => set_desired_angle,
         ("Lighting", "GetMinutesAfterMidnight") => get_minutes_after_midnight,
         ("Lighting", "SetMinutesAfterMidnight") => set_minutes_after_midnight,
-        ("Sound", "Play" | "Resume") => sound_play,
-        ("Sound", "Stop") => sound_stop,
-        ("Sound", "Pause") => sound_pause,
+        ("Sound", "Play") => sound::sound_play,
+        ("Sound", "Resume") => sound::sound_resume,
+        ("Sound", "Stop") => sound::sound_stop,
+        ("Sound", "Pause") => sound::sound_pause,
         _ => return super::services::native(owner, name),
     })
 }

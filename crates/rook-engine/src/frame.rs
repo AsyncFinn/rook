@@ -39,23 +39,41 @@ impl DataModel {
         }
     }
 
-    /// Hand scripts' new content requests to the loader and deliver what
-    /// finished, just before `wait()` resumption: PreloadAsync callbacks
-    /// run and finished calls return on the engine thread (architecture §8
-    /// "Content"). Sounds' files load the same way. Nothing happens unless
-    /// scripts or sounds asked for content.
+    /// Content and sounds, just before `wait()` resumption: sounds that
+    /// changed last frame are looked at, files go to the loader, and what
+    /// finished is delivered (PreloadAsync callbacks, sounds' `Loaded`).
     fn update_content(&mut self) {
+        let start = self.runtime.world().dom.journal().end();
+        let mut events = Vec::new();
+        let sound_files = self.apply_sound_changes(&mut events);
+        for (r, outcome) in self.run_loader(sound_files) {
+            self.sound_loaded(r, outcome, &mut events);
+        }
+        self.fire_sound_events(start, events);
+    }
+
+    /// Hand scripts' new content requests and sounds' files to the loader
+    /// and deliver what finished on the engine thread (architecture §8
+    /// "Content"); finished sound files are returned. Nothing happens
+    /// unless scripts or sounds asked for content.
+    fn run_loader(
+        &mut self,
+        sound_files: Vec<rook_content::ContentRef>,
+    ) -> Vec<(
+        rook_content::ContentRef,
+        Result<rook_content::Fetched, rook_content::Failure>,
+    )> {
         let requests = self.runtime.take_content_requests();
         let mut results = self.runtime.take_content_answers();
-        let sound_files = std::mem::take(&mut self.sounds.pending);
         let content = &mut self.content;
+        let mut sounds_done = Vec::new();
         if requests.is_empty()
             && results.is_empty()
             && sound_files.is_empty()
             && content.tickets.is_empty()
             && self.sounds.tickets.is_empty()
         {
-            return;
+            return sounds_done;
         }
         profiling::scope!("update_content");
         let loader = content.loader.get_or_insert_with(|| {
@@ -75,7 +93,6 @@ impl DataModel {
             let ticket = loader.request_as(r.clone(), rook_content::Want::Audio);
             self.sounds.tickets.insert(ticket, r);
         }
-        let mut sounds_done = Vec::new();
         let finished = if content.wait_for_sounds && !self.sounds.tickets.is_empty() {
             loader.wait_all()
         } else {
@@ -88,10 +105,8 @@ impl DataModel {
                 sounds_done.push((r, outcome));
             }
         }
-        for (r, outcome) in sounds_done {
-            self.sound_loaded(r, outcome);
-        }
         self.runtime.deliver_content(&results);
+        sounds_done
     }
 
     /// Step physics and write the results into the DOM. Parts that fell

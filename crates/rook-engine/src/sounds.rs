@@ -1,9 +1,19 @@
-//! Sounds: loading them through the content loader, `TimeLength` and
-//! `IsLoaded`, and `TimePosition` advancing while they play.
+//! Sounds: loading them through the content loader, `IsLoaded`,
+//! `TimeLength` and `Loaded`; playback (time, ends, loops) is in
+//! [`playback`].
 //!
 //! Every DataModel does this, server and client alike, as Studio does on
 //! both (`docs/behavior/audio.md`). Hearing them is the player's job: it
 //! asks for [`DataModel::playing_sounds`] each frame and mixes them.
+//!
+//! Changes are noticed at the end of a frame ([`DataModel::check_sounds`],
+//! before the journal is trimmed) and acted on at the start of the next
+//! ([`DataModel::apply_sound_changes`]), so the events they fire run in
+//! the frame like other engine events.
+
+mod playback;
+
+pub use playback::PlayingSound;
 
 use std::collections::HashSet;
 
@@ -20,6 +30,10 @@ enum Load {
     Failed,
 }
 
+/// An event for a sound's scripts: the event, the sound's `SoundId`, and
+/// `DidLoop`'s count.
+pub(crate) type SoundEvent = (InstanceId, &'static str, String, Option<u32>);
+
 #[derive(Debug, Default)]
 pub(crate) struct Sounds {
     /// Journal position up to which Sound changes have been looked at.
@@ -27,28 +41,16 @@ pub(crate) struct Sounds {
     /// Whether the DataModel's sounds have been looked for once (a loaded
     /// place's are in the tree before the journal starts).
     scanned: bool,
+    /// Sounds whose `SoundId` or place in the tree changed last frame.
+    dirty: HashSet<InstanceId>,
     /// Sounds in the DataModel, with the file each refers to (`None` for
     /// an empty or malformed `SoundId`, which never loads).
     tracked: HashMap<InstanceId, Option<ContentRef>>,
     /// Each file once, however many sounds share it.
     files: HashMap<ContentRef, Load>,
     pub(crate) tickets: HashMap<Ticket, ContentRef>,
-    /// Files to hand the loader at the start of the next frame.
-    pub(crate) pending: Vec<ContentRef>,
-}
-
-/// A sound the player should be hearing.
-#[derive(Debug, Clone)]
-pub struct PlayingSound {
-    pub id: InstanceId,
-    pub audio: Arc<Audio>,
-    /// `TimePosition`, seconds.
-    pub position: f64,
-    /// `Volume`, as a linear gain (Approximation until M5 step 2).
-    pub volume: f32,
-    /// `PlaybackSpeed`.
-    pub speed: f32,
-    pub looped: bool,
+    /// Sounds removed with `PlayOnRemove`, playing out once.
+    one_shots: Vec<playback::OneShot>,
 }
 
 fn sound_url(dom: &Dom, id: InstanceId) -> Option<ContentRef> {
@@ -56,6 +58,12 @@ fn sound_url(dom: &Dom, id: InstanceId) -> Option<ContentRef> {
         .property_by_name(id, "AudioContent")
         .or_else(|| dom.property_by_name(id, "SoundId"))?;
     ContentRef::parse(value.content_url()?)
+}
+
+fn sound_id(dom: &Dom, id: InstanceId) -> String {
+    dom.property_by_name(id, "AudioContent")
+        .and_then(|v| v.content_url().map(str::to_owned))
+        .unwrap_or_default()
 }
 
 fn number(dom: &Dom, id: InstanceId, name: &str, default: f64) -> f64 {
@@ -77,36 +85,11 @@ impl Sounds {
         self.scanned = false;
     }
 
-    /// Sounds whose `SoundId` or place in the tree changed since the last
-    /// look (every sound, the first time).
-    fn changed(&mut self, dom: &Dom) -> HashSet<InstanceId> {
-        let mut out = HashSet::new();
-        if !self.scanned {
-            self.scanned = true;
-            out.extend(
-                dom.descendants(dom.root())
-                    .into_iter()
-                    .filter(|&i| dom.is_a(i, "Sound")),
-            );
+    fn audio(&self, id: InstanceId) -> Option<&Arc<Audio>> {
+        match self.files.get(self.tracked.get(&id)?.as_ref()?)? {
+            Load::Loaded(audio) => Some(audio),
+            _ => None,
         }
-        let ids = SoundProps::get();
-        for c in dom.journal().since(self.cursor) {
-            match c {
-                Change::Property { id, property } if ids.content.contains(property) => {
-                    out.insert(*id);
-                }
-                Change::Reparented { subtree, .. } => {
-                    out.extend(subtree.iter().filter(|&&i| dom.is_a(i, "Sound")));
-                }
-                Change::Destroying(id) => {
-                    self.tracked.remove(id);
-                }
-                _ => {}
-            }
-        }
-        self.cursor = dom.journal().end();
-        out.retain(|&i| dom.get(i).is_some());
-        out
     }
 }
 
@@ -134,18 +117,69 @@ impl SoundProps {
 }
 
 impl DataModel {
-    /// Look at sounds that entered the DataModel or got a new `SoundId`
-    /// this frame (before the journal is trimmed), queueing new files for
-    /// the loader. A sound outside the DataModel doesn't load (observed in
-    /// Studio).
+    /// Note sounds that entered or left the DataModel or got a new
+    /// `SoundId` this frame, before the journal is trimmed (every sound,
+    /// the first time).
     pub(crate) fn check_sounds(&mut self) {
+        let w = self.runtime.world();
+        let dom = &w.dom;
+        let sounds = &mut self.sounds;
+        if !sounds.scanned {
+            sounds.scanned = true;
+            let all = dom.descendants(dom.root());
+            sounds
+                .dirty
+                .extend(all.into_iter().filter(|&i| dom.is_a(i, "Sound")));
+        }
+        let ids = SoundProps::get();
+        for c in dom.journal().since(sounds.cursor) {
+            match c {
+                Change::Property { id, property } if ids.content.contains(property) => {
+                    sounds.dirty.insert(*id);
+                }
+                Change::Reparented { subtree, .. } => {
+                    let moved = subtree.iter().filter(|&&i| dom.is_a(i, "Sound"));
+                    sounds.dirty.extend(moved);
+                }
+                _ => {}
+            }
+        }
+        sounds.cursor = dom.journal().end();
+    }
+
+    /// Act on last frame's sound changes: a sound that entered the
+    /// DataModel or got a new `SoundId` loads (files not asked for yet are
+    /// returned for the loader), and fires `Loaded` at once if its file
+    /// already has; one that left is unloaded, and plays out once if it has
+    /// `PlayOnRemove` (all observed in Studio, except `PlayOnRemove`,
+    /// creator-docs).
+    pub(crate) fn apply_sound_changes(&mut self, events: &mut Vec<SoundEvent>) -> Vec<ContentRef> {
+        let mut wanted = Vec::new();
+        if self.sounds.dirty.is_empty() {
+            return wanted;
+        }
         let mut w = self.runtime.world_mut();
         let dom = &mut w.dom;
         let sounds = &mut self.sounds;
         let root = dom.root();
-        for id in sounds.changed(dom) {
-            if !dom.is_ancestor_of(root, id) {
+        let mut dirty: Vec<_> = sounds.dirty.drain().collect();
+        dirty.sort();
+        for id in dirty {
+            if dom.get(id).is_none() {
                 sounds.tracked.remove(&id);
+                continue;
+            }
+            if !dom.is_ancestor_of(root, id) {
+                if let Some(audio) = sounds.audio(id).cloned()
+                    && flag(dom, id, "PlayOnRemove")
+                {
+                    sounds
+                        .one_shots
+                        .push(playback::OneShot::new(dom, id, audio));
+                }
+                if sounds.tracked.remove(&id).is_some() {
+                    let _ = dom.set_property_by_name(id, "IsLoaded", Value::Bool(false));
+                }
                 continue;
             }
             let r = sound_url(dom, id);
@@ -158,108 +192,71 @@ impl DataModel {
                     .files
                     .entry(r.clone())
                     .or_insert_with(|| {
-                        sounds.pending.push(r.clone());
+                        wanted.push(r.clone());
                         Load::Loading
                     })
                     .clone(),
             };
             sounds.tracked.insert(id, r);
-            apply(dom, id, &load);
+            apply(dom, id, &load, events);
         }
+        wanted
     }
 
     /// A sound file finished loading: every sound using it is loaded, or
     /// stays unloaded for good.
-    pub(crate) fn sound_loaded(&mut self, r: ContentRef, outcome: Result<Fetched, Failure>) {
+    pub(crate) fn sound_loaded(
+        &mut self,
+        r: ContentRef,
+        outcome: Result<Fetched, Failure>,
+        events: &mut Vec<SoundEvent>,
+    ) {
         let load = match outcome.ok().and_then(|f| f.audio) {
             Some(audio) => Load::Loaded(audio),
             None => Load::Failed,
         };
         let mut w = self.runtime.world_mut();
-        for (&id, used) in &self.sounds.tracked {
-            if used.as_ref() == Some(&r) {
-                apply(&mut w.dom, id, &load);
-            }
+        let mut users: Vec<_> = self
+            .sounds
+            .tracked
+            .iter()
+            .filter(|(_, used)| used.as_ref() == Some(&r))
+            .map(|(&id, _)| id)
+            .collect();
+        users.sort();
+        for id in users {
+            apply(&mut w.dom, id, &load, events);
         }
         self.sounds.files.insert(r, load);
     }
 
-    /// Move playing, loaded sounds on by `dt`. One that reaches its end
-    /// starts again if `Looped`, and otherwise stops and rewinds (observed
-    /// in Studio). A sound still loading, or that failed, stays at 0.
-    pub(crate) fn advance_sounds(&mut self, dt: f64) {
-        if self.sounds.tracked.is_empty() {
+    /// Fire `Changed` for what sounds changed since `start`, then their
+    /// events: Studio fires `Changed` for `IsLoaded` and `TimeLength`
+    /// before `Loaded`.
+    pub(crate) fn fire_sound_events(&mut self, start: u64, events: Vec<SoundEvent>) {
+        if events.is_empty() && self.runtime.world().dom.journal().end() == start {
             return;
         }
-        profiling::scope!("advance_sounds");
-        let mut w = self.runtime.world_mut();
-        let dom = &mut w.dom;
-        let Some(position) = dom.database().class_by_name("Sound").and_then(|c| {
-            dom.database()
-                .find_canonical_property(c.id, "TimePosition")
-                .map(|p| p.id)
-        }) else {
-            return;
-        };
-        for (&id, r) in &self.sounds.tracked {
-            let Some(Load::Loaded(audio)) = r.as_ref().and_then(|r| self.sounds.files.get(r))
-            else {
-                continue;
+        self.runtime.dispatch_since(start);
+        for (id, event, sound_id, count) in events {
+            let _ = match count {
+                Some(n) => self.runtime.fire_event(id, event, (sound_id, n)),
+                None => self.runtime.fire_event(id, event, sound_id),
             };
-            if !flag(dom, id, "Playing") {
-                continue;
-            }
-            let length = audio.seconds();
-            let speed = number(dom, id, "PlaybackSpeed", 1.0).max(0.0);
-            let mut t = number(dom, id, "TimePosition", 0.0) + dt * speed;
-            if t >= length {
-                if flag(dom, id, "Looped") && length > 0.0 {
-                    t %= length;
-                } else {
-                    let _ = dom.set_property_by_name(id, "Playing", Value::Bool(false));
-                    t = 0.0;
-                }
-            }
-            // Time passing isn't a change scripts hear about (no Changed
-            // event each frame), so it skips the journal.
-            dom.load_property(id, position, Value::Float64(t));
         }
-    }
-
-    /// The sounds to hear now: in the DataModel, loaded and `Playing`.
-    pub fn playing_sounds(&self) -> Vec<PlayingSound> {
-        let w = self.runtime.world();
-        let dom = &w.dom;
-        let mut out = Vec::new();
-        for (&id, r) in &self.sounds.tracked {
-            let Some(Load::Loaded(audio)) = r.as_ref().and_then(|r| self.sounds.files.get(r))
-            else {
-                continue;
-            };
-            if !flag(dom, id, "Playing") {
-                continue;
-            }
-            out.push(PlayingSound {
-                id,
-                audio: audio.clone(),
-                position: number(dom, id, "TimePosition", 0.0),
-                volume: number(dom, id, "Volume", 0.5) as f32,
-                speed: number(dom, id, "PlaybackSpeed", 1.0) as f32,
-                looped: flag(dom, id, "Looped"),
-            });
-        }
-        out.sort_by_key(|s| s.id);
-        out
     }
 }
 
 /// Show a sound's load state to scripts: `IsLoaded`, and `TimeLength` (0
-/// until it loads).
-fn apply(dom: &mut Dom, id: InstanceId, load: &Load) {
+/// until it loads), with `Loaded` once it has.
+fn apply(dom: &mut Dom, id: InstanceId, load: &Load, events: &mut Vec<SoundEvent>) {
     let (loaded, length) = match load {
         Load::Loaded(audio) => (true, audio.seconds()),
         Load::Loading | Load::Failed => (false, 0.0),
     };
     let _ = dom.set_property_by_name(id, "IsLoaded", Value::Bool(loaded));
     let _ = dom.set_property_by_name(id, "TimeLength", Value::Float64(length));
+    if loaded {
+        events.push((id, "Loaded", sound_id(dom, id), None));
+    }
 }
