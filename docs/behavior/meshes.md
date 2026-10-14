@@ -1,6 +1,6 @@
 # Meshes
 
-What Rook found while building M4's mesh steps: the built-in shapes (step 1), mesh files (step 3) and trusses. Each rule says where it was observed. The plan itself is in [ROADMAP.md](../../ROADMAP.md#m4-content-meshes-textures-decals).
+What Rook found while building M4's mesh steps: the built-in shapes (step 1), mesh files (step 3) and trusses. Each rule says where it was observed. The plan itself is in [ROADMAP.md](../../ROADMAP.md#m4-content-meshes-materials-textures-decals).
 
 ## Built-in shapes (step 1)
 

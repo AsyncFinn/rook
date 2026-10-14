@@ -1,6 +1,6 @@
 # Asset fetching
 
-What Rook found while building M4 step 2: where archived places' content comes from, and how Rook fetches it. The plan itself is in [ROADMAP.md](../../ROADMAP.md#m4-content-meshes-textures-decals).
+What Rook found while building M4 step 2: where archived places' content comes from, and how Rook fetches it. The plan itself is in [ROADMAP.md](../../ROADMAP.md#m4-content-meshes-materials-textures-decals).
 
 **Asset fetching (step 2)**, built 2026-10-12. How it works is in
 `docs/architecture.md` §8 "Content"; what's still partial is in

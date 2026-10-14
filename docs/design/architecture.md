@@ -34,7 +34,7 @@ apps/
   rook-cli          dump, roundtrip, run-headless, corpus-scan, conformance
   rook-player       windowed client (winit)
   rook-server       (planned) headless server
-  rook-studio       (planned) editor (much later)
+  rook-studio       (out of scope for now) editor
 conformance/         Studio-recorded expectations + the Luau cases that produced them
 docs/                guide (users), design (architecture, research), behavior (findings per topic)
 ```
