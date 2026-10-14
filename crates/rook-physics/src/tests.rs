@@ -6,7 +6,9 @@ use super::*;
 
 mod constraints;
 mod contacts;
+mod forces;
 mod joints;
+mod make_joints;
 mod movers;
 mod queries;
 
