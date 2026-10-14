@@ -14,6 +14,7 @@ mod color;
 mod mesh;
 mod shape;
 mod surface;
+mod truss;
 mod udim;
 mod value;
 mod vector;
@@ -26,6 +27,7 @@ pub use shape::PartShape;
 pub use surface::{
     MaterialLook, NormalId, SURFACE_TILE_STUDS, SurfacePattern, SurfaceType, Tiling,
 };
+pub use truss::{Lean, TRUSS_MAX_LENGTH, TrussLook, TrussShape, TrussStyle, truss_size};
 pub use udim::{UDim, UDim2};
 pub use value::{InstanceRef, Value, ValueError};
 pub use vector::{Vector2, Vector3};

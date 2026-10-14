@@ -12,7 +12,9 @@ use rook_render::{
     Camera, DrawShape, ImageHash, ImagePlacement, Layer, Lighting, MaterialLook, MeshHash,
     NormalId, PartInstance, Scene, Tiling,
 };
-use rook_types::{Color3, MeshKind, MeshLook, SurfaceType, Value, mesh_part_scale};
+use rook_types::{
+    CFrame, Color3, MeshKind, MeshLook, SurfaceType, TrussLook, TrussStyle, Value, mesh_part_scale,
+};
 
 use crate::files::{FileRef, FileState, Files, Loaded};
 
@@ -139,6 +141,32 @@ enum Decals {
     MeshUv,
 }
 
+/// A TrussPart without a mesh: its bars, along its long axis from its low
+/// end (`rook_types::TrussLook`), in the part's colour, material and
+/// transparency (observed in Studio 0.742, 2026-10-13: Color, Neon,
+/// Reflectance and Transparency show as on any part, and Wood its wood).
+/// Its Decals and Textures and its surfaces don't show (observed).
+fn truss(
+    dom: &Dom,
+    id: InstanceId,
+    cf: &CFrame,
+    size: Vec3,
+    mut out: PartInstance,
+    pose: &mut Pose,
+) -> PartInstance {
+    // Files save `Style` as `style`, which is what the DOM holds (scripts
+    // see it as `Style`).
+    let style = TrussStyle::from_u32(enum_value(dom, id, "style").unwrap_or(0));
+    let look = TrussLook::of(size, style);
+    out.shape = DrawShape::Truss(look.shape);
+    out.size = Vec3::ONE;
+    out.position = cf.position + cf.rotation * look.offset;
+    out.rotation = cf.rotation * look.turn;
+    pose.offset = look.offset;
+    pose.turn = look.turn;
+    out
+}
+
 /// Direction to the sun for a clock time and latitude. Roblox turns the sun
 /// around the Z axis once a day, rising at +X, on a circle tilted towards
 /// +Z by the latitude less 23.5° (Confirmed: `Lighting:GetSunDirection()`
@@ -212,12 +240,14 @@ const DEFAULT_SKYBOX: [&str; 6] = [
     "rbxasset://textures/sky/sky512_dn.tex",
 ];
 
-/// How a part's CFrame places what it draws: its mesh's `Offset` in the
-/// part's axes, and whether the shape is turned upright (a CylinderMesh).
+/// How a part's CFrame places what it draws: where its shape's centre is
+/// in the part's axes (a mesh's `Offset`, a truss's start), and the turn
+/// from the shape's axes to the part's (a CylinderMesh stands upright, a
+/// truss lies along its long axis).
 #[derive(Debug, Clone, Copy, Default)]
 struct Pose {
     offset: Vec3,
-    upright: bool,
+    turn: Mat3,
 }
 
 /// What a part draws: itself and its image layers, and how its CFrame
@@ -353,11 +383,7 @@ impl SceneCache {
                 let pose = self.poses[i];
                 let part = &mut self.scene.parts[i];
                 part.position = cf.position + cf.rotation * pose.offset;
-                part.rotation = if pose.upright {
-                    cf.rotation * UPRIGHT
-                } else {
-                    cf.rotation
-                };
+                part.rotation = cf.rotation * pose.turn;
                 changed.push(i);
             }
         }
@@ -600,8 +626,8 @@ impl SceneCache {
             )
         };
         // Unions (drawn as their box for now), trusses and MeshParts have
-        // no surface patterns of their own (Inference for unions and
-        // trusses).
+        // no surface patterns of their own (observed for trusses; Inference
+        // for unions).
         let has_surfaces = !matches!(
             class,
             "MeshPart"
@@ -616,6 +642,17 @@ impl SceneCache {
                 out.surfaces[face.index()] = enum_value(dom, id, SURFACES[face.index()])
                     .and_then(|s| SurfaceType::from_u32(s).pattern());
             }
+        };
+        // What the part draws without a mesh: its own shape with its
+        // surfaces, or a truss's bars.
+        let own = |mut out: PartInstance, pose: &mut Pose| {
+            if class == "TrussPart" {
+                return (truss(dom, id, &cf, size, out, pose), Decals::None);
+            }
+            if has_surfaces {
+                surfaces(&mut out);
+            }
+            (out, Decals::Faces)
         };
         if class == "MeshPart" {
             // Its own mesh file, scaled by Size / InitialSize; with an empty
@@ -643,17 +680,11 @@ impl SceneCache {
             return Some((out, Decals::Faces));
         }
         let Some((kind, mesh, url)) = part_mesh(dom, id) else {
-            if has_surfaces {
-                surfaces(&mut out);
-            }
-            return Some((out, Decals::Faces));
+            return Some(own(out, pose));
         };
         let scale = vector3(dom, mesh, "Scale").unwrap_or(Vec3::ONE);
         let Some(mut look) = kind.look_on(class, size, scale) else {
-            if has_surfaces {
-                surfaces(&mut out);
-            }
-            return Some((out, Decals::Faces));
+            return Some(own(out, pose));
         };
         if kind == MeshKind::EmptyFile {
             self.settle(id, mesh, Settled::Empty);
@@ -685,7 +716,7 @@ impl SceneCache {
                 if upright {
                     out.rotation = cf.rotation * UPRIGHT;
                     out.upright = true;
-                    pose.upright = true;
+                    pose.turn = UPRIGHT;
                 }
             }
             MeshLook::Head { scale } => {
@@ -697,7 +728,7 @@ impl SceneCache {
                 out.transparency = 1.0;
                 return Some((out, Decals::None));
             }
-            MeshLook::PartShape => return Some((out, Decals::Faces)),
+            MeshLook::PartShape => return Some(own(out, pose)),
         }
         if kind.takes_texture() {
             // The empty-MeshId box drew without the part's Neon glow

@@ -15,7 +15,7 @@
 use bytemuck::{Pod, Zeroable};
 use glam::Vec3;
 
-use crate::scene::{DrawShape, NormalId, PartShape};
+use crate::scene::{DrawShape, NormalId, PartShape, TrussShape};
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
@@ -305,6 +305,97 @@ fn head() -> MeshData {
     m
 }
 
+/// One face of a box centred at `centre` whose edges run along `axes` (a
+/// right-handed frame) with half extents `half`: the face on the `sign`
+/// side of axis `k`, flat, wound counter-clockwise seen from outside.
+fn box_face(m: &mut MeshData, centre: Vec3, axes: [Vec3; 3], half: Vec3, k: usize, sign: f32) {
+    let normal = axes[k] * sign;
+    let (mut a, mut b) = (k + 1, k + 2);
+    if sign < 0.0 {
+        std::mem::swap(&mut a, &mut b);
+    }
+    let a = axes[a % 3] * half[a % 3];
+    let b = axes[b % 3] * half[b % 3];
+    let c = centre + normal * half[k];
+    let base = m.vertices.len() as u32;
+    for p in [c - a - b, c + a - b, c + a + b, c - a + b] {
+        m.vertices
+            .push(Vertex::plain(p.to_array(), normal.to_array(), [0.0; 2]));
+    }
+    m.indices
+        .extend_from_slice(&[base, base + 1, base + 2, base, base + 2, base + 3]);
+}
+
+/// A TrussPart's bars, along Y, in studs, centred on the origin, built from
+/// the facts `rook_types::TrussShape` documents (measured from Studio's
+/// OBJ export of a 2 × 2 × 2 and a 2 × 4 × 2 truss, 2026-10-13): four
+/// 0.25-stud rails at the corners, a 0.25-stud rung across each side at
+/// the truss's ends and a 0.5-stud one where two segments meet, and each
+/// segment's braces. Faces hidden inside the bars where they meet are left
+/// out (the rungs' and braces' ends); normals are flat. The export maps its
+/// UVs into the surface-pattern strip, which Studio doesn't draw on
+/// trusses, so the bars have none.
+fn truss(shape: TrussShape) -> MeshData {
+    let mut m = MeshData::default();
+    let bar = TrussShape::BAR;
+    let half_length = shape.length() / 2.0;
+    // From the axis to the centre of a rail, a rung or a brace.
+    let side_at = TrussShape::SEGMENT / 2.0 - bar / 2.0;
+    let frame = [Vec3::X, Vec3::Y, Vec3::Z];
+    for (x, z) in [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)] {
+        let centre = Vec3::new(x, 0.0, z) * side_at;
+        let half = Vec3::new(bar / 2.0, half_length, bar / 2.0);
+        for k in 0..3 {
+            for sign in [-1.0, 1.0] {
+                box_face(&mut m, centre, frame, half, k, sign);
+            }
+        }
+    }
+    // The rungs' bands along the truss: (centre, half thickness).
+    let mut bands = vec![
+        (-half_length + bar / 2.0, bar / 2.0),
+        (half_length - bar / 2.0, bar / 2.0),
+    ];
+    for joint in 1..shape.segments {
+        bands.push((-half_length + f32::from(joint) * TrussShape::SEGMENT, bar));
+    }
+    for side in TrussShape::SIDES {
+        let normal = side.normal();
+        let across = TrussShape::across(side);
+        for &(y, thickness) in &bands {
+            let centre = normal * side_at + Vec3::Y * y;
+            let half = across * (TrussShape::SEGMENT / 2.0 - bar)
+                + Vec3::Y * thickness
+                + normal.abs() * (bar / 2.0);
+            for k in (0..3).filter(|&k| frame[k] != across) {
+                for sign in [-1.0, 1.0] {
+                    box_face(&mut m, centre, frame, half, k, sign);
+                }
+            }
+        }
+        for segment in 0..shape.segments {
+            let Some(lean) = shape.brace(segment, side) else {
+                continue;
+            };
+            let middle = -half_length + (f32::from(segment) + 0.5) * TrussShape::SEGMENT;
+            let along = (across * lean.sign() + Vec3::Y).normalize();
+            let axes = [along, normal.cross(along), normal];
+            let half = Vec3::new(
+                side_at * std::f32::consts::SQRT_2,
+                TrussShape::BRACE_WIDTH / 2.0,
+                TrussShape::BRACE_DEPTH / 2.0,
+            );
+            let centre = normal * side_at + Vec3::Y * middle;
+            for k in 1..3 {
+                for sign in [-1.0, 1.0] {
+                    box_face(&mut m, centre, axes, half, k, sign);
+                }
+            }
+        }
+    }
+    m
+}
+
 /// A mesh read from a file, as drawn.
 pub(crate) fn from_file(m: &rook_content::mesh::Mesh) -> MeshData {
     MeshData {
@@ -345,6 +436,7 @@ pub(crate) fn build(shape: DrawShape) -> MeshData {
         DrawShape::Head => head(),
         // Mesh files come with the scene (`Renderer::has_mesh`).
         DrawShape::File(_) => MeshData::default(),
+        DrawShape::Truss(shape) => truss(shape),
     }
 }
 
@@ -469,6 +561,58 @@ mod tests {
             .find(|v| v.normal == [0.0, 0.0, -1.0] && v.position == [0.5, 0.5, -0.5])
             .unwrap();
         assert_eq!(front.uv, [0.0, 0.0]);
+    }
+
+    /// A truss's faces each face the way their normal says, and its bars sit
+    /// where the export of a 2 × 4 × 2 truss has them: rails out to the
+    /// 2-stud box over the whole length, and each brace's outline reaching
+    /// 0.9634 studs from its segment's middle both across and along.
+    #[test]
+    fn truss_matches_the_export() {
+        use rook_types::TrussStyle;
+        let shape = TrussShape::new(TrussStyle::AlternatingSupports, 2);
+        let m = build(DrawShape::Truss(shape));
+        for tri in m.indices.chunks(3) {
+            let v = [tri[0], tri[1], tri[2]].map(|i| m.vertices[i as usize]);
+            let [a, b, c] = v.map(|v| Vec3::from(v.position));
+            let n = (b - a).cross(c - a).normalize();
+            assert!(n.dot(Vec3::from(v[0].normal)) > 0.999);
+        }
+        let (lo, hi) = m.bounds();
+        assert_eq!(
+            (lo, hi),
+            (Vec3::new(-1.0, -2.0, -1.0), Vec3::new(1.0, 2.0, 1.0))
+        );
+        // The braces are the only faces with diagonal normals: on the
+        // Front side of the lower segment they span x and y within
+        // ±0.9634 of (0, -1).
+        let brace: Vec<Vec3> = m
+            .vertices
+            .iter()
+            .filter(|v| v.normal[0].abs() > 0.1 && v.normal[1].abs() > 0.1)
+            .map(|v| Vec3::from(v.position))
+            .filter(|p| p.y < 0.0 && p.z < 0.0)
+            .collect();
+        let reach = brace
+            .iter()
+            .map(|p| p.x.abs().max((p.y + 1.0).abs()))
+            .fold(0.0, f32::max);
+        assert!((reach - 0.9634).abs() < 1e-4, "{reach}");
+        assert!(brace.iter().all(|p| (-0.9375..=-0.8125).contains(&p.z)));
+        // The joint's rung is 0.5 thick: a top face at y = 0.25.
+        assert!(m.vertices.iter().any(|v| v.normal == [0.0, 1.0, 0.0]
+            && (v.position[1] - 0.25).abs() < 1e-6
+            && v.position[2] == -1.0));
+        // One segment: no braces.
+        let one = build(DrawShape::Truss(TrussShape::new(
+            TrussStyle::AlternatingSupports,
+            1,
+        )));
+        assert!(
+            one.vertices
+                .iter()
+                .all(|v| v.normal.iter().filter(|c| **c != 0.0).count() == 1)
+        );
     }
 
     /// The head's measured outline: 1.2024 studs tall, and as wide as its

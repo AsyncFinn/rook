@@ -12,6 +12,8 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 
 ## [Unreleased]
 
+- TrussParts draw as Studio draws them (M4): four corner rails with rungs every 2 studs and the braces of each Style (AlternatingSupports, BridgeStyleSupports, NoSupports), at any length and along any axis, from Studio observation and its OBJ export. Trusses of the same length and Style share one mesh and draw instanced. Setting a truss's Size snaps it as Studio does (conformance case `content/truss`).
+- Fixed: a truss's `Style` loaded from a file read as AlternatingSupports (files save it as `style`).
 - README: a new pitch (offline singleplayer, self-hosting, preservation, modding, opt-in extensions), credits moved up as "Standing on the shoulders of giants" with Rapier added, and the status brought up to M3. ROADMAP lists the planned Rook extensions (unscheduled).
 - Docs split: the README is now a short overview (287 to 108 lines) that links to `docs/getting-started.md` (building, playing, controls, command bar), `docs/tools.md` (the `rook` CLI), `docs/features.md` (the full list, now with physics) and `CONTRIBUTING.md` (reporting problems, crate map, development).
 - `rook-physics`: Workspace parts are simulated with Rapier on the server at 240 Hz. Anchored parts are fixed; each unanchored part is its own body for now. Workspace.Gravity and FallenPartsDestroyHeight apply; CFrame and assembly velocities are written back and replicate.

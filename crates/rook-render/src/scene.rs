@@ -8,7 +8,7 @@ use glam::{Mat3, Vec3};
 
 pub use rook_content::image::Image;
 pub use rook_content::mesh::Mesh;
-pub use rook_types::{MaterialLook, NormalId, PartShape, SurfacePattern, Tiling};
+pub use rook_types::{MaterialLook, NormalId, PartShape, SurfacePattern, Tiling, TrussShape};
 
 /// A mesh file, by the BLAKE3 hash of its bytes: parts that use the same
 /// file share one GPU mesh, however they refer to it.
@@ -62,6 +62,10 @@ pub enum DrawShape {
     Head,
     /// A mesh file from [`Scene::meshes`], at its own size.
     File(MeshHash),
+    /// A TrussPart's bars, in studs (`rook_types::TrussLook` places it).
+    /// The renderer builds each shape's mesh the first time one is drawn,
+    /// and trusses of the same shape share it.
+    Truss(TrussShape),
 }
 
 impl DrawShape {
