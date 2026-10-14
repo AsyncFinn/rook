@@ -13,6 +13,15 @@ What each step found in Studio and the archive is in
    scan (`reports/corpus/`): 3,056 place and model files that load.
 3. **Dependencies.** A milestone that needs another's work comes after it
    (characters need physics and the head mesh).
+4. **Modern and legacy together.** Rook targets everything modern Roblox
+   supports: today's features and the legacy ones it still runs. Each
+   milestone covers both sides of its area (the 2022 materials and the
+   legacy set, SurfaceAppearance and MaterialVariant, R15 and R6, the
+   audio API and Sound, TextChatService and the old Chat), so modern
+   features are never left for later. The archive is mostly old places
+   (about 62 files were saved by today's Studio), so modern features are
+   checked against Studio and the creator docs rather than ranked by
+   archive counts.
 
 Each milestone is a vertical slice with a measurable exit criterion, and
 each release says which milestone it finishes (see `CHANGELOG.md`).
@@ -36,7 +45,7 @@ directly, since a character is what makes playing together worth it.
 | ✅ | **M1** Instance tree, signals, scheduler, Luau, server Scripts, conformance | First conformance batch passes; baseline of archive scripts running (v0.1.0) |
 | ✅ | **M2** Renderer v0, client/server split, LocalScripts, basic input | Archived places render recognisably; client scripts run alongside server scripts (v0.2.0) |
 | ✅ | **M3** Physics | Physics conformance batch passes; unanchored places settle plausibly |
-| ⬜ | **M4** Content: meshes, materials, textures, decals | Archived places render with their meshes, materials, decals and textures |
+| ⬜ | **M4** Content: meshes, materials, textures, decals | Places render with their meshes, materials (2022 and legacy, MaterialVariants, SurfaceAppearance), decals and textures |
 | ⬜ | **M5** Audio | Archived places play their sounds, positioned in 3D; the audio conformance batch passes |
 | ⬜ | **M6** Terrain | Archived places with terrain show it, and parts and queries collide with it |
 | ⬜ | **M7** Lights and effects | Local lights light the scene; Fire, Smoke, Sparkles and ParticleEmitters draw as in Studio |
@@ -49,7 +58,7 @@ directly, since a character is what makes playing together worth it.
 | ⬜ | **M14** Scripting completeness | 90% of archive places with server scripts run without an error Rook causes |
 | ⬜ | **M15** Physics completeness | Second physics conformance batch passes; MeshParts and unions collide with their real shapes |
 | ⬜ | **M16** Every class the archive uses | No class in 5 or more archive files is still inert |
-| ⬜ | **M17** Modern places | Reference places built with today's Studio (R15, layered clothing, PBR materials) play as they do in Studio |
+| ⬜ | **M17** Modern places | A conformance set of places built in today's Studio plays as it does in Studio |
 | ⬜ | **M18** Offline content | An archived place plays on a machine with no network, from a content pack |
 | ⬜ | **M19** Input and platforms | Play with a gamepad; Rook builds and runs on Windows, Linux and macOS |
 | ⬜ | **M20** Hosting safety | A public server survives runaway scripts and a hostile client test suite |
@@ -96,22 +105,34 @@ renderer draws all of these as their part's plain box.
    `TextureId` and MeshPart `TextureID` with `VertexColor`, Plastic's surface
    patterns, Neon and Reflectance, drawn as Studio draws them. Counts and
    findings: [textures-decals.md](docs/behavior/textures-decals.md).
-5. **Materials**: every material drawn as modern Roblox draws it; today
-   only Plastic (its surface patterns), Neon and Reflectance are, and the
-   rest are their plain colour. By files using them: Wood 531, Slate 502,
-   Concrete 366, Grass 358, Ice 353, DiamondPlate 351, CorrodedMetal 252,
-   SmoothPlastic 201, Foil 177, Brick 158, Sand 149, Granite 127, Marble
-   125, Metal 110 (703,662 parts), Pebble 105, Fabric 101, WoodPlanks 51,
-   Cobblestone 39, Glass 23, ForceField 18, and a few others. First find
-   where Studio keeps the material textures it downloads at runtime (they
-   aren't in the install), so Rook can load the user's copy the way it
-   loads `studs.dds`; without them Rook draws its own, never Roblox's
-   files committed. Measure in Studio for each material: texture scale in
-   studs, how Color tints it, normal and roughness, how much it reflects
-   (Metal, Foil, DiamondPlate), SmoothPlastic's lack of pattern, Glass
-   (transparency and reflection) and ForceField's animated look, and which
-   materials show surfaces (so far only Plastic does). MaterialVariant and
-   MaterialService (10 files) come last.
+5. **Materials and PBR**: the material system modern Roblox has, which
+   later work (terrain, avatars, lighting) builds on. Today only Plastic
+   (its surface patterns), Neon and Reflectance are drawn; every other
+   material is its plain colour.
+   - *PBR shading* in the renderer: colour, normal, roughness and
+     metalness maps, lit by the sun and ambient and reflecting the sky.
+     Every material below is drawn through it.
+   - *MaterialService* (62 files): `Use2022Materials`, which picks between
+     the 2022 materials and the legacy set (modern Roblox still offers
+     both, so Rook draws both), and its per-material overrides. Measure in
+     Studio which set a place without a MaterialService gets.
+   - *The built-in materials*, both sets, by files using them: Wood 531,
+     Slate 502, Concrete 366, Grass 358, Ice 353, DiamondPlate 351,
+     CorrodedMetal 252, SmoothPlastic 201, Foil 177, Brick 158, Sand 149,
+     Granite 127, Marble 125, Metal 110 (703,662 parts), Pebble 105, Fabric
+     101, WoodPlanks 51, Cobblestone 39, Glass 23, ForceField 18, and the
+     rest. First find where Studio keeps the material textures it
+     downloads at runtime (they aren't in the install), so Rook can load
+     the user's copy the way it loads `studs.dds`; without them Rook draws
+     its own, never Roblox's files committed. Measure each: texture scale in
+     studs, how Color tints it, how much it reflects, Glass and ForceField,
+     and which materials show surfaces (so far only Plastic does).
+   - *MaterialVariant* (10 files, 746 variants): custom materials from
+     colour, normal, roughness and metalness maps, `StudsPerTile` and
+     `Pattern`, applied by a part's `MaterialVariant` or as a
+     MaterialService override.
+   - *SurfaceAppearance* (13 files, 1,646 uses): PBR maps on MeshParts,
+     with `AlphaMode` (Overlay, Transparency, TintMask) and `Color`.
 6. **Unions**: draw UnionOperations with their own geometry instead of
    their bounding box (`UnionOperation.Content`, the union's geometry
    asset, is set on 70,944 unions in 99 files; `NegateOperation` 6 in 2).
@@ -142,6 +163,9 @@ state. It's self-contained, and every place sounds wrong without it.
 3. 3D sound: a Sound under a part or Attachment is positioned, with
    `RollOffMode` and its distances measured in Studio.
 4. SoundService, SoundGroups (5 files) and sound effects, by archive use.
+5. The audio API modern places use (AudioPlayer, AudioEmitter,
+   AudioListener, AudioDeviceOutput, Wire and the Audio effects), on the
+   same engine as Sound.
 
 ### M6 Terrain
 
@@ -152,7 +176,9 @@ Terrain comes before characters, who walk on it.
 
 1. Decode `SmoothGrid` voxels (material and occupancy) and mesh them as
    Roblox does, measured against Studio.
-2. Terrain materials and water (swimming comes with characters).
+2. Terrain materials through M4's material system: `MaterialColors`,
+   MaterialService overrides and MaterialVariants on terrain, grass, and
+   water (swimming comes with characters).
 3. Collision and queries: parts land on terrain, rays hit it.
 4. The Terrain API scripts use, by archive use (`FillBlock`,
    `ReadVoxels`, `WriteVoxels`, `FillBall`, ...).
@@ -168,8 +194,9 @@ create.
 1. Local lights: Brightness, Range, Color, Shadows, SpotLight Angle and
    Face, SurfaceLight; many lights per frame.
 2. Fire, Smoke and Sparkles, drawn as Studio draws them today.
-3. ParticleEmitter, Beam and Trail.
+3. ParticleEmitter (with flipbooks), Beam and Trail.
 4. Explosion: its blast (physics, joints breaking) and its look.
+5. Highlight (outlines and fills through walls).
 
 ### M8 GUI
 
@@ -179,22 +206,31 @@ It comes before characters: tools, health bars and leaderboards are GUI.
 
 1. Layout: `UDim2`, `AnchorPoint`, `ZIndex`, `ClipsDescendants`,
    `AutomaticSize`, the UI layouts and constraints.
-2. Text (cosmic-text): fonts, sizing, wrapping, `TextScaled`.
+2. Text (cosmic-text): fonts and `FontFace` weights, sizing, wrapping,
+   `TextScaled`, `RichText`.
 3. Images, 9-slice, ScrollingFrame.
-4. Input: buttons, `TextBox`, GUI taking input before the 3D world.
-5. BillboardGui and SurfaceGui in the world; Hint and Message.
-6. The GUI Roblox draws itself (player list, chat, backpack), from
-   Core-Scripts (Apache-2.0) where they fit.
+4. The modern UI objects, by files using them: UIListLayout 43 (with flex
+   and UIFlexItem), UIPadding 38, UICorner 35, UIAspectRatioConstraint 35,
+   UIGradient 31, UIGridLayout 29, UIStroke 22, UIScale 13, CanvasGroup 9,
+   ViewportFrame 5.
+5. Input: buttons, `TextBox`, GUI taking input before the 3D world.
+6. BillboardGui and SurfaceGui in the world; Hint and Message;
+   ProximityPrompt (12 files).
+7. The GUI Roblox draws itself (player list, backpack), from Core-Scripts
+   (Apache-2.0) where they fit, and chat: TextChatService (62 files) and
+   the legacy Chat.
 
 ### M9 Characters
 
 Humanoid 905 files, Tool 1,152, HopperBin 1,107, SpawnLocation 1,509,
 Seat 642, VehicleSeat 230. Needs physics, the head mesh, terrain and GUI.
 
-1. Spawning at SpawnLocations, the default R6 character, respawning.
+1. Spawning at SpawnLocations, R15 and R6 characters (`RigType`, and
+   HumanoidDescription, 15 files), respawning.
 2. Humanoid: state machine, walking, jumping, climbing, swimming, health
    and death, joints breaking.
-3. Default camera and control scripts (Core-Scripts, Apache-2.0).
+3. Default camera and control scripts: the PlayerModule modern places
+   get, and what older places expect (Core-Scripts, Apache-2.0).
 4. Tools and the backpack; HopperBin as decided below.
 5. Seats and VehicleSeats.
 6. Playing animations, enough for Rook's own Animate (Animation is in 270
@@ -211,8 +247,8 @@ and its client; this puts a real transport behind it.
 2. Several clients, each with its own player and character.
 3. Network ownership: a player's client simulates its character and what
    it owns (`SetNetworkOwner`).
-4. RemoteEvents and RemoteFunctions across machines (114 and 73 files),
-   with Roblox's limits and ordering.
+4. RemoteEvents, RemoteFunctions and UnreliableRemoteEvents across
+   machines (114, 73 and 4 files), with Roblox's limits and ordering.
 5. Bandwidth: deltas and interest management, so large archived places
    stay playable.
 
@@ -224,10 +260,13 @@ Pants 282, CharacterMesh 168, ShirtGraphic 89, Accessory 42.
 1. A local avatar (body colours, clothing, hats and faces from content
    folders or the user's install), set up without a Roblox account and
    sent to the server on joining.
-2. Clothing and ShirtGraphics on R6 bodies, CharacterMeshes, hats and
-   accessories, as Studio draws them.
-3. Animation in full: Animator, AnimationController, KeyframeSequence,
-   blending and priorities, replicated between players.
+2. Clothing and ShirtGraphics on R15 and R6 bodies, CharacterMeshes,
+   hats and accessories, as Studio draws them.
+3. Layered clothing (WrapLayer, WrapTarget: 12 files) and dynamic heads
+   (FaceControls).
+4. Animation in full: Animator (37 files), AnimationController,
+   KeyframeSequence, blending and priorities, IKControl, replicated
+   between players.
 
 ### M12 Server hosting
 
@@ -249,8 +288,10 @@ Make archived places look the way Studio shows them today.
    and Clouds (8).
 2. Post-processing: Bloom (49 files), ColorCorrection (44), SunRays (20),
    Blur (13), DepthOfField (11).
-3. Lighting tuned against Studio screenshots of reference places (it's an
-   Approximation until then).
+3. `Lighting.Technology` (Voxel, ShadowMap, Future, and Compatibility for
+   old places), `EnvironmentDiffuseScale` and `EnvironmentSpecularScale`
+   for M4's PBR materials, tuned against Studio screenshots of reference
+   places (it's an Approximation until then).
 4. Antialiasing (MSAA by quality level, measured in
    [`docs/behavior/antialiasing.md`](docs/behavior/antialiasing.md)).
 
@@ -271,16 +312,21 @@ the target counts only errors Rook causes, checked against Studio.
    web lookups.
 4. TeleportService between places in one folder (multi-place games).
 5. HttpService, opt-in per place.
-6. Client scripts in the corpus run too, once characters and GUI exist.
+6. Modern Luau: Parallel Luau (Actor, `task.desynchronize`, SharedTable),
+   `buffer`, and the libraries and syntax the pinned Luau version has.
+7. Client scripts in the corpus run too, once characters and GUI exist.
 
 ### M15 Physics completeness
 
 1. MeshPart and union collision with their real shapes (collision
    fidelity, `PhysicsData`), replacing boxes.
-2. The remaining constraints by archive use (springs, ropes, rods,
-   prismatic, the Align and Linear/AngularVelocity movers).
-3. Sleeping and adaptive timestepping as Roblox does them.
-4. A second physics conformance batch, recorded in Studio.
+2. The remaining constraints and movers, by files using them:
+   RopeConstraint 17, RodConstraint 12, SpringConstraint 11, Prismatic 5,
+   AlignPosition and AlignOrientation 4, BallSocket 2, LinearVelocity,
+   AngularVelocity, Plane, Cylindrical, LineForce, NoCollisionConstraint.
+3. Buoyancy in terrain water, and `Workspace.FluidForces` (aerodynamics).
+4. Sleeping and adaptive timestepping as Roblox does them.
+5. A second physics conformance batch, recorded in Studio.
 
 ### M16 Every class the archive uses
 
@@ -298,16 +344,19 @@ whatever the scan ranks next once characters and GUI exist.
 
 ### M17 Modern places
 
-The archive is mostly older places, but modern Roblox is the target, and
-places built in today's Studio use features old ones don't. Count each in
-a set of modern reference places first.
+Modern features belong to the milestones above (materials and
+SurfaceAppearance in M4, the audio API in M5, modern UI in M8, R15 in M9,
+layered clothing in M11, ...). This milestone is the sweep that proves
+it, and covers what doesn't fit anywhere else.
 
-1. R15 characters, HumanoidDescription (15 archive files) and modern
-   accessories (42).
-2. Layered clothing (WrapLayer, WrapTarget).
-3. SurfaceAppearance (13 files) and MaterialVariant (10): PBR textures.
-4. Highlight, modern GUI features, and whatever else the reference
-   places use that the earlier milestones didn't cover.
+1. A set of reference places built in today's Studio (Roblox's templates
+   and creator-docs samples, never committed), recorded in Studio and run
+   as conformance.
+2. Classes modern places use that no milestone covered: EditableImage and
+   EditableMesh, VideoFrame, Packages (PackageLink), and whatever the
+   reference set turns up.
+3. The API dump's newest members, checked against the pinned Roblox
+   version when it moves.
 
 ### M18 Offline content
 
