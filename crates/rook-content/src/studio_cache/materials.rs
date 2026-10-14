@@ -19,7 +19,7 @@ const TABLE: &[(Material, [&str; 3])] = &[
     (Material::WoodPlanks, ["db0b2d38998c49b49326c6bc0a389441", "025aa8fe54d30e543ebc165201f2b178", "74c2143d337c3906c0b447456c030068"]),
     (Material::Marble, ["6f09f886f2612a9011714bcdcebd31e0", "6462db1dec207210d69ca046b2b138a9", "e2f60316fac82962ca1ed1da779c0066"]),
     (Material::Basalt, ["69976c70a8da01bdd5c4912b6d457c50", "b4734aa57869b52da8093d05ffcced65", "fad1510bd90589072e28a7b740c0645a"]),
-    (Material::Slate, ["0e3af5d029c8aafa78c0408ab557a6b4", "bd73df16a827bb828cc3860b98d2f343", "e3d716b45ab78443875ae40564a3dbcf"]),
+    (Material::Slate, ["0e3af5d029c8aafa78c0408ab557a6b4", "ff16ea9cebedddb7b138dd418453a6ef", "e3d716b45ab78443875ae40564a3dbcf"]),
     (Material::CrackedLava, ["09952a68fb2f5d30e218dfa80b2290d0", "e63f8de21e9a1b60a320d2c0389d6cff", "fe232a76ecc9032a0e9798384af7cd22"]),
     (Material::Concrete, ["b5adbba4c9e50745fa0d828bef43cb52", "7da97e874a3f1aac6d9182c373d7c782", "f3ef803be6fabe61517fce8ffc11e0cf"]),
     (Material::Limestone, ["359d07c081895a0d14888841e6a3ad93", "84e19abd893d927ac61004164db256d8", "7bd687b8c62cbd5f7aeaf11e5119bfca"]),

@@ -17,6 +17,7 @@ The install holds only Plastic's textures (`PlatformContent/pc/textures/plastic/
   - *normal* (linear), stored DXT5nm-style: X in alpha, Y in green, red 255 and blue 0;
   - *roughness-metalness* (linear): red is metalness (Foil 255, Metal 202, DiamondPlate 168, CorrodedMetal 134, most others 0), green roughness (Glass 29, Ice 45, Brick 246), alpha unknown (often 255; height or occlusion, Inference).
 
+  Slate's window caught two normal maps; 0.5.0 took the one whose gradients followed the colour map slightly better (`bd73df16`), but Studio's Slate shows the fine layered relief of the other (`ff16ea9c`), which 0.5.1 uses.
   Plastic, SmoothPlastic, Neon and ForceField fetch nothing. Granite's and Pebble's normal maps and Foil's and Ice's colour maps are 4 × 4 placeholders (flat, white): Foil's crumpled look is all normal map. The table of which `contentHash` is which material's map is `rook-content`'s `studio_cache/materials.rs`; the averages above give each material's roughness and metalness when its textures aren't drawn (`rook_types::Material::shading`).
 
 ## MaterialService and `Use2022Materials`
@@ -53,12 +54,14 @@ Measured on 24 × 24 stud faces of every material, white, under even light (Cloc
   | 10 | Grass | Approximation (fitted) |
   | 12 | Foil | Approximation (fitted) |
   | 16 | Cobblestone | Approximation (fitted) |
+  | 16 | Slate, Basalt | Approximation (by eye; 8 in 0.5.0: the user saw Slate larger in Roblox, and Studio's close-up matched 16) |
   | 20 | Salt | Approximation (fitted) |
   | 24 | Granite, CorrodedMetal | Approximation (by eye) |
-  | 8 | Slate, Concrete, Basalt, Limestone, Rock, Sandstone, Mud, Ground, LeafyGrass, Glacier, Asphalt | Approximation (most materials' size) |
+  | 8 | Concrete, Limestone, Rock, Sandstone, Mud, Ground, LeafyGrass, Glacier, Asphalt | Approximation (most materials' size) |
 
   "Confirmed" is a normalised cross-correlation of the capture with the texture tiled at that size, clearly above every other size (0.28 to 0.85). The rest repeat in no way a plain tiling explains: Studio breaks their repeats up (its Organic pattern, as MaterialVariant's `Pattern` offers), so their sizes were fitted by comparing the spread of feature sizes (power spectra) of Studio's close-ups with Rook's, or by eye. Rook repeats them plainly (Approximation).
 - **Color tints by multiplying** (Confirmed): the part's Color times the texture, in linear light. White parts came out as bright as Plastic times the colour map's average (Wood predicted 184, measured 184; Brick 167 and 162; Concrete 169 and 166; Granite 84 and 86), and red ones likewise (Metal 137 and 134, DiamondPlate 116 and 112).
+- **Wedges**: a wedge's or corner wedge's faces take the material's textures in their own plane, from the face their own normal is closest to, measuring lengths along the slope. Images still go by the unit wedge's faces (a 45-degree slope belongs to Front, step 4), and following that for textures stretched a long, low wedge's slope: a modern core place's 37.4 × 6.8 × 98 Concrete wedge drew streaks 98 studs long (reported by the user, fixed in 0.5.1; Inference that Studio measures along the slope, as it shows no streaks there).
 - **Surfaces** still show only on Plastic (step 4); every textured material drops them.
 - **Meshes**: Rook lays a material's textures over file meshes and MeshParts as over their box's faces, like Decals on primitives (Inference: not checked in Studio).
 - **Normal maps** are drawn at full strength. Rook's sides away from the sun are darker than Studio's (the ambient model, M7), so relief shows more there (a sunlit Brick face matched; Concrete's pits look stronger in Rook; Approximation).
