@@ -190,6 +190,43 @@ impl Value {
         }
     }
 
+    pub fn as_bool(&self) -> Option<bool> {
+        match self {
+            Self::Bool(b) => Some(*b),
+            _ => None,
+        }
+    }
+
+    pub fn as_enum(&self) -> Option<u32> {
+        match self {
+            Self::Enum(n) => Some(*n),
+            _ => None,
+        }
+    }
+
+    pub fn as_vector3(&self) -> Option<glam::Vec3> {
+        match self {
+            Self::Vector3(v) => Some(v.0),
+            _ => None,
+        }
+    }
+
+    pub fn as_cframe(&self) -> Option<CFrame> {
+        match self {
+            Self::CFrame(c) => Some(*c),
+            _ => None,
+        }
+    }
+
+    /// A `Color3` or `Color3uint8` as a `Color3`.
+    pub fn as_color3(&self) -> Option<Color3> {
+        match self {
+            Self::Color3(c) => Some(*c),
+            Self::Color3uint8(c) => Some((*c).into()),
+            _ => None,
+        }
+    }
+
     /// The URL a content value holds: a `ContentId`'s string or a
     /// `Content`'s URI (empty when it holds none, or an object). `None` for
     /// other variants.

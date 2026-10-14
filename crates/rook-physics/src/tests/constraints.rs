@@ -16,10 +16,9 @@ fn yaw(dom: &Dom, base: InstanceId, wheel: InstanceId) -> f32 {
 }
 
 fn float(dom: &Dom, id: InstanceId, name: &str) -> f32 {
-    match dom.property_by_name(id, name) {
-        Some(Value::Float32(f)) => f,
-        other => panic!("{other:?}"),
-    }
+    dom.property_by_name(id, name)
+        .and_then(|v| v.as_number())
+        .unwrap() as f32
 }
 
 fn smooth(dom: &mut Dom, p: InstanceId) {

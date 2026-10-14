@@ -13,7 +13,7 @@ use rook_render::{
     NormalId, PartInstance, Scene, Tiling,
 };
 use rook_types::{
-    CFrame, Color3, MeshKind, MeshLook, SurfaceType, TrussLook, TrussStyle, Value, mesh_part_scale,
+    CFrame, MeshKind, MeshLook, SurfaceType, TrussLook, TrussStyle, Value, mesh_part_scale,
 };
 
 use crate::files::{FileRef, FileState, Files, Loaded};
@@ -25,33 +25,20 @@ fn number(dom: &Dom, id: InstanceId, name: &str) -> Option<f32> {
 }
 
 fn color(dom: &Dom, id: InstanceId, name: &str) -> Option<[f32; 3]> {
-    let c: Color3 = match dom.property_by_name(id, name)? {
-        Value::Color3(c) => c,
-        Value::Color3uint8(c) => c.into(),
-        _ => return None,
-    };
+    let c = dom.property_by_name(id, name)?.as_color3()?;
     Some([c.r, c.g, c.b])
 }
 
 fn boolean(dom: &Dom, id: InstanceId, name: &str) -> Option<bool> {
-    match dom.property_by_name(id, name)? {
-        Value::Bool(b) => Some(b),
-        _ => None,
-    }
+    dom.property_by_name(id, name)?.as_bool()
 }
 
 fn vector3(dom: &Dom, id: InstanceId, name: &str) -> Option<Vec3> {
-    match dom.property_by_name(id, name)? {
-        Value::Vector3(v) => Some(v.0),
-        _ => None,
-    }
+    dom.property_by_name(id, name)?.as_vector3()
 }
 
 fn enum_value(dom: &Dom, id: InstanceId, name: &str) -> Option<u32> {
-    match dom.property_by_name(id, name)? {
-        Value::Enum(n) => Some(n),
-        _ => None,
-    }
+    dom.property_by_name(id, name)?.as_enum()
 }
 
 /// The first non-empty content URL among `names` (files store the

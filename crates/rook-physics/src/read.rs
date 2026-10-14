@@ -6,39 +6,31 @@ use rook_dom::{Dom, InstanceId};
 use rook_types::{CFrame, Value};
 
 pub(crate) fn cframe(dom: &Dom, id: InstanceId, name: &str) -> CFrame {
-    match dom.property_by_name(id, name) {
-        Some(Value::CFrame(c)) => c,
-        _ => CFrame::IDENTITY,
-    }
+    read(dom, id, name, Value::as_cframe).unwrap_or(CFrame::IDENTITY)
 }
 
 pub(crate) fn float(dom: &Dom, id: InstanceId, name: &str) -> f32 {
-    match dom.property_by_name(id, name) {
-        Some(Value::Float32(f)) => f,
-        Some(Value::Float64(f)) => f as f32,
-        Some(Value::Int32(n)) => n as f32,
-        _ => 0.0,
-    }
+    read(dom, id, name, Value::as_number).map_or(0.0, |n| n as f32)
 }
 
 pub(crate) fn vector(dom: &Dom, id: InstanceId, name: &str) -> Vec3 {
-    match dom.property_by_name(id, name) {
-        Some(Value::Vector3(v)) => v.0,
-        _ => Vec3::ZERO,
-    }
+    read(dom, id, name, Value::as_vector3).unwrap_or(Vec3::ZERO)
 }
 
 pub(crate) fn enum_value(dom: &Dom, id: InstanceId, name: &str) -> u32 {
-    match dom.property_by_name(id, name) {
-        Some(Value::Enum(n)) => n,
-        _ => 0,
-    }
+    read(dom, id, name, Value::as_enum).unwrap_or(0)
 }
 
 /// A Bool property, `default` when it's missing.
 pub(crate) fn boolean(dom: &Dom, id: InstanceId, name: &str, default: bool) -> bool {
-    match dom.property_by_name(id, name) {
-        Some(Value::Bool(b)) => b,
-        _ => default,
-    }
+    read(dom, id, name, Value::as_bool).unwrap_or(default)
+}
+
+fn read<T>(
+    dom: &Dom,
+    id: InstanceId,
+    name: &str,
+    f: impl FnOnce(&Value) -> Option<T>,
+) -> Option<T> {
+    f(&dom.property_by_name(id, name)?)
 }
