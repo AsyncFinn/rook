@@ -207,6 +207,11 @@ pub(crate) fn get(w: &World, id: InstanceId, name: &str) -> Option<Value> {
                 _ => rotation(&c),
             }))
         }
+        // Observed: IsPlaying reads Playing, IsPaused the opposite.
+        "IsPlaying" | "IsPaused" if dom.is_a(id, "Sound") => {
+            let playing = dom.property_by_name(id, "Playing") == Some(Value::Bool(true));
+            Some(Value::Bool(playing == (name == "IsPlaying")))
+        }
         "RequestQueueSize" if dom.is_a(id, "ContentProvider") => {
             Some(Value::Int32(w.content.queue_size() as i32))
         }
@@ -240,6 +245,9 @@ pub(crate) fn set(
     name: &str,
     value: &Value,
 ) -> Option<Result<(), DomError>> {
+    if w.dom.is_a(id, "Sound") {
+        return set_sound(w, id, name, value);
+    }
     if let Some(target) = view(w, id, name, SAME_AS) {
         return Some(set_named(w, id, target, value.clone()));
     }
@@ -299,5 +307,36 @@ pub(crate) fn set(
             Some(w.dom.set_property(id, pid, Value::OptionalCFrame(Some(*c))))
         }
         _ => None,
+    }
+}
+
+/// Sound properties with rules of their own (observed in Studio 0.743):
+/// `Volume` is kept within 0 to 10 and `PlaybackSpeed` (and `Pitch`) within
+/// 0 to 20; a `TimePosition` a script sets is where the next `Play` starts.
+fn set_sound(
+    w: &mut World,
+    id: InstanceId,
+    name: &str,
+    value: &Value,
+) -> Option<Result<(), DomError>> {
+    let n = value.as_number();
+    match (name, n) {
+        ("Volume", Some(v)) => Some(set_named(
+            w,
+            id,
+            "Volume",
+            Value::Float32(v.clamp(0.0, 10.0) as f32),
+        )),
+        ("PlaybackSpeed" | "Pitch", Some(v)) => Some(set_named(
+            w,
+            id,
+            "PlaybackSpeed",
+            Value::Float32(v.clamp(0.0, 20.0) as f32),
+        )),
+        ("TimePosition", Some(t)) => {
+            w.sounds.entry(id).or_default().start = t;
+            Some(set_named(w, id, "TimePosition", Value::Float64(t)))
+        }
+        _ => view(w, id, name, SAME_AS).map(|target| set_named(w, id, target, value.clone())),
     }
 }

@@ -114,6 +114,7 @@ impl Game {
                 volume: s.volume,
                 speed: s.speed,
                 looped: s.looped,
+                generation: s.generation,
             })
             .collect()
     }

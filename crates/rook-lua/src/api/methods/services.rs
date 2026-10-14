@@ -1,4 +1,4 @@
-//! Services, Lighting and Sound (state only until audio).
+//! Services and Lighting.
 
 use super::*;
 
@@ -59,31 +59,5 @@ pub(super) fn set_minutes_after_midnight(
     mutate(lua, |w| {
         crate::api::properties::set_lighting_hours(w, this, minutes / 60.0)
     })?;
-    Outcome::ret(lua, ())
-}
-
-fn set_bool(w: &mut World, id: InstanceId, name: &str, v: bool) -> Result<(), DomError> {
-    w.dom.set_property_by_name(id, name, Value::Bool(v))
-}
-
-pub(super) fn sound_play(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
-    mutate(lua, |w| set_bool(w, this, "Playing", true))?;
-    fire(lua, &SignalKey::event(this, "Played"), vec![]);
-    Outcome::ret(lua, ())
-}
-
-pub(super) fn sound_stop(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
-    mutate(lua, |w| {
-        set_bool(w, this, "Playing", false)?;
-        w.dom
-            .set_property_by_name(this, "TimePosition", Value::Float64(0.0))
-    })?;
-    fire(lua, &SignalKey::event(this, "Stopped"), vec![]);
-    Outcome::ret(lua, ())
-}
-
-pub(super) fn sound_pause(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
-    mutate(lua, |w| set_bool(w, this, "Playing", false))?;
-    fire(lua, &SignalKey::event(this, "Paused"), vec![]);
     Outcome::ret(lua, ())
 }

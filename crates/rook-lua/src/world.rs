@@ -105,6 +105,19 @@ pub struct InputState {
     pub mouse_object: Option<InstanceId>,
 }
 
+/// What scripts did to a Sound that isn't a property (see
+/// `api/methods/sound.rs`).
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct SoundControl {
+    /// Where `Play` starts: the last `TimePosition` a script set, or 0
+    /// after `Stop`.
+    pub start: f64,
+    /// `Play` calls so far, so a restart can be told from time passing.
+    pub plays: u32,
+    /// Loops since the last `Play` (`DidLoop`'s count).
+    pub loops: u32,
+}
+
 /// A script's run state.
 #[derive(Debug, Default)]
 pub(crate) struct ModuleState {
@@ -147,6 +160,8 @@ pub struct World {
     pub(crate) modules: ModuleState,
     /// Scripts that have been started, so they don't start twice.
     pub(crate) started: HashMap<InstanceId, Thread>,
+    /// Sounds' script state, for those a script has played or seeked.
+    pub sounds: HashMap<InstanceId, SoundControl>,
 }
 
 impl World {
@@ -169,6 +184,7 @@ impl World {
             errors: 0,
             modules: ModuleState::default(),
             started: HashMap::new(),
+            sounds: HashMap::new(),
         }
     }
 

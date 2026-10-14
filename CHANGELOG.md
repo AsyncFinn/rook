@@ -13,6 +13,15 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-10-14 — M5 step 2: the Sound API
+
+Pinned Roblox version: 0.741.19. Finishes M5 step 2; M5 Audio continues with 3D sound.
+
+- Sound's methods follow Studio in every state: `Play` starts from the last `TimePosition` a script set (0 after `Stop`) and restarts a playing sound without `Played`; `Stop` and `Pause` do nothing to a sound that isn't playing; `Resume` plays from where it is and fires `Resumed` (it was `Play` before). Events pass the `SoundId`. `IsPlaying` and `IsPaused` read from `Playing`. Conformance case `content/sound_api`.
+- Sounds fire `Ended` at their end (without `Changed` for `Playing`), `DidLoop` with the loop count when `Looped`, and `Loaded` once loaded, again when they come back into the DataModel; a seek past the end ends a sound, and a negative one plays from the start. `Volume` is kept within 0 to 10 and `PlaybackSpeed` within 0 to 20.
+- `PlaybackLoudness` reads the sound's level on clients (before `Volume`, as in Studio), and a sound with `PlayOnRemove` plays out once when removed.
+- The mixer starts a sound over on every `Play`, even near the start. Findings: `docs/behavior/audio.md`.
+
 ## [0.8.0] — 2026-10-14 — M5 step 1: audio decoding and playback
 
 Pinned Roblox version: 0.741.19. Finishes M5 step 1; M5 Audio continues with the Sound API.

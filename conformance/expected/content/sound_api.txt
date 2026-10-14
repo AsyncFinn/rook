@@ -1,0 +1,45 @@
+-- studio 0.743.0.7431133
+-- signals: immediate
+Loaded fired with rbxasset://sounds/action_falling.ogg
+before Play false false true
+event Played rbxasset://sounds/action_falling.ogg
+played true true false
+time advances true
+restart true
+event Paused rbxasset://sounds/action_falling.ogg
+paused false false true
+stop while paused keeps place true
+event Resumed rbxasset://sounds/action_falling.ogg
+resume from place true
+event Paused rbxasset://sounds/action_falling.ogg
+event Played rbxasset://sounds/action_falling.ogg
+play from last set true
+event Stopped rbxasset://sounds/action_falling.ogg
+stopped false false true
+stop rewinds 0
+event Played rbxasset://sounds/action_falling.ogg
+play after stop true
+Playing set directly true
+event Ended rbxasset://sounds/action_falling.ogg
+seek past end false 0
+event Played rbxasset://sounds/action_falling.ogg
+negative reads -1
+negative plays from 0 true
+event Ended rbxasset://sounds/action_falling.ogg
+ended false 0
+event Played rbxasset://sounds/action_falling.ogg
+play after end true
+event Stopped rbxasset://sounds/action_falling.ogg
+event Played rbxasset://sounds/action_falling.ogg
+event DidLoop rbxasset://sounds/action_falling.ogg 1
+looped true true
+event Stopped rbxasset://sounds/action_falling.ogg
+event Played rbxasset://sounds/action_falling.ogg
+double speed true
+event Stopped rbxasset://sounds/action_falling.ogg
+PlaybackSpeed -1 0 0
+PlaybackSpeed 25 20 20
+PlaybackSpeed inf 20 20
+Volume -1 0
+Volume 11 10
+server PlaybackLoudness 0

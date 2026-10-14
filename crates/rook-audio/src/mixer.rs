@@ -24,6 +24,9 @@ pub struct Play<K> {
     /// 1 is the sound's own rate.
     pub speed: f32,
     pub looped: bool,
+    /// Changes when the sound is played again: the mixer then starts it
+    /// over at `position`, however close it already was.
+    pub generation: u32,
 }
 
 #[derive(Debug)]
@@ -34,6 +37,7 @@ struct Voice {
     volume: f32,
     speed: f32,
     looped: bool,
+    generation: u32,
 }
 
 impl Voice {
@@ -79,12 +83,15 @@ impl<K: Hash + Eq + Copy> Mixer<K> {
                 volume: p.volume,
                 speed: p.speed,
                 looped: p.looped,
+                generation: p.generation,
             });
             if !Arc::ptr_eq(&voice.audio, &p.audio)
+                || voice.generation != p.generation
                 || (voice.seconds() - p.position).abs() > DRIFT_SECONDS
             {
                 voice.audio = p.audio.clone();
                 voice.cursor = p.position * rate;
+                voice.generation = p.generation;
             }
             voice.volume = p.volume;
             voice.speed = p.speed;
@@ -171,6 +178,7 @@ mod tests {
             volume: 1.0,
             speed: 1.0,
             looped: false,
+            generation: 0,
         }
     }
 
@@ -205,6 +213,12 @@ mod tests {
         assert!((m.voices[&1].seconds() - 1.0).abs() < 1e-9);
         m.sync(&[play(&a, 5.0)]);
         assert!((m.voices[&1].seconds() - 5.0).abs() < 1e-9);
+        // Played again near where it was: starts over all the same.
+        m.sync(&[Play {
+            generation: 1,
+            ..play(&a, 5.1)
+        }]);
+        assert!((m.voices[&1].seconds() - 5.1).abs() < 1e-9);
         m.sync(&[]);
         assert!(m.is_empty());
     }
