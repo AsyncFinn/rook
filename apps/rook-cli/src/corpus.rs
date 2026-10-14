@@ -2,6 +2,7 @@
 
 mod content;
 mod report;
+pub mod runner;
 mod scripts;
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
