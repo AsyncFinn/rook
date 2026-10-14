@@ -111,6 +111,29 @@ fn perturb(n: vec3<f32>, t: vec3<f32>, dp_x: vec3<f32>, dp_y: vec3<f32>, duv_x: 
     return normalize(tangent * scale * t.x - bitangent * scale * t.y + n0 * t.z);
 }
 
+// Where a point is on its material's textures, in studs from the
+// top-left corner of its face: as images go (`at`), except on wedges,
+// whose faces use the face their own normal is closest to and lengths
+// measured in their plane, so a long, low wedge's slope tiles like a top
+// instead of stretching the Front face it belongs to for images over its
+// whole length (reported on a large modern place; Inference that Studio measures
+// along the slope).
+fn material_position(in: VertexOut, face: u32, at: vec2<f32>) -> vec2<f32> {
+    if (in.flags & SLOPED) == 0u {
+        return at;
+    }
+    let n = normalize(in.local_normal);
+    let plane_face = face_of(n);
+    let right = g.faces[plane_face * 2u].xyz;
+    let up = g.faces[plane_face * 2u + 1u].xyz;
+    let r = normalize(right - n * dot(n, right));
+    let u = normalize(up - n * dot(n, up));
+    let extent = vec2(dot(abs(right), in.box_size), dot(abs(up), in.box_size))
+        / max(vec2(abs(dot(right, r)), abs(dot(up, u))), vec2(1e-3));
+    let p = in.local - in.box_center;
+    return vec2(dot(p, r) + extent.x * 0.5, extent.y * 0.5 - dot(p, u));
+}
+
 // Neon glows past its Color: in linear light, 18 times its square, up to
 // full brightness (fitted in Studio 0.742 to eight colours: grey 128 drew
 // 237, 64 drew 60, (196, 40, 28) drew (255, 20, 7)).
@@ -130,7 +153,7 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
     let dy = dpdy(st);
     // The material's textures tile like a Texture, from each face's
     // top-left corner (measured: unrotated, unmirrored).
-    let uv = at / max(in.tile.xy, vec2(1e-3));
+    let uv = material_position(in, face, at) / max(in.tile.xy, vec2(1e-3));
     let duv_x = dpdx(uv);
     let duv_y = dpdy(uv);
     let dp_x = dpdx(in.world);

@@ -209,8 +209,9 @@ impl Material {
     /// Studio repeats them plainly (Confirmed), and fitted from close-ups
     /// by the size of their features where Studio breaks the repeats up
     /// (its Organic pattern; Approximation: Cobblestone, Salt,
-    /// Grass, Foil, and Granite and CorrodedMetal by eye); 8 studs, most
-    /// materials' size, where neither settled it (Approximation).
+    /// Grass, Foil, and Granite, CorrodedMetal, Slate and Basalt by eye);
+    /// 8 studs, most materials' size, where neither settled it
+    /// (Approximation).
     pub fn studs_per_tile(self) -> f32 {
         use Material::*;
         match self {
@@ -219,7 +220,7 @@ impl Material {
             Fabric => 20.0 / 3.0,
             Marble | Pebble | Sand | Ice | Grass => 10.0,
             Foil => 12.0,
-            Cobblestone => 16.0,
+            Cobblestone | Slate | Basalt => 16.0,
             Salt => 20.0,
             Granite | CorrodedMetal => 24.0,
             _ => 8.0,

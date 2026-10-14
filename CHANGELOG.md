@@ -13,6 +13,13 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 
 ## [Unreleased]
 
+## [0.5.1] — 2026-10-14 — M4 step 5: material fixes
+
+Pinned Roblox version: 0.741.19.
+
+- Fixed: a wedge's material textures stretched along a long, low slope (a large modern place's 98-stud Concrete wedge drew long streaks). Wedge and corner wedge faces now take textures in their own plane, measured along the slope.
+- Fixed: Slate and Basalt textures were drawn at half Studio's size (now 16 studs a tile), and Slate used the wrong one of the two normal maps its window caught; it now has Studio's fine layered relief.
+
 ## [0.5.0] — 2026-10-14 — M4 step 5: the built-in materials
 
 Pinned Roblox version: 0.741.19. M4 Content continues (materials and PBR, second part).

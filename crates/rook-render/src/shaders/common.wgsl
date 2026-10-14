@@ -59,6 +59,8 @@ const SURFACES_SHIFT: u32 = 8u;
 const MAPS: u32 = 67108864u;
 const GLASS: u32 = 134217728u;
 const FORCE_FIELD: u32 = 268435456u;
+// A wedge or corner wedge: its slopes take material textures in their plane.
+const SLOPED: u32 = 536870912u;
 const PI: f32 = 3.14159265;
 
 struct VertexIn {

@@ -42,6 +42,9 @@ pub(crate) const MAPS: u32 = 1 << 26;
 /// Glass and ForceField draw their own way (`shaders/parts.wgsl`).
 pub(crate) const GLASS: u32 = 1 << 27;
 pub(crate) const FORCE_FIELD: u32 = 1 << 28;
+/// A wedge or corner wedge, whose slopes take material textures in their
+/// own plane.
+pub(crate) const SLOPED: u32 = 1 << 29;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
@@ -105,6 +108,12 @@ impl Instance {
                 ];
                 if maps.any() {
                     flags |= MAPS;
+                    if matches!(
+                        p.shape,
+                        DrawShape::Part(PartShape::Wedge | PartShape::CornerWedge)
+                    ) {
+                        flags |= SLOPED;
+                    }
                     tile = [maps.studs_per_tile.x, maps.studs_per_tile.y, 0.0, 0.0];
                 }
                 if p.material.shows_surfaces() {
