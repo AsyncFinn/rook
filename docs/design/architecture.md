@@ -1,6 +1,6 @@
 # Rook — Architecture
 
-The current design, first drafted 2026-10-04 and kept up to date as the milestones land. Crates marked *(planned)* don't exist yet. Background and sources are in [research.md](research.md); what each milestone found in Studio is in [`docs/behavior/`](../behavior/).
+The current design, first drafted 2026-10-04 and kept up to date as the milestones land. Crates marked *(planned)* or *(unscheduled)* don't exist yet. Background and sources are in [research.md](research.md); what each milestone found in Studio is in [`docs/behavior/`](../behavior/).
 
 ## 1. Goals that shape the architecture
 
@@ -34,7 +34,7 @@ apps/
   rook-cli          dump, roundtrip, run-headless, corpus-scan, conformance
   rook-player       windowed client (winit)
   rook-server       (planned) headless server
-  rook-studio       (out of scope for now) editor
+  rook-studio       (unscheduled) editor
 conformance/         Studio-recorded expectations + the Luau cases that produced them
 docs/                guide (users), design (architecture, research), behavior (findings per topic)
 ```

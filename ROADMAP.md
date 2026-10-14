@@ -48,10 +48,13 @@ directly, since a character is what makes playing together worth it.
 | ⬜ | **M13** Lighting and post-processing | Screenshots of reference places match Studio's lighting, sky and effects |
 | ⬜ | **M14** Scripting completeness | 90% of archive places with server scripts run without an error Rook causes |
 | ⬜ | **M15** Physics completeness | Second physics conformance batch passes; MeshParts and unions collide with their real shapes |
-| ⬜ | **M16** Input and platforms | Play with a gamepad; Rook builds and runs on Windows, Linux and macOS |
-| ⬜ | **M17** Performance and scale | The archive's largest places hold 60 FPS on a mid-range PC |
-| ⬜ | **M18** Release | Download Rook, pick a place from a library and play, without a terminal |
-| ⬜ | **M19** Extensions | The opt-in profile ships with its first extensions, off by default |
+| ⬜ | **M16** Every class the archive uses | No class in 5 or more archive files is still inert |
+| ⬜ | **M17** Modern places | Reference places built with today's Studio (R15, layered clothing, PBR materials) play as they do in Studio |
+| ⬜ | **M18** Offline content | An archived place plays on a machine with no network, from a content pack |
+| ⬜ | **M19** Input and platforms | Play with a gamepad; Rook builds and runs on Windows, Linux and macOS |
+| ⬜ | **M20** Hosting safety | A public server survives runaway scripts and a hostile client test suite |
+| ⬜ | **M21** Performance and scale | The archive's largest places hold 60 FPS on a mid-range PC |
+| ⬜ | **M22** Release | Download Rook, pick a place from a library and play, without a terminal |
 
 ### M3 Physics
 
@@ -279,14 +282,65 @@ the target counts only errors Rook causes, checked against Studio.
 3. Sleeping and adaptive timestepping as Roblox does them.
 4. A second physics conformance batch, recorded in Studio.
 
-### M16 Input and platforms
+### M16 Every class the archive uses
+
+Every class exists in Rook already; this makes the ones archived places
+use actually do something, ranked by the corpus scan against
+`docs/behavior/stubs.md`: SelectionBox and the other adornments (76
+files), Flag and FlagStand (64), Dialog and DialogChoice (55),
+LocalizationTable (20), SelectionPartLasso (11), CustomEvent and
+CustomEventReceiver (10), SkateboardPlatform (8), ViewportFrame (5), and
+whatever the scan ranks next once characters and GUI exist.
+
+1. A corpus scan report of classes that are present but inert, by files.
+2. The classes in order, each checked in Studio as before.
+3. The HopperBin decision, carried out if it wasn't with characters.
+
+### M17 Modern places
+
+The archive is mostly older places, but modern Roblox is the target, and
+places built in today's Studio use features old ones don't. Count each in
+a set of modern reference places first.
+
+1. R15 characters, HumanoidDescription (15 archive files) and modern
+   accessories (42).
+2. Layered clothing (WrapLayer, WrapTarget).
+3. SurfaceAppearance (13 files) and MaterialVariant (10): PBR textures.
+4. Highlight, modern GUI features, and whatever else the reference
+   places use that the earlier milestones didn't cover.
+
+### M18 Offline content
+
+Preservation: a place should keep working after the assets it names
+stop being downloadable.
+
+1. Content packs: `rook content` exports everything a place or a folder
+   of places needs into one pack, and Rook loads from packs before the
+   network.
+2. A pack format that's documented and checked (hashes, versions), so
+   archives can share packs.
+3. Reports of what a place still can't find, offline.
+
+### M19 Input and platforms
 
 1. Gamepads, and ContextActionService and UserInputService in full.
 2. Rebindable controls and the keyboard and mouse settings Roblox has.
 3. Linux and macOS builds, checked in CI.
 4. Touch, if a platform that needs it is chosen.
 
-### M17 Performance and scale
+### M20 Hosting safety
+
+Self-hosted servers run places and players their host doesn't control.
+
+1. Script limits on servers: memory, run time per frame, instance counts,
+   with clear errors instead of a hung server.
+2. Server authority: what a client may change, as Roblox's
+   FilteringEnabled rules allow, tested against a hostile client.
+3. HttpService and other outward features off unless the host turns
+   them on.
+4. Logs and crash reports a host can act on.
+
+### M21 Performance and scale
 
 1. A benchmark set: the archive's largest and heaviest places, timed in
    CI with `rook-player --bench`.
@@ -294,9 +348,9 @@ the target counts only errors Rook causes, checked against Studio.
 3. StreamingEnabled as Roblox does it, server and client.
 4. Script performance where the corpus run shows it matters.
 
-### M18 Release
+### M22 Release
 
-Rook for people who just want to play.
+Rook for people who just want to play, once everything above is in.
 
 1. A launcher: a library of places from a folder, with thumbnails, and
    joining servers.
@@ -304,14 +358,19 @@ Rook for people who just want to play.
    reset character, leave.
 3. Packaged releases for each platform, and updating.
 
-### M19 Extensions
+## Unscheduled
 
-The opt-in profile from the architecture (§11), off by default, with its
-first extensions:
+Good ideas without a place in the order yet. Each can only come after the
+milestones it needs.
 
-- WebSockets available to any script (needs M10).
-- EditableImage and EditableMesh without platform gating.
-- Restoring embedded legacy textures that modern Roblox loads as empty.
+- **Studio**: `rook-studio`, a place editor (Explorer and Properties from
+  the reflection database; moving, scaling and rotating parts; play
+  testing; saving files Roblox Studio opens unchanged).
+- **Rook extensions**: opt-in features beyond what Roblox allows, behind
+  the explicit profile from the architecture (§11), off by default:
+  - WebSockets available to any script (needs M10).
+  - EditableImage and EditableMesh without platform gating.
+  - Restoring embedded legacy textures that modern Roblox loads as empty.
 
 ## Content and assets
 
@@ -330,9 +389,6 @@ or downloaded content packages.
   before M9 Characters whether to follow modern behaviour or offer an extension.
 - **Wire compatibility with real Roblox clients** is not a goal;
   replication is Rook to Rook.
-- **A place editor** (`rook-studio`) is out of scope for now: Roblox
-  Studio edits the places Rook plays, and Rook saves files Studio opens.
-  Revisit after M19.
 
 What's partly done or accepted but ignored today is listed member by member
 in [`docs/behavior/stubs.md`](docs/behavior/stubs.md).
