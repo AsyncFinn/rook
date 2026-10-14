@@ -48,6 +48,9 @@ pub(crate) const SLOPED: u32 = 1 << 29;
 /// The material textures go through the mesh's UVs (a SurfaceAppearance),
 /// with their alpha mode in the surfaces' bits (a MeshPart has none).
 pub(crate) const MAPS_UV: u32 = 1 << 30;
+/// The mesh's vertex colours replace the part's colour (a union with
+/// `UsePartColor` off).
+pub(crate) const VERTEX_COLORS: u32 = 1 << 31;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
@@ -66,8 +69,9 @@ pub(crate) struct Instance {
     /// textures, their studs per tile.
     tile: [f32; 4],
     /// CAST, NEON, an image layer's mode (bits 2-3) and face (4-6),
-    /// UPRIGHT (bit 7), and from bit 8 each face's surface pattern + 1,
-    /// three bits per face (wgpu allows 16 vertex attributes in all).
+    /// UPRIGHT (bit 7), from bit 8 each face's surface pattern + 1, three
+    /// bits per face, and the bits from 26 (wgpu allows 16 vertex
+    /// attributes in all).
     flags: u32,
     /// A part's `Reflectance`, roughness and metalness; w is the blue of
     /// a SurfaceAppearance's tint, whose red and green are in `tile.zw`.
@@ -86,6 +90,9 @@ impl Instance {
             Layer::Base => {
                 if p.cast_shadow {
                     flags |= CAST;
+                }
+                if p.vertex_colors {
+                    flags |= VERTEX_COLORS;
                 }
                 flags |= match p.material {
                     Material::Neon => NEON,

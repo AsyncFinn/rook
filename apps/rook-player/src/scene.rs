@@ -23,10 +23,12 @@ mod loading;
 mod look;
 mod materials;
 mod props;
+mod union;
 
 use loading::*;
 use look::*;
 use props::*;
+use union::*;
 
 /// How a part's CFrame places what it draws: where its shape's centre is
 /// in the part's axes (a mesh's `Offset`, a truss's start), and the turn

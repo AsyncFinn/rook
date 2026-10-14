@@ -28,9 +28,9 @@ each release says which milestone it finishes (see `CHANGELOG.md`).
 
 ## Now, next, later
 
-- **Now:** M4 Content: the built-in mesh shapes, asset fetching, file meshes, textures and decals, trusses and materials are done; unions are next.
-- **Next:** M5 Audio.
-- **Then:** M6 Terrain, M7 Lights and effects, M8 GUI, M9 Characters and, right after, M10 Networking.
+- **Now:** M5 Audio.
+- **Next:** M6 Terrain.
+- **Then:** M7 Lights and effects, M8 GUI, M9 Characters and, right after, M10 Networking.
 
 The world comes before the people in it: sound, terrain, lights and GUI
 are each in hundreds of archive files, and characters need terrain to walk
@@ -45,7 +45,7 @@ directly, since a character is what makes playing together worth it.
 | ✅ | **M1** Instance tree, signals, scheduler, Luau, server Scripts, conformance | First conformance batch passes; baseline of archive scripts running (v0.1.0) |
 | ✅ | **M2** Renderer v0, client/server split, LocalScripts, basic input | Archived places render recognisably; client scripts run alongside server scripts (v0.2.0) |
 | ✅ | **M3** Physics | Physics conformance batch passes; unanchored places settle plausibly |
-| ⬜ | **M4** Content: meshes, materials, textures, decals | Places render with their meshes, materials (2022 and legacy, MaterialVariants, SurfaceAppearance), decals and textures |
+| ✅ | **M4** Content: meshes, materials, textures, decals | Places render with their meshes, materials (2022 and legacy, MaterialVariants, SurfaceAppearance), decals and textures (v0.7.0) |
 | ⬜ | **M5** Audio | Archived places play their sounds, positioned in 3D; the audio conformance batch passes |
 | ⬜ | **M6** Terrain | Archived places with terrain show it, and parts and queries collide with it |
 | ⬜ | **M7** Lights and effects | Local lights light the scene; Fire, Smoke, Sparkles and ParticleEmitters draw as in Studio |
@@ -135,7 +135,7 @@ renderer draws all of these as their part's plain box.
      with `AlphaMode` (Overlay, Transparency, TintMask) and `Color`.
 
    Findings: [materials.md](docs/behavior/materials.md).
-6. **Unions**: draw UnionOperations with their own geometry instead of
+6. ✅ **Unions**: draw UnionOperations with their own geometry instead of
    their bounding box (`UnionOperation.Content`, the union's geometry
    asset, is set on 70,944 unions in 99 files; `NegateOperation` 6 in 2).
    The `rbx_mesh` crate Rook already uses decodes union geometry too: its
@@ -150,7 +150,7 @@ renderer draws all of these as their part's plain box.
    union's geometry is sized against its Size (unions can be resized),
    `UsePartColor`, and what a union draws while loading or after failing.
    Unions' collision hulls from `PhysicsData` go with MeshPart collision
-   fidelity (M15).
+   fidelity (M15). Counts and findings: [meshes.md](docs/behavior/meshes.md#unions-step-6).
 
 Physics picks up the real shapes of MeshParts and unions in M15.
 

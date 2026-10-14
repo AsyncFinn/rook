@@ -27,12 +27,20 @@ pub(crate) struct Vertex {
     /// surfaces from: the vertex itself on flat faces and mesh files.
     pub box_point: [f32; 3],
     /// The `NormalId` index of the box face it belongs to, or [`NO_FACE`]
-    /// (mesh files: the face is found from the normal).
+    /// (mesh files: the face is found from the normal), in the low byte;
+    /// a union's vertex colour (sRGB) in the three bytes above, drawn
+    /// instead of the part's colour when the instance asks for it
+    /// (`PartInstance::vertex_colors`). wgpu allows 16 vertex attributes
+    /// and the vertex and instance layouts use them all, hence the packing.
     pub face: u32,
 }
 
 /// No box face of its own: the shader finds one from the normal.
 pub(crate) const NO_FACE: u32 = 255;
+
+/// Added to a union vertex's face: Textures and material textures tile
+/// from the face's centre, as they follow the union's UVs in Studio.
+pub(crate) const UNION_FACE: u32 = 64;
 
 impl Vertex {
     /// A vertex mapped from where it is, its face found from its normal.
@@ -396,11 +404,11 @@ fn truss(shape: TrussShape) -> MeshData {
     m
 }
 
-/// A mesh read from a file, as drawn.
-/// A mesh file's vertices as they are. A vertex whose normal is zero (a
-/// file that left them out) takes the normal of the first triangle using
-/// it, so it's lit instead of drawing black (Studio lights such meshes;
-/// observed with a test mesh written without normals).
+/// A mesh file's or a union's vertices as they are. A vertex whose normal
+/// is zero (a file that left them out) takes the normal of the first
+/// triangle using it, so it's lit instead of drawing black (Studio lights
+/// such meshes; observed with a test mesh written without normals). A
+/// union's vertices keep the box face they were cut from and their colour.
 pub(crate) fn from_file(m: &rook_content::mesh::Mesh) -> MeshData {
     let mut vertices: Vec<Vertex> = m
         .positions
@@ -409,6 +417,9 @@ pub(crate) fn from_file(m: &rook_content::mesh::Mesh) -> MeshData {
         .zip(&m.uvs)
         .map(|((&position, &normal), &uv)| Vertex::plain(position, normal, uv))
         .collect();
+    for ((v, face), [r, g, b, _]) in vertices.iter_mut().zip(&m.faces).zip(&m.colors) {
+        v.face = face.index() as u32 | UNION_FACE | u32::from_le_bytes([0, *r, *g, *b]);
+    }
     for tri in m.indices.as_chunks::<3>().0 {
         let [a, b, c] = tri.map(|i| i as usize);
         if [a, b, c].iter().any(|&i| i >= vertices.len()) {

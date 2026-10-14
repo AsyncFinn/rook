@@ -162,6 +162,10 @@ pub struct PartInstance {
     /// `BasePart.CastShadow`: whether it casts a sun shadow. Every part
     /// receives shadows either way. Only opaque parts cast (Inference).
     pub cast_shadow: bool,
+    /// The mesh's own vertex colours are drawn instead of `color`: a
+    /// union with `UsePartColor` off, whose vertices keep the colours of
+    /// the parts it was made from.
+    pub vertex_colors: bool,
     /// A texture drawn through the mesh's UVs (a mesh's `TextureId`),
     /// multiplied by `color`.
     pub texture: Option<ImageHash>,
@@ -193,6 +197,7 @@ impl PartInstance {
             transparency: 0.0,
             upright: false,
             cast_shadow: true,
+            vertex_colors: false,
             texture: None,
             material: Material::SmoothPlastic,
             material_set: MaterialSet::Legacy,

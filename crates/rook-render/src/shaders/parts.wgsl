@@ -22,12 +22,19 @@ fn vs_main(v: VertexIn) -> VertexOut {
     out.world = world;
     out.normal = normalize(instance_rotation(v) * local_normal);
     out.color = vec4(srgb_to_linear(v.i_color.rgb), v.i_color.a);
+    if (v.i_flags & VERTEX_COLORS) != 0u {
+        let c = vec3((v.face >> 8u) & 255u, (v.face >> 16u) & 255u, v.face >> 24u);
+        out.color = vec4(srgb_to_linear(vec3<f32>(c) / 255.0), v.i_color.a);
+    }
     out.uv = v.uv;
     let lo = v.i_box_min * v.i_size;
     let hi = v.i_box_max * v.i_size;
     var local = v.box_point * v.i_size;
     var normal = local_normal;
-    var face = v.face;
+    // Union vertices (bit 6 of their face) tile from their face's centre.
+    let packed = v.face & 255u;
+    let centred = packed != 255u && (packed & UNION_FACE) != 0u;
+    var face = select(packed, packed & 7u, centred);
     var center = (lo + hi) * 0.5;
     var size = abs(hi - lo);
     // Images and surfaces go by the part's own axes, not the turned
@@ -43,7 +50,7 @@ fn vs_main(v: VertexIn) -> VertexOut {
             face = array<u32, 6>(1u, 3u, 2u, 4u, 0u, 5u)[face];
         }
     }
-    out.face = face;
+    out.face = face | select(0u, CENTRED, centred);
     out.local = local;
     out.local_normal = normal;
     out.box_center = center;
@@ -68,8 +75,9 @@ fn vs_shadow(v: VertexIn) -> @builtin(position) vec4<f32> {
 // The face a point belongs to: its vertices' box face, or else the one
 // its normal is closest to.
 fn face_at(in: VertexOut) -> u32 {
-    if in.face < 6u {
-        return in.face;
+    let face = in.face & 255u;
+    if face < 6u {
+        return face;
     }
     return face_of(in.local_normal);
 }
@@ -85,6 +93,15 @@ fn face_of(n: vec3<f32>) -> u32 {
         return select(3u, 0u, n.x >= 0.0);
     }
     return select(4u, 1u, n.y >= 0.0);
+}
+
+// Where tiling starts on a face: its image's top-left corner, or on a
+// union its centre (Studio tiles Textures on unions through the union's
+// UVs, planar and in studs from its centre; measured on a resized union,
+// where the tiles sat a quarter stud from where corner tiling puts them).
+// `at` is in studs from the top-left corner of a face of size `extent`.
+fn tiling_position(in: VertexOut, at: vec2<f32>, extent: vec2<f32>) -> vec2<f32> {
+    return select(at, at - extent * 0.5, (in.face & CENTRED) != 0u);
 }
 
 // Studs from the top-left corner of `face`'s image, and the face's size.
@@ -146,7 +163,8 @@ fn neon(c: vec3<f32>) -> vec3<f32> {
 fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
     var albedo = in.color.rgb * textureSample(image, image_sampler, in.uv).rgb;
     let face = face_at(in);
-    let at = face_position(face, in.local, in.box_center, in.box_size).xy;
+    let placed = face_position(face, in.local, in.box_center, in.box_size);
+    let at = placed.xy;
     let tile = g.faces[0].w;
     let st = at / tile;
     let dx = dpdx(st);
@@ -154,7 +172,8 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
     // The material's textures tile like a Texture, from each face's
     // top-left corner (measured: unrotated, unmirrored).
     let on_uv = (in.flags & MAPS_UV) != 0u;
-    let uv = select(material_position(in, face, at) / max(in.tile.xy, vec2(1e-3)), in.uv, on_uv);
+    let tiled = tiling_position(in, material_position(in, face, at), placed.zw);
+    let uv = select(tiled / max(in.tile.xy, vec2(1e-3)), in.uv, on_uv);
     let duv_x = dpdx(uv);
     let duv_y = dpdy(uv);
     let dp_x = dpdx(in.world);
@@ -268,7 +287,7 @@ fn fs_layer(in: VertexOut) -> @location(0) vec4<f32> {
     if mode == MODE_FACE {
         uv = at.xy / at.zw;
     } else if mode == MODE_TILED {
-        uv = (at.xy + in.tile.zw) / in.tile.xy;
+        uv = (tiling_position(in, at.xy, at.zw) + in.tile.zw) / in.tile.xy;
     }
     let dx = dpdx(uv);
     let dy = dpdy(uv);

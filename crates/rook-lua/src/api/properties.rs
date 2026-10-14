@@ -70,6 +70,8 @@ const SAME_AS: &[(&str, &str, &str)] = &[
     // with InitialSize reads it as MeshSize, and one saved without reads
     // (0, 0, 0) even after its mesh loads.
     ("MeshPart", "MeshSize", "InitialSize"),
+    // Unions too (observed: a disaster place's unions read their InitialSize).
+    ("PartOperation", "MeshSize", "InitialSize"),
     // Files save a truss's Style as `style`, a property of its own in the
     // database (a 2016 core place's NoSupports trusses read back the default).
     ("TrussPart", "Style", "style"),

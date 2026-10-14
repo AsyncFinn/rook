@@ -42,11 +42,17 @@ pub enum Want {
 impl Want {
     /// What a content property must hold: a mesh for the `MeshId` of a
     /// mesh class or MeshPart (`mesh_owner`; files store it as
-    /// `MeshContent`, some old MeshParts as `MeshID`), an image for the
-    /// image properties (textures, images, sky faces, the sun and moon),
-    /// and anything for the rest (sounds, animations, scripts).
+    /// `MeshContent`, some old MeshParts as `MeshID`) and for a union's
+    /// `AssetId` (also `mesh_owner`; files save it as `AssetId`, Rook reads it as `Content`), an image for the image properties
+    /// (textures, images, sky faces, the sun and moon), and anything for
+    /// the rest (sounds, animations, scripts).
     pub fn for_property(name: &str, mesh_owner: bool) -> Self {
-        if mesh_owner && matches!(name, "MeshContent" | "MeshId" | "MeshID") {
+        if mesh_owner
+            && matches!(
+                name,
+                "MeshContent" | "MeshId" | "MeshID" | "Content" | "AssetId"
+            )
+        {
             Self::Mesh
         } else if ["Texture", "Image", "ColorMap", "Skybox", "Sun", "Moon"]
             .iter()

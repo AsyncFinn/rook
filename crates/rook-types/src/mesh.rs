@@ -194,6 +194,12 @@ pub fn head_scale(size: Vec3) -> Vec3 {
 /// mesh's own origin. A MeshPart saved without `InitialSize` (it reads
 /// (0, 0, 0)) draws the mesh at Size times its own size, as if `InitialSize`
 /// were 1: a 1.2-stud mesh on a 2 × 4 × 8 part drew 2.4 × 4.8 × 9.6.
+///
+/// A union's geometry is sized the same way: its bounds equal the union's
+/// `InitialSize` (centred on its origin), and a union resized from
+/// (4, 5, 5) to (8, 5, 2.5) drew its geometry stretched by exactly that
+/// (observed in Studio 0.742, 2026-10-14, on a disaster place's
+/// unions).
 pub fn mesh_part_scale(size: Vec3, initial_size: Vec3) -> Vec3 {
     if initial_size.cmpgt(Vec3::ZERO).all() {
         size / initial_size
