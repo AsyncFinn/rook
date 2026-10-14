@@ -82,11 +82,10 @@ struct Instance {
     box_max: [f32; 3],
     /// A Texture's studs per tile and offset.
     tile: [f32; 4],
-    /// CAST, NEON, an image layer's mode (bits 2-3) and face (4-6), and
-    /// UPRIGHT (bit 7).
+    /// CAST, NEON, an image layer's mode (bits 2-3) and face (4-6),
+    /// UPRIGHT (bit 7), and from bit 8 each face's surface pattern + 1,
+    /// four bits per face (wgpu allows 16 vertex attributes in all).
     flags: u32,
-    /// Each face's surface pattern + 1, four bits per face.
-    surfaces: u32,
     /// A part's `Reflectance`.
     reflectance: f32,
 }
@@ -95,7 +94,6 @@ impl Instance {
     fn new(p: &PartInstance, (box_min, box_max): (Vec3, Vec3)) -> Self {
         let mut flags = 0;
         let mut tile = [1.0, 1.0, 0.0, 0.0];
-        let mut surfaces = 0;
         let mut reflectance = 0.0;
         if p.upright {
             flags |= UPRIGHT;
@@ -112,7 +110,7 @@ impl Instance {
                 if p.material == MaterialLook::Plastic {
                     for (face, pattern) in p.surfaces.iter().enumerate() {
                         if let Some(pattern) = pattern {
-                            surfaces |= (*pattern as u32 + 1) << (face * 4);
+                            flags |= (*pattern as u32 + 1) << (8 + face * 4);
                         }
                     }
                 }
@@ -145,7 +143,6 @@ impl Instance {
             box_max: box_max.to_array(),
             tile,
             flags,
-            surfaces,
             reflectance,
         }
     }
@@ -642,11 +639,13 @@ impl Renderer {
                 bind_group_layouts: &[Some(&layout)],
                 immediate_size: 0,
             });
-        let vertex_attrs = wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Float32x2];
+        let vertex_attrs = wgpu::vertex_attr_array![
+            0 => Float32x3, 1 => Float32x3, 2 => Float32x2, 3 => Float32x3, 4 => Uint32
+        ];
         let instance_attrs = wgpu::vertex_attr_array![
-            3 => Float32x3, 4 => Float32x3, 5 => Float32x3, 6 => Float32x3,
-            7 => Float32x3, 8 => Float32x4, 9 => Float32x3, 10 => Float32x3,
-            11 => Float32x4, 12 => Uint32, 13 => Uint32, 14 => Float32
+            5 => Float32x3, 6 => Float32x3, 7 => Float32x3, 8 => Float32x3,
+            9 => Float32x3, 10 => Float32x4, 11 => Float32x3, 12 => Float32x3,
+            13 => Float32x4, 14 => Uint32, 15 => Float32
         ];
         let buffers = [
             Some(wgpu::VertexBufferLayout {

@@ -7,9 +7,10 @@
 // as they look in Roblox (Approximation).
 //
 // Images on faces follow `rook_types::NormalId` (the face frames come in
-// `g.faces`, filled from it): a point belongs to the face its normal is
-// closest to, and its place on that face's image is measured in studs from
-// the image's top-left corner.
+// `g.faces`, filled from it): a point belongs to its vertices' box face (the
+// round primitives' grid patches, `mesh.rs`), or else to the face its normal
+// is closest to, and its place on that face's image is measured in studs
+// from the image's top-left corner, from its vertices' points on the box.
 
 struct Globals {
     view_proj: mat4x4<f32>,
@@ -57,23 +58,27 @@ struct VertexIn {
     @location(0) position: vec3<f32>,
     @location(1) normal: vec3<f32>,
     @location(2) uv: vec2<f32>,
-    @location(3) i_position: vec3<f32>,
-    @location(4) i_right: vec3<f32>,
-    @location(5) i_up: vec3<f32>,
-    @location(6) i_back: vec3<f32>,
-    @location(7) i_size: vec3<f32>,
-    @location(8) i_color: vec4<f32>,
+    // The point on the shape's box that images map from, and its face
+    // (255: none, found from the normal).
+    @location(3) box_point: vec3<f32>,
+    @location(4) face: u32,
+    @location(5) i_position: vec3<f32>,
+    @location(6) i_right: vec3<f32>,
+    @location(7) i_up: vec3<f32>,
+    @location(8) i_back: vec3<f32>,
+    @location(9) i_size: vec3<f32>,
+    @location(10) i_color: vec4<f32>,
     // The mesh's bounds in its own units, so images on faces cover the
     // drawn mesh's box.
-    @location(9) i_box_min: vec3<f32>,
-    @location(10) i_box_max: vec3<f32>,
+    @location(11) i_box_min: vec3<f32>,
+    @location(12) i_box_max: vec3<f32>,
     // A Texture's studs per tile (xy) and offset (zw).
-    @location(11) i_tile: vec4<f32>,
-    // CAST, NEON, the layer's mode (bits 2-3) and face (bits 4-6).
-    @location(12) i_flags: u32,
-    // Each face's surface pattern + 1 (0: none), 4 bits per face.
-    @location(13) i_surfaces: u32,
-    @location(14) i_reflectance: f32,
+    @location(13) i_tile: vec4<f32>,
+    // CAST, NEON, the layer's mode (bits 2-3) and face (bits 4-6),
+    // UPRIGHT (bit 7), and from bit 8 each face's surface pattern + 1 (0:
+    // none), 4 bits per face.
+    @location(14) i_flags: u32,
+    @location(15) i_reflectance: f32,
 };
 
 struct VertexOut {
@@ -92,6 +97,8 @@ struct VertexOut {
     @location(9) @interpolate(flat) flags: u32,
     @location(10) @interpolate(flat) surfaces: u32,
     @location(11) @interpolate(flat) reflectance: f32,
+    // The box face the point belongs to (255: from the normal).
+    @location(12) @interpolate(flat) face: u32,
 };
 
 fn srgb_to_linear(c: vec3<f32>) -> vec3<f32> {
@@ -120,8 +127,9 @@ fn vs_main(v: VertexIn) -> VertexOut {
     out.uv = v.uv;
     let lo = v.i_box_min * v.i_size;
     let hi = v.i_box_max * v.i_size;
-    var local = v.position * v.i_size;
+    var local = v.box_point * v.i_size;
     var normal = local_normal;
+    var face = v.face;
     var center = (lo + hi) * 0.5;
     var size = abs(hi - lo);
     // Images and surfaces go by the part's own axes, not the turned
@@ -132,14 +140,19 @@ fn vs_main(v: VertexIn) -> VertexOut {
         normal = vec3(-normal.y, normal.x, normal.z);
         center = vec3(-center.y, center.x, center.z);
         size = size.yxz;
+        // The turned shape's faces in the part's axes (+X to +Y, +Y to -X).
+        if face < 6u {
+            face = array<u32, 6>(1u, 3u, 2u, 4u, 0u, 5u)[face];
+        }
     }
+    out.face = face;
     out.local = local;
     out.local_normal = normal;
     out.box_center = center;
     out.box_size = size;
     out.tile = v.i_tile;
     out.flags = v.i_flags;
-    out.surfaces = v.i_surfaces;
+    out.surfaces = v.i_flags >> 8u;
     out.reflectance = v.i_reflectance;
     return out;
 }
@@ -152,6 +165,15 @@ fn vs_shadow(v: VertexIn) -> @builtin(position) vec4<f32> {
         return vec4(0.0, 0.0, -1.0, 1.0);
     }
     return g.shadow_view_proj * vec4(world_position(v), 1.0);
+}
+
+// The face a point belongs to: its vertices' box face, or else the one
+// its normal is closest to.
+fn face_at(in: VertexOut) -> u32 {
+    if in.face < 6u {
+        return in.face;
+    }
+    return face_of(in.local_normal);
 }
 
 // The face (`NormalId` index) a surface with part-space normal `n` shows:
@@ -223,7 +245,7 @@ fn fog(color: vec3<f32>, world: vec3<f32>) -> vec3<f32> {
 @fragment
 fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
     var albedo = in.color.rgb * textureSample(image, image_sampler, in.uv).rgb;
-    let face = face_of(in.local_normal);
+    let face = face_at(in);
     let tile = g.faces[0].w;
     let st = face_position(face, in.local, in.box_center, in.box_size).xy / tile;
     let dx = dpdx(st);
@@ -255,7 +277,7 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
 fn fs_layer(in: VertexOut) -> @location(0) vec4<f32> {
     let mode = (in.flags >> 2u) & 3u;
     let layer_face = (in.flags >> 4u) & 7u;
-    let face = face_of(in.local_normal);
+    let face = face_at(in);
     let at = face_position(layer_face, in.local, in.box_center, in.box_size);
     var uv = in.uv;
     if mode == MODE_FACE {
