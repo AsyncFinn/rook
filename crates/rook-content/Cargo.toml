@@ -19,6 +19,7 @@ rook-formats.workspace = true
 rook-types.workspace = true
 rusqlite.workspace = true
 serde_json.workspace = true
+symphonia.workspace = true
 thiserror.workspace = true
 ureq.workspace = true
 zstd.workspace = true

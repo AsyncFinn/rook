@@ -255,6 +255,9 @@ fn main() -> anyhow::Result<()> {
         install,
         uncapped: args.uncapped,
         readout: Readout::new(args.frame_times),
+        // Only the window plays sound: headless runs, `--bench` and
+        // `--screenshot` never open a device.
+        audio: rook_audio::enabled_by_env().then(rook_audio::Output::new),
         #[cfg(feature = "repl")]
         repl: if args.no_repl {
             None

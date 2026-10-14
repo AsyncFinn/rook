@@ -48,6 +48,9 @@ impl Game {
         let bytes = fs_err::read(path)?;
         let options = Options {
             content: Some(content),
+            // Sounds load in the background while the game runs, as in
+            // Roblox.
+            wait_for_sounds: false,
             ..Options::default()
         };
         let (mode, saved_camera) = if play {
@@ -97,6 +100,22 @@ impl Game {
             Mode::Play { client, .. } => client.client_mut(),
             Mode::Run(host) => host.server_mut(),
         }
+    }
+
+    /// The sounds the window's DataModel is playing, for the mixer.
+    pub fn sounds(&self) -> Vec<rook_audio::Play<rook_dom::InstanceId>> {
+        self.view()
+            .playing_sounds()
+            .into_iter()
+            .map(|s| rook_audio::Play {
+                key: s.id,
+                audio: s.audio,
+                position: s.position,
+                volume: s.volume,
+                speed: s.speed,
+                looped: s.looped,
+            })
+            .collect()
     }
 
     /// Send window input to the local player's client (Run mode has no player).

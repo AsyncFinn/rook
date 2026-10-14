@@ -95,7 +95,7 @@ impl Files {
                 match key.1 {
                     Want::Mesh => Some(Loaded::Mesh(MeshHash(hash), f.mesh?)),
                     Want::Image => Some(Loaded::Image(ImageHash(hash), f.image?)),
-                    Want::Bytes => None,
+                    Want::Bytes | Want::Audio => None,
                 }
             });
             let state = match &loaded {

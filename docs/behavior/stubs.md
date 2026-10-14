@@ -25,7 +25,7 @@ made inert without an entry in the first table.
 
 | Member or behavior | What Rook does now | What is missing | Taken over by |
 |---|---|---|---|
-| `Sound:Play`, `Stop`, `Pause`, `Resume` | Sets `Playing`/`TimePosition`, fires `Played`/`Stopped`/`Paused` | Audio output, `Ended`, `Loaded`, time advancing | Audio |
+| `Sound:Play`, `Stop`, `Pause`, `Resume` | Sets `Playing`/`TimePosition`, fires `Played`/`Stopped`/`Paused`; sounds in the DataModel load (WAV, Ogg, MP3) and set `IsLoaded` and `TimeLength`; `TimePosition` advances while a loaded sound plays, a sound stops and rewinds at its end and wraps if `Looped`; the player hears them at `Volume` as a plain gain (see [audio](audio.md)) | `Ended`, `Loaded`, measured `Volume` and `PlaybackSpeed`, 3D sound | M5 steps 2-3 |
 | `Model:MoveTo` | Moves the model to the target | Moving up out of obstructions | Physics, later (the queries it needs exist) |
 | `Model:GetBoundingBox`, `GetExtentsSize`, `GetModelCFrame` | World-axis-aligned box of the parts | Box aligned to the primary part; exact legacy `GetModelCFrame` | Physics/geometry |
 | `DataStoreService` | In-memory stores for one run; `GetSortedAsync` returns a plain table, not a `DataStorePages` | Persistence (local files), versions, `ListKeysAsync`, budgets | Server hosting, Networking |

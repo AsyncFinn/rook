@@ -159,7 +159,7 @@ Physics picks up the real shapes of MeshParts and unions in M15.
 Sound is in 1,284 files (113,199 instances); today it only keeps its
 state. It's self-contained, and every place sounds wrong without it.
 
-1. Decoding (OGG, MP3, WAV) and playback through the content loader.
+1. ✅ Decoding (OGG, MP3, WAV) and playback through the content loader (see [audio](docs/behavior/audio.md#decoding-and-playback-step-1)).
 2. `Play`, `Stop`, `Pause`, `Resume`, `TimePosition`, `Looped`,
    `PlaybackSpeed`, `Volume`, and `Played`, `Ended`, `Loaded`, `IsLoaded`.
 3. 3D sound: a Sound under a part or Attachment is positioned, with

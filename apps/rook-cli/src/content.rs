@@ -133,12 +133,17 @@ fn describe(bytes: &[u8]) -> String {
         "JPEG image"
     } else if starts(b"DDS ") {
         "DDS texture"
-    } else if starts(b"RIFF") && bytes.get(8..12) == Some(b"WAVE") {
-        "WAV sound"
-    } else if starts(b"OggS") {
-        "Ogg sound"
-    } else if starts(b"ID3") || starts(b"\xFF\xFB") || starts(b"\xFF\xF3") {
-        "MP3 sound"
+    } else if let Some(format) = rook_content::audio::AudioFormat::sniff(bytes) {
+        return match rook_content::audio::Audio::decode(bytes) {
+            Ok(a) => format!(
+                "{} sound, {:.6} s, {} Hz, {} channel(s)",
+                format.name(),
+                a.seconds(),
+                a.sample_rate,
+                a.channels
+            ),
+            Err(e) => e.to_string(),
+        };
     } else if starts(b"<roblox!") {
         "binary model"
     } else if starts(b"<roblox") {
@@ -226,10 +231,23 @@ struct Use {
     mesh: usize,
     /// Uses as an image (textures, decals, images, sky faces).
     image: usize,
+    /// Uses as a sound (Sound's `SoundId`).
+    audio: usize,
     /// `Class.Property` of the first use.
     property: String,
     /// Full name of the first instance using it.
     instance: String,
+}
+
+impl Use {
+    fn wants(&self, want: Want) -> usize {
+        match want {
+            Want::Mesh => self.mesh,
+            Want::Image => self.image,
+            Want::Audio => self.audio,
+            Want::Bytes => 0,
+        }
+    }
 }
 
 /// What a property of `class` holds (`Want::for_property`).
@@ -262,10 +280,10 @@ fn mesh_version(bytes: &[u8]) -> String {
     line.strip_prefix("version ").unwrap_or(line).to_owned()
 }
 
-/// The mesh or image references in a place: how many decode, by version
-/// or format, and which fail and why.
+/// The mesh, image or sound references in a place: how many decode, by
+/// version or format, and which fail and why.
 fn print_decoded(
-    what: &str,
+    want: Want,
     refs: &BTreeMap<ContentRef, Vec<&str>>,
     uses: &BTreeMap<String, Use>,
     decoded: &BTreeMap<ContentRef, Result<Fetched, Failure>>,
@@ -274,24 +292,25 @@ fn print_decoded(
     if decoded.is_empty() {
         return;
     }
+    let what = match want {
+        Want::Mesh => "Meshes",
+        Want::Image => "Images",
+        _ => "Sounds",
+    };
     let mut by_result: BTreeMap<String, (usize, usize)> = BTreeMap::new();
     let mut failed = Vec::new();
     for (r, outcome) in decoded {
         let texts = &refs[r];
-        let n: usize = texts
-            .iter()
-            .map(|t| {
-                if what == "Meshes" {
-                    uses[*t].mesh
-                } else {
-                    uses[*t].image
-                }
-            })
-            .sum();
+        let n: usize = texts.iter().map(|t| uses[*t].wants(want)).sum();
         let key = match outcome {
-            Ok(f) => match &f.image {
-                Some(image) => format!("decoded, {}", image.format.name()),
-                None => format!("decoded, version {}", mesh_version(&f.bytes)),
+            Ok(f) => match (&f.image, &f.audio) {
+                (Some(image), _) => format!("decoded, {}", image.format.name()),
+                (_, Some(audio)) => format!(
+                    "decoded, {} {} Hz",
+                    audio.format.map_or("?", |f| f.name()),
+                    audio.sample_rate
+                ),
+                _ => format!("decoded, version {}", mesh_version(&f.bytes)),
             },
             Err(e) if e.kind == FailureKind::Invalid => {
                 failed.push((r, texts, e));
@@ -355,6 +374,7 @@ pub fn place(file: &Path, options: &Options) -> anyhow::Result<()> {
             match property_want(&inst.class, key) {
                 Want::Mesh => u.mesh += 1,
                 Want::Image => u.image += 1,
+                Want::Audio => u.audio += 1,
                 Want::Bytes => {}
             }
         }
@@ -375,6 +395,7 @@ pub fn place(file: &Path, options: &Options) -> anyhow::Result<()> {
     let mut tickets = BTreeMap::new();
     let mut mesh_tickets = BTreeMap::new();
     let mut image_tickets = BTreeMap::new();
+    let mut audio_tickets = BTreeMap::new();
     for (r, texts) in &refs {
         if options.refresh {
             forget(&resolver, r);
@@ -386,11 +407,15 @@ pub fn place(file: &Path, options: &Options) -> anyhow::Result<()> {
         if texts.iter().any(|t| uses[*t].image > 0) {
             image_tickets.insert(loader.request_as(r.clone(), Want::Image), r.clone());
         }
+        if texts.iter().any(|t| uses[*t].audio > 0) {
+            audio_tickets.insert(loader.request_as(r.clone(), Want::Audio), r.clone());
+        }
     }
     let started = std::time::Instant::now();
     let mut results: BTreeMap<ContentRef, Result<Fetched, Failure>> = BTreeMap::new();
     let mut meshes: BTreeMap<ContentRef, Result<Fetched, Failure>> = BTreeMap::new();
     let mut images: BTreeMap<ContentRef, Result<Fetched, Failure>> = BTreeMap::new();
+    let mut sounds: BTreeMap<ContentRef, Result<Fetched, Failure>> = BTreeMap::new();
     for (t, outcome) in loader.wait_all() {
         if let Some(r) = tickets.remove(&t) {
             results.insert(r, outcome);
@@ -398,6 +423,8 @@ pub fn place(file: &Path, options: &Options) -> anyhow::Result<()> {
             meshes.insert(r, outcome);
         } else if let Some(r) = image_tickets.remove(&t) {
             images.insert(r, outcome);
+        } else if let Some(r) = audio_tickets.remove(&t) {
+            sounds.insert(r, outcome);
         }
     }
 
@@ -456,8 +483,9 @@ pub fn place(file: &Path, options: &Options) -> anyhow::Result<()> {
             println!("  {text:?}  no content\n      {}", first_use(&[text]));
         }
     }
-    print_decoded("Meshes", &refs, &uses, &meshes, &first_use);
-    print_decoded("Images", &refs, &uses, &images, &first_use);
+    print_decoded(Want::Mesh, &refs, &uses, &meshes, &first_use);
+    print_decoded(Want::Image, &refs, &uses, &images, &first_use);
+    print_decoded(Want::Audio, &refs, &uses, &sounds, &first_use);
     if options.verbose {
         println!("\nResolved:");
         for (r, texts) in &refs {

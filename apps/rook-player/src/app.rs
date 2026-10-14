@@ -33,6 +33,8 @@ pub(crate) struct App {
     /// Present without waiting for the display (`--uncapped`).
     pub(crate) uncapped: bool,
     pub(crate) readout: Readout,
+    /// Where the game's sounds are heard; `None` with `ROOK_AUDIO=off`.
+    pub(crate) audio: Option<rook_audio::Output<rook_dom::InstanceId>>,
     /// The terminal command prompt, when the terminal is interactive.
     #[cfg(feature = "repl")]
     pub(crate) repl: Option<rook_engine::repl::Repl>,
@@ -145,6 +147,9 @@ impl App {
             self.accumulator = 0.0;
         }
         self.game.advance(steps);
+        if let Some(audio) = &mut self.audio {
+            audio.sync(&self.game.sounds());
+        }
         if let Some(gfx) = &mut self.gfx {
             refresh(&mut self.scene, self.game.view_mut(), &mut gfx.renderer);
         }

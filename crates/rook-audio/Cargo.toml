@@ -1,0 +1,16 @@
+[package]
+name = "rook-audio"
+description = "Audio output and mixing for the Rook engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+cpal.workspace = true
+rook-content.workspace = true
+
+[lints]
+workspace = true
