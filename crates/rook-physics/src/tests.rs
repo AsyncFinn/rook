@@ -29,17 +29,15 @@ fn v3(x: f32, y: f32, z: f32) -> Value {
 }
 
 fn vector(dom: &Dom, id: InstanceId, name: &str) -> Vec3 {
-    match dom.property_by_name(id, name) {
-        Some(Value::Vector3(v)) => v.0,
-        other => panic!("{other:?}"),
-    }
+    dom.property_by_name(id, name)
+        .and_then(|v| v.as_vector3())
+        .unwrap()
 }
 
 fn cframe(dom: &Dom, id: InstanceId) -> CFrame {
-    match dom.property_by_name(id, "CFrame") {
-        Some(Value::CFrame(cf)) => cf,
-        other => panic!("{other:?}"),
-    }
+    dom.property_by_name(id, "CFrame")
+        .and_then(|v| v.as_cframe())
+        .unwrap()
 }
 
 fn part(dom: &mut Dom, class: &str, position: Vec3, size: Vec3, anchored: bool) -> InstanceId {
