@@ -113,7 +113,7 @@ fn run_in(lua: &Lua, chunk_name: &str, source: &str, env: Table) -> mlua::Result
     Ok(())
 }
 
-// ---- require ------------------------------------------------------------------------
+// require
 
 fn require(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
     let a = Args::new(args, "require");
