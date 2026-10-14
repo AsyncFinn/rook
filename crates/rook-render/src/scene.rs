@@ -8,7 +8,7 @@ use glam::{Mat3, Vec3};
 
 pub use rook_content::image::Image;
 pub use rook_content::mesh::Mesh;
-pub use rook_types::{MaterialLook, NormalId, PartShape, SurfacePattern, Tiling, TrussShape};
+pub use rook_types::{Material, NormalId, PartShape, SurfacePattern, Tiling, TrussShape};
 
 /// A mesh file, by the BLAKE3 hash of its bytes: parts that use the same
 /// file share one GPU mesh, however they refer to it.
@@ -104,11 +104,13 @@ pub struct PartInstance {
     /// A texture drawn through the mesh's UVs (a mesh's `TextureId`),
     /// multiplied by `color`.
     pub texture: Option<ImageHash>,
-    pub material: MaterialLook,
+    /// What it's made of: how it shades (`Material::shading`), whether
+    /// it shows its surfaces (Plastic) and glows (Neon).
+    pub material: Material,
     /// `BasePart.Reflectance`, 0 to 1.
     pub reflectance: f32,
     /// Each face's pattern (by `NormalId` index), drawn when the material
-    /// is Plastic.
+    /// shows surfaces.
     pub surfaces: [Option<SurfacePattern>; 6],
     pub layer: Layer,
 }
@@ -126,7 +128,7 @@ impl PartInstance {
             upright: false,
             cast_shadow: true,
             texture: None,
-            material: MaterialLook::Plain,
+            material: Material::SmoothPlastic,
             reflectance: 0.0,
             surfaces: [None; 6],
             layer: Layer::Base,
@@ -172,6 +174,9 @@ pub struct Lighting {
     pub skybox: Option<[ImageHash; 6]>,
     /// `Lighting.GlobalShadows`: false draws no shadows at all.
     pub global_shadows: bool,
+    /// `Lighting.EnvironmentSpecularScale`, 0 to 1: how much parts reflect
+    /// the sky, and how far metals trade their diffuse light for it.
+    pub environment_specular: f32,
 }
 
 impl Default for Lighting {
@@ -189,6 +194,7 @@ impl Default for Lighting {
             reflection: [0.75, 0.84, 0.95],
             skybox: None,
             global_shadows: true,
+            environment_specular: 0.0,
         }
     }
 }

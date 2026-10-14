@@ -52,7 +52,7 @@ impl Pipelines {
         let instance_attrs = wgpu::vertex_attr_array![
             5 => Float32x3, 6 => Float32x3, 7 => Float32x3, 8 => Float32x3,
             9 => Float32x3, 10 => Float32x4, 11 => Float32x3, 12 => Float32x3,
-            13 => Float32x4, 14 => Uint32, 15 => Float32
+            13 => Float32x4, 14 => Uint32, 15 => Float32x4
         ];
         let buffers = [
             Some(wgpu::VertexBufferLayout {

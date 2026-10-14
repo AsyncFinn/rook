@@ -16,9 +16,8 @@ mod shadow;
 mod surfaces;
 
 pub use scene::{
-    Camera, DrawShape, Image, ImageHash, ImagePlacement, Layer, Lighting, MaterialLook, Mesh,
-    MeshHash, NormalId, PartInstance, PartShape, SKYBOX_FACES, Scene, SurfacePattern, Tiling,
-    TrussShape,
+    Camera, DrawShape, Image, ImageHash, ImagePlacement, Layer, Lighting, Material, Mesh, MeshHash,
+    NormalId, PartInstance, PartShape, SKYBOX_FACES, Scene, SurfacePattern, Tiling, TrussShape,
 };
 
 use std::collections::HashMap;

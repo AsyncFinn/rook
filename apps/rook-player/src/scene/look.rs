@@ -94,7 +94,7 @@ impl SceneCache {
             // Confirmed: creator-docs BasePart.CastShadow, on by default;
             // places saved before it existed cast.
             cast_shadow: boolean(dom, id, "CastShadow").unwrap_or(true),
-            material: MaterialLook::of(enum_value(dom, id, "Material")),
+            material: Material::of_part(enum_value(dom, id, "Material")),
             reflectance: number(dom, id, "Reflectance").unwrap_or(0.0),
             ..PartInstance::plain(
                 DrawShape::Part(own),
@@ -211,8 +211,8 @@ impl SceneCache {
         if kind.takes_texture() {
             // The empty-MeshId box drew without the part's Neon glow
             // (observed); its material is otherwise unchecked.
-            if out.material == MaterialLook::Neon {
-                out.material = MaterialLook::Plain;
+            if out.material == Material::Neon {
+                out.material = Material::SmoothPlastic;
             }
             let tint = vector3(dom, mesh, "VertexColor").unwrap_or(Vec3::ONE);
             self.mesh_texture(dom, id, mesh, &mut out, tint.to_array());
@@ -306,7 +306,7 @@ impl SceneCache {
                 transparency: number(dom, child, "Transparency").unwrap_or(0.0),
                 texture: None,
                 surfaces: [None; 6],
-                material: MaterialLook::Plain,
+                material: Material::SmoothPlastic,
                 layer: Layer::Image {
                     image: ImageHash(hash),
                     placement,

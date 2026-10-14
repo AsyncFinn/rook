@@ -7,7 +7,7 @@
 //! the same with ElasticityWeight.
 
 use rook_dom::{Dom, InstanceId};
-use rook_types::{PhysicalProperties, Value};
+use rook_types::{Material, PhysicalProperties, Value};
 
 /// One set of physical properties (a `PhysicalProperties` value).
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -50,61 +50,63 @@ const fn props(d: f32, f: f32, e: f32, fw: f32, ew: f32, a: f32) -> Properties {
 /// Plastic, the default material.
 pub const PLASTIC: Properties = props(0.7, 0.3, 0.5, 1.0, 1.0, 0.3);
 
-/// `Enum.Material` values and their properties.
-const TABLE: &[(u32, Properties)] = &[
-    (256, PLASTIC),
-    (272, props(0.7, 0.2, 0.5, 1.0, 1.0, 0.2)), // SmoothPlastic
-    (288, props(0.7, 0.3, 0.2, 1.0, 1.0, 0.3)), // Neon
-    (512, props(0.35, 0.48, 0.2, 1.0, 1.0, 0.25)), // Wood
-    (528, props(0.35, 0.48, 0.2, 1.0, 1.0, 0.25)), // WoodPlanks
-    (784, props(2.563, 0.2, 0.17, 1.0, 1.0, 0.01)), // Marble
-    (788, props(2.691, 0.7, 0.15, 0.3, 1.0, 0.2)), // Basalt
-    (800, props(2.691, 0.4, 0.2, 1.0, 1.0, 0.03)), // Slate
-    (804, props(2.691, 0.65, 0.15, 1.0, 1.0, 0.35)), // CrackedLava
-    (816, props(2.403, 0.7, 0.2, 0.3, 1.0, 0.05)), // Concrete
-    (820, props(2.691, 0.5, 0.15, 1.0, 1.0, 0.15)), // Limestone
-    (832, props(2.691, 0.4, 0.2, 1.0, 1.0, 0.2)), // Granite
-    (836, props(2.691, 0.5, 0.17, 0.3, 1.0, 0.6)), // Pavement
-    (848, props(1.922, 0.8, 0.15, 0.3, 1.0, 0.35)), // Brick
-    (864, props(2.403, 0.4, 0.17, 1.0, 1.5, 0.4)), // Pebble
-    (880, props(2.691, 0.5, 0.17, 1.0, 1.0, 0.45)), // Cobblestone
-    (896, props(2.691, 0.5, 0.17, 1.0, 1.0, 0.15)), // Rock
-    (912, props(2.691, 0.5, 0.15, 5.0, 1.0, 0.2)), // Sandstone
-    (1040, props(7.85, 0.7, 0.2, 1.0, 1.0, 0.15)), // CorrodedMetal
-    (1056, props(7.85, 0.35, 0.25, 1.0, 1.0, 0.05)), // DiamondPlate
-    (1072, props(2.7, 0.4, 0.25, 1.0, 1.0, 0.1)), // Foil
-    (1088, props(7.85, 0.4, 0.25, 1.0, 1.0, 0.1)), // Metal
-    (1280, props(0.9, 0.4, 0.1, 1.0, 1.5, 0.7)), // Grass
-    (1284, props(0.9, 0.4, 0.1, 2.0, 2.0, 0.75)), // LeafyGrass
-    (1296, props(1.602, 0.5, 0.05, 5.0, 2.5, 0.55)), // Sand
-    (1312, props(0.7, 0.35, 0.05, 1.0, 1.0, 0.65)), // Fabric
-    (1328, props(0.9, 0.3, 0.03, 3.0, 4.0, 0.8)), // Snow
-    (1344, props(0.9, 0.3, 0.07, 3.0, 4.0, 0.65)), // Mud
-    (1360, props(0.9, 0.45, 0.1, 1.0, 1.0, 0.6)), // Ground
-    (1376, props(2.36, 0.8, 0.2, 0.3, 1.0, 0.4)), // Asphalt
-    (1392, props(2.165, 0.5, 0.05, 1.0, 1.0, 0.15)), // Salt
-    (1536, props(0.919, 0.02, 0.15, 3.0, 1.0, 0.2)), // Ice
-    (1552, props(0.919, 0.05, 0.15, 2.0, 1.0, 0.7)), // Glacier
-    (1568, props(2.403, 0.25, 0.2, 1.0, 1.0, 0.1)), // Glass
-    (1584, props(2.403, 0.25, 0.2, 1.0, 1.0, 0.0)), // ForceField
-    (1792, props(0.01, 0.01, 0.01, 1.0, 1.0, 0.01)), // Air
-    (2048, props(1.0, 0.005, 0.01, 1.0, 1.0, 0.01)), // Water
-    (2304, props(0.7, 0.5, 0.05, 1.0, 2.0, 0.55)), // Cardboard
-    (2305, props(1.1, 0.4, 0.25, 1.0, 2.0, 0.65)), // Carpet
-    (2306, props(2.4, 0.51, 0.2, 1.0, 1.0, 0.04)), // CeramicTiles
-    (2307, props(2.0, 0.51, 0.2, 1.0, 1.0, 0.3)), // ClayRoofTiles
-    (2308, props(2.36, 0.8, 0.2, 0.3, 1.0, 0.3)), // RoofShingles
-    (2309, props(0.86, 0.35, 0.25, 1.0, 1.0, 0.65)), // Leather
-    (2310, props(0.75, 0.6, 0.2, 0.3, 1.0, 0.3)), // Plaster
-    (2311, props(1.3, 1.5, 0.95, 3.0, 2.0, 0.5)), // Rubber
+/// Each material's properties.
+#[rustfmt::skip]
+const TABLE: &[(Material, Properties)] = &[
+    (Material::Plastic, PLASTIC),
+    (Material::SmoothPlastic, props(0.7, 0.2, 0.5, 1.0, 1.0, 0.2)),
+    (Material::Neon, props(0.7, 0.3, 0.2, 1.0, 1.0, 0.3)),
+    (Material::Wood, props(0.35, 0.48, 0.2, 1.0, 1.0, 0.25)),
+    (Material::WoodPlanks, props(0.35, 0.48, 0.2, 1.0, 1.0, 0.25)),
+    (Material::Marble, props(2.563, 0.2, 0.17, 1.0, 1.0, 0.01)),
+    (Material::Basalt, props(2.691, 0.7, 0.15, 0.3, 1.0, 0.2)),
+    (Material::Slate, props(2.691, 0.4, 0.2, 1.0, 1.0, 0.03)),
+    (Material::CrackedLava, props(2.691, 0.65, 0.15, 1.0, 1.0, 0.35)),
+    (Material::Concrete, props(2.403, 0.7, 0.2, 0.3, 1.0, 0.05)),
+    (Material::Limestone, props(2.691, 0.5, 0.15, 1.0, 1.0, 0.15)),
+    (Material::Granite, props(2.691, 0.4, 0.2, 1.0, 1.0, 0.2)),
+    (Material::Pavement, props(2.691, 0.5, 0.17, 0.3, 1.0, 0.6)),
+    (Material::Brick, props(1.922, 0.8, 0.15, 0.3, 1.0, 0.35)),
+    (Material::Pebble, props(2.403, 0.4, 0.17, 1.0, 1.5, 0.4)),
+    (Material::Cobblestone, props(2.691, 0.5, 0.17, 1.0, 1.0, 0.45)),
+    (Material::Rock, props(2.691, 0.5, 0.17, 1.0, 1.0, 0.15)),
+    (Material::Sandstone, props(2.691, 0.5, 0.15, 5.0, 1.0, 0.2)),
+    (Material::CorrodedMetal, props(7.85, 0.7, 0.2, 1.0, 1.0, 0.15)),
+    (Material::DiamondPlate, props(7.85, 0.35, 0.25, 1.0, 1.0, 0.05)),
+    (Material::Foil, props(2.7, 0.4, 0.25, 1.0, 1.0, 0.1)),
+    (Material::Metal, props(7.85, 0.4, 0.25, 1.0, 1.0, 0.1)),
+    (Material::Grass, props(0.9, 0.4, 0.1, 1.0, 1.5, 0.7)),
+    (Material::LeafyGrass, props(0.9, 0.4, 0.1, 2.0, 2.0, 0.75)),
+    (Material::Sand, props(1.602, 0.5, 0.05, 5.0, 2.5, 0.55)),
+    (Material::Fabric, props(0.7, 0.35, 0.05, 1.0, 1.0, 0.65)),
+    (Material::Snow, props(0.9, 0.3, 0.03, 3.0, 4.0, 0.8)),
+    (Material::Mud, props(0.9, 0.3, 0.07, 3.0, 4.0, 0.65)),
+    (Material::Ground, props(0.9, 0.45, 0.1, 1.0, 1.0, 0.6)),
+    (Material::Asphalt, props(2.36, 0.8, 0.2, 0.3, 1.0, 0.4)),
+    (Material::Salt, props(2.165, 0.5, 0.05, 1.0, 1.0, 0.15)),
+    (Material::Ice, props(0.919, 0.02, 0.15, 3.0, 1.0, 0.2)),
+    (Material::Glacier, props(0.919, 0.05, 0.15, 2.0, 1.0, 0.7)),
+    (Material::Glass, props(2.403, 0.25, 0.2, 1.0, 1.0, 0.1)),
+    (Material::ForceField, props(2.403, 0.25, 0.2, 1.0, 1.0, 0.0)),
+    (Material::Air, props(0.01, 0.01, 0.01, 1.0, 1.0, 0.01)),
+    (Material::Water, props(1.0, 0.005, 0.01, 1.0, 1.0, 0.01)),
+    (Material::Cardboard, props(0.7, 0.5, 0.05, 1.0, 2.0, 0.55)),
+    (Material::Carpet, props(1.1, 0.4, 0.25, 1.0, 2.0, 0.65)),
+    (Material::CeramicTiles, props(2.4, 0.51, 0.2, 1.0, 1.0, 0.04)),
+    (Material::ClayRoofTiles, props(2.0, 0.51, 0.2, 1.0, 1.0, 0.3)),
+    (Material::RoofShingles, props(2.36, 0.8, 0.2, 0.3, 1.0, 0.3)),
+    (Material::Leather, props(0.86, 0.35, 0.25, 1.0, 1.0, 0.65)),
+    (Material::Plaster, props(0.75, 0.6, 0.2, 0.3, 1.0, 0.3)),
+    (Material::Rubber, props(1.3, 1.5, 0.95, 3.0, 2.0, 0.5)),
 ];
 
 /// The default properties of the `Enum.Material` with this value; Plastic's
-/// for values not in the table (Approximation).
+/// for values that aren't a material (Approximation).
 pub fn of_material(value: u32) -> Properties {
+    let material = Material::of_part(Some(value));
     TABLE
         .iter()
-        .find(|(v, _)| *v == value)
+        .find(|(m, _)| *m == material)
         .map_or(PLASTIC, |(_, p)| *p)
 }
 
