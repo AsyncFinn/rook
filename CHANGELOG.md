@@ -13,6 +13,19 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 
 ## [Unreleased]
 
+## [0.10.1] — 2026-10-14 — Properties Roblox replicates under hidden twins
+
+Pinned Roblox version: 0.741.19.
+
+- Fixed: in Play mode nothing was heard, and once it was, sounds played at the wrong pitch. Some properties are NotReplicated in the API dump because Roblox sends them to clients under a hidden twin Rook doesn't store: Sound's `Playing` and `TimePosition` (as `PlayingReplicator` and `TimePositionReplicator`) and `PlaybackSpeed` (as `Pitch`). Rook never sent them, so the client, whose sounds the player hears, never played anything, and when it did, played it at speed 1. Checked by recording `rook-player`'s output: a test tone played by a server script came out at full level for as long as the script played it.
+- Fixed: the same was true of every property with such a twin. A list of every saved NotReplicated property in the database found them all, and they now reach clients:
+  - BasePart's `CollisionGroup` (client raycasts ignored collision groups) and Workspace's `CollisionGroups`;
+  - Player's `Team`, `AccountAge` and `MembershipType`;
+  - Humanoid's `Jump`, MeshPart's `RenderFidelity` and BallSocketConstraint's `MaxFrictionTorqueXml`;
+  - VideoFrame's `Playing` and `TimePosition`.
+
+  A test (`rook-net`, `replicated_twins`) pins the list, so a new database version can't add one silently.
+
 ## [0.10.0] — 2026-10-14 — M5 step 3: 3D sound
 
 Pinned Roblox version: 0.741.19. Finishes M5 step 3; M5 Audio continues with SoundService, SoundGroups and effects.

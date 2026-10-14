@@ -119,6 +119,18 @@ run-headless`, `--bench` and `--screenshot` never open one, and
 at `Volume` as a plain gain (Approximation; see step 2), and 3D sounds by
 distance and direction (step 3).
 
+*Replication* (Rook): a Sound's `Playing`, `TimePosition` and
+`PlaybackSpeed` are NotReplicated in the API dump. Roblox sends them under
+hidden twins (`PlayingReplicator`, `TimePositionReplicator`, and the old
+name `Pitch`), and a server's `Play` is heard on every client at its
+speed. Rook replicates the three properties, and the client keeps its own
+clock from there. Until 0.10.1 the player heard nothing in Play mode, and
+then everything at speed 1. A recording of `rook-player`'s output now has
+the test tone at full level for exactly as long as the script played it.
+Engine tests (`tests/sounds.rs`) check that the client gets every
+property it plays by. The rule covers every property replicated this way,
+not only sounds (`rook-net`'s `replicated_by_twin`).
+
 *Costs* (Rook): in Play mode the server and the client each load and
 decode their sounds, as each has its own content loader; a decoded sound
 is shared by every Sound using the same file.

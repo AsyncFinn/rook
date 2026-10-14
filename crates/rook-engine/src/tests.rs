@@ -563,3 +563,5 @@ fn scripts_moved_into_workspace_start() {
     assert_eq!(lines(&s), ["moving", "inner started"]);
     assert_eq!(s.started_scripts(), 2);
 }
+
+mod sounds;
