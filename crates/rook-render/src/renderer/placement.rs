@@ -154,32 +154,51 @@ impl Renderer {
     /// How an entry should be drawn. With the scene, files it needs that
     /// aren't on the GPU are queued; without, they're only waited for.
     fn target(&mut self, part: &PartInstance, scene: Option<&Scene>) -> Target {
-        let (image, z) = match part.layer {
-            Layer::Base => (part.texture, None),
-            Layer::Image {
+        let z = match part.layer {
+            Layer::Base
+            | Layer::Image {
                 on_transparent: true,
-                image,
                 ..
-            } => (Some(image), None),
-            Layer::Image { image, z, .. } => (Some(image), Some(z)),
+            } => None,
+            Layer::Image { z, .. } => Some(z),
         };
         if part.transparency >= 1.0 {
             return Target::Hidden;
         }
-        let mesh = self.mesh_readiness(part.shape, scene);
-        let image_ready = image.map_or(Readiness::Ready, |hash| self.image_readiness(hash, scene));
-        match (mesh, image_ready) {
-            (Readiness::Missing, _) | (_, Readiness::Missing) => return Target::Hidden,
-            (Readiness::Waiting, _) | (_, Readiness::Waiting) => return Target::Waiting,
-            _ => {}
+        let mut images = image_set(part);
+        let mut ready = self.mesh_readiness(part.shape, scene);
+        for (slot, image) in images.iter_mut().enumerate() {
+            let Some(hash) = *image else {
+                continue;
+            };
+            match self.image_readiness(hash, scene) {
+                Readiness::Ready => {}
+                // A missing map leaves the material's plain value; a
+                // missing image hides what draws it.
+                Readiness::Missing if slot > 0 => *image = None,
+                Readiness::Missing => ready = Readiness::Missing,
+                Readiness::Waiting if ready == Readiness::Ready => ready = Readiness::Waiting,
+                Readiness::Waiting => {}
+            }
+        }
+        match ready {
+            Readiness::Missing => return Target::Hidden,
+            Readiness::Waiting => return Target::Waiting,
+            Readiness::Ready => self.ensure_group(images),
         }
         let key = BatchKey {
             shape: part.shape,
-            image,
+            images,
         };
         match z {
             Some(z) => Target::Layer(z, key),
-            None if part.transparency > 0.0 || part.layer != Layer::Base => Target::Transparent,
+            // ForceField always shows what's behind it (observed).
+            None if part.transparency > 0.0
+                || part.layer != Layer::Base
+                || part.material == Material::ForceField =>
+            {
+                Target::Transparent
+            }
             None => Target::Opaque(key),
         }
     }

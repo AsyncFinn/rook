@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use glam::{Mat3, Vec3};
+use glam::{Mat3, Vec2, Vec3};
 
 pub use rook_content::image::Image;
 pub use rook_content::mesh::Mesh;
@@ -51,6 +51,42 @@ pub enum ImagePlacement {
     /// Over the whole mesh through its own UVs, as Decals on file meshes
     /// and the Head are.
     MeshUv,
+}
+
+/// A part's material textures (images in [`Scene::images`]), tiled over
+/// each face of its shape's box from the face's top-left corner, like a
+/// Texture: Studio's material textures, or a MaterialVariant's. Each one
+/// that's missing leaves the material's plain value: white for colour, a
+/// flat normal, and the part's roughness and metalness.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MaterialMaps {
+    /// Multiplies the part's colour (sRGB).
+    pub color: Option<ImageHash>,
+    /// Tangent-space normals: X in red, Y (up the image) in green.
+    pub normal: Option<ImageHash>,
+    /// Roughness, in green.
+    pub roughness: Option<ImageHash>,
+    /// Metalness, in red.
+    pub metalness: Option<ImageHash>,
+    /// Studs per repeat across and down a face.
+    pub studs_per_tile: Vec2,
+}
+
+impl MaterialMaps {
+    pub const NONE: Self = Self {
+        color: None,
+        normal: None,
+        roughness: None,
+        metalness: None,
+        studs_per_tile: Vec2::ONE,
+    };
+
+    pub fn any(&self) -> bool {
+        self.color.is_some()
+            || self.normal.is_some()
+            || self.roughness.is_some()
+            || self.metalness.is_some()
+    }
 }
 
 /// A mesh the renderer draws: a primitive part shape, a built-in mesh
@@ -107,6 +143,8 @@ pub struct PartInstance {
     /// What it's made of: how it shades (`Material::shading`), whether
     /// it shows its surfaces (Plastic) and glows (Neon).
     pub material: Material,
+    /// Its material's textures.
+    pub maps: MaterialMaps,
     /// `BasePart.Reflectance`, 0 to 1.
     pub reflectance: f32,
     /// Each face's pattern (by `NormalId` index), drawn when the material
@@ -129,6 +167,7 @@ impl PartInstance {
             cast_shadow: true,
             texture: None,
             material: Material::SmoothPlastic,
+            maps: MaterialMaps::NONE,
             reflectance: 0.0,
             surfaces: [None; 6],
             layer: Layer::Base,

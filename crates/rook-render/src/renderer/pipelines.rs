@@ -16,6 +16,10 @@ pub(crate) struct Pipelines {
     pub(crate) transparent: wgpu::RenderPipeline,
     /// Decals and Textures over what's drawn.
     pub(crate) layer: wgpu::RenderPipeline,
+    /// See-through Glass: what's behind multiplied by its colour.
+    pub(crate) glass_filter: wgpu::RenderPipeline,
+    /// ForceField: its glow added to what's behind.
+    pub(crate) additive: wgpu::RenderPipeline,
     /// The skybox, behind everything.
     pub(crate) sky: wgpu::RenderPipeline,
     /// Depth only, from the sun, over the opaque batches.
@@ -156,6 +160,36 @@ impl Pipelines {
             wgpu::CompareFunction::Greater,
             Default::default(),
         );
+        let glass_filter = make(
+            "rook glass filter",
+            "fs_glass_filter",
+            Some(wgpu::BlendState {
+                color: wgpu::BlendComponent {
+                    src_factor: wgpu::BlendFactor::Zero,
+                    dst_factor: wgpu::BlendFactor::Src,
+                    operation: wgpu::BlendOperation::Add,
+                },
+                alpha: wgpu::BlendComponent::OVER,
+            }),
+            false,
+            wgpu::CompareFunction::Greater,
+            Default::default(),
+        );
+        let additive = make(
+            "rook additive",
+            "fs_force_field",
+            Some(wgpu::BlendState {
+                color: wgpu::BlendComponent {
+                    src_factor: wgpu::BlendFactor::One,
+                    dst_factor: wgpu::BlendFactor::One,
+                    operation: wgpu::BlendOperation::Add,
+                },
+                alpha: wgpu::BlendComponent::OVER,
+            }),
+            false,
+            wgpu::CompareFunction::Greater,
+            Default::default(),
+        );
         // Images lie exactly on their part's surface: the same vertices
         // through the same (invariant) maths give the same depth.
         let layer_pipeline = make(
@@ -212,6 +246,8 @@ impl Pipelines {
             opaque: opaque_pipeline,
             transparent: transparent_pipeline,
             layer: layer_pipeline,
+            glass_filter,
+            additive,
             sky: sky_pipeline,
             shadow: shadow_pipeline,
         }

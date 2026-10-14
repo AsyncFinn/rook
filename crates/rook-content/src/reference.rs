@@ -25,6 +25,8 @@
 
 use std::fmt;
 
+use rook_types::Material;
+
 /// What a content string refers to. An empty string, or anything that
 /// isn't one of these forms, is no content at all ([`ContentRef::parse`]
 /// returns `None`), not an error.
@@ -46,6 +48,34 @@ pub enum ContentRef {
     /// `rbxthumb://type=<type>&id=<id>&w=<w>&h=<h>`: a thumbnail Roblox
     /// renders. Parsed, not resolved yet.
     Thumbnail(Thumbnail),
+    /// One of a built-in material's textures: no string names it, but
+    /// every part of that material draws it. The user's Roblox content
+    /// cache supplies Studio's ([`StudioCache`](crate::StudioCache)), and
+    /// Rook's defaults its own otherwise.
+    Material(Material, MaterialMap),
+}
+
+/// Which of a material's textures.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum MaterialMap {
+    /// The colour, which the part's Color multiplies (sRGB).
+    Color = 0,
+    /// A tangent-space normal map: X in red, Y (up the image) in green.
+    Normal = 1,
+    /// Roughness in green and metalness in red, as Studio packs them.
+    RoughnessMetalness = 2,
+}
+
+impl MaterialMap {
+    pub const ALL: [Self; 3] = [Self::Color, Self::Normal, Self::RoughnessMetalness];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Color => "color",
+            Self::Normal => "normal",
+            Self::RoughnessMetalness => "roughness-metalness",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -96,7 +126,7 @@ impl ContentRef {
                 version: Some(v),
             } => Some(format!("asset-{id}-v{v}")),
             Self::AssetVersion(id) => Some(format!("assetversion-{id}")),
-            Self::File(_) | Self::Thumbnail(_) => None,
+            Self::File(_) | Self::Thumbnail(_) | Self::Material(..) => None,
         }
     }
 }
@@ -106,6 +136,9 @@ impl fmt::Display for ContentRef {
     /// URLs for versions.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Material(material, map) => {
+                write!(f, "rook-material://{}/{}", material.name(), map.name())
+            }
             Self::File(path) => write!(f, "rbxasset://{path}"),
             Self::Asset { id, version: None } => write!(f, "rbxassetid://{id}"),
             Self::Asset {

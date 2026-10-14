@@ -8,16 +8,22 @@ use std::sync::Mutex;
 use crate::cache::{Cache, Cached};
 use crate::delivery::{self, Delivery};
 use crate::install::{self, Install};
+use crate::studio_cache::StudioCache;
 use crate::{ContentRef, Failure, FailureKind, Fetched, SourceKind, defaults};
 
 /// The providers, in the order a [`Config`] lists them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ProviderKind {
-    /// Content Rook ships ([`defaults`]): no files yet, plus the legacy
-    /// `rbxasset://fonts/` paths that now stand for public assets.
+    /// Content Rook ships ([`defaults`]): its own material textures, and
+    /// the legacy `rbxasset://fonts/` paths that now stand for public
+    /// assets.
     Defaults,
     /// The user's Roblox install, for `rbxasset://` paths.
     Install,
+    /// The user's Roblox content cache, for the material textures Studio
+    /// downloads ([`StudioCache`]); they're used before Rook's own
+    /// whatever the order.
+    StudioCache,
     /// Folders the user points at (`ROOK_CONTENT_DIRS`), laid out like
     /// the install's `content` folder: downloaded content packages or
     /// local overrides.
@@ -27,12 +33,19 @@ pub enum ProviderKind {
 }
 
 impl ProviderKind {
-    pub const ALL: [Self; 4] = [Self::Defaults, Self::Install, Self::Folders, Self::Delivery];
+    pub const ALL: [Self; 5] = [
+        Self::Defaults,
+        Self::Install,
+        Self::StudioCache,
+        Self::Folders,
+        Self::Delivery,
+    ];
 
     pub fn name(self) -> &'static str {
         match self {
             Self::Defaults => "defaults",
             Self::Install => "install",
+            Self::StudioCache => "studio-cache",
             Self::Folders => "folders",
             Self::Delivery => "delivery",
         }
@@ -50,6 +63,8 @@ impl ProviderKind {
 pub struct Config {
     pub order: Vec<ProviderKind>,
     pub install: Option<Install>,
+    /// The folder holding Roblox's content cache (`rbx-storage.db`).
+    pub roblox_cache: Option<PathBuf>,
     pub folders: Vec<PathBuf>,
     /// Whether asset delivery may use the network. With it off, only the
     /// cache answers asset ids.
@@ -100,6 +115,7 @@ impl Config {
         Self {
             order,
             install: install::newest(),
+            roblox_cache: StudioCache::find(None).map(|c| c.root().to_path_buf()),
             folders,
             network,
             api_key: std::env::var(delivery::API_KEY_VAR)
@@ -115,6 +131,7 @@ impl Config {
         Self {
             order: ProviderKind::ALL.to_vec(),
             install: None,
+            roblox_cache: None,
             folders: Vec::new(),
             network: false,
             api_key: None,
@@ -130,6 +147,7 @@ impl Config {
 pub struct Resolver {
     order: Vec<ProviderKind>,
     install: Option<Install>,
+    studio_cache: Option<StudioCache>,
     folders: Vec<PathBuf>,
     delivery: Option<Delivery>,
     cache: Option<Cache>,
@@ -141,6 +159,10 @@ pub struct Resolver {
 impl Resolver {
     pub fn new(config: Config) -> Self {
         Self {
+            studio_cache: config
+                .roblox_cache
+                .as_deref()
+                .and_then(|root| StudioCache::at(root, config.cache_dir.clone())),
             order: config.order,
             install: config.install,
             folders: config.folders,
@@ -226,7 +248,9 @@ impl Resolver {
                     SourceKind::Install,
                 ),
                 ProviderKind::Folders => (&self.folders, SourceKind::Folder),
-                ProviderKind::Defaults | ProviderKind::Delivery => return None,
+                ProviderKind::Defaults | ProviderKind::StudioCache | ProviderKind::Delivery => {
+                    return None;
+                }
             };
             roots
                 .iter()
@@ -237,6 +261,7 @@ impl Resolver {
 
     fn resolve_uncached(&self, r: &ContentRef) -> Result<Fetched, Failure> {
         let asset = match r {
+            ContentRef::Material(material, map) => return self.material(*material, *map),
             ContentRef::Thumbnail(_) => {
                 return Err(Failure::new(
                     FailureKind::Unsupported,
@@ -270,6 +295,46 @@ impl Resolver {
             ));
         }
         self.download(&asset)
+    }
+
+    /// A material's texture: Studio's, from the user's content cache, or
+    /// else Rook's own. Either comes decoded; the bytes only name it. The
+    /// two aren't mixed: once the cache has any of a material's textures,
+    /// the ones it lacks (Studio's placeholders, or ones not downloaded)
+    /// are left out rather than drawn from Rook's.
+    fn material(
+        &self,
+        material: rook_types::Material,
+        map: crate::MaterialMap,
+    ) -> Result<Fetched, Failure> {
+        let has = |kind| self.order.contains(&kind);
+        if has(ProviderKind::StudioCache)
+            && let Some(cache) = &self.studio_cache
+            && let Some((image, location)) = cache.material(material, map)
+        {
+            let name = format!("{location} {}x{}", image.width, image.height);
+            let mut fetched = Fetched::new(name.as_bytes(), SourceKind::StudioCache, name.clone());
+            fetched.image = Some(std::sync::Arc::new(image));
+            return Ok(fetched);
+        }
+        let studio_has_it = has(ProviderKind::StudioCache)
+            && self
+                .studio_cache
+                .as_ref()
+                .is_some_and(|c| c.has_material(material));
+        if !studio_has_it
+            && has(ProviderKind::Defaults)
+            && let Some(image) = defaults::material(material, map)
+        {
+            let name = format!("rook-material://{}/{}", material.name(), map.name());
+            let mut fetched = Fetched::new(name.as_bytes(), SourceKind::Defaults, name.clone());
+            fetched.image = Some(std::sync::Arc::new(image));
+            return Ok(fetched);
+        }
+        Err(Failure::new(
+            FailureKind::NotFound,
+            "no texture for this material",
+        ))
     }
 
     /// An asset id, from the cache or asset delivery.

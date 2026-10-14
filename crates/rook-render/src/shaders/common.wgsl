@@ -35,8 +35,14 @@ struct Globals {
 @group(1) @binding(2) var surface_atlas: texture_2d_array<f32>;
 // Linear, mipmapped, repeating: images and the surface patterns.
 @group(1) @binding(3) var image_sampler: sampler;
-// The batch's image: a mesh texture or a decal (white when none).
+// The batch's images (white, or a flat normal, when it has none): its
+// image (a mesh texture, a decal or a skybox face), and its material's
+// colour, normal, roughness (green) and metalness (red) maps.
 @group(2) @binding(0) var image: texture_2d<f32>;
+@group(2) @binding(1) var color_map: texture_2d<f32>;
+@group(2) @binding(2) var normal_map: texture_2d<f32>;
+@group(2) @binding(3) var roughness_map: texture_2d<f32>;
+@group(2) @binding(4) var metalness_map: texture_2d<f32>;
 
 // Instance flags.
 const CAST: u32 = 1u;
@@ -49,6 +55,10 @@ const MODE_MESH_UV: u32 = 3u;
 const UPRIGHT: u32 = 128u;
 // From bit 8, each face's surface pattern + 1 (0: none), 3 bits per face.
 const SURFACES_SHIFT: u32 = 8u;
+// The part has material textures, tiled at `tile.xy` studs.
+const MAPS: u32 = 67108864u;
+const GLASS: u32 = 134217728u;
+const FORCE_FIELD: u32 = 268435456u;
 const PI: f32 = 3.14159265;
 
 struct VertexIn {
@@ -69,7 +79,8 @@ struct VertexIn {
     // drawn mesh's box.
     @location(11) i_box_min: vec3<f32>,
     @location(12) i_box_max: vec3<f32>,
-    // A Texture's studs per tile (xy) and offset (zw).
+    // A Texture's studs per tile (xy) and offset (zw); a part's material
+    // textures' studs per tile (xy).
     @location(13) i_tile: vec4<f32>,
     // CAST, NEON, the layer's mode (bits 2-3) and face (bits 4-6),
     // UPRIGHT (bit 7), and the surface patterns (SURFACES_SHIFT).

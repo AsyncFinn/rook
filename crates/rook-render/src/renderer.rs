@@ -1,11 +1,14 @@
 //! The renderer: GPU objects, pipelines and what the scene needs on the GPU.
 
 mod draw;
+mod images;
 mod pipelines;
 mod placement;
 mod readback;
 
 use super::*;
+pub(crate) use images::ImageSet;
+use images::{Defaults, image_set};
 use pipelines::Pipelines;
 use placement::Placement;
 
@@ -26,8 +29,10 @@ pub struct Renderer {
     main_bind_group: wgpu::BindGroup,
     image_layout: wgpu::BindGroupLayout,
     image_sampler: wgpu::Sampler,
-    /// A 1 × 1 white image, for draws without one.
-    white: GpuImage,
+    /// What stands in for images a draw doesn't have.
+    defaults: Defaults,
+    /// Each image set's bind group (group 2).
+    groups: HashMap<ImageSet, wgpu::BindGroup>,
     /// The built-in shapes and each mesh file a part has drawn, by shape.
     meshes: GpuCache<DrawShape, Mesh>,
     /// Each image something has drawn, by content hash.
@@ -155,8 +160,10 @@ impl Renderer {
             ],
         });
         let image_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("rook image"),
-            entries: &[texture_entry(0, wgpu::TextureViewDimension::D2)],
+            label: Some("rook images"),
+            entries: &(0..5)
+                .map(|i| texture_entry(i, wgpu::TextureViewDimension::D2))
+                .collect::<Vec<_>>(),
         });
         let pipelines = Pipelines::new(&device, color_format, &layout, &main_layout, &image_layout);
 
@@ -166,17 +173,7 @@ impl Renderer {
             image_layout: &image_layout,
             sampler: &image_sampler,
         };
-        let white_view = texture_with_mips(
-            &cx,
-            "rook white",
-            wgpu::TextureFormat::Rgba8UnormSrgb,
-            1,
-            1,
-            &[&[vec![255; 4]]],
-        );
-        let white = GpuImage {
-            bind_group: image_bind_group(&cx, &white_view),
-        };
+        let defaults = Defaults::new(&cx);
         let main_bind_group = surface_bind_group(
             &cx,
             &main_layout,
@@ -189,7 +186,7 @@ impl Renderer {
             meshes.insert(shape, GpuMesh::upload(&device, &mesh::build(shape)));
         }
 
-        Self {
+        let mut renderer = Self {
             device,
             queue,
             color_format,
@@ -202,7 +199,8 @@ impl Renderer {
             main_bind_group,
             image_layout,
             image_sampler,
-            white,
+            defaults,
+            groups: HashMap::new(),
             meshes,
             images: GpuCache::new(),
             opaque: Batches::default(),
@@ -214,7 +212,9 @@ impl Renderer {
             transparent_parts: Vec::new(),
             lighting: Lighting::default(),
             depth: None,
-        }
+        };
+        renderer.ensure_group([None; 5]);
+        renderer
     }
 
     pub(crate) fn upload_context(&self) -> UploadContext<'_> {

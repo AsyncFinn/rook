@@ -13,6 +13,15 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-10-14 — M4 step 5: the built-in materials
+
+Pinned Roblox version: 0.741.19. M4 Content continues (materials and PBR, second part).
+
+- Every material draws with its colour, normal and roughness-metalness textures, tinted by the part's Color as Studio does (multiplied in linear light) and tiled over each face from its top-left corner at Studio's scale (4 to 24 studs; measured against the textures, some fitted). The textures are Studio's own, read from your Roblox content cache once Studio has shown the material (`%LOCALAPPDATA%\Roblox\rbx-storage.db`; `ROOK_ROBLOX_CACHE` points elsewhere or turns it off), or Rook's own, drawn in code with Studio's brightness and scale. Nothing is downloaded. Findings: `docs/behavior/materials.md`.
+- Neon glows past its Color as in Studio (grey 128 draws near white). Glass with Transparency filters what's behind it by its Color, and ForceField glows over what's behind it, brighter at grazing angles.
+- `rook-content` reads KTX2 images (BC1 and BC3, Zstandard-compressed levels), the form Roblox's material textures come in, and has a new provider, `studio-cache`, between the install and content folders (`ROOK_CONTENT_ORDER`). Where the material textures are in the cache is indexed in Rook's cache, so only the first run reads the whole cache (about 6 s, on a background thread).
+- Studio 0.742 draws the 2022 materials whatever `MaterialService.Use2022Materials` says (a place saved with it off fetched and drew the same textures), so Rook draws that one set for every place.
+
 ## [0.4.0] — 2026-10-14 — M4 step 5: PBR shading
 
 Pinned Roblox version: 0.741.19. M4 Content continues (materials and PBR, first part).

@@ -37,6 +37,11 @@ pub(crate) const MODE_MESH_UV: u32 = 3;
 pub(crate) const UPRIGHT: u32 = 1 << 7;
 /// Where the surface patterns start: 3 bits per face.
 pub(crate) const SURFACES_SHIFT: u32 = 8;
+/// The part has material textures, tiled at `tile.xy` studs.
+pub(crate) const MAPS: u32 = 1 << 26;
+/// Glass and ForceField draw their own way (`shaders/parts.wgsl`).
+pub(crate) const GLASS: u32 = 1 << 27;
+pub(crate) const FORCE_FIELD: u32 = 1 << 28;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
@@ -51,7 +56,8 @@ pub(crate) struct Instance {
     /// scaled by `size`.
     box_min: [f32; 3],
     box_max: [f32; 3],
-    /// A Texture's studs per tile and offset.
+    /// A Texture's studs per tile and offset; for a part with material
+    /// textures, their studs per tile.
     tile: [f32; 4],
     /// CAST, NEON, an image layer's mode (bits 2-3) and face (4-6),
     /// UPRIGHT (bit 7), and from bit 8 each face's surface pattern + 1,
@@ -74,16 +80,33 @@ impl Instance {
                 if p.cast_shadow {
                     flags |= CAST;
                 }
-                if p.material == Material::Neon {
-                    flags |= NEON;
-                }
+                flags |= match p.material {
+                    Material::Neon => NEON,
+                    Material::Glass => GLASS,
+                    Material::ForceField => FORCE_FIELD,
+                    _ => 0,
+                };
+                // A map gives the value itself; without one, the material's.
                 let shading = p.material.shading();
+                let maps = p.maps;
                 material = [
                     p.reflectance.clamp(0.0, 1.0),
-                    shading.roughness,
-                    shading.metalness,
+                    if maps.roughness.is_some() {
+                        1.0
+                    } else {
+                        shading.roughness
+                    },
+                    if maps.metalness.is_some() {
+                        1.0
+                    } else {
+                        shading.metalness
+                    },
                     0.0,
                 ];
+                if maps.any() {
+                    flags |= MAPS;
+                    tile = [maps.studs_per_tile.x, maps.studs_per_tile.y, 0.0, 0.0];
+                }
                 if p.material.shows_surfaces() {
                     for (face, pattern) in p.surfaces.iter().enumerate() {
                         if let Some(pattern) = pattern {
@@ -168,10 +191,34 @@ impl Upload for Mesh {
     }
 }
 
-/// An image on the GPU: its bind group (group 2) holds the texture.
+/// An image on the GPU, viewed as sRGB colour (decals, colour maps) or as
+/// linear data (normal, roughness and metalness maps).
 #[derive(Debug)]
 pub(crate) struct GpuImage {
-    pub(crate) bind_group: wgpu::BindGroup,
+    pub(crate) srgb: wgpu::TextureView,
+    pub(crate) linear: wgpu::TextureView,
+}
+
+impl GpuImage {
+    /// A 1 × 1 image of one RGBA8 colour.
+    pub(crate) fn solid(cx: &UploadContext<'_>, label: &str, rgba: [u8; 4]) -> Self {
+        let texture = texture_with_mips(cx, label, 1, 1, &[&[rgba.to_vec()]]);
+        Self::views(&texture)
+    }
+
+    fn views(texture: &wgpu::Texture) -> Self {
+        let view = |format| {
+            texture.create_view(&wgpu::TextureViewDescriptor {
+                format: Some(format),
+                dimension: Some(wgpu::TextureViewDimension::D2),
+                ..Default::default()
+            })
+        };
+        Self {
+            srgb: view(wgpu::TextureFormat::Rgba8UnormSrgb),
+            linear: view(wgpu::TextureFormat::Rgba8Unorm),
+        }
+    }
 }
 
 impl Upload for Image {
@@ -183,30 +230,26 @@ impl Upload for Image {
 
     fn upload(&self, cx: &UploadContext<'_>) -> GpuImage {
         profiling::scope!("upload image");
-        let view = texture_with_mips(
+        let texture = texture_with_mips(
             cx,
             "rook image",
-            wgpu::TextureFormat::Rgba8UnormSrgb,
             self.width,
             self.height,
             &[self.mips.as_slice()],
         );
-        GpuImage {
-            bind_group: image_bind_group(cx, &view),
-        }
+        GpuImage::views(&texture)
     }
 }
 
 /// A texture of `layers`, each a mip chain (largest first) of RGBA8
-/// `width` × `height`; one layer is a plain 2D texture.
+/// `width` × `height`, stored linear and viewable as sRGB too.
 pub(crate) fn texture_with_mips(
     cx: &UploadContext<'_>,
     label: &str,
-    format: wgpu::TextureFormat,
     width: u32,
     height: u32,
     layers: &[&[Vec<u8>]],
-) -> wgpu::TextureView {
+) -> wgpu::Texture {
     let mip_count = layers[0].len() as u32;
     let texture = cx.device.create_texture(&wgpu::TextureDescriptor {
         label: Some(label),
@@ -218,9 +261,9 @@ pub(crate) fn texture_with_mips(
         mip_level_count: mip_count,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
-        format,
+        format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-        view_formats: &[],
+        view_formats: &[wgpu::TextureFormat::Rgba8UnormSrgb],
     });
     for (layer, levels) in layers.iter().enumerate() {
         for (level, pixels) in levels.iter().enumerate() {
@@ -250,28 +293,35 @@ pub(crate) fn texture_with_mips(
             );
         }
     }
-    let dimension = if layers.len() > 1 {
-        wgpu::TextureViewDimension::D2Array
-    } else {
-        wgpu::TextureViewDimension::D2
-    };
-    texture.create_view(&wgpu::TextureViewDescriptor {
-        dimension: Some(dimension),
-        ..Default::default()
-    })
+    texture
 }
 
-pub(crate) fn image_bind_group(
+/// A draw's images (group 2): its image (a mesh texture, decal or skybox
+/// face) and colour map as sRGB, its normal, roughness and metalness maps
+/// as linear data.
+pub(crate) fn images_bind_group(
     cx: &UploadContext<'_>,
-    view: &wgpu::TextureView,
+    [image, color, normal, roughness, metalness]: [&GpuImage; 5],
 ) -> wgpu::BindGroup {
-    cx.device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("rook image"),
-        layout: cx.image_layout,
-        entries: &[wgpu::BindGroupEntry {
-            binding: 0,
+    let views = [
+        &image.srgb,
+        &color.srgb,
+        &normal.linear,
+        &roughness.linear,
+        &metalness.linear,
+    ];
+    let entries: Vec<wgpu::BindGroupEntry> = views
+        .iter()
+        .enumerate()
+        .map(|(i, view)| wgpu::BindGroupEntry {
+            binding: i as u32,
             resource: wgpu::BindingResource::TextureView(view),
-        }],
+        })
+        .collect();
+    cx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("rook images"),
+        layout: cx.image_layout,
+        entries: &entries,
     })
 }
 
@@ -288,11 +338,14 @@ pub(crate) fn surface_bind_group(
     let atlas = texture_with_mips(
         cx,
         "rook surface patterns",
-        wgpu::TextureFormat::Rgba8Unorm,
         patterns.size,
         patterns.size,
         &layers,
-    );
+    )
+    .create_view(&wgpu::TextureViewDescriptor {
+        dimension: Some(wgpu::TextureViewDimension::D2Array),
+        ..Default::default()
+    });
     cx.device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("rook shadow map and surfaces"),
         layout,

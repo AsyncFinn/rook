@@ -64,6 +64,16 @@ impl SceneCache {
         let Some(r) = ContentRef::parse(url) else {
             return FileState::Failed;
         };
+        self.file_state_of(part, r, want)
+    }
+
+    /// [`SceneCache::file_state`] for a parsed reference.
+    pub(super) fn file_state_of(
+        &mut self,
+        part: InstanceId,
+        r: ContentRef,
+        want: Want,
+    ) -> FileState {
         let state = self.files.state(&r, want);
         if state == FileState::Loading {
             self.waiting.entry((r, want)).or_default().insert(part);

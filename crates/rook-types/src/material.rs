@@ -193,6 +193,39 @@ impl Material {
         self == Self::Plastic
     }
 
+    /// Whether Studio draws the material with textures (every material
+    /// but these; Plastic's own subtle texture isn't drawn: Approximation).
+    pub fn has_textures(self) -> bool {
+        use Material::*;
+        !matches!(
+            self,
+            Plastic | SmoothPlastic | Neon | ForceField | Air | Water
+        )
+    }
+
+    /// Studs per repeat of the material's textures, across and down each
+    /// face, measured in Studio 0.742 (`docs/behavior/materials.md`):
+    /// matched against the textures themselves on 24-stud faces where
+    /// Studio repeats them plainly (Confirmed), and fitted from close-ups
+    /// by the size of their features where Studio breaks the repeats up
+    /// (its Organic pattern; Approximation: Cobblestone, Salt,
+    /// Grass, Foil, and Granite and CorrodedMetal by eye); 8 studs, most
+    /// materials' size, where neither settled it (Approximation).
+    pub fn studs_per_tile(self) -> f32 {
+        use Material::*;
+        match self {
+            Glass => 4.0,
+            Wood | DiamondPlate | Metal => 5.0,
+            Fabric => 20.0 / 3.0,
+            Marble | Pebble | Sand | Ice | Grass => 10.0,
+            Foil => 12.0,
+            Cobblestone => 16.0,
+            Salt => 20.0,
+            Granite | CorrodedMetal => 24.0,
+            _ => 8.0,
+        }
+    }
+
     /// Roughness and metalness without the material's textures: the
     /// averages of the red (metalness) and green (roughness) channels of
     /// Studio 0.742's own roughness-metalness map for each material, as

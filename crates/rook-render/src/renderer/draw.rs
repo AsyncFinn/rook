@@ -2,13 +2,34 @@
 
 use super::*;
 
+/// How a run of transparent instances is drawn.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Pass {
+    Part,
+    Image,
+    /// See-through Glass filtering what's behind it, before its surface.
+    GlassFilter,
+    ForceField,
+}
+
+impl Pass {
+    /// The passes an entry is drawn in, in order.
+    fn of(p: &PartInstance) -> &'static [Pass] {
+        match (p.layer, p.material) {
+            (Layer::Image { .. }, _) => &[Pass::Image],
+            (Layer::Base, Material::Glass) => &[Pass::GlassFilter, Pass::Part],
+            (Layer::Base, Material::ForceField) => &[Pass::ForceField],
+            (Layer::Base, _) => &[Pass::Part],
+        }
+    }
+}
+
 impl Renderer {
     /// Upload the instances changed since the last frame, and the
     /// transparent ones sorted back to front for `camera` (an image on a
     /// transparent part just after its part). Returns the transparent
-    /// draws: (key, whether they're images, instance range) runs in that
-    /// order.
-    fn upload_instances(&mut self, camera: &Camera) -> Vec<(BatchKey, bool, std::ops::Range<u32>)> {
+    /// draws: (key, pass, instance range) runs in that order.
+    fn upload_instances(&mut self, camera: &Camera) -> Vec<(BatchKey, Pass, std::ops::Range<u32>)> {
         self.opaque.upload(&self.device, &self.queue);
         self.layers.upload(&self.device, &self.queue);
         // Back to front for blending.
@@ -19,24 +40,20 @@ impl Renderer {
             let image = |p: &PartInstance| p.layer != Layer::Base;
             db.total_cmp(&da).then(image(a).cmp(&image(b)))
         });
-        let instances: Vec<Instance> = order
-            .iter()
-            .map(|p| Instance::new(p, self.bounds(p.shape)))
-            .collect();
-        let mut runs: Vec<(BatchKey, bool, std::ops::Range<u32>)> = Vec::new();
-        for (i, p) in order.iter().enumerate() {
-            let i = i as u32;
-            let (image, is_layer) = match p.layer {
-                Layer::Base => (p.texture, false),
-                Layer::Image { image, .. } => (Some(image), true),
-            };
+        let mut instances: Vec<Instance> = Vec::with_capacity(order.len());
+        let mut runs: Vec<(BatchKey, Pass, std::ops::Range<u32>)> = Vec::new();
+        for p in &order {
             let key = BatchKey {
                 shape: p.shape,
-                image,
+                images: image_set(p),
             };
-            match runs.last_mut() {
-                Some((k, l, r)) if *k == key && *l == is_layer => r.end = i + 1,
-                _ => runs.push((key, is_layer, i..i + 1)),
+            for &pass in Pass::of(p) {
+                let i = instances.len() as u32;
+                instances.push(Instance::new(p, self.bounds(p.shape)));
+                match runs.last_mut() {
+                    Some((k, q, r)) if *k == key && *q == pass => r.end = i + 1,
+                    _ => runs.push((key, pass, i..i + 1)),
+                }
             }
         }
         if instances.is_empty() {
@@ -96,6 +113,11 @@ impl Renderer {
         // below the horizon, where it lights nothing from above.
         let shadow =
             (l.global_shadows && sun.y > 0.0).then(|| ShadowView::fit(camera, aspect, sun));
+        for hash in l.skybox.into_iter().flatten() {
+            if self.images.contains(&hash) {
+                self.ensure_group([Some(hash), None, None, None, None]);
+            }
+        }
         let rgb = |c: [f32; 3], w: f32| [c[0], c[1], c[2], w];
         let mut faces = [[0.0; 4]; 12];
         for face in NormalId::ALL {
@@ -208,7 +230,7 @@ impl Renderer {
             let skybox = l.skybox.and_then(|faces| {
                 let groups: Vec<_> = faces
                     .iter()
-                    .map(|h| self.images.get(h).map(|g| &g.bind_group))
+                    .map(|h| self.groups.get(&[Some(*h), None, None, None, None]))
                     .collect::<Option<_>>()?;
                 Some(groups)
             });
@@ -231,30 +253,24 @@ impl Renderer {
                 }
                 pass.set_pipeline(pipeline);
                 for (key, buffer, instances) in draws {
-                    let image = Some(self.image_group(key.image));
-                    self.draw(&mut pass, key.shape, image, buffer, instances);
+                    let images = Some(self.group(&key.images));
+                    self.draw(&mut pass, key.shape, images, buffer, instances);
                 }
             }
             if let Some((buffer, _)) = &self.transparent_buffer {
-                for (key, is_layer, instances) in transparent_runs {
-                    pass.set_pipeline(if is_layer {
-                        &self.pipelines.layer
-                    } else {
-                        &self.pipelines.transparent
+                for (key, kind, instances) in transparent_runs {
+                    pass.set_pipeline(match kind {
+                        Pass::Part => &self.pipelines.transparent,
+                        Pass::Image => &self.pipelines.layer,
+                        Pass::GlassFilter => &self.pipelines.glass_filter,
+                        Pass::ForceField => &self.pipelines.additive,
                     });
-                    let image = Some(self.image_group(key.image));
-                    self.draw(&mut pass, key.shape, image, buffer, instances);
+                    let images = Some(self.group(&key.images));
+                    self.draw(&mut pass, key.shape, images, buffer, instances);
                 }
             }
         }
         self.queue.submit([encoder.finish()]);
-    }
-
-    /// The bind group of a draw's image (white when it has none).
-    fn image_group(&self, image: Option<ImageHash>) -> &wgpu::BindGroup {
-        image
-            .and_then(|hash| self.images.get(&hash))
-            .map_or(&self.white.bind_group, |g| &g.bind_group)
     }
 
     /// Draw `instances` of `buffer` as `shape`, with `image` bound as
