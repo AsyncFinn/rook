@@ -3,7 +3,7 @@
 //! A [`Runtime`] is one DataModel's Luau VM plus its [`World`] (DOM,
 //! signals, scheduler, output). Scripts see the Roblox API: Instance
 //! userdata, datatypes, `game`, `wait`/`task`, signals and `require`.
-//! See `docs/architecture.md` §7.
+//! See `docs/design/architecture.md` §7.
 
 mod api;
 mod args;

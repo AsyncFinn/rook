@@ -1,6 +1,6 @@
 # Features
 
-Everything Rook supports today. What's coming next is in [ROADMAP.md](../ROADMAP.md), and every unfinished script member is listed in [behavior/stubs.md](behavior/stubs.md).
+Everything Rook supports today. What's coming next is in [ROADMAP.md](../../ROADMAP.md), and every unfinished script member is listed in [behavior/stubs.md](../behavior/stubs.md).
 
 ## File formats
 
@@ -28,7 +28,7 @@ Everything Rook supports today. What's coming next is in [ROADMAP.md](../ROADMAP
 - Roblox-style error messages and chunk names (`Workspace.Script:3: ...`), output through `LogService`.
 - Security levels: members tagged above game identity raise Roblox's permission error.
 - Services including `RunService`, `TweenService` (and the legacy GUI tweens), `Players`, `Debris`, `PhysicsService`, `DataStoreService` (in memory for now) and `HttpService` (JSON and GUIDs; requests off).
-- Unfinished members are either clear `"is not implemented in Rook yet"` errors or listed, inert stubs. Every stub is documented in [behavior/stubs.md](behavior/stubs.md), and a test fails if one is added without an entry.
+- Unfinished members are either clear `"is not implemented in Rook yet"` errors or listed, inert stubs. Every stub is documented in [behavior/stubs.md](../behavior/stubs.md), and a test fails if one is added without an entry.
 
 ## Client and server
 
@@ -57,7 +57,7 @@ Everything Rook supports today. What's coming next is in [ROADMAP.md](../ROADMAP
 - **Surfaces and materials**: studs, inlets, universal and weld surfaces on Plastic (from your Roblox install, or Rook's own), Neon and Reflectance. Other materials are drawn in their plain colour.
 - `rook-player` runs the place live in a window with a fly camera that drives `Workspace.CurrentCamera`, or renders a single frame to PNG offscreen.
 
-Material textures, the sun and moon in the sky, unions' own shapes, terrain and other lighting (point and spot lights, Future lighting) are on the [roadmap](../ROADMAP.md).
+Material textures, the sun and moon in the sky, unions' own shapes, terrain and other lighting (point and spot lights, Future lighting) are on the [roadmap](../../ROADMAP.md).
 
 ## Content
 

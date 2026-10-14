@@ -3,7 +3,7 @@
 //!
 //! Every DataModel has a physics world (`rook-physics`, kept in the
 //! scripting world so script queries reach it). Servers simulate; clients
-//! only query theirs. See `docs/architecture.md` §6 for the frame order.
+//! only query theirs. See `docs/design/architecture.md` §6 for the frame order.
 
 pub mod console;
 mod frame;

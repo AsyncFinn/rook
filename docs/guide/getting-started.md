@@ -68,4 +68,4 @@ The prompt is the `repl` Cargo feature, on by default. Build with `--no-default-
 
 - [tools.md](tools.md): inspect files, run places without a window, scan an archive, check Rook against Studio.
 - [features.md](features.md): everything Rook supports today.
-- If a place doesn't load or a script behaves differently from Roblox, please [report it](../CONTRIBUTING.md#reporting-a-problem).
+- If a place doesn't load or a script behaves differently from Roblox, please [report it](../../CONTRIBUTING.md#reporting-a-problem).

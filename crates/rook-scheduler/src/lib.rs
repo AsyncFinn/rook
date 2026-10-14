@@ -7,7 +7,7 @@
 //! due at each resumption point. Jobs are an opaque `T` (for the Lua layer,
 //! a thread to resume or a function to call).
 //!
-//! Frame order and resumption points: `docs/architecture.md` §6.
+//! Frame order and resumption points: `docs/design/architecture.md` §6.
 
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, VecDeque};
