@@ -142,7 +142,7 @@ fn stack_lines(lua: &Lua, thread: &Thread) -> Option<Vec<String>> {
     (!lines.is_empty()).then_some(lines)
 }
 
-// ---- jobs ---------------------------------------------------------------
+// jobs
 
 /// Where a job's code lives (`script: Workspace.Script:12`), naming its
 /// profiler zone. Only evaluated in profiling builds.
@@ -267,7 +267,7 @@ pub(crate) fn drain_deferred(lua: &Lua) {
     }
 }
 
-// ---- signals --------------------------------------------------------------
+// signals
 
 /// Fire a signal with already-converted arguments.
 pub(crate) fn fire(lua: &Lua, key: &SignalKey, args: Vec<LuaValue>) {

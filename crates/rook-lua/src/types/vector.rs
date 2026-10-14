@@ -175,7 +175,7 @@ pub(crate) fn normal_id_vector(v: u32) -> Vector {
     }
 }
 
-// ---- Vector2 ----------------------------------------------------------------
+// Vector2
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct LVector2(pub Vector2);
@@ -287,7 +287,7 @@ impl UserData for LVector2 {
     }
 }
 
-// ---- int16 vectors -------------------------------------------------------------
+// int16 vectors
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct LVector3int16(pub rbx_types::Vector3int16);

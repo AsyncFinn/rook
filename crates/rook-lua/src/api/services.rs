@@ -124,44 +124,7 @@ pub(crate) fn luau_source(owner: &str, name: &str) -> Option<&'static str> {
         // Pages are plain tables here (Approximation: Roblox returns a
         // DataStorePages instance; scripts use the same members).
         ("OrderedDataStore", "GetSortedAsync") => {
-            r#"
-            local std = ...
-            local ds = std.datastore
-            local sort = std.table.sort
-            return function(self, ascending, pageSize, minValue, maxValue)
-                local entries = {}
-                for key, value in ds.data(self) do
-                    if type(value) == "number"
-                        and (minValue == nil or value >= minValue)
-                        and (maxValue == nil or value <= maxValue) then
-                        entries[#entries + 1] = { key = key, value = value }
-                    end
-                end
-                sort(entries, function(a, b)
-                    if ascending then return a.value < b.value end
-                    return a.value > b.value
-                end)
-                local size = pageSize or 50
-                local pages = { IsFinished = false }
-                local start = 1
-                local function page()
-                    local out = {}
-                    for i = start, math.min(start + size - 1, #entries) do
-                        out[#out + 1] = entries[i]
-                    end
-                    return out
-                end
-                pages.IsFinished = #entries < start + size
-                function pages:GetCurrentPage()
-                    return page()
-                end
-                function pages:AdvanceToNextPageAsync()
-                    start += size
-                    pages.IsFinished = #entries < start + size
-                end
-                return pages
-            end
-            "#
+            include_str!("luau/get_sorted_async.luau")
         }
         _ => return super::remotes::luau_source(owner, name),
     })
@@ -169,63 +132,19 @@ pub(crate) fn luau_source(owner: &str, name: &str) -> Option<&'static str> {
 
 /// Shared helpers for the DataStore sources, built once.
 pub(crate) fn datastore_helpers(lua: &Lua) -> mlua::Result<Table> {
-    lua.load(
-        r#"
-        local error, type, typeof, tostring, pairs, setmetatable = ...
-        local stores = setmetatable({}, { __mode = "k" })
-        local ds = {}
-        function ds.data(store)
-            local t = stores[store]
-            if not t then
-                t = {}
-                stores[store] = t
-            end
-            return t
-        end
-        function ds.key(key)
-            if type(key) ~= "string" and type(key) ~= "number" then
-                error("Argument 1 missing or nil", 3)
-            end
-            return tostring(key)
-        end
-        -- Data stores keep copies of plain data only (creator-docs Data
-        -- stores: tables, strings, numbers, booleans).
-        function ds.copy(value, checking, seen)
-            local t = type(value)
-            if t == "table" then
-                seen = seen or {}
-                if seen[value] then
-                    error("Tables with cycles cannot be stored", 0)
-                end
-                seen[value] = true
-                local out = {}
-                for k, v in pairs(value) do
-                    out[ds.copy(k, checking, seen)] = ds.copy(v, checking, seen)
-                end
-                seen[value] = nil
-                return out
-            elseif t == "string" or t == "number" or t == "boolean" or t == "nil" then
-                return value
-            elseif checking then
-                error(("Cannot store %s in data store. Data stores can only accept valid UTF-8 characters."):format(typeof(value)), 0)
-            end
-            return nil
-        end
-        return ds
-        "#,
-    )
-    .set_name("=[rook] DataStore")
-    .call((
-        lua.globals().get::<LuaValue>("error")?,
-        lua.globals().get::<LuaValue>("type")?,
-        lua.globals().get::<LuaValue>("typeof")?,
-        lua.globals().get::<LuaValue>("tostring")?,
-        lua.globals().get::<LuaValue>("pairs")?,
-        lua.globals().get::<LuaValue>("setmetatable")?,
-    ))
+    lua.load(include_str!("luau/datastore.luau"))
+        .set_name("=[rook] DataStore")
+        .call((
+            lua.globals().get::<LuaValue>("error")?,
+            lua.globals().get::<LuaValue>("type")?,
+            lua.globals().get::<LuaValue>("typeof")?,
+            lua.globals().get::<LuaValue>("tostring")?,
+            lua.globals().get::<LuaValue>("pairs")?,
+            lua.globals().get::<LuaValue>("setmetatable")?,
+        ))
 }
 
-// ---- DataStoreService -----------------------------------------------------------------
+// DataStoreService
 
 /// One store object per (kind, name, scope), as Roblox returns the same
 /// object for repeated requests. Contents live in memory for this run
@@ -275,7 +194,7 @@ fn request_budget(lua: &Lua, _: InstanceId, _: Args) -> ApiResult<Outcome> {
     Outcome::ret(lua, 60)
 }
 
-// ---- HttpService ------------------------------------------------------------------------------
+// HttpService
 
 fn to_json(v: &LuaValue, depth: usize) -> ApiResult<serde_json::Value> {
     use serde_json::Value as J;

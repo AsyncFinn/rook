@@ -76,7 +76,7 @@ impl UserData for Opaque {
     }
 }
 
-// ---- Random -----------------------------------------------------------------
+// Random
 
 /// `Random`, a PCG32 generator. Roblox documents `Random` as PCG-based but
 /// not its seeding, so sequences for a given seed differ (Approximation).
@@ -155,7 +155,7 @@ impl UserData for LRandom {
     }
 }
 
-// ---- TweenInfo -----------------------------------------------------------------
+// TweenInfo
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct LTweenInfo {
@@ -214,7 +214,7 @@ fn tween_info_new(lua: &Lua, args: MultiValue) -> mlua::Result<LTweenInfo> {
     })
 }
 
-// ---- Faces, Axes, PhysicalProperties ----------------------------------------------
+// Faces, Axes, PhysicalProperties
 
 fn faces_new(lua: &Lua, args: MultiValue) -> mlua::Result<Opaque> {
     use rbx_types::Faces;

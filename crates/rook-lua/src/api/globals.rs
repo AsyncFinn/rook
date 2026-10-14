@@ -406,7 +406,7 @@ fn install_engine_helpers(lua: &Lua) -> mlua::Result<()> {
             .0;
         std.set("heartbeat", heartbeat)?;
         let tween: Table = lua
-            .load(include_str!("tween.luau"))
+            .load(include_str!("luau/tween.luau"))
             .set_name("=[rook] Tween")
             .call(std.clone())?;
         std.set("tween", tween)?;

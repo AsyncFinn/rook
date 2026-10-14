@@ -86,7 +86,7 @@ fn instance_list(a: &Args, i: usize) -> ApiResult<Vec<InstanceId>> {
     a.instances(i)
 }
 
-// ---- Legacy rays ------------------------------------------------------------
+// Legacy rays
 
 /// `Enum.Material.Air`, which a missed legacy ray reports.
 fn air() -> u32 {
@@ -141,7 +141,7 @@ fn find_part_on_ray_whitelist(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Ou
     ray_results(lua, &a, Filter::legacy_ray(only, true))
 }
 
-// ---- Regions ----------------------------------------------------------------
+// Regions
 
 /// Parts whose `Size` box meets `region`.
 fn in_bounds(lua: &Lua, region: Region, filter: &Filter, max: usize) -> Vec<InstanceId> {
@@ -212,7 +212,7 @@ fn is_region_empty_ignore(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcom
     Outcome::ret(lua, parts.is_empty())
 }
 
-// ---- Raycast and shape casts -------------------------------------------------
+// Raycast and shape casts
 
 fn raycast_params(a: &Args, i: usize) -> ApiResult<Params> {
     match a.get(i) {
@@ -280,7 +280,7 @@ fn spherecast(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
     cast(lua, CastShape::Sphere(radius), cf, dir, &params)
 }
 
-// ---- Overlaps ---------------------------------------------------------------
+// Overlaps
 
 fn part_bounds_in_box(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
     let (cf, size) = (cframe(&a, 0)?, vector(&a, 1)?);
