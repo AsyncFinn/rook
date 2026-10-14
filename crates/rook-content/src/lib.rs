@@ -14,7 +14,7 @@
 //!   or network.
 //!
 //! Decoders for what the bytes hold live here too, one per kind: [`mesh`]
-//! reads mesh files and [`image`] image files. See `docs/architecture.md`
+//! reads mesh files and [`image`] image files. See `docs/design/architecture.md`
 //! §8 "Content" and ROADMAP M4.
 
 pub mod cache;

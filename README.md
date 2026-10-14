@@ -10,7 +10,7 @@ An open engine for Roblox places: run them offline, host them yourself, mod them
 [![Rust 1.94+](https://img.shields.io/badge/rust-1.94%2B-orange.svg)](https://www.rust-lang.org)
 ![Status: early development](https://img.shields.io/badge/status-early%20development-yellow.svg)
 
-[Getting started](docs/getting-started.md) · [Features](docs/features.md) · [Tools](docs/tools.md) · [Roadmap](ROADMAP.md) · [Contributing](CONTRIBUTING.md) · [FAQ](#faq)
+[Getting started](docs/guide/getting-started.md) · [Features](docs/guide/features.md) · [Tools](docs/guide/tools.md) · [Roadmap](ROADMAP.md) · [Contributing](CONTRIBUTING.md) · [FAQ](#faq)
 
 </div>
 
@@ -61,7 +61,7 @@ Rook is in **early development**. File formats (M0), scripting (M1), the client/
 | Places that crash Rook | **0** |
 | Studio conformance cases | Instance API, property coercion, error messages, signal order, `wait`/`task` order, tweens |
 
-The numbers come from running an archive of real places through Rook ([how](docs/tools.md#working-with-an-archive)). The failures they list set the priorities.
+The numbers come from running an archive of real places through Rook ([how](docs/guide/tools.md#working-with-an-archive)). The failures they list set the priorities.
 
 ## Features
 
@@ -73,20 +73,21 @@ The numbers come from running an archive of real places through Rook ([how](docs
 - **Content:** `rbxasset://`, `rbxassetid://` and legacy asset URLs resolve from your own Roblox install, content folders, a disk cache and Roblox's asset delivery.
 - **Tools:** dump, round-trip, run headless, scan an archive, trace where content comes from and check behaviour against Studio.
 
-The full list is in [docs/features.md](docs/features.md).
+The full list is in [docs/guide/features.md](docs/guide/features.md).
 
 ## Documentation
 
-New here? Start with [Getting started](docs/getting-started.md): build Rook and open your first place in three commands.
+New here? Start with [Getting started](docs/guide/getting-started.md): build Rook and open your first place in three commands.
 
 
 | | |
 |---|---|
-| [Getting started](docs/getting-started.md) | Build Rook, open a place, controls and the command bar |
-| [Features](docs/features.md) | Everything Rook supports today |
-| [Tools](docs/tools.md) | The `rook` command-line tool: inspect, run headless, scan archives, conformance |
+| [Getting started](docs/guide/getting-started.md) | Build Rook, open a place, controls and the command bar |
+| [Features](docs/guide/features.md) | Everything Rook supports today |
+| [Tools](docs/guide/tools.md) | The `rook` command-line tool: inspect, run headless, scan archives, conformance |
 | [Roadmap](ROADMAP.md) | What's next, in what order, and why |
-| [Architecture](docs/architecture.md) | How Rook is built, and the rules every behaviour follows |
+| [Architecture](docs/design/architecture.md) | How Rook is built, and the rules every behaviour follows |
+| [Behaviour notes](docs/behavior/) | What Rook found in Studio and the archive, topic by topic |
 | [Contributing](CONTRIBUTING.md) | Reporting problems, finding your way around the code, running the checks |
 
 ## FAQ

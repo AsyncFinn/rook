@@ -12,7 +12,7 @@ The most valuable reports are:
 
 Please include:
 
-- The `rook run-headless place.rbxl` output (see [docs/tools.md](docs/tools.md)).
+- The `rook run-headless place.rbxl` output (see [docs/guide/tools.md](docs/guide/tools.md)).
 - If you can, a minimal place that reproduces it. Only share places you have the rights to share.
 - For a behaviour difference, what Roblox does and what Rook does.
 
@@ -20,7 +20,7 @@ Calling a member that Rook doesn't support yet gives an `"is not implemented in 
 
 ## Finding your way around
 
-Rook is a Cargo workspace of small crates whose dependencies only point downward. Everything goes through one runtime DataModel: `file → instances → properties → change journal → replication / rendering → scripts → events`. The full design is in [docs/architecture.md](docs/architecture.md), and background and sources are in [docs/research.md](docs/research.md).
+Rook is a Cargo workspace of small crates whose dependencies only point downward. Everything goes through one runtime DataModel: `file → instances → properties → change journal → replication / rendering → scripts → events`. The full design is in [docs/design/architecture.md](docs/design/architecture.md), and background and sources are in [docs/design/research.md](docs/design/research.md).
 
 | Crate | What it does |
 |---|---|
@@ -31,15 +31,26 @@ Rook is a Cargo workspace of small crates whose dependencies only point downward
 | [`rook-signal`](crates/rook-signal), [`rook-scheduler`](crates/rook-scheduler) | Signals, connections, timers and the deferred queue |
 | [`rook-lua`](crates/rook-lua) | The Luau bridge: Instance API, datatypes, globals, `require` |
 | [`rook-net`](crates/rook-net) | Server-to-client replication |
+| [`rook-content`](crates/rook-content) | Content URLs, the provider chain (Rook defaults, the Roblox install, asset delivery), the cache, and mesh and image decoding |
 | [`rook-physics`](crates/rook-physics) | Assemblies, joints, constraints, contacts and scene queries over Rapier |
 | [`rook-engine`](crates/rook-engine) | DataModels, services, script start rules, play sessions and the frame loop |
 | [`rook-render`](crates/rook-render) | The wgpu renderer |
 | [`rook-cli`](apps/rook-cli) | The `rook` command-line tool |
 | [`rook-player`](apps/rook-player) | The windowed player |
 
+### Where things live
+
+- **A Luau method** (`Instance:FindFirstChild`, `Model:PivotTo`): `rook-lua/src/api/methods/<topic>.rs`, registered in `methods.rs`. Methods written in Luau, and other Luau sources, are in `rook-lua/src/api/luau/`.
+- **A property's script-side behaviour:** `rook-lua/src/api/properties.rs`; member lookup is in `rook-lua/src/api/instance/`.
+- **Physics:** `rook-physics/src/`: `bodies.rs` (assemblies as Rapier bodies), `changes.rs` (applying the journal), `drives.rs` (hinges, movers, constraints), `step.rs`.
+- **What a part draws:** `rook-player/src/scene/look.rs` builds it; `rook-render/src/renderer/` draws it, with shaders in `rook-render/src/shaders/`.
+- **Findings from Studio and the archive:** `docs/behavior/<topic>.md`. The roadmap keeps only the plan and links there.
+
+Each crate's `lib.rs` holds its module list, re-exports and core type; everything else is one topic per file, around 500 lines at most. When a file outgrows that, split it by topic (`foo.rs` plus a `foo/` folder, never `mod.rs`). `scripts/check` lists files over 600 lines.
+
 ### Behaviour provenance
 
-Every behaviour Rook implements is recorded with its source and one of four statuses: **Confirmed** (creator-docs or a Studio recording), **Inference**, **Approximation** or **Rook extension**. This is both the record of a clean implementation and a map of how compatible Rook is. Rook-specific extensions sit behind an explicit profile and are off by default. See [docs/architecture.md](docs/architecture.md#10-behavior-provenance).
+Every behaviour Rook implements is recorded with its source and one of four statuses: **Confirmed** (creator-docs or a Studio recording), **Inference**, **Approximation** or **Rook extension**. This is both the record of a clean implementation and a map of how compatible Rook is. Rook-specific extensions sit behind an explicit profile and are off by default. See [docs/design/architecture.md](docs/design/architecture.md#10-behavior-provenance).
 
 ## Development
 

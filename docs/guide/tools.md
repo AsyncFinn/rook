@@ -64,4 +64,4 @@ rook conformance record   # run the cases in a Studio playtest and save the outp
 rook conformance run      # run the same cases in Rook and diff them
 ```
 
-Recording uses Roblox Studio's built-in MCP server, so Studio is only observed through its public scripting API. See [conformance/README.md](../conformance/README.md).
+Recording uses Roblox Studio's built-in MCP server, so Studio is only observed through its public scripting API. See [conformance/README.md](../../conformance/README.md).

@@ -1,6 +1,6 @@
-# Rook — Architecture Proposal
+# Rook — Architecture
 
-Status: **draft for review**, 2026-10-04. Nothing here is implemented yet. Background and sources are in [research.md](research.md).
+The current design, first drafted 2026-10-04 and kept up to date as the milestones land. Crates marked *(planned)* don't exist yet. Background and sources are in [research.md](research.md); what each milestone found in Studio is in [`docs/behavior/`](../behavior/).
 
 ## 1. Goals that shape the architecture
 
@@ -23,20 +23,20 @@ crates/
   rook-lua          mlua/Luau bridge: Instance & datatype userdata, globals, script environments, require
   rook-content      Content URIs, providers (Rook defaults, local Roblox install, packages, asset delivery), cache, decoders
   rook-physics      Assemblies, joints, constraints, collisions, queries — Roblox semantics over Rapier
-  rook-humanoid     Humanoid state machine and character controller
-  rook-gui          GUI layout, text measurement, hit testing (engine-side; produces draw lists)
+  rook-humanoid     (planned) Humanoid state machine and character controller
+  rook-gui          (planned) GUI layout, text measurement, hit testing (engine-side; produces draw lists)
   rook-render       wgpu renderer: render world, parts/meshes/materials/lighting/sky/particles/GUI pass
-  rook-audio        Sound / SoundGroup / SoundService over kira
-  rook-input        Keyboard/mouse/gamepad/touch -> UserInputService / ContextActionService
+  rook-audio        (planned) Sound / SoundGroup / SoundService over kira
+  rook-input        (planned) Keyboard/mouse/gamepad/touch -> UserInputService / ContextActionService
   rook-net          Replication (in-process loopback first, network transport later)
   rook-engine       Assembles a DataModel: services, systems, run modes, headless host
 apps/
   rook-cli          dump, roundtrip, run-headless, corpus-scan, conformance
   rook-player       windowed client (winit)
-  rook-server       headless server
-  rook-studio       editor (much later)
+  rook-server       (planned) headless server
+  rook-studio       (planned) editor (much later)
 conformance/         Studio-recorded expectations + the Luau cases that produced them
-docs/                research, architecture, behavior notes
+docs/                guide (users), design (architecture, research), behavior (findings per topic)
 ```
 
 Dependencies only point downward:
@@ -239,7 +239,7 @@ Status is one of **Confirmed**, **Inference**, **Approximation** or **Rook exten
 
 ## 12. Milestones
 
-The milestones, their order and exit criteria are in [ROADMAP.md](../ROADMAP.md).
+The milestones, their order and exit criteria are in [ROADMAP.md](../../ROADMAP.md).
 
 ## 13. Open decisions
 
