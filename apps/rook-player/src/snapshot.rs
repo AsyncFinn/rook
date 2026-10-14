@@ -185,8 +185,32 @@ fn lighting(dom: &Dom) -> Lighting {
     let day = (l.sun_direction.y * 4.0 + 0.5).clamp(0.05, 1.0);
     l.sky_top = l.sky_top.map(|c| c * day);
     l.sky_horizon = l.sky_horizon.map(|c| c * day);
+    l.reflection = l.sky_horizon;
     l
 }
+
+/// The skybox images of a Sky, in the order Up, Back, Front, Left, Right,
+/// Down (`rook_render::SKYBOX_FACES`): (`Content` property, legacy name).
+const SKYBOX: [(&str, &str); 6] = [
+    ("SkyboxUpContent", "SkyboxUp"),
+    ("SkyboxBackContent", "SkyboxBk"),
+    ("SkyboxFrontContent", "SkyboxFt"),
+    ("SkyboxLeftContent", "SkyboxLf"),
+    ("SkyboxRightContent", "SkyboxRt"),
+    ("SkyboxDownContent", "SkyboxDn"),
+];
+
+/// The sky a place without a Sky shows: the skybox in the user's Roblox
+/// install (`PlatformContent/pc/textures/sky/sky512_*.tex`, DDS files), in
+/// [`SKYBOX`] order. Without an install, Rook's own plain sky.
+const DEFAULT_SKYBOX: [&str; 6] = [
+    "rbxasset://textures/sky/sky512_up.tex",
+    "rbxasset://textures/sky/sky512_bk.tex",
+    "rbxasset://textures/sky/sky512_ft.tex",
+    "rbxasset://textures/sky/sky512_lf.tex",
+    "rbxasset://textures/sky/sky512_rt.tex",
+    "rbxasset://textures/sky/sky512_dn.tex",
+];
 
 /// How a part's CFrame places what it draws: its mesh's `Offset` in the
 /// part's axes, and whether the shape is turned upright (a CylinderMesh).
@@ -236,6 +260,11 @@ pub struct SceneCache {
     waiting: HashMap<FileRef, HashSet<InstanceId>>,
     /// What each part's mesh file last drew.
     shown: HashMap<InstanceId, Shown>,
+    /// The skybox images the lighting waits for.
+    sky_files: HashSet<FileRef>,
+    /// The lighting changed outside [`SceneCache::apply`] (a skybox image
+    /// arrived).
+    lighting_changed: bool,
 }
 
 impl SceneCache {
@@ -250,6 +279,8 @@ impl SceneCache {
             shown: HashMap::new(),
             poses: Vec::new(),
             free: Vec::new(),
+            sky_files: HashSet::new(),
+            lighting_changed: false,
         };
         cache.rebuild(dom);
         cache
@@ -281,7 +312,7 @@ impl SceneCache {
         }
         let index = &self.index;
         self.shown.retain(|id, _| index.contains_key(id));
-        self.scene.lighting = lighting(dom);
+        self.scene.lighting = self.lighting(dom);
     }
 
     /// Apply a frame's changes.
@@ -292,7 +323,7 @@ impl SceneCache {
             return SceneChange::Full;
         }
         if changes.lighting {
-            self.scene.lighting = lighting(dom);
+            self.scene.lighting = self.lighting(dom);
         }
         let mut changed = Vec::new();
         let workspace = dom.find_service("Workspace");
@@ -432,7 +463,13 @@ impl SceneCache {
                 }
                 None => {}
             }
+            if self.sky_files.remove(&key) {
+                self.lighting_changed = true;
+            }
             parts.extend(self.waiting.remove(&key).unwrap_or_default());
+        }
+        if self.lighting_changed {
+            self.scene.lighting = self.lighting(dom);
         }
         let mut changed = Vec::new();
         for id in parts {
@@ -441,6 +478,71 @@ impl SceneCache {
             }
         }
         changed
+    }
+
+    /// The Lighting service's look, with the place's skybox (its Sky, or
+    /// the install's default sky without one): once the six images have
+    /// loaded they are drawn behind everything, the plain sky colours
+    /// become their averages (the Up image above, the four sides at the
+    /// horizon), and so does what reflective parts take on (observed:
+    /// Studio's reflections follow the Sky, a black one turning a
+    /// 0.3-reflective yellow part olive). The sun, moon and stars, and
+    /// `SkyboxOrientation`, aren't drawn yet.
+    fn lighting(&mut self, dom: &Dom) -> Lighting {
+        let mut l = lighting(dom);
+        let sky = dom.find_service("Lighting").and_then(|id| {
+            dom.children(id)
+                .iter()
+                .copied()
+                .find(|&c| dom.class_name(c) == "Sky")
+        });
+        let mut averages = Vec::new();
+        let mut hashes = Vec::new();
+        for (i, (content, legacy)) in SKYBOX.iter().enumerate() {
+            let url = match sky {
+                Some(sky) => content_url(dom, sky, &[content, legacy]),
+                None => DEFAULT_SKYBOX[i].to_owned(),
+            };
+            let Some(r) = ContentRef::parse(&url) else {
+                return l;
+            };
+            let state = self.files.state(&r, Want::Image);
+            let key = (r, Want::Image);
+            match state {
+                FileState::Loaded(hash) => {
+                    let Some(image) = self.scene.images.get(&ImageHash(hash)) else {
+                        return l;
+                    };
+                    // The 1 x 1 mip is the image's average.
+                    let px = image.mips.last().expect("mip chain");
+                    averages.push([px[0], px[1], px[2]].map(|c| f32::from(c) / 255.0));
+                    hashes.push(ImageHash(hash));
+                }
+                FileState::Loading => {
+                    // All six are asked for at once.
+                    self.sky_files.insert(key);
+                }
+                FileState::Failed => return l,
+            }
+        }
+        if averages.len() < SKYBOX.len() {
+            return l;
+        }
+        let mean = |faces: &[[f32; 3]]| {
+            let n = faces.len() as f32;
+            [0, 1, 2].map(|i| faces.iter().map(|f| f[i]).sum::<f32>() / n)
+        };
+        l.sky_top = averages[0];
+        l.sky_horizon = mean(&averages[1..5]);
+        l.reflection = mean(&averages);
+        l.skybox = hashes.try_into().ok();
+        l
+    }
+
+    /// Whether the lighting changed since the last call outside
+    /// [`SceneCache::apply`] (a skybox image arrived).
+    pub fn take_lighting_change(&mut self) -> bool {
+        std::mem::take(&mut self.lighting_changed)
     }
 
     /// A file's state, noting that `part` waits for it while it loads.

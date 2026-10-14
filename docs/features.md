@@ -48,7 +48,7 @@ Everything Rook supports today. What's coming next is in [ROADMAP.md](../ROADMAP
 ## Rendering
 
 - A **wgpu** renderer (Vulkan, Metal, DirectX 12) that draws snapshots of the scene and never touches the instance tree.
-- Primitive parts (blocks, spheres, cylinders, wedges, corner wedges) with colour and transparency, a sky colour, sun, ambient light and fog.
+- Primitive parts (blocks, spheres, cylinders, wedges, corner wedges) with colour and transparency, the place's skybox (or the default sky from your Roblox install), sun, ambient light and fog.
 - **Sun shadows** from opaque parts, out to 300 studs from the camera, with `Lighting.GlobalShadows` and `BasePart.CastShadow`. The sun's position matches Studio's for every time and latitude.
 - The built-in mesh shapes (SpecialMesh types, BlockMesh, CylinderMesh) at the sizes Roblox draws them. The classic head comes from your Roblox install when there is one, and is Rook's own version otherwise.
 - **Mesh files**: SpecialMesh and FileMesh `MeshId`s and MeshParts, in Roblox mesh versions 1.00 to 5.00, at the sizes Studio draws them, with their `TextureId` and `VertexColor`. They load in the background and appear when they arrive, as in Roblox; parts sharing a mesh share one copy on the GPU.
@@ -56,7 +56,7 @@ Everything Rook supports today. What's coming next is in [ROADMAP.md](../ROADMAP
 - **Surfaces and materials**: studs, inlets, universal and weld surfaces on Plastic (from your Roblox install, or Rook's own), Neon and Reflectance. Other materials are drawn in their plain colour.
 - `rook-player` runs the place live in a window with a fly camera that drives `Workspace.CurrentCamera`, or renders a single frame to PNG offscreen.
 
-Material textures, skyboxes, unions' own shapes, terrain and other lighting (point and spot lights, Future lighting) are on the [roadmap](../ROADMAP.md).
+Material textures, the sun and moon in the sky, unions' own shapes, terrain and other lighting (point and spot lights, Future lighting) are on the [roadmap](../ROADMAP.md).
 
 ## Content
 

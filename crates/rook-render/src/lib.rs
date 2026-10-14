@@ -14,7 +14,7 @@ mod surfaces;
 
 pub use scene::{
     Camera, DrawShape, Image, ImageHash, ImagePlacement, Layer, Lighting, MaterialLook, Mesh,
-    MeshHash, NormalId, PartInstance, PartShape, Scene, SurfacePattern, Tiling,
+    MeshHash, NormalId, PartInstance, PartShape, SKYBOX_FACES, Scene, SurfacePattern, Tiling,
 };
 
 use std::collections::HashMap;
@@ -55,8 +55,12 @@ struct Globals {
     /// Each face's image right and up (`NormalId::image_axes`), in
     /// `NormalId` order; w holds the studs per surface pattern tile.
     faces: [[f32; 4]; 12],
-    /// The sky's horizon colour (sRGB), which reflective parts take on.
+    /// What reflective parts take on (`Lighting::reflection`, sRGB).
     sky: [f32; 4],
+    /// From clip space to directions from the camera, for the skybox.
+    sky_from_clip: [[f32; 4]; 4],
+    /// Each skybox image's direction, right and up ([`SKYBOX_FACES`]).
+    sky_faces: [[f32; 4]; 18],
 }
 
 /// Instance flags (see `shader.wgsl`).
@@ -479,6 +483,8 @@ pub struct Renderer {
     transparent_pipeline: wgpu::RenderPipeline,
     /// Decals and Textures over what's drawn.
     layer_pipeline: wgpu::RenderPipeline,
+    /// The skybox, behind everything.
+    sky_pipeline: wgpu::RenderPipeline,
     /// Depth only, from the sun, over the opaque batches.
     shadow_pipeline: wgpu::RenderPipeline,
     globals: wgpu::Buffer,
@@ -767,6 +773,41 @@ impl Renderer {
             },
         );
 
+        // The skybox: one full-screen triangle per image, each keeping the
+        // pixels whose direction its face covers; nothing written to depth,
+        // so everything draws over it.
+        let sky_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("rook sky"),
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_sky"),
+                compilation_options: Default::default(),
+                buffers: &[],
+            },
+            primitive: Default::default(),
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: DEPTH_FORMAT,
+                depth_write_enabled: Some(false),
+                depth_compare: Some(wgpu::CompareFunction::Always),
+                stencil: Default::default(),
+                bias: Default::default(),
+            }),
+            multisample: Default::default(),
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_sky"),
+                compilation_options: Default::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: color_format,
+                    blend: None,
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            multiview_mask: None,
+            cache: None,
+        });
+
         let cx = UploadContext {
             device: &device,
             queue: &queue,
@@ -803,6 +844,7 @@ impl Renderer {
             opaque_pipeline,
             transparent_pipeline,
             layer_pipeline,
+            sky_pipeline,
             shadow_pipeline,
             globals,
             bind_group,
@@ -908,6 +950,10 @@ impl Renderer {
     pub fn update_parts(&mut self, scene: &Scene, changed: &[usize]) {
         profiling::scope!("Renderer::update_parts");
         self.lighting = scene.lighting;
+        // The skybox's images go up like any other image.
+        for hash in scene.lighting.skybox.into_iter().flatten() {
+            self.image_readiness(hash, Some(scene));
+        }
         if self.placements.len() < scene.parts.len() {
             self.placements.resize(scene.parts.len(), Placement::Hidden);
         }
@@ -1226,7 +1272,17 @@ impl Renderer {
                 None => [0.0; 4],
             },
             faces,
-            sky: rgb(l.sky_horizon, 0.0),
+            sky: rgb(l.reflection, 0.0),
+            sky_from_clip: camera.sky_from_clip(aspect).to_cols_array_2d(),
+            sky_faces: {
+                let mut out = [[0.0; 4]; 18];
+                for (i, (dir, right, up)) in SKYBOX_FACES.iter().enumerate() {
+                    out[i * 3] = rgb(dir.to_array(), 0.0);
+                    out[i * 3 + 1] = rgb(right.to_array(), 0.0);
+                    out[i * 3 + 2] = rgb(up.to_array(), 0.0);
+                }
+                out
+            },
         };
         self.queue
             .write_buffer(&self.globals, 0, bytemuck::bytes_of(&globals));
@@ -1295,6 +1351,22 @@ impl Renderer {
             });
             pass.set_bind_group(0, &self.bind_group, &[]);
             pass.set_bind_group(1, &self.main_bind_group, &[]);
+            // The skybox, once all six images are up; otherwise the clear
+            // colour stands for it.
+            let skybox = l.skybox.and_then(|faces| {
+                let groups: Vec<_> = faces
+                    .iter()
+                    .map(|h| self.images.get(h).map(|g| &g.bind_group))
+                    .collect::<Option<_>>()?;
+                Some(groups)
+            });
+            if let Some(groups) = skybox {
+                pass.set_pipeline(&self.sky_pipeline);
+                for (face, group) in groups.into_iter().enumerate() {
+                    pass.set_bind_group(2, group, &[]);
+                    pass.draw(0..3, face as u32..face as u32 + 1);
+                }
+            }
             // Opaque parts, then images on them (before transparent parts,
             // so a window in front of a decal covers it), then transparent
             // parts back to front.

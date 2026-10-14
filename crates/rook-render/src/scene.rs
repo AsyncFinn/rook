@@ -130,6 +130,21 @@ impl PartInstance {
     }
 }
 
+/// Where each skybox image goes, in [`Lighting::skybox`] order: (the
+/// direction it covers, the image's right, the image's up), measured in
+/// Studio 0.742 (2026-10-13) with six labelled images. The four sides are
+/// upright and unmirrored seen from inside, the Left image at +X and the
+/// Right one at -X (the opposite of what the names suggest); Up's image has
+/// its top towards +X, Down's towards -X.
+pub const SKYBOX_FACES: [(Vec3, Vec3, Vec3); 6] = [
+    (Vec3::Y, Vec3::NEG_Z, Vec3::X),
+    (Vec3::Z, Vec3::NEG_X, Vec3::Y),
+    (Vec3::NEG_Z, Vec3::X, Vec3::Y),
+    (Vec3::X, Vec3::Z, Vec3::Y),
+    (Vec3::NEG_X, Vec3::NEG_Z, Vec3::Y),
+    (Vec3::NEG_Y, Vec3::NEG_Z, Vec3::NEG_X),
+];
+
 /// Scene lighting, mapped from the Lighting service.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Lighting {
@@ -144,6 +159,13 @@ pub struct Lighting {
     pub fog_end: f32,
     pub sky_top: [f32; 3],
     pub sky_horizon: [f32; 3],
+    /// What reflective parts take on (`Reflectance`): the sky's colour,
+    /// the average of the place's skybox when it has one (sRGB).
+    pub reflection: [f32; 3],
+    /// The skybox's six images, in [`SKYBOX_FACES`] order (Up, Back,
+    /// Front, Left, Right, Down), drawn behind everything once all six
+    /// are in [`Scene::images`]; `None` draws the plain sky colour.
+    pub skybox: Option<[ImageHash; 6]>,
     /// `Lighting.GlobalShadows`: false draws no shadows at all.
     pub global_shadows: bool,
 }
@@ -160,6 +182,8 @@ impl Default for Lighting {
             fog_end: 100_000.0,
             sky_top: [0.36, 0.56, 0.86],
             sky_horizon: [0.75, 0.84, 0.95],
+            reflection: [0.75, 0.84, 0.95],
+            skybox: None,
             global_shadows: true,
         }
     }
@@ -202,17 +226,27 @@ impl Camera {
         -self.rotation.z_axis
     }
 
-    pub(crate) fn view_projection(&self, aspect: f32) -> glam::Mat4 {
-        let view = glam::Mat4::from_mat3(self.rotation.transpose())
-            * glam::Mat4::from_translation(-self.position);
+    /// From clip space to directions from the camera (its rotation only),
+    /// for the skybox.
+    pub(crate) fn sky_from_clip(&self, aspect: f32) -> glam::Mat4 {
+        let view = glam::Mat4::from_mat3(self.rotation.transpose());
+        (Self::projection(self.fov_y, aspect) * view).inverse()
+    }
+
+    fn projection(fov_y: f32, aspect: f32) -> glam::Mat4 {
         // Reverse Z (near at depth 1, infinitely far at 0) keeps a float
         // depth buffer precise far away; with ordinary Z, surfaces a few
         // hundred studs off z-fight where they meet.
-        let proj = glam::camera::rh::proj::directx::perspective_infinite_reverse(
-            self.fov_y.to_radians(),
+        glam::camera::rh::proj::directx::perspective_infinite_reverse(
+            fov_y.to_radians(),
             aspect,
             0.1,
-        );
-        proj * view
+        )
+    }
+
+    pub(crate) fn view_projection(&self, aspect: f32) -> glam::Mat4 {
+        let view = glam::Mat4::from_mat3(self.rotation.transpose())
+            * glam::Mat4::from_translation(-self.position);
+        Self::projection(self.fov_y, aspect) * view
     }
 }
