@@ -4,13 +4,18 @@
 
 Rook follows [Semantic Versioning](https://semver.org):
 
-- **Minor** (`0.x.0`): a release with new features. Finishing a milestone is a natural time for one, but releases aren't tied to milestones, and each entry below says which milestone, if any, it finishes.
-- **Patch** (`0.x.y`): fixes only.
+- **Minor** (`0.x.0`): every change that adds or changes a feature is released as its own minor version, as it lands. Each entry says which milestone (and step) it belongs to, and which milestone it finishes, if any.
+- **Patch** (`0.x.y`): every fix, as it lands: something Rook already did, made to behave as Roblox does (`0.3.0` → `0.3.1`). Fixes landing together share one patch; fixes that ship inside a feature release are listed there as "Fixed:".
+- Docs, roadmap and internal changes with no effect on behaviour don't get a version of their own; they're listed under the next release.
 - Before 1.0, a minor release may also break things, as semver allows.
 
 Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z` in git. The pinned Roblox version (currently 0.741.19) is separate and listed under each release.
 
 ## [Unreleased]
+
+## [0.3.0] — 2026-10-14 — M3: physics; M4 steps 1–4
+
+Pinned Roblox version: 0.741.19. Finishes M3 Physics; M4 Content is in progress (built-in mesh shapes, asset fetching, file meshes, textures and decals, trusses, skyboxes).
 
 - Internal: source and docs reorganized, no behaviour change. Large files split by topic (one topic per file, `foo.rs` plus `foo/`, no `mod.rs`); Luau sources in `rook-lua/src/api/luau/`, shaders in `rook-render/src/shaders/`; typed property readers on `Value`, shared by physics and the player; docs grouped into `docs/guide/`, `docs/design/` and `docs/behavior/`, with M4's findings moved out of the roadmap; `scripts/check` lists files over 600 lines.
 - TrussParts draw as Studio draws them (M4): four corner rails with rungs every 2 studs and the braces of each Style (AlternatingSupports, BridgeStyleSupports, NoSupports), at any length and along any axis, from Studio observation and its OBJ export. Trusses of the same length and Style share one mesh and draw instanced. Setting a truss's Size snaps it as Studio does (conformance case `content/truss`).
