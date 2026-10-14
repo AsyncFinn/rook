@@ -70,7 +70,7 @@ impl Game {
                     .run_extra_script(source)
                     .map_err(anyhow::Error::msg)?;
             }
-            let camera = crate::snapshot::initial_camera(host.server());
+            let camera = crate::scene::initial_camera(host.server());
             (Mode::Run(Box::new(host)), camera)
         };
         let game = Self {

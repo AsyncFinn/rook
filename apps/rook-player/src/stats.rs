@@ -97,7 +97,7 @@ impl Summary {
     }
 }
 
-fn ms(d: Duration) -> f64 {
+pub(crate) fn ms(d: Duration) -> f64 {
     d.as_secs_f64() * 1000.0
 }
 

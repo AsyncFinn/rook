@@ -71,7 +71,7 @@ impl ServerThread {
                     let mut server = DataModel::load_place(&place, &options)?;
                     server.start();
                     let mut host = ServerHost::new(server);
-                    let camera = crate::snapshot::initial_camera(host.server());
+                    let camera = crate::scene::initial_camera(host.server());
                     let (_, joined) = host.join(&name, user_id)?;
                     if let Some(source) = &script {
                         host.server()
