@@ -166,6 +166,8 @@ fn run(resolver: &Resolver, (r, want): &Job) -> Outcome {
             let mesh = Mesh::decode(&fetched.bytes).map_err(|e| invalid(&e))?;
             fetched.mesh = Some(Arc::new(mesh));
         }
+        // Material textures come decoded.
+        Want::Image if fetched.image.is_some() => {}
         Want::Image => {
             profiling::scope!("decode image");
             let image = Image::decode(&fetched.bytes).map_err(|e| invalid(&e))?;

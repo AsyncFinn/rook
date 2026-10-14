@@ -26,12 +26,14 @@ mod loader;
 pub mod mesh;
 mod reference;
 mod resolver;
+pub mod studio_cache;
 
 pub use cache::Cache;
 pub use install::{Install, InstallKind};
 pub use loader::{Loader, Ticket, Want};
-pub use reference::{ContentRef, Thumbnail, image_url_rewrite};
+pub use reference::{ContentRef, MaterialMap, Thumbnail, image_url_rewrite};
 pub use resolver::{Config, ProviderKind, Resolver};
+pub use studio_cache::StudioCache;
 
 use std::fmt;
 use std::sync::Arc;
@@ -43,6 +45,9 @@ pub enum SourceKind {
     Defaults,
     /// The user's Roblox install.
     Install,
+    /// The user's Roblox content cache: the material textures Studio has
+    /// downloaded.
+    StudioCache,
     /// A folder the user pointed Rook at (`ROOK_CONTENT_DIRS`).
     Folder,
     /// Rook's disk cache of earlier downloads.
@@ -56,6 +61,7 @@ impl SourceKind {
         match self {
             Self::Defaults => "rook defaults",
             Self::Install => "roblox install",
+            Self::StudioCache => "roblox content cache",
             Self::Folder => "content folder",
             Self::Cache => "cache",
             Self::Delivery => "asset delivery",

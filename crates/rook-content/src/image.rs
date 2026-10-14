@@ -5,10 +5,13 @@
 //! has none): PNG, JPEG, BMP and DDS (DXT1, DXT3 and DXT5; the install's
 //! `.tex` files are DDS too), the formats found among the archive's images
 //! that load (ROADMAP M4 "Textures and decals (step 4)": no GIF or TGA
-//! turned up). Anything else is not an image, as in Studio, where a mesh
-//! or sound used as a texture draws nothing (ROADMAP M4 step 2).
+//! turned up), and KTX2 (BC1 and BC3), in which Roblox's material textures
+//! come ([`ktx2`]). Anything else is not an image, as in Studio, where a
+//! mesh or sound used as a texture draws nothing (ROADMAP M4 step 2).
 //!
 //! Decoding goes through the `image` crate.
+
+pub(crate) mod ktx2;
 
 use std::io::Cursor;
 
@@ -23,6 +26,7 @@ pub enum ImageFormat {
     Jpeg,
     Bmp,
     Dds,
+    Ktx2,
 }
 
 impl ImageFormat {
@@ -37,6 +41,8 @@ impl ImageFormat {
             Self::Bmp
         } else if starts(b"DDS ") {
             Self::Dds
+        } else if starts(ktx2::MAGIC) {
+            Self::Ktx2
         } else {
             return None;
         })
@@ -48,6 +54,7 @@ impl ImageFormat {
             Self::Jpeg => "JPEG",
             Self::Bmp => "BMP",
             Self::Dds => "DDS",
+            Self::Ktx2 => "KTX2",
         }
     }
 
@@ -56,7 +63,7 @@ impl ImageFormat {
             Self::Png => ::image::ImageFormat::Png,
             Self::Jpeg => ::image::ImageFormat::Jpeg,
             Self::Bmp => ::image::ImageFormat::Bmp,
-            Self::Dds => ::image::ImageFormat::Dds,
+            Self::Dds | Self::Ktx2 => ::image::ImageFormat::Dds,
         }
     }
 }
@@ -87,10 +94,23 @@ impl Image {
     /// Decode an image file and build its mips.
     pub fn decode(bytes: &[u8]) -> Result<Self, ImageError> {
         let format = ImageFormat::sniff(bytes).ok_or(ImageError::NotAnImage)?;
-        let decoded = ::image::load(Cursor::new(bytes), format.codec())
-            .map_err(|e| ImageError::Damaged(format.name(), e.to_string()))?;
-        let mut rgba = decoded.into_rgba8();
-        while rgba.width() > MAX_SIZE || rgba.height() > MAX_SIZE {
+        let rgba = match format {
+            ImageFormat::Ktx2 => ktx2::decode(bytes)?,
+            _ => ::image::load(Cursor::new(bytes), format.codec())
+                .map_err(|e| ImageError::Damaged(format.name(), e.to_string()))?
+                .into_rgba8(),
+        };
+        Self::from_rgba(rgba, format, MAX_SIZE)
+    }
+
+    /// An image from decoded pixels, halved until neither side is over
+    /// `max_size`, with its mips.
+    pub fn from_rgba(
+        mut rgba: ::image::RgbaImage,
+        format: ImageFormat,
+        max_size: u32,
+    ) -> Result<Self, ImageError> {
+        while rgba.width() > max_size || rgba.height() > max_size {
             let (w, h) = (rgba.width(), rgba.height());
             let half = downsample(&rgba, w, h);
             rgba = ::image::RgbaImage::from_raw((w / 2).max(1), (h / 2).max(1), half)

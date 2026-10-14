@@ -2,12 +2,12 @@
 
 use super::*;
 
-/// What an instanced draw shares: its mesh and its image (a mesh texture,
-/// or a layer's decal).
+/// What an instanced draw shares: its mesh and its images (a mesh
+/// texture or a layer's decal, and the material's maps).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct BatchKey {
     pub(crate) shape: DrawShape,
-    pub(crate) image: Option<ImageHash>,
+    pub(crate) images: renderer::ImageSet,
 }
 
 /// Instances of one key, drawn instanced. An instance keeps its slot while

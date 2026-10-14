@@ -4,13 +4,13 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use glam::{Mat3, Vec2, Vec3};
-use rook_content::{ContentRef, Resolver, Want};
+use rook_content::{ContentRef, MaterialMap, Resolver, Want};
 use rook_dom::{Dom, InstanceId};
 use rook_engine::{DataModel, RenderChanges};
 use rook_physics::{is_part, part_shape, workspace_parts};
 use rook_render::{
-    Camera, DrawShape, ImageHash, ImagePlacement, Layer, Lighting, Material, MeshHash, NormalId,
-    PartInstance, Scene, Tiling,
+    Camera, DrawShape, ImageHash, ImagePlacement, Layer, Lighting, Material, MaterialMaps,
+    MeshHash, NormalId, PartInstance, Scene, Tiling,
 };
 use rook_types::{
     CFrame, MeshKind, MeshLook, SurfaceType, TrussLook, TrussStyle, Value, mesh_part_scale,
@@ -21,6 +21,7 @@ use crate::files::{FileRef, FileState, Files, Loaded};
 mod lighting;
 mod loading;
 mod look;
+mod materials;
 mod props;
 
 use loading::*;

@@ -54,10 +54,10 @@ Everything Rook supports today. What's coming next is in [ROADMAP.md](../../ROAD
 - **Mesh files**: SpecialMesh and FileMesh `MeshId`s and MeshParts, in Roblox mesh versions 1.00 to 5.00, at the sizes Studio draws them, with their `TextureId` and `VertexColor`. They load in the background and appear when they arrive, as in Roblox; parts sharing a mesh share one copy on the GPU.
 - **Trusses** as Studio draws them: AlternatingSupports, BridgeStyleSupports and NoSupports at any length and along any axis, each truss one instanced draw of a mesh shared by every truss of the same length and Style. A script setting a truss's Size gets Studio's snapped size.
 - **Decals and Textures** on every part shape and mesh, placed as Studio places them: per face with `Color3`, `Transparency` and `ZIndex`, tiled by `StudsPerTile` and offsets, through a mesh's own UVs on file meshes and the classic head. Images (PNG, JPEG, BMP, DDS) load in the background; parts sharing one share one GPU texture.
-- **Surfaces and materials**: studs, inlets, universal and weld surfaces on Plastic (from your Roblox install, or Rook's own), Neon and Reflectance. Every material shades with its own roughness and metalness: sun highlights, and the sky reflected as far as `Lighting.EnvironmentSpecularScale` says. Material textures aren't drawn yet.
+- **Surfaces and materials**: studs, inlets, universal and weld surfaces on Plastic (from your Roblox install, or Rook's own), Neon and Reflectance. Every material is drawn with its textures, tinted by the part's Color at Studio's scale: Studio's own from your Roblox content cache (once Studio has shown the material), or Rook's own. Materials shade with their roughness and metalness: sun highlights, and the sky reflected as far as `Lighting.EnvironmentSpecularScale` says. Glass filters what's behind it, ForceField glows over it, and Neon glows past its colour.
 - `rook-player` runs the place live in a window with a fly camera that drives `Workspace.CurrentCamera`, or renders a single frame to PNG offscreen.
 
-Material textures, the sun and moon in the sky, unions' own shapes, terrain and other lighting (point and spot lights, Future lighting) are on the [roadmap](../../ROADMAP.md).
+MaterialVariants and SurfaceAppearance, the sun and moon in the sky, unions' own shapes, terrain and other lighting (point and spot lights, Future lighting) are on the [roadmap](../../ROADMAP.md).
 
 ## Content
 

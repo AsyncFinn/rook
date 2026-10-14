@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/*", "apps/*"]
 
 [workspace.package]
-version = "0.4.0"
+version = "0.5.0"
 edition = "2024"
 license = "Apache-2.0"
 authors = ["AsyncFinn"]
@@ -65,6 +65,10 @@ blake3 = "1"
 ureq = "3"
 # Roblox mesh files, versions 1.00 to 5.00 (rook-content)
 rbx_mesh = { version = "0.8", default-features = false }
+# Material textures (rook-content): KTX2 levels are Zstandard-compressed
+# (the same zstd rbx_binary uses), and Studio's content cache is SQLite.
+zstd = "0.13"
+rusqlite = { version = "0.40", features = ["bundled"] }
 slotmap = "1.1"
 # Fast, deterministic hashing for engine-internal maps keyed by ids and names
 rustc-hash = "2.1"

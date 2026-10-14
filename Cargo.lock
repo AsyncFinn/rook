@@ -739,6 +739,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b5343afd4a8365a643ac588dab4cf234a190c7f6c88c9f6dd6ffe00837661b7"
 
 [[package]]
+name = "fallible-iterator"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2acce4a10f12dc2fb14a218589d4f1f62ef011b2d0cc4b3cb1bba8e94da14649"
+
+[[package]]
+name = "fallible-streaming-iterator"
+version = "0.1.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7360491ce676a36bf9bb3c56c1aa791658183a54d2744120f27285738d90465a"
+
+[[package]]
 name = "fdeflate"
 version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1057,6 +1069,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "hashlink"
+version = "0.12.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a596f1b20ed2cc5ecac41a164aaebc7258057060f06c0cf7a2ba3991ee7990fb"
+dependencies = [
+ "hashbrown 0.17.1",
+]
+
+[[package]]
 name = "heapless"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1299,6 +1320,17 @@ dependencies = [
  "libc",
  "plain",
  "redox_syscall 0.9.4",
+]
+
+[[package]]
+name = "libsqlite3-sys"
+version = "0.38.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1d20bef17f513b9b3004532233187769cd072d790971f4e4da0e346eb6401e8"
+dependencies = [
+ "cc",
+ "pkg-config",
+ "vcpkg",
 ]
 
 [[package]]
@@ -2570,7 +2602,7 @@ checksum = "4e27ee8bb91ca0adcf0ecb116293afa12d393f9c2b9b9cd54d33e8078fe19839"
 
 [[package]]
 name = "rook-cli"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "blake3",
@@ -2593,20 +2625,23 @@ dependencies = [
 
 [[package]]
 name = "rook-content"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "blake3",
  "image",
  "profiling",
  "rbx_mesh",
+ "rook-types",
+ "rusqlite",
  "serde_json",
  "thiserror 2.0.21",
  "ureq",
+ "zstd",
 ]
 
 [[package]]
 name = "rook-dom"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "rbx_types",
  "rook-reflection",
@@ -2618,7 +2653,7 @@ dependencies = [
 
 [[package]]
 name = "rook-engine"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "anstream",
  "anstyle",
@@ -2641,7 +2676,7 @@ dependencies = [
 
 [[package]]
 name = "rook-formats"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "base64 0.23.1",
  "quick-xml 0.42.0",
@@ -2657,7 +2692,7 @@ dependencies = [
 
 [[package]]
 name = "rook-lua"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "glam 0.34.0",
  "mlua",
@@ -2676,7 +2711,7 @@ dependencies = [
 
 [[package]]
 name = "rook-net"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "profiling",
  "rook-dom",
@@ -2686,7 +2721,7 @@ dependencies = [
 
 [[package]]
 name = "rook-physics"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "glam 0.34.0",
  "profiling",
@@ -2700,7 +2735,7 @@ dependencies = [
 
 [[package]]
 name = "rook-player"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2723,7 +2758,7 @@ dependencies = [
 
 [[package]]
 name = "rook-reflection"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "rbx_reflection",
  "rbx_reflection_database",
@@ -2736,7 +2771,7 @@ dependencies = [
 
 [[package]]
 name = "rook-render"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "bytemuck",
  "glam 0.34.0",
@@ -2750,11 +2785,11 @@ dependencies = [
 
 [[package]]
 name = "rook-scheduler"
-version = "0.4.0"
+version = "0.5.0"
 
 [[package]]
 name = "rook-signal"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "rook-dom",
  "rook-reflection",
@@ -2764,10 +2799,20 @@ dependencies = [
 
 [[package]]
 name = "rook-types"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "glam 0.34.0",
  "rbx_types",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "rsqlite-vfs"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c51c9ae4df8a7fba42103df5c621fa3c37eccf3a3c650879e90fc48b11cc192c"
+dependencies = [
+ "hashbrown 0.16.1",
  "thiserror 2.0.21",
 ]
 
@@ -2780,6 +2825,21 @@ dependencies = [
  "heapless",
  "num-traits",
  "smallvec",
+]
+
+[[package]]
+name = "rusqlite"
+version = "0.40.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23f2a97da3e3873c73cb2a2e71b35c40ff95e0b1eefa8d72d8499a6928c3b5b3"
+dependencies = [
+ "bitflags 2.13.2",
+ "fallible-iterator",
+ "fallible-streaming-iterator",
+ "hashlink",
+ "libsqlite3-sys",
+ "smallvec",
+ "sqlite-wasm-rs",
 ]
 
 [[package]]
@@ -3114,6 +3174,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d9571ea910ebd84c86af4b3ed27f9dbdc6ad06f17c5f96146b2b671e2976744f"
 dependencies = [
  "bitflags 2.13.2",
+]
+
+[[package]]
+name = "sqlite-wasm-rs"
+version = "0.5.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc3efc0da82635d7e1ced0053bbbfa8c7ab9645d0bf36ceb4f7127bb85315d75"
+dependencies = [
+ "cc",
+ "js-sys",
+ "rsqlite-vfs",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -3478,6 +3550,12 @@ name = "valuable"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba73ea9cf16a25df0c8caa16c51acb937d5712a8429db78a3ee29d5dcacd3a65"
+
+[[package]]
+name = "vcpkg"
+version = "0.2.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 
 [[package]]
 name = "version_check"
