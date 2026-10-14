@@ -9,8 +9,8 @@ use rook_dom::{Dom, InstanceId};
 use rook_engine::{DataModel, RenderChanges};
 use rook_physics::{is_part, part_shape, workspace_parts};
 use rook_render::{
-    Camera, DrawShape, ImageHash, ImagePlacement, Layer, Lighting, MaterialLook, MeshHash,
-    NormalId, PartInstance, Scene, Tiling,
+    Camera, DrawShape, ImageHash, ImagePlacement, Layer, Lighting, Material, MeshHash, NormalId,
+    PartInstance, Scene, Tiling,
 };
 use rook_types::{
     CFrame, MeshKind, MeshLook, SurfaceType, TrussLook, TrussStyle, Value, mesh_part_scale,

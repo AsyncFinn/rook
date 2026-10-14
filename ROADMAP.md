@@ -133,6 +133,8 @@ renderer draws all of these as their part's plain box.
      MaterialService override.
    - *SurfaceAppearance* (13 files, 1,646 uses): PBR maps on MeshParts,
      with `AlphaMode` (Overlay, Transparency, TintMask) and `Color`.
+
+   Findings: [materials.md](docs/behavior/materials.md).
 6. **Unions**: draw UnionOperations with their own geometry instead of
    their bounding box (`UnionOperation.Content`, the union's geometry
    asset, is set on 70,944 unions in 99 files; `NegateOperation` 6 in 2).

@@ -185,31 +185,6 @@ impl SurfacePattern {
 /// face's top-left corner like a Texture (observed on a 3.5 × 1.5 face).
 pub const SURFACE_TILE_STUDS: f32 = 2.0;
 
-/// How a part's `Material` looks. Only Plastic shows surface patterns
-/// (observed: Studs and Inlet on every 2022 material, SmoothPlastic
-/// included, drew nothing but on Plastic). Neon is drawn unlit at full
-/// colour (observed). Every other material's texture is downloaded by
-/// Studio at runtime and isn't in the install, so Rook draws it plain
-/// (Approximation).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum MaterialLook {
-    Plastic,
-    Neon,
-    Plain,
-}
-
-impl MaterialLook {
-    /// The look of an `Enum.Material` value (Plastic 256, Neon 288). Parts
-    /// saved without a Material are Plastic, its default.
-    pub fn of(material: Option<u32>) -> Self {
-        match material {
-            None | Some(256) => Self::Plastic,
-            Some(288) => Self::Neon,
-            Some(_) => Self::Plain,
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -259,7 +234,7 @@ mod tests {
     }
 
     #[test]
-    fn surfaces_and_materials() {
+    fn surface_patterns() {
         assert_eq!(
             SurfaceType::from_u32(3).pattern(),
             Some(SurfacePattern::Studs)
@@ -270,8 +245,5 @@ mod tests {
         );
         assert_eq!(SurfaceType::from_u32(9), SurfaceType::Other);
         assert_eq!(SurfaceType::from_u32(6).pattern(), None);
-        assert_eq!(MaterialLook::of(None), MaterialLook::Plastic);
-        assert_eq!(MaterialLook::of(Some(272)), MaterialLook::Plain);
-        assert_eq!(MaterialLook::of(Some(288)), MaterialLook::Neon);
     }
 }

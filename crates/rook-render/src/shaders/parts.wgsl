@@ -50,8 +50,8 @@ fn vs_main(v: VertexIn) -> VertexOut {
     out.box_size = size;
     out.tile = v.i_tile;
     out.flags = v.i_flags;
-    out.surfaces = v.i_flags >> 8u;
-    out.reflectance = v.i_reflectance;
+    out.surfaces = v.i_flags >> SURFACES_SHIFT;
+    out.material = v.i_material;
     return out;
 }
 
@@ -106,7 +106,7 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
     let dx = dpdx(st);
     let dy = dpdy(st);
     if in.surfaces != 0u {
-        let pattern = (in.surfaces >> (face * 4u)) & 15u;
+        let pattern = (in.surfaces >> (face * 3u)) & 7u;
         if pattern != 0u {
             // The patterns are grey around 0.5: twice them leaves the
             // colour as it is between the studs.
@@ -117,13 +117,14 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
     if (in.flags & NEON) != 0u {
         return vec4(fog(albedo, in.world), in.color.a);
     }
-    var lit = shade(albedo, in.world, in.normal);
+    var lit = shade_pbr(albedo, in.world, in.normal, in.material.y, in.material.z);
     // Reflectance: the part takes on its surroundings, here the skybox's
     // average colour (Approximation: Studio reflects the skybox itself; a
     // red part at 0.2 looks pink under the default blue sky, and a yellow
     // one at 0.3 olive under a black Sky; observed).
-    if in.reflectance > 0.0 {
-        lit = mix(lit, fog(srgb_to_linear(g.sky.rgb), in.world), in.reflectance);
+    let reflectance = in.material.x;
+    if reflectance > 0.0 {
+        lit = mix(lit, fog(srgb_to_linear(g.sky.rgb), in.world), reflectance);
     }
     return vec4(lit, in.color.a);
 }

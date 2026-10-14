@@ -72,7 +72,7 @@ fn updating_parts_draws_what_a_new_scene_draws() {
         images: HashMap::from([(hash, image())]),
         ..Scene::default()
     };
-    scene.parts[3].material = MaterialLook::Plastic;
+    scene.parts[3].material = Material::Plastic;
     scene.parts[3].surfaces = [Some(SurfacePattern::Studs); 6];
     incremental.set_scene(&scene);
     let camera = Camera::look_at(Vec3::new(0.0, 3.0, 16.0), Vec3::ZERO);

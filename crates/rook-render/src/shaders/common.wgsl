@@ -19,7 +19,8 @@ struct Globals {
     // Each face's image right (even) and up (odd) in part axes, in
     // `NormalId` order; w = studs per surface pattern tile.
     faces: array<vec4<f32>, 12>,
-    // What reflective parts take on: the skybox's average colour (sRGB).
+    // What reflective parts take on: the skybox's average colour (sRGB);
+    // w = EnvironmentSpecularScale.
     sky: vec4<f32>,
     // From clip space to directions from the camera (the skybox).
     sky_from_clip: mat4x4<f32>,
@@ -46,6 +47,9 @@ const MODE_TILED: u32 = 2u;
 const MODE_MESH_UV: u32 = 3u;
 // The shape is turned onto the part's Y axis (a CylinderMesh).
 const UPRIGHT: u32 = 128u;
+// From bit 8, each face's surface pattern + 1 (0: none), 3 bits per face.
+const SURFACES_SHIFT: u32 = 8u;
+const PI: f32 = 3.14159265;
 
 struct VertexIn {
     @location(0) position: vec3<f32>,
@@ -68,10 +72,10 @@ struct VertexIn {
     // A Texture's studs per tile (xy) and offset (zw).
     @location(13) i_tile: vec4<f32>,
     // CAST, NEON, the layer's mode (bits 2-3) and face (bits 4-6),
-    // UPRIGHT (bit 7), and from bit 8 each face's surface pattern + 1 (0:
-    // none), 4 bits per face.
+    // UPRIGHT (bit 7), and the surface patterns (SURFACES_SHIFT).
     @location(14) i_flags: u32,
-    @location(15) i_reflectance: f32,
+    // Reflectance, roughness, metalness.
+    @location(15) i_material: vec4<f32>,
 };
 
 struct VertexOut {
@@ -89,7 +93,8 @@ struct VertexOut {
     @location(8) @interpolate(flat) tile: vec4<f32>,
     @location(9) @interpolate(flat) flags: u32,
     @location(10) @interpolate(flat) surfaces: u32,
-    @location(11) @interpolate(flat) reflectance: f32,
+    // Reflectance, roughness, metalness.
+    @location(11) @interpolate(flat) material: vec4<f32>,
     // The box face the point belongs to (255: from the normal).
     @location(12) @interpolate(flat) face: u32,
 };
@@ -132,16 +137,68 @@ fn sun_visibility(world: vec3<f32>, n: vec3<f32>) -> f32 {
     return mix(lit / 9.0, 1.0, fade);
 }
 
-// Sun, ambient and fog on a linear albedo.
-fn shade(albedo: vec3<f32>, world: vec3<f32>, normal: vec3<f32>) -> vec3<f32> {
-    let n = normalize(normal);
+// The sun's light reaching a surface with normal `n` (shadowed), times
+// the cosine of its angle.
+fn sun_light(world: vec3<f32>, n: vec3<f32>) -> f32 {
     var sun = max(dot(n, g.sun_dir.xyz), 0.0) * g.fog_color.w * 0.5;
     if sun > 0.0 {
         sun *= sun_visibility(world, n);
     }
+    return sun;
+}
+
+// Ambient and OutdoorAmbient (fading on faces pointing down).
+fn ambient_light(n: vec3<f32>) -> vec3<f32> {
     let sky = 0.5 + 0.5 * n.y;
-    let ambient = srgb_to_linear(g.ambient.rgb) + srgb_to_linear(g.outdoor_ambient.rgb) * sky;
-    return fog(albedo * (ambient + vec3(sun)), world);
+    return srgb_to_linear(g.ambient.rgb) + srgb_to_linear(g.outdoor_ambient.rgb) * sky;
+}
+
+// Sun, ambient and fog on a linear albedo, without highlights (decals).
+fn shade(albedo: vec3<f32>, world: vec3<f32>, normal: vec3<f32>) -> vec3<f32> {
+    let n = normalize(normal);
+    return fog(albedo * (ambient_light(n) + vec3(sun_light(world, n))), world);
+}
+
+// Physically based shading (Approximation, tuned against Studio 0.742,
+// docs/behavior/materials.md): the diffuse light of `shade`, a GGX
+// highlight from the sun, and the sky reflected with Schlick's Fresnel
+// (weaker at grazing angles the rougher the surface), in the albedo's
+// colour on metals. The reflection is scaled by EnvironmentSpecularScale
+// (`g.sky.w`), and metals lose their diffuse light only as far as it
+// reflects: at 0, a Foil part is lit like Plastic (observed). The sky
+// reflected is its average colour (`g.sky`), as Reflectance uses.
+fn shade_pbr(
+    albedo: vec3<f32>,
+    world: vec3<f32>,
+    normal: vec3<f32>,
+    roughness: f32,
+    metalness: f32,
+) -> vec3<f32> {
+    let n = normalize(normal);
+    let v = normalize(g.camera_pos.xyz - world);
+    let l = g.sun_dir.xyz;
+    let sun = sun_light(world, n);
+    let f0 = mix(vec3(0.04), albedo, metalness);
+    let n_v = max(dot(n, v), 1e-4);
+    let environment = g.sky.w;
+    var color = albedo * (1.0 - metalness * environment) * (ambient_light(n) + vec3(sun));
+    if sun > 0.0 {
+        let h = normalize(l + v);
+        let n_h = max(dot(n, h), 0.0);
+        let n_l = max(dot(n, l), 1e-4);
+        let a = max(roughness * roughness, 0.002);
+        let a2 = a * a;
+        let d = a2 / (PI * pow(n_h * n_h * (a2 - 1.0) + 1.0, 2.0));
+        let k = (roughness + 1.0) * (roughness + 1.0) / 8.0;
+        let vis = 1.0 / (4.0 * (n_l * (1.0 - k) + k) * (n_v * (1.0 - k) + k));
+        let f = f0 + (1.0 - f0) * pow(1.0 - max(dot(h, v), 0.0), 5.0);
+        // `sun` already holds the cosine; Lambert's 1/pi is folded into
+        // the diffuse term, so the highlight takes it back.
+        color += d * vis * f * sun * PI;
+    }
+    let fresnel = f0 + (max(vec3(1.0 - roughness), f0) - f0) * pow(1.0 - n_v, 5.0);
+    color += srgb_to_linear(g.sky.rgb) * fresnel * environment;
+    return fog(color, world);
 }
 
 fn fog(color: vec3<f32>, world: vec3<f32>) -> vec3<f32> {

@@ -13,6 +13,14 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-10-14 — M4 step 5: PBR shading
+
+Pinned Roblox version: 0.741.19. M4 Content continues (materials and PBR, first part).
+
+- Every material shades with its own roughness and metalness, measured from Studio's own material maps: a GGX sun highlight (sharp on SmoothPlastic, Ice, Glass and Metal, soft on Plastic) and the sky reflected with Fresnel. `Lighting.EnvironmentSpecularScale` sets how much parts reflect the sky and how far metals trade their diffuse light for it; at 0, which places saved without it read, Foil is lit like Plastic, as in Studio 0.742. Plastic's surfaces, Neon and Reflectance look as before. Findings: `docs/behavior/materials.md`.
+- Internal: `Enum.Material` is defined once, in `rook-types` (`Material`, with each material's value, name and shading); physics' density and friction table is keyed by it. Materials not in the enum still draw and simulate as Plastic.
+- Docs: where Studio keeps the material textures it downloads (its `rbx-storage` cache, as KTX2 texture packs), and that Studio 0.742 draws the 2022 materials whatever `Use2022Materials` says (`docs/behavior/materials.md`).
+
 ## [0.3.0] — 2026-10-14 — M3: physics; M4 steps 1–4
 
 Pinned Roblox version: 0.741.19. Finishes M3 Physics; M4 Content is in progress (built-in mesh shapes, asset fetching, file meshes, textures and decals, trusses, skyboxes).

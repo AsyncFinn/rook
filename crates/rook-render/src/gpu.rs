@@ -19,7 +19,8 @@ pub(crate) struct Globals {
     /// Each face's image right and up (`NormalId::image_axes`), in
     /// `NormalId` order; w holds the studs per surface pattern tile.
     pub(crate) faces: [[f32; 4]; 12],
-    /// What reflective parts take on (`Lighting::reflection`, sRGB).
+    /// What reflective parts take on (`Lighting::reflection`, sRGB); w is
+    /// `Lighting::environment_specular`.
     pub(crate) sky: [f32; 4],
     /// From clip space to directions from the camera, for the skybox.
     pub(crate) sky_from_clip: [[f32; 4]; 4],
@@ -34,6 +35,8 @@ pub(crate) const MODE_FACE: u32 = 1;
 pub(crate) const MODE_TILED: u32 = 2;
 pub(crate) const MODE_MESH_UV: u32 = 3;
 pub(crate) const UPRIGHT: u32 = 1 << 7;
+/// Where the surface patterns start: 3 bits per face.
+pub(crate) const SURFACES_SHIFT: u32 = 8;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
@@ -52,17 +55,17 @@ pub(crate) struct Instance {
     tile: [f32; 4],
     /// CAST, NEON, an image layer's mode (bits 2-3) and face (4-6),
     /// UPRIGHT (bit 7), and from bit 8 each face's surface pattern + 1,
-    /// four bits per face (wgpu allows 16 vertex attributes in all).
+    /// three bits per face (wgpu allows 16 vertex attributes in all).
     flags: u32,
-    /// A part's `Reflectance`.
-    reflectance: f32,
+    /// A part's `Reflectance`, roughness and metalness.
+    material: [f32; 4],
 }
 
 impl Instance {
     pub(crate) fn new(p: &PartInstance, (box_min, box_max): (Vec3, Vec3)) -> Self {
         let mut flags = 0;
         let mut tile = [1.0, 1.0, 0.0, 0.0];
-        let mut reflectance = 0.0;
+        let mut material = [0.0; 4];
         if p.upright {
             flags |= UPRIGHT;
         }
@@ -71,14 +74,20 @@ impl Instance {
                 if p.cast_shadow {
                     flags |= CAST;
                 }
-                if p.material == MaterialLook::Neon {
+                if p.material == Material::Neon {
                     flags |= NEON;
                 }
-                reflectance = p.reflectance.clamp(0.0, 1.0);
-                if p.material == MaterialLook::Plastic {
+                let shading = p.material.shading();
+                material = [
+                    p.reflectance.clamp(0.0, 1.0),
+                    shading.roughness,
+                    shading.metalness,
+                    0.0,
+                ];
+                if p.material.shows_surfaces() {
                     for (face, pattern) in p.surfaces.iter().enumerate() {
                         if let Some(pattern) = pattern {
-                            flags |= (*pattern as u32 + 1) << (8 + face * 4);
+                            flags |= (*pattern as u32 + 1) << (SURFACES_SHIFT + face as u32 * 3);
                         }
                     }
                 }
@@ -111,7 +120,7 @@ impl Instance {
             box_max: box_max.to_array(),
             tile,
             flags,
-            reflectance,
+            material,
         }
     }
 }

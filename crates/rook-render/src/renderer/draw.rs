@@ -124,7 +124,7 @@ impl Renderer {
                 None => [0.0; 4],
             },
             faces,
-            sky: rgb(l.reflection, 0.0),
+            sky: rgb(l.reflection, l.environment_specular),
             sky_from_clip: camera.sky_from_clip(aspect).to_cols_array_2d(),
             sky_faces: {
                 let mut out = [[0.0; 4]; 18];

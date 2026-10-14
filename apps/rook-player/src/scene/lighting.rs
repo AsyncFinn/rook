@@ -43,6 +43,11 @@ pub(super) fn lighting(dom: &Dom) -> Lighting {
     if let Some(s) = boolean(dom, id, "GlobalShadows") {
         l.global_shadows = s;
     }
+    // Observed in Studio 0.742: a place saved without it reads 0, and at 0
+    // nothing reflects the sky (docs/behavior/materials.md).
+    l.environment_specular = number(dom, id, "EnvironmentSpecularScale")
+        .unwrap_or(0.0)
+        .clamp(0.0, 1.0);
     // A night sky darkens towards black as the sun sets (Approximation
     // until skyboxes are supported).
     let day = (l.sun_direction.y * 4.0 + 0.5).clamp(0.05, 1.0);

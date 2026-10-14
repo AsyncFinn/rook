@@ -11,6 +11,7 @@
 mod cframe;
 mod clock;
 mod color;
+mod material;
 mod mesh;
 mod shape;
 mod surface;
@@ -22,11 +23,10 @@ mod vector;
 pub use cframe::CFrame;
 pub use clock::{clock_hours, time_of_day};
 pub use color::Color3;
+pub use material::{Material, Shading};
 pub use mesh::{MeshKind, MeshLook, head_scale, mesh_part_scale};
 pub use shape::PartShape;
-pub use surface::{
-    MaterialLook, NormalId, SURFACE_TILE_STUDS, SurfacePattern, SurfaceType, Tiling,
-};
+pub use surface::{NormalId, SURFACE_TILE_STUDS, SurfacePattern, SurfaceType, Tiling};
 pub use truss::{Lean, TRUSS_MAX_LENGTH, TrussLook, TrussShape, TrussStyle, truss_size};
 pub use udim::{UDim, UDim2};
 pub use value::{InstanceRef, Value, ValueError};
