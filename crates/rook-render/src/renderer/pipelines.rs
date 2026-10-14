@@ -1,0 +1,219 @@
+//! The render pipelines and the shader they share.
+
+use super::*;
+
+/// The shader: shared bindings and lighting, then each pass's entry points.
+const SHADER: &str = concat!(
+    include_str!("../shaders/common.wgsl"),
+    include_str!("../shaders/parts.wgsl"),
+    include_str!("../shaders/sky.wgsl"),
+);
+
+/// The render pipelines, built once.
+#[derive(Debug)]
+pub(crate) struct Pipelines {
+    pub(crate) opaque: wgpu::RenderPipeline,
+    pub(crate) transparent: wgpu::RenderPipeline,
+    /// Decals and Textures over what's drawn.
+    pub(crate) layer: wgpu::RenderPipeline,
+    /// The skybox, behind everything.
+    pub(crate) sky: wgpu::RenderPipeline,
+    /// Depth only, from the sun, over the opaque batches.
+    pub(crate) shadow: wgpu::RenderPipeline,
+}
+
+impl Pipelines {
+    pub(crate) fn new(
+        device: &wgpu::Device,
+        color_format: wgpu::TextureFormat,
+        layout: &wgpu::BindGroupLayout,
+        main_layout: &wgpu::BindGroupLayout,
+        image_layout: &wgpu::BindGroupLayout,
+    ) -> Self {
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("rook parts"),
+            source: wgpu::ShaderSource::Wgsl(SHADER.into()),
+        });
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("rook parts"),
+            bind_group_layouts: &[Some(layout), Some(main_layout), Some(image_layout)],
+            immediate_size: 0,
+        });
+        // The shadow pass writes the map, so it can't bind it.
+        let shadow_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("rook shadow map"),
+                bind_group_layouts: &[Some(layout)],
+                immediate_size: 0,
+            });
+        let vertex_attrs = wgpu::vertex_attr_array![
+            0 => Float32x3, 1 => Float32x3, 2 => Float32x2, 3 => Float32x3, 4 => Uint32
+        ];
+        let instance_attrs = wgpu::vertex_attr_array![
+            5 => Float32x3, 6 => Float32x3, 7 => Float32x3, 8 => Float32x3,
+            9 => Float32x3, 10 => Float32x4, 11 => Float32x3, 12 => Float32x3,
+            13 => Float32x4, 14 => Uint32, 15 => Float32
+        ];
+        let buffers = [
+            Some(wgpu::VertexBufferLayout {
+                array_stride: std::mem::size_of::<mesh::Vertex>() as u64,
+                step_mode: wgpu::VertexStepMode::Vertex,
+                attributes: &vertex_attrs,
+            }),
+            Some(wgpu::VertexBufferLayout {
+                array_stride: std::mem::size_of::<Instance>() as u64,
+                step_mode: wgpu::VertexStepMode::Instance,
+                attributes: &instance_attrs,
+            }),
+        ];
+        let make = |label,
+                    fragment,
+                    blend: Option<wgpu::BlendState>,
+                    depth_write: bool,
+                    compare: wgpu::CompareFunction,
+                    bias: wgpu::DepthBiasState| {
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some(label),
+                layout: Some(&pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: &shader,
+                    entry_point: Some("vs_main"),
+                    compilation_options: Default::default(),
+                    buffers: &buffers,
+                },
+                primitive: wgpu::PrimitiveState {
+                    cull_mode: Some(wgpu::Face::Back),
+                    ..Default::default()
+                },
+                depth_stencil: Some(wgpu::DepthStencilState {
+                    format: DEPTH_FORMAT,
+                    depth_write_enabled: Some(depth_write),
+                    depth_compare: Some(compare),
+                    stencil: Default::default(),
+                    bias,
+                }),
+                multisample: Default::default(),
+                fragment: Some(wgpu::FragmentState {
+                    module: &shader,
+                    entry_point: Some(fragment),
+                    compilation_options: Default::default(),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: color_format,
+                        blend,
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                }),
+                multiview_mask: None,
+                cache: None,
+            })
+        };
+        let shadow_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("rook shadow map"),
+            layout: Some(&shadow_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_shadow"),
+                compilation_options: Default::default(),
+                buffers: &buffers,
+            },
+            primitive: wgpu::PrimitiveState {
+                cull_mode: Some(wgpu::Face::Back),
+                ..Default::default()
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: DEPTH_FORMAT,
+                depth_write_enabled: Some(true),
+                depth_compare: Some(wgpu::CompareFunction::Greater),
+                stencil: Default::default(),
+                // Pushes casters away from the sun (smaller in reverse Z)
+                // where they slope across its view, against acne on faces
+                // the sun grazes; the normal offset handles the rest.
+                bias: wgpu::DepthBiasState {
+                    constant: 0,
+                    slope_scale: -1.5,
+                    clamp: 0.0,
+                },
+            }),
+            multisample: Default::default(),
+            fragment: None,
+            multiview_mask: None,
+            cache: None,
+        });
+        // Reverse Z: nearer is greater.
+        let opaque_pipeline = make(
+            "rook opaque",
+            "fs_main",
+            None,
+            true,
+            wgpu::CompareFunction::Greater,
+            Default::default(),
+        );
+        let transparent_pipeline = make(
+            "rook transparent",
+            "fs_main",
+            Some(wgpu::BlendState::ALPHA_BLENDING),
+            false,
+            wgpu::CompareFunction::Greater,
+            Default::default(),
+        );
+        // Images lie exactly on their part's surface: the same vertices
+        // through the same (invariant) maths give the same depth.
+        let layer_pipeline = make(
+            "rook images",
+            "fs_layer",
+            Some(wgpu::BlendState::ALPHA_BLENDING),
+            false,
+            wgpu::CompareFunction::GreaterEqual,
+            // Towards the camera (greater in reverse Z), so an image also
+            // wins over another part's face lying in the same plane, as in
+            // Roblox, instead of fighting it.
+            wgpu::DepthBiasState {
+                constant: 4,
+                slope_scale: 1.0,
+                clamp: 0.0,
+            },
+        );
+
+        // The skybox: one full-screen triangle per image, each keeping the
+        // pixels whose direction its face covers; nothing written to depth,
+        // so everything draws over it.
+        let sky_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("rook sky"),
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_sky"),
+                compilation_options: Default::default(),
+                buffers: &[],
+            },
+            primitive: Default::default(),
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: DEPTH_FORMAT,
+                depth_write_enabled: Some(false),
+                depth_compare: Some(wgpu::CompareFunction::Always),
+                stencil: Default::default(),
+                bias: Default::default(),
+            }),
+            multisample: Default::default(),
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_sky"),
+                compilation_options: Default::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: color_format,
+                    blend: None,
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            multiview_mask: None,
+            cache: None,
+        });
+        Self {
+            opaque: opaque_pipeline,
+            transparent: transparent_pipeline,
+            layer: layer_pipeline,
+            sky: sky_pipeline,
+            shadow: shadow_pipeline,
+        }
+    }
+}
