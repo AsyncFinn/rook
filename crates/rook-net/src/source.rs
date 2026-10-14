@@ -156,7 +156,7 @@ fn withheld(server: &Dom, id: InstanceId, property: PropertyId) -> bool {
         prop.kind,
         PropertyKind::Canonical(Serialization::SerializesAs(_))
     );
-    if prop.flags.not_replicated && !replicated_as_other {
+    if prop.flags.not_replicated && !replicated_as_other && !replicated_by_twin(db, prop) {
         return true;
     }
     if prop.name == "Source" && server.class_name(id) == "Script" {
@@ -172,4 +172,76 @@ fn withheld(server: &Dom, id: InstanceId, property: PropertyId) -> bool {
             prop.kind,
             PropertyKind::Canonical(Serialization::Migrate { .. })
         )
+}
+
+/// Whether Roblox sends a NotReplicated property to clients through a
+/// hidden twin that Rook doesn't store, so Rook must send the property
+/// itself. Found by listing every saved, NotReplicated property in the
+/// database (the rest are server- or Studio-only):
+///
+/// - a replicated twin named `<name>Replicator`, `<name>Replicate` or
+///   `<name>Replicating`: Sound's `Playing` and `TimePosition`, VideoFrame's,
+///   BasePart's `CollisionGroup`, MeshPart's `RenderFidelity`, Humanoid's
+///   `Jump`, Player's `AccountAge` and `MembershipType`, and Instance's
+///   `Attributes` (which Rook sends on their own anyway);
+/// - an `Xml` property whose replicated twin drops the suffix
+///   (BallSocketConstraint's `MaxFrictionTorqueXml`);
+/// - pairs with nothing in their names to go by: Sound's `PlaybackSpeed`
+///   (replicated as `Pitch`), Player's `Team` (Roblox clients read their
+///   team) and Workspace's `CollisionGroups` (clients know the registered
+///   groups).
+///
+/// Confirmed for Sound's three (the server's sounds are heard on clients,
+/// at their speed); Inference from the database for the rest.
+fn replicated_by_twin(db: &rook_reflection::Database, prop: &rook_reflection::Property) -> bool {
+    if matches!(
+        (db.class(prop.owner).name, prop.name),
+        ("Sound", "PlaybackSpeed") | ("Player", "Team") | ("Workspace", "CollisionGroups")
+    ) {
+        return true;
+    }
+    let replicated = |name: &str| {
+        db.find_property(prop.owner, name)
+            .is_some_and(|twin| twin.owner == prop.owner && !twin.flags.not_replicated)
+    };
+    ["Replicator", "Replicate", "Replicating"]
+        .iter()
+        .any(|suffix| replicated(&format!("{}{suffix}", prop.name)))
+        || prop.name.strip_suffix("Xml").is_some_and(replicated)
+}
+
+#[cfg(test)]
+mod twin_tests {
+    use super::*;
+
+    /// Exactly these saved, NotReplicated properties reach clients.
+    #[test]
+    fn replicated_twins() {
+        let db = rook_reflection::database();
+        let mut found: Vec<String> = (0..db.property_count())
+            .map(|i| db.property(PropertyId(i as u32)))
+            .filter(|p| p.flags.not_replicated && replicated_by_twin(db, p))
+            .map(|p| format!("{}.{}", db.class(p.owner).name, p.name))
+            .collect();
+        found.sort();
+        assert_eq!(
+            found,
+            [
+                "BallSocketConstraint.MaxFrictionTorqueXml",
+                "BasePart.CollisionGroup",
+                "Humanoid.Jump",
+                "Instance.Attributes",
+                "MeshPart.RenderFidelity",
+                "Player.AccountAge",
+                "Player.MembershipType",
+                "Player.Team",
+                "Sound.PlaybackSpeed",
+                "Sound.Playing",
+                "Sound.TimePosition",
+                "VideoFrame.Playing",
+                "VideoFrame.TimePosition",
+                "Workspace.CollisionGroups",
+            ]
+        );
+    }
 }
