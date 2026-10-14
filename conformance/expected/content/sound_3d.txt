@@ -1,0 +1,12 @@
+-- studio 0.743.0.7431133
+-- signals: immediate
+defaults 10 10000 Enum.RollOffMode.Inverse 10 10000
+EmitterSize sets min 7
+MaxDistance sets max 50
+negative min 0
+min past max kept 20 3
+SoundService 1 3.33 1
+listener Enum.ListenerType.Camera nil
+CFrame listener Enum.ListenerType.CFrame 1, 2, 3, 1, 0, 0, 0, 1, 0, 0, 0, 1
+object listener Enum.ListenerType.ObjectCFrame true
+back to camera Enum.ListenerType.Camera nil

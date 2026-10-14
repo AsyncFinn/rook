@@ -59,6 +59,10 @@ const SAME_AS: &[(&str, &str, &str)] = &[
     ("IntConstrainedValue", "Value", "ConstrainedValue"),
     ("DoubleConstrainedValue", "Value", "ConstrainedValue"),
     ("Sound", "Pitch", "PlaybackSpeed"),
+    // Observed: the deprecated MaxDistance reads and sets
+    // RollOffMaxDistance (EmitterSize is RollOffMinDistance's alias in the
+    // database already).
+    ("Sound", "MaxDistance", "RollOffMaxDistance"),
     ("GuiObject", "Transparency", "BackgroundTransparency"),
     ("GuiBase2d", "Localize", "AutoLocalize"),
     (
@@ -312,7 +316,8 @@ pub(crate) fn set(
 
 /// Sound properties with rules of their own (observed in Studio 0.743):
 /// `Volume` is kept within 0 to 10 and `PlaybackSpeed` (and `Pitch`) within
-/// 0 to 20; a `TimePosition` a script sets is where the next `Play` starts.
+/// 0 to 20, the roll-off distances at 0 or more; a `TimePosition` a script
+/// sets is where the next `Play` starts.
 fn set_sound(
     w: &mut World,
     id: InstanceId,
@@ -333,6 +338,17 @@ fn set_sound(
             "PlaybackSpeed",
             Value::Float32(v.clamp(0.0, 20.0) as f32),
         )),
+        // Observed: a negative RollOffMinDistance reads 0; a minimum past
+        // the maximum is kept as it is. A negative maximum is taken to be
+        // 0 the same way (Inference).
+        ("RollOffMinDistance" | "EmitterSize" | "RollOffMaxDistance" | "MaxDistance", Some(v)) => {
+            let target = if name.contains("Max") {
+                "RollOffMaxDistance"
+            } else {
+                "RollOffMinDistance"
+            };
+            Some(set_named(w, id, target, Value::Float32(v.max(0.0) as f32)))
+        }
         ("TimePosition", Some(t)) => {
             w.sounds.entry(id).or_default().start = t;
             Some(set_named(w, id, "TimePosition", Value::Float64(t)))

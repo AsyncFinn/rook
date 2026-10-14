@@ -10,6 +10,7 @@ rust-version.workspace = true
 
 [dependencies]
 cpal.workspace = true
+glam.workspace = true
 rook-content.workspace = true
 
 [lints]

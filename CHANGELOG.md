@@ -13,6 +13,15 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-10-14 — M5 step 3: 3D sound
+
+Pinned Roblox version: 0.741.19. Finishes M5 step 3; M5 Audio continues with SoundService, SoundGroups and effects.
+
+- Sounds under a BasePart or Attachment in Workspace are heard from there: full volume within `RollOffMinDistance`, fading by `RollOffMode` (Inverse, Linear, LinearSquare, InverseTapered) and silent past `RollOffMaxDistance`, with `SoundService.RolloffScale`; panned between left and right as Studio's stereo output pans them. Every other sound is global. Measured from Studio's own audio output; findings in `docs/behavior/audio.md`.
+- `SoundService:SetListener` and `GetListener` (Camera, CFrame, ObjectPosition, ObjectCFrame); the camera is the default listener.
+- The deprecated `MaxDistance` reads and sets `RollOffMaxDistance`, and a negative roll-off distance reads 0, as in Studio (conformance case `content/sound_3d`).
+- The mixer ramps gain changes over one buffer, so moving sounds don't click.
+
 ## [0.9.0] — 2026-10-14 — M5 step 2: the Sound API
 
 Pinned Roblox version: 0.741.19. Finishes M5 step 2; M5 Audio continues with 3D sound.

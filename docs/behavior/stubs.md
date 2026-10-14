@@ -25,7 +25,7 @@ made inert without an entry in the first table.
 
 | Member or behavior | What Rook does now | What is missing | Taken over by |
 |---|---|---|---|
-| Sound | Loads, plays and is heard; `Play`, `Stop`, `Pause`, `Resume`, `TimePosition`, `Looped`, `PlaybackSpeed`, `Volume` (clamped), `Played`, `Paused`, `Resumed`, `Stopped`, `Ended`, `Loaded`, `DidLoop`, `IsLoaded`, `IsPlaying`, `IsPaused`, `PlaybackLoudness` and `PlayOnRemove` as in Studio (see [audio](audio.md)) | How loud `Volume` is (a plain gain), position in 3D, SoundGroups and effects | M5 steps 3-4 |
+| Sound | Loads, plays and is heard; `Play`, `Stop`, `Pause`, `Resume`, `TimePosition`, `Looped`, `PlaybackSpeed`, `Volume` (clamped), `Played`, `Paused`, `Resumed`, `Stopped`, `Ended`, `Loaded`, `DidLoop`, `IsLoaded`, `IsPlaying`, `IsPaused`, `PlaybackLoudness` and `PlayOnRemove` as in Studio; 3D sounds under parts and Attachments with every `RollOffMode`, `RolloffScale` and Studio's stereo panning, from the camera or `SoundService:SetListener`'s listener (see [audio](audio.md)) | How loud `Volume` is (a plain gain), the Doppler effect, SoundGroups and effects | M5 step 4 |
 | `Model:MoveTo` | Moves the model to the target | Moving up out of obstructions | Physics, later (the queries it needs exist) |
 | `Model:GetBoundingBox`, `GetExtentsSize`, `GetModelCFrame` | World-axis-aligned box of the parts | Box aligned to the primary part; exact legacy `GetModelCFrame` | Physics/geometry |
 | `DataStoreService` | In-memory stores for one run; `GetSortedAsync` returns a plain table, not a `DataStorePages` | Persistence (local files), versions, `ListKeysAsync`, budgets | Server hosting, Networking |

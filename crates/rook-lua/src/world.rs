@@ -118,6 +118,18 @@ pub struct SoundControl {
     pub loops: u32,
 }
 
+/// Where 3D sounds are heard from (`SoundService:SetListener`).
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub enum Listener {
+    /// `Workspace.CurrentCamera`.
+    #[default]
+    Camera,
+    CFrame(rook_types::CFrame),
+    /// The part's position, facing as the camera does (Inference).
+    ObjectPosition(InstanceId),
+    ObjectCFrame(InstanceId),
+}
+
 /// A script's run state.
 #[derive(Debug, Default)]
 pub(crate) struct ModuleState {
@@ -162,6 +174,7 @@ pub struct World {
     pub(crate) started: HashMap<InstanceId, Thread>,
     /// Sounds' script state, for those a script has played or seeked.
     pub sounds: HashMap<InstanceId, SoundControl>,
+    pub listener: Listener,
 }
 
 impl World {
@@ -185,6 +198,7 @@ impl World {
             modules: ModuleState::default(),
             started: HashMap::new(),
             sounds: HashMap::new(),
+            listener: Listener::Camera,
         }
     }
 

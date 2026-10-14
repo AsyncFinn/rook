@@ -71,7 +71,7 @@ The sun and moon in the sky, terrain and other lighting (point and spot lights, 
 
 - Sounds play: WAV, Ogg Vorbis and MP3 files load through the same content providers as everything else and decode in the background, `IsLoaded` and `TimeLength` read as in Studio, and `TimePosition` moves while a sound plays, on servers and clients alike.
 - The Sound API behaves as Studio's: `Play`, `Stop`, `Pause` and `Resume` in every state, where `Play` starts from, seeking, ends and loops, `PlaybackSpeed`, `Volume` and their limits, and the `Played`, `Paused`, `Resumed`, `Stopped`, `Ended`, `Loaded` and `DidLoop` events; `PlaybackLoudness` on clients and `PlayOnRemove` too.
-- `rook-player` mixes every playing sound to your default output device (`ROOK_AUDIO=off` silences it); headless runs, `--bench` and `--screenshot` never open one. Sounds aren't positioned in 3D yet.
+- `rook-player` mixes every playing sound to your default output device (`ROOK_AUDIO=off` silences it); headless runs, `--bench` and `--screenshot` never open one. Sounds under a part or Attachment are heard from there, fading by their `RollOffMode` and panned left and right as Studio pans them, from the camera or the listener `SoundService:SetListener` chose.
 
 ## Tooling
 

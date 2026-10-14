@@ -1,6 +1,8 @@
 //! Playing sounds: `TimePosition` moving on, ends and loops,
 //! `PlaybackLoudness`, and what the player should hear.
 
+use rook_types::CFrame;
+
 use super::*;
 
 /// A sound the player should be hearing.
@@ -19,6 +21,59 @@ pub struct PlayingSound {
     /// Changes with every `Play`, so the mixer restarts the sound even
     /// when it was near the start already.
     pub generation: u32,
+    /// Where a 3D sound is; `None` for a global one.
+    pub emitter: Option<Emitter>,
+}
+
+/// A 3D sound's place and roll-off: a Sound whose parent is a BasePart (at
+/// its position) or an Attachment (at its world position) in Workspace
+/// (creator-docs Sound; Confirmed by ear-free measurement, see
+/// `docs/behavior/audio.md`). Anywhere else a sound is global.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Emitter {
+    pub position: glam::Vec3,
+    /// `Enum.RollOffMode` value.
+    pub roll_off: u32,
+    pub min: f32,
+    pub max: f32,
+}
+
+/// Where 3D sounds are heard from, and how fast they fade.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Listener {
+    pub cframe: CFrame,
+    /// `SoundService.RolloffScale`.
+    pub rolloff_scale: f32,
+}
+
+fn cframe_of(dom: &Dom, id: InstanceId) -> Option<CFrame> {
+    dom.property_by_name(id, "CFrame")?.as_cframe()
+}
+
+/// A sound's emitter, if it is a 3D sound.
+fn emitter(dom: &Dom, id: InstanceId) -> Option<Emitter> {
+    let parent = dom.parent(id)?;
+    let workspace = dom.find_service("Workspace")?;
+    if !dom.is_ancestor_of(workspace, parent) {
+        return None;
+    }
+    let position = if dom.is_a(parent, "BasePart") {
+        cframe_of(dom, parent)?.position
+    } else if dom.is_a(parent, "Attachment") {
+        let part = cframe_of(dom, dom.parent(parent)?).unwrap_or(CFrame::IDENTITY);
+        (part * cframe_of(dom, parent)?).position
+    } else {
+        return None;
+    };
+    Some(Emitter {
+        position,
+        roll_off: dom
+            .property_by_name(id, "RollOffMode")
+            .and_then(|v| v.as_enum())
+            .unwrap_or(0),
+        min: number(dom, id, "RollOffMinDistance", 10.0) as f32,
+        max: number(dom, id, "RollOffMaxDistance", 10_000.0) as f32,
+    })
 }
 
 /// A sound removed with `PlayOnRemove`, playing out once from the start
@@ -39,6 +94,9 @@ impl OneShot {
                 speed: number(dom, id, "PlaybackSpeed", 1.0) as f32,
                 looped: false,
                 generation: u32::MAX,
+                // Heard where it was would need its old parent
+                // (Approximation: played as a global sound).
+                emitter: None,
             },
         }
     }
@@ -160,9 +218,82 @@ impl DataModel {
                 speed: number(dom, id, "PlaybackSpeed", 1.0) as f32,
                 looped: flag(dom, id, "Looped"),
                 generation: w.sounds.get(&id).map_or(0, |c| c.plays),
+                emitter: emitter(dom, id),
             });
         }
         out.sort_by_key(|s| s.id);
         out
+    }
+
+    /// Where 3D sounds are heard from: the camera unless a script chose
+    /// otherwise with `SoundService:SetListener` (creator-docs). An
+    /// ObjectPosition listener faces as the camera does (Inference); one
+    /// whose part is gone falls back to the camera.
+    pub fn sound_listener(&self) -> Listener {
+        let w = self.runtime.world();
+        let dom = &w.dom;
+        let camera = self
+            .current_camera()
+            .and_then(|c| cframe_of(dom, c))
+            .unwrap_or(CFrame::IDENTITY);
+        let cframe = match w.listener {
+            rook_lua::Listener::Camera => camera,
+            rook_lua::Listener::CFrame(c) => c,
+            rook_lua::Listener::ObjectPosition(p) => cframe_of(dom, p).map_or(camera, |c| CFrame {
+                position: c.position,
+                rotation: camera.rotation,
+            }),
+            rook_lua::Listener::ObjectCFrame(p) => cframe_of(dom, p).unwrap_or(camera),
+        };
+        let rolloff_scale =
+            dom.find_service("SoundService")
+                .map_or(1.0, |s| number(dom, s, "RolloffScale", 1.0)) as f32;
+        Listener {
+            cframe,
+            rolloff_scale,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use glam::Vec3;
+
+    /// A sound under a part or an attachment in Workspace is a 3D sound at
+    /// its position; under anything else, or outside Workspace, global.
+    #[test]
+    fn emitters() {
+        let mut dom = Dom::new();
+        let ws = dom.get_service("Workspace").unwrap();
+        let storage = dom.get_service("ReplicatedStorage").unwrap();
+        let new = |dom: &mut Dom, class: &str, parent: InstanceId| {
+            let id = dom.create_by_name(class).unwrap();
+            dom.set_parent(id, Some(parent)).unwrap();
+            id
+        };
+        let part = new(&mut dom, "Part", ws);
+        let at = |p: Vec3| Value::CFrame(CFrame::from_position(p));
+        dom.set_property_by_name(part, "CFrame", at(Vec3::new(1.0, 2.0, 3.0)))
+            .unwrap();
+        let on_part = new(&mut dom, "Sound", part);
+        let attachment = new(&mut dom, "Attachment", part);
+        dom.set_property_by_name(attachment, "CFrame", at(Vec3::new(0.0, 0.0, -5.0)))
+            .unwrap();
+        let on_attachment = new(&mut dom, "Sound", attachment);
+        dom.set_property_by_name(on_attachment, "RollOffMode", Value::Enum(1))
+            .unwrap();
+        let folder = new(&mut dom, "Folder", part);
+        let in_folder = new(&mut dom, "Sound", folder);
+        let stored = new(&mut dom, "Part", storage);
+        let in_storage = new(&mut dom, "Sound", stored);
+
+        let e = emitter(&dom, on_part).unwrap();
+        assert_eq!(e.position, Vec3::new(1.0, 2.0, 3.0));
+        assert_eq!((e.roll_off, e.min, e.max), (0, 10.0, 10_000.0));
+        let e = emitter(&dom, on_attachment).unwrap();
+        assert_eq!((e.position, e.roll_off), (Vec3::new(1.0, 2.0, -2.0), 1));
+        assert_eq!(emitter(&dom, in_folder), None);
+        assert_eq!(emitter(&dom, in_storage), None);
     }
 }
