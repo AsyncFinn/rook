@@ -188,6 +188,19 @@ fn many_callers_sweep_the_world_with_the_same_result() {
     assert_eq!(total, 2 * 19);
 }
 
+/// A 2×4×4 wedge with a 2×1×√32 slab lying on its slope, all Smooth.
+fn slab_on_wedge(dom: &mut Dom) -> (InstanceId, InstanceId) {
+    let wedge = part(dom, "WedgePart", Vec3::ZERO, Vec3::new(2.0, 4.0, 4.0), true);
+    let slab_size = Vec3::new(2.0, 1.0, 32f32.sqrt());
+    let slab = part(dom, "Part", Vec3::ZERO, slab_size, true);
+    let on_slope = Vec3::new(0.0, 1.0, -1.0).normalize() * 0.5;
+    let cf = at(on_slope.x, on_slope.y, on_slope.z) * CFrame::angles(-45f32.to_radians(), 0.0, 0.0);
+    set(dom, slab, "CFrame", Value::CFrame(cf));
+    surfaces(dom, wedge, "Smooth");
+    surfaces(dom, slab, "Smooth");
+    (wedge, slab)
+}
+
 #[test]
 fn wedge_slopes_join_like_studio() {
     // A 2×4×4 wedge with a 2×1×√32 slab lying on its slope, everything
@@ -198,16 +211,7 @@ fn wedge_slopes_join_like_studio() {
                  wedge_calls: bool|
      -> Option<(String, bool, Vec3)> {
         let mut dom = Dom::new();
-        let size = Vec3::new(2.0, 4.0, 4.0);
-        let wedge = part(&mut dom, "WedgePart", Vec3::ZERO, size, true);
-        let slab_size = Vec3::new(2.0, 1.0, 32f32.sqrt());
-        let slab = part(&mut dom, "Part", Vec3::ZERO, slab_size, true);
-        let on_slope = Vec3::new(0.0, 1.0, -1.0).normalize() * 0.5;
-        let cf =
-            at(on_slope.x, on_slope.y, on_slope.z) * CFrame::angles(-45f32.to_radians(), 0.0, 0.0);
-        set(&mut dom, slab, "CFrame", Value::CFrame(cf));
-        surfaces(&mut dom, wedge, "Smooth");
-        surfaces(&mut dom, slab, "Smooth");
+        let (wedge, slab) = slab_on_wedge(&mut dom);
         let e = dom.database().enum_by_name("SurfaceType").unwrap();
         let n = |s: &str| Value::Enum(e.items.iter().find(|(name, _)| *name == s).unwrap().1);
         let wedge_surfaces: Vec<_> = on_wedge.iter().map(|&(f, s)| (f, n(s))).collect();
@@ -297,6 +301,30 @@ fn wedge_slopes_join_like_studio() {
     surfaces(&mut dom, wedge, "Weld");
     surfaces::make_joints(&mut dom, &[wedge]).unwrap();
     assert!(joints::part_joints(&dom, wedge).is_empty());
+}
+
+#[test]
+fn a_slope_joins_from_either_caller() {
+    // Observed in Studio with Model:MakeJoints: a slab whose Weld bottom
+    // lies on a wedge's slope joins whichever part comes first, the slab
+    // being Part0 either way.
+    for wedge_first in [true, false] {
+        let mut dom = Dom::new();
+        let (wedge, slab) = slab_on_wedge(&mut dom);
+        let e = dom.database().enum_by_name("SurfaceType").unwrap();
+        let weld = e.items.iter().find(|(name, _)| *name == "Weld").unwrap().1;
+        set(&mut dom, slab, "BottomSurface", Value::Enum(weld));
+        let callers = if wedge_first {
+            [wedge, slab]
+        } else {
+            [slab, wedge]
+        };
+        surfaces::make_joints(&mut dom, &callers).unwrap();
+        let js = joints::part_joints(&dom, wedge);
+        assert_eq!(js.len(), 1, "wedge first: {wedge_first}");
+        assert_eq!(dom.class_name(js[0].id), "Weld");
+        assert_eq!(js[0].part0, slab);
+    }
 }
 
 #[test]
