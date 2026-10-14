@@ -122,6 +122,10 @@ fn refresh(cache: &mut SceneCache, dm: &mut DataModel, renderer: &mut Renderer) 
     };
     let loaded = cache.poll_files(dom, false);
     let change = match change {
+        // A skybox image arrived: the lighting alone changed.
+        SceneChange::None if loaded.is_empty() && cache.take_lighting_change() => {
+            SceneChange::Parts(Vec::new())
+        }
         _ if loaded.is_empty() => change,
         SceneChange::None => SceneChange::Parts(loaded),
         SceneChange::Parts(mut parts) => {

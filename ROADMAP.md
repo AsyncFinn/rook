@@ -679,7 +679,7 @@ FPS), no frame over 16.7 ms in any.
 *Left for later:* the 2022 materials' textures (not in the install; Rook
 draws them plain), Plastic's own material texture and normal maps; surface
 patterns that follow round and sloped surfaces, and the Hinge and Motor
-pins; Sky (920 files: skyboxes go through the same image path, not done);
+pins; the sky's sun, moon and stars (skyboxes are drawn: 920 files have a Sky, each image placed as Studio places it, measured with six labelled images; Left is at +X and Right at -X, Up's top towards +X, Down's towards -X);
 SurfaceAppearance and MaterialVariant (10 files); CharacterMesh textures
 (with characters, M5); the order of decals with equal `ZIndex`;
 `rbxthumb://` images.
