@@ -13,6 +13,12 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 
 ## [Unreleased]
 
+## [0.6.1] — 2026-10-14 — MakeJoints: balls and cylinders
+
+Pinned Roblox version: 0.741.19.
+
+- Fixed: `MakeJoints` gave balls and cylinders no surfaces, so wheels on Hinge surfaces and studded round parts were never joined (a small place's tractor and tank wheels, a shop's lights). As in Studio, they now join as their boxes: a ball's Hinge makes a Rotate and its Studs a Snap, and a cylinder's caps and curved side weld and hinge, framed at the box face.
+
 ## [0.6.0] — 2026-10-14 — M4 step 5: MaterialVariant, MaterialService and SurfaceAppearance
 
 Pinned Roblox version: 0.741.19. Finishes M4 step 5 (materials and PBR); M4 Content continues with unions.

@@ -21,8 +21,9 @@
 //!   there. Rotating surfaces on either side of a slope join nothing.
 //!
 //! Every other part is treated as its box (a wedge's side triangles as
-//! rectangles), except balls and cylinders, which have no surfaces here
-//! (Approximation). Corner wedges are boxes too.
+//! rectangles). Balls, cylinders and corner wedges are boxes too: in
+//! Studio a ball's Hinge makes a Rotate and its Studs a Snap, and a
+//! cylinder's caps and curved side join, all framed at the box face.
 
 use rustc_hash::FxHashMap as HashMap;
 
@@ -137,9 +138,10 @@ struct Box {
 impl Box {
     fn of(dom: &Dom, id: InstanceId) -> Option<Self> {
         let faces = match part_shape(dom, id) {
-            PartShape::Ball | PartShape::Cylinder => return None,
             PartShape::Wedge => WEDGE_FACES,
-            PartShape::Block | PartShape::CornerWedge => BOX_FACES,
+            PartShape::Block | PartShape::CornerWedge | PartShape::Ball | PartShape::Cylinder => {
+                BOX_FACES
+            }
         };
         let (Some(Value::CFrame(cf)), Some(Value::Vector3(size))) = (
             dom.property_by_name(id, "CFrame"),
