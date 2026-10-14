@@ -9,7 +9,7 @@
 //! patterns are Rook's own (Approximation): only their scale and
 //! brightness follow Studio.
 
-use rook_types::Material;
+use rook_types::{Material, MaterialSet};
 
 use crate::MaterialMap;
 use crate::image::{Image, ImageFormat};
@@ -46,7 +46,47 @@ enum Pattern {
     Weave { threads: u32 },
 }
 
-/// Each textured material's pattern and Studio's average colour (sRGB).
+/// The average colour (sRGB) of Studio's 2022 colour map, where it differs
+/// from the legacy one (measured from the cached textures' averages).
+fn average_2022(material: Material) -> Option<[u8; 3]> {
+    use Material::*;
+    Some(match material {
+        Wood => [213, 204, 202],
+        WoodPlanks => [202, 202, 200],
+        Marble => [173, 176, 186],
+        Basalt => [151, 151, 149],
+        Slate => [232, 232, 233],
+        CrackedLava => [69, 71, 74],
+        Concrete => [220, 220, 220],
+        Limestone => [249, 247, 242],
+        Granite => [205, 200, 194],
+        Pavement => [213, 213, 214],
+        Brick => [226, 209, 199],
+        Pebble => [198, 197, 195],
+        Cobblestone => [214, 214, 214],
+        Rock => [206, 206, 204],
+        Sandstone => [239, 231, 226],
+        CorrodedMetal => [200, 168, 154],
+        DiamondPlate => [204, 205, 204],
+        Foil => [236, 236, 236],
+        Metal => [223, 223, 223],
+        Grass => [190, 189, 182],
+        LeafyGrass => [174, 170, 167],
+        Sand => [214, 211, 204],
+        Fabric => [216, 216, 216],
+        Snow => [238, 238, 239],
+        Mud => [186, 185, 186],
+        Ground => [157, 156, 151],
+        Asphalt => [223, 224, 225],
+        Salt => [248, 248, 249],
+        Ice => [232, 237, 240],
+        Glacier => [222, 225, 226],
+        _ => return None,
+    })
+}
+
+/// Each textured material's pattern and Studio's average colour (sRGB) in
+/// the legacy set.
 fn style(material: Material) -> Option<(Pattern, [u8; 3])> {
     use Material::*;
     use Pattern::*;
@@ -194,10 +234,15 @@ fn style(material: Material) -> Option<(Pattern, [u8; 3])> {
     })
 }
 
-/// Rook's own `map` for `material`, or `None` when it has no texture (or
-/// for roughness-metalness, which Rook leaves to the material's values).
-pub fn material(material: Material, map: MaterialMap) -> Option<Image> {
-    let (pattern, average) = style(material)?;
+/// Rook's own `map` for `material` in `set`, or `None` when it has no
+/// texture (or for roughness-metalness, which Rook leaves to the
+/// material's values).
+pub fn material(material: Material, set: MaterialSet, map: MaterialMap) -> Option<Image> {
+    let (pattern, legacy) = style(material)?;
+    let average = match set {
+        MaterialSet::Materials2022 => average_2022(material).unwrap_or(legacy),
+        MaterialSet::Legacy => legacy,
+    };
     let (height, shade) = height_field(pattern, material as u32);
     let n = SIZE as usize;
     let mut rgba = ::image::RgbaImage::new(SIZE, SIZE);
@@ -412,16 +457,16 @@ mod tests {
     fn rooks_own_textures() {
         for m in Material::ALL {
             let Some((_, average)) = style(m) else {
-                assert!(material(m, MaterialMap::Color).is_none());
+                assert!(material(m, MaterialSet::Legacy, MaterialMap::Color).is_none());
                 continue;
             };
-            let color = material(m, MaterialMap::Color).unwrap();
+            let color = material(m, MaterialSet::Legacy, MaterialMap::Color).unwrap();
             let px = &color.mips[0];
             let mean = px.chunks(4).map(|p| f32::from(p[1])).sum::<f32>() / (px.len() / 4) as f32;
             assert!((mean - f32::from(average[1])).abs() < 20.0, "{m:?} {mean}");
-            let normal = material(m, MaterialMap::Normal).unwrap();
+            let normal = material(m, MaterialSet::Legacy, MaterialMap::Normal).unwrap();
             assert_eq!((normal.width, normal.height), (SIZE, SIZE));
-            assert!(material(m, MaterialMap::RoughnessMetalness).is_none());
+            assert!(material(m, MaterialSet::Legacy, MaterialMap::RoughnessMetalness).is_none());
         }
     }
 }

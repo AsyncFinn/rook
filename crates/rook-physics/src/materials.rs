@@ -140,3 +140,60 @@ pub fn mix(a: f32, weight_a: f32, b: f32, weight_b: f32) -> f32 {
     }
     (a * weight_a + b * weight_b) / total
 }
+
+/// The name of the MaterialVariant that stands in for `m` across the
+/// place (MaterialService's `<Material>Name`, set by
+/// `SetBaseMaterialOverride`): the material's own name until one is set
+/// (observed in Studio 0.742: a new place answers "Plastic" for Plastic;
+/// an override set to "" reads ""). `None` for materials without one.
+pub fn base_material_override(dom: &Dom, service: InstanceId, m: Material) -> Option<String> {
+    let property = m.override_property()?;
+    Some(
+        dom.property_by_name(service, &property)
+            .and_then(|v| v.as_str().map(str::to_owned))
+            .unwrap_or_else(|| m.name().to_owned()),
+    )
+}
+
+/// The first MaterialVariant among MaterialService's descendants with this
+/// name and base material (observed: one inside a Folder is found, one of
+/// another base material isn't).
+pub fn find_variant(dom: &Dom, service: InstanceId, m: Material, name: &str) -> Option<InstanceId> {
+    dom.descendants(service).into_iter().find(|&v| {
+        dom.class_name(v) == "MaterialVariant"
+            && dom.name(v) == name
+            && dom
+                .property_by_name(v, "BaseMaterial")
+                .and_then(|b| b.as_enum())
+                == Some(m.value())
+    })
+}
+
+/// The MaterialVariant a part draws with (`docs/behavior/materials.md`):
+/// the one its `MaterialVariant` names, or else the one MaterialService's
+/// override names for its material, if a variant of that name exists for
+/// its material. A name that matches no variant draws the plain material,
+/// and so does a variant of another base material (observed: a Plastic
+/// part naming a Brick variant drew plain Plastic).
+pub fn part_variant(dom: &Dom, part: InstanceId) -> Option<InstanceId> {
+    let service = dom.find_service("MaterialService")?;
+    let material = Material::of_part(
+        dom.property_by_name(part, "Material")
+            .and_then(|v| v.as_enum()),
+    );
+    let own = ["MaterialVariant", "MaterialVariantSerialized"]
+        .iter()
+        .find_map(|p| dom.property_by_name(part, p)?.as_str().map(str::to_owned))
+        .filter(|n| !n.is_empty());
+    let name = match own {
+        Some(name) => name,
+        None => base_material_override(dom, service, material)?,
+    };
+    if name.is_empty() || name == material.name() {
+        // The material's own name is the built-in material (Inference: a
+        // variant can't take a built-in name; "'%s' is a reserved
+        // MaterialVariant name" in Studio's strings).
+        return None;
+    }
+    find_variant(dom, service, material, &name)
+}

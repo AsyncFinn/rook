@@ -1,0 +1,16 @@
+-- studio 0.742.0.7421053
+-- signals: immediate
+Plastic Plastic
+Neon false GetBaseMaterialOverride failed: Material 'Neon' is not supported.
+set Neon false SetBaseMaterialOverride failed: Material 'Neon' is not supported.
+by name true Wood
+Wood NoSuchVariant
+Wood empty ""
+defaults Enum.Material.Plastic 10 Enum.MaterialPattern.Regular
+found RookCaseVariant
+other base nil
+missing nil
+after destroy nil
+SurfaceAppearance Enum.AlphaMode.Overlay 1, 1, 1
+Part.MaterialVariant ""
+set Anything

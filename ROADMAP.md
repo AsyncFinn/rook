@@ -28,7 +28,7 @@ each release says which milestone it finishes (see `CHANGELOG.md`).
 
 ## Now, next, later
 
-- **Now:** M4 Content: the built-in mesh shapes, asset fetching, file meshes, textures and decals and trusses are done; materials are next, then unions.
+- **Now:** M4 Content: the built-in mesh shapes, asset fetching, file meshes, textures and decals, trusses and materials are done; unions are next.
 - **Next:** M5 Audio.
 - **Then:** M6 Terrain, M7 Lights and effects, M8 GUI, M9 Characters and, right after, M10 Networking.
 
@@ -105,7 +105,7 @@ renderer draws all of these as their part's plain box.
    `TextureId` and MeshPart `TextureID` with `VertexColor`, Plastic's surface
    patterns, Neon and Reflectance, drawn as Studio draws them. Counts and
    findings: [textures-decals.md](docs/behavior/textures-decals.md).
-5. **Materials and PBR**: the material system modern Roblox has, which
+5. ✅ **Materials and PBR**: the material system modern Roblox has, which
    later work (terrain, avatars, lighting) builds on. Today only Plastic
    (its surface patterns), Neon and Reflectance are drawn; every other
    material is its plain colour.

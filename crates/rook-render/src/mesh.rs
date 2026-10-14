@@ -397,15 +397,33 @@ fn truss(shape: TrussShape) -> MeshData {
 }
 
 /// A mesh read from a file, as drawn.
+/// A mesh file's vertices as they are. A vertex whose normal is zero (a
+/// file that left them out) takes the normal of the first triangle using
+/// it, so it's lit instead of drawing black (Studio lights such meshes;
+/// observed with a test mesh written without normals).
 pub(crate) fn from_file(m: &rook_content::mesh::Mesh) -> MeshData {
+    let mut vertices: Vec<Vertex> = m
+        .positions
+        .iter()
+        .zip(&m.normals)
+        .zip(&m.uvs)
+        .map(|((&position, &normal), &uv)| Vertex::plain(position, normal, uv))
+        .collect();
+    for tri in m.indices.as_chunks::<3>().0 {
+        let [a, b, c] = tri.map(|i| i as usize);
+        if [a, b, c].iter().any(|&i| i >= vertices.len()) {
+            continue;
+        }
+        let p = |i: usize| Vec3::from(vertices[i].position);
+        let face = (p(b) - p(a)).cross(p(c) - p(a)).normalize_or_zero();
+        for i in [a, b, c] {
+            if Vec3::from(vertices[i].normal).length_squared() < 1e-12 {
+                vertices[i].normal = face.to_array();
+            }
+        }
+    }
     MeshData {
-        vertices: m
-            .positions
-            .iter()
-            .zip(&m.normals)
-            .zip(&m.uvs)
-            .map(|((&position, &normal), &uv)| Vertex::plain(position, normal, uv))
-            .collect(),
+        vertices,
         indices: m.indices.clone(),
     }
 }

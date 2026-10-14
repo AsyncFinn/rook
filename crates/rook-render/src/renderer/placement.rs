@@ -195,7 +195,8 @@ impl Renderer {
             // ForceField always shows what's behind it (observed).
             None if part.transparency > 0.0
                 || part.layer != Layer::Base
-                || part.material == Material::ForceField =>
+                || part.material == Material::ForceField
+                || part.maps.alpha == MapAlpha::Transparency =>
             {
                 Target::Transparent
             }

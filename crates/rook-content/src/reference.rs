@@ -25,7 +25,7 @@
 
 use std::fmt;
 
-use rook_types::Material;
+use rook_types::{Material, MaterialSet};
 
 /// What a content string refers to. An empty string, or anything that
 /// isn't one of these forms, is no content at all ([`ContentRef::parse`]
@@ -48,11 +48,12 @@ pub enum ContentRef {
     /// `rbxthumb://type=<type>&id=<id>&w=<w>&h=<h>`: a thumbnail Roblox
     /// renders. Parsed, not resolved yet.
     Thumbnail(Thumbnail),
-    /// One of a built-in material's textures: no string names it, but
-    /// every part of that material draws it. The user's Roblox content
-    /// cache supplies Studio's ([`StudioCache`](crate::StudioCache)), and
-    /// Rook's defaults its own otherwise.
-    Material(Material, MaterialMap),
+    /// One of a built-in material's textures in one of the two sets: no
+    /// string names it, but every part of that material draws it. The
+    /// user's Roblox content cache supplies Studio's
+    /// ([`StudioCache`](crate::StudioCache)), and Rook's defaults its own
+    /// otherwise.
+    Material(Material, MaterialSet, MaterialMap),
 }
 
 /// Which of a material's textures.
@@ -136,8 +137,17 @@ impl fmt::Display for ContentRef {
     /// URLs for versions.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Material(material, map) => {
-                write!(f, "rook-material://{}/{}", material.name(), map.name())
+            Self::Material(material, set, map) => {
+                let set = match set {
+                    MaterialSet::Legacy => "legacy",
+                    MaterialSet::Materials2022 => "2022",
+                };
+                write!(
+                    f,
+                    "rook-material://{set}/{}/{}",
+                    material.name(),
+                    map.name()
+                )
             }
             Self::File(path) => write!(f, "rbxasset://{path}"),
             Self::Asset { id, version: None } => write!(f, "rbxassetid://{id}"),

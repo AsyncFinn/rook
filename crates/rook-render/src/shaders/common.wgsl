@@ -61,6 +61,12 @@ const GLASS: u32 = 134217728u;
 const FORCE_FIELD: u32 = 268435456u;
 // A wedge or corner wedge: its slopes take material textures in their plane.
 const SLOPED: u32 = 536870912u;
+// The material textures go through the mesh's UVs (a SurfaceAppearance),
+// with its alpha mode in the surfaces' bits.
+const MAPS_UV: u32 = 1073741824u;
+const ALPHA_OVERLAY: u32 = 1u;
+const ALPHA_TRANSPARENCY: u32 = 2u;
+const ALPHA_TINT_MASK: u32 = 3u;
 const PI: f32 = 3.14159265;
 
 struct VertexIn {

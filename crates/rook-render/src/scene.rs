@@ -8,7 +8,9 @@ use glam::{Mat3, Vec2, Vec3};
 
 pub use rook_content::image::Image;
 pub use rook_content::mesh::Mesh;
-pub use rook_types::{Material, NormalId, PartShape, SurfacePattern, Tiling, TrussShape};
+pub use rook_types::{
+    Material, MaterialSet, NormalId, PartShape, SurfacePattern, Tiling, TrussShape,
+};
 
 /// A mesh file, by the BLAKE3 hash of its bytes: parts that use the same
 /// file share one GPU mesh, however they refer to it.
@@ -53,11 +55,26 @@ pub enum ImagePlacement {
     MeshUv,
 }
 
-/// A part's material textures (images in [`Scene::images`]), tiled over
+/// How a SurfaceAppearance uses its colour map's alpha (`Enum.AlphaMode`;
+/// observed in Studio 0.742 and the creator docs).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MapAlpha {
+    /// Ignored: material textures, MaterialVariants, and `Opaque`.
+    Ignore = 0,
+    /// The map over the part's Color, by its alpha.
+    Overlay = 1,
+    /// The alpha is the surface's opacity.
+    Transparency = 2,
+    /// The alpha says where the tint applies.
+    TintMask = 3,
+}
+
+/// A part's material textures (images in [`Scene::images`]): tiled over
 /// each face of its shape's box from the face's top-left corner, like a
-/// Texture: Studio's material textures, or a MaterialVariant's. Each one
-/// that's missing leaves the material's plain value: white for colour, a
-/// flat normal, and the part's roughness and metalness.
+/// Texture (Studio's material textures, a MaterialVariant's), or laid
+/// through the mesh's UVs (a SurfaceAppearance's). Each one that's missing
+/// leaves the material's plain value: white for colour, a flat normal, and
+/// the part's roughness and metalness.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MaterialMaps {
     /// Multiplies the part's colour (sRGB).
@@ -70,6 +87,11 @@ pub struct MaterialMaps {
     pub metalness: Option<ImageHash>,
     /// Studs per repeat across and down a face.
     pub studs_per_tile: Vec2,
+    /// Laid through the mesh's own UVs instead of over its faces.
+    pub on_mesh_uv: bool,
+    pub alpha: MapAlpha,
+    /// Multiplies the colour map (a SurfaceAppearance's `Color`; sRGB).
+    pub tint: [f32; 3],
 }
 
 impl MaterialMaps {
@@ -79,6 +101,9 @@ impl MaterialMaps {
         roughness: None,
         metalness: None,
         studs_per_tile: Vec2::ONE,
+        on_mesh_uv: false,
+        alpha: MapAlpha::Ignore,
+        tint: [1.0; 3],
     };
 
     pub fn any(&self) -> bool {
@@ -143,6 +168,9 @@ pub struct PartInstance {
     /// What it's made of: how it shades (`Material::shading`), whether
     /// it shows its surfaces (Plastic) and glows (Neon).
     pub material: Material,
+    /// Which set of built-in materials its place draws (its shading
+    /// values differ between the two).
+    pub material_set: MaterialSet,
     /// Its material's textures.
     pub maps: MaterialMaps,
     /// `BasePart.Reflectance`, 0 to 1.
@@ -167,6 +195,7 @@ impl PartInstance {
             cast_shadow: true,
             texture: None,
             material: Material::SmoothPlastic,
+            material_set: MaterialSet::Legacy,
             maps: MaterialMaps::NONE,
             reflectance: 0.0,
             surfaces: [None; 6],

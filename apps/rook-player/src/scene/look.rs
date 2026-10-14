@@ -68,7 +68,7 @@ impl SceneCache {
     pub(super) fn part(&mut self, dom: &Dom, id: InstanceId) -> Option<Drawn> {
         let mut pose = Pose::default();
         let (mut part, decals) = self.look(dom, id, &mut pose)?;
-        part.maps = self.material_maps(id, part.material);
+        self.material_maps(dom, id, &mut part);
         let layers = match decals {
             Decals::None => Vec::new(),
             Decals::Faces | Decals::MeshUv => self.images(dom, id, &part, decals),

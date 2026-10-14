@@ -261,7 +261,9 @@ impl Resolver {
 
     fn resolve_uncached(&self, r: &ContentRef) -> Result<Fetched, Failure> {
         let asset = match r {
-            ContentRef::Material(material, map) => return self.material(*material, *map),
+            ContentRef::Material(material, set, map) => {
+                return self.material(*material, *set, *map);
+            }
             ContentRef::Thumbnail(_) => {
                 return Err(Failure::new(
                     FailureKind::Unsupported,
@@ -305,12 +307,13 @@ impl Resolver {
     fn material(
         &self,
         material: rook_types::Material,
+        set: rook_types::MaterialSet,
         map: crate::MaterialMap,
     ) -> Result<Fetched, Failure> {
         let has = |kind| self.order.contains(&kind);
         if has(ProviderKind::StudioCache)
             && let Some(cache) = &self.studio_cache
-            && let Some((image, location)) = cache.material(material, map)
+            && let Some((image, location)) = cache.material(material, set, map)
         {
             let name = format!("{location} {}x{}", image.width, image.height);
             let mut fetched = Fetched::new(name.as_bytes(), SourceKind::StudioCache, name.clone());
@@ -321,12 +324,12 @@ impl Resolver {
             && self
                 .studio_cache
                 .as_ref()
-                .is_some_and(|c| c.has_material(material));
+                .is_some_and(|c| c.has_material(material, set));
         if !studio_has_it
             && has(ProviderKind::Defaults)
-            && let Some(image) = defaults::material(material, map)
+            && let Some(image) = defaults::material(material, set, map)
         {
-            let name = format!("rook-material://{}/{}", material.name(), map.name());
+            let name = ContentRef::Material(material, set, map).to_string();
             let mut fetched = Fetched::new(name.as_bytes(), SourceKind::Defaults, name.clone());
             fetched.image = Some(std::sync::Arc::new(image));
             return Ok(fetched);
