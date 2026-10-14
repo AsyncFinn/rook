@@ -300,6 +300,70 @@ fn wedge_slopes_join_like_studio() {
 }
 
 #[test]
+fn balls_and_cylinders_join_as_boxes() {
+    // A ball or cylinder beside a 10-stud Smooth cube (or one whose facing
+    // surface is `base_face`) calls MakeJoints. Returns the joint's class,
+    // whether the round part is Part0, and C0's position.
+    let trial = |shape: u32,
+                 size: Vec3,
+                 offset: Vec3,
+                 own: (&str, &str),
+                 base_face: Option<(&str, &str)>|
+     -> Option<(String, bool, Vec3)> {
+        let mut dom = Dom::new();
+        let base = part(&mut dom, "Part", Vec3::ZERO, Vec3::splat(10.0), true);
+        let round = part(&mut dom, "Part", offset, size, true);
+        set(&mut dom, round, "Shape", Value::Enum(shape));
+        surfaces(&mut dom, base, "Smooth");
+        surfaces(&mut dom, round, "Smooth");
+        let e = dom.database().enum_by_name("SurfaceType").unwrap();
+        let n = |s: &str| Value::Enum(e.items.iter().find(|(name, _)| *name == s).unwrap().1);
+        set(&mut dom, round, &format!("{}Surface", own.0), n(own.1));
+        if let Some((face, s)) = base_face {
+            set(&mut dom, base, &format!("{face}Surface"), n(s));
+        }
+        surfaces::make_joints(&mut dom, &[round]).unwrap();
+        let j = *joints::part_joints(&dom, round).first()?;
+        let Some(Value::CFrame(c0)) = dom.property_by_name(j.id, "C0") else {
+            panic!("no C0")
+        };
+        Some((
+            dom.class_name(j.id).to_owned(),
+            j.part0 == round,
+            c0.position,
+        ))
+    };
+    let joined = |class: &str, c0: Vec3| Some((class.to_owned(), true, c0));
+    const BALL: u32 = 0;
+    const CYLINDER: u32 = 2;
+    let ball = Vec3::splat(3.0);
+    let wheel = Vec3::new(2.0, 6.0, 6.0);
+    // Observed in Studio: everything framed at the round part's box face.
+    assert_eq!(
+        trial(BALL, ball, Vec3::Y * 6.5, ("Bottom", "Hinge"), None),
+        joined("Rotate", Vec3::new(0.0, -1.5, 0.0))
+    );
+    assert_eq!(
+        trial(
+            BALL,
+            ball,
+            Vec3::Y * 6.5,
+            ("Bottom", "Studs"),
+            Some(("Top", "Inlet"))
+        ),
+        joined("Snap", Vec3::new(0.0, -1.5, 0.0))
+    );
+    assert_eq!(
+        trial(CYLINDER, wheel, -Vec3::X * 6.0, ("Right", "Hinge"), None),
+        joined("Rotate", Vec3::new(1.0, 0.0, 0.0))
+    );
+    assert_eq!(
+        trial(CYLINDER, wheel, Vec3::Y * 8.0, ("Bottom", "Weld"), None),
+        joined("Weld", Vec3::new(0.0, -3.0, 0.0))
+    );
+}
+
+#[test]
 fn surface_type_numbers_match_the_database() {
     let e = rook_reflection::database()
         .enum_by_name("SurfaceType")

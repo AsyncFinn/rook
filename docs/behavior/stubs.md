@@ -70,7 +70,6 @@ made inert without an entry in the first table.
 | Physics: unanchored parts joined to several anchored parts | They join the assembly of the anchored part with the highest joint id | Roblox picks the newest joint; ids usually follow creation order | Conformance |
 | Physics: equal-sized root candidates | The part with the highest internal id (usually the newer one) | Roblox picks the newer part; its exact rule is unknown | Conformance |
 | Legacy automatic joints | Places that don't save `Workspace.ExplicitAutoJoints` (saved before it existed) have every Workspace part joined by its surfaces when they load | Whether legacy Roblox also joined parts as scripts parented them into Workspace or moved them; checking it needs such a place open in Studio | Conformance |
-| `MakeJoints` on balls and cylinders | No surfaces; other parts are treated as boxes, wedges included | Their real surfaces | Physics, later |
 | Motor6D `Transform` and `DesiredAngle` together | Both apply: `C0 · Transform · Rz(CurrentAngle) · C1⁻¹` | Studio resets `CurrentAngle` when `Transform` is set; the interaction is unverified | Animation |
 | `WeldConstraint` state in files | `Enabled` defaults to true; the saved `State` isn't read | A disabled WeldConstraint saved in a file loads enabled | Conformance |
 | Physics: mass of MeshParts, unions and trusses | Their Size as a box | Their real volumes, from the mesh per `CollisionFidelity` (the mesh loader exists now; physics doesn't ask it yet) | Content, after textures |
