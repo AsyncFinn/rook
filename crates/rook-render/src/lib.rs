@@ -2,7 +2,7 @@
 //!
 //! The renderer draws a [`Scene`] snapshot: it never touches the DOM
 //! (architecture §8). It draws primitive parts, the built-in mesh shapes
-//! and mesh files with their colour, transparency, mesh textures, Plastic's
+//! and mesh files, and TrussParts' bars, with their colour, transparency, mesh textures, Plastic's
 //! surface patterns and Neon, Decals and Textures over them, a sky colour,
 //! a sun, ambient light, fog and the sun's shadows. Terrain comes later.
 
@@ -15,6 +15,7 @@ mod surfaces;
 pub use scene::{
     Camera, DrawShape, Image, ImageHash, ImagePlacement, Layer, Lighting, MaterialLook, Mesh,
     MeshHash, NormalId, PartInstance, PartShape, SKYBOX_FACES, Scene, SurfacePattern, Tiling,
+    TrussShape,
 };
 
 use std::collections::HashMap;
@@ -1073,9 +1074,9 @@ impl Renderer {
         }
     }
 
-    /// Whether a shape's mesh is on the GPU, queueing a mesh file the
-    /// first time one is drawn. A file the scene doesn't hold, or one
-    /// without triangles, draws nothing.
+    /// Whether a shape's mesh is on the GPU, queueing a mesh file (or
+    /// building a truss) the first time one is drawn. A file the scene
+    /// doesn't hold, or one without triangles, draws nothing.
     fn mesh_readiness(&mut self, shape: DrawShape, scene: Option<&Scene>) -> Readiness {
         if self.meshes.contains(&shape) {
             return Readiness::Ready;
@@ -1083,8 +1084,16 @@ impl Renderer {
         if self.meshes.is_queued(&shape) {
             return Readiness::Waiting;
         }
-        let DrawShape::File(hash) = shape else {
-            return Readiness::Missing;
+        let hash = match shape {
+            DrawShape::File(hash) => hash,
+            // Built the first time a truss of this shape is drawn: a few
+            // kilobytes, uploaded at once and shared by every such truss.
+            DrawShape::Truss(_) => {
+                let gpu = GpuMesh::upload(&self.device, &mesh::build(shape));
+                self.meshes.insert(shape, gpu);
+                return Readiness::Ready;
+            }
+            _ => return Readiness::Missing,
         };
         match scene.and_then(|s| s.meshes.get(&hash)) {
             Some(file) if !file.indices.is_empty() => {

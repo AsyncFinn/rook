@@ -70,6 +70,9 @@ const SAME_AS: &[(&str, &str, &str)] = &[
     // with InitialSize reads it as MeshSize, and one saved without reads
     // (0, 0, 0) even after its mesh loads.
     ("MeshPart", "MeshSize", "InitialSize"),
+    // Files save a truss's Style as `style`, a property of its own in the
+    // database (a 2016 core place's NoSupports trusses read back the default).
+    ("TrussPart", "Style", "style"),
 ];
 
 /// BrickColor views of Color3 properties: reads give the nearest
@@ -246,6 +249,13 @@ pub(crate) fn set(
             Some(set_lighting_hours(w, id, f64::from(*h)))
         }
         ("CFrame", Value::CFrame(c)) if w.dom.is_a(id, "BasePart") => Some(set_cframe(w, id, *c)),
+        // A truss keeps at most one axis other than 2 (observed; conformance
+        // case `content/truss`).
+        ("Size", Value::Vector3(v)) if w.dom.class_name(id) == "TrussPart" => {
+            let pid = w.dom.property_id(id, "Size")?;
+            let size = rook_types::truss_size(v.0);
+            Some(w.dom.set_property(id, pid, Value::Vector3(Vector3(size))))
+        }
         // Assembly velocities belong to the whole assembly; the deprecated
         // Velocity and RotVelocity set them too (observed). Files save
         // those two; rook_physics::adopt_saved_velocities moves them.
