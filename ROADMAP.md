@@ -628,6 +628,23 @@ marked):
 - *Empty MeshPart:* a new one drew its plain box, with no checker (step 3
   had seen a checker once).
 
+*Roblox's round primitives* (measured afterwards from Studio's OBJ export
+of a Ball and a Cylinder part; the export itself is not kept): a Ball is a
+cube whose six faces are each split into a 6 × 6 grid of squares, every
+point pushed out onto the sphere, each face with its own vertices (294
+vertices, 432 triangles); a Cylinder's round side is a square split into 6
+segments per side (24 in all, at atan(1/3), atan(2/3), 45 degrees, ...)
+pushed out onto the circle, with flat ends (114 vertices, 96 triangles);
+normals are smooth. Their UVs map each patch linearly from the box face it
+came from, 1/8 of a unit per stud, starting at each face's top-left corner
+(a block's faces likewise). So a decal on a ball or cylinder covers its
+face's whole patch, out to the 45-degree seams; Rook's earlier projection
+straight along the face's axis reached only 85% of the way there, which
+stretched the image across a CylinderMesh barrel by about 13%. Rook's Ball
+and Cylinder are now built from these rules, each vertex keeping its box
+point and face for images and surfaces, and the barrel's face lines up
+with Studio's to a pixel.
+
 *Compared with Studio* (`rook-player --screenshot` against Studio's
 `screen_capture`, same cameras, field of view 20, one test scene run by the
 same script in both, the test files given to Rook through

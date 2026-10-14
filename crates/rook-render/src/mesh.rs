@@ -1,8 +1,16 @@
 //! Unit primitive meshes (extents -0.5..0.5) with flat or smooth normals,
 //! and Rook's own head mesh. Each is scaled by the instance's size in the
-//! vertex shader. UVs matter for the block (the empty-`MeshId` box draws a
-//! mesh texture on every face) and the head (its face decal); the other
-//! shapes only ever get images projected onto them.
+//! vertex shader.
+//!
+//! Images and surface patterns on a primitive are mapped from each
+//! vertex's point on the shape's bounding box and the box face it belongs
+//! to (`Vertex::box_point`, `Vertex::face`). For flat faces that's the
+//! vertex itself. The round shapes are built as Roblox builds them, from a
+//! box whose faces are split into a grid and pushed out onto the round
+//! surface, each vertex keeping the grid point it came from (measured from
+//! Studio's OBJ export of a Ball and a Cylinder part, 2026-10-13: see
+//! [`ball`] and [`cylinder`]). So a decal on a ball or cylinder covers its
+//! face's whole patch of the surface, as in Roblox.
 
 use bytemuck::{Pod, Zeroable};
 use glam::Vec3;
@@ -15,6 +23,28 @@ pub(crate) struct Vertex {
     pub position: [f32; 3],
     pub normal: [f32; 3],
     pub uv: [f32; 2],
+    /// The point on the shape's bounding box this vertex maps images and
+    /// surfaces from: the vertex itself on flat faces and mesh files.
+    pub box_point: [f32; 3],
+    /// The `NormalId` index of the box face it belongs to, or [`NO_FACE`]
+    /// (mesh files: the face is found from the normal).
+    pub face: u32,
+}
+
+/// No box face of its own: the shader finds one from the normal.
+pub(crate) const NO_FACE: u32 = 255;
+
+impl Vertex {
+    /// A vertex mapped from where it is, its face found from its normal.
+    fn plain(position: [f32; 3], normal: [f32; 3], uv: [f32; 2]) -> Self {
+        Self {
+            position,
+            normal,
+            uv,
+            box_point: position,
+            face: NO_FACE,
+        }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -36,9 +66,8 @@ impl MeshData {
         for p in points {
             let (at, extent) = face.image_position(*p, Vec3::ONE);
             self.vertices.push(Vertex {
-                position: p.to_array(),
-                normal: normal.to_array(),
-                uv: (at / extent).to_array(),
+                face: face.index() as u32,
+                ..Vertex::plain(p.to_array(), normal.to_array(), (at / extent).to_array())
             });
         }
         for i in 1..points.len() as u32 - 1 {
@@ -57,73 +86,122 @@ fn polyhedron(shape: PartShape) -> MeshData {
     m
 }
 
-const SEGMENTS: u32 = 32;
+/// Grid squares along each edge of a round shape's box faces (measured: 6
+/// for both the Ball and the Cylinder).
+const GRID: u32 = 6;
 
-/// Along X, radius 0.5.
+/// A point of a box face's grid: `s` and `t` from -1 to 1 along the face's
+/// image right and up, on the unit cube (extents -1..1).
+fn grid_point(face: NormalId, s: f32, t: f32) -> Vec3 {
+    let (right, up) = face.image_axes();
+    face.normal() + right * s + up * t
+}
+
+/// The grid coordinate of step `i` of [`GRID`], from -1 to 1.
+fn step(i: u32) -> f32 {
+    i as f32 / GRID as f32 * 2.0 - 1.0
+}
+
+/// A Cylinder part's shape, along X, radius 0.5, as Roblox builds it
+/// (measured from Studio's OBJ export: 114 vertices, 96 triangles). Its
+/// round side is a square split into [`GRID`] segments per side (24 in all,
+/// so the corners sit at atan(1/3), atan(2/3), 45 degrees, ...) with each
+/// point pushed out onto the circle; normals are smooth. Each quarter maps
+/// images from the Top, Front, Bottom or Back face of the box, linearly
+/// along the square's side: the quarter's 45-degree seams are the face's
+/// edges. The flat ends are the Left and Right faces.
 fn cylinder() -> MeshData {
     let mut m = MeshData::default();
-    let ring = |i: u32| {
-        let a = i as f32 / SEGMENTS as f32 * std::f32::consts::TAU;
-        (a.cos() * 0.5, a.sin() * 0.5)
-    };
-    // Side, smooth normals.
-    for i in 0..=SEGMENTS {
-        let (y, z) = ring(i);
-        let n = Vec3::new(0.0, y, z).normalize();
-        for x in [-0.5, 0.5] {
-            m.vertices.push(Vertex {
-                position: [x, y, z],
-                normal: n.to_array(),
-                uv: [0.0; 2],
-            });
+    for face in [
+        NormalId::Top,
+        NormalId::Back,
+        NormalId::Bottom,
+        NormalId::Front,
+    ] {
+        let n = face.normal();
+        // Along the side, so that (X, w) turns towards the outside.
+        let w = n.cross(Vec3::X);
+        let base = m.vertices.len() as u32;
+        for i in 0..=GRID {
+            let g = n + w * step(i);
+            let round = Vec3::new(0.0, g.y, g.z).normalize();
+            for x in [-1.0f32, 1.0] {
+                let box_point = Vec3::new(x, g.y, g.z) * 0.5;
+                m.vertices.push(Vertex {
+                    position: [x * 0.5, round.y * 0.5, round.z * 0.5],
+                    normal: round.to_array(),
+                    uv: [0.0; 2],
+                    box_point: box_point.to_array(),
+                    face: face.index() as u32,
+                });
+            }
+        }
+        for i in 0..GRID {
+            let a = base + i * 2;
+            // (x-, s), (x+, s), (x+, s'), (x-, s').
+            m.indices
+                .extend_from_slice(&[a, a + 1, a + 3, a, a + 3, a + 2]);
         }
     }
-    for i in 0..SEGMENTS {
-        let a = i * 2;
-        m.indices
-            .extend_from_slice(&[a, a + 2, a + 1, a + 1, a + 2, a + 3]);
+    // The ends: the round rim, flat.
+    let mut rim = Vec::new();
+    for face in [
+        NormalId::Top,
+        NormalId::Back,
+        NormalId::Bottom,
+        NormalId::Front,
+    ] {
+        let n = face.normal();
+        let w = n.cross(Vec3::X);
+        for i in 0..GRID {
+            let g = n + w * step(i);
+            rim.push(Vec3::new(0.0, g.y, g.z).normalize() * 0.5);
+        }
     }
-    // Caps.
-    let caps: Vec<Vec3> = (0..SEGMENTS)
-        .map(|i| {
-            let (y, z) = ring(i);
-            Vec3::new(0.5, y, z)
-        })
-        .collect();
-    m.polygon(&caps);
-    let back: Vec<Vec3> = caps
-        .iter()
-        .rev()
-        .map(|p| Vec3::new(-0.5, p.y, p.z))
-        .collect();
-    m.polygon(&back);
+    // In order around the axis.
+    rim.sort_by(|a, b| a.z.atan2(a.y).total_cmp(&b.z.atan2(b.y)));
+    for x in [0.5f32, -0.5] {
+        let mut cap: Vec<Vec3> = rim.iter().map(|p| Vec3::new(x, p.y, p.z)).collect();
+        let normal = (cap[1] - cap[0]).cross(cap[2] - cap[0]);
+        if normal.x * x < 0.0 {
+            cap.reverse();
+        }
+        m.polygon(&cap);
+    }
     m
 }
 
+/// A Ball part's shape, radius 0.5, as Roblox builds it (measured from
+/// Studio's OBJ export: 294 vertices, 432 triangles): a cube whose six
+/// faces are each split into a [`GRID`] × [`GRID`] grid, every point pushed
+/// out onto the sphere, each face with its own vertices; normals are
+/// smooth. Each face's patch maps images from that face of the box,
+/// linearly along its grid.
 fn ball() -> MeshData {
     let mut m = MeshData::default();
-    let (rings, segs) = (16u32, SEGMENTS);
-    for r in 0..=rings {
-        let theta = r as f32 / rings as f32 * std::f32::consts::PI;
-        for s in 0..=segs {
-            let phi = s as f32 / segs as f32 * std::f32::consts::TAU;
-            let n = Vec3::new(
-                theta.sin() * phi.cos(),
-                theta.cos(),
-                theta.sin() * phi.sin(),
-            );
-            m.vertices.push(Vertex {
-                position: (n * 0.5).to_array(),
-                normal: n.to_array(),
-                uv: [0.0; 2],
-            });
+    for face in NormalId::ALL {
+        let base = m.vertices.len() as u32;
+        for j in 0..=GRID {
+            for i in 0..=GRID {
+                let g = grid_point(face, step(i), step(j));
+                let round = g.normalize();
+                m.vertices.push(Vertex {
+                    position: (round * 0.5).to_array(),
+                    normal: round.to_array(),
+                    uv: [i as f32 / GRID as f32, 1.0 - j as f32 / GRID as f32],
+                    box_point: (g * 0.5).to_array(),
+                    face: face.index() as u32,
+                });
+            }
         }
-    }
-    for r in 0..rings {
-        for s in 0..segs {
-            let a = r * (segs + 1) + s;
-            let b = a + segs + 1;
-            m.indices.extend_from_slice(&[a, a + 1, b, a + 1, b + 1, b]);
+        let row = GRID + 1;
+        for j in 0..GRID {
+            for i in 0..GRID {
+                let a = base + j * row + i;
+                // Right then up is counter-clockwise seen from outside.
+                m.indices
+                    .extend_from_slice(&[a, a + 1, a + row + 1, a, a + row + 1, a + row]);
+            }
         }
     }
     m
@@ -185,11 +263,11 @@ fn head() -> MeshData {
     let vertex = |&(radius, y, a): &(f32, f32, f32), k: u32, front: bool| {
         let (sin, cos) = around(k);
         let position = [radius * cos, y, radius * sin];
-        Vertex {
+        Vertex::plain(
             position,
-            normal: [a.cos() * cos, a.sin(), a.cos() * sin],
-            uv: head_uv(front, position),
-        }
+            [a.cos() * cos, a.sin(), a.cos() * sin],
+            head_uv(front, position),
+        )
     };
     // Each segment has its own vertices, so the front quarter's edges are
     // seams; the normals stay smooth.
@@ -210,11 +288,11 @@ fn head() -> MeshData {
         for (ring, ny) in [(0u32, -1.0f32), (profile.len() as u32 - 1, 1.0)] {
             let centre = m.vertices.len() as u32;
             let position = [0.0, ny * r, 0.0];
-            m.vertices.push(Vertex {
+            m.vertices.push(Vertex::plain(
                 position,
-                normal: [0.0, ny, 0.0],
-                uv: head_uv(front, position),
-            });
+                [0.0, ny, 0.0],
+                head_uv(front, position),
+            ));
             let (a, b) = (base + ring * 2, base + ring * 2 + 1);
             let tri = if ny < 0.0 {
                 [centre, a, b]
@@ -235,11 +313,7 @@ pub(crate) fn from_file(m: &rook_content::mesh::Mesh) -> MeshData {
             .iter()
             .zip(&m.normals)
             .zip(&m.uvs)
-            .map(|((&position, &normal), &uv)| Vertex {
-                position,
-                normal,
-                uv,
-            })
+            .map(|((&position, &normal), &uv)| Vertex::plain(position, normal, uv))
             .collect(),
         indices: m.indices.clone(),
     }
@@ -325,6 +399,40 @@ mod tests {
             hi = hi.max(Vec3::from(v.position));
         }
         assert!((lo + hi).abs().max_element() < 1e-3, "{lo} {hi}");
+    }
+
+    /// The round shapes keep each vertex's grid point on the box face it
+    /// belongs to, with the measured vertex and triangle counts.
+    #[test]
+    fn round_shapes_map_from_their_box_faces() {
+        for (shape, triangles) in [(PartShape::Ball, 432), (PartShape::Cylinder, 96)] {
+            let m = build(DrawShape::Part(shape));
+            let side_triangles = m.indices.len() / 3;
+            if shape == PartShape::Ball {
+                assert_eq!((m.vertices.len(), side_triangles), (294, triangles));
+            } else {
+                // 24 side quads; the flat ends as 22-triangle fans (the
+                // export's are 24-triangle fans around a centre).
+                assert_eq!(side_triangles, 48 + 2 * 22);
+            }
+            for v in &m.vertices {
+                let face = NormalId::ALL[v.face as usize];
+                let b = Vec3::from(v.box_point);
+                assert!((b.dot(face.normal()) - 0.5).abs() < 1e-5, "{shape:?} {b}");
+                assert!(b.abs().max_element() <= 0.5 + 1e-5);
+                assert!(
+                    (Vec3::from(v.position).length() - 0.5).abs() < 1e-5
+                        || shape == PartShape::Cylinder
+                );
+            }
+        }
+        // The cylinder's side corners: atan(1/3) from the axis of its face.
+        let m = build(DrawShape::Part(PartShape::Cylinder));
+        let angle = (1.0f32 / 3.0).atan();
+        assert!(m.vertices.iter().any(|v| {
+            let p = Vec3::from(v.position);
+            (p.z.atan2(p.y) - angle).abs() < 1e-5 && p.x > 0.0
+        }));
     }
 
     /// The head's UVs: the front quarter projected straight on, the rest
