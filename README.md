@@ -24,7 +24,7 @@ Millions of places have been built on Roblox since 2006, and today they run in e
 **What you get**
 
 - **Singleplayer that works offline.** The server runs inside the player, so a place plays on your machine with nothing to connect to.
-- **Your own servers** *(planned, M8)*. Host a place yourself and invite your friends.
+- **Your own servers** *(planned, M12)*. Host a place yourself and invite your friends.
 - **Preservation.** Old places keep running as long as someone has the file, with no account and nothing that can be switched off.
 - **Modding.** The whole engine is open, so any behaviour can be inspected, patched and extended.
 - **Fewer restrictions** *(planned)*. [Opt-in extensions](ROADMAP.md#rook-extensions-unscheduled) such as WebSockets for any script, and EditableImage and EditableMesh with no platform gating. They're off by default, so modern Roblox stays the reference.
@@ -93,7 +93,7 @@ New here? Start with [Getting started](docs/guide/getting-started.md): build Roo
 ## FAQ
 
 **Can Rook connect to Roblox servers or join Roblox games?**
-No. Replication is Rook to Rook. Wire compatibility with Roblox clients or servers isn't a goal. Instead, you'll be able to host your own Rook servers (M8 on the [roadmap](ROADMAP.md)).
+No. Replication is Rook to Rook. Wire compatibility with Roblox clients or servers isn't a goal. Instead, you'll be able to host your own Rook servers (M12 on the [roadmap](ROADMAP.md)).
 
 **Does Rook use Roblox's code or assets?**
 No. Rook is written from public documentation, the public API dump and observation of Studio through its scripting API. Each behaviour cites its source.

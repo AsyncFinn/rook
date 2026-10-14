@@ -20,17 +20,13 @@ each release says which milestone it finishes (see `CHANGELOG.md`).
 ## Now, next, later
 
 - **Now:** M4 Content: the built-in mesh shapes, asset fetching, file meshes, textures and decals and trusses are done; unions are next.
-- **Next:** M5 Characters.
-- **Later:** M6 GUI, M7 Audio and M8 Networking.
+- **Next:** M5 Audio.
+- **Then:** M6 Terrain, M7 Lights and effects, M8 GUI, M9 Characters and, right after, M10 Networking.
 
-### Rook extensions (unscheduled)
-
-Opt-in features beyond what Roblox allows, behind an explicit profile and off by default.
-None are scheduled; each comes after the milestone it depends on.
-
-- WebSockets available to any script (after M8 Networking)
-- EditableImage and EditableMesh without platform gating (after M4 Content)
-- Restoring embedded legacy textures that modern Roblox loads as empty
+The world comes before the people in it: sound, terrain, lights and GUI
+are each in hundreds of archive files, and characters need terrain to walk
+on and GUI for their tools and health. Networking follows characters
+directly, since a character is what makes playing together worth it.
 
 ## Milestones
 
@@ -41,11 +37,17 @@ None are scheduled; each comes after the milestone it depends on.
 | ✅ | **M2** Renderer v0, client/server split, LocalScripts, basic input | Archived places render recognisably; client scripts run alongside server scripts (v0.2.0) |
 | ✅ | **M3** Physics | Physics conformance batch passes; unanchored places settle plausibly |
 | ⬜ | **M4** Content: meshes, textures, decals | Archived places render with their meshes, decals and textures |
-| ⬜ | **M5** Characters | Walk around and use tools in an archived place |
-| ⬜ | **M6** GUI | GUI conformance batch passes |
-| ⬜ | **M7** Audio | Archived places play their sounds |
-| ⬜ | **M8** Networking: transport, headless server, multiple clients | Two clients play together |
-| ⬜ | **M9+** Terrain, animation, effects, advanced lighting, Studio tooling | — |
+| ⬜ | **M5** Audio | Archived places play their sounds, positioned in 3D; the audio conformance batch passes |
+| ⬜ | **M6** Terrain | Archived places with terrain show it, and parts and queries collide with it |
+| ⬜ | **M7** Lights and effects | Local lights light the scene; Fire, Smoke, Sparkles and ParticleEmitters draw as in Studio |
+| ⬜ | **M8** GUI | GUI conformance batch passes; archived places' GUIs draw and take input |
+| ⬜ | **M9** Characters | Spawn, walk, jump, sit and use tools in an archived place |
+| ⬜ | **M10** Networking | Two players on two machines play an archived place together |
+| ⬜ | **M11** Avatars and animation | Players pick an avatar (no Roblox account) and see each other's, dressed and animated |
+| ⬜ | **M12** Server hosting | Host a place for friends over the internet; its saved data survives a restart |
+| ⬜ | **M13** Lighting and post-processing | Screenshots of reference places match Studio's lighting, sky and effects |
+| ⬜ | **M14** Studio | Open, edit and save a place that Roblox Studio opens again unchanged |
+| ⬜ | **M15** Extensions | The opt-in profile ships with its first extensions, off by default |
 
 ### M3 Physics
 
@@ -108,41 +110,152 @@ Physics is to pick up the real shapes and volumes of MeshParts
 (collision fidelity) and unions (`PhysicsData`), replacing today's boxes;
 it wasn't done in step 3.
 
-### M5 Characters
+### M5 Audio
 
-Needs M3 (physics) and M4 (the head and body meshes). Humanoid 903 files,
-Tool 1,150, SpawnLocation 1,507, Seat 640.
+Sound is in 1,284 files (113,199 instances); today it only keeps its
+state. It's self-contained, and every place sounds wrong without it.
 
-- Spawning, Humanoid (state machine, walking, jumping, climbing, seats,
-  health and death, joint breaking), tools.
-- Default camera and control scripts (Core-Scripts, Apache-2.0) and Rook's
-  own Animate.
-- Network ownership of a player's character, so its client simulates it.
+1. Decoding (OGG, MP3, WAV) and playback through the content loader.
+2. `Play`, `Stop`, `Pause`, `Resume`, `TimePosition`, `Looped`,
+   `PlaybackSpeed`, `Volume`, and `Played`, `Ended`, `Loaded`, `IsLoaded`.
+3. 3D sound: a Sound under a part or Attachment is positioned, with
+   `RollOffMode` and its distances measured in Studio.
+4. SoundService, SoundGroups (5 files) and sound effects, by archive use.
 
-### M6 GUI
+### M6 Terrain
 
-ScreenGui 598 files, SurfaceGui 138, BillboardGui 227. Layout (`UDim2`,
-`AnchorPoint`, `AutomaticSize`, the UI layouts and constraints), text
-(cosmic-text), images, `ClipsDescendants`, ScrollingFrame and GUI input.
+977 files have a Terrain instance. First count how many hold voxels
+(`SmoothGrid`) or legacy `ClusterGrid` blocks, and check what modern
+Roblox does with the legacy data before deciding how Rook handles it.
+Terrain comes before characters, who walk on it.
 
-### M7 Audio
+1. Decode `SmoothGrid` voxels (material and occupancy) and mesh them as
+   Roblox does, measured against Studio.
+2. Terrain materials and water (swimming comes with characters).
+3. Collision and queries: parts land on terrain, rays hit it.
+4. The Terrain API scripts use, by archive use (`FillBlock`,
+   `ReadVoxels`, `WriteVoxels`, `FillBall`, ...).
 
-Sound is in 1,282 files. Playback, `TimePosition`, `Ended`/`Loaded`,
-3D sound, SoundService and SoundGroups. Today Sound only keeps its state.
+### M7 Lights and effects
 
-### M8 Networking
+Lights are in hundreds of files and in great numbers: PointLight 228
+files (35,041 instances), SpotLight 212 (50,397), SurfaceLight 65
+(7,949). Effects: Sparkles 303 files, Fire 256, Smoke 251,
+ParticleEmitter 86, Trail 17, Beam 15, plus the `Explosion`s scripts
+create.
 
-A real transport behind the in-process replicator's interface, a headless
-server and several clients.
+1. Local lights: Brightness, Range, Color, Shadows, SpotLight Angle and
+   Face, SurfaceLight; many lights per frame.
+2. Fire, Smoke and Sparkles, drawn as Studio draws them today.
+3. ParticleEmitter, Beam and Trail.
+4. Explosion: its blast (physics, joints breaking) and its look.
 
-### M9+ Later
+### M8 GUI
 
-Terrain (including legacy `ClusterGrid` data; 975 files), animation
-(Animation 269 files), effects (Fire 255, Smoke 249, Sparkles 303,
-ParticleEmitter 84), lights (PointLight 226, SpotLight 210) and advanced
-lighting, antialiasing (MSAA by quality level, measured in
-[`docs/behavior/antialiasing.md`](docs/behavior/antialiasing.md)), Studio
-tooling, and opt-in extensions.
+ScreenGui 600 files, SurfaceGui 140, BillboardGui 229; Frame 558,
+TextLabel 550, ImageLabel 458, TextButton 456; Hint 145 and Message 26.
+It comes before characters: tools, health bars and leaderboards are GUI.
+
+1. Layout: `UDim2`, `AnchorPoint`, `ZIndex`, `ClipsDescendants`,
+   `AutomaticSize`, the UI layouts and constraints.
+2. Text (cosmic-text): fonts, sizing, wrapping, `TextScaled`.
+3. Images, 9-slice, ScrollingFrame.
+4. Input: buttons, `TextBox`, GUI taking input before the 3D world.
+5. BillboardGui and SurfaceGui in the world; Hint and Message.
+6. The GUI Roblox draws itself (player list, chat, backpack), from
+   Core-Scripts (Apache-2.0) where they fit.
+
+### M9 Characters
+
+Humanoid 905 files, Tool 1,152, HopperBin 1,107, SpawnLocation 1,509,
+Seat 642, VehicleSeat 230. Needs physics, the head mesh, terrain and GUI.
+
+1. Spawning at SpawnLocations, the default R6 character, respawning.
+2. Humanoid: state machine, walking, jumping, climbing, swimming, health
+   and death, joints breaking.
+3. Default camera and control scripts (Core-Scripts, Apache-2.0).
+4. Tools and the backpack; HopperBin as decided below.
+5. Seats and VehicleSeats.
+6. Playing animations, enough for Rook's own Animate (Animation is in 270
+   files; the rest of animation is M11).
+
+### M10 Networking
+
+Straight after characters: once there's a character, the next thing is
+playing together. Replication already runs in-process between a server
+and its client; this puts a real transport behind it.
+
+1. A transport (UDP, reliable and unreliable channels) behind the
+   replicator's interface; joining, leaving, timeouts.
+2. Several clients, each with its own player and character.
+3. Network ownership: a player's client simulates its character and what
+   it owns (`SetNetworkOwner`).
+4. RemoteEvents and RemoteFunctions across machines (114 and 73 files),
+   with Roblox's limits and ordering.
+5. Bandwidth: deltas and interest management, so large archived places
+   stay playable.
+
+### M11 Avatars and animation
+
+How players look and move. BodyColors 359 files, Shirt 330, Hat 323,
+Pants 282, CharacterMesh 168, ShirtGraphic 89, Accessory 42.
+
+1. A local avatar (body colours, clothing, hats and faces from content
+   folders or the user's install), set up without a Roblox account and
+   sent to the server on joining.
+2. Clothing and ShirtGraphics on R6 bodies, CharacterMeshes, hats and
+   accessories, as Studio draws them.
+3. Animation in full: Animator, AnimationController, KeyframeSequence,
+   blending and priorities, replicated between players.
+
+### M12 Server hosting
+
+Rook's self-hosting promise: anyone can host a place for friends.
+
+1. `rook-server`: a headless server for one place, with a config file
+   (port, player limit, admins).
+2. Joining by address, and finding servers on the local network.
+3. DataStores saved to disk, so a server keeps its data between runs.
+4. Teams (482 files) and team spawns, if characters didn't need them
+   sooner.
+5. Basic moderation: kicking, banning, server messages.
+
+### M13 Lighting and post-processing
+
+Make archived places look the way Studio shows them today.
+
+1. The sun, moon and stars, `SkyboxOrientation`, Atmosphere (16 files)
+   and Clouds (8).
+2. Post-processing: Bloom (49 files), ColorCorrection (44), SunRays (20),
+   Blur (13), DepthOfField (11).
+3. Lighting tuned against Studio screenshots of reference places (it's an
+   Approximation until then).
+4. Antialiasing (MSAA by quality level, measured in
+   [`docs/behavior/antialiasing.md`](docs/behavior/antialiasing.md)).
+
+### M14 Studio
+
+`rook-studio`, a place editor.
+
+1. Explorer and Properties, driven by the reflection database.
+2. Selecting, moving, scaling and rotating parts; inserting models.
+3. Play testing in the editor, server and client, as Studio does.
+4. Saving `.rbxl` and `.rbxlx` files that Roblox Studio opens unchanged.
+
+### M15 Extensions
+
+The opt-in profile from the architecture (§11), off by default, with its
+first extensions:
+
+- WebSockets available to any script (needs M10).
+- EditableImage and EditableMesh without platform gating.
+- Restoring embedded legacy textures that modern Roblox loads as empty.
+
+### Not yet placed
+
+Gamepad and touch input; packaged releases for Windows, Linux and macOS;
+performance work on the largest archived places as it's needed (each
+milestone keeps its own places fast).
 
 ## Content and assets
 
@@ -158,7 +271,7 @@ or downloaded content packages.
   later as an opt-in extension. Old content works as far as modern Roblox
   still runs it.
 - **HopperBin** (1,107 files): modern Roblox no longer runs it. Decide
-  before M5 whether to follow modern behaviour or offer an extension.
+  before M9 Characters whether to follow modern behaviour or offer an extension.
 - **Wire compatibility with real Roblox clients** is not a goal;
   replication is Rook to Rook.
 
