@@ -20,13 +20,16 @@ fn effect(dom: &Dom, id: InstanceId) -> Option<Effect> {
             low: float(dom, id, "LowGain", -20.0),
             mid: float(dom, id, "MidGain", -10.0),
             high: float(dom, id, "HighGain", 0.0),
+            range: rook_audio::effects::CROSSOVERS,
         },
         "ReverbSoundEffect" => Effect::Reverb(Reverb {
             decay: float(dom, id, "DecayTime", 1.5),
             density: float(dom, id, "Density", 1.0),
             diffusion: float(dom, id, "Diffusion", 1.0),
-            dry: float(dom, id, "DryLevel", -6.0),
-            wet: float(dom, id, "WetLevel", 0.0),
+            // Within ReverbSoundEffect's -80 to 10 dB (creator-docs),
+            // narrower than AudioReverb's.
+            dry: float(dom, id, "DryLevel", -6.0).clamp(-80.0, 10.0),
+            wet: float(dom, id, "WetLevel", 0.0).clamp(-80.0, 10.0),
             ..Reverb::default()
         }),
         "DistortionSoundEffect" => Effect::Distortion {

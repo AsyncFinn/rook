@@ -564,5 +564,6 @@ fn scripts_moved_into_workspace_start() {
     assert_eq!(s.started_scripts(), 2);
 }
 
+mod audio_api;
 mod sounds;
 mod unions;

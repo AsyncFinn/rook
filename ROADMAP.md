@@ -28,9 +28,9 @@ each release says which milestone it finishes (see `CHANGELOG.md`).
 
 ## Now, next, later
 
-- **Now:** M5 Audio.
-- **Next:** M6 Terrain.
-- **Then:** M7 Lights and effects, M8 GUI, M9 Characters and, right after, M10 Networking.
+- **Now:** M6 Terrain.
+- **Next:** M7 Lights and effects.
+- **Then:** M8 GUI, M9 Characters and, right after, M10 Networking.
 
 The world comes before the people in it: sound, terrain, lights and GUI
 are each in hundreds of archive files, and characters need terrain to walk
@@ -46,7 +46,7 @@ directly, since a character is what makes playing together worth it.
 | ✅ | **M2** Renderer v0, client/server split, LocalScripts, basic input | Archived places render recognisably; client scripts run alongside server scripts (v0.2.0) |
 | ✅ | **M3** Physics | Physics conformance batch passes; unanchored places settle plausibly |
 | ✅ | **M4** Content: meshes, materials, textures, decals | Places render with their meshes, materials (2022 and legacy, MaterialVariants, SurfaceAppearance), decals and textures (v0.4.0) |
-| ⬜ | **M5** Audio | Archived places play their sounds, positioned in 3D; the audio conformance batch passes |
+| ✅ | **M5** Audio | Archived places play their sounds, positioned in 3D; the audio conformance batch passes (v0.5.0) |
 | ⬜ | **M6** Terrain | Archived places with terrain show it, and parts and queries collide with it |
 | ⬜ | **M7** Lights and effects | Local lights light the scene; Fire, Smoke, Sparkles and ParticleEmitters draw as in Studio |
 | ⬜ | **M8** GUI | GUI conformance batch passes; archived places' GUIs draw and take input |
@@ -166,9 +166,9 @@ state. It's self-contained, and every place sounds wrong without it.
 3. ✅ 3D sound: a Sound under a part or Attachment is positioned, with
    `RollOffMode` and its distances measured in Studio (see [audio](docs/behavior/audio.md#3d-sound-step-3)).
 4. ✅ SoundService, SoundGroups and the four most used sound effects (see [audio](docs/behavior/audio.md#soundservice-soundgroups-and-effects-step-4)).
-5. The audio API modern places use (AudioPlayer, AudioEmitter,
+5. ✅ The audio API modern places use (AudioPlayer, AudioEmitter,
    AudioListener, AudioDeviceOutput, Wire and the Audio effects), on the
-   same engine as Sound.
+   same engine as Sound (see [audio](docs/behavior/audio.md#the-audio-api-step-5)).
 
 ### M6 Terrain
 

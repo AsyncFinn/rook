@@ -222,7 +222,8 @@ impl Security {
             Self::PluginSecurity => "Plugin",
             Self::LocalUserSecurity => "LocalUser",
             Self::RobloxScriptSecurity => "RobloxScript",
-            Self::RobloxSecurity => "Roblox",
+            // Observed in Studio 0.742, writing AudioPlayer.IsPlaying.
+            Self::RobloxSecurity => "RobloxEngine",
             Self::NotAccessibleSecurity => "NotAccessible",
         }
     }

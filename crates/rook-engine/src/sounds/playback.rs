@@ -156,6 +156,8 @@ impl DataModel {
         profiling::scope!("advance_sounds");
         let client = self.role == Role::Client;
         let mut events = Vec::new();
+        // An AudioPlayer that ends changes `IsPlaying` for scripts to see.
+        let start = self.runtime.world().dom.journal().end();
         {
             let mut w = self.runtime.world_mut();
             let w = &mut *w;
@@ -166,6 +168,10 @@ impl DataModel {
                 let Some(audio) = self.sounds.audio(id).cloned() else {
                     continue;
                 };
+                if is_player(dom, id) {
+                    players::advance(dom, &mut w.sounds, id, &audio, dt, &mut events);
+                    continue;
+                }
                 let set = |dom: &mut Dom, name: &str, v: Value| {
                     // Time passing isn't a change scripts hear about (no
                     // Changed each frame), so it skips the journal.
@@ -203,22 +209,22 @@ impl DataModel {
                         t %= length;
                         let control = w.sounds.entry(id).or_default();
                         control.loops += 1;
-                        events.push((id, "DidLoop", sound_id(dom, id), Some(control.loops)));
+                        events.push((id, "DidLoop", Some(sound_id(dom, id)), Some(control.loops)));
                     } else {
                         set(dom, "Playing", Value::Bool(false));
                         t = 0.0;
-                        events.push((id, "Ended", sound_id(dom, id), None));
+                        events.push((id, "Ended", Some(sound_id(dom, id)), None));
                     }
                 }
                 set(dom, "TimePosition", Value::Float64(t));
             }
         }
-        let start = self.runtime.world().dom.journal().end();
         self.fire_sound_events(start, events);
     }
 
-    /// The sounds to hear now: in the DataModel, loaded and `Playing`,
-    /// plus removed `PlayOnRemove` sounds playing out.
+    /// The Sounds to hear now: in the DataModel, loaded and `Playing`,
+    /// plus removed `PlayOnRemove` sounds playing out. (AudioPlayers are
+    /// heard through [`DataModel::audio_graph`].)
     pub fn playing_sounds(&self) -> Vec<PlayingSound> {
         let w = self.runtime.world();
         let dom = &w.dom;

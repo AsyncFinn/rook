@@ -8,6 +8,7 @@
 //! pitch, not the same artefacts).
 
 use super::Frame;
+use super::line::Line;
 
 /// The window: 60 ms, long enough for low voices.
 const WINDOW_SECONDS: f32 = 0.06;
@@ -24,8 +25,7 @@ fn level(octave: f32) -> f32 {
 pub(super) struct Shifter {
     ratio: f32,
     window: f32,
-    buffer: Vec<Frame>,
-    write: usize,
+    line: Line,
     /// How far into the window the first read point is, 0 to 1.
     phase: f32,
 }
@@ -36,8 +36,7 @@ impl Shifter {
         Self {
             ratio: octave.clamp(0.5, 2.0),
             window,
-            buffer: vec![[0.0; 2]; window as usize + 2],
-            write: 0,
+            line: Line::new(window as usize + 1),
             phase: 0.0,
         }
     }
@@ -47,30 +46,16 @@ impl Shifter {
     }
 
     pub(super) fn latency(&self) -> usize {
-        self.buffer.len()
-    }
-
-    /// The input `delay` frames ago, between frames by linear
-    /// interpolation.
-    fn read(&self, delay: f32, channel: usize) -> f32 {
-        let n = self.buffer.len();
-        let at = self.write as f32 - delay;
-        let at = if at < 0.0 { at + n as f32 } else { at };
-        let i = at as usize % n;
-        let t = at - at.floor();
-        let a = self.buffer[i][channel];
-        let b = self.buffer[(i + 1) % n][channel];
-        a + (b - a) * t
+        self.line.len()
     }
 
     pub(super) fn process(&mut self, frames: &mut [Frame]) {
         if self.ratio == 1.0 {
             return;
         }
-        let n = self.buffer.len();
         let step = (1.0 - self.ratio) / self.window;
         for frame in frames {
-            self.buffer[self.write] = *frame;
+            self.line.push(*frame);
             let second = (self.phase + 0.5) % 1.0;
             // Hann weights half a window apart add up to 1, and each is 0
             // where its read point jumps.
@@ -79,10 +64,9 @@ impl Shifter {
             let gain = level(self.ratio);
             for (c, s) in frame.iter_mut().enumerate() {
                 *s = gain
-                    * (w1 * self.read(self.phase * self.window, c)
-                        + w2 * self.read(second * self.window, c));
+                    * (w1 * self.line.read(1.0 + self.phase * self.window, c)
+                        + w2 * self.line.read(1.0 + second * self.window, c));
             }
-            self.write = (self.write + 1) % n;
             self.phase = (self.phase + step).rem_euclid(1.0);
         }
     }

@@ -118,6 +118,28 @@ pub struct SoundControl {
     pub loops: u32,
 }
 
+/// The audio API's script state (`api/methods/audio.rs`).
+#[derive(Debug, Default)]
+pub struct AudioState {
+    /// AudioAnalyzers' last spectra, written by the engine on clients.
+    pub spectra: HashMap<InstanceId, Vec<f32>>,
+    /// `AudioPlayer:Play(atTime)` and `Stop(atTime)` calls waiting for
+    /// their time.
+    pub scheduled: Vec<Scheduled>,
+    /// The last id a scheduled call returned.
+    pub next_action: i64,
+}
+
+/// A scheduled `Play` or `Stop`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Scheduled {
+    pub id: i64,
+    pub player: InstanceId,
+    pub play: bool,
+    /// On the DataModel's clock (`SoundService:GetMixerTime`).
+    pub at: f64,
+}
+
 /// Where 3D sounds are heard from (`SoundService:SetListener`).
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub enum Listener {
@@ -172,12 +194,14 @@ pub struct World {
     pub(crate) modules: ModuleState,
     /// Scripts that have been started, so they don't start twice.
     pub(crate) started: HashMap<InstanceId, Thread>,
-    /// Sounds' script state, for those a script has played or seeked.
+    /// Sounds' and AudioPlayers' script state, for those a script has
+    /// played or seeked.
     pub sounds: HashMap<InstanceId, SoundControl>,
     pub listener: Listener,
     /// Sounds given to `SoundService:PlayLocalSound`, for the engine to
     /// play once.
     pub local_sounds: Vec<InstanceId>,
+    pub audio: AudioState,
 }
 
 impl World {
@@ -203,6 +227,7 @@ impl World {
             sounds: HashMap::new(),
             listener: Listener::Camera,
             local_sounds: Vec::new(),
+            audio: AudioState::default(),
         }
     }
 

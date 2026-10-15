@@ -60,6 +60,66 @@ pub fn attenuation(mode: RollOff, distance: f32, min: f32, max: f32, scale: f32)
     }
 }
 
+/// How loud an AudioEmitter is `distance` studs from a listener, 0 to 1,
+/// by its `DistanceAttenuationMode` (an `Enum` value), its
+/// `DistanceAttenuationBounds` and the curve `SetDistanceAttenuation` gave
+/// it (Confirmed against Studio's `GetAudibilityFor`):
+///
+/// - Custom (0) with a curve: the curve ([`curve`]);
+/// - Custom with no curve: InverseTapered between 4 and 10000 studs,
+///   whatever the bounds are (`min / d` up to about 9,500 studs, then
+///   falling to 0 at 10,000);
+/// - InverseTapered (1), Linear (2), LinearSquared (3) and Inverse (4):
+///   the RollOffMode formulas between the bounds, but silent from the
+///   maximum on (a Sound is silent only past it).
+pub fn emitter_attenuation(
+    mode: u32,
+    bounds: [f32; 2],
+    points: &[(f32, f32)],
+    distance: f32,
+) -> f32 {
+    let preset = |roll_off, [min, max]: [f32; 2]| {
+        if distance >= max {
+            0.0
+        } else {
+            attenuation(roll_off, distance, min, max, 1.0)
+        }
+    };
+    match mode {
+        0 if points.is_empty() => preset(RollOff::InverseTapered, [4.0, 10_000.0]),
+        0 => curve(points, distance),
+        1 => preset(RollOff::InverseTapered, bounds),
+        2 => preset(RollOff::Linear, bounds),
+        3 => preset(RollOff::LinearSquare, bounds),
+        _ => preset(RollOff::Inverse, bounds),
+    }
+}
+
+/// A volume-over-distance curve's level at `distance`: straight lines
+/// between its points (distance, volume), flat past either end; 1 with no
+/// points (creator-docs `SetDistanceAttenuation`, Confirmed by
+/// `GetAudibilityFor`). `points` are sorted by distance.
+pub fn curve(points: &[(f32, f32)], distance: f32) -> f32 {
+    let Some(&(first_d, first_v)) = points.first() else {
+        return 1.0;
+    };
+    if distance <= first_d {
+        return first_v;
+    }
+    for pair in points.windows(2) {
+        let [(d0, v0), (d1, v1)] = [pair[0], pair[1]];
+        if distance <= d1 {
+            let t = if d1 > d0 {
+                (distance - d0) / (d1 - d0)
+            } else {
+                1.0
+            };
+            return v0 + (v1 - v0) * t;
+        }
+    }
+    points.last().map_or(1.0, |p| p.1)
+}
+
 /// The 7.1 speakers Studio pans between, by angle (degrees, clockwise from
 /// ahead), with how much of each reaches the left and right of a stereo
 /// output. Fitted to Studio's stereo output for a source at every 30
@@ -177,5 +237,34 @@ mod tests {
         }
         assert_eq!(pan(Vec3::new(0.0, -10.0, 0.0)), [0.89, 0.89]);
         assert_eq!(pan(Vec3::ZERO), [0.89, 0.89]);
+    }
+
+    /// `GetAudibilityFor` in Studio 0.742, for an emitter with no curve,
+    /// with the presets between 10 and 100, and with a curve.
+    #[test]
+    fn emitter_attenuation_matches_studio() {
+        let none: &[(f32, f32)] = &[];
+        let b = [10.0, 100.0];
+        for (mode, d, want) in [
+            (0, 4.0, 1.0),
+            (0, 10.0, 0.4),
+            (0, 1000.0, 0.004),
+            (0, 9900.0, 0.0001),
+            (4, 95.0, 0.1053),
+            (4, 100.0, 0.0),
+            (2, 15.0, 0.9444),
+            (3, 80.0, 0.0494),
+            (1, 60.0, 0.1667),
+            (1, 95.0, 0.0031),
+        ] {
+            let got = emitter_attenuation(mode, b, none, d);
+            assert!((got - want).abs() < 2e-4, "mode {mode} at {d}: {got}");
+        }
+        let c = [(10.0, 1.0), (100.0, 0.4), (300.0, 0.0)];
+        for (d, want) in [(0.0, 1.0), (55.0, 0.7), (200.0, 0.2), (500.0, 0.0)] {
+            assert!((emitter_attenuation(0, b, &c, d) - want).abs() < 1e-5);
+        }
+        assert_eq!(curve(&[(50.0, 0.5)], 0.0), 0.5);
+        assert_eq!(curve(&[], 7.0), 1.0);
     }
 }

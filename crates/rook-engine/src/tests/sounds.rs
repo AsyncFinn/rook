@@ -4,7 +4,7 @@
 use super::*;
 
 /// Options whose install holds a real 1 s WAV at `sounds/tone.wav`.
-fn tone_options(name: &str) -> Options {
+pub(super) fn tone_options(name: &str) -> Options {
     let dir = std::env::temp_dir()
         .join("rook-engine-tests")
         .join(format!("{name}-{}", std::process::id()));
@@ -162,7 +162,8 @@ fn effects_groups_and_local_sounds() {
             Effect::Equalizer {
                 low: -20.0,
                 mid: -10.0,
-                high: 0.0
+                high: 0.0,
+                range: rook_audio::effects::CROSSOVERS,
             },
             Effect::Distortion { level: 0.75 }
         ]
