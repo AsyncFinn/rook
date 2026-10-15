@@ -93,3 +93,94 @@ fn sound_properties_replicate() {
     let sound = session.client(index).unwrap().playing_sounds();
     assert_eq!(sound[0].speed, 0.75, "Pitch set later");
 }
+
+/// What a client hears a sound through: its enabled effects directly
+/// under it, in priority order; its SoundGroup and the groups that one is
+/// in; `AmbientReverb`. `PlaybackLoudness` is taken after the sound's
+/// effects, and `PlayLocalSound` plays a sound once without it playing.
+#[test]
+fn effects_groups_and_local_sounds() {
+    use rook_audio::Effect;
+    let options = tone_options("sound-effects");
+    let mut server = DataModel::new(&options).unwrap();
+    let first = service(&server, "ReplicatedFirst");
+    add_under(
+        &server,
+        first,
+        "LocalScript",
+        "Sounds",
+        r#"
+        local SS = game:GetService('SoundService')
+        local outer = Instance.new('SoundGroup') outer.Name = 'Outer' outer.Volume = 2 outer.Parent = SS
+        local inner = Instance.new('SoundGroup') inner.Name = 'Inner' inner.Volume = 0.25 inner.Parent = outer
+        Instance.new('ReverbSoundEffect').Parent = inner
+        local function new(name)
+            local s = Instance.new('Sound') s.Name = name s.SoundId = 'rbxasset://sounds/tone.wav'
+            s.Looped = true s.Parent = SS return s
+        end
+        local a = new('A') a.SoundGroup = inner
+        Instance.new('DistortionSoundEffect').Parent = a
+        Instance.new('EqualizerSoundEffect').Parent = a
+        local off = Instance.new('PitchShiftSoundEffect') off.Enabled = false off.Parent = a
+        local folder = Instance.new('Folder') folder.Parent = a
+        Instance.new('EqualizerSoundEffect').Parent = folder
+        a:Play()
+        local quiet = new('Quiet')
+        local cut = Instance.new('EqualizerSoundEffect')
+        cut.LowGain = -80 cut.MidGain = -80 cut.HighGain = -80 cut.Parent = quiet
+        quiet:Play()
+        local plain = new('Plain') plain:Play()
+        SS.AmbientReverb = Enum.ReverbType.Cave
+        task.wait(0.3)
+        print('loudness', plain.PlaybackLoudness > 100, quiet.PlaybackLoudness < 1)
+        local once = new('Once') once.Looped = false
+        SS:PlayLocalSound(once)
+        task.wait(0.1)
+        print('once', once.Playing, once.TimePosition)
+        "#,
+    );
+    server.start();
+    let mut session = Session::new(server, options);
+    let index = session.join("Player1", 1).unwrap();
+    session.run_for(0.6);
+    let client = session.client(index).unwrap();
+    let log: Vec<String> = client.take_log().into_iter().map(|e| e.message).collect();
+    assert!(log.contains(&"loudness true true".to_owned()), "{log:?}");
+    assert!(log.contains(&"once false 0".to_owned()), "{log:?}");
+
+    let dom = &client.runtime.world().dom;
+    let ss = dom.find_service("SoundService").unwrap();
+    let named = |parent, name| dom.find_first_child(parent, name, false).unwrap();
+    let (a, once) = (named(ss, "A"), named(ss, "Once"));
+    let outer = named(ss, "Outer");
+    let inner = named(outer, "Inner");
+    let playing = client.playing_sounds();
+    let sound = playing.iter().find(|s| s.id == a).unwrap();
+    assert_eq!(
+        sound.effects,
+        [
+            Effect::Equalizer {
+                low: -20.0,
+                mid: -10.0,
+                high: 0.0
+            },
+            Effect::Distortion { level: 0.75 }
+        ]
+    );
+    assert_eq!(sound.group, Some(inner));
+    assert!(
+        playing.iter().any(|s| s.id == once),
+        "the local sound plays once"
+    );
+    let groups = client.sound_groups(&playing);
+    let summary: Vec<_> = groups
+        .iter()
+        .map(|g| (g.key, g.parent, g.volume, g.effects.len()))
+        .collect();
+    assert_eq!(
+        summary,
+        [(inner, Some(outer), 0.25, 1), (outer, None, 2.0, 0)]
+    );
+    let ambient = client.sound_listener().ambient_reverb.unwrap();
+    assert_eq!(ambient.decay, 2.9);
+}

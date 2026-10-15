@@ -243,6 +243,35 @@ pub(crate) fn get(w: &World, id: InstanceId, name: &str) -> Option<Value> {
     }
 }
 
+/// Reference properties that take one class only, with that class. Rook
+/// checks just these: the database doesn't say which class the others
+/// take.
+const REF_CLASSES: &[(&str, &str, &str)] = &[("Sound", "SoundGroup", "SoundGroup")];
+
+/// Studio's error for an instance of the wrong class given to one of
+/// [`REF_CLASSES`] (observed for `Sound.SoundGroup`: "Expected SoundGroup
+/// got Part for Sound.SoundGroup.").
+pub(crate) fn wrong_ref_class(
+    w: &World,
+    id: InstanceId,
+    name: &str,
+    value: &Value,
+) -> Option<String> {
+    let Value::Ref(Some(r)) = value else {
+        return None;
+    };
+    let target = InstanceId::from_ref(*r);
+    let &(owner, _, class) = REF_CLASSES
+        .iter()
+        .find(|(owner, p, _)| *p == name && w.dom.is_a(id, owner))?;
+    (!w.dom.is_a(target, class)).then(|| {
+        format!(
+            "Expected {class} got {} for {owner}.{name}.",
+            w.dom.class_name(target)
+        )
+    })
+}
+
 pub(crate) fn set(
     w: &mut World,
     id: InstanceId,
@@ -259,6 +288,16 @@ pub(crate) fn set(
         return Some(set_named(w, id, target, Value::Color3(Color3::from(*b))));
     }
     match (name, value) {
+        // Observed in Studio 0.742: kept within 0 to 10, as Sound.Volume.
+        ("Volume", v) if w.dom.is_a(id, "SoundGroup") => {
+            let v = v.as_number()?;
+            Some(set_named(
+                w,
+                id,
+                "Volume",
+                Value::Float32(v.clamp(0.0, 10.0) as f32),
+            ))
+        }
         ("ClockTime", Value::Float32(h)) if w.dom.is_a(id, "Lighting") => {
             Some(set_lighting_hours(w, id, f64::from(*h)))
         }

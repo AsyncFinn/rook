@@ -107,6 +107,11 @@ pub(crate) fn write_property(
         .find_canonical_property(class, name)
         .ok_or_else(|| format!("{name} is not a property"))?;
     let converted = from_lua(lua, value, prop.ty)?;
+    if let Some(e) = with_world(lua, |w| {
+        properties::wrong_ref_class(w, id, name, &converted)
+    }) {
+        return Ok(Err(ScriptError(e)));
+    }
     let result = with_world(lua, |w| {
         if let (Some(target), Some(url)) =
             (properties::content_view(prop.id), converted.content_url())

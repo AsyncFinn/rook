@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/*", "apps/*"]
 
 [workspace.package]
-version = "0.12.0"
+version = "0.13.0"
 edition = "2024"
 license = "Apache-2.0"
 authors = ["AsyncFinn"]
@@ -24,7 +24,7 @@ rook-render = { path = "crates/rook-render" }
 rook-net = { path = "crates/rook-net" }
 rook-physics = { path = "crates/rook-physics" }
 rook-content = { path = "crates/rook-content" }
-rook-audio = { path = "crates/rook-audio" }
+rook-audio = { path = "crates/rook-audio", default-features = false }
 
 # Roblox formats and data (rbx-dom ecosystem)
 rbx_dom_weak = "4.2"

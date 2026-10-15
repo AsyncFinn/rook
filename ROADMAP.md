@@ -165,7 +165,7 @@ state. It's self-contained, and every place sounds wrong without it.
    `PlaybackSpeed`, `Volume`, and `Played`, `Ended`, `Loaded`, `IsLoaded` (see [audio](docs/behavior/audio.md#the-sound-api-step-2)).
 3. ✅ 3D sound: a Sound under a part or Attachment is positioned, with
    `RollOffMode` and its distances measured in Studio (see [audio](docs/behavior/audio.md#3d-sound-step-3)).
-4. SoundService, SoundGroups (5 files) and sound effects, by archive use.
+4. ✅ SoundService, SoundGroups and the four most used sound effects (see [audio](docs/behavior/audio.md#soundservice-soundgroups-and-effects-step-4)).
 5. The audio API modern places use (AudioPlayer, AudioEmitter,
    AudioListener, AudioDeviceOutput, Wire and the Audio effects), on the
    same engine as Sound.

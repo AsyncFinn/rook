@@ -8,8 +8,14 @@ authors.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
+[features]
+default = ["output"]
+# The output device (`Output`, through cpal). The engine leaves it off: it
+# only needs the effects.
+output = ["dep:cpal"]
+
 [dependencies]
-cpal.workspace = true
+cpal = { workspace = true, optional = true }
 glam.workspace = true
 rook-content.workspace = true
 

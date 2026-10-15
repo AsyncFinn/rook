@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
-use crate::{Mixer, Play};
+use crate::{Mix, Mixer};
 
 /// The system's default output device, fed by a [`Mixer`].
 pub struct Output<K> {
@@ -44,9 +44,9 @@ impl<K: Hash + Eq + Copy + Send + 'static> Output<K> {
     }
 
     /// Play exactly `wanted` from now on.
-    pub fn sync(&mut self, wanted: &[Play<K>]) {
+    pub fn sync(&mut self, wanted: &Mix<K>) {
         if self.mixer.is_none() {
-            if wanted.is_empty() || self.failed {
+            if wanted.sounds.is_empty() || self.failed {
                 return;
             }
             if let Err(e) = self.open() {

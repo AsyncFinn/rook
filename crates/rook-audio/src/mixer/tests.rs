@@ -1,0 +1,196 @@
+use super::*;
+
+fn audio(rate: u32, samples: Vec<i16>) -> Arc<Audio> {
+    Arc::new(Audio {
+        format: None,
+        sample_rate: rate,
+        channels: 1,
+        samples,
+    })
+}
+
+fn play(audio: &Arc<Audio>, position: f64) -> Play<u32> {
+    Play {
+        key: 1,
+        audio: audio.clone(),
+        position,
+        gains: [1.0, 1.0],
+        speed: 1.0,
+        looped: false,
+        generation: 0,
+        effects: Vec::new(),
+        group: None,
+    }
+}
+
+fn only(sounds: Vec<Play<u32>>) -> Mix<u32> {
+    Mix {
+        sounds,
+        ..Mix::default()
+    }
+}
+
+fn group(key: u32, parent: Option<u32>, volume: f32) -> Group<u32> {
+    Group {
+        key,
+        parent,
+        volume,
+        effects: Vec::new(),
+    }
+}
+
+#[test]
+fn resamples_and_ends() {
+    // 4 frames at 2 Hz, mixed at 4 Hz: every source frame twice, with
+    // the half-way frames interpolated, then silence.
+    let a = audio(2, vec![0, 16384, 0, -16384]);
+    let mut m = Mixer::new(4);
+    m.sync(&only(vec![play(&a, 0.0)]));
+    let mut out = [9.0; 20];
+    m.mix(&mut out, 2);
+    let left: Vec<f32> = out.chunks(2).map(|f| f[0]).collect();
+    assert_eq!(
+        left,
+        [0.0, 0.25, 0.5, 0.25, 0.0, -0.25, -0.5, -0.5, 0.0, 0.0]
+    );
+    assert!(out.chunks(2).all(|f| f[0] == f[1]));
+    assert!(m.is_empty());
+}
+
+#[test]
+fn follows_the_engine() {
+    let a = audio(10, vec![1000; 100]);
+    let mut m = Mixer::new(10);
+    m.sync(&only(vec![play(&a, 0.0)]));
+    let mut out = [0.0; 10];
+    m.mix(&mut out, 1);
+    // The engine says 1.1 s where the mixer is at 1.0: small drift
+    // stays; a seek moves it; a sound no longer wanted stops.
+    m.sync(&only(vec![play(&a, 1.1)]));
+    assert!((m.voices[&1].seconds() - 1.0).abs() < 1e-9);
+    m.sync(&only(vec![play(&a, 5.0)]));
+    assert!((m.voices[&1].seconds() - 5.0).abs() < 1e-9);
+    // Played again near where it was: starts over all the same.
+    m.sync(&only(vec![Play {
+        generation: 1,
+        ..play(&a, 5.1)
+    }]));
+    assert!((m.voices[&1].seconds() - 5.1).abs() < 1e-9);
+    m.sync(&Mix::default());
+    assert!(m.is_empty());
+}
+
+#[test]
+fn loops() {
+    let a = audio(4, vec![8192, 0, 0, 0]);
+    let mut m = Mixer::new(4);
+    m.sync(&only(vec![Play {
+        looped: true,
+        ..play(&a, 0.0)
+    }]));
+    let mut out = [0.0; 9];
+    m.mix(&mut out, 1);
+    assert_eq!((out[0], out[4], out[8]), (0.25, 0.25, 0.25));
+    assert_eq!(m.len(), 1);
+}
+
+/// Gains move to new values over one buffer, per side.
+#[test]
+fn ramps_and_pans() {
+    let a = audio(4, vec![16384; 40]);
+    let mut m = Mixer::new(4);
+    m.sync(&only(vec![play(&a, 0.0)]));
+    m.sync(&only(vec![Play {
+        gains: [0.0, 1.0],
+        ..play(&a, 0.0)
+    }]));
+    let mut out = [0.0; 8];
+    m.mix(&mut out, 2);
+    assert_eq!(out, [0.5, 0.5, 0.375, 0.5, 0.25, 0.5, 0.125, 0.5]);
+    m.mix(&mut out, 2);
+    assert_eq!(out, [0.0, 0.5, 0.0, 0.5, 0.0, 0.5, 0.0, 0.5]);
+}
+
+/// A sound's effects run before its Volume (Studio's `PlaybackLoudness`
+/// is taken after effects and before Volume): a distortion makes a quiet
+/// sound as loud as a loud one, and Volume then scales the result.
+#[test]
+fn effects_before_volume() {
+    let a = audio(4, vec![328; 8]);
+    let mut m = Mixer::new(4);
+    m.sync(&only(vec![Play {
+        gains: [0.5, 0.5],
+        effects: vec![Effect::Distortion { level: 1.0 }],
+        ..play(&a, 0.0)
+    }]));
+    let mut out = [0.0; 4];
+    m.mix(&mut out, 1);
+    assert!(out.iter().all(|s| (s - 0.5).abs() < 0.01), "{out:?}");
+}
+
+/// A group's Volume multiplies its sounds', and a group inside another is
+/// multiplied by that one's too (creator-docs; nesting by Inference).
+#[test]
+fn groups_multiply() {
+    let a = audio(4, vec![16384; 40]);
+    let mut m = Mixer::new(4);
+    let mix = Mix {
+        sounds: vec![Play {
+            gains: [0.5, 0.5],
+            group: Some(10),
+            ..play(&a, 0.0)
+        }],
+        groups: vec![group(10, Some(20), 0.5), group(20, None, 2.0)],
+        ambient: None,
+    };
+    m.sync(&mix);
+    let mut out = [0.0; 4];
+    m.mix(&mut out, 1);
+    // 0.5 (the sample) × 0.5 (Volume) × 0.5 × 2 (the groups).
+    assert_eq!(out, [0.25; 4]);
+    // A sound whose group isn't listed goes straight out.
+    m.sync(&only(vec![Play {
+        gains: [0.5, 0.5],
+        group: Some(99),
+        ..play(&a, 0.0)
+    }]));
+    m.mix(&mut out, 1);
+    assert_eq!(out, [0.25; 4]);
+}
+
+/// A group's effects run over the sum of its sounds, and a reverb's tail
+/// goes on after the sound stops.
+#[test]
+fn group_effects_and_tails() {
+    let a = audio(100, vec![16384; 10]);
+    let mut m = Mixer::new(100);
+    let reverb = Effect::Reverb(Reverb {
+        dry: -80.0,
+        ..Reverb::default()
+    });
+    let mix = Mix {
+        sounds: vec![Play {
+            group: Some(10),
+            ..play(&a, 0.0)
+        }],
+        groups: vec![Group {
+            effects: vec![reverb],
+            ..group(10, None, 1.0)
+        }],
+        ambient: None,
+    };
+    m.sync(&mix);
+    let mut out = vec![0.0; 100];
+    m.mix(&mut out, 1);
+    // The sound has ended and the engine lists nothing any more, yet the
+    // group's reverb still rings.
+    m.sync(&Mix::default());
+    m.mix(&mut out, 1);
+    assert!(out.iter().any(|s| s.abs() > 1e-4));
+    // Once its tail has passed, the bus is gone.
+    for _ in 0..3 {
+        m.mix(&mut out, 1);
+    }
+    m.sync(&Mix::default());
+    assert!(m.buses.is_empty());
+}

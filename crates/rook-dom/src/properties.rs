@@ -161,31 +161,35 @@ pub(crate) fn ref_target(value: &Value) -> Option<InstanceId> {
     }
 }
 
-/// Defaults of properties that don't serialize, which the database
-/// doesn't list, where the zero value is wrong. Keyed by the class that
+/// Defaults the database doesn't list (properties that don't serialize,
+/// where the zero value is wrong) or lists wrongly. Keyed by the class that
 /// declares the property.
-const UNSERIALIZED_DEFAULTS: &[(&str, &str, Value)] = &[
+const DEFAULTS: &[(&str, &str, Value)] = &[
     // Confirmed: creator-docs WeldConstraint.Enabled.
     ("WeldConstraint", "Enabled", Value::Bool(true)),
+    // Confirmed: creator-docs, and Studio 0.742 (the database says false).
+    ("SoundService", "RespectFilteringEnabled", Value::Bool(true)),
 ];
 
-/// The class default from the database, then [`UNSERIALIZED_DEFAULTS`],
-/// then the zero value of the property's type (Approximation: the
-/// database lists defaults only for properties that serialize).
+/// [`DEFAULTS`], then the class default from the database, then the zero
+/// value of the property's type (Approximation: the database lists
+/// defaults only for properties that serialize).
 fn convert_default(db: &Database, class: ClassId, property: PropertyId) -> Option<Value> {
     let prop = db.property(property);
     let ty = prop.ty;
+    let owner = db.class(prop.owner).name;
+    if let Some((_, _, v)) = DEFAULTS
+        .iter()
+        .find(|(c, p, _)| *c == owner && *p == prop.name)
+    {
+        return Some(v.clone());
+    }
     if let Some(variant) = db.default_value(class, property) {
         return Value::from_variant(variant.clone(), |_| None)
             .ok()
             .map(|v| coerce(ty, v));
     }
-    let owner = db.class(prop.owner).name;
-    UNSERIALIZED_DEFAULTS
-        .iter()
-        .find(|(c, p, _)| *c == owner && *p == prop.name)
-        .map(|(_, _, v)| v.clone())
-        .or_else(|| zero_value(db, ty))
+    zero_value(db, ty)
 }
 
 /// Store values in the property's declared type. Files and the database

@@ -32,7 +32,7 @@ Rook is a Cargo workspace of small crates whose dependencies only point downward
 | [`rook-lua`](crates/rook-lua) | The Luau bridge: Instance API, datatypes, globals, `require` |
 | [`rook-net`](crates/rook-net) | Server-to-client replication |
 | [`rook-content`](crates/rook-content) | Content URLs, the provider chain (Rook defaults, the Roblox install, asset delivery), the cache, and mesh, image and sound decoding |
-| [`rook-audio`](crates/rook-audio) | The mixer and the audio output device |
+| [`rook-audio`](crates/rook-audio) | The mixer, SoundGroups, sound effects and the audio output device |
 | [`rook-physics`](crates/rook-physics) | Assemblies, joints, constraints, contacts and scene queries over Rapier |
 | [`rook-engine`](crates/rook-engine) | DataModels, services, script start rules, play sessions and the frame loop |
 | [`rook-render`](crates/rook-render) | The wgpu renderer |

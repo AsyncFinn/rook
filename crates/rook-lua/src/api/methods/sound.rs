@@ -129,3 +129,21 @@ pub(super) fn get_listener(lua: &Lua, _: InstanceId, _: Args) -> ApiResult<Outco
     let item = crate::types::enums::enum_item(lua, "ListenerType", kind)?;
     Outcome::ret(lua, (item, value))
 }
+
+/// `SoundService:PlayLocalSound`: the sound plays once from the start for
+/// this DataModel alone, wherever it is (creator-docs), changing nothing
+/// scripts see: no `Playing`, `TimePosition` or events (Confirmed). On a
+/// server it is an error. The engine plays it (`rook-engine`'s `sounds`).
+pub(super) fn play_local_sound(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
+    if !with_world(lua, |w| w.is_client) {
+        return Err(ScriptError(
+            "SoundService:PlayLocalSound only works on a client.".into(),
+        ));
+    }
+    let sound = a.opt_instance(0)?;
+    let sound = sound
+        .filter(|&s| with_world(lua, |w| w.dom.is_a(s, "Sound")))
+        .ok_or_else(|| ScriptError("SoundService:PlayLocalSound expects a Sound object.".into()))?;
+    with_world(lua, |w| w.local_sounds.push(sound));
+    Outcome::ret(lua, ())
+}
