@@ -23,6 +23,7 @@ rook-content.workspace = true
 rook-audio = { workspace = true, features = ["output"] }
 rook-engine.workspace = true
 rook-physics.workspace = true
+rook-terrain.workspace = true
 wgpu.workspace = true
 winit.workspace = true
 pollster.workspace = true
@@ -31,6 +32,8 @@ image.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 profiling.workspace = true
+rayon.workspace = true
+blake3.workspace = true
 
 [features]
 default = ["repl"]

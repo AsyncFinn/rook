@@ -177,8 +177,11 @@ state. It's self-contained, and every place sounds wrong without it.
 Roblox does with the legacy data before deciding how Rook handles it.
 Terrain comes before characters, who walk on it.
 
-1. Decode `SmoothGrid` voxels (material and occupancy) and mesh them as
-   Roblox does, measured against Studio.
+1. ✅ Decode `SmoothGrid` voxels (material and occupancy) and mesh them as
+   Roblox does, measured against Studio, in the new `rook-terrain` crate;
+   drawn in a flat colour per material. Only 10 unique archive files hold
+   voxels and 104 legacy blocks, which today's Studio doesn't load
+   either. Counts and findings: [terrain.md](docs/behavior/terrain.md).
 2. Terrain materials through M4's material system: `MaterialColors`,
    MaterialService overrides and MaterialVariants on terrain, grass, and
    water (swimming comes with characters).

@@ -39,5 +39,6 @@ pub use rbx_types::{
     Attributes, Axes, BinaryString, BrickColor, Color3uint8, ColorSequence, ColorSequenceKeypoint,
     Content, ContentId, CustomPhysicalProperties, Faces, Font, MaterialColors, NetAssetRef,
     NumberRange, NumberSequence, NumberSequenceKeypoint, PhysicalProperties, Ray, Rect, Region3,
-    Region3int16, SecurityCapabilities, SharedString, Tags, UniqueId, Vector2int16, Vector3int16,
+    Region3int16, SecurityCapabilities, SharedString, Tags, TerrainMaterials, UniqueId,
+    Vector2int16, Vector3int16,
 };

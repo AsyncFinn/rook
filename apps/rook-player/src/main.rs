@@ -175,11 +175,17 @@ fn main() -> anyhow::Result<()> {
     // The camera the place was saved with (clients start with a fresh one).
     let mut camera = game.saved_camera;
     let name = args.place.file_name().unwrap_or_default().to_string_lossy();
+    let terrain = scene.terrain_meshes();
+    let terrain = if terrain > 0 {
+        format!(", terrain in {} meshes", thousands(terrain))
+    } else {
+        String::new()
+    };
     console::print_message(
         MessageType::Info,
         &format!(
-            "Loaded {name} in {load_time:.2} s ({} parts)",
-            thousands(scene.scene.parts.len())
+            "Loaded {name} in {load_time:.2} s ({} parts{terrain})",
+            thousands(scene.scene.parts.len() - scene.terrain_meshes())
         ),
     );
     if let Some(pos) = args.camera {

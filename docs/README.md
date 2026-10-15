@@ -13,6 +13,7 @@
   - [Asset fetching](behavior/content.md)
   - [Textures and decals](behavior/textures-decals.md)
   - [Antialiasing](behavior/antialiasing.md)
+  - [Terrain](behavior/terrain.md): `SmoothGrid` voxels and the surface Roblox builds from them
   - [Stubs](behavior/stubs.md): what's partly done or accepted but ignored, member by member
 
 The plan is in [ROADMAP.md](../ROADMAP.md).

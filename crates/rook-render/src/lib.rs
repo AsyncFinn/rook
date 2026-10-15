@@ -4,7 +4,8 @@
 //! (architecture §8). It draws primitive parts, the built-in mesh shapes
 //! and mesh files, and TrussParts' bars, with their colour, transparency, mesh textures, Plastic's
 //! surface patterns and Neon, Decals and Textures over them, a sky colour,
-//! a sun, ambient light, fog and the sun's shadows. Terrain comes later.
+//! a sun, ambient light, fog and the sun's shadows. Terrain arrives as
+//! mesh files too: the player meshes its chunks with `rook-terrain`.
 
 mod batch;
 mod cache;

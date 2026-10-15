@@ -33,6 +33,7 @@ Rook is a Cargo workspace of small crates whose dependencies only point downward
 | [`rook-net`](crates/rook-net) | Server-to-client replication |
 | [`rook-content`](crates/rook-content) | Content URLs, the provider chain (Rook defaults, the Roblox install, asset delivery), the cache, and mesh, image and sound decoding |
 | [`rook-audio`](crates/rook-audio) | The mixer, SoundGroups, sound effects and the audio output device |
+| [`rook-terrain`](crates/rook-terrain) | Terrain's voxels (`SmoothGrid`) and the surface Roblox meshes from them |
 | [`rook-physics`](crates/rook-physics) | Assemblies, joints, constraints, contacts and scene queries over Rapier |
 | [`rook-engine`](crates/rook-engine) | DataModels, services, script start rules, play sessions and the frame loop |
 | [`rook-render`](crates/rook-render) | The wgpu renderer |

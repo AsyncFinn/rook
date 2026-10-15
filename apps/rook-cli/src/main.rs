@@ -7,6 +7,7 @@ mod dump;
 mod gen_members;
 mod roundtrip;
 mod run;
+mod terrain;
 
 use std::path::PathBuf;
 
@@ -53,6 +54,18 @@ enum Command {
         /// Files larger than this many megabytes are processed one at a time.
         #[arg(long, default_value_t = 64)]
         large_mb: u64,
+    },
+    /// Show what a file's Terrain holds (smooth voxels or legacy blocks),
+    /// or with `--scan`, count both across a folder's unique files.
+    Terrain {
+        /// Files to inspect, or one folder with `--scan`.
+        #[arg(required = true)]
+        paths: Vec<PathBuf>,
+        #[arg(long)]
+        scan: bool,
+        /// Worker threads for `--scan` (default: 8).
+        #[arg(long)]
+        jobs: Option<usize>,
     },
     /// Run a place's server Scripts headless and print their output.
     RunHeadless {
@@ -203,6 +216,13 @@ fn main() -> anyhow::Result<()> {
             large_mb,
         } => corpus::run(&dir, &out, jobs, large_mb),
         Command::GenMembers { dump, source, out } => gen_members::run(&dump, &source, &out),
+        Command::Terrain { paths, scan, jobs } => {
+            if scan {
+                terrain::scan(&paths[0], jobs)
+            } else {
+                terrain::inspect(&paths)
+            }
+        }
         Command::Content {
             references,
             place,

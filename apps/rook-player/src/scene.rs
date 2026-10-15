@@ -23,11 +23,13 @@ mod loading;
 mod look;
 mod materials;
 mod props;
+mod terrain;
 mod union;
 
 use loading::*;
 use look::*;
 use props::*;
+use terrain::TerrainCache;
 use union::*;
 
 /// How a part's CFrame places what it draws: where its shape's centre is
@@ -85,6 +87,8 @@ pub struct SceneCache {
     /// The lighting changed outside [`SceneCache::apply`] (a skybox image
     /// arrived).
     lighting_changed: bool,
+    /// Workspace's Terrain, meshed.
+    terrain: TerrainCache,
 }
 
 impl SceneCache {
@@ -101,6 +105,7 @@ impl SceneCache {
             free: Vec::new(),
             sky_files: HashSet::new(),
             lighting_changed: false,
+            terrain: TerrainCache::default(),
         };
         cache.rebuild(dom);
         cache
@@ -130,6 +135,7 @@ impl SceneCache {
                 }
             }
         }
+        self.add_terrain(dom);
         let index = &self.index;
         self.shown.retain(|id, _| index.contains_key(id));
         self.scene.lighting = self.lighting(dom);

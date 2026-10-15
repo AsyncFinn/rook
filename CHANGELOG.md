@@ -15,6 +15,17 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 
 ## [Unreleased]
 
+## [0.5.1] — 2026-10-15 — M6 step 1: terrain voxels and their surface
+
+Pinned Roblox version: 0.741.19. M6 Terrain, step 1.
+
+- Smooth terrain is drawn. The new `rook-terrain` crate decodes `Terrain.SmoothGrid` (checked against Studio's `ReadVoxels` on an archive place: every voxel and its occupancy match) and meshes it as Roblox does: surface nets, with each edge crossing `4 × occupancy` studs from its solid voxel, measured in Studio with `Workspace:Raycast` on single voxels, slabs and random blocks.
+- Materials shape the surface as in Studio: Brick and WoodPlanks are 4-stud blocks, Concrete and Pavement snap to halves and quarters of a voxel, and those four are drawn faceted; Grass, Sand, Snow and the other plain materials are smooth. Each material is drawn in its `Terrain.MaterialColors` colour (textures are step 2), and water in `WaterColor` at `WaterTransparency`.
+- Not yet: the pseudo-random roughness of Rock, Slate, CrackedLava, Basalt, Ice and Cobblestone (drawn smooth), Roblox's choice of diagonal on bent quads, and its water surface. Nothing collides with terrain yet (step 3).
+- Legacy terrain (`ClusterGrid`, `ClusterGridV2`) shows nothing, as in today's Studio, which refuses it as malformed or ignores it (three archive places checked).
+- Clients get the terrain: `SmoothGrid` replicates, as Roblox's own terrain streaming does.
+- `rook terrain <file>` shows what a file's Terrain holds and how long it takes to mesh; `--scan <folder>` counts smooth and legacy terrain across an archive. Of the archive's 6,378 unique files, 10 hold smooth voxels and 104 legacy blocks. See `docs/behavior/terrain.md`.
+
 ## [0.5.0] — 2026-10-15 — M5 step 5: the audio API; M5 Audio done
 
 Pinned Roblox version: 0.741.19. Finishes M5 step 5 and with it M5 Audio: archived places play their sounds, positioned in 3D, and the audio conformance cases pass.

@@ -188,15 +188,19 @@ fn withheld(server: &Dom, id: InstanceId, property: PropertyId) -> bool {
 ///   (BallSocketConstraint's `MaxFrictionTorqueXml`);
 /// - pairs with nothing in their names to go by: Sound's `PlaybackSpeed`
 ///   (replicated as `Pitch`), Player's `Team` (Roblox clients read their
-///   team) and Workspace's `CollisionGroups` (clients know the registered
-///   groups).
+///   team), Workspace's `CollisionGroups` (clients know the registered
+///   groups) and Terrain's `SmoothGrid` (Roblox streams voxels to clients
+///   its own way; clients see the terrain).
 ///
 /// Confirmed for Sound's three (the server's sounds are heard on clients,
 /// at their speed); Inference from the database for the rest.
 fn replicated_by_twin(db: &rook_reflection::Database, prop: &rook_reflection::Property) -> bool {
     if matches!(
         (db.class(prop.owner).name, prop.name),
-        ("Sound", "PlaybackSpeed") | ("Player", "Team") | ("Workspace", "CollisionGroups")
+        ("Sound", "PlaybackSpeed")
+            | ("Player", "Team")
+            | ("Workspace", "CollisionGroups")
+            | ("Terrain", "SmoothGrid")
     ) {
         return true;
     }
@@ -238,6 +242,7 @@ mod twin_tests {
                 "Sound.PlaybackSpeed",
                 "Sound.Playing",
                 "Sound.TimePosition",
+                "Terrain.SmoothGrid",
                 "VideoFrame.Playing",
                 "VideoFrame.TimePosition",
                 "Workspace.CollisionGroups",

@@ -59,7 +59,9 @@ Everything Rook supports today. What's coming next is in [ROADMAP.md](../../ROAD
 - **Unions** with their own geometry, from the union's asset: sized to the union's Size, in their parts' colours or the union's Color by `UsePartColor`, with Decals, Textures and materials laid as Studio lays them. Union assets of 2015-2016 places load anonymously; newer ones need an account, and draw nothing without one.
 - `rook-player` runs the place live in a window with a fly camera that drives `Workspace.CurrentCamera`, or renders a single frame to PNG offscreen.
 
-The sun and moon in the sky, terrain and other lighting (point and spot lights, Future lighting) are on the [roadmap](../../ROADMAP.md).
+- **Terrain**: Workspace's smooth terrain (`SmoothGrid`) is drawn with Roblox's own surface, the plain rounded shape of Grass, Sand or Snow, Brick and WoodPlanks as blocks, and Concrete and Pavement faceted, each material in its flat `Terrain.MaterialColors` colour (textures come next), water see-through in `WaterColor`. Legacy terrain (`ClusterGrid`) shows nothing, as in today's Studio. Nothing collides with terrain yet.
+
+The sun and moon in the sky, terrain materials and other lighting (point and spot lights, Future lighting) are on the [roadmap](../../ROADMAP.md).
 
 ## Content
 
