@@ -107,6 +107,28 @@ impl From<rbx_types::BrickColor> for Color3 {
     }
 }
 
+/// An sRGB colour (0 to 1 per channel) in linear light.
+pub fn srgb_to_linear(c: [f32; 3]) -> [f32; 3] {
+    c.map(|x| {
+        if x <= 0.04045 {
+            x / 12.92
+        } else {
+            ((x + 0.055) / 1.055).powf(2.4)
+        }
+    })
+}
+
+/// A linear colour back in sRGB.
+pub fn linear_to_srgb(c: [f32; 3]) -> [f32; 3] {
+    c.map(|x| {
+        if x <= 0.003_130_8 {
+            x * 12.92
+        } else {
+            1.055 * x.powf(1.0 / 2.4) - 0.055
+        }
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

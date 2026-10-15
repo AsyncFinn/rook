@@ -15,6 +15,15 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 
 ## [Unreleased]
 
+## [0.5.3] — 2026-10-15 — M6 step 2: grass blades and water waves
+
+Pinned Roblox version: 0.741.19. M6 Terrain, the rest of step 2.
+
+- Grass grows blades with `Terrain.Decoration` on, as in Studio: dark olive spikes 1.5 to 3.3 studs tall, about one per square stud, leaning every way, sized against a ruler in Studio screenshots. They're built in 32-stud tiles within 200 studs of the camera, thin out with distance, and sway, bending with `Workspace.GlobalWind`. With `Decoration` off there are none.
+- Water waves: the surface rises and falls by `WaterWaveSize` studs in long, slow humps, moving with `WaterWaveSpeed`, as Studio's does (its waves move the surface itself, measured at grazing angle). It's rippled by the water normal map from the user's Roblox install, reflects more of the sky at grazing angles, glints in the sun, and turns more opaque there.
+- Costs about 1 ms a frame on Ragdoll Engine (median 4.5 → 5.5 ms offscreen).
+- Not yet: Studio's exact blade shapes and sway, its 25-frame water animation, and terrain properties scripts change after load. See `docs/behavior/terrain.md`.
+
 ## [0.5.2] — 2026-10-15 — M6 step 2: terrain materials and water
 
 Pinned Roblox version: 0.741.19. M6 Terrain, step 2.

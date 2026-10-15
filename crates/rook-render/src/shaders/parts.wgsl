@@ -14,7 +14,11 @@
 
 @vertex
 fn vs_main(v: VertexIn) -> VertexOut {
-    let world = world_position(v);
+    var world = world_position(v);
+    let packed = v.face & 255u;
+    if packed >= TERRAIN_FACE && packed != 255u {
+        world = terrain_motion(world, packed, v.uv);
+    }
     // Inverse-transpose of a rotation times a scale: rotate n / size.
     let local_normal = normalize(v.normal / max(abs(v.i_size), vec3(1e-4)) * sign(v.i_size));
     var out: VertexOut;
@@ -32,7 +36,6 @@ fn vs_main(v: VertexIn) -> VertexOut {
     var local = v.box_point * v.i_size;
     var normal = local_normal;
     // Union vertices (bit 6 of their face) tile from their face's centre.
-    let packed = v.face & 255u;
     let centred = packed != 255u && (packed & UNION_FACE) != 0u;
     var face = select(packed, packed & 7u, centred);
     var center = (lo + hi) * 0.5;
@@ -227,6 +230,9 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
     let duv_y = dpdy(uv);
     let dp_x = dpdx(in.world);
     let dp_y = dpdy(in.world);
+    if terrain && (packed & TERRAIN_WATER) != 0u {
+        return water_surface(in, dp_x, dp_y);
+    }
     var normal = in.normal;
     var roughness = in.material.y;
     var metalness = in.material.z;

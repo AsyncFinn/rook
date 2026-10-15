@@ -1,11 +1,14 @@
 //! Smooth terrain: `Terrain.SmoothGrid`'s voxels ([`Grid`], decoded in
-//! [`decode`]) and the surface Roblox builds from them ([`mesh`]), shared by
-//! the renderer and, later, physics and the Terrain API.
+//! [`decode`]), the surface Roblox builds from them ([`mesh`]) and the
+//! grass blades on it ([`grass`]), shared by the renderer and, later,
+//! physics and the Terrain API.
 
 mod decode;
+pub mod grass;
 mod grid;
 mod material;
 pub mod mesh;
+mod random;
 
 pub use decode::DecodeError;
 pub use grid::{CHUNK_VOXELS, Grid, VOXEL_STUDS, Voxel, chunk_of};

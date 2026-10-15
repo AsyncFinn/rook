@@ -46,7 +46,8 @@ pub(crate) const UNION_FACE: u32 = 64;
 
 /// A terrain vertex's face: its material textures are projected onto the
 /// plane its surface faces most, in world studs; plus 1 for the axes'
-/// planes only (`rook_content::mesh::TerrainMapping`).
+/// planes only, 2 for water and 4 for grass blades
+/// (`rook_content::mesh::TerrainMapping`).
 pub(crate) const TERRAIN_FACE: u32 = 128;
 
 impl Vertex {
@@ -428,7 +429,13 @@ pub(crate) fn from_file(m: &rook_content::mesh::Mesh) -> MeshData {
         v.face = face.index() as u32 | UNION_FACE | u32::from_le_bytes([0, *r, *g, *b]);
     }
     if let Some(mapping) = m.terrain {
-        let face = TERRAIN_FACE + u32::from(mapping == TerrainMapping::Cube);
+        let face = TERRAIN_FACE
+            + match mapping {
+                TerrainMapping::Planes => 0,
+                TerrainMapping::Cube => 1,
+                TerrainMapping::Water => 2,
+                TerrainMapping::Blades => 4,
+            };
         for v in &mut vertices {
             v.face = face;
         }

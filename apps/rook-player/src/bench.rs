@@ -51,7 +51,8 @@ pub(crate) fn bench(
         game.step();
         sim += secs(t);
         let t = Instant::now();
-        if refresh(&mut cache, game.view_mut(), &mut renderer) {
+        renderer.set_time(frame as f32 / 60.0);
+        if refresh(&mut cache, game.view_mut(), &mut renderer, camera.position) {
             updates += 1;
         }
         build += secs(t);
