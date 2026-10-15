@@ -53,6 +53,21 @@ pub(crate) fn pack_velocity(v: Vector) -> u128 {
         .fold(0, |acc, (i, f)| acc | (u128::from(f.to_bits()) << (32 * i)))
 }
 
+/// Whether a collider needs [`Mixer`]: its weights aren't Rapier's plain
+/// average (both 1), or its anchored body carries what touches it. Pairs
+/// without it get the same friction and elasticity from Rapier's Average
+/// rule, and Rapier can reuse their contacts while they barely move, which
+/// it never does for a pair with a hook (half the narrow phase on 60k-part
+/// places).
+pub(crate) fn hooks_for(collider_data: u128, body_data: u128) -> ActiveHooks {
+    let [_, fw, _, ew] = unpack(collider_data);
+    if fw != 1.0 || ew != 1.0 || body_data != 0 {
+        ActiveHooks::MODIFY_SOLVER_CONTACTS
+    } else {
+        ActiveHooks::empty()
+    }
+}
+
 fn surface_velocity(context: &ContactModificationContext, body: Option<RigidBodyHandle>) -> Vector {
     let Some(rb) = body.and_then(|b| context.bodies.get(b)) else {
         return Vector::ZERO;

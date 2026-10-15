@@ -101,10 +101,11 @@ fn materials_mix_by_weight() {
     );
 }
 
-#[test]
-fn friction_is_mixed_in_the_simulation() {
-    // A block slid at 20 studs/s over a floor slows by mu·g; Studio
-    // measured mu ≈ 0.09 for 0.3 (weight 1) against 0.02 (weight 3).
+/// The friction a block with `block`'s friction and weight shows sliding
+/// at 20 studs/s over a floor with `floor`'s: it slows by mu·g.
+fn sliding_friction(floor: (f32, f32), block: (f32, f32)) -> f32 {
+    let (floor_f, floor_w) = floor;
+    let (block_f, block_w) = block;
     let mut dom = Dom::new();
     let floor = part(
         &mut dom,
@@ -120,8 +121,8 @@ fn friction_is_mixed_in_the_simulation() {
         Vec3::splat(2.0),
         false,
     );
-    custom(&mut dom, floor, 1.0, 0.3, 0.0, 1.0, 1.0);
-    custom(&mut dom, block, 1.0, 0.02, 0.0, 3.0, 1.0);
+    custom(&mut dom, floor, 1.0, floor_f, 0.0, floor_w, 1.0);
+    custom(&mut dom, block, 1.0, block_f, 0.0, block_w, 1.0);
     let mut physics = Physics::new();
     run(&mut physics, &mut dom, 0.5);
     set(
@@ -137,8 +138,17 @@ fn friction_is_mixed_in_the_simulation() {
     };
     let v1 = speed(&dom);
     run(&mut physics, &mut dom, 0.25);
-    let mu = (v1 - speed(&dom)) / 0.25 / 196.2;
+    (v1 - speed(&dom)) / 0.25 / 196.2
+}
+
+#[test]
+fn friction_is_mixed_in_the_simulation() {
+    // Studio measured mu ≈ 0.09 for 0.3 (weight 1) against 0.02 (weight 3).
+    let mu = sliding_friction((0.3, 1.0), (0.02, 3.0));
     assert!((mu - 0.09).abs() < 0.015, "{mu}");
+    // Equal weights average plainly, with no contact hook on either part.
+    let mu = sliding_friction((0.3, 1.0), (0.02, 1.0));
+    assert!((mu - 0.16).abs() < 0.015, "{mu}");
 }
 
 #[test]
