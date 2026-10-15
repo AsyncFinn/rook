@@ -125,7 +125,7 @@ SoundGroups (step 4).
 hidden twins (`PlayingReplicator`, `TimePositionReplicator`, and the old
 name `Pitch`), and a server's `Play` is heard on every client at its
 speed. Rook replicates the three properties, and the client keeps its own
-clock from there. Until 0.10.1 the player heard nothing in Play mode, and
+clock from there. Until 0.4.4 the player heard nothing in Play mode, and
 then everything at speed 1. A recording of `rook-player`'s output now has
 the test tone at full level for exactly as long as the script played it.
 Engine tests (`tests/sounds.rs`) check that the client gets every
