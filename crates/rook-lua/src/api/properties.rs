@@ -182,7 +182,8 @@ pub(crate) fn get(w: &World, id: InstanceId, name: &str) -> Option<Value> {
     }
     match name {
         "ClockTime" if dom.is_a(id, "Lighting") => Some(Value::Float32(dom.clock_time(id) as f32)),
-        "Workspace" if id == dom.root() => Some(Value::Ref(
+        // `workspace` is the deprecated lowercase name.
+        "Workspace" | "workspace" if id == dom.root() => Some(Value::Ref(
             dom.find_service("Workspace").map(InstanceId::to_ref),
         )),
         "Terrain" if dom.is_a(id, "Workspace") => Some(Value::Ref(

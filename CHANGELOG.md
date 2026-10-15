@@ -15,6 +15,12 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 
 ## [Unreleased]
 
+## [0.5.10] — 2026-10-15 — Fix: `game.workspace` is nil
+
+Pinned Roblox version: 0.741.19.
+
+- `game.workspace`, the deprecated lowercase name for `game.Workspace`, gives Workspace; it was nil. Old scripts that use it now run: a 61k-part place and an 86k-part place's `Univerisal_Opener_Lockdown` no longer fails on its first line.
+
 ## [0.5.9] — 2026-10-15 — Fix: the player rebuilds the whole scene on its first frame
 
 Pinned Roblox version: 0.741.19.
