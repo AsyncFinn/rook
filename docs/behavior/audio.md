@@ -447,21 +447,37 @@ tested with the measured cases.
 - One added while the sound plays applies at once.
 
 An effect's state (its filters, a reverb's tail) carries on when its
-settings change. A sound's effects end with the sound (Inference: a
-stopped sound's reverb is cut, since its channel is gone).
+settings change. A sound's effects end with the sound (Confirmed by
+recording, below: a sound's own reverb went silent the moment its tone
+ended).
 
-*SoundGroups* (creator-docs and Inference; none of it shows in
-`PlaybackLoudness`, so nothing here is measured):
+*SoundGroups.* None of this shows in `PlaybackLoudness`, so Studio's
+output was recorded (2026-10-15, Studio 0.742, playtest client), as for
+3D sound but capturing only Studio's own process (WASAPI process
+loopback), so other programs' sounds stayed out. A 1 kHz tone at Volume
+0.1 was put in the install's `content/sounds` for the test and removed
+after. Levels are relative to the same tone played with no group:
+
+| Setup | Level |
+|---|---:|
+| In a group at 0.5 | 0.500 |
+| In a group at 0.5, inside a group at 0.5 | 0.250 |
+| In a group at 1, inside a group at 0.5 | 0.500 |
+| Parented under a group at 0.5, `SoundGroup` not set | 1.000 |
 
 - A Sound plays through the group its `SoundGroup` property names.
-  Parenting it under a group doesn't count (creator-docs).
+  Parenting it under a group doesn't count (Confirmed).
 - A group's sounds are mixed together, run through the group's effects,
-  and scaled by its `Volume` (creator-docs: it "acts as a multiplier").
-  Studio keeps `Volume` within 0 to 10 (Confirmed).
+  and scaled by its `Volume` (Confirmed). Studio keeps `Volume` within 0
+  to 10 (Confirmed).
 - A group parented under another plays into it, and their volumes
-  multiply. Creator-docs calls nested groups a "mix tree"; the
-  multiplying is Inference.
-- A group's reverb rings on after its last sound stops (Inference).
+  multiply (Confirmed).
+- A group's reverb rings on after its last sound stops (Confirmed). With
+  a group ReverbSoundEffect (dry and wet 0 dB, decay 3 s), the tail went
+  on for about 1.5 s above the recording's floor after a 0.25 s tone
+  ended, after a looped tone was stopped, and after one was destroyed.
+  The same reverb under the Sound itself was cut the moment the tone
+  ended.
 
 `Sound.SoundGroup` takes SoundGroups only (Confirmed: "Expected
 SoundGroup got Part for Sound.SoundGroup."). It still points at a group
@@ -469,13 +485,33 @@ that has been destroyed, and Rook then ignores it.
 
 *`SoundService`:*
 
-- **`AmbientReverb`** (Approximation). Creator-docs: "A reverb preset that
-  should be applied to all Sounds in the experience". `ReverbType` lists
-  FMOD's reverb presets by name, in FMOD's order. So Rook adds a reverb
-  to the whole mix with each preset's published decay, diffusion,
-  density, high cut and wet level (`rook_audio::effects::ambient`).
-  Studio's output with these presets isn't measured. The default is
-  NoReverb.
+- **`AmbientReverb`** (Approximation, its level measured). Creator-docs:
+  "A reverb preset that should be applied to all Sounds in the
+  experience". `ReverbType` lists FMOD's reverb presets by name, in
+  FMOD's order. So Rook adds a reverb to the whole mix with each
+  preset's published decay, diffusion, density and high cut
+  (`rook_audio::effects::ambient`). The default is NoReverb.
+
+  Studio's output was recorded as for SoundGroups: a 0.25 s 1 kHz tone
+  at Volume 0.1, then 5 s of tail, under each preset. The tail's energy
+  over the 2 s after the tone, relative to the tone:
+
+  | Preset | Studio, global | Studio, 3D | FMOD wet level in Rook | Rook now |
+  |---|---:|---:|---:|---:|
+  | Cave | 0.00016 | 0.00007 | 0.0062 | 0.00016 |
+  | Hallway | 0.00034 | 0.00015 | 0.0171 | 0.00043 |
+  | ConcertHall | 0.00033 | 0.00016 | 0.0093 | 0.00023 |
+  | NoReverb | 0 | 0 | — | 0 |
+
+  So Studio's ambient reverb is much quieter than the presets' published
+  wet levels give: 14.5 to 17.0 dB. Rook lowers every preset's wet level
+  by 16 dB (`AMBIENT_WET_DB`), which brings these three within 1.6 dB.
+  Both global sounds and 3D ones get the reverb. A 3D sound 5 studs in
+  front of the camera got about 3.5 dB less of it than a global one;
+  Rook reverbs the whole mix alike (Approximation). Studio's tails fell
+  at 15, 31 and 15 dB a second (Cave, Hallway, ConcertHall). That is a
+  little slower than the presets' 2.9, 1.5 and 3.9 s decays, which Rook
+  keeps (21, 41 and 15 dB a second measured the same way).
 - **`RespectFilteringEnabled`**. The default is true (Confirmed;
   creator-docs). The reflection database says false, and Rook corrects
   it. It decides whether a client's sound playback replicates. Rook only

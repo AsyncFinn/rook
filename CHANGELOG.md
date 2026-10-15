@@ -13,6 +13,13 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 
 ## [Unreleased]
 
+## [0.13.1] — 2026-10-15 — AmbientReverb as loud as Studio's
+
+Pinned Roblox version: 0.741.19.
+
+- Fixed: `SoundService.AmbientReverb` was far too loud. Rook used FMOD's published wet level for each preset, but a recording of Studio's own output (Cave, Hallway, ConcertHall) put its reverb 14.5 to 17.0 dB below that. Every preset's wet level is now 16 dB lower, within 1.6 dB of Studio for all three.
+- Measured from Studio's output, which `PlaybackLoudness` doesn't show: nested SoundGroups' volumes multiply, a Sound parented under a group without `SoundGroup` set isn't in it, a group's reverb rings on after its sounds end, stop or are destroyed, and a Sound's own reverb is cut when it ends. Rook already did all of this; `docs/behavior/audio.md` now records it as Confirmed.
+
 ## [0.13.0] — 2026-10-15 — M5 step 4: SoundGroups and sound effects
 
 Pinned Roblox version: 0.741.19. Finishes M5 step 4; M5 Audio continues with the modern audio API.
