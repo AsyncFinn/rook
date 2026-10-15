@@ -1,8 +1,7 @@
 //! A union's collision geometry: decoded by `rook-content` from its
-//! `PhysicsData` (or its drawn geometry, when none was saved), and turned
-//! into colliders by `rook-physics`.
+//! `PhysicsData`, and turned into colliders by `rook-physics`.
 
-/// A triangle mesh in a union's own space: the space of its `MeshData`,
+/// A convex piece of a union, in its own space: the space of its `MeshData`,
 /// at its `InitialSize`, centred on its origin.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Hull {
@@ -18,7 +17,4 @@ pub enum UnionCollision {
     Block,
     /// Convex pieces, as Studio saved them.
     Hulls(Vec<Hull>),
-    /// No collision geometry was saved: the drawn geometry, from which
-    /// physics makes its own.
-    Mesh(Hull),
 }

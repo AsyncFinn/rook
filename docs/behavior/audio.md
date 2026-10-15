@@ -104,7 +104,7 @@ legacy sounds are those assets' current versions (Approximation).
 runs too. It isn't recorded as a change, so it fires no `Changed` each
 frame and isn't replicated: each side keeps its own clock, as `Playing`
 replicates. Headless runs and conformance finish loading a sound file
-within the frame that asks for it (`Options::wait_for_content`), so
+within the frame that asks for it (`Options::wait_for_sounds`), so
 simulated time can't run ahead of loading and runs repeat exactly; the
 player loads in the background.
 

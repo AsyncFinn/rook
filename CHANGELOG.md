@@ -13,6 +13,13 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 
 ## [Unreleased]
 
+## [0.11.1] — 2026-10-14 — Unions without saved hulls are boxes
+
+Pinned Roblox version: 0.741.19.
+
+- Fixed: a union with no collision hulls saved (`PhysicalConfigData` empty or missing; 247 of a large modern place's unions) collided as its drawn geometry, fetched from its asset. In Studio it is its box: measured in Studio 0.742, such unions read `CollisionFidelity` Box and rays hit them everywhere, even through a doorway. Rook no longer fetches union assets for collision. Also measured: Studio's rays follow `CollisionFidelity` (Default and PreciseConvexDecomposition leave a cut hole open, Hull and Box fill it), and files don't save `CollisionFidelity`. Findings in `docs/behavior/collision.md`.
+- `Options::wait_for_content` is `wait_for_sounds` again: only sounds load within the frame.
+
 ## [0.11.0] — 2026-10-14 — M15 step 1: unions collide as their shapes
 
 Pinned Roblox version: 0.741.19. Starts M15 step 1; MeshParts' collision shapes follow.

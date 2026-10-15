@@ -119,26 +119,6 @@ fn parts_fall_through_a_unions_gaps() {
     let _ = boxed;
 }
 
-#[test]
-fn a_union_without_saved_hulls_collides_as_its_mesh() {
-    let mut dom = Dom::new();
-    let u = union(&mut dom, Vec3::ZERO, true);
-    let mut physics = Physics::new();
-    // A closed 2-stud cube in the middle of the 6-stud box.
-    let cube = cuboid(Vec3::splat(-1.0), Vec3::splat(1.0));
-    let indices = vec![
-        0, 2, 1, 1, 2, 3, 4, 5, 6, 5, 7, 6, 0, 1, 4, 1, 5, 4, 2, 6, 3, 3, 6, 7, 0, 4, 2, 2, 4, 6,
-        1, 3, 5, 3, 7, 5,
-    ];
-    let mesh = Hull {
-        positions: cube.positions,
-        indices,
-    };
-    physics.set_union_collision(u, Some(Arc::new(UnionCollision::Mesh(mesh))));
-    assert_eq!(ray_at(&mut physics, &mut dom, 2.0), None);
-    assert_eq!(ray_at(&mut physics, &mut dom, 0.0), Some(4.0));
-}
-
 /// A moving union that doesn't collide keeps its box (for speed).
 #[test]
 fn moving_non_colliding_unions_keep_their_box() {

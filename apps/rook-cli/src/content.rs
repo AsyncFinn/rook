@@ -164,9 +164,9 @@ fn physics_detail(bytes: &[u8]) -> String {
     use rook_content::mesh::union::physics;
     use rook_types::UnionCollision;
     let hulls = match physics::decode_asset(bytes) {
-        Ok(UnionCollision::Block) => return "BLOCK".into(),
-        Ok(UnionCollision::Mesh(_)) => return "none (collides as its MeshData)".into(),
-        Ok(UnionCollision::Hulls(hulls)) => hulls,
+        Ok(None) => return "none".into(),
+        Ok(Some(UnionCollision::Block)) => return "BLOCK".into(),
+        Ok(Some(UnionCollision::Hulls(hulls))) => hulls,
         Err(e) => return e.to_string(),
     };
     let (mut lo, mut hi) = ([f32::MAX; 3], [f32::MIN; 3]);
@@ -276,7 +276,7 @@ impl Use {
             Want::Mesh => self.mesh,
             Want::Image => self.image,
             Want::Audio => self.audio,
-            Want::Bytes | Want::Collision => 0,
+            Want::Bytes => 0,
         }
     }
 }
@@ -406,7 +406,7 @@ pub fn place(file: &Path, options: &Options) -> anyhow::Result<()> {
                 Want::Mesh => u.mesh += 1,
                 Want::Image => u.image += 1,
                 Want::Audio => u.audio += 1,
-                Want::Bytes | Want::Collision => {}
+                Want::Bytes => {}
             }
         }
     }
