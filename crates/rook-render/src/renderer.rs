@@ -12,6 +12,11 @@ use images::{Defaults, image_set};
 use pipelines::Pipelines;
 use placement::Placement;
 
+/// Water's phase wraps here: a whole number of its 25 normal frames'
+/// cycles (20 units each) and of both waves' periods (40 and 25,
+/// `shaders/terrain.wgsl`), so nothing jumps.
+const WATER_PHASE_PERIOD: f64 = 200.0;
+
 /// GPU objects shared by windowed and offscreen rendering.
 #[derive(Debug)]
 pub struct Renderer {
@@ -22,8 +27,11 @@ pub struct Renderer {
     globals: wgpu::Buffer,
     pub(crate) bind_group: wgpu::BindGroup,
     /// The shadow map, drawn by the shadow pass and sampled by the main
-    /// pass through `main_bind_group`, with the surface patterns.
+    /// pass through `main_bind_group`, with the surface patterns and
+    /// water's normal frames.
     shadow_view: wgpu::TextureView,
+    surfaces_view: wgpu::TextureView,
+    water_view: wgpu::TextureView,
     shadow_sampler: wgpu::Sampler,
     main_layout: wgpu::BindGroupLayout,
     main_bind_group: wgpu::BindGroup,
@@ -51,8 +59,12 @@ pub struct Renderer {
     transparent_free: Vec<usize>,
     lighting: Lighting,
     terrain: TerrainLook,
-    /// Seconds on the clock water and grass move by ([`Renderer::set_time`]).
+    /// Seconds on the clock grass sways by ([`Renderer::set_time`]).
     time: f32,
+    /// How far water has moved: `WaterWaveSpeed` × seconds, summed as the
+    /// speed changes (observed: Studio's water stops where it is at speed
+    /// 0 and goes on from there), wrapped at [`WATER_PHASE_PERIOD`].
+    pub(crate) water_phase: f64,
     depth: Option<(wgpu::Texture, wgpu::TextureView, u32, u32)>,
 }
 
@@ -160,6 +172,7 @@ impl Renderer {
                     ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                     count: None,
                 },
+                texture_entry(4, wgpu::TextureViewDimension::D2Array),
             ],
         });
         let image_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -177,12 +190,23 @@ impl Renderer {
             sampler: &image_sampler,
         };
         let defaults = Defaults::new(&cx);
-        let main_bind_group = surface_bind_group(
+        let own = surfaces::rooks_own();
+        let surfaces_view = layers_view(&cx, "rook surface patterns", own.size, &own.layers);
+        // Without the install's frames, a flat normal (X in alpha, Y in
+        // green, as the install's DXT5 maps hold them).
+        let water_view = layers_view(
+            &cx,
+            "rook water normals",
+            1,
+            &[vec![vec![128, 128, 255, 128]]],
+        );
+        let main_bind_group = main_bind_group(
             &cx,
             &main_layout,
             &shadow_view,
             &shadow_sampler,
-            &surfaces::rooks_own(),
+            &surfaces_view,
+            &water_view,
         );
         let mut meshes = GpuCache::new();
         for shape in DrawShape::ALL {
@@ -197,6 +221,8 @@ impl Renderer {
             globals,
             bind_group,
             shadow_view,
+            surfaces_view,
+            water_view,
             shadow_sampler,
             main_layout,
             main_bind_group,
@@ -216,6 +242,7 @@ impl Renderer {
             lighting: Lighting::default(),
             terrain: TerrainLook::default(),
             time: 0.0,
+            water_phase: 0.0,
             depth: None,
         };
         renderer.ensure_group([None; 5]);
@@ -238,8 +265,13 @@ impl Renderer {
         self.meshes.remove(&DrawShape::File(mesh));
     }
 
-    /// Set the clock water's waves and grass's sway move by, in seconds.
+    /// Set the clock grass sways by, in seconds; water moves on by the time
+    /// since the last call (none when the clock goes back, at most a
+    /// second) at the scene's `WaterWaveSpeed`.
     pub fn set_time(&mut self, seconds: f32) {
+        let dt = (seconds - self.time).clamp(0.0, 1.0);
+        self.water_phase =
+            (self.water_phase + f64::from(dt * self.terrain.wave_speed)) % WATER_PHASE_PERIOD;
         self.time = seconds;
     }
 
@@ -258,14 +290,44 @@ impl Renderer {
         let Some(patterns) = surfaces::from_studs_atlas(atlas) else {
             return false;
         };
-        self.main_bind_group = surface_bind_group(
+        self.surfaces_view = layers_view(
+            &self.upload_context(),
+            "rook surface patterns",
+            patterns.size,
+            &patterns.layers,
+        );
+        self.rebuild_main_bind_group();
+        true
+    }
+
+    /// Ripple water with these normal maps (the install's
+    /// `textures/water/normal_01.dds` to `normal_25.dds`, X in alpha and Y
+    /// in green), an animation of one frame each, instead of a flat
+    /// surface. Returns false, keeping the flat one, unless they're all
+    /// square and the same size.
+    pub fn set_water_normals(&mut self, frames: &[Image]) -> bool {
+        let Some(first) = frames.first() else {
+            return false;
+        };
+        let size = first.width;
+        if frames.iter().any(|f| f.width != size || f.height != size) {
+            return false;
+        }
+        let layers: Vec<Vec<Vec<u8>>> = frames.iter().map(|f| f.mips.clone()).collect();
+        self.water_view = layers_view(&self.upload_context(), "rook water normals", size, &layers);
+        self.rebuild_main_bind_group();
+        true
+    }
+
+    fn rebuild_main_bind_group(&mut self) {
+        self.main_bind_group = main_bind_group(
             &self.upload_context(),
             &self.main_layout,
             &self.shadow_view,
             &self.shadow_sampler,
-            &patterns,
+            &self.surfaces_view,
+            &self.water_view,
         );
-        true
     }
 
     /// A renderer without a window, for screenshots and tests.

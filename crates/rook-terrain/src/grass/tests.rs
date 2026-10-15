@@ -29,7 +29,7 @@ fn blades_grow_on_grass_tops_only() {
     for (tile, triangles) in &tops {
         let b = blades(*tile, triangles);
         count += b.count();
-        assert_eq!(b.indices.len(), b.count() * 18);
+        assert_eq!(b.indices.len(), b.count() * 6);
         let origin = tile_origin(*tile);
         for (p, uv) in b.positions.iter().zip(&b.uvs) {
             let p = origin + Vec3::from(*p);

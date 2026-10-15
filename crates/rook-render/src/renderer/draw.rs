@@ -163,7 +163,9 @@ impl Renderer {
                 self.terrain.wave_speed,
                 self.terrain.grass_reach,
             ],
-            wind: rgb(self.terrain.wind.to_array(), 0.0),
+            wind: rgb(self.terrain.wind.to_array(), self.water_phase as f32),
+            sky_top: rgb(l.sky_top, 0.0),
+            sky_horizon: rgb(l.sky_horizon, 0.0),
         };
         self.queue
             .write_buffer(&self.globals, 0, bytemuck::bytes_of(&globals));

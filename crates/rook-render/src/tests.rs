@@ -157,3 +157,27 @@ fn decals_draw_on_their_face() {
     assert!(top_left[0] > top_left[2] + 100, "{top_left:?}");
     assert!(bottom_right.iter().all(|&c| c > 150), "{bottom_right:?}");
 }
+
+/// Water's phase sums `WaterWaveSpeed` over time: it stops where it is at
+/// speed 0 and goes on from there (as Studio's water does), and a clock
+/// going back moves nothing.
+#[test]
+fn water_phase_follows_wave_speed() {
+    let Ok(mut r) = Renderer::headless() else {
+        return;
+    };
+    let mut scene = Scene::default();
+    r.set_scene(&scene);
+    r.set_time(1.0);
+    assert!((r.water_phase - 10.0).abs() < 1e-4, "{}", r.water_phase);
+    scene.terrain.wave_speed = 0.0;
+    r.update_parts(&scene, &[]);
+    r.set_time(3.0);
+    assert!((r.water_phase - 10.0).abs() < 1e-4);
+    scene.terrain.wave_speed = 4.0;
+    r.update_parts(&scene, &[]);
+    r.set_time(3.5);
+    assert!((r.water_phase - 12.0).abs() < 1e-4);
+    r.set_time(0.0);
+    assert!((r.water_phase - 12.0).abs() < 1e-4);
+}

@@ -7,11 +7,13 @@ use super::*;
 /// may have entered or left the tree (parented, moved between parents or
 /// destroyed), `parts` changed in any other way, `moved` only in their
 /// CFrame (what physics does to every moving part every step), plus
-/// Lighting if `lighting`.
+/// Lighting if `lighting`, and the terrain's look (a Terrain's properties,
+/// `Workspace.GlobalWind`) if `terrain`.
 #[derive(Debug, Clone, Default)]
 pub struct RenderChanges {
     pub full: bool,
     pub lighting: bool,
+    pub terrain: bool,
     pub placed: std::collections::HashSet<InstanceId>,
     pub parts: std::collections::HashSet<InstanceId>,
     pub moved: std::collections::HashSet<InstanceId>,
@@ -29,6 +31,7 @@ impl RenderChanges {
     pub fn is_empty(&self) -> bool {
         !self.full
             && !self.lighting
+            && !self.terrain
             && self.placed.is_empty()
             && self.parts.is_empty()
             && self.moved.is_empty()
@@ -40,6 +43,7 @@ impl RenderChanges {
 pub(crate) struct RenderProps {
     cframe: rook_reflection::PropertyId,
     velocities: [rook_reflection::PropertyId; 2],
+    global_wind: rook_reflection::PropertyId,
 }
 
 impl RenderProps {
@@ -51,6 +55,11 @@ impl RenderProps {
             RenderProps {
                 cframe: id("CFrame"),
                 velocities: [id("AssemblyLinearVelocity"), id("AssemblyAngularVelocity")],
+                global_wind: db
+                    .class_by_name("Workspace")
+                    .and_then(|ws| db.find_property(ws.id, "GlobalWind"))
+                    .expect("Workspace.GlobalWind")
+                    .id,
             }
         });
         &PROPS
@@ -60,8 +69,9 @@ impl RenderProps {
 impl DataModel {
     /// Note whether the journal since the last check touched anything drawn:
     /// parts, their meshes, decals and SurfaceAppearances, their ancestry,
-    /// Lighting, or MaterialService and its MaterialVariants (which can
-    /// change any part: the whole scene is rebuilt, as they change rarely).
+    /// Lighting, the Terrain and `Workspace.GlobalWind` (which bends grass),
+    /// or MaterialService and its MaterialVariants (which can change any
+    /// part: the whole scene is rebuilt, as they change rarely).
     /// Camera moves don't count; the renderer reads the camera every frame
     /// anyway.
     pub(crate) fn check_render_changes(&mut self) {
@@ -93,6 +103,8 @@ impl DataModel {
                 Change::Property { id, property } => {
                     if Some(*id) == lighting {
                         changes.lighting = true;
+                    } else if dom.is_a(*id, "Terrain") || *property == props.global_wind {
+                        changes.terrain = true;
                     } else if materials(*id) {
                         changes.full = true;
                     } else if props.velocities.contains(property) {

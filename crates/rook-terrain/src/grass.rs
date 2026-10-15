@@ -3,9 +3,12 @@
 //! Grass triangles facing up, at random points fixed by where each
 //! triangle is, in tiles of [`TILE_STUDS`] so the player builds blades only
 //! near the camera. Their size and density are fitted to Studio 0.742
-//! screenshots of a Grass strip beside a 4-stud ruler: blades 1.5 to 3.4
-//! studs tall, about half a stud wide at the foot, leaning every way,
-//! about one per square stud (Approximation).
+//! screenshots of a Grass strip beside a 4-stud ruler: each blade one flat
+//! triangle up to 3.4 studs tall and about half a stud wide at the foot,
+//! leaning every way; how much of the view they cover at each height side
+//! on (within 0.06 at every height) and from above fits 2.3 blades per
+//! square stud, 0.72 to 3.6 studs tall, leaning up to 52 degrees
+//! (Approximation).
 
 use glam::{IVec2, IVec3, Vec3};
 use rook_types::{Color3uint8, linear_to_srgb, srgb_to_linear};
@@ -17,9 +20,9 @@ use crate::{ChunkMesh, Facing, TerrainMaterial};
 /// The side of a square tile of blades, in studs across X and Z.
 pub const TILE_STUDS: f32 = 32.0;
 /// Blades per square stud of ground.
-const DENSITY: f32 = 1.0;
-/// The tallest blade, in studs; the shortest is 0.45 of it.
-pub const BLADE_HEIGHT: f32 = 3.3;
+const DENSITY: f32 = 2.3;
+/// The tallest blade, in studs; the shortest is a fifth of it.
+pub const BLADE_HEIGHT: f32 = 3.6;
 /// A blade's width at its foot.
 const BLADE_WIDTH: f32 = 0.45;
 
@@ -27,10 +30,12 @@ const BLADE_WIDTH: f32 = 0.45;
 /// tints (alpha): Studio's `FStringTerrainColorTable`, `avgAlbedo2022`.
 const GRASS_AVERAGE: [u8; 4] = [196, 196, 189, 241];
 
-/// How much darker blades are than the ground's average (observed: in
-/// Studio a blade is one flat colour about 0.73 of the ground's brightness
-/// in sRGB; Approximation).
-const BLADE_SHADE: f32 = 0.5;
+/// How much darker blades are than the ground's average, in linear light
+/// (measured in Studio: a blade is one flat colour, close to the ground's
+/// average around it, by luminance 0.78 of it in the default colour and
+/// 0.97 with Grass red; Rook's blades at 0.7 come out 0.82 of Rook's own
+/// ground in the default colour; Approximation).
+const BLADE_SHADE: f32 = 0.7;
 
 /// The blades' colour (sRGB) for Grass's `MaterialColors` colour: the
 /// ground's average (its texture tinted as a tint mask is), darkened by
@@ -75,8 +80,9 @@ pub fn add_grass_tops(chunk: &ChunkMesh, tops: &mut GrassTops) {
 
 /// One tile's blades, relative to its [`tile_origin`]. Each vertex's UV is
 /// (a number from 0 to 1 for its blade: its sway's phase, and which blades
-/// thin out first far away; its height above the blade's foot in studs); its normal is the ground's, so blades light as the
-/// ground under them does.
+/// thin out first far away; its height above the blade's foot in studs);
+/// its normal points straight up, so every blade is one flat colour, as in
+/// Studio (observed, on slopes too).
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Blades {
     pub positions: Vec<[f32; 3]>,
@@ -87,19 +93,18 @@ pub struct Blades {
 
 impl Blades {
     pub fn count(&self) -> usize {
-        self.positions.len() / 5
+        self.positions.len() / 3
     }
 }
 
-/// The blades growing on `triangles` (a tile of [`GrassTops`]): each a
-/// tapering, bending strip of five vertices, seen from both sides.
+/// The blades growing on `triangles` (a tile of [`GrassTops`]): each one
+/// triangle from its foot to its tip, seen from both sides (observed:
+/// Studio's blades are straight-sided spikes).
 pub fn blades(tile: IVec2, triangles: &[[Vec3; 3]]) -> Blades {
     let origin = tile_origin(tile);
     let mut out = Blades::default();
     for t in triangles {
-        let edge = (t[1] - t[0]).cross(t[2] - t[0]);
-        let area = edge.length() / 2.0;
-        let normal = edge.normalize_or(Vec3::Y);
+        let area = (t[1] - t[0]).cross(t[2] - t[0]).length() / 2.0;
         let centre = (t[0] + t[1] + t[2]) / 3.0;
         let mut r = Random::at((centre * 16.0).round().as_ivec3() + IVec3::new(0, 7, 0));
         let count = (area * DENSITY + r.next()) as usize;
@@ -110,30 +115,26 @@ pub fn blades(tile: IVec2, triangles: &[[Vec3; 3]]) -> Blades {
                 (u, v) = (1.0 - u, 1.0 - v);
             }
             let foot = t[0] + (t[1] - t[0]) * u + (t[2] - t[0]) * v - origin;
-            let height = BLADE_HEIGHT * (0.45 + 0.55 * r.next());
+            let height = BLADE_HEIGHT * (0.2 + 0.8 * r.next());
             let turn = r.next() * std::f32::consts::TAU;
             let across = Vec3::new(turn.cos(), 0.0, turn.sin()) * (BLADE_WIDTH / 2.0);
-            // Leaning out of its own plane, up to about 30 degrees.
-            let lean = Vec3::new(-turn.sin(), 0.0, turn.cos()) * (r.next() - 0.5) * 1.2 * height;
+            // Leaning any way, up to about 52 degrees.
+            let way = r.next() * std::f32::consts::TAU;
+            let lean = Vec3::new(way.cos(), 0.0, way.sin()) * r.next() * 1.3 * height;
             let phase = r.next();
             let first = out.positions.len() as u32;
-            let mid = foot + lean * 0.3 + Vec3::Y * height * 0.5;
             let points = [
                 (foot - across, 0.0),
                 (foot + across, 0.0),
-                (mid - across * 0.6, height * 0.5),
-                (mid + across * 0.6, height * 0.5),
                 (foot + lean + Vec3::Y * height, height),
             ];
             for (p, up) in points {
                 out.positions.push(p.to_array());
-                out.normals.push(normal.to_array());
+                out.normals.push(Vec3::Y.to_array());
                 out.uvs.push([phase, up]);
             }
-            for [a, b, c] in [[0, 1, 2], [1, 3, 2], [2, 3, 4]] {
-                out.indices.extend([first + a, first + b, first + c]);
-                out.indices.extend([first + a, first + c, first + b]);
-            }
+            out.indices.extend([first, first + 1, first + 2]);
+            out.indices.extend([first, first + 2, first + 1]);
         }
     }
     out

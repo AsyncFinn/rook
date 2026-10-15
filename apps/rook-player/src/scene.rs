@@ -152,6 +152,15 @@ impl SceneCache {
             self.scene.lighting = self.lighting(dom);
         }
         let mut changed = Vec::new();
+        if changes.terrain {
+            match self.terrain_changed(dom) {
+                Some(entries) => changed.extend(entries),
+                None => {
+                    self.rebuild(dom);
+                    return SceneChange::Full;
+                }
+            }
+        }
         let workspace = dom.find_service("Workspace");
         for id in &changes.placed {
             // Only parts in Workspace are drawn.
@@ -183,7 +192,9 @@ impl SceneCache {
                 changed.push(i);
             }
         }
-        if changed.is_empty() && !changes.lighting {
+        // The terrain's look (waves, wind) reaches the renderer with any
+        // update, even one that changed no entry.
+        if changed.is_empty() && !changes.lighting && !changes.terrain {
             SceneChange::None
         } else {
             SceneChange::Parts(changed)

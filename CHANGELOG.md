@@ -15,6 +15,15 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 
 ## [Unreleased]
 
+## [0.5.5] — 2026-10-15 — M6 step 2: terrain's look checked against Studio
+
+Pinned Roblox version: 0.741.19. M6 Terrain, step 2, measured again.
+
+- Water plays all 25 of the install's normal frames, fading each into the next, on a phase of `WaterWaveSpeed` × time as Studio's does: at speed 0 the water freezes and it goes on from there, and the frames come round every 20 units of phase (2 seconds at the default speed), measured by freezing Studio's water at set phases. The ripples no longer scroll (Studio's don't), and are laid at Studio's size (fitted: same contrast and pattern from above). Water also reflects the sky's colour from overhead to the horizon, so its ripples show, and the sun's glint is a narrow highlight on ridges, as in Studio.
+- Grass blades are single straight triangles as in Studio, 2.3 per square stud, up to 3.6 studs tall (fitted to how much of Studio's view they cover at each height: within 0.04), one flat colour 0.8 of the ground's brightness even on slopes, swaying as a wave crosses the grass, and turning into `Workspace.GlobalWind` by up to 50 degrees, as measured.
+- Scripts changing the Terrain's water properties or `Workspace.GlobalWind` take effect at once (they were read only when the terrain was built).
+- Found: Studio tints terrain textures differently from the tint mask Rook uses for non-default `MaterialColors` (red Grass turns magenta); not fixed yet. See `docs/behavior/terrain.md`.
+
 ## [0.5.4] — 2026-10-15 — Fix: moved models balloon and vanish
 
 Pinned Roblox version: 0.741.19.

@@ -27,6 +27,11 @@ pub(super) struct Grass {
 }
 
 impl Grass {
+    /// The entries drawing blades.
+    pub(super) fn entries(&self) -> Vec<usize> {
+        self.shown.values().map(|(i, _)| *i).collect()
+    }
+
     /// Forget the tiles drawn (the scene's entries were rebuilt): their
     /// meshes, for the scene and the renderer to drop.
     pub(super) fn reset(&mut self) -> Vec<MeshHash> {
