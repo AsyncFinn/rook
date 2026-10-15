@@ -232,7 +232,8 @@ impl Assembly {
     /// Write every member's CFrame from the root's.
     pub fn place(&self, dom: &mut Dom, root: CFrame) -> Result<(), DomError> {
         for m in &self.members {
-            dom.set_property_by_name(m.part, "CFrame", Value::CFrame(root * m.offset))?;
+            let cf = (root * m.offset).orthonormalize();
+            dom.set_property_by_name(m.part, "CFrame", Value::CFrame(cf))?;
         }
         Ok(())
     }
@@ -321,6 +322,11 @@ pub fn move_part(dom: &mut Dom, part: InstanceId, cf: CFrame) -> Result<(), DomE
 /// [`move_part`] for several parts moved together (a model's), each move
 /// given relative to the same starting poses: a part whose assembly an
 /// earlier one already moved is skipped.
+///
+/// Parts' CFrames are orthonormalized as they're written, as Roblox's are
+/// (creator-docs CFrame:Orthonormalize). Without that, rounding error in a
+/// rotation grows threefold with each `SetPrimaryPartCFrame(Get.. * r)`,
+/// whose inverse assumes an orthonormal rotation, until parts balloon.
 pub fn move_parts(
     dom: &mut Dom,
     moves: impl IntoIterator<Item = (InstanceId, CFrame)>,
@@ -336,7 +342,7 @@ pub fn move_parts(
                 asm.place(dom, cf * offset.inverse())?;
                 moved.extend(asm.members.iter().map(|m| m.part));
             }
-            _ => dom.set_property_by_name(part, "CFrame", Value::CFrame(cf))?,
+            _ => dom.set_property_by_name(part, "CFrame", Value::CFrame(cf.orthonormalize()))?,
         }
     }
     Ok(())

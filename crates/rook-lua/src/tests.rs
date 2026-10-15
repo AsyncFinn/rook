@@ -448,6 +448,34 @@ fn tweens() {
     );
 }
 
+/// Doors that swing by `SetPrimaryPartCFrame(GetPrimaryPartCFrame() * r)`
+/// every frame (a 61k-part place's) used to balloon and vanish: rounding error in
+/// the rotation tripled with each move until parts were orthonormalized.
+#[test]
+fn repeated_model_moves_keep_parts_rigid() {
+    expect(
+        r#"
+        local m = Instance.new("Model")
+        local door = Instance.new("Part")
+        door.Anchored = true
+        door.CFrame = CFrame.new(-837.6, 5766.9, 1323.1) * CFrame.Angles(0.3, 1.47, -0.2)
+        door.Parent = m
+        local hinge = door:Clone()
+        hinge.CFrame = door.CFrame * CFrame.new(2, 0, 0)
+        hinge.Parent = m
+        m.PrimaryPart = door
+        m.Parent = workspace
+        for _ = 1, 600 do
+            m:SetPrimaryPartCFrame(m:GetPrimaryPartCFrame() * CFrame.Angles(0, math.rad(-6), 0))
+        end
+        local function scale(p) return math.round(p.CFrame.RightVector.Magnitude * 1e4) / 1e4 end
+        print(scale(door), scale(hinge), math.round((door.Position - hinge.Position).Magnitude * 10) / 10)
+        "#,
+        0,
+        &["1 1 2"],
+    );
+}
+
 /// Every no-op member must be documented with what will take it over.
 #[test]
 fn inert_members_are_documented() {
