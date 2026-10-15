@@ -15,6 +15,12 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 
 ## [Unreleased]
 
+## [0.5.6] — 2026-10-15 — Fix: slow server steps on big places
+
+Pinned Roblox version: 0.741.19.
+
+- Physics no longer runs continuous collision detection. Rapier turned it on for every fast-moving part, and each one was checked against the whole world's colliders four times a frame. On places with tens of thousands of parts that cost most of the server's frame. Roblox doesn't sweep fast parts either: they can pass through thin parts. Server step median on 300 frames of `--bench`: a 61k-part place 36.8 → 23.5 ms, an 86k-part place 26.0 → 17.8 ms; client steps unchanged.
+
 ## [0.5.5] — 2026-10-15 — M6 step 2: terrain's look checked against Studio
 
 Pinned Roblox version: 0.741.19. M6 Terrain, step 2, measured again.

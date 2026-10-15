@@ -225,6 +225,10 @@ impl Physics {
         let mut world = PhysicsWorld::new();
         world.gravity = Vector::new(0.0, -DEFAULT_GRAVITY, 0.0);
         world.integration_parameters.dt = (1.0 / STEP_HZ) as f32;
+        // No continuous collision: Roblox lets a fast part pass through a
+        // thin one, and Rapier's sweeps cost ~19 ms a frame on 60k-part
+        // places.
+        world.integration_parameters.max_ccd_substeps = 0;
         size_worker_pool();
         Self {
             world,
