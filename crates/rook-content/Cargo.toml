@@ -17,7 +17,6 @@ rbx_mesh = { workspace = true, features = ["mesh-v1", "union-graphics", "union-p
 rbx_types.workspace = true
 rook-formats.workspace = true
 rook-types.workspace = true
-rusqlite.workspace = true
 serde_json.workspace = true
 symphonia.workspace = true
 thiserror.workspace = true

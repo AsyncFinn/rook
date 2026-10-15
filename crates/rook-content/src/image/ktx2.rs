@@ -29,7 +29,6 @@ struct Header {
     width: u32,
     height: u32,
     supercompression: u32,
-    kvd: (usize, usize),
     /// The first level's offset, length and uncompressed length.
     level0: (usize, usize, usize),
 }
@@ -51,33 +50,8 @@ fn header(b: &[u8]) -> Option<Header> {
         width: u32_at(b, 20)?,
         height: u32_at(b, 24)?.max(1),
         supercompression: u32_at(b, 44)?,
-        kvd: (u32_at(b, 56)? as usize, u32_at(b, 60)? as usize),
         level0: (u64_at(b, 80)?, u64_at(b, 88)?, u64_at(b, 96)?),
     })
-}
-
-/// The file's key-value pairs (keys without their terminating NUL, values
-/// with trailing NULs removed). Needs only the header and key-value data,
-/// so the start of a file is enough.
-pub fn key_values(b: &[u8]) -> Option<Vec<(String, Vec<u8>)>> {
-    let h = header(b)?;
-    let kvd = b.get(h.kvd.0..h.kvd.0 + h.kvd.1)?;
-    let mut out = Vec::new();
-    let mut at = 0;
-    while at + 4 <= kvd.len() {
-        let len = u32_at(kvd, at)? as usize;
-        let entry = kvd.get(at + 4..at + 4 + len)?;
-        let split = entry.iter().position(|&c| c == 0).unwrap_or(entry.len());
-        let key = String::from_utf8_lossy(&entry[..split]).into_owned();
-        let mut value = entry.get(split + 1..).unwrap_or_default().to_vec();
-        while value.last() == Some(&0) {
-            value.pop();
-        }
-        out.push((key, value));
-        // Each entry is padded to 4 bytes.
-        at = (at + 4 + len + 3) & !3;
-    }
-    Some(out)
 }
 
 /// The first level as RGBA8 (as stored: no colour conversion).
@@ -178,11 +152,9 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn reads_bc1_levels_and_key_values() {
+    fn reads_bc1_levels() {
         for zstd in [false, true] {
             let file = bc1(0xF800, "abc123", zstd);
-            let kv = key_values(&file).unwrap();
-            assert_eq!(kv, vec![("contentHash".to_owned(), b"abc123".to_vec())]);
             let img = decode(&file).unwrap();
             assert_eq!(img.dimensions(), (4, 4));
             assert_eq!(img.get_pixel(1, 2).0, [255, 0, 0, 255]);

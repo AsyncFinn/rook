@@ -8,22 +8,17 @@ use std::sync::Mutex;
 use crate::cache::{Cache, Cached};
 use crate::delivery::{self, Delivery};
 use crate::install::{self, Install};
-use crate::studio_cache::StudioCache;
-use crate::{ContentRef, Failure, FailureKind, Fetched, SourceKind, defaults};
+use crate::materials::{self, TexturePack};
+use crate::{ContentRef, Failure, FailureKind, Fetched, MaterialMap, SourceKind, defaults};
 
 /// The providers, in the order a [`Config`] lists them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ProviderKind {
-    /// Content Rook ships ([`defaults`]): its own material textures, and
-    /// the legacy `rbxasset://fonts/` paths that now stand for public
-    /// assets.
+    /// What Rook knows itself ([`defaults`]): the legacy `rbxasset://`
+    /// paths that now stand for public assets.
     Defaults,
     /// The user's Roblox install, for `rbxasset://` paths.
     Install,
-    /// The user's Roblox content cache, for the material textures Studio
-    /// downloads ([`StudioCache`]); they're used before Rook's own
-    /// whatever the order.
-    StudioCache,
     /// Folders the user points at (`ROOK_CONTENT_DIRS`), laid out like
     /// the install's `content` folder: downloaded content packages or
     /// local overrides.
@@ -33,19 +28,12 @@ pub enum ProviderKind {
 }
 
 impl ProviderKind {
-    pub const ALL: [Self; 5] = [
-        Self::Defaults,
-        Self::Install,
-        Self::StudioCache,
-        Self::Folders,
-        Self::Delivery,
-    ];
+    pub const ALL: [Self; 4] = [Self::Defaults, Self::Install, Self::Folders, Self::Delivery];
 
     pub fn name(self) -> &'static str {
         match self {
             Self::Defaults => "defaults",
             Self::Install => "install",
-            Self::StudioCache => "studio-cache",
             Self::Folders => "folders",
             Self::Delivery => "delivery",
         }
@@ -63,8 +51,6 @@ impl ProviderKind {
 pub struct Config {
     pub order: Vec<ProviderKind>,
     pub install: Option<Install>,
-    /// The folder holding Roblox's content cache (`rbx-storage.db`).
-    pub roblox_cache: Option<PathBuf>,
     pub folders: Vec<PathBuf>,
     /// Whether asset delivery may use the network. With it off, only the
     /// cache answers asset ids.
@@ -115,7 +101,6 @@ impl Config {
         Self {
             order,
             install: install::newest(),
-            roblox_cache: StudioCache::find(None).map(|c| c.root().to_path_buf()),
             folders,
             network,
             api_key: std::env::var(delivery::API_KEY_VAR)
@@ -131,7 +116,6 @@ impl Config {
         Self {
             order: ProviderKind::ALL.to_vec(),
             install: None,
-            roblox_cache: None,
             folders: Vec::new(),
             network: false,
             api_key: None,
@@ -147,7 +131,6 @@ impl Config {
 pub struct Resolver {
     order: Vec<ProviderKind>,
     install: Option<Install>,
-    studio_cache: Option<StudioCache>,
     folders: Vec<PathBuf>,
     delivery: Option<Delivery>,
     cache: Option<Cache>,
@@ -159,10 +142,6 @@ pub struct Resolver {
 impl Resolver {
     pub fn new(config: Config) -> Self {
         Self {
-            studio_cache: config
-                .roblox_cache
-                .as_deref()
-                .and_then(|root| StudioCache::at(root, config.cache_dir.clone())),
             order: config.order,
             install: config.install,
             folders: config.folders,
@@ -248,7 +227,7 @@ impl Resolver {
                     SourceKind::Install,
                 ),
                 ProviderKind::Folders => (&self.folders, SourceKind::Folder),
-                ProviderKind::Defaults | ProviderKind::StudioCache | ProviderKind::Delivery => {
+                ProviderKind::Defaults | ProviderKind::Delivery => {
                     return None;
                 }
             };
@@ -299,45 +278,46 @@ impl Resolver {
         self.download(&asset)
     }
 
-    /// A material's texture: Studio's, from the user's content cache, or
-    /// else Rook's own. Either comes decoded; the bytes only name it. The
-    /// two aren't mixed: once the cache has any of a material's textures,
-    /// the ones it lacks (Studio's placeholders, or ones not downloaded)
-    /// are left out rather than drawn from Rook's.
+    /// A material's texture, from the TexturePack asset Studio uses for it
+    /// ([`materials`]): the pack names an image per map, and both come
+    /// through the cache and asset delivery like any asset. Comes decoded;
+    /// the bytes only name it.
     fn material(
         &self,
         material: rook_types::Material,
         set: rook_types::MaterialSet,
-        map: crate::MaterialMap,
+        map: MaterialMap,
     ) -> Result<Fetched, Failure> {
-        let has = |kind| self.order.contains(&kind);
-        if has(ProviderKind::StudioCache)
-            && let Some(cache) = &self.studio_cache
-            && let Some((image, location)) = cache.material(material, set, map)
-        {
-            let name = format!("{location} {}x{}", image.width, image.height);
-            let mut fetched = Fetched::new(name.as_bytes(), SourceKind::StudioCache, name.clone());
-            fetched.image = Some(std::sync::Arc::new(image));
-            return Ok(fetched);
+        let not_found = |why: &str| Failure::new(FailureKind::NotFound, why);
+        let asset = |id| ContentRef::Asset { id, version: None };
+        let pack_id = materials::pack(material, set, map)
+            .ok_or_else(|| not_found("no texture for this material"))?;
+        let pack = self.resolve(&asset(pack_id))?;
+        let pack = TexturePack::parse(&pack.bytes)
+            .ok_or_else(|| Failure::new(FailureKind::Invalid, "not a TexturePack"))?;
+        let main = match map {
+            MaterialMap::Color => pack.color,
+            MaterialMap::Normal => pack.normal,
+            MaterialMap::RoughnessMetalness => pack.roughness,
         }
-        let studio_has_it = has(ProviderKind::StudioCache)
-            && self
-                .studio_cache
-                .as_ref()
-                .is_some_and(|c| c.has_material(material, set));
-        if !studio_has_it
-            && has(ProviderKind::Defaults)
-            && let Some(image) = defaults::material(material, set, map)
-        {
-            let name = ContentRef::Material(material, set, map).to_string();
-            let mut fetched = Fetched::new(name.as_bytes(), SourceKind::Defaults, name.clone());
-            fetched.image = Some(std::sync::Arc::new(image));
-            return Ok(fetched);
-        }
-        Err(Failure::new(
-            FailureKind::NotFound,
-            "no texture for this material",
-        ))
+        .ok_or_else(|| not_found("the material's texture pack has no such map"))?;
+        let image = self.resolve(&asset(main))?;
+        let metalness = match (map, pack.metalness) {
+            (MaterialMap::RoughnessMetalness, Some(id)) => Some(self.resolve(&asset(id))?),
+            _ => None,
+        };
+        let decoded = materials::build(map, &image.bytes, metalness.as_ref().map(|m| &*m.bytes))
+            .map_err(|e| Failure::new(FailureKind::Invalid, e.to_string()))?;
+        let name = format!(
+            "{} rbxassetid://{pack_id} {} {}x{}",
+            image.source.location,
+            map.name(),
+            decoded.width,
+            decoded.height
+        );
+        let mut fetched = Fetched::new(name.as_bytes(), image.source.kind, name.clone());
+        fetched.image = Some(std::sync::Arc::new(decoded));
+        Ok(fetched)
     }
 
     /// An asset id, from the cache or asset delivery.
