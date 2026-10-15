@@ -20,6 +20,7 @@ rook-formats.workspace = true
 rook-engine.workspace = true
 rook-lua.workspace = true
 rook-content.workspace = true
+rook-terrain.workspace = true
 rbx_dom_weak.workspace = true
 rbx_types.workspace = true
 full_moon.workspace = true

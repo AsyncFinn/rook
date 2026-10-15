@@ -9,6 +9,7 @@
 | `rook run-headless` | Run server scripts without a window and print their output |
 | `rook corpus-scan` | Scan a folder of places for what loads and which classes, properties and script APIs they use |
 | `rook corpus-run` | Run every place in a folder headless and rank the most common script errors |
+| `rook terrain` | Show what a file's Terrain holds (smooth voxels by material, or legacy blocks) and how long it takes to mesh; `--scan <folder>` counts both across a folder |
 | `rook content` | Show how content references resolve: from the Roblox install, content folders, the cache or asset delivery, and why any fail |
 | `rook cache` | Show the download cache's folder and size; `prune --older-than <days>`, `trim` or `clear` it |
 | `rook conformance record` / `run` | Record behaviour in Roblox Studio and check Rook against it |
@@ -54,9 +55,10 @@ Asset delivery only talks to Roblox's asset endpoints. Rook never reads browser 
 ```sh
 rook corpus-scan path/to/places --out reports/corpus
 rook corpus-run path/to/places
+rook terrain --scan path/to/places
 ```
 
-`corpus-scan` skips duplicates and writes `corpus.json` and `summary.md`: what loads, what fails and why, and which classes, properties and script APIs the files use. `corpus-run` runs every place headless and ranks the most common script errors. These two reports produce the numbers in the README's status table, and the failures they list set Rook's priorities.
+`corpus-scan` skips duplicates and writes `corpus.json` and `summary.md`: what loads, what fails and why, and which classes, properties and script APIs the files use. `corpus-run` runs every place headless and ranks the most common script errors. `terrain --scan` counts the unique files with smooth terrain and with legacy terrain, and lists the largest of each. These two reports produce the numbers in the README's status table, and the failures they list set Rook's priorities.
 
 ## Conformance against Roblox Studio
 

@@ -129,7 +129,7 @@ impl SceneCache {
 /// when the place doesn't save it or has no MaterialService (observed in
 /// Studio 0.742). Only a saved value counts, under either name (XML files
 /// save `Use2022MaterialsXml`): the class default would hide it.
-fn material_set(dom: &Dom) -> MaterialSet {
+pub(super) fn material_set(dom: &Dom) -> MaterialSet {
     let db = rook_reflection::database();
     let saved = dom
         .find_service("MaterialService")

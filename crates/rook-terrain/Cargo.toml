@@ -1,0 +1,21 @@
+[package]
+name = "rook-terrain"
+description = "Smooth terrain for the Rook engine: Terrain's voxels and the surface Roblox builds from them"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+rook-types.workspace = true
+glam.workspace = true
+rustc-hash.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true
