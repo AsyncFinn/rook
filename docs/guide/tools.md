@@ -39,9 +39,8 @@ Rook finds your Roblox install by itself. These environment variables change wha
 | Variable | Effect |
 |---|---|
 | `ROOK_ROBLOX_INSTALL` | A Roblox version folder or `content` folder to use instead, or `off` |
-| `ROOK_ROBLOX_CACHE` | The folder holding Roblox's content cache (`rbx-storage.db`), where Studio keeps the material textures it downloads, or `off` for Rook's own (default `%LOCALAPPDATA%\Roblox`) |
 | `ROOK_CONTENT_DIRS` | Extra folders laid out like `content` (content packages, local overrides) |
-| `ROOK_CONTENT_ORDER` | Provider order, default `defaults,install,studio-cache,folders,delivery` |
+| `ROOK_CONTENT_ORDER` | Provider order, default `defaults,install,folders,delivery` |
 | `ROOK_AUDIO` | `off` keeps `rook-player` silent (it never opens an audio device) |
 | `ROOK_ASSET_DELIVERY` | `on` or `off`. On by default in `rook-player` and `rook content`, off in headless runs |
 | `ROOK_OPEN_CLOUD_API_KEY` | An Open Cloud key, tried for assets refused anonymously (needs the `legacy-asset:manage` scope) |

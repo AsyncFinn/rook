@@ -49,10 +49,8 @@ pub enum ContentRef {
     /// renders. Parsed, not resolved yet.
     Thumbnail(Thumbnail),
     /// One of a built-in material's textures in one of the two sets: no
-    /// string names it, but every part of that material draws it. The
-    /// user's Roblox content cache supplies Studio's
-    /// ([`StudioCache`](crate::StudioCache)), and Rook's defaults its own
-    /// otherwise.
+    /// string names it, but every part of that material draws it. It comes
+    /// from the TexturePack asset Studio uses ([`crate::materials`]).
     Material(Material, MaterialSet, MaterialMap),
 }
 

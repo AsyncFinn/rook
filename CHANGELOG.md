@@ -13,6 +13,13 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 
 ## [Unreleased]
 
+## [0.12.0] — 2026-10-15 — Material textures from Roblox
+
+Pinned Roblox version: 0.741.19.
+
+- Material textures come from Roblox like any other asset, with no Studio needed. Each material's textures in each set are a TexturePack asset, whose colour, normal, roughness and metalness images load through asset delivery and the disk cache. Rook used to read them from Studio's local content cache, so materials Studio hadn't shown on that machine drew Rook's own stand-ins, and Studio's distant-view copies drew blurry. Which pack is which material's comes from Studio's own `PartMaterialInfosPre2022` and `PartMaterialInfos2022` tables, checked texture by texture against what Studio showed. Findings: `docs/behavior/materials.md`.
+- Removed: reading Studio's content cache (`ROOK_ROBLOX_CACHE`, the `studio-cache` provider) and Rook's own material textures drawn in code. Offline with nothing cached, materials draw untextured, like any missing asset.
+
 ## [0.11.1] — 2026-10-14 — Unions without saved hulls are boxes
 
 Pinned Roblox version: 0.741.19.

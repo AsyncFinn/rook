@@ -93,13 +93,7 @@ pub enum ImageError {
 impl Image {
     /// Decode an image file and build its mips.
     pub fn decode(bytes: &[u8]) -> Result<Self, ImageError> {
-        let format = ImageFormat::sniff(bytes).ok_or(ImageError::NotAnImage)?;
-        let rgba = match format {
-            ImageFormat::Ktx2 => ktx2::decode(bytes)?,
-            _ => ::image::load(Cursor::new(bytes), format.codec())
-                .map_err(|e| ImageError::Damaged(format.name(), e.to_string()))?
-                .into_rgba8(),
-        };
+        let (rgba, format) = decode_rgba(bytes)?;
         Self::from_rgba(rgba, format, MAX_SIZE)
     }
 
@@ -135,6 +129,18 @@ impl Image {
     pub fn byte_len(&self) -> usize {
         self.mips.iter().map(Vec::len).sum()
     }
+}
+
+/// An image file's pixels, as RGBA8, and its format.
+pub(crate) fn decode_rgba(bytes: &[u8]) -> Result<(::image::RgbaImage, ImageFormat), ImageError> {
+    let format = ImageFormat::sniff(bytes).ok_or(ImageError::NotAnImage)?;
+    let rgba = match format {
+        ImageFormat::Ktx2 => ktx2::decode(bytes)?,
+        _ => ::image::load(Cursor::new(bytes), format.codec())
+            .map_err(|e| ImageError::Damaged(format.name(), e.to_string()))?
+            .into_rgba8(),
+    };
+    Ok((rgba, format))
 }
 
 /// The mip chain of an RGBA8 image of `width` × `height`, starting with

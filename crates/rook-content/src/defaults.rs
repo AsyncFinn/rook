@@ -1,8 +1,8 @@
 //! Rook's own defaults: content Rook ships so places work without Roblox's
 //! files.
 //!
-//! No files: Rook's own material textures are drawn in code
-//! ([`materials`]), and Rook's head mesh is generated in code by `rook-render`
+//! No files: material textures come from Roblox like any asset
+//! ([`crate::materials`]), and Rook's head mesh is generated in code by `rook-render`
 //! rather than shipped as a mesh file here: it is geometry built for the
 //! renderer from measured facts, not bytes in a Roblox format, so storing
 //! it here would mean encoding a mesh file only to decode it again.
@@ -25,10 +25,6 @@
 //! Studio knows more such paths than this table: `textures/rocket.png`,
 //! `TrowelTexture.png`, `paintballicon.png` and `rocketboots.png` loaded
 //! too, but aren't among that upload, and how Studio finds them is unknown.
-
-mod materials;
-
-pub use materials::material;
 
 /// The asset that stands in for a legacy `rbxasset://` path, compared
 /// without case.
