@@ -102,13 +102,16 @@ impl Game {
         }
     }
 
-    /// The sounds the window's DataModel is playing, for the mixer.
-    pub fn sounds(&self) -> Vec<rook_audio::Play<rook_dom::InstanceId>> {
+    /// What the window's DataModel is playing, for the mixer: its sounds,
+    /// their SoundGroups and `SoundService.AmbientReverb`.
+    pub fn sounds(&self) -> rook_audio::Mix<rook_dom::InstanceId> {
         use rook_audio::spatial::{RollOff, attenuation, pan};
         let view = self.view();
         let listener = view.sound_listener();
         let (at, facing) = (listener.cframe.position, listener.cframe.rotation);
-        view.playing_sounds()
+        let playing = view.playing_sounds();
+        let groups = view.sound_groups(&playing);
+        let sounds = playing
             .into_iter()
             .map(|s| {
                 // A global sound is heard at its Volume on both sides; a 3D
@@ -135,9 +138,16 @@ impl Game {
                     speed: s.speed,
                     looped: s.looped,
                     generation: s.generation,
+                    effects: s.effects,
+                    group: s.group,
                 }
             })
-            .collect()
+            .collect();
+        rook_audio::Mix {
+            sounds,
+            groups,
+            ambient: listener.ambient_reverb,
+        }
     }
 
     /// Send window input to the local player's client (Run mode has no player).

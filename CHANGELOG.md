@@ -13,6 +13,18 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 
 ## [Unreleased]
 
+## [0.13.0] — 2026-10-15 — M5 step 4: SoundGroups and sound effects
+
+Pinned Roblox version: 0.741.19. Finishes M5 step 4; M5 Audio continues with the modern audio API.
+
+- SoundGroups: a Sound is heard through the group its `SoundGroup` names, and through the groups that one is nested in. Each group runs its own effects and scales by its `Volume` (kept within 0 to 10, as in Studio). A group's reverb rings on after its sounds stop.
+- Sound effects, picked by archive use: EqualizerSoundEffect (335 files), ReverbSoundEffect (248), PitchShiftSoundEffect (240) and DistortionSoundEffect (229) are heard, under a Sound or a SoundGroup, with `Enabled`. They run in Studio's `Priority` order, including each effect's base priority for 0, which was measured by bisection. They were measured silently: Studio's `PlaybackLoudness` is taken after a sound's own effects, so a sound at Volume 0 showed what each setting does. On the same file, Rook's equalizer and distortion match Studio within 4%. Its reverb and pitch shift are Rook's own, with levels fitted to Studio's. Chorus, Compressor, Echo, Flange and Tremolo keep their properties but aren't heard yet.
+- `PlaybackLoudness` on clients is read after the sound's own effects, as in Studio.
+- `SoundService.AmbientReverb` adds a reverb to everything heard, using FMOD's preset of the same name. `SoundService:PlayLocalSound` plays a sound once for the client that calls it, without changing `Playing` or firing events. It errors on a server and for anything but a Sound, with Studio's messages.
+- `rook-audio` builds without its output device (feature `output`, on by default), so the engine can use the effects.
+- Fixed: a new SoundService's `RespectFilteringEnabled` read false; Studio and creator-docs give true, and the reflection database is wrong. Setting `Sound.SoundGroup` to something other than a SoundGroup now errors as in Studio.
+- Conformance case `content/sound_groups`. Findings: `docs/behavior/audio.md`.
+
 ## [0.12.0] — 2026-10-15 — Material textures from Roblox
 
 Pinned Roblox version: 0.741.19.

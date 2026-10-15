@@ -175,6 +175,9 @@ pub struct World {
     /// Sounds' script state, for those a script has played or seeked.
     pub sounds: HashMap<InstanceId, SoundControl>,
     pub listener: Listener,
+    /// Sounds given to `SoundService:PlayLocalSound`, for the engine to
+    /// play once.
+    pub local_sounds: Vec<InstanceId>,
 }
 
 impl World {
@@ -199,6 +202,7 @@ impl World {
             started: HashMap::new(),
             sounds: HashMap::new(),
             listener: Listener::Camera,
+            local_sounds: Vec::new(),
         }
     }
 

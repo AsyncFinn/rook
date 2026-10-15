@@ -23,6 +23,10 @@ pub struct PlayingSound {
     pub generation: u32,
     /// Where a 3D sound is; `None` for a global one.
     pub emitter: Option<Emitter>,
+    /// Its own effects, in the order they run (before `Volume`).
+    pub effects: Vec<rook_audio::Effect>,
+    /// The SoundGroup it plays through ([`DataModel::sound_groups`]).
+    pub group: Option<InstanceId>,
 }
 
 /// A 3D sound's place and roll-off: a Sound whose parent is a BasePart (at
@@ -44,6 +48,8 @@ pub struct Listener {
     pub cframe: CFrame,
     /// `SoundService.RolloffScale`.
     pub rolloff_scale: f32,
+    /// `SoundService.AmbientReverb`, added to every sound heard.
+    pub ambient_reverb: Option<rook_audio::effects::Reverb>,
 }
 
 fn cframe_of(dom: &Dom, id: InstanceId) -> Option<CFrame> {
@@ -51,7 +57,7 @@ fn cframe_of(dom: &Dom, id: InstanceId) -> Option<CFrame> {
 }
 
 /// A sound's emitter, if it is a 3D sound.
-fn emitter(dom: &Dom, id: InstanceId) -> Option<Emitter> {
+pub(super) fn emitter(dom: &Dom, id: InstanceId) -> Option<Emitter> {
     let parent = dom.parent(id)?;
     let workspace = dom.find_service("Workspace")?;
     if !dom.is_ancestor_of(workspace, parent) {
@@ -76,15 +82,23 @@ fn emitter(dom: &Dom, id: InstanceId) -> Option<Emitter> {
     })
 }
 
-/// A sound removed with `PlayOnRemove`, playing out once from the start
-/// with the `Volume` and `PlaybackSpeed` it had.
+/// A sound playing out once from the start, with the `Volume`,
+/// `PlaybackSpeed`, effects and group it had: one removed with
+/// `PlayOnRemove`, or given to `SoundService:PlayLocalSound`.
 #[derive(Debug, Clone)]
 pub(crate) struct OneShot {
     sound: PlayingSound,
 }
 
 impl OneShot {
-    pub(super) fn new(dom: &Dom, id: InstanceId, audio: Arc<Audio>) -> Self {
+    /// `emitter` is where it is heard from: `None` for a removed sound,
+    /// whose part is gone (Approximation: played as a global sound).
+    pub(super) fn new(
+        dom: &Dom,
+        id: InstanceId,
+        audio: Arc<Audio>,
+        emitter: Option<Emitter>,
+    ) -> Self {
         Self {
             sound: PlayingSound {
                 id,
@@ -94,9 +108,9 @@ impl OneShot {
                 speed: number(dom, id, "PlaybackSpeed", 1.0) as f32,
                 looped: false,
                 generation: u32::MAX,
-                // Heard where it was would need its old parent
-                // (Approximation: played as a global sound).
-                emitter: None,
+                emitter,
+                effects: effects::effects(dom, id),
+                group: effects::group(dom, id),
             },
         }
     }
@@ -149,7 +163,7 @@ impl DataModel {
             let mut ids: Vec<_> = self.sounds.tracked.keys().copied().collect();
             ids.sort();
             for id in ids {
-                let Some(audio) = self.sounds.audio(id) else {
+                let Some(audio) = self.sounds.audio(id).cloned() else {
                     continue;
                 };
                 let set = |dom: &mut Dom, name: &str, v: Value| {
@@ -170,7 +184,18 @@ impl DataModel {
                 let before = number(dom, id, "TimePosition", 0.0).max(0.0);
                 let mut t = before + dt * speed;
                 if client {
-                    let level = loudness(audio, before, t.min(length));
+                    let list = effects::effects(dom, id);
+                    let level = if list.is_empty() {
+                        self.sounds.loudness.remove(&id);
+                        loudness(&audio, before, t.min(length))
+                    } else {
+                        let chain =
+                            self.sounds.loudness.entry(id).or_insert_with(|| {
+                                rook_audio::effects::Chain::new(audio.sample_rate)
+                            });
+                        chain.sync(&list);
+                        effects::loudness_through(&audio, before, t.min(length), chain)
+                    };
                     set(dom, "PlaybackLoudness", Value::Float64(level));
                 }
                 if t >= length {
@@ -219,6 +244,8 @@ impl DataModel {
                 looped: flag(dom, id, "Looped"),
                 generation: w.sounds.get(&id).map_or(0, |c| c.plays),
                 emitter: emitter(dom, id),
+                effects: effects::effects(dom, id),
+                group: effects::group(dom, id),
             });
         }
         out.sort_by_key(|s| s.id);
@@ -251,6 +278,7 @@ impl DataModel {
         Listener {
             cframe,
             rolloff_scale,
+            ambient_reverb: effects::ambient_reverb(dom),
         }
     }
 }

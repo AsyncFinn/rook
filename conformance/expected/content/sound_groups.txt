@@ -1,0 +1,23 @@
+-- studio 0.742.0.7421053
+-- signals: deferred
+SoundService Enum.ReverbType.NoReverb true
+group volume 0.5
+above 10 10
+below 0 0
+no group nil
+in group true
+part as group false Expected SoundGroup got Part for Sound.SoundGroup.
+EqualizerSoundEffect true 0 LowGain=-20.00 MidGain=-10.00 HighGain=0.00
+ReverbSoundEffect true 0 DecayTime=1.50 Density=1.00 Diffusion=1.00 DryLevel=-6.00 WetLevel=0.00
+DistortionSoundEffect true 0 Level=0.75
+PitchShiftSoundEffect true 0 Octave=1.25
+ChorusSoundEffect true 0 Depth=0.15 Mix=0.50 Rate=0.50
+EchoSoundEffect true 0 Delay=1.00 DryLevel=0.00 Feedback=0.50 WetLevel=0.00
+CompressorSoundEffect true 0 Attack=0.10 GainMakeup=0.00 Ratio=40.00 Release=0.10 Threshold=-40.00
+FlangeSoundEffect true 0 Depth=0.45 Mix=0.85 Rate=5.00
+TremoloSoundEffect true 0 Depth=1.00 Duty=0.50 Frequency=5.00
+unclamped 30 -200 5
+PlayLocalSound false SoundService:PlayLocalSound only works on a client.
+PlayLocalSound part false SoundService:PlayLocalSound only works on a client.
+PlayLocalSound nil false SoundService:PlayLocalSound only works on a client.
+still false 0

@@ -11,6 +11,7 @@
 //! ([`DataModel::apply_sound_changes`]), so the events they fire run in
 //! the frame like other engine events.
 
+mod effects;
 mod playback;
 
 pub use playback::{Emitter, Listener, PlayingSound};
@@ -51,6 +52,11 @@ pub(crate) struct Sounds {
     pub(crate) tickets: HashMap<Ticket, ContentRef>,
     /// Sounds removed with `PlayOnRemove`, playing out once.
     one_shots: Vec<playback::OneShot>,
+    /// On clients, the effects `PlaybackLoudness` is read through, per
+    /// sound with effects.
+    loudness: HashMap<InstanceId, rook_audio::effects::Chain>,
+    /// Sounds given to `PlayLocalSound` whose file is still loading.
+    local: Vec<(InstanceId, ContentRef)>,
 }
 
 fn sound_url(dom: &Dom, id: InstanceId) -> Option<ContentRef> {
@@ -154,7 +160,7 @@ impl DataModel {
     /// `PlayOnRemove` (all observed in Studio, except `PlayOnRemove`,
     /// creator-docs).
     pub(crate) fn apply_sound_changes(&mut self, events: &mut Vec<SoundEvent>) -> Vec<ContentRef> {
-        let mut wanted = Vec::new();
+        let mut wanted = self.play_local_sounds();
         if self.sounds.dirty.is_empty() {
             return wanted;
         }
@@ -175,7 +181,7 @@ impl DataModel {
                 {
                     sounds
                         .one_shots
-                        .push(playback::OneShot::new(dom, id, audio));
+                        .push(playback::OneShot::new(dom, id, audio, None));
                 }
                 if sounds.tracked.remove(&id).is_some() {
                     let _ = dom.set_property_by_name(id, "IsLoaded", Value::Bool(false));
@@ -216,6 +222,24 @@ impl DataModel {
             None => Load::Failed,
         };
         let mut w = self.runtime.world_mut();
+        if let Load::Loaded(audio) = &load {
+            let dom = &w.dom;
+            let sounds = &mut self.sounds;
+            sounds.local.retain(|(id, wants)| {
+                if *wants != r {
+                    return true;
+                }
+                if dom.get(*id).is_some() {
+                    let at = playback::emitter(dom, *id);
+                    sounds
+                        .one_shots
+                        .push(playback::OneShot::new(dom, *id, audio.clone(), at));
+                }
+                false
+            });
+        } else {
+            self.sounds.local.retain(|(_, wants)| *wants != r);
+        }
         let mut users: Vec<_> = self
             .sounds
             .tracked
@@ -228,6 +252,43 @@ impl DataModel {
             apply(&mut w.dom, id, &load, events);
         }
         self.sounds.files.insert(r, load);
+    }
+
+    /// Start the sounds scripts gave to `SoundService:PlayLocalSound`: at
+    /// once if their file has loaded, else once it does (the file is
+    /// returned for the loader if nothing asked for it yet). Heard from
+    /// where the sound is when called (Inference), even if it isn't in
+    /// the DataModel.
+    fn play_local_sounds(&mut self) -> Vec<ContentRef> {
+        let mut wanted = Vec::new();
+        let ids = std::mem::take(&mut self.runtime.world_mut().local_sounds);
+        if ids.is_empty() {
+            return wanted;
+        }
+        let w = self.runtime.world();
+        let dom = &w.dom;
+        let sounds = &mut self.sounds;
+        for id in ids {
+            let Some(r) = sound_url(dom, id) else {
+                continue;
+            };
+            let load = sounds.files.entry(r.clone()).or_insert_with(|| {
+                wanted.push(r.clone());
+                Load::Loading
+            });
+            match load {
+                Load::Loaded(audio) => {
+                    let audio = audio.clone();
+                    let at = playback::emitter(dom, id);
+                    sounds
+                        .one_shots
+                        .push(playback::OneShot::new(dom, id, audio, at));
+                }
+                Load::Loading => sounds.local.push((id, r)),
+                Load::Failed => {}
+            }
+        }
+        wanted
     }
 
     /// Fire `Changed` for what sounds changed since `start`, then their

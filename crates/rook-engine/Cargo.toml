@@ -18,6 +18,7 @@ rook-lua.workspace = true
 rook-net.workspace = true
 rook-physics.workspace = true
 rook-content.workspace = true
+rook-audio.workspace = true
 mlua.workspace = true
 thiserror.workspace = true
 profiling.workspace = true

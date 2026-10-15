@@ -147,6 +147,7 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("Sound", "Pause") => sound::sound_pause,
         ("SoundService", "SetListener") => sound::set_listener,
         ("SoundService", "GetListener") => sound::get_listener,
+        ("SoundService", "PlayLocalSound") => sound::play_local_sound,
         _ => return super::services::native(owner, name),
     })
 }

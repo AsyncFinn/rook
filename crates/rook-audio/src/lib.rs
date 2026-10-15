@@ -7,16 +7,24 @@
 //!   device's thread pulls from. It opens the device the first time
 //!   something is to be heard, so a silent place never opens one.
 //! - [`spatial`] says how loud and on which side a 3D sound is heard.
+//! - [`effects`] are the legacy sound effects a Sound or SoundGroup runs.
+//!   They don't need a device, so the engine uses them too (with the
+//!   `output` feature off) for `PlaybackLoudness`.
 //!
 //! The engine keeps each sound's state (`Playing`, `TimePosition`); the
-//! player hands the playing ones to [`Output::sync`] every frame. See
+//! player hands the playing ones, and their SoundGroups, to
+//! `Output::sync` every frame. See
 //! `docs/behavior/audio.md`.
 
+pub mod effects;
 mod mixer;
+#[cfg(feature = "output")]
 mod output;
 pub mod spatial;
 
-pub use mixer::{Mixer, Play};
+pub use effects::Effect;
+pub use mixer::{Group, Mix, Mixer, Play};
+#[cfg(feature = "output")]
 pub use output::Output;
 
 /// The environment variable that turns audio off (`ROOK_AUDIO=off`).
