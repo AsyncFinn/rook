@@ -116,7 +116,12 @@ fn parse_vec3(s: &str) -> Result<Vec3, String> {
     }
 }
 
-fn scene_of(dm: &DataModel, content: &Arc<Resolver>) -> SceneCache {
+/// The scene for a DataModel as it is now. Its pending render changes are
+/// already drawn, so they're dropped: otherwise the first frame would
+/// rebuild the whole scene again (a new DataModel's changes say "rebuild
+/// everything").
+fn scene_of(dm: &mut DataModel, content: &Arc<Resolver>) -> SceneCache {
+    dm.take_render_changes();
     SceneCache::new(&dm.runtime().world().dom, content.clone())
 }
 
@@ -180,7 +185,7 @@ fn main() -> anyhow::Result<()> {
     if args.seconds > 0.0 {
         game.run_for(args.seconds);
     }
-    let mut scene = scene_of(game.view(), &content);
+    let mut scene = scene_of(game.view_mut(), &content);
     // The camera the place was saved with (clients start with a fresh one).
     let mut camera = game.saved_camera;
     let name = args.place.file_name().unwrap_or_default().to_string_lossy();
@@ -217,12 +222,12 @@ fn main() -> anyhow::Result<()> {
     if let Some(frames) = args.bench {
         return bench(
             &mut game,
+            scene,
             frames,
             &camera,
             args.width,
             args.height,
             &install,
-            &content,
         );
     }
 

@@ -15,6 +15,13 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 
 ## [Unreleased]
 
+## [0.5.9] — 2026-10-15 — Fix: the player rebuilds the whole scene on its first frame
+
+Pinned Roblox version: 0.741.19.
+
+- The player no longer rebuilds the whole scene on the first frame after loading. A new DataModel says "redraw everything", and the scene the player had just built from it took that as a reason to rebuild all of it again: every part's look, the terrain's entries, and a fresh upload to the GPU. The scene now drops the changes it was built with. `--bench` also reuses the loaded scene instead of building its own, which meshed the terrain a second time (7,045 meshes, several seconds on an 86k-part place). On an 86k-part place, 300 frames of `--bench`, longest frame 5.1–6.1 → 3.6–4.3 s, slowest 1% 2.2–2.5 → 1.5–1.7 s (A/B against 0.5.7, two rounds; 0.5.8 is on its own branch). Screenshots are unchanged.
+- Found: what's left of the first frame is building the physics worlds. The client's first mouse raycast builds its world (1.3 s on an 86k-part place), and so does the server's first step (another 1.3 s). Nothing remeshes terrain after load any more: no script API writes voxels yet.
+
 ## [0.5.8] — 2026-10-15 — Fix: a frame stalls when many sounds finish loading
 
 Pinned Roblox version: 0.741.19.

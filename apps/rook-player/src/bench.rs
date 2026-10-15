@@ -18,16 +18,15 @@ pub(crate) fn thousands(n: usize) -> String {
 /// Time each stage of a frame, offscreen.
 pub(crate) fn bench(
     game: &mut Game,
+    mut cache: SceneCache,
     frames: u32,
     camera: &Camera,
     width: u32,
     height: u32,
     install: &Installed,
-    content: &Arc<Resolver>,
 ) -> anyhow::Result<()> {
     let mut renderer = Renderer::headless()?;
     install.apply(&mut renderer);
-    let mut cache = scene_of(game.view(), content);
     renderer.set_scene(&cache.scene);
     let (mut sim, mut build, mut render) = (0.0, 0.0, 0.0);
     let mut updates = 0;
