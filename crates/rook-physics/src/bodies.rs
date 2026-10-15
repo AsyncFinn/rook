@@ -201,7 +201,6 @@ impl Physics {
             .friction(material.friction)
             .restitution(material.elasticity)
             .user_data(contacts::pack(&material))
-            .active_hooks(ActiveHooks::MODIFY_SOLVER_CONTACTS)
             .active_events(ActiveEvents::COLLISION_EVENTS)
             .solver_groups(solver)
             .collision_groups(collision)
@@ -209,8 +208,25 @@ impl Physics {
             .sensor(!can_collide)
             .position(pose_of(&offset) * shape_pose);
         let handle = self.world.insert_collider(collider, Some(body));
+        self.set_hooks(handle);
         self.colliders.insert(handle, part);
         Some((handle, shape_pose))
+    }
+
+    /// Turn [`contacts::Mixer`] on for a collider only where it changes
+    /// the result.
+    fn set_hooks(&mut self, collider: ColliderHandle) {
+        let Some(c) = self.world.colliders.get(collider) else {
+            return;
+        };
+        let body = c
+            .parent()
+            .and_then(|b| self.world.bodies.get(b))
+            .map_or(0, |rb| rb.user_data);
+        let hooks = contacts::hooks_for(c.user_data, body);
+        if let Some(c) = self.world.colliders.get_mut(collider) {
+            c.set_active_hooks(hooks);
+        }
     }
 
     fn read_can_touch(&mut self, dom: &Dom, props: &Props, part: InstanceId) {
@@ -251,6 +267,7 @@ impl Physics {
         c.set_friction(material.friction);
         c.set_restitution(material.elasticity);
         c.user_data = contacts::pack(&material);
+        self.set_hooks(collider);
         // Movers read the mass before the next step would recompute it.
         if let Some(rb) = self.world.bodies.get_mut(h) {
             rb.recompute_mass_properties_from_colliders(&self.world.colliders);
@@ -354,5 +371,12 @@ impl Physics {
         }
         // Keep the rest of the assembly with it.
         let _ = body.asm.place(dom, root);
+        if !self.world.bodies[h].is_dynamic() {
+            let colliders: Vec<ColliderHandle> =
+                body.colliders.iter().flatten().map(|&(c, _)| c).collect();
+            for c in colliders {
+                self.set_hooks(c);
+            }
+        }
     }
 }

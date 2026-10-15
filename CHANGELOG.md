@@ -15,6 +15,12 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 
 ## [Unreleased]
 
+## [0.5.7] — 2026-10-15 — Fix: slow server steps on big places, part 2
+
+Pinned Roblox version: 0.741.19.
+
+- Physics only runs Rook's friction and elasticity mixing on parts that need it: parts whose `FrictionWeight` or `ElasticityWeight` isn't 1, and anchored parts carrying what touches them (conveyors). Everywhere else both weights are 1, Roblox's weighted average is the plain average, and Rapier's own Average rule gives the same numbers. Rapier never reuses a contact between steps when a hook is on, so with the hook on every part it worked out every resting contact from scratch four times a frame. Server step median on 300 frames of `--bench`: a 61k-part place 22.0 → 16.2 ms, an 86k-part place 16.9 → 14.2 ms (A/B against 0.5.6, same output).
+
 ## [0.5.6] — 2026-10-15 — Fix: slow server steps on big places
 
 Pinned Roblox version: 0.741.19.
