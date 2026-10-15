@@ -5,7 +5,7 @@
 //! `PhysicsData`, decoded by `rook-content` into [`UnionCollision`]), not
 //! its box. The engine loads that geometry and hands it over
 //! ([`Physics::set_union_collision`]); until it does, and for a union with
-//! none, the union is its box. So is a moving union with `CanCollide` off
+//! none or a block, the union is its box. So is a moving union with `CanCollide` off
 //! (see `Physics::add_collider`).
 //!
 //! The geometry is in the union's own space at its `InitialSize`, so it is
@@ -101,23 +101,6 @@ fn build(geometry: &UnionCollision, scale: Vec3) -> Option<SharedShape> {
                 1 => pieces.pop().map(|(_, s)| s),
                 _ => Some(SharedShape::compound(pieces)),
             }
-        }
-        UnionCollision::Mesh(mesh) => {
-            let triangles = mesh.indices.as_chunks::<3>().0.to_vec();
-            if triangles.is_empty() {
-                return None;
-            }
-            let vertices = points(&mesh.positions);
-            // Oriented, so a point inside counts as inside (rays starting
-            // in it skip it, as for parts); not every union's mesh is
-            // closed, and those are plain triangles.
-            SharedShape::trimesh_with_flags(
-                vertices.clone(),
-                triangles.clone(),
-                TriMeshFlags::FIX_INTERNAL_EDGES | TriMeshFlags::ORIENTED,
-            )
-            .or_else(|_| SharedShape::trimesh(vertices, triangles))
-            .ok()
         }
     }
 }

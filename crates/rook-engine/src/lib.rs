@@ -76,12 +76,11 @@ pub struct Options {
     /// content folders and the cache, with asset delivery off unless
     /// `ROOK_ASSET_DELIVERY=on`. Shared by a session's DataModels.
     pub content: Option<Arc<rook_content::Resolver>>,
-    /// Finish loading sound files and unions' collision geometry within
-    /// the frame that asks for them, so
+    /// Finish loading sound files within the frame that asks for them, so
     /// simulated time can't run ahead of loading and runs repeat exactly
     /// (headless runs, conformance, tests). The player loads in the
     /// background instead, as Roblox does.
-    pub wait_for_content: bool,
+    pub wait_for_sounds: bool,
 }
 
 impl Default for Options {
@@ -91,7 +90,7 @@ impl Default for Options {
             script_timeout: rook_lua::DEFAULT_SCRIPT_TIMEOUT,
             memory_limit: 1 << 30,
             content: None,
-            wait_for_content: true,
+            wait_for_sounds: true,
         }
     }
 }
@@ -136,7 +135,7 @@ struct Content {
     loader: Option<rook_content::Loader>,
     /// Loader tickets to the scripts' request ids.
     tickets: HashMap<rook_content::Ticket, u64>,
-    wait_for_content: bool,
+    wait_for_sounds: bool,
 }
 
 impl DataModel {
@@ -264,7 +263,7 @@ impl DataModel {
             input: Default::default(),
             content: Content {
                 resolver: options.content.clone(),
-                wait_for_content: options.wait_for_content,
+                wait_for_sounds: options.wait_for_sounds,
                 ..Content::default()
             },
             sounds: Default::default(),
