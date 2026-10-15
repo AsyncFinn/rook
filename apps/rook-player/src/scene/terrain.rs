@@ -4,8 +4,9 @@
 //! terrain material table (or the MaterialVariant MaterialService puts in
 //! its place), tinted by `Terrain.MaterialColors`. Water is drawn in
 //! `WaterColor` at `WaterTransparency`, waving and rippled by the install's
-//! water normal map, and Grass grows blades near the camera ([`grass`])
-//! with `Decoration` on (`docs/behavior/terrain.md`).
+//! water normal frames (the renderer's, `Installed`), and Grass grows
+//! blades near the camera ([`grass`]) with `Decoration` on
+//! (`docs/behavior/terrain.md`).
 
 mod grass;
 
@@ -19,11 +20,6 @@ use rook_types::MaterialColors;
 
 use super::*;
 use grass::{GRASS_REACH, Grass};
-
-/// The install's water normal map (DXT5nm), rippling the water's surface.
-/// Studio animates 25 of them (`normal_01` to `normal_25`); Rook scrolls
-/// the first.
-const WATER_NORMALS: &str = "rbxasset://textures/water/normal_01.dds";
 
 /// One chunk's surface of one material facing one way, as a mesh.
 #[derive(Debug, Clone, Copy)]
@@ -59,19 +55,8 @@ impl SceneCache {
     /// voxels aren't the ones meshed last.
     pub(super) fn add_terrain(&mut self, dom: &Dom) {
         profiling::scope!("SceneCache::add_terrain");
-        let terrain = dom
-            .find_service("Workspace")
-            .and_then(|ws| dom.find_first_child_of_class(ws, "Terrain"));
-        // Borrowed, not cloned: a large map's grid is megabytes.
-        let db = rook_reflection::database();
-        let grid = terrain.and_then(|t| {
-            dom.get(t)?.properties().iter().find_map(|(id, v)| match v {
-                Value::BinaryString(b) if db.property(*id).name == "SmoothGrid" => {
-                    Some(AsRef::<[u8]>::as_ref(b))
-                }
-                _ => None,
-            })
-        });
+        let terrain = workspace_terrain(dom);
+        let grid = terrain.and_then(|t| smooth_grid(dom, t));
         let source = grid.map(blake3::hash);
         if source != self.terrain.source {
             self.terrain.source = source;
@@ -87,6 +72,41 @@ impl SceneCache {
         for mesh in self.terrain.grass.reset() {
             self.scene.meshes.remove(&mesh);
         }
+        self.read_terrain_look(dom);
+        let entries = self.terrain_entries(dom);
+        self.terrain.first = self.scene.parts.len();
+        self.terrain.count = entries.len();
+        for entry in entries {
+            self.scene.parts.push(entry);
+            self.poses.push(Pose::default());
+        }
+    }
+
+    /// Scripts changed the Terrain's properties or `Workspace.GlobalWind`:
+    /// read the waves, wind, colours and grass again and redraw the
+    /// terrain's entries and blades. Returns the entries that changed, or
+    /// `None` when the voxels themselves changed and the scene must be
+    /// rebuilt.
+    pub(super) fn terrain_changed(&mut self, dom: &Dom) -> Option<Vec<usize>> {
+        let terrain = workspace_terrain(dom);
+        let source = terrain.and_then(|t| smooth_grid(dom, t)).map(blake3::hash);
+        if terrain != self.terrain.instance || source != self.terrain.source {
+            return None;
+        }
+        self.read_terrain_look(dom);
+        let mut changed = self.refresh_terrain(dom);
+        let color = self.terrain.grass.color;
+        for i in self.terrain.grass.entries() {
+            self.scene.parts[i].color = color;
+            changed.push(i);
+        }
+        Some(changed)
+    }
+
+    /// The Terrain's waves and wind, and whether and in what colour Grass
+    /// grows blades.
+    fn read_terrain_look(&mut self, dom: &Dom) {
+        let terrain = self.terrain.instance;
         self.scene.terrain = terrain_look(dom, terrain);
         let colors = terrain.and_then(|t| match dom.property_by_name(t, "MaterialColors") {
             Some(Value::MaterialColors(c)) => Some(c),
@@ -98,13 +118,6 @@ impl SceneCache {
             .color(colors.as_ref(), MaterialSet::Materials2022)
             .map(blade_color)
             .unwrap_or_default();
-        let entries = self.terrain_entries(dom);
-        self.terrain.first = self.scene.parts.len();
-        self.terrain.count = entries.len();
-        for entry in entries {
-            self.scene.parts.push(entry);
-            self.poses.push(Pose::default());
-        }
     }
 
     /// Redraw the terrain (its textures arrived): the entries that changed.
@@ -203,12 +216,6 @@ impl SceneCache {
         // mixes towards the sky's colour by `WaterReflectance`, half of it
         // looking down (Approximation).
         let water_reflectance = number(dom, terrain, "WaterReflectance").unwrap_or(1.0);
-        let water_normals = ContentRef::parse(WATER_NORMALS).and_then(|r| {
-            match self.file_state_of(terrain, r, Want::Image) {
-                FileState::Loaded(hash) => Some(ImageHash(hash)),
-                FileState::Loading | FileState::Failed => None,
-            }
-        });
         let surfaces = self.terrain.surfaces.clone();
         let mut looks: HashMap<(TerrainMaterial, Facing), (MaterialMaps, [f32; 3])> =
             HashMap::new();
@@ -223,7 +230,6 @@ impl SceneCache {
                 part.transparency = water_transparency;
                 part.reflectance = water_reflectance.clamp(0.0, 1.0);
                 part.cast_shadow = false;
-                part.maps.normal = water_normals;
             } else {
                 let (maps, color) = *looks.entry((s.material, s.facing)).or_insert_with(|| {
                     self.terrain_look(dom, terrain, s.material, s.facing, set, colors.as_ref())
@@ -322,3 +328,27 @@ fn terrain_look(dom: &Dom, terrain: Option<InstanceId>) -> TerrainLook {
     }
     look
 }
+
+/// Workspace's Terrain.
+fn workspace_terrain(dom: &Dom) -> Option<InstanceId> {
+    dom.find_service("Workspace")
+        .and_then(|ws| dom.find_first_child_of_class(ws, "Terrain"))
+}
+
+/// A Terrain's `SmoothGrid`, borrowed, not cloned: a large map's grid is
+/// megabytes.
+fn smooth_grid(dom: &Dom, terrain: InstanceId) -> Option<&[u8]> {
+    let db = rook_reflection::database();
+    dom.get(terrain)?
+        .properties()
+        .iter()
+        .find_map(|(id, v)| match v {
+            Value::BinaryString(b) if db.property(*id).name == "SmoothGrid" => {
+                Some(AsRef::<[u8]>::as_ref(b))
+            }
+            _ => None,
+        })
+}
+
+#[cfg(test)]
+mod tests;

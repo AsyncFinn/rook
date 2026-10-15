@@ -26,11 +26,15 @@ pub(crate) struct Globals {
     pub(crate) sky_from_clip: [[f32; 4]; 4],
     /// Each skybox image's direction, right and up ([`SKYBOX_FACES`]).
     pub(crate) sky_faces: [[f32; 4]; 18],
-    /// Seconds since the renderer's clock started, the waves' size and
-    /// speed, and how far grass is drawn ([`TerrainLook`]).
+    /// Seconds on the renderer's clock, the waves' size and speed, and how
+    /// far grass is drawn ([`TerrainLook`]).
     pub(crate) terrain: [f32; 4],
-    /// `TerrainLook::wind`.
+    /// `TerrainLook::wind`; w is water's phase (`Renderer::water_phase`).
     pub(crate) wind: [f32; 4],
+    /// The sky's colour overhead and at the horizon (`Lighting::sky_top`,
+    /// `Lighting::sky_horizon`, sRGB), which water reflects.
+    pub(crate) sky_top: [f32; 4],
+    pub(crate) sky_horizon: [f32; 4],
 }
 
 /// Instance flags (see `shaders/common.wgsl`).
@@ -355,34 +359,39 @@ pub(crate) fn images_bind_group(
     })
 }
 
-/// The main pass's group 1: the shadow map and the surface patterns.
-pub(crate) fn surface_bind_group(
+/// A texture array of square layers, each with its mip chain, as the view
+/// group 1 binds (the surface patterns, water's normal frames).
+pub(crate) fn layers_view(
+    cx: &UploadContext<'_>,
+    label: &str,
+    size: u32,
+    layers: &[Vec<Vec<u8>>],
+) -> wgpu::TextureView {
+    let layers: Vec<&[Vec<u8>]> = layers.iter().map(Vec::as_slice).collect();
+    texture_with_mips(cx, label, size, size, &layers).create_view(&wgpu::TextureViewDescriptor {
+        dimension: Some(wgpu::TextureViewDimension::D2Array),
+        ..Default::default()
+    })
+}
+
+/// The main pass's group 1: the shadow map, the surface patterns (linear:
+/// grey 0.5 is a factor of 1 after doubling) and water's normal frames.
+pub(crate) fn main_bind_group(
     cx: &UploadContext<'_>,
     layout: &wgpu::BindGroupLayout,
     shadow_view: &wgpu::TextureView,
     shadow_sampler: &wgpu::Sampler,
-    patterns: &surfaces::Patterns,
+    surfaces: &wgpu::TextureView,
+    water: &wgpu::TextureView,
 ) -> wgpu::BindGroup {
-    let layers: Vec<&[Vec<u8>]> = patterns.layers.iter().map(Vec::as_slice).collect();
-    // Linear: grey 0.5 is a factor of 1 after doubling.
-    let atlas = texture_with_mips(
-        cx,
-        "rook surface patterns",
-        patterns.size,
-        patterns.size,
-        &layers,
-    )
-    .create_view(&wgpu::TextureViewDescriptor {
-        dimension: Some(wgpu::TextureViewDimension::D2Array),
-        ..Default::default()
-    });
+    let view = wgpu::BindingResource::TextureView;
     cx.device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("rook shadow map and surfaces"),
+        label: Some("rook shadow map, surfaces and water"),
         layout,
         entries: &[
             wgpu::BindGroupEntry {
                 binding: 0,
-                resource: wgpu::BindingResource::TextureView(shadow_view),
+                resource: view(shadow_view),
             },
             wgpu::BindGroupEntry {
                 binding: 1,
@@ -390,11 +399,15 @@ pub(crate) fn surface_bind_group(
             },
             wgpu::BindGroupEntry {
                 binding: 2,
-                resource: wgpu::BindingResource::TextureView(&atlas),
+                resource: view(surfaces),
             },
             wgpu::BindGroupEntry {
                 binding: 3,
                 resource: wgpu::BindingResource::Sampler(cx.sampler),
+            },
+            wgpu::BindGroupEntry {
+                binding: 4,
+                resource: view(water),
             },
         ],
     })

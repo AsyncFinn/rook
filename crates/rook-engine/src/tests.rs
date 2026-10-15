@@ -566,4 +566,5 @@ fn scripts_moved_into_workspace_start() {
 
 mod audio_api;
 mod sounds;
+mod terrain_look;
 mod unions;

@@ -29,8 +29,11 @@ struct Globals {
     // x = seconds, y = WaterWaveSize, z = WaterWaveSpeed, w = how far
     // grass is drawn.
     terrain: vec4<f32>,
-    // GlobalWind (xyz).
+    // GlobalWind (xyz); w = water's phase, WaterWaveSpeed x seconds summed.
     wind: vec4<f32>,
+    // The sky overhead and at the horizon (sRGB), which water reflects.
+    sky_top: vec4<f32>,
+    sky_horizon: vec4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> g: Globals;
@@ -40,6 +43,8 @@ struct Globals {
 @group(1) @binding(2) var surface_atlas: texture_2d_array<f32>;
 // Linear, mipmapped, repeating: images and the surface patterns.
 @group(1) @binding(3) var image_sampler: sampler;
+// Water's normal frames, one per layer (X in alpha, Y in green).
+@group(1) @binding(4) var water_normals: texture_2d_array<f32>;
 // The batch's images (white, or a flat normal, when it has none): its
 // image (a mesh texture, a decal or a skybox face), and its material's
 // colour, normal, roughness (green) and metalness (red) maps.
