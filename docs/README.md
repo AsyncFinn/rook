@@ -9,6 +9,7 @@
   - [Research](design/research.md): background, sources and policies
 - **[behavior/](behavior/)**: what Rook found in Studio and the archive, topic by topic.
   - [Meshes](behavior/meshes.md): built-in shapes, mesh files, trusses
+  - [Collision shapes](behavior/collision.md): what unions collide and are queried as
   - [Asset fetching](behavior/content.md)
   - [Textures and decals](behavior/textures-decals.md)
   - [Antialiasing](behavior/antialiasing.md)

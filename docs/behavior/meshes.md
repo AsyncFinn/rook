@@ -323,8 +323,8 @@ braces.
 `NegateOperation`, `IntersectOperation`) draws its own geometry, decoded
 by `rook_content::mesh::union` into the same `Mesh` as mesh files and
 loaded, uploaded and drawn through the same path (`Want::Mesh`, the GPU
-mesh cache). Physics keeps each union's box (hulls from `PhysicsData` are
-M15's).
+mesh cache). What unions collide as (their saved hulls, since M15) is in
+[collision](collision.md#unions).
 
 *What the archive uses* (`rook corpus-scan`, which now counts unions by
 form; 6,245 files loaded from a larger archive than step 3's, so the
@@ -421,4 +421,5 @@ by as much (8.6 to 9.6 ms): within run-to-run noise.
 Left for later: unions whose assets need an account; in-file geometry
 without an asset; `MeshData` versions 4 and 5 are decoded but no archive
 asset Rook can fetch uses them, so they're unchecked against Studio; the
-NegateOperation colour's exact value; `PhysicsData` hulls (M15).
+NegateOperation colour's exact value. `PhysicsData` hulls came with M15
+([collision](collision.md#unions)).

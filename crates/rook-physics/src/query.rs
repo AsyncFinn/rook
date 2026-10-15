@@ -368,7 +368,7 @@ impl Physics {
     ) -> Vec<InstanceId> {
         profiling::scope!("Physics::parts_in_part");
         self.prepare(dom);
-        let Some((shape, pose)) = shape::world_shape(dom, part) else {
+        let Some((shape, pose)) = shape::world_shape(dom, &mut self.unions, part) else {
             return Vec::new();
         };
         self.overlapping(dom, (&*shape, pose), filter, max, Some(part), |_, co| {
@@ -401,7 +401,7 @@ impl Physics {
         } else {
             return Vec::new();
         };
-        let Some((shape, pose)) = shape::world_shape(dom, part) else {
+        let Some((shape, pose)) = shape::world_shape(dom, &mut self.unions, part) else {
             return Vec::new();
         };
         let aabb = shape.compute_aabb(&pose);

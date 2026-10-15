@@ -5,6 +5,8 @@ use super::*;
 impl Physics {
     pub(crate) fn build(&mut self, dom: &mut Dom, props: &Props) {
         profiling::scope!("Physics::build");
+        // Built with whatever geometry unions have now.
+        self.unions.reshaped.clear();
         self.read_workspace(dom, props);
         let parts = workspace_parts(dom);
         self.rebuild(dom, props, parts);
@@ -143,6 +145,16 @@ impl Physics {
             {
                 self.teleport(dom, props, h, part);
             }
+        }
+    }
+
+    /// Rebuild the unions whose geometry arrived or changed.
+    pub(crate) fn reshape_unions(&mut self, dom: &mut Dom, props: &Props) {
+        let mut parts = std::mem::take(&mut self.unions.reshaped);
+        parts.retain(|p| self.parts.contains_key(p));
+        if !parts.is_empty() {
+            self.all_dirty = true;
+            self.rebuild(dom, props, parts);
         }
     }
 

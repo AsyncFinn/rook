@@ -44,6 +44,7 @@ Everything Rook supports today. What's coming next is in [ROADMAP.md](../../ROAD
 - Every material's density, friction and elasticity, `CustomPhysicalProperties`, `Touched` and `TouchEnded`, and collision groups.
 - The legacy BodyMovers (`BodyVelocity`, `BodyPosition`, `BodyGyro`, `RocketPropulsion` and the rest) and constraints (`HingeConstraint`, `BallSocketConstraint`, ropes, rods, springs, `VectorForce`, `Torque`), tuned from Studio measurements.
 - **Scene queries**: `Raycast`, `Blockcast`, `Spherecast`, the overlap queries, the legacy `FindPartOnRay` and `FindPartsInRegion3` families, and the camera's ray and screen-point methods. LocalScripts can query too, and the mouse and ClickDetectors use the same queries.
+- **Unions** collide and are hit by rays, the mouse and ClickDetectors as the shape Studio saved for them, not their box, so a door button inside a union's doorway can be clicked. MeshParts still collide as their box.
 
 ## Rendering
 

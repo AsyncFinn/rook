@@ -42,6 +42,10 @@ pub enum Want {
     /// [`Fetched::audio`]; bytes that aren't a WAV, Ogg or MP3 sound fail
     /// with [`FailureKind::Invalid`].
     Audio,
+    /// A union asset's collision geometry: the worker decodes it into
+    /// [`Fetched::collision`]; bytes that aren't a union asset fail with
+    /// [`FailureKind::Invalid`].
+    Collision,
 }
 
 impl Want {
@@ -191,6 +195,12 @@ fn run(resolver: &Resolver, (r, want): &Job) -> Outcome {
             profiling::scope!("decode audio");
             let audio = Audio::decode(&fetched.bytes).map_err(|e| invalid(&e))?;
             fetched.audio = Some(Arc::new(audio));
+        }
+        Want::Collision => {
+            profiling::scope!("decode union collision");
+            let collision = crate::mesh::union::physics::decode_asset(&fetched.bytes)
+                .map_err(|e| invalid(&e))?;
+            fetched.collision = Some(Arc::new(collision));
         }
     }
     Ok(fetched)

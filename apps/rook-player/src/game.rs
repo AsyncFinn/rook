@@ -50,7 +50,7 @@ impl Game {
             content: Some(content),
             // Sounds load in the background while the game runs, as in
             // Roblox.
-            wait_for_sounds: false,
+            wait_for_content: false,
             ..Options::default()
         };
         let (mode, saved_camera) = if play {

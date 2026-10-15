@@ -40,6 +40,7 @@ mod read;
 mod shape;
 mod step;
 pub mod surfaces;
+mod unions;
 
 use std::collections::BTreeMap;
 
@@ -200,6 +201,7 @@ pub struct Physics {
     stale: HashSet<RigidBodyHandle>,
     /// The world only answers queries; it never steps (clients).
     query_only: bool,
+    unions: unions::Unions,
 }
 
 impl std::fmt::Debug for Physics {
@@ -251,6 +253,7 @@ impl Physics {
             drives: HashMap::default(),
             stale: HashSet::default(),
             query_only: false,
+            unions: unions::Unions::default(),
         }
     }
 
@@ -310,6 +313,16 @@ impl Physics {
         Some(self.bodies[self.parts.get(&part)?].asm.root())
     }
 
+    /// A union's collision geometry, loaded (or `None`: it collides as its
+    /// box again). It takes effect at the next sync.
+    pub fn set_union_collision(
+        &mut self,
+        part: InstanceId,
+        collision: Option<std::sync::Arc<rook_types::UnionCollision>>,
+    ) {
+        self.unions.set(part, collision);
+    }
+
     /// Bring the world up to date with the DOM: on the first call, add
     /// every Workspace part; after that, apply the journal since last time.
     /// Parts are snapped to where their joints hold them.
@@ -326,6 +339,7 @@ impl Physics {
         } else {
             self.apply_changes(dom, &props);
         }
+        self.reshape_unions(dom, &props);
         let all = std::mem::take(&mut self.all_dirty);
         let dirty = std::mem::take(&mut self.dirty);
         self.refresh_constraints(dom, all, &dirty);

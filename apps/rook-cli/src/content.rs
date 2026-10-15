@@ -122,10 +122,14 @@ fn describe(bytes: &[u8]) -> String {
         && let Ok(data) = rook_content::mesh::union::asset_mesh_data(bytes)
     {
         let kind = rook_content::mesh::union::MeshDataKind::of(&data).name();
-        return match rook_content::mesh::Mesh::decode(&data) {
-            Ok(m) => format!("union asset, MeshData {kind}, {}", mesh_detail(&m)),
-            Err(e) => format!("union asset, MeshData {kind}, {e}"),
+        let mesh = match rook_content::mesh::Mesh::decode(&data) {
+            Ok(m) => mesh_detail(&m),
+            Err(e) => e.to_string(),
         };
+        return format!(
+            "union asset, MeshData {kind}, {mesh}; PhysicsData {}",
+            physics_detail(bytes)
+        );
     }
     let kind = if starts(b"\x89PNG") {
         "PNG image"
@@ -152,6 +156,33 @@ fn describe(bytes: &[u8]) -> String {
         "unknown"
     };
     kind.to_owned()
+}
+
+/// A union asset's collision geometry: its form, and its hulls' count,
+/// points and bounds.
+fn physics_detail(bytes: &[u8]) -> String {
+    use rook_content::mesh::union::physics;
+    use rook_types::UnionCollision;
+    let hulls = match physics::decode_asset(bytes) {
+        Ok(UnionCollision::Block) => return "BLOCK".into(),
+        Ok(UnionCollision::Mesh(_)) => return "none (collides as its MeshData)".into(),
+        Ok(UnionCollision::Hulls(hulls)) => hulls,
+        Err(e) => return e.to_string(),
+    };
+    let (mut lo, mut hi) = ([f32::MAX; 3], [f32::MIN; 3]);
+    for p in hulls.iter().flat_map(|h| &h.positions) {
+        for i in 0..3 {
+            lo[i] = lo[i].min(p[i]);
+            hi[i] = hi[i].max(p[i]);
+        }
+    }
+    let points: usize = hulls.iter().map(|h| h.positions.len()).sum();
+    let size = [0, 1, 2].map(|i| format!("{:.3}", hi[i] - lo[i]));
+    format!(
+        "{} hulls, {points} points, {} studs",
+        hulls.len(),
+        size.join(" x ")
+    )
 }
 
 /// A decoded mesh's triangles, size and centre.
@@ -245,7 +276,7 @@ impl Use {
             Want::Mesh => self.mesh,
             Want::Image => self.image,
             Want::Audio => self.audio,
-            Want::Bytes => 0,
+            Want::Bytes | Want::Collision => 0,
         }
     }
 }
@@ -375,7 +406,7 @@ pub fn place(file: &Path, options: &Options) -> anyhow::Result<()> {
                 Want::Mesh => u.mesh += 1,
                 Want::Image => u.image += 1,
                 Want::Audio => u.audio += 1,
-                Want::Bytes => {}
+                Want::Bytes | Want::Collision => {}
             }
         }
     }

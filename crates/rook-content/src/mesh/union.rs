@@ -16,6 +16,8 @@
 //! Version 5 holds more than one index range; only the first is drawn (the
 //! others are Inference: further levels of detail).
 
+pub mod physics;
+
 use rbx_mesh::union_graphics::{Mesh2, NormalId as UnionNormal, UnionGraphics};
 use rbx_types::Variant;
 use rook_types::NormalId;
