@@ -46,8 +46,8 @@ impl Default for Reverb {
 /// every sound: `None` for NoReverb. Approximation: the enum lists FMOD's
 /// reverb presets by name and in FMOD's order, so Rook uses those presets'
 /// decay, diffusion, density, wet level and high cut, as FMOD publishes
-/// them; Studio's own output for them hasn't been measured. The dry sound
-/// passes unchanged.
+/// them, with the wet level lowered by `AMBIENT_WET_DB` to match a
+/// recording of Studio. The dry sound passes unchanged.
 pub fn ambient(reverb_type: u32) -> Option<Reverb> {
     // (decay ms, diffusion %, density %, high cut Hz, wet dB)
     const PRESETS: [(f32, f32, f32, f32, f32); 23] = [
@@ -82,10 +82,16 @@ pub fn ambient(reverb_type: u32) -> Option<Reverb> {
         density: density / 100.0,
         diffusion: diffusion / 100.0,
         dry: 0.0,
-        wet,
+        wet: wet + AMBIENT_WET_DB,
         high_cut,
     })
 }
+
+/// How much quieter Studio's ambient reverb is than FMOD's preset wet level
+/// gives through Rook's reverb: recorded after a short tone, Studio's tails
+/// for Cave, Hallway and ConcertHall were 15.9, 17.0 and 14.5 dB below
+/// Rook's without this (`docs/behavior/audio.md`).
+const AMBIENT_WET_DB: f32 = -16.0;
 
 /// The delay lines' lengths at full density, in ms: spread out and with
 /// no common factors, so their echoes don't line up.
@@ -265,7 +271,7 @@ mod tests {
     fn presets() {
         assert_eq!(ambient(0), None);
         assert_eq!(ambient(9).map(|r| r.decay), Some(2.9));
-        assert_eq!(ambient(23).map(|r| r.wet), Some(7.0));
+        assert_eq!(ambient(23).map(|r| r.wet), Some(7.0 + AMBIENT_WET_DB));
         assert_eq!(ambient(24), None);
     }
 }
