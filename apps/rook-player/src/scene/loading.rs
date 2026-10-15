@@ -51,6 +51,10 @@ impl SceneCache {
             self.scene.lighting = self.lighting(dom);
         }
         let mut changed = Vec::new();
+        if let Some(&terrain) = parts.iter().find(|&&id| self.is_terrain(id)) {
+            parts.remove(&terrain);
+            changed.extend(self.refresh_terrain(dom));
+        }
         for id in parts {
             if self.index.contains_key(&id) {
                 self.place(dom, id, true, &mut changed);

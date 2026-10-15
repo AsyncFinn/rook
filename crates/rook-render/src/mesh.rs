@@ -15,6 +15,8 @@
 use bytemuck::{Pod, Zeroable};
 use glam::Vec3;
 
+use rook_content::mesh::TerrainMapping;
+
 use crate::scene::{DrawShape, NormalId, PartShape, TrussShape};
 
 #[repr(C)]
@@ -41,6 +43,11 @@ pub(crate) const NO_FACE: u32 = 255;
 /// Added to a union vertex's face: Textures and material textures tile
 /// from the face's centre, as they follow the union's UVs in Studio.
 pub(crate) const UNION_FACE: u32 = 64;
+
+/// A terrain vertex's face: its material textures are projected onto the
+/// plane its surface faces most, in world studs; plus 1 for the axes'
+/// planes only (`rook_content::mesh::TerrainMapping`).
+pub(crate) const TERRAIN_FACE: u32 = 128;
 
 impl Vertex {
     /// A vertex mapped from where it is, its face found from its normal.
@@ -419,6 +426,12 @@ pub(crate) fn from_file(m: &rook_content::mesh::Mesh) -> MeshData {
         .collect();
     for ((v, face), [r, g, b, _]) in vertices.iter_mut().zip(&m.faces).zip(&m.colors) {
         v.face = face.index() as u32 | UNION_FACE | u32::from_le_bytes([0, *r, *g, *b]);
+    }
+    if let Some(mapping) = m.terrain {
+        let face = TERRAIN_FACE + u32::from(mapping == TerrainMapping::Cube);
+        for v in &mut vertices {
+            v.face = face;
+        }
     }
     for tri in m.indices.as_chunks::<3>().0 {
         let [a, b, c] = tri.map(|i| i as usize);

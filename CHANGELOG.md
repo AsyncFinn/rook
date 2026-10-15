@@ -15,6 +15,18 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 
 ## [Unreleased]
 
+## [0.5.2] — 2026-10-15 — M6 step 2: terrain materials and water
+
+Pinned Roblox version: 0.741.19. M6 Terrain, step 2.
+
+- Terrain is textured. Rook reads Studio's own terrain material table (from Studio's settings, kept in `rook-terrain`): each material's top, side and bottom texture packs, fetched from Roblox like part materials, projected onto the plane each point faces most of 18, in world studs. Grass has grass on top and earth on its sides, as in Studio.
+- `Terrain.MaterialColors` tints the textures through their tint masks, as Studio does: CrackedLava's cracks take its colour over dark rock, Grass's sides stay earth. Places that saved no colours get the 2022 defaults.
+- A MaterialVariant that MaterialService's override names for a terrain material replaces its textures on terrain.
+- Terrain's shapes now come from the same table: Rock, Slate, CrackedLava, Basalt and Ice are rough (with Rook's own pseudo-random offsets, of the table's size), Cobblestone is faceted, and Rock, Basalt, Cobblestone and Pavement shade flat.
+- Water sits half a voxel lower than solid terrain's surface would, as Studio's does, and reflects some of the sky.
+- Not yet: grass blades, water waves, the texture detiling and height blending between materials; some colours differ from Studio's (Brick paler, Mud brighter there). See `docs/behavior/terrain.md` and `docs/behavior/stubs.md`.
+- Fixed: step 1's Cobblestone was a guess (cubify plus a shift); it quantizes to 0.6 studs, which matches Studio exactly.
+
 ## [0.5.1] — 2026-10-15 — M6 step 1: terrain voxels and their surface
 
 Pinned Roblox version: 0.741.19. M6 Terrain, step 1.

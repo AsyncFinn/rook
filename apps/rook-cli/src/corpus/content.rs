@@ -150,7 +150,7 @@ pub fn classify(url: &str) -> (&'static str, Option<String>) {
         Some(ContentRef::Asset { .. }) => "asset+version",
         Some(ContentRef::AssetVersion(_)) => "asset version id",
         Some(ContentRef::Thumbnail(_)) => "thumbnail",
-        Some(ContentRef::Material(..)) => "material",
+        Some(ContentRef::Material(..) | ContentRef::TexturePack(..)) => "material",
         Some(ContentRef::File(path)) => {
             let key = path.to_ascii_lowercase();
             if key.split('/').any(|p| p == "..") {

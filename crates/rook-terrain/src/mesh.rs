@@ -11,25 +11,59 @@
 //! triangles along a fixed diagonal ([`DIAGONALS`]).
 //!
 //! Water is meshed the same way in a second pass, where solid voxels count
-//! as inside too and only the faces of water voxels are kept (Rook's
-//! choice for step 1; Roblox's water surface is step 2).
+//! as inside too and only the faces of water voxels are kept, then moved
+//! down half a voxel ([`WATER_DROP`]).
 
 use glam::{IVec3, Vec3};
 
 use crate::TerrainMaterial;
 use crate::grid::{CHUNK_VOXELS, Grid, VOXEL_STUDS, Voxel};
 
+mod deform;
+
+use deform::deform;
+
 /// One material's part of a chunk's surface, relative to the chunk's
 /// corner ([`ChunkMesh::origin`]).
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Surface {
     pub material: TerrainMaterial,
+    /// Which of the material's textures its triangles take.
+    pub facing: Facing,
     pub positions: Vec<[f32; 3]>,
     /// Smooth: the mean of the faces around each vertex, across chunks
     /// and materials; flat for the materials with hard edges.
     pub normals: Vec<[f32; 3]>,
     /// Three per triangle, counter-clockwise seen from outside.
     pub indices: Vec<u32>,
+}
+
+/// Which way a triangle faces, for its material's top, side and bottom
+/// textures: up when its normal is closer to one of the five upward planes
+/// Studio projects textures on (straight up and the four at 45 degrees)
+/// than to a vertical one, that is more than 22.5 degrees up (observed: a
+/// Grass ball shows grass down to about that far above its middle).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum Facing {
+    Top,
+    #[default]
+    Side,
+    Bottom,
+}
+
+impl Facing {
+    /// sin(22.5 degrees).
+    const LIMIT: f32 = 0.382_683_43;
+
+    pub fn of(normal: Vec3) -> Self {
+        if normal.y > Self::LIMIT {
+            Facing::Top
+        } else if normal.y < -Self::LIMIT {
+            Facing::Bottom
+        } else {
+            Facing::Side
+        }
+    }
 }
 
 /// The surface of one chunk: the quads of the voxel edges starting in it.
@@ -87,6 +121,13 @@ fn all_uniform(grid: &Grid, chunk: IVec3) -> bool {
     })
 }
 
+/// How far water's surface sits below where solid terrain's would: half a
+/// voxel (Studio's terrain material table gives Water `"water": 0.5`;
+/// measured: a lone full water voxel spans 3.333 to 0.667 studs below its
+/// centre, a full one-voxel slab 6 below to 2 above, its edge sloping as a
+/// solid slab's does, 2 studs lower).
+pub const WATER_DROP: f32 = VOXEL_STUDS / 2.0;
+
 /// Voxels read before a chunk's first one: edges start one voxel before
 /// it (for the normals of the faces just outside), and their cells one
 /// more.
@@ -112,6 +153,7 @@ pub(crate) fn mesh_chunk_with(grid: &Grid, chunk: IVec3, diagonals: [[bool; 2]; 
         let mut mesher = Mesher {
             block: &block,
             pass,
+            origin: chunk * CHUNK_VOXELS - IVec3::splat(PAD),
             cells: vec![NONE; (CELLS * CELLS * CELLS) as usize],
             positions: Vec::new(),
             normals: Vec::new(),
@@ -164,49 +206,6 @@ fn centre(p: IVec3) -> Vec3 {
     ((p - IVec3::splat(PAD)).as_vec3() + 0.5) * VOXEL_STUDS
 }
 
-/// How a material moves its vertices from where the edge crossings put
-/// them (zeux, "Roblox: Large-scale terrain", SIGGRAPH 2020: shift,
-/// cubify, quantize), measured per material in Studio. `first` is the
-/// centre of the cell's first voxel, the cell's corner.
-fn deform(p: Vec3, first: Vec3, material: TerrainMaterial) -> Vec3 {
-    use TerrainMaterial::*;
-    let cell_centre = first + Vec3::splat(VOXEL_STUDS / 2.0);
-    match material {
-        // Cubify: towards the cell's centre, all the way for these (a lone
-        // voxel is its whole 4-stud box, whatever its occupancy) ...
-        Brick | WoodPlanks => cell_centre,
-        // ... a tenth of the way for Cobblestone (a lone voxel 1.40 studs
-        // from its centre instead of 1.33, a slab's top 3.8 above it).
-        Cobblestone => p.lerp(cell_centre, 0.1),
-        // Quantize: to whole halves (Concrete) or quarters (Pavement) of
-        // the cell.
-        Concrete => quantize(p, first, 2.0),
-        Pavement => quantize(p, first, 4.0),
-        // Rock, Slate, CrackedLava, Basalt and Ice shift each vertex by a
-        // pseudo-random offset Rook can't reproduce yet; they keep the
-        // plain position (Approximation).
-        _ => p,
-    }
-}
-
-/// Whether a material shades with hard edges, each triangle flat ("materials
-/// also define soft/hard edges", zeux 2020): Brick, WoodPlanks, Concrete
-/// and Pavement are faceted in Studio (observed), Grass and Snow smooth.
-/// The rest are smooth (Inference).
-fn hard_edges(material: TerrainMaterial) -> bool {
-    use TerrainMaterial::*;
-    matches!(material, Brick | WoodPlanks | Concrete | Pavement)
-}
-
-/// Round `p` to multiples of `1 / steps` of the cell, halves away from the
-/// cell's centre (measured: a half-full Concrete slab's edge comes in to
-/// the voxel centre, not out).
-fn quantize(p: Vec3, first: Vec3, steps: f32) -> Vec3 {
-    let step = VOXEL_STUDS / steps;
-    let centre = first + Vec3::splat(VOXEL_STUDS / 2.0);
-    centre + ((p - centre) / step).round() * step
-}
-
 /// The twelve edges of a cell, as pairs of corner offsets.
 const CELL_EDGES: [(IVec3, IVec3); 12] = {
     const fn v(x: i32, y: i32, z: i32) -> IVec3 {
@@ -231,6 +230,8 @@ const CELL_EDGES: [(IVec3, IVec3); 12] = {
 struct Mesher<'a> {
     block: &'a Block,
     pass: Pass,
+    /// The block's first voxel in the grid (seeds the shift).
+    origin: IVec3,
     /// Each cell's vertex, by cell, once made.
     cells: Vec<u32>,
     positions: Vec<Vec3>,
@@ -264,8 +265,12 @@ impl Mesher<'_> {
             n += 1;
         }
         let mut position = sum / n.max(1) as f32;
-        if self.pass == Pass::Solid {
-            position = deform(position, centre(c), self.dominant(c));
+        match self.pass {
+            Pass::Solid => {
+                let look = self.dominant(c).shape();
+                position = deform(position, centre(c), look, self.origin + c);
+            }
+            Pass::Water => position.y -= WATER_DROP,
         }
         let index = self.positions.len() as u32;
         self.positions.push(position);
@@ -347,21 +352,38 @@ impl Mesher<'_> {
 
     /// Add the triangles to `surfaces`, one per material.
     fn split(self, surfaces: &mut Vec<Surface>) {
-        let mut materials: Vec<TerrainMaterial> = self.triangles.iter().map(|(_, m)| *m).collect();
-        materials.sort();
-        materials.dedup();
+        let positions = &self.positions;
+        // Split by facing only where the material's textures differ by it,
+        // so each draw covers as much as it can.
+        let facing = |t: &[u32; 3], m: TerrainMaterial| {
+            let look = m.textures();
+            if look.top == look.side && look.side == look.bottom {
+                return Facing::Side;
+            }
+            let p = t.map(|i| positions[i as usize]);
+            Facing::of((p[1] - p[0]).cross(p[2] - p[0]).normalize_or(Vec3::Y))
+        };
+        let mut keys: Vec<(TerrainMaterial, Facing)> = self
+            .triangles
+            .iter()
+            .map(|(t, m)| (*m, facing(t, *m)))
+            .collect();
+        keys.sort();
+        keys.dedup();
         let mut remap = vec![NONE; self.positions.len()];
-        for material in materials {
+        for (material, side) in keys {
             let mut s = Surface {
                 material,
+                facing: side,
                 ..Surface::default()
             };
             remap.fill(NONE);
+            let flat = material.shape().edges.flat();
             for (t, m) in &self.triangles {
-                if *m != material {
+                if *m != material || facing(t, *m) != side {
                     continue;
                 }
-                if hard_edges(material) {
+                if flat {
                     let p = t.map(|i| self.positions[i as usize]);
                     let n = (p[1] - p[0]).cross(p[2] - p[0]).normalize_or(Vec3::Y);
                     for p in p {

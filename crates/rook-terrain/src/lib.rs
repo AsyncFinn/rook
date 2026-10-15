@@ -9,8 +9,8 @@ pub mod mesh;
 
 pub use decode::DecodeError;
 pub use grid::{CHUNK_VOXELS, Grid, VOXEL_STUDS, Voxel, chunk_of};
-pub use material::TerrainMaterial;
-pub use mesh::{ChunkMesh, Surface, chunk_origin, chunks_to_mesh, mesh_chunk};
+pub use material::{Edges, Look, TerrainMaterial, Texture};
+pub use mesh::{ChunkMesh, Facing, Surface, chunk_origin, chunks_to_mesh, mesh_chunk};
 
 #[cfg(test)]
 mod tests;
