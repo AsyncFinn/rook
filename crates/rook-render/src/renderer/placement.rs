@@ -61,6 +61,7 @@ impl Renderer {
     pub fn update_parts(&mut self, scene: &Scene, changed: &[usize]) {
         profiling::scope!("Renderer::update_parts");
         self.lighting = scene.lighting;
+        self.terrain = scene.terrain;
         // The skybox's images go up like any other image.
         for hash in scene.lighting.skybox.into_iter().flatten() {
             self.image_readiness(hash, Some(scene));

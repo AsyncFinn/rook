@@ -231,14 +231,94 @@ studs below its centre, a half-full one 2.667 to 1.333 below; a full
 one-voxel slab spans 6 below to 2 above, its edge sloping as a solid's
 does, 2 studs lower. Rook draws it in `WaterColor` at `WaterTransparency`,
 mixed halfway towards the sky's colour by `WaterReflectance` (Studio's
-water is mostly the sky it reflects; Approximation). Not yet: waves
-(`WaterWaveSize`, `WaterWaveSpeed`), the shoreline water inside solid
-voxels, and how water looks from below.
+water is mostly the sky it reflects; Approximation). Waves came later
+([below](#grass-and-waves-step-2-continued)). Not yet: the shoreline
+water inside solid voxels, and how water looks from below.
 
-*Grass* (not drawn): with `Terrain.Decoration` on, Studio grows animated
-grass blades on Grass's tops (scripts can't change the property). Of the
-archive's ten smooth-terrain places only one has it on.
+*Grass*: with `Terrain.Decoration` on, Studio grows animated grass blades
+on Grass's tops (scripts can't change the property). Of the archive's ten
+smooth-terrain places only one has it on. Drawn since
+[below](#grass-and-waves-step-2-continued).
 
 *Loading*: terrain textures load in the background like part materials
 (one pack per material and facing the place uses), and the terrain is
 redrawn as they arrive.
+
+## Grass and waves (step 2, continued)
+
+**Grass and waves**, built 2026-10-15: what step 2 left of terrain's look.
+Measured in Studio 0.742 on the Baseplate place with a 64 × 4 × 64 Grass
+slab, a 64 × 4 × 12 Grass strip and a block of Water, each beside a
+4-stud ruler part, screenshots taken with a narrow field of view (8
+degrees) so the ruler gives studs per pixel.
+
+*What Studio's settings say*: nothing about the blades' size or the
+waves' shape. `StudioAppSettings.json` has only switches
+(`FFlagRenderGrassUseBarycentricPlantingPoints`, `FFlagGrassGPUDensityCull`,
+`FIntGrassLengthCustomization_FRMDensityScaling_UpperBound` 6, the water
+transparency flags), and Grass's average texture colour in
+`FStringTerrainColorTable` (`avgAlbedo2022`: (196, 196, 189), tint mask
+alpha 241). Studio's install has 25 water normal maps
+(`PlatformContent/pc/textures/water/normal_01.dds` to `normal_25.dds`,
+256 × 256 DXT5 with X in alpha and Y in green): an animated sequence.
+`Terrain.GrassLength` isn't a member in Studio 0.742.
+
+*Grass blades* (observed; sizes Approximation within the screenshots'
+precision):
+
+- On Grass's tops, with `Decoration` on (Studio's Baseplate has it on).
+  Off, Rook draws none, as the property's documentation says; Studio
+  wasn't checked with it off, since scripts can't change it (Inference).
+  LeafyGrass grows none in Rook (Inference: the property is for Grass).
+- Each blade is one flat, unshaded dark olive spike: in the Baseplate's
+  lighting (46, 71, 26) whether seen from the side or from above, darker
+  than the ground under it (about 0.73 of its brightness in sRGB).
+- Side on, blades stand 1.5 to 3.4 studs above the ground, mostly 2 to 3,
+  about half a stud wide at the foot and tapering to a point, many
+  leaning 30 to 40 degrees, every way.
+- From above, about one blade per square stud, the ground about half
+  covered.
+- Still as dense 100 studs away, sparser but still drawn 200 studs away.
+
+Rook plants blades at random points on Grass's upward triangles
+(`rook_terrain::grass`; the points are fixed by each triangle's position,
+so the same ground grows the same blades), one per square stud, 1.5 to 3.3
+studs tall, 0.45 wide, leaning up to about 30 degrees. Each is a strip of
+five vertices, seen from both sides, in the ground's average colour
+(`avgAlbedo2022` tinted by Grass's `MaterialColors` colour as a tint mask)
+at half its brightness in linear light, lit with the ground's normal. The
+player builds them in 32-stud tiles within 200 studs of the camera, and
+drops a tile's mesh when the camera leaves. In the shader blades sway (a
+sine per blade, bending with `Workspace.GlobalWind`; Studio's sway isn't
+measured, Approximation), thin out from 60 studs away to 40% at the edge,
+and sink into the ground over the last quarter. They cast no shadow
+(Inference).
+
+*Waves* (observed): the waves move water's surface itself. Seen along
+the water at grazing angle with `WaterWaveSize` 1, the far edge of the
+64-stud block rises and falls by about 1.2 studs, in humps longer than
+the block is wide, so the size is about how many studs the waves rise
+and fall. Rook adds two sines to water's height (wavelengths 60 and 45
+studs) that together rise and fall `WaterWaveSize` studs, moving faster
+with `WaterWaveSpeed` (defaults 0.15 and 10; the speed's scale isn't
+measured, Approximation). The water's normal follows the waves, rippled
+by the install's `normal_01` map scrolled two ways at 24 and 15 studs
+per repeat (Studio animates all 25; Approximation).
+
+*The surface* (Approximation): `WaterColor` lit from above, mixed towards
+the sky's colour by `WaterReflectance`, half of it looking down (step 2's
+look) and all of it at grazing angles (Schlick's Fresnel), with the sun's
+glint, and more opaque at grazing angles. Studio's grazing view is
+nearly all sky, rippled in pale and darker blue.
+
+*Not yet*: Studio's exact blade shapes, sway and colour under other
+lighting; the 25-frame normal animation; terrain properties changed by
+scripts (`WaterWaveSize` and the rest) are read when the terrain is
+built, not as they change.
+
+*Costs* (release build, `--bench 300` on the largest terrain place, 1280 × 720,
+0.5.2 against 0.5.3, two runs each): from the camera it saved, median
+frame 4.5 ms against 5.5 ms; from the grass, 4.8 against 5.6. The ~1 ms
+is drawing about 120 tiles of blades (Rook draws each blade's two sides
+as separate triangles) and the waving water.
+

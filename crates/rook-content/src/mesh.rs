@@ -50,6 +50,11 @@ pub enum TerrainMapping {
     Planes,
     /// Onto the axes' planes only, like a box (Brick, WoodPlanks).
     Cube,
+    /// Water's surface: no textures, waves and reflections instead.
+    Water,
+    /// Grass blades (`rook_terrain::grass`): each vertex's UV is its
+    /// blade's sway phase and its height above the blade's foot.
+    Blades,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]

@@ -26,6 +26,11 @@ pub(crate) struct Globals {
     pub(crate) sky_from_clip: [[f32; 4]; 4],
     /// Each skybox image's direction, right and up ([`SKYBOX_FACES`]).
     pub(crate) sky_faces: [[f32; 4]; 18],
+    /// Seconds since the renderer's clock started, the waves' size and
+    /// speed, and how far grass is drawn ([`TerrainLook`]).
+    pub(crate) terrain: [f32; 4],
+    /// `TerrainLook::wind`.
+    pub(crate) wind: [f32; 4],
 }
 
 /// Instance flags (see `shaders/common.wgsl`).
@@ -392,15 +397,5 @@ pub(crate) fn surface_bind_group(
                 resource: wgpu::BindingResource::Sampler(cx.sampler),
             },
         ],
-    })
-}
-
-pub(crate) fn srgb_to_linear(c: [f32; 3]) -> [f32; 3] {
-    c.map(|x| {
-        if x <= 0.04045 {
-            x / 12.92
-        } else {
-            ((x + 0.055) / 1.055).powf(2.4)
-        }
     })
 }

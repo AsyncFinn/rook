@@ -15,6 +15,8 @@ pub(crate) struct App {
     pub(crate) game: Game,
     /// Real time not yet simulated, in seconds.
     pub(crate) accumulator: f64,
+    /// Seconds since the window opened, which water and grass move by.
+    pub(crate) clock: f64,
     pub(crate) camera: FlyCamera,
     pub(crate) gfx: Option<Gfx>,
     pub(crate) keys: HashSet<KeyCode>,
@@ -138,6 +140,7 @@ impl App {
         // The client steps at 60 Hz, catching up at most a few per frame;
         // the server keeps its own pace on its thread.
         self.accumulator += f64::from(dt);
+        self.clock += f64::from(dt);
         let mut steps = 0;
         while self.accumulator >= STEP && steps < 4 {
             self.accumulator -= STEP;
@@ -151,7 +154,13 @@ impl App {
             audio.sync(&self.game.sounds());
         }
         if let Some(gfx) = &mut self.gfx {
-            refresh(&mut self.scene, self.game.view_mut(), &mut gfx.renderer);
+            let camera = self.camera.camera.position;
+            refresh(
+                &mut self.scene,
+                self.game.view_mut(),
+                &mut gfx.renderer,
+                camera,
+            );
         }
     }
 
@@ -168,6 +177,8 @@ impl App {
             }
         };
         let view = frame.texture.create_view(&Default::default());
+        // Wrapped so the shader's sines stay precise in long sessions.
+        gfx.renderer.set_time((self.clock % 3600.0) as f32);
         gfx.renderer.render(
             &view,
             gfx.config.width,

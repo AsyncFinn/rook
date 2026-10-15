@@ -123,7 +123,12 @@ fn scene_of(dm: &DataModel, content: &Arc<Resolver>) -> SceneCache {
 /// Bring a cached scene up to date with a DataModel's changes and the mesh
 /// files and images that finished loading since the last frame, then the
 /// renderer with the scene. Returns whether anything changed.
-fn refresh(cache: &mut SceneCache, dm: &mut DataModel, renderer: &mut Renderer) -> bool {
+fn refresh(
+    cache: &mut SceneCache,
+    dm: &mut DataModel,
+    renderer: &mut Renderer,
+    camera: Vec3,
+) -> bool {
     let changes = dm.take_render_changes();
     let dom = &dm.runtime().world().dom;
     let change = if changes.is_empty() {
@@ -131,7 +136,8 @@ fn refresh(cache: &mut SceneCache, dm: &mut DataModel, renderer: &mut Renderer) 
     } else {
         cache.apply(dom, &changes)
     };
-    let loaded = cache.poll_files(dom, false);
+    let mut loaded = cache.poll_files(dom, false);
+    loaded.extend(cache.update_grass(camera));
     let change = match change {
         // A skybox image arrived: the lighting alone changed.
         SceneChange::None if loaded.is_empty() && cache.take_lighting_change() => {
@@ -149,6 +155,9 @@ fn refresh(cache: &mut SceneCache, dm: &mut DataModel, renderer: &mut Renderer) 
         SceneChange::None => return false,
         SceneChange::Parts(parts) => renderer.update_parts(&cache.scene, parts),
         SceneChange::Full => renderer.set_scene(&cache.scene),
+    }
+    for mesh in cache.take_dropped_meshes() {
+        renderer.drop_mesh(mesh);
     }
     true
 }
@@ -223,6 +232,7 @@ fn main() -> anyhow::Result<()> {
         let dom = &game.view().runtime().world().dom;
         // Images on a mesh are asked for once its file has loaded.
         while !scene.poll_files(dom, true).is_empty() {}
+        scene.update_grass(camera.position);
         let mut renderer = Renderer::headless()?;
         install.apply(&mut renderer);
         renderer.set_scene(&scene.scene);
@@ -250,6 +260,7 @@ fn main() -> anyhow::Result<()> {
         scene,
         game,
         accumulator: 0.0,
+        clock: 0.0,
         camera: FlyCamera::new(camera),
         gfx: None,
         keys: HashSet::new(),

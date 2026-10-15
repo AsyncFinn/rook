@@ -184,9 +184,10 @@ Terrain comes before characters, who walk on it.
    either. Counts and findings: [terrain.md](docs/behavior/terrain.md).
 2. ✅ Terrain materials through M4's material system: `MaterialColors`,
    MaterialService overrides and MaterialVariants on terrain, and water's
-   surface, from Studio's own terrain material table. Grass blades and
-   water waves are left (swimming comes with characters). Findings:
-   [terrain.md](docs/behavior/terrain.md#materials-and-water-step-2).
+   surface, from Studio's own terrain material table; then grass blades
+   (`Decoration`) and water waves (swimming comes with characters).
+   Findings: [terrain.md](docs/behavior/terrain.md#materials-and-water-step-2),
+   [grass and waves](docs/behavior/terrain.md#grass-and-waves-step-2-continued).
 3. Collision and queries: parts land on terrain, rays hit it.
 4. The Terrain API scripts use, by archive use (`FillBlock`,
    `ReadVoxels`, `WriteVoxels`, `FillBall`, ...).

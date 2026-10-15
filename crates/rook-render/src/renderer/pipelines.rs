@@ -6,6 +6,7 @@ use super::*;
 const SHADER: &str = concat!(
     include_str!("../shaders/common.wgsl"),
     include_str!("../shaders/parts.wgsl"),
+    include_str!("../shaders/terrain.wgsl"),
     include_str!("../shaders/sky.wgsl"),
 );
 

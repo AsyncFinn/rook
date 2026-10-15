@@ -50,6 +50,9 @@ pub struct Renderer {
     transparent_parts: Vec<Option<PartInstance>>,
     transparent_free: Vec<usize>,
     lighting: Lighting,
+    terrain: TerrainLook,
+    /// Seconds on the clock water and grass move by ([`Renderer::set_time`]).
+    time: f32,
     depth: Option<(wgpu::Texture, wgpu::TextureView, u32, u32)>,
 }
 
@@ -211,6 +214,8 @@ impl Renderer {
             transparent_buffer: None,
             transparent_parts: Vec::new(),
             lighting: Lighting::default(),
+            terrain: TerrainLook::default(),
+            time: 0.0,
             depth: None,
         };
         renderer.ensure_group([None; 5]);
@@ -224,6 +229,18 @@ impl Renderer {
             image_layout: &self.image_layout,
             sampler: &self.image_sampler,
         }
+    }
+
+    /// Free a mesh file's GPU copy once no entry draws it (the player's
+    /// grass tiles, dropped as the camera leaves them). An entry still
+    /// drawing it draws nothing until the scene hands the mesh over again.
+    pub fn drop_mesh(&mut self, mesh: MeshHash) {
+        self.meshes.remove(&DrawShape::File(mesh));
+    }
+
+    /// Set the clock water's waves and grass's sway move by, in seconds.
+    pub fn set_time(&mut self, seconds: f32) {
+        self.time = seconds;
     }
 
     /// Draw the Head MeshType with this mesh (the user's own `head.mesh`)

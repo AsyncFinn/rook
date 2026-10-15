@@ -26,6 +26,11 @@ struct Globals {
     sky_from_clip: mat4x4<f32>,
     // Each skybox image's direction, right and up (`SKYBOX_FACES`).
     sky_faces: array<vec4<f32>, 18>,
+    // x = seconds, y = WaterWaveSize, z = WaterWaveSpeed, w = how far
+    // grass is drawn.
+    terrain: vec4<f32>,
+    // GlobalWind (xyz).
+    wind: vec4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> g: Globals;
@@ -69,8 +74,10 @@ const VERTEX_COLORS: u32 = 2147483648u;
 // A union vertex's face byte carries this bit (`mesh::UNION_FACE`).
 const UNION_FACE: u32 = 64u;
 // A terrain vertex's face byte (`mesh::TERRAIN_FACE`), plus 1 for textures
-// on the axes' planes only.
+// on the axes' planes only, 2 for water, 4 for grass blades.
 const TERRAIN_FACE: u32 = 128u;
+const TERRAIN_WATER: u32 = 2u;
+const TERRAIN_BLADES: u32 = 4u;
 // Set on `VertexOut::face` for union vertices: tile from the face's centre.
 const CENTRED: u32 = 256u;
 const ALPHA_OVERLAY: u32 = 1u;

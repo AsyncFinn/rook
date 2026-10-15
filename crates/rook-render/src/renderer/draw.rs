@@ -157,6 +157,13 @@ impl Renderer {
                 }
                 out
             },
+            terrain: [
+                self.time,
+                self.terrain.wave_size,
+                self.terrain.wave_speed,
+                self.terrain.grass_reach,
+            ],
+            wind: rgb(self.terrain.wind.to_array(), 0.0),
         };
         self.queue
             .write_buffer(&self.globals, 0, bytemuck::bytes_of(&globals));

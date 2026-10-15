@@ -7,6 +7,7 @@ use glam::{IVec3, Vec3};
 
 use crate::Look;
 use crate::grid::VOXEL_STUDS;
+use crate::random::Random;
 
 /// Move vertex `p` of the cell whose first corner (the centre of its first
 /// voxel) is `first` and whose first voxel is `cell` in the grid.
@@ -41,16 +42,6 @@ fn quantize(p: Vec3, centre: Vec3, step: f32) -> Vec3 {
 
 /// Three numbers from 0 to 1 fixed by a cell's position.
 fn shift(cell: IVec3) -> Vec3 {
-    let mut h = (cell.x as u32).wrapping_mul(0x9e37_79b1)
-        ^ (cell.y as u32).wrapping_mul(0x85eb_ca77)
-        ^ (cell.z as u32).wrapping_mul(0xc2b2_ae3d);
-    let mut next = || {
-        h ^= h >> 15;
-        h = h.wrapping_mul(0x2c1b_3c6d);
-        h ^= h >> 12;
-        h = h.wrapping_mul(0x297a_2d39);
-        h ^= h >> 15;
-        (h >> 8) as f32 / (1u32 << 24) as f32
-    };
-    Vec3::new(next(), next(), next())
+    let mut r = Random::at(cell);
+    Vec3::new(r.next(), r.next(), r.next())
 }

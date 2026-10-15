@@ -3,15 +3,27 @@
 //! drawn with that material's top, side or bottom textures from Studio's
 //! terrain material table (or the MaterialVariant MaterialService puts in
 //! its place), tinted by `Terrain.MaterialColors`. Water is drawn in
-//! `WaterColor` at `WaterTransparency` (`docs/behavior/terrain.md`).
+//! `WaterColor` at `WaterTransparency`, waving and rippled by the install's
+//! water normal map, and Grass grows blades near the camera ([`grass`])
+//! with `Decoration` on (`docs/behavior/terrain.md`).
+
+mod grass;
 
 use rayon::prelude::*;
 use rook_content::MaterialMap;
 use rook_content::mesh::{Mesh, TerrainMapping};
+use rook_render::TerrainLook;
+use rook_terrain::grass::{GrassTops, add_grass_tops, blade_color};
 use rook_terrain::{Facing, Grid, TerrainMaterial, chunks_to_mesh, mesh_chunk};
 use rook_types::MaterialColors;
 
 use super::*;
+use grass::{GRASS_REACH, Grass};
+
+/// The install's water normal map (DXT5nm), rippling the water's surface.
+/// Studio animates 25 of them (`normal_01` to `normal_25`); Rook scrolls
+/// the first.
+const WATER_NORMALS: &str = "rbxasset://textures/water/normal_01.dds";
 
 /// One chunk's surface of one material facing one way, as a mesh.
 #[derive(Debug, Clone, Copy)]
@@ -34,6 +46,7 @@ pub(super) struct TerrainCache {
     /// Where the terrain's entries start in `scene.parts`, and how many.
     first: usize,
     count: usize,
+    grass: Grass,
 }
 
 impl SceneCache {
@@ -64,10 +77,27 @@ impl SceneCache {
             self.terrain.source = source;
             self.terrain.surfaces = match grid {
                 Some(bytes) => self.mesh_terrain(bytes),
-                None => Vec::new(),
+                None => {
+                    self.terrain.grass.tops = GrassTops::default();
+                    Vec::new()
+                }
             };
         }
         self.terrain.instance = terrain;
+        for mesh in self.terrain.grass.reset() {
+            self.scene.meshes.remove(&mesh);
+        }
+        self.scene.terrain = terrain_look(dom, terrain);
+        let colors = terrain.and_then(|t| match dom.property_by_name(t, "MaterialColors") {
+            Some(Value::MaterialColors(c)) => Some(c),
+            _ => None,
+        });
+        let grass = &mut self.terrain.grass;
+        grass.on = self.scene.terrain.grass_reach > 0.0;
+        grass.color = TerrainMaterial::Grass
+            .color(colors.as_ref(), MaterialSet::Materials2022)
+            .map(blade_color)
+            .unwrap_or_default();
         let entries = self.terrain_entries(dom);
         self.terrain.first = self.scene.parts.len();
         self.terrain.count = entries.len();
@@ -107,6 +137,11 @@ impl SceneCache {
             .par_iter()
             .map(|c| mesh_chunk(&grid, *c))
             .collect();
+        let mut tops = GrassTops::default();
+        for chunk in &meshes {
+            add_grass_tops(chunk, &mut tops);
+        }
+        self.terrain.grass.tops = tops;
         let mut surfaces = Vec::new();
         for chunk in meshes {
             let origin = chunk.origin();
@@ -127,7 +162,9 @@ impl SceneCache {
                         normals: surface.normals,
                         uvs: vec![[0.0; 2]; count],
                         indices: surface.indices,
-                        terrain: Some(if look.cube {
+                        terrain: Some(if surface.material == TerrainMaterial::Water {
+                            TerrainMapping::Water
+                        } else if look.cube {
                             TerrainMapping::Cube
                         } else {
                             TerrainMapping::Planes
@@ -162,10 +199,16 @@ impl SceneCache {
         let water =
             color(dom, terrain, "WaterColor").unwrap_or([12.0 / 255.0, 84.0 / 255.0, 92.0 / 255.0]);
         let water_transparency = number(dom, terrain, "WaterTransparency").unwrap_or(0.3);
-        // Most of Studio's water colour is the sky it reflects: drawn as a
-        // mix towards the sky's colour, half of `WaterReflectance`
-        // (Approximation; no waves yet).
-        let water_reflectance = number(dom, terrain, "WaterReflectance").unwrap_or(1.0) * 0.5;
+        // Most of Studio's water colour is the sky it reflects: the shader
+        // mixes towards the sky's colour by `WaterReflectance`, half of it
+        // looking down (Approximation).
+        let water_reflectance = number(dom, terrain, "WaterReflectance").unwrap_or(1.0);
+        let water_normals = ContentRef::parse(WATER_NORMALS).and_then(|r| {
+            match self.file_state_of(terrain, r, Want::Image) {
+                FileState::Loaded(hash) => Some(ImageHash(hash)),
+                FileState::Loading | FileState::Failed => None,
+            }
+        });
         let surfaces = self.terrain.surfaces.clone();
         let mut looks: HashMap<(TerrainMaterial, Facing), (MaterialMaps, [f32; 3])> =
             HashMap::new();
@@ -180,6 +223,7 @@ impl SceneCache {
                 part.transparency = water_transparency;
                 part.reflectance = water_reflectance.clamp(0.0, 1.0);
                 part.cast_shadow = false;
+                part.maps.normal = water_normals;
             } else {
                 let (maps, color) = *looks.entry((s.material, s.facing)).or_insert_with(|| {
                     self.terrain_look(dom, terrain, s.material, s.facing, set, colors.as_ref())
@@ -259,4 +303,22 @@ impl SceneCache {
         };
         (maps, color)
     }
+}
+
+/// How the terrain's water waves and its grass moves: `WaterWaveSize`,
+/// `WaterWaveSpeed` (Studio's defaults 0.15 and 10), `Workspace.GlobalWind`,
+/// and how far grass is drawn with `Decoration` on.
+fn terrain_look(dom: &Dom, terrain: Option<InstanceId>) -> TerrainLook {
+    let mut look = TerrainLook::default();
+    if let Some(t) = terrain {
+        look.wave_size = number(dom, t, "WaterWaveSize").unwrap_or(look.wave_size);
+        look.wave_speed = number(dom, t, "WaterWaveSpeed").unwrap_or(look.wave_speed);
+        if boolean(dom, t, "Decoration").unwrap_or(false) {
+            look.grass_reach = GRASS_REACH;
+        }
+    }
+    if let Some(ws) = dom.find_service("Workspace") {
+        look.wind = vector3(dom, ws, "GlobalWind").unwrap_or(Vec3::ZERO);
+    }
+    look
 }

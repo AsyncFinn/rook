@@ -19,13 +19,14 @@ mod surfaces;
 pub use scene::{
     Camera, DrawShape, Image, ImageHash, ImagePlacement, Layer, Lighting, MapAlpha, Material,
     MaterialMaps, MaterialSet, Mesh, MeshHash, NormalId, PartInstance, PartShape, SKYBOX_FACES,
-    Scene, SurfacePattern, Tiling, TrussShape,
+    Scene, SurfacePattern, TerrainLook, Tiling, TrussShape,
 };
 
 use std::collections::HashMap;
 
 use bytemuck::{Pod, Zeroable};
 use glam::Vec3;
+use rook_types::srgb_to_linear;
 use wgpu::util::DeviceExt;
 
 use cache::{FRAME_UPLOAD_BYTES, GpuCache, Upload, UploadContext};

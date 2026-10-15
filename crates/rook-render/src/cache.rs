@@ -69,6 +69,14 @@ impl<K: Copy + Eq + Hash, T: Upload> GpuCache<K, T> {
         }
     }
 
+    /// Forget `key`'s GPU copy, or its queued upload.
+    pub fn remove(&mut self, key: &K) {
+        self.ready.remove(key);
+        if self.queued.remove(key) {
+            self.queue.retain(|(k, _)| k != key);
+        }
+    }
+
     pub fn has_queued(&self) -> bool {
         !self.queue.is_empty()
     }

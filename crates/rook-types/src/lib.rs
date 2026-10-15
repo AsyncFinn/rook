@@ -24,7 +24,7 @@ mod vector;
 pub use cframe::CFrame;
 pub use clock::{clock_hours, time_of_day};
 pub use collision::{Hull, UnionCollision};
-pub use color::Color3;
+pub use color::{Color3, linear_to_srgb, srgb_to_linear};
 pub use material::{Material, MaterialSet, Shading};
 pub use mesh::{MeshKind, MeshLook, head_scale, mesh_part_scale};
 pub use shape::PartShape;
