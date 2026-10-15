@@ -2,25 +2,27 @@
 
 ## Versioning
 
-Rook follows [Semantic Versioning](https://semver.org):
+Rook's version says how far along the roadmap it is:
 
-- **Minor** (`0.x.0`): every change that adds or changes a feature is released as its own minor version, as it lands. Each entry says which milestone (and step) it belongs to, and which milestone it finishes, if any.
-- **Patch** (`0.x.y`): every fix, as it lands: something Rook already did, made to behave as Roblox does (`0.3.0` → `0.3.1`). Fixes landing together share one patch; fixes that ship inside a feature release are listed there as "Fixed:".
+- **Minor** (`0.N.0`): finishing milestone N. 0.3.0 finished M3 Physics, 0.4.0 M4 Content, and 0.5.0 will finish M5 Audio. Version 1.0 comes with M22, the release.
+- **Patch** (`0.N.y`): everything released between milestones: each roadmap step and each fix, as it lands (`0.4.8` → `0.4.9`). Each entry says which milestone and step it belongs to. Fixes landing together share one patch; fixes that ship inside a step's release are listed there as "Fixed:".
 - Docs, roadmap and internal changes with no effect on behaviour don't get a version of their own; they're listed under the next release.
-- Before 1.0, a minor release may also break things, as semver allows.
+- Before 1.0, any release may break things.
+
+Versions were renumbered this way on 2026-10-15; until then every step was a minor version (0.4.0 to 0.13.1, now 0.3.1 to 0.4.9).
 
 Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z` in git. The pinned Roblox version (currently 0.741.19) is separate and listed under each release.
 
 ## [Unreleased]
 
-## [0.13.1] — 2026-10-15 — AmbientReverb as loud as Studio's
+## [0.4.9] — 2026-10-15 — AmbientReverb as loud as Studio's
 
 Pinned Roblox version: 0.741.19.
 
 - Fixed: `SoundService.AmbientReverb` was far too loud. Rook used FMOD's published wet level for each preset, but a recording of Studio's own output (Cave, Hallway, ConcertHall) put its reverb 14.5 to 17.0 dB below that. Every preset's wet level is now 16 dB lower, within 1.6 dB of Studio for all three.
 - Measured from Studio's output, which `PlaybackLoudness` doesn't show: nested SoundGroups' volumes multiply, a Sound parented under a group without `SoundGroup` set isn't in it, a group's reverb rings on after its sounds end, stop or are destroyed, and a Sound's own reverb is cut when it ends. Rook already did all of this; `docs/behavior/audio.md` now records it as Confirmed.
 
-## [0.13.0] — 2026-10-15 — M5 step 4: SoundGroups and sound effects
+## [0.4.8] — 2026-10-15 — M5 step 4: SoundGroups and sound effects
 
 Pinned Roblox version: 0.741.19. Finishes M5 step 4; M5 Audio continues with the modern audio API.
 
@@ -32,21 +34,21 @@ Pinned Roblox version: 0.741.19. Finishes M5 step 4; M5 Audio continues with the
 - Fixed: a new SoundService's `RespectFilteringEnabled` read false; Studio and creator-docs give true, and the reflection database is wrong. Setting `Sound.SoundGroup` to something other than a SoundGroup now errors as in Studio.
 - Conformance case `content/sound_groups`. Findings: `docs/behavior/audio.md`.
 
-## [0.12.0] — 2026-10-15 — Material textures from Roblox
+## [0.4.7] — 2026-10-15 — Material textures from Roblox
 
 Pinned Roblox version: 0.741.19.
 
 - Material textures come from Roblox like any other asset, with no Studio needed. Each material's textures in each set are a TexturePack asset, whose colour, normal, roughness and metalness images load through asset delivery and the disk cache. Rook used to read them from Studio's local content cache, so materials Studio hadn't shown on that machine drew Rook's own stand-ins, and Studio's distant-view copies drew blurry. Which pack is which material's comes from Studio's own `PartMaterialInfosPre2022` and `PartMaterialInfos2022` tables, checked texture by texture against what Studio showed. Findings: `docs/behavior/materials.md`.
 - Removed: reading Studio's content cache (`ROOK_ROBLOX_CACHE`, the `studio-cache` provider) and Rook's own material textures drawn in code. Offline with nothing cached, materials draw untextured, like any missing asset.
 
-## [0.11.1] — 2026-10-14 — Unions without saved hulls are boxes
+## [0.4.6] — 2026-10-14 — Unions without saved hulls are boxes
 
 Pinned Roblox version: 0.741.19.
 
 - Fixed: a union with no collision hulls saved (`PhysicalConfigData` empty or missing; 247 of a modern core place's unions) collided as its drawn geometry, fetched from its asset. In Studio it is its box: measured in Studio 0.742, such unions read `CollisionFidelity` Box and rays hit them everywhere, even through a doorway. Rook no longer fetches union assets for collision. Also measured: Studio's rays follow `CollisionFidelity` (Default and PreciseConvexDecomposition leave a cut hole open, Hull and Box fill it), and files don't save `CollisionFidelity`. Findings in `docs/behavior/collision.md`.
 - `Options::wait_for_content` is `wait_for_sounds` again: only sounds load within the frame.
 
-## [0.11.0] — 2026-10-14 — M15 step 1: unions collide as their shapes
+## [0.4.5] — 2026-10-14 — M15 step 1: unions collide as their shapes
 
 Pinned Roblox version: 0.741.19. Starts M15 step 1; MeshParts' collision shapes follow.
 
@@ -54,7 +56,7 @@ Pinned Roblox version: 0.741.19. Starts M15 step 1; MeshParts' collision shapes 
 - `rook content` describes a union asset's collision geometry.
 - `Options::wait_for_sounds` is now `wait_for_content`: union geometry loads within the frame too.
 
-## [0.10.1] — 2026-10-14 — Properties Roblox replicates under hidden twins
+## [0.4.4] — 2026-10-14 — Properties Roblox replicates under hidden twins
 
 Pinned Roblox version: 0.741.19.
 
@@ -67,7 +69,7 @@ Pinned Roblox version: 0.741.19.
 
   A test (`rook-net`, `replicated_twins`) pins the list, so a new database version can't add one silently.
 
-## [0.10.0] — 2026-10-14 — M5 step 3: 3D sound
+## [0.4.3] — 2026-10-14 — M5 step 3: 3D sound
 
 Pinned Roblox version: 0.741.19. Finishes M5 step 3; M5 Audio continues with SoundService, SoundGroups and effects.
 
@@ -76,7 +78,7 @@ Pinned Roblox version: 0.741.19. Finishes M5 step 3; M5 Audio continues with Sou
 - The deprecated `MaxDistance` reads and sets `RollOffMaxDistance`, and a negative roll-off distance reads 0, as in Studio (conformance case `content/sound_3d`).
 - The mixer ramps gain changes over one buffer, so moving sounds don't click.
 
-## [0.9.0] — 2026-10-14 — M5 step 2: the Sound API
+## [0.4.2] — 2026-10-14 — M5 step 2: the Sound API
 
 Pinned Roblox version: 0.741.19. Finishes M5 step 2; M5 Audio continues with 3D sound.
 
@@ -85,7 +87,7 @@ Pinned Roblox version: 0.741.19. Finishes M5 step 2; M5 Audio continues with 3D 
 - `PlaybackLoudness` reads the sound's level on clients (before `Volume`, as in Studio), and a sound with `PlayOnRemove` plays out once when removed.
 - The mixer starts a sound over on every `Play`, even near the start. Findings: `docs/behavior/audio.md`.
 
-## [0.8.0] — 2026-10-14 — M5 step 1: audio decoding and playback
+## [0.4.1] — 2026-10-14 — M5 step 1: audio decoding and playback
 
 Pinned Roblox version: 0.741.19. Finishes M5 step 1; M5 Audio continues with the Sound API.
 
@@ -93,7 +95,7 @@ Pinned Roblox version: 0.741.19. Finishes M5 step 1; M5 Audio continues with the
 - As in Studio: a Sound in the DataModel loads whether or not it plays, and reads `IsLoaded` and its `TimeLength` once loaded (an Ogg's length is its last granule position; conformance case `content/sound`); `TimePosition` stays 0 while the file loads and then advances; a sound whose file fails stays `Playing` and silent at 0; a sound that ends stops and rewinds. A `Looped` sound wraps. Headless runs finish loading a sound within the frame, so runs repeat exactly. Findings: `docs/behavior/audio.md`.
 - `rook content` decodes sound files it shows (format, length, rate, channels), and `rook content --place` totals a place's sounds by format and rate.
 
-## [0.7.0] — 2026-10-14 — M4 step 6: unions
+## [0.4.0] — 2026-10-14 — M4 step 6: unions
 
 Pinned Roblox version: 0.741.19. Finishes M4 step 6 and M4 Content.
 
@@ -101,37 +103,37 @@ Pinned Roblox version: 0.741.19. Finishes M4 step 6 and M4 Content.
 - `Instance.new` names new unions `Union`, NegateOperations `NegativePart` and IntersectOperations `Intersection`, and unions read their `InitialSize` as `MeshSize`, as in Studio (conformance case `content/union`).
 - `rook corpus-scan` counts unions by where their geometry lives and which `MeshData`, `MeshData2` and `PhysicsData` forms they save; `rook content` describes union assets and totals their `MeshData` versions; a file that panics while being counted is recorded as failed instead of ending the scan.
 
-## [0.6.2] — 2026-10-14 — MakeJoints: wedge slopes from either side
+## [0.3.6] — 2026-10-14 — MakeJoints: wedge slopes from either side
 
 Pinned Roblox version: 0.741.19.
 
 - Fixed: a model's `MakeJoints` tried each touching pair once, from whichever part came first. A wedge's slope joins differently from each side, so a part welded onto a slope came loose whenever the wedge came first (a ship in a 2017 disaster place, whose legs are mounted that way). As in Studio, when both parts are being joined and the first makes no joint, the other tries too.
 
-## [0.6.1] — 2026-10-14 — MakeJoints: balls and cylinders
+## [0.3.5] — 2026-10-14 — MakeJoints: balls and cylinders
 
 Pinned Roblox version: 0.741.19.
 
 - Fixed: `MakeJoints` gave balls and cylinders no surfaces, so wheels on Hinge surfaces and studded round parts were never joined (a disaster place's tractor and tank wheels, a shop's lights). As in Studio, they now join as their boxes: a ball's Hinge makes a Rotate and its Studs a Snap, and a cylinder's caps and curved side weld and hinge, framed at the box face.
 
-## [0.6.0] — 2026-10-14 — M4 step 5: MaterialVariant, MaterialService and SurfaceAppearance
+## [0.3.4] — 2026-10-14 — M4 step 5: MaterialVariant, MaterialService and SurfaceAppearance
 
 Pinned Roblox version: 0.741.19. Finishes M4 step 5 (materials and PBR); M4 Content continues with unions.
 
 - MaterialVariants draw: a part's `MaterialVariant`, or the variant MaterialService's override names for its material (`WoodName`), replaces the material's textures with the variant's colour, normal, roughness and metalness maps, tiled at its `StudsPerTile` and tinted by the part's Color. Only a variant of the part's own material counts, as in Studio.
 - MaterialService's `GetBaseMaterialOverride`, `SetBaseMaterialOverride` and `GetMaterialVariant`, with Studio's answers and errors (conformance case `content/materialservice`). Changing MaterialService or a MaterialVariant redraws the scene.
 - SurfaceAppearance on MeshParts: its maps through the mesh's UVs, with `AlphaMode` Overlay (the part's Color through the map's see-through pixels), Transparency, TintMask and Opaque, and `Color` tinting the map.
-- Fixed: Studio draws a different set of built-in materials when `MaterialService.Use2022Materials` is on; 0.5.0 drew the legacy set for every place, having concluded Studio ignores the flag from places that turned out to be legacy ones. Places that save it on now draw the 2022 set (Studio's textures from your content cache, or Rook's own in its colours), at its own scale (8 studs) and shading; places that save it off, don't save it, or have no MaterialService keep the legacy set. Findings: `docs/behavior/materials.md`.
+- Fixed: Studio draws a different set of built-in materials when `MaterialService.Use2022Materials` is on; 0.3.2 drew the legacy set for every place, having concluded Studio ignores the flag from places that turned out to be legacy ones. Places that save it on now draw the 2022 set (Studio's textures from your content cache, or Rook's own in its colours), at its own scale (8 studs) and shading; places that save it off, don't save it, or have no MaterialService keep the legacy set. Findings: `docs/behavior/materials.md`.
 - Fixed: a mesh file whose normals are all zero drew black; its vertices now take their triangle's normal, and it's lit as in Studio.
 - Fixed: Rook's index of Studio's content cache didn't notice when the textures it looks for changed, so it could miss ones it had read past before.
 
-## [0.5.1] — 2026-10-14 — M4 step 5: material fixes
+## [0.3.3] — 2026-10-14 — M4 step 5: material fixes
 
 Pinned Roblox version: 0.741.19.
 
 - Fixed: a wedge's material textures stretched along a long, low slope (a modern core place's 98-stud Concrete wedge drew long streaks). Wedge and corner wedge faces now take textures in their own plane, measured along the slope.
 - Fixed: Slate and Basalt textures were drawn at half Studio's size (now 16 studs a tile), and Slate used the wrong one of the two normal maps its window caught; it now has Studio's fine layered relief.
 
-## [0.5.0] — 2026-10-14 — M4 step 5: the built-in materials
+## [0.3.2] — 2026-10-14 — M4 step 5: the built-in materials
 
 Pinned Roblox version: 0.741.19. M4 Content continues (materials and PBR, second part).
 
@@ -140,7 +142,7 @@ Pinned Roblox version: 0.741.19. M4 Content continues (materials and PBR, second
 - `rook-content` reads KTX2 images (BC1 and BC3, Zstandard-compressed levels), the form Roblox's material textures come in, and has a new provider, `studio-cache`, between the install and content folders (`ROOK_CONTENT_ORDER`). Where the material textures are in the cache is indexed in Rook's cache, so only the first run reads the whole cache (about 6 s, on a background thread).
 - Studio 0.742 draws the 2022 materials whatever `MaterialService.Use2022Materials` says (a place saved with it off fetched and drew the same textures), so Rook draws that one set for every place.
 
-## [0.4.0] — 2026-10-14 — M4 step 5: PBR shading
+## [0.3.1] — 2026-10-14 — M4 step 5: PBR shading
 
 Pinned Roblox version: 0.741.19. M4 Content continues (materials and PBR, first part).
 
