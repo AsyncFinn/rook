@@ -269,21 +269,28 @@ fn compare(grid: &Grid, rays: &[Ray], tolerance: f32, either: bool) -> (f32, usi
 
 #[test]
 fn single_voxel_is_a_cube_of_four_thirds_its_occupancy() {
-    // Measured: a lone full voxel reaches 1.333 studs from its centre on
-    // every side, a half-full one 0.667.
-    for (occupancy, half) in [(255, 4.0 / 3.0), (127, 4.0 / 3.0 * 0.5)] {
+    use TerrainMaterial::*;
+    // Measured in a legacy place: a lone full voxel reaches 1.333 studs
+    // from its centre on every side, a half-full one 0.667; Cobblestone
+    // 1.40, Pavement 1.00, Concrete and Brick 2.00 (any occupancy for
+    // Brick).
+    for (material, occupancy, half) in [
+        (Grass, 255, 4.0 / 3.0),
+        (Grass, 127, 4.0 / 3.0 * 0.5),
+        (Cobblestone, 255, 2.0 - 0.1499 * 4.0),
+        (Pavement, 255, 1.0),
+        (Concrete, 255, 2.0),
+        (Brick, 127, 2.0),
+    ] {
         let mut grid = Grid::new();
-        grid.set(
-            IVec3::new(3, 3, 3),
-            Voxel::new(TerrainMaterial::Rock, occupancy),
-        );
+        grid.set(IVec3::new(3, 3, 3), Voxel::new(material, occupancy));
         let tris = triangles(&grid, mesh::DIAGONALS);
         let centre = Vec3::splat(14.0);
         for dir in [Vec3::X, Vec3::NEG_Y, Vec3::Z] {
             let (t, normal, m) = cast(&tris, centre - dir * 10.0, dir).unwrap();
-            assert!((t - (10.0 - half)).abs() < 1e-4, "{dir}: {t}");
+            assert!((t - (10.0 - half)).abs() < 1e-4, "{material:?} {dir}: {t}");
             assert!(normal.dot(-dir) > 0.999);
-            assert_eq!(m, TerrainMaterial::Rock);
+            assert_eq!(m, material);
         }
     }
 }
@@ -326,4 +333,31 @@ fn studio_material_shapes_match() {
     let (grid, rays) = studio_blob("studio-materials.json");
     let (worst, off, n) = compare(&grid, &rays, 0.01, true);
     assert!(off * 100 <= n * 13, "{off} rays off, worst {worst}, of {n}");
+}
+
+#[test]
+fn water_sits_half_a_voxel_low() {
+    // Measured: a lone full water voxel from 3.333 to 0.667 studs below its
+    // centre; a half-full one 2.667 to 1.333 below.
+    for (occupancy, top, bottom) in [(255, -0.667, -3.333), (127, -1.333, -2.667)] {
+        let mut grid = Grid::new();
+        grid.set(
+            IVec3::new(3, 3, 3),
+            Voxel::new(TerrainMaterial::Water, occupancy),
+        );
+        let tris = triangles(&grid, mesh::DIAGONALS);
+        let centre = Vec3::splat(14.0);
+        let (t, ..) = cast(&tris, centre + Vec3::Y * 10.0, Vec3::NEG_Y).unwrap();
+        assert!(
+            (10.0 - t - top).abs() < 1e-3,
+            "{occupancy}: top {}",
+            10.0 - t
+        );
+        let (t, ..) = cast(&tris, centre - Vec3::Y * 10.0, Vec3::Y).unwrap();
+        assert!(
+            (t - 10.0 - bottom).abs() < 1e-3,
+            "{occupancy}: bottom {}",
+            t - 10.0
+        );
+    }
 }

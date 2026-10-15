@@ -68,6 +68,9 @@ const MAPS_UV: u32 = 1073741824u;
 const VERTEX_COLORS: u32 = 2147483648u;
 // A union vertex's face byte carries this bit (`mesh::UNION_FACE`).
 const UNION_FACE: u32 = 64u;
+// A terrain vertex's face byte (`mesh::TERRAIN_FACE`), plus 1 for textures
+// on the axes' planes only.
+const TERRAIN_FACE: u32 = 128u;
 // Set on `VertexOut::face` for union vertices: tile from the face's centre.
 const CENTRED: u32 = 256u;
 const ALPHA_OVERLAY: u32 = 1u;

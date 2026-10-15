@@ -36,6 +36,20 @@ pub struct Mesh {
     /// Union geometry only: the box face each vertex was cut from, which
     /// images and material textures go by.
     pub faces: Vec<NormalId>,
+    /// Terrain only: its material textures are projected onto planes in
+    /// the world instead of laid over a box.
+    pub terrain: Option<TerrainMapping>,
+}
+
+/// How terrain lays its material's textures (Studio's terrain material
+/// table, `docs/behavior/terrain.md`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TerrainMapping {
+    /// Onto whichever of 18 planes (the 6 axes' and the 12 at 45 degrees
+    /// between two) faces the surface most.
+    Planes,
+    /// Onto the axes' planes only, like a box (Brick, WoodPlanks).
+    Cube,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]

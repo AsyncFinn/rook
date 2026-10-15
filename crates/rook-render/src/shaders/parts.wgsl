@@ -151,6 +151,50 @@ fn material_position(in: VertexOut, face: u32, at: vec2<f32>) -> vec2<f32> {
     return vec2(dot(p, r) + extent.x * 0.5, extent.y * 0.5 - dot(p, u));
 }
 
+// Where a terrain point is on its material's textures, in world studs
+// across the plane its surface faces most: of the 6 axes' planes for the
+// cube-mapped materials (Brick, WoodPlanks), of 18 for the rest (the 6 and
+// the 12 at 45 degrees between two axes), as Studio picks one of 18 planes
+// (zeux, SIGGRAPH 2020). The images run right and down across each plane;
+// which way exactly isn't known (Approximation).
+fn terrain_position(p: vec3<f32>, n: vec3<f32>, cube: bool) -> vec2<f32> {
+    let a = abs(n);
+    let s = select(vec3(-1.0), vec3(1.0), n >= vec3(0.0));
+    var best = a.x;
+    var plane = 0u;
+    if a.y > best {
+        best = a.y;
+        plane = 1u;
+    }
+    if a.z > best {
+        best = a.z;
+        plane = 2u;
+    }
+    if !cube {
+        let d = vec3(a.x + a.y, a.x + a.z, a.y + a.z) * 0.70710678;
+        if d.x > best {
+            best = d.x;
+            plane = 3u;
+        }
+        if d.y > best {
+            best = d.y;
+            plane = 4u;
+        }
+        if d.z > best {
+            plane = 5u;
+        }
+    }
+    let h = 0.70710678;
+    switch plane {
+        case 0u: { return vec2(-s.x * p.z, -p.y); }
+        case 1u: { return vec2(p.x, s.y * p.z); }
+        case 2u: { return vec2(s.z * p.x, -p.y); }
+        case 3u: { return vec2(p.z, -(s.y * p.y - s.x * p.x) * h); }
+        case 4u: { return vec2((s.z * p.x - s.x * p.z) * h, -p.y); }
+        default: { return vec2(p.x, -(s.z * p.z - s.y * p.y) * h); }
+    }
+}
+
 // Neon glows past its Color: in linear light, 18 times its square, up to
 // full brightness (fitted in Studio 0.742 to eight colours: grey 128 drew
 // 237, 64 drew 60, (196, 40, 28) drew (255, 20, 7)).
@@ -173,7 +217,12 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
     // top-left corner (measured: unrotated, unmirrored).
     let on_uv = (in.flags & MAPS_UV) != 0u;
     let tiled = tiling_position(in, material_position(in, face, at), placed.zw);
-    let uv = select(tiled / max(in.tile.xy, vec2(1e-3)), in.uv, on_uv);
+    var uv = select(tiled / max(in.tile.xy, vec2(1e-3)), in.uv, on_uv);
+    let packed = in.face & 255u;
+    let terrain = packed >= TERRAIN_FACE && packed != 255u;
+    if terrain {
+        uv = terrain_position(in.world, in.normal, (packed & 1u) != 0u) / max(in.tile.xy, vec2(1e-3));
+    }
     let duv_x = dpdx(uv);
     let duv_y = dpdy(uv);
     let dp_x = dpdx(in.world);
@@ -187,6 +236,11 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
         let a = surface_appearance(in, c);
         albedo = a.rgb;
         alpha *= a.a;
+    } else if terrain && (in.flags & MAPS) != 0u {
+        // Terrain's colour maps are tint masks (their packs' `alphamode`
+        // 2, TintMask): the colour tints them where they're opaque.
+        let c = textureSampleGrad(color_map, image_sampler, uv, duv_x, duv_y);
+        albedo = c.rgb * mix(vec3(1.0), in.color.rgb, c.a);
     } else if (in.flags & MAPS) != 0u {
         albedo *= textureSampleGrad(color_map, image_sampler, uv, duv_x, duv_y).rgb;
     }

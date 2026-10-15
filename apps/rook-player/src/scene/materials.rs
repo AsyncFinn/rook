@@ -75,7 +75,7 @@ impl SceneCache {
     }
 
     /// The four maps of a SurfaceAppearance or MaterialVariant, as loaded.
-    fn map_images(
+    pub(super) fn map_images(
         &mut self,
         dom: &Dom,
         part: InstanceId,

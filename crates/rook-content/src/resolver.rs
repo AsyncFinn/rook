@@ -241,8 +241,12 @@ impl Resolver {
     fn resolve_uncached(&self, r: &ContentRef) -> Result<Fetched, Failure> {
         let asset = match r {
             ContentRef::Material(material, set, map) => {
-                return self.material(*material, *set, *map);
+                let pack = materials::pack(*material, *set, *map).ok_or_else(|| {
+                    Failure::new(FailureKind::NotFound, "no texture for this material")
+                })?;
+                return self.texture_pack(pack, *map);
             }
+            ContentRef::TexturePack(pack, map) => return self.texture_pack(*pack, *map),
             ContentRef::Thumbnail(_) => {
                 return Err(Failure::new(
                     FailureKind::Unsupported,
@@ -278,20 +282,13 @@ impl Resolver {
         self.download(&asset)
     }
 
-    /// A material's texture, from the TexturePack asset Studio uses for it
-    /// ([`materials`]): the pack names an image per map, and both come
-    /// through the cache and asset delivery like any asset. Comes decoded;
-    /// the bytes only name it.
-    fn material(
-        &self,
-        material: rook_types::Material,
-        set: rook_types::MaterialSet,
-        map: MaterialMap,
-    ) -> Result<Fetched, Failure> {
+    /// One map of a TexturePack asset (a material's, [`materials`], or
+    /// terrain's): the pack names an image per map, and both come through
+    /// the cache and asset delivery like any asset. Comes decoded; the
+    /// bytes only name it.
+    fn texture_pack(&self, pack_id: u64, map: MaterialMap) -> Result<Fetched, Failure> {
         let not_found = |why: &str| Failure::new(FailureKind::NotFound, why);
         let asset = |id| ContentRef::Asset { id, version: None };
-        let pack_id = materials::pack(material, set, map)
-            .ok_or_else(|| not_found("no texture for this material"))?;
         let pack = self.resolve(&asset(pack_id))?;
         let pack = TexturePack::parse(&pack.bytes)
             .ok_or_else(|| Failure::new(FailureKind::Invalid, "not a TexturePack"))?;

@@ -52,6 +52,8 @@ pub enum ContentRef {
     /// string names it, but every part of that material draws it. It comes
     /// from the TexturePack asset Studio uses ([`crate::materials`]).
     Material(Material, MaterialSet, MaterialMap),
+    /// One map of a TexturePack asset (terrain's textures).
+    TexturePack(u64, MaterialMap),
 }
 
 /// Which of a material's textures.
@@ -125,7 +127,7 @@ impl ContentRef {
                 version: Some(v),
             } => Some(format!("asset-{id}-v{v}")),
             Self::AssetVersion(id) => Some(format!("assetversion-{id}")),
-            Self::File(_) | Self::Thumbnail(_) | Self::Material(..) => None,
+            Self::File(_) | Self::Thumbnail(_) | Self::Material(..) | Self::TexturePack(..) => None,
         }
     }
 }
@@ -135,6 +137,7 @@ impl fmt::Display for ContentRef {
     /// URLs for versions.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::TexturePack(id, map) => write!(f, "rook-texturepack://{id}/{}", map.name()),
             Self::Material(material, set, map) => {
                 let set = match set {
                     MaterialSet::Legacy => "legacy",
