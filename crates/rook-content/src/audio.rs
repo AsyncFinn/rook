@@ -230,11 +230,11 @@ fn push_frames(out: &mut Audio, samples: &[i16], channels: usize) {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     /// A 16-bit PCM WAV of `frames` frames.
-    fn wav(rate: u32, channels: u16, frames: u32) -> Vec<u8> {
+    pub(crate) fn wav(rate: u32, channels: u16, frames: u32) -> Vec<u8> {
         let data_len = frames * u32::from(channels) * 2;
         let mut b = Vec::new();
         b.extend_from_slice(b"RIFF");

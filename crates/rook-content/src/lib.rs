@@ -77,8 +77,10 @@ pub struct Source {
 /// A resolved reference.
 #[derive(Debug, Clone)]
 pub struct Fetched {
+    /// The file; empty when a [`Loader`] decoded it as a sound
+    /// ([`Want::Audio`]).
     pub bytes: Arc<[u8]>,
-    /// BLAKE3 of the bytes.
+    /// BLAKE3 of the bytes (as resolved, even once freed).
     pub hash: blake3::Hash,
     pub source: Source,
     /// The decoded mesh, when a [`Loader`] was asked for a mesh

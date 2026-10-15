@@ -15,6 +15,12 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 
 ## [Unreleased]
 
+## [0.5.8] — 2026-10-15 — Fix: a frame stalls when many sounds finish loading
+
+Pinned Roblox version: 0.741.19.
+
+- A sound's file is freed on the content worker that decoded it, not on the engine thread. Freeing each file took about 0.3 ms, so when an 86k-part place's 168 sound files finished loading together, one server step stalled for 55–80 ms. Time spent on the engine thread handing loaded sounds over (`sound_loaded`, Tracy, 300 frames of `--bench` on an 86k-part place): 144 → 22 ms in total, and at most 55 → 11 ms in one frame. Sounds play as before.
+
 ## [0.5.7] — 2026-10-15 — Fix: slow server steps on big places, part 2
 
 Pinned Roblox version: 0.741.19.

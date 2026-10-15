@@ -39,8 +39,9 @@ pub enum Want {
     /// [`FailureKind::Invalid`].
     Image,
     /// A sound: the worker decodes it to 16-bit PCM into
-    /// [`Fetched::audio`]; bytes that aren't a WAV, Ogg or MP3 sound fail
-    /// with [`FailureKind::Invalid`].
+    /// [`Fetched::audio`] and frees the file, leaving [`Fetched::bytes`]
+    /// empty; bytes that aren't a WAV, Ogg or MP3 sound fail with
+    /// [`FailureKind::Invalid`].
     Audio,
 }
 
@@ -191,6 +192,11 @@ fn run(resolver: &Resolver, (r, want): &Job) -> Outcome {
             profiling::scope!("decode audio");
             let audio = Audio::decode(&fetched.bytes).map_err(|e| invalid(&e))?;
             fetched.audio = Some(Arc::new(audio));
+            // Nothing reads a sound's file once it's decoded, and freeing
+            // a few megabytes costs a fraction of a millisecond: free it
+            // here rather than on the engine thread, where a place's sounds
+            // finishing together would add up to a stalled frame.
+            fetched.bytes = Arc::from([]);
         }
     }
     Ok(fetched)
@@ -286,5 +292,24 @@ mod tests {
             FailureKind::Invalid
         );
         assert!(results[2].1.as_ref().unwrap().mesh.is_none());
+    }
+
+    /// Asked for a sound, the worker decodes it and frees the file, so the
+    /// engine thread never pays for freeing it.
+    #[test]
+    fn decodes_sounds_and_frees_the_file() {
+        let dir = crate::tests::temp_dir("loader-audio");
+        std::fs::create_dir_all(dir.join("content/sounds")).unwrap();
+        let wav = crate::audio::tests::wav(22050, 1, 2205);
+        std::fs::write(dir.join("content/sounds/tone.wav"), &wav).unwrap();
+        let mut config = Config::empty();
+        config.install = Install::at(&dir, InstallKind::Custom);
+        let mut loader = Loader::new(Arc::new(Resolver::new(config)));
+        loader.request_as(ContentRef::File("sounds/tone.wav".into()), Want::Audio);
+        let results = loader.wait_all();
+        let fetched = results[0].1.as_ref().unwrap();
+        assert!(fetched.audio.is_some());
+        assert!(fetched.bytes.is_empty());
+        assert_eq!(fetched.hash, blake3::hash(&wav));
     }
 }
