@@ -118,8 +118,12 @@ impl<K> Voice<K> {
 }
 
 /// Add `from` into `to`, with gains ramping from `gains` to `target`
-/// across the buffer.
+/// across the buffer. A gain that isn't finite (a sound on a part flung to
+/// NaN) counts as silence: NaN reaching an effect's state, such as the
+/// ambient reverb's, would silence everything after it for good.
 pub(crate) fn add(from: &[Frame], to: &mut [Frame], gains: [f32; 2], target: [f32; 2]) {
+    let finite = |g: [f32; 2]| g.map(|x| if x.is_finite() { x } else { 0.0 });
+    let (gains, target) = (finite(gains), finite(target));
     let count = from.len().max(1) as f32;
     for (k, (a, b)) in from.iter().zip(to.iter_mut()).enumerate() {
         let f = k as f32 / count;

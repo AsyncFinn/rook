@@ -15,6 +15,13 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 
 ## [Unreleased]
 
+## [0.5.4] — 2026-10-15 — Fix: moved models balloon and vanish
+
+Pinned Roblox version: 0.741.19.
+
+- Fixed: models moved over and over with `SetPrimaryPartCFrame` (doors swung by `GetPrimaryPartCFrame() * CFrame.Angles(...)`, or driven by a tweened CFrameValue) grew huge and then vanished. Rounding error in a part's rotation tripled with every move, since the move inverts a rotation it assumes is orthonormal. Parts' CFrames are now orthonormalized whenever a script sets them, as Roblox does.
+- Fixed: a sound on a part flung that far got NaN volumes, which could reach the ambient reverb and silence all audio until restart. Gains that aren't finite now mix as silence.
+
 ## [0.5.3] — 2026-10-15 — M6 step 2: grass blades and water waves
 
 Pinned Roblox version: 0.741.19. M6 Terrain, the rest of step 2.

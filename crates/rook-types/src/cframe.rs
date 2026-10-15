@@ -180,11 +180,15 @@ impl CFrame {
     }
 
     /// `CFrame:Orthonormalize()` via Gram-Schmidt on the right and up
-    /// vectors. Roblox's exact algorithm is unverified.
+    /// vectors. Roblox's exact algorithm is unverified. A rotation too
+    /// degenerate to fix (a zero or parallel axis) is kept as it is.
     pub fn orthonormalize(&self) -> CFrame {
         let right = self.rotation.x_axis.normalize();
         let up = (self.rotation.y_axis - right * right.dot(self.rotation.y_axis)).normalize();
         let back = right.cross(up);
+        if !back.is_finite() {
+            return *self;
+        }
         CFrame {
             position: self.position,
             rotation: Mat3::from_cols(right, up, back),
