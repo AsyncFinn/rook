@@ -17,6 +17,7 @@ rook-signal.workspace = true
 rook-scheduler.workspace = true
 rook-physics.workspace = true
 rook-content.workspace = true
+rook-audio.workspace = true
 rbx_types.workspace = true
 mlua.workspace = true
 glam.workspace = true

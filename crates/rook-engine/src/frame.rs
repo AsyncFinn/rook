@@ -24,6 +24,7 @@ impl DataModel {
         }
         self.update_content();
         self.advance_sounds(dt);
+        self.update_audio(dt);
         self.runtime.resume_due(Queue::Legacy);
         self.fire(rs, "Stepped", (now, dt));
         self.fire(rs, "PreSimulation", dt);

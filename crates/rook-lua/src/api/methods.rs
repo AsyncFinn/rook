@@ -29,6 +29,7 @@ use crate::world::{Job, World};
 
 mod assemblies;
 mod attributes;
+mod audio;
 mod bindables;
 mod characters;
 mod materials;
@@ -47,6 +48,7 @@ use services::*;
 use tree::*;
 
 pub(crate) use bindables::{get_callback, set_callback};
+pub(crate) use models::pivot_of;
 pub(crate) use tree::{Core, Found, fast};
 
 pub(crate) type RawMethod = fn(&Lua, InstanceId, Args) -> ApiResult<Outcome>;
@@ -148,6 +150,25 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("SoundService", "SetListener") => sound::set_listener,
         ("SoundService", "GetListener") => sound::get_listener,
         ("SoundService", "PlayLocalSound") => sound::play_local_sound,
+        ("SoundService", "GetMixerTime") => audio::get_mixer_time,
+        ("AudioPlayer", "Play") => audio::audio_play,
+        ("AudioPlayer", "Stop") => audio::audio_stop,
+        ("AudioPlayer", "Cancel") => audio::audio_cancel,
+        (c, "GetInputPins") if crate::audio::pins(c).is_some() => audio::get_input_pins,
+        (c, "GetOutputPins") if crate::audio::pins(c).is_some() => audio::get_output_pins,
+        (c, "GetConnectedWires") if crate::audio::pins(c).is_some() => audio::get_connected_wires,
+        ("AudioEmitter" | "AudioListener", "SetDistanceAttenuation") => {
+            audio::set_distance_attenuation
+        }
+        ("AudioEmitter" | "AudioListener", "GetDistanceAttenuation") => {
+            audio::get_distance_attenuation
+        }
+        ("AudioEmitter" | "AudioListener", "SetAngleAttenuation") => audio::set_angle_attenuation,
+        ("AudioEmitter" | "AudioListener", "GetAngleAttenuation") => audio::get_angle_attenuation,
+        ("AudioEmitter" | "AudioListener", "GetAudibilityFor") => audio::get_audibility_for,
+        ("AudioEmitter", "GetInteractingListeners") => audio::get_interacting_listeners,
+        ("AudioListener", "GetInteractingEmitters") => audio::get_interacting_emitters,
+        ("AudioAnalyzer", "GetSpectrum") => audio::get_spectrum,
         _ => return super::services::native(owner, name),
     })
 }

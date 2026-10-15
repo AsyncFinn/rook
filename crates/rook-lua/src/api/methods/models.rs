@@ -18,7 +18,7 @@ fn primary_part(w: &World, model: InstanceId) -> Option<InstanceId> {
 }
 
 /// `PVInstance:GetPivot` for a part is `CFrame * PivotOffset`.
-fn pivot_of(w: &World, id: InstanceId) -> CFrame {
+pub(crate) fn pivot_of(w: &World, id: InstanceId) -> CFrame {
     if w.dom.is_a(id, "BasePart") {
         let offset = match w.dom.property_by_name(id, "PivotOffset") {
             Some(Value::CFrame(c)) => c,

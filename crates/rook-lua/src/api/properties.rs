@@ -216,6 +216,12 @@ pub(crate) fn get(w: &World, id: InstanceId, name: &str) -> Option<Value> {
             let playing = dom.property_by_name(id, "Playing") == Some(Value::Bool(true));
             Some(Value::Bool(playing == (name == "IsPlaying")))
         }
+        // Observed: whether the wire carries sound now (crate::audio).
+        "Connected" if dom.is_a(id, "Wire") => {
+            let all = crate::audio::all_wires(dom);
+            let connected = crate::audio::connections(dom, &all);
+            Some(Value::Bool(connected.iter().any(|c| c.wire == id)))
+        }
         "RequestQueueSize" if dom.is_a(id, "ContentProvider") => {
             Some(Value::Int32(w.content.queue_size() as i32))
         }
@@ -280,6 +286,9 @@ pub(crate) fn set(
 ) -> Option<Result<(), DomError>> {
     if w.dom.is_a(id, "Sound") {
         return set_sound(w, id, name, value);
+    }
+    if let Some(done) = crate::audio::clamp(w, id, name, value) {
+        return Some(done);
     }
     if let Some(target) = view(w, id, name, SAME_AS) {
         return Some(set_named(w, id, target, value.clone()));

@@ -14,6 +14,8 @@ pub(crate) mod scripts;
 pub(crate) mod services;
 pub(crate) mod signal;
 
+pub(crate) use methods::pivot_of;
+
 use mlua::Lua;
 
 pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {

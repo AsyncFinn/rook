@@ -20,9 +20,10 @@ pub struct Reverb {
     pub density: f32,
     /// 0 to 1.
     pub diffusion: f32,
-    /// dB, -80 to 10.
+    /// dB, -80 to 20 (AudioReverb; the engine keeps ReverbSoundEffect to
+    /// its -80 to 10).
     pub dry: f32,
-    /// dB, -80 to 10.
+    /// dB, as `dry`.
     pub wet: f32,
     /// Hz above which the tail is cut (20 kHz for ReverbSoundEffect).
     pub high_cut: f32,
@@ -204,9 +205,9 @@ impl State {
     }
 
     pub(crate) fn process(&mut self, frames: &mut [Frame]) {
-        let dry = db(self.settings.dry.clamp(-80.0, 10.0));
+        let dry = db(self.settings.dry.clamp(-80.0, 20.0));
         let decay = self.settings.decay.clamp(0.1, 20.0);
-        let wet = db(self.settings.wet.clamp(-80.0, 10.0)) * WET_SCALE / (WET_DECAY + decay).sqrt();
+        let wet = db(self.settings.wet.clamp(-80.0, 20.0)) * WET_SCALE / (WET_DECAY + decay).sqrt();
         let g = 0.7 * self.settings.diffusion.clamp(0.0, 1.0);
         let mut taps = [0.0f32; 8];
         for frame in frames {

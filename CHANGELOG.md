@@ -15,6 +15,19 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-10-15 — M5 step 5: the audio API; M5 Audio done
+
+Pinned Roblox version: 0.741.19. Finishes M5 step 5 and with it M5 Audio: archived places play their sounds, positioned in 3D, and the audio conformance cases pass.
+
+- The audio API plays on the same engine as Sound. AudioPlayers load through the same cache as Sounds and play as Studio's do: `Play` from `TimePosition`, `Stop` keeping it, `Looping` and `Looped`, `Ended` at the end or past it, `PlaybackSpeed`, `Volume`, `AutoLoad`, and `Play(atTime)`, `Stop(atTime)` and `Cancel` on clients (with Studio's error on a server).
+- Wires connect by Studio's rules: both ends and the wire in the DataModel, pins that exist (`GetInputPins`, `GetOutputPins`), no self-wire and no loop. `Wire.Connected` and `GetConnectedWires` read as in Studio.
+- AudioEmitters are heard by AudioListeners in the same `AudioInteractionGroup`, by Studio's default distance falloff (InverseTapered, 4 to 10,000 studs), its presets, and curves set with `SetDistanceAttenuation` and `SetAngleAttenuation`, panned as a Sound is. `GetAudibilityFor` matches Studio's. A client gets Studio's default listener under the camera, wired to `SoundService.AudioDeviceOutput`.
+- Heard effects: AudioFader, AudioEqualizer (with `MidRange`), AudioDistortion, AudioPitchShifter and AudioReverb, which Studio plays exactly as the step 4 sound effects, plus new AudioChorus, AudioEcho and AudioCompressor (with `Sidechain`), fitted to Studio's levels. Effect properties keep to Studio's ranges.
+- AudioAnalyzer measures `RmsLevel`, `PeakLevel` and `GetSpectrum` on clients, as Studio's (`RmsLevel` is `PlaybackLoudness` / 1000).
+- Not yet: AudioFilter, AudioFlanger, AudioTremolo, AudioLimiter, AudioGate and AudioChannelSplitter pass sound through; `PlaybackRegion` and `LoopRegion`; Studio's 7.1 layouts and near-field spread. See `docs/behavior/audio.md` and `docs/behavior/stubs.md`.
+- The `RobloxSecurity` capability is now called `RobloxEngine`, as Studio's error messages name it.
+- Conformance case `content/audio_api`, recorded in Studio; all 11 content cases pass.
+
 ## [0.4.9] — 2026-10-15 — AmbientReverb as loud as Studio's
 
 Pinned Roblox version: 0.741.19.

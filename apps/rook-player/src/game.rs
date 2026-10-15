@@ -103,7 +103,8 @@ impl Game {
     }
 
     /// What the window's DataModel is playing, for the mixer: its sounds,
-    /// their SoundGroups and `SoundService.AmbientReverb`.
+    /// their SoundGroups, `SoundService.AmbientReverb` and the audio API's
+    /// graph.
     pub fn sounds(&self) -> rook_audio::Mix<rook_dom::InstanceId> {
         use rook_audio::spatial::{RollOff, attenuation, pan};
         let view = self.view();
@@ -147,6 +148,7 @@ impl Game {
             sounds,
             groups,
             ambient: listener.ambient_reverb,
+            graph: view.audio_graph(),
         }
     }
 

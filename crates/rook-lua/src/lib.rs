@@ -7,6 +7,7 @@
 
 mod api;
 mod args;
+pub mod audio;
 mod convert;
 mod ctx;
 mod net;
@@ -19,8 +20,8 @@ pub use api::camera::{Lens, viewport_ray};
 pub use ctx::{ScriptError, lua_error_message};
 pub use net::{NetValue, RemoteKind, RemoteMessage};
 pub use world::{
-    Handler, InputState, Job, Listener, LogEntry, MessageType, SignalBehavior, SoundControl,
-    WaitKind, World,
+    AudioState, Handler, InputState, Job, Listener, LogEntry, MessageType, Scheduled,
+    SignalBehavior, SoundControl, WaitKind, World,
 };
 
 use std::cell::{Cell, Ref, RefCell, RefMut};

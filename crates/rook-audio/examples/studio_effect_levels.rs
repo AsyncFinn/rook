@@ -1,11 +1,14 @@
 //! Rook's sound effects against the levels Studio gave for them
-//! (`docs/behavior/audio.md`, "Effects"): `PlaybackLoudness` of the
+//! (`docs/behavior/audio.md`, steps 4 and 5): `PlaybackLoudness` of the
 //! install's `sounds/impact_explosion_03.mp3`, looped, averaged over two
-//! loops, at Volume 0 so the measurement was silent.
+//! loops, at Volume 0 so the measurement was silent. The audio API's
+//! effects were measured with an AudioAnalyzer instead, which reads the
+//! same; their levels here are Studio's ratio to the plain sound times
+//! the plain level.
 //!
 //! `cargo run -p rook-audio --example studio_effect_levels -- <file>`
 
-use rook_audio::effects::{Chain, Effect, Frame, Reverb, ordered};
+use rook_audio::effects::{CROSSOVERS, Chain, Effect, Frame, Reverb, ordered};
 use rook_content::audio::Audio;
 
 /// A setting's name, its effects with their `Priority`, and Studio's level.
@@ -13,7 +16,12 @@ type Case = (&'static str, Vec<(Effect, i32)>, f32);
 
 /// Studio's mean `PlaybackLoudness` for each setting (Studio 0.742).
 fn cases() -> Vec<Case> {
-    let eq = |low, mid, high| Effect::Equalizer { low, mid, high };
+    let eq = |low, mid, high| Effect::Equalizer {
+        low,
+        mid,
+        high,
+        range: CROSSOVERS,
+    };
     let dist = |level| Effect::Distortion { level };
     let wet = |decay: f32, density: f32, diffusion: f32| {
         Effect::Reverb(Reverb {
@@ -26,6 +34,24 @@ fn cases() -> Vec<Case> {
     };
     let pitch = |octave| Effect::PitchShift { octave };
     let hi = eq(-80.0, -80.0, 0.0);
+    let chorus = |depth, mix, rate| Effect::Chorus { depth, mix, rate };
+    let echo = |delay, dry, feedback| Effect::Echo {
+        delay,
+        dry,
+        wet: 0.0,
+        feedback,
+    };
+    let comp = |threshold, ratio, attack, release| Effect::Compressor {
+        threshold,
+        ratio,
+        attack,
+        release,
+        makeup: 0.0,
+    };
+    // Studio 0.742: the audio API's level over the plain sound's, on this
+    // scale. AudioEcho and AudioCompressor widen a mono stream to 7.1, so
+    // their analyzer readings are divided by the 0.354 that alone gives.
+    let api = |ratio: f32| 180.5 * ratio;
     vec![
         ("plain", vec![], 180.5),
         ("eq low -80", vec![(eq(-80.0, 0.0, 0.0), 0)], 54.3),
@@ -55,6 +81,57 @@ fn cases() -> Vec<Case> {
             15.9,
         ),
         ("eq high, then pitch 2", vec![(pitch(2.0), 0), (hi, 0)], 6.4),
+        (
+            "chorus defaults",
+            vec![(chorus(0.45, 0.85, 5.0), 0)],
+            api(1.042),
+        ),
+        (
+            "chorus mix 1 depth 1",
+            vec![(chorus(1.0, 1.0, 5.0), 0)],
+            api(1.005),
+        ),
+        ("echo defaults", vec![(echo(1.0, 0.0, 0.5), 0)], api(1.451)),
+        (
+            "echo wet, 0.2 s",
+            vec![(echo(0.2, -80.0, 0.0), 0)],
+            api(0.974),
+        ),
+        (
+            "echo wet, 0.2 s, fb 0.7",
+            vec![(echo(0.2, -80.0, 0.7), 0)],
+            api(1.315),
+        ),
+        (
+            "comp defaults",
+            vec![(comp(-40.0, 40.0, 0.1, 0.1), 0)],
+            api(0.082),
+        ),
+        (
+            "comp -20, 4:1",
+            vec![(comp(-20.0, 4.0, 0.1, 0.1), 0)],
+            api(0.436),
+        ),
+        (
+            "comp -20, 4:1, fast",
+            vec![(comp(-20.0, 4.0, 0.001, 0.1), 0)],
+            api(0.246),
+        ),
+        (
+            "comp -20, 50:1",
+            vec![(comp(-20.0, 50.0, 0.1, 0.1), 0)],
+            api(0.342),
+        ),
+        (
+            "comp -20, 50:1, fastest",
+            vec![(comp(-20.0, 50.0, 0.0001, 0.01), 0)],
+            api(0.196),
+        ),
+        (
+            "comp -10, 2:1, fastest",
+            vec![(comp(-10.0, 2.0, 0.0001, 0.1), 0)],
+            api(0.622),
+        ),
     ]
 }
 

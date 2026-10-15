@@ -1,0 +1,65 @@
+-- studio 0.742.0.7421053
+-- signals: deferred
+player  1 1 0 false true false
+player state false false 0
+Volume -1 0
+Volume 11 10
+Volume nan 10
+PlaybackSpeed 25 20
+TimePosition -1 -1
+Asset rbxasset://sounds/swordslash.wav
+write IsPlaying false The current thread cannot write 'IsPlaying' (lacking capability RobloxEngine)
+AudioFader false Volume=1[0,3]
+AudioEqualizer false LowGain=0[-80,10] MidGain=0[-80,10] HighGain=0[-80,10]
+AudioDistortion false Level=0.5[0,1]
+AudioPitchShifter false Pitch=1.25[0.5,2]
+AudioReverb false DecayTime=1.5[0.1,20] Density=1[0.1,1] Diffusion=1[0.1,1] DryLevel=0[-80,20] WetLevel=-6[-80,20] HighCutFrequency=20000[20,20000]
+AudioChorus false Depth=0.45[0,1] Mix=0.85[0,1] Rate=5[0,20]
+AudioEcho false DelayTime=1[0.001,5] DryLevel=0[-80,10] Feedback=0.5[0,1] WetLevel=0[-80,10]
+AudioCompressor false Attack=0.1[0.0001,0.5] MakeupGain=0[-30,30] Ratio=40[1,50] Release=0.1[0.01,5] Threshold=-40[-60,0]
+MidRange 400 4000 
+MidRange 10-30000 200 20000 
+pins AudioPlayer  Output
+pins AudioEmitter Input 
+pins AudioListener  Output
+pins AudioDeviceOutput Input 
+pins AudioAnalyzer Input 
+pins AudioFader Input Output
+pins AudioCompressor Input,Sidechain Output
+wire Output Input false
+source only false
+player to fader true 1 1
+pin case false
+target outside the DataModel false
+to itself false
+loop true false
+wire outside the DataModel false
+emitter Enum.DistanceAttenuationMode.Custom 4 10000  
+no curve 
+curve 100=0.4 10=1 300=0
+kept within 0 to 1 20=0 5=1
+string key false AudioEmitter:SetDistanceAttenuation: numeric key expected.
+cleared 
+not loaded outside the DataModel false 0
+loaded true 10
+Play returns nil
+playing true
+time advances true
+Play while playing keeps the place true
+Stop keeps the place false true
+stopped stays true
+event Ended 0
+ended false 0
+event Looped 0
+looped true true
+event Ended 0
+played past the end false 0
+played from -3 true true
+speed 0 holds true 1
+Play(atTime) false AudioPlayer:Play(atTime) cannot be used on the server
+Stop(atTime) false AudioPlayer:Stop(atTime) cannot be used on the server
+Cancel false
+missing file false 0 true 0
+AutoLoad off false 0
+loads on Play true 0.3322902494331066
+analyzer on a server 0 0 0 true Enum.AudioWindowSize.Medium

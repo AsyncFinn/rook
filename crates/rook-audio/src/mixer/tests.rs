@@ -142,6 +142,7 @@ fn groups_multiply() {
         }],
         groups: vec![group(10, Some(20), 0.5), group(20, None, 2.0)],
         ambient: None,
+        graph: Graph::default(),
     };
     m.sync(&mix);
     let mut out = [0.0; 4];
@@ -178,6 +179,7 @@ fn group_effects_and_tails() {
             ..group(10, None, 1.0)
         }],
         ambient: None,
+        graph: Graph::default(),
     };
     m.sync(&mix);
     let mut out = vec![0.0; 100];

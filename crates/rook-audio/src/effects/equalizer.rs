@@ -1,7 +1,10 @@
-//! EqualizerSoundEffect: three bands, below 400 Hz, 400 to 4000 Hz and
-//! above (creator-docs), each with a gain of -80 to 10 dB. Studio keeps
-//! to that range when it plays even though the property reads back what
-//! was set: +30 dB on every band was exactly as loud as +10 (Confirmed).
+//! EqualizerSoundEffect and AudioEqualizer: three bands, below 400 Hz,
+//! 400 to 4000 Hz and above (creator-docs; AudioEqualizer's `MidRange`
+//! moves the two crossovers), each with a gain of -80 to 10 dB. Studio
+//! keeps to that range when it plays even though the legacy property reads
+//! back what was set: +30 dB on every band was exactly as loud as +10
+//! (Confirmed). The two classes are one effect: they gave the same levels
+//! on one recording (Confirmed).
 //!
 //! The bands are split by Linkwitz-Riley crossovers of 24 dB per octave,
 //! whose bands add back up to the input (Inference: FMOD's three-band EQ
@@ -10,8 +13,9 @@
 
 use super::{Frame, db};
 
-const LOW_CROSSOVER: f32 = 400.0;
-const HIGH_CROSSOVER: f32 = 4000.0;
+/// EqualizerSoundEffect's crossovers, and AudioEqualizer's default
+/// `MidRange`.
+pub const CROSSOVERS: [f32; 2] = [400.0, 4000.0];
 
 /// A second-order filter (the Audio EQ Cookbook's forms).
 #[derive(Debug, Clone, Copy, Default)]
@@ -87,20 +91,27 @@ pub(super) struct Equalizer {
     /// so the three add back up flat.
     low_phase: Biquad,
     gains: [f32; 3],
+    crossovers: [f32; 2],
 }
 
 impl Equalizer {
-    pub(super) fn new(rate: f32, gains: [f32; 3]) -> Self {
+    pub(super) fn new(rate: f32, gains: [f32; 3], crossovers: [f32; 2]) -> Self {
+        let [low, high] = crossovers;
         let mut e = Self {
-            low_pass: Lr4::new(true, LOW_CROSSOVER, rate),
-            low_high_pass: Lr4::new(false, LOW_CROSSOVER, rate),
-            mid_pass: Lr4::new(true, HIGH_CROSSOVER, rate),
-            high_pass: Lr4::new(false, HIGH_CROSSOVER, rate),
-            low_phase: Biquad::new(Pass::All, HIGH_CROSSOVER, rate),
+            low_pass: Lr4::new(true, low, rate),
+            low_high_pass: Lr4::new(false, low, rate),
+            mid_pass: Lr4::new(true, high, rate),
+            high_pass: Lr4::new(false, high, rate),
+            low_phase: Biquad::new(Pass::All, high, rate),
             gains: [1.0; 3],
+            crossovers,
         };
         e.set_gains(gains);
         e
+    }
+
+    pub(super) fn crossovers(&self) -> [f32; 2] {
+        self.crossovers
     }
 
     pub(super) fn set_gains(&mut self, gains: [f32; 3]) {
@@ -129,7 +140,7 @@ mod tests {
     /// A sine's level through the equalizer, once it has settled.
     fn level(frequency: f32, gains: [f32; 3]) -> f32 {
         let rate = 48_000.0;
-        let mut eq = Equalizer::new(rate, gains);
+        let mut eq = Equalizer::new(rate, gains, CROSSOVERS);
         let mut frames: Vec<Frame> = (0..48_000)
             .map(|i| [(std::f32::consts::TAU * frequency * i as f32 / rate).sin(); 2])
             .collect();

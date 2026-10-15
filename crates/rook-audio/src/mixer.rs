@@ -1,8 +1,8 @@
 //! Mixing playing sounds into one stream: each sound through its own
-//! effects, then its SoundGroups, then `SoundService.AmbientReverb`.
+//! effects, then its SoundGroups, then `SoundService.AmbientReverb`; and
+//! the audio API's graph, whose device outputs are added after that.
 
 mod bus;
-mod voice;
 
 use std::collections::HashMap;
 use std::hash::Hash;
@@ -11,14 +11,9 @@ use std::sync::Arc;
 use rook_content::audio::Audio;
 
 use crate::effects::{Chain, Effect, Frame, Reverb};
+use crate::graph::{Graph, Runner};
+use crate::voice::{self, Voice};
 use bus::Bus;
-use voice::Voice;
-
-/// How far the mixer's own position may drift from the engine's
-/// `TimePosition` before it jumps to the engine's (a script seeking, or a
-/// stalled frame). The two run on different clocks, so small drift is
-/// normal and jumping on it would click.
-const DRIFT_SECONDS: f64 = 0.25;
 
 /// How deep SoundGroups may nest before the rest are taken as top-level
 /// (a loop of groups can't be built in Roblox's tree, but a damaged file
@@ -66,8 +61,10 @@ pub struct Mix<K> {
     pub sounds: Vec<Play<K>>,
     /// The groups the sounds play through, and the groups those are in.
     pub groups: Vec<Group<K>>,
-    /// `SoundService.AmbientReverb`, added to everything.
+    /// `SoundService.AmbientReverb`, added to every Sound.
     pub ambient: Option<Reverb>,
+    /// The audio API's instances and wires.
+    pub graph: Graph<K>,
 }
 
 impl<K> Default for Mix<K> {
@@ -76,6 +73,7 @@ impl<K> Default for Mix<K> {
             sounds: Vec::new(),
             groups: Vec::new(),
             ambient: None,
+            graph: Graph::default(),
         }
     }
 }
@@ -88,6 +86,7 @@ pub struct Mixer<K> {
     buses: HashMap<K, Bus<K>>,
     ambient: Chain,
     ambient_idle: usize,
+    graph: Runner<K>,
     /// Reused buffers: one voice at a time, and the output before it is
     /// laid out on the device's channels.
     scratch: Vec<Frame>,
@@ -102,6 +101,7 @@ impl<K: Hash + Eq + Copy> Mixer<K> {
             buses: HashMap::new(),
             ambient: Chain::new(rate),
             ambient_idle: 0,
+            graph: Runner::new(rate),
             scratch: Vec::new(),
             master: Vec::new(),
         }
@@ -124,26 +124,11 @@ impl<K: Hash + Eq + Copy> Mixer<K> {
         self.voices
             .retain(|k, _| wanted.iter().any(|p| p.key == *k));
         for p in wanted {
-            let rate = f64::from(p.audio.sample_rate.max(1));
-            let voice = self.voices.entry(p.key).or_insert_with(|| Voice {
-                audio: p.audio.clone(),
-                cursor: p.position * rate,
-                gains: p.gains,
-                target: p.gains,
-                speed: p.speed,
-                looped: p.looped,
-                generation: p.generation,
-                effects: Chain::new(self.rate),
-                group: p.group,
-            });
-            if !Arc::ptr_eq(&voice.audio, &p.audio)
-                || voice.generation != p.generation
-                || (voice.seconds() - p.position).abs() > DRIFT_SECONDS
-            {
-                voice.audio = p.audio.clone();
-                voice.cursor = p.position * rate;
-                voice.generation = p.generation;
-            }
+            let voice = self
+                .voices
+                .entry(p.key)
+                .or_insert_with(|| Voice::new(&p.audio, p.position, p.gains, self.rate));
+            voice.follow(&p.audio, p.position, p.generation);
             voice.target = p.gains;
             voice.speed = p.speed;
             voice.looped = p.looped;
@@ -168,6 +153,7 @@ impl<K: Hash + Eq + Copy> Mixer<K> {
             Some(r) => self.ambient.sync(&[Effect::Reverb(*r)]),
             None => self.ambient.sync(&[]),
         }
+        self.graph.sync(&mix.graph);
     }
 
     /// Mix into `out`, interleaved with `channels` channels, replacing what
@@ -214,6 +200,7 @@ impl<K: Hash + Eq + Copy> Mixer<K> {
                 self.ambient.process(&mut self.master);
             }
         }
+        self.graph.render(&mut self.master);
         for (frame, m) in out.chunks_exact_mut(channels).zip(&self.master) {
             for (c, s) in frame.iter_mut().enumerate() {
                 *s = match (channels, c) {
