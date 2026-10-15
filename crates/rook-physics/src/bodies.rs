@@ -23,6 +23,13 @@ fn collider_surface(dom: &Dom, part: InstanceId, is_root: bool) -> (f32, materia
     (mass, materials::of_part(dom, part))
 }
 
+/// A box's mass properties, of this size and mass.
+fn box_mass(size: glam::Vec3, mass: f32) -> MassProperties {
+    let size = size.max(glam::Vec3::splat(shape::MIN_PART_SIZE));
+    let density = mass / (size.x * size.y * size.z);
+    MassProperties::from_cuboid(density, to_rapier(size * 0.5))
+}
+
 impl Physics {
     /// Rebuild the assemblies of `seeds` and of every part that shared an
     /// assembly with one. Returns the new bodies.
@@ -166,13 +173,31 @@ impl Physics {
         let Some(Value::Vector3(size)) = dom.property(part, props.size) else {
             return None;
         };
-        let (shape, shape_pose) = shape::collider_shape(part_shape(dom, part), size.0)?;
         let can_collide = dom.property(part, props.can_collide) != Some(Value::Bool(false));
+        // A moving union that doesn't collide keeps its box: its hulls would
+        // be tested against everything near it every step only for Touched
+        // and queries (Approximation, for speed: a large modern place's spinning
+        // rings and fans made a 5-second run 20% slower).
+        let union = if can_collide || self.world.bodies[body].is_fixed() {
+            self.unions.shape(dom, part, size.0)
+        } else {
+            None
+        };
+        let (shape, shape_pose) = match &union {
+            Some(s) => (s.clone(), Pose::IDENTITY),
+            None => shape::collider_shape(part_shape(dom, part), size.0)?,
+        };
         self.read_can_touch(dom, props, part);
         let (mass, material) = collider_surface(dom, part, is_root);
         let (solver, collision) = self.interaction_groups(dom, part);
-        let collider = ColliderBuilder::new(shape)
-            .mass(mass)
+        let collider = ColliderBuilder::new(shape);
+        // A union keeps its box's mass and inertia (Approximation: Studio
+        // saves the real ones with its hulls).
+        let collider = match union {
+            Some(_) => collider.mass_properties(box_mass(size.0, mass)),
+            None => collider.mass(mass),
+        };
+        let collider = collider
             .friction(material.friction)
             .restitution(material.elasticity)
             .user_data(contacts::pack(&material))

@@ -95,6 +95,9 @@ pub struct Fetched {
     /// The decoded sound, when a [`Loader`] was asked for one
     /// ([`Want::Audio`]).
     pub audio: Option<Arc<audio::Audio>>,
+    /// A union asset's collision geometry, when a [`Loader`] was asked for
+    /// it ([`Want::Collision`]).
+    pub collision: Option<Arc<rook_types::UnionCollision>>,
 }
 
 impl Fetched {
@@ -107,6 +110,7 @@ impl Fetched {
             mesh: None,
             image: None,
             audio: None,
+            collision: None,
         }
     }
 }

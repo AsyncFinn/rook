@@ -5,6 +5,7 @@ use rook_dom::{Dom, InstanceId};
 use rook_types::{PartShape, Value};
 
 use crate::convert::{pose_of, to_rapier};
+use crate::unions::Unions;
 
 /// Roblox parts are at least this many studs on each side.
 pub(crate) const MIN_PART_SIZE: f32 = 0.001;
@@ -58,12 +59,20 @@ pub(crate) fn collider_shape(shape: PartShape, size: glam::Vec3) -> Option<(Shar
     })
 }
 
-/// A part's collider shape placed in the world, read from the DOM.
-pub(crate) fn world_shape(dom: &Dom, part: InstanceId) -> Option<(SharedShape, Pose)> {
+/// A part's collider shape placed in the world, read from the DOM (a
+/// union's from its geometry, if it has some).
+pub(crate) fn world_shape(
+    dom: &Dom,
+    unions: &mut Unions,
+    part: InstanceId,
+) -> Option<(SharedShape, Pose)> {
     let Some(Value::Vector3(size)) = dom.property_by_name(part, "Size") else {
         return None;
     };
-    let (shape, local) = collider_shape(part_shape(dom, part), size.0)?;
+    let (shape, local) = match unions.shape(dom, part, size.0) {
+        Some(s) => (s, Pose::IDENTITY),
+        None => collider_shape(part_shape(dom, part), size.0)?,
+    };
     Some((
         shape,
         pose_of(&crate::read::cframe(dom, part, "CFrame")) * local,

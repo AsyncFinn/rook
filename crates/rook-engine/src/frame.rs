@@ -2,6 +2,18 @@
 
 use super::*;
 
+type Outcome = (
+    rook_content::ContentRef,
+    Result<rook_content::Fetched, rook_content::Failure>,
+);
+
+/// Sound files and union assets the loader finished this frame.
+#[derive(Default)]
+struct Finished {
+    sounds: Vec<Outcome>,
+    unions: Vec<Outcome>,
+}
+
 impl DataModel {
     /// Run one frame.
     ///
@@ -34,46 +46,50 @@ impl DataModel {
         self.start_new_scripts();
         self.check_render_changes();
         self.check_sounds();
+        self.check_unions();
         if self.auto_trim {
             self.trim_journal();
         }
     }
 
-    /// Content and sounds, just before `wait()` resumption: sounds that
-    /// changed last frame are looked at, files go to the loader, and what
-    /// finished is delivered (PreloadAsync callbacks, sounds' `Loaded`).
+    /// Content, sounds and unions, just before `wait()` resumption: sounds
+    /// and unions that changed last frame are looked at, files go to the
+    /// loader, and what finished is delivered (PreloadAsync callbacks,
+    /// sounds' `Loaded`, unions' collision geometry).
     fn update_content(&mut self) {
         let start = self.runtime.world().dom.journal().end();
         let mut events = Vec::new();
         let sound_files = self.apply_sound_changes(&mut events);
-        for (r, outcome) in self.run_loader(sound_files) {
+        self.update_unions();
+        let done = self.run_loader(sound_files);
+        for (r, outcome) in done.sounds {
             self.sound_loaded(r, outcome, &mut events);
+        }
+        for (r, outcome) in done.unions {
+            self.union_loaded(r, outcome);
         }
         self.fire_sound_events(start, events);
     }
 
-    /// Hand scripts' new content requests and sounds' files to the loader
-    /// and deliver what finished on the engine thread (architecture §8
-    /// "Content"); finished sound files are returned. Nothing happens
-    /// unless scripts or sounds asked for content.
-    fn run_loader(
-        &mut self,
-        sound_files: Vec<rook_content::ContentRef>,
-    ) -> Vec<(
-        rook_content::ContentRef,
-        Result<rook_content::Fetched, rook_content::Failure>,
-    )> {
+    /// Hand scripts' new content requests, sounds' files and union assets
+    /// to the loader and deliver what finished on the engine thread
+    /// (architecture §8 "Content"); finished sound files and union assets
+    /// are returned. Nothing happens unless something asked for content.
+    fn run_loader(&mut self, sound_files: Vec<rook_content::ContentRef>) -> Finished {
+        let union_assets = std::mem::take(&mut self.unions.queued);
         let requests = self.runtime.take_content_requests();
         let mut results = self.runtime.take_content_answers();
         let content = &mut self.content;
-        let mut sounds_done = Vec::new();
+        let mut done = Finished::default();
         if requests.is_empty()
             && results.is_empty()
             && sound_files.is_empty()
+            && union_assets.is_empty()
             && content.tickets.is_empty()
             && self.sounds.tickets.is_empty()
+            && self.unions.tickets.is_empty()
         {
-            return sounds_done;
+            return done;
         }
         profiling::scope!("update_content");
         let loader = content.loader.get_or_insert_with(|| {
@@ -93,7 +109,12 @@ impl DataModel {
             let ticket = loader.request_as(r.clone(), rook_content::Want::Audio);
             self.sounds.tickets.insert(ticket, r);
         }
-        let finished = if content.wait_for_sounds && !self.sounds.tickets.is_empty() {
+        for r in union_assets {
+            let ticket = loader.request_as(r.clone(), rook_content::Want::Collision);
+            self.unions.tickets.insert(ticket, r);
+        }
+        let waited_for = !self.sounds.tickets.is_empty() || !self.unions.tickets.is_empty();
+        let finished = if content.wait_for_content && waited_for {
             loader.wait_all()
         } else {
             loader.poll()
@@ -102,11 +123,13 @@ impl DataModel {
             if let Some(request) = content.tickets.remove(&ticket) {
                 results.push((request, outcome.is_ok()));
             } else if let Some(r) = self.sounds.tickets.remove(&ticket) {
-                sounds_done.push((r, outcome));
+                done.sounds.push((r, outcome));
+            } else if let Some(r) = self.unions.tickets.remove(&ticket) {
+                done.unions.push((r, outcome));
             }
         }
         self.runtime.deliver_content(&results);
-        sounds_done
+        done
     }
 
     /// Step physics and write the results into the DOM. Parts that fell

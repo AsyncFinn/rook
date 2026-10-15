@@ -13,7 +13,7 @@ blake3.workspace = true
 image.workspace = true
 profiling.workspace = true
 rbx_dom_weak.workspace = true
-rbx_mesh = { workspace = true, features = ["mesh-v1", "union-graphics"] }
+rbx_mesh = { workspace = true, features = ["mesh-v1", "union-graphics", "union-physics", "csgphs-v8-zstd"] }
 rbx_types.workspace = true
 rook-formats.workspace = true
 rook-types.workspace = true

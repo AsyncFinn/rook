@@ -152,7 +152,8 @@ renderer draws all of these as their part's plain box.
    Unions' collision hulls from `PhysicsData` go with MeshPart collision
    fidelity (M15). Counts and findings: [meshes.md](docs/behavior/meshes.md#unions-step-6).
 
-Physics picks up the real shapes of MeshParts and unions in M15.
+Physics picks up the real shapes of MeshParts and unions in M15 (unions
+done: [collision.md](docs/behavior/collision.md#unions)).
 
 ### M5 Audio
 
@@ -321,7 +322,9 @@ the target counts only errors Rook causes, checked against Studio.
 ### M15 Physics completeness
 
 1. MeshPart and union collision with their real shapes (collision
-   fidelity, `PhysicsData`), replacing boxes.
+   fidelity, `PhysicsData`), replacing boxes. Unions done: they collide
+   and are queried as the hulls Studio saved (see
+   [collision](docs/behavior/collision.md#unions)); MeshParts remain.
 2. The remaining constraints and movers, by files using them:
    RopeConstraint 17, RodConstraint 12, SpringConstraint 11, Prismatic 5,
    AlignPosition and AlignOrientation 4, BallSocket 2, LinearVelocity,

@@ -13,6 +13,14 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 
 ## [Unreleased]
 
+## [0.11.0] — 2026-10-14 — M15 step 1: unions collide as their shapes
+
+Pinned Roblox version: 0.741.19. Starts M15 step 1; MeshParts' collision shapes follow.
+
+- Unions collide and are queried as their real shape, not their box: the hulls Studio saved in `PhysicalConfigData` or `PhysicsData` (`CSGPHS` versions 3 to 8), scaled with the union like its drawn geometry, or its drawn geometry when none was saved; `CollisionFidelity` Box stays a box, and so does a moving union with `CanCollide` off (for speed). Rays, shape casts, `GetPartsInPart`, `GetTouchingParts`, collisions, the mouse and ClickDetectors all use it, on the server and the client. In two large places, buttons inside wall unions can be clicked. Rules and counts in `docs/behavior/collision.md`.
+- `rook content` describes a union asset's collision geometry.
+- `Options::wait_for_sounds` is now `wait_for_content`: union geometry loads within the frame too.
+
 ## [0.10.1] — 2026-10-14 — Properties Roblox replicates under hidden twins
 
 Pinned Roblox version: 0.741.19.

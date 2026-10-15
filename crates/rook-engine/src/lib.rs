@@ -15,6 +15,7 @@ pub mod repl;
 mod scripts;
 mod session;
 mod sounds;
+mod unions;
 
 pub use input::{ClickEvent, ClickKind, InputEvent};
 
@@ -75,11 +76,12 @@ pub struct Options {
     /// content folders and the cache, with asset delivery off unless
     /// `ROOK_ASSET_DELIVERY=on`. Shared by a session's DataModels.
     pub content: Option<Arc<rook_content::Resolver>>,
-    /// Finish loading sound files within the frame that asks for them, so
+    /// Finish loading sound files and unions' collision geometry within
+    /// the frame that asks for them, so
     /// simulated time can't run ahead of loading and runs repeat exactly
     /// (headless runs, conformance, tests). The player loads in the
     /// background instead, as Roblox does.
-    pub wait_for_sounds: bool,
+    pub wait_for_content: bool,
 }
 
 impl Default for Options {
@@ -89,7 +91,7 @@ impl Default for Options {
             script_timeout: rook_lua::DEFAULT_SCRIPT_TIMEOUT,
             memory_limit: 1 << 30,
             content: None,
-            wait_for_sounds: true,
+            wait_for_content: true,
         }
     }
 }
@@ -123,6 +125,7 @@ pub struct DataModel {
     input: input::InputTracker,
     content: Content,
     sounds: sounds::Sounds,
+    unions: unions::Unions,
 }
 
 /// Content requests from scripts, resolved off the engine thread.
@@ -133,7 +136,7 @@ struct Content {
     loader: Option<rook_content::Loader>,
     /// Loader tickets to the scripts' request ids.
     tickets: HashMap<rook_content::Ticket, u64>,
-    wait_for_sounds: bool,
+    wait_for_content: bool,
 }
 
 impl DataModel {
@@ -172,6 +175,7 @@ impl DataModel {
         self.render_cursor = end;
         self.render_changes = RenderChanges::everything();
         self.sounds.rescan(end);
+        self.unions.rescan(end);
     }
 
     /// Drop journal entries every reader has seen. Physics catches up first
@@ -260,10 +264,11 @@ impl DataModel {
             input: Default::default(),
             content: Content {
                 resolver: options.content.clone(),
-                wait_for_sounds: options.wait_for_sounds,
+                wait_for_content: options.wait_for_content,
                 ..Content::default()
             },
             sounds: Default::default(),
+            unions: Default::default(),
         })
     }
 

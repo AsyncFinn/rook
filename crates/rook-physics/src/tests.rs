@@ -11,6 +11,7 @@ mod joints;
 mod make_joints;
 mod movers;
 mod queries;
+mod unions;
 
 fn set(dom: &mut Dom, id: InstanceId, name: &str, value: Value) {
     dom.set_property_by_name(id, name, value).unwrap();
