@@ -1,28 +1,17 @@
 //! The render pipelines and the shader they share.
 
+use wesl_core::include_wesl;
+
 use super::*;
 
-/// The shader: shared bindings and lighting, how draws reach their images
-/// (a table, or a set bound per draw), then each pass's entry points.
-fn shader(table: bool) -> String {
-    [
-        // Enables come before any declaration.
-        if table {
-            "enable wgpu_binding_array;
-"
-        } else {
-            ""
-        },
-        include_str!("../shaders/common.wgsl"),
-        match table {
-            true => include_str!("../shaders/images_table.wgsl"),
-            false => include_str!("../shaders/images_bound.wgsl"),
-        },
-        include_str!("../shaders/parts.wgsl"),
-        include_str!("../shaders/terrain.wgsl"),
-        include_str!("../shaders/sky.wgsl"),
-    ]
-    .concat()
+/// The shaders (`shaders/`, linked by the build script): parts and
+/// terrain, and the skybox, for how draws reach their images (a table, or
+/// a set bound per draw).
+fn shaders(table: bool) -> [&'static str; 2] {
+    match table {
+        true => [include_wesl!("parts_table"), include_wesl!("sky_table")],
+        false => [include_wesl!("parts"), include_wesl!("sky")],
+    }
 }
 
 /// The render pipelines, built once.
@@ -51,9 +40,14 @@ impl Pipelines {
         image_layout: &wgpu::BindGroupLayout,
         table: bool,
     ) -> Self {
+        let [parts, sky] = shaders(table);
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("rook parts"),
-            source: wgpu::ShaderSource::Wgsl(shader(table).into()),
+            source: wgpu::ShaderSource::Wgsl(parts.into()),
+        });
+        let sky_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("rook sky"),
+            source: wgpu::ShaderSource::Wgsl(sky.into()),
         });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("rook parts"),
@@ -242,7 +236,7 @@ impl Pipelines {
             label: Some("rook sky"),
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
-                module: &shader,
+                module: &sky_shader,
                 entry_point: Some("vs_sky"),
                 compilation_options: Default::default(),
                 buffers: &[],
@@ -257,7 +251,7 @@ impl Pipelines {
             }),
             multisample: Default::default(),
             fragment: Some(wgpu::FragmentState {
-                module: &shader,
+                module: &sky_shader,
                 entry_point: Some("fs_sky"),
                 compilation_options: Default::default(),
                 targets: &[Some(wgpu::ColorTargetState {

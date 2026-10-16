@@ -18,6 +18,11 @@ thiserror.workspace = true
 pollster.workspace = true
 rustc-hash.workspace = true
 profiling.workspace = true
+wesl-core.workspace = true
+
+[build-dependencies]
+wesl.workspace = true
+naga.workspace = true
 
 [lints]
 workspace = true

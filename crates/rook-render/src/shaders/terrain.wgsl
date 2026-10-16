@@ -2,6 +2,11 @@
 // blades' sway and lean (docs/behavior/terrain.md). What Studio 0.742
 // shows was measured; the shapes chosen to match it are Approximations.
 
+import package::common::{
+    g, image_sampler, water_normals, VertexOut, TERRAIN_WATER, TERRAIN_BLADES, srgb_to_linear,
+};
+import package::lighting::{ambient_light, sun_light, sun_visibility, fog};
+
 // Studs per repeat of water's normal frames (Approximation: Studio's
 // ripples are 1 to 3 studs across, about two of the maps' bumps, and
 // don't repeat within 43 studs).
