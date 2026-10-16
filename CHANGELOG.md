@@ -15,6 +15,14 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 
 ## [Unreleased]
 
+## [0.5.13] — 2026-10-15 — Fix: drawing off-screen parts that share a batch with visible ones
+
+Pinned Roblox version: 0.741.19.
+
+- The renderer culls within batches, not just whole batches. Each batch keeps a box per 16 instance slots, grown when an instance changes and worked out afresh with the batch's own box. Each pass draws only the runs of consecutive boxes its view reaches (the camera's for the main pass and images, the sun's for the shadow pass), one draw per run, in the same order as before.
+- On an 86k-part place's saved camera, triangles per frame fell from 9.6M to 6.2M (main pass) and 7.5M to 4.4M (shadow pass); GPU time from 3.73 to 2.63 ms (main) and 1.08 to 0.66 ms (shadow). A 61k-part place's saved camera: 11.7M to 8.1M triangles, GPU 4.70 to 3.15 ms. Draws rose (an 86k-part place 309 + 597 to 547 + 809, a 61k-part place 389 to 715) but draw calls didn't: they're all still in the same multi-draws. CPU recording barely moved (medians 2.98 → 3.91 ms on an 86k-part place, 2.49 → 2.64 ms on a 61k-part place, one round of 200 frames of `--bench` each, A/B against 0.5.12).
+- Frames look the same: a 61k-part place's saved view is byte-identical to 0.5.12; an 86k-part place's differs in 108 pixels by at most 2 levels, within its run-to-run noise.
+
 ## [0.5.12] — 2026-10-15 — Fix: too many draw calls on big places
 
 Pinned Roblox version: 0.741.19.

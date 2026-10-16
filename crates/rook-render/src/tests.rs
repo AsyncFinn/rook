@@ -296,7 +296,10 @@ fn table_and_multi_draws_draw_what_bound_sets_draw() {
     let Ok(mut plain) = Renderer::headless_with(|_| wgpu::DeviceDescriptor::default()) else {
         return;
     };
-    assert!(matches!(plain.image_binding, renderer::ImageBinding::Sets(_)));
+    assert!(matches!(
+        plain.image_binding,
+        renderer::ImageBinding::Sets(_)
+    ));
     assert!(!plain.multi_draw);
     let scene = busy_scene();
     let camera = Camera::look_at(Vec3::new(0.0, 4.0, 14.0), Vec3::ZERO);

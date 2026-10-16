@@ -1,8 +1,10 @@
 //! Skipping draws nothing in them can be seen in: each batch keeps a box
-//! around its instances in the world, and a pass records a batch's draw
-//! only when that box reaches into the pass's view (the camera's, or the
+//! around its instances in the world, and one per run of 16 of them, and a
+//! pass records only the runs whose box reaches into the pass's view (the camera's, or the
 //! sun's for the shadow map). The GPU clips away the same triangles, so no
 //! pixel changes; big places just record far fewer draws.
+
+use std::ops::Range;
 
 use glam::{Mat4, Vec3, Vec4};
 
@@ -69,6 +71,33 @@ impl Frustum {
     }
 }
 
+/// The runs of a batch's `instances` that `view` sees: consecutive
+/// `chunks` (a box per `per` instances) it sees, joined, in order.
+pub(crate) fn seen_runs<'a>(
+    view: &'a Frustum,
+    chunks: &'a [Aabb],
+    per: u32,
+    margin: f32,
+    instances: Range<u32>,
+) -> impl Iterator<Item = Range<u32>> + 'a {
+    let mut c = 0;
+    std::iter::from_fn(move || {
+        while c < chunks.len() && !view.sees(chunks[c], margin) {
+            c += 1;
+        }
+        if c == chunks.len() {
+            return None;
+        }
+        let first = c;
+        while c < chunks.len() && view.sees(chunks[c], margin) {
+            c += 1;
+        }
+        let start = instances.start + first as u32 * per;
+        let end = (instances.start + c as u32 * per).min(instances.end);
+        (start < end).then_some(start..end)
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -94,5 +123,16 @@ mod tests {
         assert!(!view.sees(Aabb::EMPTY, MOTION_STUDS));
         // Grown far enough, the box beside the view reaches into it.
         assert!(view.sees(cube(Vec3::new(30.0, 0.0, -10.0)), 25.0));
+    }
+
+    /// Seen chunks join into runs; the last run stops at the batch's end.
+    #[test]
+    fn seen_chunks_join_into_runs() {
+        let camera = Camera::look_at(Vec3::ZERO, Vec3::NEG_Z);
+        let view = Frustum::of(camera.view_projection(16.0 / 9.0));
+        let (ahead, behind) = (cube(Vec3::NEG_Z * 10.0), cube(Vec3::Z * 10.0));
+        let chunks = [ahead, behind, ahead, ahead];
+        let runs: Vec<_> = seen_runs(&view, &chunks, 16, 0.0, 100..155).collect();
+        assert_eq!(runs, [100..116, 132..155]);
     }
 }
