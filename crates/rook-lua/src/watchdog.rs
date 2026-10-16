@@ -6,7 +6,8 @@
 //! the clock every 1024th time. An mlua interrupt closure made every loop
 //! iteration three times slower and every call 2.7 times slower.
 //!
-//! This is the only unsafe code in Rook: mlua's safe interrupt API is the
+//! This is one of only two unsafe spots in Rook (the other lowers a
+//! thread's priority, in rook-threads): mlua's safe interrupt API is the
 //! closure. It is limited to installing the function and raising the
 //! timeout error from it, as mlua's own interrupt does.
 

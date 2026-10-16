@@ -1,0 +1,15 @@
+[package]
+name = "rook-threads"
+description = "How many background threads the Rook engine uses, from the machine's cores"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = ["Win32_System_Threading"] }
+
+[lints]
+workspace = true

@@ -24,8 +24,8 @@ pub(crate) fn bench(
     width: u32,
     height: u32,
     install: &Installed,
-    load_start: Instant,
 ) -> anyhow::Result<()> {
+    let load_start = game.load_start;
     let mut renderer = Renderer::headless()?;
     install.apply(&mut renderer);
     renderer.set_scene(&cache.scene);

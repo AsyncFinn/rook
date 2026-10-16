@@ -71,9 +71,10 @@ use props::Props;
 /// 120 or 60 Hz per assembly; Rook always uses 240, an Approximation).
 pub const STEP_HZ: f64 = 240.0;
 
-/// Size the worker threads collision detection and the solver use: half
-/// the logical cores, so a server stepping physics leaves the rest to the
-/// client, the renderer and everything else. It's Rayon's global pool, not
+/// Size the worker threads collision detection and the solver use: physics'
+/// share of the thread budget ([`rook_threads::Budget::physics`]), so a
+/// server stepping physics leaves the rest to the client, the renderer and
+/// content decoding. It's Rayon's global pool, not
 /// a pool of the world's own: Rapier hands a whole step to a world's own
 /// pool, a cross-thread wake-up per 240 Hz step that made small places
 /// slower. Rapier lays the parallel work out the same whatever the pool's
@@ -81,11 +82,10 @@ pub const STEP_HZ: f64 = 240.0;
 fn size_worker_pool() {
     static SIZED: std::sync::Once = std::sync::Once::new();
     SIZED.call_once(|| {
-        let cores = std::thread::available_parallelism().map_or(2, usize::from);
         // Fails only if something else built the global pool first; then
         // that size stands.
         let _ = rapier3d::rayon::ThreadPoolBuilder::new()
-            .num_threads((cores / 2).max(1))
+            .num_threads(rook_threads::Budget::get().physics())
             .thread_name(|i| format!("physics-{i}"))
             .build_global();
     });
