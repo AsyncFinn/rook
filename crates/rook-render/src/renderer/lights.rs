@@ -1,7 +1,7 @@
 //! Local lights on the GPU, drawn as Studio's voxel lighting draws them
 //! (docs/behavior/lights.md): every light in one buffer, a spatial hash
 //! saying which lights reach each place, and a volume of 4-stud voxels
-//! around the camera that a compute pass fills from them
+//! ahead of the camera that a compute pass fills from them
 //! (`shaders/light_volume.wgsl`) and surfaces sample
 //! (`shaders/lighting.wgsl`).
 //!
@@ -24,10 +24,15 @@ use hash::{GpuLight, LightHash};
 pub(super) const SLACK: f32 = 8.0;
 /// Studio's light voxels, in studs (centred at 4k + 2).
 const VOXEL: f32 = 4.0;
-/// The voxel volume: voxels along each axis (512 x 256 x 512 studs).
-const VOLUME: [u32; 3] = [128, 64, 128];
-/// How far the camera may move from the volume's centre before the
-/// volume follows it, in studs.
+/// The voxel volume: voxels along each axis (1024 x 256 x 1024 studs, as
+/// Studio's grid: docs/behavior/lights.md). Light stops at its faces.
+const VOLUME: [u32; 3] = [256, 64, 256];
+/// How far ahead of the camera the volume's centre sits, along the view
+/// direction flattened onto the ground (Studio's grid reaches about 760
+/// studs ahead and 260 behind; looking straight down, it's centred).
+const AHEAD: f32 = 256.0;
+/// How far the volume's centre may drift from where it should be before
+/// the volume follows, in studs.
 const RECENTRE: f32 = 64.0;
 
 /// What the fill pass reads (`Params` in `shaders/light_volume.wgsl`).
@@ -275,26 +280,28 @@ impl GpuLights {
         );
     }
 
-    /// Fill the voxels again if the lights changed or the camera at
-    /// `camera` left the volume's middle.
+    /// Fill the voxels again if the lights changed or the volume's centre
+    /// drifted [`RECENTRE`] from where the camera puts it.
     pub(crate) fn fill(
         &mut self,
         queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
-        camera: Vec3,
+        camera: &Camera,
     ) {
         let dims = Vec3::new(VOLUME[0] as f32, VOLUME[1] as f32, VOLUME[2] as f32);
         let half = dims * (VOXEL * 0.5);
+        let forward = camera.forward();
+        let centre = camera.position + Vec3::new(forward.x, 0.0, forward.z) * AHEAD;
         let centred = self
             .origin
-            .is_some_and(|o| (o + half - camera).abs().max_element() <= RECENTRE);
+            .is_some_and(|o| (o + half - centre).abs().max_element() <= RECENTRE);
         if !self.dirty && centred {
             return;
         }
         profiling::scope!("GpuLights::fill");
         self.dirty = false;
         // Voxels are centred at 4k + 2.
-        let origin = ((camera - half) / VOXEL).floor() * VOXEL + Vec3::splat(VOXEL * 0.5);
+        let origin = ((centre - half) / VOXEL).floor() * VOXEL + Vec3::splat(VOXEL * 0.5);
         self.origin = Some(origin);
         let lit = !self.lights.is_empty();
         queue.write_buffer(

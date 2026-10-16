@@ -12,7 +12,7 @@ const PI: f32 = 3.14159265;
 
 // Local lights (PointLight, SpotLight, SurfaceLight), as Studio draws them
 // in the lighting archived places get: each light writes into 4-stud
-// voxels (`light_volume.wgsl` fills them around the camera), and a surface
+// voxels (`light_volume.wgsl` fills them ahead of the camera), and a surface
 // takes the voxels around the point 6 studs out along its normal,
 // blended, whichever way it faces (docs/behavior/lights.md).
 struct LightVolume {

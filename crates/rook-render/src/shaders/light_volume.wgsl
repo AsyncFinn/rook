@@ -1,4 +1,4 @@
-// Fills the light voxels around the camera (`lighting.wgsl` samples them):
+// Fills the light voxels ahead of the camera (`lighting.wgsl` samples them):
 // each voxel sums what every light listed in its cube's bucket of the
 // lights' spatial hash writes into it.
 
