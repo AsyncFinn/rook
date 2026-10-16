@@ -158,7 +158,9 @@ impl Loader {
             return ticket;
         }
         self.waiting.insert(job.clone(), vec![ticket]);
-        let workers = self.workers.get_or_insert_with(|| spawn_fetchers(&self.resolver));
+        let workers = self
+            .workers
+            .get_or_insert_with(|| spawn_fetchers(&self.resolver));
         IN_FLIGHT.fetch_add(1, Ordering::Relaxed);
         // The workers live as long as `jobs`, so the send can't fail.
         let _ = workers.jobs.send(job);
