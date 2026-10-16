@@ -188,7 +188,11 @@ Terrain comes before characters, who walk on it.
    (`Decoration`) and water waves (swimming comes with characters).
    Findings: [terrain.md](docs/behavior/terrain.md#materials-and-water-step-2),
    [grass and waves](docs/behavior/terrain.md#grass-and-waves-step-2-continued).
-3. Collision and queries: parts land on terrain, rays hit it.
+3. ✅ Collision and queries: parts land on and rest on terrain's smooth
+   surface, and rays, shape casts, `GetTouchingParts` and
+   `IsRegion3Empty` find it as Studio does (bounds queries don't);
+   colliders are built per chunk when something comes near. Findings:
+   [terrain.md](docs/behavior/terrain.md#collision-and-queries-step-3).
 4. The Terrain API scripts use, by archive use (`FillBlock`,
    `ReadVoxels`, `WriteVoxels`, `FillBall`, ...).
 

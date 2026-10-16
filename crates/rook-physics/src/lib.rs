@@ -19,6 +19,9 @@
 //! RotateV, RotateP and HingeConstraint actuators drive their joints'
 //! motors.
 //!
+//! Workspace's Terrain collides as the surface its voxels mesh to
+//! ([`terrain`]).
+//!
 //! Scripts' scene queries (rays, shape casts, regions, overlaps) run on
 //! the same world ([`query`]); each brings it up to date with the DOM
 //! first. A client's world only answers queries ([`Physics::for_queries`]).
@@ -40,6 +43,7 @@ mod read;
 mod shape;
 mod step;
 pub mod surfaces;
+mod terrain;
 mod unions;
 
 use std::collections::BTreeMap;
@@ -203,6 +207,9 @@ pub struct Physics {
     /// The world only answers queries; it never steps (clients).
     query_only: bool,
     unions: unions::Unions,
+    terrain: terrain::Terrain,
+    /// Terrain colliders were added since the last query.
+    terrain_placed: bool,
 }
 
 impl std::fmt::Debug for Physics {
@@ -258,6 +265,8 @@ impl Physics {
             stale: HashSet::default(),
             query_only: false,
             unions: unions::Unions::default(),
+            terrain: terrain::Terrain::default(),
+            terrain_placed: false,
         }
     }
 
@@ -344,6 +353,7 @@ impl Physics {
             self.apply_changes(dom, &props);
         }
         self.reshape_unions(dom, &props);
+        self.refresh_terrain(dom);
         let all = std::mem::take(&mut self.all_dirty);
         let dirty = std::mem::take(&mut self.dirty);
         self.refresh_constraints(dom, all, &dirty);

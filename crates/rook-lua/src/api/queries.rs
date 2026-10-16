@@ -3,8 +3,10 @@
 //! `GetTouchingParts`. The rules are `rook_physics::query`'s; this file
 //! reads arguments and builds results. Messages observed in Studio 0.742.
 //!
-//! Terrain doesn't exist in Rook yet, so `terrainCellsAreCubes`,
-//! `ignoreWater` and `RaycastParams.IgnoreWater` change nothing.
+//! Rays and casts hit Terrain (`rook_physics::terrain`); `ignoreWater`
+//! and `RaycastParams.IgnoreWater` pass through its water. The legacy
+//! rays' `terrainCellsAreCubes` changes nothing (observed: a ray hits the
+//! smooth surface either way).
 
 use glam::Vec3;
 use mlua::{Lua, UserData, Value as LuaValue};
@@ -124,21 +126,29 @@ fn ray_results(lua: &Lua, a: &Args, filter: Filter) -> ApiResult<Outcome> {
     )
 }
 
+/// A legacy ray's filter, with its `ignoreWater` argument at `water`.
+fn legacy_ray(a: &Args, instances: Vec<InstanceId>, include: bool, water: usize) -> Filter {
+    Filter {
+        ignore_water: a.truthy(water),
+        ..Filter::legacy_ray(instances, include)
+    }
+}
+
 fn find_part_on_ray(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
     let ignore = a.opt_instance(1)?.into_iter().collect();
-    ray_results(lua, &a, Filter::legacy_ray(ignore, false))
+    ray_results(lua, &a, legacy_ray(&a, ignore, false, 3))
 }
 
 fn find_part_on_ray_ignore(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
     datatype::<LRay>(&a, 0, "Ray")?;
     let ignore = instance_list(&a, 1)?;
-    ray_results(lua, &a, Filter::legacy_ray(ignore, false))
+    ray_results(lua, &a, legacy_ray(&a, ignore, false, 3))
 }
 
 fn find_part_on_ray_whitelist(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
     datatype::<LRay>(&a, 0, "Ray")?;
     let only = instance_list(&a, 1)?;
-    ray_results(lua, &a, Filter::legacy_ray(only, true))
+    ray_results(lua, &a, legacy_ray(&a, only, true, 2))
 }
 
 // Regions
@@ -199,17 +209,26 @@ fn find_parts_in_region_whitelist(lua: &Lua, _: InstanceId, a: Args) -> ApiResul
     )
 }
 
+/// Whether a Region3 holds no part outside `ignore` and no terrain voxel
+/// (observed: terrain counts even when ignored).
+fn region_empty(lua: &Lua, a: &Args, ignore: Vec<InstanceId>) -> ApiResult<Outcome> {
+    let parts = region_parts(lua, a, Filter::legacy_region(ignore, false), 1.0)?;
+    let region = datatype::<LRegion3>(a, 0, "Region3")?.0;
+    let (min, max) = (Vector3::from(region.min).0, Vector3::from(region.max).0);
+    let empty =
+        parts.is_empty() && !with_world(lua, |w| w.physics.terrain_voxels_in(&mut w.dom, min, max));
+    Outcome::ret(lua, empty)
+}
+
 fn is_region_empty(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
     let ignore = a.opt_instance(1)?.into_iter().collect();
-    let parts = region_parts(lua, &a, Filter::legacy_region(ignore, false), 1.0)?;
-    Outcome::ret(lua, parts.is_empty())
+    region_empty(lua, &a, ignore)
 }
 
 fn is_region_empty_ignore(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
     datatype::<LRegion3>(&a, 0, "Region3")?;
     let ignore = instance_list(&a, 1)?;
-    let parts = region_parts(lua, &a, Filter::legacy_region(ignore, false), 1.0)?;
-    Outcome::ret(lua, parts.is_empty())
+    region_empty(lua, &a, ignore)
 }
 
 // Raycast and shape casts

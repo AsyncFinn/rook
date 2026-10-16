@@ -12,6 +12,7 @@ rust-version.workspace = true
 rook-types.workspace = true
 rook-dom.workspace = true
 rook-reflection.workspace = true
+rook-terrain.workspace = true
 rapier3d.workspace = true
 rustc-hash.workspace = true
 glam.workspace = true

@@ -9,44 +9,13 @@ use serde_json::Value as Json;
 use crate::mesh::mesh_chunk_with;
 use crate::*;
 
-/// Encode chunks the way Studio does: runs of up to 256 equal voxels.
+/// Encode chunks given in `SmoothGrid` order.
 fn encode(chunks: &[(IVec3, Vec<Voxel>)]) -> Vec<u8> {
-    let mut out = vec![1, 5];
-    let mut last = IVec3::ZERO;
+    let mut grid = Grid::new();
     for (at, voxels) in chunks {
-        let d = (*at - last).to_array().map(i32::to_be_bytes);
-        for byte in 0..4 {
-            for axis in &d {
-                out.push(axis[byte]);
-            }
-        }
-        last = *at;
-        let mut i = 0;
-        while i < voxels.len() {
-            let v = voxels[i];
-            let mut run = 1;
-            while run < 256 && i + run < voxels.len() && voxels[i + run] == v {
-                run += 1;
-            }
-            let mut flag = v.material as u8;
-            let partial = v.occupancy != 255 && v.material != TerrainMaterial::Air;
-            if partial {
-                flag |= 0x40;
-            }
-            if run > 1 {
-                flag |= 0x80;
-            }
-            out.push(flag);
-            if partial {
-                out.push(v.occupancy);
-            }
-            if run > 1 {
-                out.push((run - 1) as u8);
-            }
-            i += run;
-        }
+        grid.insert_chunk(*at, voxels.clone());
     }
-    out
+    grid.encode()
 }
 
 #[test]

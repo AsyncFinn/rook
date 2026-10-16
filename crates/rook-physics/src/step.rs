@@ -10,6 +10,7 @@ impl Physics {
         if self.query_only || self.bodies.values().all(|b| b.asm.anchored) {
             return;
         }
+        self.build_terrain_near_bodies(dt as f32);
         let steps = (dt * STEP_HZ).round().max(1.0) as u32;
         self.drive_joints(dt, steps);
         let events = contacts::Collector::default();

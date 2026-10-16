@@ -10,8 +10,8 @@ use crate::unions::Unions;
 /// Roblox parts are at least this many studs on each side.
 pub(crate) const MIN_PART_SIZE: f32 = 0.001;
 
-/// A BasePart with a shape of its own: everything but Terrain, which is
-/// drawn and simulated separately (later; see ROADMAP.md).
+/// A BasePart with a shape of its own: everything but Terrain, which
+/// collides as its voxels' surface (`terrain`).
 pub fn is_part(dom: &Dom, id: InstanceId) -> bool {
     dom.is_a(id, "BasePart") && dom.class_name(id) != "Terrain"
 }
