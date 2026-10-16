@@ -101,13 +101,11 @@ pub(super) fn set_primary_part_cframe(lua: &Lua, this: InstanceId, a: Args) -> A
     Outcome::ret(lua, ())
 }
 
-/// Deprecated; the primary part's CFrame, or the bounding box centre
-/// (Approximation: Roblox's legacy calculation is undocumented).
+/// Deprecated; the same CFrame as `GetBoundingBox`, not the primary part's
+/// (Confirmed in Studio: door scripts rotate about it, so the hinge side
+/// often carries an invisible part to pull the box centre there).
 pub(super) fn get_model_cframe(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
-    let c = with_world(lua, |w| match primary_part(w, this) {
-        Some(p) => cframe(w, p),
-        None => bounding_box(w, this).0,
-    });
+    let c = with_world(lua, |w| bounding_box(w, this).0);
     Outcome::ret(lua, LCFrame(c))
 }
 
@@ -134,14 +132,21 @@ pub(super) fn model_move_to(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<O
     Outcome::ret(lua, ())
 }
 
-/// World-axis-aligned bounds of a model's parts, as (centre, size).
-/// Roblox aligns the box to the primary part's orientation; this is an
-/// Approximation for models without one rotated off-axis.
+/// Bounds of a model's parts as (centre, size), in a box turned to the
+/// primary part's orientation, or to the world axes without one (Confirmed:
+/// creator-docs and Studio).
 fn bounding_box(w: &World, model: InstanceId) -> (CFrame, Vector3) {
+    let basis = match primary_part(w, model) {
+        Some(p) => CFrame {
+            position: glam::Vec3::ZERO,
+            ..cframe(w, p)
+        },
+        None => CFrame::IDENTITY,
+    };
     let mut min = glam::Vec3::splat(f32::INFINITY);
     let mut max = glam::Vec3::splat(f32::NEG_INFINITY);
     for part in parts_of(w, model) {
-        let c = cframe(w, part);
+        let c = basis.to_object_space(cframe(w, part));
         let size = match w.dom.property_by_name(part, "Size") {
             Some(Value::Vector3(s)) => s.0,
             _ => glam::Vec3::ONE,
@@ -153,7 +158,8 @@ fn bounding_box(w: &World, model: InstanceId) -> (CFrame, Vector3) {
     if min.x > max.x {
         return (CFrame::IDENTITY, Vector3::ZERO);
     }
-    (CFrame::from_position((min + max) * 0.5), Vector3(max - min))
+    let centre = basis.to_world_space(CFrame::from_position((min + max) * 0.5));
+    (centre, Vector3(max - min))
 }
 
 pub(super) fn get_extents_size(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {

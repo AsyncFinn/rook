@@ -494,6 +494,33 @@ fn repeated_model_moves_keep_parts_rigid() {
     );
 }
 
+/// QSML3's doors turn every part about `GetModelCFrame()`, which Roblox puts
+/// at the bounding box centre (turned to the primary part), not the primary
+/// part itself: an invisible part beside the hinge pulls it there.
+#[test]
+fn model_cframe_is_the_bounding_box() {
+    expect(
+        r#"
+        local m = Instance.new("Model")
+        local door = Instance.new("Part")
+        door.Size = Vector3.new(0.6, 7.7, 5)
+        door.CFrame = CFrame.new(10, 5, 0) * CFrame.Angles(0, math.rad(30), 0)
+        door.Parent = m
+        local stabilizer = Instance.new("Part")
+        stabilizer.Size = Vector3.new(0.6, 8, 5)
+        stabilizer.CFrame = door.CFrame * CFrame.new(0, 0.15, 4)
+        stabilizer.Parent = m
+        m.PrimaryPart = door
+        local box, size = m:GetBoundingBox()
+        local p = door.CFrame:ToObjectSpace(m:GetModelCFrame())
+        local function r(v) return math.round(v * 100) / 100 end
+        print(m:GetModelCFrame() == box, r(p.X), r(p.Y), r(p.Z), r(size.X), r(size.Y), r(size.Z))
+        "#,
+        0,
+        &["true 0 0.15 2 0.6 8 9"],
+    );
+}
+
 /// Every no-op member must be documented with what will take it over.
 #[test]
 fn inert_members_are_documented() {
