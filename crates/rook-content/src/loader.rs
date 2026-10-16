@@ -7,8 +7,10 @@
 //! first request: a place that never asks for content costs nothing.
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use crate::audio::Audio;
 use crate::image::Image;
@@ -19,6 +21,32 @@ use crate::{ContentRef, Failure, FailureKind, Fetched, Resolver};
 /// milliseconds per request, so a few in flight keep a place with hundreds
 /// of assets moving without hammering the service.
 const WORKERS: usize = 4;
+
+/// Jobs queued or running on every loader in the process.
+static IN_FLIGHT: AtomicUsize = AtomicUsize::new(0);
+
+/// When the last job in flight finished.
+static IDLE_SINCE: Mutex<Option<Instant>> = Mutex::new(None);
+
+/// Jobs queued or running on every loader in the process: 0 once
+/// everything asked for has been fetched and decoded.
+pub fn jobs_in_flight() -> usize {
+    IN_FLIGHT.load(Ordering::Relaxed)
+}
+
+/// When every loader in the process last ran out of work, if none has
+/// any now (`--bench` times loading by it).
+pub fn idle_since() -> Option<Instant> {
+    let since = *IDLE_SINCE.lock().expect("idle time");
+    since.filter(|_| jobs_in_flight() == 0)
+}
+
+/// Count a job as finished.
+fn job_done() {
+    if IN_FLIGHT.fetch_sub(1, Ordering::Relaxed) == 1 {
+        *IDLE_SINCE.lock().expect("idle time") = Some(Instant::now());
+    }
+}
 
 /// Identifies one request.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -124,6 +152,7 @@ impl Loader {
         }
         self.waiting.insert(job.clone(), vec![ticket]);
         let workers = self.workers.get_or_insert_with(|| spawn(&self.resolver));
+        IN_FLIGHT.fetch_add(1, Ordering::Relaxed);
         // The workers live as long as `jobs`, so the send can't fail.
         let _ = workers.jobs.send(job);
         ticket
@@ -217,6 +246,7 @@ fn spawn(resolver: &Arc<Resolver>) -> Workers {
                         return;
                     };
                     let outcome = run(&resolver, &job);
+                    job_done();
                     if done.send((job, outcome)).is_err() {
                         return;
                     }

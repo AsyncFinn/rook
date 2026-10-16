@@ -38,6 +38,13 @@ impl Times {
         }
     }
 
+    /// The samples before index `end`.
+    pub fn until(&self, end: usize) -> Times {
+        Times {
+            samples: self.samples[..end.min(self.samples.len())].to_vec(),
+        }
+    }
+
     /// Sample by sample, these times plus `other`'s (a lockstep step's
     /// server and client parts); samples only one side has count alone.
     pub fn sum_with(&self, other: &Times) -> Times {
