@@ -189,6 +189,7 @@ impl Renderer {
                 &self.globals_layout,
                 &self.main_layout,
                 &self.image_layout,
+                &self.lights.layout,
                 true,
             );
         }

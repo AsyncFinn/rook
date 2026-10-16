@@ -7,13 +7,17 @@ use crate::*;
 /// may have entered or left the tree (parented, moved between parents or
 /// destroyed), `parts` changed in any other way, `moved` only in their
 /// CFrame (what physics does to every moving part every step), plus
-/// Lighting if `lighting`, and the terrain's look (a Terrain's properties,
-/// `Workspace.GlobalWind`) if `terrain`.
+/// Lighting if `lighting`, the terrain's look (a Terrain's properties,
+/// `Workspace.GlobalWind`) if `terrain`, the local lights (and
+/// Attachments, which may carry one) whose properties changed in `lights`,
+/// and lights entering or leaving the tree if `lights_placed`.
 #[derive(Debug, Clone, Default)]
 pub struct RenderChanges {
     pub full: bool,
     pub lighting: bool,
     pub terrain: bool,
+    pub lights: std::collections::HashSet<InstanceId>,
+    pub lights_placed: bool,
     pub placed: std::collections::HashSet<InstanceId>,
     pub parts: std::collections::HashSet<InstanceId>,
     pub moved: std::collections::HashSet<InstanceId>,
@@ -32,6 +36,8 @@ impl RenderChanges {
         !self.full
             && !self.lighting
             && !self.terrain
+            && self.lights.is_empty()
+            && !self.lights_placed
             && self.placed.is_empty()
             && self.parts.is_empty()
             && self.moved.is_empty()
@@ -88,6 +94,7 @@ impl DataModel {
                 || dom.is_a(id, "FaceInstance")
                 || dom.is_a(id, "SurfaceAppearance")
         };
+        let light = |id: InstanceId| dom.is_a(id, "Light");
         let materials =
             |id: InstanceId| dom.is_a(id, "MaterialService") || dom.is_a(id, "MaterialVariant");
         let mark_part = |changes: &mut RenderChanges, part: Option<InstanceId>| {
@@ -107,6 +114,8 @@ impl DataModel {
                         changes.terrain = true;
                     } else if materials(*id) {
                         changes.full = true;
+                    } else if light(*id) || dom.is_a(*id, "Attachment") {
+                        changes.lights.insert(*id);
                     } else if props.velocities.contains(property) {
                         // Physics writes these for every moving part every
                         // step; nothing draws them.
@@ -131,6 +140,9 @@ impl DataModel {
                     if subtree.iter().any(|i| dom.is_a(*i, "MaterialVariant")) {
                         changes.full = true;
                     }
+                    if subtree.iter().any(|i| light(*i)) {
+                        changes.lights_placed = true;
+                    }
                     let parts = subtree.iter().filter(|i| dom.is_a(**i, "BasePart"));
                     let before = changes.placed.len();
                     changes.placed.extend(parts);
@@ -142,10 +154,14 @@ impl DataModel {
                 Change::Destroying(id) if dom.is_a(*id, "BasePart") => {
                     changes.placed.insert(*id);
                 }
+                Change::Destroying(id) if light(*id) => {
+                    changes.lights_placed = true;
+                }
                 _ => {}
             }
         }
         if changes.full {
+            changes.lights.clear();
             changes.parts.clear();
             changes.moved.clear();
             changes.placed.clear();

@@ -12,8 +12,8 @@ use rook_dom::{Dom, InstanceId};
 use rook_engine::{DataModel, RenderChanges};
 use rook_physics::{is_part, part_shape, workspace_parts};
 use rook_render::{
-    Camera, DrawShape, ImageHash, ImagePlacement, Layer, Lighting, MapAlpha, Material,
-    MaterialMaps, MaterialSet, MeshHash, NormalId, PartInstance, Scene, Tiling,
+    Camera, DrawShape, ImageHash, ImagePlacement, Layer, LightShape, Lighting, LocalLight,
+    MapAlpha, Material, MaterialMaps, MaterialSet, MeshHash, NormalId, PartInstance, Scene, Tiling,
 };
 use rook_types::{
     CFrame, MeshKind, MeshLook, SurfaceType, TrussLook, TrussStyle, Value, mesh_part_scale,
@@ -22,6 +22,7 @@ use rook_types::{
 use crate::scene::files::{FileRef, FileState, Files, Loaded};
 
 mod lighting;
+mod lights;
 mod loading;
 mod look;
 mod materials;
@@ -92,6 +93,12 @@ pub struct SceneCache {
     lighting_changed: bool,
     /// Workspace's Terrain, meshed.
     terrain: TerrainCache,
+    /// Every local light in Workspace, and the parts they hang from
+    /// (directly or through an Attachment), which move them.
+    light_ids: Vec<InstanceId>,
+    /// Indices into `light_ids` of the lights each part or Attachment
+    /// carries, and of each light itself.
+    light_holders: HashMap<InstanceId, Vec<usize>>,
 }
 
 impl SceneCache {
@@ -109,6 +116,8 @@ impl SceneCache {
             sky_files: HashSet::new(),
             lighting_changed: false,
             terrain: TerrainCache::default(),
+            light_ids: Vec::new(),
+            light_holders: HashMap::new(),
         };
         cache.rebuild(dom);
         cache
@@ -142,6 +151,72 @@ impl SceneCache {
         let index = &self.index;
         self.shown.retain(|id, _| index.contains_key(id));
         self.scene.lighting = self.lighting(dom);
+        self.find_lights(dom);
+    }
+
+    /// Find every local light in Workspace again, and read them.
+    fn find_lights(&mut self, dom: &Dom) {
+        profiling::scope!("SceneCache::find_lights");
+        self.light_ids = lights::find_lights(dom);
+        self.light_holders.clear();
+        for (i, &id) in self.light_ids.iter().enumerate() {
+            // A light changes with its own properties, and under an
+            // Attachment moves with the attachment and its part.
+            self.light_holders.entry(id).or_default().push(i);
+            let mut holder = dom.parent(id);
+            while let Some(h) = holder {
+                self.light_holders.entry(h).or_default().push(i);
+                if dom.class_name(h) != "Attachment" {
+                    break;
+                }
+                holder = dom.parent(h);
+            }
+        }
+        self.scene.lights = (0..self.light_ids.len())
+            .map(|i| self.read_light(dom, i))
+            .collect();
+    }
+
+    /// The `i`th known light as it is now; a light Studio wouldn't draw
+    /// (not under a part or an Attachment) shines with brightness 0.
+    fn read_light(&self, dom: &Dom, i: usize) -> LocalLight {
+        lights::light(dom, self.light_ids[i]).unwrap_or(LocalLight {
+            position: Vec3::ZERO,
+            shape: LightShape::Point,
+            color: [0.0; 3],
+            brightness: 0.0,
+            range: 0.0,
+            shadows: false,
+        })
+    }
+
+    /// Bring the lights up to date with a frame's changes, reading again
+    /// only the lights that changed and those on parts and Attachments
+    /// that did; whether any may have changed.
+    fn lights_changed(&mut self, dom: &Dom, changes: &RenderChanges) -> bool {
+        let holders = &self.light_holders;
+        let placed = changes.placed.iter().any(|id| holders.contains_key(id));
+        if changes.lights_placed || placed {
+            self.find_lights(dom);
+            return true;
+        }
+        let stale: Vec<usize> = changes
+            .moved
+            .iter()
+            .chain(&changes.parts)
+            .chain(&changes.lights)
+            .filter_map(|id| holders.get(id))
+            .flatten()
+            .copied()
+            .collect();
+        if stale.is_empty() {
+            return false;
+        }
+        profiling::scope!("SceneCache::read_lights");
+        for i in stale {
+            self.scene.lights[i] = self.read_light(dom, i);
+        }
+        true
     }
 
     /// Apply a frame's changes.
@@ -154,6 +229,7 @@ impl SceneCache {
         if changes.lighting {
             self.scene.lighting = self.lighting(dom);
         }
+        let lights = self.lights_changed(dom, changes);
         let mut changed = Vec::new();
         if changes.terrain {
             match self.terrain_changed(dom) {
@@ -197,7 +273,7 @@ impl SceneCache {
         }
         // The terrain's look (waves, wind) reaches the renderer with any
         // update, even one that changed no entry.
-        if changed.is_empty() && !changes.lighting && !changes.terrain {
+        if changed.is_empty() && !changes.lighting && !changes.terrain && !lights {
             SceneChange::None
         } else {
             SceneChange::Parts(changed)

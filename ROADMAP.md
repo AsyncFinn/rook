@@ -211,8 +211,10 @@ files (35,041 instances), SpotLight 212 (50,397), SurfaceLight 65
 ParticleEmitter 86, Trail 17, Beam 15, plus the `Explosion`s scripts
 create.
 
-1. Local lights: Brightness, Range, Color, Shadows, SpotLight Angle and
-   Face, SurfaceLight; many lights per frame.
+1. ✅ Local lights: Brightness, Range, Color, Shadows, SpotLight Angle and
+   Face, SurfaceLight; many lights per frame
+   ([`docs/behavior/lights.md`](docs/behavior/lights.md); `Shadows` not
+   yet).
 2. Fire, Smoke and Sparkles, drawn as Studio draws them today.
 3. ParticleEmitter (with flipbooks), Beam and Trail.
 4. Explosion: its blast (physics, joints breaking) and its look.
