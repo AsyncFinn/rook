@@ -1,10 +1,10 @@
 // Parts: one draw per (shape, image), one instance per part or image layer.
 //
-// Lighting is an Approximation of Roblox's look until it is tuned against
-// Studio screenshots: Lambert sun light plus Ambient and an OutdoorAmbient
-// term that fades on faces pointing down, then linear fog. Only the sun
-// term is shadowed; Ambient and OutdoorAmbient light shadowed areas too,
-// as they look in Roblox (Approximation).
+// Lighting comes from `lighting.wgsl`: Lambert sun light, shadowed through
+// the shadow map, plus an ambient that is the brighter of Ambient and
+// OutdoorAmbient on every face, unshadowed and never occluded from the sky
+// (measured in Studio 0.742, docs/behavior/lights.md), local lights, then
+// linear fog.
 //
 // Images on faces follow `rook_types::NormalId` (the face frames come in
 // `g.faces`, filled from it): a point belongs to its vertices' box face (the
