@@ -21,11 +21,11 @@ pub(crate) enum Placement {
     Hidden,
     Opaque {
         batch: usize,
-        slot: usize,
+        slot: u32,
     },
     Layer {
         batch: usize,
-        slot: usize,
+        slot: u32,
     },
     /// An index into the transparent parts, which are sorted every frame.
     Transparent(usize),
@@ -97,18 +97,19 @@ impl Renderer {
             return;
         }
         profiling::scope!("Renderer::upload_files");
-        let cx = UploadContext {
+        let mut cx = UploadContext {
             device: &self.device,
             queue: &self.queue,
             image_layout: &self.image_layout,
             sampler: &self.image_sampler,
         };
         let mut first = true;
-        let meshes = self.meshes.upload(&cx, &mut budget, &mut first);
-        let images = self.images.upload(&cx, &mut budget, &mut first);
-        if !meshes && !images {
+        let meshes = self.meshes.upload(&mut self.pool, &mut budget, &mut first);
+        let images = self.images.upload(&mut cx, &mut budget, &mut first);
+        if meshes.is_empty() && images.is_empty() {
             return;
         }
+        self.add_images(&images);
         let waiting: Vec<(usize, PartInstance)> = self.waiting.drain().collect();
         for (i, part) in waiting {
             let target = self.target(&part, None);
@@ -126,14 +127,14 @@ impl Renderer {
             (Placement::Opaque { batch, slot }, Target::Opaque(key))
                 if self.opaque.list[batch].key == key =>
             {
-                let instance = Instance::new(part, self.bounds(part.shape));
-                self.opaque.list[batch].set(slot, instance);
+                let instance = self.instance(part);
+                self.opaque.set(batch, slot, instance);
             }
             (Placement::Layer { batch, slot }, Target::Layer(z, key))
                 if self.layers.list[batch].key == key && self.layers.z[batch] == z =>
             {
-                let instance = Instance::new(part, self.bounds(part.shape));
-                self.layers.list[batch].set(slot, instance);
+                let instance = self.instance(part);
+                self.layers.set(batch, slot, instance);
             }
             (old, _) => {
                 self.vacate(old);
@@ -220,7 +221,7 @@ impl Renderer {
             // Built the first time a truss of this shape is drawn: a few
             // kilobytes, uploaded at once and shared by every such truss.
             DrawShape::Truss(_) => {
-                let gpu = GpuMesh::upload(&self.device, &mesh::build(shape));
+                let gpu = self.pool.add(&mesh::build(shape));
                 self.meshes.insert(shape, gpu);
                 return Readiness::Ready;
             }
@@ -266,7 +267,7 @@ impl Renderer {
 
     /// Take a slot to draw an entry in.
     pub(crate) fn occupy(&mut self, part: &PartInstance, target: Target) -> Placement {
-        let instance = Instance::new(part, self.bounds(part.shape));
+        let instance = self.instance(part);
         match target {
             Target::Hidden | Target::Waiting => Placement::Hidden,
             Target::Transparent => {

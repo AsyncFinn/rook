@@ -1,6 +1,7 @@
 //! Drawing a frame: the shadow pass, the sky, then parts and images.
 
 use super::*;
+use runs::{Pipe, Runs, Source};
 
 /// How a run of transparent instances is drawn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -13,6 +14,15 @@ enum Pass {
 }
 
 impl Pass {
+    fn pipe(self) -> Pipe {
+        match self {
+            Pass::Part => Pipe::Transparent,
+            Pass::Image => Pipe::Layer,
+            Pass::GlassFilter => Pipe::GlassFilter,
+            Pass::ForceField => Pipe::Additive,
+        }
+    }
+
     /// The passes an entry is drawn in, in order.
     fn of(p: &PartInstance) -> &'static [Pass] {
         match (p.layer, p.material) {
@@ -35,8 +45,12 @@ impl Renderer {
         view: &Frustum,
         margin: f32,
     ) -> Vec<(BatchKey, Pass, std::ops::Range<u32>)> {
-        self.opaque.upload(&self.device, &self.queue);
-        self.layers.upload(&self.device, &self.queue);
+        {
+            profiling::scope!("opaque and layers");
+            self.opaque.upload(&self.device, &self.queue);
+            self.layers.upload(&self.device, &self.queue);
+        }
+        profiling::scope!("transparent");
         // Back to front for blending.
         let mut order: Vec<&PartInstance> = self.transparent_parts.iter().flatten().collect();
         order.sort_by(|a, b| {
@@ -48,7 +62,7 @@ impl Renderer {
         let mut instances: Vec<Instance> = Vec::with_capacity(order.len());
         let mut runs: Vec<(BatchKey, Pass, std::ops::Range<u32>)> = Vec::new();
         for p in &order {
-            let instance = Instance::new(p, self.bounds(p.shape));
+            let instance = self.instance(p);
             if !view.sees(instance.world_box(), margin) {
                 continue;
             }
@@ -76,7 +90,15 @@ impl Renderer {
             _ => {
                 // Room to grow, so a few more parts don't make a new buffer.
                 let capacity = instances.len() * 2;
-                let buffer = instance_buffer(&self.device, &instances, capacity);
+                let mut padded = instances;
+                padded.resize(capacity, Instance::zeroed());
+                let buffer = self
+                    .device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("rook transparent instances"),
+                        contents: bytemuck::cast_slice(&padded),
+                        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                    });
                 self.transparent_buffer = Some((buffer, capacity));
             }
         }
@@ -127,6 +149,11 @@ impl Renderer {
             if self.images.contains(&hash) {
                 self.ensure_group([Some(hash), None, None, None, None]);
             }
+        }
+        self.update_table();
+        let mut sky_images = [[0; 4]; 2];
+        for (i, hash) in l.skybox.iter().flatten().enumerate() {
+            sky_images[i / 4][i % 4] = self.image_slots(&[Some(*hash), None, None, None, None])[0];
         }
         let rgb = |c: [f32; 3], w: f32| [c[0], c[1], c[2], w];
         let mut faces = [[0.0; 4]; 12];
@@ -180,11 +207,19 @@ impl Renderer {
             wind: rgb(self.terrain.wind.to_array(), self.water_phase as f32),
             sky_top: rgb(l.sky_top, 0.0),
             sky_horizon: rgb(l.sky_horizon, 0.0),
+            sky_images,
         };
         self.queue
             .write_buffer(&self.globals, 0, bytemuck::bytes_of(&globals));
 
-        let transparent_runs = self.upload_instances(camera, &view, margin);
+        let transparent_runs = {
+            profiling::scope!("upload instances");
+            self.upload_instances(camera, &view, margin)
+        };
+
+        // Each pass's draws, joined into runs that share what's bound.
+        let (mut shadow_runs, mut main_runs, starts) =
+            self.build_draws(shadow, &view, margin, transparent_runs);
 
         let depth = self.depth_view(width, height);
         let sky = srgb_to_linear(l.sky_horizon);
@@ -193,13 +228,8 @@ impl Renderer {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("rook frame"),
             });
-        let opaque = self.opaque.draws();
-        let mut counts = DrawCounts::default();
-        if let Some(shadow) = shadow {
+        if shadow.is_some() {
             profiling::scope!("shadow pass");
-            // The sun's whole view, not just the camera's: a part off
-            // screen still shadows what's on it.
-            let sun_view = Frustum::of(shadow.view_proj);
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("rook shadow map"),
                 color_attachments: &[],
@@ -216,17 +246,10 @@ impl Renderer {
                 multiview_mask: None,
             });
             pass.set_bind_group(0, &self.bind_group, &[]);
-            pass.set_pipeline(&self.pipelines.shadow);
-            for (key, buffer, instances, bounds) in &opaque {
-                if sun_view.sees(*bounds, margin) {
-                    let triangles =
-                        self.draw(&mut pass, key.shape, None, buffer, instances.clone());
-                    counts.shadow += u32::from(triangles > 0);
-                    counts.shadow_triangles += triangles;
-                }
-            }
+            self.record(&mut pass, &mut shadow_runs, starts[0]);
         }
         {
+            profiling::scope!("main pass");
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("rook parts"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -257,88 +280,116 @@ impl Renderer {
             });
             pass.set_bind_group(0, &self.bind_group, &[]);
             pass.set_bind_group(1, &self.main_bind_group, &[]);
-            // The skybox, once all six images are up; otherwise the clear
-            // colour stands for it.
-            let skybox = l.skybox.and_then(|faces| {
-                let groups: Vec<_> = faces
-                    .iter()
-                    .map(|h| self.groups.get(&[Some(*h), None, None, None, None]))
-                    .collect::<Option<_>>()?;
-                Some(groups)
-            });
-            if let Some(groups) = skybox {
-                pass.set_pipeline(&self.pipelines.sky);
-                for (face, group) in groups.into_iter().enumerate() {
-                    pass.set_bind_group(2, group, &[]);
-                    pass.draw(0..3, face as u32..face as u32 + 1);
-                }
+            if let ImageBinding::Table(_) = &self.image_binding {
+                pass.set_bind_group(2, self.group(&[None; 5]), &[]);
             }
-            // Opaque parts, then images on them (before transparent parts,
-            // so a window in front of a decal covers it), then transparent
-            // parts back to front.
-            for (pipeline, draws) in [
-                (&self.pipelines.opaque, opaque),
-                (&self.pipelines.layer, self.layers.draws()),
-            ] {
-                if draws.is_empty() {
-                    continue;
-                }
-                pass.set_pipeline(pipeline);
-                for (key, buffer, instances, bounds) in draws {
-                    if !view.sees(bounds, margin) {
-                        continue;
-                    }
-                    let images = Some(self.group(&key.images));
-                    let triangles = self.draw(&mut pass, key.shape, images, buffer, instances);
-                    counts.main += u32::from(triangles > 0);
-                    counts.main_triangles += triangles;
-                }
-            }
-            if let Some((buffer, _)) = &self.transparent_buffer {
-                for (key, kind, instances) in transparent_runs {
-                    pass.set_pipeline(match kind {
-                        Pass::Part => &self.pipelines.transparent,
-                        Pass::Image => &self.pipelines.layer,
-                        Pass::GlassFilter => &self.pipelines.glass_filter,
-                        Pass::ForceField => &self.pipelines.additive,
-                    });
-                    let images = Some(self.group(&key.images));
-                    let triangles = self.draw(&mut pass, key.shape, images, buffer, instances);
-                    counts.main += u32::from(triangles > 0);
-                    counts.main_triangles += triangles;
-                }
-            }
+            self.record_sky(&mut pass);
+            self.record(&mut pass, &mut main_runs, starts[1]);
         }
         if let Some(timer) = &mut self.timer {
             timer.resolve(&mut encoder, shadow.is_some());
         }
-        self.draw_counts = counts;
-        self.queue.submit([encoder.finish()]);
+        self.draw_counts = DrawCounts {
+            shadow: shadow_runs.counts,
+            main: main_runs.counts,
+        };
+        let commands = {
+            profiling::scope!("finish");
+            encoder.finish()
+        };
+        self.queue.submit([commands]);
         self.record_time = start.elapsed();
     }
 
-    /// Draw `instances` of `buffer` as `shape`, with `image` bound as
-    /// group 2 (not in the shadow pass). Returns how many triangles that
-    /// drew (none for a shape without a mesh, which makes no draw call).
-    fn draw(
-        &self,
-        pass: &mut wgpu::RenderPass<'_>,
-        shape: DrawShape,
-        image: Option<&wgpu::BindGroup>,
-        buffer: &wgpu::Buffer,
-        instances: std::ops::Range<u32>,
-    ) -> u64 {
-        // Entries are only drawn for shapes with a mesh.
-        let Some(mesh) = self.meshes.get(&shape) else {
-            return 0;
-        };
-        if let Some(group) = image {
-            pass.set_bind_group(2, group, &[]);
+    /// Each pass's draws, joined into runs that share what's bound, with
+    /// their arguments uploaded: (shadow pass, main pass, where each
+    /// pass's arguments start).
+    fn build_draws(
+        &mut self,
+        shadow: Option<ShadowView>,
+        view: &Frustum,
+        margin: f32,
+        transparent_runs: Vec<(BatchKey, Pass, std::ops::Range<u32>)>,
+    ) -> (Runs, Runs, Vec<usize>) {
+        profiling::scope!("build draws");
+        let mut shadow_runs = Runs::default();
+        let mut main_runs = Runs::default();
+        // The sun's whole view, not just the camera's: a part off screen
+        // still shadows what's on it.
+        let sun_view = shadow.map(|s| Frustum::of(s.view_proj));
+        for (key, instances, bounds) in self.opaque.draws() {
+            let shadowed = sun_view.is_some_and(|sun| sun.sees(bounds, margin));
+            let seen = view.sees(bounds, margin);
+            let Some(mesh) = self.meshes.get(&key.shape).filter(|_| shadowed || seen) else {
+                continue;
+            };
+            if shadowed {
+                let (pipe, source) = (Pipe::Shadow, Source::Opaque);
+                self.push_draw(&mut shadow_runs, pipe, source, mesh, key, instances.clone());
+            }
+            if seen {
+                let (pipe, source) = (Pipe::Opaque, Source::Opaque);
+                self.push_draw(&mut main_runs, pipe, source, mesh, key, instances);
+            }
         }
-        pass.set_vertex_buffer(0, mesh.vertices.slice(..));
-        pass.set_vertex_buffer(1, buffer.slice(..));
-        pass.set_index_buffer(mesh.indices.slice(..), wgpu::IndexFormat::Uint32);
-        pass.draw_indexed(0..mesh.index_count, 0, instances.clone());
-        u64::from(mesh.index_count / 3) * u64::from(instances.len() as u32)
+        // Then images on opaque parts (before transparent parts, so a
+        // window in front of a decal covers it), then transparent parts
+        // back to front.
+        for (key, instances, bounds) in self.layers.draws() {
+            if let Some(mesh) = self
+                .meshes
+                .get(&key.shape)
+                .filter(|_| view.sees(bounds, margin))
+            {
+                self.push_draw(
+                    &mut main_runs,
+                    Pipe::Layer,
+                    Source::Layers,
+                    mesh,
+                    key,
+                    instances,
+                );
+            }
+        }
+        for (key, pass, instances) in transparent_runs {
+            let Some(mesh) = self.meshes.get(&key.shape) else {
+                continue;
+            };
+            self.push_draw(
+                &mut main_runs,
+                pass.pipe(),
+                Source::Transparent,
+                mesh,
+                &key,
+                instances,
+            );
+        }
+        let starts = self.upload_args(&[&shadow_runs, &main_runs]);
+        (shadow_runs, main_runs, starts)
+    }
+
+    /// The skybox, once all six images are up; otherwise the clear colour
+    /// stands for it. With a table, one draw of six faces; else a draw per
+    /// face with its image bound.
+    fn record_sky(&self, pass: &mut wgpu::RenderPass<'_>) {
+        let Some(faces) = self.lighting.skybox else {
+            return;
+        };
+        if !faces.iter().all(|h| self.images.contains(h)) {
+            return;
+        }
+        pass.set_pipeline(&self.pipelines.sky);
+        match &self.image_binding {
+            ImageBinding::Table(_) => pass.draw(0..3, 0..6),
+            ImageBinding::Sets(groups) => {
+                for (face, hash) in faces.iter().enumerate() {
+                    let Some(group) = groups.get(&[Some(*hash), None, None, None, None]) else {
+                        continue;
+                    };
+                    pass.set_bind_group(2, group, &[]);
+                    pass.draw(0..3, face as u32..face as u32 + 1);
+                }
+            }
+        }
     }
 }

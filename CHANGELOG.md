@@ -15,6 +15,17 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 
 ## [Unreleased]
 
+## [0.5.12] — 2026-10-15 — Fix: too many draw calls on big places
+
+Pinned Roblox version: 0.741.19.
+
+- The renderer draws a whole pass in a few draw calls instead of one per mesh and image. Every mesh's vertices and indices sit in shared buffers, each set of batches keeps its instances in one buffer, and every image sits in one table that each instance indexes (binding arrays), so consecutive draws bind nothing new. Each pass's visible batches become indirect draw arguments, drawn with one multi-draw per pipeline in the same order as before. On an 86k-part place, 321 + 620 draw calls (shadow + main) fell to 1 + 6; from a camera seeing most of the map, 7,831 to 135. A 61k-part place's main pass went from 393 to 68 calls, and 3,143 to 805 from above (its sorted transparent parts still switch pipelines). The shadow pass reads positions only (12 bytes a vertex instead of 48).
+- CPU time recording a frame (300 frames of `--bench`, A/B against 0.5.11, means of two rounds): an 86k-part place 18.2 → 10.4 ms from the saved camera and 30.3 → 13.4 ms from above; a 61k-part place 6.4 → 3.1 ms and 8.7 → 4.2 ms. Render with readback: an 86k-part place 29.9 → 21.4 and 50.4 → 27.2 ms; a 61k-part place 21.7 → 13.4 and 21.8 → 17.6 ms. In steady frames on an 86k-part place (Tracy), `Renderer::render` went from 7.7 to 3.3 ms. GPU time is unchanged.
+- Frames look the same: from above both places are byte-identical to 0.5.11. From the saved cameras the only differences beyond run-to-run noise are 2 pixels on an 86k-part place one level apart (float rounding).
+- Adapters without binding arrays, or without first instances in indirect draws, bind each image set and draw each batch directly; the frames are identical.
+- `--bench` prints draw calls and instanced draws, triangles per pass, and medians of CPU recording and of each pass's GPU time (timestamp queries).
+- Found: from inside the map, most triangles drawn belong to instances off screen that share a batch with some in view (an 86k-part place's saved camera: 13% of the opaque triangles drawn are in view; a 61k-part place's 22%). Culling within batches is next.
+
 ## [0.5.11] — 2026-10-15 — Fix: slow rendering on big places
 
 Pinned Roblox version: 0.741.19.

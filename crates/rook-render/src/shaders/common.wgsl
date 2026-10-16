@@ -34,6 +34,8 @@ struct Globals {
     // The sky overhead and at the horizon (sRGB), which water reflects.
     sky_top: vec4<f32>,
     sky_horizon: vec4<f32>,
+    // Each skybox image's slot in the image table, when there is one.
+    sky_images: array<vec4<u32>, 2>,
 };
 
 @group(0) @binding(0) var<uniform> g: Globals;
@@ -45,14 +47,12 @@ struct Globals {
 @group(1) @binding(3) var image_sampler: sampler;
 // Water's normal frames, one per layer (X in alpha, Y in green).
 @group(1) @binding(4) var water_normals: texture_2d_array<f32>;
-// The batch's images (white, or a flat normal, when it has none): its
-// image (a mesh texture, a decal or a skybox face), and its material's
-// colour, normal, roughness (green) and metalness (red) maps.
-@group(2) @binding(0) var image: texture_2d<f32>;
-@group(2) @binding(1) var color_map: texture_2d<f32>;
-@group(2) @binding(2) var normal_map: texture_2d<f32>;
-@group(2) @binding(3) var roughness_map: texture_2d<f32>;
-@group(2) @binding(4) var metalness_map: texture_2d<f32>;
+// A draw's images (`ImageSet` order), as `sample_map` takes them.
+const IMAGE: u32 = 0u;
+const COLOR_MAP: u32 = 1u;
+const NORMAL_MAP: u32 = 2u;
+const ROUGHNESS_MAP: u32 = 3u;
+const METALNESS_MAP: u32 = 4u;
 
 // Instance flags.
 const CAST: u32 = 1u;
@@ -112,9 +112,10 @@ struct VertexIn {
     // A Texture's studs per tile (xy) and offset (zw); a part's material
     // textures' studs per tile (xy).
     @location(13) i_tile: vec4<f32>,
-    // CAST, NEON, the layer's mode (bits 2-3) and face (bits 4-6),
-    // UPRIGHT (bit 7), and the surface patterns (SURFACES_SHIFT).
-    @location(14) i_flags: u32,
+    // x: CAST, NEON, the layer's mode (bits 2-3) and face (bits 4-6),
+    // UPRIGHT (bit 7), and the surface patterns (SURFACES_SHIFT); yzw:
+    // the images' slots in the image table.
+    @location(14) i_flags: vec4<u32>,
     // Reflectance, roughness, metalness.
     @location(15) i_material: vec4<f32>,
 };
@@ -138,6 +139,19 @@ struct VertexOut {
     @location(11) @interpolate(flat) material: vec4<f32>,
     // The box face the point belongs to (255: from the normal).
     @location(12) @interpolate(flat) face: u32,
+    // The images' slots in the image table.
+    @location(13) @interpolate(flat) images: vec3<u32>,
+};
+
+// What the shadow pass reads: positions only, and where the instance is.
+struct ShadowIn {
+    @location(0) position: vec3<f32>,
+    @location(5) i_position: vec3<f32>,
+    @location(6) i_right: vec3<f32>,
+    @location(7) i_up: vec3<f32>,
+    @location(8) i_back: vec3<f32>,
+    @location(9) i_size: vec3<f32>,
+    @location(14) i_flags: vec4<u32>,
 };
 
 fn srgb_to_linear(c: vec3<f32>) -> vec3<f32> {
@@ -150,7 +164,11 @@ fn instance_rotation(v: VertexIn) -> mat3x3<f32> {
 
 // Where a vertex of an instance is in the world (every pass).
 fn world_position(v: VertexIn) -> vec3<f32> {
-    return v.i_position + instance_rotation(v) * (v.position * v.i_size);
+    return placed(v.position, v.i_position, instance_rotation(v), v.i_size);
+}
+
+fn placed(p: vec3<f32>, at: vec3<f32>, rotation: mat3x3<f32>, size: vec3<f32>) -> vec3<f32> {
+    return at + rotation * (p * size);
 }
 
 // How much of the sun reaches a point: 3x3 comparison samples (each one

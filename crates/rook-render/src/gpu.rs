@@ -35,6 +35,8 @@ pub(crate) struct Globals {
     /// `Lighting::sky_horizon`, sRGB), which water reflects.
     pub(crate) sky_top: [f32; 4],
     pub(crate) sky_horizon: [f32; 4],
+    /// Each skybox image's slot in the image table, when there is one.
+    pub(crate) sky_images: [[u32; 4]; 2],
 }
 
 /// Instance flags (see `shaders/common.wgsl`).
@@ -82,13 +84,20 @@ pub(crate) struct Instance {
     /// bits per face, and the bits from 26 (wgpu allows 16 vertex
     /// attributes in all).
     flags: u32,
+    /// Its images' slots in the image table, 16 bits each, in
+    /// [`renderer::ImageSet`] order (unused without a table).
+    images: [u32; 3],
     /// A part's `Reflectance`, roughness and metalness; w is the blue of
     /// a SurfaceAppearance's tint, whose red and green are in `tile.zw`.
     material: [f32; 4],
 }
 
 impl Instance {
-    pub(crate) fn new(p: &PartInstance, (box_min, box_max): (Vec3, Vec3)) -> Self {
+    pub(crate) fn new(
+        p: &PartInstance,
+        (box_min, box_max): (Vec3, Vec3),
+        images: [u32; 3],
+    ) -> Self {
         let mut flags = 0;
         let mut tile = [1.0, 1.0, 0.0, 0.0];
         let mut material = [0.0; 4];
@@ -177,6 +186,7 @@ impl Instance {
             box_max: box_max.to_array(),
             tile,
             flags,
+            images,
             material,
         }
     }
@@ -207,46 +217,17 @@ impl Instance {
     }
 }
 
-#[derive(Debug)]
-pub(crate) struct GpuMesh {
-    pub(crate) vertices: wgpu::Buffer,
-    pub(crate) indices: wgpu::Buffer,
-    pub(crate) index_count: u32,
-    /// The mesh's bounds in its own units.
-    pub(crate) bounds: (Vec3, Vec3),
-}
-
-impl GpuMesh {
-    pub(crate) fn upload(device: &wgpu::Device, data: &mesh::MeshData) -> Self {
-        let vertices = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("rook mesh vertices"),
-            contents: bytemuck::cast_slice(&data.vertices),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-        let indices = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("rook mesh indices"),
-            contents: bytemuck::cast_slice(&data.indices),
-            usage: wgpu::BufferUsages::INDEX,
-        });
-        Self {
-            vertices,
-            indices,
-            index_count: data.indices.len() as u32,
-            bounds: data.bounds(),
-        }
-    }
-}
-
 impl Upload for Mesh {
     type Gpu = GpuMesh;
+    type Context<'a> = MeshPool;
 
     fn upload_size(&self) -> usize {
         self.positions.len() * std::mem::size_of::<mesh::Vertex>() + self.indices.len() * 4
     }
 
-    fn upload(&self, cx: &UploadContext<'_>) -> GpuMesh {
+    fn upload(&self, pool: &mut MeshPool) -> GpuMesh {
         profiling::scope!("upload mesh");
-        GpuMesh::upload(cx.device, &mesh::from_file(self))
+        pool.add(&mesh::from_file(self))
     }
 }
 
@@ -282,12 +263,13 @@ impl GpuImage {
 
 impl Upload for Image {
     type Gpu = GpuImage;
+    type Context<'a> = UploadContext<'a>;
 
     fn upload_size(&self) -> usize {
         self.byte_len()
     }
 
-    fn upload(&self, cx: &UploadContext<'_>) -> GpuImage {
+    fn upload(&self, cx: &mut UploadContext<'_>) -> GpuImage {
         profiling::scope!("upload image");
         let texture = texture_with_mips(
             cx,

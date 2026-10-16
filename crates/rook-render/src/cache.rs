@@ -6,9 +6,11 @@
 //! of images at once spreads them over frames instead of stalling one.
 //! What waits for an upload draws nothing until it's done.
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::VecDeque;
 use std::hash::Hash;
 use std::sync::Arc;
+
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 /// Bytes uploaded per frame at most (the first upload of a frame always
 /// goes, however large).
@@ -27,9 +29,11 @@ pub(crate) struct UploadContext<'a> {
 /// A file that can live on the GPU.
 pub(crate) trait Upload {
     type Gpu;
+    /// What uploading it needs.
+    type Context<'a>;
     /// About how many bytes uploading it moves.
     fn upload_size(&self) -> usize;
-    fn upload(&self, cx: &UploadContext<'_>) -> Self::Gpu;
+    fn upload(&self, cx: &mut Self::Context<'_>) -> Self::Gpu;
 }
 
 /// GPU copies of files, by key.
@@ -43,9 +47,9 @@ pub(crate) struct GpuCache<K, T: Upload> {
 impl<K: Copy + Eq + Hash, T: Upload> GpuCache<K, T> {
     pub fn new() -> Self {
         Self {
-            ready: HashMap::new(),
+            ready: HashMap::default(),
             queue: VecDeque::new(),
-            queued: HashSet::new(),
+            queued: HashSet::default(),
         }
     }
 
@@ -57,9 +61,10 @@ impl<K: Copy + Eq + Hash, T: Upload> GpuCache<K, T> {
         self.ready.contains_key(key)
     }
 
-    /// Put an already uploaded object in the cache (built-in meshes).
-    pub fn insert(&mut self, key: K, gpu: T::Gpu) {
-        self.ready.insert(key, gpu);
+    /// Put an already uploaded object in the cache (built-in meshes),
+    /// returning the one it replaces.
+    pub fn insert(&mut self, key: K, gpu: T::Gpu) -> Option<T::Gpu> {
+        self.ready.insert(key, gpu)
     }
 
     /// Queue `file` for upload under `key`, unless it's there or queued.
@@ -69,12 +74,12 @@ impl<K: Copy + Eq + Hash, T: Upload> GpuCache<K, T> {
         }
     }
 
-    /// Forget `key`'s GPU copy, or its queued upload.
-    pub fn remove(&mut self, key: &K) {
-        self.ready.remove(key);
+    /// Forget `key`'s queued upload, or take its GPU copy out.
+    pub fn remove(&mut self, key: &K) -> Option<T::Gpu> {
         if self.queued.remove(key) {
             self.queue.retain(|(k, _)| k != key);
         }
+        self.ready.remove(key)
     }
 
     pub fn has_queued(&self) -> bool {
@@ -86,15 +91,15 @@ impl<K: Copy + Eq + Hash, T: Upload> GpuCache<K, T> {
     }
 
     /// Upload queued files while `budget` (bytes) lasts; with
-    /// `first_free`, the first one goes whatever its size. Returns whether
-    /// anything was uploaded.
+    /// `first_free`, the first one goes whatever its size. Returns the keys
+    /// uploaded.
     pub fn upload(
         &mut self,
-        cx: &UploadContext<'_>,
+        cx: &mut T::Context<'_>,
         budget: &mut usize,
         first_free: &mut bool,
-    ) -> bool {
-        let mut any = false;
+    ) -> Vec<K> {
+        let mut uploaded = Vec::new();
         while let Some((_, file)) = self.queue.front() {
             let size = file.upload_size();
             if size > *budget && !*first_free {
@@ -106,9 +111,9 @@ impl<K: Copy + Eq + Hash, T: Upload> GpuCache<K, T> {
             self.queued.remove(&key);
             let gpu = file.upload(cx);
             self.ready.insert(key, gpu);
-            any = true;
+            uploaded.push(key);
         }
-        any
+        uploaded
     }
 }
 
@@ -121,10 +126,11 @@ mod tests {
 
     impl Upload for Blob {
         type Gpu = usize;
+        type Context<'a> = ();
         fn upload_size(&self) -> usize {
             self.0
         }
-        fn upload(&self, _: &UploadContext<'_>) -> usize {
+        fn upload(&self, _: &mut ()) -> usize {
             self.0
         }
     }
@@ -132,10 +138,6 @@ mod tests {
     /// Uploads stop at the budget, but the first always goes.
     #[test]
     fn uploads_spread_over_frames() {
-        let Ok(r) = crate::Renderer::headless() else {
-            return;
-        };
-        let cx = r.upload_context();
         let mut cache: GpuCache<u32, Blob> = GpuCache::new();
         let big = Arc::new(Blob(FRAME_UPLOAD_BYTES));
         for key in 0..3 {
@@ -145,7 +147,7 @@ mod tests {
         let frame = |cache: &mut GpuCache<u32, Blob>| {
             let mut budget = FRAME_UPLOAD_BYTES / 2;
             let mut first = true;
-            cache.upload(&cx, &mut budget, &mut first)
+            !cache.upload(&mut (), &mut budget, &mut first).is_empty()
         };
         assert!(frame(&mut cache));
         assert!(cache.contains(&0) && !cache.contains(&1));

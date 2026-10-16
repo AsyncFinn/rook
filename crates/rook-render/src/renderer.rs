@@ -5,11 +5,13 @@ mod images;
 mod pipelines;
 mod placement;
 mod readback;
+mod runs;
 mod timing;
 
 use super::*;
 pub(crate) use images::ImageSet;
-use images::{Defaults, image_set};
+pub(crate) use images::ImageBinding;
+use images::{Defaults, image_layout, image_set};
 use pipelines::Pipelines;
 use placement::Placement;
 use timing::GpuTimer;
@@ -28,6 +30,7 @@ pub struct Renderer {
     color_format: wgpu::TextureFormat,
     pipelines: Pipelines,
     globals: wgpu::Buffer,
+    globals_layout: wgpu::BindGroupLayout,
     pub(crate) bind_group: wgpu::BindGroup,
     /// The shadow map, drawn by the shadow pass and sampled by the main
     /// pass through `main_bind_group`, with the surface patterns and
@@ -42,10 +45,18 @@ pub struct Renderer {
     image_sampler: wgpu::Sampler,
     /// What stands in for images a draw doesn't have.
     defaults: Defaults,
-    /// Each image set's bind group (group 2).
-    groups: HashMap<ImageSet, wgpu::BindGroup>,
-    /// The built-in shapes and each mesh file a part has drawn, by shape.
+    /// The image table, or each image set's bind group (group 2).
+    pub(crate) image_binding: ImageBinding,
+    /// The built-in shapes and each mesh file a part has drawn, by shape,
+    /// each a place in `pool`.
     meshes: GpuCache<DrawShape, Mesh>,
+    pool: MeshPool,
+    /// Whether each pipeline's draws go in multi-draws from `indirect`
+    /// (the adapter takes a first instance in indirect draws), or one by
+    /// one.
+    pub(crate) multi_draw: bool,
+    /// The frame's draws' arguments, and how many it has room for.
+    indirect: Option<(wgpu::Buffer, usize)>,
     /// Each image something has drawn, by content hash.
     images: GpuCache<ImageHash, Image>,
     opaque: Batches,
@@ -78,14 +89,21 @@ pub struct Renderer {
     record_time: std::time::Duration,
 }
 
-/// How many draw calls a frame took, in the shadow pass and the main pass,
-/// and how many triangles they drew (free instance slots included).
+/// What a frame drew, in the shadow pass and the main pass.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct DrawCounts {
-    pub shadow: u32,
-    pub main: u32,
-    pub shadow_triangles: u64,
-    pub main_triangles: u64,
+    pub shadow: PassCounts,
+    pub main: PassCounts,
+}
+
+/// What a pass drew: the draw calls recorded (a multi-draw is one), the
+/// instanced draws in them, and their triangles (free instance slots
+/// included).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PassCounts {
+    pub calls: u32,
+    pub draws: u32,
+    pub triangles: u64,
 }
 
 impl Renderer {
@@ -195,13 +213,17 @@ impl Renderer {
                 texture_entry(4, wgpu::TextureViewDimension::D2Array),
             ],
         });
-        let image_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("rook images"),
-            entries: &(0..5)
-                .map(|i| texture_entry(i, wgpu::TextureViewDimension::D2))
-                .collect::<Vec<_>>(),
-        });
-        let pipelines = Pipelines::new(&device, color_format, &layout, &main_layout, &image_layout);
+        let image_binding = ImageBinding::for_device(&device);
+        let table = image_binding.table_slots();
+        let image_layout = image_layout(&device, table);
+        let pipelines = Pipelines::new(
+            &device,
+            color_format,
+            &layout,
+            &main_layout,
+            &image_layout,
+            table.is_some(),
+        );
 
         let cx = UploadContext {
             device: &device,
@@ -228,10 +250,14 @@ impl Renderer {
             &surfaces_view,
             &water_view,
         );
+        let mut pool = MeshPool::new(&device, &queue);
         let mut meshes = GpuCache::new();
         for shape in DrawShape::ALL {
-            meshes.insert(shape, GpuMesh::upload(&device, &mesh::build(shape)));
+            meshes.insert(shape, pool.add(&mesh::build(shape)));
         }
+        let multi_draw = device
+            .features()
+            .contains(wgpu::Features::INDIRECT_FIRST_INSTANCE);
 
         let mut renderer = Self {
             device,
@@ -239,6 +265,7 @@ impl Renderer {
             color_format,
             pipelines,
             globals,
+            globals_layout: layout,
             bind_group,
             shadow_view,
             surfaces_view,
@@ -249,13 +276,16 @@ impl Renderer {
             image_layout,
             image_sampler,
             defaults,
-            groups: HashMap::new(),
+            image_binding,
             meshes,
+            pool,
+            multi_draw,
+            indirect: None,
             images: GpuCache::new(),
             opaque: Batches::default(),
             layers: Batches::default(),
             placements: Vec::new(),
-            waiting: HashMap::new(),
+            waiting: HashMap::default(),
             transparent_free: Vec::new(),
             transparent_buffer: None,
             transparent_parts: Vec::new(),
@@ -285,7 +315,9 @@ impl Renderer {
     /// grass tiles, dropped as the camera leaves them). An entry still
     /// drawing it draws nothing until the scene hands the mesh over again.
     pub fn drop_mesh(&mut self, mesh: MeshHash) {
-        self.meshes.remove(&DrawShape::File(mesh));
+        if let Some(gpu) = self.meshes.remove(&DrawShape::File(mesh)) {
+            self.pool.remove(&gpu);
+        }
     }
 
     /// Set the clock grass sways by, in seconds; water moves on by the time
@@ -302,8 +334,10 @@ impl Renderer {
     /// instead of Rook's. It must be the head at its own size, as Roblox's
     /// file is.
     pub fn set_head_mesh(&mut self, head: &Mesh) {
-        let gpu = GpuMesh::upload(&self.device, &mesh::from_file(head));
-        self.meshes.insert(DrawShape::Head, gpu);
+        let gpu = self.pool.add(&mesh::from_file(head));
+        if let Some(old) = self.meshes.insert(DrawShape::Head, gpu) {
+            self.pool.remove(&old);
+        }
     }
 
     /// Draw the surface patterns from this atlas (the user's own
@@ -353,8 +387,46 @@ impl Renderer {
         );
     }
 
+    /// What to ask the adapter for when making the device a renderer
+    /// gets: the features Rook uses where the adapter has them
+    /// (timestamps for `--bench`, binding arrays for the image table,
+    /// first instances in indirect draws for multi-draws), room for the
+    /// table, and the adapter's biggest buffers (for the mesh pool).
+    pub fn device_descriptor(adapter: &wgpu::Adapter) -> wgpu::DeviceDescriptor<'static> {
+        let wanted = wgpu::Features::TIMESTAMP_QUERY
+            | wgpu::Features::INDIRECT_FIRST_INSTANCE
+            | wgpu::Features::TEXTURE_BINDING_ARRAY
+            | wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
+            | wgpu::Features::PARTIALLY_BOUND_BINDING_ARRAY;
+        let required_features = adapter.features() & wanted;
+        let mut required_limits = wgpu::Limits {
+            max_buffer_size: adapter.limits().max_buffer_size,
+            ..Default::default()
+        };
+        if required_features.contains(wgpu::Features::TEXTURE_BINDING_ARRAY) {
+            let a = adapter.limits();
+            required_limits.max_binding_array_elements_per_shader_stage =
+                a.max_binding_array_elements_per_shader_stage;
+            required_limits.max_sampled_textures_per_shader_stage =
+                a.max_sampled_textures_per_shader_stage;
+        }
+        wgpu::DeviceDescriptor {
+            label: Some("rook"),
+            required_features,
+            required_limits,
+            ..Default::default()
+        }
+    }
+
     /// A renderer without a window, for screenshots and tests.
     pub fn headless() -> Result<Self, RenderError> {
+        Self::headless_with(Self::device_descriptor)
+    }
+
+    /// A renderer without a window on a device `descriptor` asks for.
+    pub(crate) fn headless_with(
+        descriptor: impl FnOnce(&wgpu::Adapter) -> wgpu::DeviceDescriptor<'static>,
+    ) -> Result<Self, RenderError> {
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
@@ -363,12 +435,8 @@ impl Renderer {
             apply_limit_buckets: false,
         }))
         .map_err(|e| RenderError::Adapter(e.to_string()))?;
-        let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-            label: Some("rook"),
-            required_features: Self::wanted_features(&adapter),
-            ..Default::default()
-        }))
-        .map_err(|e| RenderError::Device(e.to_string()))?;
+        let (device, queue) = pollster::block_on(adapter.request_device(&descriptor(&adapter)))
+            .map_err(|e| RenderError::Device(e.to_string()))?;
         Ok(Self::new(
             device,
             queue,

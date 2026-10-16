@@ -26,7 +26,7 @@ fn vs_main(v: VertexIn) -> VertexOut {
     out.world = world;
     out.normal = normalize(instance_rotation(v) * local_normal);
     out.color = vec4(srgb_to_linear(v.i_color.rgb), v.i_color.a);
-    if (v.i_flags & VERTEX_COLORS) != 0u {
+    if (v.i_flags.x & VERTEX_COLORS) != 0u {
         let c = vec3((v.face >> 8u) & 255u, (v.face >> 16u) & 255u, v.face >> 24u);
         out.color = vec4(srgb_to_linear(vec3<f32>(c) / 255.0), v.i_color.a);
     }
@@ -43,7 +43,7 @@ fn vs_main(v: VertexIn) -> VertexOut {
     // Images and surfaces go by the part's own axes, not the turned
     // shape's: the turn takes the shape's (x, y, z) to the part's
     // (-y, x, z).
-    if (v.i_flags & UPRIGHT) != 0u {
+    if (v.i_flags.x & UPRIGHT) != 0u {
         local = vec3(-local.y, local.x, local.z);
         normal = vec3(-normal.y, normal.x, normal.z);
         center = vec3(-center.y, center.x, center.z);
@@ -59,20 +59,22 @@ fn vs_main(v: VertexIn) -> VertexOut {
     out.box_center = center;
     out.box_size = size;
     out.tile = v.i_tile;
-    out.flags = v.i_flags;
-    out.surfaces = v.i_flags >> SURFACES_SHIFT;
+    out.flags = v.i_flags.x;
+    out.surfaces = v.i_flags.x >> SURFACES_SHIFT;
     out.material = v.i_material;
+    out.images = v.i_flags.yzw;
     return out;
 }
 
 // The shadow map: depth only, from the sun.
 @vertex
-fn vs_shadow(v: VertexIn) -> @builtin(position) vec4<f32> {
-    if (v.i_flags & CAST) == 0u {
+fn vs_shadow(v: ShadowIn) -> @builtin(position) vec4<f32> {
+    if (v.i_flags.x & CAST) == 0u {
         // Outside the depth range, so every triangle is clipped away.
         return vec4(0.0, 0.0, -1.0, 1.0);
     }
-    return g.shadow_view_proj * vec4(world_position(v), 1.0);
+    let rotation = mat3x3<f32>(v.i_right, v.i_up, v.i_back);
+    return g.shadow_view_proj * vec4(placed(v.position, v.i_position, rotation, v.i_size), 1.0);
 }
 
 // The face a point belongs to: its vertices' box face, or else the one
@@ -208,7 +210,7 @@ fn neon(c: vec3<f32>) -> vec3<f32> {
 // Parts and their mesh textures. A texture's alpha is ignored (observed).
 @fragment
 fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
-    var albedo = in.color.rgb * textureSample(image, image_sampler, in.uv).rgb;
+    var albedo = in.color.rgb * sample_image(in.images, in.uv).rgb;
     let face = face_at(in);
     let placed = face_position(face, in.local, in.box_center, in.box_size);
     let at = placed.xy;
@@ -238,22 +240,22 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
     var metalness = in.material.z;
     var alpha = surface_alpha(in);
     if on_uv {
-        let c = textureSampleGrad(color_map, image_sampler, uv, duv_x, duv_y);
+        let c = sample_map(in.images, COLOR_MAP, uv, duv_x, duv_y);
         let a = surface_appearance(in, c);
         albedo = a.rgb;
         alpha *= a.a;
     } else if terrain && (in.flags & MAPS) != 0u {
         // Terrain's colour maps are tint masks (their packs' `alphamode`
         // 2, TintMask): the colour tints them where they're opaque.
-        let c = textureSampleGrad(color_map, image_sampler, uv, duv_x, duv_y);
+        let c = sample_map(in.images, COLOR_MAP, uv, duv_x, duv_y);
         albedo = c.rgb * mix(vec3(1.0), in.color.rgb, c.a);
     } else if (in.flags & MAPS) != 0u {
-        albedo *= textureSampleGrad(color_map, image_sampler, uv, duv_x, duv_y).rgb;
+        albedo *= sample_map(in.images, COLOR_MAP, uv, duv_x, duv_y).rgb;
     }
     if (in.flags & MAPS) != 0u {
-        roughness *= textureSampleGrad(roughness_map, image_sampler, uv, duv_x, duv_y).g;
-        metalness *= textureSampleGrad(metalness_map, image_sampler, uv, duv_x, duv_y).r;
-        let t = textureSampleGrad(normal_map, image_sampler, uv, duv_x, duv_y).xyz * 2.0 - 1.0;
+        roughness *= sample_map(in.images, ROUGHNESS_MAP, uv, duv_x, duv_y).g;
+        metalness *= sample_map(in.images, METALNESS_MAP, uv, duv_x, duv_y).r;
+        let t = sample_map(in.images, NORMAL_MAP, uv, duv_x, duv_y).xyz * 2.0 - 1.0;
         normal = perturb(in.normal, t, dp_x, dp_y, duv_x, duv_y);
     }
     if in.surfaces != 0u && (in.flags & MAPS_UV) == 0u {
@@ -361,10 +363,10 @@ fn fs_layer(in: VertexOut) -> @location(0) vec4<f32> {
         // A decal doesn't repeat: keep the repeating sampler off the far
         // edges (a head's (0, 0) UVs show the image's top-left texel,
         // observed).
-        let half_texel = 0.5 / vec2<f32>(textureDimensions(image));
+        let half_texel = 0.5 / vec2<f32>(image_size(in.images));
         uv = clamp(uv, half_texel, vec2(1.0) - half_texel);
     }
-    let texel = textureSampleGrad(image, image_sampler, uv, dx, dy);
+    let texel = sample_map(in.images, IMAGE, uv, dx, dy);
     let alpha = texel.a * in.color.a;
     return vec4(shade(texel.rgb * in.color.rgb, in.world, in.normal), alpha);
 }

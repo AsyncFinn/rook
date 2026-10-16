@@ -12,6 +12,7 @@ mod cache;
 mod cull;
 mod gpu;
 mod mesh;
+mod pool;
 mod renderer;
 mod scene;
 mod shadow;
@@ -23,7 +24,8 @@ pub use scene::{
     Scene, SurfacePattern, TerrainLook, Tiling, TrussShape,
 };
 
-use std::collections::HashMap;
+// Content hashes are 32 bytes: FxHash keeps lookups by them cheap.
+use rustc_hash::FxHashMap as HashMap;
 
 use bytemuck::{Pod, Zeroable};
 use glam::Vec3;
@@ -36,8 +38,9 @@ use shadow::{SHADOW_DISTANCE, SHADOW_SIZE, ShadowView};
 
 use batch::*;
 use gpu::*;
+use pool::{GpuMesh, MeshPool};
 
-pub use renderer::{DrawCounts, GpuTimes, Renderer};
+pub use renderer::{DrawCounts, GpuTimes, PassCounts, Renderer};
 
 pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 

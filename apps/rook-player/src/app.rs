@@ -60,11 +60,7 @@ impl App {
             apply_limit_buckets: false,
         }))?;
         let (device, queue) =
-            pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-                label: Some("rook"),
-                required_features: Renderer::wanted_features(&adapter),
-                ..Default::default()
-            }))?;
+            pollster::block_on(adapter.request_device(&Renderer::device_descriptor(&adapter)))?;
         let size = window.inner_size();
         let mut config = surface
             .get_default_config(&adapter, size.width.max(1), size.height.max(1))

@@ -16,6 +16,7 @@ glam.workspace = true
 bytemuck.workspace = true
 thiserror.workspace = true
 pollster.workspace = true
+rustc-hash.workspace = true
 profiling.workspace = true
 
 [lints]

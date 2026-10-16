@@ -29,9 +29,9 @@ fn fs_sky(in: SkyOut) -> @location(0) vec4<f32> {
     let on_face = d / max(along, 1e-6);
     var uv = vec2(0.5 + 0.5 * dot(on_face, right), 0.5 - 0.5 * dot(on_face, up));
     // Images don't repeat: keep the sampler off the far edges.
-    let half_texel = 0.5 / vec2<f32>(textureDimensions(image));
+    let half_texel = 0.5 / vec2<f32>(sky_size(in.face));
     uv = clamp(uv, half_texel, vec2(1.0) - half_texel);
-    let texel = textureSample(image, image_sampler, uv);
+    let texel = sample_sky(in.face, uv);
     let a = abs(d);
     if along < max(a.x, max(a.y, a.z)) - 1e-6 {
         discard;
