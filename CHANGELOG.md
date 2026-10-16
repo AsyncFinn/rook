@@ -15,6 +15,12 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 
 ## [Unreleased]
 
+## [0.5.14] — 2026-10-15 — Fix: the player won't start without the Visual C++ runtime
+
+Pinned Roblox version: 0.741.19.
+
+- Windows builds include the C and C++ runtime (`+crt-static`, in `.cargo/config.toml`), so `rook-player.exe` starts on machines without the Visual C++ Redistributable. It failed with "VCRUNTIME140_1.dll was not found". It now needs only DLLs that ship with Windows.
+
 ## [0.5.13] — 2026-10-15 — Fix: drawing off-screen parts that share a batch with visible ones
 
 Pinned Roblox version: 0.741.19.
