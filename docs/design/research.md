@@ -98,7 +98,7 @@ Versions are as of 2026-10-04 (crates.io).
 | Math | `glam` | 0.34 | Backing for Vector3/CFrame; f32 on the engine side, f64 where Luau semantics need it. |
 | GPU | `wgpu` | 30.0.1 | Renderer. |
 | Windowing | `winit` | 0.30.13 | Player window and input. |
-| Text | `cosmic-text` (+ `glyphon`) | 0.19 / 0.12 | GUI text shaping, layout and rasterisation. |
+| Text | `parley` | 0.12 | GUI text shaping (HarfRust, the HarfBuzz project's Rust port) and layout; glyphs rasterised from its `skrifa` outlines into an atlas. Linebender's, not tied to an engine (Bevy moved to it from cosmic-text in 0.19). |
 | Physics | `rapier3d` | 0.36.0 | Rigid bodies, colliders, joints and queries underneath Rook's own Roblox-semantics layer. |
 | Audio | `kira` (preferred) or `rodio` | 0.12.5 / 0.22.2 | Kira's tweening, mixer tracks and spatial audio map well onto Sound and SoundGroup. |
 | Datatype reference | `lune-roblox` | 0.3.5 (MPL-2.0) | Reference for datatype edge cases. Taking files from it means those files stay MPL. |
@@ -140,7 +140,7 @@ Only public, citable sources. Primary source: Arseny Kapoulkine ("zeux", Roblox 
 | **PGS solver** (in-house) | Optional from mid-2015, plus a hybrid LDL-PGS in 2018; the legacy spring solver was **removed March 4, 2019** | Roblox newsroom (Aug 2020); DevForum announcements | Confirmed | Modern means PGS only. Old places no longer get spring-solver behavior, so Rook never implements it. Rapier's impulse-based solver is the same family. |
 | **RakNet** (modified) | Transport under the Replicator | Developer Console memory categories `network/raknet` and `network/replicator`, discussed widely on DevForum | Confirmed (observable) | BrikNet's RakNet-style design fits. Rook doesn't need wire compatibility. |
 | **FMOD** | Audio engine | Studio About dialog (0.741.19, checked 2026-10-04): "Uses 'FMOD Studio' from 'Firelight Technologies'"; also FMOD error codes on DevForum | Confirmed (observed directly) | `Sound` rolloff modes and attenuation likely follow FMOD's publicly documented 3D rolloff models. Implement those curves in kira. **Inference** until checked in Studio. |
-| **HarfBuzz** | Unicode text shaping, plus dynamic TTF rasterisation (both after 2013) | [zeux] | Confirmed | cosmic-text shapes with a HarfBuzz port, so glyph advances and kerning should match closely. |
+| **HarfBuzz** | Unicode text shaping, plus dynamic TTF rasterisation (both after 2013) | [zeux] | Confirmed | Parley shapes with HarfRust, the HarfBuzz project's own Rust port, so glyph advances and kerning should match closely. |
 | **pugixml** | XML place/model parsing since 2019 | [zeux] | Confirmed | XML whitespace and entity behavior follow pugixml. Note it if rbx_xml ever disagrees. |
 | **LZ4** | Per-chunk compression in the binary format (designed 2013) | [zeux] | Confirmed | Already handled by rbx_binary. |
 | **Recast + Detour** | PathfindingService navmesh (≈2018–2019, replacing voxel pathfinding) | [zeux] | Confirmed | Use a Recast/Detour port or binding for `PathfindingService`. |
