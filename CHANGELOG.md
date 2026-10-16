@@ -15,6 +15,13 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 
 ## [Unreleased]
 
+## [0.5.11] — 2026-10-15 — Fix: slow rendering on big places
+
+Pinned Roblox version: 0.741.19.
+
+- The renderer skips draws for what the camera can't see. Each batch of instanced parts (one per mesh and image set, so every mesh file and terrain chunk) keeps a box around its instances in the world. The main pass only draws batches whose box reaches into the camera's view, and transparent parts likewise. The shadow pass only draws batches the sun's view of the shadowed area reaches, so a part behind the camera still shadows what's in view. The GPU clipped those triangles away anyway, so no pixel changes: frames rendered with and without culling are byte-identical on an 86k-part place and a 61k-part place, from three views each. On an 86k-part place (86k parts, 7,680 mesh files), draws per frame fell from 6,762 + 8,332 (shadow + main) to 321 + 620, and render with readback from 84 to 36 ms a frame. On a 61k-part place (no shadows), main-pass draws fell from 2,966 to 393 and render from 18.7 to 15.3 ms (300 frames of `--bench` each, A/B against 0.5.7; 0.5.8 to 0.5.10 don't touch rendering).
+- `--bench` prints the draw calls per frame.
+
 ## [0.5.10] — 2026-10-15 — Fix: `game.workspace` is nil
 
 Pinned Roblox version: 0.741.19.

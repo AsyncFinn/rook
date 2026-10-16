@@ -34,6 +34,7 @@ pub(crate) fn bench(
     game.set_viewport(width, height);
     let mut mouse = 0.0;
     let mut whole = stats::Times::default();
+    let (mut shadow_draws, mut main_draws) = (0u64, 0u64);
     game.server_steps.clear();
     game.client_steps.clear();
     for frame in 0..frames {
@@ -58,6 +59,9 @@ pub(crate) fn bench(
         let t = Instant::now();
         renderer.render_to_image(width, height, camera)?;
         render += secs(t);
+        let draws = renderer.draw_counts();
+        shadow_draws += u64::from(draws.shadow);
+        main_draws += u64::from(draws.main);
         whole.push(frame_start.elapsed());
         profiling::finish_frame!();
     }
@@ -75,6 +79,12 @@ pub(crate) fn bench(
         ms(sim),
         ms(build),
         ms(render)
+    );
+    let per_frame = |n: u64| thousands((n / u64::from(frames.max(1))) as usize);
+    eprintln!(
+        "draw calls per frame: shadow pass {}, main pass {}",
+        per_frame(shadow_draws),
+        per_frame(main_draws)
     );
     eprintln!("server step: {}", game.server_steps.summary());
     if !game.client_steps.is_empty() {

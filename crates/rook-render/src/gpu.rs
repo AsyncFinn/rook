@@ -180,6 +180,31 @@ impl Instance {
             material,
         }
     }
+
+    /// The box around what this instance draws in the world, before the
+    /// shader moves any vertex. A free slot (all zeroes) draws nothing.
+    pub(crate) fn world_box(&self) -> Aabb {
+        let size = Vec3::from(self.size);
+        if size == Vec3::ZERO {
+            return Aabb::EMPTY;
+        }
+        let (lo, hi) = (
+            Vec3::from(self.box_min) * size,
+            Vec3::from(self.box_max) * size,
+        );
+        let rotation = glam::Mat3::from_cols(self.right.into(), self.up.into(), self.back.into());
+        let centre = Vec3::from(self.position) + rotation * ((lo + hi) * 0.5);
+        let abs = glam::Mat3::from_cols(
+            rotation.x_axis.abs(),
+            rotation.y_axis.abs(),
+            rotation.z_axis.abs(),
+        );
+        let half = abs * ((hi - lo) * 0.5).abs();
+        Aabb {
+            min: centre - half,
+            max: centre + half,
+        }
+    }
 }
 
 #[derive(Debug)]

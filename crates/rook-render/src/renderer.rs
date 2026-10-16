@@ -66,6 +66,15 @@ pub struct Renderer {
     /// 0 and goes on from there), wrapped at [`WATER_PHASE_PERIOD`].
     pub(crate) water_phase: f64,
     depth: Option<(wgpu::Texture, wgpu::TextureView, u32, u32)>,
+    /// The last frame's draw calls.
+    draw_counts: DrawCounts,
+}
+
+/// How many draw calls a frame took, in the shadow pass and the main pass.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct DrawCounts {
+    pub shadow: u32,
+    pub main: u32,
 }
 
 impl Renderer {
@@ -244,6 +253,7 @@ impl Renderer {
             time: 0.0,
             water_phase: 0.0,
             depth: None,
+            draw_counts: DrawCounts::default(),
         };
         renderer.ensure_group([None; 5]);
         renderer
@@ -350,6 +360,11 @@ impl Renderer {
             queue,
             wgpu::TextureFormat::Rgba8UnormSrgb,
         ))
+    }
+
+    /// How many draw calls the last frame took.
+    pub fn draw_counts(&self) -> DrawCounts {
+        self.draw_counts
     }
 
     pub fn color_format(&self) -> wgpu::TextureFormat {

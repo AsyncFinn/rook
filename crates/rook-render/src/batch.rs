@@ -10,6 +10,10 @@ pub(crate) struct BatchKey {
     pub(crate) images: renderer::ImageSet,
 }
 
+/// A batch's draw: its key, its instances' buffer and range, and the box
+/// around them in the world.
+pub(crate) type Draw<'a> = (BatchKey, &'a wgpu::Buffer, std::ops::Range<u32>, Aabb);
+
 /// Instances of one key, drawn instanced. An instance keeps its slot while
 /// it draws this key; a slot it leaves holds a zeroed instance (which
 /// draws nothing) until another takes it.
@@ -23,11 +27,16 @@ pub(crate) struct Batch {
     buffer: Option<(wgpu::Buffer, usize)>,
     /// Instances changed since they were last uploaded.
     dirty: Option<std::ops::Range<usize>>,
+    /// The box around every instance in the world, and whether an
+    /// instance changed since it was worked out.
+    bounds: Aabb,
+    bounds_stale: bool,
 }
 
 impl Batch {
     pub(crate) fn set(&mut self, slot: usize, instance: Instance) {
         self.instances[slot] = instance;
+        self.bounds_stale = true;
         self.dirty = Some(match self.dirty.take() {
             Some(r) => r.start.min(slot)..r.end.max(slot + 1),
             None => slot..slot + 1,
@@ -65,6 +74,8 @@ impl Batches {
                     free: Vec::new(),
                     buffer: None,
                     dirty: None,
+                    bounds: Aabb::EMPTY,
+                    bounds_stale: false,
                 });
                 self.z.push(z);
                 self.of.insert((z, key), b);
@@ -91,10 +102,17 @@ impl Batches {
         b.free.push(slot);
     }
 
-    /// Bring the batches' GPU copies up to date.
+    /// Bring the batches' GPU copies and their bounds up to date.
     pub(crate) fn upload(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {
         let size = std::mem::size_of::<Instance>();
         for b in &mut self.list {
+            if b.bounds_stale {
+                b.bounds = b
+                    .instances
+                    .iter()
+                    .fold(Aabb::EMPTY, |all, i| all.union(i.world_box()));
+                b.bounds_stale = false;
+            }
             let len = b.instances.len();
             match &b.buffer {
                 Some((buffer, capacity)) if *capacity >= len => {
@@ -116,14 +134,14 @@ impl Batches {
         }
     }
 
-    /// (key, buffer, instances) in drawing order.
-    pub(crate) fn draws(&self) -> Vec<(BatchKey, &wgpu::Buffer, std::ops::Range<u32>)> {
+    /// (key, buffer, instances, bounds) in drawing order.
+    pub(crate) fn draws(&self) -> Vec<Draw<'_>> {
         self.order
             .iter()
             .filter_map(|&i| {
                 let b = &self.list[i];
                 let (buffer, _) = b.buffer.as_ref()?;
-                Some((b.key, buffer, 0..b.instances.len() as u32))
+                Some((b.key, buffer, 0..b.instances.len() as u32, b.bounds))
             })
             .collect()
     }
