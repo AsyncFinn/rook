@@ -66,7 +66,7 @@ blake3 = "1"
 # Asset delivery (rook-content): rustls and gzip, no async runtime
 ureq = "3"
 # Roblox mesh files, versions 1.00 to 5.00 (rook-content)
-rbx_mesh = { version = "0.8", default-features = false }
+rbx_mesh = { version = "0.8.2", default-features = false }
 # KTX2 images (rook-content): levels are Zstandard-compressed (the same
 # zstd rbx_binary uses)
 zstd = "0.13"

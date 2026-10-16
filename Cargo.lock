@@ -2822,12 +2822,11 @@ dependencies = [
 
 [[package]]
 name = "rbx_mesh"
-version = "0.8.1"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f9bfedc10ca40c278d4d091a1f9f6084d354af12f994356be6ef81555924240"
+checksum = "4e4ec9af3319029bbc8b3fc24eb02af030638497f07e822e1ac53845950be8eb"
 dependencies = [
  "binrw",
- "regex",
  "zstd",
 ]
 
