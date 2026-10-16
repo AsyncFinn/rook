@@ -249,8 +249,8 @@ redrawn as they arrive.
 
 ## Grass and waves (step 2, continued)
 
-**Grass and waves**, built 2026-10-15 (0.5.3) and measured again for
-0.5.4: what step 2 left of terrain's look. Measured in Studio 0.742 on
+**Grass and waves**, built 2026-10-15 and measured again before 0.5.2
+was released: what step 2 left of terrain's look. Measured in Studio 0.742 on
 the Baseplate place with a 64 × 4 × 64 Grass slab, a 64 × 4 × 12 Grass
 strip and a 64 × 4 × 64 block of Water, each beside a ruler part,
 screenshots taken with narrow fields of view (2 to 8 degrees) so the
@@ -372,8 +372,8 @@ and with grey 128 a dark navy (38, 54, 67). Rook's ground still uses the
 tint mask (left for a terrain colours fix).
 
 *Costs* (release build, `--bench 300` on Ragdoll Engine, 1280 × 720,
-0.5.4 against 0.5.5, five runs each from the grass and two from the
+the last change of the step against the build before it, five runs each from the grass and two from the
 saved camera): no difference beyond the noise (medians 4.5 to 9.9 ms
 for both, other builds running alongside). There are 2.3 times as many
-blades as in 0.5.3 but each is 2 triangles instead of 6, and water takes
+blades as first built but each is 2 triangles instead of 6, and water takes
 a second texture sample.

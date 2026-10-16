@@ -100,7 +100,7 @@ on purpose, `RCBlocker`, or other plain parts). The 2016 airlock's wall
 union (1 × 12 × 12.2 studs, 15 saved hulls) now lets rays through its
 round doorway.
 
-*Performance* (release builds, base = 0.4.4, `rook run-headless
+*Performance* (release builds, base = the build before this step, `rook run-headless
 --seconds 5`, two runs each): a 2016 core place (no moving unions) 17.1 / 17.2 s
 against 17.4 / 17.7 s; a modern core place (86 moving unions, most of them not
 colliding) 14.8 / 14.7 s against 15.6 / 15.8 s, the cost of its
