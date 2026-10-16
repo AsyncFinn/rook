@@ -24,6 +24,7 @@ pub(crate) fn bench(
     width: u32,
     height: u32,
     install: &Installed,
+    load_start: Instant,
 ) -> anyhow::Result<()> {
     let mut renderer = Renderer::headless()?;
     install.apply(&mut renderer);
@@ -39,6 +40,9 @@ pub(crate) fn bench(
     game.set_viewport(width, height);
     let mut mouse = 0.0;
     let mut whole = stats::Times::default();
+    // When the content loaders last ran out of work, and the frames
+    // until then.
+    let mut idle_at = None;
     // Per pass (shadow, main): draw calls, instanced draws, triangles.
     let mut drawn = [[0u64; 3]; 2];
     game.server_steps.clear();
@@ -78,6 +82,10 @@ pub(crate) fn bench(
             sum[2] += pass.triangles;
         }
         whole.push(frame_start.elapsed());
+        let idle = rook_content::idle_since();
+        if idle != idle_at.map(|(t, _)| t) {
+            idle_at = idle.map(|t| (t, whole.len()));
+        }
         profiling::finish_frame!();
     }
     game.print_logs();
@@ -130,5 +138,16 @@ pub(crate) fn bench(
         "whole frame (offscreen, with readback): {}",
         whole.summary()
     );
+    match idle_at {
+        Some((at, frames)) => eprintln!(
+            "content loaded {:.2} s after the place started loading; frames until then: {}",
+            at.saturating_duration_since(load_start).as_secs_f64(),
+            whole.until(frames).summary()
+        ),
+        None => eprintln!(
+            "content still loading after {frames} frames, {:.2} s after the place started loading",
+            load_start.elapsed().as_secs_f64()
+        ),
+    }
     Ok(())
 }

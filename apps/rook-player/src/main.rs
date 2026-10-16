@@ -228,6 +228,7 @@ fn main() -> anyhow::Result<()> {
             args.width,
             args.height,
             &install,
+            load_start,
         );
     }
 
