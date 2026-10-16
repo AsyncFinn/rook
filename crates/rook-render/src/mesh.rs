@@ -50,6 +50,12 @@ pub(crate) const UNION_FACE: u32 = 64;
 /// (`rook_content::decode::mesh::TerrainMapping`).
 pub(crate) const TERRAIN_FACE: u32 = 128;
 
+/// Where a terrain seam vertex's face holds which corners' layer its mesh
+/// draws (`TerrainCorner::drawn`, 3 bits). The vertex's UV is its
+/// barycentric weights' first two, and its box point its triangle's
+/// corners' layers.
+pub(crate) const TERRAIN_DRAWN_SHIFT: u32 = 9;
+
 impl Vertex {
     /// A vertex mapped from where it is, its face found from its normal.
     fn plain(position: [f32; 3], normal: [f32; 3], uv: [f32; 2]) -> Self {
@@ -438,6 +444,14 @@ pub(crate) fn from_file(m: &rook_content::decode::mesh::Mesh) -> MeshData {
             };
         for v in &mut vertices {
             v.face = face;
+        }
+        for (v, c) in vertices.iter_mut().zip(&m.terrain_corners) {
+            v.uv = [
+                f32::from(u8::from(c.corner == 0)),
+                f32::from(u8::from(c.corner == 1)),
+            ];
+            v.box_point = c.layers.map(f32::from);
+            v.face |= u32::from(c.drawn) << TERRAIN_DRAWN_SHIFT;
         }
     }
     for tri in m.indices.as_chunks::<3>().0 {

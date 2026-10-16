@@ -106,6 +106,31 @@ pub struct Texture {
     pub detiling: f32,
     /// How far Studio turns the texture at random (not drawn yet).
     pub rotation: f32,
+    /// How it blends with the textures around it.
+    pub blend: Blend,
+}
+
+/// How a texture blends into its neighbours' where materials (or top and
+/// side) meet, by its pack's height map: the map's 0 to 1 stands from
+/// `min` to `max` (clamped to 0 to 1), so a texture with a low range, such
+/// as Sand's, gives way to its neighbours; `scale` is how soft the edge
+/// between two textures is, in those units (Studio's `blend`, per texture,
+/// or the material's for textures without one). Inference: Studio's
+/// shader scales and offsets the height by two per-texture numbers; this
+/// reading of them gives seams as wide as Studio's, the other (`min` to
+/// `max` stretched to 0 to 1) far narrower ones.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Blend {
+    pub min: f32,
+    pub max: f32,
+    pub scale: f32,
+}
+
+impl Blend {
+    /// The height's multiplier and offset: `height * a + b`.
+    pub fn remap(&self) -> (f32, f32) {
+        (self.max - self.min, self.min)
+    }
 }
 
 impl Texture {

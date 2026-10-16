@@ -13,6 +13,10 @@
 //! Water is meshed the same way in a second pass, where solid voxels count
 //! as inside too and only the faces of water voxels are kept, then moved
 //! down half a voxel ([`WATER_DROP`]).
+//!
+//! [`ChunkMesh::surfaces`] split the triangles by their voxel's material,
+//! for collisions; [`ChunkMesh::draws`] by the layers drawn, blending
+//! where they meet ([`draws`]).
 
 use glam::{IVec3, Vec3};
 
@@ -20,8 +24,10 @@ use crate::TerrainMaterial;
 use crate::grid::{CHUNK_VOXELS, Grid, VOXEL_STUDS, Voxel};
 
 mod deform;
+pub mod draws;
 
 use deform::deform;
+pub use draws::{Corner, Draw, Layer, Seam};
 
 /// One material's part of a chunk's surface, relative to the chunk's
 /// corner ([`ChunkMesh::origin`]).
@@ -72,6 +78,8 @@ pub struct ChunkMesh {
     pub chunk: IVec3,
     /// By material, solids first and water last.
     pub surfaces: Vec<Surface>,
+    /// What's drawn, by layer, solids first and water last.
+    pub draws: Vec<Draw>,
 }
 
 impl ChunkMesh {
@@ -152,6 +160,7 @@ pub(crate) fn mesh_chunk_with(grid: &Grid, chunk: IVec3, diagonals: [[bool; 2]; 
     grid.read_block(first, IVec3::splat(SPAN), &mut voxels);
     let block = Block { voxels };
     let mut surfaces = Vec::new();
+    let mut draws = Vec::new();
     for pass in [Pass::Solid, Pass::Water] {
         let mut mesher = Mesher {
             block: &block,
@@ -160,12 +169,18 @@ pub(crate) fn mesh_chunk_with(grid: &Grid, chunk: IVec3, diagonals: [[bool; 2]; 
             cells: vec![NONE; (CELLS * CELLS * CELLS) as usize],
             positions: Vec::new(),
             normals: Vec::new(),
+            materials: Vec::new(),
             triangles: Vec::new(),
         };
         mesher.run(diagonals);
+        mesher.draws(&mut draws);
         mesher.split(&mut surfaces);
     }
-    ChunkMesh { chunk, surfaces }
+    ChunkMesh {
+        chunk,
+        surfaces,
+        draws,
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -239,6 +254,8 @@ struct Mesher<'a> {
     cells: Vec<u32>,
     positions: Vec<Vec3>,
     normals: Vec<Vec3>,
+    /// Each vertex's material: its cell's ([`Mesher::dominant`]), or Water.
+    materials: Vec<TerrainMaterial>,
     /// The chunk's own triangles and their material.
     triangles: Vec<([u32; 3], TerrainMaterial)>,
 }
@@ -268,15 +285,20 @@ impl Mesher<'_> {
             n += 1;
         }
         let mut position = sum / n.max(1) as f32;
-        match self.pass {
+        let material = match self.pass {
             Pass::Solid => {
-                let look = self.dominant(c).shape();
-                position = deform(position, centre(c), look, self.origin + c);
+                let material = self.dominant(c);
+                position = deform(position, centre(c), material.shape(), self.origin + c);
+                material
             }
-            Pass::Water => position.y -= WATER_DROP,
-        }
+            Pass::Water => {
+                position.y -= WATER_DROP;
+                TerrainMaterial::Water
+            }
+        };
         let index = self.positions.len() as u32;
         self.positions.push(position);
+        self.materials.push(material);
         self.normals.push(Vec3::ZERO);
         self.cells[slot] = index;
         index

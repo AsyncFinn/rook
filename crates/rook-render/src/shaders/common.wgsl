@@ -35,6 +35,10 @@ struct Globals {
     sky_horizon: vec4<f32>,
     // Each skybox image's slot in the image table, when there is one.
     sky_images: array<vec4<u32>, 2>,
+    // Each terrain layer's blend, two per layer: the height's multiplier
+    // and offset, the edge's softness, studs per repeat; then the height
+    // map's slot and whether it's laid like a box (`TerrainLayer`).
+    terrain_layers: array<vec4<f32>, 138>,
 };
 
 @group(0) @binding(0) var<uniform> g: Globals;
@@ -73,6 +77,9 @@ const UNION_FACE: u32 = 64u;
 const TERRAIN_FACE: u32 = 128u;
 const TERRAIN_WATER: u32 = 2u;
 const TERRAIN_BLADES: u32 = 4u;
+// A terrain seam vertex's face: from this bit, which of its triangle's
+// corners' layer its mesh draws (`mesh::TERRAIN_DRAWN_SHIFT`).
+const TERRAIN_DRAWN_SHIFT: u32 = 9u;
 // Set on `VertexOut::face` for union vertices: tile from the face's centre.
 const CENTRED: u32 = 256u;
 const ALPHA_OVERLAY: u32 = 1u;

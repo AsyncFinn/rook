@@ -185,6 +185,10 @@ pub struct PartInstance {
     /// shows surfaces.
     pub surfaces: [Option<SurfacePattern>; 6],
     pub layer: Layer,
+    /// Added over what's drawn at the same depth instead of covering it:
+    /// a terrain seam's later layers, each its share of the blend
+    /// ([`TerrainLayer`]). Never casts shadows.
+    pub over: bool,
 }
 
 impl PartInstance {
@@ -207,6 +211,7 @@ impl PartInstance {
             reflectance: 0.0,
             surfaces: [None; 6],
             layer: Layer::Base,
+            over: false,
         }
     }
 }
@@ -286,6 +291,45 @@ pub struct TerrainLook {
     /// How far from the camera grass blades are drawn; they shrink away
     /// over the last quarter.
     pub grass_reach: f32,
+    /// How each texture layer blends where layers meet on a seam, by the
+    /// layer's index (`rook_terrain::Layer::index`).
+    pub layers: [TerrainLayer; TERRAIN_LAYERS],
+}
+
+/// The most terrain texture layers: three facings of 23 materials.
+pub const TERRAIN_LAYERS: usize = 69;
+
+/// How a terrain texture layer weighs in on a seam: a terrain mesh whose
+/// vertices name their triangle's corners' layers (`Mesh::terrain_corners`)
+/// draws its share of the corners' blend, Studio's: each corner's
+/// barycentric weight times its layer's height there, the highest winning
+/// over a soft edge (read from Studio 0.742's terrain shader;
+/// `docs/behavior/terrain.md`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TerrainLayer {
+    /// The image holding the layer's height map, in blue (its
+    /// roughness-metalness map); none counts as full height.
+    pub height: Option<ImageHash>,
+    /// The height's multiplier and offset (`height * a + b`, 0 to 1).
+    pub remap: [f32; 2],
+    /// How soft the edge between layers is.
+    pub scale: f32,
+    /// Studs per repeat of its textures.
+    pub studs: f32,
+    /// Textures laid like a box's (Brick, WoodPlanks).
+    pub cube: bool,
+}
+
+impl Default for TerrainLayer {
+    fn default() -> Self {
+        Self {
+            height: None,
+            remap: [0.0, 1.0],
+            scale: 1.0,
+            studs: 8.0,
+            cube: false,
+        }
+    }
 }
 
 impl Default for TerrainLook {
@@ -295,6 +339,7 @@ impl Default for TerrainLook {
             wave_speed: 10.0,
             wind: Vec3::ZERO,
             grass_reach: 0.0,
+            layers: [TerrainLayer::default(); TERRAIN_LAYERS],
         }
     }
 }

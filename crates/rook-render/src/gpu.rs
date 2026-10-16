@@ -40,6 +40,11 @@ pub(crate) struct Globals {
     pub(crate) sky_horizon: [f32; 4],
     /// Each skybox image's slot in the image table, when there is one.
     pub(crate) sky_images: [[u32; 4]; 2],
+    /// Each terrain layer's blend ([`TerrainLayer`]), two per layer: the
+    /// height's multiplier and offset, the edge's softness and the studs
+    /// per repeat; then its height map's slot in the image table and
+    /// whether it's laid like a box.
+    pub(crate) terrain_layers: [[f32; 4]; 2 * TERRAIN_LAYERS],
 }
 
 /// Instance flags (see `shaders/common.wgsl`).

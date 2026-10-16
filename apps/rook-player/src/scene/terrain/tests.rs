@@ -58,7 +58,7 @@ fn edits_remesh_only_changed_chunks() {
             .terrain
             .surfaces
             .iter()
-            .filter(|s| s.material == material)
+            .filter(|s| s.layer.material == material)
             .map(|s| s.mesh)
             .collect()
     };
