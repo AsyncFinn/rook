@@ -13,6 +13,8 @@
 //! and casts hit it unless they ignore water, and parts touch it, but
 //! nothing rests on it. The colliders map to the Terrain instance like a
 //! part's, so filters, collision groups and Touched treat it as a part.
+//! Scripts' edits change the voxels here and rebuild only the chunks they
+//! touch ([`edit`]).
 
 use rapier3d::parry::query::RayCullingMode;
 use rapier3d::parry::shape::TriMesh;
@@ -26,6 +28,7 @@ use rook_terrain::{
 use rook_types::Value;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
+mod edit;
 mod near;
 
 use crate::convert::to_rapier;
@@ -39,6 +42,8 @@ pub(crate) struct Terrain {
     body: Option<RigidBodyHandle>,
     /// Each collider's material.
     pieces: HashMap<ColliderHandle, TerrainMaterial>,
+    /// Each built chunk's colliders, so an edit can take them down.
+    chunk_pieces: HashMap<glam::IVec3, Vec<ColliderHandle>>,
     /// The voxels, for the queries that test voxels rather than the
     /// surface (`IsRegion3Empty`).
     grid: Grid,
@@ -51,9 +56,18 @@ pub(crate) struct Terrain {
     /// The voxels changed (or the Terrain came or went) since the
     /// colliders were built.
     pub(crate) stale: bool,
+    /// The voxels scripts edited this frame (see [`edit`]).
+    edits: Vec<rook_terrain::edit::Bounds>,
 }
 
 impl Terrain {
+    /// Build chunk `c`'s colliders when something comes near it.
+    fn mark_unbuilt(&mut self, c: glam::IVec3) {
+        self.unbuilt.insert(c);
+        let (lo, hi) = self.extent.unwrap_or((c, c));
+        self.extent = Some((lo.min(c), hi.max(c)));
+    }
+
     /// The terrain material of a terrain collider; `None` for a part's.
     pub(crate) fn material(&self, collider: ColliderHandle) -> Option<TerrainMaterial> {
         self.pieces.get(&collider).copied()
@@ -66,6 +80,7 @@ impl Terrain {
 
 /// One material's surface in a chunk, as a collider shape.
 struct Piece {
+    chunk: glam::IVec3,
     material: TerrainMaterial,
     origin: glam::Vec3,
     mesh: TriMesh,
@@ -74,6 +89,7 @@ struct Piece {
 /// A chunk's surface as one mesh per material.
 fn pieces(chunk: ChunkMesh) -> Vec<Piece> {
     let origin = chunk.origin();
+    let at = chunk.chunk;
     let mut by_material: Vec<(TerrainMaterial, Vec<Vector>, Vec<[u32; 3]>)> = Vec::new();
     for s in chunk.surfaces {
         let at = match by_material.iter().position(|(m, ..)| *m == s.material) {
@@ -99,6 +115,7 @@ fn pieces(chunk: ChunkMesh) -> Vec<Piece> {
         .filter_map(|(material, vertices, indices)| {
             let mesh = TriMesh::new(vertices, indices).ok()?;
             Some(Piece {
+                chunk: at,
                 material,
                 origin,
                 mesh,
@@ -132,6 +149,9 @@ impl Physics {
             return;
         }
         profiling::scope!("Physics::refresh_terrain");
+        if self.update_terrain(dom) {
+            return;
+        }
         if let Some(body) = self.terrain.body.take() {
             self.world.remove_body(body);
             for (collider, _) in self.terrain.pieces.drain() {
@@ -140,29 +160,53 @@ impl Physics {
                 }
             }
         }
+        self.terrain.chunk_pieces.clear();
         self.terrain.grid = Grid::new();
         self.terrain.unbuilt.clear();
         self.terrain.extent = None;
+        self.terrain.edits.clear();
         let Some((terrain, bytes)) = smooth_grid(dom) else {
             self.terrain.instance = None;
             return;
         };
         self.terrain.instance = Some(terrain);
-        let Some(bytes) = bytes else {
-            return;
-        };
-        self.terrain.grid = match Grid::decode(bytes) {
-            Ok(grid) => grid,
-            // The renderer warns about it already.
-            Err(_) => return,
-        };
-        self.terrain.unbuilt = chunks_to_mesh(&self.terrain.grid).into_iter().collect();
-        self.terrain.extent = self.terrain.unbuilt.iter().fold(None, |e, c| {
-            let (lo, hi) = e.unwrap_or((*c, *c));
-            Some((lo.min(*c), hi.max(*c)))
-        });
+        // Even an empty Terrain gets its body: scripts may fill it.
         self.terrain.body = Some(self.world.insert_body(RigidBodyBuilder::fixed()));
         self.terrain.groups = self.interaction_groups(dom, terrain);
+        self.terrain.grid = match bytes.map(Grid::decode) {
+            Some(Ok(grid)) => grid,
+            // The renderer warns about one that doesn't decode.
+            None | Some(Err(_)) => return,
+        };
+        for c in chunks_to_mesh(&self.terrain.grid) {
+            self.terrain.mark_unbuilt(c);
+        }
+    }
+
+    /// Only the voxels of the same Terrain changed (a script's edit
+    /// replicated, or written by hand): rebuild just the chunks that
+    /// differ. Returns false when the colliders must be built anew.
+    fn update_terrain(&mut self, dom: &Dom) -> bool {
+        let Some((terrain, bytes)) = smooth_grid(dom) else {
+            return false;
+        };
+        if self.terrain.instance != Some(terrain)
+            || self.terrain.body.is_none()
+            || self.interaction_groups(dom, terrain) != self.terrain.groups
+        {
+            return false;
+        }
+        let grid = match bytes.map(Grid::decode) {
+            Some(Ok(grid)) => grid,
+            None | Some(Err(_)) => Grid::new(),
+        };
+        let changes = self.terrain.grid.changes(&grid);
+        self.terrain.grid = grid;
+        self.terrain.edits.clear();
+        for bounds in changes {
+            self.voxels_changed(bounds);
+        }
+        true
     }
 
     /// Build the colliders of these chunks (unbuilt ones, each once).
@@ -199,6 +243,11 @@ impl Physics {
             let handle = self.world.insert_collider(collider, Some(body));
             self.colliders.insert(handle, terrain);
             self.terrain.pieces.insert(handle, piece.material);
+            self.terrain
+                .chunk_pieces
+                .entry(piece.chunk)
+                .or_default()
+                .push(handle);
             // Queries see it before the next step (see `prepare`).
             let co = &self.world.colliders[handle];
             let aabb = co.compute_broad_phase_aabb(&params, &self.world.bodies);

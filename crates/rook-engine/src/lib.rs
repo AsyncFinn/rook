@@ -142,7 +142,10 @@ struct Content {
 impl DataModel {
     /// An empty place.
     pub fn new(options: &Options) -> Result<Self, EngineError> {
-        Self::with_dom(Dom::new(), options)
+        let mut dom = Dom::new();
+        dom.journal_mut().set_enabled(false);
+        ensure_terrain(&mut dom);
+        Self::with_dom(dom, options)
     }
 
     /// An empty client DataModel, filled by replication.
@@ -202,6 +205,7 @@ impl DataModel {
         let journaling = dom.journal().is_enabled();
         dom.journal_mut().set_enabled(false);
         rook_physics::adopt_saved_velocities(&mut dom);
+        ensure_terrain(&mut dom);
         if rook_physics::surfaces::joins_on_load(&dom) {
             let parts = rook_physics::workspace_parts(&dom);
             let _ = rook_physics::surfaces::make_joints(&mut dom, &parts);
@@ -359,6 +363,23 @@ fn ensure_camera(dom: &mut Dom) {
     if let Some(p) = dom.property_id(ws, "CurrentCamera") {
         dom.load_property(ws, p, Value::Ref(Some(camera.to_ref())));
     }
+}
+
+/// Workspace always has a Terrain, as in Roblox, where `workspace.Terrain`
+/// is never nil (Inference: every place Studio saves has one, and a new
+/// place starts with one). Clients get the server's by replication.
+fn ensure_terrain(dom: &mut Dom) {
+    let Ok(ws) = dom.get_service("Workspace") else {
+        return;
+    };
+    if dom.find_first_child_of_class(ws, "Terrain").is_some() {
+        return;
+    }
+    let Ok(terrain) = dom.create_by_name("Terrain") else {
+        return;
+    };
+    let _ = dom.set_name(terrain, "Terrain".into());
+    dom.attach_unchecked(terrain, ws);
 }
 
 #[cfg(test)]

@@ -6,16 +6,18 @@
 //! `WaterColor` at `WaterTransparency`, waving and rippled by the install's
 //! water normal frames (the renderer's, `Installed`), and Grass grows
 //! blades near the camera ([`grass`]) with `Decoration` on
-//! (`docs/behavior/terrain.md`).
+//! (`docs/behavior/terrain.md`). When scripts edit the voxels, only the
+//! chunks they changed, and their neighbours, are meshed again.
 
 mod grass;
 
+use glam::IVec3;
 use rayon::prelude::*;
 use rook_content::MaterialMap;
 use rook_content::mesh::{Mesh, TerrainMapping};
 use rook_render::TerrainLook;
 use rook_terrain::grass::{GrassTops, add_grass_tops, blade_color};
-use rook_terrain::{Facing, Grid, TerrainMaterial, chunks_to_mesh, mesh_chunk};
+use rook_terrain::{ChunkMesh, Facing, Grid, TerrainMaterial, chunks_to_mesh, mesh_chunk};
 use rook_types::MaterialColors;
 
 use super::*;
@@ -30,12 +32,26 @@ struct TerrainSurface {
     facing: Facing,
 }
 
+/// A chunk's surfaces and its Grass tops.
+#[derive(Debug, Default)]
+struct MeshedChunk {
+    surfaces: Vec<TerrainSurface>,
+    tops: GrassTops,
+}
+
 /// The terrain's surfaces, kept until its `SmoothGrid` changes, and the
 /// scene entries drawing them.
 #[derive(Debug, Default)]
 pub(super) struct TerrainCache {
     /// The hash of the `SmoothGrid` the meshes were built from.
     source: Option<blake3::Hash>,
+    /// The voxels meshed, to find the chunks an edit changed.
+    grid: Grid,
+    chunks: HashMap<IVec3, MeshedChunk>,
+    /// How many times the terrain was meshed: part of each mesh's key, so
+    /// a chunk meshed again gets new keys.
+    epoch: u64,
+    /// Every chunk's surfaces, in chunk order.
     surfaces: Vec<TerrainSurface>,
     /// The Terrain instance, which waits for the textures.
     instance: Option<InstanceId>,
@@ -60,13 +76,15 @@ impl SceneCache {
         let source = grid.map(blake3::hash);
         if source != self.terrain.source {
             self.terrain.source = source;
-            self.terrain.surfaces = match grid {
-                Some(bytes) => self.mesh_terrain(bytes),
-                None => {
-                    self.terrain.grass.tops = GrassTops::default();
-                    Vec::new()
+            let grid = match grid.map(Grid::decode) {
+                Some(Ok(grid)) => grid,
+                Some(Err(e)) => {
+                    eprintln!("warning: Terrain.SmoothGrid doesn't decode: {e}");
+                    Grid::new()
                 }
+                None => Grid::new(),
             };
+            self.mesh_terrain(grid);
         }
         self.terrain.instance = terrain;
         for mesh in self.terrain.grass.reset() {
@@ -136,64 +154,97 @@ impl SceneCache {
         self.terrain.instance == Some(id)
     }
 
-    fn mesh_terrain(&mut self, bytes: &[u8]) -> Vec<TerrainSurface> {
+    /// Mesh the chunks of `grid` that differ from the voxels meshed last
+    /// (all of them the first time), and the neighbours whose surfaces
+    /// reach the voxels that changed.
+    fn mesh_terrain(&mut self, grid: Grid) {
         profiling::scope!("mesh_terrain");
-        let grid = match Grid::decode(bytes) {
-            Ok(grid) => grid,
-            Err(e) => {
-                eprintln!("warning: Terrain.SmoothGrid doesn't decode: {e}");
-                return Vec::new();
+        let wanted: HashSet<IVec3> = chunks_to_mesh(&grid).into_iter().collect();
+        let mut remesh: HashSet<IVec3> = HashSet::new();
+        if self.terrain.chunks.is_empty() {
+            remesh.extend(&wanted);
+        } else {
+            for bounds in self.terrain.grid.changes(&grid) {
+                remesh.extend(bounds.chunks(rook_terrain::MESH_REACH));
             }
-        };
-        let source = blake3::hash(bytes);
-        let meshes: Vec<_> = chunks_to_mesh(&grid)
-            .par_iter()
-            .map(|c| mesh_chunk(&grid, *c))
+        }
+        let terrain = &mut self.terrain;
+        let gone: Vec<IVec3> = terrain
+            .chunks
+            .keys()
+            .filter(|c| remesh.contains(c) || !wanted.contains(c))
+            .copied()
+            .collect();
+        for c in gone {
+            for s in terrain.chunks.remove(&c).expect("meshed").surfaces {
+                self.scene.meshes.remove(&s.mesh);
+            }
+        }
+        terrain.epoch += 1;
+        let todo: Vec<IVec3> = remesh.into_iter().filter(|c| wanted.contains(c)).collect();
+        let meshes: Vec<ChunkMesh> = todo.par_iter().map(|c| mesh_chunk(&grid, *c)).collect();
+        for chunk in meshes {
+            let meshed = self.add_chunk_meshes(chunk);
+            self.terrain.chunks.insert(meshed.0, meshed.1);
+        }
+        let terrain = &mut self.terrain;
+        terrain.grid = grid;
+        let mut order: Vec<&IVec3> = terrain.chunks.keys().collect();
+        order.sort_unstable_by_key(|c| (c.x, c.y, c.z));
+        terrain.surfaces = order
+            .iter()
+            .flat_map(|c| terrain.chunks[*c].surfaces.iter().copied())
             .collect();
         let mut tops = GrassTops::default();
-        for chunk in &meshes {
-            add_grass_tops(chunk, &mut tops);
-        }
-        self.terrain.grass.tops = tops;
-        let mut surfaces = Vec::new();
-        for chunk in meshes {
-            let origin = chunk.origin();
-            for surface in chunk.surfaces {
-                let mut key = blake3::Hasher::new();
-                key.update(source.as_bytes());
-                key.update(&[surface.material as u8, surface.facing as u8]);
-                for v in chunk.chunk.to_array() {
-                    key.update(&v.to_le_bytes());
-                }
-                let mesh = MeshHash(*key.finalize().as_bytes());
-                let count = surface.positions.len();
-                let look = surface.material.shape();
-                self.scene.meshes.insert(
-                    mesh,
-                    Arc::new(Mesh {
-                        positions: surface.positions,
-                        normals: surface.normals,
-                        uvs: vec![[0.0; 2]; count],
-                        indices: surface.indices,
-                        terrain: Some(if surface.material == TerrainMaterial::Water {
-                            TerrainMapping::Water
-                        } else if look.cube {
-                            TerrainMapping::Cube
-                        } else {
-                            TerrainMapping::Planes
-                        }),
-                        ..Mesh::default()
-                    }),
-                );
-                surfaces.push(TerrainSurface {
-                    mesh,
-                    origin,
-                    material: surface.material,
-                    facing: surface.facing,
-                });
+        for c in order {
+            for (tile, tris) in &terrain.chunks[c].tops {
+                tops.entry(*tile).or_default().extend(tris);
             }
         }
-        surfaces
+        terrain.grass.tops = tops;
+    }
+
+    /// Put a chunk's surfaces in the scene's meshes.
+    fn add_chunk_meshes(&mut self, chunk: ChunkMesh) -> (IVec3, MeshedChunk) {
+        let mut tops = GrassTops::default();
+        add_grass_tops(&chunk, &mut tops);
+        let origin = chunk.origin();
+        let mut surfaces = Vec::new();
+        for surface in chunk.surfaces {
+            let mut key = blake3::Hasher::new();
+            key.update(&self.terrain.epoch.to_le_bytes());
+            key.update(&[surface.material as u8, surface.facing as u8]);
+            for v in chunk.chunk.to_array() {
+                key.update(&v.to_le_bytes());
+            }
+            let mesh = MeshHash(*key.finalize().as_bytes());
+            let count = surface.positions.len();
+            let look = surface.material.shape();
+            self.scene.meshes.insert(
+                mesh,
+                Arc::new(Mesh {
+                    positions: surface.positions,
+                    normals: surface.normals,
+                    uvs: vec![[0.0; 2]; count],
+                    indices: surface.indices,
+                    terrain: Some(if surface.material == TerrainMaterial::Water {
+                        TerrainMapping::Water
+                    } else if look.cube {
+                        TerrainMapping::Cube
+                    } else {
+                        TerrainMapping::Planes
+                    }),
+                    ..Mesh::default()
+                }),
+            );
+            surfaces.push(TerrainSurface {
+                mesh,
+                origin,
+                material: surface.material,
+                facing: surface.facing,
+            });
+        }
+        (chunk.chunk, MeshedChunk { surfaces, tops })
     }
 
     /// The entries drawing the terrain's surfaces, with what has loaded of

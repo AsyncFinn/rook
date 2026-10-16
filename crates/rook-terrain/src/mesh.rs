@@ -132,6 +132,9 @@ pub const WATER_DROP: f32 = VOXEL_STUDS / 2.0;
 /// it (for the normals of the faces just outside), and their cells one
 /// more.
 const PAD: i32 = 2;
+/// How far outside a chunk, in voxels, its surface reads: changing a
+/// voxel changes the surfaces of the chunks within this many voxels of it.
+pub const MESH_REACH: i32 = PAD;
 /// Voxels read along each axis.
 const SPAN: i32 = CHUNK_VOXELS + 2 * PAD;
 /// Dual cells along each axis.

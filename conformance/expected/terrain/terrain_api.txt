@@ -1,0 +1,50 @@
+-- studio 0.742.0.7421053
+-- signals: deferred
+block aligned 0,0,0:Grass:255
+block straddling -1,-1,-1:Grass:128 -1,-1,0:Grass:128 -1,0,-1:Grass:128 -1,0,0:Grass:128 0,-1,-1:Grass:128 0,-1,0:Grass:128 0,0,-1:Grass:128 0,0,0:Grass:128
+block shifted 0,0,0:Grass:223 0,1,0:Grass:32
+block turned -1,0,-1:Grass:22 -1,0,0:Grass:202 -1,0,1:Grass:22 0,0,-1:Grass:202 0,0,0:Grass:255 0,0,1:Grass:202 1,0,-1:Grass:22 1,0,0:Grass:202 1,0,1:Grass:22
+block of Plastic 0,0,0:Grass:255
+ball r0.5 0,0,0:Grass:159
+ball r4 -1,-1,0:Grass:22 -1,0,-1:Grass:22 -1,0,0:Grass:128 -1,0,1:Grass:22 -1,1,0:Grass:22 0,-1,-1:Grass:22 0,-1,0:Grass:128 0,-1,1:Grass:22 0,0,-1:Grass:128 0,0,0:Grass:255 0,0,1:Grass:128 0,1,-1:Grass:22 0,1,0:Grass:128 0,1,1:Grass:22 1,-1,0:Grass:22 1,0,-1:Grass:22 1,0,0:Grass:128 1,0,1:Grass:22 1,1,0:Grass:22
+cylinder r6 h4 -1,0,-1:Grass:21 -1,0,0:Grass:127 -1,0,1:Grass:21 0,0,-1:Grass:127 0,0,0:Grass:255 0,0,1:Grass:127 1,0,-1:Grass:21 1,0,0:Grass:127 1,0,1:Grass:21
+cylinder r4 h8 0,-1,0:Grass:255 0,0,0:Grass:255 0,1,0:Grass:255
+wedge 4x8x16 0,-1,-2:Grass:64 0,-1,-1:Grass:191 0,-1,0:Grass:255 0,-1,1:Grass:255 0,-1,2:Grass:255 0,0,0:Grass:64 0,0,1:Grass:191 0,0,2:Grass:255 0,1,2:Grass:64
+wedge 8x4x8 -1,0,0:Grass:64 -1,0,1:Grass:128 0,0,0:Grass:64 0,0,1:Grass:191 1,0,0:Grass:64 1,0,1:Grass:128
+rock half over grass 0,0,0:Grass:255
+rock over half grass 0,0,0:Rock:191
+rock equal to grass 0,0,0:Rock:128
+water over half grass 0,0,0:Grass:128
+rock half in water 0,0,0:Water:255
+air half on grass 0,0,0:Grass:127
+fill region 1..8 0,0,0:Rock:255 1,0,0:Rock:255
+replace half grass with water 0,0,0:Water:128
+read size 1, 1, 1
+resolution 2 false Resolution has to be 4
+too large false Region is too large
+empty block false Extents cannot be empty
+write 0.5 Enum.Material.Rock 0.5
+write 0 Enum.Material.Air 0
+write 2 Enum.Material.Rock 1
+write wrong size false Bad argument materials to 'WriteVoxels' (2x1x1 array expected)
+WorldToCell 1, -1, 2
+CellCenterToWorld 6, 10, 14 -6, 14, 2
+CellCornerToWorld 4, 8, 12
+PreferSolid 0, 0, 0
+PreferEmpty 1, 0, 0
+GetCell Enum.CellMaterial.MossyStone Enum.CellBlock.VerticalWedge Enum.CellOrientation.NegZ
+SetCell MossyStone corner wedge 0,0,0:Pavement:85
+GetCell Basalt Enum.CellMaterial.Grass
+GetWaterCell false Enum.WaterForce.None Enum.WaterDirection.NegX
+GetWaterCell after true Enum.WaterForce.None Enum.WaterDirection.NegX
+AutowedgeCell false
+copy TerrainRegion 3, 1, 1 true nil
+pasted keeping -4,0,0:Grass:255 -3,0,0:Rock:128 -2,0,0:Sand:255 0,0,0:Grass:255 1,0,0:Rock:128
+inverted copy false The region can not be empty or inverted.
+colour 1, 0, 0
+colour of Water false Unsupported terrain material
+colour of Plastic false Invalid terrain material
+ray at once nil nil nil
+ray later true Enum.Material.Grass 6
+ray at once after carving true Enum.Material.Grass 6
+ray later after carving nil nil nil

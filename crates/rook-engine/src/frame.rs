@@ -33,6 +33,12 @@ impl DataModel {
         self.fire(rs, "Heartbeat", dt);
         self.runtime.resume_due(Queue::Task);
         self.start_new_scripts();
+        {
+            // Scripts' terrain edits, for the renderer and replication.
+            let mut w = self.runtime.world_mut();
+            let w = &mut *w;
+            w.physics.write_terrain(&mut w.dom);
+        }
         self.check_render_changes();
         self.check_sounds();
         self.check_unions();

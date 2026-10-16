@@ -10,7 +10,7 @@ use crate::api::instance::{LuaInstance, push_instance};
 use crate::args::{borrow_clone, number_of, type_name};
 use crate::types::{
     LBrickColor, LCFrame, LColor3, LColorSequence, LNumberRange, LNumberSequence, LRay, LRect,
-    LRegion3, LUDim, LUDim2, LVector2, LVector2int16, LVector3int16, Opaque, enums,
+    LRegion3, LRegion3int16, LUDim, LUDim2, LVector2, LVector2int16, LVector3int16, Opaque, enums,
 };
 
 /// Luau's native `vector` → `Vector3`.
@@ -55,6 +55,7 @@ pub(crate) fn to_lua(lua: &Lua, value: &Value, enum_id: Option<EnumId>) -> mlua:
         Value::Ray(r) => LRay(*r).into_lua(lua)?,
         Value::Rect(r) => LRect(*r).into_lua(lua)?,
         Value::Region3(r) => LRegion3(*r).into_lua(lua)?,
+        Value::Region3int16(r) => LRegion3int16(*r).into_lua(lua)?,
         Value::Vector3int16(v) => LVector3int16(*v).into_lua(lua)?,
         Value::Vector2int16(v) => LVector2int16(*v).into_lua(lua)?,
         Value::Enum(v) => match enum_id {
@@ -188,6 +189,7 @@ pub(crate) fn datatype_value(u: &mlua::AnyUserData) -> Option<Value> {
         LRay => |x: LRay| Value::Ray(x.0),
         LRect => |x: LRect| Value::Rect(x.0),
         LRegion3 => |x: LRegion3| Value::Region3(x.0),
+        LRegion3int16 => |x: LRegion3int16| Value::Region3int16(x.0),
         LVector3int16 => |x: LVector3int16| Value::Vector3int16(x.0),
         LVector2int16 => |x: LVector2int16| Value::Vector2int16(x.0),
         Opaque => |x: Opaque| x.0,
@@ -225,6 +227,7 @@ pub(crate) fn variant_name(vt: VariantType) -> &'static str {
         VariantType::Ray => "Ray",
         VariantType::Rect => "Rect",
         VariantType::Region3 => "Region3",
+        VariantType::Region3int16 => "Region3int16",
         VariantType::Faces => "Faces",
         VariantType::Axes => "Axes",
         VariantType::Font => "Font",
