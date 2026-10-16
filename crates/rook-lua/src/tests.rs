@@ -142,9 +142,10 @@ fn legacy_lowercase_members() {
         print(p.Parent, #m:GetChildren())
         print(game:service("Workspace") == workspace)
         print(game.workspace == workspace, game.Workspace == workspace)
+        print(m.className, p.className)
         "#,
         0,
-        &["true 1 1", "nil Part", "nil 0", "true", "true true"],
+        &["true 1 1", "nil Part", "nil 0", "true", "true true", "Model Part"],
     );
 }
 
