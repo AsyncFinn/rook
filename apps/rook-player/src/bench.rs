@@ -28,6 +28,9 @@ pub(crate) fn bench(
     let mut renderer = Renderer::headless()?;
     install.apply(&mut renderer);
     renderer.set_scene(&cache.scene);
+    let timing_gpu = renderer.time_gpu();
+    let (mut record, mut gpu_shadow, mut gpu_main) = (0.0, 0.0, 0.0);
+    let (mut shadow_triangles, mut main_triangles) = (0u64, 0u64);
     let (mut sim, mut build, mut render) = (0.0, 0.0, 0.0);
     let mut updates = 0;
     let secs = |t: Instant| t.elapsed().as_secs_f64();
@@ -59,9 +62,16 @@ pub(crate) fn bench(
         let t = Instant::now();
         renderer.render_to_image(width, height, camera)?;
         render += secs(t);
+        record += renderer.record_time().as_secs_f64();
+        if let Some(gpu) = renderer.gpu_times() {
+            gpu_shadow += gpu.shadow / 1000.0;
+            gpu_main += gpu.main / 1000.0;
+        }
         let draws = renderer.draw_counts();
         shadow_draws += u64::from(draws.shadow);
         main_draws += u64::from(draws.main);
+        shadow_triangles += draws.shadow_triangles;
+        main_triangles += draws.main_triangles;
         whole.push(frame_start.elapsed());
         profiling::finish_frame!();
     }
@@ -86,6 +96,19 @@ pub(crate) fn bench(
         per_frame(shadow_draws),
         per_frame(main_draws)
     );
+    eprintln!(
+        "triangles per frame: shadow pass {}, main pass {}",
+        per_frame(shadow_triangles),
+        per_frame(main_triangles)
+    );
+    eprintln!("render: CPU recording {:.2} ms per frame", ms(record));
+    if timing_gpu {
+        eprintln!(
+            "render: GPU shadow pass {:.2} ms, main pass {:.2} ms per frame",
+            ms(gpu_shadow),
+            ms(gpu_main)
+        );
+    }
     eprintln!("server step: {}", game.server_steps.summary());
     if !game.client_steps.is_empty() {
         eprintln!("client step: {}", game.client_steps.summary());

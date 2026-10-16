@@ -114,6 +114,7 @@ impl Renderer {
     /// per-frame budget.
     pub fn render(&mut self, target: &wgpu::TextureView, width: u32, height: u32, camera: &Camera) {
         profiling::scope!("Renderer::render");
+        let start = std::time::Instant::now();
         self.upload_files(FRAME_UPLOAD_BYTES);
         let l = self.lighting;
         let aspect = width as f32 / height.max(1) as f32;
@@ -210,7 +211,7 @@ impl Renderer {
                     }),
                     stencil_ops: None,
                 }),
-                timestamp_writes: None,
+                timestamp_writes: self.timer.as_ref().map(|t| t.writes(1)),
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
@@ -218,8 +219,10 @@ impl Renderer {
             pass.set_pipeline(&self.pipelines.shadow);
             for (key, buffer, instances, bounds) in &opaque {
                 if sun_view.sees(*bounds, margin) {
-                    counts.shadow +=
+                    let triangles =
                         self.draw(&mut pass, key.shape, None, buffer, instances.clone());
+                    counts.shadow += u32::from(triangles > 0);
+                    counts.shadow_triangles += triangles;
                 }
             }
         }
@@ -248,7 +251,7 @@ impl Renderer {
                     }),
                     stencil_ops: None,
                 }),
-                timestamp_writes: None,
+                timestamp_writes: self.timer.as_ref().map(|t| t.writes(0)),
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
@@ -286,7 +289,9 @@ impl Renderer {
                         continue;
                     }
                     let images = Some(self.group(&key.images));
-                    counts.main += self.draw(&mut pass, key.shape, images, buffer, instances);
+                    let triangles = self.draw(&mut pass, key.shape, images, buffer, instances);
+                    counts.main += u32::from(triangles > 0);
+                    counts.main_triangles += triangles;
                 }
             }
             if let Some((buffer, _)) = &self.transparent_buffer {
@@ -298,17 +303,23 @@ impl Renderer {
                         Pass::ForceField => &self.pipelines.additive,
                     });
                     let images = Some(self.group(&key.images));
-                    counts.main += self.draw(&mut pass, key.shape, images, buffer, instances);
+                    let triangles = self.draw(&mut pass, key.shape, images, buffer, instances);
+                    counts.main += u32::from(triangles > 0);
+                    counts.main_triangles += triangles;
                 }
             }
         }
+        if let Some(timer) = &mut self.timer {
+            timer.resolve(&mut encoder, shadow.is_some());
+        }
         self.draw_counts = counts;
         self.queue.submit([encoder.finish()]);
+        self.record_time = start.elapsed();
     }
 
     /// Draw `instances` of `buffer` as `shape`, with `image` bound as
-    /// group 2 (not in the shadow pass). Returns how many draw calls that
-    /// took (none for a shape without a mesh).
+    /// group 2 (not in the shadow pass). Returns how many triangles that
+    /// drew (none for a shape without a mesh, which makes no draw call).
     fn draw(
         &self,
         pass: &mut wgpu::RenderPass<'_>,
@@ -316,7 +327,7 @@ impl Renderer {
         image: Option<&wgpu::BindGroup>,
         buffer: &wgpu::Buffer,
         instances: std::ops::Range<u32>,
-    ) -> u32 {
+    ) -> u64 {
         // Entries are only drawn for shapes with a mesh.
         let Some(mesh) = self.meshes.get(&shape) else {
             return 0;
@@ -327,7 +338,7 @@ impl Renderer {
         pass.set_vertex_buffer(0, mesh.vertices.slice(..));
         pass.set_vertex_buffer(1, buffer.slice(..));
         pass.set_index_buffer(mesh.indices.slice(..), wgpu::IndexFormat::Uint32);
-        pass.draw_indexed(0..mesh.index_count, 0, instances);
-        1
+        pass.draw_indexed(0..mesh.index_count, 0, instances.clone());
+        u64::from(mesh.index_count / 3) * u64::from(instances.len() as u32)
     }
 }
