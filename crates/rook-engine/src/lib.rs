@@ -15,6 +15,7 @@ pub mod repl;
 mod scripts;
 mod session;
 mod sounds;
+pub mod threads;
 mod unions;
 
 pub use input::{ClickEvent, ClickKind, InputEvent};
@@ -210,6 +211,7 @@ impl DataModel {
     }
 
     fn with_dom(mut dom: Dom, options: &Options) -> Result<Self, EngineError> {
+        threads::size_threads();
         dom.journal_mut().set_enabled(false);
         for service in DEFAULT_SERVICES {
             // A class missing from the database would be a Rook bug, not a

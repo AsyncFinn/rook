@@ -1,5 +1,5 @@
-//! How many background threads Rook uses, decided in one place from the
-//! machine's cores.
+//! How many background threads Rook uses, decided once from the machine's
+//! cores and handed to content decoding and physics as plain counts.
 //!
 //! Some threads must stay responsive whatever the machine: the engine
 //! thread (which also records rendering and runs the window) and the
@@ -12,9 +12,7 @@
 //! `ROOK_THREADS=n` pretends the machine has `n` logical cores, to test
 //! how Rook behaves on a smaller (or bigger) one.
 
-#![cfg_attr(windows, allow(unsafe_code))]
-
-use std::sync::OnceLock;
+use std::sync::Once;
 
 /// Threads set aside before handing out the rest: the engine thread and
 /// the server thread.
@@ -35,17 +33,13 @@ pub struct Budget {
 
 impl Budget {
     /// This machine's budget: its logical cores, or `ROOK_THREADS`.
-    pub fn get() -> Self {
-        static BUDGET: OnceLock<Budget> = OnceLock::new();
-        *BUDGET.get_or_init(|| {
-            let forced = std::env::var("ROOK_THREADS")
-                .ok()
-                .and_then(|n| n.trim().parse::<usize>().ok());
-            let cores = forced.unwrap_or_else(|| {
-                std::thread::available_parallelism().map_or(2, usize::from)
-            });
-            Self::for_cores(cores)
-        })
+    pub fn of_this_machine() -> Self {
+        let forced = std::env::var("ROOK_THREADS")
+            .ok()
+            .and_then(|n| n.trim().parse::<usize>().ok());
+        let cores = forced
+            .unwrap_or_else(|| std::thread::available_parallelism().map_or(2, usize::from));
+        Self::for_cores(cores)
     }
 
     pub fn for_cores(cores: usize) -> Self {
@@ -56,8 +50,8 @@ impl Budget {
 
     /// Threads decoding meshes, images and sounds: the cores left after
     /// the reserved threads, at least one and at most [`MAX_DECODE`].
-    /// They run at below-normal priority ([`lower_priority`]), so on a
-    /// small machine they take what the frame leaves.
+    /// They run at below-normal priority, so on a small machine they take
+    /// what the frame leaves.
     pub fn decode(self) -> usize {
         self.cores.saturating_sub(RESERVED).clamp(1, MAX_DECODE)
     }
@@ -71,22 +65,16 @@ impl Budget {
     }
 }
 
-/// Run the calling thread at below-normal priority: background work that
-/// should yield to the frame and to audio when cores are short. Only
-/// Windows for now; elsewhere the thread keeps its priority.
-pub fn lower_priority() {
-    #[cfg(windows)]
-    {
-        use windows_sys::Win32::System::Threading::{
-            GetCurrentThread, SetThreadPriority, THREAD_PRIORITY_BELOW_NORMAL,
-        };
-        // SAFETY: GetCurrentThread returns a pseudo-handle for the calling
-        // thread that is always valid and needs no closing. A failure only
-        // leaves the priority as it was.
-        unsafe {
-            SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
-        }
-    }
+/// Size content decoding and physics' pool from this machine's budget.
+/// Runs once per process, before the first DataModel; tools that load
+/// content without a DataModel call it themselves.
+pub fn size_threads() {
+    static SIZED: Once = Once::new();
+    SIZED.call_once(|| {
+        let budget = Budget::of_this_machine();
+        rook_content::set_decode_threads(budget.decode());
+        rook_physics::size_worker_pool(budget.physics());
+    });
 }
 
 #[cfg(test)]
@@ -97,7 +85,10 @@ mod tests {
     fn small_machines_get_one_decode_thread_and_big_ones_eight() {
         let decode = |cores| Budget::for_cores(cores).decode();
         let physics = |cores| Budget::for_cores(cores).physics();
-        assert_eq!([0, 1, 2, 3, 4, 6, 12, 32].map(decode), [1, 1, 1, 1, 2, 4, 8, 8]);
+        assert_eq!(
+            [0, 1, 2, 3, 4, 6, 12, 32].map(decode),
+            [1, 1, 1, 1, 2, 4, 8, 8]
+        );
         assert_eq!([0, 1, 2, 3, 4, 12].map(physics), [1, 1, 1, 1, 2, 6]);
     }
 }

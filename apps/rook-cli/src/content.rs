@@ -381,6 +381,7 @@ fn full_name(dom: &WeakDom, mut id: Ref) -> String {
 }
 
 pub fn place(file: &Path, options: &Options) -> anyhow::Result<()> {
+    rook_engine::threads::size_threads();
     let bytes = fs_err::read(file)?;
     let loaded = rook_formats::load(&bytes)?;
     drop(bytes);

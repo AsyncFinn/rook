@@ -31,7 +31,7 @@ mod resolver;
 
 pub use cache::Cache;
 pub use install::{Install, InstallKind};
-pub use loader::{Loader, Ticket, Want, idle_since, jobs_in_flight};
+pub use loader::{Loader, Ticket, Want, idle_since, jobs_in_flight, set_decode_threads};
 pub use reference::{ContentRef, MaterialMap, Thumbnail, image_url_rewrite};
 pub use resolver::{Config, ProviderKind, Resolver};
 

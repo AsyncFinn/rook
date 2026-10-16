@@ -7,7 +7,7 @@
 //!
 //! Each loader has a few fetch threads, which wait on disk and the network,
 //! and hands decoding to one decode pool the whole process shares, sized
-//! from the machine's cores ([`rook_threads::Budget::decode`]). Both run at
+//! by the engine from the machine's cores ([`set_decode_threads`]). Both run at
 //! below-normal priority, so on a small machine loading takes what the
 //! frame and audio leave. Threads start with the first request: a place
 //! that never asks for content costs nothing.
@@ -267,7 +267,7 @@ fn spawn_threads<T: Send + 'static>(
         let spawned = std::thread::Builder::new()
             .name(format!("{name}-{i}"))
             .spawn(move || {
-                rook_threads::lower_priority();
+                lower_priority();
                 loop {
                     // Ends when the queue's sender is dropped.
                     let Ok(item) = queue.lock().expect("thread queue").recv() else {
@@ -286,6 +286,34 @@ fn spawn_threads<T: Send + 'static>(
     }
 }
 
+/// Decode threads; 1 until the engine sets it.
+static DECODE_THREADS: AtomicUsize = AtomicUsize::new(1);
+
+/// Size the decode pool. Takes effect if the pool hasn't started yet
+/// (it starts with the first decode).
+pub fn set_decode_threads(threads: usize) {
+    DECODE_THREADS.store(threads.max(1), Ordering::Relaxed);
+}
+
+/// Run the calling thread at below-normal priority, so background work
+/// yields to the frame and to audio when cores are short. Only Windows for
+/// now; elsewhere the thread keeps its priority.
+#[allow(unsafe_code)]
+fn lower_priority() {
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::System::Threading::{
+            GetCurrentThread, SetThreadPriority, THREAD_PRIORITY_BELOW_NORMAL,
+        };
+        // SAFETY: GetCurrentThread returns a pseudo-handle for the calling
+        // thread that is always valid and needs no closing. A failure only
+        // leaves the priority as it was.
+        unsafe {
+            SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
+        }
+    }
+}
+
 /// Decoding for a job, run on the decode pool.
 type DecodeJob = Box<dyn FnOnce() + Send>;
 
@@ -296,7 +324,7 @@ fn queue_decode(job: DecodeJob) {
         let (jobs, queue) = channel::<DecodeJob>();
         spawn_threads(
             "rook-decode",
-            rook_threads::Budget::get().decode(),
+            DECODE_THREADS.load(Ordering::Relaxed),
             queue,
             |job: DecodeJob| {
                 job();

@@ -16,13 +16,15 @@ rbx_dom_weak.workspace = true
 rbx_mesh = { workspace = true, features = ["mesh-v1", "union-graphics", "union-physics", "csgphs-v8-zstd"] }
 rbx_types.workspace = true
 rook-formats.workspace = true
-rook-threads.workspace = true
 rook-types.workspace = true
 serde_json.workspace = true
 symphonia.workspace = true
 thiserror.workspace = true
 ureq.workspace = true
 zstd.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = ["Win32_System_Threading"] }
 
 [lints]
 workspace = true
