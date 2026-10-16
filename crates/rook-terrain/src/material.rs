@@ -3,6 +3,7 @@
 //! materials and `Terrain.MaterialColors`).
 
 mod looks;
+mod tint;
 
 use rook_types::{Color3uint8, Material, MaterialColors, MaterialSet, TerrainMaterials};
 
@@ -216,5 +217,31 @@ mod tests {
         assert!(legacy(Air).top.is_none() && legacy(Water).side.is_none());
         let modern = Concrete.look(MaterialSet::Materials2022);
         assert_eq!(modern.quantize, 1.0);
+    }
+
+    /// The tints' shapes measured in Studio (docs/behavior/terrain.md).
+    #[test]
+    fn tints() {
+        use TerrainMaterial::*;
+        let rgb = |r, g, b| Color3uint8::new(r, g, b);
+        // White keeps the texture's grey, and grey dims it.
+        assert_eq!(Grass.tint(rgb(255, 255, 255)), [1.0; 3]);
+        assert!(
+            Sand.tint(rgb(128, 128, 128))
+                .iter()
+                .all(|&x| (x - 0.502).abs() < 0.001)
+        );
+        // Red turns magenta on Grass, and teal on Basalt.
+        let [r, g, b] = Grass.tint(rgb(255, 0, 0));
+        assert!(r > b && b > g);
+        let [r, g, b] = Basalt.tint(rgb(255, 0, 0));
+        assert!(g > r && b > r);
+        // Rock's chroma tops out: pink and red look alike.
+        assert_eq!(Rock.tint(rgb(255, 128, 128)), Rock.tint(rgb(255, 0, 0)));
+        // Basalt is as bright in its default colour as in white.
+        let luma = |[r, g, b]: [f32; 3]| (r + 2.0 * g + b) / 4.0;
+        assert_eq!(luma(Basalt.tint(rgb(75, 74, 74))), 0.6);
+        assert_eq!(luma(Basalt.tint(rgb(255, 255, 255))), 0.6);
+        assert_eq!(Water.tint(rgb(255, 0, 0)), [1.0, 0.0, 0.0]);
     }
 }

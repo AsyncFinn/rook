@@ -1,0 +1,101 @@
+//! How Studio colours a material's 2022 textures by its `MaterialColors`
+//! colour. Studio bakes the colour into the textures on the CPU and stores
+//! them in YCoCg, read back squared (gamma 2) by its terrain shader
+//! (`SmoothClusterFSUnified`); where a texture's tint mask is opaque it
+//! keeps only the texel's luma, times a tint worked out from the colour
+//! per material:
+//!
+//! - its brightness is the colour's largest channel times a gain, up to 1
+//!   (Mud and Basalt reach 1 at their default colours, and draw dimmer
+//!   than their textures: 0.85 and 0.6 of the other materials' share);
+//! - its chroma (YCoCg, over that channel) turns and scales by a 2x2
+//!   matrix, up to a length.
+//!
+//! The constants are fitted to Studio 0.742 screenshots of every material
+//! under flat ambient light beside grey calibration parts, coloured white,
+//! red, green, blue, pale red, green and blue, and two greys; they match
+//! held-out colours (each material's default, (255, 128, 128)) within
+//! 6/255, except CrackedLava, whose dark rock and lit cracks average
+//! unevenly (Approximation; `docs/behavior/terrain.md`).
+
+use rook_types::Color3uint8;
+
+use super::TerrainMaterial;
+
+/// One material's tint: `chroma` times the colour's chroma, at most `cap`
+/// long, and `gain` times its brightness, at most 1, times `scale`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Tint {
+    chroma: [[f32; 2]; 2],
+    cap: f32,
+    gain: f32,
+    scale: f32,
+}
+
+const fn tint(chroma: [[f32; 2]; 2], cap: f32, gain: f32, scale: f32) -> Option<Tint> {
+    Some(Tint {
+        chroma,
+        cap,
+        gain,
+        scale,
+    })
+}
+
+const NONE: f32 = f32::INFINITY;
+
+// Fitted numbers; Grass's 0.318 isn't 1/π.
+#[allow(clippy::approx_constant)]
+#[rustfmt::skip]
+const TINTS: [Option<Tint>; 23] = [
+    None, // Air
+    None, // Water
+    tint([[1.052, 0.379], [-0.318, 1.181]], NONE, 1.0, 1.0), // Grass
+    tint([[0.100, 0.163], [-0.134, 0.121]], 0.095, 1.0, 1.0), // Slate
+    tint([[0.168, -0.037], [0.033, 0.193]], NONE, 1.0, 1.0), // Concrete
+    tint([[0.911, -0.035], [0.024, 1.052]], NONE, 1.0, 1.0), // Brick
+    tint([[1.123, -0.042], [0.038, 1.313]], 0.432, 1.0, 1.0), // Sand
+    tint([[1.215, -0.148], [0.133, 1.390]], 0.602, 1.0, 1.0), // WoodPlanks
+    tint([[1.043, 0.007], [-0.016, 1.209]], 0.121, 1.16, 1.0), // Rock
+    tint([[0.423, -0.095], [0.074, 0.485]], NONE, 1.0, 1.0), // Glacier
+    tint([[1.312, 0.070], [-0.071, 1.524]], 0.161, 1.0, 1.0), // Snow
+    tint([[1.236, -0.109], [0.104, 1.425]], 0.681, 1.0, 1.0), // Sandstone
+    tint([[0.739, -0.219], [0.175, 0.848]], 0.337, 2.2, 0.85), // Mud
+    tint([[-0.588, -0.048], [0.024, -0.640]], 0.124, 3.43, 0.6), // Basalt
+    tint([[0.941, -0.026], [0.028, 1.078]], 0.456, 1.26, 1.0), // Ground
+    tint([[1.871, 0.675], [-0.590, 2.104]], 0.97, 1.0, 1.0), // CrackedLava
+    tint([[0.802, 0.240], [-0.209, 0.893]], 0.123, 1.04, 1.0), // Asphalt
+    tint([[1.186, 0.040], [-0.041, 1.375]], 0.438, 1.0, 1.0), // Cobblestone
+    tint([[1.101, -0.020], [0.011, 1.256]], 0.526, 1.0, 1.0), // Ice
+    tint([[1.188, 0.443], [-0.415, 1.371]], 0.634, 1.0, 1.0), // LeafyGrass
+    tint([[0.109, -0.063], [0.056, 0.115]], 0.014, 1.0, 1.0), // Salt
+    tint([[1.221, -0.277], [0.254, 1.414]], 0.402, 1.0, 1.0), // Limestone
+    tint([[1.161, -0.359], [0.329, 1.335]], 0.139, 1.0, 1.0), // Pavement
+];
+
+impl TerrainMaterial {
+    /// What a texel's luma is multiplied by where the material's tint mask
+    /// is opaque, for its `MaterialColors` colour (sRGB, 0 to 1 and above:
+    /// a strong colour lifts some channels over the luma). Air and Water
+    /// give the colour itself.
+    pub fn tint(self, color: Color3uint8) -> [f32; 3] {
+        let c = [color.r, color.g, color.b].map(|v| f32::from(v) / 255.0);
+        let Some(t) = TINTS[self as usize] else {
+            return c;
+        };
+        let value = c[0].max(c[1]).max(c[2]);
+        if value <= 0.0 {
+            return [0.0; 3];
+        }
+        let co = (c[0] - c[2]) / 2.0 / value;
+        let cg = (2.0 * c[1] - c[0] - c[2]) / 4.0 / value;
+        let [[a, b], [d, e]] = t.chroma;
+        let (mut co, mut cg) = (a * co + b * cg, d * co + e * cg);
+        let length = co.hypot(cg);
+        if length > t.cap {
+            co *= t.cap / length;
+            cg *= t.cap / length;
+        }
+        let brightness = (t.gain * value).min(1.0) * t.scale;
+        [1.0 + co - cg, 1.0 + cg, 1.0 - co - cg].map(|x| x * brightness)
+    }
+}
