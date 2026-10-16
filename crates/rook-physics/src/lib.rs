@@ -71,21 +71,22 @@ use props::Props;
 /// 120 or 60 Hz per assembly; Rook always uses 240, an Approximation).
 pub const STEP_HZ: f64 = 240.0;
 
-/// Size the worker threads collision detection and the solver use: physics'
-/// share of the thread budget ([`rook_threads::Budget::physics`]), so a
+/// Size the worker threads collision detection and the solver use. The
+/// engine gives physics its share of the machine (half the cores), so a
 /// server stepping physics leaves the rest to the client, the renderer and
-/// content decoding. It's Rayon's global pool, not
+/// content decoding; without a call, Rayon's default (every core) stands.
+/// Only the first call counts. It's Rayon's global pool, not
 /// a pool of the world's own: Rapier hands a whole step to a world's own
 /// pool, a cross-thread wake-up per 240 Hz step that made small places
 /// slower. Rapier lays the parallel work out the same whatever the pool's
 /// size, so results don't depend on it.
-fn size_worker_pool() {
+pub fn size_worker_pool(threads: usize) {
     static SIZED: std::sync::Once = std::sync::Once::new();
     SIZED.call_once(|| {
         // Fails only if something else built the global pool first; then
         // that size stands.
         let _ = rapier3d::rayon::ThreadPoolBuilder::new()
-            .num_threads(rook_threads::Budget::get().physics())
+            .num_threads(threads.max(1))
             .thread_name(|i| format!("physics-{i}"))
             .build_global();
     });
@@ -229,7 +230,6 @@ impl Physics {
         // thin one, and Rapier's sweeps cost ~19 ms a frame on 60k-part
         // places.
         world.integration_parameters.max_ccd_substeps = 0;
-        size_worker_pool();
         Self {
             world,
             props: None,

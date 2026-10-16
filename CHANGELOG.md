@@ -16,7 +16,7 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 
 ## [Unreleased]
 
-- One place decides how many background threads Rook uses, from the machine's logical cores (`rook-threads`). It sets aside the engine and server threads and hands out the rest. `ROOK_THREADS=n` pretends the machine has `n` cores.
+- One place decides how many background threads Rook uses, from the machine's logical cores (`rook_engine::threads`), and hands content decoding and physics their counts. It sets aside the engine and server threads and hands out the rest. `ROOK_THREADS=n` pretends the machine has `n` cores.
 - Content loading splits fetching from decoding. Each loader keeps 4 fetch threads for disk and network. Meshes, images and sounds decode on one process-wide pool: one thread on 2-3 cores, 8 at most (8 on a 12-core PC, up from 4 per loader). Both run at below-normal priority on Windows, so loading yields to the frame and audio. Physics' worker pool takes half the cores from the same budget, as before.
 - `rook-player --bench` prints when content finished loading, counted from the start of loading the place, and the frame times until then.
 

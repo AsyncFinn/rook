@@ -26,7 +26,6 @@ rook-physics = { path = "crates/rook-physics" }
 rook-content = { path = "crates/rook-content" }
 rook-audio = { path = "crates/rook-audio", default-features = false }
 rook-terrain = { path = "crates/rook-terrain" }
-rook-threads = { path = "crates/rook-threads" }
 
 # Roblox formats and data (rbx-dom ecosystem)
 rbx_dom_weak = "4.2"
@@ -78,7 +77,7 @@ profiling = "1"
 # Sound files (rook-content): pure-Rust WAV (PCM, ADPCM), Ogg Vorbis and MP3
 # decoders, nothing else (docs/behavior/audio.md)
 symphonia = { version = "0.5", default-features = false, features = ["wav", "pcm", "adpcm", "ogg", "vorbis", "mp3"] }
-# Thread priority on Windows (rook-threads)
+# Thread priority on Windows (rook-content)
 windows-sys = "0.61"
 # Audio output device (rook-audio)
 cpal = "0.15"

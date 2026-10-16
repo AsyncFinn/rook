@@ -7,7 +7,7 @@
 //! iteration three times slower and every call 2.7 times slower.
 //!
 //! This is one of only two unsafe spots in Rook (the other lowers a
-//! thread's priority, in rook-threads): mlua's safe interrupt API is the
+//! thread's priority, in rook-content's loader): mlua's safe interrupt API is the
 //! closure. It is limited to installing the function and raising the
 //! timeout error from it, as mlua's own interrupt does.
 
