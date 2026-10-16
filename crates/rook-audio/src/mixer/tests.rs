@@ -1,11 +1,13 @@
 use super::*;
 
+/// A stereo file with `samples` on both sides (a mono one plays 3 dB
+/// down; see `mono_is_centred`).
 fn audio(rate: u32, samples: Vec<i16>) -> Arc<Audio> {
     Arc::new(Audio {
         format: None,
         sample_rate: rate,
-        channels: 1,
-        samples,
+        channels: 2,
+        samples: samples.iter().flat_map(|&s| [s, s]).collect(),
     })
 }
 
@@ -55,6 +57,30 @@ fn resamples_and_ends() {
     );
     assert!(out.chunks(2).all(|f| f[0] == f[1]));
     assert!(m.is_empty());
+}
+
+/// Studio centres a mono sound at 1/√2 on each side; a stereo one keeps
+/// its level.
+#[test]
+fn mono_is_centred() {
+    let mono = Arc::new(Audio {
+        format: None,
+        sample_rate: 4,
+        channels: 1,
+        samples: vec![16384; 4],
+    });
+    let mut m = Mixer::new(4);
+    m.sync(&only(vec![play(&mono, 0.0)]));
+    let mut out = [0.0; 4];
+    m.mix(&mut out, 2);
+    assert!(
+        out.iter().all(|s| (s - 0.5 * MONO_LEVEL).abs() < 1e-6),
+        "{out:?}"
+    );
+    let mut m = Mixer::new(4);
+    m.sync(&only(vec![play(&audio(4, vec![16384; 4]), 0.0)]));
+    m.mix(&mut out, 2);
+    assert_eq!(out, [0.5; 4]);
 }
 
 #[test]
