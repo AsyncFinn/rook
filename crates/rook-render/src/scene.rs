@@ -299,9 +299,42 @@ impl Default for TerrainLook {
     }
 }
 
+/// How a [`LocalLight`] shines.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum LightShape {
+    /// A PointLight: every way from `position`.
+    Point,
+    /// A SpotLight: a cone `angle` degrees across (`SpotLight.Angle`, 0 to
+    /// 180) around `direction` (unit, the face it shines from).
+    Spot { direction: Vec3, angle: f32 },
+    /// A SurfaceLight: from the centre of a face of its part (`position`),
+    /// over a cone `angle` degrees across around `direction` (unit, the
+    /// face's normal).
+    Surface { direction: Vec3, angle: f32 },
+}
+
+/// A PointLight, SpotLight or SurfaceLight, placed in the world
+/// (`docs/behavior/lights.md`). The renderer turns its Roblox properties
+/// into light as Studio does.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LocalLight {
+    pub position: Vec3,
+    pub shape: LightShape,
+    /// `Light.Color`, sRGB 0..1.
+    pub color: [f32; 3],
+    /// `Light.Brightness`.
+    pub brightness: f32,
+    /// `Range`, in studs.
+    pub range: f32,
+    /// `Light.Shadows` (not drawn yet).
+    pub shadows: bool,
+}
+
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Scene {
     pub parts: Vec<PartInstance>,
+    /// The local lights in Workspace (disabled ones at brightness 0).
+    pub lights: Vec<LocalLight>,
     pub lighting: Lighting,
     pub terrain: TerrainLook,
     /// The mesh files parts may draw ([`DrawShape::File`]). The renderer

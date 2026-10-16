@@ -4,6 +4,7 @@ pub(crate) mod shadow;
 
 mod draw;
 mod images;
+mod lights;
 mod pipelines;
 mod placement;
 mod readback;
@@ -14,6 +15,7 @@ use super::*;
 pub(crate) use images::ImageBinding;
 pub(crate) use images::ImageSet;
 use images::{Defaults, image_layout, image_set};
+use lights::GpuLights;
 use pipelines::Pipelines;
 use placement::Placement;
 use timing::GpuTimer;
@@ -76,6 +78,8 @@ pub struct Renderer {
     transparent_parts: Vec<Option<PartInstance>>,
     transparent_free: Vec<usize>,
     lighting: Lighting,
+    /// The local lights and their spatial hash (group 3).
+    pub(crate) lights: GpuLights,
     terrain: TerrainLook,
     /// Seconds on the clock grass sways by ([`Renderer::set_time`]).
     time: f32,
@@ -226,12 +230,14 @@ impl Renderer {
         let image_binding = ImageBinding::for_device(&device);
         let table = image_binding.table_slots();
         let image_layout = image_layout(&device, table);
+        let lights = GpuLights::new(&device);
         let pipelines = Pipelines::new(
             &device,
             color_format,
             &layout,
             &main_layout,
             &image_layout,
+            &lights.layout,
             table.is_some(),
         );
 
@@ -302,6 +308,7 @@ impl Renderer {
             transparent_buffer: None,
             transparent_parts: Vec::new(),
             lighting: Lighting::default(),
+            lights,
             terrain: TerrainLook::default(),
             time: 0.0,
             water_phase: 0.0,

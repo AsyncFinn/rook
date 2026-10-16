@@ -230,6 +230,7 @@ impl Renderer {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("rook frame"),
             });
+        self.lights.fill(&self.queue, &mut encoder, camera.position);
         if shadow.is_some() {
             profiling::scope!("shadow pass");
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -282,6 +283,7 @@ impl Renderer {
             });
             pass.set_bind_group(0, &self.bind_group, &[]);
             pass.set_bind_group(1, &self.main_bind_group, &[]);
+            pass.set_bind_group(3, &self.lights.bind_group, &[]);
             if let ImageBinding::Table(_) = &self.image_binding {
                 pass.set_bind_group(2, self.group(&[None; 5]), &[]);
             }

@@ -38,6 +38,7 @@ impl Pipelines {
         layout: &wgpu::BindGroupLayout,
         main_layout: &wgpu::BindGroupLayout,
         image_layout: &wgpu::BindGroupLayout,
+        lights_layout: &wgpu::BindGroupLayout,
         table: bool,
     ) -> Self {
         let [parts, sky] = shaders(table);
@@ -51,7 +52,12 @@ impl Pipelines {
         });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("rook parts"),
-            bind_group_layouts: &[Some(layout), Some(main_layout), Some(image_layout)],
+            bind_group_layouts: &[
+                Some(layout),
+                Some(main_layout),
+                Some(image_layout),
+                Some(lights_layout),
+            ],
             immediate_size: 0,
         });
         // The shadow pass writes the map, so it can't bind it.
