@@ -6,6 +6,10 @@
 //! Observed in Studio 0.742 unless marked otherwise. Constrained parts keep
 //! colliding with each other (Inference: that's what
 //! NoCollisionConstraint exists for).
+//!
+//! The joints are stiff but not rigid, as Roblox's are: a part saved
+//! overlapping an anchored one gets pushed out a little and the
+//! constraint gives, instead of the two fighting (see [`JOINT_SOFTNESS`]).
 
 use rapier3d::prelude::*;
 use rook_dom::{Dom, InstanceId};
@@ -117,9 +121,23 @@ impl Spec {
                 .limits(JointAxis::LinX, [min, max]),
         };
         b = b.local_frame1(frame(0)).local_frame2(frame(1));
-        b.build()
+        b.softness(JOINT_SOFTNESS).build()
     }
 }
+
+/// How firmly attachment constraints hold. Observed: a block hung by a
+/// HingeConstraint from an anchored part, saved overlapping an anchored
+/// floor by 1 stud, rests still with the hinge stretched 0.05 studs; a
+/// laser's spinner whose union rests on its anchored beam, 1.72 studs.
+/// Rapier's rigid default (1 MHz) instead fights the contacts every step
+/// until the solver diverges and throws the assembly about. This gives
+/// 0.07 studs in the first case (Approximation: Rapier pushes out at a
+/// capped speed, so the give doesn't grow with the overlap as Studio's
+/// does).
+const JOINT_SOFTNESS: SpringCoefficients<Real> = SpringCoefficients {
+    natural_frequency: 100.0,
+    damping_ratio: 10.0,
+};
 
 /// What turns a revolute joint about its axis.
 #[derive(Debug, Clone, Copy, PartialEq)]
