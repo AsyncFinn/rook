@@ -206,7 +206,8 @@ pub(crate) fn get_member(
     if let Some(v) = runtime_property(lua, &c, id, key)? {
         return Ok((v, false, None));
     }
-    if key == "ClassName" {
+    // `className` is the deprecated lowercase name.
+    if key == "ClassName" || key == "className" {
         let name = with_world(lua, |w| w.dom.class_name(id).to_owned());
         return Ok((LuaValue::String(lua.create_string(name)?), false, None));
     }

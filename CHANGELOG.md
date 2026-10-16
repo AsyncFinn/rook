@@ -15,6 +15,12 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 
 ## [Unreleased]
 
+## [0.5.16] — 2026-10-15 — Fix: `className` is nil
+
+Pinned Roblox version: 0.741.19.
+
+- `className`, the deprecated lowercase name for `ClassName`, gives the class name; it was nil. Old scripts that filter children with `if c.className == "Part"` found nothing: a heist place's vault door and drill turned in place without opening.
+
 ## [0.5.15] — 2026-10-15 — Fix: the player crashes on OpenGL
 
 Pinned Roblox version: 0.741.19.
