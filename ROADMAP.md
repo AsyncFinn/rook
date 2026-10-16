@@ -226,7 +226,7 @@ It comes before characters: tools, health bars and leaderboards are GUI.
 
 1. Layout: `UDim2`, `AnchorPoint`, `ZIndex`, `ClipsDescendants`,
    `AutomaticSize`, the UI layouts and constraints.
-2. Text (cosmic-text): fonts and `FontFace` weights, sizing, wrapping,
+2. Text (Parley): fonts and `FontFace` weights, sizing, wrapping,
    `TextScaled`, `RichText`.
 3. Images, 9-slice, ScrollingFrame.
 4. The modern UI objects, by files using them: UIListLayout 43 (with flex
