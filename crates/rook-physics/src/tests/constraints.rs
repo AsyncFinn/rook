@@ -386,3 +386,60 @@ fn disabling_a_constraint_frees_its_parts() {
     run(&mut physics, &mut dom, 0.5);
     assert!(position(&dom, w).y < 980.0);
 }
+
+/// Observed: a 4 × 10 × 4 block hung by a HingeConstraint motor from an
+/// anchored part, saved overlapping an anchored floor by 1 stud, is pushed
+/// up 0.05 studs and then rests still. A rigid joint fought the contact
+/// and buzzed 0.04 studs a frame; with dozens of such contacts (a laser
+/// spinner on its beam) the solver diverged and threw the parts about.
+#[test]
+fn hinge_held_part_overlapping_an_anchored_one_rests() {
+    let mut dom = Dom::new();
+    let top = part(
+        &mut dom,
+        "Part",
+        Vec3::new(0.0, 30.0, 0.0),
+        Vec3::splat(2.0),
+        true,
+    );
+    let block = part(
+        &mut dom,
+        "Part",
+        Vec3::new(0.0, 24.0, 0.0),
+        Vec3::new(4.0, 10.0, 4.0),
+        false,
+    );
+    part(
+        &mut dom,
+        "Part",
+        Vec3::new(0.0, 19.0, 0.0),
+        Vec3::new(8.0, 2.0, 8.0),
+        true,
+    );
+    let up = CFrame::angles(0.0, 0.0, std::f32::consts::FRAC_PI_2);
+    let at = |y| Value::CFrame(CFrame::from_position(Vec3::new(0.0, y, 0.0)) * up);
+    let a0 = child(&mut dom, "Attachment", top, &[("CFrame", at(-1.0))]);
+    let a1 = child(&mut dom, "Attachment", block, &[("CFrame", at(5.0))]);
+    child(
+        &mut dom,
+        "HingeConstraint",
+        block,
+        &[
+            ("Attachment0", Value::Ref(Some(a0.to_ref()))),
+            ("Attachment1", Value::Ref(Some(a1.to_ref()))),
+            ("ActuatorType", Value::Enum(1)),
+            ("MotorMaxTorque", Value::Float32(1.5e9)),
+        ],
+    );
+    let mut physics = Physics::new();
+    run(&mut physics, &mut dom, 2.0);
+    let rest = position(&dom, block);
+    assert!((rest - Vec3::new(0.0, 24.0, 0.0)).length() < 0.1, "{rest}");
+    let mut most: f32 = 0.0;
+    for _ in 0..30 {
+        let before = position(&dom, block);
+        run(&mut physics, &mut dom, 1.0 / 60.0);
+        most = most.max((position(&dom, block) - before).length());
+    }
+    assert!(most < 0.005, "moves {most} a frame");
+}
