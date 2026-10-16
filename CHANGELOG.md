@@ -15,6 +15,14 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 
 ## [Unreleased]
 
+## [0.5.17] — 2026-10-16 — Fix: deprecated lowercase properties read stale values
+
+Pinned Roblox version: 0.741.19.
+
+- A deprecated lowercase property reads and writes its capitalized twin, as lowercase methods and events already did: `Mouse.hit` and `Mouse.target`, `Sound.isPlaying`, `Humanoid.maxHealth`, `Players.localPlayer` and `numPlayers`, `Player.userId`, `Camera.focus`, `JointInstance.part1`, `Instance.archivable` and the rest. Roblox's API lists them as separate properties, so Rook kept each at its default (`Mouse.hit` never followed the mouse). `className` and `game.workspace` go through the same rule, and their own special cases are gone.
+- `game.lighting` gives Lighting; it was nil.
+- Found by reading every deprecated member of Roblox's API (492 that scripts can reach) in Rook. Every member that errored is one Roblox also keeps from game scripts (plugin or Roblox-only security).
+
 ## [0.5.16] — 2026-10-15 — Fix: `className` is nil
 
 Pinned Roblox version: 0.741.19.
