@@ -7,8 +7,6 @@ use super::*;
 #[test]
 fn terrain_and_wind_changes_mark_the_terrain() {
     let mut s = Server::new(&Options::default()).unwrap();
-    let ws = service(&s, "Workspace");
-    add_under(&s, ws, "Terrain", "Terrain", "");
     s.start();
     s.take_render_changes();
     let terrain = |s: &mut Server, source: &str| {

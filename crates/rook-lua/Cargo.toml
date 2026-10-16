@@ -16,6 +16,7 @@ rook-dom.workspace = true
 rook-signal.workspace = true
 rook-scheduler.workspace = true
 rook-physics.workspace = true
+rook-terrain.workspace = true
 rook-content.workspace = true
 rook-audio.workspace = true
 rbx_types.workspace = true

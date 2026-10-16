@@ -1,13 +1,13 @@
-//! Ray, Rect and Region3.
+//! Ray, Rect, Region3 and Region3int16.
 
 use mlua::{
     Lua, MetaMethod, MultiValue, UserData, UserDataFields, UserDataMethods, UserDataRef,
     Value as LuaValue, Vector,
 };
-use rbx_types::{Ray, Rect, Region3};
+use rbx_types::{Ray, Rect, Region3, Region3int16, Vector3int16};
 use rook_types::{CFrame, Vector2, Vector3};
 
-use super::{LCFrame, LVector2, fmt_f32};
+use super::{LCFrame, LVector2, LVector3int16, fmt_f32};
 use crate::args::{borrow_clone, number_of};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -18,6 +18,9 @@ pub(crate) struct LRect(pub Rect);
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct LRegion3(pub Region3);
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct LRegion3int16(pub Region3int16);
 
 fn r3(v: rbx_types::Vector3) -> Vector3 {
     v.into()
@@ -125,6 +128,24 @@ impl UserData for LRegion3 {
     }
 }
 
+impl UserData for LRegion3int16 {
+    fn add_fields<F: UserDataFields<Self>>(f: &mut F) {
+        f.add_meta_field("__type", "Region3int16");
+        f.add_field_method_get("Min", |_, t| Ok(LVector3int16(t.0.min)));
+        f.add_field_method_get("Max", |_, t| Ok(LVector3int16(t.0.max)));
+    }
+
+    fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
+        m.add_meta_method(MetaMethod::Eq, |_, t, o: UserDataRef<LRegion3int16>| {
+            Ok(t.0 == o.0)
+        });
+        m.add_meta_method(MetaMethod::ToString, |_, t, ()| {
+            let v = |v: Vector3int16| format!("{}, {}, {}", v.x, v.y, v.z);
+            Ok(format!("{}; {}", v(t.0.min), v(t.0.max)))
+        });
+    }
+}
+
 fn rect_new(_: &Lua, args: MultiValue) -> mlua::Result<LRect> {
     let args = args.into_vec();
     let v2 = |v: &LuaValue| match v {
@@ -175,5 +196,24 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
         })?,
     )?;
     g.set("Region3", region)?;
+
+    let region16 = lua.create_table()?;
+    region16.set(
+        "new",
+        lua.create_function(
+            |_,
+             (a, b): (
+                Option<UserDataRef<LVector3int16>>,
+                Option<UserDataRef<LVector3int16>>,
+            )| {
+                let zero = Vector3int16::new(0, 0, 0);
+                Ok(LRegion3int16(Region3int16::new(
+                    a.map_or(zero, |v| v.0),
+                    b.map_or(zero, |v| v.0),
+                )))
+            },
+        )?,
+    )?;
+    g.set("Region3int16", region16)?;
     Ok(())
 }

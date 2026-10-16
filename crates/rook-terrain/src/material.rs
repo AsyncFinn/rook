@@ -32,6 +32,14 @@ macro_rules! terrain_materials {
                 }
             }
 
+            /// The terrain material of an `Enum.Material`, if it is one.
+            pub fn from_material(material: Material) -> Option<Self> {
+                match material {
+                    $(Material::$name => Some(Self::$name),)*
+                    _ => None,
+                }
+            }
+
             pub fn name(self) -> &'static str {
                 match self {
                     $(Self::$name => stringify!($name),)*

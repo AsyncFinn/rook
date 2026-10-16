@@ -28,9 +28,9 @@ each release says which milestone it finishes (see `CHANGELOG.md`).
 
 ## Now, next, later
 
-- **Now:** M6 Terrain.
-- **Next:** M7 Lights and effects.
-- **Then:** M8 GUI, M9 Characters and, right after, M10 Networking.
+- **Now:** M7 Lights and effects.
+- **Next:** M8 GUI.
+- **Then:** M9 Characters and, right after, M10 Networking.
 
 The world comes before the people in it: sound, terrain, lights and GUI
 are each in hundreds of archive files, and characters need terrain to walk
@@ -47,7 +47,7 @@ directly, since a character is what makes playing together worth it.
 | ✅ | **M3** Physics | Physics conformance batch passes; unanchored places settle plausibly |
 | ✅ | **M4** Content: meshes, materials, textures, decals | Places render with their meshes, materials (2022 and legacy, MaterialVariants, SurfaceAppearance), decals and textures (v0.4.0) |
 | ✅ | **M5** Audio | Archived places play their sounds, positioned in 3D; the audio conformance batch passes (v0.5.0) |
-| ⬜ | **M6** Terrain | Archived places with terrain show it, and parts and queries collide with it |
+| ✅ | **M6** Terrain | Archived places with terrain show it, and parts and queries collide with it (v0.6.0) |
 | ⬜ | **M7** Lights and effects | Local lights light the scene; Fire, Smoke, Sparkles and ParticleEmitters draw as in Studio |
 | ⬜ | **M8** GUI | GUI conformance batch passes; archived places' GUIs draw and take input |
 | ⬜ | **M9** Characters | Spawn, walk, jump, sit and use tools in an archived place |
@@ -193,8 +193,15 @@ Terrain comes before characters, who walk on it.
    `IsRegion3Empty` find it as Studio does (bounds queries don't);
    colliders are built per chunk when something comes near. Findings:
    [terrain.md](docs/behavior/terrain.md#collision-and-queries-step-3).
-4. The Terrain API scripts use, by archive use (`FillBlock`,
-   `ReadVoxels`, `WriteVoxels`, `FillBall`, ...).
+4. ✅ The Terrain API scripts use: the fills, regions, `ReadVoxels` and
+   `WriteVoxels`, `CopyRegion`/`PasteRegion`, material colours and the
+   legacy cell methods modern Roblox still honours, each measured in
+   Studio (conformance case `terrain/terrain_api`). Edits reach collision
+   and `SmoothGrid` at the end of the frame, and only changed chunks are
+   rebuilt. Findings: [terrain.md](docs/behavior/terrain.md#the-terrain-api-step-4).
+
+M6's exit criterion is met: archived places with terrain show it, parts
+rest on it and queries find it, and scripts can build and dig it.
 
 ### M7 Lights and effects
 

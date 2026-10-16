@@ -36,6 +36,7 @@ mod materials;
 mod models;
 mod services;
 mod sound;
+mod terrain;
 mod tree;
 
 use assemblies::*;
@@ -49,6 +50,7 @@ use tree::*;
 
 pub(crate) use bindables::{get_callback, set_callback};
 pub(crate) use models::pivot_of;
+pub(crate) use terrain::region_voxels_of as terrain_region_voxels;
 pub(crate) use tree::{Core, Found, fast};
 
 pub(crate) type RawMethod = fn(&Lua, InstanceId, Args) -> ApiResult<Outcome>;
@@ -169,6 +171,32 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("AudioEmitter", "GetInteractingListeners") => audio::get_interacting_listeners,
         ("AudioListener", "GetInteractingEmitters") => audio::get_interacting_emitters,
         ("AudioAnalyzer", "GetSpectrum") => audio::get_spectrum,
+        ("Terrain", "FillBlock") => terrain::fill_block,
+        ("Terrain", "FillBall") => terrain::fill_ball,
+        ("Terrain", "FillCylinder") => terrain::fill_cylinder,
+        ("Terrain", "FillWedge") => terrain::fill_wedge,
+        ("Terrain", "FillRegion") => terrain::fill_region,
+        ("Terrain", "ReplaceMaterial") => terrain::replace_material,
+        ("Terrain", "ReadVoxels") => terrain::read_voxels,
+        ("Terrain", "WriteVoxels") => terrain::write_voxels,
+        ("Terrain", "Clear") => terrain::terrain_clear,
+        ("Terrain", "CountCells") => terrain::count_cells,
+        ("Terrain", "WorldToCell") => terrain::world_to_cell,
+        ("Terrain", "WorldToCellPreferSolid") => terrain::world_to_cell_prefer_solid,
+        ("Terrain", "WorldToCellPreferEmpty") => terrain::world_to_cell_prefer_empty,
+        ("Terrain", "CellCenterToWorld") => terrain::cell_center_to_world,
+        ("Terrain", "CellCornerToWorld") => terrain::cell_corner_to_world,
+        ("Terrain", "GetCell") => terrain::get_cell,
+        ("Terrain", "SetCell") => terrain::set_cell,
+        ("Terrain", "SetCells") => terrain::set_cells_region,
+        ("Terrain", "AutowedgeCell") => terrain::autowedge_cell,
+        ("Terrain", "AutowedgeCells") => terrain::autowedge_cells,
+        ("Terrain", "SetWaterCell") => terrain::set_water_cell,
+        ("Terrain", "GetWaterCell") => terrain::get_water_cell,
+        ("Terrain", "CopyRegion") => terrain::copy_region,
+        ("Terrain", "PasteRegion") => terrain::paste_region,
+        ("Terrain", "GetMaterialColor") => terrain::get_material_color,
+        ("Terrain", "SetMaterialColor") => terrain::set_material_color,
         _ => return super::services::native(owner, name),
     })
 }

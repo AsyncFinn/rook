@@ -239,3 +239,35 @@ fn bounds_queries_skip_terrain_and_touching_parts_find_it() {
         Vec3::new(304.0, 48.0, 4.0)
     ));
 }
+
+/// New voxels in `SmoothGrid` (a script's edit replicated) rebuild only
+/// the chunks that changed: the Brick slab, a chunk away, keeps its
+/// colliders, and rays find the lone voxel gone.
+#[test]
+fn smooth_grid_changes_rebuild_only_changed_chunks() {
+    let (mut dom, terrain) = world();
+    let mut physics = Physics::new();
+    let all = Filter::legacy_ray(Vec::new(), false);
+    let down = Vec3::new(0.0, -40.0, 0.0);
+    let slab = Vec3::new(202.0, 60.0, 2.0);
+    assert!(physics.raycast(&mut dom, slab, down, &all).is_some());
+    assert!(
+        physics
+            .raycast(&mut dom, Vec3::new(2.0, 60.0, 2.0), down, &all)
+            .is_some()
+    );
+    let built = physics.terrain.pieces.len();
+    let mut grid = physics.terrain.grid.clone();
+    grid.set(IVec3::new(0, 10, 0), Voxel::AIR);
+    let bytes = Value::BinaryString(BinaryString::from(grid.encode()));
+    dom.set_property_by_name(terrain, "SmoothGrid", bytes)
+        .unwrap();
+    physics.sync(&mut dom);
+    // Only the lone voxel's chunk went.
+    assert!(physics.terrain.pieces.len() < built && !physics.terrain.pieces.is_empty());
+    assert_eq!(
+        physics.raycast(&mut dom, Vec3::new(2.0, 60.0, 2.0), down, &all),
+        None
+    );
+    assert!(physics.raycast(&mut dom, slab, down, &all).is_some());
+}

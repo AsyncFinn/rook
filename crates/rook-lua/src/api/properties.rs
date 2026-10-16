@@ -187,6 +187,16 @@ pub(crate) fn get(w: &World, id: InstanceId, name: &str) -> Option<Value> {
         "lighting" if id == dom.root() => Some(Value::Ref(
             dom.find_service("Lighting").map(InstanceId::to_ref),
         )),
+        // Observed: a copy's size, and smooth whatever was copied.
+        "SizeInCells" if dom.is_a(id, "TerrainRegion") => {
+            let (_, size) = super::methods::terrain_region_voxels(dom, id);
+            Some(Value::Vector3(rook_types::Vector3::new(
+                size.x as f32,
+                size.y as f32,
+                size.z as f32,
+            )))
+        }
+        "IsSmooth" if dom.is_a(id, "TerrainRegion") => Some(Value::Bool(true)),
         "Terrain" if dom.is_a(id, "Workspace") => Some(Value::Ref(
             dom.find_first_child_of_class(id, "Terrain")
                 .map(InstanceId::to_ref),
