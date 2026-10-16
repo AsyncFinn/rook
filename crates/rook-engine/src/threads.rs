@@ -37,8 +37,8 @@ impl Budget {
         let forced = std::env::var("ROOK_THREADS")
             .ok()
             .and_then(|n| n.trim().parse::<usize>().ok());
-        let cores = forced
-            .unwrap_or_else(|| std::thread::available_parallelism().map_or(2, usize::from));
+        let cores =
+            forced.unwrap_or_else(|| std::thread::available_parallelism().map_or(2, usize::from));
         Self::for_cores(cores)
     }
 
