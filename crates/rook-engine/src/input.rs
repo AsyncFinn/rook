@@ -103,6 +103,12 @@ fn key_code_value(code: &str) -> Option<u32> {
 }
 
 impl DataModel {
+    /// The ClickDetector under the cursor, which the window shows as a
+    /// pointing hand.
+    pub fn hovered_click_detector(&self) -> Option<InstanceId> {
+        self.input.hover
+    }
+
     /// The window's size in pixels (for the mouse ray and Mouse.ViewSize).
     pub fn set_viewport(&mut self, width: u32, height: u32) {
         self.input.viewport = (width.max(1), height.max(1));
@@ -336,7 +342,7 @@ impl DataModel {
         // The camera may have been replaced since the window last resized.
         self.sync_viewport_size();
         let (origin, dir, camera) = self.mouse_ray()?;
-        let hit = {
+        let (hit, click_hit) = {
             let mut w = self.runtime.world_mut();
             let w = &mut *w;
             // TargetFilter and what it contains are ignored; otherwise the
@@ -347,8 +353,19 @@ impl DataModel {
                 .into_iter()
                 .collect();
             let filter = rook_physics::Filter::legacy_ray(ignore, false);
-            w.physics
-                .raycast(&mut w.dom, origin, dir * MOUSE_RANGE, &filter)
+            let hit = w
+                .physics
+                .raycast(&mut w.dom, origin, dir * MOUSE_RANGE, &filter);
+            // Clicks pass through invisible parts that don't collide; the
+            // same TargetFilter applying is Inference.
+            let clicks = rook_physics::Filter {
+                skip_invisible_ghosts: true,
+                ..filter
+            };
+            let click_hit = w
+                .physics
+                .raycast(&mut w.dom, origin, dir * MOUSE_RANGE, &clicks);
+            (hit, click_hit)
         };
         let point = hit.map_or(origin + dir * MOUSE_RANGE, |h| h.position);
         let (mx, my) = self.runtime.world().input.mouse;
@@ -373,7 +390,8 @@ impl DataModel {
             )),
         );
 
-        let detector = hit.and_then(|h| self.detector_for(h.part, origin.distance(h.position)));
+        let detector =
+            click_hit.and_then(|h| self.detector_for(h.part, origin.distance(h.position)));
         if detector != self.input.hover {
             if let Some(old) = self.input.hover {
                 clicks.push(ClickEvent {
