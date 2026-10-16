@@ -242,21 +242,37 @@ pub(crate) struct GpuImage {
 impl GpuImage {
     /// A 1 × 1 image of one RGBA8 colour.
     pub(crate) fn solid(cx: &UploadContext<'_>, label: &str, rgba: [u8; 4]) -> Self {
-        let texture = texture_with_mips(cx, label, 1, 1, &[&[rgba.to_vec()]]);
-        Self::views(&texture)
+        Self::new(cx, label, 1, 1, &[rgba.to_vec()])
     }
 
-    fn views(texture: &wgpu::Texture) -> Self {
-        let view = |format| {
+    /// `mips` (largest first) of RGBA8 `width` × `height`, viewed both
+    /// ways: one texture where the device can view it as sRGB too, else a
+    /// second copy stored as sRGB.
+    fn new(cx: &UploadContext<'_>, label: &str, width: u32, height: u32, mips: &[Vec<u8>]) -> Self {
+        let view = |texture: &wgpu::Texture, format| {
             texture.create_view(&wgpu::TextureViewDescriptor {
                 format: Some(format),
                 dimension: Some(wgpu::TextureViewDimension::D2),
                 ..Default::default()
             })
         };
+        let linear = texture_with_mips(cx, label, width, height, &[mips]);
+        let srgb = if cx.view_formats {
+            view(&linear, wgpu::TextureFormat::Rgba8UnormSrgb)
+        } else {
+            let copy = texture_in(
+                cx,
+                label,
+                wgpu::TextureFormat::Rgba8UnormSrgb,
+                width,
+                height,
+                &[mips],
+            );
+            view(&copy, wgpu::TextureFormat::Rgba8UnormSrgb)
+        };
         Self {
-            srgb: view(wgpu::TextureFormat::Rgba8UnormSrgb),
-            linear: view(wgpu::TextureFormat::Rgba8Unorm),
+            srgb,
+            linear: view(&linear, wgpu::TextureFormat::Rgba8Unorm),
         }
     }
 }
@@ -271,19 +287,13 @@ impl Upload for Image {
 
     fn upload(&self, cx: &mut UploadContext<'_>) -> GpuImage {
         profiling::scope!("upload image");
-        let texture = texture_with_mips(
-            cx,
-            "rook image",
-            self.width,
-            self.height,
-            &[self.mips.as_slice()],
-        );
-        GpuImage::views(&texture)
+        GpuImage::new(cx, "rook image", self.width, self.height, &self.mips)
     }
 }
 
 /// A texture of `layers`, each a mip chain (largest first) of RGBA8
-/// `width` × `height`, stored linear and viewable as sRGB too.
+/// `width` × `height`, stored linear and viewable as sRGB too where the
+/// device allows it.
 pub(crate) fn texture_with_mips(
     cx: &UploadContext<'_>,
     label: &str,
@@ -291,6 +301,31 @@ pub(crate) fn texture_with_mips(
     height: u32,
     layers: &[&[Vec<u8>]],
 ) -> wgpu::Texture {
+    texture_in(
+        cx,
+        label,
+        wgpu::TextureFormat::Rgba8Unorm,
+        width,
+        height,
+        layers,
+    )
+}
+
+/// [`texture_with_mips`] stored as `format`.
+fn texture_in(
+    cx: &UploadContext<'_>,
+    label: &str,
+    format: wgpu::TextureFormat,
+    width: u32,
+    height: u32,
+    layers: &[&[Vec<u8>]],
+) -> wgpu::Texture {
+    let srgb_view = [wgpu::TextureFormat::Rgba8UnormSrgb];
+    let view_formats: &[_] = if cx.view_formats && format == wgpu::TextureFormat::Rgba8Unorm {
+        &srgb_view
+    } else {
+        &[]
+    };
     let mip_count = layers[0].len() as u32;
     let texture = cx.device.create_texture(&wgpu::TextureDescriptor {
         label: Some(label),
@@ -302,9 +337,9 @@ pub(crate) fn texture_with_mips(
         mip_level_count: mip_count,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
-        format: wgpu::TextureFormat::Rgba8Unorm,
+        format,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-        view_formats: &[wgpu::TextureFormat::Rgba8UnormSrgb],
+        view_formats,
     });
     for (layer, levels) in layers.iter().enumerate() {
         for (level, pixels) in levels.iter().enumerate() {

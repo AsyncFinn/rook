@@ -28,6 +28,8 @@ pub struct Renderer {
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
     color_format: wgpu::TextureFormat,
+    /// See [`UploadContext::view_formats`].
+    view_formats: bool,
     pipelines: Pipelines,
     globals: wgpu::Buffer,
     globals_layout: wgpu::BindGroupLayout,
@@ -107,12 +109,18 @@ pub struct PassCounts {
 }
 
 impl Renderer {
-    /// Create a renderer drawing into `color_format` targets.
+    /// Create a renderer drawing into `color_format` targets, on a device
+    /// made from `adapter`.
     pub fn new(
+        adapter: &wgpu::Adapter,
         device: wgpu::Device,
         queue: wgpu::Queue,
         color_format: wgpu::TextureFormat,
     ) -> Self {
+        let view_formats = adapter
+            .get_downlevel_capabilities()
+            .flags
+            .contains(wgpu::DownlevelFlags::VIEW_FORMATS);
         let globals = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("rook globals"),
             size: std::mem::size_of::<Globals>() as u64,
@@ -230,6 +238,7 @@ impl Renderer {
             queue: &queue,
             image_layout: &image_layout,
             sampler: &image_sampler,
+            view_formats,
         };
         let defaults = Defaults::new(&cx);
         let own = surfaces::rooks_own();
@@ -263,6 +272,7 @@ impl Renderer {
             device,
             queue,
             color_format,
+            view_formats,
             pipelines,
             globals,
             globals_layout: layout,
@@ -308,6 +318,7 @@ impl Renderer {
             queue: &self.queue,
             image_layout: &self.image_layout,
             sampler: &self.image_sampler,
+            view_formats: self.view_formats,
         }
     }
 
@@ -427,7 +438,8 @@ impl Renderer {
     pub(crate) fn headless_with(
         descriptor: impl FnOnce(&wgpu::Adapter) -> wgpu::DeviceDescriptor<'static>,
     ) -> Result<Self, RenderError> {
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
+        let instance =
+            wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
             compatible_surface: None,
@@ -438,6 +450,7 @@ impl Renderer {
         let (device, queue) = pollster::block_on(adapter.request_device(&descriptor(&adapter)))
             .map_err(|e| RenderError::Device(e.to_string()))?;
         Ok(Self::new(
+            &adapter,
             device,
             queue,
             wgpu::TextureFormat::Rgba8UnormSrgb,

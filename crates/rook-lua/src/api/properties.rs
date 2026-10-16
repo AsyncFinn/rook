@@ -30,7 +30,8 @@ pub(crate) fn set_cframe(w: &mut World, id: InstanceId, c: CFrame) -> Result<(),
 /// does: its joints are rewritten to hold it where it now is (observed).
 fn set_cframe_alone(w: &mut World, id: InstanceId, c: CFrame) -> Result<(), DomError> {
     let pid = w.dom.property_id(id, "CFrame").ok_or(DomError::Stale)?;
-    w.dom.set_property(id, pid, Value::CFrame(c.orthonormalize()))?;
+    w.dom
+        .set_property(id, pid, Value::CFrame(c.orthonormalize()))?;
     joints::reseat(&mut w.dom, id)
 }
 

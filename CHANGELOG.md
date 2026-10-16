@@ -15,6 +15,13 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 
 ## [Unreleased]
 
+## [0.5.15] — 2026-10-15 — Fix: the player crashes on OpenGL
+
+Pinned Roblox version: 0.741.19.
+
+- The player runs on devices that can't view a texture in a second format, such as OpenGL (what wgpu picks over Remote Desktop or on old drivers). There it stopped at once with "Downlevel flags VIEW_FORMATS are required". Each image now keeps a second copy stored as sRGB there, using twice the image memory. Elsewhere nothing changes. An 86k-part place renders the same on OpenGL as on the default backend.
+- `WGPU_BACKEND` (`vulkan`, `dx12`, `gl`) picks the graphics backend for the player and for headless renders.
+
 ## [0.5.14] — 2026-10-15 — Fix: the player won't start without the Visual C++ runtime
 
 Pinned Roblox version: 0.741.19.
