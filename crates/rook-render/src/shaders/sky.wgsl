@@ -40,5 +40,5 @@ fn fs_sky(in: SkyOut) -> @location(0) vec4<f32> {
     if along < max(a.x, max(a.y, a.z)) - 1e-6 {
         discard;
     }
-    return vec4(texel.rgb, 1.0);
+    return vec4(texel.rgb * g.fog_range.z, 1.0);
 }

@@ -66,8 +66,11 @@ fn local_light(world: vec3<f32>, n: vec3<f32>) -> vec3<f32> {
         return vec3(0.0);
     }
     let sum = textureSampleLevel(light_voxels, light_sampler, uvw, 0.0).rgb;
-    let ambient = g.ambient.rgb * g.ambient.rgb;
-    return max(studio_light3(ambient + sum) - studio_light3(ambient), vec3(0.0));
+    // Exposure scales light before the curve, as in Studio; `fog` applies
+    // it to the rest afterwards, so it's taken back out here.
+    let e = g.fog_range.z;
+    let ambient = g.ambient.rgb * g.ambient.rgb * e;
+    return max(studio_light3(ambient + sum * e) - studio_light3(ambient), vec3(0.0)) / e;
 }
 
 // How much of the sun reaches a point: 3x3 comparison samples (each one
@@ -160,8 +163,9 @@ fn shade_pbr(
     return fog(color, world);
 }
 
+// Fog, then the exposure (every lit surface ends here).
 fn fog(color: vec3<f32>, world: vec3<f32>) -> vec3<f32> {
     let dist = distance(world, g.camera_pos.xyz);
     let f = clamp((dist - g.fog_range.x) / max(g.fog_range.y - g.fog_range.x, 1e-3), 0.0, 1.0);
-    return mix(color, srgb_to_linear(g.fog_color.rgb), f);
+    return mix(color, srgb_to_linear(g.fog_color.rgb), f) * g.fog_range.z;
 }
