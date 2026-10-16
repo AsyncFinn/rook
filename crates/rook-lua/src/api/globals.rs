@@ -7,6 +7,10 @@
 use mlua::{Function, Lua, MultiValue, Table, Thread, Value as LuaValue};
 use rook_scheduler::{LEGACY_MIN_WAIT, Queue};
 
+mod new_name;
+
+use new_name::new_name;
+
 use super::instance::push_instance;
 use crate::args::{Args, display_value, type_name};
 use crate::ctx::{ApiResult, Outcome, ScriptError, api_fn, api_ret, with_world};
@@ -218,17 +222,6 @@ fn instance_new(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
         super::methods::mutate(lua, |w| w.dom.set_parent(id, Some(p)))?;
     }
     Outcome::ret(lua, push_instance(lua, id)?)
-}
-
-/// The Name `Instance.new` gives a class whose new instances aren't named
-/// after it (observed in Studio 0.742; conformance case `content/union`).
-fn new_name(class: &str) -> Option<&'static str> {
-    Some(match class {
-        "UnionOperation" => "Union",
-        "NegateOperation" => "NegativePart",
-        "IntersectOperation" => "Intersection",
-        _ => return None,
-    })
 }
 
 fn instance_table(lua: &Lua) -> mlua::Result<Table> {

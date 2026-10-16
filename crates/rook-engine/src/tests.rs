@@ -86,7 +86,7 @@ fn mesh_and_decal_changes_mark_their_part() {
         "workspace.Part.Mesh.MeshType = Enum.MeshType.Sphere",
         "workspace.Part.Mesh.Scale = Vector3.new(1, 2, 1)",
         "Instance.new('CylinderMesh', workspace.Part)",
-        "workspace.Part.CylinderMesh.Parent = nil",
+        "workspace.Part:FindFirstChildOfClass('CylinderMesh').Parent = nil",
         "workspace.Part.Mesh:Destroy()",
         "Instance.new('Decal', workspace.Part)",
         "workspace.Part.Decal.Transparency = 0.5",
