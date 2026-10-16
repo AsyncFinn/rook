@@ -1,0 +1,48 @@
+-- studio 0.742.0.7421053
+-- signals: deferred
+Part Part
+Model Model
+Folder Folder
+RemoteEvent RemoteEvent
+BindableEvent Event
+BindableFunction Function
+BoolValue Value
+IntValue Value
+NumberValue Value
+StringValue Value
+ObjectValue Value
+CFrameValue Value
+Vector3Value Value
+Color3Value Value
+BrickColorValue Value
+RayValue Value
+IntConstrainedValue Value
+DoubleConstrainedValue Value
+BinaryStringValue Value
+BlockMesh Mesh
+CylinderMesh Mesh
+FileMesh Mesh
+SpecialMesh Mesh
+WedgePart Wedge
+CornerWedgePart CornerWedge
+TrussPart Truss
+UnionOperation Union
+NegateOperation NegativePart
+IntersectOperation Intersection
+Shirt Clothing
+Pants Clothing
+ShirtGraphic Shirt Graphic
+BodyColors Body Colors
+Hint Message
+NumberPose Pose
+Plane PlaneConstraint
+BloomEffect Bloom
+BlurEffect Blur
+ColorCorrectionEffect ColorCorrection
+ColorGradingEffect ColorGrading
+DepthOfFieldEffect DepthOfField
+SunRaysEffect SunRays
+FloatCurve Instance
+TeleportOptions Instance
+DataStoreOptions Instance
+GetTextBoundsParams Instance
