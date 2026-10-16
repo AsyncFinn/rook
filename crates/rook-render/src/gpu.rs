@@ -141,7 +141,9 @@ impl Instance {
                     tile = [1.0, 1.0, t[0], t[1]];
                     material[3] = t[2];
                 } else if maps.any() {
-                    flags |= MAPS;
+                    // Only terrain's maps say how their alpha is used, in
+                    // the bits Plastic's surfaces use otherwise.
+                    flags |= MAPS | (maps.alpha as u32) << SURFACES_SHIFT;
                     if matches!(
                         p.shape,
                         DrawShape::Part(PartShape::Wedge | PartShape::CornerWedge)

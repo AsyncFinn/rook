@@ -244,11 +244,12 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
         let a = surface_appearance(in, c);
         albedo = a.rgb;
         alpha *= a.a;
-    } else if terrain && (in.flags & MAPS) != 0u {
-        // Terrain's colour maps are tint masks (their packs' `alphamode`
-        // 2, TintMask): where they're opaque, Studio keeps only the
-        // texel's luma, times the material's tint for its colour
-        // (`TerrainMaterial::tint`, the instance colour).
+    } else if terrain && (in.flags & MAPS) != 0u && (in.surfaces & 3u) == ALPHA_TINT_MASK {
+        // The 2022 set's terrain colour maps are tint masks (their packs'
+        // `alphamode` 2, TintMask): where they're opaque, Studio keeps
+        // only the texel's luma, times the material's tint for its colour
+        // (`TerrainMaterial::tint`, the instance colour). The legacy set's
+        // are multiplied by it, as below.
         let c = sample_map(in.images, COLOR_MAP, uv, duv_x, duv_y);
         let luma = dot(c.rgb, vec3(0.25, 0.5, 0.25));
         albedo = mix(c.rgb, luma * in.color.rgb, c.a);
@@ -261,7 +262,7 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
         let t = sample_map(in.images, NORMAL_MAP, uv, duv_x, duv_y).xyz * 2.0 - 1.0;
         normal = perturb(in.normal, t, dp_x, dp_y, duv_x, duv_y);
     }
-    if in.surfaces != 0u && (in.flags & MAPS_UV) == 0u {
+    if in.surfaces != 0u && (in.flags & MAPS_UV) == 0u && !terrain {
         let pattern = (in.surfaces >> (face * 3u)) & 7u;
         if pattern != 0u {
             // The patterns are grey around 0.5: twice them leaves the

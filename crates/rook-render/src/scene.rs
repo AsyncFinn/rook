@@ -59,13 +59,15 @@ pub enum ImagePlacement {
 /// observed in Studio 0.742 and the creator docs).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MapAlpha {
-    /// Ignored: material textures, MaterialVariants, and `Opaque`.
+    /// Ignored: material textures, MaterialVariants, the legacy set's
+    /// terrain textures, and `Opaque`.
     Ignore = 0,
     /// The map over the part's Color, by its alpha.
     Overlay = 1,
     /// The alpha is the surface's opacity.
     Transparency = 2,
-    /// The alpha says where the tint applies.
+    /// The alpha says where the tint applies (on terrain, the 2022 set's
+    /// tint, on the texel's luma).
     TintMask = 3,
 }
 

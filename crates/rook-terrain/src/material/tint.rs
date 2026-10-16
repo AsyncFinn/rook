@@ -1,7 +1,7 @@
-//! How Studio colours a material's 2022 textures by its `MaterialColors`
-//! colour. Studio bakes the colour into the textures on the CPU and stores
-//! them in YCoCg, read back squared (gamma 2) by its terrain shader
-//! (`SmoothClusterFSUnified`); where a texture's tint mask is opaque it
+//! How Studio colours a material's textures by its `MaterialColors`
+//! colour. For the 2022 set, Studio bakes the colour into the textures on
+//! the CPU and stores them in YCoCg, read back squared (gamma 2) by its
+//! terrain shader (`SmoothClusterFSUnified`); where a texture's tint mask is opaque it
 //! keeps only the texel's luma, times a tint worked out from the colour
 //! per material:
 //!
@@ -18,7 +18,7 @@
 //! 6/255, except CrackedLava, whose dark rock and lit cracks average
 //! unevenly (Approximation; `docs/behavior/terrain.md`).
 
-use rook_types::Color3uint8;
+use rook_types::{Color3uint8, MaterialSet};
 
 use super::TerrainMaterial;
 
@@ -73,12 +73,27 @@ const TINTS: [Option<Tint>; 23] = [
 ];
 
 impl TerrainMaterial {
-    /// What a texel's luma is multiplied by where the material's tint mask
-    /// is opaque, for its `MaterialColors` colour (sRGB, 0 to 1 and above:
-    /// a strong colour lifts some channels over the luma). Air and Water
-    /// give the colour itself.
-    pub fn tint(self, color: Color3uint8) -> [f32; 3] {
+    /// How the material's textures in `set` are coloured for its
+    /// `MaterialColors` colour (sRGB, 0 to 1 and above). The 2022 set's
+    /// colour maps are tint masks: where opaque, the texel's luma is
+    /// multiplied by this (a strong colour lifts some channels over the
+    /// luma). The legacy set's are coloured and opaque (their packs say
+    /// `alphamode` 1, Studio's `avgAlbedoPre2022` alpha 255): the texel is
+    /// multiplied by the colour over the set's default, so the default
+    /// colour draws the texture as it is (Inference). Air and Water give
+    /// the colour itself.
+    pub fn tint(self, color: Color3uint8, set: MaterialSet) -> [f32; 3] {
         let c = [color.r, color.g, color.b].map(|v| f32::from(v) / 255.0);
+        if set == MaterialSet::Legacy {
+            let Some(base) = self
+                .color(None, set)
+                .filter(|_| TINTS[self as usize].is_some())
+            else {
+                return c;
+            };
+            let base = [base.r, base.g, base.b].map(|v| f32::from(v.max(1)) / 255.0);
+            return [0, 1, 2].map(|i| c[i] / base[i]);
+        }
         let Some(t) = TINTS[self as usize] else {
             return c;
         };

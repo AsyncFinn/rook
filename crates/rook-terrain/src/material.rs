@@ -153,13 +153,22 @@ impl TerrainMaterial {
         self.look(MaterialSet::Legacy)
     }
 
-    /// Its textures: the 2022 set's, in places of either set (observed:
-    /// Studio drew the same scene alike with `Use2022Materials` on and
-    /// off, and CrackedLava's cracks in the place's magenta colour, as the
-    /// 2022 set's grey texture tinted gives and the legacy set's orange one
-    /// doesn't).
-    pub fn textures(self) -> &'static Look {
-        self.look(MaterialSet::Materials2022)
+    /// Its textures: those of the place's set (observed: Studio draws a
+    /// legacy place's Sandstone with the legacy set's cracked red rock,
+    /// not the 2022 set's pale stone).
+    pub fn textures(self, set: MaterialSet) -> &'static Look {
+        self.look(set)
+    }
+
+    /// Whether its top, side and bottom textures differ in either set, so
+    /// its surfaces are split by which way they face.
+    pub fn faces_differ(self) -> bool {
+        [MaterialSet::Legacy, MaterialSet::Materials2022]
+            .iter()
+            .any(|&set| {
+                let look = self.textures(set);
+                look.top != look.side || look.side != look.bottom
+            })
     }
 
     /// Its colour in `Terrain.MaterialColors`, or `set`'s default when the
@@ -224,24 +233,31 @@ mod tests {
     fn tints() {
         use TerrainMaterial::*;
         let rgb = |r, g, b| Color3uint8::new(r, g, b);
+        let m22 = MaterialSet::Materials2022;
         // White keeps the texture's grey, and grey dims it.
-        assert_eq!(Grass.tint(rgb(255, 255, 255)), [1.0; 3]);
+        assert_eq!(Grass.tint(rgb(255, 255, 255), m22), [1.0; 3]);
         assert!(
-            Sand.tint(rgb(128, 128, 128))
+            Sand.tint(rgb(128, 128, 128), m22)
                 .iter()
                 .all(|&x| (x - 0.502).abs() < 0.001)
         );
         // Red turns magenta on Grass, and teal on Basalt.
-        let [r, g, b] = Grass.tint(rgb(255, 0, 0));
+        let [r, g, b] = Grass.tint(rgb(255, 0, 0), m22);
         assert!(r > b && b > g);
-        let [r, g, b] = Basalt.tint(rgb(255, 0, 0));
+        let [r, g, b] = Basalt.tint(rgb(255, 0, 0), m22);
         assert!(g > r && b > r);
         // Rock's chroma tops out: pink and red look alike.
-        assert_eq!(Rock.tint(rgb(255, 128, 128)), Rock.tint(rgb(255, 0, 0)));
+        assert_eq!(
+            Rock.tint(rgb(255, 128, 128), m22),
+            Rock.tint(rgb(255, 0, 0), m22)
+        );
         // Basalt is as bright in its default colour as in white.
         let luma = |[r, g, b]: [f32; 3]| (r + 2.0 * g + b) / 4.0;
-        assert_eq!(luma(Basalt.tint(rgb(75, 74, 74))), 0.6);
-        assert_eq!(luma(Basalt.tint(rgb(255, 255, 255))), 0.6);
-        assert_eq!(Water.tint(rgb(255, 0, 0)), [1.0, 0.0, 0.0]);
+        assert_eq!(luma(Basalt.tint(rgb(75, 74, 74), m22)), 0.6);
+        assert_eq!(luma(Basalt.tint(rgb(255, 255, 255), m22)), 0.6);
+        assert_eq!(Water.tint(rgb(255, 0, 0), m22), [1.0, 0.0, 0.0]);
+        // The legacy set's textures draw as they are in its default colours.
+        let legacy = MaterialSet::Legacy;
+        assert_eq!(Sandstone.tint(rgb(137, 90, 71), legacy), [1.0; 3]);
     }
 }
