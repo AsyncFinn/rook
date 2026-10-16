@@ -175,7 +175,7 @@ impl Renderer {
             ambient: rgb(l.ambient, 0.0),
             outdoor_ambient: rgb(l.outdoor_ambient, 0.0),
             fog_color: rgb(l.fog_color, l.brightness),
-            fog_range: [l.fog_start, l.fog_end, 0.0, 0.0],
+            fog_range: [l.fog_start, l.fog_end, l.exposure, 0.0],
             shadow_view_proj: shadow
                 .map_or(glam::Mat4::IDENTITY, |s| s.view_proj)
                 .to_cols_array_2d(),
@@ -225,7 +225,7 @@ impl Renderer {
             self.build_draws(shadow, &view, margin, transparent_runs);
 
         let depth = self.depth_view(width, height);
-        let sky = srgb_to_linear(l.sky_horizon);
+        let sky = srgb_to_linear(l.sky_horizon).map(|c| c * l.exposure);
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {

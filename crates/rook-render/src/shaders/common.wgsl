@@ -8,7 +8,8 @@ struct Globals {
     outdoor_ambient: vec4<f32>,
     // rgb fog colour, w = brightness
     fog_color: vec4<f32>,
-    // x = fog start, y = fog end
+    // x = fog start, y = fog end, z = exposure (a multiplier on linear
+    // light, `Lighting::exposure`)
     fog_range: vec4<f32>,
     // World to the shadow map's clip space (reverse Z).
     shadow_view_proj: mat4x4<f32>,

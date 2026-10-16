@@ -77,6 +77,22 @@ Future).
    restore the Baseplate's Lighting and Workspace, and delete the files
    from `content`.
 
+## ExposureCompensation
+
+Measured on 2026-10-16 from a control room that looked far too light in
+Rook (Ambient 175 grey, Brightness 0, ExposureCompensation −0.6). In a
+Baseplate with that Lighting, −0.6 against 0 took white SmoothPlastic
+from 179 to 148, 163-grey SmoothPlastic from 112 to 84 and 163-grey Metal
+from 92 to 67; the sky went from (85, 163, 202) to (61, 129, 174).
+
+Rook multiplies linear light by 2^ExposureCompensation (`Lighting::exposure`,
+applied in `fog` and to the sky), which lands within about 8 of those.
+Local lights take it before their tone curve, as Studio does, so lit walls
+don't dim as much as unlit ones. In the room, unlit consoles now draw
+95 to Studio's 91. Its carpet floor is still 59 to Studio's 24: a black
+Texture (alpha about 0.65, Transparency 0.2) over Metal, the
+blend-before-the-curve case above.
+
 ## For Rook
 
 Draw to an HDR target (Rgba16Float), leave Neon unclamped up to its cap,

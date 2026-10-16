@@ -257,6 +257,9 @@ pub struct Lighting {
     /// `Lighting.EnvironmentSpecularScale`, 0 to 1: how much parts reflect
     /// the sky, and how far metals trade their diffuse light for it.
     pub environment_specular: f32,
+    /// `Lighting.ExposureCompensation` as a multiplier on linear light
+    /// (2 to the power of it), for everything drawn, the sky included.
+    pub exposure: f32,
 }
 
 impl Default for Lighting {
@@ -275,6 +278,7 @@ impl Default for Lighting {
             skybox: None,
             global_shadows: true,
             environment_specular: 0.0,
+            exposure: 1.0,
         }
     }
 }
