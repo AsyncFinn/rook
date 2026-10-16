@@ -3,13 +3,19 @@
 //! The engine asks a [`Loader`] for references and collects the results at
 //! a fixed point in its frame ([`Loader::poll`]), so disk, network and
 //! decoding never hold up a frame and completions reach scripts on the
-//! engine thread (architecture §8 "Content"). Worker threads start with the
-//! first request: a place that never asks for content costs nothing.
+//! engine thread (architecture §8 "Content").
+//!
+//! Each loader has a few fetch threads, which wait on disk and the network,
+//! and hands decoding to one decode pool the whole process shares, sized
+//! from the machine's cores ([`rook_threads::Budget::decode`]). Both run at
+//! below-normal priority, so on a small machine loading takes what the
+//! frame and audio leave. Threads start with the first request: a place
+//! that never asks for content costs nothing.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{Receiver, Sender, channel};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 
 use crate::audio::Audio;
@@ -17,10 +23,11 @@ use crate::image::Image;
 use crate::mesh::Mesh;
 use crate::{ContentRef, Failure, FailureKind, Fetched, Resolver};
 
-/// Worker threads per loader. Asset delivery answers in a few hundred
+/// Fetch threads per loader. Asset delivery answers in a few hundred
 /// milliseconds per request, so a few in flight keep a place with hundreds
-/// of assets moving without hammering the service.
-const WORKERS: usize = 4;
+/// of assets moving without hammering the service; they wait rather than
+/// compute, so they don't come out of the thread budget.
+const FETCHERS: usize = 4;
 
 /// Jobs queued or running on every loader in the process.
 static IN_FLIGHT: AtomicUsize = AtomicUsize::new(0);
@@ -151,7 +158,7 @@ impl Loader {
             return ticket;
         }
         self.waiting.insert(job.clone(), vec![ticket]);
-        let workers = self.workers.get_or_insert_with(|| spawn(&self.resolver));
+        let workers = self.workers.get_or_insert_with(|| spawn_fetchers(&self.resolver));
         IN_FLIGHT.fetch_add(1, Ordering::Relaxed);
         // The workers live as long as `jobs`, so the send can't fail.
         let _ = workers.jobs.send(job);
@@ -199,9 +206,18 @@ impl Loader {
     }
 }
 
-/// Resolve a job and, for a mesh or an image, decode it.
-fn run(resolver: &Resolver, (r, want): &Job) -> Outcome {
-    let mut fetched = resolver.resolve(r)?;
+/// Whether a job's bytes still need decoding once fetched.
+fn needs_decoding(want: Want, fetched: &Fetched) -> bool {
+    match want {
+        Want::Bytes => false,
+        // Material textures come decoded.
+        Want::Image => fetched.image.is_none(),
+        Want::Mesh | Want::Audio => true,
+    }
+}
+
+/// Decode a fetched mesh, image or sound.
+fn decode(want: Want, mut fetched: Fetched) -> Outcome {
     let invalid = |e: &dyn std::fmt::Display| Failure::new(FailureKind::Invalid, e.to_string());
     match want {
         Want::Bytes => {}
@@ -210,8 +226,6 @@ fn run(resolver: &Resolver, (r, want): &Job) -> Outcome {
             let mesh = Mesh::decode(&fetched.bytes).map_err(|e| invalid(&e))?;
             fetched.mesh = Some(Arc::new(mesh));
         }
-        // Material textures come decoded.
-        Want::Image if fetched.image.is_some() => {}
         Want::Image => {
             profiling::scope!("decode image");
             let image = Image::decode(&fetched.bytes).map_err(|e| invalid(&e))?;
@@ -231,23 +245,35 @@ fn run(resolver: &Resolver, (r, want): &Job) -> Outcome {
     Ok(fetched)
 }
 
-fn spawn(resolver: &Arc<Resolver>) -> Workers {
-    let (jobs, job_rx) = channel::<Job>();
-    let (done_tx, done) = channel();
-    let job_rx = Arc::new(Mutex::new(job_rx));
-    for i in 0..WORKERS {
-        let (resolver, jobs, done) = (resolver.clone(), job_rx.clone(), done_tx.clone());
+type Done = Sender<(Job, Outcome)>;
+
+/// Hand a finished job back to its loader.
+fn finish(done: &Done, job: Job, outcome: Outcome) -> bool {
+    job_done();
+    done.send((job, outcome)).is_ok()
+}
+
+/// Start `count` threads named `name-i`, at below-normal priority, each
+/// running `work` on what arrives on a shared queue until it closes.
+fn spawn_threads<T: Send + 'static>(
+    name: &str,
+    count: usize,
+    queue: Receiver<T>,
+    work: impl Fn(T) -> bool + Send + Clone + 'static,
+) {
+    let queue = Arc::new(Mutex::new(queue));
+    for i in 0..count {
+        let (queue, work) = (queue.clone(), work.clone());
         let spawned = std::thread::Builder::new()
-            .name(format!("rook-content-{i}"))
+            .name(format!("{name}-{i}"))
             .spawn(move || {
+                rook_threads::lower_priority();
                 loop {
-                    // Ends when the loader (and its sender) is dropped.
-                    let Ok(job) = jobs.lock().expect("job queue").recv() else {
+                    // Ends when the queue's sender is dropped.
+                    let Ok(item) = queue.lock().expect("thread queue").recv() else {
                         return;
                     };
-                    let outcome = run(&resolver, &job);
-                    job_done();
-                    if done.send((job, outcome)).is_err() {
+                    if !work(item) {
                         return;
                     }
                 }
@@ -256,8 +282,51 @@ fn spawn(resolver: &Arc<Resolver>) -> Workers {
         if spawned.is_err() && i > 0 {
             break;
         }
-        spawned.expect("starting a content worker thread");
+        spawned.expect("starting a content thread");
     }
+}
+
+/// Decoding for a job, run on the decode pool.
+type DecodeJob = Box<dyn FnOnce() + Send>;
+
+/// Queue decoding on the process's decode pool, starting it the first time.
+fn queue_decode(job: DecodeJob) {
+    static POOL: OnceLock<Mutex<Sender<DecodeJob>>> = OnceLock::new();
+    let pool = POOL.get_or_init(|| {
+        let (jobs, queue) = channel::<DecodeJob>();
+        spawn_threads(
+            "rook-decode",
+            rook_threads::Budget::get().decode(),
+            queue,
+            |job: DecodeJob| {
+                job();
+                true
+            },
+        );
+        Mutex::new(jobs)
+    });
+    // The pool lives as long as the process, so the send can't fail.
+    let _ = pool.lock().expect("decode queue").send(job);
+}
+
+fn spawn_fetchers(resolver: &Arc<Resolver>) -> Workers {
+    let (jobs, queue) = channel::<Job>();
+    let (done_tx, done) = channel();
+    let resolver = resolver.clone();
+    spawn_threads("rook-content", FETCHERS, queue, move |job: Job| {
+        let fetched = resolver.resolve(&job.0);
+        match fetched {
+            Ok(fetched) if needs_decoding(job.1, &fetched) => {
+                let done = done_tx.clone();
+                queue_decode(Box::new(move || {
+                    let outcome = decode(job.1, fetched);
+                    finish(&done, job, outcome);
+                }));
+                true
+            }
+            outcome => finish(&done_tx, job, outcome),
+        }
+    });
     Workers { jobs, done }
 }
 

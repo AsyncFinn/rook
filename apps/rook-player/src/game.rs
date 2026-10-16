@@ -32,6 +32,8 @@ pub struct Game {
     pub client_steps: Times,
     /// Time spent applying server frames since the last client step.
     delivering: std::time::Duration,
+    /// When loading the place started (`--bench` times content from it).
+    pub load_start: std::time::Instant,
 }
 
 impl Game {
@@ -45,6 +47,7 @@ impl Game {
         content: Arc<rook_content::Resolver>,
         script: Option<String>,
     ) -> anyhow::Result<Self> {
+        let load_start = std::time::Instant::now();
         let bytes = fs_err::read(path)?;
         let options = Options {
             content: Some(content),
@@ -82,6 +85,7 @@ impl Game {
             server_steps: Times::default(),
             client_steps: Times::default(),
             delivering: std::time::Duration::ZERO,
+            load_start,
         };
         game.print_logs();
         Ok(game)
