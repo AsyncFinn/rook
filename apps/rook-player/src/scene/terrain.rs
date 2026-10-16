@@ -14,7 +14,7 @@ mod grass;
 use glam::IVec3;
 use rayon::prelude::*;
 use rook_content::MaterialMap;
-use rook_content::mesh::{Mesh, TerrainMapping};
+use rook_content::decode::mesh::{Mesh, TerrainMapping};
 use rook_render::TerrainLook;
 use rook_terrain::grass::{GrassTops, add_grass_tops, blade_color};
 use rook_terrain::{ChunkMesh, Facing, Grid, TerrainMaterial, chunks_to_mesh, mesh_chunk};
@@ -318,9 +318,17 @@ impl SceneCache {
             .unwrap_or(rook_types::Color3uint8::new(255, 255, 255));
         let color = [c.r, c.g, c.b].map(|v| f32::from(v) / 255.0);
         let variant = dom.find_service("MaterialService").and_then(|service| {
-            let name =
-                rook_physics::materials::base_material_override(dom, service, material.material())?;
-            rook_physics::materials::find_variant(dom, service, material.material(), &name)
+            let name = rook_physics::contacts::materials::base_material_override(
+                dom,
+                service,
+                material.material(),
+            )?;
+            rook_physics::contacts::materials::find_variant(
+                dom,
+                service,
+                material.material(),
+                &name,
+            )
         });
         if let Some(variant) = variant {
             let [color_map, normal, roughness, metalness] = self.map_images(dom, terrain, variant);

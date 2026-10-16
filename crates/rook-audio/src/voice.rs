@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use rook_content::audio::Audio;
+use rook_content::decode::audio::Audio;
 
 use crate::effects::{Chain, Frame};
 

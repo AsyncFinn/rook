@@ -6,6 +6,8 @@
 //! terminal line (the `repl` feature), [`set_output`] routes it there
 //! instead, so it prints above the prompt.
 
+pub mod repl;
+
 use std::sync::Mutex;
 
 use anstyle::{AnsiColor, Style};

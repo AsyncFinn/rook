@@ -33,7 +33,7 @@ pub(super) fn get_base_material_override(
     let m = material(lua, &a, 0)?;
     override_property("GetBaseMaterialOverride", m)?;
     let name = with_world(lua, |w| {
-        rook_physics::materials::base_material_override(&w.dom, this, m)
+        rook_physics::contacts::materials::base_material_override(&w.dom, this, m)
     });
     Outcome::ret(lua, name)
 }
@@ -61,7 +61,7 @@ pub(super) fn get_material_variant(lua: &Lua, this: InstanceId, a: Args) -> ApiR
     let m = material(lua, &a, 0)?;
     let name = a.string(1)?;
     let found = with_world(lua, |w| {
-        rook_physics::materials::find_variant(&w.dom, this, m, &name)
+        rook_physics::contacts::materials::find_variant(&w.dom, this, m, &name)
     });
     ret_instance(lua, found)
 }

@@ -7,8 +7,8 @@
 
 use glam::{Affine3A, IVec3, Vec3};
 use rbx_types::{Region3int16, Vector3int16};
-use rook_terrain::cells;
-use rook_terrain::edit::{Bounds, REGION_MAX_VOXELS, Shape, region_voxels};
+use rook_terrain::grid::cells;
+use rook_terrain::grid::edit::{Bounds, REGION_MAX_VOXELS, Shape, region_voxels};
 use rook_terrain::{Grid, TerrainMaterial, Voxel};
 use rook_types::{Material, MaterialSet, TerrainMaterials};
 
@@ -235,7 +235,7 @@ pub(super) fn read_voxels(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Out
         materials.raw_set(x + 1, mx)?;
         occupancies.raw_set(x + 1, ox)?;
     }
-    let size_value = crate::convert::vector3_to_lua(rook_types::Vector3::new(
+    let size_value = crate::ctx::convert::vector3_to_lua(rook_types::Vector3::new(
         size.x as f32,
         size.y as f32,
         size.z as f32,
@@ -297,7 +297,7 @@ fn voxel_array<T>(
                         x + 1,
                         y + 1,
                         z + 1,
-                        crate::args::type_name(&v)
+                        crate::ctx::args::type_name(&v)
                     ))
                 })?;
                 out.push(value);
@@ -328,7 +328,14 @@ pub(super) fn write_voxels(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Ou
         },
         "Enum.Material",
     )?;
-    let occupancies = voxel_array(&a, 3, "occupancies", size, crate::args::number_of, "number")?;
+    let occupancies = voxel_array(
+        &a,
+        3,
+        "occupancies",
+        size,
+        crate::ctx::args::number_of,
+        "number",
+    )?;
     let Some(bounds) = Bounds::of_block(min, size) else {
         return Outcome::ret(lua, ());
     };

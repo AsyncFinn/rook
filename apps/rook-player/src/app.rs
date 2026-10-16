@@ -1,5 +1,9 @@
 //! The window: input, the frame loop and drawing.
 
+pub(crate) mod camera;
+pub(crate) mod keys;
+pub(crate) mod readout;
+
 use crate::*;
 
 pub(crate) struct Gfx {
@@ -41,7 +45,7 @@ pub(crate) struct App {
     pub(crate) audio: Option<rook_audio::Output<rook_dom::InstanceId>>,
     /// The terminal command prompt, when the terminal is interactive.
     #[cfg(feature = "repl")]
-    pub(crate) repl: Option<rook_engine::repl::Repl>,
+    pub(crate) repl: Option<rook_engine::console::repl::Repl>,
 }
 
 impl App {

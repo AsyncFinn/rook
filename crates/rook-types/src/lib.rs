@@ -8,31 +8,22 @@
 //! [`Value`] is the dynamic property value. It mirrors `rbx_types::Variant`
 //! one-to-one so conversion in either direction is lossless.
 
-mod cframe;
 mod clock;
-mod collision;
-mod color;
-mod material;
-mod mesh;
-mod shape;
-mod surface;
-mod truss;
-mod udim;
+mod part;
 mod value;
-mod vector;
 
-pub use cframe::CFrame;
 pub use clock::{clock_hours, time_of_day};
-pub use collision::{Hull, UnionCollision};
-pub use color::{Color3, linear_to_srgb, srgb_to_linear};
-pub use material::{Material, MaterialSet, Shading};
-pub use mesh::{MeshKind, MeshLook, head_scale, mesh_part_scale};
-pub use shape::PartShape;
-pub use surface::{NormalId, SURFACE_TILE_STUDS, SurfacePattern, SurfaceType, Tiling};
-pub use truss::{Lean, TRUSS_MAX_LENGTH, TrussLook, TrussShape, TrussStyle, truss_size};
-pub use udim::{UDim, UDim2};
+pub use part::collision::{Hull, UnionCollision};
+pub use part::material::{Material, MaterialSet, Shading};
+pub use part::mesh::{MeshKind, MeshLook, head_scale, mesh_part_scale};
+pub use part::shape::PartShape;
+pub use part::surface::{NormalId, SURFACE_TILE_STUDS, SurfacePattern, SurfaceType, Tiling};
+pub use part::truss::{Lean, TRUSS_MAX_LENGTH, TrussLook, TrussShape, TrussStyle, truss_size};
+pub use value::cframe::CFrame;
+pub use value::color::{Color3, linear_to_srgb, srgb_to_linear};
+pub use value::udim::{UDim, UDim2};
+pub use value::vector::{Vector2, Vector3};
 pub use value::{InstanceRef, Value, ValueError};
-pub use vector::{Vector2, Vector3};
 
 /// Plain-data Roblox types reused from `rbx_types`.
 pub use rbx_types::{

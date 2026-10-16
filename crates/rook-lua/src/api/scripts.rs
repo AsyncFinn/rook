@@ -5,7 +5,7 @@ use rook_dom::InstanceId;
 use rook_types::Value;
 
 use super::instance::{LuaInstance, push_instance};
-use crate::args::Args;
+use crate::ctx::args::Args;
 use crate::ctx::{ApiResult, Outcome, ScriptError, api_fn, api_ret, with_world};
 use crate::threads::spawn;
 use crate::world::MessageType;
@@ -177,7 +177,7 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
             let key = lua.create_registry_value(value)?;
             with_world(lua, |w| w.modules.results.insert(module, key));
         } else {
-            let msg = crate::args::display_value(lua, &value);
+            let msg = crate::ctx::args::display_value(lua, &value);
             with_world(lua, |w| {
                 w.errors += 1;
                 w.push_log(MessageType::Error, msg);

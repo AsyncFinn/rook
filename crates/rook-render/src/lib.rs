@@ -8,14 +8,10 @@
 //! mesh files too: the player meshes its chunks with `rook-terrain`.
 
 mod batch;
-mod cache;
-mod cull;
 mod gpu;
 mod mesh;
-mod pool;
 mod renderer;
 mod scene;
-mod shadow;
 mod surfaces;
 
 pub use scene::{
@@ -32,13 +28,13 @@ use glam::Vec3;
 use rook_types::srgb_to_linear;
 use wgpu::util::DeviceExt;
 
-use cache::{FRAME_UPLOAD_BYTES, GpuCache, Upload, UploadContext};
-use cull::{Aabb, Frustum, MOTION_STUDS};
-use shadow::{SHADOW_DISTANCE, SHADOW_SIZE, ShadowView};
+use batch::cull::{Aabb, Frustum, MOTION_STUDS};
+use gpu::cache::{FRAME_UPLOAD_BYTES, GpuCache, Upload, UploadContext};
+use renderer::shadow::{SHADOW_DISTANCE, SHADOW_SIZE, ShadowView};
 
 use batch::*;
+use gpu::pool::{GpuMesh, MeshPool};
 use gpu::*;
-use pool::{GpuMesh, MeshPool};
 
 pub use renderer::{DrawCounts, GpuTimes, PassCounts, Renderer};
 

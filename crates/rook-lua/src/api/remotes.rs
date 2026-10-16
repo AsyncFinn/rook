@@ -8,7 +8,7 @@ use mlua::{Lua, MultiValue, Value as LuaValue};
 use rook_dom::InstanceId;
 
 use super::methods::RawMethod;
-use crate::args::Args;
+use crate::ctx::args::Args;
 use crate::ctx::{ApiResult, Outcome, ScriptError, api_fn, with_world};
 use crate::net::{RemoteKind, RemoteMessage, to_net};
 

@@ -9,7 +9,7 @@
 //! `cargo run -p rook-audio --example studio_effect_levels -- <file>`
 
 use rook_audio::effects::{CROSSOVERS, Chain, Effect, Frame, Reverb, ordered};
-use rook_content::audio::Audio;
+use rook_content::decode::audio::Audio;
 
 /// A setting's name, its effects with their `Priority`, and Studio's level.
 type Case = (&'static str, Vec<(Effect, i32)>, f32);

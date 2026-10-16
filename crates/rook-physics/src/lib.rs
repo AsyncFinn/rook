@@ -7,7 +7,7 @@
 //! Parts joined by rigid joints form an assembly ([`assembly`]), which is
 //! one Rapier body with a collider per part; anchored assemblies are fixed
 //! bodies. Hinge joints connect bodies with Rapier revolute joints.
-//! [`joints`], [`assembly`] and [`surfaces`] work on the DOM alone, so
+//! [`joints`], [`assembly`] and [`joints::surfaces`] work on the DOM alone, so
 //! scripts can use them synchronously.
 //!
 //! Parts simulate with their material's properties ([`materials`]), in
@@ -27,24 +27,13 @@
 //! first. A client's world only answers queries ([`Physics::for_queries`]).
 
 pub mod assembly;
-mod bodies;
 mod changes;
-mod constraints;
-mod contacts;
+pub mod contacts;
 mod convert;
-mod drives;
-pub mod groups;
 pub mod joints;
-pub mod materials;
-mod movers;
-mod props;
 pub mod query;
-mod read;
 mod shape;
 mod step;
-pub mod surfaces;
-mod terrain;
-mod unions;
 
 use std::collections::BTreeMap;
 
@@ -61,15 +50,19 @@ pub use shape::{is_part, part_shape, workspace_parts};
 pub use contacts::Touch;
 pub use query::{CastShape, Filter, Hit, Region};
 
+use assembly::bodies::Body;
 use assembly::{Assembly, is_massless};
-use bodies::Body;
-use constraints::{Drive, Spec, apply_drive, hinge_constraint_drive, revolute_angle};
+use changes::props::Props;
+use contacts::groups::CollisionGroups;
 use convert::{cframe_of, pose_of, to_glam, to_rapier};
-use drives::{BuiltConstraint, DriveSource, Driven};
-use groups::CollisionGroups;
+use joints::constraints::{Drive, Spec, apply_drive, hinge_constraint_drive, revolute_angle};
+use joints::drives::{BuiltConstraint, DriveSource, Driven};
+use joints::movers::Mover;
 use joints::{HingeInput, Joint, JointKind, active_joint, endpoints, is_joint};
-use movers::Mover;
-use props::Props;
+
+use contacts::{groups, materials};
+use joints::{constraints, movers};
+use shape::{terrain, unions};
 
 /// Roblox simulates at 240 Hz (creator-docs "Adaptive timestepping": 240,
 /// 120 or 60 Hz per assembly; Rook always uses 240, an Approximation).

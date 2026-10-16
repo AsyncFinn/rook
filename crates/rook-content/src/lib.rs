@@ -17,22 +17,18 @@
 //! reads mesh files, [`image`] image files and [`audio`] sound files. See `docs/design/architecture.md`
 //! §8 "Content" and ROADMAP M4.
 
-pub mod audio;
-pub mod cache;
-pub mod defaults;
-pub mod delivery;
-pub mod image;
-pub mod install;
+pub mod decode;
 mod loader;
 pub mod materials;
-pub mod mesh;
 mod reference;
-mod resolver;
+pub mod resolver;
 
-pub use cache::Cache;
-pub use install::{Install, InstallKind};
+use decode::{audio, image, mesh};
+
 pub use loader::{Loader, Ticket, Want, idle_since, jobs_in_flight, set_decode_threads};
 pub use reference::{ContentRef, MaterialMap, Thumbnail, image_url_rewrite};
+pub use resolver::cache::Cache;
+pub use resolver::install::{Install, InstallKind};
 pub use resolver::{Config, ProviderKind, Resolver};
 
 use std::fmt;

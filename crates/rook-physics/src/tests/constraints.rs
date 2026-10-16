@@ -56,7 +56,7 @@ fn surface_hinge(
     set(dom, base, "TopSurfaceInput", Value::Enum(input));
     set(dom, base, "TopParamA", Value::Float32(a));
     set(dom, base, "TopParamB", Value::Float32(b));
-    crate::surfaces::make_joints(dom, &[wheel]).unwrap();
+    crate::joints::surfaces::make_joints(dom, &[wheel]).unwrap();
     (base, wheel)
 }
 
@@ -100,7 +100,7 @@ fn rotor_on_motor(dom: &mut Dom, motor: f32, b: f32) -> InstanceId {
     set(dom, base, "TopSurface", Value::Enum(MOTOR));
     set(dom, base, "TopSurfaceInput", Value::Enum(CONSTANT));
     set(dom, base, "TopParamB", Value::Float32(b));
-    crate::surfaces::make_joints(dom, &[bar]).unwrap();
+    crate::joints::surfaces::make_joints(dom, &[bar]).unwrap();
     bar
 }
 

@@ -16,12 +16,7 @@
 
 mod app;
 mod bench;
-mod camera;
-mod files;
 mod game;
-mod installed;
-mod keys;
-mod readout;
 mod record;
 mod scene;
 mod server;
@@ -36,19 +31,19 @@ use anyhow::Context;
 use clap::Parser;
 use game::Game;
 use glam::{EulerRot, Mat3, Vec3};
-use rook_content::image::Image;
-use rook_content::mesh::Mesh;
+use rook_content::decode::image::Image;
+use rook_content::decode::mesh::Mesh;
 use rook_content::{ContentRef, Resolver};
 use rook_engine::{DataModel, InputEvent, MessageType, console};
 use rook_render::{Camera, Renderer};
 use rook_types::{CFrame, Value};
 use scene::{SceneCache, SceneChange};
 
+use app::camera::*;
+use app::readout::*;
 use app::*;
 use bench::*;
-use camera::*;
-use installed::*;
-use readout::*;
+use scene::installed::*;
 
 /// Simulation step: 60 Hz, like Roblox's frame-based scheduler.
 const STEP: f64 = 1.0 / 60.0;
@@ -308,7 +303,7 @@ fn main() -> anyhow::Result<()> {
         repl: if args.no_repl {
             None
         } else {
-            rook_engine::repl::Repl::start()
+            rook_engine::console::repl::Repl::start()
         },
     };
     event_loop.run_app(&mut app)?;

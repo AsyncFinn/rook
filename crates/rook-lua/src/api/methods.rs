@@ -16,12 +16,12 @@ use rook_types::{CFrame, Value, Vector3};
 
 use super::instance::push_instance;
 use rook_physics::assembly::{self, Assembly};
-use rook_physics::{joints, surfaces};
+use rook_physics::joints::{self, surfaces};
 
 use super::properties::{cframe, set_cframe};
 use super::signal::LSignal;
-use crate::args::Args;
-use crate::convert::{to_lua, vector3_to_lua};
+use crate::ctx::args::Args;
+use crate::ctx::convert::{to_lua, vector3_to_lua};
 use crate::ctx::{ApiResult, Outcome, ScriptError, with_world};
 use crate::threads::{dispatch, fire};
 use crate::types::LCFrame;

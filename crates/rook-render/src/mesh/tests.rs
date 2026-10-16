@@ -22,7 +22,7 @@ fn normals_point_outward() {
 /// like Rook's (same winding) and is centred like it.
 #[test]
 fn installed_head_matches_rooks_frame() {
-    let Some(install) = rook_content::install::newest() else {
+    let Some(install) = rook_content::resolver::install::newest() else {
         eprintln!("skipped: no Roblox install found");
         return;
     };
@@ -30,7 +30,7 @@ fn installed_head_matches_rooks_frame() {
         eprintln!("skipped: no head.mesh in the install");
         return;
     };
-    let m = from_file(&rook_content::mesh::Mesh::decode(&bytes).unwrap());
+    let m = from_file(&rook_content::decode::mesh::Mesh::decode(&bytes).unwrap());
     let outward = m
         .indices
         .chunks(3)

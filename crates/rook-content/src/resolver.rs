@@ -1,15 +1,20 @@
 //! The provider chain: a reference goes to each provider in turn until one
 //! has it.
 
+pub mod cache;
+pub mod defaults;
+pub mod delivery;
+pub mod install;
+
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use crate::cache::{Cache, Cached};
-use crate::delivery::{self, Delivery};
-use crate::install::{self, Install};
 use crate::materials::{self, TexturePack};
-use crate::{ContentRef, Failure, FailureKind, Fetched, MaterialMap, SourceKind, defaults};
+use crate::{ContentRef, Failure, FailureKind, Fetched, MaterialMap, SourceKind};
+use cache::{Cache, Cached};
+use delivery::Delivery;
+use install::Install;
 
 /// The providers, in the order a [`Config`] lists them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

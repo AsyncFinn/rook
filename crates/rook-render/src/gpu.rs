@@ -1,5 +1,8 @@
 //! GPU-side data: the uniform globals, per-instance data, meshes and images.
 
+pub(crate) mod cache;
+pub(crate) mod pool;
+
 use super::*;
 
 #[repr(C)]

@@ -1,5 +1,8 @@
 //! Building the world from the DOM and applying the journal to it.
 
+pub(crate) mod props;
+pub(crate) mod read;
+
 use super::*;
 
 impl Physics {

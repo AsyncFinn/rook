@@ -62,7 +62,7 @@ pub(crate) fn set_member(lua: &Lua, id: InstanceId, key: &str, value: LuaValue) 
                 _ => {
                     return Err(ScriptError(format!(
                         "Unable to assign property {key}. Function expected, got {}",
-                        crate::args::type_name(&value)
+                        crate::ctx::args::type_name(&value)
                     )));
                 }
             };

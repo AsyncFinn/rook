@@ -36,7 +36,7 @@ use rook_reflection::{PropertyType, database};
 
 use super::methods::RawMethod;
 use super::properties::content_view;
-use crate::args::{Args, type_name};
+use crate::ctx::args::{Args, type_name};
 use crate::ctx::{ApiResult, Outcome, ScriptError, with_world};
 use crate::world::World;
 

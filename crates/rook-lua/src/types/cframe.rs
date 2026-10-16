@@ -8,12 +8,12 @@ use mlua::{
 use rook_types::{CFrame, Vector3};
 
 use super::fmt_f32;
-use crate::args::number_of;
+use crate::ctx::args::number_of;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct LCFrame(pub CFrame);
 
-use crate::convert::{from_lua_vector as v3, lua_vector as lv3};
+use crate::ctx::convert::{from_lua_vector as v3, lua_vector as lv3};
 
 fn g(v: Vector) -> Vec3 {
     v3(v).0

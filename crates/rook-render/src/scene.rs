@@ -6,8 +6,8 @@ use std::sync::Arc;
 
 use glam::{Mat3, Vec2, Vec3};
 
-pub use rook_content::image::Image;
-pub use rook_content::mesh::Mesh;
+pub use rook_content::decode::image::Image;
+pub use rook_content::decode::mesh::Mesh;
 pub use rook_types::{
     Material, MaterialSet, NormalId, PartShape, SurfacePattern, Tiling, TrussShape,
 };

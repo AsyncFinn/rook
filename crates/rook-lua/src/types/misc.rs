@@ -8,7 +8,7 @@ use mlua::{
 use rook_types::Value;
 
 use super::enums::item_value;
-use crate::args::number_of;
+use crate::ctx::args::number_of;
 
 /// A property value Rook can't yet show as a proper datatype. It still
 /// round-trips: reading a property and assigning it back works.
@@ -259,7 +259,7 @@ fn axes_new(lua: &Lua, args: MultiValue) -> mlua::Result<Opaque> {
 /// [, frictionWeight, elasticityWeight [, acousticAbsorption]])`, with the
 /// values clamped (observed).
 fn physical_properties_new(lua: &Lua, args: MultiValue) -> mlua::Result<Opaque> {
-    use rook_physics::materials::{self, Properties};
+    use rook_physics::contacts::materials::{self, Properties};
     let a = args.into_vec();
     let p = if a.len() == 1
         && let Some(material) = item_value(lua, &a[0], "Material")

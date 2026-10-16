@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::batch::CULL_SLOTS;
-use crate::cull::seen_runs;
+use crate::batch::cull::seen_runs;
 use runs::{Pipe, Runs, Source};
 
 /// How a run of transparent instances is drawn.

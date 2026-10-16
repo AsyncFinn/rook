@@ -44,11 +44,11 @@ Rook is a Cargo workspace of small crates whose dependencies only point downward
 
 - **A Luau method** (`Instance:FindFirstChild`, `Model:PivotTo`): `rook-lua/src/api/methods/<topic>.rs`, registered in `methods.rs`. Methods written in Luau, and other Luau sources, are in `rook-lua/src/api/luau/`.
 - **A property's script-side behaviour:** `rook-lua/src/api/properties.rs`; member lookup is in `rook-lua/src/api/instance/`.
-- **Physics:** `rook-physics/src/`: `bodies.rs` (assemblies as Rapier bodies), `changes.rs` (applying the journal), `drives.rs` (hinges, movers, constraints), `step.rs`.
+- **Physics:** `rook-physics/src/`: `assembly/bodies.rs` (assemblies as Rapier bodies), `changes.rs` (applying the journal), `joints/` (joints, constraints, movers and the drives that power them), `contacts/` (materials, collision groups), `shape/` (collider shapes, unions, terrain), `step.rs`.
 - **What a part draws:** `rook-player/src/scene/look.rs` builds it; `rook-render/src/renderer/` draws it, with shaders in `rook-render/src/shaders/`.
 - **Findings from Studio and the archive:** `docs/behavior/<topic>.md`. The roadmap keeps only the plan and links there.
 
-Each crate's `lib.rs` holds its module list, re-exports and core type; everything else is one topic per file, around 500 lines at most. When a file outgrows that, split it by topic (`foo.rs` plus a `foo/` folder, never `mod.rs`). `scripts/check` lists files over 600 lines.
+Each crate's `lib.rs` holds its module list, re-exports and core type; everything else is one topic per file, around 500 lines at most. When a file outgrows that, split it by topic (`foo.rs` plus a `foo/` folder, never `mod.rs`). `scripts/check` lists files over 600 lines. Group files that share a topic in a folder too, before any of them gets big: a `src/` with many top-level files is hard to find your way around, and a crate is not one topic (`rook-engine` and `rook-player` are glue between many). Don't make a folder for a lone file.
 
 ### Behaviour provenance
 

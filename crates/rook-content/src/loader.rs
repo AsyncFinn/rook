@@ -18,9 +18,9 @@ use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 
-use crate::audio::Audio;
-use crate::image::Image;
-use crate::mesh::Mesh;
+use crate::decode::audio::Audio;
+use crate::decode::image::Image;
+use crate::decode::mesh::Mesh;
 use crate::{ContentRef, Failure, FailureKind, Fetched, Resolver};
 
 /// Fetch threads per loader. Asset delivery answers in a few hundred
@@ -429,7 +429,7 @@ mod tests {
     fn decodes_sounds_and_frees_the_file() {
         let dir = crate::tests::temp_dir("loader-audio");
         std::fs::create_dir_all(dir.join("content/sounds")).unwrap();
-        let wav = crate::audio::tests::wav(22050, 1, 2205);
+        let wav = crate::decode::audio::tests::wav(22050, 1, 2205);
         std::fs::write(dir.join("content/sounds/tone.wav"), &wav).unwrap();
         let mut config = Config::empty();
         config.install = Install::at(&dir, InstallKind::Custom);

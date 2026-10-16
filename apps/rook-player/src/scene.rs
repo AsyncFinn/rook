@@ -1,5 +1,8 @@
 //! Build a render [`Scene`] from a DataModel.
 
+pub(crate) mod files;
+pub(crate) mod installed;
+
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -16,7 +19,7 @@ use rook_types::{
     CFrame, MeshKind, MeshLook, SurfaceType, TrussLook, TrussStyle, Value, mesh_part_scale,
 };
 
-use crate::files::{FileRef, FileState, Files, Loaded};
+use crate::scene::files::{FileRef, FileState, Files, Loaded};
 
 mod lighting;
 mod loading;

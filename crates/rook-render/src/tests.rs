@@ -29,8 +29,8 @@ fn image() -> Arc<Image> {
     Arc::new(Image {
         width: 2,
         height: 2,
-        format: rook_content::image::ImageFormat::Png,
-        mips: rook_content::image::mips(pixels.concat(), 2, 2),
+        format: rook_content::decode::image::ImageFormat::Png,
+        mips: rook_content::decode::image::mips(pixels.concat(), 2, 2),
         translucent: false,
     })
 }

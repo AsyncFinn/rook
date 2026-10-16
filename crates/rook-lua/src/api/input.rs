@@ -6,7 +6,7 @@ use rook_dom::InstanceId;
 
 use super::instance::push_instance;
 use super::methods::RawMethod;
-use crate::args::Args;
+use crate::ctx::args::Args;
 use crate::ctx::{ApiResult, Outcome, with_world};
 use crate::types::LVector2;
 use crate::types::enums::item_value;

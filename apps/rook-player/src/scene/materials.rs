@@ -16,7 +16,7 @@ impl SceneCache {
     /// Set what `part`'s material draws. A SurfaceAppearance on a MeshPart
     /// replaces the mesh's texture and the part's Color (but for Overlay)
     /// with its maps, laid through the mesh's UVs; otherwise the part's
-    /// MaterialVariant ([`rook_physics::materials::part_variant`]) replaces
+    /// MaterialVariant ([`rook_physics::contacts::materials::part_variant`]) replaces
     /// the material's textures with its own; otherwise the material's
     /// textures (Studio's, from the user's content cache, or Rook's own).
     /// While a texture loads, or if there is none, the part draws without
@@ -57,7 +57,7 @@ impl SceneCache {
             };
             return;
         }
-        if let Some(variant) = rook_physics::materials::part_variant(dom, id) {
+        if let Some(variant) = rook_physics::contacts::materials::part_variant(dom, id) {
             let [color, normal, roughness, metalness] = self.map_images(dom, id, variant);
             part.maps = MaterialMaps {
                 color,

@@ -15,7 +15,7 @@
 use bytemuck::{Pod, Zeroable};
 use glam::Vec3;
 
-use rook_content::mesh::TerrainMapping;
+use rook_content::decode::mesh::TerrainMapping;
 
 use crate::scene::{DrawShape, NormalId, PartShape, TrussShape};
 
@@ -47,7 +47,7 @@ pub(crate) const UNION_FACE: u32 = 64;
 /// A terrain vertex's face: its material textures are projected onto the
 /// plane its surface faces most, in world studs; plus 1 for the axes'
 /// planes only, 2 for water and 4 for grass blades
-/// (`rook_content::mesh::TerrainMapping`).
+/// (`rook_content::decode::mesh::TerrainMapping`).
 pub(crate) const TERRAIN_FACE: u32 = 128;
 
 impl Vertex {
@@ -417,7 +417,7 @@ fn truss(shape: TrussShape) -> MeshData {
 /// triangle using it, so it's lit instead of drawing black (Studio lights
 /// such meshes; observed with a test mesh written without normals). A
 /// union's vertices keep the box face they were cut from and their colour.
-pub(crate) fn from_file(m: &rook_content::mesh::Mesh) -> MeshData {
+pub(crate) fn from_file(m: &rook_content::decode::mesh::Mesh) -> MeshData {
     let mut vertices: Vec<Vertex> = m
         .positions
         .iter()

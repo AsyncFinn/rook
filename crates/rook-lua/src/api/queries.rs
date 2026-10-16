@@ -17,8 +17,8 @@ use rook_signal::SignalKey;
 use rook_types::{CFrame, Vector3};
 
 use super::methods::RawMethod;
-use crate::args::{Args, borrow_clone, type_name};
-use crate::convert::vector3_to_lua;
+use crate::ctx::args::{Args, borrow_clone, type_name};
+use crate::ctx::convert::vector3_to_lua;
 use crate::ctx::{ApiResult, Outcome, ScriptError, with_world};
 use crate::types::enums::enum_item;
 use crate::types::query::{LOverlapParams, LRaycastParams, LRaycastResult, Params};
@@ -71,7 +71,7 @@ fn cast_error(a: &Args, i: usize, name: &str) -> ScriptError {
 
 fn vector(a: &Args, i: usize) -> ApiResult<Vec3> {
     match a.get(i) {
-        LuaValue::Vector(v) => Ok(crate::convert::from_lua_vector(*v).0),
+        LuaValue::Vector(v) => Ok(crate::ctx::convert::from_lua_vector(*v).0),
         _ => Err(cast_error(a, i, "Vector3")),
     }
 }

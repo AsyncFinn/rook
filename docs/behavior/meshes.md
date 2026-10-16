@@ -19,7 +19,7 @@ Properties panel hides the deprecated types):
 | Head | The head mesh (below), fitted to the part | Rook's own head mesh, matching the measured one |
 | Prism, Pyramid, ParallelRamp, RightAngleRamp (deprecated) | Nothing | None: draw nothing |
 
-The existing shapes live in `rook-types/src/shape.rs` (`PartShape`), so
+The existing shapes live in `rook-types/src/part/shape.rs` (`PartShape`), so
 SpecialMesh types reuse them rather than defining their own. A SpecialMesh
 changes only how a part looks: the invisible types still collide and are
 hit by queries. Sphere and Cylinder meshes showed the part's surface studs,
@@ -269,7 +269,7 @@ only its near side showed, front and side views):
   only the truss's two X sides, the lower floor(n / 2) segments leaning one
   way and the rest the other, the two sides alike seen through the truss.
   NoSupports draws rails and rungs only. Exact directions are in
-  `rook-types/src/truss.rs`.
+  `rook-types/src/part/truss.rs`.
 - *The lead that a 2 × 2 × 2 draws like NoSupports and longer ones like
   AlternatingSupports whatever Style says* held only in part: a truss of
   one segment (2 × 2 × 2, 2 × 3 × 2, 2 × 1 × 2) draws no braces whatever

@@ -1,11 +1,15 @@
 //! Terrain's voxels: 4-stud cubes in chunks of 32 on each side, as
 //! `SmoothGrid` stores them.
 
+pub mod cells;
+pub(crate) mod decode;
+pub mod edit;
+
 use glam::IVec3;
 use rustc_hash::FxHashMap;
 
 use crate::TerrainMaterial;
-use crate::edit::Bounds;
+use crate::grid::edit::Bounds;
 
 /// A voxel's edge, in studs. Voxel `v` covers `4v` to `4v + 4`.
 pub const VOXEL_STUDS: f32 = 4.0;

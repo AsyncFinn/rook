@@ -1,3 +1,8 @@
+pub(crate) mod cframe;
+pub(crate) mod color;
+pub(crate) mod udim;
+pub(crate) mod vector;
+
 use rbx_types::Variant;
 
 use crate::{CFrame, Color3, UDim, UDim2, Vector2, Vector3};

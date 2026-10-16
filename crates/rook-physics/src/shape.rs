@@ -1,11 +1,14 @@
 //! Part shapes and their Rapier collider shapes.
 
+pub(crate) mod terrain;
+pub(crate) mod unions;
+
 use rapier3d::prelude::*;
 use rook_dom::{Dom, InstanceId};
 use rook_types::{PartShape, Value};
 
 use crate::convert::{pose_of, to_rapier};
-use crate::unions::Unions;
+use crate::shape::unions::Unions;
 
 /// Roblox parts are at least this many studs on each side.
 pub(crate) const MIN_PART_SIZE: f32 = 0.001;
@@ -75,7 +78,7 @@ pub(crate) fn world_shape(
     };
     Some((
         shape,
-        pose_of(&crate::read::cframe(dom, part, "CFrame")) * local,
+        pose_of(&crate::changes::read::cframe(dom, part, "CFrame")) * local,
     ))
 }
 
@@ -88,6 +91,6 @@ pub(crate) fn world_box(dom: &Dom, part: InstanceId) -> Option<(SharedShape, Pos
         return None;
     };
     let h = size.0.max(glam::Vec3::splat(MIN_PART_SIZE)) * 0.5;
-    let cf = crate::read::cframe(dom, part, "CFrame");
+    let cf = crate::changes::read::cframe(dom, part, "CFrame");
     Some((SharedShape::cuboid(h.x, h.y, h.z), pose_of(&cf)))
 }

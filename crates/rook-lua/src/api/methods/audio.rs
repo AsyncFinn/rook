@@ -122,9 +122,9 @@ fn set_curve(lua: &Lua, this: InstanceId, a: Args, method: &str) -> ApiResult<Ou
     if let LuaValue::Table(t) = a.get(0) {
         for pair in t.clone().pairs::<LuaValue, LuaValue>() {
             let (k, v) = pair?;
-            let key = crate::args::number_of(&k)
+            let key = crate::ctx::args::number_of(&k)
                 .ok_or_else(|| ScriptError(format!("{class}:{method}: numeric key expected.")))?;
-            let value = crate::args::number_of(&v)
+            let value = crate::ctx::args::number_of(&v)
                 .ok_or_else(|| ScriptError(format!("{class}:{method}: numeric value expected.")))?;
             points.push((key as f32, value as f32));
         }

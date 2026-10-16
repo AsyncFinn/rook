@@ -1,5 +1,7 @@
 //! Running Lua threads, reporting their errors, and dispatching signals.
 
+pub(crate) mod watchdog;
+
 use mlua::prelude::LuaThreadStatus as ThreadStatus;
 use mlua::{Function, IntoLuaMulti, Lua, MultiValue, Thread, Value as LuaValue};
 use rook_dom::{Change, InstanceId};

@@ -10,13 +10,16 @@
 //! parts meet and end slightly after, where Roblox ends a touch as soon as
 //! parts stop overlapping (Approximation).
 
+pub mod groups;
+pub mod materials;
+
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::sync::Mutex;
 
 use rapier3d::prelude::*;
 use rook_dom::InstanceId;
 
-use crate::materials::{Properties, mix};
+use crate::contacts::materials::{Properties, mix};
 
 /// A Touched (`began`) or TouchEnded event: fire it on `part` with `other`
 /// as the argument, then on `other` with `part`.

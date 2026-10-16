@@ -1,14 +1,8 @@
 //! `rook`: command-line tools for the Rook engine.
 
-mod conformance;
-mod content;
-mod corpus;
-mod dump;
-mod gen_members;
-mod roundtrip;
-mod run;
-mod terrain;
+mod commands;
 
+use commands::{conformance, content, corpus, dump, gen_members, roundtrip, run, terrain};
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
