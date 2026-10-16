@@ -9,6 +9,7 @@
 
 mod batch;
 mod cache;
+mod cull;
 mod gpu;
 mod mesh;
 mod renderer;
@@ -30,12 +31,13 @@ use rook_types::srgb_to_linear;
 use wgpu::util::DeviceExt;
 
 use cache::{FRAME_UPLOAD_BYTES, GpuCache, Upload, UploadContext};
+use cull::{Aabb, Frustum, MOTION_STUDS};
 use shadow::{SHADOW_DISTANCE, SHADOW_SIZE, ShadowView};
 
 use batch::*;
 use gpu::*;
 
-pub use renderer::Renderer;
+pub use renderer::{DrawCounts, Renderer};
 
 pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 

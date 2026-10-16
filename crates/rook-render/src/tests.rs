@@ -181,3 +181,39 @@ fn water_phase_follows_wave_speed() {
     r.set_time(0.0);
     assert!((r.water_phase - 12.0).abs() < 1e-4);
 }
+
+/// A part behind the camera, culled from the main pass, still shadows the
+/// ground in view: the shadow pass draws what the sun sees.
+#[test]
+fn parts_out_of_view_still_cast_shadows() {
+    let Ok(mut r) = Renderer::headless() else {
+        return;
+    };
+    let mut ground = part(PartShape::Block, 0.0, [0.8; 3], 0.0);
+    ground.position.y = -0.5;
+    ground.size = Vec3::new(200.0, 1.0, 200.0);
+    // A tower 15 studs behind the camera, with the sun behind it (a
+    // cylinder, so it's a batch of its own).
+    let mut tower = part(PartShape::Cylinder, 0.0, [0.8; 3], 0.0);
+    tower.position = Vec3::new(0.0, 20.0, 15.0);
+    // Standing up: a cylinder's axis is its X.
+    tower.rotation = Mat3::from_rotation_z(std::f32::consts::FRAC_PI_2);
+    tower.size = Vec3::new(40.0, 4.0, 4.0);
+    let mut scene = Scene {
+        parts: vec![ground],
+        lighting: Lighting {
+            sun_direction: Vec3::new(0.0, 1.0, 1.0).normalize(),
+            ..Lighting::default()
+        },
+        ..Scene::default()
+    };
+    let camera = Camera::look_at(Vec3::new(0.0, 5.0, 0.0), Vec3::new(0.0, 0.0, -20.0));
+    r.set_scene(&scene);
+    let lit = r.render_to_image(64, 64, &camera).unwrap();
+    scene.parts.push(tower);
+    r.set_scene(&scene);
+    let shadowed = r.render_to_image(64, 64, &camera).unwrap();
+    assert_eq!(r.draw_counts().main, 1, "the tower is out of view");
+    assert_eq!(r.draw_counts().shadow, 2);
+    assert_ne!(lit, shadowed);
+}

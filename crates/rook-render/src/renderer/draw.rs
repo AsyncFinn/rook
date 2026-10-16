@@ -26,10 +26,15 @@ impl Pass {
 
 impl Renderer {
     /// Upload the instances changed since the last frame, and the
-    /// transparent ones sorted back to front for `camera` (an image on a
-    /// transparent part just after its part). Returns the transparent
-    /// draws: (key, pass, instance range) runs in that order.
-    fn upload_instances(&mut self, camera: &Camera) -> Vec<(BatchKey, Pass, std::ops::Range<u32>)> {
+    /// transparent ones `view` reaches sorted back to front for `camera`
+    /// (an image on a transparent part just after its part). Returns the
+    /// transparent draws: (key, pass, instance range) runs in that order.
+    fn upload_instances(
+        &mut self,
+        camera: &Camera,
+        view: &Frustum,
+        margin: f32,
+    ) -> Vec<(BatchKey, Pass, std::ops::Range<u32>)> {
         self.opaque.upload(&self.device, &self.queue);
         self.layers.upload(&self.device, &self.queue);
         // Back to front for blending.
@@ -43,13 +48,17 @@ impl Renderer {
         let mut instances: Vec<Instance> = Vec::with_capacity(order.len());
         let mut runs: Vec<(BatchKey, Pass, std::ops::Range<u32>)> = Vec::new();
         for p in &order {
+            let instance = Instance::new(p, self.bounds(p.shape));
+            if !view.sees(instance.world_box(), margin) {
+                continue;
+            }
             let key = BatchKey {
                 shape: p.shape,
                 images: image_set(p),
             };
             for &pass in Pass::of(p) {
                 let i = instances.len() as u32;
-                instances.push(Instance::new(p, self.bounds(p.shape)));
+                instances.push(instance);
                 match runs.last_mut() {
                     Some((k, q, r)) if *k == key && *q == pass => r.end = i + 1,
                     _ => runs.push((key, pass, i..i + 1)),
@@ -125,8 +134,12 @@ impl Renderer {
             faces[face.index() * 2] = rgb(right.to_array(), rook_types::SURFACE_TILE_STUDS);
             faces[face.index() * 2 + 1] = rgb(up.to_array(), 0.0);
         }
+        // What each pass can see; batches wholly outside draw nothing.
+        let view_proj = camera.view_projection(aspect);
+        let view = Frustum::of(view_proj);
+        let margin = MOTION_STUDS.max(self.terrain.wave_size.abs());
         let globals = Globals {
-            view_proj: camera.view_projection(aspect).to_cols_array_2d(),
+            view_proj: view_proj.to_cols_array_2d(),
             camera_pos: rgb(camera.position.to_array(), 1.0),
             sun_dir: rgb(sun.to_array(), 0.0),
             ambient: rgb(l.ambient, 0.0),
@@ -170,7 +183,7 @@ impl Renderer {
         self.queue
             .write_buffer(&self.globals, 0, bytemuck::bytes_of(&globals));
 
-        let transparent_runs = self.upload_instances(camera);
+        let transparent_runs = self.upload_instances(camera, &view, margin);
 
         let depth = self.depth_view(width, height);
         let sky = srgb_to_linear(l.sky_horizon);
@@ -180,8 +193,12 @@ impl Renderer {
                 label: Some("rook frame"),
             });
         let opaque = self.opaque.draws();
-        if shadow.is_some() {
+        let mut counts = DrawCounts::default();
+        if let Some(shadow) = shadow {
             profiling::scope!("shadow pass");
+            // The sun's whole view, not just the camera's: a part off
+            // screen still shadows what's on it.
+            let sun_view = Frustum::of(shadow.view_proj);
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("rook shadow map"),
                 color_attachments: &[],
@@ -199,8 +216,11 @@ impl Renderer {
             });
             pass.set_bind_group(0, &self.bind_group, &[]);
             pass.set_pipeline(&self.pipelines.shadow);
-            for (key, buffer, instances) in &opaque {
-                self.draw(&mut pass, key.shape, None, buffer, instances.clone());
+            for (key, buffer, instances, bounds) in &opaque {
+                if sun_view.sees(*bounds, margin) {
+                    counts.shadow +=
+                        self.draw(&mut pass, key.shape, None, buffer, instances.clone());
+                }
             }
         }
         {
@@ -261,9 +281,12 @@ impl Renderer {
                     continue;
                 }
                 pass.set_pipeline(pipeline);
-                for (key, buffer, instances) in draws {
+                for (key, buffer, instances, bounds) in draws {
+                    if !view.sees(bounds, margin) {
+                        continue;
+                    }
                     let images = Some(self.group(&key.images));
-                    self.draw(&mut pass, key.shape, images, buffer, instances);
+                    counts.main += self.draw(&mut pass, key.shape, images, buffer, instances);
                 }
             }
             if let Some((buffer, _)) = &self.transparent_buffer {
@@ -275,15 +298,17 @@ impl Renderer {
                         Pass::ForceField => &self.pipelines.additive,
                     });
                     let images = Some(self.group(&key.images));
-                    self.draw(&mut pass, key.shape, images, buffer, instances);
+                    counts.main += self.draw(&mut pass, key.shape, images, buffer, instances);
                 }
             }
         }
+        self.draw_counts = counts;
         self.queue.submit([encoder.finish()]);
     }
 
     /// Draw `instances` of `buffer` as `shape`, with `image` bound as
-    /// group 2 (not in the shadow pass).
+    /// group 2 (not in the shadow pass). Returns how many draw calls that
+    /// took (none for a shape without a mesh).
     fn draw(
         &self,
         pass: &mut wgpu::RenderPass<'_>,
@@ -291,10 +316,10 @@ impl Renderer {
         image: Option<&wgpu::BindGroup>,
         buffer: &wgpu::Buffer,
         instances: std::ops::Range<u32>,
-    ) {
+    ) -> u32 {
         // Entries are only drawn for shapes with a mesh.
         let Some(mesh) = self.meshes.get(&shape) else {
-            return;
+            return 0;
         };
         if let Some(group) = image {
             pass.set_bind_group(2, group, &[]);
@@ -303,5 +328,6 @@ impl Renderer {
         pass.set_vertex_buffer(1, buffer.slice(..));
         pass.set_index_buffer(mesh.indices.slice(..), wgpu::IndexFormat::Uint32);
         pass.draw_indexed(0..mesh.index_count, 0, instances);
+        1
     }
 }
