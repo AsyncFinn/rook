@@ -13,6 +13,7 @@
   - [Asset fetching](behavior/content.md)
   - [Textures and decals](behavior/textures-decals.md)
   - [Antialiasing](behavior/antialiasing.md)
+  - [Tone mapping](behavior/tone-mapping.md): Studio's HDR blending, Neon's glow, and ColorGrading's curves
   - [Terrain](behavior/terrain.md): `SmoothGrid` voxels and the surface Roblox builds from them
   - [Stubs](behavior/stubs.md): what's partly done or accepted but ignored, member by member
 
