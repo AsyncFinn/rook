@@ -455,3 +455,30 @@ fn query_worlds_never_simulate() {
     );
     assert_eq!(hit.map(|h| h.part), Some(p));
 }
+
+#[test]
+fn click_rays_pass_invisible_parts_that_dont_collide() {
+    let mut dom = Dom::new();
+    let behind = block(&mut dom, Vec3::new(0.0, 0.0, -20.0));
+    let ghost = block(&mut dom, Vec3::new(0.0, 0.0, -10.0));
+    set(&mut dom, ghost, "Transparency", Value::Float32(1.0));
+    set(&mut dom, ghost, "CanCollide", Value::Bool(false));
+    let mut physics = Physics::new();
+    let dir = Vec3::new(0.0, 0.0, -100.0);
+    let clicks = Filter {
+        skip_invisible_ghosts: true,
+        ..all()
+    };
+    let hit = |physics: &mut Physics, dom: &mut Dom, f: &Filter| {
+        physics.raycast(dom, O, dir, f).map(|h| h.part)
+    };
+    // Observed: Mouse.Target still reports the invisible part.
+    assert_eq!(hit(&mut physics, &mut dom, &all()), Some(ghost));
+    assert_eq!(hit(&mut physics, &mut dom, &clicks), Some(behind));
+    // Colliding, or visible, it blocks clicks.
+    set(&mut dom, ghost, "CanCollide", Value::Bool(true));
+    assert_eq!(hit(&mut physics, &mut dom, &clicks), Some(ghost));
+    set(&mut dom, ghost, "CanCollide", Value::Bool(false));
+    set(&mut dom, ghost, "Transparency", Value::Float32(0.0));
+    assert_eq!(hit(&mut physics, &mut dom, &clicks), Some(ghost));
+}

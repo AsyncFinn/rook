@@ -261,6 +261,14 @@ impl Game {
     }
 
     pub fn has_client(&self) -> bool {
+    /// Whether the cursor is over a ClickDetector the player can click.
+    pub fn hovering_click_detector(&self) -> bool {
+        match &self.mode {
+            Mode::Play { client, .. } => client.client().hovered_click_detector().is_some(),
+            Mode::Run(_) => false,
+        }
+    }
+
         matches!(self.mode, Mode::Play { .. })
     }
 

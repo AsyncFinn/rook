@@ -36,7 +36,7 @@ use rook_dom::{Dom, InstanceId};
 use rook_types::CFrame;
 
 use crate::convert::{pose_of, to_glam, to_rapier};
-use crate::read::{boolean, enum_value};
+use crate::read::{boolean, enum_value, float};
 use crate::{Physics, groups, shape};
 
 /// Rays find nothing further than this many studs from their origin
@@ -69,6 +69,11 @@ pub struct Filter {
     pub respect_can_collide: bool,
     /// Skip terrain water (rays and shape casts).
     pub ignore_water: bool,
+    /// Skip parts that are fully transparent with `CanCollide` off, as
+    /// ClickDetector picking does (observed: such a part in front of a
+    /// detector's part lets the click through, though `Mouse.Target`
+    /// reports it).
+    pub skip_invisible_ghosts: bool,
 }
 
 impl Filter {
@@ -81,6 +86,7 @@ impl Filter {
             group: Some(groups::DEFAULT.to_owned()),
             respect_can_collide: false,
             ignore_water: false,
+            skip_invisible_ghosts: false,
         }
     }
 
@@ -92,12 +98,16 @@ impl Filter {
             group: None,
             respect_can_collide: false,
             ignore_water: false,
+            skip_invisible_ghosts: false,
         }
     }
 
     fn accepts(&self, dom: &Dom, groups: &groups::CollisionGroups, part: InstanceId) -> bool {
         let collides = boolean(dom, part, "CanCollide", true);
         if !collides && (self.respect_can_collide || !boolean(dom, part, "CanQuery", true)) {
+            return false;
+        }
+        if !collides && self.skip_invisible_ghosts && float(dom, part, "Transparency") >= 1.0 {
             return false;
         }
         if let Some(g) = &self.group

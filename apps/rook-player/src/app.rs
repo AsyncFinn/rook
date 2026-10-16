@@ -30,6 +30,8 @@ pub(crate) struct App {
     /// The latest cursor position not yet sent to the game. Moves are sent
     /// once per frame because each costs a mouse raycast.
     pub(crate) pending_mouse: Option<(f32, f32)>,
+    /// The cursor shows a pointing hand, over a ClickDetector.
+    pub(crate) pointing: bool,
     /// What the renderer takes from the user's install.
     pub(crate) install: Installed,
     /// Present without waiting for the display (`--uncapped`).
@@ -127,6 +129,17 @@ impl App {
 
         if let Some((x, y)) = self.pending_mouse.take() {
             self.game.input(InputEvent::MouseMove { x, y });
+        }
+        let pointing = self.game.hovering_click_detector();
+        if pointing != self.pointing
+            && let Some(gfx) = &self.gfx
+        {
+            gfx.window.set_cursor(if pointing {
+                CursorIcon::Pointer
+            } else {
+                CursorIcon::Default
+            });
+            self.pointing = pointing;
         }
 
         #[cfg(feature = "repl")]

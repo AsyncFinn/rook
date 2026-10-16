@@ -91,6 +91,7 @@ impl Params {
             group: Some(self.collision_group.clone()),
             respect_can_collide: self.respect_can_collide,
             ignore_water: self.ignore_water,
+            skip_invisible_ghosts: false,
         }
     }
 

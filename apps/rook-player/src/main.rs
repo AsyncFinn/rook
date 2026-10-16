@@ -57,7 +57,7 @@ use winit::event::{
 };
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::{KeyCode, PhysicalKey};
-use winit::window::{CursorGrabMode, Window, WindowId};
+use winit::window::{CursorGrabMode, CursorIcon, Window, WindowId};
 
 #[derive(Debug, Parser)]
 #[command(name = "rook-player", version, about = "Open a Roblox place in Rook")]
@@ -291,5 +291,6 @@ fn main() -> anyhow::Result<()> {
     if args.frame_times {
         app.readout.print_run(&app.game);
     }
+        pointing: false,
     Ok(())
 }
