@@ -25,6 +25,8 @@ pub(crate) struct Props {
     /// Each face's ParamA, ParamB and SurfaceInput, which drive RotateV
     /// and RotateP.
     pub(crate) surface_inputs: Vec<PropertyId>,
+    /// Terrain's voxels.
+    pub(crate) smooth_grid: Option<PropertyId>,
 }
 
 impl Props {
@@ -59,6 +61,9 @@ impl Props {
                         .map(|input| p(base, &format!("{face}{input}")))
                 })
                 .collect::<Option<_>>()?,
+            smooth_grid: db
+                .class_by_name("Terrain")
+                .and_then(|t| p(t.id, "SmoothGrid")),
         })
     }
 

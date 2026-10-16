@@ -7,6 +7,7 @@ impl Physics {
         profiling::scope!("Physics::build");
         // Built with whatever geometry unions have now.
         self.unions.reshaped.clear();
+        self.terrain.stale = true;
         self.read_workspace(dom, props);
         let parts = workspace_parts(dom);
         self.rebuild(dom, props, parts);
@@ -33,7 +34,12 @@ impl Physics {
             match change {
                 Change::Property { id, property } => {
                     let p = *property;
-                    if props.is_structural(p) {
+                    if Some(*id) == self.terrain.instance {
+                        // Its voxels, or its collision group.
+                        if Some(p) == props.smooth_grid || props.is_structural(p) {
+                            self.terrain.stale = true;
+                        }
+                    } else if props.is_structural(p) {
                         structural.push(*id);
                     } else if props.is_surface(p) {
                         materials.push(*id);
@@ -61,7 +67,9 @@ impl Physics {
                 }
                 Change::Reparented { subtree, .. } => {
                     for &i in subtree {
-                        if self.parts.contains_key(&i) || is_part(dom, i) {
+                        if Some(i) == self.terrain.instance || dom.class_name(i) == "Terrain" {
+                            self.terrain.stale = true;
+                        } else if self.parts.contains_key(&i) || is_part(dom, i) {
                             structural.push(i);
                         } else if self.joints.contains_key(&i) || is_joint(dom, i) {
                             changed_joints.push(i);
@@ -174,6 +182,9 @@ impl Physics {
         if groups != self.groups || touches_use_groups != self.touches_use_groups {
             self.groups = groups;
             self.touches_use_groups = touches_use_groups;
+            if let Some(t) = self.terrain.instance {
+                self.terrain.groups = self.interaction_groups(dom, t);
+            }
             let colliders: Vec<_> = self.colliders.iter().map(|(h, p)| (*h, *p)).collect();
             for (handle, part) in colliders {
                 let (solver, collision) = self.interaction_groups(dom, part);

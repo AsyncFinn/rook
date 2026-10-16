@@ -133,6 +133,24 @@ impl Grid {
         self.chunks.keys().copied()
     }
 
+    /// A stored chunk's voxels in `SmoothGrid` order (Y slowest, X
+    /// fastest), in chunk order.
+    pub(crate) fn stored(&self) -> Vec<(IVec3, std::borrow::Cow<'_, [Voxel]>)> {
+        let mut out: Vec<_> = self
+            .chunks
+            .iter()
+            .map(|(at, chunk)| {
+                let voxels = match chunk {
+                    Chunk::Uniform(v) => std::borrow::Cow::Owned(vec![*v; CHUNK_LEN]),
+                    Chunk::Dense(voxels) => std::borrow::Cow::Borrowed(&voxels[..]),
+                };
+                (*at, voxels)
+            })
+            .collect();
+        out.sort_by_key(|(c, _)| (c.x, c.y, c.z));
+        out
+    }
+
     /// Whether chunk `chunk` is all one voxel, and which.
     pub fn uniform(&self, chunk: IVec3) -> Option<Voxel> {
         match self.chunks.get(&chunk) {

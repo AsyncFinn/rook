@@ -90,6 +90,7 @@ impl Params {
             include: self.filter_type == INCLUDE,
             group: Some(self.collision_group.clone()),
             respect_can_collide: self.respect_can_collide,
+            ignore_water: self.ignore_water,
         }
     }
 

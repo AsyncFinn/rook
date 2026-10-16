@@ -1,4 +1,4 @@
-//! Reading `Terrain.SmoothGrid`.
+//! Reading and writing `Terrain.SmoothGrid`.
 //!
 //! The layout (checkraisefold's notes in rbx-dom pull request 444, checked
 //! against archive files and Studio's `ReadVoxels`, see
@@ -111,5 +111,50 @@ impl Grid {
             number += 1;
         }
         Ok(grid)
+    }
+
+    /// Encode the grid as a `SmoothGrid`, in runs of up to 256 equal
+    /// voxels as Studio writes them. An empty grid is empty.
+    pub fn encode(&self) -> Vec<u8> {
+        let chunks = self.stored();
+        if chunks.is_empty() {
+            return Vec::new();
+        }
+        let mut out = vec![VERSION, CHUNK_SIZE_LOG2];
+        let mut last = IVec3::ZERO;
+        for (at, voxels) in chunks {
+            let d = (at - last).to_array().map(i32::to_be_bytes);
+            for byte in 0..4 {
+                out.extend(d.iter().map(|axis| axis[byte]));
+            }
+            last = at;
+            let mut i = 0;
+            while i < voxels.len() {
+                let v = voxels[i];
+                let mut run = 1;
+                while v.water == 0 && run < 256 && i + run < voxels.len() && voxels[i + run] == v {
+                    run += 1;
+                }
+                let mut flag = v.material as u8;
+                let partial = v.occupancy != 255 && v.material != TerrainMaterial::Air;
+                if partial {
+                    flag |= HAS_OCCUPANCY;
+                }
+                if run > 1 || v.water != 0 {
+                    flag |= HAS_COUNT;
+                }
+                out.push(flag);
+                if partial {
+                    out.push(v.occupancy);
+                }
+                if v.water != 0 {
+                    out.extend([0, v.water]);
+                } else if run > 1 {
+                    out.push((run - 1) as u8);
+                }
+                i += run;
+            }
+        }
+        out
     }
 }

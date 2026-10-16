@@ -20,6 +20,12 @@
 //! - Region3 and the `GetPartBounds*` queries test each part's `Size` box
 //!   (see [`shape::world_box`]); touching faces count. `GetPartsInPart`
 //!   and `GetTouchingParts` test real shapes and need the parts to overlap.
+//! - Terrain ([`crate::terrain`]): rays and shape casts hit its surface,
+//!   water's too unless they ignore water, and report Terrain with the
+//!   material hit; a ray starting inside it hits nothing until it leaves.
+//!   Region3, the `GetPartBounds*` queries and `GetPartsInPart` never
+//!   return it; `GetTouchingParts` does where a part overlaps its solid
+//!   surface, whatever the part's `CanCollide`.
 
 use rustc_hash::FxHashSet as HashSet;
 
@@ -61,6 +67,8 @@ pub struct Filter {
     pub group: Option<String>,
     /// Skip parts with `CanCollide` off.
     pub respect_can_collide: bool,
+    /// Skip terrain water (rays and shape casts).
+    pub ignore_water: bool,
 }
 
 impl Filter {
@@ -72,6 +80,7 @@ impl Filter {
             include,
             group: Some(groups::DEFAULT.to_owned()),
             respect_can_collide: false,
+            ignore_water: false,
         }
     }
 
@@ -82,6 +91,7 @@ impl Filter {
             include,
             group: None,
             respect_can_collide: false,
+            ignore_water: false,
         }
     }
 
@@ -159,7 +169,8 @@ impl Physics {
     fn prepare(&mut self, dom: &mut Dom) {
         profiling::scope!("Physics::prepare_query");
         self.sync(dom);
-        if self.stale.is_empty() {
+        let terrain_placed = std::mem::take(&mut self.terrain_placed);
+        if self.stale.is_empty() && !terrain_placed {
             return;
         }
         let params = self.world.integration_parameters;
@@ -204,6 +215,9 @@ impl Physics {
     ) -> impl Fn(ColliderHandle) -> Option<InstanceId> + 'a {
         move |h| {
             let part = *self.colliders.get(&h)?;
+            if filter.ignore_water && self.terrain.is_water(h) {
+                return None;
+            }
             filter.accepts(dom, &self.groups, part).then_some(part)
         }
     }
@@ -226,23 +240,31 @@ impl Physics {
         }
         let dir = direction / length;
         let max = length.min(MAX_RAY_LENGTH);
+        self.build_terrain_along(origin, dir, max);
         let ray = Ray::new(to_rapier(origin), to_rapier(dir));
         let accept = self.part_filter(dom, filter);
         let pipeline = self.world.query_pipeline();
         // Solid, so a ray starting inside a part hits it at 0 and is
-        // skipped, then hits the next part along.
-        let (part, hit) = pipeline
+        // skipped, then hits the next part along. Terrain is a surface,
+        // hit only from outside.
+        let (h, part, hit) = pipeline
             .intersect_ray(ray, max, true)
-            .filter(|(_, _, hit)| hit.time_of_impact > 0.0)
-            .filter_map(|(h, _, hit)| Some((accept(h)?, hit)))
-            .min_by(|a, b| a.1.time_of_impact.total_cmp(&b.1.time_of_impact))?;
+            .filter_map(|(h, _, hit)| {
+                let hit = match self.terrain.material(h) {
+                    Some(_) => self.terrain_ray(h, &ray, max)?,
+                    None => hit,
+                };
+                Some((h, accept(h)?, hit))
+            })
+            .filter(|(.., hit)| hit.time_of_impact > 0.0)
+            .min_by(|a, b| a.2.time_of_impact.total_cmp(&b.2.time_of_impact))?;
         let distance = hit.time_of_impact;
         Some(Hit {
             part,
             position: origin + dir * distance,
             normal: surface_normal(to_glam(hit.normal)),
             distance,
-            material: enum_value(dom, part, "Material"),
+            material: self.material_of(dom, h, part),
         })
     }
 
@@ -272,6 +294,12 @@ impl Physics {
             }
         };
         let start = pose_of(&cframe);
+        let from = cast.compute_aabb(&start);
+        let to = cast.compute_aabb(&(Pose::from_translation(to_rapier(direction)) * start));
+        self.build_terrain_in(
+            to_glam(from.mins.min(to.mins)),
+            to_glam(from.maxs.max(to.maxs)),
+        );
         let accept = self.part_filter(dom, filter);
         let predicate = |h: ColliderHandle, co: &Collider| {
             accept(h).is_some()
@@ -296,8 +324,17 @@ impl Physics {
             position: to_glam(hit.witness1),
             normal: surface_normal(to_glam(hit.normal1)),
             distance: hit.time_of_impact,
-            material: enum_value(dom, part, "Material"),
+            material: self.material_of(dom, h, part),
         })
+    }
+
+    /// The `Enum.Material` value a hit on collider `h` of `part` reports:
+    /// the part's, or the terrain material the collider is made of.
+    fn material_of(&self, dom: &Dom, h: ColliderHandle, part: InstanceId) -> u32 {
+        match self.terrain.material(h) {
+            Some(m) => m.material() as u32,
+            None => enum_value(dom, part, "Material"),
+        }
     }
 
     /// Parts whose collider overlaps `shape` at `pose` by `test`, in id
@@ -320,6 +357,9 @@ impl Physics {
             .query_pipeline()
             .intersect_aabb_conservative(aabb)
             .filter_map(|(h, co)| {
+                if self.terrain.material(h).is_some() {
+                    return None;
+                }
                 let part = accept(h).filter(|p| Some(*p) != skip)?;
                 test(part, co).then_some(part)
             })
@@ -382,6 +422,7 @@ impl Physics {
     /// `touch_listened` (something is connected to its Touched, which
     /// gives it a TouchInterest), and then every part it overlaps
     /// (observed; creator-docs says the same). `CanQuery` doesn't matter.
+    /// Terrain's solid surface counts for every part (observed).
     pub fn touching_parts(
         &mut self,
         dom: &mut Dom,
@@ -394,25 +435,37 @@ impl Physics {
             return Vec::new();
         }
         let collides = |p| boolean(dom, p, "CanCollide", true);
-        let all = if collides(part) {
-            false
+        // Parts that touch it, if any: all of them, or only colliding ones.
+        let others = if collides(part) {
+            Some(false)
         } else if touch_listened {
-            true
+            Some(true)
         } else {
-            return Vec::new();
+            None
         };
         let Some((shape, pose)) = shape::world_shape(dom, &mut self.unions, part) else {
             return Vec::new();
         };
         let aabb = shape.compute_aabb(&pose);
+        let center = to_glam(pose.translation);
+        self.build_terrain_in(to_glam(aabb.mins), to_glam(aabb.maxs));
+        self.build_terrain_along(center, Vec3::Y, MAX_RAY_LENGTH);
         let mut found: Vec<InstanceId> = self
             .world
             .query_pipeline()
             .intersect_aabb_conservative(aabb)
             .filter_map(|(h, co)| {
                 let other = *self.colliders.get(&h)?;
-                (other != part && (all || collides(other)) && overlaps(&*shape, &pose, co))
-                    .then_some(other)
+                match self.terrain.material(h) {
+                    // Solid terrain counts whatever the part's CanCollide,
+                    // and so does a part inside it (observed); water doesn't.
+                    Some(_) => (!self.terrain.is_water(h)
+                        && (overlaps(&*shape, &pose, co) || self.inside_terrain(center)))
+                    .then_some(other),
+                    None => (others.is_some_and(|all| other != part && (all || collides(other)))
+                        && overlaps(&*shape, &pose, co))
+                    .then_some(other),
+                }
             })
             .collect();
         found.sort_unstable();
@@ -423,10 +476,22 @@ impl Physics {
 
 /// Whether `shape` at `pose` overlaps a collider by more than [`OVERLAP`].
 fn overlaps(shape: &dyn Shape, pose: &Pose, co: &Collider) -> bool {
-    parry::contact(pose, shape, co.position(), co.shape(), 0.0)
-        .ok()
-        .flatten()
-        .is_some_and(|c| c.dist < -OVERLAP)
+    let deep = |other: &dyn Shape| {
+        parry::contact(pose, shape, co.position(), other, 0.0)
+            .ok()
+            .flatten()
+            .is_some_and(|c| c.dist < -OVERLAP)
+    };
+    match co.shape().as_trimesh() {
+        // Terrain: parry's contact query takes its triangles one at a time.
+        Some(mesh) => {
+            let local = shape.compute_aabb(&(co.position().inverse() * *pose));
+            mesh.bvh()
+                .intersect_aabb(&local)
+                .any(|i| deep(&mesh.triangle(i)))
+        }
+        None => deep(co.shape()),
+    }
 }
 
 /// A unit normal with float noise around zero removed, so a face's
