@@ -143,9 +143,25 @@ fn legacy_lowercase_members() {
         print(game:service("Workspace") == workspace)
         print(game.workspace == workspace, game.Workspace == workspace)
         print(m.className, p.className)
+        local lighting = game:GetService("Lighting")
+        print(game.lighting == lighting)
+        local s = Instance.new("Sound")
+        s.Playing = true
+        local h = Instance.new("Humanoid")
+        h.maxHealth = 50
+        print(s.isPlaying, h.MaxHealth, h.maxHealth, p.brickColor == p.BrickColor)
         "#,
         0,
-        &["true 1 1", "nil Part", "nil 0", "true", "true true", "Model Part"],
+        &[
+            "true 1 1",
+            "nil Part",
+            "nil 0",
+            "true",
+            "true true",
+            "Model Part",
+            "true",
+            "true 50 50 true",
+        ],
     );
 }
 

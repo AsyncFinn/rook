@@ -55,8 +55,6 @@ fn rotation(c: &CFrame) -> Vector3 {
 /// same object, found by comparing the database's serialization data.
 const SAME_AS: &[(&str, &str, &str)] = &[
     ("Humanoid", "Health", "Health_XML"),
-    ("Humanoid", "maxHealth", "MaxHealth"),
-    ("Player", "userId", "UserId"),
     ("IntConstrainedValue", "Value", "ConstrainedValue"),
     ("DoubleConstrainedValue", "Value", "ConstrainedValue"),
     ("Sound", "Pitch", "PlaybackSpeed"),
@@ -86,7 +84,6 @@ const SAME_AS: &[(&str, &str, &str)] = &[
 /// BrickColor, writes store the BrickColor's colour.
 const BRICK_COLOR_OF: &[(&str, &str, &str)] = &[
     ("BasePart", "BrickColor", "Color"),
-    ("BasePart", "brickColor", "Color"),
     ("BodyColors", "HeadColor", "HeadColor3"),
     ("BodyColors", "LeftArmColor", "LeftArmColor3"),
     ("BodyColors", "LeftLegColor", "LeftLegColor3"),
@@ -183,9 +180,12 @@ pub(crate) fn get(w: &World, id: InstanceId, name: &str) -> Option<Value> {
     }
     match name {
         "ClockTime" if dom.is_a(id, "Lighting") => Some(Value::Float32(dom.clock_time(id) as f32)),
-        // `workspace` is the deprecated lowercase name.
-        "Workspace" | "workspace" if id == dom.root() => Some(Value::Ref(
+        "Workspace" if id == dom.root() => Some(Value::Ref(
             dom.find_service("Workspace").map(InstanceId::to_ref),
+        )),
+        // The deprecated `game.lighting` has no capitalized twin.
+        "lighting" if id == dom.root() => Some(Value::Ref(
+            dom.find_service("Lighting").map(InstanceId::to_ref),
         )),
         "Terrain" if dom.is_a(id, "Workspace") => Some(Value::Ref(
             dom.find_first_child_of_class(id, "Terrain")

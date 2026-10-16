@@ -73,6 +73,7 @@ pub(super) fn member_table(class: ClassId, known: bool) -> MemberTable {
             // Aliases read and write their canonical property, but keep
             // their own scriptability (`size` is an alias scripts can't use).
             let canonical = db.find_canonical_property(class, name).unwrap_or(p);
+            let canonical = capitalized_twin(class, canonical).unwrap_or(canonical);
             table.insert(
                 name,
                 Member::Property(PropInfo {
@@ -137,6 +138,32 @@ pub(super) fn member_table(class: ClassId, known: bool) -> MemberTable {
         }
     }
     table
+}
+
+/// The capitalized property a deprecated lowercase spelling stands for
+/// (`className`, `Mouse.hit`, `Sound.isPlaying`). The API lists both as
+/// separate properties; scripts get the same value from either
+/// (Inference: the API marks the lowercase one deprecated, and old
+/// scripts rely on it).
+fn capitalized_twin(
+    class: ClassId,
+    p: &'static rook_reflection::Property,
+) -> Option<&'static rook_reflection::Property> {
+    let db = database();
+    if !p.name.starts_with(|c: char| c.is_ascii_lowercase()) {
+        return None;
+    }
+    let twin = db
+        .class(class)
+        .all_properties
+        .iter()
+        .map(|&id| db.property(id))
+        .find(|q| {
+            q.name != p.name
+                && q.name.starts_with(|c: char| c.is_ascii_uppercase())
+                && q.name.eq_ignore_ascii_case(p.name)
+        })?;
+    db.find_canonical_property(class, twin.name)
 }
 
 /// What `key` names on an instance's class, if anything.
@@ -207,7 +234,7 @@ pub(crate) fn get_member(
         return Ok((v, false, None));
     }
     // `className` is the deprecated lowercase name.
-    if key == "ClassName" || key == "className" {
+    if matches!(key, "ClassName" | "className") {
         let name = with_world(lua, |w| w.dom.class_name(id).to_owned());
         return Ok((LuaValue::String(lua.create_string(name)?), false, None));
     }
