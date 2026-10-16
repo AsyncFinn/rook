@@ -1,6 +1,6 @@
 // The light on surfaces, shared by parts and terrain: the sun (shadowed
-// through the shadow map), Ambient and OutdoorAmbient, local lights, and
-// fog.
+// through the shadow map), the ambient (Ambient and OutdoorAmbient), local
+// lights, and fog.
 
 import package::common::{g, srgb_to_linear};
 import package::lights::VOXEL;
@@ -69,7 +69,8 @@ fn local_light(world: vec3<f32>, n: vec3<f32>) -> vec3<f32> {
     // Exposure scales light before the curve, as in Studio; `fog` applies
     // it to the rest afterwards, so it's taken back out here.
     let e = g.fog_range.z;
-    let ambient = g.ambient.rgb * g.ambient.rgb * e;
+    let a = ambient_color();
+    let ambient = a * a * e;
     return max(studio_light3(ambient + sum * e) - studio_light3(ambient), vec3(0.0)) / e;
 }
 
@@ -108,16 +109,23 @@ fn sun_light(world: vec3<f32>, n: vec3<f32>) -> f32 {
     return sun;
 }
 
-// Ambient and OutdoorAmbient (fading on faces pointing down).
-fn ambient_light(n: vec3<f32>) -> vec3<f32> {
-    let sky = 0.5 + 0.5 * n.y;
-    return srgb_to_linear(g.ambient.rgb) + srgb_to_linear(g.outdoor_ambient.rgb) * sky;
+// Studio's ambient colour: the brighter of Ambient and OutdoorAmbient in
+// each channel, the same on every face, indoors or out, whatever the
+// Brightness or time of day (docs/behavior/lights.md, "Ambient and
+// OutdoorAmbient").
+fn ambient_color() -> vec3<f32> {
+    return max(g.ambient.rgb, g.outdoor_ambient.rgb);
+}
+
+// The ambient light on every surface, in Rook's linear light.
+fn ambient_light() -> vec3<f32> {
+    return srgb_to_linear(ambient_color());
 }
 
 // Sun, ambient and fog on a linear albedo, without highlights (decals).
 fn shade(albedo: vec3<f32>, world: vec3<f32>, normal: vec3<f32>) -> vec3<f32> {
     let n = normalize(normal);
-    return fog(albedo * (ambient_light(n) + local_light(world, n) + vec3(sun_light(world, n))), world);
+    return fog(albedo * (ambient_light() + local_light(world, n) + vec3(sun_light(world, n))), world);
 }
 
 // Physically based shading (Approximation, tuned against Studio 0.742,
@@ -142,7 +150,7 @@ fn shade_pbr(
     let f0 = mix(vec3(0.04), albedo, metalness);
     let n_v = max(dot(n, v), 1e-4);
     let environment = g.sky.w;
-    let diffuse = ambient_light(n) + local_light(world, n) + vec3(sun);
+    let diffuse = ambient_light() + local_light(world, n) + vec3(sun);
     var color = albedo * (1.0 - metalness * environment) * diffuse;
     if sun > 0.0 {
         let h = normalize(l + v);
