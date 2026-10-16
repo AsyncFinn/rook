@@ -16,7 +16,7 @@ import package::common::{
     g, surface_atlas, image_sampler, VertexIn, VertexOut, ShadowIn, srgb_to_linear,
     instance_rotation, world_position, placed, CAST, NEON, MODE_FACE, MODE_TILED,
     MODE_MESH_UV, UPRIGHT, SURFACES_SHIFT, MAPS, GLASS, SLOPED, MAPS_UV, VERTEX_COLORS,
-    UNION_FACE, TERRAIN_FACE, TERRAIN_WATER, CENTRED, ALPHA_OVERLAY, ALPHA_TRANSPARENCY,
+    UNION_FACE, TERRAIN_FACE, TERRAIN_WATER, TERRAIN_DRAWN_SHIFT, CENTRED, ALPHA_OVERLAY, ALPHA_TRANSPARENCY,
     ALPHA_TINT_MASK,
 };
 import package::images::{
@@ -24,7 +24,7 @@ import package::images::{
     METALNESS_MAP,
 };
 import package::lighting::{shade, shade_pbr, fog};
-import package::terrain::{terrain_motion, water_surface};
+import package::terrain::{terrain_motion, terrain_position, terrain_share, water_surface};
 
 @vertex
 fn vs_main(v: VertexIn) -> VertexOut {
@@ -68,6 +68,9 @@ fn vs_main(v: VertexIn) -> VertexOut {
         }
     }
     out.face = face | select(0u, CENTRED, centred);
+    if packed >= TERRAIN_FACE && packed != 255u {
+        out.face |= v.face & (7u << TERRAIN_DRAWN_SHIFT);
+    }
     out.local = local;
     out.local_normal = normal;
     out.box_center = center;
@@ -170,50 +173,6 @@ fn material_position(in: VertexOut, face: u32, at: vec2<f32>) -> vec2<f32> {
     return vec2(dot(p, r) + extent.x * 0.5, extent.y * 0.5 - dot(p, u));
 }
 
-// Where a terrain point is on its material's textures, in world studs
-// across the plane its surface faces most: of the 6 axes' planes for the
-// cube-mapped materials (Brick, WoodPlanks), of 18 for the rest (the 6 and
-// the 12 at 45 degrees between two axes), as Studio picks one of 18 planes
-// (zeux, SIGGRAPH 2020). The images run right and down across each plane;
-// which way exactly isn't known (Approximation).
-fn terrain_position(p: vec3<f32>, n: vec3<f32>, cube: bool) -> vec2<f32> {
-    let a = abs(n);
-    let s = select(vec3(-1.0), vec3(1.0), n >= vec3(0.0));
-    var best = a.x;
-    var plane = 0u;
-    if a.y > best {
-        best = a.y;
-        plane = 1u;
-    }
-    if a.z > best {
-        best = a.z;
-        plane = 2u;
-    }
-    if !cube {
-        let d = vec3(a.x + a.y, a.x + a.z, a.y + a.z) * 0.70710678;
-        if d.x > best {
-            best = d.x;
-            plane = 3u;
-        }
-        if d.y > best {
-            best = d.y;
-            plane = 4u;
-        }
-        if d.z > best {
-            plane = 5u;
-        }
-    }
-    let h = 0.70710678;
-    switch plane {
-        case 0u: { return vec2(-s.x * p.z, -p.y); }
-        case 1u: { return vec2(p.x, s.y * p.z); }
-        case 2u: { return vec2(s.z * p.x, -p.y); }
-        case 3u: { return vec2(p.z, -(s.y * p.y - s.x * p.x) * h); }
-        case 4u: { return vec2((s.z * p.x - s.x * p.z) * h, -p.y); }
-        default: { return vec2(p.x, -(s.z * p.z - s.y * p.y) * h); }
-    }
-}
-
 // Neon glows past its Color: in linear light, 18 times its square, up to
 // full brightness (fitted in Studio 0.742 to eight colours: grey 128 drew
 // 237, 64 drew 60, (196, 40, 28) drew (255, 20, 7)).
@@ -296,6 +255,9 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
     let reflectance = in.material.x;
     if reflectance > 0.0 {
         lit = mix(lit, fog(srgb_to_linear(g.sky.rgb), in.world), reflectance);
+    }
+    if terrain && (in.face >> TERRAIN_DRAWN_SHIFT) != 0u {
+        lit *= terrain_share(in, dp_x, dp_y);
     }
     return vec4(lit, alpha);
 }

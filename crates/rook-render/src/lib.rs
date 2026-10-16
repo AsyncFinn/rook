@@ -17,7 +17,8 @@ mod surfaces;
 pub use scene::{
     Camera, DrawShape, Image, ImageHash, ImagePlacement, Layer, LightShape, Lighting, LocalLight,
     MapAlpha, Material, MaterialMaps, MaterialSet, Mesh, MeshHash, NormalId, PartInstance,
-    PartShape, SKYBOX_FACES, Scene, SurfacePattern, TerrainLook, Tiling, TrussShape,
+    PartShape, SKYBOX_FACES, Scene, SurfacePattern, TERRAIN_LAYERS, TerrainLayer, TerrainLook,
+    Tiling, TrussShape,
 };
 
 // Content hashes are 32 bytes: FxHash keeps lookups by them cheap.

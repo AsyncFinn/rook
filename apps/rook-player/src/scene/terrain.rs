@@ -1,8 +1,9 @@
 //! Workspace's Terrain: its `SmoothGrid` voxels meshed by `rook_terrain`,
-//! each chunk's surface split by material and by which way it faces, and
-//! drawn with that material's top, side or bottom textures from Studio's
-//! terrain material table (or the MaterialVariant MaterialService puts in
-//! its place), tinted by `Terrain.MaterialColors`. Water is drawn in
+//! each chunk's surface split by texture layer (a material and which way
+//! it faces), and drawn with that material's top, side or bottom textures
+//! from Studio's terrain material table (or the MaterialVariant
+//! MaterialService puts in its place), tinted by `Terrain.MaterialColors`,
+//! blending where layers meet (`rook_terrain::mesh::draws`). Water is drawn in
 //! `WaterColor` at `WaterTransparency`, waving and rippled by the install's
 //! water normal frames (the renderer's, `Installed`), and Grass grows
 //! blades near the camera ([`grass`]) with `Decoration` on
@@ -14,22 +15,28 @@ mod grass;
 use glam::IVec3;
 use rayon::prelude::*;
 use rook_content::MaterialMap;
-use rook_content::decode::mesh::{Mesh, TerrainMapping};
-use rook_render::TerrainLook;
+use rook_content::decode::mesh::{Mesh, TerrainCorner, TerrainMapping};
+use rook_render::{TERRAIN_LAYERS, TerrainLayer, TerrainLook};
 use rook_terrain::grass::{GrassTops, add_grass_tops, blade_color};
-use rook_terrain::{ChunkMesh, Facing, Grid, TerrainMaterial, chunks_to_mesh, mesh_chunk};
+use rook_terrain::{
+    ChunkMesh, Facing, Grid, Layer, Seam, TerrainMaterial, chunks_to_mesh, mesh_chunk,
+};
+
+// The renderer's table holds every layer.
+const _: () = assert!(Layer::COUNT <= TERRAIN_LAYERS);
 use rook_types::MaterialColors;
 
 use super::*;
 use grass::{GRASS_REACH, Grass};
 
-/// One chunk's surface of one material facing one way, as a mesh.
+/// One chunk's surface of one layer, as a mesh: the triangles wholly of
+/// the layer, or its part of the seams.
 #[derive(Debug, Clone, Copy)]
 struct TerrainSurface {
     mesh: MeshHash,
     origin: Vec3,
-    material: TerrainMaterial,
-    facing: Facing,
+    layer: Layer,
+    seam: Option<Seam>,
 }
 
 /// A chunk's surfaces and its Grass tops.
@@ -210,38 +217,55 @@ impl SceneCache {
         add_grass_tops(&chunk, &mut tops);
         let origin = chunk.origin();
         let mut surfaces = Vec::new();
-        for surface in chunk.surfaces {
+        for draw in chunk.draws {
             let mut key = blake3::Hasher::new();
             key.update(&self.terrain.epoch.to_le_bytes());
-            key.update(&[surface.material as u8, surface.facing as u8]);
+            let seam = match draw.seam {
+                None => 0,
+                Some(Seam::First) => 1,
+                Some(Seam::Over) => 2,
+            };
+            key.update(&[draw.layer.index() as u8, seam]);
             for v in chunk.chunk.to_array() {
                 key.update(&v.to_le_bytes());
             }
             let mesh = MeshHash(*key.finalize().as_bytes());
-            let count = surface.positions.len();
-            let look = surface.material.shape();
+            let count = draw.positions.len();
+            let material = draw.layer.material;
+            let terrain_corners = draw
+                .corners
+                .iter()
+                .map(|c| TerrainCorner {
+                    layers: c.layers.map(|l| l.index() as u8),
+                    corner: c.corner,
+                    drawn: (0..3)
+                        .filter(|&k| c.layers[k] == draw.layer)
+                        .fold(0, |bits, k| bits | 1 << k),
+                })
+                .collect();
             self.scene.meshes.insert(
                 mesh,
                 Arc::new(Mesh {
-                    positions: surface.positions,
-                    normals: surface.normals,
+                    positions: draw.positions,
+                    normals: draw.normals,
                     uvs: vec![[0.0; 2]; count],
-                    indices: surface.indices,
-                    terrain: Some(if surface.material == TerrainMaterial::Water {
+                    indices: draw.indices,
+                    terrain: Some(if material == TerrainMaterial::Water {
                         TerrainMapping::Water
-                    } else if look.cube {
+                    } else if material.shape().cube {
                         TerrainMapping::Cube
                     } else {
                         TerrainMapping::Planes
                     }),
+                    terrain_corners,
                     ..Mesh::default()
                 }),
             );
             surfaces.push(TerrainSurface {
                 mesh,
                 origin,
-                material: surface.material,
-                facing: surface.facing,
+                layer: draw.layer,
+                seam: draw.seam,
             });
         }
         (chunk.chunk, MeshedChunk { surfaces, tops })
@@ -268,32 +292,40 @@ impl SceneCache {
         // looking down (Approximation).
         let water_reflectance = number(dom, terrain, "WaterReflectance").unwrap_or(1.0);
         let surfaces = self.terrain.surfaces.clone();
-        let mut looks: HashMap<(TerrainMaterial, Facing), (MaterialMaps, [f32; 3])> =
-            HashMap::new();
+        let mut looks: HashMap<Layer, (MaterialMaps, [f32; 3])> = HashMap::new();
         let mut entries = Vec::with_capacity(surfaces.len());
+        let mut layers = [TerrainLayer::default(); TERRAIN_LAYERS];
         for s in surfaces {
+            let material = s.layer.material;
             let mut part =
                 PartInstance::plain(DrawShape::File(s.mesh), s.origin, Mat3::IDENTITY, Vec3::ONE);
-            part.material = s.material.material();
+            part.material = material.material();
             part.material_set = set;
-            if s.material == TerrainMaterial::Water {
+            if material == TerrainMaterial::Water {
                 part.color = water;
                 part.transparency = water_transparency;
                 part.reflectance = water_reflectance.clamp(0.0, 1.0);
                 part.cast_shadow = false;
             } else {
-                let (maps, color) = *looks.entry((s.material, s.facing)).or_insert_with(|| {
-                    self.terrain_look(dom, terrain, s.material, s.facing, set, colors.as_ref())
+                let (maps, color) = *looks.entry(s.layer).or_insert_with(|| {
+                    let (maps, color, blend) =
+                        self.terrain_look(dom, terrain, s.layer, set, colors.as_ref());
+                    layers[s.layer.index()] = blend;
+                    (maps, color)
                 });
                 part.maps = maps;
                 part.color = color;
+                part.over = s.seam == Some(Seam::Over);
+                part.cast_shadow = !part.over;
             }
             entries.push(part);
         }
+        self.scene.terrain.layers = layers;
         entries
     }
 
-    /// The textures and tint of `material`'s surfaces facing `facing`: a
+    /// The textures and tint of `layer`'s surfaces, and how it blends on
+    /// seams: a
     /// MaterialVariant MaterialService puts in the material's place (its
     /// maps tinted by the colour, as on parts), or else the material's own
     /// pack in `set`, coloured by the material's tint for its
@@ -304,15 +336,30 @@ impl SceneCache {
     /// material's colour over dark rock, and Grass's sides have none, so
     /// they show plain earth, as in Studio). The legacy set's are the
     /// texel times the tint. Untextured, a material shows its colour.
+    /// A pack's layer blends by its height map (in its roughness-metalness
+    /// image, blue) and blend settings; a variant's has no height map, only
+    /// the pack's softness (Approximation: what Studio does there isn't
+    /// known).
     fn terrain_look(
         &mut self,
         dom: &Dom,
         terrain: InstanceId,
-        material: TerrainMaterial,
-        facing: Facing,
+        layer: Layer,
         set: MaterialSet,
         colors: Option<&MaterialColors>,
-    ) -> (MaterialMaps, [f32; 3]) {
+    ) -> (MaterialMaps, [f32; 3], TerrainLayer) {
+        let Layer { material, facing } = layer;
+        let look = material.textures(set);
+        let texture = match facing {
+            Facing::Top => look.top,
+            Facing::Side => look.side,
+            Facing::Bottom => look.bottom,
+        };
+        let mut blend = TerrainLayer {
+            cube: material.shape().cube,
+            scale: texture.map_or(1.0, |t| t.blend.scale),
+            ..TerrainLayer::default()
+        };
         let c = material
             .color(colors, set)
             .unwrap_or(rook_types::Color3uint8::new(255, 255, 255));
@@ -340,16 +387,11 @@ impl SceneCache {
                 studs_per_tile: Vec2::splat(number(dom, variant, "StudsPerTile").unwrap_or(10.0)),
                 ..MaterialMaps::NONE
             };
-            return (maps, color);
+            blend.studs = maps.studs_per_tile.x;
+            return (maps, color, blend);
         }
-        let look = material.textures(set);
-        let texture = match facing {
-            Facing::Top => look.top,
-            Facing::Side => look.side,
-            Facing::Bottom => look.bottom,
-        };
         let Some(texture) = texture else {
-            return (MaterialMaps::NONE, color);
+            return (MaterialMaps::NONE, color, blend);
         };
         let mut map = |m: MaterialMap| match self.file_state_of(
             terrain,
@@ -376,7 +418,13 @@ impl SceneCache {
             Some(_) => material.tint(c, set),
             None => color,
         };
-        (maps, color)
+        let (a, b) = texture.blend.remap();
+        blend.studs = texture.studs();
+        if roughness_metalness.is_some() {
+            blend.remap = [a, b];
+            blend.height = roughness_metalness;
+        }
+        (maps, color, blend)
     }
 }
 

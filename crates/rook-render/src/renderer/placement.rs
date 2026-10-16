@@ -14,6 +14,10 @@ pub(crate) enum Target {
     Layer(i32, BatchKey),
 }
 
+/// The layers' z of entries drawn over what's there ([`PartInstance::over`]):
+/// before every image.
+pub(crate) const OVER_Z: i32 = i32::MIN;
+
 /// Where a scene entry is drawn, by its index in [`Scene::parts`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Placement {
@@ -195,6 +199,7 @@ impl Renderer {
             images,
         };
         match z {
+            None if part.over => Target::Layer(OVER_Z, key),
             Some(z) => Target::Layer(z, key),
             // ForceField always shows what's behind it (observed).
             None if part.transparency > 0.0

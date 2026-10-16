@@ -25,6 +25,9 @@ pub(crate) struct Pipelines {
     pub(crate) glass_filter: wgpu::RenderPipeline,
     /// ForceField: its glow added to what's behind.
     pub(crate) additive: wgpu::RenderPipeline,
+    /// Terrain seams' later layers: their share added to the first's, on
+    /// the same surface (the same vertices, so the same depth).
+    pub(crate) over: wgpu::RenderPipeline,
     /// The skybox, behind everything.
     pub(crate) sky: wgpu::RenderPipeline,
     /// Depth only, from the sun, over the opaque batches.
@@ -217,6 +220,25 @@ impl Pipelines {
             wgpu::CompareFunction::Greater,
             Default::default(),
         );
+        let over = make(
+            "rook terrain seams",
+            "fs_main",
+            Some(wgpu::BlendState {
+                color: wgpu::BlendComponent {
+                    src_factor: wgpu::BlendFactor::One,
+                    dst_factor: wgpu::BlendFactor::One,
+                    operation: wgpu::BlendOperation::Add,
+                },
+                alpha: wgpu::BlendComponent {
+                    src_factor: wgpu::BlendFactor::Zero,
+                    dst_factor: wgpu::BlendFactor::One,
+                    operation: wgpu::BlendOperation::Add,
+                },
+            }),
+            false,
+            wgpu::CompareFunction::GreaterEqual,
+            Default::default(),
+        );
         // Images lie exactly on their part's surface: the same vertices
         // through the same (invariant) maths give the same depth.
         let layer_pipeline = make(
@@ -275,6 +297,7 @@ impl Pipelines {
             layer: layer_pipeline,
             glass_filter,
             additive,
+            over,
             sky: sky_pipeline,
             shadow: shadow_pipeline,
         }

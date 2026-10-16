@@ -137,12 +137,16 @@ pub struct TexturePack {
     pub normal: Option<u64>,
     pub metalness: Option<u64>,
     pub roughness: Option<u64>,
+    /// How high each point of the surface stands (terrain's packs: where
+    /// materials meet, the higher one shows).
+    pub height: Option<u64>,
 }
 
 impl TexturePack {
     /// Read a TexturePack asset: `<roblox>` holding `<color>`, `<normal>`,
-    /// `<metalness>` and `<roughness>` image ids (and settings Rook doesn't
-    /// use: `<usage>`, `<alphamode>`, `<tiling>`, `<emissive...>`).
+    /// `<metalness>`, `<roughness>` and `<height>` image ids (and settings
+    /// Rook doesn't use: `<usage>`, `<alphamode>`, `<tiling>`,
+    /// `<emissive...>`).
     pub fn parse(bytes: &[u8]) -> Option<Self> {
         let text = std::str::from_utf8(bytes).ok()?;
         if !text.trim_start().starts_with("<roblox") {
@@ -159,32 +163,39 @@ impl TexturePack {
             normal: id("normal"),
             metalness: id("metalness"),
             roughness: id("roughness"),
+            height: id("height"),
         })
     }
 }
 
 /// A material map from its image files: the colour or normal map as it is
-/// (normals are ordinary RGB normal maps), or roughness (into green) and
-/// metalness (into red, 0 when the pack has none) packed into one, with an
-/// opaque alpha so mips aren't weighted by it.
-pub fn build(map: MaterialMap, main: &[u8], metalness: Option<&[u8]>) -> Result<Image, ImageError> {
+/// (normals are ordinary RGB normal maps), or roughness (into green),
+/// metalness (into red, 0 when the pack has none) and height (into blue,
+/// full when it has none) packed into one, with an opaque alpha so mips
+/// aren't weighted by it.
+pub fn build(
+    map: MaterialMap,
+    main: &[u8],
+    metalness: Option<&[u8]>,
+    height: Option<&[u8]>,
+) -> Result<Image, ImageError> {
     let (mut rgba, format) = crate::decode::image::decode_rgba(main)?;
     if map == MaterialMap::RoughnessMetalness {
-        let metal = match metalness {
-            Some(bytes) => {
-                let (m, _) = crate::decode::image::decode_rgba(bytes)?;
-                Some(::image::imageops::resize(
-                    &m,
-                    rgba.width(),
-                    rgba.height(),
-                    ::image::imageops::FilterType::Triangle,
-                ))
-            }
-            None => None,
+        let (w, h) = rgba.dimensions();
+        let sized = |bytes: Option<&[u8]>| -> Result<_, ImageError> {
+            let Some(bytes) = bytes else {
+                return Ok(None);
+            };
+            let (m, _) = crate::decode::image::decode_rgba(bytes)?;
+            let filter = ::image::imageops::FilterType::Triangle;
+            Ok(Some(::image::imageops::resize(&m, w, h, filter)))
         };
+        let metal = sized(metalness)?;
+        let height = sized(height)?;
         for (x, y, p) in rgba.enumerate_pixels_mut() {
             let m = metal.as_ref().map_or(0, |m| m.get_pixel(x, y)[0]);
-            p.0 = [m, p[0], 0, 255];
+            let h = height.as_ref().map_or(255, |h| h.get_pixel(x, y)[0]);
+            p.0 = [m, p[0], h, 255];
         }
     }
     Image::from_rgba(rgba, format, MATERIAL_MAX_SIZE)
@@ -212,6 +223,7 @@ mod tests {
                 normal: Some(11498586912),
                 metalness: Some(11498586281),
                 roughness: Some(11498587586),
+                height: None,
             })
         );
         let normal_only = b"<roblox><usage>3</usage><normal>9438453869</normal></roblox>";
@@ -257,9 +269,15 @@ mod tests {
             .unwrap();
             out
         };
-        let rm = build(MaterialMap::RoughnessMetalness, &png(200), Some(&png(30))).unwrap();
-        assert_eq!(&rm.mips[0][..4], &[30, 200, 0, 255]);
-        let r = build(MaterialMap::RoughnessMetalness, &png(90), None).unwrap();
-        assert_eq!(&r.mips[0][..4], &[0, 90, 0, 255]);
+        let rm = build(
+            MaterialMap::RoughnessMetalness,
+            &png(200),
+            Some(&png(30)),
+            Some(&png(70)),
+        )
+        .unwrap();
+        assert_eq!(&rm.mips[0][..4], &[30, 200, 70, 255]);
+        let r = build(MaterialMap::RoughnessMetalness, &png(90), None, None).unwrap();
+        assert_eq!(&r.mips[0][..4], &[0, 90, 255, 255]);
     }
 }

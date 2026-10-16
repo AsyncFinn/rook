@@ -3,8 +3,10 @@
 // shows was measured; the shapes chosen to match it are Approximations.
 
 import package::common::{
-    g, image_sampler, water_normals, VertexOut, TERRAIN_WATER, TERRAIN_BLADES, srgb_to_linear,
+    g, image_sampler, water_normals, VertexOut, TERRAIN_WATER, TERRAIN_BLADES,
+    TERRAIN_DRAWN_SHIFT, srgb_to_linear,
 };
+import package::images::layer_height;
 import package::lighting::{ambient_light, local_light, sun_light, sun_visibility, fog};
 
 // Studs per repeat of water's normal frames (Approximation: Studio's
@@ -118,4 +120,99 @@ fn water_surface(in: VertexOut, dp_x: vec3<f32>, dp_y: vec3<f32>) -> vec4<f32> {
         c += vec3(glint * g.fog_color.w * 0.3 * sun_visibility(in.world, up));
     }
     return vec4(fog(c, in.world), mix(in.color.a, 1.0, fresnel));
+}
+
+// A terrain seam fragment's share of its draw's layer (Studio 0.742's
+// terrain shader, read from its GLSL): each of the triangle's corners
+// weighs its barycentric weight times its layer's height there (remapped
+// to 0 to 1); each weight beyond the highest of the others, plus half the
+// edge's softness (the corners' softness, blended), over that softness,
+// gives the corner's share, the shares then summing to 1. Where the
+// textures shrink to under 7 pixels a repeat, the shares fade to the plain
+// barycentric weights, as they do near the edge between two corners of
+// one layer. The draw's share is that of the corners its layer holds.
+// Every draw of a triangle works the shares out alike (the triangle's own
+// normal, not its vertices', picks the planes), so they add up to the
+// whole.
+fn terrain_share(in: VertexOut, dp_x: vec3<f32>, dp_y: vec3<f32>) -> f32 {
+    let drawn = in.face >> TERRAIN_DRAWN_SHIFT;
+    let b = vec3(in.uv.x, in.uv.y, 1.0 - in.uv.x - in.uv.y);
+    let ids = vec3<u32>(round(in.local));
+    var n = cross(dp_x, dp_y);
+    n = normalize(select(n, -n, dot(n, in.normal) < 0.0));
+    var h = vec3(0.0);
+    var softness = 0.0;
+    var minified = 0.0;
+    for (var k = 0u; k < 3u; k++) {
+        let a = g.terrain_layers[ids[k] * 2u];
+        let c = g.terrain_layers[ids[k] * 2u + 1u];
+        let cube = c.y > 0.5;
+        let studs = max(a.w, 1e-3);
+        let uv = terrain_position(in.world, n, cube) / studs;
+        // The planes' coordinates are linear in the position.
+        let dx = terrain_position(dp_x, n, cube) / studs;
+        let dy = terrain_position(dp_y, n, cube) / studs;
+        h[k] = clamp(layer_height(u32(c.x), uv, dx, dy) * a.x + a.y, 0.0, 1.0);
+        softness += b[k] * a.z;
+        if k == 0u {
+            minified = sqrt(max(dot(dx, dx), dot(dy, dy))) * 7.0;
+        }
+    }
+    let w = b * h;
+    let others = vec3(max(w.y, w.z), max(w.x, w.z), max(w.x, w.y));
+    let soft = max(softness, 1e-4);
+    var s = clamp((w - others + 0.5 * soft) / soft, vec3(0.0), vec3(1.0));
+    s /= max(s.x + s.y + s.z, 1e-4);
+    let paired = vec3(
+        f32(ids.x == ids.y || ids.x == ids.z),
+        f32(ids.y == ids.x || ids.y == ids.z),
+        f32(ids.z == ids.x || ids.z == ids.y),
+    );
+    s = mix(s, b, clamp(minified + dot(paired, b) * 20.0 - 19.0, 0.0, 1.0));
+    let mine = vec3(f32(drawn & 1u), f32((drawn >> 1u) & 1u), f32((drawn >> 2u) & 1u));
+    return dot(s, mine);
+}
+
+// Where a terrain point is on its material's textures, in world studs
+// across the plane its surface faces most: of the 6 axes' planes for the
+// cube-mapped materials (Brick, WoodPlanks), of 18 for the rest (the 6 and
+// the 12 at 45 degrees between two axes), as Studio picks one of 18 planes
+// (zeux, SIGGRAPH 2020). The images run right and down across each plane;
+// which way exactly isn't known (Approximation).
+fn terrain_position(p: vec3<f32>, n: vec3<f32>, cube: bool) -> vec2<f32> {
+    let a = abs(n);
+    let s = select(vec3(-1.0), vec3(1.0), n >= vec3(0.0));
+    var best = a.x;
+    var plane = 0u;
+    if a.y > best {
+        best = a.y;
+        plane = 1u;
+    }
+    if a.z > best {
+        best = a.z;
+        plane = 2u;
+    }
+    if !cube {
+        let d = vec3(a.x + a.y, a.x + a.z, a.y + a.z) * 0.70710678;
+        if d.x > best {
+            best = d.x;
+            plane = 3u;
+        }
+        if d.y > best {
+            best = d.y;
+            plane = 4u;
+        }
+        if d.z > best {
+            plane = 5u;
+        }
+    }
+    let h = 0.70710678;
+    switch plane {
+        case 0u: { return vec2(-s.x * p.z, -p.y); }
+        case 1u: { return vec2(p.x, s.y * p.z); }
+        case 2u: { return vec2(s.z * p.x, -p.y); }
+        case 3u: { return vec2(p.z, -(s.y * p.y - s.x * p.x) * h); }
+        case 4u: { return vec2((s.z * p.x - s.x * p.z) * h, -p.y); }
+        default: { return vec2(p.x, -(s.z * p.z - s.y * p.y) * h); }
+    }
 }

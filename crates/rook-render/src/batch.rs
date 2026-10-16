@@ -244,16 +244,18 @@ impl Batches {
         self.pool.buffer.as_ref()
     }
 
-    /// Each batch's key, instances in the shared buffer, bounds and a box
-    /// per `CULL_SLOTS` of those instances, in drawing order.
-    pub(crate) fn draws(&self) -> impl Iterator<Item = (&BatchKey, Range<u32>, Aabb, &[Aabb])> {
+    /// Each batch's key, instances in the shared buffer, bounds, a box
+    /// per `CULL_SLOTS` of those instances and z, in drawing order.
+    pub(crate) fn draws(
+        &self,
+    ) -> impl Iterator<Item = (&BatchKey, Range<u32>, Aabb, &[Aabb], i32)> {
         self.order
             .iter()
-            .map(|&i| &self.list[i])
-            .filter(|b| b.len > 0)
-            .map(|b| {
+            .map(|&i| (&self.list[i], self.z[i]))
+            .filter(|(b, _)| b.len > 0)
+            .map(|(b, z)| {
                 let start = b.region.start;
-                (&b.key, start..start + b.len, b.bounds, &b.chunks[..])
+                (&b.key, start..start + b.len, b.bounds, &b.chunks[..], z)
             })
     }
 }

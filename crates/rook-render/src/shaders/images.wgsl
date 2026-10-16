@@ -82,6 +82,19 @@ fn sample_map(images: vec3<u32>, which: u32, uv: vec2<f32>, dx: vec2<f32>, dy: v
     }
 }
 
+// A terrain layer's height (blue of its roughness-metalness map) at `uv`,
+// from its slot in the table. Without a table only the draw's own images
+// are bound, so every layer counts as full height and seams blend by
+// their corners' weights alone.
+@if(image_table)
+fn layer_height(slot: u32, uv: vec2<f32>, dx: vec2<f32>, dy: vec2<f32>) -> f32 {
+    return textureSampleGrad(images_linear[slot], image_sampler, uv, dx, dy).b;
+}
+@else
+fn layer_height(slot: u32, uv: vec2<f32>, dx: vec2<f32>, dy: vec2<f32>) -> f32 {
+    return 1.0;
+}
+
 // A skybox face's image: its slot in the table (`Globals::sky_images`),
 // or bound for its draw.
 @if(image_table)

@@ -39,6 +39,19 @@ pub struct Mesh {
     /// Terrain only: its material textures are projected onto planes in
     /// the world instead of laid over a box.
     pub terrain: Option<TerrainMapping>,
+    /// Terrain seams only (empty elsewhere): each vertex's place in the
+    /// blend of its triangle's layers (`rook_terrain::mesh::draws`).
+    pub terrain_corners: Vec<TerrainCorner>,
+}
+
+/// A terrain seam vertex: the layers (`rook_terrain::Layer::index`) of
+/// its triangle's three corners, which corner it is, and which corners'
+/// layer the mesh draws (a bit per corner).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct TerrainCorner {
+    pub layers: [u8; 3],
+    pub corner: u8,
+    pub drawn: u8,
 }
 
 /// How terrain lays its material's textures (Studio's terrain material

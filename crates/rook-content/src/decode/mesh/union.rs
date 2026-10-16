@@ -137,6 +137,7 @@ pub(super) fn decode(bytes: &[u8]) -> Result<Mesh, MeshError> {
                 colors: m.colors,
                 faces: m.normal_ids.iter().map(|f| normal_id(f.0)).collect(),
                 terrain: None,
+                terrain_corners: Vec::new(),
             }
         }
     })

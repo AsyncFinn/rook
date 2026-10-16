@@ -330,3 +330,51 @@ fn water_sits_half_a_voxel_low() {
         );
     }
 }
+
+/// Where a Grass slab meets a Rock one, the triangles whose corners take
+/// different layers are drawn once per layer they hold, the first corner's
+/// opaque: every triangle is drawn opaque once, the materials' seams lie
+/// along their boundary, and each seam vertex names its triangle's
+/// corners.
+#[test]
+fn seams_blend_layers() {
+    use TerrainMaterial::{Grass, Rock};
+    let mut grid = Grid::new();
+    for z in 0..6 {
+        for x in 0..8 {
+            let m = if x < 4 { Grass } else { Rock };
+            grid.set(IVec3::new(x, 0, z), Voxel::new(m, 255));
+        }
+    }
+    let (mut opaque, mut surface, mut overs) = (0, 0, 0);
+    for chunk in chunks_to_mesh(&grid) {
+        let mesh = mesh_chunk(&grid, chunk);
+        surface += mesh.triangles();
+        for d in &mesh.draws {
+            let tris = d.indices.len() / 3;
+            match d.seam {
+                None => opaque += tris,
+                Some(Seam::First) => opaque += tris,
+                Some(Seam::Over) => overs += tris,
+            }
+            if d.seam.is_none() {
+                continue;
+            }
+            assert_eq!(d.corners.len(), d.positions.len());
+            for (c, p) in d.corners.iter().zip(&d.positions) {
+                assert!(c.layers.contains(&d.layer));
+                let distinct = c.layers.iter().any(|l| *l != c.layers[0]);
+                assert!(distinct, "a seam's corners differ");
+                // Grass's top and side meet round the slab's edge; the
+                // materials only within a cell of their boundary, x = 16
+                // (and Rock's shift, under a stud).
+                let x = mesh.origin().x + p[0];
+                if c.layers.iter().any(|l| l.material != c.layers[0].material) {
+                    assert!((x - 16.0).abs() <= 5.0, "seam at x = {x}");
+                }
+            }
+        }
+    }
+    assert_eq!(opaque, surface);
+    assert!(overs > 0);
+}

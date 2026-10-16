@@ -28,6 +28,8 @@ pub(crate) enum Pipe {
     Transparent,
     GlassFilter,
     Additive,
+    /// Terrain seams' later layers, added over the first.
+    Over,
 }
 
 /// Which instance buffer a run's instances are in.
@@ -201,6 +203,7 @@ impl Renderer {
             Pipe::Transparent => &p.transparent,
             Pipe::GlassFilter => &p.glass_filter,
             Pipe::Additive => &p.additive,
+            Pipe::Over => &p.over,
         }
     }
 

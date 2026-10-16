@@ -304,12 +304,19 @@ impl Resolver {
         }
         .ok_or_else(|| not_found("the material's texture pack has no such map"))?;
         let image = self.resolve(&asset(main))?;
-        let metalness = match (map, pack.metalness) {
-            (MaterialMap::RoughnessMetalness, Some(id)) => Some(self.resolve(&asset(id))?),
-            _ => None,
+        let extra = |id: Option<u64>| match (map, id) {
+            (MaterialMap::RoughnessMetalness, Some(id)) => self.resolve(&asset(id)).map(Some),
+            _ => Ok(None),
         };
-        let decoded = materials::build(map, &image.bytes, metalness.as_ref().map(|m| &*m.bytes))
-            .map_err(|e| Failure::new(FailureKind::Invalid, e.to_string()))?;
+        let metalness = extra(pack.metalness)?;
+        let height = extra(pack.height)?;
+        let decoded = materials::build(
+            map,
+            &image.bytes,
+            metalness.as_ref().map(|m| &*m.bytes),
+            height.as_ref().map(|h| &*h.bytes),
+        )
+        .map_err(|e| Failure::new(FailureKind::Invalid, e.to_string()))?;
         let name = format!(
             "{} rbxassetid://{pack_id} {} {}x{}",
             image.source.location,

@@ -210,6 +210,7 @@ impl Renderer {
             sky_top: rgb(l.sky_top, 0.0),
             sky_horizon: rgb(l.sky_horizon, 0.0),
             sky_images,
+            terrain_layers: self.terrain_layers(),
         };
         self.queue
             .write_buffer(&self.globals, 0, bytemuck::bytes_of(&globals));
@@ -321,7 +322,7 @@ impl Renderer {
         // The sun's whole view, not just the camera's: a part off screen
         // still shadows what's on it.
         let sun_view = shadow.map(|s| Frustum::of(s.view_proj));
-        for (key, instances, bounds, chunks) in self.opaque.draws() {
+        for (key, instances, bounds, chunks, _) in self.opaque.draws() {
             let shadowed = sun_view.as_ref().filter(|sun| sun.sees(bounds, margin));
             let seen = view.sees(bounds, margin);
             let Some(mesh) = self
@@ -347,7 +348,7 @@ impl Renderer {
         // Then images on opaque parts (before transparent parts, so a
         // window in front of a decal covers it), then transparent parts
         // back to front.
-        for (key, instances, bounds, chunks) in self.layers.draws() {
+        for (key, instances, bounds, chunks, z) in self.layers.draws() {
             let Some(mesh) = self
                 .meshes
                 .get(&key.shape)
@@ -355,7 +356,12 @@ impl Renderer {
             else {
                 continue;
             };
-            let (pipe, source) = (Pipe::Layer, Source::Layers);
+            let pipe = if z == placement::OVER_Z {
+                Pipe::Over
+            } else {
+                Pipe::Layer
+            };
+            let source = Source::Layers;
             for run in seen_runs(view, chunks, CULL_SLOTS, margin, instances) {
                 self.push_draw(&mut main_runs, pipe, source, mesh, key, run);
             }
@@ -375,6 +381,17 @@ impl Renderer {
         }
         let starts = self.upload_args(&[&shadow_runs, &main_runs]);
         (shadow_runs, main_runs, starts)
+    }
+
+    /// Each terrain layer's blend, as the shader reads it.
+    fn terrain_layers(&self) -> [[f32; 4]; 2 * TERRAIN_LAYERS] {
+        let mut out = [[0.0; 4]; 2 * TERRAIN_LAYERS];
+        for (i, l) in self.terrain.layers.iter().enumerate() {
+            let slot = self.image_slots(&[None, None, None, l.height, None])[3];
+            out[i * 2] = [l.remap[0], l.remap[1], l.scale, l.studs];
+            out[i * 2 + 1] = [slot as f32, f32::from(u8::from(l.cube)), 0.0, 0.0];
+        }
+        out
     }
 
     /// The skybox, once all six images are up; otherwise the clear colour
