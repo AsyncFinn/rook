@@ -38,13 +38,17 @@ const GRASS_AVERAGE: [u8; 4] = [196, 196, 189, 241];
 const BLADE_SHADE: f32 = 0.7;
 
 /// The blades' colour (sRGB) for Grass's `MaterialColors` colour: the
-/// ground's average (its texture tinted as a tint mask is), darkened by
+/// ground's average (its texture's luma times [`TerrainMaterial::tint`]
+/// where its tint mask is opaque, as the ground is drawn), darkened by
 /// [`BLADE_SHADE`] in linear light.
 pub fn blade_color(grass: Color3uint8) -> [f32; 3] {
     let [r, g, b, a] = GRASS_AVERAGE.map(|v| f32::from(v) / 255.0);
     let average = srgb_to_linear([r, g, b]);
-    let tint = srgb_to_linear([grass.r, grass.g, grass.b].map(|v| f32::from(v) / 255.0));
-    linear_to_srgb([0, 1, 2].map(|i| average[i] * (1.0 + (tint[i] - 1.0) * a) * BLADE_SHADE))
+    let luma = (average[0] + 2.0 * average[1] + average[2]) / 4.0;
+    let tint = srgb_to_linear(TerrainMaterial::Grass.tint(grass));
+    linear_to_srgb(
+        [0, 1, 2].map(|i| (average[i] + (luma * tint[i] - average[i]) * a) * BLADE_SHADE),
+    )
 }
 
 /// Grass's upward triangles in world studs, by the tile their centre is in.

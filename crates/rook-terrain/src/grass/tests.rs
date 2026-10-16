@@ -60,5 +60,6 @@ fn blades_grow_on_grass_tops_only() {
 fn blades_are_darker_than_the_ground() {
     let c = blade_color(Color3uint8::new(111, 126, 62));
     assert!(c.iter().all(|v| (0.0..0.6).contains(v)), "{c:?}");
-    assert!(c[1] > c[0] && c[0] > c[2]);
+    // Olive, as Studio's ground is in the default colour: (82, 84, 43).
+    assert!((c[0] - c[1]).abs() < 0.02 && c[1] > c[2] + 0.1, "{c:?}");
 }

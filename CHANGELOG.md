@@ -16,6 +16,7 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 
 ## [Unreleased]
 
+- Fix: terrain takes `Terrain.MaterialColors` as Studio does. Studio doesn't multiply a texture by its colour: where the tint mask is opaque it keeps the texel's luma and multiplies it by a tint worked out per material, as bright as the colour's largest channel and with its hue turned and its saturation scaled and capped. Red Grass is magenta and red Basalt teal, as in Studio, and Basalt and Mud are as bright in their dark default colours as in white. Fitted on screenshots of all 21 materials in nine colours; colours held out of the fit match within 6/255 (CrackedLava within 48). Grass blades follow the ground.
 - Fix: sounds are as loud as in Studio and no longer crackle when loud. A mono Sound plays 3 dB down on each side, as Studio centres it (Rook played it at full level), and Rook no longer clips the mix at full scale itself: Studio hands levels past it to the system, and so does Rook now. Measured silently on Studio's output: Volume 0.1 to 10 and 10 sounds at once now match within 0.1%.
 - `rook-player --record-audio out.wav` mixes the first `--seconds` of a place to a WAV file without a device, and prints the peak, the samples past full scale and the sounds playing at the loudest moment.
 

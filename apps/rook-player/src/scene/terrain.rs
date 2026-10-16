@@ -296,8 +296,9 @@ impl SceneCache {
     /// The textures and tint of `material`'s surfaces facing `facing`: a
     /// MaterialVariant MaterialService puts in the material's place (its
     /// maps tinted by the colour, as on parts), or else the material's own
-    /// pack, whose colour map is a tint mask: the `MaterialColors` colour
-    /// tints it where its alpha is opaque (the packs say `alphamode` 2,
+    /// pack, whose colour map is a tint mask: where its alpha is opaque,
+    /// the texel's luma times the material's tint for its `MaterialColors`
+    /// colour ([`TerrainMaterial::tint`]; the packs say `alphamode` 2,
     /// TintMask; CrackedLava's alpha is its cracks, which Studio draws in
     /// the material's colour over dark rock, and Grass's sides have none,
     /// so they show plain earth, as in Studio). Untextured, a material
@@ -357,6 +358,11 @@ impl SceneCache {
             metalness: roughness_metalness,
             studs_per_tile: Vec2::splat(texture.studs()),
             ..MaterialMaps::NONE
+        };
+        // The colour map's luma, times the material's tint for its colour.
+        let color = match maps.color {
+            Some(_) => material.tint(c),
+            None => color,
         };
         (maps, color)
     }

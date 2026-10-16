@@ -246,9 +246,12 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
         alpha *= a.a;
     } else if terrain && (in.flags & MAPS) != 0u {
         // Terrain's colour maps are tint masks (their packs' `alphamode`
-        // 2, TintMask): the colour tints them where they're opaque.
+        // 2, TintMask): where they're opaque, Studio keeps only the
+        // texel's luma, times the material's tint for its colour
+        // (`TerrainMaterial::tint`, the instance colour).
         let c = sample_map(in.images, COLOR_MAP, uv, duv_x, duv_y);
-        albedo = c.rgb * mix(vec3(1.0), in.color.rgb, c.a);
+        let luma = dot(c.rgb, vec3(0.25, 0.5, 0.25));
+        albedo = mix(c.rgb, luma * in.color.rgb, c.a);
     } else if (in.flags & MAPS) != 0u {
         albedo *= sample_map(in.images, COLOR_MAP, uv, duv_x, duv_y).rgb;
     }

@@ -194,8 +194,8 @@ colours. Rook keeps these tables in `rook-terrain`
   and leaves it where it's clear: CrackedLava's alpha covers its cracks
   (37% of the map), so Studio draws coloured cracks on dark rock; Grass's
   side map has no alpha, so its sides show plain earth whatever the
-  colour; Brick's mortar stays light. Rook draws texture × mix(white,
-  colour, alpha) in linear light, as for SurfaceAppearance's TintMask.
+  colour; Brick's mortar stays light. Where it's opaque, though, the
+  colour doesn't multiply the map: see [Colours](#colours) below.
 - **Top, side and bottom textures**: a triangle takes its material's top
   texture when it faces more than 22.5 degrees up (closer to one of the
   five upward projection planes than to a vertical one), the bottom one
@@ -216,12 +216,10 @@ colours. Rook keeps these tables in `rook-terrain`
   materials and between top and side (`blend`; the slides' low-quality
   mode has sharp seams too), and the packs' height maps.
 - **Colours**: a place that saved no `MaterialColors` gets the 2022 set's
-  defaults (a new place saves those). Studio's colours still differ in
-  places: Brick's bricks are paler and Pavement's sides greener in Studio,
-  Mud and Snow brighter. Part of it is lighting (Studio's whole scene has
-  a blue cast, M13), part unknown (Approximation). A Ground slab coloured
-  white drew 1.7 to 2.6 times as bright as at its default colour, where a
-  plain multiply says 3.8 to 7.2.
+  defaults (a new place saves those). How a colour tints the textures is
+  in [Colours](#colours) below. A Ground slab coloured white drew 1.7 to
+  2.6 times as bright as at its default colour, where a plain multiply
+  says 3.8 to 7.2; the tint below gives 2.3.
 
 *MaterialVariants* (Inference, by parts' rules): a MaterialVariant that
 MaterialService's override names for a terrain material (`GrassName` and
@@ -247,6 +245,63 @@ smooth-terrain places only Ragdoll Engine has it on. Drawn since
 *Loading*: terrain textures load in the background like part materials
 (one pack per material and facing the place uses), and the terrain is
 redrawn as they arrive.
+
+### Colours
+
+Fixed 2026-10-16, after the grass measurements found red Grass magenta
+in Studio ([below](#found-on-the-way)). Measured in Studio 0.742 on a
+16 × 4 × 16 slab of each of the 21 materials, seen from above under flat
+light (`EnvironmentDiffuseScale` and `EnvironmentSpecularScale` 0,
+`Brightness` 0, `Ambient` and `OutdoorAmbient` grey), beside
+SmoothPlastic parts in 9 greys whose pixels undo Studio's tone curve,
+pixel by pixel, before averaging. Each slab was coloured white, red,
+green, blue, (255, 204, 204), (204, 255, 204), (204, 204, 255), grey 128
+and grey 64; its default colour and (255, 128, 128) were held back to
+check the fit.
+
+*Where Studio does it* (Studio's own shaders): the terrain shader
+(`SmoothClusterFSUnified` in the install's `shaders_glsl3.pack`, plain
+GLSL) takes the albedo already coloured from a texture array, stored as
+YCoCg and squared (gamma 2). No shader in the packs applies
+`MaterialColors`, so Studio colours the textures on the CPU when it
+builds that array. `FStringTerrainColorTable` holds no tint constants.
+
+*What it does* (Confirmed for the shape, constants fitted): in gamma
+space, where the map's tint mask is opaque, Studio keeps only the texel's
+luma and multiplies it by a tint worked out from the colour per material:
+
+- **Brightness**: the colour's largest channel (HSV value), times a
+  per-material gain, at most 1. White, red, green and blue all draw as
+  bright as each other; grey 128 draws half as bright as white. The gain
+  is 1 for 16 materials, Rock 1.16, Ground 1.26, Asphalt 1.04, and Mud
+  2.2 and Basalt 3.43, which reach full brightness at their default
+  colours (Basalt is as bright in its dark grey default as in white). At
+  white, Basalt draws at about 0.6 and Mud at 0.85 of the other
+  materials' share of their textures' luma.
+- **Chroma**: the colour's YCoCg chroma over its largest channel, times a
+  per-material 2 × 2 matrix (turning and scaling it), cut to a
+  per-material length. Red turns magenta on Grass and LeafyGrass (about
+  20 degrees), lavender on Slate (55), teal on Basalt (175). Concrete,
+  Slate, Glacier and Salt take little of it (Salt almost none); Rock,
+  Basalt, Asphalt, Pavement and Snow reach their length already at a
+  pale colour, so pink and red look alike on them.
+- Where the tint mask is clear, the map shows as it is.
+
+Fitted on the 7 coloured shots, the brightness and chroma reproduce the
+held-back colours within 6 of 255 on 20 materials. CrackedLava misses by
+up to 48: its dark rock and lit cracks average unevenly (Approximation).
+With the matrix the identity and no length, the tint would be the
+colour itself: a grey texture times the colour, in gamma space.
+
+Rook (`rook_terrain::TerrainMaterial::tint`, `src/material/tint.rs`, and
+the terrain branch of `shaders/parts.wgsl`): the player sends the tint
+as the surface's colour, and the shader draws mix(texel, luma × tint,
+alpha), luma being (r + 2g + b) / 4 of the linear texel (close to
+Studio's for terrain's near-grey maps). Rendered from above, red Grass,
+Sand and Basalt turn magenta, pink and teal, and in their default
+colours Basalt draws about as bright as Grass, as in Studio. Rook's lighting
+still flattens the contrast between materials (Sand against Grass 0.6
+where Studio has 0.46, M13).
 
 ## Grass and waves (step 2, continued)
 
@@ -301,9 +356,9 @@ Observed:
 Rook (`rook_terrain::grass`, `shaders/terrain.wgsl`): blades at random
 points on Grass's upward triangles, fixed by each triangle's position so
 the same ground grows the same blades, as above; each one triangle seen
-from both sides, lit with an upward normal, in `avgAlbedo2022` tinted by
-Grass's colour as a tint mask at 0.7 of it in linear light (which comes
-out 0.82 of Rook's own ground). Measured on the same views, Rook covers
+from both sides, lit with an upward normal, in `avgAlbedo2022` tinted as
+the ground is ([Colours](#colours)) at 0.7 of it in linear light (which
+came out 0.82 of Rook's own ground). Measured on the same views, Rook covers
 within 0.04 of Studio at every height side on, and 0.43 of the ground
 from above against 0.50. The player builds blades in 32-stud tiles
 within 200 studs of the camera and drops a tile's mesh when the camera
@@ -369,8 +424,8 @@ Studio tints terrain textures differently from the tint mask step 2
 assumed (Confirmed): with Grass set red, the ground under the blades
 averages (197, 73, 167), magenta, where texture × mix(1, colour, alpha)
 gives a dark red; with white, the blades are a blue grey (112, 143, 163)
-and with grey 128 a dark navy (38, 54, 67). Rook's ground still uses the
-tint mask (left for a terrain colours fix).
+and with grey 128 a dark navy (38, 54, 67). Measured and fixed on
+2026-10-16: see [Colours](#colours).
 
 *Costs* (release build, `--bench 300` on Ragdoll Engine, 1280 × 720,
 the last change of the step against the build before it, five runs each from the grass and two from the
