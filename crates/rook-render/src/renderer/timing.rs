@@ -72,12 +72,6 @@ pub struct GpuTimes {
 }
 
 impl Renderer {
-    /// The features Rook uses where the adapter has them: ask for these
-    /// when making the device a renderer gets.
-    pub fn wanted_features(adapter: &wgpu::Adapter) -> wgpu::Features {
-        adapter.features() & wgpu::Features::TIMESTAMP_QUERY
-    }
-
     /// Time the GPU's passes from now on, if the adapter can
     /// ([`Renderer::gpu_times`]). Returns whether it can.
     pub fn time_gpu(&mut self) -> bool {

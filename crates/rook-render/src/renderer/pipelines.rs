@@ -2,13 +2,28 @@
 
 use super::*;
 
-/// The shader: shared bindings and lighting, then each pass's entry points.
-const SHADER: &str = concat!(
-    include_str!("../shaders/common.wgsl"),
-    include_str!("../shaders/parts.wgsl"),
-    include_str!("../shaders/terrain.wgsl"),
-    include_str!("../shaders/sky.wgsl"),
-);
+/// The shader: shared bindings and lighting, how draws reach their images
+/// (a table, or a set bound per draw), then each pass's entry points.
+fn shader(table: bool) -> String {
+    [
+        // Enables come before any declaration.
+        if table {
+            "enable wgpu_binding_array;
+"
+        } else {
+            ""
+        },
+        include_str!("../shaders/common.wgsl"),
+        match table {
+            true => include_str!("../shaders/images_table.wgsl"),
+            false => include_str!("../shaders/images_bound.wgsl"),
+        },
+        include_str!("../shaders/parts.wgsl"),
+        include_str!("../shaders/terrain.wgsl"),
+        include_str!("../shaders/sky.wgsl"),
+    ]
+    .concat()
+}
 
 /// The render pipelines, built once.
 #[derive(Debug)]
@@ -34,10 +49,11 @@ impl Pipelines {
         layout: &wgpu::BindGroupLayout,
         main_layout: &wgpu::BindGroupLayout,
         image_layout: &wgpu::BindGroupLayout,
+        table: bool,
     ) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("rook parts"),
-            source: wgpu::ShaderSource::Wgsl(SHADER.into()),
+            source: wgpu::ShaderSource::Wgsl(shader(table).into()),
         });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("rook parts"),
@@ -51,26 +67,36 @@ impl Pipelines {
                 bind_group_layouts: &[Some(layout)],
                 immediate_size: 0,
             });
+        // The mesh pool's two vertex streams, then the instances.
+        let position_attrs = wgpu::vertex_attr_array![0 => Float32x3];
         let vertex_attrs = wgpu::vertex_attr_array![
-            0 => Float32x3, 1 => Float32x3, 2 => Float32x2, 3 => Float32x3, 4 => Uint32
+            1 => Float32x3, 2 => Float32x2, 3 => Float32x3, 4 => Uint32
         ];
         let instance_attrs = wgpu::vertex_attr_array![
             5 => Float32x3, 6 => Float32x3, 7 => Float32x3, 8 => Float32x3,
             9 => Float32x3, 10 => Float32x4, 11 => Float32x3, 12 => Float32x3,
-            13 => Float32x4, 14 => Uint32, 15 => Float32x4
+            13 => Float32x4, 14 => Uint32x4, 15 => Float32x4
         ];
+        let positions = wgpu::VertexBufferLayout {
+            array_stride: 12,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: &position_attrs,
+        };
+        let instances = wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<Instance>() as u64,
+            step_mode: wgpu::VertexStepMode::Instance,
+            attributes: &instance_attrs,
+        };
         let buffers = [
+            Some(positions.clone()),
             Some(wgpu::VertexBufferLayout {
-                array_stride: std::mem::size_of::<mesh::Vertex>() as u64,
+                array_stride: std::mem::size_of::<pool::VertexAttributes>() as u64,
                 step_mode: wgpu::VertexStepMode::Vertex,
                 attributes: &vertex_attrs,
             }),
-            Some(wgpu::VertexBufferLayout {
-                array_stride: std::mem::size_of::<Instance>() as u64,
-                step_mode: wgpu::VertexStepMode::Instance,
-                attributes: &instance_attrs,
-            }),
+            Some(instances.clone()),
         ];
+        let shadow_buffers = [Some(positions), Some(instances)];
         let make = |label,
                     fragment,
                     blend: Option<wgpu::BlendState>,
@@ -119,7 +145,7 @@ impl Pipelines {
                 module: &shader,
                 entry_point: Some("vs_shadow"),
                 compilation_options: Default::default(),
-                buffers: &buffers,
+                buffers: &shadow_buffers,
             },
             primitive: wgpu::PrimitiveState {
                 cull_mode: Some(wgpu::Face::Back),

@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use glam::Mat3;
@@ -213,7 +214,140 @@ fn parts_out_of_view_still_cast_shadows() {
     scene.parts.push(tower);
     r.set_scene(&scene);
     let shadowed = r.render_to_image(64, 64, &camera).unwrap();
-    assert_eq!(r.draw_counts().main, 1, "the tower is out of view");
-    assert_eq!(r.draw_counts().shadow, 2);
+    assert_eq!(r.draw_counts().main.draws, 1, "the tower is out of view");
+    assert_eq!(r.draw_counts().shadow.draws, 2);
     assert_ne!(lit, shadowed);
+}
+
+/// A small mesh file: a square of two triangles facing +Z, `side` wide.
+fn square(side: f32) -> Arc<Mesh> {
+    let h = side / 2.0;
+    Arc::new(Mesh {
+        positions: vec![[-h, -h, 0.0], [h, -h, 0.0], [h, h, 0.0], [-h, h, 0.0]],
+        normals: vec![[0.0, 0.0, 1.0]; 4],
+        uvs: vec![[0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]],
+        indices: vec![0, 1, 2, 0, 2, 3],
+        ..Mesh::default()
+    })
+}
+
+/// A scene drawing with everything that binds images or meshes: mesh
+/// files, a mesh texture, material maps, a decal, transparent parts,
+/// Glass, a ForceField and a skybox.
+fn busy_scene() -> Scene {
+    let (a, b) = (ImageHash([1; 32]), ImageHash([2; 32]));
+    let (m1, m2) = (MeshHash([3; 32]), MeshHash([4; 32]));
+    let mut parts = vec![
+        part(PartShape::Block, -6.0, [1.0, 0.0, 0.0], 0.0),
+        part(PartShape::Ball, -3.0, [0.0, 1.0, 0.0], 0.0),
+        part(PartShape::Block, 0.0, [0.0, 0.0, 1.0], 0.5),
+        part(PartShape::Cylinder, 3.0, [1.0, 1.0, 0.0], 0.0),
+        part(PartShape::Wedge, 6.0, [0.0, 1.0, 1.0], 0.0),
+    ];
+    parts[1].texture = Some(a);
+    parts[3].maps = MaterialMaps {
+        color: Some(b),
+        normal: Some(a),
+        ..MaterialMaps::NONE
+    };
+    let mut glass = part(PartShape::Block, -1.5, [0.5, 0.8, 1.0], 0.3);
+    glass.material = Material::Glass;
+    let mut field = part(PartShape::Ball, 1.5, [1.0, 0.2, 0.2], 0.0);
+    field.material = Material::ForceField;
+    parts.extend([glass, field]);
+    for (i, mesh) in [m1, m2, m1].into_iter().enumerate() {
+        let mut p = part(PartShape::Block, -4.0 + i as f32 * 4.0, [0.9; 3], 0.0);
+        p.shape = DrawShape::File(mesh);
+        p.position.y = 3.0;
+        p.size = Vec3::ONE;
+        p.texture = (i == 1).then_some(b);
+        parts.push(p);
+    }
+    parts.push(PartInstance {
+        layer: Layer::Image {
+            image: b,
+            placement: ImagePlacement::Face(NormalId::Back),
+            z: 1,
+            on_transparent: false,
+        },
+        ..part(PartShape::Block, -6.0, [1.0; 3], 0.0)
+    });
+    Scene {
+        parts,
+        images: HashMap::from([(a, image()), (b, image())]),
+        meshes: HashMap::from([(m1, square(2.0)), (m2, square(1.5))]),
+        lighting: Lighting {
+            skybox: Some([a, b, a, b, a, b]),
+            ..Lighting::default()
+        },
+        ..Scene::default()
+    }
+}
+
+/// Every image in one table and each pipeline's draws in a few
+/// multi-draws draw exactly what a bind group per image set and a draw
+/// call per batch draw (the way for adapters without binding arrays or
+/// first instances in indirect draws).
+#[test]
+fn table_and_multi_draws_draw_what_bound_sets_draw() {
+    let Ok(mut fast) = Renderer::headless() else {
+        return;
+    };
+    let Ok(mut plain) = Renderer::headless_with(|_| wgpu::DeviceDescriptor::default()) else {
+        return;
+    };
+    assert!(matches!(plain.image_binding, renderer::ImageBinding::Sets(_)));
+    assert!(!plain.multi_draw);
+    let scene = busy_scene();
+    let camera = Camera::look_at(Vec3::new(0.0, 4.0, 14.0), Vec3::ZERO);
+    let mut frames = Vec::new();
+    for r in [&mut fast, &mut plain] {
+        r.set_scene(&scene);
+        r.finish_uploads();
+        frames.push(r.render_to_image(96, 64, &camera).unwrap());
+    }
+    assert_eq!(frames[0], frames[1]);
+    let (fast, plain) = (fast.draw_counts().main, plain.draw_counts().main);
+    assert_eq!(plain.calls, plain.draws);
+    assert_eq!(fast.draws, plain.draws);
+    if fast.calls < fast.draws {
+        // Opaque, layer and the transparent passes each need a call.
+        assert!(fast.calls <= 6, "{fast:?}");
+    }
+}
+
+/// A mesh dropped from the pool leaves room that a later mesh takes, and
+/// both draw as they would in a fresh renderer.
+#[test]
+fn dropped_meshes_make_room_for_others() {
+    let Ok(mut r) = Renderer::headless() else {
+        return;
+    };
+    let mut scene = busy_scene();
+    let camera = Camera::look_at(Vec3::new(0.0, 4.0, 14.0), Vec3::ZERO);
+    r.set_scene(&scene);
+    r.finish_uploads();
+    r.render_to_image(96, 64, &camera).unwrap();
+    // The first square goes, and a new square comes in its place.
+    let (old, new) = (MeshHash([3; 32]), MeshHash([5; 32]));
+    r.drop_mesh(old);
+    scene.meshes.remove(&old);
+    scene.meshes.insert(new, square(2.0));
+    let moved: Vec<usize> = (0..scene.parts.len())
+        .filter(|&i| scene.parts[i].shape == DrawShape::File(old))
+        .collect();
+    for &i in &moved {
+        scene.parts[i].shape = DrawShape::File(new);
+    }
+    r.update_parts(&scene, &moved);
+    r.finish_uploads();
+    let Ok(mut fresh) = Renderer::headless() else {
+        return;
+    };
+    fresh.set_scene(&scene);
+    fresh.finish_uploads();
+    assert_eq!(
+        r.render_to_image(96, 64, &camera).unwrap(),
+        fresh.render_to_image(96, 64, &camera).unwrap()
+    );
 }

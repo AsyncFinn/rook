@@ -29,15 +29,18 @@ pub(crate) fn bench(
     install.apply(&mut renderer);
     renderer.set_scene(&cache.scene);
     let timing_gpu = renderer.time_gpu();
-    let (mut record, mut gpu_shadow, mut gpu_main) = (0.0, 0.0, 0.0);
-    let (mut shadow_triangles, mut main_triangles) = (0u64, 0u64);
+    // The renderer's CPU recording, render with readback, and the GPU's
+    // shadow and main passes: medians, as the GPU is shared with the
+    // desktop and swings from run to run.
+    let mut render_times: [stats::Times; 4] = Default::default();
     let (mut sim, mut build, mut render) = (0.0, 0.0, 0.0);
     let mut updates = 0;
     let secs = |t: Instant| t.elapsed().as_secs_f64();
     game.set_viewport(width, height);
     let mut mouse = 0.0;
     let mut whole = stats::Times::default();
-    let (mut shadow_draws, mut main_draws) = (0u64, 0u64);
+    // Per pass (shadow, main): draw calls, instanced draws, triangles.
+    let mut drawn = [[0u64; 3]; 2];
     game.server_steps.clear();
     game.client_steps.clear();
     for frame in 0..frames {
@@ -62,16 +65,18 @@ pub(crate) fn bench(
         let t = Instant::now();
         renderer.render_to_image(width, height, camera)?;
         render += secs(t);
-        record += renderer.record_time().as_secs_f64();
+        render_times[0].push(renderer.record_time());
+        render_times[1].push(t.elapsed());
         if let Some(gpu) = renderer.gpu_times() {
-            gpu_shadow += gpu.shadow / 1000.0;
-            gpu_main += gpu.main / 1000.0;
+            render_times[2].push(Duration::from_secs_f64(gpu.shadow / 1000.0));
+            render_times[3].push(Duration::from_secs_f64(gpu.main / 1000.0));
         }
-        let draws = renderer.draw_counts();
-        shadow_draws += u64::from(draws.shadow);
-        main_draws += u64::from(draws.main);
-        shadow_triangles += draws.shadow_triangles;
-        main_triangles += draws.main_triangles;
+        let counts = renderer.draw_counts();
+        for (sum, pass) in drawn.iter_mut().zip([counts.shadow, counts.main]) {
+            sum[0] += u64::from(pass.calls);
+            sum[1] += u64::from(pass.draws);
+            sum[2] += pass.triangles;
+        }
         whole.push(frame_start.elapsed());
         profiling::finish_frame!();
     }
@@ -92,22 +97,26 @@ pub(crate) fn bench(
     );
     let per_frame = |n: u64| thousands((n / u64::from(frames.max(1))) as usize);
     eprintln!(
-        "draw calls per frame: shadow pass {}, main pass {}",
-        per_frame(shadow_draws),
-        per_frame(main_draws)
+        "draw calls per frame: shadow pass {} ({} draws), main pass {} ({} draws)",
+        per_frame(drawn[0][0]),
+        per_frame(drawn[0][1]),
+        per_frame(drawn[1][0]),
+        per_frame(drawn[1][1])
     );
     eprintln!(
         "triangles per frame: shadow pass {}, main pass {}",
-        per_frame(shadow_triangles),
-        per_frame(main_triangles)
+        per_frame(drawn[0][2]),
+        per_frame(drawn[1][2])
     );
-    eprintln!("render: CPU recording {:.2} ms per frame", ms(record));
+    let [record, with_readback, gpu_shadow, gpu_main] = render_times
+        .each_ref()
+        .map(|t| stats::ms(t.summary().median));
+    eprintln!(
+        "render medians: CPU recording {record:.2} ms (mean {:.2} ms), render+readback {with_readback:.2} ms",
+        stats::ms(render_times[0].summary().total) / f64::from(frames.max(1))
+    );
     if timing_gpu {
-        eprintln!(
-            "render: GPU shadow pass {:.2} ms, main pass {:.2} ms per frame",
-            ms(gpu_shadow),
-            ms(gpu_main)
-        );
+        eprintln!("render medians: GPU shadow pass {gpu_shadow:.2} ms, main pass {gpu_main:.2} ms");
     }
     eprintln!("server step: {}", game.server_steps.summary());
     if !game.client_steps.is_empty() {
