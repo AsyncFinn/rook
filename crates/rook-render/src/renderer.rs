@@ -5,12 +5,15 @@ mod images;
 mod pipelines;
 mod placement;
 mod readback;
+mod timing;
 
 use super::*;
 pub(crate) use images::ImageSet;
 use images::{Defaults, image_set};
 use pipelines::Pipelines;
 use placement::Placement;
+use timing::GpuTimer;
+pub use timing::GpuTimes;
 
 /// Water's phase wraps here: a whole number of its 25 normal frames'
 /// cycles (20 units each) and of both waves' periods (40 and 25,
@@ -68,13 +71,21 @@ pub struct Renderer {
     depth: Option<(wgpu::Texture, wgpu::TextureView, u32, u32)>,
     /// The last frame's draw calls.
     draw_counts: DrawCounts,
+    /// The GPU's pass times, once asked for ([`Renderer::time_gpu`]).
+    timer: Option<GpuTimer>,
+    /// How long the last frame took the CPU to record and submit, file
+    /// uploads included.
+    record_time: std::time::Duration,
 }
 
-/// How many draw calls a frame took, in the shadow pass and the main pass.
+/// How many draw calls a frame took, in the shadow pass and the main pass,
+/// and how many triangles they drew (free instance slots included).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct DrawCounts {
     pub shadow: u32,
     pub main: u32,
+    pub shadow_triangles: u64,
+    pub main_triangles: u64,
 }
 
 impl Renderer {
@@ -254,6 +265,8 @@ impl Renderer {
             water_phase: 0.0,
             depth: None,
             draw_counts: DrawCounts::default(),
+            timer: None,
+            record_time: Default::default(),
         };
         renderer.ensure_group([None; 5]);
         renderer
@@ -352,6 +365,7 @@ impl Renderer {
         .map_err(|e| RenderError::Adapter(e.to_string()))?;
         let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
             label: Some("rook"),
+            required_features: Self::wanted_features(&adapter),
             ..Default::default()
         }))
         .map_err(|e| RenderError::Device(e.to_string()))?;
@@ -365,6 +379,12 @@ impl Renderer {
     /// How many draw calls the last frame took.
     pub fn draw_counts(&self) -> DrawCounts {
         self.draw_counts
+    }
+
+    /// How long the CPU took to record and submit the last frame, file
+    /// uploads included (not the GPU's time: [`Renderer::gpu_times`]).
+    pub fn record_time(&self) -> std::time::Duration {
+        self.record_time
     }
 
     pub fn color_format(&self) -> wgpu::TextureFormat {

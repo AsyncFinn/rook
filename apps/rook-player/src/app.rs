@@ -62,6 +62,7 @@ impl App {
         let (device, queue) =
             pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
                 label: Some("rook"),
+                required_features: Renderer::wanted_features(&adapter),
                 ..Default::default()
             }))?;
         let size = window.inner_size();

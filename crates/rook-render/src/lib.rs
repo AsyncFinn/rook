@@ -37,7 +37,7 @@ use shadow::{SHADOW_DISTANCE, SHADOW_SIZE, ShadowView};
 use batch::*;
 use gpu::*;
 
-pub use renderer::{DrawCounts, Renderer};
+pub use renderer::{DrawCounts, GpuTimes, Renderer};
 
 pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
