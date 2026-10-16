@@ -1,6 +1,8 @@
 //! Drawing a frame: the shadow pass, the sky, then parts and images.
 
 use super::*;
+use crate::batch::CULL_SLOTS;
+use crate::cull::seen_runs;
 use runs::{Pipe, Runs, Source};
 
 /// How a run of transparent instances is drawn.
@@ -317,38 +319,43 @@ impl Renderer {
         // The sun's whole view, not just the camera's: a part off screen
         // still shadows what's on it.
         let sun_view = shadow.map(|s| Frustum::of(s.view_proj));
-        for (key, instances, bounds) in self.opaque.draws() {
-            let shadowed = sun_view.is_some_and(|sun| sun.sees(bounds, margin));
+        for (key, instances, bounds, chunks) in self.opaque.draws() {
+            let shadowed = sun_view.as_ref().filter(|sun| sun.sees(bounds, margin));
             let seen = view.sees(bounds, margin);
-            let Some(mesh) = self.meshes.get(&key.shape).filter(|_| shadowed || seen) else {
+            let Some(mesh) = self
+                .meshes
+                .get(&key.shape)
+                .filter(|_| shadowed.is_some() || seen)
+            else {
                 continue;
             };
-            if shadowed {
+            if let Some(sun) = shadowed {
                 let (pipe, source) = (Pipe::Shadow, Source::Opaque);
-                self.push_draw(&mut shadow_runs, pipe, source, mesh, key, instances.clone());
+                for run in seen_runs(sun, chunks, CULL_SLOTS, margin, instances.clone()) {
+                    self.push_draw(&mut shadow_runs, pipe, source, mesh, key, run);
+                }
             }
             if seen {
                 let (pipe, source) = (Pipe::Opaque, Source::Opaque);
-                self.push_draw(&mut main_runs, pipe, source, mesh, key, instances);
+                for run in seen_runs(view, chunks, CULL_SLOTS, margin, instances) {
+                    self.push_draw(&mut main_runs, pipe, source, mesh, key, run);
+                }
             }
         }
         // Then images on opaque parts (before transparent parts, so a
         // window in front of a decal covers it), then transparent parts
         // back to front.
-        for (key, instances, bounds) in self.layers.draws() {
-            if let Some(mesh) = self
+        for (key, instances, bounds, chunks) in self.layers.draws() {
+            let Some(mesh) = self
                 .meshes
                 .get(&key.shape)
                 .filter(|_| view.sees(bounds, margin))
-            {
-                self.push_draw(
-                    &mut main_runs,
-                    Pipe::Layer,
-                    Source::Layers,
-                    mesh,
-                    key,
-                    instances,
-                );
+            else {
+                continue;
+            };
+            let (pipe, source) = (Pipe::Layer, Source::Layers);
+            for run in seen_runs(view, chunks, CULL_SLOTS, margin, instances) {
+                self.push_draw(&mut main_runs, pipe, source, mesh, key, run);
             }
         }
         for (key, pass, instances) in transparent_runs {

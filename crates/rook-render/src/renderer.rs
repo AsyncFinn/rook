@@ -9,8 +9,8 @@ mod runs;
 mod timing;
 
 use super::*;
-pub(crate) use images::ImageSet;
 pub(crate) use images::ImageBinding;
+pub(crate) use images::ImageSet;
 use images::{Defaults, image_layout, image_set};
 use pipelines::Pipelines;
 use placement::Placement;

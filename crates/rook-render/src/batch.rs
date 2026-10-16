@@ -30,8 +30,15 @@ pub(crate) struct Batch {
     /// instances have changed as the batch has, so a few parts moving in
     /// a batch of thousands cost little.
     bounds: Aabb,
+    /// A box like `bounds` per run of `CULL_SLOTS` slots, so a pass can
+    /// skip the runs out of its view. Widened and worked out afresh with
+    /// `bounds`.
+    chunks: Vec<Aabb>,
     changes: u32,
 }
+
+/// How many slots share a box for culling within a batch.
+pub(crate) const CULL_SLOTS: u32 = 16;
 
 /// Instances are written to the GPU in chunks of this many.
 const CHUNK: u32 = 64;
@@ -147,7 +154,13 @@ impl Batches {
     /// Put `instance` in a batch's slot.
     pub(crate) fn set(&mut self, batch: usize, slot: u32, instance: Instance) {
         let b = &mut self.list[batch];
-        b.bounds = b.bounds.union(instance.world_box());
+        let world = instance.world_box();
+        b.bounds = b.bounds.union(world);
+        let c = (slot / CULL_SLOTS) as usize;
+        if c >= b.chunks.len() {
+            b.chunks.resize(c + 1, Aabb::EMPTY);
+        }
+        b.chunks[c] = b.chunks[c].union(world);
         b.changes += 1;
         self.pool.set(b.region.start + slot, instance);
     }
@@ -164,6 +177,7 @@ impl Batches {
                     len: 0,
                     free: Vec::new(),
                     bounds: Aabb::EMPTY,
+                    chunks: Vec::new(),
                     changes: 0,
                 });
                 self.z.push(z);
@@ -208,9 +222,14 @@ impl Batches {
         for b in &mut self.list {
             if b.changes >= b.len.max(1) {
                 let start = b.region.start as usize;
-                b.bounds = self.pool.instances[start..start + b.len as usize]
-                    .iter()
-                    .fold(Aabb::EMPTY, |all, i| all.union(i.world_box()));
+                b.chunks = self.pool.instances[start..start + b.len as usize]
+                    .chunks(CULL_SLOTS as usize)
+                    .map(|run| {
+                        run.iter()
+                            .fold(Aabb::EMPTY, |all, i| all.union(i.world_box()))
+                    })
+                    .collect();
+                b.bounds = b.chunks.iter().fold(Aabb::EMPTY, |all, c| all.union(*c));
                 b.changes = 0;
             }
         }
@@ -223,16 +242,16 @@ impl Batches {
         self.pool.buffer.as_ref()
     }
 
-    /// Each batch's key, instances in the shared buffer and bounds, in
-    /// drawing order.
-    pub(crate) fn draws(&self) -> impl Iterator<Item = (&BatchKey, Range<u32>, Aabb)> {
+    /// Each batch's key, instances in the shared buffer, bounds and a box
+    /// per `CULL_SLOTS` of those instances, in drawing order.
+    pub(crate) fn draws(&self) -> impl Iterator<Item = (&BatchKey, Range<u32>, Aabb, &[Aabb])> {
         self.order
             .iter()
             .map(|&i| &self.list[i])
             .filter(|b| b.len > 0)
             .map(|b| {
                 let start = b.region.start;
-                (&b.key, start..start + b.len, b.bounds)
+                (&b.key, start..start + b.len, b.bounds, &b.chunks[..])
             })
     }
 }
