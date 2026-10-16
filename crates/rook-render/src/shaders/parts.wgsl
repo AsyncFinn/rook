@@ -12,6 +12,20 @@
 // is closest to, and its place on that face's image is measured in studs
 // from the image's top-left corner, from its vertices' points on the box.
 
+import package::common::{
+    g, surface_atlas, image_sampler, VertexIn, VertexOut, ShadowIn, srgb_to_linear,
+    instance_rotation, world_position, placed, CAST, NEON, MODE_FACE, MODE_TILED,
+    MODE_MESH_UV, UPRIGHT, SURFACES_SHIFT, MAPS, GLASS, SLOPED, MAPS_UV, VERTEX_COLORS,
+    UNION_FACE, TERRAIN_FACE, TERRAIN_WATER, CENTRED, ALPHA_OVERLAY, ALPHA_TRANSPARENCY,
+    ALPHA_TINT_MASK,
+};
+import package::images::{
+    sample_image, image_size, sample_map, IMAGE, COLOR_MAP, NORMAL_MAP, ROUGHNESS_MAP,
+    METALNESS_MAP,
+};
+import package::lighting::{shade, shade_pbr, fog};
+import package::terrain::{terrain_motion, water_surface};
+
 @vertex
 fn vs_main(v: VertexIn) -> VertexOut {
     var world = world_position(v);

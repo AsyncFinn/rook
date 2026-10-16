@@ -8,7 +8,7 @@ edition = "2024"
 license = "Apache-2.0"
 authors = ["AsyncFinn"]
 repository = "https://github.com/AsyncFinn/rook"
-rust-version = "1.94"
+rust-version = "1.97.1"
 
 [workspace.dependencies]
 # Rook crates
@@ -85,6 +85,15 @@ cpal = "0.15"
 # Rendering
 wgpu = "30"
 winit = "0.30"
+# Shader modules (rook-render's build script): imports and @if over
+# WGSL, with its own parser, so wgpu upgrades never wait on it (`naga-ext`
+# only lets it parse wgpu's `binding_array`);
+# `include_wesl!` is in wesl-core
+wesl = { version = "0.6", default-features = false, features = ["naga-ext"] }
+wesl-core = "0.1"
+# Checks the built shaders at build time (rook-render's build script);
+# the same version wgpu uses
+naga = { version = "30", default-features = false, features = ["wgsl-in"] }
 pollster = "1"
 bytemuck = { version = "1", features = ["derive"] }
 # Images: decals, textures and mesh textures (rook-content), screenshots

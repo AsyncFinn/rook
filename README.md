@@ -7,7 +7,7 @@
 An open engine for Roblox places: run them offline, host them yourself, mod them, and keep them alive. Built to match modern Roblox.
 
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Rust 1.94+](https://img.shields.io/badge/rust-1.94%2B-orange.svg)](https://www.rust-lang.org)
+[![Rust 1.97.1+](https://img.shields.io/badge/rust-1.97.1%2B-orange.svg)](https://www.rust-lang.org)
 ![Status: early development](https://img.shields.io/badge/status-early%20development-yellow.svg)
 
 [Getting started](docs/guide/getting-started.md) · [Features](docs/guide/features.md) · [Tools](docs/guide/tools.md) · [Roadmap](ROADMAP.md) · [Contributing](CONTRIBUTING.md) · [FAQ](#faq)

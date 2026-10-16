@@ -1,5 +1,9 @@
 // The skybox: a full-screen triangle per image (the instance is the image),
 // at the far plane.
+
+import package::common::g;
+import package::images::{sample_sky, sky_size};
+
 struct SkyOut {
     @builtin(position) clip: vec4<f32>,
     @location(0) ndc: vec2<f32>,
