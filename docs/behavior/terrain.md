@@ -185,10 +185,20 @@ colours. Rook keeps these tables in `rook-terrain`
   both shift 0.1), measured in a place saved with `Use2022Materials` on,
   where the 2022 table would step Concrete by whole cells and shift
   neither Slate nor Basalt. Studio drew the copy saved with it off alike.
-- **Textures follow the 2022 table in every place** (Confirmed): Studio drew
-  both copies alike, CrackedLava with cracks in the place's magenta
-  colour, which only the 2022 set's dark texture with its crack mask gives
-  (the legacy set's texture is orange).
+- **Textures follow the place's set** (Confirmed, 2026-10-16): Studio
+  draws a legacy place's Sandstone wall with the legacy set's cracked red
+  rock and moss, not the 2022 set's pale stone. This replaces the claim
+  that every place draws the 2022 table, which came from the two copies
+  above drawing alike, likely because one Studio process kept the
+  textures it loaded first (a long-running Studio does; measure material
+  sets in a fresh process).
+- **Legacy colour maps are coloured, not tint masks** (Inference): their
+  packs say `alphamode` 1 and `FStringTerrainColorTable`'s
+  `avgAlbedoPre2022` gives every material alpha 255 and a coloured
+  average. Rook multiplies the texel by the material's colour over the
+  legacy set's default (`baseColorsPre2022`), so default colours draw the
+  texture as it is, as in Studio; other colours in legacy places aren't
+  measured yet.
 - **The colour map's alpha is a tint mask** (Confirmed): the terrain packs
   say `alphamode` 2 (TintMask). The colour tints a map where it's opaque
   and leaves it where it's clear: CrackedLava's alpha covers its cracks
@@ -215,8 +225,8 @@ colours. Rook keeps these tables in `rook-terrain`
   up repeats (`detiling`, `rotation`), the height-based blending between
   materials and between top and side (`blend`; the slides' low-quality
   mode has sharp seams too), and the packs' height maps.
-- **Colours**: a place that saved no `MaterialColors` gets the 2022 set's
-  defaults (a new place saves those). How a colour tints the textures is
+- **Colours**: a place that saved no `MaterialColors` gets its set's
+  defaults (a new place saves the 2022 set's). How a colour tints the textures is
   in [Colours](#colours) below. A Ground slab coloured white drew 1.7 to
   2.6 times as bright as at its default colour, where a plain multiply
   says 3.8 to 7.2; the tint below gives 2.3.

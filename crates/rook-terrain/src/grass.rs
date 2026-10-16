@@ -11,7 +11,7 @@
 //! (Approximation).
 
 use glam::{IVec2, IVec3, Vec3};
-use rook_types::{Color3uint8, linear_to_srgb, srgb_to_linear};
+use rook_types::{Color3uint8, MaterialSet, linear_to_srgb, srgb_to_linear};
 use rustc_hash::FxHashMap;
 
 use crate::random::Random;
@@ -45,7 +45,7 @@ pub fn blade_color(grass: Color3uint8) -> [f32; 3] {
     let [r, g, b, a] = GRASS_AVERAGE.map(|v| f32::from(v) / 255.0);
     let average = srgb_to_linear([r, g, b]);
     let luma = (average[0] + 2.0 * average[1] + average[2]) / 4.0;
-    let tint = srgb_to_linear(TerrainMaterial::Grass.tint(grass));
+    let tint = srgb_to_linear(TerrainMaterial::Grass.tint(grass, MaterialSet::Materials2022));
     linear_to_srgb(
         [0, 1, 2].map(|i| (average[i] + (luma * tint[i] - average[i]) * a) * BLADE_SHADE),
     )

@@ -359,8 +359,7 @@ impl Mesher<'_> {
         // Split by facing only where the material's textures differ by it,
         // so each draw covers as much as it can.
         let facing = |t: &[u32; 3], m: TerrainMaterial| {
-            let look = m.textures();
-            if look.top == look.side && look.side == look.bottom {
+            if !m.faces_differ() {
                 return Facing::Side;
             }
             let p = t.map(|i| positions[i as usize]);

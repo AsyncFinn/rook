@@ -253,9 +253,9 @@ impl SceneCache {
         let Some(terrain) = self.terrain.instance else {
             return Vec::new();
         };
-        // Terrain draws the 2022 set's textures and colours in every place
-        // (`TerrainMaterial::textures`).
-        let set = MaterialSet::Materials2022;
+        // Terrain draws the place's set of textures and default colours
+        // (`TerrainMaterial::textures`), as parts do.
+        let set = materials::material_set(dom);
         let colors = match dom.property_by_name(terrain, "MaterialColors") {
             Some(Value::MaterialColors(c)) => Some(c),
             _ => None,
@@ -296,13 +296,14 @@ impl SceneCache {
     /// The textures and tint of `material`'s surfaces facing `facing`: a
     /// MaterialVariant MaterialService puts in the material's place (its
     /// maps tinted by the colour, as on parts), or else the material's own
-    /// pack, whose colour map is a tint mask: where its alpha is opaque,
-    /// the texel's luma times the material's tint for its `MaterialColors`
-    /// colour ([`TerrainMaterial::tint`]; the packs say `alphamode` 2,
-    /// TintMask; CrackedLava's alpha is its cracks, which Studio draws in
-    /// the material's colour over dark rock, and Grass's sides have none,
-    /// so they show plain earth, as in Studio). Untextured, a material
-    /// shows its colour.
+    /// pack in `set`, coloured by the material's tint for its
+    /// `MaterialColors` colour ([`TerrainMaterial::tint`]). The 2022 set's
+    /// colour maps are tint masks: where their alpha is opaque, the
+    /// texel's luma times the tint (the packs say `alphamode` 2, TintMask;
+    /// CrackedLava's alpha is its cracks, which Studio draws in the
+    /// material's colour over dark rock, and Grass's sides have none, so
+    /// they show plain earth, as in Studio). The legacy set's are the
+    /// texel times the tint. Untextured, a material shows its colour.
     fn terrain_look(
         &mut self,
         dom: &Dom,
@@ -333,7 +334,7 @@ impl SceneCache {
             };
             return (maps, color);
         }
-        let look = material.textures();
+        let look = material.textures(set);
         let texture = match facing {
             Facing::Top => look.top,
             Facing::Side => look.side,
@@ -357,11 +358,14 @@ impl SceneCache {
             roughness: roughness_metalness,
             metalness: roughness_metalness,
             studs_per_tile: Vec2::splat(texture.studs()),
+            alpha: match set {
+                MaterialSet::Legacy => MapAlpha::Ignore,
+                MaterialSet::Materials2022 => MapAlpha::TintMask,
+            },
             ..MaterialMaps::NONE
         };
-        // The colour map's luma, times the material's tint for its colour.
         let color = match maps.color {
-            Some(_) => material.tint(c),
+            Some(_) => material.tint(c, set),
             None => color,
         };
         (maps, color)
