@@ -6,8 +6,8 @@ Rook's version says how far along the roadmap it is:
 
 - Every change goes under **[Unreleased]** as it lands, without a version of its own.
 - **Minor** (`0.N.0`): finishing milestone N releases what's collected. 0.3.0 finished M3 Physics, 0.4.0 M4 Content and 0.5.0 M5 Audio. Version 1.0 comes with M22, the release; after it the minor counts sets of features the same way.
-- **Patch** (`0.N.y`): finishing a roadmap step releases what's collected, fixes included. So does a push: anything that changes behaviour is released before it goes to GitHub, so what's there always has a version.
-- Docs, roadmap and internal changes with no effect on behaviour wait under [Unreleased] for the next release.
+- **Patch** (`0.N.y`): not cut on a schedule. Roadmap steps, fixes and pushes don't release anything; a patch only comes if a release is asked for between milestones.
+- Commits go to GitHub as they land, so [Unreleased] on GitHub shows what the next version will hold.
 - Before 1.0, any release may break things.
 
 Versions were renumbered twice: on 2026-10-15 (every step had been a minor version, 0.4.0 to 0.13.1) and on 2026-10-16 (every fix had been a patch of its own, up to 0.5.17), when commit messages were rewritten to match.
