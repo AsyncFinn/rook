@@ -7,9 +7,9 @@ use mlua::{
 use rook_types::{Vector2, Vector3};
 
 use super::fmt_f32;
-use crate::args::number_of;
+use crate::ctx::args::number_of;
 
-use crate::convert::{from_lua_vector as v3, lua_vector as lua_v3};
+use crate::ctx::convert::{from_lua_vector as v3, lua_vector as lua_v3};
 
 fn map3(v: Vector, f: impl Fn(f32) -> f32) -> Vector {
     Vector::new(f(v.x()), f(v.y()), f(v.z()))

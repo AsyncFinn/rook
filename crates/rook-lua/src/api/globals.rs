@@ -12,7 +12,7 @@ mod new_name;
 use new_name::new_name;
 
 use super::instance::push_instance;
-use crate::args::{Args, display_value, type_name};
+use crate::ctx::args::{Args, display_value, type_name};
 use crate::ctx::{ApiResult, Outcome, ScriptError, api_fn, api_ret, with_world};
 use crate::threads::resume;
 use crate::world::{Job, MessageType, WaitKind};

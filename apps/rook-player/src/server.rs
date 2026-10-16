@@ -11,7 +11,7 @@ use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, TryRecvError, channel}
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use rook_engine::host::{Joined, ServerHost, ToClient, ToServer};
+use rook_engine::session::host::{Joined, ServerHost, ToClient, ToServer};
 use rook_engine::{DataModel, MessageType, Options, console};
 use rook_render::Camera;
 
@@ -212,7 +212,7 @@ fn obey(
         }
         Command::Deliver(msg) => host.deliver(0, msg),
         Command::Repl(line) => {
-            if let Err(e) = rook_engine::repl::run_line(host.server(), &line) {
+            if let Err(e) = rook_engine::console::repl::run_line(host.server(), &line) {
                 console::print_message(MessageType::Error, &e);
             }
             print_logs(host.server());

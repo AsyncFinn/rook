@@ -20,8 +20,8 @@ use rook_types::{InstanceRef, Value};
 use rustc_hash::FxHashMap;
 
 use super::{methods, properties, signal::LSignal};
-use crate::args::{Args, display_value};
-use crate::convert::{from_lua, to_lua};
+use crate::ctx::args::{Args, display_value};
+use crate::ctx::convert::{from_lua, to_lua};
 use crate::ctx::{ApiResult, Ctx, Outcome, ScriptError, api_fn, ctx, with_world};
 use crate::threads::dispatch;
 

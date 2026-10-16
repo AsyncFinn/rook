@@ -107,7 +107,7 @@ uploaded every file of that client's `fonts`, `music`, `sky`, `sounds` and
 `textures` folders as a public asset whose description is the old path, in
 alphabetical order (ids 12220916 to 12224353, 262 files);
 `MarketplaceService:GetProductInfo` over that range gave Rook's table
-(`rook-content/src/defaults.rs`). Asset 12221462 is byte-identical to the
+(`rook-content/src/resolver/defaults.rs`). Asset 12221462 is byte-identical to the
 install's `avatar/heads/head.mesh` (same BLAKE3). Studio also loads a few
 old paths that aren't in that upload (`textures/rocket.png`,
 `TrowelTexture.png`, `paintballicon.png`, `rocketboots.png`; 2,138 uses

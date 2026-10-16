@@ -1,6 +1,8 @@
 //! Instanced draws grouped by mesh and image, their instances sharing one
 //! buffer.
 
+pub(crate) mod cull;
+
 use std::ops::Range;
 
 use super::*;

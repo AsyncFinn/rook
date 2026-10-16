@@ -8,7 +8,7 @@
 //! patterns ([`rooks_own`]), an Approximation of the same shapes.
 
 use glam::Vec2;
-use rook_content::image::{Image, mips};
+use rook_content::decode::image::{Image, mips};
 use rook_types::SurfacePattern;
 
 /// One layer per pattern, square, each with its mip chain.
@@ -125,7 +125,7 @@ mod tests {
         let atlas = Image {
             width: 2,
             height: 32,
-            format: rook_content::image::ImageFormat::Dds,
+            format: rook_content::decode::image::ImageFormat::Dds,
             mips: vec![level0],
             translucent: false,
         };

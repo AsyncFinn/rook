@@ -5,24 +5,18 @@
 //! scripting world so script queries reach it). Servers simulate; clients
 //! only query theirs. See `docs/design/architecture.md` §6 for the frame order.
 
+mod bridges;
 pub mod console;
 mod frame;
-pub mod host;
-mod input;
-mod render_changes;
 #[cfg(feature = "repl")]
-pub mod repl;
 mod scripts;
-mod session;
-mod sounds;
-pub mod threads;
-mod unions;
+pub mod session;
 
-pub use input::{ClickEvent, ClickKind, InputEvent};
+pub use bridges::input::{ClickEvent, ClickKind, InputEvent};
 
-pub use render_changes::RenderChanges;
+pub use bridges::render_changes::RenderChanges;
+pub use bridges::sounds::{Emitter, Listener as SoundListener, PlayingSound};
 pub use session::Session;
-pub use sounds::{Emitter, Listener as SoundListener, PlayingSound};
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -34,6 +28,9 @@ use rook_scheduler::{Clock, Queue};
 use rook_types::Value;
 
 pub use rook_lua::MessageType;
+
+use bridges::{input, sounds, unions};
+use session::threads;
 
 #[derive(Debug, thiserror::Error)]
 pub enum EngineError {
@@ -206,9 +203,9 @@ impl DataModel {
         dom.journal_mut().set_enabled(false);
         rook_physics::adopt_saved_velocities(&mut dom);
         ensure_terrain(&mut dom);
-        if rook_physics::surfaces::joins_on_load(&dom) {
+        if rook_physics::joints::surfaces::joins_on_load(&dom) {
             let parts = rook_physics::workspace_parts(&dom);
-            let _ = rook_physics::surfaces::make_joints(&mut dom, &parts);
+            let _ = rook_physics::joints::surfaces::make_joints(&mut dom, &parts);
         }
         dom.journal_mut().set_enabled(journaling);
         Self::with_dom(dom, options)

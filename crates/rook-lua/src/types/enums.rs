@@ -80,7 +80,7 @@ pub(crate) fn coerce(_lua: &Lua, v: &LuaValue, enum_id: EnumId) -> Result<u32, S
             )),
             Err(_) => Err(format!(
                 "EnumItem expected, got {}",
-                crate::args::type_name(v)
+                crate::ctx::args::type_name(v)
             )),
         },
         LuaValue::String(s) => {
@@ -89,7 +89,7 @@ pub(crate) fn coerce(_lua: &Lua, v: &LuaValue, enum_id: EnumId) -> Result<u32, S
                 .ok_or_else(|| format!("Invalid value \"{s}\" for enum {enum_name}"))
         }
         LuaValue::Integer(_) | LuaValue::Number(_) => {
-            let n = crate::args::number_of(v).unwrap_or(-1.0);
+            let n = crate::ctx::args::number_of(v).unwrap_or(-1.0);
             let value = n as u32;
             if n >= 0.0 && has_value(enum_id, value) {
                 Ok(value)
@@ -99,7 +99,7 @@ pub(crate) fn coerce(_lua: &Lua, v: &LuaValue, enum_id: EnumId) -> Result<u32, S
         }
         _ => Err(format!(
             "EnumItem expected, got {}",
-            crate::args::type_name(v)
+            crate::ctx::args::type_name(v)
         )),
     }
 }

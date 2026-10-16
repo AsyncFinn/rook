@@ -20,7 +20,7 @@
 //! - Region3 and the `GetPartBounds*` queries test each part's `Size` box
 //!   (see [`shape::world_box`]); touching faces count. `GetPartsInPart`
 //!   and `GetTouchingParts` test real shapes and need the parts to overlap.
-//! - Terrain ([`crate::terrain`]): rays and shape casts hit its surface,
+//! - Terrain ([`crate::shape::terrain`]): rays and shape casts hit its surface,
 //!   water's too unless they ignore water, and report Terrain with the
 //!   material hit; a ray starting inside it hits nothing until it leaves.
 //!   Region3, the `GetPartBounds*` queries and `GetPartsInPart` never
@@ -35,9 +35,10 @@ use rapier3d::prelude::*;
 use rook_dom::{Dom, InstanceId};
 use rook_types::CFrame;
 
+use crate::changes::read::{boolean, enum_value, float};
+use crate::contacts::groups;
 use crate::convert::{pose_of, to_glam, to_rapier};
-use crate::read::{boolean, enum_value, float};
-use crate::{Physics, groups, shape};
+use crate::{Physics, shape};
 
 /// Rays find nothing further than this many studs from their origin
 /// (observed for `FindPartOnRay` and `Raycast`, whatever the ray's

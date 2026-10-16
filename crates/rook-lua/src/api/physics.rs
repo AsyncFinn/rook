@@ -1,16 +1,16 @@
 //! PhysicsService collision groups, `BasePart:CanCollideWith` and
 //! RocketPropulsion's Fire and Abort. Behavior and messages observed in
 //! Studio 0.742; the groups themselves live on Workspace (see
-//! `rook_physics::groups`).
+//! `rook_physics::contacts::groups`).
 
 use mlua::Lua;
 use rook_dom::InstanceId;
 use rook_physics::Command;
-use rook_physics::groups::{self, CollisionGroups, GroupError, MAX_GROUPS};
+use rook_physics::contacts::groups::{self, CollisionGroups, GroupError, MAX_GROUPS};
 use rook_types::Value;
 
 use super::methods::{RawMethod, mutate};
-use crate::args::Args;
+use crate::ctx::args::Args;
 use crate::ctx::{ApiResult, Outcome, ScriptError, with_world};
 
 pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {

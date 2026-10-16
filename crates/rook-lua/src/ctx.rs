@@ -15,6 +15,9 @@
 //! results, never a vararg list: forwarding varargs through a helper
 //! costs more than most engine functions themselves.
 
+pub(crate) mod args;
+pub(crate) mod convert;
+
 use std::cell::RefCell;
 use std::rc::Rc;
 

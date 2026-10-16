@@ -10,6 +10,8 @@
 //! other form a cluster; a cluster joined to anchored parts belongs to the
 //! assembly of one of them, the one whose joint is newest in Studio.
 
+pub(crate) mod bodies;
+
 use std::collections::VecDeque;
 
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};

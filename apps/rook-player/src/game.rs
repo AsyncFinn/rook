@@ -5,8 +5,8 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use rook_engine::host::{ClientHost, ServerHost};
-use rook_engine::repl::Side;
+use rook_engine::console::repl::Side;
+use rook_engine::session::host::{ClientHost, ServerHost};
 use rook_engine::{DataModel, InputEvent, MessageType, Options, console};
 use rook_render::Camera;
 
@@ -256,7 +256,7 @@ impl Game {
             (Mode::Play { client, .. }, Side::Client) => client.client(),
             (Mode::Run(host), _) => host.server(),
         };
-        if let Err(e) = rook_engine::repl::run_line(dm, line) {
+        if let Err(e) = rook_engine::console::repl::run_line(dm, line) {
             console::print_message(MessageType::Error, &e);
         }
     }

@@ -6,15 +6,14 @@
 //! See `docs/design/architecture.md` §7.
 
 mod api;
-mod args;
 pub mod audio;
-mod convert;
 mod ctx;
 mod net;
 mod threads;
 mod types;
-mod watchdog;
 mod world;
+
+use threads::watchdog;
 
 pub use api::camera::{Lens, viewport_ray};
 pub use ctx::{ScriptError, lua_error_message};

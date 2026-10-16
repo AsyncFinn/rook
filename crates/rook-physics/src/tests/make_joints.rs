@@ -7,7 +7,7 @@ use rook_types::{CFrame, Value};
 
 use super::joints::at;
 use super::{part, set};
-use crate::{joints, surfaces};
+use crate::joints::{self, surfaces};
 
 fn surfaces(dom: &mut Dom, id: InstanceId, surface: &str) {
     let e = dom.database().enum_by_name("SurfaceType").unwrap();

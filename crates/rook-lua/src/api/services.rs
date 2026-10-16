@@ -5,7 +5,7 @@ use rook_dom::InstanceId;
 
 use super::instance::push_instance;
 use super::methods::RawMethod;
-use crate::args::Args;
+use crate::ctx::args::Args;
 use crate::ctx::{ApiResult, Outcome, ScriptError, with_world};
 
 pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
@@ -205,7 +205,7 @@ fn to_json(v: &LuaValue, depth: usize) -> ApiResult<serde_json::Value> {
         LuaValue::Nil => J::Null,
         LuaValue::Boolean(b) => J::Bool(*b),
         LuaValue::Integer(_) | LuaValue::Number(_) => {
-            let n = crate::args::number_of(v).unwrap_or(0.0);
+            let n = crate::ctx::args::number_of(v).unwrap_or(0.0);
             if n.fract() == 0.0 && n.abs() < 9.0e15 {
                 J::Number((n as i64).into())
             } else {
@@ -229,7 +229,9 @@ fn to_json(v: &LuaValue, depth: usize) -> ApiResult<serde_json::Value> {
                     let key = match &k {
                         LuaValue::String(s) => s.to_string_lossy(),
                         LuaValue::Integer(_) | LuaValue::Number(_) => {
-                            crate::args::format_number(crate::args::number_of(&k).unwrap_or(0.0))
+                            crate::ctx::args::format_number(
+                                crate::ctx::args::number_of(&k).unwrap_or(0.0),
+                            )
                         }
                         _ => return Err(ScriptError("Can't convert to JSON".into())),
                     };

@@ -1,5 +1,7 @@
 //! The renderer: GPU objects, pipelines and what the scene needs on the GPU.
 
+pub(crate) mod shadow;
+
 mod draw;
 mod images;
 mod pipelines;

@@ -21,7 +21,7 @@
 use rook_types::{Material, MaterialSet};
 
 use crate::MaterialMap;
-use crate::image::{Image, ImageError};
+use crate::decode::image::{Image, ImageError};
 
 /// Material textures are kept at 512 × 512 at most (Roblox's are 1024): 40
 /// materials' three maps at 1024 would hold 640 MB.
@@ -168,11 +168,11 @@ impl TexturePack {
 /// metalness (into red, 0 when the pack has none) packed into one, with an
 /// opaque alpha so mips aren't weighted by it.
 pub fn build(map: MaterialMap, main: &[u8], metalness: Option<&[u8]>) -> Result<Image, ImageError> {
-    let (mut rgba, format) = crate::image::decode_rgba(main)?;
+    let (mut rgba, format) = crate::decode::image::decode_rgba(main)?;
     if map == MaterialMap::RoughnessMetalness {
         let metal = match metalness {
             Some(bytes) => {
-                let (m, _) = crate::image::decode_rgba(bytes)?;
+                let (m, _) = crate::decode::image::decode_rgba(bytes)?;
                 Some(::image::imageops::resize(
                     &m,
                     rgba.width(),

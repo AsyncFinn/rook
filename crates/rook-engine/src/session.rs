@@ -3,9 +3,12 @@
 //! The ends are the same [`ServerHost`] and [`ClientHost`] a threaded host
 //! runs apart.
 
+pub mod host;
+pub mod threads;
+
 use rook_dom::InstanceId;
 
-use crate::host::{ClientHost, ServerHost, ToClient};
+use crate::session::host::{ClientHost, ServerHost, ToClient};
 use crate::{DataModel, EngineError, Options};
 
 #[derive(Debug)]
