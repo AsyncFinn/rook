@@ -410,7 +410,7 @@ same cameras). Observed unless marked:
 - *Mesh children* still replace the geometry with a 1-stud shape, as
   observed in step 3.
 
-*Performance* (release builds, base = 0.3.6, one `rook-player --bench
+*Performance* (release builds, base = the build before this step, one `rook-player --bench
 300` run each): whole-frame medians a small place 1.86 against 1.93 ms, a large 2016 place
 19.0 against 18.7 ms, a third large place (182 union uses) 17.7
 against 19.8 ms, where the server step, which unions don't touch, moved

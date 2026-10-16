@@ -4,129 +4,110 @@
 
 Rook's version says how far along the roadmap it is:
 
-- **Minor** (`0.N.0`): finishing milestone N. 0.3.0 finished M3 Physics, 0.4.0 M4 Content, and 0.5.0 will finish M5 Audio. Version 1.0 comes with M22, the release.
-- **Patch** (`0.N.y`): everything released between milestones: each roadmap step and each fix, as it lands (`0.4.8` → `0.4.9`). Each entry says which milestone and step it belongs to. Fixes landing together share one patch; fixes that ship inside a step's release are listed there as "Fixed:".
-- Docs, roadmap and internal changes with no effect on behaviour don't get a version of their own; they're listed under the next release.
+- Every change goes under **[Unreleased]** as it lands, without a version of its own.
+- **Minor** (`0.N.0`): finishing milestone N releases what's collected. 0.3.0 finished M3 Physics, 0.4.0 M4 Content and 0.5.0 M5 Audio. Version 1.0 comes with M22, the release; after it the minor counts sets of features the same way.
+- **Patch** (`0.N.y`): finishing a roadmap step releases what's collected, fixes included. So does a push: anything that changes behaviour is released before it goes to GitHub, so what's there always has a version.
+- Docs, roadmap and internal changes with no effect on behaviour wait under [Unreleased] for the next release.
 - Before 1.0, any release may break things.
 
-Versions were renumbered this way on 2026-10-15; until then every step was a minor version (0.4.0 to 0.13.1, now 0.3.1 to 0.4.9).
+Versions were renumbered twice: on 2026-10-15 (every step had been a minor version, 0.4.0 to 0.13.1) and on 2026-10-16 (every fix had been a patch of its own, up to 0.5.17), when commit messages were rewritten to match.
 
 Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z` in git. The pinned Roblox version (currently 0.741.19) is separate and listed under each release.
 
 ## [Unreleased]
 
-## [0.5.17] — 2026-10-16 — Fix: deprecated lowercase properties read stale values
+## [0.5.4] — 2026-10-16 — Fixes: draw calls, Windows start-up, deprecated properties
 
 Pinned Roblox version: 0.741.19.
+
+### Fix: deprecated lowercase properties read stale values
 
 - A deprecated lowercase property reads and writes its capitalized twin, as lowercase methods and events already did: `Mouse.hit` and `Mouse.target`, `Sound.isPlaying`, `Humanoid.maxHealth`, `Players.localPlayer` and `numPlayers`, `Player.userId`, `Camera.focus`, `JointInstance.part1`, `Instance.archivable` and the rest. Roblox's API lists them as separate properties, so Rook kept each at its default (`Mouse.hit` never followed the mouse). `className` and `game.workspace` go through the same rule, and their own special cases are gone.
 - `game.lighting` gives Lighting; it was nil.
 - Found by reading every deprecated member of Roblox's API (492 that scripts can reach) in Rook. Every member that errored is one Roblox also keeps from game scripts (plugin or Roblox-only security).
 
-## [0.5.16] — 2026-10-15 — Fix: `className` is nil
-
-Pinned Roblox version: 0.741.19.
+### Fix: `className` is nil
 
 - `className`, the deprecated lowercase name for `ClassName`, gives the class name; it was nil. Old scripts that filter children with `if c.className == "Part"` found nothing: a heist place's vault door and drill turned in place without opening.
 
-## [0.5.15] — 2026-10-15 — Fix: the player crashes on OpenGL
-
-Pinned Roblox version: 0.741.19.
+### Fix: the player crashes on OpenGL
 
 - The player runs on devices that can't view a texture in a second format, such as OpenGL (what wgpu picks over Remote Desktop or on old drivers). There it stopped at once with "Downlevel flags VIEW_FORMATS are required". Each image now keeps a second copy stored as sRGB there, using twice the image memory. Elsewhere nothing changes. An 86k-part place renders the same on OpenGL as on the default backend.
 - `WGPU_BACKEND` (`vulkan`, `dx12`, `gl`) picks the graphics backend for the player and for headless renders.
 
-## [0.5.14] — 2026-10-15 — Fix: the player won't start without the Visual C++ runtime
-
-Pinned Roblox version: 0.741.19.
+### Fix: the player won't start without the Visual C++ runtime
 
 - Windows builds include the C and C++ runtime (`+crt-static`, in `.cargo/config.toml`), so `rook-player.exe` starts on machines without the Visual C++ Redistributable. It failed with "VCRUNTIME140_1.dll was not found". It now needs only DLLs that ship with Windows.
 
-## [0.5.13] — 2026-10-15 — Fix: drawing off-screen parts that share a batch with visible ones
-
-Pinned Roblox version: 0.741.19.
+### Fix: drawing off-screen parts that share a batch with visible ones
 
 - The renderer culls within batches, not just whole batches. Each batch keeps a box per 16 instance slots, grown when an instance changes and worked out afresh with the batch's own box. Each pass draws only the runs of consecutive boxes its view reaches (the camera's for the main pass and images, the sun's for the shadow pass), one draw per run, in the same order as before.
 - On an 86k-part place's saved camera, triangles per frame fell from 9.6M to 6.2M (main pass) and 7.5M to 4.4M (shadow pass); GPU time from 3.73 to 2.63 ms (main) and 1.08 to 0.66 ms (shadow). A 61k-part place's saved camera: 11.7M to 8.1M triangles, GPU 4.70 to 3.15 ms. Draws rose (an 86k-part place 309 + 597 to 547 + 809, a 61k-part place 389 to 715) but draw calls didn't: they're all still in the same multi-draws. CPU recording barely moved (medians 2.98 → 3.91 ms on an 86k-part place, 2.49 → 2.64 ms on a 61k-part place, one round of 200 frames of `--bench` each, A/B against 0.5.12).
-- Frames look the same: a 61k-part place's saved view is byte-identical to 0.5.12; an 86k-part place's differs in 108 pixels by at most 2 levels, within its run-to-run noise.
+- Frames look the same: a 61k-part place's saved view is byte-identical to the build with the draw-call fix alone; an 86k-part place's differs in 108 pixels by at most 2 levels, within its run-to-run noise.
 
-## [0.5.12] — 2026-10-15 — Fix: too many draw calls on big places
-
-Pinned Roblox version: 0.741.19.
+### Fix: too many draw calls on big places
 
 - The renderer draws a whole pass in a few draw calls instead of one per mesh and image. Every mesh's vertices and indices sit in shared buffers, each set of batches keeps its instances in one buffer, and every image sits in one table that each instance indexes (binding arrays), so consecutive draws bind nothing new. Each pass's visible batches become indirect draw arguments, drawn with one multi-draw per pipeline in the same order as before. On an 86k-part place, 321 + 620 draw calls (shadow + main) fell to 1 + 6; from a camera seeing most of the map, 7,831 to 135. A 61k-part place's main pass went from 393 to 68 calls, and 3,143 to 805 from above (its sorted transparent parts still switch pipelines). The shadow pass reads positions only (12 bytes a vertex instead of 48).
-- CPU time recording a frame (300 frames of `--bench`, A/B against 0.5.11, means of two rounds): an 86k-part place 18.2 → 10.4 ms from the saved camera and 30.3 → 13.4 ms from above; a 61k-part place 6.4 → 3.1 ms and 8.7 → 4.2 ms. Render with readback: an 86k-part place 29.9 → 21.4 and 50.4 → 27.2 ms; a 61k-part place 21.7 → 13.4 and 21.8 → 17.6 ms. In steady frames on an 86k-part place (Tracy), `Renderer::render` went from 7.7 to 3.3 ms. GPU time is unchanged.
-- Frames look the same: from above both places are byte-identical to 0.5.11. From the saved cameras the only differences beyond run-to-run noise are 2 pixels on an 86k-part place one level apart (float rounding).
+- CPU time recording a frame (300 frames of `--bench`, A/B against 0.5.3, means of two rounds): an 86k-part place 18.2 → 10.4 ms from the saved camera and 30.3 → 13.4 ms from above; a 61k-part place 6.4 → 3.1 ms and 8.7 → 4.2 ms. Render with readback: an 86k-part place 29.9 → 21.4 and 50.4 → 27.2 ms; a 61k-part place 21.7 → 13.4 and 21.8 → 17.6 ms. In steady frames on an 86k-part place (Tracy), `Renderer::render` went from 7.7 to 3.3 ms. GPU time is unchanged.
+- Frames look the same: from above both places are byte-identical to 0.5.3. From the saved cameras the only differences beyond run-to-run noise are 2 pixels on an 86k-part place one level apart (float rounding).
 - Adapters without binding arrays, or without first instances in indirect draws, bind each image set and draw each batch directly; the frames are identical.
 - `--bench` prints draw calls and instanced draws, triangles per pass, and medians of CPU recording and of each pass's GPU time (timestamp queries).
 - Found: from inside the map, most triangles drawn belong to instances off screen that share a batch with some in view (an 86k-part place's saved camera: 13% of the opaque triangles drawn are in view; a 61k-part place's 22%). Culling within batches is next.
 
-## [0.5.11] — 2026-10-15 — Fix: slow rendering on big places
+## [0.5.3] — 2026-10-15 — Fixes: speed on big places
 
 Pinned Roblox version: 0.741.19.
 
-- The renderer skips draws for what the camera can't see. Each batch of instanced parts (one per mesh and image set, so every mesh file and terrain chunk) keeps a box around its instances in the world. The main pass only draws batches whose box reaches into the camera's view, and transparent parts likewise. The shadow pass only draws batches the sun's view of the shadowed area reaches, so a part behind the camera still shadows what's in view. The GPU clipped those triangles away anyway, so no pixel changes: frames rendered with and without culling are byte-identical on an 86k-part place and a 61k-part place, from three views each. On an 86k-part place (86k parts, 7,680 mesh files), draws per frame fell from 6,762 + 8,332 (shadow + main) to 321 + 620, and render with readback from 84 to 36 ms a frame. On a 61k-part place (no shadows), main-pass draws fell from 2,966 to 393 and render from 18.7 to 15.3 ms (300 frames of `--bench` each, A/B against 0.5.7; 0.5.8 to 0.5.10 don't touch rendering).
+### Fix: slow rendering on big places
+
+- The renderer skips draws for what the camera can't see. Each batch of instanced parts (one per mesh and image set, so every mesh file and terrain chunk) keeps a box around its instances in the world. The main pass only draws batches whose box reaches into the camera's view, and transparent parts likewise. The shadow pass only draws batches the sun's view of the shadowed area reaches, so a part behind the camera still shadows what's in view. The GPU clipped those triangles away anyway, so no pixel changes: frames rendered with and without culling are byte-identical on an 86k-part place and a 61k-part place, from three views each. On an 86k-part place (86k parts, 7,680 mesh files), draws per frame fell from 6,762 + 8,332 (shadow + main) to 321 + 620, and render with readback from 84 to 36 ms a frame. On a 61k-part place (no shadows), main-pass draws fell from 2,966 to 393 and render from 18.7 to 15.3 ms (300 frames of `--bench` each, A/B against the build with the physics fixes; the fixes in between don't touch rendering).
 - `--bench` prints the draw calls per frame.
 
-## [0.5.10] — 2026-10-15 — Fix: `game.workspace` is nil
-
-Pinned Roblox version: 0.741.19.
+### Fix: `game.workspace` is nil
 
 - `game.workspace`, the deprecated lowercase name for `game.Workspace`, gives Workspace; it was nil. Old scripts that use it now run: a 61k-part place and an 86k-part place's `Univerisal_Opener_Lockdown` no longer fails on its first line.
 
-## [0.5.9] — 2026-10-15 — Fix: the player rebuilds the whole scene on its first frame
+### Fix: the player rebuilds the whole scene on its first frame
 
-Pinned Roblox version: 0.741.19.
-
-- The player no longer rebuilds the whole scene on the first frame after loading. A new DataModel says "redraw everything", and the scene the player had just built from it took that as a reason to rebuild all of it again: every part's look, the terrain's entries, and a fresh upload to the GPU. The scene now drops the changes it was built with. `--bench` also reuses the loaded scene instead of building its own, which meshed the terrain a second time (7,045 meshes, several seconds on an 86k-part place). On an 86k-part place, 300 frames of `--bench`, longest frame 5.1–6.1 → 3.6–4.3 s, slowest 1% 2.2–2.5 → 1.5–1.7 s (A/B against 0.5.7, two rounds; 0.5.8 is on its own branch). Screenshots are unchanged.
+- The player no longer rebuilds the whole scene on the first frame after loading. A new DataModel says "redraw everything", and the scene the player had just built from it took that as a reason to rebuild all of it again: every part's look, the terrain's entries, and a fresh upload to the GPU. The scene now drops the changes it was built with. `--bench` also reuses the loaded scene instead of building its own, which meshed the terrain a second time (7,045 meshes, several seconds on an 86k-part place). On an 86k-part place, 300 frames of `--bench`, longest frame 5.1–6.1 → 3.6–4.3 s, slowest 1% 2.2–2.5 → 1.5–1.7 s (A/B against the build with the physics fixes, two rounds). Screenshots are unchanged.
 - Found: what's left of the first frame is building the physics worlds. The client's first mouse raycast builds its world (1.3 s on an 86k-part place), and so does the server's first step (another 1.3 s). Nothing remeshes terrain after load any more: no script API writes voxels yet.
 
-## [0.5.8] — 2026-10-15 — Fix: a frame stalls when many sounds finish loading
-
-Pinned Roblox version: 0.741.19.
+### Fix: a frame stalls when many sounds finish loading
 
 - A sound's file is freed on the content worker that decoded it, not on the engine thread. Freeing each file took about 0.3 ms, so when an 86k-part place's 168 sound files finished loading together, one server step stalled for 55–80 ms. Time spent on the engine thread handing loaded sounds over (`sound_loaded`, Tracy, 300 frames of `--bench` on an 86k-part place): 144 → 22 ms in total, and at most 55 → 11 ms in one frame. Sounds play as before.
 
-## [0.5.7] — 2026-10-15 — Fix: slow server steps on big places, part 2
-
-Pinned Roblox version: 0.741.19.
+### Fix: slow server steps on big places, part 2
 
 - Physics only runs Rook's friction and elasticity mixing on parts that need it: parts whose `FrictionWeight` or `ElasticityWeight` isn't 1, and anchored parts carrying what touches them (conveyors). Everywhere else both weights are 1, Roblox's weighted average is the plain average, and Rapier's own Average rule gives the same numbers. Rapier never reuses a contact between steps when a hook is on, so with the hook on every part it worked out every resting contact from scratch four times a frame. Server step median on 300 frames of `--bench`: a 61k-part place 22.0 → 16.2 ms, an 86k-part place 16.9 → 14.2 ms (A/B against 0.5.6, same output).
 
-## [0.5.6] — 2026-10-15 — Fix: slow server steps on big places
-
-Pinned Roblox version: 0.741.19.
+### Fix: slow server steps on big places
 
 - Physics no longer runs continuous collision detection. Rapier turned it on for every fast-moving part, and each one was checked against the whole world's colliders four times a frame. On places with tens of thousands of parts that cost most of the server's frame. Roblox doesn't sweep fast parts either: they can pass through thin parts. Server step median on 300 frames of `--bench`: a 61k-part place 36.8 → 23.5 ms, an 86k-part place 26.0 → 17.8 ms; client steps unchanged.
 
-## [0.5.5] — 2026-10-15 — M6 step 2: terrain's look checked against Studio
+## [0.5.2] — 2026-10-15 — M6 step 2: terrain materials, water, grass and waves
 
 Pinned Roblox version: 0.741.19. M6 Terrain, step 2, measured again.
+
+### M6 step 2: terrain's look checked against Studio
 
 - Water plays all 25 of the install's normal frames, fading each into the next, on a phase of `WaterWaveSpeed` × time as Studio's does: at speed 0 the water freezes and it goes on from there, and the frames come round every 20 units of phase (2 seconds at the default speed), measured by freezing Studio's water at set phases. The ripples no longer scroll (Studio's don't), and are laid at Studio's size (fitted: same contrast and pattern from above). Water also reflects the sky's colour from overhead to the horizon, so its ripples show, and the sun's glint is a narrow highlight on ridges, as in Studio.
 - Grass blades are single straight triangles as in Studio, 2.3 per square stud, up to 3.6 studs tall (fitted to how much of Studio's view they cover at each height: within 0.04), one flat colour 0.8 of the ground's brightness even on slopes, swaying as a wave crosses the grass, and turning into `Workspace.GlobalWind` by up to 50 degrees, as measured.
 - Scripts changing the Terrain's water properties or `Workspace.GlobalWind` take effect at once (they were read only when the terrain was built).
 - Found: Studio tints terrain textures differently from the tint mask Rook uses for non-default `MaterialColors` (red Grass turns magenta); not fixed yet. See `docs/behavior/terrain.md`.
 
-## [0.5.4] — 2026-10-15 — Fix: moved models balloon and vanish
-
-Pinned Roblox version: 0.741.19.
+### Fix: moved models balloon and vanish
 
 - Fixed: models moved over and over with `SetPrimaryPartCFrame` (doors swung by `GetPrimaryPartCFrame() * CFrame.Angles(...)`, or driven by a tweened CFrameValue) grew huge and then vanished. Rounding error in a part's rotation tripled with every move, since the move inverts a rotation it assumes is orthonormal. Parts' CFrames are now orthonormalized whenever a script sets them, as Roblox does.
 - Fixed: a sound on a part flung that far got NaN volumes, which could reach the ambient reverb and silence all audio until restart. Gains that aren't finite now mix as silence.
 
-## [0.5.3] — 2026-10-15 — M6 step 2: grass blades and water waves
-
-Pinned Roblox version: 0.741.19. M6 Terrain, the rest of step 2.
+### M6 step 2: grass blades and water waves
 
 - Grass grows blades with `Terrain.Decoration` on, as in Studio: dark olive spikes 1.5 to 3.3 studs tall, about one per square stud, leaning every way, sized against a ruler in Studio screenshots. They're built in 32-stud tiles within 200 studs of the camera, thin out with distance, and sway, bending with `Workspace.GlobalWind`. With `Decoration` off there are none.
 - Water waves: the surface rises and falls by `WaterWaveSize` studs in long, slow humps, moving with `WaterWaveSpeed`, as Studio's does (its waves move the surface itself, measured at grazing angle). It's rippled by the water normal map from the user's Roblox install, reflects more of the sky at grazing angles, glints in the sun, and turns more opaque there.
 - Costs about 1 ms a frame on the largest terrain place (median 4.5 → 5.5 ms offscreen).
 - Not yet: Studio's exact blade shapes and sway, its 25-frame water animation, and terrain properties scripts change after load. See `docs/behavior/terrain.md`.
 
-## [0.5.2] — 2026-10-15 — M6 step 2: terrain materials and water
-
-Pinned Roblox version: 0.741.19. M6 Terrain, step 2.
+### M6 step 2: terrain materials and water
 
 - Terrain is textured. Rook reads Studio's own terrain material table (from Studio's settings, kept in `rook-terrain`): each material's top, side and bottom texture packs, fetched from Roblox like part materials, projected onto the plane each point faces most of 18, in world studs. Grass has grass on top and earth on its sides, as in Studio.
 - `Terrain.MaterialColors` tints the textures through their tint masks, as Studio does: CrackedLava's cracks take its colour over dark rock, Grass's sides stay earth. Places that saved no colours get the 2022 defaults.
@@ -151,6 +132,8 @@ Pinned Roblox version: 0.741.19. M6 Terrain, step 1.
 
 Pinned Roblox version: 0.741.19. Finishes M5 step 5 and with it M5 Audio: archived places play their sounds, positioned in 3D, and the audio conformance cases pass.
 
+### M5 step 5: the audio API; M5 Audio done
+
 - The audio API plays on the same engine as Sound. AudioPlayers load through the same cache as Sounds and play as Studio's do: `Play` from `TimePosition`, `Stop` keeping it, `Looping` and `Looped`, `Ended` at the end or past it, `PlaybackSpeed`, `Volume`, `AutoLoad`, and `Play(atTime)`, `Stop(atTime)` and `Cancel` on clients (with Studio's error on a server).
 - Wires connect by Studio's rules: both ends and the wire in the DataModel, pins that exist (`GetInputPins`, `GetOutputPins`), no self-wire and no loop. `Wire.Connected` and `GetConnectedWires` read as in Studio.
 - AudioEmitters are heard by AudioListeners in the same `AudioInteractionGroup`, by Studio's default distance falloff (InverseTapered, 4 to 10,000 studs), its presets, and curves set with `SetDistanceAttenuation` and `SetAngleAttenuation`, panned as a Sound is. `GetAudibilityFor` matches Studio's. A client gets Studio's default listener under the camera, wired to `SoundService.AudioDeviceOutput`.
@@ -160,16 +143,16 @@ Pinned Roblox version: 0.741.19. Finishes M5 step 5 and with it M5 Audio: archiv
 - The `RobloxSecurity` capability is now called `RobloxEngine`, as Studio's error messages name it.
 - Conformance case `content/audio_api`, recorded in Studio; all 11 content cases pass.
 
-## [0.4.9] — 2026-10-15 — AmbientReverb as loud as Studio's
-
-Pinned Roblox version: 0.741.19.
+### AmbientReverb as loud as Studio's
 
 - Fixed: `SoundService.AmbientReverb` was far too loud. Rook used FMOD's published wet level for each preset, but a recording of Studio's own output (Cave, Hallway, ConcertHall) put its reverb 14.5 to 17.0 dB below that. Every preset's wet level is now 16 dB lower, within 1.6 dB of Studio for all three.
 - Measured from Studio's output, which `PlaybackLoudness` doesn't show: nested SoundGroups' volumes multiply, a Sound parented under a group without `SoundGroup` set isn't in it, a group's reverb rings on after its sounds end, stop or are destroyed, and a Sound's own reverb is cut when it ends. Rook already did all of this; `docs/behavior/audio.md` now records it as Confirmed.
 
-## [0.4.8] — 2026-10-15 — M5 step 4: SoundGroups and sound effects
+## [0.4.5] — 2026-10-15 — M5 step 4: SoundGroups and sound effects
 
 Pinned Roblox version: 0.741.19. Finishes M5 step 4; M5 Audio continues with the modern audio API.
+
+### M5 step 4: SoundGroups and sound effects
 
 - SoundGroups: a Sound is heard through the group its `SoundGroup` names, and through the groups that one is nested in. Each group runs its own effects and scales by its `Volume` (kept within 0 to 10, as in Studio). A group's reverb rings on after its sounds stop.
 - Sound effects, picked by archive use: EqualizerSoundEffect (335 files), ReverbSoundEffect (248), PitchShiftSoundEffect (240) and DistortionSoundEffect (229) are heard, under a Sound or a SoundGroup, with `Enabled`. They run in Studio's `Priority` order, including each effect's base priority for 0, which was measured by bisection. They were measured silently: Studio's `PlaybackLoudness` is taken after a sound's own effects, so a sound at Volume 0 showed what each setting does. On the same file, Rook's equalizer and distortion match Studio within 4%. Its reverb and pitch shift are Rook's own, with levels fitted to Studio's. Chorus, Compressor, Echo, Flange and Tremolo keep their properties but aren't heard yet.
@@ -179,31 +162,27 @@ Pinned Roblox version: 0.741.19. Finishes M5 step 4; M5 Audio continues with the
 - Fixed: a new SoundService's `RespectFilteringEnabled` read false; Studio and creator-docs give true, and the reflection database is wrong. Setting `Sound.SoundGroup` to something other than a SoundGroup now errors as in Studio.
 - Conformance case `content/sound_groups`. Findings: `docs/behavior/audio.md`.
 
-## [0.4.7] — 2026-10-15 — Material textures from Roblox
-
-Pinned Roblox version: 0.741.19.
+### Material textures from Roblox
 
 - Material textures come from Roblox like any other asset, with no Studio needed. Each material's textures in each set are a TexturePack asset, whose colour, normal, roughness and metalness images load through asset delivery and the disk cache. Rook used to read them from Studio's local content cache, so materials Studio hadn't shown on that machine drew Rook's own stand-ins, and Studio's distant-view copies drew blurry. Which pack is which material's comes from Studio's own `PartMaterialInfosPre2022` and `PartMaterialInfos2022` tables, checked texture by texture against what Studio showed. Findings: `docs/behavior/materials.md`.
 - Removed: reading Studio's content cache (`ROOK_ROBLOX_CACHE`, the `studio-cache` provider) and Rook's own material textures drawn in code. Offline with nothing cached, materials draw untextured, like any missing asset.
 
-## [0.4.6] — 2026-10-14 — Unions without saved hulls are boxes
-
-Pinned Roblox version: 0.741.19.
+### Unions without saved hulls are boxes
 
 - Fixed: a union with no collision hulls saved (`PhysicalConfigData` empty or missing; 247 of a large modern place's unions) collided as its drawn geometry, fetched from its asset. In Studio it is its box: measured in Studio 0.742, such unions read `CollisionFidelity` Box and rays hit them everywhere, even through a doorway. Rook no longer fetches union assets for collision. Also measured: Studio's rays follow `CollisionFidelity` (Default and PreciseConvexDecomposition leave a cut hole open, Hull and Box fill it), and files don't save `CollisionFidelity`. Findings in `docs/behavior/collision.md`.
 - `Options::wait_for_content` is `wait_for_sounds` again: only sounds load within the frame.
 
-## [0.4.5] — 2026-10-14 — M15 step 1: unions collide as their shapes
+## [0.4.4] — 2026-10-14 — M15 step 1: unions collide as their shapes
 
 Pinned Roblox version: 0.741.19. Starts M15 step 1; MeshParts' collision shapes follow.
+
+### M15 step 1: unions collide as their shapes
 
 - Unions collide and are queried as their real shape, not their box: the hulls Studio saved in `PhysicalConfigData` or `PhysicsData` (`CSGPHS` versions 3 to 8), scaled with the union like its drawn geometry, or its drawn geometry when none was saved; `CollisionFidelity` Box stays a box, and so does a moving union with `CanCollide` off (for speed). Rays, shape casts, `GetPartsInPart`, `GetTouchingParts`, collisions, the mouse and ClickDetectors all use it, on the server and the client. In two large places, buttons inside wall unions can be clicked. Rules and counts in `docs/behavior/collision.md`.
 - `rook content` describes a union asset's collision geometry.
 - `Options::wait_for_sounds` is now `wait_for_content`: union geometry loads within the frame too.
 
-## [0.4.4] — 2026-10-14 — Properties Roblox replicates under hidden twins
-
-Pinned Roblox version: 0.741.19.
+### Properties Roblox replicates under hidden twins
 
 - Fixed: in Play mode nothing was heard, and once it was, sounds played at the wrong pitch. Some properties are NotReplicated in the API dump because Roblox sends them to clients under a hidden twin Rook doesn't store: Sound's `Playing` and `TimePosition` (as `PlayingReplicator` and `TimePositionReplicator`) and `PlaybackSpeed` (as `Pitch`). Rook never sent them, so the client, whose sounds the player hears, never played anything, and when it did, played it at speed 1. Checked by recording `rook-player`'s output: a test tone played by a server script came out at full level for as long as the script played it.
 - Fixed: the same was true of every property with such a twin. A list of every saved NotReplicated property in the database found them all, and they now reach clients:
@@ -244,52 +223,46 @@ Pinned Roblox version: 0.741.19. Finishes M5 step 1; M5 Audio continues with the
 
 Pinned Roblox version: 0.741.19. Finishes M4 step 6 and M4 Content.
 
+### M4 step 6: unions
+
 - Unions draw their own geometry instead of their bounding box. The geometry is read from the asset a union's `AssetId` names (`MeshData` versions 2, 4 and 5, through `rbx_mesh`) and loads, uploads and draws through the same path as mesh files. As in Studio: it's sized by Size / `InitialSize`; with `UsePartColor` off it keeps the colours of the parts it was made from; Decals go on the geometry cut from their face, Textures tile from each face's centre, and surfaces don't show; a union whose asset fails, or that has none, draws nothing; NegateOperations draw in their fixed orange-red. Union assets of 2015-2016 places load anonymously; newer places' need an account and draw nothing without one. Findings: `docs/behavior/meshes.md`.
 - `Instance.new` names new unions `Union`, NegateOperations `NegativePart` and IntersectOperations `Intersection`, and unions read their `InitialSize` as `MeshSize`, as in Studio (conformance case `content/union`).
 - `rook corpus-scan` counts unions by where their geometry lives and which `MeshData`, `MeshData2` and `PhysicsData` forms they save; `rook content` describes union assets and totals their `MeshData` versions; a file that panics while being counted is recorded as failed instead of ending the scan.
 
-## [0.3.6] — 2026-10-14 — MakeJoints: wedge slopes from either side
-
-Pinned Roblox version: 0.741.19.
+### MakeJoints: wedge slopes from either side
 
 - Fixed: a model's `MakeJoints` tried each touching pair once, from whichever part came first. A wedge's slope joins differently from each side, so a part welded onto a slope came loose whenever the wedge came first. As in Studio, when both parts are being joined and the first makes no joint, the other tries too.
 
-## [0.3.5] — 2026-10-14 — MakeJoints: balls and cylinders
-
-Pinned Roblox version: 0.741.19.
+### MakeJoints: balls and cylinders
 
 - Fixed: `MakeJoints` gave balls and cylinders no surfaces, so wheels on Hinge surfaces and studded round parts were never joined (a small place's tractor and tank wheels, a shop's lights). As in Studio, they now join as their boxes: a ball's Hinge makes a Rotate and its Studs a Snap, and a cylinder's caps and curved side weld and hinge, framed at the box face.
 
-## [0.3.4] — 2026-10-14 — M4 step 5: MaterialVariant, MaterialService and SurfaceAppearance
+## [0.3.1] — 2026-10-14 — M4 step 5: PBR shading and materials
 
 Pinned Roblox version: 0.741.19. Finishes M4 step 5 (materials and PBR); M4 Content continues with unions.
+
+### M4 step 5: MaterialVariant, MaterialService and SurfaceAppearance
 
 - MaterialVariants draw: a part's `MaterialVariant`, or the variant MaterialService's override names for its material (`WoodName`), replaces the material's textures with the variant's colour, normal, roughness and metalness maps, tiled at its `StudsPerTile` and tinted by the part's Color. Only a variant of the part's own material counts, as in Studio.
 - MaterialService's `GetBaseMaterialOverride`, `SetBaseMaterialOverride` and `GetMaterialVariant`, with Studio's answers and errors (conformance case `content/materialservice`). Changing MaterialService or a MaterialVariant redraws the scene.
 - SurfaceAppearance on MeshParts: its maps through the mesh's UVs, with `AlphaMode` Overlay (the part's Color through the map's see-through pixels), Transparency, TintMask and Opaque, and `Color` tinting the map.
-- Fixed: Studio draws a different set of built-in materials when `MaterialService.Use2022Materials` is on; 0.3.2 drew the legacy set for every place, having concluded Studio ignores the flag from places that turned out to be legacy ones. Places that save it on now draw the 2022 set (Studio's textures from your content cache, or Rook's own in its colours), at its own scale (8 studs) and shading; places that save it off, don't save it, or have no MaterialService keep the legacy set. Findings: `docs/behavior/materials.md`.
+- Fixed: Studio draws a different set of built-in materials when `MaterialService.Use2022Materials` is on; the first build of this step drew the legacy set for every place, having concluded Studio ignores the flag from places that turned out to be legacy ones. Places that save it on now draw the 2022 set (Studio's textures from your content cache, or Rook's own in its colours), at its own scale (8 studs) and shading; places that save it off, don't save it, or have no MaterialService keep the legacy set. Findings: `docs/behavior/materials.md`.
 - Fixed: a mesh file whose normals are all zero drew black; its vertices now take their triangle's normal, and it's lit as in Studio.
 - Fixed: Rook's index of Studio's content cache didn't notice when the textures it looks for changed, so it could miss ones it had read past before.
 
-## [0.3.3] — 2026-10-14 — M4 step 5: material fixes
-
-Pinned Roblox version: 0.741.19.
+### M4 step 5: material fixes
 
 - Fixed: a wedge's material textures stretched along a long, low slope (a large modern place's 98-stud Concrete wedge drew long streaks). Wedge and corner wedge faces now take textures in their own plane, measured along the slope.
 - Fixed: Slate and Basalt textures were drawn at half Studio's size (now 16 studs a tile), and Slate used the wrong one of the two normal maps its window caught; it now has Studio's fine layered relief.
 
-## [0.3.2] — 2026-10-14 — M4 step 5: the built-in materials
-
-Pinned Roblox version: 0.741.19. M4 Content continues (materials and PBR, second part).
+### M4 step 5: the built-in materials
 
 - Every material draws with its colour, normal and roughness-metalness textures, tinted by the part's Color as Studio does (multiplied in linear light) and tiled over each face from its top-left corner at Studio's scale (4 to 24 studs; measured against the textures, some fitted). The textures are Studio's own, read from your Roblox content cache once Studio has shown the material (`%LOCALAPPDATA%\Roblox\rbx-storage.db`; `ROOK_ROBLOX_CACHE` points elsewhere or turns it off), or Rook's own, drawn in code with Studio's brightness and scale. Nothing is downloaded. Findings: `docs/behavior/materials.md`.
 - Neon glows past its Color as in Studio (grey 128 draws near white). Glass with Transparency filters what's behind it by its Color, and ForceField glows over what's behind it, brighter at grazing angles.
 - `rook-content` reads KTX2 images (BC1 and BC3, Zstandard-compressed levels), the form Roblox's material textures come in, and has a new provider, `studio-cache`, between the install and content folders (`ROOK_CONTENT_ORDER`). Where the material textures are in the cache is indexed in Rook's cache, so only the first run reads the whole cache (about 6 s, on a background thread).
 - Studio 0.742 draws the 2022 materials whatever `MaterialService.Use2022Materials` says (a place saved with it off fetched and drew the same textures), so Rook draws that one set for every place.
 
-## [0.3.1] — 2026-10-14 — M4 step 5: PBR shading
-
-Pinned Roblox version: 0.741.19. M4 Content continues (materials and PBR, first part).
+### M4 step 5: PBR shading
 
 - Every material shades with its own roughness and metalness, measured from Studio's own material maps: a GGX sun highlight (sharp on SmoothPlastic, Ice, Glass and Metal, soft on Plastic) and the sky reflected with Fresnel. `Lighting.EnvironmentSpecularScale` sets how much parts reflect the sky and how far metals trade their diffuse light for it; at 0, which places saved without it read, Foil is lit like Plastic, as in Studio 0.742. Plastic's surfaces, Neon and Reflectance look as before. Findings: `docs/behavior/materials.md`.
 - Internal: `Enum.Material` is defined once, in `rook-types` (`Material`, with each material's value, name and shading); physics' density and friction table is keyed by it. Materials not in the enum still draw and simulate as Plastic.
