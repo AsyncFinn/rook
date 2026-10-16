@@ -20,6 +20,14 @@ use bus::Bus;
 /// shouldn't hang the mixer).
 const MAX_DEPTH: usize = 32;
 
+/// A mono Sound's level on each side: Studio centres it, 3 dB down
+/// (measured on the output for global sounds at every Volume; a stereo
+/// file plays at its own level). The 3D panning in [`crate::spatial`] is
+/// relative to this. Applied after the sound's effects, as a channel's
+/// panning comes after its effects (Inference). The audio API keeps a mono
+/// stream mono, so its AudioPlayers don't take it.
+const MONO_LEVEL: f32 = std::f32::consts::FRAC_1_SQRT_2;
+
 /// One sound to hear, as the engine sees it this frame.
 #[derive(Debug, Clone)]
 pub struct Play<K> {
@@ -115,6 +123,12 @@ impl<K: Hash + Eq + Copy> Mixer<K> {
         self.voices.is_empty()
     }
 
+    /// The last [`mix`](Self::mix) as left and right, before it was laid
+    /// out on the device's channels.
+    pub fn mixed(&self) -> &[Frame] {
+        &self.master
+    }
+
     /// Make the mixer play exactly `mix`: new sounds start at their
     /// position, ones no longer wanted stop, and ones still playing keep
     /// their own position unless it drifted too far from the engine's.
@@ -160,6 +174,9 @@ impl<K: Hash + Eq + Copy> Mixer<K> {
     /// it held. The left side goes to the first channel and any past the
     /// second, the right to the second; a mono output takes both sides'
     /// average (Approximation). A sound that ends stops unless it loops.
+    /// Nothing is clipped here: Studio hands the device levels past full
+    /// scale (seven times it for a sound at Volume 10) and leaves them to
+    /// the system, so Rook does too.
     pub fn mix(&mut self, out: &mut [f32], channels: usize) {
         out.fill(0.0);
         if channels == 0 {
@@ -178,6 +195,11 @@ impl<K: Hash + Eq + Copy> Mixer<K> {
             scratch.clear();
             scratch.resize(frames, [0.0; 2]);
             let alive = v.render(scratch, rate);
+            if v.audio.channels <= 1 {
+                for s in scratch.iter_mut().flatten() {
+                    *s *= MONO_LEVEL;
+                }
+            }
             let target = match v.group.and_then(|g| buses.get_mut(&g)) {
                 Some(bus) => {
                     bus.fed = true;
@@ -207,8 +229,7 @@ impl<K: Hash + Eq + Copy> Mixer<K> {
                     (1, _) => (m[0] + m[1]) / 2.0,
                     (_, 1) => m[1],
                     _ => m[0],
-                }
-                .clamp(-1.0, 1.0);
+                };
             }
         }
     }

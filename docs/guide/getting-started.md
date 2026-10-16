@@ -25,6 +25,7 @@ rook-player place.rbxl --screenshot out.png               # render one frame to 
 rook-player place.rbxl --camera 100,80,100 --look-at 0,0,0 --screenshot out.png
 rook-player place.rbxl --camera 0,500,0.01 --look-at 0,0,0 --fov 20 --screenshot top.png  # narrow field of view
 rook-player place.rbxl --seconds 5 --screenshot out.png   # run scripts for 5 s first
+rook-player place.rbxl --seconds 20 --record-audio out.wav  # mix 20 s of sound to a file, silently
 rook-player place.rbxl --script extra.luau                # also run a Luau file as a server script
 rook-player place.rbxl --uncapped                         # draw as fast as possible, not at the monitor's refresh rate
 rook-player place.rbxl --frame-times                      # print frame and step times every second, and a summary at exit

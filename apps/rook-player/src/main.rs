@@ -3,7 +3,8 @@
 //! Loads a place, starts a play session with one local player (or the
 //! server alone with `--run`), and draws what that player's client sees. Hold the right mouse button to look, WASD to move, Q/E to go
 //! down/up, Shift to move faster, and the mouse wheel to change speed.
-//! `--screenshot out.png` renders one frame offscreen instead.
+//! `--screenshot out.png` renders one frame offscreen instead, and
+//! `--record-audio out.wav` mixes the first `--seconds` to a file.
 //!
 //! In Play mode the server runs on its own thread at 60 Hz, so the window
 //! waits only on its client and the renderer. `--uncapped` draws as fast
@@ -21,6 +22,7 @@ mod game;
 mod installed;
 mod keys;
 mod readout;
+mod record;
 mod scene;
 mod server;
 mod stats;
@@ -80,6 +82,10 @@ struct Args {
     /// Vertical field of view in degrees (default: the saved camera's).
     #[arg(long)]
     fov: Option<f32>,
+    /// Mix the place's sounds to this WAV file for `--seconds` (10 by
+    /// default) instead of opening a window; prints how loud it got.
+    #[arg(long)]
+    record_audio: Option<PathBuf>,
     /// Run the place's scripts for this many seconds before showing it.
     #[arg(long, default_value_t = 0.0)]
     seconds: f64,
@@ -180,8 +186,25 @@ fn main() -> anyhow::Result<()> {
         Some(path) => Some(fs_err::read_to_string(path)?),
         None => None,
     };
-    let mut game = Game::load(&args.place, !args.run, content.clone(), script)?;
+    // A recording waits for each sound to load, so it keeps to game time
+    // however fast it runs.
+    let wait_for_sounds = args.record_audio.is_some();
+    let mut game = Game::load(
+        &args.place,
+        !args.run,
+        content.clone(),
+        script,
+        wait_for_sounds,
+    )?;
     let load_time = load_start.elapsed().as_secs_f64();
+    if let Some(out) = &args.record_audio {
+        let seconds = if args.seconds > 0.0 {
+            args.seconds
+        } else {
+            10.0
+        };
+        return record::record(&mut game, seconds, out);
+    }
     if args.seconds > 0.0 {
         game.run_for(args.seconds);
     }
@@ -272,13 +295,14 @@ fn main() -> anyhow::Result<()> {
         looking: false,
         look_anchor: None,
         cursor: PhysicalPosition::new(0.0, 0.0),
+        pointing: false,
         last_frame: Instant::now(),
         pending_mouse: None,
         install,
         uncapped: args.uncapped,
         readout: Readout::new(args.frame_times),
-        // Only the window plays sound: headless runs, `--bench` and
-        // `--screenshot` never open a device.
+        // Only the window plays sound: headless runs, `--bench`,
+        // `--screenshot` and `--record-audio` never open a device.
         audio: rook_audio::enabled_by_env().then(rook_audio::Output::new),
         #[cfg(feature = "repl")]
         repl: if args.no_repl {
@@ -291,6 +315,5 @@ fn main() -> anyhow::Result<()> {
     if args.frame_times {
         app.readout.print_run(&app.game);
     }
-        pointing: false,
     Ok(())
 }

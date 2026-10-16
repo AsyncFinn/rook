@@ -41,19 +41,20 @@ impl Game {
     /// window shows that player's client, as in Studio's Play mode.
     /// Content requests resolve through `content`; `script` (the
     /// `--script` file) runs as a server script once the place starts.
+    /// Sounds load in the background while the game runs, as in Roblox,
+    /// unless `wait_for_sounds` holds each frame until they have.
     pub fn load(
         path: &Path,
         play: bool,
         content: Arc<rook_content::Resolver>,
         script: Option<String>,
+        wait_for_sounds: bool,
     ) -> anyhow::Result<Self> {
         let load_start = std::time::Instant::now();
         let bytes = fs_err::read(path)?;
         let options = Options {
             content: Some(content),
-            // Sounds load in the background while the game runs, as in
-            // Roblox.
-            wait_for_sounds: false,
+            wait_for_sounds,
             ..Options::default()
         };
         let (mode, saved_camera) = if play {
@@ -260,7 +261,6 @@ impl Game {
         }
     }
 
-    pub fn has_client(&self) -> bool {
     /// Whether the cursor is over a ClickDetector the player can click.
     pub fn hovering_click_detector(&self) -> bool {
         match &self.mode {
@@ -269,6 +269,7 @@ impl Game {
         }
     }
 
+    pub fn has_client(&self) -> bool {
         matches!(self.mode, Mode::Play { .. })
     }
 

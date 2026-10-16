@@ -16,6 +16,9 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 
 ## [Unreleased]
 
+- Fix: sounds are as loud as in Studio and no longer crackle when loud. A mono Sound plays 3 dB down on each side, as Studio centres it (Rook played it at full level), and Rook no longer clips the mix at full scale itself: Studio hands levels past it to the system, and so does Rook now. Measured silently on Studio's output: Volume 0.1 to 10 and 10 sounds at once now match within 0.1%.
+- `rook-player --record-audio out.wav` mixes the first `--seconds` of a place to a WAV file without a device, and prints the peak, the samples past full scale and the sounds playing at the loudest moment.
+
 ## [0.6.0] — 2026-10-16 — M6 steps 3 and 4: terrain collision and the Terrain API; M6 Terrain done
 
 Pinned Roblox version: 0.741.19. Finishes M6 Terrain: archived places with terrain show it, parts rest on it and queries find it, and scripts build and dig it as Studio does; the conformance case `terrain/terrain_api` passes.

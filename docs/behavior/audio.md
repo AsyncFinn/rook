@@ -199,9 +199,36 @@ times real time (1 s at 2 moved 2.03 to 2.13 s), and 0 holds it still
 while `Playing` stays true. `Volume` is kept within 0 to 10, and
 `PlaybackSpeed` (and `Pitch`, the same property) within 0 to 20;
 infinity reads 20. Rook plays faster sounds higher, as resampling does
-(Inference). How loud `Volume` makes a sound can't be measured by script,
-since `PlaybackLoudness` doesn't change with it, so Rook's plain linear
-gain stays an Approximation.
+(Inference). `Volume` is a plain linear gain on the output (Confirmed;
+see *Output level* below).
+
+*Output level and clipping* (Confirmed, Studio 0.743, 2026-10-16). Studio's
+output was recorded silently: its Windows output device was set to one of
+Steam's virtual devices, which nobody hears, and that device was
+recorded. `Only Play Audio from Window in Focus` was off, so Studio didn't
+need focus. The install's `impact_explosion_03.mp3` (mono), as a global
+sound in a playtest client, peaked at:
+
+| Played | Studio | Rook before | Rook now |
+|---|---:|---:|---:|
+| Volume 0.1 | 0.071 | 0.100 | 0.071 |
+| Volume 1 | 0.707 | 1.000 | 0.707 |
+| Volume 3 | 2.121 | 3.000 | 2.121 |
+| Volume 10 | 7.070 | 9.999 | 7.071 |
+| 5 at once, Volume 1 | 3.535 | 5.000 | 3.535 |
+| 10 at once, Volume 1 | 7.070 | 9.999 | 7.071 |
+
+So `Volume` and stacked sounds add up linearly, with no limiter, and
+Studio hands the device levels far past full scale. A mono sound plays
+3 dB down on each side (1/√2, centred); the stereo
+`action_falling.ogg` played at its own level (Rook within 0.2%). Rook
+used to play mono at full level and clip the mix at full scale itself,
+which crackled; it now centres mono Sounds after their effects
+(Inference for the order) and leaves levels past full scale to the
+system, as Studio does. The 3D levels above are relative to the mono
+global sound, so they keep their fit. How a stereo file is panned in 3D
+is unknown (Approximation: as now). `rook-player --record-audio` mixes a
+place to a WAV file the same way, for checking Rook silently.
 
 *`PlaybackLoudness`* (Confirmed for a steady tone): a client-only reading
 (0 on the server) of the sound's own level, before `Volume` and unchanged
