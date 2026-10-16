@@ -307,7 +307,9 @@ Make archived places look the way Studio shows them today.
 1. The sun, moon and stars, `SkyboxOrientation`, Atmosphere (16 files)
    and Clouds (8).
 2. Post-processing: Bloom (49 files), ColorCorrection (44), SunRays (20),
-   Blur (13), DepthOfField (11).
+   Blur (13), DepthOfField (11); an HDR target with Studio's tone curves,
+   ColorGrading's included, so Decals blend over Neon as in Studio
+   ([`docs/behavior/tone-mapping.md`](docs/behavior/tone-mapping.md)).
 3. `Lighting.Technology` (Voxel, ShadowMap, Future, and Compatibility for
    old places), `EnvironmentDiffuseScale` and `EnvironmentSpecularScale`
    for M4's PBR materials, tuned against Studio screenshots of reference
