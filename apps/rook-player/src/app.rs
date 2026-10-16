@@ -51,7 +51,8 @@ impl App {
                     .with_inner_size(winit::dpi::LogicalSize::new(1280, 720)),
             )?,
         );
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
+        let instance =
+            wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
         let surface = instance.create_surface(window.clone())?;
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
@@ -75,7 +76,7 @@ impl App {
             wgpu::PresentMode::AutoVsync
         };
         surface.configure(&device, &config);
-        let mut renderer = Renderer::new(device, queue, config.format);
+        let mut renderer = Renderer::new(&adapter, device, queue, config.format);
         self.install.apply(&mut renderer);
         renderer.set_scene(&self.scene.scene);
         self.game.set_viewport(config.width, config.height);

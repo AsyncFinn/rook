@@ -24,6 +24,9 @@ pub(crate) struct UploadContext<'a> {
     /// The layout of an image's bind group.
     pub image_layout: &'a wgpu::BindGroupLayout,
     pub sampler: &'a wgpu::Sampler,
+    /// Whether a texture can be viewed in a second format (sRGB and
+    /// linear); OpenGL can't.
+    pub view_formats: bool,
 }
 
 /// A file that can live on the GPU.

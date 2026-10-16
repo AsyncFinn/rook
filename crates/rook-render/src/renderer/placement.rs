@@ -102,6 +102,7 @@ impl Renderer {
             queue: &self.queue,
             image_layout: &self.image_layout,
             sampler: &self.image_sampler,
+            view_formats: self.view_formats,
         };
         let mut first = true;
         let meshes = self.meshes.upload(&mut self.pool, &mut budget, &mut first);
