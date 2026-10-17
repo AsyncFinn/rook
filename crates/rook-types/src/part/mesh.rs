@@ -90,6 +90,15 @@ impl MeshKind {
         matches!(self, Self::Head | Self::File | Self::EmptyFile)
     }
 
+    /// Whether Textures on the part are stretched once over their face,
+    /// like Decals, instead of tiled by `StudsPerTile` (observed in Studio
+    /// 0.742, 2026-10-16: a Texture tiled every 0.25 studs drew once on a
+    /// BlockMesh and a CylinderMesh, and tiled on a plain part and on
+    /// SpecialMesh Brick and Sphere).
+    pub fn stretches_textures(self) -> bool {
+        matches!(self, Self::BlockMesh | Self::UprightCylinder)
+    }
+
     /// Whether the part's surfaces (studs, inlets) are drawn on the mesh:
     /// on the primitive SpecialMesh shapes, projected like decals (observed
     /// for Brick, Sphere and Cylinder), but not on a BlockMesh (at any

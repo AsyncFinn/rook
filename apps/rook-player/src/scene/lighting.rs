@@ -53,7 +53,9 @@ pub(super) fn lighting(dom: &Dom) -> Lighting {
     // Ambient alone from 179 to 148 and the sky from (85, 163, 202) to
     // (61, 129, 174) (observed in Studio 0.742; Approximation, as Studio
     // scales before its tone curve).
-    l.exposure = number(dom, id, "ExposureCompensation").unwrap_or(0.0).exp2();
+    l.exposure = number(dom, id, "ExposureCompensation")
+        .unwrap_or(0.0)
+        .exp2();
     // A night sky darkens towards black as the sun sets (Approximation
     // until skyboxes are supported).
     let day = (l.sun_direction.y * 4.0 + 0.5).clamp(0.05, 1.0);

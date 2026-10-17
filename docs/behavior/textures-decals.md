@@ -71,6 +71,11 @@ marked):
   2 × 1.5 tiles, whole tiles at the top left and part tiles at the right and
   bottom); the image coordinate is (studs + `OffsetStudsU`/`V`) /
   `StudsPerTile`, so an offset of 0.5 moves the image 0.5 studs left.
+  On a BlockMesh or a CylinderMesh a Texture isn't tiled: it is stretched
+  once over its face, like a Decal (checked 2026-10-16, after a dial built
+  from CylinderMesh discs with Textures tiled every 0.05 studs drew dense
+  lines in Rook and one line per disc in Studio). SpecialMesh Brick and
+  Sphere tile as a plain part does.
 - *Mesh textures:* `TextureId` draws only on file meshes (SpecialMesh
   FileMesh and FileMesh, including the empty-`MeshId` box, which shows the
   image on every face); a Head, Sphere or Brick SpecialMesh ignores it. The
