@@ -5,7 +5,7 @@ use glam::Vec3;
 use rook_dom::{Dom, InstanceId};
 use rook_types::{CFrame, Value};
 
-use super::{cframe, child, part, position, run, v3, vector};
+use super::{cframe, child, part, position, run, set, v3, vector};
 use crate::Physics;
 
 pub(super) fn cube(dom: &mut Dom, x: f32) -> InstanceId {
@@ -261,6 +261,44 @@ fn body_gyro_settles_with_default_gains() {
     run(&mut physics, &mut dom, 0.2);
     let (_, y, _) = cframe(&dom, p).to_orientation();
     assert!((y.to_degrees() - 0.58f32.to_degrees()).abs() < 3.0, "{y}");
+    run(&mut physics, &mut dom, 3.0);
+    assert!(cframe(&dom, p).rotation.abs_diff_eq(target.rotation, 0.01));
+}
+
+#[test]
+fn movers_holding_still_let_their_body_sleep() {
+    let mut dom = Dom::new();
+    part(
+        &mut dom,
+        "Part",
+        Vec3::ZERO,
+        Vec3::new(64.0, 2.0, 64.0),
+        true,
+    );
+    let p = part(
+        &mut dom,
+        "Part",
+        Vec3::new(0.0, 2.0, 0.0),
+        Vec3::splat(2.0),
+        false,
+    );
+    let gyro = child(&mut dom, "BodyGyro", p, &[("MaxTorque", v3(1e9, 1e9, 1e9))]);
+    child(
+        &mut dom,
+        "BodyVelocity",
+        p,
+        &[("Velocity", v3(0.0, 0.0, 0.0))],
+    );
+    let mut physics = Physics::new();
+    let sleeping = |physics: &Physics| physics.world.bodies[physics.parts[&p]].is_sleeping();
+    // Observed: a gyro at its target and a zero BodyVelocity sleep.
+    run(&mut physics, &mut dom, 3.0);
+    assert!(sleeping(&physics));
+    // Changing a mover wakes its body, which turns to the new target.
+    let target = CFrame::angles(0.0, 0.5, 0.0);
+    set(&mut dom, gyro, "CFrame", Value::CFrame(target));
+    run(&mut physics, &mut dom, 1.0 / 60.0);
+    assert!(!sleeping(&physics));
     run(&mut physics, &mut dom, 3.0);
     assert!(cframe(&dom, p).rotation.abs_diff_eq(target.rotation, 0.01));
 }
