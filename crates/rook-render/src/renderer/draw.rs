@@ -239,7 +239,12 @@ impl Renderer {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("rook frame"),
             });
-        self.lights.fill(&self.queue, &mut encoder, camera);
+        self.lights.fill(
+            &self.queue,
+            &mut encoder,
+            camera,
+            l.environment_diffuse > 0.0,
+        );
         if shadow.is_some() {
             profiling::scope!("shadow pass");
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

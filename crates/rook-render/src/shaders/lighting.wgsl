@@ -18,7 +18,8 @@ const PI: f32 = 3.14159265;
 struct LightVolume {
     // xyz: the centre of voxel (0, 0, 0); w: 0 when there's no volume.
     origin: vec4<f32>,
-    // xyz: voxels along each axis.
+    // xyz: voxels along each axis; w: 1 when their alpha holds how much
+    // of the sky's diffuse light reaches them.
     size: vec4<f32>,
 };
 
@@ -68,6 +69,38 @@ fn local_light(world: vec3<f32>, n: vec3<f32>, base: vec3<f32>) -> vec3<f32> {
     }
     let sum = textureSampleLevel(light_voxels, light_sampler, uvw, 0.0).rgb;
     return over_curve(base, sum);
+}
+
+// How far across the surface `sky_visibility` spreads its samples, in
+// studs (fitted).
+const SKY_SPREAD: f32 = 3.0;
+
+// The voxels' share of the sky's light at `p`, blended trilinearly; all of
+// it outside the volume.
+fn sky_voxel(p: vec3<f32>) -> f32 {
+    let uvw = ((p - light_volume.origin.xyz) / VOXEL + 0.5) / light_volume.size.xyz;
+    if any(uvw < vec3(0.0)) || any(uvw > vec3(1.0)) {
+        return 1.0;
+    }
+    return textureSampleLevel(light_voxels, light_sampler, uvw, 0.0).a;
+}
+
+// How much of the sky's diffuse light reaches a surface at `world` facing
+// `n` (unit), past the roofs and walls that block it: the voxels around
+// the point 6 studs out along the normal, as for local lights, averaged
+// over four points 3 studs apart across the surface (Studio's shadows of
+// the sky are softer than one voxel blend; fitted, docs/behavior/
+// materials.md, "The sky's diffuse light").
+fn sky_visibility(world: vec3<f32>, n: vec3<f32>) -> f32 {
+    if light_volume.size.w == 0.0 {
+        return 1.0;
+    }
+    let q = world + n * VOXEL_OFFSET;
+    let t = normalize(cross(n, select(vec3(0.0, 1.0, 0.0), vec3(1.0, 0.0, 0.0), abs(n.y) > 0.9)));
+    let b = cross(n, t);
+    let s = SKY_SPREAD;
+    return 0.25 * (sky_voxel(q + (t + b) * s) + sky_voxel(q + (t - b) * s)
+        + sky_voxel(q - (t + b) * s) + sky_voxel(q - (t - b) * s));
 }
 
 // `extra` light units on top of `base` through Studio's tone curve, in
@@ -127,6 +160,12 @@ fn ambient_light() -> vec3<f32> {
     return srgb_to_linear(ambient_color());
 }
 
+// The sky's light left on a surface no sky reaches, in light units at
+// EnvironmentDiffuseScale 1 (measured: about 0.04 in each channel under a
+// roof, under the default sky and a flat grey one, with Ambient or
+// without; it scales with the property).
+const SKY_COVERED: f32 = 0.04;
+
 // The sky's diffuse light on a surface facing `n`, in light units (colour
 // squared), as Studio lights with EnvironmentDiffuseScale (`g.sky_top.w`,
 // dimmed at night with the sky): the skybox's average colours overhead,
@@ -134,8 +173,8 @@ fn ambient_light() -> vec3<f32> {
 // or down. A side face takes 3/4 of the horizon and 1/8 each of the top
 // and bottom, an upward face 0.58 of the top and 0.42 of the horizon
 // (measured in Studio 0.742 with a red top, blue sides and black bottom;
-// docs/behavior/materials.md, "The sky's diffuse light"). Not yet
-// blocked by roofs and walls, as Studio's is.
+// docs/behavior/materials.md, "The sky's diffuse light"), before roofs
+// and walls block it (`sky_visibility`).
 fn sky_light(n: vec3<f32>) -> vec3<f32> {
     let y = n.y;
     let top = 0.125 + 0.29 * y + 0.165 * y * y;
@@ -152,11 +191,13 @@ fn sky_light(n: vec3<f32>) -> vec3<f32> {
 // the sky's light added to them before Studio's tone curve (so it
 // brightens sunlit faces much less than shaded ones, as in Studio; the
 // sun's linear light standing in for its light units), then the local
-// lights on top of the ambient and sky.
+// lights on top of the ambient and sky. Where roofs block the sky, a dim
+// grey light stays (`SKY_COVERED`).
 fn diffuse_light(world: vec3<f32>, n: vec3<f32>, sun: f32) -> vec3<f32> {
     let a = ambient_color();
     let ambient = a * a;
-    let sky = sky_light(n);
+    let covered = vec3(SKY_COVERED * g.sky_top.w);
+    let sky = mix(covered, sky_light(n), sky_visibility(world, normalize(n)));
     return ambient_light() + vec3(sun) + over_curve(ambient + sun, sky)
         + local_light(world, n, ambient + sky);
 }

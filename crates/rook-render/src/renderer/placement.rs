@@ -55,6 +55,7 @@ impl Renderer {
         self.waiting.clear();
         self.transparent_parts.clear();
         self.transparent_free.clear();
+        self.lights.clear_blockers();
         self.update_parts(scene, &(0..scene.parts.len()).collect::<Vec<_>>());
     }
 
@@ -67,6 +68,7 @@ impl Renderer {
         self.lighting = scene.lighting;
         self.terrain = scene.terrain;
         self.lights.update(&self.device, &self.queue, &scene.lights);
+        self.lights.update_blockers(scene, changed);
         // The skybox's images go up like any other image.
         for hash in scene.lighting.skybox.into_iter().flatten() {
             self.image_readiness(hash, Some(scene));
