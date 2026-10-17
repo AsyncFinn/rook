@@ -1,6 +1,6 @@
 // The light on surfaces, shared by parts and terrain: the sun (shadowed
-// through the shadow map), the ambient (Ambient and OutdoorAmbient), local
-// lights, and fog.
+// through the shadow map), the ambient (Ambient and OutdoorAmbient), the
+// sky's diffuse light (EnvironmentDiffuseScale), local lights, and fog.
 
 import package::common::{g, srgb_to_linear};
 import package::lights::VOXEL;
@@ -54,9 +54,10 @@ fn studio_light3(v: vec3<f32>) -> vec3<f32> {
 
 // The local lights' light on a surface at `world` with normal `n`, in
 // Rook's linear light: the voxels around the point 6 studs out, blended
-// trilinearly, through Studio's tone curve on top of the Ambient it adds
-// to (so a lit wall in a lit room brightens as Studio's does).
-fn local_light(world: vec3<f32>, n: vec3<f32>) -> vec3<f32> {
+// trilinearly, through Studio's tone curve on top of the ambient and sky
+// light it adds to (`base`, light units; so a lit wall in a lit room
+// brightens as Studio's does).
+fn local_light(world: vec3<f32>, n: vec3<f32>, base: vec3<f32>) -> vec3<f32> {
     if light_volume.origin.w == 0.0 {
         return vec3(0.0);
     }
@@ -66,12 +67,16 @@ fn local_light(world: vec3<f32>, n: vec3<f32>) -> vec3<f32> {
         return vec3(0.0);
     }
     let sum = textureSampleLevel(light_voxels, light_sampler, uvw, 0.0).rgb;
-    // Exposure scales light before the curve, as in Studio; `fog` applies
-    // it to the rest afterwards, so it's taken back out here.
+    return over_curve(base, sum);
+}
+
+// `extra` light units on top of `base` through Studio's tone curve, in
+// Rook's linear light. Exposure scales light before the curve, as in
+// Studio; `fog` applies it to the rest afterwards, so it's taken back out
+// here.
+fn over_curve(base: vec3<f32>, extra: vec3<f32>) -> vec3<f32> {
     let e = g.fog_range.z;
-    let a = ambient_color();
-    let ambient = a * a * e;
-    return max(studio_light3(ambient + sum * e) - studio_light3(ambient), vec3(0.0)) / e;
+    return max(studio_light3((base + extra) * e) - studio_light3(base * e), vec3(0.0)) / e;
 }
 
 // How much of the sun reaches a point: 3x3 comparison samples (each one
@@ -122,10 +127,44 @@ fn ambient_light() -> vec3<f32> {
     return srgb_to_linear(ambient_color());
 }
 
+// The sky's diffuse light on a surface facing `n`, in light units (colour
+// squared), as Studio lights with EnvironmentDiffuseScale (`g.sky_top.w`,
+// dimmed at night with the sky): the skybox's average colours overhead,
+// around the horizon and below, weighted by how far the surface faces up
+// or down. A side face takes 3/4 of the horizon and 1/8 each of the top
+// and bottom, an upward face 0.58 of the top and 0.42 of the horizon
+// (measured in Studio 0.742 with a red top, blue sides and black bottom;
+// docs/behavior/materials.md, "The sky's diffuse light"). Not yet
+// blocked by roofs and walls, as Studio's is.
+fn sky_light(n: vec3<f32>) -> vec3<f32> {
+    let y = n.y;
+    let top = 0.125 + 0.29 * y + 0.165 * y * y;
+    let bottom = 0.125 - 0.29 * y + 0.165 * y * y;
+    let t = g.sky_top.rgb;
+    let h = g.sky_horizon.rgb;
+    let b = g.sky_bottom.rgb;
+    let light = top * t * t + (1.0 - top - bottom) * h * h + bottom * b * b;
+    return light * g.sky_top.w;
+}
+
+// All the diffuse light on a surface at `world` facing `n`, given the
+// sun's (`sun_light`), in Rook's linear light: the ambient and the sun,
+// the sky's light added to them before Studio's tone curve (so it
+// brightens sunlit faces much less than shaded ones, as in Studio; the
+// sun's linear light standing in for its light units), then the local
+// lights on top of the ambient and sky.
+fn diffuse_light(world: vec3<f32>, n: vec3<f32>, sun: f32) -> vec3<f32> {
+    let a = ambient_color();
+    let ambient = a * a;
+    let sky = sky_light(n);
+    return ambient_light() + vec3(sun) + over_curve(ambient + sun, sky)
+        + local_light(world, n, ambient + sky);
+}
+
 // Sun, ambient and fog on a linear albedo, without highlights (decals).
 fn shade(albedo: vec3<f32>, world: vec3<f32>, normal: vec3<f32>) -> vec3<f32> {
     let n = normalize(normal);
-    return fog(albedo * (ambient_light() + local_light(world, n) + vec3(sun_light(world, n))), world);
+    return fog(albedo * diffuse_light(world, n, sun_light(world, n)), world);
 }
 
 // Physically based shading (Approximation, tuned against Studio 0.742,
@@ -150,7 +189,7 @@ fn shade_pbr(
     let f0 = mix(vec3(0.04), albedo, metalness);
     let n_v = max(dot(n, v), 1e-4);
     let environment = g.sky.w;
-    let diffuse = ambient_light() + local_light(world, n) + vec3(sun);
+    let diffuse = diffuse_light(world, n, sun);
     var color = albedo * (1.0 - metalness * environment) * diffuse;
     if sun > 0.0 {
         let h = normalize(l + v);

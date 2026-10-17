@@ -7,7 +7,7 @@ import package::common::{
     TERRAIN_DRAWN_SHIFT, srgb_to_linear,
 };
 import package::images::layer_height;
-import package::lighting::{ambient_light, local_light, sun_light, sun_visibility, fog};
+import package::lighting::{diffuse_light, sun_light, sun_visibility, fog};
 
 // Studs per repeat of water's normal frames (Approximation: Studio's
 // ripples are 1 to 3 studs across, about two of the maps' bumps, and
@@ -110,7 +110,7 @@ fn water_surface(in: VertexOut, dp_x: vec3<f32>, dp_y: vec3<f32>) -> vec4<f32> {
     let v = normalize(g.camera_pos.xyz - in.world);
     let fresnel = 0.02 + 0.98 * pow(1.0 - max(dot(n, v), 0.0), 5.0);
     let up = vec3(0.0, 1.0, 0.0);
-    let body = in.color.rgb * (ambient_light() + local_light(in.world, n) + vec3(sun_light(in.world, n)));
+    let body = in.color.rgb * diffuse_light(in.world, n, sun_light(in.world, n));
     let reflected = clamp(in.material.x * mix(0.5, 1.0, fresnel), 0.0, 1.0);
     let r = reflect(-v, n);
     let sky = mix(srgb_to_linear(g.sky_horizon.rgb), srgb_to_linear(g.sky_top.rgb), clamp(r.y, 0.0, 1.0));

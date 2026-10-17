@@ -48,6 +48,13 @@ pub(super) fn lighting(dom: &Dom) -> Lighting {
     l.environment_specular = number(dom, id, "EnvironmentSpecularScale")
         .unwrap_or(0.0)
         .clamp(0.0, 1.0);
+    // The sky lights surfaces as a second ambient, added to Ambient before
+    // the tone curve (observed in Studio 0.742; docs/behavior/materials.md,
+    // "The sky's diffuse light"). Read as 0 when unsaved, like
+    // EnvironmentSpecularScale, so archived places are lit as before.
+    l.environment_diffuse = number(dom, id, "EnvironmentDiffuseScale")
+        .unwrap_or(0.0)
+        .clamp(0.0, 1.0);
     // Scales all light, the sky's too, about as a multiplier on linear
     // light: ExposureCompensation -0.6 took white SmoothPlastic under
     // Ambient alone from 179 to 148 and the sky from (85, 163, 202) to
@@ -56,13 +63,19 @@ pub(super) fn lighting(dom: &Dom) -> Lighting {
     l.exposure = number(dom, id, "ExposureCompensation")
         .unwrap_or(0.0)
         .exp2();
-    // A night sky darkens towards black as the sun sets (Approximation
-    // until skyboxes are supported).
-    let day = (l.sun_direction.y * 4.0 + 0.5).clamp(0.05, 1.0);
+    let day = daylight(l.sun_direction);
     l.sky_top = l.sky_top.map(|c| c * day);
     l.sky_horizon = l.sky_horizon.map(|c| c * day);
+    l.sky_bottom = l.sky_horizon;
     l.reflection = l.sky_horizon;
     l
+}
+
+/// How bright the sky is for the sun's height: a night sky darkens towards
+/// black as the sun sets (Approximation; Studio's sky draws black at
+/// midnight and then lights nothing).
+fn daylight(sun_direction: Vec3) -> f32 {
+    (sun_direction.y * 4.0 + 0.5).clamp(0.05, 1.0)
 }
 
 /// The skybox images of a Sky, in the order Up, Back, Front, Left, Right,
@@ -93,7 +106,7 @@ impl SceneCache {
     /// the install's default sky without one): once the six images have
     /// loaded they are drawn behind everything, the plain sky colours
     /// become their averages (the Up image above, the four sides at the
-    /// horizon), and so does what reflective parts take on (observed:
+    /// horizon, the Down image below), and so does what reflective parts take on (observed:
     /// Studio's reflections follow the Sky, a black one turning a
     /// 0.3-reflective yellow part olive). The sun, moon and stars, and
     /// `SkyboxOrientation`, aren't drawn yet.
@@ -143,7 +156,11 @@ impl SceneCache {
         };
         l.sky_top = averages[0];
         l.sky_horizon = mean(&averages[1..5]);
+        l.sky_bottom = averages[5];
         l.reflection = mean(&averages);
+        // The images aren't darkened for the night, so the light they give
+        // is.
+        l.environment_diffuse *= daylight(l.sun_direction);
         l.skybox = hashes.try_into().ok();
         l
     }

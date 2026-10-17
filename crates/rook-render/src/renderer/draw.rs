@@ -214,8 +214,9 @@ impl Renderer {
                 self.terrain.grass_reach,
             ],
             wind: rgb(self.terrain.wind.to_array(), self.water_phase as f32),
-            sky_top: rgb(l.sky_top, 0.0),
+            sky_top: rgb(l.sky_top, l.environment_diffuse),
             sky_horizon: rgb(l.sky_horizon, 0.0),
+            sky_bottom: rgb(l.sky_bottom, 0.0),
             sky_images,
             terrain_layers: self.terrain_layers(),
         };

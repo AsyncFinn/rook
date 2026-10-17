@@ -245,6 +245,8 @@ pub struct Lighting {
     pub fog_end: f32,
     pub sky_top: [f32; 3],
     pub sky_horizon: [f32; 3],
+    /// The sky below the horizon (the skybox's Down image).
+    pub sky_bottom: [f32; 3],
     /// What reflective parts take on (`Reflectance`): the sky's colour,
     /// the average of the place's skybox when it has one (sRGB).
     pub reflection: [f32; 3],
@@ -257,6 +259,9 @@ pub struct Lighting {
     /// `Lighting.EnvironmentSpecularScale`, 0 to 1: how much parts reflect
     /// the sky, and how far metals trade their diffuse light for it.
     pub environment_specular: f32,
+    /// `Lighting.EnvironmentDiffuseScale`, 0 to 1: how much the sky lights
+    /// surfaces (on top of Ambient), dimmed as the sky darkens at night.
+    pub environment_diffuse: f32,
     /// `Lighting.ExposureCompensation` as a multiplier on linear light
     /// (2 to the power of it), for everything drawn, the sky included.
     pub exposure: f32,
@@ -274,10 +279,12 @@ impl Default for Lighting {
             fog_end: 100_000.0,
             sky_top: [0.36, 0.56, 0.86],
             sky_horizon: [0.75, 0.84, 0.95],
+            sky_bottom: [0.75, 0.84, 0.95],
             reflection: [0.75, 0.84, 0.95],
             skybox: None,
             global_shadows: true,
             environment_specular: 0.0,
+            environment_diffuse: 0.0,
             exposure: 1.0,
         }
     }
