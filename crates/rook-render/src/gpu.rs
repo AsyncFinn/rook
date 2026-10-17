@@ -34,10 +34,13 @@ pub(crate) struct Globals {
     pub(crate) terrain: [f32; 4],
     /// `TerrainLook::wind`; w is water's phase (`Renderer::water_phase`).
     pub(crate) wind: [f32; 4],
-    /// The sky's colour overhead and at the horizon (`Lighting::sky_top`,
-    /// `Lighting::sky_horizon`, sRGB), which water reflects.
+    /// The sky's colour overhead, at the horizon and below
+    /// (`Lighting::sky_top`, `sky_horizon`, `sky_bottom`, sRGB): water
+    /// reflects the first two, and all three light surfaces. `sky_top`'s w
+    /// is `Lighting::environment_diffuse`.
     pub(crate) sky_top: [f32; 4],
     pub(crate) sky_horizon: [f32; 4],
+    pub(crate) sky_bottom: [f32; 4],
     /// Each skybox image's slot in the image table, when there is one.
     pub(crate) sky_images: [[u32; 4]; 2],
     /// Each terrain layer's blend ([`TerrainLayer`]), two per layer: the
