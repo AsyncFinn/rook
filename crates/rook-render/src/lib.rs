@@ -39,7 +39,22 @@ use gpu::*;
 
 pub use renderer::{DrawCounts, GpuTimes, PassCounts, Renderer};
 
+/// The shadow map's depth, and the main pass's where the device has no
+/// stencil to go with it (`main_depth_format`).
 pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
+
+/// The main pass's depth: with a stencil where the device has one, so
+/// that See-through Glass filters each pixel once (`Pipelines::new`).
+pub(crate) fn main_depth_format(device: &wgpu::Device) -> wgpu::TextureFormat {
+    if device
+        .features()
+        .contains(wgpu::Features::DEPTH32FLOAT_STENCIL8)
+    {
+        wgpu::TextureFormat::Depth32FloatStencil8
+    } else {
+        DEPTH_FORMAT
+    }
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum RenderError {

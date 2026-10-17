@@ -108,12 +108,36 @@ impl Pipelines {
             Some(instances.clone()),
         ];
         let shadow_buffers = [Some(positions), Some(instances)];
+        let depth_format = main_depth_format(device);
+        // See-through Glass's filter and surface each draw a pixel once
+        // per part: the first fragment there stamps the part's reference
+        // (`Renderer::record` gives each Glass run its own) and ties with
+        // it at the same depth fail. Without a stencil, ties draw twice,
+        // in thin dark lines where a union's shells meet (observed on an
+        // extinguisher box's cover).
+        let once = if depth_format.has_stencil_aspect() {
+            let face = wgpu::StencilFaceState {
+                compare: wgpu::CompareFunction::NotEqual,
+                fail_op: wgpu::StencilOperation::Keep,
+                depth_fail_op: wgpu::StencilOperation::Keep,
+                pass_op: wgpu::StencilOperation::Replace,
+            };
+            wgpu::StencilState {
+                front: face,
+                back: face,
+                read_mask: 0xff,
+                write_mask: 0xff,
+            }
+        } else {
+            wgpu::StencilState::default()
+        };
         let make = |label,
                     fragment,
                     blend: Option<wgpu::BlendState>,
                     depth_write: bool,
                     compare: wgpu::CompareFunction,
-                    bias: wgpu::DepthBiasState| {
+                    bias: wgpu::DepthBiasState,
+                    stencil: wgpu::StencilState| {
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some(label),
                 layout: Some(&pipeline_layout),
@@ -128,10 +152,10 @@ impl Pipelines {
                     ..Default::default()
                 },
                 depth_stencil: Some(wgpu::DepthStencilState {
-                    format: DEPTH_FORMAT,
+                    format: depth_format,
                     depth_write_enabled: Some(depth_write),
                     depth_compare: Some(compare),
-                    stencil: Default::default(),
+                    stencil,
                     bias,
                 }),
                 multisample: Default::default(),
@@ -189,6 +213,7 @@ impl Pipelines {
             true,
             wgpu::CompareFunction::Greater,
             Default::default(),
+            Default::default(),
         );
         let transparent_pipeline = make(
             "rook transparent",
@@ -196,6 +221,7 @@ impl Pipelines {
             Some(wgpu::BlendState::ALPHA_BLENDING),
             false,
             wgpu::CompareFunction::Greater,
+            Default::default(),
             Default::default(),
         );
         // Depth only: the colour stays as it is.
@@ -214,6 +240,7 @@ impl Pipelines {
             true,
             wgpu::CompareFunction::Greater,
             Default::default(),
+            Default::default(),
         );
         let glass_filter = make(
             "rook glass filter",
@@ -229,6 +256,7 @@ impl Pipelines {
             false,
             wgpu::CompareFunction::Equal,
             Default::default(),
+            once.clone(),
         );
         let glass_surface = make(
             "rook glass surface",
@@ -237,6 +265,7 @@ impl Pipelines {
             false,
             wgpu::CompareFunction::GreaterEqual,
             Default::default(),
+            once.clone(),
         );
         let additive = make(
             "rook additive",
@@ -251,6 +280,7 @@ impl Pipelines {
             }),
             false,
             wgpu::CompareFunction::Greater,
+            Default::default(),
             Default::default(),
         );
         let over = make(
@@ -271,6 +301,7 @@ impl Pipelines {
             false,
             wgpu::CompareFunction::GreaterEqual,
             Default::default(),
+            Default::default(),
         );
         // Images lie exactly on their part's surface: the same vertices
         // through the same (invariant) maths give the same depth.
@@ -288,6 +319,7 @@ impl Pipelines {
                 slope_scale: 1.0,
                 clamp: 0.0,
             },
+            Default::default(),
         );
 
         // The skybox: one full-screen triangle per image, each keeping the
@@ -304,7 +336,7 @@ impl Pipelines {
             },
             primitive: Default::default(),
             depth_stencil: Some(wgpu::DepthStencilState {
-                format: DEPTH_FORMAT,
+                format: depth_format,
                 depth_write_enabled: Some(false),
                 depth_compare: Some(wgpu::CompareFunction::Always),
                 stencil: Default::default(),
