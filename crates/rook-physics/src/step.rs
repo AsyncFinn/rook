@@ -100,15 +100,16 @@ impl Physics {
     fn step_motors(&mut self, dom: &mut Dom) {
         let dt = self.last_dt;
         let turned: Vec<RigidBodyHandle> = self
-            .bodies
+            .motored
             .iter()
-            .filter(|(_, b)| {
+            .filter(|h| {
                 // Every motor steps, even after one has turned.
-                b.motors
+                self.bodies[*h]
+                    .motors
                     .iter()
                     .fold(false, |any, j| joints::step_motor(dom, j, dt) | any)
             })
-            .map(|(h, _)| *h)
+            .copied()
             .collect();
         for h in turned {
             self.refresh_offsets(dom, h);
