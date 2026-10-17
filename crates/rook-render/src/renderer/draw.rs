@@ -10,8 +10,11 @@ use runs::{Pipe, Runs, Source};
 enum Pass {
     Part,
     Image,
-    /// See-through Glass filtering what's behind it, before its surface.
+    /// See-through Glass: its nearest depth, then its filter on what's
+    /// behind, then its surface.
+    GlassDepth,
     GlassFilter,
+    GlassSurface,
     ForceField,
 }
 
@@ -20,7 +23,9 @@ impl Pass {
         match self {
             Pass::Part => Pipe::Transparent,
             Pass::Image => Pipe::Layer,
+            Pass::GlassDepth => Pipe::GlassDepth,
             Pass::GlassFilter => Pipe::GlassFilter,
+            Pass::GlassSurface => Pipe::GlassSurface,
             Pass::ForceField => Pipe::Additive,
         }
     }
@@ -29,7 +34,9 @@ impl Pass {
     fn of(p: &PartInstance) -> &'static [Pass] {
         match (p.layer, p.material) {
             (Layer::Image { .. }, _) => &[Pass::Image],
-            (Layer::Base, Material::Glass) => &[Pass::GlassFilter, Pass::Part],
+            (Layer::Base, Material::Glass) => {
+                &[Pass::GlassDepth, Pass::GlassFilter, Pass::GlassSurface]
+            }
             (Layer::Base, Material::ForceField) => &[Pass::ForceField],
             (Layer::Base, _) => &[Pass::Part],
         }
@@ -285,6 +292,13 @@ impl Renderer {
             pass.set_bind_group(0, &self.bind_group, &[]);
             pass.set_bind_group(1, &self.main_bind_group, &[]);
             pass.set_bind_group(3, &self.lights.bind_group, &[]);
+            let haze = pipelines::GLASS_HAZE;
+            pass.set_blend_constant(wgpu::Color {
+                r: haze,
+                g: haze,
+                b: haze,
+                a: 0.0,
+            });
             if let ImageBinding::Table(_) = &self.image_binding {
                 pass.set_bind_group(2, self.group(&[None; 5]), &[]);
             }

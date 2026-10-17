@@ -295,14 +295,22 @@ fn surface_alpha(in: VertexOut) -> f32 {
     return in.color.a;
 }
 
-// See-through Glass: what's behind is multiplied by the Glass's colour,
-// fully up to Transparency about 0.65 and less beyond (observed: red Glass
-// at 0.5 left almost nothing of a blue wall, at 0.8 turned yellow orange;
-// fitted, Approximation).
+// See-through Glass: what's behind, plus a faint haze (the blend constant,
+// `GLASS_HAZE`), times a filter per channel: 1.2 x the Glass's colour (in
+// linear light) raised to 4 x (1 - Transparency)², at most 1. So from 0.5
+// down the colour filters fully (the surface shows more instead, in
+// `surface_alpha`), and by 0.95 it nearly passes everything; white Glass
+// passes all of it at any Transparency, and black Glass at 0.6 lets 3%
+// through (observed on grey Glass from 0 to 255 at 0.5 to 0.95 over a wall
+// of greys; per channel, as red Glass's green and blue match black Glass;
+// fitted within about 6 levels. Approximation: Studio seems to filter
+// before its tone curve (Inference), so its bright blues pass a little
+// more, and white Glass brightens what's behind by up to 18 levels where
+// Rook only adds the haze).
 @fragment
 fn fs_glass_filter(in: VertexOut) -> @location(0) vec4<f32> {
-    let strength = clamp(2.9 * in.color.a, 0.0, 1.0);
-    return vec4(mix(vec3(1.0), in.color.rgb, strength), 1.0);
+    let power = min(4.0 * in.color.a * in.color.a, 1.0);
+    return vec4(min(pow(1.2 * in.color.rgb + 0.005, vec3(power)), vec3(1.0)), 1.0);
 }
 
 // ForceField: its colour added over what's behind, faint where it faces
