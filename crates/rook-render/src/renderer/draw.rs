@@ -292,13 +292,6 @@ impl Renderer {
             pass.set_bind_group(0, &self.bind_group, &[]);
             pass.set_bind_group(1, &self.main_bind_group, &[]);
             pass.set_bind_group(3, &self.lights.bind_group, &[]);
-            let haze = pipelines::GLASS_HAZE;
-            pass.set_blend_constant(wgpu::Color {
-                r: haze,
-                g: haze,
-                b: haze,
-                a: 0.0,
-            });
             if let ImageBinding::Table(_) = &self.image_binding {
                 pass.set_bind_group(2, self.group(&[None; 5]), &[]);
             }
