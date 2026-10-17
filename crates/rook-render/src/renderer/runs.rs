@@ -26,7 +26,9 @@ pub(crate) enum Pipe {
     Opaque,
     Layer,
     Transparent,
+    GlassDepth,
     GlassFilter,
+    GlassSurface,
     Additive,
     /// Terrain seams' later layers, added over the first.
     Over,
@@ -201,7 +203,9 @@ impl Renderer {
             Pipe::Opaque => &p.opaque,
             Pipe::Layer => &p.layer,
             Pipe::Transparent => &p.transparent,
+            Pipe::GlassDepth => &p.glass_depth,
             Pipe::GlassFilter => &p.glass_filter,
+            Pipe::GlassSurface => &p.glass_surface,
             Pipe::Additive => &p.additive,
             Pipe::Over => &p.over,
         }

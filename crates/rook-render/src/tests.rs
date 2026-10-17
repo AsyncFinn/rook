@@ -314,8 +314,9 @@ fn table_and_multi_draws_draw_what_bound_sets_draw() {
     assert_eq!(plain.calls, plain.draws);
     assert_eq!(fast.draws, plain.draws);
     if fast.calls < fast.draws {
-        // Opaque, layer and the transparent passes each need a call.
-        assert!(fast.calls <= 6, "{fast:?}");
+        // Opaque, layer and the transparent passes (three for Glass) each
+        // need a call.
+        assert!(fast.calls <= 7, "{fast:?}");
     }
 }
 

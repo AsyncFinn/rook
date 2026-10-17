@@ -14,6 +14,12 @@ fn shaders(table: bool) -> [&'static str; 2] {
     }
 }
 
+/// The faint haze See-through Glass adds to what's behind before filtering
+/// it (linear light; the main pass's blend constant): black Glass at 0.95
+/// lifts a near-black wall by about 9 levels (observed; fitted with the
+/// filter in `fs_glass_filter`).
+pub(crate) const GLASS_HAZE: f64 = 0.008;
+
 /// The render pipelines, built once.
 #[derive(Debug)]
 pub(crate) struct Pipelines {
@@ -21,8 +27,16 @@ pub(crate) struct Pipelines {
     pub(crate) transparent: wgpu::RenderPipeline,
     /// Decals and Textures over what's drawn.
     pub(crate) layer: wgpu::RenderPipeline,
-    /// See-through Glass: what's behind multiplied by its colour.
+    /// See-through Glass's nearest depth, before its filter, so a union's
+    /// overlapping shells filter once (Inference: Studio shows an
+    /// extinguisher clearly through a Glass union with three layers, which
+    /// Rook darkened to 3% when each filtered).
+    pub(crate) glass_depth: wgpu::RenderPipeline,
+    /// See-through Glass: what's behind, plus `GLASS_HAZE`, times its
+    /// filter, where the Glass is nearest.
     pub(crate) glass_filter: wgpu::RenderPipeline,
+    /// See-through Glass's own surface, where it's nearest.
+    pub(crate) glass_surface: wgpu::RenderPipeline,
     /// ForceField: its glow added to what's behind.
     pub(crate) additive: wgpu::RenderPipeline,
     /// Terrain seams' later layers: their share added to the first's, on
@@ -190,19 +204,44 @@ impl Pipelines {
             wgpu::CompareFunction::Greater,
             Default::default(),
         );
+        // Depth only: the colour stays as it is.
+        let keep = wgpu::BlendComponent {
+            src_factor: wgpu::BlendFactor::Zero,
+            dst_factor: wgpu::BlendFactor::One,
+            operation: wgpu::BlendOperation::Add,
+        };
+        let glass_depth = make(
+            "rook glass depth",
+            "fs_glass_filter",
+            Some(wgpu::BlendState {
+                color: keep,
+                alpha: keep,
+            }),
+            true,
+            wgpu::CompareFunction::Greater,
+            Default::default(),
+        );
         let glass_filter = make(
             "rook glass filter",
             "fs_glass_filter",
             Some(wgpu::BlendState {
                 color: wgpu::BlendComponent {
-                    src_factor: wgpu::BlendFactor::Zero,
+                    src_factor: wgpu::BlendFactor::Constant,
                     dst_factor: wgpu::BlendFactor::Src,
                     operation: wgpu::BlendOperation::Add,
                 },
                 alpha: wgpu::BlendComponent::OVER,
             }),
             false,
-            wgpu::CompareFunction::Greater,
+            wgpu::CompareFunction::Equal,
+            Default::default(),
+        );
+        let glass_surface = make(
+            "rook glass surface",
+            "fs_main",
+            Some(wgpu::BlendState::ALPHA_BLENDING),
+            false,
+            wgpu::CompareFunction::GreaterEqual,
             Default::default(),
         );
         let additive = make(
@@ -295,7 +334,9 @@ impl Pipelines {
             opaque: opaque_pipeline,
             transparent: transparent_pipeline,
             layer: layer_pipeline,
+            glass_depth,
             glass_filter,
+            glass_surface,
             additive,
             over,
             sky: sky_pipeline,
