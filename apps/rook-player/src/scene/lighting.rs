@@ -128,7 +128,8 @@ impl SceneCache {
             let Some(r) = ContentRef::parse(&url) else {
                 return l;
             };
-            let state = self.files.state(&r, Want::Image);
+            // The sky is all around the camera: first.
+            let state = self.files.state(&r, Want::Image, 0.0);
             let key = (r, Want::Image);
             match state {
                 FileState::Loaded(hash) => {

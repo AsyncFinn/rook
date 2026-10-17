@@ -54,8 +54,9 @@ impl Files {
         }
     }
 
-    /// A file's state, asking for it the first time.
-    pub fn state(&mut self, r: &ContentRef, want: Want) -> FileState {
+    /// A file's state, asking for it the first time, behind files of a
+    /// lower `priority`.
+    pub fn state(&mut self, r: &ContentRef, want: Want, priority: f32) -> FileState {
         let key = (r.clone(), want);
         if let Some(&state) = self.states.get(&key) {
             return state;
@@ -65,9 +66,16 @@ impl Files {
             .loader
             .get_or_insert_with(|| Loader::new(resolver.clone()));
         self.tickets
-            .insert(loader.request_as(r.clone(), want), key.clone());
+            .insert(loader.request_at(r.clone(), want, priority), key.clone());
         self.states.insert(key, FileState::Loading);
         FileState::Loading
+    }
+
+    /// Change the priority of a file still waiting to load.
+    pub fn set_priority(&self, key: &FileRef, priority: f32) {
+        if let Some(loader) = &self.loader {
+            loader.set_priority(key.0.clone(), key.1, priority);
+        }
     }
 
     /// Files finished since the last call, with what they hold (`None` for

@@ -11,12 +11,21 @@
 //! below-normal priority, so on a small machine loading takes what the
 //! frame and audio leave. Threads start with the first request: a place
 //! that never asks for content costs nothing.
+//!
+//! Requests carry a priority, lower first, which can change while they
+//! wait: the player ranks files by how far from the camera the parts
+//! waiting for them are, so what's around the camera arrives first.
+//! Fetching and decoding both take the most urgent job next.
+
+mod queue;
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
+
+use queue::Queue;
 
 use crate::decode::audio::Audio;
 use crate::decode::image::Image;
@@ -113,8 +122,15 @@ type Job = (ContentRef, Want);
 
 #[derive(Debug)]
 struct Workers {
-    jobs: Sender<Job>,
+    jobs: Arc<Queue<Job, ()>>,
     done: Receiver<(Job, Outcome)>,
+}
+
+impl Drop for Workers {
+    /// The fetch threads end with their loader.
+    fn drop(&mut self) {
+        self.jobs.close();
+    }
 }
 
 /// Queues references for the worker threads and hands back results.
@@ -148,8 +164,15 @@ impl Loader {
         self.request_as(r, Want::Bytes)
     }
 
-    /// Queue a reference, asking for `want`.
+    /// Queue a reference, asking for `want`, ahead of anything with a
+    /// priority.
     pub fn request_as(&mut self, r: ContentRef, want: Want) -> Ticket {
+        self.request_at(r, want, 0.0)
+    }
+
+    /// Queue a reference, asking for `want`, behind requests of a lower
+    /// `priority` (a reference already in flight keeps its own).
+    pub fn request_at(&mut self, r: ContentRef, want: Want, priority: f32) -> Ticket {
         self.next += 1;
         let ticket = Ticket(self.next);
         let job = (r, want);
@@ -162,9 +185,16 @@ impl Loader {
             .workers
             .get_or_insert_with(|| spawn_fetchers(&self.resolver));
         IN_FLIGHT.fetch_add(1, Ordering::Relaxed);
-        // The workers live as long as `jobs`, so the send can't fail.
-        let _ = workers.jobs.send(job);
+        workers.jobs.push(job, (), priority);
         ticket
+    }
+
+    /// Change the priority of a request not picked up yet; nothing once a
+    /// worker has it.
+    pub fn set_priority(&self, r: ContentRef, want: Want, priority: f32) {
+        if let Some(workers) = &self.workers {
+            workers.jobs.set_priority(&(r, want), priority);
+        }
     }
 
     /// Requests not delivered yet (`ContentProvider.RequestQueueSize`).
@@ -256,26 +286,25 @@ fn finish(done: &Done, job: Job, outcome: Outcome) -> bool {
 }
 
 /// Start `count` threads named `name-i`, at below-normal priority, each
-/// running `work` on what arrives on a shared queue until it closes.
-fn spawn_threads<T: Send + 'static>(
+/// running `work` on the most urgent item of a shared queue until it
+/// closes.
+fn spawn_threads<K, V>(
     name: &str,
     count: usize,
-    queue: Receiver<T>,
-    work: impl Fn(T) -> bool + Send + Clone + 'static,
-) {
-    let queue = Arc::new(Mutex::new(queue));
+    queue: Arc<Queue<K, V>>,
+    work: impl Fn(K, V, f32) -> bool + Send + Clone + 'static,
+) where
+    K: std::hash::Hash + Eq + Clone + Send + 'static,
+    V: Send + 'static,
+{
     for i in 0..count {
         let (queue, work) = (queue.clone(), work.clone());
         let spawned = std::thread::Builder::new()
             .name(format!("{name}-{i}"))
             .spawn(move || {
                 lower_priority();
-                loop {
-                    // Ends when the queue's sender is dropped.
-                    let Ok(item) = queue.lock().expect("thread queue").recv() else {
-                        return;
-                    };
-                    if !work(item) {
+                while let Some((key, value, priority)) = queue.pop() {
+                    if !work(key, value, priority) {
                         return;
                     }
                 }
@@ -319,44 +348,54 @@ fn lower_priority() {
 /// Decoding for a job, run on the decode pool.
 type DecodeJob = Box<dyn FnOnce() + Send>;
 
-/// Queue decoding on the process's decode pool, starting it the first time.
-fn queue_decode(job: DecodeJob) {
-    static POOL: OnceLock<Mutex<Sender<DecodeJob>>> = OnceLock::new();
+/// Queue decoding on the process's decode pool, starting it the first
+/// time, behind decoding of a lower `priority` (the fetch's, as it was when
+/// fetching began).
+fn queue_decode(job: DecodeJob, priority: f32) {
+    static POOL: OnceLock<Arc<Queue<u64, DecodeJob>>> = OnceLock::new();
+    static NEXT: AtomicU64 = AtomicU64::new(0);
     let pool = POOL.get_or_init(|| {
-        let (jobs, queue) = channel::<DecodeJob>();
+        let queue = Arc::new(Queue::new());
         spawn_threads(
             "rook-decode",
             DECODE_THREADS.load(Ordering::Relaxed),
-            queue,
-            |job: DecodeJob| {
+            queue.clone(),
+            |_, job: DecodeJob, _| {
                 job();
                 true
             },
         );
-        Mutex::new(jobs)
+        queue
     });
-    // The pool lives as long as the process, so the send can't fail.
-    let _ = pool.lock().expect("decode queue").send(job);
+    pool.push(NEXT.fetch_add(1, Ordering::Relaxed), job, priority);
 }
 
 fn spawn_fetchers(resolver: &Arc<Resolver>) -> Workers {
-    let (jobs, queue) = channel::<Job>();
+    let jobs = Arc::new(Queue::new());
     let (done_tx, done) = channel();
     let resolver = resolver.clone();
-    spawn_threads("rook-content", FETCHERS, queue, move |job: Job| {
-        let fetched = resolver.resolve(&job.0);
-        match fetched {
-            Ok(fetched) if needs_decoding(job.1, &fetched) => {
-                let done = done_tx.clone();
-                queue_decode(Box::new(move || {
-                    let outcome = decode(job.1, fetched);
-                    finish(&done, job, outcome);
-                }));
-                true
+    spawn_threads(
+        "rook-content",
+        FETCHERS,
+        jobs.clone(),
+        move |job: Job, (), priority| {
+            let fetched = resolver.resolve(&job.0);
+            match fetched {
+                Ok(fetched) if needs_decoding(job.1, &fetched) => {
+                    let done = done_tx.clone();
+                    queue_decode(
+                        Box::new(move || {
+                            let outcome = decode(job.1, fetched);
+                            finish(&done, job, outcome);
+                        }),
+                        priority,
+                    );
+                    true
+                }
+                outcome => finish(&done_tx, job, outcome),
             }
-            outcome => finish(&done_tx, job, outcome),
-        }
-    });
+        },
+    );
     Workers { jobs, done }
 }
 

@@ -84,6 +84,13 @@ pub struct SceneCache {
     files: Files,
     /// Parts waiting for each file, redrawn when it arrives.
     waiting: HashMap<FileRef, HashSet<InstanceId>>,
+    /// Where the camera is, for loading the files nearest it first.
+    focus: Vec3,
+    /// Where the camera was when the waiting files were last ranked.
+    ranked_from: Vec3,
+    /// Where the part being looked at is (files it asks for are ranked by
+    /// its distance from `focus`).
+    near: Vec3,
     /// What each part's mesh file last drew.
     shown: HashMap<InstanceId, Shown>,
     /// The skybox images the lighting waits for.
@@ -102,14 +109,18 @@ pub struct SceneCache {
 }
 
 impl SceneCache {
-    /// Mesh files and images resolve through `content`.
-    pub fn new(dom: &Dom, content: Arc<Resolver>) -> Self {
+    /// Mesh files and images resolve through `content`, those nearest
+    /// `camera` first.
+    pub fn new(dom: &Dom, content: Arc<Resolver>, camera: Vec3) -> Self {
         let mut cache = Self {
             scene: Scene::default(),
             index: HashMap::new(),
             layers: HashMap::new(),
             files: Files::new(content),
             waiting: HashMap::new(),
+            focus: camera,
+            ranked_from: camera,
+            near: camera,
             shown: HashMap::new(),
             poses: Vec::new(),
             free: Vec::new(),
