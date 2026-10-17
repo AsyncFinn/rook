@@ -157,6 +157,10 @@ pub struct Physics {
     world: PhysicsWorld,
     props: Option<Props>,
     pub(crate) bodies: HashMap<RigidBodyHandle, Body>,
+    /// Bodies with motors inside, so stepping motors needn't visit every
+    /// body (a place with 79k bodies spent milliseconds a frame finding its
+    /// two).
+    motored: HashSet<RigidBodyHandle>,
     parts: HashMap<InstanceId, RigidBodyHandle>,
     /// Joints in the world and the parts they joined, so a changed joint's
     /// former parts are rebuilt too.
@@ -234,6 +238,7 @@ impl Physics {
             world,
             props: None,
             bodies: HashMap::default(),
+            motored: HashSet::default(),
             parts: HashMap::default(),
             joints: HashMap::default(),
             hinges: HashMap::default(),
