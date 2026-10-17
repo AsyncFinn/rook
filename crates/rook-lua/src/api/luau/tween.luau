@@ -224,9 +224,11 @@ function tween.play(t)
 	if s then play(s) end
 end
 
+-- Only a Playing tween pauses; a Delayed one carries on (Confirmed, Studio
+-- recording 2026-10-17, and creator-docs TweenBase:Pause).
 function tween.pause(t)
 	local s = states[t]
-	if s and (s.state == PlaybackState.Playing or s.state == PlaybackState.Delayed) then
+	if s and s.state == PlaybackState.Playing then
 		stop(s)
 		setState(s, PlaybackState.Paused)
 	end

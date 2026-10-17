@@ -8,7 +8,6 @@
 mod bridges;
 pub mod console;
 mod frame;
-#[cfg(feature = "repl")]
 mod scripts;
 pub mod session;
 

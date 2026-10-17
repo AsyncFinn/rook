@@ -6,6 +6,7 @@
 //! terminal line (the `repl` feature), [`set_output`] routes it there
 //! instead, so it prints above the prompt.
 
+#[cfg(feature = "repl")]
 pub mod repl;
 
 use std::sync::Mutex;

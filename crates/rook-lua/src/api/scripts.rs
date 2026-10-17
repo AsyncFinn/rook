@@ -28,13 +28,13 @@ fn environment(lua: &Lua, script: InstanceId) -> mlua::Result<Table> {
     Ok(env)
 }
 
-/// Compile a script's source. Chunk names are full names, so errors read
-/// `Workspace.Script:3: ...` as on Roblox.
-fn compile(lua: &Lua, id: InstanceId) -> mlua::Result<Function> {
+/// Compile a script's source to run in `env`. Chunk names are full names,
+/// so errors read `Workspace.Script:3: ...` as on Roblox.
+fn compile(lua: &Lua, id: InstanceId, env: Table) -> mlua::Result<Function> {
     let name = with_world(lua, |w| w.dom.full_name(id));
     lua.load(source_of(lua, id))
         .set_name(format!("={name}"))
-        .set_environment(environment(lua, id)?)
+        .set_environment(env)
         .into_function()
 }
 
@@ -44,7 +44,8 @@ pub fn run_script(lua: &Lua, id: InstanceId) -> bool {
     if with_world(lua, |w| w.started.contains_key(&id)) {
         return false;
     }
-    let func = match compile(lua, id) {
+    let compiled = environment(lua, id).and_then(|env| Ok((compile(lua, id, env.clone())?, env)));
+    let (func, env) = match compiled {
         Ok(f) => f,
         Err(e) => {
             with_world(lua, |w| {
@@ -56,12 +57,36 @@ pub fn run_script(lua: &Lua, id: InstanceId) -> bool {
     };
     match lua.create_thread(func) {
         Ok(thread) => {
-            with_world(lua, |w| w.started.insert(id, thread.clone()));
+            with_world(lua, |w| w.started.insert(id, env));
             crate::threads::resume(lua, &thread, ());
             true
         }
         Err(_) => false,
     }
+}
+
+/// Stop a running Script: its threads, delayed calls and connections never
+/// run again, though code running right now carries on until it yields
+/// (Confirmed, Studio recording 2026-10-17). Threads are matched to the
+/// script by the environment its functions share, which also covers ones
+/// the script made with `task.spawn` or `coroutine`. Returns false if the
+/// script wasn't running.
+pub fn stop_script(lua: &Lua, id: InstanceId) -> bool {
+    let Some(env) = with_world(lua, |w| w.started.remove(&id)) else {
+        return false;
+    };
+    let stopped = lua
+        .named_registry_value::<Table>("rook.stopped_envs")
+        .and_then(|t| t.raw_set(env, true));
+    with_world(lua, |w| w.any_stopped = true);
+    stopped.is_ok()
+}
+
+/// Whether `env` is the environment of a stopped script.
+pub(crate) fn is_stopped_env(lua: &Lua, env: Table) -> bool {
+    lua.named_registry_value::<Table>("rook.stopped_envs")
+        .and_then(|t| t.raw_get::<bool>(env))
+        .unwrap_or(false)
 }
 
 /// Run a chunk of source as if it were a Script at `id` (used by tests and
@@ -147,7 +172,7 @@ fn require(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
             "Requested module was required recursively".into(),
         ));
     }
-    let func = compile(lua, module).map_err(|e| {
+    let func = compile(lua, module, environment(lua, module)?).map_err(|e| {
         with_world(lua, |w| {
             w.errors += 1;
             w.push_log(MessageType::Error, crate::ctx::lua_error_message(&e));
@@ -166,6 +191,16 @@ fn require(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
 }
 
 pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
+    // Stopped scripts' environments, and the function each thread `task.*`
+    // made calls (see `threads::thread_for`). Weak, so entries go with
+    // what they describe.
+    for key in ["rook.stopped_envs", "rook.thread_functions"] {
+        let t = lua.create_table()?;
+        let mt = lua.create_table()?;
+        mt.raw_set("__mode", "k")?;
+        t.set_metatable(Some(mt))?;
+        lua.set_named_registry_value(key, t)?;
+    }
     // Runs the module body from Lua, so modules may yield while loading.
     let finished = api_ret(lua, |lua, args| {
         let a = Args::new(args, "require");
