@@ -411,13 +411,15 @@ impl Renderer {
     /// gets: the features Rook uses where the adapter has them
     /// (timestamps for `--bench`, binding arrays for the image table,
     /// first instances in indirect draws for multi-draws), room for the
-    /// table, and the adapter's biggest buffers (for the mesh pool).
+    /// table, a stencil with the depth for Glass (`main_depth_format`),
+    /// and the adapter's biggest buffers (for the mesh pool).
     pub fn device_descriptor(adapter: &wgpu::Adapter) -> wgpu::DeviceDescriptor<'static> {
         let wanted = wgpu::Features::TIMESTAMP_QUERY
             | wgpu::Features::INDIRECT_FIRST_INSTANCE
             | wgpu::Features::TEXTURE_BINDING_ARRAY
             | wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
-            | wgpu::Features::PARTIALLY_BOUND_BINDING_ARRAY;
+            | wgpu::Features::PARTIALLY_BOUND_BINDING_ARRAY
+            | wgpu::Features::DEPTH32FLOAT_STENCIL8;
         let required_features = adapter.features() & wanted;
         let mut required_limits = wgpu::Limits {
             max_buffer_size: adapter.limits().max_buffer_size,

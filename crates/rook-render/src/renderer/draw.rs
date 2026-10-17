@@ -131,7 +131,7 @@ impl Renderer {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: DEPTH_FORMAT,
+            format: main_depth_format(&self.device),
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],
         });
@@ -289,7 +289,12 @@ impl Renderer {
                         load: wgpu::LoadOp::Clear(0.0),
                         store: wgpu::StoreOp::Store,
                     }),
-                    stencil_ops: None,
+                    stencil_ops: main_depth_format(&self.device)
+                        .has_stencil_aspect()
+                        .then_some(wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(0),
+                            store: wgpu::StoreOp::Discard,
+                        }),
                 }),
                 timestamp_writes: self.timer.as_ref().map(|t| t.writes(0)),
                 occlusion_query_set: None,

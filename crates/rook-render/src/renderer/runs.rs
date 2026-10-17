@@ -150,7 +150,16 @@ impl Renderer {
             Option<usize>,
             Option<ImageSet>,
         ) = (None, None, None, None);
+        // Each Glass filter or surface run is one part (its passes
+        // alternate, so they never join): its own stencil reference, so it
+        // draws each pixel once (`Pipelines::new`). After 255 runs the
+        // references come round again.
+        let mut stencil = 0u32;
         for run in &runs.runs {
+            if matches!(run.pipe, Pipe::GlassFilter | Pipe::GlassSurface) {
+                stencil = stencil % 255 + 1;
+                pass.set_stencil_reference(stencil);
+            }
             let shadow = run.pipe == Pipe::Shadow;
             let Some(instances) = self.instance_buffer(run.source) else {
                 continue;
