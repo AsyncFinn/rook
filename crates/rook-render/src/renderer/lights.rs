@@ -11,13 +11,19 @@
 //! test). Reaches are padded by [`SLACK`], so lights that move a little
 //! (spinning fixtures) don't rebuild it. The voxels are filled again only
 //! when a light changes or the camera leaves the volume's middle.
+//!
+//! The same pass carries the sky's diffuse light down through the voxels
+//! into their alpha, layer by layer from the top, around the parts that
+//! block it (`sky.rs`), when the place lights with the sky.
 
 mod hash;
+mod sky;
 
 use wesl_core::include_wesl;
 
 use super::*;
 use hash::{GpuLight, LightHash};
+use sky::SkyBlockers;
 
 /// How far a light may move from where the hash placed it before the hash
 /// is built again, in studs.
@@ -35,12 +41,31 @@ const AHEAD: f32 = 256.0;
 /// the volume follows, in studs.
 const RECENTRE: f32 = 64.0;
 
+/// Bytes between the layers' entries in [`SkyBuffers::layers`] (the
+/// alignment WebGPU allows dynamic offsets at).
+const LAYER_STRIDE: u64 = 256;
+
 /// What the fill pass reads (`Params` in `shaders/light_volume.wgsl`).
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 struct FillParams {
     origin: [f32; 4],
     size: [u32; 4],
+    /// x: there are lights to fill; y: the sky's light to carry down.
+    flags: [u32; 4],
+}
+
+/// The buffers the fill pass carries the sky's light down with.
+#[derive(Debug)]
+struct SkyBuffers {
+    /// Each dispatch's layer, [`LAYER_STRIDE`] apart (a dynamic offset).
+    layers: wgpu::Buffer,
+    /// One bit per voxel: a part blocks it ([`SkyBlockers::mark`]).
+    solid: wgpu::Buffer,
+    /// The sky's light in the last two layers filled.
+    rows: wgpu::Buffer,
+    /// Whether each column is still open to the sky.
+    columns: wgpu::Buffer,
 }
 
 /// Where the main pass finds the voxels (`LightVolume` in
@@ -71,10 +96,14 @@ pub(crate) struct GpuLights {
     fill: wgpu::ComputePipeline,
     fill_layout: wgpu::BindGroupLayout,
     fill_group: wgpu::BindGroup,
+    sky_buffers: SkyBuffers,
+    blockers: SkyBlockers,
     /// The centre of voxel (0, 0, 0), once filled.
     origin: Option<Vec3>,
     /// The lights changed since the voxels were filled.
     dirty: bool,
+    /// The voxels hold the sky's light.
+    sky: bool,
 }
 
 fn buffer_entry(
@@ -91,6 +120,39 @@ fn buffer_entry(
             min_binding_size: None,
         },
         count: None,
+    }
+}
+
+impl SkyBuffers {
+    fn new(device: &wgpu::Device) -> Self {
+        let [nx, ny, nz] = VOLUME;
+        let storage = |label, words: u32, usage| {
+            device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some(label),
+                size: u64::from(words) * 4,
+                usage: wgpu::BufferUsages::STORAGE | usage,
+                mapped_at_creation: false,
+            })
+        };
+        let mut layers = vec![0u8; (LAYER_STRIDE * u64::from(ny)) as usize];
+        for y in 0..ny {
+            let at = (LAYER_STRIDE * u64::from(y)) as usize;
+            layers[at..at + 4].copy_from_slice(&y.to_le_bytes());
+        }
+        Self {
+            layers: device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("rook light volume layers"),
+                contents: &layers,
+                usage: wgpu::BufferUsages::UNIFORM,
+            }),
+            solid: storage(
+                "rook sky blockers",
+                (nx * ny * nz).div_ceil(32),
+                wgpu::BufferUsages::COPY_DST,
+            ),
+            rows: storage("rook sky rows", 2 * nx * nz, wgpu::BufferUsages::empty()),
+            columns: storage("rook sky columns", nx * nz, wgpu::BufferUsages::empty()),
+        }
     }
 }
 
@@ -121,6 +183,7 @@ impl GpuLights {
         });
         let compute = wgpu::ShaderStages::COMPUTE;
         let storage = wgpu::BufferBindingType::Storage { read_only: true };
+        let read_write = wgpu::BufferBindingType::Storage { read_only: false };
         let fill_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("rook light volume fill"),
             entries: &[
@@ -138,6 +201,19 @@ impl GpuLights {
                     },
                     count: None,
                 },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 5,
+                    visibility: compute,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: true,
+                        min_binding_size: wgpu::BufferSize::new(16),
+                    },
+                    count: None,
+                },
+                buffer_entry(6, storage, compute),
+                buffer_entry(7, read_write, compute),
+                buffer_entry(8, read_write, compute),
             ],
         });
         let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -208,10 +284,12 @@ impl GpuLights {
         });
         let hash = LightHash::build(&[]);
         let (light_buffer, bucket_buffer, entry_buffer) = buffers(device, &[], &hash);
+        let sky_buffers = SkyBuffers::new(device);
         let fill_group = fill_group(
             device,
             &fill_layout,
             [&params, &light_buffer, &bucket_buffer, &entry_buffer],
+            &sky_buffers,
             &voxels,
         );
         Self {
@@ -229,8 +307,11 @@ impl GpuLights {
             fill,
             fill_layout,
             fill_group,
+            sky_buffers,
+            blockers: SkyBlockers::default(),
             origin: None,
             dirty: true,
+            sky: false,
         }
     }
 
@@ -276,17 +357,31 @@ impl GpuLights {
                 &self.bucket_buffer,
                 &self.entry_buffer,
             ],
+            &self.sky_buffers,
             &self.voxels,
         );
     }
 
-    /// Fill the voxels again if the lights changed or the volume's centre
-    /// drifted [`RECENTRE`] from where the camera puts it.
+    /// Forget the parts blocking the sky (the scene is replaced).
+    pub(crate) fn clear_blockers(&mut self) {
+        self.blockers.clear();
+    }
+
+    /// Take the parts at `changed` (indices into `scene.parts`) as they
+    /// block the sky now.
+    pub(crate) fn update_blockers(&mut self, scene: &Scene, changed: &[usize]) {
+        self.blockers.update(scene, changed);
+    }
+
+    /// Fill the voxels again if the lights changed, the volume's centre
+    /// drifted [`RECENTRE`] from where the camera puts it, or, when the
+    /// place lights with the sky (`sky`), the parts blocking it changed.
     pub(crate) fn fill(
         &mut self,
         queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
         camera: &Camera,
+        sky: bool,
     ) {
         let dims = Vec3::new(VOLUME[0] as f32, VOLUME[1] as f32, VOLUME[2] as f32);
         let half = dims * (VOXEL * 0.5);
@@ -295,24 +390,34 @@ impl GpuLights {
         let centred = self
             .origin
             .is_some_and(|o| (o + half - centre).abs().max_element() <= RECENTRE);
-        if !self.dirty && centred {
+        let blocked = sky && (self.blockers.due() || !self.sky);
+        if !self.dirty && centred && !blocked && sky == self.sky {
             return;
         }
         profiling::scope!("GpuLights::fill");
         self.dirty = false;
-        // Voxels are centred at 4k + 2.
-        let origin = ((centre - half) / VOXEL).floor() * VOXEL + Vec3::splat(VOXEL * 0.5);
+        let origin = if centred {
+            self.origin.unwrap_or_default()
+        } else {
+            // Voxels are centred at 4k + 2.
+            ((centre - half) / VOXEL).floor() * VOXEL + Vec3::splat(VOXEL * 0.5)
+        };
+        if sky && (blocked || !centred) {
+            let bits = self.blockers.mark(origin, VOLUME);
+            queue.write_buffer(&self.sky_buffers.solid, 0, bytemuck::cast_slice(&bits));
+        }
         self.origin = Some(origin);
+        self.sky = sky;
         let lit = !self.lights.is_empty();
         queue.write_buffer(
             &self.volume,
             0,
             bytemuck::bytes_of(&VolumeUniform {
                 origin: [origin.x, origin.y, origin.z, f32::from(u8::from(lit))],
-                size: [dims.x, dims.y, dims.z, 0.0],
+                size: [dims.x, dims.y, dims.z, f32::from(u8::from(sky))],
             }),
         );
-        if !lit {
+        if !lit && !sky {
             return;
         }
         queue.write_buffer(
@@ -326,6 +431,7 @@ impl GpuLights {
                     VOLUME[1],
                     VOLUME[2],
                 ],
+                flags: [u32::from(lit), u32::from(sky), 0, 0],
             }),
         );
         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
@@ -333,8 +439,13 @@ impl GpuLights {
             timestamp_writes: None,
         });
         pass.set_pipeline(&self.fill);
-        pass.set_bind_group(0, &self.fill_group, &[]);
-        pass.dispatch_workgroups(VOLUME[0] / 4, VOLUME[1] / 4, VOLUME[2] / 4);
+        // One layer at a time from the top: each takes the sky's light
+        // from the one above.
+        for y in (0..VOLUME[1]).rev() {
+            let offset = (LAYER_STRIDE * u64::from(y)) as u32;
+            pass.set_bind_group(0, &self.fill_group, &[offset]);
+            pass.dispatch_workgroups(VOLUME[0] / 8, VOLUME[2] / 8, 1);
+        }
     }
 }
 
@@ -382,6 +493,7 @@ fn fill_group(
     device: &wgpu::Device,
     layout: &wgpu::BindGroupLayout,
     buffers: [&wgpu::Buffer; 4],
+    sky: &SkyBuffers,
     voxels: &wgpu::TextureView,
 ) -> wgpu::BindGroup {
     let mut entries: Vec<_> = buffers
@@ -396,6 +508,20 @@ fn fill_group(
         binding: 4,
         resource: wgpu::BindingResource::TextureView(voxels),
     });
+    entries.push(wgpu::BindGroupEntry {
+        binding: 5,
+        resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+            buffer: &sky.layers,
+            offset: 0,
+            size: wgpu::BufferSize::new(16),
+        }),
+    });
+    for (binding, buffer) in [(6, &sky.solid), (7, &sky.rows), (8, &sky.columns)] {
+        entries.push(wgpu::BindGroupEntry {
+            binding,
+            resource: buffer.as_entire_binding(),
+        });
+    }
     device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("rook light volume fill"),
         layout,
