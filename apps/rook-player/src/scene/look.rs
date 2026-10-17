@@ -30,6 +30,9 @@ pub(super) enum Decals {
     None,
     /// Projected onto the faces of the drawn shape's box.
     Faces,
+    /// Projected like `Faces`, but Textures are stretched once like Decals
+    /// (`MeshKind::stretches_textures`).
+    Stretched,
     /// Through the mesh's own UVs (`MeshKind::decals_follow_uvs`).
     MeshUv,
 }
@@ -71,7 +74,9 @@ impl SceneCache {
         self.material_maps(dom, id, &mut part);
         let layers = match decals {
             Decals::None => Vec::new(),
-            Decals::Faces | Decals::MeshUv => self.images(dom, id, &part, decals),
+            Decals::Faces | Decals::Stretched | Decals::MeshUv => {
+                self.images(dom, id, &part, decals)
+            }
         };
         Some(Drawn { part, pose, layers })
     }
@@ -220,6 +225,8 @@ impl SceneCache {
         pose.offset = offset;
         let decals = if kind.decals_follow_uvs() {
             Decals::MeshUv
+        } else if kind.stretches_textures() {
+            Decals::Stretched
         } else {
             Decals::Faces
         };
@@ -282,7 +289,7 @@ impl SceneCache {
                 .unwrap_or(NormalId::Front);
             let placement = match (decals, class) {
                 (Decals::MeshUv, _) => ImagePlacement::MeshUv,
-                (_, "Texture") => ImagePlacement::Tiled(
+                (Decals::Faces, "Texture") => ImagePlacement::Tiled(
                     face,
                     Tiling {
                         studs_per_tile: Vec2::new(
