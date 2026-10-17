@@ -295,22 +295,22 @@ fn surface_alpha(in: VertexOut) -> f32 {
     return in.color.a;
 }
 
-// See-through Glass: what's behind, plus a faint haze (the blend constant,
-// `GLASS_HAZE`), times a filter per channel: 1.2 x the Glass's colour (in
-// linear light) raised to 4 x (1 - Transparency)², at most 1. So from 0.5
-// down the colour filters fully (the surface shows more instead, in
-// `surface_alpha`), and by 0.95 it nearly passes everything; white Glass
-// passes all of it at any Transparency, and black Glass at 0.6 lets 3%
-// through (observed on grey Glass from 0 to 255 at 0.5 to 0.95 over a wall
-// of greys; per channel, as red Glass's green and blue match black Glass;
-// fitted within about 6 levels. Approximation: Studio seems to filter
-// before its tone curve (Inference), so its bright blues pass a little
-// more, and white Glass brightens what's behind by up to 18 levels where
-// Rook only adds the haze).
+// See-through Glass: what's behind times a filter per channel, 1.2 x the
+// Glass's colour (in linear light) plus 0.01, raised to
+// 1.25 x min(2 x (1 - Transparency), 1)^1.7, at most 1. So the colour
+// filters most strongly from 0.5 down (where the surface shows instead, in
+// `surface_alpha`), and by 0.95 nearly everything passes; white Glass
+// passes all of it, black Glass at 0.6 2%, grey 99 at 0.6 about 21%
+// (observed from 45 studs on grey Glass from 0 to 255 at 0.5 to 0.95 over
+// a wall of greys, per channel: red Glass's green and blue match black
+// Glass's; fitted within about 5 levels. Approximation: Studio seems to
+// filter before its tone curve (Inference), so its bright blues pass a
+// little more, and seen from hundreds of studs away its Glass passes up to
+// 12 levels more).
 @fragment
 fn fs_glass_filter(in: VertexOut) -> @location(0) vec4<f32> {
-    let power = min(4.0 * in.color.a * in.color.a, 1.0);
-    return vec4(min(pow(1.2 * in.color.rgb + 0.005, vec3(power)), vec3(1.0)), 1.0);
+    let power = 1.25 * pow(min(2.0 * in.color.a, 1.0), 1.7);
+    return vec4(min(pow(1.2 * in.color.rgb + 0.01, vec3(power)), vec3(1.0)), 1.0);
 }
 
 // ForceField: its colour added over what's behind, faint where it faces

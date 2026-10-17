@@ -14,12 +14,6 @@ fn shaders(table: bool) -> [&'static str; 2] {
     }
 }
 
-/// The faint haze See-through Glass adds to what's behind before filtering
-/// it (linear light; the main pass's blend constant): black Glass at 0.95
-/// lifts a near-black wall by about 9 levels (observed; fitted with the
-/// filter in `fs_glass_filter`).
-pub(crate) const GLASS_HAZE: f64 = 0.008;
-
 /// The render pipelines, built once.
 #[derive(Debug)]
 pub(crate) struct Pipelines {
@@ -32,8 +26,8 @@ pub(crate) struct Pipelines {
     /// extinguisher clearly through a Glass union with three layers, which
     /// Rook darkened to 3% when each filtered).
     pub(crate) glass_depth: wgpu::RenderPipeline,
-    /// See-through Glass: what's behind, plus `GLASS_HAZE`, times its
-    /// filter, where the Glass is nearest.
+    /// See-through Glass: what's behind times its filter, where the Glass
+    /// is nearest.
     pub(crate) glass_filter: wgpu::RenderPipeline,
     /// See-through Glass's own surface, where it's nearest.
     pub(crate) glass_surface: wgpu::RenderPipeline,
@@ -226,7 +220,7 @@ impl Pipelines {
             "fs_glass_filter",
             Some(wgpu::BlendState {
                 color: wgpu::BlendComponent {
-                    src_factor: wgpu::BlendFactor::Constant,
+                    src_factor: wgpu::BlendFactor::Zero,
                     dst_factor: wgpu::BlendFactor::Src,
                     operation: wgpu::BlendOperation::Add,
                 },
