@@ -48,7 +48,7 @@ directly, since a character is what makes playing together worth it.
 | ✅ | **M4** Content: meshes, materials, textures, decals | Places render with their meshes, materials (2022 and legacy, MaterialVariants, SurfaceAppearance), decals and textures (v0.4.0) |
 | ✅ | **M5** Audio | Archived places play their sounds, positioned in 3D; the audio conformance batch passes (v0.5.0) |
 | ✅ | **M6** Terrain | Archived places with terrain show it, and parts and queries collide with it (v0.6.0) |
-| ⬜ | **M7** Lights and effects | Local lights light the scene; Fire, Smoke, Sparkles and ParticleEmitters draw as in Studio |
+| 🟨 | **M7** Lights and effects | Local lights light the scene; Fire, Smoke, Sparkles and ParticleEmitters draw as in Studio |
 | ⬜ | **M8** GUI | GUI conformance batch passes; archived places' GUIs draw and take input |
 | ⬜ | **M9** Characters | Spawn, walk, jump, sit and use tools in an archived place |
 | ⬜ | **M10** Networking | Two players on two machines play an archived place together |
