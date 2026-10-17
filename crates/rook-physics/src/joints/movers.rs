@@ -25,6 +25,12 @@
 //!   MaxTorque) toward a direction between the target's (CartoonFactor 1)
 //!   and its thrust's (0). Within TargetRadius it fires ReachedTarget and
 //!   holds still until Abort.
+//! - An assembly a mover only holds in place (a BodyGyro or BodyPosition
+//!   at its target, a zero BodyVelocity, a force friction balances) falls
+//!   asleep like any resting one, hinged vehicles included. Changing the
+//!   mover wakes it. A mover asking for motion keeps it awake: BodyVelocity
+//!   at 0.03 studs/s and BodyAngularVelocity at 0.05 rad/s did, at 0.01
+//!   neither did (Approximation: any nonzero target keeps it awake).
 
 use rustc_hash::FxHashMap as HashMap;
 
@@ -58,7 +64,7 @@ pub(crate) fn is_mover(class: &str) -> bool {
 pub(crate) type Frame = (RigidBodyHandle, CFrame);
 
 /// A mover acting on a body this frame.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Mover {
     pub id: InstanceId,
     /// The body pushed, and the mover's frame in it: its part's, or
@@ -67,7 +73,7 @@ pub(crate) struct Mover {
     pub kind: Kind,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Kind {
     /// A force along world axes or `relative` to a frame, at the centre of
     /// mass or at `point` in the mover's frame.
@@ -249,6 +255,7 @@ struct State {
     mass: f32,
     inertia: AngularInertia,
     dynamic: bool,
+    awake: bool,
 }
 
 impl State {
@@ -261,6 +268,7 @@ impl State {
             mass: rb.mass(),
             inertia: rb.mass_properties().effective_angular_inertia(),
             dynamic: rb.is_dynamic(),
+            awake: rb.is_dynamic() && !rb.is_sleeping(),
         }
     }
 
@@ -307,17 +315,33 @@ struct Push {
     torque: Vec3,
     /// Forces at points (force, world point).
     at: Vec<(Vec3, Vec3)>,
+    /// Whether the push wakes the body: holding still doesn't.
+    wake: bool,
 }
 
 impl Mover {
     /// The bodies this mover reads.
-    fn bodies(&self) -> impl Iterator<Item = RigidBodyHandle> {
+    pub(crate) fn bodies(&self) -> impl Iterator<Item = RigidBodyHandle> {
         let other = match &self.kind {
             Kind::Force { relative, .. } | Kind::Torque { relative, .. } => relative.map(|f| f.0),
             Kind::Spring { other, .. } => Some(other.0),
             _ => None,
         };
         std::iter::once(self.at.0).chain(other)
+    }
+
+    /// Whether the mover moves its body `s` on its own, rather than
+    /// holding it where it is.
+    fn asks_motion(&self, s: &State) -> bool {
+        match &self.kind {
+            Kind::Velocity { target, .. } | Kind::AngularVelocity { target, .. } => {
+                *target != Vec3::ZERO
+            }
+            Kind::Rocket { target, radius, .. } => {
+                (s.pose * self.at.1).position.distance(*target) > *radius
+            }
+            _ => false,
+        }
     }
 }
 
@@ -361,6 +385,11 @@ pub(crate) fn apply<'a>(
             continue;
         }
         let world_frame = s.pose * frame;
+        // A mover wakes its body when it asks for motion, or when a body
+        // it reads moves.
+        let moved = |b: RigidBodyHandle| states.get(&b).is_some_and(|o| o.awake);
+        pushes.entry(body).or_default().wake |=
+            m.asks_motion(s) || m.bodies().any(|b| b != body && moved(b));
         match &m.kind {
             Kind::Force {
                 force,
@@ -467,7 +496,9 @@ pub(crate) fn apply<'a>(
                 let f = (stiffness * (len - free_length) + damping * along)
                     .clamp(-max_force.abs(), max_force.abs());
                 pushes.entry(body).or_default().at.push((f * n, p0));
-                pushes.entry(other.0).or_default().at.push((-f * n, p1));
+                let o = pushes.entry(other.0).or_default();
+                o.at.push((-f * n, p1));
+                o.wake |= s.awake;
             }
         }
     }
@@ -478,7 +509,7 @@ pub(crate) fn apply<'a>(
         let Some(rb) = world.bodies.get_mut(b) else {
             continue;
         };
-        let wake = push.force != Vec3::ZERO || push.torque != Vec3::ZERO || !push.at.is_empty();
+        let wake = push.wake;
         rb.add_force(to_rapier(push.force), wake);
         rb.add_torque(to_rapier(push.torque), wake);
         for (f, p) in push.at {

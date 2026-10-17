@@ -89,7 +89,8 @@ impl Physics {
     }
 
     /// Re-read the movers that changed (`all` after a rebuild), and every
-    /// fired rocket, whose target may have moved.
+    /// fired rocket, whose target may have moved. A mover that changed
+    /// wakes the bodies it acts on.
     pub(crate) fn refresh_movers(&mut self, dom: &Dom, all: bool, dirty: &HashSet<InstanceId>) {
         profiling::scope!("Physics::refresh_movers");
         let ids: Vec<InstanceId> = if all {
@@ -100,20 +101,25 @@ impl Physics {
         };
         let ws = dom.find_service("Workspace");
         for id in ids {
-            if dom.is_destroyed(id) {
+            let destroyed = dom.is_destroyed(id);
+            if destroyed {
                 self.mover_ids.remove(&id);
                 self.rockets.remove(&id);
-                self.movers.remove(&id);
-                continue;
             }
             let fired = self.rockets.contains_key(&id);
             let mover = ws
-                .filter(|ws| dom.is_ancestor_of(*ws, id))
+                .filter(|ws| !destroyed && dom.is_ancestor_of(*ws, id))
                 .and_then(|_| Mover::read(dom, id, fired, |p| self.frame_of(p)));
-            match mover {
-                Some(m) => self.movers.insert(id, m),
-                None => self.movers.remove(&id),
-            };
+            let old = self.movers.remove(&id);
+            if old != mover {
+                let bodies: Vec<_> = old.iter().chain(&mover).flat_map(Mover::bodies).collect();
+                for b in bodies {
+                    self.world.wake_up(b, true);
+                }
+            }
+            if let Some(m) = mover {
+                self.movers.insert(id, m);
+            }
         }
     }
 
