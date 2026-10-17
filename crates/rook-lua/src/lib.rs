@@ -132,6 +132,12 @@ impl Runtime {
         })
     }
 
+    /// Stop a started Script so it can run again. Returns false if it wasn't
+    /// running.
+    pub fn stop_script(&self, script: InstanceId) -> bool {
+        api::scripts::stop_script(&self.lua, script)
+    }
+
     /// Whether a script has been started.
     pub fn is_started(&self, script: InstanceId) -> bool {
         self.world().started.contains_key(&script)

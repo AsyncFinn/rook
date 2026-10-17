@@ -1,5 +1,7 @@
 //! Which scripts run where, and starting them.
 
+use std::collections::HashSet;
+
 use super::*;
 
 impl DataModel {
@@ -63,29 +65,40 @@ impl DataModel {
         }
     }
 
-    /// Start scripts that became runnable since the last check: moved into
-    /// a running location or enabled.
+    /// Start scripts that became runnable since the last check (moved into
+    /// a running location or enabled) and stop running ones that were
+    /// disabled. A script disabled and enabled again runs afresh, as on
+    /// Roblox (Confirmed, Studio recording 2026-10-17).
     pub(crate) fn start_new_scripts(&mut self) {
         profiling::scope!("start_new_scripts");
         let end = self.runtime.world().dom.journal().end();
-        let candidates: Vec<InstanceId> = {
+        let mut candidates: Vec<InstanceId> = Vec::new();
+        // Scripts whose Disabled changed. The journal only records real
+        // changes, so a running one among them was disabled at some point.
+        let mut toggled: HashSet<InstanceId> = HashSet::new();
+        {
             let world = self.runtime.world();
-            let journal = world.dom.journal();
             let disabled = |id: InstanceId| world.dom.property_id(id, "Disabled");
-            journal
-                .since(self.script_cursor)
-                .iter()
-                .flat_map(|change| match change {
-                    Change::Reparented { subtree, .. } => subtree.clone(),
+            for change in world.dom.journal().since(self.script_cursor) {
+                match change {
+                    Change::Reparented { subtree, .. } => candidates.extend(subtree),
                     Change::Property { id, property } if disabled(*id) == Some(*property) => {
-                        vec![*id]
+                        candidates.push(*id);
+                        toggled.insert(*id);
                     }
-                    _ => Vec::new(),
-                })
-                .collect()
-        };
+                    _ => {}
+                }
+            }
+        }
         self.script_cursor = end;
+        let mut seen = HashSet::new();
         for id in candidates {
+            if !seen.insert(id) {
+                continue;
+            }
+            if toggled.contains(&id) {
+                self.runtime.stop_script(id);
+            }
             if self.should_run(id) {
                 self.runtime.run_script(id);
             }

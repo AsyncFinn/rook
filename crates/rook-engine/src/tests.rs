@@ -543,28 +543,8 @@ fn input_mouse_and_click_detectors() {
     assert_eq!(server_log, ["server click Clicker"]);
 }
 
-#[test]
-fn scripts_moved_into_workspace_start() {
-    let mut s = Server::new(&Options::default()).unwrap();
-    add_script(&s, "ServerStorage", "Inner", "print('inner started')");
-    add_script(
-        &s,
-        "ServerScriptService",
-        "Outer",
-        r#"
-        local inner = game:GetService("ServerStorage").Inner
-        task.wait(0.1)
-        print("moving")
-        inner.Parent = workspace
-        "#,
-    );
-    s.start();
-    s.run_for(0.5);
-    assert_eq!(lines(&s), ["moving", "inner started"]);
-    assert_eq!(s.started_scripts(), 2);
-}
-
 mod audio_api;
+mod scripts;
 mod sounds;
 mod terrain_api;
 mod terrain_look;

@@ -2,7 +2,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use mlua::{Function, Thread, Value as LuaValue};
+use mlua::{Function, Table, Thread, Value as LuaValue};
 use rook_dom::{Dom, InstanceId};
 use rook_scheduler::{Clock, Scheduler};
 use rook_signal::{ConnectionId, Signals};
@@ -192,8 +192,12 @@ pub struct World {
     /// Threads that ended with an error.
     pub errors: u64,
     pub(crate) modules: ModuleState,
-    /// Scripts that have been started, so they don't start twice.
-    pub(crate) started: HashMap<InstanceId, Thread>,
+    /// Running scripts and the environment each runs in, so they don't
+    /// start twice and stopping one can find its threads.
+    pub(crate) started: HashMap<InstanceId, Table>,
+    /// Whether any script has been stopped, so threads are only checked for
+    /// a stopped owner once there can be one.
+    pub(crate) any_stopped: bool,
     /// Sounds' and AudioPlayers' script state, for those a script has
     /// played or seeked.
     pub sounds: HashMap<InstanceId, SoundControl>,
@@ -224,6 +228,7 @@ impl World {
             errors: 0,
             modules: ModuleState::default(),
             started: HashMap::new(),
+            any_stopped: false,
             sounds: HashMap::new(),
             listener: Listener::Camera,
             local_sounds: Vec::new(),

@@ -3,7 +3,7 @@
 pub(crate) mod watchdog;
 
 use mlua::prelude::LuaThreadStatus as ThreadStatus;
-use mlua::{Function, IntoLuaMulti, Lua, MultiValue, Thread, Value as LuaValue};
+use mlua::{Function, IntoLuaMulti, Lua, MultiValue, Table, Thread, Value as LuaValue};
 use rook_dom::{Change, InstanceId};
 use rook_signal::{FireArgs, Firing, SignalKey};
 
@@ -12,21 +12,74 @@ use crate::ctx::{lua_error_message, with_world};
 use crate::world::{Handler, Job, MessageType, SignalBehavior, WaitKind};
 
 /// Call `func` on a new thread right away. Errors go to the output.
+/// Functions of a stopped script don't run.
 pub(crate) fn spawn(lua: &Lua, func: Function, args: impl IntoLuaMulti) -> mlua::Result<Thread> {
+    let stopped = stopped_function(lua, &func);
     let thread = lua.create_thread(func)?;
-    resume(lua, &thread, args);
+    if !stopped {
+        resume(lua, &thread, args);
+    }
     Ok(thread)
 }
 
 /// Resume a suspended thread. Threads that already finished or are
-/// running are skipped.
+/// running are skipped, and so are a stopped script's.
 pub(crate) fn resume(lua: &Lua, thread: &Thread, args: impl IntoLuaMulti) {
-    if thread.status() != ThreadStatus::Resumable {
+    if thread.status() != ThreadStatus::Resumable || stopped_thread(lua, thread) {
         return;
     }
     if let Err(e) = thread.resume::<MultiValue>(args) {
         report_error(lua, thread, &e);
     }
+}
+
+/// Whether `func` belongs to a stopped script.
+fn stopped_function(lua: &Lua, func: &Function) -> bool {
+    with_world(lua, |w| w.any_stopped)
+        && func
+            .environment()
+            .is_some_and(|env| crate::api::scripts::is_stopped_env(lua, env))
+}
+
+/// A new thread that will call `func`, remembered so that it can be found
+/// to belong to a stopped script before it has started (`task.delay`).
+pub(crate) fn thread_for(lua: &Lua, func: Function) -> mlua::Result<Thread> {
+    let thread = lua.create_thread(func.clone())?;
+    lua.named_registry_value::<Table>("rook.thread_functions")?
+        .raw_set(thread.clone(), func)?;
+    Ok(thread)
+}
+
+/// Whether `thread` belongs to a stopped script: whether the function it
+/// was made for does, or else the function at the bottom of its stack.
+fn stopped_thread(lua: &Lua, thread: &Thread) -> bool {
+    if !with_world(lua, |w| w.any_stopped) {
+        return false;
+    }
+    let made_for = lua
+        .named_registry_value::<Table>("rook.thread_functions")
+        .and_then(|t| t.raw_get::<Option<Function>>(thread.clone()));
+    if let Ok(Some(f)) = made_for {
+        return stopped_function(lua, &f);
+    }
+    let base = luau_helper(
+        lua,
+        "thread_base",
+        r#"
+        local info = debug.info
+        return function(co)
+            local base
+            for level = 0, 1000 do
+                local f = info(co, level, "f")
+                if f == nil then break end
+                base = f
+            end
+            return base
+        end
+        "#,
+    )
+    .and_then(|f| f.call::<Option<Function>>(thread.clone()));
+    matches!(base, Ok(Some(f)) if stopped_function(lua, &f))
 }
 
 /// Print an error the way Roblox's output does:
@@ -175,35 +228,37 @@ pub(crate) fn job_label(lua: &Lua, job: &Job) -> String {
 
 /// The innermost script frame of a suspended thread.
 fn thread_label(lua: &Lua, thread: &Thread) -> String {
-    let find = || -> mlua::Result<String> {
-        let f: Function = match lua.named_registry_value::<Option<Function>>("rook.thread_label")? {
-            Some(f) => f,
-            None => {
-                let f: Function = lua
-                    .load(
-                        r#"
-                        local info = debug.info
-                        return function(co)
-                            for level = 0, 30 do
-                                local s, l = info(co, level, "sl")
-                                if s == nil then break end
-                                if s ~= "[C]" and string.sub(s, 1, 6) ~= "[rook]" then
-                                    return s .. ":" .. l
-                                end
-                            end
-                            return "?"
-                        end
-                        "#,
-                    )
-                    .set_name("=[rook] thread_label")
-                    .call(())?;
-                lua.set_named_registry_value("rook.thread_label", f.clone())?;
-                f
-            }
-        };
-        f.call(thread.clone())
-    };
-    format!("script: {}", find().unwrap_or_else(|_| "?".into()))
+    let find = luau_helper(
+        lua,
+        "thread_label",
+        r#"
+        local info = debug.info
+        return function(co)
+            for level = 0, 30 do
+                local s, l = info(co, level, "sl")
+                if s == nil then break end
+                if s ~= "[C]" and string.sub(s, 1, 6) ~= "[rook]" then
+                    return s .. ":" .. l
+                end
+            end
+            return "?"
+        end
+        "#,
+    )
+    .and_then(|f| f.call::<String>(thread.clone()));
+    format!("script: {}", find.unwrap_or_else(|_| "?".into()))
+}
+
+/// The function a Luau chunk returns, loaded once and kept in the registry
+/// under `rook.<name>`.
+fn luau_helper(lua: &Lua, name: &str, source: &str) -> mlua::Result<Function> {
+    let key = format!("rook.{name}");
+    if let Some(f) = lua.named_registry_value::<Option<Function>>(&key)? {
+        return Ok(f);
+    }
+    let f: Function = lua.load(source).set_name(format!("=[rook] {name}")).call(())?;
+    lua.set_named_registry_value(&key, f.clone())?;
+    Ok(f)
 }
 
 /// Run one scheduled job.
@@ -276,6 +331,13 @@ pub(crate) fn fire(lua: &Lua, key: &SignalKey, args: Vec<LuaValue>) {
     let (handlers, behavior) =
         with_world(lua, |w| (w.signals.take_handlers(key), w.signal_behavior));
     for (connection, handler) in handlers {
+        // A stopped script's connections are disconnected.
+        if let Handler::Call(f) = &handler
+            && stopped_function(lua, f)
+        {
+            with_world(lua, |w| w.signals.disconnect(connection));
+            continue;
+        }
         match behavior {
             SignalBehavior::Deferred => with_world(lua, |w| {
                 w.scheduler.defer(Job::Fire {
