@@ -121,9 +121,9 @@ fn parse_vec3(s: &str) -> Result<Vec3, String> {
 /// already drawn, so they're dropped: otherwise the first frame would
 /// rebuild the whole scene again (a new DataModel's changes say "rebuild
 /// everything").
-fn scene_of(dm: &mut DataModel, content: &Arc<Resolver>) -> SceneCache {
+fn scene_of(dm: &mut DataModel, content: &Arc<Resolver>, camera: Vec3) -> SceneCache {
     dm.take_render_changes();
-    SceneCache::new(&dm.runtime().world().dom, content.clone())
+    SceneCache::new(&dm.runtime().world().dom, content.clone(), camera)
 }
 
 /// Bring a cached scene up to date with a DataModel's changes and the mesh
@@ -142,6 +142,7 @@ fn refresh(
     } else {
         cache.apply(dom, &changes)
     };
+    cache.follow_camera(dom, camera);
     let mut loaded = cache.poll_files(dom, false);
     loaded.extend(cache.update_grass(camera));
     let change = match change {
@@ -203,23 +204,8 @@ fn main() -> anyhow::Result<()> {
     if args.seconds > 0.0 {
         game.run_for(args.seconds);
     }
-    let mut scene = scene_of(game.view_mut(), &content);
     // The camera the place was saved with (clients start with a fresh one).
     let mut camera = game.saved_camera;
-    let name = args.place.file_name().unwrap_or_default().to_string_lossy();
-    let terrain = scene.terrain_meshes();
-    let terrain = if terrain > 0 {
-        format!(", terrain in {} meshes", thousands(terrain))
-    } else {
-        String::new()
-    };
-    console::print_message(
-        MessageType::Info,
-        &format!(
-            "Loaded {name} in {load_time:.2} s ({} parts{terrain})",
-            thousands(scene.scene.parts.len() - scene.terrain_meshes())
-        ),
-    );
     if let Some(pos) = args.camera {
         let target = args.look_at.unwrap_or(pos + camera.forward());
         camera = Camera {
@@ -236,6 +222,23 @@ fn main() -> anyhow::Result<()> {
     if let Some(fov) = args.fov {
         camera.fov_y = fov;
     }
+
+    // Files near the camera load first.
+    let mut scene = scene_of(game.view_mut(), &content, camera.position);
+    let name = args.place.file_name().unwrap_or_default().to_string_lossy();
+    let terrain = scene.terrain_meshes();
+    let terrain = if terrain > 0 {
+        format!(", terrain in {} meshes", thousands(terrain))
+    } else {
+        String::new()
+    };
+    console::print_message(
+        MessageType::Info,
+        &format!(
+            "Loaded {name} in {load_time:.2} s ({} parts{terrain})",
+            thousands(scene.scene.parts.len() - scene.terrain_meshes())
+        ),
+    );
 
     if let Some(frames) = args.bench {
         return bench(

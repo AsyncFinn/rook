@@ -3,6 +3,10 @@
 
 use super::*;
 
+/// How far the camera moves before the files still loading are ranked
+/// again by their distance from it, in studs.
+const RERANK: f32 = 16.0;
+
 /// What a part's mesh file last settled on.
 #[derive(Debug, Clone, Copy)]
 pub(super) enum Settled {
@@ -78,11 +82,46 @@ impl SceneCache {
         r: ContentRef,
         want: Want,
     ) -> FileState {
-        let state = self.files.state(&r, want);
+        // Terrain is under the camera wherever it is.
+        let priority = if self.is_terrain(part) {
+            0.0
+        } else {
+            self.focus.distance(self.near)
+        };
+        let state = self.files.state(&r, want, priority);
         if state == FileState::Loading {
             self.waiting.entry((r, want)).or_default().insert(part);
         }
         state
+    }
+
+    /// Follow the camera: once it has moved far enough, rank the files
+    /// still loading again by how near it their nearest waiting part is, so
+    /// what's around it loads first.
+    pub fn follow_camera(&mut self, dom: &Dom, camera: Vec3) {
+        self.focus = camera;
+        if self.waiting.is_empty() || camera.distance(self.ranked_from) < RERANK {
+            return;
+        }
+        profiling::scope!("SceneCache::follow_camera");
+        self.ranked_from = camera;
+        for (key, parts) in &self.waiting {
+            let nearest = parts
+                .iter()
+                .filter_map(|&id| {
+                    if self.is_terrain(id) {
+                        return Some(0.0);
+                    }
+                    match dom.property_by_name(id, "CFrame")? {
+                        Value::CFrame(cf) => Some(camera.distance(cf.position)),
+                        _ => None,
+                    }
+                })
+                .reduce(f32::min);
+            if let Some(priority) = nearest {
+                self.files.set_priority(key, priority);
+            }
+        }
     }
 
     pub(super) fn settle(&mut self, part: InstanceId, mesh: InstanceId, settled: Settled) {

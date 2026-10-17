@@ -91,6 +91,7 @@ impl SceneCache {
         let Value::CFrame(cf) = dom.property_by_name(id, "CFrame")? else {
             return None;
         };
+        self.near = cf.position;
         let size = vector3(dom, id, "Size")?;
         let own = part_shape(dom, id);
         let class = dom.class_name(id);

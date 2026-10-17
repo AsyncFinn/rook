@@ -9,7 +9,7 @@ fn script_changes_update_the_terrain_look() {
     let terrain = dom.create_by_name("Terrain").unwrap();
     dom.set_parent(terrain, Some(ws)).unwrap();
     let content = Arc::new(Resolver::new(rook_content::Config::empty()));
-    let mut cache = SceneCache::new(&dom, content);
+    let mut cache = SceneCache::new(&dom, content, glam::Vec3::ZERO);
     assert_eq!(cache.scene.terrain.wave_size, 0.15);
     dom.set_property_by_name(terrain, "WaterWaveSize", Value::Float32(0.6))
         .unwrap();
@@ -52,7 +52,7 @@ fn edits_remesh_only_changed_chunks() {
     };
     write(&mut dom, &grid);
     let content = Arc::new(Resolver::new(rook_content::Config::empty()));
-    let mut cache = SceneCache::new(&dom, content);
+    let mut cache = SceneCache::new(&dom, content, glam::Vec3::ZERO);
     let meshes_of = |cache: &SceneCache, material| -> Vec<MeshHash> {
         cache
             .terrain
