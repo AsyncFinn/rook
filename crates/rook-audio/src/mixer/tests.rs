@@ -90,18 +90,27 @@ fn follows_the_engine() {
     m.sync(&only(vec![play(&a, 0.0)]));
     let mut out = [0.0; 10];
     m.mix(&mut out, 1);
-    // The engine says 1.1 s where the mixer is at 1.0: small drift
-    // stays; a seek moves it; a sound no longer wanted stops.
-    m.sync(&only(vec![play(&a, 1.1)]));
+    // The engine says 0.4 s where the mixer is at 1.0 (its frames were
+    // slow): the voice keeps its own clock.
+    m.sync(&only(vec![play(&a, 0.4)]));
     assert!((m.voices[&1].seconds() - 1.0).abs() < 1e-9);
-    m.sync(&only(vec![play(&a, 5.0)]));
-    assert!((m.voices[&1].seconds() - 5.0).abs() < 1e-9);
-    // Played again near where it was: starts over all the same.
+    // Played again or seeked (a new generation): it starts there.
     m.sync(&only(vec![Play {
         generation: 1,
         ..play(&a, 5.1)
     }]));
     assert!((m.voices[&1].seconds() - 5.1).abs() < 1e-9);
+    // Played to its end, it stays silent while the engine's clock catches
+    // up, rather than playing the end again.
+    let mut rest = [0.0; 60];
+    m.mix(&mut rest, 1);
+    assert!(m.is_empty());
+    m.sync(&only(vec![Play {
+        generation: 1,
+        ..play(&a, 9.5)
+    }]));
+    m.mix(&mut out, 1);
+    assert_eq!(out, [0.0; 10]);
     m.sync(&Mix::default());
     assert!(m.is_empty());
 }

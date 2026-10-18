@@ -153,8 +153,8 @@ impl<K: Hash + Eq + Copy> Runner<K> {
     }
 
     /// Render `graph` from now on: new nodes start, removed ones go, and
-    /// players keep their own position unless it drifted from the
-    /// engine's.
+    /// players keep their own position until played again or seeked
+    /// (`generation`).
     pub fn sync(&mut self, graph: &Graph<K>) {
         let index: HashMap<K, usize> = graph
             .nodes

@@ -111,8 +111,13 @@ player loads in the background.
 *Hearing it* (Rook): the player gives the playing, loaded sounds of the
 DataModel it shows (the client in Play mode) to `rook-audio` each frame.
 The mixer resamples each to the device's rate by linear interpolation and
-mixes them, following the engine's `TimePosition` but keeping its own
-unless the two drift more than 0.25 s apart (a seek). The output device
+mixes them. Each sound starts at the engine's `TimePosition` and then keeps
+its own clock. It jumps to the engine's position again only when the sound
+is played again or a script (or replication) sets `TimePosition`. A sound
+played to its end stays silent until then. The engine's clock falls behind
+the device's whenever frames are slow (the client steps at most four 1/60 s
+frames per window frame). The mixer used to jump back to it once
+the two were 0.25 s apart, which stuttered. The output device
 (`cpal`, the system default) opens on the first sound to hear; `rook
 run-headless`, `--bench` and `--screenshot` never open one, and
 `ROOK_AUDIO=off` keeps the player silent. Every sound is heard
@@ -125,7 +130,16 @@ SoundGroups (step 4).
 hidden twins (`PlayingReplicator`, `TimePositionReplicator`, and the old
 name `Pitch`), and a server's `Play` is heard on every client at its
 speed. Rook replicates the three properties, and the client keeps its own
-clock from there. Until 0.4.4 the player heard nothing in Play mode, and
+clock from there.
+
+*What replicates* (Confirmed in Studio 0.743, Play mode, a server Sound
+at Volume 0): a client that set its own `TimePosition` 5 s ahead kept that
+offset for as long as the server played on, so playing progress is never
+sent. A server seek reached the client (it read the new position plus the
+time since), and so did `Play` on a playing sound (a restart from the last
+position a script set), `Stop` (0), and a `TimePosition` set while
+stopped. Rook sends `TimePosition` only when it is set (time passing
+isn't journaled), so a slow server never pulls a client back. Until 0.4.4 the player heard nothing in Play mode, and
 then everything at speed 1. A recording of `rook-player`'s output now has
 the test tone at full level for exactly as long as the script played it.
 Engine tests (`tests/sounds.rs`) check that the client gets every
@@ -285,8 +299,10 @@ So: full volume within `RollOffMinDistance`, and nothing past
 `RollOffMaxDistance`, even when the minimum is larger (min 20, max 3, at
 10: silent). Between them, Inverse is `min / d`, Linear
 `(max - d) / (max - min)`, LinearSquare that squared, and InverseTapered
-the lesser of Inverse and LinearSquare. A minimum of 0 makes Inverse
-silent. With the default max of 10000, Inverse at 200 and 1000 studs read
+the lesser of Inverse and LinearSquare. By the formula a minimum of 0
+makes Inverse silent (Inference, not measured: every Sound in some
+archive places has a minimum of 0, so this needs checking against
+Studio's output). With the default max of 10000, Inverse at 200 and 1000 studs read
 0.06 and 0.01. `SoundService.RolloffScale` stretches the distance past
 the minimum, `d = min + scale * (distance - min)`: Inverse at 20 and 40
 with scale 2 read 0.33 and 0.14, with 0.5 at 40 read 0.40, and Linear at

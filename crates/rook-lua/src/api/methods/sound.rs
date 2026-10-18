@@ -45,7 +45,6 @@ pub(super) fn sound_play(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outc
     let was_playing = with_world(lua, |w| playing(w, this));
     let restart = |w: &mut World| {
         let control = w.sounds.entry(this).or_default();
-        control.plays = control.plays.wrapping_add(1);
         control.loops = 0;
         let start = control.start;
         w.dom

@@ -185,3 +185,46 @@ fn effects_groups_and_local_sounds() {
     let ambient = client.sound_listener().ambient_reverb.unwrap();
     assert_eq!(ambient.decay, 2.9);
 }
+
+/// A client runs a playing sound's clock itself: a server stepping
+/// slower than the client neither pulls the client's `TimePosition` back
+/// nor restarts what the client hears, and a script seeking on the server
+/// still reaches it as a restart (Confirmed in Studio: a client's own
+/// offset held while the server played on; seeks, `Play` and `Stop`
+/// replicated).
+#[test]
+fn slow_server_keeps_client_clock() {
+    use crate::session::host::{ClientHost, ServerHost, ToClient};
+    let options = tone_options("sound-clock");
+    let mut server = DataModel::new(&options).unwrap();
+    add_script(
+        &server,
+        "ServerScriptService",
+        "Play",
+        "local s = Instance.new('Sound') s.SoundId = 'rbxasset://sounds/tone.wav'          s.PlaybackSpeed = 0.1 s.Parent = workspace s:Play()          task.wait(0.5) s.TimePosition = 0.02",
+    );
+    server.start();
+    let mut host = ServerHost::new(server);
+    let (_, joined) = host.join("Player1", 1).unwrap();
+    let mut client = ClientHost::new(&joined, &options).unwrap();
+    // The server takes as long as nine client frames.
+    let mut server_frames = |client: &mut ClientHost, n: usize| {
+        for _ in 0..n {
+            host.step();
+            client.deliver(&ToClient::Updates(host.updates().pop().unwrap()));
+            for _ in 0..9 {
+                client.step();
+            }
+        }
+        let sound = client.client().playing_sounds().pop().unwrap();
+        (sound.position, sound.generation)
+    };
+    let (_, started) = server_frames(&mut client, 2);
+    // 180 client frames at speed 0.1: 0.3 s in, where the server is 0.033.
+    let (ahead, generation) = server_frames(&mut client, 18);
+    assert!((ahead - 0.3).abs() < 0.02, "client clock: {ahead}");
+    assert_eq!(generation, started, "no restart while the server lags");
+    let (seeked, generation) = server_frames(&mut client, 15);
+    assert!(seeked < 0.2, "server seek: {seeked}");
+    assert_ne!(generation, started, "the seek restarts the voice");
+}
