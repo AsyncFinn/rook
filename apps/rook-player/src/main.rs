@@ -263,6 +263,8 @@ fn main() -> anyhow::Result<()> {
         install.apply(&mut renderer);
         renderer.set_scene(&scene.scene);
         renderer.finish_uploads();
+        // Effects as they look once going: Smoke's puffs live 5 seconds.
+        renderer.settle_particles(6.0);
         let pixels = renderer.render_to_image(args.width, args.height, &camera)?;
         image::save_buffer(
             &out,

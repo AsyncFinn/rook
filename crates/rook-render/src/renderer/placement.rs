@@ -69,6 +69,8 @@ impl Renderer {
         self.terrain = scene.terrain;
         self.lights.update(&self.device, &self.queue, &scene.lights);
         self.lights.update_blockers(scene, changed);
+        self.particles.sim.set_emitters(&scene.emitters);
+        self.request_particle_images(scene);
         // The skybox's images go up like any other image.
         for hash in scene.lighting.skybox.into_iter().flatten() {
             self.image_readiness(hash, Some(scene));
@@ -245,7 +247,7 @@ impl Renderer {
         }
     }
 
-    fn image_readiness(&mut self, hash: ImageHash, scene: Option<&Scene>) -> Readiness {
+    pub(super) fn image_readiness(&mut self, hash: ImageHash, scene: Option<&Scene>) -> Readiness {
         if self.images.contains(&hash) {
             return Readiness::Ready;
         }

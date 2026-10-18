@@ -228,6 +228,8 @@ impl Renderer {
             self.upload_instances(camera, &view, margin)
         };
 
+        let particle_runs = self.upload_particles(camera, &view);
+
         // Each pass's draws, joined into runs that share what's bound.
         let (mut shadow_runs, mut main_runs, starts) =
             self.build_draws(shadow, &view, margin, transparent_runs);
@@ -308,6 +310,7 @@ impl Renderer {
             }
             self.record_sky(&mut pass);
             self.record(&mut pass, &mut main_runs, starts[1]);
+            self.record_particles(&mut pass, &particle_runs);
         }
         if let Some(timer) = &mut self.timer {
             timer.resolve(&mut encoder, shadow.is_some());

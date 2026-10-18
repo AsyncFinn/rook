@@ -5,6 +5,7 @@ pub(crate) mod shadow;
 mod draw;
 mod images;
 mod lights;
+mod particles;
 mod pipelines;
 mod placement;
 mod readback;
@@ -16,6 +17,7 @@ pub(crate) use images::ImageBinding;
 pub(crate) use images::ImageSet;
 use images::{Defaults, image_layout, image_set};
 use lights::GpuLights;
+use particles::GpuParticles;
 use pipelines::Pipelines;
 use placement::Placement;
 use timing::GpuTimer;
@@ -80,6 +82,8 @@ pub struct Renderer {
     lighting: Lighting,
     /// The local lights and their spatial hash (group 3).
     pub(crate) lights: GpuLights,
+    /// The emitters' particles.
+    particles: GpuParticles,
     terrain: TerrainLook,
     /// Seconds on the clock grass sways by ([`Renderer::set_time`]).
     time: f32,
@@ -309,6 +313,7 @@ impl Renderer {
             transparent_parts: Vec::new(),
             lighting: Lighting::default(),
             lights,
+            particles: GpuParticles::default(),
             terrain: TerrainLook::default(),
             time: 0.0,
             water_phase: 0.0,
@@ -340,11 +345,12 @@ impl Renderer {
         }
     }
 
-    /// Set the clock grass sways by, in seconds; water moves on by the time
-    /// since the last call (none when the clock goes back, at most a
-    /// second) at the scene's `WaterWaveSpeed`.
+    /// Set the clock grass sways by, in seconds; water and particles move
+    /// on by the time since the last call (none when the clock goes back,
+    /// at most a second), water at the scene's `WaterWaveSpeed`.
     pub fn set_time(&mut self, seconds: f32) {
         let dt = (seconds - self.time).clamp(0.0, 1.0);
+        self.particles.sim.step(dt);
         self.water_phase =
             (self.water_phase + f64::from(dt * self.terrain.wave_speed)) % WATER_PHASE_PERIOD;
         self.time = seconds;

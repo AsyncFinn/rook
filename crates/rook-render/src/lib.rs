@@ -4,21 +4,23 @@
 //! (architecture §8). It draws primitive parts, the built-in mesh shapes
 //! and mesh files, and TrussParts' bars, with their colour, transparency, mesh textures, Plastic's
 //! surface patterns and Neon, Decals and Textures over them, a sky colour,
-//! a sun, ambient light, fog and the sun's shadows. Terrain arrives as
-//! mesh files too: the player meshes its chunks with `rook-terrain`.
+//! a sun, ambient light, fog and the sun's shadows, and particles (Fire,
+//! Smoke and Sparkles). Terrain arrives as mesh files too: the player
+//! meshes its chunks with `rook-terrain`.
 
 mod batch;
 mod gpu;
 mod mesh;
+mod particles;
 mod renderer;
 mod scene;
 mod surfaces;
 
 pub use scene::{
-    Camera, DrawShape, Image, ImageHash, ImagePlacement, Layer, LightShape, Lighting, LocalLight,
-    MapAlpha, Material, MaterialMaps, MaterialSet, Mesh, MeshHash, NormalId, PartInstance,
-    PartShape, SKYBOX_FACES, Scene, SurfacePattern, TERRAIN_LAYERS, TerrainLayer, TerrainLook,
-    Tiling, TrussShape,
+    Camera, Curve, DrawShape, Emitter, EmitterLook, Image, ImageHash, ImagePlacement, Layer,
+    LightShape, Lighting, LocalLight, MapAlpha, Material, MaterialMaps, MaterialSet, Mesh,
+    MeshHash, NormalId, PartInstance, PartShape, SKYBOX_FACES, Scene, SurfacePattern,
+    TERRAIN_LAYERS, TerrainLayer, TerrainLook, Tiling, TrussShape,
 };
 
 // Content hashes are 32 bytes: FxHash keeps lookups by them cheap.

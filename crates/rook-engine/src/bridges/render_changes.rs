@@ -10,7 +10,8 @@ use crate::*;
 /// Lighting if `lighting`, the terrain's look (a Terrain's properties,
 /// `Workspace.GlobalWind`) if `terrain`, the local lights (and
 /// Attachments, which may carry one) whose properties changed in `lights`,
-/// and lights entering or leaving the tree if `lights_placed`.
+/// and lights entering or leaving the tree if `lights_placed`; the same
+/// for Fire, Smoke and Sparkles in `effects` and `effects_placed`.
 #[derive(Debug, Clone, Default)]
 pub struct RenderChanges {
     pub full: bool,
@@ -18,6 +19,10 @@ pub struct RenderChanges {
     pub terrain: bool,
     pub lights: std::collections::HashSet<InstanceId>,
     pub lights_placed: bool,
+    /// Fire, Smoke and Sparkles whose properties changed, and whether any
+    /// entered or left the tree (`effects_placed`).
+    pub effects: std::collections::HashSet<InstanceId>,
+    pub effects_placed: bool,
     pub placed: std::collections::HashSet<InstanceId>,
     pub parts: std::collections::HashSet<InstanceId>,
     pub moved: std::collections::HashSet<InstanceId>,
@@ -38,6 +43,8 @@ impl RenderChanges {
             && !self.terrain
             && self.lights.is_empty()
             && !self.lights_placed
+            && self.effects.is_empty()
+            && !self.effects_placed
             && self.placed.is_empty()
             && self.parts.is_empty()
             && self.moved.is_empty()
@@ -95,6 +102,7 @@ impl DataModel {
                 || dom.is_a(id, "SurfaceAppearance")
         };
         let light = |id: InstanceId| dom.is_a(id, "Light");
+        let effect = |id: InstanceId| matches!(dom.class_name(id), "Fire" | "Smoke" | "Sparkles");
         let materials =
             |id: InstanceId| dom.is_a(id, "MaterialService") || dom.is_a(id, "MaterialVariant");
         let mark_part = |changes: &mut RenderChanges, part: Option<InstanceId>| {
@@ -114,8 +122,12 @@ impl DataModel {
                         changes.terrain = true;
                     } else if materials(*id) {
                         changes.full = true;
+                    } else if effect(*id) {
+                        changes.effects.insert(*id);
                     } else if light(*id) || dom.is_a(*id, "Attachment") {
+                        // Attachments carry effects as well as lights.
                         changes.lights.insert(*id);
+                        changes.effects.insert(*id);
                     } else if props.velocities.contains(property) {
                         // Physics writes these for every moving part every
                         // step; nothing draws them.
@@ -143,6 +155,9 @@ impl DataModel {
                     if subtree.iter().any(|i| light(*i)) {
                         changes.lights_placed = true;
                     }
+                    if subtree.iter().any(|i| effect(*i)) {
+                        changes.effects_placed = true;
+                    }
                     let parts = subtree.iter().filter(|i| dom.is_a(**i, "BasePart"));
                     let before = changes.placed.len();
                     changes.placed.extend(parts);
@@ -157,11 +172,15 @@ impl DataModel {
                 Change::Destroying(id) if light(*id) => {
                     changes.lights_placed = true;
                 }
+                Change::Destroying(id) if effect(*id) => {
+                    changes.effects_placed = true;
+                }
                 _ => {}
             }
         }
         if changes.full {
             changes.lights.clear();
+            changes.effects.clear();
             changes.parts.clear();
             changes.moved.clear();
             changes.placed.clear();

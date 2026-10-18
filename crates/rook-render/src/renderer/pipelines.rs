@@ -5,12 +5,20 @@ use wesl_core::include_wesl;
 use super::*;
 
 /// The shaders (`shaders/`, linked by the build script): parts and
-/// terrain, and the skybox, for how draws reach their images (a table, or
-/// a set bound per draw).
-fn shaders(table: bool) -> [&'static str; 2] {
+/// terrain, the skybox, and particles, for how draws reach their images
+/// (a table, or a set bound per draw).
+fn shaders(table: bool) -> [&'static str; 3] {
     match table {
-        true => [include_wesl!("parts_table"), include_wesl!("sky_table")],
-        false => [include_wesl!("parts"), include_wesl!("sky")],
+        true => [
+            include_wesl!("parts_table"),
+            include_wesl!("sky_table"),
+            include_wesl!("particles_table"),
+        ],
+        false => [
+            include_wesl!("parts"),
+            include_wesl!("sky"),
+            include_wesl!("particles"),
+        ],
     }
 }
 
@@ -40,6 +48,8 @@ pub(crate) struct Pipelines {
     pub(crate) sky: wgpu::RenderPipeline,
     /// Depth only, from the sun, over the opaque batches.
     pub(crate) shadow: wgpu::RenderPipeline,
+    /// Emitters' particles, over everything.
+    pub(crate) particles: wgpu::RenderPipeline,
 }
 
 impl Pipelines {
@@ -52,7 +62,7 @@ impl Pipelines {
         lights_layout: &wgpu::BindGroupLayout,
         table: bool,
     ) -> Self {
-        let [parts, sky] = shaders(table);
+        let [parts, sky, particles] = shaders(table);
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("rook parts"),
             source: wgpu::ShaderSource::Wgsl(parts.into()),
@@ -265,7 +275,7 @@ impl Pipelines {
             false,
             wgpu::CompareFunction::GreaterEqual,
             Default::default(),
-            once.clone(),
+            once,
         );
         let additive = make(
             "rook additive",
@@ -356,7 +366,19 @@ impl Pipelines {
             multiview_mask: None,
             cache: None,
         });
+        let particle_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("rook particles"),
+            source: wgpu::ShaderSource::Wgsl(particles.into()),
+        });
+        let particles = super::particles::pipeline(
+            device,
+            &pipeline_layout,
+            &particle_shader,
+            color_format,
+            depth_format,
+        );
         Self {
+            particles,
             opaque: opaque_pipeline,
             transparent: transparent_pipeline,
             layer: layer_pipeline,

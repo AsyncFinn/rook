@@ -21,6 +21,7 @@ use rook_types::{
 
 use crate::scene::files::{FileRef, FileState, Files, Loaded};
 
+mod effects;
 mod lighting;
 mod lights;
 mod loading;
@@ -30,6 +31,7 @@ mod props;
 mod terrain;
 mod union;
 
+use effects::{EffectCache, EffectTextures};
 use loading::*;
 use look::*;
 use props::*;
@@ -106,14 +108,18 @@ pub struct SceneCache {
     /// Indices into `light_ids` of the lights each part or Attachment
     /// carries, and of each light itself.
     light_holders: HashMap<InstanceId, Vec<usize>>,
+    /// Fire, Smoke and Sparkles, as `scene.emitters`.
+    effects: EffectCache,
 }
 
 impl SceneCache {
     /// Mesh files and images resolve through `content`, those nearest
     /// `camera` first.
     pub fn new(dom: &Dom, content: Arc<Resolver>, camera: Vec3) -> Self {
+        let mut scene = Scene::default();
+        let textures = EffectTextures::load(&content, &mut scene.images);
         let mut cache = Self {
-            scene: Scene::default(),
+            scene,
             index: HashMap::new(),
             layers: HashMap::new(),
             files: Files::new(content),
@@ -129,6 +135,7 @@ impl SceneCache {
             terrain: TerrainCache::default(),
             light_ids: Vec::new(),
             light_holders: HashMap::new(),
+            effects: EffectCache::new(textures),
         };
         cache.rebuild(dom);
         cache
@@ -163,6 +170,7 @@ impl SceneCache {
         self.shown.retain(|id, _| index.contains_key(id));
         self.scene.lighting = self.lighting(dom);
         self.find_lights(dom);
+        self.effects.find(dom, &mut self.scene.emitters);
     }
 
     /// Find every local light in Workspace again, and read them.
@@ -242,6 +250,7 @@ impl SceneCache {
             self.scene.lighting = self.lighting(dom);
         }
         let lights = self.lights_changed(dom, changes);
+        let effects = self.effects.changed(dom, changes, &mut self.scene.emitters);
         let mut changed = Vec::new();
         if changes.terrain {
             match self.terrain_changed(dom) {
@@ -285,7 +294,7 @@ impl SceneCache {
         }
         // The terrain's look (waves, wind) reaches the renderer with any
         // update, even one that changed no entry.
-        if changed.is_empty() && !changes.lighting && !changes.terrain && !lights {
+        if changed.is_empty() && !changes.lighting && !changes.terrain && !lights && !effects {
             SceneChange::None
         } else {
             SceneChange::Parts(changed)
