@@ -75,12 +75,15 @@ impl DataModel {
     )> {
         let requests = self.runtime.take_content_requests();
         let mut results = self.runtime.take_content_answers();
+        let assets = self.runtime.take_asset_requests();
         let content = &mut self.content;
         let mut sounds_done = Vec::new();
         if requests.is_empty()
             && results.is_empty()
+            && assets.is_empty()
             && sound_files.is_empty()
             && content.tickets.is_empty()
+            && content.assets.is_empty()
             && self.sounds.tickets.is_empty()
         {
             return sounds_done;
@@ -99,6 +102,16 @@ impl DataModel {
                 .tickets
                 .insert(loader.request_as(reference, want), request);
         }
+        let mut assets_done = Vec::new();
+        for (request, id) in assets {
+            match u64::try_from(id).ok().filter(|&id| id > 0) {
+                Some(id) => {
+                    let r = rook_content::ContentRef::Asset { id, version: None };
+                    content.assets.insert(loader.request(r), request);
+                }
+                None => assets_done.push((request, Err(rook_content::FailureKind::NotFound))),
+            }
+        }
         for r in sound_files {
             let ticket = loader.request_as(r.clone(), rook_content::Want::Audio);
             self.sounds.tickets.insert(ticket, r);
@@ -111,11 +124,16 @@ impl DataModel {
         for (ticket, outcome) in finished {
             if let Some(request) = content.tickets.remove(&ticket) {
                 results.push((request, outcome.is_ok()));
+            } else if let Some(request) = content.assets.remove(&ticket) {
+                assets_done.push((request, read_asset(outcome)));
             } else if let Some(r) = self.sounds.tickets.remove(&ticket) {
                 sounds_done.push((r, outcome));
             }
         }
         self.runtime.deliver_content(&results);
+        for (request, fill) in assets_done {
+            self.runtime.deliver_asset(request, fill);
+        }
         sounds_done
     }
 
@@ -151,4 +169,17 @@ impl DataModel {
             self.runtime.destroy(id);
         }
     }
+}
+
+/// Read a fetched model asset, for scripts that load it: a function that
+/// copies its instances into the Model they get.
+fn read_asset(
+    outcome: Result<rook_content::Fetched, rook_content::Failure>,
+) -> rook_lua::AssetFill {
+    let fetched = outcome.map_err(|f| f.kind)?;
+    let loaded =
+        rook_formats::load(&fetched.bytes).map_err(|_| rook_content::FailureKind::Invalid)?;
+    Ok(Box::new(move |dom, model| {
+        rook_formats::into_dom(&loaded.dom, dom, model);
+    }))
 }

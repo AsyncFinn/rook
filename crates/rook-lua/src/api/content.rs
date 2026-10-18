@@ -77,7 +77,10 @@ impl ContentRequests {
 pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
     Some(match (owner, name) {
         ("ContentProvider", "PreloadAsync") => preload_async,
-        _ => return super::remotes::native(owner, name),
+        _ => {
+            return super::assets::native(owner, name)
+                .or_else(|| super::remotes::native(owner, name));
+        }
     })
 }
 

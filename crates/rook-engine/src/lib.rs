@@ -132,6 +132,9 @@ struct Content {
     loader: Option<rook_content::Loader>,
     /// Loader tickets to the scripts' request ids.
     tickets: HashMap<rook_content::Ticket, u64>,
+    /// Loader tickets to the request ids of assets scripts load
+    /// (`require(assetId)`, `InsertService:LoadAsset`).
+    assets: HashMap<rook_content::Ticket, u64>,
     wait_for_sounds: bool,
 }
 

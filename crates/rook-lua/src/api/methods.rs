@@ -63,7 +63,7 @@ const INERT: &[(&str, &str)] = &[
     ("BasePart", "SetNetworkOwner"),
     ("BasePart", "SetNetworkOwnershipAuto"),
     ("ContentProvider", "Preload"),
-    // Pre-approves an asset for LoadAsset; only matters once assets load.
+    // Pre-approves an asset for LoadAsset, which doesn't check approvals.
     ("InsertService", "ApproveAssetId"),
     ("InsertService", "ApproveAssetVersionId"),
     // FunctionalTest reports results to Roblox's internal test harness.

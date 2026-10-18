@@ -15,6 +15,7 @@ mod world;
 
 use threads::watchdog;
 
+pub use api::assets::AssetFill;
 pub use api::camera::{Lens, viewport_ray};
 pub use ctx::{ScriptError, lua_error_message};
 pub use net::{NetValue, RemoteKind, RemoteMessage};
@@ -358,6 +359,21 @@ impl Runtime {
         }
         self.guarded(|| {
             api::content::deliver(&self.lua, results);
+            threads::drain_deferred(&self.lua);
+        });
+    }
+
+    /// Assets `require(assetId)` and `InsertService:LoadAsset` wait for
+    /// (`(request, asset id)`), asked for since the last call.
+    pub fn take_asset_requests(&self) -> Vec<(u64, i64)> {
+        std::mem::take(&mut self.world_mut().assets.outbox)
+    }
+
+    /// Deliver a fetched asset: `fill` puts its instances in the Model the
+    /// waiting call gets, and the threads waiting for it resume.
+    pub fn deliver_asset(&self, request: u64, fill: AssetFill) {
+        self.guarded(|| {
+            api::assets::deliver(&self.lua, request, fill);
             threads::drain_deferred(&self.lua);
         });
     }

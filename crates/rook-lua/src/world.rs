@@ -176,6 +176,7 @@ pub struct World {
     pub outbox: Vec<crate::net::RemoteMessage>,
     /// ContentProvider requests waiting for the engine to resolve them.
     pub content: crate::api::content::ContentRequests,
+    pub assets: crate::api::assets::AssetRequests,
     /// The physics world. Scripts query it (raycasts, regions), which
     /// brings it up to date with the DOM first, so it lives here with the
     /// DOM. Servers step it; a client's only answers queries (see
@@ -219,6 +220,7 @@ impl World {
             input: InputState::default(),
             outbox: Vec::new(),
             content: Default::default(),
+            assets: Default::default(),
             physics: rook_physics::Physics::new(),
             pending_calls: HashMap::new(),
             next_call: 0,

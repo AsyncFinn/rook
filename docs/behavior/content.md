@@ -128,6 +128,36 @@ cast string to Array`, `Unable to cast double to ContentId`, `Unable to
 cast double to Function`. `RequestQueueSize` read 0 on an idle server and
 rose to 5-6 during a client preload, not tracking its entries exactly.
 
+*Published models* (observed in Studio 0.742 on a playtest server and
+client, 2026-10-18): `require(id)` loads the asset into a Model named
+`required_asset_<id>` with no parent and requires its child `MainModule`
+(so the module's full name is `required_asset_<id>.MainModule`, and
+`script.Parent.Parent` is nil). Each id loads once: requiring it again
+returns the same value at once, and a failure is remembered as well (the
+second call failed in no time with the same message). A missing asset,
+one that isn't a model, or an id of 0 or below raises `Downloading asset
+failed for asset id <id>.  Is the asset id correct and is the asset type
+"Model"?`; a model without `MainModule` raises `Unable to find module for
+asset id <id>.  Does the asset have a ModuleScript named "MainModule"?`.
+A fractional id rounds to the nearest, and a string is Luau's path
+require, not an asset id. `InsertService:LoadAsset(id)` returns a new
+parentless Model named `Model` holding the asset's top-level instances, a
+fresh copy every call; it takes numeric strings, a missing asset raises
+`Request asset was not found`, and Studio refused assets the place's
+creator doesn't own (`User is not authorized to access Asset.`, `Asset is
+not trusted for this place`). On a client both refuse: `require(assetId)
+cannot be called from a client.  assetId = <id>` and `InsertService cannot
+be used to load assets from the client`. Both wait for the download (0.2
+to 0.4 s in Studio). Rook does all of this, fetching through the same
+providers and cache as other content and reading the file with
+rook-formats; it doesn't check ownership, so it loads whatever asset
+delivery gives it. Asset delivery is the limit: of the archive's modules
+tried every
+one now needs an account, so `require` fails with the download message
+Studio gives for a missing asset, while an old analytics module
+(`153590792`) loads and runs. Headless runs leave asset delivery off
+unless `ROOK_ASSET_DELIVERY=on`; the player has it on.
+
 *Asset delivery today* (tested 2026-10-12): Roblox announced in March 2025
 that every assetdelivery.roblox.com endpoint would need authentication,
 with Open Cloud's `apis.roblox.com/asset-delivery-api/v1/assetId/<id>` and
@@ -170,6 +200,4 @@ nothing when one fails to load (checking 1.00's halved size and the V flip
 against Studio while at it), mesh versions 6.00 and 7.00; image decoding
 (PNG, JPEG, DDS, the old `.tex`) and textures, decals and materials;
 `VertexColor`. Also open: thumbnails (`rbxthumb://`), the old paths outside
-Rook's table, Decal's URL rewrite, `require(assetId)` and
-`InsertService:LoadAsset` (asset fetching can download the model; loading
-it isn't done), and assets that need an account.
+Rook's table, Decal's URL rewrite, and assets that need an account.

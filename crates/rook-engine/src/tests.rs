@@ -545,6 +545,7 @@ fn input_mouse_and_click_detectors() {
     assert_eq!(server_log, ["server click Clicker"]);
 }
 
+mod assets;
 mod audio_api;
 mod client_tweens;
 mod scripts;

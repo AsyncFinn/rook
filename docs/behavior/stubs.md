@@ -17,8 +17,8 @@ made inert without an entry in the first table.
 | `BasePart:SetNetworkOwner` | Chooses which machine simulates the part's assembly | Networking (single machine until then) |
 | `BasePart:SetNetworkOwnershipAuto` | Returns network ownership to the engine | Networking |
 | `ContentProvider:Preload` | Queues an asset for download (deprecated; not checked in Studio) | Content |
-| `InsertService:ApproveAssetId` | Allowed a place to `LoadAsset` a specific asset (legacy) | Content, together with `InsertService:LoadAsset` |
-| `InsertService:ApproveAssetVersionId` | Same, for one asset version | Content |
+| `InsertService:ApproveAssetId` | Allowed a place to `LoadAsset` a specific asset (legacy) | Stays inert: Rook's `LoadAsset` doesn't check approvals or ownership |
+| `InsertService:ApproveAssetVersionId` | Same, for one asset version | Stays inert, as above |
 | `FunctionalTest:Passed`, `Failed`, `Error`, `Warn` | Report results to Roblox's internal test harness | Possibly the conformance tooling; otherwise stays inert |
 
 ## Partial implementations
@@ -32,7 +32,7 @@ made inert without an entry in the first table.
 | `Model:MoveTo` | Moves the model to the target | Moving up out of obstructions | Physics, later (the queries it needs exist) |
 | `DataStoreService` | In-memory stores for one run; `GetSortedAsync` returns a plain table, not a `DataStorePages` | Persistence (local files), versions, `ListKeysAsync`, budgets | Server hosting, Networking |
 | `HttpService:GetAsync`, `PostAsync`, `RequestAsync` | Raise "Http requests are not enabled" | Opt-in HTTP for places that enable it | Opt-in, later |
-| `require(assetId)` | Raises an error | Loading published modules | Content, later: asset fetching can fetch the model, but loading it as a module isn't done |
+| `require(assetId)`, `InsertService:LoadAsset` | Load the model through asset delivery and the cache, waiting for it, with Studio's Model, caching and errors (see [content](content.md)) | Most models now need an account, which Rook's asset delivery doesn't have; ownership isn't checked; `LoadAssetVersion` and the other InsertService members | Content (assets that need an account) |
 | `ContentProvider:PreloadAsync` | On a client: resolves entries through the provider chain and calls back with `Enum.AssetFetchStatus` Success or Failure as each finishes, then returns; instances stand for their and their descendants' content properties; a mesh's `MeshId` must decode as a mesh and an image property's value as an image (a PNG as a mesh, or a sound in a Decal, fails, as in Studio); strings load only `rbxasset://` images (as in Studio). On a server: never returns once there is anything to fetch (as in Studio) | Meshes of versions 6.00 and 7.00 report `Failure` until Rook reads them; images in formats Rook doesn't read (none found in the archive) report `Failure`; `Loading`/`TimedOut`; exact frame timing | Conformance |
 | `ContentProvider.RequestQueueSize` | Requests a DataModel is waiting on | Studio's own count, which didn't follow one call's entries exactly | Conformance |
 | Other ContentProvider members (`GetAssetFetchStatus`, `AssetFetchFailed`, `ListEncryptedAssets`, ...) | Not implemented | Each, if places use it | Content |
