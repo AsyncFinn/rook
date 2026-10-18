@@ -305,13 +305,15 @@ impl Mesher<'_> {
     }
 
     /// The material of the cell's solid corners with the most occupancy
-    /// in all (the first by index on a tie).
+    /// in all (the first by index on a tie). Only materials the corners
+    /// hold count: corners whose occupancy byte is 0 still hold a little
+    /// ([`Voxel::fill`]), so a cell of only those is theirs, not Air's.
     fn dominant(&self, c: IVec3) -> TerrainMaterial {
-        let mut total = [0u32; 23];
+        let mut total = [None::<u32>; 23];
         for i in 0..8 {
             let v = self.block.at(c + IVec3::new(i & 1, i >> 1 & 1, i >> 2));
             if v.is_solid() {
-                total[v.material as usize] += u32::from(v.occupancy);
+                *total[v.material as usize].get_or_insert(0) += u32::from(v.occupancy);
             }
         }
         let best = (0..23).rev().max_by_key(|&i| total[i]).unwrap_or(0);

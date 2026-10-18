@@ -378,3 +378,32 @@ fn seams_blend_layers() {
     assert_eq!(opaque, surface);
     assert!(overs > 0);
 }
+
+/// A voxel whose occupancy byte is 0 still holds a little of its material
+/// (`Voxel::fill`): a cell whose only solid corners are such voxels takes
+/// their material, not Air, which has no texture and drew white specks on
+/// a grass hillside.
+#[test]
+fn faint_voxels_keep_their_material() {
+    use TerrainMaterial::Grass;
+    let mut grid = Grid::new();
+    for z in 0..6 {
+        for x in 0..6 {
+            grid.set(IVec3::new(x, 0, z), Voxel::new(Grass, 255));
+        }
+    }
+    for z in 2..4 {
+        for x in 2..4 {
+            grid.set(IVec3::new(x, 1, z), Voxel::new(Grass, 0));
+        }
+    }
+    for chunk in chunks_to_mesh(&grid) {
+        let mesh = mesh_chunk(&grid, chunk);
+        for d in &mesh.draws {
+            assert_eq!(d.layer.material, Grass);
+            for c in &d.corners {
+                assert!(c.layers.iter().all(|l| l.material == Grass));
+            }
+        }
+    }
+}
