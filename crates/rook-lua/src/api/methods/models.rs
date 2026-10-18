@@ -43,6 +43,7 @@ pub(crate) fn pivot_of(w: &World, id: InstanceId) -> CFrame {
 /// Move every part of a model rigidly by `delta` (applied in world space),
 /// taking along whatever they're joined to.
 fn transform_model(w: &mut World, model: InstanceId, delta: CFrame) -> Result<(), DomError> {
+    let delta = rigid(delta);
     let moves: Vec<_> = parts_of(w, model)
         .into_iter()
         .map(|part| (part, delta * cframe(w, part)))
@@ -59,6 +60,14 @@ fn transform_model(w: &mut World, model: InstanceId, delta: CFrame) -> Result<()
     Ok(())
 }
 
+/// A move made from a place's slightly skewed CFrames (`target *
+/// current.inverse()`, where the inverse is a transpose) is skewed too;
+/// left that way, moving a model again and again scales its pivot further
+/// each time until it's infinite. Moves are rigid.
+fn rigid(delta: CFrame) -> CFrame {
+    delta.orthonormalize()
+}
+
 pub(super) fn get_pivot(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
     Outcome::ret(lua, LCFrame(with_world(lua, |w| pivot_of(w, this))))
 }
@@ -70,7 +79,7 @@ pub(super) fn pivot_to(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcom
         let delta = target.0 * current.inverse();
         if w.dom.is_a(this, "BasePart") {
             let c = cframe(w, this);
-            set_cframe(w, this, delta * c)
+            set_cframe(w, this, rigid(delta) * c)
         } else {
             transform_model(w, this, delta)
         }

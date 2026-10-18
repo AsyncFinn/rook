@@ -64,18 +64,8 @@ pub struct ServerHost {
     /// its own number for the call.
     calls: HashMap<u64, (usize, u64)>,
     next_call: u64,
-}
-
-/// Copies of `from`'s archivable children placed under `to`.
-fn copy_children(dom: &mut rook_dom::Dom, from: Option<InstanceId>, to: InstanceId) {
-    let Some(from) = from else {
-        return;
-    };
-    for child in dom.children(from).to_vec() {
-        if let Some(copy) = dom.clone_instance(child) {
-            let _ = dom.set_parent(copy, Some(to));
-        }
-    }
+    /// Players whose first character spawns at the start of the next step.
+    spawning: Vec<InstanceId>,
 }
 
 impl ServerHost {
@@ -88,6 +78,7 @@ impl ServerHost {
             clients: Vec::new(),
             calls: HashMap::new(),
             next_call: 0,
+            spawning: Vec::new(),
         }
     }
 
@@ -104,12 +95,11 @@ impl ServerHost {
         self.clients.get(client).map(|c| c.player)
     }
 
-    /// A player joins: the server gets a Player (with Backpack and
-    /// PlayerGui filled from StarterPack and StarterGui) and fires
-    /// PlayerAdded. Returns the client's index and what it starts with.
-    ///
-    /// Roblox copies StarterGui and StarterPack when the character spawns;
-    /// without characters Rook copies them on join (Approximation).
+    /// A player joins: the server gets a Player (with an empty Backpack and
+    /// PlayerGui) and fires PlayerAdded. Returns the client's index and
+    /// what it starts with. With `Players.CharacterAutoLoads` the
+    /// character spawns at the start of the next step, once the client
+    /// runs, so it arrives like any later change.
     pub fn join(&mut self, name: &str, user_id: i64) -> Result<(usize, Joined), EngineError> {
         let (player, start) = {
             let mut w = self.server.runtime().world_mut();
@@ -129,16 +119,6 @@ impl ServerHost {
                     let _ = dom.set_parent(c, Some(player));
                 }
             }
-            let gui = dom.find_first_child(player, "PlayerGui", false);
-            let backpack = dom.find_first_child(player, "Backpack", false);
-            let starter_gui = dom.find_service("StarterGui");
-            let starter_pack = dom.find_service("StarterPack");
-            if let Some(gui) = gui {
-                copy_children(dom, starter_gui, gui);
-            }
-            if let Some(backpack) = backpack {
-                copy_children(dom, starter_pack, backpack);
-            }
             let _ = dom.set_parent(player, Some(players));
             (player, start)
         };
@@ -150,6 +130,17 @@ impl ServerHost {
                 let _ = self.server.runtime().fire_event(players, "PlayerAdded", ud);
             }
             self.server.runtime().drain_deferred();
+        }
+        let auto_loads = players.is_none_or(|p| {
+            self.server
+                .runtime()
+                .world()
+                .dom
+                .property_by_name(p, "CharacterAutoLoads")
+                != Some(Value::Bool(false))
+        });
+        if auto_loads {
+            self.spawning.push(player);
         }
         let mut source = Source::new(Some(player));
         let (snapshot, signal_behavior) = {
@@ -169,6 +160,12 @@ impl ServerHost {
 
     /// One frame of the server.
     pub fn step(&mut self) {
+        for player in std::mem::take(&mut self.spawning) {
+            if let Err(e) = self.server.runtime().load_character(player) {
+                let mut w = self.server.runtime().world_mut();
+                w.push_log(crate::MessageType::Error, format!("LoadCharacter: {e}"));
+            }
+        }
         self.server.step();
     }
 
@@ -355,13 +352,26 @@ impl ClientHost {
         let rt = self.client.runtime();
         match msg {
             ToClient::Updates(updates) => {
-                let start = {
+                let (start, local, added) = {
                     let mut w = rt.world_mut();
                     let start = w.dom.journal().end();
+                    let local = w.dom.local_player();
+                    let character =
+                        |dom: &rook_dom::Dom| local.and_then(|p| dom.ref_property(p, "Character"));
+                    let before = character(&w.dom);
                     self.sink.apply(updates, &mut w.dom);
-                    start
+                    let after = character(&w.dom);
+                    (start, local, (after != before).then_some(after).flatten())
                 };
                 rt.dispatch_since(start);
+                // The local player's new character fires CharacterAdded on
+                // the client too.
+                if let (Some(local), Some(character)) = (local, added)
+                    && let Ok(ud) = rt.push_instance(character)
+                {
+                    let _ = rt.fire_event(local, "CharacterAdded", ud);
+                    rt.drain_deferred();
+                }
             }
             ToClient::Remote(RemoteMessage { remote, kind, args }) => {
                 let args: Vec<NetValue> = args

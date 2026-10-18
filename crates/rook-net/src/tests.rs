@@ -138,3 +138,30 @@ fn server_script_source_is_withheld() {
         Some(Value::String("print(1)".into()))
     );
 }
+
+/// A reference set before its target becomes visible (as
+/// `Player.Character` is set before the character enters Workspace)
+/// points at the target once it arrives, in a later sync or the same one.
+#[test]
+fn references_wait_for_their_target() {
+    let (mut server, mut client, mut r) = setup();
+    let ws = server.find_service("Workspace").unwrap();
+    let ss = server.find_service("ServerStorage").unwrap();
+    r.initial(&server, &mut client);
+    let v = server.create_by_name("ObjectValue").unwrap();
+    server.set_parent(v, Some(ws)).unwrap();
+    let target = part(&mut server, "Target", ss);
+    server
+        .set_property_by_name(v, "Value", Value::Ref(Some(target.to_ref())))
+        .unwrap();
+    r.sync(&server, &mut client);
+    let cv = r.client_id(v).unwrap();
+    assert_eq!(client.property_by_name(cv, "Value"), Some(Value::Ref(None)));
+    server.set_parent(target, Some(ws)).unwrap();
+    r.sync(&server, &mut client);
+    let ct = r.client_id(target).unwrap();
+    assert_eq!(
+        client.property_by_name(cv, "Value"),
+        Some(Value::Ref(Some(ct.to_ref())))
+    );
+}

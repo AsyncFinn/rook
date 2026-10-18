@@ -49,6 +49,7 @@ use services::*;
 use tree::*;
 
 pub(crate) use bindables::{get_callback, set_callback};
+pub(crate) use characters::spawn_character;
 pub(crate) use models::pivot_of;
 pub(crate) use terrain::region_voxels_of as terrain_region_voxels;
 pub(crate) use tree::{Core, Found, fast};
@@ -121,6 +122,7 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("Players", "GetPlayers" | "getPlayers" | "players") => get_players,
         ("Players", "GetPlayerFromCharacter" | "playerFromCharacter") => player_from_character,
         ("Players", "GetPlayerByUserId") => player_by_user_id,
+        ("Player", "LoadCharacter" | "LoadCharacterAsync") => load_character,
         ("Humanoid", "TakeDamage") => take_damage,
         ("PVInstance", "GetPivot") => get_pivot,
         ("PVInstance", "PivotTo") => pivot_to,

@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use super::*;
 
 /// The client half: which client instance copies which server one.
@@ -5,6 +7,16 @@ use super::*;
 pub struct Sink {
     to_client: HashMap<InstanceId, InstanceId>,
     to_server: HashMap<InstanceId, InstanceId>,
+    /// References to server instances the client doesn't have yet, by the
+    /// client property holding them: nil until the target arrives, then
+    /// set. A script may set a reference before parenting its target
+    /// (`Player.Character` is set before the character enters Workspace).
+    waiting: HashMap<(InstanceId, PropertyId), InstanceId>,
+    /// The same, by server target.
+    waiting_for: HashMap<InstanceId, HashSet<(InstanceId, PropertyId)>>,
+    /// Server instances mapped during the current call, whose waiting
+    /// references resolve at its end.
+    arrived: Vec<InstanceId>,
 }
 
 impl Sink {
@@ -23,6 +35,65 @@ impl Sink {
     fn map(&mut self, server: InstanceId, client: InstanceId) {
         self.to_client.insert(server, client);
         self.to_server.insert(client, server);
+        if self.waiting_for.contains_key(&server) {
+            self.arrived.push(server);
+        }
+    }
+
+    /// Store a property's value on a client instance, through the
+    /// journal or not. A reference to a server instance the client
+    /// doesn't have yet is stored as nil and waits for it.
+    fn store(
+        &mut self,
+        client: &mut Dom,
+        cid: InstanceId,
+        property: PropertyId,
+        value: &Value,
+        journaled: bool,
+    ) {
+        let key = (cid, property);
+        if let Some(old) = self.waiting.remove(&key)
+            && let Some(set) = self.waiting_for.get_mut(&old)
+        {
+            set.remove(&key);
+            if set.is_empty() {
+                self.waiting_for.remove(&old);
+            }
+        }
+        if let Value::Ref(Some(target)) = value {
+            let target = InstanceId::from_ref(*target);
+            if self.client_id(target).is_none() {
+                self.waiting.insert(key, target);
+                self.waiting_for.entry(target).or_default().insert(key);
+            }
+        }
+        let value = self.to_client_value(value);
+        if journaled {
+            let _ = client.set_property(cid, property, value);
+        } else {
+            client.load_property(cid, property, value);
+        }
+    }
+
+    /// Set the references that were waiting for instances that arrived.
+    fn resolve_arrived(&mut self, client: &mut Dom, journaled: bool) {
+        for server in std::mem::take(&mut self.arrived) {
+            let Some(keys) = self.waiting_for.remove(&server) else {
+                continue;
+            };
+            let Some(target) = self.client_id(server) else {
+                continue;
+            };
+            for key @ (cid, property) in keys {
+                self.waiting.remove(&key);
+                let value = Value::Ref(Some(target.to_ref()));
+                if journaled {
+                    let _ = client.set_property(cid, property, value);
+                } else {
+                    client.load_property(cid, property, value);
+                }
+            }
+        }
     }
 
     fn unmap_subtree(&mut self, client: &Dom, root: InstanceId) {
@@ -57,10 +128,11 @@ impl Sink {
         for (_, service) in &snapshot.services {
             self.copy_tree(service, client);
         }
+        self.resolve_arrived(client, false);
         client.journal_mut().set_enabled(was);
     }
 
-    fn copy_tree(&self, node: &Node, client: &mut Dom) {
+    fn copy_tree(&mut self, node: &Node, client: &mut Dom) {
         if let Some(c) = self.client_id(node.id) {
             self.copy_data(node, client, c, false);
         }
@@ -102,7 +174,7 @@ impl Sink {
                     value,
                 } => {
                     if let Some(c) = self.client_id(*id) {
-                        let _ = client.set_property(c, *property, self.to_client_value(value));
+                        self.store(client, c, *property, value, true);
                     }
                 }
                 Update::Attribute { id, name, value } => {
@@ -122,6 +194,7 @@ impl Sink {
                 }
             }
         }
+        self.resolve_arrived(client, true);
     }
 
     /// Build a detached copy of a server subtree on the client.
@@ -142,14 +215,9 @@ impl Sink {
     }
 
     /// Store a node's properties, attributes and tags on its copy.
-    fn copy_data(&self, node: &Node, client: &mut Dom, cid: InstanceId, journaled: bool) {
+    fn copy_data(&mut self, node: &Node, client: &mut Dom, cid: InstanceId, journaled: bool) {
         for (property, value) in &node.properties {
-            let value = self.to_client_value(value);
-            if journaled {
-                let _ = client.set_property(cid, *property, value);
-            } else {
-                client.load_property(cid, *property, value);
-            }
+            self.store(client, cid, *property, value, journaled);
         }
         if let Some(c) = client.instance_mut(cid) {
             for (k, v) in node.attributes.iter() {

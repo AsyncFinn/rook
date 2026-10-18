@@ -50,7 +50,7 @@ directly, since a character is what makes playing together worth it.
 | ✅ | **M6** Terrain | Archived places with terrain show it, and parts and queries collide with it (v0.6.0) |
 | 🟨 | **M7** Lights and effects | Local lights light the scene; Fire, Smoke, Sparkles and ParticleEmitters draw as in Studio |
 | ⬜ | **M8** GUI | GUI conformance batch passes; archived places' GUIs draw and take input |
-| ⬜ | **M9** Characters | Spawn, walk, jump, sit and use tools in an archived place |
+| 🟨 | **M9** Characters | Spawn, walk, jump, sit and use tools in an archived place |
 | ⬜ | **M10** Networking | Two players on two machines play an archived place together |
 | ⬜ | **M11** Avatars and animation | Players pick an avatar (no Roblox account) and see each other's, dressed and animated |
 | ⬜ | **M12** Server hosting | Host a place for friends over the internet; its saved data survives a restart |
@@ -247,7 +247,9 @@ Humanoid 905 files, Tool 1,152, HopperBin 1,107, SpawnLocation 1,509,
 Seat 642, VehicleSeat 230. Needs physics, the head mesh, terrain and GUI.
 
 1. Spawning at SpawnLocations, R15 and R6 characters (`RigType`, and
-   HumanoidDescription, 15 files), respawning.
+   HumanoidDescription, 15 files), respawning. Begun: the spawn flow
+   (`LoadCharacter`, CharacterAutoLoads, StarterCharacterScripts, Backpack
+   and PlayerGui refills, CharacterAdded) with a bare, anchored body.
 2. Humanoid: state machine, walking, jumping, climbing, swimming, health
    and death, joints breaking.
 3. Default camera and control scripts: the PlayerModule modern places

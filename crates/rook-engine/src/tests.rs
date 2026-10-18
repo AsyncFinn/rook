@@ -311,7 +311,9 @@ fn session_join_runs_local_scripts_where_roblox_does() {
         .into_iter()
         .map(|e| e.message)
         .collect();
-    assert_eq!(server_log, ["server: joined Builderman 156 1"]);
+    // StarterGui is copied when the character spawns (creator-docs
+    // StarterGui), after PlayerAdded.
+    assert_eq!(server_log, ["server: joined Builderman 156 0"]);
     let mut client_log: Vec<String> = session
         .client(index)
         .unwrap()
@@ -544,6 +546,7 @@ fn input_mouse_and_click_detectors() {
 }
 
 mod audio_api;
+mod client_tweens;
 mod scripts;
 mod sounds;
 mod terrain_api;

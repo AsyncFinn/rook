@@ -221,6 +221,16 @@ impl Runtime {
         });
     }
 
+    /// Spawn a player's character (`Player:LoadCharacter()`), firing the
+    /// signals it causes.
+    pub fn load_character(&self, player: InstanceId) -> Result<InstanceId, ScriptError> {
+        self.guarded(|| {
+            let r = api::methods::spawn_character(&self.lua, player);
+            threads::drain_deferred(&self.lua);
+            r
+        })
+    }
+
     /// Drain the deferred queue (a resumption point).
     pub fn drain_deferred(&self) {
         profiling::scope!("drain_deferred");

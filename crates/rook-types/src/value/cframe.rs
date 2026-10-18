@@ -169,13 +169,15 @@ impl CFrame {
 
     /// `CFrame:Lerp`. Interpolates position linearly and rotation spherically.
     /// Matches Roblox in intent; exact numeric agreement is to be verified
-    /// against Studio recordings.
+    /// against Studio recordings. The rotation comes out orthonormal even
+    /// from the slightly skewed ones places save: a scaled one would grow
+    /// each time a tween's value is pivoted to.
     pub fn lerp(&self, goal: CFrame, alpha: f32) -> CFrame {
-        let a = Quat::from_mat3(&self.rotation);
-        let b = Quat::from_mat3(&goal.rotation);
+        let a = Quat::from_mat3(&self.rotation).normalize();
+        let b = Quat::from_mat3(&goal.rotation).normalize();
         CFrame {
             position: self.position.lerp(goal.position, alpha),
-            rotation: Mat3::from_quat(a.slerp(b, alpha)),
+            rotation: Mat3::from_quat(a.slerp(b, alpha).normalize()),
         }
     }
 
@@ -275,6 +277,16 @@ mod tests {
         assert_eq!(cf.right_vector(), Vector3::new(0.0, 1.0, 0.0));
         assert_eq!(cf.up_vector(), Vector3::new(-1.0, 0.0, 0.0));
         assert_eq!(cf.look_vector(), Vector3::new(0.0, 0.0, -1.0));
+    }
+
+    /// Lerping between slightly skewed rotations (as saved in places)
+    /// gives an orthonormal one.
+    #[test]
+    fn lerp_rotation_is_orthonormal() {
+        let mut skewed = CFrame::angles(0.0, 0.4, 0.0);
+        skewed.rotation *= 1.001;
+        let r = skewed.lerp(skewed, 0.5).rotation;
+        assert!((r.transpose() * r).abs_diff_eq(Mat3::IDENTITY, EPS));
     }
 
     #[test]
