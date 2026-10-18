@@ -172,7 +172,7 @@ Not established from public sources: anything beyond the above. Studio's About d
 
 ### Not to be used
 
-Decompiling or disassembling Roblox binaries or `shaders.zip`, even though some projects do. Third-party knowledge stays limited to the public sources above.
+Decompiling or disassembling Roblox executables, even though some projects do. Files a Roblox install ships as data (shader packs, content, tables) are leads under §6.
 
 ---
 
@@ -185,12 +185,7 @@ Rook is an independent implementation.
 - Each subsystem's design note records where its behavior came from (see architecture §10).
 - **GUI is citation-only.** Every GUI behavior entry must cite creator-docs or a committed Studio conformance recording. No GUI behavior is accepted on recall or "known behavior" alone.
 - Community knowledge (revival communities, forums, word of mouth) is a lead, not a source. Before relying on it, verify it in Studio or find a public citation.
-- **Files shipped in official Roblox builds** (for example the plain-text shader sources in some 2016 player builds) were published by Roblox, but they carry no licence. They may serve as a lead only, through a split process:
-  1. The maintainer reads them and writes a private facts-only note: formulas in maths notation, constants, which inputs feed which terms, and per-pixel versus per-vertex work. The note contains no code and no pasted snippets.
-  2. The Rook implementation is written from that note by someone who has not opened the original files.
-  3. The behavior counts as Confirmed only after it matches Studio (golden images or conformance recordings). Until then it is an Inference.
-
-  The original files and the notes stay out of the repository and are never linked from it. Binary or packed builds (`.pack`, `shaders.zip`) remain under "Not to be used" (§5a). Content from a user's Roblox install may still be loaded at runtime (§7).
+- **Files shipped in official Roblox builds** (shader packs such as `shaders_glsl3.pack`, the plain-text shaders in some 2016 player builds, terrain and material tables) carry no licence, but they may be read for facts: formulas, constants, which inputs feed which terms. Rook uses those facts exactly, aiming for the same results as Studio, in its own functions shaped for its own renderer. Their code is never pasted or transliterated statement by statement into the repository, and the files themselves are never committed. Docs may name the file a fact came from. Behaviour read this way is an Inference until it matches Studio (golden images or conformance recordings), then Confirmed. Content from a user's Roblox install may still be loaded at runtime (§7).
 
 ---
 
