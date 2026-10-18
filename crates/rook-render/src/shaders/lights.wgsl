@@ -11,8 +11,11 @@ struct Light {
     // light's cosine where its cone has faded out.
     direction: vec4<f32>,
     // x: 0 point, 1 spot, 2 surface; y: how far a spot light brightens
-    // from its origin.
+    // from its origin; z: 1 when parts block it.
     kind: vec4<f32>,
+    // xyz: the box of the part it hangs from, which doesn't block it.
+    part_min: vec4<f32>,
+    part_max: vec4<f32>,
 };
 
 // Studio's light voxels, in studs, centred at 4k + 2.

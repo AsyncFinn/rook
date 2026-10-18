@@ -1,8 +1,9 @@
-//! What blocks the sky's diffuse light (`EnvironmentDiffuseScale`): the
-//! scene's opaque parts as boxes, marked into the light volume's voxels so
-//! the fill pass can carry the sky's light down around them
+//! What blocks light in the voxels: the scene's opaque parts as boxes,
+//! marked into the light volume's voxels so the fill pass can carry the
+//! sky's diffuse light (`EnvironmentDiffuseScale`) down around them and
+//! keep lights with `Shadows` out from behind them
 //! (`shaders/light_volume.wgsl`; docs/behavior/materials.md, "The sky's
-//! diffuse light").
+//! diffuse light"; docs/behavior/lights.md, "Shadows").
 
 use std::time::{Duration, Instant};
 
@@ -14,7 +15,7 @@ use super::*;
 /// again (a moving part would otherwise mark them every frame).
 const REMARK: Duration = Duration::from_millis(500);
 
-/// A part as the sky's light sees it: a box.
+/// A part as the voxels see it: a box.
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct Blocker {
     centre: Vec3,
@@ -29,7 +30,7 @@ struct Blocker {
 }
 
 #[derive(Debug, Default)]
-pub(super) struct SkyBlockers {
+pub(super) struct Blockers {
     /// By index into `Scene::parts`.
     blockers: Vec<Option<Blocker>>,
     /// Each mesh file's box in its own space (centre, half size); `None`
@@ -40,7 +41,7 @@ pub(super) struct SkyBlockers {
     marked_at: Option<Instant>,
 }
 
-impl SkyBlockers {
+impl Blockers {
     pub(super) fn clear(&mut self) {
         self.blockers.clear();
         self.changed = true;
@@ -67,9 +68,10 @@ impl SkyBlockers {
     }
 
     /// Which parts block: opaque ones that cast shadows (measured: a roof
-    /// with `CastShadow` off blocks nothing, one at Transparency 0.5 only
-    /// a tenth or so), as boxes; wedges, balls, cylinders and unions
-    /// block their whole box (Approximation).
+    /// with `CastShadow` off blocks nothing, nor does such a post block
+    /// lights with `Shadows`; a roof at Transparency 0.5 blocks only a
+    /// tenth or so), as boxes; wedges, balls, cylinders and unions block
+    /// their whole box (Approximation).
     fn blocker(&mut self, part: &PartInstance, scene: &Scene) -> Option<Blocker> {
         if !part.cast_shadow || part.over || part.transparency >= 0.5 {
             return None;
@@ -111,7 +113,7 @@ impl SkyBlockers {
     /// (0, 0, 0)), `x + nx * (z + nz * y)`: set where a voxel's centre is
     /// inside a blocker.
     pub(super) fn mark(&mut self, origin: Vec3, dims: [u32; 3]) -> Vec<u32> {
-        profiling::scope!("SkyBlockers::mark");
+        profiling::scope!("Blockers::mark");
         self.changed = false;
         self.marked_at = Some(Instant::now());
         let [nx, ny, nz] = dims;

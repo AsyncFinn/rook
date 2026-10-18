@@ -26,8 +26,13 @@ pub(crate) struct GpuLight {
     /// light's cosine where its cone has faded out.
     pub(super) direction: [f32; 4],
     /// x: 0 point, 1 spot, 2 surface; y: how far a spot light brightens
-    /// from its origin, in studs.
+    /// from its origin, in studs; z: 1 when parts block it.
     pub(super) kind: [f32; 4],
+    /// xyz: the low corner of the box of the part it hangs from, which
+    /// doesn't block it.
+    pub(super) part_min: [f32; 4],
+    /// xyz: that box's high corner.
+    pub(super) part_max: [f32; 4],
 }
 
 impl GpuLight {
@@ -69,8 +74,14 @@ impl GpuLight {
             position: [light.position.x, light.position.y, light.position.z, reach],
             color: [c[0] * b, c[1] * b, c[2] * b, slope],
             direction: [direction.x, direction.y, direction.z, cone],
-            kind: [kind, ramp, 0.0, 0.0],
+            kind: [kind, ramp, f32::from(u8::from(light.shadows)), 0.0],
+            part_min: light.part.0.extend(0.0).to_array(),
+            part_max: light.part.1.extend(0.0).to_array(),
         }
+    }
+
+    pub(super) fn shadows(&self) -> bool {
+        self.kind[2] > 0.5
     }
 
     pub(super) fn at(&self) -> Vec3 {
@@ -202,6 +213,7 @@ mod tests {
             brightness: 1.0,
             range,
             shadows: false,
+            part: (at, at),
         })
     }
 

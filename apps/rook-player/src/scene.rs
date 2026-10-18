@@ -198,6 +198,7 @@ impl SceneCache {
             brightness: 0.0,
             range: 0.0,
             shadows: false,
+            part: (Vec3::ZERO, Vec3::ZERO),
         })
     }
 

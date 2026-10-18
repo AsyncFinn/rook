@@ -213,8 +213,7 @@ create.
 
 1. ✅ Local lights: Brightness, Range, Color, Shadows, SpotLight Angle and
    Face, SurfaceLight; many lights per frame
-   ([`docs/behavior/lights.md`](docs/behavior/lights.md); `Shadows` not
-   yet).
+   ([`docs/behavior/lights.md`](docs/behavior/lights.md)).
 2. Fire, Smoke and Sparkles, drawn as Studio draws them today.
 3. ParticleEmitter (with flipbooks), Beam and Trail.
 4. Explosion: its blast (physics, joints breaking) and its look.

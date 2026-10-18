@@ -12,18 +12,20 @@
 //! (spinning fixtures) don't rebuild it. The voxels are filled again only
 //! when a light changes or the camera leaves the volume's middle.
 //!
-//! The same pass carries the sky's diffuse light down through the voxels
-//! into their alpha, layer by layer from the top, around the parts that
-//! block it (`sky.rs`), when the place lights with the sky.
+//! The parts are marked into a bit per voxel (`blockers.rs`) when the
+//! place lights with the sky or a light has `Shadows`: the same pass
+//! carries the sky's diffuse light down through the voxels into their
+//! alpha, layer by layer from the top, around them, and casts rays from
+//! each voxel to its shadowing lights through them.
 
+mod blockers;
 mod hash;
-mod sky;
 
 use wesl_core::include_wesl;
 
 use super::*;
+use blockers::Blockers;
 use hash::{GpuLight, LightHash};
-use sky::SkyBlockers;
 
 /// How far a light may move from where the hash placed it before the hash
 /// is built again, in studs.
@@ -51,7 +53,8 @@ const LAYER_STRIDE: u64 = 256;
 struct FillParams {
     origin: [f32; 4],
     size: [u32; 4],
-    /// x: there are lights to fill; y: the sky's light to carry down.
+    /// x: there are lights to fill; y: the sky's light to carry down; z:
+    /// the blockers are marked (some light has `Shadows`).
     flags: [u32; 4],
 }
 
@@ -60,7 +63,7 @@ struct FillParams {
 struct SkyBuffers {
     /// Each dispatch's layer, [`LAYER_STRIDE`] apart (a dynamic offset).
     layers: wgpu::Buffer,
-    /// One bit per voxel: a part blocks it ([`SkyBlockers::mark`]).
+    /// One bit per voxel: a part blocks it ([`Blockers::mark`]).
     solid: wgpu::Buffer,
     /// The sky's light in the last two layers filled.
     rows: wgpu::Buffer,
@@ -97,13 +100,17 @@ pub(crate) struct GpuLights {
     fill_layout: wgpu::BindGroupLayout,
     fill_group: wgpu::BindGroup,
     sky_buffers: SkyBuffers,
-    blockers: SkyBlockers,
+    blockers: Blockers,
     /// The centre of voxel (0, 0, 0), once filled.
     origin: Option<Vec3>,
     /// The lights changed since the voxels were filled.
     dirty: bool,
     /// The voxels hold the sky's light.
     sky: bool,
+    /// Some light has `Shadows`.
+    shadows: bool,
+    /// The blockers are marked for the volume where it is now.
+    marked: bool,
 }
 
 fn buffer_entry(
@@ -146,7 +153,7 @@ impl SkyBuffers {
                 usage: wgpu::BufferUsages::UNIFORM,
             }),
             solid: storage(
-                "rook sky blockers",
+                "rook light blockers",
                 (nx * ny * nz).div_ceil(32),
                 wgpu::BufferUsages::COPY_DST,
             ),
@@ -308,10 +315,12 @@ impl GpuLights {
             fill_layout,
             fill_group,
             sky_buffers,
-            blockers: SkyBlockers::default(),
+            blockers: Blockers::default(),
             origin: None,
             dirty: true,
             sky: false,
+            shadows: false,
+            marked: false,
         }
     }
 
@@ -330,6 +339,7 @@ impl GpuLights {
         }
         profiling::scope!("GpuLights::update");
         self.dirty = true;
+        self.shadows = lights.iter().any(GpuLight::shadows);
         let hashed = lights.len() == self.lights.len()
             && lights
                 .iter()
@@ -362,20 +372,21 @@ impl GpuLights {
         );
     }
 
-    /// Forget the parts blocking the sky (the scene is replaced).
+    /// Forget the parts blocking light (the scene is replaced).
     pub(crate) fn clear_blockers(&mut self) {
         self.blockers.clear();
     }
 
     /// Take the parts at `changed` (indices into `scene.parts`) as they
-    /// block the sky now.
+    /// block light now.
     pub(crate) fn update_blockers(&mut self, scene: &Scene, changed: &[usize]) {
         self.blockers.update(scene, changed);
     }
 
     /// Fill the voxels again if the lights changed, the volume's centre
     /// drifted [`RECENTRE`] from where the camera puts it, or, when the
-    /// place lights with the sky (`sky`), the parts blocking it changed.
+    /// place lights with the sky (`sky`) or a light has `Shadows`, the
+    /// parts blocking light changed.
     pub(crate) fn fill(
         &mut self,
         queue: &wgpu::Queue,
@@ -390,7 +401,8 @@ impl GpuLights {
         let centred = self
             .origin
             .is_some_and(|o| (o + half - centre).abs().max_element() <= RECENTRE);
-        let blocked = sky && (self.blockers.due() || !self.sky);
+        let solid = sky || self.shadows;
+        let blocked = solid && (self.blockers.due() || !self.marked);
         if !self.dirty && centred && !blocked && sky == self.sky {
             return;
         }
@@ -402,10 +414,11 @@ impl GpuLights {
             // Voxels are centred at 4k + 2.
             ((centre - half) / VOXEL).floor() * VOXEL + Vec3::splat(VOXEL * 0.5)
         };
-        if sky && (blocked || !centred) {
+        if solid && (blocked || !centred) {
             let bits = self.blockers.mark(origin, VOLUME);
             queue.write_buffer(&self.sky_buffers.solid, 0, bytemuck::cast_slice(&bits));
         }
+        self.marked = solid;
         self.origin = Some(origin);
         self.sky = sky;
         let lit = !self.lights.is_empty();
@@ -431,7 +444,7 @@ impl GpuLights {
                     VOLUME[1],
                     VOLUME[2],
                 ],
-                flags: [u32::from(lit), u32::from(sky), 0, 0],
+                flags: [u32::from(lit), u32::from(sky), u32::from(solid), 0],
             }),
         );
         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
@@ -456,6 +469,8 @@ fn light_bytes(lights: &[GpuLight]) -> &[u8] {
         color: [0.0; 4],
         direction: [0.0; 4],
         kind: [0.0; 4],
+        part_min: [0.0; 4],
+        part_max: [0.0; 4],
     }];
     if lights.is_empty() {
         bytemuck::cast_slice(&NONE)

@@ -40,18 +40,23 @@ fn cframe(dom: &Dom, id: InstanceId) -> Option<CFrame> {
 pub(super) fn light(dom: &Dom, id: InstanceId) -> Option<LocalLight> {
     let enabled = boolean(dom, id, "Enabled") != Some(false);
     let parent = dom.parent(id)?;
-    let (cf, size) = if is_part(dom, parent) {
-        let size = vector3(dom, parent, "Size").unwrap_or(Vec3::ONE);
-        (cframe(dom, parent)?, size)
+    let part = if is_part(dom, parent) {
+        parent
     } else if dom.class_name(parent) == "Attachment" {
-        let part = dom.parent(parent)?;
-        if !is_part(dom, part) {
-            return None;
-        }
-        (cframe(dom, part)? * cframe(dom, parent)?, Vec3::ZERO)
+        dom.parent(parent).filter(|&p| is_part(dom, p))?
     } else {
         return None;
     };
+    let part_cf = cframe(dom, part)?;
+    let part_size = vector3(dom, part, "Size").unwrap_or(Vec3::ONE);
+    let (cf, size) = if part == parent {
+        (part_cf, part_size)
+    } else {
+        (part_cf * cframe(dom, parent)?, Vec3::ZERO)
+    };
+    let r = part_cf.rotation;
+    let extent =
+        Mat3::from_cols(r.x_axis.abs(), r.y_axis.abs(), r.z_axis.abs()) * (part_size * 0.5);
     // SpotLight and SurfaceLight face Front (-Z) by default.
     let face = enum_value(dom, id, "Face")
         .and_then(NormalId::from_u32)
@@ -84,5 +89,6 @@ pub(super) fn light(dom: &Dom, id: InstanceId) -> Option<LocalLight> {
         },
         range: number(dom, id, "Range").unwrap_or(8.0),
         shadows: boolean(dom, id, "Shadows").unwrap_or(false),
+        part: (part_cf.position - extent, part_cf.position + extent),
     })
 }

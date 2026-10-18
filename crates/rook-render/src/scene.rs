@@ -382,8 +382,11 @@ pub struct LocalLight {
     pub brightness: f32,
     /// `Range`, in studs.
     pub range: f32,
-    /// `Light.Shadows` (not drawn yet).
+    /// `Light.Shadows`: parts block its light.
     pub shadows: bool,
+    /// The box (min, max) of the part it hangs from, which doesn't block
+    /// its light.
+    pub part: (Vec3, Vec3),
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]

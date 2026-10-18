@@ -69,10 +69,50 @@ measures from the nearest point of the face (`axisU`/`axisV` in
 `LightRenderGPU`), but in the voxel grid that fitted worse than the
 centre.
 
-**Shadows** (not measured): Studio's captures stopped working (its window
-was covered) before the `Shadows` check. In the voxel grid, Studio's
-lights are known to be blocked by parts filling voxels (2013's
-point-light shadows); Rook draws no local-light shadows yet.
+## Shadows
+
+Measured in Studio 0.742 on 2026-10-18, by the Method below (a fresh
+Studio, no `Technology`), with a Range 60, Brightness 0.25 PointLight at
+(2, 6, 2), seen from 120 studs up.
+
+- **`Shadows` off, light goes through parts** (Observed): behind a
+  4 × 30 × 80 wall 12 studs from a Range 32 light, the floor drew 143
+  with `Shadows` off and 2 with it on.
+- **Parts that don't cast shadows don't block** (Observed): a post with
+  `CastShadow` off casts nothing. `Lighting.GlobalShadows` makes no
+  difference.
+- **A one-voxel post leaves about half** (measured, in light units over
+  the unshadowed floor): behind a 4 × 10 × 4 post 12 studs from the
+  light, the darkest strip keeps 0.54 at 20 studs out and 0.6 further;
+  with the post on the light's other side, 0.6. The shadow is soft, about
+  three voxels wide, and grows no wider with distance.
+- **It leans one way** (Observed): with the post at +X of the light the
+  shadow spreads far to −Z (0.68 to 0.76 at 20 to 30 studs off the
+  axis) and hardly to +Z; with it at −X it is narrow on both sides. A
+  light inside a 12 × 4 × 12 part lights three quarters of its pool fully
+  and the fourth (−X, −Z) at about half.
+- **A light inside its own part still shines** (Observed): in a 3-stud
+  opaque part, all of its pool; in a 12 × 4 × 12 one, as above.
+
+Roblox's patent on its voxel lighting (US9245376) carries light from
+cell to cell away from the light, each cell
+taking its upstream face neighbours weighted by the light's direction,
+less the cell's occupancy. That explains the softness and the lean (an
+off-centre start), but fitting it to the two posts left 0.13 of error
+on one of them, so Rook doesn't use it.
+
+**Rook's fit** (Approximation): for each light with `Shadows`, each voxel
+it reaches casts nine parallel rays toward it, from the voxel and from
+the voxels around it across the ray, weighted 1-2-1 each way, and keeps
+the share that no blocked voxel stops. Blocked voxels are those the sky's
+light uses ([materials](materials.md#the-skys-diffuse-light)): opaque
+parts casting shadows, as boxes, at least a voxel thick. The part the
+light hangs from doesn't block it. A wall blocks all of it, a one-voxel
+post half, as in Studio; the lean isn't reproduced. Against Studio on
+the same scenes, behind the post the darkest strip draws 84 where Studio
+draws 79 to 90; Rook's soft edge reaches a voxel further on the side
+Studio leaves lit, and Studio's long tail to −Z is missing (up to 30
+levels).
 
 ## Rook against Studio
 
@@ -96,7 +136,8 @@ The same scenes as `rook-player --screenshot` rbxlx copies, same camera
 `rook-player`'s scene keeps every PointLight, SpotLight and SurfaceLight
 under a part or an Attachment in Workspace (`scene/lights.rs`); disabled
 lights stay in the list at Brightness 0 so that scripts switching lights
-on and off rewrite only colours. Scripts changing a light, its
+on and off rewrite only colours. Each light keeps the box of the part it
+hangs from, which doesn't shadow it. Scripts changing a light, its
 Attachment, or the part it hangs from redraw it (only those lights are
 read again).
 
@@ -109,7 +150,10 @@ along its view direction with the height dropped, again only when lights
 change or that centre drifts 64 studs, and parts, decals and terrain
 (water included) sample it as Studio does (`local_light` in
 `shaders/lighting.wgsl`). Surfaces outside it get no local light, as in
-Studio.
+Studio. When a light has `Shadows`, the parts are marked into a bit per
+voxel (`renderer/lights/blockers.rs`, shared with the sky's light) and
+the fill pass casts that light's rays through them.
+
 
 Cost, on an archive place with 1,900 lights, about 55 of them on parts
 that move every frame (dev build, 300 frames, before → after): scene
