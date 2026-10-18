@@ -9,7 +9,7 @@ use glam::{Mat3, Vec2, Vec3};
 pub use rook_content::decode::image::Image;
 pub use rook_content::decode::mesh::Mesh;
 pub use rook_types::{
-    Material, MaterialSet, NormalId, PartShape, SurfacePattern, Tiling, TrussShape,
+    Material, MaterialSet, NormalId, PartShape, SurfacePattern, TilePattern, Tiling, TrussShape,
 };
 
 mod emitters;
@@ -92,6 +92,10 @@ pub struct MaterialMaps {
     pub metalness: Option<ImageHash>,
     /// Studs per repeat across and down a face.
     pub studs_per_tile: Vec2,
+    /// How the repeats are laid (not for terrain, which [`Detile`]s).
+    pub pattern: TilePattern,
+    /// On terrain, how each point's copy is turned and shifted.
+    pub detile: Detile,
     /// Laid through the mesh's own UVs instead of over its faces.
     pub on_mesh_uv: bool,
     pub alpha: MapAlpha,
@@ -106,6 +110,8 @@ impl MaterialMaps {
         roughness: None,
         metalness: None,
         studs_per_tile: Vec2::ONE,
+        pattern: TilePattern::Regular,
+        detile: Detile::NONE,
         on_mesh_uv: false,
         alpha: MapAlpha::Ignore,
         tint: [1.0; 3],
@@ -117,6 +123,27 @@ impl MaterialMaps {
             || self.roughness.is_some()
             || self.metalness.is_some()
     }
+}
+
+/// How terrain breaks up a texture layer's repeats (Studio's terrain
+/// shader, `docs/behavior/terrain.md`): each mesh vertex has a random
+/// number *r* from 0 to 255, and the layer's texture coordinates there are
+/// turned by asin((*r* / 128 - 1) × `turn`) and shifted by (*r*,
+/// ⌊2.6651442 *r*⌋) × `shift` repeats; across a triangle the three
+/// corners' copies blend by their weights.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Detile {
+    /// Repeats per step of *r*: 1 / the table's `detiling` (0: none).
+    pub shift: f32,
+    /// The table's `rotation`: 1 turns up to 90 degrees either way.
+    pub turn: f32,
+}
+
+impl Detile {
+    pub const NONE: Self = Self {
+        shift: 0.0,
+        turn: 0.0,
+    };
 }
 
 /// A mesh the renderer draws: a primitive part shape, a built-in mesh
@@ -332,6 +359,8 @@ pub struct TerrainLayer {
     pub studs: f32,
     /// Textures laid like a box's (Brick, WoodPlanks).
     pub cube: bool,
+    /// How its height map is turned and shifted, as its textures are.
+    pub detile: Detile,
 }
 
 impl Default for TerrainLayer {
@@ -342,6 +371,7 @@ impl Default for TerrainLayer {
             scale: 1.0,
             studs: 8.0,
             cube: false,
+            detile: Detile::NONE,
         }
     }
 }

@@ -4,7 +4,7 @@
 
 import package::common::{
     g, image_sampler, water_normals, VertexOut, TERRAIN_WATER, TERRAIN_BLADES,
-    TERRAIN_DRAWN_SHIFT, srgb_to_linear,
+    TERRAIN_DRAWN_SHIFT, srgb_to_linear, terrain_taps,
 };
 import package::images::layer_height;
 import package::lighting::{diffuse_light, sun_light, sun_visibility, fog};
@@ -148,11 +148,11 @@ fn terrain_share(in: VertexOut, dp_x: vec3<f32>, dp_y: vec3<f32>) -> f32 {
         let c = g.terrain_layers[ids[k] * 2u + 1u];
         let cube = c.y > 0.5;
         let studs = max(a.w, 1e-3);
-        let uv = terrain_position(in.world, n, cube) / studs;
+        let taps = terrain_taps(terrain_position(in.world, n, cube), studs, c.z, c.w);
         // The planes' coordinates are linear in the position.
         let dx = terrain_position(dp_x, n, cube) / studs;
         let dy = terrain_position(dp_y, n, cube) / studs;
-        h[k] = clamp(layer_height(u32(c.x), uv, dx, dy) * a.x + a.y, 0.0, 1.0);
+        h[k] = clamp(layer_height(u32(c.x), taps, dx, dy) * a.x + a.y, 0.0, 1.0);
         softness += b[k] * a.z;
         if k == 0u {
             minified = sqrt(max(dot(dx, dx), dot(dy, dy))) * 7.0;

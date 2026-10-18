@@ -108,6 +108,12 @@ the same random block in one material:
 | Rock, Slate, CrackedLava, Basalt, Ice | A pseudo-random shift of each vertex, up to about 1 stud, fixed by position (Slate and CrackedLava shift alike, Rock, Basalt and Ice each their own way) | 0.4 to 1.6, varying | Approximation: since step 2, Rook's own pseudo-random shift of the table's size |
 | Water | Half a voxel lower than a solid's surface (step 2) | | Confirmed |
 
+A voxel whose occupancy byte is 0 still holds 1/256 of its material
+(`ReadVoxels` reads it so), so a cell whose only solid corners are such
+voxels takes their material. Rook once let Air win that tie, and Air,
+untextured and uncoloured, drew white specks a few studs across where
+those faint voxels lay over grass (fixed 2026-10-18).
+
 Quantizing rounds halves away from the cell's centre: the edge of a
 half-full Concrete slab comes in to its voxels' centres. Where a cell
 mixes these materials, Rook moves its vertex by the dominant material, and
@@ -220,10 +226,24 @@ colours. Rook keeps these tables in `rook-terrain`
   (a Sand ball in Studio shows similar seams; Approximation).
 - **Scale**: a texture covers `4 / tiling` studs, 8 for the 2022 table's
   0.5 (Inference, consistent with the comparisons).
-- **Not drawn yet** (Approximation): the random shift and turn that break
-  up repeats (`detiling`, `rotation`). The height-based blending between
-  materials and between top and side (`blend`) came later: see
-  [Blending](#blending).
+- **Breaking up repeats** (`terrain_taps` in `common.wgsl`): Studio's
+  terrain vertex shader (`SmoothClusterVSUnified`) gives each vertex a
+  random number *r* from 0 to 255 and, per corner layer, turns its
+  coordinates by asin((*r* / 128 − 1) × `rotation`) and shifts them by
+  (*r*, ⌊2.6651442 *r*⌋) × *k* repeats; across a triangle the corners'
+  copies blend by their weights (read from the shader; Inference until
+  checked closer). *k* is 1 / `detiling` (Inference: Studio's
+  `materials.json` keeps an older `detiling_legacy` next to `detiling`,
+  equal to 1 / `detiling` in every legacy row, and the shader has one
+  such factor). So the 2022 Brick, WoodPlanks, Cobblestone and Pavement
+  tops (`detiling` 1) move by whole repeats, which shows nothing, and turn
+  not at all. Rook's mesh vertices don't carry *r*, so Rook takes the
+  corners of a 4-stud grid over the texture's plane, split along a
+  diagonal, with *r* from a hash (Approximation). A 200-stud grass block
+  seen straight down shows no repeat in either (no autocorrelation peak
+  over 46 studs, Studio 0.743 and Rook), where Rook used to repeat every
+  16 studs. The same random number moves the layer's height map
+  ([Blending](#blending)).
 - **Colours**: a place that saved no `MaterialColors` gets its set's
   defaults (a new place saves the 2022 set's). How a colour tints the textures is
   in [Colours](#colours) below. A Ground slab coloured white drew 1.7 to
@@ -701,7 +721,10 @@ screenshots in Studio and Rook of the same fills.
   layer (its fade term is `20 × (weights of corners whose layer another
   corner shares) - 19`).
 - The vertex shader also turns and shifts each layer's coordinates by a
-  per-vertex random number (`detiling`, `rotation`); Rook doesn't yet.
+  per-vertex random number (`detiling`, `rotation`; see Breaking up
+  repeats above), so each corner's height is read where its copy lies.
+  Rook reads each layer's height through the same 4-stud grid as its
+  colour.
 
 *The table's numbers* (Inference): each texture's `blend` in Studio's
 material tables is `{min, max, scale}`. `scale` is the softness. `min`
@@ -747,7 +770,8 @@ and lights once (Approximation, alike where the layers' normals agree).
   blend by the corners' weights alone, softened, without the ragged edge.
 - MaterialVariants on terrain blend without a height map, at their
   material's softness (what Studio does there isn't known).
-- Not drawn yet: `detiling` and `rotation`.
+- The random turn and shift come from a 4-stud grid, not the mesh's
+  vertices (above).
 
 *Costs* (release build, `--bench 300`, the build before against this
 one, two runs each, other builds idle): on a 33k-part place whose

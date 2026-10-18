@@ -17,10 +17,10 @@ import package::common::{
     instance_rotation, world_position, placed, CAST, NEON, MODE_FACE, MODE_TILED,
     MODE_MESH_UV, UPRIGHT, SURFACES_SHIFT, MAPS, GLASS, SLOPED, MAPS_UV, VERTEX_COLORS,
     UNION_FACE, TERRAIN_FACE, TERRAIN_WATER, TERRAIN_DRAWN_SHIFT, CENTRED, ALPHA_OVERLAY, ALPHA_TRANSPARENCY,
-    ALPHA_TINT_MASK,
+    ALPHA_TINT_MASK, PATTERN_SHIFT, one_tap, tile_taps, terrain_taps,
 };
 import package::images::{
-    sample_image, image_size, sample_map, IMAGE, COLOR_MAP, NORMAL_MAP, ROUGHNESS_MAP,
+    sample_image, image_size, sample_map, sample_taps, normal_taps, IMAGE, COLOR_MAP, ROUGHNESS_MAP,
     METALNESS_MAP,
 };
 import package::lighting::{shade, shade_pbr, fog};
@@ -198,8 +198,10 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
     var uv = select(tiled / max(in.tile.xy, vec2(1e-3)), in.uv, on_uv);
     let packed = in.face & 255u;
     let terrain = packed >= TERRAIN_FACE && packed != 255u;
+    var planar = vec2(0.0);
     if terrain {
-        uv = terrain_position(in.world, in.normal, (packed & 1u) != 0u) / max(in.tile.xy, vec2(1e-3));
+        planar = terrain_position(in.world, in.normal, (packed & 1u) != 0u);
+        uv = planar / max(in.tile.xy, vec2(1e-3));
     }
     let duv_x = dpdx(uv);
     let duv_y = dpdy(uv);
@@ -207,6 +209,14 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
     let dp_y = dpdy(in.world);
     if terrain && (packed & TERRAIN_WATER) != 0u {
         return water_surface(in, dp_x, dp_y);
+    }
+    // Where the textures are read, their repeats broken up as Studio
+    // breaks them (`tile_taps`, `terrain_taps`).
+    var taps = one_tap(uv);
+    if terrain {
+        taps = terrain_taps(planar, max(in.tile.x, 1e-3), in.tile.z, in.tile.w);
+    } else if !on_uv {
+        taps = tile_taps(uv, (in.flags >> PATTERN_SHIFT) & 3u);
     }
     var normal = in.normal;
     var roughness = in.material.y;
@@ -223,16 +233,16 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
         // only the texel's luma, times the material's tint for its colour
         // (`TerrainMaterial::tint`, the instance colour). The legacy set's
         // are multiplied by it, as below.
-        let c = sample_map(in.images, COLOR_MAP, uv, duv_x, duv_y);
+        let c = sample_taps(in.images, COLOR_MAP, taps, duv_x, duv_y);
         let luma = dot(c.rgb, vec3(0.25, 0.5, 0.25));
         albedo = mix(c.rgb, luma * in.color.rgb, c.a);
     } else if (in.flags & MAPS) != 0u {
-        albedo *= sample_map(in.images, COLOR_MAP, uv, duv_x, duv_y).rgb;
+        albedo *= sample_taps(in.images, COLOR_MAP, taps, duv_x, duv_y).rgb;
     }
     if (in.flags & MAPS) != 0u {
-        roughness *= sample_map(in.images, ROUGHNESS_MAP, uv, duv_x, duv_y).g;
-        metalness *= sample_map(in.images, METALNESS_MAP, uv, duv_x, duv_y).r;
-        let t = sample_map(in.images, NORMAL_MAP, uv, duv_x, duv_y).xyz * 2.0 - 1.0;
+        roughness *= sample_taps(in.images, ROUGHNESS_MAP, taps, duv_x, duv_y).g;
+        metalness *= sample_taps(in.images, METALNESS_MAP, taps, duv_x, duv_y).r;
+        let t = normal_taps(in.images, taps, duv_x, duv_y);
         normal = perturb(in.normal, t, dp_x, dp_y, duv_x, duv_y);
     }
     if in.surfaces != 0u && (in.flags & MAPS_UV) == 0u && !terrain {

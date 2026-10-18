@@ -67,6 +67,11 @@ impl SceneCache {
                 // Confirmed: creator-docs MaterialVariant.StudsPerTile,
                 // 10 by default (also read in Studio 0.742).
                 studs_per_tile: Vec2::splat(number(dom, variant, "StudsPerTile").unwrap_or(10.0)),
+                // `MaterialPattern` (Regular 0, Organic 1).
+                pattern: match enum_value(dom, variant, "MaterialPattern") {
+                    Some(1) => TilePattern::Organic,
+                    _ => TilePattern::Regular,
+                },
                 ..MaterialMaps::NONE
             };
             return;
@@ -119,6 +124,7 @@ impl SceneCache {
             roughness: roughness_metalness,
             metalness: roughness_metalness,
             studs_per_tile: Vec2::splat(material.studs_per_tile(set)),
+            pattern: material.tile_pattern(set),
             ..MaterialMaps::NONE
         }
     }

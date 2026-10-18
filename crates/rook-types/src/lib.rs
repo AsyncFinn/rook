@@ -14,7 +14,7 @@ mod value;
 
 pub use clock::{clock_hours, time_of_day};
 pub use part::collision::{Hull, UnionCollision};
-pub use part::material::{Material, MaterialSet, Shading};
+pub use part::material::{Material, MaterialSet, Shading, TilePattern};
 pub use part::mesh::{MeshKind, MeshLook, head_scale, mesh_part_scale};
 pub use part::shape::PartShape;
 pub use part::surface::{NormalId, SURFACE_TILE_STUDS, SurfacePattern, SurfaceType, Tiling};

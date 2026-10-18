@@ -7,7 +7,7 @@
 // (a mesh texture, a decal or a skybox face), and its material's colour,
 // normal, roughness (green) and metalness (red) maps.
 
-import package::common::{g, image_sampler};
+import package::common::{g, image_sampler, Taps, turned};
 
 @if(image_table) enable wgpu_binding_array;
 
@@ -82,16 +82,48 @@ fn sample_map(images: vec3<u32>, which: u32, uv: vec2<f32>, dx: vec2<f32>, dy: v
     }
 }
 
-// A terrain layer's height (blue of its roughness-metalness map) at `uv`,
-// from its slot in the table. Without a table only the draw's own images
-// are bound, so every layer counts as full height and seams blend by
-// their corners' weights alone.
+// One of the draw's images read at `taps` and blended, `dx` and `dy` the
+// derivatives of the plain coordinates.
+fn sample_taps(images: vec3<u32>, which: u32, taps: Taps, dx: vec2<f32>, dy: vec2<f32>) -> vec4<f32> {
+    var sum = vec4(0.0);
+    for (var k = 0u; k < taps.count; k++) {
+        let turn = taps.turn[k];
+        sum += taps.weight[k] * sample_map(images, which, taps.uv[k], turned(dx, turn), turned(dy, turn));
+    }
+    return sum;
+}
+
+// The normal map read at `taps` (X right and Y up the image, Z out), each
+// copy's normal turned back by its turn so its slopes face the way the
+// copy's features do on the surface, then blended.
+fn normal_taps(images: vec3<u32>, taps: Taps, dx: vec2<f32>, dy: vec2<f32>) -> vec3<f32> {
+    var sum = vec3(0.0);
+    for (var k = 0u; k < taps.count; k++) {
+        let turn = taps.turn[k];
+        let t = sample_map(images, NORMAL_MAP, taps.uv[k], turned(dx, turn), turned(dy, turn)).xyz * 2.0 - 1.0;
+        // The image's Y runs up, its coordinates down.
+        let back = vec2(t.x * turn.x + t.y * turn.y, t.y * turn.x - t.x * turn.y);
+        sum += taps.weight[k] * vec3(back, t.z);
+    }
+    return sum;
+}
+
+// A terrain layer's height (blue of its roughness-metalness map) at its
+// `taps`, from its slot in the table. Without a table only the draw's own
+// images are bound, so every layer counts as full height and seams blend
+// by their corners' weights alone.
 @if(image_table)
-fn layer_height(slot: u32, uv: vec2<f32>, dx: vec2<f32>, dy: vec2<f32>) -> f32 {
-    return textureSampleGrad(images_linear[slot], image_sampler, uv, dx, dy).b;
+fn layer_height(slot: u32, taps: Taps, dx: vec2<f32>, dy: vec2<f32>) -> f32 {
+    var sum = 0.0;
+    for (var k = 0u; k < taps.count; k++) {
+        let turn = taps.turn[k];
+        sum += taps.weight[k]
+            * textureSampleGrad(images_linear[slot], image_sampler, taps.uv[k], turned(dx, turn), turned(dy, turn)).b;
+    }
+    return sum;
 }
 @else
-fn layer_height(slot: u32, uv: vec2<f32>, dx: vec2<f32>, dy: vec2<f32>) -> f32 {
+fn layer_height(slot: u32, taps: Taps, dx: vec2<f32>, dy: vec2<f32>) -> f32 {
     return 1.0;
 }
 

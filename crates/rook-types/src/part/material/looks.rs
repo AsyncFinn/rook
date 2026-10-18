@@ -30,6 +30,21 @@ impl MaterialSet {
     }
 }
 
+/// How a material's textures repeat across a surface: `MaterialPattern`
+/// for MaterialVariants, plus the Wang tiles some built-in materials use.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum TilePattern {
+    /// Plainly, every `studs_per_tile` studs.
+    #[default]
+    Regular,
+    /// Each point blends two copies of the texture, shifted by amounts a
+    /// smooth noise picks, so no repeat lines up (`MaterialPattern.Organic`).
+    Organic,
+    /// The image is a 4 × 4 atlas of Wang tiles, each a quarter of a
+    /// repeat across, picked so their edges match.
+    Wang,
+}
+
 /// How a material shades without textures: its roughness and metalness,
 /// 0 to 1.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -57,30 +72,56 @@ impl Material {
     }
 
     /// Studs per repeat of the material's textures, across and down each
-    /// face, measured in Studio 0.742 (`docs/behavior/materials.md`) by
-    /// matching 24-stud faces against the textures themselves. The 2022
-    /// set repeats every 8 studs (Confirmed for most; the few weak matches
-    /// take 8 too). The legacy set: Confirmed where Studio repeats the
-    /// textures plainly; where it breaks the repeats up (its Organic
-    /// pattern), fitted from close-ups by the size of their features
-    /// (Approximation: Cobblestone, Salt, Grass, Foil, and Granite,
-    /// CorrodedMetal, Slate and Basalt by eye); 8 studs where neither
-    /// settled it (Approximation).
+    /// face (for [`TilePattern::Wang`], of the whole 4 × 4 atlas). Measured
+    /// in Studio 0.743 (`docs/behavior/materials.md`) from 64-stud faces:
+    /// where a plain repeat's period shows, exactly (every one is 40 studs
+    /// over a round number); where Studio breaks repeats up, from where its
+    /// shifted copies land. Sand's image holds its pattern twice each way,
+    /// so it shows a 5-stud period.
     pub fn studs_per_tile(self, set: MaterialSet) -> f32 {
         use Material::*;
         if set == MaterialSet::Materials2022 {
-            return 8.0;
+            return match self {
+                Granite | Foil => 32.0,
+                Salt | Fabric | Cobblestone => 40.0 / 3.0,
+                _ => 8.0,
+            };
         }
         match self {
             Glass => 4.0,
             Wood | DiamondPlate | Metal => 5.0,
             Fabric => 20.0 / 3.0,
-            Marble | Pebble | Sand | Ice | Grass => 10.0,
-            Foil => 12.0,
-            Cobblestone | Slate | Basalt => 16.0,
-            Salt => 20.0,
-            Granite | CorrodedMetal => 24.0,
+            Marble | Pebble | Sand => 10.0,
+            Grass => 40.0 / 3.9,
+            Salt => 40.0 / 3.0,
+            Cobblestone => 40.0 / 2.7,
+            CorrodedMetal => 20.0,
+            Concrete => 80.0 / 3.0,
+            Slate | Granite | Foil | Ice => 40.0,
             _ => 8.0,
+        }
+    }
+
+    /// How Studio lays the material's textures across a face, read from
+    /// its part shaders and checked against 64-stud faces in Studio 0.743
+    /// (`docs/behavior/materials.md`). The legacy set's Wang materials are
+    /// the ones whose TexturePacks say `<tiling>2`.
+    pub fn tile_pattern(self, set: MaterialSet) -> TilePattern {
+        use Material::*;
+        match set {
+            MaterialSet::Legacy => match self {
+                Brick | WoodPlanks | Marble | Grass | Cobblestone => TilePattern::Wang,
+                Basalt | Limestone | Rock | Sandstone | Mud | Ground | LeafyGrass | Glacier
+                | Snow | Asphalt => TilePattern::Organic,
+                _ => TilePattern::Regular,
+            },
+            MaterialSet::Materials2022 => match self {
+                Concrete | Slate | CorrodedMetal | Basalt | Limestone | Rock | Sandstone | Mud
+                | Ground | LeafyGrass | Glacier | Asphalt | Sand | Ice | Wood | Grass | Snow => {
+                    TilePattern::Organic
+                }
+                _ => TilePattern::Regular,
+            },
         }
     }
 
@@ -178,6 +219,19 @@ mod tests {
         assert_eq!(
             Material::Glass.studs_per_tile(MaterialSet::Materials2022),
             8.0
+        );
+        // Legacy Cobblestone's image is a Wang atlas; the 2022 one repeats.
+        assert_eq!(
+            Material::Cobblestone.tile_pattern(MaterialSet::Legacy),
+            TilePattern::Wang
+        );
+        assert_eq!(
+            Material::Cobblestone.tile_pattern(MaterialSet::Materials2022),
+            TilePattern::Regular
+        );
+        assert_eq!(
+            Material::Concrete.tile_pattern(MaterialSet::Materials2022),
+            TilePattern::Organic
         );
         assert_ne!(
             Material::Metal.shading(MaterialSet::Legacy),

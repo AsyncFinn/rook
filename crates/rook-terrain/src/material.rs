@@ -102,9 +102,11 @@ pub struct Texture {
     pub pack: u64,
     /// Repeats per voxel: the pack covers `4 / tiling` studs.
     pub tiling: f32,
-    /// How strongly Studio breaks up the repeats (not drawn yet).
+    /// How Studio shifts the texture at random: by whole steps of
+    /// 1 / `detiling` repeats ([`Texture::shift`]).
     pub detiling: f32,
-    /// How far Studio turns the texture at random (not drawn yet).
+    /// How far Studio turns the texture at random: 1 up to 90 degrees
+    /// either way.
     pub rotation: f32,
     /// How it blends with the textures around it.
     pub blend: Blend,
@@ -137,6 +139,18 @@ impl Texture {
     /// Studs one repeat of the texture covers.
     pub fn studs(&self) -> f32 {
         crate::VOXEL_STUDS / self.tiling
+    }
+
+    /// Repeats per step of the random shift: 1 / `detiling` (Inference:
+    /// Studio's older `detiling_legacy` field, next to `detiling` in its
+    /// `materials.json`, is exactly that in every legacy row, and its
+    /// shader multiplies the random number by one such factor).
+    pub fn shift(&self) -> f32 {
+        if self.detiling > 0.0 {
+            1.0 / self.detiling
+        } else {
+            0.0
+        }
     }
 }
 

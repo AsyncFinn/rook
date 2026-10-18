@@ -410,7 +410,12 @@ impl Renderer {
         for (i, l) in self.terrain.layers.iter().enumerate() {
             let slot = self.image_slots(&[None, None, None, l.height, None])[3];
             out[i * 2] = [l.remap[0], l.remap[1], l.scale, l.studs];
-            out[i * 2 + 1] = [slot as f32, f32::from(u8::from(l.cube)), 0.0, 0.0];
+            out[i * 2 + 1] = [
+                slot as f32,
+                f32::from(u8::from(l.cube)),
+                l.detile.shift,
+                l.detile.turn,
+            ];
         }
         out
     }

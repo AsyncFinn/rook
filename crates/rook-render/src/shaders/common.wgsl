@@ -170,3 +170,138 @@ fn world_position(v: VertexIn) -> vec3<f32> {
 fn placed(p: vec3<f32>, at: vec3<f32>, rotation: mat3x3<f32>, size: vec3<f32>) -> vec3<f32> {
     return at + rotation * (p * size);
 }
+
+// How a material's textures repeat (`rook_types::TilePattern`), in bits
+// 2-3 of a part's flags.
+const PATTERN_SHIFT: u32 = 2u;
+const PATTERN_ORGANIC: u32 = 1u;
+const PATTERN_WANG: u32 = 2u;
+
+// Where to read a repeating texture, so its repeats don't line up: up to
+// three points (`uv`) blended by `weight`, each with how its copy is
+// turned (cos, sin), which turns the derivatives and normals read there
+// too. `sample_taps` and `normal_taps` (images.wgsl) read them.
+struct Taps {
+    uv: array<vec2<f32>, 3>,
+    turn: array<vec2<f32>, 3>,
+    weight: vec3<f32>,
+    count: u32,
+}
+
+fn one_tap(uv: vec2<f32>) -> Taps {
+    var t: Taps;
+    t.uv[0] = uv;
+    t.turn[0] = vec2(1.0, 0.0);
+    t.weight = vec3(1.0, 0.0, 0.0);
+    t.count = 1u;
+    return t;
+}
+
+// A well-mixed 32-bit number for a lattice point (`salt` keeps uses apart).
+fn lattice_hash(p: vec2<i32>, salt: u32) -> u32 {
+    var h = (bitcast<u32>(p.x) * 0x8da6b343u) ^ (bitcast<u32>(p.y) * 0xd8163841u) ^ (salt * 0xcb1ab31fu);
+    h ^= h >> 16u;
+    h *= 0x7feb352du;
+    h ^= h >> 15u;
+    h *= 0x846ca68bu;
+    h ^= h >> 16u;
+    return h;
+}
+
+// Smooth noise from 0 to 1: a random value per whole `p`, blended
+// bilinearly between them (as Studio reads its 32 × 32 white-noise image).
+fn value_noise(p: vec2<f32>) -> f32 {
+    let c = vec2<i32>(floor(p));
+    let f = p - floor(p);
+    let v = vec4(
+        f32(lattice_hash(c, 1u) >> 8u),
+        f32(lattice_hash(c + vec2(1, 0), 1u) >> 8u),
+        f32(lattice_hash(c + vec2(0, 1), 1u) >> 8u),
+        f32(lattice_hash(c + vec2(1, 1), 1u) >> 8u),
+    ) / 16777216.0;
+    return mix(mix(v.x, v.y, f.x), mix(v.z, v.w, f.x), f.y);
+}
+
+// A part's material textures at `uv` (in repeats) by its pattern, from
+// Studio's part shaders (`DefaultUnified{Tiled,Detiled,Wang}FS`):
+// - Organic: a smooth noise with one random value per repeat, times 8,
+//   picks *i* (its whole part) and blends (by its fraction) the texture
+//   shifted by sin(3*i*, 7*i*) and by sin(3(*i* + 1), 7(*i* + 1)) repeats
+//   (measured: a MaterialVariant's shifts land on exactly these, and the
+//   noise's scale is a repeat at 8 and at 4 studs per tile).
+// - Wang: the image is 4 × 4 tiles; each quarter-repeat cell shows the
+//   tile whose edges match its neighbours'. Every cell edge is one of two
+//   kinds, at random; a tile's column in the image is 0, 1, 2 or 3 for
+//   left and right edges of kinds (0, 0), (0, 1), (1, 1), (1, 0), and its
+//   row likewise for top and bottom (the layout of Studio's
+//   `wangIndex.dds`, which Rook doesn't use: its cells come from a hash).
+fn tile_taps(uv: vec2<f32>, pattern: u32) -> Taps {
+    if pattern == PATTERN_ORGANIC {
+        let n = value_noise(uv) * 8.0;
+        let i = floor(n);
+        var t: Taps;
+        t.uv[0] = uv + sin(vec2(3.0, 7.0) * i);
+        t.uv[1] = uv + sin(vec2(3.0, 7.0) * (i + 1.0));
+        t.turn[0] = vec2(1.0, 0.0);
+        t.turn[1] = vec2(1.0, 0.0);
+        t.weight = vec3(1.0 - (n - i), n - i, 0.0);
+        t.count = 2u;
+        return t;
+    }
+    if pattern == PATTERN_WANG {
+        let q = uv * 4.0;
+        let cell = vec2<i32>(floor(q));
+        // Vertical edges (salt 2) at a cell's left, horizontal (3) at its top.
+        let w = lattice_hash(cell, 2u) & 1u;
+        let e = lattice_hash(cell + vec2(1, 0), 2u) & 1u;
+        let n = lattice_hash(cell, 3u) & 1u;
+        let s = lattice_hash(cell + vec2(0, 1), 3u) & 1u;
+        let tile = vec2(f32(2u * w + (w ^ e)), f32(2u * n + (n ^ s)));
+        return one_tap((tile + (q - floor(q))) * 0.25);
+    }
+    return one_tap(uv);
+}
+
+// A terrain layer's textures at `p` (studs across the plane it's laid on,
+// `terrain_position`), `studs` per repeat, broken up by its `shift` and
+// `turn` (`Detile`; Studio's `SmoothClusterVS`): each mesh vertex has a
+// random r from 0 to 255; there the coordinates turn by
+// asin((r / 128 - 1) × turn) and move by (r, floor(2.6651442 r)) × shift
+// repeats, and across a triangle the corners' copies blend by their
+// weights. Rook's terrain vertices don't carry r, so the corners are
+// those of a 4-stud grid (a voxel) over the plane, split along a diagonal,
+// each with r from a hash (Approximation: Studio's vertices sit near
+// those points, moved by the surface's shape).
+fn terrain_taps(p: vec2<f32>, studs: f32, shift: f32, turn: f32) -> Taps {
+    let uv = p / studs;
+    if turn == 0.0 && fract(shift) == 0.0 {
+        // Whole repeats: every copy is the same.
+        return one_tap(uv);
+    }
+    let q = p * 0.25;
+    let cell = vec2<i32>(floor(q));
+    let f = q - floor(q);
+    var corners: array<vec2<i32>, 3>;
+    var t: Taps;
+    if f.x + f.y < 1.0 {
+        corners = array(cell, cell + vec2(1, 0), cell + vec2(0, 1));
+        t.weight = vec3(1.0 - f.x - f.y, f.x, f.y);
+    } else {
+        corners = array(cell + vec2(1, 1), cell + vec2(0, 1), cell + vec2(1, 0));
+        t.weight = vec3(f.x + f.y - 1.0, 1.0 - f.x, 1.0 - f.y);
+    }
+    for (var k = 0u; k < 3u; k++) {
+        let r = f32(lattice_hash(corners[k], 4u) & 255u);
+        let s = (r / 128.0 - 1.0) * turn;
+        let c = sqrt(max(1.0 - s * s, 0.0));
+        t.uv[k] = vec2(uv.x * c + uv.y * s, uv.y * c - uv.x * s) + vec2(r, floor(r * 2.6651442)) * shift;
+        t.turn[k] = vec2(c, s);
+    }
+    t.count = 3u;
+    return t;
+}
+
+// Derivatives `d` of the plain coordinates, turned as a tap's copy is.
+fn turned(d: vec2<f32>, turn: vec2<f32>) -> vec2<f32> {
+    return vec2(d.x * turn.x + d.y * turn.y, d.y * turn.x - d.x * turn.y);
+}

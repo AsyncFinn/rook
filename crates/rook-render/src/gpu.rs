@@ -45,8 +45,8 @@ pub(crate) struct Globals {
     pub(crate) sky_images: [[u32; 4]; 2],
     /// Each terrain layer's blend ([`TerrainLayer`]), two per layer: the
     /// height's multiplier and offset, the edge's softness and the studs
-    /// per repeat; then its height map's slot in the image table and
-    /// whether it's laid like a box.
+    /// per repeat; then its height map's slot in the image table, whether
+    /// it's laid like a box, and its [`Detile`].
     pub(crate) terrain_layers: [[f32; 4]; 2 * TERRAIN_LAYERS],
 }
 
@@ -56,6 +56,9 @@ pub(crate) const NEON: u32 = 2;
 pub(crate) const MODE_FACE: u32 = 1;
 pub(crate) const MODE_TILED: u32 = 2;
 pub(crate) const MODE_MESH_UV: u32 = 3;
+/// A part's material textures' [`TilePattern`], in the bits an image
+/// layer's mode takes.
+pub(crate) const PATTERN_SHIFT: u32 = 2;
 pub(crate) const UPRIGHT: u32 = 1 << 7;
 /// Where the surface patterns start: 3 bits per face.
 pub(crate) const SURFACES_SHIFT: u32 = 8;
@@ -88,9 +91,10 @@ pub(crate) struct Instance {
     box_min: [f32; 3],
     box_max: [f32; 3],
     /// A Texture's studs per tile and offset; for a part with material
-    /// textures, their studs per tile.
+    /// textures, their studs per tile, and on terrain their [`Detile`].
     tile: [f32; 4],
-    /// CAST, NEON, an image layer's mode (bits 2-3) and face (4-6),
+    /// CAST, NEON, an image layer's mode or a part's tile pattern (bits
+    /// 2-3), an image layer's face (4-6),
     /// UPRIGHT (bit 7), from bit 8 each face's surface pattern + 1, three
     /// bits per face, and the bits from 26 (wgpu allows 16 vertex
     /// attributes in all).
@@ -161,7 +165,13 @@ impl Instance {
                     ) {
                         flags |= SLOPED;
                     }
-                    tile = [maps.studs_per_tile.x, maps.studs_per_tile.y, 0.0, 0.0];
+                    flags |= (maps.pattern as u32) << PATTERN_SHIFT;
+                    tile = [
+                        maps.studs_per_tile.x,
+                        maps.studs_per_tile.y,
+                        maps.detile.shift,
+                        maps.detile.turn,
+                    ];
                 }
                 if p.material.shows_surfaces() {
                     for (face, pattern) in p.surfaces.iter().enumerate() {

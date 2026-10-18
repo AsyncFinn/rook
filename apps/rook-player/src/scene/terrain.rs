@@ -16,7 +16,7 @@ use glam::IVec3;
 use rayon::prelude::*;
 use rook_content::MaterialMap;
 use rook_content::decode::mesh::{Mesh, TerrainCorner, TerrainMapping};
-use rook_render::{TERRAIN_LAYERS, TerrainLayer, TerrainLook};
+use rook_render::{Detile, TERRAIN_LAYERS, TerrainLayer, TerrainLook};
 use rook_terrain::grass::{GrassTops, add_grass_tops, blade_color};
 use rook_terrain::{
     ChunkMesh, Facing, Grid, Layer, Seam, TerrainMaterial, chunks_to_mesh, mesh_chunk,
@@ -355,9 +355,16 @@ impl SceneCache {
             Facing::Side => look.side,
             Facing::Bottom => look.bottom,
         };
+        // A variant on terrain is turned and shifted as the material's own
+        // texture would be (Inference).
+        let detile = texture.map_or(Detile::NONE, |t| Detile {
+            shift: t.shift(),
+            turn: t.rotation,
+        });
         let mut blend = TerrainLayer {
             cube: material.shape().cube,
             scale: texture.map_or(1.0, |t| t.blend.scale),
+            detile,
             ..TerrainLayer::default()
         };
         let c = material
@@ -385,6 +392,7 @@ impl SceneCache {
                 roughness,
                 metalness,
                 studs_per_tile: Vec2::splat(number(dom, variant, "StudsPerTile").unwrap_or(10.0)),
+                detile,
                 ..MaterialMaps::NONE
             };
             blend.studs = maps.studs_per_tile.x;
@@ -408,6 +416,7 @@ impl SceneCache {
             roughness: roughness_metalness,
             metalness: roughness_metalness,
             studs_per_tile: Vec2::splat(texture.studs()),
+            detile,
             alpha: match set {
                 MaterialSet::Legacy => MapAlpha::Ignore,
                 MaterialSet::Materials2022 => MapAlpha::TintMask,
