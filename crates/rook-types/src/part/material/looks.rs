@@ -72,32 +72,25 @@ impl Material {
     }
 
     /// Studs per repeat of the material's textures, across and down each
-    /// face (for [`TilePattern::Wang`], of the whole 4 × 4 atlas). Measured
-    /// in Studio 0.743 (`docs/behavior/materials.md`) from 64-stud faces:
-    /// where a plain repeat's period shows, exactly (every one is 40 studs
-    /// over a round number); where Studio breaks repeats up, from where its
-    /// shifted copies land. Sand's image holds its pattern twice each way,
-    /// so it shows a 5-stud period.
+    /// face (for [`TilePattern::Wang`], of the whole 4 × 4 atlas). The 2022
+    /// set: 8 for every material (Confirmed: Roblox's texture
+    /// specifications, "Parts display a 1024×1024 on an 8×8 stud face").
+    /// The legacy set: Unverified, fitted by eye in Studio 0.742; Roblox
+    /// publishes no sizes for it (`docs/behavior/materials.md`).
     pub fn studs_per_tile(self, set: MaterialSet) -> f32 {
         use Material::*;
         if set == MaterialSet::Materials2022 {
-            return match self {
-                Granite | Foil => 32.0,
-                Salt | Fabric | Cobblestone => 40.0 / 3.0,
-                _ => 8.0,
-            };
+            return 8.0;
         }
         match self {
             Glass => 4.0,
             Wood | DiamondPlate | Metal => 5.0,
             Fabric => 20.0 / 3.0,
-            Marble | Pebble | Sand => 10.0,
-            Grass => 40.0 / 3.9,
-            Salt => 40.0 / 3.0,
-            Cobblestone => 40.0 / 2.7,
-            CorrodedMetal => 20.0,
-            Concrete => 80.0 / 3.0,
-            Slate | Granite | Foil | Ice => 40.0,
+            Marble | Pebble | Sand | Ice | Grass => 10.0,
+            Foil => 12.0,
+            Cobblestone | Slate | Basalt => 16.0,
+            Salt => 20.0,
+            Granite | CorrodedMetal => 24.0,
             _ => 8.0,
         }
     }
