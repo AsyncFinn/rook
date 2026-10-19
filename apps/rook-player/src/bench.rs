@@ -40,6 +40,7 @@ pub(crate) fn bench(
     game.set_viewport(width, height);
     let mut mouse = 0.0;
     let mut mouse_times = stats::Times::default();
+    let mut update_times = stats::Times::default();
     let mut whole = stats::Times::default();
     // When the content loaders last ran out of work, and the frames
     // until then.
@@ -68,6 +69,7 @@ pub(crate) fn bench(
             updates += 1;
         }
         build += secs(t);
+        update_times.push(t.elapsed());
         let t = Instant::now();
         renderer.render_to_image(width, height, camera)?;
         render += secs(t);
@@ -133,6 +135,7 @@ pub(crate) fn bench(
         eprintln!("render medians: GPU shadow pass {gpu_shadow:.2} ms, main pass {gpu_main:.2} ms");
     }
     eprintln!("mouse: {}", mouse_times.summary());
+    eprintln!("scene update and upload: {}", update_times.summary());
     eprintln!("server step: {}", game.server_steps.summary());
     if !game.client_steps.is_empty() {
         eprintln!("client step: {}", game.client_steps.summary());

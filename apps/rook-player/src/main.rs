@@ -160,19 +160,28 @@ fn refresh(
     let change = match change {
         // A skybox image arrived: the lighting alone changed.
         SceneChange::None if loaded.is_empty() && cache.take_lighting_change() => {
-            SceneChange::Parts(Vec::new())
+            SceneChange::Parts {
+                changed: Vec::new(),
+                moved: Vec::new(),
+            }
         }
         _ if loaded.is_empty() => change,
-        SceneChange::None => SceneChange::Parts(loaded),
-        SceneChange::Parts(mut parts) => {
-            parts.extend(loaded);
-            SceneChange::Parts(parts)
+        SceneChange::None => SceneChange::Parts {
+            changed: loaded,
+            moved: Vec::new(),
+        },
+        SceneChange::Parts { mut changed, moved } => {
+            changed.extend(loaded);
+            SceneChange::Parts { changed, moved }
         }
         SceneChange::Full => SceneChange::Full,
     };
     match &change {
         SceneChange::None => return false,
-        SceneChange::Parts(parts) => renderer.update_parts(&cache.scene, parts),
+        SceneChange::Parts { changed, moved } => {
+            renderer.update_parts(&cache.scene, changed);
+            renderer.move_parts(&cache.scene, moved);
+        }
         SceneChange::Full => renderer.set_scene(&cache.scene),
     }
     for mesh in cache.take_dropped_meshes() {

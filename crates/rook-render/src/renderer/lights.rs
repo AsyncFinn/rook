@@ -87,6 +87,9 @@ pub(crate) struct GpuLights {
     pub(crate) layout: wgpu::BindGroupLayout,
     pub(crate) bind_group: wgpu::BindGroup,
     lights: Vec<GpuLight>,
+    /// The scene's lights they were made from, so an unchanged list
+    /// skips making them again.
+    scene_lights: Vec<LocalLight>,
     /// Where each light was when the hash was built.
     hashed_at: Vec<Vec3>,
     hash: LightHash,
@@ -303,6 +306,7 @@ impl GpuLights {
             layout,
             bind_group,
             lights: Vec::new(),
+            scene_lights: Vec::new(),
             hashed_at: Vec::new(),
             hash,
             light_buffer,
@@ -333,6 +337,10 @@ impl GpuLights {
         queue: &wgpu::Queue,
         scene: &[LocalLight],
     ) {
+        if scene == self.scene_lights {
+            return;
+        }
+        self.scene_lights = scene.to_vec();
         let mut lights: Vec<GpuLight> = scene.iter().map(GpuLight::of).collect();
         if lights == self.lights {
             return;
@@ -378,9 +386,12 @@ impl GpuLights {
     }
 
     /// Take the parts at `changed` (indices into `scene.parts`) as they
-    /// block light now.
+    /// block light now. Only noted while nothing reads the blockers (the
+    /// sky lights nothing and no light has `Shadows`), and taken once
+    /// something does.
     pub(crate) fn update_blockers(&mut self, scene: &Scene, changed: &[usize]) {
-        self.blockers.update(scene, changed);
+        let used = scene.lighting.environment_diffuse > 0.0 || self.shadows;
+        self.blockers.update(scene, changed, used);
     }
 
     /// Fill the voxels again if the lights changed, the volume's centre

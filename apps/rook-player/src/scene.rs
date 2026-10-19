@@ -64,7 +64,11 @@ pub enum SceneChange {
     None,
     /// These entries (indices into `scene.parts`, which may have grown),
     /// and maybe the lighting.
-    Parts(Vec<usize>),
+    Parts {
+        changed: Vec<usize>,
+        /// Entries that only moved: same look, new place.
+        moved: Vec<usize>,
+    },
     /// Everything was rebuilt.
     Full,
 }
@@ -263,6 +267,7 @@ impl SceneCache {
         let effects = self
             .with_effects(|effects, drawn, images| effects.changed(dom, changes, drawn, images));
         let mut changed = Vec::new();
+        let mut moved = Vec::new();
         if changes.terrain {
             match self.terrain_changed(dom) {
                 Some(entries) => changed.extend(entries),
@@ -300,15 +305,21 @@ impl SceneCache {
                 let part = &mut self.scene.parts[i];
                 part.position = cf.position + cf.rotation * pose.offset;
                 part.rotation = cf.rotation * pose.turn;
-                changed.push(i);
+                moved.push(i);
             }
         }
         // The terrain's look (waves, wind) reaches the renderer with any
         // update, even one that changed no entry.
-        if changed.is_empty() && !changes.lighting && !changes.terrain && !lights && !effects {
+        if changed.is_empty()
+            && moved.is_empty()
+            && !changes.lighting
+            && !changes.terrain
+            && !lights
+            && !effects
+        {
             SceneChange::None
         } else {
-            SceneChange::Parts(changed)
+            SceneChange::Parts { changed, moved }
         }
     }
 

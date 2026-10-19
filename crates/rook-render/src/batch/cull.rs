@@ -71,6 +71,21 @@ impl Frustum {
     }
 }
 
+impl Frustum {
+    /// Whether all of `b`, grown by `margin` studs, is inside.
+    pub fn holds(&self, b: Aabb, margin: f32) -> bool {
+        if b.is_empty() {
+            return false;
+        }
+        let centre = (b.min + b.max) * 0.5;
+        let half = (b.max - b.min) * 0.5 + Vec3::splat(margin);
+        self.planes.iter().all(|p| {
+            let n = p.truncate();
+            n.dot(centre) - n.abs().dot(half) + p.w >= 0.0
+        })
+    }
+}
+
 /// Where `position` falls along a Z-order curve through 16-stud cells:
 /// entries placed in this order fill a batch's slots near each other, so
 /// each run of [`CULL_SLOTS`](crate::batch::CULL_SLOTS) slots gets a small

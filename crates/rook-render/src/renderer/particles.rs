@@ -82,7 +82,10 @@ impl Renderer {
             return Vec::new();
         }
         profiling::scope!("upload particles");
-        let mut drawn: Vec<(f32, ImageHash, ParticleInstance)> = Vec::new();
+        // Each drawn particle's instance and image, and (distance, index)
+        // to sort by: moving the small keys, not the instances.
+        let mut drawn: Vec<(ImageHash, ParticleInstance)> = Vec::new();
+        let mut order: Vec<(f32, u32)> = Vec::new();
         for (look, particles, bounds) in self.particles.sim.drawn() {
             let Some(texture) = look.texture.filter(|h| self.images.contains(h)) else {
                 continue;
@@ -101,7 +104,21 @@ impl Renderer {
                 Orientation::VelocityParallel => 2,
                 Orientation::VelocityPerpendicular => 3,
             };
+            // A quad turned any way stays within 0.71 x its size of its
+            // centre; one moved by ZOffset isn't culled on its own.
+            let reach = (look.z_offset == 0.0).then_some(biggest * 0.75);
             for p in particles {
+                if let Some(reach) = reach
+                    && !view.sees(
+                        Aabb {
+                            min: p.position,
+                            max: p.position,
+                        },
+                        reach,
+                    )
+                {
+                    continue;
+                }
                 let t = p.life();
                 let alpha = p.alpha(look);
                 let size = p.size(look);
@@ -139,16 +156,19 @@ impl Renderer {
                     z_offset: look.z_offset,
                 };
                 let d = p.position.distance_squared(camera.position);
-                drawn.push((d, texture, instance));
+                order.push((d, drawn.len() as u32));
+                drawn.push((texture, instance));
             }
         }
-        drawn.sort_by(|a, b| b.0.total_cmp(&a.0));
+        // Back to front; ties keep the order they were made in.
+        order.sort_unstable_by(|a, b| b.0.total_cmp(&a.0).then(a.1.cmp(&b.1)));
         // With a table every particle draws in one go; otherwise a run per
         // image in a row.
         let table = matches!(self.image_binding, ImageBinding::Table(_));
         let mut runs: Vec<ParticleRun> = Vec::new();
-        for (i, (_, texture, _)) in drawn.iter().enumerate() {
+        for (i, &(_, at)) in order.iter().enumerate() {
             let i = i as u32;
+            let texture = &drawn[at as usize].0;
             match runs.last_mut() {
                 Some((t, r)) if table || t == texture => r.end = i + 1,
                 _ => runs.push((*texture, i..i + 1)),
@@ -157,7 +177,8 @@ impl Renderer {
         for (texture, _) in &runs {
             self.ensure_group([Some(*texture), None, None, None, None]);
         }
-        let instances: Vec<ParticleInstance> = drawn.into_iter().map(|d| d.2).collect();
+        let instances: Vec<ParticleInstance> =
+            order.iter().map(|&(_, at)| drawn[at as usize].1).collect();
         if instances.is_empty() {
             return runs;
         }

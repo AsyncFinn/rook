@@ -224,7 +224,7 @@ impl Renderer {
         match source {
             Source::Opaque => self.opaque.buffer(),
             Source::Layers => self.layers.buffer(),
-            Source::Transparent => self.transparent_buffer.as_ref().map(|(b, _)| b),
+            Source::Transparent => self.transparent.buffer(),
         }
     }
 }

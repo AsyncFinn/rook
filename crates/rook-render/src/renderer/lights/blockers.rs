@@ -44,6 +44,10 @@ pub(super) struct Blockers {
     grid: Option<Grid>,
     /// Blockers changed since the grid was marked: (before, after).
     moved: Vec<(Option<Blocker>, Option<Blocker>)>,
+    /// Parts changed while nothing used the blockers, taken when
+    /// something does; `stale` marks those listed.
+    stale: Vec<usize>,
+    is_stale: Vec<bool>,
 }
 
 /// The marked voxels of a volume.
@@ -110,15 +114,28 @@ impl Blockers {
         self.changed = true;
         self.grid = None;
         self.moved.clear();
+        self.stale.clear();
+        self.is_stale.clear();
     }
 
     /// Take the parts at `changed` (indices into `scene.parts`) as they
-    /// are now.
-    pub(super) fn update(&mut self, scene: &Scene, changed: &[usize]) {
+    /// are now, or, while the blockers aren't `used`, note them for later.
+    pub(super) fn update(&mut self, scene: &Scene, changed: &[usize], used: bool) {
         if self.blockers.len() < scene.parts.len() {
             self.blockers.resize(scene.parts.len(), None);
+            self.is_stale.resize(scene.parts.len(), false);
         }
-        for &i in changed {
+        if !used {
+            for &i in changed {
+                if !std::mem::replace(&mut self.is_stale[i], true) {
+                    self.stale.push(i);
+                }
+            }
+            return;
+        }
+        let stale = std::mem::take(&mut self.stale);
+        for &i in stale.iter().chain(changed) {
+            self.is_stale[i] = false;
             let blocker = self.blocker(&scene.parts[i], scene);
             if self.blockers[i] != blocker {
                 if self.grid.is_some() {

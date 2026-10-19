@@ -13,6 +13,7 @@ mod ribbons;
 mod runs;
 mod timing;
 mod tonemap;
+mod transparent;
 
 use super::*;
 pub(crate) use images::ImageBinding;
@@ -26,6 +27,7 @@ use ribbons::GpuRibbons;
 use timing::GpuTimer;
 pub use timing::GpuTimes;
 use tonemap::{FRAME_FORMAT, Tonemap};
+use transparent::TransparentParts;
 
 /// Water's phase wraps here: a whole number of its 25 normal frames'
 /// cycles (20 units each) and of both waves' periods (40 and 25,
@@ -81,12 +83,8 @@ pub struct Renderer {
     placements: Vec<Placement>,
     /// Entries waiting for an upload, placed once it's done.
     waiting: HashMap<usize, PartInstance>,
-    /// The sorted transparent parts' instances, rewritten every frame, and
-    /// how many it holds.
-    transparent_buffer: Option<(wgpu::Buffer, usize)>,
-    /// Slots for transparent parts (`None` when free), sorted every frame.
-    transparent_parts: Vec<Option<PartInstance>>,
-    transparent_free: Vec<usize>,
+    /// Transparent parts, sorted back to front as the view changes.
+    transparent: TransparentParts,
     lighting: Lighting,
     /// The local lights and their spatial hash (group 3).
     pub(crate) lights: GpuLights,
@@ -333,9 +331,7 @@ impl Renderer {
             layers: Batches::default(),
             placements: Vec::new(),
             waiting: HashMap::default(),
-            transparent_free: Vec::new(),
-            transparent_buffer: None,
-            transparent_parts: Vec::new(),
+            transparent: TransparentParts::default(),
             lighting: Lighting::default(),
             lights,
             particles: GpuParticles::default(),
