@@ -11,7 +11,8 @@ use crate::*;
 /// `Workspace.GlobalWind`) if `terrain`, the local lights (and
 /// Attachments, which may carry one) whose properties changed in `lights`,
 /// and lights entering or leaving the tree if `lights_placed`; the same
-/// for Fire, Smoke and Sparkles in `effects` and `effects_placed`.
+/// for the visual effects ([`is_effect_class`]) in `effects` and
+/// `effects_placed`, plus the effect methods scripts called.
 #[derive(Debug, Clone, Default)]
 pub struct RenderChanges {
     pub full: bool,
@@ -19,10 +20,12 @@ pub struct RenderChanges {
     pub terrain: bool,
     pub lights: std::collections::HashSet<InstanceId>,
     pub lights_placed: bool,
-    /// Fire, Smoke and Sparkles whose properties changed, and whether any
-    /// entered or left the tree (`effects_placed`).
+    /// Effects whose properties changed, and whether any entered or left
+    /// the tree (`effects_placed`).
     pub effects: std::collections::HashSet<InstanceId>,
     pub effects_placed: bool,
+    /// `ParticleEmitter:Emit` and the like, in the order called.
+    pub effect_calls: Vec<(InstanceId, rook_lua::EffectCall)>,
     pub placed: std::collections::HashSet<InstanceId>,
     pub parts: std::collections::HashSet<InstanceId>,
     pub moved: std::collections::HashSet<InstanceId>,
@@ -45,10 +48,21 @@ impl RenderChanges {
             && !self.lights_placed
             && self.effects.is_empty()
             && !self.effects_placed
+            && self.effect_calls.is_empty()
             && self.placed.is_empty()
             && self.parts.is_empty()
             && self.moved.is_empty()
     }
+}
+
+/// Whether instances of `class` are visual effects the renderer draws:
+/// particles (Fire, Smoke, Sparkles, ParticleEmitter) and ribbons (Beam,
+/// Trail).
+pub fn is_effect_class(class: &str) -> bool {
+    matches!(
+        class,
+        "Fire" | "Smoke" | "Sparkles" | "ParticleEmitter" | "Beam" | "Trail"
+    )
 }
 
 /// The part properties render-change tracking treats specially.
@@ -89,6 +103,8 @@ impl DataModel {
     /// anyway.
     pub(crate) fn check_render_changes(&mut self) {
         profiling::scope!("check_render_changes");
+        let calls = std::mem::take(&mut self.runtime.world_mut().effect_calls);
+        self.render_changes.effect_calls.extend(calls);
         let world = self.runtime.world();
         let dom = &world.dom;
         let lighting = dom.find_service("Lighting");
@@ -102,7 +118,7 @@ impl DataModel {
                 || dom.is_a(id, "SurfaceAppearance")
         };
         let light = |id: InstanceId| dom.is_a(id, "Light");
-        let effect = |id: InstanceId| matches!(dom.class_name(id), "Fire" | "Smoke" | "Sparkles");
+        let effect = |id: InstanceId| is_effect_class(dom.class_name(id));
         let materials =
             |id: InstanceId| dom.is_a(id, "MaterialService") || dom.is_a(id, "MaterialVariant");
         let mark_part = |changes: &mut RenderChanges, part: Option<InstanceId>| {

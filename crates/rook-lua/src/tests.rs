@@ -618,3 +618,20 @@ fn legacy_enum_names_resolve() {
         ],
     );
 }
+
+/// An Attachment's Position, Orientation and World views read and set its
+/// CFrame, under its part.
+#[test]
+fn attachment_views_of_cframe() {
+    expect(
+        "local p = Instance.new('Part') p.Position = Vector3.new(10, 0, 0) \
+         local a = Instance.new('Attachment', p) a.Position = Vector3.new(0, 2, 0) \
+         print(a.CFrame.Position, a.WorldPosition) \
+         a.Orientation = Vector3.new(0, 90, 0) \
+         print(math.round(a.Axis.Z), math.round(a.WorldAxis.Z)) \
+         a.WorldPosition = Vector3.new(0, 0, 0) \
+         print(a.Position)",
+        0,
+        &["0, 2, 0 10, 2, 0", "-1 -1", "-10, 0, 0"],
+    );
+}

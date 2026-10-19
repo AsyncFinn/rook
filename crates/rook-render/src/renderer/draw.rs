@@ -233,6 +233,7 @@ impl Renderer {
             self.upload_instances(camera, &view, margin)
         };
 
+        let ribbon_runs = self.upload_ribbons(camera, &view);
         let particle_runs = self.upload_particles(camera, &view);
 
         // Each pass's draws, joined into runs that share what's bound.
@@ -311,6 +312,7 @@ impl Renderer {
             }
             self.record_sky(&mut pass);
             self.record(&mut pass, &mut main_runs, starts[1]);
+            self.record_ribbons(&mut pass, &ribbon_runs);
             self.record_particles(&mut pass, &particle_runs);
         }
         self.tonemap

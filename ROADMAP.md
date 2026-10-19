@@ -223,7 +223,9 @@ create.
    blend over Neon as in Studio and sunlit faces stop drawing too bright
    ([`docs/behavior/tone-mapping.md`](docs/behavior/tone-mapping.md)).
    Before the remaining effects, which blend in HDR too.
-4. ParticleEmitter (with flipbooks), Beam and Trail.
+4. ✅ ParticleEmitter (with flipbooks), Beam and Trail
+   ([`docs/behavior/particle-emitters.md`](docs/behavior/particle-emitters.md),
+   [`docs/behavior/beams-and-trails.md`](docs/behavior/beams-and-trails.md)).
 5. Explosion: its blast (physics, joints breaking) and its look.
 6. Highlight (outlines and fills through walls).
 

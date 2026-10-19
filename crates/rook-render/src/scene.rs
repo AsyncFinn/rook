@@ -13,7 +13,12 @@ pub use rook_types::{
 };
 
 mod emitters;
-pub use emitters::{Curve, Emitter, EmitterLook};
+mod ribbons;
+pub use emitters::{
+    Curve, Emitter, EmitterLook, EmitterShape, Flipbook, FlipbookMode, InOut, Lerp, Orientation,
+    Sequence, Spawn,
+};
+pub use ribbons::{Anchor, Beam, RibbonLook, TextureMode, Trail};
 
 /// A mesh file, by the BLAKE3 hash of its bytes: parts that use the same
 /// file share one GPU mesh, however they refer to it.
@@ -453,10 +458,13 @@ pub struct Scene {
     pub parts: Vec<PartInstance>,
     /// The local lights in Workspace (disabled ones at brightness 0).
     pub lights: Vec<LocalLight>,
-    /// Particle emitters (Fire, Smoke, Sparkles). An emitter keeps its
-    /// index from one update to the next, as parts do, so that its
-    /// particles stay with it.
+    /// Particle emitters (Fire, Smoke, Sparkles, ParticleEmitter). An
+    /// emitter keeps its index from one update to the next, as parts do,
+    /// so that its particles stay with it.
     pub emitters: Vec<Emitter>,
+    pub beams: Vec<Beam>,
+    /// Trails, which keep their index as emitters do (for their pieces).
+    pub trails: Vec<Trail>,
     pub lighting: Lighting,
     pub terrain: TerrainLook,
     /// The mesh files parts may draw ([`DrawShape::File`]). The renderer

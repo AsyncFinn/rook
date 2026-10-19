@@ -1,32 +1,43 @@
 //! The particles of the scene's emitters, simulated on the CPU in world
-//! space: each emitter's are born at its rate where it is, move by their
-//! velocity, acceleration and drag, and die at the end of their lifetime
-//! (docs/behavior/effects.md).
+//! space: each emitter's are born at its rate (and when scripts call
+//! `Emit`) where it is, move by their velocity, acceleration and drag, and
+//! die at the end of their lifetime (docs/behavior/effects.md,
+//! docs/behavior/particle-emitters.md).
+
+mod spawn;
 
 use std::sync::Arc;
 
-use glam::Vec3;
+use glam::{Mat3, Vec3};
 
 use crate::batch::cull::Aabb;
-use crate::scene::{Emitter, EmitterLook};
+use crate::scene::{Emitter, EmitterLook, FlipbookMode};
 
 /// The longest step simulated at once; longer ones are split, up to
 /// [`MAX_STEP`] in all.
 const SUBSTEP: f32 = 1.0 / 30.0;
 /// The most time one call simulates (a frame after a long stall).
 const MAX_STEP: f32 = 1.0;
+/// The most particles one `Emit` call births (scripts asking for millions
+/// would stall the frame).
+const MAX_BURST: u64 = 10_000;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Particle {
     pub(crate) position: Vec3,
-    velocity: Vec3,
+    pub(crate) velocity: Vec3,
     age: f32,
     lifetime: f32,
     /// The random factor on its size.
     scale: f32,
-    /// Degrees.
+    /// Degrees, positive clockwise.
     rotation: f32,
     spin: f32,
+    /// Picks its envelopes and random flipbook frames.
+    seed: u32,
+    /// Flipbook frames per second, and the frame it started at.
+    frame_rate: f32,
+    first_frame: f32,
 }
 
 impl Particle {
@@ -34,6 +45,57 @@ impl Particle {
     pub(crate) fn life(&self) -> f32 {
         (self.age / self.lifetime).clamp(0.0, 1.0)
     }
+
+    /// Its width and height in studs now.
+    pub(crate) fn size(&self, look: &EmitterLook) -> [f32; 2] {
+        let t = self.life();
+        let size = look.size.at(t, |k| self.pick(k)) * self.scale;
+        let squash = look.squash.at(t).exp2();
+        [size / squash, size * squash]
+    }
+
+    /// Its opacity now.
+    pub(crate) fn alpha(&self, look: &EmitterLook) -> f32 {
+        // The envelope picks differ from the size's.
+        look.alpha
+            .at(self.life(), |k| self.pick(k + 64))
+            .clamp(0.0, 1.0)
+    }
+
+    pub(crate) fn rotation(&self) -> f32 {
+        self.rotation
+    }
+
+    /// The flipbook frame it shows now, of `frames`.
+    pub(crate) fn frame(&self, mode: FlipbookMode, frames: u32) -> u32 {
+        let n = frames.max(1);
+        if mode == FlipbookMode::OneShot {
+            return ((self.life() * n as f32) as u32).min(n - 1);
+        }
+        let k = (self.first_frame + self.age * self.frame_rate).max(0.0) as u32;
+        match mode {
+            FlipbookMode::PingPong if n > 1 => {
+                let k = k % (2 * n - 2);
+                if k < n { k } else { 2 * n - 2 - k }
+            }
+            FlipbookMode::Random => hash(self.seed ^ k.wrapping_mul(0x9E37_79B9)) % n,
+            _ => k % n,
+        }
+    }
+
+    /// A number in [-1, 1] for keypoint `k`, the same every frame.
+    fn pick(&self, k: usize) -> f32 {
+        let h = hash(self.seed.wrapping_add((k as u32).wrapping_mul(0x85EB_CA6B)));
+        (h >> 8) as f32 / (1u32 << 23) as f32 - 1.0
+    }
+}
+
+fn hash(mut x: u32) -> u32 {
+    x ^= x >> 16;
+    x = x.wrapping_mul(0x7FEB_352D);
+    x ^= x >> 15;
+    x = x.wrapping_mul(0x846C_A68B);
+    x ^ (x >> 16)
 }
 
 /// One emitter's living particles.
@@ -45,6 +107,9 @@ struct Pool {
     rng: Rng,
     /// A box around its particles, as of the last step.
     bounds: Option<Aabb>,
+    /// The emitter's `emitted` and `cleared` acted on so far.
+    emitted: u64,
+    cleared: u64,
 }
 
 /// Every emitter's particles, by the emitter's index in the scene.
@@ -56,10 +121,9 @@ pub(crate) struct Particles {
 
 impl Particles {
     /// Take the scene's emitters (by index: an emitter's particles stay
-    /// with its index).
+    /// with its index), acting on scripts' `Emit` and `Clear` and moving
+    /// locked particles with their emitter.
     pub(crate) fn set_emitters(&mut self, emitters: &[Emitter]) {
-        self.emitters.clear();
-        self.emitters.extend_from_slice(emitters);
         while self.pools.len() < emitters.len() {
             let seed = self.pools.len() as u64;
             self.pools.push(Pool {
@@ -69,6 +133,29 @@ impl Particles {
         }
         // Emitters gone: their particles go with them.
         self.pools.truncate(emitters.len());
+        for (i, (new, pool)) in emitters.iter().zip(&mut self.pools).enumerate() {
+            match self.emitters.get(i) {
+                Some(old) if new.look.locked => pool.follow(old, new),
+                Some(_) => {}
+                // A new emitter: calls made before it was drawn count.
+                None => (pool.emitted, pool.cleared) = (0, 0),
+            }
+            if new.cleared != pool.cleared {
+                pool.particles.clear();
+                pool.cleared = new.cleared;
+            }
+            // A different emitter took this index: its count starts here.
+            if new.emitted < pool.emitted {
+                pool.emitted = new.emitted;
+            }
+            let burst = (new.emitted - pool.emitted).min(MAX_BURST);
+            pool.emitted = new.emitted;
+            for _ in 0..burst {
+                pool.birth(new, 0.0);
+            }
+        }
+        self.emitters.clear();
+        self.emitters.extend_from_slice(emitters);
     }
 
     /// Move every particle on by `dt` seconds (each emitter's
@@ -109,7 +196,7 @@ impl Pool {
         }
         let look = &*emitter.look;
         let damping = (-look.drag * dt).exp();
-        let acceleration = emitter.rotation * look.acceleration;
+        let acceleration = acceleration(emitter);
         for p in &mut self.particles {
             p.age += dt;
             p.velocity = (p.velocity + acceleration * dt) * damping;
@@ -127,24 +214,69 @@ impl Pool {
             // Born some way into the step, so a steady rate doesn't
             // come out in layers.
             let age = self.rng.next() * dt;
-            let r = &mut self.rng;
-            let mut p = Particle {
-                position: emitter.position + r.in_ball() * look.spawn_radius,
-                velocity: emitter.rotation * look.velocity + r.in_ball() * look.spread,
-                age: 0.0,
-                lifetime: r.between(look.lifetime),
-                scale: r.between(look.size_spread),
-                rotation: r.next() * 360.0,
-                spin: r.between(look.spin) * if r.next() < 0.5 { -1.0 } else { 1.0 },
-            };
-            p.age = age;
-            p.velocity += acceleration * age;
-            p.position += p.velocity * age;
-            self.particles.push(p);
+            self.birth(emitter, age);
         }
     }
 
-    /// A box around its particles (their full size).
+    /// A new particle, `age` seconds old.
+    fn birth(&mut self, emitter: &Emitter, age: f32) {
+        let look = &*emitter.look;
+        let r = &mut self.rng;
+        let lifetime = r.between(look.lifetime);
+        // A lifetime of 0 emits nothing (creator-docs).
+        if lifetime <= 0.0 {
+            return;
+        }
+        let (offset, velocity) = spawn::spawn(look, r);
+        let rotation = r.between(look.rotation);
+        let mut spin = r.between(look.spin);
+        if look.spin_either_way && r.next() < 0.5 {
+            spin = -spin;
+        }
+        let (frame_rate, first_frame) = match look.flipbook {
+            Some(f) => {
+                let start = if f.start_random {
+                    r.next() * f.frames() as f32
+                } else {
+                    0.0
+                };
+                (r.between(f.framerate), start)
+            }
+            None => (0.0, 0.0),
+        };
+        let seed = (r.next() * 16_777_216.0) as u32;
+        let mut p = Particle {
+            position: emitter.position + emitter.rotation * offset,
+            velocity: emitter.rotation * velocity,
+            age,
+            lifetime,
+            scale: r.between(look.size_spread),
+            rotation,
+            spin,
+            seed,
+            frame_rate,
+            first_frame,
+        };
+        let acceleration = acceleration(emitter);
+        p.velocity += acceleration * age;
+        p.position += p.velocity * age;
+        self.particles.push(p);
+    }
+
+    /// Carry the particles of a locked emitter from where it was to where
+    /// it is.
+    fn follow(&mut self, old: &Emitter, new: &Emitter) {
+        if old.position == new.position && old.rotation == new.rotation {
+            return;
+        }
+        let turn: Mat3 = new.rotation * old.rotation.transpose();
+        for p in &mut self.particles {
+            p.position = new.position + turn * (p.position - old.position);
+            p.velocity = turn * p.velocity;
+        }
+    }
+
+    /// A box around its particles (their centres).
     fn bounds(&self) -> Option<Aabb> {
         let mut b = Aabb::EMPTY;
         for p in &self.particles {
@@ -157,15 +289,9 @@ impl Pool {
     }
 }
 
-impl Particle {
-    /// Its width in studs now.
-    pub(crate) fn size(&self, look: &EmitterLook) -> f32 {
-        look.size.at(self.life()) * self.scale
-    }
-
-    pub(crate) fn rotation(&self) -> f32 {
-        self.rotation
-    }
+/// An emitter's acceleration in the world.
+fn acceleration(emitter: &Emitter) -> Vec3 {
+    emitter.rotation * emitter.look.acceleration + emitter.look.world_acceleration
 }
 
 /// A small, fast random number generator (SplitMix64), seeded per
@@ -193,83 +319,31 @@ impl Rng {
         a + (b - a) * self.next()
     }
 
+    /// A number in [-1, 1).
+    fn signed(&mut self) -> f32 {
+        self.next() * 2.0 - 1.0
+    }
+
     /// A point in the unit ball, evenly.
     fn in_ball(&mut self) -> Vec3 {
         loop {
-            let v = Vec3::new(self.next(), self.next(), self.next()) * 2.0 - Vec3::ONE;
+            let v = Vec3::new(self.signed(), self.signed(), self.signed());
             if v.length_squared() <= 1.0 {
                 return v;
+            }
+        }
+    }
+
+    /// A point on the unit sphere, evenly.
+    fn on_sphere(&mut self) -> Vec3 {
+        loop {
+            let v = self.in_ball();
+            if v.length_squared() > 1e-6 {
+                return v.normalize();
             }
         }
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::scene::Curve;
-
-    fn look(rate: f32) -> Arc<EmitterLook> {
-        Arc::new(EmitterLook {
-            texture: None,
-            rate,
-            lifetime: [1.0, 1.0],
-            spawn_radius: 0.0,
-            velocity: Vec3::Y,
-            spread: 0.0,
-            acceleration: Vec3::ZERO,
-            drag: 0.0,
-            size: Curve::constant(1.0),
-            size_spread: [1.0, 1.0],
-            spin: [0.0, 0.0],
-            color: [1.0; 3],
-            brightness: Curve::constant(1.0),
-            alpha: Curve::constant(1.0),
-            light_emission: 0.0,
-            lit: false,
-        })
-    }
-
-    /// A steady rate keeps rate × lifetime alive; disabling stops births
-    /// and the living ones die out; time scale 0 freezes them.
-    #[test]
-    fn rate_lifetime_and_enabled() {
-        let mut e = Emitter {
-            position: Vec3::ZERO,
-            rotation: glam::Mat3::IDENTITY,
-            enabled: true,
-            time_scale: 1.0,
-            look: look(20.0),
-        };
-        let mut ps = Particles::default();
-        ps.set_emitters(std::slice::from_ref(&e));
-        for _ in 0..3 {
-            ps.step(1.0);
-        }
-        let alive = ps.pools[0].particles.len();
-        assert!((19..=21).contains(&alive), "{alive}");
-        let top = ps.pools[0]
-            .particles
-            .iter()
-            .map(|p| p.position.y)
-            .fold(0.0, f32::max);
-        assert!(top <= 1.0 && top > 0.9, "{top}");
-        e.time_scale = 0.0;
-        ps.set_emitters(std::slice::from_ref(&e));
-        ps.step(1.0);
-        assert_eq!(ps.pools[0].particles.len(), alive);
-        e.time_scale = 1.0;
-        e.enabled = false;
-        ps.set_emitters(std::slice::from_ref(&e));
-        ps.step(1.0);
-        assert!(!ps.any());
-    }
-
-    #[test]
-    fn curves() {
-        let c = Curve(vec![(0.0, 0.0), (0.5, 1.0), (1.0, 0.0)]);
-        assert_eq!(c.at(0.25), 0.5);
-        assert_eq!(c.at(0.75), 0.5);
-        assert_eq!(c.at(2.0), 0.0);
-    }
-}
+mod tests;

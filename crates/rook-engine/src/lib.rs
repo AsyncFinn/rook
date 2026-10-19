@@ -16,8 +16,9 @@ pub mod settings;
 
 pub use bridges::input::{ClickEvent, ClickKind, InputEvent};
 
-pub use bridges::render_changes::RenderChanges;
+pub use bridges::render_changes::{RenderChanges, is_effect_class};
 pub use bridges::sounds::{Emitter, Listener as SoundListener, PlayingSound};
+pub use rook_lua::EffectCall;
 pub use session::Session;
 
 use std::collections::HashMap;
@@ -219,10 +220,10 @@ impl DataModel {
         if duplicate_ids {
             // Studio's Output, word for word (observed in Studio 0.743 on a
             // place with two instances saved under one UniqueId).
-            engine
-                .runtime
-                .world_mut()
-                .push_log(MessageType::Error, "DM contains duplicate Unique ids".into());
+            engine.runtime.world_mut().push_log(
+                MessageType::Error,
+                "DM contains duplicate Unique ids".into(),
+            );
         }
         Ok(engine)
     }

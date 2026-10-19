@@ -1,10 +1,15 @@
-//! Fire, Smoke and Sparkles under parts and their Attachments in
-//! Workspace, as the renderer's particle emitters
-//! (docs/behavior/effects.md). Each is fitted to Studio 0.742.
+//! Visual effects in Workspace (docs/behavior/effects.md,
+//! docs/behavior/particle-emitters.md, docs/behavior/beams-and-trails.md):
+//! Fire, Smoke, Sparkles and ParticleEmitter as the renderer's particle
+//! emitters, Beam and Trail as its ribbons.
 
+mod classic;
+mod emitter;
+mod ribbons;
 mod textures;
 
-use rook_render::{Curve, Emitter, EmitterLook};
+use rook_engine::{EffectCall, is_effect_class};
+use rook_render::{Beam, Emitter, Trail};
 
 pub(super) use textures::EffectTextures;
 
@@ -12,28 +17,56 @@ use super::*;
 
 /// Whether `id` is an effect this module draws.
 pub(super) fn is_effect(dom: &Dom, id: InstanceId) -> bool {
-    matches!(dom.class_name(id), "Fire" | "Smoke" | "Sparkles")
+    is_effect_class(dom.class_name(id))
 }
 
-/// How many emitters an effect of `class` draws with.
-fn emitter_count(class: &str) -> usize {
-    match class {
-        // Its flames, and the core and trail in SecondaryColor.
-        "Fire" => 2,
-        _ => 1,
-    }
+/// Where an effect is drawn in the scene's lists. Each keeps its place
+/// while it exists, so particles and Trail pieces stay with it.
+#[derive(Debug, Clone, Copy)]
+enum Slot {
+    Emitters { first: usize, count: usize },
+    Beam(usize),
+    Trail(usize),
 }
 
-/// The effects in Workspace, the emitters they draw with, and the parts
-/// and Attachments that carry them.
+/// What scripts did to an effect beyond its properties.
+#[derive(Debug, Clone, Copy, Default)]
+struct Calls {
+    emitted: u64,
+    cleared: u64,
+    texture_offset: f32,
+}
+
+/// The scene's effect lists, which the cache keeps.
+pub(super) struct EffectLists<'a> {
+    pub(super) emitters: &'a mut Vec<Emitter>,
+    pub(super) beams: &'a mut Vec<Beam>,
+    pub(super) trails: &'a mut Vec<Trail>,
+}
+
+/// An effect's image by URL: its hash once loaded (noting that the effect
+/// waits for it while it loads).
+pub(super) type Images<'a> = dyn FnMut(InstanceId, &str) -> Option<ImageHash> + 'a;
+
+/// How an effect is read: the document, its images, the textures Fire,
+/// Smoke and Sparkles draw, and what scripts did to it.
+struct Reader<'a, 'b> {
+    dom: &'a Dom,
+    images: &'a mut Images<'b>,
+    textures: &'a EffectTextures,
+    calls: Calls,
+}
+
+/// The effects in Workspace, where they're drawn, and the instances that
+/// move or change them.
 #[derive(Debug, Default)]
 pub(super) struct EffectCache {
     ids: Vec<InstanceId>,
-    /// Each effect's first emitter in `Scene::emitters`.
-    first: Vec<usize>,
-    /// Indices into `ids` of the effects each part or Attachment carries,
-    /// and of each effect itself.
+    slots: Vec<Slot>,
+    /// Indices into `ids` of the effects each part or Attachment carries
+    /// (or a Beam or Trail runs between), and of each effect itself.
     holders: HashMap<InstanceId, Vec<usize>>,
+    calls: HashMap<InstanceId, Calls>,
     textures: Option<EffectTextures>,
 }
 
@@ -45,64 +78,94 @@ impl EffectCache {
         }
     }
 
+    /// Whether `id` is an effect drawn here.
+    pub(super) fn has(&self, id: InstanceId) -> bool {
+        self.ids.contains(&id)
+    }
+
     /// Find every effect in Workspace again, and read them all.
-    pub(super) fn find(&mut self, dom: &Dom, emitters: &mut Vec<Emitter>) {
+    pub(super) fn find(&mut self, dom: &Dom, drawn: EffectLists<'_>, images: &mut Images<'_>) {
         profiling::scope!("EffectCache::find");
+        drawn.emitters.clear();
+        drawn.beams.clear();
+        drawn.trails.clear();
+        self.ids.clear();
+        self.slots.clear();
+        self.holders.clear();
         let Some(ws) = dom.find_service("Workspace") else {
             return;
         };
         let mut ids = dom.descendants(ws);
         ids.retain(|id| is_effect(dom, *id));
-        self.ids = ids;
-        self.first.clear();
-        self.holders.clear();
-        emitters.clear();
-        for (i, &id) in self.ids.iter().enumerate() {
-            self.first.push(emitters.len());
-            self.holders.entry(id).or_default().push(i);
-            let mut holder = dom.parent(id);
-            while let Some(h) = holder {
-                self.holders.entry(h).or_default().push(i);
-                if dom.class_name(h) != "Attachment" {
-                    break;
-                }
-                holder = dom.parent(h);
+        let ids_set: HashSet<InstanceId> = ids.iter().copied().collect();
+        self.calls.retain(|id, _| ids_set.contains(id));
+        for (i, &id) in ids.iter().enumerate() {
+            for holder in holders(dom, id) {
+                self.holders.entry(holder).or_default().push(i);
             }
-            let read = self.read(dom, id);
-            emitters.extend(read);
+            let slot = match dom.class_name(id) {
+                "Beam" => {
+                    drawn.beams.push(self.reader(dom, id, images).beam(id));
+                    Slot::Beam(drawn.beams.len() - 1)
+                }
+                "Trail" => {
+                    drawn.trails.push(self.reader(dom, id, images).trail(id));
+                    Slot::Trail(drawn.trails.len() - 1)
+                }
+                _ => {
+                    let read = self.reader(dom, id, images).emitters(id);
+                    let first = drawn.emitters.len();
+                    let count = read.len();
+                    drawn.emitters.extend(read);
+                    Slot::Emitters { first, count }
+                }
+            };
+            self.slots.push(slot);
+        }
+        self.ids = ids;
+    }
+
+    /// Count scripts' effect calls, before the effects are read (again).
+    pub(super) fn note_calls(&mut self, calls: &[(InstanceId, EffectCall)]) {
+        for &(id, call) in calls {
+            let calls = self.calls.entry(id).or_default();
+            match call {
+                EffectCall::Emit(n) => calls.emitted += u64::from(n),
+                EffectCall::Clear => calls.cleared += 1,
+                EffectCall::TextureOffset(offset) => calls.texture_offset = offset,
+            }
         }
     }
 
-    /// Bring the emitters up to date with a frame's changes: effects whose
-    /// properties changed are read again, and those on parts and
-    /// Attachments that moved only move. Whether any changed.
+    /// Bring the effects up to date with a frame's changes (their calls
+    /// already noted): those whose properties or calls changed are read
+    /// again, and those on parts and Attachments that only moved only
+    /// move. Whether any changed.
     pub(super) fn changed(
         &mut self,
         dom: &Dom,
         changes: &RenderChanges,
-        emitters: &mut Vec<Emitter>,
+        drawn: EffectLists<'_>,
+        images: &mut Images<'_>,
     ) -> bool {
-        let holders = &self.holders;
-        let placed = changes.placed.iter().any(|id| holders.contains_key(id));
+        let placed = changes
+            .placed
+            .iter()
+            .any(|id| self.holders.contains_key(id));
         if changes.effects_placed || placed {
-            self.find(dom, emitters);
+            self.find(dom, drawn, images);
             return true;
         }
-        let mut any = false;
+        let holders = &self.holders;
         let stale: HashSet<usize> = changes
             .effects
             .iter()
             .chain(&changes.parts)
+            .chain(changes.effect_calls.iter().map(|(id, _)| id))
             .filter_map(|id| holders.get(id))
             .flatten()
             .copied()
             .collect();
-        for &i in &stale {
-            let read = self.read(dom, self.ids[i]);
-            let first = self.first[i];
-            emitters.splice(first..first + read.len(), read);
-            any = true;
-        }
         let moved: HashSet<usize> = changes
             .moved
             .iter()
@@ -111,240 +174,181 @@ impl EffectCache {
             .copied()
             .filter(|i| !stale.contains(i))
             .collect();
+        let any = !stale.is_empty() || !moved.is_empty();
+        self.reread(
+            dom,
+            stale,
+            drawn.emitters,
+            drawn.beams,
+            drawn.trails,
+            images,
+        );
         for i in moved {
-            let id = self.ids[i];
-            let Some(frame) = holder_frame(dom, id) else {
-                continue;
-            };
-            let first = self.first[i];
-            for e in &mut emitters[first..first + emitter_count(dom.class_name(id))] {
-                e.position = frame.position;
-                e.rotation = frame.rotation;
-            }
-            any = true;
+            self.moved(dom, i, drawn.emitters, drawn.beams, drawn.trails);
         }
         any
     }
 
-    /// The emitters effect `id` draws with now: always as many for its
-    /// class, disabled where Studio draws nothing (not under a part or an
-    /// Attachment).
-    fn read(&self, dom: &Dom, id: InstanceId) -> Vec<Emitter> {
-        let textures = self.textures.as_ref().expect("made with textures");
-        let class = dom.class_name(id);
-        let frame = holder_frame(dom, id);
-        let enabled = frame.is_some() && boolean(dom, id, "Enabled") != Some(false);
-        let frame = frame.unwrap_or(CFrame::IDENTITY);
-        let time_scale = number(dom, id, "TimeScale").unwrap_or(1.0).clamp(0.0, 1.0);
-        let looks = match class {
-            "Fire" => fire(dom, id, textures),
-            "Smoke" => vec![smoke(dom, id, textures)],
-            _ => vec![sparkles(dom, id, textures)],
-        };
-        looks
-            .into_iter()
-            .map(|look| Emitter {
-                position: frame.position,
-                rotation: frame.rotation,
-                enabled,
-                time_scale,
-                look: Arc::new(look),
-            })
-            .collect()
+    /// Read the effects `ids` again (their images loaded, or scripts
+    /// called them). Whether any is drawn here.
+    pub(super) fn reread_ids(
+        &mut self,
+        dom: &Dom,
+        ids: &[InstanceId],
+        drawn: EffectLists<'_>,
+        images: &mut Images<'_>,
+    ) -> bool {
+        let stale: HashSet<usize> = ids
+            .iter()
+            .filter_map(|id| self.ids.iter().position(|e| e == id))
+            .collect();
+        let any = !stale.is_empty();
+        self.reread(
+            dom,
+            stale,
+            drawn.emitters,
+            drawn.beams,
+            drawn.trails,
+            images,
+        );
+        any
     }
+
+    fn reread(
+        &self,
+        dom: &Dom,
+        stale: HashSet<usize>,
+        emitters: &mut [Emitter],
+        beams: &mut [Beam],
+        trails: &mut [Trail],
+        images: &mut Images<'_>,
+    ) {
+        for i in stale {
+            let id = self.ids[i];
+            let mut reader = self.reader(dom, id, images);
+            match self.slots[i] {
+                Slot::Emitters { first, count } => {
+                    let read = reader.emitters(id);
+                    for (slot, e) in emitters[first..first + count].iter_mut().zip(read) {
+                        *slot = e;
+                    }
+                }
+                Slot::Beam(b) => beams[b] = reader.beam(id),
+                Slot::Trail(t) => trails[t] = reader.trail(id),
+            }
+        }
+    }
+
+    /// Effect `i`'s holder moved: carry it along.
+    fn moved(
+        &self,
+        dom: &Dom,
+        i: usize,
+        emitters: &mut [Emitter],
+        beams: &mut [Beam],
+        trails: &mut [Trail],
+    ) {
+        let id = self.ids[i];
+        match self.slots[i] {
+            Slot::Emitters { first, count } => {
+                let Some(frame) = holder_frame(dom, id) else {
+                    return;
+                };
+                for e in &mut emitters[first..first + count] {
+                    e.position = frame.position;
+                    e.rotation = frame.rotation;
+                }
+            }
+            Slot::Beam(b) => {
+                if let Some(ends) = ribbons::anchors(dom, id) {
+                    beams[b].ends = ends;
+                }
+            }
+            Slot::Trail(t) => {
+                if let Some([a, z]) = ribbons::anchors(dom, id) {
+                    trails[t].ends = [a.position, z.position];
+                }
+            }
+        }
+    }
+
+    fn reader<'a, 'b>(
+        &'a self,
+        dom: &'a Dom,
+        id: InstanceId,
+        images: &'a mut Images<'b>,
+    ) -> Reader<'a, 'b> {
+        Reader {
+            dom,
+            images,
+            textures: self.textures.as_ref().expect("made with textures"),
+            calls: self.calls.get(&id).copied().unwrap_or_default(),
+        }
+    }
+}
+
+impl Reader<'_, '_> {
+    /// Effect `id`'s image (`Texture`), once loaded.
+    fn texture(&mut self, id: InstanceId) -> Option<ImageHash> {
+        let url = content_url(self.dom, id, &["TextureContent", "Texture"]);
+        if url.is_empty() {
+            return None;
+        }
+        (self.images)(id, &url)
+    }
+}
+
+/// The instances whose changes change effect `id`: itself, and the part
+/// and Attachment it hangs from, or a Beam's or Trail's Attachments and
+/// their parts.
+fn holders(dom: &Dom, id: InstanceId) -> Vec<InstanceId> {
+    let mut out = vec![id];
+    if matches!(dom.class_name(id), "Beam" | "Trail") {
+        for name in ["Attachment0", "Attachment1"] {
+            if let Some(a) = dom.ref_property(id, name) {
+                out.push(a);
+                out.extend(dom.parent(a));
+            }
+        }
+        return out;
+    }
+    let mut holder = dom.parent(id);
+    while let Some(h) = holder {
+        out.push(h);
+        if dom.class_name(h) != "Attachment" {
+            break;
+        }
+        holder = dom.parent(h);
+    }
+    out
+}
+
+/// An instance's `CFrame` property.
+fn cframe(dom: &Dom, id: InstanceId) -> Option<CFrame> {
+    match dom.property_by_name(id, "CFrame")? {
+        Value::CFrame(cf) => Some(cf),
+        _ => None,
+    }
+}
+
+/// An Attachment's frame in the world, under a part. `None` elsewhere.
+fn attachment_frame(dom: &Dom, attachment: InstanceId) -> Option<CFrame> {
+    let part = dom.parent(attachment).filter(|&p| is_part(dom, p))?;
+    Some(cframe(dom, part)? * cframe(dom, attachment)?)
 }
 
 /// Where an effect emits from and which way: its part's CFrame, or its
 /// Attachment's in the world. `None` when it's under neither.
 fn holder_frame(dom: &Dom, id: InstanceId) -> Option<CFrame> {
     let parent = dom.parent(id)?;
-    let cframe = |id| match dom.property_by_name(id, "CFrame")? {
-        Value::CFrame(cf) => Some(cf),
-        _ => None,
-    };
     if is_part(dom, parent) {
-        return cframe(parent);
+        return cframe(dom, parent);
     }
     if dom.class_name(parent) == "Attachment" {
-        let part = dom.parent(parent).filter(|&p| is_part(dom, p))?;
-        return Some(cframe(part)? * cframe(parent)?);
+        return attachment_frame(dom, parent);
     }
     None
 }
 
-/// Keypoints from a table of values at even steps over a particle's life.
-fn even(values: &[f32]) -> Curve {
-    let last = (values.len() - 1).max(1) as f32;
-    Curve(
-        values
-            .iter()
-            .enumerate()
-            .map(|(i, &v)| (i as f32 / last, v))
-            .collect(),
-    )
-}
-
-/// Fire: flames in `Color` that rise faster the higher `Heat` (its
-/// acceleration in studs/s², halved), as wide as about half its `Size`,
-/// covering what's behind and glowing; and a smaller, longer-lived core
-/// and trail in `SecondaryColor` added on top. Neither is lit.
-fn fire(dom: &Dom, id: InstanceId, textures: &EffectTextures) -> Vec<EmitterLook> {
-    let size = number(dom, id, "Size").unwrap_or(5.0).clamp(2.0, 30.0);
-    let heat = number(dom, id, "Heat").unwrap_or(9.0).clamp(-25.0, 25.0);
-    let primary = color(dom, id, "Color").unwrap_or([0.925, 0.545, 0.275]);
-    let secondary = color(dom, id, "SecondaryColor").unwrap_or([0.545, 0.314, 0.216]);
-    let rise = Vec3::new(0.0, heat * 0.5, 0.0);
-    let flames = EmitterLook {
-        texture: Some(textures.fire),
-        rate: 40.0,
-        lifetime: [1.0, 1.4],
-        spawn_radius: 0.12 * size,
-        velocity: Vec3::ZERO,
-        spread: 0.05 * size,
-        acceleration: rise,
-        drag: 0.0,
-        size: Curve(vec![(0.0, 0.4 * size), (1.0, 0.15 * size)]),
-        size_spread: [0.8, 1.2],
-        spin: [0.0, 60.0],
-        color: primary,
-        brightness: Curve(vec![(0.0, 20.0), (0.5, 14.0), (0.75, 2.0), (1.0, 0.0)]),
-        alpha: Curve(vec![(0.0, 0.0), (0.1, 1.0), (0.7, 0.8), (1.0, 0.0)]),
-        light_emission: 0.0,
-        lit: false,
-    };
-    let core = EmitterLook {
-        texture: Some(textures.fire),
-        rate: 40.0,
-        lifetime: [1.3, 1.9],
-        spawn_radius: 0.05 * size,
-        velocity: Vec3::ZERO,
-        spread: 0.05 * size,
-        acceleration: rise * 1.1,
-        drag: 0.0,
-        size: Curve(vec![(0.0, 0.3 * size), (1.0, 0.1 * size)]),
-        size_spread: [0.8, 1.2],
-        spin: [0.0, 60.0],
-        color: secondary,
-        brightness: Curve::constant(4.0),
-        alpha: Curve(vec![(0.0, 0.0), (0.15, 0.8), (0.6, 0.5), (1.0, 0.0)]),
-        light_emission: 1.0,
-        lit: false,
-    };
-    vec![flames, core]
-}
-
-/// Smoke: big, lit puffs in `Color` rising at `RiseVelocity` and growing
-/// from `Size` by about 4 studs a second, as opaque as `Opacity` at their
-/// thickest, a third of the way through their 5 seconds.
-fn smoke(dom: &Dom, id: InstanceId, textures: &EffectTextures) -> EmitterLook {
-    let size = number(dom, id, "Size").unwrap_or(1.0).clamp(0.1, 100.0);
-    let opacity = number(dom, id, "Opacity").unwrap_or(0.5).clamp(0.0, 1.0);
-    let rise = number(dom, id, "RiseVelocity")
-        .unwrap_or(1.0)
-        .clamp(-25.0, 25.0);
-    // The install's smoke ramp (`textures/particles/smoke_color.dds`
-    // alpha), in sixteenths of the life.
-    let ramp = [
-        0.02, 0.07, 0.22, 0.42, 0.58, 0.63, 0.57, 0.45, 0.32, 0.22, 0.15, 0.11, 0.07, 0.05, 0.02,
-        0.0,
-    ];
-    let alpha: Vec<f32> = ramp.iter().map(|a| (a * opacity * 3.6).min(1.0)).collect();
-    EmitterLook {
-        texture: Some(textures.smoke),
-        rate: 10.0,
-        lifetime: [4.5, 5.5],
-        spawn_radius: 0.1 * size,
-        velocity: Vec3::new(0.0, rise, 0.0),
-        spread: 3.0,
-        acceleration: Vec3::ZERO,
-        drag: 0.4,
-        size: Curve(vec![(0.0, size + 1.0), (1.0, size + 14.0)]),
-        size_spread: [0.8, 1.2],
-        spin: [0.0, 20.0],
-        color: color(dom, id, "Color").unwrap_or([1.0; 3]),
-        brightness: Curve::constant(1.0),
-        alpha: even(&alpha),
-        light_emission: 0.0,
-        lit: true,
-    }
-}
-
-/// Sparkles: stars in `SparkleColor` thrown out a few studs every way
-/// (more upward), lighting what's behind them.
-fn sparkles(dom: &Dom, id: InstanceId, textures: &EffectTextures) -> EmitterLook {
-    EmitterLook {
-        texture: Some(textures.sparkles),
-        rate: 30.0,
-        lifetime: [1.0, 1.6],
-        spawn_radius: 0.5,
-        velocity: Vec3::new(0.0, 2.0, 0.0),
-        spread: 8.0,
-        acceleration: Vec3::ZERO,
-        drag: 1.0,
-        size: Curve::constant(1.6),
-        size_spread: [0.4, 1.4],
-        spin: [0.0, 90.0],
-        color: color(dom, id, "SparkleColor").unwrap_or([0.565, 0.098, 1.0]),
-        brightness: Curve::constant(1.8),
-        alpha: Curve(vec![
-            (0.0, 0.0),
-            (0.2, 0.1),
-            (0.45, 0.85),
-            (0.7, 0.55),
-            (1.0, 0.0),
-        ]),
-        light_emission: 1.0,
-        lit: false,
-    }
-}
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use rook_engine::Options;
-
-    const PLACE: &str = r#"<roblox version="4">
-<Item class="Workspace" referent="W"><Properties><string name="Name">Workspace</string></Properties>
-<Item class="Part" referent="P"><Properties><string name="Name">Holder</string><bool name="Anchored">true</bool></Properties>
-<Item class="Fire" referent="F"><Properties><string name="Name">Fire</string></Properties></Item>
-<Item class="Smoke" referent="S"><Properties><string name="Name">Smoke</string></Properties></Item>
-</Item></Item>
-<Item class="ServerScriptService" referent="SS"><Properties><string name="Name">ServerScriptService</string></Properties>
-<Item class="Script" referent="X"><Properties><string name="Name">Script</string><ProtectedString name="Source"><![CDATA[
-task.wait(0.5)
-local holder = workspace.Holder
-holder.Fire.Enabled = false
-holder.Smoke.Color = Color3.new(1, 0, 0)
-holder.Position = Vector3.new(10, 0, 0)
-]]></ProtectedString></Properties></Item></Item>
-</roblox>"#;
-
-    /// A script switching an effect off, changing its colour and moving
-    /// its part changes the emitters drawn.
-    #[test]
-    fn scripts_redraw_effects() {
-        let mut dm = DataModel::load_place(PLACE.as_bytes(), &Options::default()).unwrap();
-        dm.start();
-        dm.take_render_changes();
-        let content = Arc::new(Resolver::new(rook_content::Config::from_env(false)));
-        let mut cache = SceneCache::new(&dm.runtime().world().dom, content, Vec3::ZERO);
-        // Fire's two emitters, then Smoke's.
-        let e = &cache.scene.emitters;
-        assert_eq!(e.len(), 3);
-        assert!(e.iter().all(|e| e.enabled));
-        dm.run_for(1.0);
-        let changes = dm.take_render_changes();
-        assert_ne!(
-            cache.apply(&dm.runtime().world().dom, &changes),
-            SceneChange::None
-        );
-        let e = &cache.scene.emitters;
-        assert!(!e[0].enabled && !e[1].enabled && e[2].enabled);
-        assert_eq!(e[2].look.color, [1.0, 0.0, 0.0]);
-        assert!(
-            e.iter().all(|e| e.position.x == 10.0),
-            "{:?}",
-            e[0].position
-        );
-    }
-}
+mod tests;

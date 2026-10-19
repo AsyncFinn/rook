@@ -13,14 +13,17 @@ mod gpu;
 mod mesh;
 mod particles;
 mod renderer;
+mod ribbons;
 mod scene;
 mod surfaces;
 
 pub use scene::{
-    Camera, Curve, Detile, DrawShape, Emitter, EmitterLook, Image, ImageHash, ImagePlacement,
-    Layer, LightShape, Lighting, LocalLight, MapAlpha, Material, MaterialMaps, MaterialSet, Mesh,
-    MeshHash, NormalId, PartInstance, PartShape, SKYBOX_FACES, Scene, SurfacePattern,
-    TERRAIN_LAYERS, TerrainLayer, TerrainLook, TilePattern, Tiling, Tonemapper, TrussShape,
+    Anchor, Beam, Camera, Curve, Detile, DrawShape, Emitter, EmitterLook, EmitterShape, Flipbook,
+    FlipbookMode, Image, ImageHash, ImagePlacement, InOut, Layer, Lerp, LightShape, Lighting,
+    LocalLight, MapAlpha, Material, MaterialMaps, MaterialSet, Mesh, MeshHash, NormalId,
+    Orientation, PartInstance, PartShape, RibbonLook, SKYBOX_FACES, Scene, Sequence, Spawn,
+    SurfacePattern, TERRAIN_LAYERS, TerrainLayer, TerrainLook, TextureMode, TilePattern, Tiling,
+    Tonemapper, Trail, TrussShape,
 };
 
 // Content hashes are 32 bytes: FxHash keeps lookups by them cheap.

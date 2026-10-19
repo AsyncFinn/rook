@@ -12,9 +12,9 @@ use rook_dom::{Dom, InstanceId};
 use rook_engine::{DataModel, RenderChanges};
 use rook_physics::{is_part, part_shape, workspace_parts};
 use rook_render::{
-    Camera, DrawShape, ImageHash, ImagePlacement, Layer, LightShape, Lighting, LocalLight,
+    Camera, Curve, DrawShape, ImageHash, ImagePlacement, Layer, LightShape, Lighting, LocalLight,
     MapAlpha, Material, MaterialMaps, MaterialSet, MeshHash, NormalId, PartInstance, Scene,
-    TilePattern, Tiling,
+    Sequence, TilePattern, Tiling,
 };
 use rook_types::{
     CFrame, MeshKind, MeshLook, SurfaceType, TrussLook, TrussStyle, Value, mesh_part_scale,
@@ -33,7 +33,7 @@ mod report;
 mod terrain;
 mod union;
 
-use effects::{EffectCache, EffectTextures};
+use effects::{EffectCache, EffectLists, EffectTextures, Images};
 use loading::*;
 use look::*;
 use props::*;
@@ -110,8 +110,11 @@ pub struct SceneCache {
     /// Indices into `light_ids` of the lights each part or Attachment
     /// carries, and of each light itself.
     light_holders: HashMap<InstanceId, Vec<usize>>,
-    /// Fire, Smoke and Sparkles, as `scene.emitters`.
+    /// The visual effects, as `scene.emitters`, `beams` and `trails`.
     effects: EffectCache,
+    /// An effect changed outside [`SceneCache::apply`] (its image
+    /// arrived).
+    effects_loaded: bool,
     /// Files that didn't load, reported once loading settles.
     report: report::Report,
 }
@@ -140,6 +143,7 @@ impl SceneCache {
             light_ids: Vec::new(),
             light_holders: HashMap::new(),
             effects: EffectCache::new(textures),
+            effects_loaded: false,
             report: report::Report::default(),
         };
         cache.rebuild(dom);
@@ -175,7 +179,7 @@ impl SceneCache {
         self.shown.retain(|id, _| index.contains_key(id));
         self.scene.lighting = self.lighting(dom);
         self.find_lights(dom);
-        self.effects.find(dom, &mut self.scene.emitters);
+        self.with_effects(|effects, drawn, images| effects.find(dom, drawn, images));
     }
 
     /// Find every local light in Workspace again, and read them.
@@ -247,6 +251,7 @@ impl SceneCache {
     /// Apply a frame's changes.
     pub fn apply(&mut self, dom: &Dom, changes: &RenderChanges) -> SceneChange {
         profiling::scope!("SceneCache::apply");
+        self.effects.note_calls(&changes.effect_calls);
         if changes.full {
             self.rebuild(dom);
             return SceneChange::Full;
@@ -255,7 +260,8 @@ impl SceneCache {
             self.scene.lighting = self.lighting(dom);
         }
         let lights = self.lights_changed(dom, changes);
-        let effects = self.effects.changed(dom, changes, &mut self.scene.emitters);
+        let effects = self
+            .with_effects(|effects, drawn, images| effects.changed(dom, changes, drawn, images));
         let mut changed = Vec::new();
         if changes.terrain {
             match self.terrain_changed(dom) {
@@ -383,8 +389,49 @@ impl SceneCache {
 
     /// Whether the lighting changed since the last call outside
     /// [`SceneCache::apply`] (a skybox image arrived).
+    /// Apply scripts' effect calls (`Emit` and the like) made before this
+    /// scene was built from the DataModel. Whether any effect changed.
+    pub fn take_effect_calls(
+        &mut self,
+        dom: &Dom,
+        calls: &[(InstanceId, rook_engine::EffectCall)],
+    ) -> bool {
+        self.effects.note_calls(calls);
+        let ids: Vec<InstanceId> = calls.iter().map(|c| c.0).collect();
+        self.with_effects(|cache, drawn, images| cache.reread_ids(dom, &ids, drawn, images))
+    }
+
+    /// Whether the lighting or an effect changed outside
+    /// [`SceneCache::apply`] (an image they wait for arrived).
     pub fn take_lighting_change(&mut self) -> bool {
-        std::mem::take(&mut self.lighting_changed)
+        std::mem::take(&mut self.lighting_changed) | std::mem::take(&mut self.effects_loaded)
+    }
+
+    /// Run `f` on the effect cache with the scene's effect lists and a way
+    /// to load the effects' images.
+    fn with_effects<R>(
+        &mut self,
+        f: impl FnOnce(&mut EffectCache, EffectLists<'_>, &mut Images<'_>) -> R,
+    ) -> R {
+        let mut cache = std::mem::take(&mut self.effects);
+        let mut emitters = std::mem::take(&mut self.scene.emitters);
+        let mut beams = std::mem::take(&mut self.scene.beams);
+        let mut trails = std::mem::take(&mut self.scene.trails);
+        let drawn = EffectLists {
+            emitters: &mut emitters,
+            beams: &mut beams,
+            trails: &mut trails,
+        };
+        let mut images = |id: InstanceId, url: &str| match self.file_state(id, url, Want::Image) {
+            FileState::Loaded(hash) => Some(ImageHash(hash)),
+            FileState::Loading | FileState::Failed => None,
+        };
+        let out = f(&mut cache, drawn, &mut images);
+        self.effects = cache;
+        self.scene.emitters = emitters;
+        self.scene.beams = beams;
+        self.scene.trails = trails;
+        out
     }
 }
 

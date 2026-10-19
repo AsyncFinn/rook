@@ -105,6 +105,18 @@ pub struct InputState {
     pub mouse_object: Option<InstanceId>,
 }
 
+/// A visual effect's method a script called: what the renderer applies
+/// besides properties.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum EffectCall {
+    /// `ParticleEmitter:Emit(count)`.
+    Emit(u32),
+    /// `ParticleEmitter:Clear()`, `Trail:Clear()`.
+    Clear,
+    /// `Beam:SetTextureOffset(offset)`.
+    TextureOffset(f32),
+}
+
 /// What scripts did to a Sound that isn't a property (see
 /// `api/methods/sound.rs`).
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
@@ -205,6 +217,8 @@ pub struct World {
     /// play once.
     pub local_sounds: Vec<InstanceId>,
     pub audio: AudioState,
+    /// Effect methods called since the renderer last took them, in order.
+    pub effect_calls: Vec<(InstanceId, EffectCall)>,
 }
 
 impl World {
@@ -233,6 +247,7 @@ impl World {
             listener: Listener::Camera,
             local_sounds: Vec::new(),
             audio: AudioState::default(),
+            effect_calls: Vec::new(),
         }
     }
 

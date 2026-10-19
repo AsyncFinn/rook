@@ -21,6 +21,52 @@ pub(super) fn vector3(dom: &Dom, id: InstanceId, name: &str) -> Option<Vec3> {
     dom.property_by_name(id, name)?.as_vector3()
 }
 
+/// A NumberSequence as a curve with its keypoints' envelopes.
+pub(super) fn number_sequence(dom: &Dom, id: InstanceId, name: &str) -> Option<Sequence> {
+    let Value::NumberSequence(seq) = dom.property_by_name(id, name)? else {
+        return None;
+    };
+    if seq.keypoints.is_empty() {
+        return None;
+    }
+    let curve = Curve(seq.keypoints.iter().map(|k| (k.time, k.value)).collect());
+    let envelope: Vec<f32> = seq.keypoints.iter().map(|k| k.envelope).collect();
+    let envelope = if envelope.iter().all(|&e| e == 0.0) {
+        Vec::new()
+    } else {
+        envelope
+    };
+    Some(Sequence { curve, envelope })
+}
+
+/// A ColorSequence as a curve of sRGB colours.
+pub(super) fn color_sequence(dom: &Dom, id: InstanceId, name: &str) -> Option<Curve<[f32; 3]>> {
+    let Value::ColorSequence(seq) = dom.property_by_name(id, name)? else {
+        return None;
+    };
+    let points: Vec<_> = seq
+        .keypoints
+        .iter()
+        .map(|k| (k.time, [k.color.r, k.color.g, k.color.b]))
+        .collect();
+    (!points.is_empty()).then_some(Curve(points))
+}
+
+/// A NumberRange's minimum and maximum.
+pub(super) fn number_range(dom: &Dom, id: InstanceId, name: &str) -> Option<[f32; 2]> {
+    let Value::NumberRange(r) = dom.property_by_name(id, name)? else {
+        return None;
+    };
+    Some([r.min, r.max])
+}
+
+pub(super) fn vector2(dom: &Dom, id: InstanceId, name: &str) -> Option<Vec2> {
+    let Value::Vector2(v) = dom.property_by_name(id, name)? else {
+        return None;
+    };
+    Some(Vec2::new(v.x(), v.y()))
+}
+
 pub(super) fn enum_value(dom: &Dom, id: InstanceId, name: &str) -> Option<u32> {
     dom.property_by_name(id, name)?.as_enum()
 }
