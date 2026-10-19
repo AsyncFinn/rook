@@ -39,6 +39,7 @@ pub(crate) fn bench(
     let secs = |t: Instant| t.elapsed().as_secs_f64();
     game.set_viewport(width, height);
     let mut mouse = 0.0;
+    let mut mouse_times = stats::Times::default();
     let mut whole = stats::Times::default();
     // When the content loaders last ran out of work, and the frames
     // until then.
@@ -57,6 +58,7 @@ pub(crate) fn bench(
             y: height as f32 / 2.0,
         });
         mouse += secs(t);
+        mouse_times.push(t.elapsed());
         let t = Instant::now();
         game.step();
         sim += secs(t);
@@ -126,6 +128,7 @@ pub(crate) fn bench(
     if timing_gpu {
         eprintln!("render medians: GPU shadow pass {gpu_shadow:.2} ms, main pass {gpu_main:.2} ms");
     }
+    eprintln!("mouse: {}", mouse_times.summary());
     eprintln!("server step: {}", game.server_steps.summary());
     if !game.client_steps.is_empty() {
         eprintln!("client step: {}", game.client_steps.summary());

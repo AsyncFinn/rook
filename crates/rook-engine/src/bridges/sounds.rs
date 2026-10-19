@@ -19,7 +19,7 @@ mod players;
 
 pub use playback::{Emitter, Listener, PlayingSound};
 
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 
 use rook_content::decode::audio::Audio;
 use rook_content::{ContentRef, Failure, Fetched, Ticket};
@@ -51,6 +51,11 @@ pub(crate) struct Sounds {
     /// Sounds in the DataModel, with the file each refers to (`None` for
     /// an empty or malformed `SoundId`, which never loads).
     tracked: HashMap<InstanceId, Option<ContentRef>>,
+    /// The tracked sounds each frame moves on: AudioPlayers, and Sounds
+    /// that may be playing (`Playing` set since they were last looked at,
+    /// or a file still loading). A place's thousands of idle sounds cost
+    /// nothing a frame.
+    active: BTreeSet<InstanceId>,
     /// Each file once, however many sounds share it.
     files: HashMap<ContentRef, Load>,
     pub(crate) tickets: HashMap<Ticket, ContentRef>,
@@ -117,6 +122,12 @@ impl Sounds {
             _ => None,
         }
     }
+
+    /// Whether a sound's file is still loading.
+    fn loading(&self, id: InstanceId) -> bool {
+        let file = self.tracked.get(&id).and_then(Option::as_ref);
+        matches!(file.and_then(|f| self.files.get(f)), Some(Load::Loading))
+    }
 }
 
 /// The properties whose change makes a sound look at its file again, by
@@ -126,6 +137,8 @@ impl Sounds {
 #[derive(Debug)]
 struct SoundProps {
     content: Vec<rook_reflection::PropertyId>,
+    /// Sound's `Playing`.
+    playing: Vec<rook_reflection::PropertyId>,
 }
 
 impl SoundProps {
@@ -144,7 +157,8 @@ impl SoundProps {
                 "AudioPlayer",
                 &["AudioContent", "Asset", "IsPlaying", "AutoLoad"],
             ));
-            SoundProps { content }
+            let playing = find("Sound", &["Playing"]);
+            SoundProps { content, playing }
         });
         &PROPS
     }
@@ -174,6 +188,11 @@ impl DataModel {
             match c {
                 Change::Property { id, property } if ids.content.contains(property) => {
                     sounds.dirty.insert(*id);
+                }
+                Change::Property { id, property }
+                    if ids.playing.contains(property) && sounds.tracked.contains_key(id) =>
+                {
+                    sounds.active.insert(*id);
                 }
                 Change::Reparented { subtree, .. } => {
                     let moved = subtree.iter().filter(|&&i| is_sound(dom, i));
@@ -220,6 +239,7 @@ impl DataModel {
         for id in dirty {
             if dom.get(id).is_none() {
                 sounds.tracked.remove(&id);
+                sounds.active.remove(&id);
                 sounds.seen_players.remove(&id);
                 continue;
             }
@@ -231,6 +251,7 @@ impl DataModel {
                         .one_shots
                         .push(playback::OneShot::new(dom, id, audio, None));
                 }
+                sounds.active.remove(&id);
                 if sounds.tracked.remove(&id).is_some() {
                     let _ = dom.set_property_by_name(id, "IsLoaded", Value::Bool(false));
                 }
@@ -263,6 +284,7 @@ impl DataModel {
                     .clone(),
             };
             sounds.tracked.insert(id, r);
+            sounds.active.insert(id);
             apply(dom, id, &load, events);
         }
         wanted

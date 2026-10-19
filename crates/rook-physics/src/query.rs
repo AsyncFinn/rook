@@ -254,21 +254,39 @@ impl Physics {
         self.build_terrain_along(origin, dir, max);
         let ray = Ray::new(to_rapier(origin), to_rapier(dir));
         let accept = self.part_filter(dom, filter);
-        let pipeline = self.world.query_pipeline();
-        // Solid, so a ray starting inside a part hits it at 0 and is
-        // skipped, then hits the next part along. Terrain is a surface,
-        // hit only from outside.
-        let (h, part, hit) = pipeline
-            .intersect_ray(ray, max, true)
-            .filter_map(|(h, _, hit)| {
-                let hit = match self.terrain.material(h) {
-                    Some(_) => self.terrain_ray(h, &ray, max)?,
-                    None => hit,
-                };
+        // Parts: the nearest hit, found nearest first so the search stops
+        // there instead of testing every part the ray passes. A part the
+        // ray starts inside (or on) would be hit at 0: it's skipped, and
+        // the next part along is hit.
+        let part_ok = |h: ColliderHandle, co: &Collider| {
+            self.terrain.material(h).is_none()
+                && accept(h).is_some()
+                && !(co.compute_aabb().contains_local_point(ray.origin)
+                    && co
+                        .shape()
+                        .cast_ray(co.position(), &ray, max, true)
+                        .is_some_and(|t| t <= 0.0))
+        };
+        let parts = self
+            .world
+            .query_pipeline_with_filter(QueryFilter::new().predicate(&part_ok))
+            .cast_ray_and_get_normal(&ray, max, true)
+            .and_then(|(h, hit)| Some((h, *self.colliders.get(&h)?, hit)));
+        // Terrain is a surface, hit only from outside, and only nearer
+        // than the part hit.
+        let reach = parts.map_or(max, |(.., hit)| hit.time_of_impact);
+        let is_terrain = |h: ColliderHandle, _: &Collider| self.terrain.material(h).is_some();
+        let terrain = self
+            .world
+            .query_pipeline_with_filter(QueryFilter::new().predicate(&is_terrain))
+            .intersect_ray(ray, reach, true)
+            .filter_map(|(h, ..)| {
+                let hit = self.terrain_ray(h, &ray, reach)?;
                 Some((h, accept(h)?, hit))
             })
             .filter(|(.., hit)| hit.time_of_impact > 0.0)
-            .min_by(|a, b| a.2.time_of_impact.total_cmp(&b.2.time_of_impact))?;
+            .min_by(|a, b| a.2.time_of_impact.total_cmp(&b.2.time_of_impact));
+        let (h, part, hit) = terrain.or(parts)?;
         let distance = hit.time_of_impact;
         Some(Hit {
             part,

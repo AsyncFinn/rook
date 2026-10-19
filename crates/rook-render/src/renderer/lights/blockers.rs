@@ -39,12 +39,77 @@ pub(super) struct Blockers {
     /// A blocker changed since the voxels were marked.
     changed: bool,
     marked_at: Option<Instant>,
+    /// The voxels as last marked, kept so parts that change only unmark
+    /// their old box and mark their new one.
+    grid: Option<Grid>,
+    /// Blockers changed since the grid was marked: (before, after).
+    moved: Vec<(Option<Blocker>, Option<Blocker>)>,
+}
+
+/// The marked voxels of a volume.
+#[derive(Debug)]
+struct Grid {
+    origin: Vec3,
+    dims: [u32; 3],
+    /// Blockers covering each voxel.
+    counts: Vec<u32>,
+    /// A bit per voxel covered at all, as the fill pass reads it.
+    bits: Vec<u32>,
+}
+
+impl Grid {
+    fn new(origin: Vec3, dims: [u32; 3]) -> Self {
+        let voxels = (dims[0] * dims[1] * dims[2]) as usize;
+        Self {
+            origin,
+            dims,
+            counts: vec![0; voxels],
+            bits: vec![0; voxels.div_ceil(32)],
+        }
+    }
+
+    /// Count `b` in (`add`) or out of the voxels whose centres it holds.
+    fn apply(&mut self, b: &Blocker, add: bool) {
+        let [nx, ny, nz] = self.dims;
+        let origin = self.origin;
+        let last = Vec3::new(nx as f32 - 1.0, ny as f32 - 1.0, nz as f32 - 1.0);
+        let lo = ((b.min - origin) / VOXEL).ceil().max(Vec3::ZERO);
+        let hi = ((b.max - origin) / VOXEL).floor().min(last);
+        if lo.cmpgt(hi).any() {
+            return;
+        }
+        let to_local = b.axes.transpose();
+        for y in lo.y as u32..=hi.y as u32 {
+            for z in lo.z as u32..=hi.z as u32 {
+                for x in lo.x as u32..=hi.x as u32 {
+                    let at = origin + Vec3::new(x as f32, y as f32, z as f32) * VOXEL;
+                    let local = to_local * (at - b.centre);
+                    if !local.abs().cmple(b.half).all() {
+                        continue;
+                    }
+                    let i = (x + nx * (z + nz * y)) as usize;
+                    let (word, bit) = (i / 32, 1 << (i % 32));
+                    if add {
+                        self.counts[i] += 1;
+                        self.bits[word] |= bit;
+                    } else {
+                        self.counts[i] -= 1;
+                        if self.counts[i] == 0 {
+                            self.bits[word] &= !bit;
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 impl Blockers {
     pub(super) fn clear(&mut self) {
         self.blockers.clear();
         self.changed = true;
+        self.grid = None;
+        self.moved.clear();
     }
 
     /// Take the parts at `changed` (indices into `scene.parts`) as they
@@ -56,9 +121,18 @@ impl Blockers {
         for &i in changed {
             let blocker = self.blocker(&scene.parts[i], scene);
             if self.blockers[i] != blocker {
+                if self.grid.is_some() {
+                    self.moved.push((self.blockers[i], blocker));
+                }
                 self.blockers[i] = blocker;
                 self.changed = true;
             }
+        }
+        // More changes than parts (or nothing marking the voxels for a
+        // while): marking afresh is cheaper.
+        if self.moved.len() > self.blockers.len() {
+            self.grid = None;
+            self.moved.clear();
         }
     }
 
@@ -111,35 +185,33 @@ impl Blockers {
 
     /// One bit per voxel of the volume at `origin` (the centre of voxel
     /// (0, 0, 0)), `x + nx * (z + nz * y)`: set where a voxel's centre is
-    /// inside a blocker.
-    pub(super) fn mark(&mut self, origin: Vec3, dims: [u32; 3]) -> Vec<u32> {
+    /// inside a blocker. The same volume as last time only takes the
+    /// blockers that changed since; a new one is marked from scratch.
+    pub(super) fn mark(&mut self, origin: Vec3, dims: [u32; 3]) -> &[u32] {
         profiling::scope!("Blockers::mark");
         self.changed = false;
         self.marked_at = Some(Instant::now());
-        let [nx, ny, nz] = dims;
-        let mut bits = vec![0u32; (nx * ny * nz).div_ceil(32) as usize];
-        let last = Vec3::new(nx as f32 - 1.0, ny as f32 - 1.0, nz as f32 - 1.0);
-        for b in self.blockers.iter().flatten() {
-            let lo = ((b.min - origin) / VOXEL).ceil().max(Vec3::ZERO);
-            let hi = ((b.max - origin) / VOXEL).floor().min(last);
-            if lo.cmpgt(hi).any() {
-                continue;
-            }
-            let to_local = b.axes.transpose();
-            for y in lo.y as u32..=hi.y as u32 {
-                for z in lo.z as u32..=hi.z as u32 {
-                    for x in lo.x as u32..=hi.x as u32 {
-                        let at = origin + Vec3::new(x as f32, y as f32, z as f32) * VOXEL;
-                        let local = to_local * (at - b.centre);
-                        if local.abs().cmple(b.half).all() {
-                            let i = x + nx * (z + nz * y);
-                            bits[(i / 32) as usize] |= 1 << (i % 32);
-                        }
+        let moved = std::mem::take(&mut self.moved);
+        match &mut self.grid {
+            Some(grid) if grid.origin == origin && grid.dims == dims => {
+                for (before, after) in &moved {
+                    if let Some(b) = before {
+                        grid.apply(b, false);
+                    }
+                    if let Some(b) = after {
+                        grid.apply(b, true);
                     }
                 }
             }
+            grid => {
+                let mut fresh = Grid::new(origin, dims);
+                for b in self.blockers.iter().flatten() {
+                    fresh.apply(b, true);
+                }
+                *grid = Some(fresh);
+            }
         }
-        bits
+        &self.grid.as_ref().expect("just marked").bits
     }
 }
 

@@ -162,10 +162,13 @@ impl DataModel {
             let mut w = self.runtime.world_mut();
             let w = &mut *w;
             let dom = &mut w.dom;
-            let mut ids: Vec<_> = self.sounds.tracked.keys().copied().collect();
-            ids.sort();
+            let ids: Vec<_> = self.sounds.active.iter().copied().collect();
             for id in ids {
                 let Some(audio) = self.sounds.audio(id).cloned() else {
+                    // A file that failed never plays; one loading may.
+                    if !self.sounds.loading(id) {
+                        self.sounds.active.remove(&id);
+                    }
                     continue;
                 };
                 if is_player(dom, id) {
@@ -183,6 +186,8 @@ impl DataModel {
                     if client {
                         set(dom, "PlaybackLoudness", Value::Float64(0.0));
                     }
+                    // Back when a script plays it.
+                    self.sounds.active.remove(&id);
                     continue;
                 }
                 let length = audio.seconds();
@@ -234,7 +239,7 @@ impl DataModel {
             .iter()
             .map(|o| o.sound.clone())
             .collect();
-        for &id in self.sounds.tracked.keys() {
+        for &id in &self.sounds.active {
             let Some(audio) = self.sounds.audio(id) else {
                 continue;
             };

@@ -60,21 +60,25 @@ impl Renderer {
             self.layers.upload(&self.device, &self.queue);
         }
         profiling::scope!("transparent");
-        // Back to front for blending.
-        let mut order: Vec<&PartInstance> = self.transparent_parts.iter().flatten().collect();
-        order.sort_by(|a, b| {
-            let da = a.position.distance_squared(camera.position);
-            let db = b.position.distance_squared(camera.position);
+        // What the view reaches, back to front for blending.
+        let mut order: Vec<(f32, &PartInstance, Instance)> = self
+            .transparent_parts
+            .iter()
+            .flatten()
+            .filter_map(|p| {
+                let instance = self.instance(p);
+                view.sees(instance.world_box(), margin).then(|| {
+                    (p.position.distance_squared(camera.position), p, instance)
+                })
+            })
+            .collect();
+        order.sort_by(|(da, a, _), (db, b, _)| {
             let image = |p: &PartInstance| p.layer != Layer::Base;
-            db.total_cmp(&da).then(image(a).cmp(&image(b)))
+            db.total_cmp(da).then(image(a).cmp(&image(b)))
         });
         let mut instances: Vec<Instance> = Vec::with_capacity(order.len());
         let mut runs: Vec<(BatchKey, Pass, std::ops::Range<u32>)> = Vec::new();
-        for p in &order {
-            let instance = self.instance(p);
-            if !view.sees(instance.world_box(), margin) {
-                continue;
-            }
+        for &(_, p, instance) in &order {
             let key = BatchKey {
                 shape: p.shape,
                 images: image_set(p),

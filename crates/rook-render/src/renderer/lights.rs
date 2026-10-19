@@ -416,7 +416,7 @@ impl GpuLights {
         };
         if solid && (blocked || !centred) {
             let bits = self.blockers.mark(origin, VOLUME);
-            queue.write_buffer(&self.sky_buffers.solid, 0, bytemuck::cast_slice(&bits));
+            queue.write_buffer(&self.sky_buffers.solid, 0, bytemuck::cast_slice(bits));
         }
         self.marked = solid;
         self.origin = Some(origin);
