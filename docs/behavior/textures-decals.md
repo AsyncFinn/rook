@@ -48,7 +48,9 @@ marked):
 - *Round and sloped shapes:* a Decal is projected straight along its face's
   axis onto the part's box, over the points whose normal is closest to that
   axis: a Front decal covers the front of a ball, a cylinder's curved side
-  shows its Front, Top, Back and Bottom decals, and on a 45-degree wedge
+  shows its Front, Top, Back and Bottom decals (the Bottom one turned half
+  a turn from a block's: one image was upright on a cylinder's Bottom and
+  upside down on a block's, 2026-10-19), and on a 45-degree wedge
   slope the Front decal wins over the Top one. The same on a SpecialMesh
   Sphere and on a MeshPart (projected onto the mesh's box).
 - *Decals on file meshes:* on a SpecialMesh FileMesh, a FileMesh and the
