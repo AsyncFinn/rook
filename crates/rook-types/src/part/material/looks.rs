@@ -74,7 +74,8 @@ impl Material {
     /// Studs per repeat of the material's textures, across and down each
     /// face (for [`TilePattern::Wang`], of the whole 4 × 4 atlas). The 2022
     /// set: 8 for every material (Confirmed: Roblox's texture
-    /// specifications, "Parts display a 1024×1024 on an 8×8 stud face").
+    /// specifications, "Parts display a 1024×1024 on an 8×8 stud face",
+    /// and Studio's OBJ export of every material).
     /// The legacy set: Confirmed from Studio 0.743's OBJ export of a
     /// 4 × 1 × 4 part of each material, whose UVs count repeats of the
     /// material's texture (Concrete's 4-stud sides span 0.6)
