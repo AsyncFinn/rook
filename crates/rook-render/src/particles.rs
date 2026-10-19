@@ -169,17 +169,18 @@ impl Particle {
 }
 
 /// A small, fast random number generator (SplitMix64), seeded per
-/// emitter so that the same scene draws the same particles.
+/// emitter so that the same scene draws the same particles (and per part,
+/// for where its material textures start).
 #[derive(Debug, Clone, Default)]
-struct Rng(u64);
+pub(crate) struct Rng(u64);
 
 impl Rng {
-    fn new(seed: u64) -> Self {
+    pub(crate) fn new(seed: u64) -> Self {
         Self(seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) ^ 0x2545_F491_4F6C_DD1D)
     }
 
     /// A number in [0, 1).
-    fn next(&mut self) -> f32 {
+    pub(crate) fn next(&mut self) -> f32 {
         self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
         let mut z = self.0;
         z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);

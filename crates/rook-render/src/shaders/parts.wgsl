@@ -206,9 +206,10 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
     let dx = dpdx(st);
     let dy = dpdy(st);
     // The material's textures tile like a Texture, from each face's
-    // top-left corner (measured: unrotated, unmirrored).
+    // top-left corner (measured: unrotated, unmirrored), shifted by the
+    // part's own start (`MaterialMaps::seed`, in `tile.zw`).
     let on_uv = (in.flags & MAPS_UV) != 0u;
-    let tiled = tiling_position(in, material_position(in, face, at), placed.zw);
+    let tiled = tiling_position(in, material_position(in, face, at), placed.zw) + in.tile.zw;
     var uv = select(tiled / max(in.tile.xy, vec2(1e-3)), in.uv, on_uv);
     let packed = in.face & 255u;
     let terrain = packed >= TERRAIN_FACE && packed != 255u;

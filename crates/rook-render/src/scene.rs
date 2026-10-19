@@ -96,6 +96,11 @@ pub struct MaterialMaps {
     pub pattern: TilePattern,
     /// On terrain, how each point's copy is turned and shifted.
     pub detile: Detile,
+    /// On a part, picks where its textures start, up to a repeat in from
+    /// each face's corner (Studio rolls a random start per part each
+    /// session: the same part exported again after reopening its place
+    /// started elsewhere). 0 starts them at the corner, as terrain needs.
+    pub seed: u64,
     /// Laid through the mesh's own UVs instead of over its faces.
     pub on_mesh_uv: bool,
     pub alpha: MapAlpha,
@@ -112,6 +117,7 @@ impl MaterialMaps {
         studs_per_tile: Vec2::ONE,
         pattern: TilePattern::Regular,
         detile: Detile::NONE,
+        seed: 0,
         on_mesh_uv: false,
         alpha: MapAlpha::Ignore,
         tint: [1.0; 3],

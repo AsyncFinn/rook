@@ -4,6 +4,7 @@ pub(crate) mod cache;
 pub(crate) mod pool;
 
 use super::*;
+use crate::particles::Rng;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
@@ -166,12 +167,14 @@ impl Instance {
                         flags |= SLOPED;
                     }
                     flags |= (maps.pattern as u32) << PATTERN_SHIFT;
-                    tile = [
-                        maps.studs_per_tile.x,
-                        maps.studs_per_tile.y,
-                        maps.detile.shift,
-                        maps.detile.turn,
-                    ];
+                    let [z, w] = if maps.seed != 0 {
+                        // Studs the part's textures start in by.
+                        let mut rng = Rng::new(maps.seed);
+                        (glam::Vec2::new(rng.next(), rng.next()) * maps.studs_per_tile).to_array()
+                    } else {
+                        [maps.detile.shift, maps.detile.turn]
+                    };
+                    tile = [maps.studs_per_tile.x, maps.studs_per_tile.y, z, w];
                 }
                 if p.material.shows_surfaces() {
                     for (face, pattern) in p.surfaces.iter().enumerate() {

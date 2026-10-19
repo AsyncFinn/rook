@@ -72,6 +72,7 @@ impl SceneCache {
                     Some(1) => TilePattern::Organic,
                     _ => TilePattern::Regular,
                 },
+                seed: texture_seed(id),
                 ..MaterialMaps::NONE
             };
             return;
@@ -125,9 +126,16 @@ impl SceneCache {
             metalness: roughness_metalness,
             studs_per_tile: Vec2::splat(material.studs_per_tile(set)),
             pattern: material.tile_pattern(set),
+            seed: texture_seed(part),
             ..MaterialMaps::NONE
         }
     }
+}
+
+/// Where `part`'s material textures start: from its id, so it stays put
+/// while the part lives (never 0, which starts them at the corner).
+fn texture_seed(part: InstanceId) -> u64 {
+    part.to_ref().0 | 1
 }
 
 /// The set of built-in materials the place draws: the 2022 set when
