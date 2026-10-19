@@ -30,6 +30,7 @@ fn image() -> Arc<Image> {
         width: 2,
         height: 2,
         format: rook_content::decode::image::ImageFormat::Png,
+        encoding: rook_content::decode::image::Encoding::Rgba8,
         mips: rook_content::decode::image::mips(pixels.concat(), 2, 2),
         translucent: false,
     })
@@ -318,6 +319,54 @@ fn table_and_multi_draws_draw_what_bound_sets_draw() {
         // need a call.
         assert!(fast.calls <= 7, "{fast:?}");
     }
+}
+
+/// A block-compressed colour map draws the same where the device samples
+/// blocks and where it gets them decoded (a device without BC).
+#[test]
+fn block_compressed_maps_draw_the_same_decoded() {
+    use rook_content::decode::image::{Encoding, ImageFormat, mips};
+    let Ok(mut fast) = Renderer::headless() else {
+        return;
+    };
+    let Ok(mut plain) = Renderer::headless_with(|_| wgpu::DeviceDescriptor::default()) else {
+        return;
+    };
+    assert!(!plain.block_compression);
+    let flat = [200, 120, 40, 255].repeat(64);
+    let map = Image {
+        width: 8,
+        height: 8,
+        format: ImageFormat::Png,
+        encoding: Encoding::Rgba8,
+        mips: mips(flat, 8, 8),
+        translucent: false,
+    }
+    .compressed(Encoding::Bc1);
+    let hash = ImageHash([5; 32]);
+    let mut block = part(PartShape::Block, 0.0, [1.0; 3], 0.0);
+    block.maps = MaterialMaps {
+        color: Some(hash),
+        ..MaterialMaps::NONE
+    };
+    let scene = Scene {
+        parts: vec![block],
+        images: HashMap::from([(hash, Arc::new(map))]),
+        ..Scene::default()
+    };
+    let camera = Camera::look_at(Vec3::new(0.0, 3.0, 6.0), Vec3::ZERO);
+    let mut frames = Vec::new();
+    for r in [&mut fast, &mut plain] {
+        r.set_scene(&scene);
+        r.finish_uploads();
+        frames.push(r.render_to_image(48, 32, &camera).unwrap());
+    }
+    assert!(
+        frames[0]
+            .iter()
+            .zip(&frames[1])
+            .all(|(x, y)| x.abs_diff(*y) <= 2)
+    );
 }
 
 /// A mesh dropped from the pool leaves room that a later mesh takes, and

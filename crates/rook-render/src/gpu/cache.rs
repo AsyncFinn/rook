@@ -27,6 +27,9 @@ pub(crate) struct UploadContext<'a> {
     /// Whether a texture can be viewed in a second format (sRGB and
     /// linear); OpenGL can't.
     pub view_formats: bool,
+    /// Whether the device samples BC blocks (most desktop GPUs; not
+    /// phones or browsers).
+    pub block_compression: bool,
 }
 
 /// A file that can live on the GPU.
@@ -58,6 +61,11 @@ impl<K: Copy + Eq + Hash, T: Upload> GpuCache<K, T> {
 
     pub fn get(&self, key: &K) -> Option<&T::Gpu> {
         self.ready.get(key)
+    }
+
+    /// Every uploaded object.
+    pub fn uploaded(&self) -> impl Iterator<Item = &T::Gpu> {
+        self.ready.values()
     }
 
     pub fn contains(&self, key: &K) -> bool {

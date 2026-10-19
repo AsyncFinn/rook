@@ -3,6 +3,8 @@
 pub(crate) mod cache;
 pub(crate) mod pool;
 
+use rook_content::decode::image::Encoding;
+
 use super::*;
 
 #[repr(C)]
@@ -260,18 +262,39 @@ impl Upload for Mesh {
 pub(crate) struct GpuImage {
     pub(crate) srgb: wgpu::TextureView,
     pub(crate) linear: wgpu::TextureView,
+    /// The GPU memory its textures hold.
+    pub(crate) bytes: usize,
 }
+
+/// Where the device can't sample blocks, block-compressed images (material
+/// textures) go up as RGBA8 from their first level this size or smaller:
+/// their full 1024 would take four times the memory.
+const UNCOMPRESSED_MAX_SIZE: u32 = 512;
 
 impl GpuImage {
     /// A 1 × 1 image of one RGBA8 colour.
     pub(crate) fn solid(cx: &UploadContext<'_>, label: &str, rgba: [u8; 4]) -> Self {
-        Self::new(cx, label, 1, 1, &[rgba.to_vec()])
+        Self::new(cx, label, 1, 1, Encoding::Rgba8, &[rgba.to_vec()])
     }
 
-    /// `mips` (largest first) of RGBA8 `width` × `height`, viewed both
-    /// ways: one texture where the device can view it as sRGB too, else a
-    /// second copy stored as sRGB.
-    fn new(cx: &UploadContext<'_>, label: &str, width: u32, height: u32, mips: &[Vec<u8>]) -> Self {
+    /// `mips` (largest first) of `width` × `height` in `encoding`, viewed
+    /// both ways: one texture where the device can view it as sRGB too,
+    /// else a second copy stored as sRGB.
+    fn new(
+        cx: &UploadContext<'_>,
+        label: &str,
+        width: u32,
+        height: u32,
+        encoding: Encoding,
+        mips: &[Vec<u8>],
+    ) -> Self {
+        let format = match encoding {
+            Encoding::Rgba8 => wgpu::TextureFormat::Rgba8Unorm,
+            Encoding::Bc1 => wgpu::TextureFormat::Bc1RgbaUnorm,
+            Encoding::Bc3 => wgpu::TextureFormat::Bc3RgbaUnorm,
+            Encoding::Bc7 => wgpu::TextureFormat::Bc7RgbaUnorm,
+        };
+        let srgb_format = format.add_srgb_suffix();
         let view = |texture: &wgpu::Texture, format| {
             texture.create_view(&wgpu::TextureViewDescriptor {
                 format: Some(format),
@@ -279,23 +302,19 @@ impl GpuImage {
                 ..Default::default()
             })
         };
-        let linear = texture_with_mips(cx, label, width, height, &[mips]);
+        let linear = texture_in(cx, label, format, width, height, &[mips]);
+        let mut bytes: usize = mips.iter().map(Vec::len).sum();
         let srgb = if cx.view_formats {
-            view(&linear, wgpu::TextureFormat::Rgba8UnormSrgb)
+            view(&linear, srgb_format)
         } else {
-            let copy = texture_in(
-                cx,
-                label,
-                wgpu::TextureFormat::Rgba8UnormSrgb,
-                width,
-                height,
-                &[mips],
-            );
-            view(&copy, wgpu::TextureFormat::Rgba8UnormSrgb)
+            bytes *= 2;
+            let copy = texture_in(cx, label, srgb_format, width, height, &[mips]);
+            view(&copy, srgb_format)
         };
         Self {
             srgb,
-            linear: view(&linear, wgpu::TextureFormat::Rgba8Unorm),
+            linear: view(&linear, format),
+            bytes,
         }
     }
 }
@@ -310,7 +329,12 @@ impl Upload for Image {
 
     fn upload(&self, cx: &mut UploadContext<'_>) -> GpuImage {
         profiling::scope!("upload image");
-        GpuImage::new(cx, "rook image", self.width, self.height, &self.mips)
+        if self.encoding != Encoding::Rgba8 && !cx.block_compression {
+            let rgba = self.decompressed(UNCOMPRESSED_MAX_SIZE);
+            return rgba.upload(cx);
+        }
+        let (w, h) = (self.width, self.height);
+        GpuImage::new(cx, "rook image", w, h, self.encoding, &self.mips)
     }
 }
 
@@ -334,7 +358,8 @@ pub(crate) fn texture_with_mips(
     )
 }
 
-/// [`texture_with_mips`] stored as `format`.
+/// [`texture_with_mips`] stored as `format` (RGBA8 or blocks), each level
+/// rows of pixels or of blocks.
 fn texture_in(
     cx: &UploadContext<'_>,
     label: &str,
@@ -343,8 +368,8 @@ fn texture_in(
     height: u32,
     layers: &[&[Vec<u8>]],
 ) -> wgpu::Texture {
-    let srgb_view = [wgpu::TextureFormat::Rgba8UnormSrgb];
-    let view_formats: &[_] = if cx.view_formats && format == wgpu::TextureFormat::Rgba8Unorm {
+    let srgb_view = [format.add_srgb_suffix()];
+    let view_formats: &[_] = if cx.view_formats && !format.is_srgb() {
         &srgb_view
     } else {
         &[]
@@ -364,9 +389,13 @@ fn texture_in(
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats,
     });
+    let (bw, bh) = format.block_dimensions();
+    let block_bytes = format.block_copy_size(None).expect("colour format");
     for (layer, levels) in layers.iter().enumerate() {
         for (level, pixels) in levels.iter().enumerate() {
-            let (w, h) = ((width >> level).max(1), (height >> level).max(1));
+            // A level smaller than a block takes a whole one.
+            let w = ((width >> level).max(1)).next_multiple_of(bw);
+            let h = ((height >> level).max(1)).next_multiple_of(bh);
             cx.queue.write_texture(
                 wgpu::TexelCopyTextureInfo {
                     texture: &texture,
@@ -381,8 +410,8 @@ fn texture_in(
                 pixels,
                 wgpu::TexelCopyBufferLayout {
                     offset: 0,
-                    bytes_per_row: Some(w * 4),
-                    rows_per_image: Some(h),
+                    bytes_per_row: Some(w / bw * block_bytes),
+                    rows_per_image: Some(h / bh),
                 },
                 wgpu::Extent3d {
                     width: w,

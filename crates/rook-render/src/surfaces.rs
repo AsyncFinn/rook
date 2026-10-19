@@ -126,6 +126,7 @@ mod tests {
             width: 2,
             height: 32,
             format: rook_content::decode::image::ImageFormat::Dds,
+            encoding: rook_content::decode::image::Encoding::Rgba8,
             mips: vec![level0],
             translucent: false,
         };

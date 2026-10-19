@@ -38,6 +38,8 @@ pub struct Renderer {
     color_format: wgpu::TextureFormat,
     /// See [`UploadContext::view_formats`].
     view_formats: bool,
+    /// See [`UploadContext::block_compression`].
+    pub(crate) block_compression: bool,
     pipelines: Pipelines,
     globals: wgpu::Buffer,
     globals_layout: wgpu::BindGroupLayout,
@@ -133,6 +135,9 @@ impl Renderer {
             .get_downlevel_capabilities()
             .flags
             .contains(wgpu::DownlevelFlags::VIEW_FORMATS);
+        let block_compression = device
+            .features()
+            .contains(wgpu::Features::TEXTURE_COMPRESSION_BC);
         let globals = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("rook globals"),
             size: std::mem::size_of::<Globals>() as u64,
@@ -253,6 +258,7 @@ impl Renderer {
             image_layout: &image_layout,
             sampler: &image_sampler,
             view_formats,
+            block_compression,
         };
         let defaults = Defaults::new(&cx);
         let own = surfaces::rooks_own();
@@ -293,6 +299,7 @@ impl Renderer {
             queue,
             color_format,
             view_formats,
+            block_compression,
             pipelines,
             globals,
             globals_layout: layout,
@@ -341,6 +348,7 @@ impl Renderer {
             image_layout: &self.image_layout,
             sampler: &self.image_sampler,
             view_formats: self.view_formats,
+            block_compression: self.block_compression,
         }
     }
 
@@ -424,7 +432,8 @@ impl Renderer {
     /// What to ask the adapter for when making the device a renderer
     /// gets: the features Rook uses where the adapter has them
     /// (timestamps for `--bench`, binding arrays for the image table,
-    /// first instances in indirect draws for multi-draws), room for the
+    /// first instances in indirect draws for multi-draws, BC blocks for
+    /// material textures), room for the
     /// table, a stencil with the depth for Glass (`main_depth_format`),
     /// and the adapter's biggest buffers (for the mesh pool).
     pub fn device_descriptor(adapter: &wgpu::Adapter) -> wgpu::DeviceDescriptor<'static> {
@@ -433,7 +442,8 @@ impl Renderer {
             | wgpu::Features::TEXTURE_BINDING_ARRAY
             | wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
             | wgpu::Features::PARTIALLY_BOUND_BINDING_ARRAY
-            | wgpu::Features::DEPTH32FLOAT_STENCIL8;
+            | wgpu::Features::DEPTH32FLOAT_STENCIL8
+            | wgpu::Features::TEXTURE_COMPRESSION_BC;
         let required_features = adapter.features() & wanted;
         let mut required_limits = wgpu::Limits {
             max_buffer_size: adapter.limits().max_buffer_size,
@@ -480,6 +490,11 @@ impl Renderer {
             queue,
             wgpu::TextureFormat::Rgba8UnormSrgb,
         ))
+    }
+
+    /// The GPU memory the scene's images hold.
+    pub fn image_bytes(&self) -> usize {
+        self.images.uploaded().map(|i| i.bytes).sum()
     }
 
     /// How many draw calls the last frame took.
