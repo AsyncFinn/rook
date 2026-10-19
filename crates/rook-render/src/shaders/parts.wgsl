@@ -155,8 +155,10 @@ fn perturb(n: vec3<f32>, t: vec3<f32>, dp_x: vec3<f32>, dp_y: vec3<f32>, duv_x: 
 // whose faces use the face their own normal is closest to and lengths
 // measured in their plane, so a long, low wedge's slope tiles like a top
 // instead of stretching the Front face it belongs to for images over its
-// whole length (reported on a large modern place; Inference that Studio measures
-// along the slope).
+// whole length (reported on a large modern place). Along a slope Studio
+// counts 0.7 x the two sides it spans, not its true length (Confirmed:
+// its part vertex shaders scale a slope's texture coordinate by 0.7 x
+// (Y + Z) size on wedges, 0.7 x (X + Y) on a corner wedge's other slope).
 fn material_position(in: VertexOut, face: u32, at: vec2<f32>) -> vec2<f32> {
     if (in.flags & SLOPED) == 0u {
         return at;
@@ -170,7 +172,19 @@ fn material_position(in: VertexOut, face: u32, at: vec2<f32>) -> vec2<f32> {
     let extent = vec2(dot(abs(right), in.box_size), dot(abs(up), in.box_size))
         / max(vec2(abs(dot(right, r)), abs(dot(up, u))), vec2(1e-3));
     let p = in.local - in.box_center;
-    return vec2(dot(p, r) + extent.x * 0.5, extent.y * 0.5 - dot(p, u));
+    let along = vec2(dot(p, r) + extent.x * 0.5, extent.y * 0.5 - dot(p, u));
+    return along * vec2(slope_scale(r, in.box_size, extent.x), slope_scale(u, in.box_size, extent.y));
+}
+
+// Studio's length over the true one along `t`, a direction in a face
+// `length` studs long that way: 0.7 x the box sides it spans when it
+// crosses two axes (a slope), else 1.
+fn slope_scale(t: vec3<f32>, size: vec3<f32>, length: f32) -> f32 {
+    let spans = step(vec3(1e-3), abs(t));
+    if dot(spans, vec3(1.0)) < 2.0 {
+        return 1.0;
+    }
+    return 0.7 * dot(spans, size) / max(length, 1e-3);
 }
 
 // Neon glows past its Color: in linear light, 18 times its square, up to
