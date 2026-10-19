@@ -20,7 +20,7 @@ pub use scene::{
     Camera, Curve, Detile, DrawShape, Emitter, EmitterLook, Image, ImageHash, ImagePlacement,
     Layer, LightShape, Lighting, LocalLight, MapAlpha, Material, MaterialMaps, MaterialSet, Mesh,
     MeshHash, NormalId, PartInstance, PartShape, SKYBOX_FACES, Scene, SurfacePattern,
-    TERRAIN_LAYERS, TerrainLayer, TerrainLook, TilePattern, Tiling, TrussShape,
+    TERRAIN_LAYERS, TerrainLayer, TerrainLook, TilePattern, Tiling, Tonemapper, TrussShape,
 };
 
 // Content hashes are 32 bytes: FxHash keeps lookups by them cheap.

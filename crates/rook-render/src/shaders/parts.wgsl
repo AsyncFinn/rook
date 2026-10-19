@@ -13,7 +13,7 @@
 // from the image's top-left corner, from its vertices' points on the box.
 
 import package::common::{
-    g, surface_atlas, image_sampler, VertexIn, VertexOut, ShadowIn, srgb_to_linear,
+    g, surface_atlas, image_sampler, VertexIn, VertexOut, ShadowIn,
     instance_rotation, world_position, placed, CAST, NEON, MODE_FACE, MODE_TILED,
     MODE_MESH_UV, UPRIGHT, SURFACES_SHIFT, MAPS, GLASS, SLOPED, MAPS_UV, VERTEX_COLORS,
     UNION_FACE, TERRAIN_FACE, TERRAIN_WATER, TERRAIN_DRAWN_SHIFT, CENTRED, ALPHA_OVERLAY, ALPHA_TRANSPARENCY,
@@ -23,7 +23,8 @@ import package::images::{
     sample_image, image_size, sample_map, sample_taps, normal_taps, IMAGE, COLOR_MAP, ROUGHNESS_MAP,
     METALNESS_MAP,
 };
-import package::lighting::{shade, shade_pbr, fog};
+import package::lighting::{shade, shade_pbr, fog_units};
+import package::tone::{frame, frame_of, light_units3, linear_to_srgb, srgb_to_linear};
 import package::terrain::{terrain_motion, terrain_position, terrain_share, water_surface};
 
 @vertex
@@ -187,11 +188,14 @@ fn slope_scale(t: vec3<f32>, size: vec3<f32>, length: f32) -> f32 {
     return 0.7 * dot(spans, size) / max(length, 1e-3);
 }
 
-// Neon glows past its Color: in linear light, 18 times its square, up to
-// full brightness (fitted in Studio 0.742 to eight colours: grey 128 drew
-// 237, 64 drew 60, (196, 40, 28) drew (255, 20, 7)).
-fn neon(c: vec3<f32>) -> vec3<f32> {
-    return min(c * c * 18.0, vec3(1.0));
+// Neon's glow in light units from its linear colour: 13.6 times the fourth
+// power of its sRGB colour, as bright as the frame keeps from about 188
+// grey up (fitted in Studio 0.742: grey 128 is 0.865 units under both
+// curves, 64 is 0.055, blue 105 0.38, and 160 grey reaches 2.04, as
+// Decals over it show; docs/behavior/tone-mapping.md).
+fn neon(albedo: vec3<f32>) -> vec3<f32> {
+    let c = linear_to_srgb(albedo);
+    return 13.6 * c * c * c * c;
 }
 
 // Parts and their mesh textures. A texture's alpha is ignored (observed).
@@ -270,7 +274,7 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
         }
     }
     if (in.flags & NEON) != 0u {
-        return vec4(fog(neon(albedo), in.world), in.color.a);
+        return vec4(frame(fog_units(neon(albedo), in.world)), in.color.a);
     }
     var lit = shade_pbr(albedo, in.world, normal, roughness, metalness);
     // Reflectance: the part takes on its surroundings, here the skybox's
@@ -279,12 +283,14 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
     // one at 0.3 olive under a black Sky; observed).
     let reflectance = in.material.x;
     if reflectance > 0.0 {
-        lit = mix(lit, fog(srgb_to_linear(g.sky.rgb), in.world), reflectance);
+        let sky = light_units3(srgb_to_linear(g.sky.rgb));
+        lit = mix(lit, fog_units(sky, in.world), reflectance);
     }
+    var out = frame(lit);
     if terrain && (in.face >> TERRAIN_DRAWN_SHIFT) != 0u {
-        lit *= terrain_share(in, dp_x, dp_y);
+        out *= terrain_share(in, dp_x, dp_y);
     }
-    return vec4(lit, alpha);
+    return vec4(out, alpha);
 }
 
 // A SurfaceAppearance's colour (linear) and opacity from its colour map
@@ -335,7 +341,9 @@ fn surface_alpha(in: VertexOut) -> f32 {
 @fragment
 fn fs_glass_filter(in: VertexOut) -> @location(0) vec4<f32> {
     let power = 1.25 * pow(min(2.0 * in.color.a, 1.0), 1.7);
-    return vec4(min(pow(1.2 * in.color.rgb + 0.01, vec3(power)), vec3(1.0)), 1.0);
+    // The frame holds the light's square root: this scales the light by
+    // the filter, before the curve.
+    return vec4(sqrt(min(pow(1.2 * in.color.rgb + 0.01, vec3(power)), vec3(1.0))), 1.0);
 }
 
 // ForceField: its colour added over what's behind, faint where it faces
@@ -348,7 +356,7 @@ fn fs_force_field(in: VertexOut) -> @location(0) vec4<f32> {
     let n = normalize(in.normal);
     let v = normalize(g.camera_pos.xyz - in.world);
     let rim = pow(1.0 - abs(dot(n, v)), 3.0);
-    return vec4(in.color.rgb * (0.025 + 0.6 * rim) * in.color.a, 0.0);
+    return vec4(frame_of(in.color.rgb * (0.025 + 0.6 * rim) * in.color.a), 0.0);
 }
 
 // Decals and Textures, blended over what's drawn.
@@ -381,5 +389,5 @@ fn fs_layer(in: VertexOut) -> @location(0) vec4<f32> {
     }
     let texel = sample_map(in.images, IMAGE, uv, dx, dy);
     let alpha = texel.a * in.color.a;
-    return vec4(shade(texel.rgb * in.color.rgb, in.world, in.normal), alpha);
+    return vec4(frame(shade(texel.rgb * in.color.rgb, in.world, in.normal)), alpha);
 }
