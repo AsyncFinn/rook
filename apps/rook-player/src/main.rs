@@ -46,6 +46,12 @@ use app::*;
 use bench::*;
 use scene::installed::*;
 
+/// The system allocator on Windows is slow for blocks of tens of
+/// kilobytes once a big place has made its heap large (a fraction of a
+/// millisecond each): mimalloc keeps the frame's allocations cheap.
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 /// Simulation step: 60 Hz, like Roblox's frame-based scheduler.
 const STEP: f64 = 1.0 / 60.0;
 use winit::application::ApplicationHandler;
