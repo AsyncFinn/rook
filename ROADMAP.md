@@ -217,9 +217,15 @@ create.
 2. ✅ Fire, Smoke and Sparkles, drawn as Studio draws them today, as
    particles a ParticleEmitter can reuse
    ([`docs/behavior/effects.md`](docs/behavior/effects.md)).
-3. ParticleEmitter (with flipbooks), Beam and Trail.
-4. Explosion: its blast (physics, joints breaking) and its look.
-5. Highlight (outlines and fills through walls).
+3. An HDR target with Studio's tone curves, ColorGrading's presets
+   included: the sun, ambient, sky, local lights and Neon add up in
+   Studio's light units and go through one curve at the end, so Decals
+   blend over Neon as in Studio and sunlit faces stop drawing too bright
+   ([`docs/behavior/tone-mapping.md`](docs/behavior/tone-mapping.md)).
+   Before the remaining effects, which blend in HDR too.
+4. ParticleEmitter (with flipbooks), Beam and Trail.
+5. Explosion: its blast (physics, joints breaking) and its look.
+6. Highlight (outlines and fills through walls).
 
 ### M8 GUI
 
@@ -311,10 +317,8 @@ Make archived places look the way Studio shows them today.
 
 1. The sun, moon and stars, `SkyboxOrientation`, Atmosphere (16 files)
    and Clouds (8).
-2. Post-processing: Bloom (49 files), ColorCorrection (44), SunRays (20),
-   Blur (13), DepthOfField (11); an HDR target with Studio's tone curves,
-   ColorGrading's included, so Decals blend over Neon as in Studio
-   ([`docs/behavior/tone-mapping.md`](docs/behavior/tone-mapping.md)).
+2. Post-processing on M7's HDR target: Bloom (49 files), ColorCorrection
+   (44), SunRays (20), Blur (13), DepthOfField (11).
 3. `Lighting.Technology` (Voxel, ShadowMap, Future, and Compatibility for
    old places), `EnvironmentDiffuseScale` and `EnvironmentSpecularScale`
    for M4's PBR materials, tuned against Studio screenshots of reference
