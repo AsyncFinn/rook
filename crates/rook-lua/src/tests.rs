@@ -566,6 +566,26 @@ fn model_cframe_is_the_bounding_box() {
     );
 }
 
+/// Without a primary part the box turns with the saved pivot, so a light
+/// spun about `GetModelCFrame()`'s X axis turns about the pivot's.
+#[test]
+fn model_cframe_turns_with_the_pivot() {
+    expect(
+        r#"
+        local m = Instance.new("Model")
+        local p = Instance.new("Part")
+        p.Size = Vector3.new(1, 2, 3)
+        p.Parent = m
+        m.WorldPivot = CFrame.new(5, 0, 0) * CFrame.Angles(0, 0, math.rad(90))
+        local c = m:GetModelCFrame()
+        local function r(v) return math.round(v * 100) / 100 end
+        print(r(c.XVector.Y), r(c.Position.X))
+        "#,
+        0,
+        &["1 0"],
+    );
+}
+
 /// Every no-op member must be documented with what will take it over.
 #[test]
 fn inert_members_are_documented() {

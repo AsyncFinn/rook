@@ -142,13 +142,22 @@ pub(super) fn model_move_to(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<O
 }
 
 /// Bounds of a model's parts as (centre, size), in a box turned to the
-/// primary part's orientation, or to the world axes without one (Confirmed:
-/// creator-docs and Studio).
+/// primary part's orientation, else to the saved pivot's, else to the world
+/// axes (Confirmed: creator-docs and Studio; the pivot's observed in Studio
+/// 0.742 on an archived spinning light, whose script turns it about
+/// `GetModelCFrame()`'s X axis).
 fn bounding_box(w: &World, model: InstanceId) -> (CFrame, Vector3) {
-    let basis = match primary_part(w, model) {
-        Some(p) => CFrame {
+    let turn = match primary_part(w, model) {
+        Some(p) => Some(cframe(w, p)),
+        None => match w.dom.property_by_name(model, "WorldPivotData") {
+            Some(Value::OptionalCFrame(Some(pivot))) => Some(pivot),
+            _ => None,
+        },
+    };
+    let basis = match turn {
+        Some(c) => CFrame {
             position: glam::Vec3::ZERO,
-            ..cframe(w, p)
+            ..c
         },
         None => CFrame::IDENTITY,
     };
