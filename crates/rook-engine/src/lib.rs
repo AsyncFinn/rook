@@ -204,6 +204,7 @@ impl DataModel {
         let mut dom = Dom::new();
         let root = dom.root();
         rook_formats::into_dom(&loaded.dom, &mut dom, root);
+        let duplicate_ids = has_duplicate_unique_ids(&dom);
         // Part of loading the place, not changes for anyone to replay.
         let journaling = dom.journal().is_enabled();
         dom.journal_mut().set_enabled(false);
@@ -214,7 +215,16 @@ impl DataModel {
             let _ = rook_physics::joints::surfaces::make_joints(&mut dom, &parts);
         }
         dom.journal_mut().set_enabled(journaling);
-        Self::with_dom(dom, options)
+        let engine = Self::with_dom(dom, options)?;
+        if duplicate_ids {
+            // Studio's Output, word for word (observed in Studio 0.743 on a
+            // place with two instances saved under one UniqueId).
+            engine
+                .runtime
+                .world_mut()
+                .push_log(MessageType::Error, "DM contains duplicate Unique ids".into());
+        }
+        Ok(engine)
     }
 
     fn with_dom(mut dom: Dom, options: &Options) -> Result<Self, EngineError> {
@@ -366,6 +376,18 @@ fn ensure_camera(dom: &mut Dom) {
     if let Some(p) = dom.property_id(ws, "CurrentCamera") {
         dom.load_property(ws, p, Value::Ref(Some(camera.to_ref())));
     }
+}
+
+/// Whether two instances were saved with the same `UniqueId` (nil ones,
+/// which old files and new instances have, don't count).
+fn has_duplicate_unique_ids(dom: &Dom) -> bool {
+    let mut seen = std::collections::HashSet::new();
+    dom.descendants(dom.root()).into_iter().any(|id| {
+        matches!(
+            dom.property_by_name(id, "UniqueId"),
+            Some(Value::UniqueId(u)) if !u.is_nil() && !seen.insert(u)
+        )
+    })
 }
 
 /// Workspace always has a Terrain, as in Roblox, where `workspace.Terrain`
