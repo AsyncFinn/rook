@@ -105,6 +105,10 @@ pollster = "1"
 bytemuck = { version = "1", features = ["derive"] }
 # Images: decals, textures and mesh textures (rook-content), screenshots
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "bmp", "dds"] }
+# Block compression of material textures (rook-content): Intel's ISPC
+# encoder, and a decoder for devices that can't sample blocks
+intel_tex_2 = "0.5"
+bcdec_rs = "0.2"
 
 # Luau
 mlua = { version = "0.12", features = ["luau", "vendored"] }

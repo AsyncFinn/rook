@@ -93,6 +93,10 @@ pub(crate) fn bench(
     game.print_logs();
     let ms = |total: f64| total / f64::from(frames) * 1000.0;
     eprintln!(
+        "images on the GPU: {:.1} MB",
+        renderer.image_bytes() as f64 / f64::from(1 << 20)
+    );
+    eprintln!(
         "{frames} frames, {} entries, {} mesh files, {} images, scene updated on {updates} frames",
         cache.scene.parts.len(),
         cache.scene.meshes.len(),

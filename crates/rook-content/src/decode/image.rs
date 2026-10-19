@@ -1,5 +1,6 @@
 //! Reading images (decal, texture and mesh texture files) into RGBA8 with
-//! a full mip chain, the one layout the renderer uploads.
+//! a full mip chain, the layout the renderer uploads, or block-compressed
+//! ([`blocks`]: material textures).
 //!
 //! Formats are recognised by their bytes, not by a file name (an asset id
 //! has none): PNG, JPEG, BMP and DDS (DXT1, DXT3 and DXT5; the install's
@@ -11,7 +12,10 @@
 //!
 //! Decoding goes through the `image` crate.
 
+mod blocks;
 pub(crate) mod ktx2;
+
+pub use blocks::Encoding;
 
 use std::io::Cursor;
 
@@ -68,15 +72,18 @@ impl ImageFormat {
     }
 }
 
-/// A decoded image: RGBA8 (sRGB colour, straight alpha), each mip level
-/// half the one before down to 1 × 1.
+/// A decoded image: RGBA8 (sRGB colour, straight alpha) or blocks of it,
+/// each mip level half the one before down to 1 × 1.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Image {
     pub width: u32,
     pub height: u32,
     pub format: ImageFormat,
+    /// How [`Image::mips`] are stored.
+    pub encoding: Encoding,
     /// Level 0 first; level `i` is `max(1, width >> i)` by
-    /// `max(1, height >> i)` pixels, rows packed.
+    /// `max(1, height >> i)` pixels, rows packed (in blocks, rows of
+    /// blocks, a partial block counting whole).
     pub mips: Vec<Vec<u8>>,
     /// Whether any pixel is less than fully opaque.
     pub translucent: bool,
@@ -120,6 +127,7 @@ impl Image {
             width,
             height,
             format,
+            encoding: Encoding::Rgba8,
             mips: mips(level0, width, height),
             translucent,
         })

@@ -21,11 +21,7 @@
 use rook_types::{Material, MaterialSet};
 
 use crate::MaterialMap;
-use crate::decode::image::{Image, ImageError};
-
-/// Material textures are kept at 512 × 512 at most (Roblox's are 1024): 40
-/// materials' three maps at 1024 would hold 640 MB.
-pub const MATERIAL_MAX_SIZE: u32 = 512;
+use crate::decode::image::{Encoding, Image, ImageError, ImageFormat, MAX_SIZE};
 
 /// Each textured material's pack in the legacy set, and the pack its normal
 /// map comes from when it isn't the same one.
@@ -168,17 +164,38 @@ impl TexturePack {
     }
 }
 
-/// A material map from its image files: the colour or normal map as it is
-/// (normals are ordinary RGB normal maps), or roughness (into green),
-/// metalness (into red, 0 when the pack has none) and height (into blue,
-/// full when it has none) packed into one, with an opaque alpha so mips
-/// aren't weighted by it.
+/// A material map from its image files, block-compressed at its full size
+/// (Roblox's are 1024 × 1024): the colour or normal map as BC1 (BC3 where
+/// it has alpha), the roughness-metalness-height map as BC7. A material's
+/// three maps hold 2.7 MB with their mips, where RGBA8 would hold 16 MB
+/// (40 materials: 107 MB against 640).
 pub fn build(
     map: MaterialMap,
     main: &[u8],
     metalness: Option<&[u8]>,
     height: Option<&[u8]>,
 ) -> Result<Image, ImageError> {
+    let (rgba, format) = packed(map, main, metalness, height)?;
+    let image = Image::from_rgba(rgba, format, MAX_SIZE)?;
+    let encoding = match map {
+        MaterialMap::RoughnessMetalness => Encoding::Bc7,
+        _ if image.translucent => Encoding::Bc3,
+        _ => Encoding::Bc1,
+    };
+    Ok(image.compressed(encoding))
+}
+
+/// A material map's pixels: the colour or normal map as it is (normals
+/// are ordinary RGB normal maps), or roughness (into green), metalness
+/// (into red, 0 when the pack has none) and height (into blue, full when
+/// it has none) packed into one, with an opaque alpha so mips aren't
+/// weighted by it.
+fn packed(
+    map: MaterialMap,
+    main: &[u8],
+    metalness: Option<&[u8]>,
+    height: Option<&[u8]>,
+) -> Result<(::image::RgbaImage, ImageFormat), ImageError> {
     let (mut rgba, format) = crate::decode::image::decode_rgba(main)?;
     if map == MaterialMap::RoughnessMetalness {
         let (w, h) = rgba.dimensions();
@@ -198,7 +215,7 @@ pub fn build(
             p.0 = [m, p[0], h, 255];
         }
     }
-    Image::from_rgba(rgba, format, MATERIAL_MAX_SIZE)
+    Ok((rgba, format))
 }
 
 /// Every pack id in the tables (tests and tools).
@@ -269,15 +286,18 @@ mod tests {
             .unwrap();
             out
         };
-        let rm = build(
+        let (rm, _) = packed(
             MaterialMap::RoughnessMetalness,
             &png(200),
             Some(&png(30)),
             Some(&png(70)),
         )
         .unwrap();
-        assert_eq!(&rm.mips[0][..4], &[30, 200, 70, 255]);
-        let r = build(MaterialMap::RoughnessMetalness, &png(90), None, None).unwrap();
-        assert_eq!(&r.mips[0][..4], &[0, 90, 255, 255]);
+        assert_eq!(rm.get_pixel(0, 0).0, [30, 200, 70, 255]);
+        let (r, _) = packed(MaterialMap::RoughnessMetalness, &png(90), None, None).unwrap();
+        assert_eq!(r.get_pixel(0, 0).0, [0, 90, 255, 255]);
+        // Built, it's BC7.
+        let built = build(MaterialMap::RoughnessMetalness, &png(90), None, None).unwrap();
+        assert_eq!(built.encoding, Encoding::Bc7);
     }
 }
