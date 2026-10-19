@@ -10,7 +10,7 @@ use rook_engine::session::host::{ClientHost, ServerHost};
 use rook_engine::{DataModel, InputEvent, MessageType, Options, console};
 use rook_render::Camera;
 
-use crate::server::ServerThread;
+use crate::server::{ServerThread, Started};
 use crate::stats::Times;
 
 enum Mode {
@@ -36,14 +36,30 @@ pub struct Game {
     pub load_start: std::time::Instant,
 }
 
-impl Game {
-    /// Load a place and start it. With `play`, a local player joins and the
-    /// window shows that player's client, as in Studio's Play mode.
-    /// Content requests resolve through `content`; `script` (the
-    /// `--script` file) runs as a server script once the place starts.
-    /// Sounds load in the background while the game runs, as in Roblox,
-    /// unless `wait_for_sounds` holds each frame until they have.
-    pub fn load(
+/// A place on its way to being a [`Game`], for a window that keeps
+/// drawing while it loads: [`Loading::poll`] it once a frame.
+pub struct Loading {
+    stage: Stage,
+    finish: Finish,
+}
+
+enum Stage {
+    /// Play: the server is loading the place on its thread.
+    Server(crate::server::Starting),
+    /// Run: the place loads here on the next poll.
+    Run(Vec<u8>),
+}
+
+/// What's needed once the server is there.
+struct Finish {
+    options: Options,
+    script: Option<String>,
+    load_start: std::time::Instant,
+}
+
+impl Loading {
+    /// Start loading a place (see [`Game::load`]).
+    pub fn begin(
         path: &Path,
         play: bool,
         content: Arc<rook_content::Resolver>,
@@ -57,41 +73,95 @@ impl Game {
             wait_for_sounds,
             ..Options::default()
         };
-        let (mode, saved_camera) = if play {
-            let (server, started) =
-                ServerThread::start(bytes, options.clone(), script, ("Player1", 1))?;
-            let client = ClientHost::new(&started.joined, &options)?;
-            (
-                Mode::Play {
-                    server,
-                    client: Box::new(client),
-                },
-                started.camera,
-            )
+        let (stage, script) = if play {
+            let starting = ServerThread::spawn(bytes, options.clone(), script, ("Player1", 1))?;
+            (Stage::Server(starting), None)
         } else {
-            let mut server = DataModel::load_place(&bytes, &options)?;
-            server.start();
-            let host = ServerHost::new(server);
-            if let Some(source) = &script {
-                host.server()
-                    .run_extra_script(source)
-                    .map_err(anyhow::Error::msg)?;
-            }
-            let camera = crate::scene::initial_camera(host.server());
-            (Mode::Run(Box::new(host)), camera)
+            (Stage::Run(bytes), script)
         };
-        let game = Self {
+        Ok(Self {
+            stage,
+            finish: Finish {
+                options,
+                script,
+                load_start,
+            },
+        })
+    }
+
+    /// The game, once the place has loaded. Joining the client (Play) or
+    /// loading the place (Run) happens in the poll that returns it.
+    pub fn poll(&mut self) -> Option<anyhow::Result<Game>> {
+        match &mut self.stage {
+            Stage::Server(starting) => {
+                let started = starting.poll()?;
+                Some(started.and_then(|s| self.finish.joined(s)))
+            }
+            Stage::Run(bytes) => Some(self.finish.run(bytes)),
+        }
+    }
+}
+
+impl Finish {
+    fn joined(&self, (server, started): (ServerThread, Started)) -> anyhow::Result<Game> {
+        let client = ClientHost::new(&started.joined, &self.options)?;
+        Ok(self.game(
+            Mode::Play {
+                server,
+                client: Box::new(client),
+            },
+            started.camera,
+        ))
+    }
+
+    fn run(&self, bytes: &[u8]) -> anyhow::Result<Game> {
+        let mut server = DataModel::load_place(bytes, &self.options)?;
+        server.start();
+        let host = ServerHost::new(server);
+        if let Some(source) = &self.script {
+            host.server()
+                .run_extra_script(source)
+                .map_err(anyhow::Error::msg)?;
+        }
+        let camera = crate::scene::initial_camera(host.server());
+        Ok(self.game(Mode::Run(Box::new(host)), camera))
+    }
+
+    fn game(&self, mode: Mode, saved_camera: Camera) -> Game {
+        let game = Game {
             mode,
             saved_camera,
             server_steps: Times::default(),
             client_steps: Times::default(),
             delivering: std::time::Duration::ZERO,
-            load_start,
+            load_start: self.load_start,
         };
         game.print_logs();
-        Ok(game)
+        game
     }
+}
 
+impl Game {
+    /// Load a place and start it, waiting until it has. With `play`, a
+    /// local player joins and the window shows that player's client, as
+    /// in Studio's Play mode. Content requests resolve through `content`;
+    /// `script` (the `--script` file) runs as a server script once the
+    /// place starts. Sounds load in the background while the game runs, as
+    /// in Roblox, unless `wait_for_sounds` holds each frame until they
+    /// have.
+    pub fn load(
+        path: &Path,
+        play: bool,
+        content: Arc<rook_content::Resolver>,
+        script: Option<String>,
+        wait_for_sounds: bool,
+    ) -> anyhow::Result<Self> {
+        let loading = Loading::begin(path, play, content, script, wait_for_sounds)?;
+        match loading.stage {
+            Stage::Server(starting) => loading.finish.joined(starting.wait()?),
+            Stage::Run(bytes) => loading.finish.run(&bytes),
+        }
+    }
     /// The DataModel the window shows.
     pub fn view(&self) -> &DataModel {
         match &self.mode {
