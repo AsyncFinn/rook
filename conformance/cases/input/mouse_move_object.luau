@@ -1,10 +1,8 @@
 -- Whether mouse movement reuses one InputObject across InputChanged events,
 -- and whether a kept object's Position and Delta follow later moves.
 --
--- Mouse input only reaches the client, so this case must run in the
--- playtest Client datamodel while the mouse moves (Studio MCP
--- user_mouse_input, a few moveTo steps). `rook-tools conformance record`
--- runs cases on the server, where no moves arrive.
+-- Mouse input only reaches clients, so this runs on the playtest client.
+--! client mouse 300,300 340,320 400,350 420,380
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 

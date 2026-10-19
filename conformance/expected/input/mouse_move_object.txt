@@ -1,0 +1,10 @@
+-- studio 0.743.0.7431133
+-- signals: deferred
+client true moves 3
+same object 1-2 true
+same object 2-3 true
+first follows last position true
+first follows last delta true
+first changed since its event true
+state Enum.UserInputState.Change Enum.UserInputState.Change
+parent nil

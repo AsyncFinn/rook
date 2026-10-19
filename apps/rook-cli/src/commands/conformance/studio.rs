@@ -3,7 +3,8 @@
 //! Studio ships a launcher at `%LOCALAPPDATA%\Roblox\mcp.bat` that speaks
 //! MCP (JSON-RPC over stdio) once "Studio as MCP server" is enabled in the
 //! Assistant settings. Rook only uses its documented tools: `execute_luau`,
-//! `start_stop_play`, `get_studio_state` and `list_roblox_studios`.
+//! `start_stop_play`, `get_studio_state`, `list_roblox_studios` and
+//! `user_mouse_input`.
 
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStdin, Command, Stdio};
@@ -182,6 +183,45 @@ impl Studio {
             json!({ "code": code, "datamodel_type": "Server" }),
             Duration::from_secs(120),
         )
+    }
+
+    /// Run Luau in the playtest client while the mouse moves through
+    /// `moves` (screen pixels), and return its result. The code runs on its
+    /// own thread so the moves arrive while it waits for them.
+    pub fn run_on_client(&mut self, code: &str, moves: &[(f32, f32)]) -> anyhow::Result<String> {
+        const PENDING: &str = "\u{1}pending";
+        let client = |code: &str| json!({ "code": code, "datamodel_type": "Client" });
+        let start = format!(
+            "_G.__rook_conformance = nil\ntask.spawn(function()\n\
+             _G.__rook_conformance = (function()\n{code}\nend)()\nend)"
+        );
+        self.tool("execute_luau", client(&start), Duration::from_secs(120))?;
+        let actions: Vec<Value> = moves
+            .iter()
+            .flat_map(|&(x, y)| {
+                [
+                    json!({ "action": "moveTo", "x": x, "y": y }),
+                    json!({ "action": "wait", "wait_time_ms": 200 }),
+                ]
+            })
+            .collect();
+        self.tool(
+            "user_mouse_input",
+            json!({ "actions": actions, "datamodel_type": "Client" }),
+            Duration::from_secs(60),
+        )?;
+        let poll = format!(
+            "local r = _G.__rook_conformance\n_G.__rook_conformance = nil\nreturn r or \"{PENDING}\""
+        );
+        let deadline = Instant::now() + Duration::from_secs(60);
+        while Instant::now() < deadline {
+            let r = self.tool("execute_luau", client(&poll), Duration::from_secs(30))?;
+            if r != PENDING {
+                return Ok(r);
+            }
+            std::thread::sleep(Duration::from_millis(500));
+        }
+        bail!("client case did not finish within 60 s")
     }
 }
 

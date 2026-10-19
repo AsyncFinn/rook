@@ -11,6 +11,11 @@ checked against it.
 - `expected/<group>/<name>.txt`: the output recorded in Roblox Studio. The
   first lines give the Studio version and whether the place used Immediate
   or Deferred signals; Rook runs the case in the same mode.
+- A case with a `--! client mouse x,y x,y ...` line runs on the playtest
+  client (a client DataModel in Rook), with the mouse moved through those
+  screen points, 0.2 s apart, while it runs. Studio eases each move over a
+  few events and Rook sends one, so client cases log what holds either way
+  rather than positions.
 
 ## Recording in Studio
 
