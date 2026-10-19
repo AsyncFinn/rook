@@ -67,6 +67,17 @@ impl SceneCache {
             self.scene.lighting = self.lighting(dom);
         }
         let mut changed = Vec::new();
+        let effects: Vec<InstanceId> = parts
+            .iter()
+            .copied()
+            .filter(|&id| self.effects.has(id))
+            .collect();
+        if !effects.is_empty() {
+            parts.retain(|id| !effects.contains(id));
+            self.effects_loaded |= self.with_effects(|cache, drawn, images| {
+                cache.reread_ids(dom, &effects, drawn, images)
+            });
+        }
         if let Some(&terrain) = parts.iter().find(|&&id| self.is_terrain(id)) {
             parts.remove(&terrain);
             changed.extend(self.refresh_terrain(dom));

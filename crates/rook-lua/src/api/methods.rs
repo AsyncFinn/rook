@@ -32,6 +32,7 @@ mod attributes;
 mod audio;
 mod bindables;
 mod characters;
+mod effects;
 mod materials;
 mod models;
 mod services;
@@ -147,6 +148,9 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("Motor", "SetDesiredAngle") => set_desired_angle,
         ("Lighting", "GetMinutesAfterMidnight") => get_minutes_after_midnight,
         ("Lighting", "SetMinutesAfterMidnight") => set_minutes_after_midnight,
+        ("ParticleEmitter", "Emit") => effects::emit,
+        ("ParticleEmitter" | "Trail", "Clear") => effects::clear,
+        ("Beam", "SetTextureOffset") => effects::set_texture_offset,
         ("Sound", "Play") => sound::sound_play,
         ("Sound", "Resume") => sound::sound_resume,
         ("Sound", "Stop") => sound::sound_stop,

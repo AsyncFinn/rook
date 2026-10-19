@@ -548,6 +548,7 @@ fn input_mouse_and_click_detectors() {
 mod assets;
 mod audio_api;
 mod client_tweens;
+mod effects;
 mod scripts;
 mod sounds;
 mod terrain_api;

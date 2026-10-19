@@ -12,7 +12,7 @@
 use std::collections::HashMap;
 
 use rook_dom::InstanceId;
-use rook_lua::{NetValue, RemoteKind, RemoteMessage};
+use rook_lua::{EffectCall, NetValue, RemoteKind, RemoteMessage};
 use rook_net::{Sink, Snapshot, Source, Update};
 use rook_types::Value;
 
@@ -25,6 +25,9 @@ pub enum ToClient {
     Remote(RemoteMessage),
     /// Replicated changes.
     Updates(Vec<Update>),
+    /// Effect methods the server's scripts called (`ParticleEmitter:Emit`
+    /// and the like), which show on every client.
+    Effects(Vec<(InstanceId, EffectCall)>),
 }
 
 /// From a client to the server, with the server's instance ids.
@@ -188,6 +191,18 @@ impl ServerHost {
     /// once.
     pub fn outgoing(&mut self) -> Vec<(usize, ToClient)> {
         let mut out = Vec::new();
+        // Effect calls go to the clients' renderers: those each step moved
+        // into the server's render changes, then any made since. Without
+        // clients (Run mode) the server's own renderer takes them.
+        if !self.clients.is_empty() {
+            let mut calls = std::mem::take(&mut self.server.render_changes.effect_calls);
+            calls.append(&mut self.server.runtime().world_mut().effect_calls);
+            if !calls.is_empty() {
+                for i in 0..self.clients.len() {
+                    out.push((i, ToClient::Effects(calls.clone())));
+                }
+            }
+        }
         for msg in self.server.runtime().take_outbox() {
             let RemoteMessage { remote, kind, args } = msg;
             let mut send = |index: usize, kind: RemoteKind| {
@@ -286,6 +301,10 @@ pub struct ClientHost {
     /// number for the call.
     calls: HashMap<u64, u64>,
     next_call: u64,
+    /// Effect calls on instances that hadn't replicated yet (created and
+    /// called in the same server frame), tried again after the next
+    /// updates.
+    early_effects: Vec<(InstanceId, EffectCall)>,
 }
 
 impl ClientHost {
@@ -331,7 +350,28 @@ impl ClientHost {
             sink,
             calls: HashMap::new(),
             next_call: 0,
+            early_effects: Vec::new(),
         })
+    }
+
+    /// Hand effect calls to the client's renderer, by the client's ids;
+    /// with `keep`, those on instances it doesn't have yet wait for the
+    /// next updates.
+    fn effect_calls(
+        client: &DataModel,
+        sink: &Sink,
+        early: &mut Vec<(InstanceId, EffectCall)>,
+        calls: &[(InstanceId, EffectCall)],
+        keep: bool,
+    ) {
+        let mut w = client.runtime().world_mut();
+        for &(id, call) in calls {
+            match sink.client_id(id) {
+                Some(local) => w.effect_calls.push((local, call)),
+                None if keep => early.push((id, call)),
+                None => {}
+            }
+        }
     }
 
     pub fn client(&self) -> &DataModel {
@@ -364,6 +404,14 @@ impl ClientHost {
                     (start, local, (after != before).then_some(after).flatten())
                 };
                 rt.dispatch_since(start);
+                let early = std::mem::take(&mut self.early_effects);
+                Self::effect_calls(
+                    &self.client,
+                    &self.sink,
+                    &mut self.early_effects,
+                    &early,
+                    false,
+                );
                 // The local player's new character fires CharacterAdded on
                 // the client too.
                 if let (Some(local), Some(character)) = (local, added)
@@ -372,6 +420,15 @@ impl ClientHost {
                     let _ = rt.fire_event(local, "CharacterAdded", ud);
                     rt.drain_deferred();
                 }
+            }
+            ToClient::Effects(calls) => {
+                Self::effect_calls(
+                    &self.client,
+                    &self.sink,
+                    &mut self.early_effects,
+                    calls,
+                    true,
+                );
             }
             ToClient::Remote(RemoteMessage { remote, kind, args }) => {
                 let args: Vec<NetValue> = args

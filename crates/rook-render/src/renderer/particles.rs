@@ -9,18 +9,20 @@ use std::ops::Range;
 
 use super::*;
 use crate::particles::Particles;
+use crate::scene::Orientation;
 
 /// The particle pipeline's instance: one particle.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub(crate) struct ParticleInstance {
     position: [f32; 3],
-    size: f32,
+    /// Width and height in studs.
+    size: [f32; 2],
     /// sRGB colour, and opacity.
     color: [f32; 4],
-    /// Degrees.
+    /// Degrees, positive anticlockwise on screen.
     rotation: f32,
-    /// 1 lit by the scene, 0 its own colour.
+    /// LightInfluence: 1 lit by the scene, 0 its own colour.
     lit: f32,
     /// Its image's slot in the table (unused without one).
     image: u32,
@@ -28,6 +30,15 @@ pub(crate) struct ParticleInstance {
     brightness: f32,
     /// 1 - LightEmission: how far it covers what's behind it.
     keep: f32,
+    /// The part of its image it shows (a flipbook frame): offset and
+    /// scale.
+    frame: [f32; 4],
+    /// Its velocity, which the velocity orientations line up with.
+    velocity: [f32; 3],
+    /// [`Orientation`] as a number.
+    orientation: u32,
+    /// Studs towards the camera.
+    z_offset: f32,
 }
 
 /// The particles and what the last frame drew of them.
@@ -42,13 +53,15 @@ pub(crate) struct GpuParticles {
 pub(crate) type ParticleRun = (ImageHash, Range<u32>);
 
 impl Renderer {
-    /// Run the particles on by `seconds` without drawing (a screenshot
-    /// shows effects as they look once they've been going a while).
+    /// Run the particles and Trails on by `seconds` without drawing (a
+    /// screenshot shows effects as they look once they've been going a
+    /// while).
     pub fn settle_particles(&mut self, seconds: f32) {
         let mut left = seconds;
         while left > 0.0 {
             let dt = left.min(1.0 / 30.0);
             self.particles.sim.step(dt);
+            self.ribbons.sim.step(dt);
             left -= dt;
         }
     }
@@ -74,30 +87,56 @@ impl Renderer {
             let Some(texture) = look.texture.filter(|h| self.images.contains(h)) else {
                 continue;
             };
-            let biggest = look.size.0.iter().map(|p| p.1).fold(0.0, f32::max)
-                * look.size_spread[1].max(look.size_spread[0]);
+            let squash = look.squash.0.iter().map(|p| p.1.abs()).fold(0.0, f32::max);
+            let biggest =
+                look.size.max() * look.size_spread[1].max(look.size_spread[0]) * squash.exp2();
             if !view.sees(bounds, biggest * 0.5) {
                 continue;
             }
             let slot = self.image_slots(&[Some(texture), None, None, None, None])[0];
-            let color = look.color;
             let keep = 1.0 - look.light_emission.clamp(0.0, 1.0);
+            let orientation = match look.orientation {
+                Orientation::FacingCamera => 0,
+                Orientation::FacingCameraWorldUp => 1,
+                Orientation::VelocityParallel => 2,
+                Orientation::VelocityPerpendicular => 3,
+            };
             for p in particles {
                 let t = p.life();
-                let alpha = look.alpha.at(t).clamp(0.0, 1.0);
+                let alpha = p.alpha(look);
                 let size = p.size(look);
-                if alpha <= 0.0 || size <= 0.0 {
+                if alpha <= 0.0 || size[0] <= 0.0 || size[1] <= 0.0 {
                     continue;
                 }
+                let color = look.color.at(t);
+                let frame = match look.flipbook {
+                    Some(f) => {
+                        let i = p.frame(f.mode, f.frames());
+                        let (columns, rows) = (f.columns.max(1), f.rows.max(1));
+                        let scale = [1.0 / columns as f32, 1.0 / rows as f32];
+                        [
+                            (i % columns) as f32 * scale[0],
+                            (i / columns) as f32 * scale[1],
+                            scale[0],
+                            scale[1],
+                        ]
+                    }
+                    None => [0.0, 0.0, 1.0, 1.0],
+                };
                 let instance = ParticleInstance {
                     position: p.position.to_array(),
                     size,
                     color: [color[0], color[1], color[2], alpha],
-                    rotation: p.rotation(),
-                    lit: f32::from(u8::from(look.lit)),
+                    // Studio turns positive rotations clockwise.
+                    rotation: -p.rotation(),
+                    lit: look.light_influence.clamp(0.0, 1.0),
                     image: slot,
                     brightness: look.brightness.at(t),
                     keep,
+                    frame,
+                    velocity: p.velocity.to_array(),
+                    orientation,
+                    z_offset: look.z_offset,
                 };
                 let d = p.position.distance_squared(camera.position);
                 drawn.push((d, texture, instance));
@@ -178,21 +217,45 @@ pub(crate) fn pipeline(
     depth_format: wgpu::TextureFormat,
 ) -> wgpu::RenderPipeline {
     let attrs = wgpu::vertex_attr_array![
-        0 => Float32x3, 1 => Float32, 2 => Float32x4, 3 => Float32, 4 => Float32, 5 => Uint32,
-        6 => Float32, 7 => Float32
+        0 => Float32x3, 1 => Float32x2, 2 => Float32x4, 3 => Float32, 4 => Float32, 5 => Uint32,
+        6 => Float32, 7 => Float32, 8 => Float32x4, 9 => Float32x3, 10 => Uint32, 11 => Float32
     ];
+    blended_pipeline(
+        device,
+        "rook particles",
+        layout,
+        (shader, "vs_particle", "fs_particle"),
+        wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<ParticleInstance>() as u64,
+            step_mode: wgpu::VertexStepMode::Instance,
+            attributes: &attrs,
+        },
+        color_format,
+        depth_format,
+    )
+}
+
+/// A pipeline drawing over the frame as particles do: premultiplied colour
+/// added to what's behind, which is dimmed by the coverage in alpha; depth
+/// tested, not written; both sides drawn. `entries` are the shader and its
+/// vertex and fragment entry points.
+pub(crate) fn blended_pipeline(
+    device: &wgpu::Device,
+    label: &str,
+    layout: &wgpu::PipelineLayout,
+    (shader, vertex, fragment): (&wgpu::ShaderModule, &str, &str),
+    buffer: wgpu::VertexBufferLayout<'_>,
+    color_format: wgpu::TextureFormat,
+    depth_format: wgpu::TextureFormat,
+) -> wgpu::RenderPipeline {
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: Some("rook particles"),
+        label: Some(label),
         layout: Some(layout),
         vertex: wgpu::VertexState {
             module: shader,
-            entry_point: Some("vs_particle"),
+            entry_point: Some(vertex),
             compilation_options: Default::default(),
-            buffers: &[Some(wgpu::VertexBufferLayout {
-                array_stride: std::mem::size_of::<ParticleInstance>() as u64,
-                step_mode: wgpu::VertexStepMode::Instance,
-                attributes: &attrs,
-            })],
+            buffers: &[Some(buffer)],
         },
         primitive: Default::default(),
         depth_stencil: Some(wgpu::DepthStencilState {
@@ -205,7 +268,7 @@ pub(crate) fn pipeline(
         multisample: Default::default(),
         fragment: Some(wgpu::FragmentState {
             module: shader,
-            entry_point: Some("fs_particle"),
+            entry_point: Some(fragment),
             compilation_options: Default::default(),
             targets: &[Some(wgpu::ColorTargetState {
                 format: color_format,

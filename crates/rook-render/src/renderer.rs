@@ -9,6 +9,7 @@ mod particles;
 mod pipelines;
 mod placement;
 mod readback;
+mod ribbons;
 mod runs;
 mod timing;
 mod tonemap;
@@ -21,6 +22,7 @@ use lights::GpuLights;
 use particles::GpuParticles;
 use pipelines::Pipelines;
 use placement::Placement;
+use ribbons::GpuRibbons;
 use timing::GpuTimer;
 pub use timing::GpuTimes;
 use tonemap::{FRAME_FORMAT, Tonemap};
@@ -90,6 +92,8 @@ pub struct Renderer {
     pub(crate) lights: GpuLights,
     /// The emitters' particles.
     particles: GpuParticles,
+    /// Beams and Trails.
+    ribbons: GpuRibbons,
     terrain: TerrainLook,
     /// Seconds on the clock grass sways by ([`Renderer::set_time`]).
     time: f32,
@@ -335,6 +339,7 @@ impl Renderer {
             lighting: Lighting::default(),
             lights,
             particles: GpuParticles::default(),
+            ribbons: GpuRibbons::default(),
             terrain: TerrainLook::default(),
             time: 0.0,
             water_phase: 0.0,
@@ -368,12 +373,14 @@ impl Renderer {
         }
     }
 
-    /// Set the clock grass sways by, in seconds; water and particles move
-    /// on by the time since the last call (none when the clock goes back,
-    /// at most a second), water at the scene's `WaterWaveSpeed`.
+    /// Set the clock grass sways by and Beams' images scroll by, in
+    /// seconds; water, particles and Trails move on by the time since the
+    /// last call (none when the clock goes back, at most a second), water
+    /// at the scene's `WaterWaveSpeed`.
     pub fn set_time(&mut self, seconds: f32) {
         let dt = (seconds - self.time).clamp(0.0, 1.0);
         self.particles.sim.step(dt);
+        self.ribbons.sim.step(dt);
         self.water_phase =
             (self.water_phase + f64::from(dt * self.terrain.wave_speed)) % WATER_PHASE_PERIOD;
         self.time = seconds;

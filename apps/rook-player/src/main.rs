@@ -127,12 +127,15 @@ fn parse_vec3(s: &str) -> Result<Vec3, String> {
 }
 
 /// The scene for a DataModel as it is now. Its pending render changes are
-/// already drawn, so they're dropped: otherwise the first frame would
-/// rebuild the whole scene again (a new DataModel's changes say "rebuild
-/// everything").
+/// already drawn, so they're dropped (otherwise the first frame would
+/// rebuild the whole scene again: a new DataModel's changes say "rebuild
+/// everything"), all but scripts' effect calls, which aren't in the tree.
 fn scene_of(dm: &mut DataModel, content: &Arc<Resolver>, camera: Vec3) -> SceneCache {
-    dm.take_render_changes();
-    SceneCache::new(&dm.runtime().world().dom, content.clone(), camera)
+    let calls = dm.take_render_changes().effect_calls;
+    let dom = &dm.runtime().world().dom;
+    let mut scene = SceneCache::new(dom, content.clone(), camera);
+    scene.take_effect_calls(dom, &calls);
+    scene
 }
 
 /// Bring a cached scene up to date with a DataModel's changes and the mesh

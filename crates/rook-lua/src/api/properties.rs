@@ -11,6 +11,8 @@ use rook_reflection::{PropertyId, PropertyKind, PropertyType, Serialization};
 use rook_types::{CFrame, Color3, Value, Vector3};
 
 use crate::types::color::closest_brick_color;
+
+mod attachment;
 use crate::world::World;
 
 /// A part's CFrame.
@@ -169,6 +171,11 @@ pub(crate) fn set_lighting_hours(
 
 pub(crate) fn get(w: &World, id: InstanceId, name: &str) -> Option<Value> {
     let dom = &w.dom;
+    if dom.is_a(id, "Attachment")
+        && let Some(v) = attachment::get(w, id, name)
+    {
+        return Some(v);
+    }
     if let Some(target) = view(w, id, name, SAME_AS) {
         return dom.property_by_name(id, target);
     }
@@ -298,6 +305,11 @@ pub(crate) fn set(
 ) -> Option<Result<(), DomError>> {
     if w.dom.is_a(id, "Sound") {
         return set_sound(w, id, name, value);
+    }
+    if w.dom.is_a(id, "Attachment")
+        && let Some(done) = attachment::set(w, id, name, value)
+    {
+        return Some(done);
     }
     if let Some(done) = crate::audio::clamp(w, id, name, value) {
         return Some(done);

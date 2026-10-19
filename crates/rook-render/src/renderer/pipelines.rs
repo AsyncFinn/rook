@@ -52,6 +52,8 @@ pub(crate) struct Pipelines {
     pub(crate) shadow: wgpu::RenderPipeline,
     /// Emitters' particles, over everything.
     pub(crate) particles: wgpu::RenderPipeline,
+    /// Beams and Trails, before the particles.
+    pub(crate) ribbons: wgpu::RenderPipeline,
 }
 
 impl Pipelines {
@@ -382,8 +384,16 @@ impl Pipelines {
             frame_format,
             depth_format,
         );
+        let ribbons = super::ribbons::pipeline(
+            device,
+            &pipeline_layout,
+            &particle_shader,
+            frame_format,
+            depth_format,
+        );
         Self {
             particles,
+            ribbons,
             opaque: opaque_pipeline,
             transparent: transparent_pipeline,
             layer: layer_pipeline,

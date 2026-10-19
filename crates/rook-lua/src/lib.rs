@@ -20,7 +20,7 @@ pub use api::camera::{Lens, viewport_ray};
 pub use ctx::{ScriptError, lua_error_message};
 pub use net::{NetValue, RemoteKind, RemoteMessage};
 pub use world::{
-    AudioState, Handler, InputState, Job, Listener, LogEntry, MessageType, Scheduled,
+    AudioState, EffectCall, Handler, InputState, Job, Listener, LogEntry, MessageType, Scheduled,
     SignalBehavior, SoundControl, WaitKind, World,
 };
 
