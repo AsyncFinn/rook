@@ -28,7 +28,11 @@ impl EffectTextures {
             let installed = content
                 .resolve_local(&ContentRef::File(path.as_str().into()))
                 .and_then(|f| {
-                    let mut image = Image::decode(&f.bytes).ok()?;
+                    let mut image = Image::decode(&f.bytes)
+                        .map_err(
+                            |e| tracing::warn!(target: "content", "{}: {e}", f.source.location),
+                        )
+                        .ok()?;
                     for level in &mut image.mips {
                         convert(level);
                     }

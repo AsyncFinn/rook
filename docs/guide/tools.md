@@ -12,6 +12,7 @@
 | `rook terrain` | Show what a file's Terrain holds (smooth voxels by material, or legacy blocks) and how long it takes to mesh; `--scan <folder>` counts both across a folder |
 | `rook content` | Show how content references resolve: from the Roblox install, content folders, the cache or asset delivery, and why any fail |
 | `rook cache` | Show the download cache's folder and size; `prune --older-than <days>`, `trim` or `clear` it |
+| `rook logs` | Print the newest log file's path; `--open` opens the logs folder |
 | `rook conformance record` / `run` | Record behaviour in Roblox Studio and check Rook against it |
 
 ## Inspecting and testing files
@@ -28,14 +29,14 @@ rook run-headless place.rbxl --repl        # then open a command bar (see gettin
 
 ```sh
 rook content rbxassetid://12221462               # what it is, where it comes from, size, hash
-rook content --place place.rbxl                  # every reference in a place: what resolves, from where, what fails and why
+rook content place.rbxl                          # every reference in a place and its outcome: what resolves, from where, what fails and why
 rook content --place place.rbxl --offline        # only the install, folders and cache
                                                  # (--place also totals mesh and image references: which decode, by version or format, and why others fail)
 rook cache                                       # where downloads are cached and how much
 rook cache prune --older-than 30                 # delete what hasn't been used for 30 days
 ```
 
-Rook finds your Roblox install by itself. These environment variables change what it uses (for `rook`, `rook-player` and headless runs alike):
+Rook finds your Roblox install by itself. `settings.json` in the data folder (`%LOCALAPPDATA%\Rook`) holds the cache size, whether asset delivery is on, the install to use and the log level; these environment variables override it (for `rook`, `rook-player` and headless runs alike), and command-line flags override both:
 
 | Variable | Effect |
 |---|---|
@@ -47,6 +48,12 @@ Rook finds your Roblox install by itself. These environment variables change wha
 | `ROOK_OPEN_CLOUD_API_KEY` | An Open Cloud key, tried for assets refused anonymously (needs the `legacy-asset:manage` scope) |
 | `ROOK_CACHE_DIR` | Where downloads are cached (default `%TEMP%\Rook\cache` on Windows, `~/Library/Caches/Rook` on macOS, `$XDG_CACHE_HOME/rook` elsewhere) |
 | `ROOK_CACHE_MAX` | The cache's size limit (`2GB` by default; `500MB`, `5GB`, ...). Rook drops what was used least recently when it starts |
+| `ROOK_DATA_DIR` | Where settings, logs, crash reports and kept content live (default `%LOCALAPPDATA%\Rook` on Windows) |
+| `ROOK_LOG` | What the terminal shows: a level (`debug`) or subsystems (`content,terrain`), like `--verbose` |
+
+## Logs and failures
+
+After loading, `rook-player` prints one summary of what didn't load, grouped by cause. `--verbose` lists every failure with its instance, reference and reason; `--verbose content` (or `terrain`, `render`, ...) shows everything one area logs. Each player run writes a full log (`rook logs` prints its path), and a crash leaves a report in the logs' `crashes` folder. See [data and logging](../design/data-and-logging.md).
 
 Asset delivery only talks to Roblox's asset endpoints. Rook never reads browser cookies or stored credentials.
 

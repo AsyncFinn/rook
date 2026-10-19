@@ -68,28 +68,38 @@ impl Delivery {
         self.api_key.is_some()
     }
 
-    /// Download an asset (its latest version, or `version`). Returns the
-    /// bytes and the URL they came from (without its signature).
-    pub fn fetch(&self, id: u64, version: Option<u32>) -> Result<(Vec<u8>, String), Failure> {
+    /// Download an asset (its latest version, or `version`).
+    pub fn fetch(&self, id: u64, version: Option<u32>) -> Result<Asset, Failure> {
         let path = match version {
             Some(v) => format!("{id}/version/{v}"),
             None => id.to_string(),
         };
         let anonymous = self.locate(&format!("{ANONYMOUS}/{path}"), None);
-        let location = match (anonymous, &self.api_key) {
+        let (location, version) = match (anonymous, &self.api_key) {
             (Err(f), Some(key)) if f.kind == FailureKind::Forbidden => {
                 self.locate(&format!("{OPEN_CLOUD}/{path}"), Some(key))?
             }
             (result, _) => result?,
         };
         let bytes = self.download(&location)?;
-        let shown = location.split('?').next().unwrap_or("").to_owned();
-        Ok((bytes, shown))
+        let url = location.split('?').next().unwrap_or("").to_owned();
+        Ok(Asset {
+            bytes,
+            url,
+            version,
+        })
     }
 
-    /// Ask where an asset's bytes are.
-    fn locate(&self, url: &str, key: Option<&str>) -> Result<String, Failure> {
-        let (status, body) = self.get(url, key)?;
+    /// An asset's latest version, without downloading it.
+    pub fn latest_version(&self, id: u64) -> Result<u32, Failure> {
+        let (_, version) = self.locate(&format!("{ANONYMOUS}/{id}"), None)?;
+        version.ok_or_else(|| Failure::new(FailureKind::Network, "no version in the answer"))
+    }
+
+    /// Ask where an asset's bytes are, and which version they are (the
+    /// `roblox-assetversionnumber` header, when sent).
+    fn locate(&self, url: &str, key: Option<&str>) -> Result<(String, Option<u32>), Failure> {
+        let (status, body, version) = self.get(url, key)?;
         let json: serde_json::Value = serde_json::from_slice(&body).map_err(|_| {
             Failure::new(
                 FailureKind::Network,
@@ -108,7 +118,7 @@ impl Delivery {
             .and_then(|l| l["location"].as_str())
             .or_else(|| json["location"].as_str());
         if let Some(location) = location {
-            return Ok(location.to_owned());
+            return Ok((location.to_owned(), version));
         }
         let error = &json["errors"][0];
         let code = error["code"].as_u64().unwrap_or(u64::from(status));
@@ -120,7 +130,7 @@ impl Delivery {
     }
 
     fn download(&self, url: &str) -> Result<Vec<u8>, Failure> {
-        let (status, body) = self.get(url, None)?;
+        let (status, body, _) = self.get(url, None)?;
         if status == 200 {
             Ok(body)
         } else {
@@ -131,8 +141,9 @@ impl Delivery {
         }
     }
 
-    /// GET with retries on HTTP 429; the body is decompressed.
-    fn get(&self, url: &str, key: Option<&str>) -> Result<(u16, Vec<u8>), Failure> {
+    /// GET with retries on HTTP 429; the body is decompressed. Returns the
+    /// status, the body and the asset version header.
+    fn get(&self, url: &str, key: Option<&str>) -> Result<(u16, Vec<u8>, Option<u32>), Failure> {
         let network = |e: ureq::Error| Failure::new(FailureKind::Network, e.to_string());
         for attempt in 1..=TRIES {
             let mut request = self.agent.get(url);
@@ -152,6 +163,11 @@ impl Delivery {
                 std::thread::sleep(Duration::from_secs(wait));
                 continue;
             }
+            let version = response
+                .headers()
+                .get("roblox-assetversionnumber")
+                .and_then(|v| v.to_str().ok())
+                .and_then(|v| v.parse().ok());
             let mut body = Vec::new();
             response
                 .body_mut()
@@ -159,13 +175,23 @@ impl Delivery {
                 .take(MAX_BYTES)
                 .read_to_end(&mut body)
                 .map_err(|e| Failure::new(FailureKind::Network, e.to_string()))?;
-            return Ok((status, body));
+            return Ok((status, body, version));
         }
         Err(Failure::new(
             FailureKind::Network,
             "rate limited (HTTP 429)",
         ))
     }
+}
+
+/// A downloaded asset.
+#[derive(Debug)]
+pub struct Asset {
+    pub bytes: Vec<u8>,
+    /// The URL the bytes came from, without its signature.
+    pub url: String,
+    /// Which version asset delivery says it is.
+    pub version: Option<u32>,
 }
 
 /// An asset delivery error code (or HTTP status) as a failure kind.

@@ -20,6 +20,7 @@ rook-types.workspace = true
 serde_json.workspace = true
 symphonia.workspace = true
 thiserror.workspace = true
+tracing.workspace = true
 ureq.workspace = true
 zstd.workspace = true
 

@@ -139,7 +139,7 @@ pub fn classify(url: &str) -> (&'static str, Option<String>) {
     use std::sync::{LazyLock, Mutex};
 
     static RESOLVER: LazyLock<rook_content::Resolver> = LazyLock::new(|| {
-        let mut config = rook_content::Config::from_env(false);
+        let mut config = rook_engine::settings::content_config(false);
         config.cache_dir = None;
         rook_content::Resolver::new(config)
     });

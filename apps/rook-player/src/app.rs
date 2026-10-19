@@ -83,6 +83,7 @@ impl App {
         };
         surface.configure(&device, &config);
         let mut renderer = Renderer::new(&adapter, device, queue, config.format);
+        crate::note_gpu(&renderer);
         self.install.apply(&mut renderer);
         renderer.set_scene(&self.scene.scene);
         self.game.set_viewport(config.width, config.height);

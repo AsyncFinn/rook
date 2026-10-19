@@ -32,24 +32,36 @@ impl SceneCache {
     pub fn poll_files(&mut self, dom: &Dom, wait: bool) -> Vec<usize> {
         let finished = self.files.poll(wait);
         if finished.is_empty() {
+            if self.files.idle() {
+                self.report.flush(dom);
+            }
             return Vec::new();
         }
         profiling::scope!("SceneCache::poll_files");
         let mut parts = HashSet::new();
         for (key, loaded) in finished {
+            let waiting = self.waiting.remove(&key).unwrap_or_default();
+            let sky = self.sky_files.remove(&key);
             match loaded {
-                Some(Loaded::Mesh(hash, mesh)) => {
+                Ok(Loaded::Mesh(hash, mesh)) => {
                     self.scene.meshes.insert(hash, mesh);
                 }
-                Some(Loaded::Image(hash, image)) => {
+                Ok(Loaded::Image(hash, image)) => {
                     self.scene.images.insert(hash, image);
                 }
-                None => {}
+                Err(failure) => {
+                    for &part in &waiting {
+                        self.report.add(Some(part), &key, &failure);
+                    }
+                    if sky {
+                        self.report.add(None, &key, &failure);
+                    }
+                }
             }
-            if self.sky_files.remove(&key) {
+            if sky {
                 self.lighting_changed = true;
             }
-            parts.extend(self.waiting.remove(&key).unwrap_or_default());
+            parts.extend(waiting);
         }
         if self.lighting_changed {
             self.scene.lighting = self.lighting(dom);
@@ -63,6 +75,9 @@ impl SceneCache {
             if self.index.contains_key(&id) {
                 self.place(dom, id, true, &mut changed);
             }
+        }
+        if self.files.idle() {
+            self.report.flush(dom);
         }
         changed
     }
@@ -89,8 +104,18 @@ impl SceneCache {
             self.focus.distance(self.near)
         };
         let state = self.files.state(&r, want, priority);
-        if state == FileState::Loading {
-            self.waiting.entry((r, want)).or_default().insert(part);
+        let key = (r, want);
+        match state {
+            FileState::Loading => {
+                self.waiting.entry(key).or_default().insert(part);
+            }
+            // A file that failed before: this part didn't load either.
+            FileState::Failed => {
+                if let Some(failure) = self.files.failure(&key) {
+                    self.report.add(Some(part), &key, failure);
+                }
+            }
+            FileState::Loaded(_) => {}
         }
         state
     }

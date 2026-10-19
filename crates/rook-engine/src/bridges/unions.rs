@@ -119,7 +119,17 @@ impl DataModel {
                 Some(blob) if in_workspace => match unions.saved.get(&blob) {
                     Some(c) => c.clone(),
                     None => {
-                        let c = physics::decode(&blob).ok().map(Arc::new);
+                        let c = match physics::decode(&blob) {
+                            Ok(c) => Some(Arc::new(c)),
+                            Err(e) => {
+                                tracing::debug!(
+                                    target: "physics",
+                                    "{}: union collision didn't decode: {e}",
+                                    dom.full_name(id)
+                                );
+                                None
+                            }
+                        };
                         unions.saved.insert(blob, c.clone());
                         c
                     }

@@ -43,6 +43,9 @@ pub enum SourceKind {
     Install,
     /// A folder the user pointed Rook at (`ROOK_CONTENT_DIRS`).
     Folder,
+    /// Content Rook keeps for good in its data folder
+    /// ([`resolver::kept`]).
+    Kept,
     /// Rook's disk cache of earlier downloads.
     Cache,
     /// Downloaded from Roblox's asset delivery just now.
@@ -55,6 +58,7 @@ impl SourceKind {
             Self::Defaults => "rook defaults",
             Self::Install => "roblox install",
             Self::Folder => "content folder",
+            Self::Kept => "kept content",
             Self::Cache => "cache",
             Self::Delivery => "asset delivery",
         }
@@ -118,9 +122,12 @@ pub enum FailureKind {
     Offline,
     /// The network failed (no connection, timeout, an unexpected answer).
     Network,
-    /// The bytes aren't what was asked for: not a mesh or an image, or one
-    /// that is damaged or of a version Rook doesn't read yet.
+    /// The bytes aren't what was asked for (not a mesh or an image), or
+    /// are damaged.
     Invalid,
+    /// A file of a version or form Rook doesn't read yet (a mesh version,
+    /// a union's geometry).
+    UnknownVersion,
 }
 
 impl FailureKind {
@@ -132,6 +139,7 @@ impl FailureKind {
             Self::Offline => "offline",
             Self::Network => "network",
             Self::Invalid => "invalid",
+            Self::UnknownVersion => "unknown-version",
         }
     }
 
@@ -143,6 +151,7 @@ impl FailureKind {
             Self::Offline,
             Self::Network,
             Self::Invalid,
+            Self::UnknownVersion,
         ]
         .into_iter()
         .find(|k| k.name() == name)
@@ -152,7 +161,11 @@ impl FailureKind {
     pub fn is_lasting(self) -> bool {
         matches!(
             self,
-            Self::NotFound | Self::Forbidden | Self::Unsupported | Self::Invalid
+            Self::NotFound
+                | Self::Forbidden
+                | Self::Unsupported
+                | Self::Invalid
+                | Self::UnknownVersion
         )
     }
 }

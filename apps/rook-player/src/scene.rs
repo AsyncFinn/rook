@@ -29,6 +29,7 @@ mod loading;
 mod look;
 mod materials;
 mod props;
+mod report;
 mod terrain;
 mod union;
 
@@ -111,6 +112,8 @@ pub struct SceneCache {
     light_holders: HashMap<InstanceId, Vec<usize>>,
     /// Fire, Smoke and Sparkles, as `scene.emitters`.
     effects: EffectCache,
+    /// Files that didn't load, reported once loading settles.
+    report: report::Report,
 }
 
 impl SceneCache {
@@ -137,6 +140,7 @@ impl SceneCache {
             light_ids: Vec::new(),
             light_holders: HashMap::new(),
             effects: EffectCache::new(textures),
+            report: report::Report::default(),
         };
         cache.rebuild(dom);
         cache

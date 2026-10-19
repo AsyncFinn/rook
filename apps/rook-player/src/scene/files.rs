@@ -6,12 +6,13 @@
 //! [`Files::poll`] hands back what finished at a fixed point in the frame,
 //! so a frame never waits for disk, network or decoding. Each file is kept
 //! once by the hash of its bytes, however parts refer to it. A place
-//! without file meshes or images starts no loader and pays nothing.
+//! without file meshes or images starts no loader and pays nothing. A file
+//! that fails keeps why ([`Files::failure`]), for the scene's load report.
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use rook_content::{ContentRef, Loader, Resolver, Ticket, Want};
+use rook_content::{ContentRef, Failure, FailureKind, Loader, Resolver, Ticket, Want};
 use rook_render::{Image, ImageHash, Mesh, MeshHash};
 
 /// A file the scene asked for, and what it wants of it.
@@ -41,6 +42,8 @@ pub struct Files {
     /// Made on the first request.
     loader: Option<Loader>,
     states: HashMap<FileRef, FileState>,
+    /// Why each failed file failed.
+    failures: HashMap<FileRef, Failure>,
     tickets: HashMap<Ticket, FileRef>,
 }
 
@@ -50,6 +53,7 @@ impl Files {
             resolver,
             loader: None,
             states: HashMap::new(),
+            failures: HashMap::new(),
             tickets: HashMap::new(),
         }
     }
@@ -71,6 +75,16 @@ impl Files {
         FileState::Loading
     }
 
+    /// Why a file failed, if it did.
+    pub fn failure(&self, key: &FileRef) -> Option<&Failure> {
+        self.failures.get(key)
+    }
+
+    /// Whether nothing asked for is still loading.
+    pub fn idle(&self) -> bool {
+        self.tickets.is_empty()
+    }
+
     /// Change the priority of a file still waiting to load.
     pub fn set_priority(&self, key: &FileRef, priority: f32) {
         if let Some(loader) = &self.loader {
@@ -78,10 +92,9 @@ impl Files {
         }
     }
 
-    /// Files finished since the last call, with what they hold (`None` for
-    /// failures). With `wait`, blocks until nothing is loading
-    /// (screenshots).
-    pub fn poll(&mut self, wait: bool) -> Vec<(FileRef, Option<Loaded>)> {
+    /// Files finished since the last call, with what they hold or why they
+    /// failed. With `wait`, blocks until nothing is loading (screenshots).
+    pub fn poll(&mut self, wait: bool) -> Vec<(FileRef, Result<Loaded, Failure>)> {
         let Some(loader) = &mut self.loader else {
             return Vec::new();
         };
@@ -98,19 +111,23 @@ impl Files {
             let Some(key) = self.tickets.remove(&ticket) else {
                 continue;
             };
-            let loaded = outcome.ok().and_then(|f| {
+            let loaded = outcome.and_then(|f| {
                 let hash = *f.hash.as_bytes();
-                match key.1 {
-                    Want::Mesh => Some(Loaded::Mesh(MeshHash(hash), f.mesh?)),
-                    Want::Image => Some(Loaded::Image(ImageHash(hash), f.image?)),
+                let loaded = match key.1 {
+                    Want::Mesh => f.mesh.map(|m| Loaded::Mesh(MeshHash(hash), m)),
+                    Want::Image => f.image.map(|i| Loaded::Image(ImageHash(hash), i)),
                     Want::Bytes | Want::Audio => None,
-                }
+                };
+                loaded.ok_or_else(|| Failure::new(FailureKind::Invalid, "not a mesh or an image"))
             });
             let state = match &loaded {
-                Some(Loaded::Mesh(MeshHash(h), _) | Loaded::Image(ImageHash(h), _)) => {
+                Ok(Loaded::Mesh(MeshHash(h), _) | Loaded::Image(ImageHash(h), _)) => {
                     FileState::Loaded(*h)
                 }
-                None => FileState::Failed,
+                Err(failure) => {
+                    self.failures.insert(key.clone(), failure.clone());
+                    FileState::Failed
+                }
             };
             self.states.insert(key.clone(), state);
             out.push((key, loaded));

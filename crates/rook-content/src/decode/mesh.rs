@@ -76,8 +76,18 @@ pub enum MeshError {
     NotAMesh,
     #[error("mesh version {0} is not supported yet")]
     Unsupported(String),
+    /// A union's `MeshData` in a form Rook doesn't read (`CSGMDL3`).
+    #[error("union geometry {0} is not supported yet")]
+    UnsupportedUnion(String),
     #[error("mesh file is damaged: {0}")]
     Damaged(String),
+}
+
+impl MeshError {
+    /// Whether the file is fine but Rook can't read its version yet.
+    pub fn is_unsupported(&self) -> bool {
+        matches!(self, Self::Unsupported(_) | Self::UnsupportedUnion(_))
+    }
 }
 
 /// The versions `rbx_mesh` reads.

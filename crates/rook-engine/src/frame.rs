@@ -91,9 +91,9 @@ impl DataModel {
         profiling::scope!("update_content");
         let loader = content.loader.get_or_insert_with(|| {
             let resolver = content.resolver.clone().unwrap_or_else(|| {
-                Arc::new(rook_content::Resolver::new(rook_content::Config::from_env(
-                    false,
-                )))
+                Arc::new(rook_content::Resolver::new(
+                    crate::settings::content_config(false),
+                ))
             });
             rook_content::Loader::new(resolver)
         });

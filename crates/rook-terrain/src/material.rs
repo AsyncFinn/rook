@@ -173,6 +173,21 @@ pub struct Look {
     pub bottom: Option<Texture>,
 }
 
+/// Every texture pack terrain uses, in either set (tools: Rook keeps
+/// these, `rook content --pin`).
+pub fn all_packs() -> impl Iterator<Item = u64> {
+    TerrainMaterial::ALL.into_iter().flat_map(|m| {
+        [MaterialSet::Legacy, MaterialSet::Materials2022]
+            .into_iter()
+            .flat_map(move |set| {
+                let look = m.textures(set);
+                [look.top, look.side, look.bottom]
+            })
+            .flatten()
+            .map(|t| t.pack)
+    })
+}
+
 impl TerrainMaterial {
     /// How this material looks in `set`.
     pub fn look(self, set: MaterialSet) -> &'static Look {

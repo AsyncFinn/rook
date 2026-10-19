@@ -74,7 +74,13 @@ impl Install {
 /// Every install found, newest first, or only `ROOK_ROBLOX_INSTALL`'s
 /// (none if it is `off` or doesn't exist).
 pub fn find() -> Vec<Install> {
-    if let Some(value) = std::env::var_os(INSTALL_VAR) {
+    find_from(std::env::var_os(INSTALL_VAR).as_deref())
+}
+
+/// Every install found, newest first, or only the one `chosen` names (a
+/// version or content folder; none if it is `off` or doesn't exist).
+pub fn find_from(chosen: Option<&std::ffi::OsStr>) -> Vec<Install> {
+    if let Some(value) = chosen {
         if value.eq_ignore_ascii_case("off") || value.is_empty() {
             return Vec::new();
         }
@@ -123,6 +129,11 @@ pub fn find() -> Vec<Install> {
 /// The newest install, if any.
 pub fn newest() -> Option<Install> {
     find().into_iter().next()
+}
+
+/// The newest install, or the one `chosen` names ([`find_from`]).
+pub fn newest_from(chosen: Option<&std::ffi::OsStr>) -> Option<Install> {
+    find_from(chosen).into_iter().next()
 }
 
 fn version_folders() -> Vec<PathBuf> {

@@ -60,7 +60,14 @@ rayon = "1"
 anstream = "1"
 anstyle = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
-rustyline = { version = "18", default-features = false }
+# `with-file-history`: the prompt's history is kept between runs
+rustyline = { version = "18", default-features = false, features = ["with-file-history"] }
+# Logging (rook-engine's `logging`): events from every crate, printed in the
+# console's line format and written to a file per run
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["registry", "std"] }
+# The platform's data, state and log folders (rook-engine's `data`)
+directories = "6"
 walkdir = "2"
 blake3 = "1"
 # Asset delivery (rook-content): rustls and gzip, no async runtime

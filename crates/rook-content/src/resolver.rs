@@ -5,6 +5,7 @@ pub mod cache;
 pub mod defaults;
 pub mod delivery;
 pub mod install;
+pub mod kept;
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -66,6 +67,9 @@ pub struct Config {
     /// The cache's size limit, kept by a trim in the background when the
     /// resolver opens it; `None` never trims.
     pub cache_max: Option<u64>,
+    /// Where content Rook itself loads in nearly every place is kept for
+    /// good ([`kept`]); `None` keeps it in the cache like the rest.
+    pub kept_dir: Option<PathBuf>,
 }
 
 /// The default cache folder, after moving a cache left in the old
@@ -74,7 +78,9 @@ fn default_cache_dir() -> Option<PathBuf> {
     let dir = Cache::default_dir()?;
     if let Some(old) = Cache::legacy_dir() {
         // A failed move leaves the old cache where it is; nothing is lost.
-        let _ = Cache::move_legacy(&old, &dir);
+        if let Err(e) = Cache::move_legacy(&old, &dir) {
+            tracing::warn!(target: "content", "couldn't move the cache from {}: {e}", old.display());
+        }
     }
     Some(dir)
 }
@@ -87,10 +93,10 @@ impl Config {
     /// `on` or `off`: whether asset delivery may use the network.
     pub const NETWORK_VAR: &str = "ROOK_ASSET_DELIVERY";
 
-    /// Settings from the environment. `network` is the default for
-    /// `ROOK_ASSET_DELIVERY`: tools that exist to show content turn it on,
-    /// headless runs and tests leave it off.
-    pub fn from_env(network: bool) -> Self {
+    /// Settings from the environment over `base`: the values a
+    /// `ROOK_*` variable doesn't set (the engine fills it from
+    /// `settings.json` and each program's defaults).
+    pub fn from_env_over(base: Base) -> Self {
         let order = std::env::var(Self::ORDER_VAR)
             .ok()
             .map(|v| v.split(',').filter_map(ProviderKind::from_name).collect())
@@ -98,22 +104,35 @@ impl Config {
         let folders = std::env::var_os(Self::FOLDERS_VAR)
             .map(|v| std::env::split_paths(&v).filter(|p| p.is_dir()).collect())
             .unwrap_or_default();
-        let network = match std::env::var(Self::NETWORK_VAR) {
-            Ok(v) if v.eq_ignore_ascii_case("off") || v == "0" => false,
-            Ok(v) if v.eq_ignore_ascii_case("on") || v == "1" => true,
-            _ => network,
-        };
+        let network = std::env::var(Self::NETWORK_VAR)
+            .ok()
+            .and_then(|v| parse_switch(&v))
+            .unwrap_or(base.network);
+        let install = std::env::var_os(install::INSTALL_VAR).or(base.install);
         Self {
             order,
-            install: install::newest(),
+            install: install::newest_from(install.as_deref()),
             folders,
             network,
             api_key: std::env::var(delivery::API_KEY_VAR)
                 .ok()
                 .filter(|k| !k.trim().is_empty()),
             cache_dir: default_cache_dir(),
-            cache_max: Some(Cache::max_from_env()),
+            cache_max: Some(Cache::max_from_env().unwrap_or(base.cache_max)),
+            kept_dir: base.kept_dir,
         }
+    }
+
+    /// [`Config::from_env_over`] with Rook's defaults: `network` is the
+    /// default for `ROOK_ASSET_DELIVERY` (tools that exist to show content
+    /// turn it on, headless runs and tests leave it off), and nothing is
+    /// kept. Programs go through `rook_engine::settings` instead, which
+    /// adds `settings.json` and the kept content folder.
+    pub fn from_env(network: bool) -> Self {
+        Self::from_env_over(Base {
+            network,
+            ..Base::default()
+        })
     }
 
     /// No providers but the ones given: for tests.
@@ -126,6 +145,50 @@ impl Config {
             api_key: None,
             cache_dir: None,
             cache_max: None,
+            kept_dir: None,
+        }
+    }
+}
+
+/// `on`/`off` (or `1`/`0`, `true`/`false`).
+pub fn parse_switch(value: &str) -> Option<bool> {
+    let v = value.trim();
+    if ["on", "1", "true"]
+        .iter()
+        .any(|s| v.eq_ignore_ascii_case(s))
+    {
+        Some(true)
+    } else if ["off", "0", "false"]
+        .iter()
+        .any(|s| v.eq_ignore_ascii_case(s))
+    {
+        Some(false)
+    } else {
+        None
+    }
+}
+
+/// What a [`Config`] holds where no `ROOK_*` variable says otherwise.
+#[derive(Debug, Clone)]
+pub struct Base {
+    /// Whether asset delivery may use the network.
+    pub network: bool,
+    /// The download cache's size limit.
+    pub cache_max: u64,
+    /// The Roblox install to use (a version or content folder, or `off`);
+    /// `None` searches for the newest.
+    pub install: Option<std::ffi::OsString>,
+    /// The kept content folder ([`kept`]).
+    pub kept_dir: Option<PathBuf>,
+}
+
+impl Default for Base {
+    fn default() -> Self {
+        Self {
+            network: false,
+            cache_max: cache::DEFAULT_MAX,
+            install: None,
+            kept_dir: None,
         }
     }
 }
@@ -139,6 +202,8 @@ pub struct Resolver {
     folders: Vec<PathBuf>,
     delivery: Option<Delivery>,
     cache: Option<Cache>,
+    /// Content kept for good ([`kept`]).
+    kept: Option<Cache>,
     /// Failures this run that the disk cache doesn't keep (network errors,
     /// asset delivery being off), so they aren't retried every request.
     failed: Mutex<HashMap<ContentRef, Failure>>,
@@ -152,21 +217,30 @@ impl Resolver {
             folders: config.folders,
             delivery: config.network.then(|| Delivery::new(config.api_key)),
             cache: config.cache_dir.and_then(|dir| {
-                let cache = Cache::open(dir).ok()?;
+                let cache = open_store(dir)?;
                 if let Some(max) = config.cache_max {
                     // Off the caller's thread: walking a big cache takes a
                     // while, and nothing waits on it. Blobs a resolution is
                     // reading can't be deleted on Windows, and a deleted one
                     // is fetched again.
                     let trimmed = cache.clone();
-                    let _ = std::thread::Builder::new()
+                    let trim = std::thread::Builder::new()
                         .name("rook-cache-trim".into())
                         .spawn(move || trimmed.trim(max));
+                    if let Err(e) = trim {
+                        tracing::warn!(target: "content", "couldn't start trimming the cache: {e}");
+                    }
                 }
                 Some(cache)
             }),
+            kept: config.kept_dir.and_then(open_store),
             failed: Mutex::new(HashMap::new()),
         }
+    }
+
+    /// The kept content folder ([`kept`]).
+    pub fn kept(&self) -> Option<&Cache> {
+        self.kept.as_ref()
     }
 
     pub fn install(&self) -> Option<&Install> {
@@ -216,7 +290,9 @@ impl Resolver {
     /// content needed at startup, such as the head mesh.
     pub fn resolve_local(&self, r: &ContentRef) -> Option<Fetched> {
         let (kind, file) = self.locate_local(r)?;
-        let bytes = std::fs::read(&file).ok()?;
+        let bytes = std::fs::read(&file)
+            .map_err(|e| tracing::warn!(target: "content", "{}: {e}", file.display()))
+            .ok()?;
         Some(Fetched::new(bytes, kind, file.display().to_string()))
     }
 
@@ -329,13 +405,42 @@ impl Resolver {
         Ok(fetched)
     }
 
-    /// An asset id, from the cache or asset delivery.
+    /// An asset id, from the cache or asset delivery; a kept asset
+    /// ([`kept`]) at its pinned version, from the kept folder first.
     fn download(&self, r: &ContentRef) -> Result<Fetched, Failure> {
+        let pinned = match r {
+            ContentRef::Asset { id, version: None } => {
+                kept::version(*id).map(|v| ContentRef::Asset {
+                    id: *id,
+                    version: Some(v),
+                })
+            }
+            _ => None,
+        };
+        let r = pinned.as_ref().unwrap_or(r);
         let key = r.cache_key().expect("downloadable reference");
+        // Kept content is written to the kept folder; without one it goes
+        // to the cache like the rest.
+        let keep = self.kept.as_ref().filter(|_| pinned.is_some());
+        if let Some(Cached::Hit {
+            bytes, path, url, ..
+        }) = keep.map(|k| k.get(&key))
+        {
+            return Ok(Fetched::new(
+                bytes,
+                SourceKind::Kept,
+                format!("{} {url}", path.display()),
+            ));
+        }
         match self.cache.as_ref().map(|c| c.get(&key)) {
             Some(Cached::Hit {
                 bytes, path, url, ..
             }) => {
+                if let Some(kept) = keep
+                    && let Err(e) = kept.put(&key, &bytes, &url)
+                {
+                    tracing::warn!(target: "content", "couldn't keep {r}: {e}");
+                }
                 return Ok(Fetched::new(
                     bytes,
                     SourceKind::Cache,
@@ -364,21 +469,41 @@ impl Resolver {
             _ => unreachable!("only assets are downloaded"),
         };
         match fetched {
-            Ok((bytes, url)) => {
-                let location = match self.cache.as_ref().map(|c| c.put(&key, &bytes, &url)) {
-                    Some(Ok(path)) => format!("{url} -> {}", path.display()),
-                    _ => url,
+            Ok(asset) => {
+                let location = match keep.or(self.cache.as_ref()) {
+                    Some(store) => match store.put(&key, &asset.bytes, &asset.url) {
+                        Ok(path) => format!("{} -> {}", asset.url, path.display()),
+                        Err(e) => {
+                            tracing::warn!(
+                                target: "content",
+                                "couldn't save {r} in {}: {e}",
+                                store.dir().display()
+                            );
+                            asset.url
+                        }
+                    },
+                    None => asset.url,
                 };
-                Ok(Fetched::new(bytes, SourceKind::Delivery, location))
+                Ok(Fetched::new(asset.bytes, SourceKind::Delivery, location))
             }
             Err(f) => {
-                if let Some(cache) = &self.cache {
-                    let _ = cache.put_failure(&key, &f);
+                if let Some(cache) = &self.cache
+                    && let Err(e) = cache.put_failure(&key, &f)
+                {
+                    tracing::debug!(target: "content", "couldn't remember why {r} failed: {e}");
                 }
                 Err(f)
             }
         }
     }
+}
+
+/// The cache or kept content folder in `dir`; none (and a warning) if it
+/// can't be made.
+fn open_store(dir: PathBuf) -> Option<Cache> {
+    Cache::open(&dir)
+        .map_err(|e| tracing::warn!(target: "content", "{}: {e}", dir.display()))
+        .ok()
 }
 
 /// A file under `root` by its `rbxasset://` path, ignoring case. Paths

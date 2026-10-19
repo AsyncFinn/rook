@@ -277,9 +277,14 @@ impl DataModel {
         events: &mut Vec<SoundEvent>,
     ) {
         profiling::scope!("sound_loaded");
-        let load = match outcome.ok().and_then(|f| f.audio) {
-            Some(audio) => Load::Loaded(audio),
-            None => Load::Failed,
+        let load = match outcome.map(|f| f.audio) {
+            Ok(Some(audio)) => Load::Loaded(audio),
+            Ok(None) => Load::Failed,
+            Err(failure) => {
+                // Studio's Output warns about every sound that fails.
+                tracing::warn!(target: "audio", "Failed to load sound {r}: {}", failure.message);
+                Load::Failed
+            }
         };
         let mut w = self.runtime.world_mut();
         if let Load::Loaded(audio) = &load {

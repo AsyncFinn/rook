@@ -1,7 +1,8 @@
 //! The command bar: Luau typed at the terminal and run in a live
 //! DataModel, like Roblox Studio's command bar, with the feel of Luau's own
 //! REPL: `> ` prompts, `>> ` while a statement is unfinished, line editing
-//! and history (rustyline). Output prints above the prompt.
+//! and history (rustyline), kept between runs in the data folder
+//! (`state/repl-history.txt`). Output prints above the prompt.
 //!
 //! Built only with the `repl` feature (on by default in the apps; build
 //! with `--no-default-features` to leave it out). It reads this process's
@@ -111,6 +112,14 @@ fn read(tx: &Sender<String>) {
             let _ = printer.print(line);
         })));
     }
+    // History from earlier runs, kept in the data folder's state.
+    let history = crate::data::DataDir::locate().map(|d| d.repl_history());
+    if let Some(path) = &history
+        && path.exists()
+        && let Err(e) = editor.load_history(path)
+    {
+        tracing::debug!(target: "rook", "couldn't read {}: {e}", path.display());
+    }
     // A VM of the reader's own, only for checking whether input is complete.
     let checker = mlua::Lua::new();
     let mut pending = String::new();
@@ -126,8 +135,18 @@ fn read(tx: &Sender<String>) {
                     continue;
                 }
                 let chunk = std::mem::take(&mut pending);
-                if !chunk.trim().is_empty() {
-                    let _ = editor.add_history_entry(chunk.as_str());
+                if !chunk.trim().is_empty()
+                    && editor.add_history_entry(chunk.as_str()).unwrap_or(false)
+                    && let Some(path) = &history
+                {
+                    let saved = path
+                        .parent()
+                        .map_or(Ok(()), std::fs::create_dir_all)
+                        .map_err(ReadlineError::from)
+                        .and_then(|()| editor.append_history(path));
+                    if let Err(e) = saved {
+                        tracing::debug!(target: "rook", "couldn't save {}: {e}", path.display());
+                    }
                 }
                 if tx.send(chunk).is_err() {
                     break;

@@ -7,6 +7,7 @@
 - **[design/](design/)**: how Rook is built.
   - [Architecture](design/architecture.md): crates, data flow and the rules every behaviour follows
   - [Research](design/research.md): background, sources and policies
+  - [Data and logging](design/data-and-logging.md): the data folder, settings.json, logs, crash reports and kept content
 - **[behavior/](behavior/)**: what Rook found in Studio and the archive, topic by topic.
   - [Meshes](behavior/meshes.md): built-in shapes, mesh files, trusses
   - [Collision shapes](behavior/collision.md): what unions collide and are queried as

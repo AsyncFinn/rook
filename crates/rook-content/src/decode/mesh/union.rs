@@ -104,7 +104,7 @@ pub(super) fn decode(bytes: &[u8]) -> Result<Mesh, MeshError> {
                 "the union's MeshData has no geometry".into(),
             ));
         }
-        other => return Err(MeshError::Unsupported(other.name())),
+        other => return Err(MeshError::UnsupportedUnion(other.name())),
     }
     let graphics = rbx_mesh::read_union_graphics_versioned(std::io::Cursor::new(bytes))
         .map_err(|e| MeshError::Damaged(e.to_string()))?;

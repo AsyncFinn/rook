@@ -26,6 +26,11 @@ glam.workspace = true
 anstream.workspace = true
 anstyle.workspace = true
 chrono.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+directories.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 rustyline = { workspace = true, optional = true }
 
 [dev-dependencies]

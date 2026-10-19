@@ -104,6 +104,14 @@ struct Args {
     #[cfg(feature = "repl")]
     #[arg(long)]
     no_repl: bool,
+    /// Show every content failure with its instance, reference and
+    /// reason; `--verbose <subsystem>` (content, terrain, render, ...)
+    /// shows everything that area logs.
+    #[arg(long, value_name = "SUBSYSTEM", num_args = 0..=1, require_equals = true, default_missing_value = "")]
+    verbose: Option<String>,
+    /// Panic once the place has loaded (checks crash reports).
+    #[arg(long, hide = true)]
+    crash_test: bool,
 }
 
 fn parse_vec3(s: &str) -> Result<Vec3, String> {
@@ -169,14 +177,29 @@ fn refresh(
     true
 }
 
+/// Put the GPU in the log and in any crash report.
+fn note_gpu(renderer: &Renderer) {
+    rook_engine::logging::set_context("GPU", renderer.gpu().to_owned());
+    tracing::debug!(target: "render", "GPU: {}", renderer.gpu());
+}
+
 fn main() -> anyhow::Result<()> {
     #[cfg(feature = "tracy")]
     profiling::tracy_client::Client::start();
-    let args = Args::parse();
+    let args = Args::parse_from(rook_engine::logging::fix_verbose_args(std::env::args()));
+    rook_engine::logging::init(rook_engine::logging::Options {
+        program: "rook-player",
+        verbose: args.verbose.clone(),
+        file: true,
+    });
+    rook_engine::logging::run(|| play(args))
+}
+
+fn play(args: Args) -> anyhow::Result<()> {
     let load_start = Instant::now();
     // Asset delivery is on in the player, which exists to show places;
-    // ROOK_ASSET_DELIVERY=off turns it off.
-    let content = Arc::new(Resolver::new(rook_content::Config::from_env(true)));
+    // ROOK_ASSET_DELIVERY=off or settings.json turns it off.
+    let content = Arc::new(Resolver::new(rook_engine::settings::content_config(true)));
     let install = Installed::find(&content);
     let script = match &args.script {
         Some(path) => Some(fs_err::read_to_string(path)?),
@@ -240,6 +263,10 @@ fn main() -> anyhow::Result<()> {
         ),
     );
 
+    if args.crash_test {
+        panic!("--crash-test");
+    }
+
     if let Some(frames) = args.bench {
         return bench(
             &mut game,
@@ -260,6 +287,7 @@ fn main() -> anyhow::Result<()> {
         while !scene.poll_files(dom, true).is_empty() {}
         scene.update_grass(camera.position);
         let mut renderer = Renderer::headless()?;
+        note_gpu(&renderer);
         install.apply(&mut renderer);
         renderer.set_scene(&scene.scene);
         renderer.finish_uploads();

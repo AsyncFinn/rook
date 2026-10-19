@@ -7,9 +7,12 @@
 
 mod bridges;
 pub mod console;
+pub mod data;
 mod frame;
+pub mod logging;
 mod scripts;
 pub mod session;
+pub mod settings;
 
 pub use bridges::input::{ClickEvent, ClickKind, InputEvent};
 
@@ -69,9 +72,10 @@ pub struct Options {
     /// Luau heap limit in bytes.
     pub memory_limit: usize,
     /// Where content requests (`ContentProvider:PreloadAsync`) resolve.
-    /// `None` uses `rook_content::Config::from_env(false)`: the install,
+    /// `None` uses `settings::content_config(false)`: the install,
     /// content folders and the cache, with asset delivery off unless
-    /// `ROOK_ASSET_DELIVERY=on`. Shared by a session's DataModels.
+    /// `ROOK_ASSET_DELIVERY=on` or `settings.json` turns it on. Shared by
+    /// a session's DataModels.
     pub content: Option<Arc<rook_content::Resolver>>,
     /// Finish loading sound files within the frame that asks for them, so
     /// simulated time can't run ahead of loading and runs repeat exactly

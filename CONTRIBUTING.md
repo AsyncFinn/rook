@@ -50,6 +50,12 @@ Rook is a Cargo workspace of small crates whose dependencies only point downward
 
 Each crate's `lib.rs` holds its module list, re-exports and core type; everything else is one topic per file, around 500 lines at most. When a file outgrows that, split it by topic (`foo.rs` plus a `foo/` folder, never `mod.rs`). `scripts/check` lists files over 600 lines. Group files that share a topic in a folder too, before any of them gets big: a `src/` with many top-level files is hard to find your way around, and a crate is not one topic (`rook-engine` and `rook-player` are glue between many). Don't make a folder for a lone file.
 
+### Errors
+
+Failures keep their reason until something reports it. Return typed errors (`thiserror`) that say what went wrong, and log them with `tracing` where the context is known (an instance's path, a file's name); a content load that fails is logged at `debug` with its instance, reference and reason, and summed up after loading (see [data and logging](docs/design/data-and-logging.md)).
+
+`.ok()`, `let _ =` and `unwrap_or_default()` on a `Result` are only for where something being absent is normal (an optional file that isn't there, a best-effort clean-up), never to hide a failure. When dropping an error is right, say why in a comment. The content-loading paths follow this; other places get fixed as they're touched.
+
 ### Behaviour provenance
 
 Every behaviour Rook implements is recorded with its source and one of four statuses: **Confirmed** (creator-docs or a Studio recording), **Inference**, **Approximation** or **Rook extension**. This is both the record of a clean implementation and a map of how compatible Rook is. Rook-specific extensions sit behind an explicit profile and are off by default. See [docs/design/architecture.md](docs/design/architecture.md#10-behavior-provenance).

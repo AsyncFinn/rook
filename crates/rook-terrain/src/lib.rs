@@ -11,7 +11,7 @@ mod random;
 
 pub use grid::decode::DecodeError;
 pub use grid::{CHUNK_VOXELS, Grid, VOXEL_STUDS, Voxel, chunk_of};
-pub use material::{Blend, Edges, Look, TerrainMaterial, Texture};
+pub use material::{Blend, Edges, Look, TerrainMaterial, Texture, all_packs};
 pub use mesh::{
     ChunkMesh, Draw, Facing, Layer, MESH_REACH, Seam, Surface, chunk_origin, chunks_to_mesh,
     mesh_chunk,

@@ -33,6 +33,8 @@ const WATER_PHASE_PERIOD: f64 = 200.0;
 pub struct Renderer {
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
+    /// The GPU, its backend and driver, for logs and crash reports.
+    gpu: String,
     color_format: wgpu::TextureFormat,
     /// See [`UploadContext::view_formats`].
     view_formats: bool,
@@ -280,7 +282,13 @@ impl Renderer {
             .features()
             .contains(wgpu::Features::INDIRECT_FIRST_INSTANCE);
 
+        let info = adapter.get_info();
+        let gpu = format!(
+            "{} ({:?}, driver {} {})",
+            info.name, info.backend, info.driver, info.driver_info
+        );
         let mut renderer = Self {
+            gpu,
             device,
             queue,
             color_format,
@@ -483,6 +491,11 @@ impl Renderer {
     /// uploads included (not the GPU's time: [`Renderer::gpu_times`]).
     pub fn record_time(&self) -> std::time::Duration {
         self.record_time
+    }
+
+    /// The GPU, its backend and driver.
+    pub fn gpu(&self) -> &str {
+        &self.gpu
     }
 
     pub fn color_format(&self) -> wgpu::TextureFormat {

@@ -793,6 +793,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "directories"
+version = "6.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "16f5094c54661b38d03bd7e50df373292118db60b585c08a411c6d840017fe7d"
+dependencies = [
+ "dirs-sys",
+]
+
+[[package]]
 name = "dirs"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3025,6 +3034,7 @@ dependencies = [
  "rook-types",
  "serde",
  "serde_json",
+ "tracing",
  "walkdir",
 ]
 
@@ -3043,6 +3053,7 @@ dependencies = [
  "serde_json",
  "symphonia",
  "thiserror 2.0.21",
+ "tracing",
  "ureq",
  "windows-sys 0.61.2",
  "zstd",
@@ -3067,6 +3078,7 @@ dependencies = [
  "anstream",
  "anstyle",
  "chrono",
+ "directories",
  "glam 0.34.0",
  "mlua",
  "profiling",
@@ -3082,7 +3094,11 @@ dependencies = [
  "rook-terrain",
  "rook-types",
  "rustyline",
+ "serde",
+ "serde_json",
  "thiserror 2.0.21",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -3170,6 +3186,7 @@ dependencies = [
  "rook-render",
  "rook-terrain",
  "rook-types",
+ "tracing",
  "wgpu",
  "winit",
 ]
@@ -3931,7 +3948,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "63e71662fa4b2a2c3a26f570f037eb95bb1f85397f3cd8076caed2f026a6d100"
 dependencies = [
  "pin-project-lite",
+ "tracing-attributes",
  "tracing-core",
+]
+
+[[package]]
+name = "tracing-attributes"
+version = "0.1.31"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7490cfa5ec963746568740651ac6781f701c9c5ea257c58e057f3ba8cf69e8da"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
 ]
 
 [[package]]

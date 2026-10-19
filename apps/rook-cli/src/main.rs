@@ -2,7 +2,7 @@
 
 mod commands;
 
-use commands::{conformance, content, corpus, dump, gen_members, roundtrip, run, terrain};
+use commands::{conformance, content, corpus, dump, gen_members, logs, roundtrip, run, terrain};
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
@@ -12,6 +12,10 @@ use clap::{Parser, Subcommand};
 struct Cli {
     #[command(subcommand)]
     command: Command,
+    /// Show Rook's debug messages; `--verbose <subsystem>` (content,
+    /// terrain, ...) shows everything that area logs.
+    #[arg(long, global = true, value_name = "SUBSYSTEM", num_args = 0..=1, require_equals = true, default_missing_value = "")]
+    verbose: Option<String>,
 }
 
 #[derive(Debug, Subcommand)]
@@ -114,23 +118,33 @@ enum Command {
     /// folders, the cache or asset delivery), and why one fails.
     ///
     /// Asset delivery is on here unless `--offline` or
-    /// ROOK_ASSET_DELIVERY=off; downloads go to the cache.
+    /// ROOK_ASSET_DELIVERY=off; downloads go to the cache. Given a place
+    /// or model file, reports every content reference in it and its
+    /// outcome.
     Content {
-        /// References to resolve (`rbxassetid://5`, `rbxasset://textures/face.png`, ...).
-        #[arg(required_unless_present = "place")]
+        /// References to resolve (`rbxassetid://5`, `rbxasset://textures/face.png`, ...),
+        /// or one place or model file.
+        #[arg(required_unless_present_any = ["place", "pin"])]
         references: Vec<String>,
         /// Resolve every content reference in this place or model instead.
         #[arg(long, conflicts_with = "references")]
         place: Option<PathBuf>,
+        /// Write the list of content Rook keeps for good again, with each
+        /// asset's version today (crates/rook-content/data/kept.txt).
+        #[arg(long, conflicts_with_all = ["references", "place"])]
+        pin: bool,
         /// Don't use the network: only the install, folders and the cache.
         #[arg(long)]
         offline: bool,
         /// Forget cached answers for these references first.
         #[arg(long)]
         refresh: bool,
-        /// With `--place`, list every reference, not just failures.
-        #[arg(long, short)]
-        verbose: bool,
+    },
+    /// Print the newest log file's path, or open the logs folder.
+    Logs {
+        /// Open the folder instead.
+        #[arg(long)]
+        open: bool,
     },
     /// Show the download cache's folder and size, or clean it.
     ///
@@ -195,7 +209,22 @@ impl From<FormatArg> for rook_formats::Format {
 }
 
 fn main() -> anyhow::Result<()> {
-    match Cli::parse().command {
+    let cli = Cli::parse_from(rook_engine::logging::fix_verbose_args(std::env::args()));
+    // Long commands keep a log file; quick ones print and are done.
+    let long = matches!(
+        cli.command,
+        Command::CorpusScan { .. } | Command::CorpusRun { .. } | Command::Conformance { .. }
+    );
+    rook_engine::logging::init(rook_engine::logging::Options {
+        program: "rook",
+        verbose: cli.verbose.clone(),
+        file: long,
+    });
+    rook_engine::logging::run(|| command(cli.command))
+}
+
+fn command(command: Command) -> anyhow::Result<()> {
+    match command {
         Command::Dump {
             file,
             properties,
@@ -220,20 +249,25 @@ fn main() -> anyhow::Result<()> {
         Command::Content {
             references,
             place,
+            pin,
             offline,
             refresh,
-            verbose,
         } => {
-            let options = content::Options {
-                offline,
-                refresh,
-                verbose,
-            };
+            if pin {
+                return content::pin(std::path::Path::new("crates/rook-content/data/kept.txt"));
+            }
+            let options = content::Options { offline, refresh };
+            // A lone file argument is a place or model.
+            let place = place.or_else(|| match references.as_slice() {
+                [one] if std::path::Path::new(one).is_file() => Some(PathBuf::from(one)),
+                _ => None,
+            });
             match place {
                 Some(file) => content::place(&file, &options),
                 None => content::references(&references, &options),
             }
         }
+        Command::Logs { open } => logs::run(open),
         Command::Cache { action } => content::cache(match action {
             None => content::CacheCommand::Show,
             Some(CacheAction::Prune { older_than }) => content::CacheCommand::Prune(older_than),

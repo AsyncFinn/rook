@@ -4,7 +4,8 @@
 //!
 //! Output normally goes straight to stdout. While a prompt owns the
 //! terminal line (the `repl` feature), [`set_output`] routes it there
-//! instead, so it prints above the prompt.
+//! instead, so it prints above the prompt. Every line printed also goes to
+//! the run's log file ([`crate::logging`]).
 
 #[cfg(feature = "repl")]
 pub mod repl;
@@ -24,7 +25,13 @@ pub fn set_output(output: Option<Output>) {
     *OUTPUT.lock().unwrap_or_else(|e| e.into_inner()) = output;
 }
 
-fn emit(line: String) {
+/// Print a line to the terminal and the log file, or (`terminal` off)
+/// only the log file.
+fn emit(line: String, terminal: bool) {
+    crate::logging::record(&line);
+    if !terminal {
+        return;
+    }
     let mut output = OUTPUT.lock().unwrap_or_else(|e| e.into_inner());
     match output.as_mut() {
         Some(f) if std::env::var_os("NO_COLOR").is_some() => {
@@ -48,22 +55,29 @@ fn style(kind: MessageType) -> Style {
 /// Print a message from Rook itself (not a script) in the same layout,
 /// e.g. `19:25:03.100  Loaded place.rbxl in 1.20 s  -  Rook`.
 pub fn print_message(kind: MessageType, message: &str) {
-    print_entry(
-        "Rook",
-        &LogEntry {
-            kind,
-            message: message.to_owned(),
-            time: 0.0,
-            wall: std::time::SystemTime::now(),
-            source: None,
-        },
-    );
+    print_rook(kind, message, true);
+}
+
+/// [`print_message`], or with `terminal` off, only to the log file.
+pub(crate) fn print_rook(kind: MessageType, message: &str, terminal: bool) {
+    let entry = LogEntry {
+        kind,
+        message: message.to_owned(),
+        time: 0.0,
+        wall: std::time::SystemTime::now(),
+        source: None,
+    };
+    print_to("Rook", &entry, terminal);
 }
 
 /// Print one entry the way Roblox Studio's Output window shows it:
 /// `19:25:03.100  message  -  Server - Script:3`. The time and the context
 /// are dimmed; the message is coloured by type.
 pub fn print_entry(side: &str, entry: &LogEntry) {
+    print_to(side, entry, true);
+}
+
+fn print_to(side: &str, entry: &LogEntry, terminal: bool) {
     let dim = Style::new().dimmed();
     let s = style(entry.kind);
     let time = chrono::DateTime::<chrono::Local>::from(entry.wall).format("%H:%M:%S%.3f");
@@ -73,15 +87,17 @@ pub fn print_entry(side: &str, entry: &LogEntry) {
     };
     let mut lines = entry.message.lines();
     let first = lines.next().unwrap_or("");
-    emit(format!(
-        "{dim}{time}{dim:#}  {s}{first}{s:#}  {dim}-  {context}{dim:#}"
-    ));
+    emit(
+        format!("{dim}{time}{dim:#}  {s}{first}{s:#}  {dim}-  {context}{dim:#}"),
+        terminal,
+    );
     // Further lines (an error's stack trace) print as their own entries in
     // the info colour, as Studio does.
     let info = style(MessageType::Info);
     for line in lines {
-        emit(format!(
-            "{dim}{time}{dim:#}  {info}{line}{info:#}  {dim}-  {side}{dim:#}"
-        ));
+        emit(
+            format!("{dim}{time}{dim:#}  {info}{line}{info:#}  {dim}-  {side}{dim:#}"),
+            terminal,
+        );
     }
 }

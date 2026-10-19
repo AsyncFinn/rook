@@ -75,8 +75,9 @@ type Outcome = Result<Fetched, Failure>;
 pub enum Want {
     /// The bytes as they are.
     Bytes,
-    /// A mesh: the worker decodes it into [`Fetched::mesh`], and bytes that
-    /// don't decode fail with [`FailureKind::Invalid`].
+    /// A mesh: the worker decodes it into [`Fetched::mesh`]; bytes that
+    /// don't decode fail with [`FailureKind::Invalid`], or
+    /// [`FailureKind::UnknownVersion`] for a version Rook doesn't read yet.
     Mesh,
     /// An image: the worker decodes it to RGBA8 with mips into
     /// [`Fetched::image`]; bytes that aren't an image fail with
@@ -255,7 +256,13 @@ fn decode(want: Want, mut fetched: Fetched) -> Outcome {
         Want::Bytes => {}
         Want::Mesh => {
             profiling::scope!("decode mesh");
-            let mesh = Mesh::decode(&fetched.bytes).map_err(|e| invalid(&e))?;
+            let mesh = Mesh::decode(&fetched.bytes).map_err(|e| {
+                if e.is_unsupported() {
+                    Failure::new(FailureKind::UnknownVersion, e.to_string())
+                } else {
+                    invalid(&e)
+                }
+            })?;
             fetched.mesh = Some(Arc::new(mesh));
         }
         Want::Image => {

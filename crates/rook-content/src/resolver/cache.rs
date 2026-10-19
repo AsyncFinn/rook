@@ -152,12 +152,9 @@ impl Cache {
         Ok(moved)
     }
 
-    /// The size limit: `ROOK_CACHE_MAX`, or [`DEFAULT_MAX`].
-    pub fn max_from_env() -> u64 {
-        std::env::var(MAX_VAR)
-            .ok()
-            .and_then(|v| parse_size(&v))
-            .unwrap_or(DEFAULT_MAX)
+    /// The size limit `ROOK_CACHE_MAX` sets, if it does.
+    pub fn max_from_env() -> Option<u64> {
+        std::env::var(MAX_VAR).ok().and_then(|v| parse_size(&v))
     }
 
     pub fn dir(&self) -> &Path {
