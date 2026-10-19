@@ -7,6 +7,7 @@ use std::ops::Range;
 
 use super::*;
 use pool::RangeAlloc;
+use rayon::prelude::*;
 
 /// What an instanced draw shares: its mesh and its images (a mesh
 /// texture or a layer's decal, and the material's maps).
@@ -27,12 +28,7 @@ pub(crate) struct Batch {
     region: Range<u32>,
     len: u32,
     free: Vec<u32>,
-    /// A box around every instance in the world. A changed instance
-    /// widens it; it's worked out afresh (tight again) once as many
-    /// instances have changed as the batch has, so a few parts moving in
-    /// a batch of thousands cost little.
-    bounds: Aabb,
-    /// A box like `bounds` per run of `CULL_SLOTS` slots, so a pass can
+    /// A box like [`Batches::bounds`] per run of `CULL_SLOTS` slots, so a pass can
     /// skip the runs out of its view. Widened and worked out afresh with
     /// `bounds`.
     chunks: Vec<Aabb>,
@@ -41,6 +37,13 @@ pub(crate) struct Batch {
 
 /// How many slots share a box for culling within a batch.
 pub(crate) const CULL_SLOTS: u32 = 16;
+
+/// How many batches, in drawing order, share a box for culling.
+const CULL_BATCHES: usize = 32;
+
+/// How many clean chunks between changed ones are written along with
+/// them, so scattered changes take a few big writes, not many small ones.
+const MERGE_GAP: usize = 8;
 
 /// Instances are written to the GPU in chunks of this many.
 const CHUNK: u32 = 64;
@@ -119,10 +122,17 @@ impl InstancePool {
                 continue;
             }
             let first = c;
-            while c < self.dirty.len() && self.dirty[c] {
-                self.dirty[c] = false;
+            // A run goes on over gaps of up to `MERGE_GAP` clean chunks:
+            // rewriting them costs less than another write.
+            let mut end = c;
+            while c < self.dirty.len() && c - end <= MERGE_GAP {
+                if self.dirty[c] {
+                    self.dirty[c] = false;
+                    end = c + 1;
+                }
                 c += 1;
             }
+            c = end;
             let start = first * CHUNK as usize;
             let end = (c * CHUNK as usize).min(self.instances.len());
             queue.write_buffer(
@@ -145,6 +155,14 @@ pub(crate) struct Batches {
     order: Vec<usize>,
     /// Each batch's z.
     pub(crate) z: Vec<i32>,
+    /// A box around each batch's instances in the world. A changed
+    /// instance widens it; it's worked out afresh (tight again) once as
+    /// many instances have changed as the batch has, so a few parts moving
+    /// in a batch of thousands cost little. Kept apart from `list` so
+    /// culling reads only the boxes.
+    bounds: Vec<Aabb>,
+    /// Batches with changes since their boxes were last worked out.
+    changed: Vec<usize>,
     pool: InstancePool,
 }
 
@@ -157,14 +175,25 @@ impl Batches {
     pub(crate) fn set(&mut self, batch: usize, slot: u32, instance: Instance) {
         let b = &mut self.list[batch];
         let world = instance.world_box();
-        b.bounds = b.bounds.union(world);
+        self.bounds[batch] = self.bounds[batch].union(world);
         let c = (slot / CULL_SLOTS) as usize;
         if c >= b.chunks.len() {
             b.chunks.resize(c + 1, Aabb::EMPTY);
         }
         b.chunks[c] = b.chunks[c].union(world);
+        if b.changes == 0 {
+            self.changed.push(batch);
+        }
         b.changes += 1;
         self.pool.set(b.region.start + slot, instance);
+    }
+
+    /// The instance in a batch's slot moved to where `part` is, its look
+    /// the same.
+    pub(crate) fn moved(&mut self, batch: usize, slot: u32, part: &PartInstance) {
+        let at = self.list[batch].region.start + slot;
+        let instance = self.pool.instances[at as usize].placed(part);
+        self.set(batch, slot, instance);
     }
 
     /// Take a slot for `instance` in the batch of `(z, key)`.
@@ -178,11 +207,11 @@ impl Batches {
                     region: 0..0,
                     len: 0,
                     free: Vec::new(),
-                    bounds: Aabb::EMPTY,
                     chunks: Vec::new(),
                     changes: 0,
                 });
                 self.z.push(z);
+                self.bounds.push(Aabb::EMPTY);
                 self.of.insert((z, key), b);
                 let at = self.order.partition_point(|&o| self.z[o] <= z);
                 self.order.insert(at, b);
@@ -221,20 +250,26 @@ impl Batches {
     /// Bring the GPU copy of the instances and the batches' bounds up to
     /// date.
     pub(crate) fn upload(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {
-        for b in &mut self.list {
-            if b.changes >= b.len.max(1) {
-                let start = b.region.start as usize;
-                b.chunks = self.pool.instances[start..start + b.len as usize]
-                    .chunks(CULL_SLOTS as usize)
-                    .map(|run| {
-                        run.iter()
-                            .fold(Aabb::EMPTY, |all, i| all.union(i.world_box()))
-                    })
-                    .collect();
-                b.bounds = b.chunks.iter().fold(Aabb::EMPTY, |all, c| all.union(*c));
-                b.changes = 0;
+        let (list, bounds, pool) = (&mut self.list, &mut self.bounds, &self.pool);
+        // Each batch changed as many times as it has instances gets its
+        // boxes worked out afresh; the others wait for more changes.
+        self.changed.retain(|&i| {
+            let b = &mut list[i];
+            if b.changes < b.len.max(1) {
+                return true;
             }
-        }
+            let start = b.region.start as usize;
+            b.chunks = pool.instances[start..start + b.len as usize]
+                .chunks(CULL_SLOTS as usize)
+                .map(|run| {
+                    run.iter()
+                        .fold(Aabb::EMPTY, |all, i| all.union(i.world_box()))
+                })
+                .collect();
+            bounds[i] = b.chunks.iter().fold(Aabb::EMPTY, |all, c| all.union(*c));
+            b.changes = 0;
+            false
+        });
         self.pool.upload(device, queue);
     }
 
@@ -244,18 +279,40 @@ impl Batches {
         self.pool.buffer.as_ref()
     }
 
-    /// Each batch's key, instances in the shared buffer, bounds, a box
-    /// per `CULL_SLOTS` of those instances and z, in drawing order.
-    pub(crate) fn draws(
-        &self,
-    ) -> impl Iterator<Item = (&BatchKey, Range<u32>, Aabb, &[Aabb], i32)> {
-        self.order
-            .iter()
-            .map(|&i| (&self.list[i], self.z[i]))
-            .filter(|(b, _)| b.len > 0)
-            .map(|(b, z)| {
-                let start = b.region.start;
-                (&b.key, start..start + b.len, b.bounds, &b.chunks[..], z)
-            })
+    /// Whether `view` sees each batch (any of its box grown by
+    /// `margin`), in drawing order. Batches are culled [`CULL_BATCHES`] at
+    /// a time first: none of a box the view misses is seen, all of one
+    /// wholly inside it is.
+    pub(crate) fn seen(&self, view: &Frustum, margin: f32) -> Vec<bool> {
+        let mut out = vec![false; self.order.len()];
+        out.par_chunks_mut(CULL_BATCHES)
+            .zip(self.order.par_chunks(CULL_BATCHES))
+            .for_each(|(seen, block)| {
+                let all = block
+                    .iter()
+                    .fold(Aabb::EMPTY, |all, &i| all.union(self.bounds[i]));
+                if !view.sees(all, margin) {
+                    return;
+                }
+                let inside = view.holds(all, margin);
+                for (&i, seen) in block.iter().zip(seen) {
+                    let b = self.bounds[i];
+                    *seen = if inside {
+                        !b.is_empty()
+                    } else {
+                        view.sees(b, margin)
+                    };
+                }
+            });
+        out
+    }
+
+    /// The batch `k`th in drawing order: its key, instances in the shared
+    /// buffer, a box per `CULL_SLOTS` of those instances and z.
+    pub(crate) fn draw(&self, k: usize) -> (&BatchKey, Range<u32>, &[Aabb], i32) {
+        let i = self.order[k];
+        let b = &self.list[i];
+        let start = b.region.start;
+        (&b.key, start..start + b.len, &b.chunks[..], self.z[i])
     }
 }

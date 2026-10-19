@@ -4,117 +4,25 @@ use super::*;
 use crate::batch::CULL_SLOTS;
 use crate::batch::cull::seen_runs;
 use runs::{Pipe, Runs, Source};
-
-/// How a run of transparent instances is drawn.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Pass {
-    Part,
-    Image,
-    /// See-through Glass: its nearest depth, then its filter on what's
-    /// behind, then its surface.
-    GlassDepth,
-    GlassFilter,
-    GlassSurface,
-    ForceField,
-}
-
-impl Pass {
-    fn pipe(self) -> Pipe {
-        match self {
-            Pass::Part => Pipe::Transparent,
-            Pass::Image => Pipe::Layer,
-            Pass::GlassDepth => Pipe::GlassDepth,
-            Pass::GlassFilter => Pipe::GlassFilter,
-            Pass::GlassSurface => Pipe::GlassSurface,
-            Pass::ForceField => Pipe::Additive,
-        }
-    }
-
-    /// The passes an entry is drawn in, in order.
-    fn of(p: &PartInstance) -> &'static [Pass] {
-        match (p.layer, p.material) {
-            (Layer::Image { .. }, _) => &[Pass::Image],
-            (Layer::Base, Material::Glass) => {
-                &[Pass::GlassDepth, Pass::GlassFilter, Pass::GlassSurface]
-            }
-            (Layer::Base, Material::ForceField) => &[Pass::ForceField],
-            (Layer::Base, _) => &[Pass::Part],
-        }
-    }
-}
+use transparent::TransparentRun;
 
 impl Renderer {
     /// Upload the instances changed since the last frame, and the
-    /// transparent ones `view` reaches sorted back to front for `camera`
-    /// (an image on a transparent part just after its part). Returns the
-    /// transparent draws: (key, pass, instance range) runs in that order.
+    /// transparent ones `view` reaches sorted back to front for `camera`.
+    /// Returns the transparent draws.
     fn upload_instances(
         &mut self,
         camera: &Camera,
         view: &Frustum,
         margin: f32,
-    ) -> Vec<(BatchKey, Pass, std::ops::Range<u32>)> {
+    ) -> Vec<TransparentRun> {
         {
             profiling::scope!("opaque and layers");
             self.opaque.upload(&self.device, &self.queue);
             self.layers.upload(&self.device, &self.queue);
         }
-        profiling::scope!("transparent");
-        // What the view reaches, back to front for blending.
-        let mut order: Vec<(f32, &PartInstance, Instance)> = self
-            .transparent_parts
-            .iter()
-            .flatten()
-            .filter_map(|p| {
-                let instance = self.instance(p);
-                view.sees(instance.world_box(), margin)
-                    .then(|| (p.position.distance_squared(camera.position), p, instance))
-            })
-            .collect();
-        order.sort_by(|(da, a, _), (db, b, _)| {
-            let image = |p: &PartInstance| p.layer != Layer::Base;
-            db.total_cmp(da).then(image(a).cmp(&image(b)))
-        });
-        let mut instances: Vec<Instance> = Vec::with_capacity(order.len());
-        let mut runs: Vec<(BatchKey, Pass, std::ops::Range<u32>)> = Vec::new();
-        for &(_, p, instance) in &order {
-            let key = BatchKey {
-                shape: p.shape,
-                images: image_set(p),
-            };
-            for &pass in Pass::of(p) {
-                let i = instances.len() as u32;
-                instances.push(instance);
-                match runs.last_mut() {
-                    Some((k, q, r)) if *k == key && *q == pass => r.end = i + 1,
-                    _ => runs.push((key, pass, i..i + 1)),
-                }
-            }
-        }
-        if instances.is_empty() {
-            return runs;
-        }
-        match &self.transparent_buffer {
-            Some((buffer, capacity)) if *capacity >= instances.len() => {
-                self.queue
-                    .write_buffer(buffer, 0, bytemuck::cast_slice(&instances));
-            }
-            _ => {
-                // Room to grow, so a few more parts don't make a new buffer.
-                let capacity = instances.len() * 2;
-                let mut padded = instances;
-                padded.resize(capacity, Instance::zeroed());
-                let buffer = self
-                    .device
-                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("rook transparent instances"),
-                        contents: bytemuck::cast_slice(&padded),
-                        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-                    });
-                self.transparent_buffer = Some((buffer, capacity));
-            }
-        }
-        runs
+        self.transparent
+            .upload(&self.device, &self.queue, camera, view, margin)
     }
 
     fn depth_view(&mut self, width: u32, height: u32) -> wgpu::TextureView {
@@ -151,6 +59,14 @@ impl Renderer {
         profiling::scope!("Renderer::render");
         let start = std::time::Instant::now();
         self.upload_files(FRAME_UPLOAD_BYTES);
+        let mut times = StageTimes::default();
+        let mut lap = start;
+        let mut stage = |time: &mut std::time::Duration| {
+            let now = std::time::Instant::now();
+            *time = now - lap;
+            lap = now;
+        };
+        stage(&mut times.uploads);
         let l = self.lighting;
         let aspect = width as f32 / height.max(1) as f32;
         let sun = l.sun_direction.normalize_or(Vec3::Y);
@@ -228,18 +144,22 @@ impl Renderer {
         self.queue
             .write_buffer(&self.globals, 0, bytemuck::bytes_of(&globals));
 
+        stage(&mut times.setup);
         let transparent_runs = {
             profiling::scope!("upload instances");
             self.upload_instances(camera, &view, margin)
         };
 
+        stage(&mut times.instances);
         let ribbon_runs = self.upload_ribbons(camera, &view);
         let particle_runs = self.upload_particles(camera, &view);
+        stage(&mut times.effects);
 
         // Each pass's draws, joined into runs that share what's bound.
         let (mut shadow_runs, mut main_runs, starts) =
             self.build_draws(shadow, &view, margin, transparent_runs);
 
+        stage(&mut times.draws);
         let depth = self.depth_view(width, height);
         let frame = self.tonemap.frame(&self.device, width, height);
         let mut encoder = self
@@ -329,6 +249,8 @@ impl Renderer {
             encoder.finish()
         };
         self.queue.submit([commands]);
+        stage(&mut times.passes);
+        self.stage_times = times;
         self.record_time = start.elapsed();
     }
 
@@ -340,7 +262,7 @@ impl Renderer {
         shadow: Option<ShadowView>,
         view: &Frustum,
         margin: f32,
-        transparent_runs: Vec<(BatchKey, Pass, std::ops::Range<u32>)>,
+        transparent_runs: Vec<TransparentRun>,
     ) -> (Runs, Runs, Vec<usize>) {
         profiling::scope!("build draws");
         let mut shadow_runs = Runs::default();
@@ -348,17 +270,30 @@ impl Renderer {
         // The sun's whole view, not just the camera's: a part off screen
         // still shadows what's on it.
         let sun_view = shadow.map(|s| Frustum::of(s.view_proj));
-        for (key, instances, bounds, chunks, _) in self.opaque.draws() {
-            let shadowed = sun_view.as_ref().filter(|sun| sun.sees(bounds, margin));
-            let seen = view.sees(bounds, margin);
-            let Some(mesh) = self
-                .meshes
-                .get(&key.shape)
-                .filter(|_| shadowed.is_some() || seen)
-            else {
+        // The three cullings at once.
+        let ((seen, shadowed), layers_seen) = rayon::join(
+            || {
+                rayon::join(
+                    || self.opaque.seen(view, margin),
+                    || {
+                        sun_view
+                            .as_ref()
+                            .map(|sun| (sun, self.opaque.seen(sun, margin)))
+                    },
+                )
+            },
+            || self.layers.seen(view, margin),
+        );
+        for (k, &seen) in seen.iter().enumerate() {
+            let sun = shadowed.as_ref().filter(|(_, s)| s[k]).map(|(sun, _)| *sun);
+            if sun.is_none() && !seen {
+                continue;
+            }
+            let (key, instances, chunks, _) = self.opaque.draw(k);
+            let Some(mesh) = self.meshes.get(&key.shape) else {
                 continue;
             };
-            if let Some(sun) = shadowed {
+            if let Some(sun) = sun {
                 let (pipe, source) = (Pipe::Shadow, Source::Opaque);
                 for run in seen_runs(sun, chunks, CULL_SLOTS, margin, instances.clone()) {
                     self.push_draw(&mut shadow_runs, pipe, source, mesh, key, run);
@@ -374,12 +309,9 @@ impl Renderer {
         // Then images on opaque parts (before transparent parts, so a
         // window in front of a decal covers it), then transparent parts
         // back to front.
-        for (key, instances, bounds, chunks, z) in self.layers.draws() {
-            let Some(mesh) = self
-                .meshes
-                .get(&key.shape)
-                .filter(|_| view.sees(bounds, margin))
-            else {
+        for k in (0..layers_seen.len()).filter(|&k| layers_seen[k]) {
+            let (key, instances, chunks, z) = self.layers.draw(k);
+            let Some(mesh) = self.meshes.get(&key.shape) else {
                 continue;
             };
             let pipe = if z == placement::OVER_Z {

@@ -70,6 +70,8 @@ tracing-subscriber = { version = "0.3", default-features = false, features = ["r
 directories = "6"
 walkdir = "2"
 blake3 = "1"
+# rook-player's allocator (the system one is slow on big heaps)
+mimalloc = "0.1"
 # Asset delivery (rook-content): rustls and gzip, no async runtime
 ureq = "3"
 # Roblox mesh files, versions 1.00 to 5.00 (rook-content)

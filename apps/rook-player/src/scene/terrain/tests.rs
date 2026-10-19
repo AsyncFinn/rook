@@ -23,7 +23,13 @@ fn script_changes_update_the_terrain_look() {
         terrain: true,
         ..RenderChanges::default()
     };
-    assert_eq!(cache.apply(&dom, &changes), SceneChange::Parts(Vec::new()));
+    assert_eq!(
+        cache.apply(&dom, &changes),
+        SceneChange::Parts {
+            changed: Vec::new(),
+            moved: Vec::new()
+        }
+    );
     assert_eq!(cache.scene.terrain.wave_size, 0.6);
     assert_eq!(cache.scene.terrain.wind, Vec3::new(5.0, 0.0, 0.0));
 }

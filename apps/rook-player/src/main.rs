@@ -46,6 +46,12 @@ use app::*;
 use bench::*;
 use scene::installed::*;
 
+/// The system allocator on Windows is slow for blocks of tens of
+/// kilobytes once a big place has made its heap large (a fraction of a
+/// millisecond each): mimalloc keeps the frame's allocations cheap.
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 /// Simulation step: 60 Hz, like Roblox's frame-based scheduler.
 const STEP: f64 = 1.0 / 60.0;
 use winit::application::ApplicationHandler;
@@ -94,6 +100,10 @@ struct Args {
     /// Run this many frames offscreen and print where the time goes.
     #[arg(long)]
     bench: Option<u32>,
+    /// With `--bench`: turn the camera this many degrees each frame, as
+    /// someone looking around does (default: it holds still).
+    #[arg(long, default_value_t = 0.0)]
+    turn: f32,
     /// Present frames as fast as they're drawn instead of at the monitor's
     /// refresh rate.
     #[arg(long)]
@@ -160,19 +170,28 @@ fn refresh(
     let change = match change {
         // A skybox image arrived: the lighting alone changed.
         SceneChange::None if loaded.is_empty() && cache.take_lighting_change() => {
-            SceneChange::Parts(Vec::new())
+            SceneChange::Parts {
+                changed: Vec::new(),
+                moved: Vec::new(),
+            }
         }
         _ if loaded.is_empty() => change,
-        SceneChange::None => SceneChange::Parts(loaded),
-        SceneChange::Parts(mut parts) => {
-            parts.extend(loaded);
-            SceneChange::Parts(parts)
+        SceneChange::None => SceneChange::Parts {
+            changed: loaded,
+            moved: Vec::new(),
+        },
+        SceneChange::Parts { mut changed, moved } => {
+            changed.extend(loaded);
+            SceneChange::Parts { changed, moved }
         }
         SceneChange::Full => SceneChange::Full,
     };
     match &change {
         SceneChange::None => return false,
-        SceneChange::Parts(parts) => renderer.update_parts(&cache.scene, parts),
+        SceneChange::Parts { changed, moved } => {
+            renderer.update_parts(&cache.scene, changed);
+            renderer.move_parts(&cache.scene, moved);
+        }
         SceneChange::Full => renderer.set_scene(&cache.scene),
     }
     for mesh in cache.take_dropped_meshes() {
@@ -293,15 +312,7 @@ fn play(args: Args) -> anyhow::Result<()> {
     }
 
     if let Some(frames) = args.bench {
-        return bench(
-            &mut game,
-            scene,
-            frames,
-            &camera,
-            args.width,
-            args.height,
-            &install,
-        );
+        return bench(&mut game, scene, frames, camera, &args, &install);
     }
 
     if let Some(out) = args.screenshot {

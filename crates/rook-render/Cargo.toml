@@ -17,6 +17,7 @@ bytemuck.workspace = true
 thiserror.workspace = true
 pollster.workspace = true
 rustc-hash.workspace = true
+rayon.workspace = true
 profiling.workspace = true
 wesl-core.workspace = true
 

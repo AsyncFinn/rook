@@ -35,6 +35,7 @@ tracing.workspace = true
 profiling.workspace = true
 rayon.workspace = true
 blake3.workspace = true
+mimalloc.workspace = true
 
 [features]
 default = ["repl"]

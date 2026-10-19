@@ -221,6 +221,15 @@ impl Instance {
         }
     }
 
+    /// This instance where `part` is now (its look unchanged).
+    pub(crate) fn placed(mut self, part: &PartInstance) -> Self {
+        self.position = part.position.to_array();
+        self.right = part.rotation.x_axis.to_array();
+        self.up = part.rotation.y_axis.to_array();
+        self.back = part.rotation.z_axis.to_array();
+        self
+    }
+
     /// The box around what this instance draws in the world, before the
     /// shader moves any vertex. A free slot (all zeroes) draws nothing.
     pub(crate) fn world_box(&self) -> Aabb {

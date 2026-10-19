@@ -41,7 +41,7 @@ use batch::*;
 use gpu::pool::{GpuMesh, MeshPool};
 use gpu::*;
 
-pub use renderer::{DrawCounts, GpuTimes, PassCounts, Renderer};
+pub use renderer::{DrawCounts, GpuTimes, PassCounts, Renderer, StageTimes};
 
 /// The shadow map's depth, and the main pass's where the device has no
 /// stencil to go with it (`main_depth_format`).

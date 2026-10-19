@@ -53,8 +53,7 @@ impl Renderer {
         self.layers.clear();
         self.placements.clear();
         self.waiting.clear();
-        self.transparent_parts.clear();
-        self.transparent_free.clear();
+        self.transparent.clear();
         self.lights.clear_blockers();
         self.update_parts(scene, &(0..scene.parts.len()).collect::<Vec<_>>());
     }
@@ -88,6 +87,30 @@ impl Renderer {
             self.waiting.remove(&i);
             let target = self.target(&part, Some(scene));
             self.place(i, &part, target);
+        }
+    }
+
+    /// Move the entries at `moved` (indices into `scene.parts`) to where
+    /// they are now: entries whose look didn't change since they were last
+    /// updated, which keep their slots.
+    pub fn move_parts(&mut self, scene: &Scene, moved: &[usize]) {
+        if moved.is_empty() {
+            return;
+        }
+        profiling::scope!("Renderer::move_parts");
+        self.lights.update_blockers(scene, moved);
+        for &i in moved {
+            let part = &scene.parts[i];
+            match self.placements[i] {
+                Placement::Opaque { batch, slot } => self.opaque.moved(batch, slot, part),
+                Placement::Layer { batch, slot } => self.layers.moved(batch, slot, part),
+                Placement::Transparent(t) => self.transparent.moved(t, part),
+                Placement::Hidden => {
+                    if let Some(waiting) = self.waiting.get_mut(&i) {
+                        *waiting = *part;
+                    }
+                }
+            }
         }
     }
 
@@ -139,7 +162,8 @@ impl Renderer {
         match (self.placements[i], target) {
             (Placement::Hidden, Target::Hidden) => {}
             (Placement::Transparent(t), Target::Transparent) => {
-                self.transparent_parts[t] = Some(*part);
+                let instance = self.instance(part);
+                self.transparent.set(t, part, instance);
             }
             (Placement::Opaque { batch, slot }, Target::Opaque(key))
                 if self.opaque.list[batch].key == key =>
@@ -276,10 +300,7 @@ impl Renderer {
             Placement::Hidden => {}
             Placement::Opaque { batch, slot } => self.opaque.vacate(batch, slot),
             Placement::Layer { batch, slot } => self.layers.vacate(batch, slot),
-            Placement::Transparent(t) => {
-                self.transparent_parts[t] = None;
-                self.transparent_free.push(t);
-            }
+            Placement::Transparent(t) => self.transparent.vacate(t),
         }
     }
 
@@ -288,17 +309,7 @@ impl Renderer {
         let instance = self.instance(part);
         match target {
             Target::Hidden | Target::Waiting => Placement::Hidden,
-            Target::Transparent => {
-                let t = match self.transparent_free.pop() {
-                    Some(t) => t,
-                    None => {
-                        self.transparent_parts.push(None);
-                        self.transparent_parts.len() - 1
-                    }
-                };
-                self.transparent_parts[t] = Some(*part);
-                Placement::Transparent(t)
-            }
+            Target::Transparent => Placement::Transparent(self.transparent.occupy(part, instance)),
             Target::Opaque(key) => {
                 let (batch, slot) = self.opaque.occupy(0, key, instance);
                 Placement::Opaque { batch, slot }

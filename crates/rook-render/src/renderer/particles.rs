@@ -8,7 +8,10 @@
 use std::ops::Range;
 
 use super::*;
-use crate::particles::Particles;
+use rayon::prelude::*;
+
+use crate::particles::{Particle, Particles};
+use crate::scene::EmitterLook;
 use crate::scene::Orientation;
 
 /// The particle pipeline's instance: one particle.
@@ -52,6 +55,84 @@ pub(crate) struct GpuParticles {
 /// A run of the frame's particles drawn with one image.
 pub(crate) type ParticleRun = (ImageHash, Range<u32>);
 
+/// An emitter the view may reach, and what its particles share.
+struct EmitterDraw<'a> {
+    look: &'a EmitterLook,
+    particles: &'a [Particle],
+    texture: ImageHash,
+    /// Its image's slot in the table.
+    slot: u32,
+    /// How far from its centre a particle may reach, to cull it by.
+    reach: Option<f32>,
+}
+
+impl EmitterDraw<'_> {
+    /// The instances of the particles `view` may see, with their squared
+    /// distance from `camera`.
+    fn instances(&self, view: &Frustum, camera: &Camera) -> Vec<(f32, ParticleInstance)> {
+        let look = self.look;
+        let keep = 1.0 - look.light_emission.clamp(0.0, 1.0);
+        let orientation = match look.orientation {
+            Orientation::FacingCamera => 0,
+            Orientation::FacingCameraWorldUp => 1,
+            Orientation::VelocityParallel => 2,
+            Orientation::VelocityPerpendicular => 3,
+        };
+        let mut out = Vec::new();
+        for p in self.particles {
+            if let Some(reach) = self.reach
+                && !view.sees(
+                    Aabb {
+                        min: p.position,
+                        max: p.position,
+                    },
+                    reach,
+                )
+            {
+                continue;
+            }
+            let t = p.life();
+            let alpha = p.alpha(look);
+            let size = p.size(look);
+            if alpha <= 0.0 || size[0] <= 0.0 || size[1] <= 0.0 {
+                continue;
+            }
+            let color = look.color.at(t);
+            let frame = match look.flipbook {
+                Some(f) => {
+                    let i = p.frame(f.mode, f.frames());
+                    let (columns, rows) = (f.columns.max(1), f.rows.max(1));
+                    let scale = [1.0 / columns as f32, 1.0 / rows as f32];
+                    [
+                        (i % columns) as f32 * scale[0],
+                        (i / columns) as f32 * scale[1],
+                        scale[0],
+                        scale[1],
+                    ]
+                }
+                None => [0.0, 0.0, 1.0, 1.0],
+            };
+            let instance = ParticleInstance {
+                position: p.position.to_array(),
+                size,
+                color: [color[0], color[1], color[2], alpha],
+                // Studio turns positive rotations clockwise.
+                rotation: -p.rotation(),
+                lit: look.light_influence.clamp(0.0, 1.0),
+                image: self.slot,
+                brightness: look.brightness.at(t),
+                keep,
+                frame,
+                velocity: p.velocity.to_array(),
+                orientation,
+                z_offset: look.z_offset,
+            };
+            out.push((p.position.distance_squared(camera.position), instance));
+        }
+        out
+    }
+}
+
 impl Renderer {
     /// Run the particles and Trails on by `seconds` without drawing (a
     /// screenshot shows effects as they look once they've been going a
@@ -82,7 +163,8 @@ impl Renderer {
             return Vec::new();
         }
         profiling::scope!("upload particles");
-        let mut drawn: Vec<(f32, ImageHash, ParticleInstance)> = Vec::new();
+        // The emitters the view may reach, with what their particles share.
+        let mut emitters: Vec<EmitterDraw<'_>> = Vec::new();
         for (look, particles, bounds) in self.particles.sim.drawn() {
             let Some(texture) = look.texture.filter(|h| self.images.contains(h)) else {
                 continue;
@@ -93,62 +175,44 @@ impl Renderer {
             if !view.sees(bounds, biggest * 0.5) {
                 continue;
             }
-            let slot = self.image_slots(&[Some(texture), None, None, None, None])[0];
-            let keep = 1.0 - look.light_emission.clamp(0.0, 1.0);
-            let orientation = match look.orientation {
-                Orientation::FacingCamera => 0,
-                Orientation::FacingCameraWorldUp => 1,
-                Orientation::VelocityParallel => 2,
-                Orientation::VelocityPerpendicular => 3,
-            };
-            for p in particles {
-                let t = p.life();
-                let alpha = p.alpha(look);
-                let size = p.size(look);
-                if alpha <= 0.0 || size[0] <= 0.0 || size[1] <= 0.0 {
-                    continue;
-                }
-                let color = look.color.at(t);
-                let frame = match look.flipbook {
-                    Some(f) => {
-                        let i = p.frame(f.mode, f.frames());
-                        let (columns, rows) = (f.columns.max(1), f.rows.max(1));
-                        let scale = [1.0 / columns as f32, 1.0 / rows as f32];
-                        [
-                            (i % columns) as f32 * scale[0],
-                            (i / columns) as f32 * scale[1],
-                            scale[0],
-                            scale[1],
-                        ]
-                    }
-                    None => [0.0, 0.0, 1.0, 1.0],
-                };
-                let instance = ParticleInstance {
-                    position: p.position.to_array(),
-                    size,
-                    color: [color[0], color[1], color[2], alpha],
-                    // Studio turns positive rotations clockwise.
-                    rotation: -p.rotation(),
-                    lit: look.light_influence.clamp(0.0, 1.0),
-                    image: slot,
-                    brightness: look.brightness.at(t),
-                    keep,
-                    frame,
-                    velocity: p.velocity.to_array(),
-                    orientation,
-                    z_offset: look.z_offset,
-                };
-                let d = p.position.distance_squared(camera.position);
-                drawn.push((d, texture, instance));
-            }
+            emitters.push(EmitterDraw {
+                look,
+                particles,
+                texture,
+                slot: self.image_slots(&[Some(texture), None, None, None, None])[0],
+                // A quad turned any way stays within 0.71 x its size of
+                // its centre; one moved by ZOffset isn't culled on its own.
+                reach: (look.z_offset == 0.0).then_some(biggest * 0.75),
+            });
         }
-        drawn.sort_by(|a, b| b.0.total_cmp(&a.0));
+        // Each emitter's particles are built on their own (in parallel),
+        // then sorted by small keys pointing at them, not moved themselves.
+        let built: Vec<Vec<(f32, ParticleInstance)>> = emitters
+            .par_iter()
+            .map(|e| e.instances(view, camera))
+            .collect();
+        let textures: Vec<ImageHash> = emitters.iter().map(|e| e.texture).collect();
+        // (distance, emitter, particle), back to front; ties keep the
+        // order they were made in.
+        let mut order: Vec<(f32, u32, u32)> = built
+            .iter()
+            .enumerate()
+            .flat_map(|(e, list)| {
+                list.iter()
+                    .enumerate()
+                    .map(move |(i, &(d, _))| (d, e as u32, i as u32))
+            })
+            .collect();
+        order.par_sort_unstable_by(|a, b| {
+            b.0.total_cmp(&a.0).then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2))
+        });
         // With a table every particle draws in one go; otherwise a run per
         // image in a row.
         let table = matches!(self.image_binding, ImageBinding::Table(_));
         let mut runs: Vec<ParticleRun> = Vec::new();
-        for (i, (_, texture, _)) in drawn.iter().enumerate() {
+        for (i, &(_, e, _)) in order.iter().enumerate() {
             let i = i as u32;
+            let texture = &textures[e as usize];
             match runs.last_mut() {
                 Some((t, r)) if table || t == texture => r.end = i + 1,
                 _ => runs.push((*texture, i..i + 1)),
@@ -157,10 +221,10 @@ impl Renderer {
         for (texture, _) in &runs {
             self.ensure_group([Some(*texture), None, None, None, None]);
         }
-        let instances: Vec<ParticleInstance> = drawn.into_iter().map(|d| d.2).collect();
-        if instances.is_empty() {
-            return runs;
-        }
+        let instances: Vec<ParticleInstance> = order
+            .iter()
+            .map(|&(_, e, i)| built[e as usize][i as usize].1)
+            .collect();
         match &self.particles.buffer {
             Some((buffer, capacity)) if *capacity >= instances.len() => {
                 self.queue

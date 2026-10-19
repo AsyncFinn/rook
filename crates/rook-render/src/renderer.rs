@@ -13,6 +13,7 @@ mod ribbons;
 mod runs;
 mod timing;
 mod tonemap;
+mod transparent;
 
 use super::*;
 pub(crate) use images::ImageBinding;
@@ -26,6 +27,7 @@ use ribbons::GpuRibbons;
 use timing::GpuTimer;
 pub use timing::GpuTimes;
 use tonemap::{FRAME_FORMAT, Tonemap};
+use transparent::TransparentParts;
 
 /// Water's phase wraps here: a whole number of its 25 normal frames'
 /// cycles (20 units each) and of both waves' periods (40 and 25,
@@ -81,12 +83,8 @@ pub struct Renderer {
     placements: Vec<Placement>,
     /// Entries waiting for an upload, placed once it's done.
     waiting: HashMap<usize, PartInstance>,
-    /// The sorted transparent parts' instances, rewritten every frame, and
-    /// how many it holds.
-    transparent_buffer: Option<(wgpu::Buffer, usize)>,
-    /// Slots for transparent parts (`None` when free), sorted every frame.
-    transparent_parts: Vec<Option<PartInstance>>,
-    transparent_free: Vec<usize>,
+    /// Transparent parts, sorted back to front as the view changes.
+    transparent: TransparentParts,
     lighting: Lighting,
     /// The local lights and their spatial hash (group 3).
     pub(crate) lights: GpuLights,
@@ -112,6 +110,24 @@ pub struct Renderer {
     /// How long the last frame took the CPU to record and submit, file
     /// uploads included.
     record_time: std::time::Duration,
+    stage_times: StageTimes,
+}
+
+/// Where the CPU's time recording the last frame went.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct StageTimes {
+    /// Mesh files and images going up, and entries waiting on them placed.
+    pub uploads: std::time::Duration,
+    /// Shadow view, image table, globals.
+    pub setup: std::time::Duration,
+    /// Changed instances uploaded, transparent parts sorted.
+    pub instances: std::time::Duration,
+    /// Beams, Trails and particles built and uploaded.
+    pub effects: std::time::Duration,
+    /// Culling and the draws' arguments.
+    pub draws: std::time::Duration,
+    /// Recording the passes and submitting them.
+    pub passes: std::time::Duration,
 }
 
 /// What a frame drew, in the shadow pass and the main pass.
@@ -333,9 +349,7 @@ impl Renderer {
             layers: Batches::default(),
             placements: Vec::new(),
             waiting: HashMap::default(),
-            transparent_free: Vec::new(),
-            transparent_buffer: None,
-            transparent_parts: Vec::new(),
+            transparent: TransparentParts::default(),
             lighting: Lighting::default(),
             lights,
             particles: GpuParticles::default(),
@@ -348,6 +362,7 @@ impl Renderer {
             draw_counts: DrawCounts::default(),
             timer: None,
             record_time: Default::default(),
+            stage_times: StageTimes::default(),
         };
         renderer.ensure_group([None; 5]);
         renderer
@@ -520,6 +535,11 @@ impl Renderer {
     /// uploads included (not the GPU's time: [`Renderer::gpu_times`]).
     pub fn record_time(&self) -> std::time::Duration {
         self.record_time
+    }
+
+    /// Where [`Renderer::record_time`] went.
+    pub fn stage_times(&self) -> StageTimes {
+        self.stage_times
     }
 
     /// The GPU, its backend and driver.

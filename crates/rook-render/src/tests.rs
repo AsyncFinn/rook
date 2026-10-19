@@ -93,6 +93,13 @@ fn updating_parts_draws_what_a_new_scene_draws() {
     // The hidden part's slot is taken by a new one.
     scene.parts[4] = part(PartShape::Ball, -9.0, blue, 0.0);
     incremental.update_parts(&scene, &[4]);
+    // Parts that only move: opaque, waiting for its image, transparent,
+    // and a decal on a transparent part.
+    for i in [0, 1, 3, 5] {
+        scene.parts[i].position.x += 0.5;
+        scene.parts[i].rotation = Mat3::from_rotation_y(0.3);
+    }
+    incremental.move_parts(&scene, &[0, 1, 3, 5]);
     incremental.finish_uploads();
 
     fresh.set_scene(&scene);
