@@ -75,10 +75,10 @@ impl Material {
     /// face (for [`TilePattern::Wang`], of the whole 4 × 4 atlas). The 2022
     /// set: 8 for every material (Confirmed: Roblox's texture
     /// specifications, "Parts display a 1024×1024 on an 8×8 stud face").
-    /// The legacy set: Concrete Confirmed from Studio's OBJ export, which
-    /// writes the material's texture and UVs in repeats (a 4-stud face
-    /// spans 0.6); the rest Unverified, fitted by eye in Studio 0.742
-    /// (`docs/behavior/materials.md`).
+    /// The legacy set: Confirmed from Studio 0.743's OBJ export of a
+    /// 4 × 1 × 4 part of each material, whose UVs count repeats of the
+    /// material's texture (Concrete's 4-stud sides span 0.6); Sandstone,
+    /// not exported, takes 8 (Inference) (`docs/behavior/materials.md`).
     pub fn studs_per_tile(self, set: MaterialSet) -> f32 {
         use Material::*;
         if set == MaterialSet::Materials2022 {
@@ -87,12 +87,9 @@ impl Material {
         match self {
             Glass => 4.0,
             Wood | DiamondPlate | Metal => 5.0,
-            Fabric | Concrete => 20.0 / 3.0,
-            Marble | Pebble | Sand | Ice | Grass => 10.0,
-            Foil => 12.0,
-            Cobblestone | Slate | Basalt => 16.0,
-            Salt => 20.0,
-            Granite | CorrodedMetal => 24.0,
+            Fabric | Concrete | Grass => 20.0 / 3.0,
+            Marble | Pebble | Sand | Ice | Slate | Granite | Foil | CorrodedMetal => 10.0,
+            Cobblestone => 40.0 / 2.7,
             _ => 8.0,
         }
     }
