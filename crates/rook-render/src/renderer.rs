@@ -110,6 +110,24 @@ pub struct Renderer {
     /// How long the last frame took the CPU to record and submit, file
     /// uploads included.
     record_time: std::time::Duration,
+    stage_times: StageTimes,
+}
+
+/// Where the CPU's time recording the last frame went.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct StageTimes {
+    /// Mesh files and images going up, and entries waiting on them placed.
+    pub uploads: std::time::Duration,
+    /// Shadow view, image table, globals.
+    pub setup: std::time::Duration,
+    /// Changed instances uploaded, transparent parts sorted.
+    pub instances: std::time::Duration,
+    /// Beams, Trails and particles built and uploaded.
+    pub effects: std::time::Duration,
+    /// Culling and the draws' arguments.
+    pub draws: std::time::Duration,
+    /// Recording the passes and submitting them.
+    pub passes: std::time::Duration,
 }
 
 /// What a frame drew, in the shadow pass and the main pass.
@@ -344,6 +362,7 @@ impl Renderer {
             draw_counts: DrawCounts::default(),
             timer: None,
             record_time: Default::default(),
+            stage_times: StageTimes::default(),
         };
         renderer.ensure_group([None; 5]);
         renderer
@@ -516,6 +535,11 @@ impl Renderer {
     /// uploads included (not the GPU's time: [`Renderer::gpu_times`]).
     pub fn record_time(&self) -> std::time::Duration {
         self.record_time
+    }
+
+    /// Where [`Renderer::record_time`] went.
+    pub fn stage_times(&self) -> StageTimes {
+        self.stage_times
     }
 
     /// The GPU, its backend and driver.

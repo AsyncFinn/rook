@@ -121,6 +121,8 @@ pub struct SceneCache {
     effects_loaded: bool,
     /// Files that didn't load, reported once loading settles.
     report: report::Report,
+    /// `BasePart.CFrame`, which moved parts are read again by.
+    cframe: Option<rook_reflection::PropertyId>,
 }
 
 impl SceneCache {
@@ -149,6 +151,11 @@ impl SceneCache {
             effects: EffectCache::new(textures),
             effects_loaded: false,
             report: report::Report::default(),
+            cframe: dom
+                .database()
+                .class_by_name("BasePart")
+                .and_then(|base| dom.database().find_canonical_property(base.id, "CFrame"))
+                .map(|p| p.id),
         };
         cache.rebuild(dom);
         cache
@@ -295,7 +302,7 @@ impl SceneCache {
             let Some(&i) = self.index.get(id) else {
                 continue;
             };
-            let Some(Value::CFrame(cf)) = dom.property_by_name(*id, "CFrame") else {
+            let Some(Value::CFrame(cf)) = self.cframe.and_then(|p| dom.property(*id, p)) else {
                 continue;
             };
             let entries =

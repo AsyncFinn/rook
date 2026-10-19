@@ -20,11 +20,12 @@ pub(crate) fn bench(
     game: &mut Game,
     mut cache: SceneCache,
     frames: u32,
-    camera: &Camera,
-    width: u32,
-    height: u32,
+    mut camera: Camera,
+    args: &Args,
     install: &Installed,
 ) -> anyhow::Result<()> {
+    let (width, height) = (args.width, args.height);
+    let turn = Mat3::from_rotation_y(args.turn.to_radians());
     let load_start = game.load_start;
     let mut renderer = Renderer::headless()?;
     install.apply(&mut renderer);
@@ -41,6 +42,8 @@ pub(crate) fn bench(
     let mut mouse = 0.0;
     let mut mouse_times = stats::Times::default();
     let mut update_times = stats::Times::default();
+    // The renderer's CPU recording by stage (`StageTimes`, in order).
+    let mut stage_times: [stats::Times; 6] = Default::default();
     let mut whole = stats::Times::default();
     // When the content loaders last ran out of work, and the frames
     // until then.
@@ -63,6 +66,7 @@ pub(crate) fn bench(
         let t = Instant::now();
         game.step();
         sim += secs(t);
+        camera.rotation = turn * camera.rotation;
         let t = Instant::now();
         renderer.set_time(frame as f32 / 60.0);
         if refresh(&mut cache, game.view_mut(), &mut renderer, camera.position) {
@@ -71,10 +75,22 @@ pub(crate) fn bench(
         build += secs(t);
         update_times.push(t.elapsed());
         let t = Instant::now();
-        renderer.render_to_image(width, height, camera)?;
+        renderer.render_to_image(width, height, &camera)?;
         render += secs(t);
         render_times[0].push(renderer.record_time());
         render_times[1].push(t.elapsed());
+        let s = renderer.stage_times();
+        let stages = [
+            s.uploads,
+            s.setup,
+            s.instances,
+            s.effects,
+            s.draws,
+            s.passes,
+        ];
+        for (times, stage) in stage_times.iter_mut().zip(stages) {
+            times.push(stage);
+        }
         if let Some(gpu) = renderer.gpu_times() {
             render_times[2].push(Duration::from_secs_f64(gpu.shadow / 1000.0));
             render_times[3].push(Duration::from_secs_f64(gpu.main / 1000.0));
@@ -130,6 +146,12 @@ pub(crate) fn bench(
     eprintln!(
         "render medians: CPU recording {record:.2} ms (mean {:.2} ms), render+readback {with_readback:.2} ms",
         stats::ms(render_times[0].summary().total) / f64::from(frames.max(1))
+    );
+    let [uploads, setup, instances, effects, draws, passes] = stage_times
+        .each_ref()
+        .map(|t| stats::ms(t.summary().median));
+    eprintln!(
+        "CPU recording medians by stage: uploads {uploads:.2} ms, setup {setup:.2} ms, instances {instances:.2} ms, effects {effects:.2} ms, draws {draws:.2} ms, passes {passes:.2} ms"
     );
     if timing_gpu {
         eprintln!("render medians: GPU shadow pass {gpu_shadow:.2} ms, main pass {gpu_main:.2} ms");

@@ -100,6 +100,10 @@ struct Args {
     /// Run this many frames offscreen and print where the time goes.
     #[arg(long)]
     bench: Option<u32>,
+    /// With `--bench`: turn the camera this many degrees each frame, as
+    /// someone looking around does (default: it holds still).
+    #[arg(long, default_value_t = 0.0)]
+    turn: f32,
     /// Present frames as fast as they're drawn instead of at the monitor's
     /// refresh rate.
     #[arg(long)]
@@ -308,15 +312,7 @@ fn play(args: Args) -> anyhow::Result<()> {
     }
 
     if let Some(frames) = args.bench {
-        return bench(
-            &mut game,
-            scene,
-            frames,
-            &camera,
-            args.width,
-            args.height,
-            &install,
-        );
+        return bench(&mut game, scene, frames, camera, &args, &install);
     }
 
     if let Some(out) = args.screenshot {

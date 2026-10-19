@@ -3269,6 +3269,7 @@ dependencies = [
  "naga",
  "pollster",
  "profiling",
+ "rayon",
  "rook-content",
  "rook-types",
  "rustc-hash 2.1.3",

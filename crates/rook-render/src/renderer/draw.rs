@@ -59,6 +59,14 @@ impl Renderer {
         profiling::scope!("Renderer::render");
         let start = std::time::Instant::now();
         self.upload_files(FRAME_UPLOAD_BYTES);
+        let mut times = StageTimes::default();
+        let mut lap = start;
+        let mut stage = |time: &mut std::time::Duration| {
+            let now = std::time::Instant::now();
+            *time = now - lap;
+            lap = now;
+        };
+        stage(&mut times.uploads);
         let l = self.lighting;
         let aspect = width as f32 / height.max(1) as f32;
         let sun = l.sun_direction.normalize_or(Vec3::Y);
@@ -136,18 +144,22 @@ impl Renderer {
         self.queue
             .write_buffer(&self.globals, 0, bytemuck::bytes_of(&globals));
 
+        stage(&mut times.setup);
         let transparent_runs = {
             profiling::scope!("upload instances");
             self.upload_instances(camera, &view, margin)
         };
 
+        stage(&mut times.instances);
         let ribbon_runs = self.upload_ribbons(camera, &view);
         let particle_runs = self.upload_particles(camera, &view);
+        stage(&mut times.effects);
 
         // Each pass's draws, joined into runs that share what's bound.
         let (mut shadow_runs, mut main_runs, starts) =
             self.build_draws(shadow, &view, margin, transparent_runs);
 
+        stage(&mut times.draws);
         let depth = self.depth_view(width, height);
         let frame = self.tonemap.frame(&self.device, width, height);
         let mut encoder = self
@@ -237,6 +249,8 @@ impl Renderer {
             encoder.finish()
         };
         self.queue.submit([commands]);
+        stage(&mut times.passes);
+        self.stage_times = times;
         self.record_time = start.elapsed();
     }
 
@@ -256,10 +270,20 @@ impl Renderer {
         // The sun's whole view, not just the camera's: a part off screen
         // still shadows what's on it.
         let sun_view = shadow.map(|s| Frustum::of(s.view_proj));
-        let seen = self.opaque.seen(view, margin);
-        let shadowed = sun_view
-            .as_ref()
-            .map(|sun| (sun, self.opaque.seen(sun, margin)));
+        // The three cullings at once.
+        let ((seen, shadowed), layers_seen) = rayon::join(
+            || {
+                rayon::join(
+                    || self.opaque.seen(view, margin),
+                    || {
+                        sun_view
+                            .as_ref()
+                            .map(|sun| (sun, self.opaque.seen(sun, margin)))
+                    },
+                )
+            },
+            || self.layers.seen(view, margin),
+        );
         for (k, &seen) in seen.iter().enumerate() {
             let sun = shadowed.as_ref().filter(|(_, s)| s[k]).map(|(sun, _)| *sun);
             if sun.is_none() && !seen {
@@ -285,8 +309,7 @@ impl Renderer {
         // Then images on opaque parts (before transparent parts, so a
         // window in front of a decal covers it), then transparent parts
         // back to front.
-        let seen = self.layers.seen(view, margin);
-        for k in (0..seen.len()).filter(|&k| seen[k]) {
+        for k in (0..layers_seen.len()).filter(|&k| layers_seen[k]) {
             let (key, instances, chunks, z) = self.layers.draw(k);
             let Some(mesh) = self.meshes.get(&key.shape) else {
                 continue;

@@ -7,6 +7,7 @@ use std::ops::Range;
 
 use super::*;
 use pool::RangeAlloc;
+use rayon::prelude::*;
 
 /// What an instanced draw shares: its mesh and its images (a mesh
 /// texture or a layer's decal, and the material's maps).
@@ -39,6 +40,10 @@ pub(crate) const CULL_SLOTS: u32 = 16;
 
 /// How many batches, in drawing order, share a box for culling.
 const CULL_BATCHES: usize = 32;
+
+/// How many clean chunks between changed ones are written along with
+/// them, so scattered changes take a few big writes, not many small ones.
+const MERGE_GAP: usize = 8;
 
 /// Instances are written to the GPU in chunks of this many.
 const CHUNK: u32 = 64;
@@ -117,10 +122,17 @@ impl InstancePool {
                 continue;
             }
             let first = c;
-            while c < self.dirty.len() && self.dirty[c] {
-                self.dirty[c] = false;
+            // A run goes on over gaps of up to `MERGE_GAP` clean chunks:
+            // rewriting them costs less than another write.
+            let mut end = c;
+            while c < self.dirty.len() && c - end <= MERGE_GAP {
+                if self.dirty[c] {
+                    self.dirty[c] = false;
+                    end = c + 1;
+                }
                 c += 1;
             }
+            c = end;
             let start = first * CHUNK as usize;
             let end = (c * CHUNK as usize).min(self.instances.len());
             queue.write_buffer(
@@ -273,27 +285,25 @@ impl Batches {
     /// wholly inside it is.
     pub(crate) fn seen(&self, view: &Frustum, margin: f32) -> Vec<bool> {
         let mut out = vec![false; self.order.len()];
-        for (block, seen) in self
-            .order
-            .chunks(CULL_BATCHES)
-            .zip(out.chunks_mut(CULL_BATCHES))
-        {
-            let all = block
-                .iter()
-                .fold(Aabb::EMPTY, |all, &i| all.union(self.bounds[i]));
-            if !view.sees(all, margin) {
-                continue;
-            }
-            let inside = view.holds(all, margin);
-            for (&i, seen) in block.iter().zip(seen) {
-                let b = self.bounds[i];
-                *seen = if inside {
-                    !b.is_empty()
-                } else {
-                    view.sees(b, margin)
-                };
-            }
-        }
+        out.par_chunks_mut(CULL_BATCHES)
+            .zip(self.order.par_chunks(CULL_BATCHES))
+            .for_each(|(seen, block)| {
+                let all = block
+                    .iter()
+                    .fold(Aabb::EMPTY, |all, &i| all.union(self.bounds[i]));
+                if !view.sees(all, margin) {
+                    return;
+                }
+                let inside = view.holds(all, margin);
+                for (&i, seen) in block.iter().zip(seen) {
+                    let b = self.bounds[i];
+                    *seen = if inside {
+                        !b.is_empty()
+                    } else {
+                        view.sees(b, margin)
+                    };
+                }
+            });
         out
     }
 
