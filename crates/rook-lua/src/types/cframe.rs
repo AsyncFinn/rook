@@ -131,9 +131,9 @@ impl UserData for LCFrame {
         for name in ["UpVector", "upVector"] {
             f.add_field_method_get(name, |_, t| Ok(lv3(t.0.up_vector())));
         }
-        f.add_field_method_get("XVector", |_, t| Ok(lv(t.0.rotation.row(0))));
-        f.add_field_method_get("YVector", |_, t| Ok(lv(t.0.rotation.row(1))));
-        f.add_field_method_get("ZVector", |_, t| Ok(lv(t.0.rotation.row(2))));
+        f.add_field_method_get("XVector", |_, t| Ok(lv(t.0.rotation.col(0))));
+        f.add_field_method_get("YVector", |_, t| Ok(lv(t.0.rotation.col(1))));
+        f.add_field_method_get("ZVector", |_, t| Ok(lv(t.0.rotation.col(2))));
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
