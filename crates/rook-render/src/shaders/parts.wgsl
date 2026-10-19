@@ -24,7 +24,7 @@ import package::images::{
     METALNESS_MAP,
 };
 import package::lighting::{shade, shade_pbr, fog_units};
-import package::tone::{frame, frame_of, light_units3, linear_to_srgb, srgb_to_linear};
+import package::tone::{albedo_units, frame, frame_of, linear_to_srgb, srgb_to_linear};
 import package::terrain::{terrain_motion, terrain_position, terrain_share, water_surface};
 
 @vertex
@@ -276,15 +276,14 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
     if (in.flags & NEON) != 0u {
         return vec4(frame(fog_units(neon(albedo), in.world)), in.color.a);
     }
-    var lit = shade_pbr(albedo, in.world, normal, roughness, metalness);
+    var lit = shade_pbr(albedo_units(albedo), in.world, normal, roughness, metalness);
     // Reflectance: the part takes on its surroundings, here the skybox's
     // average colour (Approximation: Studio reflects the skybox itself; a
     // red part at 0.2 looks pink under the default blue sky, and a yellow
     // one at 0.3 olive under a black Sky; observed).
     let reflectance = in.material.x;
     if reflectance > 0.0 {
-        let sky = light_units3(srgb_to_linear(g.sky.rgb));
-        lit = mix(lit, fog_units(sky, in.world), reflectance);
+        lit = mix(lit, fog_units(g.sky.rgb * g.sky.rgb, in.world), reflectance);
     }
     var out = frame(lit);
     if terrain && (in.face >> TERRAIN_DRAWN_SHIFT) != 0u {
@@ -389,5 +388,5 @@ fn fs_layer(in: VertexOut) -> @location(0) vec4<f32> {
     }
     let texel = sample_map(in.images, IMAGE, uv, dx, dy);
     let alpha = texel.a * in.color.a;
-    return vec4(frame(shade(texel.rgb * in.color.rgb, in.world, in.normal)), alpha);
+    return vec4(frame(shade(albedo_units(texel.rgb * in.color.rgb), in.world, in.normal)), alpha);
 }

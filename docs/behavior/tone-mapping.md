@@ -120,6 +120,29 @@ don't dim as much as unlit ones. In the room, unlit consoles now draw
 Texture (alpha about 0.65, Transparency 0.2) over Metal, the
 blend-before-the-curve case above.
 
+## Fog
+
+Studio's surface and particle shaders keep exp2(z × distance + x) − w of
+a surface, clamped to 0 to 1, and mix the rest towards FogColor (a
+particle's opacity fades instead). Measured in Studio 0.743 on
+2026-10-19: white SmoothPlastic squares facing the camera at 12 distances
+(5 to 120 studs), lit by Ambient white alone, FogColor black, read as
+light units:
+
+| t = (distance − FogStart) / (FogEnd − FogStart) | 0.1 | 0.2 | 0.3 | 0.4 | 0.5 | 0.6 | 0.7 | 0.8 | 0.9 |
+|---|---|---|---|---|---|---|---|---|---|
+| surface kept | 0.89 | 0.76 | 0.64 | 0.52 | 0.41 | 0.32 | 0.23 | 0.14 | 0.07 |
+
+(averaged with FogColor 128 grey, which reads 1 − kept). FogStart 50 /
+FogEnd 100 and 0 / 200 land on the same values at the same t, and the
+kept share is 2^(1 − t) − 1 within 0.025 (x = 1, w = 1, z = −1 /
+(FogEnd − FogStart), FogStart shifting the start). Full fog draws
+FogColor's colour squared in light units (128 grey drew 130, the curve
+gives 129). The sky isn't fogged.
+
+Rook: `fog_amount` and `fog_units` in `shaders/lighting.wgsl`, before
+the exposure.
+
 ## How Rook does it
 
 The main pass draws into a frame (`renderer/tonemap.rs`, Rgba16Float to
@@ -130,23 +153,25 @@ first enabled ColorGradingEffect in Lighting.
 
 Light adds up in light units (`diffuse_light` in `shaders/lighting.wgsl`):
 the ambient as its colour squared, the sky's diffuse light and the local
-lights as measured, Neon as above, and the exposure before the curve. The
-looks still fitted on Studio's pixels reach the frame through the curve's
-inverse (`light_units` in `tone.wgsl`, an Approximation until each is
-measured in light units). These are the sun (what it added to the pixels
-over the ambient, it adds now), the GGX highlight and sky reflection,
-skyboxes, fog, water, ForceField, unlit particles and Glass's filter (now a
-scale on the light, before the curve).
+lights as measured, the sun and its highlight as Studio's shaders add
+them ([lights](lights.md#the-sun)), Neon as above, fog as below, and the
+exposure before the curve; surface colours are their sRGB values squared.
+Unlit particles are their image times colour, squared, times Brightness,
+as Studio's particle shaders draw them. The looks still fitted on
+Studio's pixels reach the frame through the curve's inverse (`frame_of` in
+`tone.wgsl`): skyboxes and the plain sky, and ForceField's rim; water's
+glint is in light units but unmeasured (as bright as the sun's light on a
+face square to it). Glass's filter is a scale on the light, before the
+curve.
 
 Against the table above (`rook-player --screenshot` of a test place with
 black parts at each Transparency over Neon, which blend as Decals do),
 Rook lands within 6 levels everywhere under the default curve (white Neon
 9, 35, 100, 160, 199, 224, 243, 253; grey 128 and lavender within 6), and
-Retro's uncovered Neon draws Studio's 237 and 159. Rook's linear fog,
-which with Roblox's defaults (FogStart 0, FogEnd 100000) tints everything
-by a hair, lifts near-black see-through covers by up to 5 levels;
-Studio's fog is exponential and starts later (its shaders), not yet
-matched.
+Retro's uncovered Neon draws Studio's 237 and 159. Rook's old linear fog lifted
+near-black see-through covers by up to 5 levels with Roblox's defaults
+(FogStart 0, FogEnd 100000); the fog below tints less at a given
+distance.
 
 Not done: ColorGradingEffects under the Camera, the other presets, and
 Bloom and ColorCorrection (M13).

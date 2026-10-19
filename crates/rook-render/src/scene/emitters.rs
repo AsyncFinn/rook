@@ -68,8 +68,8 @@ pub struct EmitterLook {
     /// Turning, in degrees per second, random between the two (either
     /// way).
     pub spin: [f32; 2],
-    /// sRGB colour, times `brightness` (on linear light) over its life:
-    /// above 1 glows.
+    /// sRGB colour, times `brightness` (on its light units, as Studio's
+    /// particle shaders scale them) over its life: above 1 glows.
     pub color: [f32; 3],
     pub brightness: Curve,
     /// Opacity over its life, 0 to 1.

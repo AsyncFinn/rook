@@ -270,12 +270,16 @@ pub const SKYBOX_FACES: [(Vec3, Vec3, Vec3); 6] = [
 /// Scene lighting, mapped from the Lighting service.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Lighting {
-    /// Unit vector pointing towards the sun.
+    /// Unit vector pointing towards the sun, or towards the moon while
+    /// the sun is down: where [`sun_color`](Self::sun_color) comes from.
     pub sun_direction: Vec3,
     /// sRGB colours.
     pub ambient: [f32; 3],
     pub outdoor_ambient: [f32; 3],
-    pub brightness: f32,
+    /// The sun's (or moon's) light on a white face square to it, in
+    /// Studio's light units per channel, `Brightness` included
+    /// (docs/behavior/lights.md, "The sun").
+    pub sun_color: [f32; 3],
     pub fog_color: [f32; 3],
     pub fog_start: f32,
     pub fog_end: f32,
@@ -324,7 +328,7 @@ impl Default for Lighting {
             sun_direction: Vec3::new(0.3, 0.8, 0.5).normalize(),
             ambient: [0.27; 3],
             outdoor_ambient: [0.27; 3],
-            brightness: 2.0,
+            sun_color: [1.0; 3],
             fog_color: [0.75; 3],
             fog_start: 0.0,
             fog_end: 100_000.0,

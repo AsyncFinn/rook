@@ -4,9 +4,12 @@ struct Globals {
     view_proj: mat4x4<f32>,
     camera_pos: vec4<f32>,
     sun_dir: vec4<f32>,
+    // The sun's light on a white face square to it, in light units
+    // (`Lighting::sun_color`).
+    sun_color: vec4<f32>,
     ambient: vec4<f32>,
     outdoor_ambient: vec4<f32>,
-    // rgb fog colour, w = brightness
+    // rgb fog colour (sRGB)
     fog_color: vec4<f32>,
     // x = fog start, y = fog end, z = exposure (a multiplier on linear
     // light, `Lighting::exposure`)

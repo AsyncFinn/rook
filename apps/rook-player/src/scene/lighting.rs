@@ -12,22 +12,55 @@ fn sun_direction(hours: f32, latitude_degrees: f32) -> Vec3 {
     Vec3::new(-h.sin() * tilt.cos(), h.cos() * tilt.cos(), tilt.sin())
 }
 
-pub(super) fn lighting(dom: &Dom) -> Lighting {
+/// The sun's light in Studio's light units on a white face square to it,
+/// per unit of `Brightness`, for its height `y` (the sine of its
+/// elevation): 0.5 by day (measured: white and black SmoothPlastic at six
+/// angles to the sun, Brightness 0.5, 1 and 3, all within 0.02), turning
+/// yellow and dimming in the last few degrees above the horizon (measured
+/// at five heights: (0.40, 0.40, 0) at y 0.024, (0.70, 0.70, 0.03) at
+/// 0.048, (0.91, 0.92, 0.51) at 0.096, white from about 0.15; fitted,
+/// Approximation). docs/behavior/lights.md, "The sun".
+fn sun_color(y: f32) -> [f32; 3] {
+    let warm = 1.0 - (-y.max(0.0) / 0.04).exp();
+    let t = ((y - 0.045) / 0.105).clamp(0.0, 1.0);
+    let blue = t * t * (3.0 - 2.0 * t);
+    [0.5 * warm, 0.5 * warm, 0.5 * blue]
+}
+
+/// The moon's light per unit of `Brightness` (measured once, at 66° up:
+/// 0.031 units on white; Approximation elsewhere, faded in as the sun's).
+const MOON_LIGHT: f32 = 0.031;
+
+/// The direction light comes from and its colour in light units: the sun
+/// while it's up, else the moon, which Roblox puts opposite the sun's
+/// daily circle (Confirmed: `Lighting:GetMoonDirection()` in Studio 0.743
+/// at midnight, latitude 0, is the noon sun's direction).
+fn sun_and_moon(sun: Vec3, brightness: f32) -> (Vec3, [f32; 3]) {
+    if sun.y > 0.0 {
+        return (sun, sun_color(sun.y).map(|c| c * brightness));
+    }
+    let moon = Vec3::new(-sun.x, -sun.y, sun.z);
+    let fade = 1.0 - (-moon.y / 0.04).exp();
+    (moon, [MOON_LIGHT * fade * brightness; 3])
+}
+
+/// The Lighting service's look, and how bright the sky is
+/// ([`daylight`]).
+pub(super) fn lighting(dom: &Dom) -> (Lighting, f32) {
     let mut l = Lighting::default();
     let Some(id) = dom.find_service("Lighting") else {
-        return l;
+        return (l, 1.0);
     };
     let hours = dom.clock_time(id) as f32;
     let latitude = number(dom, id, "GeographicLatitude").unwrap_or(41.733);
-    l.sun_direction = sun_direction(hours, latitude);
+    let sun = sun_direction(hours, latitude);
+    let brightness = number(dom, id, "Brightness").unwrap_or(2.0);
+    (l.sun_direction, l.sun_color) = sun_and_moon(sun, brightness);
     if let Some(c) = color(dom, id, "Ambient") {
         l.ambient = c;
     }
     if let Some(c) = color(dom, id, "OutdoorAmbient") {
         l.outdoor_ambient = c;
-    }
-    if let Some(b) = number(dom, id, "Brightness") {
-        l.brightness = b;
     }
     if let Some(c) = color(dom, id, "FogColor") {
         l.fog_color = c;
@@ -64,12 +97,12 @@ pub(super) fn lighting(dom: &Dom) -> Lighting {
         .unwrap_or(0.0)
         .exp2();
     l.tonemapper = tonemapper(dom, id);
-    let day = daylight(l.sun_direction);
+    let day = daylight(sun);
     l.sky_top = l.sky_top.map(|c| c * day);
     l.sky_horizon = l.sky_horizon.map(|c| c * day);
     l.sky_bottom = l.sky_horizon;
     l.reflection = l.sky_horizon;
-    l
+    (l, day)
 }
 
 /// The tone curve of the first enabled ColorGradingEffect in Lighting
@@ -126,7 +159,7 @@ impl SceneCache {
     /// 0.3-reflective yellow part olive). The sun, moon and stars, and
     /// `SkyboxOrientation`, aren't drawn yet.
     pub(super) fn lighting(&mut self, dom: &Dom) -> Lighting {
-        let mut l = lighting(dom);
+        let (mut l, day) = lighting(dom);
         let sky = dom.find_service("Lighting").and_then(|id| {
             dom.children(id)
                 .iter()
@@ -176,7 +209,7 @@ impl SceneCache {
         l.reflection = mean(&averages);
         // The images aren't darkened for the night, so the light they give
         // is.
-        l.environment_diffuse *= daylight(l.sun_direction);
+        l.environment_diffuse *= day;
         l.skybox = hashes.try_into().ok();
         l
     }

@@ -14,6 +14,8 @@ pub(crate) struct Globals {
     pub(crate) view_proj: [[f32; 4]; 4],
     pub(crate) camera_pos: [f32; 4],
     pub(crate) sun_dir: [f32; 4],
+    /// `Lighting::sun_color`, in light units.
+    pub(crate) sun_color: [f32; 4],
     pub(crate) ambient: [f32; 4],
     pub(crate) outdoor_ambient: [f32; 4],
     pub(crate) fog_color: [f32; 4],

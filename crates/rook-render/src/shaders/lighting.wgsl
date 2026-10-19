@@ -5,14 +5,11 @@
 // them (`tone.wgsl`).
 
 import package::common::g;
-import package::tone::{light_units3, srgb_to_linear, studio_light3};
 
 import package::lights::VOXEL;
 
 @group(1) @binding(0) var shadow_map: texture_depth_2d;
 @group(1) @binding(1) var shadow_sampler: sampler_comparison;
-
-const PI: f32 = 3.14159265;
 
 // Local lights (PointLight, SpotLight, SurfaceLight), as Studio draws them
 // in the lighting archived places get: each light writes into 4-stud
@@ -82,13 +79,6 @@ fn sky_visibility(world: vec3<f32>, n: vec3<f32>) -> f32 {
         + sky_voxel(q - (t + b) * s) + sky_voxel(q - (t - b) * s));
 }
 
-// The light units that, on top of `base`, add `extra` linear light to the
-// pixels under the default curve: how a look fitted as light added to
-// Studio's pixels (the sun, highlights) joins the light units.
-fn units_over(base: vec3<f32>, extra: vec3<f32>) -> vec3<f32> {
-    return max(light_units3(studio_light3(base) + extra) - base, vec3(0.0));
-}
-
 // How much of the sun reaches a point: 3x3 comparison samples (each one
 // filtered 2x2 by the sampler), fading out towards the edge of the
 // shadowed distance.
@@ -114,14 +104,16 @@ fn sun_visibility(world: vec3<f32>, n: vec3<f32>) -> f32 {
     return mix(lit / 9.0, 1.0, fade);
 }
 
-// The sun's light reaching a surface with normal `n` (shadowed), times
-// the cosine of its angle.
-fn sun_light(world: vec3<f32>, n: vec3<f32>) -> f32 {
-    var sun = max(dot(n, g.sun_dir.xyz), 0.0) * g.fog_color.w * 0.5;
-    if sun > 0.0 {
-        sun *= sun_visibility(world, n);
+// The sun's light on a surface with normal `n` (shadowed), in light units:
+// `g.sun_color` (0.5 units per Brightness on a white face square to the
+// sun, measured) times the cosine of its angle, as Studio lights
+// (docs/behavior/lights.md, "The sun").
+fn sun_light(world: vec3<f32>, n: vec3<f32>) -> vec3<f32> {
+    var cosine = max(dot(n, g.sun_dir.xyz), 0.0);
+    if cosine > 0.0 {
+        cosine *= sun_visibility(world, n);
     }
-    return sun;
+    return g.sun_color.rgb * cosine;
 }
 
 // Studio's ambient colour: the brighter of Ambient and OutdoorAmbient in
@@ -158,38 +150,51 @@ fn sky_light(n: vec3<f32>) -> vec3<f32> {
     return light * g.sky_top.w;
 }
 
-// The diffuse light off a surface of linear colour `albedo` at `world`
-// facing `n`, given the sun's (`sun_light`), in light units: the albedo
-// times the ambient (its colour squared; measured: white SmoothPlastic
-// under Ambient 80 drew 66 under the default curve and 79 under Retro,
-// both 0.093 units), the sky's light and the local lights'. Where roofs
-// block the sky, a dim grey light stays (`SKY_COVERED`). The sun keeps its
-// look fitted on Studio's pixels (Approximation until it's measured in
-// light units): it adds the albedo times its light to the pixels, on top
-// of the rest.
-fn diffuse_light(albedo: vec3<f32>, world: vec3<f32>, n: vec3<f32>, sun: f32) -> vec3<f32> {
+// The diffuse light off a surface of colour `albedo` at `world` facing
+// `n`, given the sun's (`sun_light`), in light units: the albedo times the
+// ambient (its colour squared; measured: white SmoothPlastic under Ambient
+// 80 drew 66 under the default curve and 79 under Retro, both 0.093
+// units), the sky's light, the local lights' and the sun's. Where roofs
+// block the sky, a dim grey light stays (`SKY_COVERED`).
+fn diffuse_light(albedo: vec3<f32>, world: vec3<f32>, n: vec3<f32>, sun: vec3<f32>) -> vec3<f32> {
     let a = ambient_color();
     let covered = vec3(SKY_COVERED * g.sky_top.w);
     let sky = mix(covered, sky_light(n), sky_visibility(world, normalize(n)));
-    let lit = albedo * (a * a + sky + local_light(world, n));
-    return lit + units_over(lit, albedo * sun);
+    return albedo * (a * a + sky + local_light(world, n) + sun);
 }
 
-// Sun, ambient and fog on a linear albedo, without highlights (decals), in
+// Sun, ambient and fog on an albedo, without highlights (decals), in
 // light units.
 fn shade(albedo: vec3<f32>, world: vec3<f32>, normal: vec3<f32>) -> vec3<f32> {
     let n = normalize(normal);
     return fog_units(diffuse_light(albedo, world, n, sun_light(world, n)), world);
 }
 
-// Physically based shading (Approximation, tuned against Studio 0.742,
-// docs/behavior/materials.md): the diffuse light of `shade`, a GGX
-// highlight from the sun, and the sky reflected with Schlick's Fresnel
-// (weaker at grazing angles the rougher the surface), in the albedo's
-// colour on metals. The reflection is scaled by EnvironmentSpecularScale
-// (`g.sky.w`), and metals lose their diffuse light only as far as it
-// reflects: at 0, a Foil part is lit like Plastic (observed). The sky
-// reflected is its average colour (`g.sky`), as Reflectance uses.
+// The sun's highlight on a surface of reflectance `f0` at the given
+// cosines, per unit of the sun's light on it (its cosine already in):
+// Studio's surface shaders' own distribution (`shaders_glsl3.pack`, 0.743:
+// remapped roughness r = 0.089 + 0.911 x roughness, a = r^4, no 1/pi and
+// no visibility term), with Schlick's Fresnel on the light and half-way
+// vectors. Confirmed against black SmoothPlastic at known angles, which
+// fits roughness 0.4 within 0.005 units (docs/behavior/lights.md).
+fn sun_highlight(f0: vec3<f32>, roughness: f32, n_h: f32, l_h: f32) -> vec3<f32> {
+    let r = 0.089 + 0.911 * roughness;
+    let a = r * r * r * r;
+    let d = n_h * n_h * (a - 1.0) + 1.0;
+    let f = f0 + (1.0 - f0) * pow(1.0 - l_h, 5.0);
+    return f * (a + a * a) / (d * d * (3.0 * l_h + 0.5) * (0.75 * n_h + 0.25));
+}
+
+// Physically based shading in light units, as Studio's surface shaders add
+// it up (docs/behavior/lights.md): the diffuse light of `shade`, the sun's
+// highlight (`sun_highlight`), and the sky reflected with Schlick's
+// Fresnel (weaker at grazing angles the rougher the surface; an
+// Approximation of Studio's prefiltered sky), in the albedo's colour on
+// metals. EnvironmentSpecularScale (`g.sky.w`) scales the reflection and
+// metalness both: at 0, a Foil part is lit like Plastic (observed; in
+// Studio's shaders metalness is multiplied by it). Metals lose their
+// diffuse light as far as they are metal, and every surface the share of
+// the sun's light its highlight reflects.
 fn shade_pbr(
     albedo: vec3<f32>,
     world: vec3<f32>,
@@ -200,43 +205,44 @@ fn shade_pbr(
     let n = normalize(normal);
     let v = normalize(g.camera_pos.xyz - world);
     let l = g.sun_dir.xyz;
-    let sun = sun_light(world, n);
-    let f0 = mix(vec3(0.04), albedo, metalness);
-    let n_v = max(dot(n, v), 1e-4);
     let environment = g.sky.w;
-    let diffuse = diffuse_light(albedo * (1.0 - metalness * environment), world, n, sun);
-    // The highlight and the reflection keep their looks fitted on
-    // Studio's pixels, added over the diffuse light (`units_over`).
-    var color = vec3(0.0);
-    if sun > 0.0 {
+    let metal = metalness * environment;
+    let f0 = mix(vec3(0.04), albedo, metal);
+    let n_v = max(dot(n, v), 1e-4);
+    let sun = sun_light(world, n);
+    var kept = vec3(1.0);
+    var highlight = vec3(0.0);
+    if any(sun > vec3(0.0)) {
         let h = normalize(l + v);
-        let n_h = max(dot(n, h), 0.0);
-        let n_l = max(dot(n, l), 1e-4);
-        let a = max(roughness * roughness, 0.002);
-        let a2 = a * a;
-        let d = a2 / (PI * pow(n_h * n_h * (a2 - 1.0) + 1.0, 2.0));
-        let k = (roughness + 1.0) * (roughness + 1.0) / 8.0;
-        let vis = 1.0 / (4.0 * (n_l * (1.0 - k) + k) * (n_v * (1.0 - k) + k));
-        let f = f0 + (1.0 - f0) * pow(1.0 - max(dot(h, v), 0.0), 5.0);
-        // `sun` already holds the cosine; Lambert's 1/pi is folded into
-        // the diffuse term, so the highlight takes it back.
-        color += d * vis * f * sun * PI;
+        let l_h = max(dot(l, h), 0.0);
+        let f = f0 + (1.0 - f0) * pow(1.0 - l_h, 5.0);
+        kept = 1.0 - f * environment;
+        highlight = sun_highlight(f0, roughness, max(dot(n, h), 1e-3), l_h) * sun;
     }
+    let lit = diffuse_light(albedo * (1.0 - metal), world, n, sun * kept);
     let fresnel = f0 + (max(vec3(1.0 - roughness), f0) - f0) * pow(1.0 - n_v, 5.0);
-    color += srgb_to_linear(g.sky.rgb) * fresnel * environment;
-    return fog_units(diffuse + units_over(diffuse, color), world);
+    let reflected = g.sky.rgb * g.sky.rgb * fresnel * environment;
+    return fog_units(lit + highlight + reflected, world);
 }
 
-// How far fog has taken over at `world`, 0 to 1.
+// How far fog has taken over at `world`, 0 to 1: Studio's surface shaders
+// keep exp2(1 - t) - 1 of the surface at t = (distance - FogStart) /
+// (FogEnd - FogStart) (their form exp2(z x d + x) - w; the constants fit
+// white parts at 12 distances under three FogStart/FogEnd pairs within
+// 0.03; docs/behavior/lights.md, "Fog").
 fn fog_amount(world: vec3<f32>) -> f32 {
     let dist = distance(world, g.camera_pos.xyz);
-    return clamp((dist - g.fog_range.x) / max(g.fog_range.y - g.fog_range.x, 1e-3), 0.0, 1.0);
+    let t = (dist - g.fog_range.x) / max(g.fog_range.y - g.fog_range.x, 1e-3);
+    return 1.0 - clamp(exp2(1.0 - t) - 1.0, 0.0, 1.0);
 }
 
-// Fog, then the exposure, on light units (every lit surface ends here):
-// towards FogColor as Studio's pixels draw it under the default curve,
-// then scaled before the curve, as Studio scales.
+// FogColor in light units (its colour squared, as Studio's fog draws).
+fn fog_light() -> vec3<f32> {
+    return g.fog_color.rgb * g.fog_color.rgb;
+}
+
+// Fog, then the exposure, on light units (every lit surface ends here),
+// as Studio's shaders apply them before the frame.
 fn fog_units(units: vec3<f32>, world: vec3<f32>) -> vec3<f32> {
-    let fog = light_units3(srgb_to_linear(g.fog_color.rgb));
-    return mix(units, fog, fog_amount(world)) * g.fog_range.z;
+    return mix(units, fog_light(), fog_amount(world)) * g.fog_range.z;
 }

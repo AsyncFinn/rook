@@ -16,7 +16,7 @@ use crate::particles::Particles;
 pub(crate) struct ParticleInstance {
     position: [f32; 3],
     size: f32,
-    /// Linear colour times opacity, and coverage.
+    /// sRGB colour, and opacity.
     color: [f32; 4],
     /// Degrees.
     rotation: f32,
@@ -24,7 +24,10 @@ pub(crate) struct ParticleInstance {
     lit: f32,
     /// Its image's slot in the table (unused without one).
     image: u32,
-    _pad: u32,
+    /// `Brightness`, a multiplier on its light units.
+    brightness: f32,
+    /// 1 - LightEmission: how far it covers what's behind it.
+    keep: f32,
 }
 
 /// The particles and what the last frame drew of them.
@@ -77,7 +80,7 @@ impl Renderer {
                 continue;
             }
             let slot = self.image_slots(&[Some(texture), None, None, None, None])[0];
-            let color = srgb_to_linear(look.color);
+            let color = look.color;
             let keep = 1.0 - look.light_emission.clamp(0.0, 1.0);
             for p in particles {
                 let t = p.life();
@@ -86,15 +89,15 @@ impl Renderer {
                 if alpha <= 0.0 || size <= 0.0 {
                     continue;
                 }
-                let k = look.brightness.at(t) * alpha;
                 let instance = ParticleInstance {
                     position: p.position.to_array(),
                     size,
-                    color: [color[0] * k, color[1] * k, color[2] * k, alpha * keep],
+                    color: [color[0], color[1], color[2], alpha],
                     rotation: p.rotation(),
                     lit: f32::from(u8::from(look.lit)),
                     image: slot,
-                    _pad: 0,
+                    brightness: look.brightness.at(t),
+                    keep,
                 };
                 let d = p.position.distance_squared(camera.position);
                 drawn.push((d, texture, instance));
@@ -175,7 +178,8 @@ pub(crate) fn pipeline(
     depth_format: wgpu::TextureFormat,
 ) -> wgpu::RenderPipeline {
     let attrs = wgpu::vertex_attr_array![
-        0 => Float32x3, 1 => Float32, 2 => Float32x4, 3 => Float32, 4 => Float32, 5 => Uint32
+        0 => Float32x3, 1 => Float32, 2 => Float32x4, 3 => Float32, 4 => Float32, 5 => Uint32,
+        6 => Float32, 7 => Float32
     ];
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("rook particles"),

@@ -14,6 +14,15 @@ fn linear_to_srgb(c: vec3<f32>) -> vec3<f32> {
     return select(1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, c * 12.92, c <= vec3(0.0031308));
 }
 
+// A surface colour as Studio's shaders take it: they square the sRGB
+// colour (texture times colour), where Rook's colours and images arrive as
+// linear light (`shaders_glsl3.pack`, 0.743; within a level of the product
+// of the squares except near black).
+fn albedo_units(linear: vec3<f32>) -> vec3<f32> {
+    let c = linear_to_srgb(max(linear, vec3(0.0)));
+    return c * c;
+}
+
 // The brightest light the frame keeps, in light units.
 const FRAME_LIGHT: f32 = 4.0;
 

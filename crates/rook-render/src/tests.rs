@@ -129,7 +129,7 @@ fn decals_draw_on_their_face() {
         lighting: Lighting {
             ambient: [1.0; 3],
             outdoor_ambient: [0.0; 3],
-            brightness: 0.0,
+            sun_color: [0.0; 3],
             ..Lighting::default()
         },
         ..Scene::default()

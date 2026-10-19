@@ -183,9 +183,10 @@ impl Renderer {
             view_proj: view_proj.to_cols_array_2d(),
             camera_pos: rgb(camera.position.to_array(), 1.0),
             sun_dir: rgb(sun.to_array(), 0.0),
+            sun_color: rgb(l.sun_color, 0.0),
             ambient: rgb(l.ambient, 0.0),
             outdoor_ambient: rgb(l.outdoor_ambient, 0.0),
-            fog_color: rgb(l.fog_color, l.brightness),
+            fog_color: rgb(l.fog_color, 0.0),
             fog_range: [l.fog_start, l.fog_end, l.exposure, 0.0],
             shadow_view_proj: shadow
                 .map_or(glam::Mat4::IDENTITY, |s| s.view_proj)

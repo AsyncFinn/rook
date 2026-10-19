@@ -28,7 +28,6 @@ use rustc_hash::FxHashMap as HashMap;
 
 use bytemuck::{Pod, Zeroable};
 use glam::Vec3;
-use rook_types::srgb_to_linear;
 use wgpu::util::DeviceExt;
 
 use batch::cull::{Aabb, Frustum, MOTION_STUDS};

@@ -122,14 +122,16 @@ impl Material {
     /// averages of the red (metalness) and green (roughness) channels of
     /// the set's roughness-metalness map, as Studio's files record them
     /// (`docs/behavior/materials.md`). Plastic, SmoothPlastic, Neon,
-    /// ForceField, Air and Water have no such map; theirs are
-    /// Approximations, tuned against Studio screenshots.
+    /// ForceField, Air and Water have no such map: Plastic's and
+    /// SmoothPlastic's are fitted to the sun's highlight on black parts
+    /// at known angles (docs/behavior/lights.md, "The sun"), the rest
+    /// Approximations.
     pub fn shading(self, set: MaterialSet) -> Shading {
         use Material::*;
         let modern = set == MaterialSet::Materials2022;
         let (metalness, roughness) = match self {
-            Plastic => (0.0, 0.75),
-            SmoothPlastic => (0.0, 0.5),
+            Plastic => (0.0, 0.65),
+            SmoothPlastic => (0.0, 0.4),
             Neon | ForceField | Air | Water => (0.0, 1.0),
             Wood if modern => (0.0, 0.63),
             Wood => (0.09, 0.53),
