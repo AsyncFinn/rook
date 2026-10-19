@@ -127,7 +127,7 @@ impl DataModel {
                             volume: float(dom, id, "Volume", 1.0),
                             speed: float(dom, id, "PlaybackSpeed", 1.0),
                             looped: flag(dom, id, "Looping"),
-                            generation: w.sounds.get(&id).map_or(0, |c| c.plays),
+                            generation: self.sounds.generation(id),
                         }),
                 ),
                 "AudioEmitter" => NodeKind::Emitter,

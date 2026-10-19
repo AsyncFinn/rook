@@ -82,14 +82,11 @@ pub fn in_graph(class: &str) -> bool {
 }
 
 /// Play or stop an AudioPlayer where its `TimePosition` is. Playing one
-/// that plays already changes nothing; one that starts gets a new
-/// generation, so the mixer starts it exactly there.
+/// that plays already changes nothing.
 pub fn set_playing(w: &mut World, id: InstanceId, play: bool) -> Result<(), rook_dom::DomError> {
     let playing = w.dom.property_by_name(id, "IsPlaying") == Some(Value::Bool(true));
     if play && !playing {
-        let control = w.sounds.entry(id).or_default();
-        control.plays = control.plays.wrapping_add(1);
-        control.loops = 0;
+        w.sounds.entry(id).or_default().loops = 0;
     }
     w.dom
         .set_property_by_name(id, "IsPlaying", Value::Bool(play))

@@ -7,12 +7,6 @@ use rook_content::decode::audio::Audio;
 
 use crate::effects::{Chain, Frame};
 
-/// How far a voice's own position may drift from the engine's
-/// `TimePosition` before it jumps to the engine's (a script seeking, or a
-/// stalled frame). The two run on different clocks, so small drift is
-/// normal and jumping on it would click.
-const DRIFT_SECONDS: f64 = 0.25;
-
 #[derive(Debug)]
 pub(crate) struct Voice<K> {
     pub(crate) audio: Arc<Audio>,
@@ -25,6 +19,9 @@ pub(crate) struct Voice<K> {
     pub(crate) speed: f32,
     pub(crate) looped: bool,
     pub(crate) generation: u32,
+    /// Played to its end (not looped): silent until the engine plays it
+    /// again, however far behind the engine's clock is.
+    pub(crate) ended: bool,
     pub(crate) effects: Chain,
     pub(crate) group: Option<K>,
 }
@@ -40,25 +37,27 @@ impl<K> Voice<K> {
             speed: 1.0,
             looped: false,
             generation: u32::MAX,
+            ended: false,
             effects: Chain::new(rate),
             group: None,
         }
     }
 
-    /// Follow the engine: start over at `position` for a new file or a new
-    /// `Play` (`generation`), or when it drifted too far from the voice's
-    /// own clock.
+    /// Follow the engine: start over at `position` for a new file, or when
+    /// `generation` changed (a `Play`, or a script setting `TimePosition`).
+    /// Otherwise the voice keeps its own clock, as a Roblox client does:
+    /// the engine's clock falls behind whenever frames are slow, and
+    /// jumping back to it would stutter.
     pub(crate) fn follow(&mut self, audio: &Arc<Audio>, position: f64, generation: u32) {
-        if !Arc::ptr_eq(&self.audio, audio)
-            || self.generation != generation
-            || (self.seconds() - position).abs() > DRIFT_SECONDS
-        {
+        if !Arc::ptr_eq(&self.audio, audio) || self.generation != generation {
             self.audio = audio.clone();
             self.cursor = position * f64::from(audio.sample_rate.max(1));
             self.generation = generation;
+            self.ended = false;
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn seconds(&self) -> f64 {
         self.cursor / f64::from(self.audio.sample_rate.max(1))
     }
@@ -68,7 +67,11 @@ impl<K> Voice<K> {
     /// ends with it, Inference: Studio's sound effects are on the sound's
     /// own channel).
     pub(crate) fn render(&mut self, out: &mut [Frame], rate: f64) -> bool {
+        if self.ended {
+            return false;
+        }
         let alive = self.read(out, rate);
+        self.ended = !alive;
         if !self.effects.is_empty() {
             self.effects.process(out);
         }
