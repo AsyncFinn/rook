@@ -71,6 +71,23 @@ impl Frustum {
     }
 }
 
+/// Where `position` falls along a Z-order curve through 16-stud cells:
+/// entries placed in this order fill a batch's slots near each other, so
+/// each run of [`CULL_SLOTS`](crate::batch::CULL_SLOTS) slots gets a small
+/// box that views can skip.
+pub(crate) fn spatial_key(position: Vec3) -> u64 {
+    // 21 bits an axis, centred on the origin (±16.7M studs).
+    let cell = |v: f32| ((v / 16.0).floor() as i64 + (1 << 20)).clamp(0, (1 << 21) - 1) as u64;
+    let spread = |mut v: u64| {
+        v = (v | (v << 32)) & 0x1f00000000ffff;
+        v = (v | (v << 16)) & 0x1f0000ff0000ff;
+        v = (v | (v << 8)) & 0x100f00f00f00f00f;
+        v = (v | (v << 4)) & 0x10c30c30c30c30c3;
+        (v | (v << 2)) & 0x1249249249249249
+    };
+    spread(cell(position.x)) | spread(cell(position.y)) << 1 | spread(cell(position.z)) << 2
+}
+
 /// The runs of a batch's `instances` that `view` sees: consecutive
 /// `chunks` (a box per `per` instances) it sees, joined, in order.
 pub(crate) fn seen_runs<'a>(
