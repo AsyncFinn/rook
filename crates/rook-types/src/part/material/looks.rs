@@ -77,8 +77,8 @@ impl Material {
     /// specifications, "Parts display a 1024×1024 on an 8×8 stud face").
     /// The legacy set: Confirmed from Studio 0.743's OBJ export of a
     /// 4 × 1 × 4 part of each material, whose UVs count repeats of the
-    /// material's texture (Concrete's 4-stud sides span 0.6); Sandstone,
-    /// not exported, takes 8 (Inference) (`docs/behavior/materials.md`).
+    /// material's texture (Concrete's 4-stud sides span 0.6)
+    /// (`docs/behavior/materials.md`).
     pub fn studs_per_tile(self, set: MaterialSet) -> f32 {
         use Material::*;
         if set == MaterialSet::Materials2022 {
