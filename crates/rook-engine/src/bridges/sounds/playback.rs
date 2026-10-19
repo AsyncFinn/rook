@@ -253,7 +253,7 @@ impl DataModel {
                 volume: number(dom, id, "Volume", 0.5) as f32,
                 speed: number(dom, id, "PlaybackSpeed", 1.0) as f32,
                 looped: flag(dom, id, "Looped"),
-                generation: w.sounds.get(&id).map_or(0, |c| c.plays),
+                generation: self.sounds.generation(id),
                 emitter: emitter(dom, id),
                 effects: effects::effects(dom, id),
                 group: effects::group(dom, id),

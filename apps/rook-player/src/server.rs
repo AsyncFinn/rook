@@ -51,15 +51,42 @@ pub struct ServerThread {
 /// catching up and drops the lost time (as the window's client does).
 const MAX_LAG: Duration = Duration::from_millis(250);
 
+/// A server thread still loading its place: [`Starting::poll`] it each
+/// frame, or [`Starting::wait`].
+pub struct Starting {
+    server: Option<ServerThread>,
+    started: Receiver<anyhow::Result<Started>>,
+}
+
+impl Starting {
+    /// The server, once it has loaded and its player has joined.
+    pub fn poll(&mut self) -> Option<anyhow::Result<(ServerThread, Started)>> {
+        let started = match self.started.try_recv() {
+            Ok(started) => started,
+            Err(TryRecvError::Empty) => return None,
+            Err(TryRecvError::Disconnected) => Err(anyhow::anyhow!("the server thread stopped")),
+        };
+        Some(started.map(|s| (self.server.take().expect("polled after it started"), s)))
+    }
+
+    pub fn wait(mut self) -> anyhow::Result<(ServerThread, Started)> {
+        let started = self
+            .started
+            .recv()
+            .map_err(|_| anyhow::anyhow!("the server thread stopped"))??;
+        Ok((self.server.take().expect("waited once"), started))
+    }
+}
+
 impl ServerThread {
     /// Load `place` on a new thread, start its scripts, run `script` (the
     /// `--script` file) and let one player join.
-    pub fn start(
+    pub fn spawn(
         place: Vec<u8>,
         options: Options,
         script: Option<String>,
         player: (&str, i64),
-    ) -> anyhow::Result<(Self, Started)> {
+    ) -> anyhow::Result<Starting> {
         let (commands, command_rx) = channel();
         let (frame_tx, frames) = channel();
         let (started_tx, started_rx) = channel();
@@ -89,17 +116,14 @@ impl ServerThread {
                     }
                 }
             })?;
-        let started = started_rx
-            .recv()
-            .map_err(|_| anyhow::anyhow!("the server thread stopped"))??;
-        Ok((
-            Self {
+        Ok(Starting {
+            server: Some(Self {
                 commands,
                 frames,
                 thread: Some(thread),
-            },
-            started,
-        ))
+            }),
+            started: started_rx,
+        })
     }
 
     /// Step the server once and wait for its frame.

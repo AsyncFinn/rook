@@ -59,6 +59,10 @@ pub(crate) struct Sounds {
     /// Each file once, however many sounds share it.
     files: HashMap<ContentRef, Load>,
     pub(crate) tickets: HashMap<Ticket, ContentRef>,
+    /// Per sound, how often scripts or replication set its `TimePosition`
+    /// or started it: the mixer jumps to the engine's position only then
+    /// (time passing isn't journaled).
+    seeks: HashMap<InstanceId, u32>,
     /// Sounds removed with `PlayOnRemove`, playing out once.
     one_shots: Vec<playback::OneShot>,
     /// On clients, the effects `PlaybackLoudness` is read through, per
@@ -116,6 +120,12 @@ impl Sounds {
         self.scanned = false;
     }
 
+    /// What the mixer restarts a sound by: a new value whenever a `Play`
+    /// or a set `TimePosition` (by a script, or replicated) moved it.
+    fn generation(&self, id: InstanceId) -> u32 {
+        self.seeks.get(&id).copied().unwrap_or(0)
+    }
+
     fn audio(&self, id: InstanceId) -> Option<&Arc<Audio>> {
         match self.files.get(self.tracked.get(&id)?.as_ref()?)? {
             Load::Loaded(audio) => Some(audio),
@@ -139,6 +149,8 @@ struct SoundProps {
     content: Vec<rook_reflection::PropertyId>,
     /// Sound's `Playing`.
     playing: Vec<rook_reflection::PropertyId>,
+    /// Where a sound is in its file, and whether it plays.
+    clock: Vec<rook_reflection::PropertyId>,
 }
 
 impl SoundProps {
@@ -158,7 +170,13 @@ impl SoundProps {
                 &["AudioContent", "Asset", "IsPlaying", "AutoLoad"],
             ));
             let playing = find("Sound", &["Playing"]);
-            SoundProps { content, playing }
+            let mut clock = find("Sound", &["TimePosition", "Playing"]);
+            clock.extend(find("AudioPlayer", &["TimePosition", "IsPlaying"]));
+            SoundProps {
+                content,
+                playing,
+                clock,
+            }
         });
         &PROPS
     }
@@ -186,13 +204,17 @@ impl DataModel {
         let ids = SoundProps::get();
         for c in dom.journal().since(sounds.cursor) {
             match c {
-                Change::Property { id, property } if ids.content.contains(property) => {
-                    sounds.dirty.insert(*id);
-                }
-                Change::Property { id, property }
-                    if ids.playing.contains(property) && sounds.tracked.contains_key(id) =>
-                {
-                    sounds.active.insert(*id);
+                Change::Property { id, property } => {
+                    if ids.content.contains(property) {
+                        sounds.dirty.insert(*id);
+                    }
+                    if ids.clock.contains(property) {
+                        let n = sounds.seeks.entry(*id).or_default();
+                        *n = n.wrapping_add(1);
+                    }
+                    if ids.playing.contains(property) && sounds.tracked.contains_key(id) {
+                        sounds.active.insert(*id);
+                    }
                 }
                 Change::Reparented { subtree, .. } => {
                     let moved = subtree.iter().filter(|&&i| is_sound(dom, i));
@@ -241,6 +263,7 @@ impl DataModel {
                 sounds.tracked.remove(&id);
                 sounds.active.remove(&id);
                 sounds.seen_players.remove(&id);
+                sounds.seeks.remove(&id);
                 continue;
             }
             if !dom.is_ancestor_of(root, id) {

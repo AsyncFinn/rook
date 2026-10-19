@@ -115,12 +115,14 @@ impl<K: Hash + Eq + Copy> Mixer<K> {
         }
     }
 
+    /// Voices still sounding (an ended one waits, silent, for the engine
+    /// to stop or restart it).
     pub fn len(&self) -> usize {
-        self.voices.len()
+        self.voices.values().filter(|v| !v.ended).count()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.voices.is_empty()
+        self.len() == 0
     }
 
     /// The last [`mix`](Self::mix) as left and right, before it was laid
@@ -131,7 +133,8 @@ impl<K: Hash + Eq + Copy> Mixer<K> {
 
     /// Make the mixer play exactly `mix`: new sounds start at their
     /// position, ones no longer wanted stop, and ones still playing keep
-    /// their own position unless it drifted too far from the engine's.
+    /// their own position until they are played again or seeked
+    /// (`generation`).
     /// Groups no longer listed play out their effects' tails.
     pub fn sync(&mut self, mix: &Mix<K>) {
         let wanted = &mix.sounds;
@@ -191,10 +194,13 @@ impl<K: Hash + Eq + Copy> Mixer<K> {
             bus.buffer.resize(frames, [0.0; 2]);
         }
         let (scratch, master, buses) = (&mut self.scratch, &mut self.master, &mut self.buses);
-        self.voices.retain(|_, v| {
+        for v in self.voices.values_mut() {
+            if v.ended {
+                continue;
+            }
             scratch.clear();
             scratch.resize(frames, [0.0; 2]);
-            let alive = v.render(scratch, rate);
+            v.render(scratch, rate);
             if v.audio.channels <= 1 {
                 for s in scratch.iter_mut().flatten() {
                     *s *= MONO_LEVEL;
@@ -209,11 +215,10 @@ impl<K: Hash + Eq + Copy> Mixer<K> {
             };
             voice::add(scratch, target, v.gains, v.target);
             v.gains = v.target;
-            alive
-        });
+        }
         let buses_sounding = self.mix_buses(frames);
         if !self.ambient.is_empty() {
-            self.ambient_idle = if !buses_sounding && self.voices.is_empty() {
+            self.ambient_idle = if !buses_sounding && self.is_empty() {
                 self.ambient_idle.saturating_add(frames)
             } else {
                 0

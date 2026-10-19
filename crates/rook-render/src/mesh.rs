@@ -131,7 +131,11 @@ fn step(i: u32) -> f32 {
 /// point pushed out onto the circle; normals are smooth. Each quarter maps
 /// images from the Top, Front, Bottom or Back face of the box, linearly
 /// along the square's side: the quarter's 45-degree seams are the face's
-/// edges. The flat ends are the Left and Right faces.
+/// edges, and the Bottom quarter's image is turned half a turn from the
+/// box face's (observed in Studio 0.742, 2026-10-19: one image on a block
+/// and a cylinder, upright on the cylinder's Bottom and upside down on the
+/// block's; Top, Back and Front matched; CylinderMesh and the SpecialMesh
+/// Cylinder are Inference). The flat ends are the Left and Right faces.
 fn cylinder() -> MeshData {
     let mut m = MeshData::default();
     for face in [
@@ -148,7 +152,12 @@ fn cylinder() -> MeshData {
             let g = n + w * step(i);
             let round = Vec3::new(0.0, g.y, g.z).normalize();
             for x in [-1.0f32, 1.0] {
-                let box_point = Vec3::new(x, g.y, g.z) * 0.5;
+                let mut box_point = Vec3::new(x, g.y, g.z) * 0.5;
+                if face == NormalId::Bottom {
+                    // Turned half a turn: the Bottom quarter shows its
+                    // image upside down from a block's Bottom face.
+                    box_point *= Vec3::new(-1.0, 1.0, -1.0);
+                }
                 m.vertices.push(Vertex {
                     position: [x * 0.5, round.y * 0.5, round.z * 0.5],
                     normal: round.to_array(),

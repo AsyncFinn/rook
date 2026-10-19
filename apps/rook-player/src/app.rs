@@ -2,6 +2,7 @@
 
 pub(crate) mod camera;
 pub(crate) mod keys;
+pub(crate) mod launch;
 pub(crate) mod readout;
 
 use crate::*;
@@ -48,12 +49,17 @@ pub(crate) struct App {
     pub(crate) repl: Option<rook_engine::console::repl::Repl>,
 }
 
-impl App {
-    pub(crate) fn init_gfx(&mut self, event_loop: &ActiveEventLoop) -> anyhow::Result<()> {
+impl Gfx {
+    /// Open the window and its GPU device.
+    pub(crate) fn open(
+        event_loop: &ActiveEventLoop,
+        title: &str,
+        uncapped: bool,
+    ) -> anyhow::Result<Self> {
         let window = Arc::new(
             event_loop.create_window(
                 Window::default_attributes()
-                    .with_title(&self.title)
+                    .with_title(title)
                     .with_inner_size(winit::dpi::LogicalSize::new(1280, 720)),
             )?,
         );
@@ -76,24 +82,54 @@ impl App {
         if let Some(srgb) = caps.formats.iter().find(|f| f.is_srgb()) {
             config.format = *srgb;
         }
-        config.present_mode = if self.uncapped {
+        config.present_mode = if uncapped {
             wgpu::PresentMode::AutoNoVsync
         } else {
             wgpu::PresentMode::AutoVsync
         };
         surface.configure(&device, &config);
-        let mut renderer = Renderer::new(&adapter, device, queue, config.format);
+        let renderer = Renderer::new(&adapter, device, queue, config.format);
         crate::note_gpu(&renderer);
-        self.install.apply(&mut renderer);
-        renderer.set_scene(&self.scene.scene);
-        self.game.set_viewport(config.width, config.height);
-        self.gfx = Some(Gfx {
+        Ok(Self {
             window,
             surface,
             config,
             renderer,
-        });
-        Ok(())
+        })
+    }
+
+    /// Take a new window size.
+    pub(crate) fn resize(&mut self, size: PhysicalSize<u32>) -> bool {
+        if size.width == 0 || size.height == 0 {
+            return false;
+        }
+        self.config.width = size.width;
+        self.config.height = size.height;
+        self.surface.configure(&self.renderer.device, &self.config);
+        true
+    }
+
+    /// The next frame to draw on, or `None` when the surface had to be
+    /// set up again.
+    pub(crate) fn next_frame(&mut self) -> Option<wgpu::SurfaceTexture> {
+        match self.surface.get_current_texture() {
+            wgpu::CurrentSurfaceTexture::Success(t)
+            | wgpu::CurrentSurfaceTexture::Suboptimal(t) => Some(t),
+            _ => {
+                self.surface.configure(&self.renderer.device, &self.config);
+                None
+            }
+        }
+    }
+}
+
+impl App {
+    /// Draw the game in `gfx`'s window from now on.
+    pub(crate) fn attach(&mut self, mut gfx: Gfx) {
+        self.install.apply(&mut gfx.renderer);
+        gfx.renderer.set_scene(&self.scene.scene);
+        self.game.set_viewport(gfx.config.width, gfx.config.height);
+        self.gfx = Some(gfx);
     }
 
     pub(crate) fn update(&mut self, dt: f32) {
@@ -184,13 +220,8 @@ impl App {
         let Some(gfx) = &mut self.gfx else {
             return;
         };
-        let frame = match gfx.surface.get_current_texture() {
-            wgpu::CurrentSurfaceTexture::Success(t)
-            | wgpu::CurrentSurfaceTexture::Suboptimal(t) => t,
-            _ => {
-                gfx.surface.configure(&gfx.renderer.device, &gfx.config);
-                return;
-            }
+        let Some(frame) = gfx.next_frame() else {
+            return;
         };
         let view = frame.texture.create_view(&Default::default());
         // Wrapped so the shader's sines stay precise in long sessions.
@@ -231,16 +262,22 @@ impl App {
     }
 }
 
+pub(crate) fn no_renderer(event_loop: &ActiveEventLoop, e: &anyhow::Error) {
+    console::print_message(
+        MessageType::Error,
+        &format!("Could not start the renderer: {e:#}"),
+    );
+    event_loop.exit();
+}
+
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        if self.gfx.is_none()
-            && let Err(e) = self.init_gfx(event_loop)
-        {
-            console::print_message(
-                MessageType::Error,
-                &format!("Could not start the renderer: {e:#}"),
-            );
-            event_loop.exit();
+        if self.gfx.is_some() {
+            return;
+        }
+        match Gfx::open(event_loop, &self.title, self.uncapped) {
+            Ok(gfx) => self.attach(gfx),
+            Err(e) => no_renderer(event_loop, &e),
         }
     }
 
@@ -249,12 +286,8 @@ impl ApplicationHandler for App {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => {
                 if let Some(gfx) = &mut self.gfx
-                    && size.width > 0
-                    && size.height > 0
+                    && gfx.resize(size)
                 {
-                    gfx.config.width = size.width;
-                    gfx.config.height = size.height;
-                    gfx.surface.configure(&gfx.renderer.device, &gfx.config);
                     self.game.set_viewport(size.width, size.height);
                 }
             }

@@ -112,8 +112,6 @@ pub struct SoundControl {
     /// Where `Play` starts: the last `TimePosition` a script set, or 0
     /// after `Stop`.
     pub start: f64,
-    /// `Play` calls so far, so a restart can be told from time passing.
-    pub plays: u32,
     /// Loops since the last `Play` (`DidLoop`'s count).
     pub loops: u32,
 }

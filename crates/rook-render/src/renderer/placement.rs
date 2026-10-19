@@ -78,7 +78,10 @@ impl Renderer {
         if self.placements.len() < scene.parts.len() {
             self.placements.resize(scene.parts.len(), Placement::Hidden);
         }
-        for &i in changed {
+        // Near entries take near slots, so culling skips more.
+        let mut changed = changed.to_vec();
+        changed.sort_by_key(|&i| (crate::batch::cull::spatial_key(scene.parts[i].position), i));
+        for i in changed {
             let part = scene.parts[i];
             self.waiting.remove(&i);
             let target = self.target(&part, Some(scene));
@@ -121,7 +124,8 @@ impl Renderer {
             return;
         }
         self.add_images(&images);
-        let waiting: Vec<(usize, PartInstance)> = self.waiting.drain().collect();
+        let mut waiting: Vec<(usize, PartInstance)> = self.waiting.drain().collect();
+        waiting.sort_by_key(|(i, p)| (crate::batch::cull::spatial_key(p.position), *i));
         for (i, part) in waiting {
             let target = self.target(&part, None);
             self.place(i, &part, target);

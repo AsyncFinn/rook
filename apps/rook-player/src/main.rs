@@ -40,6 +40,7 @@ use rook_types::{CFrame, Value};
 use scene::{SceneCache, SceneChange};
 
 use app::camera::*;
+use app::launch::*;
 use app::readout::*;
 use app::*;
 use bench::*;
@@ -48,7 +49,7 @@ use scene::installed::*;
 /// Simulation step: 60 Hz, like Roblox's frame-based scheduler.
 const STEP: f64 = 1.0 / 60.0;
 use winit::application::ApplicationHandler;
-use winit::dpi::PhysicalPosition;
+use winit::dpi::{PhysicalPosition, PhysicalSize};
 use winit::event::{
     DeviceEvent, DeviceId, ElementState, MouseButton, MouseScrollDelta, WindowEvent,
 };
@@ -177,6 +178,49 @@ fn refresh(
     true
 }
 
+/// Get a loaded game ready to show: run `--seconds`, pick the camera,
+/// build the scene (files near the camera load first) and say what
+/// loaded.
+fn prepare(game: &mut Game, args: &Args, content: &Arc<Resolver>) -> (SceneCache, Camera) {
+    let load_time = game.load_start.elapsed().as_secs_f64();
+    if args.seconds > 0.0 {
+        game.run_for(args.seconds);
+    }
+    // The camera the place was saved with (clients start with a fresh one).
+    let mut camera = game.saved_camera;
+    if let Some(pos) = args.camera {
+        let target = args.look_at.unwrap_or(pos + camera.forward());
+        camera = Camera {
+            fov_y: camera.fov_y,
+            ..Camera::look_at(pos, target)
+        };
+    } else if let Some(target) = args.look_at {
+        camera = Camera {
+            fov_y: camera.fov_y,
+            ..Camera::look_at(camera.position, target)
+        };
+    }
+    if let Some(fov) = args.fov {
+        camera.fov_y = fov;
+    }
+    let scene = scene_of(game.view_mut(), content, camera.position);
+    let name = args.place.file_name().unwrap_or_default().to_string_lossy();
+    let terrain = scene.terrain_meshes();
+    let terrain = if terrain > 0 {
+        format!(", terrain in {} meshes", thousands(terrain))
+    } else {
+        String::new()
+    };
+    console::print_message(
+        MessageType::Info,
+        &format!(
+            "Loaded {name} in {load_time:.2} s ({} parts{terrain})",
+            thousands(scene.scene.parts.len() - scene.terrain_meshes())
+        ),
+    );
+    (scene, camera)
+}
+
 /// Put the GPU in the log and in any crash report.
 fn note_gpu(renderer: &Renderer) {
     rook_engine::logging::set_context("GPU", renderer.gpu().to_owned());
@@ -196,7 +240,6 @@ fn main() -> anyhow::Result<()> {
 }
 
 fn play(args: Args) -> anyhow::Result<()> {
-    let load_start = Instant::now();
     // Asset delivery is on in the player, which exists to show places;
     // ROOK_ASSET_DELIVERY=off or settings.json turns it off.
     let content = Arc::new(Resolver::new(rook_engine::settings::content_config(true)));
@@ -208,6 +251,23 @@ fn play(args: Args) -> anyhow::Result<()> {
     // A recording waits for each sound to load, so it keeps to game time
     // however fast it runs.
     let wait_for_sounds = args.record_audio.is_some();
+    let windowed = args.record_audio.is_none() && args.bench.is_none() && args.screenshot.is_none();
+    if windowed && !args.crash_test {
+        // The window opens at once and shows a loading screen while the
+        // place loads, as Roblox's does.
+        let loading = game::Loading::begin(
+            &args.place,
+            !args.run,
+            content.clone(),
+            script,
+            wait_for_sounds,
+        )?;
+        let mut launch = Launch::new(args, content, install, loading);
+        let event_loop = EventLoop::new()?;
+        event_loop.set_control_flow(ControlFlow::Poll);
+        event_loop.run_app(&mut launch)?;
+        return launch.finish();
+    }
     let mut game = Game::load(
         &args.place,
         !args.run,
@@ -215,7 +275,6 @@ fn play(args: Args) -> anyhow::Result<()> {
         script,
         wait_for_sounds,
     )?;
-    let load_time = load_start.elapsed().as_secs_f64();
     if let Some(out) = &args.record_audio {
         let seconds = if args.seconds > 0.0 {
             args.seconds
@@ -224,44 +283,7 @@ fn play(args: Args) -> anyhow::Result<()> {
         };
         return record::record(&mut game, seconds, out);
     }
-    if args.seconds > 0.0 {
-        game.run_for(args.seconds);
-    }
-    // The camera the place was saved with (clients start with a fresh one).
-    let mut camera = game.saved_camera;
-    if let Some(pos) = args.camera {
-        let target = args.look_at.unwrap_or(pos + camera.forward());
-        camera = Camera {
-            fov_y: camera.fov_y,
-            ..Camera::look_at(pos, target)
-        };
-    } else if let Some(target) = args.look_at {
-        camera = Camera {
-            fov_y: camera.fov_y,
-            ..Camera::look_at(camera.position, target)
-        };
-    }
-
-    if let Some(fov) = args.fov {
-        camera.fov_y = fov;
-    }
-
-    // Files near the camera load first.
-    let mut scene = scene_of(game.view_mut(), &content, camera.position);
-    let name = args.place.file_name().unwrap_or_default().to_string_lossy();
-    let terrain = scene.terrain_meshes();
-    let terrain = if terrain > 0 {
-        format!(", terrain in {} meshes", thousands(terrain))
-    } else {
-        String::new()
-    };
-    console::print_message(
-        MessageType::Info,
-        &format!(
-            "Loaded {name} in {load_time:.2} s ({} parts{terrain})",
-            thousands(scene.scene.parts.len() - scene.terrain_meshes())
-        ),
-    );
+    let (mut scene, camera) = prepare(&mut game, &args, &content);
 
     if args.crash_test {
         panic!("--crash-test");
@@ -308,40 +330,5 @@ fn play(args: Args) -> anyhow::Result<()> {
         return Ok(());
     }
 
-    let event_loop = EventLoop::new()?;
-    event_loop.set_control_flow(ControlFlow::Poll);
-    game.free_run();
-    let mut app = App {
-        title: format!("Rook - {}", args.place.display()),
-        scene,
-        game,
-        accumulator: 0.0,
-        clock: 0.0,
-        camera: FlyCamera::new(camera),
-        gfx: None,
-        keys: HashSet::new(),
-        looking: false,
-        look_anchor: None,
-        cursor: PhysicalPosition::new(0.0, 0.0),
-        pointing: false,
-        last_frame: Instant::now(),
-        pending_mouse: None,
-        install,
-        uncapped: args.uncapped,
-        readout: Readout::new(args.frame_times),
-        // Only the window plays sound: headless runs, `--bench`,
-        // `--screenshot` and `--record-audio` never open a device.
-        audio: rook_audio::enabled_by_env().then(rook_audio::Output::new),
-        #[cfg(feature = "repl")]
-        repl: if args.no_repl {
-            None
-        } else {
-            rook_engine::console::repl::Repl::start()
-        },
-    };
-    event_loop.run_app(&mut app)?;
-    if args.frame_times {
-        app.readout.print_run(&app.game);
-    }
-    Ok(())
+    unreachable!("the window opens above")
 }
