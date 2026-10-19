@@ -105,3 +105,17 @@ against 17.4 / 17.7 s; a large modern place (86 moving unions, most of them not
 colliding) 14.8 / 14.7 s against 15.6 / 15.8 s, the cost of its
 colliding moving unions (stall doors, elevator railings) touching their
 neighbours hull by hull.
+
+*Where a big place's physics time goes* (2026-10-18, a 120k-part place
+with spinning machinery, measured with throwaway timers): the server's
+step is about 6 ms a frame, nearly all of it Rapier's own collision
+detection (about 60% narrow phase, 30% broad phase; the solver is under
+5%). Only 18 of its 181 bodies are awake: 8 rotors spinning at 11-28
+rad/s, and bodies resting against them that never sleep (two of 101
+parts crawl at 0.05 studs/s). Unions are half of it: with their hulls
+replaced by boxes the step took 2.9 ms instead of 5.7, though only 13 of
+its 726 union contact pairs were touching. Ruled out: its 1,638 sensor
+pairs (non-colliding parts; rejecting them all saved nothing), Rapier's
+`length_unit` (studs instead of metres changed nothing), teleports (about
+300 colliders moved a frame) and `CollisionFidelity`, which Studio
+already applies to the hulls it saves.
