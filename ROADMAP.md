@@ -217,7 +217,7 @@ create.
 2. ✅ Fire, Smoke and Sparkles, drawn as Studio draws them today, as
    particles a ParticleEmitter can reuse
    ([`docs/behavior/effects.md`](docs/behavior/effects.md)).
-3. An HDR target with Studio's tone curves, ColorGrading's presets
+3. ✅ An HDR target with Studio's tone curves, ColorGrading's presets
    included: the sun, ambient, sky, local lights and Neon add up in
    Studio's light units and go through one curve at the end, so Decals
    blend over Neon as in Studio and sunlit faces stop drawing too bright

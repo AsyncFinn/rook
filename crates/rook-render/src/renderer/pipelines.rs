@@ -46,6 +46,8 @@ pub(crate) struct Pipelines {
     pub(crate) over: wgpu::RenderPipeline,
     /// The skybox, behind everything.
     pub(crate) sky: wgpu::RenderPipeline,
+    /// The plain sky colour, before (or without) the skybox.
+    pub(crate) plain_sky: wgpu::RenderPipeline,
     /// Depth only, from the sun, over the opaque batches.
     pub(crate) shadow: wgpu::RenderPipeline,
     /// Emitters' particles, over everything.
@@ -53,9 +55,10 @@ pub(crate) struct Pipelines {
 }
 
 impl Pipelines {
+    /// Pipelines drawing into a `frame_format` frame (`tonemap.rs`).
     pub(crate) fn new(
         device: &wgpu::Device,
-        color_format: wgpu::TextureFormat,
+        frame_format: wgpu::TextureFormat,
         layout: &wgpu::BindGroupLayout,
         main_layout: &wgpu::BindGroupLayout,
         image_layout: &wgpu::BindGroupLayout,
@@ -174,7 +177,7 @@ impl Pipelines {
                     entry_point: Some(fragment),
                     compilation_options: Default::default(),
                     targets: &[Some(wgpu::ColorTargetState {
-                        format: color_format,
+                        format: frame_format,
                         blend,
                         write_mask: wgpu::ColorWrites::ALL,
                     })],
@@ -335,37 +338,39 @@ impl Pipelines {
         // The skybox: one full-screen triangle per image, each keeping the
         // pixels whose direction its face covers; nothing written to depth,
         // so everything draws over it.
-        let sky_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("rook sky"),
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &sky_shader,
-                entry_point: Some("vs_sky"),
-                compilation_options: Default::default(),
-                buffers: &[],
-            },
-            primitive: Default::default(),
-            depth_stencil: Some(wgpu::DepthStencilState {
-                format: depth_format,
-                depth_write_enabled: Some(false),
-                depth_compare: Some(wgpu::CompareFunction::Always),
-                stencil: Default::default(),
-                bias: Default::default(),
-            }),
-            multisample: Default::default(),
-            fragment: Some(wgpu::FragmentState {
-                module: &sky_shader,
-                entry_point: Some("fs_sky"),
-                compilation_options: Default::default(),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: color_format,
-                    blend: None,
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-            }),
-            multiview_mask: None,
-            cache: None,
-        });
+        let sky_pipeline = |fragment| {
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("rook sky"),
+                layout: Some(&pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: &sky_shader,
+                    entry_point: Some("vs_sky"),
+                    compilation_options: Default::default(),
+                    buffers: &[],
+                },
+                primitive: Default::default(),
+                depth_stencil: Some(wgpu::DepthStencilState {
+                    format: depth_format,
+                    depth_write_enabled: Some(false),
+                    depth_compare: Some(wgpu::CompareFunction::Always),
+                    stencil: Default::default(),
+                    bias: Default::default(),
+                }),
+                multisample: Default::default(),
+                fragment: Some(wgpu::FragmentState {
+                    module: &sky_shader,
+                    entry_point: Some(fragment),
+                    compilation_options: Default::default(),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: frame_format,
+                        blend: None,
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                }),
+                multiview_mask: None,
+                cache: None,
+            })
+        };
         let particle_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("rook particles"),
             source: wgpu::ShaderSource::Wgsl(particles.into()),
@@ -374,7 +379,7 @@ impl Pipelines {
             device,
             &pipeline_layout,
             &particle_shader,
-            color_format,
+            frame_format,
             depth_format,
         );
         Self {
@@ -387,7 +392,8 @@ impl Pipelines {
             glass_surface,
             additive,
             over,
-            sky: sky_pipeline,
+            sky: sky_pipeline("fs_sky"),
+            plain_sky: sky_pipeline("fs_plain_sky"),
             shadow: shadow_pipeline,
         }
     }

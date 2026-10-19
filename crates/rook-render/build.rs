@@ -10,7 +10,7 @@ use wesl::sourcemap::{BasicSourceMap, SourceMap};
 use wesl::{CompileOptions, CompileResult, Compiler};
 
 /// The entry modules: one shader module each.
-const ENTRIES: [&str; 4] = ["parts", "sky", "light_volume", "particles"];
+const ENTRIES: [&str; 5] = ["parts", "sky", "light_volume", "particles", "tonemap"];
 
 fn main() {
     for entry in ENTRIES {

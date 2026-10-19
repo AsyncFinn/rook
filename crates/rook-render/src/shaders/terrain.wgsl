@@ -4,10 +4,11 @@
 
 import package::common::{
     g, image_sampler, water_normals, VertexOut, TERRAIN_WATER, TERRAIN_BLADES,
-    TERRAIN_DRAWN_SHIFT, srgb_to_linear, terrain_taps,
+    TERRAIN_DRAWN_SHIFT, terrain_taps,
 };
 import package::images::layer_height;
-import package::lighting::{diffuse_light, sun_light, sun_visibility, fog};
+import package::lighting::{diffuse_light, sun_light, sun_visibility, fog_units, units_over};
+import package::tone::{frame, light_units3, srgb_to_linear};
 
 // Studs per repeat of water's normal frames (Approximation: Studio's
 // ripples are 1 to 3 studs across, about two of the maps' bumps, and
@@ -110,16 +111,16 @@ fn water_surface(in: VertexOut, dp_x: vec3<f32>, dp_y: vec3<f32>) -> vec4<f32> {
     let v = normalize(g.camera_pos.xyz - in.world);
     let fresnel = 0.02 + 0.98 * pow(1.0 - max(dot(n, v), 0.0), 5.0);
     let up = vec3(0.0, 1.0, 0.0);
-    let body = in.color.rgb * diffuse_light(in.world, n, sun_light(in.world, n));
+    let body = diffuse_light(in.color.rgb, in.world, n, sun_light(in.world, n));
     let reflected = clamp(in.material.x * mix(0.5, 1.0, fresnel), 0.0, 1.0);
     let r = reflect(-v, n);
     let sky = mix(srgb_to_linear(g.sky_horizon.rgb), srgb_to_linear(g.sky_top.rgb), clamp(r.y, 0.0, 1.0));
-    var c = mix(body, sky, reflected);
+    var c = mix(body, light_units3(sky), reflected);
     if g.sun_dir.y > 0.0 {
         let glint = pow(max(dot(r, g.sun_dir.xyz), 0.0), 2000.0);
-        c += vec3(glint * g.fog_color.w * 0.3 * sun_visibility(in.world, up));
+        c += units_over(c, vec3(glint * g.fog_color.w * 0.3 * sun_visibility(in.world, up)));
     }
-    return vec4(fog(c, in.world), mix(in.color.a, 1.0, fresnel));
+    return vec4(frame(fog_units(c, in.world)), mix(in.color.a, 1.0, fresnel));
 }
 
 // A terrain seam fragment's share of its draw's layer (Studio 0.742's

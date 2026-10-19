@@ -11,6 +11,7 @@ mod placement;
 mod readback;
 mod runs;
 mod timing;
+mod tonemap;
 
 use super::*;
 pub(crate) use images::ImageBinding;
@@ -22,6 +23,7 @@ use pipelines::Pipelines;
 use placement::Placement;
 use timing::GpuTimer;
 pub use timing::GpuTimes;
+use tonemap::{FRAME_FORMAT, Tonemap};
 
 /// Water's phase wraps here: a whole number of its 25 normal frames'
 /// cycles (20 units each) and of both waves' periods (40 and 25,
@@ -96,6 +98,9 @@ pub struct Renderer {
     /// 0 and goes on from there), wrapped at [`WATER_PHASE_PERIOD`].
     pub(crate) water_phase: f64,
     depth: Option<(wgpu::Texture, wgpu::TextureView, u32, u32)>,
+    /// The frame the main pass draws into, and the pass taking it to the
+    /// target.
+    tonemap: Tonemap,
     /// The last frame's draw calls.
     draw_counts: DrawCounts,
     /// The GPU's pass times, once asked for ([`Renderer::time_gpu`]).
@@ -244,7 +249,7 @@ impl Renderer {
         let lights = GpuLights::new(&device);
         let pipelines = Pipelines::new(
             &device,
-            color_format,
+            FRAME_FORMAT,
             &layout,
             &main_layout,
             &image_layout,
@@ -293,6 +298,7 @@ impl Renderer {
             "{} ({:?}, driver {} {})",
             info.name, info.backend, info.driver, info.driver_info
         );
+        let tonemap = Tonemap::new(&device, color_format);
         let mut renderer = Self {
             gpu,
             device,
@@ -333,6 +339,7 @@ impl Renderer {
             time: 0.0,
             water_phase: 0.0,
             depth: None,
+            tonemap,
             draw_counts: DrawCounts::default(),
             timer: None,
             record_time: Default::default(),

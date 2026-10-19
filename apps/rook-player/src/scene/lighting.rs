@@ -63,12 +63,27 @@ pub(super) fn lighting(dom: &Dom) -> Lighting {
     l.exposure = number(dom, id, "ExposureCompensation")
         .unwrap_or(0.0)
         .exp2();
+    l.tonemapper = tonemapper(dom, id);
     let day = daylight(l.sun_direction);
     l.sky_top = l.sky_top.map(|c| c * day);
     l.sky_horizon = l.sky_horizon.map(|c| c * day);
     l.sky_bottom = l.sky_horizon;
     l.reflection = l.sky_horizon;
     l
+}
+
+/// The tone curve of the first enabled ColorGradingEffect in Lighting
+/// (`TonemapperPreset`: Default 0, Retro 1); without one, Studio's default
+/// curve (measured: the Ambient ramp of places without one follows it;
+/// docs/behavior/tone-mapping.md).
+fn tonemapper(dom: &Dom, lighting: InstanceId) -> rook_render::Tonemapper {
+    let grading = dom.children(lighting).iter().copied().find(|&c| {
+        dom.class_name(c) == "ColorGradingEffect" && boolean(dom, c, "Enabled").unwrap_or(true)
+    });
+    match grading.and_then(|c| enum_value(dom, c, "TonemapperPreset")) {
+        Some(1) => rook_render::Tonemapper::Retro,
+        _ => rook_render::Tonemapper::Default,
+    }
 }
 
 /// How bright the sky is for the sun's height: a night sky darkens towards

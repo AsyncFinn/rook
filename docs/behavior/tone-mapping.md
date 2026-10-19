@@ -1,15 +1,42 @@
 # Tone mapping
 
-Measured in Studio 0.742 on 2026-10-16, for M13's post-processing. It came
-from a place where a poster Decal on a Neon union looked washed out in
-Rook: the poster's dark areas drew about 40 in Rook and 12 in Studio.
+Measured in Studio 0.742 on 2026-10-16 (ROADMAP M7 step 3). It came from
+a place where a poster Decal on a Neon union looked washed out in Rook:
+the poster's dark areas drew about 40 in Rook and 12 in Studio.
 
-Rook has no tone curve. It draws to an 8-bit sRGB target, fits each look
-straight to Studio's final pixels (Neon's 18c², for example), and blends
-Decals and Textures in linear light. Studio draws in HDR, blends there,
-and then applies a tone curve, which `ColorGradingEffect.TonemapperPreset`
-can change. Blending before the curve gives a different result from
-blending colours that have already been through it.
+Studio adds up light in **light units** (Ambient's colour squared, a
+light's Brightness × Color squared, Neon's glow) and draws them into a
+frame holding `sqrt(light / 4)`: 4 units is the most the frame keeps.
+Decals, Transparency and particles blend in that encoding, and one tone
+curve at the end turns the frame into pixels. `ColorGradingEffect`'s
+`TonemapperPreset` picks the curve. (Confirmed: the surface shaders in the
+install's `shaders_glsl3.pack` end in `sqrt(clamp(color × scale))`, and its
+bloom and composition shaders decode the frame as 4 × value²; every
+number below fits this model.)
+
+## The frame model
+
+- **Default curve**: the Ambient ramp measured on white SmoothPlastic in
+  a place without a ColorGradingEffect ([lights](lights.md#how-studio-draws-them):
+  0.25 units draw 134, 1 unit 224, 3.5 units 253). Black Decals over white
+  Neon decode to 4T² units at Transparency T, and the curve gives 9, 35,
+  99, 160, 199, 224 and 243 for T = 0.05 to 0.7, against Studio's 8, 31,
+  97, 158, 199, 223 and 245. Lavender Neon (0.38 units) at T = 0.2 and 0.5
+  gives 12 and 68 (Studio 12 and 67). Places without a ColorGradingEffect
+  get this curve.
+- **Retro**: no curve; the pixel is the light's square root, so black
+  Decals over white Neon draw 510 × T until they clip, as measured.
+- **Neon** glows at 13.6 × c⁴ units per channel (c its sRGB colour, 0 to
+  1), up to the frame's 4: grey 128 is 0.865 units under both curves (237
+  under Retro, 215 under the default), 64 grey 0.055 (60 under Retro),
+  blue 105 0.38, and 160 grey 2.1, which is why it needs 1.4 times the
+  Transparency of a capped colour to draw the same (the 1.4 below).
+  Colours from about 188 up all reach the cap.
+- **Ambient**: white SmoothPlastic (248) under Ambient 80 is 0.093 units:
+  66 under the default curve and 79 under Retro, as Studio drew both.
+- **ExposureCompensation** scales light units before the curve: Ambient
+  175 on white is 0.47 units (177; Studio 179), and −0.6 takes it to 0.31
+  (148; Studio 148).
 
 ## Findings
 
@@ -93,12 +120,33 @@ don't dim as much as unlit ones. In the room, unlit consoles now draw
 Texture (alpha about 0.65, Transparency 0.2) over Metal, the
 blend-before-the-curve case above.
 
-## For Rook
+## How Rook does it
 
-Draw to an HDR target (Rgba16Float), leave Neon unclamped up to its cap,
-blend Decals and Textures there, and finish with the default curve or
-Retro's, chosen by ColorGrading. The colour fits that have the curve baked
-in (Neon's, the lighting constants) then need refitting against it.
-Blending only Decals and Textures in gamma space would match Retro but not
-glowing Neon behind a see-through decal, and it still needs a different
-colour target.
+The main pass draws into a frame (`renderer/tonemap.rs`, Rgba16Float to
+avoid the 8-bit frame's banding) holding Studio's encoding, `frame` in
+`shaders/tone.wgsl`, and every pipeline blends there as before. The tone
+pass then decodes it and applies the default curve or Retro's, from the
+first enabled ColorGradingEffect in Lighting.
+
+Light adds up in light units (`diffuse_light` in `shaders/lighting.wgsl`):
+the ambient as its colour squared, the sky's diffuse light and the local
+lights as measured, Neon as above, and the exposure before the curve. The
+looks still fitted on Studio's pixels reach the frame through the curve's
+inverse (`light_units` in `tone.wgsl`, an Approximation until each is
+measured in light units). These are the sun (what it added to the pixels
+over the ambient, it adds now), the GGX highlight and sky reflection,
+skyboxes, fog, water, ForceField, unlit particles and Glass's filter (now a
+scale on the light, before the curve).
+
+Against the table above (`rook-player --screenshot` of a test place with
+black parts at each Transparency over Neon, which blend as Decals do),
+Rook lands within 6 levels everywhere under the default curve (white Neon
+9, 35, 100, 160, 199, 224, 243, 253; grey 128 and lavender within 6), and
+Retro's uncovered Neon draws Studio's 237 and 159. Rook's linear fog,
+which with Roblox's defaults (FogStart 0, FogEnd 100000) tints everything
+by a hair, lifts near-black see-through covers by up to 5 levels;
+Studio's fog is exponential and starts later (its shaders), not yet
+matched.
+
+Not done: ColorGradingEffects under the Camera, the other presets, and
+Bloom and ColorCorrection (M13).

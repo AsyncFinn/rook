@@ -48,8 +48,9 @@ matched within the measurement noise).
   squared): Ambient 32, 64, 96, 128, 160, 192, 255 grey drew 14, 47, 91,
   134, 166, 193, 224 on white; brighter lights reach 248 at 2.24 units and
   253 at 3.5. Rook applies this curve to the local lights' sum on top of
-  Ambient (`studio_light` in `shaders/lighting.wgsl`), so a dark scene
-  draws Studio's pixels; Rook's other light has no such curve yet (M13).
+  Ambient (`studio_light` in `shaders/tone.wgsl`), so a dark scene
+  draws Studio's pixels. Every light now goes through it, once, at the
+  end of the frame ([tone mapping](tone-mapping.md)).
 
 **SpotLight** (Range 32, Angle 60, Brightness 0.25, from an 8-stud part
 facing +Z): it shines from the part's centre, not its face. Unlike a

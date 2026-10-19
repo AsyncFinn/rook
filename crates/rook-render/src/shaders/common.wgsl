@@ -154,10 +154,6 @@ struct ShadowIn {
     @location(14) i_flags: vec4<u32>,
 };
 
-fn srgb_to_linear(c: vec3<f32>) -> vec3<f32> {
-    return select(pow((c + 0.055) / 1.055, vec3(2.4)), c / 12.92, c <= vec3(0.04045));
-}
-
 fn instance_rotation(v: VertexIn) -> mat3x3<f32> {
     return mat3x3<f32>(v.i_right, v.i_up, v.i_back);
 }

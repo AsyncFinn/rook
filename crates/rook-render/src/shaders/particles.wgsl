@@ -2,9 +2,10 @@
 // the camera, its colour premultiplied by its opacity, its coverage in
 // alpha. Lit ones take the light a surface facing the camera would.
 
-import package::common::{g, srgb_to_linear};
+import package::common::g;
+import package::tone::{frame, light_units3, srgb_to_linear};
 import package::images::sample_image;
-import package::lighting::{diffuse_light, sun_light};
+import package::lighting::{diffuse_light, fog_amount, sun_light};
 
 struct ParticleIn {
     @builtin(vertex_index) corner: u32,
@@ -60,16 +61,27 @@ fn vs_particle(v: ParticleIn) -> ParticleOut {
 @fragment
 fn fs_particle(in: ParticleOut) -> @location(0) vec4<f32> {
     let texel = sample_image(vec3(in.image, 0u, 0u), in.uv);
+    // Premultiplied light units: lit particles take the light around them,
+    // unlit ones keep the look fitted on Studio's pixels.
     var rgb = in.color.rgb * texel.rgb * texel.a;
+    let coverage = in.color.a * texel.a;
     if in.lit > 0.0 {
         let n = normalize(g.camera_pos.xyz - in.world);
-        rgb *= diffuse_light(in.world, n, sun_light(in.world, n));
+        rgb = diffuse_light(rgb, in.world, n, sun_light(in.world, n));
+    } else if coverage > 1e-4 {
+        rgb = light_units3(rgb / coverage) * coverage;
+    } else {
+        rgb = light_units3(rgb);
     }
-    let coverage = in.color.a * texel.a;
     // Fog takes over as for a surface: towards its colour where the
     // particle covers, and its light fading out.
-    let dist = distance(in.world, g.camera_pos.xyz);
-    let f = clamp((dist - g.fog_range.x) / max(g.fog_range.y - g.fog_range.x, 1e-3), 0.0, 1.0);
-    rgb = mix(rgb, srgb_to_linear(g.fog_color.rgb) * coverage, f) * g.fog_range.z;
-    return vec4(rgb, coverage);
+    let f = fog_amount(in.world);
+    rgb = mix(rgb, light_units3(srgb_to_linear(g.fog_color.rgb)) * coverage, f) * g.fog_range.z;
+    // Premultiplied in the frame's encoding: what covers blends over what's
+    // behind as Studio blends, and what has no coverage (LightEmission)
+    // adds its light.
+    if coverage > 1e-4 {
+        return vec4(frame(rgb / coverage) * coverage, coverage);
+    }
+    return vec4(frame(rgb), 0.0);
 }

@@ -2,6 +2,7 @@
 // at the far plane.
 
 import package::common::g;
+import package::tone::{frame_of, srgb_to_linear};
 import package::images::{sample_sky, sky_size};
 
 struct SkyOut {
@@ -40,5 +41,12 @@ fn fs_sky(in: SkyOut) -> @location(0) vec4<f32> {
     if along < max(a.x, max(a.y, a.z)) - 1e-6 {
         discard;
     }
-    return vec4(texel.rgb * g.fog_range.z, 1.0);
+    return vec4(frame_of(texel.rgb * g.fog_range.z), 1.0);
+}
+
+// The plain sky, before the skybox's images are up (or without any): its
+// colour at the horizon over the whole screen.
+@fragment
+fn fs_plain_sky(in: SkyOut) -> @location(0) vec4<f32> {
+    return vec4(frame_of(srgb_to_linear(g.sky_horizon.rgb) * g.fog_range.z), 1.0);
 }

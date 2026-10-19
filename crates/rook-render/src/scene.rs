@@ -301,6 +301,21 @@ pub struct Lighting {
     /// `Lighting.ExposureCompensation` as a multiplier on linear light
     /// (2 to the power of it), for everything drawn, the sky included.
     pub exposure: f32,
+    /// The tone curve the frame goes through last
+    /// (`ColorGradingEffect.TonemapperPreset`).
+    pub tonemapper: Tonemapper,
+}
+
+/// `ColorGradingEffect.TonemapperPreset`: how light becomes the screen's
+/// pixels (docs/behavior/tone-mapping.md).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Tonemapper {
+    /// Studio's curve, which darkens the darks and rolls off the brights;
+    /// places without a ColorGradingEffect get it too.
+    #[default]
+    Default,
+    /// No curve: the light's square root is the pixel.
+    Retro,
 }
 
 impl Default for Lighting {
@@ -322,6 +337,7 @@ impl Default for Lighting {
             environment_specular: 0.0,
             environment_diffuse: 0.0,
             exposure: 1.0,
+            tonemapper: Tonemapper::Default,
         }
     }
 }

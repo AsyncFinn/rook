@@ -67,9 +67,8 @@ impl Renderer {
             .flatten()
             .filter_map(|p| {
                 let instance = self.instance(p);
-                view.sees(instance.world_box(), margin).then(|| {
-                    (p.position.distance_squared(camera.position), p, instance)
-                })
+                view.sees(instance.world_box(), margin)
+                    .then(|| (p.position.distance_squared(camera.position), p, instance))
             })
             .collect();
         order.sort_by(|(da, a, _), (db, b, _)| {
@@ -144,9 +143,10 @@ impl Renderer {
         view
     }
 
-    /// Draw the scene into `target` (a view of a `color_format` texture).
-    /// Mesh files and images queued for upload go up first, within a
-    /// per-frame budget.
+    /// Draw the scene into `target` (a view of a `color_format` texture):
+    /// into the frame, then through the tone curve onto `target`. Mesh
+    /// files and images queued for upload go up first, within a per-frame
+    /// budget.
     pub fn render(&mut self, target: &wgpu::TextureView, width: u32, height: u32, camera: &Camera) {
         profiling::scope!("Renderer::render");
         let start = std::time::Instant::now();
@@ -239,7 +239,7 @@ impl Renderer {
             self.build_draws(shadow, &view, margin, transparent_runs);
 
         let depth = self.depth_view(width, height);
-        let sky = srgb_to_linear(l.sky_horizon).map(|c| c * l.exposure);
+        let frame = self.tonemap.frame(&self.device, width, height);
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -276,16 +276,12 @@ impl Renderer {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("rook parts"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: target,
+                    view: &frame,
                     depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: f64::from(sky[0]),
-                            g: f64::from(sky[1]),
-                            b: f64::from(sky[2]),
-                            a: 1.0,
-                        }),
+                        // The sky covers every pixel first.
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                         store: wgpu::StoreOp::Store,
                     },
                 })],
@@ -316,6 +312,8 @@ impl Renderer {
             self.record(&mut pass, &mut main_runs, starts[1]);
             self.record_particles(&mut pass, &particle_runs);
         }
+        self.tonemap
+            .record(&self.queue, &mut encoder, target, l.tonemapper);
         if let Some(timer) = &mut self.timer {
             timer.resolve(&mut encoder, shadow.is_some());
         }
@@ -424,16 +422,23 @@ impl Renderer {
         out
     }
 
-    /// The skybox, once all six images are up; otherwise the clear colour
-    /// stands for it. With a table, one draw of six faces; else a draw per
-    /// face with its image bound.
+    /// The skybox, once all six images are up; otherwise the plain sky
+    /// colour stands for it. With a table, one draw of six faces; else a
+    /// draw per face with its image bound.
     fn record_sky(&self, pass: &mut wgpu::RenderPass<'_>) {
-        let Some(faces) = self.lighting.skybox else {
+        let faces = self
+            .lighting
+            .skybox
+            .filter(|faces| faces.iter().all(|h| self.images.contains(h)));
+        let Some(faces) = faces else {
+            pass.set_pipeline(&self.pipelines.plain_sky);
+            // It reads no image, but its layout has the image group.
+            if let ImageBinding::Sets(_) = &self.image_binding {
+                pass.set_bind_group(2, self.group(&[None; 5]), &[]);
+            }
+            pass.draw(0..3, 0..1);
             return;
         };
-        if !faces.iter().all(|h| self.images.contains(h)) {
-            return;
-        }
         pass.set_pipeline(&self.pipelines.sky);
         match &self.image_binding {
             ImageBinding::Table(_) => pass.draw(0..3, 0..6),
