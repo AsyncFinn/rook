@@ -20,7 +20,7 @@ feature, so Studio is only observed through its public scripting API.
 1. Open a scratch place in Studio (not a real game).
 2. In Assistant, open the ⋯ menu, choose **Manage MCP Servers** and enable
    Studio as an MCP server.
-3. Run `rook conformance record`. It starts a playtest if Studio is in edit
+3. Run `rook-tools conformance record`. It starts a playtest if Studio is in edit
    mode, runs every case on the playtest server, saves the results and
    stops the playtest.
 
@@ -29,7 +29,7 @@ contains the text.
 
 ## Checking Rook
 
-`rook conformance run` runs every case that has an expectation in Rook and
+`rook-tools conformance run` runs every case that has an expectation in Rook and
 prints a line-by-line diff for each mismatch.
 
 ## Coverage notes

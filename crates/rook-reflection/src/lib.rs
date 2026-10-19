@@ -41,7 +41,7 @@ pub fn rbx_database() -> &'static rbx_reflection::ReflectionDatabase<'static> {
 
 static MEMBERS: LazyLock<Members> = LazyLock::new(|| {
     serde_json::from_str(include_str!("../data/members.json"))
-        .expect("data/members.json is valid; regenerate with `rook gen-members`")
+        .expect("data/members.json is valid; regenerate with `rook-tools gen-members`")
 });
 
 /// Functions, events and callbacks for the pinned Roblox version.

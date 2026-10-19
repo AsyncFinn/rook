@@ -4,7 +4,7 @@
 //! own compact list of the rest, generated from Roblox's Full API dump for
 //! the same pinned version and committed as `data/members.json`.
 //!
-//! Regenerate with `rook gen-members <Full-API-Dump.json>`. The file has
+//! Regenerate with `rook-tools gen-members <Full-API-Dump.json>`. The file has
 //! one class per line so updates diff cleanly.
 //!
 //! Types are written `<kind>:<name>`, where the kind is `p` (primitive),

@@ -46,7 +46,7 @@ JSON rather than TOML because Roblox developers know JSON. It is read leniently:
 | Key | Meaning | Overridden by |
 |---|---|---|
 | `cacheMaxSize` | The download cache's size limit | `ROOK_CACHE_MAX` |
-| `assetDelivery` | `true`/`false`; `null` leaves it to each program (on in the player and `rook content`, off in headless runs) | `ROOK_ASSET_DELIVERY`, `rook content --offline` |
+| `assetDelivery` | `true`/`false`; `null` leaves it to each program (on in the player and `rook-tools content`, off in headless runs) | `ROOK_ASSET_DELIVERY`, `rook-tools content --offline` |
 | `robloxInstall` | A version or content folder, or `"off"`; `null` uses the newest install found | `ROOK_ROBLOX_INSTALL` |
 | `logLevel` | What the terminal shows: `error`, `warn`, `info`, `debug`, `trace` | `ROOK_LOG`, `--verbose` |
 
@@ -67,7 +67,7 @@ What the terminal shows:
       1 mesh (1 file): Authentication required to access Asset (forbidden) (first: Workspace.Tree.Mesh)
   ```
 
-  Failed asset loads that Studio warns about in its Output are always printed, once per file, as Studio does. These are assets that are missing or not allowed, and every failed sound (`Failed to load sound rbxassetid://…: …`). Rook's own gaps, such as a version it can't read yet, appear only in the summary and the detail. The image and mesh warning's wording, `Image "<ref>" failed to load in "<path>": <reason>`, is an Inference from memory, not checked against Studio.
+  Failed asset loads that Studio shows in its Output are always printed, once per file, as errors (red), as Studio does. These are assets that are missing or not allowed, and every failed sound (`Failed to load sound rbxassetid://…: …`). Rook's own gaps, such as a version it can't read yet, appear only in the summary and the detail. The image and mesh warning's wording, `Image "<ref>" failed to load in "<path>": <reason>`, is an Inference from memory, not checked against Studio.
 - **`--verbose`:** `debug` and up: every failure, with instance path, content reference and reason (`Workspace.Ruins.Union: rbxassetid://123 — union geometry CSGMDL3 is not supported yet`).
 - **`--verbose <subsystem>`** (or several, comma-separated): everything those subsystems log, at any level, plus the usual `info`. `--verbose content` before a file name is taken as the subsystem; a bare `--verbose` before a file name is not (`logging::fix_verbose_args`).
 
@@ -75,9 +75,9 @@ Libraries' own events reach the terminal only as warnings and errors.
 
 ### Log files
 
-Each run of the player writes one file, `logs\rook-player-<time>.log`. `rook` writes one only for long commands (`corpus-scan`, `corpus-run`, `conformance`). The file gets Rook's `debug` and up whatever the terminal shows, plus every line the terminal printed, script output included. It is plain text without colours, in the terminal's line format. At startup, old logs are cleaned: a file is deleted once it is beyond the newest 30 runs and older than 14 days, and the oldest go first past 100 MB in total. Crash reports are cleaned by the same rules.
+Each run of the player writes one file, `logs\rook-player-<time>.log`. `rook-tools` writes one only for long commands (`corpus-scan`, `corpus-run`, `conformance`). The file gets Rook's `debug` and up whatever the terminal shows, plus every line the terminal printed, script output included. It is plain text without colours, in the terminal's line format. At startup, old logs are cleaned: a file is deleted once it is beyond the newest 30 runs and older than 14 days, and the oldest go first past 100 MB in total. Crash reports are cleaned by the same rules.
 
-`rook logs` prints the newest log's path. `rook logs --open` opens the folder.
+`rook-tools logs` prints the newest log's path. `rook-tools logs --open` opens the folder.
 
 ### Crash reports
 
@@ -87,12 +87,12 @@ Each run of the player writes one file, `logs\rook-player-<time>.log`. `rook` wr
 
 Content failures are `rook_content::Failure`: a `FailureKind` (`not-found`, `forbidden`, `unsupported`, `offline`, `network`, `invalid`, `unknown-version`) and a message. The decoders return typed errors (`MeshError`, `ImageError`, `AudioError`). The loader turns them into failures, keeping "a version Rook can't read yet" (`unknown-version`) apart from "damaged or not that kind of file" (`invalid`). The player's scene keeps each failed file's failure and logs it where the instance path is known (`scene::report`). See the error rule in [CONTRIBUTING](../../CONTRIBUTING.md#errors).
 
-`rook content <place>` lists every content reference in a place and what became of it: where it came from, or why it didn't load or decode.
+`rook-tools content <place>` lists every content reference in a place and what became of it: where it came from, or why it didn't load or decode.
 
 ## Kept content
 
 Some content Rook loads itself in nearly every place: the built-in materials' texture packs, terrain's packs, and the images those name. These are kept for good in `content\` rather than the cache. The list is fixed (`crates/rook-content/data/kept.txt`), never what places happen to load. Each asset is pinned to a version, because an asset id can be uploaded again and a version never changes. Asset delivery gives the version in its `roblox-assetversionnumber` header.
 
-A request for a kept asset by its bare id is answered at the pinned version: from `content\` first, then the cache (copying it into `content\`), then asset delivery, which writes it into `content\`. `content\` is never trimmed. It has the cache's layout, blobs by hash and one ref file per key (`asset-<id>-v<version>`), so one reader handles both. `rook content --pin` writes the list again from the materials' and terrain's tables with each asset's version today. A test checks that every pack in those tables is listed.
+A request for a kept asset by its bare id is answered at the pinned version: from `content\` first, then the cache (copying it into `content\`), then asset delivery, which writes it into `content\`. `content\` is never trimmed. It has the cache's layout, blobs by hash and one ref file per key (`asset-<id>-v<version>`), so one reader handles both. `rook-tools content --pin` writes the list again from the materials' and terrain's tables with each asset's version today. A test checks that every pack in those tables is listed.
 
 The default sky is not in `content\`. It comes from the Roblox install, read in place, and without one Rook draws its own plain sky.

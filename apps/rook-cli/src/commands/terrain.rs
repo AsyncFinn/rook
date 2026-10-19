@@ -1,4 +1,4 @@
-//! `rook terrain`: what a file's Terrain holds, or how many files in a
+//! `rook-tools terrain`: what a file's Terrain holds, or how many files in a
 //! folder hold smooth voxels (`SmoothGrid`) and how many legacy blocks
 //! (`ClusterGrid`, `ClusterGridV2`, `ClusterGridV3`).
 

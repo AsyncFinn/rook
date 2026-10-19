@@ -1,4 +1,4 @@
-//! `rook content --pin`: write the kept content list
+//! `rook-tools content --pin`: write the kept content list
 //! (`crates/rook-content/data/kept.txt`) again, from the materials' and
 //! terrain's tables and each asset's version on asset delivery today.
 
@@ -20,7 +20,7 @@ pub fn pin(out: &Path) -> anyhow::Result<()> {
     let mut lines = vec![
         "# Content Rook keeps for good: built-in materials' and terrain's".to_owned(),
         "# texture packs and the images they name, each pinned to a version".to_owned(),
-        "# (rook_content::resolver::kept). Written by `rook content --pin`.".to_owned(),
+        "# (rook_content::resolver::kept). Written by `rook-tools content --pin`.".to_owned(),
         "# <asset id> <version>  # what".to_owned(),
     ];
     // Packs share images (one image as both metalness and roughness).
@@ -65,7 +65,7 @@ mod tests {
         for pack in super::packs() {
             assert!(
                 rook_content::resolver::kept::version(pack).is_some(),
-                "pack {pack} isn't kept: run `rook content --pin`"
+                "pack {pack} isn't kept: run `rook-tools content --pin`"
             );
         }
     }

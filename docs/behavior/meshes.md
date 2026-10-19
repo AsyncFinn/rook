@@ -134,7 +134,7 @@ outline to a pixel in width and height.
 is in `docs/architecture.md` §8 "Rendering"; what's left is in
 `docs/behavior/stubs.md`.
 
-*What the archive uses* (`rook corpus-scan`, 3,058 files that load; the
+*What the archive uses* (`rook-tools corpus-scan`, 3,058 files that load; the
 scan now counts mesh instances by kind):
 
 | Kind | Files | Uses |
@@ -324,7 +324,7 @@ loaded, uploaded and drawn through the same path (`Want::Mesh`, the GPU
 mesh cache). What unions collide as (their saved hulls, since M15) is in
 [collision](collision.md#unions).
 
-*What the archive uses* (`rook corpus-scan`, which now counts unions by
+*What the archive uses* (`rook-tools corpus-scan`, which now counts unions by
 form; 6,245 files loaded from a larger archive than step 3's, so the
 counts aren't comparable with the tables above):
 
@@ -353,7 +353,7 @@ counts it was stopped, so how often it holds geometry isn't known. Rook
 draws only geometry behind an `AssetId`: in-file geometry without one is a
 single union in the archive.
 
-*Which assets load* (`rook content --place`, which now decodes union
+*Which assets load* (`rook-tools content --place`, which now decodes union
 assets; a sample of 3 named places and about 20 random ones, stopped
 partway): every union asset that loaded anonymously holds `CSGMDL2`
 geometry, from 2015-2016 places (a small place 4 of 4
@@ -364,7 +364,7 @@ Cloud key was available to count what a key unlocks. A union asset is a
 model holding one `PartOperationAsset` with `MeshData`, `PhysicsData`
 and `ChildData` (the parts it was made from).
 
-*The geometry* (`rook content` on a small place's assets): its bounds equal the
+*The geometry* (`rook-tools content` on a small place's assets): its bounds equal the
 union's `InitialSize`, centred on its origin. Each vertex carries a
 colour (that of the part it came from), the `NormalId` of the box face it
 was cut from, and UVs that are planar and in studs from the union's

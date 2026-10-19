@@ -281,8 +281,8 @@ impl DataModel {
             Ok(Some(audio)) => Load::Loaded(audio),
             Ok(None) => Load::Failed,
             Err(failure) => {
-                // Studio's Output warns about every sound that fails.
-                tracing::warn!(target: "audio", "Failed to load sound {r}: {}", failure.message);
+                // Studio's Output shows every sound that fails, in red.
+                tracing::error!(target: "audio", "Failed to load sound {r}: {}", failure.message);
                 Load::Failed
             }
         };

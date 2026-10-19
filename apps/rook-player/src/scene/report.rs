@@ -1,7 +1,7 @@
 //! What didn't load, reported once loading settles: one summary of the
 //! failures grouped by cause, each failure in detail at `debug`
-//! (`--verbose`), and the ones Studio would warn about in its Output as
-//! warnings, as Studio does.
+//! (`--verbose`), and the ones Studio's Output shows as errors (in red),
+//! as Studio does.
 //!
 //! Studio warns, once per file, when an asset can't be fetched (missing,
 //! or not allowed), not about Rook's own gaps; those (a version Rook can't
@@ -104,9 +104,10 @@ impl Report {
                 reference: key.0.clone(),
                 failure,
             };
-            // Studio warns once per file, naming the first instance.
+            // Studio prints these in red, once per file, naming the first
+            // instance.
             if studio_warns(f.failure.kind) && self.warned.insert(key) {
-                tracing::warn!(
+                tracing::error!(
                     target: "content",
                     "{} \"{}\" failed to load in \"{}\": {}",
                     studio_word(f.what),

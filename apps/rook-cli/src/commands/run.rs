@@ -1,4 +1,4 @@
-//! `rook run-headless`: run a place's server Scripts without a window.
+//! `rook-tools run-headless`: run a place's server Scripts without a window.
 
 use std::path::Path;
 use std::time::{Duration, Instant};

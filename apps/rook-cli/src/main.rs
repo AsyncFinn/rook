@@ -1,4 +1,4 @@
-//! `rook`: command-line tools for the Rook engine.
+//! `rook-tools`: command-line tools for the Rook engine.
 
 mod commands;
 
@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 
 #[derive(Debug, Parser)]
-#[command(name = "rook", version, about = "Rook engine tools")]
+#[command(name = "rook-tools", version, about = "Rook engine tools")]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -216,7 +216,7 @@ fn main() -> anyhow::Result<()> {
         Command::CorpusScan { .. } | Command::CorpusRun { .. } | Command::Conformance { .. }
     );
     rook_engine::logging::init(rook_engine::logging::Options {
-        program: "rook",
+        program: "rook-tools",
         verbose: cli.verbose.clone(),
         file: long,
     });

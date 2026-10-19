@@ -211,7 +211,7 @@ Rook is an independent implementation.
 
 ## 9. Archive scan (2026-10-05)
 
-First full `rook corpus-scan` of the maintainer's archive of places and models. Only aggregate figures are recorded here.
+First full `rook-tools corpus-scan` of the maintainer's archive of places and models. Only aggregate figures are recorded here.
 
 - **4,605 files, 3,077 unique** (12.7 GB). **3,056 load (99.3%).** Before the legacy XML upgrade the figure was 55.6%.
 - **1,346 files needed the legacy XML upgrade**: 27,096 `<External>` entries dropped, 1,456 embedded assets and 5,906 `<hash>` references (both load empty, as modern Studio does; the data is kept in the upgrade report), 19.1 million control characters restored (almost all legacy `Terrain.ClusterGrid`/`ClusterGridV2` data), 6 MSVC float values, 3 `null` numbers.

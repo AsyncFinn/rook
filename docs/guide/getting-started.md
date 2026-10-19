@@ -10,7 +10,7 @@ cd rook
 cargo build --release
 ```
 
-This builds two programs in `target/release`: `rook-player` (the windowed player) and `rook` (the command-line tool, see [tools.md](tools.md)).
+This builds two programs in `target/release`: `rook-player` (the windowed player) and `rook-tools` (the command-line tool, see [tools.md](tools.md)).
 
 ## Getting a place to open
 
@@ -61,7 +61,7 @@ When the player runs in an interactive terminal, that terminal shows a `>` promp
 > :client
 ```
 
-`:server` and `:client` choose where entries run (the server by default), and `:help` lists the commands. Ctrl+C clears the line; on an empty line it, or Ctrl+D, ends input. `rook run-headless place.rbxl --repl` gives the same prompt without a window, after `--seconds`, until input ends. `--no-repl` turns the prompt off.
+`:server` and `:client` choose where entries run (the server by default), and `:help` lists the commands. Ctrl+C clears the line; on an empty line it, or Ctrl+D, ends input. `rook-tools run-headless place.rbxl --repl` gives the same prompt without a window, after `--seconds`, until input ends. `--no-repl` turns the prompt off.
 
 The prompt is the `repl` Cargo feature, on by default. Build with `--no-default-features` to leave it out of a build you hand to others. It reads only the local terminal, never the network.
 

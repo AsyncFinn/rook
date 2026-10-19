@@ -19,7 +19,7 @@ by the thousands, most of them the 2009 client's (`sounds/collide.wav` in
 install has (`sounds/uuhhh.mp3` 345 files, `action_falling.mp3` 337,
 `paintball.wav` 256).
 
-*What loads, and in which format* (`rook content --place`, which now
+*What loads, and in which format* (`rook-tools content --place`, which now
 decodes each Sound's file, run once on five places, asset delivery on,
 anonymous):
 
@@ -386,7 +386,7 @@ unchanged. Scripts call `SoundService:PlayLocalSound` in 38 files (327
 calls), so it is done too.
 
 The corpus doesn't count SoundService's property values, so five places
-were looked at with `rook dump`:
+were looked at with `rook-tools dump`:
 
 - A 2021 place, both large places and a 2008 place save `AmbientReverb`
   NoReverb.

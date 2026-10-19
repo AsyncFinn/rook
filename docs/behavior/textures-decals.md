@@ -6,7 +6,7 @@ What Rook found while building M4 step 4: images, Decals, Textures, mesh texture
 draw is in `docs/architecture.md` §8 "Rendering" and "Content"; what's
 still partial is in `docs/behavior/stubs.md`.
 
-*What the archive uses* (`rook corpus-scan`, 3,058 files that load; the
+*What the archive uses* (`rook-tools corpus-scan`, 3,058 files that load; the
 scan now counts looks too):
 
 | What | Files | Uses |
@@ -30,7 +30,7 @@ scan now counts looks too):
 | Foil, Brick, Sand, Granite, Marble, Metal, Pebble, Fabric, Neon | 177, 158, 149, 127, 125, 110, 105, 101, 84 | |
 | `Reflectance` above 0 | 1,405 | 377,042 |
 
-*Image formats* (`rook content --place`, which now decodes every image
+*Image formats* (`rook-tools content --place`, which now decodes every image
 reference and totals the results by format, over 60 random archive places
 and a large 2016 place, anonymous): of the images that load, 648 distinct are
 PNG (1,926 uses), 16 JPEG, 1 BMP (10 uses) and 2 DDS; none is a GIF or
@@ -166,7 +166,7 @@ requester") or don't exist. A cached anonymous refusal no longer stops the
 key being tried.
 
 *Performance* (release builds, base = the previous commit, one run each):
-`rook run-headless --seconds 10` gave identical output on a large 2016 place,
+`rook-tools run-headless --seconds 10` gave identical output on a large 2016 place,
 a small place and a 2008 place (15.05 against 14.98 s, 0.50 against 0.46 s, 0.45
 against 0.48 s). `rook-player --bench 300`: a small place (3 images) and a 2008 place
 (5 images) unchanged (render 1.49 against 1.53 ms, 1.71 against 1.71 ms);

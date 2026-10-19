@@ -9,7 +9,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [[bin]]
-name = "rook"
+name = "rook-tools"
 path = "src/main.rs"
 
 [dependencies]

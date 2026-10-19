@@ -6,7 +6,7 @@ What Rook found while building M4 step 2: where archived places' content comes f
 `docs/architecture.md` §8 "Content"; what's still partial is in
 `docs/behavior/stubs.md`.
 
-*What the archive uses* (`rook corpus-scan`, 3,058 files that load): 1.10
+*What the archive uses* (`rook-tools corpus-scan`, 3,058 files that load): 1.10
 million non-empty content property values (36,938 distinct), plus 1.69
 million empty ones. By what `rook-content` makes of them:
 
@@ -174,7 +174,7 @@ that path is untested for lack of a key, and whether a key opens other
 creators' public assets is unknown. Roblox's own 2009 assets (the table
 above) come anonymously.
 
-*Results* (`rook content --place`, first run, network on):
+*Results* (`rook-tools content --place`, first run, network on):
 
 | Place | References (distinct targets) | Install | Asset delivery or cache | Refused anonymously | Not found or no content |
 |---|---|---:|---:|---:|---:|
@@ -184,14 +184,14 @@ above) come anonymously.
 Most refusals are "Authentication required" (a large place: 7,471 uses, 1,141
 assets). A second run needs no network: a large place resolved all 1,655 targets
 from the install and cache in 0.2 s. The player draws the Head MeshType
-with the install's `head.mesh`, and `rook run-headless --seconds 10` on a large modern place, a small place
+with the install's `head.mesh`, and `rook-tools run-headless --seconds 10` on a large modern place, a small place
 and a 2008 place gave identical output in the same time as before (a large place
 22.3 s against 22.5 s, four alternating runs each).
 
 *Mesh files are read with the `rbx_mesh` crate* (krakow10, MIT or
 Apache-2.0, a Rojo contributor's), versions 1.00 to 5.00; Rook keeps only
 the highest level of detail and checks face indices. 6.00 and 7.00 aren't
-read yet. `rook content` decodes meshes it shows: `fonts/sword.mesh` (1.00)
+read yet. `rook-tools content` decodes meshes it shows: `fonts/sword.mesh` (1.00)
 is 198 triangles, 1.15 x 0.34 x 4.37 studs; version 1 of asset 12221462
 (1.00) is 56 x 40 x 45 studs, the giant mesh Studio drew for it.
 

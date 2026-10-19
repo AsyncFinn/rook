@@ -1,4 +1,4 @@
-//! `rook gen-members`: regenerate the committed member list.
+//! `rook-tools gen-members`: regenerate the committed member list.
 
 use std::path::Path;
 

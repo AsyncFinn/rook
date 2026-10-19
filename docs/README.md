@@ -3,7 +3,7 @@
 - **[guide/](guide/)**: for people using Rook.
   - [Getting started](guide/getting-started.md): build Rook, open a place, controls and the command bar
   - [Features](guide/features.md): everything Rook supports today
-  - [Tools](guide/tools.md): the `rook` command-line tool
+  - [Tools](guide/tools.md): the `rook-tools` command-line tool
 - **[design/](design/)**: how Rook is built.
   - [Architecture](design/architecture.md): crates, data flow and the rules every behaviour follows
   - [Research](design/research.md): background, sources and policies

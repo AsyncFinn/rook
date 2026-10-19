@@ -174,7 +174,7 @@ pub struct Look {
 }
 
 /// Every texture pack terrain uses, in either set (tools: Rook keeps
-/// these, `rook content --pin`).
+/// these, `rook-tools content --pin`).
 pub fn all_packs() -> impl Iterator<Item = u64> {
     TerrainMaterial::ALL.into_iter().flat_map(|m| {
         [MaterialSet::Legacy, MaterialSet::Materials2022]

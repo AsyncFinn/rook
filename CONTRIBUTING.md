@@ -12,7 +12,7 @@ The most valuable reports are:
 
 Please include:
 
-- The `rook run-headless place.rbxl` output (see [docs/guide/tools.md](docs/guide/tools.md)).
+- The `rook-tools run-headless place.rbxl` output (see [docs/guide/tools.md](docs/guide/tools.md)).
 - If you can, a minimal place that reproduces it. Only share places you have the rights to share.
 - For a behaviour difference, what Roblox does and what Rook does.
 
@@ -37,7 +37,7 @@ Rook is a Cargo workspace of small crates whose dependencies only point downward
 | [`rook-physics`](crates/rook-physics) | Assemblies, joints, constraints, contacts and scene queries over Rapier |
 | [`rook-engine`](crates/rook-engine) | DataModels, services, script start rules, play sessions and the frame loop |
 | [`rook-render`](crates/rook-render) | The wgpu renderer |
-| [`rook-cli`](apps/rook-cli) | The `rook` command-line tool |
+| [`rook-cli`](apps/rook-cli) | The `rook-tools` command-line tool |
 | [`rook-player`](apps/rook-player) | The windowed player |
 
 ### Where things live

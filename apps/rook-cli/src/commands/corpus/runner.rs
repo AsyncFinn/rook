@@ -1,4 +1,4 @@
-//! `rook corpus-run`: run every place in a folder headless and report how
+//! `rook-tools corpus-run`: run every place in a folder headless and report how
 //! many run their server Scripts without errors. This is M1's archive metric.
 
 use std::collections::{BTreeMap, HashSet};
@@ -99,7 +99,7 @@ pub fn run(
 
     std::fs::create_dir_all(out).with_context(|| format!("creating {}", out.display()))?;
     let json = serde_json::json!({
-        "generated_by": format!("rook corpus-run {}", env!("CARGO_PKG_VERSION")),
+        "generated_by": format!("rook-tools corpus-run {}", env!("CARGO_PKG_VERSION")),
         "roblox_version": rook_reflection::roblox_version(),
         "seconds_simulated": seconds,
         "script_timeout": timeout,

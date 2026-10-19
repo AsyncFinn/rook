@@ -91,7 +91,7 @@ Studio, by script):
 - Scripts reading `CollisionFidelity` still get Default in Rook, where
   Studio derives Box for a union without hulls (left for later).
 
-*Checked on a large place* (`rook run-headless` with a probe script: for every
+*Checked on a large place* (`rook-tools run-headless` with a probe script: for every
 ClickDetector part, rays from 5 studs out along each axis toward it):
 before, 49 of 261 ClickDetectors in a large modern place and 36 of 214 in a large 2016 place were hidden from every direction by
 a union's box; after, 16 and 20 are, none by a union and none a button (the rest are behind invisible blocker parts the places put there
@@ -99,7 +99,7 @@ on purpose, `RCBlocker`, or other plain parts). The 2016 wall union's
 union (1 × 12 × 12.2 studs, 15 saved hulls) now lets rays through its
 round doorway.
 
-*Performance* (release builds, base = the build before this step, `rook run-headless
+*Performance* (release builds, base = the build before this step, `rook-tools run-headless
 --seconds 5`, two runs each): a large 2016 place (no moving unions) 17.1 / 17.2 s
 against 17.4 / 17.7 s; a large modern place (86 moving unions, most of them not
 colliding) 14.8 / 14.7 s against 15.6 / 15.8 s, the cost of its

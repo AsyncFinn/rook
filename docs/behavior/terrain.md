@@ -12,7 +12,7 @@ per material. Everything was measured in Studio 0.742 with `WriteVoxels`,
 collision surface's exact positions and normals. The recordings are in
 `crates/rook-terrain/data/` and replayed by its tests.
 
-*What the archive has* (`rook terrain --scan`, run once over the archive's
+*What the archive has* (`rook-tools terrain --scan`, run once over the archive's
 10,939 files, 6,378 unique, 231 s):
 
 | Terrain | Files |
@@ -152,7 +152,7 @@ same camera in both, shows the same snowy landmass.
 
 *Costs* (release build, meshing only): a 75,000-voxel place 20 ms (56,000
 triangles), a 1.18-million-voxel place 63 ms (426,000), a 751,000-voxel place 92 ms (553,000),
-a 25-million-voxel place 317 ms (1.73 million, mostly the flat water). `rook terrain
+a 25-million-voxel place 317 ms (1.73 million, mostly the flat water). `rook-tools terrain
 <file>` prints what a file's Terrain holds and how long it takes to mesh.
 
 *Left for later steps:* collision and queries

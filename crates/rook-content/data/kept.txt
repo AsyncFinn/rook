@@ -1,6 +1,6 @@
 # Content Rook keeps for good: built-in materials' and terrain's
 # texture packs and the images they name, each pinned to a version
-# (rook_content::resolver::kept). Written by `rook content --pin`.
+# (rook_content::resolver::kept). Written by `rook-tools content --pin`.
 # <asset id> <version>  # what
 7546645012 1  # texture pack
 7546644642 1  # 7546645012 color

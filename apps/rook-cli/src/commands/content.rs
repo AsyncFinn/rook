@@ -1,7 +1,7 @@
-//! `rook content`: how content references resolve.
+//! `rook-tools content`: how content references resolve.
 //!
-//! `rook content <reference>...` shows what each reference means and where
-//! its bytes come from; `rook content --place <file>` does the same for
+//! `rook-tools content <reference>...` shows what each reference means and where
+//! its bytes come from; `rook-tools content --place <file>` does the same for
 //! every content property in a place and sums it up.
 
 use std::collections::BTreeMap;
@@ -37,7 +37,7 @@ fn resolver(options: &Options) -> Arc<Resolver> {
     Arc::new(resolver)
 }
 
-/// What `rook cache` does.
+/// What `rook-tools cache` does.
 pub enum CacheCommand {
     Show,
     /// Delete what hasn't been used for this many days.
@@ -46,7 +46,7 @@ pub enum CacheCommand {
     Clear,
 }
 
-/// `rook cache`: the download cache's folder and size, or a clean-up.
+/// `rook-tools cache`: the download cache's folder and size, or a clean-up.
 pub fn cache(command: CacheCommand) -> anyhow::Result<()> {
     // Making the config moves a cache left in the old place first.
     let config = rook_engine::settings::content_config(false);

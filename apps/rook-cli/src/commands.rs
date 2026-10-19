@@ -1,4 +1,4 @@
-//! The `rook` subcommands, one module each.
+//! The `rook-tools` subcommands, one module each.
 
 pub(crate) mod conformance;
 pub(crate) mod content;

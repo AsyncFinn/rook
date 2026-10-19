@@ -2,7 +2,7 @@
 
 Every member Rook accepts without doing the real work is listed here, with
 what should eventually handle it. Scripts keep running instead of failing,
-but nothing here is finished. Run reports (`rook run-headless`, `rook
+but nothing here is finished. Run reports (`rook-tools run-headless`, `rook
 corpus-run`) count calls to the inert members under "Accepted but ignored
 for now". "Taken over by" names the milestone in
 [ROADMAP.md](../../ROADMAP.md) or the work that should finish it.

@@ -27,7 +27,7 @@ pub struct Settings {
     /// megabytes). `ROOK_CACHE_MAX` overrides it.
     pub cache_max_size: Option<String>,
     /// Whether asset delivery may use the network; `null` leaves it to
-    /// each program (on in the player and `rook content`, off in headless
+    /// each program (on in the player and `rook-tools content`, off in headless
     /// runs). `ROOK_ASSET_DELIVERY` overrides it.
     pub asset_delivery: Option<bool>,
     /// The Roblox install to read `rbxasset://` files from (a version or
