@@ -182,7 +182,7 @@ impl Game {
     /// their SoundGroups, `SoundService.AmbientReverb` and the audio API's
     /// graph.
     pub fn sounds(&self) -> rook_audio::Mix<rook_dom::InstanceId> {
-        use rook_audio::spatial::{RollOff, attenuation, pan};
+        use rook_audio::spatial::{attenuation, pan};
         let view = self.view();
         let listener = view.sound_listener();
         let (at, facing) = (listener.cframe.position, listener.cframe.rotation);
@@ -198,7 +198,7 @@ impl Game {
                     Some(e) => {
                         let offset = e.position - at;
                         let fade = attenuation(
-                            RollOff::from_value(e.roll_off),
+                            e.roll_off,
                             offset.length(),
                             e.min,
                             e.max,

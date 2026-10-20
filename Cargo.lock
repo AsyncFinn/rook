@@ -3064,6 +3064,7 @@ dependencies = [
  "cpal",
  "glam 0.34.0",
  "rook-content",
+ "rook-types",
 ]
 
 [[package]]
@@ -3312,6 +3313,7 @@ version = "0.6.0"
 dependencies = [
  "glam 0.34.0",
  "rbx_types",
+ "rook-reflection",
  "thiserror 2.0.21",
 ]
 

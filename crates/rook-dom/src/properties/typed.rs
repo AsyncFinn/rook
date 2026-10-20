@@ -41,12 +41,7 @@ impl Dom {
             return None;
         };
         let value = self.property(id, prop.id)?.as_enum()?;
-        self.db
-            .enum_info(e)
-            .items
-            .iter()
-            .find(|(_, v)| *v == value)
-            .map(|(item, _)| *item)
+        self.db.enum_info(e).item_name(value)
     }
 
     pub fn vector3_property(&self, id: InstanceId, name: &str) -> Option<Vec3> {

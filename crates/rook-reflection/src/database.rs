@@ -110,6 +110,21 @@ pub struct EnumInfo {
     pub items: Vec<(&'static str, u32)>,
 }
 
+impl EnumInfo {
+    /// The name of the item with this value (the first, if several share it).
+    pub fn item_name(&self, value: u32) -> Option<&'static str> {
+        self.items
+            .iter()
+            .find(|(_, v)| *v == value)
+            .map(|(n, _)| *n)
+    }
+
+    /// The value of the item named `name`.
+    pub fn item_value(&self, name: &str) -> Option<u32> {
+        self.items.iter().find(|(n, _)| *n == name).map(|(_, v)| *v)
+    }
+}
+
 /// The compiled database. Build once via [`crate::database`].
 #[derive(Debug)]
 pub struct Database {

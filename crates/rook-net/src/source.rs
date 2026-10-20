@@ -161,10 +161,8 @@ fn withheld(server: &Dom, id: InstanceId, property: PropertyId) -> bool {
     }
     if prop.name == "Source" && server.class_name(id) == "Script" {
         // RunContext Client scripts run on the client, so their source goes.
-        return !matches!(
-            server.property_by_name(id, "RunContext"),
-            Some(Value::Enum(2))
-        );
+        let context = server.enum_property(id, "RunContext");
+        return context != Some(rook_types::RunContext::Client.value());
     }
     // Properties that only exist to carry another one in files.
     matches!(prop.kind, PropertyKind::Alias { .. })

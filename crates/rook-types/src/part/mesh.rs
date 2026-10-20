@@ -9,7 +9,7 @@
 
 use glam::Vec3;
 
-use crate::PartShape;
+use crate::{MeshType, PartShape};
 
 /// The kind of a part's mesh: a `DataModelMesh` class and, for a
 /// `SpecialMesh`, its `MeshType`.
@@ -42,11 +42,9 @@ pub enum MeshKind {
 
 impl MeshKind {
     /// The kind of a `DataModelMesh` of class `class`; `mesh_type` is a
-    /// SpecialMesh's `Enum.MeshType` value (Head 0, Torso 1, Wedge 2,
-    /// Sphere 3, Cylinder 4, FileMesh 5, Brick 6, Prism 7, Pyramid 8,
-    /// ParallelRamp 9, RightAngleRamp 10, CornerWedge 11) and `mesh_id` its
-    /// `MeshId`. `None` for a class that isn't a mesh.
-    pub fn of(class: &str, mesh_type: Option<u32>, mesh_id: &str) -> Option<Self> {
+    /// SpecialMesh's `MeshType` (Head when unset or unknown) and `mesh_id`
+    /// its `MeshId`. `None` for a class that isn't a mesh.
+    pub fn of(class: &str, mesh_type: Option<MeshType>, mesh_id: &str) -> Option<Self> {
         let file = if mesh_id.is_empty() {
             Self::EmptyFile
         } else {
@@ -56,15 +54,18 @@ impl MeshKind {
             "BlockMesh" => Self::BlockMesh,
             "CylinderMesh" => Self::UprightCylinder,
             "FileMesh" => file,
-            "SpecialMesh" => match mesh_type.unwrap_or(0) {
-                0 => Self::Head,
-                1 | 6 => Self::Shape(PartShape::Block),
-                2 => Self::Shape(PartShape::Wedge),
-                3 => Self::Shape(PartShape::Ball),
-                4 => Self::Shape(PartShape::Cylinder),
-                11 => Self::Shape(PartShape::CornerWedge),
-                7..=10 => Self::Nothing,
-                _ => file,
+            "SpecialMesh" => match mesh_type.unwrap_or(MeshType::Head) {
+                MeshType::Head => Self::Head,
+                MeshType::Torso | MeshType::Brick => Self::Shape(PartShape::Block),
+                MeshType::Wedge => Self::Shape(PartShape::Wedge),
+                MeshType::Sphere => Self::Shape(PartShape::Ball),
+                MeshType::Cylinder => Self::Shape(PartShape::Cylinder),
+                MeshType::CornerWedge => Self::Shape(PartShape::CornerWedge),
+                MeshType::Prism
+                | MeshType::Pyramid
+                | MeshType::ParallelRamp
+                | MeshType::RightAngleRamp => Self::Nothing,
+                MeshType::FileMesh => file,
             },
             _ => return None,
         })
@@ -247,8 +248,9 @@ mod tests {
     const SIZE: Vec3 = Vec3::new(2.0, 3.0, 4.0);
     const SCALE: Vec3 = Vec3::new(0.5, 1.5, 0.75);
 
+    /// The look of a mesh of `class` with `Enum.MeshType` value `mesh_type`.
     fn look(class: &str, mesh_type: Option<u32>, scale: Vec3) -> MeshLook {
-        MeshKind::of(class, mesh_type, "")
+        MeshKind::of(class, mesh_type.and_then(MeshType::from_u32), "")
             .unwrap()
             .look(SIZE, scale)
     }
@@ -346,7 +348,7 @@ mod tests {
         }
         let id = "rbxasset://fonts/head.mesh";
         for (class, mesh_type) in [("SpecialMesh", Some(5)), ("FileMesh", None)] {
-            let kind = MeshKind::of(class, mesh_type, id).unwrap();
+            let kind = MeshKind::of(class, mesh_type.and_then(MeshType::from_u32), id).unwrap();
             // Scale alone, Size ignored.
             assert_eq!(kind.look(SIZE, SCALE), MeshLook::File { scale: SCALE });
             // Without a MeshId: a unit box times Scale, Size ignored.
@@ -382,14 +384,14 @@ mod tests {
     #[test]
     fn block_mesh_hides_surfaces() {
         let block_mesh = MeshKind::of("BlockMesh", None, "").unwrap();
-        let brick = MeshKind::of("SpecialMesh", Some(6), "").unwrap();
+        let brick = MeshKind::of("SpecialMesh", Some(MeshType::Brick), "").unwrap();
         assert_eq!(block_mesh.look(SIZE, SCALE), brick.look(SIZE, SCALE));
         assert!(brick.shows_surfaces() && !block_mesh.shows_surfaces());
     }
 
     #[test]
     fn hosts() {
-        let sphere = MeshKind::of("SpecialMesh", Some(3), "").unwrap();
+        let sphere = MeshKind::of("SpecialMesh", Some(MeshType::Sphere), "").unwrap();
         assert_eq!(sphere.look_on("MeshPart", SIZE, SCALE), None);
         assert_eq!(
             sphere.look_on("UnionOperation", SIZE, SCALE),

@@ -17,7 +17,7 @@ pub(crate) use ranges::clamp;
 use std::collections::{HashMap, HashSet};
 
 use rook_dom::{Dom, InstanceId};
-use rook_types::{CFrame, Value};
+use rook_types::{CFrame, RollOffMode, Value};
 
 use crate::world::World;
 
@@ -231,9 +231,12 @@ pub fn audibility(w: &World, emitter: InstanceId, listener: InstanceId) -> f32 {
     };
     let offset = l.position - e.position;
     let distance = offset.length();
-    let mode = match dom.property_by_name(emitter, "DistanceAttenuationMode") {
-        Some(Value::Enum(m)) => m,
-        _ => 0,
+    let mode = match dom.enum_item_property(emitter, "DistanceAttenuationMode") {
+        Some("InverseTapered") => Some(RollOffMode::InverseTapered),
+        Some("Linear") => Some(RollOffMode::Linear),
+        Some("LinearSquared") => Some(RollOffMode::LinearSquare),
+        Some("Inverse") => Some(RollOffMode::Inverse),
+        _ => None,
     };
     let bounds = match dom.property_by_name(emitter, "DistanceAttenuationBounds") {
         Some(Value::NumberRange(r)) => [r.min, r.max],

@@ -6,28 +6,7 @@
 //! +X right, +Y up.
 
 use glam::Vec3;
-
-/// `Enum.RollOffMode`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RollOff {
-    Inverse,
-    Linear,
-    LinearSquare,
-    InverseTapered,
-}
-
-impl RollOff {
-    /// By `Enum.RollOffMode` value; unknown values are Inverse, the
-    /// default.
-    pub fn from_value(v: u32) -> Self {
-        match v {
-            1 => Self::Linear,
-            2 => Self::LinearSquare,
-            3 => Self::InverseTapered,
-            _ => Self::Inverse,
-        }
-    }
-}
+use rook_types::RollOffMode;
 
 /// How loud a sound `distance` studs away is, 0 to 1 (Confirmed against
 /// Studio's output for every mode, and creator-docs `RollOffMode`):
@@ -38,7 +17,7 @@ impl RollOff {
 ///   LinearSquare;
 /// - `SoundService.RolloffScale` stretches the distance past `min`:
 ///   `d = min + scale * (distance - min)`.
-pub fn attenuation(mode: RollOff, distance: f32, min: f32, max: f32, scale: f32) -> f32 {
+pub fn attenuation(mode: RollOffMode, distance: f32, min: f32, max: f32, scale: f32) -> f32 {
     if distance > max {
         return 0.0;
     }
@@ -53,27 +32,27 @@ pub fn attenuation(mode: RollOff, distance: f32, min: f32, max: f32, scale: f32)
         0.0
     };
     match mode {
-        RollOff::Inverse => inverse,
-        RollOff::Linear => linear,
-        RollOff::LinearSquare => linear * linear,
-        RollOff::InverseTapered => inverse.min(linear * linear),
+        RollOffMode::Inverse => inverse,
+        RollOffMode::Linear => linear,
+        RollOffMode::LinearSquare => linear * linear,
+        RollOffMode::InverseTapered => inverse.min(linear * linear),
     }
 }
 
 /// How loud an AudioEmitter is `distance` studs from a listener, 0 to 1,
-/// by its `DistanceAttenuationMode` (an `Enum` value), its
-/// `DistanceAttenuationBounds` and the curve `SetDistanceAttenuation` gave
-/// it (Confirmed against Studio's `GetAudibilityFor`):
+/// by its `DistanceAttenuationMode` (`None` for Custom, otherwise the
+/// RollOffMode formula it names), its `DistanceAttenuationBounds` and the
+/// curve `SetDistanceAttenuation` gave it (Confirmed against Studio's
+/// `GetAudibilityFor`):
 ///
-/// - Custom (0) with a curve: the curve ([`curve`]);
+/// - Custom with a curve: the curve ([`curve`]);
 /// - Custom with no curve: InverseTapered between 4 and 10000 studs,
 ///   whatever the bounds are (`min / d` up to about 9,500 studs, then
 ///   falling to 0 at 10,000);
-/// - InverseTapered (1), Linear (2), LinearSquared (3) and Inverse (4):
-///   the RollOffMode formulas between the bounds, but silent from the
-///   maximum on (a Sound is silent only past it).
+/// - the others: the RollOffMode formulas between the bounds, but silent
+///   from the maximum on (a Sound is silent only past it).
 pub fn emitter_attenuation(
-    mode: u32,
+    mode: Option<RollOffMode>,
     bounds: [f32; 2],
     points: &[(f32, f32)],
     distance: f32,
@@ -86,12 +65,9 @@ pub fn emitter_attenuation(
         }
     };
     match mode {
-        0 if points.is_empty() => preset(RollOff::InverseTapered, [4.0, 10_000.0]),
-        0 => curve(points, distance),
-        1 => preset(RollOff::InverseTapered, bounds),
-        2 => preset(RollOff::Linear, bounds),
-        3 => preset(RollOff::LinearSquare, bounds),
-        _ => preset(RollOff::Inverse, bounds),
+        None if points.is_empty() => preset(RollOffMode::InverseTapered, [4.0, 10_000.0]),
+        None => curve(points, distance),
+        Some(roll_off) => preset(roll_off, bounds),
     }
 }
 
@@ -191,7 +167,7 @@ mod tests {
     /// max 10000).
     #[test]
     fn roll_off_matches_studio() {
-        use RollOff::*;
+        use RollOffMode::*;
         for (mode, d, want) in [
             (Inverse, 5.0, 1.0),
             (Inverse, 20.0, 0.497),
@@ -245,24 +221,25 @@ mod tests {
     fn emitter_attenuation_matches_studio() {
         let none: &[(f32, f32)] = &[];
         let b = [10.0, 100.0];
+        use RollOffMode::*;
         for (mode, d, want) in [
-            (0, 4.0, 1.0),
-            (0, 10.0, 0.4),
-            (0, 1000.0, 0.004),
-            (0, 9900.0, 0.0001),
-            (4, 95.0, 0.1053),
-            (4, 100.0, 0.0),
-            (2, 15.0, 0.9444),
-            (3, 80.0, 0.0494),
-            (1, 60.0, 0.1667),
-            (1, 95.0, 0.0031),
+            (None, 4.0, 1.0),
+            (None, 10.0, 0.4),
+            (None, 1000.0, 0.004),
+            (None, 9900.0, 0.0001),
+            (Some(Inverse), 95.0, 0.1053),
+            (Some(Inverse), 100.0, 0.0),
+            (Some(Linear), 15.0, 0.9444),
+            (Some(LinearSquare), 80.0, 0.0494),
+            (Some(InverseTapered), 60.0, 0.1667),
+            (Some(InverseTapered), 95.0, 0.0031),
         ] {
             let got = emitter_attenuation(mode, b, none, d);
-            assert!((got - want).abs() < 2e-4, "mode {mode} at {d}: {got}");
+            assert!((got - want).abs() < 2e-4, "mode {mode:?} at {d}: {got}");
         }
         let c = [(10.0, 1.0), (100.0, 0.4), (300.0, 0.0)];
         for (d, want) in [(0.0, 1.0), (55.0, 0.7), (200.0, 0.2), (500.0, 0.0)] {
-            assert!((emitter_attenuation(0, b, &c, d) - want).abs() < 1e-5);
+            assert!((emitter_attenuation(None, b, &c, d) - want).abs() < 1e-5);
         }
         assert_eq!(curve(&[(50.0, 0.5)], 0.0), 0.5);
         assert_eq!(curve(&[], 7.0), 1.0);

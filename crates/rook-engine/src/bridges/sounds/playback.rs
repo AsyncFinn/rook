@@ -1,7 +1,7 @@
 //! Playing sounds: `TimePosition` moving on, ends and loops,
 //! `PlaybackLoudness`, and what the player should hear.
 
-use rook_types::CFrame;
+use rook_types::{CFrame, RollOffMode};
 
 use super::*;
 
@@ -36,8 +36,7 @@ pub struct PlayingSound {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Emitter {
     pub position: glam::Vec3,
-    /// `Enum.RollOffMode` value.
-    pub roll_off: u32,
+    pub roll_off: RollOffMode,
     pub min: f32,
     pub max: f32,
 }
@@ -71,7 +70,10 @@ pub(super) fn emitter(dom: &Dom, id: InstanceId) -> Option<Emitter> {
     };
     Some(Emitter {
         position,
-        roll_off: dom.enum_property(id, "RollOffMode").unwrap_or(0),
+        roll_off: dom
+            .enum_property(id, "RollOffMode")
+            .and_then(RollOffMode::from_u32)
+            .unwrap_or(RollOffMode::Inverse),
         min: dom.float_property(id, "RollOffMinDistance").unwrap_or(10.0),
         max: dom
             .float_property(id, "RollOffMaxDistance")
@@ -330,7 +332,7 @@ mod tests {
         dom.set_property_by_name(attachment, "CFrame", at(Vec3::new(0.0, 0.0, -5.0)))
             .unwrap();
         let on_attachment = new(&mut dom, "Sound", attachment);
-        dom.set_property_by_name(on_attachment, "RollOffMode", Value::Enum(1))
+        dom.set_property_by_name(on_attachment, "RollOffMode", RollOffMode::Linear.into())
             .unwrap();
         let folder = new(&mut dom, "Folder", part);
         let in_folder = new(&mut dom, "Sound", folder);
@@ -339,9 +341,15 @@ mod tests {
 
         let e = emitter(&dom, on_part).unwrap();
         assert_eq!(e.position, Vec3::new(1.0, 2.0, 3.0));
-        assert_eq!((e.roll_off, e.min, e.max), (0, 10.0, 10_000.0));
+        assert_eq!(
+            (e.roll_off, e.min, e.max),
+            (RollOffMode::Inverse, 10.0, 10_000.0)
+        );
         let e = emitter(&dom, on_attachment).unwrap();
-        assert_eq!((e.position, e.roll_off), (Vec3::new(1.0, 2.0, -2.0), 1));
+        assert_eq!(
+            (e.position, e.roll_off),
+            (Vec3::new(1.0, 2.0, -2.0), RollOffMode::Linear)
+        );
         assert_eq!(emitter(&dom, in_folder), None);
         assert_eq!(emitter(&dom, in_storage), None);
     }

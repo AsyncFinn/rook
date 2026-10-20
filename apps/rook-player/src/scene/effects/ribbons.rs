@@ -70,9 +70,9 @@ impl Reader<'_, '_> {
             number_sequence(dom, id, "Transparency").unwrap_or(Sequence::constant(0.5));
         RibbonLook {
             texture: self.texture(id),
-            texture_mode: match dom.enum_property(id, "TextureMode") {
-                Some(1) => TextureMode::Wrap,
-                Some(2) => TextureMode::Static,
+            texture_mode: match dom.enum_item_property(id, "TextureMode") {
+                Some("Wrap") => TextureMode::Wrap,
+                Some("Static") => TextureMode::Static,
                 _ => TextureMode::Stretch,
             },
             texture_length: dom.float_property(id, "TextureLength").unwrap_or(1.0),

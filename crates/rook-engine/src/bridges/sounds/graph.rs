@@ -201,10 +201,10 @@ impl DataModel {
             let Some(service) = dom.find_service("SoundService") else {
                 return;
             };
-            let location = dom.enum_property(service, "DefaultListenerLocation");
+            let location = dom.enum_item_property(service, "DefaultListenerLocation");
             let parent = match location {
-                Some(3) => camera,
-                Some(2) => dom
+                Some("Camera") => camera,
+                Some("Character") => dom
                     .find_service("Players")
                     .and_then(|p| dom.ref_property(p, "LocalPlayer"))
                     .and_then(|p| dom.ref_property(p, "Character")),
@@ -293,9 +293,9 @@ impl DataModel {
                 }
             }
             if w.dom.bool_property(id, "SpectrumEnabled").unwrap_or(false) {
-                let bins = match w.dom.enum_property(id, "WindowSize") {
-                    Some(0) => 128,
-                    Some(2) => 2048,
+                let bins = match w.dom.enum_item_property(id, "WindowSize") {
+                    Some("Small") => 128,
+                    Some("Large") => 2048,
                     _ => 512,
                 };
                 w.audio.spectra.insert(id, meter.spectrum(bins));

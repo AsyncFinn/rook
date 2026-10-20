@@ -46,10 +46,10 @@ impl SceneCache {
                 roughness,
                 metalness,
                 on_mesh_uv: true,
-                alpha: match dom.enum_property(sa, "AlphaMode") {
-                    Some(1) => MapAlpha::Transparency,
-                    Some(2) => MapAlpha::TintMask,
-                    Some(3) => MapAlpha::Ignore,
+                alpha: match dom.enum_item_property(sa, "AlphaMode") {
+                    Some("Transparency") => MapAlpha::Transparency,
+                    Some("TintMask") => MapAlpha::TintMask,
+                    Some("Opaque") => MapAlpha::Ignore,
                     _ => MapAlpha::Overlay,
                 },
                 tint: dom
@@ -72,9 +72,8 @@ impl SceneCache {
                 studs_per_tile: Vec2::splat(
                     dom.float_property(variant, "StudsPerTile").unwrap_or(10.0),
                 ),
-                // `MaterialPattern` (Regular 0, Organic 1).
-                pattern: match dom.enum_property(variant, "MaterialPattern") {
-                    Some(1) => TilePattern::Organic,
+                pattern: match dom.enum_item_property(variant, "MaterialPattern") {
+                    Some("Organic") => TilePattern::Organic,
                     _ => TilePattern::Regular,
                 },
                 seed: texture_seed(id),

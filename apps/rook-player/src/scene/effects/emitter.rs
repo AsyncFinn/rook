@@ -68,15 +68,15 @@ impl Reader<'_, '_> {
             .and_then(NormalId::from_u32)
             .unwrap_or(NormalId::Top)
             .normal();
-        let shape = match dom.enum_property(id, "Shape") {
-            Some(1) => EmitterShape::Sphere,
-            Some(2) => EmitterShape::Cylinder,
-            Some(3) => EmitterShape::Disc,
+        let shape = match dom.enum_item_property(id, "Shape") {
+            Some("Sphere") => EmitterShape::Sphere,
+            Some("Cylinder") => EmitterShape::Cylinder,
+            Some("Disc") => EmitterShape::Disc,
             _ => EmitterShape::Box,
         };
-        let in_out = match dom.enum_property(id, "ShapeInOut") {
-            Some(1) => InOut::Inward,
-            Some(2) => InOut::Both,
+        let in_out = match dom.enum_item_property(id, "ShapeInOut") {
+            Some("Inward") => InOut::Inward,
+            Some("InAndOut") => InOut::Both,
             _ => InOut::Outward,
         };
         let transparency =
@@ -101,10 +101,10 @@ impl Reader<'_, '_> {
         for e in &mut size.envelope {
             *e *= 2.0;
         }
-        let orientation = match dom.enum_property(id, "Orientation") {
-            Some(1) => Orientation::FacingCameraWorldUp,
-            Some(2) => Orientation::VelocityParallel,
-            Some(3) => Orientation::VelocityPerpendicular,
+        let orientation = match dom.enum_item_property(id, "Orientation") {
+            Some("FacingCameraWorldUp") => Orientation::FacingCameraWorldUp,
+            Some("VelocityParallel") => Orientation::VelocityParallel,
+            Some("VelocityPerpendicular") => Orientation::VelocityPerpendicular,
             _ => Orientation::FacingCamera,
         };
         EmitterLook {
@@ -121,7 +121,7 @@ impl Reader<'_, '_> {
             spawn: Spawn::Shape {
                 shape,
                 half,
-                surface: dom.enum_property(id, "ShapeStyle") == Some(1),
+                surface: dom.enum_item_property(id, "ShapeStyle") == Some("Surface"),
                 in_out,
                 partial: dom.float_property(id, "ShapePartial").unwrap_or(1.0),
             },
@@ -166,11 +166,11 @@ impl Reader<'_, '_> {
 
 /// A ParticleEmitter's flipbook, when its texture is laid out as one.
 fn flipbook(dom: &Dom, id: InstanceId) -> Option<Flipbook> {
-    let (columns, rows) = match dom.enum_property(id, "FlipbookLayout")? {
-        1 => (2, 2),
-        2 => (4, 4),
-        3 => (8, 8),
-        4 => (
+    let (columns, rows) = match dom.enum_item_property(id, "FlipbookLayout")? {
+        "Grid2x2" => (2, 2),
+        "Grid4x4" => (4, 4),
+        "Grid8x8" => (8, 8),
+        "Custom" => (
             dom.float_property(id, "FlipbookSizeX")
                 .unwrap_or(1.0)
                 .max(1.0) as u32,
@@ -180,10 +180,10 @@ fn flipbook(dom: &Dom, id: InstanceId) -> Option<Flipbook> {
         ),
         _ => return None,
     };
-    let mode = match dom.enum_property(id, "FlipbookMode") {
-        Some(1) => FlipbookMode::OneShot,
-        Some(2) => FlipbookMode::PingPong,
-        Some(3) => FlipbookMode::Random,
+    let mode = match dom.enum_item_property(id, "FlipbookMode") {
+        Some("OneShot") => FlipbookMode::OneShot,
+        Some("PingPong") => FlipbookMode::PingPong,
+        Some("Random") => FlipbookMode::Random,
         _ => FlipbookMode::Loop,
     };
     // At most 30 frames a second (creator-docs).

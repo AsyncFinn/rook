@@ -181,15 +181,15 @@ const MOTOR_DAMPING: f32 = 1.0e4;
 const ANGLE_STIFFNESS: f32 = 1.0e6;
 const ANGLE_DAMPING: f32 = 1.0e3;
 
-/// HingeConstraint's actuator (`Enum.ActuatorType`: None 0, Motor 1,
-/// Servo 2). Angles are in degrees on the instance.
+/// HingeConstraint's actuator (`ActuatorType`). Angles are in degrees on
+/// the instance.
 pub(crate) fn hinge_constraint_drive(dom: &Dom, id: InstanceId) -> Drive {
-    match dom.enum_property(id, "ActuatorType").unwrap_or(0) {
-        1 => Drive::Speed {
+    match dom.enum_item_property(id, "ActuatorType") {
+        Some("Motor") => Drive::Speed {
             speed: dom.float_property(id, "AngularVelocity").unwrap_or(0.0),
             max_torque: dom.float_property(id, "MotorMaxTorque").unwrap_or(0.0),
         },
-        2 => Drive::Servo {
+        Some("Servo") => Drive::Servo {
             target: dom
                 .float_property(id, "TargetAngle")
                 .unwrap_or(0.0)

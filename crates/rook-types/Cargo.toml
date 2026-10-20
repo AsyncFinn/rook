@@ -13,5 +13,8 @@ rbx_types.workspace = true
 glam.workspace = true
 thiserror.workspace = true
 
+[dev-dependencies]
+rook-reflection.workspace = true
+
 [lints]
 workspace = true

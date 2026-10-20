@@ -251,9 +251,9 @@ impl DataModel {
         // AncestryDeferred is treated as Deferred (Approximation).
         let signal_behavior = match dom
             .find_service("Workspace")
-            .and_then(|w| dom.property_by_name(w, "SignalBehavior"))
+            .and_then(|w| dom.enum_item_property(w, "SignalBehavior"))
         {
-            Some(Value::Enum(2 | 3)) => rook_lua::SignalBehavior::Deferred,
+            Some("Deferred" | "AncestryDeferred") => rook_lua::SignalBehavior::Deferred,
             _ => rook_lua::SignalBehavior::Immediate,
         };
         let loadstring_enabled = dom

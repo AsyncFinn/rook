@@ -174,11 +174,10 @@ impl Mover {
             }
             let a0 = dom.ref_property(id, "Attachment0")?;
             let at = in_frame(a0)?;
-            // ActuatorRelativeTo: Attachment0 0, Attachment1 1, World 2.
-            let relative = || match dom.enum_property(id, "RelativeTo").unwrap_or(0) {
-                0 => Some(at),
-                1 => dom.ref_property(id, "Attachment1").and_then(in_frame),
-                _ => None,
+            let relative = || match dom.enum_item_property(id, "RelativeTo") {
+                Some("Attachment1") => dom.ref_property(id, "Attachment1").and_then(in_frame),
+                Some("World") => None,
+                _ => Some(at),
             };
             let kind = match class {
                 "VectorForce" => Kind::Force {

@@ -123,8 +123,8 @@ fn tonemapper(dom: &Dom, lighting: InstanceId) -> rook_render::Tonemapper {
     let grading = dom.children(lighting).iter().copied().find(|&c| {
         dom.class_name(c) == "ColorGradingEffect" && dom.bool_property(c, "Enabled").unwrap_or(true)
     });
-    match grading.and_then(|c| dom.enum_property(c, "TonemapperPreset")) {
-        Some(1) => rook_render::Tonemapper::Retro,
+    match grading.and_then(|c| dom.enum_item_property(c, "TonemapperPreset")) {
+        Some("Retro") => rook_render::Tonemapper::Retro,
         _ => rook_render::Tonemapper::Default,
     }
 }

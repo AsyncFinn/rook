@@ -7,7 +7,7 @@
 
 use glam::Vec3;
 use rook_dom::InstanceId;
-use rook_types::{CFrame, Value, Vector3};
+use rook_types::{CFrame, UserInputState, UserInputType, Value, Vector3};
 
 use crate::DataModel;
 
@@ -67,14 +67,6 @@ pub(crate) struct InputTracker {
     /// The detector under the cursor when buttons 1 and 2 went down.
     pressed: [Option<InstanceId>; 2],
 }
-
-// Enum.UserInputType and Enum.UserInputState values.
-const TYPE_MOUSE_WHEEL: u32 = 3;
-const TYPE_MOUSE_MOVEMENT: u32 = 4;
-const TYPE_KEYBOARD: u32 = 8;
-const STATE_BEGIN: u32 = 0;
-const STATE_CHANGE: u32 = 1;
-const STATE_END: u32 = 2;
 
 /// How far the mouse looks for a target (Inference).
 const MOUSE_RANGE: f32 = 1000.0;
@@ -180,7 +172,8 @@ impl DataModel {
                     w.input.mouse_delta = (x - ox, y - oy);
                     w.input.mouse_delta
                 };
-                let obj = self.changed_input_object(TYPE_MOUSE_MOVEMENT, (x, y, 0.0), (dx, dy));
+                let obj =
+                    self.changed_input_object(UserInputType::MouseMovement, (x, y, 0.0), (dx, dy));
                 if let Some(obj) = obj {
                     self.fire_input("InputChanged", obj);
                 }
@@ -192,8 +185,11 @@ impl DataModel {
             InputEvent::Wheel { delta } => {
                 let pos = self.runtime.world().input.mouse;
                 // The wheel amount is in Position.Z (creator-docs InputObject).
-                let obj =
-                    self.changed_input_object(TYPE_MOUSE_WHEEL, (pos.0, pos.1, delta), (0.0, 0.0));
+                let obj = self.changed_input_object(
+                    UserInputType::MouseWheel,
+                    (pos.0, pos.1, delta),
+                    (0.0, 0.0),
+                );
                 if let Some(obj) = obj {
                     self.fire_input("InputChanged", obj);
                 }
@@ -216,8 +212,8 @@ impl DataModel {
     fn new_input_object(
         &self,
         key: u32,
-        input_type: u32,
-        state: u32,
+        input_type: UserInputType,
+        state: UserInputState,
         pos: (f32, f32),
         delta: (f32, f32),
     ) -> Option<InstanceId> {
@@ -229,11 +225,11 @@ impl DataModel {
     /// and updated in place after that.
     fn changed_input_object(
         &mut self,
-        input_type: u32,
+        input_type: UserInputType,
         pos: (f32, f32, f32),
         delta: (f32, f32),
     ) -> Option<InstanceId> {
-        let slot = if input_type == TYPE_MOUSE_WHEEL {
+        let slot = if input_type == UserInputType::MouseWheel {
             &mut self.input.mouse_wheel
         } else {
             &mut self.input.mouse_movement
@@ -248,7 +244,7 @@ impl DataModel {
                     &mut w.dom,
                     0,
                     input_type,
-                    STATE_CHANGE,
+                    UserInputState::Change,
                     (pos.0, pos.1),
                     delta,
                 )?;
@@ -257,7 +253,7 @@ impl DataModel {
             }
         };
         // In place, so scripts watching its Changed see each update.
-        self.set_property(id, "UserInputState", Value::Enum(STATE_CHANGE));
+        self.set_property(id, "UserInputState", UserInputState::Change.into());
         self.set_property(
             id,
             "Position",
@@ -281,9 +277,13 @@ impl DataModel {
             if !self.runtime.world_mut().input.keys.insert(value) {
                 return;
             }
-            let Some(obj) =
-                self.new_input_object(value, TYPE_KEYBOARD, STATE_BEGIN, pos, (0.0, 0.0))
-            else {
+            let Some(obj) = self.new_input_object(
+                value,
+                UserInputType::Keyboard,
+                UserInputState::Begin,
+                pos,
+                (0.0, 0.0),
+            ) else {
                 return;
             };
             self.input.held.insert(value, obj);
@@ -293,12 +293,18 @@ impl DataModel {
                 return;
             }
             let obj = self.input.held.remove(&value).or_else(|| {
-                self.new_input_object(value, TYPE_KEYBOARD, STATE_BEGIN, pos, (0.0, 0.0))
+                self.new_input_object(
+                    value,
+                    UserInputType::Keyboard,
+                    UserInputState::Begin,
+                    pos,
+                    (0.0, 0.0),
+                )
             });
             let Some(obj) = obj else {
                 return;
             };
-            self.set_property(obj, "UserInputState", Value::Enum(STATE_END));
+            self.set_property(obj, "UserInputState", UserInputState::End.into());
             self.fire_input("InputEnded", obj);
         }
         if let (Some(m), Some(s)) = (self.mouse_object(), legacy_key_string(code)) {
@@ -316,8 +322,18 @@ impl DataModel {
             w.input.buttons[index] = down;
             w.input.mouse
         };
-        let state = if down { STATE_BEGIN } else { STATE_END };
-        if let Some(obj) = self.new_input_object(0, u32::from(button - 1), state, pos, (0.0, 0.0)) {
+        let state = if down {
+            UserInputState::Begin
+        } else {
+            UserInputState::End
+        };
+        if let Some(obj) = self.new_input_object(
+            0,
+            UserInputType::MOUSE_BUTTONS[index],
+            state,
+            pos,
+            (0.0, 0.0),
+        ) {
             self.fire_input(if down { "InputBegan" } else { "InputEnded" }, obj);
         }
         let detector = self.refresh_mouse(clicks);

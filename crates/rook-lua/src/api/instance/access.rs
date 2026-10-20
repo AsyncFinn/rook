@@ -128,8 +128,11 @@ pub(crate) fn write_property(
                 && !url.is_empty()
                 && w.dom.class_name(id) == "SpecialMesh"
             {
-                w.dom
-                    .set_property_by_name(id, "MeshType", rook_types::Value::Enum(5))?;
+                w.dom.set_property_by_name(
+                    id,
+                    "MeshType",
+                    rook_types::MeshType::FileMesh.into(),
+                )?;
             }
             return w
                 .dom

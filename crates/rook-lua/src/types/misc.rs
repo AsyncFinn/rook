@@ -6,9 +6,9 @@ use mlua::{
     Lua, MetaMethod, MultiValue, UserData, UserDataFields, UserDataMethods, UserDataRef,
     Value as LuaValue, Vector,
 };
-use rook_types::Value;
+use rook_types::{NormalId, Value};
 
-use super::enums::item_value;
+use super::enums::{item_name, item_value};
 use crate::ctx::args::number_of;
 
 /// A property value Rook can't yet show as a proper datatype. It still
@@ -201,14 +201,24 @@ impl UserData for LTweenInfo {
     }
 }
 
+/// The value of `Enum.<enum_name>.<item>`, an item the database has.
+fn default_item(enum_name: &str, item: &str) -> u32 {
+    rook_reflection::database()
+        .enum_by_name(enum_name)
+        .and_then(|e| e.item_value(item))
+        .expect("enum item")
+}
+
 fn tween_info_new(lua: &Lua, args: MultiValue) -> mlua::Result<LTweenInfo> {
     let a = args.into_vec();
     let get = |i: usize| a.get(i).cloned().unwrap_or(LuaValue::Nil);
     Ok(LTweenInfo {
         time: number_of(&get(0)).unwrap_or(1.0),
         // EasingStyle.Quad and EasingDirection.Out are the documented defaults.
-        easing_style: item_value(lua, &get(1), "EasingStyle").unwrap_or(3),
-        easing_direction: item_value(lua, &get(2), "EasingDirection").unwrap_or(1),
+        easing_style: item_value(lua, &get(1), "EasingStyle")
+            .unwrap_or_else(|| default_item("EasingStyle", "Quad")),
+        easing_direction: item_value(lua, &get(2), "EasingDirection")
+            .unwrap_or_else(|| default_item("EasingDirection", "Out")),
         repeat_count: number_of(&get(3)).unwrap_or(0.0) as i64,
         reverses: matches!(get(4), LuaValue::Boolean(true)),
         delay_time: number_of(&get(5)).unwrap_or(0.0),
@@ -221,15 +231,14 @@ fn faces_new(lua: &Lua, args: MultiValue) -> mlua::Result<Opaque> {
     use rbx_types::Faces;
     let mut faces = Faces::empty();
     for v in args {
-        // NormalId: Right 0, Top 1, Back 2, Left 3, Bottom 4, Front 5.
-        let flag = match item_value(lua, &v, "NormalId") {
-            Some(0) => Faces::RIGHT,
-            Some(1) => Faces::TOP,
-            Some(2) => Faces::BACK,
-            Some(3) => Faces::LEFT,
-            Some(4) => Faces::BOTTOM,
-            Some(5) => Faces::FRONT,
-            _ => continue,
+        let flag = match item_value(lua, &v, "NormalId").and_then(NormalId::from_u32) {
+            Some(NormalId::Right) => Faces::RIGHT,
+            Some(NormalId::Top) => Faces::TOP,
+            Some(NormalId::Back) => Faces::BACK,
+            Some(NormalId::Left) => Faces::LEFT,
+            Some(NormalId::Bottom) => Faces::BOTTOM,
+            Some(NormalId::Front) => Faces::FRONT,
+            None => continue,
         };
         faces = Faces::from_bits(faces.bits() | flag.bits()).unwrap_or(faces);
     }
@@ -240,15 +249,15 @@ fn axes_new(lua: &Lua, args: MultiValue) -> mlua::Result<Opaque> {
     use rbx_types::Axes;
     let mut axes = Axes::empty();
     for v in args {
-        let flag = match item_value(lua, &v, "Axis") {
-            Some(0) => Axes::X,
-            Some(1) => Axes::Y,
-            Some(2) => Axes::Z,
-            _ => match item_value(lua, &v, "NormalId") {
-                Some(0 | 3) => Axes::X,
-                Some(1 | 4) => Axes::Y,
-                Some(2 | 5) => Axes::Z,
-                _ => continue,
+        let flag = match item_name(lua, &v, "Axis") {
+            Some("X") => Axes::X,
+            Some("Y") => Axes::Y,
+            Some("Z") => Axes::Z,
+            _ => match item_value(lua, &v, "NormalId").and_then(NormalId::from_u32) {
+                Some(NormalId::Right | NormalId::Left) => Axes::X,
+                Some(NormalId::Top | NormalId::Bottom) => Axes::Y,
+                Some(NormalId::Back | NormalId::Front) => Axes::Z,
+                None => continue,
             },
         };
         axes = Axes::from_bits(axes.bits() | flag.bits()).unwrap_or(axes);

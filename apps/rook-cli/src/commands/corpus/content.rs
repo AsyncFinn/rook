@@ -208,7 +208,7 @@ pub fn mesh_kinds(dom: &rbx_dom_weak::WeakDom, inst: &rbx_dom_weak::Instance) ->
                 Some(Variant::Enum(e)) => e.to_u32(),
                 _ => 0,
             };
-            if mesh_type == 5 {
+            if rook_types::MeshType::from_u32(mesh_type) == Some(rook_types::MeshType::FileMesh) {
                 out.push(format!("SpecialMesh FileMesh {id}"));
             } else {
                 out.push(format!("SpecialMesh type {mesh_type} {id}"));

@@ -100,15 +100,14 @@ pub(super) fn sound_resume(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Ou
 /// (creator-docs; `Enum.ListenerType` Camera, CFrame, ObjectPosition,
 /// ObjectCFrame).
 pub(super) fn set_listener(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
-    let id = database()
+    let e = database()
         .enum_by_name("ListenerType")
-        .expect("ListenerType enum")
-        .id;
-    let kind = crate::types::enums::coerce(lua, a.get(0), id).map_err(ScriptError)?;
-    let listener = match kind {
-        1 => Listener::CFrame(a.userdata::<LCFrame>(1, "CFrame")?.0),
-        2 => Listener::ObjectPosition(a.instance(1)?),
-        3 => Listener::ObjectCFrame(a.instance(1)?),
+        .expect("ListenerType enum");
+    let kind = crate::types::enums::coerce(lua, a.get(0), e.id).map_err(ScriptError)?;
+    let listener = match e.item_name(kind) {
+        Some("CFrame") => Listener::CFrame(a.userdata::<LCFrame>(1, "CFrame")?.0),
+        Some("ObjectPosition") => Listener::ObjectPosition(a.instance(1)?),
+        Some("ObjectCFrame") => Listener::ObjectCFrame(a.instance(1)?),
         _ => Listener::Camera,
     };
     with_world(lua, |w| w.listener = listener);
@@ -120,12 +119,17 @@ pub(super) fn set_listener(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outco
 pub(super) fn get_listener(lua: &Lua, _: InstanceId, _: Args) -> ApiResult<Outcome> {
     let listener = with_world(lua, |w| w.listener);
     let (kind, value) = match listener {
-        Listener::Camera => (0, LuaValue::Nil),
-        Listener::CFrame(c) => (1, LuaValue::UserData(lua.create_userdata(LCFrame(c))?)),
-        Listener::ObjectPosition(i) => (2, LuaValue::UserData(push_instance(lua, i)?)),
-        Listener::ObjectCFrame(i) => (3, LuaValue::UserData(push_instance(lua, i)?)),
+        Listener::Camera => ("Camera", LuaValue::Nil),
+        Listener::CFrame(c) => (
+            "CFrame",
+            LuaValue::UserData(lua.create_userdata(LCFrame(c))?),
+        ),
+        Listener::ObjectPosition(i) => {
+            ("ObjectPosition", LuaValue::UserData(push_instance(lua, i)?))
+        }
+        Listener::ObjectCFrame(i) => ("ObjectCFrame", LuaValue::UserData(push_instance(lua, i)?)),
     };
-    let item = crate::types::enums::enum_item(lua, "ListenerType", kind)?;
+    let item = crate::types::enums::named_item(lua, "ListenerType", kind)?;
     Outcome::ret(lua, (item, value))
 }
 

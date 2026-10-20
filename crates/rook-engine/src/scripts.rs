@@ -2,6 +2,8 @@
 
 use std::collections::HashSet;
 
+use rook_types::RunContext;
+
 use super::*;
 
 impl DataModel {
@@ -58,10 +60,12 @@ impl DataModel {
             return false;
         };
         let top_class = dom.class_name(top);
-        match dom.property_by_name(id, "RunContext") {
-            Some(Value::Enum(1)) => !(is_starter(top_class) || top_class == "ServerStorage"),
-            Some(Value::Enum(2 | 3)) => false,
-            _ => matches!(top_class, "Workspace" | "ServerScriptService"),
+        match run_context(dom, id) {
+            Some(RunContext::Server) => !(is_starter(top_class) || top_class == "ServerStorage"),
+            Some(RunContext::Client | RunContext::Plugin) => false,
+            Some(RunContext::Legacy) | None => {
+                matches!(top_class, "Workspace" | "ServerScriptService")
+            }
         }
     }
 
@@ -125,7 +129,7 @@ fn client_should_run(dom: &Dom, id: InstanceId, class: &str) -> bool {
                 ) && dom.parent(a) == local_player)
         });
     }
-    matches!(dom.property_by_name(id, "RunContext"), Some(Value::Enum(2)))
+    run_context(dom, id) == Some(RunContext::Client)
         && !(is_starter(top_class) || matches!(top_class, "ServerStorage" | "ServerScriptService"))
 }
 
@@ -146,4 +150,8 @@ fn top_level(dom: &Dom, id: InstanceId) -> Option<InstanceId> {
         }
         cur = parent;
     }
+}
+
+fn run_context(dom: &Dom, id: InstanceId) -> Option<RunContext> {
+    RunContext::from_u32(dom.enum_property(id, "RunContext")?)
 }

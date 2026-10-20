@@ -107,6 +107,23 @@ pub(crate) fn item_value(lua: &Lua, v: &LuaValue, enum_name: &str) -> Option<u32
     coerce(lua, v, e.id).ok()
 }
 
+/// Like [`item_value`], the item's name.
+pub(crate) fn item_name(lua: &Lua, v: &LuaValue, enum_name: &str) -> Option<&'static str> {
+    let e = database().enum_by_name(enum_name)?;
+    e.item_name(coerce(lua, v, e.id).ok()?)
+}
+
+/// The item `Enum.<enum_name>.<item>`, or nil if there's none.
+pub(crate) fn named_item(lua: &Lua, enum_name: &str, item: &str) -> mlua::Result<LuaValue> {
+    let Some(e) = database().enum_by_name(enum_name) else {
+        return Ok(LuaValue::Nil);
+    };
+    match e.item_value(item) {
+        Some(value) => push_item(lua, e.id, value),
+        None => Ok(LuaValue::Nil),
+    }
+}
+
 impl UserData for LEnumItem {
     fn add_fields<F: UserDataFields<Self>>(f: &mut F) {
         f.add_meta_field("__type", "EnumItem");

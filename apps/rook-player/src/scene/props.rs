@@ -52,7 +52,9 @@ pub(super) fn content_url(dom: &Dom, id: InstanceId, names: &[&str]) -> String {
 /// whichever was parented second). With its kind and `MeshId`.
 pub(super) fn part_mesh(dom: &Dom, id: InstanceId) -> Option<(MeshKind, InstanceId, String)> {
     dom.children(id).iter().rev().find_map(|&child| {
-        let mesh_type = dom.enum_property(child, "MeshType");
+        let mesh_type = dom
+            .enum_property(child, "MeshType")
+            .and_then(MeshType::from_u32);
         let mesh_id = mesh_id(dom, child);
         let kind = MeshKind::of(dom.class_name(child), mesh_type, &mesh_id)?;
         Some((kind, child, mesh_id))

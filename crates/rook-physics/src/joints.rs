@@ -286,12 +286,9 @@ pub fn hinge_input(dom: &Dom, j: &Joint) -> Option<HingeInput> {
     } else {
         "Front"
     };
-    let input = match dom
-        .enum_property(j.part0, &format!("{face}SurfaceInput"))
-        .unwrap_or(0)
-    {
-        12 => SurfaceInput::Constant,
-        13 => SurfaceInput::Sin,
+    let input = match dom.enum_item_property(j.part0, &format!("{face}SurfaceInput")) {
+        Some("Constant") => SurfaceInput::Constant,
+        Some("Sin") => SurfaceInput::Sin,
         _ => SurfaceInput::NoInput,
     };
     Some(HingeInput {

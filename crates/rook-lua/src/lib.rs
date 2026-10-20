@@ -31,16 +31,16 @@ use mlua::{IntoLuaMulti, Lua, Value as LuaValue};
 use rook_dom::{Dom, InstanceId};
 use rook_scheduler::{Clock, Queue};
 use rook_signal::SignalKey;
+use rook_types::{UserInputState, UserInputType};
 
-/// Create an `InputObject` describing one input (`Enum.KeyCode`,
-/// `Enum.UserInputType` and `Enum.UserInputState` values; position and
-/// delta in pixels). Used by the engine when firing input events and by
+/// Create an `InputObject` describing one input (an `Enum.KeyCode` value;
+/// position and delta in pixels). Used by the engine when firing input events and by
 /// UserInputService queries.
 pub fn input_object(
     dom: &mut Dom,
     key_code: u32,
-    input_type: u32,
-    state: u32,
+    input_type: UserInputType,
+    state: UserInputState,
     position: (f32, f32),
     delta: (f32, f32),
 ) -> Option<InstanceId> {
@@ -54,8 +54,8 @@ pub fn input_object(
         }
     };
     set(dom, "KeyCode", Value::Enum(key_code));
-    set(dom, "UserInputType", Value::Enum(input_type));
-    set(dom, "UserInputState", Value::Enum(state));
+    set(dom, "UserInputType", input_type.into());
+    set(dom, "UserInputState", state.into());
     set(
         dom,
         "Position",

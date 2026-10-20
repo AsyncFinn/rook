@@ -28,9 +28,6 @@ use crate::{Physics, shape};
 /// 27.96 for 1 × 1 × 10; 7.9496 for 2 × 3 × 4 in any orientation).
 const PUSH: f32 = 5.4825e-5;
 
-/// `Enum.ExplosionType.Craters`.
-const CRATERS: u32 = 1;
-
 /// What an explosion does.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Blast {
@@ -64,18 +61,15 @@ impl Physics {
     ///   BlastRadius, Air)` does (measured: the same occupancies).
     pub fn blast(&mut self, dom: &mut Dom, explosion: InstanceId) -> Blast {
         profiling::scope!("Physics::blast");
-        let read = |name| dom.property_by_name(explosion, name);
-        let number = |name, default: f64| read(name).and_then(|v| v.as_number()).unwrap_or(default);
-        let center = read("Position")
-            .and_then(|v| v.as_vector3())
+        let number = |name, default: f64| dom.number_property(explosion, name).unwrap_or(default);
+        let center = dom
+            .vector3_property(explosion, "Position")
             .unwrap_or(Vec3::ZERO);
         let radius = number("BlastRadius", 4.0).max(0.0) as f32;
         let pressure = number("BlastPressure", 500_000.0) as f32;
         let breaks = radius * number("DestroyJointRadiusPercent", 1.0).clamp(0.0, 1.0) as f32;
-        let craters = read("ExplosionType")
-            .and_then(|v| v.as_enum())
-            .unwrap_or(CRATERS)
-            == CRATERS;
+        // Craters unless set otherwise, as for a new Explosion.
+        let craters = dom.enum_item_property(explosion, "ExplosionType") != Some("NoCraters");
         self.prepare(dom);
         let mut blast = Blast::default();
         if radius > 0.0 {

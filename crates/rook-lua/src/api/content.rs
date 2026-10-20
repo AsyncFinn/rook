@@ -215,11 +215,7 @@ fn preload_async(lua: &Lua, _this: InstanceId, a: Args) -> ApiResult<Outcome> {
 pub(crate) fn deliver(lua: &Lua, results: &[(u64, bool)]) {
     let status = |ok: bool| {
         let name = if ok { "Success" } else { "Failure" };
-        let value = database()
-            .enum_by_name("AssetFetchStatus")
-            .and_then(|e| e.items.iter().find(|(n, _)| *n == name))
-            .map_or(0, |(_, v)| *v);
-        crate::types::enums::enum_item(lua, "AssetFetchStatus", value).unwrap_or(LuaValue::Nil)
+        crate::types::enums::named_item(lua, "AssetFetchStatus", name).unwrap_or(LuaValue::Nil)
     };
     for &(request, ok) in results {
         let found = with_world(lua, |w| {

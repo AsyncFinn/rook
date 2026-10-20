@@ -3,6 +3,7 @@
 
 use mlua::{Lua, Value as LuaValue};
 use rook_dom::InstanceId;
+use rook_types::{UserInputState, UserInputType};
 
 use super::instance::push_instance;
 use super::methods::RawMethod;
@@ -62,7 +63,16 @@ fn get_keys_pressed(lua: &Lua, _: InstanceId, _: Args) -> ApiResult<Outcome> {
         let mut keys: Vec<u32> = w.input.keys.iter().copied().collect();
         keys.sort_unstable();
         keys.into_iter()
-            .filter_map(|k| crate::input_object(&mut w.dom, k, 8, 0, (0.0, 0.0), (0.0, 0.0)))
+            .filter_map(|k| {
+                crate::input_object(
+                    &mut w.dom,
+                    k,
+                    UserInputType::Keyboard,
+                    UserInputState::Begin,
+                    (0.0, 0.0),
+                    (0.0, 0.0),
+                )
+            })
             .collect::<Vec<_>>()
     });
     sequence(lua, objects)
@@ -72,9 +82,13 @@ fn get_mouse_buttons_pressed(lua: &Lua, _: InstanceId, _: Args) -> ApiResult<Out
     let objects = with_world(lua, |w| {
         let buttons = w.input.buttons;
         let pos = w.input.mouse;
-        (0..3u32)
-            .filter(|b| buttons[*b as usize])
-            .filter_map(|b| crate::input_object(&mut w.dom, 0, b, 0, pos, (0.0, 0.0)))
+        UserInputType::MOUSE_BUTTONS
+            .into_iter()
+            .zip(buttons)
+            .filter(|&(_, down)| down)
+            .filter_map(|(b, _)| {
+                crate::input_object(&mut w.dom, 0, b, UserInputState::Begin, pos, (0.0, 0.0))
+            })
             .collect::<Vec<_>>()
     });
     sequence(lua, objects)
@@ -93,7 +107,7 @@ fn last_input_type(lua: &Lua, _: InstanceId, _: Args) -> ApiResult<Outcome> {
     // MouseMovement.
     Outcome::ret(
         lua,
-        crate::types::enums::enum_item(lua, "UserInputType", 8)?,
+        crate::types::enums::enum_item(lua, "UserInputType", UserInputType::Keyboard.value())?,
     )
 }
 
