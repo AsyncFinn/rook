@@ -215,6 +215,16 @@ impl AdornShape {
     }
 }
 
+/// A piece that keeps one size on screen, as Studio draws Handles: its
+/// offset from `anchor` (world studs) and its size scale with its
+/// distance from the camera × `per_stud`, so `position` and `size` are
+/// what it draws at 1 / `per_stud` studs away.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Grow {
+    pub anchor: Vec3,
+    pub per_stud: f32,
+}
+
 /// How light falls on a part.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Light {
@@ -282,6 +292,9 @@ pub struct PartInstance {
     /// Drawn over everything, after the transparent parts, as adornments
     /// `AlwaysOnTop` are.
     pub on_top: bool,
+    /// Scaled with the camera's distance (adornments only: it takes the
+    /// slot material textures use).
+    pub grows: Option<Grow>,
 }
 
 impl PartInstance {
@@ -308,6 +321,7 @@ impl PartInstance {
             light: Light::Lit,
             faces_camera: false,
             on_top: false,
+            grows: None,
         }
     }
 }

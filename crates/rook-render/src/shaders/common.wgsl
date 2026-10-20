@@ -193,7 +193,14 @@ fn facing_camera(at: vec3<f32>) -> mat3x3<f32> {
 
 // Where a vertex of an instance is in the world (every pass).
 fn world_position(v: VertexIn) -> vec3<f32> {
-    return placed(v.position, v.i_position, instance_rotation(v), v.i_size);
+    let at = placed(v.position, v.i_position, instance_rotation(v), v.i_size);
+    // A piece keeping one size on screen (`PartInstance::grows`): a base
+    // part without material textures, its anchor and rate in `tile`.
+    if (v.i_flags.x & (MAPS | 12u)) == 0u && v.i_tile.w > 0.0 {
+        let anchor = v.i_tile.xyz;
+        return anchor + (at - anchor) * distance(g.camera_pos.xyz, anchor) * v.i_tile.w;
+    }
+    return at;
 }
 
 fn placed(p: vec3<f32>, at: vec3<f32>, rotation: mat3x3<f32>, size: vec3<f32>) -> vec3<f32> {

@@ -146,6 +146,10 @@ impl Instance {
                 if p.faces_camera {
                     flags |= FACES_CAMERA;
                 }
+                if let Some(grow) = p.grows {
+                    // A part without material textures leaves `tile` unread.
+                    tile = grow.anchor.extend(grow.per_stud).to_array();
+                }
                 flags |= match p.material {
                     Material::Neon => NEON,
                     Material::Glass => GLASS,
@@ -257,6 +261,12 @@ impl Instance {
         self
     }
 
+    /// Whether it keeps one size on screen (`PartInstance::grows`): a base
+    /// part without material textures or a tile pattern, `tile.w` > 0.
+    fn grows(&self) -> bool {
+        self.flags & (MAPS | 3 << PATTERN_SHIFT) == 0 && self.tile[3] > 0.0
+    }
+
     /// The box around what this instance draws in the world, before the
     /// shader moves any vertex. A free slot (all zeroes) draws nothing.
     pub(crate) fn world_box(&self) -> Aabb {
@@ -279,6 +289,13 @@ impl Instance {
         if self.flags & FACES_CAMERA != 0 && self.flags & (3 << PATTERN_SHIFT) == 0 {
             // Turned to the camera in the shader: any way round.
             half = Vec3::splat(half.length());
+        }
+        if self.grows() {
+            // Its size depends on the camera: kept in every view.
+            return Aabb {
+                min: Vec3::splat(-1e7),
+                max: Vec3::splat(1e7),
+            };
         }
         Aabb {
             min: centre - half,

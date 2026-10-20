@@ -1,14 +1,17 @@
 //! Adornments drawn on a part (docs/behavior/adornments.md), as Studio
-//! 0.742 draws them: SelectionBox, SelectionSphere, SurfaceSelection and
-//! the Box, Sphere, Cylinder and Cone HandleAdornments, each kind in its
-//! own file. They draw as extra entries riding along with their Adornee.
+//! 0.742 draws them: SelectionBox, SelectionSphere, SurfaceSelection, the
+//! Box, Sphere, Cylinder and Cone HandleAdornments, Handles, ArcHandles
+//! and FloorWire, each kind in its own file. They draw as extra entries
+//! riding along with their Adornee (a FloorWire's `From`).
 
+mod floor_wire;
 mod handle_adornment;
+mod handles;
 mod selection_box;
 mod selection_sphere;
 mod surface_selection;
 
-use rook_render::{AdornShape, Light};
+use rook_render::{AdornShape, Grow, Light};
 
 use super::*;
 
@@ -16,7 +19,8 @@ use super::*;
 /// (observed).
 const DEFAULT_COLOR: [f32; 3] = [13.0 / 255.0, 105.0 / 255.0, 172.0 / 255.0];
 
-/// The adornments on part `id`, with their poses in the part's axes.
+/// The adornments on part `id`, with their poses in the part's axes (and
+/// any growth anchor there, placed in the world here).
 /// Observed in Studio 0.742: an adornment draws only on its `Adornee`
 /// (one merely inside a part draws nothing), wherever it is in Workspace.
 pub(super) fn adornments(dom: &Dom, id: InstanceId) -> Vec<(PartInstance, Pose)> {
@@ -28,7 +32,12 @@ pub(super) fn adornments(dom: &Dom, id: InstanceId) -> Vec<(PartInstance, Pose)>
     };
     let mut holders: Vec<InstanceId> = Vec::new();
     for &(holder, _) in dom.referrers(id) {
-        if dom.ref_property(holder, "Adornee") == Some(id)
+        let on = if dom.class_name(holder) == "FloorWire" {
+            "From"
+        } else {
+            "Adornee"
+        };
+        if dom.ref_property(holder, on) == Some(id)
             && !holders.contains(&holder)
             && shown(dom, holder)
         {
@@ -41,6 +50,9 @@ pub(super) fn adornments(dom: &Dom, id: InstanceId) -> Vec<(PartInstance, Pose)>
             "SelectionBox" => selection_box::selection_box(dom, holder, size),
             "SelectionSphere" => selection_sphere::selection_sphere(dom, holder, size),
             "SurfaceSelection" => surface_selection::surface_selection(dom, holder, size),
+            "Handles" => handles::handles(dom, holder, size),
+            "ArcHandles" => handles::arc_handles(dom, holder, size),
+            "FloorWire" => floor_wire::floor_wire(dom, holder, cf),
             _ if dom.is_a(holder, "HandleAdornment") => {
                 handle_adornment::handle_adornment(dom, holder, size)
             }
@@ -50,6 +62,9 @@ pub(super) fn adornments(dom: &Dom, id: InstanceId) -> Vec<(PartInstance, Pose)>
     for (part, pose) in &mut out {
         part.position = cf.position + cf.rotation * pose.offset;
         part.rotation = cf.rotation * pose.turn;
+        if let Some(grow) = &mut part.grows {
+            grow.anchor = cf.position + cf.rotation * grow.anchor;
+        }
     }
     out
 }
