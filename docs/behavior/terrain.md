@@ -431,7 +431,8 @@ the top and the sides alike (the three axes' planes, blended by how much
 the surface faces each). The surface is `WaterColor` lit as a part's top
 is (on every face, 1.2 times brighter), mixed towards the skybox, sampled
 where the reflection points, by `WaterReflectance` × 0.27 looking down
-to 0.2 along it, with a sun glint off ripples three times as steep; a
+rising to all of it along the surface (Schlick's Fresnel), rippled half
+as steeply as the frames, with a sun glint off the frames' ripples; a
 fifth of `WaterTransparency` of what's behind shows through. Before:
 the pattern's contrast and autocorrelation were fitted from above
 (luminance deviation 2.06 against Studio's 2.07); that tiling is kept.
@@ -459,11 +460,18 @@ ClockTime 14.5, the default skybox, waves frozen):
   studs barely changes it.
 - Its sides away from the sun are as light as its top, ripple as it does
   and show what's behind them as the top does.
-- The sun glints off small ripples: 1.8% of the water is near white from
-  above, 5% along it (Rook 1.3% and 4.3%).
-- Seen along the water from 2 studs above it, Studio's is 10 to 20
-  levels brighter in red and green than Rook's (blue within 5); more
-  sky reflection doesn't close it (Unknown why).
+- Its reflection rises steeply at low angles: against the sky it mirrors,
+  0.3 at 20 to 30 degrees down, 0.69 at 10, 0.80 at 5 and 0.91 at 3
+  (seen 1 stud above it, `WaterWaveSize` 0). So its top looks pale and
+  sky-coloured from a low camera and meets its teal sides in a crisp
+  line. Rook within 20 levels at each angle, and its sky itself is 13
+  levels bluer at the horizon than Studio's.
+- The edge between top and sides has the same shape in both (profiles
+  along it match within a few pixels at 38 px per stud).
+- The sun glints off small ripples towards the sun only: 1.8% of the
+  water is near white from above on the sun's side and 0.1% away from
+  it, 5% seen along it towards the sun, and none along it away from the
+  sun (Rook 1.6%, 0.7%, 1.9% and none).
 - Studio's water reflects parts (the pillar shows in it upside down);
   Rook's reflects only the skybox.
 
