@@ -195,10 +195,6 @@ impl Loader {
         self.waiting.values().map(Vec::len).sum()
     }
 
-    pub fn is_idle(&self) -> bool {
-        self.waiting.is_empty()
-    }
-
     /// Results finished since the last call, without waiting.
     pub fn poll(&mut self) -> Vec<(Ticket, Outcome)> {
         let mut out = Vec::new();

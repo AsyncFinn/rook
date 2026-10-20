@@ -12,10 +12,6 @@ impl Replicator {
         Self::default()
     }
 
-    pub fn set_player(&mut self, server_player: Option<InstanceId>) {
-        self.source.player = server_player;
-    }
-
     pub fn client_id(&self, server: InstanceId) -> Option<InstanceId> {
         self.sink.client_id(server)
     }

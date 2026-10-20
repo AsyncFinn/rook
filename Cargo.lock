@@ -3088,7 +3088,6 @@ dependencies = [
  "rook-types",
  "serde",
  "serde_json",
- "tracing",
  "walkdir",
 ]
 
@@ -3238,7 +3237,6 @@ dependencies = [
  "rook-content",
  "rook-dom",
  "rook-engine",
- "rook-formats",
  "rook-lua",
  "rook-physics",
  "rook-reflection",

@@ -26,7 +26,6 @@ rbx_types.workspace = true
 full_moon.workspace = true
 anyhow.workspace = true
 clap.workspace = true
-tracing.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 rayon.workspace = true

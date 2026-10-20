@@ -17,7 +17,6 @@ fs-err.workspace = true
 rook-types.workspace = true
 rook-reflection.workspace = true
 rook-dom.workspace = true
-rook-formats.workspace = true
 rook-render.workspace = true
 rook-content.workspace = true
 rook-audio = { workspace = true, features = ["output"] }

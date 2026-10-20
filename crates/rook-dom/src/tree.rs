@@ -212,13 +212,6 @@ impl Dom {
         Ok(())
     }
 
-    /// Lock or unlock `Parent` (used for services and engine-owned objects).
-    pub fn set_parent_locked(&mut self, id: InstanceId, locked: bool) {
-        if let Some(i) = self.instances.get_mut(id) {
-            i.parent_locked = locked;
-        }
-    }
-
     /// Remove an instance and its descendants from the arena entirely.
     /// Called by the engine once nothing references a destroyed instance.
     pub fn remove(&mut self, id: InstanceId) {
