@@ -15,9 +15,9 @@ use rapier3d::prelude::*;
 use rook_dom::{Dom, InstanceId};
 use rook_types::CFrame;
 
-use crate::changes::read::{boolean, cframe, enum_value, float};
 use crate::convert::pose_of;
 use crate::shape::is_part;
+use crate::sync::read::{boolean, cframe, enum_value, float};
 
 /// Classes this module turns into joints.
 pub(crate) fn is_constraint(class: &str) -> bool {

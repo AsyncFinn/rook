@@ -30,7 +30,6 @@
 //! first. A client's world only answers queries ([`Physics::for_queries`]).
 
 pub mod assembly;
-mod changes;
 pub mod contacts;
 mod convert;
 mod explosion;
@@ -38,6 +37,7 @@ pub mod joints;
 pub mod query;
 mod shape;
 mod step;
+mod sync;
 
 use std::collections::BTreeMap;
 
@@ -57,13 +57,13 @@ pub use query::{CastShape, Filter, Hit, Region};
 
 use assembly::bodies::Body;
 use assembly::{Assembly, is_massless};
-use changes::props::Props;
 use contacts::groups::CollisionGroups;
 use convert::{cframe_of, pose_of, to_glam, to_rapier};
 use joints::constraints::{Drive, Spec, apply_drive, hinge_constraint_drive, revolute_angle};
 use joints::drives::{BuiltConstraint, DriveSource, Driven};
 use joints::movers::Mover;
 use joints::{HingeInput, Joint, JointKind, active_joint, endpoints, is_joint};
+use sync::props::Props;
 
 use contacts::{groups, materials};
 use joints::{constraints, movers};

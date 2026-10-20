@@ -39,9 +39,9 @@ use rapier3d::prelude::*;
 use rook_dom::{Dom, InstanceId};
 use rook_types::CFrame;
 
-use crate::changes::read::{boolean, cframe, enum_value, float, vector};
 use crate::convert::{cframe_of, to_glam, to_rapier};
 use crate::joints::constraints::{attachment, attachments};
+use crate::sync::read::{boolean, cframe, enum_value, float, vector};
 
 /// Classes that act through [`Mover`].
 pub(crate) fn is_mover(class: &str) -> bool {

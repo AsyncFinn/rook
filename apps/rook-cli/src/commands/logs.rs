@@ -1,6 +1,6 @@
 //! `rook-tools logs`: where the log files are.
 
-use rook_engine::data::DataDir;
+use rook_engine::data_folder::DataDir;
 
 pub fn run(open: bool) -> anyhow::Result<()> {
     let data = DataDir::locate().ok_or_else(|| anyhow::anyhow!("no data folder"))?;

@@ -1,4 +1,5 @@
-//! Building the world from the DOM and applying the journal to it.
+//! Building the world from the DOM and keeping it in step with the
+//! journal ([`Physics::sync`]).
 
 pub(crate) mod props;
 pub(crate) mod read;

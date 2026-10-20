@@ -35,9 +35,9 @@ use rapier3d::prelude::*;
 use rook_dom::{Dom, InstanceId};
 use rook_types::CFrame;
 
-use crate::changes::read::{boolean, enum_value, float};
 use crate::contacts::groups;
 use crate::convert::{pose_of, to_glam, to_rapier};
+use crate::sync::read::{boolean, enum_value, float};
 use crate::{Physics, shape};
 
 mod filter;

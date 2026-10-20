@@ -1,6 +1,6 @@
 # Data folder, settings and logging
 
-How Rook reports what went wrong, and where it keeps what outlives a run. The code is in `rook-engine`'s `data`, `settings` and `logging` modules; content's part is in `rook-content`'s `resolver::kept`.
+How Rook reports what went wrong, and where it keeps what outlives a run. The code is in `rook-engine`'s `data_folder`, `settings` and `logging` modules; content's part is in `rook-content`'s `resolver::kept`.
 
 ## The data folder
 

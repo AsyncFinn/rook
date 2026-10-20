@@ -78,7 +78,7 @@ pub(crate) fn world_shape(
     };
     Some((
         shape,
-        pose_of(&crate::changes::read::cframe(dom, part, "CFrame")) * local,
+        pose_of(&crate::sync::read::cframe(dom, part, "CFrame")) * local,
     ))
 }
 
@@ -91,6 +91,6 @@ pub(crate) fn world_box(dom: &Dom, part: InstanceId) -> Option<(SharedShape, Pos
         return None;
     };
     let h = size.0.max(glam::Vec3::splat(MIN_PART_SIZE)) * 0.5;
-    let cf = crate::changes::read::cframe(dom, part, "CFrame");
+    let cf = crate::sync::read::cframe(dom, part, "CFrame");
     Some((SharedShape::cuboid(h.x, h.y, h.z), pose_of(&cf)))
 }

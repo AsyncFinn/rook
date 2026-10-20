@@ -113,7 +113,7 @@ fn read(tx: &Sender<String>) {
         })));
     }
     // History from earlier runs, kept in the data folder's state.
-    let history = crate::data::DataDir::locate().map(|d| d.repl_history());
+    let history = crate::data_folder::DataDir::locate().map(|d| d.repl_history());
     if let Some(path) = &history
         && path.exists()
         && let Err(e) = editor.load_history(path)

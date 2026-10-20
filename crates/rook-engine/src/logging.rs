@@ -26,7 +26,7 @@ use tracing::Level;
 pub use crash::{run, set_context};
 pub use files::{cleanup, newest_log};
 
-use crate::data::DataDir;
+use crate::data_folder::DataDir;
 
 /// The environment variable that sets what the terminal shows: a level
 /// (`debug`) or subsystems (`content,terrain`), like `--verbose`.

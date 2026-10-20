@@ -14,8 +14,8 @@ pub mod surfaces;
 use rook_dom::{Dom, DomError, InstanceId};
 use rook_types::{CFrame, Value};
 
-use crate::changes::read::{cframe, float};
 use crate::shape::is_part;
+use crate::sync::read::{cframe, float};
 
 /// How a joint relates its two parts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -222,7 +222,7 @@ pub const ROTATE_V_TORQUE: f32 = 5.0e5;
 /// times this.
 pub fn rotate_v_strength(dom: &Dom, j: &Joint) -> f32 {
     let inertia = |part, frame: &str| {
-        let size = crate::changes::read::vector(dom, part, "Size");
+        let size = crate::sync::read::vector(dom, part, "Size");
         let axis = cframe(dom, j.id, frame).rotation.z_axis;
         let volume = size.x * size.y * size.z;
         let sq = size * size;
@@ -254,8 +254,7 @@ pub fn hinge_input(dom: &Dom, j: &Joint) -> Option<HingeInput> {
     } else {
         "Front"
     };
-    let input = match crate::changes::read::enum_value(dom, j.part0, &format!("{face}SurfaceInput"))
-    {
+    let input = match crate::sync::read::enum_value(dom, j.part0, &format!("{face}SurfaceInput")) {
         12 => SurfaceInput::Constant,
         13 => SurfaceInput::Sin,
         _ => SurfaceInput::NoInput,
