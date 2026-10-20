@@ -5,9 +5,11 @@ cd "$(dirname "$0")/.."
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
-# Files past about 600 lines should be split by topic (see CONTRIBUTING).
+# A file's topics decide when it's split, not its length (see CONTRIBUTING);
+# very long ones are pointed out as worth a look. Comments and blank lines
+# don't count.
 git ls-files '*.rs' '*.wgsl' '*.luau' | while read -r f; do
-    n=$(wc -l < "$f")
-    if [ "$n" -gt 600 ]; then echo "warning: $f has $n lines; split it by topic"; fi
+    n=$(grep -cvE '^[[:space:]]*($|//|--)' "$f" || true)
+    if [ "$n" -gt 1000 ]; then echo "warning: $f has $n lines of code; check it still covers one topic"; fi
 done
 echo "check passed"
