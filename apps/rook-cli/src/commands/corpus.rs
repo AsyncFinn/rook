@@ -22,7 +22,8 @@ use scripts::ScriptUsage;
 
 const EXTENSIONS: [&str; 4] = ["rbxl", "rbxlx", "rbxm", "rbxmx"];
 
-/// Stack size for scan workers (see `run`).
+/// Stack size for scan and run workers: decoders and the Luau parser
+/// recurse deeply on some archive files.
 const WORKER_STACK: usize = 256 * 1024 * 1024;
 
 /// Usage of one name across the corpus.

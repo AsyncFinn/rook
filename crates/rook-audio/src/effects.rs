@@ -339,7 +339,7 @@ mod tests {
 
     #[test]
     fn keeps_state_across_settings() {
-        let mut chain = Chain::new(48_000);
+        let mut chain = Chain::new(crate::SAMPLE_RATE);
         chain.sync(&[EQ]);
         let mut frames = vec![[0.5, 0.5]; 64];
         chain.process(&mut frames);

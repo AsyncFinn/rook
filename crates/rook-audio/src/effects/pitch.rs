@@ -78,9 +78,9 @@ mod tests {
 
     /// Zero crossings per second of a shifted sine: its frequency, twice.
     fn crossings(octave: f32) -> f32 {
-        let rate = 48_000.0;
+        let rate = crate::SAMPLE_RATE as f32;
         let mut p = Shifter::new(rate, octave);
-        let mut frames: Vec<Frame> = (0..48_000)
+        let mut frames: Vec<Frame> = (0..crate::SAMPLE_RATE)
             .map(|i| [(std::f32::consts::TAU * 300.0 * i as f32 / rate).sin(); 2])
             .collect();
         p.process(&mut frames);

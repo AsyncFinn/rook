@@ -28,7 +28,7 @@ mod output;
 pub mod spatial;
 mod voice;
 
-pub use mixer::{Group, Mix, Mixer, Play};
+pub use mixer::{Group, Mix, Mixer, Play, SAMPLE_RATE};
 #[cfg(feature = "output")]
 pub use output::Output;
 

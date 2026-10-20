@@ -86,6 +86,10 @@ impl<K> Default for Mix<K> {
     }
 }
 
+/// The rate mixes that aren't heard run at (recordings, analyzers): the
+/// usual output device's. A device's mixer runs at the device's own rate.
+pub const SAMPLE_RATE: u32 = 48_000;
+
 /// The sounds playing now, mixed at `rate` frames per second.
 #[derive(Debug)]
 pub struct Mixer<K> {

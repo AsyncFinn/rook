@@ -132,7 +132,7 @@ mod tests {
 
     #[test]
     fn levels_and_spectrum_of_a_sine() {
-        let rate = 48_000.0;
+        let rate = crate::SAMPLE_RATE as f32;
         let mut m = Meter::default();
         // 1500 Hz, amplitude 0.5: bin 32 of 512 (46.875 Hz apart).
         let frames: Vec<Frame> = (0..HISTORY)

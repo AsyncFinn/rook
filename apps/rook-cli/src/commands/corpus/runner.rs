@@ -15,8 +15,7 @@ use rook_engine::{Options, Server};
 use rook_lua::MessageType;
 use serde::Serialize;
 
-/// Decoders and the Luau parser recurse deeply on some archive files.
-const WORKER_STACK: usize = 256 * 1024 * 1024;
+use super::WORKER_STACK;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]

@@ -139,9 +139,9 @@ mod tests {
 
     /// A sine's level through the equalizer, once it has settled.
     fn level(frequency: f32, gains: [f32; 3]) -> f32 {
-        let rate = 48_000.0;
+        let rate = crate::SAMPLE_RATE as f32;
         let mut eq = Equalizer::new(rate, gains, CROSSOVERS);
-        let mut frames: Vec<Frame> = (0..48_000)
+        let mut frames: Vec<Frame> = (0..crate::SAMPLE_RATE)
             .map(|i| [(std::f32::consts::TAU * frequency * i as f32 / rate).sin(); 2])
             .collect();
         eq.process(&mut frames);

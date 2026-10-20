@@ -5,13 +5,11 @@
 //! Which wires connect and how loud a listener hears an emitter are
 //! `rook_lua::audio`'s rules, so scripts and the mixer agree.
 
+use rook_audio::SAMPLE_RATE;
 use rook_audio::effects::{Effect, Reverb};
 use rook_audio::graph::{Graph, Node, NodeKind, Runner, Source, Wire};
 
 use super::*;
-
-/// The rate analyzers are measured at: Studio's spectra reach 24 kHz.
-const METER_RATE: u32 = 48_000;
 
 /// A client's own rendering of the graph, to measure its analyzers.
 #[derive(Debug)]
@@ -266,11 +264,12 @@ impl DataModel {
         }
         let graph = self.audio_graph();
         let m = self.sounds.meter.get_or_insert_with(|| Metering {
-            runner: Runner::new(METER_RATE),
+            // Studio's analyzer spectra reach 24 kHz.
+            runner: Runner::new(SAMPLE_RATE),
             carry: 0.0,
         });
         m.runner.sync(&graph);
-        let owed = dt * f64::from(METER_RATE) + m.carry;
+        let owed = dt * f64::from(SAMPLE_RATE) + m.carry;
         let mut frames = owed.floor() as usize;
         m.carry = owed - frames as f64;
         let mut block = Vec::new();

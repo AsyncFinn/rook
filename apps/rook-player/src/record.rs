@@ -7,16 +7,13 @@
 use std::io::Write;
 use std::path::Path;
 
-use rook_audio::Mixer;
 use rook_audio::effects::Frame;
+use rook_audio::{Mixer, SAMPLE_RATE};
 use rook_engine::console;
 use rook_lua::MessageType;
 
 use crate::STEP;
 use crate::game::Game;
-
-/// The rate the file is mixed at: the usual output device's.
-const RATE: u32 = 48_000;
 
 /// The loudest moment: when it was, and the sounds playing then, each
 /// with its left and right gain.
@@ -27,9 +24,9 @@ struct Loudest {
 }
 
 pub fn record(game: &mut Game, seconds: f64, out: &Path) -> anyhow::Result<()> {
-    let mut mixer = Mixer::new(RATE);
+    let mut mixer = Mixer::new(SAMPLE_RATE);
     let frames = (seconds / STEP).ceil() as usize;
-    let mut samples: Vec<Frame> = Vec::with_capacity((seconds * f64::from(RATE)) as usize);
+    let mut samples: Vec<Frame> = Vec::with_capacity((seconds * f64::from(SAMPLE_RATE)) as usize);
     let mut buffer = Vec::new();
     let mut loudest = Loudest {
         peak: 0.0,
@@ -44,7 +41,7 @@ pub fn record(game: &mut Game, seconds: f64, out: &Path) -> anyhow::Result<()> {
         mixer.sync(&mix);
         // Whole frames per step, carrying the remainder so the file keeps
         // to game time.
-        let end = ((frame + 1) as f64 * STEP * f64::from(RATE)).round() as usize;
+        let end = ((frame + 1) as f64 * STEP * f64::from(SAMPLE_RATE)).round() as usize;
         let len = end - samples.len();
         buffer.resize(len * 2, 0.0);
         mixer.mix(&mut buffer, 2);
@@ -53,7 +50,7 @@ pub fn record(game: &mut Game, seconds: f64, out: &Path) -> anyhow::Result<()> {
             .iter()
             .flat_map(|f| f.iter())
             .fold(0.0f32, |m, s| m.max(s.abs()));
-        let at = samples.len() as f64 / f64::from(RATE);
+        let at = samples.len() as f64 / f64::from(SAMPLE_RATE);
         if peak > 1.0 && clipped_seconds.last() != Some(&(at as u32)) {
             clipped_seconds.push(at as u32);
         }
@@ -83,7 +80,7 @@ fn report(out: &Path, samples: &[Frame], loudest: &Loudest, clipped_seconds: &[u
     let db = |v: f32| 20.0 * v.max(1e-9).log10();
     let mut text = format!(
         "Saved {:.1} s of audio to {}\n  peak {:.3} ({:+.1} dBFS) at {:.2} s, RMS {:.4} ({:+.1} dBFS)\n  {clipped} samples past full scale",
-        samples.len() as f64 / f64::from(RATE),
+        samples.len() as f64 / f64::from(SAMPLE_RATE),
         out.display(),
         loudest.peak,
         db(loudest.peak),
@@ -120,8 +117,8 @@ fn write_wav(out: &Path, samples: &[Frame]) -> anyhow::Result<()> {
     bytes.extend_from_slice(&16u32.to_le_bytes());
     bytes.extend_from_slice(&3u16.to_le_bytes()); // IEEE float
     bytes.extend_from_slice(&2u16.to_le_bytes());
-    bytes.extend_from_slice(&RATE.to_le_bytes());
-    bytes.extend_from_slice(&(RATE * 8).to_le_bytes());
+    bytes.extend_from_slice(&SAMPLE_RATE.to_le_bytes());
+    bytes.extend_from_slice(&(SAMPLE_RATE * 8).to_le_bytes());
     bytes.extend_from_slice(&8u16.to_le_bytes());
     bytes.extend_from_slice(&32u16.to_le_bytes());
     bytes.extend_from_slice(b"data");
