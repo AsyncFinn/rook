@@ -226,7 +226,7 @@ DataModel, Workspace, Players, Lighting, ReplicatedStorage, ReplicatedFirst, Ser
 
 ## 10. Behavior provenance
 
-Each subsystem has `docs/behavior/<subsystem>.md` with numbered entries:
+Each subsystem has `docs/behavior/<subsystem>.md`. Entries are planned to be numbered, like this one for GUI (planned; its conformance case doesn't exist yet):
 
 ```
 GUI-012  AnchorPoint offsets position by -AnchorPoint * AbsoluteSize before clipping.
