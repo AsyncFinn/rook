@@ -28,15 +28,7 @@ pub(super) fn tone_options(name: &str) -> Options {
         wav.extend_from_slice(&((i % 40) as i16 * 500).to_le_bytes());
     }
     std::fs::write(dir.join("content/sounds/tone.wav"), wav).unwrap();
-    let mut config = rook_content::Config::empty();
-    config.install = rook_content::resolver::install::Install::at(
-        &dir,
-        rook_content::resolver::install::InstallKind::Custom,
-    );
-    Options {
-        content: Some(Arc::new(rook_content::Resolver::new(config))),
-        ..Options::default()
-    }
+    install_options(&dir)
 }
 
 /// A sound the place starts with, and one a server script plays later,
@@ -147,7 +139,7 @@ fn effects_groups_and_local_sounds() {
     let index = session.join("Player1", 1).unwrap();
     session.run_for(0.6);
     let client = session.client(index).unwrap();
-    let log: Vec<String> = client.take_log().into_iter().map(|e| e.message).collect();
+    let log = lines(client);
     assert!(log.contains(&"loudness true true".to_owned()), "{log:?}");
     assert!(log.contains(&"once false 0".to_owned()), "{log:?}");
 

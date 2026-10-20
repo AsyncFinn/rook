@@ -5,7 +5,7 @@ use glam::Vec3;
 use rook_dom::{Dom, InstanceId};
 use rook_types::{CFrame, CustomPhysicalProperties, PhysicalProperties, Value};
 
-use super::{part, position, set};
+use super::{block, floor, part, part_of, position, set};
 use crate::contacts::Touch;
 use crate::contacts::groups::{CollisionGroups, GroupError};
 use crate::contacts::materials;
@@ -42,7 +42,7 @@ fn run(physics: &mut Physics, dom: &mut Dom, seconds: f64) -> Vec<Touch> {
 #[test]
 fn mass_follows_material_shape_and_custom_properties() {
     let mut dom = Dom::new();
-    let p = part(&mut dom, "Part", Vec3::ZERO, Vec3::splat(2.0), true);
+    let p = block(&mut dom, Vec3::ZERO, true);
     let mass = |dom: &Dom| part_mass(dom, p);
     assert!((mass(&dom) - 5.6).abs() < 1e-4);
     material(&mut dom, p, "Wood");
@@ -54,7 +54,7 @@ fn mass_follows_material_shape_and_custom_properties() {
 
     let shaped = |shape: u32, size: Vec3| {
         let mut dom = Dom::new();
-        let p = part(&mut dom, "Part", Vec3::ZERO, size, true);
+        let p = part(&mut dom, Vec3::ZERO, size, true);
         set(&mut dom, p, "Shape", Value::Enum(shape));
         part_mass(&dom, p)
     };
@@ -68,7 +68,7 @@ fn mass_follows_material_shape_and_custom_properties() {
     );
     let class = |class: &str| {
         let mut dom = Dom::new();
-        let p = part(&mut dom, class, Vec3::ZERO, Vec3::splat(2.0), true);
+        let p = part_of(&mut dom, class, Vec3::ZERO, Vec3::splat(2.0), true);
         part_mass(&dom, p)
     };
     assert!((class("WedgePart") - 2.8).abs() < 1e-4);
@@ -103,26 +103,13 @@ fn materials_mix_by_weight() {
     );
 }
 
-/// The friction a block with `block`'s friction and weight shows sliding
-/// at 20 studs/s over a floor with `floor`'s: it slows by mu·g.
-fn sliding_friction(floor: (f32, f32), block: (f32, f32)) -> f32 {
-    let (floor_f, floor_w) = floor;
-    let (block_f, block_w) = block;
+/// The friction a block with `(block_f, block_w)` friction and weight shows
+/// sliding at 20 studs/s over a floor with `(floor_f, floor_w)`: it slows
+/// by mu·g.
+fn sliding_friction((floor_f, floor_w): (f32, f32), (block_f, block_w): (f32, f32)) -> f32 {
     let mut dom = Dom::new();
-    let floor = part(
-        &mut dom,
-        "Part",
-        Vec3::ZERO,
-        Vec3::new(200.0, 1.0, 10.0),
-        true,
-    );
-    let block = part(
-        &mut dom,
-        "Part",
-        Vec3::new(-80.0, 1.5, 0.0),
-        Vec3::splat(2.0),
-        false,
-    );
+    let floor = part(&mut dom, Vec3::ZERO, Vec3::new(200.0, 1.0, 10.0), true);
+    let block = block(&mut dom, Vec3::new(-80.0, 1.5, 0.0), false);
     custom(&mut dom, floor, 1.0, floor_f, 0.0, floor_w, 1.0);
     custom(&mut dom, block, 1.0, block_f, 0.0, block_w, 1.0);
     let mut physics = Physics::new();
@@ -134,9 +121,10 @@ fn sliding_friction(floor: (f32, f32), block: (f32, f32)) -> f32 {
         Value::Vector3(rook_types::Vector3::new(20.0, 0.0, 0.0)),
     );
     run(&mut physics, &mut dom, 0.05);
-    let speed = |dom: &Dom| match dom.property_by_name(block, "AssemblyLinearVelocity") {
-        Some(Value::Vector3(v)) => v.x(),
-        other => panic!("{other:?}"),
+    let speed = |dom: &Dom| {
+        dom.vector3_property(block, "AssemblyLinearVelocity")
+            .unwrap()
+            .x
     };
     let v1 = speed(&dom);
     run(&mut physics, &mut dom, 0.25);
@@ -222,35 +210,11 @@ fn touches_of(touches: &[Touch], began: bool) -> usize {
 #[test]
 fn dropped_parts_touch_the_floor() {
     let mut dom = Dom::new();
-    let floor = part(
-        &mut dom,
-        "Part",
-        Vec3::ZERO,
-        Vec3::new(20.0, 1.0, 20.0),
-        true,
-    );
-    let drop = part(
-        &mut dom,
-        "Part",
-        Vec3::new(0.0, 5.0, 0.0),
-        Vec3::splat(2.0),
-        false,
-    );
-    let ghost = part(
-        &mut dom,
-        "Part",
-        Vec3::new(5.0, 5.0, 0.0),
-        Vec3::splat(2.0),
-        false,
-    );
+    let floor = floor(&mut dom);
+    let drop = block(&mut dom, Vec3::new(0.0, 5.0, 0.0), false);
+    let ghost = block(&mut dom, Vec3::new(5.0, 5.0, 0.0), false);
     set(&mut dom, ghost, "CanCollide", Value::Bool(false));
-    let shy = part(
-        &mut dom,
-        "Part",
-        Vec3::new(-5.0, 5.0, 0.0),
-        Vec3::splat(2.0),
-        false,
-    );
+    let shy = block(&mut dom, Vec3::new(-5.0, 5.0, 0.0), false);
     set(&mut dom, shy, "CanTouch", Value::Bool(false));
     let mut physics = Physics::new();
     let touches = run(&mut physics, &mut dom, 1.5);
@@ -276,20 +240,8 @@ fn dropped_parts_touch_the_floor() {
 #[test]
 fn rebuilding_a_resting_body_fires_nothing() {
     let mut dom = Dom::new();
-    part(
-        &mut dom,
-        "Part",
-        Vec3::ZERO,
-        Vec3::new(20.0, 1.0, 20.0),
-        true,
-    );
-    let block = part(
-        &mut dom,
-        "Part",
-        Vec3::new(0.0, 1.5, 0.0),
-        Vec3::splat(2.0),
-        false,
-    );
+    floor(&mut dom);
+    let block = block(&mut dom, Vec3::new(0.0, 1.5, 0.0), false);
     custom(&mut dom, block, 0.7, 0.3, 0.0, 1.0, 1.0);
     let mut physics = Physics::new();
     run(&mut physics, &mut dom, 1.0);
@@ -302,20 +254,8 @@ fn rebuilding_a_resting_body_fires_nothing() {
 #[test]
 fn groups_that_dont_collide_pass_through_but_still_touch() {
     let mut dom = Dom::new();
-    let floor = part(
-        &mut dom,
-        "Part",
-        Vec3::ZERO,
-        Vec3::new(20.0, 1.0, 20.0),
-        true,
-    );
-    let drop = part(
-        &mut dom,
-        "Part",
-        Vec3::new(0.0, 5.0, 0.0),
-        Vec3::splat(2.0),
-        false,
-    );
+    floor(&mut dom);
+    let drop = block(&mut dom, Vec3::new(0.0, 5.0, 0.0), false);
     let mut g = CollisionGroups::default();
     g.register("Ghosts").unwrap();
     g.set_collidable("Ghosts", "Default", false).unwrap();
@@ -330,24 +270,11 @@ fn groups_that_dont_collide_pass_through_but_still_touch() {
     let touches = run(&mut physics, &mut dom, 1.0);
     assert!(position(&dom, drop).y < -5.0, "fell through");
     assert_eq!(touches_of(&touches, true), 1, "{touches:?}");
-    let _ = floor;
 
     // With TouchesUseCollisionGroups they don't touch either.
     let mut dom = Dom::new();
-    part(
-        &mut dom,
-        "Part",
-        Vec3::ZERO,
-        Vec3::new(20.0, 1.0, 20.0),
-        true,
-    );
-    let drop = part(
-        &mut dom,
-        "Part",
-        Vec3::new(0.0, 5.0, 0.0),
-        Vec3::splat(2.0),
-        false,
-    );
+    floor(&mut dom);
+    let drop = block(&mut dom, Vec3::new(0.0, 5.0, 0.0), false);
     g.write(&mut dom).unwrap();
     let ws = dom.find_service("Workspace").unwrap();
     set(&mut dom, ws, "TouchesUseCollisionGroups", Value::Bool(true));
@@ -366,9 +293,9 @@ fn groups_that_dont_collide_pass_through_but_still_touch() {
 fn block_on_ramp(dom: &mut Dom) -> (InstanceId, InstanceId) {
     let tilt = CFrame::from_position(Vec3::new(0.0, 30.0, 0.0))
         * CFrame::angles(0.0, 0.0, 30f32.to_radians());
-    let ramp = part(dom, "Part", Vec3::ZERO, Vec3::new(20.0, 1.0, 20.0), true);
+    let ramp = floor(dom);
     set(dom, ramp, "CFrame", Value::CFrame(tilt));
-    let block = part(dom, "Part", Vec3::ZERO, Vec3::splat(2.0), false);
+    let block = block(dom, Vec3::ZERO, false);
     let on_top = tilt * CFrame::from_position(Vec3::new(0.0, 1.5, 0.0));
     set(dom, block, "CFrame", Value::CFrame(on_top));
     material(dom, ramp, "Rubber");

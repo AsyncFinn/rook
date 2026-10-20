@@ -77,22 +77,11 @@ fn session_join_runs_local_scripts_where_roblox_does() {
     let index = session.join("Builderman", 156).unwrap();
     session.run_for(1.0);
 
-    let server_log: Vec<String> = session
-        .server()
-        .take_log()
-        .into_iter()
-        .map(|e| e.message)
-        .collect();
+    let server_log = lines(session.server());
     // StarterGui is copied when the character spawns (creator-docs
     // StarterGui), after PlayerAdded.
     assert_eq!(server_log, ["server: joined Builderman 156 0"]);
-    let mut client_log: Vec<String> = session
-        .client(index)
-        .unwrap()
-        .take_log()
-        .into_iter()
-        .map(|e| e.message)
-        .collect();
+    let mut client_log = lines(session.client(index).unwrap());
     client_log.sort();
     assert_eq!(
         client_log,
@@ -132,18 +121,8 @@ fn remote_events_and_functions_cross_the_session() {
         print(pcall(function() rs.Ping:FireServer() end))
         "#,
     );
-    let sp = service(&server, "StarterPlayer");
-    let sps = add_under(
+    add_local_script(
         &server,
-        sp,
-        "StarterPlayerScripts",
-        "StarterPlayerScripts",
-        "",
-    );
-    add_under(
-        &server,
-        sps,
-        "LocalScript",
         "Client",
         r#"
         local rs = game:GetService("ReplicatedStorage")
@@ -159,19 +138,8 @@ fn remote_events_and_functions_cross_the_session() {
     let mut session = Session::new(server, Options::default());
     let index = session.join("Player1", 1).unwrap();
     session.run_for(1.0);
-    let server_log: Vec<String> = session
-        .server()
-        .take_log()
-        .into_iter()
-        .map(|e| e.message)
-        .collect();
-    let client_log: Vec<String> = session
-        .client(index)
-        .unwrap()
-        .take_log()
-        .into_iter()
-        .map(|e| e.message)
-        .collect();
+    let server_log = lines(session.server());
+    let client_log = lines(session.client(index).unwrap());
     assert_eq!(
         server_log,
         [
@@ -215,18 +183,8 @@ fn input_mouse_and_click_detectors() {
         "Main",
         "workspace.Button.ClickDetector.MouseClick:Connect(function(p) print('server click', p.Name) end)",
     );
-    let sp = service(&server, "StarterPlayer");
-    let sps = add_under(
+    add_local_script(
         &server,
-        sp,
-        "StarterPlayerScripts",
-        "StarterPlayerScripts",
-        "",
-    );
-    add_under(
-        &server,
-        sps,
-        "LocalScript",
         "Input",
         r#"
         local uis = game:GetService("UserInputService")
@@ -288,19 +246,8 @@ fn input_mouse_and_click_detectors() {
         },
     );
     session.run_for(0.1);
-    let client: Vec<String> = session
-        .client(index)
-        .unwrap()
-        .take_log()
-        .into_iter()
-        .map(|e| e.message)
-        .collect();
-    let server_log: Vec<String> = session
-        .server()
-        .take_log()
-        .into_iter()
-        .map(|e| e.message)
-        .collect();
+    let client = lines(session.client(index).unwrap());
+    let server_log = lines(session.server());
     assert_eq!(
         client,
         [

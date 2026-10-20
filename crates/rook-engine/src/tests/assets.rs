@@ -123,15 +123,7 @@ fn network_server_and_client() {
     let print =
         r#"print(game:FindFirstChild("NetworkServer"), game:FindFirstChild("NetworkClient"))"#;
     add_script(&server, "ServerScriptService", "Server", print);
-    let sp = service(&server, "StarterPlayer");
-    let sps = add_under(
-        &server,
-        sp,
-        "StarterPlayerScripts",
-        "StarterPlayerScripts",
-        "",
-    );
-    add_under(&server, sps, "LocalScript", "Client", print);
+    add_local_script(&server, "Client", print);
     server.start();
     let mut session = Session::new(server, Options::default());
     let index = session.join("Player1", 1).unwrap();

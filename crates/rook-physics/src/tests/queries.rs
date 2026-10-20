@@ -7,8 +7,9 @@ use crate::query::{CastShape, Filter, MAX_RAY_LENGTH, Region};
 
 const O: Vec3 = Vec3::new(0.0, 1000.0, 0.0);
 
-fn block(dom: &mut Dom, at: Vec3) -> InstanceId {
-    part(dom, "Part", O + at, Vec3::splat(2.0), true)
+/// An anchored 2-stud cube at `at` from [`O`].
+fn fixed(dom: &mut Dom, at: Vec3) -> InstanceId {
+    block(dom, O + at, true)
 }
 
 fn all() -> Filter {
@@ -30,8 +31,8 @@ fn region(physics: &mut Physics, dom: &mut Dom, min: Vec3, max: Vec3) -> Vec<Ins
 #[test]
 fn rays_hit_the_nearest_face() {
     let mut dom = Dom::new();
-    let near = block(&mut dom, Vec3::new(0.0, 0.0, -10.0));
-    block(&mut dom, Vec3::new(0.0, 0.0, -20.0));
+    let near = fixed(&mut dom, Vec3::new(0.0, 0.0, -10.0));
+    fixed(&mut dom, Vec3::new(0.0, 0.0, -20.0));
     let mut physics = Physics::new();
     let hit = ray(
         &mut physics,
@@ -69,10 +70,9 @@ fn rays_hit_the_nearest_face() {
 #[test]
 fn rays_skip_parts_they_start_in() {
     let mut dom = Dom::new();
-    part(&mut dom, "Part", O, Vec3::splat(4.0), true);
+    part(&mut dom, O, Vec3::splat(4.0), true);
     let behind = part(
         &mut dom,
-        "Part",
         O + Vec3::new(0.0, 0.0, -3.0),
         Vec3::splat(4.0),
         true,
@@ -93,7 +93,7 @@ fn rays_skip_parts_they_start_in() {
 #[test]
 fn can_query_only_matters_without_can_collide() {
     let mut dom = Dom::new();
-    let a = block(&mut dom, Vec3::new(0.0, 0.0, -10.0));
+    let a = fixed(&mut dom, Vec3::new(0.0, 0.0, -10.0));
     let mut physics = Physics::new();
     let hits = |physics: &mut Physics, dom: &mut Dom| {
         ray(physics, dom, Vec3::ZERO, Vec3::new(0.0, 0.0, -100.0)).is_some()
@@ -118,7 +118,7 @@ fn can_query_only_matters_without_can_collide() {
 #[test]
 fn rays_reach_15000_studs() {
     let mut dom = Dom::new();
-    let p = block(&mut dom, Vec3::new(0.0, 0.0, -14_999.0));
+    let p = fixed(&mut dom, Vec3::new(0.0, 0.0, -14_999.0));
     let mut physics = Physics::new();
     let long = Vec3::new(0.0, 0.0, -100_000.0);
     assert!(ray(&mut physics, &mut dom, Vec3::ZERO, long).is_some());
@@ -138,7 +138,6 @@ fn queries_see_this_frames_changes() {
     let mut dom = Dom::new();
     let floor = part(
         &mut dom,
-        "Part",
         O + Vec3::new(0.0, -5.0, 0.0),
         Vec3::new(20.0, 1.0, 20.0),
         true,
@@ -146,7 +145,7 @@ fn queries_see_this_frames_changes() {
     let mut physics = Physics::new();
     run(&mut physics, &mut dom, 0.1);
     // Created after the last step.
-    let new = block(&mut dom, Vec3::new(0.0, 0.0, -10.0));
+    let new = fixed(&mut dom, Vec3::new(0.0, 0.0, -10.0));
     let down = Vec3::new(0.0, 0.0, -100.0);
     assert_eq!(
         ray(&mut physics, &mut dom, Vec3::ZERO, down).map(|h| h.part),
@@ -168,7 +167,6 @@ fn queries_see_this_frames_changes() {
     // A falling part is found where physics put it.
     let ball = part(
         &mut dom,
-        "Part",
         O + Vec3::new(5.0, 0.0, 0.0),
         Vec3::splat(1.0),
         false,
@@ -192,9 +190,9 @@ fn ignore_lists_cover_descendants() {
     let mut dom = Dom::new();
     let ws = dom.get_service("Workspace").unwrap();
     let model = child(&mut dom, "Model", ws, &[]);
-    let inside = block(&mut dom, Vec3::new(0.0, 0.0, -10.0));
+    let inside = fixed(&mut dom, Vec3::new(0.0, 0.0, -10.0));
     dom.set_parent(inside, Some(model)).unwrap();
-    let behind = block(&mut dom, Vec3::new(0.0, 0.0, -20.0));
+    let behind = fixed(&mut dom, Vec3::new(0.0, 0.0, -20.0));
     let mut physics = Physics::new();
     let dir = Vec3::new(0.0, 0.0, -100.0);
     let hit = |physics: &mut Physics, dom: &mut Dom, include| {
@@ -209,7 +207,7 @@ fn ignore_lists_cover_descendants() {
 #[test]
 fn legacy_rays_act_as_the_default_group() {
     let mut dom = Dom::new();
-    let p = block(&mut dom, Vec3::new(0.0, 0.0, -10.0));
+    let p = fixed(&mut dom, Vec3::new(0.0, 0.0, -10.0));
     let mut groups = groups::CollisionGroups::read(&dom);
     groups.register("X").unwrap();
     groups.set_collidable("X", "Default", false).unwrap();
@@ -237,7 +235,7 @@ fn legacy_rays_act_as_the_default_group() {
 #[test]
 fn corner_wedge_apex_is_at_plus_x_minus_z() {
     let mut dom = Dom::new();
-    part(&mut dom, "CornerWedgePart", O, Vec3::splat(2.0), true);
+    part_of(&mut dom, "CornerWedgePart", O, Vec3::splat(2.0), true);
     let mut physics = Physics::new();
     let mut down = |x: f32, z: f32| {
         let from = Vec3::new(x, 10.0, z);
@@ -253,13 +251,12 @@ fn rays_hit_balls_cylinders_and_wedges_by_their_shape() {
     let mut dom = Dom::new();
     let ball = part(
         &mut dom,
-        "Part",
         O + Vec3::new(0.0, 0.0, -10.0),
         Vec3::splat(4.0),
         true,
     );
     set(&mut dom, ball, "Shape", Value::Enum(0));
-    let wedge = part(
+    let wedge = part_of(
         &mut dom,
         "WedgePart",
         O + Vec3::new(80.0, 0.0, 0.0),
@@ -285,17 +282,16 @@ fn rays_hit_balls_cylinders_and_wedges_by_their_shape() {
 #[test]
 fn regions_test_size_boxes_and_count_touching_faces() {
     let mut dom = Dom::new();
-    let c = block(&mut dom, Vec3::ZERO);
-    let b = block(&mut dom, Vec3::new(4.0, 0.0, 0.0));
+    let c = fixed(&mut dom, Vec3::ZERO);
+    let b = fixed(&mut dom, Vec3::new(4.0, 0.0, 0.0));
     let ball = part(
         &mut dom,
-        "Part",
         O + Vec3::new(50.0, 0.0, 0.0),
         Vec3::splat(4.0),
         true,
     );
     set(&mut dom, ball, "Shape", Value::Enum(0));
-    let rot = block(&mut dom, Vec3::new(100.0, 0.0, 0.0));
+    let rot = fixed(&mut dom, Vec3::new(100.0, 0.0, 0.0));
     set(
         &mut dom,
         rot,
@@ -321,7 +317,7 @@ fn regions_test_size_boxes_and_count_touching_faces() {
 fn region_results_stop_at_max_parts() {
     let mut dom = Dom::new();
     let made: Vec<_> = (1..=40)
-        .map(|i| block(&mut dom, Vec3::new(0.0, i as f32 * 3.0, 0.0)))
+        .map(|i| fixed(&mut dom, Vec3::new(0.0, i as f32 * 3.0, 0.0)))
         .collect();
     let mut physics = Physics::new();
     let region = Region::Box {
@@ -340,7 +336,6 @@ fn parts_in_part_use_real_shapes_and_skip_the_part() {
     let mut dom = Dom::new();
     let ball = part(
         &mut dom,
-        "Part",
         O + Vec3::new(50.0, 0.0, 0.0),
         Vec3::splat(4.0),
         true,
@@ -348,14 +343,12 @@ fn parts_in_part_use_real_shapes_and_skip_the_part() {
     set(&mut dom, ball, "Shape", Value::Enum(0));
     let probe = part(
         &mut dom,
-        "Part",
         O + Vec3::new(51.85, 1.85, 1.85),
         Vec3::splat(0.2),
         true,
     );
     let inner = part(
         &mut dom,
-        "Part",
         O + Vec3::new(51.0, 0.0, 0.0),
         Vec3::splat(0.2),
         true,
@@ -370,12 +363,12 @@ fn parts_in_part_use_real_shapes_and_skip_the_part() {
 #[test]
 fn touching_parts_need_overlap() {
     let mut dom = Dom::new();
-    let a = block(&mut dom, Vec3::ZERO);
-    let over = block(&mut dom, Vec3::new(1.0, 0.0, 0.0));
-    let face = block(&mut dom, Vec3::new(0.0, 2.0, 0.0));
-    let ghost = block(&mut dom, Vec3::new(0.0, 0.0, 1.0));
+    let a = fixed(&mut dom, Vec3::ZERO);
+    let over = fixed(&mut dom, Vec3::new(1.0, 0.0, 0.0));
+    let face = fixed(&mut dom, Vec3::new(0.0, 2.0, 0.0));
+    let ghost = fixed(&mut dom, Vec3::new(0.0, 0.0, 1.0));
     set(&mut dom, ghost, "CanCollide", Value::Bool(false));
-    let shy = block(&mut dom, Vec3::new(0.0, 0.0, -1.0));
+    let shy = fixed(&mut dom, Vec3::new(0.0, 0.0, -1.0));
     set(&mut dom, shy, "CanTouch", Value::Bool(false));
     let mut physics = Physics::new();
     assert_eq!(physics.touching_parts(&mut dom, a, false), vec![over, shy]);
@@ -393,7 +386,6 @@ fn sphere_casts_report_travel_and_skip_parts_they_start_in() {
     let mut dom = Dom::new();
     let wall = part(
         &mut dom,
-        "Part",
         O + Vec3::new(0.0, 0.0, -10.0),
         Vec3::new(10.0, 10.0, 1.0),
         true,
@@ -428,7 +420,7 @@ fn sphere_casts_report_travel_and_skip_parts_they_start_in() {
 #[test]
 fn query_worlds_never_simulate() {
     let mut dom = Dom::new();
-    let p = part(&mut dom, "Part", O, Vec3::splat(2.0), false);
+    let p = block(&mut dom, O, false);
     let mut physics = Physics::for_queries();
     run(&mut physics, &mut dom, 0.5);
     assert_eq!(position(&dom, p), O);
@@ -459,8 +451,8 @@ fn query_worlds_never_simulate() {
 #[test]
 fn click_rays_pass_invisible_parts_that_dont_collide() {
     let mut dom = Dom::new();
-    let behind = block(&mut dom, Vec3::new(0.0, 0.0, -20.0));
-    let ghost = block(&mut dom, Vec3::new(0.0, 0.0, -10.0));
+    let behind = fixed(&mut dom, Vec3::new(0.0, 0.0, -20.0));
+    let ghost = fixed(&mut dom, Vec3::new(0.0, 0.0, -10.0));
     set(&mut dom, ghost, "Transparency", Value::Float32(1.0));
     set(&mut dom, ghost, "CanCollide", Value::Bool(false));
     let mut physics = Physics::new();

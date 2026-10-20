@@ -83,13 +83,7 @@ fn client_tween_moves_a_door() {
     let index = session.join("Player1", 1).unwrap();
     session.run_for(1.2);
     let x = door_x(session.client(index).unwrap());
-    let log: Vec<String> = session
-        .client(index)
-        .unwrap()
-        .take_log()
-        .into_iter()
-        .map(|e| e.message)
-        .collect();
+    let log = lines(session.client(index).unwrap());
     assert_eq!(log, ["tweener in Player1"], "runs in the character");
     // Partway through the 2 s tween, not snapped to either end.
     assert!((4.0..6.0).contains(&x), "client door at x = {x}");

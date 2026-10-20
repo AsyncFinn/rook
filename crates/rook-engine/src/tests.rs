@@ -62,6 +62,20 @@ fn add_under(
     id
 }
 
+/// A LocalScript in StarterPlayer's StarterPlayerScripts, which a joining
+/// player's client runs.
+fn add_local_script(server: &Server, name: &str, source: &str) -> InstanceId {
+    let sp = service(server, "StarterPlayer");
+    let scripts = add_under(
+        server,
+        sp,
+        "StarterPlayerScripts",
+        "StarterPlayerScripts",
+        "",
+    );
+    add_under(server, scripts, "LocalScript", name, source)
+}
+
 fn service(server: &Server, name: &str) -> InstanceId {
     server.runtime.world_mut().dom.get_service(name).unwrap()
 }
@@ -131,9 +145,15 @@ fn content_options(name: &str) -> Options {
     std::fs::create_dir_all(dir.join("content/sounds")).unwrap();
     std::fs::write(dir.join("content/textures/face.png"), PNG).unwrap();
     std::fs::write(dir.join("content/sounds/hit.wav"), b"wav").unwrap();
+    install_options(&dir)
+}
+
+/// Options whose content comes from a Roblox install at `dir`, with no
+/// network or cache.
+fn install_options(dir: &std::path::Path) -> Options {
     let mut config = rook_content::Config::empty();
     config.install = rook_content::resolver::install::Install::at(
-        &dir,
+        dir,
         rook_content::resolver::install::InstallKind::Custom,
     );
     Options {

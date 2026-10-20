@@ -56,7 +56,7 @@ fn client_graph_listeners_and_analyzers() {
     let index = session.join("Player1", 1).unwrap();
     session.run_for(1.2);
     let client = session.client(index).unwrap();
-    let log: Vec<String> = client.take_log().into_iter().map(|e| e.message).collect();
+    let log = lines(client);
     for line in [
         "scheduled number false",
         "playing true",

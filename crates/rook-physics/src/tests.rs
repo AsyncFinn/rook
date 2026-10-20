@@ -31,7 +31,23 @@ fn v3(x: f32, y: f32, z: f32) -> Value {
     Value::Vector3(Vector3(Vec3::new(x, y, z)))
 }
 
-fn part(dom: &mut Dom, class: &str, position: Vec3, size: Vec3, anchored: bool) -> InstanceId {
+/// A `Part` in Workspace.
+fn part(dom: &mut Dom, position: Vec3, size: Vec3, anchored: bool) -> InstanceId {
+    part_of(dom, "Part", position, size, anchored)
+}
+
+/// A 2-stud cube in Workspace.
+fn block(dom: &mut Dom, position: Vec3, anchored: bool) -> InstanceId {
+    part(dom, position, Vec3::splat(2.0), anchored)
+}
+
+/// The anchored 20 × 1 × 20 floor at the origin that contact scenes use.
+fn floor(dom: &mut Dom) -> InstanceId {
+    part(dom, Vec3::ZERO, Vec3::new(20.0, 1.0, 20.0), true)
+}
+
+/// A part of `class` in Workspace.
+fn part_of(dom: &mut Dom, class: &str, position: Vec3, size: Vec3, anchored: bool) -> InstanceId {
     let ws = dom.get_service("Workspace").unwrap();
     let id = dom.create_by_name(class).unwrap();
     set(
@@ -73,16 +89,9 @@ fn properties_resolve() {
 #[test]
 fn unanchored_part_falls_and_lands_on_an_anchored_one() {
     let mut dom = Dom::new();
-    let base = part(
-        &mut dom,
-        "Part",
-        Vec3::ZERO,
-        Vec3::new(64.0, 2.0, 64.0),
-        true,
-    );
+    let base = part(&mut dom, Vec3::ZERO, Vec3::new(64.0, 2.0, 64.0), true);
     let brick = part(
         &mut dom,
-        "Part",
         Vec3::new(0.0, 20.0, 0.0),
         Vec3::new(4.0, 2.0, 4.0),
         false,
@@ -107,7 +116,7 @@ fn unanchored_part_falls_and_lands_on_an_anchored_one() {
 #[test]
 fn script_changes_reach_the_world() {
     let mut dom = Dom::new();
-    let brick = part(&mut dom, "Part", Vec3::new(0.0, 50.0, 0.0), Vec3::ONE, true);
+    let brick = part(&mut dom, Vec3::new(0.0, 50.0, 0.0), Vec3::ONE, true);
     let mut physics = Physics::new();
     run(&mut physics, &mut dom, 0.5);
     assert_eq!(position(&dom, brick).y, 50.0, "anchored parts stay put");
@@ -126,13 +135,7 @@ fn script_changes_reach_the_world() {
 #[test]
 fn workspace_gravity_is_used() {
     let mut dom = Dom::new();
-    let brick = part(
-        &mut dom,
-        "Part",
-        Vec3::new(0.0, 50.0, 0.0),
-        Vec3::ONE,
-        false,
-    );
+    let brick = part(&mut dom, Vec3::new(0.0, 50.0, 0.0), Vec3::ONE, false);
     let ws = dom.find_service("Workspace").unwrap();
     set(&mut dom, ws, "Gravity", Value::Float32(0.0));
     let mut physics = Physics::new();
@@ -150,7 +153,7 @@ fn parts_below_the_destroy_height_are_reported() {
         "FallenPartsDestroyHeight",
         Value::Float32(-10.0),
     );
-    let brick = part(&mut dom, "Part", Vec3::ZERO, Vec3::ONE, false);
+    let brick = part(&mut dom, Vec3::ZERO, Vec3::ONE, false);
     let mut physics = Physics::new();
     let fallen = run(&mut physics, &mut dom, 1.0);
     assert!(fallen.contains(&brick));

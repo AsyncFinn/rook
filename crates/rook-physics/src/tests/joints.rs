@@ -5,7 +5,7 @@ use glam::Vec3;
 use rook_dom::{Dom, InstanceId};
 use rook_types::{CFrame, Value};
 
-use super::{part, position, run, set};
+use super::{block, part, position, run, set};
 use crate::{Physics, assembly, joints};
 
 fn joint(
@@ -43,20 +43,8 @@ fn close(a: Vec3, b: Vec3) -> bool {
 #[test]
 fn welded_parts_fall_as_one_body() {
     let mut dom = Dom::new();
-    let a = part(
-        &mut dom,
-        "Part",
-        Vec3::new(0.0, 20.0, 0.0),
-        Vec3::splat(2.0),
-        false,
-    );
-    let b = part(
-        &mut dom,
-        "Part",
-        Vec3::new(2.0, 20.0, 0.0),
-        Vec3::splat(2.0),
-        false,
-    );
+    let a = block(&mut dom, Vec3::new(0.0, 20.0, 0.0), false);
+    let b = block(&mut dom, Vec3::new(2.0, 20.0, 0.0), false);
     weld(&mut dom, a, b);
     let mut physics = Physics::new();
     physics.sync(&mut dom);
@@ -71,20 +59,8 @@ fn welded_parts_fall_as_one_body() {
 #[test]
 fn a_weld_to_an_anchored_part_holds_the_assembly() {
     let mut dom = Dom::new();
-    let base = part(
-        &mut dom,
-        "Part",
-        Vec3::new(0.0, 20.0, 0.0),
-        Vec3::splat(2.0),
-        true,
-    );
-    let hanging = part(
-        &mut dom,
-        "Part",
-        Vec3::new(4.0, 20.0, 0.0),
-        Vec3::splat(2.0),
-        false,
-    );
+    let base = block(&mut dom, Vec3::new(0.0, 20.0, 0.0), true);
+    let hanging = block(&mut dom, Vec3::new(4.0, 20.0, 0.0), false);
     let w = weld(&mut dom, base, hanging);
     let mut physics = Physics::new();
     run(&mut physics, &mut dom, 0.5);
@@ -103,16 +79,9 @@ fn an_active_joint_snaps_the_non_root_part() {
     let mut dom = Dom::new();
     let ws = dom.get_service("Workspace").unwrap();
     set(&mut dom, ws, "Gravity", Value::Float32(0.0));
-    let small = part(
-        &mut dom,
-        "Part",
-        Vec3::new(0.0, 50.0, 0.0),
-        Vec3::splat(2.0),
-        false,
-    );
+    let small = block(&mut dom, Vec3::new(0.0, 50.0, 0.0), false);
     let big = part(
         &mut dom,
-        "Part",
         Vec3::new(10.0, 50.0, 0.0),
         Vec3::splat(3.0),
         false,
@@ -128,20 +97,8 @@ fn an_active_joint_snaps_the_non_root_part() {
 #[test]
 fn joints_outside_workspace_or_disabled_are_inactive() {
     let mut dom = Dom::new();
-    let a = part(
-        &mut dom,
-        "Part",
-        Vec3::new(0.0, 20.0, 0.0),
-        Vec3::splat(2.0),
-        true,
-    );
-    let b = part(
-        &mut dom,
-        "Part",
-        Vec3::new(4.0, 20.0, 0.0),
-        Vec3::splat(2.0),
-        false,
-    );
+    let a = block(&mut dom, Vec3::new(0.0, 20.0, 0.0), true);
+    let b = block(&mut dom, Vec3::new(4.0, 20.0, 0.0), false);
     let w = weld(&mut dom, a, b);
     let storage = dom.get_service("ServerStorage").unwrap();
     dom.set_parent(w, Some(storage)).unwrap();
@@ -162,20 +119,8 @@ fn motors_turn_toward_the_desired_angle() {
     // CurrentAngle moves 0.1 per frame with MaxVelocity 0.1, and
     // A⁻¹·B = C0 · Rz(angle) · C1⁻¹.
     let mut dom = Dom::new();
-    let a = part(
-        &mut dom,
-        "Part",
-        Vec3::new(0.0, 50.0, 0.0),
-        Vec3::splat(3.0),
-        true,
-    );
-    let b = part(
-        &mut dom,
-        "Part",
-        Vec3::new(4.0, 50.0, 0.0),
-        Vec3::splat(2.0),
-        false,
-    );
+    let a = part(&mut dom, Vec3::new(0.0, 50.0, 0.0), Vec3::splat(3.0), true);
+    let b = block(&mut dom, Vec3::new(4.0, 50.0, 0.0), false);
     let m = joint(&mut dom, "Motor6D", a, b, at(4.0, 0.0, 0.0));
     set(&mut dom, m, "C1", Value::CFrame(at(0.0, 1.0, 0.0)));
     set(&mut dom, m, "MaxVelocity", Value::Float32(0.1));
@@ -209,16 +154,9 @@ fn a_hinged_bar_swings_about_its_pivot() {
     // A 4-stud bar hinged at its end to an anchored block, axis along Z,
     // swings down under gravity and stays on the pivot.
     let mut dom = Dom::new();
-    let block = part(
-        &mut dom,
-        "Part",
-        Vec3::new(0.0, 50.0, 0.0),
-        Vec3::splat(2.0),
-        true,
-    );
+    let block = block(&mut dom, Vec3::new(0.0, 50.0, 0.0), true);
     let bar = part(
         &mut dom,
-        "Part",
         Vec3::new(3.0, 50.0, 0.0),
         Vec3::new(4.0, 1.0, 1.0),
         false,
@@ -241,20 +179,8 @@ fn a_hinged_bar_swings_about_its_pivot() {
 #[test]
 fn weld_constraints_keep_the_pose_they_started_with() {
     let mut dom = Dom::new();
-    let a = part(
-        &mut dom,
-        "Part",
-        Vec3::new(0.0, 20.0, 0.0),
-        Vec3::splat(2.0),
-        true,
-    );
-    let b = part(
-        &mut dom,
-        "Part",
-        Vec3::new(5.0, 23.0, 0.0),
-        Vec3::splat(2.0),
-        false,
-    );
+    let a = block(&mut dom, Vec3::new(0.0, 20.0, 0.0), true);
+    let b = block(&mut dom, Vec3::new(5.0, 23.0, 0.0), false);
     joint(&mut dom, "WeldConstraint", a, b, CFrame::IDENTITY);
     let mut physics = Physics::new();
     run(&mut physics, &mut dom, 0.5);
@@ -266,14 +192,8 @@ fn moving_a_part_moves_its_assembly_and_reseating_rewrites_its_side() {
     // Setting CFrame moves the whole assembly, anchored root included;
     // setting Position moves only the part and rewrites its C0 or C1.
     let mut dom = Dom::new();
-    let a = part(&mut dom, "Part", Vec3::ZERO, Vec3::splat(2.0), true);
-    let b = part(
-        &mut dom,
-        "Part",
-        Vec3::new(4.0, 0.0, 0.0),
-        Vec3::splat(2.0),
-        false,
-    );
+    let a = block(&mut dom, Vec3::ZERO, true);
+    let b = block(&mut dom, Vec3::new(4.0, 0.0, 0.0), false);
     let w = joint(&mut dom, "Weld", a, b, at(2.0, 0.0, 0.0));
     set(&mut dom, w, "C1", Value::CFrame(at(-2.0, 0.0, 0.0)));
     assembly::move_part(&mut dom, b, at(4.0, 10.0, 0.0)).unwrap();
@@ -291,14 +211,8 @@ fn moving_a_part_moves_its_assembly_and_reseating_rewrites_its_side() {
 #[test]
 fn root_part_rules() {
     let mut dom = Dom::new();
-    let a = part(&mut dom, "Part", Vec3::ZERO, Vec3::splat(2.0), false);
-    let b = part(
-        &mut dom,
-        "Part",
-        Vec3::new(3.0, 0.0, 0.0),
-        Vec3::splat(4.0),
-        false,
-    );
+    let a = block(&mut dom, Vec3::ZERO, false);
+    let b = part(&mut dom, Vec3::new(3.0, 0.0, 0.0), Vec3::splat(4.0), false);
     weld(&mut dom, a, b);
     let root = |dom: &Dom| assembly::Assembly::of(dom, a).unwrap().root();
     assert_eq!(root(&dom), b, "larger part");
@@ -321,21 +235,9 @@ fn anchored_parts_root_their_own_assemblies() {
     // joins B, and moving B takes C but not A. GetConnectedParts still
     // reaches all three.
     let mut dom = Dom::new();
-    let a = part(&mut dom, "Part", Vec3::ZERO, Vec3::splat(2.0), true);
-    let b = part(
-        &mut dom,
-        "Part",
-        Vec3::new(2.0, 0.0, 0.0),
-        Vec3::splat(2.0),
-        true,
-    );
-    let c = part(
-        &mut dom,
-        "Part",
-        Vec3::new(4.0, 0.0, 0.0),
-        Vec3::splat(2.0),
-        false,
-    );
+    let a = block(&mut dom, Vec3::ZERO, true);
+    let b = block(&mut dom, Vec3::new(2.0, 0.0, 0.0), true);
+    let c = block(&mut dom, Vec3::new(4.0, 0.0, 0.0), false);
     weld(&mut dom, a, b);
     weld(&mut dom, b, c);
     let root = |dom: &Dom, p| assembly::Assembly::of(dom, p).unwrap().root();
@@ -354,21 +256,9 @@ fn anchored_parts_root_their_own_assemblies() {
 #[test]
 fn a_cluster_between_anchored_parts_joins_the_newest_joint() {
     let mut dom = Dom::new();
-    let a = part(&mut dom, "Part", Vec3::ZERO, Vec3::splat(2.0), true);
-    let c = part(
-        &mut dom,
-        "Part",
-        Vec3::new(2.0, 0.0, 0.0),
-        Vec3::splat(2.0),
-        false,
-    );
-    let b = part(
-        &mut dom,
-        "Part",
-        Vec3::new(4.0, 0.0, 0.0),
-        Vec3::splat(2.0),
-        true,
-    );
+    let a = block(&mut dom, Vec3::ZERO, true);
+    let c = block(&mut dom, Vec3::new(2.0, 0.0, 0.0), false);
+    let b = block(&mut dom, Vec3::new(4.0, 0.0, 0.0), true);
     weld(&mut dom, a, c);
     weld(&mut dom, c, b);
     let root = |dom: &Dom, p| assembly::Assembly::of(dom, p).unwrap().root();
@@ -382,20 +272,8 @@ fn a_cluster_between_anchored_parts_joins_the_newest_joint() {
 #[test]
 fn anchoring_a_part_splits_its_simulated_assembly() {
     let mut dom = Dom::new();
-    let a = part(
-        &mut dom,
-        "Part",
-        Vec3::new(0.0, 20.0, 0.0),
-        Vec3::splat(2.0),
-        false,
-    );
-    let b = part(
-        &mut dom,
-        "Part",
-        Vec3::new(2.0, 20.0, 0.0),
-        Vec3::splat(2.0),
-        false,
-    );
+    let a = block(&mut dom, Vec3::new(0.0, 20.0, 0.0), false);
+    let b = block(&mut dom, Vec3::new(2.0, 20.0, 0.0), false);
     weld(&mut dom, a, b);
     let mut physics = Physics::new();
     physics.sync(&mut dom);

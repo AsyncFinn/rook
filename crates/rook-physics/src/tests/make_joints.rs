@@ -6,7 +6,7 @@ use rook_dom::{Dom, InstanceId};
 use rook_types::{CFrame, Value};
 
 use super::joints::at;
-use super::{part, set};
+use super::{block, part, part_of, set};
 use crate::joints::{self, surfaces};
 
 fn surfaces(dom: &mut Dom, id: InstanceId, surface: &str) {
@@ -22,8 +22,8 @@ fn surfaces(dom: &mut Dom, id: InstanceId, surface: &str) {
 fn stacked(lower: &str, upper: &str, gap: f32) -> Vec<(String, bool)> {
     let mut dom = Dom::new();
     let size = Vec3::new(4.0, 1.0, 2.0);
-    let bottom = part(&mut dom, "Part", Vec3::ZERO, size, true);
-    let top = part(&mut dom, "Part", Vec3::new(0.0, 1.0 + gap, 0.0), size, true);
+    let bottom = part(&mut dom, Vec3::ZERO, size, true);
+    let top = part(&mut dom, Vec3::new(0.0, 1.0 + gap, 0.0), size, true);
     surfaces(&mut dom, bottom, lower);
     surfaces(&mut dom, top, upper);
     surfaces::make_joints(&mut dom, &[top]).unwrap();
@@ -60,8 +60,8 @@ fn faces_join_only_when_close_and_aligned() {
 
     let yawed = |degrees: f32| {
         let mut dom = Dom::new();
-        let a = part(&mut dom, "Part", Vec3::ZERO, Vec3::splat(2.0), true);
-        let b = part(&mut dom, "Part", Vec3::ZERO, Vec3::splat(2.0), true);
+        let a = block(&mut dom, Vec3::ZERO, true);
+        let b = block(&mut dom, Vec3::ZERO, true);
         let cf = at(0.0, 2.0, 0.0) * CFrame::angles(0.0, degrees.to_radians(), 0.0);
         set(&mut dom, b, "CFrame", Value::CFrame(cf));
         surfaces(&mut dom, a, "Weld");
@@ -76,8 +76,8 @@ fn faces_join_only_when_close_and_aligned() {
     // Touching along an edge isn't enough.
     let mut dom = Dom::new();
     let size = Vec3::new(4.0, 1.0, 2.0);
-    let a = part(&mut dom, "Part", Vec3::ZERO, size, true);
-    part(&mut dom, "Part", Vec3::new(4.0, 1.0, 0.0), size, true);
+    let a = part(&mut dom, Vec3::ZERO, size, true);
+    part(&mut dom, Vec3::new(4.0, 1.0, 0.0), size, true);
     surfaces(&mut dom, a, "Weld");
     surfaces::make_joints(&mut dom, &[a]).unwrap();
     assert!(joints::part_joints(&dom, a).is_empty());
@@ -87,8 +87,8 @@ fn faces_join_only_when_close_and_aligned() {
 fn make_joints_frames_match_studio() {
     let check = |dir: Vec3, c0: [f32; 12], c1: [f32; 12]| {
         let mut dom = Dom::new();
-        let a = part(&mut dom, "Part", Vec3::ZERO, Vec3::splat(2.0), true);
-        part(&mut dom, "Part", dir * 2.0, Vec3::splat(2.0), true);
+        let a = block(&mut dom, Vec3::ZERO, true);
+        block(&mut dom, dir * 2.0, true);
         surfaces(&mut dom, a, "Weld");
         surfaces::make_joints(&mut dom, &[a]).unwrap();
         let j = joints::part_joints(&dom, a)[0];
@@ -129,21 +129,9 @@ fn model_parts_join_parts_outside_and_only_once() {
     // Model:MakeJoints on A and B joins A-B and A-C (C is outside the
     // model); B doesn't join A again, and a second call adds nothing.
     let mut dom = Dom::new();
-    let a = part(&mut dom, "Part", Vec3::ZERO, Vec3::splat(2.0), true);
-    let b = part(
-        &mut dom,
-        "Part",
-        Vec3::new(0.0, 2.0, 0.0),
-        Vec3::splat(2.0),
-        true,
-    );
-    let c = part(
-        &mut dom,
-        "Part",
-        Vec3::new(2.0, 0.0, 0.0),
-        Vec3::splat(2.0),
-        true,
-    );
+    let a = block(&mut dom, Vec3::ZERO, true);
+    let b = block(&mut dom, Vec3::new(0.0, 2.0, 0.0), true);
+    let c = block(&mut dom, Vec3::new(2.0, 0.0, 0.0), true);
     for p in [a, b, c] {
         surfaces(&mut dom, p, "Weld");
     }
@@ -160,15 +148,7 @@ fn many_callers_sweep_the_world_with_the_same_result() {
     // the one earlier in the list.
     let mut dom = Dom::new();
     let column: Vec<_> = (0..20)
-        .map(|i| {
-            part(
-                &mut dom,
-                "Part",
-                Vec3::new(0.0, 2.0 * i as f32, 0.0),
-                Vec3::splat(2.0),
-                true,
-            )
-        })
+        .map(|i| block(&mut dom, Vec3::new(0.0, 2.0 * i as f32, 0.0), true))
         .collect();
     for &p in &column {
         surfaces(&mut dom, p, "Weld");
@@ -190,9 +170,9 @@ fn many_callers_sweep_the_world_with_the_same_result() {
 
 /// A 2×4×4 wedge with a 2×1×√32 slab lying on its slope, all Smooth.
 fn slab_on_wedge(dom: &mut Dom) -> (InstanceId, InstanceId) {
-    let wedge = part(dom, "WedgePart", Vec3::ZERO, Vec3::new(2.0, 4.0, 4.0), true);
+    let wedge = part_of(dom, "WedgePart", Vec3::ZERO, Vec3::new(2.0, 4.0, 4.0), true);
     let slab_size = Vec3::new(2.0, 1.0, 32f32.sqrt());
-    let slab = part(dom, "Part", Vec3::ZERO, slab_size, true);
+    let slab = part(dom, Vec3::ZERO, slab_size, true);
     let on_slope = Vec3::new(0.0, 1.0, -1.0).normalize() * 0.5;
     let cf = at(on_slope.x, on_slope.y, on_slope.z) * CFrame::angles(-45f32.to_radians(), 0.0, 0.0);
     set(dom, slab, "CFrame", Value::CFrame(cf));
@@ -277,7 +257,7 @@ fn wedge_slopes_join_like_studio() {
 
     // The box's top and front aren't faces.
     let mut dom = Dom::new();
-    let wedge = part(
+    let wedge = part_of(
         &mut dom,
         "WedgePart",
         Vec3::ZERO,
@@ -286,14 +266,12 @@ fn wedge_slopes_join_like_studio() {
     );
     part(
         &mut dom,
-        "Part",
         Vec3::new(0.0, 2.5, 0.0),
         Vec3::new(2.0, 1.0, 4.0),
         true,
     );
     part(
         &mut dom,
-        "Part",
         Vec3::new(0.0, 0.0, -2.5),
         Vec3::new(2.0, 4.0, 1.0),
         true,
@@ -339,8 +317,8 @@ fn balls_and_cylinders_join_as_boxes() {
                  base_face: Option<(&str, &str)>|
      -> Option<(String, bool, Vec3)> {
         let mut dom = Dom::new();
-        let base = part(&mut dom, "Part", Vec3::ZERO, Vec3::splat(10.0), true);
-        let round = part(&mut dom, "Part", offset, size, true);
+        let base = part(&mut dom, Vec3::ZERO, Vec3::splat(10.0), true);
+        let round = part(&mut dom, offset, size, true);
         set(&mut dom, round, "Shape", Value::Enum(shape));
         surfaces(&mut dom, base, "Smooth");
         surfaces(&mut dom, round, "Smooth");

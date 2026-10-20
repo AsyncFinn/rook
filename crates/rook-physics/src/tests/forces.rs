@@ -7,7 +7,7 @@ use rook_dom::Dom;
 use rook_types::{CFrame, Value};
 
 use super::movers::{cube, hold, spin, velocity};
-use super::{child, part, position, run, set, v3};
+use super::{block, child, part, position, run, set, v3};
 use crate::{Command, Physics};
 
 #[test]
@@ -66,18 +66,11 @@ fn movers_act_on_the_whole_assembly() {
     set(&mut dom, ws, "Gravity", Value::Float32(0.0));
     let a = part(
         &mut dom,
-        "Part",
         Vec3::new(0.0, 1000.0, 0.0),
         Vec3::splat(4.0),
         false,
     );
-    let b = part(
-        &mut dom,
-        "Part",
-        Vec3::new(3.0, 1000.0, 0.0),
-        Vec3::splat(2.0),
-        false,
-    );
+    let b = block(&mut dom, Vec3::new(3.0, 1000.0, 0.0), false);
     child(
         &mut dom,
         "WeldConstraint",
@@ -98,13 +91,7 @@ fn movers_act_on_the_whole_assembly() {
         ],
     );
     // Anchored parts don't move.
-    let c = part(
-        &mut dom,
-        "Part",
-        Vec3::new(20.0, 1000.0, 0.0),
-        Vec3::ONE,
-        true,
-    );
+    let c = part(&mut dom, Vec3::new(20.0, 1000.0, 0.0), Vec3::ONE, true);
     child(
         &mut dom,
         "BodyPosition",
@@ -121,13 +108,7 @@ fn movers_act_on_the_whole_assembly() {
 #[test]
 fn rocket_flies_to_its_target_once_fired() {
     let mut dom = Dom::new();
-    let target = part(
-        &mut dom,
-        "Part",
-        Vec3::new(100.0, 1000.0, 0.0),
-        Vec3::ONE,
-        true,
-    );
+    let target = part(&mut dom, Vec3::new(100.0, 1000.0, 0.0), Vec3::ONE, true);
     let p = cube(&mut dom, 0.0);
     let rocket = child(
         &mut dom,
@@ -169,13 +150,7 @@ fn rocket_faces_between_target_and_thrust() {
     // 1 points it at the target.
     for (cartoon, up) in [(0.0, true), (1.0, false)] {
         let mut dom = Dom::new();
-        let target = part(
-            &mut dom,
-            "Part",
-            Vec3::new(100.0, 1000.0, 0.0),
-            Vec3::ONE,
-            true,
-        );
+        let target = part(&mut dom, Vec3::new(100.0, 1000.0, 0.0), Vec3::ONE, true);
         let p = cube(&mut dom, 0.0);
         let rocket = child(
             &mut dom,
@@ -250,19 +225,12 @@ fn anchored_parts_with_velocity_are_conveyors() {
     let mut dom = Dom::new();
     let belt = part(
         &mut dom,
-        "Part",
         Vec3::new(0.0, 1000.0, 0.0),
         Vec3::new(20.0, 1.0, 4.0),
         true,
     );
     set(&mut dom, belt, "AssemblyLinearVelocity", v3(10.0, 0.0, 0.0));
-    let boxed = part(
-        &mut dom,
-        "Part",
-        Vec3::new(-5.0, 1001.5, 0.0),
-        Vec3::splat(2.0),
-        false,
-    );
+    let boxed = block(&mut dom, Vec3::new(-5.0, 1001.5, 0.0), false);
     let mut physics = Physics::new();
     run(&mut physics, &mut dom, 1.0);
     let v = velocity(&dom, boxed);
@@ -277,18 +245,11 @@ fn velocity_is_the_assembly_velocity_at_the_part() {
     let mut dom = Dom::new();
     let root = part(
         &mut dom,
-        "Part",
         Vec3::new(0.0, 1000.0, 0.0),
         Vec3::splat(4.0),
         false,
     );
-    let arm = part(
-        &mut dom,
-        "Part",
-        Vec3::new(4.0, 1000.0, 0.0),
-        Vec3::splat(2.0),
-        false,
-    );
+    let arm = block(&mut dom, Vec3::new(4.0, 1000.0, 0.0), false);
     child(
         &mut dom,
         "WeldConstraint",

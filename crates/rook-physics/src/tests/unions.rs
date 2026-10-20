@@ -37,7 +37,7 @@ fn gap() -> Arc<UnionCollision> {
 }
 
 fn union(dom: &mut Dom, at: Vec3, anchored: bool) -> InstanceId {
-    let id = part(
+    let id = part_of(
         dom,
         "UnionOperation",
         O + at,
@@ -95,20 +95,8 @@ fn parts_fall_through_a_unions_gaps() {
     let boxed = union(&mut dom, Vec3::new(20.0, 0.0, 0.0), true);
     let mut physics = Physics::new();
     physics.set_union_collision(flat, Some(gap()));
-    let through = part(
-        &mut dom,
-        "Part",
-        O + Vec3::new(0.0, 3.0, 0.0),
-        Vec3::ONE,
-        false,
-    );
-    let on = part(
-        &mut dom,
-        "Part",
-        O + Vec3::new(20.0, 3.0, 0.0),
-        Vec3::ONE,
-        false,
-    );
+    let through = part(&mut dom, O + Vec3::new(0.0, 3.0, 0.0), Vec3::ONE, false);
+    let on = part(&mut dom, O + Vec3::new(20.0, 3.0, 0.0), Vec3::ONE, false);
     run(&mut physics, &mut dom, 1.0);
     assert!(
         position(&dom, through).y < O.y - 5.0,

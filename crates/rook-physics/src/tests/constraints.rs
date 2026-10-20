@@ -5,7 +5,7 @@ use glam::Vec3;
 use rook_dom::{Dom, InstanceId};
 use rook_types::{CFrame, Value};
 
-use super::{child, part, position, run, set, v3};
+use super::{block, child, part, position, run, set, v3};
 use crate::Physics;
 
 /// A wheel's turn about world Y relative to the base.
@@ -33,18 +33,11 @@ fn surface_hinge(
 ) -> (InstanceId, InstanceId) {
     let base = part(
         dom,
-        "Part",
         Vec3::new(0.0, 1000.0, 0.0),
         Vec3::new(4.0, 1.0, 4.0),
         true,
     );
-    let wheel = part(
-        dom,
-        "Part",
-        Vec3::new(0.0, 1001.5, 0.0),
-        Vec3::splat(2.0),
-        false,
-    );
+    let wheel = block(dom, Vec3::new(0.0, 1001.5, 0.0), false);
     smooth(dom, base);
     smooth(dom, wheel);
     set(dom, base, "TopSurface", Value::Enum(surface));
@@ -78,16 +71,9 @@ fn rotate_v_turns_at_31_per_unit_of_param_b() {
 /// A 40 × 1 × 4 bar (inertia 15,083) on an anchored cube of side `motor`
 /// whose top is a Motor surface at ParamB `b`.
 fn rotor_on_motor(dom: &mut Dom, motor: f32, b: f32) -> InstanceId {
-    let base = part(
-        dom,
-        "Part",
-        Vec3::new(0.0, 1000.0, 0.0),
-        Vec3::splat(motor),
-        true,
-    );
+    let base = part(dom, Vec3::new(0.0, 1000.0, 0.0), Vec3::splat(motor), true);
     let bar = part(
         dom,
-        "Part",
         Vec3::new(0.0, 1000.5 + motor / 2.0, 0.0),
         Vec3::new(40.0, 1.0, 4.0),
         false,
@@ -194,18 +180,11 @@ fn motors_without_input_hold_still() {
 fn hinge(dom: &mut Dom) -> (InstanceId, InstanceId, InstanceId) {
     let base = part(
         dom,
-        "Part",
         Vec3::new(0.0, 1000.0, 0.0),
         Vec3::new(4.0, 1.0, 4.0),
         true,
     );
-    let wheel = part(
-        dom,
-        "Part",
-        Vec3::new(0.0, 1003.0, 0.0),
-        Vec3::splat(2.0),
-        false,
-    );
+    let wheel = block(dom, Vec3::new(0.0, 1003.0, 0.0), false);
     let up = CFrame::angles(0.0, 0.0, std::f32::consts::FRAC_PI_2);
     let a0 = child(
         dom,
@@ -304,18 +283,11 @@ fn hinge_constraint_servo_and_limits() {
 fn hanging(dom: &mut Dom, class: &str, props: &[(&str, Value)]) -> InstanceId {
     let base = part(
         dom,
-        "Part",
         Vec3::new(0.0, 1000.0, 0.0),
         Vec3::new(4.0, 1.0, 4.0),
         true,
     );
-    let w = part(
-        dom,
-        "Part",
-        Vec3::new(0.0, 995.0, 0.0),
-        Vec3::splat(2.0),
-        false,
-    );
+    let w = block(dom, Vec3::new(0.0, 995.0, 0.0), false);
     let a0 = child(
         dom,
         "Attachment",
@@ -406,23 +378,15 @@ fn disabling_a_constraint_frees_its_parts() {
 #[test]
 fn hinge_held_part_overlapping_an_anchored_one_rests() {
     let mut dom = Dom::new();
-    let top = part(
-        &mut dom,
-        "Part",
-        Vec3::new(0.0, 30.0, 0.0),
-        Vec3::splat(2.0),
-        true,
-    );
+    let top = block(&mut dom, Vec3::new(0.0, 30.0, 0.0), true);
     let block = part(
         &mut dom,
-        "Part",
         Vec3::new(0.0, 24.0, 0.0),
         Vec3::new(4.0, 10.0, 4.0),
         false,
     );
     part(
         &mut dom,
-        "Part",
         Vec3::new(0.0, 19.0, 0.0),
         Vec3::new(8.0, 2.0, 8.0),
         true,

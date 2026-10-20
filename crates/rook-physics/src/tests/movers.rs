@@ -5,17 +5,11 @@ use glam::Vec3;
 use rook_dom::{Dom, InstanceId};
 use rook_types::{CFrame, Value};
 
-use super::{child, part, position, run, set, v3};
+use super::{block, child, part, position, run, set, v3};
 use crate::Physics;
 
 pub(super) fn cube(dom: &mut Dom, x: f32) -> InstanceId {
-    part(
-        dom,
-        "Part",
-        Vec3::new(x, 1000.0, 0.0),
-        Vec3::splat(2.0),
-        false,
-    )
+    block(dom, Vec3::new(x, 1000.0, 0.0), false)
 }
 
 pub(super) fn velocity(dom: &Dom, id: InstanceId) -> Vec3 {
@@ -95,7 +89,6 @@ fn body_position_is_a_mass_independent_spring() {
         let mut dom = Dom::new();
         let p = part(
             &mut dom,
-            "Part",
             Vec3::new(0.0, 1000.0, 0.0),
             Vec3::splat(size),
             false,
@@ -194,7 +187,6 @@ fn body_gyro_limits_angular_acceleration_not_torque() {
         let mut dom = Dom::new();
         let p = part(
             &mut dom,
-            "Part",
             Vec3::new(0.0, 1000.0, 0.0),
             Vec3::splat(size),
             false,
@@ -273,20 +265,8 @@ fn body_gyro_settles_with_default_gains() {
 #[test]
 fn movers_holding_still_let_their_body_sleep() {
     let mut dom = Dom::new();
-    part(
-        &mut dom,
-        "Part",
-        Vec3::ZERO,
-        Vec3::new(64.0, 2.0, 64.0),
-        true,
-    );
-    let p = part(
-        &mut dom,
-        "Part",
-        Vec3::new(0.0, 2.0, 0.0),
-        Vec3::splat(2.0),
-        false,
-    );
+    part(&mut dom, Vec3::ZERO, Vec3::new(64.0, 2.0, 64.0), true);
+    let p = block(&mut dom, Vec3::new(0.0, 2.0, 0.0), false);
     let gyro = child(&mut dom, "BodyGyro", p, &[("MaxTorque", v3(1e9, 1e9, 1e9))]);
     child(
         &mut dom,
