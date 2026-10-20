@@ -3192,6 +3192,7 @@ dependencies = [
  "rook-types",
  "rustc-hash 2.1.3",
  "serde_json",
+ "tracing",
 ]
 
 [[package]]
@@ -3202,6 +3203,7 @@ dependencies = [
  "rook-dom",
  "rook-reflection",
  "rook-types",
+ "tracing",
 ]
 
 [[package]]

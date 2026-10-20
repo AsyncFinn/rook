@@ -9,6 +9,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+tracing.workspace = true
 rook-types.workspace = true
 rook-reflection.workspace = true
 rook-dom.workspace = true

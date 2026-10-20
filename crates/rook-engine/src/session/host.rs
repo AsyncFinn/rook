@@ -108,21 +108,16 @@ impl ServerHost {
             let mut w = self.server.runtime().world_mut();
             let dom = &mut w.dom;
             let start = dom.journal().end();
-            let players = dom
-                .get_service("Players")
-                .map_err(|e| EngineError::Lua(e.to_string()))?;
-            let player = dom
-                .create_by_name("Player")
-                .map_err(|e| EngineError::Lua(e.to_string()))?;
-            dom.set_name(player, name.to_owned()).ok();
-            let _ = dom.set_property_by_name(player, "UserId", Value::Int64(user_id));
-            let _ = dom.set_property_by_name(player, "DisplayName", Value::String(name.to_owned()));
+            let players = dom.get_service("Players")?;
+            let player = dom.create_by_name("Player")?;
+            dom.set_name(player, name.to_owned())?;
+            dom.set_property_by_name(player, "UserId", Value::Int64(user_id))?;
+            dom.set_property_by_name(player, "DisplayName", Value::String(name.to_owned()))?;
             for container in ["Backpack", "PlayerGui"] {
-                if let Ok(c) = dom.create_by_name(container) {
-                    let _ = dom.set_parent(c, Some(player));
-                }
+                let c = dom.create_by_name(container)?;
+                dom.set_parent(c, Some(player))?;
             }
-            let _ = dom.set_parent(player, Some(players));
+            dom.set_parent(player, Some(players))?;
             (player, start)
         };
         let players = self.server.runtime().world().dom.find_service("Players");
@@ -130,7 +125,7 @@ impl ServerHost {
         if let Some(players) = players {
             let ud = self.server.runtime().push_instance(player);
             if let Ok(ud) = ud {
-                let _ = self.server.runtime().fire_event(players, "PlayerAdded", ud);
+                self.server.runtime().fire_event(players, "PlayerAdded", ud);
             }
             self.server.runtime().drain_deferred();
         }
@@ -261,7 +256,7 @@ impl ServerHost {
         match msg {
             ToServer::Click { detector, event } => {
                 if let Ok(ud) = rt.push_instance(player) {
-                    let _ = rt.fire_event(detector, event, ud);
+                    rt.fire_event(detector, event, ud);
                     rt.drain_deferred();
                 }
             }
@@ -417,7 +412,7 @@ impl ClientHost {
                 if let (Some(local), Some(character)) = (local, added)
                     && let Ok(ud) = rt.push_instance(character)
                 {
-                    let _ = rt.fire_event(local, "CharacterAdded", ud);
+                    rt.fire_event(local, "CharacterAdded", ud);
                     rt.drain_deferred();
                 }
             }
@@ -515,7 +510,7 @@ impl ClientHost {
             if let Some(local) = local
                 && let Ok(ud) = rt.push_instance(local)
             {
-                let _ = rt.fire_event(click.detector, event, ud);
+                rt.fire_event(click.detector, event, ud);
                 rt.drain_deferred();
             }
             if let Some(detector) = self.sink.server_id(click.detector) {

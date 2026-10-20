@@ -37,6 +37,8 @@ pub enum EngineError {
     Load(#[from] rook_formats::LoadError),
     #[error("Luau setup failed: {0}")]
     Lua(String),
+    #[error(transparent)]
+    Dom(#[from] rook_dom::DomError),
 }
 
 /// Services every place gets, created up front so scripts find them in
@@ -213,7 +215,9 @@ impl DataModel {
         ensure_terrain(&mut dom);
         if rook_physics::joints::surfaces::joins_on_load(&dom) {
             let parts = rook_physics::workspace_parts(&dom);
-            let _ = rook_physics::joints::surfaces::make_joints(&mut dom, &parts);
+            if let Err(e) = rook_physics::joints::surfaces::make_joints(&mut dom, &parts) {
+                tracing::warn!("joining the place's surfaces failed: {e}");
+            }
         }
         dom.journal_mut().set_enabled(journaling);
         let engine = Self::with_dom(dom, options, Role::Server)?;
@@ -241,7 +245,9 @@ impl DataModel {
         for service in DEFAULT_SERVICES.iter().chain([&network]) {
             // A class missing from the database would be a Rook bug, not a
             // problem with the place; skip it rather than fail.
-            let _ = dom.get_service(service);
+            if let Err(e) = dom.get_service(service) {
+                tracing::warn!("no {service}: {e}");
+            }
         }
         ensure_camera(&mut dom);
         dom.journal_mut().set_enabled(true);
@@ -270,13 +276,16 @@ impl DataModel {
         .map_err(|e| EngineError::Lua(e.to_string()))?;
         runtime.set_script_timeout(options.script_timeout);
         runtime.world_mut().signal_behavior = signal_behavior;
-        let _ = runtime.lua().set_memory_limit(options.memory_limit);
+        if let Err(e) = runtime.lua().set_memory_limit(options.memory_limit) {
+            tracing::warn!("Luau memory limit not set: {e}");
+        }
         if !loadstring_enabled {
             // Confirmed: creator-docs ServerScriptService.LoadStringEnabled.
-            let _ = runtime
+            runtime
                 .lua()
                 .globals()
-                .raw_set("loadstring", mlua::Value::Nil);
+                .raw_set("loadstring", mlua::Value::Nil)
+                .map_err(|e| EngineError::Lua(e.to_string()))?;
         }
         let script_cursor = runtime.world().dom.journal().end();
         Ok(Self {
@@ -325,14 +334,16 @@ impl DataModel {
         let start = {
             let mut w = self.runtime.world_mut();
             let start = w.dom.journal().end();
-            let _ = w.dom.set_property_by_name(id, name, value);
+            if let Err(e) = w.dom.set_property_by_name(id, name, value) {
+                tracing::warn!("setting {}.{name} failed: {e}", w.dom.full_name(id));
+            }
             start
         };
         self.runtime.dispatch_since(start);
     }
 
     fn fire(&self, instance: InstanceId, event: &'static str, args: impl mlua::IntoLuaMulti) {
-        let _ = self.runtime.fire_event(instance, event, args);
+        self.runtime.fire_event(instance, event, args);
         self.runtime.drain_deferred();
     }
 
@@ -381,7 +392,9 @@ fn ensure_camera(dom: &mut Dom) {
     let Ok(camera) = dom.create_by_name("Camera") else {
         return;
     };
-    let _ = dom.set_name(camera, "Camera".into());
+    if let Err(e) = dom.set_name(camera, "Camera".into()) {
+        tracing::warn!("naming the Camera failed: {e}");
+    }
     dom.attach_unchecked(camera, ws);
     if let Some(p) = dom.property_id(ws, "CurrentCamera") {
         dom.load_property(ws, p, Value::Ref(Some(camera.to_ref())));
@@ -413,7 +426,9 @@ fn ensure_terrain(dom: &mut Dom) {
     let Ok(terrain) = dom.create_by_name("Terrain") else {
         return;
     };
-    let _ = dom.set_name(terrain, "Terrain".into());
+    if let Err(e) = dom.set_name(terrain, "Terrain".into()) {
+        tracing::warn!("naming the Terrain failed: {e}");
+    }
     dom.attach_unchecked(terrain, ws);
 }
 

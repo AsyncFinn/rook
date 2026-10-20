@@ -69,7 +69,12 @@ impl Sink {
         }
         let value = self.to_client_value(value);
         if journaled {
-            let _ = client.set_property(cid, property, value);
+            warn_failed(
+                client.set_property(cid, property, value),
+                client,
+                cid,
+                "setting a property",
+            );
         } else {
             client.load_property(cid, property, value);
         }
@@ -88,7 +93,8 @@ impl Sink {
                 self.waiting.remove(&key);
                 let value = Value::Ref(Some(target.to_ref()));
                 if journaled {
-                    let _ = client.set_property(cid, property, value);
+                    let result = client.set_property(cid, property, value);
+                    warn_failed(result, client, cid, "setting a reference");
                 } else {
                     client.load_property(cid, property, value);
                 }
@@ -155,17 +161,17 @@ impl Sink {
                         Some(c) => c,
                         None => self.build(tree, client),
                     };
-                    let _ = client.set_parent(c, Some(parent));
+                    warn_failed(client.set_parent(c, Some(parent)), client, c, "parenting");
                 }
                 Update::Hide(id) | Update::Destroying(id) => {
                     if let Some(c) = self.client_id(*id) {
                         self.unmap_subtree(client, c);
-                        let _ = client.destroy(c);
+                        warn_failed(client.destroy(c), client, c, "destroying");
                     }
                 }
                 Update::Name { id, name } => {
                     if let Some(c) = self.client_id(*id) {
-                        let _ = client.set_name(c, name.clone());
+                        warn_failed(client.set_name(c, name.clone()), client, c, "renaming");
                     }
                 }
                 Update::Property {
@@ -179,17 +185,18 @@ impl Sink {
                 }
                 Update::Attribute { id, name, value } => {
                     if let Some(c) = self.client_id(*id) {
-                        let _ = client.set_attribute(c, name, value.clone());
+                        let result = client.set_attribute(c, name, value.clone());
+                        warn_failed(result, client, c, "setting an attribute");
                     }
                 }
                 Update::TagAdded { id, tag } => {
                     if let Some(c) = self.client_id(*id) {
-                        let _ = client.add_tag(c, tag);
+                        warn_failed(client.add_tag(c, tag), client, c, "adding a tag");
                     }
                 }
                 Update::TagRemoved { id, tag } => {
                     if let Some(c) = self.client_id(*id) {
-                        let _ = client.remove_tag(c, tag);
+                        warn_failed(client.remove_tag(c, tag), client, c, "removing a tag");
                     }
                 }
             }
@@ -203,12 +210,17 @@ impl Sink {
             NodeClass::Unknown(name) => client.create_unknown(name),
             NodeClass::Known(class) => client.create(*class),
         };
-        let _ = client.set_name(cid, node.name.clone());
+        warn_failed(
+            client.set_name(cid, node.name.clone()),
+            client,
+            cid,
+            "naming",
+        );
         self.map(node.id, cid);
         for child in &node.children {
             let c = self.build(child, client);
-            // Detached parent: no checks needed, no one is listening.
-            let _ = client.set_parent(c, Some(cid));
+            // Detached parent: no one is listening yet.
+            warn_failed(client.set_parent(c, Some(cid)), client, c, "parenting");
         }
         self.copy_data(node, client, cid, false);
         cid
@@ -237,5 +249,13 @@ impl Sink {
             ),
             other => other.clone(),
         }
+    }
+}
+
+/// Report a client write that failed: the client no longer matches the
+/// server there.
+fn warn_failed(result: Result<(), rook_dom::DomError>, client: &Dom, id: InstanceId, what: &str) {
+    if let Err(e) = result {
+        tracing::warn!("replication: {what} {} failed: {e}", client.full_name(id));
     }
 }
