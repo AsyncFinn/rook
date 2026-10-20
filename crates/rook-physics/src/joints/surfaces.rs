@@ -98,17 +98,17 @@ impl Box {
                 BOX_FACES
             }
         };
-        let (Some(Value::CFrame(cf)), Some(Value::Vector3(size))) = (
-            dom.property_by_name(id, "CFrame"),
-            dom.property_by_name(id, "Size"),
+        let (Some(cf), Some(size)) = (
+            dom.cframe_property(id, "CFrame"),
+            dom.vector3_property(id, "Size"),
         ) else {
             return None;
         };
-        let reach = cf.box_reach(size.0) + Vec3::splat(DISTANCE);
+        let reach = cf.box_reach(size) + Vec3::splat(DISTANCE);
         Some(Self {
             id,
             cf,
-            half: size.0 * 0.5,
+            half: size * 0.5,
             min: cf.position - reach,
             max: cf.position + reach,
             faces,

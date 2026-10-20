@@ -38,11 +38,7 @@ fn is_geometry_property(name: &str) -> bool {
 /// a block (Studio does the same: such a union is a box).
 fn saved_blob(dom: &Dom, id: InstanceId) -> Option<Vec<u8>> {
     let blob = |name| {
-        let bytes = match dom.property_by_name(id, name)? {
-            Value::BinaryString(b) => b.into_vec(),
-            Value::SharedString(s) => s.data().to_vec(),
-            _ => return None,
-        };
+        let bytes = dom.binary_property(id, name)?;
         physics::has_geometry(&bytes).then_some(bytes)
     };
     match blob("PhysicalConfigData") {

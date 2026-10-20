@@ -197,10 +197,7 @@ fn collision_groups_follow_studio() {
     let ws = dom.get_service("Workspace").unwrap();
     g.write(&mut dom).unwrap();
     assert_eq!(CollisionGroups::read(&dom), g);
-    assert!(matches!(
-        dom.property_by_name(ws, "CollisionGroupData"),
-        Some(Value::BinaryString(_))
-    ));
+    assert!(dom.binary_property(ws, "CollisionGroupData").is_some());
 }
 
 fn touches_of(touches: &[Touch], began: bool) -> usize {

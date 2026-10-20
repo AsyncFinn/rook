@@ -52,9 +52,7 @@ pub(crate) fn effects(dom: &Dom, id: InstanceId) -> Vec<Effect> {
         return Vec::new();
     }
     ordered(children.iter().filter_map(|&c| {
-        if !dom.is_a(c, "SoundEffect")
-            || dom.property_by_name(c, "Enabled") == Some(Value::Bool(false))
-        {
+        if !dom.is_a(c, "SoundEffect") || dom.bool_property(c, "Enabled") == Some(false) {
             return None;
         }
         let priority = dom.number_property(c, "Priority").unwrap_or(0.0) as i32;

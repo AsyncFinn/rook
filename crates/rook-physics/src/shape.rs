@@ -5,7 +5,7 @@ pub(crate) mod unions;
 
 use rapier3d::prelude::*;
 use rook_dom::{Dom, InstanceId};
-use rook_types::{CFrame, PartShape, Value};
+use rook_types::{CFrame, PartShape};
 
 use crate::convert::{pose_of, to_rapier};
 use crate::shape::unions::Unions;
@@ -31,11 +31,7 @@ pub fn workspace_parts(dom: &Dom) -> Vec<InstanceId> {
 
 /// A part's shape, from its class and `Shape` property.
 pub fn part_shape(dom: &Dom, id: InstanceId) -> PartShape {
-    let part_type = match dom.property_by_name(id, "Shape") {
-        Some(Value::Enum(n)) => Some(n),
-        _ => None,
-    };
-    PartShape::of(dom.class_name(id), part_type)
+    PartShape::of(dom.class_name(id), dom.enum_property(id, "Shape"))
 }
 
 /// The collider shape for a part of this shape and size, and its pose
@@ -69,12 +65,10 @@ pub(crate) fn world_shape(
     unions: &mut Unions,
     part: InstanceId,
 ) -> Option<(SharedShape, Pose)> {
-    let Some(Value::Vector3(size)) = dom.property_by_name(part, "Size") else {
-        return None;
-    };
-    let (shape, local) = match unions.shape(dom, part, size.0) {
+    let size = dom.vector3_property(part, "Size")?;
+    let (shape, local) = match unions.shape(dom, part, size) {
         Some(s) => (s, Pose::IDENTITY),
-        None => collider_shape(part_shape(dom, part), size.0)?,
+        None => collider_shape(part_shape(dom, part), size)?,
     };
     Some((
         shape,
@@ -90,10 +84,8 @@ pub(crate) fn world_shape(
 /// ball counts in its box's corners, and a rotated block doesn't count in
 /// its world bounding box's corners).
 pub(crate) fn world_box(dom: &Dom, part: InstanceId) -> Option<(SharedShape, Pose)> {
-    let Some(Value::Vector3(size)) = dom.property_by_name(part, "Size") else {
-        return None;
-    };
-    let h = size.0.max(glam::Vec3::splat(MIN_PART_SIZE)) * 0.5;
+    let size = dom.vector3_property(part, "Size")?;
+    let h = size.max(glam::Vec3::splat(MIN_PART_SIZE)) * 0.5;
     let cf = dom
         .cframe_property(part, "CFrame")
         .unwrap_or(CFrame::IDENTITY);

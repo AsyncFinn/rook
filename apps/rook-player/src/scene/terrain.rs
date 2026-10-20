@@ -133,10 +133,7 @@ impl SceneCache {
     fn read_terrain_look(&mut self, dom: &Dom) {
         let terrain = self.terrain.instance;
         self.scene.terrain = terrain_look(dom, terrain);
-        let colors = terrain.and_then(|t| match dom.property_by_name(t, "MaterialColors") {
-            Some(Value::MaterialColors(c)) => Some(c),
-            _ => None,
-        });
+        let colors = terrain.and_then(|t| dom.material_colors_property(t, "MaterialColors"));
         let grass = &mut self.terrain.grass;
         grass.on = self.scene.terrain.grass_reach > 0.0;
         grass.color = TerrainMaterial::Grass
@@ -280,10 +277,7 @@ impl SceneCache {
         // Terrain draws the place's set of textures and default colours
         // (`TerrainMaterial::textures`), as parts do.
         let set = look::materials::material_set(dom);
-        let colors = match dom.property_by_name(terrain, "MaterialColors") {
-            Some(Value::MaterialColors(c)) => Some(c),
-            _ => None,
-        };
+        let colors = dom.material_colors_property(terrain, "MaterialColors");
         let water = dom
             .color3_property(terrain, "WaterColor")
             .map(Color3::to_array)

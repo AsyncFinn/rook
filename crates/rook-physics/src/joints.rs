@@ -88,7 +88,7 @@ pub fn endpoints(dom: &Dom, id: InstanceId) -> [Option<InstanceId>; 2] {
 /// JointsService are active too; WeldConstraints there aren't.
 pub fn active_joint(dom: &Dom, id: InstanceId) -> Option<Joint> {
     let kind = JointKind::of(dom.class_name(id))?;
-    if dom.is_destroyed(id) || dom.property_by_name(id, "Enabled") == Some(Value::Bool(false)) {
+    if dom.is_destroyed(id) || dom.bool_property(id, "Enabled") == Some(false) {
         return None;
     }
     let [Some(part0), Some(part1)] = endpoints(dom, id) else {

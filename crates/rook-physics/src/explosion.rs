@@ -14,7 +14,6 @@ use rapier3d::prelude::*;
 use rook_dom::{Dom, InstanceId};
 use rook_terrain::TerrainMaterial;
 use rook_terrain::grid::edit::Shape as Fill;
-use rook_types::Value;
 use rustc_hash::FxHashMap as HashMap;
 
 use crate::convert::{to_glam, to_rapier};
@@ -149,10 +148,7 @@ impl Physics {
 /// A part's `Size` and where its centre is.
 fn size_and_position(dom: &Dom, part: InstanceId) -> Option<(Vec3, Vec3)> {
     let size = dom.vector3_property(part, "Size")?;
-    let at = match dom.property_by_name(part, "CFrame")? {
-        Value::CFrame(cf) => cf.position,
-        _ => return None,
-    };
+    let at = dom.cframe_property(part, "CFrame")?.position;
     Some((size.max(Vec3::splat(shape::MIN_PART_SIZE)), at))
 }
 

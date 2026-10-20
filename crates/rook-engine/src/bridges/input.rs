@@ -120,10 +120,10 @@ impl DataModel {
             return;
         };
         let (w, h) = self.input.viewport;
-        let size = Value::Vector2(rook_types::Vector2::new(w as f32, h as f32));
+        let size = rook_types::Vector2::new(w as f32, h as f32);
         let mut world = self.runtime.world_mut();
-        if world.dom.property_by_name(camera, "ViewportSize").as_ref() != Some(&size) {
-            set(&mut world.dom, camera, "ViewportSize", size);
+        if world.dom.vector2_property(camera, "ViewportSize") != Some(size) {
+            set(&mut world.dom, camera, "ViewportSize", Value::Vector2(size));
         }
     }
 
@@ -472,10 +472,9 @@ impl DataModel {
                 .filter(|a| dom.is_a(*a, "Model"))
                 .find_map(find)
         })?;
-        let max = match dom.property_by_name(detector, "MaxActivationDistance") {
-            Some(Value::Float32(m)) => m,
-            _ => 32.0,
-        };
+        let max = dom
+            .float_property(detector, "MaxActivationDistance")
+            .unwrap_or(32.0);
         (distance <= max).then_some(detector)
     }
 }

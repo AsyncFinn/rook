@@ -112,6 +112,10 @@ pub fn of_material(value: u32) -> Properties {
 
 /// The properties a part simulates with: its `CustomPhysicalProperties`
 /// when set, otherwise its material's.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "CustomPhysicalProperties has no typed reader; this is its one read"
+)]
 pub fn of_part(dom: &Dom, part: InstanceId) -> Properties {
     if let Some(Value::PhysicalProperties(PhysicalProperties::Custom(c))) =
         dom.property_by_name(part, "CustomPhysicalProperties")
@@ -125,10 +129,8 @@ pub fn of_part(dom: &Dom, part: InstanceId) -> Properties {
             c.acoustic_absorption(),
         );
     }
-    match dom.property_by_name(part, "Material") {
-        Some(Value::Enum(n)) => of_material(n),
-        _ => PLASTIC,
-    }
+    dom.enum_property(part, "Material")
+        .map_or(PLASTIC, of_material)
 }
 
 /// Two values averaged by weight, as touching parts combine friction and
@@ -149,8 +151,7 @@ pub fn mix(a: f32, weight_a: f32, b: f32, weight_b: f32) -> f32 {
 pub fn base_material_override(dom: &Dom, service: InstanceId, m: Material) -> Option<String> {
     let property = m.override_property()?;
     Some(
-        dom.property_by_name(service, &property)
-            .and_then(|v| v.as_str().map(str::to_owned))
+        dom.string_property(service, &property)
             .unwrap_or_else(|| m.name().to_owned()),
     )
 }
@@ -177,7 +178,7 @@ pub fn part_variant(dom: &Dom, part: InstanceId) -> Option<InstanceId> {
     let material = Material::of_part(dom.enum_property(part, "Material"));
     let own = ["MaterialVariant", "MaterialVariantSerialized"]
         .iter()
-        .find_map(|p| dom.property_by_name(part, p)?.as_str().map(str::to_owned))
+        .find_map(|p| dom.string_property(part, p))
         .filter(|n| !n.is_empty());
     let name = match own {
         Some(name) => name,

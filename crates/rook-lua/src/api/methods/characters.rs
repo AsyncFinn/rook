@@ -19,9 +19,9 @@ pub(super) fn player_from_character(lua: &Lua, this: InstanceId, a: &Args) -> Ap
     let character = a.opt_instance(0)?;
     let found = character.and_then(|c| {
         with_world(lua, |w| {
-            players_of(w, this).into_iter().find(|p| {
-                w.dom.property_by_name(*p, "Character") == Some(Value::Ref(Some(c.to_ref())))
-            })
+            players_of(w, this)
+                .into_iter()
+                .find(|p| w.dom.ref_property(*p, "Character") == Some(c))
         })
     });
     ret_instance(lua, found)
@@ -32,7 +32,7 @@ pub(super) fn player_by_user_id(lua: &Lua, this: InstanceId, a: &Args) -> ApiRes
     let found = with_world(lua, |w| {
         players_of(w, this)
             .into_iter()
-            .find(|p| w.dom.property_by_name(*p, "UserId") == Some(Value::Int64(user_id)))
+            .find(|p| w.dom.number_property(*p, "UserId") == Some(user_id as f64))
     });
     ret_instance(lua, found)
 }
@@ -51,10 +51,7 @@ pub(super) fn take_damage(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Ou
         if protected {
             return Ok(());
         }
-        let health = match w.dom.property_by_name(this, "Health") {
-            Some(Value::Float32(h)) => f64::from(h),
-            _ => 0.0,
-        };
+        let health = w.dom.number_property(this, "Health").unwrap_or(0.0);
         let pid = w.dom.property_id(this, "Health").ok_or(DomError::Stale)?;
         w.dom
             .set_property(this, pid, Value::Float32((health - amount).max(0.0) as f32))
@@ -153,20 +150,19 @@ fn build_body(dom: &mut rook_dom::Dom, player: InstanceId) -> Result<InstanceId,
 fn spawn_point(dom: &rook_dom::Dom) -> glam::Vec3 {
     let spawn = dom.find_service("Workspace").and_then(|ws| {
         dom.descendants(ws).into_iter().find(|&d| {
-            dom.is_a(d, "SpawnLocation")
-                && dom.property_by_name(d, "Enabled") != Some(Value::Bool(false))
+            dom.is_a(d, "SpawnLocation") && dom.bool_property(d, "Enabled") != Some(false)
         })
     });
     let Some(spawn) = spawn else {
         return glam::Vec3::new(0.0, 3.0, 0.0);
     };
-    let (Some(Value::CFrame(cf)), Some(Value::Vector3(size))) = (
-        dom.property_by_name(spawn, "CFrame"),
-        dom.property_by_name(spawn, "Size"),
+    let (Some(cf), Some(size)) = (
+        dom.cframe_property(spawn, "CFrame"),
+        dom.vector3_property(spawn, "Size"),
     ) else {
         return glam::Vec3::new(0.0, 3.0, 0.0);
     };
-    cf.position + glam::Vec3::new(0.0, size.0.y / 2.0 + 3.0, 0.0)
+    cf.position + glam::Vec3::new(0.0, size.y / 2.0 + 3.0, 0.0)
 }
 
 /// Copies of `from`'s archivable children under `to`.
@@ -204,9 +200,7 @@ fn reset_player_gui(dom: &mut rook_dom::Dom, player: InstanceId) -> Result<(), D
     let Some(gui) = dom.find_first_child(player, "PlayerGui", false) else {
         return Ok(());
     };
-    let keeps = |dom: &rook_dom::Dom, id| {
-        dom.property_by_name(id, "ResetOnSpawn") == Some(Value::Bool(false))
-    };
+    let keeps = |dom: &rook_dom::Dom, id| dom.bool_property(id, "ResetOnSpawn") == Some(false);
     let mut kept = Vec::new();
     for old in dom.children(gui).to_vec() {
         if keeps(dom, old) {

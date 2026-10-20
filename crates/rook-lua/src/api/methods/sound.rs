@@ -11,13 +11,12 @@ use crate::world::Listener;
 /// The `soundId` the Sound events pass: the `SoundId` string.
 pub(crate) fn sound_id(w: &World, id: InstanceId) -> String {
     w.dom
-        .property_by_name(id, "AudioContent")
-        .and_then(|v| v.content_url().map(str::to_owned))
+        .content_property(id, "AudioContent")
         .unwrap_or_default()
 }
 
 fn playing(w: &World, id: InstanceId) -> bool {
-    w.dom.property_by_name(id, "Playing") == Some(Value::Bool(true))
+    w.dom.bool_property(id, "Playing") == Some(true)
 }
 
 /// Fire `event` with the sound's id, then apply `change`: Studio fires the

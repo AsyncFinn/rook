@@ -233,14 +233,8 @@ mod tests {
         assert!(dom.is_parent_locked(ws));
         let brick = dom.find_first_child(ws, "Brick", false).unwrap();
         let link = dom.find_first_child(ws, "Link", false).unwrap();
-        assert_eq!(
-            dom.property_by_name(brick, "Anchored"),
-            Some(Value::Bool(true))
-        );
-        assert_eq!(
-            dom.property_by_name(link, "Value"),
-            Some(Value::Ref(Some(brick.to_ref())))
-        );
+        assert_eq!(dom.bool_property(brick, "Anchored"), Some(true));
+        assert_eq!(dom.ref_property(link, "Value"), Some(brick));
         // Loading isn't replayed as changes.
         assert_eq!(dom.journal().end(), 0);
 

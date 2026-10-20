@@ -10,7 +10,7 @@
 use glam::{Vec2, Vec3};
 use mlua::Lua;
 use rook_dom::{Dom, InstanceId};
-use rook_types::{CFrame, Value, Vector3};
+use rook_types::{CFrame, Vector3};
 
 use super::methods::RawMethod;
 use crate::ctx::args::Args;
@@ -44,16 +44,12 @@ pub struct Lens {
 impl Lens {
     /// A camera's lens, from its properties.
     pub fn of(dom: &Dom, camera: InstanceId) -> Self {
-        let cframe = match dom.property_by_name(camera, "CFrame") {
-            Some(Value::CFrame(c)) => c,
-            _ => CFrame::IDENTITY,
-        };
-        let fov = match dom.property_by_name(camera, "FieldOfView") {
-            Some(Value::Float32(f)) => f,
-            _ => 70.0,
-        };
-        let viewport = match dom.property_by_name(camera, "ViewportSize") {
-            Some(Value::Vector2(v)) if v.x() > 0.0 && v.y() > 0.0 => Vec2::new(v.x(), v.y()),
+        let cframe = dom
+            .cframe_property(camera, "CFrame")
+            .unwrap_or(CFrame::IDENTITY);
+        let fov = dom.float_property(camera, "FieldOfView").unwrap_or(70.0);
+        let viewport = match dom.vector2_property(camera, "ViewportSize") {
+            Some(v) if v.x() > 0.0 && v.y() > 0.0 => v.0,
             _ => Vec2::ONE,
         };
         Self {

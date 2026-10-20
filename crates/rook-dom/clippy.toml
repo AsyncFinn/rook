@@ -1,0 +1,2 @@
+# rook-dom defines Dom::property_by_name and the typed readers built on it,
+# so the workspace's disallowed-methods rule doesn't apply here.

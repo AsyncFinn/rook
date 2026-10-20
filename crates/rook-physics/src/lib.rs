@@ -81,11 +81,9 @@ const DEFAULT_FALLEN_HEIGHT: f32 = -500.0;
 /// A part's volume, from its shape and Size. MeshParts, unions and
 /// trusses count as blocks until meshes exist.
 pub fn part_volume(dom: &Dom, part: InstanceId) -> f32 {
-    match dom.property_by_name(part, "Size") {
-        Some(Value::Vector3(s)) => {
-            part_shape(dom, part).volume(s.0.max(glam::Vec3::splat(shape::MIN_PART_SIZE)))
-        }
-        _ => 0.0,
+    match dom.vector3_property(part, "Size") {
+        Some(s) => part_shape(dom, part).volume(s.max(glam::Vec3::splat(shape::MIN_PART_SIZE))),
+        None => 0.0,
     }
 }
 

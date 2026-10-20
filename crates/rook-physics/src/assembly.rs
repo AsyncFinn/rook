@@ -261,18 +261,15 @@ impl Assembly {
 /// centre of mass of an assembly spinning at 2 rad/s reads 7.11). An
 /// anchored part reads its own AssemblyLinearVelocity, which it keeps.
 pub fn part_velocity(dom: &Dom, part: InstanceId) -> glam::Vec3 {
-    let vector = |id, name| match dom.property_by_name(id, name) {
-        Some(Value::Vector3(v)) => v.0,
-        _ => glam::Vec3::ZERO,
-    };
+    let vector = |id, name| dom.vector3_property(id, name).unwrap_or(glam::Vec3::ZERO);
     let linear = vector(part, "AssemblyLinearVelocity");
     let angular = vector(part, "AssemblyAngularVelocity");
     if angular == glam::Vec3::ZERO {
         return linear;
     }
-    let position = |id| match dom.property_by_name(id, "CFrame") {
-        Some(Value::CFrame(c)) => c.position,
-        _ => glam::Vec3::ZERO,
+    let position = |id| {
+        dom.cframe_property(id, "CFrame")
+            .map_or(glam::Vec3::ZERO, |c| c.position)
     };
     let com = match Assembly::of(dom, part) {
         Some(asm) if !asm.anchored && asm.members.len() > 1 => {
@@ -388,11 +385,11 @@ pub fn connected_parts(dom: &Dom, part: InstanceId, recursive: bool) -> Vec<Inst
 }
 
 fn is_anchored(dom: &Dom, part: InstanceId) -> bool {
-    dom.property_by_name(part, "Anchored") == Some(Value::Bool(true))
+    dom.bool_property(part, "Anchored") == Some(true)
 }
 
 pub(crate) fn is_massless(dom: &Dom, part: InstanceId) -> bool {
-    dom.property_by_name(part, "Massless") == Some(Value::Bool(true))
+    dom.bool_property(part, "Massless") == Some(true)
 }
 
 /// The root of an unanchored cluster (creator-docs "Assemblies"; order
@@ -401,10 +398,7 @@ pub(crate) fn is_massless(dom: &Dom, part: InstanceId) -> bool {
 /// takes the highest id, which is usually the newer part (Approximation).
 fn root_of(dom: &Dom, parts: &[InstanceId]) -> InstanceId {
     let key = |p: InstanceId| {
-        let priority = match dom.property_by_name(p, "RootPriority") {
-            Some(Value::Int32(n)) => n,
-            _ => 0,
-        };
+        let priority = dom.number_property(p, "RootPriority").unwrap_or(0.0) as i32;
         (
             !is_massless(dom, p),
             priority,

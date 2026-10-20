@@ -13,10 +13,7 @@ fn door_x(dm: &DataModel) -> f32 {
         .unwrap();
     let door = dom.find_first_child(ws, "Door", false).unwrap();
     let panel = dom.find_first_child(door, "Panel", false).unwrap();
-    match dom.property_by_name(panel, "CFrame") {
-        Some(Value::CFrame(cf)) => cf.position.x,
-        other => panic!("CFrame {other:?}"),
-    }
+    dom.cframe_property(panel, "CFrame").unwrap().position.x
 }
 
 /// The character spawns with StarterCharacterScripts' contents, and a

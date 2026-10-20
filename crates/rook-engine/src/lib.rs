@@ -264,8 +264,8 @@ impl DataModel {
         };
         let loadstring_enabled = dom
             .find_service("ServerScriptService")
-            .and_then(|s| dom.property_by_name(s, "LoadStringEnabled"))
-            == Some(Value::Bool(true));
+            .and_then(|s| dom.bool_property(s, "LoadStringEnabled"))
+            == Some(true);
 
         let runtime = Runtime::new(
             dom,
@@ -403,6 +403,10 @@ fn ensure_camera(dom: &mut Dom) {
 
 /// Whether two instances were saved with the same `UniqueId` (nil ones,
 /// which old files and new instances have, don't count).
+#[expect(
+    clippy::disallowed_methods,
+    reason = "UniqueId has no typed reader; this is its one read"
+)]
 fn has_duplicate_unique_ids(dom: &Dom) -> bool {
     let mut seen = std::collections::HashSet::new();
     dom.descendants(dom.root()).into_iter().any(|id| {

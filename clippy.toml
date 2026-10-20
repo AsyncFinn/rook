@@ -1,0 +1,6 @@
+disallowed-methods = [
+    # Outside rook-dom, properties are read through Dom's typed readers
+    # (`float_property`, `enum_item_property`, ...); a raw Value read needs
+    # an allow with its reason.
+    { path = "rook_dom::Dom::property_by_name", reason = "use a typed reader such as Dom::float_property" },
+]

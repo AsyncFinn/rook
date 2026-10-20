@@ -7,9 +7,9 @@ fn smooth_grid(s: &Server) -> rook_terrain::Grid {
     let w = s.runtime().world();
     let ws = w.dom.find_service("Workspace").unwrap();
     let terrain = w.dom.find_first_child_of_class(ws, "Terrain").unwrap();
-    match w.dom.property_by_name(terrain, "SmoothGrid") {
-        Some(Value::BinaryString(b)) => rook_terrain::Grid::decode(b.as_ref()).unwrap(),
-        _ => rook_terrain::Grid::new(),
+    match w.dom.binary_property(terrain, "SmoothGrid") {
+        Some(bytes) => rook_terrain::Grid::decode(&bytes).unwrap(),
+        None => rook_terrain::Grid::new(),
     }
 }
 

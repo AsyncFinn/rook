@@ -84,7 +84,7 @@ pub fn in_graph(class: &str) -> bool {
 /// Play or stop an AudioPlayer where its `TimePosition` is. Playing one
 /// that plays already changes nothing.
 pub fn set_playing(w: &mut World, id: InstanceId, play: bool) -> Result<(), rook_dom::DomError> {
-    let playing = w.dom.property_by_name(id, "IsPlaying") == Some(Value::Bool(true));
+    let playing = w.dom.bool_property(id, "IsPlaying") == Some(true);
     if play && !playing {
         w.sounds.entry(id).or_default().loops = 0;
     }
@@ -184,10 +184,7 @@ pub(crate) fn all_wires(dom: &Dom) -> Vec<InstanceId> {
 pub fn place(w: &World, id: InstanceId) -> Option<CFrame> {
     let dom = &w.dom;
     let parent = dom.parent(id)?;
-    let cframe = |i| match dom.property_by_name(i, "CFrame") {
-        Some(Value::CFrame(c)) => Some(c),
-        _ => None,
-    };
+    let cframe = |i| dom.cframe_property(i, "CFrame");
     if dom.is_a(parent, "Attachment") {
         let part = dom
             .parent(parent)
@@ -238,10 +235,9 @@ pub fn audibility(w: &World, emitter: InstanceId, listener: InstanceId) -> f32 {
         Some("Inverse") => Some(RollOffMode::Inverse),
         _ => None,
     };
-    let bounds = match dom.property_by_name(emitter, "DistanceAttenuationBounds") {
-        Some(Value::NumberRange(r)) => [r.min, r.max],
-        _ => [4.0, 10_000.0],
-    };
+    let bounds = dom
+        .number_range_property(emitter, "DistanceAttenuationBounds")
+        .map_or([4.0, 10_000.0], |r| [r.min, r.max]);
     let by_distance =
         rook_audio::spatial::emitter_attenuation(
             mode,

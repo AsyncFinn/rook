@@ -2,7 +2,6 @@
 
 use mlua::{Function, Lua, MultiValue, Table, Value as LuaValue};
 use rook_dom::InstanceId;
-use rook_types::Value;
 
 use super::instance::{LuaInstance, push_instance};
 use crate::ctx::args::Args;
@@ -11,9 +10,8 @@ use crate::threads::spawn;
 use crate::world::{Job, MessageType, WaitKind};
 
 fn source_of(lua: &Lua, id: InstanceId) -> String {
-    with_world(lua, |w| match w.dom.property_by_name(id, "Source") {
-        Some(Value::String(s)) => s,
-        _ => String::new(),
+    with_world(lua, |w| {
+        w.dom.string_property(id, "Source").unwrap_or_default()
     })
 }
 

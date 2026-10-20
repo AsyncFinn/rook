@@ -127,10 +127,7 @@ fn motors_turn_toward_the_desired_angle() {
     set(&mut dom, m, "DesiredAngle", Value::Float32(1.0));
     let mut physics = Physics::new();
     run(&mut physics, &mut dom, 1.0 / 60.0);
-    let angle = |dom: &Dom| match dom.property_by_name(m, "CurrentAngle") {
-        Some(Value::Float32(a)) => a,
-        other => panic!("{other:?}"),
-    };
+    let angle = |dom: &Dom| dom.float_property(m, "CurrentAngle").unwrap();
     assert!((angle(&dom) - 0.1).abs() < 1e-6);
     run(&mut physics, &mut dom, 0.5);
     assert_eq!(angle(&dom), 1.0);
@@ -201,11 +198,11 @@ fn moving_a_part_moves_its_assembly_and_reseating_rewrites_its_side() {
 
     set(&mut dom, b, "CFrame", Value::CFrame(at(4.0, 20.0, 0.0)));
     joints::reseat(&mut dom, b).unwrap();
-    let c = |dom: &Dom, name| dom.property_by_name(w, name);
-    assert_eq!(c(&dom, "C1"), Some(Value::CFrame(at(-2.0, -10.0, 0.0))));
+    let c = |dom: &Dom, name| dom.cframe_property(w, name);
+    assert_eq!(c(&dom, "C1"), Some(at(-2.0, -10.0, 0.0)));
     set(&mut dom, a, "CFrame", Value::CFrame(at(0.0, 0.0, 0.0)));
     joints::reseat(&mut dom, a).unwrap();
-    assert_eq!(c(&dom, "C0"), Some(Value::CFrame(at(2.0, 10.0, 0.0))));
+    assert_eq!(c(&dom, "C0"), Some(at(2.0, 10.0, 0.0)));
 }
 
 #[test]

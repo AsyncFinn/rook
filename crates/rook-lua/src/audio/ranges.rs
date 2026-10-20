@@ -66,6 +66,10 @@ const MID_RANGE: (f32, f32) = (200.0, 20_000.0);
 /// Store `value` within its range, if `name` has one on `id`'s class.
 /// NaN reads back as the highest value (observed for AudioPlayer's
 /// `Volume`; Inference for the rest).
+#[expect(
+    clippy::disallowed_methods,
+    reason = "stores the value in the variant the property already holds"
+)]
 pub(crate) fn clamp(
     w: &mut World,
     id: InstanceId,

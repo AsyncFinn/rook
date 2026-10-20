@@ -65,10 +65,8 @@ impl CollisionGroups {
     /// archive's samples of it list only `Default`).
     pub fn read(dom: &Dom) -> Self {
         dom.find_service("Workspace")
-            .and_then(|ws| match dom.property_by_name(ws, "CollisionGroupData") {
-                Some(Value::BinaryString(b)) => Self::decode(b.as_ref()),
-                _ => None,
-            })
+            .and_then(|ws| dom.binary_property(ws, "CollisionGroupData"))
+            .and_then(|b| Self::decode(&b))
             .unwrap_or_default()
     }
 
@@ -228,8 +226,7 @@ fn check_name(name: &str) -> Result<(), GroupError> {
 
 /// A part's `CollisionGroup` name.
 pub fn part_group(dom: &Dom, part: InstanceId) -> String {
-    match dom.property_by_name(part, "CollisionGroup") {
-        Some(Value::String(s)) if !s.is_empty() => s,
-        _ => DEFAULT.to_owned(),
-    }
+    dom.string_property(part, "CollisionGroup")
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| DEFAULT.to_owned())
 }

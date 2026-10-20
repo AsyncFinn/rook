@@ -95,10 +95,7 @@ fn make_joints_frames_match_studio() {
         assert_eq!(j.part0, a);
         assert_eq!(dom.parent(j.id), Some(a));
         assert_eq!(dom.name(j.id), "Weld");
-        let get = |name| match dom.property_by_name(j.id, name) {
-            Some(Value::CFrame(c)) => c,
-            other => panic!("{other:?}"),
-        };
+        let get = |name| dom.cframe_property(j.id, name).unwrap();
         let (got0, got1) = (get("C0"), get("C1"));
         assert!(
             got0.fuzzy_eq(&CFrame::from_components(c0), 1e-5),
@@ -205,9 +202,7 @@ fn wedge_slopes_join_like_studio() {
         let js = joints::part_joints(&dom, wedge);
         assert!(js.len() <= 1);
         let j = js.first()?;
-        let Some(Value::CFrame(c0)) = dom.property_by_name(j.id, "C0") else {
-            panic!("no C0")
-        };
+        let c0 = dom.cframe_property(j.id, "C0").expect("C0");
         Some((
             dom.class_name(j.id).to_owned(),
             j.part0 == wedge,
@@ -330,9 +325,7 @@ fn balls_and_cylinders_join_as_boxes() {
         }
         surfaces::make_joints(&mut dom, &[round]).unwrap();
         let j = *joints::part_joints(&dom, round).first()?;
-        let Some(Value::CFrame(c0)) = dom.property_by_name(j.id, "C0") else {
-            panic!("no C0")
-        };
+        let c0 = dom.cframe_property(j.id, "C0").expect("C0");
         Some((
             dom.class_name(j.id).to_owned(),
             j.part0 == round,

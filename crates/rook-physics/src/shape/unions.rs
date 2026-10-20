@@ -18,7 +18,7 @@ use rustc_hash::FxHashMap as HashMap;
 
 use glam::Vec3;
 use rook_dom::{Dom, InstanceId};
-use rook_types::{UnionCollision, Value, mesh_part_scale};
+use rook_types::{UnionCollision, mesh_part_scale};
 
 use crate::convert::to_rapier;
 
@@ -58,10 +58,9 @@ impl Unions {
     pub(crate) fn shape(&mut self, dom: &Dom, part: InstanceId, size: Vec3) -> Option<SharedShape> {
         let geometry = self.geometry.get(&part)?;
 
-        let initial = match dom.property_by_name(part, "InitialSize") {
-            Some(Value::Vector3(v)) => v.0,
-            _ => Vec3::ZERO,
-        };
+        let initial = dom
+            .vector3_property(part, "InitialSize")
+            .unwrap_or(Vec3::ZERO);
         let scale = mesh_part_scale(size, initial);
         let key = (
             Arc::as_ptr(geometry) as usize,

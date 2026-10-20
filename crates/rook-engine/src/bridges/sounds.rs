@@ -79,9 +79,9 @@ pub(crate) struct Sounds {
 
 fn sound_url(dom: &Dom, id: InstanceId) -> Option<ContentRef> {
     let value = dom
-        .property_by_name(id, "AudioContent")
-        .or_else(|| dom.property_by_name(id, "SoundId"))?;
-    ContentRef::parse(value.content_url()?)
+        .content_property(id, "AudioContent")
+        .or_else(|| dom.content_property(id, "SoundId"))?;
+    ContentRef::parse(&value)
 }
 
 fn is_player(dom: &Dom, id: InstanceId) -> bool {
@@ -93,9 +93,7 @@ fn is_sound(dom: &Dom, id: InstanceId) -> bool {
 }
 
 fn sound_id(dom: &Dom, id: InstanceId) -> String {
-    dom.property_by_name(id, "AudioContent")
-        .and_then(|v| v.content_url().map(str::to_owned))
-        .unwrap_or_default()
+    dom.content_property(id, "AudioContent").unwrap_or_default()
 }
 
 impl Sounds {
@@ -273,9 +271,7 @@ impl DataModel {
                         Value::Bool(true),
                     ));
                 }
-                let auto_load = dom
-                    .property_by_name(id, "AutoLoad")
-                    .is_none_or(|v| v.as_bool() != Some(false));
+                let auto_load = dom.bool_property(id, "AutoLoad") != Some(false);
                 if !auto_load
                     && !dom.bool_property(id, "IsPlaying").unwrap_or(false)
                     && !sounds.tracked.contains_key(&id)

@@ -103,9 +103,9 @@ fn edit<R>(lua: &Lua, terrain: InstanceId, f: impl FnOnce(&mut Grid) -> (R, Opti
 /// An instance's `SmoothGrid` voxels; none when it has none or they don't
 /// decode.
 fn decoded(dom: &rook_dom::Dom, id: InstanceId) -> Grid {
-    match dom.property_by_name(id, "SmoothGrid") {
-        Some(Value::BinaryString(b)) => Grid::decode(AsRef::<[u8]>::as_ref(&b)).unwrap_or_default(),
-        _ => Grid::new(),
+    match dom.binary_property(id, "SmoothGrid") {
+        Some(bytes) => Grid::decode(&bytes).unwrap_or_default(),
+        None => Grid::new(),
     }
 }
 
@@ -432,6 +432,10 @@ pub(super) fn copy_region(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Ou
 }
 
 /// A TerrainRegion's voxels and size.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "Vector3int16 has no typed reader; this is its one read"
+)]
 pub(crate) fn region_voxels_of(dom: &rook_dom::Dom, region: InstanceId) -> (Grid, IVec3) {
     let extent = |name| match dom.property_by_name(region, name) {
         Some(Value::Vector3int16(v)) => v16(v),
@@ -471,10 +475,7 @@ fn color_key(lua: &Lua, a: &Args) -> ApiResult<(TerrainMaterial, TerrainMaterial
 }
 
 fn material_colors(dom: &rook_dom::Dom, id: InstanceId) -> Option<rook_types::MaterialColors> {
-    match dom.property_by_name(id, "MaterialColors") {
-        Some(Value::MaterialColors(c)) => Some(c),
-        _ => None,
-    }
+    dom.material_colors_property(id, "MaterialColors")
 }
 
 pub(super) fn get_material_color(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {

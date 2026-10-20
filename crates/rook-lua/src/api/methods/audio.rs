@@ -88,10 +88,7 @@ pub(super) fn get_connected_wires(lua: &Lua, this: InstanceId, a: &Args) -> ApiR
     let pin = a.string(0)?;
     let wires = with_world(lua, |w| {
         let dom = &w.dom;
-        let name = |wire, p| match dom.property_by_name(wire, p) {
-            Some(Value::String(s)) => s,
-            _ => String::new(),
-        };
+        let name = |wire, p| dom.string_property(wire, p).unwrap_or_default();
         audio::connections(dom, &audio::all_wires(dom))
             .into_iter()
             .filter(|c| {

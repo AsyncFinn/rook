@@ -385,9 +385,7 @@ pub(crate) fn initial_camera(dm: &DataModel) -> Camera {
     let world = dm.runtime().world();
     let dom = &world.dom;
     let saved = dm.current_camera().and_then(|cam| {
-        let Value::CFrame(cf) = dom.property_by_name(cam, "CFrame")? else {
-            return None;
-        };
+        let cf = dom.cframe_property(cam, "CFrame")?;
         Some(Camera {
             position: cf.position,
             rotation: Mat3::from_cols(

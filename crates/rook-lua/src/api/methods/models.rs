@@ -20,19 +20,18 @@ fn primary_part(w: &World, model: InstanceId) -> Option<InstanceId> {
 /// `PVInstance:GetPivot` for a part is `CFrame * PivotOffset`.
 pub(crate) fn pivot_of(w: &World, id: InstanceId) -> CFrame {
     if w.dom.is_a(id, "BasePart") {
-        let offset = match w.dom.property_by_name(id, "PivotOffset") {
-            Some(Value::CFrame(c)) => c,
-            _ => CFrame::IDENTITY,
-        };
+        let offset = w
+            .dom
+            .cframe_property(id, "PivotOffset")
+            .unwrap_or(CFrame::IDENTITY);
         return cframe(w, id) * offset;
     }
     match crate::api::properties::get(w, id, "WorldPivot") {
         Some(Value::CFrame(c))
             if primary_part(w, id).is_some()
-                || matches!(
-                    w.dom.property_by_name(id, "WorldPivotData"),
-                    Some(Value::OptionalCFrame(Some(_)))
-                ) =>
+                || w.dom
+                    .optional_cframe_property(id, "WorldPivotData")
+                    .is_some() =>
         {
             c
         }
@@ -49,7 +48,7 @@ fn transform_model(w: &mut World, model: InstanceId, delta: CFrame) -> Result<()
         .map(|part| (part, delta * cframe(w, part)))
         .collect();
     assembly::move_parts(&mut w.dom, moves)?;
-    if let Some(Value::OptionalCFrame(Some(p))) = w.dom.property_by_name(model, "WorldPivotData") {
+    if let Some(p) = w.dom.optional_cframe_property(model, "WorldPivotData") {
         let pid = w
             .dom
             .property_id(model, "WorldPivotData")
@@ -149,10 +148,7 @@ pub(super) fn model_move_to(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<
 fn bounding_box(w: &World, model: InstanceId) -> (CFrame, Vector3) {
     let turn = match primary_part(w, model) {
         Some(p) => Some(cframe(w, p)),
-        None => match w.dom.property_by_name(model, "WorldPivotData") {
-            Some(Value::OptionalCFrame(Some(pivot))) => Some(pivot),
-            _ => None,
-        },
+        None => w.dom.optional_cframe_property(model, "WorldPivotData"),
     };
     let basis = match turn {
         Some(c) => CFrame {
@@ -165,10 +161,10 @@ fn bounding_box(w: &World, model: InstanceId) -> (CFrame, Vector3) {
     let mut max = glam::Vec3::splat(f32::NEG_INFINITY);
     for part in parts_of(w, model) {
         let c = basis.to_object_space(cframe(w, part));
-        let size = match w.dom.property_by_name(part, "Size") {
-            Some(Value::Vector3(s)) => s.0,
-            _ => glam::Vec3::ONE,
-        };
+        let size = w
+            .dom
+            .vector3_property(part, "Size")
+            .unwrap_or(glam::Vec3::ONE);
         let extent = c.box_reach(size);
         min = min.min(c.position - extent);
         max = max.max(c.position + extent);

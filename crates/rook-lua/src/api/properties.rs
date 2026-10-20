@@ -17,10 +17,9 @@ use crate::world::World;
 
 /// A part's CFrame.
 pub(crate) fn cframe(w: &World, id: InstanceId) -> CFrame {
-    match w.dom.property_by_name(id, "CFrame") {
-        Some(Value::CFrame(c)) => c,
-        _ => CFrame::IDENTITY,
-    }
+    w.dom
+        .cframe_property(id, "CFrame")
+        .unwrap_or(CFrame::IDENTITY)
 }
 
 /// Set a part's CFrame as a script does: its assembly moves with it.
@@ -169,6 +168,10 @@ pub(crate) fn set_lighting_hours(
     )
 }
 
+#[expect(
+    clippy::disallowed_methods,
+    reason = "a property view returns another property's Value as it is"
+)]
 pub(crate) fn get(w: &World, id: InstanceId, name: &str) -> Option<Value> {
     let dom = &w.dom;
     if dom.is_a(id, "Attachment")
@@ -232,7 +235,7 @@ pub(crate) fn get(w: &World, id: InstanceId, name: &str) -> Option<Value> {
         }
         // Observed: IsPlaying reads Playing, IsPaused the opposite.
         "IsPlaying" | "IsPaused" if dom.is_a(id, "Sound") => {
-            let playing = dom.property_by_name(id, "Playing") == Some(Value::Bool(true));
+            let playing = dom.bool_property(id, "Playing") == Some(true);
             Some(Value::Bool(playing == (name == "IsPlaying")))
         }
         // Observed: whether the wire carries sound now (crate::audio).
@@ -245,15 +248,11 @@ pub(crate) fn get(w: &World, id: InstanceId, name: &str) -> Option<Value> {
             Some(Value::Int32(w.content.queue_size() as i32))
         }
         "Enabled" if dom.is_a(id, "BaseScript") => {
-            let disabled = matches!(
-                dom.property_by_name(id, "Disabled"),
-                Some(Value::Bool(true))
-            );
+            let disabled = dom.bool_property(id, "Disabled") == Some(true);
             Some(Value::Bool(!disabled))
         }
         "WorldPivot" if dom.is_a(id, "Model") => {
-            if let Some(Value::OptionalCFrame(Some(c))) = dom.property_by_name(id, "WorldPivotData")
-            {
+            if let Some(c) = dom.optional_cframe_property(id, "WorldPivotData") {
                 return Some(Value::CFrame(c));
             }
             // Without stored pivot data, the pivot is the PrimaryPart's CFrame

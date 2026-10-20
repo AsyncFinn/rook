@@ -17,9 +17,9 @@ const DEFAULT_COLOR: [f32; 3] = [13.0 / 255.0, 105.0 / 255.0, 172.0 / 255.0];
 /// box at `SurfaceTransparency` (1 by default: no fill); parts in front
 /// hide both.
 pub(in crate::scene) fn selection_boxes(dom: &Dom, id: InstanceId) -> Vec<(PartInstance, Pose)> {
-    let (Some(size), Some(Value::CFrame(cf))) = (
+    let (Some(size), Some(cf)) = (
         dom.vector3_property(id, "Size"),
-        dom.property_by_name(id, "CFrame"),
+        dom.cframe_property(id, "CFrame"),
     ) else {
         return Vec::new();
     };

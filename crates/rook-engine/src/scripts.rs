@@ -47,7 +47,7 @@ impl DataModel {
         if !matches!(class, "Script" | "LocalScript") {
             return false;
         }
-        if dom.property_by_name(id, "Disabled") == Some(Value::Bool(true)) {
+        if dom.bool_property(id, "Disabled") == Some(true) {
             return false;
         }
         if self.role == Role::Client {

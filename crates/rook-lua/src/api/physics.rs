@@ -176,7 +176,7 @@ fn can_collide_with(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome>
         ));
     }
     let result = with_world(lua, |w| {
-        let collides = |p| w.dom.property_by_name(p, "CanCollide") != Some(Value::Bool(false));
+        let collides = |p| w.dom.bool_property(p, "CanCollide") != Some(false);
         let groups = CollisionGroups::read(&w.dom);
         collides(this)
             && collides(other)

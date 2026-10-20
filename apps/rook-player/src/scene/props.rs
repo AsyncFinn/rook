@@ -4,9 +4,7 @@ use super::*;
 
 /// A NumberSequence as a curve with its keypoints' envelopes.
 pub(super) fn number_sequence(dom: &Dom, id: InstanceId, name: &str) -> Option<Sequence> {
-    let Value::NumberSequence(seq) = dom.property_by_name(id, name)? else {
-        return None;
-    };
+    let seq = dom.number_sequence_property(id, name)?;
     if seq.keypoints.is_empty() {
         return None;
     }
@@ -22,9 +20,7 @@ pub(super) fn number_sequence(dom: &Dom, id: InstanceId, name: &str) -> Option<S
 
 /// A ColorSequence as a curve of sRGB colours.
 pub(super) fn color_sequence(dom: &Dom, id: InstanceId, name: &str) -> Option<Curve<[f32; 3]>> {
-    let Value::ColorSequence(seq) = dom.property_by_name(id, name)? else {
-        return None;
-    };
+    let seq = dom.color_sequence_property(id, name)?;
     let points: Vec<_> = seq
         .keypoints
         .iter()
@@ -38,12 +34,7 @@ pub(super) fn color_sequence(dom: &Dom, id: InstanceId, name: &str) -> Option<Cu
 pub(super) fn content_url(dom: &Dom, id: InstanceId, names: &[&str]) -> String {
     names
         .iter()
-        .find_map(|name| {
-            dom.property_by_name(id, name)?
-                .content_url()
-                .filter(|u| !u.is_empty())
-                .map(str::to_owned)
-        })
+        .find_map(|name| dom.content_property(id, name).filter(|u| !u.is_empty()))
         .unwrap_or_default()
 }
 

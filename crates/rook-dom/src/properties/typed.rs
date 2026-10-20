@@ -2,7 +2,9 @@
 //! missing or holds another type; callers pick their own defaults.
 
 use glam::Vec3;
-use rook_types::{CFrame, Color3, NumberRange, Value, Vector2};
+use rook_types::{
+    CFrame, Color3, ColorSequence, MaterialColors, NumberRange, NumberSequence, Value, Vector2,
+};
 
 use super::*;
 
@@ -76,6 +78,53 @@ impl Dom {
     pub fn ref_property(&self, id: InstanceId, name: &str) -> Option<InstanceId> {
         match self.property_by_name(id, name)? {
             Value::Ref(Some(r)) => Some(InstanceId::from_ref(r)),
+            _ => None,
+        }
+    }
+
+    /// A `CFrame?` property (`WorldPivotData`) when it holds one.
+    pub fn optional_cframe_property(&self, id: InstanceId, name: &str) -> Option<CFrame> {
+        match self.property_by_name(id, name)? {
+            Value::OptionalCFrame(c) => c,
+            Value::CFrame(c) => Some(c),
+            _ => None,
+        }
+    }
+
+    /// The URL a content property holds (`MeshId`, `SoundId`, ...): empty
+    /// when it names none.
+    pub fn content_property(&self, id: InstanceId, name: &str) -> Option<String> {
+        self.property_by_name(id, name)?
+            .content_url()
+            .map(str::to_owned)
+    }
+
+    /// The bytes of a `BinaryString` or `SharedString` property.
+    pub fn binary_property(&self, id: InstanceId, name: &str) -> Option<Vec<u8>> {
+        match self.property_by_name(id, name)? {
+            Value::BinaryString(b) => Some(b.into_vec()),
+            Value::SharedString(s) => Some(s.data().to_vec()),
+            _ => None,
+        }
+    }
+
+    pub fn number_sequence_property(&self, id: InstanceId, name: &str) -> Option<NumberSequence> {
+        match self.property_by_name(id, name)? {
+            Value::NumberSequence(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub fn color_sequence_property(&self, id: InstanceId, name: &str) -> Option<ColorSequence> {
+        match self.property_by_name(id, name)? {
+            Value::ColorSequence(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub fn material_colors_property(&self, id: InstanceId, name: &str) -> Option<MaterialColors> {
+        match self.property_by_name(id, name)? {
+            Value::MaterialColors(c) => Some(c),
             _ => None,
         }
     }

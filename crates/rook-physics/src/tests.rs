@@ -63,10 +63,7 @@ fn part_of(dom: &mut Dom, class: &str, position: Vec3, size: Vec3, anchored: boo
 }
 
 fn position(dom: &Dom, id: InstanceId) -> Vec3 {
-    match dom.property_by_name(id, "CFrame") {
-        Some(Value::CFrame(cf)) => cf.position,
-        other => panic!("{other:?}"),
-    }
+    dom.cframe_property(id, "CFrame").unwrap().position
 }
 
 /// Step `seconds` at 60 Hz, the way a DataModel does.

@@ -1,3 +1,8 @@
+#![expect(
+    clippy::disallowed_methods,
+    reason = "replication tests compare the raw values each side holds"
+)]
+
 use super::*;
 
 fn part(dom: &mut Dom, name: &str, parent: InstanceId) -> InstanceId {

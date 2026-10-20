@@ -134,8 +134,8 @@ impl ServerHost {
                 .runtime()
                 .world()
                 .dom
-                .property_by_name(p, "CharacterAutoLoads")
-                != Some(Value::Bool(false))
+                .bool_property(p, "CharacterAutoLoads")
+                != Some(false)
         });
         if auto_loads {
             self.spawning.push(player);

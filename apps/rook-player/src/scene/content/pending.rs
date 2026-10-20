@@ -153,10 +153,8 @@ impl SceneCache {
                     if self.is_terrain(id) {
                         return Some(0.0);
                     }
-                    match dom.property_by_name(id, "CFrame")? {
-                        Value::CFrame(cf) => Some(camera.distance(cf.position)),
-                        _ => None,
-                    }
+                    let cf = dom.cframe_property(id, "CFrame")?;
+                    Some(camera.distance(cf.position))
                 })
                 .reduce(f32::min);
             if let Some(priority) = nearest {

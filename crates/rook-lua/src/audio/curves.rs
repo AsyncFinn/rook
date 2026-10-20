@@ -15,10 +15,10 @@ use rook_types::Value;
 
 /// The curve in `property`, sorted by distance; empty for none.
 pub fn read_curve(dom: &Dom, id: InstanceId, property: &str) -> Vec<(f32, f32)> {
-    let Some(Value::BinaryString(b)) = dom.property_by_name(id, property) else {
+    let Some(bytes) = dom.binary_property(id, property) else {
         return Vec::new();
     };
-    let bytes: &[u8] = b.as_ref();
+    let bytes: &[u8] = &bytes;
     let Some((count, rest)) = bytes.split_first_chunk::<2>() else {
         return Vec::new();
     };
