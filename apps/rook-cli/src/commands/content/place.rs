@@ -124,12 +124,8 @@ fn full_name(dom: &WeakDom, mut id: Ref) -> String {
     parts.join(".")
 }
 
-pub fn place(file: &Path, options: &Options) -> anyhow::Result<()> {
-    rook_engine::session::threads::size_threads();
-    let bytes = fs_err::read(file)?;
-    let loaded = rook_formats::load(&bytes)?;
-    drop(bytes);
-    let dom = &loaded.dom;
+/// Every non-empty content URL in the file, with how it's used.
+fn collect_uses(dom: &rbx_dom_weak::WeakDom) -> BTreeMap<String, Use> {
     let mut uses: BTreeMap<String, Use> = BTreeMap::new();
     for inst in dom.descendants() {
         for (key, value) in &inst.properties {
@@ -155,26 +151,32 @@ pub fn place(file: &Path, options: &Options) -> anyhow::Result<()> {
             }
         }
     }
-    println!("{}", file.display());
-    let resolver = resolver(options);
+    uses
+}
 
-    // Each distinct reference resolves once, on the loader's workers.
-    let mut refs: BTreeMap<ContentRef, Vec<&str>> = BTreeMap::new();
-    let mut unparsed = Vec::new();
-    for text in uses.keys() {
-        match ContentRef::parse(text) {
-            Some(r) => refs.entry(r).or_default().push(text),
-            None => unparsed.push(text.as_str()),
-        }
-    }
+/// What each reference loaded as: its bytes, and decoded as a mesh, an
+/// image or a sound where it's used as one.
+struct Fetches {
+    results: BTreeMap<ContentRef, Result<Fetched, Failure>>,
+    meshes: BTreeMap<ContentRef, Result<Fetched, Failure>>,
+    images: BTreeMap<ContentRef, Result<Fetched, Failure>>,
+    sounds: BTreeMap<ContentRef, Result<Fetched, Failure>>,
+}
+
+fn fetch(
+    resolver: &Arc<Resolver>,
+    refs: &BTreeMap<ContentRef, Vec<&str>>,
+    uses: &BTreeMap<String, Use>,
+    refresh: bool,
+) -> Fetches {
     let mut loader = Loader::new(resolver.clone());
     let mut tickets = BTreeMap::new();
     let mut mesh_tickets = BTreeMap::new();
     let mut image_tickets = BTreeMap::new();
     let mut audio_tickets = BTreeMap::new();
-    for (r, texts) in &refs {
-        if options.refresh {
-            forget(&resolver, r);
+    for (r, texts) in refs {
+        if refresh {
+            forget(resolver, r);
         }
         tickets.insert(loader.request(r.clone()), r.clone());
         if texts.iter().any(|t| uses[*t].mesh > 0) {
@@ -187,7 +189,6 @@ pub fn place(file: &Path, options: &Options) -> anyhow::Result<()> {
             audio_tickets.insert(loader.request_as(r.clone(), Want::Audio), r.clone());
         }
     }
-    let started = std::time::Instant::now();
     let mut results: BTreeMap<ContentRef, Result<Fetched, Failure>> = BTreeMap::new();
     let mut meshes: BTreeMap<ContentRef, Result<Fetched, Failure>> = BTreeMap::new();
     let mut images: BTreeMap<ContentRef, Result<Fetched, Failure>> = BTreeMap::new();
@@ -203,7 +204,39 @@ pub fn place(file: &Path, options: &Options) -> anyhow::Result<()> {
             sounds.insert(r, outcome);
         }
     }
+    Fetches {
+        results,
+        meshes,
+        images,
+        sounds,
+    }
+}
 
+pub fn place(file: &Path, options: &Options) -> anyhow::Result<()> {
+    rook_engine::session::threads::size_threads();
+    let bytes = fs_err::read(file)?;
+    let loaded = rook_formats::load(&bytes)?;
+    drop(bytes);
+    let uses = collect_uses(&loaded.dom);
+    println!("{}", file.display());
+    let resolver = resolver(options);
+
+    // Each distinct reference resolves once, on the loader's workers.
+    let mut refs: BTreeMap<ContentRef, Vec<&str>> = BTreeMap::new();
+    let mut unparsed = Vec::new();
+    for text in uses.keys() {
+        match ContentRef::parse(text) {
+            Some(r) => refs.entry(r).or_default().push(text),
+            None => unparsed.push(text.as_str()),
+        }
+    }
+    let started = std::time::Instant::now();
+    let Fetches {
+        results,
+        meshes,
+        images,
+        sounds,
+    } = fetch(&resolver, &refs, &uses, options.refresh);
     // Totals over uses (property values), with distinct references in
     // brackets.
     let mut by_source: BTreeMap<SourceKind, (usize, usize)> = BTreeMap::new();

@@ -6,16 +6,26 @@ use std::time::Duration;
 use super::{Aggregate, FileRecord, Status, UsageMap};
 
 pub fn summary_markdown(agg: &Aggregate, records: &[FileRecord], elapsed: Duration) -> String {
-    let db = rook_reflection::database();
     let mut md = String::new();
-    let pct = |n: u64, of: u64| {
-        if of == 0 {
-            0.0
-        } else {
-            n as f64 * 100.0 / of as f64
-        }
-    };
+    overview(&mut md, agg, elapsed);
+    legacy_upgrades(&mut md, agg);
+    failures(&mut md, agg, records);
+    classes(&mut md, agg);
+    content(&mut md, agg);
+    md
+}
 
+fn pct(n: u64, of: u64) -> f64 {
+    if of == 0 {
+        0.0
+    } else {
+        n as f64 * 100.0 / of as f64
+    }
+}
+
+/// The scan's totals.
+fn overview(md: &mut String, agg: &Aggregate, elapsed: Duration) {
+    let db = rook_reflection::database();
     let _ = writeln!(md, "# Corpus scan\n");
     let _ = writeln!(
         md,
@@ -55,7 +65,10 @@ pub fn summary_markdown(agg: &Aggregate, records: &[FileRecord], elapsed: Durati
         agg.scripts_with_parse_errors,
         pct(agg.scripts_with_parse_errors, agg.scripts)
     );
+}
 
+/// What upgrading legacy XML files changed.
+fn legacy_upgrades(md: &mut String, agg: &Aggregate) {
     if agg.legacy_upgraded_files > 0 {
         let t = &agg.legacy_totals;
         let _ = writeln!(
@@ -107,7 +120,10 @@ pub fn summary_markdown(agg: &Aggregate, records: &[FileRecord], elapsed: Durati
             t.null_numbers
         );
     }
+}
 
+/// Why files failed to load, with examples.
+fn failures(md: &mut String, agg: &Aggregate, records: &[FileRecord]) {
     if agg.files_failed > 0 {
         let _ = writeln!(md, "## Load failures\n");
         for (kind, n) in &agg.failures_by_kind {
@@ -115,7 +131,7 @@ pub fn summary_markdown(agg: &Aggregate, records: &[FileRecord], elapsed: Durati
         }
         let _ = writeln!(md);
         usage_table(
-            &mut md,
+            md,
             "Most common failure messages",
             "Message",
             &agg.failure_messages,
@@ -138,7 +154,11 @@ pub fn summary_markdown(agg: &Aggregate, records: &[FileRecord], elapsed: Durati
         }
         let _ = writeln!(md);
     }
+}
 
+/// Classes, properties and script calls in use.
+fn classes(md: &mut String, agg: &Aggregate) {
+    let db = rook_reflection::database();
     // Classes, annotated with database status.
     let _ = writeln!(md, "## Classes by number of files using them\n");
     let _ = writeln!(
@@ -162,70 +182,68 @@ pub fn summary_markdown(agg: &Aggregate, records: &[FileRecord], elapsed: Durati
         .filter(|(name, _)| db.class_by_name(name).is_some_and(|c| c.flags.deprecated))
         .map(|(k, v)| (k.clone(), *v))
         .collect();
+    usage_table(md, "Deprecated classes in use", "Class", &deprecated, 50);
     usage_table(
-        &mut md,
-        "Deprecated classes in use",
-        "Class",
-        &deprecated,
-        50,
-    );
-    usage_table(
-        &mut md,
+        md,
         "Classes not in the modern database",
         "Class",
         &agg.unknown_classes,
         50,
     );
     usage_table(
-        &mut md,
+        md,
         "Properties not in the modern database",
         "Class.Property",
         &agg.unknown_properties,
         60,
     );
-    usage_table(&mut md, "Script classes", "Class", &agg.script_classes, 20);
+    usage_table(md, "Script classes", "Class", &agg.script_classes, 20);
     usage_table(
-        &mut md,
+        md,
         "Methods called (`obj:Method()`)",
         "Method",
         &agg.methods,
         100,
     );
     usage_table(
-        &mut md,
+        md,
         "Global functions called",
         "Function",
         &agg.global_calls,
         60,
     );
     usage_table(
-        &mut md,
+        md,
         "Library calls (`Lib.func()`)",
         "Call",
         &agg.library_calls,
         60,
     );
     usage_table(
-        &mut md,
+        md,
         "Classes created with `Instance.new`",
         "Class",
         &agg.instance_new,
         60,
     );
     usage_table(
-        &mut md,
+        md,
         "Services requested with `GetService`",
         "Service",
         &agg.get_service,
         40,
     );
     usage_table(
-        &mut md,
+        md,
         "Direct `game.X` accesses",
         "Access",
         &agg.game_index,
         40,
     );
+}
+
+/// Content references and their URL shapes.
+fn content(md: &mut String, agg: &Aggregate) {
     let _ = writeln!(
         md,
         "## Content references
@@ -237,50 +255,44 @@ pub fn summary_markdown(agg: &Aggregate, records: &[FileRecord], elapsed: Durati
         agg.content_empty
     );
     usage_table(
-        &mut md,
+        md,
         "Content references by kind",
         "Kind",
         &agg.content_kinds,
         20,
     );
-    usage_table(&mut md, "Meshes and unions", "Kind", &agg.meshes, 100);
+    usage_table(md, "Meshes and unions", "Kind", &agg.meshes, 100);
     usage_table(
-        &mut md,
+        md,
         "Materials, surfaces, decals and textures",
         "Kind",
         &agg.looks,
         300,
     );
     usage_table(
-        &mut md,
+        md,
         "`rbxasset://` paths the install lacks",
         "Kind: path",
         &agg.content_paths,
         200,
     );
     usage_table(
-        &mut md,
+        md,
         "Content properties",
         "Class.Property",
         &agg.content_properties,
         60,
     );
+    usage_table(md, "Content URL shapes", "Shape", &agg.content_shapes, 80);
     usage_table(
-        &mut md,
-        "Content URL shapes",
-        "Shape",
-        &agg.content_shapes,
-        80,
-    );
-    usage_table(
-        &mut md,
+        md,
         "Content URL shapes by property",
         "Property shape",
         &agg.content_by_property,
         120,
     );
     usage_table(
-        &mut md,
+        md,
         "Content URLs in script sources",
         "Shape",
         &agg.content_script_shapes,
@@ -295,7 +307,6 @@ pub fn summary_markdown(agg: &Aggregate, records: &[FileRecord], elapsed: Durati
         let _ = writeln!(md, "- `{shape}`: `{sample}`");
     }
     let _ = writeln!(md);
-    md
 }
 
 fn sorted(map: &UsageMap) -> Vec<(&String, &super::Usage)> {
