@@ -22,6 +22,9 @@
 //! Workspace's Terrain collides as the surface its voxels mesh to
 //! ([`terrain`]).
 //!
+//! Explosions hit, break and push parts and carve Terrain
+//! ([`Physics::blast`]).
+//!
 //! Scripts' scene queries (rays, shape casts, regions, overlaps) run on
 //! the same world ([`query`]); each brings it up to date with the DOM
 //! first. A client's world only answers queries ([`Physics::for_queries`]).
@@ -30,6 +33,7 @@ pub mod assembly;
 mod changes;
 pub mod contacts;
 mod convert;
+mod explosion;
 pub mod joints;
 pub mod query;
 mod shape;
@@ -48,6 +52,7 @@ pub use rook_types::PartShape;
 pub use shape::{is_part, part_shape, workspace_parts};
 
 pub use contacts::Touch;
+pub use explosion::Blast;
 pub use query::{CastShape, Filter, Hit, Region};
 
 use assembly::bodies::Body;

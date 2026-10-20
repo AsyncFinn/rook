@@ -13,6 +13,9 @@ impl Reader<'_, '_> {
     /// Attachment).
     pub(super) fn emitters(&mut self, id: InstanceId) -> Vec<Emitter> {
         let dom = self.dom;
+        if dom.class_name(id) == "Explosion" {
+            return explosion::emitters(dom, id, self.textures);
+        }
         let frame = holder_frame(dom, id);
         let enabled = frame.is_some() && boolean(dom, id, "Enabled") != Some(false);
         let time_scale = number(dom, id, "TimeScale").unwrap_or(1.0).clamp(0.0, 1.0);
@@ -33,7 +36,9 @@ impl Reader<'_, '_> {
         let frame = frame.unwrap_or(CFrame::IDENTITY);
         looks
             .into_iter()
-            .map(|look| Emitter {
+            .enumerate()
+            .map(|(layer, look)| Emitter {
+                key: key(id, layer),
                 position: frame.position,
                 rotation: frame.rotation,
                 enabled,

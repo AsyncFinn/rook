@@ -549,6 +549,7 @@ mod assets;
 mod audio_api;
 mod client_tweens;
 mod effects;
+mod explosions;
 mod scripts;
 mod sounds;
 mod terrain_api;

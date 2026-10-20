@@ -226,7 +226,8 @@ create.
 4. ✅ ParticleEmitter (with flipbooks), Beam and Trail
    ([`docs/behavior/particle-emitters.md`](docs/behavior/particle-emitters.md),
    [`docs/behavior/beams-and-trails.md`](docs/behavior/beams-and-trails.md)).
-5. Explosion: its blast (physics, joints breaking) and its look.
+5. ✅ Explosion: its blast (parts hit, joints broken, the push, craters)
+   and its look ([`docs/behavior/explosions.md`](docs/behavior/explosions.md)).
 6. Highlight (outlines and fills through walls).
 
 ### M8 GUI

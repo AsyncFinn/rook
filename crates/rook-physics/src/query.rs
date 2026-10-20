@@ -177,7 +177,7 @@ pub enum CastShape {
 impl Physics {
     /// Bring the world up to the current DOM for a query (see the module
     /// docs).
-    fn prepare(&mut self, dom: &mut Dom) {
+    pub(crate) fn prepare(&mut self, dom: &mut Dom) {
         profiling::scope!("Physics::prepare_query");
         self.sync(dom);
         let terrain_placed = std::mem::take(&mut self.terrain_placed);
@@ -369,7 +369,7 @@ impl Physics {
     /// Parts whose collider overlaps `shape` at `pose` by `test`, in id
     /// order (Approximation: Roblox's order is its own; parts made in
     /// order came back in that order), at most `max` of them (0: all).
-    fn overlapping(
+    pub(crate) fn overlapping(
         &self,
         dom: &Dom,
         query: (&dyn Shape, Pose),

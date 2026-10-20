@@ -42,6 +42,7 @@ impl DataModel {
         self.check_render_changes();
         self.check_sounds();
         self.check_unions();
+        self.check_explosions();
         if self.auto_trim {
             self.trim_journal();
         }
@@ -137,12 +138,15 @@ impl DataModel {
         sounds_done
     }
 
-    /// Step physics and write the results into the DOM. Parts that fell
-    /// below Workspace.FallenPartsDestroyHeight are destroyed.
+    /// Step physics and write the results into the DOM, Explosions going
+    /// off first. Parts that fell below Workspace.FallenPartsDestroyHeight
+    /// are destroyed.
     fn simulate(&mut self, dt: f64) {
         if self.role == Role::Client {
             return;
         }
+        self.age_explosions(dt);
+        let blasts = self.set_off_explosions();
         let (fallen, touches, reached) = {
             let mut w = self.runtime.world_mut();
             let w = &mut *w;
@@ -151,6 +155,7 @@ impl DataModel {
             let fallen = w.physics.write_back(&mut w.dom);
             (fallen, w.physics.take_touches(), w.physics.take_reached())
         };
+        self.fire_explosion_hits(blasts);
         // Both parts fire, the lower id first (observed: the part made
         // first fired first in Studio; the real order is unknown).
         for t in touches {

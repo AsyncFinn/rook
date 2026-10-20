@@ -11,6 +11,10 @@ pub(in crate::scene) struct EffectTextures {
     pub(in crate::scene) fire: ImageHash,
     pub(in crate::scene) smoke: ImageHash,
     pub(in crate::scene) sparkles: ImageHash,
+    pub(in crate::scene) explosion_flash: ImageHash,
+    pub(in crate::scene) explosion_core: ImageHash,
+    pub(in crate::scene) explosion_smoke: ImageHash,
+    pub(in crate::scene) explosion_ring: ImageHash,
 }
 
 /// Rook's own textures' size.
@@ -50,6 +54,12 @@ impl EffectTextures {
             fire: add("fire_main.dds", unpremultiply, flame),
             smoke: add("smoke_main.dds", |_| {}, puff),
             sparkles: add("sparkles_main.dds", whiten, star),
+            // A white glow, a fireball (premultiplied, as Fire's), a puff
+            // and a ring.
+            explosion_flash: add("explosion01_implosion_main.dds", whiten, glow),
+            explosion_core: add("explosion01_core_main.dds", unpremultiply, puff),
+            explosion_smoke: add("explosion01_smoke_main.dds", whiten_round, puff),
+            explosion_ring: add("explosion01_shockwave_main.dds", whiten, ring),
         }
     }
 }
@@ -74,6 +84,21 @@ fn whiten(pixels: &mut [u8]) {
     }
 }
 
+/// [`whiten`], fading out before the square's edges: the install's
+/// explosion smoke reaches the middle of each edge, which drew faint arms
+/// out of a big cloud of them.
+fn whiten_round(pixels: &mut [u8]) {
+    whiten(pixels);
+    let side = ((pixels.len() / 4) as f32).sqrt() as usize;
+    for (i, p) in pixels.as_chunks_mut::<4>().0.iter_mut().enumerate() {
+        let u = ((i % side) as f32 + 0.5) / side as f32 * 2.0 - 1.0;
+        let v = ((i / side) as f32 + 0.5) / side as f32 * 2.0 - 1.0;
+        let r = (u * u + v * v).sqrt();
+        let fade = ((1.0 - r) / 0.25).clamp(0.0, 1.0);
+        p[3] = (f32::from(p[3]) * fade).round() as u8;
+    }
+}
+
 /// A white image whose alpha is `alpha` at each point (-1 to 1 across).
 fn own_image(alpha: fn(f32, f32) -> f32) -> Image {
     let mut pixels = image::RgbaImage::new(OWN, OWN);
@@ -90,6 +115,17 @@ fn own_image(alpha: fn(f32, f32) -> f32) -> Image {
 fn puff(u: f32, v: f32) -> f32 {
     let r = (u * u + v * v).sqrt();
     (1.0 - r).max(0.0).powi(2) * 0.5
+}
+
+/// A soft glow, brightest in the middle.
+fn glow(u: f32, v: f32) -> f32 {
+    (1.0 - (u * u + v * v).sqrt()).max(0.0).powi(2)
+}
+
+/// A soft ring halfway out.
+fn ring(u: f32, v: f32) -> f32 {
+    let r = (u * u + v * v).sqrt();
+    (1.0 - (r - 0.5).abs() * 4.0).max(0.0) * 0.5
 }
 
 /// A puff broken up into wisps, for flames.
