@@ -279,7 +279,7 @@ impl SceneCache {
         };
         // Terrain draws the place's set of textures and default colours
         // (`TerrainMaterial::textures`), as parts do.
-        let set = materials::material_set(dom);
+        let set = look::materials::material_set(dom);
         let colors = match dom.property_by_name(terrain, "MaterialColors") {
             Some(Value::MaterialColors(c)) => Some(c),
             _ => None,

@@ -1,7 +1,6 @@
 //! Build a render [`Scene`] from a DataModel.
 
-pub(crate) mod files;
-pub(crate) mod installed;
+pub(crate) mod content;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -12,34 +11,29 @@ use rook_dom::{Dom, InstanceId};
 use rook_engine::{DataModel, RenderChanges};
 use rook_physics::{is_part, part_shape, workspace_parts};
 use rook_render::{
-    Camera, Curve, DrawShape, ImageHash, ImagePlacement, Layer, LightShape, Lighting, LocalLight,
-    MapAlpha, Material, MaterialMaps, MaterialSet, MeshHash, NormalId, PartInstance, Scene,
-    Sequence, TilePattern, Tiling,
+    Camera, Curve, DrawShape, ImageHash, ImagePlacement, Layer, Lighting, MapAlpha, Material,
+    MaterialMaps, MaterialSet, MeshHash, NormalId, PartInstance, Scene, Sequence, TilePattern,
+    Tiling,
 };
 use rook_types::{
     CFrame, MeshKind, MeshLook, SurfaceType, TrussLook, TrussStyle, Value, mesh_part_scale,
 };
 
-use crate::scene::files::{FileRef, FileState, Files, Loaded};
+use content::loader::{FileRef, FileState, Files, Loaded};
 
 mod adornments;
 mod effects;
 mod lighting;
-mod lights;
-mod loading;
 mod look;
-mod materials;
 mod props;
-mod report;
 mod terrain;
-mod union;
 
+use content::pending::*;
+use content::report::Report;
 use effects::{EffectCache, EffectLists, EffectTextures, Images};
-use loading::*;
 use look::*;
 use props::*;
 use terrain::TerrainCache;
-use union::*;
 
 /// How a part's CFrame places what it draws: where its shape's centre is
 /// in the part's axes (a mesh's `Offset`, a truss's start), and the turn
@@ -121,7 +115,7 @@ pub struct SceneCache {
     /// arrived).
     effects_loaded: bool,
     /// Files that didn't load, reported once loading settles.
-    report: report::Report,
+    report: Report,
     /// `BasePart.CFrame`, which moved parts are read again by.
     cframe: Option<rook_reflection::PropertyId>,
 }
@@ -151,7 +145,7 @@ impl SceneCache {
             light_holders: HashMap::new(),
             effects: EffectCache::new(textures),
             effects_loaded: false,
-            report: report::Report::default(),
+            report: Report::default(),
             cframe: dom
                 .database()
                 .class_by_name("BasePart")
@@ -192,72 +186,6 @@ impl SceneCache {
         self.scene.lighting = self.lighting(dom);
         self.find_lights(dom);
         self.with_effects(|effects, drawn, images| effects.find(dom, drawn, images));
-    }
-
-    /// Find every local light in Workspace again, and read them.
-    fn find_lights(&mut self, dom: &Dom) {
-        profiling::scope!("SceneCache::find_lights");
-        self.light_ids = lights::find_lights(dom);
-        self.light_holders.clear();
-        for (i, &id) in self.light_ids.iter().enumerate() {
-            // A light changes with its own properties, and under an
-            // Attachment moves with the attachment and its part.
-            self.light_holders.entry(id).or_default().push(i);
-            let mut holder = dom.parent(id);
-            while let Some(h) = holder {
-                self.light_holders.entry(h).or_default().push(i);
-                if dom.class_name(h) != "Attachment" {
-                    break;
-                }
-                holder = dom.parent(h);
-            }
-        }
-        self.scene.lights = (0..self.light_ids.len())
-            .map(|i| self.read_light(dom, i))
-            .collect();
-    }
-
-    /// The `i`th known light as it is now; a light Studio wouldn't draw
-    /// (not under a part or an Attachment) shines with brightness 0.
-    fn read_light(&self, dom: &Dom, i: usize) -> LocalLight {
-        lights::light(dom, self.light_ids[i]).unwrap_or(LocalLight {
-            position: Vec3::ZERO,
-            shape: LightShape::Point,
-            color: [0.0; 3],
-            brightness: 0.0,
-            range: 0.0,
-            shadows: false,
-            part: (Vec3::ZERO, Vec3::ZERO),
-        })
-    }
-
-    /// Bring the lights up to date with a frame's changes, reading again
-    /// only the lights that changed and those on parts and Attachments
-    /// that did; whether any may have changed.
-    fn lights_changed(&mut self, dom: &Dom, changes: &RenderChanges) -> bool {
-        let holders = &self.light_holders;
-        let placed = changes.placed.iter().any(|id| holders.contains_key(id));
-        if changes.lights_placed || placed {
-            self.find_lights(dom);
-            return true;
-        }
-        let stale: Vec<usize> = changes
-            .moved
-            .iter()
-            .chain(&changes.parts)
-            .chain(&changes.lights)
-            .filter_map(|id| holders.get(id))
-            .flatten()
-            .copied()
-            .collect();
-        if stale.is_empty() {
-            return false;
-        }
-        profiling::scope!("SceneCache::read_lights");
-        for i in stale {
-            self.scene.lights[i] = self.read_light(dom, i);
-        }
-        true
     }
 
     /// Apply a frame's changes.
@@ -406,8 +334,6 @@ impl SceneCache {
         }
     }
 
-    /// Whether the lighting changed since the last call outside
-    /// [`SceneCache::apply`] (a skybox image arrived).
     /// Apply scripts' effect calls (`Emit` and the like) made before this
     /// scene was built from the DataModel. Whether any effect changed.
     pub fn take_effect_calls(

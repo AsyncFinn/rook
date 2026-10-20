@@ -14,7 +14,7 @@ use std::collections::{BTreeMap, HashSet};
 use rook_content::{ContentRef, Failure, FailureKind, Want};
 use rook_dom::{Dom, InstanceId};
 
-use super::files::FileRef;
+use super::loader::FileRef;
 
 /// What failed to load, by what wanted it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]

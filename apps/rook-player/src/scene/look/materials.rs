@@ -81,7 +81,7 @@ impl SceneCache {
     }
 
     /// The four maps of a SurfaceAppearance or MaterialVariant, as loaded.
-    pub(super) fn map_images(
+    pub(in crate::scene) fn map_images(
         &mut self,
         dom: &Dom,
         part: InstanceId,
@@ -143,7 +143,7 @@ fn texture_seed(part: InstanceId) -> u64 {
 /// when the place doesn't save it or has no MaterialService (observed in
 /// Studio 0.742). Only a saved value counts, under either name (XML files
 /// save `Use2022MaterialsXml`): the class default would hide it.
-pub(super) fn material_set(dom: &Dom) -> MaterialSet {
+pub(in crate::scene) fn material_set(dom: &Dom) -> MaterialSet {
     let db = rook_reflection::database();
     let saved = dom
         .find_service("MaterialService")

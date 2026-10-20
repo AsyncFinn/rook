@@ -1,6 +1,11 @@
-//! What a part draws: its shape or mesh, colour, material and images.
+//! What a part draws: its shape or mesh, colour, material ([`materials`])
+//! and images; a union's own geometry in [`union`].
+
+pub(super) mod materials;
+mod union;
 
 use super::*;
+use union::is_union;
 
 /// Turns a shape's X axis onto Y, for a CylinderMesh.
 pub(super) const UPRIGHT: Mat3 = Mat3::from_cols(Vec3::Y, Vec3::NEG_X, Vec3::Z);

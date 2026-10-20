@@ -1,7 +1,7 @@
 //! Mesh files and images loading in the background, and what parts draw
 //! meanwhile.
 
-use super::*;
+use crate::scene::*;
 
 /// How far the camera moves before the files still loading are ranked
 /// again by their distance from it, in studs.
@@ -9,7 +9,7 @@ const RERANK: f32 = 16.0;
 
 /// What a part's mesh file last settled on.
 #[derive(Debug, Clone, Copy)]
-pub(super) enum Settled {
+pub(in crate::scene) enum Settled {
     /// A loaded mesh.
     File(MeshHash),
     /// The look of an empty `MeshId`.
@@ -17,7 +17,7 @@ pub(super) enum Settled {
 }
 
 /// How a mesh file draws right now.
-pub(super) enum FileDraw {
+pub(in crate::scene) enum FileDraw {
     /// Its mesh, or the last one this mesh loaded.
     Mesh(MeshHash),
     /// The look of an empty `MeshId`, which this mesh had last.
@@ -94,7 +94,12 @@ impl SceneCache {
     }
 
     /// A file's state, noting that `part` waits for it while it loads.
-    pub(super) fn file_state(&mut self, part: InstanceId, url: &str, want: Want) -> FileState {
+    pub(in crate::scene) fn file_state(
+        &mut self,
+        part: InstanceId,
+        url: &str,
+        want: Want,
+    ) -> FileState {
         let Some(r) = ContentRef::parse(url) else {
             return FileState::Failed;
         };
@@ -102,7 +107,7 @@ impl SceneCache {
     }
 
     /// [`SceneCache::file_state`] for a parsed reference.
-    pub(super) fn file_state_of(
+    pub(in crate::scene) fn file_state_of(
         &mut self,
         part: InstanceId,
         r: ContentRef,
@@ -160,7 +165,12 @@ impl SceneCache {
         }
     }
 
-    pub(super) fn settle(&mut self, part: InstanceId, mesh: InstanceId, settled: Settled) {
+    pub(in crate::scene) fn settle(
+        &mut self,
+        part: InstanceId,
+        mesh: InstanceId,
+        settled: Settled,
+    ) {
         self.shown.insert(part, Shown { mesh, settled });
     }
 
@@ -171,7 +181,12 @@ impl SceneCache {
     /// the empty-`MeshId` box) stays until the new file arrives, and stays
     /// for good if the new one fails. The file is asked for the first time
     /// any part needs it.
-    pub(super) fn file(&mut self, part: InstanceId, mesh: InstanceId, url: &str) -> FileDraw {
+    pub(in crate::scene) fn file(
+        &mut self,
+        part: InstanceId,
+        mesh: InstanceId,
+        url: &str,
+    ) -> FileDraw {
         if let FileState::Loaded(hash) = self.file_state(part, url, Want::Mesh) {
             let hash = MeshHash(hash);
             self.settle(part, mesh, Settled::File(hash));

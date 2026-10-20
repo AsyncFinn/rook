@@ -1,4 +1,6 @@
-//! Lighting, the sun and the sky.
+//! Lighting, the sun and the sky; local lights in [`local`].
+
+mod local;
 
 use super::*;
 

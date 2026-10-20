@@ -44,7 +44,7 @@ use app::launch::*;
 use app::readout::*;
 use app::*;
 use bench::*;
-use scene::installed::*;
+use scene::content::installed::*;
 
 /// The system allocator on Windows is slow for blocks of tens of
 /// kilobytes once a big place has made its heap large (a fraction of a

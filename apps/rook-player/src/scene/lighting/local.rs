@@ -6,7 +6,7 @@ use rook_render::{LightShape, LocalLight};
 use super::*;
 
 /// Whether `id` is a local light.
-pub(super) fn is_light(dom: &Dom, id: InstanceId) -> bool {
+fn is_light(dom: &Dom, id: InstanceId) -> bool {
     matches!(
         dom.class_name(id),
         "PointLight" | "SpotLight" | "SurfaceLight"
@@ -15,7 +15,7 @@ pub(super) fn is_light(dom: &Dom, id: InstanceId) -> bool {
 
 /// Every local light in Workspace, drawn or not (its look is read again
 /// whenever a light changes; see [`SceneCache::lights_changed`]).
-pub(super) fn find_lights(dom: &Dom) -> Vec<InstanceId> {
+fn find_lights(dom: &Dom) -> Vec<InstanceId> {
     let Some(ws) = dom.find_service("Workspace") else {
         return Vec::new();
     };
@@ -37,7 +37,7 @@ fn cframe(dom: &Dom, id: InstanceId) -> Option<CFrame> {
 /// (Studio lights nothing then). A disabled light shines with brightness
 /// 0, so that scripts switching lights on and off (alarms) change only
 /// their colours.
-pub(super) fn light(dom: &Dom, id: InstanceId) -> Option<LocalLight> {
+fn light(dom: &Dom, id: InstanceId) -> Option<LocalLight> {
     let enabled = boolean(dom, id, "Enabled") != Some(false);
     let parent = dom.parent(id)?;
     let part = if is_part(dom, parent) {
@@ -91,4 +91,72 @@ pub(super) fn light(dom: &Dom, id: InstanceId) -> Option<LocalLight> {
         shadows: boolean(dom, id, "Shadows").unwrap_or(false),
         part: (part_cf.position - extent, part_cf.position + extent),
     })
+}
+
+impl SceneCache {
+    /// Find every local light in Workspace again, and read them.
+    pub(in crate::scene) fn find_lights(&mut self, dom: &Dom) {
+        profiling::scope!("SceneCache::find_lights");
+        self.light_ids = find_lights(dom);
+        self.light_holders.clear();
+        for (i, &id) in self.light_ids.iter().enumerate() {
+            // A light changes with its own properties, and under an
+            // Attachment moves with the attachment and its part.
+            self.light_holders.entry(id).or_default().push(i);
+            let mut holder = dom.parent(id);
+            while let Some(h) = holder {
+                self.light_holders.entry(h).or_default().push(i);
+                if dom.class_name(h) != "Attachment" {
+                    break;
+                }
+                holder = dom.parent(h);
+            }
+        }
+        self.scene.lights = (0..self.light_ids.len())
+            .map(|i| self.read_light(dom, i))
+            .collect();
+    }
+
+    /// The `i`th known light as it is now; a light Studio wouldn't draw
+    /// (not under a part or an Attachment) shines with brightness 0.
+    fn read_light(&self, dom: &Dom, i: usize) -> LocalLight {
+        light(dom, self.light_ids[i]).unwrap_or(LocalLight {
+            position: Vec3::ZERO,
+            shape: LightShape::Point,
+            color: [0.0; 3],
+            brightness: 0.0,
+            range: 0.0,
+            shadows: false,
+            part: (Vec3::ZERO, Vec3::ZERO),
+        })
+    }
+
+    /// Bring the lights up to date with a frame's changes, reading again
+    /// only the lights that changed and those on parts and Attachments
+    /// that did; whether any may have changed.
+    pub(in crate::scene) fn lights_changed(&mut self, dom: &Dom, changes: &RenderChanges) -> bool {
+        let holders = &self.light_holders;
+        let placed = changes.placed.iter().any(|id| holders.contains_key(id));
+        if changes.lights_placed || placed {
+            self.find_lights(dom);
+            return true;
+        }
+        let stale: Vec<usize> = changes
+            .moved
+            .iter()
+            .chain(&changes.parts)
+            .chain(&changes.lights)
+            .filter_map(|id| holders.get(id))
+            .flatten()
+            .copied()
+            .collect();
+        if stale.is_empty() {
+            return false;
+        }
+        profiling::scope!("SceneCache::read_lights");
+        for i in stale {
+            self.scene.lights[i] = self.read_light(dom, i);
+        }
+        true
+    }
 }
