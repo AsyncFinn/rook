@@ -66,11 +66,27 @@ pub fn is_effect_class(class: &str) -> bool {
 }
 
 /// Whether `id` adorns a part, drawn with it: the classes with an
-/// `Adornee` (SelectionBox, SelectionSphere, the HandleAdornments, ...).
+/// `Adornee` (SelectionBox, SelectionSphere, the HandleAdornments, ...),
+/// and FloorWire, drawn with its `From` part.
 fn is_adornment(dom: &Dom, id: InstanceId) -> bool {
-    ["InstanceAdornment", "PVAdornment", "PartAdornment"]
-        .iter()
-        .any(|base| dom.is_a(id, base))
+    [
+        "InstanceAdornment",
+        "PVAdornment",
+        "PartAdornment",
+        "FloorWire",
+    ]
+    .iter()
+    .any(|base| dom.is_a(id, base))
+}
+
+/// The part adornment `id` is drawn with.
+fn adorned_part(dom: &Dom, id: InstanceId) -> Option<InstanceId> {
+    let property = if dom.class_name(id) == "FloorWire" {
+        "From"
+    } else {
+        "Adornee"
+    };
+    dom.ref_property(id, property)
 }
 
 /// The part properties render-change tracking treats specially.
@@ -125,7 +141,7 @@ impl DataModel {
                 .descendants(dom.root())
                 .into_iter()
                 .filter(|&i| is_adornment(dom, i))
-                .filter_map(|i| Some((i, dom.ref_property(i, "Adornee")?)))
+                .filter_map(|i| Some((i, adorned_part(dom, i)?)))
                 .collect();
         }
         // A mesh decides how its parent part looks (SpecialMesh, BlockMesh,
@@ -152,11 +168,7 @@ impl DataModel {
                      adorned: &mut HashMap<InstanceId, InstanceId>,
                      id: InstanceId,
                      gone: bool| {
-            let new = if gone {
-                None
-            } else {
-                dom.ref_property(id, "Adornee")
-            };
+            let new = if gone { None } else { adorned_part(dom, id) };
             let old = match new {
                 Some(part) => adorned.insert(id, part),
                 None => adorned.remove(&id),
