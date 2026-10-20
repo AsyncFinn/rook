@@ -56,12 +56,12 @@ impl RenderChanges {
 }
 
 /// Whether instances of `class` are visual effects the renderer draws:
-/// particles (Fire, Smoke, Sparkles, ParticleEmitter) and ribbons (Beam,
-/// Trail).
+/// particles (Fire, Smoke, Sparkles, ParticleEmitter, Explosion) and
+/// ribbons (Beam, Trail).
 pub fn is_effect_class(class: &str) -> bool {
     matches!(
         class,
-        "Fire" | "Smoke" | "Sparkles" | "ParticleEmitter" | "Beam" | "Trail"
+        "Fire" | "Smoke" | "Sparkles" | "ParticleEmitter" | "Beam" | "Trail" | "Explosion"
     )
 }
 

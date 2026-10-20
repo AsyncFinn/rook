@@ -1,10 +1,12 @@
 //! Visual effects in Workspace (docs/behavior/effects.md,
-//! docs/behavior/particle-emitters.md, docs/behavior/beams-and-trails.md):
-//! Fire, Smoke, Sparkles and ParticleEmitter as the renderer's particle
-//! emitters, Beam and Trail as its ribbons.
+//! docs/behavior/particle-emitters.md, docs/behavior/beams-and-trails.md,
+//! docs/behavior/explosions.md): Fire, Smoke, Sparkles, ParticleEmitter
+//! and Explosion as the renderer's particle emitters, Beam and Trail as
+//! its ribbons.
 
 mod classic;
 mod emitter;
+mod explosion;
 mod ribbons;
 mod textures;
 
@@ -298,11 +300,19 @@ impl Reader<'_, '_> {
     }
 }
 
+/// Emitter `layer` of effect `id`: the key its particles follow.
+fn key(id: InstanceId, layer: usize) -> u64 {
+    id.to_ref().0 << 4 | layer as u64
+}
+
 /// The instances whose changes change effect `id`: itself, and the part
 /// and Attachment it hangs from, or a Beam's or Trail's Attachments and
-/// their parts.
+/// their parts. An Explosion stays where it went off.
 fn holders(dom: &Dom, id: InstanceId) -> Vec<InstanceId> {
     let mut out = vec![id];
+    if dom.class_name(id) == "Explosion" {
+        return out;
+    }
     if matches!(dom.class_name(id), "Beam" | "Trail") {
         for name in ["Attachment0", "Attachment1"] {
             if let Some(a) = dom.ref_property(id, name) {

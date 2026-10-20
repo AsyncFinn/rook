@@ -291,6 +291,9 @@ impl Default for EmitterLook {
 /// is `locked`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Emitter {
+    /// Which emitter it is (its instance and layer): its particles stay
+    /// with it while the scene's list changes around it.
+    pub key: u64,
     pub position: Vec3,
     /// Its axes in the world (its part's or Attachment's): Fire, Smoke
     /// and Sparkles go along their part's UpVector (observed: upside

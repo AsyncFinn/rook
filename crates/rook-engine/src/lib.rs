@@ -32,7 +32,7 @@ use rook_types::Value;
 
 pub use rook_lua::MessageType;
 
-use bridges::{input, sounds, unions};
+use bridges::{explosions, input, sounds, unions};
 use session::threads;
 
 #[derive(Debug, thiserror::Error)]
@@ -127,6 +127,7 @@ pub struct DataModel {
     content: Content,
     sounds: sounds::Sounds,
     unions: unions::Unions,
+    explosions: explosions::Explosions,
 }
 
 /// Content requests from scripts, resolved off the engine thread.
@@ -182,6 +183,7 @@ impl DataModel {
         self.render_changes = RenderChanges::everything();
         self.sounds.rescan(end);
         self.unions.rescan(end);
+        self.explosions.rescan(end);
     }
 
     /// Drop journal entries every reader has seen. Physics catches up first
@@ -294,6 +296,7 @@ impl DataModel {
             },
             sounds: Default::default(),
             unions: Default::default(),
+            explosions: Default::default(),
         })
     }
 

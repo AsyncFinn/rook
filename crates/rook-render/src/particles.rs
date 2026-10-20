@@ -8,6 +8,8 @@ mod spawn;
 
 use std::sync::Arc;
 
+use rustc_hash::FxHashMap as HashMap;
+
 use glam::{Mat3, Vec3};
 
 use crate::batch::cull::Aabb;
@@ -112,7 +114,7 @@ struct Pool {
     cleared: u64,
 }
 
-/// Every emitter's particles, by the emitter's index in the scene.
+/// Every emitter's particles, in the scene's order of its emitters.
 #[derive(Debug, Default)]
 pub(crate) struct Particles {
     emitters: Vec<Emitter>,
@@ -120,41 +122,44 @@ pub(crate) struct Particles {
 }
 
 impl Particles {
-    /// Take the scene's emitters (by index: an emitter's particles stay
-    /// with its index), acting on scripts' `Emit` and `Clear` and moving
-    /// locked particles with their emitter.
+    /// Take the scene's emitters, acting on scripts' `Emit` and `Clear`
+    /// and moving locked particles with their emitter. Particles stay with
+    /// their emitter's `key` wherever it moves in the list, so effects
+    /// coming and going leave the others' particles alone.
     pub(crate) fn set_emitters(&mut self, emitters: &[Emitter]) {
-        while self.pools.len() < emitters.len() {
-            let seed = self.pools.len() as u64;
-            self.pools.push(Pool {
-                rng: Rng::new(seed),
-                ..Default::default()
-            });
-        }
+        let mut old: HashMap<u64, (Emitter, Pool)> = self
+            .emitters
+            .drain(..)
+            .zip(self.pools.drain(..))
+            .map(|(e, p)| (e.key, (e, p)))
+            .collect();
         // Emitters gone: their particles go with them.
-        self.pools.truncate(emitters.len());
-        for (i, (new, pool)) in emitters.iter().zip(&mut self.pools).enumerate() {
-            match self.emitters.get(i) {
-                Some(old) if new.look.locked => pool.follow(old, new),
-                Some(_) => {}
+        for new in emitters {
+            let pool = match old.remove(&new.key) {
+                Some((old, mut pool)) => {
+                    if new.look.locked {
+                        pool.follow(&old, new);
+                    }
+                    pool
+                }
                 // A new emitter: calls made before it was drawn count.
-                None => (pool.emitted, pool.cleared) = (0, 0),
-            }
+                None => Pool {
+                    rng: Rng::new(new.key),
+                    ..Default::default()
+                },
+            };
+            self.pools.push(pool);
+            let pool = self.pools.last_mut().expect("just pushed");
             if new.cleared != pool.cleared {
                 pool.particles.clear();
                 pool.cleared = new.cleared;
             }
-            // A different emitter took this index: its count starts here.
-            if new.emitted < pool.emitted {
-                pool.emitted = new.emitted;
-            }
-            let burst = (new.emitted - pool.emitted).min(MAX_BURST);
+            let burst = new.emitted.saturating_sub(pool.emitted).min(MAX_BURST);
             pool.emitted = new.emitted;
             for _ in 0..burst {
                 pool.birth(new, 0.0);
             }
         }
-        self.emitters.clear();
         self.emitters.extend_from_slice(emitters);
     }
 

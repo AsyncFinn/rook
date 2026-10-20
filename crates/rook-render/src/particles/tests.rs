@@ -12,6 +12,7 @@ fn look(rate: f32) -> Arc<EmitterLook> {
 
 fn emitter(look: Arc<EmitterLook>) -> Emitter {
     Emitter {
+        key: 1,
         position: Vec3::ZERO,
         rotation: Mat3::IDENTITY,
         enabled: true,
@@ -73,6 +74,28 @@ fn emit_clear_and_locked() {
     e.cleared = 1;
     ps.set_emitters(std::slice::from_ref(&e));
     assert!(!ps.any());
+}
+
+/// Particles stay with their emitter's key when others come and go
+/// before it in the list.
+#[test]
+fn particles_follow_their_key() {
+    let mut a = emitter(look(0.0));
+    a.emitted = 3;
+    let mut b = emitter(look(0.0));
+    b.key = 2;
+    b.emitted = 7;
+    let mut ps = Particles::default();
+    ps.set_emitters(&[a.clone(), b.clone()]);
+    ps.set_emitters(std::slice::from_ref(&b));
+    assert_eq!(ps.pools[0].particles.len(), 7);
+    ps.set_emitters(&[a, b]);
+    assert_eq!(
+        ps.pools[0].particles.len(),
+        3,
+        "a new emitter bursts afresh"
+    );
+    assert_eq!(ps.pools[1].particles.len(), 7);
 }
 
 #[test]
