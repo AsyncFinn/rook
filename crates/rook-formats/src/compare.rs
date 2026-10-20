@@ -60,17 +60,16 @@ pub fn compare(a: &WeakDom, b: &WeakDom) -> Vec<Difference> {
 /// Compare the trees under each DOM's root with the given options.
 pub fn compare_with(a: &WeakDom, b: &WeakDom, options: CompareOptions) -> Vec<Difference> {
     // First pass: pair instances by position.
-    let mut pairs = Vec::new();
-    let mut diffs = Vec::new();
-    pair_children(
+    let mut pairing = Pairing {
         a,
         b,
-        a.root_ref(),
-        b.root_ref(),
-        String::new(),
-        &mut pairs,
-        &mut diffs,
-    );
+        pairs: Vec::new(),
+        diffs: Vec::new(),
+    };
+    pairing.pair_children(a.root_ref(), b.root_ref(), String::new());
+    let Pairing {
+        pairs, mut diffs, ..
+    } = pairing;
     let ref_map: HashMap<Ref, Ref> = pairs.iter().map(|(ra, rb, _)| (*ra, *rb)).collect();
 
     // Second pass: compare properties of paired instances.
@@ -117,52 +116,56 @@ fn is_empty_collection(v: &Variant) -> bool {
     }
 }
 
-fn pair_children(
-    a: &WeakDom,
-    b: &WeakDom,
-    pa: Ref,
-    pb: Ref,
-    path: String,
-    pairs: &mut Vec<(Ref, Ref, String)>,
-    diffs: &mut Vec<Difference>,
-) {
-    let ca = a.get_by_ref(pa).expect("parent exists").children();
-    let cb = b.get_by_ref(pb).expect("parent exists").children();
-    if ca.len() != cb.len() {
-        diffs.push(Difference::ChildCountChanged {
-            path: if path.is_empty() {
-                "<root>".into()
+/// Instances paired by position, and the differences in the tree's shape.
+struct Pairing<'a> {
+    a: &'a WeakDom,
+    b: &'a WeakDom,
+    /// Each pair with its path.
+    pairs: Vec<(Ref, Ref, String)>,
+    diffs: Vec<Difference>,
+}
+
+impl Pairing<'_> {
+    fn pair_children(&mut self, pa: Ref, pb: Ref, path: String) {
+        let (a, b) = (self.a, self.b);
+        let ca = a.get_by_ref(pa).expect("parent exists").children();
+        let cb = b.get_by_ref(pb).expect("parent exists").children();
+        if ca.len() != cb.len() {
+            self.diffs.push(Difference::ChildCountChanged {
+                path: if path.is_empty() {
+                    "<root>".into()
+                } else {
+                    path.clone()
+                },
+                from: ca.len(),
+                to: cb.len(),
+            });
+        }
+        for (index, (&ra, &rb)) in ca.iter().zip(cb).enumerate() {
+            let ia = a.get_by_ref(ra).expect("child exists");
+            let ib = b.get_by_ref(rb).expect("child exists");
+            let child_path = if path.is_empty() {
+                format!("{}[{index}]", ia.name)
             } else {
-                path.clone()
-            },
-            from: ca.len(),
-            to: cb.len(),
-        });
-    }
-    for (index, (&ra, &rb)) in ca.iter().zip(cb).enumerate() {
-        let ia = a.get_by_ref(ra).expect("child exists");
-        let ib = b.get_by_ref(rb).expect("child exists");
-        let child_path = if path.is_empty() {
-            format!("{}[{index}]", ia.name)
-        } else {
-            format!("{path}.{}[{index}]", ia.name)
-        };
-        if ia.class != ib.class {
-            diffs.push(Difference::ClassChanged {
-                path: child_path.clone(),
-                from: ia.class.to_string(),
-                to: ib.class.to_string(),
-            });
+                format!("{path}.{}[{index}]", ia.name)
+            };
+            if ia.class != ib.class {
+                self.diffs.push(Difference::ClassChanged {
+                    path: child_path.clone(),
+                    from: ia.class.to_string(),
+                    to: ib.class.to_string(),
+                });
+            }
+            if ia.name != ib.name {
+                self.diffs.push(Difference::NameChanged {
+                    path: child_path.clone(),
+                    from: ia.name.clone(),
+                    to: ib.name.clone(),
+                });
+            }
+            self.pairs.push((ra, rb, child_path.clone()));
+            self.pair_children(ra, rb, child_path);
         }
-        if ia.name != ib.name {
-            diffs.push(Difference::NameChanged {
-                path: child_path.clone(),
-                from: ia.name.clone(),
-                to: ib.name.clone(),
-            });
-        }
-        pairs.push((ra, rb, child_path.clone()));
-        pair_children(a, b, ra, rb, child_path, pairs, diffs);
     }
 }
 

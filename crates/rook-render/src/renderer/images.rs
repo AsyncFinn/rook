@@ -186,10 +186,12 @@ impl Renderer {
             self.pipelines = Pipelines::new(
                 &self.device,
                 self.color_format,
-                &self.globals_layout,
-                &self.main_layout,
-                &self.image_layout,
-                &self.lights.layout,
+                BindLayouts {
+                    globals: &self.globals_layout,
+                    main: &self.main_layout,
+                    image: &self.image_layout,
+                    lights: &self.lights.layout,
+                },
                 true,
             );
         }

@@ -22,6 +22,15 @@ fn shaders(table: bool) -> [&'static str; 3] {
     }
 }
 
+/// The bind group layouts the part pipelines use, in group order.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct BindLayouts<'a> {
+    pub(crate) globals: &'a wgpu::BindGroupLayout,
+    pub(crate) main: &'a wgpu::BindGroupLayout,
+    pub(crate) image: &'a wgpu::BindGroupLayout,
+    pub(crate) lights: &'a wgpu::BindGroupLayout,
+}
+
 /// The render pipelines, built once.
 #[derive(Debug)]
 pub(crate) struct Pipelines {
@@ -61,10 +70,7 @@ impl Pipelines {
     pub(crate) fn new(
         device: &wgpu::Device,
         frame_format: wgpu::TextureFormat,
-        layout: &wgpu::BindGroupLayout,
-        main_layout: &wgpu::BindGroupLayout,
-        image_layout: &wgpu::BindGroupLayout,
-        lights_layout: &wgpu::BindGroupLayout,
+        layouts: BindLayouts<'_>,
         table: bool,
     ) -> Self {
         let [parts, sky, particles] = shaders(table);
@@ -79,20 +85,13 @@ impl Pipelines {
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("rook parts"),
             bind_group_layouts: &[
-                Some(layout),
-                Some(main_layout),
-                Some(image_layout),
-                Some(lights_layout),
+                Some(layouts.globals),
+                Some(layouts.main),
+                Some(layouts.image),
+                Some(layouts.lights),
             ],
             immediate_size: 0,
         });
-        // The shadow pass writes the map, so it can't bind it.
-        let shadow_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("rook shadow map"),
-                bind_group_layouts: &[Some(layout)],
-                immediate_size: 0,
-            });
         // The mesh pool's two vertex streams, then the instances.
         let position_attrs = wgpu::vertex_attr_array![0 => Float32x3];
         let vertex_attrs = wgpu::vertex_attr_array![
@@ -188,38 +187,7 @@ impl Pipelines {
                 cache: None,
             })
         };
-        let shadow_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("rook shadow map"),
-            layout: Some(&shadow_pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_shadow"),
-                compilation_options: Default::default(),
-                buffers: &shadow_buffers,
-            },
-            primitive: wgpu::PrimitiveState {
-                cull_mode: Some(wgpu::Face::Back),
-                ..Default::default()
-            },
-            depth_stencil: Some(wgpu::DepthStencilState {
-                format: DEPTH_FORMAT,
-                depth_write_enabled: Some(true),
-                depth_compare: Some(wgpu::CompareFunction::Greater),
-                stencil: Default::default(),
-                // Pushes casters away from the sun (smaller in reverse Z)
-                // where they slope across its view, against acne on faces
-                // the sun grazes; the normal offset handles the rest.
-                bias: wgpu::DepthBiasState {
-                    constant: 0,
-                    slope_scale: -1.5,
-                    clamp: 0.0,
-                },
-            }),
-            multisample: Default::default(),
-            fragment: None,
-            multiview_mask: None,
-            cache: None,
-        });
+        let shadow_pipeline = shadow(device, layouts.globals, &shader, &shadow_buffers);
         // Reverse Z: nearer is greater.
         let opaque_pipeline = make(
             "rook opaque",
@@ -407,4 +375,51 @@ impl Pipelines {
             shadow: shadow_pipeline,
         }
     }
+}
+
+/// Depth only, from the sun: the shadow map.
+fn shadow(
+    device: &wgpu::Device,
+    globals: &wgpu::BindGroupLayout,
+    shader: &wgpu::ShaderModule,
+    buffers: &[Option<wgpu::VertexBufferLayout<'_>>],
+) -> wgpu::RenderPipeline {
+    // The shadow pass writes the map, so it can't bind it.
+    let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("rook shadow map"),
+        bind_group_layouts: &[Some(globals)],
+        immediate_size: 0,
+    });
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("rook shadow map"),
+        layout: Some(&layout),
+        vertex: wgpu::VertexState {
+            module: shader,
+            entry_point: Some("vs_shadow"),
+            compilation_options: Default::default(),
+            buffers,
+        },
+        primitive: wgpu::PrimitiveState {
+            cull_mode: Some(wgpu::Face::Back),
+            ..Default::default()
+        },
+        depth_stencil: Some(wgpu::DepthStencilState {
+            format: DEPTH_FORMAT,
+            depth_write_enabled: Some(true),
+            depth_compare: Some(wgpu::CompareFunction::Greater),
+            stencil: Default::default(),
+            // Pushes casters away from the sun (smaller in reverse Z)
+            // where they slope across its view, against acne on faces
+            // the sun grazes; the normal offset handles the rest.
+            bias: wgpu::DepthBiasState {
+                constant: 0,
+                slope_scale: -1.5,
+                clamp: 0.0,
+            },
+        }),
+        multisample: Default::default(),
+        fragment: None,
+        multiview_mask: None,
+        cache: None,
+    })
 }

@@ -19,7 +19,7 @@ pub(crate) use images::ImageBinding;
 pub(crate) use images::ImageSet;
 use images::{Defaults, image_layout, image_set};
 use lighting::local::GpuLights;
-use pipelines::Pipelines;
+use pipelines::{BindLayouts, Pipelines};
 use placement::Placement;
 use timing::GpuTimer;
 
@@ -267,10 +267,12 @@ impl Renderer {
         let pipelines = Pipelines::new(
             &device,
             FRAME_FORMAT,
-            &layout,
-            &main_layout,
-            &image_layout,
-            &lights.layout,
+            BindLayouts {
+                globals: &layout,
+                main: &main_layout,
+                image: &image_layout,
+                lights: &lights.layout,
+            },
             table.is_some(),
         );
 
