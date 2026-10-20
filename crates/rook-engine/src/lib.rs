@@ -144,13 +144,12 @@ impl DataModel {
         let mut dom = Dom::new();
         dom.journal_mut().set_enabled(false);
         ensure_terrain(&mut dom);
-        Self::with_dom(dom, options)
+        Self::with_dom(dom, options, Role::Server)
     }
 
     /// An empty client DataModel, filled by replication.
     pub fn new_client(options: &Options) -> Result<Self, EngineError> {
-        let mut dm = Self::with_dom(Dom::new(), options)?;
-        dm.role = Role::Client;
+        let dm = Self::with_dom(Dom::new(), options, Role::Client)?;
         let mut w = dm.runtime.world_mut();
         w.is_client = true;
         // Only the server simulates for now: it owns every part (network
@@ -210,13 +209,20 @@ impl DataModel {
             let _ = rook_physics::joints::surfaces::make_joints(&mut dom, &parts);
         }
         dom.journal_mut().set_enabled(journaling);
-        Self::with_dom(dom, options)
+        Self::with_dom(dom, options, Role::Server)
     }
 
-    fn with_dom(mut dom: Dom, options: &Options) -> Result<Self, EngineError> {
+    fn with_dom(mut dom: Dom, options: &Options, role: Role) -> Result<Self, EngineError> {
         threads::size_threads();
         dom.journal_mut().set_enabled(false);
-        for service in DEFAULT_SERVICES {
+        // Scripts tell where they run by `game:FindFirstChild("NetworkServer")`
+        // or `"NetworkClient"`: a playtest server has only the first and a
+        // client only the second (observed in Studio 0.742).
+        let network = match role {
+            Role::Server => "NetworkServer",
+            Role::Client => "NetworkClient",
+        };
+        for service in DEFAULT_SERVICES.iter().chain([&network]) {
             // A class missing from the database would be a Rook bug, not a
             // problem with the place; skip it rather than fail.
             let _ = dom.get_service(service);
@@ -259,7 +265,7 @@ impl DataModel {
         let script_cursor = runtime.world().dom.journal().end();
         Ok(Self {
             runtime,
-            role: Role::Server,
+            role,
             auto_trim: true,
             run_service,
             script_cursor,

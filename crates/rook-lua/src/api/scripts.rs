@@ -8,7 +8,7 @@ use super::instance::{LuaInstance, push_instance};
 use crate::ctx::args::Args;
 use crate::ctx::{ApiResult, Outcome, ScriptError, api_fn, api_ret, with_world};
 use crate::threads::spawn;
-use crate::world::MessageType;
+use crate::world::{Job, MessageType, WaitKind};
 
 fn source_of(lua: &Lua, id: InstanceId) -> String {
     with_world(lua, |w| match w.dom.property_by_name(id, "Source") {
@@ -164,10 +164,21 @@ fn require(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
     if let Some(v) = cached {
         return Outcome::ret(lua, v?);
     }
-    if with_world(lua, |w| w.modules.loading.contains(&module)) {
-        return Err(ScriptError(
-            "Requested module was required recursively".into(),
-        ));
+    // Another thread loading the module: wait for it (observed in Studio
+    // 0.742: a second require while the body yielded got the same value).
+    let thread = lua.current_thread();
+    let loader = with_world(lua, |w| w.modules.loading.get(&module).cloned());
+    if let Some(loader) = loader {
+        if loader == thread {
+            return Err(ScriptError(
+                "Requested module was required recursively".into(),
+            ));
+        }
+        with_world(lua, |w| {
+            w.modules.waiting.entry(module).or_default().push(thread)
+        });
+        let wait: Function = lua.named_registry_value("rook.module_wait")?;
+        return Ok(Outcome::Call(wait, MultiValue::new()));
     }
     let func = compile(lua, module, environment(lua, module)?).map_err(|e| {
         with_world(lua, |w| {
@@ -176,7 +187,7 @@ fn require(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
         });
         ScriptError("Requested module experienced an error while loading".into())
     })?;
-    with_world(lua, |w| w.modules.loading.push(module));
+    with_world(lua, |w| w.modules.loading.insert(module, thread));
     let runner: Function = lua.named_registry_value("rook.module_runner")?;
     Ok(Outcome::Call(
         runner,
@@ -204,9 +215,12 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
         let module = a.instance(0)?;
         let ok = a.truthy(1);
         let value = a.get(2).clone();
-        with_world(lua, |w| w.modules.loading.retain(|m| *m != module));
+        let waiting = with_world(lua, |w| {
+            w.modules.loading.remove(&module);
+            w.modules.waiting.remove(&module).unwrap_or_default()
+        });
         if ok {
-            let key = lua.create_registry_value(value)?;
+            let key = lua.create_registry_value(value.clone())?;
             with_world(lua, |w| w.modules.results.insert(module, key));
         } else {
             let msg = crate::ctx::args::display_value(lua, &value);
@@ -215,8 +229,37 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
                 w.push_log(MessageType::Error, msg);
             });
         }
+        // Waiters resume after this thread's require returns.
+        for thread in waiting {
+            let result = if ok { value.clone() } else { LuaValue::Nil };
+            let job = Job::Resume {
+                thread,
+                args: vec![LuaValue::Boolean(ok), result],
+                wait: WaitKind::None,
+            };
+            with_world(lua, |w| w.scheduler.defer(job));
+        }
         Ok(())
     })?;
+    // Waits for a module another thread is loading: its value, or the
+    // error the loading require raised.
+    let wait_native = api_fn(lua, |_, _| Ok(Outcome::Yield))?;
+    let wait: Function = lua
+        .load(
+            r##"
+            local wait, error = ...
+            return function()
+                local ok, value = wait()
+                if not ok then
+                    error("Requested module experienced an error while loading", 0)
+                end
+                return value
+            end
+            "##,
+        )
+        .set_name("=[rook] require")
+        .call((wait_native, lua.globals().get::<Function>("error")?))?;
+    lua.set_named_registry_value("rook.module_wait", wait)?;
     let runner: Function = lua
         .load(
             r##"

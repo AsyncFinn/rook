@@ -155,7 +155,7 @@ delivery gives it. Asset delivery is the limit: of the archive's modules
 tried every
 one now needs an account, so `require` fails with the download message
 Studio gives for a missing asset, while an old analytics module
-(`153590792`) loads and runs. Headless runs leave asset delivery off
+(`153590792`) loads and runs. A playtest server has a `NetworkServer` under the DataModel (parent locked, holding a ServerReplicator) and a client a `NetworkClient` (holding a ClientReplicator), each without the other; Rook creates both, without the replicators. A second `require` of a module still loading on another thread waits and gets the same value. Headless runs leave asset delivery off
 unless `ROOK_ASSET_DELIVERY=on`; the player has it on.
 
 *Asset delivery today* (tested 2026-10-12): Roblox announced in March 2025

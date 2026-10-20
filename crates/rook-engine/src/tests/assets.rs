@@ -30,8 +30,7 @@ fn asset_options(name: &str) -> Options {
         .join(format!("{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let cache = rook_content::Cache::open(&dir).unwrap();
-    let module =
-        r#"print("loading", script:GetFullName(), script.Parent.Parent) return {name = "mod"}"#;
+    let module = r#"print("loading", script:GetFullName(), script.Parent.Parent) task.wait() return {name = "mod"}"#;
     let assets = [
         (
             100,
@@ -58,7 +57,8 @@ fn asset_options(name: &str) -> Options {
 
 /// As observed in Studio: require loads an asset once and requires its
 /// MainModule (from a parentless `required_asset_<id>` Model, waiting
-/// for the download), remembers failures, and rounds fractional ids;
+/// for the download; a second require while the module's body yields
+/// waits for it), remembers failures, and rounds fractional ids;
 /// LoadAsset returns a fresh parentless Model each call; clients may
 /// do neither.
 #[test]
@@ -113,4 +113,29 @@ fn require_and_load_asset() {
             "false InsertService cannot be used to load assets from the client",
         ]
     );
+}
+
+/// Scripts tell a server from a client by `NetworkServer` and
+/// `NetworkClient` under the DataModel; each side has only its own.
+#[test]
+fn network_server_and_client() {
+    let mut server = Server::new(&Options::default()).unwrap();
+    let print =
+        r#"print(game:FindFirstChild("NetworkServer"), game:FindFirstChild("NetworkClient"))"#;
+    add_script(&server, "ServerScriptService", "Server", print);
+    let sp = service(&server, "StarterPlayer");
+    let sps = add_under(
+        &server,
+        sp,
+        "StarterPlayerScripts",
+        "StarterPlayerScripts",
+        "",
+    );
+    add_under(&server, sps, "LocalScript", "Client", print);
+    server.start();
+    let mut session = Session::new(server, Options::default());
+    let index = session.join("Player1", 1).unwrap();
+    session.run_for(0.2);
+    assert_eq!(lines(session.server()), ["NetworkServer nil"]);
+    assert_eq!(lines(session.client(index).unwrap()), ["nil NetworkClient"]);
 }
