@@ -238,10 +238,10 @@ pub(crate) fn get(w: &World, id: InstanceId, name: &str) -> Option<Value> {
             let playing = dom.bool_property(id, "Playing") == Some(true);
             Some(Value::Bool(playing == (name == "IsPlaying")))
         }
-        // Observed: whether the wire carries sound now (crate::audio).
+        // Observed: whether the wire carries sound now (crate::audio_api).
         "Connected" if dom.is_a(id, "Wire") => {
-            let all = crate::audio::all_wires(dom);
-            let connected = crate::audio::connections(dom, &all);
+            let all = crate::audio_api::all_wires(dom);
+            let connected = crate::audio_api::connections(dom, &all);
             Some(Value::Bool(connected.iter().any(|c| c.wire == id)))
         }
         "RequestQueueSize" if dom.is_a(id, "ContentProvider") => {
@@ -310,7 +310,7 @@ pub(crate) fn set(
     {
         return Some(done);
     }
-    if let Some(done) = crate::audio::clamp(w, id, name, value) {
+    if let Some(done) = crate::audio_api::clamp(w, id, name, value) {
         return Some(done);
     }
     if let Some(target) = view(w, id, name, SAME_AS) {

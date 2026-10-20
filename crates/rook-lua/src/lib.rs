@@ -6,7 +6,7 @@
 //! See `docs/design/architecture.md` §7.
 
 mod api;
-pub mod audio;
+pub mod audio_api;
 mod ctx;
 mod net;
 mod threads;
@@ -15,8 +15,8 @@ mod world;
 
 use threads::watchdog;
 
-pub use api::assets::AssetFill;
-pub use api::camera::{Lens, viewport_ray};
+pub use api::methods::assets::AssetFill;
+pub use api::methods::camera::{Lens, viewport_ray};
 pub use net::{NetValue, RemoteKind, RemoteMessage};
 pub use world::{EffectCall, Listener, LogEntry, MessageType, SignalBehavior, SoundControl};
 
@@ -361,7 +361,7 @@ impl Runtime {
             return;
         }
         self.guarded(|| {
-            api::content::deliver(&self.lua, results);
+            api::methods::preload::deliver(&self.lua, results);
             threads::drain_deferred(&self.lua);
         });
     }
@@ -376,7 +376,7 @@ impl Runtime {
     /// waiting call gets, and the threads waiting for it resume.
     pub fn deliver_asset(&self, request: u64, fill: AssetFill) {
         self.guarded(|| {
-            api::assets::deliver(&self.lua, request, fill);
+            api::methods::assets::deliver(&self.lua, request, fill);
             threads::drain_deferred(&self.lua);
         });
     }

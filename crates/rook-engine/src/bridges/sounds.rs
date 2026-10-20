@@ -175,7 +175,7 @@ impl DataModel {
                 .extend(all.iter().copied().filter(|&i| is_sound(dom, i)));
             sounds.graph_nodes.extend(
                 all.into_iter()
-                    .filter(|&i| rook_lua::audio::in_graph(dom.class_name(i))),
+                    .filter(|&i| rook_lua::audio_api::in_graph(dom.class_name(i))),
             );
         }
         let ids = SoundProps::get();
@@ -199,7 +199,7 @@ impl DataModel {
                     for &i in subtree {
                         if dom.get(i).is_some()
                             && dom.is_ancestor_of(dom.root(), i)
-                            && rook_lua::audio::in_graph(dom.class_name(i))
+                            && rook_lua::audio_api::in_graph(dom.class_name(i))
                         {
                             sounds.graph_nodes.insert(i);
                         } else {

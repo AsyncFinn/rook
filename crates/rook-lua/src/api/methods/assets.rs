@@ -13,8 +13,8 @@ use mlua::{Function, Lua, MultiValue, Thread, Value as LuaValue};
 use rook_content::FailureKind;
 use rook_dom::{Dom, InstanceId};
 
-use super::instance::push_instance;
-use super::methods::RawMethod;
+use super::RawMethod;
+use crate::api::instance::push_instance;
 use crate::ctx::args::{Args, number_of, type_name};
 use crate::ctx::{ApiResult, Outcome, ScriptError, api_fn, with_world};
 

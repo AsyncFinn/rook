@@ -147,8 +147,8 @@ fn require(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
     let a = Args::new(args, "require");
     let module = match a.get(0) {
         LuaValue::UserData(u) => u.borrow::<LuaInstance>().ok().map(|i| i.0),
-        LuaValue::Integer(n) => return super::assets::require_asset(lua, *n as f64),
-        LuaValue::Number(n) => return super::assets::require_asset(lua, *n),
+        LuaValue::Integer(n) => return super::methods::assets::require_asset(lua, *n as f64),
+        LuaValue::Number(n) => return super::methods::assets::require_asset(lua, *n),
         _ => None,
     }
     .ok_or_else(|| ScriptError("Attempted to call require with invalid argument(s).".into()))?;

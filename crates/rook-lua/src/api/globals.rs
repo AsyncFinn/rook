@@ -302,7 +302,10 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
         api_ret(lua, move |lua, _| Ok(start_epoch + now(lua)))?,
     )?;
     g.set("typeof", api_ret(lua, typeof_)?)?;
-    std.set("datastore", super::services::datastore_helpers(lua)?)?;
+    std.set(
+        "datastore",
+        super::methods::data_stores::datastore_helpers(lua)?,
+    )?;
     g.set(
         "version",
         lua.create_function(|_, ()| Ok(rook_reflection::roblox_version()))?,

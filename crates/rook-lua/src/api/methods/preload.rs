@@ -14,8 +14,8 @@ use rook_content::{ContentRef, Want};
 use rook_dom::InstanceId;
 use rook_reflection::{PropertyType, database};
 
-use super::methods::RawMethod;
-use super::properties::content_view;
+use super::RawMethod;
+use crate::api::properties::content_view;
 use crate::ctx::args::{Args, type_name};
 use crate::ctx::{ApiResult, Outcome, ScriptError, with_world};
 use crate::world::World;
@@ -57,10 +57,7 @@ impl ContentRequests {
 pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
     Some(match (owner, name) {
         ("ContentProvider", "PreloadAsync") => preload_async,
-        _ => {
-            return super::assets::native(owner, name)
-                .or_else(|| super::remotes::native(owner, name));
-        }
+        _ => return None,
     })
 }
 
@@ -138,7 +135,10 @@ fn preload_async(lua: &Lua, _this: InstanceId, a: &Args) -> ApiResult<Outcome> {
                 }
             }
             LuaValue::UserData(ud) => {
-                let Ok(id) = ud.borrow::<super::instance::LuaInstance>().map(|i| i.0) else {
+                let Ok(id) = ud
+                    .borrow::<crate::api::instance::LuaInstance>()
+                    .map(|i| i.0)
+                else {
                     return Err(ScriptError(format!(
                         "Unable to cast {} to ContentId",
                         type_name(&LuaValue::UserData(ud))

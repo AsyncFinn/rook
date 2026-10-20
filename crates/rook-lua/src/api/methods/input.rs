@@ -5,8 +5,8 @@ use mlua::{Lua, Value as LuaValue};
 use rook_dom::InstanceId;
 use rook_types::{UserInputState, UserInputType};
 
-use super::instance::push_instance;
-use super::methods::RawMethod;
+use super::RawMethod;
+use crate::api::instance::push_instance;
 use crate::ctx::args::Args;
 use crate::ctx::{ApiResult, Outcome, with_world};
 use crate::types::LVector2;
@@ -23,7 +23,7 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("UserInputService", "GetFocusedTextBox") => nil,
         ("UserInputService", "GetLastInputType") => last_input_type,
         ("Player", "GetMouse") => get_mouse,
-        _ => return super::physics::native(owner, name),
+        _ => return None,
     })
 }
 

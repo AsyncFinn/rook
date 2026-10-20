@@ -1,6 +1,10 @@
-//! Native implementations of Roblox member functions.
+//! Roblox member functions, one file per topic in `methods/`.
 //!
-//! `native(owner, name)` maps a member (by the class that declares it in
+//! `native(owner, name)` lists the core classes' members here; topics with
+//! their own table (`native`, and `luau_source` for members written in
+//! Luau) are tried after it, in the order listed.
+//!
+//! Each table maps a member (by the class that declares it in
 //! the API dump) to its implementation. Members without one raise
 //! "not implemented in Rook yet" and are counted. A short list of members
 //! whose effect only matters to systems Rook doesn't have yet (network
@@ -28,17 +32,27 @@ use crate::types::LCFrame;
 use crate::world::{Job, World};
 
 mod assemblies;
+pub(crate) mod assets;
 mod attributes;
-mod audio;
+mod audio_api;
 mod bindables;
+pub(crate) mod camera;
 mod characters;
+pub(crate) mod data_stores;
 mod effects;
+mod http;
+mod input;
 mod materials;
 mod models;
+mod physics;
+pub(crate) mod preload;
+mod queries;
+pub(crate) mod remotes;
 mod services;
 mod sound;
 mod terrain;
 mod tree;
+mod tweens;
 
 use assemblies::*;
 use attributes::*;
@@ -162,25 +176,31 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("SoundService", "SetListener") => sound::set_listener,
         ("SoundService", "GetListener") => sound::get_listener,
         ("SoundService", "PlayLocalSound") => sound::play_local_sound,
-        ("SoundService", "GetMixerTime") => audio::get_mixer_time,
-        ("AudioPlayer", "Play") => audio::audio_play,
-        ("AudioPlayer", "Stop") => audio::audio_stop,
-        ("AudioPlayer", "Cancel") => audio::audio_cancel,
-        (c, "GetInputPins") if crate::audio::pins(c).is_some() => audio::get_input_pins,
-        (c, "GetOutputPins") if crate::audio::pins(c).is_some() => audio::get_output_pins,
-        (c, "GetConnectedWires") if crate::audio::pins(c).is_some() => audio::get_connected_wires,
+        ("SoundService", "GetMixerTime") => audio_api::get_mixer_time,
+        ("AudioPlayer", "Play") => audio_api::audio_play,
+        ("AudioPlayer", "Stop") => audio_api::audio_stop,
+        ("AudioPlayer", "Cancel") => audio_api::audio_cancel,
+        (c, "GetInputPins") if crate::audio_api::pins(c).is_some() => audio_api::get_input_pins,
+        (c, "GetOutputPins") if crate::audio_api::pins(c).is_some() => audio_api::get_output_pins,
+        (c, "GetConnectedWires") if crate::audio_api::pins(c).is_some() => {
+            audio_api::get_connected_wires
+        }
         ("AudioEmitter" | "AudioListener", "SetDistanceAttenuation") => {
-            audio::set_distance_attenuation
+            audio_api::set_distance_attenuation
         }
         ("AudioEmitter" | "AudioListener", "GetDistanceAttenuation") => {
-            audio::get_distance_attenuation
+            audio_api::get_distance_attenuation
         }
-        ("AudioEmitter" | "AudioListener", "SetAngleAttenuation") => audio::set_angle_attenuation,
-        ("AudioEmitter" | "AudioListener", "GetAngleAttenuation") => audio::get_angle_attenuation,
-        ("AudioEmitter" | "AudioListener", "GetAudibilityFor") => audio::get_audibility_for,
-        ("AudioEmitter", "GetInteractingListeners") => audio::get_interacting_listeners,
-        ("AudioListener", "GetInteractingEmitters") => audio::get_interacting_emitters,
-        ("AudioAnalyzer", "GetSpectrum") => audio::get_spectrum,
+        ("AudioEmitter" | "AudioListener", "SetAngleAttenuation") => {
+            audio_api::set_angle_attenuation
+        }
+        ("AudioEmitter" | "AudioListener", "GetAngleAttenuation") => {
+            audio_api::get_angle_attenuation
+        }
+        ("AudioEmitter" | "AudioListener", "GetAudibilityFor") => audio_api::get_audibility_for,
+        ("AudioEmitter", "GetInteractingListeners") => audio_api::get_interacting_listeners,
+        ("AudioListener", "GetInteractingEmitters") => audio_api::get_interacting_emitters,
+        ("AudioAnalyzer", "GetSpectrum") => audio_api::get_spectrum,
         ("Terrain", "FillBlock") => terrain::fill_block,
         ("Terrain", "FillBall") => terrain::fill_ball,
         ("Terrain", "FillCylinder") => terrain::fill_cylinder,
@@ -207,7 +227,21 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("Terrain", "PasteRegion") => terrain::paste_region,
         ("Terrain", "GetMaterialColor") => terrain::get_material_color,
         ("Terrain", "SetMaterialColor") => terrain::set_material_color,
-        _ => return super::services::native(owner, name),
+        _ => {
+            return [
+                data_stores::native,
+                http::native,
+                preload::native,
+                assets::native,
+                remotes::native,
+                input::native,
+                physics::native,
+                queries::native,
+                camera::native,
+            ]
+            .iter()
+            .find_map(|topic| topic(owner, name));
+        }
     })
 }
 
@@ -221,7 +255,14 @@ pub(crate) fn luau_source(owner: &str, name: &str) -> Option<&'static str> {
         // timeOut; without one, warns about a possible infinite yield after
         // 5 seconds). Warning text is Inference.
         ("Instance", "WaitForChild") => Some(include_str!("luau/wait_for_child.luau")),
-        _ => super::services::luau_source(owner, name),
+        _ => [
+            tweens::luau_source,
+            bindables::luau_source,
+            data_stores::luau_source,
+            remotes::luau_source,
+        ]
+        .iter()
+        .find_map(|topic| topic(owner, name)),
     }
 }
 

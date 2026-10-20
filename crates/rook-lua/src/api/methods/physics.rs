@@ -9,7 +9,7 @@ use rook_physics::Command;
 use rook_physics::contacts::groups::{self, CollisionGroups, GroupError, MAX_GROUPS};
 use rook_types::Value;
 
-use super::methods::{RawMethod, mutate};
+use super::{RawMethod, mutate};
 use crate::ctx::args::Args;
 use crate::ctx::{ApiResult, Outcome, ScriptError, with_world};
 
@@ -32,7 +32,7 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("BasePart", "CanCollideWith") => can_collide_with,
         ("RocketPropulsion", "Fire" | "fire") => fire_rocket,
         ("RocketPropulsion", "Abort") => abort_rocket,
-        _ => return super::queries::native(owner, name),
+        _ => return None,
     })
 }
 

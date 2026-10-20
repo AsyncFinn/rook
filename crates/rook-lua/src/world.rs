@@ -128,7 +128,7 @@ pub struct SoundControl {
     pub loops: u32,
 }
 
-/// The audio API's script state (`api/methods/audio.rs`).
+/// The audio API's script state (`api/methods/audio_api.rs`).
 #[derive(Debug, Default)]
 pub struct AudioState {
     /// AudioAnalyzers' last spectra, written by the engine on clients.
@@ -188,8 +188,8 @@ pub struct World {
     /// Remote calls waiting for the session to deliver them.
     pub outbox: Vec<crate::net::RemoteMessage>,
     /// ContentProvider requests waiting for the engine to resolve them.
-    pub content: crate::api::content::ContentRequests,
-    pub assets: crate::api::assets::AssetRequests,
+    pub content: crate::api::methods::preload::ContentRequests,
+    pub assets: crate::api::methods::assets::AssetRequests,
     /// The physics world. Scripts query it (raycasts, regions), which
     /// brings it up to date with the DOM first, so it lives here with the
     /// DOM. Servers step it; a client's only answers queries (see

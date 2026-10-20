@@ -12,7 +12,7 @@ use mlua::Lua;
 use rook_dom::{Dom, InstanceId};
 use rook_types::{CFrame, Vector3};
 
-use super::methods::RawMethod;
+use super::RawMethod;
 use crate::ctx::args::Args;
 use crate::ctx::convert::vector3_to_lua;
 use crate::ctx::{ApiResult, Outcome, with_world};

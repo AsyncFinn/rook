@@ -7,7 +7,7 @@
 use mlua::{Lua, MultiValue, Value as LuaValue};
 use rook_dom::InstanceId;
 
-use super::methods::RawMethod;
+use super::RawMethod;
 use crate::ctx::args::Args;
 use crate::ctx::{ApiResult, Outcome, ScriptError, api_fn, with_world};
 use crate::net::{RemoteKind, RemoteMessage, to_net};
@@ -17,7 +17,7 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("RemoteEvent" | "UnreliableRemoteEvent", "FireServer") => fire_server,
         ("RemoteEvent" | "UnreliableRemoteEvent", "FireClient") => fire_client,
         ("RemoteEvent" | "UnreliableRemoteEvent", "FireAllClients") => fire_all_clients,
-        _ => return super::input::native(owner, name),
+        _ => return None,
     })
 }
 

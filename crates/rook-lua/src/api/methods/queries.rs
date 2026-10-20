@@ -16,7 +16,7 @@ use rook_physics::{CastShape, Filter, Hit, Region};
 use rook_signal::SignalKey;
 use rook_types::{CFrame, Vector3};
 
-use super::methods::RawMethod;
+use super::RawMethod;
 use crate::ctx::args::{Args, borrow_clone, type_name};
 use crate::ctx::convert::vector3_to_lua;
 use crate::ctx::{ApiResult, Outcome, ScriptError, with_world};
@@ -45,7 +45,7 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("WorldRoot", "GetPartsInPart") => parts_in_part,
         ("BasePart", "GetTouchingParts") => touching_parts,
         ("BasePart", "GetNoCollisionConstraints") => no_collision_constraints,
-        _ => return super::camera::native(owner, name),
+        _ => return None,
     })
 }
 
@@ -108,7 +108,7 @@ fn ray_results(lua: &Lua, a: &Args, filter: &Filter) -> ApiResult<Outcome> {
     let hit = with_world(lua, |w| w.physics.raycast(&mut w.dom, origin, dir, filter));
     let (part, position, normal, material) = match hit {
         Some(h) => (
-            LuaValue::UserData(super::instance::push_instance(lua, h.part)?),
+            LuaValue::UserData(crate::api::instance::push_instance(lua, h.part)?),
             h.position,
             h.normal,
             h.material,
@@ -177,7 +177,7 @@ fn region_parts(lua: &Lua, a: &Args, filter: &Filter, max: f64) -> ApiResult<Vec
 }
 
 fn ret_parts(lua: &Lua, parts: &[InstanceId]) -> ApiResult<Outcome> {
-    super::instance::ret_instance_array(lua, parts)
+    crate::api::instance::ret_instance_array(lua, parts)
 }
 
 fn find_parts_in_region(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {

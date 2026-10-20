@@ -59,3 +59,18 @@ pub(crate) fn get_callback(
         None => Ok(None),
     }
 }
+
+/// `Invoke`, written in Luau: it waits until a callback is set.
+pub(super) fn luau_source(owner: &str, name: &str) -> Option<&'static str> {
+    Some(match (owner, name) {
+        ("BindableFunction", "Invoke") => {
+            r#"
+            local wait_for_callback = (...).wait_for_callback
+            return function(self, ...)
+                return wait_for_callback(self, "OnInvoke")(...)
+            end
+            "#
+        }
+        _ => return None,
+    })
+}

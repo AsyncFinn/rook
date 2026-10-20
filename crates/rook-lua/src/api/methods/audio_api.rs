@@ -6,7 +6,7 @@
 use mlua::Table;
 
 use super::*;
-use crate::audio;
+use crate::audio_api;
 use crate::world::Scheduled;
 
 /// `Play(atTime)` and `Stop(atTime)`: at once without a time, from where
@@ -15,7 +15,7 @@ use crate::world::Scheduled;
 /// returning an id for `Cancel`; servers refuse that.
 fn play_or_stop(lua: &Lua, this: InstanceId, a: &Args, play: bool) -> ApiResult<Outcome> {
     let Some(at) = a.opt_number(0)? else {
-        mutate(lua, |w| audio::set_playing(w, this, play))?;
+        mutate(lua, |w| audio_api::set_playing(w, this, play))?;
         // An explicit nil (observed: `log(p:Play())` printed "nil").
         return Outcome::ret(lua, LuaValue::Nil);
     };
@@ -66,7 +66,7 @@ pub(super) fn get_mixer_time(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Ou
 }
 
 fn class_pins(lua: &Lua, this: InstanceId) -> (&'static [&'static str], &'static [&'static str]) {
-    with_world(lua, |w| audio::pins(w.dom.class_name(this))).unwrap_or((&[], &[]))
+    with_world(lua, |w| audio_api::pins(w.dom.class_name(this))).unwrap_or((&[], &[]))
 }
 
 pub(super) fn get_input_pins(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
@@ -89,7 +89,7 @@ pub(super) fn get_connected_wires(lua: &Lua, this: InstanceId, a: &Args) -> ApiR
     let wires = with_world(lua, |w| {
         let dom = &w.dom;
         let name = |wire, p| dom.string_property(wire, p).unwrap_or_default();
-        audio::connections(dom, &audio::all_wires(dom))
+        audio_api::connections(dom, &audio_api::all_wires(dom))
             .into_iter()
             .filter(|c| {
                 (c.from == this && name(c.wire, "SourceName") == pin)
@@ -128,14 +128,14 @@ fn set_curve(lua: &Lua, this: InstanceId, a: &Args, method: &str) -> ApiResult<O
     }
     let property = curve_property(method);
     mutate(lua, |w| {
-        audio::write_curve(&mut w.dom, this, property, points)
+        audio_api::write_curve(&mut w.dom, this, property, points)
     })?;
     Outcome::ret(lua, ())
 }
 
 fn get_curve(lua: &Lua, this: InstanceId, method: &str) -> ApiResult<Outcome> {
     let points = with_world(lua, |w| {
-        audio::read_curve(&w.dom, this, curve_property(method))
+        audio_api::read_curve(&w.dom, this, curve_property(method))
     });
     let t: Table = lua.create_table()?;
     for (k, v) in points {
@@ -174,9 +174,9 @@ pub(super) fn get_audibility_for(lua: &Lua, this: InstanceId, a: &Args) -> ApiRe
     let other = a.instance(0)?;
     let level = with_world(lua, |w| {
         if w.dom.is_a(this, "AudioEmitter") {
-            audio::audibility(w, this, other)
+            audio_api::audibility(w, this, other)
         } else {
-            audio::audibility(w, other, this)
+            audio_api::audibility(w, other, this)
         }
     });
     Outcome::ret(lua, f64::from(level))
@@ -188,7 +188,7 @@ pub(super) fn get_interacting_listeners(
     _: &Args,
 ) -> ApiResult<Outcome> {
     let ids = with_world(lua, |w| {
-        audio::interacting_with(&w.dom, this, "AudioListener")
+        audio_api::interacting_with(&w.dom, this, "AudioListener")
     });
     ret_instances(lua, &ids)
 }
@@ -199,7 +199,7 @@ pub(super) fn get_interacting_emitters(
     _: &Args,
 ) -> ApiResult<Outcome> {
     let ids = with_world(lua, |w| {
-        audio::interacting_with(&w.dom, this, "AudioEmitter")
+        audio_api::interacting_with(&w.dom, this, "AudioEmitter")
     });
     ret_instances(lua, &ids)
 }

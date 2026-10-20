@@ -3,7 +3,7 @@
 //! and `Stop` calls, and AudioAnalyzers' measurements.
 //!
 //! Which wires connect and how loud a listener hears an emitter are
-//! `rook_lua::audio`'s rules, so scripts and the mixer agree.
+//! `rook_lua::audio_api`'s rules, so scripts and the mixer agree.
 
 use rook_audio::SAMPLE_RATE;
 use rook_audio::effects::{Effect, Reverb};
@@ -126,7 +126,7 @@ impl DataModel {
                 "AudioListener" => NodeKind::Listener(
                     emitters
                         .iter()
-                        .filter_map(|&e| Some((e, rook_lua::audio::heard(&w, e, id)?)))
+                        .filter_map(|&e| Some((e, rook_lua::audio_api::heard(&w, e, id)?)))
                         .collect(),
                 ),
                 "AudioDeviceOutput" => {
@@ -142,7 +142,7 @@ impl DataModel {
             };
             nodes.push(Node { key: id, kind });
         }
-        let wires = rook_lua::audio::connections(dom, &wires)
+        let wires = rook_lua::audio_api::connections(dom, &wires)
             .into_iter()
             .map(|c| Wire {
                 from: c.from,
@@ -179,7 +179,7 @@ impl DataModel {
                 .partition(|s| s.at <= now);
             w.audio.scheduled = waiting;
             for s in due {
-                rook_dom::ignore_stale(rook_lua::audio::set_playing(&mut w, s.player, s.play));
+                rook_dom::ignore_stale(rook_lua::audio_api::set_playing(&mut w, s.player, s.play));
             }
             start
         };

@@ -1,18 +1,10 @@
 //! The Roblox API surface: Instance, signals, globals, scripts.
 
-pub(crate) mod assets;
-pub(crate) mod camera;
-pub(crate) mod content;
 pub(crate) mod globals;
-pub(crate) mod input;
 pub(crate) mod instance;
 pub(crate) mod methods;
-pub(crate) mod physics;
 pub(crate) mod properties;
-pub(crate) mod queries;
-pub(crate) mod remotes;
 pub(crate) mod scripts;
-pub(crate) mod services;
 pub(crate) mod signal;
 
 pub(crate) use methods::pivot_of;
@@ -24,7 +16,7 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     signal::install(lua)?;
     globals::install(lua)?;
     scripts::install(lua)?;
-    assets::install(lua)?;
-    remotes::install(lua)?;
+    methods::assets::install(lua)?;
+    methods::remotes::install(lua)?;
     Ok(())
 }
