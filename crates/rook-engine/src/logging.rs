@@ -168,7 +168,7 @@ pub fn log_path() -> Option<PathBuf> {
 /// Start logging: the terminal filter from `--verbose`, `ROOK_LOG` and
 /// `settings.json`, the log file (after cleaning old ones), and the crash
 /// hook. Call once, first thing in `main`.
-pub fn init(options: Options) {
+pub fn init(options: &Options) {
     let loaded = crate::settings::get();
     let mut problems: Vec<String> = loaded.problem.iter().cloned().collect();
     let file_level = loaded.settings.log_level.as_deref().and_then(|l| {

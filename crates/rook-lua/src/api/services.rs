@@ -202,7 +202,6 @@ fn to_json(v: &LuaValue, depth: usize) -> ApiResult<serde_json::Value> {
         return Err(ScriptError("Can't convert to JSON".into()));
     }
     Ok(match v {
-        LuaValue::Nil => J::Null,
         LuaValue::Boolean(b) => J::Bool(*b),
         LuaValue::Integer(_) | LuaValue::Number(_) => {
             let n = crate::ctx::args::number_of(v).unwrap_or(0.0);

@@ -17,6 +17,10 @@ struct Tint {
     scale: f32,
 }
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "builds the rows of a table of Option<Tint>, beside its None rows"
+)]
 const fn tint(chroma: [[f32; 2]; 2], cap: f32, gain: f32, scale: f32) -> Option<Tint> {
     Some(Tint {
         chroma,

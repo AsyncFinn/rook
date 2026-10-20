@@ -166,7 +166,7 @@ impl DataModel {
         self.measure_analyzers(dt);
     }
 
-    fn run_scheduled(&mut self) {
+    fn run_scheduled(&self) {
         let start = {
             let mut w = self.runtime.world_mut();
             if w.audio.scheduled.is_empty() {

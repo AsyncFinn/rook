@@ -12,7 +12,7 @@ fn players_of(w: &World, this: InstanceId) -> Vec<InstanceId> {
 }
 
 pub(super) fn get_players(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
-    ret_instances(lua, with_world(lua, |w| players_of(w, this)))
+    ret_instances(lua, &with_world(lua, |w| players_of(w, this)))
 }
 
 pub(super) fn player_from_character(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
@@ -89,7 +89,7 @@ pub(crate) fn spawn_character(lua: &Lua, player: InstanceId) -> ApiResult<Instan
         fire(
             lua,
             &SignalKey::event(player, "CharacterRemoving"),
-            vec![LuaValue::UserData(ud)],
+            &[LuaValue::UserData(ud)],
         );
         mutate(lua, |w| w.dom.destroy(old))?;
     }
@@ -111,7 +111,7 @@ pub(crate) fn spawn_character(lua: &Lua, player: InstanceId) -> ApiResult<Instan
     fire(
         lua,
         &SignalKey::event(player, "CharacterAdded"),
-        vec![LuaValue::UserData(ud)],
+        &[LuaValue::UserData(ud)],
     );
     mutate(lua, |w| {
         let workspace = w.dom.find_service("Workspace").ok_or(DomError::Stale)?;

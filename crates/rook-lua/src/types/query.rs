@@ -171,6 +171,10 @@ impl<const OVERLAP: bool> LParams<OVERLAP> {
         })
     }
 
+    #[expect(
+        clippy::needless_pass_by_value,
+        reason = "a method shim hands its arguments over by value"
+    )]
     fn add_to_filter(_: &Lua, ud: &AnyUserData, args: MultiValue) -> ApiResult<()> {
         let v = args.front().cloned().unwrap_or(LuaValue::Nil);
         if !matches!(v, LuaValue::Table(_) | LuaValue::UserData(_)) {
@@ -182,7 +186,7 @@ impl<const OVERLAP: bool> LParams<OVERLAP> {
         Ok(())
     }
 
-    fn set(&mut self, key: &str, v: LuaValue) -> ApiResult<()> {
+    fn set(&mut self, key: &str, v: &LuaValue) -> ApiResult<()> {
         let p = &mut self.0;
         let truthy = !matches!(v, LuaValue::Nil | LuaValue::Boolean(false));
         match key {
@@ -205,14 +209,14 @@ impl<const OVERLAP: bool> LParams<OVERLAP> {
                     return Err(ScriptError::from("Invalid value type; expected a table"));
                 }
                 let mut list = Vec::new();
-                collect(&v, &mut list, 0)?;
+                collect(v, &mut list, 0)?;
                 p.instances = list;
             }
             "CollisionGroup" => {
                 p.collision_group = match &v {
                     LuaValue::String(s) => s.to_string_lossy(),
                     LuaValue::Integer(_) | LuaValue::Number(_) => {
-                        crate::ctx::args::format_number(number_of(&v).unwrap_or(0.0))
+                        crate::ctx::args::format_number(number_of(v).unwrap_or(0.0))
                     }
                     _ => return Err(ScriptError::from("Invalid value type; expected a string")),
                 };
@@ -221,10 +225,10 @@ impl<const OVERLAP: bool> LParams<OVERLAP> {
             "BruteForceAllSlow" => p.brute_force = truthy,
             "IgnoreWater" if !OVERLAP => p.ignore_water = truthy,
             "MaxParts" if OVERLAP => {
-                p.max_parts = number_of(&v).unwrap_or(0.0) as i32;
+                p.max_parts = number_of(v).unwrap_or(0.0) as i32;
             }
             "Tolerance" if OVERLAP => {
-                let t = number_of(&v).unwrap_or(0.0) as f32;
+                let t = number_of(v).unwrap_or(0.0) as f32;
                 if !(0.0..=0.05).contains(&t) {
                     return Err(ScriptError::from(format!(
                         "Tolerance outside bounds: Expected 0 - 0.050000, got {t:.6}"
@@ -271,7 +275,7 @@ impl<const OVERLAP: bool> UserData for LParams<OVERLAP> {
         f.add_meta_field_with("__newindex", |lua| {
             shim::<Self, ()>(lua, |_, ud, args| {
                 let v = args.get(1).cloned().unwrap_or(LuaValue::Nil);
-                ud.borrow_mut::<Self>()?.set(&key(&args), v)
+                ud.borrow_mut::<Self>()?.set(&key(&args), &v)
             })
         });
     }

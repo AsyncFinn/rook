@@ -32,7 +32,7 @@ fn fire_then(
     fire(
         lua,
         &SignalKey::event(this, event),
-        vec![LuaValue::String(lua.create_string(&id)?)],
+        &[LuaValue::String(lua.create_string(&id)?)],
     );
     mutate(lua, change)?;
     Outcome::ret(lua, ())

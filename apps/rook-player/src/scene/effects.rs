@@ -87,6 +87,10 @@ impl EffectCache {
     }
 
     /// Find every effect in Workspace again, and read them all.
+    #[expect(
+        clippy::needless_pass_by_value,
+        reason = "EffectLists is a set of &mut lists, reborrowed for the call"
+    )]
     pub(super) fn find(&mut self, dom: &Dom, drawn: EffectLists<'_>, images: &mut Images<'_>) {
         profiling::scope!("EffectCache::find");
         drawn.emitters.clear();
@@ -194,8 +198,12 @@ impl EffectCache {
 
     /// Read the effects `ids` again (their images loaded, or scripts
     /// called them). Whether any is drawn here.
+    #[expect(
+        clippy::needless_pass_by_value,
+        reason = "EffectLists is a set of &mut lists, reborrowed for the call"
+    )]
     pub(super) fn reread_ids(
-        &mut self,
+        &self,
         dom: &Dom,
         ids: &[InstanceId],
         drawn: EffectLists<'_>,

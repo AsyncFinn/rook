@@ -101,7 +101,7 @@ pub(super) fn get_connected_wires(lua: &Lua, this: InstanceId, a: &Args) -> ApiR
             .map(|c| c.wire)
             .collect::<Vec<_>>()
     });
-    ret_instances(lua, wires)
+    ret_instances(lua, &wires)
 }
 
 /// The curve property a `Set...`/`Get...Attenuation` method works on.
@@ -193,7 +193,7 @@ pub(super) fn get_interacting_listeners(
     let ids = with_world(lua, |w| {
         audio::interacting_with(&w.dom, this, "AudioListener")
     });
-    ret_instances(lua, ids)
+    ret_instances(lua, &ids)
 }
 
 pub(super) fn get_interacting_emitters(
@@ -204,7 +204,7 @@ pub(super) fn get_interacting_emitters(
     let ids = with_world(lua, |w| {
         audio::interacting_with(&w.dom, this, "AudioEmitter")
     });
-    ret_instances(lua, ids)
+    ret_instances(lua, &ids)
 }
 
 /// `AudioAnalyzer:GetSpectrum`: the engine's last measurement on a client;

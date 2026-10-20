@@ -354,8 +354,7 @@ fn seams_blend_layers() {
         for d in &mesh.draws {
             let tris = d.indices.len() / 3;
             match d.seam {
-                None => opaque += tris,
-                Some(Seam::First) => opaque += tris,
+                None | Some(Seam::First) => opaque += tris,
                 Some(Seam::Over) => overs += tris,
             }
             if d.seam.is_none() {

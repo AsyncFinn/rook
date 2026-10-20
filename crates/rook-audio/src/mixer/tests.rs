@@ -2,7 +2,7 @@ use super::*;
 
 /// A stereo file with `samples` on both sides (a mono one plays 3 dB
 /// down; see `mono_is_centred`).
-fn audio(rate: u32, samples: Vec<i16>) -> Arc<Audio> {
+fn audio(rate: u32, samples: &[i16]) -> Arc<Audio> {
     Arc::new(Audio {
         format: None,
         sample_rate: rate,
@@ -45,7 +45,7 @@ fn group(key: u32, parent: Option<u32>, volume: f32) -> Group<u32> {
 fn resamples_and_ends() {
     // 4 frames at 2 Hz, mixed at 4 Hz: every source frame twice, with
     // the half-way frames interpolated, then silence.
-    let a = audio(2, vec![0, 16384, 0, -16384]);
+    let a = audio(2, &[0, 16384, 0, -16384]);
     let mut m = Mixer::new(4);
     m.sync(&only(vec![play(&a, 0.0)]));
     let mut out = [9.0; 20];
@@ -78,14 +78,14 @@ fn mono_is_centred() {
         "{out:?}"
     );
     let mut m = Mixer::new(4);
-    m.sync(&only(vec![play(&audio(4, vec![16384; 4]), 0.0)]));
+    m.sync(&only(vec![play(&audio(4, &[16384; 4]), 0.0)]));
     m.mix(&mut out, 2);
     assert_eq!(out, [0.5; 4]);
 }
 
 #[test]
 fn follows_the_engine() {
-    let a = audio(10, vec![1000; 100]);
+    let a = audio(10, &[1000; 100]);
     let mut m = Mixer::new(10);
     m.sync(&only(vec![play(&a, 0.0)]));
     let mut out = [0.0; 10];
@@ -117,7 +117,7 @@ fn follows_the_engine() {
 
 #[test]
 fn loops() {
-    let a = audio(4, vec![8192, 0, 0, 0]);
+    let a = audio(4, &[8192, 0, 0, 0]);
     let mut m = Mixer::new(4);
     m.sync(&only(vec![Play {
         looped: true,
@@ -132,7 +132,7 @@ fn loops() {
 /// Gains move to new values over one buffer, per side.
 #[test]
 fn ramps_and_pans() {
-    let a = audio(4, vec![16384; 40]);
+    let a = audio(4, &[16384; 40]);
     let mut m = Mixer::new(4);
     m.sync(&only(vec![play(&a, 0.0)]));
     m.sync(&only(vec![Play {
@@ -151,7 +151,7 @@ fn ramps_and_pans() {
 /// sound as loud as a loud one, and Volume then scales the result.
 #[test]
 fn effects_before_volume() {
-    let a = audio(4, vec![328; 8]);
+    let a = audio(4, &[328; 8]);
     let mut m = Mixer::new(4);
     m.sync(&only(vec![Play {
         gains: [0.5, 0.5],
@@ -167,7 +167,7 @@ fn effects_before_volume() {
 /// multiplied by that one's too (creator-docs; nesting by Inference).
 #[test]
 fn groups_multiply() {
-    let a = audio(4, vec![16384; 40]);
+    let a = audio(4, &[16384; 40]);
     let mut m = Mixer::new(4);
     let mix = Mix {
         sounds: vec![Play {
@@ -198,7 +198,7 @@ fn groups_multiply() {
 /// goes on after the sound stops.
 #[test]
 fn group_effects_and_tails() {
-    let a = audio(100, vec![16384; 10]);
+    let a = audio(100, &[16384; 10]);
     let mut m = Mixer::new(100);
     let reverb = Effect::Reverb(Reverb {
         dry: -80.0,
@@ -234,7 +234,7 @@ fn group_effects_and_tails() {
 
 #[test]
 fn master_volume_scales_what_is_heard() {
-    let a = audio(4, vec![16384; 4]);
+    let a = audio(4, &[16384; 4]);
     let mut m = Mixer::new(4);
     m.set_master_volume(0.25);
     m.sync(&only(vec![play(&a, 0.0)]));

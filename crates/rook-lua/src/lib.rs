@@ -186,7 +186,7 @@ impl Runtime {
                 return;
             }
         };
-        self.guarded(|| threads::fire(&self.lua, &SignalKey::event(instance, event), args));
+        self.guarded(|| threads::fire(&self.lua, &SignalKey::event(instance, event), &args));
     }
 
     /// Fire signals for journal entries recorded since `start` by code
@@ -269,7 +269,7 @@ impl Runtime {
             values.push(net::from_net(lua, a).unwrap_or(mlua::Value::Nil));
         }
         self.guarded(|| {
-            threads::fire(lua, &SignalKey::event(remote, event), values);
+            threads::fire(lua, &SignalKey::event(remote, event), &values);
             threads::drain_deferred(lua);
         });
     }

@@ -54,7 +54,6 @@ impl NetValue {
 
 pub(crate) fn to_net(v: &LuaValue, depth: u32) -> NetValue {
     match v {
-        LuaValue::Nil => NetValue::Nil,
         LuaValue::Boolean(b) => NetValue::Bool(*b),
         LuaValue::Integer(i) => NetValue::Number(*i as f64),
         LuaValue::Number(n) => NetValue::Number(*n),

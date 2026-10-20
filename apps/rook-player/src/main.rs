@@ -257,7 +257,7 @@ fn main() -> anyhow::Result<()> {
     #[cfg(feature = "tracy")]
     profiling::tracy_client::Client::start();
     let args = Args::parse_from(rook_engine::logging::fix_verbose_args(std::env::args()));
-    rook_engine::logging::init(rook_engine::logging::Options {
+    rook_engine::logging::init(&rook_engine::logging::Options {
         program: "rook-player",
         verbose: args.verbose.clone(),
         file: true,

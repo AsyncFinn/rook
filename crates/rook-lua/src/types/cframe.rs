@@ -68,6 +68,10 @@ fn new(_: &Lua, args: MultiValue) -> mlua::Result<LCFrame> {
     }
 }
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "Luau calls it through mlua, which wants a Result"
+)]
 fn from_matrix(
     _: &Lua,
     (pos, x, y, z): (Vector, Vector, Vector, Option<Vector>),
@@ -78,6 +82,10 @@ fn from_matrix(
 }
 
 /// Rx * Ry * Rz.
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "Luau calls it through mlua, which wants a Result"
+)]
 fn angles(_: &Lua, (x, y, z): (Option<f32>, Option<f32>, Option<f32>)) -> mlua::Result<LCFrame> {
     Ok(LCFrame(CFrame::angles(
         x.unwrap_or(0.0),
@@ -87,6 +95,10 @@ fn angles(_: &Lua, (x, y, z): (Option<f32>, Option<f32>, Option<f32>)) -> mlua::
 }
 
 /// Ry * Rx * Rz (`fromOrientation`, `fromEulerAnglesYXZ`).
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "Luau calls it through mlua, which wants a Result"
+)]
 fn angles_yxz(
     _: &Lua,
     (x, y, z): (Option<f32>, Option<f32>, Option<f32>),

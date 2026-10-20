@@ -33,7 +33,6 @@ pub(crate) fn type_name(v: &LuaValue) -> String {
             .metatable()
             .and_then(|mt| mt.get::<String>("__type"))
             .unwrap_or_else(|_| "userdata".into()),
-        LuaValue::LightUserData(_) => "userdata".into(),
         _ => "userdata".into(),
     }
 }

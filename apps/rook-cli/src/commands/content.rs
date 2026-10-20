@@ -38,6 +38,7 @@ fn resolver(options: &Options) -> Arc<Resolver> {
 }
 
 /// What `rook-tools cache` does.
+#[derive(Clone, Copy)]
 pub(crate) enum CacheCommand {
     Show,
     /// Delete what hasn't been used for this many days.
@@ -229,6 +230,10 @@ fn print_fetched(f: &Fetched) {
     println!("  blake3:   {}", f.hash.to_hex());
 }
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "a command like the others, which main runs the same way"
+)]
 pub(crate) fn references(refs: &[String], options: &Options) -> anyhow::Result<()> {
     let resolver = resolver(options);
     for text in refs {

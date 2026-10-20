@@ -17,7 +17,7 @@ use crate::ctx::{ApiResult, Outcome, ScriptError, api_fn, api_ret, with_world};
 use crate::threads::resume;
 use crate::world::{Job, MessageType, WaitKind};
 
-fn log(lua: &Lua, kind: MessageType, args: MultiValue) {
+fn log(lua: &Lua, kind: MessageType, args: &MultiValue) {
     let text = args
         .iter()
         .map(|v| display_value(lua, v))
@@ -191,6 +191,10 @@ fn task_cancel(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
 }
 
 /// Roblox's `typeof`: datatype names for userdata and `Vector3` for vectors.
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "Luau calls it through mlua, which wants a Result"
+)]
 fn typeof_(_: &Lua, args: MultiValue) -> ApiResult<String> {
     let v = args.into_iter().next().unwrap_or(LuaValue::Nil);
     Ok(type_name(&v))
@@ -243,12 +247,12 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     g.set(
         "print",
         api_ret(lua, |lua, args| {
-            log(lua, MessageType::Output, args);
+            log(lua, MessageType::Output, &args);
             Ok(())
         })?,
     )?;
     let warn = api_ret(lua, |lua, args| {
-        log(lua, MessageType::Warning, args);
+        log(lua, MessageType::Warning, &args);
         Ok(())
     })?;
     g.set("warn", warn.clone())?;
@@ -397,7 +401,7 @@ fn install_engine_helpers(lua: &Lua) -> mlua::Result<()> {
                 crate::threads::fire(
                     lua,
                     &rook_signal::SignalKey::event(id, event),
-                    args.into_iter().collect(),
+                    &args.into_iter().collect::<Vec<_>>(),
                 );
                 Ok(())
             },

@@ -126,6 +126,10 @@ impl Material {
     /// SmoothPlastic's are fitted to the sun's highlight on black parts
     /// at known angles (docs/behavior/lights.md, "The sun"), the rest
     /// Approximations.
+    #[expect(
+        clippy::match_same_arms,
+        reason = "a row per material: equal measured values are coincidence"
+    )]
     pub fn shading(self, set: MaterialSet) -> Shading {
         use Material::*;
         let modern = set == MaterialSet::Materials2022;

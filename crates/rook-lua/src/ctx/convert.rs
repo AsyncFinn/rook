@@ -41,9 +41,8 @@ pub(crate) fn to_lua(lua: &Lua, value: &Value, enum_id: Option<EnumId>) -> mlua:
         Value::ContentId(c) => LuaValue::String(lua.create_string(c.as_str())?),
         Value::Vector3(v) => vector3_to_lua(*v),
         Value::Vector2(v) => LVector2(*v).into_lua(lua)?,
-        Value::CFrame(c) => LCFrame(*c).into_lua(lua)?,
-        Value::OptionalCFrame(Some(c)) => LCFrame(*c).into_lua(lua)?,
-        Value::OptionalCFrame(None) => LuaValue::Nil,
+        Value::CFrame(c) | Value::OptionalCFrame(Some(c)) => LCFrame(*c).into_lua(lua)?,
+        Value::OptionalCFrame(None) | Value::Ref(None) => LuaValue::Nil,
         Value::Color3(c) => LColor3(*c).into_lua(lua)?,
         Value::Color3uint8(c) => LColor3(Color3::from(*c)).into_lua(lua)?,
         Value::BrickColor(b) => LBrickColor(*b).into_lua(lua)?,
@@ -68,7 +67,6 @@ pub(crate) fn to_lua(lua: &Lua, value: &Value, enum_id: Option<EnumId>) -> mlua:
                 None => LuaValue::Number(f64::from(*value)),
             }
         }
-        Value::Ref(None) => LuaValue::Nil,
         Value::Ref(Some(r)) => LuaValue::UserData(push_instance(lua, InstanceId::from_ref(*r))?),
         other => Opaque(other.clone()).into_lua(lua)?,
     })
@@ -137,7 +135,7 @@ pub(crate) fn from_lua(lua: &Lua, v: &LuaValue, ty: PropertyType) -> Result<Valu
                 _ => {
                     let u = ud(v).ok_or_else(fail)?;
                     let value = datatype_value(&u).ok_or_else(fail)?;
-                    if value_type(&value) != Some(vt) {
+                    if value_type(&value) != vt {
                         return Err(fail());
                     }
                     value
@@ -199,8 +197,8 @@ pub(crate) fn datatype_value(u: &mlua::AnyUserData) -> Option<Value> {
     None
 }
 
-fn value_type(v: &Value) -> Option<VariantType> {
-    Some(v.to_variant(|_| rbx_types::Ref::none()).ty())
+fn value_type(v: &Value) -> VariantType {
+    v.to_variant(|_| rbx_types::Ref::none()).ty()
 }
 
 /// Roblox's name for a value type in assignment errors.

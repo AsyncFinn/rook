@@ -60,7 +60,7 @@ impl Studio {
         };
         studio.request(
             "initialize",
-            json!({
+            &json!({
                 "protocolVersion": "2025-06-18",
                 "capabilities": {},
                 "clientInfo": { "name": "rook-conformance", "version": env!("CARGO_PKG_VERSION") },
@@ -73,7 +73,7 @@ impl Studio {
         let deadline = Instant::now() + Duration::from_secs(30);
         loop {
             let text =
-                studio.tool_raw("list_roblox_studios", json!({}), Duration::from_secs(30))?;
+                studio.tool_raw("list_roblox_studios", &json!({}), Duration::from_secs(30))?;
             let list: Value = serde_json::from_str(&text).unwrap_or(Value::Null);
             // With several Studio windows open, ROOK_STUDIO picks the one
             // whose name (its place) contains that text.
@@ -108,7 +108,12 @@ impl Studio {
         self.send(&json!({ "jsonrpc": "2.0", "method": method }))
     }
 
-    fn request(&mut self, method: &str, params: Value, timeout: Duration) -> anyhow::Result<Value> {
+    fn request(
+        &mut self,
+        method: &str,
+        params: &Value,
+        timeout: Duration,
+    ) -> anyhow::Result<Value> {
         let id = self.next_id;
         self.next_id += 1;
         self.send(&json!({ "jsonrpc": "2.0", "id": id, "method": method, "params": params }))?;
@@ -133,10 +138,10 @@ impl Studio {
         }
     }
 
-    fn tool_raw(&mut self, name: &str, args: Value, timeout: Duration) -> anyhow::Result<String> {
+    fn tool_raw(&mut self, name: &str, args: &Value, timeout: Duration) -> anyhow::Result<String> {
         let result = self.request(
             "tools/call",
-            json!({ "name": name, "arguments": args }),
+            &json!({ "name": name, "arguments": args }),
             timeout,
         )?;
         let text: String = result["content"]
@@ -154,7 +159,7 @@ impl Studio {
 
     fn tool(&mut self, name: &str, mut args: Value, timeout: Duration) -> anyhow::Result<String> {
         args["studio_id"] = json!(self.studio_id);
-        self.tool_raw(name, args, timeout)
+        self.tool_raw(name, &args, timeout)
     }
 
     /// "Edit", "Play", ... from `get_studio_state`.

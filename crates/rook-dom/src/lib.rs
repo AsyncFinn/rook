@@ -75,6 +75,10 @@ pub enum DomError {
 /// The result of a write to an instance the caller tracked, which may have
 /// been removed since ([`DomError::Stale`]): there is nothing left to write
 /// to, and the caller drops it on its next look. Any other failure is a bug.
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "it takes the result it ignores, as drop does"
+)]
 pub fn ignore_stale(result: Result<(), DomError>) {
     debug_assert!(
         matches!(result, Ok(()) | Err(DomError::Stale)),

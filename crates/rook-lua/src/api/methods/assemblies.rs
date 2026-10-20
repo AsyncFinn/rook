@@ -5,20 +5,20 @@ use super::*;
 
 /// Active JointInstances and WeldConstraints attached to the part.
 pub(super) fn get_joints(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
-    let ids = with_world(lua, |w| {
+    let ids: Vec<_> = with_world(lua, |w| {
         joints::part_joints(&w.dom, this)
             .iter()
             .map(|j| j.id)
             .collect()
     });
-    ret_instances(lua, ids)
+    ret_instances(lua, &ids)
 }
 
 pub(super) fn get_connected_parts(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let recursive = a.truthy(0);
     ret_instances(
         lua,
-        with_world(lua, |w| assembly::connected_parts(&w.dom, this, recursive)),
+        &with_world(lua, |w| assembly::connected_parts(&w.dom, this, recursive)),
     )
 }
 

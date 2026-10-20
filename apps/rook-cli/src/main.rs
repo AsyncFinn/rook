@@ -215,7 +215,7 @@ fn main() -> anyhow::Result<()> {
         cli.command,
         Command::CorpusScan { .. } | Command::CorpusRun { .. } | Command::Conformance { .. }
     );
-    rook_engine::logging::init(rook_engine::logging::Options {
+    rook_engine::logging::init(&rook_engine::logging::Options {
         program: "rook-tools",
         verbose: cli.verbose.clone(),
         file: long,

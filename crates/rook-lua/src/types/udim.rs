@@ -83,6 +83,10 @@ impl UserData for LUDim2 {
     }
 }
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "Luau calls it through mlua, which wants a Result"
+)]
 fn udim2_new(_: &Lua, args: MultiValue) -> mlua::Result<LUDim2> {
     let args = args.into_vec();
     if let [LuaValue::UserData(a), LuaValue::UserData(b)] = args.as_slice()

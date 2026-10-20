@@ -396,7 +396,7 @@ impl DataModel {
     /// Fire `Changed` for what sounds changed since `start`, then their
     /// events: Studio fires `Changed` for `IsLoaded` and `TimeLength`
     /// before `Loaded`.
-    pub(crate) fn fire_sound_events(&mut self, start: u64, events: Vec<SoundEvent>) {
+    pub(crate) fn fire_sound_events(&self, start: u64, events: Vec<SoundEvent>) {
         if events.is_empty() && self.runtime.world().dom.journal().end() == start {
             return;
         }

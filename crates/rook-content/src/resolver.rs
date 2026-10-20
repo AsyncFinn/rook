@@ -44,7 +44,7 @@ impl Resolver {
             folders: config.folders,
             delivery: config.network.then(|| Delivery::new(config.api_key)),
             cache: config.cache_dir.and_then(|dir| {
-                let cache = open_store(dir)?;
+                let cache = open_store(&dir)?;
                 if let Some(max) = config.cache_max {
                     // Off the caller's thread: walking a big cache takes a
                     // while, and nothing waits on it. Blobs a resolution is
@@ -60,7 +60,7 @@ impl Resolver {
                 }
                 Some(cache)
             }),
-            kept: config.kept_dir.and_then(open_store),
+            kept: config.kept_dir.as_deref().and_then(open_store),
             failed: Mutex::new(HashMap::new()),
         }
     }
@@ -327,8 +327,8 @@ impl Resolver {
 
 /// The cache or kept content folder in `dir`; none (and a warning) if it
 /// can't be made.
-fn open_store(dir: PathBuf) -> Option<Cache> {
-    Cache::open(&dir)
+fn open_store(dir: &Path) -> Option<Cache> {
+    Cache::open(dir)
         .map_err(|e| tracing::warn!(target: "content", "{}: {e}", dir.display()))
         .ok()
 }

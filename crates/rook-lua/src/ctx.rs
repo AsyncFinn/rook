@@ -229,8 +229,9 @@ stack traceback:",
             .unwrap_or(s)
             .to_owned()
         }
-        mlua::Error::CallbackError { cause, .. } => lua_error_message(cause),
-        mlua::Error::WithContext { cause, .. } => lua_error_message(cause),
+        mlua::Error::CallbackError { cause, .. } | mlua::Error::WithContext { cause, .. } => {
+            lua_error_message(cause)
+        }
         mlua::Error::FromLuaConversionError { from, to, .. } => {
             format!("Unable to cast {from} to {to}")
         }

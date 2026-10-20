@@ -270,7 +270,7 @@ impl Game {
     }
 
     /// Let the server keep its own 60 Hz pace (Play mode), for live play.
-    pub(crate) fn free_run(&mut self) {
+    pub(crate) fn free_run(&self) {
         if let Mode::Play { server, .. } = &self.mode {
             server.run(true);
         }

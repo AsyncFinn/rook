@@ -286,7 +286,7 @@ fn finish(done: &Done, job: Job, outcome: Outcome) -> bool {
 fn spawn_threads<K, V>(
     name: &str,
     count: usize,
-    queue: Arc<Queue<K, V>>,
+    queue: &Arc<Queue<K, V>>,
     work: impl Fn(K, V, f32) -> bool + Send + Clone + 'static,
 ) where
     K: std::hash::Hash + Eq + Clone + Send + 'static,
@@ -354,7 +354,7 @@ fn queue_decode(job: DecodeJob, priority: f32) {
         spawn_threads(
             "rook-decode",
             DECODE_THREADS.load(Ordering::Relaxed),
-            queue.clone(),
+            &queue,
             |_, job: DecodeJob, _| {
                 job();
                 true
@@ -372,7 +372,7 @@ fn spawn_fetchers(resolver: &Arc<Resolver>) -> Workers {
     spawn_threads(
         "rook-content",
         FETCHERS,
-        jobs.clone(),
+        &jobs,
         move |job: Job, (), priority| {
             let fetched = resolver.resolve(&job.0);
             match fetched {

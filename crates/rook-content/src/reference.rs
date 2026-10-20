@@ -260,6 +260,10 @@ mod tests {
 
     use super::*;
 
+    #[expect(
+        clippy::unnecessary_wraps,
+        reason = "compared with what ContentRef::parse returns"
+    )]
     fn asset(id: u64) -> Option<ContentRef> {
         Some(ContentRef::Asset { id, version: None })
     }

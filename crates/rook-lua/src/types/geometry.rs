@@ -146,6 +146,10 @@ impl UserData for LRegion3int16 {
     }
 }
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "Luau calls it through mlua, which wants a Result"
+)]
 fn rect_new(_: &Lua, args: MultiValue) -> mlua::Result<LRect> {
     let args = args.into_vec();
     let v2 = |v: &LuaValue| match v {

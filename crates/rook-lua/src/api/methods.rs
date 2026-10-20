@@ -74,6 +74,10 @@ const INERT: &[(&str, &str)] = &[
     ("FunctionalTest", "Warn"),
 ];
 
+#[expect(
+    clippy::match_same_arms,
+    reason = "a row per member: members that behave alike stay listed apart"
+)]
 pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
     if INERT.contains(&(owner, name)) {
         return Some(inert);
@@ -239,8 +243,8 @@ fn ret_instance(lua: &Lua, id: Option<InstanceId>) -> ApiResult<Outcome> {
     }
 }
 
-fn ret_instances(lua: &Lua, ids: Vec<InstanceId>) -> ApiResult<Outcome> {
-    super::instance::ret_instance_array(lua, &ids)
+fn ret_instances(lua: &Lua, ids: &[InstanceId]) -> ApiResult<Outcome> {
+    super::instance::ret_instance_array(lua, ids)
 }
 
 fn inert(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {

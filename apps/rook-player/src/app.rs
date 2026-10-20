@@ -111,7 +111,7 @@ impl Gfx {
 
     /// The next frame to draw on, or `None` when the surface had to be
     /// set up again.
-    pub(crate) fn next_frame(&mut self) -> Option<wgpu::SurfaceTexture> {
+    pub(crate) fn next_frame(&self) -> Option<wgpu::SurfaceTexture> {
         match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(t)
             | wgpu::CurrentSurfaceTexture::Suboptimal(t) => Some(t),

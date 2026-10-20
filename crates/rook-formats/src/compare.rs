@@ -66,7 +66,7 @@ pub fn compare_with(a: &WeakDom, b: &WeakDom, options: CompareOptions) -> Vec<Di
         pairs: Vec::new(),
         diffs: Vec::new(),
     };
-    pairing.pair_children(a.root_ref(), b.root_ref(), String::new());
+    pairing.pair_children(a.root_ref(), b.root_ref(), "");
     let Pairing {
         pairs, mut diffs, ..
     } = pairing;
@@ -126,7 +126,7 @@ struct Pairing<'a> {
 }
 
 impl Pairing<'_> {
-    fn pair_children(&mut self, pa: Ref, pb: Ref, path: String) {
+    fn pair_children(&mut self, pa: Ref, pb: Ref, path: &str) {
         let (a, b) = (self.a, self.b);
         let ca = a.get_by_ref(pa).expect("parent exists").children();
         let cb = b.get_by_ref(pb).expect("parent exists").children();
@@ -135,7 +135,7 @@ impl Pairing<'_> {
                 path: if path.is_empty() {
                     "<root>".into()
                 } else {
-                    path.clone()
+                    path.to_owned()
                 },
                 from: ca.len(),
                 to: cb.len(),
@@ -164,7 +164,7 @@ impl Pairing<'_> {
                 });
             }
             self.pairs.push((ra, rb, child_path.clone()));
-            self.pair_children(ra, rb, child_path);
+            self.pair_children(ra, rb, &child_path);
         }
     }
 }

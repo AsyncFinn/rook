@@ -98,7 +98,7 @@ impl DataModel {
 
     /// Fire each blast's `Hit` for every part it hit, with the part's
     /// distance.
-    pub(crate) fn fire_explosion_hits(&mut self, blasts: Vec<(InstanceId, rook_physics::Blast)>) {
+    pub(crate) fn fire_explosion_hits(&self, blasts: Vec<(InstanceId, rook_physics::Blast)>) {
         for (id, blast) in blasts {
             for (part, distance) in blast.hits {
                 if let Ok(part) = self.runtime.push_instance(part) {

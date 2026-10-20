@@ -209,6 +209,10 @@ fn default_item(enum_name: &str, item: &str) -> u32 {
         .expect("enum item")
 }
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "Luau calls it through mlua, which wants a Result"
+)]
 fn tween_info_new(lua: &Lua, args: MultiValue) -> mlua::Result<LTweenInfo> {
     let a = args.into_vec();
     let get = |i: usize| a.get(i).cloned().unwrap_or(LuaValue::Nil);
@@ -227,6 +231,10 @@ fn tween_info_new(lua: &Lua, args: MultiValue) -> mlua::Result<LTweenInfo> {
 
 // Faces, Axes, PhysicalProperties
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "Luau calls it through mlua, which wants a Result"
+)]
 fn faces_new(lua: &Lua, args: MultiValue) -> mlua::Result<Opaque> {
     use rbx_types::Faces;
     let mut faces = Faces::empty();
@@ -245,6 +253,10 @@ fn faces_new(lua: &Lua, args: MultiValue) -> mlua::Result<Opaque> {
     Ok(Opaque(Value::Faces(faces)))
 }
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "Luau calls it through mlua, which wants a Result"
+)]
 fn axes_new(lua: &Lua, args: MultiValue) -> mlua::Result<Opaque> {
     use rbx_types::Axes;
     let mut axes = Axes::empty();

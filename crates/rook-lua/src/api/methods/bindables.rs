@@ -4,7 +4,7 @@ use super::*;
 
 pub(super) fn bindable_fire(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let args = a.rest(0);
-    fire(lua, &SignalKey::event(this, "Event"), args);
+    fire(lua, &SignalKey::event(this, "Event"), &args);
     Outcome::ret(lua, ())
 }
 

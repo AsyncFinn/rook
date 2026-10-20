@@ -128,6 +128,10 @@ todo = "warn"
 unimplemented = "warn"
 redundant_clone = "warn"
 needless_borrow = "warn"
+needless_pass_by_value = "warn"
+match_same_arms = "warn"
+unnecessary_wraps = "warn"
+needless_pass_by_ref_mut = "warn"
 redundant_closure_for_method_calls = "warn"
 
 # Build profiles:

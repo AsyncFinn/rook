@@ -215,13 +215,12 @@ impl Renderer {
                 continue;
             };
             match self.image_readiness(hash, scene) {
-                Readiness::Ready => {}
                 // A missing map leaves the material's plain value; a
                 // missing image hides what draws it.
                 Readiness::Missing if slot > 0 => *image = None,
                 Readiness::Missing => ready = Readiness::Missing,
                 Readiness::Waiting if ready == Readiness::Ready => ready = Readiness::Waiting,
-                Readiness::Waiting => {}
+                Readiness::Ready | Readiness::Waiting => {}
             }
         }
         match ready {

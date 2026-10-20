@@ -101,11 +101,11 @@ fn air() -> u32 {
 /// The legacy ray's four results: the part (or nil), where the ray hit or
 /// ended, the surface normal (zero on a miss) and the material (Air on a
 /// miss), all observed.
-fn ray_results(lua: &Lua, a: &Args, filter: Filter) -> ApiResult<Outcome> {
+fn ray_results(lua: &Lua, a: &Args, filter: &Filter) -> ApiResult<Outcome> {
     let ray = datatype::<LRay>(a, 0, "Ray")?.0;
     let origin = Vector3::from(ray.origin).0;
     let dir = Vector3::from(ray.direction).0;
-    let hit = with_world(lua, |w| w.physics.raycast(&mut w.dom, origin, dir, &filter));
+    let hit = with_world(lua, |w| w.physics.raycast(&mut w.dom, origin, dir, filter));
     let (part, position, normal, material) = match hit {
         Some(h) => (
             LuaValue::UserData(super::instance::push_instance(lua, h.part)?),
@@ -136,19 +136,19 @@ fn legacy_ray(a: &Args, instances: Vec<InstanceId>, include: bool, water: usize)
 
 fn find_part_on_ray(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let ignore = a.opt_instance(1)?.into_iter().collect();
-    ray_results(lua, a, legacy_ray(a, ignore, false, 3))
+    ray_results(lua, a, &legacy_ray(a, ignore, false, 3))
 }
 
 fn find_part_on_ray_ignore(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     datatype::<LRay>(a, 0, "Ray")?;
     let ignore = instance_list(a, 1)?;
-    ray_results(lua, a, legacy_ray(a, ignore, false, 3))
+    ray_results(lua, a, &legacy_ray(a, ignore, false, 3))
 }
 
 fn find_part_on_ray_whitelist(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     datatype::<LRay>(a, 0, "Ray")?;
     let only = instance_list(a, 1)?;
-    ray_results(lua, a, legacy_ray(a, only, true, 2))
+    ray_results(lua, a, &legacy_ray(a, only, true, 2))
 }
 
 // Regions
@@ -162,7 +162,7 @@ fn in_bounds(lua: &Lua, region: Region, filter: &Filter, max: usize) -> Vec<Inst
 
 /// Parts in a Region3, at most `max` (0 or less: all; observed). An
 /// inverted region finds nothing (observed).
-fn region_parts(lua: &Lua, a: &Args, filter: Filter, max: f64) -> ApiResult<Vec<InstanceId>> {
+fn region_parts(lua: &Lua, a: &Args, filter: &Filter, max: f64) -> ApiResult<Vec<InstanceId>> {
     let region = datatype::<LRegion3>(a, 0, "Region3")?.0;
     let (min, max_corner) = (Vector3::from(region.min).0, Vector3::from(region.max).0);
     if min.cmpgt(max_corner).any() {
@@ -173,11 +173,11 @@ fn region_parts(lua: &Lua, a: &Args, filter: Filter, max: f64) -> ApiResult<Vec<
         size: max_corner - min,
     };
     let limit = if max > 0.0 { max as usize } else { 0 };
-    Ok(in_bounds(lua, region, &filter, limit))
+    Ok(in_bounds(lua, region, filter, limit))
 }
 
-fn ret_parts(lua: &Lua, parts: Vec<InstanceId>) -> ApiResult<Outcome> {
-    super::instance::ret_instance_array(lua, &parts)
+fn ret_parts(lua: &Lua, parts: &[InstanceId]) -> ApiResult<Outcome> {
+    super::instance::ret_instance_array(lua, parts)
 }
 
 fn find_parts_in_region(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
@@ -185,7 +185,7 @@ fn find_parts_in_region(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome
     let max = a.number_or(2, REGION_MAX_PARTS)?;
     ret_parts(
         lua,
-        region_parts(lua, a, Filter::legacy_region(ignore, false), max)?,
+        &region_parts(lua, a, &Filter::legacy_region(ignore, false), max)?,
     )
 }
 
@@ -195,7 +195,7 @@ fn find_parts_in_region_ignore(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<
     let max = a.number_or(2, REGION_MAX_PARTS)?;
     ret_parts(
         lua,
-        region_parts(lua, a, Filter::legacy_region(ignore, false), max)?,
+        &region_parts(lua, a, &Filter::legacy_region(ignore, false), max)?,
     )
 }
 
@@ -205,14 +205,14 @@ fn find_parts_in_region_whitelist(lua: &Lua, _: InstanceId, a: &Args) -> ApiResu
     let max = a.number_or(2, REGION_MAX_PARTS)?;
     ret_parts(
         lua,
-        region_parts(lua, a, Filter::legacy_region(only, true), max)?,
+        &region_parts(lua, a, &Filter::legacy_region(only, true), max)?,
     )
 }
 
 /// Whether a Region3 holds no part outside `ignore` and no terrain voxel
 /// (observed: terrain counts even when ignored).
 fn region_empty(lua: &Lua, a: &Args, ignore: Vec<InstanceId>) -> ApiResult<Outcome> {
-    let parts = region_parts(lua, a, Filter::legacy_region(ignore, false), 1.0)?;
+    let parts = region_parts(lua, a, &Filter::legacy_region(ignore, false), 1.0)?;
     let region = datatype::<LRegion3>(a, 0, "Region3")?.0;
     let (min, max) = (Vector3::from(region.min).0, Vector3::from(region.max).0);
     let empty =
@@ -306,7 +306,7 @@ fn part_bounds_in_box(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> 
     let params = overlap_params(a, 2)?;
     let region = Region::Box { cframe: cf, size };
     let parts = in_bounds(lua, region, &params.filter(), params.max());
-    ret_parts(lua, parts)
+    ret_parts(lua, &parts)
 }
 
 fn part_bounds_in_radius(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
@@ -314,14 +314,14 @@ fn part_bounds_in_radius(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcom
     let params = overlap_params(a, 2)?;
     // Observed: a negative radius finds nothing.
     if radius < 0.0 {
-        return ret_parts(lua, Vec::new());
+        return ret_parts(lua, &Vec::new());
     }
     let region = Region::Sphere {
         center: position,
         radius,
     };
     let parts = in_bounds(lua, region, &params.filter(), params.max());
-    ret_parts(lua, parts)
+    ret_parts(lua, &parts)
 }
 
 fn parts_in_part(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
@@ -335,7 +335,7 @@ fn parts_in_part(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
         w.physics
             .parts_in_part(&mut w.dom, part, &filter, params.max())
     });
-    ret_parts(lua, parts)
+    ret_parts(lua, &parts)
 }
 
 fn touching_parts(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
@@ -345,7 +345,7 @@ fn touching_parts(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
             .has_connections(&SignalKey::event(this, "Touched"));
         w.physics.touching_parts(&mut w.dom, this, listened)
     });
-    ret_parts(lua, parts)
+    ret_parts(lua, &parts)
 }
 
 /// NoCollisionConstraints whose Part0 or Part1 is this part.
@@ -366,5 +366,5 @@ fn no_collision_constraints(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<
         found.dedup();
         found
     });
-    ret_parts(lua, found)
+    ret_parts(lua, &found)
 }

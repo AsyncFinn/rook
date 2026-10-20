@@ -32,7 +32,7 @@ fn ret_found(lua: &Lua, found: Found) -> ApiResult<Outcome> {
     match found {
         Found::Bool(b) => Outcome::ret(lua, b),
         Found::Instance(id) => ret_instance(lua, id),
-        Found::Instances(ids) => ret_instances(lua, ids),
+        Found::Instances(ids) => ret_instances(lua, &ids),
     }
 }
 
@@ -158,7 +158,7 @@ pub(super) fn get_children(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<O
 }
 
 pub(super) fn get_descendants(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
-    ret_instances(lua, with_world(lua, |w| w.dom.descendants(this)))
+    ret_instances(lua, &with_world(lua, |w| w.dom.descendants(this)))
 }
 
 pub(super) fn is_descendant_of(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
