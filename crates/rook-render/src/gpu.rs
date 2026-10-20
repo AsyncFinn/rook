@@ -6,7 +6,7 @@ pub(crate) mod pool;
 use rook_content::decode::image::Encoding;
 
 use super::*;
-use crate::particles::Rng;
+use crate::effects::particles::Rng;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]

@@ -69,8 +69,8 @@ script's `Emit` shows on clients.
 The player reads each ParticleEmitter into the renderer's `EmitterLook`
 (`apps/rook-player/src/scene/effects/emitter.rs`), the same model Fire,
 Smoke and Sparkles use (docs/behavior/effects.md); the renderer simulates
-it on the CPU (`crates/rook-render/src/particles.rs`, shapes in
-`particles/spawn.rs`) and draws each particle as a rectangle of its image
+it on the CPU (`crates/rook-render/src/effects/particles.rs`, shapes in
+`effects/particles/spawn.rs`) and draws each particle as a rectangle of its image
 (`shaders/particles.wgsl`): the flipbook frame's part of it, squashed,
 turned to its orientation, mixed between its own colour and the lit one by
 LightInfluence.

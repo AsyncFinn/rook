@@ -1,5 +1,5 @@
 //! The lights as the shaders read them, and their spatial hash
-//! (`renderer/lights.rs` has the whole picture).
+//! (`renderer/lighting/local.rs` has the whole picture).
 
 use super::*;
 

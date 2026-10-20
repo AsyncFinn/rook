@@ -72,7 +72,7 @@ Sparkles' alpha is near 0 for the first fifth.
 
 ## Rook's fit
 
-Rook simulates particles on the CPU (`crates/rook-render/src/particles.rs`)
+Rook simulates particles on the CPU (`crates/rook-render/src/effects/particles.rs`)
 from an `Emitter` per layer: its place and axes, `Enabled`, `TimeScale`
 and an `EmitterLook` (rate, lifetime, spawn radius, velocity and
 acceleration along the emitter's axes, a random spread, drag, size and

@@ -6,7 +6,7 @@
 use std::ops::Range;
 
 use super::*;
-use crate::ribbons::{Edge, Ribbons, Strip};
+use crate::effects::ribbons::{Edge, Ribbons, Strip};
 
 /// The ribbon pipeline's vertex.
 #[repr(C)]

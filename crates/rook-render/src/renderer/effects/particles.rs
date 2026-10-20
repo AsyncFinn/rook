@@ -10,7 +10,7 @@ use std::ops::Range;
 use super::*;
 use rayon::prelude::*;
 
-use crate::particles::{Particle, Particles};
+use crate::effects::particles::{Particle, Particles};
 use crate::scene::EmitterLook;
 use crate::scene::Orientation;
 

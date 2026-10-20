@@ -9,11 +9,10 @@
 //! meshes its chunks with `rook-terrain`.
 
 mod batch;
+mod effects;
 mod gpu;
 mod mesh;
-mod particles;
 mod renderer;
-mod ribbons;
 mod scene;
 mod surfaces;
 
@@ -35,7 +34,7 @@ use wgpu::util::DeviceExt;
 
 use batch::cull::{Aabb, Frustum, MOTION_STUDS};
 use gpu::cache::{FRAME_UPLOAD_BYTES, GpuCache, Upload, UploadContext};
-use renderer::shadow::{SHADOW_DISTANCE, SHADOW_SIZE, ShadowView};
+use renderer::lighting::shadow::{SHADOW_DISTANCE, SHADOW_SIZE, ShadowView};
 
 use batch::*;
 use gpu::pool::{GpuMesh, MeshPool};

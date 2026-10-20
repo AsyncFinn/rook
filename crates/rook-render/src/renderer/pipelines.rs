@@ -377,14 +377,14 @@ impl Pipelines {
             label: Some("rook particles"),
             source: wgpu::ShaderSource::Wgsl(particles.into()),
         });
-        let particles = super::particles::pipeline(
+        let particles = super::effects::particles::pipeline(
             device,
             &pipeline_layout,
             &particle_shader,
             frame_format,
             depth_format,
         );
-        let ribbons = super::ribbons::pipeline(
+        let ribbons = super::effects::ribbons::pipeline(
             device,
             &pipeline_layout,
             &particle_shader,

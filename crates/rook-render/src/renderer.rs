@@ -1,29 +1,26 @@
 //! The renderer: GPU objects, pipelines and what the scene needs on the GPU.
 
-pub(crate) mod shadow;
-
 mod draw;
+mod effects;
 mod images;
-mod lights;
-mod particles;
+pub(crate) mod lighting;
 mod pipelines;
 mod placement;
 mod readback;
-mod ribbons;
 mod runs;
 mod timing;
 mod tonemap;
 mod transparent;
 
 use super::*;
+use effects::particles::GpuParticles;
+use effects::ribbons::GpuRibbons;
 pub(crate) use images::ImageBinding;
 pub(crate) use images::ImageSet;
 use images::{Defaults, image_layout, image_set};
-use lights::GpuLights;
-use particles::GpuParticles;
+use lighting::local::GpuLights;
 use pipelines::Pipelines;
 use placement::Placement;
-use ribbons::GpuRibbons;
 use timing::GpuTimer;
 pub use timing::GpuTimes;
 use tonemap::{FRAME_FORMAT, Tonemap};

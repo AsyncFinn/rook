@@ -49,7 +49,7 @@ measurements in Studio 0.743 on 2026-10-19.
 The player reads each into the renderer's `Beam` and `Trail`
 (`apps/rook-player/src/scene/effects/ribbons.rs`); the renderer lays and
 ages the Trails' pieces and builds both as strips of quads each frame
-(`crates/rook-render/src/ribbons.rs`), drawn with the particles' shading
+(`crates/rook-render/src/effects/ribbons.rs`), drawn with the particles' shading
 after the transparent parts and before the particles, farthest strip
 first, both sides showing (`renderer/ribbons.rs`). Without FaceCamera a
 Beam's width at each piece turns from Attachment0's up to Attachment1's

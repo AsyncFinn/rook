@@ -142,7 +142,7 @@ hangs from, which doesn't shadow it. Scripts changing a light, its
 Attachment, or the part it hangs from redraw it (only those lights are
 read again).
 
-The renderer (`renderer/lights.rs`) keeps the lights in a buffer and a
+The renderer (`renderer/lighting/local.rs`) keeps the lights in a buffer and a
 spatial hash (16-stud cubes hashed into buckets, padded 8 studs so that
 lights that move a little don't rebuild it). A compute pass
 (`shaders/light_volume.wgsl`) fills a 256 × 64 × 256 volume of 4-stud
@@ -152,7 +152,7 @@ change or that centre drifts 64 studs, and parts, decals and terrain
 (water included) sample it as Studio does (`local_light` in
 `shaders/lighting.wgsl`). Surfaces outside it get no local light, as in
 Studio. When a light has `Shadows`, the parts are marked into a bit per
-voxel (`renderer/lights/blockers.rs`, shared with the sky's light) and
+voxel (`renderer/lighting/local/blockers.rs`, shared with the sky's light) and
 the fill pass casts that light's rays through them.
 
 

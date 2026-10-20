@@ -31,7 +31,7 @@ struct Params {
 // Whether each column is open to the sky down to the last layer.
 @group(0) @binding(8) var<storage, read_write> columns: array<u32>;
 
-// The bucket a point's cube hashes to (`renderer/lights.rs`, `bucket`).
+// The bucket a point's cube hashes to (`renderer/lighting/local.rs`, `bucket`).
 fn bucket(p: vec3<f32>) -> vec2<u32> {
     let c = vec3<i32>(floor(p / params.origin.w));
     let h = (u32(c.x) * 73856093u) ^ (u32(c.y) * 19349663u) ^ (u32(c.z) * 83492791u);

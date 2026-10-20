@@ -1,6 +1,6 @@
 // Local lights as Studio's voxel lighting takes them: what each light
 // writes into the 4-stud voxels around it (docs/behavior/lights.md). The
-// renderer fills `Light`s (`renderer/lights.rs`).
+// renderer fills `Light`s (`renderer/lighting/local.rs`).
 
 struct Light {
     // xyz: where it is; w: the distance its falloff reaches 0.
