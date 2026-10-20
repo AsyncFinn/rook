@@ -228,7 +228,14 @@ create.
    [`docs/behavior/beams-and-trails.md`](docs/behavior/beams-and-trails.md)).
 5. ✅ Explosion: its blast (parts hit, joints broken, the push, craters)
    and its look ([`docs/behavior/explosions.md`](docs/behavior/explosions.md)).
-6. Highlight (outlines and fills through walls).
+6. Highlight and the adornments, by files saving them (and creating them
+   with `Instance.new`) in the corpus scan: SelectionBox 676 (749),
+   ImageHandleAdornment 57 (220), SelectionPartLasso 50 (362),
+   SelectionSphere 45 (15), Handles 37 (264), FloorWire 33 (51),
+   LineHandleAdornment 26 (49), SurfaceSelection 12 (89), the Box, Sphere,
+   Cylinder and Cone HandleAdornments 6 to 13 each (34 to 82), ArcHandles
+   11 (68), Highlight 68 (42): outlines, fills through walls, and the
+   handles' look (dragging them comes with GUI input).
 
 ### M8 GUI
 
@@ -368,8 +375,7 @@ the target counts only errors Rook causes, checked against Studio.
 
 Every class exists in Rook already; this makes the ones archived places
 use actually do something, ranked by the corpus scan against
-`docs/behavior/stubs.md`: SelectionBox and the other adornments (76
-files), Flag and FlagStand (64), Dialog and DialogChoice (55),
+`docs/behavior/stubs.md`: Flag and FlagStand (64), Dialog and DialogChoice (55),
 LocalizationTable (20), SelectionPartLasso (11), CustomEvent and
 CustomEventReceiver (10), SkateboardPlatform (8), ViewportFrame (5), and
 whatever the scan ranks next once characters and GUI exist.
