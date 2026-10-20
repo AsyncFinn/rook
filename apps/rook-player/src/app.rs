@@ -249,6 +249,7 @@ impl App {
         };
         let window = &gfx.window;
         window.set_cursor_visible(!on);
+        // Grabbing is best effort: platforms support different modes.
         if !on {
             let _ = window.set_cursor_grab(CursorGrabMode::None);
             return;
@@ -377,6 +378,7 @@ impl ApplicationHandler for App {
             // Where the cursor can only be confined to the window (Windows),
             // put it back after each move.
             if let (Some(anchor), Some(gfx)) = (self.look_anchor, &self.gfx) {
+                // Best effort, as grabbing is.
                 let _ = gfx.window.set_cursor_position(anchor);
             }
         }

@@ -35,10 +35,8 @@ fn angle(a: Vector3, b: Vector3) -> f32 {
 /// Members of Vector3 that aren't components (those are native).
 fn vector3_index(lua: &Lua, (v, key): (Vector, String)) -> mlua::Result<LuaValue> {
     let a = v3(v);
-    let f = |lua: &Lua, func: mlua::Function| -> mlua::Result<LuaValue> {
-        let _ = lua;
-        Ok(LuaValue::Function(func))
-    };
+    let f =
+        |_: &Lua, func: mlua::Function| -> mlua::Result<LuaValue> { Ok(LuaValue::Function(func)) };
     match key.as_str() {
         "X" | "x" => Ok(LuaValue::Number(f64::from(a.x()))),
         "Y" | "y" => Ok(LuaValue::Number(f64::from(a.y()))),

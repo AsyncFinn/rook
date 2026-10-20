@@ -67,9 +67,17 @@ impl Physics {
                 if cf.position.y < self.fallen_height {
                     fallen.push(m.part);
                 }
-                let _ = dom.set_property(m.part, props.cframe, Value::CFrame(cf));
-                let _ = dom.set_property(m.part, props.linear_velocity, linvel.clone());
-                let _ = dom.set_property(m.part, props.angular_velocity, angvel.clone());
+                rook_dom::ignore_stale(dom.set_property(m.part, props.cframe, Value::CFrame(cf)));
+                rook_dom::ignore_stale(dom.set_property(
+                    m.part,
+                    props.linear_velocity,
+                    linvel.clone(),
+                ));
+                rook_dom::ignore_stale(dom.set_property(
+                    m.part,
+                    props.angular_velocity,
+                    angvel.clone(),
+                ));
             }
         }
         // Our own writes aren't changes to apply next time.
@@ -92,8 +100,11 @@ impl Physics {
                 continue;
             };
             let angle = revolute_angle(&j.data, rb1.position(), rb2.position());
-            let _ =
-                dom.set_property_by_name(id, "CurrentAngle", Value::Float32(angle.to_degrees()));
+            rook_dom::ignore_stale(dom.set_property_by_name(
+                id,
+                "CurrentAngle",
+                Value::Float32(angle.to_degrees()),
+            ));
         }
     }
 

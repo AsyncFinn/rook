@@ -2,9 +2,8 @@
 
 use super::*;
 
-pub(super) fn get_service(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
+pub(super) fn get_service(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
     let name = a.string(0)?;
-    let _ = this;
     let id = mutate(lua, |w| w.dom.get_service(&name))?;
     ret_instance(lua, Some(id))
 }

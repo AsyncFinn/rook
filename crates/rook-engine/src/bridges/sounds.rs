@@ -254,7 +254,11 @@ impl DataModel {
                 }
                 sounds.active.remove(&id);
                 if sounds.tracked.remove(&id).is_some() {
-                    let _ = dom.set_property_by_name(id, "IsLoaded", Value::Bool(false));
+                    rook_dom::ignore_stale(dom.set_property_by_name(
+                        id,
+                        "IsLoaded",
+                        Value::Bool(false),
+                    ));
                 }
                 continue;
             }
@@ -263,7 +267,11 @@ impl DataModel {
                     && !client
                     && dom.bool_property(id, "AutoPlay").unwrap_or(false)
                 {
-                    let _ = dom.set_property_by_name(id, "IsPlaying", Value::Bool(true));
+                    rook_dom::ignore_stale(dom.set_property_by_name(
+                        id,
+                        "IsPlaying",
+                        Value::Bool(true),
+                    ));
                 }
                 let auto_load = dom
                     .property_by_name(id, "AutoLoad")
@@ -394,7 +402,7 @@ impl DataModel {
         }
         self.runtime.dispatch_since(start);
         for (id, event, sound_id, count) in events {
-            let _ = match (sound_id, count) {
+            match (sound_id, count) {
                 (Some(s), Some(n)) => self.runtime.fire_event(id, event, (s, n)),
                 (Some(s), None) => self.runtime.fire_event(id, event, s),
                 (None, _) => self.runtime.fire_event(id, event, ()),
@@ -414,8 +422,8 @@ fn apply(dom: &mut Dom, id: InstanceId, load: &Load, events: &mut Vec<SoundEvent
     };
     let player = is_player(dom, id);
     let ready = if player { "IsReady" } else { "IsLoaded" };
-    let _ = dom.set_property_by_name(id, ready, Value::Bool(loaded));
-    let _ = dom.set_property_by_name(id, "TimeLength", Value::Float64(length));
+    rook_dom::ignore_stale(dom.set_property_by_name(id, ready, Value::Bool(loaded)));
+    rook_dom::ignore_stale(dom.set_property_by_name(id, "TimeLength", Value::Float64(length)));
     if loaded && !player {
         events.push((id, "Loaded", Some(sound_id(dom, id)), None));
     }

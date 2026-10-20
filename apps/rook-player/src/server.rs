@@ -107,6 +107,8 @@ impl ServerThread {
                             .map_err(anyhow::Error::msg)?;
                     }
                     print_logs(host.server());
+                    // The receiver is gone only if the game closed while
+                    // starting.
                     let _ = started_tx.send(Ok(Started { joined, camera }));
                     Ok(host)
                 })();
@@ -127,9 +129,15 @@ impl ServerThread {
         })
     }
 
+    /// Send the server thread a command. It is gone only if it failed,
+    /// which the game has reported, or the game is closing.
+    fn send(&self, command: Command) {
+        let _ = self.commands.send(command);
+    }
+
     /// Step the server once and wait for its frame.
     pub fn step(&self) -> Frame {
-        let _ = self.commands.send(Command::Step);
+        self.send(Command::Step);
         self.frames.recv().unwrap_or(Frame {
             messages: Vec::new(),
             took: Duration::ZERO,
@@ -138,7 +146,7 @@ impl ServerThread {
 
     /// Let the server step by itself at 60 Hz (`true`), or only when told.
     pub fn run(&self, on: bool) {
-        let _ = self.commands.send(Command::Run(on));
+        self.send(Command::Run(on));
     }
 
     /// Frames the running server has finished since the last call.
@@ -147,12 +155,12 @@ impl ServerThread {
     }
 
     pub fn deliver(&self, msg: ToServer) {
-        let _ = self.commands.send(Command::Deliver(msg));
+        self.send(Command::Deliver(msg));
     }
 
     /// Run a command-bar entry on the server.
     pub fn repl(&self, line: &str) {
-        let _ = self.commands.send(Command::Repl(line.to_owned()));
+        self.send(Command::Repl(line.to_owned()));
     }
 }
 
@@ -162,6 +170,7 @@ impl Drop for ServerThread {
         let (dead, _) = channel();
         self.commands = dead;
         if let Some(thread) = self.thread.take() {
+            // A panic was reported where it happened.
             let _ = thread.join();
         }
     }

@@ -94,7 +94,7 @@ fn edit<R>(lua: &Lua, terrain: InstanceId, f: impl FnOnce(&mut Grid) -> (R, Opti
         let (out, changed) = f(&mut grid);
         if changed.is_some() {
             let bytes = Value::BinaryString(grid.encode().into());
-            let _ = w.dom.set_property_by_name(terrain, "SmoothGrid", bytes);
+            rook_dom::ignore_stale(w.dom.set_property_by_name(terrain, "SmoothGrid", bytes));
         }
         out
     })

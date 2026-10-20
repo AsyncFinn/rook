@@ -53,7 +53,11 @@ impl Physics {
             return;
         };
         let bytes = self.terrain.grid.encode();
-        let _ = dom.set_property_by_name(terrain, "SmoothGrid", Value::BinaryString(bytes.into()));
+        rook_dom::ignore_stale(dom.set_property_by_name(
+            terrain,
+            "SmoothGrid",
+            Value::BinaryString(bytes.into()),
+        ));
         // The voxels written are the ones here already.
         self.cursor = dom.journal().end();
     }

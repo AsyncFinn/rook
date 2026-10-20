@@ -120,7 +120,7 @@ pub fn adopt_saved_velocities(dom: &mut Dom) {
             if let Some(Value::Vector3(v)) = dom.property(id, saved)
                 && v.0 != glam::Vec3::ZERO
             {
-                let _ = dom.set_property(id, used, Value::Vector3(v));
+                rook_dom::ignore_stale(dom.set_property(id, used, Value::Vector3(v)));
             }
         }
     }

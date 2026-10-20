@@ -152,7 +152,7 @@ impl Physics {
         // Snap the members to where the joints hold them.
         {
             profiling::scope!("Assembly::place");
-            let _ = asm.place(dom, root_cf);
+            rook_dom::ignore_stale(asm.place(dom, root_cf));
         }
         self.bodies.insert(
             handle,
@@ -339,7 +339,7 @@ impl Physics {
             }
         }
         let root = cframe_of(self.world.bodies[h].position());
-        let _ = body.asm.place(dom, root);
+        rook_dom::ignore_stale(body.asm.place(dom, root));
         self.world.wake_up(h, true);
         self.stale.insert(h);
     }
@@ -374,7 +374,7 @@ impl Physics {
             rb.user_data = contacts::pack_velocity(vector(props.linear_velocity));
         }
         // Keep the rest of the assembly with it.
-        let _ = body.asm.place(dom, root);
+        rook_dom::ignore_stale(body.asm.place(dom, root));
         if !self.world.bodies[h].is_dynamic() {
             let colliders: Vec<ColliderHandle> =
                 body.colliders.iter().flatten().map(|&(c, _)| c).collect();

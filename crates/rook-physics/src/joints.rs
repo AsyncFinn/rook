@@ -357,6 +357,6 @@ pub(crate) fn step_motor(dom: &mut Dom, j: &Joint, dt: f64) -> bool {
     }
     let max = dom.float_property(j.id, "MaxVelocity").unwrap_or(0.0).abs() * (dt * 60.0) as f32;
     let next = current + (desired - current).clamp(-max, max);
-    let _ = dom.set_property_by_name(j.id, "CurrentAngle", Value::Float32(next));
+    rook_dom::ignore_stale(dom.set_property_by_name(j.id, "CurrentAngle", Value::Float32(next)));
     next != current
 }

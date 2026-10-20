@@ -295,6 +295,7 @@ pub(crate) fn run_job(lua: &Lua, job: Job) {
         }
         Job::Destroy(id) => {
             let start = with_world(lua, |w| w.dom.journal().end());
+            // Debris may outlive what it was given; destroyed is destroyed.
             let _ = with_world(lua, |w| w.dom.destroy(id));
             dispatch(lua, start);
         }

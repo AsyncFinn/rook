@@ -23,7 +23,7 @@ fn step(rt: &Runtime) {
     rt.resume_due(Queue::Legacy);
     let rs = rt.world().dom.find_service("RunService");
     if let Some(rs) = rs {
-        rt.fire_event(rs, "Heartbeat", dt).unwrap();
+        rt.fire_event(rs, "Heartbeat", dt);
         rt.drain_deferred();
     }
     rt.resume_due(Queue::Task);

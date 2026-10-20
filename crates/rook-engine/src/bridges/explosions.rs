@@ -102,8 +102,7 @@ impl DataModel {
         for (id, blast) in blasts {
             for (part, distance) in blast.hits {
                 if let Ok(part) = self.runtime.push_instance(part) {
-                    let _ = self
-                        .runtime
+                    self.runtime
                         .fire_event(id, "Hit", (part, f64::from(distance)));
                 }
             }

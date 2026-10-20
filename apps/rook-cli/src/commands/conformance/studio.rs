@@ -227,6 +227,7 @@ impl Studio {
 
 impl Drop for Studio {
     fn drop(&mut self) {
+        // Best effort: Studio may have exited already.
         let _ = self.child.kill();
     }
 }

@@ -162,12 +162,12 @@ impl DataModel {
             let event = if t.began { "Touched" } else { "TouchEnded" };
             for (part, other) in [(t.part, t.other), (t.other, t.part)] {
                 if let Ok(other) = self.runtime.push_instance(other) {
-                    let _ = self.runtime.fire_event(part, event, other);
+                    self.runtime.fire_event(part, event, other);
                 }
             }
         }
         for rocket in reached {
-            let _ = self.runtime.fire_event(rocket, "ReachedTarget", ());
+            self.runtime.fire_event(rocket, "ReachedTarget", ());
         }
         self.runtime.drain_deferred();
         for id in fallen {

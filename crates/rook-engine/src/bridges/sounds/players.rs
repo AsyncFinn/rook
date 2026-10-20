@@ -42,7 +42,7 @@ pub(super) fn advance(
             controls.entry(id).or_default().loops += 1;
             events.push((id, "Looped", None, None));
         } else {
-            let _ = dom.set_property_by_name(id, "IsPlaying", Value::Bool(false));
+            rook_dom::ignore_stale(dom.set_property_by_name(id, "IsPlaying", Value::Bool(false)));
             t = 0.0;
             events.push((id, "Ended", None, None));
         }

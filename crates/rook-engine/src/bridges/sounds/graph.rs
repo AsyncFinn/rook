@@ -179,7 +179,7 @@ impl DataModel {
                 .partition(|s| s.at <= now);
             w.audio.scheduled = waiting;
             for s in due {
-                let _ = rook_lua::audio::set_playing(&mut w, s.player, s.play);
+                rook_dom::ignore_stale(rook_lua::audio::set_playing(&mut w, s.player, s.play));
             }
             start
         };
@@ -224,13 +224,11 @@ impl DataModel {
             ) else {
                 return;
             };
-            let _ = dom.set_property_by_name(
-                wire,
-                "SourceInstance",
-                Value::Ref(Some(listener.to_ref())),
-            );
-            let _ =
-                dom.set_property_by_name(wire, "TargetInstance", Value::Ref(Some(output.to_ref())));
+            // Fresh instances under ones just found: none of this can fail.
+            let source = Value::Ref(Some(listener.to_ref()));
+            let target = Value::Ref(Some(output.to_ref()));
+            rook_dom::ignore_stale(dom.set_property_by_name(wire, "SourceInstance", source));
+            rook_dom::ignore_stale(dom.set_property_by_name(wire, "TargetInstance", target));
             let _ = dom.set_parent(wire, Some(listener));
             let _ = dom.set_parent(listener, Some(parent));
             let _ = dom.set_parent(output, Some(service));

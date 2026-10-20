@@ -27,7 +27,7 @@ use std::cell::{Cell, Ref, RefCell, RefMut};
 use std::rc::Rc;
 use std::time::Duration;
 
-use mlua::{IntoLuaMulti, Lua, Value as LuaValue};
+use mlua::{IntoLuaMulti, Lua};
 use rook_dom::{Dom, InstanceId};
 use rook_scheduler::{Clock, Queue};
 use rook_signal::SignalKey;
@@ -175,17 +175,18 @@ impl Runtime {
     }
 
     /// Fire an instance's event with arguments (for engine events such as
-    /// `RunService.Heartbeat` or `Players.PlayerAdded`).
-    pub fn fire_event(
-        &self,
-        instance: InstanceId,
-        event: &'static str,
-        args: impl IntoLuaMulti,
-    ) -> mlua::Result<()> {
+    /// `RunService.Heartbeat` or `Players.PlayerAdded`). Arguments Luau
+    /// can't hold (out of memory) leave the event unfired, with a warning.
+    pub fn fire_event(&self, instance: InstanceId, event: &'static str, args: impl IntoLuaMulti) {
         profiling::scope!("fire_event");
-        let args: Vec<LuaValue> = args.into_lua_multi(&self.lua)?.into_vec();
+        let args = match args.into_lua_multi(&self.lua) {
+            Ok(args) => args.into_vec(),
+            Err(e) => {
+                tracing::warn!("{event} not fired: {e}");
+                return;
+            }
+        };
         self.guarded(|| threads::fire(&self.lua, &SignalKey::event(instance, event), args));
-        Ok(())
     }
 
     /// Fire signals for journal entries recorded since `start` by code
@@ -199,6 +200,7 @@ impl Runtime {
     /// signals it causes.
     pub fn destroy(&self, id: InstanceId) {
         let start = self.world().dom.journal().end();
+        // A part a script destroyed first has nothing left to destroy.
         let _ = self.world_mut().dom.destroy(id);
         self.dispatch_since(start);
     }
@@ -307,6 +309,8 @@ impl Runtime {
             values.push(net::from_net(lua, a).unwrap_or(mlua::Value::Nil));
         }
         self.guarded(|| {
+            // The thread reports its own errors; starting it fails only
+            // out of memory, which Luau has reported already.
             let _ = threads::spawn(lua, runner, mlua::MultiValue::from_vec(values));
             threads::drain_deferred(lua);
         });

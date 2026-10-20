@@ -101,6 +101,7 @@ impl Dom {
     /// Store a property from a file without recording a change.
     pub fn load_property(&mut self, id: InstanceId, property: PropertyId, value: Value) {
         let value = coerce(self.db.property(property).ty, value);
+        // A load into a missing instance has nowhere to go.
         let _ = self.store(id, property, value);
     }
 

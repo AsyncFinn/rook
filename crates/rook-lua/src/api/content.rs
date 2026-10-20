@@ -214,6 +214,7 @@ pub(crate) fn deliver(lua: &Lua, results: &[(u64, bool)]) {
             continue;
         };
         if let Some(f) = callback {
+            // The callback's thread reports its own errors.
             let _ = crate::threads::spawn(lua, f, (text, status(ok)));
         }
         if let Some(thread) = done {

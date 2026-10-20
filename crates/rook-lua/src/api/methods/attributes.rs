@@ -21,7 +21,7 @@ fn valid_attribute_name(name: &str) -> bool {
         && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
-fn attribute_value(lua: &Lua, v: &LuaValue) -> ApiResult<Option<Value>> {
+fn attribute_value(v: &LuaValue) -> ApiResult<Option<Value>> {
     use crate::ctx::convert::datatype_value;
     Ok(match v {
         LuaValue::Nil => None,
@@ -61,7 +61,6 @@ fn attribute_value(lua: &Lua, v: &LuaValue) -> ApiResult<Option<Value>> {
             }
         }
         other => {
-            let _ = lua;
             return Err(ScriptError(format!(
                 "{} is not a supported attribute type",
                 crate::ctx::args::type_name(other)
@@ -77,7 +76,7 @@ pub(super) fn set_attribute(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<O
             "Attribute name \"{name}\" is not valid"
         )));
     }
-    let value = attribute_value(lua, a.get(1))?;
+    let value = attribute_value(a.get(1))?;
     mutate(lua, |w| w.dom.set_attribute(this, &name, value))?;
     Outcome::ret(lua, ())
 }

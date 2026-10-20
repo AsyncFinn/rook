@@ -184,14 +184,15 @@ fn task_cancel(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
         .named_registry_value::<Table>("rook.std")?
         .get("coroutine")?;
     let close: Function = co.get("close")?;
+    // `coroutine.close` returns the thread's error, which the closing
+    // script doesn't see.
     let _ = close.call::<MultiValue>(thread);
     Outcome::ret(lua, ())
 }
 
 /// Roblox's `typeof`: datatype names for userdata and `Vector3` for vectors.
-fn typeof_(lua: &Lua, args: MultiValue) -> ApiResult<String> {
+fn typeof_(_: &Lua, args: MultiValue) -> ApiResult<String> {
     let v = args.into_iter().next().unwrap_or(LuaValue::Nil);
-    let _ = lua;
     Ok(type_name(&v))
 }
 

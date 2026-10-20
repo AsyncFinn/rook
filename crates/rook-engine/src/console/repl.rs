@@ -109,6 +109,7 @@ fn read(tx: &Sender<String>) {
     };
     if let Ok(mut printer) = editor.create_external_printer() {
         set_output(Some(Box::new(move |line| {
+            // Fails only once the prompt has closed, with nowhere to print.
             let _ = printer.print(line);
         })));
     }

@@ -368,6 +368,7 @@ fn touch(path: &Path, now: SystemTime) {
         .and_then(|m| m.modified())
         .is_ok_and(|t| now.duration_since(t).is_ok_and(|a| a < TOUCH_INTERVAL));
     if !recent {
+        // Best effort: a blob that can't be marked is only trimmed sooner.
         let _ = std::fs::File::options()
             .write(true)
             .open(path)

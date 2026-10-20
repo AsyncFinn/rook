@@ -64,7 +64,6 @@ pub fn run(
     std::panic::set_hook(Box::new(|_| {}));
     let seen = Mutex::new(HashSet::new());
     let done = AtomicUsize::new(0);
-    let total = places.len();
     let options = Options {
         script_timeout: Duration::from_secs_f64(timeout),
         memory_limit: 512 << 20,
@@ -95,7 +94,6 @@ pub fn run(
             .collect()
     });
     std::panic::set_hook(default_hook);
-    let _ = total;
 
     std::fs::create_dir_all(out).with_context(|| format!("creating {}", out.display()))?;
     let json = serde_json::json!({
