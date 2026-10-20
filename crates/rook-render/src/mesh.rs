@@ -261,22 +261,10 @@ fn head_uv(front: bool, position: [f32; 3]) -> [f32; 2] {
 }
 
 /// Rook's own head, built from measurements of the `head.mesh` in the
-/// user's Roblox install (the Head MeshType draws that file; ROADMAP M4).
-/// The facts measured, and nothing else from the file, are these: a solid
-/// of revolution about Y with 36 segments starting 5 degrees off +X; its
-/// profile is a cylinder of radius R = 0.6012 whose straight side runs
-/// from -R/2 to R/2, with each rim rounded by a quarter circle of radius R/2
-/// in 4 steps, and flat round caps. Normals are smooth around and along the
-/// whole profile, so the rim blends into the caps. Its UVs (measured in
-/// M4 step 4): the vertices of the front quarter, facing within 45 degrees
-/// of -Z, have UV (0.5 - x / 2R, 0.5 - y / 2R), a straight projection onto
-/// the front; the other 417 of its 517 vertices have (0, 0), and the
-/// quarter's edges are seams with both. Rook keeps those rules and
-/// triangulates the caps as fans (a grid in the file).
-///
-/// From asset fetching on (M4 steps 2 and 3), the user's own install can
-/// supply the real file: load it with the mesh reader and use it in place
-/// of this for [`DrawShape::Head`].
+/// user's Roblox install (the Head MeshType draws that file): a solid of
+/// revolution with rounded rims and its front quarter's UVs projected
+/// straight on. The measured facts are in `docs/behavior/meshes.md`; the
+/// user's own install can supply the real file for [`DrawShape::Head`].
 fn head() -> MeshData {
     use std::f32::consts::{FRAC_PI_2, TAU};
     let mut m = MeshData::default();

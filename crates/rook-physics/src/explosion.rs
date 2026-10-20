@@ -41,24 +41,10 @@ pub struct Blast {
 }
 
 impl Physics {
-    /// Explosion `explosion` goes off (it has just entered Workspace).
-    ///
-    /// - It hits every part whose surface is within `BlastRadius` of
-    ///   `Position` (observed: a turned cube whose corner reaches in is
-    ///   hit; a sphere wholly inside a part misses it, as do radii under
-    ///   1 inside 2-stud cubes), `CanQuery` off excluded; Terrain fires
-    ///   nothing.
-    /// - It breaks the Welds, ManualWelds, Snaps, Glues, Motors and
-    ///   Motor6Ds of parts within `BlastRadius × DestroyJointRadiusPercent`
-    ///   (observed: WeldConstraints, Rotates, RotatePs, RotateVs,
-    ///   VelocityMotors and constraints stay).
-    /// - It pushes every unanchored part it hits straight away from it
-    ///   ([`PUSH`]), spinning it about that line by a quarter of the
-    ///   impulse × `|Size|` (measured).
-    /// - Parts under something holding a ForceField are neither broken
-    ///   off nor pushed (observed on a character), though they're hit.
-    /// - `ExplosionType` Craters carves Terrain as `FillBall(Position,
-    ///   BlastRadius, Air)` does (measured: the same occupancies).
+    /// Explosion `explosion` goes off (it has just entered Workspace): it hits
+    /// the parts its radius reaches, breaks their joints, pushes them
+    /// ([`PUSH`]) and carves Terrain, by the rules measured in Studio
+    /// (`docs/behavior/effects/explosions.md`).
     pub fn blast(&mut self, dom: &mut Dom, explosion: InstanceId) -> Blast {
         profiling::scope!("Physics::blast");
         let number = |name, default: f64| dom.number_property(explosion, name).unwrap_or(default);

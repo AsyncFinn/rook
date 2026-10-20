@@ -1,27 +1,8 @@
 //! Content references: the strings in `MeshId`, `TextureId`, `Texture`,
 //! `SoundId` and the other content properties, parsed once into
-//! [`ContentRef`].
-//!
-//! The rules follow what Studio loads (observed in Studio 0.742,
-//! 2026-10-12, by giving FileMeshes the head mesh's id in each form and
-//! seeing which drew; ROADMAP M4 step 2), for the forms the archive uses:
-//!
-//! - `rbxasset://` and `rbxassetid://` only in lower case (`RBXASSET://`
-//!   and `Rbxassetid://` drew nothing); `http`/`https` in any case.
-//! - Trailing whitespace is ignored; leading whitespace only before
-//!   `http` (` rbxassetid://5` drew nothing, ` http://...` drew).
-//! - `rbxassetid://<rest>` works like an asset URL whose query is
-//!   `id=<rest>`: `rbxassetid://5&x=1` loads asset 5, `rbxassetid://5/`
-//!   and `rbxassetid://5abc` load nothing.
-//! - Asset URLs: any host (even `example.com`), a path ending in `asset`
-//!   in any case with any slashes around it (`//asset/`, `v1/asset/`),
-//!   query keys in any case.
-//!   The last `id` counts; its value may have spaces around it, a `+` and
-//!   leading zeros, but nothing else (`5;`, `5#x` load nothing). A
-//!   `version` that isn't a number is ignored. Other paths (`asset.aspx`,
-//!   `asset/Default.ashx`, `thumbs/...`) and a bare number load nothing.
-//! - `rbxasset://` paths: backslashes and doubled slashes are fine, and
-//!   the case doesn't matter.
+//! [`ContentRef`] by the rules of what Studio loads
+//! (`docs/behavior/content.md`, "Which forms Studio loads"; each form is a
+//! test here).
 
 use std::fmt;
 

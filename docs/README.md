@@ -11,6 +11,9 @@
 - **[behavior/](behavior/)**: what Rook found in Studio and the archive, topic by topic.
   - [Meshes](behavior/meshes.md): built-in shapes, mesh files, trusses
   - [Collision shapes](behavior/collision.md): what unions collide and are queried as
+  - [Physics](behavior/physics.md): surface joints, movers and scene queries
+  - [Replication](behavior/replication.md): what a client receives from the server
+  - [Legacy XML](behavior/legacy-xml.md): how 2006 to 2010 files are upgraded
   - [Asset fetching](behavior/content.md)
   - [Textures and decals](behavior/textures-decals.md)
   - [Antialiasing](behavior/antialiasing.md)

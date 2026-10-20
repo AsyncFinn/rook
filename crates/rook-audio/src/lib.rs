@@ -1,24 +1,16 @@
 //! Hearing sounds: one mixer, resampling every sound to the output
-//! device's rate, and the device itself.
+//! device's rate, and the device itself (`docs/behavior/audio.md`).
 //!
-//! - [`Mixer`] holds what's playing and mixes it into a buffer. It knows
-//!   nothing of devices, so it is tested without one.
-//! - [`Output`] owns the output device (through `cpal`) and a mixer the
-//!   device's thread pulls from. It opens the device the first time
-//!   something is to be heard, so a silent place never opens one.
-//! - [`spatial`] says how loud and on which side a 3D sound is heard.
-//! - [`effects`] are the sound effects Sounds, SoundGroups and the audio
-//!   API share. They don't need a device, so the engine uses them too
-//!   (with the `output` feature off) for `PlaybackLoudness`.
-//! - [`graph`] renders the audio API's graph (AudioPlayers, effects,
-//!   emitters, listeners, outputs and analyzers joined by Wires); the
-//!   mixer runs it for the device, and the engine runs it to measure
-//!   AudioAnalyzers.
-//!
-//! The engine keeps each sound's state (`Playing`, `TimePosition`); the
-//! player hands the playing ones, their SoundGroups and the audio graph
-//! to `Output::sync` every frame. See
-//! `docs/behavior/audio.md`.
+//! - [`Mixer`] mixes what's playing into a buffer; it knows nothing of
+//!   devices, so it is tested without one.
+//! - [`Output`] owns the device (through `cpal`), opened the first time
+//!   something is to be heard, and a mixer the device's thread pulls from.
+//! - [`spatial`]: how loud and on which side a 3D sound is heard.
+//! - [`effects`]: the sound effects Sounds, SoundGroups and the audio API
+//!   share; the engine uses them too, without a device, for
+//!   `PlaybackLoudness`.
+//! - [`graph`]: the audio API's graph, run by the mixer for the device and
+//!   by the engine to measure AudioAnalyzers.
 
 pub mod effects;
 pub mod graph;

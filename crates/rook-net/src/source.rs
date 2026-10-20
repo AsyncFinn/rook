@@ -174,24 +174,8 @@ fn withheld(server: &Dom, id: InstanceId, property: PropertyId) -> bool {
 
 /// Whether Roblox sends a NotReplicated property to clients through a
 /// hidden twin that Rook doesn't store, so Rook must send the property
-/// itself. Found by listing every saved, NotReplicated property in the
-/// database (the rest are server- or Studio-only):
-///
-/// - a replicated twin named `<name>Replicator`, `<name>Replicate` or
-///   `<name>Replicating`: Sound's `Playing` and `TimePosition`, VideoFrame's,
-///   BasePart's `CollisionGroup`, MeshPart's `RenderFidelity`, Humanoid's
-///   `Jump`, Player's `AccountAge` and `MembershipType`, and Instance's
-///   `Attributes` (which Rook sends on their own anyway);
-/// - an `Xml` property whose replicated twin drops the suffix
-///   (BallSocketConstraint's `MaxFrictionTorqueXml`);
-/// - pairs with nothing in their names to go by: Sound's `PlaybackSpeed`
-///   (replicated as `Pitch`), Player's `Team` (Roblox clients read their
-///   team), Workspace's `CollisionGroups` (clients know the registered
-///   groups) and Terrain's `SmoothGrid` (Roblox streams voxels to clients
-///   its own way; clients see the terrain).
-///
-/// Confirmed for Sound's three (the server's sounds are heard on clients,
-/// at their speed); Inference from the database for the rest.
+/// itself. The list and how it was found are in
+/// `docs/behavior/replication.md`.
 fn replicated_by_twin(db: &rook_reflection::Database, prop: &rook_reflection::Property) -> bool {
     if matches!(
         (db.class(prop.owner).name, prop.name),

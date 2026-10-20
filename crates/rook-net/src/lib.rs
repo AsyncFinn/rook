@@ -1,21 +1,9 @@
 //! Replication from a server DataModel to a client DataModel.
 //!
 //! Rook runs Play mode as separate server and client DataModels, the way
-//! modern Roblox does, connected first by this in-process replicator
-//! (architecture §8). A network transport can later carry the same changes.
-//!
-//! What replicates (creator-docs "Client-server model", "Replication"):
-//! - Instances under services that replicate. Classes marked NotReplicated
-//!   in the API dump (ServerScriptService, ServerStorage, Camera,
-//!   PlayerScripts, ...) and everything under them never reach clients.
-//! - A player's PlayerGui reaches only that player (PlayerReplicated).
-//! - Properties except those marked NotReplicated. Server `Script` source
-//!   is withheld (Inference: Roblox doesn't send server code to clients);
-//!   LocalScript and ModuleScript source is sent.
-//! - Attributes and tags.
-//!
-//! Changes made on the client stay on the client (FilteringEnabled, which
-//! modern Roblox always uses).
+//! modern Roblox does, connected by this in-process replicator (architecture
+//! §8); a network transport can later carry the same changes. What
+//! replicates is in `docs/behavior/replication.md`.
 //!
 //! Replication has two halves, so the server and a client can run on
 //! different threads (or, later, machines). A [`Source`] reads the server's

@@ -1,30 +1,9 @@
-//! Rook's own defaults: content Rook ships so places work without Roblox's
-//! files.
-//!
-//! No files: material textures come from Roblox like any asset
-//! ([`crate::materials`]), and Rook's head mesh is generated in code by `rook-render`
-//! rather than shipped as a mesh file here: it is geometry built for the
-//! renderer from measured facts, not bytes in a Roblox format, so storing
-//! it here would mean encoding a mesh file only to decode it again.
-//!
-//! What this module does hold is a table of legacy `rbxasset://` paths.
-//! Archived places name files of the 2009 client that modern installs no
-//! longer have: the classic character and gear meshes
-//! (`rbxasset://fonts/head.mesh`, `fonts/sword.mesh`), sounds
-//! (`sounds/collide.wav`), skies and textures
-//! (`textures/SpawnLocation.png`, in 997 archived files). On 2009-06-24
-//! Roblox uploaded each file of that client's `fonts`, `music`, `sky`,
-//! `sounds` and `textures` folders as an ordinary public asset whose
-//! description is its old path, in alphabetical order (ids 12220916 to
-//! 12224353), and modern Studio loads such paths although its install
-//! lacks them (observed 2026-10-12: `fonts/sword.mesh` drew as a FileMesh,
-//! and `PreloadAsync` loaded `textures/SpawnLocation.png` and
-//! `sky/null_plainsky512_bk.jpg`). The ids were read from the assets'
-//! public descriptions with `MarketplaceService:GetProductInfo` in Studio.
-//!
-//! Studio knows more such paths than this table: `textures/rocket.png`,
-//! `TrowelTexture.png`, `paintballicon.png` and `rocketboots.png` loaded
-//! too, but aren't among that upload, and how Studio finds them is unknown.
+//! Rook's own defaults: a table of the 2009 client's `rbxasset://` paths
+//! that modern installs lack, mapped to the public assets Roblox uploaded
+//! them as, which modern Studio loads too (`docs/behavior/content.md`, "The
+//! 2009 client's paths"). Rook ships no files: material textures come from
+//! Roblox like any asset ([`crate::materials`]), and the head mesh is built
+//! in code by `rook-render`.
 
 /// The asset that stands in for a legacy `rbxasset://` path, compared
 /// without case.

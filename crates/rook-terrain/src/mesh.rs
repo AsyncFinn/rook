@@ -1,22 +1,10 @@
-//! The surface Roblox builds from the voxels, measured in Studio with
-//! `Workspace:Raycast` (`docs/behavior/terrain.md`): surface nets.
-//!
-//! Corners of the dual grid are voxel centres. Each dual cell (the cube
-//! between eight voxel centres) where solid meets air holds one vertex: the
-//! mean of the points where its edges cross the surface. An edge from a
-//! solid voxel to an air one crosses `4 × occupancy` studs from the solid
-//! voxel's centre, so a full voxel reaches the next voxel's centre. Each
-//! voxel edge that crosses gets a quad joining the vertices of the four
-//! cells around it, made of the solid voxel's material and split into two
-//! triangles along a fixed diagonal ([`DIAGONALS`]).
-//!
-//! Water is meshed the same way in a second pass, where solid voxels count
-//! as inside too and only the faces of water voxels are kept, then moved
-//! down half a voxel ([`WATER_DROP`]).
-//!
-//! [`ChunkMesh::surfaces`] split the triangles by their voxel's material,
-//! for collisions; [`ChunkMesh::draws`] by the layers drawn, blending
-//! where they meet ([`draws`]).
+//! The surface Roblox builds from the voxels: surface nets
+//! (`docs/behavior/terrain.md`). Each dual cell where solid meets air holds
+//! one vertex, the mean of its edges' crossings; each crossing voxel edge
+//! gets a quad of the solid voxel's material, split along [`DIAGONALS`].
+//! Water is meshed the same way in a second pass and moved down
+//! [`WATER_DROP`]. [`ChunkMesh::surfaces`] split the triangles by material
+//! for collisions; [`ChunkMesh::draws`] by the layers drawn ([`draws`]).
 
 use glam::{IVec3, Vec3};
 

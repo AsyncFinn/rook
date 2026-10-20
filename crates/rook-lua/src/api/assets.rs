@@ -4,32 +4,8 @@
 //! fetches each through its content loader, reads the file and hands back
 //! a function that fills a Model with the file's instances
 //! (`Runtime::deliver_asset`), so this crate needs no network or file
-//! formats of its own. The calling thread waits meanwhile. Observed in
-//! Studio 0.742 (2026-10-18):
-//!
-//! - `require(id)` loads the asset into a Model named
-//!   `required_asset_<id>` with no parent, and requires its child
-//!   `MainModule` (the module's full name is
-//!   `required_asset_<id>.MainModule`).
-//! - Each id loads once: a second `require` returns the same value without
-//!   waiting, and a failure is remembered too (the second call failed at
-//!   once with the same message).
-//! - A missing asset, one that isn't a model, or id 0 or below:
-//!   `Downloading asset failed for asset id <id>.  Is the asset id correct
-//!   and is the asset type "Model"?`. A model without `MainModule`:
-//!   `Unable to find module for asset id <id>.  Does the asset have a
-//!   ModuleScript named "MainModule"?`. A fractional id rounds to the
-//!   nearest; a string isn't an asset id (Luau's string require).
-//! - On a client: `require(assetId) cannot be called from a client.
-//!   assetId = <id>` and `InsertService cannot be used to load assets
-//!   from the client`.
-//! - `LoadAsset(id)` returns a new Model named `Model` with no parent
-//!   holding the asset's instances, a fresh copy each call; it takes
-//!   numeric strings (`Unable to cast string to int64` otherwise). A
-//!   missing asset raises `Request asset was not found`. Studio also
-//!   refused assets the place's creator doesn't own (`User is not
-//!   authorized to access Asset.`, `Asset is not trusted for this place`),
-//!   which Rook can't check: it loads whatever asset delivery gives it.
+//! formats of its own. The calling thread waits meanwhile. What Studio does
+//! is in `docs/behavior/content.md` (Published models).
 
 use std::collections::HashMap;
 

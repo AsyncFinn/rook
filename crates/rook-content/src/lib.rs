@@ -1,21 +1,16 @@
 //! Content for Rook: what the strings in `MeshId`, `TextureId`, `SoundId`
 //! and the other content properties refer to, and their bytes.
 //!
-//! - [`ContentRef`] parses a content string once (`rbxasset://`,
-//!   `rbxassetid://`, legacy `http://www.roblox.com/asset/?id=` URLs,
-//!   `rbxthumb://`).
+//! - [`ContentRef`] parses a content string once.
 //! - A [`Resolver`] turns a reference into bytes through a chain of
-//!   providers, in a configurable order: Rook's own defaults, the user's
-//!   Roblox install, folders the user points at, and Roblox's asset
-//!   delivery (anonymous, opt-out, with a disk [`Cache`]). Each answer says
-//!   where the bytes came from.
-//! - A [`Loader`] runs resolutions on worker threads and hands the results
-//!   back when the engine asks, so the engine thread never waits for disk
-//!   or network.
+//!   providers in a configurable order (Rook's defaults, the Roblox install,
+//!   the user's folders, asset delivery with a disk [`Cache`]), saying where
+//!   the bytes came from.
+//! - A [`Loader`] runs resolutions on worker threads, so the engine thread
+//!   never waits for disk or network.
 //!
-//! Decoders for what the bytes hold live here too, one per kind: [`mesh`]
-//! reads mesh files, [`image`] image files and [`audio`] sound files. See `docs/design/architecture.md`
-//! §8 "Content" and ROADMAP M4.
+//! Decoders live here too: [`mesh`], [`image`] and [`audio`]. See
+//! `docs/design/architecture.md` §8 "Content".
 
 pub mod decode;
 mod loader;

@@ -1,21 +1,10 @@
 //! Reading Roblox mesh files, through the `rbx_mesh` crate (versions 1.00
 //! to 5.00; 6.00 and 7.00 aren't read yet), into the one layout Rook draws.
-//!
-//! `rbx_mesh` already corrects version 1.00's positions (stored at twice
-//! their size) and the upside-down V of version 1 UVs. What Rook adds:
-//!
-//! - From version 3.00 on, a file holds every level of detail in one face
-//!   list, and its LOD table gives where each starts. Only the first
-//!   (highest-detail) range is kept (Inference from the community format
-//!   specification, Maximum_ADHD's "Roblox Mesh Format", DevForum).
-//! - Faces pointing past the vertex list are rejected, so a damaged file
-//!   can't reach the renderer.
-//!
-//! Checked against the user's `head.mesh` (version 2.00, 517 vertices, 846
-//! triangles, ROADMAP M4) when an install is found.
-//!
-//! A union's geometry decodes into the same [`Mesh`] ([`union`]), so
-//! unions load, upload and draw through the same path as mesh files.
+//! `rbx_mesh` corrects version 1.00's doubled positions and flipped UVs;
+//! Rook keeps only the highest level of detail (`docs/behavior/meshes.md`)
+//! and rejects faces pointing past the vertex list, so a damaged file can't
+//! reach the renderer. A union's geometry decodes into the same [`Mesh`]
+//! ([`union`]), so unions load and draw through the same path.
 
 pub mod union;
 

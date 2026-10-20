@@ -1,31 +1,8 @@
-//! Scene queries: every way scripts ask "what's there?" (rays, shape
-//! casts, regions, overlaps and touching parts), answered by Rapier's
-//! query pipeline over the same colliders the simulation uses.
-//!
-//! Queries see the current DOM, not last frame's physics: scripts often
-//! create or move a part and query in the same frame (observed: a ray
-//! hits a part created or moved just before it). So every query first
-//! brings the world up to date ([`Physics::sync`] applies the journal),
-//! then puts the colliders of bodies moved or rebuilt since the last step
-//! where they are now, in the broad phase too (Rapier only does that when
-//! it steps). Filters (`CanQuery`, ignore lists, collision groups) are read
-//! from the DOM per candidate, so they're always current as well.
-//!
-//! Rules observed in Studio 0.742 unless noted:
-//! - A part is skipped when both `CanCollide` and `CanQuery` are off
-//!   (`CanQuery` alone does nothing while `CanCollide` is on).
-//!   `Transparency` doesn't matter; anchored and unanchored parts count.
-//! - Rays don't hit a part they start inside (or on the surface of), and
-//!   reach at most [`MAX_RAY_LENGTH`] studs.
-//! - Region3 and the `GetPartBounds*` queries test each part's `Size` box
-//!   (see [`shape::world_box`]); touching faces count. `GetPartsInPart`
-//!   and `GetTouchingParts` test real shapes and need the parts to overlap.
-//! - Terrain ([`crate::shape::terrain`]): rays and shape casts hit its surface,
-//!   water's too unless they ignore water, and report Terrain with the
-//!   material hit; a ray starting inside it hits nothing until it leaves.
-//!   Region3, the `GetPartBounds*` queries and `GetPartsInPart` never
-//!   return it; `GetTouchingParts` does where a part overlaps its solid
-//!   surface, whatever the part's `CanCollide`.
+//! Scene queries: rays, shape casts, regions, overlaps and touching parts,
+//! answered by Rapier's query pipeline over the same colliders the
+//! simulation uses. Each query first brings the world up to date with the
+//! DOM, as scripts query what they just made or moved. The rules are in
+//! `docs/behavior/physics.md` (Scene queries).
 
 use rustc_hash::FxHashSet as HashSet;
 

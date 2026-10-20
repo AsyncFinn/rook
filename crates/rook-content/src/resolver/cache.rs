@@ -1,14 +1,7 @@
-//! The disk cache for downloaded content, outside the repository.
-//!
-//! It lives where the system expects caches, so the system may clear it
-//! (`ROOK_CACHE_DIR`, else `%TEMP%\Rook\cache` on Windows, where Storage
-//! Sense and cleanup tools can empty it, `~/Library/Caches/Rook` on macOS
-//! and `$XDG_CACHE_HOME/rook` elsewhere). Anything cleared is fetched again
-//! when needed. Rook keeps it under a size itself ([`Cache::trim`],
-//! `ROOK_CACHE_MAX`, 2 GB by default), dropping the blobs used least
-//! recently first: reading a blob marks it used. Caches made before
-//! 2026-10-13 lived in `%LOCALAPPDATA%\Rook\cache` on Windows and are moved
-//! once ([`Cache::move_legacy`]).
+//! The disk cache for downloaded content, outside the repository, where the
+//! system keeps caches so it may clear them; Rook keeps it under a size
+//! itself, least recently used first ([`Cache::trim`]). How it is laid out
+//! and kept sound is in `docs/design/architecture.md` (Cache).
 //!
 //! Layout under the cache folder:
 //!
@@ -17,14 +10,6 @@
 //! - `refs/<key>`: one small text file per reference (`asset-12221462`,
 //!   `asset-5-v3`, `assetversion-77`), either `ok <hash> <size> <unix time>
 //!   <url>` or `fail <kind> <unix time> <message>`.
-//!
-//! Every file is written to a temporary name and renamed into place, so a
-//! crash never leaves a partial file under a real name. Blobs are checked
-//! against their size and hash when read; a damaged one is deleted and the
-//! reference counts as uncached, so it is fetched again. Failures that
-//! won't change soon (not found, forbidden) are remembered for
-//! [`NEGATIVE_TTL`], so a place with hundreds of broken ids doesn't ask
-//! the network again on every run; network errors are never remembered.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

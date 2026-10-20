@@ -56,6 +56,10 @@ Failures keep their reason until something reports it. Return typed errors (`thi
 
 `.ok()`, `let _ =` and `unwrap_or_default()` on a `Result` are only for where something being absent is normal (an optional file that isn't there, a best-effort clean-up), never to hide a failure. When dropping an error is right, say why in a comment. The content-loading paths follow this; other places get fixed as they're touched.
 
+### Comments
+
+Comments say why: a Roblox behaviour, a measurement, a non-obvious reason, or an Observed/Measured/Inference tag, never what the next line already says. Findings have one home, `docs/behavior/<topic>.md`: a module's header says what it does and links there, and only one-line tagged rules stay beside the code that implements them.
+
 ### Behaviour provenance
 
 Every behaviour Rook implements is recorded with its source and one of four statuses: **Confirmed** (creator-docs or a Studio recording), **Inference**, **Approximation** or **Rook extension**. This is both the record of a clean implementation and a map of how compatible Rook is. Rook-specific extensions sit behind an explicit profile and are off by default. See [docs/design/architecture.md](docs/design/architecture.md#10-behavior-provenance).

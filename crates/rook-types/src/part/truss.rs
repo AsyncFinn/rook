@@ -221,23 +221,10 @@ pub struct TrussLook {
 }
 
 impl TrussLook {
-    /// What a truss of `size` and `style` draws (observed in Studio 0.742,
-    /// 2026-10-13):
-    ///
-    /// - It runs along the axis that isn't 2 studs (Y when none is): its
-    ///   frame's Y turns onto that axis. Long in Z, the frame's X stays X
-    ///   and its Z points down (-Y); long in X, its X points to the Front
-    ///   (-Z) and its Z down. Found from which sides of long-in-X and
-    ///   long-in-Z trusses carry braces and which way they lean.
-    /// - It has floor(length / 2) segments, at least one: 2 × 3 × 2 draws
-    ///   one, 2 × 5 × 2 two and 2 × 7 × 2 three. The drawing starts at the
-    ///   part's low end along that axis (its -Y, -X or -Z face) and the rest
-    ///   of the box stays empty; a truss shorter than 2 draws one segment
-    ///   centred on the part (2 × 1 × 2 drew a 2-stud segment overhanging
-    ///   both ends by half a stud).
-    ///
-    /// A Size Studio wouldn't keep (only from a file) is first snapped as
-    /// [`truss_size`] snaps a script's (Inference: files in the archive only
+    /// What a truss of `size` and `style` draws: segments along its long axis
+    /// from its low end, as observed in Studio (`docs/behavior/meshes.md`,
+    /// Trusses). A Size Studio wouldn't keep (only from a file) is first snapped
+    /// as [`truss_size`] snaps a script's (Inference: files in the archive only
     /// hold sizes Studio keeps).
     pub fn of(size: Vec3, style: TrussStyle) -> Self {
         let s = truss_size(size);

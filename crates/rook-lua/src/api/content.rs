@@ -3,28 +3,8 @@
 //! Scripts queue requests in the World ([`ContentRequests`]); the engine
 //! resolves them off its thread and hands the results back at a fixed
 //! point in the frame (`Runtime::deliver_content`), where callbacks run and
-//! the waiting thread resumes. Observed in Studio 0.742 (2026-10-12; ROADMAP
-//! M4 step 2):
-//!
-//! - On a client, `PreloadAsync(list, callback)` yields until every entry
-//!   is done, calling `callback(contentId, Enum.AssetFetchStatus)` for each
-//!   as it finishes (in completion order), then returns nothing. Failures
-//!   that need no download came within a few frames.
-//! - Instances in the list stand for their content properties and their
-//!   descendants' (a Model holding a Decal reported the Decal's texture).
-//! - A mesh's `MeshId` loads as a mesh: on a client a SpecialMesh whose
-//!   `MeshId` was a PNG reported `Failure`, while mesh files (versions
-//!   1.00 and 2.00, by path or asset id) reported `Success` (observed
-//!   2026-10-13).
-//! - An image property must hold an image: a mesh, a sound or a damaged
-//!   PNG in a Decal's `Texture` reported `Failure` (observed 2026-10-13).
-//! - Strings are loaded as images: `rbxasset://` image files succeeded,
-//!   `.mesh` and `.wav` paths failed, and so did every `rbxassetid://` and
-//!   asset URL string, even an image that loaded as a Decal's texture.
-//!   Empty strings are skipped; a repeated entry gets a callback each time.
-//! - On a server, the call never returned (30 s and more) once anything
-//!   was to be fetched, even a bad string; with nothing to fetch (`{}`,
-//!   `{""}`, a Folder) it returned at once.
+//! the waiting thread resumes. What Studio does is in
+//! `docs/behavior/content.md` (PreloadAsync).
 
 use std::collections::HashMap;
 

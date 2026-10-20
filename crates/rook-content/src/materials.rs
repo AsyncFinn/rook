@@ -1,22 +1,8 @@
-//! Built-in materials' textures, fetched from Roblox like any other asset
-//! (`docs/behavior/materials.md`).
-//!
-//! Each material's textures are a TexturePack asset (asset type 63): a
-//! small XML file naming one image asset per map (`color`, `normal`,
-//! `metalness`, `roughness`). Asset delivery serves both anonymously, and
-//! they go through the disk cache like everything else.
-//!
-//! Which pack is which material's comes from Studio itself: its
-//! `PartMaterialInfosPre2022` and `PartMaterialInfos2022` tables (Studio
-//! 0.743), whose ids are listed in the order of the Material values next
-//! to them. That order was checked against the textures Studio showed for
-//! each material (identified in its content cache in M4 step 5) by
-//! comparing pictures. Most materials' normal maps came out the same image
-//! (differences under 1.5 of 255), which pins every pack to its material.
-//! For legacy Wood and Slate and 2022 Foil, Studio showed the normal of a
-//! separate normal-only pack in the same table; those are listed as each
-//! one's normal pack. Plastic, SmoothPlastic, Neon and ForceField have no
-//! textures here, as in Studio.
+//! Built-in materials' textures, fetched from Roblox like any other asset.
+//! Each material's textures are a TexturePack asset (asset type 63): a small
+//! XML file naming one image asset per map (`color`, `normal`, `metalness`,
+//! `roughness`). Which pack is which material's, and how that was found, is
+//! in `docs/behavior/materials.md`.
 
 use rook_types::{Material, MaterialSet};
 

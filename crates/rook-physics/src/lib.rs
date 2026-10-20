@@ -1,33 +1,13 @@
 //! Roblox physics semantics over Rapier.
 //!
-//! [`Physics`] mirrors Workspace's parts into a Rapier world. It reads the
-//! DOM's change journal to keep up with scripts, steps the simulation, and
-//! writes simulated parts' CFrame and velocities back into the DOM.
-//!
-//! Parts joined by rigid joints form an assembly ([`assembly`]), which is
-//! one Rapier body with a collider per part; anchored assemblies are fixed
-//! bodies. Hinge joints connect bodies with Rapier revolute joints.
-//! [`joints`], [`assembly`] and [`joints::surfaces`] work on the DOM alone, so
-//! scripts can use them synchronously.
-//!
-//! Parts simulate with their material's properties ([`materials`]), in
-//! their collision group ([`groups`]), and their contacts become Touched
-//! and TouchEnded ([`Physics::take_touches`]).
-//!
-//! BodyMovers and force constraints push bodies every step ([`movers`]);
-//! attachment constraints become Rapier joints ([`constraints`]), and
-//! RotateV, RotateP and HingeConstraint actuators drive their joints'
-//! motors.
-//!
-//! Workspace's Terrain collides as the surface its voxels mesh to
-//! ([`terrain`]).
-//!
-//! Explosions hit, break and push parts and carve Terrain
-//! ([`Physics::blast`]).
-//!
-//! Scripts' scene queries (rays, shape casts, regions, overlaps) run on
-//! the same world ([`query`]); each brings it up to date with the DOM
-//! first. A client's world only answers queries ([`Physics::for_queries`]).
+//! [`Physics`] mirrors Workspace's parts into a Rapier world, keeps up with
+//! scripts through the DOM's change journal, steps it and writes simulated
+//! parts' CFrames and velocities back. Rigidly joined parts form one body
+//! ([`assembly`]); [`joints`] covers joints, constraints and movers;
+//! [`contacts`] materials, collision groups and Touched; [`query`] scripts'
+//! scene queries, which a client's world only answers
+//! ([`Physics::for_queries`]). Findings are in `docs/behavior/physics.md` and
+//! `docs/behavior/collision.md`.
 
 pub mod assembly;
 pub mod contacts;

@@ -1,20 +1,9 @@
 //! Terrain's collision surface: Workspace's Terrain collides and is
-//! queried as the surface `rook-terrain` meshes from its voxels, the one
-//! it draws (observed in Studio 0.742: a ball comes to rest on a lone
-//! voxel's smooth top, 1.333 studs above its centre, not on its 4-stud
-//! box; see `docs/behavior/terrain.md`).
-//!
-//! Each chunk's surface becomes one triangle-mesh collider per material
-//! on a fixed body, so a hit's material is its collider's, and parts
-//! slide with that material's friction. A chunk's colliders are built the
-//! first time a moving part or a query comes near it ([`near`]): a large
-//! map's whole surface (an 86k-part place's 12 million triangles) took 3.5 seconds and
-//! gigabytes to build, and a game only ever touches a little of it. Water's surface is a sensor: rays
-//! and casts hit it unless they ignore water, and parts touch it, but
-//! nothing rests on it. The colliders map to the Terrain instance like a
-//! part's, so filters, collision groups and Touched treat it as a part.
-//! Scripts' edits change the voxels here and rebuild only the chunks they
-//! touch ([`edit`]).
+//! queried as the surface `rook-terrain` meshes from its voxels, one
+//! triangle-mesh collider per material and chunk, built when something first
+//! comes near the chunk ([`near`]); water's is a sensor. Scripts' edits
+//! rebuild only the chunks they touch ([`edit`]). Measurements are in
+//! `docs/behavior/terrain.md` (Collision and queries).
 
 use rapier3d::parry::query::RayCullingMode;
 use rapier3d::parry::shape::TriMesh;

@@ -331,22 +331,11 @@ impl SceneCache {
         entries
     }
 
-    /// The textures and tint of `layer`'s surfaces, and how it blends on
-    /// seams: a
-    /// MaterialVariant MaterialService puts in the material's place (its
-    /// maps tinted by the colour, as on parts), or else the material's own
-    /// pack in `set`, coloured by the material's tint for its
-    /// `MaterialColors` colour ([`TerrainMaterial::tint`]). The 2022 set's
-    /// colour maps are tint masks: where their alpha is opaque, the
-    /// texel's luma times the tint (the packs say `alphamode` 2, TintMask;
-    /// CrackedLava's alpha is its cracks, which Studio draws in the
-    /// material's colour over dark rock, and Grass's sides have none, so
-    /// they show plain earth, as in Studio). The legacy set's are the
-    /// texel times the tint. Untextured, a material shows its colour.
-    /// A pack's layer blends by its height map (in its roughness-metalness
-    /// image, blue) and blend settings; a variant's has no height map, only
-    /// the pack's softness (Approximation: what Studio does there isn't
-    /// known).
+    /// The textures and tint of `layer`'s surfaces, and how it blends on seams:
+    /// a MaterialVariant MaterialService puts in the material's place, or else
+    /// the material's own pack in `set`, coloured by the material's tint
+    /// ([`TerrainMaterial::tint`]); untextured, a material shows its colour.
+    /// How Studio tints and blends them is in `docs/behavior/terrain.md`.
     fn terrain_look(
         &mut self,
         dom: &Dom,

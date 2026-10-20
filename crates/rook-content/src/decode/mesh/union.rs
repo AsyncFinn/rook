@@ -1,20 +1,8 @@
 //! A union's geometry (`UnionOperation`, `NegateOperation`,
-//! `IntersectOperation`), read through `rbx_mesh`'s `union_graphics`.
-//!
-//! A union keeps its geometry in a `MeshData` blob: in the union itself in
-//! old files, or, from about 2015 on, in a model asset its `AssetId` names,
-//! whose one `PartOperationAsset` holds `MeshData` (and `PhysicsData` and
-//! `ChildData`, which drawing doesn't need). The blob is one of:
-//!
-//! - `CSGK` and a 32-digit hex id: no geometry, only a pointer to the
-//!   asset;
-//! - `CSGMDL` versions 2 and 4 (XOR-obfuscated, full vertices) and 5
-//!   (packed, delta-coded indices), which `rbx_mesh` reads.
-//!
-//! Each vertex also carries its colour (the colour of the part it came
-//! from) and the `NormalId` of the box face it was cut from; both are kept.
-//! Version 5 holds more than one index range; only the first is drawn (the
-//! others are Inference: further levels of detail).
+//! `IntersectOperation`), read from its `MeshData` blob through `rbx_mesh`'s
+//! `union_graphics`, with each vertex's colour and the `NormalId` of the
+//! box face it was cut from. Where the blob is and its forms are in
+//! `docs/behavior/meshes.md` (Unions).
 
 pub mod physics;
 

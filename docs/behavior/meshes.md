@@ -131,8 +131,15 @@ outline to a pixel in width and height.
 ## File meshes (step 3)
 
 **File meshes (step 3)**, built 2026-10-13. How loading and drawing work
-is in `docs/architecture.md` §8 "Rendering"; what's left is in
+is in [architecture](../design/architecture.md) §8 "Rendering"; what's left is in
 `docs/behavior/stubs.md`.
+
+*Levels of detail* (Inference from the community format specification,
+Maximum_ADHD's "Roblox Mesh Format" on the DevForum): from version 3.00
+on, a file holds every level of detail in one face list, and its LOD
+table gives where each starts; Rook keeps only the first, highest-detail
+range. Checked against the user's `head.mesh` (version 2.00, 517
+vertices, 846 triangles) when an install is found.
 
 *What the archive uses* (`rook-tools corpus-scan`, 3,058 files that load; the
 scan now counts mesh instances by kind):
@@ -239,7 +246,7 @@ up; meshes that need an account.
 
 **Trusses**, built 2026-10-13 (TrussPart is in 371 archive files, 31,487
 uses; until now each drew as a solid grey box). How Rook builds and
-batches them is in `docs/architecture.md` §8 "Rendering"; what's left is in
+batches them is in [architecture](../design/architecture.md) §8 "Rendering"; what's left is in
 `docs/behavior/stubs.md`.
 
 *Measured from Studio's OBJ export* of a 2 × 2 × 2 and a 2 × 4 × 2 truss

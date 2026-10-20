@@ -1,22 +1,8 @@
-//! Roblox asset delivery: the only network access in Rook.
-//!
-//! What works today (tested 2026-10-12, ROADMAP M4 step 2): Roblox's
-//! March 2025 announcement said every assetdelivery.roblox.com endpoint
-//! would need authentication, but anonymous requests for public assets
-//! still succeed. `GET https://assetdelivery.roblox.com/v2/assetId/<id>`
-//! (and `/version/<n>`) answers with HTTP 200 and JSON either way:
-//! `locations[].location` is a signed, short-lived CDN URL (served
-//! gzip-encoded), and a failure is `errors[0].code`: 404 for a missing
-//! asset, 409 "User is not authorized to access Asset." for one that isn't
-//! public. Lookups by asset version id are refused ("deprecated").
-//!
-//! Requests are anonymous. If the user sets `ROOK_OPEN_CLOUD_API_KEY`, an
-//! asset refused anonymously is asked for again from the Open Cloud
-//! endpoint (`https://apis.roblox.com/asset-delivery-api/v1/assetId/<id>`,
-//! key in `x-api-key`; it needs the `legacy-asset:manage` scope, per
-//! Roblox's announcement). The key is only ever sent there. That path is
-//! untested: Rook has no key to test it with. Rook never reads browser
-//! cookies or any other credential.
+//! Roblox asset delivery: the only network access in Rook. Requests are
+//! anonymous; for assets refused anonymously, an Open Cloud key the user set
+//! is sent to the Open Cloud endpoint (in `x-api-key`) and nowhere else.
+//! Rook never reads browser cookies or any other credential. What the
+//! endpoints answer is in `docs/behavior/content.md`.
 
 use std::io::Read;
 use std::time::Duration;

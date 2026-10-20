@@ -3,19 +3,11 @@
 //! The engine asks a [`Loader`] for references and collects the results at
 //! a fixed point in its frame ([`Loader::poll`]), so disk, network and
 //! decoding never hold up a frame and completions reach scripts on the
-//! engine thread (architecture §8 "Content").
-//!
-//! Each loader has a few fetch threads, which wait on disk and the network,
-//! and hands decoding to one decode pool the whole process shares, sized
-//! by the engine from the machine's cores ([`set_decode_threads`]). Both run at
-//! below-normal priority, so on a small machine loading takes what the
-//! frame and audio leave. Threads start with the first request: a place
-//! that never asks for content costs nothing.
-//!
-//! Requests carry a priority, lower first, which can change while they
-//! wait: the player ranks files by how far from the camera the parts
-//! waiting for them are, so what's around the camera arrives first.
-//! Fetching and decoding both take the most urgent job next.
+//! engine thread (architecture §8 "Content"). Each loader's fetch threads
+//! hand decoding to one process-wide pool ([`set_decode_threads`]), both at
+//! below-normal priority and started by the first request. Requests carry a
+//! priority that can change while they wait (the player ranks files by
+//! distance from the camera); both stages take the most urgent job next.
 
 mod queue;
 

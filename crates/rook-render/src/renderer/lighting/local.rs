@@ -1,22 +1,12 @@
-//! Local lights on the GPU, drawn as Studio's voxel lighting draws them
-//! (docs/behavior/lights.md): every light in one buffer, a spatial hash
-//! saying which lights reach each place, and a volume of 4-stud voxels
-//! ahead of the camera that a compute pass fills from them
-//! (`shaders/light_volume.wgsl`) and surfaces sample
-//! (`shaders/lighting.wgsl`).
-//!
-//! The hash cuts the world into cubes `cell` studs across; each cube
-//! hashes to a bucket, and a bucket lists every light whose reach overlaps
-//! a cube that hashes to it (collisions only cost a few lights more to
-//! test). Reaches are padded by [`SLACK`], so lights that move a little
-//! (spinning fixtures) don't rebuild it. The voxels are filled again only
-//! when a light changes or the camera leaves the volume's middle.
-//!
-//! The parts are marked into a bit per voxel (`blockers.rs`) when the
-//! place lights with the sky or a light has `Shadows`: the same pass
-//! carries the sky's diffuse light down through the voxels into their
-//! alpha, layer by layer from the top, around them, and casts rays from
-//! each voxel to its shadowing lights through them.
+//! Local lights on the GPU, drawn as Studio's voxel lighting draws them:
+//! every light in one buffer, a spatial hash saying which lights reach each
+//! place (reaches padded by [`SLACK`], so lights that move a little don't
+//! rebuild it), and a volume of 4-stud voxels ahead of the camera that a
+//! compute pass fills (`shaders/light_volume.wgsl`) and surfaces sample
+//! (`shaders/lighting.wgsl`). The voxels are filled again only when a light
+//! changes or the camera leaves the volume's middle; parts marked into them
+//! (`blockers.rs`) carry the sky's light down and shadow lights. What Studio
+//! does is in `docs/behavior/lights.md`.
 
 mod blockers;
 mod hash;

@@ -3,7 +3,7 @@
 What Rook found while building M4 step 2: where archived places' content comes from, and how Rook fetches it. The plan itself is in [ROADMAP.md](../../ROADMAP.md#m4-content-meshes-materials-textures-decals).
 
 **Asset fetching (step 2)**, built 2026-10-12. How it works is in
-`docs/architecture.md` §8 "Content"; what's still partial is in
+[architecture](../design/architecture.md) §8 "Content"; what's still partial is in
 `docs/behavior/stubs.md`.
 
 *What the archive uses* (`rook-tools corpus-scan`, 3,058 files that load): 1.10
@@ -54,7 +54,8 @@ leading spaces before `http`, and `rbxassetid://5&x=1` (so
 `rbxasset://` or `rbxassetid://` schemes, a leading space before
 `rbxassetid://`, `rbxassetid://5/`, an id followed by anything else
 (`5abc`, `5;`, `5#x`), a bare number, `asset.aspx`, `asset/Default.ashx`,
-other paths, and no scheme. `version=` is honoured: version 1 of asset
+other paths, and no scheme. In `rbxasset://` paths, backslashes and
+doubled slashes are fine and case doesn't matter. `version=` is honoured: version 1 of asset
 12221462 is a different, much larger mesh. `rook-content` parses by
 exactly these rules (`reference.rs`, with each form as a test).
 
@@ -116,9 +117,14 @@ together with the rest); how is unknown.
 *PreloadAsync* (observed on a playtest client, a server and in edit mode;
 the server part is the conformance case `content/preload`): on a client it
 yields, calls back `(contentId, Enum.AssetFetchStatus)` for each entry in
-the order they finish, and returns nothing after the last. Instances count
+the order they finish, and returns nothing after the last; failures that
+need no download came within a few frames. Instances count
 with their descendants (a Model holding a Decal reported the Decal's
-texture). Strings load as images: `rbxasset://` images succeeded, `.mesh`
+texture). Each property loads as what it holds (2026-10-13): a
+SpecialMesh whose `MeshId` was a PNG reported `Failure`, while mesh files
+(versions 1.00 and 2.00, by path or asset id) reported `Success`; a mesh,
+a sound or a damaged PNG in a Decal's `Texture` reported `Failure`.
+Strings load as images: `rbxasset://` images succeeded, `.mesh`
 and `.wav` paths failed, and every `rbxassetid://` or asset URL string
 failed, even an image that loaded as a Decal's texture. Empty strings are
 skipped; a repeated entry gets a callback each time. On a server it never
@@ -142,7 +148,8 @@ asset id <id>.  Does the asset have a ModuleScript named "MainModule"?`.
 A fractional id rounds to the nearest, and a string is Luau's path
 require, not an asset id. `InsertService:LoadAsset(id)` returns a new
 parentless Model named `Model` holding the asset's top-level instances, a
-fresh copy every call; it takes numeric strings, a missing asset raises
+fresh copy every call; it takes numeric strings (`Unable to cast string
+to int64` otherwise), a missing asset raises
 `Request asset was not found`, and Studio refused assets the place's
 creator doesn't own (`User is not authorized to access Asset.`, `Asset is
 not trusted for this place`). On a client both refuse: `require(assetId)

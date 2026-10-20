@@ -1,22 +1,7 @@
-//! How Studio colours a material's textures by its `MaterialColors`
-//! colour. For the 2022 set, Studio bakes the colour into the textures on
-//! the CPU and stores them in YCoCg, read back squared (gamma 2) by its
-//! terrain shader (`SmoothClusterFSUnified`); where a texture's tint mask is opaque it
-//! keeps only the texel's luma, times a tint worked out from the colour
-//! per material:
-//!
-//! - its brightness is the colour's largest channel times a gain, up to 1
-//!   (Mud and Basalt reach 1 at their default colours, and draw dimmer
-//!   than their textures: 0.85 and 0.6 of the other materials' share);
-//! - its chroma (YCoCg, over that channel) turns and scales by a 2x2
-//!   matrix, up to a length.
-//!
-//! The constants are fitted to Studio 0.742 screenshots of every material
-//! under flat ambient light beside grey calibration parts, coloured white,
-//! red, green, blue, pale red, green and blue, and two greys; they match
-//! held-out colours (each material's default, (255, 128, 128)) within
-//! 6/255, except CrackedLava, whose dark rock and lit cracks average
-//! unevenly (Approximation; `docs/behavior/terrain.md`).
+//! How Studio colours a material's textures by its `MaterialColors` colour:
+//! for the 2022 set, a texel's luma times a tint worked out per material
+//! from the colour, a brightness and a turned and scaled chroma. The
+//! constants are fitted to Studio screenshots (`docs/behavior/terrain.md`).
 
 use rook_types::{Color3uint8, MaterialSet};
 

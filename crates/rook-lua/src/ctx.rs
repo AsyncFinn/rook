@@ -11,9 +11,8 @@
 //! resumes it), a call marker followed by a function whose arguments are
 //! pending (the shim calls it from Lua, so it may yield; used by `require`
 //! and `Invoke`), or a multi marker when there are several results pending.
-//! Pending values are fetched with a second call. The shim only takes two
-//! results, never a vararg list: forwarding varargs through a helper
-//! costs more than most engine functions themselves.
+//! Pending values are fetched with a second call; the shim takes two
+//! results, never varargs, which cost more than most engine functions.
 
 pub(crate) mod args;
 pub(crate) mod convert;
