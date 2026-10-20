@@ -6,12 +6,9 @@
 //! `~/Library/Logs/Rook`; elsewhere data is under `$XDG_DATA_HOME/rook`
 //! and logs and state under `$XDG_STATE_HOME/rook`. `ROOK_DATA_DIR` puts
 //! all of it under one folder instead. The download cache is not here: it
-//! stays where the system may clear it (`rook_content::resolver::cache::Cache`).
+//! stays where the system may clear it ([`default_cache_dir`]).
 
 use std::path::{Path, PathBuf};
-
-/// The environment variable that moves the whole data folder.
-pub const DATA_VAR: &str = "ROOK_DATA_DIR";
 
 /// Where each part of Rook's data lives.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,12 +25,13 @@ impl DataDir {
     /// `ROOK_DATA_DIR`, or the platform's folders. `None` only where the
     /// system names no home folder.
     pub fn locate() -> Option<Self> {
-        if let Some(dir) = std::env::var_os(DATA_VAR).filter(|d| !d.is_empty()) {
+        if let Some(dir) =
+            std::env::var_os(crate::settings::env::DATA_FOLDER).filter(|d| !d.is_empty())
+        {
             return Some(Self::under(PathBuf::from(dir)));
         }
         if cfg!(windows) {
-            let local = std::env::var_os("LOCALAPPDATA")?;
-            return Some(Self::under(PathBuf::from(local).join("Rook")));
+            return Some(Self::under(local_app_data()?.join("Rook")));
         }
         let dirs = directories::ProjectDirs::from("", "", "Rook")?;
         if cfg!(target_os = "macos") {
@@ -86,4 +84,32 @@ impl DataDir {
     pub fn recent(&self) -> PathBuf {
         self.state.join("recent.json")
     }
+}
+
+/// `%LOCALAPPDATA%` on Windows: the data folder's base, and where Roblox
+/// installs and older Rook caches live. Read here and nowhere else.
+pub fn local_app_data() -> Option<PathBuf> {
+    std::env::var_os("LOCALAPPDATA")
+        .filter(|d| !d.is_empty())
+        .map(PathBuf::from)
+}
+
+/// Where the download cache goes when no setting moves it: where the
+/// system expects caches, so the system may clear it (`%TEMP%\Rook\cache`
+/// on Windows, where Storage Sense and cleanup tools can empty it,
+/// `~/Library/Caches/Rook` on macOS, `$XDG_CACHE_HOME/rook` elsewhere).
+pub fn default_cache_dir() -> Option<PathBuf> {
+    if cfg!(windows) {
+        return Some(std::env::temp_dir().join("Rook").join("cache"));
+    }
+    let dirs = directories::ProjectDirs::from("", "", "Rook")?;
+    Some(dirs.cache_dir().to_path_buf())
+}
+
+/// Where Windows caches lived before 2026-10-13, moved from once.
+pub fn legacy_cache_dir() -> Option<PathBuf> {
+    if !cfg!(windows) {
+        return None;
+    }
+    Some(local_app_data()?.join("Rook").join("cache"))
 }

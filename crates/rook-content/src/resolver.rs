@@ -18,7 +18,7 @@ use cache::{Cache, Cached};
 use delivery::Delivery;
 use install::Install;
 
-pub use config::{Base, Config, ProviderKind, parse_switch};
+pub use config::{Config, ProviderKind, parse_switch};
 
 /// Resolves references to bytes. Shared by every DataModel and the
 /// [`Loader`](crate::Loader)'s workers.

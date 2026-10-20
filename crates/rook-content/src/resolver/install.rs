@@ -5,15 +5,12 @@
 //! `%LOCALAPPDATA%\Roblox\Versions\version-<hash>` (older installers used
 //! `Program Files (x86)\Roblox\Versions`), with Studio and the player in
 //! separate folders, each holding a `content` folder. On macOS the content
-//! is inside the app bundles. Rook uses the newest install it finds.
-//! `ROOK_ROBLOX_INSTALL` overrides the search: a version folder or a
-//! content folder, or `off` for none.
+//! is inside the app bundles. Rook uses the newest install it finds,
+//! unless the user names one (a version folder or a content folder, or
+//! `off` for none).
 
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
-
-/// The environment variable that overrides the install search.
-pub const INSTALL_VAR: &str = "ROOK_ROBLOX_INSTALL";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InstallKind {
@@ -71,15 +68,38 @@ impl Install {
     }
 }
 
-/// Every install found, newest first, or only `ROOK_ROBLOX_INSTALL`'s
-/// (none if it is `off` or doesn't exist).
-pub fn find() -> Vec<Install> {
-    find_from(std::env::var_os(INSTALL_VAR).as_deref())
+/// Where Roblox installs live on this system: the folders holding
+/// `Roblox\Versions` on Windows, and the application folders on macOS.
+#[derive(Debug, Clone, Default)]
+pub struct Places {
+    pub versions: Vec<PathBuf>,
+    pub mac_apps: Vec<PathBuf>,
 }
 
-/// Every install found, newest first, or only the one `chosen` names (a
-/// version or content folder; none if it is `off` or doesn't exist).
-pub fn find_from(chosen: Option<&std::ffi::OsStr>) -> Vec<Install> {
+impl Places {
+    /// The places for a system whose environment `env` reads: the engine
+    /// passes its own lookup, so this crate reads no environment itself.
+    pub fn from_env(env: impl Fn(&str) -> Option<std::ffi::OsString>) -> Self {
+        let versions = ["LOCALAPPDATA", "ProgramFiles(x86)", "ProgramFiles"]
+            .iter()
+            .filter_map(|name| env(name))
+            .map(|base| PathBuf::from(base).join("Roblox").join("Versions"))
+            .collect();
+        let mut mac_apps = Vec::new();
+        if cfg!(target_os = "macos") {
+            mac_apps.push(PathBuf::from("/Applications"));
+            if let Some(home) = env("HOME") {
+                mac_apps.push(PathBuf::from(home).join("Applications"));
+            }
+        }
+        Self { versions, mac_apps }
+    }
+}
+
+/// Every install found in `places`, newest first, or only the one
+/// `chosen` names (a version or content folder; none if it is `off` or
+/// doesn't exist).
+pub fn find_from(chosen: Option<&std::ffi::OsStr>, places: &Places) -> Vec<Install> {
     if let Some(value) = chosen {
         if value.eq_ignore_ascii_case("off") || value.is_empty() {
             return Vec::new();
@@ -89,8 +109,8 @@ pub fn find_from(chosen: Option<&std::ffi::OsStr>) -> Vec<Install> {
             .collect();
     }
     let mut found = Vec::new();
-    for versions in version_folders() {
-        let Ok(entries) = std::fs::read_dir(&versions) else {
+    for versions in &places.versions {
+        let Ok(entries) = std::fs::read_dir(versions) else {
             continue;
         };
         for entry in entries.flatten() {
@@ -113,7 +133,7 @@ pub fn find_from(chosen: Option<&std::ffi::OsStr>) -> Vec<Install> {
         ("RobloxStudio.app", InstallKind::Studio),
         ("Roblox.app", InstallKind::Player),
     ] {
-        for apps in mac_app_folders() {
+        for apps in &places.mac_apps {
             let resources = apps.join(app).join("Contents/Resources");
             if resources.join("content").is_dir()
                 && let Some(install) = Install::at(&resources, kind)
@@ -126,33 +146,9 @@ pub fn find_from(chosen: Option<&std::ffi::OsStr>) -> Vec<Install> {
     found
 }
 
-/// The newest install, if any.
-pub fn newest() -> Option<Install> {
-    find().into_iter().next()
-}
-
 /// The newest install, or the one `chosen` names ([`find_from`]).
-pub fn newest_from(chosen: Option<&std::ffi::OsStr>) -> Option<Install> {
-    find_from(chosen).into_iter().next()
-}
-
-fn version_folders() -> Vec<PathBuf> {
-    ["LOCALAPPDATA", "ProgramFiles(x86)", "ProgramFiles"]
-        .iter()
-        .filter_map(std::env::var_os)
-        .map(|base| PathBuf::from(base).join("Roblox").join("Versions"))
-        .collect()
-}
-
-fn mac_app_folders() -> Vec<PathBuf> {
-    if !cfg!(target_os = "macos") {
-        return Vec::new();
-    }
-    let mut out = vec![PathBuf::from("/Applications")];
-    if let Some(home) = std::env::var_os("HOME") {
-        out.push(PathBuf::from(home).join("Applications"));
-    }
-    out
+pub fn newest_from(chosen: Option<&std::ffi::OsStr>, places: &Places) -> Option<Install> {
+    find_from(chosen, places).into_iter().next()
 }
 
 #[cfg(test)]

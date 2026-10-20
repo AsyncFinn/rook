@@ -18,14 +18,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::{Failure, FailureKind};
 
-/// The environment variable that sets the cache folder.
-pub const CACHE_VAR: &str = "ROOK_CACHE_DIR";
-
-/// The environment variable that sets the cache's size limit (`2GB`,
-/// `500MB`, `750K`; a bare number is megabytes).
-pub const MAX_VAR: &str = "ROOK_CACHE_MAX";
-
-/// The size limit without `ROOK_CACHE_MAX`.
+/// The size limit when none is set.
 pub const DEFAULT_MAX: u64 = 2 << 30;
 
 /// A blob read again within this long isn't marked used again (saves a
@@ -63,31 +56,6 @@ impl Cache {
         std::fs::create_dir_all(dir.join("blobs"))?;
         std::fs::create_dir_all(dir.join("refs"))?;
         Ok(Self { dir })
-    }
-
-    /// `ROOK_CACHE_DIR`, or the platform's cache folder.
-    pub fn default_dir() -> Option<PathBuf> {
-        if let Some(dir) = std::env::var_os(CACHE_VAR) {
-            return Some(dir.into());
-        }
-        let env = |name| std::env::var_os(name).map(PathBuf::from);
-        if cfg!(windows) {
-            Some(std::env::temp_dir().join("Rook").join("cache"))
-        } else if cfg!(target_os = "macos") {
-            env("HOME").map(|d| d.join("Library/Caches/Rook"))
-        } else {
-            env("XDG_CACHE_HOME")
-                .or_else(|| env("HOME").map(|h| h.join(".cache")))
-                .map(|d| d.join("rook"))
-        }
-    }
-
-    /// Where Windows caches lived before they moved to `%TEMP%`.
-    pub fn legacy_dir() -> Option<PathBuf> {
-        if !cfg!(windows) || std::env::var_os(CACHE_VAR).is_some() {
-            return None;
-        }
-        std::env::var_os("LOCALAPPDATA").map(|d| PathBuf::from(d).join("Rook").join("cache"))
     }
 
     /// Move a cache from `from` into `to`, once: the whole folder when `to`
@@ -135,11 +103,6 @@ impl Cache {
             remove_if_empty(from.parent());
         }
         Ok(moved)
-    }
-
-    /// The size limit `ROOK_CACHE_MAX` sets, if it does.
-    pub fn max_from_env() -> Option<u64> {
-        std::env::var(MAX_VAR).ok().and_then(|v| parse_size(&v))
     }
 
     pub fn dir(&self) -> &Path {

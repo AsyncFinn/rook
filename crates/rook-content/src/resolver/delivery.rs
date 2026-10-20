@@ -9,9 +9,6 @@ use std::time::Duration;
 
 use crate::{Failure, FailureKind};
 
-/// The environment variable holding an Open Cloud API key.
-pub const API_KEY_VAR: &str = "ROOK_OPEN_CLOUD_API_KEY";
-
 const ANONYMOUS: &str = "https://assetdelivery.roblox.com/v2/assetId";
 const OPEN_CLOUD: &str = "https://apis.roblox.com/asset-delivery-api/v1/assetId";
 /// Larger answers are refused (Roblox's own limits are far below this).
@@ -27,15 +24,6 @@ pub struct Delivery {
 }
 
 impl Delivery {
-    /// Anonymous, plus the Open Cloud key from `ROOK_OPEN_CLOUD_API_KEY` if
-    /// set.
-    pub fn from_env() -> Self {
-        let key = std::env::var(API_KEY_VAR)
-            .ok()
-            .filter(|k| !k.trim().is_empty());
-        Self::new(key)
-    }
-
     pub fn new(api_key: Option<String>) -> Self {
         let agent = ureq::Agent::config_builder()
             .timeout_global(Some(Duration::from_secs(60)))

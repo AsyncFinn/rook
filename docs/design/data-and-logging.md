@@ -30,27 +30,30 @@ The download cache is not in the data folder. It stays in `%TEMP%\Rook\cache` (`
 
 ## settings.json
 
-Rook writes `settings.json` the first time it runs, as plain pretty JSON with the defaults:
-
-```json
-{
-  "cacheMaxSize": "2GB",
-  "assetDelivery": null,
-  "robloxInstall": null,
-  "logLevel": "info"
-}
-```
+Rook writes `settings.json` the first time it runs, with every key at its default and a `//` comment saying what each does.
 
 JSON rather than TOML because Roblox developers know JSON. It is read leniently: `//` and `/* */` comments and trailing commas are allowed, and unknown keys are ignored. A file that doesn't parse is reported once and Rook's defaults are used; the file is left as it is.
 
-| Key | Meaning | Overridden by |
-|---|---|---|
-| `cacheMaxSize` | The download cache's size limit | `ROOK_CACHE_MAX` |
-| `assetDelivery` | `true`/`false`; `null` leaves it to each program (on in the player and `rook-tools content`, off in headless runs) | `ROOK_ASSET_DELIVERY`, `rook-tools content --offline` |
-| `robloxInstall` | A version or content folder, or `"off"`; `null` uses the newest install found | `ROOK_ROBLOX_INSTALL` |
-| `logLevel` | What the terminal shows: `error`, `warn`, `info`, `debug`, `trace` | `ROOK_LOG`, `--verbose` |
+| Key | Environment variable | Flag | Default | What it does |
+|---|---|---|---|---|
+| `contentOrder` | `ROOK_CONTENT_ORDER` (comma-separated) | | `defaults, install, folders, delivery` | Where content comes from, in order |
+| `contentFolders` | `ROOK_CONTENT_DIRS` (separated like `PATH`) | | none | Folders laid out like the install's `content` (content packages, local overrides) |
+| `assetDelivery` | `ROOK_ASSET_DELIVERY` (`on`/`off`) | `rook-tools content --offline` | on in `rook-player` and `rook-tools content`, off in headless runs | Whether asset delivery may use the network |
+| `robloxInstall` | `ROOK_ROBLOX_INSTALL` | | the newest install found | A Roblox version or `content` folder to use instead, or `"off"` |
+| `cacheFolder` | `ROOK_CACHE_DIR` | | `%TEMP%\Rook\cache` on Windows, `~/Library/Caches/Rook` on macOS, `$XDG_CACHE_HOME/rook` elsewhere | Where downloads are cached |
+| `cacheMaxSize` | `ROOK_CACHE_MAX` | | `2GB` | The cache's size limit (`500MB`, `5GB`, ...); Rook drops what was used least recently |
+| `openCloudKeyFile` | `ROOK_OPEN_CLOUD_API_KEY` (the key itself) | | none | A file holding an Open Cloud key, tried for assets refused anonymously (needs the `legacy-asset:manage` scope). The key never goes in `settings.json` |
+| `threads` | `ROOK_THREADS` | | the machine's logical cores | The cores Rook plans background threads for |
+| `audioDevice` | `ROOK_AUDIO` | | `default` | `default`, `off` (`rook-player` never opens a device), or an output device's name |
+| `masterVolume` | | `--volume` | `1` | Everything heard, 0 to 1, like Roblox's in-game volume |
+| `uncapped` | | `--uncapped` | `false` | Draw as fast as possible instead of at the display's rate |
+| `frameTimes` | | `--frame-times` | `false` | Print frame times to the terminal |
+| `logLevel` | `ROOK_LOG` (a level or subsystems) | `--verbose` | `info` | What the terminal shows: `error`, `warn`, `info`, `debug`, `trace` |
+| | `ROOK_DATA_DIR` | | `%LOCALAPPDATA%\Rook` on Windows | Where settings, logs, crash reports and kept content live (so it can't be in `settings.json`) |
 
-Each value comes from the first of these that sets it: the command-line flag, the `ROOK_*` environment variable, `settings.json`, then Rook's default (`settings::pick`). The engine reads the file and passes values down. `rook-content` takes them as `resolver::Base`, which its own `ROOK_*` variables override.
+Each value comes from the first of these that sets it: the command-line flag, the `ROOK_*` environment variable, `settings.json`, then Rook's default (`settings::pick`). `rook-engine`'s `settings` module resolves every one and hands plain values down (`rook_content::Config`, the audio device and volume, the thread budget); no other crate reads the environment. `ROOK_STUDIO`, which picks the Studio window `rook-tools conformance` drives, is a developer's variable of `rook-cli` alone.
+
+`masterVolume` is Rook's version of the in-game menu's volume, `UserGameSettings.MasterVolume`. Once `UserGameSettings` exists (branch `feat/user-settings`), its `MasterVolume` should read and write this setting.
 
 ## Logging
 

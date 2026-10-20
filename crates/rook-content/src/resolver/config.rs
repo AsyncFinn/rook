@@ -11,7 +11,7 @@ pub enum ProviderKind {
     Defaults,
     /// The user's Roblox install, for `rbxasset://` paths.
     Install,
-    /// Folders the user points at (`ROOK_CONTENT_DIRS`), laid out like
+    /// Folders the user points at, laid out like
     /// the install's `content` folder: downloaded content packages or
     /// local overrides.
     Folders,
@@ -58,70 +58,9 @@ pub struct Config {
     pub kept_dir: Option<PathBuf>,
 }
 
-/// The default cache folder, after moving a cache left in the old
-/// Windows location (`%LOCALAPPDATA%\Rook\cache`) into it, once.
-fn default_cache_dir() -> Option<PathBuf> {
-    let dir = Cache::default_dir()?;
-    if let Some(old) = Cache::legacy_dir() {
-        // A failed move leaves the old cache where it is; nothing is lost.
-        if let Err(e) = Cache::move_legacy(&old, &dir) {
-            tracing::warn!(target: "content", "couldn't move the cache from {}: {e}", old.display());
-        }
-    }
-    Some(dir)
-}
-
 impl Config {
-    /// Provider order, comma-separated (`folders,install,defaults,delivery`).
-    pub const ORDER_VAR: &str = "ROOK_CONTENT_ORDER";
-    /// Content folders, separated like `PATH`.
-    pub const FOLDERS_VAR: &str = "ROOK_CONTENT_DIRS";
-    /// `on` or `off`: whether asset delivery may use the network.
-    pub const NETWORK_VAR: &str = "ROOK_ASSET_DELIVERY";
-
-    /// Settings from the environment over `base`: the values a
-    /// `ROOK_*` variable doesn't set (the engine fills it from
-    /// `settings.json` and each program's defaults).
-    pub fn from_env_over(base: Base) -> Self {
-        let order = std::env::var(Self::ORDER_VAR)
-            .ok()
-            .map(|v| v.split(',').filter_map(ProviderKind::from_name).collect())
-            .unwrap_or_else(|| ProviderKind::ALL.to_vec());
-        let folders = std::env::var_os(Self::FOLDERS_VAR)
-            .map(|v| std::env::split_paths(&v).filter(|p| p.is_dir()).collect())
-            .unwrap_or_default();
-        let network = std::env::var(Self::NETWORK_VAR)
-            .ok()
-            .and_then(|v| parse_switch(&v))
-            .unwrap_or(base.network);
-        let install = std::env::var_os(install::INSTALL_VAR).or(base.install);
-        Self {
-            order,
-            install: install::newest_from(install.as_deref()),
-            folders,
-            network,
-            api_key: std::env::var(delivery::API_KEY_VAR)
-                .ok()
-                .filter(|k| !k.trim().is_empty()),
-            cache_dir: default_cache_dir(),
-            cache_max: Some(Cache::max_from_env().unwrap_or(base.cache_max)),
-            kept_dir: base.kept_dir,
-        }
-    }
-
-    /// [`Config::from_env_over`] with Rook's defaults: `network` is the
-    /// default for `ROOK_ASSET_DELIVERY` (tools that exist to show content
-    /// turn it on, headless runs and tests leave it off), and nothing is
-    /// kept. Programs go through `rook_engine::settings` instead, which
-    /// adds `settings.json` and the kept content folder.
-    pub fn from_env(network: bool) -> Self {
-        Self::from_env_over(Base {
-            network,
-            ..Base::default()
-        })
-    }
-
-    /// No providers but the ones given: for tests.
+    /// No providers but the ones given: for tests, and the base the
+    /// engine fills from its settings.
     pub fn empty() -> Self {
         Self {
             order: ProviderKind::ALL.to_vec(),
@@ -151,30 +90,5 @@ pub fn parse_switch(value: &str) -> Option<bool> {
         Some(false)
     } else {
         None
-    }
-}
-
-/// What a [`Config`] holds where no `ROOK_*` variable says otherwise.
-#[derive(Debug, Clone)]
-pub struct Base {
-    /// Whether asset delivery may use the network.
-    pub network: bool,
-    /// The download cache's size limit.
-    pub cache_max: u64,
-    /// The Roblox install to use (a version or content folder, or `off`);
-    /// `None` searches for the newest.
-    pub install: Option<std::ffi::OsString>,
-    /// The kept content folder ([`kept`]).
-    pub kept_dir: Option<PathBuf>,
-}
-
-impl Default for Base {
-    fn default() -> Self {
-        Self {
-            network: false,
-            cache_max: cache::DEFAULT_MAX,
-            install: None,
-            kept_dir: None,
-        }
     }
 }

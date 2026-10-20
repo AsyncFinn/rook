@@ -231,3 +231,17 @@ fn group_effects_and_tails() {
     m.sync(&Mix::default());
     assert!(m.buses.is_empty());
 }
+
+#[test]
+fn master_volume_scales_what_is_heard() {
+    let a = audio(4, vec![16384; 4]);
+    let mut m = Mixer::new(4);
+    m.set_master_volume(0.25);
+    m.sync(&only(vec![play(&a, 0.0)]));
+    let mut out = [0.0; 2];
+    m.mix(&mut out, 2);
+    assert_eq!(out, [0.125, 0.125]);
+    m.set_master_volume(3.0);
+    m.mix(&mut out, 2);
+    assert_eq!(out, [0.5, 0.5], "clamped to 1");
+}

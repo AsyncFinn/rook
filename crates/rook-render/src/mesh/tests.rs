@@ -22,7 +22,10 @@ fn normals_point_outward() {
 /// like Rook's (same winding) and is centred like it.
 #[test]
 fn installed_head_matches_rooks_frame() {
-    let Some(install) = rook_content::resolver::install::newest() else {
+    let Some(install) = rook_content::resolver::install::newest_from(
+        None,
+        &rook_content::resolver::install::Places::from_env(|n| std::env::var_os(n)),
+    ) else {
         eprintln!("skipped: no Roblox install found");
         return;
     };

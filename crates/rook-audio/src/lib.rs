@@ -24,10 +24,11 @@ pub use mixer::{Group, Mix, Mixer, Play, SAMPLE_RATE};
 #[cfg(feature = "output")]
 pub use output::Output;
 
-/// The environment variable that turns audio off (`ROOK_AUDIO=off`).
-pub const AUDIO_VAR: &str = "ROOK_AUDIO";
-
-/// Whether audio is on: everything but `ROOK_AUDIO=off`.
-pub fn enabled_by_env() -> bool {
-    !std::env::var(AUDIO_VAR).is_ok_and(|v| v.eq_ignore_ascii_case("off"))
+/// Which output device to play through.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Device {
+    /// The system's default output device.
+    Default,
+    /// The output device with this name.
+    Named(String),
 }

@@ -112,6 +112,9 @@ struct Args {
     /// Print frame times to the terminal every second, and a summary at exit.
     #[arg(long)]
     frame_times: bool,
+    /// The master volume, 0 to 1 (overrides `masterVolume` in settings.json).
+    #[arg(long)]
+    volume: Option<f32>,
     /// Don't show the `>` command prompt in the terminal.
     #[cfg(feature = "repl")]
     #[arg(long)]
@@ -264,7 +267,7 @@ fn main() -> anyhow::Result<()> {
 
 fn play(args: Args) -> anyhow::Result<()> {
     // Asset delivery is on in the player, which exists to show places;
-    // ROOK_ASSET_DELIVERY=off or settings.json turns it off.
+    // the setting turns it off.
     let content = Arc::new(Resolver::new(rook_engine::settings::content_config(true)));
     let install = Installed::find(&content);
     let script = match &args.script {

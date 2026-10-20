@@ -51,7 +51,7 @@ impl Launch {
             return Err(e);
         }
         if let Some(app) = &self.app
-            && self.args.frame_times
+            && rook_engine::settings::frame_times(self.args.frame_times)
         {
             app.readout.print_run(&app.game);
         }
@@ -118,11 +118,13 @@ impl Launch {
             last_frame: Instant::now(),
             pending_mouse: None,
             install: self.install.take().expect("started once"),
-            uncapped: args.uncapped,
-            readout: Readout::new(args.frame_times),
+            uncapped: rook_engine::settings::uncapped(args.uncapped),
+            readout: Readout::new(rook_engine::settings::frame_times(args.frame_times)),
             // Only the window plays sound: headless runs, `--bench`,
             // `--screenshot` and `--record-audio` never open a device.
-            audio: rook_audio::enabled_by_env().then(rook_audio::Output::new),
+            audio: rook_engine::settings::audio_device().map(|device| {
+                rook_audio::Output::new(device, rook_engine::settings::master_volume(args.volume))
+            }),
             #[cfg(feature = "repl")]
             repl: if args.no_repl {
                 None
@@ -145,7 +147,11 @@ impl ApplicationHandler for Launch {
         }
         if self.gfx.is_none() {
             let title = format!("{}  |  Loading...", self.title());
-            match Gfx::open(event_loop, &title, self.args.uncapped) {
+            match Gfx::open(
+                event_loop,
+                &title,
+                rook_engine::settings::uncapped(self.args.uncapped),
+            ) {
                 Ok(gfx) => self.gfx = Some(gfx),
                 Err(e) => no_renderer(event_loop, &e),
             }

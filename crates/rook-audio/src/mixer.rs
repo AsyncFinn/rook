@@ -103,6 +103,9 @@ pub struct Mixer<K> {
     /// laid out on the device's channels.
     scratch: Vec<Frame>,
     master: Vec<Frame>,
+    /// The player's master volume, 0 to 1, on everything heard
+    /// (`UserGameSettings.MasterVolume`).
+    master_volume: f32,
 }
 
 impl<K: Hash + Eq + Copy> Mixer<K> {
@@ -116,7 +119,13 @@ impl<K: Hash + Eq + Copy> Mixer<K> {
             graph: Runner::new(rate),
             scratch: Vec::new(),
             master: Vec::new(),
+            master_volume: 1.0,
         }
+    }
+
+    /// Scale everything heard by `volume` (0 to 1).
+    pub fn set_master_volume(&mut self, volume: f32) {
+        self.master_volume = volume.clamp(0.0, 1.0);
     }
 
     /// Voices still sounding (an ended one waits, silent, for the engine
@@ -232,13 +241,15 @@ impl<K: Hash + Eq + Copy> Mixer<K> {
             }
         }
         self.graph.render(&mut self.master);
+        let gain = self.master_volume;
         for (frame, m) in out.chunks_exact_mut(channels).zip(&self.master) {
             for (c, s) in frame.iter_mut().enumerate() {
-                *s = match (channels, c) {
-                    (1, _) => (m[0] + m[1]) / 2.0,
-                    (_, 1) => m[1],
-                    _ => m[0],
-                };
+                *s = gain
+                    * match (channels, c) {
+                        (1, _) => (m[0] + m[1]) / 2.0,
+                        (_, 1) => m[1],
+                        _ => m[0],
+                    };
             }
         }
     }

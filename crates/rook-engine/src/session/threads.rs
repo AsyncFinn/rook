@@ -9,8 +9,8 @@
 //! loading doesn't starve the frame; a strong one gets many, so it loads
 //! faster.
 //!
-//! `ROOK_THREADS=n` pretends the machine has `n` logical cores, to test
-//! how Rook behaves on a smaller (or bigger) one.
+//! The `threads` setting pretends the machine has `n` logical cores, to
+//! test how Rook behaves on a smaller (or bigger) one.
 
 use std::sync::Once;
 
@@ -32,13 +32,10 @@ pub struct Budget {
 }
 
 impl Budget {
-    /// This machine's budget: its logical cores, or `ROOK_THREADS`.
+    /// This machine's budget: its logical cores, or the `threads` setting.
     pub fn of_this_machine() -> Self {
-        let forced = std::env::var("ROOK_THREADS")
-            .ok()
-            .and_then(|n| n.trim().parse::<usize>().ok());
-        let cores =
-            forced.unwrap_or_else(|| std::thread::available_parallelism().map_or(2, usize::from));
+        let cores = crate::settings::threads()
+            .unwrap_or_else(|| std::thread::available_parallelism().map_or(2, usize::from));
         Self::for_cores(cores)
     }
 

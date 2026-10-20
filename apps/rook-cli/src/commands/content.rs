@@ -53,7 +53,7 @@ pub fn cache(command: CacheCommand) -> anyhow::Result<()> {
     let dir = config.cache_dir.ok_or_else(|| {
         anyhow::anyhow!(
             "no cache folder (set {})",
-            rook_content::resolver::cache::CACHE_VAR
+            rook_engine::settings::env::CACHE_FOLDER
         )
     })?;
     let cache = rook_content::resolver::cache::Cache::open(&dir)?;
@@ -82,7 +82,7 @@ pub fn cache(command: CacheCommand) -> anyhow::Result<()> {
     println!(
         "limit:  {:.0} MB ({})",
         mb(rook_engine::settings::cache_max()),
-        rook_content::resolver::cache::MAX_VAR
+        rook_engine::settings::env::CACHE_MAX_SIZE
     );
     Ok(())
 }
@@ -92,7 +92,7 @@ fn print_setup(r: &Resolver) {
         Some(i) => println!("Roblox install: {} ({:?})", i.root.display(), i.kind),
         None => println!(
             "Roblox install: none found (set {} to a version or content folder)",
-            rook_content::resolver::install::INSTALL_VAR
+            rook_engine::settings::env::ROBLOX_INSTALL
         ),
     }
     for folder in r.folders() {

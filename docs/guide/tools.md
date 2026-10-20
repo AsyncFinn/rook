@@ -36,20 +36,24 @@ rook-tools cache                                       # where downloads are cac
 rook-tools cache prune --older-than 30                 # delete what hasn't been used for 30 days
 ```
 
-Rook finds your Roblox install by itself. `settings.json` in the data folder (`%LOCALAPPDATA%\Rook`) holds the cache size, whether asset delivery is on, the install to use and the log level; these environment variables override it (for `rook-tools`, `rook-player` and headless runs alike), and command-line flags override both:
+Rook finds your Roblox install by itself. Every setting is in `settings.json` in the data folder (`%LOCALAPPDATA%\Rook`), written the first time Rook runs with each key at its default and a comment saying what it does. An environment variable overrides the file (for `rook-tools`, `rook-player` and headless runs alike), and a command-line flag overrides both:
 
-| Variable | Effect |
-|---|---|
-| `ROOK_ROBLOX_INSTALL` | A Roblox version folder or `content` folder to use instead, or `off` |
-| `ROOK_CONTENT_DIRS` | Extra folders laid out like `content` (content packages, local overrides) |
-| `ROOK_CONTENT_ORDER` | Provider order, default `defaults,install,folders,delivery` |
-| `ROOK_AUDIO` | `off` keeps `rook-player` silent (it never opens an audio device) |
-| `ROOK_ASSET_DELIVERY` | `on` or `off`. On by default in `rook-player` and `rook-tools content`, off in headless runs |
-| `ROOK_OPEN_CLOUD_API_KEY` | An Open Cloud key, tried for assets refused anonymously (needs the `legacy-asset:manage` scope) |
-| `ROOK_CACHE_DIR` | Where downloads are cached (default `%TEMP%\Rook\cache` on Windows, `~/Library/Caches/Rook` on macOS, `$XDG_CACHE_HOME/rook` elsewhere) |
-| `ROOK_CACHE_MAX` | The cache's size limit (`2GB` by default; `500MB`, `5GB`, ...). Rook drops what was used least recently when it starts |
-| `ROOK_DATA_DIR` | Where settings, logs, crash reports and kept content live (default `%LOCALAPPDATA%\Rook` on Windows) |
-| `ROOK_LOG` | What the terminal shows: a level (`debug`) or subsystems (`content,terrain`), like `--verbose` |
+| Key | Environment variable | Flag | Default | What it does |
+|---|---|---|---|---|
+| `contentOrder` | `ROOK_CONTENT_ORDER` (comma-separated) | | `defaults, install, folders, delivery` | Where content comes from, in order |
+| `contentFolders` | `ROOK_CONTENT_DIRS` (separated like `PATH`) | | none | Folders laid out like the install's `content` (content packages, local overrides) |
+| `assetDelivery` | `ROOK_ASSET_DELIVERY` (`on`/`off`) | `rook-tools content --offline` | on in `rook-player` and `rook-tools content`, off in headless runs | Whether asset delivery may use the network |
+| `robloxInstall` | `ROOK_ROBLOX_INSTALL` | | the newest install found | A Roblox version or `content` folder to use instead, or `"off"` |
+| `cacheFolder` | `ROOK_CACHE_DIR` | | `%TEMP%\Rook\cache` on Windows, `~/Library/Caches/Rook` on macOS, `$XDG_CACHE_HOME/rook` elsewhere | Where downloads are cached |
+| `cacheMaxSize` | `ROOK_CACHE_MAX` | | `2GB` | The cache's size limit (`500MB`, `5GB`, ...); Rook drops what was used least recently |
+| `openCloudKeyFile` | `ROOK_OPEN_CLOUD_API_KEY` (the key itself) | | none | A file holding an Open Cloud key, tried for assets refused anonymously (needs the `legacy-asset:manage` scope). The key never goes in `settings.json` |
+| `threads` | `ROOK_THREADS` | | the machine's logical cores | The cores Rook plans background threads for |
+| `audioDevice` | `ROOK_AUDIO` | | `default` | `default`, `off` (`rook-player` never opens a device), or an output device's name |
+| `masterVolume` | | `--volume` | `1` | Everything heard, 0 to 1, like Roblox's in-game volume |
+| `uncapped` | | `--uncapped` | `false` | Draw as fast as possible instead of at the display's rate |
+| `frameTimes` | | `--frame-times` | `false` | Print frame times to the terminal |
+| `logLevel` | `ROOK_LOG` (a level or subsystems) | `--verbose` | `info` | What the terminal shows: `error`, `warn`, `info`, `debug`, `trace` |
+| | `ROOK_DATA_DIR` | | `%LOCALAPPDATA%\Rook` on Windows | Where settings, logs, crash reports and kept content live (so it can't be in `settings.json`) |
 
 ## Logs and failures
 

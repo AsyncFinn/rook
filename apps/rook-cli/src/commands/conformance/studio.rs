@@ -25,8 +25,9 @@ pub struct Studio {
 impl Studio {
     /// Start the MCP launcher and wait for a Studio window to attach.
     pub fn connect() -> anyhow::Result<Self> {
-        let local = std::env::var("LOCALAPPDATA").context("LOCALAPPDATA is not set")?;
-        let launcher = std::path::Path::new(&local).join("Roblox").join("mcp.bat");
+        let local =
+            rook_engine::data_folder::local_app_data().context("LOCALAPPDATA is not set")?;
+        let launcher = local.join("Roblox").join("mcp.bat");
         anyhow::ensure!(
             launcher.is_file(),
             "{} not found; enable Studio's MCP server in Assistant > Manage MCP Servers",

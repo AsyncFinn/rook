@@ -32,7 +32,7 @@ fn scripts_redraw_effects() {
     let mut dm = DataModel::load_place(PLACE.as_bytes(), &Options::default()).unwrap();
     dm.start();
     dm.take_render_changes();
-    let content = Arc::new(Resolver::new(rook_content::Config::from_env(false)));
+    let content = Arc::new(Resolver::new(rook_engine::settings::content_config(false)));
     let mut cache = SceneCache::new(&dm.runtime().world().dom, content, Vec3::ZERO);
     // Fire's two emitters, then Smoke's, then the ParticleEmitter's.
     let e = &cache.scene.emitters;

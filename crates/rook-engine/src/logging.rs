@@ -28,10 +28,6 @@ pub use files::{cleanup, newest_log};
 
 use crate::data_folder::DataDir;
 
-/// The environment variable that sets what the terminal shows: a level
-/// (`debug`) or subsystems (`content,terrain`), like `--verbose`.
-pub const LOG_VAR: &str = "ROOK_LOG";
-
 /// The areas `--verbose <subsystem>` names: each is its crate's events
 /// (`rook_content::...`) and events logged with it as their target.
 pub const SUBSYSTEMS: &[&str] = &[
@@ -178,10 +174,13 @@ pub fn init(options: Options) {
         level
     });
     let base = file_level.unwrap_or(Level::INFO);
-    let env = std::env::var(LOG_VAR).ok().and_then(|v| {
+    let env = std::env::var(crate::settings::env::LOG).ok().and_then(|v| {
         let filter = Filter::parse(&v, base);
         if filter.is_none() {
-            problems.push(format!("{LOG_VAR}={v:?}: not a level or subsystem"));
+            problems.push(format!(
+                "{}={v:?}: not a level or subsystem",
+                crate::settings::env::LOG
+            ));
         }
         filter
     });

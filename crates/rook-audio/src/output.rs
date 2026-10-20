@@ -5,10 +5,12 @@ use std::sync::{Arc, Mutex};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
-use crate::{Mix, Mixer};
+use crate::{Device, Mix, Mixer};
 
-/// The system's default output device, fed by a [`Mixer`].
+/// An output device, fed by a [`Mixer`].
 pub struct Output<K> {
+    device: Device,
+    master_volume: f32,
     mixer: Option<Arc<Mutex<Mixer<K>>>>,
     /// Kept alive while the game runs; dropping it closes the device.
     stream: Option<cpal::Stream>,
@@ -26,17 +28,13 @@ impl<K> std::fmt::Debug for Output<K> {
     }
 }
 
-impl<K: Hash + Eq + Copy + Send + 'static> Default for Output<K> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl<K: Hash + Eq + Copy + Send + 'static> Output<K> {
-    /// No device yet: it opens on the first [`sync`](Self::sync) with
-    /// something to hear.
-    pub fn new() -> Self {
+    /// No device yet: `device` opens on the first [`sync`](Self::sync)
+    /// with something to hear, at `master_volume` (0 to 1).
+    pub fn new(device: Device, master_volume: f32) -> Self {
         Self {
+            device,
+            master_volume,
             mixer: None,
             stream: None,
             failed: false,
@@ -63,14 +61,22 @@ impl<K: Hash + Eq + Copy + Send + 'static> Output<K> {
     }
 
     fn open(&mut self) -> Result<(), String> {
-        let device = cpal::default_host()
-            .default_output_device()
-            .ok_or("no output device")?;
+        let host = cpal::default_host();
+        let device = match &self.device {
+            Device::Default => host.default_output_device().ok_or("no output device")?,
+            Device::Named(name) => host
+                .output_devices()
+                .map_err(|e| e.to_string())?
+                .find(|d| d.name().is_ok_and(|n| n == *name))
+                .ok_or_else(|| format!("no output device named {name:?}"))?,
+        };
         let supported = device.default_output_config().map_err(|e| e.to_string())?;
         let format = supported.sample_format();
         let config: cpal::StreamConfig = supported.into();
         let channels = usize::from(config.channels);
-        let mixer = Arc::new(Mutex::new(Mixer::new(config.sample_rate.0)));
+        let mut mixer = Mixer::new(config.sample_rate.0);
+        mixer.set_master_volume(self.master_volume);
+        let mixer = Arc::new(Mutex::new(mixer));
         let error = |e: cpal::StreamError| eprintln!("Audio output error: {e}");
         let stream = match format {
             cpal::SampleFormat::F32 => {

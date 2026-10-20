@@ -255,7 +255,10 @@ mod tests {
     /// studs each way).
     #[test]
     fn reads_the_installed_head_mesh() {
-        let Some(install) = crate::resolver::install::newest() else {
+        let Some(install) = crate::resolver::install::newest_from(
+            None,
+            &crate::resolver::install::Places::from_env(|n| std::env::var_os(n)),
+        ) else {
             eprintln!("skipped: no Roblox install found");
             return;
         };
