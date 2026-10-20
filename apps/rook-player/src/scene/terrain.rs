@@ -287,9 +287,7 @@ impl SceneCache {
         let water =
             color(dom, terrain, "WaterColor").unwrap_or([12.0 / 255.0, 84.0 / 255.0, 92.0 / 255.0]);
         let water_transparency = number(dom, terrain, "WaterTransparency").unwrap_or(0.3);
-        // Most of Studio's water colour is the sky it reflects: the shader
-        // mixes towards the sky's colour by `WaterReflectance`, half of it
-        // looking down (Approximation).
+        // The shader mixes towards the skybox by `WaterReflectance`.
         let water_reflectance = number(dom, terrain, "WaterReflectance").unwrap_or(1.0);
         let surfaces = self.terrain.surfaces.clone();
         let mut looks: HashMap<Layer, (MaterialMaps, [f32; 3])> = HashMap::new();
@@ -303,7 +301,10 @@ impl SceneCache {
             part.material_set = set;
             if material == TerrainMaterial::Water {
                 part.color = water;
-                part.transparency = water_transparency;
+                // Studio still draws water at WaterTransparency 1, letting
+                // through only a fifth of what's behind it (the shader's
+                // `WATER_PASSES`), where a part would be gone.
+                part.transparency = water_transparency.clamp(0.0, 0.999);
                 part.reflectance = water_reflectance.clamp(0.0, 1.0);
                 part.cast_shadow = false;
             } else {

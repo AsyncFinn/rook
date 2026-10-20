@@ -8,6 +8,7 @@
 // normal, roughness (green) and metalness (red) maps.
 
 import package::common::{g, image_sampler, Taps, turned};
+import package::tone::srgb_to_linear;
 
 @if(image_table) enable wgpu_binding_array;
 
@@ -150,4 +151,45 @@ fn sky_size(face: u32) -> vec2<u32> {
 @else
 fn sky_size(face: u32) -> vec2<u32> {
     return textureDimensions(image);
+}
+
+// Where direction `d` falls on skybox image `face` (`Globals::sky_faces`),
+// half a texel off its edges, as the images don't repeat.
+fn sky_uv(face: u32, d: vec3<f32>) -> vec2<f32> {
+    let dir = g.sky_faces[face * 3u].xyz;
+    let right = g.sky_faces[face * 3u + 1u].xyz;
+    let up = g.sky_faces[face * 3u + 2u].xyz;
+    let on_face = d / max(dot(d, dir), 1e-6);
+    let uv = vec2(0.5 + 0.5 * dot(on_face, right), 0.5 - 0.5 * dot(on_face, up));
+    let half_texel = 0.5 / vec2<f32>(sky_size(face));
+    return clamp(uv, half_texel, vec2(1.0) - half_texel);
+}
+
+// The sky's linear light towards `d`: the skybox image facing nearest it,
+// a mip down (reflections pick their face per pixel, so there are no
+// derivatives to pick one), or the sky's colour from the horizon to
+// overhead before its images are up and without the image table.
+@if(image_table)
+fn sky_toward(d: vec3<f32>) -> vec3<f32> {
+    var face = 0u;
+    var along = -2.0;
+    for (var f = 0u; f < 6u; f++) {
+        let a = dot(d, g.sky_faces[f * 3u].xyz);
+        if a > along {
+            along = a;
+            face = f;
+        }
+    }
+    if sky_slot(face) == 0u {
+        return plain_sky_toward(d);
+    }
+    return textureSampleLevel(images_srgb[sky_slot(face)], image_sampler, sky_uv(face, d), 1.0).rgb;
+}
+@else
+fn sky_toward(d: vec3<f32>) -> vec3<f32> {
+    return plain_sky_toward(d);
+}
+
+fn plain_sky_toward(d: vec3<f32>) -> vec3<f32> {
+    return srgb_to_linear(mix(g.sky_horizon.rgb, g.sky_top.rgb, clamp(d.y, 0.0, 1.0)));
 }
