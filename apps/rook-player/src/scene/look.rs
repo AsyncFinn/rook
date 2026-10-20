@@ -97,9 +97,7 @@ impl SceneCache {
         id: InstanceId,
         pose: &mut Pose,
     ) -> Option<(PartInstance, Decals)> {
-        let Value::CFrame(cf) = dom.property_by_name(id, "CFrame")? else {
-            return None;
-        };
+        let cf = dom.cframe_property(id, "CFrame")?;
         self.near = cf.position;
         let size = dom.vector3_property(id, "Size")?;
         let own = part_shape(dom, id);
@@ -144,31 +142,7 @@ impl SceneCache {
             (out, Decals::Faces)
         };
         if class == "MeshPart" {
-            // Its own mesh file, scaled by Size / InitialSize; with an empty
-            // MeshId, its Size box (observed).
-            let url = mesh_id(dom, id);
-            if url.is_empty() {
-                self.settle(id, id, Settled::Empty);
-                return Some((out, Decals::Faces));
-            }
-            let initial = dom
-                .vector3_property(id, "InitialSize")
-                .unwrap_or(Vec3::ZERO);
-            let scale = mesh_part_scale(size, initial);
-            match self.file(id, id, &url) {
-                FileDraw::Mesh(hash) => {
-                    out.shape = DrawShape::File(hash);
-                    out.size = scale;
-                    self.mesh_texture(dom, id, id, &mut out, [1.0; 3]);
-                }
-                FileDraw::Empty => {}
-                FileDraw::Nothing => {
-                    out.transparency = 1.0;
-                    return Some((out, Decals::None));
-                }
-            }
-            // Decals on a MeshPart are projected onto its faces (observed).
-            return Some((out, Decals::Faces));
+            return Some(self.mesh_part(dom, id, size, out));
         }
         let Some((kind, mesh, url)) = part_mesh(dom, id) else {
             if is_union(dom, id) {
@@ -178,9 +152,7 @@ impl SceneCache {
             return Some(own(out, pose));
         };
         let scale = dom.vector3_property(mesh, "Scale").unwrap_or(Vec3::ONE);
-        let host = if class == "MeshPart" {
-            MeshHost::MeshPart
-        } else if is_union(dom, id) {
+        let host = if is_union(dom, id) {
             MeshHost::Union
         } else {
             MeshHost::Part
@@ -256,6 +228,41 @@ impl SceneCache {
             Decals::Faces
         };
         Some((out, decals))
+    }
+
+    /// What a MeshPart draws.
+    fn mesh_part(
+        &mut self,
+        dom: &Dom,
+        id: InstanceId,
+        size: Vec3,
+        mut out: PartInstance,
+    ) -> (PartInstance, Decals) {
+        // Its own mesh file, scaled by Size / InitialSize; with an empty
+        // MeshId, its Size box (observed).
+        let url = mesh_id(dom, id);
+        if url.is_empty() {
+            self.settle(id, id, Settled::Empty);
+            return (out, Decals::Faces);
+        }
+        let initial = dom
+            .vector3_property(id, "InitialSize")
+            .unwrap_or(Vec3::ZERO);
+        let scale = mesh_part_scale(size, initial);
+        match self.file(id, id, &url) {
+            FileDraw::Mesh(hash) => {
+                out.shape = DrawShape::File(hash);
+                out.size = scale;
+                self.mesh_texture(dom, id, id, &mut out, [1.0; 3]);
+            }
+            FileDraw::Empty => {}
+            FileDraw::Nothing => {
+                out.transparency = 1.0;
+                return (out, Decals::None);
+            }
+        }
+        // Decals on a MeshPart are projected onto its faces (observed).
+        (out, Decals::Faces)
     }
 
     /// A mesh's texture (`TextureId` of `mesh`, a MeshPart's `TextureID`),
