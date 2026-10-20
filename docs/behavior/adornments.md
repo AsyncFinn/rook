@@ -21,8 +21,8 @@ SelectionBox is saved in 676 corpus files and made by scripts in 749.
 - **Depth**: parts in front hide it (it isn't drawn on top).
 - `Visible` off hides it.
 
-Rook draws it as unlit boxes with the part (`apps/rook-player/src/scene/
-adornments.rs`): twelve bars and a fill box 0.02 studs outside the
+Rook draws it as unlit boxes with the part
+(`apps/rook-player/src/scene/adornments/selection_box.rs`): twelve bars and a fill box 0.02 studs outside the
 part's faces, so the two don't flicker. The X bars cover the corners and
 the others stop at them, so a see-through box doesn't darken its corners
 (Inference: not checked in Studio). The same scene in `rook-player
