@@ -51,7 +51,7 @@ pub(super) fn method_function(
             if inert {
                 with_world(lua, |w| w.count_inert(format!("{owner}.{resolved}")));
             }
-            raw(lua, this, args)
+            raw(lua, this, &args)
         })?,
         None => api_fn(lua, move |lua, args| {
             let (this, _) = Args::method(args, name)?;

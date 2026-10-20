@@ -55,7 +55,7 @@ struct Drawn {
 
 /// What [`SceneCache::apply`] changed in the scene.
 #[derive(Debug, PartialEq, Eq)]
-pub enum SceneChange {
+pub(crate) enum SceneChange {
     None,
     /// These entries (indices into `scene.parts`, which may have grown),
     /// and maybe the lighting.
@@ -72,7 +72,7 @@ pub enum SceneChange {
 /// parts scripts changed are rebuilt. Each drawn part is an entry in
 /// `scene.parts`, and so is each of its Decals and Textures.
 #[derive(Debug)]
-pub struct SceneCache {
+pub(crate) struct SceneCache {
     pub scene: Scene,
     /// Where each drawn part is in `scene.parts`.
     index: HashMap<InstanceId, usize>,
@@ -123,7 +123,7 @@ pub struct SceneCache {
 impl SceneCache {
     /// Mesh files and images resolve through `content`, those nearest
     /// `camera` first.
-    pub fn new(dom: &Dom, content: Arc<Resolver>, camera: Vec3) -> Self {
+    pub(crate) fn new(dom: &Dom, content: Arc<Resolver>, camera: Vec3) -> Self {
         let mut scene = Scene::default();
         let textures = EffectTextures::load(&content, &mut scene.images);
         let mut cache = Self {
@@ -157,7 +157,7 @@ impl SceneCache {
     }
 
     /// Rebuild everything (parts added, removed or moved).
-    pub fn rebuild(&mut self, dom: &Dom) {
+    pub(crate) fn rebuild(&mut self, dom: &Dom) {
         profiling::scope!("SceneCache::rebuild");
         self.scene.parts.clear();
         self.poses.clear();
@@ -189,7 +189,7 @@ impl SceneCache {
     }
 
     /// Apply a frame's changes.
-    pub fn apply(&mut self, dom: &Dom, changes: &RenderChanges) -> SceneChange {
+    pub(crate) fn apply(&mut self, dom: &Dom, changes: &RenderChanges) -> SceneChange {
         profiling::scope!("SceneCache::apply");
         self.effects.note_calls(&changes.effect_calls);
         if changes.full {
@@ -336,7 +336,7 @@ impl SceneCache {
 
     /// Apply scripts' effect calls (`Emit` and the like) made before this
     /// scene was built from the DataModel. Whether any effect changed.
-    pub fn take_effect_calls(
+    pub(crate) fn take_effect_calls(
         &mut self,
         dom: &Dom,
         calls: &[(InstanceId, rook_lua::EffectCall)],
@@ -348,7 +348,7 @@ impl SceneCache {
 
     /// Whether the lighting or an effect changed outside
     /// [`SceneCache::apply`] (an image they wait for arrived).
-    pub fn take_lighting_change(&mut self) -> bool {
+    pub(crate) fn take_lighting_change(&mut self) -> bool {
         std::mem::take(&mut self.lighting_changed) | std::mem::take(&mut self.effects_loaded)
     }
 
@@ -381,7 +381,7 @@ impl SceneCache {
 }
 
 /// The camera the place was saved with, or a view of the origin.
-pub fn initial_camera(dm: &DataModel) -> Camera {
+pub(crate) fn initial_camera(dm: &DataModel) -> Camera {
     let world = dm.runtime().world();
     let dom = &world.dom;
     let saved = dm.current_camera().and_then(|cam| {

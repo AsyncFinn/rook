@@ -5,7 +5,7 @@
 /// The shape of a content URL: digit runs become `#`, `rbxasset://` paths
 /// keep their first folder and extension, query values are masked and
 /// keys keep their case. `(empty)` for an empty value.
-pub fn shape(url: &str) -> String {
+pub(super) fn shape(url: &str) -> String {
     let t = url.trim();
     if t.is_empty() {
         return if url.is_empty() {
@@ -101,7 +101,7 @@ fn truncate(s: &str, n: usize) -> String {
 /// `scheme://...` with a content scheme, or an http(s) URL on a roblox.com
 /// host, up to the closing quote. A URL a script builds by concatenation
 /// (`"...?id=" .. id`) ends at its quote, so its id is empty.
-pub fn urls_in_source(source: &str) -> impl Iterator<Item = &str> {
+pub(super) fn urls_in_source(source: &str) -> impl Iterator<Item = &str> {
     source.match_indices("://").filter_map(move |(at, _)| {
         let bytes = source.as_bytes();
         let start = bytes[..at]
@@ -132,7 +132,7 @@ pub fn urls_in_source(source: &str) -> impl Iterator<Item = &str> {
 /// asset` (an old path that stands for an asset), `rbxasset: outside
 /// content` (`../` paths), `rbxasset: missing`, or `no content`. The
 /// second value is the path of a missing `rbxasset://` file, lowercased.
-pub fn classify(url: &str) -> (&'static str, Option<String>) {
+pub(super) fn classify(url: &str) -> (&'static str, Option<String>) {
     use rook_content::ContentRef;
     use rook_content::resolver::defaults;
     use std::collections::HashMap;
@@ -184,7 +184,10 @@ pub fn classify(url: &str) -> (&'static str, Option<String>) {
 /// saved `InitialSize` (what scripts read as `MeshSize`) and its
 /// `CollisionFidelity`; and the class of the part a mesh is under when that
 /// isn't a plain part.
-pub fn mesh_kinds(dom: &rbx_dom_weak::WeakDom, inst: &rbx_dom_weak::Instance) -> Vec<String> {
+pub(super) fn mesh_kinds(
+    dom: &rbx_dom_weak::WeakDom,
+    inst: &rbx_dom_weak::Instance,
+) -> Vec<String> {
     use rbx_types::Variant;
     let class = inst.class.as_str();
     let prop = |name: &str| inst.properties.get(&name.into());
@@ -245,7 +248,7 @@ pub fn mesh_kinds(dom: &rbx_dom_weak::WeakDom, inst: &rbx_dom_weak::Instance) ->
 /// transparency and `ZIndex`, a Texture's tiling, and whether its part is
 /// invisible; a mesh's `VertexColor` and `TextureId`, and MeshPart
 /// `TextureID`.
-pub fn looks(dom: &rbx_dom_weak::WeakDom, inst: &rbx_dom_weak::Instance) -> Vec<String> {
+pub(super) fn looks(dom: &rbx_dom_weak::WeakDom, inst: &rbx_dom_weak::Instance) -> Vec<String> {
     use rbx_types::Variant;
     let db = rook_reflection::database();
     let item = |enum_name: &str, value: u32| {

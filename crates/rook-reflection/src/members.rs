@@ -341,7 +341,7 @@ mod dump {
 
     #[derive(Deserialize)]
     #[serde(rename_all = "PascalCase")]
-    pub struct Root {
+    pub(super) struct Root {
         pub classes: Vec<Class>,
         #[serde(default)]
         pub enums: Vec<Enum>,
@@ -349,14 +349,14 @@ mod dump {
 
     #[derive(Deserialize)]
     #[serde(rename_all = "PascalCase")]
-    pub struct Enum {
+    pub(super) struct Enum {
         pub name: String,
         pub items: Vec<EnumItem>,
     }
 
     #[derive(Deserialize)]
     #[serde(rename_all = "PascalCase")]
-    pub struct EnumItem {
+    pub(super) struct EnumItem {
         pub name: String,
         #[serde(default)]
         pub legacy_names: Vec<String>,
@@ -364,14 +364,14 @@ mod dump {
 
     #[derive(Deserialize)]
     #[serde(rename_all = "PascalCase")]
-    pub struct Class {
+    pub(super) struct Class {
         pub name: String,
         pub members: Vec<Member>,
     }
 
     #[derive(Deserialize)]
     #[serde(rename_all = "PascalCase")]
-    pub struct Member {
+    pub(super) struct Member {
         pub member_type: String,
         pub name: String,
         #[serde(default)]
@@ -422,7 +422,7 @@ mod dump {
     }
 
     impl Member {
-        pub fn params(&self) -> Result<Vec<Param>, GenerateError> {
+        pub(super) fn params(&self) -> Result<Vec<Param>, GenerateError> {
             self.parameters
                 .iter()
                 .map(|p| {
@@ -435,7 +435,7 @@ mod dump {
                 .collect()
         }
 
-        pub fn returns(&self) -> Result<Vec<TypeRef>, GenerateError> {
+        pub(super) fn returns(&self) -> Result<Vec<TypeRef>, GenerateError> {
             let types: Vec<DumpType> = match &self.return_type {
                 None => Vec::new(),
                 Some(v @ serde_json::Value::Array(_)) => serde_json::from_value(v.clone())?,
@@ -444,7 +444,7 @@ mod dump {
             types.iter().map(DumpType::convert).collect()
         }
 
-        pub fn member_security(&self) -> Result<Security, GenerateError> {
+        pub(super) fn member_security(&self) -> Result<Security, GenerateError> {
             match &self.security {
                 serde_json::Value::String(s) => security(s),
                 other => Err(GenerateError::Shape(format!("member security {other}"))),
@@ -452,7 +452,7 @@ mod dump {
         }
 
         /// `Some([read, write])` when either is restricted.
-        pub fn property_security(&self) -> Result<Option<[Security; 2]>, GenerateError> {
+        pub(super) fn property_security(&self) -> Result<Option<[Security; 2]>, GenerateError> {
             let get = |key: &str| match self.security.get(key) {
                 Some(serde_json::Value::String(s)) => security(s),
                 _ => Err(GenerateError::Shape(format!(
@@ -465,14 +465,14 @@ mod dump {
         }
 
         /// String tags Rook cares about; others (replication, threading) are dropped.
-        pub fn tags(&self) -> Vec<Tag> {
+        pub(super) fn tags(&self) -> Vec<Tag> {
             self.tags
                 .iter()
                 .filter_map(|t| serde_json::from_value(t.clone()).ok())
                 .collect()
         }
 
-        pub fn preferred(&self) -> Option<String> {
+        pub(super) fn preferred(&self) -> Option<String> {
             self.tags.iter().find_map(|t| {
                 t.get("PreferredDescriptorName")
                     .and_then(|v| v.as_str())

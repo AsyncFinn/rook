@@ -39,7 +39,7 @@ pub(crate) use lookup::{MemberTable, get_member, runtime_properties};
 /// A script's handle to an instance. There is one userdata per instance,
 /// so `==`, `rawequal` and table keys behave as on Roblox.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct LuaInstance(pub InstanceId);
+pub(crate) struct LuaInstance(pub InstanceId);
 
 impl UserData for LuaInstance {
     fn add_fields<F: UserDataFields<Self>>(f: &mut F) {

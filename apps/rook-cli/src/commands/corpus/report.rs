@@ -5,7 +5,11 @@ use std::time::Duration;
 
 use super::{Aggregate, FileRecord, Status, UsageMap};
 
-pub fn summary_markdown(agg: &Aggregate, records: &[FileRecord], elapsed: Duration) -> String {
+pub(super) fn summary_markdown(
+    agg: &Aggregate,
+    records: &[FileRecord],
+    elapsed: Duration,
+) -> String {
     let mut md = String::new();
     overview(&mut md, agg, elapsed);
     legacy_upgrades(&mut md, agg);

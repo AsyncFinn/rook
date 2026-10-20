@@ -2,19 +2,19 @@
 
 use super::*;
 
-pub(super) fn bindable_fire(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
-    let args = a.into_vec();
+pub(super) fn bindable_fire(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
+    let args = a.rest(0);
     fire(lua, &SignalKey::event(this, "Event"), args);
     Outcome::ret(lua, ())
 }
 
-pub(super) fn bindable_invoke(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
+pub(super) fn bindable_invoke(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let callback = get_callback(lua, this, "OnInvoke")?.ok_or_else(|| {
         // Roblox waits for a callback to be set; Rook reports it instead
         // until callback queues exist.
         ScriptError("BindableFunction:Invoke has no OnInvoke callback".into())
     })?;
-    Ok(Outcome::Call(callback, MultiValue::from_vec(a.into_vec())))
+    Ok(Outcome::Call(callback, MultiValue::from_vec(a.rest(0))))
 }
 
 fn callbacks_table(lua: &Lua) -> mlua::Result<mlua::Table> {

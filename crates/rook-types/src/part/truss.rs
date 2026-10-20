@@ -15,7 +15,7 @@ use crate::NormalId;
 
 /// The largest length a truss keeps (observed: setting 3000 or 600 on any
 /// axis read back 512).
-pub const TRUSS_MAX_LENGTH: f32 = 512.0;
+pub(crate) const TRUSS_MAX_LENGTH: f32 = 512.0;
 
 /// The smallest any axis of a part can be (observed: a truss given -4
 /// read back 0.001).

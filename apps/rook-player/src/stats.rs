@@ -6,40 +6,40 @@ use std::time::Duration;
 
 /// A 60 Hz frame's budget, rounded up as the readout states it, so a
 /// frame paced by a 60 Hz display isn't counted for timing jitter alone.
-pub const BUDGET: Duration = Duration::from_micros(16_700);
+pub(crate) const BUDGET: Duration = Duration::from_micros(16_700);
 
 /// Durations collected over a run or a window of time.
 #[derive(Debug, Default, Clone)]
-pub struct Times {
+pub(crate) struct Times {
     samples: Vec<Duration>,
 }
 
 impl Times {
-    pub fn push(&mut self, d: Duration) {
+    pub(crate) fn push(&mut self, d: Duration) {
         self.samples.push(d);
     }
 
-    pub fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.samples.clear();
     }
 
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.samples.is_empty()
     }
 
-    pub fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.samples.len()
     }
 
     /// The samples from index `start` on.
-    pub fn since(&self, start: usize) -> Times {
+    pub(crate) fn since(&self, start: usize) -> Times {
         Times {
             samples: self.samples.get(start..).unwrap_or_default().to_vec(),
         }
     }
 
     /// The samples before index `end`.
-    pub fn until(&self, end: usize) -> Times {
+    pub(crate) fn until(&self, end: usize) -> Times {
         Times {
             samples: self.samples[..end.min(self.samples.len())].to_vec(),
         }
@@ -47,7 +47,7 @@ impl Times {
 
     /// Sample by sample, these times plus `other`'s (a lockstep step's
     /// server and client parts); samples only one side has count alone.
-    pub fn sum_with(&self, other: &Times) -> Times {
+    pub(crate) fn sum_with(&self, other: &Times) -> Times {
         let (long, short) = if self.samples.len() >= other.samples.len() {
             (self, other)
         } else {
@@ -60,7 +60,7 @@ impl Times {
         Times { samples }
     }
 
-    pub fn summary(&self) -> Summary {
+    pub(crate) fn summary(&self) -> Summary {
         let mut sorted = self.samples.clone();
         sorted.sort_unstable();
         let count = sorted.len();
@@ -83,7 +83,7 @@ impl Times {
 }
 
 #[derive(Debug, Default, Clone, Copy)]
-pub struct Summary {
+pub(crate) struct Summary {
     pub count: usize,
     pub total: Duration,
     pub median: Duration,
@@ -96,7 +96,7 @@ pub struct Summary {
 
 impl Summary {
     /// Frames per second, if the samples are back-to-back frames.
-    pub fn fps(&self) -> f64 {
+    pub(crate) fn fps(&self) -> f64 {
         if self.total.is_zero() {
             return 0.0;
         }

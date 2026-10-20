@@ -15,7 +15,7 @@ fn packs() -> BTreeSet<u64> {
         .collect()
 }
 
-pub fn pin(out: &Path) -> anyhow::Result<()> {
+pub(crate) fn pin(out: &Path) -> anyhow::Result<()> {
     let delivery = Delivery::new(None);
     let mut lines = vec![
         "# Content Rook keeps for good: built-in materials' and terrain's".to_owned(),

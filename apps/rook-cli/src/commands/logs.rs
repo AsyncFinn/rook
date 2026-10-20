@@ -2,7 +2,7 @@
 
 use rook_engine::data_folder::DataDir;
 
-pub fn run(open: bool) -> anyhow::Result<()> {
+pub(crate) fn run(open: bool) -> anyhow::Result<()> {
     let data = DataDir::locate().ok_or_else(|| anyhow::anyhow!("no data folder"))?;
     if open {
         std::fs::create_dir_all(&data.logs)?;

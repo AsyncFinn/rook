@@ -24,7 +24,7 @@ enum Mode {
     Run(Box<ServerHost>),
 }
 
-pub struct Game {
+pub(crate) struct Game {
     mode: Mode,
     /// The camera the place was saved with.
     pub saved_camera: Camera,
@@ -39,7 +39,7 @@ pub struct Game {
 
 /// A place on its way to being a [`Game`], for a window that keeps
 /// drawing while it loads: [`Loading::poll`] it once a frame.
-pub struct Loading {
+pub(crate) struct Loading {
     stage: Stage,
     finish: Finish,
 }
@@ -60,7 +60,7 @@ struct Finish {
 
 impl Loading {
     /// Start loading a place (see [`Game::load`]).
-    pub fn begin(
+    pub(crate) fn begin(
         path: &Path,
         play: bool,
         content: Arc<rook_content::Resolver>,
@@ -92,7 +92,7 @@ impl Loading {
 
     /// The game, once the place has loaded. Joining the client (Play) or
     /// loading the place (Run) happens in the poll that returns it.
-    pub fn poll(&mut self) -> Option<anyhow::Result<Game>> {
+    pub(crate) fn poll(&mut self) -> Option<anyhow::Result<Game>> {
         match &mut self.stage {
             Stage::Server(starting) => {
                 let started = starting.poll()?;
@@ -150,7 +150,7 @@ impl Game {
     /// place starts. Sounds load in the background while the game runs, as
     /// in Roblox, unless `wait_for_sounds` holds each frame until they
     /// have.
-    pub fn load(
+    pub(crate) fn load(
         path: &Path,
         play: bool,
         content: Arc<rook_content::Resolver>,
@@ -164,14 +164,14 @@ impl Game {
         }
     }
     /// The DataModel the window shows.
-    pub fn view(&self) -> &DataModel {
+    pub(crate) fn view(&self) -> &DataModel {
         match &self.mode {
             Mode::Play { client, .. } => client.client(),
             Mode::Run(host) => host.server(),
         }
     }
 
-    pub fn view_mut(&mut self) -> &mut DataModel {
+    pub(crate) fn view_mut(&mut self) -> &mut DataModel {
         match &mut self.mode {
             Mode::Play { client, .. } => client.client_mut(),
             Mode::Run(host) => host.server_mut(),
@@ -181,7 +181,7 @@ impl Game {
     /// What the window's DataModel is playing, for the mixer: its sounds,
     /// their SoundGroups, `SoundService.AmbientReverb` and the audio API's
     /// graph.
-    pub fn sounds(&self) -> rook_audio::Mix<rook_dom::InstanceId> {
+    pub(crate) fn sounds(&self) -> rook_audio::Mix<rook_dom::InstanceId> {
         use rook_audio::spatial::{attenuation, pan};
         let view = self.view();
         let listener = view.sound_listener();
@@ -229,7 +229,7 @@ impl Game {
     }
 
     /// Send window input to the local player's client (Run mode has no player).
-    pub fn input(&mut self, event: InputEvent) {
+    pub(crate) fn input(&mut self, event: InputEvent) {
         if let Mode::Play { server, client } = &mut self.mode {
             for msg in client.input(event) {
                 server.deliver(msg);
@@ -237,14 +237,14 @@ impl Game {
         }
     }
 
-    pub fn set_viewport(&mut self, width: u32, height: u32) {
+    pub(crate) fn set_viewport(&mut self, width: u32, height: u32) {
         self.view_mut().set_viewport(width, height);
     }
 
     /// One frame of the whole game in lockstep: the server steps, its
     /// changes reach the client, then the client steps. Results are the
     /// same every run.
-    pub fn step(&mut self) {
+    pub(crate) fn step(&mut self) {
         match &mut self.mode {
             Mode::Play { server, client } => {
                 let frame = server.step();
@@ -270,7 +270,7 @@ impl Game {
     }
 
     /// Let the server keep its own 60 Hz pace (Play mode), for live play.
-    pub fn free_run(&mut self) {
+    pub(crate) fn free_run(&mut self) {
         if let Mode::Play { server, .. } = &self.mode {
             server.run(true);
         }
@@ -278,7 +278,7 @@ impl Game {
 
     /// Live play: apply what the running server sent, then step the client
     /// `steps` times. In Run mode the server steps here.
-    pub fn advance(&mut self, steps: u32) {
+    pub(crate) fn advance(&mut self, steps: u32) {
         match &mut self.mode {
             Mode::Play { server, client } => {
                 let start = std::time::Instant::now();
@@ -310,7 +310,7 @@ impl Game {
         }
     }
 
-    pub fn run_for(&mut self, seconds: f64) {
+    pub(crate) fn run_for(&mut self, seconds: f64) {
         let target = self.view().now() + seconds;
         while self.view().now() + 1e-9 < target {
             self.step();
@@ -318,7 +318,7 @@ impl Game {
     }
 
     /// Run a command-bar entry on the server or the client.
-    pub fn repl(&self, side: Side, line: &str) {
+    pub(crate) fn repl(&self, side: Side, line: &str) {
         let dm = match (&self.mode, side) {
             (Mode::Play { server, .. }, Side::Server) => {
                 server.repl(line);
@@ -333,20 +333,20 @@ impl Game {
     }
 
     /// Whether the cursor is over a ClickDetector the player can click.
-    pub fn hovering_click_detector(&self) -> bool {
+    pub(crate) fn hovering_click_detector(&self) -> bool {
         match &self.mode {
             Mode::Play { client, .. } => client.client().hovered_click_detector().is_some(),
             Mode::Run(_) => false,
         }
     }
 
-    pub fn has_client(&self) -> bool {
+    pub(crate) fn has_client(&self) -> bool {
         matches!(self.mode, Mode::Play { .. })
     }
 
     /// Print new output from this thread's DataModel (the server thread
     /// prints its own).
-    pub fn print_logs(&self) {
+    pub(crate) fn print_logs(&self) {
         let side = if self.has_client() {
             "Client"
         } else {
@@ -358,7 +358,7 @@ impl Game {
     }
 
     /// What lockstep steps took, server and client together.
-    pub fn total_steps(&self) -> Times {
+    pub(crate) fn total_steps(&self) -> Times {
         self.server_steps.sum_with(&self.client_steps)
     }
 }

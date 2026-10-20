@@ -68,7 +68,7 @@ fn material_line(counts: &[u64; 23]) -> String {
 }
 
 /// Print what each file's Terrain holds, and how long meshing it takes.
-pub fn inspect(files: &[PathBuf]) -> anyhow::Result<()> {
+pub(crate) fn inspect(files: &[PathBuf]) -> anyhow::Result<()> {
     for file in files {
         let loaded = rook_formats::load(&fs_err::read(file)?)?;
         println!("{}", file.display());
@@ -125,7 +125,7 @@ enum Kind {
 
 /// Count, over the unique files under `dir`, which hold smooth voxels and
 /// which legacy blocks.
-pub fn scan(dir: &Path, jobs: Option<usize>) -> anyhow::Result<()> {
+pub(crate) fn scan(dir: &Path, jobs: Option<usize>) -> anyhow::Result<()> {
     let started = Instant::now();
     let files = find_files(dir, &EXTENSIONS);
     eprintln!("found {} place/model files", files.len());

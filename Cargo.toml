@@ -120,6 +120,7 @@ unsafe_code = "deny"
 unsafe_op_in_unsafe_fn = "deny"
 unused_lifetimes = "warn"
 missing_debug_implementations = "warn"
+unreachable_pub = "warn"
 
 [workspace.lints.clippy]
 dbg_macro = "warn"
@@ -127,6 +128,7 @@ todo = "warn"
 unimplemented = "warn"
 redundant_clone = "warn"
 needless_borrow = "warn"
+redundant_closure_for_method_calls = "warn"
 
 # Build profiles:
 #   dev        `cargo build`: Rook's own code lightly optimised (fast to

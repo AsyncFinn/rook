@@ -11,11 +11,11 @@ fn players_of(w: &World, this: InstanceId) -> Vec<InstanceId> {
         .collect()
 }
 
-pub(super) fn get_players(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
+pub(super) fn get_players(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
     ret_instances(lua, with_world(lua, |w| players_of(w, this)))
 }
 
-pub(super) fn player_from_character(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
+pub(super) fn player_from_character(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let character = a.opt_instance(0)?;
     let found = character.and_then(|c| {
         with_world(lua, |w| {
@@ -27,7 +27,7 @@ pub(super) fn player_from_character(lua: &Lua, this: InstanceId, a: Args) -> Api
     ret_instance(lua, found)
 }
 
-pub(super) fn player_by_user_id(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
+pub(super) fn player_by_user_id(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let user_id = a.number(0)? as i64;
     let found = with_world(lua, |w| {
         players_of(w, this)
@@ -39,7 +39,7 @@ pub(super) fn player_by_user_id(lua: &Lua, this: InstanceId, a: Args) -> ApiResu
 
 /// Health goes down unless the character has a ForceField (creator-docs
 /// Humanoid:TakeDamage). Death handling arrives with characters.
-pub(super) fn take_damage(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
+pub(super) fn take_damage(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let amount = a.number(0)?;
     mutate(lua, |w| {
         let protected = w.dom.parent(this).is_some_and(|p| {
@@ -63,7 +63,7 @@ pub(super) fn take_damage(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Out
 }
 
 /// `Player:LoadCharacter()`: the server spawns the player a new character.
-pub(super) fn load_character(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
+pub(super) fn load_character(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
     if with_world(lua, |w| w.is_client) {
         return Err(ScriptError(
             "LoadCharacter can only be called by the backend server".into(),

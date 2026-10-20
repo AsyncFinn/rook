@@ -474,7 +474,7 @@ pub(crate) fn from_file(m: &rook_content::decode::mesh::Mesh) -> MeshData {
 
 impl MeshData {
     /// The smallest box holding every vertex: (min, max).
-    pub fn bounds(&self) -> (Vec3, Vec3) {
+    pub(crate) fn bounds(&self) -> (Vec3, Vec3) {
         if self.vertices.is_empty() {
             return (Vec3::ZERO, Vec3::ZERO);
         }

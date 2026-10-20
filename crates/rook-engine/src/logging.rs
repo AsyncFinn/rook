@@ -146,7 +146,9 @@ static SINK: Mutex<Sink> = Mutex::new(Sink {
 pub(crate) fn record(line: &str) {
     let plain = anstream::adapter::strip_str(line).to_string();
     crash::remember(&plain);
-    let mut sink = SINK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut sink = SINK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     if let Some(file) = sink.file.as_mut()
         && writeln!(file, "{plain}").is_err()
     {
@@ -157,7 +159,10 @@ pub(crate) fn record(line: &str) {
 
 /// This run's log file, if it writes one.
 pub fn log_path() -> Option<PathBuf> {
-    SINK.lock().unwrap_or_else(|e| e.into_inner()).path.clone()
+    SINK.lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .path
+        .clone()
 }
 
 /// Start logging: the terminal filter from `--verbose`, `ROOK_LOG` and
@@ -228,7 +233,9 @@ fn open_file(logs: &Path, program: &str, problems: &mut Vec<String>) {
     let path = logs.join(format!("{program}-{}.log", files::stamp()));
     match File::create(&path) {
         Ok(file) => {
-            let mut sink = SINK.lock().unwrap_or_else(|e| e.into_inner());
+            let mut sink = SINK
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             sink.file = Some(LineWriter::new(file));
             sink.path = Some(path);
         }
@@ -242,7 +249,7 @@ mod tests {
 
     #[test]
     fn verbose_takes_a_subsystem_but_not_a_file() {
-        let args = |a: &[&str]| fix_verbose_args(a.iter().map(|s| s.to_string()));
+        let args = |a: &[&str]| fix_verbose_args(a.iter().map(std::string::ToString::to_string));
         assert_eq!(
             args(&["rook-player", "--verbose", "place.rbxl"]),
             ["rook-player", "--verbose", "place.rbxl"]

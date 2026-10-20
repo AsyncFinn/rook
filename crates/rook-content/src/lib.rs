@@ -191,7 +191,7 @@ pub(crate) mod tests {
     use std::path::PathBuf;
 
     /// A fresh, empty folder for one test.
-    pub fn temp_dir(name: &str) -> PathBuf {
+    pub(crate) fn temp_dir(name: &str) -> PathBuf {
         let dir = std::env::temp_dir()
             .join("rook-content-tests")
             .join(format!("{name}-{}", std::process::id()));

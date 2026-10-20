@@ -13,7 +13,7 @@ use crate::world::Scheduled;
 /// `TimePosition` is (`Stop` keeps it; `Play` on a playing player does
 /// nothing). With one, scheduled against `SoundService:GetMixerTime`,
 /// returning an id for `Cancel`; servers refuse that.
-fn play_or_stop(lua: &Lua, this: InstanceId, a: Args, play: bool) -> ApiResult<Outcome> {
+fn play_or_stop(lua: &Lua, this: InstanceId, a: &Args, play: bool) -> ApiResult<Outcome> {
     let Some(at) = a.opt_number(0)? else {
         mutate(lua, |w| audio::set_playing(w, this, play))?;
         // An explicit nil (observed: `log(p:Play())` printed "nil").
@@ -39,16 +39,16 @@ fn play_or_stop(lua: &Lua, this: InstanceId, a: Args, play: bool) -> ApiResult<O
     Outcome::ret(lua, id)
 }
 
-pub(super) fn audio_play(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
+pub(super) fn audio_play(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     play_or_stop(lua, this, a, true)
 }
 
-pub(super) fn audio_stop(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
+pub(super) fn audio_stop(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     play_or_stop(lua, this, a, false)
 }
 
 /// Cancels a scheduled `Play` or `Stop`: true if it was still waiting.
-pub(super) fn audio_cancel(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
+pub(super) fn audio_cancel(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let id = a.opt_number(0)?.map(|n| n as i64);
     let cancelled = with_world(lua, |w| {
         let before = w.audio.scheduled.len();
@@ -61,7 +61,7 @@ pub(super) fn audio_cancel(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outco
 /// `SoundService:GetMixerTime`: seconds on the clock scheduled `Play` and
 /// `Stop` use. Rook's is the DataModel's own clock (Inference: Studio's
 /// starts from an arbitrary value).
-pub(super) fn get_mixer_time(lua: &Lua, _: InstanceId, _: Args) -> ApiResult<Outcome> {
+pub(super) fn get_mixer_time(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
     Outcome::ret(lua, with_world(lua, |w| w.scheduler.now()))
 }
 
@@ -69,14 +69,14 @@ fn class_pins(lua: &Lua, this: InstanceId) -> (&'static [&'static str], &'static
     with_world(lua, |w| audio::pins(w.dom.class_name(this))).unwrap_or((&[], &[]))
 }
 
-pub(super) fn get_input_pins(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
+pub(super) fn get_input_pins(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
     Outcome::ret(
         lua,
         lua.create_sequence_from(class_pins(lua, this).0.iter().copied())?,
     )
 }
 
-pub(super) fn get_output_pins(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
+pub(super) fn get_output_pins(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
     Outcome::ret(
         lua,
         lua.create_sequence_from(class_pins(lua, this).1.iter().copied())?,
@@ -84,7 +84,7 @@ pub(super) fn get_output_pins(lua: &Lua, this: InstanceId, _: Args) -> ApiResult
 }
 
 /// The connected Wires on one of this instance's pins.
-pub(super) fn get_connected_wires(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
+pub(super) fn get_connected_wires(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let pin = a.string(0)?;
     let wires = with_world(lua, |w| {
         let dom = &w.dom;
@@ -116,7 +116,7 @@ fn curve_property(method: &str) -> &'static str {
 /// `SetDistanceAttenuation(curve)` and `SetAngleAttenuation(curve)`: a
 /// table of distance (or angle) to volume; empty or nil for the default.
 /// A key that isn't a number is an error (observed message).
-fn set_curve(lua: &Lua, this: InstanceId, a: Args, method: &str) -> ApiResult<Outcome> {
+fn set_curve(lua: &Lua, this: InstanceId, a: &Args, method: &str) -> ApiResult<Outcome> {
     let class = with_world(lua, |w| w.dom.class_name(this).to_owned());
     let mut points = Vec::new();
     if let LuaValue::Table(t) = a.get(0) {
@@ -147,25 +147,33 @@ fn get_curve(lua: &Lua, this: InstanceId, method: &str) -> ApiResult<Outcome> {
     Outcome::ret(lua, t)
 }
 
-pub(super) fn set_distance_attenuation(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
+pub(super) fn set_distance_attenuation(
+    lua: &Lua,
+    this: InstanceId,
+    a: &Args,
+) -> ApiResult<Outcome> {
     set_curve(lua, this, a, "SetDistanceAttenuation")
 }
 
-pub(super) fn set_angle_attenuation(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
+pub(super) fn set_angle_attenuation(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     set_curve(lua, this, a, "SetAngleAttenuation")
 }
 
-pub(super) fn get_distance_attenuation(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
+pub(super) fn get_distance_attenuation(
+    lua: &Lua,
+    this: InstanceId,
+    _: &Args,
+) -> ApiResult<Outcome> {
     get_curve(lua, this, "GetDistanceAttenuation")
 }
 
-pub(super) fn get_angle_attenuation(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
+pub(super) fn get_angle_attenuation(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
     get_curve(lua, this, "GetAngleAttenuation")
 }
 
 /// `AudioEmitter:GetAudibilityFor(listener)` and
 /// `AudioListener:GetAudibilityFor(emitter)`.
-pub(super) fn get_audibility_for(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
+pub(super) fn get_audibility_for(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let other = a.instance(0)?;
     let level = with_world(lua, |w| {
         if w.dom.is_a(this, "AudioEmitter") {
@@ -180,7 +188,7 @@ pub(super) fn get_audibility_for(lua: &Lua, this: InstanceId, a: Args) -> ApiRes
 pub(super) fn get_interacting_listeners(
     lua: &Lua,
     this: InstanceId,
-    _: Args,
+    _: &Args,
 ) -> ApiResult<Outcome> {
     let ids = with_world(lua, |w| {
         audio::interacting_with(&w.dom, this, "AudioListener")
@@ -188,7 +196,11 @@ pub(super) fn get_interacting_listeners(
     ret_instances(lua, ids)
 }
 
-pub(super) fn get_interacting_emitters(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
+pub(super) fn get_interacting_emitters(
+    lua: &Lua,
+    this: InstanceId,
+    _: &Args,
+) -> ApiResult<Outcome> {
     let ids = with_world(lua, |w| {
         audio::interacting_with(&w.dom, this, "AudioEmitter")
     });
@@ -197,7 +209,7 @@ pub(super) fn get_interacting_emitters(lua: &Lua, this: InstanceId, _: Args) -> 
 
 /// `AudioAnalyzer:GetSpectrum`: the engine's last measurement on a client;
 /// empty on a server (creator-docs) or before anything was measured.
-pub(super) fn get_spectrum(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
+pub(super) fn get_spectrum(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
     let bins = with_world(lua, |w| w.audio.spectra.get(&this).cloned()).unwrap_or_default();
     Outcome::ret(
         lua,

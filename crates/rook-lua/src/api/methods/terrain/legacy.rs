@@ -18,12 +18,12 @@ fn vec_out(lua: &Lua, v: Vec3) -> ApiResult<Outcome> {
 pub(in crate::api::methods) fn world_to_cell(
     lua: &Lua,
     _: InstanceId,
-    a: Args,
+    a: &Args,
 ) -> ApiResult<Outcome> {
     vec_out(lua, cells::world_to_cell(glam_vec(a.vector3(0)?)).as_vec3())
 }
 
-fn world_to_cell_prefer(lua: &Lua, this: InstanceId, a: Args, solid: bool) -> ApiResult<Outcome> {
+fn world_to_cell_prefer(lua: &Lua, this: InstanceId, a: &Args, solid: bool) -> ApiResult<Outcome> {
     let p = glam_vec(a.vector3(0)?);
     let cell = read(lua, this, |g| cells::world_to_cell_prefer(g, p, solid));
     vec_out(lua, cell.as_vec3())
@@ -32,7 +32,7 @@ fn world_to_cell_prefer(lua: &Lua, this: InstanceId, a: Args, solid: bool) -> Ap
 pub(in crate::api::methods) fn world_to_cell_prefer_solid(
     lua: &Lua,
     this: InstanceId,
-    a: Args,
+    a: &Args,
 ) -> ApiResult<Outcome> {
     world_to_cell_prefer(lua, this, a, true)
 }
@@ -40,7 +40,7 @@ pub(in crate::api::methods) fn world_to_cell_prefer_solid(
 pub(in crate::api::methods) fn world_to_cell_prefer_empty(
     lua: &Lua,
     this: InstanceId,
-    a: Args,
+    a: &Args,
 ) -> ApiResult<Outcome> {
     world_to_cell_prefer(lua, this, a, false)
 }
@@ -56,17 +56,17 @@ fn cell_coords(a: &Args) -> ApiResult<Vec3> {
 pub(in crate::api::methods) fn cell_center_to_world(
     lua: &Lua,
     _: InstanceId,
-    a: Args,
+    a: &Args,
 ) -> ApiResult<Outcome> {
-    vec_out(lua, cells::cell_center(cell_coords(&a)?))
+    vec_out(lua, cells::cell_center(cell_coords(a)?))
 }
 
 pub(in crate::api::methods) fn cell_corner_to_world(
     lua: &Lua,
     _: InstanceId,
-    a: Args,
+    a: &Args,
 ) -> ApiResult<Outcome> {
-    vec_out(lua, cells::cell_corner(cell_coords(&a)?))
+    vec_out(lua, cells::cell_corner(cell_coords(a)?))
 }
 
 /// The cell's legacy material, a block shape for how full it is, and
@@ -74,9 +74,9 @@ pub(in crate::api::methods) fn cell_corner_to_world(
 pub(in crate::api::methods) fn get_cell(
     lua: &Lua,
     this: InstanceId,
-    a: Args,
+    a: &Args,
 ) -> ApiResult<Outcome> {
-    let cell = cell_args(&a, 0)?;
+    let cell = cell_args(a, 0)?;
     let voxel = read(lua, this, |g| g.voxel(cell));
     Outcome::ret(
         lua,
@@ -110,9 +110,9 @@ fn bounds_len(b: Bounds) -> usize {
 pub(in crate::api::methods) fn set_cell(
     lua: &Lua,
     this: InstanceId,
-    a: Args,
+    a: &Args,
 ) -> ApiResult<Outcome> {
-    let cell = cell_args(&a, 0)?;
+    let cell = cell_args(a, 0)?;
     set_cells(
         lua,
         this,
@@ -120,7 +120,7 @@ pub(in crate::api::methods) fn set_cell(
             min: cell,
             max: cell,
         },
-        &a,
+        a,
         3,
     )?;
     Outcome::ret(lua, ())
@@ -129,10 +129,10 @@ pub(in crate::api::methods) fn set_cell(
 pub(in crate::api::methods) fn set_cells_region(
     lua: &Lua,
     this: InstanceId,
-    a: Args,
+    a: &Args,
 ) -> ApiResult<Outcome> {
-    if let Some(bounds) = region16_bounds(region16_arg(&a, 0)?) {
-        set_cells(lua, this, bounds, &a, 1)?;
+    if let Some(bounds) = region16_bounds(region16_arg(a, 0)?) {
+        set_cells(lua, this, bounds, a, 1)?;
     }
     Outcome::ret(lua, ())
 }
@@ -141,18 +141,18 @@ pub(in crate::api::methods) fn set_cells_region(
 pub(in crate::api::methods) fn autowedge_cell(
     lua: &Lua,
     _: InstanceId,
-    a: Args,
+    a: &Args,
 ) -> ApiResult<Outcome> {
-    cell_args(&a, 0)?;
+    cell_args(a, 0)?;
     Outcome::ret(lua, false)
 }
 
 pub(in crate::api::methods) fn autowedge_cells(
     lua: &Lua,
     _: InstanceId,
-    a: Args,
+    a: &Args,
 ) -> ApiResult<Outcome> {
-    region16_arg(&a, 0)?;
+    region16_arg(a, 0)?;
     Outcome::ret(lua, ())
 }
 
@@ -161,11 +161,11 @@ pub(in crate::api::methods) fn autowedge_cells(
 pub(in crate::api::methods) fn set_water_cell(
     lua: &Lua,
     this: InstanceId,
-    a: Args,
+    a: &Args,
 ) -> ApiResult<Outcome> {
-    let cell = cell_args(&a, 0)?;
-    enum_name(lua, &a, 3, "WaterForce")?;
-    enum_name(lua, &a, 4, "WaterDirection")?;
+    let cell = cell_args(a, 0)?;
+    enum_name(lua, a, 3, "WaterForce")?;
+    enum_name(lua, a, 4, "WaterDirection")?;
     let bounds = Bounds {
         min: cell,
         max: cell,
@@ -179,9 +179,9 @@ pub(in crate::api::methods) fn set_water_cell(
 pub(in crate::api::methods) fn get_water_cell(
     lua: &Lua,
     this: InstanceId,
-    a: Args,
+    a: &Args,
 ) -> ApiResult<Outcome> {
-    let cell = cell_args(&a, 0)?;
+    let cell = cell_args(a, 0)?;
     let water = read(lua, this, |g| {
         g.voxel(cell).material == TerrainMaterial::Water
     });

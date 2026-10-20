@@ -70,7 +70,7 @@ pub(super) struct TerrainCache {
 
 impl SceneCache {
     /// How many scene entries draw the terrain.
-    pub fn terrain_meshes(&self) -> usize {
+    pub(crate) fn terrain_meshes(&self) -> usize {
         self.terrain.count
     }
 

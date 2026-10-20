@@ -18,7 +18,7 @@ use rook_render::Camera;
 
 /// One server frame's output for the client.
 #[derive(Debug)]
-pub struct Frame {
+pub(crate) struct Frame {
     pub messages: Vec<ToClient>,
     /// How long the server took to step.
     pub took: Duration,
@@ -35,14 +35,14 @@ enum Command {
 
 /// What the server sends back once it's running.
 #[derive(Debug)]
-pub struct Started {
+pub(crate) struct Started {
     pub joined: Joined,
     /// The camera the place was saved with.
     pub camera: Camera,
 }
 
 #[derive(Debug)]
-pub struct ServerThread {
+pub(crate) struct ServerThread {
     commands: Sender<Command>,
     frames: Receiver<Frame>,
     thread: Option<JoinHandle<()>>,
@@ -54,14 +54,14 @@ const MAX_LAG: Duration = Duration::from_millis(250);
 
 /// A server thread still loading its place: [`Starting::poll`] it each
 /// frame, or [`Starting::wait`].
-pub struct Starting {
+pub(crate) struct Starting {
     server: Option<ServerThread>,
     started: Receiver<anyhow::Result<Started>>,
 }
 
 impl Starting {
     /// The server, once it has loaded and its player has joined.
-    pub fn poll(&mut self) -> Option<anyhow::Result<(ServerThread, Started)>> {
+    pub(crate) fn poll(&mut self) -> Option<anyhow::Result<(ServerThread, Started)>> {
         let started = match self.started.try_recv() {
             Ok(started) => started,
             Err(TryRecvError::Empty) => return None,
@@ -70,7 +70,7 @@ impl Starting {
         Some(started.map(|s| (self.server.take().expect("polled after it started"), s)))
     }
 
-    pub fn wait(mut self) -> anyhow::Result<(ServerThread, Started)> {
+    pub(crate) fn wait(mut self) -> anyhow::Result<(ServerThread, Started)> {
         let started = self
             .started
             .recv()
@@ -82,7 +82,7 @@ impl Starting {
 impl ServerThread {
     /// Load `place` on a new thread, start its scripts, run `script` (the
     /// `--script` file) and let one player join.
-    pub fn spawn(
+    pub(crate) fn spawn(
         place: Vec<u8>,
         options: Options,
         script: Option<String>,
@@ -136,7 +136,7 @@ impl ServerThread {
     }
 
     /// Step the server once and wait for its frame.
-    pub fn step(&self) -> Frame {
+    pub(crate) fn step(&self) -> Frame {
         self.send(Command::Step);
         self.frames.recv().unwrap_or(Frame {
             messages: Vec::new(),
@@ -145,21 +145,21 @@ impl ServerThread {
     }
 
     /// Let the server step by itself at 60 Hz (`true`), or only when told.
-    pub fn run(&self, on: bool) {
+    pub(crate) fn run(&self, on: bool) {
         self.send(Command::Run(on));
     }
 
     /// Frames the running server has finished since the last call.
-    pub fn frames(&self) -> impl Iterator<Item = Frame> + '_ {
+    pub(crate) fn frames(&self) -> impl Iterator<Item = Frame> + '_ {
         self.frames.try_iter()
     }
 
-    pub fn deliver(&self, msg: ToServer) {
+    pub(crate) fn deliver(&self, msg: ToServer) {
         self.send(Command::Deliver(msg));
     }
 
     /// Run a command-bar entry on the server.
-    pub fn repl(&self, line: &str) {
+    pub(crate) fn repl(&self, line: &str) {
         self.send(Command::Repl(line.to_owned()));
     }
 }

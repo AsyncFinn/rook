@@ -55,7 +55,7 @@ pub(crate) use models::pivot_of;
 pub(crate) use terrain::region_voxels_of as terrain_region_voxels;
 pub(crate) use tree::{Core, Found, fast};
 
-pub(crate) type RawMethod = fn(&Lua, InstanceId, Args) -> ApiResult<Outcome>;
+pub(crate) type RawMethod = fn(&Lua, InstanceId, &Args) -> ApiResult<Outcome>;
 
 /// Members that are accepted and ignored for now (see module docs). Each
 /// one is documented in `docs/behavior/stubs.md` with what will take it over;
@@ -243,27 +243,27 @@ fn ret_instances(lua: &Lua, ids: Vec<InstanceId>) -> ApiResult<Outcome> {
     super::instance::ret_instance_array(lua, &ids)
 }
 
-fn inert(lua: &Lua, _: InstanceId, _: Args) -> ApiResult<Outcome> {
+fn inert(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
     Outcome::ret(lua, ())
 }
 
-fn nil(lua: &Lua, _: InstanceId, _: Args) -> ApiResult<Outcome> {
+fn nil(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
     Outcome::ret(lua, LuaValue::Nil)
 }
 
-fn true_(lua: &Lua, _: InstanceId, _: Args) -> ApiResult<Outcome> {
+fn true_(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
     Outcome::ret(lua, true)
 }
 
-fn false_(lua: &Lua, _: InstanceId, _: Args) -> ApiResult<Outcome> {
+fn false_(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
     Outcome::ret(lua, false)
 }
 
-fn is_server(lua: &Lua, _: InstanceId, _: Args) -> ApiResult<Outcome> {
+fn is_server(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
     Outcome::ret(lua, !with_world(lua, |w| w.is_client))
 }
 
-fn is_client(lua: &Lua, _: InstanceId, _: Args) -> ApiResult<Outcome> {
+fn is_client(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
     Outcome::ret(lua, with_world(lua, |w| w.is_client))
 }
 

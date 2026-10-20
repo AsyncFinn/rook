@@ -22,7 +22,9 @@ static OUTPUT: Mutex<Option<Output>> = Mutex::new(None);
 /// Send every printed line to `output` instead of stdout (`None` restores
 /// stdout). Lines keep their colour codes unless `NO_COLOR` is set.
 pub fn set_output(output: Option<Output>) {
-    *OUTPUT.lock().unwrap_or_else(|e| e.into_inner()) = output;
+    *OUTPUT
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = output;
 }
 
 /// Print a line to the terminal and the log file, or (`terminal` off)
@@ -32,7 +34,9 @@ fn emit(line: String, terminal: bool) {
     if !terminal {
         return;
     }
-    let mut output = OUTPUT.lock().unwrap_or_else(|e| e.into_inner());
+    let mut output = OUTPUT
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     match output.as_mut() {
         Some(f) if std::env::var_os("NO_COLOR").is_some() => {
             f(anstream::adapter::strip_str(&line).to_string());

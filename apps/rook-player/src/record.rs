@@ -23,7 +23,7 @@ struct Loudest {
     sounds: Vec<(String, [f32; 2])>,
 }
 
-pub fn record(game: &mut Game, seconds: f64, out: &Path) -> anyhow::Result<()> {
+pub(crate) fn record(game: &mut Game, seconds: f64, out: &Path) -> anyhow::Result<()> {
     let mut mixer = Mixer::new(SAMPLE_RATE);
     let frames = (seconds / STEP).ceil() as usize;
     let mut samples: Vec<Frame> = Vec::with_capacity((seconds * f64::from(SAMPLE_RATE)) as usize);

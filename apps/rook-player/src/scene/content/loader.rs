@@ -18,18 +18,18 @@ use rook_content::{ContentRef, Failure, FailureKind, Loader, Resolver, Ticket, W
 use rook_render::{ImageHash, MeshHash};
 
 /// A file the scene asked for, and what it wants of it.
-pub type FileRef = (ContentRef, Want);
+pub(crate) type FileRef = (ContentRef, Want);
 
 /// What a finished file holds.
 #[derive(Debug, Clone)]
-pub enum Loaded {
+pub(crate) enum Loaded {
     Mesh(MeshHash, Arc<Mesh>),
     Image(ImageHash, Arc<Image>),
 }
 
 /// Where a file is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FileState {
+pub(crate) enum FileState {
     Loading,
     /// Loaded, by the hash of its bytes.
     Loaded([u8; 32]),
@@ -39,7 +39,7 @@ pub enum FileState {
 }
 
 #[derive(Debug)]
-pub struct Files {
+pub(crate) struct Files {
     resolver: Arc<Resolver>,
     /// Made on the first request.
     loader: Option<Loader>,
@@ -50,7 +50,7 @@ pub struct Files {
 }
 
 impl Files {
-    pub fn new(resolver: Arc<Resolver>) -> Self {
+    pub(crate) fn new(resolver: Arc<Resolver>) -> Self {
         Self {
             resolver,
             loader: None,
@@ -62,7 +62,7 @@ impl Files {
 
     /// A file's state, asking for it the first time, behind files of a
     /// lower `priority`.
-    pub fn state(&mut self, r: &ContentRef, want: Want, priority: f32) -> FileState {
+    pub(crate) fn state(&mut self, r: &ContentRef, want: Want, priority: f32) -> FileState {
         let key = (r.clone(), want);
         if let Some(&state) = self.states.get(&key) {
             return state;
@@ -78,17 +78,17 @@ impl Files {
     }
 
     /// Why a file failed, if it did.
-    pub fn failure(&self, key: &FileRef) -> Option<&Failure> {
+    pub(crate) fn failure(&self, key: &FileRef) -> Option<&Failure> {
         self.failures.get(key)
     }
 
     /// Whether nothing asked for is still loading.
-    pub fn idle(&self) -> bool {
+    pub(crate) fn idle(&self) -> bool {
         self.tickets.is_empty()
     }
 
     /// Change the priority of a file still waiting to load.
-    pub fn set_priority(&self, key: &FileRef, priority: f32) {
+    pub(crate) fn set_priority(&self, key: &FileRef, priority: f32) {
         if let Some(loader) = &self.loader {
             loader.set_priority(key.0.clone(), key.1, priority);
         }
@@ -96,7 +96,7 @@ impl Files {
 
     /// Files finished since the last call, with what they hold or why they
     /// failed. With `wait`, blocks until nothing is loading (screenshots).
-    pub fn poll(&mut self, wait: bool) -> Vec<(FileRef, Result<Loaded, Failure>)> {
+    pub(crate) fn poll(&mut self, wait: bool) -> Vec<(FileRef, Result<Loaded, Failure>)> {
         let Some(loader) = &mut self.loader else {
             return Vec::new();
         };

@@ -2,7 +2,7 @@ use std::path::Path;
 
 use rbx_dom_weak::{Instance, WeakDom};
 
-pub fn run(file: &Path, properties: bool, depth: Option<usize>) -> anyhow::Result<()> {
+pub(crate) fn run(file: &Path, properties: bool, depth: Option<usize>) -> anyhow::Result<()> {
     let bytes = fs_err::read(file)?;
     let loaded = rook_formats::load(&bytes)?;
     println!(
@@ -62,7 +62,7 @@ fn print_properties(inst: &Instance, indent: &str) {
 
 /// Print the source of every script whose full name (as `GetFullName`
 /// reports it, without `Game.`) contains `name`.
-pub fn print_source(path: &Path, name: &str) -> anyhow::Result<()> {
+pub(crate) fn print_source(path: &Path, name: &str) -> anyhow::Result<()> {
     let bytes = fs_err::read(path)?;
     let loaded = rook_formats::load(&bytes)?;
     let mut stack: Vec<(rbx_types::Ref, String)> = loaded

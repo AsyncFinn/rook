@@ -211,7 +211,10 @@ pub fn restore_control_chars(dom: &mut WeakDom, report: &LegacyUpgrade) {
     if report.control_characters == 0 || report.control_characters_lossy {
         return;
     }
-    let refs: Vec<_> = dom.descendants().map(|i| i.referent()).collect();
+    let refs: Vec<_> = dom
+        .descendants()
+        .map(rbx_dom_weak::Instance::referent)
+        .collect();
     for r in refs {
         let Some(inst) = dom.get_by_ref_mut(r) else {
             continue;

@@ -17,7 +17,7 @@ use full_moon::{LuaVersion, parse_fallible};
 
 /// Counts of each kind of API use in one script.
 #[derive(Debug, Default)]
-pub struct ScriptUsage {
+pub(super) struct ScriptUsage {
     pub methods: BTreeMap<String, u64>,
     pub global_calls: BTreeMap<String, u64>,
     pub library_calls: BTreeMap<String, u64>,
@@ -28,13 +28,13 @@ pub struct ScriptUsage {
 
 /// Result of analysing one script.
 #[derive(Debug)]
-pub struct ScriptAnalysis {
+pub(super) struct ScriptAnalysis {
     pub usage: ScriptUsage,
     /// Number of syntax errors; the usage above covers whatever did parse.
     pub parse_errors: usize,
 }
 
-pub fn analyse(source: &str) -> ScriptAnalysis {
+pub(super) fn analyse(source: &str) -> ScriptAnalysis {
     let result = parse_fallible(source, LuaVersion::luau());
     let mut visitor = UsageVisitor::default();
     visitor.visit_ast(result.ast());

@@ -80,10 +80,6 @@ impl Args {
         self.vals.get(from..).map(<[_]>::to_vec).unwrap_or_default()
     }
 
-    pub(crate) fn into_vec(self) -> Vec<LuaValue> {
-        self.vals
-    }
-
     fn missing(&self, i: usize) -> ScriptError {
         ScriptError(format!("Argument {} missing or nil", i + 1))
     }

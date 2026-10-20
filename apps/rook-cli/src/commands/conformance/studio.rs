@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, bail};
 use serde_json::{Value, json};
 
-pub struct Studio {
+pub(super) struct Studio {
     child: Child,
     stdin: ChildStdin,
     lines: Receiver<String>,
@@ -24,7 +24,7 @@ pub struct Studio {
 
 impl Studio {
     /// Start the MCP launcher and wait for a Studio window to attach.
-    pub fn connect() -> anyhow::Result<Self> {
+    pub(super) fn connect() -> anyhow::Result<Self> {
         let local =
             rook_engine::data_folder::local_app_data().context("LOCALAPPDATA is not set")?;
         let launcher = local.join("Roblox").join("mcp.bat");
@@ -158,7 +158,7 @@ impl Studio {
     }
 
     /// "Edit", "Play", ... from `get_studio_state`.
-    pub fn mode(&mut self) -> anyhow::Result<String> {
+    pub(super) fn mode(&mut self) -> anyhow::Result<String> {
         let state = self.tool("get_studio_state", json!({}), Duration::from_secs(30))?;
         Ok(state
             .lines()
@@ -168,7 +168,7 @@ impl Studio {
             .to_owned())
     }
 
-    pub fn set_playing(&mut self, play: bool) -> anyhow::Result<()> {
+    pub(super) fn set_playing(&mut self, play: bool) -> anyhow::Result<()> {
         self.tool(
             "start_stop_play",
             json!({ "is_start": play }),
@@ -178,7 +178,7 @@ impl Studio {
     }
 
     /// Run Luau in the playtest server and return its result.
-    pub fn run_on_server(&mut self, code: &str) -> anyhow::Result<String> {
+    pub(super) fn run_on_server(&mut self, code: &str) -> anyhow::Result<String> {
         self.tool(
             "execute_luau",
             json!({ "code": code, "datamodel_type": "Server" }),
@@ -189,7 +189,11 @@ impl Studio {
     /// Run Luau in the playtest client while the mouse moves through
     /// `moves` (screen pixels), and return its result. The code runs on its
     /// own thread so the moves arrive while it waits for them.
-    pub fn run_on_client(&mut self, code: &str, moves: &[(f32, f32)]) -> anyhow::Result<String> {
+    pub(super) fn run_on_client(
+        &mut self,
+        code: &str,
+        moves: &[(f32, f32)],
+    ) -> anyhow::Result<String> {
         const PENDING: &str = "\u{1}pending";
         let client = |code: &str| json!({ "code": code, "datamodel_type": "Client" });
         let start = format!(

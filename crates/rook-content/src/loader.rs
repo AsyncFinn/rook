@@ -38,7 +38,7 @@ static IDLE_SINCE: Mutex<Option<Instant>> = Mutex::new(None);
 
 /// Jobs queued or running on every loader in the process: 0 once
 /// everything asked for has been fetched and decoded.
-pub fn jobs_in_flight() -> usize {
+pub(crate) fn jobs_in_flight() -> usize {
     IN_FLIGHT.load(Ordering::Relaxed)
 }
 

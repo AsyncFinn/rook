@@ -68,11 +68,11 @@ fn rigid(delta: CFrame) -> CFrame {
     delta.orthonormalize()
 }
 
-pub(super) fn get_pivot(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
+pub(super) fn get_pivot(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
     Outcome::ret(lua, LCFrame(with_world(lua, |w| pivot_of(w, this))))
 }
 
-pub(super) fn pivot_to(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
+pub(super) fn pivot_to(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let target: LCFrame = a.userdata(0, "CFrame")?;
     mutate(lua, |w| {
         let current = pivot_of(w, this);
@@ -93,13 +93,13 @@ fn no_primary_part(method: &str) -> ScriptError {
     ))
 }
 
-pub(super) fn get_primary_part_cframe(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
+pub(super) fn get_primary_part_cframe(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
     let c = with_world(lua, |w| primary_part(w, this).map(|p| cframe(w, p)))
         .ok_or_else(|| no_primary_part("GetPrimaryPartCFrame"))?;
     Outcome::ret(lua, LCFrame(c))
 }
 
-pub(super) fn set_primary_part_cframe(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
+pub(super) fn set_primary_part_cframe(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let target: LCFrame = a.userdata(0, "CFrame")?;
     let primary = with_world(lua, |w| primary_part(w, this))
         .ok_or_else(|| no_primary_part("SetPrimaryPartCFrame"))?;
@@ -113,12 +113,12 @@ pub(super) fn set_primary_part_cframe(lua: &Lua, this: InstanceId, a: Args) -> A
 /// Deprecated; the same CFrame as `GetBoundingBox`, not the primary part's
 /// (Confirmed in Studio: door scripts rotate about it, so the hinge side
 /// often carries an invisible part to pull the box centre there).
-pub(super) fn get_model_cframe(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
+pub(super) fn get_model_cframe(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
     let c = with_world(lua, |w| bounding_box(w, this).0);
     Outcome::ret(lua, LCFrame(c))
 }
 
-pub(super) fn translate_by(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
+pub(super) fn translate_by(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let v = a.vector3(0)?;
     mutate(lua, |w| {
         transform_model(w, this, CFrame::from_position(v.0))
@@ -129,7 +129,7 @@ pub(super) fn translate_by(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Ou
 /// Moves the model so its primary part (or bounding box centre) is at the
 /// target. Roblox also moves the model up out of obstructions; that needs
 /// collision queries (Approximation until M3).
-pub(super) fn model_move_to(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
+pub(super) fn model_move_to(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let target = a.vector3(0)?;
     mutate(lua, |w| {
         let from = match primary_part(w, this) {
@@ -180,17 +180,17 @@ fn bounding_box(w: &World, model: InstanceId) -> (CFrame, Vector3) {
     (centre, Vector3(max - min))
 }
 
-pub(super) fn get_extents_size(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
+pub(super) fn get_extents_size(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
     let size = with_world(lua, |w| bounding_box(w, this).1);
     Outcome::ret(lua, vector3_to_lua(size))
 }
 
-pub(super) fn get_bounding_box(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
+pub(super) fn get_bounding_box(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
     let (c, s) = with_world(lua, |w| bounding_box(w, this));
     Outcome::ret(lua, (LCFrame(c), vector3_to_lua(s)))
 }
 
-pub(super) fn get_mass(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
+pub(super) fn get_mass(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
     let mass = with_world(lua, |w| rook_physics::part_mass(&w.dom, this));
     Outcome::ret(lua, f64::from(mass))
 }

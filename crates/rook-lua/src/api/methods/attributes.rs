@@ -2,7 +2,7 @@
 
 use super::*;
 
-pub(super) fn get_attribute(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
+pub(super) fn get_attribute(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let name = a.string(0)?;
     let value = with_world(lua, |w| w.dom.attribute(this, &name).cloned());
     match value {
@@ -69,7 +69,7 @@ fn attribute_value(v: &LuaValue) -> ApiResult<Option<Value>> {
     })
 }
 
-pub(super) fn set_attribute(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
+pub(super) fn set_attribute(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let name = a.string(0)?;
     if !valid_attribute_name(&name) {
         return Err(ScriptError(format!(
@@ -81,7 +81,7 @@ pub(super) fn set_attribute(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<O
     Outcome::ret(lua, ())
 }
 
-pub(super) fn get_attributes(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
+pub(super) fn get_attributes(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
     let attrs: Vec<(String, Value)> = with_world(lua, |w| {
         w.dom
             .get(this)
@@ -100,7 +100,11 @@ pub(super) fn get_attributes(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<
     Outcome::ret(lua, t)
 }
 
-pub(super) fn attribute_changed_signal(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
+pub(super) fn attribute_changed_signal(
+    lua: &Lua,
+    this: InstanceId,
+    a: &Args,
+) -> ApiResult<Outcome> {
     let name = a.string(0)?;
     Outcome::ret(
         lua,
@@ -111,24 +115,24 @@ pub(super) fn attribute_changed_signal(lua: &Lua, this: InstanceId, a: Args) -> 
     )
 }
 
-pub(super) fn add_tag(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
+pub(super) fn add_tag(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let tag = a.string(0)?;
     mutate(lua, |w| w.dom.add_tag(this, &tag))?;
     Outcome::ret(lua, ())
 }
 
-pub(super) fn remove_tag(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
+pub(super) fn remove_tag(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let tag = a.string(0)?;
     mutate(lua, |w| w.dom.remove_tag(this, &tag))?;
     Outcome::ret(lua, ())
 }
 
-pub(super) fn has_tag(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
+pub(super) fn has_tag(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let tag = a.string(0)?;
     Outcome::ret(lua, with_world(lua, |w| w.dom.has_tag(this, &tag)))
 }
 
-pub(super) fn get_tags(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
+pub(super) fn get_tags(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
     let tags = with_world(lua, |w| {
         w.dom.get(this).map(|i| i.tags.clone()).unwrap_or_default()
     });

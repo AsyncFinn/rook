@@ -45,7 +45,7 @@ impl ShadowView {
     /// centre moves in whole texels across the sun's view, so a texel's
     /// footprint on the ground stays put as the camera moves and shadow
     /// edges don't shimmer.
-    pub fn fit(camera: &Camera, aspect: f32, sun: Vec3) -> Self {
+    pub(crate) fn fit(camera: &Camera, aspect: f32, sun: Vec3) -> Self {
         let d = SHADOW_DISTANCE;
         // Tangent of the angle to the view's corners.
         let k = (camera.fov_y.to_radians() / 2.0).tan() * (1.0 + aspect * aspect).sqrt();

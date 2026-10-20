@@ -29,7 +29,7 @@ impl SceneCache {
     /// Take the files that finished loading and redraw the parts waiting
     /// for them; with `wait`, first wait until none is loading. Returns the
     /// entries that changed.
-    pub fn poll_files(&mut self, dom: &Dom, wait: bool) -> Vec<usize> {
+    pub(crate) fn poll_files(&mut self, dom: &Dom, wait: bool) -> Vec<usize> {
         let finished = self.files.poll(wait);
         if finished.is_empty() {
             if self.files.idle() {
@@ -139,7 +139,7 @@ impl SceneCache {
     /// Follow the camera: once it has moved far enough, rank the files
     /// still loading again by how near it their nearest waiting part is, so
     /// what's around it loads first.
-    pub fn follow_camera(&mut self, dom: &Dom, camera: Vec3) {
+    pub(crate) fn follow_camera(&mut self, dom: &Dom, camera: Vec3) {
         self.focus = camera;
         if self.waiting.is_empty() || camera.distance(self.ranked_from) < RERANK {
             return;

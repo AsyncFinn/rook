@@ -70,28 +70,28 @@ fn player_arg(lua: &Lua, a: &Args, method: &str) -> ApiResult<InstanceId> {
     }
 }
 
-fn fire_server(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
+fn fire_server(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     if !is_client(lua) {
         return Err("FireServer can only be called from the client".into());
     }
-    push(lua, this, RemoteKind::FireServer, &a.into_vec());
+    push(lua, this, RemoteKind::FireServer, &a.rest(0));
     Outcome::ret(lua, ())
 }
 
-fn fire_client(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
+fn fire_client(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     if is_client(lua) {
         return Err("FireClient can only be called from the server".into());
     }
-    let player = player_arg(lua, &a, "FireClient")?;
+    let player = player_arg(lua, a, "FireClient")?;
     push(lua, this, RemoteKind::FireClient { player }, &a.rest(1));
     Outcome::ret(lua, ())
 }
 
-fn fire_all_clients(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
+fn fire_all_clients(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     if is_client(lua) {
         return Err("FireAllClients can only be called from the server".into());
     }
-    push(lua, this, RemoteKind::FireAllClients, &a.into_vec());
+    push(lua, this, RemoteKind::FireAllClients, &a.rest(0));
     Outcome::ret(lua, ())
 }
 

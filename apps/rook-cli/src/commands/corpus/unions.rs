@@ -12,7 +12,10 @@ fn is_union(class: &str) -> bool {
 }
 
 /// What a union instance is made of (none for other classes).
-pub fn union_kinds(dom: &rbx_dom_weak::WeakDom, inst: &rbx_dom_weak::Instance) -> Vec<String> {
+pub(super) fn union_kinds(
+    dom: &rbx_dom_weak::WeakDom,
+    inst: &rbx_dom_weak::Instance,
+) -> Vec<String> {
     let class = inst.class.as_str();
     if !is_union(class) {
         return Vec::new();

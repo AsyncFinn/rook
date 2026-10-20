@@ -110,7 +110,7 @@ fn instance_content(w: &World, root: InstanceId, out: &mut Vec<(String, Want)>) 
     }
 }
 
-fn preload_async(lua: &Lua, _this: InstanceId, a: Args) -> ApiResult<Outcome> {
+fn preload_async(lua: &Lua, _this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let LuaValue::Table(list) = a.get(0) else {
         return Err(ScriptError(match a.get(0) {
             LuaValue::Nil => "Argument 1 missing or nil".into(),

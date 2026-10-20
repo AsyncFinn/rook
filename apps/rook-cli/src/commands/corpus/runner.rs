@@ -45,7 +45,7 @@ struct PlaceRecord {
     wall_seconds: f64,
 }
 
-pub fn run(
+pub(crate) fn run(
     dir: &Path,
     out: &Path,
     seconds: f64,

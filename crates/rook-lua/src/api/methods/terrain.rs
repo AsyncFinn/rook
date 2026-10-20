@@ -122,29 +122,29 @@ fn fill(lua: &Lua, this: InstanceId, shape: Shape, m: Material) -> ApiResult<Out
     Outcome::ret(lua, ())
 }
 
-pub(super) fn fill_block(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
+pub(super) fn fill_block(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let pose = pose(&a.userdata::<LCFrame>(0, "CFrame")?);
     let size = glam_vec(a.vector3(1)?);
     fill(
         lua,
         this,
         Shape::Block { pose, size },
-        material_arg(lua, &a, 2)?,
+        material_arg(lua, a, 2)?,
     )
 }
 
-pub(super) fn fill_ball(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
+pub(super) fn fill_ball(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let center = glam_vec(a.vector3(0)?);
     let radius = a.number(1)? as f32;
     fill(
         lua,
         this,
         Shape::Ball { center, radius },
-        material_arg(lua, &a, 2)?,
+        material_arg(lua, a, 2)?,
     )
 }
 
-pub(super) fn fill_cylinder(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
+pub(super) fn fill_cylinder(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let pose = pose(&a.userdata::<LCFrame>(0, "CFrame")?);
     let (height, radius) = (a.number(1)? as f32, a.number(2)? as f32);
     let shape = Shape::Cylinder {
@@ -152,17 +152,17 @@ pub(super) fn fill_cylinder(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<O
         height,
         radius,
     };
-    fill(lua, this, shape, material_arg(lua, &a, 3)?)
+    fill(lua, this, shape, material_arg(lua, a, 3)?)
 }
 
-pub(super) fn fill_wedge(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
+pub(super) fn fill_wedge(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let pose = pose(&a.userdata::<LCFrame>(0, "CFrame")?);
     let size = glam_vec(a.vector3(1)?);
     fill(
         lua,
         this,
         Shape::Wedge { pose, size },
-        material_arg(lua, &a, 2)?,
+        material_arg(lua, a, 2)?,
     )
 }
 
@@ -186,9 +186,9 @@ fn checked_size(size: IVec3) -> ApiResult<IVec3> {
     Ok(size)
 }
 
-pub(super) fn fill_region(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
-    let (min, size) = region_arg(&a, 0)?;
-    let material = voxel_material(material_arg(lua, &a, 2)?);
+pub(super) fn fill_region(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
+    let (min, size) = region_arg(a, 0)?;
+    let material = voxel_material(material_arg(lua, a, 2)?);
     if let Some(bounds) = Bounds::of_block(min, size) {
         edit(lua, this, |g| {
             (g.fill_block(bounds, material), Some(bounds))
@@ -197,10 +197,10 @@ pub(super) fn fill_region(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Out
     Outcome::ret(lua, ())
 }
 
-pub(super) fn replace_material(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
-    let (min, size) = region_arg(&a, 0)?;
-    let from = voxel_material(material_arg(lua, &a, 2)?);
-    let to = voxel_material(material_arg(lua, &a, 3)?);
+pub(super) fn replace_material(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
+    let (min, size) = region_arg(a, 0)?;
+    let from = voxel_material(material_arg(lua, a, 2)?);
+    let to = voxel_material(material_arg(lua, a, 3)?);
     if let Some(bounds) = Bounds::of_block(min, size) {
         edit(lua, this, |g| {
             ((), g.replace(bounds, from, to).then_some(bounds))
@@ -212,8 +212,8 @@ pub(super) fn replace_material(lua: &Lua, this: InstanceId, a: Args) -> ApiResul
 /// `ReadVoxels`: materials and occupancies as `[x][y][z]` arrays with a
 /// `Size` field; an air voxel's occupancy is 0, any other's
 /// `(byte + 1) / 256` (see `rook_terrain::Voxel`).
-pub(super) fn read_voxels(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
-    let (min, size) = region_arg(&a, 0)?;
+pub(super) fn read_voxels(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
+    let (min, size) = region_arg(a, 0)?;
     let size = checked_size(size)?;
     let mut voxels = Vec::new();
     if size.cmpgt(IVec3::ZERO).all() {
@@ -317,12 +317,12 @@ fn voxel_array<T>(
 
 /// `WriteVoxels`: occupancies are clamped to 0..1; 0, or Air, leaves air
 /// (observed).
-pub(super) fn write_voxels(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
-    let (min, size) = region_arg(&a, 0)?;
+pub(super) fn write_voxels(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
+    let (min, size) = region_arg(a, 0)?;
     let size = checked_size(size)?;
     let material_enum = enum_id("Material");
     let materials = voxel_array(
-        &a,
+        a,
         2,
         "materials",
         size,
@@ -337,7 +337,7 @@ pub(super) fn write_voxels(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Ou
         "Enum.Material",
     )?;
     let occupancies = voxel_array(
-        &a,
+        a,
         3,
         "occupancies",
         size,
@@ -365,7 +365,7 @@ pub(super) fn write_voxels(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Ou
     Outcome::ret(lua, ())
 }
 
-pub(super) fn terrain_clear(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
+pub(super) fn terrain_clear(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
     edit(lua, this, |g| {
         let chunks: Vec<IVec3> = g.chunks().collect();
         let bounds = chunks.iter().fold(None, |b: Option<Bounds>, c| {
@@ -388,7 +388,7 @@ pub(super) fn terrain_clear(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<O
 /// The number of voxels that aren't air. Studio counts differently for
 /// small terrain (observed: one voxel, or two side by side, count 2; a
 /// full chunk counts its 32,768).
-pub(super) fn count_cells(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
+pub(super) fn count_cells(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
     let n = read(lua, this, Grid::count_cells);
     Outcome::ret(lua, n as f64)
 }
@@ -412,8 +412,8 @@ fn region16_bounds(r: Region3int16) -> Option<Bounds> {
 /// A TerrainRegion holding the region's voxels, in its `SmoothGrid` from
 /// voxel 0, with its size in `ExtentsMax` (observed: the corners are both
 /// included; an inverted region errors).
-pub(super) fn copy_region(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
-    let bounds = region16_bounds(region16_arg(&a, 0)?)
+pub(super) fn copy_region(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
+    let bounds = region16_bounds(region16_arg(a, 0)?)
         .ok_or_else(|| ScriptError("The region can not be empty or inverted.".into()))?;
     let copy = read(lua, this, |g| g.copy(bounds));
     let size = bounds.max - bounds.min + IVec3::ONE;
@@ -443,7 +443,7 @@ pub(crate) fn region_voxels_of(dom: &rook_dom::Dom, region: InstanceId) -> (Grid
     )
 }
 
-pub(super) fn paste_region(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
+pub(super) fn paste_region(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let region = a.instance(0)?;
     let corner = v16(a.userdata::<LVector3int16>(1, "Vector3int16")?.0);
     let paste_empty = a.truthy(2);
@@ -477,8 +477,8 @@ fn material_colors(dom: &rook_dom::Dom, id: InstanceId) -> Option<rook_types::Ma
     }
 }
 
-pub(super) fn get_material_color(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
-    let (t, _) = color_key(lua, &a)?;
+pub(super) fn get_material_color(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
+    let (t, _) = color_key(lua, a)?;
     let colors = with_world(lua, |w| material_colors(&w.dom, this));
     let c = t
         .color(colors.as_ref(), MaterialSet::Materials2022)
@@ -486,8 +486,8 @@ pub(super) fn get_material_color(lua: &Lua, this: InstanceId, a: Args) -> ApiRes
     Outcome::ret(lua, LColor3(rook_types::Color3::from(c)))
 }
 
-pub(super) fn set_material_color(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
-    let (_, key) = color_key(lua, &a)?;
+pub(super) fn set_material_color(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
+    let (_, key) = color_key(lua, a)?;
     let color = a.userdata::<LColor3>(1, "Color3")?.0;
     mutate(lua, |w| {
         let mut colors = material_colors(&w.dom, this).unwrap_or_default();

@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 use rook_engine::{Options, Server};
 use rook_lua::MessageType;
 
-pub fn run(
+pub(crate) fn run(
     file: &Path,
     seconds: f64,
     timeout: f64,

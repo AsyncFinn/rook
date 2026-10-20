@@ -2,7 +2,7 @@
 
 use winit::keyboard::KeyCode;
 
-pub fn roblox_key(code: KeyCode) -> Option<&'static str> {
+pub(crate) fn roblox_key(code: KeyCode) -> Option<&'static str> {
     use KeyCode as K;
     Some(match code {
         K::KeyA => "A",

@@ -100,7 +100,7 @@ fn project(lens: &Lens, point: Vec3) -> (Vec3, bool) {
 /// Rook has no top bar, so it is 0 (Roblox clients: 58 pixels).
 const GUI_INSET: f32 = 0.0;
 
-fn point_to_ray(lua: &Lua, this: InstanceId, a: Args, inset: f32) -> ApiResult<Outcome> {
+fn point_to_ray(lua: &Lua, this: InstanceId, a: &Args, inset: f32) -> ApiResult<Outcome> {
     let (x, y) = (a.number(0)? as f32, a.number(1)? as f32);
     let depth = a.number_or(2, 0.0)? as f32;
     let lens = with_world(lua, |w| Lens::of(&w.dom, this));
@@ -110,15 +110,15 @@ fn point_to_ray(lua: &Lua, this: InstanceId, a: Args, inset: f32) -> ApiResult<O
     Outcome::ret(lua, LRay(ray))
 }
 
-fn viewport_point_to_ray(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
+fn viewport_point_to_ray(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     point_to_ray(lua, this, a, 0.0)
 }
 
-fn screen_point_to_ray(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
+fn screen_point_to_ray(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     point_to_ray(lua, this, a, GUI_INSET)
 }
 
-fn world_to_point(lua: &Lua, this: InstanceId, a: Args, inset: f32) -> ApiResult<Outcome> {
+fn world_to_point(lua: &Lua, this: InstanceId, a: &Args, inset: f32) -> ApiResult<Outcome> {
     let point = a.vector3(0)?.0;
     let lens = with_world(lua, |w| Lens::of(&w.dom, this));
     let (p, visible) = project(&lens, point);
@@ -126,11 +126,11 @@ fn world_to_point(lua: &Lua, this: InstanceId, a: Args, inset: f32) -> ApiResult
     Outcome::ret(lua, (vector3_to_lua(Vector3(p)), visible))
 }
 
-fn world_to_viewport_point(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
+fn world_to_viewport_point(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     world_to_point(lua, this, a, 0.0)
 }
 
-fn world_to_screen_point(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
+fn world_to_screen_point(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     world_to_point(lua, this, a, GUI_INSET)
 }
 

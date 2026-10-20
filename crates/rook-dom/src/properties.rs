@@ -187,7 +187,7 @@ fn convert_default(db: &Database, class: ClassId, property: PropertyId) -> Optio
 /// Store values in the property's declared type. Files and the database
 /// sometimes hold an equivalent encoding (`Color3uint8` for a `Color3`
 /// property, `Int32` for an `Int64` one).
-pub fn coerce(ty: PropertyType, value: Value) -> Value {
+pub(crate) fn coerce(ty: PropertyType, value: Value) -> Value {
     use rbx_types::VariantType as T;
     let PropertyType::Value(target) = ty else {
         return value;

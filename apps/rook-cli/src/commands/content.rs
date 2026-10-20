@@ -15,10 +15,10 @@ use rook_content::{ContentRef, Failure, FailureKind, Fetched, Loader, Resolver, 
 mod pin;
 mod place;
 
-pub use pin::pin;
-pub use place::place;
+pub(crate) use pin::pin;
+pub(crate) use place::place;
 
-pub struct Options {
+pub(crate) struct Options {
     /// Never use the network: only the install, folders and the cache.
     pub offline: bool,
     /// Forget cached answers for these references first.
@@ -38,7 +38,7 @@ fn resolver(options: &Options) -> Arc<Resolver> {
 }
 
 /// What `rook-tools cache` does.
-pub enum CacheCommand {
+pub(crate) enum CacheCommand {
     Show,
     /// Delete what hasn't been used for this many days.
     Prune(u64),
@@ -47,7 +47,7 @@ pub enum CacheCommand {
 }
 
 /// `rook-tools cache`: the download cache's folder and size, or a clean-up.
-pub fn cache(command: CacheCommand) -> anyhow::Result<()> {
+pub(crate) fn cache(command: CacheCommand) -> anyhow::Result<()> {
     // Making the config moves a cache left in the old place first.
     let config = rook_engine::settings::content_config(false);
     let dir = config.cache_dir.ok_or_else(|| {
@@ -229,7 +229,7 @@ fn print_fetched(f: &Fetched) {
     println!("  blake3:   {}", f.hash.to_hex());
 }
 
-pub fn references(refs: &[String], options: &Options) -> anyhow::Result<()> {
+pub(crate) fn references(refs: &[String], options: &Options) -> anyhow::Result<()> {
     let resolver = resolver(options);
     for text in refs {
         println!("{text}");

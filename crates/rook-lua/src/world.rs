@@ -85,7 +85,7 @@ pub struct LogEntry {
 }
 
 /// `Workspace.Model.Script` and line 3 → `Script:3`.
-pub fn short_source(chunk: &str, line: usize) -> String {
+pub(crate) fn short_source(chunk: &str, line: usize) -> String {
     let name = chunk.rsplit('.').next().unwrap_or(chunk);
     format!("{name}:{line}")
 }

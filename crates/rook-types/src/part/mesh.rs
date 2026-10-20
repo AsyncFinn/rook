@@ -199,7 +199,7 @@ impl MeshKind {
 /// (min(X, Z), Y, min(X, Z)) / 1.25, so it is round from above and never
 /// stretched along the longer of X and Z (observed by overlapping it with a
 /// FileMesh of the same mesh, ROADMAP M4 "The Head MeshType").
-pub fn head_scale(size: Vec3) -> Vec3 {
+pub(crate) fn head_scale(size: Vec3) -> Vec3 {
     let across = size.x.min(size.z);
     Vec3::new(across, size.y, across) / 1.25
 }

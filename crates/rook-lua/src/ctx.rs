@@ -217,7 +217,7 @@ impl From<&str> for ScriptError {
 }
 
 /// The message a script would see for an mlua error.
-pub fn lua_error_message(e: &mlua::Error) -> String {
+pub(crate) fn lua_error_message(e: &mlua::Error) -> String {
     match e {
         mlua::Error::RuntimeError(s) | mlua::Error::SyntaxError { message: s, .. } => {
             // mlua appends a traceback to errors from resumed threads.

@@ -2,7 +2,7 @@
 
 mod content;
 mod report;
-pub mod runner;
+pub(crate) mod runner;
 mod scripts;
 mod unions;
 
@@ -28,25 +28,25 @@ const WORKER_STACK: usize = 256 * 1024 * 1024;
 
 /// Usage of one name across the corpus.
 #[derive(Debug, Default, Clone, Copy, Serialize)]
-pub struct Usage {
+pub(crate) struct Usage {
     /// Number of unique files using it.
     pub files: u64,
     /// Total occurrences across all unique files.
     pub count: u64,
 }
 
-pub type UsageMap = BTreeMap<String, Usage>;
+pub(crate) type UsageMap = BTreeMap<String, Usage>;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum Status {
+pub(crate) enum Status {
     Loaded,
     Duplicate,
     Failed { kind: String, message: String },
 }
 
 #[derive(Debug, Serialize)]
-pub struct FileRecord {
+pub(crate) struct FileRecord {
     pub path: PathBuf,
     pub bytes: u64,
     pub hash: String,
@@ -60,7 +60,7 @@ pub struct FileRecord {
 
 /// What the legacy XML upgrade changed in one file.
 #[derive(Debug, Default, Clone, Copy, Serialize)]
-pub struct LegacyCounts {
+pub(crate) struct LegacyCounts {
     pub externals_dropped: u64,
     pub embedded_assets: u64,
     pub embedded_bytes: u64,
@@ -113,7 +113,7 @@ struct ContentUsage {
 
 /// Corpus-wide totals.
 #[derive(Debug, Default, Serialize)]
-pub struct Aggregate {
+pub(crate) struct Aggregate {
     pub files_found: u64,
     pub files_unique: u64,
     pub files_duplicate: u64,
@@ -165,7 +165,7 @@ pub struct Aggregate {
 }
 
 /// Files under `dir` with one of `extensions` (any case), sorted by path.
-pub fn find_files(dir: &Path, extensions: &[&str]) -> Vec<walkdir::DirEntry> {
+pub(crate) fn find_files(dir: &Path, extensions: &[&str]) -> Vec<walkdir::DirEntry> {
     let mut files: Vec<walkdir::DirEntry> = walkdir::WalkDir::new(dir)
         .into_iter()
         .filter_map(Result::ok)
@@ -181,7 +181,12 @@ pub fn find_files(dir: &Path, extensions: &[&str]) -> Vec<walkdir::DirEntry> {
     files
 }
 
-pub fn run(dir: &Path, out: &Path, jobs: Option<usize>, large_mb: u64) -> anyhow::Result<()> {
+pub(crate) fn run(
+    dir: &Path,
+    out: &Path,
+    jobs: Option<usize>,
+    large_mb: u64,
+) -> anyhow::Result<()> {
     anyhow::ensure!(dir.is_dir(), "{} is not a folder", dir.display());
     let started = Instant::now();
 

@@ -5,7 +5,7 @@ use std::path::Path;
 use anyhow::Context;
 use rook_reflection::Members;
 
-pub fn run(dump: &Path, source: &str, out: &Path) -> anyhow::Result<()> {
+pub(crate) fn run(dump: &Path, source: &str, out: &Path) -> anyhow::Result<()> {
     let text = fs_err::read_to_string(dump)?;
     let version = rook_reflection::roblox_version();
     let members = Members::from_api_dump(&text, &version, source)?;

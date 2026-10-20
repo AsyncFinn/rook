@@ -212,7 +212,7 @@ fn fetch(
     }
 }
 
-pub fn place(file: &Path, options: &Options) -> anyhow::Result<()> {
+pub(crate) fn place(file: &Path, options: &Options) -> anyhow::Result<()> {
     rook_engine::session::threads::size_threads();
     let bytes = fs_err::read(file)?;
     let loaded = rook_formats::load(&bytes)?;

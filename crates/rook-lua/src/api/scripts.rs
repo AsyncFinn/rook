@@ -40,7 +40,7 @@ fn compile(lua: &Lua, id: InstanceId, env: Table) -> mlua::Result<Function> {
 
 /// Start a Script on a new thread. Compile errors go to the output.
 /// Returns false if the script was already started or failed to compile.
-pub fn run_script(lua: &Lua, id: InstanceId) -> bool {
+pub(crate) fn run_script(lua: &Lua, id: InstanceId) -> bool {
     if with_world(lua, |w| w.started.contains_key(&id)) {
         return false;
     }
@@ -71,7 +71,7 @@ pub fn run_script(lua: &Lua, id: InstanceId) -> bool {
 /// script by the environment its functions share, which also covers ones
 /// the script made with `task.spawn` or `coroutine`. Returns false if the
 /// script wasn't running.
-pub fn stop_script(lua: &Lua, id: InstanceId) -> bool {
+pub(crate) fn stop_script(lua: &Lua, id: InstanceId) -> bool {
     let Some(env) = with_world(lua, |w| w.started.remove(&id)) else {
         return false;
     };
@@ -91,7 +91,7 @@ pub(crate) fn is_stopped_env(lua: &Lua, env: Table) -> bool {
 
 /// Run a chunk of source as if it were a Script at `id` (used by tests and
 /// the conformance runner).
-pub fn run_source(
+pub(crate) fn run_source(
     lua: &Lua,
     chunk_name: &str,
     source: &str,
@@ -115,7 +115,12 @@ fn fresh_environment(lua: &Lua) -> mlua::Result<Table> {
 
 /// Run `source` in the environment kept under `name` across calls, so
 /// globals one call sets the next one sees.
-pub fn run_source_in(lua: &Lua, name: &str, chunk_name: &str, source: &str) -> mlua::Result<()> {
+pub(crate) fn run_source_in(
+    lua: &Lua,
+    name: &str,
+    chunk_name: &str,
+    source: &str,
+) -> mlua::Result<()> {
     let key = format!("rook.env.{name}");
     let env = match lua.named_registry_value::<Option<Table>>(&key)? {
         Some(env) => env,

@@ -32,7 +32,7 @@ fn log(lua: &Lua, kind: MessageType, args: MultiValue) {
 fn caller(lua: &Lua) -> Option<String> {
     for level in 1..8 {
         let found = lua.inspect_stack(level, |d| {
-            let src = d.source().short_src.map(|s| s.into_owned());
+            let src = d.source().short_src.map(std::borrow::Cow::into_owned);
             (src, d.current_line())
         })?;
         if let (Some(src), Some(line)) = found

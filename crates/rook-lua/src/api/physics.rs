@@ -50,36 +50,36 @@ fn edit(
     mutate(lua, |w| groups.write(&mut w.dom))
 }
 
-fn register(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
+fn register(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let name = a.string(0)?;
     edit(lua, |g| g.register(&name))?;
     Outcome::ret(lua, ())
 }
 
-fn unregister(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
+fn unregister(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let name = a.string(0)?;
     edit(lua, |g| g.unregister(&name))?;
     Outcome::ret(lua, ())
 }
 
-fn rename(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
+fn rename(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let (from, to) = (a.string(0)?, a.string(1)?);
     edit(lua, |g| g.rename(&from, &to))?;
     Outcome::ret(lua, ())
 }
 
-fn set_collidable(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
+fn set_collidable(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let (x, y, collides) = (a.string(0)?, a.string(1)?, a.truthy(2));
     edit(lua, |g| g.set_collidable(&x, &y, collides))?;
     Outcome::ret(lua, ())
 }
 
-fn are_collidable(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
+fn are_collidable(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let (x, y) = (a.string(0)?, a.string(1)?);
     Outcome::ret(lua, read(lua).collidable(&x, &y))
 }
 
-fn is_registered(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
+fn is_registered(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let name = a.string(0)?;
     Outcome::ret(lua, read(lua).get(&name).is_some())
 }
@@ -100,21 +100,21 @@ fn group_tables(lua: &Lua, with_id: bool) -> ApiResult<Outcome> {
     Outcome::ret(lua, list)
 }
 
-fn registered_groups(lua: &Lua, _: InstanceId, _: Args) -> ApiResult<Outcome> {
+fn registered_groups(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
     group_tables(lua, false)
 }
 
-fn legacy_groups(lua: &Lua, _: InstanceId, _: Args) -> ApiResult<Outcome> {
+fn legacy_groups(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
     group_tables(lua, true)
 }
 
-fn max_groups(lua: &Lua, _: InstanceId, _: Args) -> ApiResult<Outcome> {
+fn max_groups(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
     Outcome::ret(lua, MAX_GROUPS)
 }
 
 /// Deprecated: registers the group and returns its id; the name must be
 /// new.
-fn create(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
+fn create(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let name = a.string(0)?;
     if read(lua).get(&name).is_some() {
         return Err(ScriptError(GroupError::Exists.to_string()));
@@ -123,7 +123,7 @@ fn create(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
     Outcome::ret(lua, read(lua).id_of(&name))
 }
 
-fn group_id(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
+fn group_id(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let name = a.string(0)?;
     let id = read(lua)
         .get(&name)
@@ -133,7 +133,7 @@ fn group_id(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
 }
 
 /// The name for an id, or an empty string.
-fn group_name(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
+fn group_name(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let id = a.number(0)?;
     let groups = read(lua);
     let name = groups
@@ -144,7 +144,7 @@ fn group_name(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
     Outcome::ret(lua, name)
 }
 
-fn set_part_group(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
+fn set_part_group(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let (part, name) = (a.instance(0)?, a.string(1)?);
     mutate(lua, |w| {
         w.dom
@@ -153,7 +153,7 @@ fn set_part_group(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
     Outcome::ret(lua, ())
 }
 
-fn contains_part(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
+fn contains_part(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let (name, part) = (a.string(0)?, a.instance(1)?);
     Outcome::ret(
         lua,
@@ -163,7 +163,7 @@ fn contains_part(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
 
 /// Both parts collide and their groups collide (creator-docs
 /// BasePart:CanCollideWith). Both must be in Workspace (observed).
-fn can_collide_with(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
+fn can_collide_with(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let other = a.instance(0)?;
     let in_world = with_world(lua, |w| {
         w.dom
@@ -189,12 +189,12 @@ fn can_collide_with(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> 
 }
 
 /// Starts the rocket flying toward its target at the next physics step.
-fn fire_rocket(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
+fn fire_rocket(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
     with_world(lua, |w| w.physics.command(Command::FireRocket(this)));
     Outcome::ret(lua, ())
 }
 
-fn abort_rocket(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
+fn abort_rocket(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
     with_world(lua, |w| w.physics.command(Command::AbortRocket(this)));
     Outcome::ret(lua, ())
 }

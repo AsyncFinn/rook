@@ -111,7 +111,7 @@ fn expected_path(root: &Path, id: &str) -> PathBuf {
 }
 
 /// Run every case in a Studio playtest and save the results.
-pub fn record(root: &Path, filter: Option<&str>) -> anyhow::Result<()> {
+pub(crate) fn record(root: &Path, filter: Option<&str>) -> anyhow::Result<()> {
     let cases = cases(root, filter)?;
     let mut studio = studio::Studio::connect()?;
     let was_playing = studio.mode()? != "Edit";
@@ -193,7 +193,7 @@ fn run_in_rook(case: &Case, deferred: bool) -> anyhow::Result<String> {
 }
 
 /// Run every case that has an expectation in Rook and compare.
-pub fn run(root: &Path, filter: Option<&str>) -> anyhow::Result<()> {
+pub(crate) fn run(root: &Path, filter: Option<&str>) -> anyhow::Result<()> {
     let cases = cases(root, filter)?;
     let (mut passed, mut failed, mut missing) = (0, 0, 0);
     for case in &cases {

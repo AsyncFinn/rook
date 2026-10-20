@@ -2,7 +2,7 @@ use std::path::Path;
 
 use rook_formats::{CompareOptions, Format, compare_with, load, save};
 
-pub fn run(file: &Path, to: Option<Format>) -> anyhow::Result<()> {
+pub(crate) fn run(file: &Path, to: Option<Format>) -> anyhow::Result<()> {
     let bytes = fs_err::read(file)?;
     let first = load(&bytes)?;
     let target = to.unwrap_or(first.format);

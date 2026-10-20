@@ -27,17 +27,17 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
     })
 }
 
-fn nil(lua: &Lua, _: InstanceId, _: Args) -> ApiResult<Outcome> {
+fn nil(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
     Outcome::ret(lua, LuaValue::Nil)
 }
 
-fn is_key_down(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
+fn is_key_down(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let code = item_value(lua, a.get(0), "KeyCode").ok_or_else(|| a.wrong(0, "KeyCode"))?;
     Outcome::ret(lua, with_world(lua, |w| w.input.keys.contains(&code)))
 }
 
 /// `Enum.UserInputType` MouseButton1-3 are values 0-2.
-fn is_mouse_button_pressed(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
+fn is_mouse_button_pressed(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let t =
         item_value(lua, a.get(0), "UserInputType").ok_or_else(|| a.wrong(0, "UserInputType"))?;
     let pressed = with_world(lua, |w| {
@@ -46,19 +46,19 @@ fn is_mouse_button_pressed(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outco
     Outcome::ret(lua, pressed)
 }
 
-fn get_mouse_location(lua: &Lua, _: InstanceId, _: Args) -> ApiResult<Outcome> {
+fn get_mouse_location(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
     let (x, y) = with_world(lua, |w| w.input.mouse);
     Outcome::ret(lua, LVector2(rook_types::Vector2::new(x, y)))
 }
 
-fn get_mouse_delta(lua: &Lua, _: InstanceId, _: Args) -> ApiResult<Outcome> {
+fn get_mouse_delta(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
     let (x, y) = with_world(lua, |w| w.input.mouse_delta);
     Outcome::ret(lua, LVector2(rook_types::Vector2::new(x, y)))
 }
 
 /// Fresh InputObjects describing what is held (creator-docs
 /// UserInputService:GetKeysPressed).
-fn get_keys_pressed(lua: &Lua, _: InstanceId, _: Args) -> ApiResult<Outcome> {
+fn get_keys_pressed(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
     let objects = with_world(lua, |w| {
         let mut keys: Vec<u32> = w.input.keys.iter().copied().collect();
         keys.sort_unstable();
@@ -78,7 +78,7 @@ fn get_keys_pressed(lua: &Lua, _: InstanceId, _: Args) -> ApiResult<Outcome> {
     sequence(lua, objects)
 }
 
-fn get_mouse_buttons_pressed(lua: &Lua, _: InstanceId, _: Args) -> ApiResult<Outcome> {
+fn get_mouse_buttons_pressed(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
     let objects = with_world(lua, |w| {
         let buttons = w.input.buttons;
         let pos = w.input.mouse;
@@ -103,7 +103,7 @@ fn sequence(lua: &Lua, ids: Vec<InstanceId>) -> ApiResult<Outcome> {
 }
 
 /// Keyboard and mouse is the only input Rook has so far.
-fn last_input_type(lua: &Lua, _: InstanceId, _: Args) -> ApiResult<Outcome> {
+fn last_input_type(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
     // MouseMovement.
     Outcome::ret(
         lua,
@@ -112,7 +112,7 @@ fn last_input_type(lua: &Lua, _: InstanceId, _: Args) -> ApiResult<Outcome> {
 }
 
 /// The local player's Mouse on a client; nil on the server.
-fn get_mouse(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
+fn get_mouse(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
     let mouse = with_world(lua, |w| {
         let local = w.dom.local_player()?;
         (local == this).then_some(w.input.mouse_object).flatten()

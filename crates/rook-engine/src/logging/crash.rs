@@ -37,7 +37,9 @@ static STATE: Mutex<State> = Mutex::new(State {
 });
 
 fn state() -> std::sync::MutexGuard<'static, State> {
-    STATE.lock().unwrap_or_else(|e| e.into_inner())
+    STATE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 pub(super) fn remember(line: &str) {
@@ -72,7 +74,7 @@ fn note(info: &PanicHookInfo<'_>) {
     let message = info
         .payload()
         .downcast_ref::<&str>()
-        .map(|s| s.to_string())
+        .map(std::string::ToString::to_string)
         .or_else(|| info.payload().downcast_ref::<String>().cloned())
         .unwrap_or_else(|| "(not a string)".into());
     let place = info

@@ -19,7 +19,7 @@ use crate::ctx::args::{Args, number_of, type_name};
 use crate::ctx::{ApiResult, Outcome, ScriptError, api_fn, with_world};
 
 /// Copies a fetched asset's instances into a Model.
-pub type Fill = Box<dyn FnOnce(&mut Dom, InstanceId)>;
+pub(crate) type Fill = Box<dyn FnOnce(&mut Dom, InstanceId)>;
 
 /// A [`Fill`] for the asset, or why it didn't load.
 pub type AssetFill = Result<Fill, FailureKind>;
@@ -65,7 +65,7 @@ fn asset_id(n: f64) -> i64 {
     n.round() as i64
 }
 
-fn load_asset(lua: &Lua, _this: InstanceId, a: Args) -> ApiResult<Outcome> {
+fn load_asset(lua: &Lua, _this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let id = match a.get(0) {
         LuaValue::Nil => return Err(ScriptError("Argument 1 missing or nil".into())),
         v => number_of(v)

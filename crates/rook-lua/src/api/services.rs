@@ -173,24 +173,24 @@ fn store(lua: &Lua, class: &str, name: &str, scope: &str) -> ApiResult<Outcome> 
     Outcome::ret(lua, ud)
 }
 
-fn get_data_store(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
+fn get_data_store(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let name = a.string(0)?;
     let scope = a.opt_string(1)?.unwrap_or_else(|| "global".into());
     store(lua, "DataStore", &name, &scope)
 }
 
-fn get_global_data_store(lua: &Lua, _: InstanceId, _: Args) -> ApiResult<Outcome> {
+fn get_global_data_store(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
     store(lua, "GlobalDataStore", "GlobalDataStore", "global")
 }
 
-fn get_ordered_data_store(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
+fn get_ordered_data_store(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let name = a.string(0)?;
     let scope = a.opt_string(1)?.unwrap_or_else(|| "global".into());
     store(lua, "OrderedDataStore", &name, &scope)
 }
 
 /// No request limits locally.
-fn request_budget(lua: &Lua, _: InstanceId, _: Args) -> ApiResult<Outcome> {
+fn request_budget(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
     Outcome::ret(lua, 60)
 }
 
@@ -268,12 +268,12 @@ fn from_json(lua: &Lua, v: &serde_json::Value) -> mlua::Result<LuaValue> {
     })
 }
 
-fn json_encode(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
+fn json_encode(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let json = to_json(a.get(0), 0)?;
     Outcome::ret(lua, json.to_string())
 }
 
-fn json_decode(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
+fn json_decode(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let text = a.string(0)?;
     let json: serde_json::Value =
         serde_json::from_str(&text).map_err(|_| ScriptError("Can't parse JSON".into()))?;
@@ -282,7 +282,7 @@ fn json_decode(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
 
 /// A random version 4 UUID, uppercase, in braces unless asked otherwise
 /// (creator-docs HttpService:GenerateGUID).
-fn generate_guid(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
+fn generate_guid(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let braces = !matches!(a.get(0), LuaValue::Boolean(false));
     let math: Table = lua.globals().get("math")?;
     let random: mlua::Function = math.get("random")?;
@@ -304,7 +304,7 @@ fn generate_guid(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
     Outcome::ret(lua, if braces { format!("{{{guid}}}") } else { guid })
 }
 
-fn url_encode(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
+fn url_encode(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let text = a.string(0)?;
     let mut out = String::new();
     for b in text.bytes() {
@@ -319,7 +319,7 @@ fn url_encode(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
 
 /// HTTP requests are off unless the place enables them; Rook doesn't
 /// make network requests on behalf of archived places yet.
-fn http_disabled(_: &Lua, _: InstanceId, _: Args) -> ApiResult<Outcome> {
+fn http_disabled(_: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
     Err(ScriptError(
         "Http requests are not enabled. Enable via game settings".into(),
     ))

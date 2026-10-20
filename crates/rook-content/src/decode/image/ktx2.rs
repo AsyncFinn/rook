@@ -114,7 +114,7 @@ pub(crate) mod tests {
 
     /// A 4 × 4 KTX2 holding one BC1 block of `color` (RGB565), with
     /// `contentHash` set, Zstandard-compressed when `zstd`.
-    pub fn bc1(color: u16, content_hash: &str, zstd: bool) -> Vec<u8> {
+    pub(crate) fn bc1(color: u16, content_hash: &str, zstd: bool) -> Vec<u8> {
         let mut block = Vec::new();
         block.extend_from_slice(&color.to_le_bytes());
         block.extend_from_slice(&color.to_le_bytes());

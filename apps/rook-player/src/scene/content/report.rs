@@ -18,7 +18,7 @@ use super::loader::FileRef;
 
 /// What failed to load, by what wanted it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum What {
+pub(crate) enum What {
     Union,
     Mesh,
     /// A built-in material's or terrain's texture.
@@ -59,7 +59,7 @@ impl What {
 
 /// One instance whose file didn't load.
 #[derive(Debug, Clone)]
-pub struct Failed {
+pub(crate) struct Failed {
     pub what: What,
     pub path: String,
     pub reference: ContentRef,
@@ -68,7 +68,7 @@ pub struct Failed {
 
 /// Failures waiting to be reported.
 #[derive(Debug, Default)]
-pub struct Report {
+pub(crate) struct Report {
     /// Each instance and file reported once.
     seen: HashSet<(Option<InstanceId>, FileRef)>,
     /// Files Studio-style warnings were printed for (once each).
@@ -78,14 +78,14 @@ pub struct Report {
 
 impl Report {
     /// Note that `part`'s file `key` failed (`None` for the sky).
-    pub fn add(&mut self, part: Option<InstanceId>, key: &FileRef, failure: &Failure) {
+    pub(crate) fn add(&mut self, part: Option<InstanceId>, key: &FileRef, failure: &Failure) {
         if self.seen.insert((part, key.clone())) {
             self.pending.push((part, key.clone(), failure.clone()));
         }
     }
 
     /// Report what failed since the last flush.
-    pub fn flush(&mut self, dom: &Dom) {
+    pub(crate) fn flush(&mut self, dom: &Dom) {
         if self.pending.is_empty() {
             return;
         }
@@ -151,7 +151,7 @@ struct Group<'a> {
 
 /// The summary: a first line counting what didn't load, then one line per
 /// cause with how many instances and files it hit and the first instance.
-pub fn summarize(failed: &[Failed]) -> Vec<String> {
+pub(crate) fn summarize(failed: &[Failed]) -> Vec<String> {
     if failed.is_empty() {
         return Vec::new();
     }

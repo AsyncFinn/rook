@@ -51,7 +51,7 @@ pub(crate) struct GpuCache<K, T: Upload> {
 }
 
 impl<K: Copy + Eq + Hash, T: Upload> GpuCache<K, T> {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             ready: HashMap::default(),
             queue: VecDeque::new(),
@@ -59,52 +59,52 @@ impl<K: Copy + Eq + Hash, T: Upload> GpuCache<K, T> {
         }
     }
 
-    pub fn get(&self, key: &K) -> Option<&T::Gpu> {
+    pub(crate) fn get(&self, key: &K) -> Option<&T::Gpu> {
         self.ready.get(key)
     }
 
     /// Every uploaded object.
-    pub fn uploaded(&self) -> impl Iterator<Item = &T::Gpu> {
+    pub(crate) fn uploaded(&self) -> impl Iterator<Item = &T::Gpu> {
         self.ready.values()
     }
 
-    pub fn contains(&self, key: &K) -> bool {
+    pub(crate) fn contains(&self, key: &K) -> bool {
         self.ready.contains_key(key)
     }
 
     /// Put an already uploaded object in the cache (built-in meshes),
     /// returning the one it replaces.
-    pub fn insert(&mut self, key: K, gpu: T::Gpu) -> Option<T::Gpu> {
+    pub(crate) fn insert(&mut self, key: K, gpu: T::Gpu) -> Option<T::Gpu> {
         self.ready.insert(key, gpu)
     }
 
     /// Queue `file` for upload under `key`, unless it's there or queued.
-    pub fn request(&mut self, key: K, file: &Arc<T>) {
+    pub(crate) fn request(&mut self, key: K, file: &Arc<T>) {
         if !self.ready.contains_key(&key) && self.queued.insert(key) {
             self.queue.push_back((key, file.clone()));
         }
     }
 
     /// Forget `key`'s queued upload, or take its GPU copy out.
-    pub fn remove(&mut self, key: &K) -> Option<T::Gpu> {
+    pub(crate) fn remove(&mut self, key: &K) -> Option<T::Gpu> {
         if self.queued.remove(key) {
             self.queue.retain(|(k, _)| k != key);
         }
         self.ready.remove(key)
     }
 
-    pub fn has_queued(&self) -> bool {
+    pub(crate) fn has_queued(&self) -> bool {
         !self.queue.is_empty()
     }
 
-    pub fn is_queued(&self, key: &K) -> bool {
+    pub(crate) fn is_queued(&self, key: &K) -> bool {
         self.queued.contains(key)
     }
 
     /// Upload queued files while `budget` (bytes) lasts; with
     /// `first_free`, the first one goes whatever its size. Returns the keys
     /// uploaded.
-    pub fn upload(
+    pub(crate) fn upload(
         &mut self,
         cx: &mut T::Context<'_>,
         budget: &mut usize,

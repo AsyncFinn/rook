@@ -28,9 +28,9 @@ fn override_property(method: &str, m: Material) -> ApiResult<String> {
 pub(super) fn get_base_material_override(
     lua: &Lua,
     this: InstanceId,
-    a: Args,
+    a: &Args,
 ) -> ApiResult<Outcome> {
-    let m = material(lua, &a, 0)?;
+    let m = material(lua, a, 0)?;
     override_property("GetBaseMaterialOverride", m)?;
     let name = with_world(lua, |w| {
         rook_physics::contacts::materials::base_material_override(&w.dom, this, m)
@@ -42,9 +42,9 @@ pub(super) fn get_base_material_override(
 pub(super) fn set_base_material_override(
     lua: &Lua,
     this: InstanceId,
-    a: Args,
+    a: &Args,
 ) -> ApiResult<Outcome> {
-    let m = material(lua, &a, 0)?;
+    let m = material(lua, a, 0)?;
     let name = a.string(1)?;
     let property = override_property("SetBaseMaterialOverride", m)?;
     mutate(lua, |w| {
@@ -57,8 +57,8 @@ pub(super) fn set_base_material_override(
 /// The first MaterialVariant among the service's descendants with this
 /// name and base material, or nil (observed: one inside a Folder is found;
 /// one of another base material isn't).
-pub(super) fn get_material_variant(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
-    let m = material(lua, &a, 0)?;
+pub(super) fn get_material_variant(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
+    let m = material(lua, a, 0)?;
     let name = a.string(1)?;
     let found = with_world(lua, |w| {
         rook_physics::contacts::materials::find_variant(&w.dom, this, m, &name)

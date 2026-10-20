@@ -23,19 +23,19 @@ pub(crate) struct Aabb {
 
 impl Aabb {
     /// Holds nothing; any view misses it.
-    pub const EMPTY: Self = Self {
+    pub(crate) const EMPTY: Self = Self {
         min: Vec3::splat(f32::INFINITY),
         max: Vec3::splat(f32::NEG_INFINITY),
     };
 
-    pub fn union(self, other: Self) -> Self {
+    pub(crate) fn union(self, other: Self) -> Self {
         Self {
             min: self.min.min(other.min),
             max: self.max.max(other.max),
         }
     }
 
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.min.cmpgt(self.max).any()
     }
 }
@@ -48,7 +48,7 @@ pub(crate) struct Frustum {
 }
 
 impl Frustum {
-    pub fn of(view_proj: Mat4) -> Self {
+    pub(crate) fn of(view_proj: Mat4) -> Self {
         let [x, y, z, w] = [0, 1, 2, 3].map(|i| view_proj.row(i));
         Self {
             planes: [w + x, w - x, w + y, w - y, z, w - z],
@@ -58,7 +58,7 @@ impl Frustum {
     /// Whether any of `b`, grown by `margin` studs, is inside. A box in
     /// front of all six planes may still miss the view near a corner;
     /// that only costs a draw.
-    pub fn sees(&self, b: Aabb, margin: f32) -> bool {
+    pub(crate) fn sees(&self, b: Aabb, margin: f32) -> bool {
         if b.is_empty() {
             return false;
         }
@@ -73,7 +73,7 @@ impl Frustum {
 
 impl Frustum {
     /// Whether all of `b`, grown by `margin` studs, is inside.
-    pub fn holds(&self, b: Aabb, margin: f32) -> bool {
+    pub(crate) fn holds(&self, b: Aabb, margin: f32) -> bool {
         if b.is_empty() {
             return false;
         }

@@ -41,7 +41,7 @@ fn fire_then(
 /// Plays from the last `TimePosition` a script set (0 if none, or since
 /// `Stop`), restarting a sound already playing; `Played` fires only when
 /// it wasn't playing.
-pub(super) fn sound_play(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
+pub(super) fn sound_play(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
     let was_playing = with_world(lua, |w| playing(w, this));
     let restart = |w: &mut World| {
         let control = w.sounds.entry(this).or_default();
@@ -61,7 +61,7 @@ pub(super) fn sound_play(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outc
 
 /// Stops and rewinds a playing sound; does nothing to one that isn't
 /// playing (a paused sound keeps its place).
-pub(super) fn sound_stop(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
+pub(super) fn sound_stop(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
     if !with_world(lua, |w| playing(w, this)) {
         return Outcome::ret(lua, ());
     }
@@ -75,7 +75,7 @@ pub(super) fn sound_stop(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outc
 }
 
 /// Pauses a playing sound where it is.
-pub(super) fn sound_pause(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
+pub(super) fn sound_pause(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
     if !with_world(lua, |w| playing(w, this)) {
         return Outcome::ret(lua, ());
     }
@@ -86,7 +86,7 @@ pub(super) fn sound_pause(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Out
 }
 
 /// Plays a sound that isn't playing from where it is.
-pub(super) fn sound_resume(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Outcome> {
+pub(super) fn sound_resume(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
     if with_world(lua, |w| playing(w, this)) {
         return Outcome::ret(lua, ());
     }
@@ -99,7 +99,7 @@ pub(super) fn sound_resume(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Ou
 /// `SoundService:SetListener`: where 3D sounds are heard from
 /// (creator-docs; `Enum.ListenerType` Camera, CFrame, ObjectPosition,
 /// ObjectCFrame).
-pub(super) fn set_listener(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
+pub(super) fn set_listener(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let e = database()
         .enum_by_name("ListenerType")
         .expect("ListenerType enum");
@@ -116,7 +116,7 @@ pub(super) fn set_listener(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outco
 
 /// `SoundService:GetListener`: the type and what goes with it (nil for
 /// Camera), as set.
-pub(super) fn get_listener(lua: &Lua, _: InstanceId, _: Args) -> ApiResult<Outcome> {
+pub(super) fn get_listener(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
     let listener = with_world(lua, |w| w.listener);
     let (kind, value) = match listener {
         Listener::Camera => ("Camera", LuaValue::Nil),
@@ -137,7 +137,7 @@ pub(super) fn get_listener(lua: &Lua, _: InstanceId, _: Args) -> ApiResult<Outco
 /// this DataModel alone, wherever it is (creator-docs), changing nothing
 /// scripts see: no `Playing`, `TimePosition` or events (Confirmed). On a
 /// server it is an error. The engine plays it (`rook-engine`'s `sounds`).
-pub(super) fn play_local_sound(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
+pub(super) fn play_local_sound(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     if !with_world(lua, |w| w.is_client) {
         return Err(ScriptError(
             "SoundService:PlayLocalSound only works on a client.".into(),

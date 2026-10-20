@@ -52,7 +52,7 @@ fn near(tile: IVec2, camera: Vec3, reach: f32) -> bool {
 impl SceneCache {
     /// Draw the blades of the tiles near `camera` and stop drawing the
     /// rest. Returns the entries that changed.
-    pub fn update_grass(&mut self, camera: Vec3) -> Vec<usize> {
+    pub(crate) fn update_grass(&mut self, camera: Vec3) -> Vec<usize> {
         let mut changed = Vec::new();
         let reach = if self.terrain.grass.on {
             GRASS_REACH
@@ -132,7 +132,7 @@ impl SceneCache {
 
     /// The meshes of grass tiles no longer drawn, for
     /// [`Renderer::drop_mesh`] once the renderer has their entries hidden.
-    pub fn take_dropped_meshes(&mut self) -> Vec<MeshHash> {
+    pub(crate) fn take_dropped_meshes(&mut self) -> Vec<MeshHash> {
         std::mem::take(&mut self.terrain.grass.dropped)
     }
 }
