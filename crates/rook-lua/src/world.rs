@@ -167,8 +167,11 @@ pub enum Listener {
 pub(crate) struct ModuleState {
     /// `require` results, by ModuleScript.
     pub(crate) results: HashMap<InstanceId, mlua::RegistryKey>,
-    /// Modules currently loading, to detect cycles.
-    pub(crate) loading: Vec<InstanceId>,
+    /// Modules currently loading, with the thread running each body: a
+    /// require from that thread is a cycle, one from another thread waits.
+    pub(crate) loading: HashMap<InstanceId, mlua::Thread>,
+    /// Threads waiting for a module another thread is loading.
+    pub(crate) waiting: HashMap<InstanceId, Vec<mlua::Thread>>,
 }
 
 /// Everything a DataModel's scripts can reach.

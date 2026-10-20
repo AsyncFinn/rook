@@ -472,41 +472,8 @@ ClockTime 14.5, the default skybox, waves frozen):
   water is near white from above on the sun's side and 0.1% away from
   it, 5% seen along it towards the sun, and none along it away from the
   sun (Rook 1.6%, 0.7%, 1.9% and none).
-- At Automatic quality, which every value here was measured at, Studio's
-  water reflects only the skybox, as Rook's does (Confirmed, Studio 0.743,
-  2026-10-19). An earlier read of a pillar "reflected upside down" was its
-  underwater half showing through: the pillar was centred on the water
-  line, so that half sits where a mirror image would. It goes with
-  `WaterTransparency` 0 and when the pillar is lifted out of the water.
-  The dark shapes beside a pillar are its shadow on the water and, offset
-  by the sun's angle, its shadow on the floor seen through the water; both
-  go with `GlobalShadows` off.
-
-#### Reflections at high quality
-
-For when Rook gets a quality setting (see
-[antialiasing](antialiasing.md#for-rook)). From `EditQualityLevel` Level16
-up, Studio's water also reflects parts: none at Automatic, Level08, 12, 14
-or 15, a strong, rippled reflection at 16 and 21. It's screen-space
-(Confirmed):
-
-- With the pillar off screen (camera looking down on the water), the
-  reflection is gone.
-- With the pillar's top off the top of the screen, the reflection stops
-  where the mirror image of the screen's top edge falls (measured: 648 px,
-  predicted 648), not at the mirror image of the pillar's top (691).
-- It follows the ripples (its edges are torn), so it's traced along the
-  rippled normal, not a flat mirror plane.
-
-Not measured yet: its strength against the sky reflection at each angle,
-how far a ray reaches, how it fades near the screen's edges, whether
-terrain and transparent parts show in it, and which in-game Graphics
-Quality steps map to Level16.
-
-*Method*: the pool above with the 4 × 20 × 4 red pillar raised to stand
-on the water (centre y 20.5), camera at (200, 16, 20) looking at
-(232, 8, 20), FOV 70; set `settings().Rendering.EditQualityLevel`, wait,
-capture; put it back to Automatic afterwards.
+- Studio's water reflects parts (the pillar shows in it upside down);
+  Rook's reflects only the skybox.
 
 ### Scripts
 

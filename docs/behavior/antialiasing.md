@@ -62,6 +62,3 @@ The simplest match is a quality setting that picks 1, 2 or 4 samples:
 multisampled colour and depth target for the main pass, resolved into the
 window or screenshot image, and every pipeline built with that sample
 count.
-
-The same setting should turn on water's screen-space reflections from
-Level16 up: see [terrain](terrain.md#reflections-at-high-quality).
