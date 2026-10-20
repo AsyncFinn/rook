@@ -24,6 +24,7 @@ use std::collections::{BTreeSet, HashSet};
 use rook_content::decode::audio::Audio;
 use rook_content::{ContentRef, Failure, Fetched, Ticket};
 
+use super::journal_watch::JournalWatch;
 use crate::*;
 
 /// What one sound file came to.
@@ -41,11 +42,7 @@ pub(crate) type SoundEvent = (InstanceId, &'static str, Option<String>, Option<u
 
 #[derive(Debug, Default)]
 pub(crate) struct Sounds {
-    /// Journal position up to which Sound changes have been looked at.
-    cursor: u64,
-    /// Whether the DataModel's sounds have been looked for once (a loaded
-    /// place's are in the tree before the journal starts).
-    scanned: bool,
+    pub(crate) watch: JournalWatch,
     /// Sounds whose `SoundId` or place in the tree changed last frame.
     dirty: HashSet<InstanceId>,
     /// Sounds in the DataModel, with the file each refers to (`None` for
@@ -102,12 +99,6 @@ fn sound_id(dom: &Dom, id: InstanceId) -> String {
 }
 
 impl Sounds {
-    /// Look at every sound again (a client DataModel filled by hand).
-    pub(crate) fn rescan(&mut self, cursor: u64) {
-        self.cursor = cursor;
-        self.scanned = false;
-    }
-
     /// What the mixer restarts a sound by: a new value whenever a `Play`
     /// or a set `TimePosition` (by a script, or replicated) moved it.
     fn generation(&self, id: InstanceId) -> u32 {
@@ -178,8 +169,8 @@ impl DataModel {
         let w = self.runtime.world();
         let dom = &w.dom;
         let sounds = &mut self.sounds;
-        if !sounds.scanned {
-            sounds.scanned = true;
+        let (first, changes) = sounds.watch.look(dom);
+        if first {
             let all = dom.descendants(dom.root());
             sounds
                 .dirty
@@ -190,7 +181,7 @@ impl DataModel {
             );
         }
         let ids = SoundProps::get();
-        for c in dom.journal().since(sounds.cursor) {
+        for c in changes {
             match c {
                 Change::Property { id, property } => {
                     if ids.content.contains(property) {
@@ -221,7 +212,6 @@ impl DataModel {
                 _ => {}
             }
         }
-        sounds.cursor = dom.journal().end();
     }
 
     /// Act on last frame's sound changes: a sound that entered the

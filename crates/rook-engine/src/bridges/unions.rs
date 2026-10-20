@@ -15,14 +15,12 @@ use std::collections::HashSet;
 use rook_content::decode::mesh::union::physics;
 use rook_types::UnionCollision;
 
+use super::journal_watch::JournalWatch;
 use crate::*;
 
 #[derive(Debug, Default)]
 pub(crate) struct Unions {
-    /// Journal position up to which changes have been looked at.
-    cursor: u64,
-    /// Whether every union has been looked at once.
-    scanned: bool,
+    pub(crate) watch: JournalWatch,
     /// Unions to look at again.
     dirty: HashSet<InstanceId>,
     /// Geometry decoded so far, by its bytes: copies share it.
@@ -32,14 +30,6 @@ pub(crate) struct Unions {
 /// The properties whose change gives a union new geometry.
 fn is_geometry_property(name: &str) -> bool {
     matches!(name, "PhysicalConfigData" | "PhysicsData")
-}
-
-impl Unions {
-    /// Look at every union again (a client DataModel filled by hand).
-    pub(crate) fn rescan(&mut self, cursor: u64) {
-        self.cursor = cursor;
-        self.scanned = false;
-    }
 }
 
 /// The physics blob saved in a union, if one holds geometry or a block.
@@ -71,15 +61,15 @@ impl DataModel {
         let Some(ws) = dom.find_service("Workspace") else {
             return;
         };
-        if !unions.scanned {
-            unions.scanned = true;
+        let (first, changes) = unions.watch.look(dom);
+        if first {
             let all = dom.descendants(ws);
             unions
                 .dirty
                 .extend(all.into_iter().filter(|&i| dom.is_a(i, "PartOperation")));
         }
         let db = dom.database();
-        for c in dom.journal().since(unions.cursor) {
+        for c in changes {
             match c {
                 Change::Property { id, property }
                     if is_geometry_property(db.property(*property).name)
@@ -94,7 +84,6 @@ impl DataModel {
                 _ => {}
             }
         }
-        unions.cursor = dom.journal().end();
     }
 
     /// Give physics the saved geometry of every union changed since the

@@ -110,14 +110,16 @@ impl DataModel {
         let lighting = dom.find_service("Lighting");
         let props = RenderProps::get();
         let changes = &mut self.render_changes;
-        // The place's own SelectionBoxes, the first time.
-        let adorned = self.adorned.get_or_insert_with(|| {
-            dom.descendants(dom.root())
+        let (first, journal) = self.render_watch.look(dom);
+        let adorned = &mut self.adorned;
+        if first {
+            *adorned = dom
+                .descendants(dom.root())
                 .into_iter()
                 .filter(|&i| dom.class_name(i) == "SelectionBox")
                 .filter_map(|i| Some((i, dom.ref_property(i, "Adornee")?)))
-                .collect()
-        });
+                .collect();
+        }
         // A mesh decides how its parent part looks (SpecialMesh, BlockMesh,
         // CylinderMesh, FileMesh), and decals and textures draw on it.
         let decorates = |id: InstanceId| {
@@ -155,7 +157,7 @@ impl DataModel {
             mark_part(changes, new);
         };
         let adornment = |id: InstanceId| dom.class_name(id) == "SelectionBox";
-        for c in dom.journal().since(self.render_cursor) {
+        for c in journal {
             match c {
                 Change::Property { id, property } => {
                     if Some(*id) == lighting {
@@ -242,6 +244,5 @@ impl DataModel {
                 .retain(|id| !parts.contains(id) && !placed.contains(id));
             changes.parts.retain(|id| !placed.contains(id));
         }
-        self.render_cursor = dom.journal().end();
     }
 }

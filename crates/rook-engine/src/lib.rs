@@ -27,6 +27,7 @@ use rook_lua::{LogEntry, MessageType, Runtime};
 use rook_scheduler::{Clock, Queue};
 use rook_types::Value;
 
+use bridges::journal_watch::JournalWatch;
 use bridges::{explosions, input, sounds, unions};
 use session::threads;
 
@@ -113,13 +114,13 @@ pub struct DataModel {
     run_service: InstanceId,
     /// Journal position up to which new scripts have been looked for.
     script_cursor: u64,
-    /// Journal position up to which render-relevant changes have been checked.
-    render_cursor: u64,
+    /// Where render-relevant changes have been checked up to.
+    render_watch: JournalWatch,
     /// What a renderer draws that changed since it last asked.
     render_changes: RenderChanges,
     /// Each SelectionBox's Adornee as last seen, whose look changes when
-    /// it moves to another (read from the DOM on first use).
-    adorned: Option<HashMap<InstanceId, InstanceId>>,
+    /// it moves to another.
+    adorned: HashMap<InstanceId, InstanceId>,
     /// Keyboard and mouse bookkeeping (clients).
     input: input::InputTracker,
     content: Content,
@@ -177,11 +178,11 @@ impl DataModel {
     pub fn reset_cursors(&mut self) {
         let end = self.runtime.world().dom.journal().end();
         self.script_cursor = end;
-        self.render_cursor = end;
+        self.render_watch.rescan(end);
         self.render_changes = RenderChanges::everything();
-        self.sounds.rescan(end);
-        self.unions.rescan(end);
-        self.explosions.rescan(end);
+        self.sounds.watch.rescan(end);
+        self.unions.watch.rescan(end);
+        self.explosions.watch.rescan(end);
     }
 
     /// Drop journal entries every reader has seen. Physics catches up first
@@ -284,9 +285,9 @@ impl DataModel {
             auto_trim: true,
             run_service,
             script_cursor,
-            render_cursor: script_cursor,
+            render_watch: JournalWatch::starting_at(script_cursor),
             render_changes: RenderChanges::everything(),
-            adorned: None,
+            adorned: HashMap::new(),
             input: Default::default(),
             content: Content {
                 resolver: options.content.clone(),

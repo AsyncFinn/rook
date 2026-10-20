@@ -13,6 +13,7 @@
 
 use std::collections::HashSet;
 
+use super::journal_watch::JournalWatch;
 use crate::*;
 
 /// How long an Explosion stays in Workspace after going off, in its own
@@ -22,24 +23,13 @@ const LIFETIME: f64 = 2.75;
 
 #[derive(Debug, Default)]
 pub(crate) struct Explosions {
-    /// Journal position up to which changes have been looked at.
-    cursor: u64,
-    /// Whether Workspace has been looked through once.
-    scanned: bool,
+    pub(crate) watch: JournalWatch,
     /// Every Explosion seen in Workspace, so each goes off once.
     seen: HashSet<InstanceId>,
     /// Waiting for the next step.
     pending: Vec<InstanceId>,
     /// Gone off, and their age in their own time.
     live: Vec<(InstanceId, f64)>,
-}
-
-impl Explosions {
-    /// Look through Workspace again (a client DataModel filled by hand).
-    pub(crate) fn rescan(&mut self, cursor: u64) {
-        self.cursor = cursor;
-        self.scanned = false;
-    }
 }
 
 /// Whether `id` is an Explosion in Workspace.
@@ -61,18 +51,17 @@ impl DataModel {
         let dom = &w.dom;
         let x = &mut self.explosions;
         let mut found = Vec::new();
-        if !x.scanned {
-            x.scanned = true;
+        let (first, changes) = x.watch.look(dom);
+        if first {
             if let Some(ws) = dom.find_service("Workspace") {
                 found.extend(dom.descendants(ws));
             }
         }
-        for c in dom.journal().since(x.cursor) {
+        for c in changes {
             if let Change::Reparented { subtree, .. } = c {
                 found.extend(subtree.iter().copied());
             }
         }
-        x.cursor = dom.journal().end();
         for id in found {
             if in_workspace(dom, id) && x.seen.insert(id) {
                 x.pending.push(id);
