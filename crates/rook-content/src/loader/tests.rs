@@ -39,8 +39,7 @@ fn resolves_off_thread_and_shares_duplicates() {
 fn decodes_meshes_on_the_workers() {
     let dir = crate::tests::temp_dir("loader-mesh");
     std::fs::create_dir_all(dir.join("content/meshes")).unwrap();
-    let text =
-        "version 1.00\n1\n[2,0,0][0,1,0][0,0,0][0,2,0][0,1,0][0,0,0][0,0,2][0,1,0][0,0,0]\n";
+    let text = "version 1.00\n1\n[2,0,0][0,1,0][0,0,0][0,2,0][0,1,0][0,0,0][0,0,2][0,1,0][0,0,0]\n";
     std::fs::write(dir.join("content/meshes/tri.mesh"), text).unwrap();
     std::fs::write(dir.join("content/meshes/face.png"), b"\x89PNG").unwrap();
     let mut config = Config::empty();

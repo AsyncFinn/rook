@@ -24,8 +24,7 @@ fn the_written_file_sets_every_key() {
 
 #[test]
 fn reads_hand_edits() {
-    let edited =
-        "{\n  // more room\n  \"cacheMaxSize\": \"5GB\",\n  \"assetDelivery\": false,\n}";
+    let edited = "{\n  // more room\n  \"cacheMaxSize\": \"5GB\",\n  \"assetDelivery\": false,\n}";
     let settings = Settings::parse(edited).unwrap();
     assert_eq!(settings.cache_max_size.as_deref(), Some("5GB"));
     assert_eq!(settings.asset_delivery, Some(false));

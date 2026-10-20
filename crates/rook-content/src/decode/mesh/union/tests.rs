@@ -19,8 +19,8 @@ fn kinds() {
 /// magic by absolute position, as Roblox writes it.
 fn csgmdl2() -> Vec<u8> {
     const KEY: [u8; 31] = [
-        86, 46, 110, 88, 49, 32, 48, 4, 52, 105, 12, 119, 12, 1, 94, 0, 26, 96, 55, 105, 29,
-        82, 43, 7, 79, 36, 89, 101, 83, 4, 122,
+        86, 46, 110, 88, 49, 32, 48, 4, 52, 105, 12, 119, 12, 1, 94, 0, 26, 96, 55, 105, 29, 82,
+        43, 7, 79, 36, 89, 101, 83, 4, 122,
     ];
     let mut b = b"CSGMDL".to_vec();
     b.extend_from_slice(&2u32.to_le_bytes());
