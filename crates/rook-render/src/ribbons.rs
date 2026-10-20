@@ -245,7 +245,10 @@ fn beam<'a>(b: &'a Beam, camera: Vec3, time: f32) -> Option<Strip<'a>> {
             } else {
                 // Along the Attachments' up however the curve runs
                 // (observed: a steep end stays an upright band).
-                a.rotation.y_axis.lerp(z.rotation.y_axis, s).normalize_or(Vec3::Y)
+                a.rotation
+                    .y_axis
+                    .lerp(z.rotation.y_axis, s)
+                    .normalize_or(Vec3::Y)
             };
             let at = at + to_camera * b.z_offset;
             let u = match look.texture_mode {

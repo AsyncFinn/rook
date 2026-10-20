@@ -256,7 +256,10 @@ fn luau_helper(lua: &Lua, name: &str, source: &str) -> mlua::Result<Function> {
     if let Some(f) = lua.named_registry_value::<Option<Function>>(&key)? {
         return Ok(f);
     }
-    let f: Function = lua.load(source).set_name(format!("=[rook] {name}")).call(())?;
+    let f: Function = lua
+        .load(source)
+        .set_name(format!("=[rook] {name}"))
+        .call(())?;
     lua.set_named_registry_value(&key, f.clone())?;
     Ok(f)
 }
