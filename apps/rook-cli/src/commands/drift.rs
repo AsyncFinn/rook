@@ -1,16 +1,11 @@
-//! `rook-tools drift`: the checks `scripts/check` runs against the codebase
-//! drifting (CONTRIBUTING, "Keeping it clean"). Errors fail the check;
-//! warnings point at something worth a look.
-//!
-//! - Two functions in different files with the same signature and body
-//!   (whitespace and comments aside, bodies over [`MIN_BODY`] characters)
-//!   are an error: the helper belongs one layer down, once.
-//! - A comment block over [`MAX_COMMENT_LINES`] lines is a warning:
-//!   findings go in `docs/behavior`.
-//! - Reading the environment in a crate other than rook-engine and the
-//!   apps is an error: settings flow down from rook-engine.
-//!
-//! Test code (`tests.rs`, `tests/`, after `#[cfg(test)]`) is left out.
+//! `rook-tools drift`: what `scripts/check` runs against the codebase
+//! drifting (CONTRIBUTING, "Keeping it clean"). Errors fail the check:
+//! a function copied into another file (bodies over [`MIN_BODY`]
+//! characters, so helpers live once, a layer down), an environment read
+//! below rook-engine (settings flow down from it), and a file more than
+//! [`MAX_DEPTH`] folders below its crate's `src/` (so paths can be
+//! guessed). A comment block over [`MAX_COMMENT_LINES`] lines is a warning:
+//! findings go in `docs/behavior`. Test code is left out, except for depth.
 
 mod source;
 
@@ -20,6 +15,7 @@ use source::Source;
 
 const MIN_BODY: usize = 60;
 const MAX_COMMENT_LINES: usize = 15;
+const MAX_DEPTH: usize = 3;
 
 pub(crate) fn run() -> anyhow::Result<()> {
     let listed = std::process::Command::new("git")
@@ -33,6 +29,7 @@ pub(crate) fn run() -> anyhow::Result<()> {
     }
     let mut errors = duplicates(&sources);
     errors.extend(environment(&sources));
+    errors.extend(too_deep(&sources));
     for warning in long_comments(&sources) {
         println!("warning: {warning}");
     }
@@ -98,4 +95,37 @@ fn environment(sources: &[Source]) -> Vec<String> {
             )
         })
         .collect()
+}
+
+fn too_deep(sources: &[Source]) -> Vec<String> {
+    sources
+        .iter()
+        .filter_map(|s| {
+            let depth = folders_below_src(&s.path)?;
+            (depth > MAX_DEPTH).then(|| {
+                format!(
+                    "{} is {depth} folders below src/; at most {MAX_DEPTH}, so its path can be guessed",
+                    s.path
+                )
+            })
+        })
+        .collect()
+}
+
+/// How many folders `path` sits in below its crate's `src/`.
+fn folders_below_src(path: &str) -> Option<usize> {
+    let (_, inside) = path.split_once("/src/")?;
+    Some(inside.matches('/').count())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn depth_counts_folders_below_src() {
+        assert_eq!(folders_below_src("crates/a/src/lib.rs"), Some(0));
+        assert_eq!(folders_below_src("crates/a/src/x/y/z/f.rs"), Some(3));
+        assert_eq!(folders_below_src("crates/a/build.rs"), None);
+    }
 }
