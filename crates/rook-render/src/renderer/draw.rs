@@ -1,5 +1,7 @@
 //! Drawing a frame: the shadow pass, the sky, then parts and images.
 
+use super::effects::particles::ParticleRun;
+use super::effects::ribbons::RibbonRun;
 use super::*;
 use crate::batch::CULL_SLOTS;
 use crate::batch::cull::seen_runs;
@@ -74,6 +76,79 @@ impl Renderer {
         // below the horizon, where it lights nothing from above.
         let shadow =
             (l.global_shadows && sun.y > 0.0).then(|| ShadowView::fit(camera, aspect, sun));
+        // What each pass can see; batches wholly outside draw nothing.
+        let view_proj = camera.view_projection(aspect);
+        let view = Frustum::of(view_proj);
+        let margin = MOTION_STUDS.max(self.terrain.wave_size.abs());
+        self.write_globals(camera, aspect, sun, shadow);
+
+        stage(&mut times.setup);
+        let transparent_runs = {
+            profiling::scope!("upload instances");
+            self.upload_instances(camera, &view, margin)
+        };
+
+        stage(&mut times.instances);
+        let ribbon_runs = self.upload_ribbons(camera, &view);
+        let particle_runs = self.upload_particles(camera, &view);
+        stage(&mut times.effects);
+
+        // Each pass's draws, joined into runs that share what's bound.
+        let (mut shadow_runs, mut main_runs, starts) =
+            self.build_draws(shadow, &view, margin, transparent_runs);
+
+        stage(&mut times.draws);
+        let depth = self.depth_view(width, height);
+        let frame = self.tonemap.frame(&self.device, width, height);
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("rook frame"),
+            });
+        self.lights.fill(
+            &self.queue,
+            &mut encoder,
+            camera,
+            l.environment_diffuse > 0.0,
+        );
+        if shadow.is_some() {
+            self.shadow_pass(&mut encoder, &mut shadow_runs, starts[0]);
+        }
+        self.main_pass(
+            &mut encoder,
+            [&frame, &depth],
+            &mut main_runs,
+            starts[1],
+            (&ribbon_runs, &particle_runs),
+        );
+        self.tonemap
+            .record(&self.queue, &mut encoder, target, l.tonemapper);
+        if let Some(timer) = &mut self.timer {
+            timer.resolve(&mut encoder, shadow.is_some());
+        }
+        self.draw_counts = DrawCounts {
+            shadow: shadow_runs.counts,
+            main: main_runs.counts,
+        };
+        let commands = {
+            profiling::scope!("finish");
+            encoder.finish()
+        };
+        self.queue.submit([commands]);
+        stage(&mut times.passes);
+        self.stage_times = times;
+        self.record_time = start.elapsed();
+    }
+
+    /// The lighting, camera and sky the shaders read this frame.
+    fn write_globals(
+        &mut self,
+        camera: &Camera,
+        aspect: f32,
+        sun: Vec3,
+        shadow: Option<ShadowView>,
+    ) {
+        let l = self.lighting;
         for hash in l.skybox.into_iter().flatten() {
             if self.images.contains(&hash) {
                 self.ensure_group([Some(hash), None, None, None, None]);
@@ -91,10 +166,7 @@ impl Renderer {
             faces[face.index() * 2] = rgb(right.to_array(), rook_types::SURFACE_TILE_STUDS);
             faces[face.index() * 2 + 1] = rgb(up.to_array(), 0.0);
         }
-        // What each pass can see; batches wholly outside draw nothing.
         let view_proj = camera.view_projection(aspect);
-        let view = Frustum::of(view_proj);
-        let margin = MOTION_STUDS.max(self.terrain.wave_size.abs());
         let globals = Globals {
             view_proj: view_proj.to_cols_array_2d(),
             camera_pos: rgb(camera.position.to_array(), 1.0),
@@ -143,115 +215,79 @@ impl Renderer {
         };
         self.queue
             .write_buffer(&self.globals, 0, bytemuck::bytes_of(&globals));
+    }
 
-        stage(&mut times.setup);
-        let transparent_runs = {
-            profiling::scope!("upload instances");
-            self.upload_instances(camera, &view, margin)
-        };
-
-        stage(&mut times.instances);
-        let ribbon_runs = self.upload_ribbons(camera, &view);
-        let particle_runs = self.upload_particles(camera, &view);
-        stage(&mut times.effects);
-
-        // Each pass's draws, joined into runs that share what's bound.
-        let (mut shadow_runs, mut main_runs, starts) =
-            self.build_draws(shadow, &view, margin, transparent_runs);
-
-        stage(&mut times.draws);
-        let depth = self.depth_view(width, height);
-        let frame = self.tonemap.frame(&self.device, width, height);
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("rook frame"),
-            });
-        self.lights.fill(
-            &self.queue,
-            &mut encoder,
-            camera,
-            l.environment_diffuse > 0.0,
-        );
-        if shadow.is_some() {
-            profiling::scope!("shadow pass");
-            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("rook shadow map"),
-                color_attachments: &[],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &self.shadow_view,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(0.0),
-                        store: wgpu::StoreOp::Store,
-                    }),
-                    stencil_ops: None,
+    /// Depth from the sun into the shadow map.
+    fn shadow_pass(&self, encoder: &mut wgpu::CommandEncoder, runs: &mut Runs, start: usize) {
+        profiling::scope!("shadow pass");
+        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("rook shadow map"),
+            color_attachments: &[],
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: &self.shadow_view,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(0.0),
+                    store: wgpu::StoreOp::Store,
                 }),
-                timestamp_writes: self.timer.as_ref().map(|t| t.writes(1)),
-                occlusion_query_set: None,
-                multiview_mask: None,
-            });
-            pass.set_bind_group(0, &self.bind_group, &[]);
-            self.record(&mut pass, &mut shadow_runs, starts[0]);
-        }
-        {
-            profiling::scope!("main pass");
-            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("rook parts"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &frame,
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        // The sky covers every pixel first.
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &depth,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(0.0),
-                        store: wgpu::StoreOp::Store,
-                    }),
-                    stencil_ops: main_depth_format(&self.device)
-                        .has_stencil_aspect()
-                        .then_some(wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(0),
-                            store: wgpu::StoreOp::Discard,
-                        }),
+                stencil_ops: None,
+            }),
+            timestamp_writes: self.timer.as_ref().map(|t| t.writes(1)),
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+        pass.set_bind_group(0, &self.bind_group, &[]);
+        self.record(&mut pass, runs, start);
+    }
+
+    /// The sky, the parts and the effects into the frame.
+    fn main_pass(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        [frame, depth]: [&wgpu::TextureView; 2],
+        runs: &mut Runs,
+        start: usize,
+        (ribbons, particles): (&[RibbonRun], &[ParticleRun]),
+    ) {
+        profiling::scope!("main pass");
+        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("rook parts"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: frame,
+                depth_slice: None,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    // The sky covers every pixel first.
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: depth,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(0.0),
+                    store: wgpu::StoreOp::Store,
                 }),
-                timestamp_writes: self.timer.as_ref().map(|t| t.writes(0)),
-                occlusion_query_set: None,
-                multiview_mask: None,
-            });
-            pass.set_bind_group(0, &self.bind_group, &[]);
-            pass.set_bind_group(1, &self.main_bind_group, &[]);
-            pass.set_bind_group(3, &self.lights.bind_group, &[]);
-            if let ImageBinding::Table(_) = &self.image_binding {
-                pass.set_bind_group(2, self.group(&[None; 5]), &[]);
-            }
-            self.record_sky(&mut pass);
-            self.record(&mut pass, &mut main_runs, starts[1]);
-            self.record_ribbons(&mut pass, &ribbon_runs);
-            self.record_particles(&mut pass, &particle_runs);
+                stencil_ops: main_depth_format(&self.device)
+                    .has_stencil_aspect()
+                    .then_some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(0),
+                        store: wgpu::StoreOp::Discard,
+                    }),
+            }),
+            timestamp_writes: self.timer.as_ref().map(|t| t.writes(0)),
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+        pass.set_bind_group(0, &self.bind_group, &[]);
+        pass.set_bind_group(1, &self.main_bind_group, &[]);
+        pass.set_bind_group(3, &self.lights.bind_group, &[]);
+        if let ImageBinding::Table(_) = &self.image_binding {
+            pass.set_bind_group(2, self.group(&[None; 5]), &[]);
         }
-        self.tonemap
-            .record(&self.queue, &mut encoder, target, l.tonemapper);
-        if let Some(timer) = &mut self.timer {
-            timer.resolve(&mut encoder, shadow.is_some());
-        }
-        self.draw_counts = DrawCounts {
-            shadow: shadow_runs.counts,
-            main: main_runs.counts,
-        };
-        let commands = {
-            profiling::scope!("finish");
-            encoder.finish()
-        };
-        self.queue.submit([commands]);
-        stage(&mut times.passes);
-        self.stage_times = times;
-        self.record_time = start.elapsed();
+        self.record_sky(&mut pass);
+        self.record(&mut pass, runs, start);
+        self.record_ribbons(&mut pass, ribbons);
+        self.record_particles(&mut pass, particles);
     }
 
     /// Each pass's draws, joined into runs that share what's bound, with
