@@ -385,11 +385,37 @@ pub(crate) fn apply<'a>(
             states.insert(b, State::of(rb));
         }
     }
+    let pushes = pushes(movers, &states, h, gravity);
+    for (b, push) in pushes {
+        if !states.get(&b).is_some_and(|s| s.dynamic) {
+            continue;
+        }
+        let Some(rb) = world.bodies.get_mut(b) else {
+            continue;
+        };
+        let wake = push.wake;
+        rb.add_force(to_rapier(push.force), wake);
+        rb.add_torque(to_rapier(push.torque), wake);
+        for (f, p) in push.at {
+            rb.add_force_at_point(to_rapier(f), to_rapier(p), wake);
+        }
+        forced.push(b);
+    }
+}
+
+/// What every mover asks of its bodies this step, from the bodies' state
+/// before it.
+fn pushes<'a>(
+    movers: impl Iterator<Item = &'a Mover>,
+    states: &HashMap<RigidBodyHandle, State>,
+    h: f32,
+    gravity: Vec3,
+) -> HashMap<RigidBodyHandle, Push> {
+    let mut pushes: HashMap<RigidBodyHandle, Push> = HashMap::default();
     let rotation_of = |rel: Option<Frame>| match rel {
         Some((b, f)) => states.get(&b).map(|s| (s.pose * f).rotation),
         None => Some(Mat3::IDENTITY),
     };
-    let mut pushes: HashMap<RigidBodyHandle, Push> = HashMap::default();
     for m in movers {
         let (body, frame) = m.at;
         let Some(s) = states.get(&body) else {
@@ -518,21 +544,7 @@ pub(crate) fn apply<'a>(
             }
         }
     }
-    for (b, push) in pushes {
-        if !states.get(&b).is_some_and(|s| s.dynamic) {
-            continue;
-        }
-        let Some(rb) = world.bodies.get_mut(b) else {
-            continue;
-        };
-        let wake = push.wake;
-        rb.add_force(to_rapier(push.force), wake);
-        rb.add_torque(to_rapier(push.torque), wake);
-        for (f, p) in push.at {
-            rb.add_force_at_point(to_rapier(f), to_rapier(p), wake);
-        }
-        forced.push(b);
-    }
+    pushes
 }
 
 /// Where a rocket's part is relative to its target's radius, to fire
