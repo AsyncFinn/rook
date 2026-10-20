@@ -52,10 +52,8 @@ impl DataModel {
         let x = &mut self.explosions;
         let mut found = Vec::new();
         let (first, changes) = x.watch.look(dom);
-        if first {
-            if let Some(ws) = dom.find_service("Workspace") {
-                found.extend(dom.descendants(ws));
-            }
+        if first && let Some(ws) = dom.find_service("Workspace") {
+            found.extend(dom.descendants(ws));
         }
         for c in changes {
             if let Change::Reparented { subtree, .. } = c {

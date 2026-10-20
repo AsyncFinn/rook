@@ -64,7 +64,7 @@ fn new(_: &Lua, args: MultiValue) -> mlua::Result<LCFrame> {
                 }
             })
         }
-        n => Err(err(&format!("Invalid number of arguments: {n}"))),
+        n => Err(err(format!("Invalid number of arguments: {n}"))),
     }
 }
 
