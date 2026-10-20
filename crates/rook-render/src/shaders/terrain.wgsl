@@ -6,9 +6,9 @@ import package::common::{
     g, image_sampler, water_normals, VertexOut, TERRAIN_WATER, TERRAIN_BLADES,
     TERRAIN_DRAWN_SHIFT, terrain_taps,
 };
-import package::images::layer_height;
+import package::images::{layer_height, sky_toward};
 import package::lighting::{diffuse_light, sun_light, sun_visibility, fog_units};
-import package::tone::{albedo_units, frame};
+import package::tone::{albedo_units, frame, light_units3};
 
 // Studs per repeat of water's normal frames (Approximation: Studio's
 // ripples are 1 to 3 studs across, about two of the maps' bumps, and
@@ -17,6 +17,27 @@ const WATER_NORMAL_STUDS: f32 = 44.0;
 // Frames per unit of water's phase (measured: the 25 frames come round
 // every 20 units, 2 seconds at WaterWaveSpeed 10).
 const WATER_FRAMES_PER_PHASE: f32 = 1.25;
+// How much of the sky water reflects at WaterReflectance 1, looking
+// straight down and along it (measured in Studio 0.742 with a black
+// WaterColor against the default skybox: 0.27 of it seen from above;
+// along it 0.2 keeps its sides' and the far water's blue within 5 levels
+// of Studio's, Approximation).
+const WATER_REFLECTS_FACING: f32 = 0.27;
+const WATER_REFLECTS_GRAZING: f32 = 0.2;
+// What water lets through of what's behind it, per unit of
+// WaterTransparency (measured from above over grey and sand at 0, 0.3
+// and 1: about a fifth at 1 in green and blue, half that in red; the
+// depth, 3 to 10 studs, barely matters).
+const WATER_PASSES: f32 = 0.2;
+// Water's body takes more light than a part's face would (measured from
+// above in white and in WaterColor: about 1.2 times; Approximation).
+const WATER_BODY_LIGHT: f32 = 1.2;
+// The sun's glint takes the ripples this many times as steep as the
+// light does, and falls off at this power (fitted to how much of Studio's
+// water is near white: 1.8% of it from above, 5% along it; Rook 1.3%
+// and 4.3%).
+const WATER_GLINT_RIPPLES: f32 = 3.0;
+const WATER_GLINT_POWER: f32 = 90.0;
 
 // The waves at `p` (world X and Z): two sines across the water, together
 // up to WaterWaveSize studs above and below it, moving with water's phase.
@@ -80,50 +101,67 @@ fn water_frame(uv: vec2<f32>, frame: i32, dx: vec2<f32>, dy: vec2<f32>) -> vec2<
     return textureSampleGrad(water_normals, image_sampler, uv, frame, dx, dy).ag * 2.0 - 1.0;
 }
 
-// Water's surface: WaterColor lit by its rippled normal, the sky reflected
-// (half of WaterReflectance looking down, all of it at grazing angles, by
-// Schlick's Fresnel; the sky's colour from overhead to the horizon by
-// where the reflection points, so the ripples show, as Studio's do when it
-// reflects its skybox), the sun's glint, and more opaque at grazing
-// angles.
+// The normal frames' slope across the plane of `t1` and `t2` at `p`,
+// frame `f0` fading `k` of the way into the next, as a vector in it.
+fn water_ripple(p: vec3<f32>, dp_x: vec3<f32>, dp_y: vec3<f32>, t1: vec3<f32>, t2: vec3<f32>, f0: f32, k: f32) -> vec3<f32> {
+    let frames = f32(textureNumLayers(water_normals));
+    let uv = vec2(dot(p, t1), dot(p, t2)) / WATER_NORMAL_STUDS;
+    let dx = vec2(dot(dp_x, t1), dot(dp_x, t2)) / WATER_NORMAL_STUDS;
+    let dy = vec2(dot(dp_y, t1), dot(dp_y, t2)) / WATER_NORMAL_STUDS;
+    let s0 = water_frame(uv, i32(f0 % frames), dx, dy);
+    let s1 = water_frame(uv, i32((f0 + 1.0) % frames), dx, dy);
+    let s = mix(s0, s1, k);
+    return t1 * s.x + t2 * s.y;
+}
+
+// Water's surface: WaterColor lit like a part's top on every face, the
+// skybox reflected (WATER_REFLECTS_FACING to _GRAZING of it by Schlick's
+// Fresnel, times WaterReflectance), the sun's glint, and a little of what's
+// behind it showing through (WATER_PASSES; observed: as much through its
+// sides as from above).
 // Its normal follows the waves, rippled by the normal frames, which play
 // at WATER_FRAMES_PER_PHASE, each fading into the next (Inference: shots a
 // third of a frame apart differ as much as the next third does), and stay
 // in place (measured: they drift less than 0.07 studs per unit).
 fn water_surface(in: VertexOut, dp_x: vec3<f32>, dp_y: vec3<f32>) -> vec4<f32> {
     let w = wave(in.world.xz);
-    var n = normalize(vec3(-w.y, 1.0, -w.z));
-    if in.normal.y < 0.5 {
-        // Water's sides don't wave.
-        n = normalize(in.normal);
-    }
-    let frames = f32(textureNumLayers(water_normals));
+    // The waves tilt the top; the sides, less as they turn away from up.
+    let face = normalize(in.normal);
+    var n = normalize(face + vec3(-w.y, 0.0, -w.z) * max(face.y, 0.0));
     let f = g.wind.w * WATER_FRAMES_PER_PHASE;
     let f0 = floor(f);
-    let uv = in.world.xz / WATER_NORMAL_STUDS;
-    let dx = dp_x.xz / WATER_NORMAL_STUDS;
-    let dy = dp_y.xz / WATER_NORMAL_STUDS;
-    let s0 = water_frame(uv, i32(f0 % frames), dx, dy);
-    let s1 = water_frame(uv, i32((f0 + 1.0) % frames), dx, dy);
-    let s = mix(s0, s1, f - f0);
-    let strength = clamp(g.terrain.y * 2.0 + 0.2, 0.2, 1.0) * max(n.y, 0.0);
-    n = normalize(n + vec3(s.x, 0.0, s.y) * strength);
+    // The frames lie on the three axes' planes, blended by how much the
+    // surface faces each, top and sides alike (observed: Studio's sides
+    // ripple as its top does, rounding over the edge without a seam).
+    let k = f - f0;
+    var weights = pow(abs(n), vec3(4.0));
+    weights /= weights.x + weights.y + weights.z;
+    let ripple = weights.x * water_ripple(in.world, dp_x, dp_y, vec3(0.0, 0.0, 1.0), vec3(0.0, 1.0, 0.0), f0, k)
+        + weights.y * water_ripple(in.world, dp_x, dp_y, vec3(1.0, 0.0, 0.0), vec3(0.0, 0.0, 1.0), f0, k)
+        + weights.z * water_ripple(in.world, dp_x, dp_y, vec3(1.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0), f0, k);
+    let strength = clamp(g.terrain.y * 2.0 + 0.2, 0.2, 1.0);
+    let glint_n = normalize(n + ripple * WATER_GLINT_RIPPLES);
+    n = normalize(n + ripple * strength);
     let v = normalize(g.camera_pos.xyz - in.world);
     let fresnel = 0.02 + 0.98 * pow(1.0 - max(dot(n, v), 0.0), 5.0);
     let up = vec3(0.0, 1.0, 0.0);
-    let body = diffuse_light(albedo_units(in.color.rgb), in.world, n, sun_light(in.world, n));
-    let reflected = clamp(in.material.x * mix(0.5, 1.0, fresnel), 0.0, 1.0);
+    // The body is lit as the top is on every face (measured: Studio's
+    // sides away from the sun are as light as its top).
+    let lit = normalize(vec3(0.0, 1.0, 0.0) + ripple * strength);
+    let body = WATER_BODY_LIGHT * diffuse_light(albedo_units(in.color.rgb), in.world, lit, sun_light(in.world, lit));
+    let reflected = clamp(in.material.x, 0.0, 1.0) * mix(WATER_REFLECTS_FACING, WATER_REFLECTS_GRAZING, fresnel);
     let r = reflect(-v, n);
-    let sky = mix(g.sky_horizon.rgb, g.sky_top.rgb, clamp(r.y, 0.0, 1.0));
-    var c = mix(body, sky * sky, reflected);
+    // Ripples can point a reflection below the horizon: keep it on the sky.
+    let sky = light_units3(sky_toward(normalize(vec3(r.x, max(r.y, 0.02), r.z))) * g.fog_range.z);
+    var c = mix(body, sky, reflected);
     if g.sun_dir.y > 0.0 {
-        // The sun's glint, in light units: as bright as the sun's light on
-        // a face square to it (Approximation, unmeasured; it keeps the
-        // look fitted before light units at Brightness 2).
-        let glint = pow(max(dot(r, g.sun_dir.xyz), 0.0), 2000.0);
+        // The sun's glint, in light units: up to the sun's light on a face
+        // square to it.
+        let glint = pow(max(dot(reflect(-v, glint_n), g.sun_dir.xyz), 0.0), WATER_GLINT_POWER);
         c += glint * g.sun_color.rgb * sun_visibility(in.world, up);
     }
-    return vec4(frame(fog_units(c, in.world)), mix(in.color.a, 1.0, fresnel));
+    let passes = (1.0 - in.color.a) * WATER_PASSES;
+    return vec4(frame(fog_units(c, in.world)), 1.0 - passes);
 }
 
 // A terrain seam fragment's share of its draw's layer (Studio 0.742's

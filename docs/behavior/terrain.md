@@ -426,19 +426,46 @@ Observed:
 Rook: two sines rise and fall `WaterWaveSize` studs (wavelengths 60 and
 45 studs, periods 40 and 25 units of phase); the 25 frames (the
 renderer's texture array, from the install) play at 1.25 per unit, each
-fading into the next, laid at 44 studs per repeat without scrolling. The
-surface is `WaterColor` lit by the rippled normal, mixed towards the sky
-by `WaterReflectance`, half of it looking down and all of it at grazing
-angles (Schlick's Fresnel), the sky's colour going from overhead to the
-horizon by where the reflection points, with a narrow sun glint. Seen
-from above as in Studio, the pattern's contrast matches (luminance
-deviation 2.06 against 2.07) and its autocorrelation across the ripples
-too (0.36, 0.11, 0.02, -0.06, -0.10, -0.11 at 4 to 24 px against 0.47,
-0.14, -0.01, -0.09, -0.13, -0.14); along them Rook's falls off a little
-faster. Approximation: the tiling scale, the waves' shape and the
-ripples' strength are fitted; close up Rook's ripples have a fifth of
-Studio's contrast, which reflects its skybox's detail (Rook reflects two
-sky colours, M13).
+fading into the next, laid at 44 studs per repeat without scrolling, on
+the top and the sides alike (the three axes' planes, blended by how much
+the surface faces each). The surface is `WaterColor` lit as a part's top
+is (on every face, 1.2 times brighter), mixed towards the skybox, sampled
+where the reflection points, by `WaterReflectance` × 0.27 looking down
+to 0.2 along it, with a sun glint off ripples three times as steep; a
+fifth of `WaterTransparency` of what's behind shows through. Before:
+the pattern's contrast and autocorrelation were fitted from above
+(luminance deviation 2.06 against Studio's 2.07); that tiling is kept.
+Approximation: the tiling scale, the waves' shape and the ripples'
+strength are fitted.
+
+**Colour and transparency**, measured 2026-10-19 on a 128 × 12 × 128
+pool over the baseplate with sand 3 and 6 studs down, a white slab 4
+down and a red pillar, from straight above (Studio 0.742, Brightness 3,
+ClockTime 14.5, the default skybox, waves frozen):
+
+| Water | Over | Studio | Rook |
+|---|---|---|---|
+| Defaults (transparency 0.3) | baseplate, 10 down | 36, 125, 156 | 38, 125, 157 |
+| | sand, 6 down | 47, 136, 163 | 45, 136, 164 |
+| | sand, 3 down | 51, 140, 166 | 46, 139, 168 |
+| | white slab, 4 down | 56, 144, 173 | 50, 140, 170 |
+| Transparency 1 | baseplate / sand 6 | 49, 124, 153 / 84, 157, 170 | 46, 126, 155 / 77, 152, 172 |
+| Transparency 0, reflectance 0 | | 5, 119, 143 | 4, 121, 145 |
+| ... and white | | 241, 245, 248 | 237, 242, 248 |
+| Transparency 0, black | | 28, 58, 94 | 33, 54, 91 |
+
+- Water is drawn at transparency 1, still teal: only a fifth of what's
+  behind it shows through (half that in red), and depth from 3 to 10
+  studs barely changes it.
+- Its sides away from the sun are as light as its top, ripple as it does
+  and show what's behind them as the top does.
+- The sun glints off small ripples: 1.8% of the water is near white from
+  above, 5% along it (Rook 1.3% and 4.3%).
+- Seen along the water from 2 studs above it, Studio's is 10 to 20
+  levels brighter in red and green than Rook's (blue within 5); more
+  sky reflection doesn't close it (Unknown why).
+- Studio's water reflects parts (the pillar shows in it upside down);
+  Rook's reflects only the skybox.
 
 ### Scripts
 

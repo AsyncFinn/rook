@@ -3,7 +3,7 @@
 
 import package::common::g;
 import package::tone::{frame_of, srgb_to_linear};
-import package::images::{sample_sky, sky_size};
+import package::images::{sample_sky, sky_uv};
 
 struct SkyOut {
     @builtin(position) clip: vec4<f32>,
@@ -27,16 +27,8 @@ fn vs_sky(@builtin(vertex_index) i: u32, @builtin(instance_index) face: u32) -> 
 fn fs_sky(in: SkyOut) -> @location(0) vec4<f32> {
     let p = g.sky_from_clip * vec4(in.ndc, 1.0, 1.0);
     let d = normalize(p.xyz / p.w);
-    let dir = g.sky_faces[in.face * 3u].xyz;
-    let right = g.sky_faces[in.face * 3u + 1u].xyz;
-    let up = g.sky_faces[in.face * 3u + 2u].xyz;
-    let along = dot(d, dir);
-    let on_face = d / max(along, 1e-6);
-    var uv = vec2(0.5 + 0.5 * dot(on_face, right), 0.5 - 0.5 * dot(on_face, up));
-    // Images don't repeat: keep the sampler off the far edges.
-    let half_texel = 0.5 / vec2<f32>(sky_size(in.face));
-    uv = clamp(uv, half_texel, vec2(1.0) - half_texel);
-    let texel = sample_sky(in.face, uv);
+    let along = dot(d, g.sky_faces[in.face * 3u].xyz);
+    let texel = sample_sky(in.face, sky_uv(in.face, d));
     let a = abs(d);
     if along < max(a.x, max(a.y, a.z)) - 1e-6 {
         discard;
