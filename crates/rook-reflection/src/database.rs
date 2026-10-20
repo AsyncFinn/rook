@@ -317,6 +317,15 @@ impl Database {
         false
     }
 
+    /// [`Database::is_a`] by class names; false for a name the database
+    /// doesn't have.
+    pub fn class_is_a(&self, class: &str, ancestor: &str) -> bool {
+        match (self.class_by_name(class), self.class_by_name(ancestor)) {
+            (Some(c), Some(a)) => self.is_a(c.id, a.id),
+            _ => false,
+        }
+    }
+
     /// The class followed by each superclass up to `Instance`.
     pub fn superclasses(&self, class: ClassId) -> impl Iterator<Item = &Class> {
         let mut cur = Some(class);

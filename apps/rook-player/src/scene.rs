@@ -15,8 +15,8 @@ use rook_render::{
     MeshHash, PartInstance, Scene, Sequence,
 };
 use rook_types::{
-    CFrame, Color3, Material, MaterialSet, MeshKind, MeshLook, MeshType, NormalId, SurfaceType,
-    TilePattern, Tiling, TrussLook, TrussStyle, Value, mesh_part_scale,
+    CFrame, Color3, Material, MaterialSet, MeshHost, MeshKind, MeshLook, MeshType, NormalId,
+    SurfaceType, TilePattern, Tiling, TrussLook, TrussStyle, Value, mesh_part_scale,
 };
 
 use content::loader::{FileRef, FileState, Files, Loaded};

@@ -39,14 +39,7 @@ impl What {
             return Self::MaterialTexture;
         }
         match key.1 {
-            Want::Mesh
-                if matches!(
-                    dom.class_name(part),
-                    "UnionOperation" | "NegateOperation" | "IntersectOperation"
-                ) =>
-            {
-                Self::Union
-            }
+            Want::Mesh if dom.is_a(part, "PartOperation") => Self::Union,
             Want::Mesh => Self::Mesh,
             _ => Self::Image,
         }

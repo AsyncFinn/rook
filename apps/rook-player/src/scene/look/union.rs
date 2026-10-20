@@ -3,12 +3,9 @@
 
 use super::*;
 
-/// The union classes.
-pub(super) fn is_union(class: &str) -> bool {
-    matches!(
-        class,
-        "UnionOperation" | "NegateOperation" | "IntersectOperation" | "PartOperation"
-    )
+/// Whether `id` is a union (a `PartOperation` or one of its subclasses).
+pub(super) fn is_union(dom: &Dom, id: InstanceId) -> bool {
+    dom.is_a(id, "PartOperation")
 }
 
 /// What colour a NegateOperation draws in, whatever its Color and

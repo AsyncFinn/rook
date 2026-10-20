@@ -124,7 +124,7 @@ impl SceneCache {
         };
         // Unions, trusses and MeshParts have no surface patterns of their
         // own (observed for trusses; Inference for unions).
-        let has_surfaces = !matches!(class, "MeshPart" | "TrussPart") && !is_union(class);
+        let has_surfaces = !matches!(class, "MeshPart" | "TrussPart") && !is_union(dom, id);
         let surfaces = |out: &mut PartInstance| {
             for face in NormalId::ALL {
                 out.surfaces[face.index()] = dom
@@ -171,14 +171,21 @@ impl SceneCache {
             return Some((out, Decals::Faces));
         }
         let Some((kind, mesh, url)) = part_mesh(dom, id) else {
-            if is_union(class) {
+            if is_union(dom, id) {
                 let decals = self.union(dom, id, size, &mut out);
                 return Some((out, decals));
             }
             return Some(own(out, pose));
         };
         let scale = dom.vector3_property(mesh, "Scale").unwrap_or(Vec3::ONE);
-        let Some(mut look) = kind.look_on(class, size, scale) else {
+        let host = if class == "MeshPart" {
+            MeshHost::MeshPart
+        } else if is_union(dom, id) {
+            MeshHost::Union
+        } else {
+            MeshHost::Part
+        };
+        let Some(mut look) = kind.look_on(host, size, scale) else {
             return Some(own(out, pose));
         };
         if kind == MeshKind::EmptyFile {
@@ -192,7 +199,7 @@ impl SceneCache {
                     MeshLook::File { scale }
                 }
                 FileDraw::Empty => MeshKind::EmptyFile
-                    .look_on(class, size, scale)
+                    .look_on(host, size, scale)
                     .unwrap_or(MeshLook::PartShape),
                 FileDraw::Nothing => MeshLook::Nothing,
             };

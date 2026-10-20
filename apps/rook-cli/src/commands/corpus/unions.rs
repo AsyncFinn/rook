@@ -6,18 +6,15 @@
 use rbx_types::Variant;
 use rook_content::decode::mesh::union::MeshDataKind;
 
-/// The union classes.
-pub const UNIONS: [&str; 4] = [
-    "UnionOperation",
-    "NegateOperation",
-    "IntersectOperation",
-    "PartOperation",
-];
+/// Whether `class` is a union (a `PartOperation` or one of its subclasses).
+fn is_union(class: &str) -> bool {
+    rook_reflection::database().class_is_a(class, "PartOperation")
+}
 
 /// What a union instance is made of (none for other classes).
 pub fn union_kinds(dom: &rbx_dom_weak::WeakDom, inst: &rbx_dom_weak::Instance) -> Vec<String> {
     let class = inst.class.as_str();
-    if !UNIONS.contains(&class) {
+    if !is_union(class) {
         return Vec::new();
     }
     let prop = |name: &str| inst.properties.get(&name.into());
@@ -78,7 +75,7 @@ pub fn union_kinds(dom: &rbx_dom_weak::WeakDom, inst: &rbx_dom_weak::Instance) -
         _ => {}
     }
     if let Some(parent) = dom.get_by_ref(inst.parent())
-        && UNIONS.contains(&parent.class.as_str())
+        && is_union(&parent.class)
     {
         out.push(format!("{class} under {}", parent.class));
     }

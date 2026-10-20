@@ -40,6 +40,16 @@ pub enum MeshKind {
     EmptyFile,
 }
 
+/// The kind of part a mesh is parented to, for [`MeshKind::look_on`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MeshHost {
+    MeshPart,
+    /// A `PartOperation` or one of its subclasses.
+    Union,
+    /// Any other part.
+    Part,
+}
+
 impl MeshKind {
     /// The kind of a `DataModelMesh` of class `class`; `mesh_type` is a
     /// SpecialMesh's `MeshType` (Head when unset or unknown) and `mesh_id`
@@ -122,13 +132,11 @@ impl MeshKind {
     ///   which Rook doesn't copy).
     /// - Every other part, trusses included, follows [`look`](Self::look)
     ///   (a Sphere mesh filled a 2 × 10 × 2 truss).
-    pub fn look_on(self, class: &str, size: Vec3, scale: Vec3) -> Option<MeshLook> {
-        match class {
-            "MeshPart" => None,
-            "UnionOperation" | "NegateOperation" | "IntersectOperation" | "PartOperation" => {
-                Some(self.look(Vec3::ONE, Vec3::ONE))
-            }
-            _ => Some(self.look(size, scale)),
+    pub fn look_on(self, host: MeshHost, size: Vec3, scale: Vec3) -> Option<MeshLook> {
+        match host {
+            MeshHost::MeshPart => None,
+            MeshHost::Union => Some(self.look(Vec3::ONE, Vec3::ONE)),
+            MeshHost::Part => Some(self.look(size, scale)),
         }
     }
 
@@ -392,13 +400,13 @@ mod tests {
     #[test]
     fn hosts() {
         let sphere = MeshKind::of("SpecialMesh", Some(MeshType::Sphere), "").unwrap();
-        assert_eq!(sphere.look_on("MeshPart", SIZE, SCALE), None);
+        assert_eq!(sphere.look_on(MeshHost::MeshPart, SIZE, SCALE), None);
         assert_eq!(
-            sphere.look_on("UnionOperation", SIZE, SCALE),
+            sphere.look_on(MeshHost::Union, SIZE, SCALE),
             Some(shape(PartShape::Ball, Vec3::ONE, false))
         );
         assert_eq!(
-            sphere.look_on("TrussPart", SIZE, SCALE),
+            sphere.look_on(MeshHost::Part, SIZE, SCALE),
             Some(shape(PartShape::Ball, SIZE * SCALE, false))
         );
     }

@@ -7,10 +7,7 @@ use super::*;
 
 /// Whether `id` is a local light.
 fn is_light(dom: &Dom, id: InstanceId) -> bool {
-    matches!(
-        dom.class_name(id),
-        "PointLight" | "SpotLight" | "SurfaceLight"
-    )
+    dom.is_a(id, "Light")
 }
 
 /// Every local light in Workspace, drawn or not (its look is read again

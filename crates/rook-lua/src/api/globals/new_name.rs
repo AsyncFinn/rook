@@ -18,7 +18,7 @@ pub(super) fn new_name(class: &str) -> Option<&'static str> {
         | "RayValue"
         | "StringValue"
         | "Vector3Value" => "Value",
-        "BlockMesh" | "CylinderMesh" | "FileMesh" | "SpecialMesh" => "Mesh",
+        c if rook_reflection::database().class_is_a(c, "DataModelMesh") => "Mesh",
         "Pants" | "Shirt" => "Clothing",
         "BindableEvent" => "Event",
         "BindableFunction" => "Function",

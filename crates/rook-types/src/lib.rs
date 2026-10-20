@@ -17,7 +17,7 @@ pub use clock::{clock_hours, time_of_day};
 pub use enums::{MeshType, RollOffMode, RunContext, UserInputState, UserInputType};
 pub use part::collision::{Hull, UnionCollision};
 pub use part::material::{Material, MaterialSet, TilePattern};
-pub use part::mesh::{MeshKind, MeshLook, mesh_part_scale};
+pub use part::mesh::{MeshHost, MeshKind, MeshLook, mesh_part_scale};
 pub use part::shape::PartShape;
 pub use part::surface::{NormalId, SURFACE_TILE_STUDS, SurfacePattern, SurfaceType, Tiling};
 pub use part::truss::{TrussLook, TrussShape, TrussStyle, truss_size};

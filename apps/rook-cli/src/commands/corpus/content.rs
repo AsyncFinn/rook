@@ -229,14 +229,10 @@ pub fn mesh_kinds(dom: &rbx_dom_weak::WeakDom, inst: &rbx_dom_weak::Instance) ->
         }
         _ => {}
     }
-    if matches!(
-        class,
-        "SpecialMesh" | "FileMesh" | "BlockMesh" | "CylinderMesh"
-    ) && let Some(parent) = dom.get_by_ref(inst.parent())
-        && matches!(
-            parent.class.as_str(),
-            "MeshPart" | "UnionOperation" | "NegateOperation" | "TrussPart" | "PartOperation"
-        )
+    let db = rook_reflection::database();
+    if db.class_is_a(class, "DataModelMesh")
+        && let Some(parent) = dom.get_by_ref(inst.parent())
+        && (db.class_is_a(&parent.class, "TriangleMeshPart") || parent.class == "TrussPart")
     {
         out.push(format!("{class} under {}", parent.class));
     }
@@ -337,10 +333,7 @@ pub fn looks(dom: &rbx_dom_weak::WeakDom, inst: &rbx_dom_weak::Instance) -> Vec<
             }
         }
     }
-    if matches!(
-        class,
-        "SpecialMesh" | "FileMesh" | "BlockMesh" | "CylinderMesh"
-    ) {
+    if rook_reflection::database().class_is_a(class, "DataModelMesh") {
         if let Some(Variant::Vector3(c)) = prop("VertexColor")
             && [c.x, c.y, c.z] != [1.0; 3]
         {

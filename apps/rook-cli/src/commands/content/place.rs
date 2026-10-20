@@ -33,17 +33,11 @@ impl Use {
 
 /// What a property of `class` holds (`Want::for_property`).
 fn property_want(class: &str, key: &str) -> Want {
-    let mesh_owner = matches!(
-        class,
-        "SpecialMesh"
-            | "FileMesh"
-            | "CharacterMesh"
-            | "MeshPart"
-            | "UnionOperation"
-            | "NegateOperation"
-            | "IntersectOperation"
-            | "PartOperation"
-    );
+    let db = rook_reflection::database();
+    // FileMesh and SpecialMesh; MeshPart and the unions (TriangleMeshParts).
+    let mesh_owner = class == "CharacterMesh"
+        || db.class_is_a(class, "FileMesh")
+        || db.class_is_a(class, "TriangleMeshPart");
     Want::for_property(key, mesh_owner)
 }
 
