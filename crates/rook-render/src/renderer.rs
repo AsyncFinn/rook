@@ -187,30 +187,7 @@ impl Renderer {
                 resource: globals.as_entire_binding(),
             }],
         });
-        let shadow_texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("rook shadow map"),
-            size: wgpu::Extent3d {
-                width: SHADOW_SIZE,
-                height: SHADOW_SIZE,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: DEPTH_FORMAT,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
-            view_formats: &[],
-        });
-        let shadow_view = shadow_texture.create_view(&Default::default());
-        let shadow_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("rook shadow map"),
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
-            // Reverse Z: lit when the point is at least as near the sun as
-            // what the map holds.
-            compare: Some(wgpu::CompareFunction::GreaterEqual),
-            ..Default::default()
-        });
+        let (shadow_view, shadow_sampler) = shadow_map(&device);
         let image_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("rook images"),
             address_mode_u: wgpu::AddressMode::Repeat,
@@ -221,45 +198,7 @@ impl Renderer {
             anisotropy_clamp: 8,
             ..Default::default()
         });
-        let texture_entry = |binding, dimension| wgpu::BindGroupLayoutEntry {
-            binding,
-            visibility: wgpu::ShaderStages::FRAGMENT,
-            ty: wgpu::BindingType::Texture {
-                sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                view_dimension: dimension,
-                multisampled: false,
-            },
-            count: None,
-        };
-        let main_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("rook shadow map and surfaces"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Depth,
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison),
-                    count: None,
-                },
-                texture_entry(2, wgpu::TextureViewDimension::D2Array),
-                wgpu::BindGroupLayoutEntry {
-                    binding: 3,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
-                texture_entry(4, wgpu::TextureViewDimension::D2Array),
-            ],
-        });
+        let main_layout = main_layout(&device);
         let image_binding = ImageBinding::for_device(&device);
         let table = image_binding.table_slots();
         let image_layout = image_layout(&device, table);
