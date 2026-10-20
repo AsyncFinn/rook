@@ -15,8 +15,8 @@ use rook_render::{
     MeshHash, PartInstance, Scene, Sequence,
 };
 use rook_types::{
-    CFrame, Material, MaterialSet, MeshKind, MeshLook, NormalId, SurfaceType, TilePattern, Tiling,
-    TrussLook, TrussStyle, Value, mesh_part_scale,
+    CFrame, Color3, Material, MaterialSet, MeshKind, MeshLook, NormalId, SurfaceType, TilePattern,
+    Tiling, TrussLook, TrussStyle, Value, mesh_part_scale,
 };
 
 use content::loader::{FileRef, FileState, Files, Loaded};
@@ -395,7 +395,7 @@ pub fn initial_camera(dm: &DataModel) -> Camera {
                 cf.rotation.y_axis.normalize(),
                 cf.rotation.z_axis.normalize(),
             ),
-            fov_y: number(dom, cam, "FieldOfView").unwrap_or(70.0),
+            fov_y: dom.float_property(cam, "FieldOfView").unwrap_or(70.0),
         })
     });
     saved.unwrap_or_else(|| Camera::look_at(Vec3::new(0.0, 20.0, 40.0), Vec3::ZERO))

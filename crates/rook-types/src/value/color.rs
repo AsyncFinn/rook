@@ -13,6 +13,10 @@ impl Color3 {
         Self { r, g, b }
     }
 
+    pub const fn to_array(self) -> [f32; 3] {
+        [self.r, self.g, self.b]
+    }
+
     /// `Color3.fromRGB`.
     pub fn from_rgb(r: u8, g: u8, b: u8) -> Self {
         Self::new(

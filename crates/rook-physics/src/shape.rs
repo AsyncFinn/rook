@@ -5,7 +5,7 @@ pub(crate) mod unions;
 
 use rapier3d::prelude::*;
 use rook_dom::{Dom, InstanceId};
-use rook_types::{PartShape, Value};
+use rook_types::{CFrame, PartShape, Value};
 
 use crate::convert::{pose_of, to_rapier};
 use crate::shape::unions::Unions;
@@ -78,7 +78,10 @@ pub(crate) fn world_shape(
     };
     Some((
         shape,
-        pose_of(&crate::sync::read::cframe(dom, part, "CFrame")) * local,
+        pose_of(
+            &dom.cframe_property(part, "CFrame")
+                .unwrap_or(CFrame::IDENTITY),
+        ) * local,
     ))
 }
 
@@ -91,6 +94,8 @@ pub(crate) fn world_box(dom: &Dom, part: InstanceId) -> Option<(SharedShape, Pos
         return None;
     };
     let h = size.0.max(glam::Vec3::splat(MIN_PART_SIZE)) * 0.5;
-    let cf = crate::sync::read::cframe(dom, part, "CFrame");
+    let cf = dom
+        .cframe_property(part, "CFrame")
+        .unwrap_or(CFrame::IDENTITY);
     Some((SharedShape::cuboid(h.x, h.y, h.z), pose_of(&cf)))
 }

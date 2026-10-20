@@ -41,7 +41,6 @@ use rook_types::CFrame;
 
 use crate::convert::{cframe_of, to_glam, to_rapier};
 use crate::joints::constraints::{attachment, attachments};
-use crate::sync::read::{boolean, cframe, enum_value, float, vector};
 
 /// Classes that act through [`Mover`].
 pub(crate) fn is_mover(class: &str) -> bool {
@@ -139,9 +138,16 @@ fn damping(d: f32) -> f32 {
 /// RocketPropulsion's target point: the Target part's position plus
 /// TargetOffset, or TargetOffset alone without a Target (Inference).
 fn rocket_target(dom: &Dom, id: InstanceId) -> Vec3 {
-    let offset = vector(dom, id, "TargetOffset");
+    let offset = dom
+        .vector3_property(id, "TargetOffset")
+        .unwrap_or(Vec3::ZERO);
     match dom.ref_property(id, "Target") {
-        Some(t) => cframe(dom, t, "CFrame").position + offset,
+        Some(t) => {
+            dom.cframe_property(t, "CFrame")
+                .unwrap_or(CFrame::IDENTITY)
+                .position
+                + offset
+        }
         None => offset,
     }
 }
@@ -163,35 +169,38 @@ impl Mover {
         };
         // Constraints act through Attachment0 (and Attachment1).
         if matches!(class, "VectorForce" | "Torque" | "SpringConstraint") {
-            if dom.is_destroyed(id) || !boolean(dom, id, "Enabled", true) {
+            if dom.is_destroyed(id) || !dom.bool_property(id, "Enabled").unwrap_or(true) {
                 return None;
             }
             let a0 = dom.ref_property(id, "Attachment0")?;
             let at = in_frame(a0)?;
             // ActuatorRelativeTo: Attachment0 0, Attachment1 1, World 2.
-            let relative = || match enum_value(dom, id, "RelativeTo") {
+            let relative = || match dom.enum_property(id, "RelativeTo").unwrap_or(0) {
                 0 => Some(at),
                 1 => dom.ref_property(id, "Attachment1").and_then(in_frame),
                 _ => None,
             };
             let kind = match class {
                 "VectorForce" => Kind::Force {
-                    force: vector(dom, id, "Force"),
+                    force: dom.vector3_property(id, "Force").unwrap_or(Vec3::ZERO),
                     relative: relative(),
-                    point: (!boolean(dom, id, "ApplyAtCenterOfMass", false)).then_some(Vec3::ZERO),
+                    point: (!dom
+                        .bool_property(id, "ApplyAtCenterOfMass")
+                        .unwrap_or(false))
+                    .then_some(Vec3::ZERO),
                 },
                 "Torque" => Kind::Torque {
-                    torque: vector(dom, id, "Torque"),
+                    torque: dom.vector3_property(id, "Torque").unwrap_or(Vec3::ZERO),
                     relative: relative(),
                 },
                 _ => {
                     let [_, a1] = attachments(dom, id)?;
                     Kind::Spring {
                         other: in_frame(a1)?,
-                        stiffness: float(dom, id, "Stiffness"),
-                        damping: float(dom, id, "Damping"),
-                        free_length: float(dom, id, "FreeLength"),
-                        max_force: float(dom, id, "MaxForce"),
+                        stiffness: dom.float_property(id, "Stiffness").unwrap_or(0.0),
+                        damping: dom.float_property(id, "Damping").unwrap_or(0.0),
+                        free_length: dom.float_property(id, "FreeLength").unwrap_or(0.0),
+                        max_force: dom.float_property(id, "MaxForce").unwrap_or(0.0),
                     }
                 }
             };
@@ -200,45 +209,53 @@ impl Mover {
         let at = frame_of(dom.parent(id)?)?;
         let kind = match class {
             "BodyForce" => Kind::Force {
-                force: vector(dom, id, "Force"),
+                force: dom.vector3_property(id, "Force").unwrap_or(Vec3::ZERO),
                 relative: None,
                 point: None,
             },
             // The force is in the part's frame, at Location in it.
             "BodyThrust" => Kind::Force {
-                force: vector(dom, id, "Force"),
+                force: dom.vector3_property(id, "Force").unwrap_or(Vec3::ZERO),
                 relative: Some(at),
-                point: Some(vector(dom, id, "Location")),
+                point: Some(dom.vector3_property(id, "Location").unwrap_or(Vec3::ZERO)),
             },
             "BodyVelocity" => Kind::Velocity {
-                target: vector(dom, id, "Velocity"),
-                max_force: vector(dom, id, "MaxForce"),
+                target: dom.vector3_property(id, "Velocity").unwrap_or(Vec3::ZERO),
+                max_force: dom.vector3_property(id, "MaxForce").unwrap_or(Vec3::ZERO),
             },
             "BodyAngularVelocity" => Kind::AngularVelocity {
-                target: vector(dom, id, "AngularVelocity"),
-                max_torque: vector(dom, id, "MaxTorque"),
+                target: dom
+                    .vector3_property(id, "AngularVelocity")
+                    .unwrap_or(Vec3::ZERO),
+                max_torque: dom.vector3_property(id, "MaxTorque").unwrap_or(Vec3::ZERO),
             },
             "BodyPosition" => Kind::Position {
-                target: vector(dom, id, "Position"),
-                p: float(dom, id, "P"),
-                d: damping(float(dom, id, "D")),
-                max_force: vector(dom, id, "MaxForce"),
+                target: dom.vector3_property(id, "Position").unwrap_or(Vec3::ZERO),
+                p: dom.float_property(id, "P").unwrap_or(0.0),
+                d: damping(dom.float_property(id, "D").unwrap_or(0.0)),
+                max_force: dom.vector3_property(id, "MaxForce").unwrap_or(Vec3::ZERO),
             },
             "BodyGyro" => Kind::Gyro {
-                target: cframe(dom, id, "CFrame").rotation,
-                p: float(dom, id, "P"),
-                d: damping(float(dom, id, "D")),
-                max_accel: vector(dom, id, "MaxTorque"),
+                target: dom
+                    .cframe_property(id, "CFrame")
+                    .unwrap_or(CFrame::IDENTITY)
+                    .rotation,
+                p: dom.float_property(id, "P").unwrap_or(0.0),
+                d: damping(dom.float_property(id, "D").unwrap_or(0.0)),
+                max_accel: dom.vector3_property(id, "MaxTorque").unwrap_or(Vec3::ZERO),
             },
             "RocketPropulsion" if fired => Kind::Rocket {
                 target: rocket_target(dom, id),
-                max_speed: float(dom, id, "MaxSpeed"),
-                max_thrust: float(dom, id, "MaxThrust"),
-                radius: float(dom, id, "TargetRadius"),
-                turn_p: float(dom, id, "TurnP"),
-                turn_d: damping(float(dom, id, "TurnD")),
-                max_accel: vector(dom, id, "MaxTorque"),
-                cartoon: float(dom, id, "CartoonFactor").clamp(0.0, 1.0),
+                max_speed: dom.float_property(id, "MaxSpeed").unwrap_or(0.0),
+                max_thrust: dom.float_property(id, "MaxThrust").unwrap_or(0.0),
+                radius: dom.float_property(id, "TargetRadius").unwrap_or(0.0),
+                turn_p: dom.float_property(id, "TurnP").unwrap_or(0.0),
+                turn_d: damping(dom.float_property(id, "TurnD").unwrap_or(0.0)),
+                max_accel: dom.vector3_property(id, "MaxTorque").unwrap_or(Vec3::ZERO),
+                cartoon: dom
+                    .float_property(id, "CartoonFactor")
+                    .unwrap_or(0.0)
+                    .clamp(0.0, 1.0),
             },
             _ => return None,
         };

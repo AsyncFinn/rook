@@ -24,13 +24,6 @@ fn find_lights(dom: &Dom) -> Vec<InstanceId> {
     lights
 }
 
-fn cframe(dom: &Dom, id: InstanceId) -> Option<CFrame> {
-    match dom.property_by_name(id, "CFrame")? {
-        Value::CFrame(cf) => Some(cf),
-        _ => None,
-    }
-}
-
 /// A light as it shines now: under a part, from the part (a surface
 /// light from the part's `Face`); under an Attachment, from the
 /// attachment, facing along its axes. `None` when it isn't under either
@@ -38,7 +31,7 @@ fn cframe(dom: &Dom, id: InstanceId) -> Option<CFrame> {
 /// 0, so that scripts switching lights on and off (alarms) change only
 /// their colours.
 fn light(dom: &Dom, id: InstanceId) -> Option<LocalLight> {
-    let enabled = boolean(dom, id, "Enabled") != Some(false);
+    let enabled = dom.bool_property(id, "Enabled") != Some(false);
     let parent = dom.parent(id)?;
     let part = if is_part(dom, parent) {
         parent
@@ -47,22 +40,23 @@ fn light(dom: &Dom, id: InstanceId) -> Option<LocalLight> {
     } else {
         return None;
     };
-    let part_cf = cframe(dom, part)?;
-    let part_size = vector3(dom, part, "Size").unwrap_or(Vec3::ONE);
+    let part_cf = dom.cframe_property(part, "CFrame")?;
+    let part_size = dom.vector3_property(part, "Size").unwrap_or(Vec3::ONE);
     let (cf, size) = if part == parent {
         (part_cf, part_size)
     } else {
-        (part_cf * cframe(dom, parent)?, Vec3::ZERO)
+        (part_cf * dom.cframe_property(parent, "CFrame")?, Vec3::ZERO)
     };
     let r = part_cf.rotation;
     let extent =
         Mat3::from_cols(r.x_axis.abs(), r.y_axis.abs(), r.z_axis.abs()) * (part_size * 0.5);
     // SpotLight and SurfaceLight face Front (-Z) by default.
-    let face = enum_value(dom, id, "Face")
+    let face = dom
+        .enum_property(id, "Face")
         .and_then(NormalId::from_u32)
         .unwrap_or(NormalId::Front);
     let direction = cf.rotation * face.normal();
-    let angle = number(dom, id, "Angle").unwrap_or(90.0);
+    let angle = dom.float_property(id, "Angle").unwrap_or(90.0);
     let (position, shape) = match dom.class_name(id) {
         "PointLight" => (cf.position, LightShape::Point),
         // Measured: a spot light shines from its part's centre.
@@ -81,14 +75,17 @@ fn light(dom: &Dom, id: InstanceId) -> Option<LocalLight> {
     Some(LocalLight {
         position,
         shape,
-        color: color(dom, id, "Color").unwrap_or([1.0; 3]),
+        color: dom
+            .color3_property(id, "Color")
+            .map(Color3::to_array)
+            .unwrap_or([1.0; 3]),
         brightness: if enabled {
-            number(dom, id, "Brightness").unwrap_or(1.0)
+            dom.float_property(id, "Brightness").unwrap_or(1.0)
         } else {
             0.0
         },
-        range: number(dom, id, "Range").unwrap_or(8.0),
-        shadows: boolean(dom, id, "Shadows").unwrap_or(false),
+        range: dom.float_property(id, "Range").unwrap_or(8.0),
+        shadows: dom.bool_property(id, "Shadows").unwrap_or(false),
         part: (part_cf.position - extent, part_cf.position + extent),
     })
 }

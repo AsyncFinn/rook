@@ -5,20 +5,15 @@ use glam::Vec3;
 use rook_dom::{Dom, InstanceId};
 use rook_types::{CFrame, Value};
 
-use super::{cframe, child, part, position, run, set, v3, vector};
+use super::{child, part, position, run, set, v3};
 use crate::Physics;
 
 /// A wheel's turn about world Y relative to the base.
 fn yaw(dom: &Dom, base: InstanceId, wheel: InstanceId) -> f32 {
-    let rel = cframe(dom, base).inverse() * cframe(dom, wheel);
+    let rel = dom.cframe_property(base, "CFrame").unwrap().inverse()
+        * dom.cframe_property(wheel, "CFrame").unwrap();
     let (_, y, _) = rel.to_orientation();
     y
-}
-
-fn float(dom: &Dom, id: InstanceId, name: &str) -> f32 {
-    dom.property_by_name(id, name)
-        .and_then(|v| v.as_number())
-        .unwrap() as f32
 }
 
 fn smooth(dom: &mut Dom, p: InstanceId) {
@@ -73,7 +68,9 @@ fn rotate_v_turns_at_31_per_unit_of_param_b() {
         let (_, wheel) = surface_hinge(&mut dom, MOTOR, CONSTANT, 0.0, b);
         let mut physics = Physics::new();
         run(&mut physics, &mut dom, 0.25);
-        let w = vector(&dom, wheel, "AssemblyAngularVelocity");
+        let w = dom
+            .vector3_property(wheel, "AssemblyAngularVelocity")
+            .unwrap();
         assert!((w.y - 31.0 * b).abs() < 0.05 * 31.0 * b, "B {b}: {w}");
     }
 }
@@ -113,7 +110,9 @@ fn rotate_v_torque_is_limited_by_the_smaller_part() {
         let bar = rotor_on_motor(&mut dom, motor, 10.0);
         let mut physics = Physics::new();
         run(&mut physics, &mut dom, seconds);
-        vector(&dom, bar, "AssemblyAngularVelocity").y
+        dom.vector3_property(bar, "AssemblyAngularVelocity")
+            .unwrap()
+            .y
     };
     let w = spin(2.0, 0.1);
     assert!((w - 178.0).abs() < 25.0, "{w}");
@@ -130,7 +129,10 @@ fn rotate_v_spins_faster_than_a_quarter_turn_per_step() {
     let (_, wheel) = surface_hinge(&mut dom, MOTOR, CONSTANT, 0.0, 50.0);
     let mut physics = Physics::new();
     run(&mut physics, &mut dom, 0.25);
-    let w = vector(&dom, wheel, "AssemblyAngularVelocity").y;
+    let w = dom
+        .vector3_property(wheel, "AssemblyAngularVelocity")
+        .unwrap()
+        .y;
     assert!((w - 1550.0).abs() < 10.0, "{w}");
 }
 
@@ -141,7 +143,10 @@ fn rotate_v_sin_input() {
     let (_, wheel) = surface_hinge(&mut dom, MOTOR, SIN, 2.0, 3.0);
     let mut physics = Physics::new();
     run(&mut physics, &mut dom, 0.5);
-    let w = vector(&dom, wheel, "AssemblyAngularVelocity").y;
+    let w = dom
+        .vector3_property(wheel, "AssemblyAngularVelocity")
+        .unwrap()
+        .y;
     assert!((w - 62.0 * (3.0f32 * 0.5).sin()).abs() < 3.0, "{w}");
 }
 
@@ -239,7 +244,7 @@ fn hinge_constraint_holds_its_attachments_together() {
     let mut physics = Physics::new();
     run(&mut physics, &mut dom, 0.5);
     assert!((position(&dom, wheel) - Vec3::new(0.0, 1003.0, 0.0)).length() < 0.02);
-    assert!(float(&dom, h, "CurrentAngle").abs() < 0.5);
+    assert!(dom.float_property(h, "CurrentAngle").unwrap().abs() < 0.5);
 }
 
 #[test]
@@ -254,14 +259,20 @@ fn hinge_constraint_motor() {
     // Observed: 0.999 rad and 57.2° after 0.2 s.
     let a = yaw(&dom, base, wheel);
     assert!((a - 1.0).abs() < 0.03, "{a}");
-    assert!((float(&dom, h, "CurrentAngle") - 57.2).abs() < 2.0);
+    assert!((dom.float_property(h, "CurrentAngle").unwrap() - 57.2).abs() < 2.0);
 
     // A weak motor speeds up by MotorMaxTorque / inertia (3.73).
     set(&mut dom, h, "MotorMaxTorque", Value::Float32(3.7333));
     set(&mut dom, h, "AngularVelocity", Value::Float32(100.0));
-    let before = vector(&dom, wheel, "AssemblyAngularVelocity").y;
+    let before = dom
+        .vector3_property(wheel, "AssemblyAngularVelocity")
+        .unwrap()
+        .y;
     run(&mut physics, &mut dom, 0.5);
-    let after = vector(&dom, wheel, "AssemblyAngularVelocity").y;
+    let after = dom
+        .vector3_property(wheel, "AssemblyAngularVelocity")
+        .unwrap()
+        .y;
     assert!((after - before - 0.5).abs() < 0.05, "{before} {after}");
 }
 
@@ -279,13 +290,13 @@ fn hinge_constraint_servo_and_limits() {
     let a = yaw(&dom, base, wheel);
     assert!((a - 0.4).abs() < 0.03, "{a}");
     run(&mut physics, &mut dom, 0.8);
-    assert!((float(&dom, h, "CurrentAngle") - 90.0).abs() < 1.0);
+    assert!((dom.float_property(h, "CurrentAngle").unwrap() - 90.0).abs() < 1.0);
 
     set(&mut dom, h, "LimitsEnabled", Value::Bool(true));
     set(&mut dom, h, "UpperAngle", Value::Float32(30.0));
     set(&mut dom, h, "LowerAngle", Value::Float32(-30.0));
     run(&mut physics, &mut dom, 0.5);
-    let a = float(&dom, h, "CurrentAngle");
+    let a = dom.float_property(h, "CurrentAngle").unwrap();
     assert!((a - 30.0).abs() < 2.0, "{a}");
 }
 

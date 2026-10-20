@@ -9,9 +9,12 @@ use super::*;
 /// The emitters Explosion `id` draws with: always as many, drawing
 /// nothing when it isn't `Visible`.
 pub(super) fn emitters(dom: &Dom, id: InstanceId, textures: &EffectTextures) -> Vec<Emitter> {
-    let position = vector3(dom, id, "Position").unwrap_or(Vec3::ZERO);
-    let visible = boolean(dom, id, "Visible") != Some(false);
-    let time_scale = number(dom, id, "TimeScale").unwrap_or(1.0).clamp(0.0, 1.0);
+    let position = dom.vector3_property(id, "Position").unwrap_or(Vec3::ZERO);
+    let visible = dom.bool_property(id, "Visible") != Some(false);
+    let time_scale = dom
+        .float_property(id, "TimeScale")
+        .unwrap_or(1.0)
+        .clamp(0.0, 1.0);
     looks(textures)
         .into_iter()
         .enumerate()

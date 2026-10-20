@@ -46,13 +46,16 @@ impl SceneCache {
                 roughness,
                 metalness,
                 on_mesh_uv: true,
-                alpha: match enum_value(dom, sa, "AlphaMode") {
+                alpha: match dom.enum_property(sa, "AlphaMode") {
                     Some(1) => MapAlpha::Transparency,
                     Some(2) => MapAlpha::TintMask,
                     Some(3) => MapAlpha::Ignore,
                     _ => MapAlpha::Overlay,
                 },
-                tint: self::color(dom, sa, "Color").unwrap_or([1.0; 3]),
+                tint: dom
+                    .color3_property(sa, "Color")
+                    .map(Color3::to_array)
+                    .unwrap_or([1.0; 3]),
                 ..MaterialMaps::NONE
             };
             return;
@@ -66,9 +69,11 @@ impl SceneCache {
                 metalness,
                 // Confirmed: creator-docs MaterialVariant.StudsPerTile,
                 // 10 by default (also read in Studio 0.742).
-                studs_per_tile: Vec2::splat(number(dom, variant, "StudsPerTile").unwrap_or(10.0)),
+                studs_per_tile: Vec2::splat(
+                    dom.float_property(variant, "StudsPerTile").unwrap_or(10.0),
+                ),
                 // `MaterialPattern` (Regular 0, Organic 1).
-                pattern: match enum_value(dom, variant, "MaterialPattern") {
+                pattern: match dom.enum_property(variant, "MaterialPattern") {
                     Some(1) => TilePattern::Organic,
                     _ => TilePattern::Regular,
                 },

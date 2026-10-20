@@ -69,10 +69,7 @@ fn part(dom: &mut Dom, class: &str, at: Vec3, size: Vec3, anchored: bool) -> Ins
 }
 
 fn position(dom: &Dom, id: InstanceId) -> Vec3 {
-    dom.property_by_name(id, "CFrame")
-        .and_then(|v| v.as_cframe())
-        .unwrap()
-        .position
+    dom.cframe_property(id, "CFrame").unwrap().position
 }
 
 #[test]

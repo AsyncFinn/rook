@@ -22,10 +22,22 @@ fn even(values: &[f32]) -> Curve {
 /// covering what's behind and glowing; and a smaller, longer-lived core
 /// and trail in `SecondaryColor` added on top. Neither is lit.
 pub(super) fn fire(dom: &Dom, id: InstanceId, textures: &EffectTextures) -> Vec<EmitterLook> {
-    let size = number(dom, id, "Size").unwrap_or(5.0).clamp(2.0, 30.0);
-    let heat = number(dom, id, "Heat").unwrap_or(9.0).clamp(-25.0, 25.0);
-    let primary = color(dom, id, "Color").unwrap_or([0.925, 0.545, 0.275]);
-    let secondary = color(dom, id, "SecondaryColor").unwrap_or([0.545, 0.314, 0.216]);
+    let size = dom
+        .float_property(id, "Size")
+        .unwrap_or(5.0)
+        .clamp(2.0, 30.0);
+    let heat = dom
+        .float_property(id, "Heat")
+        .unwrap_or(9.0)
+        .clamp(-25.0, 25.0);
+    let primary = dom
+        .color3_property(id, "Color")
+        .map(Color3::to_array)
+        .unwrap_or([0.925, 0.545, 0.275]);
+    let secondary = dom
+        .color3_property(id, "SecondaryColor")
+        .map(Color3::to_array)
+        .unwrap_or([0.545, 0.314, 0.216]);
     let rise = Vec3::new(0.0, heat * 0.5, 0.0);
     let flames = EmitterLook {
         texture: Some(textures.fire),
@@ -67,9 +79,16 @@ pub(super) fn fire(dom: &Dom, id: InstanceId, textures: &EffectTextures) -> Vec<
 /// from `Size` by about 4 studs a second, as opaque as `Opacity` at their
 /// thickest, a third of the way through their 5 seconds.
 pub(super) fn smoke(dom: &Dom, id: InstanceId, textures: &EffectTextures) -> EmitterLook {
-    let size = number(dom, id, "Size").unwrap_or(1.0).clamp(0.1, 100.0);
-    let opacity = number(dom, id, "Opacity").unwrap_or(0.5).clamp(0.0, 1.0);
-    let rise = number(dom, id, "RiseVelocity")
+    let size = dom
+        .float_property(id, "Size")
+        .unwrap_or(1.0)
+        .clamp(0.1, 100.0);
+    let opacity = dom
+        .float_property(id, "Opacity")
+        .unwrap_or(0.5)
+        .clamp(0.0, 1.0);
+    let rise = dom
+        .float_property(id, "RiseVelocity")
         .unwrap_or(1.0)
         .clamp(-25.0, 25.0);
     // The install's smoke ramp (`textures/particles/smoke_color.dds`
@@ -91,7 +110,11 @@ pub(super) fn smoke(dom: &Dom, id: InstanceId, textures: &EffectTextures) -> Emi
         size_spread: [0.8, 1.2],
         spin: [0.0, 20.0],
         spin_either_way: true,
-        color: Curve::constant(color(dom, id, "Color").unwrap_or([1.0; 3])),
+        color: Curve::constant(
+            dom.color3_property(id, "Color")
+                .map(Color3::to_array)
+                .unwrap_or([1.0; 3]),
+        ),
         brightness: Curve::constant(1.0),
         alpha: Sequence::from(even(&alpha)),
         light_influence: 1.0,
@@ -114,7 +137,11 @@ pub(super) fn sparkles(dom: &Dom, id: InstanceId, textures: &EffectTextures) -> 
         size_spread: [0.4, 1.4],
         spin: [0.0, 90.0],
         spin_either_way: true,
-        color: Curve::constant(color(dom, id, "SparkleColor").unwrap_or([0.565, 0.098, 1.0])),
+        color: Curve::constant(
+            dom.color3_property(id, "SparkleColor")
+                .map(Color3::to_array)
+                .unwrap_or([0.565, 0.098, 1.0]),
+        ),
         brightness: Curve::constant(1.8),
         alpha: Sequence::from(Curve(vec![
             (0.0, 0.0),

@@ -101,18 +101,6 @@ fn sound_id(dom: &Dom, id: InstanceId) -> String {
         .unwrap_or_default()
 }
 
-fn number(dom: &Dom, id: InstanceId, name: &str, default: f64) -> f64 {
-    dom.property_by_name(id, name)
-        .and_then(|v| v.as_number())
-        .unwrap_or(default)
-}
-
-fn flag(dom: &Dom, id: InstanceId, name: &str) -> bool {
-    dom.property_by_name(id, name)
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false)
-}
-
 impl Sounds {
     /// Look at every sound again (a client DataModel filled by hand).
     pub(crate) fn rescan(&mut self, cursor: u64) {
@@ -268,7 +256,7 @@ impl DataModel {
             }
             if !dom.is_ancestor_of(root, id) {
                 if let Some(audio) = sounds.audio(id).cloned()
-                    && flag(dom, id, "PlayOnRemove")
+                    && dom.bool_property(id, "PlayOnRemove").unwrap_or(false)
                 {
                     sounds
                         .one_shots
@@ -281,13 +269,19 @@ impl DataModel {
                 continue;
             }
             if is_player(dom, id) {
-                if sounds.seen_players.insert(id) && !client && flag(dom, id, "AutoPlay") {
+                if sounds.seen_players.insert(id)
+                    && !client
+                    && dom.bool_property(id, "AutoPlay").unwrap_or(false)
+                {
                     let _ = dom.set_property_by_name(id, "IsPlaying", Value::Bool(true));
                 }
                 let auto_load = dom
                     .property_by_name(id, "AutoLoad")
                     .is_none_or(|v| v.as_bool() != Some(false));
-                if !auto_load && !flag(dom, id, "IsPlaying") && !sounds.tracked.contains_key(&id) {
+                if !auto_load
+                    && !dom.bool_property(id, "IsPlaying").unwrap_or(false)
+                    && !sounds.tracked.contains_key(&id)
+                {
                     continue;
                 }
             }

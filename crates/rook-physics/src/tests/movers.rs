@@ -5,7 +5,7 @@ use glam::Vec3;
 use rook_dom::{Dom, InstanceId};
 use rook_types::{CFrame, Value};
 
-use super::{cframe, child, part, position, run, set, v3, vector};
+use super::{child, part, position, run, set, v3};
 use crate::Physics;
 
 pub(super) fn cube(dom: &mut Dom, x: f32) -> InstanceId {
@@ -19,11 +19,11 @@ pub(super) fn cube(dom: &mut Dom, x: f32) -> InstanceId {
 }
 
 pub(super) fn velocity(dom: &Dom, id: InstanceId) -> Vec3 {
-    vector(dom, id, "AssemblyLinearVelocity")
+    dom.vector3_property(id, "AssemblyLinearVelocity").unwrap()
 }
 
 pub(super) fn spin(dom: &Dom, id: InstanceId) -> Vec3 {
-    vector(dom, id, "AssemblyAngularVelocity")
+    dom.vector3_property(id, "AssemblyAngularVelocity").unwrap()
 }
 
 /// Hold a part still on every axis, as the gyro measurements did.
@@ -259,10 +259,15 @@ fn body_gyro_settles_with_default_gains() {
     let mut physics = Physics::new();
     // Observed: 0.58 of the way after 12 frames.
     run(&mut physics, &mut dom, 0.2);
-    let (_, y, _) = cframe(&dom, p).to_orientation();
+    let (_, y, _) = dom.cframe_property(p, "CFrame").unwrap().to_orientation();
     assert!((y.to_degrees() - 0.58f32.to_degrees()).abs() < 3.0, "{y}");
     run(&mut physics, &mut dom, 3.0);
-    assert!(cframe(&dom, p).rotation.abs_diff_eq(target.rotation, 0.01));
+    assert!(
+        dom.cframe_property(p, "CFrame")
+            .unwrap()
+            .rotation
+            .abs_diff_eq(target.rotation, 0.01)
+    );
 }
 
 #[test]
@@ -300,5 +305,10 @@ fn movers_holding_still_let_their_body_sleep() {
     run(&mut physics, &mut dom, 1.0 / 60.0);
     assert!(!sleeping(&physics));
     run(&mut physics, &mut dom, 3.0);
-    assert!(cframe(&dom, p).rotation.abs_diff_eq(target.rotation, 0.01));
+    assert!(
+        dom.cframe_property(p, "CFrame")
+            .unwrap()
+            .rotation
+            .abs_diff_eq(target.rotation, 0.01)
+    );
 }

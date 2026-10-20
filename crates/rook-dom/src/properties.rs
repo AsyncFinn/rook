@@ -2,6 +2,8 @@
 
 use super::*;
 
+mod typed;
+
 impl Dom {
     /// Read a property. Unset properties read the class default.
     /// `Name` and `Parent` are stored on the instance itself.
@@ -34,15 +36,6 @@ impl Dom {
         self.referrers.get(&id).map_or(&[], Vec::as_slice)
     }
 
-    /// The instance a reference property (`PrimaryPart`, `CurrentCamera`,
-    /// ...) points at, if it's set.
-    pub fn ref_property(&self, id: InstanceId, name: &str) -> Option<InstanceId> {
-        match self.property_by_name(id, name)? {
-            Value::Ref(Some(r)) => Some(InstanceId::from_ref(r)),
-            _ => None,
-        }
-    }
-
     /// `Players.LocalPlayer` (set on clients only).
     pub fn local_player(&self) -> Option<InstanceId> {
         self.ref_property(self.find_service("Players")?, "LocalPlayer")
@@ -50,10 +43,8 @@ impl Dom {
 
     /// `Lighting.ClockTime`: Lighting's clock in hours, from `TimeOfDay`.
     pub fn clock_time(&self, lighting: InstanceId) -> f64 {
-        match self.property_by_name(lighting, "TimeOfDay") {
-            Some(Value::String(s)) => rook_types::clock_hours(&s),
-            _ => 14.0,
-        }
+        self.string_property(lighting, "TimeOfDay")
+            .map_or(14.0, |s| rook_types::clock_hours(&s))
     }
 
     /// The id of the property `name` (aliases resolved) on `id`'s class.

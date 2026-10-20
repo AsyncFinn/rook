@@ -44,13 +44,15 @@ impl SceneCache {
             out.transparency = 1.0;
             return Decals::None;
         };
-        let initial = vector3(dom, id, "InitialSize").unwrap_or(Vec3::ZERO);
+        let initial = dom
+            .vector3_property(id, "InitialSize")
+            .unwrap_or(Vec3::ZERO);
         out.shape = DrawShape::File(hash);
         out.size = mesh_part_scale(size, initial);
         if dom.class_name(id) == "NegateOperation" {
             out.color = NEGATE_COLOR;
         } else {
-            out.vertex_colors = !boolean(dom, id, "UsePartColor").unwrap_or(false);
+            out.vertex_colors = !dom.bool_property(id, "UsePartColor").unwrap_or(false);
         }
         Decals::Faces
     }

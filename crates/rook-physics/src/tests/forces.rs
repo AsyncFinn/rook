@@ -7,7 +7,7 @@ use rook_dom::Dom;
 use rook_types::{CFrame, Value};
 
 use super::movers::{cube, hold, spin, velocity};
-use super::{cframe, child, part, position, run, set, v3};
+use super::{child, part, position, run, set, v3};
 use crate::{Command, Physics};
 
 #[test]
@@ -189,7 +189,7 @@ fn rocket_faces_between_target_and_thrust() {
         let mut physics = Physics::new();
         physics.command(Command::FireRocket(rocket));
         run(&mut physics, &mut dom, 1.5);
-        let look = -cframe(&dom, p).rotation.z_axis;
+        let look = -dom.cframe_property(p, "CFrame").unwrap().rotation.z_axis;
         if up {
             assert!(look.y > 0.95, "{look}");
         } else {

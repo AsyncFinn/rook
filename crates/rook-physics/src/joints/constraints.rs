@@ -17,7 +17,6 @@ use rook_types::CFrame;
 
 use crate::convert::pose_of;
 use crate::shape::is_part;
-use crate::sync::read::{boolean, cframe, enum_value, float};
 
 /// Classes this module turns into joints.
 pub(crate) fn is_constraint(class: &str) -> bool {
@@ -33,12 +32,16 @@ pub(crate) fn attachment(dom: &Dom, att: InstanceId) -> Option<(InstanceId, CFra
         return None;
     }
     let part = dom.parent(att).filter(|p| is_part(dom, *p))?;
-    Some((part, cframe(dom, att, "CFrame")))
+    Some((
+        part,
+        dom.cframe_property(att, "CFrame")
+            .unwrap_or(CFrame::IDENTITY),
+    ))
 }
 
 /// A constraint's two attachments, if it's enabled and has both.
 pub(crate) fn attachments(dom: &Dom, id: InstanceId) -> Option<[InstanceId; 2]> {
-    if dom.is_destroyed(id) || !boolean(dom, id, "Enabled", true) {
+    if dom.is_destroyed(id) || !dom.bool_property(id, "Enabled").unwrap_or(true) {
         return None;
     }
     Some([
@@ -77,19 +80,28 @@ impl Spec {
         let (p1, f1) = attachment(dom, a1)?;
         let kind = match dom.class_name(id) {
             "HingeConstraint" => Kind::Hinge {
-                limits: boolean(dom, id, "LimitsEnabled", false).then(|| {
-                    let lower = float(dom, id, "LowerAngle").to_radians();
-                    let upper = float(dom, id, "UpperAngle").to_radians();
-                    [lower.min(upper), upper.max(lower)]
-                }),
+                limits: dom
+                    .bool_property(id, "LimitsEnabled")
+                    .unwrap_or(false)
+                    .then(|| {
+                        let lower = dom
+                            .float_property(id, "LowerAngle")
+                            .unwrap_or(0.0)
+                            .to_radians();
+                        let upper = dom
+                            .float_property(id, "UpperAngle")
+                            .unwrap_or(0.0)
+                            .to_radians();
+                        [lower.min(upper), upper.max(lower)]
+                    }),
             },
             "BallSocketConstraint" => Kind::BallSocket,
             "RopeConstraint" => Kind::Distance {
                 min: 0.0,
-                max: float(dom, id, "Length").max(0.0),
+                max: dom.float_property(id, "Length").unwrap_or(0.0).max(0.0),
             },
             "RodConstraint" => {
-                let length = float(dom, id, "Length").max(0.0);
+                let length = dom.float_property(id, "Length").unwrap_or(0.0).max(0.0);
                 Kind::Distance {
                     min: length,
                     max: length,
@@ -172,15 +184,18 @@ const ANGLE_DAMPING: f32 = 1.0e3;
 /// HingeConstraint's actuator (`Enum.ActuatorType`: None 0, Motor 1,
 /// Servo 2). Angles are in degrees on the instance.
 pub(crate) fn hinge_constraint_drive(dom: &Dom, id: InstanceId) -> Drive {
-    match enum_value(dom, id, "ActuatorType") {
+    match dom.enum_property(id, "ActuatorType").unwrap_or(0) {
         1 => Drive::Speed {
-            speed: float(dom, id, "AngularVelocity"),
-            max_torque: float(dom, id, "MotorMaxTorque"),
+            speed: dom.float_property(id, "AngularVelocity").unwrap_or(0.0),
+            max_torque: dom.float_property(id, "MotorMaxTorque").unwrap_or(0.0),
         },
         2 => Drive::Servo {
-            target: float(dom, id, "TargetAngle").to_radians(),
-            speed: float(dom, id, "AngularSpeed").abs(),
-            max_torque: float(dom, id, "ServoMaxTorque"),
+            target: dom
+                .float_property(id, "TargetAngle")
+                .unwrap_or(0.0)
+                .to_radians(),
+            speed: dom.float_property(id, "AngularSpeed").unwrap_or(0.0).abs(),
+            max_torque: dom.float_property(id, "ServoMaxTorque").unwrap_or(0.0),
         },
         _ => Drive::Free,
     }

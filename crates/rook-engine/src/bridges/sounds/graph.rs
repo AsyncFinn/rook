@@ -21,26 +21,15 @@ pub(crate) struct Metering {
     carry: f64,
 }
 
-fn float(dom: &Dom, id: InstanceId, name: &str, default: f64) -> f32 {
-    number(dom, id, name, default) as f32
-}
-
-fn range(dom: &Dom, id: InstanceId, name: &str, default: [f32; 2]) -> [f32; 2] {
-    match dom.property_by_name(id, name) {
-        Some(Value::NumberRange(r)) => [r.min, r.max],
-        _ => default,
-    }
-}
-
 /// The effect an effect instance plays, with Studio's defaults; `None`
 /// passes sound through as it is: a bypassed effect (creator-docs), and
 /// AudioFilter, AudioFlanger, AudioTremolo, AudioLimiter, AudioGate and
 /// AudioChannelSplitter, which Rook doesn't play yet (Approximation).
 fn effect(dom: &Dom, id: InstanceId) -> Option<Effect> {
-    if flag(dom, id, "Bypass") {
+    if dom.bool_property(id, "Bypass").unwrap_or(false) {
         return None;
     }
-    let f = |name: &str, default: f64| float(dom, id, name, default);
+    let f = |name: &str, default: f32| dom.float_property(id, name).unwrap_or(default);
     Some(match dom.class_name(id) {
         "AudioFader" => Effect::Fader {
             volume: f("Volume", 1.0),
@@ -49,7 +38,9 @@ fn effect(dom: &Dom, id: InstanceId) -> Option<Effect> {
             low: f("LowGain", 0.0),
             mid: f("MidGain", 0.0),
             high: f("HighGain", 0.0),
-            range: range(dom, id, "MidRange", rook_audio::effects::CROSSOVERS),
+            range: dom
+                .number_range_property(id, "MidRange")
+                .map_or(rook_audio::effects::CROSSOVERS, |r| [r.min, r.max]),
         },
         // Confirmed one effect with ReverbSoundEffect at the same
         // settings; the properties it lacks (DecayRatio, the delays, the
@@ -120,13 +111,16 @@ impl DataModel {
                 "AudioPlayer" => NodeKind::Player(
                     self.sounds
                         .audio(id)
-                        .filter(|_| flag(dom, id, "IsPlaying"))
+                        .filter(|_| dom.bool_property(id, "IsPlaying").unwrap_or(false))
                         .map(|audio| Source {
                             audio: audio.clone(),
-                            position: number(dom, id, "TimePosition", 0.0).max(0.0),
-                            volume: float(dom, id, "Volume", 1.0),
-                            speed: float(dom, id, "PlaybackSpeed", 1.0),
-                            looped: flag(dom, id, "Looping"),
+                            position: dom
+                                .number_property(id, "TimePosition")
+                                .unwrap_or(0.0)
+                                .max(0.0),
+                            volume: dom.float_property(id, "Volume").unwrap_or(1.0),
+                            speed: dom.float_property(id, "PlaybackSpeed").unwrap_or(1.0),
+                            looped: dom.bool_property(id, "Looping").unwrap_or(false),
                             generation: self.sounds.generation(id),
                         }),
                 ),
@@ -209,9 +203,7 @@ impl DataModel {
             let Some(service) = dom.find_service("SoundService") else {
                 return;
             };
-            let location = dom
-                .property_by_name(service, "DefaultListenerLocation")
-                .and_then(|v| v.as_enum());
+            let location = dom.enum_property(service, "DefaultListenerLocation");
             let parent = match location {
                 Some(3) => camera,
                 Some(2) => dom
@@ -301,12 +293,8 @@ impl DataModel {
                     w.dom.load_property(id, p, Value::Float32(v));
                 }
             }
-            if flag(&w.dom, id, "SpectrumEnabled") {
-                let bins = match w
-                    .dom
-                    .property_by_name(id, "WindowSize")
-                    .and_then(|v| v.as_enum())
-                {
+            if w.dom.bool_property(id, "SpectrumEnabled").unwrap_or(false) {
+                let bins = match w.dom.enum_property(id, "WindowSize") {
                     Some(0) => 128,
                     Some(2) => 2048,
                     _ => 512,

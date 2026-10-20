@@ -139,8 +139,7 @@ impl DataModel {
                 }
                 let scale = w
                     .dom
-                    .property_by_name(*id, "TimeScale")
-                    .and_then(|v| v.as_number())
+                    .number_property(*id, "TimeScale")
                     .unwrap_or(1.0)
                     .clamp(0.0, 1.0);
                 *age += dt * scale;

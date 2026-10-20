@@ -55,11 +55,16 @@ impl Filter {
         groups: &groups::CollisionGroups,
         part: InstanceId,
     ) -> bool {
-        let collides = boolean(dom, part, "CanCollide", true);
-        if !collides && (self.respect_can_collide || !boolean(dom, part, "CanQuery", true)) {
+        let collides = dom.bool_property(part, "CanCollide").unwrap_or(true);
+        if !collides
+            && (self.respect_can_collide || !dom.bool_property(part, "CanQuery").unwrap_or(true))
+        {
             return false;
         }
-        if !collides && self.skip_invisible_ghosts && float(dom, part, "Transparency") >= 1.0 {
+        if !collides
+            && self.skip_invisible_ghosts
+            && dom.float_property(part, "Transparency").unwrap_or(0.0) >= 1.0
+        {
             return false;
         }
         if let Some(g) = &self.group

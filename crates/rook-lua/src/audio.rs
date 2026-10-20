@@ -106,13 +106,6 @@ fn in_tree(dom: &Dom, id: InstanceId) -> bool {
     dom.get(id).is_some() && dom.is_ancestor_of(dom.root(), id)
 }
 
-fn string(dom: &Dom, id: InstanceId, name: &str) -> String {
-    match dom.property_by_name(id, name) {
-        Some(Value::String(s)) => s,
-        _ => String::new(),
-    }
-}
-
 /// What `wire` would connect, before loops are looked at: both ends set,
 /// the wire and both ends in the DataModel, pins that exist on the ends
 /// (names are case-sensitive), and not an instance to itself.
@@ -125,8 +118,8 @@ fn ends(dom: &Dom, wire: InstanceId) -> Option<Connection> {
     if from == to || !in_tree(dom, from) || !in_tree(dom, to) {
         return None;
     }
-    let source = string(dom, wire, "SourceName");
-    let target = string(dom, wire, "TargetName");
+    let source = dom.string_property(wire, "SourceName").unwrap_or_default();
+    let target = dom.string_property(wire, "TargetName").unwrap_or_default();
     let (_, outputs) = pins(dom.class_name(from))?;
     let (inputs, _) = pins(dom.class_name(to))?;
     (outputs.contains(&source.as_str()) && inputs.contains(&target.as_str())).then(|| Connection {
@@ -212,7 +205,8 @@ pub fn place(w: &World, id: InstanceId) -> Option<CFrame> {
 }
 
 fn group(dom: &Dom, id: InstanceId) -> String {
-    string(dom, id, "AudioInteractionGroup")
+    dom.string_property(id, "AudioInteractionGroup")
+        .unwrap_or_default()
 }
 
 /// Whether `listener` can hear `emitter` at all: the same

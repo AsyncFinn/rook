@@ -17,8 +17,11 @@ impl Reader<'_, '_> {
             return explosion::emitters(dom, id, self.textures);
         }
         let frame = holder_frame(dom, id);
-        let enabled = frame.is_some() && boolean(dom, id, "Enabled") != Some(false);
-        let time_scale = number(dom, id, "TimeScale").unwrap_or(1.0).clamp(0.0, 1.0);
+        let enabled = frame.is_some() && dom.bool_property(id, "Enabled") != Some(false);
+        let time_scale = dom
+            .float_property(id, "TimeScale")
+            .unwrap_or(1.0)
+            .clamp(0.0, 1.0);
         let looks = match dom.class_name(id) {
             "Fire" => classic::fire(dom, id, self.textures),
             "Smoke" => vec![classic::smoke(dom, id, self.textures)],
@@ -58,19 +61,20 @@ impl Reader<'_, '_> {
         let parent = dom.parent(id);
         let half = parent
             .filter(|&p| is_part(dom, p))
-            .and_then(|p| vector3(dom, p, "Size"))
+            .and_then(|p| dom.vector3_property(p, "Size"))
             .map_or(Vec3::ZERO, |size| size * 0.5);
-        let direction = enum_value(dom, id, "EmissionDirection")
+        let direction = dom
+            .enum_property(id, "EmissionDirection")
             .and_then(NormalId::from_u32)
             .unwrap_or(NormalId::Top)
             .normal();
-        let shape = match enum_value(dom, id, "Shape") {
+        let shape = match dom.enum_property(id, "Shape") {
             Some(1) => EmitterShape::Sphere,
             Some(2) => EmitterShape::Cylinder,
             Some(3) => EmitterShape::Disc,
             _ => EmitterShape::Box,
         };
-        let in_out = match enum_value(dom, id, "ShapeInOut") {
+        let in_out = match dom.enum_property(id, "ShapeInOut") {
             Some(1) => InOut::Inward,
             Some(2) => InOut::Both,
             _ => InOut::Outward,
@@ -97,7 +101,7 @@ impl Reader<'_, '_> {
         for e in &mut size.envelope {
             *e *= 2.0;
         }
-        let orientation = match enum_value(dom, id, "Orientation") {
+        let orientation = match dom.enum_property(id, "Orientation") {
             Some(1) => Orientation::FacingCameraWorldUp,
             Some(2) => Orientation::VelocityParallel,
             Some(3) => Orientation::VelocityPerpendicular,
@@ -106,33 +110,55 @@ impl Reader<'_, '_> {
         EmitterLook {
             texture: self.texture(id),
             flipbook: flipbook(dom, id),
-            rate: number(dom, id, "Rate").unwrap_or(20.0).clamp(0.0, 10_000.0),
-            lifetime: number_range(dom, id, "Lifetime").unwrap_or([5.0, 10.0]),
+            rate: dom
+                .float_property(id, "Rate")
+                .unwrap_or(20.0)
+                .clamp(0.0, 10_000.0),
+            lifetime: dom
+                .number_range_property(id, "Lifetime")
+                .map(|r| [r.min, r.max])
+                .unwrap_or([5.0, 10.0]),
             spawn: Spawn::Shape {
                 shape,
                 half,
-                surface: enum_value(dom, id, "ShapeStyle") == Some(1),
+                surface: dom.enum_property(id, "ShapeStyle") == Some(1),
                 in_out,
-                partial: number(dom, id, "ShapePartial").unwrap_or(1.0),
+                partial: dom.float_property(id, "ShapePartial").unwrap_or(1.0),
             },
-            speed: number_range(dom, id, "Speed").unwrap_or([5.0, 5.0]),
+            speed: dom
+                .number_range_property(id, "Speed")
+                .map(|r| [r.min, r.max])
+                .unwrap_or([5.0, 5.0]),
             direction,
-            spread_angle: vector2(dom, id, "SpreadAngle").unwrap_or(Vec2::ZERO),
-            world_acceleration: vector3(dom, id, "Acceleration").unwrap_or(Vec3::ZERO),
+            spread_angle: dom
+                .vector2_property(id, "SpreadAngle")
+                .map(|v| v.0)
+                .unwrap_or(Vec2::ZERO),
+            world_acceleration: dom
+                .vector3_property(id, "Acceleration")
+                .unwrap_or(Vec3::ZERO),
             // Drag halves the speed every 1 / Drag seconds (creator-docs).
-            drag: number(dom, id, "Drag").unwrap_or(0.0) * std::f32::consts::LN_2,
-            locked: boolean(dom, id, "LockedToPart") == Some(true),
+            drag: dom.float_property(id, "Drag").unwrap_or(0.0) * std::f32::consts::LN_2,
+            locked: dom.bool_property(id, "LockedToPart") == Some(true),
             size,
             squash: number_sequence(dom, id, "Squash").map_or(Curve::constant(0.0), |s| s.curve),
-            rotation: number_range(dom, id, "Rotation").unwrap_or([0.0, 0.0]),
-            spin: number_range(dom, id, "RotSpeed").unwrap_or([0.0, 0.0]),
+            rotation: dom
+                .number_range_property(id, "Rotation")
+                .map(|r| [r.min, r.max])
+                .unwrap_or([0.0, 0.0]),
+            spin: dom
+                .number_range_property(id, "RotSpeed")
+                .map(|r| [r.min, r.max])
+                .unwrap_or([0.0, 0.0]),
             orientation,
             color: color_sequence(dom, id, "Color").unwrap_or(Curve::constant([1.0; 3])),
-            brightness: Curve::constant(number(dom, id, "Brightness").unwrap_or(1.0).max(0.0)),
+            brightness: Curve::constant(
+                dom.float_property(id, "Brightness").unwrap_or(1.0).max(0.0),
+            ),
             alpha,
-            light_emission: number(dom, id, "LightEmission").unwrap_or(0.0),
-            light_influence: number(dom, id, "LightInfluence").unwrap_or(0.0),
-            z_offset: number(dom, id, "ZOffset").unwrap_or(0.0),
+            light_emission: dom.float_property(id, "LightEmission").unwrap_or(0.0),
+            light_influence: dom.float_property(id, "LightInfluence").unwrap_or(0.0),
+            z_offset: dom.float_property(id, "ZOffset").unwrap_or(0.0),
             ..Default::default()
         }
     }
@@ -140,24 +166,30 @@ impl Reader<'_, '_> {
 
 /// A ParticleEmitter's flipbook, when its texture is laid out as one.
 fn flipbook(dom: &Dom, id: InstanceId) -> Option<Flipbook> {
-    let (columns, rows) = match enum_value(dom, id, "FlipbookLayout")? {
+    let (columns, rows) = match dom.enum_property(id, "FlipbookLayout")? {
         1 => (2, 2),
         2 => (4, 4),
         3 => (8, 8),
         4 => (
-            number(dom, id, "FlipbookSizeX").unwrap_or(1.0).max(1.0) as u32,
-            number(dom, id, "FlipbookSizeY").unwrap_or(1.0).max(1.0) as u32,
+            dom.float_property(id, "FlipbookSizeX")
+                .unwrap_or(1.0)
+                .max(1.0) as u32,
+            dom.float_property(id, "FlipbookSizeY")
+                .unwrap_or(1.0)
+                .max(1.0) as u32,
         ),
         _ => return None,
     };
-    let mode = match enum_value(dom, id, "FlipbookMode") {
+    let mode = match dom.enum_property(id, "FlipbookMode") {
         Some(1) => FlipbookMode::OneShot,
         Some(2) => FlipbookMode::PingPong,
         Some(3) => FlipbookMode::Random,
         _ => FlipbookMode::Loop,
     };
     // At most 30 frames a second (creator-docs).
-    let framerate = number_range(dom, id, "FlipbookFramerate")
+    let framerate = dom
+        .number_range_property(id, "FlipbookFramerate")
+        .map(|r| [r.min, r.max])
         .unwrap_or([1.0, 1.0])
         .map(|f| f.clamp(0.0, 30.0));
     Some(Flipbook {
@@ -165,6 +197,6 @@ fn flipbook(dom: &Dom, id: InstanceId) -> Option<Flipbook> {
         rows,
         mode,
         framerate,
-        start_random: boolean(dom, id, "FlipbookStartRandom") == Some(true),
+        start_random: dom.bool_property(id, "FlipbookStartRandom") == Some(true),
     })
 }

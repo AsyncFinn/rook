@@ -334,18 +334,10 @@ fn holders(dom: &Dom, id: InstanceId) -> Vec<InstanceId> {
     out
 }
 
-/// An instance's `CFrame` property.
-fn cframe(dom: &Dom, id: InstanceId) -> Option<CFrame> {
-    match dom.property_by_name(id, "CFrame")? {
-        Value::CFrame(cf) => Some(cf),
-        _ => None,
-    }
-}
-
 /// An Attachment's frame in the world, under a part. `None` elsewhere.
 fn attachment_frame(dom: &Dom, attachment: InstanceId) -> Option<CFrame> {
     let part = dom.parent(attachment).filter(|&p| is_part(dom, p))?;
-    Some(cframe(dom, part)? * cframe(dom, attachment)?)
+    Some(dom.cframe_property(part, "CFrame")? * dom.cframe_property(attachment, "CFrame")?)
 }
 
 /// Where an effect emits from and which way: its part's CFrame, or its
@@ -353,7 +345,7 @@ fn attachment_frame(dom: &Dom, attachment: InstanceId) -> Option<CFrame> {
 fn holder_frame(dom: &Dom, id: InstanceId) -> Option<CFrame> {
     let parent = dom.parent(id)?;
     if is_part(dom, parent) {
-        return cframe(dom, parent);
+        return dom.cframe_property(parent, "CFrame");
     }
     if dom.class_name(parent) == "Attachment" {
         return attachment_frame(dom, parent);

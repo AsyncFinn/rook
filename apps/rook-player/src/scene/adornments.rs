@@ -10,7 +10,7 @@ pub(super) use selection_box::selection_boxes;
 /// Whether adornment `id` draws: `Visible`, and somewhere drawn from
 /// (Workspace, or a PlayerGui).
 fn shown(dom: &Dom, id: InstanceId) -> bool {
-    if boolean(dom, id, "Visible") == Some(false) {
+    if dom.bool_property(id, "Visible") == Some(false) {
         return false;
     }
     let mut at = dom.parent(id);

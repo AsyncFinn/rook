@@ -17,9 +17,10 @@ const DEFAULT_COLOR: [f32; 3] = [13.0 / 255.0, 105.0 / 255.0, 172.0 / 255.0];
 /// box at `SurfaceTransparency` (1 by default: no fill); parts in front
 /// hide both.
 pub(in crate::scene) fn selection_boxes(dom: &Dom, id: InstanceId) -> Vec<(PartInstance, Pose)> {
-    let (Some(size), Some(Value::CFrame(cf))) =
-        (vector3(dom, id, "Size"), dom.property_by_name(id, "CFrame"))
-    else {
+    let (Some(size), Some(Value::CFrame(cf))) = (
+        dom.vector3_property(id, "Size"),
+        dom.property_by_name(id, "CFrame"),
+    ) else {
         return Vec::new();
     };
     let mut out = Vec::new();
@@ -48,10 +49,16 @@ pub(in crate::scene) fn selection_boxes(dom: &Dom, id: InstanceId) -> Vec<(PartI
 
 /// One SelectionBox on a part of `size`.
 fn selection_box(dom: &Dom, id: InstanceId, size: Vec3) -> Vec<(PartInstance, Pose)> {
-    let thickness = number(dom, id, "LineThickness").unwrap_or(0.15).max(0.0);
+    let thickness = dom
+        .float_property(id, "LineThickness")
+        .unwrap_or(0.15)
+        .max(0.0);
     let line = PartInstance {
-        color: color(dom, id, "Color3").unwrap_or(DEFAULT_COLOR),
-        transparency: number(dom, id, "Transparency").unwrap_or(0.0),
+        color: dom
+            .color3_property(id, "Color3")
+            .map(Color3::to_array)
+            .unwrap_or(DEFAULT_COLOR),
+        transparency: dom.float_property(id, "Transparency").unwrap_or(0.0),
         cast_shadow: false,
         unlit: true,
         ..PartInstance::plain(
@@ -62,11 +69,14 @@ fn selection_box(dom: &Dom, id: InstanceId, size: Vec3) -> Vec<(PartInstance, Po
         )
     };
     let mut out = Vec::new();
-    let fill = number(dom, id, "SurfaceTransparency").unwrap_or(1.0);
+    let fill = dom.float_property(id, "SurfaceTransparency").unwrap_or(1.0);
     if fill < 1.0 {
         out.push((
             PartInstance {
-                color: color(dom, id, "SurfaceColor3").unwrap_or(DEFAULT_COLOR),
+                color: dom
+                    .color3_property(id, "SurfaceColor3")
+                    .map(Color3::to_array)
+                    .unwrap_or(DEFAULT_COLOR),
                 transparency: fill,
                 // A hair outside the part's faces, so the two don't fight.
                 size: size + Vec3::splat(0.02),

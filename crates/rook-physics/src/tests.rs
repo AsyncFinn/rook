@@ -31,18 +31,6 @@ fn v3(x: f32, y: f32, z: f32) -> Value {
     Value::Vector3(Vector3(Vec3::new(x, y, z)))
 }
 
-fn vector(dom: &Dom, id: InstanceId, name: &str) -> Vec3 {
-    dom.property_by_name(id, name)
-        .and_then(|v| v.as_vector3())
-        .unwrap()
-}
-
-fn cframe(dom: &Dom, id: InstanceId) -> CFrame {
-    dom.property_by_name(id, "CFrame")
-        .and_then(|v| v.as_cframe())
-        .unwrap()
-}
-
 fn part(dom: &mut Dom, class: &str, position: Vec3, size: Vec3, anchored: bool) -> InstanceId {
     let ws = dom.get_service("Workspace").unwrap();
     let id = dom.create_by_name(class).unwrap();

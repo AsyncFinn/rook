@@ -162,10 +162,7 @@ pub fn find_variant(dom: &Dom, service: InstanceId, m: Material, name: &str) -> 
     dom.descendants(service).into_iter().find(|&v| {
         dom.class_name(v) == "MaterialVariant"
             && dom.name(v) == name
-            && dom
-                .property_by_name(v, "BaseMaterial")
-                .and_then(|b| b.as_enum())
-                == Some(m.value())
+            && dom.enum_property(v, "BaseMaterial") == Some(m.value())
     })
 }
 
@@ -177,10 +174,7 @@ pub fn find_variant(dom: &Dom, service: InstanceId, m: Material, name: &str) -> 
 /// part naming a Brick variant drew plain Plastic).
 pub fn part_variant(dom: &Dom, part: InstanceId) -> Option<InstanceId> {
     let service = dom.find_service("MaterialService")?;
-    let material = Material::of_part(
-        dom.property_by_name(part, "Material")
-            .and_then(|v| v.as_enum()),
-    );
+    let material = Material::of_part(dom.enum_property(part, "Material"));
     let own = ["MaterialVariant", "MaterialVariantSerialized"]
         .iter()
         .find_map(|p| dom.property_by_name(part, p)?.as_str().map(str::to_owned))

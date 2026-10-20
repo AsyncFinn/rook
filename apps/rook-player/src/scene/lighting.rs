@@ -54,40 +54,47 @@ pub(super) fn lighting(dom: &Dom) -> (Lighting, f32) {
         return (l, 1.0);
     };
     let hours = dom.clock_time(id) as f32;
-    let latitude = number(dom, id, "GeographicLatitude").unwrap_or(41.733);
+    let latitude = dom
+        .float_property(id, "GeographicLatitude")
+        .unwrap_or(41.733);
     let sun = sun_direction(hours, latitude);
-    let brightness = number(dom, id, "Brightness").unwrap_or(2.0);
+    let brightness = dom.float_property(id, "Brightness").unwrap_or(2.0);
     (l.sun_direction, l.sun_color) = sun_and_moon(sun, brightness);
-    if let Some(c) = color(dom, id, "Ambient") {
+    if let Some(c) = dom.color3_property(id, "Ambient").map(Color3::to_array) {
         l.ambient = c;
     }
-    if let Some(c) = color(dom, id, "OutdoorAmbient") {
+    if let Some(c) = dom
+        .color3_property(id, "OutdoorAmbient")
+        .map(Color3::to_array)
+    {
         l.outdoor_ambient = c;
     }
-    if let Some(c) = color(dom, id, "FogColor") {
+    if let Some(c) = dom.color3_property(id, "FogColor").map(Color3::to_array) {
         l.fog_color = c;
     }
-    if let Some(s) = number(dom, id, "FogStart") {
+    if let Some(s) = dom.float_property(id, "FogStart") {
         l.fog_start = s;
     }
-    if let Some(e) = number(dom, id, "FogEnd") {
+    if let Some(e) = dom.float_property(id, "FogEnd") {
         l.fog_end = e;
     }
     // Off draws no shadows (Confirmed: creator-docs Lighting.GlobalShadows;
     // defaults to on).
-    if let Some(s) = boolean(dom, id, "GlobalShadows") {
+    if let Some(s) = dom.bool_property(id, "GlobalShadows") {
         l.global_shadows = s;
     }
     // Observed in Studio 0.742: a place saved without it reads 0, and at 0
     // nothing reflects the sky (docs/behavior/materials.md).
-    l.environment_specular = number(dom, id, "EnvironmentSpecularScale")
+    l.environment_specular = dom
+        .float_property(id, "EnvironmentSpecularScale")
         .unwrap_or(0.0)
         .clamp(0.0, 1.0);
     // The sky lights surfaces as a second ambient, added to Ambient before
     // the tone curve (observed in Studio 0.742; docs/behavior/materials.md,
     // "The sky's diffuse light"). Read as 0 when unsaved, like
     // EnvironmentSpecularScale, so archived places are lit as before.
-    l.environment_diffuse = number(dom, id, "EnvironmentDiffuseScale")
+    l.environment_diffuse = dom
+        .float_property(id, "EnvironmentDiffuseScale")
         .unwrap_or(0.0)
         .clamp(0.0, 1.0);
     // Scales all light, the sky's too, about as a multiplier on linear
@@ -95,7 +102,8 @@ pub(super) fn lighting(dom: &Dom) -> (Lighting, f32) {
     // Ambient alone from 179 to 148 and the sky from (85, 163, 202) to
     // (61, 129, 174) (observed in Studio 0.742; Approximation, as Studio
     // scales before its tone curve).
-    l.exposure = number(dom, id, "ExposureCompensation")
+    l.exposure = dom
+        .float_property(id, "ExposureCompensation")
         .unwrap_or(0.0)
         .exp2();
     l.tonemapper = tonemapper(dom, id);
@@ -113,9 +121,9 @@ pub(super) fn lighting(dom: &Dom) -> (Lighting, f32) {
 /// docs/behavior/tone-mapping.md).
 fn tonemapper(dom: &Dom, lighting: InstanceId) -> rook_render::Tonemapper {
     let grading = dom.children(lighting).iter().copied().find(|&c| {
-        dom.class_name(c) == "ColorGradingEffect" && boolean(dom, c, "Enabled").unwrap_or(true)
+        dom.class_name(c) == "ColorGradingEffect" && dom.bool_property(c, "Enabled").unwrap_or(true)
     });
-    match grading.and_then(|c| enum_value(dom, c, "TonemapperPreset")) {
+    match grading.and_then(|c| dom.enum_property(c, "TonemapperPreset")) {
         Some(1) => rook_render::Tonemapper::Retro,
         _ => rook_render::Tonemapper::Default,
     }

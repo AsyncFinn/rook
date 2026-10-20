@@ -52,10 +52,6 @@ pub struct Listener {
     pub ambient_reverb: Option<rook_audio::effects::Reverb>,
 }
 
-fn cframe_of(dom: &Dom, id: InstanceId) -> Option<CFrame> {
-    dom.property_by_name(id, "CFrame")?.as_cframe()
-}
-
 /// A sound's emitter, if it is a 3D sound.
 pub(super) fn emitter(dom: &Dom, id: InstanceId) -> Option<Emitter> {
     let parent = dom.parent(id)?;
@@ -64,21 +60,22 @@ pub(super) fn emitter(dom: &Dom, id: InstanceId) -> Option<Emitter> {
         return None;
     }
     let position = if dom.is_a(parent, "BasePart") {
-        cframe_of(dom, parent)?.position
+        dom.cframe_property(parent, "CFrame")?.position
     } else if dom.is_a(parent, "Attachment") {
-        let part = cframe_of(dom, dom.parent(parent)?).unwrap_or(CFrame::IDENTITY);
-        (part * cframe_of(dom, parent)?).position
+        let part = dom
+            .cframe_property(dom.parent(parent)?, "CFrame")
+            .unwrap_or(CFrame::IDENTITY);
+        (part * dom.cframe_property(parent, "CFrame")?).position
     } else {
         return None;
     };
     Some(Emitter {
         position,
-        roll_off: dom
-            .property_by_name(id, "RollOffMode")
-            .and_then(|v| v.as_enum())
-            .unwrap_or(0),
-        min: number(dom, id, "RollOffMinDistance", 10.0) as f32,
-        max: number(dom, id, "RollOffMaxDistance", 10_000.0) as f32,
+        roll_off: dom.enum_property(id, "RollOffMode").unwrap_or(0),
+        min: dom.float_property(id, "RollOffMinDistance").unwrap_or(10.0),
+        max: dom
+            .float_property(id, "RollOffMaxDistance")
+            .unwrap_or(10_000.0),
     })
 }
 
@@ -104,8 +101,8 @@ impl OneShot {
                 id,
                 audio,
                 position: 0.0,
-                volume: number(dom, id, "Volume", 0.5) as f32,
-                speed: number(dom, id, "PlaybackSpeed", 1.0) as f32,
+                volume: dom.float_property(id, "Volume").unwrap_or(0.5),
+                speed: dom.float_property(id, "PlaybackSpeed").unwrap_or(1.0),
                 looped: false,
                 generation: u32::MAX,
                 emitter,
@@ -182,7 +179,7 @@ impl DataModel {
                         dom.load_property(id, p, v);
                     }
                 };
-                if !flag(dom, id, "Playing") {
+                if !dom.bool_property(id, "Playing").unwrap_or(false) {
                     if client {
                         set(dom, "PlaybackLoudness", Value::Float64(0.0));
                     }
@@ -191,8 +188,14 @@ impl DataModel {
                     continue;
                 }
                 let length = audio.seconds();
-                let speed = number(dom, id, "PlaybackSpeed", 1.0).max(0.0);
-                let before = number(dom, id, "TimePosition", 0.0).max(0.0);
+                let speed = dom
+                    .number_property(id, "PlaybackSpeed")
+                    .unwrap_or(1.0)
+                    .max(0.0);
+                let before = dom
+                    .number_property(id, "TimePosition")
+                    .unwrap_or(0.0)
+                    .max(0.0);
                 let mut t = before + dt * speed;
                 if client {
                     let list = effects::effects(dom, id);
@@ -210,7 +213,7 @@ impl DataModel {
                     set(dom, "PlaybackLoudness", Value::Float64(level));
                 }
                 if t >= length {
-                    if flag(dom, id, "Looped") && length > 0.0 {
+                    if dom.bool_property(id, "Looped").unwrap_or(false) && length > 0.0 {
                         t %= length;
                         let control = w.sounds.entry(id).or_default();
                         control.loops += 1;
@@ -243,16 +246,19 @@ impl DataModel {
             let Some(audio) = self.sounds.audio(id) else {
                 continue;
             };
-            if !flag(dom, id, "Playing") {
+            if !dom.bool_property(id, "Playing").unwrap_or(false) {
                 continue;
             }
             out.push(PlayingSound {
                 id,
                 audio: audio.clone(),
-                position: number(dom, id, "TimePosition", 0.0).max(0.0),
-                volume: number(dom, id, "Volume", 0.5) as f32,
-                speed: number(dom, id, "PlaybackSpeed", 1.0) as f32,
-                looped: flag(dom, id, "Looped"),
+                position: dom
+                    .number_property(id, "TimePosition")
+                    .unwrap_or(0.0)
+                    .max(0.0),
+                volume: dom.float_property(id, "Volume").unwrap_or(0.5),
+                speed: dom.float_property(id, "PlaybackSpeed").unwrap_or(1.0),
+                looped: dom.bool_property(id, "Looped").unwrap_or(false),
                 generation: self.sounds.generation(id),
                 emitter: emitter(dom, id),
                 effects: effects::effects(dom, id),
@@ -272,20 +278,24 @@ impl DataModel {
         let dom = &w.dom;
         let camera = self
             .current_camera()
-            .and_then(|c| cframe_of(dom, c))
+            .and_then(|c| dom.cframe_property(c, "CFrame"))
             .unwrap_or(CFrame::IDENTITY);
         let cframe = match w.listener {
             rook_lua::Listener::Camera => camera,
             rook_lua::Listener::CFrame(c) => c,
-            rook_lua::Listener::ObjectPosition(p) => cframe_of(dom, p).map_or(camera, |c| CFrame {
-                position: c.position,
-                rotation: camera.rotation,
-            }),
-            rook_lua::Listener::ObjectCFrame(p) => cframe_of(dom, p).unwrap_or(camera),
+            rook_lua::Listener::ObjectPosition(p) => {
+                dom.cframe_property(p, "CFrame").map_or(camera, |c| CFrame {
+                    position: c.position,
+                    rotation: camera.rotation,
+                })
+            }
+            rook_lua::Listener::ObjectCFrame(p) => {
+                dom.cframe_property(p, "CFrame").unwrap_or(camera)
+            }
         };
-        let rolloff_scale =
-            dom.find_service("SoundService")
-                .map_or(1.0, |s| number(dom, s, "RolloffScale", 1.0)) as f32;
+        let rolloff_scale = dom.find_service("SoundService").map_or(1.0, |s| {
+            dom.number_property(s, "RolloffScale").unwrap_or(1.0)
+        }) as f32;
         Listener {
             cframe,
             rolloff_scale,

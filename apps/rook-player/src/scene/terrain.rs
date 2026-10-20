@@ -284,11 +284,17 @@ impl SceneCache {
             Some(Value::MaterialColors(c)) => Some(c),
             _ => None,
         };
-        let water =
-            color(dom, terrain, "WaterColor").unwrap_or([12.0 / 255.0, 84.0 / 255.0, 92.0 / 255.0]);
-        let water_transparency = number(dom, terrain, "WaterTransparency").unwrap_or(0.3);
+        let water = dom
+            .color3_property(terrain, "WaterColor")
+            .map(Color3::to_array)
+            .unwrap_or([12.0 / 255.0, 84.0 / 255.0, 92.0 / 255.0]);
+        let water_transparency = dom
+            .float_property(terrain, "WaterTransparency")
+            .unwrap_or(0.3);
         // The shader mixes towards the skybox by `WaterReflectance`.
-        let water_reflectance = number(dom, terrain, "WaterReflectance").unwrap_or(1.0);
+        let water_reflectance = dom
+            .float_property(terrain, "WaterReflectance")
+            .unwrap_or(1.0);
         let surfaces = self.terrain.surfaces.clone();
         let mut looks: HashMap<Layer, (MaterialMaps, [f32; 3])> = HashMap::new();
         let mut entries = Vec::with_capacity(surfaces.len());
@@ -392,7 +398,9 @@ impl SceneCache {
                 normal,
                 roughness,
                 metalness,
-                studs_per_tile: Vec2::splat(number(dom, variant, "StudsPerTile").unwrap_or(10.0)),
+                studs_per_tile: Vec2::splat(
+                    dom.float_property(variant, "StudsPerTile").unwrap_or(10.0),
+                ),
                 detile,
                 ..MaterialMaps::NONE
             };
@@ -444,14 +452,18 @@ impl SceneCache {
 fn terrain_look(dom: &Dom, terrain: Option<InstanceId>) -> TerrainLook {
     let mut look = TerrainLook::default();
     if let Some(t) = terrain {
-        look.wave_size = number(dom, t, "WaterWaveSize").unwrap_or(look.wave_size);
-        look.wave_speed = number(dom, t, "WaterWaveSpeed").unwrap_or(look.wave_speed);
-        if boolean(dom, t, "Decoration").unwrap_or(false) {
+        look.wave_size = dom
+            .float_property(t, "WaterWaveSize")
+            .unwrap_or(look.wave_size);
+        look.wave_speed = dom
+            .float_property(t, "WaterWaveSpeed")
+            .unwrap_or(look.wave_speed);
+        if dom.bool_property(t, "Decoration").unwrap_or(false) {
             look.grass_reach = GRASS_REACH;
         }
     }
     if let Some(ws) = dom.find_service("Workspace") {
-        look.wind = vector3(dom, ws, "GlobalWind").unwrap_or(Vec3::ZERO);
+        look.wind = dom.vector3_property(ws, "GlobalWind").unwrap_or(Vec3::ZERO);
     }
     look
 }

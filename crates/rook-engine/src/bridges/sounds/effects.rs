@@ -6,37 +6,38 @@ use rook_audio::effects::{Chain, Effect, Reverb, ordered};
 
 use super::*;
 
-/// Reads a property as a number the way `number` does, as an `f32`.
-fn float(dom: &Dom, id: InstanceId, name: &str, default: f64) -> f32 {
-    number(dom, id, name, default) as f32
-}
-
 /// The effect a SoundEffect instance is, if Rook plays its class (Chorus,
 /// Compressor, Echo, Flange and Tremolo are left out, see the docs).
 /// Defaults are Studio's.
 fn effect(dom: &Dom, id: InstanceId) -> Option<Effect> {
     Some(match dom.class_name(id) {
         "EqualizerSoundEffect" => Effect::Equalizer {
-            low: float(dom, id, "LowGain", -20.0),
-            mid: float(dom, id, "MidGain", -10.0),
-            high: float(dom, id, "HighGain", 0.0),
+            low: dom.float_property(id, "LowGain").unwrap_or(-20.0),
+            mid: dom.float_property(id, "MidGain").unwrap_or(-10.0),
+            high: dom.float_property(id, "HighGain").unwrap_or(0.0),
             range: rook_audio::effects::CROSSOVERS,
         },
         "ReverbSoundEffect" => Effect::Reverb(Reverb {
-            decay: float(dom, id, "DecayTime", 1.5),
-            density: float(dom, id, "Density", 1.0),
-            diffusion: float(dom, id, "Diffusion", 1.0),
+            decay: dom.float_property(id, "DecayTime").unwrap_or(1.5),
+            density: dom.float_property(id, "Density").unwrap_or(1.0),
+            diffusion: dom.float_property(id, "Diffusion").unwrap_or(1.0),
             // Within ReverbSoundEffect's -80 to 10 dB (creator-docs),
             // narrower than AudioReverb's.
-            dry: float(dom, id, "DryLevel", -6.0).clamp(-80.0, 10.0),
-            wet: float(dom, id, "WetLevel", 0.0).clamp(-80.0, 10.0),
+            dry: dom
+                .float_property(id, "DryLevel")
+                .unwrap_or(-6.0)
+                .clamp(-80.0, 10.0),
+            wet: dom
+                .float_property(id, "WetLevel")
+                .unwrap_or(0.0)
+                .clamp(-80.0, 10.0),
             ..Reverb::default()
         }),
         "DistortionSoundEffect" => Effect::Distortion {
-            level: float(dom, id, "Level", 0.75),
+            level: dom.float_property(id, "Level").unwrap_or(0.75),
         },
         "PitchShiftSoundEffect" => Effect::PitchShift {
-            octave: float(dom, id, "Octave", 1.25),
+            octave: dom.float_property(id, "Octave").unwrap_or(1.25),
         },
         _ => return None,
     })
@@ -56,7 +57,7 @@ pub(crate) fn effects(dom: &Dom, id: InstanceId) -> Vec<Effect> {
         {
             return None;
         }
-        let priority = number(dom, c, "Priority", 0.0) as i32;
+        let priority = dom.number_property(c, "Priority").unwrap_or(0.0) as i32;
         Some((effect(dom, c)?, priority))
     }))
 }
@@ -121,7 +122,7 @@ impl DataModel {
                 out.push(rook_audio::Group {
                     key: g,
                     parent,
-                    volume: float(dom, g, "Volume", 0.5),
+                    volume: dom.float_property(g, "Volume").unwrap_or(0.5),
                     effects: effects(dom, g),
                 });
                 next = parent;
@@ -134,5 +135,5 @@ impl DataModel {
 /// `SoundService.AmbientReverb`'s reverb, added to every sound.
 pub(super) fn ambient_reverb(dom: &Dom) -> Option<Reverb> {
     let service = dom.find_service("SoundService")?;
-    rook_audio::effects::ambient(dom.property_by_name(service, "AmbientReverb")?.as_enum()?)
+    rook_audio::effects::ambient(dom.enum_property(service, "AmbientReverb")?)
 }

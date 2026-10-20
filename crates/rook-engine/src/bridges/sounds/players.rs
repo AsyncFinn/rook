@@ -22,19 +22,22 @@ pub(super) fn advance(
     dt: f64,
     events: &mut Vec<SoundEvent>,
 ) {
-    if !flag(dom, id, "IsPlaying") {
+    if !dom.bool_property(id, "IsPlaying").unwrap_or(false) {
         return;
     }
     let length = audio.seconds();
-    let speed = number(dom, id, "PlaybackSpeed", 1.0).max(0.0);
-    let before = number(dom, id, "TimePosition", 0.0);
+    let speed = dom
+        .number_property(id, "PlaybackSpeed")
+        .unwrap_or(1.0)
+        .max(0.0);
+    let before = dom.number_property(id, "TimePosition").unwrap_or(0.0);
     let mut t = if before >= length {
         before
     } else {
         before.max(0.0) + dt * speed
     };
     if t >= length {
-        if flag(dom, id, "Looping") && length > 0.0 {
+        if dom.bool_property(id, "Looping").unwrap_or(false) && length > 0.0 {
             t %= length;
             controls.entry(id).or_default().loops += 1;
             events.push((id, "Looped", None, None));

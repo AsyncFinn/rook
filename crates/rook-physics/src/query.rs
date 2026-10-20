@@ -37,7 +37,6 @@ use rook_types::CFrame;
 
 use crate::contacts::groups;
 use crate::convert::{pose_of, to_glam, to_rapier};
-use crate::sync::read::{boolean, enum_value, float};
 use crate::{Physics, shape};
 
 mod filter;
@@ -298,7 +297,7 @@ impl Physics {
     fn material_of(&self, dom: &Dom, h: ColliderHandle, part: InstanceId) -> u32 {
         match self.terrain.material(h) {
             Some(m) => m.material() as u32,
-            None => enum_value(dom, part, "Material"),
+            None => dom.enum_property(part, "Material").unwrap_or(0),
         }
     }
 
@@ -399,7 +398,7 @@ impl Physics {
         if !self.parts.contains_key(&part) {
             return Vec::new();
         }
-        let collides = |p| boolean(dom, p, "CanCollide", true);
+        let collides = |p| dom.bool_property(p, "CanCollide").unwrap_or(true);
         // Parts that touch it, if any: all of them, or only colliding ones.
         let others = if collides(part) {
             Some(false)

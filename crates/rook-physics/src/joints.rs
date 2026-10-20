@@ -11,11 +11,11 @@ pub(crate) mod drives;
 pub(crate) mod movers;
 pub mod surfaces;
 
+use glam::Vec3;
 use rook_dom::{Dom, DomError, InstanceId};
 use rook_types::{CFrame, Value};
 
 use crate::shape::is_part;
-use crate::sync::read::{cframe, float};
 
 /// How a joint relates its two parts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -133,10 +133,20 @@ pub fn part_joints(dom: &Dom, part: InstanceId) -> Vec<Joint> {
 
 /// What sits between `C0` and `C1`: `Part0 * C0 * middle = Part1 * C1`.
 fn middle(dom: &Dom, j: &Joint) -> CFrame {
-    let angle = || CFrame::angles(0.0, 0.0, float(dom, j.id, "CurrentAngle"));
+    let angle = || {
+        CFrame::angles(
+            0.0,
+            0.0,
+            dom.float_property(j.id, "CurrentAngle").unwrap_or(0.0),
+        )
+    };
     match j.kind {
         JointKind::Motor => angle(),
-        JointKind::Motor6D => cframe(dom, j.id, "Transform") * angle(),
+        JointKind::Motor6D => {
+            dom.cframe_property(j.id, "Transform")
+                .unwrap_or(CFrame::IDENTITY)
+                * angle()
+        }
         _ => CFrame::IDENTITY,
     }
 }
@@ -147,14 +157,28 @@ pub fn offset(dom: &Dom, j: &Joint) -> CFrame {
         // Inference: the captured offset is the parts' relative pose, which
         // stays true while they move together; setting one part's Position
         // re-captures it, which reading it live also does.
-        return cframe(dom, j.part0, "CFrame").inverse() * cframe(dom, j.part1, "CFrame");
+        return dom
+            .cframe_property(j.part0, "CFrame")
+            .unwrap_or(CFrame::IDENTITY)
+            .inverse()
+            * dom
+                .cframe_property(j.part1, "CFrame")
+                .unwrap_or(CFrame::IDENTITY);
     }
-    cframe(dom, j.id, "C0") * middle(dom, j) * cframe(dom, j.id, "C1").inverse()
+    dom.cframe_property(j.id, "C0").unwrap_or(CFrame::IDENTITY)
+        * middle(dom, j)
+        * dom
+            .cframe_property(j.id, "C1")
+            .unwrap_or(CFrame::IDENTITY)
+            .inverse()
 }
 
 /// The hinge frames on Part0 and Part1 (their Z axes are the hinge axis).
 pub fn hinge_frames(dom: &Dom, j: &Joint) -> (CFrame, CFrame) {
-    (cframe(dom, j.id, "C0"), cframe(dom, j.id, "C1"))
+    (
+        dom.cframe_property(j.id, "C0").unwrap_or(CFrame::IDENTITY),
+        dom.cframe_property(j.id, "C1").unwrap_or(CFrame::IDENTITY),
+    )
 }
 
 /// `Enum.InputType`: how a motor surface drives its hinge.
@@ -222,8 +246,12 @@ pub const ROTATE_V_TORQUE: f32 = 5.0e5;
 /// times this.
 pub fn rotate_v_strength(dom: &Dom, j: &Joint) -> f32 {
     let inertia = |part, frame: &str| {
-        let size = crate::sync::read::vector(dom, part, "Size");
-        let axis = cframe(dom, j.id, frame).rotation.z_axis;
+        let size = dom.vector3_property(part, "Size").unwrap_or(Vec3::ZERO);
+        let axis = dom
+            .cframe_property(j.id, frame)
+            .unwrap_or(CFrame::IDENTITY)
+            .rotation
+            .z_axis;
         let volume = size.x * size.y * size.z;
         let sq = size * size;
         let diagonal = glam::Vec3::new(sq.y + sq.z, sq.x + sq.z, sq.x + sq.y) * (volume / 12.0);
@@ -243,7 +271,11 @@ pub fn hinge_input(dom: &Dom, j: &Joint) -> Option<HingeInput> {
         "RotateP" => true,
         _ => return None,
     };
-    let z = cframe(dom, j.id, "C0").rotation.z_axis;
+    let z = dom
+        .cframe_property(j.id, "C0")
+        .unwrap_or(CFrame::IDENTITY)
+        .rotation
+        .z_axis;
     let a = z.abs();
     let face = if a.x >= a.y && a.x >= a.z {
         if z.x > 0.0 { "Right" } else { "Left" }
@@ -254,7 +286,10 @@ pub fn hinge_input(dom: &Dom, j: &Joint) -> Option<HingeInput> {
     } else {
         "Front"
     };
-    let input = match crate::sync::read::enum_value(dom, j.part0, &format!("{face}SurfaceInput")) {
+    let input = match dom
+        .enum_property(j.part0, &format!("{face}SurfaceInput"))
+        .unwrap_or(0)
+    {
         12 => SurfaceInput::Constant,
         13 => SurfaceInput::Sin,
         _ => SurfaceInput::NoInput,
@@ -262,8 +297,12 @@ pub fn hinge_input(dom: &Dom, j: &Joint) -> Option<HingeInput> {
     Some(HingeInput {
         stepping,
         input,
-        param_a: float(dom, j.part0, &format!("{face}ParamA")),
-        param_b: float(dom, j.part0, &format!("{face}ParamB")),
+        param_a: dom
+            .float_property(j.part0, &format!("{face}ParamA"))
+            .unwrap_or(0.0),
+        param_b: dom
+            .float_property(j.part0, &format!("{face}ParamB"))
+            .unwrap_or(0.0),
         strength: rotate_v_strength(dom, j),
     })
 }
@@ -276,16 +315,30 @@ pub fn reseat(dom: &mut Dom, part: InstanceId) -> Result<(), DomError> {
         if j.kind == JointKind::WeldConstraint {
             continue;
         }
-        let here = cframe(dom, part, "CFrame").inverse();
+        let here = dom
+            .cframe_property(part, "CFrame")
+            .unwrap_or(CFrame::IDENTITY)
+            .inverse();
         let m = middle(dom, &j);
         let (name, value) = if part == j.part1 {
-            let c0 = cframe(dom, j.id, "C0");
-            ("C1", here * cframe(dom, j.part0, "CFrame") * c0 * m)
+            let c0 = dom.cframe_property(j.id, "C0").unwrap_or(CFrame::IDENTITY);
+            (
+                "C1",
+                here * dom
+                    .cframe_property(j.part0, "CFrame")
+                    .unwrap_or(CFrame::IDENTITY)
+                    * c0
+                    * m,
+            )
         } else {
-            let c1 = cframe(dom, j.id, "C1");
+            let c1 = dom.cframe_property(j.id, "C1").unwrap_or(CFrame::IDENTITY);
             (
                 "C0",
-                here * cframe(dom, j.part1, "CFrame") * c1 * m.inverse(),
+                here * dom
+                    .cframe_property(j.part1, "CFrame")
+                    .unwrap_or(CFrame::IDENTITY)
+                    * c1
+                    * m.inverse(),
             )
         };
         dom.set_property_by_name(j.id, name, Value::CFrame(value))?;
@@ -300,12 +353,12 @@ pub(crate) fn step_motor(dom: &mut Dom, j: &Joint, dt: f64) -> bool {
     if !matches!(j.kind, JointKind::Motor | JointKind::Motor6D) {
         return false;
     }
-    let current = float(dom, j.id, "CurrentAngle");
-    let desired = float(dom, j.id, "DesiredAngle");
+    let current = dom.float_property(j.id, "CurrentAngle").unwrap_or(0.0);
+    let desired = dom.float_property(j.id, "DesiredAngle").unwrap_or(0.0);
     if current == desired {
         return false;
     }
-    let max = float(dom, j.id, "MaxVelocity").abs() * (dt * 60.0) as f32;
+    let max = dom.float_property(j.id, "MaxVelocity").unwrap_or(0.0).abs() * (dt * 60.0) as f32;
     let next = current + (desired - current).clamp(-max, max);
     let _ = dom.set_property_by_name(j.id, "CurrentAngle", Value::Float32(next));
     next != current

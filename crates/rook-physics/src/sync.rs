@@ -2,7 +2,6 @@
 //! journal ([`Physics::sync`]).
 
 pub(crate) mod props;
-pub(crate) mod read;
 
 use super::*;
 

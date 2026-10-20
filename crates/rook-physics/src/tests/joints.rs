@@ -5,7 +5,7 @@ use glam::Vec3;
 use rook_dom::{Dom, InstanceId};
 use rook_types::{CFrame, Value};
 
-use super::{cframe, part, position, run, set};
+use super::{part, position, run, set};
 use crate::{Physics, assembly, joints};
 
 fn joint(
@@ -27,7 +27,8 @@ fn joint(
 
 /// A weld holding `b` where it is relative to `a`.
 fn weld(dom: &mut Dom, a: InstanceId, b: InstanceId) -> InstanceId {
-    let c0 = cframe(dom, a).inverse() * cframe(dom, b);
+    let c0 = dom.cframe_property(a, "CFrame").unwrap().inverse()
+        * dom.cframe_property(b, "CFrame").unwrap();
     joint(dom, "Weld", a, b, c0)
 }
 
@@ -188,7 +189,8 @@ fn motors_turn_toward_the_desired_angle() {
     assert!((angle(&dom) - 0.1).abs() < 1e-6);
     run(&mut physics, &mut dom, 0.5);
     assert_eq!(angle(&dom), 1.0);
-    let rel = cframe(&dom, a).inverse() * cframe(&dom, b);
+    let rel = dom.cframe_property(a, "CFrame").unwrap().inverse()
+        * dom.cframe_property(b, "CFrame").unwrap();
     let expected = Vec3::new(4.0 + 1f32.sin(), -1f32.cos(), 0.0);
     assert!(close(rel.position, expected), "{rel:?}");
 
@@ -197,7 +199,8 @@ fn motors_turn_toward_the_desired_angle() {
     set(&mut dom, m, "CurrentAngle", Value::Float32(0.0));
     set(&mut dom, m, "Transform", Value::CFrame(at(0.0, 0.0, 2.0)));
     run(&mut physics, &mut dom, 1.0 / 60.0);
-    let rel = cframe(&dom, a).inverse() * cframe(&dom, b);
+    let rel = dom.cframe_property(a, "CFrame").unwrap().inverse()
+        * dom.cframe_property(b, "CFrame").unwrap();
     assert!(close(rel.position, Vec3::new(4.0, -1.0, 2.0)), "{rel:?}");
 }
 
@@ -226,7 +229,7 @@ fn a_hinged_bar_swings_about_its_pivot() {
     physics.sync(&mut dom);
     assert_eq!(physics.body_count(), 1);
     run(&mut physics, &mut dom, 1.5);
-    let bar_cf = cframe(&dom, bar);
+    let bar_cf = dom.cframe_property(bar, "CFrame").unwrap();
     let end = bar_cf * rook_types::Vector3::new(-2.0, 0.0, 0.0);
     assert!(
         (end.0 - Vec3::new(1.0, 50.0, 0.0)).length() < 0.05,

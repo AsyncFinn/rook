@@ -57,7 +57,7 @@ pub(super) fn truss(
 ) -> PartInstance {
     // Files save `Style` as `style`, which is what the DOM holds (scripts
     // see it as `Style`).
-    let style = TrussStyle::from_u32(enum_value(dom, id, "style").unwrap_or(0));
+    let style = TrussStyle::from_u32(dom.enum_property(id, "style").unwrap_or(0));
     let look = TrussLook::of(size, style);
     out.shape = DrawShape::Truss(look.shape);
     out.size = Vec3::ONE;
@@ -101,17 +101,20 @@ impl SceneCache {
             return None;
         };
         self.near = cf.position;
-        let size = vector3(dom, id, "Size")?;
+        let size = dom.vector3_property(id, "Size")?;
         let own = part_shape(dom, id);
         let class = dom.class_name(id);
         let mut out = PartInstance {
-            color: color(dom, id, "Color").unwrap_or([0.64, 0.64, 0.65]),
-            transparency: number(dom, id, "Transparency").unwrap_or(0.0),
+            color: dom
+                .color3_property(id, "Color")
+                .map(Color3::to_array)
+                .unwrap_or([0.64, 0.64, 0.65]),
+            transparency: dom.float_property(id, "Transparency").unwrap_or(0.0),
             // Confirmed: creator-docs BasePart.CastShadow, on by default;
             // places saved before it existed cast.
-            cast_shadow: boolean(dom, id, "CastShadow").unwrap_or(true),
-            material: Material::of_part(enum_value(dom, id, "Material")),
-            reflectance: number(dom, id, "Reflectance").unwrap_or(0.0),
+            cast_shadow: dom.bool_property(id, "CastShadow").unwrap_or(true),
+            material: Material::of_part(dom.enum_property(id, "Material")),
+            reflectance: dom.float_property(id, "Reflectance").unwrap_or(0.0),
             ..PartInstance::plain(
                 DrawShape::Part(own),
                 cf.position,
@@ -124,7 +127,8 @@ impl SceneCache {
         let has_surfaces = !matches!(class, "MeshPart" | "TrussPart") && !is_union(class);
         let surfaces = |out: &mut PartInstance| {
             for face in NormalId::ALL {
-                out.surfaces[face.index()] = enum_value(dom, id, SURFACES[face.index()])
+                out.surfaces[face.index()] = dom
+                    .enum_property(id, SURFACES[face.index()])
                     .and_then(|s| SurfaceType::from_u32(s).pattern());
             }
         };
@@ -147,7 +151,9 @@ impl SceneCache {
                 self.settle(id, id, Settled::Empty);
                 return Some((out, Decals::Faces));
             }
-            let initial = vector3(dom, id, "InitialSize").unwrap_or(Vec3::ZERO);
+            let initial = dom
+                .vector3_property(id, "InitialSize")
+                .unwrap_or(Vec3::ZERO);
             let scale = mesh_part_scale(size, initial);
             match self.file(id, id, &url) {
                 FileDraw::Mesh(hash) => {
@@ -171,7 +177,7 @@ impl SceneCache {
             }
             return Some(own(out, pose));
         };
-        let scale = vector3(dom, mesh, "Scale").unwrap_or(Vec3::ONE);
+        let scale = dom.vector3_property(mesh, "Scale").unwrap_or(Vec3::ONE);
         let Some(mut look) = kind.look_on(class, size, scale) else {
             return Some(own(out, pose));
         };
@@ -225,12 +231,14 @@ impl SceneCache {
             if out.material == Material::Neon {
                 out.material = Material::SmoothPlastic;
             }
-            let tint = vector3(dom, mesh, "VertexColor").unwrap_or(Vec3::ONE);
+            let tint = dom
+                .vector3_property(mesh, "VertexColor")
+                .unwrap_or(Vec3::ONE);
             self.mesh_texture(dom, id, mesh, &mut out, tint.to_array());
         }
         // Moves the mesh in the part's own axes (Confirmed: creator-docs
         // DataModelMesh.Offset).
-        let offset = vector3(dom, mesh, "Offset").unwrap_or(Vec3::ZERO);
+        let offset = dom.vector3_property(mesh, "Offset").unwrap_or(Vec3::ZERO);
         out.position += cf.rotation * offset;
         pose.offset = offset;
         let decals = if kind.decals_follow_uvs() {
@@ -294,7 +302,8 @@ impl SceneCache {
             let FileState::Loaded(hash) = self.file_state(id, &url, Want::Image) else {
                 continue;
             };
-            let face = enum_value(dom, child, "Face")
+            let face = dom
+                .enum_property(child, "Face")
                 .and_then(NormalId::from_u32)
                 .unwrap_or(NormalId::Front);
             let placement = match (decals, class) {
@@ -303,20 +312,23 @@ impl SceneCache {
                     face,
                     Tiling {
                         studs_per_tile: Vec2::new(
-                            number(dom, child, "StudsPerTileU").unwrap_or(2.0),
-                            number(dom, child, "StudsPerTileV").unwrap_or(2.0),
+                            dom.float_property(child, "StudsPerTileU").unwrap_or(2.0),
+                            dom.float_property(child, "StudsPerTileV").unwrap_or(2.0),
                         ),
                         offset: Vec2::new(
-                            number(dom, child, "OffsetStudsU").unwrap_or(0.0),
-                            number(dom, child, "OffsetStudsV").unwrap_or(0.0),
+                            dom.float_property(child, "OffsetStudsU").unwrap_or(0.0),
+                            dom.float_property(child, "OffsetStudsV").unwrap_or(0.0),
                         ),
                     },
                 ),
                 _ => ImagePlacement::Face(face),
             };
             out.push(PartInstance {
-                color: color(dom, child, "Color3").unwrap_or([1.0; 3]),
-                transparency: number(dom, child, "Transparency").unwrap_or(0.0),
+                color: dom
+                    .color3_property(child, "Color3")
+                    .map(Color3::to_array)
+                    .unwrap_or([1.0; 3]),
+                transparency: dom.float_property(child, "Transparency").unwrap_or(0.0),
                 texture: None,
                 surfaces: [None; 6],
                 material: Material::SmoothPlastic,
@@ -324,7 +336,7 @@ impl SceneCache {
                 layer: Layer::Image {
                     image: ImageHash(hash),
                     placement,
-                    z: number(dom, child, "ZIndex").unwrap_or(1.0) as i32,
+                    z: dom.float_property(child, "ZIndex").unwrap_or(1.0) as i32,
                     on_transparent: part.transparency > 0.0 && part.transparency < 1.0,
                 },
                 ..*part

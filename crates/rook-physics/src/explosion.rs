@@ -168,7 +168,7 @@ impl Physics {
 
 /// A part's `Size` and where its centre is.
 fn size_and_position(dom: &Dom, part: InstanceId) -> Option<(Vec3, Vec3)> {
-    let size = dom.property_by_name(part, "Size")?.as_vector3()?;
+    let size = dom.vector3_property(part, "Size")?;
     let at = match dom.property_by_name(part, "CFrame")? {
         Value::CFrame(cf) => cf.position,
         _ => return None,
