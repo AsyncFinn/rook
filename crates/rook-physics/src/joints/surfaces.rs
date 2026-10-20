@@ -32,7 +32,7 @@ use rustc_hash::FxHashMap as HashMap;
 
 use glam::{Mat3, Vec3};
 use rook_dom::{Dom, DomError, InstanceId};
-use rook_types::{CFrame, PartShape, Value};
+use rook_types::{CFrame, PartShape, SurfaceType, Value};
 
 use crate::joints::part_joints;
 use crate::shape::{part_shape, workspace_parts};
@@ -60,67 +60,45 @@ const DISTANCE: f32 = 0.01;
 /// Edges line up when the sine of the angle between them is below this.
 const ALIGNMENT: f32 = 0.01;
 
-/// `Enum.SurfaceType`, the values that matter here.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Surface {
-    Glue,
-    Weld,
-    Studs,
-    Inlet,
-    Universal,
-    Hinge,
-    Motor,
-    SteppingMotor,
-    Other,
+/// A face's `Enum.SurfaceType`, from its `<Face>Surface` property.
+fn surface(dom: &Dom, part: InstanceId, property: &str) -> SurfaceType {
+    SurfaceType::from_u32(dom.enum_property(part, property).unwrap_or(0))
 }
 
-impl Surface {
-    fn of(dom: &Dom, part: InstanceId, property: &str) -> Self {
-        match dom.property_by_name(part, property) {
-            Some(Value::Enum(n)) => match n {
-                1 => Self::Glue,
-                2 => Self::Weld,
-                3 => Self::Studs,
-                4 => Self::Inlet,
-                5 => Self::Universal,
-                6 => Self::Hinge,
-                7 => Self::Motor,
-                8 => Self::SteppingMotor,
-                _ => Self::Other,
-            },
-            _ => Self::Other,
-        }
+/// The joint a motor surface makes.
+fn rotating_joint(surface: SurfaceType) -> Option<&'static str> {
+    match surface {
+        SurfaceType::Hinge => Some("Rotate"),
+        SurfaceType::Motor => Some("RotateV"),
+        SurfaceType::SteppingMotor => Some("RotateP"),
+        _ => None,
     }
+}
 
-    fn rotating_joint(self) -> Option<&'static str> {
-        match self {
-            Self::Hinge => Some("Rotate"),
-            Self::Motor => Some("RotateV"),
-            Self::SteppingMotor => Some("RotateP"),
-            _ => None,
-        }
-    }
-
-    fn connects(self) -> bool {
-        matches!(self, Self::Studs | Self::Inlet | Self::Universal)
-    }
+fn connects(surface: SurfaceType) -> bool {
+    matches!(
+        surface,
+        SurfaceType::Studs | SurfaceType::Inlet | SurfaceType::Universal
+    )
 }
 
 /// The joint class two touching surfaces make, and whether the other
 /// part's surface decided it (making that part Part0).
-fn joint_class(mine: Surface, theirs: Surface) -> Option<(&'static str, bool)> {
-    if let Some(class) = mine.rotating_joint() {
+fn joint_class(mine: SurfaceType, theirs: SurfaceType) -> Option<(&'static str, bool)> {
+    if let Some(class) = rotating_joint(mine) {
         return Some((class, false));
     }
-    if let Some(class) = theirs.rotating_joint() {
+    if let Some(class) = rotating_joint(theirs) {
         return Some((class, true));
     }
     let either = |s| mine == s || theirs == s;
-    if either(Surface::Weld) {
+    if either(SurfaceType::Weld) {
         Some(("Weld", false))
-    } else if either(Surface::Glue) {
+    } else if either(SurfaceType::Glue) {
         Some(("Glue", false))
-    } else if mine.connects() && theirs.connects() && (mine != theirs || mine == Surface::Universal)
+    } else if connects(mine)
+        && connects(theirs)
+        && (mine != theirs || mine == SurfaceType::Universal)
     {
         Some(("Snap", false))
     } else {
@@ -356,12 +334,12 @@ fn joint_between<'a>(
     if fa == SLOPE {
         let f = [TOP, FRONT]
             .into_iter()
-            .find(|&f| Surface::of(dom, me.id, FACES[f].0) == Surface::Weld)?;
+            .find(|&f| surface(dom, me.id, FACES[f].0) == SurfaceType::Weld)?;
         return Some(("Weld", me, f, other));
     }
-    let mine = Surface::of(dom, me.id, FACES[fa].0);
-    let theirs = Surface::of(dom, other.id, FACES[if fb == SLOPE { FRONT } else { fb }].0);
-    if fb == SLOPE && (mine.rotating_joint().is_some() || theirs.rotating_joint().is_some()) {
+    let mine = surface(dom, me.id, FACES[fa].0);
+    let theirs = surface(dom, other.id, FACES[if fb == SLOPE { FRONT } else { fb }].0);
+    if fb == SLOPE && (rotating_joint(mine).is_some() || rotating_joint(theirs).is_some()) {
         return None;
     }
     let (class, swapped) = joint_class(mine, theirs)?;
