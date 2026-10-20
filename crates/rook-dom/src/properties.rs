@@ -1,8 +1,13 @@
-//! Property values, defaults and the reference index.
+//! Property values and the reference index; defaults in [`defaults`],
+//! storing in the declared type in [`coerce`], typed reads in [`typed`].
 
 use super::*;
 
+mod coerce;
+mod defaults;
 mod typed;
+
+pub(crate) use coerce::coerce;
 
 impl Dom {
     /// Read a property. Unset properties read the class default.
@@ -65,17 +70,6 @@ impl Dom {
             Some(p) => self.set_property(id, p, value),
             None => Ok(()),
         }
-    }
-
-    fn default_value(&self, class: ClassId, property: PropertyId) -> Option<Value> {
-        if let Some(v) = self.defaults.borrow().get(&(class, property)) {
-            return Some(v.clone());
-        }
-        let v = convert_default(self.db, class, property)?;
-        self.defaults
-            .borrow_mut()
-            .insert((class, property), v.clone());
-        Some(v)
     }
 
     /// Write a stored property. `Name` and `Parent` must go through
@@ -151,88 +145,4 @@ pub(crate) fn ref_target(value: &Value) -> Option<InstanceId> {
         Value::Ref(Some(r)) => Some(InstanceId::from_ref(*r)),
         _ => None,
     }
-}
-
-/// Defaults the database doesn't list (properties that don't serialize,
-/// where the zero value is wrong) or lists wrongly. Keyed by the class that
-/// declares the property.
-const DEFAULTS: &[(&str, &str, Value)] = &[
-    // Confirmed: creator-docs WeldConstraint.Enabled.
-    ("WeldConstraint", "Enabled", Value::Bool(true)),
-    // Confirmed: creator-docs, and Studio 0.742 (the database says false).
-    ("SoundService", "RespectFilteringEnabled", Value::Bool(true)),
-];
-
-/// [`DEFAULTS`], then the class default from the database, then the zero
-/// value of the property's type (Approximation: the database lists
-/// defaults only for properties that serialize).
-fn convert_default(db: &Database, class: ClassId, property: PropertyId) -> Option<Value> {
-    let prop = db.property(property);
-    let ty = prop.ty;
-    let owner = db.class(prop.owner).name;
-    if let Some((_, _, v)) = DEFAULTS
-        .iter()
-        .find(|(c, p, _)| *c == owner && *p == prop.name)
-    {
-        return Some(v.clone());
-    }
-    if let Some(variant) = db.default_value(class, property) {
-        return Value::from_variant(variant.clone(), |_| None)
-            .ok()
-            .map(|v| coerce(ty, v));
-    }
-    zero_value(db, ty)
-}
-
-/// Store values in the property's declared type. Files and the database
-/// sometimes hold an equivalent encoding (`Color3uint8` for a `Color3`
-/// property, `Int32` for an `Int64` one).
-pub(crate) fn coerce(ty: PropertyType, value: Value) -> Value {
-    use rbx_types::VariantType as T;
-    let PropertyType::Value(target) = ty else {
-        return value;
-    };
-    match (target, &value) {
-        (T::Color3, Value::Color3uint8(c)) => Value::Color3((*c).into()),
-        (T::Float32, v) if !matches!(v, Value::Float32(_)) => {
-            v.as_number().map_or(value, |n| Value::Float32(n as f32))
-        }
-        (T::Float64, v) if !matches!(v, Value::Float64(_)) => {
-            v.as_number().map_or(value, Value::Float64)
-        }
-        (T::Int32, v) if !matches!(v, Value::Int32(_)) => {
-            v.as_number().map_or(value, |n| Value::Int32(n as i32))
-        }
-        (T::Int64, v) if !matches!(v, Value::Int64(_)) => {
-            v.as_number().map_or(value, |n| Value::Int64(n as i64))
-        }
-        _ => value,
-    }
-}
-
-fn zero_value(db: &Database, ty: PropertyType) -> Option<Value> {
-    use rbx_types::VariantType as T;
-    use rook_types::{CFrame, Color3, UDim, UDim2, Vector2, Vector3};
-    Some(match ty {
-        PropertyType::Enum(e) => Value::Enum(db.enum_info(e).items.first().map_or(0, |(_, v)| *v)),
-        PropertyType::Value(t) => match t {
-            T::Bool => Value::Bool(false),
-            T::Float32 => Value::Float32(0.0),
-            T::Float64 => Value::Float64(0.0),
-            T::Int32 => Value::Int32(0),
-            T::Int64 => Value::Int64(0),
-            T::String => Value::String(String::new()),
-            T::ContentId => Value::ContentId(String::new().into()),
-            T::Vector3 => Value::Vector3(Vector3::ZERO),
-            T::Vector2 => Value::Vector2(Vector2::ZERO),
-            T::CFrame => Value::CFrame(CFrame::IDENTITY),
-            T::Color3 => Value::Color3(Color3::new(0.0, 0.0, 0.0)),
-            T::UDim => Value::UDim(UDim::default()),
-            T::UDim2 => Value::UDim2(UDim2::default()),
-            T::Ref => Value::Ref(None),
-            T::BrickColor => Value::BrickColor(rbx_types::BrickColor::from_number(194)?),
-            T::NumberRange => Value::NumberRange(rbx_types::NumberRange::new(0.0, 0.0)),
-            _ => return None,
-        },
-    })
 }
