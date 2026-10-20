@@ -14,7 +14,8 @@
 
 use glam::Vec3;
 
-use super::{Facing, Mesher, NONE};
+use super::Facing;
+use super::nets::{Mesher, NONE};
 use crate::TerrainMaterial;
 
 /// One of a material's textures: the material and which way it faces.

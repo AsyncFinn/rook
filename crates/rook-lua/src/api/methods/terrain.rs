@@ -8,7 +8,7 @@
 use glam::{Affine3A, IVec3, Vec3};
 use rbx_types::{Region3int16, Vector3int16};
 use rook_terrain::grid::cells;
-use rook_terrain::grid::edit::shape::Shape;
+use rook_terrain::grid::edit::Shape;
 use rook_terrain::grid::edit::{Bounds, REGION_MAX_VOXELS, region_voxels};
 use rook_terrain::{Grid, TerrainMaterial, Voxel};
 use rook_types::{Material, MaterialSet, TerrainMaterials};
