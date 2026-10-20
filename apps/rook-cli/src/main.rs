@@ -2,7 +2,9 @@
 
 mod commands;
 
-use commands::{conformance, content, corpus, dump, gen_members, logs, roundtrip, run, terrain};
+use commands::{
+    conformance, content, corpus, drift, dump, gen_members, logs, roundtrip, run, terrain,
+};
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
@@ -156,6 +158,10 @@ enum Command {
         #[command(subcommand)]
         action: Option<CacheAction>,
     },
+    /// Check the codebase for drift (copied functions, long comment blocks,
+    /// environment reads below rook-engine); `scripts/check` runs it.
+    #[command(hide = true)]
+    Drift,
     /// Regenerate crates/rook-reflection/data/members.json from a Full API dump.
     ///
     /// The dump must match the pinned Roblox version; Roblox-Client-Tracker
@@ -268,6 +274,7 @@ fn command(command: Command) -> anyhow::Result<()> {
             }
         }
         Command::Logs { open } => logs::run(open),
+        Command::Drift => drift::run(),
         Command::Cache { action } => content::cache(match action {
             None => content::CacheCommand::Show,
             Some(CacheAction::Prune { older_than }) => content::CacheCommand::Prune(older_than),

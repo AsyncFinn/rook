@@ -60,6 +60,16 @@ Failures keep their reason until something reports it. Return typed errors (`thi
 
 Comments say why: a Roblox behaviour, a measurement, a non-obvious reason, or an Observed/Measured/Inference tag, never what the next line already says. Findings have one home, `docs/behavior/<topic>.md`: a module's header says what it does and links there, and only one-line tagged rules stay beside the code that implements them.
 
+### Keeping it clean
+
+`scripts/check` enforces these, so drift fails the check instead of waiting for someone to notice:
+
+- Two functions in different files with the same signature and body fail it: move the helper down a layer and keep one.
+- A comment block over 15 lines outside tests is pointed out: findings belong in `docs/behavior`.
+- Only `rook-engine` and the apps may read environment variables: settings are resolved in `rook-engine`'s `settings` module and passed down as plain values.
+- Outside `rook-dom`, properties are read with `Dom`'s typed readers (`float_property`, `enum_item_property`, ...), not `property_by_name` (clippy's `disallowed-methods`); a raw read needs an `#[expect]` saying why.
+- Workspace lints include `unreachable_pub`, `needless_pass_by_value`, `match_same_arms`, `unnecessary_wraps`, `redundant_closure_for_method_calls` and `needless_pass_by_ref_mut`; where one is wrong, `#[expect]` it with the reason.
+
 ### Behaviour provenance
 
 Every behaviour Rook implements is recorded with its source and one of four statuses: **Confirmed** (creator-docs or a Studio recording), **Inference**, **Approximation** or **Rook extension**. This is both the record of a clean implementation and a map of how compatible Rook is. Rook-specific extensions sit behind an explicit profile and are off by default. See [docs/design/architecture.md](docs/design/architecture.md#10-behavior-provenance).

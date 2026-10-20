@@ -3,6 +3,7 @@
 pub(crate) mod conformance;
 pub(crate) mod content;
 pub(crate) mod corpus;
+pub(crate) mod drift;
 pub(crate) mod dump;
 pub(crate) mod gen_members;
 pub(crate) mod logs;
