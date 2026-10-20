@@ -6,6 +6,7 @@
 use glam::{IVec3, Vec3};
 use serde_json::Value as Json;
 
+use crate::grid::decode::DecodeError;
 use crate::mesh::mesh_chunk_with;
 use crate::*;
 

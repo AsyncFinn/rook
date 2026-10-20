@@ -14,16 +14,16 @@ mod value;
 
 pub use clock::{clock_hours, time_of_day};
 pub use part::collision::{Hull, UnionCollision};
-pub use part::material::{Material, MaterialSet, Shading, TilePattern};
-pub use part::mesh::{MeshKind, MeshLook, head_scale, mesh_part_scale};
+pub use part::material::{Material, MaterialSet, TilePattern};
+pub use part::mesh::{MeshKind, MeshLook, mesh_part_scale};
 pub use part::shape::PartShape;
 pub use part::surface::{NormalId, SURFACE_TILE_STUDS, SurfacePattern, SurfaceType, Tiling};
-pub use part::truss::{Lean, TRUSS_MAX_LENGTH, TrussLook, TrussShape, TrussStyle, truss_size};
+pub use part::truss::{TrussLook, TrussShape, TrussStyle, truss_size};
 pub use value::cframe::CFrame;
 pub use value::color::{Color3, linear_to_srgb, srgb_to_linear};
 pub use value::udim::{UDim, UDim2};
 pub use value::vector::{Vector2, Vector3};
-pub use value::{InstanceRef, Value, ValueError};
+pub use value::{InstanceRef, Value};
 
 /// Plain-data Roblox types reused from `rbx_types`.
 pub use rbx_types::{

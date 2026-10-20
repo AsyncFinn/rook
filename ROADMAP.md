@@ -145,7 +145,7 @@ renderer draws all of these as their part's plain box.
    the crate offers the pure-Rust `ruzstd`). Turning on those features
    adds no new dependency. First count which forms the archive uses
    (geometry in the file or behind an asset id, and whether those assets
-   load anonymously), then decode through `rook_content::mesh` and draw
+   load anonymously), then decode through `rook_content::decode::mesh` and draw
    through step 3's mesh loader and GPU cache. Check in Studio how a
    union's geometry is sized against its Size (unions can be resized),
    `UsePartColor`, and what a union draws while loading or after failing.

@@ -17,8 +17,8 @@ pub mod members;
 mod overlay;
 
 pub use database::{
-    Class, ClassFlags, ClassId, Database, EnumId, EnumInfo, Property, PropertyFlags, PropertyId,
-    PropertyKind, PropertyType, Scriptability, Serialization,
+    ClassId, Database, EnumId, Property, PropertyFlags, PropertyId, PropertyKind, PropertyType,
+    Scriptability, Serialization,
 };
 pub use members::Members;
 pub use overlay::{Overlay, OverlayError};

@@ -6,9 +6,9 @@ use std::sync::Arc;
 
 use glam::{Mat3, Vec2, Vec3};
 
-pub use rook_content::decode::image::Image;
-pub use rook_content::decode::mesh::Mesh;
-pub use rook_types::{
+use rook_content::decode::image::Image;
+use rook_content::decode::mesh::Mesh;
+use rook_types::{
     Material, MaterialSet, NormalId, PartShape, SurfacePattern, TilePattern, Tiling, TrussShape,
 };
 
@@ -17,7 +17,7 @@ mod lighting;
 mod ribbons;
 mod terrain;
 pub use emitters::{
-    Curve, Emitter, EmitterLook, EmitterShape, Flipbook, FlipbookMode, InOut, Lerp, Orientation,
+    Curve, Emitter, EmitterLook, EmitterShape, Flipbook, FlipbookMode, InOut, Orientation,
     Sequence, Spawn,
 };
 pub use lighting::{LightShape, Lighting, LocalLight, SKYBOX_FACES, Tonemapper};

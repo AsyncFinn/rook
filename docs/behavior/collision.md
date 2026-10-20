@@ -5,7 +5,7 @@ What parts collide and are queried as, beyond their primitive shapes
 
 ## Unions
 
-**Built 2026-10-14** (`rook_content::mesh::union::physics`,
+**Built 2026-10-14** (`rook_content::decode::mesh::union::physics`,
 `rook_physics::unions`, `rook_engine::unions`). Before this a union
 collided and was hit by rays, mouse clicks and ClickDetectors as its box,
 so in both large places the buttons couldn't be clicked: they

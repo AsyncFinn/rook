@@ -123,12 +123,7 @@ pub fn cache_max() -> u64 {
         .cache_max_size
         .as_deref()
         .and_then(cache::parse_size);
-    pick(
-        None,
-        rook_content::Cache::max_from_env(),
-        file,
-        cache::DEFAULT_MAX,
-    )
+    pick(None, cache::Cache::max_from_env(), file, cache::DEFAULT_MAX)
 }
 
 /// Where content resolves: the `ROOK_*` variables over `settings.json`

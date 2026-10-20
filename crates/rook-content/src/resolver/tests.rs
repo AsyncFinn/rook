@@ -1,5 +1,5 @@
 use super::*;
-use crate::InstallKind;
+use crate::resolver::install::InstallKind;
 
 fn resolver_with_install(name: &str) -> (Resolver, PathBuf) {
     let dir = crate::tests::temp_dir(name);

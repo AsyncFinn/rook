@@ -29,7 +29,7 @@ fn asset_options(name: &str) -> Options {
         .join("rook-engine-tests")
         .join(format!("{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let cache = rook_content::Cache::open(&dir).unwrap();
+    let cache = rook_content::resolver::cache::Cache::open(&dir).unwrap();
     let module = r#"print("loading", script:GetFullName(), script.Parent.Parent) task.wait() return {name = "mod"}"#;
     let assets = [
         (

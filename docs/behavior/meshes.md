@@ -319,7 +319,7 @@ braces.
 
 **Unions (step 6)**, built 2026-10-14. A union (`UnionOperation`,
 `NegateOperation`, `IntersectOperation`) draws its own geometry, decoded
-by `rook_content::mesh::union` into the same `Mesh` as mesh files and
+by `rook_content::decode::mesh::union` into the same `Mesh` as mesh files and
 loaded, uploaded and drawn through the same path (`Want::Mesh`, the GPU
 mesh cache). What unions collide as (their saved hulls, since M15) is in
 [collision](collision.md#unions).

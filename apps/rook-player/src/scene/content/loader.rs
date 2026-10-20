@@ -12,8 +12,10 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use rook_content::decode::image::Image;
+use rook_content::decode::mesh::Mesh;
 use rook_content::{ContentRef, Failure, FailureKind, Loader, Resolver, Ticket, Want};
-use rook_render::{Image, ImageHash, Mesh, MeshHash};
+use rook_render::{ImageHash, MeshHash};
 
 /// A file the scene asked for, and what it wants of it.
 pub type FileRef = (ContentRef, Want);

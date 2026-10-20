@@ -16,9 +16,8 @@ mod compare;
 mod convert;
 pub mod legacy;
 
-pub use compare::{CompareOptions, Difference, compare, compare_with};
+pub use compare::{CompareOptions, compare, compare_with};
 pub use convert::{from_dom, into_dom};
-pub use legacy::{EmbeddedAsset, HashReference, LegacyUpgrade};
 
 use std::io::Cursor;
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -88,7 +87,7 @@ pub struct Loaded {
     /// instances are the root's children.
     pub dom: WeakDom,
     /// Set when the file needed the legacy XML upgrade pass to load.
-    pub legacy: Option<LegacyUpgrade>,
+    pub legacy: Option<legacy::LegacyUpgrade>,
 }
 
 /// Load a place or model file from memory.

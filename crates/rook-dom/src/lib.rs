@@ -20,9 +20,11 @@ mod journal;
 mod properties;
 mod tree;
 
-pub use instance::{Attributes, Instance};
-pub use journal::{Change, Journal};
-pub use properties::coerce;
+pub use instance::Attributes;
+pub use journal::Change;
+
+use instance::Instance;
+use journal::Journal;
 
 use std::cell::RefCell;
 use std::collections::HashMap;

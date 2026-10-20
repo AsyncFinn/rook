@@ -24,7 +24,7 @@ pub struct PlayingSound {
     /// Where a 3D sound is; `None` for a global one.
     pub emitter: Option<Emitter>,
     /// Its own effects, in the order they run (before `Volume`).
-    pub effects: Vec<rook_audio::Effect>,
+    pub effects: Vec<rook_audio::effects::Effect>,
     /// The SoundGroup it plays through ([`DataModel::sound_groups`]).
     pub group: Option<InstanceId>,
 }

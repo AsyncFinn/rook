@@ -10,7 +10,8 @@ mod explosion;
 mod ribbons;
 mod textures;
 
-use rook_engine::{EffectCall, is_effect_class};
+use rook_engine::is_effect_class;
+use rook_lua::EffectCall;
 use rook_render::{Beam, Emitter, Trail};
 
 pub(super) use textures::EffectTextures;

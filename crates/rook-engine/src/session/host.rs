@@ -166,7 +166,7 @@ impl ServerHost {
         for player in std::mem::take(&mut self.spawning) {
             if let Err(e) = self.server.runtime().load_character(player) {
                 let mut w = self.server.runtime().world_mut();
-                w.push_log(crate::MessageType::Error, format!("LoadCharacter: {e}"));
+                w.push_log(rook_lua::MessageType::Error, format!("LoadCharacter: {e}"));
             }
         }
         self.server.step();

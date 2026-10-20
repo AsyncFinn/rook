@@ -28,7 +28,6 @@ mod output;
 pub mod spatial;
 mod voice;
 
-pub use effects::Effect;
 pub use mixer::{Group, Mix, Mixer, Play};
 #[cfg(feature = "output")]
 pub use output::Output;

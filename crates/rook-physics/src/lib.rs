@@ -48,10 +48,8 @@ use rook_dom::{Change, Dom, InstanceId};
 use rook_reflection::PropertyId;
 use rook_types::{CFrame, Value, Vector3};
 
-pub use rook_types::PartShape;
 pub use shape::{is_part, part_shape, workspace_parts};
 
-pub use contacts::Touch;
 pub use explosion::Blast;
 pub use query::{CastShape, Filter, Hit, Region};
 
@@ -310,7 +308,7 @@ impl Physics {
     }
 
     /// Touched and TouchEnded events since the last call, in order.
-    pub fn take_touches(&mut self) -> Vec<Touch> {
+    pub fn take_touches(&mut self) -> Vec<contacts::Touch> {
         self.touch.take()
     }
 

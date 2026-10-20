@@ -11,7 +11,8 @@ use std::time::{Duration, Instant};
 
 use anyhow::Context;
 use rayon::prelude::*;
-use rook_engine::{MessageType, Options, Server};
+use rook_engine::{Options, Server};
+use rook_lua::MessageType;
 use serde::Serialize;
 
 /// Decoders and the Luau parser recurse deeply on some archive files.

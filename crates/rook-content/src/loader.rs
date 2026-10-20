@@ -409,7 +409,8 @@ fn spawn_fetchers(resolver: &Arc<Resolver>) -> Workers {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Config, FailureKind, Install, InstallKind};
+    use crate::resolver::install::{Install, InstallKind};
+    use crate::{Config, FailureKind};
 
     #[test]
     fn resolves_off_thread_and_shares_duplicates() {

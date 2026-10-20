@@ -1,4 +1,6 @@
 use super::*;
+use crate::session::Session;
+use rook_lua::EffectCall;
 
 fn add_script(server: &Server, location: &str, name: &str, source: &str) {
     let parent = service(server, location);
@@ -130,7 +132,10 @@ fn content_options(name: &str) -> Options {
     std::fs::write(dir.join("content/textures/face.png"), PNG).unwrap();
     std::fs::write(dir.join("content/sounds/hit.wav"), b"wav").unwrap();
     let mut config = rook_content::Config::empty();
-    config.install = rook_content::Install::at(&dir, rook_content::InstallKind::Custom);
+    config.install = rook_content::resolver::install::Install::at(
+        &dir,
+        rook_content::resolver::install::InstallKind::Custom,
+    );
     Options {
         content: Some(Arc::new(rook_content::Resolver::new(config))),
         ..Options::default()

@@ -6,7 +6,7 @@ What Rook found while building M5. The plan itself is in [ROADMAP.md](../../ROAD
 
 **Decoding and playback (step 1)**, built 2026-10-14. A Sound's file
 loads through the content loader like meshes and images
-(`Want::Audio`, decoded by `rook_content::audio` on the loader's workers),
+(`Want::Audio`, decoded by `rook_content::decode::audio` on the loader's workers),
 every DataModel keeps `IsLoaded`, `TimeLength` and `TimePosition` as
 Studio does, and the player hears what is playing through one output
 device and mixer (`rook-audio`).

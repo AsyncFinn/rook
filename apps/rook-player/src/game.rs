@@ -7,7 +7,8 @@ use std::sync::Arc;
 
 use rook_engine::console::repl::Side;
 use rook_engine::session::host::{ClientHost, ServerHost};
-use rook_engine::{DataModel, InputEvent, MessageType, Options, console};
+use rook_engine::{DataModel, InputEvent, Options, console};
+use rook_lua::MessageType;
 use rook_render::Camera;
 
 use crate::server::{ServerThread, Started};

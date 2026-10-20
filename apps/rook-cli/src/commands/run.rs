@@ -3,7 +3,8 @@
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use rook_engine::{MessageType, Options, Server};
+use rook_engine::{Options, Server};
+use rook_lua::MessageType;
 
 pub fn run(
     file: &Path,

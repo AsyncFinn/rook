@@ -24,7 +24,7 @@ Everything Rook keeps for itself lives in one folder: `%LOCALAPPDATA%\Rook` on W
 
 On macOS the data is in `~/Library/Application Support/Rook` and the logs in `~/Library/Logs/Rook`. On Linux the data is in `$XDG_DATA_HOME/rook`, and logs and state in `$XDG_STATE_HOME/rook`. The `directories` crate finds those folders.
 
-The download cache is not in the data folder. It stays in `%TEMP%\Rook\cache` (`rook_content::Cache`) so Windows can clear it; anything cleared is fetched again. Two things are deliberately elsewhere too. The Open Cloud API key belongs in the OS credential store ([research §7](research.md#7-content-and-asset-policy)). The Roblox install's files are read where they are, never copied in.
+The download cache is not in the data folder. It stays in `%TEMP%\Rook\cache` (`rook_content::resolver::cache::Cache`) so Windows can clear it; anything cleared is fetched again. Two things are deliberately elsewhere too. The Open Cloud API key belongs in the OS credential store ([research §7](research.md#7-content-and-asset-policy)). The Roblox install's files are read where they are, never copied in.
 
 `state\recent.json` (recent places, the window's size and place) has its path reserved (`DataDir::recent`). Nothing writes it yet.
 

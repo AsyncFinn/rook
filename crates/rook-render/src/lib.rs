@@ -18,11 +18,9 @@ mod surfaces;
 
 pub use scene::{
     Anchor, Beam, Camera, Curve, Detile, DrawShape, Emitter, EmitterLook, EmitterShape, Flipbook,
-    FlipbookMode, Image, ImageHash, ImagePlacement, InOut, Layer, Lerp, LightShape, Lighting,
-    LocalLight, MapAlpha, Material, MaterialMaps, MaterialSet, Mesh, MeshHash, NormalId,
-    Orientation, PartInstance, PartShape, RibbonLook, SKYBOX_FACES, Scene, Sequence, Spawn,
-    SurfacePattern, TERRAIN_LAYERS, TerrainLayer, TerrainLook, TextureMode, TilePattern, Tiling,
-    Tonemapper, Trail, TrussShape,
+    FlipbookMode, ImageHash, ImagePlacement, InOut, Layer, LightShape, Lighting, LocalLight,
+    MapAlpha, MaterialMaps, MeshHash, Orientation, PartInstance, RibbonLook, SKYBOX_FACES, Scene,
+    Sequence, Spawn, TERRAIN_LAYERS, TerrainLayer, TerrainLook, TextureMode, Tonemapper, Trail,
 };
 
 // Content hashes are 32 bytes: FxHash keeps lookups by them cheap.
@@ -30,6 +28,9 @@ use rustc_hash::FxHashMap as HashMap;
 
 use bytemuck::{Pod, Zeroable};
 use glam::Vec3;
+use rook_content::decode::image::Image;
+use rook_content::decode::mesh::Mesh;
+use rook_types::{Material, NormalId, PartShape};
 use wgpu::util::DeviceExt;
 
 use batch::cull::{Aabb, Frustum, MOTION_STUDS};
@@ -40,7 +41,7 @@ use batch::*;
 use gpu::pool::{GpuMesh, MeshPool};
 use gpu::*;
 
-pub use renderer::{DrawCounts, GpuTimes, PassCounts, Renderer, StageTimes};
+pub use renderer::Renderer;
 
 /// The shadow map's depth, and the main pass's where the device has no
 /// stencil to go with it (`main_depth_format`).

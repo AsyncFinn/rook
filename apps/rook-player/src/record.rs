@@ -9,7 +9,8 @@ use std::path::Path;
 
 use rook_audio::Mixer;
 use rook_audio::effects::Frame;
-use rook_engine::{MessageType, console};
+use rook_engine::console;
+use rook_lua::MessageType;
 
 use crate::STEP;
 use crate::game::Game;

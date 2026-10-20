@@ -25,10 +25,8 @@ pub mod resolver;
 
 use decode::{audio, image, mesh};
 
-pub use loader::{Loader, Ticket, Want, idle_since, jobs_in_flight, set_decode_threads};
-pub use reference::{ContentRef, MaterialMap, Thumbnail, image_url_rewrite};
-pub use resolver::cache::Cache;
-pub use resolver::install::{Install, InstallKind};
+pub use loader::{Loader, Ticket, Want, idle_since, set_decode_threads};
+pub use reference::{ContentRef, MaterialMap, image_url_rewrite};
 pub use resolver::{Config, ProviderKind, Resolver};
 
 use std::fmt;

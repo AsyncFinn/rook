@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use glam::Mat3;
+use rook_types::SurfacePattern;
 
 use super::*;
 

@@ -1,6 +1,6 @@
 use glam::Vec3;
 use rook_dom::{Dom, InstanceId};
-use rook_types::{CFrame, Value, Vector3};
+use rook_types::{CFrame, PartShape, Value, Vector3};
 
 use super::*;
 

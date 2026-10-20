@@ -12,7 +12,8 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use rook_engine::session::host::{Joined, ServerHost, ToClient, ToServer};
-use rook_engine::{DataModel, MessageType, Options, console};
+use rook_engine::{DataModel, Options, console};
+use rook_lua::MessageType;
 use rook_render::Camera;
 
 /// One server frame's output for the client.

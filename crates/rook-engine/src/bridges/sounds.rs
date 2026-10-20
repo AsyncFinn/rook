@@ -17,7 +17,7 @@ mod graph;
 mod playback;
 mod players;
 
-pub use playback::{Emitter, Listener, PlayingSound};
+use playback::PlayingSound;
 
 use std::collections::{BTreeSet, HashSet};
 

@@ -56,7 +56,7 @@ pub fn cache(command: CacheCommand) -> anyhow::Result<()> {
             rook_content::resolver::cache::CACHE_VAR
         )
     })?;
-    let cache = rook_content::Cache::open(&dir)?;
+    let cache = rook_content::resolver::cache::Cache::open(&dir)?;
     let mb = |bytes: u64| bytes as f64 / (1 << 20) as f64;
     let freed = match command {
         CacheCommand::Show => None,

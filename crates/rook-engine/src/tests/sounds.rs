@@ -29,7 +29,10 @@ pub(super) fn tone_options(name: &str) -> Options {
     }
     std::fs::write(dir.join("content/sounds/tone.wav"), wav).unwrap();
     let mut config = rook_content::Config::empty();
-    config.install = rook_content::Install::at(&dir, rook_content::InstallKind::Custom);
+    config.install = rook_content::resolver::install::Install::at(
+        &dir,
+        rook_content::resolver::install::InstallKind::Custom,
+    );
     Options {
         content: Some(Arc::new(rook_content::Resolver::new(config))),
         ..Options::default()
@@ -100,7 +103,7 @@ fn sound_properties_replicate() {
 /// effects, and `PlayLocalSound` plays a sound once without it playing.
 #[test]
 fn effects_groups_and_local_sounds() {
-    use rook_audio::Effect;
+    use rook_audio::effects::Effect;
     let options = tone_options("sound-effects");
     let mut server = DataModel::new(&options).unwrap();
     let first = service(&server, "ReplicatedFirst");

@@ -17,7 +17,9 @@ use glam::Vec3;
 
 use rook_content::decode::mesh::TerrainMapping;
 
-use crate::scene::{DrawShape, NormalId, PartShape, TrussShape};
+use rook_types::{NormalId, PartShape, TrussShape};
+
+use crate::scene::DrawShape;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]

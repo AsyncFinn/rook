@@ -6,8 +6,9 @@ use rook_dom::{Dom, InstanceId};
 use rook_terrain::{Grid, TerrainMaterial, Voxel};
 use rook_types::{BinaryString, CFrame, Material, Value, Vector3};
 
+use crate::Physics;
+use crate::contacts::Touch;
 use crate::query::{CastShape, Filter, Region};
-use crate::{Physics, Touch};
 
 /// Fill voxels `from` to `to` (inclusive) with full voxels of `material`.
 fn fill(grid: &mut Grid, from: IVec3, to: IVec3, material: TerrainMaterial) {

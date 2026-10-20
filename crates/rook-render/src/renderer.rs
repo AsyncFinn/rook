@@ -22,7 +22,7 @@ use lighting::local::GpuLights;
 use pipelines::Pipelines;
 use placement::Placement;
 use timing::GpuTimer;
-pub use timing::GpuTimes;
+
 use tonemap::{FRAME_FORMAT, Tonemap};
 use transparent::TransparentParts;
 

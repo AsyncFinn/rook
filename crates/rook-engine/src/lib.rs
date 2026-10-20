@@ -14,23 +14,18 @@ mod scripts;
 pub mod session;
 pub mod settings;
 
-pub use bridges::input::{ClickEvent, ClickKind, InputEvent};
+pub use bridges::input::InputEvent;
 
 pub use bridges::render_changes::{RenderChanges, is_effect_class};
-pub use bridges::sounds::{Emitter, Listener as SoundListener, PlayingSound};
-pub use rook_lua::EffectCall;
-pub use session::Session;
 
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
 use rook_dom::{Change, Dom, InstanceId};
-use rook_lua::{LogEntry, Runtime};
+use rook_lua::{LogEntry, MessageType, Runtime};
 use rook_scheduler::{Clock, Queue};
 use rook_types::Value;
-
-pub use rook_lua::MessageType;
 
 use bridges::{explosions, input, sounds, unions};
 use session::threads;

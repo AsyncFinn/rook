@@ -3237,6 +3237,7 @@ dependencies = [
  "rook-dom",
  "rook-engine",
  "rook-formats",
+ "rook-lua",
  "rook-physics",
  "rook-reflection",
  "rook-render",

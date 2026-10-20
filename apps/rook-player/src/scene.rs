@@ -11,12 +11,12 @@ use rook_dom::{Dom, InstanceId};
 use rook_engine::{DataModel, RenderChanges};
 use rook_physics::{is_part, part_shape, workspace_parts};
 use rook_render::{
-    Camera, Curve, DrawShape, ImageHash, ImagePlacement, Layer, Lighting, MapAlpha, Material,
-    MaterialMaps, MaterialSet, MeshHash, NormalId, PartInstance, Scene, Sequence, TilePattern,
-    Tiling,
+    Camera, Curve, DrawShape, ImageHash, ImagePlacement, Layer, Lighting, MapAlpha, MaterialMaps,
+    MeshHash, PartInstance, Scene, Sequence,
 };
 use rook_types::{
-    CFrame, MeshKind, MeshLook, SurfaceType, TrussLook, TrussStyle, Value, mesh_part_scale,
+    CFrame, Material, MaterialSet, MeshKind, MeshLook, NormalId, SurfaceType, TilePattern, Tiling,
+    TrussLook, TrussStyle, Value, mesh_part_scale,
 };
 
 use content::loader::{FileRef, FileState, Files, Loaded};
@@ -339,7 +339,7 @@ impl SceneCache {
     pub fn take_effect_calls(
         &mut self,
         dom: &Dom,
-        calls: &[(InstanceId, rook_engine::EffectCall)],
+        calls: &[(InstanceId, rook_lua::EffectCall)],
     ) -> bool {
         self.effects.note_calls(calls);
         let ids: Vec<InstanceId> = calls.iter().map(|c| c.0).collect();

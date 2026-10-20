@@ -6,7 +6,7 @@
 //! `~/Library/Logs/Rook`; elsewhere data is under `$XDG_DATA_HOME/rook`
 //! and logs and state under `$XDG_STATE_HOME/rook`. `ROOK_DATA_DIR` puts
 //! all of it under one folder instead. The download cache is not here: it
-//! stays where the system may clear it (`rook_content::Cache`).
+//! stays where the system may clear it (`rook_content::resolver::cache::Cache`).
 
 use std::path::{Path, PathBuf};
 

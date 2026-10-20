@@ -5,8 +5,8 @@
 
 use glam::{IVec3, Vec3};
 
-use crate::Look;
 use crate::grid::VOXEL_STUDS;
+use crate::material::Look;
 use crate::random::Random;
 
 /// Move vertex `p` of the cell whose first corner (the centre of its first
