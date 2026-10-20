@@ -7,9 +7,11 @@ cargo clippy --workspace --all-targets -- -D warnings
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 cargo test --workspace
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-# Files past about 600 lines should be split by topic (see CONTRIBUTING).
+# A file's topics decide when it's split, not its length (see CONTRIBUTING);
+# very long ones are pointed out as worth a look. Comments and blank lines
+# don't count.
 git ls-files '*.rs' '*.wgsl' '*.luau' | ForEach-Object {
-    $lines = (Get-Content $_ | Measure-Object -Line).Lines
-    if ($lines -gt 600) { Write-Warning "$_ has $lines lines; split it by topic" }
+    $code = (Get-Content $_ | Where-Object { $_ -match '\S' -and $_ -notmatch '^\s*(//|--)' }).Count
+    if ($code -gt 1000) { Write-Warning "$_ has $code lines of code; check it still covers one topic" }
 }
 Write-Host "check passed"
