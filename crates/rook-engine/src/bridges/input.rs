@@ -57,6 +57,12 @@ pub(crate) struct InputTracker {
     pub(crate) viewport: (u32, u32),
     /// InputObjects of held keys, reused for their end event.
     held: std::collections::HashMap<u32, InstanceId>,
+    /// The InputObjects mouse movement and the wheel pass to every
+    /// InputChanged: Roblox reuses one per input and updates it (recorded:
+    /// conformance input/mouse_move_object; the wheel's own object was
+    /// observed the same way).
+    mouse_movement: Option<InstanceId>,
+    mouse_wheel: Option<InstanceId>,
     hover: Option<InstanceId>,
     /// The detector under the cursor when buttons 1 and 2 went down.
     pressed: [Option<InstanceId>; 2],
@@ -174,8 +180,7 @@ impl DataModel {
                     w.input.mouse_delta = (x - ox, y - oy);
                     w.input.mouse_delta
                 };
-                let obj =
-                    self.new_input_object(0, TYPE_MOUSE_MOVEMENT, STATE_CHANGE, (x, y), (dx, dy));
+                let obj = self.changed_input_object(TYPE_MOUSE_MOVEMENT, (x, y, 0.0), (dx, dy));
                 if let Some(obj) = obj {
                     self.fire_input("InputChanged", obj);
                 }
@@ -187,26 +192,8 @@ impl DataModel {
             InputEvent::Wheel { delta } => {
                 let pos = self.runtime.world().input.mouse;
                 // The wheel amount is in Position.Z (creator-docs InputObject).
-                let obj = {
-                    let mut w = self.runtime.world_mut();
-                    let id = rook_lua::input_object(
-                        &mut w.dom,
-                        0,
-                        TYPE_MOUSE_WHEEL,
-                        STATE_CHANGE,
-                        pos,
-                        (0.0, 0.0),
-                    );
-                    if let Some(id) = id {
-                        set(
-                            &mut w.dom,
-                            id,
-                            "Position",
-                            Value::Vector3(Vector3::new(pos.0, pos.1, delta)),
-                        );
-                    }
-                    id
-                };
+                let obj =
+                    self.changed_input_object(TYPE_MOUSE_WHEEL, (pos.0, pos.1, delta), (0.0, 0.0));
                 if let Some(obj) = obj {
                     self.fire_input("InputChanged", obj);
                 }
@@ -236,6 +223,52 @@ impl DataModel {
     ) -> Option<InstanceId> {
         let mut w = self.runtime.world_mut();
         rook_lua::input_object(&mut w.dom, key, input_type, state, pos, delta)
+    }
+
+    /// The InputObject of mouse movement or the wheel, made on first use
+    /// and updated in place after that.
+    fn changed_input_object(
+        &mut self,
+        input_type: u32,
+        pos: (f32, f32, f32),
+        delta: (f32, f32),
+    ) -> Option<InstanceId> {
+        let slot = if input_type == TYPE_MOUSE_WHEEL {
+            &mut self.input.mouse_wheel
+        } else {
+            &mut self.input.mouse_movement
+        };
+        // A script may have destroyed it.
+        let existing = slot.filter(|id| self.runtime.world().dom.get(*id).is_some());
+        let id = match existing {
+            Some(id) => id,
+            None => {
+                let mut w = self.runtime.world_mut();
+                let id = rook_lua::input_object(
+                    &mut w.dom,
+                    0,
+                    input_type,
+                    STATE_CHANGE,
+                    (pos.0, pos.1),
+                    delta,
+                )?;
+                *slot = Some(id);
+                id
+            }
+        };
+        // In place, so scripts watching its Changed see each update.
+        self.set_property(id, "UserInputState", Value::Enum(STATE_CHANGE));
+        self.set_property(
+            id,
+            "Position",
+            Value::Vector3(Vector3::new(pos.0, pos.1, pos.2)),
+        );
+        self.set_property(
+            id,
+            "Delta",
+            Value::Vector3(Vector3::new(delta.0, delta.1, 0.0)),
+        );
+        Some(id)
     }
 
     fn key(&mut self, code: &str, down: bool) {

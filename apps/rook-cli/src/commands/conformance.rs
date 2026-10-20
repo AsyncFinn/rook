@@ -7,13 +7,17 @@
 //! to `conformance/expected/<group>/<name>.txt`. `run` runs the same cases in
 //! Rook and compares. Each expected file starts with the Studio version and
 //! the signal mode the place used, and Rook runs the case in that mode.
+//!
+//! A case whose source has a `--! client mouse x,y x,y ...` line runs on the
+//! playtest client instead, with the mouse moved through those points
+//! while it runs (mouse input only reaches clients).
 
 mod studio;
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use rook_engine::{Options, Server};
+use rook_engine::{DataModel, InputEvent, Options, Server};
 
 /// Wraps a case. Both sides run exactly this code; Rook's copy reports the
 /// result through `print` with a marker instead of returning it.
@@ -50,6 +54,31 @@ struct Case {
     /// `group/name`.
     id: String,
     source: String,
+    /// For client cases, where the mouse moves while the case runs.
+    mouse: Option<Vec<(f32, f32)>>,
+}
+
+/// The mouse points of a `--! client mouse x,y ...` line.
+fn client_mouse(source: &str) -> anyhow::Result<Option<Vec<(f32, f32)>>> {
+    let Some(rest) = source
+        .lines()
+        .find_map(|l| l.trim().strip_prefix("--! client"))
+    else {
+        return Ok(None);
+    };
+    let points = rest
+        .trim()
+        .strip_prefix("mouse")
+        .unwrap_or("")
+        .split_whitespace()
+        .map(|p| {
+            let (x, y) = p
+                .split_once(',')
+                .ok_or_else(|| anyhow::anyhow!("bad mouse point {p:?}"))?;
+            Ok((x.parse()?, y.parse()?))
+        })
+        .collect::<anyhow::Result<_>>()?;
+    Ok(Some(points))
 }
 
 fn cases(root: &Path, filter: Option<&str>) -> anyhow::Result<Vec<Case>> {
@@ -70,7 +99,8 @@ fn cases(root: &Path, filter: Option<&str>) -> anyhow::Result<Vec<Case>> {
             continue;
         }
         let source = fs_err::read_to_string(path)?;
-        out.push(Case { id, source });
+        let mouse = client_mouse(&source)?;
+        out.push(Case { id, source, mouse });
     }
     anyhow::ensure!(!out.is_empty(), "no cases found under {}", dir.display());
     Ok(out)
@@ -92,7 +122,11 @@ pub fn record(root: &Path, filter: Option<&str>) -> anyhow::Result<()> {
     }
     let mut failures = 0;
     for case in &cases {
-        match studio.run_on_server(&wrap(&case.source)) {
+        let result = match &case.mouse {
+            Some(moves) => studio.run_on_client(&wrap(&case.source), moves),
+            None => studio.run_on_server(&wrap(&case.source)),
+        };
+        match result {
             Ok(output) => {
                 let path = expected_path(root, &case.id);
                 std::fs::create_dir_all(path.parent().expect("has parent"))?;
@@ -114,7 +148,13 @@ pub fn record(root: &Path, filter: Option<&str>) -> anyhow::Result<()> {
 
 /// Run a case in Rook and return its output.
 fn run_in_rook(case: &Case, deferred: bool) -> anyhow::Result<String> {
-    let mut server = Server::new(&Options::default())?;
+    let mut server = if case.mouse.is_some() {
+        let mut client = DataModel::new_client(&Options::default())?;
+        client.set_viewport(800, 600);
+        client
+    } else {
+        Server::new(&Options::default())?
+    };
     server.runtime().world_mut().signal_behavior = if deferred {
         rook_lua::SignalBehavior::Deferred
     } else {
@@ -133,8 +173,15 @@ fn run_in_rook(case: &Case, deferred: bool) -> anyhow::Result<String> {
         .runtime()
         .run_source("ServerScriptService.Conformance", &source, None)
         .map_err(|e| anyhow::anyhow!("{e}"))?;
+    // Client cases get one mouse move every 12 frames (0.2 s), as in Studio.
+    let mut moves = case.mouse.iter().flatten();
     let mut log = Vec::new();
-    for _ in 0..60 * 60 {
+    for frame in 0..60 * 60 {
+        if frame % 12 == 0
+            && let Some(&(x, y)) = moves.next()
+        {
+            server.input(InputEvent::MouseMove { x, y });
+        }
         log.extend(server.take_log());
         if let Some(entry) = log.iter().find(|e| e.message.starts_with(MARKER)) {
             return Ok(entry.message[MARKER.len()..].to_owned());
