@@ -1,5 +1,5 @@
 //! ParticleEmitter, and the emitters every particle effect draws with
-//! (docs/behavior/particle-emitters.md).
+//! (docs/behavior/effects/particle-emitters.md).
 
 use rook_render::{
     Curve, EmitterLook, EmitterShape, Flipbook, FlipbookMode, InOut, Orientation, Sequence, Spawn,

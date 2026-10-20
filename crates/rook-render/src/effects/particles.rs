@@ -1,8 +1,8 @@
 //! The particles of the scene's emitters, simulated on the CPU in world
 //! space: each emitter's are born at its rate (and when scripts call
 //! `Emit`) where it is, move by their velocity, acceleration and drag, and
-//! die at the end of their lifetime (docs/behavior/effects.md,
-//! docs/behavior/particle-emitters.md).
+//! die at the end of their lifetime (docs/behavior/effects/classic.md,
+//! docs/behavior/effects/particle-emitters.md).
 
 mod spawn;
 

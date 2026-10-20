@@ -1,6 +1,6 @@
 //! ParticleEmitter's, Trail's and Beam's methods: each only notes the call
 //! for the renderer (`World::effect_calls`), which owns the particles,
-//! trail segments and texture scrolling (docs/behavior/effects.md).
+//! trail segments and texture scrolling (docs/behavior/effects/classic.md).
 
 use super::*;
 use crate::world::EffectCall;

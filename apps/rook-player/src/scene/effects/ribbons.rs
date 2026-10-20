@@ -1,5 +1,5 @@
 //! Beam and Trail as the renderer's ribbons
-//! (docs/behavior/beams-and-trails.md).
+//! (docs/behavior/effects/beams-and-trails.md).
 
 use rook_render::{Anchor, Curve, RibbonLook, Sequence, TextureMode};
 

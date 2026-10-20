@@ -1,5 +1,5 @@
 //! Fire, Smoke and Sparkles as the renderer's emitters, each fitted to
-//! Studio 0.742 (docs/behavior/effects.md).
+//! Studio 0.742 (docs/behavior/effects/classic.md).
 
 use rook_render::{Curve, EmitterLook, Sequence, Spawn};
 

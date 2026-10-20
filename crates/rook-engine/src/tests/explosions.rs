@@ -1,6 +1,6 @@
 use super::*;
 
-/// The blast as measured in Studio 0.742 (docs/behavior/explosions.md):
+/// The blast as measured in Studio 0.742 (docs/behavior/effects/explosions.md):
 /// parts whose surface it reaches are hit with their centre's distance;
 /// unanchored ones fly off at BlastPressure × |Size|² × 5.48e-5 / mass
 /// whatever their distance, spinning about that line; Welds within the

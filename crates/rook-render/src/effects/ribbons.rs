@@ -1,7 +1,7 @@
 //! Beams and Trails as strips of quads, built on the CPU each frame: a
 //! Beam's curve from its Attachments (and the camera, when it faces it),
 //! and a Trail's pieces, laid down as its Attachments move and aged here
-//! (docs/behavior/beams-and-trails.md).
+//! (docs/behavior/effects/beams-and-trails.md).
 
 use glam::Vec3;
 

@@ -1,6 +1,6 @@
 //! Explosion's look: one burst of particles at its `Position`, the same
 //! size whatever its `BlastRadius`, fitted to Studio 0.742
-//! (docs/behavior/explosions.md).
+//! (docs/behavior/effects/explosions.md).
 
 use rook_render::{Curve, EmitterLook, EmitterShape, InOut, Sequence, Spawn};
 

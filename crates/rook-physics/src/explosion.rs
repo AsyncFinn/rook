@@ -1,4 +1,4 @@
-//! Explosion's blast (docs/behavior/explosions.md), measured in Studio
+//! Explosion's blast (docs/behavior/effects/explosions.md), measured in Studio
 //! 0.742: which parts it hits, the joints it breaks, how hard it pushes
 //! and the crater it leaves in Terrain.
 //!

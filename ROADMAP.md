@@ -216,7 +216,7 @@ create.
    ([`docs/behavior/lights.md`](docs/behavior/lights.md)).
 2. ✅ Fire, Smoke and Sparkles, drawn as Studio draws them today, as
    particles a ParticleEmitter can reuse
-   ([`docs/behavior/effects.md`](docs/behavior/effects.md)).
+   ([`docs/behavior/effects/classic.md`](docs/behavior/effects/classic.md)).
 3. ✅ An HDR target with Studio's tone curves, ColorGrading's presets
    included: the sun, ambient, sky, local lights and Neon add up in
    Studio's light units and go through one curve at the end, so Decals
@@ -224,10 +224,10 @@ create.
    ([`docs/behavior/tone-mapping.md`](docs/behavior/tone-mapping.md)).
    Before the remaining effects, which blend in HDR too.
 4. ✅ ParticleEmitter (with flipbooks), Beam and Trail
-   ([`docs/behavior/particle-emitters.md`](docs/behavior/particle-emitters.md),
-   [`docs/behavior/beams-and-trails.md`](docs/behavior/beams-and-trails.md)).
+   ([`docs/behavior/effects/particle-emitters.md`](docs/behavior/effects/particle-emitters.md),
+   [`docs/behavior/effects/beams-and-trails.md`](docs/behavior/effects/beams-and-trails.md)).
 5. ✅ Explosion: its blast (parts hit, joints broken, the push, craters)
-   and its look ([`docs/behavior/explosions.md`](docs/behavior/explosions.md)).
+   and its look ([`docs/behavior/effects/explosions.md`](docs/behavior/effects/explosions.md)).
 6. Highlight and the adornments, by files saving them (and creating them
    with `Instance.new`) in the corpus scan: SelectionBox 676 (749),
    ImageHandleAdornment 57 (220), SelectionPartLasso 50 (362),

@@ -1,5 +1,5 @@
 //! Beams and Trails: strips of an image between two Attachments
-//! (docs/behavior/beams-and-trails.md).
+//! (docs/behavior/effects/beams-and-trails.md).
 
 use glam::{Mat3, Vec3};
 

@@ -1,6 +1,6 @@
-//! Visual effects in Workspace (docs/behavior/effects.md,
-//! docs/behavior/particle-emitters.md, docs/behavior/beams-and-trails.md,
-//! docs/behavior/explosions.md): Fire, Smoke, Sparkles, ParticleEmitter
+//! Visual effects in Workspace (docs/behavior/effects/classic.md,
+//! docs/behavior/effects/particle-emitters.md, docs/behavior/effects/beams-and-trails.md,
+//! docs/behavior/effects/explosions.md): Fire, Smoke, Sparkles, ParticleEmitter
 //! and Explosion as the renderer's particle emitters, Beam and Trail as
 //! its ribbons.
 

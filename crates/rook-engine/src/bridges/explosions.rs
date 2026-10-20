@@ -1,4 +1,4 @@
-//! Explosions going off (docs/behavior/explosions.md): an Explosion that
+//! Explosions going off (docs/behavior/effects/explosions.md): an Explosion that
 //! enters Workspace goes off once, at the next physics step, and is
 //! removed 2.75 seconds of its own time (`TimeScale`) later.
 //!

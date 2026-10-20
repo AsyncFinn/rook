@@ -1,6 +1,6 @@
 //! Where a new particle is born and how fast it goes, along its emitter's
 //! axes: ParticleEmitter's `Shape`, `EmissionDirection`, `Speed` and
-//! `SpreadAngle` (docs/behavior/particle-emitters.md), and the ball Fire,
+//! `SpreadAngle` (docs/behavior/effects/particle-emitters.md), and the ball Fire,
 //! Smoke and Sparkles emit from.
 
 use glam::{Quat, Vec2, Vec3};

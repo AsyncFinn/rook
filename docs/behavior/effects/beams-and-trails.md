@@ -25,7 +25,7 @@ measurements in Studio 0.743 on 2026-10-19.
   scrolls `TextureSpeed` times a second from Attachment0 towards
   Attachment1; `SetTextureOffset` moves it the other way. Without an
   image, or while it loads, the beam is its colour alone.
-- **Light**: as a ParticleEmitter's (docs/behavior/particle-emitters.md),
+- **Light**: as a ParticleEmitter's (docs/behavior/effects/particle-emitters.md),
   `Brightness` scaling its own colour when `LightInfluence` is below 1.
 
 ### Trail

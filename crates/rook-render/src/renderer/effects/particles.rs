@@ -1,4 +1,4 @@
-//! Drawing the emitters' particles (docs/behavior/effects.md): each a
+//! Drawing the emitters' particles (docs/behavior/effects/classic.md): each a
 //! quad facing the camera, sorted back to front and drawn after the
 //! transparent parts, testing depth but not writing it. A particle's
 //! colour comes premultiplied by its opacity and is added to what's

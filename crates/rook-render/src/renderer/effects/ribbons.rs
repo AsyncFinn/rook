@@ -1,4 +1,4 @@
-//! Drawing Beams and Trails (docs/behavior/beams-and-trails.md): each
+//! Drawing Beams and Trails (docs/behavior/effects/beams-and-trails.md): each
 //! strip's quads, with the particles' colours, blending and lighting
 //! (`fs_particle`), after the transparent parts and before the particles,
 //! farthest strip first, both sides showing.

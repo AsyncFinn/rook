@@ -1,6 +1,6 @@
 //! Particle emitters: what the renderer simulates and draws for Fire,
-//! Smoke, Sparkles and ParticleEmitter (docs/behavior/effects.md,
-//! docs/behavior/particle-emitters.md).
+//! Smoke, Sparkles and ParticleEmitter (docs/behavior/effects/classic.md,
+//! docs/behavior/effects/particle-emitters.md).
 
 use std::sync::Arc;
 
