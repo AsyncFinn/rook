@@ -15,6 +15,14 @@ use rook_types::{Material, MaterialSet, TerrainMaterials};
 use super::*;
 use crate::types::{LColor3, LRegion3, LRegion3int16, LVector3int16, enums};
 
+mod legacy;
+
+pub(super) use legacy::{
+    autowedge_cell, autowedge_cells, cell_center_to_world, cell_corner_to_world, get_cell,
+    get_water_cell, set_cell, set_cells_region, set_water_cell, world_to_cell,
+    world_to_cell_prefer_empty, world_to_cell_prefer_solid,
+};
+
 fn enum_id(name: &str) -> rook_reflection::EnumId {
     database()
         .enum_by_name(name)
@@ -387,109 +395,6 @@ pub(super) fn count_cells(lua: &Lua, this: InstanceId, _: Args) -> ApiResult<Out
 
 // Cells
 
-fn cell_args(a: &Args, i: usize) -> ApiResult<IVec3> {
-    Ok(IVec3::new(
-        a.number(i)? as i32,
-        a.number(i + 1)? as i32,
-        a.number(i + 2)? as i32,
-    ))
-}
-
-fn vec_out(lua: &Lua, v: Vec3) -> ApiResult<Outcome> {
-    Outcome::ret(lua, vector3_to_lua(rook_types::Vector3::new(v.x, v.y, v.z)))
-}
-
-pub(super) fn world_to_cell(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
-    vec_out(lua, cells::world_to_cell(glam_vec(a.vector3(0)?)).as_vec3())
-}
-
-fn world_to_cell_prefer(lua: &Lua, this: InstanceId, a: Args, solid: bool) -> ApiResult<Outcome> {
-    let p = glam_vec(a.vector3(0)?);
-    let cell = read(lua, this, |g| cells::world_to_cell_prefer(g, p, solid));
-    vec_out(lua, cell.as_vec3())
-}
-
-pub(super) fn world_to_cell_prefer_solid(
-    lua: &Lua,
-    this: InstanceId,
-    a: Args,
-) -> ApiResult<Outcome> {
-    world_to_cell_prefer(lua, this, a, true)
-}
-
-pub(super) fn world_to_cell_prefer_empty(
-    lua: &Lua,
-    this: InstanceId,
-    a: Args,
-) -> ApiResult<Outcome> {
-    world_to_cell_prefer(lua, this, a, false)
-}
-
-fn cell_coords(a: &Args) -> ApiResult<Vec3> {
-    Ok(Vec3::new(
-        a.number(0)? as f32,
-        a.number(1)? as f32,
-        a.number(2)? as f32,
-    ))
-}
-
-pub(super) fn cell_center_to_world(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
-    vec_out(lua, cells::cell_center(cell_coords(&a)?))
-}
-
-pub(super) fn cell_corner_to_world(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
-    vec_out(lua, cells::cell_corner(cell_coords(&a)?))
-}
-
-/// The cell's legacy material, a block shape for how full it is, and
-/// `NegZ` whatever was set (observed).
-pub(super) fn get_cell(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
-    let cell = cell_args(&a, 0)?;
-    let voxel = read(lua, this, |g| g.voxel(cell));
-    Outcome::ret(
-        lua,
-        (
-            push_named(lua, "CellMaterial", cells::to_cell_material(voxel.material))?,
-            push_named(lua, "CellBlock", cells::to_cell_block(voxel.occupancy))?,
-            push_named(lua, "CellOrientation", "NegZ")?,
-        ),
-    )
-}
-
-/// Cells to set from a material and block shape; Empty clears them.
-fn set_cells(lua: &Lua, this: InstanceId, bounds: Bounds, a: &Args, i: usize) -> ApiResult<()> {
-    let material = cells::from_cell_material(enum_name(lua, a, i, "CellMaterial")?)
-        .unwrap_or(TerrainMaterial::Air);
-    let occupancy = cells::cell_block_occupancy(enum_name(lua, a, i + 1, "CellBlock")?);
-    enum_name(lua, a, i + 2, "CellOrientation")?;
-    let voxel = Voxel::new(material, occupancy);
-    let voxels = vec![voxel; bounds_len(bounds)];
-    edit(lua, this, |g| {
-        (g.write_block(bounds, &voxels), Some(bounds))
-    });
-    Ok(())
-}
-
-fn bounds_len(b: Bounds) -> usize {
-    let s = b.max - b.min + IVec3::ONE;
-    (s.x * s.y * s.z) as usize
-}
-
-pub(super) fn set_cell(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
-    let cell = cell_args(&a, 0)?;
-    set_cells(
-        lua,
-        this,
-        Bounds {
-            min: cell,
-            max: cell,
-        },
-        &a,
-        3,
-    )?;
-    Outcome::ret(lua, ())
-}
-
 fn region16_arg(a: &Args, i: usize) -> ApiResult<Region3int16> {
     Ok(a.userdata::<LRegion3int16>(i, "Region3int16")?.0)
 }
@@ -503,57 +408,6 @@ fn region16_bounds(r: Region3int16) -> Option<Bounds> {
     let (min, max) = (v16(r.min), v16(r.max));
     min.cmple(max).all().then_some(Bounds { min, max })
 }
-
-pub(super) fn set_cells_region(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
-    if let Some(bounds) = region16_bounds(region16_arg(&a, 0)?) {
-        set_cells(lua, this, bounds, &a, 1)?;
-    }
-    Outcome::ret(lua, ())
-}
-
-/// Smooth terrain has no wedges to fit (observed: returns false).
-pub(super) fn autowedge_cell(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
-    cell_args(&a, 0)?;
-    Outcome::ret(lua, false)
-}
-
-pub(super) fn autowedge_cells(lua: &Lua, _: InstanceId, a: Args) -> ApiResult<Outcome> {
-    region16_arg(&a, 0)?;
-    Outcome::ret(lua, ())
-}
-
-/// Fills the cell with water, over whatever was there (observed: over
-/// full Grass, the voxel reads back as full Water).
-pub(super) fn set_water_cell(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
-    let cell = cell_args(&a, 0)?;
-    enum_name(lua, &a, 3, "WaterForce")?;
-    enum_name(lua, &a, 4, "WaterDirection")?;
-    let bounds = Bounds {
-        min: cell,
-        max: cell,
-    };
-    let water = [Voxel::new(TerrainMaterial::Water, 255)];
-    edit(lua, this, |g| (g.write_block(bounds, &water), Some(bounds)));
-    Outcome::ret(lua, ())
-}
-
-/// Whether the cell is water, then `None` and `NegX` (observed).
-pub(super) fn get_water_cell(lua: &Lua, this: InstanceId, a: Args) -> ApiResult<Outcome> {
-    let cell = cell_args(&a, 0)?;
-    let water = read(lua, this, |g| {
-        g.voxel(cell).material == TerrainMaterial::Water
-    });
-    Outcome::ret(
-        lua,
-        (
-            water,
-            push_named(lua, "WaterForce", "None")?,
-            push_named(lua, "WaterDirection", "NegX")?,
-        ),
-    )
-}
-
-// Regions
 
 /// A TerrainRegion holding the region's voxels, in its `SmoothGrid` from
 /// voxel 0, with its size in `ExtentsMax` (observed: the corners are both
