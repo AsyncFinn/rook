@@ -272,7 +272,7 @@ impl Upload for Mesh {
 
     fn upload(&self, pool: &mut MeshPool) -> GpuMesh {
         profiling::scope!("upload mesh");
-        pool.add(&mesh::from_file(self))
+        pool.add(&mesh::files::from_file(self))
     }
 }
 

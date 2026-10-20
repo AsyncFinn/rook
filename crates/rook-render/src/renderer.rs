@@ -343,7 +343,7 @@ impl Renderer {
     /// instead of Rook's. It must be the head at its own size, as Roblox's
     /// file is.
     pub fn set_head_mesh(&mut self, head: &Mesh) {
-        let gpu = self.pool.add(&mesh::from_file(head));
+        let gpu = self.pool.add(&mesh::files::from_file(head));
         if let Some(old) = self.meshes.insert(DrawShape::Head, gpu) {
             self.pool.remove(&old);
         }

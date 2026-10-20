@@ -13,7 +13,7 @@ use glam::Vec3;
 use rapier3d::prelude::*;
 use rook_dom::{Dom, InstanceId};
 use rook_terrain::TerrainMaterial;
-use rook_terrain::grid::edit::Shape as Fill;
+use rook_terrain::grid::edit::shape::Shape as Fill;
 use rustc_hash::FxHashMap as HashMap;
 
 use crate::convert::{to_glam, to_rapier};
