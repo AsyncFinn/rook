@@ -58,6 +58,9 @@ struct Globals {
 // Instance flags.
 const CAST: u32 = 1u;
 const NEON: u32 = 2u;
+// A base part drawn in its own colour without light (a layer's face takes
+// this bit).
+const UNLIT: u32 = 16u;
 // Bits 2-3: how a layer places its image.
 const MODE_FACE: u32 = 1u;
 const MODE_TILED: u32 = 2u;

@@ -65,6 +65,9 @@ pub(crate) const MODE_MESH_UV: u32 = 3;
 /// layer's mode takes.
 pub(crate) const PATTERN_SHIFT: u32 = 2;
 pub(crate) const UPRIGHT: u32 = 1 << 7;
+/// A base part drawn in its own colour without light (an image layer's
+/// face takes this bit).
+pub(crate) const UNLIT: u32 = 1 << 4;
 /// Where the surface patterns start: 3 bits per face.
 pub(crate) const SURFACES_SHIFT: u32 = 8;
 /// The part has material textures, tiled at `tile.xy` studs.
@@ -131,6 +134,9 @@ impl Instance {
                 }
                 if p.vertex_colors {
                     flags |= VERTEX_COLORS;
+                }
+                if p.unlit {
+                    flags |= UNLIT;
                 }
                 flags |= match p.material {
                     Material::Neon => NEON,

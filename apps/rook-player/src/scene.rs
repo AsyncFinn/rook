@@ -22,6 +22,7 @@ use rook_types::{
 
 use crate::scene::files::{FileRef, FileState, Files, Loaded};
 
+mod adornments;
 mod effects;
 mod lighting;
 mod lights;
@@ -50,12 +51,12 @@ struct Pose {
     turn: Mat3,
 }
 
-/// What a part draws: itself and its image layers, and how its CFrame
-/// places them.
+/// What a part draws: itself, its image layers and adornments, and how
+/// its CFrame places each.
 struct Drawn {
     part: PartInstance,
     pose: Pose,
-    layers: Vec<PartInstance>,
+    layers: Vec<(PartInstance, Pose)>,
 }
 
 /// What [`SceneCache::apply`] changed in the scene.
@@ -81,7 +82,7 @@ pub struct SceneCache {
     pub scene: Scene,
     /// Where each drawn part is in `scene.parts`.
     index: HashMap<InstanceId, usize>,
-    /// Where each drawn part's image layers are, in child order.
+    /// Where each drawn part's image layers and adornments are, in order.
     layers: HashMap<InstanceId, Vec<usize>>,
     /// How each entry's part's CFrame places it, by index.
     poses: Vec<Pose>,
@@ -175,10 +176,10 @@ impl SceneCache {
                 self.scene.parts.push(drawn.part);
                 self.poses.push(drawn.pose);
                 let mut layers = Vec::new();
-                for layer in drawn.layers {
+                for (layer, pose) in drawn.layers {
                     layers.push(self.scene.parts.len());
                     self.scene.parts.push(layer);
-                    self.poses.push(drawn.pose);
+                    self.poses.push(pose);
                 }
                 if !layers.is_empty() {
                     self.layers.insert(id, layers);
@@ -384,7 +385,7 @@ impl SceneCache {
         // Layers keep their indices in order; extra ones are released.
         let mut kept = Vec::with_capacity(layers.len());
         let mut old = old_layers.into_iter();
-        for layer in layers {
+        for (layer, pose) in layers {
             let i = match old.next() {
                 Some(i) => {
                     self.scene.parts[i] = layer;

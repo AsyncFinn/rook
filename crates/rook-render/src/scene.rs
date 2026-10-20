@@ -230,6 +230,9 @@ pub struct PartInstance {
     /// a terrain seam's later layers, each its share of the blend
     /// ([`TerrainLayer`]). Never casts shadows.
     pub over: bool,
+    /// Drawn in its own colour without light, as Studio draws adornments
+    /// (a SelectionBox's lines and fill).
+    pub unlit: bool,
 }
 
 impl PartInstance {
@@ -253,6 +256,7 @@ impl PartInstance {
             surfaces: [None; 6],
             layer: Layer::Base,
             over: false,
+            unlit: false,
         }
     }
 }

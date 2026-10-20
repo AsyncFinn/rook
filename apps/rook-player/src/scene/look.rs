@@ -65,19 +65,23 @@ pub(super) fn truss(
 
 impl SceneCache {
     /// What a part draws (`None` without a CFrame or Size): itself, its
-    /// Decals and Textures, and how its CFrame places them. A mesh that
+    /// Decals and Textures, the SelectionBoxes on it, and how its CFrame
+    /// places them. A mesh that
     /// draws nothing leaves the part fully transparent, so it stays in the
     /// scene for a script to change back.
     pub(super) fn part(&mut self, dom: &Dom, id: InstanceId) -> Option<Drawn> {
         let mut pose = Pose::default();
         let (mut part, decals) = self.look(dom, id, &mut pose)?;
         self.material_maps(dom, id, &mut part);
-        let layers = match decals {
+        let mut layers: Vec<(PartInstance, Pose)> = match decals {
             Decals::None => Vec::new(),
-            Decals::Faces | Decals::Stretched | Decals::MeshUv => {
-                self.images(dom, id, &part, decals)
-            }
+            Decals::Faces | Decals::Stretched | Decals::MeshUv => self
+                .images(dom, id, &part, decals)
+                .into_iter()
+                .map(|layer| (layer, pose))
+                .collect(),
         };
+        layers.extend(adornments::selection_boxes(dom, id));
         Some(Drawn { part, pose, layers })
     }
 

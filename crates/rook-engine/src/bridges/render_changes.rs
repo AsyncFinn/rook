@@ -110,6 +110,14 @@ impl DataModel {
         let lighting = dom.find_service("Lighting");
         let props = RenderProps::get();
         let changes = &mut self.render_changes;
+        // The place's own SelectionBoxes, the first time.
+        let adorned = self.adorned.get_or_insert_with(|| {
+            dom.descendants(dom.root())
+                .into_iter()
+                .filter(|&i| dom.class_name(i) == "SelectionBox")
+                .filter_map(|i| Some((i, dom.ref_property(i, "Adornee")?)))
+                .collect()
+        });
         // A mesh decides how its parent part looks (SpecialMesh, BlockMesh,
         // CylinderMesh, FileMesh), and decals and textures draw on it.
         let decorates = |id: InstanceId| {
@@ -129,6 +137,24 @@ impl DataModel {
                 changes.parts.insert(part);
             }
         };
+        // A SelectionBox draws on its Adornee: its old and new ones change.
+        let adorn = |changes: &mut RenderChanges,
+                     adorned: &mut HashMap<InstanceId, InstanceId>,
+                     id: InstanceId,
+                     gone: bool| {
+            let new = if gone {
+                None
+            } else {
+                dom.ref_property(id, "Adornee")
+            };
+            let old = match new {
+                Some(part) => adorned.insert(id, part),
+                None => adorned.remove(&id),
+            };
+            mark_part(changes, old);
+            mark_part(changes, new);
+        };
+        let adornment = |id: InstanceId| dom.class_name(id) == "SelectionBox";
         for c in dom.journal().since(self.render_cursor) {
             match c {
                 Change::Property { id, property } => {
@@ -154,6 +180,8 @@ impl DataModel {
                         }
                     } else if decorates(*id) {
                         mark_part(changes, dom.parent(*id));
+                    } else if adornment(*id) {
+                        adorn(changes, adorned, *id, false);
                     } else {
                         mark_part(changes, Some(*id));
                     }
@@ -174,6 +202,9 @@ impl DataModel {
                     if subtree.iter().any(|i| effect(*i)) {
                         changes.effects_placed = true;
                     }
+                    for &i in subtree.iter().filter(|i| adornment(**i)) {
+                        adorn(changes, adorned, i, false);
+                    }
                     let parts = subtree.iter().filter(|i| dom.is_a(**i, "BasePart"));
                     let before = changes.placed.len();
                     changes.placed.extend(parts);
@@ -190,6 +221,9 @@ impl DataModel {
                 }
                 Change::Destroying(id) if effect(*id) => {
                     changes.effects_placed = true;
+                }
+                Change::Destroying(id) if adornment(*id) => {
+                    adorn(changes, adorned, *id, true);
                 }
                 _ => {}
             }

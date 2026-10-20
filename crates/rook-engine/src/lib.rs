@@ -122,6 +122,9 @@ pub struct DataModel {
     render_cursor: u64,
     /// What a renderer draws that changed since it last asked.
     render_changes: RenderChanges,
+    /// Each SelectionBox's Adornee as last seen, whose look changes when
+    /// it moves to another (read from the DOM on first use).
+    adorned: Option<HashMap<InstanceId, InstanceId>>,
     /// Keyboard and mouse bookkeeping (clients).
     input: input::InputTracker,
     content: Content,
@@ -288,6 +291,7 @@ impl DataModel {
             script_cursor,
             render_cursor: script_cursor,
             render_changes: RenderChanges::everything(),
+            adorned: None,
             input: Default::default(),
             content: Content {
                 resolver: options.content.clone(),
