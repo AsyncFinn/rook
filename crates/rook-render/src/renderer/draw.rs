@@ -111,6 +111,7 @@ impl Renderer {
             camera,
             l.environment_diffuse > 0.0,
         );
+        self.update_sky_cube(&mut encoder);
         if shadow.is_some() {
             self.shadow_pass(&mut encoder, &mut shadow_runs, starts[0]);
         }
@@ -189,7 +190,6 @@ impl Renderer {
                 None => [0.0; 4],
             },
             faces,
-            sky: rgb(l.reflection, l.environment_specular),
             sky_from_clip: camera.sky_from_clip(aspect).to_cols_array_2d(),
             sky_faces: {
                 let mut out = [[0.0; 4]; 18];
@@ -208,7 +208,7 @@ impl Renderer {
             ],
             wind: rgb(self.terrain.wind.to_array(), self.water_phase as f32),
             sky_top: rgb(l.sky_top, l.environment_diffuse),
-            sky_horizon: rgb(l.sky_horizon, 0.0),
+            sky_horizon: rgb(l.sky_horizon, l.environment_specular),
             sky_bottom: rgb(l.sky_bottom, 0.0),
             sky_images,
             terrain_layers: self.terrain_layers(),
@@ -391,6 +391,27 @@ impl Renderer {
             ];
         }
         out
+    }
+
+    /// Build the sky's reflection cube again if the sky changed: from the
+    /// skybox once all six images are up, else from the plain sky.
+    fn update_sky_cube(&mut self, encoder: &mut wgpu::CommandEncoder) {
+        let l = self.lighting;
+        let images = l.skybox.and_then(|hashes| {
+            let views = hashes.map(|h| self.images.get(&h).map(|i| &i.linear));
+            views
+                .iter()
+                .all(Option::is_some)
+                .then(|| (hashes, views.map(|v| v.unwrap())))
+        });
+        self.sky_cube.update(
+            &self.device,
+            &self.queue,
+            encoder,
+            images,
+            l.sky_top,
+            l.sky_horizon,
+        );
     }
 
     /// The skybox, once all six images are up; otherwise the plain sky

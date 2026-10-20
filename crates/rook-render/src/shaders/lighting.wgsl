@@ -4,7 +4,7 @@
 // in Studio's light units, added up before the tone curve as Studio adds
 // them (`tone.wgsl`).
 
-import package::common::g;
+import package::common::{g, sky_cube, brdf_table, image_sampler};
 
 import package::lights::VOXEL;
 
@@ -178,51 +178,90 @@ fn shade(albedo: vec3<f32>, world: vec3<f32>, normal: vec3<f32>) -> vec3<f32> {
 // vectors. Confirmed against black SmoothPlastic at known angles, which
 // fits roughness 0.4 within 0.005 units (docs/behavior/lights.md).
 fn sun_highlight(f0: vec3<f32>, roughness: f32, n_h: f32, l_h: f32) -> vec3<f32> {
-    let r = 0.089 + 0.911 * roughness;
+    let r = remapped(roughness);
     let a = r * r * r * r;
     let d = n_h * n_h * (a - 1.0) + 1.0;
     let f = f0 + (1.0 - f0) * pow(1.0 - l_h, 5.0);
     return f * (a + a * a) / (d * d * (3.0 * l_h + 0.5) * (0.75 * n_h + 0.25));
 }
 
+// Studio's remapped roughness, 0.089 to 1: what its highlight, its
+// reflection cube's level and its BRDF table go by.
+fn remapped(roughness: f32) -> f32 {
+    return 0.089 + 0.911 * roughness;
+}
+
+// The sky towards `d` in light units, from the reflection cube's `level`
+// (0 sharp to 5, Studio's 5 x remapped roughness).
+fn sky_reflected(d: vec3<f32>, level: f32) -> vec3<f32> {
+    return textureSampleLevel(sky_cube, image_sampler, d, level).rgb;
+}
+
+// How much of the sky a surface of reflectance `f0` reflects at remapped
+// roughness `r` and cosine `n_v` to the camera: Studio's split-sum table
+// (A, B), taken as (f0 A + B) / (A + B), so a rough surface keeps all of
+// f0 (`shaders_glsl3.pack`, 0.743).
+fn sky_fresnel(f0: vec3<f32>, r: f32, n_v: f32) -> vec3<f32> {
+    let half_texel = 0.5 / vec2<f32>(textureDimensions(brdf_table));
+    let at = clamp(vec2(r, n_v), half_texel, vec2(1.0) - half_texel);
+    let t = textureSampleLevel(brdf_table, image_sampler, at, 0.0).xy;
+    return (f0 * t.x + t.y) / max(t.x + t.y, 1e-4);
+}
+
 // Physically based shading in light units, as Studio's surface shaders add
-// it up (docs/behavior/lights.md): the diffuse light of `shade`, the sun's
-// highlight (`sun_highlight`), and the sky reflected with Schlick's
-// Fresnel (weaker at grazing angles the rougher the surface; an
-// Approximation of Studio's prefiltered sky), in the albedo's colour on
-// metals. EnvironmentSpecularScale (`g.sky.w`) scales the reflection and
-// metalness both: at 0, a Foil part is lit like Plastic (observed; in
-// Studio's shaders metalness is multiplied by it). Metals lose their
-// diffuse light as far as they are metal, and every surface the share of
-// the sun's light its highlight reflects.
+// it up (`shaders_glsl3.pack`, 0.743; docs/behavior/lights.md):
+// - the sky reflected towards the camera's mirror direction, from the
+//   reflection cube at Studio's level for the roughness (`sky_reflected`),
+//   times `sky_fresnel` and EnvironmentSpecularScale (`g.sky_horizon.w`);
+//   where the sky is blocked, the dim covered light stands for Studio's
+//   indoor cube (Approximation);
+// - the sun's highlight (`sun_highlight`);
+// - the diffuse light on the albedo: ambient and local lights whole, the
+//   sky's light less what its reflection takes, the sun's less what its
+//   highlight takes, both only as far as the surface isn't metal.
+//   EnvironmentSpecularScale scales metalness too: at 0, a Foil part is
+//   lit like Plastic (observed).
+// `reflectance` (BasePart.Reflectance, on the materials that honour it)
+// mixes the albedo towards the sharp sky in the mirror direction, which is
+// then lit like any albedo, and makes the reflection itself sharp.
 fn shade_pbr(
     albedo: vec3<f32>,
     world: vec3<f32>,
     normal: vec3<f32>,
     roughness: f32,
     metalness: f32,
+    reflectance: f32,
 ) -> vec3<f32> {
     let n = normalize(normal);
     let v = normalize(g.camera_pos.xyz - world);
     let l = g.sun_dir.xyz;
-    let environment = g.sky.w;
+    let environment = g.sky_horizon.w;
     let metal = metalness * environment;
+    let not_metal = 1.0 - metal;
     let f0 = mix(vec3(0.04), albedo, metal);
+    let r = remapped(roughness);
     let n_v = max(dot(n, v), 1e-4);
+    let level = select(5.0 * r, 0.0, reflectance > 0.0);
+    let sky = sky_reflected(reflect(-v, n), level);
+    let sky_f = sky_fresnel(f0, r, n_v);
     let sun = sun_light(world, n);
-    var kept = vec3(1.0);
+    var sun_kept = vec3(0.0);
     var highlight = vec3(0.0);
     if any(sun > vec3(0.0)) {
         let h = normalize(l + v);
         let l_h = max(dot(l, h), 0.0);
         let f = f0 + (1.0 - f0) * pow(1.0 - l_h, 5.0);
-        kept = 1.0 - f * environment;
+        sun_kept = not_metal * (1.0 - f * environment);
         highlight = sun_highlight(f0, roughness, max(dot(n, h), 1e-3), l_h) * sun;
     }
-    let lit = diffuse_light(albedo * (1.0 - metal), world, n, sun * kept);
-    let fresnel = f0 + (max(vec3(1.0 - roughness), f0) - f0) * pow(1.0 - n_v, 5.0);
-    let reflected = g.sky.rgb * g.sky.rgb * fresnel * environment;
-    return fog_units(lit + highlight + reflected, world);
+    let open = sky_visibility(world, n);
+    let covered = vec3(SKY_COVERED * g.sky_top.w);
+    let sky_diffuse = mix(covered, sky_light(n), open) * not_metal * (1.0 - sky_f * environment);
+    let a = ambient_color();
+    let surface = mix(albedo, sky, reflectance);
+    let diffuse = surface * (a * a + sky_diffuse + local_light(world, n) + sun * sun_kept);
+    let reflected = mix(covered, sky, open) * sky_f * environment;
+    return fog_units(diffuse + highlight + reflected, world);
 }
 
 // How far fog has taken over at `world`, 0 to 1: Studio's surface shaders

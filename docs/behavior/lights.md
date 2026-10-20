@@ -297,8 +297,8 @@ its highlight in light units as above: `Lighting::sun_color` is
 green, a smoothstep from y = 0.045 to 0.15 on blue; fitted), or the
 moon's 0.031 × Brightness while the sun is down. Albedos are the sRGB
 colour squared (`albedo_units` in `shaders/tone.wgsl`). SmoothPlastic and
-Plastic take the fitted roughness. The sky's reflection is still the
-skybox's average colour, squared, with Schlick's Fresnel (Approximation).
+Plastic take the fitted roughness. The sky's reflection is Studio's (see
+[materials](materials.md#reflections)).
 
 Against Studio: the same rig in white, red (196, 40, 28), grey 128, blue
 (13, 105, 172) and black, at Ambient 70, OutdoorAmbient 128, Brightness

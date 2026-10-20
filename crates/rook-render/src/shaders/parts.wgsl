@@ -282,15 +282,7 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
     if (in.flags & NEON) != 0u {
         return vec4(frame(fog_units(neon(albedo), in.world)), in.color.a);
     }
-    var lit = shade_pbr(albedo_units(albedo), in.world, normal, roughness, metalness);
-    // Reflectance: the part takes on its surroundings, here the skybox's
-    // average colour (Approximation: Studio reflects the skybox itself; a
-    // red part at 0.2 looks pink under the default blue sky, and a yellow
-    // one at 0.3 olive under a black Sky; observed).
-    let reflectance = in.material.x;
-    if reflectance > 0.0 {
-        lit = mix(lit, fog_units(g.sky.rgb * g.sky.rgb, in.world), reflectance);
-    }
+    let lit = shade_pbr(albedo_units(albedo), in.world, normal, roughness, metalness, in.material.x);
     var out = frame(lit);
     if terrain && (in.face >> TERRAIN_DRAWN_SHIFT) != 0u {
         out *= terrain_share(in, dp_x, dp_y);

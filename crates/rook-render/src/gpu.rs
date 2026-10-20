@@ -27,9 +27,6 @@ pub(crate) struct Globals {
     /// Each face's image right and up (`NormalId::image_axes`), in
     /// `NormalId` order; w holds the studs per surface pattern tile.
     pub(crate) faces: [[f32; 4]; 12],
-    /// What reflective parts take on (`Lighting::reflection`, sRGB); w is
-    /// `Lighting::environment_specular`.
-    pub(crate) sky: [f32; 4],
     /// From clip space to directions from the camera, for the skybox.
     pub(crate) sky_from_clip: [[f32; 4]; 4],
     /// Each skybox image's direction, right and up ([`SKYBOX_FACES`]).
@@ -42,7 +39,8 @@ pub(crate) struct Globals {
     /// The sky's colour overhead, at the horizon and below
     /// (`Lighting::sky_top`, `sky_horizon`, `sky_bottom`, sRGB): water
     /// reflects the first two, and all three light surfaces. `sky_top`'s w
-    /// is `Lighting::environment_diffuse`.
+    /// is `Lighting::environment_diffuse`, `sky_horizon`'s
+    /// `Lighting::environment_specular`.
     pub(crate) sky_top: [f32; 4],
     pub(crate) sky_horizon: [f32; 4],
     pub(crate) sky_bottom: [f32; 4],
@@ -114,7 +112,8 @@ pub(crate) struct Instance {
     /// Its images' slots in the image table, 16 bits each, in
     /// [`renderer::ImageSet`] order (unused without a table).
     images: [u32; 3],
-    /// A part's `Reflectance`, roughness and metalness; w is the blue of
+    /// A part's `Reflectance` (where it shows), roughness and metalness;
+    /// w is the blue of
     /// a SurfaceAppearance's tint, whose red and green are in `tile.zw`.
     material: [f32; 4],
 }
@@ -156,8 +155,21 @@ impl Instance {
                 // A map gives the value itself; without one, the material's.
                 let shading = p.material.shading(p.material_set);
                 let maps = p.maps;
+                // Only Studio's Plastic shader takes Reflectance: Plastic
+                // and SmoothPlastic parts and meshes without a texture
+                // (observed: Metal, Wood, Neon and a textured mesh at 1
+                // show none of the sky; `shaders_glsl3.pack` has it in no
+                // other shader).
+                let reflects = matches!(p.material, Material::Plastic | Material::SmoothPlastic)
+                    && p.texture.is_none()
+                    && !maps.on_mesh_uv;
                 material = [
-                    p.reflectance.clamp(0.0, 1.0),
+                    // In 255ths, as Studio's vertices carry it.
+                    if reflects {
+                        (p.reflectance.clamp(0.0, 1.0) * 255.0).round() / 255.0
+                    } else {
+                        0.0
+                    },
                     if maps.roughness.is_some() {
                         1.0
                     } else {
@@ -529,8 +541,8 @@ pub(crate) fn shadow_map(device: &wgpu::Device) -> (wgpu::TextureView, wgpu::Sam
     (view, sampler)
 }
 
-/// The layout of group 1: the shadow map, and the surface pattern and
-/// water arrays.
+/// The layout of group 1: the shadow map, the surface pattern and water
+/// arrays, the sky's reflection cube and the table its reflection goes by.
 pub(crate) fn main_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
     let texture_entry = |binding, dimension| wgpu::BindGroupLayoutEntry {
         binding,
@@ -569,19 +581,21 @@ pub(crate) fn main_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
                 count: None,
             },
             texture_entry(4, wgpu::TextureViewDimension::D2Array),
+            texture_entry(5, wgpu::TextureViewDimension::Cube),
+            texture_entry(6, wgpu::TextureViewDimension::D2),
         ],
     })
 }
 
 /// The main pass's group 1: the shadow map, the surface patterns (linear:
-/// grey 0.5 is a factor of 1 after doubling) and water's normal frames.
+/// grey 0.5 is a factor of 1 after doubling), water's normal frames, the
+/// sky's reflection cube and the BRDF table.
 pub(crate) fn main_bind_group(
     cx: &UploadContext<'_>,
     layout: &wgpu::BindGroupLayout,
     shadow_view: &wgpu::TextureView,
     shadow_sampler: &wgpu::Sampler,
-    surfaces: &wgpu::TextureView,
-    water: &wgpu::TextureView,
+    [surfaces, water, sky_cube, brdf]: [&wgpu::TextureView; 4],
 ) -> wgpu::BindGroup {
     let view = wgpu::BindingResource::TextureView;
     cx.device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -607,6 +621,14 @@ pub(crate) fn main_bind_group(
             wgpu::BindGroupEntry {
                 binding: 4,
                 resource: view(water),
+            },
+            wgpu::BindGroupEntry {
+                binding: 5,
+                resource: view(sky_cube),
+            },
+            wgpu::BindGroupEntry {
+                binding: 6,
+                resource: view(brdf),
             },
         ],
     })

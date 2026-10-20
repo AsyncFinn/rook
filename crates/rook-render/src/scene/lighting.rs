@@ -38,9 +38,6 @@ pub struct Lighting {
     pub sky_horizon: [f32; 3],
     /// The sky below the horizon (the skybox's Down image).
     pub sky_bottom: [f32; 3],
-    /// What reflective parts take on (`Reflectance`): the sky's colour,
-    /// the average of the place's skybox when it has one (sRGB).
-    pub reflection: [f32; 3],
     /// The skybox's six images, in [`SKYBOX_FACES`] order (Up, Back,
     /// Front, Left, Right, Down), drawn behind everything once all six
     /// are in [`Scene::images`]; `None` draws the plain sky colour.
@@ -86,7 +83,6 @@ impl Default for Lighting {
             sky_top: [0.36, 0.56, 0.86],
             sky_horizon: [0.75, 0.84, 0.95],
             sky_bottom: [0.75, 0.84, 0.95],
-            reflection: [0.75, 0.84, 0.95],
             skybox: None,
             global_shadows: true,
             environment_specular: 0.0,

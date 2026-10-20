@@ -22,9 +22,6 @@ struct Globals {
     // Each face's image right (even) and up (odd) in part axes, in
     // `NormalId` order; w = studs per surface pattern tile.
     faces: array<vec4<f32>, 12>,
-    // What reflective parts take on: the skybox's average colour (sRGB);
-    // w = EnvironmentSpecularScale.
-    sky: vec4<f32>,
     // From clip space to directions from the camera (the skybox).
     sky_from_clip: mat4x4<f32>,
     // Each skybox image's direction, right and up (`SKYBOX_FACES`).
@@ -36,7 +33,8 @@ struct Globals {
     wind: vec4<f32>,
     // The sky overhead, at the horizon and below (sRGB): water reflects the
     // first two, and all three light surfaces. sky_top.w =
-    // EnvironmentDiffuseScale, dimmed at night.
+    // EnvironmentDiffuseScale, dimmed at night; sky_horizon.w =
+    // EnvironmentSpecularScale.
     sky_top: vec4<f32>,
     sky_horizon: vec4<f32>,
     sky_bottom: vec4<f32>,
@@ -55,6 +53,12 @@ struct Globals {
 @group(1) @binding(3) var image_sampler: sampler;
 // Water's normal frames, one per layer (X in alpha, Y in green).
 @group(1) @binding(4) var water_normals: texture_2d_array<f32>;
+// The sky's reflection cube, in light units (`renderer/lighting/sky.rs`).
+@group(1) @binding(5) var sky_cube: texture_cube<f32>;
+// Studio's split-sum table of the sky's reflection (the install's
+// `brdfLUT.dds`, or Rook's fit of it): A and B by remapped roughness
+// across and the cosine to the camera down.
+@group(1) @binding(6) var brdf_table: texture_2d<f32>;
 // Instance flags.
 const CAST: u32 = 1u;
 const NEON: u32 = 2u;

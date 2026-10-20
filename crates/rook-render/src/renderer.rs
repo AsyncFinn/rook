@@ -19,6 +19,7 @@ pub(crate) use images::ImageBinding;
 pub(crate) use images::ImageSet;
 use images::{Defaults, image_layout, image_set};
 use lighting::local::GpuLights;
+use lighting::sky::SkyCube;
 use pipelines::{BindLayouts, Pipelines};
 use placement::Placement;
 use timing::GpuTimer;
@@ -48,11 +49,13 @@ pub struct Renderer {
     globals_layout: wgpu::BindGroupLayout,
     pub(crate) bind_group: wgpu::BindGroup,
     /// The shadow map, drawn by the shadow pass and sampled by the main
-    /// pass through `main_bind_group`, with the surface patterns and
-    /// water's normal frames.
+    /// pass through `main_bind_group`, with the surface patterns, water's
+    /// normal frames, the sky's reflection cube and the BRDF table.
     shadow_view: wgpu::TextureView,
     surfaces_view: wgpu::TextureView,
     water_view: wgpu::TextureView,
+    sky_cube: SkyCube,
+    brdf_view: wgpu::TextureView,
     shadow_sampler: wgpu::Sampler,
     main_layout: wgpu::BindGroupLayout,
     main_bind_group: wgpu::BindGroup,
@@ -234,13 +237,14 @@ impl Renderer {
             1,
             &[vec![vec![128, 128, 255, 128]]],
         );
+        let sky_cube = SkyCube::new(&device, &queue);
+        let brdf_view = lighting::sky::rooks_brdf_table(&device, &queue);
         let main_bind_group = main_bind_group(
             &cx,
             &main_layout,
             &shadow_view,
             &shadow_sampler,
-            &surfaces_view,
-            &water_view,
+            [&surfaces_view, &water_view, &sky_cube.view, &brdf_view],
         );
         let mut pool = MeshPool::new(&device, &queue);
         let mut meshes = GpuCache::new();
@@ -271,6 +275,8 @@ impl Renderer {
             shadow_view,
             surfaces_view,
             water_view,
+            sky_cube,
+            brdf_view,
             shadow_sampler,
             main_layout,
             main_bind_group,
@@ -385,14 +391,31 @@ impl Renderer {
         true
     }
 
+    /// Reflect the sky by this table (the install's
+    /// `textures/brdfLUT.dds`: `size` × `size` pairs of half floats)
+    /// instead of Rook's fit of it. Returns false, keeping Rook's, when
+    /// `rg16` isn't that size.
+    pub fn set_brdf_table(&mut self, size: u32, rg16: &[u8]) -> bool {
+        if size == 0 || rg16.len() != (size * size * 4) as usize {
+            return false;
+        }
+        self.brdf_view = lighting::sky::brdf_table(&self.device, &self.queue, size, rg16);
+        self.rebuild_main_bind_group();
+        true
+    }
+
     fn rebuild_main_bind_group(&mut self) {
         self.main_bind_group = main_bind_group(
             &self.upload_context(),
             &self.main_layout,
             &self.shadow_view,
             &self.shadow_sampler,
-            &self.surfaces_view,
-            &self.water_view,
+            [
+                &self.surfaces_view,
+                &self.water_view,
+                &self.sky_cube.view,
+                &self.brdf_view,
+            ],
         );
     }
 

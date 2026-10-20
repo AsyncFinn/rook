@@ -73,7 +73,6 @@ pub(super) fn lighting(dom: &Dom) -> (Lighting, f32) {
     l.sky_top = l.sky_top.map(|c| c * day);
     l.sky_horizon = l.sky_horizon.map(|c| c * day);
     l.sky_bottom = l.sky_horizon;
-    l.reflection = l.sky_horizon;
     (l, day)
 }
 

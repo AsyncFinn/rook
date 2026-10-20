@@ -27,12 +27,10 @@ pub(super) const DEFAULT_SKYBOX: [&str; 6] = [
 
 impl SceneCache {
     /// Add the place's skybox to `l` (its Sky, or the install's default
-    /// sky without one): once the six images have
-    /// loaded they are drawn behind everything, the plain sky colours
+    /// sky without one): once the six images have loaded they are drawn
+    /// behind everything and reflected by parts, and the plain sky colours
     /// become their averages (the Up image above, the four sides at the
-    /// horizon, the Down image below), and so does what reflective parts take on (observed:
-    /// Studio's reflections follow the Sky, a black one turning a
-    /// 0.3-reflective yellow part olive). The sun, moon and stars, and
+    /// horizon, the Down image below). The sun, moon and stars, and
     /// `SkyboxOrientation`, aren't drawn yet.
     pub(super) fn sky(&mut self, dom: &Dom, l: &mut Lighting, day: f32) {
         let sky = dom.find_service("Lighting").and_then(|id| {
@@ -81,7 +79,6 @@ impl SceneCache {
         l.sky_top = averages[0];
         l.sky_horizon = mean(&averages[1..5]);
         l.sky_bottom = averages[5];
-        l.reflection = mean(&averages);
         // The images aren't darkened for the night, so the light they give
         // is.
         l.environment_diffuse *= day;
