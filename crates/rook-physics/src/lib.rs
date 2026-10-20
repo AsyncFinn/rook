@@ -40,7 +40,7 @@ use convert::{cframe_of, pose_of, to_glam, to_rapier};
 use joints::constraints::{Drive, Spec, apply_drive, hinge_constraint_drive, revolute_angle};
 use joints::drives::{BuiltConstraint, DriveSource, Driven};
 use joints::movers::Mover;
-use joints::{HingeInput, Joint, JointKind, active_joint, endpoints, is_joint};
+use joints::{Joint, JointKind, active_joint, endpoints, is_joint};
 use sync::props::Props;
 
 use contacts::{groups, materials};

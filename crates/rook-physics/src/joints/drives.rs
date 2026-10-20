@@ -62,7 +62,7 @@ impl Physics {
         let handle = self.world.insert_impulse_joint(b0, b1, joint);
         self.hinges.insert(id, handle);
         self.joints.insert(id, [j.part0, j.part1]);
-        if let Some(input) = joints::hinge_input(dom, &j) {
+        if let Some(input) = hinge_input(dom, &j) {
             self.drives.insert(
                 id,
                 Driven {
@@ -218,7 +218,7 @@ impl Physics {
             let drive = match d.source {
                 DriveSource::Actuator(drive) => drive,
                 DriveSource::Surface(input) => {
-                    d.time = if input.input == joints::SurfaceInput::Sin {
+                    d.time = if input.input == SurfaceInput::Sin {
                         d.time + dt
                     } else {
                         0.0
@@ -226,14 +226,14 @@ impl Physics {
                     let value = input.value(d.time);
                     if input.stepping {
                         let held = *d.angle.get_or_insert(angle);
-                        let max = joints::ROTATE_P_STEP * steps as f32;
+                        let max = ROTATE_P_STEP * steps as f32;
                         let next = value.map_or(held, |v| held + (v - held).clamp(-max, max));
                         d.angle = Some(next);
                         Drive::Angle { angle: next }
                     } else {
                         // NoInput holds the hinge against anything.
                         Drive::Speed {
-                            speed: joints::ROTATE_V_SPEED * value.unwrap_or(0.0),
+                            speed: ROTATE_V_SPEED * value.unwrap_or(0.0),
                             max_torque: value.map_or(Real::MAX, |v| input.strength * v.abs()),
                         }
                     }
@@ -246,4 +246,147 @@ impl Physics {
             }
         }
     }
+}
+
+/// `Enum.InputType`: how a motor surface drives its hinge.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) enum SurfaceInput {
+    /// Holds still (observed: an impulse doesn't turn it).
+    NoInput,
+    /// ParamB.
+    Constant,
+    /// `ParamA · sin(ParamB · t)`, t counted from when the input became
+    /// Sin (observed).
+    Sin,
+}
+
+/// What drives a RotateV or RotateP: the inputs of Part0's surface that
+/// the joint sits on, the face C0's Z axis points out of (Inference: for
+/// joints MakeJoints creates, that's the Motor or SteppingMotor surface,
+/// as Part0 is the part whose surface decided the joint). Changes apply
+/// live (observed).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct HingeInput {
+    /// RotateP (a stepping motor, driven to an angle) rather than RotateV
+    /// (driven at a speed).
+    pub(crate) stepping: bool,
+    pub(crate) input: SurfaceInput,
+    pub(crate) param_a: f32,
+    pub(crate) param_b: f32,
+    /// RotateV's torque limit per unit of input ([`rotate_v_strength`]).
+    pub(crate) strength: f32,
+}
+
+impl HingeInput {
+    /// The input's value `t` seconds after it became Sin: RotateV's speed
+    /// in units of [`ROTATE_V_SPEED`], or RotateP's angle in radians.
+    /// `None` holds the hinge where it is.
+    pub(crate) fn value(&self, t: f64) -> Option<f32> {
+        match self.input {
+            SurfaceInput::NoInput => None,
+            SurfaceInput::Constant => Some(self.param_b),
+            SurfaceInput::Sin => Some(self.param_a * (f64::from(self.param_b) * t).sin() as f32),
+        }
+    }
+}
+
+/// RotateV turns at this many radians per second per unit of input
+/// (observed: ParamB 0.1, 0.5, 1 and 2 turn at 3.1, 15.5, 31 and 62).
+pub(crate) const ROTATE_V_SPEED: f32 = 31.0;
+
+/// RotateV's torque limit per unit of input per unit of [`rotate_v_strength`]'s
+/// geometric inertia (observed with a 1 and a 2 stud cube: 8.3e5 and
+/// 2.7e7 at ParamB 10).
+pub(crate) const ROTATE_V_TORQUE: f32 = 5.0e5;
+
+/// RotateV's torque limit per unit of input. A rotor gains speed steadily
+/// at this torque until it turns at its input's speed, so a heavy one
+/// spins up over seconds (observed). The limit comes from the smaller of
+/// the two parts, by size alone: the same with either part's density
+/// changed, and the same whichever part is the small one (observed).
+///
+/// Inference: modelled as the part's moment of inertia about the hinge
+/// axis at unit density. That is exact for 1 and 2 stud cubes and for
+/// plates up to 1 stud thick (the limit grows with thickness, observed
+/// from 0.2 to 2 studs), but Roblox's limit grows in steps with size:
+/// cubes from 0.5 to 8 studs measured from a quarter to three and a half
+/// times this.
+pub(crate) fn rotate_v_strength(dom: &Dom, j: &Joint) -> f32 {
+    let inertia = |part, frame: &str| {
+        let size = dom
+            .vector3_property(part, "Size")
+            .unwrap_or(glam::Vec3::ZERO);
+        let axis = dom
+            .cframe_property(j.id, frame)
+            .unwrap_or(CFrame::IDENTITY)
+            .rotation
+            .z_axis;
+        let volume = size.x * size.y * size.z;
+        let sq = size * size;
+        let diagonal = glam::Vec3::new(sq.y + sq.z, sq.x + sq.z, sq.x + sq.y) * (volume / 12.0);
+        (axis * axis).dot(diagonal)
+    };
+    ROTATE_V_TORQUE * inertia(j.part0, "C0").min(inertia(j.part1, "C1"))
+}
+
+/// RotateP moves its angle this many radians per 240 Hz step toward the
+/// input (observed: 2.4 rad/s, in 0.01 rad steps, whatever the distance).
+pub(crate) const ROTATE_P_STEP: f32 = 0.01;
+
+/// The input driving `j` if it's a RotateV or RotateP.
+pub(crate) fn hinge_input(dom: &Dom, j: &Joint) -> Option<HingeInput> {
+    let stepping = match dom.class_name(j.id) {
+        "RotateV" => false,
+        "RotateP" => true,
+        _ => return None,
+    };
+    let z = dom
+        .cframe_property(j.id, "C0")
+        .unwrap_or(CFrame::IDENTITY)
+        .rotation
+        .z_axis;
+    let a = z.abs();
+    let face = if a.x >= a.y && a.x >= a.z {
+        if z.x > 0.0 { "Right" } else { "Left" }
+    } else if a.y >= a.z {
+        if z.y > 0.0 { "Top" } else { "Bottom" }
+    } else if z.z > 0.0 {
+        "Back"
+    } else {
+        "Front"
+    };
+    let input = match dom.enum_item_property(j.part0, &format!("{face}SurfaceInput")) {
+        Some("Constant") => SurfaceInput::Constant,
+        Some("Sin") => SurfaceInput::Sin,
+        _ => SurfaceInput::NoInput,
+    };
+    Some(HingeInput {
+        stepping,
+        input,
+        param_a: dom
+            .float_property(j.part0, &format!("{face}ParamA"))
+            .unwrap_or(0.0),
+        param_b: dom
+            .float_property(j.part0, &format!("{face}ParamB"))
+            .unwrap_or(0.0),
+        strength: rotate_v_strength(dom, j),
+    })
+}
+
+/// Advance a Motor's CurrentAngle toward DesiredAngle over `dt` seconds.
+/// Returns whether it moved. MaxVelocity is radians per 60 Hz frame
+/// (observed: 0.1 per frame).
+pub(crate) fn step_motor(dom: &mut Dom, j: &Joint, dt: f64) -> bool {
+    if !matches!(j.kind, JointKind::Motor | JointKind::Motor6D) {
+        return false;
+    }
+    let current = dom.float_property(j.id, "CurrentAngle").unwrap_or(0.0);
+    let desired = dom.float_property(j.id, "DesiredAngle").unwrap_or(0.0);
+    if current == desired {
+        return false;
+    }
+    let max = dom.float_property(j.id, "MaxVelocity").unwrap_or(0.0).abs() * (dt * 60.0) as f32;
+    let next = current + (desired - current).clamp(-max, max);
+    rook_dom::ignore_stale(dom.set_property_by_name(j.id, "CurrentAngle", Value::Float32(next)));
+    next != current
 }

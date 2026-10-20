@@ -118,7 +118,7 @@ impl Physics {
                 self.bodies[*h]
                     .motors
                     .iter()
-                    .fold(false, |any, j| joints::step_motor(dom, j, dt) | any)
+                    .fold(false, |any, j| joints::drives::step_motor(dom, j, dt) | any)
             })
             .copied()
             .collect();

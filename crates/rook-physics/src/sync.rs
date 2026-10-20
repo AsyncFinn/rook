@@ -120,9 +120,10 @@ impl Physics {
         };
         for part in surfaces {
             for j in joints::part_joints(dom, part) {
-                if let (Some(d), Some(input)) =
-                    (self.drives.get_mut(&j.id), joints::hinge_input(dom, &j))
-                {
+                if let (Some(d), Some(input)) = (
+                    self.drives.get_mut(&j.id),
+                    joints::drives::hinge_input(dom, &j),
+                ) {
                     d.source = DriveSource::Surface(input);
                 }
             }
