@@ -32,6 +32,8 @@ pub(crate) enum Pipe {
     Additive,
     /// Terrain seams' later layers, added over the first.
     Over,
+    /// Blended over everything, depth untested.
+    OnTop,
 }
 
 /// Which instance buffer a run's instances are in.
@@ -217,6 +219,7 @@ impl Renderer {
             Pipe::GlassSurface => &p.glass_surface,
             Pipe::Additive => &p.additive,
             Pipe::Over => &p.over,
+            Pipe::OnTop => &p.on_top,
         }
     }
 

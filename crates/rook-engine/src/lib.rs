@@ -120,7 +120,7 @@ pub struct DataModel {
     render_watch: JournalWatch,
     /// What a renderer draws that changed since it last asked.
     render_changes: RenderChanges,
-    /// Each SelectionBox's Adornee as last seen, whose look changes when
+    /// Each adornment's Adornee as last seen, whose look changes when
     /// it moves to another.
     adorned: HashMap<InstanceId, InstanceId>,
     /// Keyboard and mouse bookkeeping (clients).

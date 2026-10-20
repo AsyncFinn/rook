@@ -237,6 +237,7 @@ impl Renderer {
             Some(z) => Target::Layer(z, key),
             // ForceField always shows what's behind it (observed).
             None if part.transparency > 0.0
+                || part.on_top
                 || part.layer != Layer::Base
                 || part.material == Material::ForceField
                 || part.maps.alpha == MapAlpha::Transparency =>
@@ -248,7 +249,7 @@ impl Renderer {
     }
 
     /// Whether a shape's mesh is on the GPU, queueing a mesh file (or
-    /// building a truss) the first time one is drawn. A file the scene
+    /// building a truss or adornment shape) the first time one is drawn. A file the scene
     /// doesn't hold, or one without triangles, draws nothing.
     fn mesh_readiness(&mut self, shape: DrawShape, scene: Option<&Scene>) -> Readiness {
         if self.meshes.contains(&shape) {
@@ -259,9 +260,10 @@ impl Renderer {
         }
         let hash = match shape {
             DrawShape::File(hash) => hash,
-            // Built the first time a truss of this shape is drawn: a few
-            // kilobytes, uploaded at once and shared by every such truss.
-            DrawShape::Truss(_) => {
+            // Built the first time a truss or adornment of this shape is
+            // drawn: a few kilobytes, uploaded at once and shared by every
+            // such part.
+            DrawShape::Truss(_) | DrawShape::Adorn(_) => {
                 let gpu = self.pool.add(&mesh::build(shape));
                 self.meshes.insert(shape, gpu);
                 return Readiness::Ready;

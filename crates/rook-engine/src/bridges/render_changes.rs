@@ -65,6 +65,14 @@ pub fn is_effect_class(class: &str) -> bool {
     )
 }
 
+/// Whether `id` adorns a part, drawn with it: the classes with an
+/// `Adornee` (SelectionBox, SelectionSphere, the HandleAdornments, ...).
+fn is_adornment(dom: &Dom, id: InstanceId) -> bool {
+    ["InstanceAdornment", "PVAdornment", "PartAdornment"]
+        .iter()
+        .any(|base| dom.is_a(id, base))
+}
+
 /// The part properties render-change tracking treats specially.
 #[derive(Debug)]
 pub(crate) struct RenderProps {
@@ -116,7 +124,7 @@ impl DataModel {
             *adorned = dom
                 .descendants(dom.root())
                 .into_iter()
-                .filter(|&i| dom.class_name(i) == "SelectionBox")
+                .filter(|&i| is_adornment(dom, i))
                 .filter_map(|i| Some((i, dom.ref_property(i, "Adornee")?)))
                 .collect();
         }
@@ -139,7 +147,7 @@ impl DataModel {
                 changes.parts.insert(part);
             }
         };
-        // A SelectionBox draws on its Adornee: its old and new ones change.
+        // An adornment draws on its Adornee: its old and new ones change.
         let adorn = |changes: &mut RenderChanges,
                      adorned: &mut HashMap<InstanceId, InstanceId>,
                      id: InstanceId,
@@ -156,7 +164,7 @@ impl DataModel {
             mark_part(changes, old);
             mark_part(changes, new);
         };
-        let adornment = |id: InstanceId| dom.class_name(id) == "SelectionBox";
+        let adornment = |id: InstanceId| is_adornment(dom, id);
         for c in journal {
             match c {
                 Change::Property { id, property } => {

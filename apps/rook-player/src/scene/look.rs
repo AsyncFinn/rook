@@ -49,7 +49,7 @@ pub(super) enum Decals {
 
 impl SceneCache {
     /// What a part draws (`None` without a CFrame or Size): itself, its
-    /// Decals and Textures, the SelectionBoxes on it, and how its CFrame
+    /// Decals and Textures, the adornments on it, and how its CFrame
     /// places them. A mesh that
     /// draws nothing leaves the part fully transparent, so it stays in the
     /// scene for a script to change back.
@@ -65,7 +65,7 @@ impl SceneCache {
                 .map(|layer| (layer, pose))
                 .collect(),
         };
-        layers.extend(adornments::selection_boxes(dom, id));
+        layers.extend(adornments::adornments(dom, id));
         Some(Drawn { part, pose, layers })
     }
 

@@ -65,9 +65,13 @@ pub(crate) const MODE_MESH_UV: u32 = 3;
 /// layer's mode takes.
 pub(crate) const PATTERN_SHIFT: u32 = 2;
 pub(crate) const UPRIGHT: u32 = 1 << 7;
-/// A base part drawn in its own colour without light (an image layer's
-/// face takes this bit).
+/// Bits 4-6 of a base part without a tile pattern (an image layer keeps
+/// its face there): drawn in its own colour without light, through the
+/// tone curve (`Light::Unlit`) or past it (`Light::Exact`, with
+/// [`EXACT`]); turned to face the camera (`PartInstance::faces_camera`).
 pub(crate) const UNLIT: u32 = 1 << 4;
+pub(crate) const EXACT: u32 = 1 << 5;
+pub(crate) const FACES_CAMERA: u32 = 1 << 6;
 /// Where the surface patterns start: 3 bits per face.
 pub(crate) const SURFACES_SHIFT: u32 = 8;
 /// The part has material textures, tiled at `tile.xy` studs.
@@ -135,8 +139,13 @@ impl Instance {
                 if p.vertex_colors {
                     flags |= VERTEX_COLORS;
                 }
-                if p.unlit {
-                    flags |= UNLIT;
+                flags |= match p.light {
+                    Light::Lit => 0,
+                    Light::Unlit => UNLIT,
+                    Light::Exact => UNLIT | EXACT,
+                };
+                if p.faces_camera {
+                    flags |= FACES_CAMERA;
                 }
                 flags |= match p.material {
                     Material::Neon => NEON,
@@ -254,7 +263,11 @@ impl Instance {
             rotation.y_axis.abs(),
             rotation.z_axis.abs(),
         );
-        let half = abs * ((hi - lo) * 0.5).abs();
+        let mut half = abs * ((hi - lo) * 0.5).abs();
+        if self.flags & FACES_CAMERA != 0 && self.flags & (3 << PATTERN_SHIFT) == 0 {
+            // Turned to the camera in the shader: any way round.
+            half = Vec3::splat(half.length());
+        }
         Aabb {
             min: centre - half,
             max: centre + half,

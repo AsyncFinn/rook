@@ -1,9 +1,11 @@
 //! The draw meshes: each vertex's layout ([`Vertex`]) and the meshes
 //! built for each [`DrawShape`]: unit primitives (extents -0.5..0.5) in
-//! [`shapes`], Rook's own head in [`head`] and trusses in [`truss`],
+//! [`shapes`], Rook's own head in [`head`], trusses in [`truss`] and
+//! adornments' shapes in [`adorn`],
 //! scaled by the instance's size in the vertex shader; mesh files,
 //! unions and terrain in [`files`].
 
+mod adorn;
 pub(crate) mod files;
 mod head;
 mod shapes;
@@ -125,6 +127,7 @@ pub(crate) fn build(shape: DrawShape) -> MeshData {
         // Mesh files come with the scene (`Renderer::has_mesh`).
         DrawShape::File(_) => MeshData::default(),
         DrawShape::Truss(shape) => truss::truss(shape),
+        DrawShape::Adorn(shape) => adorn::adorn(shape),
     }
 }
 

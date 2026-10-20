@@ -18,6 +18,8 @@ pub(crate) enum Pass {
     GlassFilter,
     GlassSurface,
     ForceField,
+    /// Over everything (`PartInstance::on_top`), after the rest.
+    OnTop,
 }
 
 impl Pass {
@@ -29,11 +31,15 @@ impl Pass {
             Pass::GlassFilter => Pipe::GlassFilter,
             Pass::GlassSurface => Pipe::GlassSurface,
             Pass::ForceField => Pipe::Additive,
+            Pass::OnTop => Pipe::OnTop,
         }
     }
 
     /// The passes an entry is drawn in, in order.
     fn of(p: &PartInstance) -> &'static [Pass] {
+        if p.on_top {
+            return &[Pass::OnTop];
+        }
         match (p.layer, p.material) {
             (Layer::Image { .. }, _) => &[Pass::Image],
             (Layer::Base, Material::Glass) => {
@@ -54,6 +60,7 @@ struct Entry {
     position: Vec3,
     /// An image layer (drawn just after its part at the same distance).
     image: bool,
+    on_top: bool,
     key: BatchKey,
     passes: &'static [Pass],
     instance: Instance,
@@ -65,6 +72,7 @@ impl Entry {
         Self {
             position: part.position,
             image: part.layer != Layer::Base,
+            on_top: part.on_top,
             key: BatchKey {
                 shape: part.shape,
                 images: image_set(part),
@@ -139,7 +147,8 @@ impl TransparentParts {
     }
 
     /// Upload the parts `view` reaches, sorted back to front for `camera`
-    /// (an image on a transparent part just after its part), unless
+    /// (an image on a transparent part just after its part, and those on
+    /// top after the rest), unless
     /// neither they nor the view changed since the last upload. Returns
     /// the draws: (key, pass, instance range) runs in that order.
     pub(crate) fn upload(
@@ -165,7 +174,12 @@ impl TransparentParts {
             .filter(|e| view.sees(e.world, margin))
             .map(|e| (e.position.distance_squared(camera.position), e))
             .collect();
-        order.sort_by(|(da, a), (db, b)| db.total_cmp(da).then(a.image.cmp(&b.image)));
+        order.sort_by(|(da, a), (db, b)| {
+            a.on_top
+                .cmp(&b.on_top)
+                .then(db.total_cmp(da))
+                .then(a.image.cmp(&b.image))
+        });
         let mut instances: Vec<Instance> = Vec::with_capacity(order.len());
         let mut runs: Vec<TransparentRun> = Vec::new();
         for &(_, e) in &order {

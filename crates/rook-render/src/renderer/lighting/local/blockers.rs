@@ -184,7 +184,7 @@ impl Blockers {
                 };
                 (centre * part.size, half * part.size.abs())
             }
-            DrawShape::Head | DrawShape::Truss(_) => return None,
+            DrawShape::Head | DrawShape::Truss(_) | DrawShape::Adorn(_) => return None,
         };
         let axes = part.rotation;
         let half = half.max(Vec3::splat(VOXEL * 0.5));

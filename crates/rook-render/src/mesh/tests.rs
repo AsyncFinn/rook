@@ -198,3 +198,34 @@ fn head_matches_the_measured_bounds() {
         assert!((Vec3::from(v.normal).length() - 1.0).abs() < 1e-5);
     }
 }
+
+/// Adornment shapes' triangles wind towards their normals, so back-face
+/// culling keeps the side that's seen (a tube's hole faces inward), and
+/// fit the unit box.
+#[test]
+fn adornment_shapes_face_their_normals() {
+    use crate::scene::AdornShape;
+    for shape in [
+        AdornShape::Cone,
+        AdornShape::Tube { hole: 0 },
+        AdornShape::Tube { hole: 128 },
+        AdornShape::Ring { hole: 0 },
+        AdornShape::Ring { hole: 200 },
+    ] {
+        let m = build(DrawShape::Adorn(shape));
+        assert!(!m.indices.is_empty(), "{shape:?}: no triangles");
+        let (lo, hi) = m.bounds();
+        assert!(
+            lo.cmpge(Vec3::splat(-0.5 - 1e-5)).all() && hi.cmple(Vec3::splat(0.5 + 1e-5)).all()
+        );
+        for tri in m.indices.chunks(3) {
+            let v = [tri[0], tri[1], tri[2]].map(|i| m.vertices[i as usize]);
+            let [a, b, c] = v.map(|v| Vec3::from(v.position));
+            let normal: Vec3 = v.iter().map(|v| Vec3::from(v.normal)).sum();
+            assert!(
+                (b - a).cross(c - a).dot(normal) > 0.0,
+                "{shape:?}: a triangle winds away from its normal"
+            );
+        }
+    }
+}

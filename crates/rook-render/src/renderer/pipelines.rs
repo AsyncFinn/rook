@@ -53,6 +53,8 @@ pub(crate) struct Pipelines {
     /// Terrain seams' later layers: their share added to the first's, on
     /// the same surface (the same vertices, so the same depth).
     pub(crate) over: wgpu::RenderPipeline,
+    /// Adornments always on top: blended over everything, untested.
+    pub(crate) on_top: wgpu::RenderPipeline,
     /// The skybox, behind everything.
     pub(crate) sky: wgpu::RenderPipeline,
     /// The plain sky colour, before (or without) the skybox.
@@ -286,6 +288,15 @@ impl Pipelines {
             Default::default(),
             Default::default(),
         );
+        let on_top = make(
+            "rook on top",
+            "fs_main",
+            Some(wgpu::BlendState::ALPHA_BLENDING),
+            false,
+            wgpu::CompareFunction::Always,
+            Default::default(),
+            Default::default(),
+        );
         // Images lie exactly on their part's surface: the same vertices
         // through the same (invariant) maths give the same depth.
         let layer_pipeline = make(
@@ -370,6 +381,7 @@ impl Pipelines {
             glass_surface,
             additive,
             over,
+            on_top,
             sky: sky_pipeline("fs_sky"),
             plain_sky: sky_pipeline("fs_plain_sky"),
             shadow: shadow_pipeline,

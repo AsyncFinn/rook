@@ -236,7 +236,9 @@ create.
    Cylinder and Cone HandleAdornments 6 to 13 each (34 to 82), ArcHandles
    11 (68), Highlight 68 (42): outlines, fills through walls, and the
    handles' look (dragging them comes with GUI input). Done so far:
-   SelectionBox ([`docs/behavior/adornments.md`](docs/behavior/adornments.md)).
+   SelectionBox, SelectionSphere, SurfaceSelection and the Box, Sphere,
+   Cylinder and Cone HandleAdornments
+   ([`docs/behavior/adornments.md`](docs/behavior/adornments.md)).
 
 ### M8 GUI
 

@@ -174,6 +174,8 @@ pub enum DrawShape {
     /// The renderer builds each shape's mesh the first time one is drawn,
     /// and trusses of the same shape share it.
     Truss(TrussShape),
+    /// A shape only adornments draw, built the first time one is drawn.
+    Adorn(AdornShape),
 }
 
 impl DrawShape {
@@ -185,6 +187,45 @@ impl DrawShape {
         DrawShape::Part(PartShape::Ball),
         DrawShape::Head,
     ];
+}
+
+/// The shapes adornments draw that parts don't, unit-sized like the part
+/// shapes (extents -0.5..0.5). Hole sizes are in 255ths of the outer
+/// size, so nearby sizes share a mesh.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum AdornShape {
+    /// A cone along Z: its base at z = 0.5, its tip at -0.5 (a
+    /// ConeHandleAdornment points along its CFrame's LookVector).
+    Cone,
+    /// A cylinder along Z with a round hole of `hole`/255 its diameter
+    /// (a CylinderHandleAdornment's `InnerRadius`).
+    Tube { hole: u8 },
+    /// A flat ring in the XY plane facing +Z, with a hole of `hole`/255
+    /// its diameter (0: a disc).
+    Ring { hole: u8 },
+}
+
+impl AdornShape {
+    /// The hole of `inner` within `outer`, as a shape stores it.
+    pub fn hole(inner: f32, outer: f32) -> u8 {
+        if outer <= 0.0 {
+            return 0;
+        }
+        (inner / outer * 255.0).round().clamp(0.0, 255.0) as u8
+    }
+}
+
+/// How light falls on a part.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Light {
+    #[default]
+    Lit,
+    /// Its own colour without light, through the tone curve, as Studio
+    /// draws most adornments.
+    Unlit,
+    /// Exactly its own colour on screen, past the tone curve, as Studio
+    /// draws a SelectionSphere's ring and adornments always on top.
+    Exact,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -234,9 +275,13 @@ pub struct PartInstance {
     /// a terrain seam's later layers, each its share of the blend
     /// ([`TerrainLayer`]). Never casts shadows.
     pub over: bool,
-    /// Drawn in its own colour without light, as Studio draws adornments
-    /// (a SelectionBox's lines and fill).
-    pub unlit: bool,
+    pub light: Light,
+    /// Turned to face the camera about `position` (its +Z towards it), as
+    /// a SelectionSphere's ring is; `rotation` is ignored.
+    pub faces_camera: bool,
+    /// Drawn over everything, after the transparent parts, as adornments
+    /// `AlwaysOnTop` are.
+    pub on_top: bool,
 }
 
 impl PartInstance {
@@ -260,7 +305,9 @@ impl PartInstance {
             surfaces: [None; 6],
             layer: Layer::Base,
             over: false,
-            unlit: false,
+            light: Light::Lit,
+            faces_camera: false,
+            on_top: false,
         }
     }
 }

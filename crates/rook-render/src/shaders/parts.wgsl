@@ -14,7 +14,7 @@
 
 import package::common::{
     g, surface_atlas, image_sampler, VertexIn, VertexOut, ShadowIn,
-    instance_rotation, world_position, placed, CAST, NEON, UNLIT, MODE_FACE, MODE_TILED,
+    instance_rotation, world_position, placed, adorn_bits, CAST, NEON, UNLIT, EXACT, MODE_FACE, MODE_TILED,
     MODE_MESH_UV, UPRIGHT, SURFACES_SHIFT, MAPS, GLASS, SLOPED, MAPS_UV, VERTEX_COLORS,
     UNION_FACE, TERRAIN_FACE, TERRAIN_WATER, TERRAIN_DRAWN_SHIFT, CENTRED, ALPHA_OVERLAY, ALPHA_TRANSPARENCY,
     ALPHA_TINT_MASK, PATTERN_SHIFT, one_tap, tile_taps, terrain_taps,
@@ -273,7 +273,10 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
             albedo *= s.rgb * 2.0;
         }
     }
-    if (in.flags & UNLIT) != 0u {
+    if (adorn_bits(in.flags) & EXACT) != 0u {
+        return vec4(frame_of(albedo), in.color.a);
+    }
+    if (adorn_bits(in.flags) & UNLIT) != 0u {
         return vec4(frame(fog_units(albedo_units(albedo), in.world)), in.color.a);
     }
     if (in.flags & NEON) != 0u {

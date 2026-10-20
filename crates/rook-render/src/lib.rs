@@ -17,10 +17,11 @@ mod scene;
 mod surfaces;
 
 pub use scene::{
-    Anchor, Beam, Camera, Curve, Detile, DrawShape, Emitter, EmitterLook, EmitterShape, Flipbook,
-    FlipbookMode, ImageHash, ImagePlacement, InOut, Layer, LightShape, Lighting, LocalLight,
-    MapAlpha, MaterialMaps, MeshHash, Orientation, PartInstance, RibbonLook, SKYBOX_FACES, Scene,
-    Sequence, Spawn, TERRAIN_LAYERS, TerrainLayer, TerrainLook, TextureMode, Tonemapper, Trail,
+    AdornShape, Anchor, Beam, Camera, Curve, Detile, DrawShape, Emitter, EmitterLook, EmitterShape,
+    Flipbook, FlipbookMode, ImageHash, ImagePlacement, InOut, Layer, Light, LightShape, Lighting,
+    LocalLight, MapAlpha, MaterialMaps, MeshHash, Orientation, PartInstance, RibbonLook,
+    SKYBOX_FACES, Scene, Sequence, Spawn, TERRAIN_LAYERS, TerrainLayer, TerrainLook, TextureMode,
+    Tonemapper, Trail,
 };
 
 // Content hashes are 32 bytes: FxHash keeps lookups by them cheap.

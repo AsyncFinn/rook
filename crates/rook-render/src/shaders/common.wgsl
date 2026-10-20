@@ -58,9 +58,18 @@ struct Globals {
 // Instance flags.
 const CAST: u32 = 1u;
 const NEON: u32 = 2u;
-// A base part drawn in its own colour without light (a layer's face takes
-// this bit).
+// Bits 4-6 of a base part without a tile pattern (bits 2-3 clear; an
+// image layer keeps its face there): drawn in its own colour without
+// light, through the tone curve or, with EXACT, past it; and turned to
+// face the camera about its position (`PartInstance::faces_camera`).
 const UNLIT: u32 = 16u;
+const EXACT: u32 = 32u;
+const FACES_CAMERA: u32 = 64u;
+
+// The adornment bits (UNLIT, EXACT, FACES_CAMERA) of instance flags.
+fn adorn_bits(flags: u32) -> u32 {
+    return select(0u, flags & 112u, (flags & 12u) == 0u);
+}
 // Bits 2-3: how a layer places its image.
 const MODE_FACE: u32 = 1u;
 const MODE_TILED: u32 = 2u;
@@ -161,7 +170,21 @@ struct ShadowIn {
 };
 
 fn instance_rotation(v: VertexIn) -> mat3x3<f32> {
+    if (adorn_bits(v.i_flags.x) & FACES_CAMERA) != 0u {
+        return facing_camera(v.i_position);
+    }
     return mat3x3<f32>(v.i_right, v.i_up, v.i_back);
+}
+
+// Axes at `at` whose back points at the camera, kept upright.
+fn facing_camera(at: vec3<f32>) -> mat3x3<f32> {
+    let back = normalize(g.camera_pos.xyz - at);
+    var right = cross(vec3(0.0, 1.0, 0.0), back);
+    if dot(right, right) < 1e-6 {
+        right = vec3(1.0, 0.0, 0.0);
+    }
+    right = normalize(right);
+    return mat3x3<f32>(right, cross(back, right), back);
 }
 
 // Where a vertex of an instance is in the world (every pass).
