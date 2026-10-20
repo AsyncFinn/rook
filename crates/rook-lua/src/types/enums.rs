@@ -1,5 +1,6 @@
 //! `Enum`, `Enum.X` and `Enum.X.Y`.
 
+use super::err;
 use mlua::{
     AnyUserData, Lua, MetaMethod, UserData, UserDataFields, UserDataMethods, UserDataRef,
     Value as LuaValue,
@@ -19,10 +20,6 @@ pub(crate) struct LEnum(pub EnumId);
 pub(crate) struct LEnumItem {
     pub(crate) enum_id: EnumId,
     pub(crate) value: u32,
-}
-
-fn err(msg: String) -> mlua::Error {
-    mlua::Error::RuntimeError(msg)
 }
 
 impl LEnumItem {

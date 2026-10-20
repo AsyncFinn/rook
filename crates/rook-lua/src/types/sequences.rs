@@ -1,5 +1,6 @@
 //! NumberRange, NumberSequence, ColorSequence and their keypoints.
 
+use super::err;
 use mlua::{
     Lua, MetaMethod, MultiValue, UserData, UserDataFields, UserDataMethods, UserDataRef,
     Value as LuaValue,
@@ -26,10 +27,6 @@ pub(crate) struct LColorSequence(pub ColorSequence);
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct LColorSequenceKeypoint(pub ColorSequenceKeypoint);
-
-fn err(msg: &str) -> mlua::Error {
-    mlua::Error::RuntimeError(msg.to_owned())
-}
 
 impl UserData for LNumberRange {
     fn add_fields<F: UserDataFields<Self>>(f: &mut F) {

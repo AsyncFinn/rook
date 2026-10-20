@@ -1,5 +1,6 @@
 //! CFrame.
 
+use super::err;
 use glam::{EulerRot, Mat3, Quat, Vec3};
 use mlua::{
     Lua, MetaMethod, MultiValue, UserData, UserDataFields, UserDataMethods, UserDataRef,
@@ -25,10 +26,6 @@ fn lv(v: Vec3) -> Vector {
 
 fn cf(position: Vec3, rotation: Mat3) -> LCFrame {
     LCFrame(CFrame { position, rotation })
-}
-
-fn err(msg: &str) -> mlua::Error {
-    mlua::Error::RuntimeError(msg.to_owned())
 }
 
 /// `CFrame.new(...)` with every overload from the creator-docs page.

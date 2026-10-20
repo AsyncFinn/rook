@@ -1,5 +1,6 @@
 //! Vector3 (native `vector`), Vector2, Vector3int16, Vector2int16.
 
+use super::err;
 use mlua::{
     Lua, MetaMethod, UserData, UserDataFields, UserDataMethods, UserDataRef, Value as LuaValue,
     Vector,
@@ -48,9 +49,7 @@ fn vector3_index(lua: &Lua, (v, key): (Vector, String)) -> mlua::Result<LuaValue
             let methods: mlua::Table = lua.named_registry_value("rook.vector3_methods")?;
             match methods.get::<Option<mlua::Function>>(name)? {
                 Some(func) => f(lua, func),
-                None => Err(mlua::Error::RuntimeError(format!(
-                    "{name} is not a valid member of Vector3"
-                ))),
+                None => Err(err(format!("{name} is not a valid member of Vector3"))),
             }
         }
     }
@@ -143,7 +142,7 @@ fn install_vector3(lua: &Lua) -> mlua::Result<()> {
         "FromNormalId",
         lua.create_function(|lua, item: LuaValue| {
             let v = super::enums::item_value(lua, &item, "NormalId")
-                .ok_or_else(|| mlua::Error::RuntimeError("Unable to cast to NormalId".into()))?;
+                .ok_or_else(|| err("Unable to cast to NormalId"))?;
             Ok(normal_id_vector(v))
         })?,
     )?;
@@ -151,7 +150,7 @@ fn install_vector3(lua: &Lua) -> mlua::Result<()> {
         "FromAxis",
         lua.create_function(|lua, item: LuaValue| {
             let v = super::enums::item_value(lua, &item, "Axis")
-                .ok_or_else(|| mlua::Error::RuntimeError("Unable to cast to Axis".into()))?;
+                .ok_or_else(|| err("Unable to cast to Axis"))?;
             Ok(match v {
                 0 => Vector::new(1.0, 0.0, 0.0),
                 1 => Vector::new(0.0, 1.0, 0.0),
@@ -191,9 +190,7 @@ fn mul2(a: &LuaValue, b: &LuaValue, div: bool) -> mlua::Result<LVector2> {
         (Some(x), None, _, Some(n)) => op(x, Vector2::new(n as f32, n as f32)),
         (None, Some(y), Some(n), _) => op(Vector2::new(n as f32, n as f32), y),
         _ => {
-            return Err(mlua::Error::RuntimeError(
-                "invalid argument #2 (Vector2 expected)".into(),
-            ));
+            return Err(err("invalid argument #2 (Vector2 expected)"));
         }
     };
     Ok(LVector2(res))

@@ -1,5 +1,6 @@
 //! Color3 and BrickColor.
 
+use super::err;
 use std::sync::LazyLock;
 
 use mlua::{
@@ -93,9 +94,7 @@ fn brick_new(_: &Lua, args: MultiValue) -> mlua::Result<LBrickColor> {
         [LuaValue::UserData(u)] => match borrow_clone::<LColor3>(u) {
             Some(c) => closest_brick_color(c.0),
             None => {
-                return Err(mlua::Error::RuntimeError(
-                    "Unable to cast to BrickColor".into(),
-                ));
+                return Err(err("Unable to cast to BrickColor"));
             }
         },
         [n] => by_number(number_of(n).unwrap_or(f64::from(DEFAULT_BRICK_COLOR)) as u16),
@@ -165,14 +164,11 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
                 3 => h.chars().flat_map(|c| [c, c]).collect(),
                 6 => h.to_owned(),
                 _ => {
-                    return Err(mlua::Error::RuntimeError(
-                        "Unable to convert characters to hex value".into(),
-                    ));
+                    return Err(err("Unable to convert characters to hex value"));
                 }
             };
-            let n = u32::from_str_radix(&full, 16).map_err(|_| {
-                mlua::Error::RuntimeError("Unable to convert characters to hex value".into())
-            })?;
+            let n = u32::from_str_radix(&full, 16)
+                .map_err(|_| err("Unable to convert characters to hex value"))?;
             Ok(LColor3(Color3::from_rgb(
                 (n >> 16) as u8,
                 (n >> 8) as u8,

@@ -16,10 +16,6 @@ use crate::ctx::args::number_of;
 use crate::ctx::convert::vector3_to_lua;
 use crate::ctx::{ApiResult, ScriptError, api_ret, with_world};
 
-fn err(msg: impl Into<String>) -> ScriptError {
-    ScriptError(msg.into())
-}
-
 /// A metatable function that runs `f` on the userdata it's called on.
 /// It goes through the engine function shim, so errors reach `pcall` as
 /// plain strings, as Roblox's do (mlua's own metamethods raise error
@@ -36,7 +32,9 @@ where
         let mut args = args.into_iter();
         match args.next() {
             Some(LuaValue::UserData(ud)) if ud.is::<T>() => f(lua, &ud, args.collect()),
-            _ => Err(err("Expected ':' not '.' calling member function")),
+            _ => Err(ScriptError::from(
+                "Expected ':' not '.' calling member function",
+            )),
         }
     })
 }
@@ -116,7 +114,7 @@ fn collect(v: &LuaValue, out: &mut Vec<InstanceId>, depth: u32) -> ApiResult<()>
             }
             Ok(())
         }
-        _ => Err(err(
+        _ => Err(ScriptError::from(
             "Invalid value type; table must only contain Instances and other tables",
         )),
     }
@@ -137,7 +135,7 @@ impl<const OVERLAP: bool> LParams<OVERLAP> {
     };
 
     fn invalid(key: &str) -> ScriptError {
-        err(format!("{key} is not a valid member of {}", Self::NAME))
+        ScriptError::from(format!("{key} is not a valid member of {}", Self::NAME))
     }
 
     fn get(&self, lua: &Lua, key: &str) -> ApiResult<LuaValue> {
@@ -176,7 +174,7 @@ impl<const OVERLAP: bool> LParams<OVERLAP> {
     fn add_to_filter(_: &Lua, ud: &AnyUserData, args: MultiValue) -> ApiResult<()> {
         let v = args.front().cloned().unwrap_or(LuaValue::Nil);
         if !matches!(v, LuaValue::Table(_) | LuaValue::UserData(_)) {
-            return Err(err("Expected a table or Instance"));
+            return Err(ScriptError::from("Expected a table or Instance"));
         }
         let mut list = Vec::new();
         collect(&v, &mut list, 0)?;
@@ -200,11 +198,11 @@ impl<const OVERLAP: bool> LParams<OVERLAP> {
                         .map(|i| i.value),
                     _ => None,
                 }
-                .ok_or_else(|| err("Invalid value for enum 'RaycastFilterType'"))?;
+                .ok_or_else(|| ScriptError::from("Invalid value for enum 'RaycastFilterType'"))?;
             }
             "FilterDescendantsInstances" => {
                 if !matches!(v, LuaValue::Table(_)) {
-                    return Err(err("Invalid value type; expected a table"));
+                    return Err(ScriptError::from("Invalid value type; expected a table"));
                 }
                 let mut list = Vec::new();
                 collect(&v, &mut list, 0)?;
@@ -216,7 +214,7 @@ impl<const OVERLAP: bool> LParams<OVERLAP> {
                     LuaValue::Integer(_) | LuaValue::Number(_) => {
                         crate::ctx::args::format_number(number_of(&v).unwrap_or(0.0))
                     }
-                    _ => return Err(err("Invalid value type; expected a string")),
+                    _ => return Err(ScriptError::from("Invalid value type; expected a string")),
                 };
             }
             "RespectCanCollide" => p.respect_can_collide = truthy,
@@ -228,7 +226,7 @@ impl<const OVERLAP: bool> LParams<OVERLAP> {
             "Tolerance" if OVERLAP => {
                 let t = number_of(&v).unwrap_or(0.0) as f32;
                 if !(0.0..=0.05).contains(&t) {
-                    return Err(err(format!(
+                    return Err(ScriptError::from(format!(
                         "Tolerance outside bounds: Expected 0 - 0.050000, got {t:.6}"
                     )));
                 }
@@ -308,7 +306,7 @@ impl LRaycastResult {
             "Distance" => LuaValue::Number(h.distance.into()),
             "Material" => enum_item(lua, "Material", h.material)?,
             _ => {
-                return Err(err(format!(
+                return Err(ScriptError::from(format!(
                     "'{key}' is not a valid member of RaycastResult"
                 )));
             }
@@ -327,11 +325,15 @@ impl UserData for LRaycastResult {
         f.add_meta_field_with("__newindex", |lua| {
             shim::<Self, ()>(lua, |_, _, args| {
                 let key = key(&args);
-                Err(err(if RESULT_MEMBERS.contains(&key.as_str()) {
-                    format!("{key} member of RaycastResult is read-only and cannot be assigned to")
-                } else {
-                    format!("'{key}' is not a valid member of RaycastResult")
-                }))
+                Err(ScriptError::from(
+                    if RESULT_MEMBERS.contains(&key.as_str()) {
+                        format!(
+                            "{key} member of RaycastResult is read-only and cannot be assigned to"
+                        )
+                    } else {
+                        format!("'{key}' is not a valid member of RaycastResult")
+                    },
+                ))
             })
         });
     }

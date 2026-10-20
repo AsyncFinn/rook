@@ -1,6 +1,7 @@
 //! Random, TweenInfo, Faces, Axes, PhysicalProperties, and the opaque
 //! wrapper for value types without a dedicated Lua representation yet.
 
+use super::err;
 use mlua::{
     Lua, MetaMethod, MultiValue, UserData, UserDataFields, UserDataMethods, UserDataRef,
     Value as LuaValue, Vector,
@@ -61,14 +62,14 @@ impl UserData for Opaque {
                     "ElasticityWeight" => p.elasticity_weight(),
                     "AcousticAbsorption" => p.acoustic_absorption(),
                     _ => {
-                        return Err(mlua::Error::RuntimeError(format!(
+                        return Err(err(format!(
                             "{key} is not a valid member of PhysicalProperties"
                         )));
                     }
                 };
                 return Ok(LuaValue::Number(f64::from(v)));
             }
-            Err(mlua::Error::RuntimeError(format!(
+            Err(err(format!(
                 "{key} is not a valid member of {}",
                 t.type_name()
             )))
@@ -267,7 +268,7 @@ fn physical_properties_new(lua: &Lua, args: MultiValue) -> mlua::Result<Opaque> 
         materials::of_material(material)
     } else {
         if !matches!(a.len(), 3 | 5 | 6) {
-            return Err(mlua::Error::RuntimeError(format!(
+            return Err(err(format!(
                 "Invalid number of arguments: {}. Four ways to call PhysicalProperties.new:\n\
                  \t\t\t\t\t1. new(material: Material)  -- returns default properties for the given material\n\
                  \t\t\t\t\t2. new(density: number, friction: number, elasticity: number)\n\

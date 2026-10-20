@@ -30,6 +30,11 @@ pub(crate) use vector::{LVector2, LVector2int16, LVector3int16};
 
 use mlua::Lua;
 
+/// An error raised to scripts with Roblox's message.
+pub(crate) fn err(msg: impl Into<String>) -> mlua::Error {
+    mlua::Error::RuntimeError(msg.into())
+}
+
 pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     vector::install(lua)?;
     cframe::install(lua)?;
