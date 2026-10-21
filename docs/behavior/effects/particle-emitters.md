@@ -62,7 +62,9 @@ in Studio).
 
 **Scripts**: `Emit(count)` births `count` particles at once (16 when not
 given), even while disabled; `Clear()` removes all of them. A server
-script's `Emit` shows on clients.
+script's `Emit` shows on clients. Destroying the emitter or its part
+removes its particles at once, however long they had left (Studio
+2026-10-21: 60 s particles gone within 1 s; untouched control stayed).
 
 ## Rook's fit
 
