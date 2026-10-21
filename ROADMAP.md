@@ -48,7 +48,7 @@ directly, since a character is what makes playing together worth it.
 | ✅ | **M5** Audio | Archived places play their sounds, positioned in 3D; the audio conformance batch passes (v0.5.0) |
 | ✅ | **M6** Terrain | Archived places with terrain show it, and parts and queries collide with it (v0.6.0) |
 | ✅ | **M7** Lights and effects | Local lights light the scene; Fire, Smoke, Sparkles and ParticleEmitters draw as in Studio (v0.7.0) |
-| ⬜ | **M8** GUI | GUI conformance batch passes; archived places' GUIs draw and take input |
+| 🟨 | **M8** GUI | GUI conformance batch passes; archived places' GUIs draw and take input |
 | 🟨 | **M9** Characters | Spawn, walk, jump, sit and use tools in an archived place |
 | ⬜ | **M10** Networking | Two players on two machines play an archived place together |
 | ⬜ | **M11** Avatars and animation | Players pick an avatar (no Roblox account) and see each other's, dressed and animated |
@@ -247,15 +247,16 @@ ScreenGui 600 files, SurfaceGui 140, BillboardGui 229; Frame 558,
 TextLabel 550, ImageLabel 458, TextButton 456; Hint 145 and Message 26.
 It comes before characters: tools, health bars and leaderboards are GUI.
 
-1. Layout: `UDim2`, `AnchorPoint`, `ZIndex`, `ClipsDescendants`,
-   `AutomaticSize`, the UI layouts and constraints.
+1. ✅ [Layout](docs/behavior/gui.md): `UDim2`, `AnchorPoint`, `ZIndex`,
+   `ClipsDescendants`, `AutomaticSize`, UIListLayout, UIGridLayout,
+   UIPadding, UIScale and the size constraints; backgrounds and borders
+   drawn.
 2. Text (Parley): fonts and `FontFace` weights, sizing, wrapping,
    `TextScaled`, `RichText`.
 3. Images, 9-slice, ScrollingFrame.
-4. The modern UI objects, by files using them: UIListLayout 43 (with flex
-   and UIFlexItem), UIPadding 38, UICorner 35, UIAspectRatioConstraint 35,
-   UIGradient 31, UIGridLayout 29, UIStroke 22, UIScale 13, CanvasGroup 9,
-   ViewportFrame 5.
+4. The modern UI objects, by files using them: UIListLayout's flex and
+   wrapping with UIFlexItem (43 files use UIListLayout), UICorner 35,
+   UIGradient 31, UIStroke 22, CanvasGroup 9, ViewportFrame 5.
 5. Input: buttons, `TextBox`, GUI taking input before the 3D world.
 6. BillboardGui and SurfaceGui in the world; Hint and Message;
    ProximityPrompt (12 files).

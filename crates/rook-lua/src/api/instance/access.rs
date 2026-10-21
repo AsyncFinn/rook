@@ -26,6 +26,18 @@ pub(super) fn read(
     name: &str,
     prop: Option<(PropertyId, Option<EnumId>)>,
 ) -> ApiResult<(LuaValue, bool)> {
+    let laid_out = rook_gui::is_layout_output(name);
+    if laid_out {
+        let start = {
+            let mut w = c.world.borrow_mut();
+            let w = &mut *w;
+            let start = w.dom.journal().end();
+            w.gui.sync_for(&mut w.dom, id);
+            start
+        };
+        // What moved fires Changed, as a layout in the frame does.
+        dispatch(lua, start);
+    }
     let (value, plain) = {
         let w = c.world.borrow();
         match prop.and_then(|(pid, _)| properties::content_view(pid)) {
@@ -39,7 +51,7 @@ pub(super) fn read(
                 Some(v) => (Some(v), false),
                 None => (
                     prop.and_then(|(pid, _)| w.dom.property(id, pid)),
-                    prop.is_some(),
+                    prop.is_some() && !laid_out,
                 ),
             },
         }

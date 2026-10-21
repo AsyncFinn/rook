@@ -459,5 +459,6 @@ fn legacy_enum_names_resolve() {
     );
 }
 
+mod gui;
 mod models;
 mod tweens;

@@ -198,6 +198,19 @@ impl Runtime {
         self.guarded(|| threads::dispatch(&self.lua, start));
     }
 
+    /// Lay GUI out again if it changed, as Roblox does each frame after
+    /// RenderStepped, firing Changed for what moved.
+    pub fn sync_gui(&self) {
+        let start = {
+            let mut w = self.world_mut();
+            let w = &mut *w;
+            let start = w.dom.journal().end();
+            w.gui.sync(&mut w.dom);
+            start
+        };
+        self.dispatch_since(start);
+    }
+
     /// `Instance:Destroy()` from the engine (fallen parts), firing the
     /// signals it causes.
     pub fn destroy(&self, id: InstanceId) {

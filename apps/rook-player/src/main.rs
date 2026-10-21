@@ -142,6 +142,8 @@ fn parse_vec3(s: &str) -> Result<Vec3, String> {
 /// loaded.
 fn prepare(game: &mut Game, args: &Args, content: &Arc<Resolver>) -> (SceneCache, Camera) {
     let load_time = game.load_start.elapsed().as_secs_f64();
+    // GUI lays out in the window it's drawn in.
+    game.set_viewport(args.width, args.height);
     if args.seconds > 0.0 {
         game.run_for(args.seconds);
     }
@@ -260,6 +262,7 @@ fn play(args: Args) -> anyhow::Result<()> {
         note_gpu(&renderer);
         install.apply(&mut renderer);
         renderer.set_scene(&scene.scene);
+        scene.show_gui(game.view(), &mut renderer);
         renderer.finish_uploads();
         // Effects as they look once going: Smoke's puffs live 5 seconds.
         renderer.settle_particles(6.0);

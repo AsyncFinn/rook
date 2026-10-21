@@ -33,10 +33,27 @@ impl SceneCache {
         self.update_grass(camera);
     }
 
+    /// Give the renderer the DataModel's GUI when it was laid out again
+    /// since last time (laying it out first if it changed). Returns
+    /// whether it was.
+    pub fn show_gui(&mut self, dm: &DataModel, renderer: &mut Renderer) -> bool {
+        dm.runtime().sync_gui();
+        let world = dm.runtime().world();
+        let generation = world.gui.generation();
+        if self.gui_generation == Some(generation) {
+            return false;
+        }
+        self.gui_generation = Some(generation);
+        renderer.set_gui(&world.gui.draw(&world.dom));
+        true
+    }
+
     /// Bring the scene up to date with a DataModel's changes and the mesh
     /// files and images that finished loading since the last frame, then
-    /// the renderer with the scene. Returns whether anything changed.
+    /// the renderer with the scene and the GUI. Returns whether anything
+    /// changed.
     pub fn refresh(&mut self, dm: &mut DataModel, renderer: &mut Renderer, camera: Vec3) -> bool {
+        let gui = self.show_gui(dm, renderer);
         let changes = dm.take_render_changes();
         let dom = &dm.runtime().world().dom;
         let change = if changes.is_empty() {
@@ -67,7 +84,7 @@ impl SceneCache {
             SceneChange::Full => SceneChange::Full,
         };
         match &change {
-            SceneChange::None => return false,
+            SceneChange::None => return gui,
             SceneChange::Parts { changed, moved } => {
                 renderer.update_parts(&self.scene, changed);
                 renderer.move_parts(&self.scene, moved);

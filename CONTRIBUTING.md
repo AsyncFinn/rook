@@ -35,6 +35,7 @@ Rook is a Cargo workspace of small crates whose dependencies only point downward
 | [`rook-audio`](crates/rook-audio) | The mixer, SoundGroups, sound effects and the audio output device |
 | [`rook-terrain`](crates/rook-terrain) | Terrain's voxels (`SmoothGrid`) and the surface Roblox meshes from them |
 | [`rook-physics`](crates/rook-physics) | Assemblies, joints, constraints, contacts and scene queries over Rapier |
+| [`rook-gui`](crates/rook-gui) | GUI layout (the `Absolute*` properties) and what ScreenGuis draw |
 | [`rook-engine`](crates/rook-engine) | DataModels, services, script start rules, play sessions and the frame loop |
 | [`rook-view`](crates/rook-view) | What a DataModel draws: the render scene built from the DOM, mesh files and images loading for it |
 | [`rook-render`](crates/rook-render) | The wgpu renderer |
@@ -53,6 +54,7 @@ Most features span several crates: the rules in `rook-types` or the feature's ow
 - **Sounds:** decoding in `rook-content/src/decode/audio.rs`; the mixer, effects and 3D falloff in `rook-audio`; playback in `rook-engine/src/bridges/sounds/`; Sound's methods in `rook-lua/src/api/methods/sound.rs`, the Audio API's in `api/methods/audio_api.rs` with its shared rules in `rook-lua/src/audio_api.rs`.
 - **Terrain:** voxels, meshing, materials and grass in `rook-terrain`; drawing in `rook-view/src/terrain.rs`; collision in `rook-physics/src/shape/terrain.rs`; the Terrain API in `rook-lua/src/api/methods/terrain.rs`.
 - **Content** (meshes, images, sounds by URL): parsing references in `rook-content/src/reference.rs`, finding the bytes in `resolver/` (cache, the install, asset delivery, kept content), background loading in `loader.rs`, decoding in `decode/`; the drawing side in `rook-view/src/content/`.
+- **GUI:** layout in `rook-gui/src/layout.rs` and `layout/` (UI layouts, constraints, `AutomaticSize`, padding), drawing order, clipping and borders in `rook-gui/src/draw.rs`, what the renderer takes in `rook-types/src/gui.rs`; script reads in `rook-lua/src/api/instance/access.rs`, GUI methods in `rook-lua/src/api/methods/gui.rs`; the GUI pass in `rook-render/src/renderer/gui.rs`.
 - **Input:** the window's keys and camera in `rook-player/src/app/` (`keys.rs`, `camera.rs`); clicks and the mouse in `rook-engine/src/bridges/input.rs`; UserInputService in `rook-lua/src/api/methods/input.rs`.
 - **Replication:** `rook-net` (`source.rs` on the server, `sink.rs` on the client, `replicator.rs`); the play session in `rook-engine/src/session/host.rs`; remotes in `rook-lua/src/api/methods/remotes.rs` and `rook-lua/src/net.rs`.
 - **Physics:** `rook-physics/src/`: `assembly/bodies.rs` (assemblies as Rapier bodies), `sync.rs` (building the world from the DOM and applying the journal), `joints/` (joints, constraints, movers and the drives that power them), `contacts/` (materials, collision groups), `shape/` (collider shapes, unions, terrain), `query.rs` (raycasts and overlaps), `step.rs`.

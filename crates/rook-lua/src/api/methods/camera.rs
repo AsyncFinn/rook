@@ -92,10 +92,6 @@ fn project(lens: &Lens, point: Vec3) -> (Vec3, bool) {
     (Vec3::new(x, y, depth), visible)
 }
 
-/// The top bar's height, which screen coordinates exclude. Approximation:
-/// Rook has no top bar, so it is 0 (Roblox clients: 58 pixels).
-const GUI_INSET: f32 = 0.0;
-
 fn point_to_ray(lua: &Lua, this: InstanceId, a: &Args, inset: f32) -> ApiResult<Outcome> {
     let (x, y) = (a.number(0)? as f32, a.number(1)? as f32);
     let depth = a.number_or(2, 0.0)? as f32;
@@ -111,7 +107,7 @@ fn viewport_point_to_ray(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Out
 }
 
 fn screen_point_to_ray(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    point_to_ray(lua, this, a, GUI_INSET)
+    point_to_ray(lua, this, a, super::gui::gui_inset(lua))
 }
 
 fn world_to_point(lua: &Lua, this: InstanceId, a: &Args, inset: f32) -> ApiResult<Outcome> {
@@ -127,7 +123,7 @@ fn world_to_viewport_point(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<O
 }
 
 fn world_to_screen_point(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    world_to_point(lua, this, a, GUI_INSET)
+    world_to_point(lua, this, a, super::gui::gui_inset(lua))
 }
 
 #[cfg(test)]

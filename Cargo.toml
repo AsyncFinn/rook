@@ -26,6 +26,7 @@ rook-physics = { path = "crates/rook-physics" }
 rook-content = { path = "crates/rook-content" }
 rook-audio = { path = "crates/rook-audio", default-features = false }
 rook-terrain = { path = "crates/rook-terrain" }
+rook-gui = { path = "crates/rook-gui" }
 
 # Roblox formats and data (rbx-dom ecosystem)
 rbx_dom_weak = "4.2"

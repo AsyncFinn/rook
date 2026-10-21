@@ -199,6 +199,9 @@ pub struct World {
     /// DOM. Servers step it; a client's only answers queries (see
     /// `rook_physics::Physics::for_queries`).
     pub physics: rook_physics::Physics,
+    /// GUI layout. Scripts read it (`AbsoluteSize` and the like), which
+    /// lays out again first when GUI changed, so it lives here too.
+    pub gui: rook_gui::Gui,
     /// Threads waiting for an invoke's reply, by call id.
     pub(crate) pending_calls: HashMap<u64, Thread>,
     pub(crate) next_call: u64,
@@ -241,6 +244,7 @@ impl World {
             content: Default::default(),
             assets: Default::default(),
             physics: rook_physics::Physics::new(),
+            gui: rook_gui::Gui::default(),
             pending_calls: HashMap::new(),
             next_call: 0,
             log: Vec::new(),

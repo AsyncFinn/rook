@@ -3,8 +3,8 @@
 
 use glam::Vec3;
 use rook_types::{
-    Axes, CFrame, Color3, ColorSequence, Faces, MaterialColors, NumberRange, NumberSequence, Value,
-    Vector2,
+    Axes, CFrame, Color3, ColorSequence, Faces, MaterialColors, NumberRange, NumberSequence, UDim,
+    UDim2, Value, Vector2,
 };
 
 use super::*;
@@ -54,6 +54,20 @@ impl Dom {
     pub fn vector2_property(&self, id: InstanceId, name: &str) -> Option<Vector2> {
         match self.property_by_name(id, name)? {
             Value::Vector2(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    pub fn udim_property(&self, id: InstanceId, name: &str) -> Option<UDim> {
+        match self.property_by_name(id, name)? {
+            Value::UDim(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    pub fn udim2_property(&self, id: InstanceId, name: &str) -> Option<UDim2> {
+        match self.property_by_name(id, name)? {
+            Value::UDim2(v) => Some(v),
             _ => None,
         }
     }

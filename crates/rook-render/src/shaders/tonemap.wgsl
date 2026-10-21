@@ -1,11 +1,12 @@
 // The last pass: the frame (Studio's encoding of light units, `tone.wgsl`)
-// through the place's tone curve, onto the screen, with Highlights over it.
+// through the place's tone curve, onto the screen, with Highlights and then
+// the GUI over it.
 
 import package::tone::{FRAME_LIGHT, linear_to_srgb, srgb_to_linear, studio_light3};
 
 struct Tone {
     // x: the curve (0 Default, 1 Retro); y: 1 when the mask holds
-    // Highlights.
+    // Highlights; z: 1 when the GUI layer holds GUI.
     curve: vec4<f32>,
     // Each Highlight's fill and outline (sRGB, and their opacity), by its
     // number - 1 (`renderer/highlights.rs`).
@@ -16,6 +17,8 @@ struct Tone {
 @group(0) @binding(1) var<uniform> tone: Tone;
 // Each pixel's Highlight number, 0 for none.
 @group(0) @binding(2) var mask: texture_2d<u32>;
+// The GUI, premultiplied sRGB (`gui.wgsl`).
+@group(0) @binding(3) var gui_layer: texture_2d<f32>;
 
 @vertex
 fn vs_tonemap(@builtin(vertex_index) i: u32) -> @builtin(position) vec4<f32> {
@@ -38,6 +41,11 @@ fn fs_tonemap(@builtin(position) at: vec4<f32>) -> @location(0) vec4<f32> {
     }
     if tone.curve.y == 1.0 {
         out = highlighted(p, out);
+    }
+    if tone.curve.z == 1.0 {
+        // Over the screen's sRGB pixels, as Roblox blends GUI.
+        let g = textureLoad(gui_layer, p, 0);
+        out = srgb_to_linear(g.rgb + linear_to_srgb(out) * (1.0 - g.a));
     }
     return vec4(out, 1.0);
 }

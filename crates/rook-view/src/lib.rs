@@ -133,6 +133,8 @@ pub struct SceneCache {
     report: Report,
     /// `BasePart.CFrame`, which moved parts are read again by.
     cframe: Option<rook_reflection::PropertyId>,
+    /// The GUI layout the renderer was last given.
+    gui_generation: Option<u64>,
 }
 
 impl SceneCache {
@@ -168,6 +170,7 @@ impl SceneCache {
                 .class_by_name("BasePart")
                 .and_then(|base| dom.database().find_canonical_property(base.id, "CFrame"))
                 .map(|p| p.id),
+            gui_generation: None,
         };
         cache.rebuild(dom);
         cache

@@ -95,6 +95,13 @@ fn legacy_key_string(code: &str) -> Option<String> {
     )
 }
 
+/// A window point in GUI coordinates, below the top bar, as InputObjects
+/// and the Mouse give it (measured: `GetMouseLocation` alone includes
+/// the inset).
+fn gui_point((x, y): (f32, f32)) -> (f32, f32) {
+    (x, y - rook_gui::GUI_INSET)
+}
+
 fn key_code_value(code: &str) -> Option<u32> {
     let e = rook_reflection::database().enum_by_name("KeyCode")?;
     rook_reflection::enum_item_value(e.id, code)
@@ -172,8 +179,12 @@ impl DataModel {
                     w.input.mouse_delta = (x - ox, y - oy);
                     w.input.mouse_delta
                 };
-                let obj =
-                    self.changed_input_object(UserInputType::MouseMovement, (x, y, 0.0), (dx, dy));
+                let (gx, gy) = gui_point((x, y));
+                let obj = self.changed_input_object(
+                    UserInputType::MouseMovement,
+                    (gx, gy, 0.0),
+                    (dx, dy),
+                );
                 if let Some(obj) = obj {
                     self.fire_input("InputChanged", obj);
                 }
@@ -183,7 +194,7 @@ impl DataModel {
                 }
             }
             InputEvent::Wheel { delta } => {
-                let pos = self.runtime.world().input.mouse;
+                let pos = gui_point(self.runtime.world().input.mouse);
                 // The wheel amount is in Position.Z (creator-docs InputObject).
                 let obj = self.changed_input_object(
                     UserInputType::MouseWheel,
@@ -271,7 +282,7 @@ impl DataModel {
         let Some(value) = key_code_value(code) else {
             return;
         };
-        let pos = self.runtime.world().input.mouse;
+        let pos = gui_point(self.runtime.world().input.mouse);
         if down {
             // Auto-repeat doesn't begin the input again.
             if !self.runtime.world_mut().input.keys.insert(value) {
@@ -320,7 +331,7 @@ impl DataModel {
         let pos = {
             let mut w = self.runtime.world_mut();
             w.input.buttons[index] = down;
-            w.input.mouse
+            gui_point(w.input.mouse)
         };
         let state = if down {
             UserInputState::Begin
@@ -417,8 +428,9 @@ impl DataModel {
             (hit, click_hit)
         };
         let point = hit.map_or(origin + dir * MOUSE_RANGE, |h| h.position);
-        let (mx, my) = self.runtime.world().input.mouse;
+        let (mx, my) = gui_point(self.runtime.world().input.mouse);
         let (vw, vh) = self.input.viewport;
+        let vh = (vh as f32 - rook_gui::GUI_INSET).max(0.0);
         let hit_cf = CFrame {
             position: point,
             rotation: camera.rotation,

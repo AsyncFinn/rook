@@ -1,0 +1,25 @@
+-- studio 0.743.0.7431133
+-- signals: deferred
+inset 0,58 screen height 58
+anchored -62,-6 210,71
+negative 93,15 -100,50
+in folder 200,0 200,150
+RelativeYY 0,0 150,150
+RelativeXX 200,150 200,200
+turned child 165,75 10,10
+rotation 105
+turned child, anchor 1,1 65,25 10,10
+size constraint 140,70 120,160
+min above max 100,75 200,150
+aspect fit 162.5,75 75,150
+aspect scale width 125,0 150,300
+aspect scale height 0,100 400,100
+scaled 0,0 400,300
+scaled child 200,0 200,150
+scaled box 800,600
+child of scaled box 400,150 200,150
+automatic 5,5 110,80
+automatic X 5,5 110,10
+automatic, anchored child 5,5 20,80
+automatic, padded 5,5 120,82
+padded child 19,57 100,30

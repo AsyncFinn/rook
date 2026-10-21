@@ -10,11 +10,13 @@
 
 mod clock;
 mod enums;
+mod gui;
 mod part;
 mod value;
 
 pub use clock::{clock_hours, time_of_day};
 pub use enums::{MeshType, RollOffMode, RunContext, UserInputState, UserInputType};
+pub use gui::GuiQuad;
 pub use part::collision::{Hull, UnionCollision};
 pub use part::material::{Material, MaterialSet, TilePattern};
 pub use part::mesh::{MeshHost, MeshKind, MeshLook, mesh_part_scale};

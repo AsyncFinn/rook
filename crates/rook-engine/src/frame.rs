@@ -22,6 +22,8 @@ impl DataModel {
             self.fire(rs, "RenderStepped", dt);
             self.fire(rs, "PreRender", dt);
         }
+        // Measured: GUI is laid out after RenderStepped.
+        self.runtime.sync_gui();
         self.update_content();
         self.advance_sounds(dt);
         self.update_audio(dt);

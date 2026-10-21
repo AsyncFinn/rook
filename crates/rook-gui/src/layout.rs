@@ -1,0 +1,419 @@
+//! Where every GUI object goes: its size from `Size`, `SizeConstraint`,
+//! `AutomaticSize` and the size constraints; its place from `Position` and
+//! `AnchorPoint`, or from a UIListLayout or UIGridLayout; turned about
+//! its ancestors' centres by their `Rotation` and scaled by UIScales
+//! (docs/behavior/gui.md#layout).
+
+mod automatic;
+mod constraints;
+mod grid;
+mod list;
+mod padding;
+
+use glam::Vec2;
+use rook_dom::{Dom, InstanceId};
+use rook_types::UDim2;
+use rustc_hash::FxHashMap;
+
+use padding::Inner;
+
+/// The top bar's height, which ScreenGuis start below unless they ignore
+/// the inset (measured: 58 pixels in Studio 0.742's client, with the
+/// current top bar; `GuiService:GetGuiInset()` says the same).
+pub const GUI_INSET: f32 = 58.0;
+
+/// Where a GUI object ended up.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct Placed {
+    /// Its centre on the screen.
+    pub(crate) center: Vec2,
+    /// Its size before UIScales, which its children's `Size` and
+    /// `Position` scale against.
+    pub(crate) local: Vec2,
+    /// The UIScales on it and its ancestors, multiplied.
+    pub(crate) scale: f32,
+    /// `AbsoluteRotation`, in degrees.
+    pub(crate) rotation: f32,
+}
+
+impl Placed {
+    /// What children of an unparented object are placed in: nothing, at
+    /// the origin (measured: an unparented Frame's `AbsoluteSize` is its
+    /// `Size` offsets, at (0, 0)).
+    const NOWHERE: Self = Self {
+        center: Vec2::ZERO,
+        local: Vec2::ZERO,
+        scale: 1.0,
+        rotation: 0.0,
+    };
+
+    pub(crate) fn size(&self) -> Vec2 {
+        self.local * self.scale
+    }
+
+    pub(crate) fn top_left(&self) -> Vec2 {
+        self.center - self.size() * 0.5
+    }
+
+    /// A point given in this object's own frame (pixels from its top left,
+    /// before scaling and turning), on the screen.
+    pub(crate) fn screen_point(self, local: Vec2) -> Vec2 {
+        self.center + turn(self.rotation, (local - self.local * 0.5) * self.scale)
+    }
+}
+
+/// `v` turned clockwise on the screen by `degrees` (y points down).
+pub(crate) fn turn(degrees: f32, v: Vec2) -> Vec2 {
+    if degrees == 0.0 {
+        return v;
+    }
+    let (sin, cos) = degrees.to_radians().sin_cos();
+    Vec2::new(v.x * cos - v.y * sin, v.x * sin + v.y * cos)
+}
+
+/// What a UIListLayout or UIGridLayout reports.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct Arranged {
+    /// `AbsoluteContentSize`.
+    pub(crate) content: Vec2,
+    /// A grid's `AbsoluteCellSize` and `AbsoluteCellCount`.
+    pub(crate) cells: Option<(Vec2, Vec2)>,
+}
+
+/// Every placed GUI object, and what each layout reports.
+#[derive(Debug, Default)]
+pub(crate) struct Layout {
+    pub(crate) placed: FxHashMap<InstanceId, Placed>,
+    pub(crate) arranged: FxHashMap<InstanceId, Arranged>,
+}
+
+impl Layout {
+    /// Lay out the GUI scripts see on the screen: every player's PlayerGui
+    /// and StarterGui. `previous` is the last layout, where hidden
+    /// children of a UI layout stay.
+    pub(crate) fn screens(dom: &Dom, previous: &Layout) -> Self {
+        let mut pass = Pass {
+            dom,
+            previous,
+            out: Layout::default(),
+            screen: screen_size(dom),
+        };
+        let players = dom.find_service("Players");
+        let holders = players
+            .into_iter()
+            .flat_map(|p| dom.children(p).iter().copied())
+            .filter_map(|p| dom.find_first_child_of_class(p, "PlayerGui"))
+            .chain(dom.find_service("StarterGui"));
+        for holder in holders {
+            for root in through_folders(dom, holder, |id| dom.is_a(id, "GuiBase2d")) {
+                pass.root(root);
+            }
+        }
+        pass.out
+    }
+
+    pub(crate) fn contains(&self, id: InstanceId) -> bool {
+        self.placed.contains_key(&id) || self.arranged.contains_key(&id)
+    }
+
+    /// Lay out the GUI tree holding `id` (a GUI object or a UI component
+    /// in it), from its topmost GUI ancestor.
+    pub(crate) fn add_tree(&mut self, dom: &Dom, id: InstanceId) {
+        let mut top = None;
+        let mut at = Some(id);
+        while let Some(i) = at {
+            if dom.is_a(i, "GuiBase2d") {
+                top = Some(i);
+            } else if dom.class_name(i) != "Folder" && !dom.is_a(i, "UIComponent") {
+                break;
+            }
+            at = dom.parent(i);
+        }
+        let Some(top) = top else {
+            return;
+        };
+        let mut pass = Pass {
+            dom,
+            previous: &Layout::default(),
+            out: std::mem::take(self),
+            screen: screen_size(dom),
+        };
+        pass.root(top);
+        *self = pass.out;
+    }
+}
+
+/// The window's size: the current camera's `ViewportSize`.
+fn screen_size(dom: &Dom) -> Vec2 {
+    dom.find_service("Workspace")
+        .and_then(|ws| dom.ref_property(ws, "CurrentCamera"))
+        .and_then(|c| dom.vector2_property(c, "ViewportSize"))
+        .map_or(Vec2::ZERO, |v| v.0)
+}
+
+/// `parent`'s children that pass `keep`, with Folders' children in their
+/// place (measured: a Frame in a Folder is placed in the Folder's parent).
+pub(crate) fn through_folders(
+    dom: &Dom,
+    parent: InstanceId,
+    keep: impl Fn(InstanceId) -> bool + Copy,
+) -> Vec<InstanceId> {
+    let mut out = Vec::new();
+    for &c in dom.children(parent) {
+        if dom.class_name(c) == "Folder" {
+            out.extend(through_folders(dom, c, keep));
+        } else if keep(c) {
+            out.push(c);
+        }
+    }
+    out
+}
+
+/// The GUI objects `parent` places.
+pub(crate) fn gui_children(dom: &Dom, parent: InstanceId) -> Vec<InstanceId> {
+    through_folders(dom, parent, |id| dom.is_a(id, "GuiObject"))
+}
+
+/// A child placed by a UI layout, with its size.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Kid {
+    pub(crate) id: InstanceId,
+    pub(crate) size: Vec2,
+}
+
+/// The UIListLayout or UIGridLayout placing `parent`'s children: its
+/// first one (measured: a UIListLayout added after a UIGridLayout changes
+/// nothing).
+fn arranger(dom: &Dom, parent: InstanceId) -> Option<InstanceId> {
+    dom.children(parent)
+        .iter()
+        .copied()
+        .find(|&c| dom.is_a(c, "UIGridStyleLayout"))
+}
+
+/// Where a UI layout puts each kid (its top left in the parent's inner
+/// area), what it reports, and the size it gives every kid (a grid's
+/// cell).
+pub(crate) struct Arrangement {
+    pub(crate) slots: Vec<Vec2>,
+    pub(crate) arranged: Arranged,
+    pub(crate) cell: Option<Vec2>,
+}
+
+/// Arrange `kids` (visible, in child order) with `layout` in `inner`.
+fn arrange(dom: &Dom, layout: InstanceId, kids: &[Kid], inner: Vec2) -> Arrangement {
+    let order = list::sorted(dom, layout, kids);
+    let kids: Vec<Kid> = order.iter().map(|&i| kids[i]).collect();
+    let mut out = if dom.is_a(layout, "UIGridLayout") {
+        grid::arrange(dom, layout, kids.len(), inner)
+    } else {
+        list::arrange(dom, layout, &kids, inner)
+    };
+    // Back to child order.
+    let mut slots = vec![Vec2::ZERO; order.len()];
+    for (slot, &i) in out.slots.iter().zip(&order) {
+        slots[i] = *slot;
+    }
+    out.slots = slots;
+    out
+}
+
+struct Pass<'a> {
+    dom: &'a Dom,
+    previous: &'a Layout,
+    out: Layout,
+    screen: Vec2,
+}
+
+impl Pass<'_> {
+    /// Lay out a tree from its top: a LayerCollector, or a GUI object
+    /// with no collector above it.
+    fn root(&mut self, top: InstanceId) {
+        let dom = self.dom;
+        if dom.is_a(top, "GuiObject") {
+            let inner = Inner::whole(Vec2::ZERO);
+            self.place_children(Placed::NOWHERE, &[top], inner, None);
+            return;
+        }
+        let (origin, local) = self.collector_area(top);
+        let scale = ui_scale(dom, top);
+        let placed = Placed {
+            center: origin + local * scale * 0.5,
+            local,
+            scale,
+            rotation: 0.0,
+        };
+        self.out.placed.insert(top, placed);
+        self.lay_out_inside(top, placed);
+    }
+
+    /// Where a LayerCollector's children go: the top left and size.
+    fn collector_area(&self, collector: InstanceId) -> (Vec2, Vec2) {
+        let dom = self.dom;
+        match dom.class_name(collector) {
+            "ScreenGui" => {
+                // Measured: CoreUISafeInsets (the default) starts below the
+                // top bar; IgnoreGuiInset covers the whole window.
+                // Inference: DeviceSafeInsets and None have no inset on a
+                // desktop.
+                let inset = dom.bool_property(collector, "IgnoreGuiInset") != Some(true)
+                    && dom.enum_item_property(collector, "ScreenInsets")
+                        == Some("CoreUISafeInsets");
+                let top = if inset { GUI_INSET } else { 0.0 };
+                (
+                    Vec2::new(0.0, top),
+                    (self.screen - Vec2::new(0.0, top)).max(Vec2::ZERO),
+                )
+            }
+            // Placeholders until world GUI arrives (ROADMAP M8 step 6).
+            "SurfaceGui" => (
+                Vec2::ZERO,
+                dom.vector2_property(collector, "CanvasSize")
+                    .map_or(Vec2::ZERO, |v| v.0),
+            ),
+            "BillboardGui" => {
+                let size = dom.udim2_property(collector, "Size").unwrap_or_default();
+                (
+                    Vec2::ZERO,
+                    Vec2::new(size.x.offset as f32, size.y.offset as f32),
+                )
+            }
+            _ => (Vec2::ZERO, Vec2::ZERO),
+        }
+    }
+
+    /// Lay out what `parent` (already placed) holds.
+    fn lay_out_inside(&mut self, parent: InstanceId, at: Placed) {
+        let dom = self.dom;
+        let kids = gui_children(dom, parent);
+        if kids.is_empty() {
+            return;
+        }
+        let inner = padding::inner(dom, parent, at.local);
+        self.place_children(at, &kids, inner, arranger(dom, parent));
+    }
+
+    /// Size and place `kids` in the `inner` area of their parent (placed
+    /// `at`), then lay out inside each.
+    fn place_children(
+        &mut self,
+        at: Placed,
+        kids: &[InstanceId],
+        inner: Inner,
+        layout: Option<InstanceId>,
+    ) {
+        let dom = self.dom;
+        let mut sizes: Vec<Vec2> = kids.iter().map(|&k| self.size_of(k, inner.size)).collect();
+        // Hidden children take no part in a UI layout (measured: they keep
+        // the place it last gave them).
+        let shown: Vec<usize> = (0..kids.len())
+            .filter(|&i| layout.is_none() || visible(dom, kids[i]))
+            .collect();
+        let mut slots: Vec<Option<Vec2>> = vec![None; kids.len()];
+        if let Some(layout) = layout {
+            let laid: Vec<Kid> = shown
+                .iter()
+                .map(|&i| Kid {
+                    id: kids[i],
+                    size: sizes[i],
+                })
+                .collect();
+            let arrangement = arrange(dom, layout, &laid, inner.size);
+            for (n, &i) in shown.iter().enumerate() {
+                slots[i] = Some(arrangement.slots[n]);
+                if let Some(cell) = arrangement.cell {
+                    sizes[i] = cell;
+                }
+            }
+            self.out.arranged.insert(layout, arrangement.arranged);
+        }
+        for (i, &kid) in kids.iter().enumerate() {
+            let size = sizes[i];
+            let (top_left, anchor) = match slots[i] {
+                Some(slot) => (inner.origin + slot, Vec2::ZERO),
+                None if layout.is_some() => {
+                    if let Some(&kept) = self.previous.placed.get(&kid) {
+                        self.out.placed.insert(kid, kept);
+                        self.lay_out_inside(kid, kept);
+                        continue;
+                    }
+                    (inner.origin, Vec2::ZERO)
+                }
+                None => {
+                    let anchor = vec2_or(dom, kid, "AnchorPoint", Vec2::ZERO);
+                    let position = resolve(position_of(dom, kid), inner.size);
+                    (inner.origin + position - size * anchor, anchor)
+                }
+            };
+            // A UIScale scales the object about its anchor point.
+            let k = ui_scale(dom, kid);
+            let pivot = top_left + size * anchor;
+            let center = pivot + size * k * (Vec2::splat(0.5) - anchor);
+            let placed = Placed {
+                center: at.screen_point(center),
+                local: size,
+                scale: at.scale * k,
+                rotation: at.rotation + dom.float_property(kid, "Rotation").unwrap_or(0.0),
+            };
+            self.out.placed.insert(kid, placed);
+            self.lay_out_inside(kid, placed);
+        }
+    }
+
+    /// A GUI object's size in a parent area of `parent` pixels: `Size`
+    /// by `SizeConstraint`, grown by `AutomaticSize`, then held by its
+    /// size constraints.
+    fn size_of(&mut self, id: InstanceId, parent: Vec2) -> Vec2 {
+        let dom = self.dom;
+        let base = base_size(dom, id, parent);
+        let room = (parent - resolve(position_of(dom, id), parent)).max(base);
+        let grown = automatic::grow(self, id, base, room);
+        constraints::apply(dom, id, grown, parent)
+    }
+}
+
+/// `Size` against the parent's area, by `SizeConstraint` (measured: it
+/// changes only the size, never `Position`).
+fn base_size(dom: &Dom, id: InstanceId, parent: Vec2) -> Vec2 {
+    let size = dom.udim2_property(id, "Size").unwrap_or_default();
+    let against = match dom.enum_item_property(id, "SizeConstraint") {
+        Some("RelativeXX") => Vec2::splat(parent.x),
+        Some("RelativeYY") => Vec2::splat(parent.y),
+        _ => parent,
+    };
+    resolve(size, against)
+}
+
+fn position_of(dom: &Dom, id: InstanceId) -> UDim2 {
+    dom.udim2_property(id, "Position").unwrap_or_default()
+}
+
+pub(crate) fn resolve(u: UDim2, parent: Vec2) -> Vec2 {
+    Vec2::new(u.x.resolve(parent.x), u.y.resolve(parent.y))
+}
+
+pub(crate) fn vec2_or(dom: &Dom, id: InstanceId, name: &str, default: Vec2) -> Vec2 {
+    dom.vector2_property(id, name).map_or(default, |v| v.0)
+}
+
+pub(crate) fn visible(dom: &Dom, id: InstanceId) -> bool {
+    dom.bool_property(id, "Visible") != Some(false)
+}
+
+/// A UI layout's `HorizontalAlignment` and `VerticalAlignment` as the
+/// share of the spare room before what it places.
+fn alignment(dom: &Dom, layout: InstanceId) -> Vec2 {
+    let share = |name| match dom.enum_item_property(layout, name) {
+        Some("Center") => 0.5,
+        Some("Right" | "Bottom") => 1.0,
+        _ => 0.0,
+    };
+    Vec2::new(share("HorizontalAlignment"), share("VerticalAlignment"))
+}
+
+/// The first UIScale's `Scale` on `id`, 1 without one.
+fn ui_scale(dom: &Dom, id: InstanceId) -> f32 {
+    dom.find_first_child_of_class(id, "UIScale")
+        .and_then(|s| dom.float_property(s, "Scale"))
+        .unwrap_or(1.0)
+}

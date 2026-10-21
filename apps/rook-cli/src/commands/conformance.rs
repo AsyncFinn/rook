@@ -17,6 +17,8 @@ mod studio;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use anyhow::Context;
+use rook_engine::session::Session;
 use rook_engine::{DataModel, InputEvent, Options, Server};
 
 /// Wraps a case. Both sides run exactly this code; Rook's copy reports the
@@ -146,19 +148,28 @@ pub(crate) fn record(root: &Path, filter: Option<&str>) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Run a case in Rook and return its output.
+/// Run a case in Rook and return its output. Client cases run on a
+/// player's client in a session, as in a Studio playtest.
 fn run_in_rook(case: &Case, deferred: bool) -> anyhow::Result<String> {
-    let mut server = if case.mouse.is_some() {
-        let mut client = DataModel::new_client(&Options::default())?;
-        client.set_viewport(800, 600);
-        client
-    } else {
-        Server::new(&Options::default())?
-    };
-    server.runtime().world_mut().signal_behavior = if deferred {
+    let behavior = if deferred {
         rook_lua::SignalBehavior::Deferred
     } else {
         rook_lua::SignalBehavior::Immediate
+    };
+    let server = Server::new(&Options::default())?;
+    server.runtime().world_mut().signal_behavior = behavior;
+    let mut session = Session::new(server, Options::default());
+    let client = match case.mouse {
+        Some(_) => {
+            let index = session.join("Player1", 1)?;
+            let client = session
+                .client_mut(index)
+                .context("the client didn't join")?;
+            client.set_viewport(800, 600);
+            client.runtime().world_mut().signal_behavior = behavior;
+            Some(index)
+        }
+        None => None,
     };
     let source = wrap(&case.source);
     let source = match source.rfind("return \"-- studio") {
@@ -169,7 +180,7 @@ fn run_in_rook(case: &Case, deferred: bool) -> anyhow::Result<String> {
         ),
         None => source,
     };
-    server
+    runs(&mut session, client)
         .runtime()
         .run_source("ServerScriptService.Conformance", &source, None)
         .map_err(|e| anyhow::anyhow!("{e}"))?;
@@ -178,18 +189,26 @@ fn run_in_rook(case: &Case, deferred: bool) -> anyhow::Result<String> {
     let mut log = Vec::new();
     for frame in 0..60 * 60 {
         if frame % 12 == 0
-            && let Some(&(x, y)) = moves.next()
+            && let (Some(index), Some(&(x, y))) = (client, moves.next())
         {
-            server.input(InputEvent::MouseMove { x, y });
+            session.input(index, InputEvent::MouseMove { x, y });
         }
-        log.extend(server.take_log());
+        log.extend(runs(&mut session, client).take_log());
         if let Some(entry) = log.iter().find(|e| e.message.starts_with(MARKER)) {
             return Ok(entry.message[MARKER.len()..].to_owned());
         }
-        server.step();
+        session.step();
     }
     let errors: Vec<_> = log.iter().map(|e| e.message.clone()).collect();
     anyhow::bail!("case did not finish within 60 s; output: {errors:?}")
+}
+
+/// The DataModel a case runs in: the joined client's, or the server's.
+fn runs(session: &mut Session, client: Option<usize>) -> &mut DataModel {
+    match client {
+        Some(index) => session.client_mut(index).expect("joined client"),
+        None => session.server_mut(),
+    }
 }
 
 /// Run every case that has an expectation in Rook and compare.

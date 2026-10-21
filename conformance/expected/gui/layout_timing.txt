@@ -1,0 +1,7 @@
+-- studio 0.743.0.7431133
+-- signals: deferred
+before a frame 0
+after a frame F 100, 50, C 50, 25
+set and set back 0
+read 40, 40
+after the read F 80, 80, C 40, 40

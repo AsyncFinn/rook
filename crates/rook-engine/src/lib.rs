@@ -199,6 +199,7 @@ impl DataModel {
         if w.physics.is_built() {
             w.physics.sync(&mut w.dom);
         }
+        w.gui.note_changes(&w.dom);
         let end = w.dom.journal().end();
         w.dom.journal_mut().trim(end);
     }

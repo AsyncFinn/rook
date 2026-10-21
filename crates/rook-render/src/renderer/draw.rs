@@ -101,7 +101,7 @@ impl Renderer {
 
         stage(&mut times.draws);
         let depth = self.depth_view(width, height);
-        let (frame, mask) = self.tonemap.frame(&self.device, width, height);
+        let (frame, mask, gui_layer) = self.tonemap.frame(&self.device, width, height);
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -129,8 +129,16 @@ impl Renderer {
             self.highlight_pass(&mut encoder, [&mask, &depth], &mut mask_runs, starts[2]);
         }
         let looks = highlighted.then_some(&looks);
-        self.tonemap
-            .record(&self.queue, &mut encoder, target, l.tonemapper, looks);
+        let gui = self
+            .gui
+            .record(&self.queue, &mut encoder, &gui_layer, (width, height));
+        self.tonemap.record(
+            &self.queue,
+            &mut encoder,
+            target,
+            l.tonemapper,
+            (looks, gui),
+        );
         if let Some(timer) = &mut self.timer {
             timer.resolve(&mut encoder, shadow.is_some());
         }

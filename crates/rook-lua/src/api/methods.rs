@@ -40,6 +40,7 @@ pub(crate) mod camera;
 mod characters;
 pub(crate) mod data_stores;
 mod effects;
+mod gui;
 mod http;
 mod input;
 mod materials;
@@ -241,6 +242,7 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
                 physics::native,
                 queries::native,
                 camera::native,
+                gui::native,
             ]
             .iter()
             .find_map(|topic| topic(owner, name));

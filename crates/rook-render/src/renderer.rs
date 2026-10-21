@@ -2,6 +2,7 @@
 
 mod draw;
 mod effects;
+mod gui;
 mod highlights;
 mod images;
 pub(crate) mod lighting;
@@ -16,6 +17,7 @@ mod transparent;
 use super::*;
 use effects::particles::GpuParticles;
 use effects::ribbons::GpuRibbons;
+use gui::GuiPass;
 use highlights::HighlightParts;
 pub(crate) use images::ImageBinding;
 pub(crate) use images::ImageSet;
@@ -107,6 +109,7 @@ pub struct Renderer {
     /// The frame the main pass draws into, and the pass taking it to the
     /// target.
     tonemap: Tonemap,
+    gui: GuiPass,
     /// The last frame's draw calls.
     draw_counts: DrawCounts,
     /// The GPU's pass times, once asked for ([`Renderer::time_gpu`]).
@@ -265,6 +268,7 @@ impl Renderer {
             info.name, info.backend, info.driver, info.driver_info
         );
         let tonemap = Tonemap::new(&device, color_format);
+        let gui = GuiPass::new(&device);
         let mut renderer = Self {
             gpu,
             device,
@@ -308,6 +312,7 @@ impl Renderer {
             water_phase: 0.0,
             depth: None,
             tonemap,
+            gui,
             draw_counts: DrawCounts::default(),
             timer: None,
             record_time: Default::default(),
@@ -335,6 +340,11 @@ impl Renderer {
         if let Some(gpu) = self.meshes.remove(&DrawShape::File(mesh)) {
             self.pool.remove(&gpu);
         }
+    }
+
+    /// Draw `quads` over the scene from now on, bottom first.
+    pub fn set_gui(&mut self, quads: &[GuiQuad]) {
+        self.gui.set(&self.device, &self.queue, quads);
     }
 
     /// Set the clock grass sways by and Beams' images scroll by, in

@@ -25,7 +25,7 @@ crates/
   rook-content      Content URIs, providers (Rook defaults, local Roblox install, packages, asset delivery), cache, decoders
   rook-physics      Assemblies, joints, constraints, collisions, queries — Roblox semantics over Rapier
   rook-humanoid     (planned) Humanoid state machine and character controller
-  rook-gui          (planned) GUI layout, text measurement, hit testing (engine-side; produces draw lists)
+  rook-gui          GUI layout, text measurement, hit testing (engine-side; produces draw lists)
   rook-audio        Mixer, SoundGroups, sound effects; the output device (cpal) behind its `output` feature
   rook-terrain      Terrain voxels (SmoothGrid decoding) and Roblox's surface-nets mesher
   rook-input        (planned) Keyboard/mouse/gamepad/touch -> UserInputService / ContextActionService
@@ -48,8 +48,8 @@ Dependencies only point downward:
 ```
 rook-types ← rook-reflection ← rook-dom ← rook-formats
                                   ↑
-      rook-content, rook-terrain, rook-physics, rook-audio, rook-net
-      (planned: rook-humanoid, rook-gui, rook-input)
+      rook-content, rook-terrain, rook-physics, rook-audio, rook-net, rook-gui
+      (planned: rook-humanoid, rook-input)
                                   ↑
                               rook-lua
                                   ↑
@@ -198,6 +198,8 @@ Scripts read some derived values synchronously: `AbsolutePosition`, `AbsoluteSiz
 ### GUI (`rook-gui`)
 
 Built from creator-docs and Studio observation only. Covers LayerCollectors (ScreenGui, SurfaceGui, BillboardGui), `UDim2` + `AnchorPoint` + `AutomaticSize`, the UI layouts, padding and constraints, `ZIndexBehavior`, `ClipsDescendants`, ScrollingFrame, `TextScaled`/`TextWrapped`/`RichText` (Parley), `ImageRectOffset`/`ScaleType`/`SliceCenter`, input hit-testing and GUI events. The output is draw lists for the renderer.
+
+Its `Gui` lives in `rook-lua`'s `World` beside the physics world, for the same reason: scripts read layout (`AbsoluteSize`), which lays out first when the journal shows GUI changed. The engine lays out once a frame after RenderStepped too, firing Changed for what moved. The draw list is `rook_types::GuiQuad`s, which `rook-view` hands the renderer; the renderer draws them into an 8-bit layer that the tone pass lays over the frame in sRGB.
 
 ### Rendering (`rook-render`)
 
