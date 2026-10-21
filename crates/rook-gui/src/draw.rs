@@ -1,6 +1,6 @@
 //! What the local player's ScreenGuis draw, in order: each visible GUI
 //! object's background and border (text and images come with ROADMAP M8
-//! steps 2 and 3). Order and clipping rules: docs/behavior/gui.md#drawing.
+//! steps 2 and 4). Order and clipping rules: docs/behavior/gui.md#drawing.
 
 use glam::Vec2;
 use rook_dom::{Dom, InstanceId};

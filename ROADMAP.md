@@ -252,14 +252,15 @@ It comes before characters: tools, health bars and leaderboards are GUI.
    UIPadding, UIScale and the size constraints; backgrounds and borders
    drawn.
 2. Text (Parley): fonts and `FontFace` weights, sizing, wrapping,
-   `TextScaled`, `RichText`.
-3. Images, 9-slice, ScrollingFrame.
-4. The modern UI objects, by files using them: UIListLayout's flex and
+   `TextScaled`, `RichText`; Hint 145 and Message 26, bars of text.
+3. SurfaceGui and BillboardGui in the world: signs, labels and name
+   tags. Text comes first: they're mostly TextLabels.
+4. Images, 9-slice, ScrollingFrame.
+5. Input: buttons, `TextBox`, GUI taking input before the 3D world;
+   ProximityPrompt (12 files).
+6. The modern UI objects, fewest files last: UIListLayout's flex and
    wrapping with UIFlexItem (43 files use UIListLayout), UICorner 35,
    UIGradient 31, UIStroke 22, CanvasGroup 9, ViewportFrame 5.
-5. Input: buttons, `TextBox`, GUI taking input before the 3D world.
-6. BillboardGui and SurfaceGui in the world; Hint and Message;
-   ProximityPrompt (12 files).
 7. The GUI Roblox draws itself (player list, backpack), from Core-Scripts
    (Apache-2.0) where they fit, and chat: TextChatService (62 files) and
    the legacy Chat.

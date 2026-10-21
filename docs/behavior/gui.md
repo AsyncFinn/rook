@@ -71,7 +71,7 @@ place the layout last gave them. Children sort by `SortOrder`:
 LayoutOrder, or Name by bytes (`Z` before `a`); ties keep child order.
 `AbsoluteContentSize` is what was placed.
 
-- **UIListLayout** (flex and `Wraps` are step 4): items follow each other
+- **UIListLayout** (flex and `Wraps` are step 6): items follow each other
   along `FillDirection`, `Padding` apart (its scale of the length that
   way); the run is aligned as a whole along it, each item on its own
   across it. Content is the run's length by the widest item.
@@ -126,6 +126,6 @@ Nested automatic sizes add up from the inside.
 - **Blending**: GUI blends over the finished screen's sRGB pixels
   (Inference, as Highlights measurably do): Rook draws GUI premultiplied
   into an 8-bit layer the tone pass lays over the frame.
-- Text, images, ScrollingFrame and the modern UI objects come with steps
-  2 to 4; only the local player's ScreenGuis draw until world GUI (step
-  6).
+- Text comes with step 2, world GUI (SurfaceGui, BillboardGui) with
+  step 3, images and ScrollingFrame with step 4 and the modern UI objects
+  with step 6; until step 3 only the local player's ScreenGuis draw.

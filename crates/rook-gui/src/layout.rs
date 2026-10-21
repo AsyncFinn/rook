@@ -265,7 +265,7 @@ impl Pass<'_> {
                     (self.screen - Vec2::new(0.0, top)).max(Vec2::ZERO),
                 )
             }
-            // Placeholders until world GUI arrives (ROADMAP M8 step 6).
+            // Placeholders until world GUI arrives (ROADMAP M8 step 3).
             "SurfaceGui" => (
                 Vec2::ZERO,
                 dom.vector2_property(collector, "CanvasSize")

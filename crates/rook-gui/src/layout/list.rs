@@ -1,4 +1,4 @@
-//! UIListLayout, without flex and wrapping (ROADMAP M8 step 4), and the
+//! UIListLayout, without flex and wrapping (ROADMAP M8 step 6), and the
 //! sort order every UI layout uses.
 
 use glam::Vec2;
