@@ -93,7 +93,7 @@ The server's blast is `rook_physics::Physics::blast` and `push`
 Explosions at the end of a frame and sets them off in the next step
 (`crates/rook-engine/src/bridges/explosions.rs`), firing `Hit` after the
 step. The look is five bursts on the particle emitters
-(`apps/rook-player/src/scene/effects/explosion.rs`, Approximations fitted
+(`crates/rook-view/src/effects/explosion.rs`, Approximations fitted
 to the stages above):
 
 | | Flash | Fireball | Smoke | Specks | Ring |

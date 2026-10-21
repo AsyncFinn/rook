@@ -15,7 +15,7 @@ under a PlayerGui (Inference: adornments draw there in Roblox). `Visible`
 off hides them, `Transparency` fades them, the default `Color3` is
 (13, 105, 172), and parts in front hide them unless noted. Rook draws
 them as extra entries riding along with their part
-(`apps/rook-player/src/scene/adornments/`), and any change to one
+(`crates/rook-view/src/adornments/`), and any change to one
 redraws its part.
 
 **Colours.** Studio draws most adornments in their colour without light,

@@ -1,2 +1,26 @@
 # rook-dom defines Dom::property_by_name and the typed readers built on it,
-# so the workspace's disallowed-methods rule doesn't apply here.
+# so the workspace's property_by_name rule doesn't apply here. Clippy
+# reads only this file for rook-dom, so the workspace's platform bans are
+# copied (keep them in step with the root clippy.toml).
+disallowed-methods = [
+    { path = "std::thread::spawn", reason = "use rook_platform::get().threads, or .workers for short work" },
+    { path = "std::thread::scope", reason = "use rook_platform::get().workers" },
+    { path = "std::fs::read", reason = "use rook_platform::get().files" },
+    { path = "std::fs::read_to_string", reason = "use rook_platform::get().files" },
+    { path = "std::fs::read_dir", reason = "use rook_platform::get().files" },
+    { path = "std::fs::write", reason = "use rook_platform::get().files" },
+    { path = "std::fs::copy", reason = "use rook_platform::get().files" },
+    { path = "std::fs::rename", reason = "use rook_platform::get().files" },
+    { path = "std::fs::create_dir", reason = "use rook_platform::get().files" },
+    { path = "std::fs::create_dir_all", reason = "use rook_platform::get().files" },
+    { path = "std::fs::remove_file", reason = "use rook_platform::get().files" },
+    { path = "std::fs::remove_dir", reason = "use rook_platform::get().files" },
+    { path = "std::fs::remove_dir_all", reason = "use rook_platform::get().files" },
+    { path = "std::fs::metadata", reason = "use rook_platform::get().files" },
+    { path = "std::fs::canonicalize", reason = "use rook_platform::get().files" },
+]
+disallowed-types = [
+    { path = "std::thread::Builder", reason = "use rook_platform::get().threads" },
+    { path = "std::fs::File", reason = "use rook_platform::get().files" },
+    { path = "std::fs::OpenOptions", reason = "use rook_platform::get().files" },
+]

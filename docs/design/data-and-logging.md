@@ -88,7 +88,7 @@ Each run of the player writes one file, `logs\rook-player-<time>.log`. `rook-too
 
 ## Failures carry their reason
 
-Content failures are `rook_content::Failure`: a `FailureKind` (`not-found`, `forbidden`, `unsupported`, `offline`, `network`, `invalid`, `unknown-version`) and a message. The decoders return typed errors (`MeshError`, `ImageError`, `AudioError`). The loader turns them into failures, keeping "a version Rook can't read yet" (`unknown-version`) apart from "damaged or not that kind of file" (`invalid`). The player's scene keeps each failed file's failure and logs it where the instance path is known (`scene::content::report`). See the error rule in [CONTRIBUTING](../../CONTRIBUTING.md#errors).
+Content failures are `rook_content::Failure`: a `FailureKind` (`not-found`, `forbidden`, `unsupported`, `offline`, `network`, `invalid`, `unknown-version`) and a message. The decoders return typed errors (`MeshError`, `ImageError`, `AudioError`). The loader turns them into failures, keeping "a version Rook can't read yet" (`unknown-version`) apart from "damaged or not that kind of file" (`invalid`). `rook-view`'s scene keeps each failed file's failure and logs it where the instance path is known (`rook_view::content::report`). See the error rule in [CONTRIBUTING](../../CONTRIBUTING.md#errors).
 
 `rook-tools content <place>` lists every content reference in a place and what became of it: where it came from, or why it didn't load or decode.
 

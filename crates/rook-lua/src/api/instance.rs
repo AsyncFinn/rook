@@ -6,6 +6,7 @@
 
 use std::ffi::c_void;
 
+use crate::signal::SignalKind;
 use mlua::{
     AnyUserData, Function, LightUserData, Lua, MultiValue, UserData, UserDataFields,
     Value as LuaValue,
@@ -15,7 +16,6 @@ use rook_reflection::members::Security;
 use rook_reflection::{
     ClassId, EnumId, PropertyFlags, PropertyId, PropertyType, Scriptability, database, members,
 };
-use rook_signal::SignalKind;
 use rook_types::{InstanceRef, Value};
 use rustc_hash::FxHashMap;
 

@@ -115,4 +115,8 @@ impl Mesh {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::disallowed_methods,
+    reason = "tests set up files on the machine running them"
+)]
 mod tests;

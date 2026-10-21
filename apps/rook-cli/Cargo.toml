@@ -18,6 +18,7 @@ rook-types.workspace = true
 rook-reflection.workspace = true
 rook-formats.workspace = true
 rook-engine.workspace = true
+rook-platform = { workspace = true, features = ["native"] }
 rook-lua.workspace = true
 rook-content.workspace = true
 rook-terrain.workspace = true

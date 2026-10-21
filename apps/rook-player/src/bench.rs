@@ -79,7 +79,7 @@ pub(crate) fn bench(
         camera.rotation = turn * camera.rotation;
         let t = Instant::now();
         renderer.set_time(frame as f32 / 60.0);
-        if refresh(&mut cache, game.view_mut(), &mut renderer, camera.position) {
+        if cache.refresh(game.view_mut(), &mut renderer, camera.position) {
             m.updates += 1;
         }
         m.build += secs(t);

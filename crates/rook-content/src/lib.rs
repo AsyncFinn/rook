@@ -187,6 +187,10 @@ impl fmt::Display for Failure {
 impl std::error::Error for Failure {}
 
 #[cfg(test)]
+#[expect(
+    clippy::disallowed_methods,
+    reason = "tests set up files on the machine running them"
+)]
 pub(crate) mod tests {
     use std::path::PathBuf;
 

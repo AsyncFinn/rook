@@ -16,7 +16,6 @@ pub mod crash;
 mod files;
 mod layer;
 
-use std::fs::File;
 use std::io::{LineWriter, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -132,7 +131,7 @@ pub struct Options {
 
 /// The run's log file and the last lines for a crash report.
 struct Sink {
-    file: Option<LineWriter<File>>,
+    file: Option<LineWriter<Box<dyn Write + Send>>>,
     path: Option<PathBuf>,
 }
 
@@ -224,14 +223,15 @@ pub fn init(options: &Options) {
 }
 
 fn open_file(logs: &Path, program: &str, problems: &mut Vec<String>) {
-    if let Err(e) = std::fs::create_dir_all(logs) {
+    let files = &rook_platform::get().files;
+    if let Err(e) = files.create_dir_all(logs) {
         problems.push(format!("couldn't make {}: {e}", logs.display()));
         return;
     }
     cleanup(logs);
     cleanup(&logs.join("crashes"));
     let path = logs.join(format!("{program}-{}.log", files::stamp()));
-    match File::create(&path) {
+    match files.create(&path) {
         Ok(file) => {
             let mut sink = SINK
                 .lock()

@@ -1,6 +1,31 @@
+# Crates in crates/ are portable: they reach the host machine only through
+# rook-platform (docs/design/architecture.md §2). apps/clippy.toml lifts
+# these bans for the apps, which own the host. A crate with a clippy.toml
+# of its own (rook-dom, rook-platform) gets none of this file: clippy
+# reads only the nearest one, so each copies what still applies to it.
 disallowed-methods = [
     # Outside rook-dom, properties are read through Dom's typed readers
     # (`float_property`, `enum_item_property`, ...); a raw Value read needs
     # an allow with its reason.
     { path = "rook_dom::Dom::property_by_name", reason = "use a typed reader such as Dom::float_property" },
+    { path = "std::thread::spawn", reason = "use rook_platform::get().threads, or .workers for short work" },
+    { path = "std::thread::scope", reason = "use rook_platform::get().workers" },
+    { path = "std::fs::read", reason = "use rook_platform::get().files" },
+    { path = "std::fs::read_to_string", reason = "use rook_platform::get().files" },
+    { path = "std::fs::read_dir", reason = "use rook_platform::get().files" },
+    { path = "std::fs::write", reason = "use rook_platform::get().files" },
+    { path = "std::fs::copy", reason = "use rook_platform::get().files" },
+    { path = "std::fs::rename", reason = "use rook_platform::get().files" },
+    { path = "std::fs::create_dir", reason = "use rook_platform::get().files" },
+    { path = "std::fs::create_dir_all", reason = "use rook_platform::get().files" },
+    { path = "std::fs::remove_file", reason = "use rook_platform::get().files" },
+    { path = "std::fs::remove_dir", reason = "use rook_platform::get().files" },
+    { path = "std::fs::remove_dir_all", reason = "use rook_platform::get().files" },
+    { path = "std::fs::metadata", reason = "use rook_platform::get().files" },
+    { path = "std::fs::canonicalize", reason = "use rook_platform::get().files" },
+]
+disallowed-types = [
+    { path = "std::thread::Builder", reason = "use rook_platform::get().threads" },
+    { path = "std::fs::File", reason = "use rook_platform::get().files" },
+    { path = "std::fs::OpenOptions", reason = "use rook_platform::get().files" },
 ]

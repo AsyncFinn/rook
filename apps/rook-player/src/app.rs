@@ -207,12 +207,8 @@ impl App {
         }
         if let Some(gfx) = &mut self.gfx {
             let camera = self.camera.camera.position;
-            refresh(
-                &mut self.scene,
-                self.game.view_mut(),
-                &mut gfx.renderer,
-                camera,
-            );
+            self.scene
+                .refresh(self.game.view_mut(), &mut gfx.renderer, camera);
         }
     }
 

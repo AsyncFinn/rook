@@ -12,15 +12,15 @@ rust-version = "1.97.1"
 
 [workspace.dependencies]
 # Rook crates
+rook-platform = { path = "crates/rook-platform" }
 rook-types = { path = "crates/rook-types" }
 rook-reflection = { path = "crates/rook-reflection" }
 rook-formats = { path = "crates/rook-formats" }
 rook-dom = { path = "crates/rook-dom" }
-rook-signal = { path = "crates/rook-signal" }
-rook-scheduler = { path = "crates/rook-scheduler" }
 rook-lua = { path = "crates/rook-lua" }
 rook-engine = { path = "crates/rook-engine" }
 rook-render = { path = "crates/rook-render" }
+rook-view = { path = "crates/rook-view" }
 rook-net = { path = "crates/rook-net" }
 rook-physics = { path = "crates/rook-physics" }
 rook-content = { path = "crates/rook-content" }
@@ -72,7 +72,8 @@ walkdir = "2"
 blake3 = "1"
 # rook-player's allocator (the system one is slow on big heaps)
 mimalloc = "0.1"
-# Asset delivery (rook-content): rustls and gzip, no async runtime
+# HTTPS (rook-platform's `native` network, for asset delivery): rustls
+# and gzip, no async runtime
 ureq = "3"
 # Roblox mesh files, versions 1.00 to 5.00 (rook-content)
 rbx_mesh = { version = "0.8.2", default-features = false }

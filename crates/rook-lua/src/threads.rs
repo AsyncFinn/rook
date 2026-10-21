@@ -2,10 +2,10 @@
 
 pub(crate) mod watchdog;
 
+use crate::signal::{FireArgs, Firing, SignalKey};
 use mlua::prelude::LuaThreadStatus as ThreadStatus;
 use mlua::{Function, IntoLuaMulti, Lua, MultiValue, Table, Thread, Value as LuaValue};
 use rook_dom::{Change, InstanceId};
-use rook_signal::{FireArgs, Firing, SignalKey};
 
 use crate::api::instance::push_instance;
 use crate::ctx::{lua_error_message, with_world};
@@ -378,7 +378,7 @@ pub(crate) fn dispatch(lua: &Lua, start: u64) {
             if w.signals.is_empty() {
                 return None;
             }
-            Some(rook_signal::expand(change, &w.signals))
+            Some(crate::signal::expand(change, &w.signals))
         });
         for firing in firings.into_iter().flatten() {
             if let Some(args) = firing_args(lua, &firing) {

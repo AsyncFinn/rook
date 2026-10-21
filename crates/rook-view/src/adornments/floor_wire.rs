@@ -69,7 +69,7 @@ pub(super) fn floor_wire(dom: &Dom, id: InstanceId, from: CFrame) -> Vec<(PartIn
 /// aren't drawn. Rook takes faces and floors from the parts' world boxes
 /// (Approximation: a turned part's box reaches past it), the floor under
 /// where the wire drops (Inference).
-pub(in crate::scene) fn path(dom: &Dom, id: InstanceId) -> Option<Vec<Vec3>> {
+pub(crate) fn path(dom: &Dom, id: InstanceId) -> Option<Vec<Vec3>> {
     let (from, to) = (dom.ref_property(id, "From")?, dom.ref_property(id, "To")?);
     let (a, b) = (world_box(dom, from)?, world_box(dom, to)?);
     let (pa, pb) = (a.0, b.0);

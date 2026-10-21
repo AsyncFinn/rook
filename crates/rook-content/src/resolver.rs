@@ -1,10 +1,19 @@
 //! The provider chain: a reference goes to each provider in turn until one
 //! has it.
 
+#[expect(
+    clippy::disallowed_methods,
+    clippy::disallowed_types,
+    reason = "the content cache, install lookup and decode workers are rook-platform's known exception (architecture §2)"
+)]
 pub mod cache;
 mod config;
 pub mod defaults;
 pub mod delivery;
+#[expect(
+    clippy::disallowed_methods,
+    reason = "the content cache, install lookup and decode workers are rook-platform's known exception (architecture §2)"
+)]
 pub mod install;
 pub mod kept;
 
@@ -51,6 +60,7 @@ impl Resolver {
                     // reading can't be deleted on Windows, and a deleted one
                     // is fetched again.
                     let trimmed = cache.clone();
+                    #[expect(clippy::disallowed_types, reason = "the content cache, install lookup and decode workers are rook-platform's known exception (architecture §2)")]
                     let trim = std::thread::Builder::new()
                         .name("rook-cache-trim".into())
                         .spawn(move || trimmed.trim(max));
@@ -117,6 +127,10 @@ impl Resolver {
     /// content needed at startup, such as the head mesh.
     pub fn resolve_local(&self, r: &ContentRef) -> Option<Fetched> {
         let (kind, file) = self.locate_local(r)?;
+        #[expect(
+            clippy::disallowed_methods,
+            reason = "the content cache, install lookup and decode workers are rook-platform's known exception (architecture §2)"
+        )]
         let bytes = std::fs::read(&file)
             .map_err(|e| tracing::warn!(target: "content", "{}: {e}", file.display()))
             .ok()?;
@@ -350,6 +364,10 @@ fn find_file(root: &Path, path: &str) -> Option<PathBuf> {
     // Case-sensitive file systems: match each part without case.
     let mut dir = root.to_path_buf();
     for part in parts {
+        #[expect(
+            clippy::disallowed_methods,
+            reason = "the content cache, install lookup and decode workers are rook-platform's known exception (architecture §2)"
+        )]
         let entry = std::fs::read_dir(&dir).ok()?.flatten().find(|e| {
             e.file_name()
                 .to_str()
@@ -361,4 +379,8 @@ fn find_file(root: &Path, path: &str) -> Option<PathBuf> {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::disallowed_methods,
+    reason = "tests set up files on the machine running them"
+)]
 mod tests;

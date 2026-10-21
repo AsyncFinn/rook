@@ -46,9 +46,9 @@ impl Repl {
             return None;
         }
         let (tx, rx) = channel();
-        std::thread::Builder::new()
-            .name("repl".into())
-            .spawn(move || read(&tx))
+        rook_platform::get()
+            .threads
+            .spawn("repl", Box::new(move || read(&tx)))
             .ok()?;
         print_message(MessageType::Info, HELP);
         Some(Self {
@@ -116,7 +116,7 @@ fn read(tx: &Sender<String>) {
     // History from earlier runs, kept in the data folder's state.
     let history = crate::data_folder::DataDir::locate().map(|d| d.repl_history());
     if let Some(path) = &history
-        && path.exists()
+        && rook_platform::get().files.exists(path)
         && let Err(e) = editor.load_history(path)
     {
         tracing::debug!(target: "rook", "couldn't read {}: {e}", path.display());
@@ -142,7 +142,7 @@ fn read(tx: &Sender<String>) {
                 {
                     let saved = path
                         .parent()
-                        .map_or(Ok(()), std::fs::create_dir_all)
+                        .map_or(Ok(()), |dir| rook_platform::get().files.create_dir_all(dir))
                         .map_err(ReadlineError::from)
                         .and_then(|()| editor.append_history(path));
                     if let Err(e) = saved {

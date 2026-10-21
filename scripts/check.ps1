@@ -1,4 +1,5 @@
-# The gate every change must pass: formatting, clippy (warnings are errors), tests.
+# The gate every change must pass: formatting, clippy (warnings are errors),
+# tests, and cargo-deny's bans (`cargo install cargo-deny`).
 $ErrorActionPreference = "Stop"
 Set-Location (Join-Path $PSScriptRoot "..")
 cargo fmt --all -- --check
@@ -6,6 +7,9 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 cargo clippy --workspace --all-targets -- -D warnings
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 cargo test --workspace
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+# Only the allowed crates depend on winit, cpal, ureq and rayon (deny.toml).
+cargo deny check bans
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 # Copied functions, long comment blocks, environment reads below rook-engine
 # (apps/rook-cli/src/commands/drift.rs).

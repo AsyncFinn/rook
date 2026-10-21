@@ -9,6 +9,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+rook-platform.workspace = true
 rook-types.workspace = true
 rook-dom.workspace = true
 rook-reflection.workspace = true
@@ -18,6 +19,9 @@ rustc-hash.workspace = true
 glam.workspace = true
 profiling.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+rook-platform = { workspace = true, features = ["native"] }
 
 [lints]
 workspace = true

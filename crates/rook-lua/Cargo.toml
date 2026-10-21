@@ -11,11 +11,10 @@ rust-version.workspace = true
 [dependencies]
 tracing.workspace = true
 rustc-hash.workspace = true
+slotmap.workspace = true
 rook-types.workspace = true
 rook-reflection.workspace = true
 rook-dom.workspace = true
-rook-signal.workspace = true
-rook-scheduler.workspace = true
 rook-physics.workspace = true
 rook-terrain.workspace = true
 rook-content.workspace = true

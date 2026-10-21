@@ -1,0 +1,4 @@
+# rook-platform is the portable crates' one route to the host, and its
+# `native` implementations are where std::fs and std::thread are called,
+# so the workspace clippy.toml's platform bans don't apply here (this
+# file replaces it).

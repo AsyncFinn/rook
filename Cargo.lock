@@ -3083,6 +3083,7 @@ dependencies = [
  "rook-engine",
  "rook-formats",
  "rook-lua",
+ "rook-platform",
  "rook-reflection",
  "rook-terrain",
  "rook-types",
@@ -3104,12 +3105,12 @@ dependencies = [
  "rbx_mesh",
  "rbx_types",
  "rook-formats",
+ "rook-platform",
  "rook-types",
  "serde_json",
  "symphonia",
  "thiserror 2.0.21",
  "tracing",
- "ureq",
  "windows-sys 0.61.2",
  "zstd",
 ]
@@ -3145,8 +3146,8 @@ dependencies = [
  "rook-lua",
  "rook-net",
  "rook-physics",
+ "rook-platform",
  "rook-reflection",
- "rook-scheduler",
  "rook-terrain",
  "rook-types",
  "rustyline",
@@ -3186,12 +3187,11 @@ dependencies = [
  "rook-dom",
  "rook-physics",
  "rook-reflection",
- "rook-scheduler",
- "rook-signal",
  "rook-terrain",
  "rook-types",
  "rustc-hash 2.1.3",
  "serde_json",
+ "slotmap",
  "tracing",
 ]
 
@@ -3214,6 +3214,7 @@ dependencies = [
  "profiling",
  "rapier3d",
  "rook-dom",
+ "rook-platform",
  "rook-reflection",
  "rook-terrain",
  "rook-types",
@@ -3222,11 +3223,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "rook-platform"
+version = "0.7.0"
+dependencies = [
+ "rayon",
+ "ureq",
+]
+
+[[package]]
 name = "rook-player"
 version = "0.7.0"
 dependencies = [
  "anyhow",
- "blake3",
  "clap",
  "fs-err",
  "glam 0.34.0",
@@ -3234,17 +3242,18 @@ dependencies = [
  "mimalloc",
  "pollster",
  "profiling",
- "rayon",
  "rook-audio",
  "rook-content",
  "rook-dom",
  "rook-engine",
  "rook-lua",
  "rook-physics",
+ "rook-platform",
  "rook-reflection",
  "rook-render",
  "rook-terrain",
  "rook-types",
+ "rook-view",
  "tracing",
  "wgpu",
  "winit",
@@ -3272,28 +3281,14 @@ dependencies = [
  "naga",
  "pollster",
  "profiling",
- "rayon",
  "rook-content",
+ "rook-platform",
  "rook-types",
  "rustc-hash 2.1.3",
  "thiserror 2.0.21",
  "wesl",
  "wesl-core",
  "wgpu",
-]
-
-[[package]]
-name = "rook-scheduler"
-version = "0.7.0"
-
-[[package]]
-name = "rook-signal"
-version = "0.7.0"
-dependencies = [
- "rook-dom",
- "rook-reflection",
- "rustc-hash 2.1.3",
- "slotmap",
 ]
 
 [[package]]
@@ -3315,6 +3310,27 @@ dependencies = [
  "rbx_types",
  "rook-reflection",
  "thiserror 2.0.21",
+]
+
+[[package]]
+name = "rook-view"
+version = "0.7.0"
+dependencies = [
+ "blake3",
+ "glam 0.34.0",
+ "image",
+ "profiling",
+ "rook-content",
+ "rook-dom",
+ "rook-engine",
+ "rook-lua",
+ "rook-physics",
+ "rook-platform",
+ "rook-reflection",
+ "rook-render",
+ "rook-terrain",
+ "rook-types",
+ "tracing",
 ]
 
 [[package]]

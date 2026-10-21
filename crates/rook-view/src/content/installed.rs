@@ -1,26 +1,32 @@
 //! What the renderer takes from the user's Roblox install.
 
-use crate::*;
+use rook_content::decode::image::Image;
+use rook_content::decode::mesh::Mesh;
+use rook_content::{ContentRef, Resolver};
+use rook_engine::console;
+use rook_lua::MessageType;
+use rook_render::Renderer;
 
 /// What the renderer takes from the user's Roblox install, read from disk
 /// at startup: the Head MeshType's mesh, the surface patterns, water's
 /// normal frames and the BRDF table reflections go by. Without an install
 /// (or the files), Rook draws its own (and flat water).
-pub(crate) struct Installed {
-    pub(crate) head: Option<Mesh>,
+#[derive(Debug)]
+pub struct Installed {
+    pub head: Option<Mesh>,
     /// `textures/studs.dds`: the studs, lattice, inlet and universal tiles.
-    pub(crate) surfaces: Option<Image>,
+    pub surfaces: Option<Image>,
     /// `textures/water/normal_01.dds` to `normal_25.dds`, when all load.
-    pub(crate) water: Option<Vec<Image>>,
+    pub water: Option<Vec<Image>>,
     /// `textures/brdfLUT.dds`: its side and its pairs of half floats.
-    pub(crate) brdf: Option<(u32, Vec<u8>)>,
+    pub brdf: Option<(u32, Vec<u8>)>,
 }
 
 /// How many water normal frames the install has (measured: Studio plays 25).
 const WATER_FRAMES: usize = 25;
 
 impl Installed {
-    pub(crate) fn find(content: &Resolver) -> Self {
+    pub fn find(content: &Resolver) -> Self {
         let read = |path: &str| {
             let fetched = content.resolve_local(&ContentRef::File(path.into()))?;
             Some((fetched.source.location, fetched.bytes))
@@ -59,7 +65,7 @@ impl Installed {
         }
     }
 
-    pub(crate) fn apply(&self, renderer: &mut Renderer) {
+    pub fn apply(&self, renderer: &mut Renderer) {
         if let Some(head) = &self.head {
             renderer.set_head_mesh(head);
         }

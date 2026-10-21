@@ -135,7 +135,7 @@ The same scenes as `rook-player --screenshot` rbxlx copies, same camera
 ## How Rook does it
 
 `rook-player`'s scene keeps every PointLight, SpotLight and SurfaceLight
-under a part or an Attachment in Workspace (`apps/rook-player/src/scene/lighting/local.rs`); disabled
+under a part or an Attachment in Workspace (`crates/rook-view/src/lighting/local.rs`); disabled
 lights stay in the list at Brightness 0 so that scripts switching lights
 on and off rewrite only colours. Each light keeps the box of the part it
 hangs from, which doesn't shadow it. Scripts changing a light, its
@@ -291,7 +291,7 @@ plus a highlight that takes no albedo:
   blue. Not modelled.
 
 Rook (`sun_light` and `shade_pbr` in `shaders/lighting.wgsl`;
-`sun_color` in `apps/rook-player/src/scene/lighting.rs`) adds the sun and
+`sun_color` in `crates/rook-view/src/lighting.rs`) adds the sun and
 its highlight in light units as above: `Lighting::sun_color` is
 0.5 × Brightness, yellowed near the horizon (1 − e^(−y/0.04) on red and
 green, a smoothstep from y = 0.045 to 0.15 on blue; fitted), or the

@@ -1,0 +1,23 @@
+[package]
+name = "rook-platform"
+description = "The host machine as the portable Rook crates reach it: files, threads, workers, network"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[features]
+# The desktop implementation: std files and threads, Rayon's workers and
+# ureq. Only apps turn it on (and crates' own tests, as dev-dependencies);
+# a portable crate never does, so a host without threads or a file system
+# can install its own (docs/design/architecture.md §2).
+native = ["dep:rayon", "dep:ureq"]
+
+[dependencies]
+rayon = { workspace = true, optional = true }
+ureq = { workspace = true, optional = true }
+
+[lints]
+workspace = true

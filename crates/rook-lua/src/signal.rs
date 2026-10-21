@@ -1,13 +1,13 @@
 //! `RBXScriptSignal` bookkeeping: connections, firing order, and turning
 //! DOM journal entries into signal firings.
 //!
-//! This crate knows nothing about Lua. Handlers are an opaque `H` chosen by
+//! This module knows nothing about Lua. Handlers are an opaque `H` chosen by
 //! the caller, and whether a firing runs now (Immediate) or later (Deferred)
 //! is the caller's policy. See `docs/design/architecture.md` §6.
 
 mod expand;
 
-pub use expand::{FireArgs, Firing, expand};
+pub(crate) use expand::{FireArgs, Firing, expand};
 
 use rook_dom::InstanceId;
 use rook_reflection::PropertyId;
@@ -54,7 +54,7 @@ struct Connection<H> {
 /// Maximum nesting of Immediate signal handlers. Firing a signal from inside
 /// handlers nested this deep raises an error instead (Confirmed: creator-docs,
 /// "Event behavior").
-pub const MAX_REENTRANCY: u32 = 10;
+pub(crate) const MAX_REENTRANCY: u32 = 10;
 
 /// Every connection in one DataModel.
 #[derive(Debug)]

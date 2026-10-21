@@ -14,4 +14,8 @@ pub use material::{TerrainMaterial, all_packs};
 pub use mesh::{ChunkMesh, Facing, Layer, MESH_REACH, Seam, chunks_to_mesh, mesh_chunk};
 
 #[cfg(test)]
+#[expect(
+    clippy::disallowed_methods,
+    reason = "tests set up files on the machine running them"
+)]
 mod tests;

@@ -12,11 +12,11 @@ use super::handle_adornment::{line_pixels, shaded, shift};
 use super::*;
 
 /// Each WireframeHandleAdornment's lines so far, in its CFrame's axes.
-pub(in crate::scene) type WireLines = HashMap<InstanceId, Vec<[Vec3; 2]>>;
+pub(crate) type WireLines = HashMap<InstanceId, Vec<[Vec3; 2]>>;
 
 /// Apply scripts' calls on WireframeHandleAdornments to `lines`. Returns
 /// the parts whose wireframes changed.
-pub(in crate::scene) fn note_calls(
+pub(crate) fn note_calls(
     dom: &Dom,
     lines: &mut WireLines,
     calls: &[(InstanceId, EffectCall)],

@@ -8,7 +8,6 @@
 use rapier3d::parry::query::RayCullingMode;
 use rapier3d::parry::shape::TriMesh;
 use rapier3d::prelude::*;
-use rapier3d::rayon::prelude::*;
 use rook_dom::{Dom, InstanceId};
 use rook_terrain::{
     CHUNK_VOXELS, ChunkMesh, Grid, TerrainMaterial, VOXEL_STUDS, chunk_of, chunks_to_mesh,
@@ -200,7 +199,7 @@ impl Physics {
     }
 
     /// Build the colliders of these chunks (unbuilt ones, each once).
-    fn build_chunks(&mut self, chunks: Vec<glam::IVec3>) {
+    fn build_chunks(&mut self, chunks: &[glam::IVec3]) {
         let (Some(terrain), Some(body)) = (self.terrain.instance, self.terrain.body) else {
             return;
         };
@@ -208,13 +207,15 @@ impl Physics {
             "Physics::build_terrain",
             &format!("{} chunks", chunks.len())
         );
-        for c in &chunks {
+        for c in chunks {
             self.terrain.unbuilt.remove(c);
         }
         let grid = &self.terrain.grid;
-        let pieces: Vec<Piece> = chunks
-            .into_par_iter()
-            .flat_map_iter(|c| pieces(mesh_chunk(grid, c)))
+        let pieces: Vec<Piece> = rook_platform::get()
+            .workers
+            .map(chunks, |&c| pieces(mesh_chunk(grid, c)))
+            .into_iter()
+            .flatten()
             .collect();
         let (solver, collision) = self.terrain.groups;
         let params = self.world.integration_parameters;

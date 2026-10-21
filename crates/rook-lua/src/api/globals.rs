@@ -4,8 +4,8 @@
 //! The list follows creator-docs "Roblox globals" and the `task` library
 //! page.
 
+use crate::scheduler::{LEGACY_MIN_WAIT, Queue};
 use mlua::{Function, Lua, MultiValue, Table, Thread, Value as LuaValue};
-use rook_scheduler::{LEGACY_MIN_WAIT, Queue};
 
 mod instance_new;
 mod new_name;
@@ -193,7 +193,7 @@ fn install_engine_helpers(lua: &Lua) -> mlua::Result<()> {
                 };
                 crate::threads::fire(
                     lua,
-                    &rook_signal::SignalKey::event(id, event),
+                    &crate::signal::SignalKey::event(id, event),
                     &args.into_iter().collect::<Vec<_>>(),
                 );
                 Ok(())

@@ -1,0 +1,6 @@
+# Apps own the host machine, so the workspace clippy.toml's platform bans
+# (std::fs, std::thread) don't apply here; its other rules do, copied,
+# because clippy reads only the nearest clippy.toml.
+disallowed-methods = [
+    { path = "rook_dom::Dom::property_by_name", reason = "use a typed reader such as Dom::float_property" },
+]

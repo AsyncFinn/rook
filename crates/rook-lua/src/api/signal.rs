@@ -1,8 +1,8 @@
 //! RBXScriptSignal and RBXScriptConnection.
 
+use crate::signal::{ConnectionId, SignalKey, SignalKind};
 use mlua::{Function, Lua, MultiValue, Table, UserData, UserDataFields, Value as LuaValue};
 use rook_dom::InstanceId;
-use rook_signal::{ConnectionId, SignalKey, SignalKind};
 
 use crate::ctx::args::Args;
 use crate::ctx::{ApiResult, Outcome, ScriptError, api_fn, with_world};

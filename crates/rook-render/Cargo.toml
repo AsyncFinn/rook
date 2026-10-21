@@ -17,7 +17,7 @@ bytemuck.workspace = true
 thiserror.workspace = true
 pollster.workspace = true
 rustc-hash.workspace = true
-rayon.workspace = true
+rook-platform.workspace = true
 profiling.workspace = true
 wesl-core.workspace = true
 
@@ -27,3 +27,6 @@ naga.workspace = true
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+rook-platform = { workspace = true, features = ["native"] }

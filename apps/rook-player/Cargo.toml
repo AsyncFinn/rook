@@ -18,6 +18,8 @@ rook-types.workspace = true
 rook-reflection.workspace = true
 rook-dom.workspace = true
 rook-render.workspace = true
+rook-view.workspace = true
+rook-platform = { workspace = true, features = ["native"] }
 rook-content.workspace = true
 rook-audio = { workspace = true, features = ["output"] }
 rook-engine.workspace = true
@@ -33,8 +35,6 @@ anyhow.workspace = true
 clap.workspace = true
 tracing.workspace = true
 profiling.workspace = true
-rayon.workspace = true
-blake3.workspace = true
 mimalloc.workspace = true
 
 [features]

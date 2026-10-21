@@ -111,7 +111,7 @@ impl Finish {
                 server,
                 client: Box::new(client),
             },
-            started.camera,
+            rook_view::initial_camera(started.camera),
         ))
     }
 
@@ -124,7 +124,7 @@ impl Finish {
                 .run_extra_script(source)
                 .map_err(anyhow::Error::msg)?;
         }
-        let camera = crate::scene::initial_camera(host.server());
+        let camera = rook_view::initial_camera(rook_view::SavedCamera::read(host.server()));
         Ok(self.game(Mode::Run(Box::new(host)), camera))
     }
 

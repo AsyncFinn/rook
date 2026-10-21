@@ -7,7 +7,6 @@ use std::ops::Range;
 
 use super::*;
 use pool::RangeAlloc;
-use rayon::prelude::*;
 
 /// What an instanced draw shares: its mesh and its images (a mesh
 /// texture or a layer's decal, and the material's maps).
@@ -285,9 +284,10 @@ impl Batches {
     /// wholly inside it is.
     pub(crate) fn seen(&self, view: &Frustum, margin: f32) -> Vec<bool> {
         let mut out = vec![false; self.order.len()];
-        out.par_chunks_mut(CULL_BATCHES)
-            .zip(self.order.par_chunks(CULL_BATCHES))
-            .for_each(|(seen, block)| {
+        rook_platform::get()
+            .workers
+            .for_each_chunk(&mut out, CULL_BATCHES, |k, seen| {
+                let block = &self.order[k * CULL_BATCHES..][..seen.len()];
                 let all = block
                     .iter()
                     .fold(Aabb::EMPTY, |all, &i| all.union(self.bounds[i]));

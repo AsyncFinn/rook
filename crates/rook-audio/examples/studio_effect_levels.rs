@@ -8,6 +8,11 @@
 //!
 //! `cargo run -p rook-audio --example studio_effect_levels -- <file>`
 
+#![expect(
+    clippy::disallowed_methods,
+    reason = "an example run on a desktop, reading the install's file"
+)]
+
 use rook_audio::effects::{CROSSOVERS, Chain, Effect, Frame, Reverb, ordered};
 use rook_content::decode::audio::Audio;
 

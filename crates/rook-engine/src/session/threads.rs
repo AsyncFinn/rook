@@ -34,8 +34,8 @@ pub struct Budget {
 impl Budget {
     /// This machine's budget: its logical cores, or the `threads` setting.
     pub fn of_this_machine() -> Self {
-        let cores = crate::settings::threads()
-            .unwrap_or_else(|| std::thread::available_parallelism().map_or(2, usize::from));
+        let cores =
+            crate::settings::threads().unwrap_or_else(|| rook_platform::get().workers.cores());
         Self::for_cores(cores)
     }
 

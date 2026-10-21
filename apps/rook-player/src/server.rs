@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 use rook_engine::session::host::{Joined, ServerHost, ToClient, ToServer};
 use rook_engine::{DataModel, Options, console};
 use rook_lua::MessageType;
-use rook_render::Camera;
+use rook_view::SavedCamera;
 
 /// One server frame's output for the client.
 #[derive(Debug)]
@@ -38,7 +38,7 @@ enum Command {
 pub(crate) struct Started {
     pub joined: Joined,
     /// The camera the place was saved with.
-    pub camera: Camera,
+    pub camera: Option<SavedCamera>,
 }
 
 #[derive(Debug)]
@@ -99,7 +99,7 @@ impl ServerThread {
                     let mut server = DataModel::load_place(&place, &options)?;
                     server.start();
                     let mut host = ServerHost::new(server);
-                    let camera = crate::scene::initial_camera(host.server());
+                    let camera = SavedCamera::read(host.server());
                     let (_, joined) = host.join(&name, user_id)?;
                     if let Some(source) = &script {
                         host.server()

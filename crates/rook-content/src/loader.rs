@@ -294,6 +294,10 @@ fn spawn_threads<K, V>(
 {
     for i in 0..count {
         let (queue, work) = (queue.clone(), work.clone());
+        #[expect(
+            clippy::disallowed_types,
+            reason = "the content cache, install lookup and decode workers are rook-platform's known exception (architecture §2)"
+        )]
         let spawned = std::thread::Builder::new()
             .name(format!("{name}-{i}"))
             .spawn(move || {
@@ -395,4 +399,8 @@ fn spawn_fetchers(resolver: &Arc<Resolver>) -> Workers {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::disallowed_methods,
+    reason = "tests set up files on the machine running them"
+)]
 mod tests;

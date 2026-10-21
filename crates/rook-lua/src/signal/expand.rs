@@ -3,11 +3,11 @@
 use rook_dom::{Change, InstanceId};
 use rook_reflection::PropertyId;
 
-use crate::{SignalKey, SignalKind, Signals};
+use super::{SignalKey, SignalKind, Signals};
 
 /// Arguments of a firing, before conversion to Lua values.
 #[derive(Debug, Clone, PartialEq)]
-pub enum FireArgs {
+pub(crate) enum FireArgs {
     None,
     Instance(InstanceId),
     /// `AncestryChanged(child, parent)`.
@@ -23,7 +23,7 @@ pub enum FireArgs {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Firing {
+pub(crate) struct Firing {
     pub key: SignalKey,
     pub args: FireArgs,
 }
@@ -39,7 +39,7 @@ pub struct Firing {
 /// instance actually leaves or joins; an ancestor of both the old and new
 /// parent sees neither (Confirmed). Their position in the order relative
 /// to the child events is Inference.
-pub fn expand<H: Clone>(change: &Change, signals: &Signals<H>) -> Vec<Firing> {
+pub(crate) fn expand<H: Clone>(change: &Change, signals: &Signals<H>) -> Vec<Firing> {
     let mut out = Vec::new();
     let mut push = |instance: InstanceId, kind: SignalKind, args: FireArgs| {
         let key = SignalKey { instance, kind };

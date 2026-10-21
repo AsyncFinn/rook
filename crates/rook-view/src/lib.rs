@@ -1,6 +1,13 @@
-//! Build a render [`Scene`] from a DataModel.
+//! What a DataModel draws: a render [`Scene`] built from its DOM and kept
+//! up to date as scripts change it ([`SceneCache`]), the mesh files and
+//! images it needs, and what the renderer takes from the Roblox install
+//! ([`Installed`]). Apps that draw use it between `rook-engine` and
+//! `rook-render`; a server never links it (`docs/design/architecture.md`
+//! §2).
 
-pub(crate) mod content;
+mod camera;
+mod content;
+mod frame;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -8,11 +15,11 @@ use std::sync::Arc;
 use glam::{Mat3, Vec2, Vec3};
 use rook_content::{ContentRef, MaterialMap, Resolver, Want};
 use rook_dom::{Dom, InstanceId};
-use rook_engine::{DataModel, RenderChanges};
+use rook_engine::RenderChanges;
 use rook_physics::{is_part, part_shape, workspace_parts};
 use rook_render::{
-    Camera, Curve, DrawShape, ImageHash, ImagePlacement, Layer, Lighting, MapAlpha, MaterialMaps,
-    MeshHash, PartInstance, Scene, Sequence,
+    Curve, DrawShape, ImageHash, ImagePlacement, Layer, Lighting, MapAlpha, MaterialMaps, MeshHash,
+    PartInstance, Scene, Sequence,
 };
 use rook_types::{
     CFrame, Color3, Material, MaterialSet, MeshHost, MeshKind, MeshLook, MeshType, NormalId,
@@ -27,6 +34,9 @@ mod lighting;
 mod look;
 mod props;
 mod terrain;
+
+pub use camera::{SavedCamera, initial_camera};
+pub use content::installed::Installed;
 
 use content::pending::*;
 use content::report::Report;
@@ -72,7 +82,7 @@ pub(crate) enum SceneChange {
 /// parts scripts changed are rebuilt. Each drawn part is an entry in
 /// `scene.parts`, and so is each of its Decals and Textures.
 #[derive(Debug)]
-pub(crate) struct SceneCache {
+pub struct SceneCache {
     pub scene: Scene,
     /// Where each drawn part is in `scene.parts`.
     index: HashMap<InstanceId, usize>,
@@ -402,23 +412,4 @@ impl SceneCache {
         self.scene.floor_wires = floor_wires;
         out
     }
-}
-
-/// The camera the place was saved with, or a view of the origin.
-pub(crate) fn initial_camera(dm: &DataModel) -> Camera {
-    let world = dm.runtime().world();
-    let dom = &world.dom;
-    let saved = dm.current_camera().and_then(|cam| {
-        let cf = dom.cframe_property(cam, "CFrame")?;
-        Some(Camera {
-            position: cf.position,
-            rotation: Mat3::from_cols(
-                cf.rotation.x_axis.normalize(),
-                cf.rotation.y_axis.normalize(),
-                cf.rotation.z_axis.normalize(),
-            ),
-            fov_y: dom.float_property(cam, "FieldOfView").unwrap_or(70.0),
-        })
-    });
-    saved.unwrap_or_else(|| Camera::look_at(Vec3::new(0.0, 20.0, 40.0), Vec3::ZERO))
 }

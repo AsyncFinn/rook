@@ -15,7 +15,6 @@ mod materials;
 mod meshing;
 
 use glam::IVec3;
-use rayon::prelude::*;
 use rook_content::MaterialMap;
 use rook_content::decode::mesh::{Mesh, TerrainCorner, TerrainMapping};
 use rook_render::{Detile, TERRAIN_LAYERS, TerrainLayer, TerrainLook};
@@ -72,7 +71,7 @@ pub(super) struct TerrainCache {
 
 impl SceneCache {
     /// How many scene entries draw the terrain.
-    pub(crate) fn terrain_meshes(&self) -> usize {
+    pub fn terrain_meshes(&self) -> usize {
         self.terrain.count
     }
 

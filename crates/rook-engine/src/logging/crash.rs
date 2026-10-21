@@ -108,7 +108,8 @@ pub fn run<T>(main: impl FnOnce() -> T) -> T {
 fn write_report() -> Option<PathBuf> {
     let state = state();
     let dir = state.dir.clone()?;
-    std::fs::create_dir_all(&dir).ok()?;
+    let files = &rook_platform::get().files;
+    files.create_dir_all(&dir).ok()?;
     let mut text = format!(
         "{} {} crashed at {}\n\n{}\n",
         state.program,
@@ -133,6 +134,6 @@ fn write_report() -> Option<PathBuf> {
         text.push('\n');
     }
     let path = dir.join(format!("{}-{}.txt", state.program, super::files::stamp()));
-    std::fs::write(&path, text).ok()?;
+    files.write(&path, text.as_bytes()).ok()?;
     Some(path)
 }

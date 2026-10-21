@@ -1,10 +1,13 @@
 #!/usr/bin/env sh
-# The gate every change must pass: formatting, clippy (warnings are errors), tests.
+# The gate every change must pass: formatting, clippy (warnings are errors),
+# tests, and cargo-deny's bans (`cargo install cargo-deny`).
 set -eu
 cd "$(dirname "$0")/.."
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
+# Only the allowed crates depend on winit, cpal, ureq and rayon (deny.toml).
+cargo deny check bans
 # Copied functions, long comment blocks, environment reads below rook-engine
 # (apps/rook-cli/src/commands/drift.rs).
 cargo run -q -p rook-cli --bin rook-tools -- drift

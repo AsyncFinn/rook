@@ -89,7 +89,7 @@ fn light(dom: &Dom, id: InstanceId) -> Option<LocalLight> {
 
 impl SceneCache {
     /// Find every local light in Workspace again, and read them.
-    pub(in crate::scene) fn find_lights(&mut self, dom: &Dom) {
+    pub(crate) fn find_lights(&mut self, dom: &Dom) {
         profiling::scope!("SceneCache::find_lights");
         self.light_ids = find_lights(dom);
         self.light_holders.clear();
@@ -128,7 +128,7 @@ impl SceneCache {
     /// Bring the lights up to date with a frame's changes, reading again
     /// only the lights that changed and those on parts and Attachments
     /// that did; whether any may have changed.
-    pub(in crate::scene) fn lights_changed(&mut self, dom: &Dom, changes: &RenderChanges) -> bool {
+    pub(crate) fn lights_changed(&mut self, dom: &Dom, changes: &RenderChanges) -> bool {
         let holders = &self.light_holders;
         let placed = changes.placed.iter().any(|id| holders.contains_key(id));
         if changes.lights_placed || placed {

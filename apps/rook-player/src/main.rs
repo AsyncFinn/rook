@@ -18,7 +18,6 @@ mod app;
 mod bench;
 mod game;
 mod record;
-mod scene;
 mod server;
 mod stats;
 
@@ -31,21 +30,19 @@ use anyhow::Context;
 use clap::Parser;
 use game::Game;
 use glam::{EulerRot, Mat3, Vec3};
-use rook_content::decode::image::Image;
-use rook_content::decode::mesh::Mesh;
-use rook_content::{ContentRef, Resolver};
-use rook_engine::{DataModel, InputEvent, console};
+use rook_content::Resolver;
+use rook_engine::{InputEvent, console};
 use rook_lua::MessageType;
 use rook_render::{Camera, Renderer};
 use rook_types::{CFrame, Value};
-use scene::{SceneCache, SceneChange};
+use rook_view::SceneCache;
 
 use app::camera::*;
 use app::launch::*;
 use app::readout::*;
 use app::*;
 use bench::*;
-use scene::content::installed::*;
+use rook_view::Installed;
 
 /// The system allocator on Windows is slow for blocks of tens of
 /// kilobytes once a big place has made its heap large (a fraction of a
@@ -140,70 +137,6 @@ fn parse_vec3(s: &str) -> Result<Vec3, String> {
     }
 }
 
-/// The scene for a DataModel as it is now. Its pending render changes are
-/// already drawn, so they're dropped (otherwise the first frame would
-/// rebuild the whole scene again: a new DataModel's changes say "rebuild
-/// everything"), all but scripts' effect calls, which aren't in the tree.
-fn scene_of(dm: &mut DataModel, content: &Arc<Resolver>, camera: Vec3) -> SceneCache {
-    let calls = dm.take_render_changes().effect_calls;
-    let dom = &dm.runtime().world().dom;
-    let mut scene = SceneCache::new(dom, content.clone(), camera);
-    scene.take_effect_calls(dom, &calls);
-    scene
-}
-
-/// Bring a cached scene up to date with a DataModel's changes and the mesh
-/// files and images that finished loading since the last frame, then the
-/// renderer with the scene. Returns whether anything changed.
-fn refresh(
-    cache: &mut SceneCache,
-    dm: &mut DataModel,
-    renderer: &mut Renderer,
-    camera: Vec3,
-) -> bool {
-    let changes = dm.take_render_changes();
-    let dom = &dm.runtime().world().dom;
-    let change = if changes.is_empty() {
-        SceneChange::None
-    } else {
-        cache.apply(dom, &changes)
-    };
-    cache.follow_camera(dom, camera);
-    let mut loaded = cache.poll_files(dom, false);
-    loaded.extend(cache.update_grass(camera));
-    let change = match change {
-        // A skybox image arrived: the lighting alone changed.
-        SceneChange::None if loaded.is_empty() && cache.take_lighting_change() => {
-            SceneChange::Parts {
-                changed: Vec::new(),
-                moved: Vec::new(),
-            }
-        }
-        _ if loaded.is_empty() => change,
-        SceneChange::None => SceneChange::Parts {
-            changed: loaded,
-            moved: Vec::new(),
-        },
-        SceneChange::Parts { mut changed, moved } => {
-            changed.extend(loaded);
-            SceneChange::Parts { changed, moved }
-        }
-        SceneChange::Full => SceneChange::Full,
-    };
-    match &change {
-        SceneChange::None => return false,
-        SceneChange::Parts { changed, moved } => {
-            renderer.update_parts(&cache.scene, changed);
-            renderer.move_parts(&cache.scene, moved);
-        }
-        SceneChange::Full => renderer.set_scene(&cache.scene),
-    }
-    for mesh in cache.take_dropped_meshes() {
-        renderer.drop_mesh(mesh);
-    }
-    true
-}
-
 /// Get a loaded game ready to show: run `--seconds`, pick the camera,
 /// build the scene (files near the camera load first) and say what
 /// loaded.
@@ -229,7 +162,7 @@ fn prepare(game: &mut Game, args: &Args, content: &Arc<Resolver>) -> (SceneCache
     if let Some(fov) = args.fov {
         camera.fov_y = fov;
     }
-    let scene = scene_of(game.view_mut(), content, camera.position);
+    let scene = SceneCache::for_data_model(game.view_mut(), content, camera.position);
     let name = args.place.file_name().unwrap_or_default().to_string_lossy();
     let terrain = scene.terrain_meshes();
     let terrain = if terrain > 0 {
@@ -322,10 +255,7 @@ fn play(args: Args) -> anyhow::Result<()> {
     if let Some(out) = args.screenshot {
         // A screenshot isn't a frame: it waits for the place's mesh files
         // and images, and their uploads.
-        let dom = &game.view().runtime().world().dom;
-        // Images on a mesh are asked for once its file has loaded.
-        while !scene.poll_files(dom, true).is_empty() {}
-        scene.update_grass(camera.position);
+        scene.load_all(game.view(), camera.position);
         let mut renderer = Renderer::headless()?;
         note_gpu(&renderer);
         install.apply(&mut renderer);

@@ -138,6 +138,6 @@ impl Physics {
         }
         want.sort_unstable_by_key(|c| (c.x, c.y, c.z));
         want.dedup();
-        self.build_chunks(want);
+        self.build_chunks(&want);
     }
 }

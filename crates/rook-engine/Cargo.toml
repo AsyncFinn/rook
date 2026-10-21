@@ -9,11 +9,11 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+rook-platform.workspace = true
 rook-types.workspace = true
 rook-reflection.workspace = true
 rook-dom.workspace = true
 rook-formats.workspace = true
-rook-scheduler.workspace = true
 rook-lua.workspace = true
 rook-net.workspace = true
 rook-physics.workspace = true
@@ -34,6 +34,7 @@ serde_json.workspace = true
 rustyline = { workspace = true, optional = true }
 
 [dev-dependencies]
+rook-platform = { workspace = true, features = ["native"] }
 rook-terrain.workspace = true
 
 [features]

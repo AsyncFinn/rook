@@ -7,6 +7,11 @@
 //!
 //! Without the fixtures these tests pass trivially and say so.
 
+#![expect(
+    clippy::disallowed_methods,
+    reason = "the fixtures are files on the machine running the tests"
+)]
+
 use std::fs;
 use std::path::{Path, PathBuf};
 

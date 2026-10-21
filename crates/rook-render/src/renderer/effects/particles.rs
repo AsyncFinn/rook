@@ -8,7 +8,6 @@
 use std::ops::Range;
 
 use super::*;
-use rayon::prelude::*;
 
 use crate::effects::particles::{Particle, Particles};
 use crate::scene::EmitterLook;
@@ -187,10 +186,9 @@ impl Renderer {
         }
         // Each emitter's particles are built on their own (in parallel),
         // then sorted by small keys pointing at them, not moved themselves.
-        let built: Vec<Vec<(f32, ParticleInstance)>> = emitters
-            .par_iter()
-            .map(|e| e.instances(view, camera))
-            .collect();
+        let workers = &rook_platform::get().workers;
+        let built: Vec<Vec<(f32, ParticleInstance)>> =
+            workers.map(&emitters, |e| e.instances(view, camera));
         let textures: Vec<ImageHash> = emitters.iter().map(|e| e.texture).collect();
         // (distance, emitter, particle), back to front; ties keep the
         // order they were made in.
@@ -203,7 +201,7 @@ impl Renderer {
                     .map(move |(i, &(d, _))| (d, e as u32, i as u32))
             })
             .collect();
-        order.par_sort_unstable_by(|a, b| {
+        workers.sort_by(&mut order, |a, b| {
             b.0.total_cmp(&a.0).then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2))
         });
         // With a table every particle draws in one go; otherwise a run per

@@ -18,7 +18,7 @@ use super::*;
 /// parts, outlined together; one in a Folder, or adorning a Folder,
 /// draws nothing; neither do invisible parts (the renderer leaves them
 /// out).
-pub(in crate::scene) fn highlight(
+pub(crate) fn highlight(
     dom: &Dom,
     id: InstanceId,
     models: &mut ModelHighlights,
@@ -35,7 +35,7 @@ pub(in crate::scene) fn highlight(
 
 /// Each Model's own Highlight, looked up once per scene update (a big
 /// Model's parts would each look through its children).
-pub(in crate::scene) type ModelHighlights = HashMap<InstanceId, Option<Highlight>>;
+pub(crate) type ModelHighlights = HashMap<InstanceId, Option<Highlight>>;
 
 /// The Highlight on `target` itself: adorning it, or inside it without
 /// an `Adornee`.

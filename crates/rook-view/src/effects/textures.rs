@@ -7,14 +7,14 @@ use super::*;
 
 /// The image each effect draws, in [`Scene::images`].
 #[derive(Debug, Clone, Copy)]
-pub(in crate::scene) struct EffectTextures {
-    pub(in crate::scene) fire: ImageHash,
-    pub(in crate::scene) smoke: ImageHash,
-    pub(in crate::scene) sparkles: ImageHash,
-    pub(in crate::scene) explosion_flash: ImageHash,
-    pub(in crate::scene) explosion_core: ImageHash,
-    pub(in crate::scene) explosion_smoke: ImageHash,
-    pub(in crate::scene) explosion_ring: ImageHash,
+pub(crate) struct EffectTextures {
+    pub(crate) fire: ImageHash,
+    pub(crate) smoke: ImageHash,
+    pub(crate) sparkles: ImageHash,
+    pub(crate) explosion_flash: ImageHash,
+    pub(crate) explosion_core: ImageHash,
+    pub(crate) explosion_smoke: ImageHash,
+    pub(crate) explosion_ring: ImageHash,
 }
 
 /// Rook's own textures' size.
@@ -23,10 +23,7 @@ const OWN: u32 = 64;
 impl EffectTextures {
     /// Load the images from the install through `content` (or make
     /// Rook's own) and add them to `images`.
-    pub(in crate::scene) fn load(
-        content: &Resolver,
-        images: &mut HashMap<ImageHash, Arc<Image>>,
-    ) -> Self {
+    pub(crate) fn load(content: &Resolver, images: &mut HashMap<ImageHash, Arc<Image>>) -> Self {
         let mut add = |file: &str, convert: fn(&mut [u8]), own: fn(f32, f32) -> f32| {
             let path = format!("textures/particles/{file}");
             let installed = content

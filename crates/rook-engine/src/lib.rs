@@ -25,8 +25,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use rook_dom::{Change, Dom, InstanceId};
+use rook_lua::scheduler::{Clock, Queue};
 use rook_lua::{LogEntry, MessageType, Runtime};
-use rook_scheduler::{Clock, Queue};
 use rook_types::Value;
 
 use bridges::journal_watch::JournalWatch;
@@ -439,4 +439,8 @@ fn ensure_terrain(dom: &mut Dom) {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::disallowed_methods,
+    reason = "tests set up files on the machine running them"
+)]
 mod tests;

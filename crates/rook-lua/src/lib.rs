@@ -9,6 +9,8 @@ mod api;
 pub mod audio_api;
 mod ctx;
 mod net;
+pub mod scheduler;
+mod signal;
 mod threads;
 mod types;
 mod world;
@@ -27,10 +29,10 @@ use std::cell::{Cell, Ref, RefCell, RefMut};
 use std::rc::Rc;
 use std::time::Duration;
 
+use crate::scheduler::{Clock, Queue};
+use crate::signal::SignalKey;
 use mlua::{IntoLuaMulti, Lua};
 use rook_dom::{Dom, InstanceId};
-use rook_scheduler::{Clock, Queue};
-use rook_signal::SignalKey;
 use rook_types::{UserInputState, UserInputType};
 
 /// Create an `InputObject` describing one input (an `Enum.KeyCode` value;

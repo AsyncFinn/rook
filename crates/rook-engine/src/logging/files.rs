@@ -18,18 +18,13 @@ pub(super) fn stamp() -> String {
 
 /// The files directly in a folder: (path, modified, size).
 fn files_in(dir: &Path) -> Vec<(PathBuf, SystemTime, u64)> {
-    let Ok(entries) = std::fs::read_dir(dir) else {
+    let Ok(entries) = rook_platform::get().files.list(dir) else {
         return Vec::new();
     };
     entries
-        .flatten()
-        .filter_map(|e| {
-            let meta = e.metadata().ok()?;
-            meta.is_file().then(|| {
-                let modified = meta.modified().unwrap_or(SystemTime::UNIX_EPOCH);
-                (e.path(), modified, meta.len())
-            })
-        })
+        .into_iter()
+        .filter(|e| e.is_file)
+        .map(|e| (e.path, e.modified, e.len))
         .collect()
 }
 
@@ -54,7 +49,7 @@ fn to_delete(mut files: Vec<(PathBuf, SystemTime, u64)>, now: SystemTime) -> Vec
 /// Delete old files from a folder of logs or crash reports.
 pub fn cleanup(dir: &Path) {
     for path in to_delete(files_in(dir), SystemTime::now()) {
-        if let Err(e) = std::fs::remove_file(&path) {
+        if let Err(e) = rook_platform::get().files.remove_file(&path) {
             // Another run's open log, on Windows: next time.
             tracing::debug!(target: "rook", "couldn't delete {}: {e}", path.display());
         }

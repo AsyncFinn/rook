@@ -67,7 +67,7 @@ script's `Emit` shows on clients.
 ## Rook's fit
 
 The player reads each ParticleEmitter into the renderer's `EmitterLook`
-(`apps/rook-player/src/scene/effects/emitter.rs`), the same model Fire,
+(`crates/rook-view/src/effects/emitter.rs`), the same model Fire,
 Smoke and Sparkles use (docs/behavior/effects/classic.md); the renderer simulates
 it on the CPU (`crates/rook-render/src/effects/particles.rs`, shapes in
 `effects/particles/spawn.rs`) and draws each particle as a rectangle of its image

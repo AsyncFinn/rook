@@ -8,12 +8,12 @@
 //! rays' `terrainCellsAreCubes` changes nothing (observed: a ray hits the
 //! smooth surface either way).
 
+use crate::signal::SignalKey;
 use glam::Vec3;
 use mlua::{Lua, UserData, Value as LuaValue};
 use rook_dom::InstanceId;
 use rook_physics::query::{MAX_CAST_DISTANCE, MAX_CAST_RADIUS, MAX_CAST_SIDE};
 use rook_physics::{CastShape, Filter, Hit, Region};
-use rook_signal::SignalKey;
 use rook_types::{CFrame, Vector3};
 
 use super::RawMethod;

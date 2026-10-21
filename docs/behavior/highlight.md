@@ -38,7 +38,7 @@ Studio's MCP capture shows Highlights, through walls included.
 ## In Rook
 
 The player gives each covered part's entry its Highlight's look
-(`apps/rook-player/src/scene/adornments/highlight.rs`); the nearest
+(`crates/rook-view/src/adornments/highlight.rs`); the nearest
 Highlight wins if several cover a part (Inference). The renderer draws
 the covered parts into a mask of Highlight numbers after the main pass,
 tested against its depth for Occluded ones, and the tone pass mixes the

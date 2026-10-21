@@ -11,11 +11,11 @@
 //! ownership, preloading) are *inert*: they do nothing, return nil
 //! and are counted separately, so scripts keep running.
 
+use crate::scheduler::Queue;
+use crate::signal::{SignalKey, SignalKind};
 use mlua::{Function, Lua, MultiValue, Value as LuaValue};
 use rook_dom::{DomError, InstanceId};
 use rook_reflection::database;
-use rook_scheduler::Queue;
-use rook_signal::{SignalKey, SignalKind};
 use rook_types::{CFrame, Value, Vector3};
 
 use super::instance::push_instance;

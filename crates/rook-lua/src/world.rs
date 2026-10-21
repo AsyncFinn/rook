@@ -2,10 +2,10 @@
 
 use std::collections::{BTreeMap, HashMap};
 
+use crate::scheduler::{Clock, Scheduler};
+use crate::signal::{ConnectionId, Signals};
 use mlua::{Function, Table, Thread, Value as LuaValue};
 use rook_dom::{Dom, InstanceId};
-use rook_scheduler::{Clock, Scheduler};
-use rook_signal::{ConnectionId, Signals};
 
 /// `workspace.SignalBehavior`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

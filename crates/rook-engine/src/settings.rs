@@ -109,7 +109,7 @@ impl Settings {
     /// Read a settings file leniently. A missing file is no settings; one
     /// that doesn't parse is no settings and the reason.
     pub fn read(path: &Path) -> (Self, Option<String>) {
-        let text = match std::fs::read_to_string(path) {
+        let text = match rook_platform::get().files.read_to_string(path) {
             Ok(text) => text,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return (Self::default(), None),
             Err(e) => return (Self::default(), Some(format!("{}: {e}", path.display()))),
@@ -147,9 +147,11 @@ pub fn get() -> &'static Loaded {
         };
         let path = data.settings();
         let mut problem = None;
-        if !path.exists() {
-            let written =
-                std::fs::create_dir_all(&data.root).and_then(|()| std::fs::write(&path, WRITTEN));
+        let files = &rook_platform::get().files;
+        if !files.exists(&path) {
+            let written = files
+                .create_dir_all(&data.root)
+                .and_then(|()| files.write(&path, WRITTEN.as_bytes()));
             if let Err(e) = written {
                 problem = Some(format!("couldn't write {}: {e}", path.display()));
             }
@@ -207,7 +209,7 @@ pub fn install_places() -> Places {
 fn open_cloud_key() -> Option<String> {
     var(env::OPEN_CLOUD_KEY).or_else(|| {
         let path = file().open_cloud_key_file.as_ref()?;
-        match std::fs::read_to_string(path) {
+        match rook_platform::get().files.read_to_string(path) {
             Ok(key) => Some(key.trim().to_owned()).filter(|k| !k.is_empty()),
             Err(e) => {
                 tracing::warn!(target: "content", "openCloudKeyFile {}: {e}", path.display());

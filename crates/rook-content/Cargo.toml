@@ -9,6 +9,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+rook-platform.workspace = true
 bcdec_rs.workspace = true
 blake3.workspace = true
 image.workspace = true
@@ -23,7 +24,6 @@ serde_json.workspace = true
 symphonia.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
-ureq.workspace = true
 zstd.workspace = true
 
 [target.'cfg(windows)'.dependencies]

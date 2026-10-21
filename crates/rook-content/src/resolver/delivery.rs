@@ -2,10 +2,12 @@
 //! anonymous; for assets refused anonymously, an Open Cloud key the user set
 //! is sent to the Open Cloud endpoint (in `x-api-key`) and nowhere else.
 //! Rook never reads browser cookies or any other credential. What the
-//! endpoints answer is in `docs/behavior/content.md`.
+//! endpoints answer is in `docs/behavior/content.md`. Requests go
+//! through the host's network (`rook_platform::network`).
 
-use std::io::Read;
 use std::time::Duration;
+
+use rook_platform::network::Request;
 
 use crate::{Failure, FailureKind};
 
@@ -16,26 +18,15 @@ const MAX_BYTES: u64 = 256 << 20;
 /// Tries per request when Roblox says to slow down (HTTP 429).
 const TRIES: u32 = 4;
 
-/// An HTTP client for asset delivery.
+/// Asset delivery's requests, with the user's Open Cloud key if any.
 #[derive(Debug)]
 pub struct Delivery {
-    agent: ureq::Agent,
     api_key: Option<String>,
 }
 
 impl Delivery {
     pub fn new(api_key: Option<String>) -> Self {
-        let agent = ureq::Agent::config_builder()
-            .timeout_global(Some(Duration::from_secs(60)))
-            .http_status_as_error(false)
-            .user_agent(concat!(
-                "Rook/",
-                env!("CARGO_PKG_VERSION"),
-                " (+https://github.com/AsyncFinn/rook)"
-            ))
-            .build()
-            .into();
-        Self { agent, api_key }
+        Self { api_key }
     }
 
     pub fn has_api_key(&self) -> bool {
@@ -118,19 +109,25 @@ impl Delivery {
     /// GET with retries on HTTP 429; the body is decompressed. Returns the
     /// status, the body and the asset version header.
     fn get(&self, url: &str, key: Option<&str>) -> Result<(u16, Vec<u8>, Option<u32>), Failure> {
-        let network = |e: ureq::Error| Failure::new(FailureKind::Network, e.to_string());
+        let key_header = key.map(|key| [("x-api-key", key)]);
+        let headers: &[(&str, &str)] = match &key_header {
+            Some(h) => h,
+            None => &[],
+        };
+        let request = Request {
+            url,
+            headers,
+            max_bytes: MAX_BYTES,
+        };
         for attempt in 1..=TRIES {
-            let mut request = self.agent.get(url);
-            if let Some(key) = key {
-                request = request.header("x-api-key", key);
-            }
-            let mut response = request.call().map_err(network)?;
-            let status = response.status().as_u16();
+            let response = rook_platform::get()
+                .network
+                .get(&request)
+                .map_err(|e| Failure::new(FailureKind::Network, e))?;
+            let status = response.status;
             if status == 429 && attempt < TRIES {
                 let wait = response
-                    .headers()
-                    .get("retry-after")
-                    .and_then(|v| v.to_str().ok())
+                    .header("retry-after")
                     .and_then(|v| v.parse::<u64>().ok())
                     .unwrap_or(1 << attempt)
                     .min(30);
@@ -138,18 +135,9 @@ impl Delivery {
                 continue;
             }
             let version = response
-                .headers()
-                .get("roblox-assetversionnumber")
-                .and_then(|v| v.to_str().ok())
+                .header("roblox-assetversionnumber")
                 .and_then(|v| v.parse().ok());
-            let mut body = Vec::new();
-            response
-                .body_mut()
-                .as_reader()
-                .take(MAX_BYTES)
-                .read_to_end(&mut body)
-                .map_err(|e| Failure::new(FailureKind::Network, e.to_string()))?;
-            return Ok((status, body, version));
+            return Ok((status, response.body, version));
         }
         Err(Failure::new(
             FailureKind::Network,

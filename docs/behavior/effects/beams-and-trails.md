@@ -47,7 +47,7 @@ measurements in Studio 0.743 on 2026-10-19.
 ## Rook's fit
 
 The player reads each into the renderer's `Beam` and `Trail`
-(`apps/rook-player/src/scene/effects/ribbons.rs`); the renderer lays and
+(`crates/rook-view/src/effects/ribbons.rs`); the renderer lays and
 ages the Trails' pieces and builds both as strips of quads each frame
 (`crates/rook-render/src/effects/ribbons.rs`), drawn with the particles' shading
 after the transparent parts and before the particles, farthest strip

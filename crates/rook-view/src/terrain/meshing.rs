@@ -32,7 +32,9 @@ impl SceneCache {
         }
         terrain.epoch += 1;
         let todo: Vec<IVec3> = remesh.into_iter().filter(|c| wanted.contains(c)).collect();
-        let meshes: Vec<ChunkMesh> = todo.par_iter().map(|c| mesh_chunk(&grid, *c)).collect();
+        let meshes: Vec<ChunkMesh> = rook_platform::get()
+            .workers
+            .map(&todo, |c| mesh_chunk(&grid, *c));
         for chunk in meshes {
             let meshed = self.add_chunk_meshes(chunk);
             self.terrain.chunks.insert(meshed.0, meshed.1);

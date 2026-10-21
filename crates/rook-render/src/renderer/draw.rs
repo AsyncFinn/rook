@@ -320,9 +320,10 @@ impl Renderer {
         // still shadows what's on it.
         let sun_view = shadow.map(|s| Frustum::of(s.view_proj));
         // The three cullings at once.
-        let ((seen, shadowed), layers_seen) = rayon::join(
+        let workers = &rook_platform::get().workers;
+        let ((seen, shadowed), layers_seen) = workers.join(
             || {
-                rayon::join(
+                workers.join(
                     || self.opaque.seen(view, margin),
                     || {
                         sun_view

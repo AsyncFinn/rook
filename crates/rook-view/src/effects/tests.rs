@@ -1,5 +1,5 @@
 use super::*;
-use rook_engine::Options;
+use rook_engine::{DataModel, Options};
 
 const PLACE: &str = r#"<roblox version="4">
 <Item class="Workspace" referent="W"><Properties><string name="Name">Workspace</string></Properties>

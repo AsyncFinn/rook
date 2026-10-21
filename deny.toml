@@ -1,0 +1,20 @@
+# `cargo deny check bans` (scripts/check): which crates may depend on the
+# host-specific ones, so desktop-only code can't spread into the portable
+# crates (docs/design/architecture.md §2). Each crate below may be a direct
+# dependency only of its wrappers; anything else depending on it fails.
+
+[graph]
+# Optional dependencies (cpal, and rook-platform's `native` ones) count.
+all-features = true
+
+[bans]
+multiple-versions = "allow"
+wildcards = "allow"
+deny = [
+    { crate = "winit", wrappers = ["rook-player"], reason = "windows belong to the apps" },
+    { crate = "cpal", wrappers = ["rook-audio"], reason = "the audio device, behind rook-audio's `output` feature" },
+    { crate = "ureq", wrappers = ["rook-platform"], reason = "the network goes through rook-platform" },
+    # Rapier and Parry run their own parallel steps (rook-physics' known
+    # exception); rook-cli is an app.
+    { crate = "rayon", wrappers = ["rook-platform", "rook-cli", "rapier3d", "parry3d"], reason = "parallel work goes through rook-platform" },
+]
