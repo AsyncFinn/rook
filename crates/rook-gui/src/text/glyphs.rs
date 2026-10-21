@@ -1,5 +1,6 @@
 //! Glyphs rasterized for drawing: skrifa's outlines filled by zeno into
-//! coverage masks, kept per face, glyph and size.
+//! coverage masks, kept per face, glyph and size, or into distance fields
+//! (`distance.rs`), kept per face and glyph.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -11,10 +12,12 @@ use skrifa::instance::{LocationRef, Size};
 use skrifa::outline::{DrawSettings, OutlinePen};
 use zeno::{Command, Mask, Point};
 
+use super::distance::{self, FIELD_PX};
 use super::fonts::{FaceId, Fonts};
 
-/// A glyph's mask and where it sits from the pen on the baseline, in
-/// pixels (y down).
+/// A glyph's mask and where its top left sits from the pen on the
+/// baseline, in pixels (y down): pixels at its size, or for a distance
+/// field, at [`FIELD_PX`].
 #[derive(Debug, Clone)]
 pub(crate) struct Raster {
     pub(crate) mask: Arc<GlyphMask>,
@@ -32,6 +35,7 @@ const SIZE_STEPS: f32 = 4.0;
 #[derive(Debug, Default)]
 pub(crate) struct Glyphs {
     cache: FxHashMap<(FaceId, u32, u32), Option<Raster>>,
+    fields: FxHashMap<(FaceId, u32), Option<Raster>>,
 }
 
 impl Glyphs {
@@ -44,9 +48,34 @@ impl Glyphs {
             .or_insert_with(|| rasterize(fonts, face, id, step as f32 / SIZE_STEPS))
             .clone()
     }
+
+    /// Glyph `id` of `face` as a distance field made at a line height of
+    /// [`FIELD_PX`], which draws sharp at any size.
+    pub(crate) fn field(&mut self, fonts: &Fonts, face: FaceId, id: u32) -> Option<Raster> {
+        self.fields
+            .entry((face, id))
+            .or_insert_with(|| {
+                let path = outline(fonts, face, id, FIELD_PX * distance::FINE as f32)?;
+                let field = distance::field(&path)?;
+                Some(Raster {
+                    mask: Arc::new(GlyphMask {
+                        key: NEXT_KEY.fetch_add(1, Ordering::Relaxed),
+                        width: field.width,
+                        height: field.height,
+                        pixels: field.pixels,
+                        distance: true,
+                    }),
+                    left: field.left,
+                    top: field.top,
+                })
+            })
+            .clone()
+    }
 }
 
-fn rasterize(fonts: &Fonts, face: FaceId, id: u32, px: f32) -> Option<Raster> {
+/// Glyph `id`'s outline drawn with a line height of `px` pixels; `None`
+/// for one with none.
+fn outline(fonts: &Fonts, face: FaceId, id: u32, px: f32) -> Option<Vec<Command>> {
     let f = fonts.face(face);
     let font = f.font();
     let outline = font.outline_glyphs().get(id.into())?;
@@ -58,10 +87,12 @@ fn rasterize(fonts: &Fonts, face: FaceId, id: u32, px: f32) -> Option<Raster> {
             &mut pen,
         )
         .ok()?;
-    if pen.0.is_empty() {
-        return None;
-    }
-    let (coverage, placement) = Mask::new(pen.0.as_slice()).render();
+    (!pen.0.is_empty()).then_some(pen.0)
+}
+
+fn rasterize(fonts: &Fonts, face: FaceId, id: u32, px: f32) -> Option<Raster> {
+    let path = outline(fonts, face, id, px)?;
+    let (coverage, placement) = Mask::new(path.as_slice()).render();
     if placement.width == 0 || placement.height == 0 {
         return None;
     }
@@ -70,7 +101,8 @@ fn rasterize(fonts: &Fonts, face: FaceId, id: u32, px: f32) -> Option<Raster> {
             key: NEXT_KEY.fetch_add(1, Ordering::Relaxed),
             width: placement.width,
             height: placement.height,
-            coverage,
+            pixels: coverage,
+            distance: false,
         }),
         left: placement.left as f32,
         top: placement.top as f32,

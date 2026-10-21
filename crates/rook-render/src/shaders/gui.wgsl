@@ -3,6 +3,8 @@
 // premultiplied into the GUI layer, which the tone pass lays over the
 // finished frame in sRGB (`tonemap.wgsl`).
 
+import package::glyph::glyph_alpha;
+
 struct Screen {
     // xy: the target's size in pixels.
     size: vec4<f32>,
@@ -21,17 +23,18 @@ struct Quad {
     @location(3) color: vec4<f32>,
     // left, top, right, bottom in pixels.
     @location(4) clip: vec4<f32>,
-    // The glyph's left, top, right, bottom in the atlas; a negative left
-    // fills the rectangle instead.
+    // The glyph's left, top, right, bottom in the atlas.
     @location(5) uv: vec4<f32>,
+    // How it's drawn: `glyph_alpha`'s mode.
+    @location(6) mode: f32,
 };
 
 struct Varyings {
     @builtin(position) at: vec4<f32>,
     @location(0) color: vec4<f32>,
     @location(1) clip: vec4<f32>,
-    // xy: where in the atlas; z: 1 for a glyph, 0 for a fill.
-    @location(2) uv: vec3<f32>,
+    @location(2) uv: vec2<f32>,
+    @location(3) @interpolate(flat) mode: f32,
 };
 
 @vertex
@@ -48,17 +51,18 @@ fn vs_gui(@builtin(vertex_index) i: u32, q: Quad) -> Varyings {
     out.color = q.color;
     out.clip = q.clip;
     let t = corners[i] * 0.5 + 0.5;
-    out.uv = vec3(mix(q.uv.xy, q.uv.zw, t), select(1.0, 0.0, q.uv.x < 0.0));
+    out.uv = mix(q.uv.xy, q.uv.zw, t);
+    out.mode = q.mode;
     return out;
 }
 
 @fragment
 fn fs_gui(v: Varyings) -> @location(0) vec4<f32> {
     // Sampled before the clip test, which makes control flow non-uniform.
-    let coverage = textureSample(glyphs, glyph_sampler, v.uv.xy).r;
+    let alpha = glyph_alpha(textureSample(glyphs, glyph_sampler, v.uv).r, v.mode);
     let p = v.at.xy;
     if p.x < v.clip.x || p.y < v.clip.y || p.x > v.clip.z || p.y > v.clip.w {
         discard;
     }
-    return v.color * mix(1.0, coverage, v.uv.z);
+    return v.color * alpha;
 }

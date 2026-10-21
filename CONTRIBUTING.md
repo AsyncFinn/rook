@@ -95,7 +95,7 @@ everywhere, in code and docs alike, as Roblox's API does.
 - Outside `rook-dom`, properties are read with `Dom`'s typed readers (`float_property`, `enum_item_property`, ...), not `property_by_name` (clippy's `disallowed-methods`); a raw read needs an `#[expect]` saying why.
 - Crates in `crates/` reach the host only through `rook-platform`: clippy bans `std::fs`, `std::thread::spawn` and `std::thread::Builder` there (`apps/clippy.toml` lifts the ban for the apps), and cargo-deny (`deny.toml`) lets only the listed crates depend on `winit`, `cpal`, `ureq` and `rayon`. The known exceptions carry an `#[expect]` with the reason.
 - Docs: every link and every repository path in inline code must lead somewhere, and a link's `#anchor` to a heading; every doc under `docs/` is listed in [docs/README.md](docs/README.md) (or its folder's README), has one `#` title its file name is taken from, and isn't alone in its folder; behavior pages carry their "Checked against Studio" line (one checked over 90 days ago is pointed out); the roadmap's ✅/🟨/⬜ marks agree with each milestone's steps; and the changelog's releases run newest first.
-- British spellings fail it (`colour`, `centre`, `behaviour`, `-ise`): write American.
+- British spellings fail it: write American (`color`, `center`, `behavior`, `-ize`).
 - Workspace lints include `unreachable_pub`, `needless_pass_by_value`, `match_same_arms`, `unnecessary_wraps`, `redundant_closure_for_method_calls` and `needless_pass_by_ref_mut`; where one is wrong, `#[expect]` it with the reason.
 
 ### Behavior provenance

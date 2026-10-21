@@ -3,6 +3,7 @@
 //! `TextScaled`, `RichText`), as glyphs to draw. Rules measured in Studio
 //! are in docs/behavior/gui/text.md.
 
+mod distance;
 mod fonts;
 mod glyphs;
 mod lines;
@@ -13,6 +14,7 @@ use glam::Vec2;
 use rook_dom::{Dom, InstanceId};
 use rook_types::Font;
 
+pub(crate) use distance::FIELD_PX;
 pub(crate) use fonts::{FaceId, Fonts};
 pub(crate) use glyphs::Glyphs;
 pub(crate) use rich::{Case, Stroke, Style};

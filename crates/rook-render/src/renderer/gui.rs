@@ -1,9 +1,8 @@
 //! The GUI pass: the GUI's rectangles drawn in order into the GUI layer,
 //! premultiplied and in sRGB, which the tone pass lays over the frame, so
-//! GUI blends in sRGB as Roblox's does (docs/behavior/gui/layout.md#drawing);
-//! and the world GUI's canvases drawn the same way into their atlas, which
-//! [`world`] lays in the world. Text quads draw through their glyph's
-//! coverage in the glyph atlas.
+//! GUI blends in sRGB as Roblox's does (docs/behavior/gui.md#drawing).
+//! [`world`] draws the world GUI's rectangles into the world. Text quads
+//! draw through their glyph's coverage in the glyph atlas.
 
 mod atlas;
 pub(crate) mod world;
@@ -16,23 +15,33 @@ use atlas::Atlas;
 use pipelines::BindLayouts;
 use world::{WorldGui, WorldRuns};
 
+/// The quads' vertex attributes, in [`GpuQuad`]'s order.
+const QUAD_ATTRIBUTES: [wgpu::VertexAttribute; 7] = wgpu::vertex_attr_array![
+    0 => Float32x2, 1 => Float32x2, 2 => Float32x2,
+    3 => Float32x4, 4 => Float32x4, 5 => Float32x4, 6 => Float32,
+];
+
 /// The GUI layer's format: 8-bit sRGB values, blended as stored.
 pub(crate) const GUI_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 
 /// A [`GuiQuad`] as the shader reads it.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
-struct GpuQuad {
+pub(super) struct GpuQuad {
     center: [f32; 2],
     half_size: [f32; 2],
     turn: [f32; 2],
     color: [f32; 4],
     clip: [f32; 4],
-    /// The glyph's rectangle in the atlas, 0 to 1; a negative left fills.
+    /// The glyph's rectangle in the atlas, 0 to 1.
     uv: [f32; 4],
+    /// 0 fills the rectangle, 1 draws through a coverage mask, 2 through a
+    /// distance field (`shaders/glyph.wgsl`).
+    mode: f32,
 }
 
 impl GpuQuad {
+    /// `q`, its glyph at `uv` in the atlas.
     fn new(q: &GuiQuad, uv: [f32; 4]) -> Self {
         let a = q.color[3].clamp(0.0, 1.0);
         let (sin, cos) = q.rotation.sin_cos();
@@ -43,15 +52,27 @@ impl GpuQuad {
             color: [q.color[0] * a, q.color[1] * a, q.color[2] * a, a],
             clip: q.clip,
             uv,
+            mode: match &q.glyph {
+                None => 0.0,
+                Some(mask) if mask.distance => 2.0,
+                Some(_) => 1.0,
+            },
         }
     }
 }
 
-/// What a filled quad's `uv` holds.
-const FILL: [f32; 4] = [-1.0; 4];
+impl GpuQuad {
+    /// The quads as instances, one per quad.
+    fn layout() -> wgpu::VertexBufferLayout<'static> {
+        wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<GpuQuad>() as u64,
+            step_mode: wgpu::VertexStepMode::Instance,
+            attributes: &QUAD_ATTRIBUTES,
+        }
+    }
+}
 
-/// A target the GUI pass draws: the screen's GUI layer, or the world
-/// GUI's canvas atlas.
+/// What the GUI pass draws into the screen's GUI layer.
 #[derive(Debug)]
 struct Target {
     /// The target's size.
@@ -127,9 +148,6 @@ impl Target {
 pub(crate) struct GuiPass {
     pipeline: wgpu::RenderPipeline,
     screen: Target,
-    canvases: Target,
-    /// The canvases changed since they were last drawn into their atlas.
-    canvases_stale: bool,
     world: WorldGui,
     atlas: Atlas,
 }
@@ -196,14 +214,7 @@ impl GuiPass {
                 module: &shader,
                 entry_point: Some("vs_gui"),
                 compilation_options: Default::default(),
-                buffers: &[Some(wgpu::VertexBufferLayout {
-                    array_stride: std::mem::size_of::<GpuQuad>() as u64,
-                    step_mode: wgpu::VertexStepMode::Instance,
-                    attributes: &wgpu::vertex_attr_array![
-                        0 => Float32x2, 1 => Float32x2, 2 => Float32x2,
-                        3 => Float32x4, 4 => Float32x4, 5 => Float32x4,
-                    ],
-                })],
+                buffers: &[Some(GpuQuad::layout())],
             },
             primitive: Default::default(),
             depth_stencil: None,
@@ -227,9 +238,7 @@ impl GuiPass {
         Self {
             pipeline,
             screen: Target::new(device, &layout, &atlas_view, &sampler),
-            canvases: Target::new(device, &layout, &atlas_view, &sampler),
-            canvases_stale: false,
-            world: WorldGui::new(device, layouts, table),
+            world: WorldGui::new(device, layouts, table, atlas_view),
             atlas,
         }
     }
@@ -243,11 +252,12 @@ impl GuiPass {
         screen: &[GuiQuad],
         canvases: &[WorldCanvas],
     ) {
-        let world = self.world.pack(device, canvases);
-        let [screen, world] = self.pack(queue, [screen, &world]);
-        self.screen.set(device, queue, &screen);
-        self.canvases.set(device, queue, &world);
-        self.canvases_stale = true;
+        let lists: Vec<&[GuiQuad]> = std::iter::once(screen)
+            .chain(canvases.iter().map(|c| &c.quads[..]))
+            .collect();
+        let gpu = self.pack(queue, &lists);
+        self.screen.set(device, queue, &gpu[0]);
+        self.world.set(device, canvases, &gpu[1..]);
     }
 
     /// Where each world GUI canvas is from now on.
@@ -258,25 +268,23 @@ impl GuiPass {
     /// Each of `lists` as the shader reads them, their glyphs in the
     /// atlas. If the atlas fills and starts again partway, every glyph is
     /// placed again once, so none points at a mask that was written over.
-    fn pack<const N: usize>(
-        &mut self,
-        queue: &wgpu::Queue,
-        lists: [&[GuiQuad]; N],
-    ) -> [Vec<GpuQuad>; N] {
+    fn pack(&mut self, queue: &wgpu::Queue, lists: &[&[GuiQuad]]) -> Vec<Vec<GpuQuad>> {
         let scale = 1.0 / atlas::SIZE as f32;
-        let once = |atlas: &mut Atlas| {
-            lists.map(|quads| {
-                quads
-                    .iter()
-                    .filter_map(|q| {
-                        let uv = match &q.glyph {
-                            None => FILL,
-                            Some(mask) => atlas.place(queue, mask)?.map(|t| t * scale),
-                        };
-                        Some(GpuQuad::new(q, uv))
-                    })
-                    .collect()
-            })
+        let once = |atlas: &mut Atlas| -> Vec<Vec<GpuQuad>> {
+            (lists.iter())
+                .map(|quads| {
+                    quads
+                        .iter()
+                        .filter_map(|q| {
+                            let uv = match &q.glyph {
+                                None => [0.0; 4],
+                                Some(mask) => atlas.place(queue, mask)?.map(|t| t * scale),
+                            };
+                            Some(GpuQuad::new(q, uv))
+                        })
+                        .collect()
+                })
+                .collect()
         };
         let resets = self.atlas.resets;
         let gpu = once(&mut self.atlas);
@@ -284,22 +292,6 @@ impl GuiPass {
             return gpu;
         }
         once(&mut self.atlas)
-    }
-
-    /// Draw the world GUI's canvases into their atlas, if they changed.
-    pub(crate) fn record_canvases(
-        &mut self,
-        queue: &wgpu::Queue,
-        encoder: &mut wgpu::CommandEncoder,
-    ) {
-        if !self.canvases_stale {
-            return;
-        }
-        self.canvases_stale = false;
-        if let Some(atlas) = &self.world.atlas {
-            let side = (atlas.side, atlas.side);
-            self.draw(queue, encoder, &self.canvases, &atlas.view, side, true);
-        }
     }
 
     /// Upload the world GUI's canvases `camera` sees this frame, in a
@@ -328,11 +320,10 @@ impl GuiPass {
         target: &wgpu::TextureView,
         size: (u32, u32),
     ) -> bool {
-        self.draw(queue, encoder, &self.screen, target, size, false)
+        self.draw(queue, encoder, &self.screen, target, size)
     }
 
-    /// Draw `quads` into `view`, cleared first. Whether there were any;
-    /// with `always`, `view` is cleared even without.
+    /// Draw `quads` into `view`, cleared first. Whether there were any.
     fn draw(
         &self,
         queue: &wgpu::Queue,
@@ -340,11 +331,10 @@ impl GuiPass {
         quads: &Target,
         view: &wgpu::TextureView,
         (width, height): (u32, u32),
-        always: bool,
     ) -> bool {
-        if quads.quads.is_none() && !always {
+        let Some((buffer, count)) = &quads.quads else {
             return false;
-        }
+        };
         let size = [width as f32, height as f32, 0.0, 0.0];
         queue.write_buffer(&quads.size, 0, bytemuck::bytes_of(&size));
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -363,9 +353,6 @@ impl GuiPass {
             occlusion_query_set: None,
             multiview_mask: None,
         });
-        let Some((buffer, count)) = &quads.quads else {
-            return false;
-        };
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, &quads.group, &[]);
         pass.set_vertex_buffer(0, buffer.slice(..));

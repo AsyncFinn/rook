@@ -30,38 +30,17 @@ pub struct GuiQuad {
 impl GuiQuad {
     /// A clip rectangle that clips nothing.
     pub const NO_CLIP: [f32; 4] = [f32::MIN, f32::MIN, f32::MAX, f32::MAX];
-
-    /// The pixels it can cover (left, top, right, bottom): its turned
-    /// rectangle's bounds inside its clip. Empty when right < left.
-    pub fn reach(&self) -> [f32; 4] {
-        let (sin, cos) = self.rotation.sin_cos();
-        let half = 0.5
-            * Vec2::new(
-                self.size.x.abs() * cos.abs() + self.size.y.abs() * sin.abs(),
-                self.size.x.abs() * sin.abs() + self.size.y.abs() * cos.abs(),
-            );
-        let (lo, hi) = (self.center - half, self.center + half);
-        let c = self.clip;
-        [
-            lo.x.max(c[0]),
-            lo.y.max(c[1]),
-            hi.x.min(c[2]),
-            hi.y.min(c[3]),
-        ]
-    }
 }
 
-/// A SurfaceGui's or BillboardGui's drawing (docs/behavior/gui/world.md).
+/// A SurfaceGui's or BillboardGui's drawing (docs/behavior/gui-world.md).
 #[derive(Debug, Clone, PartialEq)]
 pub struct WorldCanvas {
-    /// Bottom first, in pixels from the canvas's top left.
+    /// Bottom first, in pixels from the canvas's top left. Unclipped GUI
+    /// spills past the canvas, and draws there too.
     pub quads: Vec<GuiQuad>,
     /// The canvas's size in pixels (its `AbsoluteSize`): the rectangle
     /// laid on the face, or the billboard's size.
     pub size: Vec2,
-    /// What its quads reach, the canvas included (left, top, right,
-    /// bottom): what unclipped GUI spills past the canvas draws too.
-    pub reach: [f32; 4],
     /// `LightInfluence`: 0 its own color, 1 lit as a surface.
     pub light_influence: f32,
     pub brightness: f32,
@@ -96,13 +75,18 @@ pub enum WorldPlace {
     },
 }
 
-/// A glyph rasterized at one size: one coverage byte per pixel, rows top
-/// first.
+/// A glyph rasterized for drawing, one byte per pixel, rows top first:
+/// its coverage at one size, or a distance field that draws it sharp at
+/// any size.
 #[derive(Debug, PartialEq, Eq)]
 pub struct GlyphMask {
     /// Names this mask among all others, so a renderer can keep it.
     pub key: u64,
     pub width: u32,
     pub height: u32,
-    pub coverage: Vec<u8>,
+    pub pixels: Vec<u8>,
+    /// The bytes are a signed distance field: 128 on the outline, rising
+    /// inside and falling outside, so a renderer draws the glyph's edge
+    /// where they cross 128 (Roblox's GUI shader draws text this way).
+    pub distance: bool,
 }

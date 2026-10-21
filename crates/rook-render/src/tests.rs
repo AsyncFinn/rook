@@ -464,9 +464,9 @@ fn highlights_fill_and_outline_through_walls_when_on_top() {
     assert!(!(0..w).any(|x| at(&pixels, x, 32) == [0, 0, 255]));
 }
 
-/// A SurfaceGui's canvas shows on its face, unlit at its own color
-/// through the curve; a BillboardGui behind the part is hidden unless it's
-/// AlwaysOnTop.
+/// A SurfaceGui's canvas shows on its face, sharp and unlit at its own
+/// color through the curve; a BillboardGui behind the part is hidden
+/// unless it's AlwaysOnTop.
 #[test]
 fn world_gui_draws_in_the_world() {
     let Ok(mut r) = Renderer::headless() else {
@@ -495,20 +495,19 @@ fn world_gui_draws_in_the_world() {
     let canvas = |quads: Vec<GuiQuad>, size: f32, on_top: bool| WorldCanvas {
         quads,
         size: Vec2::splat(size),
-        reach: [0.0, 0.0, size, size],
         light_influence: 0.0,
         brightness: 1.0,
         always_on_top: on_top,
         max_distance: f32::INFINITY,
     };
-    // Red on the canvas's left half.
+    // Red on the left half of a canvas 4 pixels across, a stud each.
     let surface = canvas(
         vec![fill(
-            Vec2::new(100.0, 200.0),
-            Vec2::new(200.0, 400.0),
+            Vec2::new(1.0, 2.0),
+            Vec2::new(2.0, 4.0),
             [1.0, 0.0, 0.0],
         )],
-        400.0,
+        4.0,
         false,
     );
     let square = |color| vec![fill(Vec2::splat(5.0), Vec2::splat(10.0), color)];
@@ -526,8 +525,8 @@ fn world_gui_draws_in_the_world() {
     r.place_world_gui(vec![
         Some(WorldPlace::Surface {
             origin: Vec3::new(-2.0, 2.0, 0.5),
-            right: Vec3::new(0.01, 0.0, 0.0),
-            down: Vec3::new(0.0, -0.01, 0.0),
+            right: Vec3::X,
+            down: Vec3::NEG_Y,
         }),
         Some(billboard(1.0)),
         Some(billboard(-1.0)),
@@ -548,6 +547,9 @@ fn world_gui_draws_in_the_world() {
     assert!(red[0] > 200 && red[1] < 30 && red[2] < 30, "{red:?}");
     let part = at(42, 32);
     assert!(part[0] < 200 && part[0].abs_diff(part[1]) < 8, "{part:?}");
+    // Its edge is sharp, however few canvas pixels are stretched over it.
+    assert_eq!(at(30, 32), red);
+    assert_eq!(at(34, 32), part);
     let behind = at(39, 25);
     assert!(behind[1].abs_diff(behind[0]) < 8, "{behind:?}");
     let over = at(39, 39);

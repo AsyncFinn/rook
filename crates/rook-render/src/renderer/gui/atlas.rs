@@ -75,7 +75,7 @@ impl Atlas {
                 origin: wgpu::Origin3d { x, y: top, z: 0 },
                 aspect: wgpu::TextureAspect::All,
             },
-            &mask.coverage,
+            &mask.pixels,
             wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(mask.width),

@@ -146,12 +146,15 @@ fn what_world_gui_draws() {
     let mut layout = laid_out(&mut dom);
     let canvases = layout.draw_world(&dom);
     assert_eq!(canvases.len(), 1);
-    assert_eq!(canvases[0].reach, [0.0, 0.0, 1000.0, 800.0]);
+    let spilled = &canvases[0].quads[0];
+    assert_eq!(spilled.center, Vec2::new(850.0, 650.0));
+    assert_eq!(spilled.clip, rook_types::GuiQuad::NO_CLIP);
     assert_eq!(canvases[0].max_distance, f32::INFINITY);
 
     set(&mut dom, gui, "ClipsDescendants", Value::Bool(true));
     layout.sync(&mut dom);
-    assert_eq!(layout.draw_world(&dom)[0].reach, [0.0, 0.0, 800.0, 600.0]);
+    let clipped = &layout.draw_world(&dom)[0].quads[0];
+    assert_eq!(clipped.clip, [0.0, 0.0, 800.0, 600.0]);
 
     set(&mut dom, gui, "Enabled", Value::Bool(false));
     layout.sync(&mut dom);

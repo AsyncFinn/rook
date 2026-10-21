@@ -83,6 +83,6 @@ pub(super) fn emit(dom: &Dom, text: &mut Text<'_>, out: &mut Vec<GuiQuad>) {
             visible: None,
         };
         let block = text::lay_out(text.fonts, &source, size, None);
-        super::text::emit(&block, placed, GuiQuad::NO_CLIP, text, out);
+        super::text::emit(&block, placed, GuiQuad::NO_CLIP, false, text, out);
     }
 }

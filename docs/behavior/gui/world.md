@@ -12,7 +12,8 @@ pixels in Rook and Studio.
 
 Code: which world GUIs show, their canvas sizes and places in
 `rook-gui`'s `world` module; their contents lay out and draw as a
-ScreenGui's do ([GUI](layout.md)); the canvas atlas and the world pass in
+ScreenGui's do ([GUI](layout.md)), text from distance fields
+(`rook-gui/src/text/distance.rs`); the world pass in
 `rook-render/src/renderer/gui/world.rs` and `shaders/world_gui.wgsl`.
 
 ## Which show
@@ -54,7 +55,7 @@ inf.
 - **Spilling**: with `ClipsDescendants` off, what lies past the canvas
   still draws, past the part's edges (a 300 × 300 frame at (700, 500) on
   an 800 × 600 canvas hung 2 studs off the side and bottom). With it on,
-  the canvas clips. Rook draws up to 2048 pixels past each edge.
+  the canvas clips.
 - Inference: a SurfaceGui isn't seen from behind its face; Rook lifts it
   0.01 studs off the face.
 
@@ -93,6 +94,14 @@ inf.
   then those `AlwaysOnTop`, under the screen's GUI. Inference: SurfaceGui
   `ZOffset` isn't used yet.
 - `MaxDistance` hides one further than that from the camera.
-- Rook draws every canvas into one atlas (at most 4096 pixels square)
-  and lays each in the world as a rectangle; canvases over 2048 pixels,
-  or too many to fit, draw smaller.
+- **Sharpness**: Studio's world GUI text stays sharp however near it's
+  seen, like vector text, even on a 200 × 200 canvas stretched over a
+  23-stud sign. Its UI pixel shader (`shaders_glsl3.pack`, 0.743) draws
+  text from a one-channel signed distance field: it smooths each pixel
+  across the field's 0.5 level over 0.65 × the field's screen-space
+  slope (`fwidth`) each way, and can draw an outline from a second,
+  lower level. Rook draws world GUI text the same way from fields it
+  makes per glyph (line height 64, reaching 6 field pixels each side),
+  and lays each rectangle and glyph straight onto the canvas's plane, so
+  edges stay sharp too. Screen text still draws from coverage masks at
+  its exact size.
