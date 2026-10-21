@@ -9,7 +9,7 @@ of TextLabels in a ScreenGui under StarterGui. The conformance case
 `gui/text` holds the decisive values; Rook passes it.
 
 Code: `rook-gui`'s `text` module (fonts, shaping, lines, rich text,
-glyph masks) and `draw/text.rs`; the glyph atlas in
+glyph masks and distance fields) and `draw/text.rs`; the glyph atlas in
 `rook-render/src/renderer/gui/atlas.rs`; `Font` in Luau in
 `rook-lua/src/types/font.rs`; the `Font` and `FontSize` views in
 `rook-lua/src/api/properties/text.rs`.
@@ -107,9 +107,21 @@ small caps are drawn as capitals (Approximation).
 
 ## Drawing
 
-- Glyphs are drawn from their outlines (unhinted) into an 8-bit atlas,
-  on whole pixels unless the object is turned, over the object's
-  background and clipped with it. `TextColor3` at `TextTransparency`.
+- **SDF or bitmap**: Studio's flags (`StudioAppSettings.json`, 0.743)
+  turn signed distance field fonts on (`FFlagUseSDFForFonts3`,
+  `DFFlagEnableSDFFontUsage2`, `DFFlagSDFTextSurfaceGui`) with
+  `DFIntSDFBitmapFallbackThreshold` 34, `DFIntSDFSpread` 25, two field
+  sizes (`DFFlagTwoSDFBuckets`) and a deny list of RobotoMono at weight
+  100; its UI pixel shader has a bitmap mode and a distance field mode
+  ([world GUI](world.md#drawing)). Inference: screen text 34 pixels or
+  bigger is drawn from distance fields, smaller from bitmaps. Rook does
+  so, by the size drawn (UIScales count); world GUI text always uses
+  fields. Not yet: the deny list.
+- Bitmap glyphs are drawn from their outlines (unhinted) into an 8-bit
+  atlas at their size, on whole pixels unless the object is turned;
+  field glyphs are stretched from one field per glyph. Either is drawn
+  over the object's background and clipped with it, in `TextColor3` at
+  `TextTransparency`.
 - Inference: `TextStrokeTransparency` below 1 outlines each glyph a pixel
   wide in `TextStrokeColor3` (the glyph drawn again under it, moved each
   way), fading with the text; underlines and strikethroughs are a

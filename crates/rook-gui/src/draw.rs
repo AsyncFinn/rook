@@ -101,7 +101,7 @@ struct Draw<'a, 'b> {
     layout: &'a Layout,
     text: &'a mut Text<'b>,
     out: &'a mut Vec<GuiQuad>,
-    /// Text is drawn from distance fields, not masks at its size.
+    /// Text is drawn from distance fields at every size (world GUI).
     fields: bool,
 }
 

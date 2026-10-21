@@ -21,18 +21,25 @@ const OUTLINE: [Vec2; 8] = [
     Vec2::new(1.0, 1.0),
 ];
 
-/// `fields`: draw glyphs from distance fields, which stay sharp at any
-/// size, rather than masks at the size they're drawn.
+/// Screen text this big or bigger, in pixels as drawn, is drawn from
+/// distance fields; smaller text from masks at its size. Inference from
+/// Roblox's flags (docs/behavior/gui/text.md#drawing): SDF fonts are on,
+/// with a bitmap fallback threshold of 34.
+const FIELDS_FROM: f32 = 34.0;
+
+/// Glyphs are drawn from distance fields, which stay sharp at any size,
+/// when `world` or [`FIELDS_FROM`] says so; otherwise from masks at the
+/// size they're drawn.
 pub(super) fn emit(
     block: &TextBlock,
     p: Placed,
     clip: [f32; 4],
-    fields: bool,
+    world: bool,
     text: &mut Text<'_>,
     out: &mut Vec<GuiQuad>,
 ) {
-    let glyph = |g, nudge, color, text: &mut Text<'_>, out: &mut Vec<GuiQuad>| {
-        let quad = if fields {
+    let glyph = |g: &PlacedGlyph, nudge, color, text: &mut Text<'_>, out: &mut Vec<GuiQuad>| {
+        let quad = if world || g.px * p.scale >= FIELDS_FROM {
             field_glyph(g, p, nudge, color, clip, text)
         } else {
             glyph(g, p, nudge, color, clip, text)

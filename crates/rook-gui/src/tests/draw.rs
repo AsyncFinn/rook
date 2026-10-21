@@ -131,3 +131,48 @@ fn hints_and_messages() {
     gui.sync(&mut dom);
     assert_eq!(gui.draw(&dom).len(), 1);
 }
+
+/// Screen text 34 pixels or bigger is drawn from distance fields, smaller
+/// text from masks at its size (Inference from Studio's flags); needs the
+/// install's fonts.
+#[test]
+fn big_screen_text_draws_from_distance_fields() {
+    use rook_content::resolver::install::{Places, newest_from};
+    let Some(install) = newest_from(None, &Places::from_env(|n| std::env::var_os(n))) else {
+        return;
+    };
+    let mut config = rook_content::Config::empty();
+    config.install = Some(install);
+    config.network = false;
+    let (mut dom, player_gui) = client();
+    let screen = child(&mut dom, "ScreenGui", player_gui, &[]);
+    let label = |dom: &mut Dom, size: f32| {
+        let id = child(
+            dom,
+            "TextLabel",
+            screen,
+            &[
+                ("Size", udim2(0.0, 400, 0.0, 100)),
+                ("Text", Value::String("Ab".into())),
+                ("TextSize", Value::Float32(size)),
+                ("BackgroundTransparency", Value::Float32(1.0)),
+            ],
+        );
+        set_enum(dom, id, "Font", "SourceSans");
+        id
+    };
+    label(&mut dom, 20.0);
+    let mut gui = Gui::default();
+    gui.set_content(std::sync::Arc::new(rook_content::Resolver::new(config)));
+    gui.sync(&mut dom);
+    let fields = |quads: &[GuiQuad]| -> Vec<bool> {
+        quads
+            .iter()
+            .filter_map(|q| q.glyph.as_ref().map(|m| m.distance))
+            .collect()
+    };
+    assert_eq!(fields(&gui.draw(&dom)), [false, false]);
+    label(&mut dom, 40.0);
+    gui.sync(&mut dom);
+    assert_eq!(fields(&gui.draw(&dom)), [false, false, true, true]);
+}
