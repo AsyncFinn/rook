@@ -56,6 +56,7 @@ Most features span several crates: the rules in `rook-types` or the feature's ow
 - **Input:** the window's keys and camera in `rook-player/src/app/` (`keys.rs`, `camera.rs`); clicks and the mouse in `rook-engine/src/bridges/input.rs`; UserInputService in `rook-lua/src/api/methods/input.rs`.
 - **Replication:** `rook-net` (`source.rs` on the server, `sink.rs` on the client, `replicator.rs`); the play session in `rook-engine/src/session/host.rs`; remotes in `rook-lua/src/api/methods/remotes.rs` and `rook-lua/src/net.rs`.
 - **Physics:** `rook-physics/src/`: `assembly/bodies.rs` (assemblies as Rapier bodies), `sync.rs` (building the world from the DOM and applying the journal), `joints/` (joints, constraints, movers and the drives that power them), `contacts/` (materials, collision groups), `shape/` (collider shapes, unions, terrain), `query.rs` (raycasts and overlaps), `step.rs`.
+- **The icon:** `resources/rook.svg`, the only copy; `apps/build.rs` embeds it in both apps and `rook-player/src/app/icon.rs` puts it on the window (see `resources/README.md`).
 - **Settings, logs and the data folder:** `rook-engine/src/settings.rs`, `logging.rs` and `data_folder.rs`; the files themselves through `rook-platform`.
 - **Findings from Studio and the archive:** `docs/behavior/<topic>.md`. The roadmap keeps only the plan and links there.
 

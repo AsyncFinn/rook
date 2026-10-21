@@ -1,6 +1,7 @@
 //! The window: input, the frame loop and drawing.
 
 pub(crate) mod camera;
+pub(crate) mod icon;
 pub(crate) mod keys;
 pub(crate) mod launch;
 pub(crate) mod readout;
@@ -63,6 +64,7 @@ impl Gfx {
                     .with_inner_size(winit::dpi::LogicalSize::new(1280, 720)),
             )?,
         );
+        icon::set(&window, window.scale_factor());
         let instance =
             wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
         let surface = instance.create_surface(window.clone())?;
@@ -279,6 +281,9 @@ impl ApplicationHandler for App {
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _: WindowId, event: WindowEvent) {
+        if let Some(gfx) = &self.gfx {
+            icon::on_event(&gfx.window, &event);
+        }
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => {

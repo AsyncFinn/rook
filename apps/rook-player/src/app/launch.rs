@@ -162,6 +162,9 @@ impl ApplicationHandler for Launch {
         if let Some(app) = &mut self.app {
             return app.window_event(event_loop, id, event);
         }
+        if let Some(gfx) = &self.gfx {
+            icon::on_event(&gfx.window, &event);
+        }
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::KeyboardInput { event, .. }

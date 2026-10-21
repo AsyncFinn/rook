@@ -16,6 +16,7 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 
 ## [Unreleased]
 
+- Rook has an icon: a white rook on an orange-to-red tile (`resources/rook.svg`). `rook-player.exe` and `rook-tools.exe` carry it on Windows, drawn from the SVG at every size Windows shows, and the player's title bar and taskbar button load the image made for their exact size at the display's scale, so they stay sharp.
 - The workspace is split along what a dedicated server needs. `rook-platform` is the only way the crates reach the host machine (files, long-lived threads, parallel work, the network), with the desktop's implementation behind its `native` feature, which only the apps turn on. What turns a DataModel into the renderer's scene moved out of `rook-player` into a new `rook-view` crate, so `rook-engine`, `rook-cli` and the coming `rook-server` link no rendering code. `rook-signal` and `rook-scheduler` are now `rook-lua`'s `signal` and `scheduler` modules. Clippy's banned calls and cargo-deny's bans (`deny.toml`; `scripts/check` now runs `cargo deny check bans`) keep it that way. Nothing draws or behaves differently.
 
 ## [0.7.0] — 2026-10-20 — M7 Lights and effects

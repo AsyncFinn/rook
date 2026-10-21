@@ -7,6 +7,8 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 rust-version.workspace = true
+# Embeds the app icon (resources/README.md)
+build = "../build.rs"
 
 [[bin]]
 name = "rook-tools"
@@ -37,6 +39,10 @@ blake3.workspace = true
 default = ["repl"]
 # `run-headless --repl`: type Luau into the running place.
 repl = ["rook-engine/repl"]
+
+[build-dependencies]
+resvg.workspace = true
+embed-resource.workspace = true
 
 [lints]
 workspace = true

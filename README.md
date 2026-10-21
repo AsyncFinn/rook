@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="resources/rook.svg" width="128" alt="Rook icon">
+
 # Rook
 
 **An open-source reimplementation of the Roblox engine, written in Rust.**

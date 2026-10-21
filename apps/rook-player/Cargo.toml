@@ -7,6 +7,8 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 rust-version.workspace = true
+# Embeds the app icon (resources/README.md)
+build = "../build.rs"
 
 [[bin]]
 name = "rook-player"
@@ -44,6 +46,10 @@ default = ["repl"]
 repl = ["rook-engine/repl"]
 # Live per-frame timeline in the Tracy profiler (https://github.com/wolfpld/tracy).
 tracy = ["profiling/profile-with-tracy"]
+
+[build-dependencies]
+resvg.workspace = true
+embed-resource.workspace = true
 
 [lints]
 workspace = true

@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f47a2e"/>
+      <stop offset="1" stop-color="#b3241e"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#3a0a00" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#tile)"/>
+  <g filter="url(#shadow)">
+    <g transform="rotate(10 256 256)" fill="#ffffff" fill-rule="evenodd">
+      <!-- battlements -->
+      <path d="M150 112 Q150 104 158 104 L198 104 Q206 104 206 112 L206 132 Q206 140 214 140
+        L220 140 Q228 140 228 132 L228 112 Q228 104 236 104 L276 104 Q284 104 284 112
+        L284 132 Q284 140 292 140 L298 140 Q306 140 306 132 L306 112 Q306 104 314 104
+        L354 104 Q362 104 362 112 L362 184 Q362 192 354 192 L158 192 Q150 192 150 184 Z"/>
+      <!-- tower, with its window cut out -->
+      <path d="M186.74 211.96 Q187.58 204 195.58 204 L316.42 204 Q324.42 204 325.26 211.96
+        L337.9 332.04 Q338.74 340 330.74 340 L181.26 340 Q173.26 340 174.1 332.04 Z
+        M242 256 Q236 256 236 262 L236 290 Q236 296 242 296 L270 296 Q276 296 276 290
+        L276 262 Q276 256 270 256 Z"/>
+      <!-- base -->
+      <path d="M136 360 Q136 352 144 352 L368 352 Q376 352 376 360 L376 400 Q376 408 368 408
+        L144 408 Q136 408 136 400 Z"/>
+    </g>
+  </g>
+</svg>
