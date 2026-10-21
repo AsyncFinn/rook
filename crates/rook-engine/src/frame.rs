@@ -22,6 +22,10 @@ impl DataModel {
             self.fire(rs, "RenderStepped", dt);
             self.fire(rs, "PreRender", dt);
         }
+        if self.role == Role::Client {
+            // A script may have replaced the current camera.
+            self.sync_viewport_size();
+        }
         // Measured: GUI is laid out after RenderStepped.
         self.runtime.sync_gui();
         self.update_content();

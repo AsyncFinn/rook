@@ -121,16 +121,25 @@ impl DataModel {
     }
 
     /// Give the current camera the window's size as its ViewportSize, which
-    /// `Camera:ViewportPointToRay` and friends read.
-    fn sync_viewport_size(&self) {
+    /// `Camera:ViewportPointToRay` and friends and GUI layout read. A
+    /// change fires Changed, as a resize does in Roblox. Nothing happens
+    /// before the host gives a window size.
+    pub(crate) fn sync_viewport_size(&self) {
+        let (w, h) = self.input.viewport;
+        if (w, h) == (0, 0) {
+            return;
+        }
         let Some(camera) = self.current_camera() else {
             return;
         };
-        let (w, h) = self.input.viewport;
         let size = rook_types::Vector2::new(w as f32, h as f32);
-        let mut world = self.runtime.world_mut();
-        if world.dom.vector2_property(camera, "ViewportSize") != Some(size) {
-            set(&mut world.dom, camera, "ViewportSize", Value::Vector2(size));
+        let current = self
+            .runtime
+            .world()
+            .dom
+            .vector2_property(camera, "ViewportSize");
+        if current != Some(size) {
+            self.set_property(camera, "ViewportSize", Value::Vector2(size));
         }
     }
 
@@ -488,12 +497,6 @@ impl DataModel {
             .float_property(detector, "MaxActivationDistance")
             .unwrap_or(32.0);
         (distance <= max).then_some(detector)
-    }
-}
-
-fn set(dom: &mut rook_dom::Dom, id: InstanceId, name: &str, value: Value) {
-    if let Some(p) = dom.property_id(id, name) {
-        dom.load_property(id, p, value);
     }
 }
 

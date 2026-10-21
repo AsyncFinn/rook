@@ -182,6 +182,7 @@ mod audio_api;
 mod client_tweens;
 mod effects;
 mod explosions;
+mod gui;
 mod preload;
 mod scripts;
 mod session;

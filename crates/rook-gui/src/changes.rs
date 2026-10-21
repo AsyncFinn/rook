@@ -10,27 +10,34 @@ pub(crate) struct Watch {
     gui: Option<ClassId>,
     /// UIComponent: layouts, padding, UIScale and the size constraints.
     ui: Option<ClassId>,
-    /// `Camera.ViewportSize`, the screen's size.
+    /// `Camera.ViewportSize`, the screen's size, and
+    /// `Workspace.CurrentCamera`, which camera's it is.
     viewport: Option<PropertyId>,
+    current_camera: Option<PropertyId>,
 }
 
 impl Watch {
     pub(crate) fn new(dom: &Dom) -> Self {
         let db = dom.database();
         let class = |name| db.class_by_name(name).map(|c| c.id);
+        let property = |owner, name| {
+            class(owner)
+                .and_then(|c| db.find_canonical_property(c, name))
+                .map(|p| p.id)
+        };
         Self {
             gui: class("GuiBase2d"),
             ui: class("UIComponent"),
-            viewport: class("Camera")
-                .and_then(|c| db.find_canonical_property(c, "ViewportSize"))
-                .map(|p| p.id),
+            viewport: property("Camera", "ViewportSize"),
+            current_camera: property("Workspace", "CurrentCamera"),
         }
     }
 
     pub(crate) fn touches(&self, dom: &Dom, change: &Change) -> bool {
         match change {
             Change::Property { id, property } => {
-                Some(*property) == self.viewport || self.is_gui(dom, *id)
+                [self.viewport, self.current_camera].contains(&Some(*property))
+                    || self.is_gui(dom, *id)
             }
             // A Folder or a Player carrying GUI counts, so the whole
             // subtree is looked at.
