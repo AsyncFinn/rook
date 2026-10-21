@@ -1,6 +1,6 @@
 //! Breaking shaped text into lines: at newlines, and when wrapping, before
 //! a word that would pass the width; a word wider than a whole line is
-//! split between glyphs (docs/behavior/gui-text.md#lines).
+//! split between glyphs (docs/behavior/gui/text.md#lines).
 
 use super::shape::Glyph;
 

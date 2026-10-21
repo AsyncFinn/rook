@@ -6,9 +6,9 @@ use super::*;
 impl SceneCache {
     /// The textures and tint of `layer`'s surfaces, and how it blends on seams:
     /// a MaterialVariant MaterialService puts in the material's place, or else
-    /// the material's own pack in `set`, coloured by the material's tint
-    /// ([`TerrainMaterial::tint`]); untextured, a material shows its colour.
-    /// How Studio tints and blends them is in `docs/behavior/terrain.md`.
+    /// the material's own pack in `set`, colored by the material's tint
+    /// ([`TerrainMaterial::tint`]); untextured, a material shows its color.
+    /// How Studio tints and blends them is in `docs/behavior/terrain/materials.md`.
     pub(super) fn terrain_look(
         &mut self,
         dom: &Dom,

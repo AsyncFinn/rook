@@ -1,6 +1,6 @@
 //! The surface patterns (studs, the weld/glue lattice, inlets, universal)
 //! as four layers of one texture array, each tile 2 × 2 studs
-//! (`rook_types::SURFACE_TILE_STUDS`). Grey 0.5 leaves a part's colour as
+//! (`rook_types::SURFACE_TILE_STUDS`). Gray 0.5 leaves a part's color as
 //! it is; lighter and darker texels shade it, as Studio's do.
 //!
 //! The player hands over the user's own `textures/studs.dds` when it finds
@@ -65,7 +65,7 @@ pub(crate) fn rooks_own() -> Patterns {
     }
 }
 
-/// Grey level of a pattern at texel (x, y).
+/// Gray level of a pattern at texel (x, y).
 fn shade(pattern: SurfacePattern, x: u32, y: u32) -> f32 {
     let cell = OWN_SIZE / 2;
     let (cx, cy) = (x / cell, y / cell);

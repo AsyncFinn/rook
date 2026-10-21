@@ -65,7 +65,7 @@ fn rejects_damaged_files() {
 }
 
 /// The user's own head mesh, when an install is found: the facts
-/// measured in ROADMAP M4 (517 vertices, 846 triangles, about 1.2
+/// measured in docs/behavior/meshes/file-meshes.md (517 vertices, 846 triangles, about 1.2
 /// studs each way).
 #[test]
 fn reads_the_installed_head_mesh() {

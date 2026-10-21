@@ -20,7 +20,7 @@ pub(super) fn sun_direction(hours: f32, latitude_degrees: f32) -> Vec3 {
 /// yellow and dimming in the last few degrees above the horizon (measured
 /// at five heights: (0.40, 0.40, 0) at y 0.024, (0.70, 0.70, 0.03) at
 /// 0.048, (0.91, 0.92, 0.51) at 0.096, white from about 0.15; fitted,
-/// Approximation). docs/behavior/lights.md, "The sun".
+/// Approximation). docs/behavior/lighting/sun.md.
 fn sun_color(y: f32) -> [f32; 3] {
     let warm = 1.0 - (-y.max(0.0) / 0.04).exp();
     let t = ((y - 0.045) / 0.105).clamp(0.0, 1.0);
@@ -32,7 +32,7 @@ fn sun_color(y: f32) -> [f32; 3] {
 /// 0.031 units on white; Approximation elsewhere, faded in as the sun's).
 const MOON_LIGHT: f32 = 0.031;
 
-/// The direction light comes from and its colour in light units: the sun
+/// The direction light comes from and its color in light units: the sun
 /// while it's up, else the moon, which Roblox puts opposite the sun's
 /// daily circle (Confirmed: `Lighting:GetMoonDirection()` in Studio 0.743
 /// at midnight, latitude 0, is the noon sun's direction).

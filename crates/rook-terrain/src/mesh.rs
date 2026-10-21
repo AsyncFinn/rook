@@ -1,5 +1,5 @@
 //! The surface Roblox builds from the voxels: surface nets
-//! (`docs/behavior/terrain.md`). Each dual cell where solid meets air holds
+//! (`docs/behavior/terrain/surface.md`). Each dual cell where solid meets air holds
 //! one vertex, the mean of its edges' crossings; each crossing voxel edge
 //! gets a quad of the solid voxel's material, split along [`DIAGONALS`].
 //! Water is meshed the same way in a second pass and moved down
@@ -96,7 +96,7 @@ pub const DIAGONALS: [[bool; 2]; 3] = [[true; 2]; 3];
 
 /// The chunks that can have a surface: every stored chunk, and the empty
 /// ones just below stored ones on each axis (they own the edges into the
-/// stored chunk). Chunks whose whole neighbourhood is one uniform voxel
+/// stored chunk). Chunks whose whole neighborhood is one uniform voxel
 /// have none and are left out.
 pub fn chunks_to_mesh(grid: &Grid) -> Vec<IVec3> {
     let mut out: Vec<IVec3> = grid
@@ -122,7 +122,7 @@ fn all_uniform(grid: &Grid, chunk: IVec3) -> bool {
 /// How far water's surface sits below where solid terrain's would: half a
 /// voxel (Studio's terrain material table gives Water `"water": 0.5`;
 /// measured: a lone full water voxel spans 3.333 to 0.667 studs below its
-/// centre, a full one-voxel slab 6 below to 2 above, its edge sloping as a
+/// center, a full one-voxel slab 6 below to 2 above, its edge sloping as a
 /// solid slab's does, 2 studs lower).
 pub const WATER_DROP: f32 = VOXEL_STUDS / 2.0;
 

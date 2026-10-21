@@ -3,7 +3,7 @@
 // Lighting comes from `lighting.wgsl`: Lambert sun light, shadowed through
 // the shadow map, plus an ambient that is the brighter of Ambient and
 // OutdoorAmbient on every face, unshadowed and never occluded from the sky
-// (measured in Studio 0.742, docs/behavior/lights.md), local lights, then
+// (measured in Studio 0.742, docs/behavior/lighting/ambient.md), local lights, then
 // linear fog.
 //
 // Images on faces follow `rook_types::NormalId` (the face frames come in
@@ -16,7 +16,7 @@ import package::common::{
     g, surface_atlas, image_sampler, VertexIn, VertexOut, ShadowIn,
     instance_rotation, world_position, placed, adorn_bits, CAST, NEON, UNLIT, EXACT, MODE_FACE, MODE_TILED,
     MODE_MESH_UV, UPRIGHT, SURFACES_SHIFT, MAPS, GLASS, SLOPED, MAPS_UV, VERTEX_COLORS,
-    UNION_FACE, TERRAIN_FACE, TERRAIN_WATER, TERRAIN_DRAWN_SHIFT, CENTRED, ALPHA_OVERLAY, ALPHA_TRANSPARENCY,
+    UNION_FACE, TERRAIN_FACE, TERRAIN_WATER, TERRAIN_DRAWN_SHIFT, CENTERED, ALPHA_OVERLAY, ALPHA_TRANSPARENCY,
     ALPHA_TINT_MASK, PATTERN_SHIFT, one_tap, tile_taps, terrain_taps,
 };
 import package::images::{
@@ -50,9 +50,9 @@ fn vs_main(v: VertexIn) -> VertexOut {
     let hi = v.i_box_max * v.i_size;
     var local = v.box_point * v.i_size;
     var normal = local_normal;
-    // Union vertices (bit 6 of their face) tile from their face's centre.
-    let centred = packed != 255u && (packed & UNION_FACE) != 0u;
-    var face = select(packed, packed & 7u, centred);
+    // Union vertices (bit 6 of their face) tile from their face's center.
+    let centered = packed != 255u && (packed & UNION_FACE) != 0u;
+    var face = select(packed, packed & 7u, centered);
     var center = (lo + hi) * 0.5;
     var size = abs(hi - lo);
     // Images and surfaces go by the part's own axes, not the turned
@@ -68,7 +68,7 @@ fn vs_main(v: VertexIn) -> VertexOut {
             face = array<u32, 6>(1u, 3u, 2u, 4u, 0u, 5u)[face];
         }
     }
-    out.face = face | select(0u, CENTRED, centred);
+    out.face = face | select(0u, CENTERED, centered);
     if packed >= TERRAIN_FACE && packed != 255u {
         out.face |= v.face & (7u << TERRAIN_DRAWN_SHIFT);
     }
@@ -96,7 +96,7 @@ fn vs_shadow(v: ShadowIn) -> @builtin(position) vec4<f32> {
 }
 
 // A highlighted part into the Highlight mask: its Highlight's number,
-// carried in its colour (`Instance::numbered`), where it covers. The
+// carried in its color (`Instance::numbered`), where it covers. The
 // position is worked out as `vs_main` does, so it meets the depth it left.
 struct HighlightOut {
     @builtin(position) @invariant clip: vec4<f32>,
@@ -140,12 +140,12 @@ fn face_of(n: vec3<f32>) -> u32 {
 }
 
 // Where tiling starts on a face: its image's top-left corner, or on a
-// union its centre (Studio tiles Textures on unions through the union's
-// UVs, planar and in studs from its centre; measured on a resized union,
+// union its center (Studio tiles Textures on unions through the union's
+// UVs, planar and in studs from its center; measured on a resized union,
 // where the tiles sat a quarter stud from where corner tiling puts them).
 // `at` is in studs from the top-left corner of a face of size `extent`.
 fn tiling_position(in: VertexOut, at: vec2<f32>, extent: vec2<f32>) -> vec2<f32> {
-    return select(at, at - extent * 0.5, (in.face & CENTRED) != 0u);
+    return select(at, at - extent * 0.5, (in.face & CENTERED) != 0u);
 }
 
 // Studs from the top-left corner of `face`'s image, and the face's size.
@@ -209,11 +209,11 @@ fn slope_scale(t: vec3<f32>, size: vec3<f32>, length: f32) -> f32 {
     return 0.7 * dot(spans, size) / max(length, 1e-3);
 }
 
-// Neon's glow in light units from its linear colour: 13.6 times the fourth
-// power of its sRGB colour, as bright as the frame keeps from about 188
-// grey up (fitted in Studio 0.742: grey 128 is 0.865 units under both
-// curves, 64 is 0.055, blue 105 0.38, and 160 grey reaches 2.04, as
-// Decals over it show; docs/behavior/tone-mapping.md).
+// Neon's glow in light units from its linear color: 13.6 times the fourth
+// power of its sRGB color, as bright as the frame keeps from about 188
+// gray up (fitted in Studio 0.742: gray 128 is 0.865 units under both
+// curves, 64 is 0.055, blue 105 0.38, and 160 gray reaches 2.04, as
+// Decals over it show; docs/behavior/lighting/tone-mapping.md).
 fn neon(albedo: vec3<f32>) -> vec3<f32> {
     let c = linear_to_srgb(albedo);
     return 13.6 * c * c * c * c;
@@ -271,10 +271,10 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
         albedo = a.rgb;
         alpha *= a.a;
     } else if terrain && (in.flags & MAPS) != 0u && (in.surfaces & 3u) == ALPHA_TINT_MASK {
-        // The 2022 set's terrain colour maps are tint masks (their packs'
+        // The 2022 set's terrain color maps are tint masks (their packs'
         // `alphamode` 2, TintMask): where they're opaque, Studio keeps
-        // only the texel's luma, times the material's tint for its colour
-        // (`TerrainMaterial::tint`, the instance colour). The legacy set's
+        // only the texel's luma, times the material's tint for its color
+        // (`TerrainMaterial::tint`, the instance color). The legacy set's
         // are multiplied by it, as below.
         let c = sample_taps(in.images, COLOR_MAP, taps, duv_x, duv_y);
         let luma = dot(c.rgb, vec3(0.25, 0.5, 0.25));
@@ -291,8 +291,8 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
     if in.surfaces != 0u && (in.flags & MAPS_UV) == 0u && !terrain {
         let pattern = (in.surfaces >> (face * 3u)) & 7u;
         if pattern != 0u {
-            // The patterns are grey around 0.5: twice them leaves the
-            // colour as it is between the studs.
+            // The patterns are gray around 0.5: twice them leaves the
+            // color as it is between the studs.
             let s = textureSampleGrad(surface_atlas, image_sampler, st, i32(pattern - 1u), dx, dy);
             albedo *= s.rgb * 2.0;
         }
@@ -314,7 +314,7 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
     return vec4(out, alpha);
 }
 
-// A SurfaceAppearance's colour (linear) and opacity from its colour map
+// A SurfaceAppearance's color (linear) and opacity from its color map
 // `c` (creator docs, checked in Studio 0.742 with a map whose see-through
 // pixels are white): the map times its tint (`Color`), where Overlay shows
 // the part's Color through the map's see-through pixels, Transparency
@@ -348,13 +348,13 @@ fn surface_alpha(in: VertexOut) -> f32 {
 }
 
 // See-through Glass: what's behind times a filter per channel, 1.2 x the
-// Glass's colour (in linear light) plus 0.01, raised to
-// 1.25 x min(2 x (1 - Transparency), 1)^1.7, at most 1. So the colour
+// Glass's color (in linear light) plus 0.01, raised to
+// 1.25 x min(2 x (1 - Transparency), 1)^1.7, at most 1. So the color
 // filters most strongly from 0.5 down (where the surface shows instead, in
 // `surface_alpha`), and by 0.95 nearly everything passes; white Glass
-// passes all of it, black Glass at 0.6 2%, grey 99 at 0.6 about 21%
-// (observed from 45 studs on grey Glass from 0 to 255 at 0.5 to 0.95 over
-// a wall of greys, per channel: red Glass's green and blue match black
+// passes all of it, black Glass at 0.6 2%, gray 99 at 0.6 about 21%
+// (observed from 45 studs on gray Glass from 0 to 255 at 0.5 to 0.95 over
+// a wall of grays, per channel: red Glass's green and blue match black
 // Glass's; fitted within about 5 levels. Approximation: Studio seems to
 // filter before its tone curve (Inference), so its bright blues pass a
 // little more, and seen from hundreds of studs away its Glass passes up to
@@ -367,7 +367,7 @@ fn fs_glass_filter(in: VertexOut) -> @location(0) vec4<f32> {
     return vec4(sqrt(min(pow(1.2 * in.color.rgb + 0.01, vec3(power)), vec3(1.0))), 1.0);
 }
 
-// ForceField: its colour added over what's behind, faint where it faces
+// ForceField: its color added over what's behind, faint where it faces
 // the camera and strong towards its outline, less as Transparency rises
 // (observed on blocks and balls: face-on a red one added about 0.014 to
 // the red behind it, at grazing angles 0.18; Approximation). Studio's

@@ -3,7 +3,7 @@
 //! triangle-mesh collider per material and chunk, built when something first
 //! comes near the chunk ([`near`]); water's is a sensor. Scripts' edits
 //! rebuild only the chunks they touch ([`edit`]). Measurements are in
-//! `docs/behavior/terrain.md` (Collision and queries).
+//! `docs/behavior/terrain/collision.md`.
 
 use rapier3d::parry::query::RayCullingMode;
 use rapier3d::parry::shape::TriMesh;

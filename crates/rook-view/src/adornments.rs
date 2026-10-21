@@ -1,4 +1,4 @@
-//! Adornments drawn on a part (docs/behavior/adornments.md), as Studio
+//! Adornments drawn on a part (docs/behavior/rendering/adornments.md), as Studio
 //! 0.742 draws them: SelectionBox, SelectionSphere, SurfaceSelection,
 //! the HandleAdornments, Handles, ArcHandles, FloorWire and
 //! SelectionPartLasso, each kind in its own file, and the Highlight
@@ -135,7 +135,7 @@ fn color(dom: &Dom, id: InstanceId, property: &str) -> [f32; 3] {
         .unwrap_or(DEFAULT_COLOR)
 }
 
-/// A pose `offset` from the part's centre, unturned.
+/// A pose `offset` from the part's center, unturned.
 fn at(offset: Vec3) -> Pose {
     Pose {
         offset,

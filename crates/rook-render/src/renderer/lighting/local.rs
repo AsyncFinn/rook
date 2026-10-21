@@ -6,7 +6,7 @@
 //! (`shaders/lighting.wgsl`). The voxels are filled again only when a light
 //! changes or the camera leaves the volume's middle; parts marked into them
 //! (`blockers.rs`) carry the sky's light down and shadow lights. What Studio
-//! does is in `docs/behavior/lights.md`.
+//! does is in `docs/behavior/lighting/local-lights.md`.
 
 mod blockers;
 mod hash;
@@ -20,18 +20,18 @@ use hash::{GpuLight, LightHash};
 /// How far a light may move from where the hash placed it before the hash
 /// is built again, in studs.
 pub(super) const SLACK: f32 = 8.0;
-/// Studio's light voxels, in studs (centred at 4k + 2).
+/// Studio's light voxels, in studs (centered at 4k + 2).
 const VOXEL: f32 = 4.0;
 /// The voxel volume: voxels along each axis (1024 x 256 x 1024 studs, as
-/// Studio's grid: docs/behavior/lights.md). Light stops at its faces.
+/// Studio's grid: docs/behavior/lighting/local-lights.md). Light stops at its faces.
 const VOLUME: [u32; 3] = [256, 64, 256];
-/// How far ahead of the camera the volume's centre sits, along the view
+/// How far ahead of the camera the volume's center sits, along the view
 /// direction flattened onto the ground (Studio's grid reaches about 760
-/// studs ahead and 260 behind; looking straight down, it's centred).
+/// studs ahead and 260 behind; looking straight down, it's centered).
 const AHEAD: f32 = 256.0;
-/// How far the volume's centre may drift from where it should be before
+/// How far the volume's center may drift from where it should be before
 /// the volume follows, in studs.
-const RECENTRE: f32 = 64.0;
+const RECENTER: f32 = 64.0;
 
 /// Bytes between the layers' entries in [`SkyBuffers::layers`] (the
 /// alignment WebGPU allows dynamic offsets at).
@@ -94,7 +94,7 @@ pub(crate) struct GpuLights {
     fill_group: wgpu::BindGroup,
     sky_buffers: SkyBuffers,
     blockers: Blockers,
-    /// The centre of voxel (0, 0, 0), once filled.
+    /// The center of voxel (0, 0, 0), once filled.
     origin: Option<Vec3>,
     /// The lights changed since the voxels were filled.
     dirty: bool,
@@ -384,8 +384,8 @@ impl GpuLights {
         self.blockers.update(scene, changed, used);
     }
 
-    /// Fill the voxels again if the lights changed, the volume's centre
-    /// drifted [`RECENTRE`] from where the camera puts it, or, when the
+    /// Fill the voxels again if the lights changed, the volume's center
+    /// drifted [`RECENTER`] from where the camera puts it, or, when the
     /// place lights with the sky (`sky`) or a light has `Shadows`, the
     /// parts blocking light changed.
     pub(crate) fn fill(
@@ -398,24 +398,24 @@ impl GpuLights {
         let dims = Vec3::new(VOLUME[0] as f32, VOLUME[1] as f32, VOLUME[2] as f32);
         let half = dims * (VOXEL * 0.5);
         let forward = camera.forward();
-        let centre = camera.position + Vec3::new(forward.x, 0.0, forward.z) * AHEAD;
-        let centred = self
+        let center = camera.position + Vec3::new(forward.x, 0.0, forward.z) * AHEAD;
+        let centered = self
             .origin
-            .is_some_and(|o| (o + half - centre).abs().max_element() <= RECENTRE);
+            .is_some_and(|o| (o + half - center).abs().max_element() <= RECENTER);
         let solid = sky || self.shadows;
         let blocked = solid && (self.blockers.due() || !self.marked);
-        if !self.dirty && centred && !blocked && sky == self.sky {
+        if !self.dirty && centered && !blocked && sky == self.sky {
             return;
         }
         profiling::scope!("GpuLights::fill");
         self.dirty = false;
-        let origin = if centred {
+        let origin = if centered {
             self.origin.unwrap_or_default()
         } else {
-            // Voxels are centred at 4k + 2.
-            ((centre - half) / VOXEL).floor() * VOXEL + Vec3::splat(VOXEL * 0.5)
+            // Voxels are centered at 4k + 2.
+            ((center - half) / VOXEL).floor() * VOXEL + Vec3::splat(VOXEL * 0.5)
         };
-        if solid && (blocked || !centred) {
+        if solid && (blocked || !centered) {
             let bits = self.blockers.mark(origin, VOLUME);
             queue.write_buffer(&self.sky_buffers.solid, 0, bytemuck::cast_slice(bits));
         }

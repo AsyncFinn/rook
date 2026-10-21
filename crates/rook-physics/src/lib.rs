@@ -6,8 +6,8 @@
 //! ([`assembly`]); [`joints`] covers joints, constraints and movers;
 //! [`contacts`] materials, collision groups and Touched; [`query`] scripts'
 //! scene queries, which a client's world only answers
-//! ([`Physics::for_queries`]). Findings are in `docs/behavior/physics.md` and
-//! `docs/behavior/collision.md`.
+//! ([`Physics::for_queries`]). Findings are in `docs/behavior/physics/` and
+//! `docs/behavior/physics/collision-shapes.md`.
 
 pub mod assembly;
 pub mod contacts;

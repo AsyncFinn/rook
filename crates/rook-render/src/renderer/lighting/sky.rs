@@ -212,7 +212,7 @@ impl SkyCube {
 
     /// Build the cube again if the sky has changed since it was built:
     /// from the skybox's `images` (as stored, with their hashes) once all
-    /// six are up, else from the plain sky's colours (sRGB).
+    /// six are up, else from the plain sky's colors (sRGB).
     pub(crate) fn update(
         &mut self,
         device: &wgpu::Device,
@@ -222,7 +222,7 @@ impl SkyCube {
         top: [f32; 3],
         horizon: [f32; 3],
     ) {
-        // With images, the plain colours (which change with the time of
+        // With images, the plain colors (which change with the time of
         // day) don't count.
         let plain = |c: [f32; 3]| if images.is_some() { [0.0; 3] } else { c };
         let built = Built {

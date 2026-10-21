@@ -1,6 +1,6 @@
 //! What a sound is heard through: its own effects, its SoundGroup and the
 //! groups that one is in, and `SoundService.AmbientReverb`
-//! (`docs/behavior/audio.md`, step 4).
+//! (`docs/behavior/audio/soundgroups-and-effects.md`).
 
 use rook_audio::effects::{Chain, Effect, Reverb, ordered};
 

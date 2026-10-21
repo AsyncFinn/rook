@@ -2,7 +2,7 @@
 //! Each material's textures are a TexturePack asset (asset type 63): a small
 //! XML file naming one image asset per map (`color`, `normal`, `metalness`,
 //! `roughness`). Which pack is which material's, and how that was found, is
-//! in `docs/behavior/materials.md`.
+//! in `docs/behavior/rendering/materials.md`.
 
 use rook_types::{Material, MaterialSet};
 
@@ -151,7 +151,7 @@ impl TexturePack {
 }
 
 /// A material map from its image files, block-compressed at its full size
-/// (Roblox's are 1024 × 1024): the colour or normal map as BC1 (BC3 where
+/// (Roblox's are 1024 × 1024): the color or normal map as BC1 (BC3 where
 /// it has alpha), the roughness-metalness-height map as BC7. A material's
 /// three maps hold 2.7 MB with their mips, where RGBA8 would hold 16 MB
 /// (40 materials: 107 MB against 640).
@@ -171,7 +171,7 @@ pub fn build(
     Ok(image.compressed(encoding))
 }
 
-/// A material map's pixels: the colour or normal map as it is (normals
+/// A material map's pixels: the color or normal map as it is (normals
 /// are ordinary RGB normal maps), or roughness (into green), metalness
 /// (into red, 0 when the pack has none) and height (into blue, full when
 /// it has none) packed into one, with an opaque alpha so mips aren't

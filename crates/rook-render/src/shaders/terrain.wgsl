@@ -1,5 +1,5 @@
 // Terrain's moving surfaces: water's waves and normal frames, and grass
-// blades' sway and lean (docs/behavior/terrain.md). What Studio 0.742
+// blades' sway and lean (docs/behavior/terrain/grass.md). What Studio 0.742
 // shows was measured; the shapes chosen to match it are Approximations.
 
 import package::common::{
@@ -24,7 +24,7 @@ const WATER_FRAMES_PER_PHASE: f32 = 1.25;
 // 20 to 30 degrees, 0.69 at 10, 0.80 at 5 and 0.91 at 3).
 const WATER_REFLECTS_FACING: f32 = 0.27;
 // What water lets through of what's behind it, per unit of
-// WaterTransparency (measured from above over grey and sand at 0, 0.3
+// WaterTransparency (measured from above over gray and sand at 0, 0.3
 // and 1: about a fifth at 1 in green and blue, half that in red; the
 // depth, 3 to 10 studs, barely matters).
 const WATER_PASSES: f32 = 0.2;

@@ -40,16 +40,16 @@ impl Physics {
         seeds: Vec<InstanceId>,
     ) -> HashSet<RigidBodyHandle> {
         profiling::scope!("Physics::rebuild", &format!("{} seeds", seeds.len()));
-        // A part's neighbours may change assembly with it (anchoring a part
-        // splits its assembly; unanchoring one joins a neighbour's).
-        let mut seeds_and_neighbours = Vec::with_capacity(seeds.len());
+        // A part's neighbors may change assembly with it (anchoring a part
+        // splits its assembly; unanchoring one joins a neighbor's).
+        let mut seeds_and_neighbors = Vec::with_capacity(seeds.len());
         for part in seeds {
-            seeds_and_neighbours.push(part);
-            seeds_and_neighbours
+            seeds_and_neighbors.push(part);
+            seeds_and_neighbors
                 .extend(joints::part_joints(dom, part).iter().map(|j| j.other(part)));
         }
-        let mut todo = Vec::with_capacity(seeds_and_neighbours.len());
-        for part in seeds_and_neighbours {
+        let mut todo = Vec::with_capacity(seeds_and_neighbors.len());
+        for part in seeds_and_neighbors {
             if let Some(&h) = self.parts.get(&part)
                 && let Some(body) = self.remove_body(h)
             {

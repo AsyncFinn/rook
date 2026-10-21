@@ -37,7 +37,7 @@ struct PlaceRecord {
     outcome: Outcome,
     scripts_started: usize,
     errors: usize,
-    /// First line of each distinct error, normalised.
+    /// First line of each distinct error, normalized.
     error_kinds: Vec<String>,
     unimplemented: BTreeMap<String, u64>,
     inert: BTreeMap<String, u64>,
@@ -186,7 +186,7 @@ fn run_place(path: &Path, bytes: &[u8], seconds: f64, options: &Options) -> Plac
 }
 
 /// The message without its script location, with digits and quoted names
-/// generalised, so the same failure in different scripts groups together.
+/// generalized, so the same failure in different scripts groups together.
 fn error_kind(message: &str) -> String {
     let first = message.lines().next().unwrap_or("");
     // Drop a leading "Some.Script.Path:12: ".

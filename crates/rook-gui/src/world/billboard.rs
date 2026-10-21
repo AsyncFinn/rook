@@ -1,5 +1,5 @@
 //! A BillboardGui: where it hangs and how big it is
-//! (docs/behavior/gui-world.md#billboardgui). `Size`'s scales are studs,
+//! (docs/behavior/gui/world.md#billboardgui). `Size`'s scales are studs,
 //! seen at the billboard's depth; its offsets are pixels.
 
 use glam::{Vec2, Vec3};

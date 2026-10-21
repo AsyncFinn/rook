@@ -1,6 +1,6 @@
 //! Beam and Trail as the renderer's ribbons
 //! (docs/behavior/effects/beams-and-trails.md), and a FloorWire's images
-//! (docs/behavior/adornments.md).
+//! (docs/behavior/rendering/adornments.md).
 
 use rook_render::{Anchor, Curve, RibbonLook, Sequence, TextureMode};
 

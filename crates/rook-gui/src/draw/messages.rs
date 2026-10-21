@@ -3,7 +3,7 @@
 //! later-made ones on top. Observed by eye: a Hint is an opaque black bar
 //! across the window's top, over the top bar, shown even with no text; a
 //! Message with no text shows nothing. The rest is Inference, as Studio's
-//! captures leave GUI out (docs/behavior/gui-text.md#hint-and-message).
+//! captures leave GUI out (docs/behavior/gui/text.md#hint-and-message).
 
 use glam::Vec2;
 use rook_dom::{Dom, InstanceId};

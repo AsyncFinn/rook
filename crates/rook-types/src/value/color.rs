@@ -111,7 +111,7 @@ impl From<rbx_types::BrickColor> for Color3 {
     }
 }
 
-/// An sRGB colour (0 to 1 per channel) in linear light.
+/// An sRGB color (0 to 1 per channel) in linear light.
 pub fn srgb_to_linear(c: [f32; 3]) -> [f32; 3] {
     c.map(|x| {
         if x <= 0.04045 {
@@ -122,7 +122,7 @@ pub fn srgb_to_linear(c: [f32; 3]) -> [f32; 3] {
     })
 }
 
-/// A linear colour back in sRGB.
+/// A linear color back in sRGB.
 pub fn linear_to_srgb(c: [f32; 3]) -> [f32; 3] {
     c.map(|x| {
         if x <= 0.003_130_8 {
@@ -152,7 +152,7 @@ mod tests {
     }
 
     #[test]
-    fn brick_color_medium_stone_grey() {
+    fn brick_color_medium_stone_gray() {
         let c: Color3 = rbx_types::BrickColor::from_number(194).unwrap().into();
         assert_eq!(c.to_rgb(), (163, 162, 165));
     }

@@ -38,7 +38,7 @@ fn image() -> Arc<Image> {
 }
 
 /// Updating parts one by one draws what setting the whole scene draws:
-/// moves, recolours, a shape change, opaque to transparent and back,
+/// moves, recolors, a shape change, opaque to transparent and back,
 /// a part hidden, a new part in the slot it left, and decals and mesh
 /// textures coming and going.
 #[test]
@@ -329,7 +329,7 @@ fn table_and_multi_draws_draw_what_bound_sets_draw() {
     }
 }
 
-/// A block-compressed colour map draws the same where the device samples
+/// A block-compressed color map draws the same where the device samples
 /// blocks and where it gets them decoded (a device without BC).
 #[test]
 fn block_compressed_maps_draw_the_same_decoded() {
@@ -413,7 +413,7 @@ fn dropped_meshes_make_room_for_others() {
     );
 }
 
-/// A Highlight fills its part in exactly its colour over the finished
+/// A Highlight fills its part in exactly its color over the finished
 /// frame and outlines it, through a wall when on top; occluded, the wall
 /// hides both.
 #[test]
@@ -464,7 +464,7 @@ fn highlights_fill_and_outline_through_walls_when_on_top() {
     assert!(!(0..w).any(|x| at(&pixels, x, 32) == [0, 0, 255]));
 }
 
-/// A SurfaceGui's canvas shows on its face, unlit at its own colour
+/// A SurfaceGui's canvas shows on its face, unlit at its own color
 /// through the curve; a BillboardGui behind the part is hidden unless it's
 /// AlwaysOnTop.
 #[test]

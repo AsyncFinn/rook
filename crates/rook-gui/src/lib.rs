@@ -2,7 +2,7 @@
 //! `Absolute*` and `Text*` properties scripts read, laid out on the
 //! DataModel's thread as Roblox does), what the local player's ScreenGuis
 //! draw, and the SurfaceGuis and BillboardGuis drawn in the world. Rules
-//! measured in Studio are in `docs/behavior/gui.md`, `gui-text.md` and
+//! measured in Studio are in `docs/behavior/gui/layout.md`, `gui-text.md` and
 //! `gui-world.md`.
 
 mod changes;

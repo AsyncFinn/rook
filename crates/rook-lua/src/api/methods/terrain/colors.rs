@@ -1,4 +1,4 @@
-//! Material colours: `GetMaterialColor` and `SetMaterialColor`.
+//! Material colors: `GetMaterialColor` and `SetMaterialColor`.
 
 use super::*;
 

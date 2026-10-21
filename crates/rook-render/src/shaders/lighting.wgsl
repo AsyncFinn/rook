@@ -15,9 +15,9 @@ import package::lights::VOXEL;
 // in the lighting archived places get: each light writes into 4-stud
 // voxels (`light_volume.wgsl` fills them ahead of the camera), and a surface
 // takes the voxels around the point 6 studs out along its normal,
-// blended, whichever way it faces (docs/behavior/lights.md).
+// blended, whichever way it faces (docs/behavior/lighting/local-lights.md).
 struct LightVolume {
-    // xyz: the centre of voxel (0, 0, 0); w: 0 when there's no volume.
+    // xyz: the center of voxel (0, 0, 0); w: 0 when there's no volume.
     origin: vec4<f32>,
     // xyz: voxels along each axis; w: 1 when their alpha holds how much
     // of the sky's diffuse light reaches them.
@@ -107,7 +107,7 @@ fn sun_visibility(world: vec3<f32>, n: vec3<f32>) -> f32 {
 // The sun's light on a surface with normal `n` (shadowed), in light units:
 // `g.sun_color` (0.5 units per Brightness on a white face square to the
 // sun, measured) times the cosine of its angle, as Studio lights
-// (docs/behavior/lights.md, "The sun").
+// (docs/behavior/lighting/sun.md).
 fn sun_light(world: vec3<f32>, n: vec3<f32>) -> vec3<f32> {
     var cosine = max(dot(n, g.sun_dir.xyz), 0.0);
     if cosine > 0.0 {
@@ -116,28 +116,27 @@ fn sun_light(world: vec3<f32>, n: vec3<f32>) -> vec3<f32> {
     return g.sun_color.rgb * cosine;
 }
 
-// Studio's ambient colour: the brighter of Ambient and OutdoorAmbient in
+// Studio's ambient color: the brighter of Ambient and OutdoorAmbient in
 // each channel, the same on every face, indoors or out, whatever the
-// Brightness or time of day (docs/behavior/lights.md, "Ambient and
-// OutdoorAmbient").
+// Brightness or time of day (docs/behavior/lighting/ambient.md).
 fn ambient_color() -> vec3<f32> {
     return max(g.ambient.rgb, g.outdoor_ambient.rgb);
 }
 
 // The sky's light left on a surface no sky reaches, in light units at
 // EnvironmentDiffuseScale 1 (measured: about 0.04 in each channel under a
-// roof, under the default sky and a flat grey one, with Ambient or
+// roof, under the default sky and a flat gray one, with Ambient or
 // without; it scales with the property).
 const SKY_COVERED: f32 = 0.04;
 
-// The sky's diffuse light on a surface facing `n`, in light units (colour
+// The sky's diffuse light on a surface facing `n`, in light units (color
 // squared), as Studio lights with EnvironmentDiffuseScale (`g.sky_top.w`,
-// dimmed at night with the sky): the skybox's average colours overhead,
+// dimmed at night with the sky): the skybox's average colors overhead,
 // around the horizon and below, weighted by how far the surface faces up
 // or down. A side face takes 3/4 of the horizon and 1/8 each of the top
 // and bottom, an upward face 0.58 of the top and 0.42 of the horizon
 // (measured in Studio 0.742 with a red top, blue sides and black bottom;
-// docs/behavior/materials.md, "The sky's diffuse light"), before roofs
+// docs/behavior/rendering/materials.md, "The sky's diffuse light"), before roofs
 // and walls block it (`sky_visibility`).
 fn sky_light(n: vec3<f32>) -> vec3<f32> {
     let y = n.y;
@@ -150,12 +149,12 @@ fn sky_light(n: vec3<f32>) -> vec3<f32> {
     return light * g.sky_top.w;
 }
 
-// The diffuse light off a surface of colour `albedo` at `world` facing
+// The diffuse light off a surface of color `albedo` at `world` facing
 // `n`, given the sun's (`sun_light`), in light units: the albedo times the
-// ambient (its colour squared; measured: white SmoothPlastic under Ambient
+// ambient (its color squared; measured: white SmoothPlastic under Ambient
 // 80 drew 66 under the default curve and 79 under Retro, both 0.093
 // units), the sky's light, the local lights' and the sun's. Where roofs
-// block the sky, a dim grey light stays (`SKY_COVERED`).
+// block the sky, a dim gray light stays (`SKY_COVERED`).
 fn diffuse_light(albedo: vec3<f32>, world: vec3<f32>, n: vec3<f32>, sun: vec3<f32>) -> vec3<f32> {
     let a = ambient_color();
     let covered = vec3(SKY_COVERED * g.sky_top.w);
@@ -176,7 +175,7 @@ fn shade(albedo: vec3<f32>, world: vec3<f32>, normal: vec3<f32>) -> vec3<f32> {
 // remapped roughness r = 0.089 + 0.911 x roughness, a = r^4, no 1/pi and
 // no visibility term), with Schlick's Fresnel on the light and half-way
 // vectors. Confirmed against black SmoothPlastic at known angles, which
-// fits roughness 0.4 within 0.005 units (docs/behavior/lights.md).
+// fits roughness 0.4 within 0.005 units (docs/behavior/lighting/sun.md).
 fn sun_highlight(f0: vec3<f32>, roughness: f32, n_h: f32, l_h: f32) -> vec3<f32> {
     let r = remapped(roughness);
     let a = r * r * r * r;
@@ -209,7 +208,7 @@ fn sky_fresnel(f0: vec3<f32>, r: f32, n_v: f32) -> vec3<f32> {
 }
 
 // Physically based shading in light units, as Studio's surface shaders add
-// it up (`shaders_glsl3.pack`, 0.743; docs/behavior/lights.md):
+// it up (`shaders_glsl3.pack`, 0.743; docs/behavior/lighting/sun.md):
 // - the sky reflected towards the camera's mirror direction, from the
 //   reflection cube at Studio's level for the roughness (`sky_reflected`),
 //   times `sky_fresnel` and EnvironmentSpecularScale (`g.sky_horizon.w`);
@@ -221,7 +220,7 @@ fn sky_fresnel(f0: vec3<f32>, r: f32, n_v: f32) -> vec3<f32> {
 //   highlight takes, both only as far as the surface isn't metal.
 //   EnvironmentSpecularScale scales metalness too: at 0, a Foil part is
 //   lit like Plastic (observed).
-// `reflectance` (BasePart.Reflectance, on the materials that honour it)
+// `reflectance` (BasePart.Reflectance, on the materials that honor it)
 // mixes the albedo towards the sharp sky in the mirror direction, which is
 // then lit like any albedo, and makes the reflection itself sharp.
 fn shade_pbr(
@@ -268,14 +267,14 @@ fn shade_pbr(
 // keep exp2(1 - t) - 1 of the surface at t = (distance - FogStart) /
 // (FogEnd - FogStart) (their form exp2(z x d + x) - w; the constants fit
 // white parts at 12 distances under three FogStart/FogEnd pairs within
-// 0.03; docs/behavior/lights.md, "Fog").
+// 0.03; docs/behavior/lighting/tone-mapping.md, "Fog").
 fn fog_amount(world: vec3<f32>) -> f32 {
     let dist = distance(world, g.camera_pos.xyz);
     let t = (dist - g.fog_range.x) / max(g.fog_range.y - g.fog_range.x, 1e-3);
     return 1.0 - clamp(exp2(1.0 - t) - 1.0, 0.0, 1.0);
 }
 
-// FogColor in light units (its colour squared, as Studio's fog draws).
+// FogColor in light units (its color squared, as Studio's fog draws).
 fn fog_light() -> vec3<f32> {
     return g.fog_color.rgb * g.fog_color.rgb;
 }

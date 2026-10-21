@@ -85,7 +85,7 @@ impl<K> Voice<K> {
         if frames == 0 {
             return false;
         }
-        // Linear interpolation between neighbouring source frames: cheap,
+        // Linear interpolation between neighboring source frames: cheap,
         // and fine for the archive's mostly 8-48 kHz effects
         // (Approximation).
         let step = f64::from(audio.sample_rate) * f64::from(self.speed.max(0.0)) / rate;

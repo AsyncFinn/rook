@@ -1,7 +1,7 @@
 //! World GUI on the GPU: every SurfaceGui's and BillboardGui's canvas is
 //! drawn by the GUI pass into one atlas, then laid in the world each
 //! frame as a rectangle, after the particles, depth tested unless it's
-//! AlwaysOnTop (docs/behavior/gui-world.md).
+//! AlwaysOnTop (docs/behavior/gui/world.md).
 
 use std::ops::Range;
 

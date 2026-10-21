@@ -1,7 +1,7 @@
 //! The decoder on hand-built data, and the mesher against Studio's
 //! raycasts (`data/studio-*.json`, recorded in Studio 0.742 on 2026-10-15
 //! with `WriteVoxels` and `Workspace:Raycast`; see
-//! `docs/behavior/terrain.md`).
+//! `docs/behavior/terrain/surface.md`).
 
 use glam::{IVec3, Vec3};
 use serde_json::Value as Json;
@@ -213,7 +213,7 @@ fn studio_blob(file: &str) -> (Grid, Vec<Ray>) {
 /// `either`, along whichever diagonal fits:
 /// (worst error, rays off by more than `tolerance`, rays checked). The
 /// vertices are Roblox's; which diagonal it splits a bent quad along isn't
-/// known yet (`docs/behavior/terrain.md`).
+/// known yet (`docs/behavior/terrain/surface.md`).
 fn compare(grid: &Grid, rays: &[Ray], tolerance: f32, either: bool) -> (f32, usize, usize) {
     let mut meshes = vec![triangles(grid, mesh::DIAGONALS)];
     if either {
@@ -241,7 +241,7 @@ fn compare(grid: &Grid, rays: &[Ray], tolerance: f32, either: bool) -> (f32, usi
 fn single_voxel_is_a_cube_of_four_thirds_its_occupancy() {
     use TerrainMaterial::*;
     // Measured in a legacy place: a lone full voxel reaches 1.333 studs
-    // from its centre on every side, a half-full one 0.667; Cobblestone
+    // from its center on every side, a half-full one 0.667; Cobblestone
     // 1.40, Pavement 1.00, Concrete and Brick 2.00 (any occupancy for
     // Brick).
     for (material, occupancy, half) in [
@@ -255,9 +255,9 @@ fn single_voxel_is_a_cube_of_four_thirds_its_occupancy() {
         let mut grid = Grid::new();
         grid.set(IVec3::new(3, 3, 3), Voxel::new(material, occupancy));
         let tris = triangles(&grid, mesh::DIAGONALS);
-        let centre = Vec3::splat(14.0);
+        let center = Vec3::splat(14.0);
         for dir in [Vec3::X, Vec3::NEG_Y, Vec3::Z] {
-            let (t, normal, m) = cast(&tris, centre - dir * 10.0, dir).unwrap();
+            let (t, normal, m) = cast(&tris, center - dir * 10.0, dir).unwrap();
             assert!((t - (10.0 - half)).abs() < 1e-4, "{material:?} {dir}: {t}");
             assert!(normal.dot(-dir) > 0.999);
             assert_eq!(m, material);
@@ -278,7 +278,7 @@ fn studio_slab_matches() {
 fn studio_blob_matches() {
     // A 4x4x4 block of random voxels (60% solid, 20-100% full) in three
     // materials. Six of 2,300 rays are off: where the ray crosses from a
-    // quad Studio splits one way to a neighbour it splits the other.
+    // quad Studio splits one way to a neighbor it splits the other.
     let (grid, rays) = studio_blob("studio-blob.json");
     let (worst, off, n) = compare(&grid, &rays, 0.01, true);
     assert!(off <= 6, "{off} rays off, worst {worst}, of {n}");
@@ -308,7 +308,7 @@ fn studio_material_shapes_match() {
 #[test]
 fn water_sits_half_a_voxel_low() {
     // Measured: a lone full water voxel from 3.333 to 0.667 studs below its
-    // centre; a half-full one 2.667 to 1.333 below.
+    // center; a half-full one 2.667 to 1.333 below.
     for (occupancy, top, bottom) in [(255, -0.667, -3.333), (127, -1.333, -2.667)] {
         let mut grid = Grid::new();
         grid.set(
@@ -316,14 +316,14 @@ fn water_sits_half_a_voxel_low() {
             Voxel::new(TerrainMaterial::Water, occupancy),
         );
         let tris = triangles(&grid, mesh::DIAGONALS);
-        let centre = Vec3::splat(14.0);
-        let (t, ..) = cast(&tris, centre + Vec3::Y * 10.0, Vec3::NEG_Y).unwrap();
+        let center = Vec3::splat(14.0);
+        let (t, ..) = cast(&tris, center + Vec3::Y * 10.0, Vec3::NEG_Y).unwrap();
         assert!(
             (10.0 - t - top).abs() < 1e-3,
             "{occupancy}: top {}",
             10.0 - t
         );
-        let (t, ..) = cast(&tris, centre - Vec3::Y * 10.0, Vec3::Y).unwrap();
+        let (t, ..) = cast(&tris, center - Vec3::Y * 10.0, Vec3::Y).unwrap();
         assert!(
             (t - 10.0 - bottom).abs() < 1e-3,
             "{occupancy}: bottom {}",

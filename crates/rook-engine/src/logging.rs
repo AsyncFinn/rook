@@ -7,7 +7,7 @@
 //! <subsystem>` shows everything one area logs (`content`, `terrain`, ...).
 //! The flag beats `ROOK_LOG`, which beats `settings.json`'s `logLevel`.
 //! The log file gets `debug` and up whatever the terminal shows, plus
-//! every line the terminal printed (script output too), without colours.
+//! every line the terminal printed (script output too), without colors.
 //!
 //! [`init`] also installs a panic hook: a panic that reaches the program's
 //! `main` ([`run`]) leaves a crash report next to the logs.
@@ -140,7 +140,7 @@ static SINK: Mutex<Sink> = Mutex::new(Sink {
     path: None,
 });
 
-/// Write a line, without colours, to the log file and the crash report's
+/// Write a line, without colors, to the log file and the crash report's
 /// tail.
 pub(crate) fn record(line: &str) {
     let plain = anstream::adapter::strip_str(line).to_string();

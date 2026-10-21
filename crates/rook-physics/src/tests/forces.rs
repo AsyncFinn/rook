@@ -18,7 +18,7 @@ fn body_force_and_thrust() {
     let f = cube(&mut dom, 0.0);
     child(&mut dom, "BodyForce", f, &[("Force", v3(56.0, 0.0, 0.0))]);
     // A thrust's force is in the part's frame: turned 90° about Y, its X
-    // points along world -Z. Off-centre it also turns the part.
+    // points along world -Z. Off-center it also turns the part.
     let t = cube(&mut dom, 20.0);
     set(
         &mut dom,
@@ -189,7 +189,7 @@ fn vector_force_and_torque() {
         ),
     );
     let a = child(&mut dom, "Attachment", p, &[]);
-    // Relative to Attachment0 (the default) and at the centre of mass.
+    // Relative to Attachment0 (the default) and at the center of mass.
     child(
         &mut dom,
         "VectorForce",
@@ -240,7 +240,7 @@ fn anchored_parts_with_velocity_are_conveyors() {
 
 #[test]
 fn velocity_is_the_assembly_velocity_at_the_part() {
-    // Observed: a 2-stud cube welded 4 studs from a 4-stud cube's centre,
+    // Observed: a 2-stud cube welded 4 studs from a 4-stud cube's center,
     // the assembly spinning at 2 rad/s about Y, reads (0, 0, -7.11).
     let mut dom = Dom::new();
     let root = part(

@@ -5,7 +5,7 @@ use super::*;
 
 /// Where each skybox image goes, in [`Lighting::skybox`] order: (the
 /// direction it covers, the image's right, the image's up), measured in
-/// Studio 0.742 (2026-10-13) with six labelled images. The four sides are
+/// Studio 0.742 (2026-10-13) with six labeled images. The four sides are
 /// upright and unmirrored seen from inside, the Left image at +X and the
 /// Right one at -X (the opposite of what the names suggest); Up's image has
 /// its top towards +X, Down's towards -X.
@@ -24,12 +24,12 @@ pub struct Lighting {
     /// Unit vector pointing towards the sun, or towards the moon while
     /// the sun is down: where [`sun_color`](Self::sun_color) comes from.
     pub sun_direction: Vec3,
-    /// sRGB colours.
+    /// sRGB colors.
     pub ambient: [f32; 3],
     pub outdoor_ambient: [f32; 3],
     /// The sun's (or moon's) light on a white face square to it, in
     /// Studio's light units per channel, `Brightness` included
-    /// (docs/behavior/lights.md, "The sun").
+    /// (docs/behavior/lighting/sun.md).
     pub sun_color: [f32; 3],
     pub fog_color: [f32; 3],
     pub fog_start: f32,
@@ -40,7 +40,7 @@ pub struct Lighting {
     pub sky_bottom: [f32; 3],
     /// The skybox's six images, in [`SKYBOX_FACES`] order (Up, Back,
     /// Front, Left, Right, Down), drawn behind everything once all six
-    /// are in [`Scene::images`]; `None` draws the plain sky colour.
+    /// are in [`Scene::images`]; `None` draws the plain sky color.
     pub skybox: Option<[ImageHash; 6]>,
     /// `Lighting.GlobalShadows`: false draws no shadows at all.
     pub global_shadows: bool,
@@ -59,7 +59,7 @@ pub struct Lighting {
 }
 
 /// `ColorGradingEffect.TonemapperPreset`: how light becomes the screen's
-/// pixels (docs/behavior/tone-mapping.md).
+/// pixels (docs/behavior/lighting/tone-mapping.md).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Tonemapper {
     /// Studio's curve, which darkens the darks and rolls off the brights;
@@ -101,14 +101,14 @@ pub enum LightShape {
     /// A SpotLight: a cone `angle` degrees across (`SpotLight.Angle`, 0 to
     /// 180) around `direction` (unit, the face it shines from).
     Spot { direction: Vec3, angle: f32 },
-    /// A SurfaceLight: from the centre of a face of its part (`position`),
+    /// A SurfaceLight: from the center of a face of its part (`position`),
     /// over a cone `angle` degrees across around `direction` (unit, the
     /// face's normal).
     Surface { direction: Vec3, angle: f32 },
 }
 
 /// A PointLight, SpotLight or SurfaceLight, placed in the world
-/// (`docs/behavior/lights.md`). The renderer turns its Roblox properties
+/// (`docs/behavior/lighting/local-lights.md`). The renderer turns its Roblox properties
 /// into light as Studio does.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LocalLight {

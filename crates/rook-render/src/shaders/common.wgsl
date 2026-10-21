@@ -9,7 +9,7 @@ struct Globals {
     sun_color: vec4<f32>,
     ambient: vec4<f32>,
     outdoor_ambient: vec4<f32>,
-    // rgb fog colour (sRGB)
+    // rgb fog color (sRGB)
     fog_color: vec4<f32>,
     // x = fog start, y = fog end, z = exposure (a multiplier on linear
     // light, `Lighting::exposure`), w = studs a pixel spans 1 stud away
@@ -63,7 +63,7 @@ struct Globals {
 const CAST: u32 = 1u;
 const NEON: u32 = 2u;
 // Bits 4-6 of a base part without a tile pattern (bits 2-3 clear; an
-// image layer keeps its face there): drawn in its own colour without
+// image layer keeps its face there): drawn in its own color without
 // light, through the tone curve or, with EXACT, past it; and turned to
 // face the camera about its position (`PartInstance::faces_camera`).
 const UNLIT: u32 = 16u;
@@ -91,7 +91,7 @@ const SLOPED: u32 = 536870912u;
 // The material textures go through the mesh's UVs (a SurfaceAppearance),
 // with its alpha mode in the surfaces' bits.
 const MAPS_UV: u32 = 1073741824u;
-// The vertices' own colours (in `face`'s upper bytes) replace the part's.
+// The vertices' own colors (in `face`'s upper bytes) replace the part's.
 const VERTEX_COLORS: u32 = 2147483648u;
 // A union vertex's face byte carries this bit (`mesh::UNION_FACE`).
 const UNION_FACE: u32 = 64u;
@@ -103,8 +103,8 @@ const TERRAIN_BLADES: u32 = 4u;
 // A terrain seam vertex's face: from this bit, which of its triangle's
 // corners' layer its mesh draws (`mesh::TERRAIN_DRAWN_SHIFT`).
 const TERRAIN_DRAWN_SHIFT: u32 = 9u;
-// Set on `VertexOut::face` for union vertices: tile from the face's centre.
-const CENTRED: u32 = 256u;
+// Set on `VertexOut::face` for union vertices: tile from the face's center.
+const CENTERED: u32 = 256u;
 const ALPHA_OVERLAY: u32 = 1u;
 const ALPHA_TRANSPARENCY: u32 = 2u;
 const ALPHA_TINT_MASK: u32 = 3u;
@@ -115,7 +115,7 @@ struct VertexIn {
     @location(2) uv: vec2<f32>,
     // The point on the shape's box that images map from, and its face
     // (low byte; 255: none, found from the normal), with a union's vertex
-    // colour in the bytes above.
+    // color in the bytes above.
     @location(3) box_point: vec3<f32>,
     @location(4) face: u32,
     @location(5) i_position: vec3<f32>,
@@ -273,7 +273,7 @@ fn value_noise(p: vec2<f32>) -> f32 {
 //   (measured: a MaterialVariant's shifts land on exactly these, and the
 //   noise's scale is a repeat at 8 and at 4 studs per tile).
 // - Wang: the image is 4 × 4 tiles; each quarter-repeat cell shows the
-//   tile whose edges match its neighbours'. Every cell edge is one of two
+//   tile whose edges match its neighbors'. Every cell edge is one of two
 //   kinds, at random; a tile's column in the image is 0, 1, 2 or 3 for
 //   left and right edges of kinds (0, 0), (0, 1), (1, 1), (1, 0), and its
 //   row likewise for top and bottom (the layout of Studio's

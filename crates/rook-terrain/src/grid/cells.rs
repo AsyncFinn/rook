@@ -1,6 +1,6 @@
 //! Cells: the legacy name for voxels. Old scripts address terrain by cell
 //! (`SetCell`, `GetCell`, `WorldToCell`, ...), and modern Roblox still
-//! honours them on smooth voxels (observed in Studio 0.742): a cell is a
+//! honors them on smooth voxels (observed in Studio 0.742): a cell is a
 //! voxel, `SetCell` fills it with the smooth material standing in for the
 //! legacy one, and `GetCell` names the legacy material for the voxel's.
 
@@ -14,7 +14,7 @@ pub fn world_to_cell(p: Vec3) -> IVec3 {
     (p / VOXEL_STUDS).floor().as_ivec3()
 }
 
-/// A cell's centre (`CellCenterToWorld`); fractional cells round half away
+/// A cell's center (`CellCenterToWorld`); fractional cells round half away
 /// from zero (observed: 1.5 is cell 2, -1.5 cell -2, 0.4 cell 0).
 pub fn cell_center(cell: Vec3) -> Vec3 {
     (cell.round() + 0.5) * VOXEL_STUDS

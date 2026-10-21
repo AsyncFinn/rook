@@ -1,5 +1,5 @@
 //! What a part's material draws: a SurfaceAppearance, a MaterialVariant or
-//! the material's own textures (`docs/behavior/materials.md`).
+//! the material's own textures (`docs/behavior/rendering/materials.md`).
 
 use super::*;
 

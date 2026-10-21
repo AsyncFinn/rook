@@ -13,7 +13,7 @@
 | `rook-tools content` | Show how content references resolve: from the Roblox install, content folders, the cache or asset delivery, and why any fail |
 | `rook-tools cache` | Show the download cache's folder and size; `prune --older-than <days>`, `trim` or `clear` it |
 | `rook-tools logs` | Print the newest log file's path; `--open` opens the logs folder |
-| `rook-tools conformance record` / `run` | Record behaviour in Roblox Studio and check Rook against it |
+| `rook-tools conformance record` / `run` | Record behavior in Roblox Studio and check Rook against it |
 
 ## Inspecting and testing files
 

@@ -1,5 +1,7 @@
 # Replication
 
+Checked against Studio 0.743 on 2026-10-14.
+
 What a client DataModel receives from the server, as `rook-net` copies it.
 
 ## What replicates

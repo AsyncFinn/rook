@@ -1,5 +1,5 @@
 //! Rook's sound effects against the levels Studio gave for them
-//! (`docs/behavior/audio.md`, steps 4 and 5): `PlaybackLoudness` of the
+//! (`docs/behavior/audio/soundgroups-and-effects.md`): `PlaybackLoudness` of the
 //! install's `sounds/impact_explosion_03.mp3`, looped, averaged over two
 //! loops, at Volume 0 so the measurement was silent. The audio API's
 //! effects were measured with an AudioAnalyzer instead, which reads the

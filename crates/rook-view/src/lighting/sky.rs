@@ -28,7 +28,7 @@ pub(super) const DEFAULT_SKYBOX: [&str; 6] = [
 impl SceneCache {
     /// Add the place's skybox to `l` (its Sky, or the install's default
     /// sky without one): once the six images have loaded they are drawn
-    /// behind everything and reflected by parts, and the plain sky colours
+    /// behind everything and reflected by parts, and the plain sky colors
     /// become their averages (the Up image above, the four sides at the
     /// horizon, the Down image below). The sun, moon and stars, and
     /// `SkyboxOrientation`, aren't drawn yet.

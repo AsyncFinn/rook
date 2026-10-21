@@ -1,6 +1,8 @@
 # Explosions
 
-ROADMAP M7 step 5. Measured in Studio 0.742 on 2026-10-19, in a play
+Checked against Studio 0.742 on 2026-10-19.
+
+[M7](../../roadmap/m7-lights-and-effects.md) step 5. Measured in a play
 session on a baseplate, by the Method below. The corpus summary counts
 `Explosion` in 2,315 files; nearly all are made by scripts (rockets,
 bombs, landmines), not saved in places.
@@ -14,15 +16,15 @@ during the assignment). The server removes it 2.7 to 2.9 s later
 2.75 s of its own time, so `TimeScale` 0 keeps it.
 
 **What it hits** (Observed): every part whose surface comes within
-`BlastRadius` of `Position`. A 1-stud cube centred 10.4 studs away
+`BlastRadius` of `Position`. A 1-stud cube centered 10.4 studs away
 (surface 9.9) is hit by radius 10, one at 10.6 isn't, and a cube turned
 45° at 10.6 is (its corner reaches 9.9). A part reaching in from far away
-counts: a 1 × 1 × 10 part centred 12 studs away, its end 7 away, is hit.
-A sphere wholly inside a part misses it: radius 0.5 and 0.8 at the centre
+counts: a 1 × 1 × 10 part centered 12 studs away, its end 7 away, is hit.
+A sphere wholly inside a part misses it: radius 0.5 and 0.8 at the center
 of a 2-stud cube fire nothing, 0.95 does (the nearest face is 0.9 away);
-a 0.5-stud cube around the same centre is hit. Parts with `CanQuery` off
+a 0.5-stud cube around the same center is hit. Parts with `CanQuery` off
 aren't hit; `CanTouch` off doesn't matter; anchored parts are hit; Terrain
-fires nothing. `Hit` passes the part and its centre's distance.
+fires nothing. `Hit` passes the part and its center's distance.
 
 **Joints** (Observed, `DestroyJointRadiusPercent` 0.5, radius 10): Weld,
 ManualWeld, Snap, Glue, Motor and Motor6D break (their `Parent` becomes
@@ -34,7 +36,7 @@ modern R15 character's AnimationConstraints don't break either.
 **The push** (Measured, Workspace.Gravity 0, parts owned by the server):
 
 - A part's impulse is `BlastPressure × |Size|² × 5.4825e-5`, straight
-  away from `Position` towards its centre, whatever its distance, shape,
+  away from `Position` towards its center, whatever its distance, shape,
   density or orientation. At BlastPressure 5,000: 1-stud cube 0.8224;
   1 × 1 × 2 in any orientation 1.6447; 2 × 2 × 1 2.4671; 1 × 1 × 3
   3.0154; 1 × 1 × 4 4.9342; 2 × 3 × 4 in three orientations 7.9496;
@@ -81,7 +83,7 @@ TimeScale-stepped times (Observed, 30° field of view at 60 studs):
 
 The install's `textures/particles/` hold the images: a white glow
 (`explosion01_implosion_main.dds`), a fireball puff, premultiplied as
-Fire's is (`explosion01_core_main.dds`), a grey puff
+Fire's is (`explosion01_core_main.dds`), a gray puff
 (`explosion01_smoke_main.dds`, alpha at most 85 of 255, flat across its
 middle and reaching the middle of each edge) and a ring
 (`explosion01_shockwave_main.dds`).
@@ -102,7 +104,7 @@ to the stages above):
 | Lifetime (s) | 0.6 | 0.6–0.8 | 2.0–2.6 | 1.0–1.8 | 0.9 |
 | Size (studs) | 36 → 44 | 7 → 16 | 6 → 14 → 20 | 0.8 × 0.6–1.4 | 10 → 150 |
 | Motion | | 4 studs/s spread | 3 up, 7 spread, drag 1.2, rising | 40–90 out, drag 2.5, falling | |
-| Colour | white × 3 | white, orange, brown; × 6 falling to 0.7 | dark red to black | pale × 1.5 | pale blue |
+| Color | white × 3 | white, orange, brown; × 6 falling to 0.7 | dark red to black | pale × 1.5 | pale blue |
 | Blend | adds | covers | covers | mostly covers | adds |
 
 Particles now follow their emitter's key (instance and layer) rather than
@@ -112,7 +114,7 @@ inscribed circle: as installed it drew faint arms out of a big cloud.
 
 Rook against Studio, the same scene by `rook-player --screenshot` with
 the Explosion's `TimeScale` set so the 6 s settle lands on 0.3 s and 1 s:
-the stages, sizes and colours match by eye; Rook's 0.3 s fireball is
+the stages, sizes and colors match by eye; Rook's 0.3 s fireball is
 redder than Studio's brown, and Studio's 1 s cloud is redder underneath.
 
 ## Method

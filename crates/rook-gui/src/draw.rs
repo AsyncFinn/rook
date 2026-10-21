@@ -1,8 +1,8 @@
 //! What the local player's ScreenGuis draw, in order: each visible GUI
 //! object's background and border, then its text (images come with
-//! ROADMAP M8 step 4), and any Hint or Message over it all; and what each
+//! docs/roadmap/m8-gui.md, step 4), and any Hint or Message over it all; and what each
 //! world GUI's canvas draws, the same way. Order and clipping rules:
-//! docs/behavior/gui.md#drawing.
+//! docs/behavior/gui/layout.md#drawing.
 
 mod frame;
 mod messages;

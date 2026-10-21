@@ -24,7 +24,7 @@ holder.Position = Vector3.new(10, 0, 0)
 ]]></ProtectedString></Properties></Item></Item>
 </roblox>"#;
 
-/// A script switching an effect off, changing its colour, emitting and
+/// A script switching an effect off, changing its color, emitting and
 /// moving its part changes what's drawn; the Beam follows its
 /// Attachments.
 #[test]

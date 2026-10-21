@@ -10,19 +10,19 @@ use glam::{Vec2, Vec3};
 /// A filled rectangle on the screen, drawn over everything before it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct GuiQuad {
-    /// The rectangle's centre, in pixels from the window's top left.
+    /// The rectangle's center, in pixels from the window's top left.
     pub center: Vec2,
     /// Its width and height before it turns, in pixels.
     pub size: Vec2,
     /// Clockwise on the screen, in radians, about `center`.
     pub rotation: f32,
-    /// sRGB colour and opacity (1 is opaque). GUI blends in sRGB, as
+    /// sRGB color and opacity (1 is opaque). GUI blends in sRGB, as
     /// Roblox's does.
     pub color: [f32; 4],
     /// Only pixels inside this rectangle (left, top, right, bottom) are
     /// drawn.
     pub clip: [f32; 4],
-    /// A glyph whose coverage the colour is drawn through, stretched over
+    /// A glyph whose coverage the color is drawn through, stretched over
     /// the rectangle; `None` fills it.
     pub glyph: Option<Arc<GlyphMask>>,
 }
@@ -51,7 +51,7 @@ impl GuiQuad {
     }
 }
 
-/// A SurfaceGui's or BillboardGui's drawing (docs/behavior/gui-world.md).
+/// A SurfaceGui's or BillboardGui's drawing (docs/behavior/gui/world.md).
 #[derive(Debug, Clone, PartialEq)]
 pub struct WorldCanvas {
     /// Bottom first, in pixels from the canvas's top left.
@@ -62,7 +62,7 @@ pub struct WorldCanvas {
     /// What its quads reach, the canvas included (left, top, right,
     /// bottom): what unclipped GUI spills past the canvas draws too.
     pub reach: [f32; 4],
-    /// `LightInfluence`: 0 its own colour, 1 lit as a surface.
+    /// `LightInfluence`: 0 its own color, 1 lit as a surface.
     pub light_influence: f32,
     pub brightness: f32,
     /// Drawn over the world, not hidden by what's in front.
@@ -96,7 +96,7 @@ pub enum WorldPlace {
     },
 }
 
-/// A glyph rasterised at one size: one coverage byte per pixel, rows top
+/// A glyph rasterized at one size: one coverage byte per pixel, rows top
 /// first.
 #[derive(Debug, PartialEq, Eq)]
 pub struct GlyphMask {

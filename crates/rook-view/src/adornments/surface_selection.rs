@@ -4,7 +4,7 @@ use rook_types::PartShape;
 
 use super::*;
 
-/// How wide the outline's bars are, centred on the face's edges (measured
+/// How wide the outline's bars are, centered on the face's edges (measured
 /// in Studio 0.742, 2026-10-20: 0.4 studs on a 4-stud cube's Front and
 /// Right faces, reaching 0.2 past them).
 const WIDTH: f32 = 0.4;

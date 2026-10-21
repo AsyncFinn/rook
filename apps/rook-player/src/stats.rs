@@ -1,4 +1,4 @@
-//! Frame and step times, summarised the way players feel them: the
+//! Frame and step times, summarized the way players feel them: the
 //! typical time, the slow tail and the worst hitch, not the average.
 
 use std::fmt;

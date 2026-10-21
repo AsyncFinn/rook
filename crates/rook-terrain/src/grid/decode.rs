@@ -1,6 +1,6 @@
 //! Reading and writing `Terrain.SmoothGrid`: a version byte and the chunk
 //! size, then chunks, each a position offset and its 32,768 voxels in runs.
-//! The byte layout is in `docs/behavior/terrain.md`.
+//! The byte layout is in `docs/behavior/terrain/voxels.md`.
 
 use glam::IVec3;
 

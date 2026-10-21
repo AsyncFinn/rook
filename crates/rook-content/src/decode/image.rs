@@ -2,13 +2,13 @@
 //! a full mip chain, the layout the renderer uploads, or block-compressed
 //! ([`blocks`]: material textures).
 //!
-//! Formats are recognised by their bytes, not by a file name (an asset id
+//! Formats are recognized by their bytes, not by a file name (an asset id
 //! has none): PNG, JPEG, BMP and DDS (DXT1, DXT3 and DXT5; the install's
 //! `.tex` files are DDS too), the formats found among the archive's images
-//! that load (ROADMAP M4 "Textures and decals (step 4)": no GIF or TGA
-//! turned up), and KTX2 (BC1 and BC3), in which Roblox's material textures
+//! that load (docs/behavior/rendering/textures-and-decals.md: no
+//! GIF or TGA turned up), and KTX2 (BC1 and BC3), in which Roblox's material textures
 //! come ([`ktx2`]). Anything else is not an image, as in Studio, where a
-//! mesh or sound used as a texture draws nothing (ROADMAP M4 step 2).
+//! mesh or sound used as a texture draws nothing (docs/behavior/content/asset-fetching.md).
 //!
 //! Decoding goes through the `image` crate.
 
@@ -74,7 +74,7 @@ impl ImageFormat {
     }
 }
 
-/// A decoded image: RGBA8 (sRGB colour, straight alpha) or blocks of it,
+/// A decoded image: RGBA8 (sRGB color, straight alpha) or blocks of it,
 /// each mip level half the one before down to 1 × 1.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Image {

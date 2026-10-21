@@ -1,9 +1,9 @@
 //! Scripts' edits to the voxels: `Terrain`'s fills, region writes and
 //! copies, with the occupancy rules measured in Studio 0.742
-//! (`docs/behavior/terrain.md`, "The Terrain API").
+//! (`docs/behavior/terrain/api.md`).
 //!
 //! A fill gives each voxel near the shape an occupancy byte (255 full)
-//! from where the voxel's centre lies, then merges it into the voxel: a
+//! from where the voxel's center lies, then merges it into the voxel: a
 //! solid material takes the voxel when it fills at least as much as what
 //! is there, water only fills what no solid does, and Air carves.
 

@@ -17,7 +17,7 @@ fn indices_and_names() {
 }
 
 /// Spot checks of Studio's tables, and the shapes measured in a legacy
-/// place (docs/behavior/terrain.md).
+/// place (docs/behavior/terrain/materials.md).
 #[test]
 fn looks() {
     use TerrainMaterial::*;
@@ -34,13 +34,13 @@ fn looks() {
     assert_eq!(modern.quantize, 1.0);
 }
 
-/// The tints' shapes measured in Studio (docs/behavior/terrain.md).
+/// The tints' shapes measured in Studio (docs/behavior/terrain/materials.md).
 #[test]
 fn tints() {
     use TerrainMaterial::*;
     let rgb = |r, g, b| Color3uint8::new(r, g, b);
     let m22 = MaterialSet::Materials2022;
-    // White keeps the texture's grey, and grey dims it.
+    // White keeps the texture's gray, and gray dims it.
     assert_eq!(Grass.tint(rgb(255, 255, 255), m22), [1.0; 3]);
     assert!(
         Sand.tint(rgb(128, 128, 128), m22)
@@ -57,12 +57,12 @@ fn tints() {
         Rock.tint(rgb(255, 128, 128), m22),
         Rock.tint(rgb(255, 0, 0), m22)
     );
-    // Basalt is as bright in its default colour as in white.
+    // Basalt is as bright in its default color as in white.
     let luma = |[r, g, b]: [f32; 3]| (r + 2.0 * g + b) / 4.0;
     assert_eq!(luma(Basalt.tint(rgb(75, 74, 74), m22)), 0.6);
     assert_eq!(luma(Basalt.tint(rgb(255, 255, 255), m22)), 0.6);
     assert_eq!(Water.tint(rgb(255, 0, 0), m22), [1.0, 0.0, 0.0]);
-    // The legacy set's textures draw as they are in its default colours.
+    // The legacy set's textures draw as they are in its default colors.
     let legacy = MaterialSet::Legacy;
     assert_eq!(Sandstone.tint(rgb(137, 90, 71), legacy), [1.0; 3]);
 }

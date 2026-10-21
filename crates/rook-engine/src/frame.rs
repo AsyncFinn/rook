@@ -70,7 +70,7 @@ impl DataModel {
     }
 
     /// Hand scripts' new content requests and sounds' files to the loader
-    /// and deliver what finished on the engine thread (architecture §8
+    /// and deliver what finished on the engine thread (docs/design/architecture.md#engine-systems
     /// "Content"); finished sound files are returned. Nothing happens
     /// unless scripts or sounds asked for content.
     fn run_loader(

@@ -4,7 +4,7 @@
 //! resolves them off its thread and hands the results back at a fixed
 //! point in the frame (`Runtime::deliver_content`), where callbacks run and
 //! the waiting thread resumes. What Studio does is in
-//! `docs/behavior/content.md` (PreloadAsync).
+//! `docs/behavior/content/asset-fetching.md` (PreloadAsync).
 
 use std::collections::HashMap;
 

@@ -1,5 +1,5 @@
 //! The images each draw samples (group 2): its image (a mesh texture, a
-//! decal or a skybox face) and its material's colour, normal, roughness
+//! decal or a skybox face) and its material's color, normal, roughness
 //! and metalness maps.
 //!
 //! Where the adapter has binding arrays, every image sits in one table
@@ -10,7 +10,7 @@
 
 use super::*;
 
-/// A draw's images, in binding order: image, colour, normal, roughness,
+/// A draw's images, in binding order: image, color, normal, roughness,
 /// metalness.
 pub(crate) type ImageSet = [Option<ImageHash>; 5];
 
@@ -23,7 +23,7 @@ const DEFAULT_SLOTS: [u32; 5] = [WHITE, WHITE, FLAT_NORMAL, WHITE, WHITE];
 /// The table's first size, in slots (doubled as places need more).
 const FIRST_SLOTS: u32 = 1024;
 
-/// What stands in for a missing image: white for the image and colour
+/// What stands in for a missing image: white for the image and color
 /// (sRGB) and for roughness and metalness (linear, so the part's own
 /// values count in full), and a flat normal.
 #[derive(Debug)]

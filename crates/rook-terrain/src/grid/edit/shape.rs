@@ -53,12 +53,12 @@ impl Shape {
         }
     }
 
-    /// How full of the shape the voxel centred at `c` is, as a byte.
+    /// How full of the shape the voxel centered at `c` is, as a byte.
     ///
     /// - Block: the least of the three overlaps along the box's own axes
     ///   (a 1-stud cube in a voxel fills a quarter of it, not 1/64; a box
-    ///   turned 45° fills its corner neighbours by 22 of 255).
-    /// - Ball: `(r - d) / 4 + 1/2` of the distance `d` from the centre.
+    ///   turned 45° fills its corner neighbors by 22 of 255).
+    /// - Ball: `(r - d) / 4 + 1/2` of the distance `d` from the center.
     /// - Cylinder: `(r - d) / 4` of the distance from its axis, rounded
     ///   down, where the voxel reaches into its height at all.
     /// - Wedge: across, as a block; along its slope, `(t - y) / 4 + 1/2`

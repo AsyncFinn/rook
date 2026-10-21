@@ -1,6 +1,6 @@
 //! Where a 3D sound is heard from: how loud by distance (`RollOffMode`)
 //! and how it splits between left and right, as measured from Studio's own
-//! output (`docs/behavior/audio.md`, "3D sound").
+//! output (`docs/behavior/audio/3d-sound.md`).
 //!
 //! Directions are in the listener's space, Roblox's camera axes: -Z ahead,
 //! +X right, +Y up.

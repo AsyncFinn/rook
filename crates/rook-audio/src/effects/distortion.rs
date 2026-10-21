@@ -4,7 +4,7 @@
 //! The curve is `(1 + k) x / (1 + k |x|)` with `k = 2 level / (1 - level)`
 //! (Inference: the waveshaper FMOD's distortion is known to use; Studio's
 //! levels for a recording at every quarter of `Level` match it, see
-//! `docs/behavior/audio.md`).
+//! `docs/behavior/audio/soundgroups-and-effects.md`).
 
 use super::Frame;
 

@@ -7,7 +7,7 @@ use rook_types::GlyphMask;
 
 /// Width and height, in texels.
 pub(super) const SIZE: u32 = 2048;
-/// Empty texels around each mask, so filtering never reads a neighbour.
+/// Empty texels around each mask, so filtering never reads a neighbor.
 const GAP: u32 = 1;
 
 #[derive(Debug)]

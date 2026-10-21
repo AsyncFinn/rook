@@ -37,7 +37,7 @@ fn fs_sky(in: SkyOut) -> @location(0) vec4<f32> {
 }
 
 // The plain sky, before the skybox's images are up (or without any): its
-// colour at the horizon over the whole screen.
+// color at the horizon over the whole screen.
 @fragment
 fn fs_plain_sky(in: SkyOut) -> @location(0) vec4<f32> {
     return vec4(frame_of(srgb_to_linear(g.sky_horizon.rgb) * g.fog_range.z), 1.0);

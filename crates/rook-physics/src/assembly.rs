@@ -257,8 +257,8 @@ impl Assembly {
 
 /// The deprecated `BasePart.Velocity`: the assembly's velocity at the
 /// part's position, `AssemblyLinearVelocity + AssemblyAngularVelocity ×
-/// (position − centre of mass)` (observed: a part 3.56 studs from the
-/// centre of mass of an assembly spinning at 2 rad/s reads 7.11). An
+/// (position − center of mass)` (observed: a part 3.56 studs from the
+/// center of mass of an assembly spinning at 2 rad/s reads 7.11). An
 /// anchored part reads its own AssemblyLinearVelocity, which it keeps.
 pub fn part_velocity(dom: &Dom, part: InstanceId) -> glam::Vec3 {
     let vector = |id, name| dom.vector3_property(id, name).unwrap_or(glam::Vec3::ZERO);

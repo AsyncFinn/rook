@@ -42,14 +42,14 @@ impl ShadowView {
     /// The box holds the smallest sphere around the camera's view out to
     /// [`SHADOW_DISTANCE`], whose size depends only on the field of view
     /// and aspect, so texels keep their size as the camera turns. Its
-    /// centre moves in whole texels across the sun's view, so a texel's
+    /// center moves in whole texels across the sun's view, so a texel's
     /// footprint on the ground stays put as the camera moves and shadow
     /// edges don't shimmer.
     pub(crate) fn fit(camera: &Camera, aspect: f32, sun: Vec3) -> Self {
         let d = SHADOW_DISTANCE;
         // Tangent of the angle to the view's corners.
         let k = (camera.fov_y.to_radians() / 2.0).tan() * (1.0 + aspect * aspect).sqrt();
-        // The sphere's centre on the view axis, equally far from the eye
+        // The sphere's center on the view axis, equally far from the eye
         // and the corners at distance `d`; past `d`, the corners alone.
         let ahead = (d * (1.0 + k * k) / 2.0).min(d);
         let radius = if ahead < d { ahead } else { d * k };
@@ -65,11 +65,11 @@ impl ShadowView {
         let up = right.cross(forward);
         let view = Mat4::from_mat3(Mat3::from_cols(right, up, sun).transpose());
 
-        let centre = view.transform_point3(camera.position + camera.forward() * ahead);
-        let x = (centre.x / texel).floor() * texel;
-        let y = (centre.y / texel).floor() * texel;
+        let center = view.transform_point3(camera.position + camera.forward() * ahead);
+        let x = (center.x / texel).floor() * texel;
+        let y = (center.y / texel).floor() * texel;
         // Distance along `forward`, from the plane through the origin.
-        let mid = -centre.z;
+        let mid = -center.z;
         let near = mid - radius - CASTER_REACH;
         let far = mid + radius;
         // Reverse Z, as in the main pass: near is depth 1, far 0.

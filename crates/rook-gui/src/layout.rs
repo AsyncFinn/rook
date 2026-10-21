@@ -1,8 +1,8 @@
 //! Where every GUI object goes: its size from `Size`, `SizeConstraint`,
 //! `AutomaticSize` and the size constraints; its place from `Position` and
 //! `AnchorPoint`, or from a UIListLayout or UIGridLayout; turned about
-//! its ancestors' centres by their `Rotation` and scaled by UIScales
-//! (docs/behavior/gui.md#layout).
+//! its ancestors' centers by their `Rotation` and scaled by UIScales
+//! (docs/behavior/gui/layout.md#layout).
 
 mod automatic;
 mod constraints;
@@ -27,7 +27,7 @@ pub const GUI_INSET: f32 = 58.0;
 /// Where a GUI object ended up.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct Placed {
-    /// Its centre on the screen.
+    /// Its center on the screen.
     pub(crate) center: Vec2,
     /// Its size before UIScales, which its children's `Size` and
     /// `Position` scale against.

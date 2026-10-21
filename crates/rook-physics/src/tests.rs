@@ -103,7 +103,7 @@ fn unanchored_part_falls_and_lands_on_an_anchored_one() {
     let y = position(&dom, brick).y;
     assert!((y - (20.0 - 0.5 * 196.2 * 0.0625)).abs() < 0.3, "{y}");
 
-    // Resting on the baseplate: its centre is 1 + 1 studs above the base's.
+    // Resting on the baseplate: its center is 1 + 1 studs above the base's.
     run(&mut physics, &mut dom, 3.0);
     let y = position(&dom, brick).y;
     assert!((y - 2.0).abs() < 0.1, "{y}");

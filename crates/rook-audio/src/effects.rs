@@ -1,7 +1,7 @@
 //! Sound effects: the legacy ones (`SoundEffect` subclasses) a Sound or a
 //! SoundGroup applies in the order their `Priority` gives, and the audio
 //! API's effects (AudioEqualizer, AudioReverb, ...) wired into its graph
-//! (`docs/behavior/audio.md`, steps 4 and 5).
+//! (`docs/behavior/audio/soundgroups-and-effects.md`).
 //!
 //! An effect is one DSP for both APIs where Studio's are the same:
 //! Equalizer, Reverb, Distortion, PitchShift and Chorus gave the same

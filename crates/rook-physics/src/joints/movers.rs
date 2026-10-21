@@ -1,7 +1,7 @@
 //! Movers: instances that push an assembly with forces each 240 Hz step.
 //! The legacy BodyMovers act on the assembly of the part they're parented
 //! to; VectorForce, Torque and SpringConstraint act through attachments.
-//! What Studio showed of each is in `docs/behavior/physics.md` (Movers).
+//! What Studio showed of each is in `docs/behavior/physics/movers.md`.
 
 use rustc_hash::FxHashMap as HashMap;
 
@@ -45,7 +45,7 @@ pub(crate) struct Mover {
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Kind {
-    /// A force along world axes or `relative` to a frame, at the centre of
+    /// A force along world axes or `relative` to a frame, at the center of
     /// mass or at `point` in the mover's frame.
     Force {
         force: Vec3,

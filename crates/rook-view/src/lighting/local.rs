@@ -1,5 +1,5 @@
 //! Local lights: PointLight, SpotLight and SurfaceLight under parts and
-//! their Attachments in Workspace (docs/behavior/lights.md).
+//! their Attachments in Workspace (docs/behavior/lighting/local-lights.md).
 
 use rook_render::{LightShape, LocalLight};
 
@@ -26,7 +26,7 @@ fn find_lights(dom: &Dom) -> Vec<InstanceId> {
 /// attachment, facing along its axes. `None` when it isn't under either
 /// (Studio lights nothing then). A disabled light shines with brightness
 /// 0, so that scripts switching lights on and off (alarms) change only
-/// their colours.
+/// their colors.
 fn light(dom: &Dom, id: InstanceId) -> Option<LocalLight> {
     let enabled = dom.bool_property(id, "Enabled") != Some(false);
     let parent = dom.parent(id)?;
@@ -56,10 +56,10 @@ fn light(dom: &Dom, id: InstanceId) -> Option<LocalLight> {
     let angle = dom.float_property(id, "Angle").unwrap_or(90.0);
     let (position, shape) = match dom.class_name(id) {
         "PointLight" => (cf.position, LightShape::Point),
-        // Measured: a spot light shines from its part's centre.
+        // Measured: a spot light shines from its part's center.
         "SpotLight" => (cf.position, LightShape::Spot { direction, angle }),
         "SurfaceLight" => {
-            // From the centre of the part's face.
+            // From the center of the part's face.
             let n = face.normal();
             let out = n * n.abs().dot(size * 0.5);
             (

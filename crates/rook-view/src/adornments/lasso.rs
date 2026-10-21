@@ -12,7 +12,7 @@ const THICKNESS: f32 = 0.25;
 
 /// One lasso from a root part at `from`. Deprecated, but modern Studio
 /// still draws it (observed in 0.742, 2026-10-20): a bar [`THICKNESS`]
-/// across from the root part's centre to `Part`'s, in `Color3` without
+/// across from the root part's center to `Part`'s, in `Color3` without
 /// light, so the parts hide its ends. It is drawn as a round bar
 /// (Inference: only seen side on).
 pub(super) fn lasso(dom: &Dom, id: InstanceId, from: CFrame) -> Vec<(PartInstance, Pose)> {

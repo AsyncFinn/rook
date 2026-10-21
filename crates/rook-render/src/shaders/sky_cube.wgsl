@@ -84,8 +84,8 @@ fn face_size(face: u32) -> f32 {
 }
 
 // The sky towards `d` in light units: the skybox image facing nearest it
-// (as `fs_sky` draws it), its sRGB colour squared as Studio's shaders take
-// colours, or the plain sky from the horizon to overhead.
+// (as `fs_sky` draws it), its sRGB color squared as Studio's shaders take
+// colors, or the plain sky from the horizon to overhead.
 @fragment
 fn fs_capture(in: CubeOut) -> @location(0) vec4<f32> {
     let d = cube_direction(in.at % 6u, in.uv);

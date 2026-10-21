@@ -1,5 +1,5 @@
 //! A play session in one thread: a server and the clients connected to it,
-//! each message delivered as soon as it's sent (architecture §8, Play mode).
+//! each message delivered as soon as it's sent (docs/design/architecture.md#run-modes-and-replication-rook-net).
 //! The ends are the same [`ServerHost`] and [`ClientHost`] a threaded host
 //! runs apart.
 

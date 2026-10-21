@@ -1,7 +1,7 @@
 //! Highlights (`PartInstance::highlight`): the parts each covers are drawn
 //! into a mask of Highlight numbers after the main pass, and the tone pass
 //! fills and outlines what the mask covers over the finished frame
-//! (`shaders/tonemap.wgsl`, docs/behavior/highlight.md).
+//! (`shaders/tonemap.wgsl`, docs/behavior/rendering/highlight.md).
 
 use std::collections::BTreeMap;
 use std::ops::Range;

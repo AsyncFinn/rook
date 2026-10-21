@@ -1,5 +1,5 @@
 # Crates in crates/ are portable: they reach the host machine only through
-# rook-platform (docs/design/architecture.md §2). apps/clippy.toml lifts
+# rook-platform (docs/design/architecture.md#crate-layout). apps/clippy.toml lifts
 # these bans for the apps, which own the host. A crate with a clippy.toml
 # of its own (rook-dom, rook-platform) gets none of this file: clippy
 # reads only the nearest one, so each copies what still applies to it.

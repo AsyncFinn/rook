@@ -1,7 +1,7 @@
 //! The audio API's rules that scripts and the engine share: which pins
 //! each class has, which Wires are connected, where emitters and
 //! listeners are, how audible one is to the other, and the ranges its
-//! properties keep to (`docs/behavior/audio.md`, step 5; all observed in
+//! properties keep to (`docs/behavior/audio/audio-api.md`; all observed in
 //! Studio 0.742 unless marked).
 //!
 //! The engine builds the graph it hears from these; scripts read

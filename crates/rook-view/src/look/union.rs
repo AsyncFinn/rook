@@ -8,7 +8,7 @@ pub(super) fn is_union(dom: &Dom, id: InstanceId) -> bool {
     dom.is_a(id, "PartOperation")
 }
 
-/// What colour a NegateOperation draws in, whatever its Color and
+/// What color a NegateOperation draws in, whatever its Color and
 /// `UsePartColor` (observed in Studio 0.742, 2026-10-14: a gold one and a
 /// blue one both drew orange-red; this value is fitted against plain
 /// parts under the same light, so an Approximation).
@@ -18,7 +18,7 @@ impl SceneCache {
     /// A union without a mesh child: its geometry, at its vertices times
     /// Size / `InitialSize` about the union's position, like a MeshPart
     /// (`mesh_part_scale`). With `UsePartColor` off its vertices keep the
-    /// colours of the parts it was made from; on, it's the union's Color.
+    /// colors of the parts it was made from; on, it's the union's Color.
     /// Its Decals and Textures go on the box faces its vertices were cut
     /// from (observed). Returns how they go on it.
     pub(super) fn union(

@@ -1,8 +1,7 @@
 //! Replication from a server DataModel to a client DataModel.
 //!
 //! Rook runs Play mode as separate server and client DataModels, the way
-//! modern Roblox does, connected by this in-process replicator (architecture
-//! §8); a network transport can later carry the same changes. What
+//! modern Roblox does, connected by this in-process replicator (docs/design/architecture.md#engine-systems); a network transport can later carry the same changes. What
 //! replicates is in `docs/behavior/replication.md`.
 //!
 //! Replication has two halves, so the server and a client can run on

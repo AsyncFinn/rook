@@ -1,5 +1,5 @@
 // Local lights as Studio's voxel lighting takes them: what each light
-// writes into the 4-stud voxels around it (docs/behavior/lights.md). The
+// writes into the 4-stud voxels around it (docs/behavior/lighting/local-lights.md). The
 // renderer fills `Light`s (`renderer/lighting/local.rs`).
 
 struct Light {
@@ -18,11 +18,11 @@ struct Light {
     part_max: vec4<f32>,
 };
 
-// Studio's light voxels, in studs, centred at 4k + 2.
+// Studio's light voxels, in studs, centered at 4k + 2.
 const VOXEL: f32 = 4.0;
 
-// What one light writes into the voxel centred at `v` (fitted to Studio's
-// voxels, docs/behavior/lights.md).
+// What one light writes into the voxel centered at `v` (fitted to Studio's
+// voxels, docs/behavior/lighting/local-lights.md).
 fn light_at_voxel(light: Light, v: vec3<f32>) -> vec3<f32> {
     let kind = light.kind.x;
     let to = v - light.position.xyz;

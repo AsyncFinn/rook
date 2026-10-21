@@ -1,4 +1,4 @@
-//! The audio API's graph (`docs/behavior/audio.md`, step 5): what the
+//! The audio API's graph (`docs/behavior/audio/audio-api.md`): what the
 //! player hears of it, a client's default AudioListener, scheduled `Play`
 //! and `Stop` calls, and AudioAnalyzers' measurements.
 //!

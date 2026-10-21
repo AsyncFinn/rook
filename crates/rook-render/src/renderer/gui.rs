@@ -1,6 +1,6 @@
 //! The GUI pass: the GUI's rectangles drawn in order into the GUI layer,
 //! premultiplied and in sRGB, which the tone pass lays over the frame, so
-//! GUI blends in sRGB as Roblox's does (docs/behavior/gui.md#drawing);
+//! GUI blends in sRGB as Roblox's does (docs/behavior/gui/layout.md#drawing);
 //! and the world GUI's canvases drawn the same way into their atlas, which
 //! [`world`] lays in the world. Text quads draw through their glyph's
 //! coverage in the glyph atlas.

@@ -16,7 +16,7 @@ const MIN_CELL: f32 = 16.0;
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Pod, Zeroable)]
 pub(crate) struct GpuLight {
-    /// xyz: where it is (a surface light's face centre); w: the distance
+    /// xyz: where it is (a surface light's face center); w: the distance
     /// its falloff reaches 0.
     pub(super) position: [f32; 4],
     /// rgb: `Brightness` x `Color` squared (Studio's light units); w: how
@@ -58,7 +58,7 @@ impl GpuLight {
                 1.0,
                 0.7 * range.max(1.0),
             ),
-            // Fitted: a surface light shines from its face's centre, its
+            // Fitted: a surface light shines from its face's center, its
             // cone fading by the cosine out to 45 degrees past half its
             // Angle (at Angle 90, the cosine itself).
             LightShape::Surface { direction, angle } => (

@@ -1,5 +1,5 @@
 //! Grass blades: with `Terrain.Decoration` on, Studio grows blades on
-//! Grass's tops (`docs/behavior/terrain.md`). Rook plants them on the
+//! Grass's tops (`docs/behavior/terrain/grass.md`). Rook plants them on the
 //! Grass triangles facing up, at random points fixed by where each
 //! triangle is, in tiles of [`TILE_STUDS`] so the player builds blades only
 //! near the camera. Their size and density are fitted to Studio 0.742
@@ -26,18 +26,18 @@ pub const BLADE_HEIGHT: f32 = 3.6;
 /// A blade's width at its foot.
 const BLADE_WIDTH: f32 = 0.45;
 
-/// Grass's top texture's average colour, and how much of it its colour
+/// Grass's top texture's average color, and how much of it its color
 /// tints (alpha): Studio's `FStringTerrainColorTable`, `avgAlbedo2022`.
 const GRASS_AVERAGE: [u8; 4] = [196, 196, 189, 241];
 
 /// How much darker blades are than the ground's average, in linear light
-/// (measured in Studio: a blade is one flat colour, close to the ground's
-/// average around it, by luminance 0.78 of it in the default colour and
+/// (measured in Studio: a blade is one flat color, close to the ground's
+/// average around it, by luminance 0.78 of it in the default color and
 /// 0.97 with Grass red; Rook's blades at 0.7 come out 0.82 of Rook's own
-/// ground in the default colour; Approximation).
+/// ground in the default color; Approximation).
 const BLADE_SHADE: f32 = 0.7;
 
-/// The blades' colour (sRGB) for Grass's `MaterialColors` colour: the
+/// The blades' color (sRGB) for Grass's `MaterialColors` color: the
 /// ground's average (its texture's luma times [`TerrainMaterial::tint`]
 /// where its tint mask is opaque, as the ground is drawn), darkened by
 /// [`BLADE_SHADE`] in linear light.
@@ -51,7 +51,7 @@ pub fn blade_color(grass: Color3uint8) -> [f32; 3] {
     )
 }
 
-/// Grass's upward triangles in world studs, by the tile their centre is in.
+/// Grass's upward triangles in world studs, by the tile their center is in.
 pub type GrassTops = FxHashMap<IVec2, Vec<[Vec3; 3]>>;
 
 /// The tile a point is in.
@@ -76,8 +76,8 @@ pub fn add_grass_tops(chunk: &ChunkMesh, tops: &mut GrassTops) {
         }
         for tri in s.indices.as_chunks::<3>().0 {
             let t = tri.map(|i| origin + Vec3::from(s.positions[i as usize]));
-            let centre = (t[0] + t[1] + t[2]) / 3.0;
-            tops.entry(tile_of(centre)).or_default().push(t);
+            let center = (t[0] + t[1] + t[2]) / 3.0;
+            tops.entry(tile_of(center)).or_default().push(t);
         }
     }
 }
@@ -85,7 +85,7 @@ pub fn add_grass_tops(chunk: &ChunkMesh, tops: &mut GrassTops) {
 /// One tile's blades, relative to its [`tile_origin`]. Each vertex's UV is
 /// (a number from 0 to 1 for its blade: its sway's phase, and which blades
 /// thin out first far away; its height above the blade's foot in studs);
-/// its normal points straight up, so every blade is one flat colour, as in
+/// its normal points straight up, so every blade is one flat color, as in
 /// Studio (observed, on slopes too).
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Blades {
@@ -109,8 +109,8 @@ pub fn blades(tile: IVec2, triangles: &[[Vec3; 3]]) -> Blades {
     let mut out = Blades::default();
     for t in triangles {
         let area = (t[1] - t[0]).cross(t[2] - t[0]).length() / 2.0;
-        let centre = (t[0] + t[1] + t[2]) / 3.0;
-        let mut r = Random::at((centre * 16.0).round().as_ivec3() + IVec3::new(0, 7, 0));
+        let center = (t[0] + t[1] + t[2]) / 3.0;
+        let mut r = Random::at((center * 16.0).round().as_ivec3() + IVec3::new(0, 7, 0));
         let count = (area * DENSITY + r.next()) as usize;
         for _ in 0..count {
             // A uniform point on the triangle.
@@ -181,7 +181,7 @@ mod tests {
             let origin = tile_origin(*tile);
             for (p, uv) in b.positions.iter().zip(&b.uvs) {
                 let p = origin + Vec3::from(*p);
-                // The slab's top is 4 studs above its voxels' centres.
+                // The slab's top is 4 studs above its voxels' centers.
                 if uv[1] == 0.0 && (6.0..58.0).contains(&p.x) && (6.0..58.0).contains(&p.z) {
                     assert!((p.y - 6.0).abs() < 1e-3, "foot at {p}");
                 }
@@ -208,7 +208,7 @@ mod tests {
     fn blades_are_darker_than_the_ground() {
         let c = blade_color(Color3uint8::new(111, 126, 62));
         assert!(c.iter().all(|v| (0.0..0.6).contains(v)), "{c:?}");
-        // Olive, as Studio's ground is in the default colour: (82, 84, 43).
+        // Olive, as Studio's ground is in the default color: (82, 84, 43).
         assert!((c[0] - c[1]).abs() < 0.02 && c[1] > c[2] + 0.1, "{c:?}");
     }
 }

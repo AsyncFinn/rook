@@ -1,7 +1,7 @@
 -- Tweens: TweenService:Create, Tween:Play/Pause/Cancel, TweenService:GetValue
 -- and the legacy GuiObject:TweenPosition/TweenSize/TweenSizeAndPosition.
 --
--- Behaviour follows creator-docs (TweenService, TweenInfo, EasingStyle,
+-- Behavior follows creator-docs (TweenService, TweenInfo, EasingStyle,
 -- EasingDirection). Easing curves are the standard formulas; their exact
 -- constants are Inference until checked against TweenService:GetValue in
 -- Studio. Tweens advance on Heartbeat (Inference).
@@ -179,7 +179,7 @@ local function play(s)
 	for name in s.goals do
 		local other = byProp[name]
 		if other and other ~= s then
-			finish(other, PlaybackState.Cancelled)
+			finish(other, PlaybackState.Canceled)
 		end
 		byProp[name] = s
 	end
@@ -236,8 +236,8 @@ end
 
 function tween.cancel(t)
 	local s = states[t]
-	if s and s.state ~= PlaybackState.Completed and s.state ~= PlaybackState.Cancelled then
-		finish(s, PlaybackState.Cancelled)
+	if s and s.state ~= PlaybackState.Completed and s.state ~= PlaybackState.Canceled then
+		finish(s, PlaybackState.Canceled)
 		s.elapsed = 0
 	end
 end
@@ -256,7 +256,7 @@ function tween.gui(object, goals, direction, style, time, override, callback)
 		if not override then
 			return false
 		end
-		finish(running, PlaybackState.Cancelled)
+		finish(running, PlaybackState.Canceled)
 	end
 	local info = TweenInfo.new(time or 1, style or Enum.EasingStyle.Quad, direction or Enum.EasingDirection.Out)
 	local s = { target = object, info = info, goals = goals, state = PlaybackState.Begin }

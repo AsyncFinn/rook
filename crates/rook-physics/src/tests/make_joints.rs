@@ -141,7 +141,7 @@ fn model_parts_join_parts_outside_and_only_once() {
 
 #[test]
 fn many_callers_sweep_the_world_with_the_same_result() {
-    // A column of 20 parts: each neighbouring pair joins once, Part0 being
+    // A column of 20 parts: each neighboring pair joins once, Part0 being
     // the one earlier in the list.
     let mut dom = Dom::new();
     let column: Vec<_> = (0..20)

@@ -100,7 +100,7 @@ fn wire(velocity: f32, cycle_offset: f32) -> FloorWire {
 }
 
 /// The middle of a strip's first edge.
-fn centre(s: &Strip<'_>) -> Vec3 {
+fn center(s: &Strip<'_>) -> Vec3 {
     (s.edges[0].sides[0] + s.edges[1].sides[1]) * 0.5
 }
 
@@ -112,13 +112,13 @@ fn centre(s: &Strip<'_>) -> Vec3 {
 fn floor_wire_images_count_back_from_to() {
     let (still, offset, moving) = (wire(0.0, 0.0), wire(0.0, 0.25), wire(1.0, 0.0));
     let still = floor_wire(&still, 0.0);
-    let centres: Vec<Vec3> = still.chunks(2).map(|pair| centre(&pair[0])).collect();
+    let centers: Vec<Vec3> = still.chunks(2).map(|pair| center(&pair[0])).collect();
     let near = |a: Vec3, b: Vec3| a.distance(b) < 1e-4;
-    assert_eq!(centres.len(), 6);
-    assert!(near(centres[5], Vec3::new(10.0, 8.0, 0.0)));
-    assert!(near(centres[4], Vec3::new(10.0, 4.0, 0.0)));
-    assert!(near(centres[3], Vec3::new(9.8, 0.2, 0.0)));
-    assert!(near(centres[0], Vec3::new(0.0, 2.4, 0.0)));
+    assert_eq!(centers.len(), 6);
+    assert!(near(centers[5], Vec3::new(10.0, 8.0, 0.0)));
+    assert!(near(centers[4], Vec3::new(10.0, 4.0, 0.0)));
+    assert!(near(centers[3], Vec3::new(9.8, 0.2, 0.0)));
+    assert!(near(centers[0], Vec3::new(0.0, 2.4, 0.0)));
     let up = &still[10..12];
     assert!(near(
         up[0].edges[1].sides[0] - up[0].edges[0].sides[0],
@@ -145,11 +145,11 @@ fn floor_wire_images_count_back_from_to() {
     let moving = floor_wire(&moving, 1.0);
     // One stud on: the last image passes the end and the one before is next.
     assert!(near(
-        centre(offset.last().unwrap()),
+        center(offset.last().unwrap()),
         Vec3::new(10.0, 5.0, 0.0)
     ));
     assert!(near(
-        centre(moving.last().unwrap()),
+        center(moving.last().unwrap()),
         Vec3::new(10.0, 5.0, 0.0)
     ));
 }

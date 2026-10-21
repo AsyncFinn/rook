@@ -3,7 +3,7 @@
 use super::*;
 
 /// A TrussPart without a mesh: its bars, along its long axis from its low
-/// end (`rook_types::TrussLook`), in the part's colour, material and
+/// end (`rook_types::TrussLook`), in the part's color, material and
 /// transparency (observed in Studio 0.742, 2026-10-13: Color, Neon,
 /// Reflectance and Transparency show as on any part, and Wood its wood).
 /// Its Decals and Textures and its surfaces don't show (observed).

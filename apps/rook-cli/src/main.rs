@@ -158,8 +158,9 @@ enum Command {
         #[command(subcommand)]
         action: Option<CacheAction>,
     },
-    /// Check the codebase for drift (copied functions, long comment blocks,
-    /// environment reads below rook-engine); `scripts/check` runs it.
+    /// Check the repository for drift (copied functions, long comment
+    /// blocks, environment reads below rook-engine, broken doc links and
+    /// indexes, British spellings); `scripts/check` runs it.
     #[command(hide = true)]
     Drift,
     /// Regenerate crates/rook-reflection/data/members.json from a Full API dump.

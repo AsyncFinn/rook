@@ -1,5 +1,5 @@
-// Studio's frame and tone curve (docs/behavior/tone-mapping.md). Studio
-// draws light units (Ambient's colour squared, a light's Brightness x Color
+// Studio's frame and tone curve (docs/behavior/lighting/tone-mapping.md). Studio
+// draws light units (Ambient's color squared, a light's Brightness x Color
 // squared) into a frame holding sqrt(light / 4), so 4 units is the
 // brightest it keeps, and blends Decals, Transparency and particles in that
 // encoding (Confirmed: the composition shaders in `shaders_glsl3.pack`
@@ -14,8 +14,8 @@ fn linear_to_srgb(c: vec3<f32>) -> vec3<f32> {
     return select(1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, c * 12.92, c <= vec3(0.0031308));
 }
 
-// A surface colour as Studio's shaders take it: they square the sRGB
-// colour (texture times colour), where Rook's colours and images arrive as
+// A surface color as Studio's shaders take it: they square the sRGB
+// color (texture times color), where Rook's colors and images arrive as
 // linear light (`shaders_glsl3.pack`, 0.743; within a level of the product
 // of the squares except near black).
 fn albedo_units(linear: vec3<f32>) -> vec3<f32> {
@@ -29,7 +29,7 @@ const FRAME_LIGHT: f32 = 4.0;
 // The default tone curve (`ColorGradingEffect.TonemapperPreset` Default, and
 // places without one): light units to the linear light an sRGB target turns
 // into Studio's pixels. Measured on white SmoothPlastic: Ambient 32, 64, 96,
-// 128, 160, 192 and 255 grey drew 14, 47, 91, 134, 166, 193 and 224, brighter
+// 128, 160, 192 and 255 gray drew 14, 47, 91, 134, 166, 193 and 224, brighter
 // lights up to 253; black Decals over Neon at each Transparency land on it
 // within 4 levels.
 const CURVE_IN = array<f32, 11>(0.0, 0.0156, 0.0625, 0.141, 0.25, 0.393, 0.567, 1.0, 2.24, 3.5, 8.0);

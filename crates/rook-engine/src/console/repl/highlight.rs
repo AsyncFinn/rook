@@ -1,5 +1,5 @@
-//! Colours for Luau at the command bar: keywords, constants, strings,
-//! numbers and comments. Only the terminal's 16 named colours, so the
+//! Colors for Luau at the command bar: keywords, constants, strings,
+//! numbers and comments. Only the terminal's 16 named colors, so the
 //! user's theme decides what they look like.
 
 const KEYWORD: &str = "\x1b[35m";
@@ -9,8 +9,8 @@ const NUMBER: &str = "\x1b[33m";
 const COMMENT: &str = "\x1b[90m";
 const RESET: &str = "\x1b[0m";
 
-/// `source` with colour codes around its tokens. The whole buffer is
-/// coloured at once, so a long string or comment spanning lines stays one
+/// `source` with color codes around its tokens. The whole buffer is
+/// colored at once, so a long string or comment spanning lines stays one
 /// token.
 pub(super) fn highlight(source: &str) -> String {
     let bytes = source.as_bytes();
@@ -18,7 +18,7 @@ pub(super) fn highlight(source: &str) -> String {
     let mut i = 0;
     while i < bytes.len() {
         let start = i;
-        let colour = match bytes[i] {
+        let color = match bytes[i] {
             b'-' if bytes.get(i + 1) == Some(&b'-') => {
                 i = comment_end(bytes, i + 2);
                 Some(COMMENT)
@@ -41,7 +41,7 @@ pub(super) fn highlight(source: &str) -> String {
             }
             b if b.is_ascii_alphabetic() || b == b'_' => {
                 i = word_end(bytes, i);
-                word_colour(&source[start..i])
+                word_color(&source[start..i])
             }
             // Token ends above are all ASCII, so this is the only place a
             // multi-byte character is stepped over.
@@ -50,9 +50,9 @@ pub(super) fn highlight(source: &str) -> String {
                 None
             }
         };
-        match colour {
-            Some(colour) => {
-                out.push_str(colour);
+        match color {
+            Some(color) => {
+                out.push_str(color);
                 out.push_str(&source[start..i]);
                 out.push_str(RESET);
             }
@@ -62,11 +62,11 @@ pub(super) fn highlight(source: &str) -> String {
     out
 }
 
-fn word_colour(word: &str) -> Option<&'static str> {
+fn word_color(word: &str) -> Option<&'static str> {
     match word {
         "nil" | "true" | "false" => Some(CONSTANT),
         // `continue` is contextual in Luau, but a variable of that name is
-        // rare enough that colouring it as a keyword helps more than not.
+        // rare enough that coloring it as a keyword helps more than not.
         "and" | "break" | "continue" | "do" | "else" | "elseif" | "end" | "for" | "function"
         | "if" | "in" | "local" | "not" | "or" | "repeat" | "return" | "then" | "until"
         | "while" => Some(KEYWORD),
@@ -155,14 +155,14 @@ fn comment_end(bytes: &[u8], i: usize) -> usize {
 mod tests {
     use super::*;
 
-    /// The coloured spans of `source`, as (colour, text).
+    /// The colored spans of `source`, as (color, text).
     fn spans(source: &str) -> Vec<(&'static str, String)> {
         let out = highlight(source);
         let mut spans = Vec::new();
         for part in out.split(RESET) {
-            for colour in [KEYWORD, CONSTANT, STRING, NUMBER, COMMENT] {
-                if let Some(at) = part.find(colour) {
-                    spans.push((colour, part[at + colour.len()..].to_owned()));
+            for color in [KEYWORD, CONSTANT, STRING, NUMBER, COMMENT] {
+                if let Some(at) = part.find(color) {
+                    spans.push((color, part[at + color.len()..].to_owned()));
                 }
             }
         }
@@ -170,7 +170,7 @@ mod tests {
     }
 
     #[test]
-    fn tokens_take_their_colours() {
+    fn tokens_take_their_colors() {
         assert_eq!(
             spans("local x = nil -- note\nreturn 0x1F + 1e-3, 'a\\'b', [==[ ]] ]==]"),
             [

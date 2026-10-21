@@ -13,7 +13,7 @@ pub struct PlayingSound {
     /// `TimePosition`, seconds.
     pub position: f64,
     /// `Volume`, as a linear gain (Approximation: scripts can't see the
-    /// curve, `docs/behavior/audio.md`).
+    /// curve, `docs/behavior/audio/sound-api.md`).
     pub volume: f32,
     /// `PlaybackSpeed`.
     pub speed: f32,
@@ -32,7 +32,7 @@ pub struct PlayingSound {
 /// A 3D sound's place and roll-off: a Sound whose parent is a BasePart (at
 /// its position) or an Attachment (at its world position) in Workspace
 /// (creator-docs Sound; Confirmed by ear-free measurement, see
-/// `docs/behavior/audio.md`). Anywhere else a sound is global.
+/// `docs/behavior/audio/3d-sound.md`). Anywhere else a sound is global.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Emitter {
     pub position: glam::Vec3,

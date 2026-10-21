@@ -1,4 +1,4 @@
-//! The audio API's methods (`docs/behavior/audio.md`, step 5; observed in
+//! The audio API's methods (`docs/behavior/audio/audio-api.md`; observed in
 //! Studio 0.742 unless marked). The engine (`rook-engine`'s `sounds`)
 //! loads AudioPlayers' files, moves `TimePosition` on, fires `Ended` and
 //! `Looped`, and measures AudioAnalyzers; these change state.
@@ -50,12 +50,12 @@ pub(super) fn audio_stop(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Out
 /// Cancels a scheduled `Play` or `Stop`: true if it was still waiting.
 pub(super) fn audio_cancel(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let id = a.opt_number(0)?.map(|n| n as i64);
-    let cancelled = with_world(lua, |w| {
+    let canceled = with_world(lua, |w| {
         let before = w.audio.scheduled.len();
         w.audio.scheduled.retain(|s| Some(s.id) != id);
         w.audio.scheduled.len() != before
     });
-    Outcome::ret(lua, cancelled)
+    Outcome::ret(lua, canceled)
 }
 
 /// `SoundService:GetMixerTime`: seconds on the clock scheduled `Play` and

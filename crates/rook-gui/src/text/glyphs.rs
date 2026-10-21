@@ -1,4 +1,4 @@
-//! Glyphs rasterised for drawing: skrifa's outlines filled by zeno into
+//! Glyphs rasterized for drawing: skrifa's outlines filled by zeno into
 //! coverage masks, kept per face, glyph and size.
 
 use std::sync::Arc;
@@ -41,12 +41,12 @@ impl Glyphs {
         let step = (px * SIZE_STEPS).round().max(1.0) as u32;
         self.cache
             .entry((face, id, step))
-            .or_insert_with(|| rasterise(fonts, face, id, step as f32 / SIZE_STEPS))
+            .or_insert_with(|| rasterize(fonts, face, id, step as f32 / SIZE_STEPS))
             .clone()
     }
 }
 
-fn rasterise(fonts: &Fonts, face: FaceId, id: u32, px: f32) -> Option<Raster> {
+fn rasterize(fonts: &Fonts, face: FaceId, id: u32, px: f32) -> Option<Raster> {
     let f = fonts.face(face);
     let font = f.font();
     let outline = font.outline_glyphs().get(id.into())?;

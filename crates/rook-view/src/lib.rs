@@ -2,8 +2,7 @@
 //! up to date as scripts change it ([`SceneCache`]), the mesh files and
 //! images it needs, and what the renderer takes from the Roblox install
 //! ([`Installed`]). Apps that draw use it between `rook-engine` and
-//! `rook-render`; a server never links it (`docs/design/architecture.md`
-//! §2).
+//! `rook-render`; a server never links it (`docs/design/architecture.md#crate-layout`).
 
 mod camera;
 mod content;
@@ -45,7 +44,7 @@ use look::*;
 use props::*;
 use terrain::TerrainCache;
 
-/// How a part's CFrame places what it draws: where its shape's centre is
+/// How a part's CFrame places what it draws: where its shape's center is
 /// in the part's axes (a mesh's `Offset`, a truss's start), and the turn
 /// from the shape's axes to the part's (a CylinderMesh stands upright, a
 /// truss lies along its long axis).

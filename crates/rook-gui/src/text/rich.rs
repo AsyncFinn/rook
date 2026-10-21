@@ -14,7 +14,7 @@ pub(crate) struct Style {
     pub(crate) underline: bool,
     pub(crate) strike: bool,
     pub(crate) stroke: Option<Stroke>,
-    /// A highlight behind the text: colour and transparency.
+    /// A highlight behind the text: color and transparency.
     pub(crate) mark: Option<([f32; 3], f32)>,
     pub(crate) case: Case,
 }

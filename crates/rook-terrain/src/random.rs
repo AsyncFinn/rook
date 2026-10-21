@@ -1,5 +1,5 @@
 //! Rook's own pseudo-random numbers fixed by position, for what Studio
-//! randomises with a hash Rook doesn't know (the rough materials' shift,
+//! randomizes with a hash Rook doesn't know (the rough materials' shift,
 //! where grass blades grow).
 
 use glam::IVec3;

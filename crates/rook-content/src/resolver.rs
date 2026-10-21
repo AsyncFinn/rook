@@ -4,7 +4,7 @@
 #[expect(
     clippy::disallowed_methods,
     clippy::disallowed_types,
-    reason = "the content cache, install lookup and decode workers are rook-platform's known exception (architecture §2)"
+    reason = "the content cache, install lookup and decode workers are rook-platform's known exception (docs/design/architecture.md#crate-layout)"
 )]
 pub mod cache;
 mod config;
@@ -12,7 +12,7 @@ pub mod defaults;
 pub mod delivery;
 #[expect(
     clippy::disallowed_methods,
-    reason = "the content cache, install lookup and decode workers are rook-platform's known exception (architecture §2)"
+    reason = "the content cache, install lookup and decode workers are rook-platform's known exception (docs/design/architecture.md#crate-layout)"
 )]
 pub mod install;
 pub mod kept;
@@ -60,7 +60,7 @@ impl Resolver {
                     // reading can't be deleted on Windows, and a deleted one
                     // is fetched again.
                     let trimmed = cache.clone();
-                    #[expect(clippy::disallowed_types, reason = "the content cache, install lookup and decode workers are rook-platform's known exception (architecture §2)")]
+                    #[expect(clippy::disallowed_types, reason = "the content cache, install lookup and decode workers are rook-platform's known exception (docs/design/architecture.md#crate-layout)")]
                     let trim = std::thread::Builder::new()
                         .name("rook-cache-trim".into())
                         .spawn(move || trimmed.trim(max));
@@ -129,7 +129,7 @@ impl Resolver {
         let (kind, file) = self.locate_local(r)?;
         #[expect(
             clippy::disallowed_methods,
-            reason = "the content cache, install lookup and decode workers are rook-platform's known exception (architecture §2)"
+            reason = "the content cache, install lookup and decode workers are rook-platform's known exception (docs/design/architecture.md#crate-layout)"
         )]
         let bytes = std::fs::read(&file)
             .map_err(|e| tracing::warn!(target: "content", "{}: {e}", file.display()))
@@ -366,7 +366,7 @@ fn find_file(root: &Path, path: &str) -> Option<PathBuf> {
     for part in parts {
         #[expect(
             clippy::disallowed_methods,
-            reason = "the content cache, install lookup and decode workers are rook-platform's known exception (architecture §2)"
+            reason = "the content cache, install lookup and decode workers are rook-platform's known exception (docs/design/architecture.md#crate-layout)"
         )]
         let entry = std::fs::read_dir(&dir).ok()?.flatten().find(|e| {
             e.file_name()

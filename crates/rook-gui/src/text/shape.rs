@@ -1,5 +1,5 @@
 //! Shaping runs of text into glyphs with Roblox's pixel advances
-//! (docs/behavior/gui-text.md#widths).
+//! (docs/behavior/gui/text.md#widths).
 
 use harfrust::{ShapeOptions, UnicodeBuffer};
 

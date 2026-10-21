@@ -354,7 +354,7 @@ fn process_file(
         null_numbers: u64::from(u.null_numbers),
     });
     // A panic while counting is recorded for the file, like a decoder's.
-    let counted = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| summarise(&loaded.dom)));
+    let counted = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| summarize(&loaded.dom)));
     let summary = match counted {
         Ok(summary) => summary,
         Err(panic) => {
@@ -375,7 +375,7 @@ fn process_file(
     (record, Some(summary))
 }
 
-fn summarise(dom: &WeakDom) -> FileSummary {
+fn summarize(dom: &WeakDom) -> FileSummary {
     let db = rook_reflection::database();
     let source_container = db.class_by_name("LuaSourceContainer").map(|c| c.id);
     let mut s = FileSummary::default();
@@ -439,7 +439,7 @@ fn summarise(dom: &WeakDom) -> FileSummary {
                         .or_insert_with(|| url.to_owned());
                     *s.content.script_shapes.entry(shape).or_insert(0) += 1;
                 }
-                let analysis = scripts::analyse(source);
+                let analysis = scripts::analyze(source);
                 if analysis.parse_errors > 0 {
                     s.scripts_with_errors += 1;
                     s.script_parse_errors += analysis.parse_errors as u64;
@@ -497,7 +497,7 @@ fn merge_record(agg: &mut Aggregate, record: &FileRecord) {
             *agg.failures_by_kind.entry(kind.clone()).or_insert(0) += 1;
             let usage = agg
                 .failure_messages
-                .entry(normalise_message(message))
+                .entry(normalize_message(message))
                 .or_default();
             usage.files += 1;
             usage.count += 1;
@@ -543,7 +543,7 @@ fn merge_summary(agg: &mut Aggregate, s: FileSummary) {
 }
 
 /// Group similar error messages: digits become `#`, long messages are cut.
-fn normalise_message(message: &str) -> String {
+fn normalize_message(message: &str) -> String {
     let mut out = String::with_capacity(message.len().min(160));
     let mut last_digit = false;
     for ch in message.chars().take(160) {

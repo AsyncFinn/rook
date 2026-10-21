@@ -1,7 +1,7 @@
 //! TrussPart: how Studio sizes a truss and what it draws, the one
 //! definition scripts, the scene builder and the renderer follow. Observed
 //! in Studio 0.742 on 2026-10-13 and measured from Studio's OBJ export of a
-//! 2 × 2 × 2 and a 2 × 4 × 2 truss (ROADMAP M4 "Trusses").
+//! 2 × 2 × 2 and a 2 × 4 × 2 truss (docs/behavior/meshes/trusses.md).
 //!
 //! A truss is drawn in its own frame, built along its Y axis: a square
 //! frame of four corner rails, 2 studs across, cut into 2-stud segments.
@@ -83,7 +83,7 @@ impl TrussStyle {
 }
 
 /// What a truss draws in its own frame: `segments` 2-stud segments along
-/// its Y axis, centred on the origin, braced by `style`. Two trusses that
+/// its Y axis, centered on the origin, braced by `style`. Two trusses that
 /// draw the same have equal shapes (a one-segment truss is
 /// [`TrussStyle::NoSupports`] whatever its Style), so they share one mesh.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -121,8 +121,8 @@ impl Lean {
 /// four rails run the truss's whole length at its corners. Each segment has
 /// a rung across each of the four sides at both ends, between the rails;
 /// where two segments meet their rungs are one bar 0.5 studs thick. A
-/// brace is 0.25 studs wide and 0.125 deep, centred in the plane of the
-/// rails' centres (0.875 from the axis), running between the rails' centre
+/// brace is 0.25 studs wide and 0.125 deep, centered in the plane of the
+/// rails' centers (0.875 from the axis), running between the rails' center
 /// lines from one corner of the segment 0.875 below its middle to the
 /// opposite corner 0.875 above it, its ends cut square and buried in the
 /// rails.
@@ -210,7 +210,7 @@ impl TrussShape {
 }
 
 /// How a truss part draws: its [`TrussShape`], the turn from the shape's
-/// frame to the part's axes, and where the shape's centre is in the part's
+/// frame to the part's axes, and where the shape's center is in the part's
 /// axes.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TrussLook {
@@ -222,8 +222,7 @@ pub struct TrussLook {
 
 impl TrussLook {
     /// What a truss of `size` and `style` draws: segments along its long axis
-    /// from its low end, as observed in Studio (`docs/behavior/meshes.md`,
-    /// Trusses). A Size Studio wouldn't keep (only from a file) is first snapped
+    /// from its low end, as observed in Studio (`docs/behavior/meshes/trusses.md`). A Size Studio wouldn't keep (only from a file) is first snapped
     /// as [`truss_size`] snaps a script's (Inference: files in the archive only
     /// hold sizes Studio keeps).
     pub fn of(size: Vec3, style: TrussStyle) -> Self {

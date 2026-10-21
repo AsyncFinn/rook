@@ -29,7 +29,7 @@ pub struct Install {
     /// Folders `rbxasset://` paths are looked up in, in order: `content`,
     /// then `ExtraContent` and `PlatformContent/pc` when present (a few
     /// `rbxasset://textures/...` paths live in those; Inference from the
-    /// archive's paths, see ROADMAP M4 step 2).
+    /// archive's paths, see docs/behavior/content/asset-fetching.md).
     pub content: Vec<PathBuf>,
     /// When it was installed (its executable's modification time).
     pub modified: SystemTime,

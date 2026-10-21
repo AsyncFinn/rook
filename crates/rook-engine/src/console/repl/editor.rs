@@ -1,4 +1,4 @@
-//! The line editor: rustyline with Luau colours, a multi-line buffer that
+//! The line editor: rustyline with Luau colors, a multi-line buffer that
 //! Enter runs only once the code is complete, and keys for choosing
 //! yourself (Shift, Ctrl or Alt+Enter add a line).
 //!

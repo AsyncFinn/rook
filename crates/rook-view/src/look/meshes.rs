@@ -40,9 +40,9 @@ impl SceneCache {
 
     /// A mesh's texture (`TextureId` of `mesh`, a MeshPart's `TextureID`),
     /// observed in Studio 0.742 (2026-10-13): once loaded it replaces the
-    /// part's colour, times `tint` (the mesh's `VertexColor`); while it
+    /// part's color, times `tint` (the mesh's `VertexColor`); while it
     /// loads the mesh is black; if it fails, or there is none, the mesh
-    /// keeps the part's colour.
+    /// keeps the part's color.
     pub(super) fn mesh_texture(
         &mut self,
         dom: &Dom,

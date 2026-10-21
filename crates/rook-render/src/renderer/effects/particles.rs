@@ -1,7 +1,7 @@
-//! Drawing the emitters' particles (docs/behavior/effects/classic.md): each a
+//! Drawing the emitters' particles (docs/behavior/effects/fire-smoke-and-sparkles.md): each a
 //! quad facing the camera, sorted back to front and drawn after the
 //! transparent parts, testing depth but not writing it. A particle's
-//! colour comes premultiplied by its opacity and is added to what's
+//! color comes premultiplied by its opacity and is added to what's
 //! behind it, which is dimmed by its coverage: opacity × (1 −
 //! LightEmission), so 0 blends and 1 adds.
 
@@ -20,11 +20,11 @@ pub(crate) struct ParticleInstance {
     position: [f32; 3],
     /// Width and height in studs.
     size: [f32; 2],
-    /// sRGB colour, and opacity.
+    /// sRGB color, and opacity.
     color: [f32; 4],
     /// Degrees, positive anticlockwise on screen.
     rotation: f32,
-    /// LightInfluence: 1 lit by the scene, 0 its own colour.
+    /// LightInfluence: 1 lit by the scene, 0 its own color.
     lit: f32,
     /// Its image's slot in the table (unused without one).
     image: u32,
@@ -61,7 +61,7 @@ struct EmitterDraw<'a> {
     texture: ImageHash,
     /// Its image's slot in the table.
     slot: u32,
-    /// How far from its centre a particle may reach, to cull it by.
+    /// How far from its center a particle may reach, to cull it by.
     reach: Option<f32>,
 }
 
@@ -180,7 +180,7 @@ impl Renderer {
                 texture,
                 slot: self.image_slots(&[Some(texture), None, None, None, None])[0],
                 // A quad turned any way stays within 0.71 x its size of
-                // its centre; one moved by ZOffset isn't culled on its own.
+                // its center; one moved by ZOffset isn't culled on its own.
                 reach: (look.z_offset == 0.0).then_some(biggest * 0.75),
             });
         }
@@ -269,7 +269,7 @@ impl Renderer {
     }
 }
 
-/// The particle pipeline: premultiplied colour over what's behind,
+/// The particle pipeline: premultiplied color over what's behind,
 /// dimmed by the coverage in alpha; depth tested, not written.
 pub(crate) fn pipeline(
     device: &wgpu::Device,
@@ -297,7 +297,7 @@ pub(crate) fn pipeline(
     )
 }
 
-/// A pipeline drawing over the frame as particles do: premultiplied colour
+/// A pipeline drawing over the frame as particles do: premultiplied color
 /// added to what's behind, which is dimmed by the coverage in alpha; depth
 /// compared by `depth_compare`, not written; both sides drawn. `entries`
 /// are the shader and its vertex and fragment entry points.

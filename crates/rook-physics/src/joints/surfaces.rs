@@ -1,6 +1,6 @@
 //! Legacy surface joints: `MakeJoints` joins touching faces by their
 //! surface types. The rules, observed in Studio 0.741, are in
-//! `docs/behavior/physics.md` (Surface joints).
+//! `docs/behavior/physics/joints.md`.
 
 use rustc_hash::FxHashMap as HashMap;
 
@@ -123,13 +123,13 @@ impl Box {
         self.min.cmple(other.max).all() && other.min.cmple(self.max).all()
     }
 
-    /// Face `f`'s outward normal, its centre and its two tangent axes with
+    /// Face `f`'s outward normal, its center and its two tangent axes with
     /// their half extents, in world space.
     fn face(&self, f: usize) -> (Vec3, Vec3, [(Vec3, f32); 2]) {
         let r = self.cf.rotation;
         if f == SLOPE {
             // From the bottom front edge up to the top back one, through
-            // the centre; it faces up and forward.
+            // the center; it faces up and forward.
             let h = self.half;
             let up = Vec3::new(0.0, h.y, h.z);
             return (
@@ -141,11 +141,11 @@ impl Box {
         let axis = f % 3;
         let sign = if f < 3 { 1.0 } else { -1.0 };
         let normal = r.col(axis) * sign;
-        let centre = self.cf.position + normal * self.half[axis];
+        let center = self.cf.position + normal * self.half[axis];
         let (a, b) = ((axis + 1) % 3, (axis + 2) % 3);
         (
             normal,
-            centre,
+            center,
             [(r.col(a), self.half[a]), (r.col(b), self.half[b])],
         )
     }
@@ -169,8 +169,8 @@ fn faces_touch(a: &Box, fa: usize, b: &Box, fb: usize) -> bool {
         else {
             return false;
         };
-        let centre = d.dot(axis);
-        let overlap = half.min(centre + other_half) - (-half).max(centre - other_half);
+        let center = d.dot(axis);
+        let overlap = half.min(center + other_half) - (-half).max(center - other_half);
         overlap > 1e-4
     })
 }
@@ -195,7 +195,7 @@ pub fn make_joints(dom: &mut Dom, parts: &[InstanceId]) -> Result<(), DomError> 
             rank.entry(i).or_insert(r);
         }
     }
-    // The neighbours each caller tries. When both parts of a pair call, the
+    // The neighbors each caller tries. When both parts of a pair call, the
     // earlier tries first and the later tries again if that made no joint,
     // as in Studio: a wedge's slope joins differently from each side.
     // A few callers (the usual script call) check the world directly;
@@ -215,19 +215,19 @@ pub fn make_joints(dom: &mut Dom, parts: &[InstanceId]) -> Result<(), DomError> 
     } else {
         near_pairs(&world)
     };
-    let mut neighbours: Vec<Vec<usize>> = vec![Vec::new(); world.len()];
+    let mut neighbors: Vec<Vec<usize>> = vec![Vec::new(); world.len()];
     for (a, b) in pairs {
         match (rank.get(&a), rank.get(&b)) {
             (Some(ra), Some(rb)) => {
                 let (first, second) = if ra <= rb { (a, b) } else { (b, a) };
-                neighbours[first].push(second);
+                neighbors[first].push(second);
                 // Only a slope joins differently from the other side.
                 if world[a].has_slope() || world[b].has_slope() {
-                    neighbours[second].push(first);
+                    neighbors[second].push(first);
                 }
             }
-            (Some(_), None) => neighbours[a].push(b),
-            (None, Some(_)) => neighbours[b].push(a),
+            (Some(_), None) => neighbors[a].push(b),
+            (None, Some(_)) => neighbors[b].push(a),
             (None, None) => {}
         }
     }
@@ -235,8 +235,8 @@ pub fn make_joints(dom: &mut Dom, parts: &[InstanceId]) -> Result<(), DomError> 
     callers.sort_unstable();
     for (_, i) in callers {
         let me = &world[i];
-        neighbours[i].sort_unstable();
-        for &j in &neighbours[i] {
+        neighbors[i].sort_unstable();
+        for &j in &neighbors[i] {
             let other = &world[j];
             if part_joints(dom, me.id)
                 .iter()

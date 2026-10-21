@@ -18,8 +18,8 @@ const IMAGE_COLOR: [f32; 3] = [242.0 / 255.0, 243.0 / 255.0, 243.0 / 255.0];
 /// One HandleAdornment on a part of `size`.
 ///
 /// Measured in Studio 0.742 (2026-10-20): the shape sits at `CFrame` from
-/// the part's centre, shifted by `SizeRelativeOffset` × half the part's
-/// size; a cylinder runs along the CFrame's Z, `Height` long and centred,
+/// the part's center, shifted by `SizeRelativeOffset` × half the part's
+/// size; a cylinder runs along the CFrame's Z, `Height` long and centered,
 /// with a hole of `InnerRadius`; a cone's base is at the CFrame, its tip
 /// `Height` along the LookVector; a line runs `Length` along the
 /// LookVector from the CFrame, a few pixels across whatever its distance;
@@ -34,7 +34,7 @@ pub(super) fn handle_adornment(
     let float = |name, default| dom.float_property(id, name).unwrap_or(default);
     let (radius, height) = (float("Radius", 1.0), float("Height", 1.0));
     let plain = |shape| piece(dom, id, shape);
-    let (piece, centre) = match dom.class_name(id) {
+    let (piece, center) = match dom.class_name(id) {
         "BoxHandleAdornment" => (
             PartInstance {
                 size: dom.vector3_property(id, "Size").unwrap_or(Vec3::ONE),
@@ -85,7 +85,7 @@ pub(super) fn handle_adornment(
         "ImageHandleAdornment" => {
             let url = props::content_url(dom, id, &["Image"]);
             // Drawn once its image has loaded; one that can't load draws
-            // its colour (Inference).
+            // its color (Inference).
             let Some(texture) = (*cx.image)(&url) else {
                 return Vec::new();
             };
@@ -106,7 +106,7 @@ pub(super) fn handle_adornment(
     };
     let cf = dom.cframe_property(id, "CFrame").unwrap_or_default();
     let pose = Pose {
-        offset: shift(dom, id, size) + cf.position + cf.rotation * centre,
+        offset: shift(dom, id, size) + cf.position + cf.rotation * center,
         turn: cf.rotation,
     };
     shaded(dom, id, piece, pose)
@@ -151,7 +151,7 @@ pub(super) fn shaded(
     }
     // Inference: `AlwaysOnTop` follows the API reference (the MCP capture
     // leaves out what Studio draws on top); like Shading AlwaysOnTop, it
-    // draws in exactly its colour, past the tone curve (measured).
+    // draws in exactly its color, past the tone curve (measured).
     let shading = dom.enum_item_property(id, "Shading").unwrap_or("Default");
     if dom.bool_property(id, "AlwaysOnTop") == Some(true) || shading == "AlwaysOnTop" {
         let top = PartInstance {
@@ -169,8 +169,8 @@ pub(super) fn shaded(
     let mut out = vec![(drawn, pose)];
     if matches!(shading, "XRay" | "XRayShaded") {
         // What parts in front hide shows at about half strength (measured:
-        // red over grey 126, 152, 165 drew 190, 64, 75); over the visible
-        // part the same colour changes nothing.
+        // red over gray 126, 152, 165 drew 190, 64, 75); over the visible
+        // part the same color changes nothing.
         let ghost = PartInstance {
             transparency: 1.0 - (1.0 - drawn.transparency) * 0.5,
             on_top: true,

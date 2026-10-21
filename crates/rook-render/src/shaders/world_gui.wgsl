@@ -1,7 +1,7 @@
 // World GUI (`renderer/gui/world.rs`): each SurfaceGui's or BillboardGui's
 // canvas, drawn by the GUI pass into the canvas atlas (sRGB, premultiplied
 // by coverage), laid in the world as a rectangle. LightInfluence 0 gives
-// its colour squared times Brightness in light units, as unlit
+// its color squared times Brightness in light units, as unlit
 // adornments do (measured: a red SurfaceGui frame and an unlit red
 // adornment both draw 223 through the default curve); 1 lights it as a
 // surface facing the camera's side of it, as particles are lit.

@@ -119,7 +119,7 @@ pub(super) const MATERIALS_2022: [Look; 23] = [
     Look { shift: 0.0, cubify: 0.0, quantize: 0.25, edges: Edges::HardSoft, cube: false, top: Some(tex(9920580094, 0.5, 1.0, 0.0, blend(0.532, 0.696, 0.504))), side: Some(tex(9920580503, 0.5, 6.0, 0.0, blend(0.345, 0.712, 0.523))), bottom: Some(tex(9920580503, 0.5, 6.0, 0.0, blend(0.345, 0.712, 0.523))) },
 ];
 
-/// Each material's default colour (`MaterialColors` in a new place) per
+/// Each material's default color (`MaterialColors` in a new place) per
 /// set, from Studio's `FStringTerrainColorTable` setting, in
 /// `TerrainMaterial` order.
 #[rustfmt::skip]

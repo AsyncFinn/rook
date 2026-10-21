@@ -305,7 +305,7 @@ pub(crate) const ROTATE_V_TORQUE: f32 = 5.0e5;
 /// the two parts, by size alone: the same with either part's density
 /// changed, and the same whichever part is the small one (observed).
 ///
-/// Inference: modelled as the part's moment of inertia about the hinge
+/// Inference: modeled as the part's moment of inertia about the hinge
 /// axis at unit density. That is exact for 1 and 2 stud cubes and for
 /// plates up to 1 stud thick (the limit grows with thickness, observed
 /// from 0.2 to 2 studs), but Roblox's limit grows in steps with size:

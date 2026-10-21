@@ -6,7 +6,7 @@
 //! they ask [`get`]. The app picks the platform once per process: it
 //! [`install`]s its own, or turns on the `native` feature, whose
 //! [`Platform::native`] is used when nothing was installed. See
-//! `docs/design/architecture.md` §2.
+//! `docs/design/architecture.md#crate-layout`.
 
 pub mod files;
 pub mod network;

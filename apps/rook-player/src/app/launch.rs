@@ -4,7 +4,7 @@
 
 use crate::*;
 
-/// The loading screen's colour, a dark grey like Roblox's (linear).
+/// The loading screen's color, a dark gray like Roblox's (linear).
 const BACKGROUND: wgpu::Color = wgpu::Color {
     r: 0.012,
     g: 0.013,

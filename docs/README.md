@@ -3,22 +3,61 @@
 - **[guide/](guide/)**: for people using Rook.
   - [Getting started](guide/getting-started.md): build Rook, open a place, controls and the command bar
   - [Features](guide/features.md): everything Rook supports today
+  - [Stubs](guide/stubs.md): what's partly done, or accepted but ignored, member by member
   - [Tools](guide/tools.md): the `rook-tools` command-line tool
+- **[roadmap/](roadmap/README.md)**: the plan, one page per milestone.
 - **[design/](design/)**: how Rook is built.
-  - [Architecture](design/architecture.md): crates, data flow and the rules every behaviour follows
-  - [Research](design/research.md): background, sources and policies
+  - [Architecture](design/architecture.md): crates, data flow and the rules every behavior follows
+  - [Policies](design/policies.md): what Rook targets, where its knowledge of Roblox may come from, and what content it ships
+  - [Research](design/research.md): background, prior work, libraries and sources
   - [Data and logging](design/data-and-logging.md): the data folder, settings.json, logs, crash reports and kept content
-- **[behavior/](behavior/)**: what Rook found in Studio and the archive, topic by topic.
-  - [Meshes](behavior/meshes.md): built-in shapes, mesh files, trusses
-  - [Collision shapes](behavior/collision.md): what unions collide and are queried as
-  - [Physics](behavior/physics.md): surface joints, movers and scene queries
+- **[behavior/](behavior/)**: what Rook found in Studio and the archive, topic by topic. Each page opens with when it was last checked against Studio.
+  - Audio
+    - [Decoding and playback](behavior/audio/playback.md): formats, loading, `TimeLength`, what replicates
+    - [The Sound API](behavior/audio/sound-api.md): methods, seeking, ends and loops, output level
+    - [3D sound](behavior/audio/3d-sound.md): roll-off, left and right, the listener
+    - [SoundService, SoundGroups and effects](behavior/audio/soundgroups-and-effects.md)
+    - [The audio API](behavior/audio/audio-api.md): AudioPlayer, wires, emitters and listeners, effects
+  - Content
+    - [Asset fetching](behavior/content/asset-fetching.md): where archived places' content comes from
+    - [Legacy XML](behavior/content/legacy-xml.md): how 2006 to 2010 files are upgraded
+  - Effects
+    - [Fire, Smoke and Sparkles](behavior/effects/fire-smoke-and-sparkles.md)
+    - [Particle emitters](behavior/effects/particle-emitters.md)
+    - [Beams and Trails](behavior/effects/beams-and-trails.md)
+    - [Explosions](behavior/effects/explosions.md): the blast and its look
+  - GUI
+    - [Layout](behavior/gui/layout.md): the screen, sizes and positions, UI layouts, drawing order
+    - [Text](behavior/gui/text.md): fonts, widths, lines, `TextScaled`, `RichText`, Hint and Message
+    - [World GUI](behavior/gui/world.md): SurfaceGui and BillboardGui
+  - Lighting
+    - [Local lights](behavior/lighting/local-lights.md): PointLight, SpotLight and SurfaceLight
+    - [Ambient and OutdoorAmbient](behavior/lighting/ambient.md)
+    - [The sun](behavior/lighting/sun.md)
+    - [Tone mapping](behavior/lighting/tone-mapping.md): Studio's HDR blending, Neon's glow, ColorGrading's curves and fog
+  - Meshes
+    - [Built-in shapes](behavior/meshes/built-in-shapes.md): SpecialMesh types, BlockMesh, CylinderMesh
+    - [File meshes](behavior/meshes/file-meshes.md)
+    - [Trusses](behavior/meshes/trusses.md)
+    - [Unions](behavior/meshes/unions.md): how they draw
+  - Physics
+    - [Surface joints](behavior/physics/joints.md): `MakeJoints`
+    - [Movers](behavior/physics/movers.md): BodyMovers and force constraints
+    - [Scene queries](behavior/physics/queries.md)
+    - [Collision shapes](behavior/physics/collision-shapes.md): what unions collide and are queried as
+  - Rendering
+    - [Materials](behavior/rendering/materials.md): PBR shading, the built-in materials, MaterialVariant and SurfaceAppearance
+    - [Textures and decals](behavior/rendering/textures-and-decals.md)
+    - [Highlight](behavior/rendering/highlight.md)
+    - [Adornments](behavior/rendering/adornments.md): selection boxes, handles, FloorWire, lassos
+    - [Antialiasing](behavior/rendering/antialiasing.md)
+  - Terrain
+    - [Voxels](behavior/terrain/voxels.md): `SmoothGrid` and legacy terrain
+    - [Surface](behavior/terrain/surface.md): the surface Roblox builds from the voxels
+    - [Materials](behavior/terrain/materials.md): textures, colors and MaterialVariants
+    - [Blending](behavior/terrain/blending.md): between materials, and between top and side
+    - [Water](behavior/terrain/water.md): shape, waves, color and reflections
+    - [Grass](behavior/terrain/grass.md): blades, sway and wind
+    - [Collision and queries](behavior/terrain/collision.md)
+    - [The Terrain API](behavior/terrain/api.md)
   - [Replication](behavior/replication.md): what a client receives from the server
-  - [Legacy XML](behavior/legacy-xml.md): how 2006 to 2010 files are upgraded
-  - [Asset fetching](behavior/content.md)
-  - [Textures and decals](behavior/textures-decals.md)
-  - [Antialiasing](behavior/antialiasing.md)
-  - [Tone mapping](behavior/tone-mapping.md): Studio's HDR blending, Neon's glow, and ColorGrading's curves
-  - [Terrain](behavior/terrain.md): `SmoothGrid` voxels and the surface Roblox builds from them
-  - [Stubs](behavior/stubs.md): what's partly done or accepted but ignored, member by member
-
-The plan is in [ROADMAP.md](../ROADMAP.md).

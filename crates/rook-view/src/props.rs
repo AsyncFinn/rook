@@ -18,7 +18,7 @@ pub(super) fn number_sequence(dom: &Dom, id: InstanceId, name: &str) -> Option<S
     Some(Sequence { curve, envelope })
 }
 
-/// A ColorSequence as a curve of sRGB colours.
+/// A ColorSequence as a curve of sRGB colors.
 pub(super) fn color_sequence(dom: &Dom, id: InstanceId, name: &str) -> Option<Curve<[f32; 3]>> {
     let seq = dom.color_sequence_property(id, name)?;
     let points: Vec<_> = seq

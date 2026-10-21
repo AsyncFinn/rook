@@ -74,8 +74,8 @@ impl Block {
     }
 }
 
-/// Where voxel `p` of the block has its centre, from the chunk's corner.
-fn centre(p: IVec3) -> Vec3 {
+/// Where voxel `p` of the block has its center, from the chunk's corner.
+fn center(p: IVec3) -> Vec3 {
     ((p - IVec3::splat(PAD)).as_vec3() + 0.5) * VOXEL_STUDS
 }
 
@@ -136,14 +136,14 @@ impl Mesher<'_> {
             }
             let (from, to) = if ia { (a, b) } else { (b, a) };
             let fill = self.block.at(from).fill();
-            sum += centre(from) + (centre(to) - centre(from)) * fill;
+            sum += center(from) + (center(to) - center(from)) * fill;
             n += 1;
         }
         let mut position = sum / n.max(1) as f32;
         let material = match self.pass {
             Pass::Solid => {
                 let material = self.dominant(c);
-                position = deform(position, centre(c), material.shape(), self.origin + c);
+                position = deform(position, center(c), material.shape(), self.origin + c);
                 material
             }
             Pass::Water => {

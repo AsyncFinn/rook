@@ -1,7 +1,7 @@
 //! Upgrade pass for legacy Roblox XML (roughly 2006–2010): rewrites what
 //! `rbx_xml` rejects into modern equivalents, only after a normal load has
 //! failed. What each construct becomes, and why, is in
-//! `docs/behavior/legacy-xml.md`; what was dropped is kept in the report
+//! `docs/behavior/content/legacy-xml.md`; what was dropped is kept in the report
 //! ([`EmbeddedAsset`], [`HashReference`]).
 
 use base64::Engine;

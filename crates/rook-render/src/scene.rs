@@ -1,5 +1,5 @@
 //! What the renderer draws: a snapshot built by the engine side. The
-//! renderer never sees the DOM (architecture §8).
+//! renderer never sees the DOM (docs/design/architecture.md#engine-systems).
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -67,7 +67,7 @@ pub enum ImagePlacement {
     MeshUv,
 }
 
-/// How a SurfaceAppearance uses its colour map's alpha (`Enum.AlphaMode`;
+/// How a SurfaceAppearance uses its color map's alpha (`Enum.AlphaMode`;
 /// observed in Studio 0.742 and the creator docs).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MapAlpha {
@@ -87,11 +87,11 @@ pub enum MapAlpha {
 /// each face of its shape's box from the face's top-left corner, like a
 /// Texture (Studio's material textures, a MaterialVariant's), or laid
 /// through the mesh's UVs (a SurfaceAppearance's). Each one that's missing
-/// leaves the material's plain value: white for colour, a flat normal, and
+/// leaves the material's plain value: white for color, a flat normal, and
 /// the part's roughness and metalness.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MaterialMaps {
-    /// Multiplies the part's colour (sRGB).
+    /// Multiplies the part's color (sRGB).
     pub color: Option<ImageHash>,
     /// Tangent-space normals: X in red, Y (up the image) in green.
     pub normal: Option<ImageHash>,
@@ -113,7 +113,7 @@ pub struct MaterialMaps {
     /// Laid through the mesh's own UVs instead of over its faces.
     pub on_mesh_uv: bool,
     pub alpha: MapAlpha,
-    /// Multiplies the colour map (a SurfaceAppearance's `Color`; sRGB).
+    /// Multiplies the color map (a SurfaceAppearance's `Color`; sRGB).
     pub tint: [f32; 3],
 }
 
@@ -141,7 +141,7 @@ impl MaterialMaps {
 }
 
 /// How terrain breaks up a texture layer's repeats (Studio's terrain
-/// shader, `docs/behavior/terrain.md`): each mesh vertex has a random
+/// shader, `docs/behavior/terrain/materials.md`): each mesh vertex has a random
 /// number *r* from 0 to 255, and the layer's texture coordinates there are
 /// turned by asin((*r* / 128 - 1) × `turn`) and shifted by (*r*,
 /// ⌊2.6651442 *r*⌋) × `shift` repeats; across a triangle the three
@@ -236,10 +236,10 @@ pub enum Grow {
 pub enum Light {
     #[default]
     Lit,
-    /// Its own colour without light, through the tone curve, as Studio
+    /// Its own color without light, through the tone curve, as Studio
     /// draws most adornments.
     Unlit,
-    /// Exactly its own colour on screen, past the tone curve, as Studio
+    /// Exactly its own color on screen, past the tone curve, as Studio
     /// draws a SelectionSphere's ring and adornments always on top.
     Exact,
 }
@@ -254,7 +254,7 @@ pub struct PartInstance {
     /// Multiplies the mesh's vertices: the drawn size for the unit part
     /// shapes, a scale for the head and mesh files.
     pub size: Vec3,
-    /// sRGB colour, 0..1.
+    /// sRGB color, 0..1.
     pub color: [f32; 3],
     /// 0 is opaque, 1 invisible.
     pub transparency: f32,
@@ -266,8 +266,8 @@ pub struct PartInstance {
     /// `BasePart.CastShadow`: whether it casts a sun shadow. Every part
     /// receives shadows either way. Only opaque parts cast (Inference).
     pub cast_shadow: bool,
-    /// The mesh's own vertex colours are drawn instead of `color`: a
-    /// union with `UsePartColor` off, whose vertices keep the colours of
+    /// The mesh's own vertex colors are drawn instead of `color`: a
+    /// union with `UsePartColor` off, whose vertices keep the colors of
     /// the parts it was made from.
     pub vertex_colors: bool,
     /// A texture drawn through the mesh's UVs (a mesh's `TextureId`),
@@ -312,7 +312,7 @@ pub struct PartInstance {
 pub struct Highlight {
     /// Which Highlight it is (any number the scene keeps for it).
     pub key: u64,
-    /// sRGB colours and their opacity (1 - transparency).
+    /// sRGB colors and their opacity (1 - transparency).
     pub fill: [f32; 4],
     pub outline: [f32; 4],
     /// Shown through what's in front (`DepthMode` AlwaysOnTop), or only

@@ -12,7 +12,7 @@ rust-version.workspace = true
 # The desktop implementation: std files and threads, Rayon's workers and
 # ureq. Only apps turn it on (and crates' own tests, as dev-dependencies);
 # a portable crate never does, so a host without threads or a file system
-# can install its own (docs/design/architecture.md §2).
+# can install its own (docs/design/architecture.md#crate-layout).
 native = ["dep:rayon", "dep:ureq"]
 
 [dependencies]

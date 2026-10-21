@@ -26,7 +26,7 @@ fn head_uv(front: bool, position: [f32; 3]) -> [f32; 2] {
 /// Rook's own head, built from measurements of the `head.mesh` in the
 /// user's Roblox install (the Head MeshType draws that file): a solid of
 /// revolution with rounded rims and its front quarter's UVs projected
-/// straight on. The measured facts are in `docs/behavior/meshes.md`; the
+/// straight on. The measured facts are in `docs/behavior/meshes/built-in-shapes.md`; the
 /// user's own install can supply the real file for [`DrawShape::Head`].
 pub(super) fn head() -> MeshData {
     use std::f32::consts::{FRAC_PI_2, TAU};
@@ -35,10 +35,10 @@ pub(super) fn head() -> MeshData {
     // The profile from the bottom rim to the top rim: (radius, y, normal
     // angle above the horizontal).
     let mut profile = Vec::new();
-    for (centre_y, from) in [(-r / 2.0, -FRAC_PI_2), (r / 2.0, 0.0)] {
+    for (center_y, from) in [(-r / 2.0, -FRAC_PI_2), (r / 2.0, 0.0)] {
         for i in 0..=HEAD_EDGE_STEPS {
             let a = from + i as f32 / HEAD_EDGE_STEPS as f32 * FRAC_PI_2;
-            profile.push((r / 2.0 + r / 2.0 * a.cos(), centre_y + r / 2.0 * a.sin(), a));
+            profile.push((r / 2.0 + r / 2.0 * a.cos(), center_y + r / 2.0 * a.sin(), a));
         }
     }
     let around = |k: u32| (5.0f32.to_radians() + k as f32 / HEAD_SEGMENTS as f32 * TAU).sin_cos();
@@ -67,10 +67,10 @@ pub(super) fn head() -> MeshData {
             let b = a + 2;
             m.indices.extend_from_slice(&[a, b, a + 1, a + 1, b, b + 1]);
         }
-        // Caps: a fan triangle from the centre, sharing the rims' normals
+        // Caps: a fan triangle from the center, sharing the rims' normals
         // (straight up and down there).
         for (ring, ny) in [(0u32, -1.0f32), (profile.len() as u32 - 1, 1.0)] {
-            let centre = m.vertices.len() as u32;
+            let center = m.vertices.len() as u32;
             let position = [0.0, ny * r, 0.0];
             m.vertices.push(Vertex::plain(
                 position,
@@ -79,9 +79,9 @@ pub(super) fn head() -> MeshData {
             ));
             let (a, b) = (base + ring * 2, base + ring * 2 + 1);
             let tri = if ny < 0.0 {
-                [centre, a, b]
+                [center, a, b]
             } else {
-                [centre, b, a]
+                [center, b, a]
             };
             m.indices.extend_from_slice(&tri);
         }

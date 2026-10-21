@@ -5,7 +5,7 @@
 //! a function that fills a Model with the file's instances
 //! (`Runtime::deliver_asset`), so this crate needs no network or file
 //! formats of its own. The calling thread waits meanwhile. What Studio does
-//! is in `docs/behavior/content.md` (Published models).
+//! is in `docs/behavior/content/asset-fetching.md` (Published models).
 
 use std::collections::HashMap;
 

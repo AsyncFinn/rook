@@ -1,5 +1,5 @@
 //! MaterialService: which MaterialVariant stands in for each material
-//! (`docs/behavior/materials.md`).
+//! (`docs/behavior/rendering/materials.md`).
 
 use super::*;
 use rook_types::Material;

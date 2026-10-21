@@ -1,7 +1,7 @@
 // Particles (renderer/particles.rs): each a rectangle of its image
-// (facing the camera, or lined up with its velocity), its colour
+// (facing the camera, or lined up with its velocity), its color
 // premultiplied by its opacity, its coverage in alpha. Lit ones take the light a surface facing the camera would.
-// Unlit ones are their image times colour, squared, times Brightness, in
+// Unlit ones are their image times color, squared, times Brightness, in
 // light units, and fog fades them out rather than tinting them (Studio's
 // particle shaders, `shaders_glsl3.pack` 0.743).
 
@@ -81,14 +81,14 @@ fn vs_particle(v: ParticleIn) -> ParticleOut {
     }
     // ZOffset moves it towards the camera, the same size on screen.
     let shrink = max(distance - v.z_offset, 0.0) / max(distance, 1e-6);
-    let centre = v.position + to_camera * v.z_offset;
+    let center = v.position + to_camera * v.z_offset;
     let angle = radians(v.rotation);
     let local = (c - 0.5) * v.size * shrink;
     let turned = vec2(
         local.x * cos(angle) - local.y * sin(angle),
         local.x * sin(angle) + local.y * cos(angle),
     );
-    let world = centre + right * turned.x + up * turned.y;
+    let world = center + right * turned.x + up * turned.y;
     var out: ParticleOut;
     out.clip = g.view_proj * vec4(world, 1.0);
     out.uv = v.frame.xy + vec2(c.x, 1.0 - c.y) * v.frame.zw;
@@ -133,7 +133,7 @@ fn fs_particle(in: ParticleOut) -> @location(0) vec4<f32> {
     var units = albedo * in.look.x;
     var opacity = in.color.a * texel.a;
     let f = fog_amount(in.world);
-    // LightInfluence mixes its own colour, which fog fades out, with the
+    // LightInfluence mixes its own color, which fog fades out, with the
     // light around it, which fog tints as for a surface (Approximation).
     if in.lit > 0.0 {
         let n = normalize(g.camera_pos.xyz - in.world);

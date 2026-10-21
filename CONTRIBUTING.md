@@ -14,9 +14,9 @@ Please include:
 
 - The `rook-tools run-headless place.rbxl` output (see [docs/guide/tools.md](docs/guide/tools.md)).
 - If you can, a minimal place that reproduces it. Only share places you have the rights to share.
-- For a behaviour difference, what Roblox does and what Rook does.
+- For a behavior difference, what Roblox does and what Rook does.
 
-Calling a member that Rook doesn't support yet gives an `"is not implemented in Rook yet"` error. Reports of which ones your places hit are welcome too: they help decide what comes next. The known ones are listed in [docs/behavior/stubs.md](docs/behavior/stubs.md).
+Calling a member that Rook doesn't support yet gives an `"is not implemented in Rook yet"` error. Reports of which ones your places hit are welcome too: they help decide what comes next. The known ones are listed in [docs/guide/stubs.md](docs/guide/stubs.md).
 
 ## Finding your way around
 
@@ -46,7 +46,7 @@ Rook is a Cargo workspace of small crates whose dependencies only point downward
 
 Most features span several crates: the rules in `rook-types` or the feature's own crate, the script side in `rook-lua`, the engine glue in `rook-engine`, and drawing in `rook-view` (DOM to draw list) and `rook-render`.
 
-- **The Luau API:** `rook-lua/src/api/`. A member function (`Instance:FindFirstChild`, `Workspace:Raycast`) is in `api/methods/<topic>.rs` (registered in `methods.rs`); Luau sources such methods load are in `api/luau/`. A property's script-side behaviour is in `api/properties.rs`, member lookup in `api/instance/`, globals in `api/globals.rs`, datatypes (`CFrame`, `Ray`, ...) in `rook-lua/src/types/`.
+- **The Luau API:** `rook-lua/src/api/`. A member function (`Instance:FindFirstChild`, `Workspace:Raycast`) is in `api/methods/<topic>.rs` (registered in `methods.rs`); Luau sources such methods load are in `api/luau/`. A property's script-side behavior is in `api/properties.rs`, member lookup in `api/instance/`, globals in `api/globals.rs`, datatypes (`CFrame`, `Ray`, ...) in `rook-lua/src/types/`.
 - **Part shapes:** the shapes and their rules in `rook-types/src/part/` (`shape.rs`, `truss.rs`, `mesh.rs`, `surface.rs`); the draw meshes in `rook-render/src/mesh/` (`shapes.rs`, `head.rs`, `truss.rs`, `files.rs`); collision shapes in `rook-physics/src/shape.rs` and `shape/`; what a part draws in `rook-view/src/look.rs`.
 - **Materials:** `rook-types/src/part/material.rs` (the enum, and how each looks in `material/looks.rs`); their textures in `rook-content/src/materials.rs`; MaterialVariants and SurfaceAppearances in `rook-view/src/look/materials.rs`; density and friction in `rook-physics/src/contacts/materials.rs`; terrain's in `rook-terrain/src/material.rs`.
 - **Lighting:** the sun and sky in `rook-view/src/lighting.rs`, local lights in `rook-view/src/lighting/local.rs`; what the renderer takes in `rook-render/src/scene/lighting.rs`; drawing in `rook-render/src/renderer/lighting/` (local lights, shadow map), `renderer/tonemap.rs` and `shaders/lighting.wgsl`.
@@ -60,7 +60,7 @@ Most features span several crates: the rules in `rook-types` or the feature's ow
 - **Physics:** `rook-physics/src/`: `assembly/bodies.rs` (assemblies as Rapier bodies), `sync.rs` (building the world from the DOM and applying the journal), `joints/` (joints, constraints, movers and the drives that power them), `contacts/` (materials, collision groups), `shape/` (collider shapes, unions, terrain), `query.rs` (raycasts and overlaps), `step.rs`.
 - **The icon:** `resources/rook.svg`, the only copy; `apps/build.rs` embeds it in both apps and `rook-player/src/app/icon.rs` puts it on the window (see `resources/README.md`).
 - **Settings, logs and the data folder:** `rook-engine/src/settings.rs`, `logging.rs` and `data_folder.rs`; the files themselves through `rook-platform`.
-- **Findings from Studio and the archive:** `docs/behavior/<topic>.md`. The roadmap keeps only the plan and links there.
+- **Findings from Studio and the archive:** `docs/behavior/<area>/<topic>.md`, listed in [docs/README.md](docs/README.md). The [roadmap](docs/roadmap/README.md) keeps only the plan and links there.
 
 Each crate's `lib.rs` holds its module list, re-exports and core type; everything else is one topic per file. What a file covers decides when it's split, not its length: split it when it holds more than one topic (a second type with its own rules, a separate stage of a pipeline), or when someone looking for one thing has to wade through another. A long file that is all one topic, doc comments included, stays whole; a short one mixing two topics is split. Split by topic as `foo.rs` plus a `foo/` folder, never `mod.rs`. A `foo/` folder holds the code for each part of foo, and `foo.rs` says what those parts are, like `lib.rs` does for a crate: its module list and re-exports, plus only what the parts share (the module's core types and its entry point; `rook-render`'s `mesh.rs` keeps `Vertex`, `MeshData` and the `build` that picks a builder, while the ball, truss, head and mesh files are built in `mesh/`). Each part's implementation lives in its own file in the folder, never in `foo.rs`. A module that is one topic is a plain `foo.rs` with its tests inline at the end (`#[cfg(test)] mod tests { ... }`); once foo has parts, `foo/tests.rs` sits beside them. No folder holds only tests. Keep files at most three folders below a crate's `src/` (`src/a/b/c/file.rs`), and aim for two: deeper usually means a topic deserves its own top-level folder in the crate (`rook-tools drift` enforces three). `scripts/check` points out files over 1,000 lines of code (comments and blank lines not counted) as worth a look, not as a rule. Group files that share a topic in a folder too, before any of them gets big: a `src/` with many top-level files is hard to find your way around, and a crate is not one topic (`rook-engine` and `rook-player` are glue between many). Don't make a folder for a lone file, unless the topic is known to hold several kinds (the roadmap lists them, as with adornments): then the folder comes with the first.
 
@@ -72,7 +72,18 @@ Failures keep their reason until something reports it. Return typed errors (`thi
 
 ### Comments
 
-Comments say why: a Roblox behaviour, a measurement, a non-obvious reason, or an Observed/Measured/Inference tag, never what the next line already says. Findings have one home, `docs/behavior/<topic>.md`: a module's header says what it does and links there, and only one-line tagged rules stay beside the code that implements them.
+Comments say why: a Roblox behavior, a measurement, a non-obvious reason, or an Observed/Measured/Inference tag, never what the next line already says. Findings have one home, `docs/behavior/<area>/<topic>.md`: a module's header says what it does and links there, and only one-line tagged rules stay beside the code that implements them.
+
+### Docs
+
+Docs follow the code's rules: one topic per page, grouped in folders by
+area, named so you can guess the path, and every fact in one place that
+the others link to. Each page under `docs/behavior/` opens with the Studio
+version and day it was last checked against (`Checked against Studio 0.743
+on 2026-10-21.`), updated whenever its findings are measured again. Headings
+name topics: no section numbers (link a heading by its anchor instead) and
+no roadmap steps (the changelog records those). Rook uses American spelling
+everywhere, in code and docs alike, as Roblox's API does.
 
 ### Keeping it clean
 
@@ -83,11 +94,25 @@ Comments say why: a Roblox behaviour, a measurement, a non-obvious reason, or an
 - Only `rook-engine` and the apps may read environment variables: settings are resolved in `rook-engine`'s `settings` module and passed down as plain values.
 - Outside `rook-dom`, properties are read with `Dom`'s typed readers (`float_property`, `enum_item_property`, ...), not `property_by_name` (clippy's `disallowed-methods`); a raw read needs an `#[expect]` saying why.
 - Crates in `crates/` reach the host only through `rook-platform`: clippy bans `std::fs`, `std::thread::spawn` and `std::thread::Builder` there (`apps/clippy.toml` lifts the ban for the apps), and cargo-deny (`deny.toml`) lets only the listed crates depend on `winit`, `cpal`, `ureq` and `rayon`. The known exceptions carry an `#[expect]` with the reason.
+- Docs: every link and every repository path in inline code must lead somewhere, and a link's `#anchor` to a heading; every doc under `docs/` is listed in [docs/README.md](docs/README.md) (or its folder's README), has one `#` title its file name is taken from, and isn't alone in its folder; behavior pages carry their "Checked against Studio" line (one checked over 90 days ago is pointed out); the roadmap's ✅/🟨/⬜ marks agree with each milestone's steps; and the changelog's releases run newest first.
+- British spellings fail it (`colour`, `centre`, `behaviour`, `-ise`): write American.
 - Workspace lints include `unreachable_pub`, `needless_pass_by_value`, `match_same_arms`, `unnecessary_wraps`, `redundant_closure_for_method_calls` and `needless_pass_by_ref_mut`; where one is wrong, `#[expect]` it with the reason.
 
-### Behaviour provenance
+### Behavior provenance
 
-Every behaviour Rook implements is recorded with its source and one of four statuses: **Confirmed** (creator-docs or a Studio recording), **Inference**, **Approximation** or **Rook extension**. This is both the record of a clean implementation and a map of how compatible Rook is. Rook-specific extensions sit behind an explicit profile and are off by default. See [docs/design/architecture.md](docs/design/architecture.md#10-behavior-provenance).
+Every behavior Rook implements is recorded with its source and one of four statuses: **Confirmed** (creator-docs or a Studio recording), **Inference**, **Approximation** or **Rook extension**. This is both the record of a clean implementation and a map of how compatible Rook is. Rook-specific extensions sit behind an explicit profile and are off by default. See [docs/design/architecture.md](docs/design/architecture.md#behavior-provenance).
+
+## Versioning
+
+Rook's version says how far along the roadmap it is:
+
+- Every change goes under **[Unreleased]** in [CHANGELOG.md](CHANGELOG.md) as it lands, without a version of its own.
+- **Minor** (`0.N.0`): finishing milestone N releases what's collected. 0.3.0 finished M3 Physics, 0.4.0 M4 Content and 0.5.0 M5 Audio. Version 1.0 comes with M22, the release; after it a minor comes with each finished set of new features.
+- **Patch** (`0.N.y`): on a day behavior fixes land, they're released together with whatever else is under [Unreleased] as one patch, at most one a day. A milestone's last step gets the minor instead; single fixes, roadmap steps and pushes don't get a version of their own.
+- Commits go to GitHub as they land, so [Unreleased] on GitHub shows what the next version will hold.
+- Before 1.0, any release may break things.
+
+Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z` in git. The pinned Roblox version (currently 0.741.19) is separate and listed under each release.
 
 ## Development
 
@@ -109,8 +134,8 @@ Build profiles:
 
 | Command | Use |
 |---|---|
-| `cargo build` | Development. Rook's code is lightly optimised; dependencies are fully optimised so Luau and wgpu run at speed |
+| `cargo build` | Development. Rook's code is lightly optimized; dependencies are fully optimized so Luau and wgpu run at speed |
 | `cargo build --release` | What players use |
 | `cargo build --profile profiling` | Release speed with full debug info. Add `--features tracy` to `rook-player` for a live Tracy timeline |
 
-Behaviour changes are checked against Roblox Studio with the conformance suite; see [conformance/README.md](conformance/README.md).
+Behavior changes are checked against Roblox Studio with the conformance suite; see [conformance/README.md](conformance/README.md).

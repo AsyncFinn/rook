@@ -3,9 +3,8 @@
 //! mesh. A mesh changes only how a part looks; physics and queries keep the
 //! part's own shape.
 //!
-//! The rules were measured in Studio (ROADMAP.md, M4: "What each
-//! SpecialMesh MeshType draws", "How `Scale` combines with Size" and "File
-//! meshes (step 3)").
+//! The rules were measured in Studio (docs/behavior/meshes/built-in-shapes.md and
+//! docs/behavior/meshes/file-meshes.md).
 
 use glam::Vec3;
 
@@ -85,7 +84,7 @@ impl MeshKind {
     /// empty-`MeshId` box included (observed in Studio 0.742, 2026-10-13:
     /// a Head, Sphere or Brick SpecialMesh with a `TextureId` stayed plain;
     /// a FileMesh with an empty `MeshId` drew its box with the image on
-    /// every face). The texture replaces the part's colour, `VertexColor`
+    /// every face). The texture replaces the part's color, `VertexColor`
     /// multiplies it, and its alpha is ignored (observed).
     pub fn takes_texture(self) -> bool {
         matches!(self, Self::File | Self::EmptyFile)
@@ -198,7 +197,7 @@ impl MeshKind {
 /// How the head mesh is scaled for a (scaled) part size: by
 /// (min(X, Z), Y, min(X, Z)) / 1.25, so it is round from above and never
 /// stretched along the longer of X and Z (observed by overlapping it with a
-/// FileMesh of the same mesh, ROADMAP M4 "The Head MeshType").
+/// FileMesh of the same mesh, docs/behavior/meshes/built-in-shapes.md).
 pub(crate) fn head_scale(size: Vec3) -> Vec3 {
     let across = size.x.min(size.z);
     Vec3::new(across, size.y, across) / 1.25
@@ -214,7 +213,7 @@ pub(crate) fn head_scale(size: Vec3) -> Vec3 {
 /// were 1: a 1.2-stud mesh on a 2 × 4 × 8 part drew 2.4 × 4.8 × 9.6.
 ///
 /// A union's geometry is sized the same way: its bounds equal the union's
-/// `InitialSize` (centred on its origin), and a union resized from
+/// `InitialSize` (centered on its origin), and a union resized from
 /// (4, 5, 5) to (8, 5, 2.5) drew its geometry stretched by exactly that
 /// (observed in Studio 0.742, 2026-10-14, on a small place's
 /// unions).
@@ -239,7 +238,7 @@ pub enum MeshLook {
     /// The head mesh, at its own size times `scale`.
     Head { scale: Vec3 },
     /// A mesh file, its vertices times `scale`, with the mesh's own origin
-    /// at the part's position (observed: a mesh whose bounds are centred 11
+    /// at the part's position (observed: a mesh whose bounds are centered 11
     /// studs off its origin drew 11 studs off the part, for a FileMesh and a
     /// MeshPart alike).
     File { scale: Vec3 },

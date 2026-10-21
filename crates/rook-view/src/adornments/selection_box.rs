@@ -7,7 +7,7 @@ use super::*;
 /// One SelectionBox on a part of `size`, as its fill and 12 edge bars.
 ///
 /// Observed in Studio 0.742 (2026-10-20): each edge is a bar
-/// 2 × `LineThickness` across, centred on the part's edge, in `Color3`
+/// 2 × `LineThickness` across, centered on the part's edge, in `Color3`
 /// without light; `SurfaceColor3` fills the box at `SurfaceTransparency`
 /// (1 by default: no fill); parts in front hide both.
 pub(super) fn selection_box(dom: &Dom, id: InstanceId, size: Vec3) -> Vec<(PartInstance, Pose)> {

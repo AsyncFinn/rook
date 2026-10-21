@@ -2,10 +2,10 @@
 
 use super::*;
 
-/// One face of a box centred at `centre` whose edges run along `axes` (a
+/// One face of a box centered at `center` whose edges run along `axes` (a
 /// right-handed frame) with half extents `half`: the face on the `sign`
 /// side of axis `k`, flat, wound counter-clockwise seen from outside.
-fn box_face(m: &mut MeshData, centre: Vec3, axes: [Vec3; 3], half: Vec3, k: usize, sign: f32) {
+fn box_face(m: &mut MeshData, center: Vec3, axes: [Vec3; 3], half: Vec3, k: usize, sign: f32) {
     let normal = axes[k] * sign;
     let (mut a, mut b) = (k + 1, k + 2);
     if sign < 0.0 {
@@ -13,7 +13,7 @@ fn box_face(m: &mut MeshData, centre: Vec3, axes: [Vec3; 3], half: Vec3, k: usiz
     }
     let a = axes[a % 3] * half[a % 3];
     let b = axes[b % 3] * half[b % 3];
-    let c = centre + normal * half[k];
+    let c = center + normal * half[k];
     let base = m.vertices.len() as u32;
     for p in [c - a - b, c + a - b, c + a + b, c - a + b] {
         m.vertices
@@ -23,7 +23,7 @@ fn box_face(m: &mut MeshData, centre: Vec3, axes: [Vec3; 3], half: Vec3, k: usiz
         .extend_from_slice(&[base, base + 1, base + 2, base, base + 2, base + 3]);
 }
 
-/// A TrussPart's bars, along Y, in studs, centred on the origin, built from
+/// A TrussPart's bars, along Y, in studs, centered on the origin, built from
 /// the facts `rook_types::TrussShape` documents (measured from Studio's
 /// OBJ export of a 2 × 2 × 2 and a 2 × 4 × 2 truss, 2026-10-13): four
 /// 0.25-stud rails at the corners, a 0.25-stud rung across each side at
@@ -36,19 +36,19 @@ pub(super) fn truss(shape: TrussShape) -> MeshData {
     let mut m = MeshData::default();
     let bar = TrussShape::BAR;
     let half_length = shape.length() / 2.0;
-    // From the axis to the centre of a rail, a rung or a brace.
+    // From the axis to the center of a rail, a rung or a brace.
     let side_at = TrussShape::SEGMENT / 2.0 - bar / 2.0;
     let frame = [Vec3::X, Vec3::Y, Vec3::Z];
     for (x, z) in [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)] {
-        let centre = Vec3::new(x, 0.0, z) * side_at;
+        let center = Vec3::new(x, 0.0, z) * side_at;
         let half = Vec3::new(bar / 2.0, half_length, bar / 2.0);
         for k in 0..3 {
             for sign in [-1.0, 1.0] {
-                box_face(&mut m, centre, frame, half, k, sign);
+                box_face(&mut m, center, frame, half, k, sign);
             }
         }
     }
-    // The rungs' bands along the truss: (centre, half thickness).
+    // The rungs' bands along the truss: (center, half thickness).
     let mut bands = vec![
         (-half_length + bar / 2.0, bar / 2.0),
         (half_length - bar / 2.0, bar / 2.0),
@@ -60,13 +60,13 @@ pub(super) fn truss(shape: TrussShape) -> MeshData {
         let normal = side.normal();
         let across = TrussShape::across(side);
         for &(y, thickness) in &bands {
-            let centre = normal * side_at + Vec3::Y * y;
+            let center = normal * side_at + Vec3::Y * y;
             let half = across * (TrussShape::SEGMENT / 2.0 - bar)
                 + Vec3::Y * thickness
                 + normal.abs() * (bar / 2.0);
             for k in (0..3).filter(|&k| frame[k] != across) {
                 for sign in [-1.0, 1.0] {
-                    box_face(&mut m, centre, frame, half, k, sign);
+                    box_face(&mut m, center, frame, half, k, sign);
                 }
             }
         }
@@ -82,10 +82,10 @@ pub(super) fn truss(shape: TrussShape) -> MeshData {
                 TrussShape::BRACE_WIDTH / 2.0,
                 TrussShape::BRACE_DEPTH / 2.0,
             );
-            let centre = normal * side_at + Vec3::Y * middle;
+            let center = normal * side_at + Vec3::Y * middle;
             for k in 1..3 {
                 for sign in [-1.0, 1.0] {
-                    box_face(&mut m, centre, axes, half, k, sign);
+                    box_face(&mut m, center, axes, half, k, sign);
                 }
             }
         }

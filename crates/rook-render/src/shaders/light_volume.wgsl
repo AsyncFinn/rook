@@ -7,7 +7,7 @@
 import package::lights::{Light, VOXEL, light_at_voxel};
 
 struct Params {
-    // xyz: the centre of voxel (0, 0, 0); w: studs per hash cube.
+    // xyz: the center of voxel (0, 0, 0); w: studs per hash cube.
     origin: vec4<f32>,
     // x: the hash's buckets - 1; yzw: voxels along each axis.
     size: vec4<u32>,
@@ -54,8 +54,8 @@ fn blocks(p: vec3<f32>) -> bool {
     return is_solid(u32(c.x), u32(c.y), u32(c.z));
 }
 
-// How much of `light` reaches the voxel centred at `v` past the parts
-// (Approximation of Studio's voxel shadows, docs/behavior/lights.md):
+// How much of `light` reaches the voxel centered at `v` past the parts
+// (Approximation of Studio's voxel shadows, docs/behavior/lighting/local-lights.md):
 // nine parallel rays, from `v` to the light and from the voxels around
 // `v` across the ray to as far around the light, weighted 1-2-1 each
 // way; a ray is blocked by any blocked voxel it crosses, but not by the
@@ -99,7 +99,7 @@ fn unblocked(light: Light, v: vec3<f32>) -> f32 {
 
 // How much of the sky's light reaches voxel (x, y, z), as Studio's voxels
 // carry it (fitted to Studio 0.742 under roofs and beside walls,
-// docs/behavior/materials.md, "The sky's diffuse light"): all of it where
+// docs/behavior/rendering/materials.md, "The sky's diffuse light"): all of it where
 // nothing blocks the column above, none in a blocked voxel, and elsewhere
 // the open voxels of the layer above within two voxels each way,
 // averaged (the outer ring at 0.15). So light spreads in under a roof

@@ -1,8 +1,8 @@
 //! ParticleEmitter's, Trail's, Beam's and WireframeHandleAdornment's
 //! methods: each only notes the call for the renderer
 //! (`World::effect_calls`), which owns the particles, trail segments,
-//! texture scrolling (docs/behavior/effects/classic.md) and wireframe
-//! lines (docs/behavior/adornments.md).
+//! texture scrolling (docs/behavior/effects/fire-smoke-and-sparkles.md) and wireframe
+//! lines (docs/behavior/rendering/adornments.md).
 
 use super::*;
 use crate::world::EffectCall;

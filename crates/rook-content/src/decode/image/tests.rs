@@ -61,7 +61,7 @@ fn other_formats() {
     }
 }
 
-/// A 4 × 4 DXT1 DDS: one block whose two colours are pure red and
+/// A 4 × 4 DXT1 DDS: one block whose two colors are pure red and
 /// pure blue, every texel the first.
 #[test]
 fn decodes_dds() {

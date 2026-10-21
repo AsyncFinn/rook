@@ -16,9 +16,9 @@ use super::Image;
 pub enum Encoding {
     /// Four bytes a pixel, rows packed.
     Rgba8,
-    /// 8 bytes a block: opaque colour.
+    /// 8 bytes a block: opaque color.
     Bc1,
-    /// 16 bytes a block: BC1's colour and its own alpha.
+    /// 16 bytes a block: BC1's color and its own alpha.
     Bc3,
     /// 16 bytes a block, each channel kept apart.
     Bc7,
@@ -162,14 +162,14 @@ mod tests {
 
     /// An 8 × 8 image: four flat quarters.
     fn quarters() -> Image {
-        let colours = [
+        let colors = [
             [200, 30, 70, 255],
             [10, 120, 250, 255],
             [0, 0, 0, 255],
             [255; 4],
         ];
         let img = ::image::RgbaImage::from_fn(8, 8, |x, y| {
-            ::image::Rgba(colours[(x / 4 + y / 4 * 2) as usize])
+            ::image::Rgba(colors[(x / 4 + y / 4 * 2) as usize])
         });
         Image::from_rgba(img, ImageFormat::Png, 1024).unwrap()
     }

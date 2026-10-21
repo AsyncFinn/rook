@@ -1,6 +1,6 @@
 //! Rook's own defaults: a table of the 2009 client's `rbxasset://` paths
 //! that modern installs lack, mapped to the public assets Roblox uploaded
-//! them as, which modern Studio loads too (`docs/behavior/content.md`, "The
+//! them as, which modern Studio loads too (`docs/behavior/content/asset-fetching.md`, "The
 //! 2009 client's paths"). Rook ships no files: material textures come from
 //! Roblox like any asset ([`crate::materials`]), and the head mesh is built
 //! in code by `rook-render`.

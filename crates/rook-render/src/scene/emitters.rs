@@ -1,5 +1,5 @@
 //! Particle emitters: what the renderer simulates and draws for Fire,
-//! Smoke, Sparkles and ParticleEmitter (docs/behavior/effects/classic.md,
+//! Smoke, Sparkles and ParticleEmitter (docs/behavior/effects/fire-smoke-and-sparkles.md,
 //! docs/behavior/effects/particle-emitters.md).
 
 use std::sync::Arc;
@@ -8,7 +8,7 @@ use glam::{Mat3, Vec2, Vec3};
 
 use super::ImageHash;
 
-/// What a [`Curve`] holds: numbers, or colours.
+/// What a [`Curve`] holds: numbers, or colors.
 pub trait Lerp: Copy + Default {
     fn lerp(a: Self, b: Self, s: f32) -> Self;
 }
@@ -129,7 +129,7 @@ pub enum Spawn {
 pub enum EmitterShape {
     /// Anywhere in the box; particles go along the direction.
     Box,
-    /// In the ellipsoid; particles go out from its centre.
+    /// In the ellipsoid; particles go out from its center.
     Sphere,
     /// In a cylinder whose axis lies across the direction; particles go
     /// out from the axis (measured).
@@ -237,7 +237,7 @@ pub struct EmitterLook {
     pub spin: [f32; 2],
     pub spin_either_way: bool,
     pub orientation: Orientation,
-    /// sRGB colour over its life, times `brightness` (on its light units,
+    /// sRGB color over its life, times `brightness` (on its light units,
     /// as Studio's particle shaders scale them): above 1 glows.
     pub color: Curve<[f32; 3]>,
     pub brightness: Curve,
@@ -245,7 +245,7 @@ pub struct EmitterLook {
     pub alpha: Sequence,
     /// 0 covers what's behind by its opacity; 1 adds to it (light).
     pub light_emission: f32,
-    /// 0 draws in its own colour; 1 lit by the scene's light as a surface
+    /// 0 draws in its own color; 1 lit by the scene's light as a surface
     /// facing the camera.
     pub light_influence: f32,
     /// Studs towards the camera it's drawn at, the same size on screen.

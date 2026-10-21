@@ -48,7 +48,7 @@ base64 = "0.23"
 glam = "0.34"
 # Physics
 # `parallel`: the narrow phase and solver run on all cores; results are
-# identical to a serial build (Rapier colours constraints the same way).
+# identical to a serial build (Rapier colors constraints the same way).
 rapier3d = { version = "0.36", features = ["parallel"] }
 thiserror = "2"
 # std::fs with the path in error messages
@@ -86,12 +86,12 @@ slotmap = "1.1"
 rustc-hash = "2.1"
 profiling = "1"
 # Sound files (rook-content): pure-Rust WAV (PCM, ADPCM), Ogg Vorbis and MP3
-# decoders, nothing else (docs/behavior/audio.md)
+# decoders, nothing else (docs/behavior/audio/playback.md)
 symphonia = { version = "0.5", default-features = false, features = ["wav", "pcm", "adpcm", "ogg", "vorbis", "mp3"] }
 # GUI text (rook-gui): HarfRust shapes (HarfBuzz's own Rust port), skrifa
-# reads glyph outlines and zeno rasterises them; all on the same
+# reads glyph outlines and zeno rasterizes them; all on the same
 # read-fonts. Rook lays lines out itself: Roblox rounds every glyph's
-# advance to whole pixels (docs/behavior/gui-text.md).
+# advance to whole pixels (docs/behavior/gui/text.md).
 harfrust = "0.12"
 skrifa = "0.44"
 zeno = "0.3"
@@ -150,9 +150,9 @@ needless_pass_by_ref_mut = "warn"
 redundant_closure_for_method_calls = "warn"
 
 # Build profiles:
-#   dev        `cargo build`: Rook's own code lightly optimised (fast to
+#   dev        `cargo build`: Rook's own code lightly optimized (fast to
 #              rebuild, keeps debug assertions); every dependency fully
-#              optimised so Luau, wgpu and the file decoders run at speed.
+#              optimized so Luau, wgpu and the file decoders run at speed.
 #   release    `cargo build --release`: what players use.
 #   profiling  `cargo build --profile profiling`: release speed plus full
 #              debug info for profilers. Builds into target/profiling, so

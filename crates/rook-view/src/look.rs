@@ -1,5 +1,5 @@
 //! What a part draws: its shape, mesh ([`meshes`]), truss bars
-//! ([`truss`]) or union geometry ([`union`]), colour, material
+//! ([`truss`]) or union geometry ([`union`]), color, material
 //! ([`materials`]) and Decals and Textures ([`decals`]).
 
 mod decals;

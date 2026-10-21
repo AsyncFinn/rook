@@ -1,6 +1,6 @@
 # `cargo deny check bans` (scripts/check): which crates may depend on the
 # host-specific ones, so desktop-only code can't spread into the portable
-# crates (docs/design/architecture.md §2). Each crate below may be a direct
+# crates (docs/design/architecture.md#crate-layout). Each crate below may be a direct
 # dependency only of its wrappers; anything else depending on it fails.
 
 [graph]

@@ -5,7 +5,7 @@ use super::*;
 
 impl SceneCache {
     /// Mesh the chunks of `grid` that differ from the voxels meshed last
-    /// (all of them the first time), and the neighbours whose surfaces
+    /// (all of them the first time), and the neighbors whose surfaces
     /// reach the voxels that changed.
     pub(super) fn mesh_terrain(&mut self, grid: Grid) {
         profiling::scope!("mesh_terrain");

@@ -1,6 +1,6 @@
 //! The Terrain API: fills, voxel reads and writes, region copies, legacy
-//! cells and material colours, on the voxels `rook_terrain` edits
-//! (`docs/behavior/terrain.md`, "The Terrain API"). Workspace's Terrain is
+//! cells and material colors, on the voxels `rook_terrain` edits
+//! (`docs/behavior/terrain/api.md`). Workspace's Terrain is
 //! edited in the physics world's copy of its voxels, which goes back into
 //! `SmoothGrid` once a frame; any other Terrain is decoded and written
 //! back on each call.

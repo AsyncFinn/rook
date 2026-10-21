@@ -2,7 +2,7 @@
 //! `WorldToViewportPoint` and `WorldToScreenPoint`. The engine's mouse uses
 //! [`viewport_ray`] too, so Mouse.Hit and scripts' rays agree.
 //!
-//! Behaviour observed in Studio 0.742: `FieldOfView` is vertical; a ray
+//! Behavior observed in Studio 0.742: `FieldOfView` is vertical; a ray
 //! starts on the near plane (0.5 studs in front of the camera), moved
 //! `depth` studs further along its unit direction; a server's camera has
 //! a 1 × 1 viewport.

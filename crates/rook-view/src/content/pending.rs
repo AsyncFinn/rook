@@ -163,7 +163,7 @@ impl SceneCache {
     }
 
     /// How a part's mesh file `url` draws, by the rules observed in Studio
-    /// 0.742 (2026-10-13, ROADMAP M4 "File meshes (step 3)"): a new mesh
+    /// 0.742 (2026-10-13, docs/behavior/meshes/file-meshes.md): a new mesh
     /// draws nothing until its file arrives, and nothing if it fails to
     /// load; when a mesh's `MeshId` changes, what it drew before (a mesh, or
     /// the empty-`MeshId` box) stays until the new file arrives, and stays

@@ -4,7 +4,7 @@
 //! Every DataModel does this, server and client alike: the client's
 //! world answers the mouse's queries. A union in Workspace is the hulls
 //! saved in its `PhysicalConfigData` (or, in older files, `PhysicsData`);
-//! with none it is its box, as in Studio (`docs/behavior/collision.md`).
+//! with none it is its box, as in Studio (`docs/behavior/physics/collision-shapes.md`).
 //!
 //! A place's unions get theirs before its scripts start; after that,
 //! changes are noticed at the end of a frame ([`DataModel::check_unions`],

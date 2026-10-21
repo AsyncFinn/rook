@@ -1,5 +1,5 @@
 //! A FloorWire's images as strips: each two crossed quads on its wire
-//! (docs/behavior/adornments.md).
+//! (docs/behavior/rendering/adornments.md).
 
 use std::f32::consts::PI;
 
@@ -26,10 +26,10 @@ pub(super) fn floor_wire(w: &FloorWire, time: f32) -> Vec<Strip<'_>> {
         }
         let way = (w.path[leg + 1] - w.path[leg]).normalize_or_zero();
         if way != Vec3::ZERO {
-            let centre = w.path[leg] + way * (at - start);
+            let center = w.path[leg] + way * (at - start);
             let turn = turn(way);
             for across in [turn * Vec3::NEG_X, turn * Vec3::Z] {
-                out.push(quad(w, centre, way, across, alpha));
+                out.push(quad(w, center, way, across, alpha));
             }
         }
         at += w.spacing;
@@ -48,12 +48,12 @@ fn turn(way: Vec3) -> Quat {
     }
 }
 
-/// One quad of the image at `centre`: its width along `way` from u 0 to 1,
+/// One quad of the image at `center`: its width along `way` from u 0 to 1,
 /// its height along `across` from v 0 to 1.
-fn quad<'a>(w: &'a FloorWire, centre: Vec3, way: Vec3, across: Vec3, alpha: f32) -> Strip<'a> {
+fn quad<'a>(w: &'a FloorWire, center: Vec3, way: Vec3, across: Vec3, alpha: f32) -> Strip<'a> {
     let half = w.size * 0.5;
     let edge = |u: f32| {
-        let at = centre + way * (half.x * (2.0 * u - 1.0));
+        let at = center + way * (half.x * (2.0 * u - 1.0));
         Edge {
             sides: [at - across * half.y, at + across * half.y],
             u,

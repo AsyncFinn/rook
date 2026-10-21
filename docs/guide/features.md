@@ -1,6 +1,6 @@
 # Features
 
-Everything Rook supports today. What's coming next is in [ROADMAP.md](../../ROADMAP.md), and every unfinished script member is listed in [behavior/stubs.md](../behavior/stubs.md).
+Everything Rook supports today. What's coming next is in the [roadmap](../roadmap/README.md), and every unfinished script member is listed in [stubs](stubs.md).
 
 ## File formats
 
@@ -28,7 +28,7 @@ Everything Rook supports today. What's coming next is in [ROADMAP.md](../../ROAD
 - Roblox-style error messages and chunk names (`Workspace.Script:3: ...`), output through `LogService`.
 - Security levels: members tagged above game identity raise Roblox's permission error.
 - Services including `RunService`, `TweenService` (and the legacy GUI tweens), `Players`, `Debris`, `PhysicsService`, `DataStoreService` (in memory for now) and `HttpService` (JSON and GUIDs; requests off).
-- Unfinished members are either clear `"is not implemented in Rook yet"` errors or listed, inert stubs. Every stub is documented in [behavior/stubs.md](../behavior/stubs.md), and a test fails if one is added without an entry.
+- Unfinished members are either clear `"is not implemented in Rook yet"` errors or listed, inert stubs. Every stub is documented in [behavior/stubs.md](stubs.md), and a test fails if one is added without an entry.
 
 ## Client and server
 
@@ -49,20 +49,20 @@ Everything Rook supports today. What's coming next is in [ROADMAP.md](../../ROAD
 ## Rendering
 
 - A **wgpu** renderer (Vulkan, Metal, DirectX 12) that draws snapshots of the scene and never touches the instance tree.
-- Primitive parts (blocks, spheres, cylinders, wedges, corner wedges) with colour and transparency, the place's skybox (or the default sky from your Roblox install), sun, ambient light and fog.
+- Primitive parts (blocks, spheres, cylinders, wedges, corner wedges) with color and transparency, the place's skybox (or the default sky from your Roblox install), sun, ambient light and fog.
 - **Sun shadows** from opaque parts, out to 300 studs from the camera, with `Lighting.GlobalShadows` and `BasePart.CastShadow`. The sun's position matches Studio's for every time and latitude.
 - The built-in mesh shapes (SpecialMesh types, BlockMesh, CylinderMesh) at the sizes Roblox draws them. The classic head comes from your Roblox install when there is one, and is Rook's own version otherwise.
 - **Mesh files**: SpecialMesh and FileMesh `MeshId`s and MeshParts, in Roblox mesh versions 1.00 to 5.00, at the sizes Studio draws them, with their `TextureId` and `VertexColor`. They load in the background and appear when they arrive, as in Roblox; parts sharing a mesh share one copy on the GPU.
 - **Trusses** as Studio draws them: AlternatingSupports, BridgeStyleSupports and NoSupports at any length and along any axis, each truss one instanced draw of a mesh shared by every truss of the same length and Style. A script setting a truss's Size gets Studio's snapped size.
 - **Decals and Textures** on every part shape and mesh, placed as Studio places them: per face with `Color3`, `Transparency` and `ZIndex`, tiled by `StudsPerTile` and offsets, through a mesh's own UVs on file meshes and the classic head. Images (PNG, JPEG, BMP, DDS) load in the background; parts sharing one share one GPU texture.
-- **Surfaces and materials**: studs, inlets, universal and weld surfaces on Plastic (from your Roblox install, or Rook's own), Neon and Reflectance. Every material is drawn with its textures, tinted by the part's Color at Studio's scale, from the 2022 set or the legacy set as the place's `MaterialService.Use2022Materials` says: Roblox's own textures, fetched like any other asset (no Studio needed). MaterialVariants (a part's `MaterialVariant`, or MaterialService's overrides) and SurfaceAppearance on MeshParts draw their own maps. Materials shade with their roughness and metalness: sun highlights, and the sky reflected as far as `Lighting.EnvironmentSpecularScale` says. Glass filters what's behind it, ForceField glows over it, and Neon glows past its colour.
-- **Unions** with their own geometry, from the union's asset: sized to the union's Size, in their parts' colours or the union's Color by `UsePartColor`, with Decals, Textures and materials laid as Studio lays them. Union assets of 2015-2016 places load anonymously; newer ones need an account, and draw nothing without one.
+- **Surfaces and materials**: studs, inlets, universal and weld surfaces on Plastic (from your Roblox install, or Rook's own), Neon and Reflectance. Every material is drawn with its textures, tinted by the part's Color at Studio's scale, from the 2022 set or the legacy set as the place's `MaterialService.Use2022Materials` says: Roblox's own textures, fetched like any other asset (no Studio needed). MaterialVariants (a part's `MaterialVariant`, or MaterialService's overrides) and SurfaceAppearance on MeshParts draw their own maps. Materials shade with their roughness and metalness: sun highlights, and the sky reflected as far as `Lighting.EnvironmentSpecularScale` says. Glass filters what's behind it, ForceField glows over it, and Neon glows past its color.
+- **Unions** with their own geometry, from the union's asset: sized to the union's Size, in their parts' colors or the union's Color by `UsePartColor`, with Decals, Textures and materials laid as Studio lays them. Union assets of 2015-2016 places load anonymously; newer ones need an account, and draw nothing without one.
 - `rook-player` runs the place live in a window with a fly camera that drives `Workspace.CurrentCamera`, or renders a single frame to PNG offscreen.
 
 - **Terrain**: Workspace's smooth terrain (`SmoothGrid`) is drawn with Roblox's own surface and textures: the plain rounded shape of Grass, Sand or Snow, Brick and WoodPlanks as blocks, Concrete, Pavement and Cobblestone faceted, Rock rough; each material with Roblox's top, side and bottom textures (grass on top, earth on the sides), tinted by `Terrain.MaterialColors`, or a MaterialVariant that MaterialService puts in its place. Water sits half a voxel low, see-through in `WaterColor`, and waves (`WaterWaveSize`, `WaterWaveSpeed`) under the sky it reflects, its ripples playing Roblox's 25 animated frames at Studio's pace. With `Terrain.Decoration` on, Grass grows blades near the camera as dense and tall as Studio's, swaying and leaning into `Workspace.GlobalWind`. Scripts changing the water or the wind take effect at once. Legacy terrain (`ClusterGrid`) shows nothing, as in today's Studio.
-- **Terrain collision and scripts**: parts land on and roll off terrain's smooth surface, and rays, shape casts and `GetTouchingParts` find it, as in Studio. Scripts build and dig terrain with the Terrain API: `FillBlock`, `FillBall`, `FillCylinder`, `FillWedge`, `FillRegion`, `ReplaceMaterial`, `ReadVoxels`, `WriteVoxels`, `CopyRegion` and `PasteRegion`, material colours, and the old cell methods (`SetCell`, `GetCell`, `WorldToCell`, ...), each filling voxels as Studio does. Edits are drawn and collide from the next frame, and only the chunks they change are rebuilt.
+- **Terrain collision and scripts**: parts land on and roll off terrain's smooth surface, and rays, shape casts and `GetTouchingParts` find it, as in Studio. Scripts build and dig terrain with the Terrain API: `FillBlock`, `FillBall`, `FillCylinder`, `FillWedge`, `FillRegion`, `ReplaceMaterial`, `ReadVoxels`, `WriteVoxels`, `CopyRegion` and `PasteRegion`, material colors, and the old cell methods (`SetCell`, `GetCell`, `WorldToCell`, ...), each filling voxels as Studio does. Edits are drawn and collide from the next frame, and only the chunks they change are rebuilt.
 
-The sun and moon in the sky and other lighting (point and spot lights, Future lighting) are on the [roadmap](../../ROADMAP.md).
+The sun and moon in the sky and other lighting (point and spot lights, Future lighting) are on the [roadmap](../roadmap/README.md).
 
 ## Content
 
@@ -86,6 +86,6 @@ The sun and moon in the sky and other lighting (point and spot lights, Future li
 - `rook-tools corpus-scan`: scan a folder of places for what loads and which classes, properties and script APIs they use.
 - `rook-tools run-headless` and `rook-tools corpus-run`: run server scripts without a window and report what works.
 - `rook-tools content`: show where a content reference, or every reference in a place, comes from and why any fail.
-- `rook-tools conformance record` / `run`: record behaviour in Roblox Studio and check Rook against it.
+- `rook-tools conformance record` / `run`: record behavior in Roblox Studio and check Rook against it.
 
 Usage for each is in [tools.md](tools.md).

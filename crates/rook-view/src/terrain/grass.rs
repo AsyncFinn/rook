@@ -19,7 +19,7 @@ pub(super) struct Grass {
     pub(super) tops: GrassTops,
     /// `Terrain.Decoration`.
     pub(super) on: bool,
-    /// The blades' colour (`rook_terrain::grass::blade_color`).
+    /// The blades' color (`rook_terrain::grass::blade_color`).
     pub(super) color: [f32; 3],
     shown: HashMap<IVec2, (usize, MeshHash)>,
     /// Meshes of tiles no longer drawn, for the renderer to free.
@@ -81,10 +81,10 @@ impl SceneCache {
             return changed;
         }
         let r = (reach / TILE_STUDS).ceil() as i32 + 1;
-        let centre = tile_of(camera);
+        let center = tile_of(camera);
         for z in -r..=r {
             for x in -r..=r {
-                let tile = centre + IVec2::new(x, z);
+                let tile = center + IVec2::new(x, z);
                 let grass = &self.terrain.grass;
                 if grass.shown.contains_key(&tile) || !near(tile, camera, reach) {
                     continue;

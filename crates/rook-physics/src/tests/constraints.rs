@@ -320,7 +320,7 @@ type Case = (&'static str, Vec<(&'static str, Value)>, f32);
 
 #[test]
 fn ropes_rods_and_springs_settle_where_studio_does() {
-    // Observed resting heights below the base's centre: a spring holding
+    // Observed resting heights below the base's center: a spring holding
     // its weight (5.6 × 196.2) with Stiffness 1098.72 stretches by 1.
     let cases: [Case; 4] = [
         (

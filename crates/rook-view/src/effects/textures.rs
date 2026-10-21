@@ -61,7 +61,7 @@ impl EffectTextures {
     }
 }
 
-/// The install's flames are premultiplied (their colour already scaled by
+/// The install's flames are premultiplied (their color already scaled by
 /// their alpha); Rook's particles take straight alpha.
 fn unpremultiply(pixels: &mut [u8]) {
     for p in pixels.as_chunks_mut::<4>().0 {
@@ -72,7 +72,7 @@ fn unpremultiply(pixels: &mut [u8]) {
     }
 }
 
-/// The install's sparkle is its alpha, an eight-rayed star (its colour is
+/// The install's sparkle is its alpha, an eight-rayed star (its color is
 /// a round glow): Studio draws the star in SparkleColor (observed: sharp
 /// rays).
 fn whiten(pixels: &mut [u8]) {
@@ -131,7 +131,7 @@ fn flame(u: f32, v: f32) -> f32 {
     puff(u, v) * wisps * 0.6
 }
 
-/// A bright centre with eight rays.
+/// A bright center with eight rays.
 fn star(u: f32, v: f32) -> f32 {
     let r = (u * u + v * v).sqrt();
     let angle = v.atan2(u);

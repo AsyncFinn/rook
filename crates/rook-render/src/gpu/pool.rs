@@ -20,7 +20,7 @@ const FIRST_VERTICES: u32 = 1 << 16;
 const FIRST_INDICES: u32 = 1 << 18;
 
 /// Ranges of `0..capacity` handed out first fit; freed ranges merge with
-/// their neighbours.
+/// their neighbors.
 #[derive(Debug, Default)]
 pub(crate) struct RangeAlloc {
     /// Free ranges below `top`, sorted and apart.

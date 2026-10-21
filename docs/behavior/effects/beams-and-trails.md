@@ -1,6 +1,8 @@
 # Beams and Trails
 
-ROADMAP M7 step 4. Trail is in 17 archive files, Beam in 15. Sources: the
+Checked against Studio 0.743 on 2026-10-19.
+
+[M7](../../roadmap/m7-lights-and-effects.md) step 4. Trail is in 17 archive files, Beam in 15. Sources: the
 creator-docs reference (Beam, Trail, TextureMode, the "Beams" guide) and
 measurements in Studio 0.743 on 2026-10-19.
 
@@ -11,7 +13,7 @@ measurements in Studio 0.743 on 2026-10-19.
 - **Its curve** (creator-docs): a cubic Bézier from Attachment0 to
   Attachment1, its inner points `CurveSize0` studs along Attachment0's
   Axis (RightVector) and `CurveSize1` studs back along Attachment1's,
-  drawn as `Segments` straight pieces (10 by default). Colour and
+  drawn as `Segments` straight pieces (10 by default). Color and
   transparency change only between pieces.
 - **Its width** runs from `Width0` at Attachment0 to `Width1` at
   Attachment1. Without `FaceCamera` it lies along the Attachments'
@@ -24,9 +26,9 @@ measurements in Studio 0.743 on 2026-10-19.
   Stretch) or once every `TextureLength` studs (Wrap, Static), and
   scrolls `TextureSpeed` times a second from Attachment0 towards
   Attachment1; `SetTextureOffset` moves it the other way. Without an
-  image, or while it loads, the beam is its colour alone.
+  image, or while it loads, the beam is its color alone.
 - **Light**: as a ParticleEmitter's (docs/behavior/effects/particle-emitters.md),
-  `Brightness` scaling its own colour when `LightInfluence` is below 1.
+  `Brightness` scaling its own color when `LightInfluence` is below 1.
 
 ### Trail
 

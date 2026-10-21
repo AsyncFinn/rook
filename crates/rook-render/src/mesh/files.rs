@@ -6,7 +6,7 @@ use super::*;
 /// is zero (a file that left them out) takes the normal of the first
 /// triangle using it, so it's lit instead of drawing black (Studio lights
 /// such meshes; observed with a test mesh written without normals). A
-/// union's vertices keep the box face they were cut from and their colour.
+/// union's vertices keep the box face they were cut from and their color.
 pub(crate) fn from_file(m: &rook_content::decode::mesh::Mesh) -> MeshData {
     let mut vertices: Vec<Vertex> = m
         .positions

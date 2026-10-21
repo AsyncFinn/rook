@@ -3,7 +3,7 @@
 //!
 //! This module knows nothing about Lua. Handlers are an opaque `H` chosen by
 //! the caller, and whether a firing runs now (Immediate) or later (Deferred)
-//! is the caller's policy. See `docs/design/architecture.md` §6.
+//! is the caller's policy. See `docs/design/architecture.md#signals-and-scheduler-rook-luas-signal-and-scheduler`.
 
 mod expand;
 

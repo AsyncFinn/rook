@@ -61,7 +61,7 @@ pub(crate) struct Pipelines {
     pub(crate) highlight_occluded: wgpu::RenderPipeline,
     /// The skybox, behind everything.
     pub(crate) sky: wgpu::RenderPipeline,
-    /// The plain sky colour, before (or without) the skybox.
+    /// The plain sky color, before (or without) the skybox.
     pub(crate) plain_sky: wgpu::RenderPipeline,
     /// Depth only, from the sun, over the opaque batches.
     pub(crate) shadow: wgpu::RenderPipeline,
@@ -217,7 +217,7 @@ impl Pipelines {
             Default::default(),
             Default::default(),
         );
-        // Depth only: the colour stays as it is.
+        // Depth only: the color stays as it is.
         let keep = wgpu::BlendComponent {
             src_factor: wgpu::BlendFactor::Zero,
             dst_factor: wgpu::BlendFactor::One,

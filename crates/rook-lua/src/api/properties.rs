@@ -83,7 +83,7 @@ const SAME_AS: &[(&str, &str, &str)] = &[
 ];
 
 /// BrickColor views of Color3 properties: reads give the nearest
-/// BrickColor, writes store the BrickColor's colour.
+/// BrickColor, writes store the BrickColor's color.
 const BRICK_COLOR_OF: &[(&str, &str, &str)] = &[
     ("BasePart", "BrickColor", "Color"),
     ("BodyColors", "HeadColor", "HeadColor3"),

@@ -2,7 +2,7 @@ use rook_types::{Color3, GuiQuad};
 
 use super::*;
 
-/// A borderless 200 × 200 Frame at (600, 300) with this ZIndex, coloured
+/// A borderless 200 × 200 Frame at (600, 300) with this ZIndex, colored
 /// by its index so draws can be told apart.
 fn square(dom: &mut Dom, parent: InstanceId, z: i32, tag: f32) -> InstanceId {
     child(
@@ -28,7 +28,7 @@ fn order(dom: &mut Dom) -> Vec<f32> {
 }
 
 #[test]
-fn z_index_behaviours_and_display_order() {
+fn z_index_behaviors_and_display_order() {
     let (mut dom, player_gui) = client();
     let s1 = child(&mut dom, "ScreenGui", player_gui, &[]);
     let p = square(&mut dom, s1, 5, 0.1);

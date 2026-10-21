@@ -1,7 +1,7 @@
 //! Reading Roblox mesh files, through the `rbx_mesh` crate (versions 1.00
 //! to 5.00; 6.00 and 7.00 aren't read yet), into the one layout Rook draws.
 //! `rbx_mesh` corrects version 1.00's doubled positions and flipped UVs;
-//! Rook keeps only the highest level of detail (`docs/behavior/meshes.md`)
+//! Rook keeps only the highest level of detail (`docs/behavior/meshes/file-meshes.md`)
 //! and rejects faces pointing past the vertex list, so a damaged file can't
 //! reach the renderer. A union's geometry decodes into the same [`Mesh`]
 //! ([`union`]), so unions load and draw through the same path.
@@ -19,8 +19,8 @@ pub struct Mesh {
     pub uvs: Vec<[f32; 2]>,
     /// Three vertex indices per triangle.
     pub indices: Vec<u32>,
-    /// Union geometry only (empty for mesh files): each vertex's colour,
-    /// sRGB with alpha, the colour of the part it was cut from.
+    /// Union geometry only (empty for mesh files): each vertex's color,
+    /// sRGB with alpha, the color of the part it was cut from.
     pub colors: Vec<[u8; 4]>,
     /// Union geometry only: the box face each vertex was cut from, which
     /// images and material textures go by.
@@ -44,7 +44,7 @@ pub struct TerrainCorner {
 }
 
 /// How terrain lays its material's textures (Studio's terrain material
-/// table, `docs/behavior/terrain.md`).
+/// table, `docs/behavior/terrain/materials.md`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TerrainMapping {
     /// Onto whichever of 18 planes (the 6 axes' and the 12 at 45 degrees

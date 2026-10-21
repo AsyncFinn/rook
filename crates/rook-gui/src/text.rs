@@ -1,7 +1,7 @@
 //! Text in GUI objects: what TextLabels, TextButtons and TextBoxes show,
 //! laid out as Roblox does (`TextBounds`, `TextFits`, wrapping,
 //! `TextScaled`, `RichText`), as glyphs to draw. Rules measured in Studio
-//! are in docs/behavior/gui-text.md.
+//! are in docs/behavior/gui/text.md.
 
 mod fonts;
 mod glyphs;
@@ -119,7 +119,7 @@ pub(crate) struct PlacedGlyph {
     /// The pen on the baseline.
     pub(crate) pen: Vec2,
     pub(crate) color: [f32; 4],
-    /// Its outline: colour and thickness in pixels.
+    /// Its outline: color and thickness in pixels.
     pub(crate) stroke: Option<([f32; 4], f32)>,
 }
 

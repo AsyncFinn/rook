@@ -24,7 +24,7 @@ Everything Rook keeps for itself lives in one folder: `%LOCALAPPDATA%\Rook` on W
 
 On macOS the data is in `~/Library/Application Support/Rook` and the logs in `~/Library/Logs/Rook`. On Linux the data is in `$XDG_DATA_HOME/rook`, and logs and state in `$XDG_STATE_HOME/rook`. The `directories` crate finds those folders.
 
-The download cache is not in the data folder. It stays in `%TEMP%\Rook\cache` (`rook_content::resolver::cache::Cache`) so Windows can clear it; anything cleared is fetched again. Two things are deliberately elsewhere too. The Open Cloud API key belongs in the OS credential store ([research §7](research.md#7-content-and-asset-policy)). The Roblox install's files are read where they are, never copied in.
+The download cache is not in the data folder. It stays in `%TEMP%\Rook\cache` (`rook_content::resolver::cache::Cache`) so Windows can clear it; anything cleared is fetched again. Two things are deliberately elsewhere too. The Open Cloud API key belongs in the OS credential store ([content policy](policies.md#content-and-assets)). The Roblox install's files are read where they are, never copied in.
 
 `state\recent.json` (recent places, the window's size and place) has its path reserved (`DataDir::recent`). Nothing writes it yet.
 
@@ -78,7 +78,7 @@ Libraries' own events reach the terminal only as warnings and errors.
 
 ### Log files
 
-Each run of the player writes one file, `logs\rook-player-<time>.log`. `rook-tools` writes one only for long commands (`corpus-scan`, `corpus-run`, `conformance`). The file gets Rook's `debug` and up whatever the terminal shows, plus every line the terminal printed, script output included. It is plain text without colours, in the terminal's line format. At startup, old logs are cleaned: a file is deleted once it is beyond the newest 30 runs and older than 14 days, and the oldest go first past 100 MB in total. Crash reports are cleaned by the same rules.
+Each run of the player writes one file, `logs\rook-player-<time>.log`. `rook-tools` writes one only for long commands (`corpus-scan`, `corpus-run`, `conformance`). The file gets Rook's `debug` and up whatever the terminal shows, plus every line the terminal printed, script output included. It is plain text without colors, in the terminal's line format. At startup, old logs are cleaned: a file is deleted once it is beyond the newest 30 runs and older than 14 days, and the oldest go first past 100 MB in total. Crash reports are cleaned by the same rules.
 
 `rook-tools logs` prints the newest log's path. `rook-tools logs --open` opens the folder.
 

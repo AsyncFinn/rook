@@ -1,5 +1,5 @@
 //! The server on its own thread, so a window waits only on its client and
-//! the renderer (architecture §8). The server's DataModel is made on the
+//! the renderer (docs/design/architecture.md#engine-systems). The server's DataModel is made on the
 //! thread and never leaves it; the window talks to it in messages.
 //!
 //! The thread steps when told to ([`ServerThread::step`], which keeps a

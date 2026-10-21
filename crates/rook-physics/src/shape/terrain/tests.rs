@@ -1,5 +1,5 @@
 //! Terrain collision and queries. Expected values were measured in Studio
-//! 0.742 on the same voxels (`docs/behavior/terrain.md`).
+//! 0.742 on the same voxels (`docs/behavior/terrain/collision.md`).
 
 use glam::{IVec3, Vec3};
 use rook_dom::{Dom, InstanceId};
@@ -21,8 +21,8 @@ fn fill(grid: &mut Grid, from: IVec3, to: IVec3, material: TerrainMaterial) {
     }
 }
 
-/// Studio's test terrain, moved to the origin: a lone Grass voxel centred
-/// at (2, 42, 2), a 64 × 4 × 64 Grass slab centred at (102, 42, 2), the
+/// Studio's test terrain, moved to the origin: a lone Grass voxel centered
+/// at (2, 42, 2), a 64 × 4 × 64 Grass slab centered at (102, 42, 2), the
 /// same in Brick at x = 202, and 64 × 16 × 64 of Water at x = 302 (y 40
 /// to 56).
 fn world() -> (Dom, InstanceId) {

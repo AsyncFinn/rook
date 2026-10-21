@@ -1,8 +1,8 @@
 //! A union's geometry (`UnionOperation`, `NegateOperation`,
 //! `IntersectOperation`), read from its `MeshData` blob through `rbx_mesh`'s
-//! `union_graphics`, with each vertex's colour and the `NormalId` of the
+//! `union_graphics`, with each vertex's color and the `NormalId` of the
 //! box face it was cut from. Where the blob is and its forms are in
-//! `docs/behavior/meshes.md` (Unions).
+//! `docs/behavior/meshes/unions.md`.
 
 pub mod physics;
 

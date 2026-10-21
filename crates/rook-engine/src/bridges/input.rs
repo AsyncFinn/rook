@@ -1,7 +1,7 @@
 //! Keyboard and mouse input for a client DataModel: UserInputService
 //! events, the player's Mouse, and ClickDetectors.
 //!
-//! Event and property behaviour follows creator-docs (UserInputService,
+//! Event and property behavior follows creator-docs (UserInputService,
 //! InputObject, Mouse, ClickDetector). Rook has no GUI yet, so
 //! `gameProcessedEvent` is always false.
 

@@ -1,5 +1,5 @@
 //! Highlight: which one covers a part, and its look
-//! (docs/behavior/highlight.md). The renderer outlines and fills the
+//! (docs/behavior/rendering/highlight.md). The renderer outlines and fills the
 //! parts over the finished frame.
 
 use std::collections::HashMap;
@@ -62,7 +62,7 @@ fn enabled(dom: &Dom, id: InstanceId) -> bool {
 /// Highlight `id`'s look; the defaults are the API reference's (fill red
 /// at 0.5, outline white, AlwaysOnTop).
 fn look(dom: &Dom, id: InstanceId) -> Highlight {
-    let colour = |name, default: [f32; 3], transparency, at: f32| {
+    let color = |name, default: [f32; 3], transparency, at: f32| {
         let [r, g, b] = dom
             .color3_property(id, name)
             .map_or(default, Color3::to_array);
@@ -71,8 +71,8 @@ fn look(dom: &Dom, id: InstanceId) -> Highlight {
     };
     Highlight {
         key: id.to_ref().0,
-        fill: colour("FillColor", [1.0, 0.0, 0.0], "FillTransparency", 0.5),
-        outline: colour("OutlineColor", [1.0; 3], "OutlineTransparency", 0.0),
+        fill: color("FillColor", [1.0, 0.0, 0.0], "FillTransparency", 0.5),
+        outline: color("OutlineColor", [1.0; 3], "OutlineTransparency", 0.0),
         on_top: dom.enum_item_property(id, "DepthMode") != Some("Occluded"),
     }
 }

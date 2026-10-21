@@ -1,8 +1,8 @@
-# Rook — Architecture
+# Architecture
 
-The current design, first drafted 2026-10-04 and kept up to date as the milestones land. Crates marked *(planned)* or *(unscheduled)* don't exist yet. Background and sources are in [research.md](research.md); what each milestone found in Studio is in [`docs/behavior/`](../behavior/).
+The current design, first drafted 2026-10-04 and kept up to date as the milestones land. Crates marked *(planned)* or *(unscheduled)* don't exist yet. Background and sources are in [research.md](research.md); the rules every part follows are in [policies](policies.md); the plan is in the [roadmap](../roadmap/README.md); what each milestone found in Studio is in [`docs/behavior/`](../behavior/).
 
-## 1. Goals that shape the architecture
+## Goals that shape the architecture
 
 1. **Modern Roblox is the single source of truth**, pinned to one API snapshot. Old content works to the extent modern Roblox runs it. There is no separate legacy mode.
 2. **Instance-first.** Everything (files, scripts, physics, rendering, GUI) goes through one runtime DataModel. The pipeline for a Part is `file → instances → properties → hierarchy → change journal → physics / render / GUI → scripts → events`, never `file → cube`.
@@ -10,7 +10,7 @@ The current design, first drafted 2026-10-04 and kept up to date as the mileston
 4. **Verifiable.** Behavior is checked against values recorded from live Studio, and every behavior has a documented source.
 5. **Extensions never leak into compatibility.** Rook-specific features sit behind an explicit profile.
 
-## 2. Crate layout
+## Crate layout
 
 ```
 crates/
@@ -40,7 +40,8 @@ apps/
   rook-server       (planned) headless server
   rook-studio       (unscheduled) editor
 conformance/         Studio-recorded expectations + the Luau cases that produced them
-docs/                guide (users), design (architecture, research), behavior (findings per topic)
+docs/                guide (users), roadmap (the plan), design (architecture, policies, research),
+                     behavior (findings by area and topic)
 ```
 
 Dependencies only point downward:
@@ -60,7 +61,7 @@ rook-types ← rook-reflection ← rook-dom ← rook-formats
 rook-platform sits below all of them: every crate that touches the host reaches it through rook-platform.
 ```
 
-`rook-render` never touches the DOM (see §8): `rook-view` reads the DOM and builds what the renderer takes. Only apps that draw link `rook-view` and `rook-render`; `rook-engine` doesn't depend on either.
+`rook-render` never touches the DOM (see [Engine systems](#engine-systems)): `rook-view` reads the DOM and builds what the renderer takes. Only apps that draw link `rook-view` and `rook-render`; `rook-engine` doesn't depend on either.
 
 ### The seam: portable crates and the host
 
@@ -80,21 +81,21 @@ Known exceptions, each marked with an `#[expect]` saying why:
 - `rook-engine`: the data folder's location (`directories`) and the console's line editor (rustyline, behind the `repl` feature), which keeps its own history file.
 - Tests and examples set up files on the machine running them.
 
-## 3. Datatypes (`rook-types`)
+## Datatypes (`rook-types`)
 
 - Rook's own types, built on `glam`, with `From`/`TryFrom` conversions to `rbx_types::Variant` at the I/O boundary.
 - `Value` is the dynamic property value: `Bool`, `Int`, `Float`, `String`, `Content`, `Vector3`, `CFrame`, `Color3`, `BrickColor`, `UDim`/`UDim2`, `Rect`, `NumberSequence`, `ColorSequence`, `NumberRange`, `PhysicalProperties`, `Font`, `Faces`/`Axes`, `EnumItem(EnumId, u32)`, `Ref(Option<InstanceId>)`, `Attributes`, `Tags`, and so on.
-- Math semantics follow Luau (f64 `number`) where scripts can see the result. Engine-internal hot paths may use f32 where that's invisible. CFrame orthonormalisation, `lerp`, `ToEulerAnglesXYZ` and similar functions are verified against Studio values (§9).
+- Math semantics follow Luau (f64 `number`) where scripts can see the result. Engine-internal hot paths may use f32 where that's invisible. CFrame orthonormalisation, `lerp`, `ToEulerAnglesXYZ` and similar functions are verified against Studio values ([Testing and measurement](#testing-and-measurement)).
 - `lune-roblox` (MPL-2.0) is the reference for datatype edge cases. If any file is adapted from it, that file stays MPL.
 
-## 4. Reflection (`rook-reflection`)
+## Reflection (`rook-reflection`)
 
 - Source: pinned `rbx_reflection_database`. It includes the class tree, members, tags (`Deprecated`, `NotCreatable`, `Service`, security levels) and per-class defaults.
-- **Overlay data** (Rook-owned, in-repo TOML/JSON): which members Rook has implemented, how each property is stored (§5), behavior notes and provenance IDs, and extension classes/members marked `rook_extension = true`.
+- **Overlay data** (Rook-owned, in-repo TOML/JSON): which members Rook has implemented, how each property is stored ([Runtime DOM](#runtime-dom-rook-dom)), behavior notes and provenance IDs, and extension classes/members marked `rook_extension = true`.
 - At startup the database is compiled into dense IDs: `ClassId(u16)`, `PropertyId`, `EnumId`. Each class gets a **layout**: its full inherited property list, mapped to slots. Name lookups go through interned atoms and a per-class `(name → member)` cache.
 - Updating the pinned snapshot is a deliberate change: bump the crate version, regenerate, review the diff of added and removed members, then run the conformance suite.
 
-## 5. Runtime DOM (`rook-dom`)
+## Runtime DOM (`rook-dom`)
 
 ### Why not use `rbx_dom_weak` at runtime
 
@@ -114,7 +115,7 @@ Known exceptions, each marked with an `#[expect]` saying why:
   2. engine systems (physics, GUI, render sync, audio). Each keeps its own cursor and processes dirty sets at its phase. Systems never get callbacks in the middle of a mutation.
 - **No global state.** Several DataModels can exist in one process (server + client for Play mode, Studio edit + play). Each has its own DOM, Lua VM, scheduler and physics world.
 
-## 6. Signals and scheduler (`rook-lua`'s `signal` and `scheduler`)
+## Signals and scheduler (`rook-lua`'s `signal` and `scheduler`)
 
 ### Signals
 
@@ -125,7 +126,7 @@ Known exceptions, each marked with an `#[expect]` saying why:
 
 ### Scheduler
 
-- One thread per DataModel. Its Luau, DOM and physics run on it. This matches Roblox's cooperative model, and it is where OpenRBLX went wrong. A server and its client are separate DataModels, so they may run on separate threads (§8).
+- One thread per DataModel. Its Luau, DOM and physics run on it. This matches Roblox's cooperative model, and it is where OpenRBLX went wrong. A server and its client are separate DataModels, so they may run on separate threads ([Engine systems](#engine-systems)).
 - Frame pipeline. The order is an **Inference** from the creator-docs diagram, to be confirmed in Studio before it's locked in:
 
   ```
@@ -147,7 +148,7 @@ Known exceptions, each marked with an `#[expect]` saying why:
 - Queues: a min-heap of waiting threads by resume time; legacy `wait` (with its own minimum and throttling, behavior to be measured); `task.defer`/`task.spawn`; the deferred-event queue.
 - **Time source abstraction**: real time (player) or fixed-step simulated time (headless runs and tests), so conformance runs are deterministic.
 
-## 7. Luau bridge (`rook-lua`)
+## Luau bridge (`rook-lua`)
 
 - One Luau VM per DataModel (`mlua` with `luau`, `vendored`; `luau-jit` later). Each `Script`/`LocalScript`/`ModuleScript` runs on its own thread with its own environment table, which falls back to the shared globals. `getfenv`/`setfenv` work as in Luau.
 - **Instance userdata** wraps an `InstanceId`. A weak-valued registry keeps **one userdata per instance**, so `==`, `rawequal` and table keys behave like Roblox. `__index` checks properties, then methods, then children by name; each class's members are resolved once into a table by name, so a lookup is one hash probe. `__index` and `__newindex` skip the general engine-function shim (they run more than any other engine code). Destroyed instances still read.
@@ -157,11 +158,11 @@ Known exceptions, each marked with an `#[expect]` saying why:
 - **Errors and output**: chunk names are the instance's full name, so messages read `Workspace.Script:3: ...`. Output goes through `LogService` with Roblox-style message types.
 - `require(ModuleScript)`: caching per DataModel, cyclic-require error, and the "Requested module experienced an error while loading" message.
 
-## 8. Engine systems
+## Engine systems
 
 ### Threading and data flow
 
-Each DataModel's Luau, DOM and physics stay on one thread (§6). In singleplayer Play the player runs two DataModels on two threads, so the window waits only on its client and the renderer:
+Each DataModel's Luau, DOM and physics stay on one thread ([Signals and scheduler](#signals-and-scheduler-rook-luas-signal-and-scheduler)). In singleplayer Play the player runs two DataModels on two threads, so the window waits only on its client and the renderer:
 
 ```
    server thread                                   main thread (window)
@@ -208,20 +209,20 @@ Its `Gui` lives in `rook-lua`'s `World` beside the physics world, for the same r
 - Primitive meshes generated in code. Mesh and texture caches are fed by `rook-content`.
 - Built-in mesh shapes (SpecialMesh `MeshType`, BlockMesh, CylinderMesh) reuse the part shapes: `rook-types` decides what a part's mesh draws and at what size (`MeshKind::look_on`, which also says which parts ignore mesh children), and the snapshot turns that into a draw shape (`DrawShape`: a part shape, the head or a mesh file), a size and, for the upright CylinderMesh, a turned rotation. The only new geometry is Rook's own head mesh. Meshes change only how a part looks; physics keeps the part's shape.
 - File meshes (FileMesh, SpecialMesh FileMesh, MeshPart): `rook-types` gives their scale (`MeshLook::File`, `mesh_part_scale`), and the mesh's own origin sits at the part. The scene builder (`rook-view/src/content/loader.rs`) asks a `rook-content` `Loader` for a file the first time a part needs it (`Want::Mesh`, so the worker threads also decode it), polls finished files once per frame and redraws only the parts waiting for them. A frame never waits; a screenshot does. While a file loads, or after it fails, a part keeps what its mesh drew before (the old mesh, or the empty-`MeshId` box) and a new mesh draws nothing, as observed in Studio. The scene carries each mesh by the BLAKE3 hash of its bytes (`MeshHash`); the renderer uploads each file once and draws every part using it in one instanced batch, like the primitive shapes. No loader starts for a place without file meshes.
-- Terrain: `rook-terrain` decodes `Terrain.SmoothGrid` and meshes it as Roblox does (surface nets, then each material's vertex moves, from Studio's terrain material table). The scene builder (`rook-view/src/terrain.rs`) meshes it a chunk per worker (`rook-platform`'s `workers`) when the place loads, and hands each chunk's surface per material and facing (top, side, bottom) to the renderer as a mesh file marked as terrain (`rook_content::decode::mesh::TerrainMapping`), keyed by the grid's hash, with the material's texture pack as its maps (`ContentRef::TexturePack`). The renderer's only terrain code is in the parts shader: terrain vertices take their textures from the world plane they face most, through the colour map's tint mask.
+- Terrain: `rook-terrain` decodes `Terrain.SmoothGrid` and meshes it as Roblox does (surface nets, then each material's vertex moves, from Studio's terrain material table). The scene builder (`rook-view/src/terrain.rs`) meshes it a chunk per worker (`rook-platform`'s `workers`) when the place loads, and hands each chunk's surface per material and facing (top, side, bottom) to the renderer as a mesh file marked as terrain (`rook_content::decode::mesh::TerrainMapping`), keyed by the grid's hash, with the material's texture pack as its maps (`ContentRef::TexturePack`). The renderer's only terrain code is in the parts shader: terrain vertices take their textures from the world plane they face most, through the color map's tint mask.
 - **Trusses**: `rook-types` (`truss.rs`) holds the rules: how Size snaps (`truss_size`, used by `rook-lua`'s Size setter), the drawn shape (`TrussShape`: a Style and a segment count, a one-segment truss counting as NoSupports so it shares one mesh) and how it sits on the part (`TrussLook`: the turn onto the long axis and the offset to the box's low end). The snapshot gives the part `DrawShape::Truss` with that turn and offset in its `Pose`, so moving it only moves its instance; `rook-render` builds a shape's bars (`mesh::truss`) the first time a truss of that shape is drawn and draws every such truss in one instanced batch, so a truss costs one instance, whatever its length. Physics keeps the box. Files save `Style` as `style`, a separate property in the database; scripts' `Style` is a view of it (`SAME_AS` in `rook-lua`).
-- **Images** (mesh `TextureId`, MeshPart `TextureID`, Decals, Textures) load the same way as mesh files, through the same `Files` and `Loader` (`Want::Image`: the workers decode to RGBA8 and build the mips). The scene carries each image by the BLAKE3 hash of its bytes (`ImageHash`, in `Scene::images`). A mesh texture is a property of its part's scene entry (`PartInstance::texture`, multiplied by `VertexColor`); each Decal and Texture is a scene entry of its own (`Layer::Image`), at its part's transform, kept in its part's list of layer indices so that parts and their images update in place together. What goes where follows `rook-types`: the face frames, the dominant-axis rule for round shapes and the tiling (`NormalId`, `Tiling`), which meshes take textures and follow UVs (`MeshKind::takes_texture`, `decals_follow_uvs`, `shows_surfaces`) and materials (`MaterialLook`); the shader reads the face frames from a uniform filled from `NormalId`. While an image loads a Decal draws nothing and a mesh is black; after a failure the Decal draws nothing and the mesh keeps the part's colour, as observed in Studio.
+- **Images** (mesh `TextureId`, MeshPart `TextureID`, Decals, Textures) load the same way as mesh files, through the same `Files` and `Loader` (`Want::Image`: the workers decode to RGBA8 and build the mips). The scene carries each image by the BLAKE3 hash of its bytes (`ImageHash`, in `Scene::images`). A mesh texture is a property of its part's scene entry (`PartInstance::texture`, multiplied by `VertexColor`); each Decal and Texture is a scene entry of its own (`Layer::Image`), at its part's transform, kept in its part's list of layer indices so that parts and their images update in place together. What goes where follows `rook-types`: the face frames, the dominant-axis rule for round shapes and the tiling (`NormalId`, `Tiling`), which meshes take textures and follow UVs (`MeshKind::takes_texture`, `decals_follow_uvs`, `shows_surfaces`) and materials (`MaterialLook`); the shader reads the face frames from a uniform filled from `NormalId`. While an image loads a Decal draws nothing and a mesh is black; after a failure the Decal draws nothing and the mesh keeps the part's color, as observed in Studio.
 - **GPU cache** (`rook-render/src/gpu/cache.rs`): one scheme for mesh files and images, `GpuCache` keyed by content hash. The first entry that needs a file queues it; uploads go up at the start of a frame within a 24 MB budget, so hundreds of images arriving at once spread over frames, and entries waiting for an upload draw nothing until it is done (a screenshot uploads everything first). Images are kept for the renderer's life; a mesh file's room in the pool is given back when the player drops it (grass tiles). Opaque parts are batched by (shape, image), images on parts by (`ZIndex`, shape, image) in a second set of batches, both with the in-place slots of `update_parts`; missing images stand in as a 1 × 1 white image (a flat normal for normal maps).
 - **Draws** (`rook-render/src/gpu/pool.rs`, `batch.rs`, `renderer/runs.rs`): every mesh's vertices and indices live in a few shared buffers (`MeshPool`), in pages that grow up to the device's biggest buffer (1 GiB at most), so one page holds a whole place (an 86k-part place's terrain alone is 6.6M vertices). Positions are their own vertex stream, so the shadow pass reads 12 bytes a vertex; normals, UVs, box points and faces are a second. Each set of batches keeps its instances in one buffer, each batch a run of slots that moves when it fills; changed instances go up in 64-instance chunks. Every image sits in one table of two binding arrays (sRGB and linear views, the same slots), and each instance names its five images' slots, so draws with different images bind nothing between them. A frame lists each pass's visible batches in drawing order as indirect draw arguments and joins consecutive ones sharing pipeline, instance buffer and pool page into a run, one `multi_draw_indexed_indirect` each: on an 86k-part place 1 + 6 draw calls for 321 + 620 batches. The draw order is the batches' own, so frames are byte-identical to drawing each batch alone. Adapters without binding arrays get a bind group per image set, bound per run, and adapters without first instances in indirect draws (`INDIRECT_FIRST_INSTANCE`) issue each draw directly; the frames are the same (test `table_and_multi_draws_draw_what_bound_sets_draw`). A batch's culling box grows with each changed instance and is worked out tight again once as many instances changed as it has.
 - **Image layers** draw after the opaque parts and before the transparent ones, blended, testing depth with `GreaterEqual` and writing none: they reuse the part's own mesh and vertex maths (the clip position is `@invariant`), so they lie exactly on it. A layer projected onto a face keeps only the points whose part-space normal is closest to its face's axis and lie inside the face's box; a mesh-UV layer covers the whole mesh. Layers of a partly transparent part are sorted with the transparent parts, just after their own. Layers never enter the shadow pass.
-- **Materials and surfaces:** `MaterialLook` decides: Plastic draws its faces' surface patterns (studs, the weld/glue lattice, inlets, universal), Neon is drawn unlit, the rest plain, Reflectance mixes towards the sky colour (Approximation). The patterns are a four-layer texture array: from the user's install (`textures/studs.dds`, handed over by the player at startup like `head.mesh`) or Rook's own drawn patterns. The 2022 materials' textures aren't in the install (Studio downloads them), so Rook draws those materials plain; nothing from the install is ever committed.
+- **Materials and surfaces:** `MaterialLook` decides: Plastic draws its faces' surface patterns (studs, the weld/glue lattice, inlets, universal), Neon is drawn unlit, the rest plain, Reflectance mixes towards the sky color (Approximation). The patterns are a four-layer texture array: from the user's install (`textures/studs.dds`, handed over by the player at startup like `head.mesh`) or Rook's own drawn patterns. The 2022 materials' textures aren't in the install (Studio downloads them), so Rook draws those materials plain; nothing from the install is ever committed.
 - Lighting: Lighting service properties (ClockTime → sun, Ambient/OutdoorAmbient, Brightness, Atmosphere, Sky, post effects). A forward renderer; Future (clustered) lighting comes later. The sun's direction follows `Lighting:GetSunDirection()` as measured in Studio (`sun_direction` in `rook-view`'s lighting).
-- Sun shadows (`rook-render/src/renderer/lighting/shadow.rs`): before the main pass, a depth-only pass draws the opaque batches' existing instances from the sun into one 2048² `Depth32Float` map, reverse Z like the main pass (compare Greater, clear to 0). It reads only the mesh pool's positions and uses the main shader's own vertex maths (`placed`, shared by `vs_main` and the `vs_shadow` entry point) and a pipeline layout without the shadow map's bind group, which the pass is writing. The orthographic box holds the smallest sphere around the camera's view out to 300 studs, so its size changes only with the field of view and aspect, and its centre moves in whole texels across the sun's view, so a texel's footprint stays put as the camera moves; it reaches 500 studs further towards the sun for tall casters off screen. Against acne the casters get a slope-scaled depth bias and receivers look up the map 1.5 texels out along their normal plus 0.05 studs towards the sun. The main pass multiplies only the sun term by 3×3 linear-filtered comparison samples, fading to lit over the last fifth of the distance. Each instance carries a cast flag (`BasePart.CastShadow`) that the shadow vertex shader uses to clip non-casters, so batches and their slots are unchanged; transparent parts live outside the opaque batches and never cast. The snapshot sets `Lighting::global_shadows`; with it off, or the sun below the horizon, no shadow pass is encoded.
+- Sun shadows (`rook-render/src/renderer/lighting/shadow.rs`): before the main pass, a depth-only pass draws the opaque batches' existing instances from the sun into one 2048² `Depth32Float` map, reverse Z like the main pass (compare Greater, clear to 0). It reads only the mesh pool's positions and uses the main shader's own vertex maths (`placed`, shared by `vs_main` and the `vs_shadow` entry point) and a pipeline layout without the shadow map's bind group, which the pass is writing. The orthographic box holds the smallest sphere around the camera's view out to 300 studs, so its size changes only with the field of view and aspect, and its center moves in whole texels across the sun's view, so a texel's footprint stays put as the camera moves; it reaches 500 studs further towards the sun for tall casters off screen. Against acne the casters get a slope-scaled depth bias and receivers look up the map 1.5 texels out along their normal plus 0.05 studs towards the sun. The main pass multiplies only the sun term by 3×3 linear-filtered comparison samples, fading to lit over the last fifth of the distance. Each instance carries a cast flag (`BasePart.CastShadow`) that the shadow vertex shader uses to clip non-casters, so batches and their slots are unchanged; transparent parts live outside the opaque batches and never cast. The snapshot sets `Lighting::global_shadows`; with it off, or the sun below the horizon, no shadow pass is encoded.
 - Every lighting and material formula is documented with its source and confidence.
 
 ### Content (`rook-content`)
 
-- **References** are parsed once, into `ContentRef` (`rook-content/src/reference.rs`): `rbxasset://<path>` (a client file), an asset id with an optional version (`rbxassetid://`, and the legacy `http://www.roblox.com/asset/?id=` URLs in all the shapes Studio accepts), an asset version id, and `rbxthumb://` (parsed, not resolved). Anything else, including the empty string, is no content rather than an error. The accepted shapes follow Studio, checked form by form (ROADMAP M4 step 2). Files store content in the `Content`-typed properties (`MeshContent`, `TextureContent`, `AudioContent`); the legacy string properties scripts use (`MeshId`, `Texture`, `SoundId`) are views of them in `rook-lua`, and consumers read the `Content` ones (`Value::content_url`).
+- **References** are parsed once, into `ContentRef` (`rook-content/src/reference.rs`): `rbxasset://<path>` (a client file), an asset id with an optional version (`rbxassetid://`, and the legacy `http://www.roblox.com/asset/?id=` URLs in all the shapes Studio accepts), an asset version id, and `rbxthumb://` (parsed, not resolved). Anything else, including the empty string, is no content rather than an error. The accepted shapes follow Studio, checked form by form ([asset fetching](../behavior/content/asset-fetching.md)). Files store content in the `Content`-typed properties (`MeshContent`, `TextureContent`, `AudioContent`); the legacy string properties scripts use (`MeshId`, `Texture`, `SoundId`) are views of them in `rook-lua`, and consumers read the `Content` ones (`Value::content_url`).
 - **Providers**, tried in an order `ROOK_CONTENT_ORDER` can change (default `defaults,install,folders,delivery`):
   1. *Rook defaults* (`defaults.rs`): a table of the 2009 client's `rbxasset://` paths that now stand for public assets (`fonts/sword.mesh` → 12221720). Rook's head mesh is generated in `rook-render`, not shipped here.
   2. *The Roblox install*: the newest Studio or player version folder under `%LOCALAPPDATA%\Roblox\Versions` (and `Program Files`, and the macOS app bundles), or `ROOK_ROBLOX_INSTALL`; `rbxasset://` paths are looked up in its `content`, `ExtraContent` and `PlatformContent/pc` folders, ignoring case.
@@ -231,7 +232,7 @@ Its `Gui` lives in `rook-lua`'s `World` beside the physics world, for the same r
 - **Kept content** (`kept.rs`): the materials' and terrain's texture packs and their images, pinned to asset versions and kept for good in the data folder's `content` folder rather than the cache ([data and logging](data-and-logging.md#kept-content)).
 - **Cache** (`cache.rs`), outside the repository, where the system keeps caches so the system may clear it too (`ROOK_CACHE_DIR`, else `%TEMP%\Rook\cache` on Windows, `~/Library/Caches/Rook`, `$XDG_CACHE_HOME/rook`): content-addressed blobs (BLAKE3) plus one small file per reference giving its blob, or the failure. Rook keeps it under `ROOK_CACHE_MAX` (2 GB) itself: reading a blob marks it used (its modified time, at most hourly), and each resolver opening the cache trims the least recently used blobs, and the references they leave, on a background thread. `rook-tools cache` shows, prunes by age or clears it. A cache in the old Windows place (`%LOCALAPPDATA%\Rook\cache`) is moved once, file by file when both exist, leaving behind anything that fails to move for the next try. Files are written to a temporary name and renamed; blobs are checked against their size and hash when read and refetched if damaged. "Not found" and "forbidden" answers are kept for a day, so a place with hundreds of dead ids asks the network once a day at most; network errors are only remembered for the run. A second run needs no network.
 - **Off the engine thread**: a `Loader` (one per DataModel, made on the first request) runs resolutions on four worker threads and shares one resolution between duplicate requests. The DataModel takes scripts' new requests and delivers finished ones once per frame, just before `wait()` resumption, so `PreloadAsync` callbacks run and calls return on the engine thread. A place that never asks for content starts no threads and pays nothing per frame. No async runtime: plain threads and channels.
-- **Decoders** live with the content: `mesh.rs` reads Roblox mesh files through the `rbx_mesh` crate (versions 1.00 to 5.00) into one vertex and index layout, keeping only the highest level of detail; `image.rs` reads PNG, JPEG, BMP, DDS (DXT1/3/5; the install's `.tex` files are DDS) and KTX2 (BC1/BC3, Zstandard-compressed levels; Roblox's material textures) through the `image` crate, recognised by their bytes, into RGBA8 with a full mip chain (alpha-weighted, at most 1024 pixels a side). A `Loader` request can ask for a mesh or an image (`Want::Mesh`, `Want::Image`): the worker decodes it into `Fetched::mesh` or `Fetched::image`, and bytes that don't decode fail as `Invalid` (or `UnknownVersion`, for a version Rook doesn't read yet). `rook-view` logs each failure with the instances it hit ([data and logging](data-and-logging.md#logging)). `Want::for_property` says what a content property must hold; PreloadAsync asks this way (a sound in a Decal's `Texture` fails, as in Studio), `rook-tools content --place` totals the results, and the player asks for everything it draws. At startup `rook-view` (`Installed`) loads the install's `head.mesh` and `textures/studs.dds`, from disk only, and the player hands them to `rook-render`, which otherwise draws its own.
+- **Decoders** live with the content: `mesh.rs` reads Roblox mesh files through the `rbx_mesh` crate (versions 1.00 to 5.00) into one vertex and index layout, keeping only the highest level of detail; `image.rs` reads PNG, JPEG, BMP, DDS (DXT1/3/5; the install's `.tex` files are DDS) and KTX2 (BC1/BC3, Zstandard-compressed levels; Roblox's material textures) through the `image` crate, recognized by their bytes, into RGBA8 with a full mip chain (alpha-weighted, at most 1024 pixels a side). A `Loader` request can ask for a mesh or an image (`Want::Mesh`, `Want::Image`): the worker decodes it into `Fetched::mesh` or `Fetched::image`, and bytes that don't decode fail as `Invalid` (or `UnknownVersion`, for a version Rook doesn't read yet). `rook-view` logs each failure with the instances it hit ([data and logging](data-and-logging.md#logging)). `Want::for_property` says what a content property must hold; PreloadAsync asks this way (a sound in a Decal's `Texture` fails, as in Studio), `rook-tools content --place` totals the results, and the player asks for everything it draws. At startup `rook-view` (`Installed`) loads the install's `head.mesh` and `textures/studs.dds`, from disk only, and the player hands them to `rook-render`, which otherwise draws its own.
 
 ### Services (first wave)
 
@@ -243,7 +244,7 @@ DataModel, Workspace, Players, Lighting, ReplicatedStorage, ReplicatedFirst, Ser
 - Modern Play runs **separate server and client DataModels**. Rook does the same from M2 on, connected by an **in-process loopback replicator**. That makes `LocalScript` vs `Script`, RemoteEvents/RemoteFunctions and replication filtering correct early. A real network transport (BrikNet, quinn or renet, to be evaluated) plugs in later behind the same interface.
 - Replication is Rook-to-Rook. Wire compatibility with real Roblox clients is not a goal.
 
-## 9. Testing and measurement
+## Testing and measurement
 
 1. **Unit tests** per crate.
 2. **Format round-trip**: `rojo-rbx/rbx-test-files` plus local fixtures supplied via environment variables (never committed).
@@ -251,9 +252,9 @@ DataModel, Workspace, Players, Lighting, ReplicatedStorage, ReplicatedFirst, Ser
 4. **Corpus scanner** (`rook-cli corpus-scan <dir>`): parses every place (rbx formats) and script (`full_moon`), and reports class, member and enum usage frequency, plus "loads / runs N seconds without error / errors by cause". This drives priorities and is Rook's headline progress metric.
 5. **Render golden images** (later): Rook frames compared against Studio screenshots with perceptual tolerance.
 
-## 10. Behavior provenance
+## Behavior provenance
 
-Each subsystem has `docs/behavior/<subsystem>.md`. Entries are planned to be numbered, like this one for GUI (planned; its conformance case doesn't exist yet):
+Each subsystem has its pages in `docs/behavior/<area>/`, each opening with when it was last checked against Studio. Entries are planned to be numbered, like this one for GUI (planned; its conformance case doesn't exist yet):
 
 ```
 GUI-012  AnchorPoint offsets position by -AnchorPoint * AbsoluteSize before clipping.
@@ -263,20 +264,17 @@ GUI-012  AnchorPoint offsets position by -AnchorPoint * AbsoluteSize before clip
 
 Status is one of **Confirmed**, **Inference**, **Approximation** or **Rook extension**. Code that implements an entry cites its ID in a comment. This is both the clean-implementation record and the compatibility map.
 
-## 11. Extensions
+## Extensions
 
 - Extension classes and members are marked in the reflection overlay and only exist when the engine runs with the `extensions` profile. The default profile is strict compatibility.
 - Engine-side extensions (better lighting, debugging tools, performance options) are configuration flags that are off in strict mode.
 - Saving a file that contains extension classes warns, because Studio can't read them back.
 - Candidate extension: **restore legacy embedded assets.** Modern Roblox loads `<Content><binary>` data from old XML files as empty (Confirmed in Studio, 2026-10-05). Rook matches that by default, but the legacy upgrade keeps the data, tagged by object and property, so an opt-in extension could show those textures again.
 
-## 12. Milestones
 
-The milestones, their order and exit criteria are in [ROADMAP.md](../../ROADMAP.md).
+## Open decisions
 
-## 13. Open decisions
-
-1. **HopperBin** (1,107 files): modern Roblox no longer runs it. Decide before Characters whether to follow modern behavior or offer it as an opt-in extension.
+1. **HopperBin**: see [Unscheduled](../roadmap/unscheduled.md#undecided).
 2. **`null` numbers in legacy XML** (3 values in the archive) are read as 0; verify against Studio.
 
-Settled: license is Apache-2.0 with a `NOTICE` file crediting AsyncFinn. The repository is initialised, with a `.gitignore` that excludes Roblox files, caches, reports and credentials. The methods/events list is committed as a compact generated file inside `rook-reflection`.
+Settled: license is Apache-2.0 with a `NOTICE` file crediting AsyncFinn. The repository is initialized, with a `.gitignore` that excludes Roblox files, caches, reports and credentials. The methods/events list is committed as a compact generated file inside `rook-reflection`.

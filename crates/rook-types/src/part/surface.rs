@@ -1,7 +1,6 @@
 //! How images and surfaces map onto a part's faces: the one definition the
 //! renderer's shaders and the scene builder follow. Measured in Studio
-//! 0.742 on 2026-10-13 with a labelled test image (ROADMAP M4 "Textures and
-//! decals (step 4)").
+//! 0.742 on 2026-10-13 with a labeled test image (docs/behavior/rendering/textures-and-decals.md).
 //!
 //! - Each face has an image frame: seen from outside, the image is never
 //!   mirrored; on the four sides its up is the part's +Y; on Top and Bottom
@@ -87,7 +86,7 @@ impl NormalId {
         }
     }
 
-    /// Where `p` (studs from the centre of a box of `size`, in the part's
+    /// Where `p` (studs from the center of a box of `size`, in the part's
     /// axes) is on this face's image, in studs from its top-left corner,
     /// and the face's size in studs (width, height).
     pub fn image_position(self, p: Vec3, size: Vec3) -> (Vec2, Vec2) {

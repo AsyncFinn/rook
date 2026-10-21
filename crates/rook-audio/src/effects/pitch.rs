@@ -5,7 +5,7 @@
 //! speed, with two read points half a window apart, each faded in and out
 //! so the jumps back to the write point aren't heard (Approximation:
 //! Studio's shifter, FMOD's, works on spectra; the two give the same
-//! pitch, not the same artefacts).
+//! pitch, not the same artifacts).
 
 use super::Frame;
 use super::line::Line;

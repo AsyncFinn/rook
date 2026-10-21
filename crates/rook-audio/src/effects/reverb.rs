@@ -7,7 +7,7 @@
 //! Approximation: Studio's is FMOD's SFX reverb, with early reflections
 //! and high-frequency decay of its own. The wet level is scaled so the
 //! levels Studio gave a recording at three decay times are matched
-//! (`docs/behavior/audio.md`).
+//! (`docs/behavior/audio/soundgroups-and-effects.md`).
 
 use super::{Frame, db};
 
@@ -91,7 +91,7 @@ pub fn ambient(reverb_type: u32) -> Option<Reverb> {
 /// How much quieter Studio's ambient reverb is than FMOD's preset wet level
 /// gives through Rook's reverb: recorded after a short tone, Studio's tails
 /// for Cave, Hallway and ConcertHall were 15.9, 17.0 and 14.5 dB below
-/// Rook's without this (`docs/behavior/audio.md`).
+/// Rook's without this (`docs/behavior/audio/soundgroups-and-effects.md`).
 const AMBIENT_WET_DB: f32 = -16.0;
 
 /// The delay lines' lengths at full density, in ms: spread out and with

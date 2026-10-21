@@ -1,6 +1,6 @@
 -- The Terrain API: what each fill leaves in the voxels (as SmoothGrid
 -- bytes), how fills merge, region rounding and limits, cells, legacy cell
--- methods, copies and material colours, and rays finding a fill at once.
+-- methods, copies and material colors, and rays finding a fill at once.
 -- Everything happens in a corner of Workspace's Terrain far from the
 -- place, which is cleared again at the end.
 local T = workspace.Terrain
@@ -29,7 +29,7 @@ local function dump(name)
 	clear()
 end
 
-local C = O + Vector3.one * 2 -- voxel 0's centre
+local C = O + Vector3.one * 2 -- voxel 0's center
 local function at(x, y, z)
 	return CFrame.new(C + Vector3.new(x, y, z))
 end
@@ -129,13 +129,13 @@ dump("pasted keeping")
 log("inverted copy", pcall(T.CopyRegion, T, Region3int16.new(Vector3int16.new(1, 0, 0), Vector3int16.new(0, 0, 0))))
 copy:Destroy()
 
--- Material colours.
+-- Material colors.
 local before = T:GetMaterialColor(Enum.Material.Rock)
 T:SetMaterialColor(Enum.Material.Rock, Color3.new(1, 0, 0))
-log("colour", T:GetMaterialColor(Enum.Material.Rock))
+log("color", T:GetMaterialColor(Enum.Material.Rock))
 T:SetMaterialColor(Enum.Material.Rock, before)
-log("colour of Water", pcall(T.GetMaterialColor, T, Enum.Material.Water))
-log("colour of Plastic", pcall(T.GetMaterialColor, T, Enum.Material.Plastic))
+log("color of Water", pcall(T.GetMaterialColor, T, Enum.Material.Water))
+log("color of Plastic", pcall(T.GetMaterialColor, T, Enum.Material.Plastic))
 
 -- Collision catches up with edits a frame or two later.
 local down = Vector3.new(0, -40, 0)

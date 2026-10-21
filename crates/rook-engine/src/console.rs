@@ -1,5 +1,5 @@
-//! Printing script output to a terminal, coloured by message type: blue
-//! for print, yellow for warn, red for errors, cyan for info. Colours are
+//! Printing script output to a terminal, colored by message type: blue
+//! for print, yellow for warn, red for errors, cyan for info. Colors are
 //! dropped automatically when output isn't a terminal or `NO_COLOR` is set.
 //!
 //! Output normally goes straight to stdout. While a prompt owns the
@@ -20,7 +20,7 @@ type Output = Box<dyn FnMut(String) + Send>;
 static OUTPUT: Mutex<Option<Output>> = Mutex::new(None);
 
 /// Send every printed line to `output` instead of stdout (`None` restores
-/// stdout). Lines keep their colour codes unless `NO_COLOR` is set.
+/// stdout). Lines keep their color codes unless `NO_COLOR` is set.
 pub fn set_output(output: Option<Output>) {
     *OUTPUT
         .lock()
@@ -76,7 +76,7 @@ pub(crate) fn print_rook(kind: MessageType, message: &str, terminal: bool) {
 
 /// Print one entry the way Roblox Studio's Output window shows it:
 /// `19:25:03.100  message  -  Server - Script:3`. The time and the context
-/// are dimmed; the message is coloured by type.
+/// are dimmed; the message is colored by type.
 pub fn print_entry(side: &str, entry: &LogEntry) {
     print_to(side, entry, true);
 }
@@ -96,7 +96,7 @@ fn print_to(side: &str, entry: &LogEntry, terminal: bool) {
         terminal,
     );
     // Further lines (an error's stack trace) print as their own entries in
-    // the info colour, as Studio does.
+    // the info color, as Studio does.
     let info = style(MessageType::Info);
     for line in lines {
         emit(

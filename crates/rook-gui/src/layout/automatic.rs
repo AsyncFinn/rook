@@ -16,7 +16,7 @@ use super::{Kid, Pass, arrange, arranger, gui_children, padding, position_of, re
 /// object grows to the layout's content. Without one, children's
 /// offsets count; children sized by scale give Studio results that
 /// depend on earlier layouts, so Rook sizes them against `base`
-/// (Approximation, docs/behavior/gui.md#automaticsize).
+/// (Approximation, docs/behavior/gui/layout.md#automaticsize).
 pub(super) fn grow(pass: &mut Pass<'_>, id: InstanceId, base: Vec2, room: Vec2) -> Vec2 {
     let dom = pass.dom;
     let axes = match dom.enum_item_property(id, "AutomaticSize") {

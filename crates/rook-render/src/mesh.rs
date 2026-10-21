@@ -31,8 +31,8 @@ pub(crate) struct Vertex {
     pub box_point: [f32; 3],
     /// The `NormalId` index of the box face it belongs to, or [`NO_FACE`]
     /// (mesh files: the face is found from the normal), in the low byte;
-    /// a union's vertex colour (sRGB) in the three bytes above, drawn
-    /// instead of the part's colour when the instance asks for it
+    /// a union's vertex color (sRGB) in the three bytes above, drawn
+    /// instead of the part's color when the instance asks for it
     /// (`PartInstance::vertex_colors`). wgpu allows 16 vertex attributes
     /// and the vertex and instance layouts use them all, hence the packing.
     pub face: u32,
@@ -42,7 +42,7 @@ pub(crate) struct Vertex {
 pub(crate) const NO_FACE: u32 = 255;
 
 /// Added to a union vertex's face: Textures and material textures tile
-/// from the face's centre, as they follow the union's UVs in Studio.
+/// from the face's center, as they follow the union's UVs in Studio.
 pub(crate) const UNION_FACE: u32 = 64;
 
 /// A terrain vertex's face: its material textures are projected onto the

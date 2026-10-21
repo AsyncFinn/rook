@@ -62,10 +62,10 @@ pub(super) fn floor_wire(dom: &Dom, id: InstanceId, from: CFrame) -> Vec<(PartIn
 
 /// FloorWire `id`'s corners in the world, from `From` to `To`, without
 /// legs of no length. Measured in Studio 0.743 (2026-10-20): it leaves
-/// `From`'s centre along X towards `To` (along Z when they line up in X),
+/// `From`'s center along X towards `To` (along Z when they line up in X),
 /// drops `GAP` past `From`'s face to `GAP` above the floor under it (the
 /// top of what's below), runs along X, then along Z, and rises `GAP`
-/// short of `To`'s face to `To`'s centre height; the bits inside the parts
+/// short of `To`'s face to `To`'s center height; the bits inside the parts
 /// aren't drawn. Rook takes faces and floors from the parts' world boxes
 /// (Approximation: a turned part's box reaches past it), the floor under
 /// where the wire drops (Inference).
@@ -102,7 +102,7 @@ pub(crate) fn path(dom: &Dom, id: InstanceId) -> Option<Vec<Vec3>> {
     (path.len() > 1).then_some(path)
 }
 
-/// Part `id`'s centre and the half size of its box in the world.
+/// Part `id`'s center and the half size of its box in the world.
 fn world_box(dom: &Dom, id: InstanceId) -> Option<(Vec3, Vec3)> {
     let size = dom.vector3_property(id, "Size")?;
     let cf = dom.cframe_property(id, "CFrame")?;
@@ -118,10 +118,10 @@ fn floor_under(dom: &Dom, at: Vec3, skip: &[InstanceId]) -> Option<f32> {
         if skip.contains(&part) {
             continue;
         }
-        let Some((centre, half)) = world_box(dom, part) else {
+        let Some((center, half)) = world_box(dom, part) else {
             continue;
         };
-        let (lo, hi) = (centre - half, centre + half);
+        let (lo, hi) = (center - half, center + half);
         let over = at.x >= lo.x && at.x <= hi.x && at.z >= lo.z && at.z <= hi.z;
         if over && hi.y <= at.y && floor.is_none_or(|f| hi.y > f) {
             floor = Some(hi.y);

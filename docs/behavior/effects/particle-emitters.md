@@ -1,6 +1,8 @@
-# ParticleEmitter
+# Particle emitters
 
-ROADMAP M7 step 4. ParticleEmitter is in 86 archive files. Sources: the
+Checked against Studio 0.743 on 2026-10-21.
+
+[M7](../../roadmap/m7-lights-and-effects.md) step 4. ParticleEmitter is in 86 archive files. Sources: the
 creator-docs reference (ParticleEmitter, its enums, the "Particle
 emitters" guide), and measurements in Studio 0.743 on 2026-10-19 by the
 Method below.
@@ -17,7 +19,7 @@ born stays put when its part moves, unless `LockedToPart`.
 | Shape | Born | Goes |
 |---|---|---|
 | Box | in the box (Volume) or on its faces (Surface) | along `EmissionDirection` |
-| Sphere | in the ellipsoid, or on it | out from its centre |
+| Sphere | in the ellipsoid, or on it | out from its center |
 | Cylinder | in a cylinder whose axis lies across `EmissionDirection` | out from the axis |
 | Disc | on the face `EmissionDirection` points to | along `EmissionDirection` |
 
@@ -56,7 +58,7 @@ VelocityPerpendicular (square on to it). `ZOffset` moves particles towards
 the camera without changing their size on screen.
 
 **Light**: `LightEmission` 0 covers what's behind, 1 adds to it;
-`LightInfluence` 0 draws in its own colour times `Brightness`, 1 lit by
+`LightInfluence` 0 draws in its own color times `Brightness`, 1 lit by
 the scene (creator-docs: 0 by default from `Instance.new`, 1 when inserted
 in Studio).
 
@@ -70,11 +72,11 @@ removes its particles at once, however long they had left (Studio
 
 The player reads each ParticleEmitter into the renderer's `EmitterLook`
 (`crates/rook-view/src/effects/emitter.rs`), the same model Fire,
-Smoke and Sparkles use (docs/behavior/effects/classic.md); the renderer simulates
+Smoke and Sparkles use (docs/behavior/effects/fire-smoke-and-sparkles.md); the renderer simulates
 it on the CPU (`crates/rook-render/src/effects/particles.rs`, shapes in
 `effects/particles/spawn.rs`) and draws each particle as a rectangle of its image
 (`shaders/particles.wgsl`): the flipbook frame's part of it, squashed,
-turned to its orientation, mixed between its own colour and the lit one by
+turned to its orientation, mixed between its own color and the lit one by
 LightInfluence.
 
 `Emit`, `Clear` and `Beam:SetTextureOffset` are noted on the World

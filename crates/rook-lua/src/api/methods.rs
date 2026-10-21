@@ -73,7 +73,7 @@ pub(crate) use tree::{Core, Found, fast};
 pub(crate) type RawMethod = fn(&Lua, InstanceId, &Args) -> ApiResult<Outcome>;
 
 /// Members that are accepted and ignored for now (see module docs). Each
-/// one is documented in `docs/behavior/stubs.md` with what will take it over;
+/// one is documented in `docs/guide/stubs.md` with what will take it over;
 /// a test enforces that.
 const INERT: &[(&str, &str)] = &[
     ("BasePart", "SetNetworkOwner"),

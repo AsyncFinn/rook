@@ -46,13 +46,13 @@ pub(super) fn lighting(dom: &Dom) -> (Lighting, f32) {
         l.global_shadows = s;
     }
     // Observed in Studio 0.742: a place saved without it reads 0, and at 0
-    // nothing reflects the sky (docs/behavior/materials.md).
+    // nothing reflects the sky (docs/behavior/rendering/materials.md).
     l.environment_specular = dom
         .float_property(id, "EnvironmentSpecularScale")
         .unwrap_or(0.0)
         .clamp(0.0, 1.0);
     // The sky lights surfaces as a second ambient, added to Ambient before
-    // the tone curve (observed in Studio 0.742; docs/behavior/materials.md,
+    // the tone curve (observed in Studio 0.742; docs/behavior/rendering/materials.md,
     // "The sky's diffuse light"). Read as 0 when unsaved, like
     // EnvironmentSpecularScale, so archived places are lit as before.
     l.environment_diffuse = dom
@@ -79,7 +79,7 @@ pub(super) fn lighting(dom: &Dom) -> (Lighting, f32) {
 /// The tone curve of the first enabled ColorGradingEffect in Lighting
 /// (`TonemapperPreset`: Default 0, Retro 1); without one, Studio's default
 /// curve (measured: the Ambient ramp of places without one follows it;
-/// docs/behavior/tone-mapping.md).
+/// docs/behavior/lighting/tone-mapping.md).
 fn tonemapper(dom: &Dom, lighting: InstanceId) -> rook_render::Tonemapper {
     let grading = dom.children(lighting).iter().copied().find(|&c| {
         dom.class_name(c) == "ColorGradingEffect" && dom.bool_property(c, "Enabled").unwrap_or(true)

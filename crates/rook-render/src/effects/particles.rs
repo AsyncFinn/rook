@@ -1,7 +1,7 @@
 //! The particles of the scene's emitters, simulated on the CPU in world
 //! space: each emitter's are born at its rate (and when scripts call
 //! `Emit`) where it is, move by their velocity, acceleration and drag, and
-//! die at the end of their lifetime (docs/behavior/effects/classic.md,
+//! die at the end of their lifetime (docs/behavior/effects/fire-smoke-and-sparkles.md,
 //! docs/behavior/effects/particle-emitters.md).
 
 mod spawn;
@@ -281,7 +281,7 @@ impl Pool {
         }
     }
 
-    /// A box around its particles (their centres).
+    /// A box around its particles (their centers).
     fn bounds(&self) -> Option<Aabb> {
         let mut b = Aabb::EMPTY;
         for p in &self.particles {

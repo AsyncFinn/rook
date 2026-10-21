@@ -1,5 +1,5 @@
 //! Hearing sounds: one mixer, resampling every sound to the output
-//! device's rate, and the device itself (`docs/behavior/audio.md`).
+//! device's rate, and the device itself (`docs/behavior/audio/playback.md`).
 //!
 //! - [`Mixer`] mixes what's playing into a buffer; it knows nothing of
 //!   devices, so it is tested without one.

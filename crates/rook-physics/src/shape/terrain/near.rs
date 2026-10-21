@@ -7,7 +7,7 @@ use super::*;
 use crate::convert::to_glam;
 
 /// How far a chunk's surface reaches outside its own box, rounded up: the
-/// quads of edges into the next chunk reach the next voxels' centres (6
+/// quads of edges into the next chunk reach the next voxels' centers (6
 /// studs), the rough materials shift vertices by about a stud, and water
 /// sits 2 lower.
 const REACH: f32 = 8.0;

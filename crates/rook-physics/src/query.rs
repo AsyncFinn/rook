@@ -2,7 +2,7 @@
 //! answered by Rapier's query pipeline over the same colliders the
 //! simulation uses. Each query first brings the world up to date with the
 //! DOM, as scripts query what they just made or moved. The rules are in
-//! `docs/behavior/physics.md` (Scene queries).
+//! `docs/behavior/physics/queries.md`.
 
 use rustc_hash::FxHashSet as HashSet;
 
@@ -43,7 +43,7 @@ pub struct Hit {
     pub position: Vec3,
     /// Out of the surface hit.
     pub normal: Vec3,
-    /// How far the ray (or the swept shape) travelled.
+    /// How far the ray (or the swept shape) traveled.
     pub distance: f32,
     /// The part's `Enum.Material` value.
     pub material: u32,

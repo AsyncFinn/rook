@@ -36,7 +36,7 @@ pub(crate) struct Globals {
     pub(crate) terrain: [f32; 4],
     /// `TerrainLook::wind`; w is water's phase (`Renderer::water_phase`).
     pub(crate) wind: [f32; 4],
-    /// The sky's colour overhead, at the horizon and below
+    /// The sky's color overhead, at the horizon and below
     /// (`Lighting::sky_top`, `sky_horizon`, `sky_bottom`, sRGB): water
     /// reflects the first two, and all three light surfaces. `sky_top`'s w
     /// is `Lighting::environment_diffuse`, `sky_horizon`'s
@@ -64,7 +64,7 @@ pub(crate) const MODE_MESH_UV: u32 = 3;
 pub(crate) const PATTERN_SHIFT: u32 = 2;
 pub(crate) const UPRIGHT: u32 = 1 << 7;
 /// Bits 4-6 of a base part without a tile pattern (an image layer keeps
-/// its face there): drawn in its own colour without light, through the
+/// its face there): drawn in its own color without light, through the
 /// tone curve (`Light::Unlit`) or past it (`Light::Exact`, with
 /// [`EXACT`]); turned to face the camera (`PartInstance::faces_camera`).
 pub(crate) const UNLIT: u32 = 1 << 4;
@@ -83,7 +83,7 @@ pub(crate) const SLOPED: u32 = 1 << 29;
 /// The material textures go through the mesh's UVs (a SurfaceAppearance),
 /// with their alpha mode in the surfaces' bits (a MeshPart has none).
 pub(crate) const MAPS_UV: u32 = 1 << 30;
-/// The mesh's vertex colours replace the part's colour (a union with
+/// The mesh's vertex colors replace the part's color (a union with
 /// `UsePartColor` off).
 pub(crate) const VERTEX_COLORS: u32 = 1 << 31;
 
@@ -267,7 +267,7 @@ impl Instance {
     }
 
     /// This instance carrying Highlight `number` for the mask
-    /// (`shaders/parts.wgsl`'s `vs_highlight`) in its colour.
+    /// (`shaders/parts.wgsl`'s `vs_highlight`) in its color.
     pub(crate) fn numbered(mut self, number: u32) -> Self {
         self.color = [number as f32, 0.0, 0.0, 1.0];
         self
@@ -291,7 +291,7 @@ impl Instance {
             Vec3::from(self.box_max) * size,
         );
         let rotation = glam::Mat3::from_cols(self.right.into(), self.up.into(), self.back.into());
-        let centre = Vec3::from(self.position) + rotation * ((lo + hi) * 0.5);
+        let center = Vec3::from(self.position) + rotation * ((lo + hi) * 0.5);
         let abs = glam::Mat3::from_cols(
             rotation.x_axis.abs(),
             rotation.y_axis.abs(),
@@ -310,8 +310,8 @@ impl Instance {
             };
         }
         Aabb {
-            min: centre - half,
-            max: centre + half,
+            min: center - half,
+            max: center + half,
         }
     }
 }
@@ -330,7 +330,7 @@ impl Upload for Mesh {
     }
 }
 
-/// An image on the GPU, viewed as sRGB colour (decals, colour maps) or as
+/// An image on the GPU, viewed as sRGB color (decals, color maps) or as
 /// linear data (normal, roughness and metalness maps).
 #[derive(Debug)]
 pub(crate) struct GpuImage {
@@ -346,7 +346,7 @@ pub(crate) struct GpuImage {
 const UNCOMPRESSED_MAX_SIZE: u32 = 512;
 
 impl GpuImage {
-    /// A 1 × 1 image of one RGBA8 colour.
+    /// A 1 × 1 image of one RGBA8 color.
     pub(crate) fn solid(cx: &UploadContext<'_>, label: &str, rgba: [u8; 4]) -> Self {
         Self::new(cx, label, 1, 1, Encoding::Rgba8, &[rgba.to_vec()])
     }
@@ -464,7 +464,7 @@ fn texture_in(
         view_formats,
     });
     let (bw, bh) = format.block_dimensions();
-    let block_bytes = format.block_copy_size(None).expect("colour format");
+    let block_bytes = format.block_copy_size(None).expect("color format");
     for (layer, levels) in layers.iter().enumerate() {
         for (level, pixels) in levels.iter().enumerate() {
             // A level smaller than a block takes a whole one.
@@ -499,7 +499,7 @@ fn texture_in(
 }
 
 /// A draw's images (group 2): its image (a mesh texture, decal or skybox
-/// face) and colour map as sRGB, its normal, roughness and metalness maps
+/// face) and color map as sRGB, its normal, roughness and metalness maps
 /// as linear data.
 pub(crate) fn images_bind_group(
     cx: &UploadContext<'_>,
@@ -617,7 +617,7 @@ pub(crate) fn main_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
 }
 
 /// The main pass's group 1: the shadow map, the surface patterns (linear:
-/// grey 0.5 is a factor of 1 after doubling), water's normal frames, the
+/// gray 0.5 is a factor of 1 after doubling), water's normal frames, the
 /// sky's reflection cube and the BRDF table.
 pub(crate) fn main_bind_group(
     cx: &UploadContext<'_>,

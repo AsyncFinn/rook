@@ -2,8 +2,8 @@
 //! marked into the light volume's voxels so the fill pass can carry the
 //! sky's diffuse light (`EnvironmentDiffuseScale`) down around them and
 //! keep lights with `Shadows` out from behind them
-//! (`shaders/light_volume.wgsl`; docs/behavior/materials.md, "The sky's
-//! diffuse light"; docs/behavior/lights.md, "Shadows").
+//! (`shaders/light_volume.wgsl`; docs/behavior/rendering/materials.md, "The sky's
+//! diffuse light"; docs/behavior/lighting/local-lights.md, "Shadows").
 
 use std::time::{Duration, Instant};
 
@@ -18,7 +18,7 @@ const REMARK: Duration = Duration::from_millis(500);
 /// A part as the voxels see it: a box.
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct Blocker {
-    centre: Vec3,
+    center: Vec3,
     /// The box's axes (unit columns).
     axes: Mat3,
     /// Half the box along each axis, at least half a voxel, so a thin roof
@@ -33,7 +33,7 @@ struct Blocker {
 pub(super) struct Blockers {
     /// By index into `Scene::parts`.
     blockers: Vec<Option<Blocker>>,
-    /// Each mesh file's box in its own space (centre, half size); `None`
+    /// Each mesh file's box in its own space (center, half size); `None`
     /// for terrain, which doesn't block yet.
     bounds: HashMap<MeshHash, Option<(Vec3, Vec3)>>,
     /// A blocker changed since the voxels were marked.
@@ -72,7 +72,7 @@ impl Grid {
         }
     }
 
-    /// Count `b` in (`add`) or out of the voxels whose centres it holds.
+    /// Count `b` in (`add`) or out of the voxels whose centers it holds.
     fn apply(&mut self, b: &Blocker, add: bool) {
         let [nx, ny, nz] = self.dims;
         let origin = self.origin;
@@ -87,7 +87,7 @@ impl Grid {
             for z in lo.z as u32..=hi.z as u32 {
                 for x in lo.x as u32..=hi.x as u32 {
                     let at = origin + Vec3::new(x as f32, y as f32, z as f32) * VOXEL;
-                    let local = to_local * (at - b.centre);
+                    let local = to_local * (at - b.center);
                     if !local.abs().cmple(b.half).all() {
                         continue;
                     }
@@ -170,10 +170,10 @@ impl Blockers {
         if !matches!(part.layer, Layer::Base) {
             return None;
         }
-        let (centre, half) = match part.shape {
+        let (center, half) = match part.shape {
             DrawShape::Part(_) => (Vec3::ZERO, part.size * 0.5),
             DrawShape::File(hash) => {
-                let (centre, half) = match self.bounds.get(&hash) {
+                let (center, half) = match self.bounds.get(&hash) {
                     Some(bounds) => (*bounds)?,
                     // Not loaded yet: the part comes back when it is.
                     None => {
@@ -182,26 +182,26 @@ impl Blockers {
                         bounds?
                     }
                 };
-                (centre * part.size, half * part.size.abs())
+                (center * part.size, half * part.size.abs())
             }
             DrawShape::Head | DrawShape::Truss(_) | DrawShape::Adorn(_) => return None,
         };
         let axes = part.rotation;
         let half = half.max(Vec3::splat(VOXEL * 0.5));
-        let centre = part.position + axes * centre;
+        let center = part.position + axes * center;
         let abs = Mat3::from_cols(axes.x_axis.abs(), axes.y_axis.abs(), axes.z_axis.abs());
         let extent = abs * half;
         Some(Blocker {
-            centre,
+            center,
             axes,
             half,
-            min: centre - extent,
-            max: centre + extent,
+            min: center - extent,
+            max: center + extent,
         })
     }
 
-    /// One bit per voxel of the volume at `origin` (the centre of voxel
-    /// (0, 0, 0)), `x + nx * (z + nz * y)`: set where a voxel's centre is
+    /// One bit per voxel of the volume at `origin` (the center of voxel
+    /// (0, 0, 0)), `x + nx * (z + nz * y)`: set where a voxel's center is
     /// inside a blocker. The same volume as last time only takes the
     /// blockers that changed since; a new one is marked from scratch.
     pub(super) fn mark(&mut self, origin: Vec3, dims: [u32; 3]) -> &[u32] {
@@ -232,7 +232,7 @@ impl Blockers {
     }
 }
 
-/// A mesh's box in its own space (centre, half size); `None` for terrain.
+/// A mesh's box in its own space (center, half size); `None` for terrain.
 fn mesh_bounds(mesh: &Mesh) -> Option<(Vec3, Vec3)> {
     if mesh.terrain.is_some() {
         return None;

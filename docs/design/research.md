@@ -1,4 +1,4 @@
-# Rook — Research Findings
+# Research
 
 Status: initial survey, 2026-10-04. This document records what exists (prior experiments, competing projects, Rust libraries, Roblox data sources) so that architectural decisions are made from knowledge rather than guesswork. The companion document is [architecture.md](architecture.md).
 
@@ -10,26 +10,19 @@ Confidence labels used throughout:
 
 ---
 
-## 1. Compatibility target
+## Compatibility target
 
-**Decision:** Rook targets **modern Roblox**, pinned to a specific API snapshot. Old archived content must also work, *to the extent that modern Roblox itself still runs it*.
-
-- Modern Roblox's behavior is the single source of truth, including when it loads old content. There is no separate "2016 mode".
-- Deprecated members are part of the modern API (the current API dump still lists `FormFactor`, `Instance:remove()`, `:connect()`, BodyMovers, `wait()`/`spawn()` and so on, tagged `Deprecated`). They are implemented as modern Roblox implements them, and their priority comes from how often archived content uses them.
-- Behavior that modern Roblox broke or removed stays broken by default. Bringing any of it back is a separate, opt-in Rook extension.
-- The test oracle is live Roblox Studio. Every behavior can be checked against it, which a 2016 target could not offer.
-
-Why 2016 was dropped (all **Confirmed** from the RobloxAPI build archive):
+The target and why it's modern Roblox are in [policies](policies.md#scope). Why 2016 was dropped (all **Confirmed** from the RobloxAPI build archive):
 
 - "2016" is not one target. The January 2016 dump (0.225) has 329 classes and the December dump (0.271) has 370. MeshPart, Attachment, the constraints, R15 (`HumanoidRigType`), Accessory and `AnchorPoint` all arrived during that year.
 - 2016 client content packages are no longer downloadable: the setup CDN returns 403 for the December 2016 manifest.
-- 2016 behavior cannot be observed anymore. Its only detailed record is leaked source, which Rook must not use (see §6).
+- 2016 behavior cannot be observed anymore. Its only detailed record is leaked source, which Rook must not use (see the [clean-implementation policy](policies.md#clean-implementation)).
 
 The modern snapshot has roughly 682 classes (rbx-native's count from the current dump). The pinned version is the one bundled in `rbx_reflection_database` (currently `3.0.1+roblox-741`).
 
 ---
 
-## 2. Prior experiments
+## Prior experiments
 
 ### Mortar
 
@@ -57,7 +50,7 @@ A RakNet-style UDP library (tokio): bitstream, 6 reliability modes, 4 priorities
 
 ---
 
-## 3. Competing and related projects
+## Competing and related projects
 
 | Project | Lang / stack | Target | Strengths | Gaps / weaknesses |
 |---|---|---|---|---|
@@ -80,7 +73,7 @@ A RakNet-style UDP library (tokio): bitstream, 6 reliability modes, 4 priorities
 
 ---
 
-## 4. Rust ecosystem
+## Rust ecosystem
 
 Versions are as of 2026-10-04 (crates.io).
 
@@ -98,16 +91,16 @@ Versions are as of 2026-10-04 (crates.io).
 | Math | `glam` | 0.34 | Backing for Vector3/CFrame; f32 on the engine side, f64 where Luau semantics need it. |
 | GPU | `wgpu` | 30.0.1 | Renderer. |
 | Windowing | `winit` | 0.30.13 | Player window and input. |
-| Text | `harfrust`, `skrifa`, `zeno` | 0.12 / 0.44 / 0.3 | GUI text: HarfRust (the HarfBuzz project's Rust port) shapes, skrifa reads outlines, zeno rasterises them into an atlas. Rook breaks lines itself rather than with Parley's layout, because Roblox rounds every glyph's advance to whole pixels ([GUI text](../behavior/gui-text.md#widths)), which Parley's float layout can't. |
+| Text | `harfrust`, `skrifa`, `zeno` | 0.12 / 0.44 / 0.3 | GUI text: HarfRust (the HarfBuzz project's Rust port) shapes, skrifa reads outlines, zeno rasterizes them into an atlas. Rook breaks lines itself rather than with Parley's layout, because Roblox rounds every glyph's advance to whole pixels ([GUI text](../behavior/gui/text.md#widths)), which Parley's float layout can't. |
 | Physics | `rapier3d` | 0.36.0 | Rigid bodies, colliders, joints and queries underneath Rook's own Roblox-semantics layer. |
 | Audio | `kira` (preferred) or `rodio` | 0.12.5 / 0.22.2 | Kira's tweening, mixer tracks and spatial audio map well onto Sound and SoundGroup. |
 | Datatype reference | `lune-roblox` | 0.3.5 (MPL-2.0) | Reference for datatype edge cases. Taking files from it means those files stay MPL. |
 
-Format edge cases to be aware of (from rbx-native's findings, **Inference** until we test them): properties saved under several names (normalised on load), shared strings (`SSTR`), per-class defaults missing from the official dump (rbx-dom's database supplies them), legacy unions referencing CSG asset data.
+Format edge cases to be aware of (from rbx-native's findings, **Inference** until we test them): properties saved under several names (normalized on load), shared strings (`SSTR`), per-class defaults missing from the official dump (rbx-dom's database supplies them), legacy unions referencing CSG asset data.
 
 ---
 
-## 5. Roblox data sources
+## Roblox data sources
 
 | Source | What it gives | Notes |
 |---|---|---|
@@ -117,7 +110,7 @@ Format edge cases to be aware of (from rbx-native's findings, **Inference** unti
 | `Roblox/creator-docs` | Official engine documentation (CC-BY-4.0) | Main behavioral reference. Citing and quoting with attribution is allowed. |
 | Asset delivery (`assetdelivery.roblox.com`) | Asset bytes | **Confirmed**: a classic public mesh (id 1028713) downloads anonymously (302 to CDN). A place (id 1818) is refused anonymously ("User is not authorized"). Public meshes, images and sounds don't need a login; places and restricted assets do. |
 | `rojo-rbx/rbx-test-files` | Format test fixtures | Already used by OpenRBLX. |
-| Live Roblox Studio | Ground truth | Recorded via conformance scripts (see architecture §9). |
+| Live Roblox Studio | Ground truth | Recorded via conformance scripts (see [architecture](architecture.md#testing-and-measurement)). |
 
 Frame ordering from the creator-docs task scheduler diagram (**Inference**: label order read from the SVG, needs confirming in Studio): input processing → PreRender → render (async) → replication receive → script resumption (legacy `wait`) → PreAnimation → Humanoid step → PreSimulation → simulation step(s) → PostSimulation → Heartbeat / resume delayed threads → replication send.
 
@@ -127,7 +120,7 @@ Physics step rate: believed to be 240 Hz fixed, with an adaptive option (`Physic
 
 ---
 
-## 5a. Roblox's engine internals: what is publicly known
+## Roblox's engine internals: what is publicly known
 
 Only public, citable sources. Primary source: Arseny Kapoulkine ("zeux", Roblox Technical Director 2012–2023), [*Eight years at Roblox*](https://zeux.io/2020/08/02/eight-years-at-roblox/) (2020), cited below as **[zeux]**.
 
@@ -140,7 +133,7 @@ Only public, citable sources. Primary source: Arseny Kapoulkine ("zeux", Roblox 
 | **PGS solver** (in-house) | Optional from mid-2015, plus a hybrid LDL-PGS in 2018; the legacy spring solver was **removed March 4, 2019** | Roblox newsroom (Aug 2020); DevForum announcements | Confirmed | Modern means PGS only. Old places no longer get spring-solver behavior, so Rook never implements it. Rapier's impulse-based solver is the same family. |
 | **RakNet** (modified) | Transport under the Replicator | Developer Console memory categories `network/raknet` and `network/replicator`, discussed widely on DevForum | Confirmed (observable) | BrikNet's RakNet-style design fits. Rook doesn't need wire compatibility. |
 | **FMOD** | Audio engine | Studio About dialog (0.741.19, checked 2026-10-04): "Uses 'FMOD Studio' from 'Firelight Technologies'"; also FMOD error codes on DevForum | Confirmed (observed directly) | `Sound` rolloff modes and attenuation likely follow FMOD's publicly documented 3D rolloff models. Implement those curves in kira. **Inference** until checked in Studio. |
-| **HarfBuzz** | Unicode text shaping, plus dynamic TTF rasterisation (both after 2013) | [zeux] | Confirmed | Rook shapes with HarfRust, the HarfBuzz project's own Rust port, so kerning matches; Roblox's per-glyph pixel rounding is copied on top ([GUI text](../behavior/gui-text.md#widths)). |
+| **HarfBuzz** | Unicode text shaping, plus dynamic TTF rasterization (both after 2013) | [zeux] | Confirmed | Rook shapes with HarfRust, the HarfBuzz project's own Rust port, so kerning matches; Roblox's per-glyph pixel rounding is copied on top ([GUI text](../behavior/gui/text.md#widths)). |
 | **pugixml** | XML place/model parsing since 2019 | [zeux] | Confirmed | XML whitespace and entity behavior follow pugixml. Note it if rbx_xml ever disagrees. |
 | **LZ4** | Per-chunk compression in the binary format (designed 2013) | [zeux] | Confirmed | Already handled by rbx_binary. |
 | **Recast + Detour** | PathfindingService navmesh (≈2018–2019, replacing voxel pathfinding) | [zeux] | Confirmed | Use a Recast/Detour port or binding for `PathfindingService`. |
@@ -157,9 +150,9 @@ Not established from public sources: anything beyond the above. Studio's About d
 - **Terrain:** sparse voxel storage (2013), smooth terrain as a voxel distance field with geometric LOD (2014), cascaded LOD and a new in-memory format (2016). [zeux]
 - **Binary format:** chunk-based, per-chunk LZ4, binary filters before compression. [zeux]
 - **Remote events:** fire-and-forget events and coroutine-based remote functions (Sep 2013). [zeux]
-- **Accurate Play Solo** (2018): server and client in one process with full replication. This **confirms** Rook's planned Play-mode design (architecture §8). [zeux]
+- **Accurate Play Solo** (2018): server and client in one process with full replication. This **confirms** Rook's planned Play-mode design ([architecture](architecture.md#engine-systems)). [zeux]
 - **Physics threading** (2019–2020): simulation split into jobs per connected island; multi-core narrowphase. [zeux; Roblox newsroom]
-- **PGS stabilisation:** warm starting, post-stabilisation, compliance regularisation, LDL preconditioning. [Roblox newsroom, Aug 2020]
+- **PGS stabilization:** warm starting, post-stabilization, compliance regularisation, LDL preconditioning. [Roblox newsroom, Aug 2020]
 
 ### Roblox-licensed code Rook can use
 
@@ -172,46 +165,20 @@ Not established from public sources: anything beyond the above. Studio's About d
 
 ### Not to be used
 
-Decompiling or disassembling Roblox executables, even though some projects do. Files a Roblox install ships as data (shader packs, content, tables) are leads under §6.
+Decompiling or disassembling Roblox executables, even though some projects do. Files a Roblox install ships as data (shader packs, content, tables) are leads under the [clean-implementation policy](policies.md#clean-implementation).
 
 ---
 
-## 6. Clean-implementation policy
+## Open questions
 
-Rook is an independent implementation.
-
-- Allowed sources: public documentation (creator-docs, API dumps, DevForum, Roblox blog posts), black-box observation of Roblox Studio and clients, open-source projects under compatible licenses, and our own experiments.
-- Not allowed: leaked Roblox source or documents derived from it, decompiled or disassembled Roblox binaries, and projects built from either (e.g. libreblox-roblox).
-- Each subsystem's design note records where its behavior came from (see architecture §10).
-- **GUI is citation-only.** Every GUI behavior entry must cite creator-docs or a committed Studio conformance recording. No GUI behavior is accepted on recall or "known behavior" alone.
-- Community knowledge (revival communities, forums, word of mouth) is a lead, not a source. Before relying on it, verify it in Studio or find a public citation.
-- **Files shipped in official Roblox builds** (shader packs such as `shaders_glsl3.pack`, the plain-text shaders in some 2016 player builds, terrain and material tables) carry no licence, but they may be read for facts: formulas, constants, which inputs feed which terms. Rook uses those facts exactly, aiming for the same results as Studio, in its own functions shaped for its own renderer. Their code is never pasted or transliterated statement by statement into the repository, and the files themselves are never committed. Docs may name the file a fact came from. Behaviour read this way is an Inference until it matches Studio (golden images or conformance recordings), then Confirmed. Content from a user's Roblox install may still be loaded at runtime (§7).
+1. **Default player scripts**: decided 2026-10-11. Rook ships the camera and control scripts from Roblox/Core-Scripts: `PlayerScripts/StarterPlayerScripts/CameraScript` (RootCamera, PopperCam, Invisicam, ShiftLockController, TransparencyController, ClickToMove) and `ControlScript` (MasterControl, PathDisplay). The repository is Apache-2.0 and archived (last push 2020-06-10). The files are vendored unchanged first, then adapted only where modern APIs differ, with each change marked as Apache-2.0 requires and the license kept alongside them. They run as Luau `LocalScript`s on the client, as on Roblox, so Rook's engine only provides the APIs they use (Camera, UserInputService, ContextActionService, `RunService:BindToRenderStep`, `Players.LocalPlayer`). Still open: the Animate script (not included; write our own) and whether to offer the user's modern PlayerModule as an alternative loaded at runtime from their install.
+2. **Physics fidelity bar**: how closely Rapier-backed behavior must match Roblox's solver (stacking, friction, joint stiffness), and how we measure it.
 
 ---
 
-## 7. Content and asset policy
+## Archive scan
 
-- Rook ships **its own default content** (skybox, part textures, cursors, open-licensed fonts) so it runs with no Roblox files at all.
-- Optional: read the user's installed Roblox content folder, or download Roblox's `content-*.zip` packages the way Bloxstrap does. Content packages only, never `RobloxApp.zip` or `shaders.zip`. Downloads are hash-verified and cached, and the version is recorded.
-- Public `rbxassetid://` assets are fetched anonymously, cached and rate-limited.
-- Restricted assets: an Open Cloud API key is preferred (scoped, revocable). Whether it unlocks place files is **Unverified**. An opt-in `.ROBLOSECURITY` cookie is possible as a fallback: stored in the OS credential store, never logged, and only ever sent to roblox.com.
-- Nothing Roblox-owned is committed to the Rook repository. Tests that need real files download them at test time or read a path from an environment variable.
-
----
-
-## 8. Open questions
-
-1. **License** for Rook (MIT OR Apache-2.0 would match the Rust ecosystem and the archives).
-2. **Corpus**: where the archived places live, and how many there are. This drives the corpus scanner and priorities.
-3. **Default player scripts**: decided 2026-10-11. Rook ships the camera and control scripts from Roblox/Core-Scripts: `PlayerScripts/StarterPlayerScripts/CameraScript` (RootCamera, PopperCam, Invisicam, ShiftLockController, TransparencyController, ClickToMove) and `ControlScript` (MasterControl, PathDisplay). The repository is Apache-2.0 and archived (last push 2020-06-10). The files are vendored unchanged first, then adapted only where modern APIs differ, with each change marked as Apache-2.0 requires and the licence kept alongside them. They run as Luau `LocalScript`s on the client, as on Roblox, so Rook's engine only provides the APIs they use (Camera, UserInputService, ContextActionService, `RunService:BindToRenderStep`, `Players.LocalPlayer`). Still open: the Animate script (not included; write our own) and whether to offer the user's modern PlayerModule as an alternative loaded at runtime from their install.
-4. **Physics fidelity bar**: how closely Rapier-backed behavior must match Roblox's solver (stacking, friction, joint stiffness), and how we measure it.
-5. **Networking**: Rook-to-Rook replication only (assumed). Wire compatibility with real Roblox clients is not a goal.
-
----
-
-## 9. Archive scan (2026-10-05)
-
-First full `rook-tools corpus-scan` of the maintainer's archive of places and models. Only aggregate figures are recorded here.
+The first full `rook-tools corpus-scan` of the maintainer's archive of places and models, on 2026-10-05. Only aggregate figures are recorded here.
 
 - **4,605 files, 3,077 unique** (12.7 GB). **3,056 load (99.3%).** Before the legacy XML upgrade the figure was 55.6%.
 - **1,346 files needed the legacy XML upgrade**: 27,096 `<External>` entries dropped, 1,456 embedded assets and 5,906 `<hash>` references (both load empty, as modern Studio does; the data is kept in the upgrade report), 19.1 million control characters restored (almost all legacy `Terrain.ClusterGrid`/`ClusterGridV2` data), 6 MSVC float values, 3 `null` numbers.

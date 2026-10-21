@@ -62,11 +62,11 @@ impl Frustum {
         if b.is_empty() {
             return false;
         }
-        let centre = (b.min + b.max) * 0.5;
+        let center = (b.min + b.max) * 0.5;
         let half = (b.max - b.min) * 0.5 + Vec3::splat(margin);
         self.planes.iter().all(|p| {
             let n = p.truncate();
-            n.dot(centre) + n.abs().dot(half) + p.w >= 0.0
+            n.dot(center) + n.abs().dot(half) + p.w >= 0.0
         })
     }
 }
@@ -77,11 +77,11 @@ impl Frustum {
         if b.is_empty() {
             return false;
         }
-        let centre = (b.min + b.max) * 0.5;
+        let center = (b.min + b.max) * 0.5;
         let half = (b.max - b.min) * 0.5 + Vec3::splat(margin);
         self.planes.iter().all(|p| {
             let n = p.truncate();
-            n.dot(centre) - n.abs().dot(half) + p.w >= 0.0
+            n.dot(center) - n.abs().dot(half) + p.w >= 0.0
         })
     }
 }
@@ -91,7 +91,7 @@ impl Frustum {
 /// each run of [`CULL_SLOTS`](crate::batch::CULL_SLOTS) slots gets a small
 /// box that views can skip.
 pub(crate) fn spatial_key(position: Vec3) -> u64 {
-    // 21 bits an axis, centred on the origin (±16.7M studs).
+    // 21 bits an axis, centered on the origin (±16.7M studs).
     let cell = |v: f32| ((v / 16.0).floor() as i64 + (1 << 20)).clamp(0, (1 << 21) - 1) as u64;
     let spread = |mut v: u64| {
         v = (v | (v << 32)) & 0x1f00000000ffff;

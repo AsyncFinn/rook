@@ -6,7 +6,7 @@
 //!
 //! The DOM itself never calls out while mutating. Signal dispatch and
 //! engine systems read the journal afterwards, each with its own cursor.
-//! See `docs/design/architecture.md` §5.
+//! See `docs/design/architecture.md#runtime-dom-rook-dom`.
 //!
 //! Reference properties are indexed both ways: [`Dom::referrers`] lists
 //! what points at an instance (the joints holding a part, for example).

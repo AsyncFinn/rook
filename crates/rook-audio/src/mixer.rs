@@ -20,7 +20,7 @@ use bus::Bus;
 /// shouldn't hang the mixer).
 const MAX_DEPTH: usize = 32;
 
-/// A mono Sound's level on each side: Studio centres it, 3 dB down
+/// A mono Sound's level on each side: Studio centers it, 3 dB down
 /// (measured on the output for global sounds at every Volume; a stereo
 /// file plays at its own level). The 3D panning in [`crate::spatial`] is
 /// relative to this. Applied after the sound's effects, as a channel's

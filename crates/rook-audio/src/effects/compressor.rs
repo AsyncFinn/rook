@@ -7,7 +7,7 @@
 //! `sqrt(L² + R²)` (Approximation: of the detectors tried, the one that
 //! brought Rook within 8% of Studio's levels for a recording at five
 //! settings; at the defaults Rook is 0.6 times as loud. `MakeupGain` was
-//! exact; `docs/behavior/audio.md`).
+//! exact; `docs/behavior/audio/audio-api.md`).
 
 use super::{Frame, db};
 

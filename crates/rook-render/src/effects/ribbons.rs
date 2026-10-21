@@ -16,7 +16,7 @@ use floor_wire::floor_wire;
 use trail::TrailState;
 
 /// One edge across a strip: where its two sides are, how far along its
-/// image it is, and its colour and opacity there.
+/// image it is, and its color and opacity there.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct Edge {
     pub(crate) sides: [Vec3; 2],

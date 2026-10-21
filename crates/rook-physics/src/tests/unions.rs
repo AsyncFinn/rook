@@ -83,7 +83,7 @@ fn union_geometry_scales_with_size() {
     let mut physics = Physics::new();
     physics.set_union_collision(u, Some(gap()));
     set(&mut dom, u, "Size", v3(12.0, 2.0, 4.0));
-    // The gap is now x in (-2, 2), and the faces 2 studs from the centre.
+    // The gap is now x in (-2, 2), and the faces 2 studs from the center.
     assert_eq!(ray_at(&mut physics, &mut dom, 1.5), None);
     assert_eq!(ray_at(&mut physics, &mut dom, 3.0), Some(3.0));
 }

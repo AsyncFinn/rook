@@ -45,7 +45,7 @@ fn folders_size_constraint_and_negative_sizes() {
 }
 
 #[test]
-fn rotation_turns_children_about_the_centre() {
+fn rotation_turns_children_about_the_center() {
     let (mut dom, b) = boxed();
     let r = frame(&mut dom, b, udim2(0.0, 100, 0.0, 50));
     set(&mut dom, r, "Position", udim2(0.0, 100, 0.0, 100));

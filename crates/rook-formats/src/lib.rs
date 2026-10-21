@@ -3,7 +3,7 @@
 //! Wraps `rbx_binary` and `rbx_xml`, pinned to Rook's reflection database.
 //! Both decoders map legacy serialized names to canonical properties (for
 //! example `size` → `Size`) and run the database's migrations, the same way
-//! Studio upgrades old files on load. Properties neither decoder recognises
+//! Studio upgrades old files on load. Properties neither decoder recognizes
 //! are kept, so saving a file never silently drops data.
 //!
 //! Legacy XML (roughly 2006–2010) that `rbx_xml` rejects is retried through

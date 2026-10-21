@@ -2,7 +2,7 @@
 //! weight and style asked for, and that face's file, loaded once.
 //! Families and faces in the install load at once; ones by asset id are
 //! fetched by the engine ([`Fonts::take_requests`]), and text waits for
-//! them in the default family's face (docs/behavior/gui-text.md#fonts).
+//! them in the default family's face (docs/behavior/gui/text.md#fonts).
 
 use std::sync::Arc;
 

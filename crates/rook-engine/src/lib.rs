@@ -3,7 +3,7 @@
 //!
 //! Every DataModel has a physics world (`rook-physics`, kept in the
 //! scripting world so script queries reach it). Servers simulate; clients
-//! only query theirs. See `docs/design/architecture.md` §6 for the frame order.
+//! only query theirs. See `docs/design/architecture.md#signals-and-scheduler-rook-luas-signal-and-scheduler` for the frame order.
 
 mod bridges;
 pub mod console;
@@ -389,7 +389,7 @@ impl DataModel {
 }
 
 /// Workspace always has a current camera: Roblox creates one if the place
-/// was saved without (Inference: observed behaviour, not documented).
+/// was saved without (Inference: observed behavior, not documented).
 fn ensure_camera(dom: &mut Dom) {
     let Ok(ws) = dom.get_service("Workspace") else {
         return;

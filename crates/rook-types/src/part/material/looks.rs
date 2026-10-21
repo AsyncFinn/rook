@@ -1,6 +1,6 @@
 //! How each material looks: which surfaces it shows, how it shades, and
 //! how large its textures are, in each of the two sets Studio draws
-//! (`docs/behavior/materials.md`).
+//! (`docs/behavior/rendering/materials.md`).
 
 use super::Material;
 
@@ -12,7 +12,7 @@ use super::Material;
 /// of textures shared by both.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum MaterialSet {
-    /// The materials before 2022: greyscale textures the part's Color
+    /// The materials before 2022: grayscale textures the part's Color
     /// tints. What places without `Use2022Materials` get.
     Legacy,
     /// The 2022 materials.
@@ -79,7 +79,7 @@ impl Material {
     /// The legacy set: Confirmed from Studio 0.743's OBJ export of a
     /// 4 × 1 × 4 part of each material, whose UVs count repeats of the
     /// material's texture (Concrete's 4-stud sides span 0.6)
-    /// (`docs/behavior/materials.md`).
+    /// (`docs/behavior/rendering/materials.md`).
     pub fn studs_per_tile(self, set: MaterialSet) -> f32 {
         use Material::*;
         if set == MaterialSet::Materials2022 {
@@ -97,7 +97,7 @@ impl Material {
 
     /// How Studio lays the material's textures across a face, read from
     /// its part shaders and checked against 64-stud faces in Studio 0.743
-    /// (`docs/behavior/materials.md`). The legacy set's Wang materials are
+    /// (`docs/behavior/rendering/materials.md`). The legacy set's Wang materials are
     /// the ones whose TexturePacks say `<tiling>2`.
     pub fn tile_pattern(self, set: MaterialSet) -> TilePattern {
         use Material::*;
@@ -121,10 +121,10 @@ impl Material {
     /// Roughness and metalness without the material's textures: the
     /// averages of the red (metalness) and green (roughness) channels of
     /// the set's roughness-metalness map, as Studio's files record them
-    /// (`docs/behavior/materials.md`). Plastic, SmoothPlastic, Neon,
+    /// (`docs/behavior/rendering/materials.md`). Plastic, SmoothPlastic, Neon,
     /// ForceField, Air and Water have no such map: Plastic's and
     /// SmoothPlastic's are fitted to the sun's highlight on black parts
-    /// at known angles (docs/behavior/lights.md, "The sun"), the rest
+    /// at known angles (docs/behavior/lighting/sun.md), the rest
     /// Approximations.
     #[expect(
         clippy::match_same_arms,

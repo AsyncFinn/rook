@@ -1,7 +1,7 @@
 //! AudioChorus and ChorusSoundEffect: copies of the sound, each delayed by
 //! a slowly swinging amount, mixed back in. Studio's two are the same
 //! effect: on one recording they gave the same level at every setting
-//! tried (Confirmed, `docs/behavior/audio.md`).
+//! tried (Confirmed, `docs/behavior/audio/audio-api.md`).
 //!
 //! Rook's chorus has three copies whose delays swing around 20 ms by up
 //! to `Depth` times 10 ms at `Rate` Hz, a third of a cycle apart, the

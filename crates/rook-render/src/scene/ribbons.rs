@@ -30,11 +30,11 @@ pub enum TextureMode {
 /// How a ribbon looks: shared by Beam and Trail.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RibbonLook {
-    /// Its image; none draws it in its colour alone.
+    /// Its image; none draws it in its color alone.
     pub texture: Option<ImageHash>,
     pub texture_mode: TextureMode,
     pub texture_length: f32,
-    /// sRGB colour and opacity along it (a Beam from Attachment0 to
+    /// sRGB color and opacity along it (a Beam from Attachment0 to
     /// Attachment1; a Trail from its newest end to its oldest), and its
     /// brightness on its light units.
     pub color: Curve<[f32; 3]>,
@@ -42,7 +42,7 @@ pub struct RibbonLook {
     pub brightness: f32,
     /// 0 covers what's behind by its opacity; 1 adds to it.
     pub light_emission: f32,
-    /// 0 in its own colour; 1 lit like a part.
+    /// 0 in its own color; 1 lit like a part.
     pub light_influence: f32,
     /// Turned to face the camera, or flat as its Attachments lie.
     pub face_camera: bool,
@@ -94,7 +94,7 @@ pub struct Trail {
 /// A FloorWire's images: one `size` (along, across) every `spacing` studs
 /// of `path`, counted back from its end at `To`, moved `cycle_offset`
 /// spacings and `velocity` studs a second towards that end (measured,
-/// docs/behavior/adornments.md).
+/// docs/behavior/rendering/adornments.md).
 #[derive(Debug, Clone, PartialEq)]
 pub struct FloorWire {
     /// Its corners from `From` to `To`, each leg along a world axis.

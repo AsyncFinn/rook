@@ -1,9 +1,9 @@
 //! wgpu renderer for Rook.
 //!
 //! The renderer draws a [`Scene`] snapshot: it never touches the DOM
-//! (architecture §8). It draws primitive parts, the built-in mesh shapes
-//! and mesh files, and TrussParts' bars, with their colour, transparency, mesh textures, Plastic's
-//! surface patterns and Neon, Decals and Textures over them, a sky colour,
+//! (docs/design/architecture.md#engine-systems). It draws primitive parts, the built-in mesh shapes
+//! and mesh files, and TrussParts' bars, with their color, transparency, mesh textures, Plastic's
+//! surface patterns and Neon, Decals and Textures over them, a sky color,
 //! a sun, ambient light, fog and the sun's shadows, and particles (Fire,
 //! Smoke and Sparkles). Terrain arrives as mesh files too: the player
 //! meshes its chunks with `rook-terrain`.

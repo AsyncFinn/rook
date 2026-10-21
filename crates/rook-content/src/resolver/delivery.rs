@@ -2,7 +2,7 @@
 //! anonymous; for assets refused anonymously, an Open Cloud key the user set
 //! is sent to the Open Cloud endpoint (in `x-api-key`) and nowhere else.
 //! Rook never reads browser cookies or any other credential. What the
-//! endpoints answer is in `docs/behavior/content.md`. Requests go
+//! endpoints answer is in `docs/behavior/content/asset-fetching.md`. Requests go
 //! through the host's network (`rook_platform::network`).
 
 use std::time::Duration;

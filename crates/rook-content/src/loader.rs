@@ -3,7 +3,7 @@
 //! The engine asks a [`Loader`] for references and collects the results at
 //! a fixed point in its frame ([`Loader::poll`]), so disk, network and
 //! decoding never hold up a frame and completions reach scripts on the
-//! engine thread (architecture §8 "Content"). Each loader's fetch threads
+//! engine thread (docs/design/architecture.md#content-rook-content). Each loader's fetch threads
 //! hand decoding to one process-wide pool ([`set_decode_threads`]), both at
 //! below-normal priority and started by the first request. Requests carry a
 //! priority that can change while they wait (the player ranks files by
@@ -296,7 +296,7 @@ fn spawn_threads<K, V>(
         let (queue, work) = (queue.clone(), work.clone());
         #[expect(
             clippy::disallowed_types,
-            reason = "the content cache, install lookup and decode workers are rook-platform's known exception (architecture §2)"
+            reason = "the content cache, install lookup and decode workers are rook-platform's known exception (docs/design/architecture.md#crate-layout)"
         )]
         let spawned = std::thread::Builder::new()
             .name(format!("{name}-{i}"))

@@ -4,7 +4,7 @@
 //! [`players`], and the audio API's graph in [`graph`].
 //!
 //! Every DataModel does this, server and client alike, as Studio does on
-//! both (`docs/behavior/audio.md`). Hearing them is the player's job: it
+//! both (`docs/behavior/audio/playback.md`). Hearing them is the player's job: it
 //! asks for [`DataModel::playing_sounds`] each frame and mixes them.
 //!
 //! Changes are noticed at the end of a frame ([`DataModel::check_sounds`],

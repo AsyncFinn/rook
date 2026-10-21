@@ -1,7 +1,7 @@
 -- Text: TextBounds and TextFits for sizes, fonts, lines, wrapping,
 -- TextScaled and rich text; AutomaticSize growing to text; the Font and
 -- FontSize views and TextSize's limits. Values Rook's per-glyph rounding
--- matches exactly (docs/behavior/gui-text.md#widths).
+-- matches exactly (docs/behavior/gui/text.md#widths).
 --! client
 local player = game:GetService("Players").LocalPlayer
 local screen = Instance.new("ScreenGui")

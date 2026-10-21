@@ -2,7 +2,7 @@ use super::*;
 use files::from_file;
 use head::HEAD_RADIUS;
 
-/// Every face's normal points away from the centre.
+/// Every face's normal points away from the center.
 #[test]
 fn normals_point_outward() {
     for shape in DrawShape::ALL {
@@ -21,7 +21,7 @@ fn normals_point_outward() {
 }
 
 /// The user's own head mesh, when an install is found, faces outward
-/// like Rook's (same winding) and is centred like it.
+/// like Rook's (same winding) and is centered like it.
 #[test]
 fn installed_head_matches_rooks_frame() {
     let Some(install) = rook_content::resolver::install::newest_from(
@@ -65,7 +65,7 @@ fn round_shapes_map_from_their_box_faces() {
             assert_eq!((m.vertices.len(), side_triangles), (294, triangles));
         } else {
             // 24 side quads; the flat ends as 22-triangle fans (the
-            // export's are 24-triangle fans around a centre).
+            // export's are 24-triangle fans around a center).
             assert_eq!(side_triangles, 48 + 2 * 22);
         }
         for v in &m.vertices {
@@ -100,7 +100,7 @@ fn head_uvs_project_the_front_quarter() {
         }
         front += 1;
         let [x, y, z] = v.position;
-        // In the front quarter, or a cap's centre.
+        // In the front quarter, or a cap's center.
         assert!(x.abs() <= -z + 1e-4, "{:?}", v.position);
         let span = 2.0 * HEAD_RADIUS;
         assert!((v.uv[0] - (0.5 - x / span)).abs() < 1e-6);

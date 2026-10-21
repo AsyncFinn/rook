@@ -1,7 +1,7 @@
 //! Content references: the strings in `MeshId`, `TextureId`, `Texture`,
 //! `SoundId` and the other content properties, parsed once into
 //! [`ContentRef`] by the rules of what Studio loads
-//! (`docs/behavior/content.md`, "Which forms Studio loads"; each form is a
+//! (`docs/behavior/content/asset-fetching.md`, "Which forms Studio loads"; each form is a
 //! test here).
 
 use std::fmt;
@@ -20,7 +20,7 @@ pub enum ContentRef {
     File(String),
     /// An asset by id: `rbxassetid://<id>`, or a legacy
     /// `http://www.roblox.com/asset/?id=<id>` URL, optionally at one
-    /// version (`&version=<n>`, honoured: version 1 of the head mesh asset
+    /// version (`&version=<n>`, honored: version 1 of the head mesh asset
     /// is a different mesh).
     Asset { id: u64, version: Option<u32> },
     /// A legacy URL naming one asset version (`asset/?assetversionid=`).
@@ -40,7 +40,7 @@ pub enum ContentRef {
 /// Which of a material's textures.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum MaterialMap {
-    /// The colour, which the part's Color multiplies (sRGB).
+    /// The color, which the part's Color multiplies (sRGB).
     Color = 0,
     /// A tangent-space normal map: X in red, Y (up the image) in green.
     Normal = 1,

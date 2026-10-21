@@ -41,9 +41,9 @@ AutowedgeCell false
 copy TerrainRegion 3, 1, 1 true nil
 pasted keeping -4,0,0:Grass:255 -3,0,0:Rock:128 -2,0,0:Sand:255 0,0,0:Grass:255 1,0,0:Rock:128
 inverted copy false The region can not be empty or inverted.
-colour 1, 0, 0
-colour of Water false Unsupported terrain material
-colour of Plastic false Invalid terrain material
+color 1, 0, 0
+color of Water false Unsupported terrain material
+color of Plastic false Invalid terrain material
 ray at once nil nil nil
 ray later true Enum.Material.Grass 6
 ray at once after carving true Enum.Material.Grass 6

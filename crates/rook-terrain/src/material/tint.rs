@@ -1,13 +1,13 @@
-//! How Studio colours a material's textures by its `MaterialColors` colour:
+//! How Studio colors a material's textures by its `MaterialColors` color:
 //! for the 2022 set, a texel's luma times a tint worked out per material
-//! from the colour, a brightness and a turned and scaled chroma. The
-//! constants are fitted to Studio screenshots (`docs/behavior/terrain.md`).
+//! from the color, a brightness and a turned and scaled chroma. The
+//! constants are fitted to Studio screenshots (`docs/behavior/terrain/materials.md`).
 
 use rook_types::{Color3uint8, MaterialSet};
 
 use super::TerrainMaterial;
 
-/// One material's tint: `chroma` times the colour's chroma, at most `cap`
+/// One material's tint: `chroma` times the color's chroma, at most `cap`
 /// long, and `gain` times its brightness, at most 1, times `scale`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct Tint {
@@ -62,15 +62,15 @@ const TINTS: [Option<Tint>; 23] = [
 ];
 
 impl TerrainMaterial {
-    /// How the material's textures in `set` are coloured for its
-    /// `MaterialColors` colour (sRGB, 0 to 1 and above). The 2022 set's
-    /// colour maps are tint masks: where opaque, the texel's luma is
-    /// multiplied by this (a strong colour lifts some channels over the
-    /// luma). The legacy set's are coloured and opaque (their packs say
+    /// How the material's textures in `set` are colored for its
+    /// `MaterialColors` color (sRGB, 0 to 1 and above). The 2022 set's
+    /// color maps are tint masks: where opaque, the texel's luma is
+    /// multiplied by this (a strong color lifts some channels over the
+    /// luma). The legacy set's are colored and opaque (their packs say
     /// `alphamode` 1, Studio's `avgAlbedoPre2022` alpha 255): the texel is
-    /// multiplied by the colour over the set's default, so the default
-    /// colour draws the texture as it is (Inference). Air and Water give
-    /// the colour itself.
+    /// multiplied by the color over the set's default, so the default
+    /// color draws the texture as it is (Inference). Air and Water give
+    /// the color itself.
     pub fn tint(self, color: Color3uint8, set: MaterialSet) -> [f32; 3] {
         let c = [color.r, color.g, color.b].map(|v| f32::from(v) / 255.0);
         if set == MaterialSet::Legacy {

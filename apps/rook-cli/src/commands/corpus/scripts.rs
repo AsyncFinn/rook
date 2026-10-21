@@ -26,7 +26,7 @@ pub(super) struct ScriptUsage {
     pub game_index: BTreeMap<String, u64>,
 }
 
-/// Result of analysing one script.
+/// Result of analyzing one script.
 #[derive(Debug)]
 pub(super) struct ScriptAnalysis {
     pub usage: ScriptUsage,
@@ -34,7 +34,7 @@ pub(super) struct ScriptAnalysis {
     pub parse_errors: usize,
 }
 
-pub(super) fn analyse(source: &str) -> ScriptAnalysis {
+pub(super) fn analyze(source: &str) -> ScriptAnalysis {
     let result = parse_fallible(source, LuaVersion::luau());
     let mut visitor = UsageVisitor::default();
     visitor.visit_ast(result.ast());
@@ -161,7 +161,7 @@ mod tests {
             local lighting = game.Lighting
             spawn(function() end)
         "#;
-        let a = analyse(src);
+        let a = analyze(src);
         assert_eq!(a.parse_errors, 0);
         let u = &a.usage;
         assert_eq!(u.instance_new.get("Part"), Some(&1));
@@ -177,7 +177,7 @@ mod tests {
 
     #[test]
     fn broken_scripts_still_report() {
-        let a = analyse("wait(1)\nif then end end");
+        let a = analyze("wait(1)\nif then end end");
         assert!(a.parse_errors > 0);
     }
 }

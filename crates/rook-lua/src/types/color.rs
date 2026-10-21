@@ -76,7 +76,7 @@ pub(crate) fn closest_brick_color(c: Color3) -> BrickColor {
         .expect("BrickColor list is not empty")
 }
 
-/// Medium stone grey, what unknown names and numbers fall back to.
+/// Medium stone gray, what unknown names and numbers fall back to.
 const DEFAULT_BRICK_COLOR: u16 = 194;
 
 fn by_number(n: u16) -> BrickColor {

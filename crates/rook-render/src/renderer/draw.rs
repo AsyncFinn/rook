@@ -455,7 +455,7 @@ impl Renderer {
     }
 
     /// The skybox, once all six images are up; otherwise the plain sky
-    /// colour stands for it. With a table, one draw of six faces; else a
+    /// color stands for it. With a table, one draw of six faces; else a
     /// draw per face with its image bound.
     fn record_sky(&self, pass: &mut wgpu::RenderPass<'_>) {
         let faces = self

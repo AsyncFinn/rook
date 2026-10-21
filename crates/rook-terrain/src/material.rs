@@ -112,10 +112,10 @@ pub struct Texture {
     pub blend: Blend,
 }
 
-/// How a texture blends into its neighbours' where materials (or top and
+/// How a texture blends into its neighbors' where materials (or top and
 /// side) meet, by its pack's height map: the map's 0 to 1 stands from
 /// `min` to `max` (clamped to 0 to 1), so a texture with a low range, such
-/// as Sand's, gives way to its neighbours; `scale` is how soft the edge
+/// as Sand's, gives way to its neighbors; `scale` is how soft the edge
 /// between two textures is, in those units (Studio's `blend`, per texture,
 /// or the material's for textures without one). Inference: Studio's
 /// shader scales and offsets the height by two per-texture numbers; this
@@ -159,7 +159,7 @@ impl Texture {
 pub struct Look {
     /// A pseudo-random offset of each vertex, in cells.
     pub shift: f32,
-    /// How far each vertex moves towards its cell's centre (0 to 1).
+    /// How far each vertex moves towards its cell's center (0 to 1).
     pub cubify: f32,
     /// Vertices round to multiples of this fraction of a cell (0: none).
     pub quantize: f32,
@@ -225,7 +225,7 @@ impl TerrainMaterial {
             })
     }
 
-    /// Its colour in `Terrain.MaterialColors`, or `set`'s default when the
+    /// Its color in `Terrain.MaterialColors`, or `set`'s default when the
     /// place saved none (Studio's default is the 2022 set's: a new place
     /// saves those); Air and Water have none.
     pub fn color(self, colors: Option<&MaterialColors>, set: MaterialSet) -> Option<Color3uint8> {

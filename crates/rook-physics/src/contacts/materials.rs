@@ -167,7 +167,7 @@ pub fn find_variant(dom: &Dom, service: InstanceId, m: Material, name: &str) -> 
     })
 }
 
-/// The MaterialVariant a part draws with (`docs/behavior/materials.md`):
+/// The MaterialVariant a part draws with (`docs/behavior/rendering/materials.md`):
 /// the one its `MaterialVariant` names, or else the one MaterialService's
 /// override names for its material, if a variant of that name exists for
 /// its material. A name that matches no variant draws the plain material,

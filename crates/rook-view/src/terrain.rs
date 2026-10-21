@@ -7,8 +7,8 @@
 //! `WaterColor` at `WaterTransparency`, waving and rippled by the install's
 //! water normal frames (the renderer's, `Installed`), and Grass grows
 //! blades near the camera ([`grass`]) with `Decoration` on
-//! (`docs/behavior/terrain.md`). When scripts edit the voxels, only the
-//! chunks they changed, and their neighbours, are meshed again.
+//! (`docs/behavior/terrain/api.md`). When scripts edit the voxels, only the
+//! chunks they changed, and their neighbors, are meshed again.
 
 mod grass;
 mod materials;
@@ -109,7 +109,7 @@ impl SceneCache {
     }
 
     /// Scripts changed the Terrain's properties or `Workspace.GlobalWind`:
-    /// read the waves, wind, colours and grass again and redraw the
+    /// read the waves, wind, colors and grass again and redraw the
     /// terrain's entries and blades. Returns the entries that changed, or
     /// `None` when the voxels themselves changed and the scene must be
     /// rebuilt.
@@ -129,7 +129,7 @@ impl SceneCache {
         Some(changed)
     }
 
-    /// The Terrain's waves and wind, and whether and in what colour Grass
+    /// The Terrain's waves and wind, and whether and in what color Grass
     /// grows blades.
     fn read_terrain_look(&mut self, dom: &Dom) {
         let terrain = self.terrain.instance;
@@ -165,7 +165,7 @@ impl SceneCache {
         let Some(terrain) = self.terrain.instance else {
             return Vec::new();
         };
-        // Terrain draws the place's set of textures and default colours
+        // Terrain draws the place's set of textures and default colors
         // (`TerrainMaterial::textures`), as parts do.
         let set = look::materials::material_set(dom);
         let colors = dom.material_colors_property(terrain, "MaterialColors");

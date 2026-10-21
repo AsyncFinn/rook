@@ -2,7 +2,7 @@
 
 use super::*;
 
-/// How the terrain's water and grass move (`docs/behavior/terrain.md`).
+/// How the terrain's water and grass move (`docs/behavior/terrain/water.md`).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TerrainLook {
     /// `Terrain.WaterWaveSize`: how high the waves are, in studs.
@@ -27,7 +27,7 @@ pub const TERRAIN_LAYERS: usize = 69;
 /// draws its share of the corners' blend, Studio's: each corner's
 /// barycentric weight times its layer's height there, the highest winning
 /// over a soft edge (read from Studio 0.742's terrain shader;
-/// `docs/behavior/terrain.md`).
+/// `docs/behavior/terrain/blending.md`).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TerrainLayer {
     /// The image holding the layer's height map, in blue (its

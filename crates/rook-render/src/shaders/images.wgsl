@@ -4,7 +4,7 @@
 // `ImageSet` order (`Instance::images`); slot 0 is white, 1 a flat normal.
 // Without them, the draw's images are bound per draw (white, or a flat
 // normal, when it has none) and the instance's slots go unused: its image
-// (a mesh texture, a decal or a skybox face), and its material's colour,
+// (a mesh texture, a decal or a skybox face), and its material's color,
 // normal, roughness (green) and metalness (red) maps.
 
 import package::common::{g, image_sampler, Taps, turned};
@@ -52,7 +52,7 @@ fn image_size(images: vec3<u32>) -> vec2<u32> {
     return textureDimensions(image);
 }
 
-// One of the draw's images: the image and colour map as sRGB, the others
+// One of the draw's images: the image and color map as sRGB, the others
 // as linear data.
 @if(image_table)
 fn sample_map(images: vec3<u32>, which: u32, uv: vec2<f32>, dx: vec2<f32>, dy: vec2<f32>) -> vec4<f32> {
@@ -167,7 +167,7 @@ fn sky_uv(face: u32, d: vec3<f32>) -> vec2<f32> {
 
 // The sky's linear light towards `d`: the skybox image facing nearest it,
 // a mip down (reflections pick their face per pixel, so there are no
-// derivatives to pick one), or the sky's colour from the horizon to
+// derivatives to pick one), or the sky's color from the horizon to
 // overhead before its images are up and without the image table.
 @if(image_table)
 fn sky_toward(d: vec3<f32>) -> vec3<f32> {

@@ -35,7 +35,7 @@ fn script_changes_update_the_terrain_look() {
 }
 
 /// An edit meshes again only the chunks it changed (and their
-/// neighbours); the far chunk keeps its meshes, and the edited chunk's old
+/// neighbors); the far chunk keeps its meshes, and the edited chunk's old
 /// ones leave the scene.
 #[test]
 fn edits_remesh_only_changed_chunks() {

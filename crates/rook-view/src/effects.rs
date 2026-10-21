@@ -1,9 +1,9 @@
-//! Visual effects in Workspace (docs/behavior/effects/classic.md,
+//! Visual effects in Workspace (docs/behavior/effects/fire-smoke-and-sparkles.md,
 //! docs/behavior/effects/particle-emitters.md, docs/behavior/effects/beams-and-trails.md,
 //! docs/behavior/effects/explosions.md): Fire, Smoke, Sparkles, ParticleEmitter
 //! and Explosion as the renderer's particle emitters, Beam and Trail as
 //! its ribbons, and so a FloorWire's moving images
-//! (docs/behavior/adornments.md; its wire is an adornment).
+//! (docs/behavior/rendering/adornments.md; its wire is an adornment).
 
 mod classic;
 mod emitter;

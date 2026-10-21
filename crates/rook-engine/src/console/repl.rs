@@ -1,6 +1,6 @@
 //! The command bar: Luau typed at the terminal and run in a live
 //! DataModel, like Roblox Studio's command bar, with the feel of Luau's own
-//! REPL: a `> ` prompt with coloured, multi-line editing ([`editor`]) and
+//! REPL: a `> ` prompt with colored, multi-line editing ([`editor`]) and
 //! history, kept between runs in the data folder (`state/repl-history.txt`).
 //! Output prints above the prompt.
 //!

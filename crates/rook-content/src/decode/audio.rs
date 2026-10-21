@@ -3,7 +3,7 @@
 //!
 //! Every format goes through Symphonia (pure Rust), with only the decoders
 //! the archive needs turned on: WAV (PCM and ADPCM), Ogg Vorbis and MP3
-//! (`docs/behavior/audio.md` has the counts and why). The format is picked
+//! (`docs/behavior/audio/playback.md` has the counts and why). The format is picked
 //! by the file's first bytes, not by its name or URL: the archive's
 //! `sounds/*.mp3` paths and asset ids say nothing reliable about what they
 //! hold.
@@ -108,7 +108,7 @@ impl Audio {
         {
             // The decoder hands out whole blocks; the stream's last granule
             // position says where it really ends (Studio's TimeLength
-            // agrees: `docs/behavior/audio.md`).
+            // agrees: `docs/behavior/audio/playback.md`).
             let keep = end.saturating_mul(usize::from(audio.channels));
             audio.samples.truncate(keep);
         }

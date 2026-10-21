@@ -30,7 +30,7 @@ const PUSH: f32 = 5.4825e-5;
 /// What an explosion does.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Blast {
-    /// Each part it hits, by id, and its centre's distance from the
+    /// Each part it hits, by id, and its center's distance from the
     /// explosion, for `Hit`.
     pub hits: Vec<(InstanceId, f32)>,
     /// Joints it breaks.
@@ -145,7 +145,7 @@ impl Physics {
     }
 }
 
-/// A part's `Size` and where its centre is.
+/// A part's `Size` and where its center is.
 fn size_and_position(dom: &Dom, part: InstanceId) -> Option<(Vec3, Vec3)> {
     let size = dom.vector3_property(part, "Size")?;
     let at = dom.cframe_property(part, "CFrame")?.position;

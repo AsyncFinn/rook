@@ -1,5 +1,5 @@
 //! A SurfaceGui's canvas on its part's face: the canvas's size, and the
-//! face it's stretched over (docs/behavior/gui-world.md#surfacegui).
+//! face it's stretched over (docs/behavior/gui/world.md#surfacegui).
 
 use glam::{Vec2, Vec3};
 use rook_dom::{Dom, InstanceId};

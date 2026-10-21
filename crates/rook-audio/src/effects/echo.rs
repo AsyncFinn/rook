@@ -3,7 +3,7 @@
 //!
 //! A plain feedback delay (Approximation: with no feedback it matched
 //! Studio's level for a recording within 2%, but with feedback Rook's
-//! comes out up to 29% louder, `docs/behavior/audio.md`). `RampTime`, how fast a new delay is reached,
+//! comes out up to 29% louder, `docs/behavior/audio/audio-api.md`). `RampTime`, how fast a new delay is reached,
 //! isn't used: a new delay takes effect at once.
 
 use super::line::Line;

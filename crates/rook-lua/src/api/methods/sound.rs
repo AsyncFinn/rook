@@ -1,5 +1,5 @@
 //! Sound's methods, by the rules observed in Studio 0.743
-//! (`docs/behavior/audio.md`, conformance case `content/sound_api`).
+//! (`docs/behavior/audio/sound-api.md`, conformance case `content/sound_api`).
 //!
 //! The engine (`rook-engine`'s `sounds`) loads the file, moves
 //! `TimePosition` on and fires `Loaded`, `Ended` and `DidLoop`; these only

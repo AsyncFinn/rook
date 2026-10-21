@@ -43,7 +43,7 @@ dump("vertical", items)
 log("content", v(list.AbsoluteContentSize))
 list.HorizontalAlignment = Enum.HorizontalAlignment.Center
 list.VerticalAlignment = Enum.VerticalAlignment.Center
-dump("centred", items)
+dump("centered", items)
 list.HorizontalAlignment = Enum.HorizontalAlignment.Right
 list.VerticalAlignment = Enum.VerticalAlignment.Bottom
 list.FillDirection = Enum.FillDirection.Horizontal
@@ -105,7 +105,7 @@ grid.FillDirection = Enum.FillDirection.Vertical
 grid.FillDirectionMaxCells = 0
 grid.HorizontalAlignment = Enum.HorizontalAlignment.Center
 grid.VerticalAlignment = Enum.VerticalAlignment.Center
-dump("vertical, centred", cells)
+dump("vertical, centered", cells)
 log("cells", v(grid.AbsoluteCellCount), v(grid.AbsoluteContentSize))
 local second = Instance.new("UIListLayout")
 second.Parent = box

@@ -1,5 +1,5 @@
 //! KTX2 textures, the form Roblox's content delivery serves material
-//! textures in (`docs/behavior/materials.md`): BC1 or BC3 blocks, each mip
+//! textures in (`docs/behavior/rendering/materials.md`): BC1 or BC3 blocks, each mip
 //! level Zstandard-compressed (supercompression scheme 2) or stored as is,
 //! with key-value data naming the texture (`contentHash`).
 //!
@@ -54,7 +54,7 @@ fn header(b: &[u8]) -> Option<Header> {
     })
 }
 
-/// The first level as RGBA8 (as stored: no colour conversion).
+/// The first level as RGBA8 (as stored: no color conversion).
 pub(crate) fn decode(b: &[u8]) -> Result<::image::RgbaImage, ImageError> {
     let damaged = |why: &str| ImageError::Damaged("KTX2", why.to_owned());
     let h = header(b).ok_or_else(|| damaged("bad header"))?;

@@ -2,7 +2,7 @@
 //! `PhysicsData`, and turned into colliders by `rook-physics`.
 
 /// A convex piece of a union, in its own space: the space of its `MeshData`,
-/// at its `InitialSize`, centred on its origin.
+/// at its `InitialSize`, centered on its origin.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Hull {
     pub positions: Vec<[f32; 3]>,

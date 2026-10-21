@@ -1,6 +1,5 @@
 //! AudioPlayers playing: `TimePosition` moving on, ends and loops
-//! (observed in Studio 0.742 on a playtest server; `docs/behavior/audio.md`,
-//! step 5).
+//! (observed in Studio 0.742 on a playtest server; `docs/behavior/audio/audio-api.md`).
 //!
 //! Unlike a Sound's, an AudioPlayer's end is a change scripts see:
 //! `IsPlaying` turns false with `Changed`, then `Ended` fires, and

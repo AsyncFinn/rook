@@ -1,6 +1,6 @@
 //! The audio API's graph: AudioPlayers, effects, AudioEmitters,
 //! AudioListeners, AudioDeviceOutputs and AudioAnalyzers joined by Wires
-//! (`docs/behavior/audio.md`, step 5).
+//! (`docs/behavior/audio/audio-api.md`).
 //!
 //! The engine describes the graph each frame as a [`Graph`]: its nodes,
 //! with what each player is playing and what each listener hears, and its

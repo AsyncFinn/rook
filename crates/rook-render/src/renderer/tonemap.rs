@@ -1,7 +1,7 @@
 //! The frame and the tone pass: the main pass draws light units into the
 //! frame in Studio's encoding (`shaders/tone.wgsl`), blending there as
 //! Studio blends, and the tone pass puts it through the place's tone curve
-//! onto the target (docs/behavior/tone-mapping.md), Highlights and the
+//! onto the target (docs/behavior/lighting/tone-mapping.md), Highlights and the
 //! GUI layer over it.
 
 use wesl_core::include_wesl;

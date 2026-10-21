@@ -1,7 +1,7 @@
 //! World GUI: SurfaceGuis laid on a part's face and BillboardGuis facing
 //! the camera. Which are shown, their canvas sizes, and where they are each
 //! frame; their contents are laid out and drawn like a ScreenGui's
-//! (docs/behavior/gui-world.md).
+//! (docs/behavior/gui/world.md).
 
 mod billboard;
 mod surface;

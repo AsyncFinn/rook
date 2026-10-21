@@ -1,5 +1,5 @@
 //! Layouts checked against values measured in Studio 0.742's client, in
-//! a 1561 × 793 window (docs/behavior/gui.md).
+//! a 1561 × 793 window (docs/behavior/gui/layout.md).
 
 use glam::Vec2;
 use rook_dom::{Dom, InstanceId};

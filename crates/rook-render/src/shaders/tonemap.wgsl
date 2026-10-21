@@ -56,8 +56,8 @@ fn mask_at(p: vec2<i32>) -> u32 {
 }
 
 // The finished pixel `linear` at `p` with Highlights over it (measured in
-// Studio 0.742, docs/behavior/highlight.md): the fill over what its parts
-// cover, and a 2-pixel outline centred on the edge of what they cover,
+// Studio 0.742, docs/behavior/rendering/highlight.md): the fill over what its parts
+// cover, and a 2-pixel outline centered on the edge of what they cover,
 // both mixed in over the screen's sRGB pixels.
 fn highlighted(p: vec2<i32>, linear: vec3<f32>) -> vec3<f32> {
     let own = mask_at(p);
@@ -67,7 +67,7 @@ fn highlighted(p: vec2<i32>, linear: vec3<f32>) -> vec3<f32> {
         mask_at(p + vec2(0, 1)),
         mask_at(p - vec2(0, 1)),
     );
-    // Inside, the edge is where a neighbour isn't ours; outside, it's
+    // Inside, the edge is where a neighbor isn't ours; outside, it's
     // the first Highlight next to us.
     var edge = 0u;
     for (var i = 0; i < 4; i++) {

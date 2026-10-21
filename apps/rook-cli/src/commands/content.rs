@@ -193,11 +193,11 @@ fn physics_detail(bytes: &[u8]) -> String {
     )
 }
 
-/// A decoded mesh's triangles, size and centre.
+/// A decoded mesh's triangles, size and center.
 fn mesh_detail(m: &rook_content::decode::mesh::Mesh) -> String {
     let (lo, hi) = m.bounds();
     let size = [0, 1, 2].map(|i| format!("{:.3}", hi[i] - lo[i]));
-    let centre = [0, 1, 2].map(|i| format!("{:.3}", (hi[i] + lo[i]) / 2.0));
+    let center = [0, 1, 2].map(|i| format!("{:.3}", (hi[i] + lo[i]) / 2.0));
     let mut uv = [f32::MAX, f32::MAX, f32::MIN, f32::MIN];
     for t in &m.uvs {
         uv = [
@@ -208,10 +208,10 @@ fn mesh_detail(m: &rook_content::decode::mesh::Mesh) -> String {
         ];
     }
     format!(
-        "{} triangles, {} studs, centred at ({}), UVs {:.2}..{:.2} x {:.2}..{:.2}",
+        "{} triangles, {} studs, centered at ({}), UVs {:.2}..{:.2} x {:.2}..{:.2}",
         m.indices.len() / 3,
         size.join(" x "),
-        centre.join(", "),
+        center.join(", "),
         uv[0],
         uv[2],
         uv[1],

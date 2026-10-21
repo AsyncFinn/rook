@@ -15,7 +15,7 @@ pub fn mips(level0: Vec<u8>, width: u32, height: u32) -> Vec<Vec<u8>> {
 }
 
 /// Halve an RGBA8 image (a side of 1 stays 1), averaging each 2 × 2 block
-/// weighted by alpha, so fully transparent pixels don't bleed their colour
+/// weighted by alpha, so fully transparent pixels don't bleed their color
 /// into the edges of what's drawn.
 pub(super) fn downsample(src: &[u8], w: u32, h: u32) -> Vec<u8> {
     let (nw, nh) = ((w / 2).max(1), (h / 2).max(1));

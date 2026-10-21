@@ -111,7 +111,7 @@ pub(super) fn set_primary_part_cframe(lua: &Lua, this: InstanceId, a: &Args) -> 
 
 /// Deprecated; the same CFrame as `GetBoundingBox`, not the primary part's
 /// (Confirmed in Studio: door scripts rotate about it, so the hinge side
-/// often carries an invisible part to pull the box centre there).
+/// often carries an invisible part to pull the box center there).
 pub(super) fn get_model_cframe(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
     let c = with_world(lua, |w| bounding_box(w, this).0);
     Outcome::ret(lua, LCFrame(c))
@@ -125,7 +125,7 @@ pub(super) fn translate_by(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<O
     Outcome::ret(lua, ())
 }
 
-/// Moves the model so its primary part (or bounding box centre) is at the
+/// Moves the model so its primary part (or bounding box center) is at the
 /// target. Roblox also moves the model up out of obstructions; that needs
 /// collision queries (Approximation until M3).
 pub(super) fn model_move_to(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
@@ -140,7 +140,7 @@ pub(super) fn model_move_to(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<
     Outcome::ret(lua, ())
 }
 
-/// Bounds of a model's parts as (centre, size), in a box turned to the
+/// Bounds of a model's parts as (center, size), in a box turned to the
 /// primary part's orientation, else to the saved pivot's, else to the world
 /// axes (Confirmed: creator-docs and Studio; the pivot's observed in Studio
 /// 0.742 on an archived spinning light, whose script turns it about
@@ -172,8 +172,8 @@ fn bounding_box(w: &World, model: InstanceId) -> (CFrame, Vector3) {
     if min.x > max.x {
         return (CFrame::IDENTITY, Vector3::ZERO);
     }
-    let centre = basis.to_world_space(CFrame::from_position((min + max) * 0.5));
-    (centre, Vector3(max - min))
+    let center = basis.to_world_space(CFrame::from_position((min + max) * 0.5));
+    (center, Vector3(max - min))
 }
 
 pub(super) fn get_extents_size(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {

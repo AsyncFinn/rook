@@ -1,7 +1,7 @@
 use super::*;
 
 /// A stereo file with `samples` on both sides (a mono one plays 3 dB
-/// down; see `mono_is_centred`).
+/// down; see `mono_is_centered`).
 fn audio(rate: u32, samples: &[i16]) -> Arc<Audio> {
     Arc::new(Audio {
         format: None,
@@ -59,10 +59,10 @@ fn resamples_and_ends() {
     assert!(m.is_empty());
 }
 
-/// Studio centres a mono sound at 1/√2 on each side; a stereo one keeps
+/// Studio centers a mono sound at 1/√2 on each side; a stereo one keeps
 /// its level.
 #[test]
-fn mono_is_centred() {
+fn mono_is_centered() {
     let mono = Arc::new(Audio {
         format: None,
         sample_rate: 4,

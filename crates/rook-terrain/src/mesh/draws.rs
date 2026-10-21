@@ -1,6 +1,6 @@
 //! The surface as it's drawn: by texture layer, blending where layers
 //! meet, as Studio's terrain shader does (read from its GLSL, Studio
-//! 0.742; `docs/behavior/terrain.md`).
+//! 0.742; `docs/behavior/terrain/blending.md`).
 //!
 //! Each vertex takes its cell's material ([`Mesher::dominant`]) and, for
 //! materials whose top and side textures differ, the facing of its smooth

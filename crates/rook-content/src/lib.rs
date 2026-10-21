@@ -10,7 +10,7 @@
 //!   never waits for disk or network.
 //!
 //! Decoders live here too: [`mesh`], [`image`] and [`audio`]. See
-//! `docs/design/architecture.md` §8 "Content".
+//! `docs/design/architecture.md#content-rook-content`.
 
 pub mod decode;
 mod loader;

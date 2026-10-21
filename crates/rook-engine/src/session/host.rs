@@ -1,6 +1,6 @@
 //! The two ends of a play session, which only talk through messages: a
 //! [`ServerHost`] owns the server DataModel, a [`ClientHost`] one client's.
-//! Each can run on its own thread (architecture §8: a DataModel's Luau, DOM
+//! Each can run on its own thread (docs/design/architecture.md#engine-systems: a DataModel's Luau, DOM
 //! and physics stay on one thread); [`crate::Session`] runs them together
 //! in one, delivering each message as soon as it's sent.
 //!

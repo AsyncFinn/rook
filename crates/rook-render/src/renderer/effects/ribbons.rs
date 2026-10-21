@@ -1,5 +1,5 @@
 //! Drawing Beams, Trails (docs/behavior/effects/beams-and-trails.md) and
-//! FloorWires' images: each strip's quads, with the particles' colours,
+//! FloorWires' images: each strip's quads, with the particles' colors,
 //! blending and lighting (`fs_particle`), after the transparent parts and
 //! before the particles, farthest strip first, both sides showing.
 
@@ -14,7 +14,7 @@ use crate::effects::ribbons::{Edge, Ribbons, Strip};
 pub(crate) struct RibbonVertex {
     position: [f32; 3],
     uv: [f32; 2],
-    /// sRGB colour, and opacity.
+    /// sRGB color, and opacity.
     color: [f32; 4],
     /// LightInfluence.
     lit: f32,
@@ -68,10 +68,10 @@ impl Renderer {
             if b.is_empty() || !view.sees(b, 0.0) {
                 continue;
             }
-            let centre = (b.min + b.max) * 0.5;
-            // An image still loading draws as plain colour (creator-docs).
+            let center = (b.min + b.max) * 0.5;
+            // An image still loading draws as plain color (creator-docs).
             let texture = strip.look.texture.filter(|h| self.images.contains(h));
-            drawn.push((centre.distance_squared(camera.position), strip, texture));
+            drawn.push((center.distance_squared(camera.position), strip, texture));
         }
         drawn.sort_by(|a, b| b.0.total_cmp(&a.0));
         let table = matches!(self.image_binding, ImageBinding::Table(_));
@@ -158,7 +158,7 @@ fn quads(strip: &Strip<'_>, image: u32, out: &mut Vec<RibbonVertex>) {
     }
 }
 
-/// The ribbon pipeline: as the particles' (premultiplied colour over what's
+/// The ribbon pipeline: as the particles' (premultiplied color over what's
 /// behind, depth tested, not written), from a plain triangle list, both
 /// sides drawn.
 pub(crate) fn pipeline(

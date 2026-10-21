@@ -9,7 +9,7 @@ use crate::MESH_REACH;
 use crate::grid::cells::*;
 use TerrainMaterial::{Air, Grass, Rock, Water};
 
-/// Studio's voxel 0 centre, where the probes put their shapes.
+/// Studio's voxel 0 center, where the probes put their shapes.
 const C: Vec3 = Vec3::splat(2.0);
 
 fn at(p: Vec3) -> Affine3A {
@@ -113,7 +113,7 @@ fn wedges_slope_down_to_minus_z() {
     // Across, a wedge fills as a block does.
     let flat = wedge(C, Vec3::new(8.0, 4.0, 8.0));
     assert!(flat.contains(&((1, 0, 1), 128)) && flat.contains(&((0, 0, 1), 191)));
-    // A voxel-sized wedge fills nothing: its slope crosses the centre.
+    // A voxel-sized wedge fills nothing: its slope crosses the center.
     let mut grid = Grid::new();
     let small = Shape::Wedge {
         pose: at(C),
@@ -237,7 +237,7 @@ fn changes_box_the_voxels_that_differ() {
             max: IVec3::new(6, 4, 5),
         }]
     );
-    // Within two voxels of chunk 0's low corner: its neighbours below too.
+    // Within two voxels of chunk 0's low corner: its neighbors below too.
     let corner = Bounds {
         min: IVec3::ZERO,
         max: IVec3::ZERO,

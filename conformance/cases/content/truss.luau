@@ -1,5 +1,5 @@
 -- What a TrussPart's Size becomes when a script sets it: at most one axis
--- other than 2, clamped to 512 (ROADMAP M4 "Trusses").
+-- other than 2, clamped to 512 (docs/behavior/meshes/trusses.md).
 local t = Instance.new("TrussPart")
 log("new", t.Size, t.Style, t.Material, t.BrickColor)
 for _, size in {
