@@ -124,6 +124,13 @@ pub(crate) fn write_property(
     }) {
         return Ok(Err(ScriptError(e)));
     }
+    if name == "Parent" {
+        let rook_types::Value::Ref(r) = converted else {
+            return Ok(Ok(()));
+        };
+        let result = crate::removal::set_parent(lua, id, r.map(InstanceId::from_ref));
+        return Ok(result.map_err(ScriptError::from));
+    }
     let result = with_world(lua, |w| {
         if let (Some(target), Some(url)) =
             (properties::content_view(prop.id), converted.content_url())
@@ -159,12 +166,6 @@ pub(crate) fn write_property(
                     return Ok(());
                 };
                 w.dom.set_name(id, s)
-            }
-            "Parent" => {
-                let rook_types::Value::Ref(r) = converted else {
-                    return Ok(());
-                };
-                w.dom.set_parent(id, r.map(InstanceId::from_ref))
             }
             _ => w.dom.set_property(id, prop.id, converted),
         }

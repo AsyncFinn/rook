@@ -294,10 +294,8 @@ pub(crate) fn run_job(lua: &Lua, job: Job) {
             }
         }
         Job::Destroy(id) => {
-            let start = with_world(lua, |w| w.dom.journal().end());
             // Debris may outlive what it was given; destroyed is destroyed.
-            let _ = with_world(lua, |w| w.dom.destroy(id));
-            dispatch(lua, start);
+            let _ = crate::removal::destroy(lua, id);
         }
         Job::Fire { handler, args, .. } => run_handler(lua, handler, args),
     }
@@ -372,7 +370,7 @@ pub(crate) fn dispatch(lua: &Lua, start: u64) {
     for pos in start..end {
         let firings = with_world(lua, |w| {
             let change = w.dom.journal().get(pos)?;
-            if let Change::Destroying(id) = change {
+            if let Change::Destroyed(id) = change {
                 destroyed.push(*id);
             }
             if w.signals.is_empty() {

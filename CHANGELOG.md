@@ -16,6 +16,8 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 
 ## [Unreleased]
 
+- Removing an instance fires its signals in Studio's order, each step's handlers seeing the tree as it is then. `Destroying` and `DescendantRemoving` fire before anything moves (they used to fire after the instance had left and its children were gone), the Parent locks before any handler runs, and `Destroy` then destroys the children the instance had at the start, even one a handler moved elsewhere meanwhile. `DescendantRemoving` fires per descendant, nearest ancestor first, and the locked-Parent error names parents by `Name`. This holds for scripts' `Destroy`, `Remove`, `ClearAllChildren` and `Parent` writes, Debris and fallen parts. Measured in Studio 0.743 with Default (Immediate) signals; a new conformance case passes. As in Roblox today, a 2021 disaster game that moves a dying meteor's emitters onto a stand-in to let its smoke fade still loses the smoke.
+
 ## [0.7.1] — 2026-10-21 — M8 steps 1 and 2: GUI layout and text
 
 Pinned Roblox version: 0.741.19.

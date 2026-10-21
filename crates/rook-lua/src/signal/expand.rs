@@ -31,14 +31,15 @@ pub(crate) struct Firing {
 /// The firings one journal entry causes, limited to signals with
 /// connections.
 ///
-/// Order within a move, observed in Studio 0.741.19 (conformance case
-/// `signals/reparent_order`): `ChildRemoved`, `ChildAdded`, then
-/// `AncestryChanged` on the subtree in post-order (children before their
-/// parent); the `Parent` property change follows as its own journal entry.
-/// `DescendantRemoving`/`DescendantAdded` fire only on ancestors the
-/// instance actually leaves or joins; an ancestor of both the old and new
-/// parent sees neither (Confirmed). Their position in the order relative
-/// to the child events is Inference.
+/// Order within a move, observed in Studio 0.741.19 and 0.743 (conformance
+/// cases `signals/reparent_order` and `signals/destroy_order`):
+/// `DescendantRemoving` before the move (its own journal entries, per
+/// descendant in pre-order, nearest ancestor first), then `ChildRemoved`,
+/// `ChildAdded`, `DescendantAdded`, and `AncestryChanged` on the subtree in
+/// post-order (children before their parent); the `Parent` property change
+/// follows as its own journal entry. `DescendantRemoving`/`DescendantAdded`
+/// fire only on ancestors the instance actually leaves or joins; an
+/// ancestor of both the old and new parent sees neither.
 pub(crate) fn expand<H: Clone>(change: &Change, signals: &Signals<H>) -> Vec<Firing> {
     let mut out = Vec::new();
     let mut push = |instance: InstanceId, kind: SignalKind, args: FireArgs| {
@@ -48,7 +49,22 @@ pub(crate) fn expand<H: Clone>(change: &Change, signals: &Signals<H>) -> Vec<Fir
         }
     };
     match change {
-        Change::Created(_) | Change::TagAdded { .. } | Change::TagRemoved { .. } => {}
+        Change::Created(_)
+        | Change::Destroyed(_)
+        | Change::TagAdded { .. }
+        | Change::TagRemoved { .. } => {}
+        Change::Removing {
+            ancestors,
+            descendant,
+        } => {
+            for &ancestor in ancestors {
+                push(
+                    ancestor,
+                    SignalKind::Event("DescendantRemoving"),
+                    FireArgs::Instance(*descendant),
+                );
+            }
+        }
         Change::Property { id, property } => {
             push(
                 *id,
@@ -77,15 +93,6 @@ pub(crate) fn expand<H: Clone>(change: &Change, signals: &Signals<H>) -> Vec<Fir
             subtree,
             subtree_post_order,
         } => {
-            for &ancestor in old_ancestors.iter().filter(|a| !new_ancestors.contains(a)) {
-                for &d in subtree {
-                    push(
-                        ancestor,
-                        SignalKind::Event("DescendantRemoving"),
-                        FireArgs::Instance(d),
-                    );
-                }
-            }
             if let Some(p) = old_parent {
                 push(
                     *p,

@@ -1,0 +1,59 @@
+-- studio 0.743.0.7431133
+-- signals: immediate
+-- Destroy
+P.Destroying P.Parent=A E.Parent=P Q.Parent=E Pkids=1
+A.DescendantRemoving P
+Root.DescendantRemoving P P.Parent=A E.Parent=P Q.Parent=E Pkids=1
+A.DescendantRemoving E
+Root.DescendantRemoving E P.Parent=A E.Parent=P Q.Parent=E Pkids=1
+A.DescendantRemoving Q
+Root.DescendantRemoving Q P.Parent=A E.Parent=P Q.Parent=E Pkids=1
+A.ChildRemoved P P.Parent=nil E.Parent=P Q.Parent=E Pkids=1
+Q.AncestryChanged P nil P.Parent=nil E.Parent=P Q.Parent=E Pkids=1
+E.AncestryChanged P nil P.Parent=nil E.Parent=P Q.Parent=E Pkids=1
+P.AncestryChanged P nil P.Parent=nil E.Parent=P Q.Parent=E Pkids=1
+P.Parent changed P.Parent=nil E.Parent=P Q.Parent=E Pkids=1
+E.Destroying P.Parent=nil E.Parent=P Q.Parent=E Pkids=1
+P.DescendantRemoving E P.Parent=nil E.Parent=P Q.Parent=E Pkids=1
+P.DescendantRemoving Q P.Parent=nil E.Parent=P Q.Parent=E Pkids=1
+P.ChildRemoved E P.Parent=nil E.Parent=nil Q.Parent=E Pkids=0
+Q.AncestryChanged E nil P.Parent=nil E.Parent=nil Q.Parent=E Pkids=0
+E.AncestryChanged E nil P.Parent=nil E.Parent=nil Q.Parent=E Pkids=0
+E.Parent changed P.Parent=nil E.Parent=nil Q.Parent=E Pkids=0
+Q.Destroying P.Parent=nil E.Parent=nil Q.Parent=E Pkids=0
+E.ChildRemoved Q
+Q.AncestryChanged Q nil P.Parent=nil E.Parent=nil Q.Parent=nil Pkids=0
+Q.Parent changed P.Parent=nil E.Parent=nil Q.Parent=nil Pkids=0
+after nil nil nil
+Root.DescendantRemoving A P.Parent=nil E.Parent=nil Q.Parent=nil Pkids=0
+-- Parent = nil
+A.DescendantRemoving P
+Root.DescendantRemoving P P.Parent=A E.Parent=P Q.Parent=E Pkids=1
+A.DescendantRemoving E
+Root.DescendantRemoving E P.Parent=A E.Parent=P Q.Parent=E Pkids=1
+A.DescendantRemoving Q
+Root.DescendantRemoving Q P.Parent=A E.Parent=P Q.Parent=E Pkids=1
+A.ChildRemoved P P.Parent=nil E.Parent=P Q.Parent=E Pkids=1
+Q.AncestryChanged P nil P.Parent=nil E.Parent=P Q.Parent=E Pkids=1
+E.AncestryChanged P nil P.Parent=nil E.Parent=P Q.Parent=E Pkids=1
+P.AncestryChanged P nil P.Parent=nil E.Parent=P Q.Parent=E Pkids=1
+P.Parent changed P.Parent=nil E.Parent=P Q.Parent=E Pkids=1
+after nil P
+Root.DescendantRemoving A P.Parent=nil E.Parent=P Q.Parent=E Pkids=1
+-- a child moved out while its parent is destroyed
+Root.DescendantRemoving P parent Root
+P.ChildRemoved E
+move E true
+Root.DescendantRemoving F parent P
+E.Destroying X
+Root.DescendantRemoving E parent X
+F.Destroying P
+P.ChildRemoved F
+after nil nil
+move E again false The Parent property of E is locked, current parent: NULL, new parent X
+-- the dying instance moves itself
+in Destroying false The Parent property of Root.P2 is locked, current parent: Root, new parent X
+in DescendantRemoving false The Parent property of Root.P2 is locked, current parent: Root, new parent X
+Root.DescendantRemoving P2 parent Root
+after nil
+Root.DescendantRemoving X parent Root

@@ -9,6 +9,7 @@ mod api;
 pub mod audio_api;
 mod ctx;
 mod net;
+mod removal;
 pub mod scheduler;
 mod signal;
 mod threads;
@@ -214,10 +215,10 @@ impl Runtime {
     /// `Instance:Destroy()` from the engine (fallen parts), firing the
     /// signals it causes.
     pub fn destroy(&self, id: InstanceId) {
-        let start = self.world().dom.journal().end();
         // A part a script destroyed first has nothing left to destroy.
-        let _ = self.world_mut().dom.destroy(id);
-        self.dispatch_since(start);
+        self.guarded(|| {
+            let _ = removal::destroy(&self.lua, id);
+        });
     }
 
     /// Resume due jobs on one queue, then drain the deferred queue.

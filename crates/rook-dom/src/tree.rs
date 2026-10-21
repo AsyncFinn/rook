@@ -88,16 +88,87 @@ impl Dom {
         self.instances.get(id).is_none_or(|i| i.destroyed)
     }
 
+    /// A parent as the locked-Parent error names it: by `Name` alone
+    /// (conformance case `signals/destroy_order`).
     fn display_parent(&self, p: Option<InstanceId>) -> String {
-        p.map_or_else(|| "NULL".to_owned(), |p| self.full_name(p))
+        p.map_or_else(|| "NULL".to_owned(), |p| self.name(p).to_owned())
     }
 
-    /// Set `Parent`, with Roblox's checks.
+    /// Set `Parent`, with Roblox's checks. `DescendantRemoving` is recorded
+    /// before the move, for the whole subtree at once; scripts go through
+    /// [`Dom::leaving_ancestors`] and [`Dom::move_announced`] instead, so
+    /// their handlers run in between.
     pub fn set_parent(
         &mut self,
         id: InstanceId,
         parent: Option<InstanceId>,
     ) -> Result<(), DomError> {
+        if !self.check_parent(id, parent)? {
+            return Ok(());
+        }
+        self.note_subtree_removing(id, parent);
+        self.move_unchecked(id, parent);
+        Ok(())
+    }
+
+    /// Move `id` once scripts were told it's leaving, checking again, as
+    /// their handlers may have changed the tree.
+    pub fn move_announced(
+        &mut self,
+        id: InstanceId,
+        parent: Option<InstanceId>,
+    ) -> Result<(), DomError> {
+        if self.check_parent(id, parent)? {
+            self.move_unchecked(id, parent);
+        }
+        Ok(())
+    }
+
+    /// The ancestors `id` leaves by moving to `parent`, nearest first: the
+    /// ones whose `DescendantRemoving` fires. An ancestor of both the old
+    /// and the new parent sees nothing.
+    pub fn leaving_ancestors(&self, id: InstanceId, parent: Option<InstanceId>) -> Vec<InstanceId> {
+        let staying: Vec<_> = parent
+            .into_iter()
+            .chain(parent.into_iter().flat_map(|p| self.ancestors(p)))
+            .collect();
+        self.ancestors(id)
+            .filter(|a| !staying.contains(a))
+            .collect()
+    }
+
+    /// Record that `descendant` is about to leave `ancestors`.
+    pub fn note_removing(&mut self, ancestors: Vec<InstanceId>, descendant: InstanceId) {
+        self.journal.push(Change::Removing {
+            ancestors,
+            descendant,
+        });
+    }
+
+    /// Record that `id` and its descendants are about to leave the
+    /// ancestors they don't keep under `parent`.
+    fn note_subtree_removing(&mut self, id: InstanceId, parent: Option<InstanceId>) {
+        if !self.journal.is_enabled() {
+            return;
+        }
+        let leaving = self.leaving_ancestors(id, parent);
+        if leaving.is_empty() {
+            return;
+        }
+        let mut subtree = vec![id];
+        self.collect_descendants(id, &mut subtree);
+        for d in subtree {
+            self.note_removing(leaving.clone(), d);
+        }
+    }
+
+    /// Roblox's checks on setting `id`'s Parent to `parent`; `Ok(false)`
+    /// when it's the parent already.
+    pub fn check_parent(
+        &self,
+        id: InstanceId,
+        parent: Option<InstanceId>,
+    ) -> Result<bool, DomError> {
         let current = self.inst(id)?.parent;
         if let Some(p) = parent {
             self.inst(p)?;
@@ -110,7 +181,7 @@ impl Dom {
             });
         }
         if current == parent {
-            return Ok(());
+            return Ok(false);
         }
         if let Some(p) = parent {
             if p == id {
@@ -123,8 +194,7 @@ impl Dom {
                 });
             }
         }
-        self.move_unchecked(id, parent);
-        Ok(())
+        Ok(true)
     }
 
     pub(crate) fn move_unchecked(&mut self, id: InstanceId, parent: Option<InstanceId>) {
@@ -173,11 +243,28 @@ impl Dom {
         }
     }
 
-    /// `Instance:Destroy()`: fire `Destroying`, set Parent to nil, lock it,
-    /// and destroy every descendant.
+    /// `Instance:Destroy()`, recording each step's signals in Roblox's
+    /// order (conformance case `signals/destroy_order`). Scripts take the
+    /// same steps with their handlers run in between.
     pub fn destroy(&mut self, id: InstanceId) -> Result<(), DomError> {
-        if self.inst(id)?.destroyed {
+        let Some(children) = self.begin_destroy(id)? else {
             return Ok(());
+        };
+        self.note_subtree_removing(id, None);
+        self.detach_destroyed(id);
+        for child in children {
+            self.destroy(child)?;
+        }
+        self.end_destroy(id);
+        Ok(())
+    }
+
+    /// Destroy's first step: lock `id`'s Parent, record `Destroying`, and
+    /// return the children it has now, which are destroyed whatever
+    /// handlers do with them. `None` when it's destroyed already.
+    pub fn begin_destroy(&mut self, id: InstanceId) -> Result<Option<Vec<InstanceId>>, DomError> {
+        if self.inst(id)?.destroyed {
+            return Ok(None);
         }
         if id == self.root {
             return Err(DomError::ParentLocked {
@@ -186,19 +273,24 @@ impl Dom {
                 new: "NULL".to_owned(),
             });
         }
-        self.journal.push(Change::Destroying(id));
         let inst = &mut self.instances[id];
         inst.destroyed = true;
-        // A locked instance (a service, or one already destroyed) still
-        // gets destroyed; only the parent assignment is skipped.
-        if inst.parent.is_some() {
+        inst.parent_locked = true;
+        let children = inst.children.clone();
+        self.journal.push(Change::Destroying(id));
+        Ok(Some(children))
+    }
+
+    /// Take a destroyed instance out of its parent (despite the lock).
+    pub fn detach_destroyed(&mut self, id: InstanceId) {
+        if self.parent(id).is_some() {
             self.move_unchecked(id, None);
         }
-        self.instances[id].parent_locked = true;
-        for child in self.children(id).to_vec() {
-            self.destroy(child)?;
-        }
-        Ok(())
+    }
+
+    /// Destroy's last step, once its children are destroyed too.
+    pub fn end_destroy(&mut self, id: InstanceId) {
+        self.journal.push(Change::Destroyed(id));
     }
 
     /// `Instance:ClearAllChildren()`: destroy every child.

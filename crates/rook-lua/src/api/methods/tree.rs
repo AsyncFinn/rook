@@ -1,6 +1,7 @@
 //! Object and Instance: the tree, finding, destroying, cloning.
 
 use super::*;
+use crate::removal;
 
 /// What a method with a fast form found.
 pub(crate) enum Found {
@@ -172,26 +173,31 @@ pub(super) fn is_ancestor_of(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult
 }
 
 pub(super) fn destroy(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
-    mutate(lua, |w| w.dom.destroy(this))?;
+    removal::destroy(lua, this)?;
     Outcome::ret(lua, ())
 }
 
 /// Deprecated `Remove`: Parent to nil, then the same for each descendant
 /// (creator-docs Instance:Remove). Unlike Destroy nothing is locked.
 pub(super) fn remove(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
-    fn rec(w: &mut World, id: InstanceId) -> Result<(), DomError> {
-        w.dom.set_parent(id, None)?;
-        for child in w.dom.children(id).to_vec() {
-            rec(w, child)?;
+    fn rec(lua: &Lua, id: InstanceId) -> Result<(), DomError> {
+        removal::set_parent(lua, id, None)?;
+        for child in with_world(lua, |w| w.dom.children(id).to_vec()) {
+            rec(lua, child)?;
         }
         Ok(())
     }
-    mutate(lua, |w| rec(w, this))?;
+    rec(lua, this)?;
     Outcome::ret(lua, ())
 }
 
 pub(super) fn clear_all_children(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
-    mutate(lua, |w| w.dom.clear_all_children(this))?;
+    for child in with_world(lua, |w| w.dom.children(this).to_vec()) {
+        // Locked children (services) are skipped, as in Roblox.
+        if !with_world(lua, |w| w.dom.is_parent_locked(child)) {
+            removal::destroy(lua, child)?;
+        }
+    }
     Outcome::ret(lua, ())
 }
 

@@ -15,9 +15,15 @@ pub enum Change {
         id: InstanceId,
         name: String,
     },
+    /// `descendant` is about to leave `ancestors` (nearest first): their
+    /// `DescendantRemoving`, which fires before the move.
+    Removing {
+        ancestors: Vec<InstanceId>,
+        descendant: InstanceId,
+    },
     /// `id` moved. Carries what signal dispatch needs to expand it into
-    /// `ChildRemoved`/`ChildAdded`, `DescendantRemoving`/`DescendantAdded`
-    /// and `AncestryChanged`, as the tree looked at the time of the move.
+    /// `ChildRemoved`/`ChildAdded`, `DescendantAdded` and
+    /// `AncestryChanged`, as the tree looked at the time of the move.
     Reparented {
         id: InstanceId,
         old_parent: Option<InstanceId>,
@@ -32,8 +38,10 @@ pub enum Change {
         /// the order `AncestryChanged` fires in.
         subtree_post_order: Vec<InstanceId>,
     },
-    /// Recorded before `Destroy` changes anything.
+    /// Recorded before `Destroy` changes anything but the Parent lock.
     Destroying(InstanceId),
+    /// `Destroy` finished, children included: its connections go.
+    Destroyed(InstanceId),
     TagAdded {
         id: InstanceId,
         tag: String,

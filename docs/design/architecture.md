@@ -121,6 +121,7 @@ Known exceptions, each marked with an `#[expect]` saying why:
 - `RBXScriptSignal`: `Connect`, `Once`, `Wait`, `ConnectParallel` (stub until Actors exist), plus legacy `connect`/`wait` aliases. `RBXScriptConnection`: `Disconnect`, `Connected`.
 - **Immediate** mode (what `SignalBehavior.Default` maps to today, and what old places use): handlers run synchronously at fire time on a new thread, with a re-entrancy depth limit of 10. This is **Confirmed** from creator-docs.
 - **Deferred** mode: handlers are queued and run at resumption points. `Disconnect()` drops pending invocations; `Destroy()` disconnects but still runs pending ones. This is **Confirmed** from creator-docs.
+- **Removal** (`rook-lua`'s `removal`): a script's `Destroy` or `Parent` write is split into steps (lock and `Destroying`; `DescendantRemoving` per descendant; the move; each child it had at the start), each step's journal entries dispatched before the next, so Immediate handlers see the tree mid-removal as in Studio. Host code doing the same through `Dom` records the same entries in the same order and dispatches after. **Confirmed** in Studio 0.743 (conformance case `signals/destroy_order`).
 
 ### Scheduler
 

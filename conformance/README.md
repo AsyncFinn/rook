@@ -39,7 +39,8 @@ prints a line-by-line diff for each mismatch.
 
 ## Coverage notes
 
-Expectations so far were recorded in a place whose `SignalBehavior` is
-Deferred (new template places save that). Archived places use `Default`,
-which Roblox documents as Immediate today; recording the same cases in such
-a place is still to do.
+Each expectation is recorded in one signal mode, named in its header. New
+template places save `SignalBehavior` Deferred; archived places use
+`Default`, which is Immediate in Studio 0.743. To record in Immediate, open
+a copy of a template place with `SignalBehavior2` set to 0 in its file and
+pick it with `ROOK_STUDIO=<its name>`.
