@@ -292,23 +292,23 @@ pub(crate) fn pipeline(
             step_mode: wgpu::VertexStepMode::Instance,
             attributes: &attrs,
         },
-        color_format,
-        depth_format,
+        (color_format, depth_format),
+        wgpu::CompareFunction::Greater,
     )
 }
 
 /// A pipeline drawing over the frame as particles do: premultiplied colour
 /// added to what's behind, which is dimmed by the coverage in alpha; depth
-/// tested, not written; both sides drawn. `entries` are the shader and its
-/// vertex and fragment entry points.
+/// compared by `depth_compare`, not written; both sides drawn. `entries`
+/// are the shader and its vertex and fragment entry points.
 pub(crate) fn blended_pipeline(
     device: &wgpu::Device,
     label: &str,
     layout: &wgpu::PipelineLayout,
     (shader, vertex, fragment): (&wgpu::ShaderModule, &str, &str),
     buffer: wgpu::VertexBufferLayout<'_>,
-    color_format: wgpu::TextureFormat,
-    depth_format: wgpu::TextureFormat,
+    (color_format, depth_format): (wgpu::TextureFormat, wgpu::TextureFormat),
+    depth_compare: wgpu::CompareFunction,
 ) -> wgpu::RenderPipeline {
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some(label),
@@ -323,7 +323,7 @@ pub(crate) fn blended_pipeline(
         depth_stencil: Some(wgpu::DepthStencilState {
             format: depth_format,
             depth_write_enabled: Some(false),
-            depth_compare: Some(wgpu::CompareFunction::Greater),
+            depth_compare: Some(depth_compare),
             stencil: Default::default(),
             bias: Default::default(),
         }),

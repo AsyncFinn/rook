@@ -92,6 +92,9 @@ impl Renderer {
         stage(&mut times.instances);
         let ribbon_runs = self.upload_ribbons(camera, &view);
         let particle_runs = self.upload_particles(camera, &view);
+        let world_gui_runs = self
+            .gui
+            .upload_world(&self.device, &self.queue, camera, height);
         stage(&mut times.effects);
 
         let (highlight_runs, looks) = self.highlights.upload(&self.device, &self.queue);
@@ -114,6 +117,7 @@ impl Renderer {
             l.environment_diffuse > 0.0,
         );
         self.update_sky_cube(&mut encoder);
+        self.gui.record_canvases(&self.queue, &mut encoder);
         if shadow.is_some() {
             self.shadow_pass(&mut encoder, &mut shadow_runs, starts[0]);
         }
@@ -122,7 +126,7 @@ impl Renderer {
             [&frame, &depth],
             &mut main_runs,
             starts[1],
-            (&ribbon_runs, &particle_runs),
+            (&ribbon_runs, &particle_runs, &world_gui_runs),
         );
         let highlighted = !mask_runs.runs.is_empty();
         if highlighted {
@@ -259,14 +263,14 @@ impl Renderer {
         self.record(&mut pass, runs, start);
     }
 
-    /// The sky, the parts and the effects into the frame.
+    /// The sky, the parts, the effects and the world GUI into the frame.
     fn main_pass(
         &self,
         encoder: &mut wgpu::CommandEncoder,
         [frame, depth]: [&wgpu::TextureView; 2],
         runs: &mut Runs,
         start: usize,
-        (ribbons, particles): (&[RibbonRun], &[ParticleRun]),
+        (ribbons, particles, world_gui): (&[RibbonRun], &[ParticleRun], &WorldRuns),
     ) {
         profiling::scope!("main pass");
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -308,6 +312,7 @@ impl Renderer {
         self.record(&mut pass, runs, start);
         self.record_ribbons(&mut pass, ribbons);
         self.record_particles(&mut pass, particles);
+        self.gui.record_world(&mut pass, world_gui);
     }
 
     /// Each pass's draws, joined into runs that share what's bound, with

@@ -34,19 +34,22 @@ impl SceneCache {
     }
 
     /// Give the renderer the DataModel's GUI when it was laid out again
-    /// since last time (laying it out first if it changed). Returns
-    /// whether it was.
+    /// since last time (laying it out first if it changed), and where its
+    /// world GUI is now. Returns whether it was laid out again.
     pub fn show_gui(&mut self, dm: &DataModel, renderer: &mut Renderer) -> bool {
         dm.runtime().sync_gui();
         let mut world = dm.runtime().world_mut();
         let world = &mut *world;
         let generation = world.gui.generation();
-        if self.gui_generation == Some(generation) {
-            return false;
+        let changed = self.gui_generation != Some(generation);
+        if changed {
+            self.gui_generation = Some(generation);
+            let screen = world.gui.draw(&world.dom);
+            let canvases = world.gui.draw_world(&world.dom);
+            renderer.set_gui(&screen, &canvases);
         }
-        self.gui_generation = Some(generation);
-        renderer.set_gui(&world.gui.draw(&world.dom));
-        true
+        renderer.place_world_gui(world.gui.world_places(&world.dom));
+        changed
     }
 
     /// Bring the scene up to date with a DataModel's changes and the mesh

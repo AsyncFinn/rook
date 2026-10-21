@@ -16,6 +16,7 @@ use rook_types::UDim2;
 use rustc_hash::FxHashMap;
 
 use crate::text::{self, Fonts, Source, TextBlock};
+use crate::world::{self, Eye, Hung};
 use padding::Inner;
 
 /// The top bar's height, which ScreenGuis start below unless they ignore
@@ -81,13 +82,14 @@ pub(crate) struct Arranged {
     pub(crate) cells: Option<(Vec2, Vec2)>,
 }
 
-/// Every placed GUI object, what each layout reports, and each text
-/// object's text.
+/// Every placed GUI object, what each layout reports, each text object's
+/// text, and every world GUI with the canvas size it was laid out at.
 #[derive(Debug, Default)]
 pub(crate) struct Layout {
     pub(crate) placed: FxHashMap<InstanceId, Placed>,
     pub(crate) arranged: FxHashMap<InstanceId, Arranged>,
     pub(crate) texts: FxHashMap<InstanceId, Laid>,
+    pub(crate) world: Vec<(Hung, Vec2)>,
 }
 
 /// A text object's text, with what it was laid out from, so an unchanged
@@ -103,17 +105,16 @@ pub(crate) struct Laid {
 }
 
 impl Layout {
-    /// Lay out the GUI scripts see on the screen: every player's PlayerGui
-    /// and StarterGui. `previous` is the last layout, where hidden
-    /// children of a UI layout stay.
-    pub(crate) fn screens(dom: &Dom, previous: &Layout, fonts: &mut Fonts) -> Self {
-        let mut pass = Pass {
-            dom,
-            previous,
-            fonts,
-            out: Layout::default(),
-            screen: screen_size(dom),
-        };
+    /// Lay out the GUI scripts see: every player's PlayerGui, StarterGui
+    /// and the world GUIs in `world`. `previous` is the last layout, where
+    /// hidden children of a UI layout stay.
+    pub(crate) fn screens(
+        dom: &Dom,
+        previous: &Layout,
+        fonts: &mut Fonts,
+        world: &[InstanceId],
+    ) -> Self {
+        let mut pass = Pass::new(dom, previous, fonts, Layout::default());
         let players = dom.find_service("Players");
         let holders = players
             .into_iter()
@@ -124,6 +125,9 @@ impl Layout {
             for root in through_folders(dom, holder, |id| dom.is_a(id, "GuiBase2d")) {
                 pass.root(root);
             }
+        }
+        for &root in world {
+            pass.root(root);
         }
         pass.out
     }
@@ -148,14 +152,23 @@ impl Layout {
         let Some(top) = top else {
             return;
         };
-        let mut pass = Pass {
-            dom,
-            previous: &Layout::default(),
-            fonts,
-            out: std::mem::take(self),
-            screen: screen_size(dom),
-        };
-        pass.root(top);
+        self.redo(dom, &[top], fonts);
+    }
+
+    /// Lay out the world GUIs `guis` again, as when the camera moving
+    /// resizes a BillboardGui, leaving the rest as it is.
+    pub(crate) fn redo_world(&mut self, dom: &Dom, guis: &[InstanceId], fonts: &mut Fonts) {
+        self.world.retain(|(h, _)| !guis.contains(&h.gui));
+        self.redo(dom, guis, fonts);
+    }
+
+    /// Lay out the trees from `tops` into this layout.
+    fn redo(&mut self, dom: &Dom, tops: &[InstanceId], fonts: &mut Fonts) {
+        let previous = Layout::default();
+        let mut pass = Pass::new(dom, &previous, fonts, std::mem::take(self));
+        for &top in tops {
+            pass.root(top);
+        }
         *self = pass.out;
     }
 }
@@ -241,9 +254,22 @@ struct Pass<'a> {
     fonts: &'a mut Fonts,
     out: Layout,
     screen: Vec2,
+    /// What BillboardGuis are sized from.
+    eye: Option<Eye>,
 }
 
-impl Pass<'_> {
+impl<'a> Pass<'a> {
+    fn new(dom: &'a Dom, previous: &'a Layout, fonts: &'a mut Fonts, out: Layout) -> Self {
+        Self {
+            dom,
+            previous,
+            fonts,
+            out,
+            screen: screen_size(dom),
+            eye: Eye::of(dom),
+        }
+    }
+
     /// Lay out a tree from its top: a LayerCollector, or a GUI object
     /// with no collector above it.
     fn root(&mut self, top: InstanceId) {
@@ -253,7 +279,14 @@ impl Pass<'_> {
             self.place_children(Placed::NOWHERE, &[top], inner, None);
             return;
         }
-        let (origin, local) = self.collector_area(top);
+        let (origin, local) = if world::is_world_gui(dom, top) {
+            let hung = Hung::of(dom, top);
+            let size = hung.canvas_size(dom, self.eye.as_ref());
+            self.out.world.push((hung, size));
+            (Vec2::ZERO, size)
+        } else {
+            self.collector_area(top)
+        };
         let scale = ui_scale(dom, top);
         let placed = Placed {
             center: origin + local * scale * 0.5,
@@ -265,7 +298,7 @@ impl Pass<'_> {
         self.lay_out_inside(top, placed);
     }
 
-    /// Where a LayerCollector's children go: the top left and size.
+    /// Where a ScreenGui's children go: the top left and size.
     fn collector_area(&self, collector: InstanceId) -> (Vec2, Vec2) {
         let dom = self.dom;
         match dom.class_name(collector) {
@@ -281,19 +314,6 @@ impl Pass<'_> {
                 (
                     Vec2::new(0.0, top),
                     (self.screen - Vec2::new(0.0, top)).max(Vec2::ZERO),
-                )
-            }
-            // Placeholders until world GUI arrives (ROADMAP M8 step 3).
-            "SurfaceGui" => (
-                Vec2::ZERO,
-                dom.vector2_property(collector, "CanvasSize")
-                    .map_or(Vec2::ZERO, |v| v.0),
-            ),
-            "BillboardGui" => {
-                let size = dom.udim2_property(collector, "Size").unwrap_or_default();
-                (
-                    Vec2::ZERO,
-                    Vec2::new(size.x.offset as f32, size.y.offset as f32),
                 )
             }
             _ => (Vec2::ZERO, Vec2::ZERO),
@@ -350,7 +370,10 @@ impl Pass<'_> {
             let (top_left, anchor) = match slots[i] {
                 Some(slot) => (inner.origin + slot, Vec2::ZERO),
                 None if layout.is_some() => {
-                    if let Some(&kept) = self.previous.placed.get(&kid) {
+                    // Laying out part of a layout again, the earlier
+                    // place is still in `out`.
+                    let kept = self.previous.placed.get(&kid);
+                    if let Some(&kept) = kept.or_else(|| self.out.placed.get(&kid)) {
                         self.out.placed.insert(kid, kept);
                         self.lay_out_text(kid, kept.local);
                         self.lay_out_inside(kid, kept);
@@ -388,7 +411,8 @@ impl Pass<'_> {
         let inner = padding::inner(self.dom, id, size);
         let area = (inner.origin, inner.size);
         let fonts = self.fonts.generation();
-        let block = match self.previous.texts.get(&id) {
+        let earlier = self.previous.texts.get(&id);
+        let block = match earlier.or_else(|| self.out.texts.get(&id)) {
             Some(old) if old.source == source && old.area == area && old.fonts == fonts => {
                 old.block.clone()
             }

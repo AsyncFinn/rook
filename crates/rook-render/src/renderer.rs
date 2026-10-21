@@ -18,6 +18,7 @@ use super::*;
 use effects::particles::GpuParticles;
 use effects::ribbons::GpuRibbons;
 use gui::GuiPass;
+use gui::world::WorldRuns;
 use highlights::HighlightParts;
 pub(crate) use images::ImageBinding;
 pub(crate) use images::ImageSet;
@@ -268,7 +269,16 @@ impl Renderer {
             info.name, info.backend, info.driver, info.driver_info
         );
         let tonemap = Tonemap::new(&device, color_format);
-        let gui = GuiPass::new(&device);
+        let gui = GuiPass::new(
+            &device,
+            BindLayouts {
+                globals: &layout,
+                main: &main_layout,
+                image: &image_layout,
+                lights: &lights.layout,
+            },
+            table.is_some(),
+        );
         let mut renderer = Self {
             gpu,
             device,
@@ -343,8 +353,14 @@ impl Renderer {
     }
 
     /// Draw `quads` over the scene from now on, bottom first.
-    pub fn set_gui(&mut self, quads: &[GuiQuad]) {
-        self.gui.set(&self.device, &self.queue, quads);
+    pub fn set_gui(&mut self, screen: &[GuiQuad], world: &[WorldCanvas]) {
+        self.gui.set(&self.device, &self.queue, screen, world);
+    }
+
+    /// Where each canvas of the last [`Renderer::set_gui`]'s `world` is
+    /// now (`None`: not drawn).
+    pub fn place_world_gui(&mut self, places: Vec<Option<WorldPlace>>) {
+        self.gui.place(places);
     }
 
     /// Set the clock grass sways by and Beams' images scroll by, in

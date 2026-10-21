@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use glam::Mat3;
+use glam::{Mat3, Vec2};
 use rook_types::SurfacePattern;
 
 use super::*;
@@ -462,4 +462,94 @@ fn highlights_fill_and_outline_through_walls_when_on_top() {
     let pixels = r.render_to_image(w, h, &camera).unwrap();
     assert_eq!(at(&pixels, 32, 32), at(&pixels, 4, 4));
     assert!(!(0..w).any(|x| at(&pixels, x, 32) == [0, 0, 255]));
+}
+
+/// A SurfaceGui's canvas shows on its face, unlit at its own colour
+/// through the curve; a BillboardGui behind the part is hidden unless it's
+/// AlwaysOnTop.
+#[test]
+fn world_gui_draws_in_the_world() {
+    let Ok(mut r) = Renderer::headless() else {
+        return;
+    };
+    let mut base = part(PartShape::Block, 0.0, [0.5; 3], 0.0);
+    base.size = Vec3::new(4.0, 4.0, 1.0);
+    r.set_scene(&Scene {
+        parts: vec![base],
+        lighting: Lighting {
+            ambient: [1.0; 3],
+            outdoor_ambient: [0.0; 3],
+            sun_color: [0.0; 3],
+            ..Lighting::default()
+        },
+        ..Scene::default()
+    });
+    let fill = |center: Vec2, size: Vec2, color: [f32; 3]| GuiQuad {
+        center,
+        size,
+        rotation: 0.0,
+        color: [color[0], color[1], color[2], 1.0],
+        clip: GuiQuad::NO_CLIP,
+        glyph: None,
+    };
+    let canvas = |quads: Vec<GuiQuad>, size: f32, on_top: bool| WorldCanvas {
+        quads,
+        size: Vec2::splat(size),
+        reach: [0.0, 0.0, size, size],
+        light_influence: 0.0,
+        brightness: 1.0,
+        always_on_top: on_top,
+        max_distance: f32::INFINITY,
+    };
+    // Red on the canvas's left half.
+    let surface = canvas(
+        vec![fill(
+            Vec2::new(100.0, 200.0),
+            Vec2::new(200.0, 400.0),
+            [1.0, 0.0, 0.0],
+        )],
+        400.0,
+        false,
+    );
+    let square = |color| vec![fill(Vec2::splat(5.0), Vec2::splat(10.0), color)];
+    let hidden = canvas(square([0.0, 1.0, 0.0]), 10.0, false);
+    let on_top = canvas(square([0.0, 0.0, 1.0]), 10.0, true);
+    r.set_gui(&[], &[surface, hidden, on_top]);
+    let billboard = |y: f32| WorldPlace::Billboard {
+        anchor: Vec3::new(1.0, y, -5.0),
+        studs: Vec3::ZERO,
+        size_studs: Vec2::ZERO,
+        size_pixels: Vec2::splat(6.0),
+        shift: Vec2::ZERO,
+    };
+    // The Back face (+Z), its top left at −X +Y.
+    r.place_world_gui(vec![
+        Some(WorldPlace::Surface {
+            origin: Vec3::new(-2.0, 2.0, 0.5),
+            right: Vec3::new(0.01, 0.0, 0.0),
+            down: Vec3::new(0.0, -0.01, 0.0),
+        }),
+        Some(billboard(1.0)),
+        Some(billboard(-1.0)),
+    ]);
+    let camera = Camera {
+        fov_y: 20.0,
+        ..Camera::look_at(Vec3::new(0.0, 0.0, 20.0), Vec3::ZERO)
+    };
+    let (w, h) = (64, 64);
+    let pixels = r.render_to_image(w, h, &camera).unwrap();
+    let at = |x: u32, y: u32| {
+        let i = ((y * w + x) * 4) as usize;
+        [pixels[i], pixels[i + 1], pixels[i + 2]]
+    };
+    // The face spans pixels 13 to 51; the billboards sit 7 pixels from
+    // the middle at depth 25.
+    let red = at(22, 32);
+    assert!(red[0] > 200 && red[1] < 30 && red[2] < 30, "{red:?}");
+    let part = at(42, 32);
+    assert!(part[0] < 200 && part[0].abs_diff(part[1]) < 8, "{part:?}");
+    let behind = at(39, 25);
+    assert!(behind[1].abs_diff(behind[0]) < 8, "{behind:?}");
+    let over = at(39, 39);
+    assert!(over[2] > 200 && over[0] < 30, "{over:?}");
 }

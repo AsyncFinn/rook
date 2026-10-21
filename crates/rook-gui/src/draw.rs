@@ -1,14 +1,15 @@
 //! What the local player's ScreenGuis draw, in order: each visible GUI
 //! object's background and border, then its text (images come with
-//! ROADMAP M8 step 4), and any Hint or Message over it all. Order and
-//! clipping rules: docs/behavior/gui.md#drawing.
+//! ROADMAP M8 step 4), and any Hint or Message over it all; and what each
+//! world GUI's canvas draws, the same way. Order and clipping rules:
+//! docs/behavior/gui.md#drawing.
 
 mod frame;
 mod messages;
 mod text;
 
 use rook_dom::{Dom, InstanceId};
-use rook_types::GuiQuad;
+use rook_types::{GuiQuad, WorldCanvas};
 
 use crate::layout::{Layout, Placed, gui_children, through_folders, visible};
 
@@ -38,23 +39,81 @@ pub(crate) fn quads(dom: &Dom, layout: &Layout, text: &mut Text<'_>) -> Vec<GuiQ
     screens.retain(|&s| dom.bool_property(s, "Enabled") != Some(false));
     screens.sort_by_key(|&s| dom.number_property(s, "DisplayOrder").unwrap_or(0.0) as i64);
     for screen in screens {
-        let mut drawn = Vec::new();
-        collect(dom, layout, screen, Clip::NONE, &mut drawn);
-        if dom.enum_item_property(screen, "ZIndexBehavior") == Some("Global") {
-            // Measured: every object by ZIndex alone, later in the tree on
-            // top on a tie.
-            let mut flat = Vec::new();
-            flatten(drawn, &mut flat);
-            flat.sort_by_key(|d| d.z);
-            for d in flat {
-                draw.emit(&d);
-            }
-        } else {
-            sibling_order(&mut draw, drawn);
-        }
+        draw.collector(screen, Clip::NONE);
     }
     messages::emit(dom, draw.text, draw.out);
     out
+}
+
+/// How far past its canvas a world GUI's spilling contents are drawn, in
+/// pixels each way, so one huge object can't ask for a huge canvas.
+const SPILL: f32 = 2048.0;
+
+/// What each of `guis` (world GUIs, laid out) draws on its canvas.
+pub(crate) fn world(
+    dom: &Dom,
+    layout: &Layout,
+    guis: &[InstanceId],
+    text: &mut Text<'_>,
+) -> Vec<WorldCanvas> {
+    let mut canvases = Vec::new();
+    for &gui in guis {
+        let Some(placed) = layout.placed.get(&gui) else {
+            continue;
+        };
+        let size = placed.local;
+        let canvas = [0.0, 0.0, size.x, size.y];
+        let clip = Clip {
+            rect: if dom.bool_property(gui, "ClipsDescendants") == Some(true) {
+                canvas
+            } else {
+                GuiQuad::NO_CLIP
+            },
+            turned: false,
+        };
+        let mut quads = Vec::new();
+        Draw {
+            dom,
+            layout,
+            text,
+            out: &mut quads,
+        }
+        .collector(gui, clip);
+        let mut reach = canvas;
+        for q in &quads {
+            let r = q.reach();
+            if r[0] < r[2] && r[1] < r[3] {
+                reach = [
+                    reach[0].min(r[0]),
+                    reach[1].min(r[1]),
+                    reach[2].max(r[2]),
+                    reach[3].max(r[3]),
+                ];
+            }
+        }
+        let reach = [
+            reach[0].max(-SPILL),
+            reach[1].max(-SPILL),
+            reach[2].min(size.x + SPILL),
+            reach[3].min(size.y + SPILL),
+        ];
+        let max_distance = match dom.float_property(gui, "MaxDistance") {
+            // Inference: a SurfaceGui's default MaxDistance 0 means no
+            // limit, as creator-docs say.
+            Some(d) if d > 0.0 => d,
+            _ => f32::INFINITY,
+        };
+        canvases.push(WorldCanvas {
+            quads,
+            size,
+            reach,
+            light_influence: dom.float_property(gui, "LightInfluence").unwrap_or(0.0),
+            brightness: dom.float_property(gui, "Brightness").unwrap_or(1.0),
+            always_on_top: dom.bool_property(gui, "AlwaysOnTop") == Some(true),
+            max_distance,
+        });
+    }
+    canvases
 }
 
 struct Draw<'a, 'b> {
@@ -65,6 +124,24 @@ struct Draw<'a, 'b> {
 }
 
 impl Draw<'_, '_> {
+    /// What a LayerCollector holds, in its `ZIndexBehavior`'s order.
+    fn collector(&mut self, root: InstanceId, clip: Clip) {
+        let mut drawn = Vec::new();
+        collect(self.dom, self.layout, root, clip, &mut drawn);
+        if self.dom.enum_item_property(root, "ZIndexBehavior") == Some("Global") {
+            // Measured: every object by ZIndex alone, later in the tree on
+            // top on a tie.
+            let mut flat = Vec::new();
+            flatten(drawn, &mut flat);
+            flat.sort_by_key(|d| d.z);
+            for d in flat {
+                self.emit(&d);
+            }
+        } else {
+            sibling_order(self, drawn);
+        }
+    }
+
     fn emit(&mut self, d: &Drawn) {
         frame::emit(self.dom, d.id, d.placed, d.clip, self.out);
         if let Some(laid) = self.layout.texts.get(&d.id) {

@@ -31,7 +31,7 @@ use bytemuck::{Pod, Zeroable};
 use glam::Vec3;
 use rook_content::decode::image::Image;
 use rook_content::decode::mesh::Mesh;
-use rook_types::{GuiQuad, Material, NormalId, PartShape};
+use rook_types::{GuiQuad, Material, NormalId, PartShape, WorldCanvas, WorldPlace};
 use wgpu::util::DeviceExt;
 
 use batch::cull::{Aabb, Frustum, MOTION_STUDS};

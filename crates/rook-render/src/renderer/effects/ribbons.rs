@@ -182,7 +182,7 @@ pub(crate) fn pipeline(
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &attrs,
         },
-        color_format,
-        depth_format,
+        (color_format, depth_format),
+        wgpu::CompareFunction::Greater,
     )
 }

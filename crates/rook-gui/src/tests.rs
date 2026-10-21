@@ -9,6 +9,7 @@ use super::*;
 
 mod draw;
 mod layouts;
+mod world;
 
 fn set(dom: &mut Dom, id: InstanceId, name: &str, value: Value) {
     dom.set_property_by_name(id, name, value).unwrap();

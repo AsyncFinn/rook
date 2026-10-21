@@ -254,8 +254,8 @@ It comes before characters: tools, health bars and leaderboards are GUI.
 2. ✅ [Text](docs/behavior/gui-text.md): fonts and `FontFace` weights,
    sizing, wrapping, `TextScaled`, `RichText`; Hint 145 and Message 26,
    bars of text.
-3. SurfaceGui and BillboardGui in the world: signs, labels and name
-   tags. Text comes first: they're mostly TextLabels.
+3. ✅ [SurfaceGui and BillboardGui](docs/behavior/gui-world.md) in the
+   world: signs, labels and name tags.
 4. Images, 9-slice, ScrollingFrame.
 5. Input: buttons, `TextBox`, GUI taking input before the 3D world;
    ProximityPrompt (12 files).

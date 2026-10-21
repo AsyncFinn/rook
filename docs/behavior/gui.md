@@ -126,6 +126,6 @@ Nested automatic sizes add up from the inside.
 - **Blending**: GUI blends over the finished screen's sRGB pixels
   (Inference, as Highlights measurably do): Rook draws GUI premultiplied
   into an 8-bit layer the tone pass lays over the frame.
-- Text: [GUI text](gui-text.md). World GUI (SurfaceGui, BillboardGui)
-  comes with step 3, images and ScrollingFrame with step 4 and the modern UI objects
-  with step 6; until step 3 only the local player's ScreenGuis draw.
+- Text: [GUI text](gui-text.md); SurfaceGui and BillboardGui:
+  [world GUI](gui-world.md). Images and ScrollingFrame come with step 4
+  and the modern UI objects with step 6.
