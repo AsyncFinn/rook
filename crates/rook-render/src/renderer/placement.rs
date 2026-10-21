@@ -70,7 +70,9 @@ impl Renderer {
         self.lights.update_blockers(scene, changed);
         self.particles.sim.set_emitters(&scene.emitters);
         self.request_particle_images(scene);
-        self.ribbons.sim.set(&scene.beams, &scene.trails);
+        self.ribbons
+            .sim
+            .set(&scene.beams, &scene.trails, &scene.floor_wires);
         self.request_ribbon_images(scene);
         // The skybox's images go up like any other image.
         for hash in scene.lighting.skybox.into_iter().flatten() {

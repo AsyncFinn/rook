@@ -1,5 +1,6 @@
 //! FloorWire: a wire laid along the floor between two parts, drawn with
-//! its `From` part.
+//! its `From` part; its moving images are the renderer's
+//! ([`rook_render::FloorWire`], read in `effects`).
 
 use glam::Quat;
 use rook_types::PartShape;
@@ -10,20 +11,15 @@ use super::*;
 /// 1.25 × `WireRadius`, so they bulge at the corners).
 const CORNER: f32 = 1.25;
 
+/// How far the wire keeps off the floor and its parts' faces (measured:
+/// 0.2 studs, whatever its radius or the parts' sizes).
+const GAP: f32 = 0.2;
+
 /// One FloorWire from a part at `from`: tubes `WireRadius` thick (0.0625
-/// by default) in `Color3`, lit, with a ball at each corner. Measured in
-/// Studio 0.742 (2026-10-20, parts 20 studs apart on every axis, one
-/// over a platform): the wire drops from `From`'s centre to the floor
-/// under it (the top of what's below, the wire's centre on it), runs
-/// along X, then along Z, at that height, and rises to `To`'s centre.
-/// Rook finds the floor from the parts' world boxes (Approximation: a
-/// turned part's box reaches past it). Rook draws nothing without a `To`.
-/// Not yet: its moving `Texture`, and following `To` when only `To` moves.
+/// by default) in `Color3`, lit, along [`path`], with a ball at each
+/// corner. Rook draws nothing without a `To`.
 pub(super) fn floor_wire(dom: &Dom, id: InstanceId, from: CFrame) -> Vec<(PartInstance, Pose)> {
-    let Some(to_part) = dom.ref_property(id, "To") else {
-        return Vec::new();
-    };
-    let Some(to) = dom.cframe_property(to_part, "CFrame") else {
+    let Some(path) = path(dom, id) else {
         return Vec::new();
     };
     let radius = dom.float_property(id, "WireRadius").unwrap_or(0.0625);
@@ -34,25 +30,12 @@ pub(super) fn floor_wire(dom: &Dom, id: InstanceId, from: CFrame) -> Vec<(PartIn
     if radius <= 0.0 || wire.transparency >= 1.0 {
         return Vec::new();
     }
-    let (a, b) = (from.position, to.position);
-    let skip = [dom.ref_property(id, "From"), Some(to_part)];
-    let floor = floor_under(dom, a, &skip).unwrap_or(a.y);
-    let path = [
-        a,
-        Vec3::new(a.x, floor, a.z),
-        Vec3::new(b.x, floor, a.z),
-        Vec3::new(b.x, floor, b.z),
-        b,
-    ];
     // Into the From part's axes.
     let local = |p: Vec3| from.rotation.transpose() * (p - from.position);
     let mut out = Vec::new();
     for (i, leg) in path.windows(2).enumerate() {
         let (p, q) = (local(leg[0]), local(leg[1]));
         let length = p.distance(q);
-        if length < 1e-4 {
-            continue;
-        }
         let turn = Mat3::from_quat(Quat::from_rotation_arc(Vec3::Z, (q - p) / length));
         let tube = PartInstance {
             size: Vec3::new(2.0 * radius, 2.0 * radius, length),
@@ -77,22 +60,68 @@ pub(super) fn floor_wire(dom: &Dom, id: InstanceId, from: CFrame) -> Vec<(PartIn
     out
 }
 
+/// FloorWire `id`'s corners in the world, from `From` to `To`, without
+/// legs of no length. Measured in Studio 0.743 (2026-10-20): it leaves
+/// `From`'s centre along X towards `To` (along Z when they line up in X),
+/// drops `GAP` past `From`'s face to `GAP` above the floor under it (the
+/// top of what's below), runs along X, then along Z, and rises `GAP`
+/// short of `To`'s face to `To`'s centre height; the bits inside the parts
+/// aren't drawn. Rook takes faces and floors from the parts' world boxes
+/// (Approximation: a turned part's box reaches past it), the floor under
+/// where the wire drops (Inference).
+pub(in crate::scene) fn path(dom: &Dom, id: InstanceId) -> Option<Vec<Vec3>> {
+    let (from, to) = (dom.ref_property(id, "From")?, dom.ref_property(id, "To")?);
+    let (a, b) = (world_box(dom, from)?, world_box(dom, to)?);
+    let (pa, pb) = (a.0, b.0);
+    let way = (pb - pa).signum();
+    let (dx, dz) = (pb.x != pa.x, pb.z != pa.z);
+    let start = match (dx, dz) {
+        (true, _) => pa + Vec3::X * way.x * (a.1.x + GAP),
+        (false, true) => pa + Vec3::Z * way.z * (a.1.z + GAP),
+        (false, false) => pa,
+    };
+    let end = match (dx, dz) {
+        (_, true) => pb - Vec3::Z * way.z * (b.1.z + GAP),
+        (true, false) => pb - Vec3::X * way.x * (b.1.x + GAP),
+        (false, false) => pb,
+    };
+    let floor = floor_under(dom, start, &[from, to]).unwrap_or(start.y - GAP) + GAP;
+    let corners = [
+        start,
+        Vec3::new(start.x, floor, start.z),
+        Vec3::new(end.x, floor, start.z),
+        Vec3::new(end.x, floor, end.z),
+        end,
+    ];
+    let mut path = vec![start];
+    for p in &corners[1..] {
+        if p.distance(*path.last().unwrap()) > 1e-4 {
+            path.push(*p);
+        }
+    }
+    (path.len() > 1).then_some(path)
+}
+
+/// Part `id`'s centre and the half size of its box in the world.
+fn world_box(dom: &Dom, id: InstanceId) -> Option<(Vec3, Vec3)> {
+    let size = dom.vector3_property(id, "Size")?;
+    let cf = dom.cframe_property(id, "CFrame")?;
+    let r = cf.rotation;
+    let half = Mat3::from_cols(r.x_axis.abs(), r.y_axis.abs(), r.z_axis.abs()) * (size * 0.5);
+    Some((cf.position, half))
+}
+
 /// The top of the highest Workspace part under `at` (not those in `skip`).
-fn floor_under(dom: &Dom, at: Vec3, skip: &[Option<InstanceId>]) -> Option<f32> {
+fn floor_under(dom: &Dom, at: Vec3, skip: &[InstanceId]) -> Option<f32> {
     let mut floor: Option<f32> = None;
     for part in workspace_parts(dom) {
-        if skip.contains(&Some(part)) {
+        if skip.contains(&part) {
             continue;
         }
-        let (Some(size), Some(cf)) = (
-            dom.vector3_property(part, "Size"),
-            dom.cframe_property(part, "CFrame"),
-        ) else {
+        let Some((centre, half)) = world_box(dom, part) else {
             continue;
         };
-        let r = cf.rotation;
-        let half = Mat3::from_cols(r.x_axis.abs(), r.y_axis.abs(), r.z_axis.abs()) * (size * 0.5);
-        let (lo, hi) = (cf.position - half, cf.position + half);
+        let (lo, hi) = (centre - half, centre + half);
         let over = at.x >= lo.x && at.x <= hi.x && at.z >= lo.z && at.z <= hi.z;
         if over && hi.y <= at.y && floor.is_none_or(|f| hi.y > f) {
             floor = Some(hi.y);

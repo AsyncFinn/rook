@@ -21,7 +21,7 @@ pub use emitters::{
     Sequence, Spawn,
 };
 pub use lighting::{LightShape, Lighting, LocalLight, SKYBOX_FACES, Tonemapper};
-pub use ribbons::{Anchor, Beam, RibbonLook, TextureMode, Trail};
+pub use ribbons::{Anchor, Beam, FloorWire, RibbonLook, TextureMode, Trail};
 pub use terrain::{TERRAIN_LAYERS, TerrainLayer, TerrainLook};
 
 /// A mesh file, by the BLAKE3 hash of its bytes: parts that use the same
@@ -338,6 +338,8 @@ pub struct Scene {
     pub beams: Vec<Beam>,
     /// Trails, which keep their index as emitters do (for their pieces).
     pub trails: Vec<Trail>,
+    /// The FloorWires' moving images (their wires are `parts`).
+    pub floor_wires: Vec<FloorWire>,
     pub lighting: Lighting,
     pub terrain: TerrainLook,
     /// The mesh files parts may draw ([`DrawShape::File`]). The renderer

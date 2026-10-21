@@ -1,7 +1,7 @@
-//! Drawing Beams and Trails (docs/behavior/effects/beams-and-trails.md): each
-//! strip's quads, with the particles' colours, blending and lighting
-//! (`fs_particle`), after the transparent parts and before the particles,
-//! farthest strip first, both sides showing.
+//! Drawing Beams, Trails (docs/behavior/effects/beams-and-trails.md) and
+//! FloorWires' images: each strip's quads, with the particles' colours,
+//! blending and lighting (`fs_particle`), after the transparent parts and
+//! before the particles, farthest strip first, both sides showing.
 
 use std::ops::Range;
 
@@ -42,7 +42,9 @@ impl Renderer {
     pub(crate) fn request_ribbon_images(&mut self, scene: &Scene) {
         let beams = scene.beams.iter().map(|b| b.look.texture);
         let trails = scene.trails.iter().map(|t| t.look.texture);
-        for hash in beams.chain(trails).flatten().collect::<Vec<_>>() {
+        let wires = scene.floor_wires.iter().map(|w| w.look.texture);
+        let hashes: Vec<ImageHash> = beams.chain(trails).chain(wires).flatten().collect();
+        for hash in hashes {
             self.image_readiness(hash, Some(scene));
         }
     }

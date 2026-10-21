@@ -137,18 +137,50 @@ a few.
 
 ## FloorWire
 
-Deprecated, but it draws. Measured with parts 20 studs apart on every
-axis, one of them over a platform:
+Deprecated, but it draws. Measured in Studio 0.742 with parts 20 studs
+apart on every axis (one over a platform), and in 0.743 (2026-10-20)
+with pairs of parts in one plane seen square on at a 1° field of view
+(38.5 px/stud) and a four-colour test image:
 
 - It needs both `From` and `To`, and draws nothing until it has them.
-- **It's laid along the floor**: from `From`'s centre straight down to
-  the top of what's under it (a platform, not the baseplate below it),
-  along X, then along Z, at that height (the wire's centre on the top),
-  then straight up (or down) to `To`'s centre.
+- **It's laid along the floor**, keeping 0.2 studs off every surface
+  whatever its radius or the parts' sizes: from `From`'s centre along X
+  towards `To` (along Z when they line up in X) to 0.2 past `From`'s
+  face, straight down to 0.2 above the top of what's under it (a
+  platform, not the baseplate below it), along X to `To`'s X, then along
+  Z, and straight up (or down) 0.2 short of `To`'s face, level with
+  `To`'s centre. The bits inside the two parts aren't drawn (a 1-stud
+  part's wire starts 0.7 from its centre, a 4-stud part's 2.2).
 - Tubes `WireRadius` thick (0.0625 by default) in `Color3`, lit, with a
-  ball about 1.25 × `WireRadius` at the corners, so they bulge.
+  ball about 1.25 × `WireRadius` at the inner corners, so they bulge;
+  the two ends are flat.
+- **`Texture`** draws as images on the wire, none by default:
+  - Each is `TextureSize` (1, 1 by default) studs, X along the wire and
+    Y across it, centred on it, as **two crossed quads**: both hold the
+    wire, and they're fixed in the world, not turned to the camera. The
+    image's width runs from `From` towards `To`, so on a rising or
+    falling leg it stands on its side; that's the "rotated going up"
+    look.
+  - Across axes, by the leg's direction: up, -X and -Z; down, -X and +Z;
+    +X, -Y and +Z; -Z, -X and -Y. Those are -X and +Z turned by the
+    shortest arc from -Y to the leg (about X when it points up); Rook
+    uses that rule for -X and +Z legs, which weren't seen.
+  - One every `StudsBetweenTextures` (4) studs along the drawn wire,
+    counted back from its end at `To` (the first at that end); changing
+    `To`'s height moves them all, a bigger `To` part does not. An image
+    whose centre is past either end isn't drawn; one near a corner
+    reaches straight past it.
+  - `Velocity` (2) moves them towards `To` at that many studs a second
+    (1 moved 0.33 studs in 0.35 s), and `CycleOffset` puts them that
+    share of the spacing further on (0.25 at spacing 4: one stud; 1: no
+    change).
+  - Unlit, through the tone curve (255 draws 222), not tinted by
+    `Color3`, and faded by `Transparency` with the wire.
 
-Rook draws it with its `From` part and finds the floor from the
-Workspace parts' world boxes (Approximation: a turned part's box reaches
-past it). Not yet: its moving `Texture`, and redrawing when only `To`
-moves.
+Rook draws the wire with its `From` part and the images as the
+renderer's ribbons (`rook_render::FloorWire`), moved each frame. Moving
+either part redraws it. It finds faces and the floor from the Workspace
+parts' world boxes (Approximation: a turned part's box reaches past it),
+under where the wire drops (Inference). Not measured: turned parts, a
+`To` straight above `From`, and where Studio's moving images start in
+time.

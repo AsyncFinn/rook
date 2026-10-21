@@ -12,7 +12,9 @@ use crate::*;
 /// Attachments, which may carry one) whose properties changed in `lights`,
 /// and lights entering or leaving the tree if `lights_placed`; the same
 /// for the visual effects ([`is_effect_class`]) in `effects` and
-/// `effects_placed`, plus the effect methods scripts called.
+/// `effects_placed`, plus the effect methods scripts called. A FloorWire
+/// is both an adornment of its `From` part (its wire) and an effect (its
+/// moving images); moving either of its parts redraws its wire.
 #[derive(Debug, Clone, Default)]
 pub struct RenderChanges {
     pub full: bool,
@@ -153,6 +155,7 @@ impl DataModel {
         };
         let light = |id: InstanceId| dom.is_a(id, "Light");
         let effect = |id: InstanceId| is_effect_class(dom.class_name(id));
+        let wire = |id: InstanceId| dom.class_name(id) == "FloorWire";
         let materials =
             |id: InstanceId| dom.is_a(id, "MaterialService") || dom.is_a(id, "MaterialVariant");
         let mark_part = |changes: &mut RenderChanges, part: Option<InstanceId>| {
@@ -200,10 +203,20 @@ impl DataModel {
                         {
                             changes.moved.insert(*id);
                         }
+                        // A FloorWire's path bends as either of its parts
+                        // moves, so its From part is drawn again.
+                        for &(r, _) in dom.referrers(*id) {
+                            if wire(r) {
+                                mark_part(changes, dom.ref_property(r, "From"));
+                            }
+                        }
                     } else if decorates(*id) {
                         mark_part(changes, dom.parent(*id));
                     } else if adornment(*id) {
                         adorn(changes, adorned, *id, false);
+                        if wire(*id) {
+                            changes.effects.insert(*id);
+                        }
                     } else {
                         mark_part(changes, Some(*id));
                     }
@@ -221,7 +234,7 @@ impl DataModel {
                     if subtree.iter().any(|i| light(*i)) {
                         changes.lights_placed = true;
                     }
-                    if subtree.iter().any(|i| effect(*i)) {
+                    if subtree.iter().any(|i| effect(*i) || wire(*i)) {
                         changes.effects_placed = true;
                     }
                     for &i in subtree.iter().filter(|i| adornment(**i)) {
@@ -246,6 +259,7 @@ impl DataModel {
                 }
                 Change::Destroying(id) if adornment(*id) => {
                     adorn(changes, adorned, *id, true);
+                    changes.effects_placed |= wire(*id);
                 }
                 _ => {}
             }

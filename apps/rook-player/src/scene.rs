@@ -109,7 +109,8 @@ pub(crate) struct SceneCache {
     /// Indices into `light_ids` of the lights each part or Attachment
     /// carries, and of each light itself.
     light_holders: HashMap<InstanceId, Vec<usize>>,
-    /// The visual effects, as `scene.emitters`, `beams` and `trails`.
+    /// The visual effects, as `scene.emitters`, `beams`, `trails` and
+    /// `floor_wires`.
     effects: EffectCache,
     /// An effect changed outside [`SceneCache::apply`] (its image
     /// arrived).
@@ -362,10 +363,12 @@ impl SceneCache {
         let mut emitters = std::mem::take(&mut self.scene.emitters);
         let mut beams = std::mem::take(&mut self.scene.beams);
         let mut trails = std::mem::take(&mut self.scene.trails);
+        let mut floor_wires = std::mem::take(&mut self.scene.floor_wires);
         let drawn = EffectLists {
             emitters: &mut emitters,
             beams: &mut beams,
             trails: &mut trails,
+            floor_wires: &mut floor_wires,
         };
         let mut images = |id: InstanceId, url: &str| match self.file_state(id, url, Want::Image) {
             FileState::Loaded(hash) => Some(ImageHash(hash)),
@@ -376,6 +379,7 @@ impl SceneCache {
         self.scene.emitters = emitters;
         self.scene.beams = beams;
         self.scene.trails = trails;
+        self.scene.floor_wires = floor_wires;
         out
     }
 }

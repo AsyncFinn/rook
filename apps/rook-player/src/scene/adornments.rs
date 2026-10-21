@@ -4,7 +4,7 @@
 //! and FloorWire, each kind in its own file. They draw as extra entries
 //! riding along with their Adornee (a FloorWire's `From`).
 
-mod floor_wire;
+pub(super) mod floor_wire;
 mod handle_adornment;
 mod handles;
 mod selection_box;

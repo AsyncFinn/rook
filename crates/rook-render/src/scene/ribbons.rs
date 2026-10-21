@@ -1,7 +1,7 @@
 //! Beams and Trails: strips of an image between two Attachments
 //! (docs/behavior/effects/beams-and-trails.md).
 
-use glam::{Mat3, Vec3};
+use glam::{Mat3, Vec2, Vec3};
 
 use super::ImageHash;
 use super::emitters::{Curve, Sequence};
@@ -88,5 +88,20 @@ pub struct Trail {
     pub width_scale: Sequence,
     /// How many times scripts have cleared it (`Clear`).
     pub cleared: u64,
+    pub look: RibbonLook,
+}
+
+/// A FloorWire's images: one `size` (along, across) every `spacing` studs
+/// of `path`, counted back from its end at `To`, moved `cycle_offset`
+/// spacings and `velocity` studs a second towards that end (measured,
+/// docs/behavior/adornments.md).
+#[derive(Debug, Clone, PartialEq)]
+pub struct FloorWire {
+    /// Its corners from `From` to `To`, each leg along a world axis.
+    pub path: Vec<Vec3>,
+    pub size: Vec2,
+    pub spacing: f32,
+    pub velocity: f32,
+    pub cycle_offset: f32,
     pub look: RibbonLook,
 }

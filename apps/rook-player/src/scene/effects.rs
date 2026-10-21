@@ -2,7 +2,8 @@
 //! docs/behavior/effects/particle-emitters.md, docs/behavior/effects/beams-and-trails.md,
 //! docs/behavior/effects/explosions.md): Fire, Smoke, Sparkles, ParticleEmitter
 //! and Explosion as the renderer's particle emitters, Beam and Trail as
-//! its ribbons.
+//! its ribbons, and so a FloorWire's moving images
+//! (docs/behavior/adornments.md; its wire is an adornment).
 
 mod classic;
 mod emitter;
@@ -12,7 +13,7 @@ mod textures;
 
 use rook_engine::is_effect_class;
 use rook_lua::EffectCall;
-use rook_render::{Beam, Emitter, Trail};
+use rook_render::{Beam, Emitter, FloorWire, Trail};
 
 pub(super) use textures::EffectTextures;
 
@@ -20,7 +21,7 @@ use super::*;
 
 /// Whether `id` is an effect this module draws.
 pub(super) fn is_effect(dom: &Dom, id: InstanceId) -> bool {
-    is_effect_class(dom.class_name(id))
+    is_effect_class(dom.class_name(id)) || dom.class_name(id) == "FloorWire"
 }
 
 /// Where an effect is drawn in the scene's lists. Each keeps its place
@@ -30,6 +31,7 @@ enum Slot {
     Emitters { first: usize, count: usize },
     Beam(usize),
     Trail(usize),
+    FloorWire(usize),
 }
 
 /// What scripts did to an effect beyond its properties.
@@ -45,6 +47,7 @@ pub(super) struct EffectLists<'a> {
     pub(super) emitters: &'a mut Vec<Emitter>,
     pub(super) beams: &'a mut Vec<Beam>,
     pub(super) trails: &'a mut Vec<Trail>,
+    pub(super) floor_wires: &'a mut Vec<FloorWire>,
 }
 
 /// An effect's image by URL: its hash once loaded (noting that the effect
@@ -96,6 +99,7 @@ impl EffectCache {
         drawn.emitters.clear();
         drawn.beams.clear();
         drawn.trails.clear();
+        drawn.floor_wires.clear();
         self.ids.clear();
         self.slots.clear();
         self.holders.clear();
@@ -118,6 +122,12 @@ impl EffectCache {
                 "Trail" => {
                     drawn.trails.push(self.reader(dom, id, images).trail(id));
                     Slot::Trail(drawn.trails.len() - 1)
+                }
+                "FloorWire" => {
+                    drawn
+                        .floor_wires
+                        .push(self.reader(dom, id, images).floor_wire(id));
+                    Slot::FloorWire(drawn.floor_wires.len() - 1)
                 }
                 _ => {
                     let read = self.reader(dom, id, images).emitters(id);
@@ -152,14 +162,19 @@ impl EffectCache {
         &mut self,
         dom: &Dom,
         changes: &RenderChanges,
-        drawn: EffectLists<'_>,
+        mut drawn: EffectLists<'_>,
         images: &mut Images<'_>,
     ) -> bool {
         let placed = changes
             .placed
             .iter()
             .any(|id| self.holders.contains_key(id));
-        if changes.effects_placed || placed {
+        // A FloorWire's change may give it other parts to hang from.
+        let rewired = changes
+            .effects
+            .iter()
+            .any(|&id| dom.class_name(id) == "FloorWire");
+        if changes.effects_placed || placed || rewired {
             self.find(dom, drawn, images);
             return true;
         }
@@ -182,31 +197,20 @@ impl EffectCache {
             .filter(|i| !stale.contains(i))
             .collect();
         let any = !stale.is_empty() || !moved.is_empty();
-        self.reread(
-            dom,
-            stale,
-            drawn.emitters,
-            drawn.beams,
-            drawn.trails,
-            images,
-        );
+        self.reread(dom, stale, &mut drawn, images);
         for i in moved {
-            self.moved(dom, i, drawn.emitters, drawn.beams, drawn.trails);
+            self.moved(dom, i, &mut drawn);
         }
         any
     }
 
     /// Read the effects `ids` again (their images loaded, or scripts
     /// called them). Whether any is drawn here.
-    #[expect(
-        clippy::needless_pass_by_value,
-        reason = "EffectLists is a set of &mut lists, reborrowed for the call"
-    )]
     pub(super) fn reread_ids(
         &self,
         dom: &Dom,
         ids: &[InstanceId],
-        drawn: EffectLists<'_>,
+        mut drawn: EffectLists<'_>,
         images: &mut Images<'_>,
     ) -> bool {
         let stale: HashSet<usize> = ids
@@ -214,14 +218,7 @@ impl EffectCache {
             .filter_map(|id| self.ids.iter().position(|e| e == id))
             .collect();
         let any = !stale.is_empty();
-        self.reread(
-            dom,
-            stale,
-            drawn.emitters,
-            drawn.beams,
-            drawn.trails,
-            images,
-        );
+        self.reread(dom, stale, &mut drawn, images);
         any
     }
 
@@ -229,9 +226,7 @@ impl EffectCache {
         &self,
         dom: &Dom,
         stale: HashSet<usize>,
-        emitters: &mut [Emitter],
-        beams: &mut [Beam],
-        trails: &mut [Trail],
+        drawn: &mut EffectLists<'_>,
         images: &mut Images<'_>,
     ) {
         for i in stale {
@@ -240,45 +235,44 @@ impl EffectCache {
             match self.slots[i] {
                 Slot::Emitters { first, count } => {
                     let read = reader.emitters(id);
-                    for (slot, e) in emitters[first..first + count].iter_mut().zip(read) {
+                    let slots = &mut drawn.emitters[first..first + count];
+                    for (slot, e) in slots.iter_mut().zip(read) {
                         *slot = e;
                     }
                 }
-                Slot::Beam(b) => beams[b] = reader.beam(id),
-                Slot::Trail(t) => trails[t] = reader.trail(id),
+                Slot::Beam(b) => drawn.beams[b] = reader.beam(id),
+                Slot::Trail(t) => drawn.trails[t] = reader.trail(id),
+                Slot::FloorWire(w) => drawn.floor_wires[w] = reader.floor_wire(id),
             }
         }
     }
 
     /// Effect `i`'s holder moved: carry it along.
-    fn moved(
-        &self,
-        dom: &Dom,
-        i: usize,
-        emitters: &mut [Emitter],
-        beams: &mut [Beam],
-        trails: &mut [Trail],
-    ) {
+    fn moved(&self, dom: &Dom, i: usize, drawn: &mut EffectLists<'_>) {
         let id = self.ids[i];
         match self.slots[i] {
             Slot::Emitters { first, count } => {
                 let Some(frame) = holder_frame(dom, id) else {
                     return;
                 };
-                for e in &mut emitters[first..first + count] {
+                for e in &mut drawn.emitters[first..first + count] {
                     e.position = frame.position;
                     e.rotation = frame.rotation;
                 }
             }
             Slot::Beam(b) => {
                 if let Some(ends) = ribbons::anchors(dom, id) {
-                    beams[b].ends = ends;
+                    drawn.beams[b].ends = ends;
                 }
             }
             Slot::Trail(t) => {
                 if let Some([a, z]) = ribbons::anchors(dom, id) {
-                    trails[t].ends = [a.position, z.position];
+                    drawn.trails[t].ends = [a.position, z.position];
                 }
+            }
+            Slot::FloorWire(w) => {
+                drawn.floor_wires[w].path =
+                    super::adornments::floor_wire::path(dom, id).unwrap_or_default();
             }
         }
     }
@@ -315,12 +309,22 @@ fn key(id: InstanceId, layer: usize) -> u64 {
 }
 
 /// The instances whose changes change effect `id`: itself, and the part
-/// and Attachment it hangs from, or a Beam's or Trail's Attachments and
-/// their parts. An Explosion stays where it went off.
+/// and Attachment it hangs from, a Beam's or Trail's Attachments and
+/// their parts, or a FloorWire's parts. An Explosion stays where it went
+/// off.
 fn holders(dom: &Dom, id: InstanceId) -> Vec<InstanceId> {
     let mut out = vec![id];
-    if dom.class_name(id) == "Explosion" {
-        return out;
+    match dom.class_name(id) {
+        "Explosion" => return out,
+        "FloorWire" => {
+            out.extend(
+                ["From", "To"]
+                    .iter()
+                    .filter_map(|p| dom.ref_property(id, p)),
+            );
+            return out;
+        }
+        _ => {}
     }
     if matches!(dom.class_name(id), "Beam" | "Trail") {
         for name in ["Attachment0", "Attachment1"] {

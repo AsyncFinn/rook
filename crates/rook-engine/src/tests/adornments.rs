@@ -88,3 +88,32 @@ fn floor_wire_changes_redraw_its_from_part() {
             .contains(&dom.find_first_child(ws, "A", false).unwrap())
     );
 }
+
+/// A FloorWire's path bends when its `To` part moves: its `From` part is
+/// drawn again, while `To` itself only moves.
+#[test]
+fn floor_wire_redraws_when_to_moves() {
+    let mut s = Server::new(&Options::default()).unwrap();
+    add_script(
+        &s,
+        "ServerScriptService",
+        "Wire",
+        r#"
+        local a = Instance.new("Part") a.Name = "A" a.Anchored = true a.Parent = workspace
+        local b = Instance.new("Part") b.Name = "B" b.Anchored = true b.Parent = workspace
+        local wire = Instance.new("FloorWire") wire.From = a wire.To = b wire.Parent = workspace
+        task.wait(0.5)
+        b.Position = Vector3.new(10, 5, 0)
+        "#,
+    );
+    s.start();
+    s.run_for(0.2);
+    s.take_render_changes();
+    s.run_for(0.5);
+    let changes = s.take_render_changes();
+    let dom = &s.runtime().world().dom;
+    let ws = dom.find_service("Workspace").unwrap();
+    let part = |name| dom.find_first_child(ws, name, false).unwrap();
+    assert!(changes.parts.contains(&part("A")));
+    assert!(changes.moved.contains(&part("B")));
+}
