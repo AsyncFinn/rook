@@ -1,8 +1,8 @@
 //! The command bar: Luau typed at the terminal and run in a live
 //! DataModel, like Roblox Studio's command bar, with the feel of Luau's own
-//! REPL: `> ` prompts, `>> ` while a statement is unfinished, line editing
-//! and history (rustyline), kept between runs in the data folder
-//! (`state/repl-history.txt`). Output prints above the prompt.
+//! REPL: a `> ` prompt with coloured, multi-line editing ([`editor`]) and
+//! history, kept between runs in the data folder (`state/repl-history.txt`).
+//! Output prints above the prompt.
 //!
 //! Built only with the `repl` feature (on by default in the apps; build
 //! with `--no-default-features` to leave it out). It reads this process's
@@ -14,11 +14,14 @@ use std::io::IsTerminal;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError, channel};
 
 use rook_lua::MessageType;
+use rustyline::ExternalPrinter;
 use rustyline::error::ReadlineError;
-use rustyline::{DefaultEditor, ExternalPrinter};
 
 use crate::DataModel;
 use crate::console::{print_message, set_output};
+
+mod editor;
+mod highlight;
 
 /// Where commands run.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -101,10 +104,10 @@ impl Repl {
     }
 }
 
-/// The reader thread: prompt, collect a complete chunk (asking for more
-/// lines while a statement is unfinished), and send it to the engine.
+/// The reader thread: prompt, let the editor collect a complete chunk, and
+/// send it to the engine.
 fn read(tx: &Sender<String>) {
-    let Ok(mut editor) = DefaultEditor::new() else {
+    let Ok(mut editor) = editor::new() else {
         return;
     };
     if let Ok(mut printer) = editor.create_external_printer() {
@@ -121,48 +124,30 @@ fn read(tx: &Sender<String>) {
     {
         tracing::debug!(target: "rook", "couldn't read {}: {e}", path.display());
     }
-    // A VM of the reader's own, only for checking whether input is complete.
-    let checker = mlua::Lua::new();
-    let mut pending = String::new();
-    loop {
-        let prompt = if pending.is_empty() { "> " } else { ">> " };
-        match editor.readline(prompt) {
-            Ok(line) => {
-                if !pending.is_empty() {
-                    pending.push('\n');
-                }
-                pending.push_str(&line);
-                if is_unfinished(&checker, &pending) {
-                    continue;
-                }
-                let chunk = std::mem::take(&mut pending);
-                if !chunk.trim().is_empty()
-                    && editor.add_history_entry(chunk.as_str()).unwrap_or(false)
-                    && let Some(path) = &history
-                {
-                    let saved = path
-                        .parent()
-                        .map_or(Ok(()), |dir| rook_platform::get().files.create_dir_all(dir))
-                        .map_err(ReadlineError::from)
-                        .and_then(|()| editor.append_history(path));
-                    if let Err(e) = saved {
-                        tracing::debug!(target: "rook", "couldn't save {}: {e}", path.display());
-                    }
-                }
-                if tx.send(chunk).is_err() {
-                    break;
-                }
+    while let Ok(chunk) = editor.readline("> ") {
+        if !chunk.trim().is_empty()
+            && editor.add_history_entry(chunk.as_str()).unwrap_or(false)
+            && let Some(path) = &history
+        {
+            let saved = path
+                .parent()
+                .map_or(Ok(()), |dir| rook_platform::get().files.create_dir_all(dir))
+                .map_err(ReadlineError::from)
+                .and_then(|()| editor.append_history(path));
+            if let Err(e) = saved {
+                tracing::debug!(target: "rook", "couldn't save {}: {e}", path.display());
             }
-            Err(ReadlineError::Interrupted) if !pending.is_empty() => pending.clear(),
-            Err(_) => break,
+        }
+        if tx.send(chunk).is_err() {
+            break;
         }
     }
     set_output(None);
 }
 
 /// Whether `source` only fails to compile because it ends too soon (an
-/// open `do`, `function`, table or string), so the prompt should ask for
-/// more, as Luau's REPL does.
+/// open `do`, `function`, table or string), so Enter should add a line,
+/// as in Luau's REPL.
 fn is_unfinished(lua: &mlua::Lua, source: &str) -> bool {
     if source.trim_start().starts_with(':') {
         return false;

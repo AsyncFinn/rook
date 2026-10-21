@@ -61,7 +61,7 @@ anstream = "1"
 anstyle = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 # `with-file-history`: the prompt's history is kept between runs
-rustyline = { version = "18", default-features = false, features = ["with-file-history"] }
+rustyline = { version = "18", default-features = false, features = ["with-file-history", "custom-bindings"] }
 # Logging (rook-engine's `logging`): events from every crate, printed in the
 # console's line format and written to a file per run
 tracing = "0.1"
