@@ -1,0 +1,27 @@
+-- studio 0.743.0.7431133
+-- signals: deferred
+source sans 24 107, 24 true
+legacy 48 359, 72 true
+legacy 13 41, 19 true
+ten H 520, 100 true
+empty 0, 36 true
+trailing spaces 45, 36 true
+two lines 22, 72 true
+trailing newline 22, 72 true
+line height 22, 90 true
+unwrapped 36 false
+split word 180 false
+scaled 43, 50 true
+scaled to 100 85, 100 true
+rich size 58, 60 true
+rich escapes 104, 36 true
+content text Hi & you
+automatic 107, 24
+font face Font { Family = rbxasset://fonts/families/SourceSansPro.json, Weight = Bold, Style = Normal }
+font Enum.Font.ArialBold
+other font Enum.Font.Unknown
+from enum Font { Family = rbxasset://fonts/families/GothamSSm.json, Weight = Heavy, Style = Normal }
+font size Enum.FontSize.Size14
+text size 36
+too big 100
+too small 1

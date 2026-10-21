@@ -1,22 +1,38 @@
 //! What the local player's ScreenGuis draw, in order: each visible GUI
-//! object's background and border (text and images come with ROADMAP M8
-//! steps 2 and 4). Order and clipping rules: docs/behavior/gui.md#drawing.
+//! object's background and border, then its text (images come with
+//! ROADMAP M8 step 4), and any Hint or Message over it all. Order and
+//! clipping rules: docs/behavior/gui.md#drawing.
 
-use glam::Vec2;
+mod frame;
+mod messages;
+mod text;
+
 use rook_dom::{Dom, InstanceId};
 use rook_types::GuiQuad;
 
-use crate::layout::{Layout, Placed, gui_children, through_folders, turn, visible};
+use crate::layout::{Layout, Placed, gui_children, through_folders, visible};
+
+/// The fonts and glyph masks text is drawn with.
+pub(crate) struct Text<'a> {
+    pub(crate) fonts: &'a mut crate::text::Fonts,
+    pub(crate) glyphs: &'a mut crate::text::Glyphs,
+}
 
 /// Bottom first. Measured: ScreenGuis stack by `DisplayOrder`, later ones
 /// on top on a tie.
-pub(crate) fn quads(dom: &Dom, layout: &Layout) -> Vec<GuiQuad> {
+pub(crate) fn quads(dom: &Dom, layout: &Layout, text: &mut Text<'_>) -> Vec<GuiQuad> {
     let mut out = Vec::new();
     let Some(player_gui) = dom
         .local_player()
         .and_then(|p| dom.find_first_child_of_class(p, "PlayerGui"))
     else {
         return out;
+    };
+    let mut draw = Draw {
+        dom,
+        layout,
+        text,
+        out: &mut out,
     };
     let mut screens = through_folders(dom, player_gui, |id| dom.class_name(id) == "ScreenGui");
     screens.retain(|&s| dom.bool_property(s, "Enabled") != Some(false));
@@ -31,13 +47,30 @@ pub(crate) fn quads(dom: &Dom, layout: &Layout) -> Vec<GuiQuad> {
             flatten(drawn, &mut flat);
             flat.sort_by_key(|d| d.z);
             for d in flat {
-                d.emit(dom, &mut out);
+                draw.emit(&d);
             }
         } else {
-            sibling_order(dom, drawn, &mut out);
+            sibling_order(&mut draw, drawn);
         }
     }
+    messages::emit(dom, draw.text, draw.out);
     out
+}
+
+struct Draw<'a, 'b> {
+    dom: &'a Dom,
+    layout: &'a Layout,
+    text: &'a mut Text<'b>,
+    out: &'a mut Vec<GuiQuad>,
+}
+
+impl Draw<'_, '_> {
+    fn emit(&mut self, d: &Drawn) {
+        frame::emit(self.dom, d.id, d.placed, d.clip, self.out);
+        if let Some(laid) = self.layout.texts.get(&d.id) {
+            text::emit(&laid.block, d.placed, d.clip, self.text, self.out);
+        }
+    }
 }
 
 /// What clips an object's descendants.
@@ -110,76 +143,11 @@ fn flatten(drawn: Vec<Drawn>, out: &mut Vec<Drawn>) {
 
 /// Measured: siblings by ZIndex (later on top on a tie), each with all it
 /// holds over it.
-fn sibling_order(dom: &Dom, mut drawn: Vec<Drawn>, out: &mut Vec<GuiQuad>) {
+fn sibling_order(draw: &mut Draw<'_, '_>, mut drawn: Vec<Drawn>) {
     drawn.sort_by_key(|d| d.z);
     for mut d in drawn {
         let kids = std::mem::take(&mut d.kids);
-        d.emit(dom, out);
-        sibling_order(dom, kids, out);
-    }
-}
-
-impl Drawn {
-    /// The background, and the border around it. Inference: the border
-    /// takes the background's transparency and doesn't overlap it, and
-    /// UIScales thicken it.
-    fn emit(&self, dom: &Dom, out: &mut Vec<GuiQuad>) {
-        let alpha = 1.0
-            - dom
-                .float_property(self.id, "BackgroundTransparency")
-                .unwrap_or(0.0);
-        if alpha <= 0.0 {
-            return;
-        }
-        let p = self.placed;
-        let size = p.size();
-        let border = dom
-            .number_property(self.id, "BorderSizePixel")
-            .unwrap_or(0.0) as f32
-            * p.scale;
-        // Confirmed (creator-docs BorderMode): Outline outside the
-        // object, Middle across its edge, Inset inside.
-        let (inset, outset) = match dom.enum_item_property(self.id, "BorderMode") {
-            Some("Middle") => (border * 0.5, border * 0.5),
-            Some("Inset") => (border, 0.0),
-            _ => (0.0, border),
-        };
-        let quad = |offset: Vec2, extent: Vec2, color: [f32; 3]| GuiQuad {
-            center: p.center + turn(p.rotation, offset),
-            size: extent,
-            rotation: p.rotation.to_radians(),
-            color: [color[0], color[1], color[2], alpha],
-            clip: self.clip,
-        };
-        if border > 0.0 {
-            let color = dom
-                .color3_property(self.id, "BorderColor3")
-                .map_or([0.0; 3], |c| [c.r, c.g, c.b]);
-            let outer = size.abs() + Vec2::splat(2.0 * outset);
-            let thick = border;
-            let half = outer * 0.5 - thick * 0.5;
-            out.push(quad(
-                Vec2::new(0.0, -half.y),
-                Vec2::new(outer.x, thick),
-                color,
-            ));
-            out.push(quad(
-                Vec2::new(0.0, half.y),
-                Vec2::new(outer.x, thick),
-                color,
-            ));
-            let side = Vec2::new(thick, outer.y - 2.0 * thick);
-            if side.y > 0.0 {
-                out.push(quad(Vec2::new(-half.x, 0.0), side, color));
-                out.push(quad(Vec2::new(half.x, 0.0), side, color));
-            }
-        }
-        let inner = size.abs() - Vec2::splat(2.0 * inset);
-        if inner.x > 0.0 && inner.y > 0.0 {
-            let color = dom
-                .color3_property(self.id, "BackgroundColor3")
-                .map_or([1.0; 3], |c| [c.r, c.g, c.b]);
-            out.push(quad(Vec2::ZERO, inner, color));
-        }
+        draw.emit(&d);
+        sibling_order(draw, kids);
     }
 }

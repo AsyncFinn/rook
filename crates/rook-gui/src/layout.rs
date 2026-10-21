@@ -15,6 +15,7 @@ use rook_dom::{Dom, InstanceId};
 use rook_types::UDim2;
 use rustc_hash::FxHashMap;
 
+use crate::text::{self, Fonts, Source, TextBlock};
 use padding::Inner;
 
 /// The top bar's height, which ScreenGuis start below unless they ignore
@@ -80,21 +81,36 @@ pub(crate) struct Arranged {
     pub(crate) cells: Option<(Vec2, Vec2)>,
 }
 
-/// Every placed GUI object, and what each layout reports.
+/// Every placed GUI object, what each layout reports, and each text
+/// object's text.
 #[derive(Debug, Default)]
 pub(crate) struct Layout {
     pub(crate) placed: FxHashMap<InstanceId, Placed>,
     pub(crate) arranged: FxHashMap<InstanceId, Arranged>,
+    pub(crate) texts: FxHashMap<InstanceId, Laid>,
+}
+
+/// A text object's text, with what it was laid out from, so an unchanged
+/// one is reused next time rather than shaped again.
+#[derive(Debug)]
+pub(crate) struct Laid {
+    source: Source,
+    /// The area inside the padding: its top left and size.
+    area: (Vec2, Vec2),
+    /// [`Fonts::generation`] then: a font arriving lays text out again.
+    fonts: u64,
+    pub(crate) block: TextBlock,
 }
 
 impl Layout {
     /// Lay out the GUI scripts see on the screen: every player's PlayerGui
     /// and StarterGui. `previous` is the last layout, where hidden
     /// children of a UI layout stay.
-    pub(crate) fn screens(dom: &Dom, previous: &Layout) -> Self {
+    pub(crate) fn screens(dom: &Dom, previous: &Layout, fonts: &mut Fonts) -> Self {
         let mut pass = Pass {
             dom,
             previous,
+            fonts,
             out: Layout::default(),
             screen: screen_size(dom),
         };
@@ -118,7 +134,7 @@ impl Layout {
 
     /// Lay out the GUI tree holding `id` (a GUI object or a UI component
     /// in it), from its topmost GUI ancestor.
-    pub(crate) fn add_tree(&mut self, dom: &Dom, id: InstanceId) {
+    pub(crate) fn add_tree(&mut self, dom: &Dom, id: InstanceId, fonts: &mut Fonts) {
         let mut top = None;
         let mut at = Some(id);
         while let Some(i) = at {
@@ -135,6 +151,7 @@ impl Layout {
         let mut pass = Pass {
             dom,
             previous: &Layout::default(),
+            fonts,
             out: std::mem::take(self),
             screen: screen_size(dom),
         };
@@ -144,7 +161,7 @@ impl Layout {
 }
 
 /// The window's size: the current camera's `ViewportSize`.
-fn screen_size(dom: &Dom) -> Vec2 {
+pub(crate) fn screen_size(dom: &Dom) -> Vec2 {
     dom.find_service("Workspace")
         .and_then(|ws| dom.ref_property(ws, "CurrentCamera"))
         .and_then(|c| dom.vector2_property(c, "ViewportSize"))
@@ -221,6 +238,7 @@ fn arrange(dom: &Dom, layout: InstanceId, kids: &[Kid], inner: Vec2) -> Arrangem
 struct Pass<'a> {
     dom: &'a Dom,
     previous: &'a Layout,
+    fonts: &'a mut Fonts,
     out: Layout,
     screen: Vec2,
 }
@@ -334,6 +352,7 @@ impl Pass<'_> {
                 None if layout.is_some() => {
                     if let Some(&kept) = self.previous.placed.get(&kid) {
                         self.out.placed.insert(kid, kept);
+                        self.lay_out_text(kid, kept.local);
                         self.lay_out_inside(kid, kept);
                         continue;
                     }
@@ -356,8 +375,36 @@ impl Pass<'_> {
                 rotation: at.rotation + dom.float_property(kid, "Rotation").unwrap_or(0.0),
             };
             self.out.placed.insert(kid, placed);
+            self.lay_out_text(kid, size);
             self.lay_out_inside(kid, placed);
         }
+    }
+
+    /// A text object's text, in the area inside its padding.
+    fn lay_out_text(&mut self, id: InstanceId, size: Vec2) {
+        let Some(source) = Source::of(self.dom, id) else {
+            return;
+        };
+        let inner = padding::inner(self.dom, id, size);
+        let area = (inner.origin, inner.size);
+        let fonts = self.fonts.generation();
+        let block = match self.previous.texts.get(&id) {
+            Some(old) if old.source == source && old.area == area && old.fonts == fonts => {
+                old.block.clone()
+            }
+            _ => {
+                let mut block = text::lay_out(self.fonts, &source, inner.size, None);
+                block.shift(inner.origin);
+                block
+            }
+        };
+        let laid = Laid {
+            source,
+            area,
+            fonts,
+            block,
+        };
+        self.out.texts.insert(id, laid);
     }
 
     /// A GUI object's size in a parent area of `parent` pixels: `Size`

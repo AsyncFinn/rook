@@ -83,14 +83,17 @@ impl DataModel {
         let requests = self.runtime.take_content_requests();
         let mut results = self.runtime.take_content_answers();
         let assets = self.runtime.take_asset_requests();
+        let fonts = self.runtime.world_mut().gui.take_font_requests();
         let content = &mut self.content;
         let mut sounds_done = Vec::new();
         if requests.is_empty()
             && results.is_empty()
             && assets.is_empty()
             && sound_files.is_empty()
+            && fonts.is_empty()
             && content.tickets.is_empty()
             && content.assets.is_empty()
+            && content.fonts.is_empty()
             && self.sounds.tickets.is_empty()
         {
             return sounds_done;
@@ -123,7 +126,17 @@ impl DataModel {
             let ticket = loader.request_as(r.clone(), rook_content::Want::Audio);
             self.sounds.tickets.insert(ticket, r);
         }
-        let finished = if content.wait_for_sounds && !self.sounds.tickets.is_empty() {
+        for url in fonts {
+            match rook_content::ContentRef::parse(&url) {
+                Some(r) => {
+                    content.fonts.insert(loader.request(r), url);
+                }
+                None => self.runtime.world_mut().gui.font_arrived(&url, None),
+            }
+        }
+        // Runs that must repeat exactly wait for fonts as for sounds.
+        let waiting = !self.sounds.tickets.is_empty() || !content.fonts.is_empty();
+        let finished = if content.wait_for_sounds && waiting {
             loader.wait_all()
         } else {
             loader.poll()
@@ -135,6 +148,9 @@ impl DataModel {
                 assets_done.push((request, read_asset(outcome)));
             } else if let Some(r) = self.sounds.tickets.remove(&ticket) {
                 sounds_done.push((r, outcome));
+            } else if let Some(url) = content.fonts.remove(&ticket) {
+                let bytes = outcome.ok().map(|f| f.bytes);
+                self.runtime.world_mut().gui.font_arrived(&url, bytes);
             }
         }
         self.runtime.deliver_content(&results);

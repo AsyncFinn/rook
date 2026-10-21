@@ -193,6 +193,12 @@ impl Dom {
         Ok(self.create(class.id))
     }
 
+    /// When `id` was made, as an order: later instances (clones too) give
+    /// greater numbers.
+    pub fn creation_order(&self, id: InstanceId) -> Option<u64> {
+        self.instances.get(id).map(|i| i.created)
+    }
+
     pub fn class_name(&self, id: InstanceId) -> &str {
         match self.instances.get(id) {
             Some(i) => i

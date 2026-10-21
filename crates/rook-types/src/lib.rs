@@ -10,13 +10,18 @@
 
 mod clock;
 mod enums;
+mod font;
 mod gui;
 mod part;
 mod value;
 
 pub use clock::{clock_hours, time_of_day};
 pub use enums::{MeshType, RollOffMode, RunContext, UserInputState, UserInputType};
-pub use gui::GuiQuad;
+pub use font::{
+    FAMILY_FOLDER, FONT_SIZES, LEGACY_FONTS, enum_of_font, font_from_enum, font_size_of,
+    text_size_of,
+};
+pub use gui::{GlyphMask, GuiQuad};
 pub use part::collision::{Hull, UnionCollision};
 pub use part::material::{Material, MaterialSet, TilePattern};
 pub use part::mesh::{MeshHost, MeshKind, MeshLook, mesh_part_scale};
@@ -32,8 +37,8 @@ pub use value::{InstanceRef, Value};
 /// Plain-data Roblox types reused from `rbx_types`.
 pub use rbx_types::{
     Attributes, Axes, BinaryString, BrickColor, Color3uint8, ColorSequence, ColorSequenceKeypoint,
-    Content, ContentId, CustomPhysicalProperties, Faces, Font, MaterialColors, NetAssetRef,
-    NumberRange, NumberSequence, NumberSequenceKeypoint, PhysicalProperties, Ray, Rect, Region3,
-    Region3int16, SecurityCapabilities, SharedString, Tags, TerrainMaterials, UniqueId,
-    Vector2int16, Vector3int16,
+    Content, ContentId, CustomPhysicalProperties, Faces, Font, FontStyle, FontWeight,
+    MaterialColors, NetAssetRef, NumberRange, NumberSequence, NumberSequenceKeypoint,
+    PhysicalProperties, Ray, Rect, Region3, Region3int16, SecurityCapabilities, SharedString, Tags,
+    TerrainMaterials, UniqueId, Vector2int16, Vector3int16,
 };

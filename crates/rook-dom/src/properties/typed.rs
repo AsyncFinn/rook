@@ -3,8 +3,8 @@
 
 use glam::Vec3;
 use rook_types::{
-    Axes, CFrame, Color3, ColorSequence, Faces, MaterialColors, NumberRange, NumberSequence, UDim,
-    UDim2, Value, Vector2,
+    Axes, CFrame, Color3, ColorSequence, Faces, Font, MaterialColors, NumberRange, NumberSequence,
+    UDim, UDim2, Value, Vector2,
 };
 
 use super::*;
@@ -79,6 +79,13 @@ impl Dom {
     /// A `Color3` or `Color3uint8` property as a `Color3`.
     pub fn color3_property(&self, id: InstanceId, name: &str) -> Option<Color3> {
         self.property_by_name(id, name)?.as_color3()
+    }
+
+    pub fn font_property(&self, id: InstanceId, name: &str) -> Option<Font> {
+        match self.property_by_name(id, name)? {
+            Value::Font(f) => Some(f),
+            _ => None,
+        }
     }
 
     pub fn faces_property(&self, id: InstanceId, name: &str) -> Option<Faces> {

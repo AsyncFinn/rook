@@ -13,6 +13,7 @@ use rook_types::{CFrame, Color3, Value, Vector3};
 use crate::types::color::closest_brick_color;
 
 mod attachment;
+mod text;
 use crate::world::World;
 
 /// A part's CFrame.
@@ -139,6 +140,11 @@ pub(crate) fn content_value(url: &str) -> Value {
     Value::Content(rook_types::Content::from_uri(url))
 }
 
+/// A TextLabel, TextButton or TextBox.
+fn is_text_object(w: &World, id: InstanceId) -> bool {
+    matches!(w.dom.class_name(id), "TextLabel" | "TextButton" | "TextBox")
+}
+
 fn view<'a>(
     w: &World,
     id: InstanceId,
@@ -181,6 +187,11 @@ pub(crate) fn get(w: &World, id: InstanceId, name: &str) -> Option<Value> {
     }
     if let Some(target) = view(w, id, name, SAME_AS) {
         return dom.property_by_name(id, target);
+    }
+    if is_text_object(w, id)
+        && let Some(v) = text::get(w, id, name)
+    {
+        return Some(v);
     }
     if let Some(target) = view(w, id, name, BRICK_COLOR_OF) {
         return match dom.property_by_name(id, target) {
@@ -311,6 +322,11 @@ pub(crate) fn set(
         return Some(done);
     }
     if let Some(done) = crate::audio_api::clamp(w, id, name, value) {
+        return Some(done);
+    }
+    if is_text_object(w, id)
+        && let Some(done) = text::set(w, id, name, value)
+    {
         return Some(done);
     }
     if let Some(target) = view(w, id, name, SAME_AS) {

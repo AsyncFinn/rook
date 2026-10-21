@@ -1,3 +1,5 @@
+use std::sync::atomic::{AtomicU64, Ordering};
+
 use rustc_hash::FxHashMap;
 
 use rook_reflection::{ClassId, PropertyId};
@@ -64,7 +66,12 @@ pub struct Instance {
     pub unknown_properties: Vec<(String, Value)>,
     pub attributes: Attributes,
     pub tags: Vec<String>,
+    /// Counts up with every instance made, in any DataModel, so later
+    /// ones compare greater (ids are reused and say nothing of age).
+    pub(crate) created: u64,
 }
+
+static CREATED: AtomicU64 = AtomicU64::new(0);
 
 impl Instance {
     pub(crate) fn new(class: ClassId, name: String) -> Self {
@@ -80,6 +87,7 @@ impl Instance {
             unknown_properties: Vec::new(),
             attributes: Attributes::default(),
             tags: Vec::new(),
+            created: CREATED.fetch_add(1, Ordering::Relaxed),
         }
     }
 

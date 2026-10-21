@@ -197,7 +197,7 @@ Scripts read some derived values synchronously: `AbsolutePosition`, `AbsoluteSiz
 
 ### GUI (`rook-gui`)
 
-Built from creator-docs and Studio observation only. Covers LayerCollectors (ScreenGui, SurfaceGui, BillboardGui), `UDim2` + `AnchorPoint` + `AutomaticSize`, the UI layouts, padding and constraints, `ZIndexBehavior`, `ClipsDescendants`, ScrollingFrame, `TextScaled`/`TextWrapped`/`RichText` (Parley), `ImageRectOffset`/`ScaleType`/`SliceCenter`, input hit-testing and GUI events. The output is draw lists for the renderer.
+Built from creator-docs and Studio observation only. Covers LayerCollectors (ScreenGui, SurfaceGui, BillboardGui), `UDim2` + `AnchorPoint` + `AutomaticSize`, the UI layouts, padding and constraints, `ZIndexBehavior`, `ClipsDescendants`, ScrollingFrame, `TextScaled`/`TextWrapped`/`RichText` (HarfRust shaping, Rook's own lines), `ImageRectOffset`/`ScaleType`/`SliceCenter`, input hit-testing and GUI events. The output is draw lists for the renderer.
 
 Its `Gui` lives in `rook-lua`'s `World` beside the physics world, for the same reason: scripts read layout (`AbsoluteSize`), which lays out first when the journal shows GUI changed. The engine lays out once a frame after RenderStepped too, firing Changed for what moved. The draw list is `rook_types::GuiQuad`s, which `rook-view` hands the renderer; the renderer draws them into an 8-bit layer that the tone pass lays over the frame in sRGB.
 

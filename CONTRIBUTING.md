@@ -35,7 +35,7 @@ Rook is a Cargo workspace of small crates whose dependencies only point downward
 | [`rook-audio`](crates/rook-audio) | The mixer, SoundGroups, sound effects and the audio output device |
 | [`rook-terrain`](crates/rook-terrain) | Terrain's voxels (`SmoothGrid`) and the surface Roblox meshes from them |
 | [`rook-physics`](crates/rook-physics) | Assemblies, joints, constraints, contacts and scene queries over Rapier |
-| [`rook-gui`](crates/rook-gui) | GUI layout (the `Absolute*` properties) and what ScreenGuis draw |
+| [`rook-gui`](crates/rook-gui) | GUI layout (the `Absolute*` properties), text (fonts, shaping, `TextBounds`) and what ScreenGuis draw |
 | [`rook-engine`](crates/rook-engine) | DataModels, services, script start rules, play sessions and the frame loop |
 | [`rook-view`](crates/rook-view) | What a DataModel draws: the render scene built from the DOM, mesh files and images loading for it |
 | [`rook-render`](crates/rook-render) | The wgpu renderer |

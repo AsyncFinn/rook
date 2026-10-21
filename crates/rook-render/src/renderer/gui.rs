@@ -1,10 +1,14 @@
 //! The GUI pass: the GUI's rectangles drawn in order into the GUI layer,
 //! premultiplied and in sRGB, which the tone pass lays over the frame, so
 //! GUI blends in sRGB as Roblox's does (docs/behavior/gui.md#drawing).
+//! Text quads draw through their glyph's coverage in the atlas.
+
+mod atlas;
 
 use wesl_core::include_wesl;
 
 use super::*;
+use atlas::Atlas;
 
 /// The GUI layer's format: 8-bit sRGB values, blended as stored.
 pub(crate) const GUI_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
@@ -18,10 +22,12 @@ struct GpuQuad {
     turn: [f32; 2],
     color: [f32; 4],
     clip: [f32; 4],
+    /// The glyph's rectangle in the atlas, 0 to 1; a negative left fills.
+    uv: [f32; 4],
 }
 
-impl From<&GuiQuad> for GpuQuad {
-    fn from(q: &GuiQuad) -> Self {
+impl GpuQuad {
+    fn new(q: &GuiQuad, uv: [f32; 4]) -> Self {
         let a = q.color[3].clamp(0.0, 1.0);
         let (sin, cos) = q.rotation.sin_cos();
         Self {
@@ -30,9 +36,13 @@ impl From<&GuiQuad> for GpuQuad {
             turn: [sin, cos],
             color: [q.color[0] * a, q.color[1] * a, q.color[2] * a, a],
             clip: q.clip,
+            uv,
         }
     }
 }
+
+/// What a filled quad's `uv` holds.
+const FILL: [f32; 4] = [-1.0; 4];
 
 #[derive(Debug)]
 pub(crate) struct GuiPass {
@@ -42,22 +52,49 @@ pub(crate) struct GuiPass {
     group: wgpu::BindGroup,
     /// The quads, and how many there are.
     quads: Option<(wgpu::Buffer, u32)>,
+    atlas: Atlas,
 }
 
 impl GuiPass {
     pub(crate) fn new(device: &wgpu::Device) -> Self {
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("rook gui"),
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
                 },
-                count: None,
-            }],
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+            ],
+        });
+        let atlas = Atlas::new(device);
+        let atlas_view = atlas.texture.create_view(&Default::default());
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("rook gui glyphs"),
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            ..Default::default()
         });
         let screen = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("rook gui screen"),
@@ -68,10 +105,20 @@ impl GuiPass {
         let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("rook gui"),
             layout: &layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: screen.as_entire_binding(),
-            }],
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: screen.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&atlas_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+            ],
         });
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("rook gui"),
@@ -99,7 +146,7 @@ impl GuiPass {
                     step_mode: wgpu::VertexStepMode::Instance,
                     attributes: &wgpu::vertex_attr_array![
                         0 => Float32x2, 1 => Float32x2, 2 => Float32x2,
-                        3 => Float32x4, 4 => Float32x4,
+                        3 => Float32x4, 4 => Float32x4, 5 => Float32x4,
                     ],
                 })],
             },
@@ -127,12 +174,13 @@ impl GuiPass {
             screen,
             group,
             quads: None,
+            atlas,
         }
     }
 
     /// Draw `quads` from now on, bottom first.
     pub(crate) fn set(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, quads: &[GuiQuad]) {
-        let gpu: Vec<GpuQuad> = quads.iter().map(GpuQuad::from).collect();
+        let gpu = self.pack(queue, quads);
         if gpu.is_empty() {
             self.quads = None;
             return;
@@ -152,6 +200,31 @@ impl GuiPass {
             queue.write_buffer(buffer, 0, bytes);
             *count = gpu.len() as u32;
         }
+    }
+
+    /// `quads` as the shader reads them, their glyphs in the atlas. If the
+    /// atlas fills and starts again partway, every glyph is placed again
+    /// once, so none points at a mask that was written over.
+    fn pack(&mut self, queue: &wgpu::Queue, quads: &[GuiQuad]) -> Vec<GpuQuad> {
+        let scale = 1.0 / atlas::SIZE as f32;
+        let once = |atlas: &mut Atlas| -> Vec<GpuQuad> {
+            quads
+                .iter()
+                .filter_map(|q| {
+                    let uv = match &q.glyph {
+                        None => FILL,
+                        Some(mask) => atlas.place(queue, mask)?.map(|t| t * scale),
+                    };
+                    Some(GpuQuad::new(q, uv))
+                })
+                .collect()
+        };
+        let resets = self.atlas.resets;
+        let gpu = once(&mut self.atlas);
+        if self.atlas.resets == resets {
+            return gpu;
+        }
+        once(&mut self.atlas)
     }
 
     /// Draw the GUI layer into `target`, if there's any GUI. Whether there

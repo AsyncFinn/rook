@@ -73,10 +73,32 @@ pub fn into_dom(weak: &WeakDom, dom: &mut Dom, parent: InstanceId) -> Vec<Instan
                 }
             }
         }
+        text_size_from_font_size(dom, id, inst);
     }
 
     dom.journal_mut().set_enabled(was_enabled);
     top
+}
+
+/// Files from before `TextSize` (about 2016) save only the `FontSize`
+/// enum, which Studio shows as that `TextSize` (Inference: the enum names
+/// its size, and files since save both, agreeing).
+fn text_size_from_font_size(dom: &mut Dom, id: InstanceId, inst: &rbx_dom_weak::Instance) {
+    let Some(Variant::Enum(e)) = inst.properties.get(&"FontSize".into()) else {
+        return;
+    };
+    if inst.properties.contains_key(&"TextSize".into()) {
+        return;
+    }
+    let db = dom.database();
+    let size = db
+        .enum_by_name("FontSize")
+        .and_then(|info| info.item_name(e.to_u32()))
+        .and_then(rook_types::text_size_of);
+    let class = dom.get(id).expect("exists").class;
+    if let (Some(size), Some(p)) = (size, db.find_canonical_property(class, "TextSize")) {
+        dom.load_property(id, p.id, Value::Float32(size));
+    }
 }
 
 fn create_rec(
@@ -241,5 +263,31 @@ mod tests {
         let back = from_dom(&dom, &[ws]);
         let diffs = compare(&loaded.dom, &back);
         assert!(diffs.is_empty(), "{diffs:#?}");
+    }
+
+    #[test]
+    fn font_size_becomes_text_size() {
+        let size24 = rbx_types::Enum::from_u32(7);
+        let old = InstanceBuilder::new("TextLabel")
+            .with_name("Old")
+            .with_property("FontSize", size24);
+        let both = InstanceBuilder::new("TextLabel")
+            .with_name("Both")
+            .with_property("FontSize", size24)
+            .with_property("TextSize", 14.0f32);
+        let weak = WeakDom::new(
+            InstanceBuilder::new("DataModel")
+                .with_child(old)
+                .with_child(both),
+        );
+        let mut dom = Dom::new();
+        let root = dom.root();
+        into_dom(&weak, &mut dom, root);
+        let size = |name| {
+            let id = dom.find_first_child(root, name, false).unwrap();
+            dom.float_property(id, "TextSize")
+        };
+        assert_eq!(size("Old"), Some(24.0));
+        assert_eq!(size("Both"), Some(14.0));
     }
 }

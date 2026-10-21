@@ -38,7 +38,8 @@ impl SceneCache {
     /// whether it was.
     pub fn show_gui(&mut self, dm: &DataModel, renderer: &mut Renderer) -> bool {
         dm.runtime().sync_gui();
-        let world = dm.runtime().world();
+        let mut world = dm.runtime().world_mut();
+        let world = &mut *world;
         let generation = world.gui.generation();
         if self.gui_generation == Some(generation) {
             return false;

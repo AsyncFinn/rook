@@ -261,6 +261,24 @@ pub fn content_config(network: bool) -> Config {
     }
 }
 
+/// Content on this machine only (the install and content folders, no
+/// cache or network), for what DataModels read at once: GUI fonts. One
+/// shared by every DataModel that isn't given its own resolver.
+pub fn local_content() -> std::sync::Arc<rook_content::Resolver> {
+    static LOCAL: std::sync::OnceLock<std::sync::Arc<rook_content::Resolver>> =
+        std::sync::OnceLock::new();
+    LOCAL
+        .get_or_init(|| {
+            let mut config = content_config(false);
+            config.network = false;
+            config.cache_dir = None;
+            config.cache_max = None;
+            config.kept_dir = None;
+            std::sync::Arc::new(rook_content::Resolver::new(config))
+        })
+        .clone()
+}
+
 /// The logical cores to plan background threads for, if set.
 pub fn threads() -> Option<usize> {
     let env = var(env::THREADS).and_then(|n| n.trim().parse().ok());

@@ -1,6 +1,6 @@
 [package]
 name = "rook-gui"
-description = "GUI layout and the GUI draw list for the Rook engine"
+description = "GUI layout, text and the GUI draw list for the Rook engine"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -12,6 +12,12 @@ rust-version.workspace = true
 rook-types.workspace = true
 rook-reflection.workspace = true
 rook-dom.workspace = true
+rook-content.workspace = true
+harfrust.workspace = true
+skrifa.workspace = true
+zeno.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 glam.workspace = true
 rustc-hash.workspace = true
 profiling.workspace = true

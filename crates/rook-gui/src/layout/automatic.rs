@@ -3,6 +3,8 @@
 use glam::Vec2;
 use rook_dom::InstanceId;
 
+use crate::text::{self, Source};
+
 use super::{Kid, Pass, arrange, arranger, gui_children, padding, position_of, resolve, visible};
 
 /// `base` grown on `id`'s `AutomaticSize` axes to hold its visible
@@ -27,8 +29,9 @@ pub(super) fn grow(pass: &mut Pass<'_>, id: InstanceId, base: Vec2, room: Vec2) 
         .into_iter()
         .filter(|&k| visible(dom, k))
         .collect();
+    let text = text_extent(pass, id, base, axes);
     if kids.is_empty() {
-        return base;
+        return base + (text - base).max(Vec2::ZERO) * axes;
     }
     let extent = match arranger(dom, id) {
         Some(layout) => {
@@ -55,5 +58,19 @@ pub(super) fn grow(pass: &mut Pass<'_>, id: InstanceId, base: Vec2, room: Vec2) 
             inner.origin + extent + inner.far
         }
     };
+    let extent = extent.max(text);
     base + (extent - base).max(Vec2::ZERO) * axes
+}
+
+/// What a text object's text needs: its `TextBounds` inside its padding.
+/// Measured: wrapped text grows on Y at the object's width; Inference:
+/// growing on X lays it out unwrapped.
+fn text_extent(pass: &mut Pass<'_>, id: InstanceId, base: Vec2, axes: Vec2) -> Vec2 {
+    let Some(source) = Source::of(pass.dom, id) else {
+        return Vec2::ZERO;
+    };
+    let inner = padding::inner(pass.dom, id, base);
+    let wrap = (source.wrapped && axes.x == 0.0).then_some(inner.size.x);
+    let bounds = text::lay_out(pass.fonts, &source, inner.size, Some(wrap)).bounds;
+    inner.origin + bounds + inner.far
 }

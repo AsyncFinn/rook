@@ -144,6 +144,8 @@ struct Content {
     /// Loader tickets to the request ids of assets scripts load
     /// (`require(assetId)`, `InsertService:LoadAsset`).
     assets: HashMap<rook_content::Ticket, u64>,
+    /// Loader tickets to the GUI's font files by asset id.
+    fonts: HashMap<rook_content::Ticket, String>,
     wait_for_sounds: bool,
 }
 
@@ -279,6 +281,12 @@ impl DataModel {
         .map_err(|e| EngineError::Lua(e.to_string()))?;
         runtime.set_script_timeout(options.script_timeout);
         runtime.world_mut().signal_behavior = signal_behavior;
+        runtime.world_mut().gui.set_content(
+            options
+                .content
+                .clone()
+                .unwrap_or_else(settings::local_content),
+        );
         if let Err(e) = runtime.lua().set_memory_limit(options.memory_limit) {
             tracing::warn!("Luau memory limit not set: {e}");
         }

@@ -251,8 +251,9 @@ It comes before characters: tools, health bars and leaderboards are GUI.
    `ClipsDescendants`, `AutomaticSize`, UIListLayout, UIGridLayout,
    UIPadding, UIScale and the size constraints; backgrounds and borders
    drawn.
-2. Text (Parley): fonts and `FontFace` weights, sizing, wrapping,
-   `TextScaled`, `RichText`; Hint 145 and Message 26, bars of text.
+2. ✅ [Text](docs/behavior/gui-text.md): fonts and `FontFace` weights,
+   sizing, wrapping, `TextScaled`, `RichText`; Hint 145 and Message 26,
+   bars of text.
 3. SurfaceGui and BillboardGui in the world: signs, labels and name
    tags. Text comes first: they're mostly TextLabels.
 4. Images, 9-slice, ScrollingFrame.

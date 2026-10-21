@@ -97,7 +97,7 @@ Nested automatic sizes add up from the inside.
   earlier layouts (a 0.5-wide child with offset 30 gave a 50-wide parent).
   Rook sizes them against the object's `Size` (Approximation); children
   sized by offset, the usual case, are exact.
-- Text (`TextLabel` growing to its text) comes with step 2.
+- Text objects grow to their text too ([GUI text](gui-text.md#automaticsize)).
 
 ### When layout runs
 
@@ -126,6 +126,6 @@ Nested automatic sizes add up from the inside.
 - **Blending**: GUI blends over the finished screen's sRGB pixels
   (Inference, as Highlights measurably do): Rook draws GUI premultiplied
   into an 8-bit layer the tone pass lays over the frame.
-- Text comes with step 2, world GUI (SurfaceGui, BillboardGui) with
-  step 3, images and ScrollingFrame with step 4 and the modern UI objects
+- Text: [GUI text](gui-text.md). World GUI (SurfaceGui, BillboardGui)
+  comes with step 3, images and ScrollingFrame with step 4 and the modern UI objects
   with step 6; until step 3 only the local player's ScreenGuis draw.

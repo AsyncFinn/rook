@@ -1,11 +1,15 @@
-//! 2D GUI: where every GUI object is (the `Absolute*` properties scripts
-//! read, laid out on the DataModel's thread as Roblox does) and what the
-//! local player's ScreenGuis draw. Rules measured in Studio are in
-//! `docs/behavior/gui.md`.
+//! 2D GUI: where every GUI object is and what its text says (the
+//! `Absolute*` and `Text*` properties scripts read, laid out on the
+//! DataModel's thread as Roblox does) and what the local player's
+//! ScreenGuis draw. Rules measured in Studio are in `docs/behavior/gui.md`
+//! and `docs/behavior/gui-text.md`.
 
 mod changes;
 mod draw;
 mod layout;
+mod text;
+
+use std::sync::Arc;
 
 use rook_dom::{Dom, InstanceId};
 use rook_types::{GuiQuad, Value, Vector2};
@@ -27,6 +31,9 @@ pub fn is_layout_output(name: &str) -> bool {
             | "AbsoluteContentSize"
             | "AbsoluteCellSize"
             | "AbsoluteCellCount"
+            | "TextBounds"
+            | "TextFits"
+            | "ContentText"
     )
 }
 
@@ -41,6 +48,8 @@ pub struct Gui {
     /// Counts layouts, so the drawing knows when to rebuild.
     generation: u64,
     watch: Option<Watch>,
+    fonts: text::Fonts,
+    glyphs: text::Glyphs,
 }
 
 impl Default for Gui {
@@ -51,11 +60,33 @@ impl Default for Gui {
             layout: Layout::default(),
             generation: 0,
             watch: None,
+            fonts: text::Fonts::default(),
+            glyphs: text::Glyphs::default(),
         }
     }
 }
 
 impl Gui {
+    /// Where fonts in the Roblox install are read from. Without one, text
+    /// has no fonts and draws nothing.
+    pub fn set_content(&mut self, resolver: Arc<rook_content::Resolver>) {
+        self.fonts.set_resolver(resolver);
+        self.stale = true;
+    }
+
+    /// Fonts by asset id (`rbxassetid://...`) text is waiting for, each
+    /// asked for once; hand each back with [`Gui::font_arrived`].
+    pub fn take_font_requests(&mut self) -> Vec<String> {
+        self.fonts.take_requests()
+    }
+
+    /// A requested font file's bytes (`None`: it can't be had). Text using
+    /// it lays out again.
+    pub fn font_arrived(&mut self, url: &str, bytes: Option<Arc<[u8]>>) {
+        if self.fonts.arrived(url, bytes) {
+            self.stale = true;
+        }
+    }
     /// Look at the journal since last time, so it can be trimmed.
     pub fn note_changes(&mut self, dom: &Dom) {
         let watch = self.watch.get_or_insert_with(|| Watch::new(dom));
@@ -76,7 +107,7 @@ impl Gui {
         self.note_changes(dom);
         if self.stale {
             profiling::scope!("Gui::layout");
-            self.layout = Layout::screens(dom, &self.layout);
+            self.layout = Layout::screens(dom, &self.layout, &mut self.fonts);
             self.stale = false;
             self.generation += 1;
             self.write(dom);
@@ -88,7 +119,7 @@ impl Gui {
     pub fn sync_for(&mut self, dom: &mut Dom, id: InstanceId) {
         self.sync(dom);
         if !self.layout.contains(id) {
-            self.layout.add_tree(dom, id);
+            self.layout.add_tree(dom, id, &mut self.fonts);
             self.write(dom);
         }
     }
@@ -100,8 +131,12 @@ impl Gui {
 
     /// What the local player's ScreenGuis draw, bottom first, as of the
     /// last layout.
-    pub fn draw(&self, dom: &Dom) -> Vec<GuiQuad> {
-        draw::quads(dom, &self.layout)
+    pub fn draw(&mut self, dom: &Dom) -> Vec<GuiQuad> {
+        let mut text = draw::Text {
+            fonts: &mut self.fonts,
+            glyphs: &mut self.glyphs,
+        };
+        draw::quads(dom, &self.layout, &mut text)
     }
 
     fn write(&mut self, dom: &mut Dom) {
@@ -125,6 +160,13 @@ impl Gui {
                 let _ = dom.set_property_by_name(id, "AbsoluteCellSize", v2(cell));
                 let _ = dom.set_property_by_name(id, "AbsoluteCellCount", v2(count));
             }
+        }
+        for (&id, laid) in &self.layout.texts {
+            let block = &laid.block;
+            let _ = dom.set_property_by_name(id, "TextBounds", v2(block.bounds));
+            let _ = dom.set_property_by_name(id, "TextFits", Value::Bool(block.fits));
+            let _ =
+                dom.set_property_by_name(id, "ContentText", Value::String(block.content.clone()));
         }
         // Our own writes aren't changes to lay out again for.
         self.cursor = dom.journal().end();

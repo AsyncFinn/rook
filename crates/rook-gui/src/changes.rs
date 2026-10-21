@@ -10,6 +10,8 @@ pub(crate) struct Watch {
     gui: Option<ClassId>,
     /// UIComponent: layouts, padding, UIScale and the size constraints.
     ui: Option<ClassId>,
+    /// Message, and Hint, its subclass: drawn over the GUI.
+    message: Option<ClassId>,
     /// `Camera.ViewportSize`, the screen's size, and
     /// `Workspace.CurrentCamera`, which camera's it is.
     viewport: Option<PropertyId>,
@@ -28,6 +30,7 @@ impl Watch {
         Self {
             gui: class("GuiBase2d"),
             ui: class("UIComponent"),
+            message: class("Message"),
             viewport: property("Camera", "ViewportSize"),
             current_camera: property("Workspace", "CurrentCamera"),
         }
@@ -51,7 +54,7 @@ impl Watch {
             return false;
         };
         let db = dom.database();
-        [self.gui, self.ui]
+        [self.gui, self.ui, self.message]
             .into_iter()
             .flatten()
             .any(|c| db.is_a(inst.class, c))

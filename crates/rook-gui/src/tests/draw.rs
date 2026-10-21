@@ -23,7 +23,7 @@ fn square(dom: &mut Dom, parent: InstanceId, z: i32, tag: f32) -> InstanceId {
 }
 
 fn order(dom: &mut Dom) -> Vec<f32> {
-    let gui = laid_out(dom);
+    let mut gui = laid_out(dom);
     gui.draw(dom).iter().map(|q| q.color[0]).collect()
 }
 
@@ -63,7 +63,7 @@ fn clipping_and_hidden_objects() {
     let hidden = square(&mut dom, screen, 1, 0.3);
     set(&mut dom, hidden, "Visible", Value::Bool(false));
     square(&mut dom, hidden, 1, 0.4);
-    let gui = laid_out(&mut dom);
+    let mut gui = laid_out(&mut dom);
     let quads = gui.draw(&dom);
     assert_eq!(quads.len(), 2);
     assert_eq!(quads[0].clip, GuiQuad::NO_CLIP);
@@ -71,7 +71,7 @@ fn clipping_and_hidden_objects() {
 
     // A turned clipper clips nothing (creator-docs ClipsDescendants).
     set(&mut dom, p, "Rotation", Value::Float32(10.0));
-    let gui = laid_out(&mut dom);
+    let mut gui = laid_out(&mut dom);
     assert_eq!(gui.draw(&dom)[1].clip, GuiQuad::NO_CLIP);
 }
 
@@ -87,7 +87,7 @@ fn borders_go_around_the_background() {
     let f = square(&mut dom, screen, 1, 0.1);
     set(&mut dom, f, "BorderSizePixel", Value::Int32(2));
     set(&mut dom, f, "BackgroundTransparency", Value::Float32(0.25));
-    let gui = laid_out(&mut dom);
+    let mut gui = laid_out(&mut dom);
     let quads = gui.draw(&dom);
     // Four strips outside a 200 × 200 background, all 75% opaque.
     assert_eq!(quads.len(), 5);
@@ -97,6 +97,37 @@ fn borders_go_around_the_background() {
     assert_eq!(quads[4].size, Vec2::new(200.0, 200.0));
     assert!(quads.iter().all(|q| q.color[3] == 0.75));
     set_enum(&mut dom, f, "BorderMode", "Inset");
-    let gui = laid_out(&mut dom);
+    let mut gui = laid_out(&mut dom);
     assert_eq!(gui.draw(&dom)[4].size, Vec2::new(196.0, 196.0));
+}
+
+#[test]
+fn hints_and_messages() {
+    let (mut dom, _) = client();
+    let ws = dom.find_service("Workspace").unwrap();
+    let mut gui = laid_out(&mut dom);
+    let empty_message = child(&mut dom, "Message", ws, &[]);
+    gui.sync(&mut dom);
+    assert!(gui.draw(&dom).is_empty(), "an empty Message shows nothing");
+    let hint = child(&mut dom, "Hint", ws, &[]);
+    gui.sync(&mut dom);
+    let quads = gui.draw(&dom);
+    assert_eq!(quads.len(), 1, "an empty Hint shows its bar");
+    assert_eq!(quads[0].color, [0.0, 0.0, 0.0, 1.0]);
+    assert_eq!(quads[0].center.y, 10.0);
+    // Made later, so drawn over the Hint.
+    set(
+        &mut dom,
+        empty_message,
+        "Text",
+        Value::String(String::new()),
+    );
+    let message = child(&mut dom, "Message", ws, &[]);
+    set(&mut dom, message, "Text", Value::String(" ".into()));
+    gui.sync(&mut dom);
+    let quads = gui.draw(&dom);
+    assert_eq!(quads.last().unwrap().color[3], 0.5);
+    dom.set_parent(hint, None).unwrap();
+    gui.sync(&mut dom);
+    assert_eq!(gui.draw(&dom).len(), 1);
 }
