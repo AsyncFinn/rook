@@ -16,6 +16,10 @@ Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-10-20 — M7 Lights and effects
+
+Pinned Roblox version: 0.741.19. Finishes M7 Lights and effects: local lights light the scene; Fire, Smoke, Sparkles, ParticleEmitters, Beams, Trails and Explosions draw as in Studio, through Studio's tone curve; and Highlights and the adornments draw as in Studio.
+
 - Highlights draw as in Studio. A Highlight fills the parts it covers (its `Adornee`, or its parent part or Model) in exactly `FillColor` at `FillTransparency`, mixed into the finished picture, and outlines them in `OutlineColor` two pixels wide, around a Model's parts as one shape; `DepthMode` AlwaysOnTop shows both through walls and Occluded only where the parts are seen. One with an `Adornee` works wherever it is, as in Studio. A same-scene comparison with Studio puts the outlines on the same pixels.
 - Line, Image and Wireframe HandleAdornments and SelectionPartLassos draw as in Studio. A LineHandleAdornment runs `Length` along its LookVector, a few pixels across whatever its distance (0.35 pixels per `Thickness`, as Studio draws it). An ImageHandleAdornment shows its `Image` tinted by `Color3` on a square of `Size` turned with its `CFrame`, seen from in front. A WireframeHandleAdornment draws the one-pixel lines scripts give it with `AddLine`, `AddLines` and `AddPath`, which `Clear` empties, from any script. A SelectionPartLasso, though deprecated, still draws in Studio: a quarter-stud bar from its Humanoid's root part to its `Part`, following either as it moves. M7 step 6 is done.
 - FloorWire textures draw as in Studio: its `Texture` shows every `StudsBetweenTextures` along the wire, counted back from `To`, as two crossed images `TextureSize` big that stand on their side on the rising and falling legs, moving towards `To` at `Velocity` studs a second from `CycleOffset`. The wire also keeps 0.2 studs off the floor and out from its parts' faces as Studio's does, and follows `To` when only `To` moves.
