@@ -115,6 +115,10 @@ pub(crate) struct SceneCache {
     /// An effect changed outside [`SceneCache::apply`] (its image
     /// arrived).
     effects_loaded: bool,
+    /// The lines scripts gave WireframeHandleAdornments.
+    wire_lines: adornments::wireframe::WireLines,
+    /// Models' Highlights, found again each update.
+    model_highlights: adornments::highlight::ModelHighlights,
     /// Files that didn't load, reported once loading settles.
     report: Report,
     /// `BasePart.CFrame`, which moved parts are read again by.
@@ -146,6 +150,8 @@ impl SceneCache {
             light_holders: HashMap::new(),
             effects: EffectCache::new(textures),
             effects_loaded: false,
+            wire_lines: Default::default(),
+            model_highlights: Default::default(),
             report: Report::default(),
             cframe: dom
                 .database()
@@ -160,6 +166,7 @@ impl SceneCache {
     /// Rebuild everything (parts added, removed or moved).
     pub(crate) fn rebuild(&mut self, dom: &Dom) {
         profiling::scope!("SceneCache::rebuild");
+        self.model_highlights.clear();
         self.scene.parts.clear();
         self.poses.clear();
         self.free.clear();
@@ -192,7 +199,10 @@ impl SceneCache {
     /// Apply a frame's changes.
     pub(crate) fn apply(&mut self, dom: &Dom, changes: &RenderChanges) -> SceneChange {
         profiling::scope!("SceneCache::apply");
+        self.model_highlights.clear();
         self.effects.note_calls(&changes.effect_calls);
+        let wired =
+            adornments::wireframe::note_calls(dom, &mut self.wire_lines, &changes.effect_calls);
         if changes.full {
             self.rebuild(dom);
             return SceneChange::Full;
@@ -221,7 +231,7 @@ impl SceneCache {
                 workspace.is_some_and(|ws| is_part(dom, *id) && dom.is_ancestor_of(ws, *id));
             self.place(dom, *id, drawn, &mut changed);
         }
-        for id in &changes.parts {
+        for id in changes.parts.iter().chain(&wired) {
             // Parts outside Workspace aren't drawn.
             if self.index.contains_key(id) {
                 self.place(dom, *id, true, &mut changed);
@@ -336,15 +346,25 @@ impl SceneCache {
     }
 
     /// Apply scripts' effect calls (`Emit` and the like) made before this
-    /// scene was built from the DataModel. Whether any effect changed.
+    /// scene was built from the DataModel. Whether any effect or
+    /// wireframe changed.
     pub(crate) fn take_effect_calls(
         &mut self,
         dom: &Dom,
         calls: &[(InstanceId, rook_lua::EffectCall)],
     ) -> bool {
         self.effects.note_calls(calls);
+        let wired = adornments::wireframe::note_calls(dom, &mut self.wire_lines, calls);
+        let mut changed = Vec::new();
+        for id in wired {
+            if self.index.contains_key(&id) {
+                self.place(dom, id, true, &mut changed);
+            }
+        }
         let ids: Vec<InstanceId> = calls.iter().map(|c| c.0).collect();
-        self.with_effects(|cache, drawn, images| cache.reread_ids(dom, &ids, drawn, images))
+        let effects =
+            self.with_effects(|cache, drawn, images| cache.reread_ids(dom, &ids, drawn, images));
+        effects || !changed.is_empty()
     }
 
     /// Whether the lighting or an effect changed outside

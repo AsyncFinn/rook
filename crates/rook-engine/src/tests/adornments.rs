@@ -117,3 +117,75 @@ fn floor_wire_redraws_when_to_moves() {
     assert!(changes.parts.contains(&part("A")));
     assert!(changes.moved.contains(&part("B")));
 }
+
+/// A Highlight in a Model covers all its parts: changing it redraws each.
+#[test]
+fn highlight_changes_redraw_its_models_parts() {
+    let mut s = Server::new(&Options::default()).unwrap();
+    add_script(
+        &s,
+        "ServerScriptService",
+        "Glow",
+        r#"
+        local m = Instance.new("Model") m.Name = "M" m.Parent = workspace
+        for _, name in {"A", "B"} do
+            local p = Instance.new("Part") p.Name = name p.Anchored = true p.Parent = m
+        end
+        local h = Instance.new("Highlight") h.Parent = m
+        task.wait(0.5)
+        h.FillColor = Color3.new(0, 1, 0)
+        "#,
+    );
+    s.start();
+    s.run_for(0.2);
+    s.take_render_changes();
+    s.run_for(0.5);
+    let changes = s.take_render_changes();
+    let dom = &s.runtime().world().dom;
+    let ws = dom.find_service("Workspace").unwrap();
+    let m = dom.find_first_child(ws, "M", false).unwrap();
+    for name in ["A", "B"] {
+        assert!(
+            changes
+                .parts
+                .contains(&dom.find_first_child(m, name, false).unwrap())
+        );
+    }
+}
+
+/// A SelectionPartLasso draws with its Humanoid's root part: moving
+/// either end redraws that part in full, as the bar bends.
+#[test]
+fn lasso_redraws_its_root_part_as_either_end_moves() {
+    let mut s = Server::new(&Options::default()).unwrap();
+    add_script(
+        &s,
+        "ServerScriptService",
+        "Lasso",
+        r#"
+        local m = Instance.new("Model") m.Name = "Dummy"
+        local root = Instance.new("Part") root.Name = "HumanoidRootPart" root.Anchored = true root.Parent = m
+        local h = Instance.new("Humanoid") h.Parent = m
+        m.Parent = workspace
+        local target = Instance.new("Part") target.Name = "Target" target.Anchored = true target.Parent = workspace
+        local lasso = Instance.new("SelectionPartLasso") lasso.Humanoid = h lasso.Part = target lasso.Parent = workspace
+        task.wait(0.5)
+        target.Position = Vector3.new(10, 0, 0)
+        task.wait(0.5)
+        root.Position = Vector3.new(0, 10, 0)
+        "#,
+    );
+    s.start();
+    s.run_for(0.2);
+    s.take_render_changes();
+    let root = {
+        let dom = &s.runtime().world().dom;
+        let ws = dom.find_service("Workspace").unwrap();
+        let m = dom.find_first_child(ws, "Dummy", false).unwrap();
+        dom.find_first_child(m, "HumanoidRootPart", false).unwrap()
+    };
+    s.run_for(0.5);
+    assert!(s.take_render_changes().parts.contains(&root));
+    s.run_for(0.5);
+    assert!(s.take_render_changes().parts.contains(&root));
+}

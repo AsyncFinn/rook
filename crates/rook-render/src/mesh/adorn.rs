@@ -1,6 +1,6 @@
-//! The shapes only adornments draw ([`AdornShape`]): cones, tubes and flat
-//! rings, unit-sized and around Z. Adornments draw in one colour without
-//! images, so their vertices map from themselves.
+//! The shapes only adornments draw ([`AdornShape`]): cones, tubes, flat
+//! rings and squares, unit-sized and around Z. Only the square carries an
+//! image (through its UVs); the others' vertices map from themselves.
 
 use std::f32::consts::TAU;
 
@@ -21,7 +21,25 @@ pub(super) fn adorn(shape: AdornShape) -> MeshData {
             ring(&mut m, f32::from(hole) / 255.0, 0.0, 1.0);
             m
         }
+        AdornShape::Quad => quad(),
     }
+}
+
+fn quad() -> MeshData {
+    let mut m = MeshData::default();
+    let n = -Vec3::Z;
+    // Seen from -Z, +X is on the left: the image's left edge (u = 0) is
+    // there, its top (v = 0) at +Y.
+    let corner = |x: f32, y: f32| Vertex::plain([x, y, 0.0], n.to_array(), [0.5 - x, 0.5 - y]);
+    m.vertices.extend([
+        corner(0.5, 0.5),
+        corner(-0.5, 0.5),
+        corner(-0.5, -0.5),
+        corner(0.5, -0.5),
+    ]);
+    // Counter-clockwise seen from -Z.
+    m.indices.extend_from_slice(&[0, 3, 2, 0, 2, 1]);
+    m
 }
 
 /// Point `i` of [`SEGMENTS`] around a circle of radius 0.5 in XY.

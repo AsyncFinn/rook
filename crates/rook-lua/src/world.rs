@@ -105,16 +105,20 @@ pub struct InputState {
     pub mouse_object: Option<InstanceId>,
 }
 
-/// A visual effect's method a script called: what the renderer applies
-/// besides properties.
+/// A visual effect's or adornment's method a script called: what the
+/// renderer applies besides properties.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum EffectCall {
     /// `ParticleEmitter:Emit(count)`.
     Emit(u32),
-    /// `ParticleEmitter:Clear()`, `Trail:Clear()`.
+    /// `ParticleEmitter:Clear()`, `Trail:Clear()`,
+    /// `WireframeHandleAdornment:Clear()`.
     Clear,
     /// `Beam:SetTextureOffset(offset)`.
     TextureOffset(f32),
+    /// A line a WireframeHandleAdornment's `AddLine`, `AddLines` or
+    /// `AddPath` added, in its CFrame's axes.
+    Line(glam::Vec3, glam::Vec3),
 }
 
 /// What scripts did to a Sound that isn't a property (see

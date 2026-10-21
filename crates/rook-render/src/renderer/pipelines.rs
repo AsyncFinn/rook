@@ -55,6 +55,10 @@ pub(crate) struct Pipelines {
     pub(crate) over: wgpu::RenderPipeline,
     /// Adornments always on top: blended over everything, untested.
     pub(crate) on_top: wgpu::RenderPipeline,
+    /// Highlighted parts into the Highlight mask (`highlights.rs`): over
+    /// everything, or only where seen.
+    pub(crate) highlight_on_top: wgpu::RenderPipeline,
+    pub(crate) highlight_occluded: wgpu::RenderPipeline,
     /// The skybox, behind everything.
     pub(crate) sky: wgpu::RenderPipeline,
     /// The plain sky colour, before (or without) the skybox.
@@ -190,6 +194,10 @@ impl Pipelines {
             })
         };
         let shadow_pipeline = shadow(device, layouts.globals, &shader, &shadow_buffers);
+        let highlight = |on_top| {
+            super::highlights::pipeline(device, layouts.globals, &shader, &buffers, on_top)
+        };
+        let (highlight_on_top, highlight_occluded) = (highlight(true), highlight(false));
         // Reverse Z: nearer is greater.
         let opaque_pipeline = make(
             "rook opaque",
@@ -382,6 +390,8 @@ impl Pipelines {
             additive,
             over,
             on_top,
+            highlight_on_top,
+            highlight_occluded,
             sky: sky_pipeline("fs_sky"),
             plain_sky: sky_pipeline("fs_plain_sky"),
             shadow: shadow_pipeline,

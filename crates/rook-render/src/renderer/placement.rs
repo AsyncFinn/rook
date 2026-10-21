@@ -54,6 +54,7 @@ impl Renderer {
         self.placements.clear();
         self.waiting.clear();
         self.transparent.clear();
+        self.highlights.clear();
         self.lights.clear_blockers();
         self.update_parts(scene, &(0..scene.parts.len()).collect::<Vec<_>>());
     }
@@ -103,6 +104,7 @@ impl Renderer {
         self.lights.update_blockers(scene, moved);
         for &i in moved {
             let part = &scene.parts[i];
+            self.highlights.moved(i, part);
             match self.placements[i] {
                 Placement::Opaque { batch, slot } => self.opaque.moved(batch, slot, part),
                 Placement::Layer { batch, slot } => self.layers.moved(batch, slot, part),
@@ -161,6 +163,10 @@ impl Renderer {
 
     /// Draw entry `i` as `target`, leaving where it was drawn before.
     fn place(&mut self, i: usize, part: &PartInstance, target: Target) {
+        let drawn = !matches!(target, Target::Hidden | Target::Waiting);
+        let masked = (drawn && part.layer == Layer::Base && part.highlight.is_some())
+            .then(|| self.instance(part));
+        self.highlights.set(i, part, masked);
         match (self.placements[i], target) {
             (Placement::Hidden, Target::Hidden) => {}
             (Placement::Transparent(t), Target::Transparent) => {
@@ -237,9 +243,11 @@ impl Renderer {
         match z {
             None if part.over => Target::Layer(OVER_Z, key),
             Some(z) => Target::Layer(z, key),
-            // ForceField always shows what's behind it (observed).
+            // ForceField always shows what's behind it (observed); an
+            // unlit adornment's image is cut out by its alpha.
             None if part.transparency > 0.0
                 || part.on_top
+                || (part.light != Light::Lit && part.texture.is_some())
                 || part.layer != Layer::Base
                 || part.material == Material::ForceField
                 || part.maps.alpha == MapAlpha::Transparency =>

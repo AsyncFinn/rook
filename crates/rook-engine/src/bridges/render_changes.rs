@@ -68,7 +68,8 @@ pub fn is_effect_class(class: &str) -> bool {
 }
 
 /// Whether `id` adorns a part, drawn with it: the classes with an
-/// `Adornee` (SelectionBox, SelectionSphere, the HandleAdornments, ...),
+/// `Adornee` (SelectionBox, SelectionSphere, the HandleAdornments,
+/// Highlight, ...), SelectionPartLasso,
 /// and FloorWire, drawn with its `From` part.
 fn is_adornment(dom: &Dom, id: InstanceId) -> bool {
     [
@@ -76,19 +77,47 @@ fn is_adornment(dom: &Dom, id: InstanceId) -> bool {
         "PVAdornment",
         "PartAdornment",
         "FloorWire",
+        "SelectionPartLasso",
+        "Highlight",
     ]
     .iter()
     .any(|base| dom.is_a(id, base))
 }
 
-/// The part adornment `id` is drawn with.
-fn adorned_part(dom: &Dom, id: InstanceId) -> Option<InstanceId> {
-    let property = if dom.class_name(id) == "FloorWire" {
-        "From"
-    } else {
-        "Adornee"
-    };
-    dom.ref_property(id, property)
+/// What adornment `id` is drawn with: its `Adornee`; a FloorWire's `From`;
+/// a SelectionPartLasso's Humanoid's root part; a Highlight's `Adornee`,
+/// else its parent (a part, or a Model whose parts it covers).
+pub fn adorned_part(dom: &Dom, id: InstanceId) -> Option<InstanceId> {
+    match dom.class_name(id) {
+        "FloorWire" => dom.ref_property(id, "From"),
+        "SelectionPartLasso" => dom
+            .ref_property(id, "Humanoid")
+            .and_then(|h| humanoid_root_part(dom, h)),
+        "Highlight" => dom.ref_property(id, "Adornee").or_else(|| dom.parent(id)),
+        _ => dom.ref_property(id, "Adornee"),
+    }
+}
+
+/// A Humanoid's root part as a lasso starts from it (measured: the
+/// HumanoidRootPart, not the Torso beside it), else its Torso
+/// (Inference).
+pub fn humanoid_root_part(dom: &Dom, humanoid: InstanceId) -> Option<InstanceId> {
+    let model = dom.parent(humanoid)?;
+    ["HumanoidRootPart", "Torso"]
+        .into_iter()
+        .filter_map(|name| dom.find_first_child(model, name, false))
+        .find(|&p| dom.is_a(p, "BasePart"))
+}
+
+/// The Humanoid whose root part `part` is.
+pub fn humanoid_of_root(dom: &Dom, part: InstanceId) -> Option<InstanceId> {
+    let model = dom.parent(part)?;
+    let humanoid = dom
+        .children(model)
+        .iter()
+        .copied()
+        .find(|&c| dom.class_name(c) == "Humanoid")?;
+    (humanoid_root_part(dom, humanoid) == Some(part)).then_some(humanoid)
 }
 
 /// The part properties render-change tracking treats specially.
@@ -158,12 +187,18 @@ impl DataModel {
         let wire = |id: InstanceId| dom.class_name(id) == "FloorWire";
         let materials =
             |id: InstanceId| dom.is_a(id, "MaterialService") || dom.is_a(id, "MaterialVariant");
+        // A Model's parts all redraw (a Highlight covers them).
         let mark_part = |changes: &mut RenderChanges, part: Option<InstanceId>| {
-            if let Some(part) = part
-                && !changes.full
-                && dom.is_a(part, "BasePart")
-            {
+            let Some(part) = part.filter(|_| !changes.full) else {
+                return;
+            };
+            if dom.is_a(part, "BasePart") {
                 changes.parts.insert(part);
+            } else if dom.is_a(part, "Model") && !dom.is_a(part, "WorldRoot") {
+                let parts = dom.descendants(part).into_iter();
+                changes
+                    .parts
+                    .extend(parts.filter(|&p| dom.is_a(p, "BasePart")));
             }
         };
         // An adornment draws on its Adornee: its old and new ones change.
@@ -204,10 +239,22 @@ impl DataModel {
                             changes.moved.insert(*id);
                         }
                         // A FloorWire's path bends as either of its parts
-                        // moves, so its From part is drawn again.
+                        // moves, and a lasso's as its Part does, so the
+                        // part they're drawn with is drawn again.
                         for &(r, _) in dom.referrers(*id) {
-                            if wire(r) {
-                                mark_part(changes, dom.ref_property(r, "From"));
+                            if wire(r) || dom.class_name(r) == "SelectionPartLasso" {
+                                mark_part(changes, adorned_part(dom, r));
+                            }
+                        }
+                        if matches!(dom.name(*id), "HumanoidRootPart" | "Torso") {
+                            let lassos = humanoid_of_root(dom, *id)
+                                .map(|h| dom.referrers(h))
+                                .unwrap_or_default();
+                            if lassos
+                                .iter()
+                                .any(|&(r, _)| adorned_part(dom, r) == Some(*id))
+                            {
+                                mark_part(changes, Some(*id));
                             }
                         }
                     } else if decorates(*id) {

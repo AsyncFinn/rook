@@ -28,9 +28,8 @@ each release says which milestone it finishes (see `CHANGELOG.md`).
 
 ## Now, next, later
 
-- **Now:** M7 Lights and effects.
-- **Next:** M8 GUI.
-- **Then:** M9 Characters and, right after, M10 Networking.
+- **Now:** M8 GUI.
+- **Next:** M9 Characters and, right after, M10 Networking.
 
 The world comes before the people in it: sound, terrain, lights and GUI
 are each in hundreds of archive files, and characters need terrain to walk
@@ -48,7 +47,7 @@ directly, since a character is what makes playing together worth it.
 | ✅ | **M4** Content: meshes, materials, textures, decals | Places render with their meshes, materials (2022 and legacy, MaterialVariants, SurfaceAppearance), decals and textures (v0.4.0) |
 | ✅ | **M5** Audio | Archived places play their sounds, positioned in 3D; the audio conformance batch passes (v0.5.0) |
 | ✅ | **M6** Terrain | Archived places with terrain show it, and parts and queries collide with it (v0.6.0) |
-| 🟨 | **M7** Lights and effects | Local lights light the scene; Fire, Smoke, Sparkles and ParticleEmitters draw as in Studio |
+| ✅ | **M7** Lights and effects | Local lights light the scene; Fire, Smoke, Sparkles and ParticleEmitters draw as in Studio (v0.7.0) |
 | ⬜ | **M8** GUI | GUI conformance batch passes; archived places' GUIs draw and take input |
 | 🟨 | **M9** Characters | Spawn, walk, jump, sit and use tools in an archived place |
 | ⬜ | **M10** Networking | Two players on two machines play an archived place together |
@@ -228,17 +227,19 @@ create.
    [`docs/behavior/effects/beams-and-trails.md`](docs/behavior/effects/beams-and-trails.md)).
 5. ✅ Explosion: its blast (parts hit, joints broken, the push, craters)
    and its look ([`docs/behavior/effects/explosions.md`](docs/behavior/effects/explosions.md)).
-6. Highlight and the adornments, by files saving them (and creating them
+6. ✅ Highlight and the adornments, by files saving them (and creating them
    with `Instance.new`) in the corpus scan: SelectionBox 676 (749),
    ImageHandleAdornment 57 (220), SelectionPartLasso 50 (362),
    SelectionSphere 45 (15), Handles 37 (264), FloorWire 33 (51),
    LineHandleAdornment 26 (49), SurfaceSelection 12 (89), the Box, Sphere,
    Cylinder and Cone HandleAdornments 6 to 13 each (34 to 82), ArcHandles
    11 (68), Highlight 68 (42): outlines, fills through walls, and the
-   handles' look (dragging them comes with GUI input). Done so far:
-   SelectionBox, SelectionSphere, SurfaceSelection, the Box, Sphere,
-   Cylinder and Cone HandleAdornments, Handles, ArcHandles and FloorWire
-   ([`docs/behavior/adornments.md`](docs/behavior/adornments.md)).
+   handles' look (dragging them comes with GUI input)
+   ([`docs/behavior/adornments.md`](docs/behavior/adornments.md),
+   [`docs/behavior/highlight.md`](docs/behavior/highlight.md)).
+
+M7's exit criterion is met: local lights light the scene, and Fire,
+Smoke, Sparkles and ParticleEmitters draw as in Studio.
 
 ### M8 GUI
 

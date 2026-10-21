@@ -203,6 +203,9 @@ pub enum AdornShape {
     /// A flat ring in the XY plane facing +Z, with a hole of `hole`/255
     /// its diameter (0: a disc).
     Ring { hole: u8 },
+    /// A one-sided square in the XY plane facing -Z (Front), its texture
+    /// laid as a Decal on a Front face: the image's left at +X.
+    Quad,
 }
 
 impl AdornShape {
@@ -215,14 +218,17 @@ impl AdornShape {
     }
 }
 
-/// A piece that keeps one size on screen, as Studio draws Handles: its
-/// offset from `anchor` (world studs) and its size scale with its
-/// distance from the camera × `per_stud`, so `position` and `size` are
-/// what it draws at 1 / `per_stud` studs away.
+/// How a piece keeps its size on screen whatever its distance.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Grow {
-    pub anchor: Vec3,
-    pub per_stud: f32,
+pub enum Grow {
+    /// As Studio draws Handles: its offset from `anchor` (world studs) and
+    /// its size scale with its distance from the camera × `per_stud`, so
+    /// `position` and `size` are what it draws at 1 / `per_stud` studs
+    /// away.
+    Whole { anchor: Vec3, per_stud: f32 },
+    /// As Studio draws lines: `pixels` wide across its Z axis at every
+    /// point (its X and Y size are 1), its length in studs.
+    Across { pixels: f32 },
 }
 
 /// How light falls on a part.
@@ -295,6 +301,23 @@ pub struct PartInstance {
     /// Scaled with the camera's distance (adornments only: it takes the
     /// slot material textures use).
     pub grows: Option<Grow>,
+    /// Outlined and filled over the finished frame, as a Highlight on it
+    /// draws.
+    pub highlight: Option<Highlight>,
+}
+
+/// A Highlight's look on the parts it covers. Parts with the same `key`
+/// share one outline, around all of them.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Highlight {
+    /// Which Highlight it is (any number the scene keeps for it).
+    pub key: u64,
+    /// sRGB colours and their opacity (1 - transparency).
+    pub fill: [f32; 4],
+    pub outline: [f32; 4],
+    /// Shown through what's in front (`DepthMode` AlwaysOnTop), or only
+    /// where the parts are seen (Occluded).
+    pub on_top: bool,
 }
 
 impl PartInstance {
@@ -322,6 +345,7 @@ impl PartInstance {
             faces_camera: false,
             on_top: false,
             grows: None,
+            highlight: None,
         }
     }
 }

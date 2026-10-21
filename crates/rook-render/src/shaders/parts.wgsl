@@ -95,6 +95,27 @@ fn vs_shadow(v: ShadowIn) -> @builtin(position) vec4<f32> {
     return g.shadow_view_proj * vec4(placed(v.position, v.i_position, rotation, v.i_size), 1.0);
 }
 
+// A highlighted part into the Highlight mask: its Highlight's number,
+// carried in its colour (`Instance::numbered`), where it covers. The
+// position is worked out as `vs_main` does, so it meets the depth it left.
+struct HighlightOut {
+    @builtin(position) @invariant clip: vec4<f32>,
+    @location(0) @interpolate(flat) number: u32,
+};
+
+@vertex
+fn vs_highlight(v: VertexIn) -> HighlightOut {
+    var out: HighlightOut;
+    out.clip = g.view_proj * vec4(world_position(v), 1.0);
+    out.number = u32(round(v.i_color.r));
+    return out;
+}
+
+@fragment
+fn fs_highlight(in: HighlightOut) -> @location(0) u32 {
+    return in.number;
+}
+
 // The face a point belongs to: its vertices' box face, or else the one
 // its normal is closest to.
 fn face_at(in: VertexOut) -> u32 {
@@ -198,10 +219,13 @@ fn neon(albedo: vec3<f32>) -> vec3<f32> {
     return 13.6 * c * c * c * c;
 }
 
-// Parts and their mesh textures. A texture's alpha is ignored (observed).
+// Parts and their mesh textures. A texture's alpha is ignored (observed),
+// except on adornments drawn without light (an ImageHandleAdornment's
+// image; Inference).
 @fragment
 fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
-    var albedo = in.color.rgb * sample_image(in.images, in.uv).rgb;
+    let image = sample_image(in.images, in.uv);
+    var albedo = in.color.rgb * image.rgb;
     let face = face_at(in);
     let placed = face_position(face, in.local, in.box_center, in.box_size);
     let at = placed.xy;
@@ -274,10 +298,10 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
         }
     }
     if (adorn_bits(in.flags) & EXACT) != 0u {
-        return vec4(frame_of(albedo), in.color.a);
+        return vec4(frame_of(albedo), in.color.a * image.a);
     }
     if (adorn_bits(in.flags) & UNLIT) != 0u {
-        return vec4(frame(fog_units(albedo_units(albedo), in.world)), in.color.a);
+        return vec4(frame(fog_units(albedo_units(albedo), in.world)), in.color.a * image.a);
     }
     if (in.flags & NEON) != 0u {
         return vec4(frame(fog_units(neon(albedo), in.world)), in.color.a);

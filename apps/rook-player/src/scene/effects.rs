@@ -150,6 +150,8 @@ impl EffectCache {
                 EffectCall::Emit(n) => calls.emitted += u64::from(n),
                 EffectCall::Clear => calls.cleared += 1,
                 EffectCall::TextureOffset(offset) => calls.texture_offset = offset,
+                // A wireframe's (`adornments::wireframe`).
+                EffectCall::Line(..) => {}
             }
         }
     }

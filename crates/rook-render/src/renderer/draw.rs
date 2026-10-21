@@ -2,6 +2,7 @@
 
 use super::effects::particles::ParticleRun;
 use super::effects::ribbons::RibbonRun;
+use super::highlights::HighlightRun;
 use super::*;
 use crate::batch::CULL_SLOTS;
 use crate::batch::cull::seen_runs;
@@ -80,7 +81,7 @@ impl Renderer {
         let view_proj = camera.view_projection(aspect);
         let view = Frustum::of(view_proj);
         let margin = MOTION_STUDS.max(self.terrain.wave_size.abs());
-        self.write_globals(camera, aspect, sun, shadow);
+        self.write_globals(camera, (aspect, height), sun, shadow);
 
         stage(&mut times.setup);
         let transparent_runs = {
@@ -93,13 +94,14 @@ impl Renderer {
         let particle_runs = self.upload_particles(camera, &view);
         stage(&mut times.effects);
 
+        let (highlight_runs, looks) = self.highlights.upload(&self.device, &self.queue);
         // Each pass's draws, joined into runs that share what's bound.
-        let (mut shadow_runs, mut main_runs, starts) =
-            self.build_draws(shadow, &view, margin, transparent_runs);
+        let ([mut shadow_runs, mut main_runs, mut mask_runs], starts) =
+            self.build_draws(shadow, &view, margin, transparent_runs, highlight_runs);
 
         stage(&mut times.draws);
         let depth = self.depth_view(width, height);
-        let frame = self.tonemap.frame(&self.device, width, height);
+        let (frame, mask) = self.tonemap.frame(&self.device, width, height);
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -122,8 +124,13 @@ impl Renderer {
             starts[1],
             (&ribbon_runs, &particle_runs),
         );
+        let highlighted = !mask_runs.runs.is_empty();
+        if highlighted {
+            self.highlight_pass(&mut encoder, [&mask, &depth], &mut mask_runs, starts[2]);
+        }
+        let looks = highlighted.then_some(&looks);
         self.tonemap
-            .record(&self.queue, &mut encoder, target, l.tonemapper);
+            .record(&self.queue, &mut encoder, target, l.tonemapper, looks);
         if let Some(timer) = &mut self.timer {
             timer.resolve(&mut encoder, shadow.is_some());
         }
@@ -145,7 +152,7 @@ impl Renderer {
     fn write_globals(
         &mut self,
         camera: &Camera,
-        aspect: f32,
+        (aspect, height): (f32, u32),
         sun: Vec3,
         shadow: Option<ShadowView>,
     ) {
@@ -176,7 +183,12 @@ impl Renderer {
             ambient: rgb(l.ambient, 0.0),
             outdoor_ambient: rgb(l.outdoor_ambient, 0.0),
             fog_color: rgb(l.fog_color, 0.0),
-            fog_range: [l.fog_start, l.fog_end, l.exposure, 0.0],
+            fog_range: [
+                l.fog_start,
+                l.fog_end,
+                l.exposure,
+                2.0 * (camera.fov_y.to_radians() * 0.5).tan() / height.max(1) as f32,
+            ],
             shadow_view_proj: shadow
                 .map_or(glam::Mat4::IDENTITY, |s| s.view_proj)
                 .to_cols_array_2d(),
@@ -291,15 +303,16 @@ impl Renderer {
     }
 
     /// Each pass's draws, joined into runs that share what's bound, with
-    /// their arguments uploaded: (shadow pass, main pass, where each
-    /// pass's arguments start).
+    /// their arguments uploaded: (the shadow, main and Highlight mask
+    /// passes, where each pass's arguments start).
     fn build_draws(
         &mut self,
         shadow: Option<ShadowView>,
         view: &Frustum,
         margin: f32,
         transparent_runs: Vec<TransparentRun>,
-    ) -> (Runs, Runs, Vec<usize>) {
+        highlight_runs: Vec<HighlightRun>,
+    ) -> ([Runs; 3], Vec<usize>) {
         profiling::scope!("build draws");
         let mut shadow_runs = Runs::default();
         let mut main_runs = Runs::default();
@@ -373,8 +386,21 @@ impl Renderer {
                 instances,
             );
         }
-        let starts = self.upload_args(&[&shadow_runs, &main_runs]);
-        (shadow_runs, main_runs, starts)
+        let mut mask_runs = Runs::default();
+        for (key, on_top, instances) in highlight_runs {
+            let Some(mesh) = self.meshes.get(&key.shape) else {
+                continue;
+            };
+            let pipe = if on_top {
+                Pipe::HighlightOnTop
+            } else {
+                Pipe::HighlightOccluded
+            };
+            let source = Source::Highlights;
+            self.push_draw(&mut mask_runs, pipe, source, mesh, &key, instances);
+        }
+        let starts = self.upload_args(&[&shadow_runs, &main_runs, &mask_runs]);
+        ([shadow_runs, main_runs, mask_runs], starts)
     }
 
     /// Each terrain layer's blend, as the shader reads it.

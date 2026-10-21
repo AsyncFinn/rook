@@ -34,6 +34,9 @@ pub(crate) enum Pipe {
     Over,
     /// Blended over everything, depth untested.
     OnTop,
+    /// Into the Highlight mask, over everything or only where seen.
+    HighlightOnTop,
+    HighlightOccluded,
 }
 
 /// Which instance buffer a run's instances are in.
@@ -42,6 +45,7 @@ pub(crate) enum Source {
     Opaque,
     Layers,
     Transparent,
+    Highlights,
 }
 
 #[derive(Debug)]
@@ -77,8 +81,13 @@ impl Renderer {
         if mesh.indices.is_empty() || instances.is_empty() {
             return;
         }
+        // The shadow and mask passes read no image.
         let images = match (&self.image_binding, pipe) {
-            (ImageBinding::Sets(_), p) if p != Pipe::Shadow => Some(key.images),
+            (
+                ImageBinding::Sets(_),
+                Pipe::Shadow | Pipe::HighlightOnTop | Pipe::HighlightOccluded,
+            ) => None,
+            (ImageBinding::Sets(_), _) => Some(key.images),
             _ => None,
         };
         let at = runs.args.len();
@@ -220,6 +229,8 @@ impl Renderer {
             Pipe::Additive => &p.additive,
             Pipe::Over => &p.over,
             Pipe::OnTop => &p.on_top,
+            Pipe::HighlightOnTop => &p.highlight_on_top,
+            Pipe::HighlightOccluded => &p.highlight_occluded,
         }
     }
 
@@ -228,6 +239,7 @@ impl Renderer {
             Source::Opaque => self.opaque.buffer(),
             Source::Layers => self.layers.buffer(),
             Source::Transparent => self.transparent.buffer(),
+            Source::Highlights => self.highlights.buffer(),
         }
     }
 }

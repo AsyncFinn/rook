@@ -146,9 +146,14 @@ impl Instance {
                 if p.faces_camera {
                     flags |= FACES_CAMERA;
                 }
-                if let Some(grow) = p.grows {
-                    // A part without material textures leaves `tile` unread.
-                    tile = grow.anchor.extend(grow.per_stud).to_array();
+                // A part without material textures leaves `tile` unread:
+                // w > 0 grows whole about xyz, w < 0 is pixels across.
+                match p.grows {
+                    Some(Grow::Whole { anchor, per_stud }) => {
+                        tile = anchor.extend(per_stud).to_array();
+                    }
+                    Some(Grow::Across { pixels }) => tile = [0.0, 0.0, 0.0, -pixels],
+                    None => {}
                 }
                 flags |= match p.material {
                     Material::Neon => NEON,
@@ -261,10 +266,17 @@ impl Instance {
         self
     }
 
-    /// Whether it keeps one size on screen (`PartInstance::grows`): a base
-    /// part without material textures or a tile pattern, `tile.w` > 0.
+    /// This instance carrying Highlight `number` for the mask
+    /// (`shaders/parts.wgsl`'s `vs_highlight`) in its colour.
+    pub(crate) fn numbered(mut self, number: u32) -> Self {
+        self.color = [number as f32, 0.0, 0.0, 1.0];
+        self
+    }
+
+    /// Whether it keeps its size on screen (`PartInstance::grows`): a base
+    /// part without material textures or a tile pattern, `tile.w` not 0.
     fn grows(&self) -> bool {
-        self.flags & (MAPS | 3 << PATTERN_SHIFT) == 0 && self.tile[3] > 0.0
+        self.flags & (MAPS | 3 << PATTERN_SHIFT) == 0 && self.tile[3] != 0.0
     }
 
     /// The box around what this instance draws in the world, before the

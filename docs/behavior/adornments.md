@@ -4,8 +4,10 @@ ROADMAP M7 step 6. Measured in Studio 0.742 on 2026-10-20 on Baseplate,
 seen square on at a 3-8° field of view. Corpus counts are files saving
 each kind (and creating it with `Instance.new`): SelectionBox 676 (749),
 SelectionSphere 45 (15), SurfaceSelection 12 (89), the Box, Sphere,
-Cylinder and Cone HandleAdornments 6 to 13 each (34 to 82), Handles 37
-(264), ArcHandles 11 (68), FloorWire 33 (51).
+Cylinder and Cone HandleAdornments 6 to 13 each (34 to 82),
+LineHandleAdornment 26 (49), ImageHandleAdornment 57 (220), Handles 37
+(264), ArcHandles 11 (68), FloorWire 33 (51), SelectionPartLasso 50
+(362). Highlight has its own page, [highlight.md](highlight.md).
 
 Every kind here draws only on its `Adornee` (Observed: one merely inside
 a part draws nothing), wherever it is in Workspace. Rook also draws those
@@ -97,9 +99,35 @@ Rook draws XRay as the shape plus a copy at half its opacity over
 everything: where the shape shows, the same colour over itself changes
 nothing. The same scene in `rook-player --screenshot` draws Default red
 at 224, Shaded at 215, 24, 32 (Rook's light, M13), and the XRay ghost
-at 191, 67, 78. Not yet: LineHandleAdornment (its `Thickness` drew
-1-2 pixels at 150 studs, neither studs nor pixels clearly),
-ImageHandleAdornment and WireframeHandleAdornment, and `ZIndex`.
+at 191, 67, 78. Not yet: `ZIndex`.
+
+The next three were measured in a 1253 × 773 viewport at fields of view
+of 8° and 30°, 40 to 150 studs away. Thin lines' colours aren't
+readable from Studio's JPEG capture; where they are, they draw like the
+shapes above, without light through the curve.
+
+- **LineHandleAdornment**: a line from its `CFrame` `Length` (5) along
+  the LookVector, about 0.35 pixels across per unit of `Thickness`
+  whatever its distance and field of view: 20 drew 7 pixels, 10 drew
+  3.5, 4 drew 1.4, and the default 1 a faint hairline. Rook draws it as
+  a bar kept that many pixels across at every point along it
+  (`rook_render::Grow::Across`), and one thinner than a pixel one pixel
+  across, faded by how much of it the line would cover.
+- **ImageHandleAdornment**: `Image` (default `SurfacesDefault.png`) on a
+  flat `Size` (1, 1) studs at its `CFrame`, turned with it (one turned
+  60° drew foreshortened) and facing along the LookVector, the image's
+  left at the CFrame's +X; from behind it isn't drawn. `Color3`
+  (default 242, 243, 243) tints the image: red over a white image drew
+  (218, 9, 14). Rook also cuts it out by the image's alpha (Inference),
+  and draws a plain `Color3` square when the image can't load.
+- **WireframeHandleAdornment**: nothing until a script adds lines, in
+  its CFrame's axes: `AddLine(from, to)`, `AddLines` (a line per pair of
+  points), `AddPath(points, loop)`, and `Clear` empties it. Lines are
+  one pixel across in `Color3`, whatever `Thickness` (1 and 5 drew
+  alike), and parts in front hide them. One whose `Thickness` was set to
+  10 before its `AddPath` drew nothing, unexplained; Rook draws it.
+  Rook also scales its points by `Scale` (Inference). `AddText` isn't
+  drawn yet.
 
 ## Handles and ArcHandles
 
@@ -184,3 +212,15 @@ parts' world boxes (Approximation: a turned part's box reaches past it),
 under where the wire drops (Inference). Not measured: turned parts, a
 `To` straight above `From`, and where Studio's moving images start in
 time.
+
+## SelectionPartLasso
+
+Deprecated, but modern Studio still draws it (observed in 0.742): a bar
+0.25 studs across from its Humanoid's root part to `Part`, centre to
+centre, so the two parts hide its ends; 9 pixels 40 studs away, 3 at
+120. With both a HumanoidRootPart and a Torso it starts at the
+HumanoidRootPart (Rook falls back to the Torso, Inference). `Color3`
+without light, through the curve (red drew 223, 8, 13).
+
+Rook draws it as a round bar with the root part (Inference: only seen
+side on), and moving either end draws it again.

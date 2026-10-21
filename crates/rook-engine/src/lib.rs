@@ -16,7 +16,9 @@ pub mod settings;
 
 pub use bridges::input::InputEvent;
 
-pub use bridges::render_changes::{RenderChanges, is_effect_class};
+pub use bridges::render_changes::{
+    RenderChanges, adorned_part, humanoid_of_root, humanoid_root_part, is_effect_class,
+};
 
 use std::collections::HashMap;
 use std::sync::Arc;

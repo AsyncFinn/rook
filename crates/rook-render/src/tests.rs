@@ -412,3 +412,54 @@ fn dropped_meshes_make_room_for_others() {
         fresh.render_to_image(96, 64, &camera).unwrap()
     );
 }
+
+/// A Highlight fills its part in exactly its colour over the finished
+/// frame and outlines it, through a wall when on top; occluded, the wall
+/// hides both.
+#[test]
+fn highlights_fill_and_outline_through_walls_when_on_top() {
+    let Ok(mut r) = Renderer::headless() else {
+        return;
+    };
+    let highlight = |on_top| Highlight {
+        key: 1,
+        fill: [0.0, 1.0, 0.0, 1.0],
+        outline: [0.0, 0.0, 1.0, 1.0],
+        on_top,
+    };
+    let mut wall = part(PartShape::Block, 0.0, [0.5; 3], 0.0);
+    wall.position.z = 4.0;
+    wall.size = Vec3::new(20.0, 20.0, 1.0);
+    let mut scene = Scene {
+        parts: vec![
+            PartInstance {
+                highlight: Some(highlight(true)),
+                ..part(PartShape::Block, 0.0, [1.0, 0.0, 0.0], 0.0)
+            },
+            wall,
+        ],
+        ..Scene::default()
+    };
+    r.set_scene(&scene);
+    let camera = Camera {
+        fov_y: 20.0,
+        ..Camera::look_at(Vec3::new(0.0, 0.0, 20.0), Vec3::ZERO)
+    };
+    let (w, h) = (64, 64);
+    let at = |pixels: &[u8], x: u32, y: u32| {
+        let i = ((y * w + x) * 4) as usize;
+        [pixels[i], pixels[i + 1], pixels[i + 2]]
+    };
+    let pixels = r.render_to_image(w, h, &camera).unwrap();
+    assert_eq!(at(&pixels, 32, 32), [0, 255, 0]);
+    let row: Vec<[u8; 3]> = (0..w).map(|x| at(&pixels, x, 32)).collect();
+    let outline = row.iter().filter(|&&c| c == [0, 0, 255]).count();
+    // Two pixels at either side.
+    assert_eq!(outline, 4, "{row:?}");
+
+    scene.parts[0].highlight = Some(highlight(false));
+    r.update_parts(&scene, &[0]);
+    let pixels = r.render_to_image(w, h, &camera).unwrap();
+    assert_eq!(at(&pixels, 32, 32), at(&pixels, 4, 4));
+    assert!(!(0..w).any(|x| at(&pixels, x, 32) == [0, 0, 255]));
+}

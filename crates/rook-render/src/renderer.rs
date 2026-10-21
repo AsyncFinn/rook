@@ -2,6 +2,7 @@
 
 mod draw;
 mod effects;
+mod highlights;
 mod images;
 pub(crate) mod lighting;
 mod pipelines;
@@ -15,6 +16,7 @@ mod transparent;
 use super::*;
 use effects::particles::GpuParticles;
 use effects::ribbons::GpuRibbons;
+use highlights::HighlightParts;
 pub(crate) use images::ImageBinding;
 pub(crate) use images::ImageSet;
 use images::{Defaults, image_layout, image_set};
@@ -85,6 +87,8 @@ pub struct Renderer {
     waiting: HashMap<usize, PartInstance>,
     /// Transparent parts, sorted back to front as the view changes.
     transparent: TransparentParts,
+    /// The parts Highlights cover, drawn into their mask.
+    highlights: HighlightParts,
     lighting: Lighting,
     /// The local lights and their spatial hash (group 3).
     pub(crate) lights: GpuLights,
@@ -294,6 +298,7 @@ impl Renderer {
             placements: Vec::new(),
             waiting: HashMap::default(),
             transparent: TransparentParts::default(),
+            highlights: HighlightParts::default(),
             lighting: Lighting::default(),
             lights,
             particles: GpuParticles::default(),

@@ -65,7 +65,8 @@ impl SceneCache {
                 .map(|layer| (layer, pose))
                 .collect(),
         };
-        layers.extend(adornments::adornments(dom, id));
+        layers.extend(self.adornments(dom, id));
+        part.highlight = adornments::highlight::highlight(dom, id, &mut self.model_highlights);
         Some(Drawn { part, pose, layers })
     }
 

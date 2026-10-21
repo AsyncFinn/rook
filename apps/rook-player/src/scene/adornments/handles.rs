@@ -65,7 +65,7 @@ pub(super) fn handles(dom: &Dom, id: InstanceId, size: Vec3) -> Vec<(PartInstanc
             let part = PartInstance {
                 shape: DrawShape::Adorn(*shape),
                 size: *extent,
-                grows: Some(Grow {
+                grows: Some(Grow::Whole {
                     anchor: on_face,
                     per_stud: PER_STUD,
                 }),
@@ -134,7 +134,7 @@ fn grip(base: PartInstance, at: Vec3, size: Vec3) -> (PartInstance, Pose) {
     let part = PartInstance {
         shape: DrawShape::Part(PartShape::Ball),
         size,
-        grows: Some(Grow {
+        grows: Some(Grow::Whole {
             anchor: at,
             per_stud: PER_STUD,
         }),

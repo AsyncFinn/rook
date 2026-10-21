@@ -12,7 +12,7 @@ struct Globals {
     // rgb fog colour (sRGB)
     fog_color: vec4<f32>,
     // x = fog start, y = fog end, z = exposure (a multiplier on linear
-    // light, `Lighting::exposure`)
+    // light, `Lighting::exposure`), w = studs a pixel spans 1 stud away
     fog_range: vec4<f32>,
     // World to the shadow map's clip space (reverse Z).
     shadow_view_proj: mat4x4<f32>,
@@ -194,11 +194,18 @@ fn facing_camera(at: vec3<f32>) -> mat3x3<f32> {
 // Where a vertex of an instance is in the world (every pass).
 fn world_position(v: VertexIn) -> vec3<f32> {
     let at = placed(v.position, v.i_position, instance_rotation(v), v.i_size);
-    // A piece keeping one size on screen (`PartInstance::grows`): a base
-    // part without material textures, its anchor and rate in `tile`.
+    // A piece keeping its size on screen (`PartInstance::grows`): a base
+    // part without material textures, its anchor and rate in `tile`, or
+    // with w < 0, -w pixels across its Z axis at every point along it.
     if (v.i_flags.x & (MAPS | 12u)) == 0u && v.i_tile.w > 0.0 {
         let anchor = v.i_tile.xyz;
         return anchor + (at - anchor) * distance(g.camera_pos.xyz, anchor) * v.i_tile.w;
+    }
+    if (v.i_flags.x & (MAPS | 12u)) == 0u && v.i_tile.w < 0.0 {
+        let rotation = instance_rotation(v);
+        let axis = v.i_position + rotation * vec3(0.0, 0.0, v.position.z * v.i_size.z);
+        let across = -v.i_tile.w * distance(g.camera_pos.xyz, axis) * g.fog_range.w;
+        return axis + rotation * vec3(v.position.xy * across, 0.0);
     }
     return at;
 }

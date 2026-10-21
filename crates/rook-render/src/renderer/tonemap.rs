@@ -1,24 +1,44 @@
 //! The frame and the tone pass: the main pass draws light units into the
 //! frame in Studio's encoding (`shaders/tone.wgsl`), blending there as
 //! Studio blends, and the tone pass puts it through the place's tone curve
-//! onto the target (docs/behavior/tone-mapping.md).
+//! onto the target (docs/behavior/tone-mapping.md), Highlights over it.
 
 use wesl_core::include_wesl;
 
+use super::highlights::{HIGHLIGHT_LIMIT, Looks, MASK_FORMAT};
 use super::*;
+
+/// What the tone pass reads besides the frame and the mask.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable)]
+struct ToneUniform {
+    /// x: the curve (0 Default, 1 Retro); y: 1 when the mask holds
+    /// Highlights this frame.
+    curve: [f32; 4],
+    looks: Looks,
+}
 
 /// The frame's format. Studio's is 8 bits a channel; half floats keep the
 /// same encoding without its banding.
 pub(crate) const FRAME_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 
 #[derive(Debug)]
+struct Frame {
+    view: wgpu::TextureView,
+    mask: wgpu::TextureView,
+    group: wgpu::BindGroup,
+    size: (u32, u32),
+}
+
+#[derive(Debug)]
 pub(crate) struct Tonemap {
     pipeline: wgpu::RenderPipeline,
     layout: wgpu::BindGroupLayout,
-    /// x: the curve (0 Default, 1 Retro).
+    /// A [`ToneUniform`].
     uniform: wgpu::Buffer,
-    /// The frame, its view and size, and the bind group reading it.
-    frame: Option<(wgpu::TextureView, wgpu::BindGroup, u32, u32)>,
+    /// The frame's and the Highlight mask's views, their size, and the
+    /// bind group reading them.
+    frame: Option<Frame>,
 }
 
 impl Tonemap {
@@ -43,6 +63,16 @@ impl Tonemap {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
                         min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Uint,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
                     },
                     count: None,
                 },
@@ -84,7 +114,7 @@ impl Tonemap {
         });
         let uniform = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("rook tone"),
-            size: 16,
+            size: std::mem::size_of::<ToneUniform>() as u64,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -96,34 +126,40 @@ impl Tonemap {
         }
     }
 
-    /// The frame for a `width` × `height` target, made again when the size
-    /// changes.
+    /// The frame and the Highlight mask for a `width` × `height` target,
+    /// made again when the size changes.
     pub(crate) fn frame(
         &mut self,
         device: &wgpu::Device,
         width: u32,
         height: u32,
-    ) -> wgpu::TextureView {
-        if let Some((view, _, w, h)) = &self.frame
-            && (*w, *h) == (width, height)
+    ) -> (wgpu::TextureView, wgpu::TextureView) {
+        if let Some(f) = &self.frame
+            && f.size == (width, height)
         {
-            return view.clone();
+            return (f.view.clone(), f.mask.clone());
         }
-        let texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("rook frame"),
-            size: wgpu::Extent3d {
-                width,
-                height,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: FRAME_FORMAT,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
-            view_formats: &[],
-        });
-        let view = texture.create_view(&Default::default());
+        let texture = |label, format| {
+            device
+                .create_texture(&wgpu::TextureDescriptor {
+                    label: Some(label),
+                    size: wgpu::Extent3d {
+                        width,
+                        height,
+                        depth_or_array_layers: 1,
+                    },
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: wgpu::TextureDimension::D2,
+                    format,
+                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                        | wgpu::TextureUsages::TEXTURE_BINDING,
+                    view_formats: &[],
+                })
+                .create_view(&Default::default())
+        };
+        let view = texture("rook frame", FRAME_FORMAT);
+        let mask = texture("rook highlight mask", MASK_FORMAT);
         let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("rook tone"),
             layout: &self.layout,
@@ -136,32 +172,43 @@ impl Tonemap {
                     binding: 1,
                     resource: self.uniform.as_entire_binding(),
                 },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(&mask),
+                },
             ],
         });
-        self.frame = Some((view.clone(), group, width, height));
-        view
+        self.frame = Some(Frame {
+            view: view.clone(),
+            mask: mask.clone(),
+            group,
+            size: (width, height),
+        });
+        (view, mask)
     }
 
-    /// The frame through `tonemapper`'s curve onto `target`.
+    /// The frame through `tonemapper`'s curve onto `target`, with the
+    /// Highlights' `looks` over it when the mask holds any.
     pub(crate) fn record(
         &self,
         queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
         target: &wgpu::TextureView,
         tonemapper: Tonemapper,
+        looks: Option<&Looks>,
     ) {
-        let Some((_, group, _, _)) = &self.frame else {
+        let Some(Frame { group, .. }) = &self.frame else {
             return;
         };
         let curve = match tonemapper {
             Tonemapper::Default => 0.0f32,
             Tonemapper::Retro => 1.0,
         };
-        queue.write_buffer(
-            &self.uniform,
-            0,
-            bytemuck::bytes_of(&[curve, 0.0, 0.0, 0.0]),
-        );
+        let uniform = ToneUniform {
+            curve: [curve, f32::from(u8::from(looks.is_some())), 0.0, 0.0],
+            looks: looks.copied().unwrap_or([[0.0; 4]; 2 * HIGHLIGHT_LIMIT]),
+        };
+        queue.write_buffer(&self.uniform, 0, bytemuck::bytes_of(&uniform));
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("rook tone"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
