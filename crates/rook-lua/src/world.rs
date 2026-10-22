@@ -1,6 +1,6 @@
 //! Engine state shared by every Lua callback in one DataModel.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use crate::scheduler::{Clock, Scheduler};
 use crate::signal::{ConnectionId, Signals};
@@ -229,6 +229,9 @@ pub struct World {
     pub audio: AudioState,
     /// Effect methods called since the renderer last took them, in order.
     pub effect_calls: Vec<(InstanceId, EffectCall)>,
+    /// Players that have had a character, whose next spawns reset their
+    /// PlayerGui.
+    pub(crate) spawned: HashSet<InstanceId>,
 }
 
 impl World {
@@ -259,6 +262,7 @@ impl World {
             local_sounds: Vec::new(),
             audio: AudioState::default(),
             effect_calls: Vec::new(),
+            spawned: HashSet::new(),
         }
     }
 

@@ -91,6 +91,7 @@ pub(crate) fn spawn_character(lua: &Lua, player: InstanceId) -> ApiResult<Instan
         mutate(lua, |w| w.dom.destroy(old))?;
     }
     let character = mutate(lua, |w| {
+        let first = w.spawned.insert(player);
         let dom = &mut w.dom;
         let character = build_body(dom, player)?;
         if let Some(scripts) = dom
@@ -100,7 +101,7 @@ pub(crate) fn spawn_character(lua: &Lua, player: InstanceId) -> ApiResult<Instan
             copy_children(dom, scripts, character)?;
         }
         refill_backpack(dom, player)?;
-        reset_player_gui(dom, player)?;
+        reset_player_gui(dom, player, first)?;
         dom.set_property_by_name(player, "Character", Value::Ref(Some(character.to_ref())))?;
         Ok(character)
     })?;
@@ -195,8 +196,15 @@ fn refill_backpack(dom: &mut rook_dom::Dom, player: InstanceId) -> Result<(), Do
 
 /// GUIs with `ResetOnSpawn` are replaced by fresh copies from StarterGui;
 /// ones without it stay, and aren't copied again (Inference: matched by
-/// name).
-fn reset_player_gui(dom: &mut rook_dom::Dom, player: InstanceId) -> Result<(), DomError> {
+/// name). The `first` spawn keeps every GUI the server gave before it
+/// (Confirmed in Studio: a ScreenGui parented in PlayerAdded outlives the
+/// first character, but not a LoadCharacter after it, even with
+/// `Character` nil).
+fn reset_player_gui(
+    dom: &mut rook_dom::Dom,
+    player: InstanceId,
+    first: bool,
+) -> Result<(), DomError> {
     let Some(gui) = dom.find_first_child(player, "PlayerGui", false) else {
         return Ok(());
     };
@@ -205,7 +213,7 @@ fn reset_player_gui(dom: &mut rook_dom::Dom, player: InstanceId) -> Result<(), D
     for old in dom.children(gui).to_vec() {
         if keeps(dom, old) {
             kept.push(dom.name(old).to_owned());
-        } else {
+        } else if !first {
             dom.destroy(old)?;
         }
     }

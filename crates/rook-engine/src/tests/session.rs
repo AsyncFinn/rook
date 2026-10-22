@@ -263,3 +263,54 @@ fn input_mouse_and_click_detectors() {
     );
     assert_eq!(server_log, ["server click Clicker"]);
 }
+
+#[test]
+fn player_gui_from_the_server_reaches_only_its_player() {
+    let mut server = Server::new(&Options::default()).unwrap();
+    add_script(
+        &server,
+        "ServerScriptService",
+        "Give",
+        r#"
+        local Players = game:GetService("Players")
+        local function give(p, name)
+            local gui = Instance.new("ScreenGui")
+            gui.Name = name
+            Instance.new("Frame", gui)
+            gui.Parent = p.PlayerGui
+        end
+        Players.PlayerAdded:Connect(function(p) give(p, "Early") end)
+        task.wait(0.3)
+        for _, p in Players:GetPlayers() do give(p, "Late") end
+        task.wait(0.3)
+        Players.A:LoadCharacter()
+        "#,
+    );
+    server.start();
+    let mut session = Session::new(server, Options::default());
+    let a = session.join("A", 1).unwrap();
+    let b = session.join("B", 2).unwrap();
+    // Each client's view of every player's PlayerGui.
+    let guis = |session: &Session, index| {
+        let w = session.client(index).unwrap().runtime.world();
+        let dom = &w.dom;
+        let players = dom.find_service("Players").unwrap();
+        let mut seen = Vec::new();
+        for &p in dom.children(players) {
+            if let Some(gui) = dom.find_first_child(p, "PlayerGui", false) {
+                for &g in dom.children(gui) {
+                    seen.push(format!("{}.{}", dom.name(p), dom.name(g)));
+                }
+            }
+        }
+        seen
+    };
+    session.run_for(0.5);
+    // The first spawn keeps what PlayerAdded gave.
+    assert_eq!(guis(&session, a), ["A.Early", "A.Late"]);
+    assert_eq!(guis(&session, b), ["B.Early", "B.Late"]);
+    session.run_for(0.3);
+    // A later spawn resets them.
+    assert!(guis(&session, a).is_empty());
+    assert_eq!(guis(&session, b), ["B.Early", "B.Late"]);
+}
