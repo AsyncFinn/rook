@@ -5,6 +5,8 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- `rook-tools drift` no longer checks spelling. Rook's own writing still prefers American spelling, but names taken from Roblox (such as its `btn_grey.png` texture) keep theirs.
+
 ## [0.7.2] - 2026-10-22 - M8 steps 3 to 5: world GUI, images and input
 
 Pinned Roblox version: 0.741.19.

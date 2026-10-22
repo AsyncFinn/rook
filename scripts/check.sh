@@ -10,7 +10,7 @@ cargo test --workspace
 cargo deny check bans
 # Code drift (copied functions, long comment blocks, environment reads
 # below rook-engine), docs drift (links, indexes, Studio check dates, the
-# roadmap's marks) and British spellings (apps/rook-cli/src/commands/drift.rs).
+# roadmap's marks) (apps/rook-cli/src/commands/drift.rs).
 # Built with `--workspace`, not run with `-p rook-cli`: one package alone
 # resolves its dependencies' features differently, which compiled about a
 # hundred of them again.
