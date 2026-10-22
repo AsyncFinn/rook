@@ -20,21 +20,20 @@ collision surface's exact positions and normals. The recordings are in
 | Both | 0 |
 
 So 696 unique files have a Terrain (the roadmap's 977 came from an older count),
-and very few hold voxels. The smooth ones are a 25-million-voxel place (25.2 million
-voxels, 99% of them Water), a 1.18-million-voxel place (1.18 million, Grass with
-Concrete, Brick and WoodPlanks buildings), a 751,000-voxel place (751,000: Rock and
-Snow), two water-only places (water only), a 75,000-voxel place (75,000:
-Snow and Glacier) and four smaller ones. Over all ten, Water is 93% of voxels, then Grass, Rock and Snow. The
+and very few hold voxels. The largest smooth ones hold 25.2 million
+voxels (99% of them Water), 1.18 million (Grass with
+Concrete, Brick and WoodPlanks), 751,000 (Rock and
+Snow) and 75,000 (Snow and Glacier); two hold water only. Over all ten, Water is 93% of voxels, then Grass, Rock and Snow. The
 per-material totals were counted before Rook's decoder kept voxels with
 occupancy byte 0 (below), so they are a few hundred voxels short; the file
-counts are unaffected. The legacy files are mostly 2008 to 2012 places and
-other places (`a place`, the an archive admin places).
+counts are unaffected. The legacy files are mostly 2008 to 2012 places.
 
 *Legacy terrain in modern Studio* (Confirmed, Studio 0.742, three places
-opened from a copy): Studio loads **no voxels** from legacy terrain. Two places saved with `ClusterGridV2` log "Legacy terrain data is malformed, voxels will not be
-loaded: Error while decoding data: unexpected end at offset 407" (and
-"offset 16"), and one with `ClusterGrid` (XML) loads with
-no message. In all three `Terrain:CountCells()` is 0 and `ReadVoxels` finds
+opened from a copy): Studio loads **no voxels** from legacy terrain. Two
+places saved with `ClusterGridV2` log "Legacy terrain data is malformed,
+voxels will not be loaded: Error while decoding data: unexpected end at
+offset 407" (and "offset 16"), and one with `ClusterGrid` (XML) loads
+with no message. In all three `Terrain:CountCells()` is 0 and `ReadVoxels` finds
 no voxel between -2048 and 2048 studs. Rook does the same: it reads only
 `SmoothGrid`. (The legacy XML upgrade still restores `ClusterGrid`'s
 control characters, so the file round-trips.)
@@ -49,7 +48,7 @@ byte and a count byte), the occupancy, and the count (0 instead says one
 voxel whose shoreline water occupancy follows). A missing occupancy is full.
 Occupancy byte `b` is `(b + 1) / 256` full: a place built from known bytes
 reads back in `ReadVoxels` as exactly that, so byte 255 is full and byte 0
-is 1/256 full (a voxel, not air). Rook decodes a 75,000-voxel place exactly as
+is 1/256 full (a voxel, not air). Rook decodes the 75,000-voxel place exactly as
 Studio reads it: Snow 60,059, Glacier 15,194 and Grass 98 voxels, with
 the same summed occupancy (55,756.99, 14,122.13, 85.02). Voxel `v` covers
 studs `4v` to `4v + 4`, and chunk `c` starts at `128c`. A damaged grid

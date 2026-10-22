@@ -27,7 +27,7 @@ The install holds only Plastic's textures (`PlatformContent/pc/textures/plastic/
 - Files save the property as `Use2022MaterialsXml`. Scripts can't read `Use2022Materials` ("lacking capability RobloxScript"; Rook says it's "not a valid member", a difference in the message only); the overrides are saved as `<Material>Name` strings (`WoodName`), which scripts reach through `GetBaseMaterialOverride` and `SetBaseMaterialOverride`.
 - **The flag picks the set** (Confirmed): a place saved with it true fetched and drew a second set of textures (red-pink Brick, light Granite, a light herringbone Pavement on white parts), while places saved with it false, with a MaterialService that doesn't save it, or with no MaterialService at all fetched and drew the legacy set (gray Brick, dark Granite). Rook reads the saved value under either name (the class default would hide it) and draws the legacy set without one (`rook_types::MaterialSet`).
 - **Corrected in 0.3.1**: an earlier build of that release said Studio draws one set whatever the flag says. Its "2022" comparison place was a session that had already loaded materials, and both of its test places turned out to be legacy places (one saved the flag under the wrong name, the other false), so the set mapped then, and the scales below, are the legacy set's. That build drew that set for every place, which is right for the archive's places but not for places saving the flag on.
-- Of the archive's XML places, five save the flag false  and two true; older places don't save it, so the archive is almost all legacy.
+- Of the archive's XML places, five save the flag false and two true; older places don't save it, so the archive is almost all legacy.
 
 ## Shading
 

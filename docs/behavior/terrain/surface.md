@@ -93,11 +93,11 @@ Studio's Baseplate template. Rook's render from the same camera has the same
 outlines: a smooth Grass ball, a sharp Brick box, the faceted Concrete
 block and Pavement ball, and the Snow heightfield's shape. Colors,
 textures and the water surface are step 2's. A 75,000-voxel place, from the
-same camera in both, shows the same snowy landmass.
+same camera in both, shows the same landmass.
 
 *Costs* (release build, meshing only): a 75,000-voxel place 20 ms (56,000
-triangles), a 1.18-million-voxel place 63 ms (426,000), a 751,000-voxel place 92 ms (553,000),
-a 25-million-voxel place 317 ms (1.73 million, mostly the flat water). `rook-tools terrain
+triangles), a 1.18-million one 63 ms (426,000), a 751,000 one 92 ms (553,000),
+a 25.2-million one 317 ms (1.73 million, mostly the flat water). `rook-tools terrain
 <file>` prints what a file's Terrain holds and how long it takes to mesh.
 
 ## Scripts

@@ -55,7 +55,7 @@ color (that of the part it came from), the `NormalId` of the box face it
 was cut from, and UVs that are planar and in studs from the union's
 center.
 
-*Checked in Studio 0.742* (2026-10-14, a test place of a small place's unions plus
+*Checked in Studio 0.742* (2026-10-14, a test place of one place's unions plus
 variants, opened in a fresh Studio and laid out by the same script in
 Studio and in `rook-player --script`, compared at FieldOfView 20 from the
 same cameras). Observed unless marked:

@@ -10,7 +10,7 @@ What parts collide and are queried as, beyond their primitive shapes
 **Built 2026-10-14** (`rook_content::decode::mesh::union::physics`,
 `rook_physics::unions`, `rook_engine::unions`). Before this a union
 collided and was hit by rays, mouse clicks and ClickDetectors as its box,
-so in both large places the buttons couldn't be clicked: they
+so in two large places, buttons inside unions couldn't be clicked: they
 sit in a doorway cut through a wall union, and the mouse ray hit the
 wall's box. Rook now uses the geometry Studio saved for the union.
 
@@ -18,7 +18,7 @@ wall's box. Rook now uses the geometry Studio saved for the union.
 saved in the union (and, in a union asset's `PartOperationAsset`, beside
 its `MeshData`):
 
-| Where | large 2016 place | Modern large place |
+| Where | Large 2016 place | Modern large place |
 |---|---:|---:|
 | `PhysicalConfigData` in the file (version 7 / 6) | 190 of 190 | 1,555 of 1,802 |
 | `PhysicsData` in the file | 0 | 0 |
@@ -84,7 +84,7 @@ Studio, by script):
 - A union that moves (in an unanchored assembly) with `CanCollide` off
   keeps its box (Approximation, for speed: it collides with nothing, but
   its hulls would still be tested against everything near it every step
-  for Touched; a large modern place's 9 spinning spinning rings and its fans made
+  for Touched; a large modern place's 9 spinning rings and other spinning parts made
   a 5-second headless run 20% slower).
 - Mass and inertia stay those of the box (Approximation: Studio saves the
   real volume, center of mass and inertia with the hulls).

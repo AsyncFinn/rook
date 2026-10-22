@@ -7,7 +7,7 @@ its materials' textures, tinted by `Terrain.MaterialColors`; MaterialService
 overrides put MaterialVariants on it; and water sits where Studio's does.
 Measured on two copies of the [surface](surface.md) scene with blocks of
 the other 18 materials added, one saved with `Use2022Materials` on and one
-with it off, and on the 1.18-million-voxel archive place.
+with it off, and on a 1.18-million-voxel archive place.
 
 *Studio's terrain material table* (Studio's own data; how each field is
 used comes from the measurements below): Studio's settings

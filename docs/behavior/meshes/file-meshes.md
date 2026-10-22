@@ -93,9 +93,11 @@ against `rook-player --screenshot --fov 20` from the same cameras, 1270 ×
 549): a test scene (the off-center mesh front and top, the sword, the head
 with Offset, a MeshPart at Size ≠ `MeshSize` and one without
 `InitialSize`): every outline within 2 px, 4 px on the sword's tip at 3.9
-px per stud. A 2017 place, its maps loaded into Workspace by the same script
-in both: 8 scaled meshes (top within 1 px), 8 rotated meshes (top within 2 px) and an offset mesh
-(within 1 px); a large modern place's 54 rotated meshes from front and top. Where masks differ by more (up to 12 px) it
+px per stud. A 2017 place, laid out by the same script
+in both: 8 scaled meshes (top within 1 px), 8 rotated
+meshes (top within 2 px) and an offset mesh
+(within 1 px); in a large modern place, 54 rotated
+meshes from front and top. Where masks differ by more (up to 12 px) it
 is on sub-pixel fins and wires, which Studio's antialiasing fades
 below the mask's threshold. A large modern place's MeshParts couldn't be compared:
 their meshes need an account.

@@ -143,11 +143,11 @@ fn friction_is_mixed_in_the_simulation() {
 
 #[test]
 fn collision_group_data_round_trips() {
-    // a large modern place's: Default, NoClip, FlyNoClip.
+    // Default, NoClip, FlyNoClip, as a place saves them.
     let bytes: Vec<u8> = vec![
         1, 3, 0, 4, 249, 255, 255, 255, 7, 68, 101, 102, 97, 117, 108, 116, 1, 4, 250, 255, 255,
-        255, 6, 78, 111, 67, 108, 105, 112, 2, 4, 248, 255, 255, 255,
-        9, 70, 108, 121, 78, 111, 67, 108, 105, 112,
+        255, 6, 78, 111, 67, 108, 105, 112, 2, 4, 248, 255, 255, 255, 9, 70, 108, 121, 78, 111,
+        67, 108, 105, 112,
     ];
     let groups = CollisionGroups::decode(&bytes).unwrap();
     assert_eq!(groups.0.len(), 3);
