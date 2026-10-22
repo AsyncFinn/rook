@@ -175,3 +175,57 @@ fn big_screen_text_draws_from_distance_fields() {
     gui.sync(&mut dom);
     assert_eq!(fields(&gui.draw(&dom)), [false, false, true, true]);
 }
+
+/// A UICorner rounds the object's own quads and drops its border, a
+/// UIGradient colors them, a UIStroke is a band over them, and a
+/// CanvasGroup draws what it holds into its own quads, from its top left.
+#[test]
+fn corners_gradients_strokes_and_groups() {
+    let (mut dom, player_gui) = client();
+    let screen = child(&mut dom, "ScreenGui", player_gui, &[]);
+    let p = square(&mut dom, screen, 1, 0.1);
+    set(&mut dom, p, "BorderSizePixel", Value::Int32(3));
+    let corner = child(&mut dom, "UICorner", p, &[]);
+    set(&mut dom, corner, "TopLeftRadius", udim(0.0, 500));
+    child(&mut dom, "UIGradient", p, &[]);
+    child(
+        &mut dom,
+        "UIStroke",
+        p,
+        &[("Thickness", Value::Float32(4.0))],
+    );
+    let mut gui = laid_out(&mut dom);
+    let quads = gui.draw(&dom);
+    assert_eq!(quads.len(), 2, "background and stroke, no border");
+    let shape = quads[0].shape.expect("rounded");
+    // Held to half the shorter side; the others keep the default 8.
+    assert_eq!(shape.radii, [100.0, 8.0, 8.0, 8.0]);
+    let g = quads[0].gradient.as_ref().expect("graded");
+    assert_eq!(g.step, Vec2::new(1.0 / 200.0, 0.0));
+    let band = quads[1].shape.expect("a band");
+    assert_eq!((band.ring, band.size), (4.0, Vec2::splat(208.0)));
+    assert_eq!(band.radii, [104.0, 12.0, 12.0, 12.0]);
+
+    let group = child(
+        &mut dom,
+        "CanvasGroup",
+        screen,
+        &[
+            ("Size", udim2(0.0, 100, 0.0, 50)),
+            ("Position", udim2(0.0, 10, 0.0, 20)),
+            ("GroupTransparency", Value::Float32(0.25)),
+            ("BorderSizePixel", Value::Int32(0)),
+        ],
+    );
+    let inner = square(&mut dom, group, 1, 0.5);
+    set(&mut dom, inner, "Position", udim2(0.0, 5, 0.0, 5));
+    let mut gui = laid_out(&mut dom);
+    let quads = gui.draw(&dom);
+    let Paint::Group(drawn) = &quads.last().unwrap().paint else {
+        panic!("a group quad last");
+    };
+    assert_eq!(quads.last().unwrap().color[3], 0.75);
+    assert_eq!(drawn.size, [100, 50]);
+    assert_eq!(drawn.quads.len(), 2);
+    assert_eq!(drawn.quads[1].center, Vec2::new(105.0, 105.0));
+}

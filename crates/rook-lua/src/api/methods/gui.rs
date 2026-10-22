@@ -18,6 +18,26 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
     })
 }
 
+/// UIPageLayout's methods, written in Luau over the `std.page_layout`
+/// helpers (`luau/page_layout.luau`).
+pub(super) fn luau_source(owner: &str, name: &str) -> Option<&'static str> {
+    Some(match (owner, name) {
+        ("UIPageLayout", "JumpTo") => {
+            "local p = (...).page_layout return function(self, page) p.jumpTo(self, page) end"
+        }
+        ("UIPageLayout", "JumpToIndex") => {
+            "local p = (...).page_layout return function(self, index) p.jumpToIndex(self, index) end"
+        }
+        ("UIPageLayout", "Next") => {
+            "local p = (...).page_layout return function(self) p.step(self, 1) end"
+        }
+        ("UIPageLayout", "Previous") => {
+            "local p = (...).page_layout return function(self) p.step(self, -1) end"
+        }
+        _ => return None,
+    })
+}
+
 /// The top bar's height on this side: a client's has one, a server's
 /// doesn't (measured: a server's `ScreenPointToRay` and
 /// `ViewportPointToRay` agree; conformance case `physics/queries`).

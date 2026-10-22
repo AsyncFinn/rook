@@ -1,0 +1,10 @@
+-- UICorner's CornerRadius and its four corners' radii.
+local corner = Instance.new("UICorner")
+log("new", corner.CornerRadius, corner.TopLeftRadius, corner.BottomRightRadius)
+corner.CornerRadius = UDim.new(0.2, 3)
+log("set", corner.CornerRadius, corner.TopRightRadius, corner.BottomLeftRadius)
+corner.BottomRightRadius = UDim.new(0, 1)
+log("one corner", corner.CornerRadius, corner.BottomRightRadius)
+corner.TopLeftRadius = UDim.new(0, 9)
+log("top left", corner.CornerRadius)
+corner:Destroy()

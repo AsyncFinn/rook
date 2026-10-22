@@ -74,7 +74,8 @@ tried.
   between the pieces of a turned style; Rook doesn't.
 - UICorner on a styled object rounds each of the nine pieces on its own
   in Studio, leaving notches; UIStroke draws its stroke around the box as
-  usual. Rook has neither yet (step 7).
+  usual. Rook rounds the object as a whole instead
+  ([modern UI objects](modern.md#uicorner)).
 
 ## States
 

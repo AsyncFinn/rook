@@ -29,12 +29,13 @@ const FIELDS_FROM: f32 = 34.0;
 
 /// Glyphs are drawn from distance fields, which stay sharp at any size,
 /// when `world` or [`FIELDS_FROM`] says so; otherwise from masks at the
-/// size they're drawn.
+/// size they're drawn. A UIStroke's `outline` (color, width) takes the
+/// place of the text's own stroke.
 pub(super) fn emit(
     block: &TextBlock,
-    p: Placed,
-    clip: [f32; 4],
+    (p, clip): (Placed, [f32; 4]),
     world: bool,
+    outline: Option<([f32; 4], f32)>,
     text: &mut Text<'_>,
     out: &mut Vec<GuiQuad>,
 ) {
@@ -53,12 +54,20 @@ pub(super) fn emit(
         color,
         clip,
         paint: Paint::Solid,
+        shape: None,
+        gradient: None,
     };
     for r in block.rects.iter().filter(|r| r.behind && r.color[3] > 0.0) {
         out.push(rect(r.min, r.max, r.color));
     }
     for g in &block.glyphs {
-        if let Some((color, thickness)) = g.stroke.filter(|(c, _)| c[3] > 0.0) {
+        // Inference: a UIStroke's outline fades with the text, as its own
+        // stroke does.
+        let stroke = match outline {
+            Some((c, width)) => Some(([c[0], c[1], c[2], c[3] * g.color[3]], width)),
+            None => g.stroke,
+        };
+        if let Some((color, thickness)) = stroke.filter(|(c, _)| c[3] > 0.0) {
             for step in OUTLINE {
                 glyph(g, step * thickness, color, text, out);
             }
@@ -99,6 +108,8 @@ fn glyph(
         color,
         clip,
         paint: Paint::Glyph(raster.mask),
+        shape: None,
+        gradient: None,
     })
 }
 
@@ -124,5 +135,7 @@ fn field_glyph(
         color,
         clip,
         paint: Paint::Glyph(raster.mask),
+        shape: None,
+        gradient: None,
     })
 }

@@ -25,6 +25,8 @@ fn rect(p: Placed, min: Vec2, max: Vec2, color: [f32; 4], clip: [f32; 4]) -> Gui
         color,
         clip,
         paint: Paint::Solid,
+        shape: None,
+        gradient: None,
     }
 }
 

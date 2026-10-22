@@ -116,6 +116,7 @@ impl Renderer {
             l.environment_diffuse > 0.0,
         );
         self.update_sky_cube(&mut encoder);
+        self.gui.record_groups(&self.queue, &mut encoder);
         if shadow.is_some() {
             self.shadow_pass(&mut encoder, &mut shadow_runs, starts[0]);
         }

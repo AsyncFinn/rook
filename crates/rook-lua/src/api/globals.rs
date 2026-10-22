@@ -137,8 +137,9 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     Ok(())
 }
 
-/// Helpers for engine features written in Luau (tweens). They bypass the
-/// rules game scripts follow, so they live only in the registry.
+/// Helpers for engine features written in Luau (tweens, UIPageLayout).
+/// They bypass the rules game scripts follow, so they live only in the
+/// registry.
 fn install_engine_helpers(lua: &Lua) -> mlua::Result<()> {
     use mlua::AnyUserData;
     let std: Table = lua.named_registry_value("rook.std")?;
@@ -185,6 +186,7 @@ fn install_engine_helpers(lua: &Lua) -> mlua::Result<()> {
                 // Only engine events raised from Luau are listed here.
                 let event: &'static str = match name.as_str() {
                     "Completed" => "Completed",
+                    "Stopped" => "Stopped",
                     _ => {
                         return Err(mlua::Error::RuntimeError(format!(
                             "unknown engine event {name}"
@@ -208,6 +210,24 @@ fn install_engine_helpers(lua: &Lua) -> mlua::Result<()> {
             push_instance(lua, id)
         })?,
     )?;
+    std.set(
+        "pages",
+        lua.create_function(|lua, inst: AnyUserData| {
+            let id = inst.borrow::<super::instance::LuaInstance>()?.0;
+            let pages = with_world(lua, |w| w.gui.pages(&mut w.dom, id));
+            (pages.into_iter())
+                .map(|p| push_instance(lua, p))
+                .collect::<mlua::Result<Vec<_>>>()
+        })?,
+    )?;
+    std.set(
+        "turn_pages",
+        lua.create_function(|lua, (inst, at): (AnyUserData, Option<f32>)| {
+            let id = inst.borrow::<super::instance::LuaInstance>()?.0;
+            with_world(lua, |w| w.gui.turn_pages(id, at));
+            Ok(())
+        })?,
+    )?;
     let run_service = with_world(lua, |w| w.dom.get_service("RunService").ok());
     if let Some(rs) = run_service {
         let heartbeat = super::instance::get_member(lua, rs, "Heartbeat")
@@ -219,6 +239,11 @@ fn install_engine_helpers(lua: &Lua) -> mlua::Result<()> {
             .set_name("=[rook] Tween")
             .call(std.clone())?;
         std.set("tween", tween)?;
+        let pages: Table = lua
+            .load(include_str!("luau/page_layout.luau"))
+            .set_name("=[rook] UIPageLayout")
+            .call(std.clone())?;
+        std.set("page_layout", pages)?;
     }
     Ok(())
 }

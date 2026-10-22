@@ -129,5 +129,7 @@ fn line(p: Placed, to: [Vec2; 2], color: [f32; 4], clip: [f32; 4]) -> GuiQuad {
         color,
         clip,
         paint: Paint::Solid,
+        shape: None,
+        gradient: None,
     }
 }

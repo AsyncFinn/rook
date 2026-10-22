@@ -1,7 +1,7 @@
 //! The images GUI quads are drawn through: each bound with the sampler its
 //! paint asks for (blended or nearest, edge pixels carried on or
-//! repeating), and a white one for quads without an image. Quads are drawn
-//! in runs that share their image.
+//! repeating), groups' textures, and a white one for quads without an
+//! image. Quads are drawn in runs that share their image.
 
 use std::ops::Range;
 
@@ -11,16 +11,20 @@ use super::super::*;
 
 /// An image as GUI quads sample it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) struct ImageKey {
-    pub(crate) hash: ImageHash,
-    /// An index into [`GuiImages`]' samplers: bit 0 nearest, bit 1
-    /// repeating.
-    sampling: usize,
+pub(crate) enum ImageKey {
+    File {
+        hash: ImageHash,
+        /// An index into [`GuiImages`]' samplers: bit 0 nearest, bit 1
+        /// repeating.
+        sampling: usize,
+    },
+    /// A group's texture, by its key.
+    Group(u64),
 }
 
 impl ImageKey {
     pub(crate) fn of(paint: &ImagePaint) -> Self {
-        Self {
+        Self::File {
             hash: ImageHash(paint.hash),
             sampling: usize::from(paint.pixelated) | usize::from(paint.tiled) << 1,
         }
@@ -58,6 +62,8 @@ pub(crate) struct GuiImages {
     /// Group 1 of the screen pass: an image and its sampler.
     pub(crate) layout: wgpu::BindGroupLayout,
     groups: HashMap<Option<ImageKey>, wgpu::BindGroup>,
+    /// The groups' textures now drawn, by group key.
+    group_views: HashMap<u64, wgpu::TextureView>,
 }
 
 impl GuiImages {
@@ -122,7 +128,16 @@ impl GuiImages {
             white: white.create_view(&Default::default()),
             layout,
             groups: HashMap::default(),
+            group_views: HashMap::default(),
         }
+    }
+
+    /// The groups' textures from now on, by group key; bind groups of
+    /// earlier ones go.
+    pub(crate) fn set_groups(&mut self, views: HashMap<u64, wgpu::TextureView>) {
+        self.groups
+            .retain(|key, _| !matches!(key, Some(ImageKey::Group(_))));
+        self.group_views = views;
     }
 
     /// The view and sampler `key` draws with, once its image is on the GPU.
@@ -134,9 +149,12 @@ impl GuiImages {
         match key {
             None => Some((&self.white, &self.samplers[0])),
             // Raw sRGB values: GUI blends in sRGB.
-            Some(k) => cache
-                .get(&k.hash)
-                .map(|gpu| (&gpu.linear, &self.samplers[k.sampling])),
+            Some(ImageKey::File { hash, sampling }) => cache
+                .get(&hash)
+                .map(|gpu| (&gpu.linear, &self.samplers[sampling])),
+            Some(ImageKey::Group(key)) => {
+                (self.group_views.get(&key)).map(|view| (view, &self.samplers[0]))
+            }
         }
     }
 

@@ -5,7 +5,7 @@ use rook_dom::InstanceId;
 
 use crate::text::{self, Source};
 
-use super::{Kid, Pass, arrange, arranger, gui_children, padding, position_of, resolve, visible};
+use super::{Kid, Pass, arranger, gui_children, padding, position_of, resolve, visible};
 
 /// `base` grown on `id`'s `AutomaticSize` axes to hold its visible
 /// children, never shrunk (measured: `Size` is the least it gets).
@@ -43,7 +43,7 @@ pub(super) fn grow(pass: &mut Pass<'_>, id: InstanceId, base: Vec2, room: Vec2) 
                     size: pass.size_of(k, inner.size),
                 })
                 .collect();
-            let content = arrange(dom, layout, &laid, inner.size).arranged.content;
+            let content = pass.arrange(layout, &laid, inner.size).arranged.content;
             inner.origin + content + inner.far
         }
         None => {

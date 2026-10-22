@@ -85,7 +85,7 @@ place the layout last gave them. Children sort by `SortOrder`:
 LayoutOrder, or Name by bytes (`Z` before `a`); ties keep child order.
 `AbsoluteContentSize` is what was placed.
 
-- **UIListLayout** (flex and `Wraps` are step 7): items follow each other
+- **UIListLayout** (flex and `Wraps`: [modern UI objects](modern.md#flex)): items follow each other
   along `FillDirection`, `Padding` apart (its scale of the length that
   way); the run is aligned as a whole along it, each item on its own
   across it. Content is the run's length by the widest item.
@@ -142,4 +142,5 @@ Nested automatic sizes add up from the inside.
   into an 8-bit layer the tone pass lays over the frame.
 - Text: [GUI text](text.md); SurfaceGui and BillboardGui:
   [world GUI](world.md); images: [GUI images](images.md); ScrollingFrame:
-  [ScrollingFrame](scrolling.md). The modern UI objects come with step 7.
+  [ScrollingFrame](scrolling.md); UICorner, UIStroke, UIGradient and
+  CanvasGroup: [modern UI objects](modern.md).

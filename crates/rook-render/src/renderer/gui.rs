@@ -3,10 +3,14 @@
 //! GUI blends in sRGB as Roblox's does (docs/behavior/gui/layout.md#drawing).
 //! [`world`] draws the world GUI's rectangles into the world. Text quads
 //! draw through their glyph's coverage in the glyph atlas, image quads
-//! through their image ([`images`]).
+//! through their image ([`images`]), group quads through their group's
+//! texture, drawn first ([`groups`]); gradients read their ramp
+//! ([`ramps`]).
 
 mod atlas;
+mod groups;
 mod images;
+mod ramps;
 pub(crate) mod world;
 
 use rook_types::{Paint, WorldCanvas, WorldPlace};
@@ -14,17 +18,20 @@ use wesl_core::include_wesl;
 
 use super::*;
 use atlas::Atlas;
+use groups::Groups;
 use images::{GuiImages, ImageKey, Run, runs};
 use pipelines::BindLayouts;
+use ramps::Ramps;
 use world::{WorldGui, WorldRuns};
 
 /// A list of quads as the shader reads them, each with its image.
 type Packed = Vec<(GpuQuad, Option<ImageKey>)>;
 
 /// The quads' vertex attributes, in [`GpuQuad`]'s order.
-const QUAD_ATTRIBUTES: [wgpu::VertexAttribute; 7] = wgpu::vertex_attr_array![
+const QUAD_ATTRIBUTES: [wgpu::VertexAttribute; 11] = wgpu::vertex_attr_array![
     0 => Float32x2, 1 => Float32x2, 2 => Float32x2,
     3 => Float32x4, 4 => Float32x4, 5 => Float32x4, 6 => Float32,
+    7 => Float32x4, 8 => Float32x4, 9 => Float32x4, 10 => Float32x4,
 ];
 
 /// The GUI layer's format: 8-bit sRGB values, blended as stored.
@@ -42,15 +49,35 @@ pub(super) struct GpuQuad {
     /// The glyph's rectangle in the atlas, or the image's part, 0 to 1.
     uv: [f32; 4],
     /// 0 fills the rectangle, 1 draws through a coverage mask, 2 through a
-    /// distance field, 3 through an image (`shaders/gui_paint.wgsl`).
+    /// distance field, 3 through an image, 4 through a group's texture
+    /// (`shaders/gui_paint.wgsl`).
     mode: f32,
+    /// The shape's center and half size (0: none).
+    shape_rect: [f32; 4],
+    /// The shape's corner radii, as [`rook_types::GuiShape`]'s.
+    radii: [f32; 4],
+    /// The shape's band and cut corners (1), and the gradient's ramp row
+    /// (-1: none).
+    shape: [f32; 4],
+    /// Where the gradient is 0.5, and its change per pixel.
+    gradient: [f32; 4],
 }
 
 impl GpuQuad {
-    /// `q`, its glyph or image at `uv`.
-    fn new(q: &GuiQuad, uv: [f32; 4]) -> Self {
+    /// `q`, its glyph or image at `uv`, its gradient's ramp on row `ramp`.
+    fn new(q: &GuiQuad, uv: [f32; 4], ramp: Option<u32>) -> Self {
         let a = q.color[3].clamp(0.0, 1.0);
         let (sin, cos) = q.rotation.sin_cos();
+        let (shape_rect, radii, [ring, bevel]) = match &q.shape {
+            Some(s) => (
+                [s.center.x, s.center.y, s.size.x * 0.5, s.size.y * 0.5],
+                s.radii,
+                [s.ring, if s.bevel { 1.0 } else { 0.0 }],
+            ),
+            None => ([0.0; 4], [0.0; 4], [0.0; 2]),
+        };
+        let gradient = (q.gradient.as_ref())
+            .map_or([0.0; 4], |g| [g.origin.x, g.origin.y, g.step.x, g.step.y]);
         Self {
             center: q.center.to_array(),
             half_size: (q.size * 0.5).to_array(),
@@ -63,12 +90,15 @@ impl GpuQuad {
                 Paint::Glyph(mask) if mask.distance => 2.0,
                 Paint::Glyph(_) => 1.0,
                 Paint::Image(_) => 3.0,
+                Paint::Group(_) => 4.0,
             },
+            shape_rect,
+            radii,
+            shape: [ring, bevel, ramp.map_or(-1.0, |r| r as f32), 0.0],
+            gradient,
         }
     }
-}
 
-impl GpuQuad {
     /// The quads as instances, one per quad.
     fn layout() -> wgpu::VertexBufferLayout<'static> {
         wgpu::VertexBufferLayout {
@@ -79,7 +109,8 @@ impl GpuQuad {
     }
 }
 
-/// What the GUI pass draws into the screen's GUI layer.
+/// What the GUI pass draws into a target: the screen's GUI layer or a
+/// group's texture.
 #[derive(Debug)]
 struct Target {
     /// The target's size.
@@ -91,12 +122,7 @@ struct Target {
 }
 
 impl Target {
-    fn new(
-        device: &wgpu::Device,
-        layout: &wgpu::BindGroupLayout,
-        glyphs: &wgpu::TextureView,
-        sampler: &wgpu::Sampler,
-    ) -> Self {
+    fn new(device: &wgpu::Device, binds: Binds<'_>) -> Self {
         let size = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("rook gui target size"),
             size: 16,
@@ -105,7 +131,7 @@ impl Target {
         });
         let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("rook gui"),
-            layout,
+            layout: binds.layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
@@ -113,11 +139,15 @@ impl Target {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::TextureView(glyphs),
+                    resource: wgpu::BindingResource::TextureView(binds.glyphs),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: wgpu::BindingResource::Sampler(sampler),
+                    resource: wgpu::BindingResource::Sampler(binds.sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::TextureView(binds.ramps),
                 },
             ],
         });
@@ -155,12 +185,29 @@ impl Target {
     }
 }
 
+/// What a [`Target`]'s bind group binds.
+#[derive(Clone, Copy)]
+struct Binds<'a> {
+    layout: &'a wgpu::BindGroupLayout,
+    glyphs: &'a wgpu::TextureView,
+    ramps: &'a wgpu::TextureView,
+    sampler: &'a wgpu::Sampler,
+}
+
 #[derive(Debug)]
 pub(crate) struct GuiPass {
     pipeline: wgpu::RenderPipeline,
+    /// The layout targets bind with, and the glyph atlas's and ramps'
+    /// views and the sampler they bind.
+    layout: wgpu::BindGroupLayout,
+    glyphs: wgpu::TextureView,
+    ramps_view: wgpu::TextureView,
+    sampler: wgpu::Sampler,
     screen: Target,
+    groups: Groups,
     world: WorldGui,
     atlas: Atlas,
+    ramps: Ramps,
     images: GuiImages,
 }
 
@@ -171,6 +218,16 @@ impl GuiPass {
         layouts: BindLayouts<'_>,
         table: bool,
     ) -> Self {
+        let texture = |binding| wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Texture {
+                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                view_dimension: wgpu::TextureViewDimension::D2,
+                multisampled: false,
+            },
+            count: None,
+        };
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("rook gui"),
             entries: &[
@@ -184,26 +241,20 @@ impl GuiPass {
                     },
                     count: None,
                 },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
+                texture(1),
                 wgpu::BindGroupLayoutEntry {
                     binding: 2,
                     visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                     count: None,
                 },
+                texture(3),
             ],
         });
         let atlas = Atlas::new(device);
-        let atlas_view = atlas.texture.create_view(&Default::default());
+        let glyphs = atlas.texture.create_view(&Default::default());
+        let ramps = Ramps::new(device);
+        let ramps_view = ramps.texture.create_view(&Default::default());
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("rook gui glyphs"),
             mag_filter: wgpu::FilterMode::Linear,
@@ -253,17 +304,31 @@ impl GuiPass {
             multiview_mask: None,
             cache: None,
         });
+        let binds = Binds {
+            layout: &layout,
+            glyphs: &glyphs,
+            ramps: &ramps_view,
+            sampler: &sampler,
+        };
+        let screen = Target::new(device, binds);
+        let world = WorldGui::new(device, layouts, table, (&glyphs, &ramps_view));
         Self {
             pipeline,
-            screen: Target::new(device, &layout, &atlas_view, &sampler),
-            world: WorldGui::new(device, layouts, table, atlas_view),
+            screen,
+            groups: Groups::default(),
+            world,
+            layout,
+            glyphs,
+            ramps_view,
+            sampler,
             atlas,
+            ramps,
             images,
         }
     }
 
     /// Draw `screen` on the screen from now on, bottom first, and the
-    /// world GUI's `canvases`.
+    /// world GUI's `canvases`, with the groups they hold.
     pub(crate) fn set(
         &mut self,
         device: &wgpu::Device,
@@ -274,9 +339,23 @@ impl GuiPass {
         let lists: Vec<&[GuiQuad]> = std::iter::once(screen)
             .chain(canvases.iter().map(|c| &c.quads[..]))
             .collect();
-        let packed = self.pack(queue, &lists);
+        let held = groups::held(&lists);
+        let all: Vec<&[GuiQuad]> = (lists.iter().copied())
+            .chain(held.iter().map(|g| &g.quads[..]))
+            .collect();
+        let packed = self.pack(queue, &all);
         self.screen.set(device, queue, &packed[0]);
-        self.world.set(device, canvases, &packed[1..]);
+        self.world.set(device, canvases, &packed[1..lists.len()]);
+        let binds = Binds {
+            layout: &self.layout,
+            glyphs: &self.glyphs,
+            ramps: &self.ramps_view,
+            sampler: &self.sampler,
+        };
+        let packed = &packed[lists.len()..];
+        let views = (self.groups).set(device, queue, &held, packed, |d| Target::new(d, binds));
+        self.images.set_groups(views);
+        self.world.forget_groups();
     }
 
     /// Where each world GUI canvas is from now on.
@@ -284,12 +363,13 @@ impl GuiPass {
         self.world.place(places);
     }
 
-    /// Each of `lists` as the shader reads them, their glyphs in the
-    /// atlas. If the atlas fills and starts again partway, every glyph is
-    /// placed again once, so none points at a mask that was written over.
+    /// Each of `lists` as the shader reads them, their glyphs in the atlas
+    /// and their gradients' ramps in theirs. If either fills and starts
+    /// again partway, everything is placed again once, so nothing points
+    /// at a mask or ramp that was written over.
     fn pack(&mut self, queue: &wgpu::Queue, lists: &[&[GuiQuad]]) -> Vec<Packed> {
         let scale = 1.0 / atlas::SIZE as f32;
-        let once = |atlas: &mut Atlas| -> Vec<Packed> {
+        let once = |atlas: &mut Atlas, ramps: &mut Ramps| -> Vec<Packed> {
             (lists.iter())
                 .map(|quads| {
                     quads
@@ -301,19 +381,23 @@ impl GuiPass {
                                     (atlas.place(queue, mask)?.map(|t| t * scale), None)
                                 }
                                 Paint::Image(image) => (image.uv, Some(ImageKey::of(image))),
+                                Paint::Group(group) => {
+                                    ([0.0, 0.0, 1.0, 1.0], Some(ImageKey::Group(group.key)))
+                                }
                             };
-                            Some((GpuQuad::new(q, uv), image))
+                            let ramp = (q.gradient.as_ref()).map(|g| ramps.place(queue, &g.ramp));
+                            Some((GpuQuad::new(q, uv, ramp), image))
                         })
                         .collect()
                 })
                 .collect()
         };
-        let resets = self.atlas.resets;
-        let gpu = once(&mut self.atlas);
-        if self.atlas.resets == resets {
+        let resets = (self.atlas.resets, self.ramps.resets);
+        let gpu = once(&mut self.atlas, &mut self.ramps);
+        if (self.atlas.resets, self.ramps.resets) == resets {
             return gpu;
         }
-        once(&mut self.atlas)
+        once(&mut self.atlas, &mut self.ramps)
     }
 
     /// Bind the images the GUI draws that are on the GPU now (`cache`),
@@ -328,6 +412,9 @@ impl GuiPass {
         height: u32,
     ) -> WorldRuns {
         self.images.bind(device, &self.screen.runs, cache);
+        for (target, _, _) in self.groups.drawn() {
+            self.images.bind(device, &target.runs, cache);
+        }
         let images = (&self.images, cache);
         self.world.upload(device, queue, images, camera, height)
     }
@@ -335,6 +422,14 @@ impl GuiPass {
     /// Lay the world GUI's canvases in the world (last in the main pass).
     pub(crate) fn record_world(&self, pass: &mut wgpu::RenderPass<'_>, runs: &WorldRuns) {
         self.world.record(pass, runs);
+    }
+
+    /// Draw the groups into their textures, inner ones first, before
+    /// anything that shows them.
+    pub(crate) fn record_groups(&self, queue: &wgpu::Queue, encoder: &mut wgpu::CommandEncoder) {
+        for (target, view, size) in self.groups.drawn() {
+            self.draw(queue, encoder, target, view, size);
+        }
     }
 
     /// Draw the GUI layer into `target`, if there's any GUI. Whether there

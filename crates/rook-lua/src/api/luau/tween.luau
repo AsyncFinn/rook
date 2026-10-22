@@ -242,6 +242,9 @@ function tween.cancel(t)
 	end
 end
 
+-- The eased share of the way by Enum values (UIPageLayout's turns).
+tween.ease = ease
+
 function tween.getValue(alpha, style, direction)
 	return ease(style.Value, direction.Value, math.clamp(alpha, 0, 1))
 end

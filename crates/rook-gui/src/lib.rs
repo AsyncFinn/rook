@@ -28,7 +28,7 @@ pub use layout::GUI_INSET;
 pub use scroll_input::BarDrag;
 
 use changes::{Touch, Watch};
-use layout::Layout;
+use layout::{Layout, Turning};
 
 /// Whether a property is one the layout writes, which a script's read
 /// brings up to date first (measured: reading `AbsoluteSize` right after
@@ -74,6 +74,8 @@ pub struct Gui {
     focus: Option<InstanceId>,
     /// ScrollingFrames the wheel is moving.
     scrolling: FxHashMap<InstanceId, scroll_input::Eased>,
+    /// Where each turning UIPageLayout's view is.
+    turning: Turning,
     /// Each world GUI's canvas as of the last layout, once drawn.
     canvases: FxHashMap<InstanceId, WorldCanvas>,
     fonts: text::Fonts,
@@ -95,6 +97,7 @@ impl Default for Gui {
             screen_drawn: None,
             focus: None,
             scrolling: FxHashMap::default(),
+            turning: Turning::default(),
             canvases: FxHashMap::default(),
             fonts: text::Fonts::default(),
             glyphs: text::Glyphs::default(),
@@ -207,7 +210,8 @@ impl Gui {
                 None => Vec::new(),
             };
             world.sort_unstable();
-            self.layout = Layout::screens(dom, &self.layout, &mut self.fonts, &world);
+            let previous = (&self.layout, &self.turning);
+            self.layout = Layout::screens(dom, previous, &mut self.fonts, &world);
             self.stale = false;
             self.restyled = false;
             self.generation += 1;
@@ -233,7 +237,7 @@ impl Gui {
             return;
         }
         profiling::scope!("Gui::layout world");
-        self.layout.redo_world(dom, &resized, &mut self.fonts);
+        (self.layout).redo_world(dom, &resized, (&mut self.fonts, &self.turning));
         self.generation += 1;
         for id in &resized {
             self.canvases.remove(id);
@@ -249,11 +253,27 @@ impl Gui {
     pub fn sync_for(&mut self, dom: &mut Dom, id: InstanceId) {
         self.sync(dom);
         if !self.layout.contains(id) {
-            self.layout.add_tree(dom, id, &mut self.fonts);
+            (self.layout).add_tree(dom, id, (&mut self.fonts, &self.turning));
             self.screen_drawn = None;
             self.canvases.clear();
             self.write(dom);
         }
+    }
+
+    /// UIPageLayout `layout`'s pages in order, as laid out now.
+    pub fn pages(&mut self, dom: &mut Dom, layout: InstanceId) -> Vec<InstanceId> {
+        self.sync_for(dom, layout);
+        self.layout.pages.get(&layout).cloned().unwrap_or_default()
+    }
+
+    /// Show UIPageLayout `layout`'s pages from `at` (a page index,
+    /// fractional while it turns), or (`None`) from its `CurrentPage`.
+    pub fn turn_pages(&mut self, layout: InstanceId, at: Option<f32>) {
+        let changed = match at {
+            Some(at) => self.turning.insert(layout, at) != Some(at),
+            None => self.turning.remove(&layout).is_some(),
+        };
+        self.stale |= changed;
     }
 
     /// The TextBox that has focus, which shows its caret and selection.
@@ -392,6 +412,15 @@ impl Gui {
                         let _ = dom.set_property_by_name(id, "CanvasPosition", v2(scroll.position));
                     }
                 }
+            }
+            // Measured: a UIPageLayout without a current page shows its
+            // first.
+            let first = self.layout.pages.get(&id).and_then(|p| p.first());
+            if let Some(&first) = first
+                && dom.ref_property(id, "CurrentPage").is_none()
+            {
+                let _ =
+                    dom.set_property_by_name(id, "CurrentPage", Value::Ref(Some(first.to_ref())));
             }
             if let Some(arranged) = self.layout.arranged.get(&id) {
                 let _ = dom.set_property_by_name(id, "AbsoluteContentSize", v2(arranged.content));

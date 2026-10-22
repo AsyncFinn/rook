@@ -68,8 +68,10 @@ pub(crate) struct WorldGui {
     tested: wgpu::RenderPipeline,
     on_top: wgpu::RenderPipeline,
     group_layout: wgpu::BindGroupLayout,
-    /// The glyph atlas, which text quads draw through.
+    /// The glyph atlas, which text quads draw through, and the
+    /// gradients' ramps.
     glyphs: wgpu::TextureView,
+    ramps: wgpu::TextureView,
     /// Bytes between frames in the uniform buffer.
     stride: u64,
     canvases: Vec<Canvas>,
@@ -84,7 +86,7 @@ impl WorldGui {
         device: &wgpu::Device,
         layouts: BindLayouts<'_>,
         table: bool,
-        glyphs: wgpu::TextureView,
+        (glyphs, ramps): (&wgpu::TextureView, &wgpu::TextureView),
     ) -> Self {
         let size = std::mem::size_of::<CanvasFrame>() as u64;
         let group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -112,6 +114,16 @@ impl WorldGui {
                 },
                 image_entries(2)[0],
                 image_entries(2)[1],
+                wgpu::BindGroupLayoutEntry {
+                    binding: 4,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
             ],
         });
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -149,7 +161,8 @@ impl WorldGui {
             tested: pipeline(wgpu::CompareFunction::Greater),
             on_top: pipeline(wgpu::CompareFunction::Always),
             group_layout,
-            glyphs,
+            glyphs: glyphs.clone(),
+            ramps: ramps.clone(),
             stride: size.div_ceil(align) * align,
             canvases: Vec::new(),
             quads: None,
@@ -191,6 +204,13 @@ impl WorldGui {
                 usage: wgpu::BufferUsages::VERTEX,
             })
         });
+    }
+
+    /// Drop the bind groups of groups' textures, which were drawn anew.
+    pub(crate) fn forget_groups(&mut self) {
+        if let Some(frames) = &mut self.frames {
+            (frames.groups).retain(|key, _| !matches!(key, Some(ImageKey::Group(_))));
+        }
     }
 
     /// Where each canvas is from now on.
@@ -309,6 +329,10 @@ impl WorldGui {
                 wgpu::BindGroupEntry {
                     binding: 3,
                     resource: wgpu::BindingResource::Sampler(sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: wgpu::BindingResource::TextureView(&self.ramps),
                 },
             ],
         });

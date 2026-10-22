@@ -1,6 +1,7 @@
 //! What GUI drawing hands the renderer: rectangles in screen pixels, in
-//! the order they're drawn, filled, text glyphs or images, and the world
-//! GUI's canvases with where each is in the world. `rook-gui` makes them and
+//! the order they're drawn, filled, text glyphs, images or groups drawn
+//! apart, cut to rounded or stroked shapes and colored by gradients, and
+//! the world GUI's canvases with where each is in the world. `rook-gui` makes them and
 //! `rook-render` draws them, so the shapes live here, below both.
 
 use std::sync::Arc;
@@ -23,11 +24,56 @@ pub struct GuiQuad {
     /// drawn.
     pub clip: [f32; 4],
     pub paint: Paint,
+    /// Only pixels inside this shape are drawn (UICorner, UIStroke).
+    pub shape: Option<GuiShape>,
+    /// Multiplies the color, opacity too (UIGradient).
+    pub gradient: Option<GuiGradient>,
 }
 
 impl GuiQuad {
     /// A clip rectangle that clips nothing.
     pub const NO_CLIP: [f32; 4] = [f32::MIN, f32::MIN, f32::MAX, f32::MAX];
+}
+
+/// A rectangle with rounded or cut corners a [`GuiQuad`] is cut to,
+/// turned with it, or the band inside its edge (a stroke).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct GuiShape {
+    /// Its center, in the quad's pixels.
+    pub center: Vec2,
+    /// Its width and height before it turns.
+    pub size: Vec2,
+    /// How far in from each side each corner starts: top left, top right,
+    /// bottom right, bottom left.
+    pub radii: [f32; 4],
+    /// Only this band inside the edge is drawn (0: all of it); the inside
+    /// edge's corners are `radii` less this.
+    pub ring: f32,
+    /// The corners are cut straight across instead of rounded.
+    pub bevel: bool,
+}
+
+/// A gradient over a [`GuiQuad`]: the color at `t` is the ramp's texel
+/// at `t` (0 to 1, held at the ends), where `t` is 0.5 at `origin` and
+/// grows by `step` per pixel.
+#[derive(Debug, Clone, PartialEq)]
+pub struct GuiGradient {
+    pub ramp: Arc<GuiRamp>,
+    pub origin: Vec2,
+    pub step: Vec2,
+}
+
+/// A gradient's colors and opacities from 0 to 1, sampled evenly.
+#[derive(Debug, PartialEq, Eq)]
+pub struct GuiRamp {
+    /// Names this ramp among all others, so a renderer can keep it.
+    pub key: u64,
+    /// sRGB and opacity, not premultiplied.
+    pub texels: [[u8; 4]; GuiRamp::TEXELS],
+}
+
+impl GuiRamp {
+    pub const TEXELS: usize = 256;
 }
 
 /// What a [`GuiQuad`] is filled with, in its color.
@@ -40,6 +86,21 @@ pub enum Paint {
     Glyph(Arc<GlyphMask>),
     /// Part of an image, tinted by the color.
     Image(ImagePaint),
+    /// A group of quads drawn apart into a texture of its own, then laid
+    /// over the rectangle, tinted by the color (a CanvasGroup).
+    Group(Arc<GuiGroup>),
+}
+
+/// Quads a [`Paint::Group`] draws into its texture.
+#[derive(Debug, PartialEq)]
+pub struct GuiGroup {
+    /// Names this group's drawing among all others, so a renderer can keep
+    /// its texture while it's unchanged.
+    pub key: u64,
+    /// The texture's size in pixels.
+    pub size: [u32; 2],
+    /// Bottom first, in pixels from the texture's top left.
+    pub quads: Vec<GuiQuad>,
 }
 
 /// Part of an image stretched over a [`GuiQuad`].

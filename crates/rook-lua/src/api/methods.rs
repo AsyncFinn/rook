@@ -264,6 +264,7 @@ pub(crate) fn luau_source(owner: &str, name: &str) -> Option<&'static str> {
         ("Instance", "WaitForChild") => Some(include_str!("luau/wait_for_child.luau")),
         _ => [
             tweens::luau_source,
+            gui::luau_source,
             bindables::luau_source,
             data_stores::luau_source,
             remotes::luau_source,

@@ -491,6 +491,8 @@ fn world_gui_draws_in_the_world() {
         color: [color[0], color[1], color[2], 1.0],
         clip: GuiQuad::NO_CLIP,
         paint: rook_types::Paint::Solid,
+        shape: None,
+        gradient: None,
     };
     let canvas = |quads: Vec<GuiQuad>, size: f32, on_top: bool| WorldCanvas {
         quads,
@@ -578,6 +580,8 @@ fn gui_images_draw_their_texels() {
             pixelated: true,
             tiled,
         }),
+        shape: None,
+        gradient: None,
     };
     let mut missing = quad(72.0, [0.0, 0.0, 1.0, 1.0], [1.0; 3], false);
     if let rook_types::Paint::Image(paint) = &mut missing.paint {
@@ -612,4 +616,95 @@ fn gui_images_draw_their_texels() {
     assert_eq!(at(37, 1), [0, 255, 0]);
     assert_eq!(at(56, 8), [0, 255, 0]);
     assert_ne!(at(72, 8), [255, 0, 0]);
+}
+
+/// Screen GUI quads are cut to their shapes (rounded corners, a stroke's
+/// band), colored along their gradients, and groups draw their quads into
+/// a texture laid over as one, tinted.
+#[test]
+fn gui_shapes_gradients_and_groups_draw() {
+    let Ok(mut r) = Renderer::headless() else {
+        return;
+    };
+    r.set_scene(&Scene::default());
+    let fill = |center: Vec2, size: Vec2, color: [f32; 4]| GuiQuad {
+        center,
+        size,
+        rotation: 0.0,
+        color,
+        clip: GuiQuad::NO_CLIP,
+        paint: rook_types::Paint::Solid,
+        shape: None,
+        gradient: None,
+    };
+    let white = [1.0; 4];
+    let shape = |center: Vec2, radius: f32, ring: f32| rook_types::GuiShape {
+        center,
+        size: Vec2::splat(16.0),
+        radii: [radius; 4],
+        ring,
+        bevel: false,
+    };
+    let rounded = GuiQuad {
+        shape: Some(shape(Vec2::splat(8.0), 8.0, 0.0)),
+        ..fill(Vec2::splat(8.0), Vec2::splat(16.0), white)
+    };
+    let band = GuiQuad {
+        shape: Some(shape(Vec2::new(24.0, 8.0), 0.0, 3.0)),
+        ..fill(Vec2::new(24.0, 8.0), Vec2::splat(16.0), white)
+    };
+    let mut texels = [[0u8; 4]; rook_types::GuiRamp::TEXELS];
+    for (i, t) in texels.iter_mut().enumerate() {
+        *t = [i as u8, i as u8, i as u8, 255];
+    }
+    let ramp = std::sync::Arc::new(rook_types::GuiRamp { key: 1, texels });
+    let graded = GuiQuad {
+        gradient: Some(rook_types::GuiGradient {
+            ramp,
+            origin: Vec2::new(40.0, 8.0),
+            step: Vec2::new(1.0 / 16.0, 0.0),
+        }),
+        ..fill(Vec2::new(40.0, 8.0), Vec2::splat(16.0), white)
+    };
+    let group = rook_types::GuiGroup {
+        key: 2,
+        size: [16, 16],
+        quads: vec![
+            fill(Vec2::splat(8.0), Vec2::splat(16.0), [1.0, 0.0, 0.0, 1.0]),
+            fill(
+                Vec2::new(12.0, 8.0),
+                Vec2::new(8.0, 16.0),
+                [1.0, 1.0, 0.0, 1.0],
+            ),
+        ],
+    };
+    let grouped = GuiQuad {
+        paint: rook_types::Paint::Group(std::sync::Arc::new(group)),
+        ..fill(
+            Vec2::new(56.0, 8.0),
+            Vec2::splat(16.0),
+            [0.0, 1.0, 1.0, 1.0],
+        )
+    };
+    r.set_gui(&[rounded, band, graded, grouped], &[], &Default::default());
+    let camera = Camera::look_at(Vec3::new(0.0, 0.0, 10.0), Vec3::ZERO);
+    let (w, h) = (64, 16);
+    let pixels = r.render_to_image(w, h, &camera).unwrap();
+    let at = |x: u32, y: u32| {
+        let i = ((y * w + x) * 4) as usize;
+        [pixels[i], pixels[i + 1], pixels[i + 2]]
+    };
+    let sky = at(0, 0);
+    assert_ne!(sky, [255; 3]);
+    assert_eq!(at(8, 8), [255; 3]);
+    assert_eq!(at(8, 1), [255; 3]);
+    assert_eq!(at(0, 15), sky);
+    assert_eq!(at(17, 0), [255; 3]);
+    assert_eq!(at(24, 8), sky);
+    // Pixel 39's middle is 0.5 + (39.5 - 40) / 16 along.
+    assert!(at(39, 8)[0].abs_diff(120) <= 1, "{:?}", at(39, 8));
+    assert!(at(32, 8)[0] < 20 && at(47, 8)[0] > 235);
+    // Red, then yellow, both tinted cyan.
+    assert_eq!(at(50, 8), [0, 0, 0]);
+    assert_eq!(at(62, 8), [0, 255, 0]);
 }

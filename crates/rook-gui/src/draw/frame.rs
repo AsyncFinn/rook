@@ -7,8 +7,15 @@ use rook_types::{GuiQuad, Paint};
 use crate::layout::{Placed, turn};
 
 /// Inference: the border takes the background's transparency and doesn't
-/// overlap it, and UIScales thicken it.
-pub(super) fn emit(dom: &Dom, id: InstanceId, p: Placed, clip: [f32; 4], out: &mut Vec<GuiQuad>) {
+/// overlap it, and UIScales thicken it. Measured: an object with a
+/// UICorner draws no border (`rounded`).
+pub(super) fn emit(
+    dom: &Dom,
+    id: InstanceId,
+    (p, clip): (Placed, [f32; 4]),
+    rounded: bool,
+    out: &mut Vec<GuiQuad>,
+) {
     let alpha = 1.0
         - dom
             .float_property(id, "BackgroundTransparency")
@@ -17,7 +24,11 @@ pub(super) fn emit(dom: &Dom, id: InstanceId, p: Placed, clip: [f32; 4], out: &m
         return;
     }
     let size = p.size();
-    let border = dom.number_property(id, "BorderSizePixel").unwrap_or(0.0) as f32 * p.scale;
+    let border = if rounded {
+        0.0
+    } else {
+        dom.number_property(id, "BorderSizePixel").unwrap_or(0.0) as f32 * p.scale
+    };
     // Confirmed (creator-docs BorderMode): Outline outside the object,
     // Middle across its edge, Inset inside.
     let (inset, outset) = match dom.enum_item_property(id, "BorderMode") {
@@ -32,6 +43,8 @@ pub(super) fn emit(dom: &Dom, id: InstanceId, p: Placed, clip: [f32; 4], out: &m
         color: [color[0], color[1], color[2], alpha],
         clip,
         paint: Paint::Solid,
+        shape: None,
+        gradient: None,
     };
     if border > 0.0 {
         let color = dom

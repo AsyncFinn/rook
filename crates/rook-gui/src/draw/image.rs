@@ -108,6 +108,8 @@ pub(super) fn quad(p: Placed, piece: Piece, look: Look, clip: [f32; 4]) -> Optio
             pixelated: look.pixelated,
             tiled: look.tiled,
         }),
+        shape: None,
+        gradient: None,
     })
 }
 

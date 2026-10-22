@@ -62,10 +62,10 @@ pub(super) fn arrange(dom: &Dom, layout: InstanceId, count: usize, inner: Vec2) 
         .collect();
     Arrangement {
         slots,
+        sizes: vec![cell; count],
         arranged: Arranged {
             content,
             cells: Some((cell, Vec2::new(columns as f32, rows as f32))),
         },
-        cell: Some(cell),
     }
 }

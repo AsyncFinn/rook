@@ -250,6 +250,11 @@ pub(crate) fn get(w: &World, id: InstanceId, name: &str) -> Option<Value> {
                 _ => rotation(&c),
             }))
         }
+        // Measured: a view of the four corners' radii (files migrate it to
+        // them), reading the top left's.
+        "CornerRadius" if dom.class_name(id) == "UICorner" => {
+            dom.property_by_name(id, "TopLeftRadius")
+        }
         // Observed: IsPlaying reads Playing, IsPaused the opposite.
         "IsPlaying" | "IsPaused" if dom.is_a(id, "Sound") => {
             let playing = dom.bool_property(id, "Playing") == Some(true);
@@ -342,6 +347,17 @@ pub(crate) fn set(
         return Some(set_named(w, id, target, Value::Color3(Color3::from(*b))));
     }
     match (name, value) {
+        // Measured: sets all four corners.
+        ("CornerRadius", v) if w.dom.class_name(id) == "UICorner" => Some(
+            [
+                "TopLeftRadius",
+                "TopRightRadius",
+                "BottomRightRadius",
+                "BottomLeftRadius",
+            ]
+            .into_iter()
+            .try_for_each(|corner| set_named(w, id, corner, v.clone())),
+        ),
         // Observed in Studio 0.742: kept within 0 to 10, as Sound.Volume.
         ("Volume", v) if w.dom.is_a(id, "SoundGroup") => {
             let v = v.as_number()?;

@@ -2,14 +2,15 @@
 // quads, laid on its canvas's plane in the world, so edges and text stay
 // sharp up close, its text drawn from distance fields. A quad is filled or
 // drawn through a glyph or its image, in sRGB premultiplied by its
-// opacity, as on the screen (`gui.wgsl`).
+// opacity, cut to its shape and colored by its gradient, as on the screen
+// (`gui.wgsl`).
 // LightInfluence 0 gives its color squared times Brightness in light
 // units, as unlit adornments do (measured: a red SurfaceGui frame and an
 // unlit red adornment both draw 223 through the default curve); 1 lights
 // it as a surface facing the camera's side of it, as particles are lit.
 
 import package::common::{g, image_sampler};
-import package::gui_paint::gui_paint;
+import package::gui_paint::{gui_gradient, gui_paint, gui_shape, ramp_uv};
 import package::tone::frame;
 import package::lighting::{diffuse_light, fog_amount, fog_light, sun_light};
 
@@ -29,6 +30,8 @@ struct Canvas {
 // The run's image (white for fills and glyphs), raw sRGB.
 @group(2) @binding(2) var image: texture_2d<f32>;
 @group(2) @binding(3) var paint_sampler: sampler;
+// Gradients' ramps, one a row (`GuiRamp`), raw sRGB and opacity.
+@group(2) @binding(4) var ramps: texture_2d<f32>;
 
 struct Quad {
     @location(0) center: vec2<f32>,
@@ -43,6 +46,15 @@ struct Quad {
     @location(5) uv: vec4<f32>,
     // How it's drawn: `gui_paint`'s mode.
     @location(6) mode: f32,
+    // Its shape's center and half size (0: none), in canvas pixels.
+    @location(7) shape_rect: vec4<f32>,
+    // Its shape's corner radii (`gui_shape`).
+    @location(8) radii: vec4<f32>,
+    // Its shape's band and cut corners (`gui_shape`), and the gradient's
+    // ramp row (below 0: none).
+    @location(9) shape: vec4<f32>,
+    // Where the gradient is 0.5, and its change per canvas pixel.
+    @location(10) gradient: vec4<f32>,
 };
 
 struct QuadOut {
@@ -54,6 +66,13 @@ struct QuadOut {
     // Where on the canvas, in its pixels.
     @location(3) canvas_at: vec2<f32>,
     @location(4) world: vec3<f32>,
+    // Where in its shape, from the center, unturned.
+    @location(6) shape_at: vec2<f32>,
+    @location(7) @interpolate(flat) shape_half: vec2<f32>,
+    @location(8) @interpolate(flat) radii: vec4<f32>,
+    @location(9) @interpolate(flat) shape: vec4<f32>,
+    // Where along its gradient.
+    @location(10) t: f32,
 };
 
 @vertex
@@ -74,6 +93,12 @@ fn vs_world_gui(@builtin(vertex_index) i: u32, q: Quad) -> QuadOut {
     out.mode = q.mode;
     out.canvas_at = p;
     out.world = world;
+    let d = p - q.shape_rect.xy;
+    out.shape_at = vec2(d.x * q.turn.y + d.y * q.turn.x, d.y * q.turn.y - d.x * q.turn.x);
+    out.shape_half = q.shape_rect.zw;
+    out.shape = q.shape;
+    out.radii = q.radii;
+    out.t = 0.5 + dot(p - q.gradient.xy, q.gradient.zw);
     return out;
 }
 
@@ -81,7 +106,10 @@ fn vs_world_gui(@builtin(vertex_index) i: u32, q: Quad) -> QuadOut {
 fn fs_world_gui(in: QuadOut) -> @location(0) vec4<f32> {
     // Sampled before the tests, which make control flow non-uniform.
     let glyph = textureSample(glyphs, image_sampler, in.uv).r;
-    let painted = in.color * gui_paint(glyph, textureSample(image, paint_sampler, in.uv), in.mode);
+    let rows = vec2<f32>(textureDimensions(ramps));
+    let ramp = textureSample(ramps, image_sampler, ramp_uv(in.t, in.shape.z, rows.y, rows.x));
+    let painted = in.color * gui_paint(glyph, textureSample(image, paint_sampler, in.uv), in.mode)
+        * gui_gradient(ramp, in.shape.z) * gui_shape(in.shape_at, in.shape_half, in.radii, in.shape);
     let p = in.canvas_at;
     let normal = normalize(cross(canvas.down.xyz, canvas.right.xyz));
     let toward = g.camera_pos.xyz - in.world;

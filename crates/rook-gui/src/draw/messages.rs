@@ -61,6 +61,8 @@ pub(super) fn emit(dom: &Dom, text: &mut Text<'_>, out: &mut Vec<GuiQuad>) {
             color: fill,
             clip: GuiQuad::NO_CLIP,
             paint: Paint::Solid,
+            shape: None,
+            gradient: None,
         });
         let source = Source {
             text: dom.string_property(id, "Text").unwrap_or_default(),
@@ -84,6 +86,6 @@ pub(super) fn emit(dom: &Dom, text: &mut Text<'_>, out: &mut Vec<GuiQuad>) {
             carets: Carets::None,
         };
         let block = text::lay_out(text.fonts, &source, size, None);
-        super::text::emit(&block, placed, GuiQuad::NO_CLIP, false, text, out);
+        super::text::emit(&block, (placed, GuiQuad::NO_CLIP), false, None, text, out);
     }
 }

@@ -1,14 +1,20 @@
 //! What the local player's ScreenGuis draw, in order: each visible GUI
 //! object's background and border (or legacy style), a ScrollingFrame's
-//! bars, then its image or text, and any Hint or Message over it all; and
-//! what each world GUI's canvas draws, the same way. Order and clipping
-//! rules: docs/behavior/gui/layout.md#drawing.
+//! bars, then its image or text, cut by its UICorner and colored by its
+//! UIGradient, then its UIStroke; CanvasGroups drawn apart and laid over
+//! as one; and any Hint or Message over it all; and what each world GUI's
+//! canvas draws, the same way. Order and clipping rules:
+//! docs/behavior/gui/layout.md#drawing, docs/behavior/gui/modern.md.
 
 mod caret;
+mod corner;
 mod frame;
+mod gradient;
+mod group;
 mod image;
 mod messages;
 mod scrolling;
+mod stroke;
 mod style;
 mod text;
 
@@ -127,8 +133,30 @@ struct Draw<'a, 'b> {
 impl Draw<'_, '_> {
     /// What a LayerCollector holds, in its `ZIndexBehavior`'s order.
     fn collector(&mut self, root: InstanceId, clip: Clip) {
-        for s in order::stack(self.dom, self.layout, root, clip) {
-            self.emit(&s);
+        let stack = order::stack(self.dom, self.layout, root, clip);
+        self.emit_all(&stack);
+    }
+
+    /// `stack`'s objects in order, each CanvasGroup with what it holds
+    /// drawn into its group.
+    fn emit_all(&mut self, stack: &[Stacked]) {
+        let mut taken = vec![false; stack.len()];
+        for (i, d) in stack.iter().enumerate() {
+            if taken[i] {
+                continue;
+            }
+            if self.dom.class_name(d.id) != "CanvasGroup" {
+                self.emit(d);
+                continue;
+            }
+            let mut held = Vec::new();
+            for (j, e) in stack.iter().enumerate().skip(i + 1) {
+                if self.dom.is_ancestor_of(d.id, e.id) {
+                    taken[j] = true;
+                    held.push(*e);
+                }
+            }
+            group::emit(self, d, &held);
         }
     }
 
@@ -136,10 +164,19 @@ impl Draw<'_, '_> {
         if !touches(d.placed, self.canvas) {
             return;
         }
+        let radii = self.own(d, true);
+        stroke::emit(self.dom, d.id, d.placed, radii, d.clip, self.out);
+    }
+
+    /// What `d` draws of itself, cut by its UICorner and, when `graded`,
+    /// colored by its UIGradient; its UICorner's radii.
+    fn own(&mut self, d: &Stacked, graded: bool) -> Option<[f32; 4]> {
         let (dom, out) = (self.dom, &mut *self.out);
+        let start = out.len();
+        let radii = corner::radii(dom, d.id, d.placed);
         match crate::style::of(dom, d.id) {
             Some(look) => style::emit(dom, d.id, look, d.placed, d.clip, self.images, out),
-            None => frame::emit(dom, d.id, d.placed, d.clip, out),
+            None => frame::emit(dom, d.id, (d.placed, d.clip), radii.is_some(), out),
         }
         if let Some(scroll) = self.layout.scrolls.get(&d.id) {
             scrolling::emit(dom, d.id, d.placed, scroll, d.clip, self.images, out);
@@ -153,11 +190,27 @@ impl Draw<'_, '_> {
             if focused {
                 caret::selection(dom, d.id, &laid.block, d.placed, d.clip, out);
             }
-            text::emit(&laid.block, d.placed, d.clip, self.fields, text, out);
+            let outline = stroke::text_outline(dom, d.id, d.placed);
+            let at = (d.placed, d.clip);
+            text::emit(&laid.block, at, self.fields, outline, text, out);
             if focused {
                 caret::caret(dom, d.id, &laid.block, d.placed, d.clip, out);
             }
         }
+        let own = &mut self.out[start..];
+        if let Some(radii) = radii {
+            let shape = corner::shape(d.placed, radii);
+            for q in own.iter_mut() {
+                q.shape = Some(shape);
+            }
+        }
+        let g = graded.then(|| gradient::of(dom, d.id, d.placed, d.placed.size()));
+        if let Some(g) = g.flatten() {
+            for q in own.iter_mut().filter(|q| q.gradient.is_none()) {
+                q.gradient = Some(g.clone());
+            }
+        }
+        radii
     }
 }
 

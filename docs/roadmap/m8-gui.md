@@ -24,42 +24,33 @@ health bars and leaderboards are GUI.
    Frame's `Style`, drawn from the install's textures with their hover,
    pressed and selected looks, and the insets they give children and
    text.
-7. **The modern UI objects**, by files: UICorner 864, UIGradient 782,
-   UIListLayout's flex and `Wraps` (UIListLayout is in 722 files,
-   UIFlexItem in 6), ViewportFrame 251, UIStroke 212, UIPageLayout 69,
-   CanvasGroup 34, UITableLayout 7.
-   - *Scope*:
-     - UICorner on backgrounds, images and borders, and how it meets
-       `ClipsDescendants`.
-     - UIGradient on backgrounds, images and text: `Color` and
-       `Transparency` sequences, `Rotation`, `Offset`.
-     - UIStroke: `ApplyStrokeMode` (a text outline or a border),
-       `Thickness`, `LineJoinMode`, `Transparency`, with UICorner and
-       under UIScale.
-     - Flex: `HorizontalFlex`, `VerticalFlex`, `ItemLineAlignment`,
-       `Wraps`, and UIFlexItem's `FlexMode`, grow and shrink ratios.
-     - UIPageLayout: pages, `JumpTo`, `Next`, `Previous`, the tween
-       between pages, `Circular`, the wheel, and its events.
-     - UITableLayout's rows and columns.
-     - ViewportFrame: its own Camera (`CurrentCamera`), `Ambient`,
-       `LightColor`, `LightDirection`, `ImageColor3`, and WorldModel (46
-       files) for queries and animation inside it.
-     - CanvasGroup: the group drawn to a texture, then with
-       `GroupTransparency` and `GroupColor3`, clipped by its UICorner.
-   - *Studio questions*: how ViewportFrame lights its scene (just ambient
-     and one directional light? shadows? materials and SurfaceAppearance?)
-     and how it scales with screen size; whether UICorner's edge is
-     anti-aliased; the color space gradients blend in; whether UIStroke
-     grows with UIScale; how sharp a CanvasGroup's texture is.
-   - *Method*: layout and property reads as conformance cases; looks
-     compared to screenshots the user takes, all views asked for at once.
-   - *How*: rounded corners, gradients and strokes become parameters of
-     the GUI quad, drawn in its shader, not new geometry. ViewportFrame
-     reuses the scene renderer on a small target with the frame's
-     subtree, and CanvasGroup is a GUI layer drawn to a texture.
-   - *Done when*: the cases pass and the reference views match Studio
-     within step 4's tolerance.
-8. **The GUI Roblox draws itself**, from the CoreScripts in the user's
+7. ✅ [The modern UI objects](../behavior/gui/modern.md), by files:
+   [UICorner](../behavior/gui/modern.md#uicorner) 864,
+   [UIGradient](../behavior/gui/modern.md#uigradient) 782,
+   [UIListLayout's flex and `Wraps`](../behavior/gui/modern.md#flex)
+   (UIListLayout is in 722 files, UIFlexItem in 6),
+   [UIStroke](../behavior/gui/modern.md#uistroke) 212,
+   [UIPageLayout](../behavior/gui/modern.md#uipagelayout) 69,
+   [CanvasGroup](../behavior/gui/modern.md#canvasgroup) 34 and
+   [UITableLayout](../behavior/gui/modern.md#uitablelayout) 7. Corners,
+   strokes and gradients are parameters of the GUI quad drawn in its
+   shader; a CanvasGroup is drawn to a texture of its own.
+8. **ViewportFrame** (251 files) and WorldModel (46).
+   - *Scope*: its own Camera (`CurrentCamera`), `Ambient`, `LightColor`,
+     `LightDirection`, `ImageColor3` and `ImageTransparency`; WorldModel
+     for queries and animation inside it.
+   - *Studio questions*: how it lights its scene (just ambient and one
+     directional light? shadows? materials and SurfaceAppearance?) and how
+     it scales with screen size. Captures leave ViewportFrames out, on
+     SurfaceGuis too, so the looks come from screenshots the user takes,
+     all views asked for at once.
+   - *How*: the renderer draws more than one scene: the frame's subtree
+     with its camera and light into a target of the frame's size, laid
+     over the frame like an image (as CanvasGroups' textures are).
+   - *Done when*: a ViewportFrame's parts draw as in Studio's screenshots
+     within step 4's tolerance, and raycasts against a WorldModel's parts
+     return what Studio's do.
+9. **The GUI Roblox draws itself**, from the CoreScripts in the user's
    Studio install, loaded at runtime and never shipped (see the
    [content policy](../design/policies.md#content-and-assets)). They
    draw the top bar, player list, backpack, health bar, ProximityPrompts
@@ -94,7 +85,7 @@ health bars and leaderboards are GUI.
      with its leaderstats, the backpack with StarterPack's tools,
      working ProximityPrompts and Dialogs, and hides what its scripts
      turn off.
-9. **Chat**: TextChatService and what the archive's scripts expect of
+10. **Chat**: TextChatService and what the archive's scripts expect of
    the legacy Chat service (`Chat:Chat` bubbles in 561 files, `Chatted`
    handlers in about 830).
    - *Scope*: the chat window and input bar from the CoreScripts

@@ -34,6 +34,7 @@
     - [ScrollingFrame](behavior/gui/scrolling.md): canvas, window, bars, `CanvasPosition`
     - [GUI input](behavior/gui/input.md): what takes a click, buttons, the wheel, TextBox focus and typing
     - [GUI legacy styles](behavior/gui/styles.md): Frame and GuiButton `Style`, their textures, states and insets
+    - [GUI modern UI objects](behavior/gui/modern.md): UICorner, UIStroke, UIGradient, flex, UITableLayout, UIPageLayout, CanvasGroup
   - Lighting
     - [Local lights](behavior/lighting/local-lights.md): PointLight, SpotLight and SurfaceLight
     - [Ambient and OutdoorAmbient](behavior/lighting/ambient.md)

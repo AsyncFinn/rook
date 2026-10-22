@@ -1,16 +1,19 @@
 //! Where every GUI object goes: its size from `Size`, `SizeConstraint`,
 //! `AutomaticSize` and the size constraints; its place from `Position` and
-//! `AnchorPoint`, or from a UIListLayout or UIGridLayout, on a
-//! ScrollingFrame's canvas if it's in one; turned about its ancestors'
-//! centers by their `Rotation` and scaled by UIScales
-//! (docs/behavior/gui/layout.md#layout).
+//! `AnchorPoint`, or from a UI layout (UIListLayout with its flex,
+//! UIGridLayout, UITableLayout, UIPageLayout), on a ScrollingFrame's canvas
+//! if it's in one; turned about its ancestors' centers by their `Rotation`
+//! and scaled by UIScales (docs/behavior/gui/layout.md#layout,
+//! docs/behavior/gui/modern.md).
 
 mod automatic;
 mod constraints;
 mod grid;
 mod list;
 mod padding;
+mod page;
 mod scrolling;
+mod table;
 
 use glam::Vec2;
 use rook_dom::{Dom, InstanceId};
@@ -91,13 +94,14 @@ pub(crate) struct Arranged {
     pub(crate) cells: Option<(Vec2, Vec2)>,
 }
 
-/// Every placed GUI object, what each layout reports, each text object's
-/// text, each ScrollingFrame's canvas, and every world GUI with the canvas
-/// size it was laid out at.
+/// Every placed GUI object, what each layout reports, each UIPageLayout's
+/// pages in order, each text object's text, each ScrollingFrame's canvas,
+/// and every world GUI with the canvas size it was laid out at.
 #[derive(Debug, Default)]
 pub(crate) struct Layout {
     pub(crate) placed: FxHashMap<InstanceId, Placed>,
     pub(crate) arranged: FxHashMap<InstanceId, Arranged>,
+    pub(crate) pages: FxHashMap<InstanceId, Vec<InstanceId>>,
     pub(crate) texts: FxHashMap<InstanceId, Laid>,
     pub(crate) scrolls: FxHashMap<InstanceId, Scroll>,
     pub(crate) world: Vec<(Hung, Vec2)>,
@@ -118,14 +122,15 @@ pub(crate) struct Laid {
 impl Layout {
     /// Lay out the GUI scripts see: every player's PlayerGui, StarterGui
     /// and the world GUIs in `world`. `previous` is the last layout, where
-    /// hidden children of a UI layout stay.
+    /// hidden children of a UI layout stay; `turning` says where each
+    /// turning UIPageLayout's view is.
     pub(crate) fn screens(
         dom: &Dom,
-        previous: &Layout,
+        (previous, turning): (&Layout, &Turning),
         fonts: &mut Fonts,
         world: &[InstanceId],
     ) -> Self {
-        let mut pass = Pass::new(dom, previous, fonts, Layout::default());
+        let mut pass = Pass::new(dom, (previous, turning), fonts, Layout::default());
         let players = dom.find_service("Players");
         let holders = players
             .into_iter()
@@ -149,7 +154,7 @@ impl Layout {
 
     /// Lay out the GUI tree holding `id` (a GUI object or a UI component
     /// in it), from its topmost GUI ancestor.
-    pub(crate) fn add_tree(&mut self, dom: &Dom, id: InstanceId, fonts: &mut Fonts) {
+    pub(crate) fn add_tree(&mut self, dom: &Dom, id: InstanceId, with: Fonted<'_>) {
         let mut top = None;
         let mut at = Some(id);
         while let Some(i) = at {
@@ -163,20 +168,20 @@ impl Layout {
         let Some(top) = top else {
             return;
         };
-        self.redo(dom, &[top], fonts);
+        self.redo(dom, &[top], with);
     }
 
     /// Lay out the world GUIs `guis` again, as when the camera moving
     /// resizes a BillboardGui, leaving the rest as it is.
-    pub(crate) fn redo_world(&mut self, dom: &Dom, guis: &[InstanceId], fonts: &mut Fonts) {
+    pub(crate) fn redo_world(&mut self, dom: &Dom, guis: &[InstanceId], with: Fonted<'_>) {
         self.world.retain(|(h, _)| !guis.contains(&h.gui));
-        self.redo(dom, guis, fonts);
+        self.redo(dom, guis, with);
     }
 
     /// Lay out the trees from `tops` into this layout.
-    fn redo(&mut self, dom: &Dom, tops: &[InstanceId], fonts: &mut Fonts) {
+    fn redo(&mut self, dom: &Dom, tops: &[InstanceId], (fonts, turning): Fonted<'_>) {
         let previous = Layout::default();
-        let mut pass = Pass::new(dom, &previous, fonts, std::mem::take(self));
+        let mut pass = Pass::new(dom, (&previous, turning), fonts, std::mem::take(self));
         for &top in tops {
             pass.root(top);
         }
@@ -215,6 +220,12 @@ pub(crate) fn gui_children(dom: &Dom, parent: InstanceId) -> Vec<InstanceId> {
     through_folders(dom, parent, |id| dom.is_a(id, "GuiObject"))
 }
 
+/// Where each turning UIPageLayout's view is, as a page index.
+pub(crate) type Turning = FxHashMap<InstanceId, f32>;
+
+/// The fonts text is laid out with, and where turning UIPageLayouts are.
+pub(crate) type Fonted<'a> = (&'a mut Fonts, &'a Turning);
+
 /// A child placed by a UI layout, with its size.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Kid {
@@ -233,52 +244,80 @@ fn arranger(dom: &Dom, parent: InstanceId) -> Option<InstanceId> {
 }
 
 /// Where a UI layout puts each kid (its top left in the parent's inner
-/// area), what it reports, and the size it gives every kid (a grid's
-/// cell).
+/// area), the size it gives each, and what it reports.
 pub(crate) struct Arrangement {
     pub(crate) slots: Vec<Vec2>,
+    pub(crate) sizes: Vec<Vec2>,
     pub(crate) arranged: Arranged,
-    pub(crate) cell: Option<Vec2>,
-}
-
-/// Arrange `kids` (visible, in child order) with `layout` in `inner`.
-fn arrange(dom: &Dom, layout: InstanceId, kids: &[Kid], inner: Vec2) -> Arrangement {
-    let order = list::sorted(dom, layout, kids);
-    let kids: Vec<Kid> = order.iter().map(|&i| kids[i]).collect();
-    let mut out = if dom.is_a(layout, "UIGridLayout") {
-        grid::arrange(dom, layout, kids.len(), inner)
-    } else {
-        list::arrange(dom, layout, &kids, inner)
-    };
-    // Back to child order.
-    let mut slots = vec![Vec2::ZERO; order.len()];
-    for (slot, &i) in out.slots.iter().zip(&order) {
-        slots[i] = *slot;
-    }
-    out.slots = slots;
-    out
 }
 
 struct Pass<'a> {
     dom: &'a Dom,
     previous: &'a Layout,
+    turning: &'a Turning,
     fonts: &'a mut Fonts,
     out: Layout,
     screen: Vec2,
     /// What BillboardGuis are sized from.
     eye: Option<Eye>,
+    /// Cells a UITableLayout placed in their rows: top left and size.
+    cells: FxHashMap<InstanceId, (Vec2, Vec2)>,
 }
 
 impl<'a> Pass<'a> {
-    fn new(dom: &'a Dom, previous: &'a Layout, fonts: &'a mut Fonts, out: Layout) -> Self {
+    fn new(
+        dom: &'a Dom,
+        (previous, turning): (&'a Layout, &'a Turning),
+        fonts: &'a mut Fonts,
+        out: Layout,
+    ) -> Self {
         Self {
             dom,
             previous,
+            turning,
             fonts,
             out,
             screen: screen_size(dom),
             eye: Eye::of(dom),
+            cells: FxHashMap::default(),
         }
+    }
+
+    /// Arrange `kids` (visible, in child order) with `layout` in `inner`.
+    fn arrange(&mut self, layout: InstanceId, kids: &[Kid], inner: Vec2) -> Arrangement {
+        let dom = self.dom;
+        let order = list::sorted(dom, layout, kids);
+        let kids: Vec<Kid> = order.iter().map(|&i| kids[i]).collect();
+        let mut out = match dom.class_name(layout) {
+            "UIGridLayout" => grid::arrange(dom, layout, kids.len(), inner),
+            "UITableLayout" => {
+                let (out, cells) =
+                    table::arrange(dom, layout, &kids, inner, |c| self.size_of(c, inner));
+                (self.cells).extend(cells.into_iter().map(|c| (c.id, (c.at, c.size))));
+                out
+            }
+            "UIPageLayout" => {
+                let pages: Vec<InstanceId> = kids.iter().map(|k| k.id).collect();
+                let current = dom.ref_property(layout, "CurrentPage");
+                let at = self.turning.get(&layout).copied().unwrap_or_else(|| {
+                    let found = current.and_then(|c| pages.iter().position(|&p| p == c));
+                    found.unwrap_or(0) as f32
+                });
+                self.out.pages.insert(layout, pages);
+                page::arrange(dom, layout, &kids, inner, at)
+            }
+            _ => list::arrange(dom, layout, &kids, inner),
+        };
+        // Back to child order.
+        let mut slots = vec![Vec2::ZERO; order.len()];
+        let mut sizes = vec![Vec2::ZERO; order.len()];
+        for (n, &i) in order.iter().enumerate() {
+            slots[i] = out.slots[n];
+            sizes[i] = out.sizes[n];
+        }
+        out.slots = slots;
+        out.sizes = sizes;
+        out
     }
 
     /// Lay out a tree from its top: a LayerCollector, or a GUI object
@@ -373,20 +412,22 @@ impl<'a> Pass<'a> {
                     size: sizes[i],
                 })
                 .collect();
-            let arrangement = arrange(dom, layout, &laid, inner.size);
+            let arrangement = self.arrange(layout, &laid, inner.size);
             for (n, &i) in shown.iter().enumerate() {
                 slots[i] = Some(arrangement.slots[n]);
-                if let Some(cell) = arrangement.cell {
-                    sizes[i] = cell;
-                }
+                sizes[i] = arrangement.sizes[n];
             }
             self.out.arranged.insert(layout, arrangement.arranged);
         }
         for (i, &kid) in kids.iter().enumerate() {
-            let size = sizes[i];
-            let (top_left, anchor) = match slots[i] {
-                Some(slot) => (inner.origin + slot, Vec2::ZERO),
-                None if layout.is_some() => {
+            let cell = self.cells.get(&kid).copied();
+            let size = cell.map_or(sizes[i], |(_, size)| size);
+            let (top_left, anchor) = match (cell, slots[i]) {
+                // Inference: a table's cell is placed from its row's top
+                // left, whatever the row's padding.
+                (Some((at, _)), _) => (at, Vec2::ZERO),
+                (None, Some(slot)) => (inner.origin + slot, Vec2::ZERO),
+                (None, None) if layout.is_some() => {
                     // Laying out part of a layout again, the earlier
                     // place is still in `out`.
                     let kept = self.previous.placed.get(&kid);
@@ -398,7 +439,7 @@ impl<'a> Pass<'a> {
                     }
                     (inner.origin, Vec2::ZERO)
                 }
-                None => {
+                (None, None) => {
                     let anchor = vec2_or(dom, kid, "AnchorPoint", Vec2::ZERO);
                     let position = resolve(position_of(dom, kid), inner.size);
                     (inner.origin + position - size * anchor, anchor)

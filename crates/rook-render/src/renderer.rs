@@ -362,14 +362,27 @@ impl Renderer {
         world: &[WorldCanvas],
         images: &std::collections::HashMap<ImageHash, std::sync::Arc<Image>>,
     ) {
-        let quads = screen.iter().chain(world.iter().flat_map(|c| &c.quads));
-        for q in quads {
-            if let rook_types::Paint::Image(paint) = &q.paint {
-                let hash = ImageHash(paint.hash);
-                if let Some(file) = images.get(&hash) {
-                    self.images.request(hash, file);
+        fn request(
+            quads: &[GuiQuad],
+            images: &std::collections::HashMap<ImageHash, std::sync::Arc<Image>>,
+            cache: &mut GpuCache<ImageHash, Image>,
+        ) {
+            for q in quads {
+                match &q.paint {
+                    rook_types::Paint::Image(paint) => {
+                        let hash = ImageHash(paint.hash);
+                        if let Some(file) = images.get(&hash) {
+                            cache.request(hash, file);
+                        }
+                    }
+                    rook_types::Paint::Group(group) => request(&group.quads, images, cache),
+                    _ => {}
                 }
             }
+        }
+        request(screen, images, &mut self.images);
+        for canvas in world {
+            request(&canvas.quads, images, &mut self.images);
         }
         self.gui.set(&self.device, &self.queue, screen, world);
     }
