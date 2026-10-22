@@ -1,6 +1,6 @@
 # GUI layout
 
-Checked against Studio 0.743 on 2026-10-21.
+Checked against Studio 0.743 on 2026-10-22.
 
 [M8](../../roadmap/m8-gui.md) step 1. ScreenGui is in 600 archive files, Frame in 558. Measured in
 Studio 0.742–0.743 on 2026-10-21, in a playtest client on Baseplate, a
@@ -63,6 +63,11 @@ GUI pass in `rook-render/src/renderer/gui.rs`.
   400 × 300: 400 × 100). One under a UIGridLayout holds its cells.
 - **UIPadding**: left and right scale with the object's width, top and
   bottom with its height.
+- **Borders inside**: an Inset border's width is taken off every side of
+  the area an object's children and text are placed in, a Middle border's
+  half, as a UIPadding's would be: a 4-pixel Inset border put a child at
+  (10, 20) at (14, 24), half its size 96 × 46 in 200 × 100, wrapped text
+  that had just fit no longer fit, and `AutomaticSize` grew around it.
 
 ### UI layouts
 
@@ -129,5 +134,5 @@ Nested automatic sizes add up from the inside.
   (Inference, as Highlights measurably do): Rook draws GUI premultiplied
   into an 8-bit layer the tone pass lays over the frame.
 - Text: [GUI text](text.md); SurfaceGui and BillboardGui:
-  [world GUI](world.md). Images and ScrollingFrame come with step 4
-  and the modern UI objects with step 6.
+  [world GUI](world.md); images: [GUI images](images.md); ScrollingFrame:
+  [ScrollingFrame](scrolling.md). The modern UI objects come with step 6.

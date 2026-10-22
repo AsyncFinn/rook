@@ -355,6 +355,40 @@ fn automatic_size() {
     );
 }
 
+/// Measured: an Inset border is taken off every side of the area inside,
+/// a Middle one by half, as a UIPadding would be.
+#[test]
+fn inset_borders_pad_what_is_inside() {
+    let (mut dom, frame) = boxed();
+    let f = child(
+        &mut dom,
+        "Frame",
+        frame,
+        &[
+            ("Size", udim2(0.0, 200, 0.0, 100)),
+            ("BorderSizePixel", Value::Int32(4)),
+        ],
+    );
+    let c = child(
+        &mut dom,
+        "Frame",
+        f,
+        &[
+            ("Position", udim2(0.0, 10, 0.0, 20)),
+            ("Size", udim2(0.5, 0, 0.5, 0)),
+        ],
+    );
+    for (mode, want) in [
+        ("Outline", ([10.0, 20.0], [100.0, 50.0])),
+        ("Inset", ([14.0, 24.0], [96.0, 46.0])),
+        ("Middle", ([12.0, 22.0], [98.0, 48.0])),
+    ] {
+        set_enum(&mut dom, f, "BorderMode", mode);
+        laid_out(&mut dom);
+        near(rect(&dom, c, f), want);
+    }
+}
+
 #[test]
 fn nested_automatic_sizes() {
     let (mut dom, b) = boxed();

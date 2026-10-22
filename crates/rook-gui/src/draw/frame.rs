@@ -2,7 +2,7 @@
 
 use glam::Vec2;
 use rook_dom::{Dom, InstanceId};
-use rook_types::GuiQuad;
+use rook_types::{GuiQuad, Paint};
 
 use crate::layout::{Placed, turn};
 
@@ -31,7 +31,7 @@ pub(super) fn emit(dom: &Dom, id: InstanceId, p: Placed, clip: [f32; 4], out: &m
         rotation: p.rotation.to_radians(),
         color: [color[0], color[1], color[2], alpha],
         clip,
-        glyph: None,
+        paint: Paint::Solid,
     };
     if border > 0.0 {
         let color = dom

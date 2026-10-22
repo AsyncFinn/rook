@@ -350,6 +350,10 @@ pub(crate) fn set(
             Some(set_lighting_hours(w, id, f64::from(*h)))
         }
         ("CFrame", Value::CFrame(c)) if w.dom.is_a(id, "BasePart") => Some(set_cframe(w, id, *c)),
+        // Measured: kept within the canvas as laid out now.
+        ("CanvasPosition", Value::Vector2(v)) if w.dom.class_name(id) == "ScrollingFrame" => {
+            Some(w.gui.set_canvas_position(&mut w.dom, id, v.0))
+        }
         // A truss keeps at most one axis other than 2 (observed; conformance
         // case `content/truss`).
         ("Size", Value::Vector3(v)) if w.dom.class_name(id) == "TrussPart" => {

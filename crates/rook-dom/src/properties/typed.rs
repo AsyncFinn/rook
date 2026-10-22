@@ -4,7 +4,7 @@
 use glam::Vec3;
 use rook_types::{
     Axes, CFrame, Color3, ColorSequence, Faces, Font, MaterialColors, NumberRange, NumberSequence,
-    UDim, UDim2, Value, Vector2,
+    Rect, UDim, UDim2, Value, Vector2,
 };
 
 use super::*;
@@ -68,6 +68,13 @@ impl Dom {
     pub fn udim2_property(&self, id: InstanceId, name: &str) -> Option<UDim2> {
         match self.property_by_name(id, name)? {
             Value::UDim2(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    pub fn rect_property(&self, id: InstanceId, name: &str) -> Option<Rect> {
+        match self.property_by_name(id, name)? {
+            Value::Rect(v) => Some(v),
             _ => None,
         }
     }

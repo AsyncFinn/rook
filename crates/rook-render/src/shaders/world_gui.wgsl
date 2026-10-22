@@ -1,15 +1,15 @@
 // World GUI (`renderer/gui/world.rs`): each SurfaceGui's and BillboardGui's
 // quads, laid on its canvas's plane in the world, so edges and text stay
 // sharp up close, its text drawn from distance fields. A quad is filled or
-// drawn through a glyph, in sRGB premultiplied by its opacity, as on the
-// screen (`gui.wgsl`).
+// drawn through a glyph or its image, in sRGB premultiplied by its
+// opacity, as on the screen (`gui.wgsl`).
 // LightInfluence 0 gives its color squared times Brightness in light
 // units, as unlit adornments do (measured: a red SurfaceGui frame and an
 // unlit red adornment both draw 223 through the default curve); 1 lights
 // it as a surface facing the camera's side of it, as particles are lit.
 
 import package::common::{g, image_sampler};
-import package::glyph::glyph_alpha;
+import package::gui_paint::gui_paint;
 import package::tone::frame;
 import package::lighting::{diffuse_light, fog_amount, fog_light, sun_light};
 
@@ -26,6 +26,9 @@ struct Canvas {
 
 @group(2) @binding(0) var<uniform> canvas: Canvas;
 @group(2) @binding(1) var glyphs: texture_2d<f32>;
+// The run's image (white for fills and glyphs), raw sRGB.
+@group(2) @binding(2) var image: texture_2d<f32>;
+@group(2) @binding(3) var paint_sampler: sampler;
 
 struct Quad {
     @location(0) center: vec2<f32>,
@@ -36,9 +39,9 @@ struct Quad {
     @location(3) color: vec4<f32>,
     // left, top, right, bottom in canvas pixels.
     @location(4) clip: vec4<f32>,
-    // The glyph's left, top, right, bottom in the atlas.
+    // The glyph's left, top, right, bottom in the atlas, or the image's.
     @location(5) uv: vec4<f32>,
-    // How it's drawn: `glyph_alpha`'s mode.
+    // How it's drawn: `gui_paint`'s mode.
     @location(6) mode: f32,
 };
 
@@ -77,18 +80,19 @@ fn vs_world_gui(@builtin(vertex_index) i: u32, q: Quad) -> QuadOut {
 @fragment
 fn fs_world_gui(in: QuadOut) -> @location(0) vec4<f32> {
     // Sampled before the tests, which make control flow non-uniform.
-    let shape = glyph_alpha(textureSample(glyphs, image_sampler, in.uv).r, in.mode);
+    let glyph = textureSample(glyphs, image_sampler, in.uv).r;
+    let painted = in.color * gui_paint(glyph, textureSample(image, paint_sampler, in.uv), in.mode);
     let p = in.canvas_at;
     let normal = normalize(cross(canvas.down.xyz, canvas.right.xyz));
     let toward = g.camera_pos.xyz - in.world;
-    let alpha = in.color.a * shape;
+    let alpha = painted.a;
     // Inference: a SurfaceGui can't be seen from behind its face.
     let behind = canvas.look.z > 0.0 && dot(normal, toward) <= 0.0;
     if alpha <= 0.0 || behind || p.x < in.clip.x || p.y < in.clip.y || p.x > in.clip.z
         || p.y > in.clip.w {
         discard;
     }
-    let c = in.color.rgb / in.color.a;
+    let c = painted.rgb / alpha;
     let albedo = c * c;
     var units = albedo * canvas.look.y;
     let f = fog_amount(in.world);

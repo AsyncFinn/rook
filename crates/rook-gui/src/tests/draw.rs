@@ -1,4 +1,4 @@
-use rook_types::{Color3, GuiQuad};
+use rook_types::{Color3, GuiQuad, Paint};
 
 use super::*;
 
@@ -168,7 +168,10 @@ fn big_screen_text_draws_from_distance_fields() {
     let fields = |quads: &[GuiQuad]| -> Vec<bool> {
         quads
             .iter()
-            .filter_map(|q| q.glyph.as_ref().map(|m| m.distance))
+            .filter_map(|q| match &q.paint {
+                Paint::Glyph(m) => Some(m.distance),
+                _ => None,
+            })
             .collect()
     };
     assert_eq!(fields(&gui.draw(&dom)), [false, false]);

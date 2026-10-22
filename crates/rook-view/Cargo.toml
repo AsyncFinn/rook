@@ -18,6 +18,7 @@ rook-terrain.workspace = true
 rook-physics.workspace = true
 rook-lua.workspace = true
 rook-engine.workspace = true
+rook-gui.workspace = true
 rook-render.workspace = true
 glam.workspace = true
 image.workspace = true

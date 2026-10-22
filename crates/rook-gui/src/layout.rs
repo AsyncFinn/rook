@@ -1,7 +1,8 @@
 //! Where every GUI object goes: its size from `Size`, `SizeConstraint`,
 //! `AutomaticSize` and the size constraints; its place from `Position` and
-//! `AnchorPoint`, or from a UIListLayout or UIGridLayout; turned about
-//! its ancestors' centers by their `Rotation` and scaled by UIScales
+//! `AnchorPoint`, or from a UIListLayout or UIGridLayout, on a
+//! ScrollingFrame's canvas if it's in one; turned about its ancestors'
+//! centers by their `Rotation` and scaled by UIScales
 //! (docs/behavior/gui/layout.md#layout).
 
 mod automatic;
@@ -9,6 +10,7 @@ mod constraints;
 mod grid;
 mod list;
 mod padding;
+mod scrolling;
 
 use glam::Vec2;
 use rook_dom::{Dom, InstanceId};
@@ -18,6 +20,7 @@ use rustc_hash::FxHashMap;
 use crate::text::{self, Fonts, Source, TextBlock};
 use crate::world::{self, Eye, Hung};
 use padding::Inner;
+pub(crate) use scrolling::Scroll;
 
 /// The top bar's height, which ScreenGuis start below unless they ignore
 /// the inset (measured: 58 pixels in Studio 0.742's client, with the
@@ -62,6 +65,12 @@ impl Placed {
     pub(crate) fn screen_point(self, local: Vec2) -> Vec2 {
         self.center + turn(self.rotation, (local - self.local * 0.5) * self.scale)
     }
+
+    /// A point on the screen in this object's own frame: the inverse of
+    /// [`Placed::screen_point`].
+    pub(crate) fn local_point(self, screen: Vec2) -> Vec2 {
+        turn(-self.rotation, screen - self.center) / self.scale + self.local * 0.5
+    }
 }
 
 /// `v` turned clockwise on the screen by `degrees` (y points down).
@@ -83,12 +92,14 @@ pub(crate) struct Arranged {
 }
 
 /// Every placed GUI object, what each layout reports, each text object's
-/// text, and every world GUI with the canvas size it was laid out at.
+/// text, each ScrollingFrame's canvas, and every world GUI with the canvas
+/// size it was laid out at.
 #[derive(Debug, Default)]
 pub(crate) struct Layout {
     pub(crate) placed: FxHashMap<InstanceId, Placed>,
     pub(crate) arranged: FxHashMap<InstanceId, Arranged>,
     pub(crate) texts: FxHashMap<InstanceId, Laid>,
+    pub(crate) scrolls: FxHashMap<InstanceId, Scroll>,
     pub(crate) world: Vec<(Hung, Vec2)>,
 }
 
@@ -295,7 +306,7 @@ impl<'a> Pass<'a> {
             rotation: 0.0,
         };
         self.out.placed.insert(top, placed);
-        self.lay_out_inside(top, placed);
+        self.lay_out_inside(top, placed, local);
     }
 
     /// Where a ScreenGui's children go: the top left and size.
@@ -320,9 +331,14 @@ impl<'a> Pass<'a> {
         }
     }
 
-    /// Lay out what `parent` (already placed) holds.
-    fn lay_out_inside(&mut self, parent: InstanceId, at: Placed) {
+    /// Lay out what `parent` (already placed in an `area` of its parent)
+    /// holds.
+    fn lay_out_inside(&mut self, parent: InstanceId, at: Placed, area: Vec2) {
         let dom = self.dom;
+        if dom.class_name(parent) == "ScrollingFrame" {
+            scrolling::lay_out(self, parent, at, area);
+            return;
+        }
         let kids = gui_children(dom, parent);
         if kids.is_empty() {
             return;
@@ -376,7 +392,7 @@ impl<'a> Pass<'a> {
                     if let Some(&kept) = kept.or_else(|| self.out.placed.get(&kid)) {
                         self.out.placed.insert(kid, kept);
                         self.lay_out_text(kid, kept.local);
-                        self.lay_out_inside(kid, kept);
+                        self.lay_out_inside(kid, kept, inner.size);
                         continue;
                     }
                     (inner.origin, Vec2::ZERO)
@@ -399,7 +415,7 @@ impl<'a> Pass<'a> {
             };
             self.out.placed.insert(kid, placed);
             self.lay_out_text(kid, size);
-            self.lay_out_inside(kid, placed);
+            self.lay_out_inside(kid, placed, inner.size);
         }
     }
 

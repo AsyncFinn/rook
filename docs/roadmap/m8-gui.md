@@ -13,7 +13,8 @@ It comes before characters: tools, health bars and leaderboards are GUI.
    bars of text.
 3. ✅ [SurfaceGui and BillboardGui](../behavior/gui/world.md) in the
    world: signs, labels and name tags.
-4. Images, 9-slice, ScrollingFrame.
+4. ✅ [Images, 9-slice](../behavior/gui/images.md),
+   [ScrollingFrame](../behavior/gui/scrolling.md).
 5. Input: buttons, `TextBox`, GUI taking input before the 3D world;
    ProximityPrompt (12 files).
 6. The modern UI objects, fewest files last: UIListLayout's flex and

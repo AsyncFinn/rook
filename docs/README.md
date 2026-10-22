@@ -30,6 +30,8 @@
     - [Layout](behavior/gui/layout.md): the screen, sizes and positions, UI layouts, drawing order
     - [Text](behavior/gui/text.md): fonts, widths, lines, `TextScaled`, `RichText`, Hint and Message
     - [World GUI](behavior/gui/world.md): SurfaceGui and BillboardGui
+    - [GUI images](behavior/gui/images.md): loading, `ScaleType`, rects, 9-slice
+    - [ScrollingFrame](behavior/gui/scrolling.md): canvas, window, bars, `CanvasPosition`
   - Lighting
     - [Local lights](behavior/lighting/local-lights.md): PointLight, SpotLight and SurfaceLight
     - [Ambient and OutdoorAmbient](behavior/lighting/ambient.md)

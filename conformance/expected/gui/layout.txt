@@ -23,3 +23,7 @@ automatic X 5,5 110,10
 automatic, anchored child 5,5 20,80
 automatic, padded 5,5 120,82
 padded child 19,57 100,30
+Inset border, automatic 5,5 118,88
+Inset border child 19,59 100,30
+Middle border, automatic 5,5 114,84
+Middle border child 17,57 100,30

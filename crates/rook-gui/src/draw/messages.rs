@@ -7,7 +7,7 @@
 
 use glam::Vec2;
 use rook_dom::{Dom, InstanceId};
-use rook_types::{GuiQuad, font_from_enum};
+use rook_types::{GuiQuad, Paint, font_from_enum};
 
 use super::Text;
 use crate::layout::{Placed, screen_size};
@@ -60,7 +60,7 @@ pub(super) fn emit(dom: &Dom, text: &mut Text<'_>, out: &mut Vec<GuiQuad>) {
             rotation: 0.0,
             color: fill,
             clip: GuiQuad::NO_CLIP,
-            glyph: None,
+            paint: Paint::Solid,
         });
         let source = Source {
             text: dom.string_property(id, "Text").unwrap_or_default(),

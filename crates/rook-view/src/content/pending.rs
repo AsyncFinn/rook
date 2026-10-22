@@ -42,20 +42,23 @@ impl SceneCache {
         for (key, loaded) in finished {
             let waiting = self.waiting.remove(&key).unwrap_or_default();
             let sky = self.sky_files.remove(&key);
+            let gui = self.gui_waiting.contains_key(&key);
             match loaded {
                 Ok(Loaded::Mesh(hash, mesh)) => {
                     self.scene.meshes.insert(hash, mesh);
                 }
                 Ok(Loaded::Image(hash, image)) => {
+                    self.gui_file_done(&key, Some(crate::gui::gui_image(hash, &image)));
                     self.scene.images.insert(hash, image);
                 }
                 Err(failure) => {
                     for &part in &waiting {
                         self.report.add(Some(part), &key, &failure);
                     }
-                    if sky {
+                    if sky || gui {
                         self.report.add(None, &key, &failure);
                     }
+                    self.gui_file_done(&key, None);
                 }
             }
             if sky {

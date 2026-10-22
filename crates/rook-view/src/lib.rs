@@ -7,6 +7,7 @@
 mod camera;
 mod content;
 mod frame;
+mod gui;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -134,6 +135,10 @@ pub struct SceneCache {
     cframe: Option<rook_reflection::PropertyId>,
     /// The GUI layout the renderer was last given.
     gui_generation: Option<u64>,
+    /// The GUI's images still loading, with the URLs it asked for each by.
+    gui_waiting: HashMap<FileRef, Vec<String>>,
+    /// The GUI's images that finished, for it to take.
+    gui_arrived: Vec<(String, Option<rook_gui::GuiImage>)>,
 }
 
 impl SceneCache {
@@ -170,6 +175,8 @@ impl SceneCache {
                 .and_then(|base| dom.database().find_canonical_property(base.id, "CFrame"))
                 .map(|p| p.id),
             gui_generation: None,
+            gui_waiting: HashMap::new(),
+            gui_arrived: Vec::new(),
         };
         cache.rebuild(dom);
         cache

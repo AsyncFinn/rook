@@ -490,7 +490,7 @@ fn world_gui_draws_in_the_world() {
         rotation: 0.0,
         color: [color[0], color[1], color[2], 1.0],
         clip: GuiQuad::NO_CLIP,
-        glyph: None,
+        paint: rook_types::Paint::Solid,
     };
     let canvas = |quads: Vec<GuiQuad>, size: f32, on_top: bool| WorldCanvas {
         quads,
@@ -513,7 +513,7 @@ fn world_gui_draws_in_the_world() {
     let square = |color| vec![fill(Vec2::splat(5.0), Vec2::splat(10.0), color)];
     let hidden = canvas(square([0.0, 1.0, 0.0]), 10.0, false);
     let on_top = canvas(square([0.0, 0.0, 1.0]), 10.0, true);
-    r.set_gui(&[], &[surface, hidden, on_top]);
+    r.set_gui(&[], &[surface, hidden, on_top], &Default::default());
     let billboard = |y: f32| WorldPlace::Billboard {
         anchor: Vec3::new(1.0, y, -5.0),
         studs: Vec3::ZERO,
@@ -554,4 +554,62 @@ fn world_gui_draws_in_the_world() {
     assert!(behind[1].abs_diff(behind[0]) < 8, "{behind:?}");
     let over = at(39, 39);
     assert!(over[2] > 200 && over[0] < 30, "{over:?}");
+}
+
+/// Screen GUI images draw their part of the image, mirrored, tiled and
+/// tinted, with nearest texels when pixelated; one whose image isn't
+/// there draws nothing.
+#[test]
+fn gui_images_draw_their_texels() {
+    let Ok(mut r) = Renderer::headless() else {
+        return;
+    };
+    r.set_scene(&Scene::default());
+    let hash = [7; 32];
+    let quad = |x: f32, uv: [f32; 4], color: [f32; 3], tiled: bool| GuiQuad {
+        center: Vec2::new(x, 8.0),
+        size: Vec2::splat(16.0),
+        rotation: 0.0,
+        color: [color[0], color[1], color[2], 1.0],
+        clip: GuiQuad::NO_CLIP,
+        paint: rook_types::Paint::Image(rook_types::ImagePaint {
+            hash,
+            uv,
+            pixelated: true,
+            tiled,
+        }),
+    };
+    let mut missing = quad(72.0, [0.0, 0.0, 1.0, 1.0], [1.0; 3], false);
+    if let rook_types::Paint::Image(paint) = &mut missing.paint {
+        paint.hash = [8; 32];
+    }
+    let screen = [
+        quad(8.0, [0.0, 0.0, 1.0, 1.0], [1.0; 3], false),
+        // Mirrored left to right.
+        quad(24.0, [1.0, 0.0, 0.0, 1.0], [1.0; 3], false),
+        // Two tiles each way: red repeats at the third quarter.
+        quad(40.0, [0.0, 0.0, 2.0, 2.0], [1.0; 3], true),
+        // White tinted green.
+        quad(56.0, [0.5, 0.5, 1.0, 1.0], [0.0, 1.0, 0.0], false),
+        missing,
+    ];
+    let images = [(ImageHash(hash), image())].into_iter().collect();
+    r.set_gui(&screen, &[], &images);
+    r.finish_uploads();
+    let camera = Camera::look_at(Vec3::new(0.0, 0.0, 10.0), Vec3::ZERO);
+    let (w, h) = (80, 16);
+    let pixels = r.render_to_image(w, h, &camera).unwrap();
+    let at = |x: u32, y: u32| {
+        let i = ((y * w + x) * 4) as usize;
+        [pixels[i], pixels[i + 1], pixels[i + 2]]
+    };
+    assert_eq!(at(3, 3), [255, 0, 0]);
+    assert_eq!(at(12, 12), [255, 255, 255]);
+    assert_eq!(at(19, 3), [0, 255, 0]);
+    assert_eq!(at(28, 3), [255, 0, 0]);
+    assert_eq!(at(33, 1), [255, 0, 0]);
+    assert_eq!(at(41, 1), [255, 0, 0]);
+    assert_eq!(at(37, 1), [0, 255, 0]);
+    assert_eq!(at(56, 8), [0, 255, 0]);
+    assert_ne!(at(72, 8), [255, 0, 0]);
 }

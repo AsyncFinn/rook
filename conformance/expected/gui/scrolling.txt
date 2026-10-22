@@ -1,0 +1,35 @@
+-- studio 0.743.0.7431133
+-- signals: deferred
+default window 188,100 canvas 200,600 child 10,20 100,300
+both window 188,88 canvas 300,400 child 10,20 150,200
+vertical window 188,100 canvas 200,400 child 10,20 100,200
+horizontal window 200,88 canvas 300,100 child 10,20 150,50
+none window 200,100 canvas 200,100 child 10,20 100,50
+pushed window 188,88 canvas 200,400 child 10,20 100,200
+negative window 200,100 canvas 200,100 child 10,20 100,50
+scaled window 188,88 canvas 400,600 child 10,20 200,300
+inset window 188,100 canvas 188,400 child 10,20 94,200
+always window 200,100 canvas 188,88 child 10,20 94,44
+thick window 170,70 canvas 300,400 child 10,20 150,200
+thin window 200,100 canvas 300,400 child 10,20 150,200
+border window 185,85 canvas 300,400 child 10,20 150,200
+inset border window 184,84 canvas 300,400 child 14,24 146,196
+x only window 200,88 canvas 300,400 child 10,20 150,200
+y only window 188,100 canvas 300,400 child 10,20 150,200
+disabled window 188,88 canvas 300,400 child 10,20 150,200
+left window 188,100 canvas 188,400 child 22,20 94,200
+scrolled position 30,40 child -20,-20
+past the end position 112,312 child -102,-292
+before the start position 0,0 child 10,20
+between pixels position 10.6,20.25 child -1,0
+nothing to scroll position 0,0 child 10,20
+y only position 30,40 child -20,-20
+auto y window 187,100 canvas 200,350
+auto y over 500 window 187,100 canvas 200,500
+auto xy window 187,87 canvas 350,180
+auto y padded window 187,100 canvas 200,380
+auto y hidden window 187,100 canvas 200,150
+auto y deep window 187,100 canvas 200,450
+auto y list window 187,100 canvas 200,320
+auto position 0,200
+auto grown position 0,260

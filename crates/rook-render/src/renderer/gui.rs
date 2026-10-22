@@ -1,19 +1,25 @@
 //! The GUI pass: the GUI's rectangles drawn in order into the GUI layer,
 //! premultiplied and in sRGB, which the tone pass lays over the frame, so
-//! GUI blends in sRGB as Roblox's does (docs/behavior/gui.md#drawing).
+//! GUI blends in sRGB as Roblox's does (docs/behavior/gui/layout.md#drawing).
 //! [`world`] draws the world GUI's rectangles into the world. Text quads
-//! draw through their glyph's coverage in the glyph atlas.
+//! draw through their glyph's coverage in the glyph atlas, image quads
+//! through their image ([`images`]).
 
 mod atlas;
+mod images;
 pub(crate) mod world;
 
-use rook_types::{WorldCanvas, WorldPlace};
+use rook_types::{Paint, WorldCanvas, WorldPlace};
 use wesl_core::include_wesl;
 
 use super::*;
 use atlas::Atlas;
+use images::{GuiImages, ImageKey, Run, runs};
 use pipelines::BindLayouts;
 use world::{WorldGui, WorldRuns};
+
+/// A list of quads as the shader reads them, each with its image.
+type Packed = Vec<(GpuQuad, Option<ImageKey>)>;
 
 /// The quads' vertex attributes, in [`GpuQuad`]'s order.
 const QUAD_ATTRIBUTES: [wgpu::VertexAttribute; 7] = wgpu::vertex_attr_array![
@@ -33,15 +39,15 @@ pub(super) struct GpuQuad {
     turn: [f32; 2],
     color: [f32; 4],
     clip: [f32; 4],
-    /// The glyph's rectangle in the atlas, 0 to 1.
+    /// The glyph's rectangle in the atlas, or the image's part, 0 to 1.
     uv: [f32; 4],
     /// 0 fills the rectangle, 1 draws through a coverage mask, 2 through a
-    /// distance field (`shaders/glyph.wgsl`).
+    /// distance field, 3 through an image (`shaders/gui_paint.wgsl`).
     mode: f32,
 }
 
 impl GpuQuad {
-    /// `q`, its glyph at `uv` in the atlas.
+    /// `q`, its glyph or image at `uv`.
     fn new(q: &GuiQuad, uv: [f32; 4]) -> Self {
         let a = q.color[3].clamp(0.0, 1.0);
         let (sin, cos) = q.rotation.sin_cos();
@@ -52,10 +58,11 @@ impl GpuQuad {
             color: [q.color[0] * a, q.color[1] * a, q.color[2] * a, a],
             clip: q.clip,
             uv,
-            mode: match &q.glyph {
-                None => 0.0,
-                Some(mask) if mask.distance => 2.0,
-                Some(_) => 1.0,
+            mode: match &q.paint {
+                Paint::Solid => 0.0,
+                Paint::Glyph(mask) if mask.distance => 2.0,
+                Paint::Glyph(_) => 1.0,
+                Paint::Image(_) => 3.0,
             },
         }
     }
@@ -80,6 +87,7 @@ struct Target {
     group: wgpu::BindGroup,
     /// The quads, and how many there are.
     quads: Option<(wgpu::Buffer, u32)>,
+    runs: Vec<Run>,
 }
 
 impl Target {
@@ -117,16 +125,19 @@ impl Target {
             size,
             group,
             quads: None,
+            runs: Vec::new(),
         }
     }
 
-    /// Draw `gpu` from now on.
-    fn set(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, gpu: &[GpuQuad]) {
-        if gpu.is_empty() {
+    /// Draw `packed` from now on.
+    fn set(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, packed: &Packed) {
+        self.runs = runs(packed.iter().map(|(_, image)| *image));
+        if packed.is_empty() {
             self.quads = None;
             return;
         }
-        let bytes: &[u8] = bytemuck::cast_slice(gpu);
+        let gpu: Vec<GpuQuad> = packed.iter().map(|(q, _)| *q).collect();
+        let bytes: &[u8] = bytemuck::cast_slice(&gpu);
         let reuse = matches!(&self.quads, Some((b, _)) if b.size() >= bytes.len() as u64);
         if !reuse {
             let buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -150,10 +161,16 @@ pub(crate) struct GuiPass {
     screen: Target,
     world: WorldGui,
     atlas: Atlas,
+    images: GuiImages,
 }
 
 impl GuiPass {
-    pub(crate) fn new(device: &wgpu::Device, layouts: BindLayouts<'_>, table: bool) -> Self {
+    pub(crate) fn new(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        layouts: BindLayouts<'_>,
+        table: bool,
+    ) -> Self {
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("rook gui"),
             entries: &[
@@ -197,9 +214,10 @@ impl GuiPass {
             label: Some("rook gui"),
             source: wgpu::ShaderSource::Wgsl(include_wesl!("gui").into()),
         });
+        let images = GuiImages::new(device, queue);
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("rook gui"),
-            bind_group_layouts: &[Some(&layout)],
+            bind_group_layouts: &[Some(&layout), Some(&images.layout)],
             immediate_size: 0,
         });
         let premultiplied = wgpu::BlendComponent {
@@ -240,6 +258,7 @@ impl GuiPass {
             screen: Target::new(device, &layout, &atlas_view, &sampler),
             world: WorldGui::new(device, layouts, table, atlas_view),
             atlas,
+            images,
         }
     }
 
@@ -255,9 +274,9 @@ impl GuiPass {
         let lists: Vec<&[GuiQuad]> = std::iter::once(screen)
             .chain(canvases.iter().map(|c| &c.quads[..]))
             .collect();
-        let gpu = self.pack(queue, &lists);
-        self.screen.set(device, queue, &gpu[0]);
-        self.world.set(device, canvases, &gpu[1..]);
+        let packed = self.pack(queue, &lists);
+        self.screen.set(device, queue, &packed[0]);
+        self.world.set(device, canvases, &packed[1..]);
     }
 
     /// Where each world GUI canvas is from now on.
@@ -268,19 +287,22 @@ impl GuiPass {
     /// Each of `lists` as the shader reads them, their glyphs in the
     /// atlas. If the atlas fills and starts again partway, every glyph is
     /// placed again once, so none points at a mask that was written over.
-    fn pack(&mut self, queue: &wgpu::Queue, lists: &[&[GuiQuad]]) -> Vec<Vec<GpuQuad>> {
+    fn pack(&mut self, queue: &wgpu::Queue, lists: &[&[GuiQuad]]) -> Vec<Packed> {
         let scale = 1.0 / atlas::SIZE as f32;
-        let once = |atlas: &mut Atlas| -> Vec<Vec<GpuQuad>> {
+        let once = |atlas: &mut Atlas| -> Vec<Packed> {
             (lists.iter())
                 .map(|quads| {
                     quads
                         .iter()
                         .filter_map(|q| {
-                            let uv = match &q.glyph {
-                                None => [0.0; 4],
-                                Some(mask) => atlas.place(queue, mask)?.map(|t| t * scale),
+                            let (uv, image) = match &q.paint {
+                                Paint::Solid => ([0.0; 4], None),
+                                Paint::Glyph(mask) => {
+                                    (atlas.place(queue, mask)?.map(|t| t * scale), None)
+                                }
+                                Paint::Image(image) => (image.uv, Some(ImageKey::of(image))),
                             };
-                            Some(GpuQuad::new(q, uv))
+                            Some((GpuQuad::new(q, uv), image))
                         })
                         .collect()
                 })
@@ -294,16 +316,20 @@ impl GuiPass {
         once(&mut self.atlas)
     }
 
-    /// Upload the world GUI's canvases `camera` sees this frame, in a
+    /// Bind the images the GUI draws that are on the GPU now (`cache`),
+    /// and upload the world GUI's canvases `camera` sees this frame, in a
     /// `height`-pixel window.
-    pub(crate) fn upload_world(
+    pub(crate) fn upload(
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
+        cache: &GpuCache<ImageHash, Image>,
         camera: &Camera,
         height: u32,
     ) -> WorldRuns {
-        self.world.upload(device, queue, camera, height)
+        self.images.bind(device, &self.screen.runs, cache);
+        let images = (&self.images, cache);
+        self.world.upload(device, queue, images, camera, height)
     }
 
     /// Lay the world GUI's canvases in the world (last in the main pass).
@@ -356,7 +382,13 @@ impl GuiPass {
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, &quads.group, &[]);
         pass.set_vertex_buffer(0, buffer.slice(..));
-        pass.draw(0..6, 0..*count);
+        // Quads whose image isn't up yet draw nothing.
+        for run in quads.runs.iter().filter(|r| r.quads.end <= *count) {
+            if let Some(group) = self.images.group(run.image) {
+                pass.set_bind_group(1, group, &[]);
+                pass.draw(0..6, run.quads.clone());
+            }
+        }
         true
     }
 }

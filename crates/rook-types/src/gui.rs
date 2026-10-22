@@ -1,6 +1,6 @@
 //! What GUI drawing hands the renderer: rectangles in screen pixels, in
-//! the order they're drawn, some of them text glyphs, and the world GUI's
-//! canvases with where each is in the world. `rook-gui` makes them and
+//! the order they're drawn, filled, text glyphs or images, and the world
+//! GUI's canvases with where each is in the world. `rook-gui` makes them and
 //! `rook-render` draws them, so the shapes live here, below both.
 
 use std::sync::Arc;
@@ -22,9 +22,7 @@ pub struct GuiQuad {
     /// Only pixels inside this rectangle (left, top, right, bottom) are
     /// drawn.
     pub clip: [f32; 4],
-    /// A glyph whose coverage the color is drawn through, stretched over
-    /// the rectangle; `None` fills it.
-    pub glyph: Option<Arc<GlyphMask>>,
+    pub paint: Paint,
 }
 
 impl GuiQuad {
@@ -32,7 +30,36 @@ impl GuiQuad {
     pub const NO_CLIP: [f32; 4] = [f32::MIN, f32::MIN, f32::MAX, f32::MAX];
 }
 
-/// A SurfaceGui's or BillboardGui's drawing (docs/behavior/gui-world.md).
+/// What a [`GuiQuad`] is filled with, in its color.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Paint {
+    /// The color alone.
+    Solid,
+    /// The color drawn through a glyph's coverage, stretched over the
+    /// rectangle.
+    Glyph(Arc<GlyphMask>),
+    /// Part of an image, tinted by the color.
+    Image(ImagePaint),
+}
+
+/// Part of an image stretched over a [`GuiQuad`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ImagePaint {
+    /// The image file, by the BLAKE3 hash of its bytes (how renderers keep
+    /// images).
+    pub hash: [u8; 32],
+    /// The part shown: left, top, right and bottom, 0 to 1 across the
+    /// image. Right left of left (or bottom above top) mirrors it.
+    pub uv: [f32; 4],
+    /// Each pixel shows its nearest texel instead of a blend
+    /// (`ResampleMode` Pixelated).
+    pub pixelated: bool,
+    /// The image repeats past 0 and 1 (`ScaleType` Tile); otherwise its
+    /// edge pixels carry on.
+    pub tiled: bool,
+}
+
+/// A SurfaceGui's or BillboardGui's drawing (docs/behavior/gui/world.md).
 #[derive(Debug, Clone, PartialEq)]
 pub struct WorldCanvas {
     /// Bottom first, in pixels from the canvas's top left. Unclipped GUI

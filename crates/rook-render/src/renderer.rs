@@ -271,6 +271,7 @@ impl Renderer {
         let tonemap = Tonemap::new(&device, color_format);
         let gui = GuiPass::new(
             &device,
+            &queue,
             BindLayouts {
                 globals: &layout,
                 main: &main_layout,
@@ -352,8 +353,24 @@ impl Renderer {
         }
     }
 
-    /// Draw `quads` over the scene from now on, bottom first.
-    pub fn set_gui(&mut self, screen: &[GuiQuad], world: &[WorldCanvas]) {
+    /// Draw `screen` over the scene from now on, bottom first, and the
+    /// world GUI's canvases; the images they draw are in `images`, and go
+    /// up as others do (quads draw nothing until theirs is up).
+    pub fn set_gui(
+        &mut self,
+        screen: &[GuiQuad],
+        world: &[WorldCanvas],
+        images: &std::collections::HashMap<ImageHash, std::sync::Arc<Image>>,
+    ) {
+        let quads = screen.iter().chain(world.iter().flat_map(|c| &c.quads));
+        for q in quads {
+            if let rook_types::Paint::Image(paint) = &q.paint {
+                let hash = ImageHash(paint.hash);
+                if let Some(file) = images.get(&hash) {
+                    self.images.request(hash, file);
+                }
+            }
+        }
         self.gui.set(&self.device, &self.queue, screen, world);
     }
 

@@ -111,5 +111,14 @@ padding.PaddingTop = UDim.new(0, 2)
 padding.Parent = auto
 rect("automatic, padded", auto)
 rect("padded child", a1)
+padding:Destroy()
+
+-- An Inset border pads what's inside it; a Middle one by half.
+auto.BorderSizePixel = 4
+for _, mode in { Enum.BorderMode.Inset, Enum.BorderMode.Middle } do
+	auto.BorderMode = mode
+	rect(mode.Name .. " border, automatic", auto)
+	rect(mode.Name .. " border child", a1)
+end
 
 screen:Destroy()

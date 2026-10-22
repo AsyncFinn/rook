@@ -92,9 +92,8 @@ impl Renderer {
         stage(&mut times.instances);
         let ribbon_runs = self.upload_ribbons(camera, &view);
         let particle_runs = self.upload_particles(camera, &view);
-        let world_gui_runs = self
-            .gui
-            .upload_world(&self.device, &self.queue, camera, height);
+        let world_gui_runs =
+            (self.gui).upload(&self.device, &self.queue, &self.images, camera, height);
         stage(&mut times.effects);
 
         let (highlight_runs, looks) = self.highlights.upload(&self.device, &self.queue);

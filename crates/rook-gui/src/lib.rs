@@ -2,21 +2,23 @@
 //! `Absolute*` and `Text*` properties scripts read, laid out on the
 //! DataModel's thread as Roblox does), what the local player's ScreenGuis
 //! draw, and the SurfaceGuis and BillboardGuis drawn in the world. Rules
-//! measured in Studio are in `docs/behavior/gui/layout.md`, `gui-text.md` and
-//! `gui-world.md`.
+//! measured in Studio are in `docs/behavior/gui/`.
 
 mod changes;
 mod draw;
+mod images;
 mod layout;
 mod text;
 mod world;
 
 use std::sync::Arc;
 
-use rook_dom::{Change, Dom, InstanceId};
+use glam::Vec2;
+use rook_dom::{Change, Dom, DomError, InstanceId};
 use rook_types::{GuiQuad, Value, Vector2, WorldCanvas, WorldPlace};
 use rustc_hash::{FxHashMap, FxHashSet};
 
+pub use images::GuiImage;
 pub use layout::GUI_INSET;
 
 use changes::Watch;
@@ -34,6 +36,8 @@ pub fn is_layout_output(name: &str) -> bool {
             | "AbsoluteContentSize"
             | "AbsoluteCellSize"
             | "AbsoluteCellCount"
+            | "AbsoluteCanvasSize"
+            | "AbsoluteWindowSize"
             | "TextBounds"
             | "TextFits"
             | "ContentText"
@@ -62,6 +66,7 @@ pub struct Gui {
     canvases: FxHashMap<InstanceId, WorldCanvas>,
     fonts: text::Fonts,
     glyphs: text::Glyphs,
+    images: images::Images,
 }
 
 impl Default for Gui {
@@ -78,6 +83,7 @@ impl Default for Gui {
             canvases: FxHashMap::default(),
             fonts: text::Fonts::default(),
             glyphs: text::Glyphs::default(),
+            images: images::Images::default(),
         }
     }
 }
@@ -102,6 +108,36 @@ impl Gui {
         if self.fonts.arrived(url, bytes) {
             self.stale = true;
         }
+    }
+
+    /// Images the drawing is waiting for, by content URL, each asked for
+    /// once; hand each back with [`Gui::image_arrived`].
+    pub fn take_image_requests(&mut self) -> Vec<String> {
+        self.images.take_requests()
+    }
+
+    /// A requested image loaded (`None`: it can't be had). What shows it
+    /// draws again, and its `IsLoaded` turns true.
+    pub fn image_arrived(&mut self, url: &str, image: Option<GuiImage>) {
+        if self.images.arrived(url, image) {
+            self.stale = true;
+        }
+    }
+
+    /// Set a ScrollingFrame's `CanvasPosition` as a script does: measured,
+    /// it's kept within the canvas as laid out then.
+    pub fn set_canvas_position(
+        &mut self,
+        dom: &mut Dom,
+        id: InstanceId,
+        at: Vec2,
+    ) -> Result<(), DomError> {
+        self.sync_for(dom, id);
+        let at = match self.layout.scrolls.get(&id) {
+            Some(scroll) => at.clamp(Vec2::ZERO, scroll.reach()),
+            None => at,
+        };
+        dom.set_property_by_name(id, "CanvasPosition", Value::Vector2(Vector2(at)))
     }
     /// Look at the journal since last time, so it can be trimmed.
     pub fn note_changes(&mut self, dom: &Dom) {
@@ -202,11 +238,12 @@ impl Gui {
         if let Some(drawn) = &self.screen_drawn {
             return drawn.clone();
         }
+        self.ask_for_images(dom);
         let mut text = draw::Text {
             fonts: &mut self.fonts,
             glyphs: &mut self.glyphs,
         };
-        let drawn = draw::quads(dom, &self.layout, &mut text);
+        let drawn = draw::quads(dom, &self.layout, &mut text, &mut self.images);
         self.screen_drawn = Some(drawn.clone());
         drawn
     }
@@ -221,11 +258,14 @@ impl Gui {
             .map(|h| h.gui)
             .filter(|id| !self.canvases.contains_key(id))
             .collect();
+        if !missing.is_empty() {
+            self.ask_for_images(dom);
+        }
         let mut text = draw::Text {
             fonts: &mut self.fonts,
             glyphs: &mut self.glyphs,
         };
-        let drawn = draw::world(dom, &self.layout, &missing, &mut text);
+        let drawn = draw::world(dom, &self.layout, &missing, &mut text, &mut self.images);
         self.canvases.extend(missing.into_iter().zip(drawn));
         (self.world_drawn.iter())
             .map(|h| self.canvases[&h.gui].clone())
@@ -236,6 +276,17 @@ impl Gui {
     /// it can't be drawn, its part gone).
     pub fn world_places(&self, dom: &Dom) -> Vec<Option<WorldPlace>> {
         self.world_drawn.iter().map(|h| h.place(dom)).collect()
+    }
+
+    /// Ask for every laid-out image object's image, shown or not, so its
+    /// `IsLoaded` turns true as in Studio (scripts wait on it to show it).
+    fn ask_for_images(&mut self, dom: &Dom) {
+        for &id in self.layout.placed.keys() {
+            if draw::is_image(dom, id) {
+                let url = dom.content_property(id, "ImageContent").unwrap_or_default();
+                self.images.get(&url);
+            }
+        }
     }
 
     /// Write every laid-out object's outputs.
@@ -263,6 +314,23 @@ impl Gui {
                 let _ = dom.set_property_by_name(id, "AbsolutePosition", v2(at));
                 let _ = dom.set_property_by_name(id, "AbsoluteSize", v2(size));
                 let _ = dom.set_property_by_name(id, "AbsoluteRotation", Value::Float32(turn));
+                if draw::is_image(dom, id) {
+                    let url = dom.content_property(id, "ImageContent").unwrap_or_default();
+                    let loaded = Value::Bool(self.images.is_loaded(&url));
+                    let _ = dom.set_property_by_name(id, "IsLoaded", loaded);
+                }
+                if let Some(scroll) = self.layout.scrolls.get(&id) {
+                    let k = placed.scale;
+                    let _ =
+                        dom.set_property_by_name(id, "AbsoluteCanvasSize", v2(scroll.canvas * k));
+                    let _ =
+                        dom.set_property_by_name(id, "AbsoluteWindowSize", v2(scroll.window * k));
+                    // Measured: a canvas that shrank pulls the position back.
+                    let asked = dom.vector2_property(id, "CanvasPosition").map(|v| v.0);
+                    if asked != Some(scroll.position) {
+                        let _ = dom.set_property_by_name(id, "CanvasPosition", v2(scroll.position));
+                    }
+                }
             }
             if let Some(arranged) = self.layout.arranged.get(&id) {
                 let _ = dom.set_property_by_name(id, "AbsoluteContentSize", v2(arranged.content));

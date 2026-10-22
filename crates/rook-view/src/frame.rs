@@ -24,32 +24,18 @@ impl SceneCache {
         scene
     }
 
-    /// Wait for every mesh file and image the scene asks for (images on
-    /// a mesh are asked for once its file has loaded), and grow the grass
-    /// around `camera`: what a screenshot shows.
+    /// Wait for every mesh file and image the scene and its GUI ask for
+    /// (images on a mesh are asked for once its file has loaded), and grow
+    /// the grass around `camera`: what a screenshot shows.
     pub fn load_all(&mut self, dm: &DataModel, camera: Vec3) {
-        let dom = &dm.runtime().world().dom;
-        while !self.poll_files(dom, true).is_empty() {}
-        self.update_grass(camera);
-    }
-
-    /// Give the renderer the DataModel's GUI when it was laid out again
-    /// since last time (laying it out first if it changed), and where its
-    /// world GUI is now. Returns whether it was laid out again.
-    pub fn show_gui(&mut self, dm: &DataModel, renderer: &mut Renderer) -> bool {
-        dm.runtime().sync_gui();
-        let mut world = dm.runtime().world_mut();
-        let world = &mut *world;
-        let generation = world.gui.generation();
-        let changed = self.gui_generation != Some(generation);
-        if changed {
-            self.gui_generation = Some(generation);
-            let screen = world.gui.draw(&world.dom);
-            let canvases = world.gui.draw_world(&world.dom);
-            renderer.set_gui(&screen, &canvases);
+        loop {
+            self.draw_gui_for_images(dm);
+            let dom = &dm.runtime().world().dom;
+            if self.poll_files(dom, true).is_empty() && self.gui_arrived.is_empty() {
+                break;
+            }
         }
-        renderer.place_world_gui(world.gui.world_places(&world.dom));
-        changed
+        self.update_grass(camera);
     }
 
     /// Bring the scene up to date with a DataModel's changes and the mesh

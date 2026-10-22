@@ -1,4 +1,5 @@
-//! UIPadding: the area inside an object its children are placed in.
+//! The area inside an object its children and text are placed in: less
+//! its UIPadding, and an Inset or Middle border.
 
 use glam::Vec2;
 use rook_dom::{Dom, InstanceId};
@@ -23,22 +24,45 @@ impl Inner {
     }
 }
 
-/// `id`'s area of `size` less its first UIPadding's. Measured: left and
-/// right scale with the width, top and bottom with the height, and
-/// children's `Size` and `Position` scale with what's left.
+/// `id`'s area of `size` less its first UIPadding's and its border's part
+/// inside it. Measured: left and right padding scale with the width, top
+/// and bottom with the height, and children's `Size` and `Position` scale
+/// with what's left.
 pub(crate) fn inner(dom: &Dom, id: InstanceId, size: Vec2) -> Inner {
+    let border = Vec2::splat(border_inside(dom, id));
     let Some(p) = dom.find_first_child_of_class(id, "UIPadding") else {
-        return Inner::whole(size);
+        return Inner {
+            origin: border,
+            size: size - border * 2.0,
+            far: border,
+        };
     };
     let side = |name, length: f32| {
         dom.udim_property(p, name)
             .map_or(0.0, |u| u.resolve(length))
     };
-    let origin = Vec2::new(side("PaddingLeft", size.x), side("PaddingTop", size.y));
-    let far = Vec2::new(side("PaddingRight", size.x), side("PaddingBottom", size.y));
+    let origin = Vec2::new(side("PaddingLeft", size.x), side("PaddingTop", size.y)) + border;
+    let far = Vec2::new(side("PaddingRight", size.x), side("PaddingBottom", size.y)) + border;
     Inner {
         origin,
         size: size - origin - far,
         far,
+    }
+}
+
+/// How far `id`'s border reaches into it. Measured: an Inset border's
+/// width, or half a Middle one's, is taken off every side of the area its
+/// children and text are placed in (a 4-pixel Inset border put a child at
+/// (10, 20) at (14, 24), half its size 96 × 46 in 200 × 100).
+fn border_inside(dom: &Dom, id: InstanceId) -> f32 {
+    let width = || {
+        dom.number_property(id, "BorderSizePixel")
+            .unwrap_or(0.0)
+            .max(0.0) as f32
+    };
+    match dom.enum_item_property(id, "BorderMode") {
+        Some("Inset") => width(),
+        Some("Middle") => width() * 0.5,
+        _ => 0.0,
     }
 }

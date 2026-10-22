@@ -1,9 +1,9 @@
 // GUI rectangles (`renderer/gui.rs`): each instance a turned rectangle in
-// pixels, filled or drawn through a glyph's coverage in the atlas,
-// premultiplied into the GUI layer, which the tone pass lays over the
-// finished frame in sRGB (`tonemap.wgsl`).
+// pixels, filled, drawn through a glyph's coverage in the atlas or through
+// its image, premultiplied into the GUI layer, which the tone pass lays
+// over the finished frame in sRGB (`tonemap.wgsl`).
 
-import package::glyph::glyph_alpha;
+import package::gui_paint::gui_paint;
 
 struct Screen {
     // xy: the target's size in pixels.
@@ -13,6 +13,9 @@ struct Screen {
 @group(0) @binding(0) var<uniform> screen: Screen;
 @group(0) @binding(1) var glyphs: texture_2d<f32>;
 @group(0) @binding(2) var glyph_sampler: sampler;
+// The run's image (white for fills and glyphs), raw sRGB.
+@group(1) @binding(0) var image: texture_2d<f32>;
+@group(1) @binding(1) var image_sampler: sampler;
 
 struct Quad {
     @location(0) center: vec2<f32>,
@@ -23,9 +26,9 @@ struct Quad {
     @location(3) color: vec4<f32>,
     // left, top, right, bottom in pixels.
     @location(4) clip: vec4<f32>,
-    // The glyph's left, top, right, bottom in the atlas.
+    // The glyph's left, top, right, bottom in the atlas, or the image's.
     @location(5) uv: vec4<f32>,
-    // How it's drawn: `glyph_alpha`'s mode.
+    // How it's drawn: `gui_paint`'s mode.
     @location(6) mode: f32,
 };
 
@@ -59,10 +62,11 @@ fn vs_gui(@builtin(vertex_index) i: u32, q: Quad) -> Varyings {
 @fragment
 fn fs_gui(v: Varyings) -> @location(0) vec4<f32> {
     // Sampled before the clip test, which makes control flow non-uniform.
-    let alpha = glyph_alpha(textureSample(glyphs, glyph_sampler, v.uv).r, v.mode);
+    let glyph = textureSample(glyphs, glyph_sampler, v.uv).r;
+    let paint = gui_paint(glyph, textureSample(image, image_sampler, v.uv), v.mode);
     let p = v.at.xy;
     if p.x < v.clip.x || p.y < v.clip.y || p.x > v.clip.z || p.y > v.clip.w {
         discard;
     }
-    return v.color * alpha;
+    return v.color * paint;
 }

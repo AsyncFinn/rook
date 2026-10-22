@@ -8,7 +8,9 @@ use rook_types::{UDim, UDim2, Value, Vector2};
 use super::*;
 
 mod draw;
+mod images;
 mod layouts;
+mod scrolling;
 mod world;
 
 fn set(dom: &mut Dom, id: InstanceId, name: &str, value: Value) {

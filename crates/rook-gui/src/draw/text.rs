@@ -2,7 +2,7 @@
 //! glyphs, then underlines and strikethroughs.
 
 use glam::Vec2;
-use rook_types::GuiQuad;
+use rook_types::{GuiQuad, Paint};
 
 use super::Text;
 use crate::layout::Placed;
@@ -52,7 +52,7 @@ pub(super) fn emit(
         rotation: p.rotation.to_radians(),
         color,
         clip,
-        glyph: None,
+        paint: Paint::Solid,
     };
     for r in block.rects.iter().filter(|r| r.behind && r.color[3] > 0.0) {
         out.push(rect(r.min, r.max, r.color));
@@ -98,7 +98,7 @@ fn glyph(
         rotation: p.rotation.to_radians(),
         color,
         clip,
-        glyph: Some(raster.mask),
+        paint: Paint::Glyph(raster.mask),
     })
 }
 
@@ -123,6 +123,6 @@ fn field_glyph(
         rotation: p.rotation.to_radians(),
         color,
         clip,
-        glyph: Some(raster.mask),
+        paint: Paint::Glyph(raster.mask),
     })
 }
