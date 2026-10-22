@@ -74,8 +74,8 @@ hover images in `draw/frame.rs` and `draw/image.rs`, the caret in
   pressed, it's mixed 30% towards white (white stays white), in sRGB.
   Measured from `screen_capture` shots of buttons on a SurfaceGui,
   hovered and pressed through the world, read against a strip of known
-  greys: white hovered read 179, (200, 100, 50) hovered (140, 70, 35)
-  and pressed (216, 147, 110), grey 30 hovered 21 and pressed 98.
+  grays: white hovered read 179, (200, 100, 50) hovered (140, 70, 35)
+  and pressed (216, 147, 110), gray 30 hovered 21 and pressed 98.
 - **Mouse movement**: entering an object fires `MouseEnter`, `InputBegan`
   (MouseMovement, state Change) and `GuiState` Hover; leaving fires
   `MouseLeave`, `InputEnded` (MouseMovement) and Idle; moving over it

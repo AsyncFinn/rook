@@ -63,4 +63,5 @@
     - [Grass](behavior/terrain/grass.md): blades, sway and wind
     - [Collision and queries](behavior/terrain/collision.md)
     - [The Terrain API](behavior/terrain/api.md)
+  - [Property defaults](behavior/property-defaults.md): what unsaved properties read before anything sets them
   - [Replication](behavior/replication.md): what a client receives from the server

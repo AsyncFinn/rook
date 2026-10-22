@@ -1,13 +1,16 @@
-//! Property values and the reference index; defaults in [`defaults`],
+//! Property values and the reference index; defaults in [`defaults`]
+//! (Studio's measured ones in [`studio_defaults`]),
 //! storing in the declared type in [`coerce`], typed reads in [`typed`].
 
 use super::*;
 
 mod coerce;
 mod defaults;
+mod studio_defaults;
 mod typed;
 
 pub(crate) use coerce::coerce;
+pub use defaults::zero_value;
 
 impl Dom {
     /// Read a property. Unset properties read the class default.

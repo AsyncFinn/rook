@@ -22,6 +22,7 @@ mod tree;
 
 pub use instance::Attributes;
 pub use journal::Change;
+pub use properties::zero_value;
 
 use instance::Instance;
 use journal::Journal;

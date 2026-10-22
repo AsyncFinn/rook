@@ -1,5 +1,5 @@
 //! A property's default: Rook's own list, the database's class default,
-//! or the zero value of its type.
+//! the value measured in Studio, or the zero value of its type.
 
 use super::*;
 
@@ -24,25 +24,17 @@ impl Dom {
     }
 }
 
-/// Defaults the database doesn't list (properties that don't serialize,
-/// where the zero value is wrong) or lists wrongly. Keyed by the class that
-/// declares the property.
+/// Defaults the database lists wrongly. Keyed by the class that declares
+/// the property. Ones it leaves out come from the Studio sweep
+/// ([`studio_defaults`]).
 const DEFAULTS: &[(&str, &str, Value)] = &[
-    // Confirmed: creator-docs WeldConstraint.Enabled.
-    ("WeldConstraint", "Enabled", Value::Bool(true)),
     // Confirmed: creator-docs, and Studio 0.742 (the database says false).
     ("SoundService", "RespectFilteringEnabled", Value::Bool(true)),
-    // Measured in Studio 0.743: a new TextBox's caret is at 1, no
-    // selection.
-    ("TextBox", "CursorPosition", Value::Int32(1)),
-    ("TextBox", "SelectionStart", Value::Int32(-1)),
-    // Measured in Studio 0.743; false would hide the window's cursor.
-    ("UserInputService", "MouseIconEnabled", Value::Bool(true)),
 ];
 
-/// [`DEFAULTS`], then the class default from the database, then the zero
-/// value of the property's type (Approximation: the database lists
-/// defaults only for properties that serialize).
+/// [`DEFAULTS`], then the class default from the database, then the value
+/// measured in Studio (the database lists defaults only for properties
+/// that serialize), then the zero value of the property's type.
 fn convert_default(db: &Database, class: ClassId, property: PropertyId) -> Option<Value> {
     let prop = db.property(property);
     let ty = prop.ty;
@@ -58,10 +50,18 @@ fn convert_default(db: &Database, class: ClassId, property: PropertyId) -> Optio
             .ok()
             .map(|v| coerce(ty, v));
     }
+    if let Some(v) = studio_defaults::measured(db.class(class).name, prop.name)
+        .or_else(|| studio_defaults::measured(owner, prop.name))
+    {
+        return Some(v);
+    }
     zero_value(db, ty)
 }
 
-fn zero_value(db: &Database, ty: PropertyType) -> Option<Value> {
+/// What a property reads when nothing gives it a default: false, 0, empty,
+/// or the enum's first item. `rook-tools studio-defaults` keeps only the
+/// Studio values that differ from it.
+pub fn zero_value(db: &Database, ty: PropertyType) -> Option<Value> {
     use rbx_types::VariantType as T;
     use rook_types::{CFrame, Color3, UDim, UDim2, Vector2, Vector3};
     Some(match ty {

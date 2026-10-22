@@ -3,7 +3,8 @@
 mod commands;
 
 use commands::{
-    conformance, content, corpus, drift, dump, gen_members, logs, roundtrip, run, terrain,
+    conformance, content, corpus, drift, dump, gen_members, logs, roundtrip, run, studio_defaults,
+    terrain,
 };
 use std::path::PathBuf;
 
@@ -176,6 +177,21 @@ enum Command {
         #[arg(long, default_value = "crates/rook-reflection/data/members.json")]
         out: PathBuf,
     },
+    /// Measure in Studio (through its MCP server) the property defaults
+    /// the reflection database leaves out, and regenerate Rook's table.
+    ///
+    /// Reads Edit mode, then a playtest client; Studio must be in Edit.
+    /// ROOK_STUDIO picks the window, as for `conformance`.
+    StudioDefaults {
+        /// Only list the properties without a database default.
+        #[arg(long)]
+        list: bool,
+        #[arg(
+            long,
+            default_value = "crates/rook-dom/src/properties/studio_defaults.rs"
+        )]
+        out: PathBuf,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -246,6 +262,7 @@ fn command(command: Command) -> anyhow::Result<()> {
             large_mb,
         } => corpus::run(&dir, &out, jobs, large_mb),
         Command::GenMembers { dump, source, out } => gen_members::run(&dump, &source, &out),
+        Command::StudioDefaults { list, out } => studio_defaults::run(list, &out),
         Command::Terrain { paths, scan, jobs } => {
             if scan {
                 terrain::scan(&paths[0], jobs)

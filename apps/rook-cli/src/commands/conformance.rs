@@ -13,7 +13,6 @@
 //! played while it runs (input only reaches clients; see [`client`]).
 
 mod client;
-mod studio;
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -93,7 +92,7 @@ fn expected_path(root: &Path, id: &str) -> PathBuf {
 /// Run every case in a Studio playtest and save the results.
 pub(crate) fn record(root: &Path, filter: Option<&str>) -> anyhow::Result<()> {
     let cases = cases(root, filter)?;
-    let mut studio = studio::Studio::connect()?;
+    let mut studio = super::studio::Studio::connect()?;
     let was_playing = studio.mode()? != "Edit";
     if !was_playing {
         eprintln!("starting a playtest");
@@ -103,7 +102,7 @@ pub(crate) fn record(root: &Path, filter: Option<&str>) -> anyhow::Result<()> {
     let mut failures = 0;
     for case in &cases {
         let result = match &case.input {
-            Some(steps) => studio.run_on_client(&wrap(&case.source), steps),
+            Some(steps) => studio.run_on_client(&wrap(&case.source), &client::studio_calls(steps)),
             None => studio.run_on_server(&wrap(&case.source)),
         };
         match result {

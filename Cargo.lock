@@ -3269,6 +3269,7 @@ dependencies = [
  "rbx_types",
  "resvg",
  "rook-content",
+ "rook-dom",
  "rook-engine",
  "rook-formats",
  "rook-gui",

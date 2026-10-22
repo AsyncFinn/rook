@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, bail};
 use serde_json::{Value, json};
 
-pub(super) struct Studio {
+pub(crate) struct Studio {
     child: Child,
     stdin: ChildStdin,
     lines: Receiver<String>,
@@ -24,7 +24,7 @@ pub(super) struct Studio {
 
 impl Studio {
     /// Start the MCP launcher and wait for a Studio window to attach.
-    pub(super) fn connect() -> anyhow::Result<Self> {
+    pub(crate) fn connect() -> anyhow::Result<Self> {
         let local =
             rook_engine::data_folder::local_app_data().context("LOCALAPPDATA is not set")?;
         let launcher = local.join("Roblox").join("mcp.bat");
@@ -63,7 +63,7 @@ impl Studio {
             &json!({
                 "protocolVersion": "2025-06-18",
                 "capabilities": {},
-                "clientInfo": { "name": "rook-conformance", "version": env!("CARGO_PKG_VERSION") },
+                "clientInfo": { "name": "rook-tools", "version": env!("CARGO_PKG_VERSION") },
             }),
             Duration::from_secs(30),
         )?;
@@ -163,7 +163,7 @@ impl Studio {
     }
 
     /// "Edit", "Play", ... from `get_studio_state`.
-    pub(super) fn mode(&mut self) -> anyhow::Result<String> {
+    pub(crate) fn mode(&mut self) -> anyhow::Result<String> {
         let state = self.tool("get_studio_state", json!({}), Duration::from_secs(30))?;
         Ok(state
             .lines()
@@ -173,7 +173,7 @@ impl Studio {
             .to_owned())
     }
 
-    pub(super) fn set_playing(&mut self, play: bool) -> anyhow::Result<()> {
+    pub(crate) fn set_playing(&mut self, play: bool) -> anyhow::Result<()> {
         self.tool(
             "start_stop_play",
             json!({ "is_start": play }),
@@ -183,21 +183,27 @@ impl Studio {
     }
 
     /// Run Luau in the playtest server and return its result.
-    pub(super) fn run_on_server(&mut self, code: &str) -> anyhow::Result<String> {
+    pub(crate) fn run_on_server(&mut self, code: &str) -> anyhow::Result<String> {
+        self.run(code, "Server")
+    }
+
+    /// Run Luau in a datamodel ("Edit", "Server" or "Client") and return
+    /// its result.
+    pub(crate) fn run(&mut self, code: &str, datamodel: &str) -> anyhow::Result<String> {
         self.tool(
             "execute_luau",
-            json!({ "code": code, "datamodel_type": "Server" }),
+            json!({ "code": code, "datamodel_type": datamodel }),
             Duration::from_secs(120),
         )
     }
 
-    /// Run Luau in the playtest client while `steps` are played, and
-    /// return its result. The code runs on its own thread so the input
-    /// arrives while it waits for it.
-    pub(super) fn run_on_client(
+    /// Run Luau in the playtest client while the input tool `calls` are
+    /// played, and return its result. The code runs on its own thread so
+    /// the input arrives while it waits for it.
+    pub(crate) fn run_on_client(
         &mut self,
         code: &str,
-        steps: &[super::client::Step],
+        calls: &[(&str, Vec<Value>)],
     ) -> anyhow::Result<String> {
         const PENDING: &str = "\u{1}pending";
         let client = |code: &str| json!({ "code": code, "datamodel_type": "Client" });
@@ -206,7 +212,7 @@ impl Studio {
              _G.__rook_conformance = (function()\n{code}\nend)()\nend)"
         );
         self.tool("execute_luau", client(&start), Duration::from_secs(120))?;
-        for (tool, actions) in super::client::studio_calls(steps) {
+        for (tool, actions) in calls {
             self.tool(
                 tool,
                 json!({ "actions": actions, "datamodel_type": "Client" }),
