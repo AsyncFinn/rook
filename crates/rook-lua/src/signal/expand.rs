@@ -104,6 +104,10 @@ pub(crate) fn expand<H: Clone>(change: &Change, signals: &Signals<H>) -> Vec<Fir
                 push(*p, SignalKind::Event("ChildAdded"), FireArgs::Instance(*id));
             }
             for &ancestor in new_ancestors.iter().filter(|a| !old_ancestors.contains(a)) {
+                // One look per ancestor, not one per instance moved.
+                if !signals.has_connections(&SignalKey::event(ancestor, "DescendantAdded")) {
+                    continue;
+                }
                 for &d in subtree {
                     push(
                         ancestor,

@@ -149,7 +149,7 @@ fn build_body(dom: &mut rook_dom::Dom, player: InstanceId) -> Result<InstanceId,
 /// may use; teams come with M9).
 fn spawn_point(dom: &rook_dom::Dom) -> glam::Vec3 {
     let spawn = dom.find_service("Workspace").and_then(|ws| {
-        dom.descendants(ws).into_iter().find(|&d| {
+        dom.find_descendant(ws, &|d| {
             dom.is_a(d, "SpawnLocation") && dom.bool_property(d, "Enabled") != Some(false)
         })
     });

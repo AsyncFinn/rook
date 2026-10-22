@@ -82,11 +82,17 @@ impl DataModel {
         let mut toggled: HashSet<InstanceId> = HashSet::new();
         {
             let world = self.runtime.world();
-            let disabled = |id: InstanceId| world.dom.property_id(id, "Disabled");
+            let db = world.dom.database();
+            // The name check first: most changes are other properties (physics
+            // writes every moving part's CFrame each frame).
+            let disabled = |id: InstanceId, property: rook_reflection::PropertyId| {
+                db.property(property).name == "Disabled"
+                    && world.dom.property_id(id, "Disabled") == Some(property)
+            };
             for change in world.dom.journal().since(self.script_cursor) {
                 match change {
                     Change::Reparented { subtree, .. } => candidates.extend(subtree),
-                    Change::Property { id, property } if disabled(*id) == Some(*property) => {
+                    Change::Property { id, property } if disabled(*id, *property) => {
                         candidates.push(*id);
                         toggled.insert(*id);
                     }

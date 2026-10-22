@@ -160,7 +160,7 @@ pub fn base_material_override(dom: &Dom, service: InstanceId, m: Material) -> Op
 /// name and base material (observed: one inside a Folder is found, one of
 /// another base material isn't).
 pub fn find_variant(dom: &Dom, service: InstanceId, m: Material, name: &str) -> Option<InstanceId> {
-    dom.descendants(service).into_iter().find(|&v| {
+    dom.find_descendant(service, &|v| {
         dom.class_name(v) == "MaterialVariant"
             && dom.name(v) == name
             && dom.enum_property(v, "BaseMaterial") == Some(m.value())

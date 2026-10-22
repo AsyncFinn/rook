@@ -79,12 +79,12 @@ fn find_child_by(
     pred: impl Fn(&World, InstanceId) -> bool,
 ) -> ApiResult<Outcome> {
     let found = with_world(lua, |w| {
-        let candidates = if recursive {
-            w.dom.descendants(this)
+        let w = &*w;
+        if recursive {
+            w.dom.find_descendant(this, &|c| pred(w, c))
         } else {
-            w.dom.children(this).to_vec()
-        };
-        candidates.into_iter().find(|c| pred(w, *c))
+            w.dom.children(this).iter().copied().find(|c| pred(w, *c))
+        }
     });
     ret_instance(lua, found)
 }

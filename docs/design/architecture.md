@@ -150,7 +150,7 @@ Known exceptions, each marked with an `#[expect]` saying why:
 
 ## Luau bridge (`rook-lua`)
 
-- One Luau VM per DataModel (`mlua` with `luau`, `vendored`; `luau-jit` later). Each `Script`/`LocalScript`/`ModuleScript` runs on its own thread with its own environment table, which falls back to the shared globals. `getfenv`/`setfenv` work as in Luau.
+- One Luau VM per DataModel (`mlua` with `luau`, `vendored`; `luau-jit` later). Each `Script`/`LocalScript`/`ModuleScript` runs on its own thread with its own environment table, which falls back to the shared globals. Environments are marked `safeenv`, as Roblox's sandbox marks them, so Luau runs builtins natively; `getfenv`/`setfenv` work as in Luau and clear the mark. Builtins Rook replaces (`typeof`) are left out of the compiler's builtins, so calls reach Rook's.
 - **Instance userdata** wraps an `InstanceId`. A weak-valued registry keeps **one userdata per instance**, so `==`, `rawequal` and table keys behave like Roblox. `__index` checks properties, then methods, then children by name; each class's members are resolved once into a table by name, so a lookup is one hash probe. `__index` and `__newindex` skip the general engine-function shim (they run more than any other engine code). Destroyed instances still read.
 - Datatypes are userdata with Roblox's operators, constructors and immutability.
 - **Yielding**: a yielding engine function (`wait`, `task.wait`, `WaitForChild`, `Event:Wait`, `InvokeServer`, async HTTP) registers the current thread with the scheduler, then yields. That way a yield inside a `coroutine.wrap` behaves as on Roblox. The exact mlua mechanism (async functions vs. yield-with-values) gets prototyped in M1, and the observable behavior is pinned by conformance cases.

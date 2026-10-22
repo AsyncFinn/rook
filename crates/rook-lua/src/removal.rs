@@ -7,6 +7,7 @@ use mlua::Lua;
 use rook_dom::{DomError, InstanceId};
 
 use crate::ctx::with_world;
+use crate::signal::SignalKey;
 use crate::threads::dispatch;
 
 /// Run `f` on the world and fire the signals it recorded.
@@ -51,7 +52,15 @@ pub(crate) fn destroy(lua: &Lua, id: InstanceId) -> Result<(), DomError> {
 /// after its handlers ran, so a child they moved out isn't announced.
 fn announce(lua: &Lua, id: InstanceId, parent: Option<InstanceId>) {
     let leaving = with_world(lua, |w| w.dom.leaving_ancestors(id, parent));
-    if leaving.is_empty() {
+    // With no handler on any of them, nothing runs during the walk to
+    // connect one, so none of its firings would reach a handler.
+    let heard = with_world(lua, |w| {
+        leaving.iter().any(|&a| {
+            w.signals
+                .has_connections(&SignalKey::event(a, "DescendantRemoving"))
+        })
+    });
+    if !heard {
         return;
     }
     let mut pending = vec![id];

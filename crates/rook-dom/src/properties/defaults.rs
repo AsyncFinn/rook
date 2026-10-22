@@ -14,6 +14,14 @@ impl Dom {
             .insert((class, property), v.clone());
         Some(v)
     }
+
+    /// Whether `value` is the class default, without copying the default.
+    pub(super) fn default_is(&self, class: ClassId, property: PropertyId, value: &Value) -> bool {
+        if let Some(v) = self.defaults.borrow().get(&(class, property)) {
+            return v == value;
+        }
+        self.default_value(class, property).as_ref() == Some(value)
+    }
 }
 
 /// Defaults the database doesn't list (properties that don't serialize,

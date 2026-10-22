@@ -83,8 +83,12 @@ impl Dom {
     ) -> Result<(), DomError> {
         debug_assert!(property != self.name_prop && property != self.parent_prop);
         let value = coerce(self.db.property(property).ty, value);
-        let current = self.property(id, property);
-        if current.as_ref() == Some(&value) {
+        let inst = self.inst(id)?;
+        let unchanged = match inst.properties.get(&property) {
+            Some(current) => *current == value,
+            None => self.default_is(inst.class, property, &value),
+        };
+        if unchanged {
             return Ok(());
         }
         self.store(id, property, value)?;

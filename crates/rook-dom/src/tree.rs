@@ -54,15 +54,29 @@ impl Dom {
         recursive: bool,
     ) -> Option<InstanceId> {
         if recursive {
-            self.descendants(id)
-                .into_iter()
-                .find(|c| self.name(*c) == name)
+            self.find_descendant(id, &|d| self.name(d) == name)
         } else {
             self.children(id)
                 .iter()
                 .copied()
                 .find(|c| self.name(*c) == name)
         }
+    }
+
+    /// The first descendant in pre-order (`GetDescendants` order) that
+    /// `pred` accepts. Stops there, rather than listing the subtree first.
+    pub fn find_descendant(
+        &self,
+        id: InstanceId,
+        pred: &impl Fn(InstanceId) -> bool,
+    ) -> Option<InstanceId> {
+        self.children(id).iter().find_map(|&child| {
+            if pred(child) {
+                Some(child)
+            } else {
+                self.find_descendant(child, pred)
+            }
+        })
     }
 
     /// `Instance:FindFirstChildOfClass()`.

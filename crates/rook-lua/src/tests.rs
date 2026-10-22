@@ -502,6 +502,26 @@ fn safe_environment_keeps_script_semantics() {
     );
 }
 
+/// `DescendantRemoving` steps are skipped only while nothing listens: a
+/// handler connected by an earlier step of the same `Destroy` still hears
+/// every descendant.
+#[test]
+fn descendant_removing_connected_mid_destroy() {
+    expect(
+        r#"
+        local model = Instance.new("Model")
+        Instance.new("Part", model).Name = "A"
+        model.Parent = workspace
+        model.Destroying:Connect(function()
+            workspace.DescendantRemoving:Connect(function(d) print("removing", d.Name) end)
+        end)
+        model:Destroy()
+        "#,
+        0,
+        &["removing Model", "removing A"],
+    );
+}
+
 mod gui;
 mod models;
 mod tweens;
