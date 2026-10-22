@@ -15,14 +15,11 @@ fn find(dom: &Dom, id: InstanceId) -> Option<InstanceId> {
     })
 }
 
-fn is_text(dom: &Dom, id: InstanceId) -> bool {
-    matches!(dom.class_name(id), "TextLabel" | "TextButton" | "TextBox")
-}
-
 /// Whether the stroke goes round the text rather than the edge: Contextual
 /// on a text object (Confirmed: creator-docs ApplyStrokeMode).
 fn on_text(dom: &Dom, id: InstanceId, stroke: InstanceId) -> bool {
-    is_text(dom, id) && dom.enum_item_property(stroke, "ApplyStrokeMode") != Some("Border")
+    crate::text::is_text(dom, id)
+        && dom.enum_item_property(stroke, "ApplyStrokeMode") != Some("Border")
 }
 
 /// The stroke's color and opacity (measured: only its own `Transparency`
