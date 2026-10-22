@@ -1,4 +1,4 @@
-//! UIListLayout, without flex and wrapping (docs/roadmap/m8-gui.md, step 6), and the
+//! UIListLayout, without flex and wrapping (docs/roadmap/m8-gui.md, step 7), and the
 //! sort order every UI layout uses.
 
 use glam::Vec2;

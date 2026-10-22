@@ -1,8 +1,11 @@
 //! The area inside an object its children and text are placed in: less
-//! its UIPadding, and an Inset or Middle border.
+//! its UIPadding, and an Inset or Middle border or its legacy style's
+//! inset.
 
 use glam::Vec2;
 use rook_dom::{Dom, InstanceId};
+
+use crate::style;
 
 /// The area children are placed in, in their parent's own frame.
 #[derive(Debug, Clone, Copy)]
@@ -25,11 +28,15 @@ impl Inner {
 }
 
 /// `id`'s area of `size` less its first UIPadding's and its border's part
-/// inside it. Measured: left and right padding scale with the width, top
-/// and bottom with the height, and children's `Size` and `Position` scale
-/// with what's left.
+/// inside it. Measured: left and right padding scale with the width inside
+/// the border, top and bottom with the height (a 0.25 left padding in a
+/// 120-wide frame with a 4-pixel Inset border is 28), and children's
+/// `Size` and `Position` scale with what's left.
 pub(crate) fn inner(dom: &Dom, id: InstanceId, size: Vec2) -> Inner {
-    let border = Vec2::splat(border_inside(dom, id));
+    // Measured: a style's inset adds to an Inset border's (8 and 4 put a
+    // child 12 in), though the style draws no border.
+    let style = style::of(dom, id).map_or(0.0, |s| s.inset(size));
+    let border = Vec2::splat(border_inside(dom, id) + style);
     let Some(p) = dom.find_first_child_of_class(id, "UIPadding") else {
         return Inner {
             origin: border,
@@ -37,12 +44,16 @@ pub(crate) fn inner(dom: &Dom, id: InstanceId, size: Vec2) -> Inner {
             far: border,
         };
     };
+    let within = size - border * 2.0;
     let side = |name, length: f32| {
         dom.udim_property(p, name)
             .map_or(0.0, |u| u.resolve(length))
     };
-    let origin = Vec2::new(side("PaddingLeft", size.x), side("PaddingTop", size.y)) + border;
-    let far = Vec2::new(side("PaddingRight", size.x), side("PaddingBottom", size.y)) + border;
+    let origin = Vec2::new(side("PaddingLeft", within.x), side("PaddingTop", within.y)) + border;
+    let far = Vec2::new(
+        side("PaddingRight", within.x),
+        side("PaddingBottom", within.y),
+    ) + border;
     Inner {
         origin,
         size: size - origin - far,

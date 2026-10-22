@@ -278,7 +278,10 @@ pub(crate) fn lay_out(
     } else {
         set_lines(fonts, source, &spans, None, wrap_at)
     };
-    let mut fits = !set.split && set.size.x <= size.x && set.size.y <= size.y;
+    // Measured: unwrapped text taller than the object still fits (21-pixel
+    // text in a 120 × 10 button).
+    let tall = wrap_at.is_some() && set.size.y > size.y;
+    let mut fits = !set.split && set.size.x <= size.x && !tall;
     if wrap.is_none() && wrap_at.is_some() {
         fits &= !set.keep_fitting(size.y);
     }

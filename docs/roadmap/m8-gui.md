@@ -20,7 +20,11 @@ health bars and leaderboards are GUI.
 5. ✅ [Input](../behavior/gui/input.md): GUI takes the mouse and keyboard
    before the world; buttons, the wheel and scroll bars, TextBoxes, the
    cursor.
-6. **The modern UI objects**, by files: UICorner 864, UIGradient 782,
+6. ✅ [The legacy styles](../behavior/gui/styles.md): GuiButton's and
+   Frame's `Style`, drawn from the install's textures with their hover,
+   pressed and selected looks, and the insets they give children and
+   text.
+7. **The modern UI objects**, by files: UICorner 864, UIGradient 782,
    UIListLayout's flex and `Wraps` (UIListLayout is in 722 files,
    UIFlexItem in 6), ViewportFrame 251, UIStroke 212, UIPageLayout 69,
    CanvasGroup 34, UITableLayout 7.
@@ -55,7 +59,7 @@ health bars and leaderboards are GUI.
      subtree, and CanvasGroup is a GUI layer drawn to a texture.
    - *Done when*: the cases pass and the reference views match Studio
      within step 4's tolerance.
-7. **The GUI Roblox draws itself**, from the CoreScripts in the user's
+8. **The GUI Roblox draws itself**, from the CoreScripts in the user's
    Studio install, loaded at runtime and never shipped (see the
    [content policy](../design/policies.md#content-and-assets)). They
    draw the top bar, player list, backpack, health bar, ProximityPrompts
@@ -90,7 +94,7 @@ health bars and leaderboards are GUI.
      with its leaderstats, the backpack with StarterPack's tools,
      working ProximityPrompts and Dialogs, and hides what its scripts
      turn off.
-8. **Chat**: TextChatService and what the archive's scripts expect of
+9. **Chat**: TextChatService and what the archive's scripts expect of
    the legacy Chat service (`Chat:Chat` bubbles in 561 files, `Chatted`
    handlers in about 830).
    - *Scope*: the chat window and input bar from the CoreScripts

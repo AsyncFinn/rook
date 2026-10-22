@@ -1,14 +1,15 @@
 //! What the local player's ScreenGuis draw, in order: each visible GUI
-//! object's background and border, a ScrollingFrame's bars, then its image
-//! or text, and any Hint or Message over it all; and what each world GUI's
-//! canvas draws, the same way. Order and clipping rules:
-//! docs/behavior/gui/layout.md#drawing.
+//! object's background and border (or legacy style), a ScrollingFrame's
+//! bars, then its image or text, and any Hint or Message over it all; and
+//! what each world GUI's canvas draws, the same way. Order and clipping
+//! rules: docs/behavior/gui/layout.md#drawing.
 
 mod caret;
 mod frame;
 mod image;
 mod messages;
 mod scrolling;
+mod style;
 mod text;
 
 use glam::Vec2;
@@ -136,7 +137,10 @@ impl Draw<'_, '_> {
             return;
         }
         let (dom, out) = (self.dom, &mut *self.out);
-        frame::emit(dom, d.id, d.placed, d.clip, out);
+        match crate::style::of(dom, d.id) {
+            Some(look) => style::emit(dom, d.id, look, d.placed, d.clip, self.images, out),
+            None => frame::emit(dom, d.id, d.placed, d.clip, out),
+        }
         if let Some(scroll) = self.layout.scrolls.get(&d.id) {
             scrolling::emit(dom, d.id, d.placed, scroll, d.clip, self.images, out);
         }

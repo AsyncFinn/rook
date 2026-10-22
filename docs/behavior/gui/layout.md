@@ -67,7 +67,9 @@ GUI pass in `rook-render/src/renderer/gui.rs`.
   the parent when it's bigger (ratio 4, Height, a 200 × 150 object in
   400 × 300: 400 × 100). One under a UIGridLayout holds its cells.
 - **UIPadding**: left and right scale with the object's width, top and
-  bottom with its height.
+  bottom with its height, both inside its border (a 0.25 left padding
+  in a 120-wide frame with a 4-pixel Inset border is 28; checked in
+  Studio 0.744) or [legacy style](styles.md#insets).
 - **Borders inside**: an Inset border's width is taken off every side of
   the area an object's children and text are placed in, a Middle border's
   half, as a UIPadding's would be: a 4-pixel Inset border put a child at
@@ -83,7 +85,7 @@ place the layout last gave them. Children sort by `SortOrder`:
 LayoutOrder, or Name by bytes (`Z` before `a`); ties keep child order.
 `AbsoluteContentSize` is what was placed.
 
-- **UIListLayout** (flex and `Wraps` are step 6): items follow each other
+- **UIListLayout** (flex and `Wraps` are step 7): items follow each other
   along `FillDirection`, `Padding` apart (its scale of the length that
   way); the run is aligned as a whole along it, each item on its own
   across it. Content is the run's length by the widest item.
@@ -140,4 +142,4 @@ Nested automatic sizes add up from the inside.
   into an 8-bit layer the tone pass lays over the frame.
 - Text: [GUI text](text.md); SurfaceGui and BillboardGui:
   [world GUI](world.md); images: [GUI images](images.md); ScrollingFrame:
-  [ScrollingFrame](scrolling.md). The modern UI objects come with step 6.
+  [ScrollingFrame](scrolling.md). The modern UI objects come with step 7.

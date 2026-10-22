@@ -71,7 +71,8 @@ glyph masks and distance fields) and `draw/text.rs`; the glyph atlas in
   then `TextFits` is false. Only the lines that fit the object's height
   count: a word split over seven lines in a label five lines tall reports
   five lines' bounds. Without wrapping, text runs past the object and
-  `TextFits` is false.
+  `TextFits` is false when it's too wide, but not when it's too tall
+  (21-pixel text in a 120 × 10 button fits; checked in Studio 0.744).
 - Inference: alignment puts lines on whole pixels, and spaces where a
   line wrapped don't count to its width.
 

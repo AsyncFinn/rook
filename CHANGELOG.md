@@ -5,6 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- Older places' styled buttons and panels draw as in Studio (M8 step 6). A Frame's `Style` (RobloxSquare, RobloxRound, ChatBlue, ChatGreen, ChatRed, DropShadow) and a TextButton's or ImageButton's (RobloxButton, RobloxButtonDefault and the three round button styles) used to draw as Custom; they now draw Roblox's own textures from your Roblox install, sliced over the object in place of its background and border, with their corners shrinking on small objects as Studio's do. Buttons light up while hovered, pressed or not interactable when `AutoButtonColor` is on, and a selected one shows its selected look. Styled objects move their children and text in from their edges (17 pixels for the Chat styles, 8 for the other frames, 12 for buttons, less on small objects), so scripts read the same `AbsolutePosition` as in Studio; a new conformance case passes.
 - `rook-tools drift` no longer checks spelling. Rook's own writing still prefers American spelling, but names taken from Roblox (such as its `btn_grey.png` texture) keep theirs.
 
 ## [0.7.2] - 2026-10-22 - M8 steps 3 to 5: world GUI, images and input

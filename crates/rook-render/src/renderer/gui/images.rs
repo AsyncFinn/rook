@@ -86,6 +86,11 @@ impl GuiImages {
                 } else {
                     wgpu::MipmapFilterMode::Nearest
                 },
+                // A slice squeezed along one axis (a style's middle row,
+                // 26 texels in 2 pixels) would otherwise take a mip
+                // blurred along both and smear its edge sideways, which
+                // Studio's doesn't.
+                anisotropy_clamp: if i & 1 == 0 { 16 } else { 1 },
                 ..Default::default()
             })
         };
