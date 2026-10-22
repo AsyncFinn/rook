@@ -17,6 +17,12 @@ Each can only come after the milestones it needs.
 
 ## Undecided
 
-- **HopperBin** (1,107 files): modern Roblox no longer runs it. Decide
-  before [M9 Characters](m9-characters.md) whether to follow modern
-  behavior or offer an extension.
+- **HopperBin** (1,813 files): modern Roblox no longer runs it. Decide
+  before [M9 Characters](m9-characters.md)' tools step whether to follow
+  modern behavior or offer an extension.
+- **Default character scripts**: the 2018 Core-Scripts camera and control
+  scripts Rook can ship, with an Animate of its own
+  ([research](../design/research.md#open-questions)), or the modern
+  PlayerModule, Animate and `RbxCharacterSounds` loaded from the user's
+  Studio install, as the CoreScripts are, with the 2018 set as the
+  fallback. Decide before [M9 Characters](m9-characters.md)' camera step.

@@ -10,6 +10,6 @@ Pants 282, CharacterMesh 168, ShirtGraphic 89, Accessory 42.
    hats and accessories, as Studio draws them.
 3. Layered clothing (WrapLayer, WrapTarget: 12 files) and dynamic heads
    (FaceControls).
-4. Animation in full: Animator (37 files), AnimationController,
-   KeyframeSequence, blending and priorities, IKControl, replicated
-   between players.
+4. Animation beyond what M9's Animate scripts need: AnimationController
+   on rigs without a Humanoid, IKControl, and tracks replicated between
+   players.

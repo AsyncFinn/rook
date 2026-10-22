@@ -12,8 +12,9 @@ place in the order yet, and what's undecided, are in
 
 1. **Visible progress on archived places first.** Rook's first job is to
    open an archived place and show it as Roblox would.
-2. **Then by what the archive uses.** Counts below come from the corpus
-   scan (`reports/corpus/`): 3,056 place and model files that load.
+2. **Then by what the archive uses.** Counts come from the corpus scan
+   (`reports/corpus/`): 6,245 place and model files that load. Text
+   written before 2026-10-22 counts the first scan's 3,056.
 3. **Dependencies.** A milestone that needs another's work comes after it
    (characters need physics and the head mesh).
 4. **Modern and legacy together.** Rook targets everything modern Roblox
