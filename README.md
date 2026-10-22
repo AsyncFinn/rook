@@ -90,7 +90,7 @@ New here? Start with [Getting started](docs/guide/getting-started.md): build Roo
 | [Roadmap](docs/roadmap/README.md) | What's next, in what order, and why |
 | [Architecture](docs/design/architecture.md) | How Rook is built, and the rules every behavior follows |
 | [Behavior notes](docs/behavior/) | What Rook found in Studio and the archive, topic by topic |
-| [Contributing](CONTRIBUTING.md) | Reporting problems, finding your way around the code, running the checks |
+| [Contributing](CONTRIBUTING.md) | Reporting problems, pull requests, finding your way around the code, running the checks |
 
 ## FAQ
 
@@ -105,7 +105,7 @@ Rook matches what modern Roblox does with old content. For example, modern Roblo
 
 ## Contributing
 
-Rook gets better with every place people throw at it. The most useful thing you can do is run your places through Rook and [report what breaks](CONTRIBUTING.md#reporting-a-problem). Star the repo to follow along.
+Rook gets better with every place people throw at it. The most useful thing you can do is run your places through Rook and [report what breaks](CONTRIBUTING.md#reporting-a-problem). [Pull requests](CONTRIBUTING.md#pull-requests) are welcome too. Star the repo to follow along.
 
 ## License
 
