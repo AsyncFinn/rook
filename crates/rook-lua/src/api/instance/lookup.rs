@@ -336,6 +336,11 @@ pub(super) fn fast_read(
         if c.runtime_prop_ids.borrow().contains(&id) {
             return Ok(SLOW);
         }
+        // The most read property: made from the instance's own name, as
+        // `property` would copy it first.
+        if pid == w.dom.name_property() {
+            return Ok((LuaValue::String(lua.create_string(w.dom.name(id))?), None));
+        }
         (w.dom.property(id, pid), enum_id)
     };
     Ok(match value {
