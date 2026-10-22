@@ -234,6 +234,8 @@ pub struct World {
     /// Players that have had a character, whose next spawns reset their
     /// PlayerGui.
     pub(crate) spawned: HashSet<InstanceId>,
+    /// PlayerGuis' `SetTopbarTransparency`, for those a script set.
+    pub(crate) topbar_transparency: HashMap<InstanceId, f32>,
 }
 
 impl World {
@@ -265,6 +267,7 @@ impl World {
             audio: AudioState::default(),
             effect_calls: Vec::new(),
             spawned: HashSet::new(),
+            topbar_transparency: HashMap::new(),
         }
     }
 

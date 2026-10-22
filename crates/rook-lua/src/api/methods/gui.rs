@@ -8,12 +8,16 @@ use super::RawMethod;
 use super::ret_instances;
 use crate::ctx::args::Args;
 use crate::ctx::{ApiResult, Outcome, with_world};
+use crate::signal::SignalKey;
+use crate::threads::fire;
 use crate::types::LVector2;
 
 pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
     Some(match (owner, name) {
         ("GuiService", "GetGuiInset") => get_gui_inset,
         ("BasePlayerGui", "GetGuiObjectsAtPosition") => get_gui_objects_at_position,
+        ("PlayerGui", "GetTopbarTransparency") => get_topbar_transparency,
+        ("PlayerGui", "SetTopbarTransparency") => set_topbar_transparency,
         _ => return None,
     })
 }
@@ -54,6 +58,22 @@ pub(crate) fn gui_inset(lua: &Lua) -> f32 {
 fn get_gui_inset(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
     let top_left = LVector2(Vector2::new(0.0, gui_inset(lua)));
     Outcome::ret(lua, (top_left, LVector2(Vector2::new(0.0, 0.0))))
+}
+
+/// Measured: 0.5 until a script sets it.
+fn get_topbar_transparency(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
+    let t = with_world(lua, |w| w.topbar_transparency.get(&this).copied());
+    Outcome::ret(lua, t.unwrap_or(0.5))
+}
+
+/// Measured: deprecated but still kept, clamped to 0 to 1, and announced
+/// on `TopbarTransparencyChangedSignal`. Rook draws no top bar to apply it to.
+fn set_topbar_transparency(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
+    let t = (a.number(0)? as f32).clamp(0.0, 1.0);
+    with_world(lua, |w| w.topbar_transparency.insert(this, t));
+    let key = SignalKey::event(this, "TopbarTransparencyChangedSignal");
+    fire(lua, &key, &[mlua::Value::Number(f64::from(t))]);
+    Outcome::ret(lua, ())
 }
 
 /// The local player's on-screen GUI objects at (x, y) in GUI coordinates,

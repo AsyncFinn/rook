@@ -31,6 +31,11 @@ GUI pass in `rook-render/src/renderer/gui.rs`.
   mouse InputObjects' `Position` all exclude the inset;
   `UserInputService:GetMouseLocation()` alone includes it (the same
   point read (500, 350) and (500, 408)).
+- **Top bar transparency**: the deprecated `PlayerGui:SetTopbarTransparency`
+  still works on a client. It stores the number clamped to 0 to 1
+  (`GetTopbarTransparency` is 0.5 at first, 1 after setting 5) and fires
+  `TopbarTransparencyChangedSignal` with it; a string errors "Unable to
+  cast string to float". Nothing is drawn from it yet.
 - Rook draws no top bar yet ([CoreGui](../../roadmap/m8-gui.md)), so the strip
   shows the world.
 
