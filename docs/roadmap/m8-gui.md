@@ -17,65 +17,9 @@ health bars and leaderboards are GUI.
    world: signs, labels and name tags.
 4. ✅ [Images, 9-slice](../behavior/gui/images.md),
    [ScrollingFrame](../behavior/gui/scrolling.md).
-5. **Input**: GUI takes the mouse and keyboard before the 3D world does.
-   Today `gameProcessedEvent` is always false and clicks go straight to
-   ClickDetectors (`rook-engine/src/bridges/input.rs`).
-   - *Scope*:
-     - Hit-testing: the object under the cursor, in the order step 1
-       draws (ScreenGuis by `DisplayOrder`, then `ZIndex`), cut by
-       `ClipsDescendants` and ScrollingFrames, turned by `Rotation`, and
-       only if `Visible`, `Active` and `Interactable` allow it.
-       SurfaceGuis and BillboardGuis with `Active` set take the mouse's
-       world ray. `GetGuiObjectsAtPosition` (51 files).
-     - Events: GuiButton's `MouseButton1Click`, `Down` and `Up`, the
-       button 2 set, and `Activated`; every GuiObject's `MouseEnter`,
-       `MouseLeave`, `MouseMoved`, the wheel events and `InputBegan`,
-       `InputChanged` and `InputEnded`; `GuiState`; `AutoButtonColor`'s
-       tints and ImageButton's `HoverImage` and `PressedImage`.
-     - `gameProcessedEvent` on UserInputService's events, and GUI
-       blocking ClickDetectors and the mouse behind it.
-     - TextBox (scripts create one in 764 files): focus by clicking or
-       `CaptureFocus` (817 files) and `ReleaseFocus`, `Focused`,
-       `FocusLost` with `enterPressed`, typing through the platform's
-       text input (IME included), the caret and selection
-       (`CursorPosition`, `SelectionStart`), `ClearTextOnFocus`,
-       `MultiLine`, `TextEditable`, `PlaceholderText`, copy and paste,
-       `UserInputService:GetFocusedTextBox`. Keys typed into a box don't
-       reach the game.
-     - ScrollingFrames scrolled by the wheel and by dragging their bars.
-     - The cursor: `Mouse.Icon` and `UserInputService.MouseIcon`
-       (`GetMouse` is in 1,993 files, and tools set icons).
-   - *Not here*: gamepad selection (`Selectable`, GuiService's selected
-     object) and touch go to M19; `Modal` freeing the mouse in first
-     person comes with the camera (M9).
-   - *Studio questions*, in one session. Studio's `screen_capture` leaves
-     GUI out, so the user looks at the tints live:
-     - Overlaps: does a Frame with `Active` off, or one that is fully
-       transparent, let a click through to a button under it? To a
-       ClickDetector? Is `gameProcessedEvent` true for a click on a plain
-       TextLabel?
-     - Press on one button and release on another, or drag off and back:
-       which of Down, Up, Click and Activated fire, in what order next to
-       UserInputService's `InputBegan`?
-     - Can the clipped-away part of a button be clicked? A rotated
-       button's hit area; a disabled ScreenGui; `Visible` off on an
-       ancestor; `Interactable` off.
-     - AutoButtonColor's hover and press tints on light and dark colors,
-       and whether reading the color back shows them.
-     - TextBox: `enterPressed` for Enter, Escape, Tab and clicking away;
-       Enter in a `MultiLine` box; `ClearTextOnFocus` with
-       `CaptureFocus`; the order of `Text` Changed events while typing.
-   - *Method*: client conformance cases with clicks and keys. The
-     `--! client mouse` line gains presses and key strokes, played in
-     Studio through the MCP's `user_mouse_input` and `user_keyboard_input`
-     and in Rook as `InputEvent`s.
-   - *How*: `rook-gui` hit-tests its own layout, since it already holds
-     the draw order and clip rectangles, and returns the object and its
-     LayerCollector. The input bridge asks GUI first and the world after.
-     The window's text events become a new `InputEvent`.
-   - *Done when*: the input cases pass, and in `rook-player` an archive
-     shop menu, a TextBox form and a scrolling list work without clicks
-     falling through to the world.
+5. ✅ [Input](../behavior/gui/input.md): GUI takes the mouse and keyboard
+   before the world; buttons, the wheel and scroll bars, TextBoxes, the
+   cursor.
 6. **The modern UI objects**, by files: UICorner 864, UIGradient 782,
    UIListLayout's flex and `Wraps` (UIListLayout is in 722 files,
    UIFlexItem in 6), ViewportFrame 251, UIStroke 212, UIPageLayout 69,
