@@ -1,6 +1,7 @@
 //! The window: input, the frame loop and drawing.
 
 pub(crate) mod camera;
+pub(crate) mod cursor;
 pub(crate) mod icon;
 pub(crate) mod keys;
 pub(crate) mod launch;
@@ -36,8 +37,10 @@ pub(crate) struct App {
     /// The latest cursor position not yet sent to the game. Moves are sent
     /// once per frame because each costs a mouse raycast.
     pub(crate) pending_mouse: Option<(f32, f32)>,
-    /// The cursor shows a pointing hand, over a ClickDetector.
-    pub(crate) pointing: bool,
+    /// What the cursor shows.
+    pub(crate) cursor_shown: cursor::Shown,
+    /// The platform's input method is on, while a TextBox has focus.
+    pub(crate) ime: bool,
     /// What the renderer takes from the user's install.
     pub(crate) install: Installed,
     /// Present without waiting for the display (`--uncapped`).
@@ -135,6 +138,13 @@ impl App {
     }
 
     pub(crate) fn update(&mut self, dt: f32) {
+        let typing = self.game.typing();
+        if typing != self.ime
+            && let Some(gfx) = &self.gfx
+        {
+            gfx.window.set_ime_allowed(typing);
+            self.ime = typing;
+        }
         let mut dir = Vec3::ZERO;
         let rot = self.camera.camera.rotation;
         for (key, v) in [
@@ -146,7 +156,8 @@ impl App {
             (KeyCode::Space, Vec3::Y),
             (KeyCode::KeyQ, -Vec3::Y),
         ] {
-            if self.keys.contains(&key) {
+            // Keys typed into a TextBox don't fly the camera.
+            if self.keys.contains(&key) && !typing {
                 dir += v;
             }
         }
@@ -172,17 +183,6 @@ impl App {
 
         if let Some((x, y)) = self.pending_mouse.take() {
             self.game.input(InputEvent::MouseMove { x, y });
-        }
-        let pointing = self.game.hovering_click_detector();
-        if pointing != self.pointing
-            && let Some(gfx) = &self.gfx
-        {
-            gfx.window.set_cursor(if pointing {
-                CursorIcon::Pointer
-            } else {
-                CursorIcon::Default
-            });
-            self.pointing = pointing;
         }
 
         #[cfg(feature = "repl")]
@@ -242,6 +242,8 @@ impl App {
     pub(crate) fn look(&mut self, on: bool) {
         self.looking = on;
         self.look_anchor = None;
+        // Looking hides the cursor; whatever ends it shows it again.
+        self.cursor_shown.look = None;
         let Some(gfx) = &self.gfx else {
             return;
         };
@@ -303,18 +305,20 @@ impl ApplicationHandler for App {
             }
             WindowEvent::Focused(false) if self.looking => self.look(false),
             WindowEvent::KeyboardInput { event, .. } => {
+                let pressed = event.state == ElementState::Pressed;
+                // Escape ends typing in a TextBox rather than the player.
+                let typing = self.game.typing();
                 if let PhysicalKey::Code(code) = event.physical_key {
-                    if !event.repeat
-                        && let Some(name) = keys::roblox_key(code)
-                    {
+                    // Repeats only edit a TextBox; the engine drops the rest.
+                    if let Some(name) = keys::roblox_key(code) {
                         self.game.input(InputEvent::Key {
                             code: name.to_owned(),
-                            down: event.state == ElementState::Pressed,
+                            down: pressed,
                         });
                     }
                     match event.state {
                         ElementState::Pressed => {
-                            if code == KeyCode::Escape {
+                            if code == KeyCode::Escape && !typing {
                                 event_loop.exit();
                             }
                             self.keys.insert(code);
@@ -324,6 +328,17 @@ impl ApplicationHandler for App {
                         }
                     }
                 }
+                if pressed
+                    && self.game.typing()
+                    && let Some(text) = event.text
+                {
+                    self.game.input(InputEvent::Text {
+                        text: text.to_string(),
+                    });
+                }
+            }
+            WindowEvent::Ime(Ime::Commit(text)) => {
+                self.game.input(InputEvent::Text { text });
             }
             WindowEvent::MouseInput { button, state, .. } => {
                 let down = state == ElementState::Pressed;
@@ -348,8 +363,11 @@ impl ApplicationHandler for App {
                     MouseScrollDelta::LineDelta(_, y) => y,
                     MouseScrollDelta::PixelDelta(p) => p.y as f32 / 40.0,
                 };
-                self.camera.speed = (self.camera.speed * 1.2f32.powf(steps)).clamp(1.0, 2000.0);
                 self.game.input(InputEvent::Wheel { delta: steps });
+                // A wheel that scrolled GUI doesn't change the speed.
+                if !self.game.input_processed() {
+                    self.camera.speed = (self.camera.speed * 1.2f32.powf(steps)).clamp(1.0, 2000.0);
+                }
             }
             WindowEvent::RedrawRequested => {
                 let now = Instant::now();
@@ -357,6 +375,7 @@ impl ApplicationHandler for App {
                 let dt = elapsed.as_secs_f32().min(0.1);
                 self.last_frame = now;
                 self.update(dt);
+                self.show_cursor(event_loop);
                 self.draw();
                 if let Some(title) = self.readout.frame(elapsed, &self.game)
                     && let Some(gfx) = &self.gfx

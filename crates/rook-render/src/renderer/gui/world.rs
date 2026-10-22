@@ -6,7 +6,7 @@
 //! goes up, in a uniform its draw reads, bound with each run's image.
 
 use glam::Vec2;
-use rook_types::{WorldCanvas, WorldPlace};
+use rook_types::{Viewer, WorldCanvas, WorldPlace};
 use wesl_core::include_wesl;
 
 use super::super::*;
@@ -361,41 +361,17 @@ fn lay(
     camera: &Camera,
     height: u32,
 ) -> Option<(Vec3, Vec3, Vec3, bool)> {
-    let (corner, right, down, one_sided) = match *place {
-        WorldPlace::Surface {
-            origin,
-            right,
-            down,
-        } => {
-            let lift = down.cross(right).normalize_or_zero() * LIFT;
-            (origin + lift, right, down, true)
-        }
-        WorldPlace::Billboard {
-            anchor,
-            studs,
-            size_studs,
-            size_pixels,
-            shift,
-        } => {
-            let [right, up, back] = camera.rotation.to_cols_array_2d().map(Vec3::from);
-            let center = anchor + right * studs.x + up * studs.y + back * studs.z;
-            let depth = (center - camera.position).dot(-back);
-            let size = canvas.size;
-            if depth <= 0.05 || size.x <= 0.0 || size.y <= 0.0 {
-                return None;
-            }
-            let pixels_per_stud =
-                height as f32 / (2.0 * (camera.fov_y.to_radians() * 0.5).tan() * depth);
-            let world = size_studs + size_pixels / pixels_per_stud;
-            let center = center + right * shift.x * world.x + up * shift.y * world.y;
-            let corner = center - right * world.x * 0.5 + up * world.y * 0.5;
-            (
-                corner,
-                right * world.x / size.x,
-                -up * world.y / size.y,
-                false,
-            )
-        }
+    let viewer = Viewer {
+        position: camera.position,
+        rotation: camera.rotation,
+        fov_y: camera.fov_y,
+        height: height as f32,
     };
-    Some((corner, right, down, one_sided))
+    let f = place.frame(canvas.size, &viewer)?;
+    let lift = if f.one_sided {
+        f.down.cross(f.right).normalize_or_zero() * LIFT
+    } else {
+        Vec3::ZERO
+    };
+    Some((f.corner + lift, f.right, f.down, f.one_sided))
 }

@@ -11,7 +11,7 @@ use rook_types::{GuiQuad, Paint, font_from_enum};
 
 use super::Text;
 use crate::layout::{Placed, screen_size};
-use crate::text::{self, Case, Source, Style};
+use crate::text::{self, Carets, Case, Source, Style};
 
 /// A Hint's bar height, and both classes' text size (Legacy).
 const HINT_HEIGHT: f32 = 20.0;
@@ -81,6 +81,7 @@ pub(super) fn emit(dom: &Dom, text: &mut Text<'_>, out: &mut Vec<GuiQuad>) {
             align: Vec2::splat(0.5),
             line_height: 1.0,
             visible: None,
+            carets: Carets::None,
         };
         let block = text::lay_out(text.fonts, &source, size, None);
         super::text::emit(&block, placed, GuiQuad::NO_CLIP, false, text, out);

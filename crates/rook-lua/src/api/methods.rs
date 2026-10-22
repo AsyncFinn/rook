@@ -52,6 +52,7 @@ pub(crate) mod remotes;
 mod services;
 mod sound;
 mod terrain;
+pub(crate) mod textbox;
 mod tree;
 mod tweens;
 
@@ -243,6 +244,7 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
                 queries::native,
                 camera::native,
                 gui::native,
+                textbox::native,
             ]
             .iter()
             .find_map(|topic| topic(owner, name));
@@ -289,7 +291,7 @@ fn ret_instance(lua: &Lua, id: Option<InstanceId>) -> ApiResult<Outcome> {
     }
 }
 
-fn ret_instances(lua: &Lua, ids: &[InstanceId]) -> ApiResult<Outcome> {
+pub(crate) fn ret_instances(lua: &Lua, ids: &[InstanceId]) -> ApiResult<Outcome> {
     super::instance::ret_instance_array(lua, ids)
 }
 

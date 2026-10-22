@@ -32,7 +32,7 @@ Rook is a Cargo workspace of small crates whose dependencies only point downward
 | [`rook-reflection`](crates/rook-reflection) | Class, property and enum database, plus the member list for the pinned Roblox version |
 | [`rook-formats`](crates/rook-formats) | Loading and saving `.rbxl`, `.rbxm`, `.rbxlx`, `.rbxmx`, including legacy XML |
 | [`rook-dom`](crates/rook-dom) | The runtime instance tree and its change journal |
-| [`rook-platform`](crates/rook-platform) | The host machine as the portable crates reach it: files, threads, parallel work, the network (desktop implementation behind `native`) |
+| [`rook-platform`](crates/rook-platform) | The host machine as the portable crates reach it: files, threads, parallel work, the network, the clipboard (desktop implementation behind `native`) |
 | [`rook-lua`](crates/rook-lua) | The Luau bridge: Instance API, datatypes, globals, `require`, and the signals, timers and deferred queue under it |
 | [`rook-net`](crates/rook-net) | Server-to-client replication |
 | [`rook-content`](crates/rook-content) | Content URLs, the provider chain (Rook defaults, the Roblox install, asset delivery), the cache, and mesh, image and sound decoding |

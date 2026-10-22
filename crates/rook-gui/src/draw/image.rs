@@ -35,7 +35,7 @@ pub(super) fn emit(
     images: &mut Images,
     out: &mut Vec<GuiQuad>,
 ) {
-    let url = dom.content_property(id, "ImageContent").unwrap_or_default();
+    let url = shown_image(dom, id);
     let Some(image) = images.get(&url) else {
         return;
     };
@@ -59,6 +59,32 @@ pub(super) fn emit(
             .iter()
             .filter_map(|piece| quad(p, *piece, look, clip)),
     );
+}
+
+/// The image an object shows now: an ImageButton's `HoverImage` while
+/// hovered and `PressedImage` while pressed, when set (Inference: a
+/// pressed button without one shows its `Image`).
+pub(crate) fn shown_image(dom: &Dom, id: InstanceId) -> String {
+    let state = match dom.enum_item_property(id, "GuiState") {
+        Some("Hover") => Some("HoverImageContent"),
+        Some("Press") => Some("PressedImageContent"),
+        _ => None,
+    };
+    state
+        .filter(|_| dom.class_name(id) == "ImageButton")
+        .and_then(|name| dom.content_property(id, name))
+        .filter(|url| !url.is_empty())
+        .or_else(|| dom.content_property(id, "ImageContent"))
+        .unwrap_or_default()
+}
+
+/// Every image an object may show: its `Image`, and an ImageButton's
+/// hover and pressed images.
+pub(crate) fn all_images(dom: &Dom, id: InstanceId) -> impl Iterator<Item = String> + '_ {
+    ["ImageContent", "HoverImageContent", "PressedImageContent"]
+        .into_iter()
+        .filter_map(move |name| dom.content_property(id, name))
+        .filter(|url| !url.is_empty())
 }
 
 /// `piece` on the screen, or nothing when it covers no area.

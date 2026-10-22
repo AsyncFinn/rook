@@ -309,23 +309,24 @@ impl<'a> Pass<'a> {
         self.lay_out_inside(top, placed, local);
     }
 
-    /// Where a ScreenGui's children go: the top left and size.
+    /// Where a ScreenGui's children go: the top left, in GUI coordinates
+    /// (from just below the top bar), and size.
     fn collector_area(&self, collector: InstanceId) -> (Vec2, Vec2) {
         let dom = self.dom;
         match dom.class_name(collector) {
             "ScreenGui" => {
                 // Measured: CoreUISafeInsets (the default) starts below the
-                // top bar; IgnoreGuiInset covers the whole window.
-                // Inference: DeviceSafeInsets and None have no inset on a
-                // desktop.
-                let inset = dom.bool_property(collector, "IgnoreGuiInset") != Some(true)
-                    && dom.enum_item_property(collector, "ScreenInsets")
-                        == Some("CoreUISafeInsets");
-                let top = if inset { GUI_INSET } else { 0.0 };
-                (
-                    Vec2::new(0.0, top),
-                    (self.screen - Vec2::new(0.0, top)).max(Vec2::ZERO),
-                )
+                // top bar; the others (`IgnoreGuiInset` sets
+                // DeviceSafeInsets) cover the whole window, from (0, -58).
+                // Inference: DeviceSafeInsets has no inset on a desktop.
+                let inset =
+                    dom.enum_item_property(collector, "ScreenInsets") == Some("CoreUISafeInsets");
+                if inset {
+                    let size = self.screen - Vec2::new(0.0, GUI_INSET);
+                    (Vec2::ZERO, size.max(Vec2::ZERO))
+                } else {
+                    (Vec2::new(0.0, -GUI_INSET), self.screen)
+                }
             }
             _ => (Vec2::ZERO, Vec2::ZERO),
         }

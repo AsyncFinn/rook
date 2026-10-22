@@ -1,0 +1,56 @@
+-- studio 0.743.0.7431133
+-- signals: deferred
+A MouseEnter
+A InputBegan Enum.UserInputType.MouseMovement Enum.UserInputState.Change
+A GuiState Enum.GuiState.Hover
+A MouseButton1Down 150 183
+A InputBegan Enum.UserInputType.MouseButton1 Enum.UserInputState.Begin
+A GuiState Enum.GuiState.Press
+UIS InputBegan Enum.UserInputType.MouseButton1 true 150, 125, 0
+A MouseButton1Click
+A MouseButton1Up 150 183
+A Activated Enum.UserInputType.MouseButton1 0
+A InputEnded Enum.UserInputType.MouseButton1 Enum.UserInputState.End
+A GuiState Enum.GuiState.Hover
+UIS InputEnded Enum.UserInputType.MouseButton1 true 150, 125, 0
+A MouseButton1Down 150 183
+A InputBegan Enum.UserInputType.MouseButton1 Enum.UserInputState.Begin
+A GuiState Enum.GuiState.Press
+UIS InputBegan Enum.UserInputType.MouseButton1 true 150, 125, 0
+A MouseLeave
+A InputEnded Enum.UserInputType.MouseMovement Enum.UserInputState.Change
+A GuiState Enum.GuiState.Idle
+B MouseEnter
+B InputBegan Enum.UserInputType.MouseMovement Enum.UserInputState.Change
+B GuiState Enum.GuiState.Hover
+B MouseButton1Up 350 183
+A InputEnded Enum.UserInputType.MouseButton1 Enum.UserInputState.End
+UIS InputEnded Enum.UserInputType.MouseButton1 true 350, 125, 0
+B MouseLeave
+B InputEnded Enum.UserInputType.MouseMovement Enum.UserInputState.Change
+B GuiState Enum.GuiState.Idle
+A MouseEnter
+A InputBegan Enum.UserInputType.MouseMovement Enum.UserInputState.Change
+A GuiState Enum.GuiState.Hover
+A MouseButton2Down 150 183
+A InputBegan Enum.UserInputType.MouseButton2 Enum.UserInputState.Begin
+A GuiState Enum.GuiState.Press
+UIS InputBegan Enum.UserInputType.MouseButton2 true 150, 125, 0
+A MouseButton2Click
+A MouseButton2Up 150 183
+A InputEnded Enum.UserInputType.MouseButton2 Enum.UserInputState.End
+A GuiState Enum.GuiState.Hover
+UIS InputEnded Enum.UserInputType.MouseButton2 true 150, 125, 0
+A MouseButton1Down 150 183
+A InputBegan Enum.UserInputType.MouseButton1 Enum.UserInputState.Begin
+A GuiState Enum.GuiState.Press
+UIS InputBegan Enum.UserInputType.MouseButton1 true 150, 125, 0
+A MouseButton1Click
+A MouseButton1Up 150 183
+A Activated Enum.UserInputType.MouseButton1 0
+A InputEnded Enum.UserInputType.MouseButton1 Enum.UserInputState.End
+A GuiState Enum.GuiState.Hover
+UIS InputEnded Enum.UserInputType.MouseButton1 true 150, 125, 0
+A MouseLeave
+A InputEnded Enum.UserInputType.MouseMovement Enum.UserInputState.Change
+A GuiState Enum.GuiState.Idle

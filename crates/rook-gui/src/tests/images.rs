@@ -36,7 +36,8 @@ fn label(w: i32, h: i32, props: &[(&str, Value)]) -> (Dom, Gui, InstanceId) {
 /// Each piece of image drawn: its top left from the label's, its size,
 /// and the part of the image it shows.
 fn pieces(dom: &Dom, gui: &mut Gui, id: InstanceId) -> Vec<([f32; 2], [f32; 2], [f32; 4])> {
-    let origin = vec2_of(dom, id, "AbsolutePosition");
+    // Drawn in the window, below the top bar.
+    let origin = vec2_of(dom, id, "AbsolutePosition") + Vec2::new(0.0, GUI_INSET);
     let round = |v: Vec2| (v * 1000.0).round().to_array().map(|x| x / 1000.0);
     gui.draw(dom)
         .into_iter()

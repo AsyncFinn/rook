@@ -8,10 +8,11 @@
 //! Rook and compares. Each expected file starts with the Studio version and
 //! the signal mode the place used, and Rook runs the case in that mode.
 //!
-//! A case whose source has a `--! client mouse x,y x,y ...` line runs on the
-//! playtest client instead, with the mouse moved through those points
-//! while it runs (mouse input only reaches clients).
+//! A case whose source has a `--! client input ...` line runs on the
+//! playtest client instead, with the mouse and keyboard steps it lists
+//! played while it runs (input only reaches clients; see [`client`]).
 
+mod client;
 mod studio;
 
 use std::path::{Path, PathBuf};
@@ -19,7 +20,7 @@ use std::time::Duration;
 
 use anyhow::Context;
 use rook_engine::session::Session;
-use rook_engine::{DataModel, InputEvent, Options, Server};
+use rook_engine::{DataModel, Options, Server};
 
 /// Wraps a case. Both sides run exactly this code; Rook's copy reports the
 /// result through `print` with a marker instead of returning it.
@@ -56,31 +57,8 @@ struct Case {
     /// `group/name`.
     id: String,
     source: String,
-    /// For client cases, where the mouse moves while the case runs.
-    mouse: Option<Vec<(f32, f32)>>,
-}
-
-/// The mouse points of a `--! client mouse x,y ...` line.
-fn client_mouse(source: &str) -> anyhow::Result<Option<Vec<(f32, f32)>>> {
-    let Some(rest) = source
-        .lines()
-        .find_map(|l| l.trim().strip_prefix("--! client"))
-    else {
-        return Ok(None);
-    };
-    let points = rest
-        .trim()
-        .strip_prefix("mouse")
-        .unwrap_or("")
-        .split_whitespace()
-        .map(|p| {
-            let (x, y) = p
-                .split_once(',')
-                .ok_or_else(|| anyhow::anyhow!("bad mouse point {p:?}"))?;
-            Ok((x.parse()?, y.parse()?))
-        })
-        .collect::<anyhow::Result<_>>()?;
-    Ok(Some(points))
+    /// For client cases, the input played while the case runs.
+    input: Option<Vec<client::Step>>,
 }
 
 fn cases(root: &Path, filter: Option<&str>) -> anyhow::Result<Vec<Case>> {
@@ -101,8 +79,8 @@ fn cases(root: &Path, filter: Option<&str>) -> anyhow::Result<Vec<Case>> {
             continue;
         }
         let source = fs_err::read_to_string(path)?;
-        let mouse = client_mouse(&source)?;
-        out.push(Case { id, source, mouse });
+        let input = client::steps(&source)?;
+        out.push(Case { id, source, input });
     }
     anyhow::ensure!(!out.is_empty(), "no cases found under {}", dir.display());
     Ok(out)
@@ -124,8 +102,8 @@ pub(crate) fn record(root: &Path, filter: Option<&str>) -> anyhow::Result<()> {
     }
     let mut failures = 0;
     for case in &cases {
-        let result = match &case.mouse {
-            Some(moves) => studio.run_on_client(&wrap(&case.source), moves),
+        let result = match &case.input {
+            Some(steps) => studio.run_on_client(&wrap(&case.source), steps),
             None => studio.run_on_server(&wrap(&case.source)),
         };
         match result {
@@ -159,7 +137,7 @@ fn run_in_rook(case: &Case, deferred: bool) -> anyhow::Result<String> {
     let server = Server::new(&Options::default())?;
     server.runtime().world_mut().signal_behavior = behavior;
     let mut session = Session::new(server, Options::default());
-    let client = match case.mouse {
+    let client = match case.input {
         Some(_) => {
             let index = session.join("Player1", 1)?;
             let client = session
@@ -184,14 +162,18 @@ fn run_in_rook(case: &Case, deferred: bool) -> anyhow::Result<String> {
         .runtime()
         .run_source("ServerScriptService.Conformance", &source, None)
         .map_err(|e| anyhow::anyhow!("{e}"))?;
-    // Client cases get one mouse move every 12 frames (0.2 s), as in Studio.
-    let mut moves = case.mouse.iter().flatten();
+    // Client cases get one input step every 12 frames (0.2 s), as in
+    // Studio, from 0.2 s in, once their GUI is laid out.
+    let mut steps = case.input.iter().flatten();
     let mut log = Vec::new();
     for frame in 0..60 * 60 {
         if frame % 12 == 0
-            && let (Some(index), Some(&(x, y))) = (client, moves.next())
+            && frame > 0
+            && let (Some(index), Some(step)) = (client, steps.next())
         {
-            session.input(index, InputEvent::MouseMove { x, y });
+            for event in client::events(step) {
+                session.input(index, event);
+            }
         }
         log.extend(runs(&mut session, client).take_log());
         if let Some(entry) = log.iter().find(|e| e.message.starts_with(MARKER)) {

@@ -138,7 +138,7 @@ impl Hung {
     /// Workspace or the local player's PlayerGui, on something in the
     /// Workspace it can be drawn on (Inference: Studio draws neither kind
     /// from StarterGui or storage).
-    fn shown(&self, dom: &Dom) -> bool {
+    pub(crate) fn shown(&self, dom: &Dom) -> bool {
         let gui = self.gui;
         if dom.get(gui).is_none() || dom.bool_property(gui, "Enabled") == Some(false) {
             return false;

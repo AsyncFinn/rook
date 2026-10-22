@@ -103,6 +103,8 @@ pub struct InputState {
     pub mouse_delta: (f32, f32),
     /// The local player's Mouse (`Player:GetMouse()`).
     pub mouse_object: Option<InstanceId>,
+    /// The TextBox with focus, which keys type into.
+    pub focused: Option<InstanceId>,
 }
 
 /// A visual effect's or adornment's method a script called: what the

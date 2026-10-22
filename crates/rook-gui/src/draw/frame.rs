@@ -61,6 +61,20 @@ pub(super) fn emit(dom: &Dom, id: InstanceId, p: Placed, clip: [f32; 4], out: &m
         let color = dom
             .color3_property(id, "BackgroundColor3")
             .map_or([1.0; 3], |c| [c.r, c.g, c.b]);
-        out.push(quad(Vec2::ZERO, inner, color));
+        out.push(quad(Vec2::ZERO, inner, tint(dom, id, color)));
+    }
+}
+
+/// AutoButtonColor's tint on a button's background. Measured: hovered,
+/// the color times 0.7; pressed, mixed 30% towards white
+/// (docs/behavior/gui/input.md#buttons).
+fn tint(dom: &Dom, id: InstanceId, color: [f32; 3]) -> [f32; 3] {
+    if !dom.is_a(id, "GuiButton") || dom.bool_property(id, "AutoButtonColor") == Some(false) {
+        return color;
+    }
+    match dom.enum_item_property(id, "GuiState") {
+        Some("Hover") => color.map(|c| c * 0.7),
+        Some("Press") => color.map(|c| c + (1.0 - c) * 0.3),
+        _ => color,
     }
 }

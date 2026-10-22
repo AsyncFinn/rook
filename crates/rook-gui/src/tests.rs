@@ -9,6 +9,7 @@ use super::*;
 
 mod draw;
 mod images;
+mod input;
 mod layouts;
 mod scrolling;
 mod world;

@@ -75,37 +75,21 @@ pub(super) fn emit(
             tiled: false,
         })
     });
-    if s.vertical {
-        let x = if s.left { 0.0 } else { s.window.x + b };
-        let (start, length) = thumb(s.window.y, s.canvas.y, s.position.y, s.reach().y, t);
+    let [across, down] = s.tracks();
+    if let Some(track) = down {
+        let (start, length) = s.thumb(1);
         for (piece, look) in pieces(start, length, t).into_iter().zip(parts) {
-            let to = piece.map(|v| Vec2::new(x + v.y, v.x));
+            let to = piece.map(|v| track + Vec2::new(v.y, v.x));
             out.extend(look.and_then(|look| part(p, to, look, clip, false)));
         }
     }
-    if s.horizontal {
-        let y = s.window.y + b;
-        let (start, length) = thumb(s.window.x, s.canvas.x, s.position.x, s.reach().x, t);
+    if let Some(track) = across {
+        let (start, length) = s.thumb(0);
         for (piece, look) in pieces(start, length, t).into_iter().zip(parts) {
-            let to = piece.map(|v| Vec2::new(s.window_at.x + v.x, y + v.y));
+            let to = piece.map(|v| track + v);
             out.extend(look.and_then(|look| part(p, to, look, clip, true)));
         }
     }
-}
-
-/// Where the thumb starts along a track as long as the window, and how
-/// long it is. Measured: as long as the window's share of the canvas, but
-/// at least twice the bar's thickness.
-fn thumb(window: f32, canvas: f32, position: f32, reach: f32, thickness: f32) -> (f32, f32) {
-    let length = (window * window / canvas.max(1.0))
-        .max(2.0 * thickness)
-        .min(window);
-    let start = if reach > 0.0 {
-        position / reach * (window - length)
-    } else {
-        0.0
-    };
-    (start, length)
 }
 
 /// The thumb's top, middle and bottom pieces, along the track (x) and

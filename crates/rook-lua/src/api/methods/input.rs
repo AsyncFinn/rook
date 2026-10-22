@@ -20,15 +20,10 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("UserInputService", "GetMouseDelta") => get_mouse_delta,
         ("UserInputService", "GetKeysPressed") => get_keys_pressed,
         ("UserInputService", "GetMouseButtonsPressed") => get_mouse_buttons_pressed,
-        ("UserInputService", "GetFocusedTextBox") => nil,
         ("UserInputService", "GetLastInputType") => last_input_type,
         ("Player", "GetMouse") => get_mouse,
         _ => return None,
     })
-}
-
-fn nil(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
-    Outcome::ret(lua, LuaValue::Nil)
 }
 
 fn is_key_down(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {

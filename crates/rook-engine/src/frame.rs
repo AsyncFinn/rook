@@ -25,9 +25,13 @@ impl DataModel {
         if self.role == Role::Client {
             // A script may have replaced the current camera.
             self.sync_viewport_size();
+            self.ease_scrolls();
         }
         // Measured: GUI is laid out after RenderStepped.
         self.runtime.sync_gui();
+        if self.role == Role::Client {
+            self.refresh_gui_hover();
+        }
         self.update_content();
         self.advance_sounds(dt);
         self.update_audio(dt);

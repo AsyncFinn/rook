@@ -24,15 +24,25 @@ pub(crate) struct Glyph {
     pub(crate) space: bool,
     /// Which run it came from.
     pub(crate) run: usize,
+    /// The character it starts at in the whole text.
+    pub(crate) index: usize,
 }
 
-/// Shape `text` (no line breaks) in `face` at `px`.
+/// Shape `text` (no line breaks) in `face` at `px`; its first character
+/// is character `first` of the whole text.
 ///
 /// Measured: each glyph's advance, kerning included, is rounded up to a
 /// whole pixel, with the face scaled so its ascent to descent is `px`.
 /// About nine in ten glyphs match Studio exactly over sizes 8 to 100; the
 /// rest are a pixel off, from hinting Rook doesn't copy (Approximation).
-pub(crate) fn shape(fonts: &Fonts, face: FaceId, px: f32, text: &str, run: usize) -> Vec<Glyph> {
+pub(crate) fn shape(
+    fonts: &Fonts,
+    face: FaceId,
+    px: f32,
+    text: &str,
+    run: usize,
+    first: usize,
+) -> Vec<Glyph> {
     if text.is_empty() {
         return Vec::new();
     }
@@ -51,7 +61,8 @@ pub(crate) fn shape(fonts: &Fonts, face: FaceId, px: f32, text: &str, run: usize
         .iter()
         .zip(shaped.glyph_positions())
         .map(|(info, pos)| {
-            let ch = text[info.cluster as usize..].chars().next().unwrap_or(' ');
+            let cluster = info.cluster as usize;
+            let ch = text[cluster..].chars().next().unwrap_or(' ');
             Glyph {
                 face,
                 id: info.glyph_id,
@@ -63,6 +74,7 @@ pub(crate) fn shape(fonts: &Fonts, face: FaceId, px: f32, text: &str, run: usize
                 descent,
                 space: ch.is_whitespace(),
                 run,
+                index: first + text[..cluster].chars().count(),
             }
         })
         .collect()

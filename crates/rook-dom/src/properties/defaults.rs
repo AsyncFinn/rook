@@ -32,6 +32,10 @@ const DEFAULTS: &[(&str, &str, Value)] = &[
     ("WeldConstraint", "Enabled", Value::Bool(true)),
     // Confirmed: creator-docs, and Studio 0.742 (the database says false).
     ("SoundService", "RespectFilteringEnabled", Value::Bool(true)),
+    // Measured in Studio 0.743: a new TextBox's caret is at 1, no
+    // selection.
+    ("TextBox", "CursorPosition", Value::Int32(1)),
+    ("TextBox", "SelectionStart", Value::Int32(-1)),
 ];
 
 /// [`DEFAULTS`], then the class default from the database, then the zero

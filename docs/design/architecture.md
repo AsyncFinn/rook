@@ -14,7 +14,7 @@ The current design, first drafted 2026-10-04 and kept up to date as the mileston
 
 ```
 crates/
-  rook-platform     The host machine as the portable crates reach it: files, long-lived threads, parallel work, the network
+  rook-platform     The host machine as the portable crates reach it: files, long-lived threads, parallel work, the network, the clipboard
   rook-types        Roblox datatypes (Vector3, CFrame, Color3, UDim2, BrickColor, sequences, enums, Value)
   rook-reflection   Class/property/enum/event database: pinned rbx_reflection_database + Rook overlay
   rook-dom          Runtime instance tree, property storage, change journal, class behavior registry
@@ -65,9 +65,9 @@ rook-platform sits below all of them: every crate that touches the host reaches 
 
 ### The seam: portable crates and the host
 
-Everything in `crates/` is portable: it reaches the host machine only through `rook-platform` (`rook_platform::get()`), whose services are traits: `files` (settings, logs, crash reports, the console's history), `workers` (short work spread over cores: culling, particles, terrain meshing, terrain colliders), `threads` (long-lived threads such as the console's reader) and `network` (asset delivery's HTTPS). **Portable crates get the platform from the app**, and **a server links only `rook-engine`** (and what it pulls in): no window, renderer or audio device.
+Everything in `crates/` is portable: it reaches the host machine only through `rook-platform` (`rook_platform::get()`), whose services are traits: `files` (settings, logs, crash reports, the console's history), `workers` (short work spread over cores: culling, particles, terrain meshing, terrain colliders), `threads` (long-lived threads such as the console's reader), `network` (asset delivery's HTTPS) and `clipboard` (a TextBox's copy and paste). **Portable crates get the platform from the app**, and **a server links only `rook-engine`** (and what it pulls in): no window, renderer or audio device.
 
-The desktop implementation lives in `rook-platform` itself, behind a `native` feature (std files and threads, Rayon's global pool, ureq) that only apps turn on, as `rook-audio`'s `output` feature keeps cpal out until an app asks. An app either turns `native` on, which makes it the platform when nothing else was installed, or calls `rook_platform::install` with its own (a host without threads uses `parallel::Serial`). This beats an implementation in each app: `rook-player`, `rook-cli` and the planned `rook-server` share one copy instead of three, crates' own tests get the real thing as a dev-dependency, and the code sits beside the contract it implements; the feature keeps its dependencies out of any build that doesn't ask for them.
+The desktop implementation lives in `rook-platform` itself, behind a `native` feature (std files and threads, Rayon's global pool, ureq, arboard's clipboard) that only apps turn on, as `rook-audio`'s `output` feature keeps cpal out until an app asks. An app either turns `native` on, which makes it the platform when nothing else was installed, or calls `rook_platform::install` with its own (a host without threads uses `parallel::Serial`). This beats an implementation in each app: `rook-player`, `rook-cli` and the planned `rook-server` share one copy instead of three, crates' own tests get the real thing as a dev-dependency, and the code sits beside the contract it implements; the feature keeps its dependencies out of any build that doesn't ask for them.
 
 Guards keep it that way:
 

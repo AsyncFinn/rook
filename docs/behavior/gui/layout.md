@@ -20,6 +20,11 @@ GUI pass in `rook-render/src/renderer/gui.rs`.
   pixels, starting below them (1561 × 735 at (0, 0) in GUI coordinates);
   with `IgnoreGuiInset` it's the whole window, at (0, −58). Inference:
   `ScreenInsets` DeviceSafeInsets and None have no inset on a desktop.
+- **IgnoreGuiInset** is a view of `ScreenInsets`: setting it true sets
+  DeviceSafeInsets, false CoreUISafeInsets, and it reads true for
+  anything but CoreUISafeInsets. Files migrate it to `ScreenInsets`, and
+  only that replicates. Rook lays GUI out in these coordinates and moves
+  it below the top bar when drawing.
 - A server has no top bar: its `ScreenPointToRay` and `ViewportPointToRay`
   agree (conformance `physics/queries`).
 - **The mouse** in GUI coordinates: `Mouse.X`/`Y`, `Mouse.ViewSizeY` and

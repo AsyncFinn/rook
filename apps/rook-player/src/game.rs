@@ -340,6 +340,23 @@ impl Game {
         }
     }
 
+    /// Whether GUI took the last input event, so the window shouldn't use
+    /// it too.
+    pub(crate) fn input_processed(&self) -> bool {
+        match &self.mode {
+            Mode::Play { client, .. } => client.client().input_processed(),
+            Mode::Run(_) => false,
+        }
+    }
+
+    /// Whether keys are typing into a TextBox.
+    pub(crate) fn typing(&self) -> bool {
+        match &self.mode {
+            Mode::Play { client, .. } => client.client().focused_text_box().is_some(),
+            Mode::Run(_) => false,
+        }
+    }
+
     pub(crate) fn has_client(&self) -> bool {
         matches!(self.mode, Mode::Play { .. })
     }

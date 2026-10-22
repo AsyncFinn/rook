@@ -1,0 +1,17 @@
+-- studio 0.743.0.7431133
+-- signals: deferred
+window 187,200 canvas 200,1000
+wheel 1 -1 processed true
+after wheel 1 0,0 0,50 0,0 0,0
+wheel 2 -1 processed true
+after wheel 2 0,100 0,50 0,0 0,0
+wheel 3 1 processed true
+after wheel 3 0,0 0,50 0,0 0,0
+wheel 4 1 processed true
+after wheel 4 0,0 0,0 0,0 0,0
+wheel 5 -1 processed true
+after wheel 5 0,0 0,0 100,0 0,0
+wheel 6 -1 processed false
+after wheel 6 0,0 0,0 100,0 0,0
+drag released true 0,250 0,0 100,0 0,0
+end 0,250 0,0 100,0 0,0

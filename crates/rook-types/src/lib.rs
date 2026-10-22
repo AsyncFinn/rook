@@ -21,7 +21,7 @@ pub use font::{
     FAMILY_FOLDER, FONT_SIZES, LEGACY_FONTS, enum_of_font, font_from_enum, font_size_of,
     text_size_of,
 };
-pub use gui::{GlyphMask, GuiQuad, ImagePaint, Paint, WorldCanvas, WorldPlace};
+pub use gui::{GlyphMask, GuiQuad, ImagePaint, Paint, Viewer, WorldCanvas, WorldFrame, WorldPlace};
 pub use part::collision::{Hull, UnionCollision};
 pub use part::material::{Material, MaterialSet, TilePattern};
 pub use part::mesh::{MeshHost, MeshKind, MeshLook, mesh_part_scale};

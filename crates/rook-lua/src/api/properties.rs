@@ -201,6 +201,12 @@ pub(crate) fn get(w: &World, id: InstanceId, name: &str) -> Option<Value> {
     }
     match name {
         "ClockTime" if dom.is_a(id, "Lighting") => Some(Value::Float32(dom.clock_time(id) as f32)),
+        // Measured: a view of ScreenInsets, true for all but
+        // CoreUISafeInsets (files migrate it to ScreenInsets, and only
+        // that replicates).
+        "IgnoreGuiInset" if dom.class_name(id) == "ScreenGui" => Some(Value::Bool(
+            dom.enum_item_property(id, "ScreenInsets") != Some("CoreUISafeInsets"),
+        )),
         "Workspace" if id == dom.root() => Some(Value::Ref(
             dom.find_service("Workspace").map(InstanceId::to_ref),
         )),
@@ -348,6 +354,18 @@ pub(crate) fn set(
         }
         ("ClockTime", Value::Float32(h)) if w.dom.is_a(id, "Lighting") => {
             Some(set_lighting_hours(w, id, f64::from(*h)))
+        }
+        // Measured: true sets ScreenInsets to DeviceSafeInsets, false to
+        // CoreUISafeInsets.
+        ("IgnoreGuiInset", Value::Bool(ignore)) if w.dom.class_name(id) == "ScreenGui" => {
+            let item = if *ignore {
+                "DeviceSafeInsets"
+            } else {
+                "CoreUISafeInsets"
+            };
+            let e = rook_reflection::database().enum_by_name("ScreenInsets")?;
+            let value = rook_reflection::enum_item_value(e.id, item)?;
+            Some(set_named(w, id, "ScreenInsets", Value::Enum(value)))
         }
         ("CFrame", Value::CFrame(c)) if w.dom.is_a(id, "BasePart") => Some(set_cframe(w, id, *c)),
         // Measured: kept within the canvas as laid out now.

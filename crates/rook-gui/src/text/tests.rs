@@ -40,6 +40,7 @@ fn source(text: &str, font: &str, size: f32) -> Source {
         align: Vec2::splat(0.5),
         line_height: 1.0,
         visible: None,
+        carets: Carets::None,
     }
 }
 
@@ -172,4 +173,31 @@ fn rich_text() {
     let mut amp = source("a &amp; b &lt;", "Legacy", 24.0);
     amp.rich = true;
     assert_eq!(bounds(&mut f, &amp, area).0, 104.0);
+}
+
+/// A TextBox's caret stops: before each character, at each line's end,
+/// and at the start of a line after a newline.
+#[test]
+fn caret_stops() {
+    let mut f = need_fonts!();
+    let s = Source {
+        align: Vec2::ZERO,
+        carets: Carets::Text,
+        ..source("ab\ncd", "SourceSans", 20.0)
+    };
+    let b = lay_out(&mut f, &s, Vec2::new(200.0, 100.0), None);
+    let (start, height) = b.caret(0).unwrap();
+    assert_eq!((start, height), (Vec2::ZERO, 20.0));
+    let end_of_first = b.caret(2).unwrap().0;
+    assert!(end_of_first.x > 0.0 && end_of_first.y == 0.0);
+    assert_eq!(b.caret(3).unwrap().0, Vec2::new(0.0, 20.0));
+    assert_eq!(b.index_at(Vec2::new(-5.0, 25.0)), Some(3));
+    assert_eq!(b.index_at(Vec2::new(500.0, 25.0)), Some(5));
+    // An empty box shows its placeholder; the caret can only be at 0.
+    let empty = Source {
+        carets: Carets::Placeholder,
+        ..s
+    };
+    let b = lay_out(&mut f, &empty, Vec2::new(200.0, 100.0), None);
+    assert_eq!(b.index_at(Vec2::new(500.0, 5.0)), Some(0));
 }

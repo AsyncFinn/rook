@@ -2,7 +2,7 @@
 -- and whether a kept object's Position and Delta follow later moves.
 --
 -- Mouse input only reaches clients, so this runs on the playtest client.
---! client mouse 300,300 340,320 400,350 420,380
+--! client input 300,300 340,320 400,350 420,380
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 

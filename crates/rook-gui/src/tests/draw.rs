@@ -78,12 +78,8 @@ fn clipping_and_hidden_objects() {
 #[test]
 fn borders_go_around_the_background() {
     let (mut dom, player_gui) = client();
-    let screen = child(
-        &mut dom,
-        "ScreenGui",
-        player_gui,
-        &[("IgnoreGuiInset", Value::Bool(true))],
-    );
+    let screen = child(&mut dom, "ScreenGui", player_gui, &[]);
+    set_enum(&mut dom, screen, "ScreenInsets", "DeviceSafeInsets");
     let f = square(&mut dom, screen, 1, 0.1);
     set(&mut dom, f, "BorderSizePixel", Value::Int32(2));
     set(&mut dom, f, "BackgroundTransparency", Value::Float32(0.25));

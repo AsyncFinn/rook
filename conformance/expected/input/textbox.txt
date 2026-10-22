@@ -1,0 +1,78 @@
+-- studio 0.743.0.7431133
+-- signals: deferred
+T Text ""
+T Focused "" 1
+UIS TextBoxFocused T
+T CursorPosition 3
+T Text "ab"
+UIS InputBegan Enum.KeyCode.C true
+UIS InputEnded Enum.KeyCode.C true
+T CursorPosition 2
+T Text "a"
+UIS InputBegan Enum.KeyCode.Backspace true
+UIS InputEnded Enum.KeyCode.Backspace true
+T CursorPosition 1
+UIS InputBegan Enum.KeyCode.Left true
+UIS InputEnded Enum.KeyCode.Left true
+T CursorPosition 2
+T Text "xa"
+T CursorPosition -1
+T FocusLost true Enum.KeyCode.Return Enum.UserInputType.Keyboard "xa"
+UIS TextBoxFocusReleased T
+UIS InputBegan Enum.KeyCode.Return true
+UIS InputEnded Enum.KeyCode.Return false
+T Text ""
+T CursorPosition 1
+T Focused "" 1
+UIS TextBoxFocused T
+T CursorPosition 2
+T Text "y"
+UIS InputBegan Enum.KeyCode.Tab true
+UIS InputEnded Enum.KeyCode.Tab true
+T CursorPosition -1
+T FocusLost false Enum.KeyCode.Escape Enum.UserInputType.Keyboard "y"
+UIS TextBoxFocusReleased T
+UIS InputBegan Enum.KeyCode.Escape true
+UIS InputEnded Enum.KeyCode.Escape true
+M Focused "" 1
+UIS TextBoxFocused M
+M CursorPosition 2
+M Text "p"
+M CursorPosition 3
+M Text "p\
+"
+UIS InputBegan Enum.KeyCode.Return true
+UIS InputEnded Enum.KeyCode.Return true
+M CursorPosition 4
+M Text "p\
+q"
+M CursorPosition -1
+M FocusLost false Enum.KeyCode.None Enum.UserInputType.MouseButton1 "p\
+q"
+UIS TextBoxFocusReleased M
+M text "p\
+q" focused nil
+captured "" true 1 T
+T Text ""
+T Text ""
+T CursorPosition 1
+T Focused "" 1
+UIS TextBoxFocused T
+M captured true false 4
+T FocusLost false nil ""
+M CursorPosition 4
+M Focused "p\
+q" 4
+UIS TextBoxFocused M
+M CursorPosition -1
+M FocusLost true nil "p\
+q"
+UIS TextBoxFocusReleased M
+no clear 4 -1
+T Text "abc"
+T CursorPosition 4
+T Focused "abc" 4
+UIS TextBoxFocused T
+T CursorPosition -1
+T FocusLost false nil "abc"
+UIS TextBoxFocusReleased T

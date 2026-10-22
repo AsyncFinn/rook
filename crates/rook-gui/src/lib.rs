@@ -6,8 +6,11 @@
 
 mod changes;
 mod draw;
+mod hits;
 mod images;
 mod layout;
+mod order;
+mod scroll_input;
 mod text;
 mod world;
 
@@ -18,10 +21,12 @@ use rook_dom::{Change, Dom, DomError, InstanceId};
 use rook_types::{GuiQuad, Value, Vector2, WorldCanvas, WorldPlace};
 use rustc_hash::{FxHashMap, FxHashSet};
 
+pub use hits::WorldHit;
 pub use images::GuiImage;
 pub use layout::GUI_INSET;
+pub use scroll_input::BarDrag;
 
-use changes::Watch;
+use changes::{Touch, Watch};
 use layout::Layout;
 
 /// Whether a property is one the layout writes, which a script's read
@@ -51,6 +56,8 @@ pub struct Gui {
     cursor: u64,
     /// Something changed since the last layout.
     stale: bool,
+    /// Something changed only how GUI looks since it was last drawn.
+    restyled: bool,
     layout: Layout,
     /// Counts layouts, so the drawing knows when to rebuild.
     generation: u64,
@@ -62,6 +69,10 @@ pub struct Gui {
     world_drawn: Vec<world::Hung>,
     /// What the screen draws as of the last layout, once drawn.
     screen_drawn: Option<Vec<GuiQuad>>,
+    /// The focused TextBox, which draws its caret.
+    focus: Option<InstanceId>,
+    /// ScrollingFrames the wheel is moving.
+    scrolling: FxHashMap<InstanceId, scroll_input::Eased>,
     /// Each world GUI's canvas as of the last layout, once drawn.
     canvases: FxHashMap<InstanceId, WorldCanvas>,
     fonts: text::Fonts,
@@ -74,12 +85,15 @@ impl Default for Gui {
         Self {
             cursor: 0,
             stale: true,
+            restyled: false,
             layout: Layout::default(),
             generation: 0,
             watch: None,
             in_world: FxHashSet::default(),
             world_drawn: Vec::new(),
             screen_drawn: None,
+            focus: None,
+            scrolling: FxHashMap::default(),
             canvases: FxHashMap::default(),
             fonts: text::Fonts::default(),
             glyphs: text::Glyphs::default(),
@@ -124,6 +138,12 @@ impl Gui {
         }
     }
 
+    /// The image at `url` if it has loaded, asking for it the first time
+    /// (the mouse's icon loads this way).
+    pub fn image(&mut self, url: &str) -> Option<GuiImage> {
+        self.images.get(url)
+    }
+
     /// Set a ScrollingFrame's `CanvasPosition` as a script does: measured,
     /// it's kept within the canvas as laid out then.
     pub fn set_canvas_position(
@@ -156,8 +176,12 @@ impl Gui {
                 self.in_world
                     .extend(found.filter(|&id| world::is_world_gui(dom, id)));
             }
-            if !self.stale && watch.touches(dom, change) {
-                self.stale = true;
+            if !self.stale {
+                match watch.touches(dom, change) {
+                    Touch::Layout => self.stale = true,
+                    Touch::Look => self.restyled = true,
+                    Touch::Nothing => {}
+                }
             }
         }
         self.cursor = dom.journal().end();
@@ -184,11 +208,15 @@ impl Gui {
             world.sort_unstable();
             self.layout = Layout::screens(dom, &self.layout, &mut self.fonts, &world);
             self.stale = false;
+            self.restyled = false;
             self.generation += 1;
             self.screen_drawn = None;
             self.canvases.clear();
             self.write(dom);
             return;
+        }
+        if std::mem::take(&mut self.restyled) {
+            self.redraw();
         }
         // A server draws nothing, so its billboards keep the size they were
         // laid out at.
@@ -227,7 +255,31 @@ impl Gui {
         }
     }
 
-    /// Changes with every new layout.
+    /// The TextBox that has focus, which shows its caret and selection.
+    pub fn set_focus(&mut self, focus: Option<InstanceId>) {
+        if self.focus != focus {
+            self.focus = focus;
+            self.redraw();
+        }
+    }
+
+    /// The character a caret put at `at` (GUI coordinates) in TextBox
+    /// `id` stands before.
+    pub fn caret_index_at(&mut self, dom: &mut Dom, id: InstanceId, at: Vec2) -> Option<usize> {
+        self.sync(dom);
+        let placed = self.layout.placed.get(&id)?;
+        let block = &self.layout.texts.get(&id)?.block;
+        block.index_at(placed.local_point(at))
+    }
+
+    /// Draw everything again, as of the current layout.
+    fn redraw(&mut self) {
+        self.generation += 1;
+        self.screen_drawn = None;
+        self.canvases.clear();
+    }
+
+    /// Changes with every new layout or look.
     pub fn generation(&self) -> u64 {
         self.generation
     }
@@ -243,7 +295,7 @@ impl Gui {
             fonts: &mut self.fonts,
             glyphs: &mut self.glyphs,
         };
-        let drawn = draw::quads(dom, &self.layout, &mut text, &mut self.images);
+        let drawn = draw::quads(dom, &self.layout, &mut text, &mut self.images, self.focus);
         self.screen_drawn = Some(drawn.clone());
         drawn
     }
@@ -265,7 +317,14 @@ impl Gui {
             fonts: &mut self.fonts,
             glyphs: &mut self.glyphs,
         };
-        let drawn = draw::world(dom, &self.layout, &missing, &mut text, &mut self.images);
+        let drawn = draw::world(
+            dom,
+            &self.layout,
+            &missing,
+            &mut text,
+            &mut self.images,
+            self.focus,
+        );
         self.canvases.extend(missing.into_iter().zip(drawn));
         (self.world_drawn.iter())
             .map(|h| self.canvases[&h.gui].clone())
@@ -283,8 +342,9 @@ impl Gui {
     fn ask_for_images(&mut self, dom: &Dom) {
         for &id in self.layout.placed.keys() {
             if draw::is_image(dom, id) {
-                let url = dom.content_property(id, "ImageContent").unwrap_or_default();
-                self.images.get(&url);
+                for url in draw::all_images(dom, id) {
+                    self.images.get(&url);
+                }
             }
         }
     }

@@ -1,4 +1,5 @@
-//! Which journal entries can move or change GUI.
+//! Which journal entries can move or change GUI, and which only change
+//! how it looks.
 
 use rook_dom::{Change, Dom, InstanceId};
 use rook_reflection::{ClassId, PropertyId};
@@ -16,6 +17,18 @@ pub(crate) struct Watch {
     /// `Workspace.CurrentCamera`, which camera's it is.
     viewport: Option<PropertyId>,
     current_camera: Option<PropertyId>,
+    /// Properties input sets that change only the drawing: `GuiState`
+    /// (AutoButtonColor's tints, a button's hover and pressed images),
+    /// and a TextBox's caret and selection.
+    looks: [Option<PropertyId>; 3],
+}
+
+/// What a change does to GUI.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Touch {
+    Nothing,
+    Look,
+    Layout,
 }
 
 impl Watch {
@@ -33,11 +46,19 @@ impl Watch {
             message: class("Message"),
             viewport: property("Camera", "ViewportSize"),
             current_camera: property("Workspace", "CurrentCamera"),
+            looks: [
+                property("GuiObject", "GuiState"),
+                property("TextBox", "CursorPosition"),
+                property("TextBox", "SelectionStart"),
+            ],
         }
     }
 
-    pub(crate) fn touches(&self, dom: &Dom, change: &Change) -> bool {
-        match change {
+    pub(crate) fn touches(&self, dom: &Dom, change: &Change) -> Touch {
+        let layout = match change {
+            Change::Property { property, .. } if self.looks.contains(&Some(*property)) => {
+                return Touch::Look;
+            }
             Change::Property { id, property } => {
                 [self.viewport, self.current_camera].contains(&Some(*property))
                     || self.is_gui(dom, *id)
@@ -46,6 +67,11 @@ impl Watch {
             // subtree is looked at.
             Change::Reparented { subtree, .. } => subtree.iter().any(|&id| self.is_gui(dom, id)),
             _ => false,
+        };
+        if layout {
+            Touch::Layout
+        } else {
+            Touch::Nothing
         }
     }
 

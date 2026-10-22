@@ -8,10 +8,12 @@ use super::shape::Glyph;
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum Item {
     Glyph(Glyph),
-    /// A newline, and the height of the line it ends were it empty.
+    /// A newline (character `index` of the text), and the height of the
+    /// line it ends were it empty.
     Break {
         ascent: f32,
         descent: f32,
+        index: usize,
     },
 }
 
@@ -23,6 +25,8 @@ pub(crate) struct Line {
     pub(crate) width: f32,
     pub(crate) ascent: f32,
     pub(crate) descent: f32,
+    /// The character it starts at, when it has no glyphs.
+    empty_start: usize,
 }
 
 impl Line {
@@ -44,6 +48,11 @@ impl Line {
         }
         self.width += g.advance;
         self.glyphs.push(g);
+    }
+
+    /// The character it starts at in the whole text.
+    pub(crate) fn start(&self) -> usize {
+        self.glyphs.first().map_or(self.empty_start, |g| g.index)
     }
 
     /// The width without the spaces it ends with.
@@ -72,11 +81,22 @@ pub(crate) fn break_lines(
     let mut i = 0;
     while i < items.len() {
         match items[i] {
-            Item::Break { ascent, descent } => {
+            Item::Break {
+                ascent,
+                descent,
+                index,
+            } => {
                 if line.glyphs.is_empty() {
-                    line = Line::new((ascent, descent));
+                    line = Line {
+                        empty_start: line.empty_start,
+                        ..Line::new((ascent, descent))
+                    };
                 }
-                lines.push(std::mem::replace(&mut line, Line::new((ascent, descent))));
+                let next = Line {
+                    empty_start: index + 1,
+                    ..Line::new((ascent, descent))
+                };
+                lines.push(std::mem::replace(&mut line, next));
                 i += 1;
             }
             Item::Glyph(_) => {

@@ -40,6 +40,16 @@ pub(crate) struct Source {
     pub(crate) line_height: f32,
     /// `MaxVisibleGraphemes`, when it limits anything.
     pub(crate) visible: Option<usize>,
+    pub(crate) carets: Carets,
+}
+
+/// Whether laid-out text keeps where a caret can stand: a TextBox's does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Carets {
+    None,
+    Text,
+    /// It shows the placeholder, so the caret can only be at its start.
+    Placeholder,
 }
 
 impl Source {
@@ -55,7 +65,10 @@ impl Source {
         };
         let mut text = dom.string_property(id, "Text").unwrap_or_default();
         let mut color = color3("TextColor3", [0.0; 3]);
-        if text.is_empty() && dom.class_name(id) == "TextBox" {
+        let is_box = dom.class_name(id) == "TextBox";
+        let mut carets = if is_box { Carets::Text } else { Carets::None };
+        if text.is_empty() && is_box {
+            carets = Carets::Placeholder;
             // Inference: an empty TextBox shows its placeholder.
             text = dom
                 .string_property(id, "PlaceholderText")
@@ -101,6 +114,7 @@ impl Source {
             ),
             line_height: dom.float_property(id, "LineHeight").unwrap_or(1.0),
             visible,
+            carets,
         })
     }
 }
@@ -146,6 +160,18 @@ pub(crate) struct TextBlock {
     pub(crate) content: String,
     pub(crate) glyphs: Vec<PlacedGlyph>,
     pub(crate) rects: Vec<TextRect>,
+    /// Where a caret can stand, line by line, for a TextBox.
+    pub(crate) carets: Vec<CaretLine>,
+}
+
+/// The places a caret can stand on one line, in pixels from the object's
+/// top left before UIScales.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub(crate) struct CaretLine {
+    pub(crate) top: f32,
+    pub(crate) bottom: f32,
+    /// Each place: the character after it, and its x.
+    pub(crate) stops: Vec<(usize, f32)>,
 }
 
 impl TextBlock {
@@ -156,6 +182,42 @@ impl TextBlock {
             r.min += by;
             r.max += by;
         }
+        for line in &mut self.carets {
+            line.top += by.y;
+            line.bottom += by.y;
+            line.stops.iter_mut().for_each(|s| s.1 += by.x);
+        }
+    }
+
+    /// Where the caret before character `index` stands: its top, and the
+    /// line's height. Where a line wrapped, the start of the next line.
+    pub(crate) fn caret(&self, index: usize) -> Option<(Vec2, f32)> {
+        let found = self.carets.iter().rev().find_map(|line| {
+            let &(_, x) = line.stops.iter().find(|s| s.0 == index)?;
+            Some((line, x))
+        });
+        let (line, x) = match found {
+            Some(f) => f,
+            None => {
+                let line = self.carets.last()?;
+                (line, line.stops.last()?.1)
+            }
+        };
+        Some((Vec2::new(x, line.top), line.bottom - line.top))
+    }
+
+    /// The character a caret put at `at` stands before: on the nearest
+    /// line, at the nearest place.
+    pub(crate) fn index_at(&self, at: Vec2) -> Option<usize> {
+        let line = self.carets.iter().min_by(|a, b| {
+            let off = |l: &CaretLine| (l.top - at.y).max(at.y - l.bottom).max(0.0);
+            off(a).total_cmp(&off(b))
+        })?;
+        let stop = line
+            .stops
+            .iter()
+            .min_by(|a, b| (a.1 - at.x).abs().total_cmp(&(b.1 - at.x).abs()))?;
+        Some(stop.0)
     }
 }
 
@@ -226,6 +288,7 @@ pub(crate) fn lay_out(
         content,
         glyphs: Vec::new(),
         rects: Vec::new(),
+        carets: Vec::new(),
     };
     place(&mut block, source, &spans, &set, size);
     block
@@ -270,7 +333,12 @@ fn set_lines(
     let base = metrics(fonts, &source.style.font, source.style.size);
     let empty = base.map_or((0.0, 0.0), |(_, _, a, d)| (a, d));
     let mut items = Vec::new();
+    // The characters before each span, so glyphs know where they are in
+    // the whole text.
+    let mut at = 0;
     for (run, span) in spans.iter().enumerate() {
+        let first = at;
+        at += span.text.chars().count();
         let Some((face, line_px, ascent, descent)) =
             metrics(fonts, &span.style.font, span.style.size)
         else {
@@ -281,15 +349,22 @@ fn set_lines(
             // Approximation: small caps drawn as capitals.
             Case::Upper | Case::SmallCaps => span.text.to_uppercase(),
         };
+        let mut index = first;
         for (n, piece) in text.split('\n').enumerate() {
             if n > 0 {
-                items.push(Item::Break { ascent, descent });
+                items.push(Item::Break {
+                    ascent,
+                    descent,
+                    index,
+                });
+                index += 1;
             }
             items.extend(
-                shape::shape(fonts, face, line_px, piece, run)
+                shape::shape(fonts, face, line_px, piece, run, index)
                     .into_iter()
                     .map(Item::Glyph),
             );
+            index += piece.chars().count();
         }
     }
     let (lines, split) = break_lines(&items, wrap, empty);
@@ -319,6 +394,11 @@ fn place(block: &mut TextBlock, source: &Source, spans: &[rich::Span], set: &Set
     for (line, &line_top) in set.lines.iter().zip(&set.tops) {
         let mut x = ((size.x - line.width) * source.align.x).round();
         let baseline = top + line_top + line.ascent;
+        let mut carets = CaretLine {
+            top: top + line_top,
+            bottom: baseline + line.descent,
+            stops: vec![(line.start(), x)],
+        };
         for g in &line.glyphs {
             let style = &spans[g.run].style;
             let alpha = 1.0 - style.transparency;
@@ -366,6 +446,16 @@ fn place(block: &mut TextBlock, source: &Source, spans: &[rich::Span], set: &Set
             }
             shown += 1;
             x += g.advance;
+            carets.stops.push((g.index + 1, x));
+        }
+        match source.carets {
+            Carets::Text => block.carets.push(carets),
+            Carets::Placeholder if block.carets.is_empty() => {
+                carets.stops.truncate(1);
+                carets.stops[0].0 = 0;
+                block.carets.push(carets);
+            }
+            _ => {}
         }
     }
 }

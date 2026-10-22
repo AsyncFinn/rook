@@ -1,13 +1,18 @@
-//! Keyboard and mouse input for a client DataModel: UserInputService
-//! events, the player's Mouse, and ClickDetectors.
+//! Keyboard and mouse input for a client DataModel: GUI first, then the
+//! world. UserInputService events, with `gameProcessedEvent` true when GUI
+//! took the input; the player's Mouse; ClickDetectors; and TextBox
+//! typing.
 //!
 //! Event and property behavior follows creator-docs (UserInputService,
-//! InputObject, Mouse, ClickDetector). Rook has no GUI yet, so
-//! `gameProcessedEvent` is always false.
+//! InputObject, Mouse, ClickDetector); GUI's rules are measured
+//! (docs/behavior/gui/input.md).
 
-use glam::Vec3;
+mod gui;
+mod textbox;
+mod world;
+
 use rook_dom::InstanceId;
-use rook_types::{CFrame, UserInputState, UserInputType, Value, Vector3};
+use rook_types::{UserInputState, UserInputType, Value, Vector3};
 
 use crate::DataModel;
 
@@ -16,12 +21,24 @@ use crate::DataModel;
 pub enum InputEvent {
     /// `code` is an `Enum.KeyCode` item name ("A", "Space", "LeftShift").
     Key { code: String, down: bool },
+    /// Text the platform typed (a key, an input method's composition, a
+    /// paste), which goes to the focused TextBox.
+    Text { text: String },
     /// Button 1 (left), 2 (right) or 3 (middle).
     MouseButton { button: u8, down: bool },
     /// Cursor position in pixels from the viewport's top left.
     MouseMove { x: f32, y: f32 },
     /// Wheel steps; positive is forward.
     Wheel { delta: f32 },
+}
+
+/// What the cursor looks like, as scripts set it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CursorLook {
+    Hidden,
+    Default,
+    /// An image's content URL, drawn centered on the cursor.
+    Image(String),
 }
 
 /// A ClickDetector interaction the client detected.
@@ -66,10 +83,13 @@ pub(crate) struct InputTracker {
     hover: Option<InstanceId>,
     /// The detector under the cursor when buttons 1 and 2 went down.
     pressed: [Option<InstanceId>; 2],
+    gui: gui::GuiInput,
+    /// GUI took the last event (its `gameProcessedEvent`).
+    processed: bool,
+    /// Escape ended a TextBox's focus, so its release is processed too
+    /// (measured; Enter's isn't).
+    escape_ended_box: bool,
 }
-
-/// How far the mouse looks for a target (Inference).
-const MOUSE_RANGE: f32 = 1000.0;
 
 /// What `Mouse.KeyDown` passes for a key: the character it types, for the
 /// keys that type one (creator-docs Mouse.KeyDown, deprecated).
@@ -114,6 +134,43 @@ impl DataModel {
         self.input.hover
     }
 
+    /// The cursor scripts ask for: none with
+    /// `UserInputService.MouseIconEnabled` off, else
+    /// `UserInputService.MouseIcon`, else the Mouse's `Icon`
+    /// (Inference: UserInputService's wins when both are set).
+    pub fn cursor_look(&self) -> CursorLook {
+        let w = self.runtime.world();
+        let uis = w.dom.find_service("UserInputService");
+        if uis.is_some_and(|u| w.dom.bool_property(u, "MouseIconEnabled") == Some(false)) {
+            return CursorLook::Hidden;
+        }
+        let icons = [
+            uis.and_then(|u| w.dom.content_property(u, "MouseIconContent")),
+            (w.input.mouse_object).and_then(|m| w.dom.content_property(m, "IconContent")),
+        ];
+        match icons.into_iter().flatten().find(|url| !url.is_empty()) {
+            Some(url) => CursorLook::Image(url),
+            None => CursorLook::Default,
+        }
+    }
+
+    /// The image at `url` if the GUI has loaded it, asking for it the
+    /// first time.
+    pub fn gui_image(&self, url: &str) -> Option<rook_gui::GuiImage> {
+        self.runtime.world_mut().gui.image(url)
+    }
+
+    /// Whether GUI took the last input event (its `gameProcessedEvent`):
+    /// the window shouldn't also use it.
+    pub fn input_processed(&self) -> bool {
+        self.input.processed
+    }
+
+    /// The TextBox keys are typing into, if any.
+    pub fn focused_text_box(&self) -> Option<InstanceId> {
+        self.runtime.focused_text_box()
+    }
+
     /// The window's size in pixels (for the mouse ray and Mouse.ViewSize).
     pub fn set_viewport(&mut self, width: u32, height: u32) {
         self.input.viewport = (width.max(1), height.max(1));
@@ -153,7 +210,8 @@ impl DataModel {
         }
     }
 
-    fn fire_input(&self, event: &'static str, object: InstanceId) {
+    /// Fire one of UserInputService's input events.
+    fn fire_input(&self, event: &'static str, object: InstanceId, processed: bool) {
         let uis = self
             .runtime
             .world_mut()
@@ -161,7 +219,7 @@ impl DataModel {
             .get_service("UserInputService")
             .ok();
         if let (Some(uis), Ok(obj)) = (uis, self.runtime.push_instance(object)) {
-            self.fire(uis, event, (obj, false));
+            self.fire(uis, event, (obj, processed));
         }
     }
 
@@ -175,58 +233,57 @@ impl DataModel {
         profiling::scope!("DataModel::input");
         self.ensure_mouse();
         let mut clicks = Vec::new();
-        match event {
+        self.input.processed = match event {
             InputEvent::Key { code, down } => self.key(&code, down),
+            InputEvent::Text { text } => self.type_text(&text),
             InputEvent::MouseButton { button, down } => {
-                self.mouse_button(button, down, &mut clicks);
+                self.mouse_button(button, down, &mut clicks)
             }
-            InputEvent::MouseMove { x, y } => {
-                let (dx, dy) = {
-                    let mut w = self.runtime.world_mut();
-                    let (ox, oy) = w.input.mouse;
-                    w.input.mouse = (x, y);
-                    w.input.mouse_delta = (x - ox, y - oy);
-                    w.input.mouse_delta
-                };
-                let (gx, gy) = gui_point((x, y));
-                let obj = self.changed_input_object(
-                    UserInputType::MouseMovement,
-                    (gx, gy, 0.0),
-                    (dx, dy),
-                );
-                if let Some(obj) = obj {
-                    self.fire_input("InputChanged", obj);
-                }
-                self.refresh_mouse(&mut clicks);
-                if let Some(m) = self.mouse_object() {
-                    self.fire(m, "Move", ());
-                }
-            }
-            InputEvent::Wheel { delta } => {
-                let pos = gui_point(self.runtime.world().input.mouse);
-                // The wheel amount is in Position.Z (creator-docs InputObject).
-                let obj = self.changed_input_object(
-                    UserInputType::MouseWheel,
-                    (pos.0, pos.1, delta),
-                    (0.0, 0.0),
-                );
-                if let Some(obj) = obj {
-                    self.fire_input("InputChanged", obj);
-                }
-                if let Some(m) = self.mouse_object() {
-                    self.fire(
-                        m,
-                        if delta > 0.0 {
-                            "WheelForward"
-                        } else {
-                            "WheelBackward"
-                        },
-                        (),
-                    );
-                }
-            }
-        }
+            InputEvent::MouseMove { x, y } => self.mouse_move(x, y, &mut clicks),
+            InputEvent::Wheel { delta } => self.wheel(delta),
+        };
         clicks
+    }
+
+    fn mouse_move(&mut self, x: f32, y: f32, clicks: &mut Vec<ClickEvent>) -> bool {
+        let (dx, dy) = {
+            let mut w = self.runtime.world_mut();
+            let (ox, oy) = w.input.mouse;
+            w.input.mouse = (x, y);
+            w.input.mouse_delta = (x - ox, y - oy);
+            w.input.mouse_delta
+        };
+        let (gx, gy) = gui_point((x, y));
+        let obj = self.changed_input_object(UserInputType::MouseMovement, (gx, gy, 0.0), (dx, dy));
+        let processed = self.gui_move(obj);
+        if let Some(obj) = obj {
+            self.fire_input("InputChanged", obj, processed);
+        }
+        self.refresh_mouse(clicks);
+        if let Some(m) = self.mouse_object() {
+            self.fire(m, "Move", ());
+        }
+        processed
+    }
+
+    fn wheel(&mut self, delta: f32) -> bool {
+        let pos = gui_point(self.runtime.world().input.mouse);
+        // The wheel amount is in Position.Z (creator-docs InputObject).
+        let obj =
+            self.changed_input_object(UserInputType::MouseWheel, (pos.0, pos.1, delta), (0.0, 0.0));
+        let processed = self.gui_wheel(delta, obj);
+        if let Some(obj) = obj {
+            self.fire_input("InputChanged", obj, processed);
+        }
+        if let Some(m) = self.mouse_object() {
+            let event = if delta > 0.0 {
+                "WheelForward"
+            } else {
+                "WheelBackward"
+            };
+            self.fire(m, event, ());
+        }
+        processed
     }
 
     fn new_input_object(
@@ -287,15 +344,25 @@ impl DataModel {
         Some(id)
     }
 
-    fn key(&mut self, code: &str, down: bool) {
+    /// A key going down or up. A focused TextBox takes it first, and then
+    /// it reaches scripts as processed, but not the legacy Mouse.
+    fn key(&mut self, code: &str, down: bool) -> bool {
         let Some(value) = key_code_value(code) else {
-            return;
+            return false;
         };
         let pos = gui_point(self.runtime.world().input.mouse);
+        let mut processed = self.focused_text_box().is_some();
+        if !down && code == "Escape" {
+            processed |= std::mem::take(&mut self.input.escape_ended_box);
+        }
         if down {
-            // Auto-repeat doesn't begin the input again.
+            // Auto-repeat doesn't begin the input again, but it repeats
+            // a TextBox's editing keys (Inference).
             if !self.runtime.world_mut().input.keys.insert(value) {
-                return;
+                if processed && let Some(&obj) = self.input.held.get(&value) {
+                    self.edit_key(code, obj);
+                }
+                return processed;
             }
             let Some(obj) = self.new_input_object(
                 value,
@@ -304,13 +371,16 @@ impl DataModel {
                 pos,
                 (0.0, 0.0),
             ) else {
-                return;
+                return processed;
             };
             self.input.held.insert(value, obj);
-            self.fire_input("InputBegan", obj);
+            if processed {
+                self.edit_key(code, obj);
+            }
+            self.fire_input("InputBegan", obj, processed);
         } else {
             if !self.runtime.world_mut().input.keys.remove(&value) {
-                return;
+                return processed;
             }
             let obj = self.input.held.remove(&value).or_else(|| {
                 self.new_input_object(
@@ -322,19 +392,20 @@ impl DataModel {
                 )
             });
             let Some(obj) = obj else {
-                return;
+                return processed;
             };
             self.set_property(obj, "UserInputState", UserInputState::End.into());
-            self.fire_input("InputEnded", obj);
+            self.fire_input("InputEnded", obj, processed);
         }
-        if let (Some(m), Some(s)) = (self.mouse_object(), legacy_key_string(code)) {
+        if !processed && let (Some(m), Some(s)) = (self.mouse_object(), legacy_key_string(code)) {
             self.fire(m, if down { "KeyDown" } else { "KeyUp" }, s);
         }
+        processed
     }
 
-    fn mouse_button(&mut self, button: u8, down: bool, clicks: &mut Vec<ClickEvent>) {
+    fn mouse_button(&mut self, button: u8, down: bool, clicks: &mut Vec<ClickEvent>) -> bool {
         if !(1..=3).contains(&button) {
-            return;
+            return false;
         }
         let index = usize::from(button - 1);
         let pos = {
@@ -347,14 +418,25 @@ impl DataModel {
         } else {
             UserInputState::End
         };
-        if let Some(obj) = self.new_input_object(
+        let obj = self.new_input_object(
             0,
             UserInputType::MOUSE_BUTTONS[index],
             state,
             pos,
             (0.0, 0.0),
-        ) {
-            self.fire_input(if down { "InputBegan" } else { "InputEnded" }, obj);
+        );
+        // GUI hears of it first (measured).
+        let processed = match (button, down) {
+            (3, _) => self.gui_covers_active(),
+            (_, true) => self.gui_press(button, obj),
+            (_, false) => self.gui_release(button, obj),
+        };
+        if let Some(obj) = obj {
+            self.fire_input(
+                if down { "InputBegan" } else { "InputEnded" },
+                obj,
+                processed,
+            );
         }
         let detector = self.refresh_mouse(clicks);
         if let Some(m) = self.mouse_object()
@@ -369,13 +451,15 @@ impl DataModel {
             self.fire(m, event, ());
         }
         // A click is a press and release over the same detector
-        // (creator-docs ClickDetector.MouseClick).
+        // (creator-docs ClickDetector.MouseClick); measured, an Active
+        // GUI object over it takes the click.
         if button <= 2 {
             let slot = &mut self.input.pressed[index];
             if down {
-                *slot = detector;
+                *slot = detector.filter(|_| !processed);
             } else if let (Some(pressed), Some(now)) = (slot.take(), detector)
                 && pressed == now
+                && !processed
             {
                 clicks.push(ClickEvent {
                     detector: now,
@@ -387,116 +471,7 @@ impl DataModel {
                 });
             }
         }
-    }
-
-    /// The ray from the camera through the cursor (unit direction), the
-    /// same as `Camera:ViewportPointToRay` but starting at the camera.
-    fn mouse_ray(&self) -> Option<(Vec3, Vec3, CFrame)> {
-        let camera = self.current_camera()?;
-        let w = self.runtime.world();
-        let (vw, vh) = self.input.viewport;
-        let lens = rook_lua::Lens {
-            viewport: glam::Vec2::new(vw as f32, vh as f32),
-            ..rook_lua::Lens::of(&w.dom, camera)
-        };
-        let (mx, my) = w.input.mouse;
-        let (_, dir) = rook_lua::viewport_ray(&lens, mx, my);
-        Some((lens.cframe.position, dir, lens.cframe))
-    }
-
-    /// Update Mouse.Hit, Target and the rest from the cursor and camera,
-    /// and track which ClickDetector is under the cursor. Returns it.
-    pub(crate) fn refresh_mouse(&mut self, clicks: &mut Vec<ClickEvent>) -> Option<InstanceId> {
-        let mouse = self.mouse_object()?;
-        // The camera may have been replaced since the window last resized.
-        self.sync_viewport_size();
-        let (origin, dir, camera) = self.mouse_ray()?;
-        let (hit, click_hit) = {
-            let mut w = self.runtime.world_mut();
-            let w = &mut *w;
-            // TargetFilter and what it contains are ignored; otherwise the
-            // mouse sees what legacy rays see (Inference).
-            let ignore = w
-                .dom
-                .ref_property(mouse, "TargetFilter")
-                .into_iter()
-                .collect();
-            let filter = rook_physics::Filter::legacy_ray(ignore, false);
-            let hit = w
-                .physics
-                .raycast(&mut w.dom, origin, dir * MOUSE_RANGE, &filter);
-            // Clicks pass through invisible parts that don't collide; the
-            // same TargetFilter applying is Inference.
-            let clicks = rook_physics::Filter {
-                skip_invisible_ghosts: true,
-                ..filter
-            };
-            let click_hit = w
-                .physics
-                .raycast(&mut w.dom, origin, dir * MOUSE_RANGE, &clicks);
-            (hit, click_hit)
-        };
-        let point = hit.map_or(origin + dir * MOUSE_RANGE, |h| h.position);
-        let (mx, my) = gui_point(self.runtime.world().input.mouse);
-        let (vw, vh) = self.input.viewport;
-        let vh = (vh as f32 - rook_gui::GUI_INSET).max(0.0);
-        let hit_cf = CFrame {
-            position: point,
-            rotation: camera.rotation,
-        };
-        self.set_property(mouse, "Hit", Value::CFrame(hit_cf));
-        self.set_property(mouse, "Origin", Value::CFrame(camera));
-        self.set_property(mouse, "Target", Value::Ref(hit.map(|h| h.part.to_ref())));
-        self.set_property(mouse, "X", Value::Int32(mx as i32));
-        self.set_property(mouse, "Y", Value::Int32(my as i32));
-        self.set_property(mouse, "ViewSizeX", Value::Int32(vw as i32));
-        self.set_property(mouse, "ViewSizeY", Value::Int32(vh as i32));
-        self.set_property(
-            mouse,
-            "UnitRay",
-            Value::Ray(rook_types::Ray::new(
-                Vector3(origin).into(),
-                Vector3(dir).into(),
-            )),
-        );
-
-        let detector =
-            click_hit.and_then(|h| self.detector_for(h.part, origin.distance(h.position)));
-        if detector != self.input.hover {
-            if let Some(old) = self.input.hover {
-                clicks.push(ClickEvent {
-                    detector: old,
-                    kind: ClickKind::HoverLeave,
-                });
-            }
-            if let Some(new) = detector {
-                clicks.push(ClickEvent {
-                    detector: new,
-                    kind: ClickKind::HoverEnter,
-                });
-            }
-            self.input.hover = detector;
-        }
-        detector
-    }
-
-    /// The ClickDetector that handles clicks on `part`: one inside the part,
-    /// or inside the nearest Model containing it, if within its
-    /// MaxActivationDistance. Distance is measured from the camera until
-    /// characters exist (Inference; Roblox measures from the character).
-    fn detector_for(&self, part: InstanceId, distance: f32) -> Option<InstanceId> {
-        let w = self.runtime.world();
-        let dom = &w.dom;
-        let find = |owner: InstanceId| dom.find_first_child_of_class(owner, "ClickDetector");
-        let detector = find(part).or_else(|| {
-            dom.ancestors(part)
-                .filter(|a| dom.is_a(*a, "Model"))
-                .find_map(find)
-        })?;
-        let max = dom
-            .float_property(detector, "MaxActivationDistance")
-            .unwrap_or(32.0);
-        (distance <= max).then_some(detector)
+        processed
     }
 }
 

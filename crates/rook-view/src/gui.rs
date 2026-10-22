@@ -2,7 +2,7 @@
 //! canvases draw, and the images they ask for, loaded with the scene's
 //! other files (docs/behavior/gui/images.md).
 
-use rook_content::decode::image::Image;
+use rook_content::decode::image::{Encoding, Image};
 use rook_engine::DataModel;
 use rook_gui::{Gui, GuiImage};
 use rook_render::Renderer;
@@ -39,6 +39,14 @@ impl SceneCache {
         world.gui.draw(&world.dom);
         world.gui.draw_world(&world.dom);
         self.feed_gui(&mut world.gui);
+    }
+
+    /// A loaded GUI image's pixels, four bytes each, rows top first (for
+    /// the cursor), when it's stored uncompressed.
+    pub fn image_pixels(&self, image: GuiImage) -> Option<(u32, u32, Vec<u8>)> {
+        let found = self.scene.images.get(&ImageHash(image.hash))?;
+        let rgba = matches!(found.encoding, Encoding::Rgba8).then(|| found.mips.first())??;
+        Some((found.width, found.height, rgba.clone()))
     }
 
     /// Hand `gui` the images that arrived, and ask for those it wants.

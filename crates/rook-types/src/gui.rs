@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 
-use glam::{Vec2, Vec3};
+use glam::{Mat3, Vec2, Vec3};
 
 /// A filled rectangle on the screen, drawn over everything before it.
 #[derive(Debug, Clone, PartialEq)]
@@ -100,6 +100,77 @@ pub enum WorldPlace {
         /// Moved this share of its own size, x right and y up.
         shift: Vec2,
     },
+}
+
+/// Where a world canvas is as seen from a camera: its top left corner and
+/// the world step per canvas pixel right and down.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct WorldFrame {
+    pub corner: Vec3,
+    pub right: Vec3,
+    pub down: Vec3,
+    /// Seen only from in front (a SurfaceGui), not from behind.
+    pub one_sided: bool,
+}
+
+/// The camera a world canvas is seen from.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Viewer {
+    pub position: Vec3,
+    pub rotation: Mat3,
+    /// Vertical field of view in degrees.
+    pub fov_y: f32,
+    /// The viewport's height in pixels.
+    pub height: f32,
+}
+
+impl WorldPlace {
+    /// Where a canvas of `size` pixels placed here is, seen from `eye`;
+    /// `None` when it can't be seen (a billboard behind the camera, or no
+    /// size).
+    pub fn frame(&self, size: Vec2, eye: &Viewer) -> Option<WorldFrame> {
+        match *self {
+            Self::Surface {
+                origin,
+                right,
+                down,
+            } => Some(WorldFrame {
+                corner: origin,
+                right,
+                down,
+                one_sided: true,
+            }),
+            Self::Billboard {
+                anchor,
+                studs,
+                size_studs,
+                size_pixels,
+                shift,
+            } => {
+                let [right, up, back] = [
+                    eye.rotation.x_axis,
+                    eye.rotation.y_axis,
+                    eye.rotation.z_axis,
+                ];
+                let center = anchor + right * studs.x + up * studs.y + back * studs.z;
+                let depth = (center - eye.position).dot(-back);
+                if depth <= 0.05 || size.x <= 0.0 || size.y <= 0.0 {
+                    return None;
+                }
+                let pixels_per_stud =
+                    eye.height / (2.0 * (eye.fov_y.to_radians() * 0.5).tan() * depth);
+                let world = size_studs + size_pixels / pixels_per_stud;
+                let center = center + right * shift.x * world.x + up * shift.y * world.y;
+                let corner = center - right * world.x * 0.5 + up * world.y * 0.5;
+                Some(WorldFrame {
+                    corner,
+                    right: right * world.x / size.x,
+                    down: -up * world.y / size.y,
+                    one_sided: false,
+                })
+            }
+        }
+    }
 }
 
 /// A glyph rasterized for drawing, one byte per pixel, rows top first:

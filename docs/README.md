@@ -32,6 +32,7 @@
     - [World GUI](behavior/gui/world.md): SurfaceGui and BillboardGui
     - [GUI images](behavior/gui/images.md): loading, `ScaleType`, rects, 9-slice
     - [ScrollingFrame](behavior/gui/scrolling.md): canvas, window, bars, `CanvasPosition`
+    - [GUI input](behavior/gui/input.md): what takes a click, buttons, the wheel, TextBox focus and typing
   - Lighting
     - [Local lights](behavior/lighting/local-lights.md): PointLight, SpotLight and SurfaceLight
     - [Ambient and OutdoorAmbient](behavior/lighting/ambient.md)

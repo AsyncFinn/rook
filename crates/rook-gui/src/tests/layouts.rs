@@ -4,12 +4,8 @@ use super::*;
 fn screen_size_inset_and_anchor_point() {
     let (mut dom, player_gui) = client();
     let screen = child(&mut dom, "ScreenGui", player_gui, &[]);
-    let whole = child(
-        &mut dom,
-        "ScreenGui",
-        player_gui,
-        &[("IgnoreGuiInset", Value::Bool(true))],
-    );
+    let whole = child(&mut dom, "ScreenGui", player_gui, &[]);
+    set_enum(&mut dom, whole, "ScreenInsets", "DeviceSafeInsets");
     let f = frame(&mut dom, screen, udim2(0.5, 10, 0.25, -4));
     set(&mut dom, f, "Position", udim2(0.1, 3, 0.2, 5));
     set(&mut dom, f, "AnchorPoint", v2(0.5, 1.0));

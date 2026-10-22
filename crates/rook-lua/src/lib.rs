@@ -221,6 +221,36 @@ impl Runtime {
         self.dispatch_since(start);
     }
 
+    /// Give TextBox `id` focus as clicking it does, its caret before
+    /// character `caret` (`None`: at the end), firing what that fires.
+    pub fn focus_text_box(&self, id: InstanceId, caret: Option<usize>) {
+        let focused = self.guarded(|| api::methods::textbox::focus(&self.lua, id, caret));
+        if let Err(e) = focused {
+            tracing::warn!("focusing a TextBox failed: {e}");
+        }
+    }
+
+    /// Take focus from the focused TextBox, as a key or a click elsewhere
+    /// does: `FocusLost(enter_pressed, cause)`, then
+    /// `TextBoxFocusReleased`.
+    pub fn release_text_box(&self, enter_pressed: bool, cause: Option<InstanceId>) {
+        let released = self.guarded(|| {
+            let cause = match cause {
+                Some(id) => mlua::Value::UserData(api::instance::push_instance(&self.lua, id)?),
+                None => mlua::Value::Nil,
+            };
+            api::methods::textbox::release(&self.lua, enter_pressed, cause, false)
+        });
+        if let Err(e) = released {
+            tracing::warn!("releasing a TextBox failed: {e}");
+        }
+    }
+
+    /// The TextBox with focus, if it's still there.
+    pub fn focused_text_box(&self) -> Option<InstanceId> {
+        api::methods::textbox::focused(&self.lua)
+    }
+
     /// `Instance:Destroy()` from the engine (fallen parts), firing the
     /// signals it causes.
     pub fn destroy(&self, id: InstanceId) {

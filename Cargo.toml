@@ -76,6 +76,9 @@ mimalloc = "0.1"
 # HTTPS (rook-platform's `native` network, for asset delivery): rustls
 # and gzip, no async runtime
 ureq = "3"
+# The system clipboard (rook-platform's `native` clipboard, for TextBox
+# copy and paste): text only
+arboard = { version = "3", default-features = false }
 # Roblox mesh files, versions 1.00 to 5.00 (rook-content)
 rbx_mesh = { version = "0.8.2", default-features = false }
 # KTX2 images (rook-content): levels are Zstandard-compressed (the same

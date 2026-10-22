@@ -42,6 +42,49 @@ impl Scroll {
     pub(crate) fn reach(&self) -> Vec2 {
         (self.canvas - self.window).max(Vec2::ZERO)
     }
+
+    /// Where the thumb of the bar along `axis` (0 across, 1 down) starts
+    /// along a track as long as the window, and how long it is. Measured:
+    /// as long as the window's share of the canvas, but at least twice
+    /// the bar's thickness.
+    pub(crate) fn thumb(&self, axis: usize) -> (f32, f32) {
+        let (window, canvas) = (self.window[axis], self.canvas[axis]);
+        let (position, reach) = (self.position[axis], self.reach()[axis]);
+        let length = (window * window / canvas.max(1.0))
+            .max(2.0 * self.thickness)
+            .min(window);
+        let start = if reach > 0.0 {
+            position / reach * (window - length)
+        } else {
+            0.0
+        };
+        (start, length)
+    }
+
+    /// The top left, in the frame, of the track of each bar that shows:
+    /// across (0) and down (1).
+    pub(crate) fn tracks(&self) -> [Option<Vec2>; 2] {
+        let b = self.border;
+        let across = self
+            .horizontal
+            .then(|| Vec2::new(self.window_at.x, self.window.y + b));
+        let x = if self.left { 0.0 } else { self.window.x + b };
+        let down = self.vertical.then(|| Vec2::new(x, 0.0));
+        [across, down]
+    }
+
+    /// Which bar's thumb `local` (a point in the frame) is on.
+    pub(crate) fn thumb_at(&self, local: Vec2) -> Option<usize> {
+        (0..2).find(|&axis| {
+            let Some(track) = self.tracks()[axis] else {
+                return false;
+            };
+            let (start, length) = self.thumb(axis);
+            let along = local[axis] - track[axis];
+            let across = local[1 - axis] - track[1 - axis];
+            (start..=start + length).contains(&along) && (0.0..=self.thickness).contains(&across)
+        })
+    }
 }
 
 /// Lay out a ScrollingFrame placed `at` (its `CanvasSize` scales with

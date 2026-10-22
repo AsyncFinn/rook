@@ -5,6 +5,7 @@ use rook_dom::InstanceId;
 use rook_types::Vector2;
 
 use super::RawMethod;
+use super::ret_instances;
 use crate::ctx::args::Args;
 use crate::ctx::{ApiResult, Outcome, with_world};
 use crate::types::LVector2;
@@ -12,6 +13,7 @@ use crate::types::LVector2;
 pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
     Some(match (owner, name) {
         ("GuiService", "GetGuiInset") => get_gui_inset,
+        ("BasePlayerGui", "GetGuiObjectsAtPosition") => get_gui_objects_at_position,
         _ => return None,
     })
 }
@@ -32,4 +34,13 @@ pub(crate) fn gui_inset(lua: &Lua) -> f32 {
 fn get_gui_inset(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
     let top_left = LVector2(Vector2::new(0.0, gui_inset(lua)));
     Outcome::ret(lua, (top_left, LVector2(Vector2::new(0.0, 0.0))))
+}
+
+/// The local player's on-screen GUI objects at (x, y) in GUI coordinates,
+/// top first (measured: the order they're drawn in, reversed, as of the
+/// last frame's layout).
+fn get_gui_objects_at_position(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
+    let at = glam::Vec2::new(a.number(0)? as f32, a.number(1)? as f32);
+    let found = with_world(lua, |w| w.gui.objects_at(&w.dom, at));
+    ret_instances(lua, &found)
 }

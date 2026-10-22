@@ -1,0 +1,49 @@
+-- studio 0.743.0.7431133
+-- signals: deferred
+at 100,225 0
+passive InputBegan
+underPassive InputBegan
+press 1 processed true
+underPassive click
+active InputBegan
+underActive InputBegan
+press 2 processed true
+underActive click
+clear InputBegan
+underClear InputBegan
+press 3 processed true
+underClear click
+label InputBegan
+underLabel InputBegan
+press 4 processed true
+underLabel click
+underOff InputBegan
+press 5 processed true
+underOff click
+plainLabel InputBegan
+press 6 processed false
+detector click
+activeLabel InputBegan
+press 7 processed true
+inactiveButton InputBegan
+press 8 processed true
+inactiveButton click
+press 9 processed false
+detector click
+press 10 processed false
+detector click
+turned InputBegan
+press 11 processed true
+turned click
+press 12 processed false
+detector click
+press 13 processed false
+detector click
+passiveOnWall InputBegan
+press 14 processed false
+detector click
+activeOnWall InputBegan
+press 15 processed true
+labelOnWall InputBegan
+press 16 processed false
+detector click

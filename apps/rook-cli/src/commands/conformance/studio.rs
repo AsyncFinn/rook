@@ -191,13 +191,13 @@ impl Studio {
         )
     }
 
-    /// Run Luau in the playtest client while the mouse moves through
-    /// `moves` (screen pixels), and return its result. The code runs on its
-    /// own thread so the moves arrive while it waits for them.
+    /// Run Luau in the playtest client while `steps` are played, and
+    /// return its result. The code runs on its own thread so the input
+    /// arrives while it waits for it.
     pub(super) fn run_on_client(
         &mut self,
         code: &str,
-        moves: &[(f32, f32)],
+        steps: &[super::client::Step],
     ) -> anyhow::Result<String> {
         const PENDING: &str = "\u{1}pending";
         let client = |code: &str| json!({ "code": code, "datamodel_type": "Client" });
@@ -206,20 +206,13 @@ impl Studio {
              _G.__rook_conformance = (function()\n{code}\nend)()\nend)"
         );
         self.tool("execute_luau", client(&start), Duration::from_secs(120))?;
-        let actions: Vec<Value> = moves
-            .iter()
-            .flat_map(|&(x, y)| {
-                [
-                    json!({ "action": "moveTo", "x": x, "y": y }),
-                    json!({ "action": "wait", "wait_time_ms": 200 }),
-                ]
-            })
-            .collect();
-        self.tool(
-            "user_mouse_input",
-            json!({ "actions": actions, "datamodel_type": "Client" }),
-            Duration::from_secs(60),
-        )?;
+        for (tool, actions) in super::client::studio_calls(steps) {
+            self.tool(
+                tool,
+                json!({ "actions": actions, "datamodel_type": "Client" }),
+                Duration::from_secs(60),
+            )?;
+        }
         let poll = format!(
             "local r = _G.__rook_conformance\n_G.__rook_conformance = nil\nreturn r or \"{PENDING}\""
         );
