@@ -287,9 +287,7 @@ impl DataModel {
                 .clone()
                 .unwrap_or_else(settings::local_content),
         );
-        if let Err(e) = runtime.lua().set_memory_limit(options.memory_limit) {
-            tracing::warn!("Luau memory limit not set: {e}");
-        }
+        runtime.set_heap_limit(options.memory_limit);
         if !loadstring_enabled {
             // Confirmed: creator-docs ServerScriptService.LoadStringEnabled.
             runtime

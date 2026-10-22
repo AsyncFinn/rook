@@ -374,6 +374,31 @@ fn runaway_scripts_time_out() {
 }
 
 #[test]
+fn scripts_stop_at_the_heap_limit() {
+    let rt = Runtime::new(Dom::new(), Clock::Fixed { step: 1.0 / 60.0 }).unwrap();
+    rt.set_heap_limit(64 << 20);
+    rt.run_source(
+        "Workspace.Script",
+        r#"
+        local ok, e = pcall(function()
+            local t = {}
+            while true do table.insert(t, {}) end
+        end)
+        print(ok, e)
+        t = nil
+        -- One allocation larger than any machine has.
+        print(pcall(table.create, 2^31, 0))
+        "#,
+        None,
+    )
+    .unwrap();
+    let log: Vec<_> = rt.take_log().into_iter().map(|l| l.message).collect();
+    assert_eq!(log.len(), 2, "{log:?}");
+    assert_eq!(log[0], "false not enough memory");
+    assert!(log[1].starts_with("false "), "{log:?}");
+}
+
+#[test]
 fn unimplemented_members_are_counted() {
     expect(
         r#"

@@ -83,6 +83,8 @@ pub struct Runtime {
     world: Rc<RefCell<World>>,
     /// How long code may run without yielding.
     timeout: Cell<Duration>,
+    /// The heap size in bytes past which running code stops (0: none).
+    heap_limit: Cell<usize>,
 }
 
 impl Runtime {
@@ -103,6 +105,7 @@ impl Runtime {
             lua,
             world,
             timeout: Cell::new(DEFAULT_SCRIPT_TIMEOUT),
+            heap_limit: Cell::new(0),
         })
     }
 
@@ -122,8 +125,14 @@ impl Runtime {
         self.timeout.set(timeout);
     }
 
+    /// Stop code that grows the Luau heap past `bytes` (0: no limit)
+    /// with Luau's out-of-memory error.
+    pub fn set_heap_limit(&self, bytes: usize) {
+        self.heap_limit.set(bytes);
+    }
+
     fn guarded<R>(&self, f: impl FnOnce() -> R) -> R {
-        watchdog::guarded(self.timeout.get(), f)
+        watchdog::guarded(self.timeout.get(), self.heap_limit.get(), f)
     }
 
     /// Start a Script. Returns false if it was already started or didn't compile.
