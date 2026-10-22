@@ -41,6 +41,13 @@ fn defaults_come_from_the_database() {
 }
 
 #[test]
+fn own_defaults_fill_what_the_database_leaves_out() {
+    let mut dom = Dom::new();
+    let uis = dom.get_service("UserInputService").unwrap();
+    assert_eq!(dom.bool_property(uis, "MouseIconEnabled"), Some(true));
+}
+
+#[test]
 fn cycles_are_rejected() {
     let mut dom = Dom::new();
     let a = part(&mut dom, "A");

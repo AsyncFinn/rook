@@ -36,6 +36,8 @@ const DEFAULTS: &[(&str, &str, Value)] = &[
     // selection.
     ("TextBox", "CursorPosition", Value::Int32(1)),
     ("TextBox", "SelectionStart", Value::Int32(-1)),
+    // Measured in Studio 0.743; false would hide the window's cursor.
+    ("UserInputService", "MouseIconEnabled", Value::Bool(true)),
 ];
 
 /// [`DEFAULTS`], then the class default from the database, then the zero
