@@ -4,9 +4,9 @@ Status: initial survey, 2026-10-04. This document records what exists (prior exp
 
 Confidence labels used throughout:
 
-- **Confirmed** — verified directly (documentation, API dump, code, or a live request).
-- **Inference** — strongly suggested by evidence but not directly verified.
-- **Unverified** — believed true, needs checking before anything depends on it.
+- **Confirmed**: verified directly (documentation, API dump, code, or a live request).
+- **Inference**: strongly suggested by evidence but not directly verified.
+- **Unverified**: believed true, needs checking before anything depends on it.
 
 ---
 
@@ -54,14 +54,14 @@ A RakNet-style UDP library (tokio): bitstream, 6 reliability modes, 4 priorities
 
 | Project | Lang / stack | Target | Strengths | Gaps / weaknesses |
 |---|---|---|---|---|
-| **rbx-native** (chteau) — created 2026-09-14, very active | Rust; wgpu, GPUI, mlua | Modern; **Studio replacement** (editor) | Binary + XML read/write with exact round-trip on 16k-instance places; reflection from the daily API dump; `.mesh` v1–v5; from-scratch CSG for legacy unions; strong renderer incl. WebGPU build; Open Cloud client; asset cache | Luau runtime is "synchronous... no scheduler, no events, no yielding" (command bar only). The roadmap lists **physics, Play/Test, client/server replication** as "explicitly impossible without Roblox's engine". No Humanoid, no terrain voxels, no animation playback. |
+| **rbx-native** (chteau), created 2026-09-14, very active | Rust; wgpu, GPUI, mlua | Modern; **Studio replacement** (editor) | Binary + XML read/write with exact round-trip on 16k-instance places; reflection from the daily API dump; `.mesh` v1–v5; from-scratch CSG for legacy unions; strong renderer incl. WebGPU build; Open Cloud client; asset cache | Luau runtime is "synchronous... no scheduler, no events, no yielding" (command bar only). The roadmap lists **physics, Play/Test, client/server replication** as "explicitly impossible without Roblox's engine". No Humanoid, no terrain voxels, no animation playback. |
 | **OpenRBLX** (TornadoCookie) | C; raylib, Luau, cJSON, lz4 | Mixed 2005-era + modern | Parses rbxm/rbxl/rbxmx/rbxlx including 2005 models; uses `rojo-rbx/rbx-test-files`; ~120 classes stubbed; Luau bytecode disassembler | Each script runs on its **own pthread** and `wait()` is `usleep`, which is structurally wrong (Roblox is single-threaded, cooperative). No physics, lighting, surfaces or replication. Manual memory management; small classes are mostly stubs. |
-| **RNR's Not Roblox** (lrre-foss) — archived 2025-01-12 | C++; OGRE, Bullet, Qt, pugixml | Roblox ≤ 0.3.744 (Apr 2008) | Actual physics (8k-part demos), networking (`ArkNet`, NetworkServer/Client/Replicator), Humanoid, studio, player and server clients; stated clean-room policy | Dead project; 2008 target; its README says it references "decompilations of legacy client binaries". GPL-3 client. |
+| **RNR's Not Roblox** (lrre-foss), archived 2025-01-12 | C++; OGRE, Bullet, Qt, pugixml | Roblox ≤ 0.3.744 (Apr 2008) | Actual physics (8k-part demos), networking (`ArkNet`, NetworkServer/Client/Replicator), Humanoid, studio, player and server clients; stated clean-room policy | Dead project; 2008 target; its README says it references "decompilations of legacy client binaries". GPL-3 client. |
 | **Luau_engine** (Alienduck) | Rust; Bevy, Rapier | Roblox-*inspired* API | Bevy ECS + Rapier integration pattern | Not a compatibility engine; tiny. |
 | **OpenBLOX** (Tabletop0263) | C; SDL 1.2 | 2005–2011 XML maps; DS/Wii ports | Retro-platform portability | XML only, very early. |
 | **openblox** (openblox.org mirrors) | C++ | Roblox-like engine (2016–2020) | Historical prior art | Defunct; not inspected in depth. |
 | **libreblox-roblox** | C++ | — | — | Appears to be a build of the **leaked** client source tree (RCCService, CoreScriptConverter, ShaderCompiler). **Must not be referenced.** |
-| **Lune** (lune-org) — MPL-2.0 | Rust; mlua/Luau | Standalone Luau runtime | `lune-roblox` crate: Roblox datatypes as mlua userdata, a DataModel facade over rbx_dom_weak, place/model read/write | A scripting tool, not an engine. Very useful reference for datatype semantics. |
+| **Lune** (lune-org), MPL-2.0 | Rust; mlua/Luau | Standalone Luau runtime | `lune-roblox` crate: Roblox datatypes as mlua userdata, a DataModel facade over rbx_dom_weak, place/model read/write | A scripting tool, not an engine. Very useful reference for datatype semantics. |
 
 **Where Rook can be clearly ahead:** nobody has a modern-API **runtime**: scheduler, events, physics, Humanoid, Play mode, replication. rbx-native has the best file layer and editor but declares the runtime out of scope. RNR had a runtime but for 2008 and is dead. OpenRBLX's threading model can't be fixed incrementally. Rook's differentiators:
 

@@ -111,7 +111,7 @@ impl Report {
             }
             tracing::debug!(
                 target: "content",
-                "{}: {} — {}",
+                "{}: {}: {}",
                 f.path,
                 f.reference,
                 f.failure.message

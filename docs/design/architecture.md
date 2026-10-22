@@ -23,7 +23,7 @@ crates/
                     under it, Lua-agnostic: signals (connections, Immediate + Deferred dispatch, re-entrancy
                     limit) and the scheduler (thread queues, wait/task, resumption points, time source)
   rook-content      Content URIs, providers (Rook defaults, local Roblox install, packages, asset delivery), cache, decoders
-  rook-physics      Assemblies, joints, constraints, collisions, queries — Roblox semantics over Rapier
+  rook-physics      Assemblies, joints, constraints, collisions, queries; Roblox semantics over Rapier
   rook-humanoid     (planned) Humanoid state machine and character controller
   rook-gui          GUI layout, text measurement, hit testing (engine-side; produces draw lists)
   rook-audio        Mixer, SoundGroups, sound effects; the output device (cpal) behind its `output` feature

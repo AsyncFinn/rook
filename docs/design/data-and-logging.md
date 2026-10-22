@@ -71,7 +71,7 @@ What the terminal shows:
   ```
 
   Failed asset loads that Studio shows in its Output are always printed, once per file, as errors (red), as Studio does. These are assets that are missing or not allowed, and every failed sound (`Failed to load sound rbxassetid://…: …`). Rook's own gaps, such as a version it can't read yet, appear only in the summary and the detail. The image and mesh warning's wording, `Image "<ref>" failed to load in "<path>": <reason>`, is an Inference from memory, not checked against Studio.
-- **`--verbose`:** `debug` and up: every failure, with instance path, content reference and reason (`Workspace.Ruins.Union: rbxassetid://123 — union geometry CSGMDL3 is not supported yet`).
+- **`--verbose`:** `debug` and up: every failure, with instance path, content reference and reason (`Workspace.Ruins.Union: rbxassetid://123: union geometry CSGMDL3 is not supported yet`).
 - **`--verbose <subsystem>`** (or several, comma-separated): everything those subsystems log, at any level, plus the usual `info`. `--verbose content` before a file name is taken as the subsystem; a bare `--verbose` before a file name is not (`logging::fix_verbose_args`).
 
 Libraries' own events reach the terminal only as warnings and errors.

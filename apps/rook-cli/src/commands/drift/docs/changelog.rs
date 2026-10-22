@@ -1,5 +1,5 @@
 //! The changelog opens with `[Unreleased]`, then each release as
-//! `## [x.y.z] — YYYY-MM-DD — ...`, newest first.
+//! `## [x.y.z] - YYYY-MM-DD - ...`, newest first.
 
 use std::collections::HashMap;
 
@@ -26,7 +26,7 @@ pub(super) fn check(by_path: &HashMap<&str, &Doc>, report: &mut Report) {
         let place = format!("{CHANGELOG}:{}", heading.line);
         let Some(release) = release(heading.text) else {
             report.errors.push(format!(
-                "{place}: \"{}\" isn't `[x.y.z] — YYYY-MM-DD — ...`",
+                "{place}: \"{}\" isn't `[x.y.z] - YYYY-MM-DD - ...`",
                 heading.text
             ));
             continue;
@@ -42,7 +42,7 @@ pub(super) fn check(by_path: &HashMap<&str, &Doc>, report: &mut Report) {
     }
 }
 
-/// The version and day of a `[x.y.z] — YYYY-MM-DD` heading.
+/// The version and day of a `[x.y.z] - YYYY-MM-DD` heading.
 fn release(heading: &str) -> Option<((u32, u32, u32), i64)> {
     let (version, rest) = heading.strip_prefix('[')?.split_once(']')?;
     let mut numbers = version.split('.').map(str::parse::<u32>);
@@ -51,6 +51,6 @@ fn release(heading: &str) -> Option<((u32, u32, u32), i64)> {
         numbers.next()?.ok()?,
         numbers.next()?.ok()?,
     );
-    let date = rest.strip_prefix(" — ")?.get(..10)?;
+    let date = rest.strip_prefix(" - ")?.get(..10)?;
     Some((version, days(date)?))
 }

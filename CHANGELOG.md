@@ -15,7 +15,7 @@ Every release, newest first. How versions are numbered is in
 - Docs reorganized by area and topic: `docs/behavior/` is in folders (audio, content, effects, GUI, lighting, meshes, physics, rendering, terrain), and the long terrain, audio, mesh, physics and lights pages are one page per topic. The roadmap moved to `docs/roadmap/`, one page per milestone, and Rook's policies (target, clean implementation, content) to `docs/design/policies.md`. Every behavior page opens with when it was last checked against Studio; headings lost their section numbers and roadmap steps. Rook is spelled American throughout, code included (`color`, `center`).
 - `rook-tools drift` (run by `scripts/check`) now checks the docs too: links, anchors and repository paths lead somewhere, every doc is indexed and named after its title, behavior pages say when they were checked (and are pointed out after 90 days), the roadmap's marks agree with its steps and the changelog runs newest first. British spellings fail it, in code and docs.
 
-## [0.7.1] — 2026-10-21 — M8 steps 1 and 2: GUI layout and text
+## [0.7.1] - 2026-10-21 - M8 steps 1 and 2: GUI layout and text
 
 Pinned Roblox version: 0.741.19.
 
@@ -24,7 +24,7 @@ Pinned Roblox version: 0.741.19.
 - Rook has an icon: a white rook on an orange-to-red tile (`resources/rook.svg`). `rook-player.exe` and `rook-tools.exe` carry it on Windows, drawn from the SVG at every size Windows shows, and the player's title bar and taskbar button load the image made for their exact size at the display's scale, so they stay sharp.
 - The workspace is split along what a dedicated server needs. `rook-platform` is the only way the crates reach the host machine (files, long-lived threads, parallel work, the network), with the desktop's implementation behind its `native` feature, which only the apps turn on. What turns a DataModel into the renderer's scene moved out of `rook-player` into a new `rook-view` crate, so `rook-engine`, `rook-cli` and the coming `rook-server` link no rendering code. `rook-signal` and `rook-scheduler` are now `rook-lua`'s `signal` and `scheduler` modules. Clippy's banned calls and cargo-deny's bans (`deny.toml`; `scripts/check` now runs `cargo deny check bans`) keep it that way. Nothing draws or behaves differently.
 
-## [0.7.0] — 2026-10-20 — M7 Lights and effects
+## [0.7.0] - 2026-10-20 - M7 Lights and effects
 
 Pinned Roblox version: 0.741.19. Finishes M7 Lights and effects: local lights light the scene; Fire, Smoke, Sparkles, ParticleEmitters, Beams, Trails and Explosions draw as in Studio, through Studio's tone curve; and Highlights and the adornments draw as in Studio.
 
@@ -96,7 +96,7 @@ Pinned Roblox version: 0.741.19. Finishes M7 Lights and effects: local lights li
 - Fix: sounds are as loud as in Studio and no longer crackle when loud. A mono Sound plays 3 dB down on each side, as Studio centers it (Rook played it at full level), and Rook no longer clips the mix at full scale itself: Studio hands levels past it to the system, and so does Rook now. Measured silently on Studio's output: Volume 0.1 to 10 and 10 sounds at once now match within 0.1%.
 - `rook-player --record-audio out.wav` mixes the first `--seconds` of a place to a WAV file without a device, and prints the peak, the samples past full scale and the sounds playing at the loudest moment.
 
-## [0.6.0] — 2026-10-16 — M6 steps 3 and 4: terrain collision and the Terrain API; M6 Terrain done
+## [0.6.0] - 2026-10-16 - M6 steps 3 and 4: terrain collision and the Terrain API; M6 Terrain done
 
 Pinned Roblox version: 0.741.19. Finishes M6 Terrain: archived places with terrain show it, parts rest on it and queries find it, and scripts build and dig it as Studio does; the conformance case `terrain/terrain_api` passes.
 
@@ -111,7 +111,7 @@ Pinned Roblox version: 0.741.19. Finishes M6 Terrain: archived places with terra
 - `rook-player` shows the pointing-hand cursor over anything with a ClickDetector, as Roblox does.
 - `rook-player --bench` prints when content finished loading, counted from the start of loading the place, and the frame times until then.
 
-## [0.5.4] — 2026-10-16 — Fixes: draw calls, Windows start-up, deprecated properties
+## [0.5.4] - 2026-10-16 - Fixes: draw calls, Windows start-up, deprecated properties
 
 Pinned Roblox version: 0.741.19.
 
@@ -149,7 +149,7 @@ Pinned Roblox version: 0.741.19.
 - `--bench` prints draw calls and instanced draws, triangles per pass, and medians of CPU recording and of each pass's GPU time (timestamp queries).
 - Found: from inside the map, most triangles drawn belong to instances off screen that share a batch with some in view (an 86k-part place's saved camera: 13% of the opaque triangles drawn are in view; a 61k-part place's 22%). Culling within batches is next.
 
-## [0.5.3] — 2026-10-15 — Fixes: speed on big places
+## [0.5.3] - 2026-10-15 - Fixes: speed on big places
 
 Pinned Roblox version: 0.741.19.
 
@@ -179,7 +179,7 @@ Pinned Roblox version: 0.741.19.
 
 - Physics no longer runs continuous collision detection. Rapier turned it on for every fast-moving part, and each one was checked against the whole world's colliders four times a frame. On places with tens of thousands of parts that cost most of the server's frame. Roblox doesn't sweep fast parts either: they can pass through thin parts. Server step median on 300 frames of `--bench`: a 61k-part place 36.8 → 23.5 ms, an 86k-part place 26.0 → 17.8 ms; client steps unchanged.
 
-## [0.5.2] — 2026-10-15 — M6 step 2: terrain materials, water, grass and waves
+## [0.5.2] - 2026-10-15 - M6 step 2: terrain materials, water, grass and waves
 
 Pinned Roblox version: 0.741.19. M6 Terrain, step 2, measured again.
 
@@ -212,7 +212,7 @@ Pinned Roblox version: 0.741.19. M6 Terrain, step 2, measured again.
 - Not yet: grass blades, water waves, the texture detiling and height blending between materials; some colors differ from Studio's (Brick paler, Mud brighter there). See `docs/behavior/terrain/materials.md` and `docs/guide/stubs.md`.
 - Fixed: step 1's Cobblestone was a guess (cubify plus a shift); it quantizes to 0.6 studs, which matches Studio exactly.
 
-## [0.5.1] — 2026-10-15 — M6 step 1: terrain voxels and their surface
+## [0.5.1] - 2026-10-15 - M6 step 1: terrain voxels and their surface
 
 Pinned Roblox version: 0.741.19. M6 Terrain, step 1.
 
@@ -223,7 +223,7 @@ Pinned Roblox version: 0.741.19. M6 Terrain, step 1.
 - Clients get the terrain: `SmoothGrid` replicates, as Roblox's own terrain streaming does.
 - `rook terrain <file>` shows what a file's Terrain holds and how long it takes to mesh; `--scan <folder>` counts smooth and legacy terrain across an archive. Of the archive's 6,378 unique files, 10 hold smooth voxels and 104 legacy blocks. See `docs/behavior/terrain/voxels.md`.
 
-## [0.5.0] — 2026-10-15 — M5 step 5: the audio API; M5 Audio done
+## [0.5.0] - 2026-10-15 - M5 step 5: the audio API; M5 Audio done
 
 Pinned Roblox version: 0.741.19. Finishes M5 step 5 and with it M5 Audio: archived places play their sounds, positioned in 3D, and the audio conformance cases pass.
 
@@ -243,7 +243,7 @@ Pinned Roblox version: 0.741.19. Finishes M5 step 5 and with it M5 Audio: archiv
 - Fixed: `SoundService.AmbientReverb` was far too loud. Rook used FMOD's published wet level for each preset, but a recording of Studio's own output (Cave, Hallway, ConcertHall) put its reverb 14.5 to 17.0 dB below that. Every preset's wet level is now 16 dB lower, within 1.6 dB of Studio for all three.
 - Measured from Studio's output, which `PlaybackLoudness` doesn't show: nested SoundGroups' volumes multiply, a Sound parented under a group without `SoundGroup` set isn't in it, a group's reverb rings on after its sounds end, stop or are destroyed, and a Sound's own reverb is cut when it ends. Rook already did all of this; `docs/behavior/audio/soundgroups-and-effects.md` now records it as Confirmed.
 
-## [0.4.5] — 2026-10-15 — M5 step 4: SoundGroups and sound effects
+## [0.4.5] - 2026-10-15 - M5 step 4: SoundGroups and sound effects
 
 Pinned Roblox version: 0.741.19. Finishes M5 step 4; M5 Audio continues with the modern audio API.
 
@@ -267,7 +267,7 @@ Pinned Roblox version: 0.741.19. Finishes M5 step 4; M5 Audio continues with the
 - Fixed: a union with no collision hulls saved (`PhysicalConfigData` empty or missing; 247 of a large modern place's unions) collided as its drawn geometry, fetched from its asset. In Studio it is its box: measured in Studio 0.742, such unions read `CollisionFidelity` Box and rays hit them everywhere, even through a doorway. Rook no longer fetches union assets for collision. Also measured: Studio's rays follow `CollisionFidelity` (Default and PreciseConvexDecomposition leave a cut hole open, Hull and Box fill it), and files don't save `CollisionFidelity`. Findings in `docs/behavior/physics/collision-shapes.md`.
 - `Options::wait_for_content` is `wait_for_sounds` again: only sounds load within the frame.
 
-## [0.4.4] — 2026-10-14 — M15 step 1: unions collide as their shapes
+## [0.4.4] - 2026-10-14 - M15 step 1: unions collide as their shapes
 
 Pinned Roblox version: 0.741.19. Starts M15 step 1; MeshParts' collision shapes follow.
 
@@ -288,7 +288,7 @@ Pinned Roblox version: 0.741.19. Starts M15 step 1; MeshParts' collision shapes 
 
   A test (`rook-net`, `replicated_twins`) pins the list, so a new database version can't add one silently.
 
-## [0.4.3] — 2026-10-14 — M5 step 3: 3D sound
+## [0.4.3] - 2026-10-14 - M5 step 3: 3D sound
 
 Pinned Roblox version: 0.741.19. Finishes M5 step 3; M5 Audio continues with SoundService, SoundGroups and effects.
 
@@ -297,7 +297,7 @@ Pinned Roblox version: 0.741.19. Finishes M5 step 3; M5 Audio continues with Sou
 - The deprecated `MaxDistance` reads and sets `RollOffMaxDistance`, and a negative roll-off distance reads 0, as in Studio (conformance case `content/sound_3d`).
 - The mixer ramps gain changes over one buffer, so moving sounds don't click.
 
-## [0.4.2] — 2026-10-14 — M5 step 2: the Sound API
+## [0.4.2] - 2026-10-14 - M5 step 2: the Sound API
 
 Pinned Roblox version: 0.741.19. Finishes M5 step 2; M5 Audio continues with 3D sound.
 
@@ -306,7 +306,7 @@ Pinned Roblox version: 0.741.19. Finishes M5 step 2; M5 Audio continues with 3D 
 - `PlaybackLoudness` reads the sound's level on clients (before `Volume`, as in Studio), and a sound with `PlayOnRemove` plays out once when removed.
 - The mixer starts a sound over on every `Play`, even near the start. Findings: `docs/behavior/audio/sound-api.md`.
 
-## [0.4.1] — 2026-10-14 — M5 step 1: audio decoding and playback
+## [0.4.1] - 2026-10-14 - M5 step 1: audio decoding and playback
 
 Pinned Roblox version: 0.741.19. Finishes M5 step 1; M5 Audio continues with the Sound API.
 
@@ -314,7 +314,7 @@ Pinned Roblox version: 0.741.19. Finishes M5 step 1; M5 Audio continues with the
 - As in Studio: a Sound in the DataModel loads whether or not it plays, and reads `IsLoaded` and its `TimeLength` once loaded (an Ogg's length is its last granule position; conformance case `content/sound`); `TimePosition` stays 0 while the file loads and then advances; a sound whose file fails stays `Playing` and silent at 0; a sound that ends stops and rewinds. A `Looped` sound wraps. Headless runs finish loading a sound within the frame, so runs repeat exactly. Findings: `docs/behavior/audio/playback.md`.
 - `rook content` decodes sound files it shows (format, length, rate, channels), and `rook content --place` totals a place's sounds by format and rate.
 
-## [0.4.0] — 2026-10-14 — M4 step 6: unions
+## [0.4.0] - 2026-10-14 - M4 step 6: unions
 
 Pinned Roblox version: 0.741.19. Finishes M4 step 6 and M4 Content.
 
@@ -332,7 +332,7 @@ Pinned Roblox version: 0.741.19. Finishes M4 step 6 and M4 Content.
 
 - Fixed: `MakeJoints` gave balls and cylinders no surfaces, so wheels on Hinge surfaces and studded round parts were never joined (a small place's tractor and tank wheels, a shop's lights). As in Studio, they now join as their boxes: a ball's Hinge makes a Rotate and its Studs a Snap, and a cylinder's caps and curved side weld and hinge, framed at the box face.
 
-## [0.3.1] — 2026-10-14 — M4 step 5: PBR shading and materials
+## [0.3.1] - 2026-10-14 - M4 step 5: PBR shading and materials
 
 Pinned Roblox version: 0.741.19. Finishes M4 step 5 (materials and PBR); M4 Content continues with unions.
 
@@ -363,7 +363,7 @@ Pinned Roblox version: 0.741.19. Finishes M4 step 5 (materials and PBR); M4 Cont
 - Internal: `Enum.Material` is defined once, in `rook-types` (`Material`, with each material's value, name and shading); physics' density and friction table is keyed by it. Materials not in the enum still draw and simulate as Plastic.
 - Docs: where Studio keeps the material textures it downloads (its `rbx-storage` cache, as KTX2 texture packs), and that Studio 0.742 draws the 2022 materials whatever `Use2022Materials` says (`docs/behavior/rendering/materials.md`).
 
-## [0.3.0] — 2026-10-14 — M3: physics; M4 steps 1–4
+## [0.3.0] - 2026-10-14 - M3: physics; M4 steps 1–4
 
 Pinned Roblox version: 0.741.19. Finishes M3 Physics; M4 Content is in progress (built-in mesh shapes, asset fetching, file meshes, textures and decals, trusses, skyboxes).
 
@@ -456,7 +456,7 @@ Pinned Roblox version: 0.741.19. Finishes M3 Physics; M4 Content is in progress 
 - Fixed: parts with a BlockMesh drew their studs and inlets; Studio draws them plain (a Brick SpecialMesh keeps them).
 - Fixed: with `ROOK_OPEN_CLOUD_API_KEY` set, assets refused anonymously in an earlier run (and cached as refused) weren't retried with the key. The key path is now tested: a large 2016 place resolves 544 of its 704 distinct references with one.
 
-## [0.2.0] — 2026-10-11 — M2: client side, renderer, input
+## [0.2.0] - 2026-10-11 - M2: client side, renderer, input
 
 Pinned Roblox version: 0.741.19.
 
@@ -469,7 +469,7 @@ Pinned Roblox version: 0.741.19.
 - Console output in Roblox Studio's format, colored by message type.
 - Every inert or partial API is listed in `docs/guide/stubs.md`.
 
-## [0.1.0] — 2026-10-11 — M0 and M1: formats, DOM and scripting
+## [0.1.0] - 2026-10-11 - M0 and M1: formats, DOM and scripting
 
 Pinned Roblox version: 0.741.19.
 
