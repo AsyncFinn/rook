@@ -484,6 +484,24 @@ fn legacy_enum_names_resolve() {
     );
 }
 
+/// Script environments are `safeenv`, so Luau runs builtins natively; what
+/// scripts see must not change: Rook's `typeof`, globals a script assigns,
+/// and environments changed through `getfenv`.
+#[test]
+fn safe_environment_keeps_script_semantics() {
+    expect(
+        r#"
+        print(typeof(Vector3.new()), typeof(game), typeof(Enum.Material.Plastic))
+        tostring = function() return "mine" end
+        print(tostring(1))
+        getfenv().type = function() return "custom" end
+        print(type(1))
+        "#,
+        0,
+        &["Vector3 Instance EnumItem", "mine", "custom"],
+    );
+}
+
 mod gui;
 mod models;
 mod tweens;

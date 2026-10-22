@@ -1,5 +1,6 @@
 //! Running Scripts and ModuleScripts: environments, chunk names, `require`.
 
+use mlua::chunk::Compiler;
 use mlua::{Function, Lua, MultiValue, Table, Value as LuaValue};
 use rook_dom::InstanceId;
 
@@ -18,12 +19,15 @@ fn source_of(lua: &Lua, id: InstanceId) -> String {
 /// A fresh environment whose globals fall back to the shared ones, with
 /// `script` set. Global assignments stay in the script's own environment.
 fn environment(lua: &Lua, script: InstanceId) -> mlua::Result<Table> {
-    let env = lua.create_table()?;
+    let env = fresh_environment(lua)?;
     env.raw_set("script", push_instance(lua, script)?)?;
-    let mt = lua.create_table()?;
-    mt.raw_set("__index", lua.globals())?;
-    env.set_metatable(Some(mt))?;
     Ok(env)
+}
+
+/// How game code is compiled. `typeof` is Rook's own global (datatype
+/// names), so calls to it must reach the global, not Luau's builtin.
+fn compiler() -> Compiler {
+    Compiler::new().set_disabled_builtins(["typeof"])
 }
 
 /// Compile a script's source to run in `env`. Chunk names are full names,
@@ -32,6 +36,7 @@ fn compile(lua: &Lua, id: InstanceId, env: Table) -> mlua::Result<Function> {
     let name = with_world(lua, |w| w.dom.full_name(id));
     lua.load(source_of(lua, id))
         .set_name(format!("={name}"))
+        .set_compiler(compiler())
         .set_environment(env)
         .into_function()
 }
@@ -103,11 +108,16 @@ pub(crate) fn run_source(
 }
 
 /// An environment that reads the shared globals and keeps its own writes.
+/// It's marked `safeenv`, as Roblox's script sandbox is, so Luau calls
+/// builtins (`math.floor`, `type`, `select`) and runs `pairs` loops on its
+/// fast paths. `getfenv` and `setfenv` clear the mark (Luau's own rule),
+/// so scripts that change environments get the general paths.
 fn fresh_environment(lua: &Lua) -> mlua::Result<Table> {
     let env = lua.create_table()?;
     let mt = lua.create_table()?;
     mt.raw_set("__index", lua.globals())?;
     env.set_metatable(Some(mt))?;
+    env.set_safeenv(true);
     Ok(env)
 }
 
@@ -135,6 +145,7 @@ fn run_in(lua: &Lua, chunk_name: &str, source: &str, env: Table) -> mlua::Result
     let f = lua
         .load(source)
         .set_name(format!("={chunk_name}"))
+        .set_compiler(compiler())
         .set_environment(env)
         .into_function()?;
     spawn(lua, f, ())?;
