@@ -36,7 +36,7 @@ pub(super) fn emit(
     out: &mut Vec<GuiQuad>,
 ) {
     let url = shown_image(dom, id);
-    let Some(image) = images.get(&url) else {
+    let Some(image) = images.get(&url, Some(id)) else {
         return;
     };
     let alpha = 1.0 - dom.float_property(id, "ImageTransparency").unwrap_or(0.0);

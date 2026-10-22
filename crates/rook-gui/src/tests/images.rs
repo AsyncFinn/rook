@@ -40,7 +40,7 @@ fn pieces(dom: &Dom, gui: &mut Gui, id: InstanceId) -> Vec<([f32; 2], [f32; 2], 
     let origin = vec2_of(dom, id, "AbsolutePosition") + Vec2::new(0.0, GUI_INSET);
     let round = |v: Vec2| (v * 1000.0).round().to_array().map(|x| x / 1000.0);
     gui.draw(dom)
-        .into_iter()
+        .iter()
         .filter_map(|q| match q.paint {
             Paint::Image(p) => Some((
                 round(q.center - q.size * 0.5 - origin),

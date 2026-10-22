@@ -18,7 +18,7 @@ mod table;
 use glam::Vec2;
 use rook_dom::{Dom, InstanceId};
 use rook_types::UDim2;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::text::{self, Fonts, Source, TextBlock};
 use crate::world::{self, Eye, Hung};
@@ -152,34 +152,12 @@ impl Layout {
         self.placed.contains_key(&id) || self.arranged.contains_key(&id)
     }
 
-    /// Lay out the GUI tree holding `id` (a GUI object or a UI component
-    /// in it), from its topmost GUI ancestor.
-    pub(crate) fn add_tree(&mut self, dom: &Dom, id: InstanceId, with: Fonted<'_>) {
-        let mut top = None;
-        let mut at = Some(id);
-        while let Some(i) = at {
-            if dom.is_a(i, "GuiBase2d") {
-                top = Some(i);
-            } else if dom.class_name(i) != "Folder" && !dom.is_a(i, "UIComponent") {
-                break;
-            }
-            at = dom.parent(i);
-        }
-        let Some(top) = top else {
-            return;
-        };
-        self.redo(dom, &[top], with);
-    }
-
-    /// Lay out the world GUIs `guis` again, as when the camera moving
-    /// resizes a BillboardGui, leaving the rest as it is.
-    pub(crate) fn redo_world(&mut self, dom: &Dom, guis: &[InstanceId], with: Fonted<'_>) {
-        self.world.retain(|(h, _)| !guis.contains(&h.gui));
-        self.redo(dom, guis, with);
-    }
-
-    /// Lay out the trees from `tops` into this layout.
-    fn redo(&mut self, dom: &Dom, tops: &[InstanceId], (fonts, turning): Fonted<'_>) {
+    /// Lay out the trees from `tops` again (a world GUI the camera
+    /// resized, a tree whose properties changed), leaving the rest as it
+    /// is. What `tops` hold must be what they held when last laid out.
+    pub(crate) fn redo(&mut self, dom: &Dom, tops: &[InstanceId], (fonts, turning): Fonted<'_>) {
+        let redone: FxHashSet<InstanceId> = tops.iter().copied().collect();
+        self.world.retain(|(h, _)| !redone.contains(&h.gui));
         let previous = Layout::default();
         let mut pass = Pass::new(dom, (&previous, turning), fonts, std::mem::take(self));
         for &top in tops {
@@ -187,6 +165,22 @@ impl Layout {
         }
         *self = pass.out;
     }
+}
+
+/// The top of the GUI tree holding `id` (a GUI object, or a UI component
+/// in one): its LayerCollector, or its topmost GUI ancestor.
+pub(crate) fn top_of(dom: &Dom, id: InstanceId) -> Option<InstanceId> {
+    let mut top = None;
+    let mut at = Some(id);
+    while let Some(i) = at {
+        if dom.is_a(i, "GuiBase2d") {
+            top = Some(i);
+        } else if dom.class_name(i) != "Folder" && !dom.is_a(i, "UIComponent") {
+            break;
+        }
+        at = dom.parent(i);
+    }
+    top
 }
 
 /// The window's size: the current camera's `ViewportSize`.

@@ -31,7 +31,8 @@ pub(super) fn held(lists: &[&[GuiQuad]]) -> Vec<Arc<GuiGroup>> {
 
 #[derive(Debug)]
 struct Drawn {
-    key: u64,
+    /// The group as last given, whose quads `target` holds.
+    source: Arc<GuiGroup>,
     size: [u32; 2],
     view: wgpu::TextureView,
     target: Target,
@@ -43,23 +44,40 @@ pub(super) struct Groups {
 }
 
 impl Groups {
-    /// Draw `held` from now on, `packed` being each one's quads as the
-    /// shader reads them; textures of groups drawn before are kept. Their
-    /// views, by group key.
+    /// Whether `group` is drawn as given (the same `Arc`).
+    pub(super) fn has(&self, group: &Arc<GuiGroup>) -> bool {
+        self.drawn.iter().any(|d| Arc::ptr_eq(&d.source, group))
+    }
+
+    /// Drop every group's quads, so each is given again.
+    pub(super) fn forget(&mut self) {
+        self.drawn.clear();
+    }
+
+    /// Draw `shown` from now on, inner groups first; `fresh` holds the
+    /// quads, as the shader reads them, of those not drawn as given. A
+    /// group's texture is kept while its key and size are. The textures'
+    /// views by group key, when which are drawn changed.
     pub(super) fn set(
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        held: &[Arc<GuiGroup>],
-        packed: &[Packed],
+        shown: &[Arc<GuiGroup>],
+        fresh: &[(Arc<GuiGroup>, Packed)],
         target: impl Fn(&wgpu::Device) -> Target,
-    ) -> HashMap<u64, wgpu::TextureView> {
+    ) -> Option<HashMap<u64, wgpu::TextureView>> {
         let mut old = std::mem::take(&mut self.drawn);
-        for (group, quads) in held.iter().zip(packed) {
+        let changed = !fresh.is_empty() || old.len() != shown.len();
+        for group in shown {
+            if let Some(i) = old.iter().position(|d| Arc::ptr_eq(&d.source, group)) {
+                self.drawn.push(old.swap_remove(i));
+                continue;
+            }
+            let Some((_, quads)) = fresh.iter().find(|(g, _)| Arc::ptr_eq(g, group)) else {
+                continue;
+            };
             let size = group.size.map(|v| v.max(1));
-            let kept = old
-                .iter()
-                .position(|d| d.key == group.key && d.size == size);
+            let kept = (old.iter()).position(|d| d.source.key == group.key && d.size == size);
             let mut drawn = match kept {
                 Some(i) => old.swap_remove(i),
                 None => {
@@ -79,19 +97,22 @@ impl Groups {
                         view_formats: &[],
                     });
                     Drawn {
-                        key: group.key,
+                        source: group.clone(),
                         size,
                         view: texture.create_view(&Default::default()),
                         target: target(device),
                     }
                 }
             };
+            drawn.source = group.clone();
             drawn.target.set(device, queue, quads);
             self.drawn.push(drawn);
         }
-        (self.drawn.iter())
-            .map(|d| (d.key, d.view.clone()))
-            .collect()
+        changed.then(|| {
+            (self.drawn.iter())
+                .map(|d| (d.source.key, d.view.clone()))
+                .collect()
+        })
     }
 
     /// Each group's quads, its texture and its size, inner groups first.

@@ -515,7 +515,8 @@ fn world_gui_draws_in_the_world() {
     let square = |color| vec![fill(Vec2::splat(5.0), Vec2::splat(10.0), color)];
     let hidden = canvas(square([0.0, 1.0, 0.0]), 10.0, false);
     let on_top = canvas(square([0.0, 0.0, 1.0]), 10.0, true);
-    r.set_gui(&[], &[surface, hidden, on_top], &Default::default());
+    let canvases = [surface, hidden, on_top].map(Arc::new);
+    r.set_gui(&Arc::from([]), &canvases, &Default::default());
     let billboard = |y: f32| WorldPlace::Billboard {
         anchor: Vec3::new(1.0, y, -5.0),
         studs: Vec3::ZERO,
@@ -598,7 +599,7 @@ fn gui_images_draw_their_texels() {
         missing,
     ];
     let images = [(ImageHash(hash), image())].into_iter().collect();
-    r.set_gui(&screen, &[], &images);
+    r.set_gui(&Arc::from(screen), &[], &images);
     r.finish_uploads();
     let camera = Camera::look_at(Vec3::new(0.0, 0.0, 10.0), Vec3::ZERO);
     let (w, h) = (80, 16);
@@ -686,7 +687,8 @@ fn gui_shapes_gradients_and_groups_draw() {
             [0.0, 1.0, 1.0, 1.0],
         )
     };
-    r.set_gui(&[rounded, band, graded, grouped], &[], &Default::default());
+    let screen = Arc::from([rounded, band, graded, grouped]);
+    r.set_gui(&screen, &[], &Default::default());
     let camera = Camera::look_at(Vec3::new(0.0, 0.0, 10.0), Vec3::ZERO);
     let (w, h) = (64, 16);
     let pixels = r.render_to_image(w, h, &camera).unwrap();

@@ -68,7 +68,7 @@ pub(super) fn emit(
     let color = [c[0], c[1], c[2], alpha];
     let parts = PARTS.map(|name| {
         let url = dom.content_property(id, name).unwrap_or_default();
-        images.get(&url).map(|image| Look {
+        images.get(&url, Some(id)).map(|image| Look {
             image,
             color,
             pixelated: false,

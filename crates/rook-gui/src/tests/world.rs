@@ -165,3 +165,43 @@ fn what_world_gui_draws() {
     layout.sync(&mut dom);
     assert!(layout.draw_world(&dom).is_empty());
 }
+
+/// A change lays out and draws again only the tree it's in: turning a
+/// ScreenGui's frame every frame leaves each world canvas as it was (the
+/// same `Arc`, which a renderer keeps on the GPU), and changing one world
+/// GUI redraws that one alone.
+#[test]
+fn changes_stay_in_their_tree() {
+    let (mut dom, part) = world_part(Vec3::new(8.0, 6.0, 1.0), Vec3::ZERO);
+    let front = surface(&mut dom, part, "Front");
+    let back = surface(&mut dom, part, "Back");
+    let label = frame(&mut dom, front, udim2(0.0, 100, 0.0, 100));
+    frame(&mut dom, back, udim2(0.0, 100, 0.0, 100));
+    let player_gui = dom.find_first_child_of_class(dom.local_player().unwrap(), "PlayerGui");
+    let screen = child(&mut dom, "ScreenGui", player_gui.unwrap(), &[]);
+    let spinner = frame(&mut dom, screen, udim2(0.0, 50, 0.0, 50));
+    let mut gui = laid_out(&mut dom);
+    let before = gui.draw_world(&dom);
+    let screen_before = gui.draw(&dom);
+
+    set(&mut dom, spinner, "Rotation", Value::Float32(45.0));
+    gui.sync(&mut dom);
+    assert_eq!(dom.float_property(spinner, "AbsoluteRotation"), Some(45.0));
+    assert!(!Arc::ptr_eq(&gui.draw(&dom), &screen_before));
+    let after = gui.draw_world(&dom);
+    assert!(before.iter().zip(&after).all(|(a, b)| Arc::ptr_eq(a, b)));
+
+    set(&mut dom, label, "Size", udim2(0.0, 200, 0.0, 100));
+    gui.sync(&mut dom);
+    let screen_now = gui.draw(&dom);
+    let again = gui.draw_world(&dom);
+    let redrawn = (again.iter())
+        .filter(|c| !after.iter().any(|a| Arc::ptr_eq(a, c)))
+        .count();
+    assert_eq!((again.len(), redrawn), (2, 1));
+    assert_eq!(
+        vec2_of(&dom, label, "AbsoluteSize"),
+        Vec2::new(200.0, 100.0)
+    );
+    assert!(Arc::ptr_eq(&screen_now, &gui.draw(&dom)));
+}

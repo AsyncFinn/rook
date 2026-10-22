@@ -25,9 +25,9 @@ pub(super) fn emit(
     // Both of a button's textures are asked for at once, so the first
     // hover doesn't blink while the lit one loads.
     for url in [style.idle, style.lit, style.chosen] {
-        images.get(url);
+        images.get(url, Some(id));
     }
-    let Some(image) = images.get(style.shown(dom, id)) else {
+    let Some(image) = images.get(style.shown(dom, id), Some(id)) else {
         return;
     };
     let look = Look {

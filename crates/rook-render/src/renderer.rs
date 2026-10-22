@@ -355,11 +355,12 @@ impl Renderer {
 
     /// Draw `screen` over the scene from now on, bottom first, and the
     /// world GUI's canvases; the images they draw are in `images`, and go
-    /// up as others do (quads draw nothing until theirs is up).
+    /// up as others do (quads draw nothing until theirs is up). Lists given
+    /// last time (the same `Arc`) stay on the GPU as they are.
     pub fn set_gui(
         &mut self,
-        screen: &[GuiQuad],
-        world: &[WorldCanvas],
+        screen: &std::sync::Arc<[GuiQuad]>,
+        world: &[std::sync::Arc<WorldCanvas>],
         images: &std::collections::HashMap<ImageHash, std::sync::Arc<Image>>,
     ) {
         fn request(
@@ -380,11 +381,9 @@ impl Renderer {
                 }
             }
         }
-        request(screen, images, &mut self.images);
-        for canvas in world {
-            request(&canvas.quads, images, &mut self.images);
+        for quads in self.gui.set(&self.device, &self.queue, screen, world) {
+            request(quads, images, &mut self.images);
         }
-        self.gui.set(&self.device, &self.queue, screen, world);
     }
 
     /// Where each canvas of the last [`Renderer::set_gui`]'s `world` is

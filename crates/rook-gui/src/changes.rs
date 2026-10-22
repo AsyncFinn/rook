@@ -27,8 +27,12 @@ pub(crate) struct Watch {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Touch {
     Nothing,
+    /// How the changed object's tree looks.
     Look,
+    /// Where things are in the changed object's tree.
     Layout,
+    /// Which trees there are, or the screen they're laid out on.
+    All,
 }
 
 impl Watch {
@@ -55,23 +59,24 @@ impl Watch {
     }
 
     pub(crate) fn touches(&self, dom: &Dom, change: &Change) -> Touch {
-        let layout = match change {
+        match change {
             Change::Property { property, .. } if self.looks.contains(&Some(*property)) => {
-                return Touch::Look;
+                Touch::Look
             }
-            Change::Property { id, property } => {
-                [self.viewport, self.current_camera].contains(&Some(*property))
-                    || self.is_gui(dom, *id)
+            Change::Property { property, .. }
+                if [self.viewport, self.current_camera].contains(&Some(*property)) =>
+            {
+                Touch::All
             }
+            Change::Property { id, .. } if self.is_gui(dom, *id) => Touch::Layout,
             // A Folder or a Player carrying GUI counts, so the whole
             // subtree is looked at.
-            Change::Reparented { subtree, .. } => subtree.iter().any(|&id| self.is_gui(dom, id)),
-            _ => false,
-        };
-        if layout {
-            Touch::Layout
-        } else {
-            Touch::Nothing
+            Change::Reparented { subtree, .. }
+                if subtree.iter().any(|&id| self.is_gui(dom, id)) =>
+            {
+                Touch::All
+            }
+            _ => Touch::Nothing,
         }
     }
 

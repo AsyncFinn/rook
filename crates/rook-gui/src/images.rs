@@ -5,7 +5,8 @@
 //! [`Gui::take_image_requests`]: crate::Gui::take_image_requests
 //! [`Gui::image_arrived`]: crate::Gui::image_arrived
 
-use rustc_hash::FxHashMap;
+use rook_dom::InstanceId;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 /// A loaded image: its file, by the BLAKE3 hash of its bytes, and its size
 /// in pixels.
@@ -28,23 +29,31 @@ pub(crate) struct Images {
     states: FxHashMap<String, State>,
     /// Asked for and not yet taken by the loader.
     requests: Vec<String>,
+    /// The objects that asked for each image still loading, whose trees
+    /// draw again when it arrives.
+    waiting: FxHashMap<String, FxHashSet<InstanceId>>,
 }
 
 impl Images {
-    /// The image at `url` if it has loaded, asking for it the first time.
-    pub(crate) fn get(&mut self, url: &str) -> Option<GuiImage> {
+    /// The image at `url` if it has loaded, asking for it the first time
+    /// on behalf of object `by`.
+    pub(crate) fn get(&mut self, url: &str, by: Option<InstanceId>) -> Option<GuiImage> {
         if url.is_empty() {
             return None;
         }
         match self.states.get(url) {
-            Some(State::Loaded(image)) => Some(*image),
-            Some(_) => None,
+            Some(State::Loaded(image)) => return Some(*image),
+            Some(State::Failed) => return None,
+            Some(State::Loading) => {}
             None => {
                 self.states.insert(url.to_owned(), State::Loading);
                 self.requests.push(url.to_owned());
-                None
             }
         }
+        if let Some(by) = by {
+            self.waiting.entry(url.to_owned()).or_default().insert(by);
+        }
+        None
     }
 
     /// Whether `url` has loaded (`IsLoaded`), without asking for it.
@@ -56,10 +65,11 @@ impl Images {
         std::mem::take(&mut self.requests)
     }
 
-    /// A requested image arrived (`None`: it can't be had). Whether that
-    /// changes what's drawn.
-    pub(crate) fn arrived(&mut self, url: &str, image: Option<GuiImage>) -> bool {
+    /// A requested image arrived (`None`: it can't be had). The objects
+    /// that were waiting for it.
+    pub(crate) fn arrived(&mut self, url: &str, image: Option<GuiImage>) -> FxHashSet<InstanceId> {
         let state = image.map_or(State::Failed, State::Loaded);
-        self.states.insert(url.to_owned(), state) != Some(state)
+        self.states.insert(url.to_owned(), state);
+        self.waiting.remove(url).unwrap_or_default()
     }
 }

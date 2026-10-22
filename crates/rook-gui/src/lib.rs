@@ -55,10 +55,14 @@ pub fn is_layout_output(name: &str) -> bool {
 pub struct Gui {
     /// Where in the journal changes were last looked at.
     cursor: u64,
-    /// Something changed since the last layout.
+    /// Everything lays out again: GUI trees came or went, the screen
+    /// resized, or a font arrived.
     stale: bool,
-    /// Something changed only how GUI looks since it was last drawn.
-    restyled: bool,
+    /// Objects changed since the last layout; their trees lay out again.
+    changed: FxHashSet<InstanceId>,
+    /// Objects whose look alone changed since they were drawn; their trees
+    /// draw again.
+    restyled: FxHashSet<InstanceId>,
     layout: Layout,
     /// Counts layouts, so the drawing knows when to rebuild.
     generation: u64,
@@ -69,15 +73,16 @@ pub struct Gui {
     /// The world GUIs the last [`Gui::draw_world`] drew, in its order.
     world_drawn: Vec<world::Hung>,
     /// What the screen draws as of the last layout, once drawn.
-    screen_drawn: Option<Vec<GuiQuad>>,
+    screen_drawn: Option<Arc<[GuiQuad]>>,
     /// The focused TextBox, which draws its caret.
     focus: Option<InstanceId>,
     /// ScrollingFrames the wheel is moving.
     scrolling: FxHashMap<InstanceId, scroll_input::Eased>,
     /// Where each turning UIPageLayout's view is.
     turning: Turning,
-    /// Each world GUI's canvas as of the last layout, once drawn.
-    canvases: FxHashMap<InstanceId, WorldCanvas>,
+    /// Each world GUI's canvas as of the last layout, once drawn; one
+    /// still drawn is the same `Arc`, so a renderer can keep its copy.
+    canvases: FxHashMap<InstanceId, Arc<WorldCanvas>>,
     fonts: text::Fonts,
     glyphs: text::Glyphs,
     images: images::Images,
@@ -88,7 +93,8 @@ impl Default for Gui {
         Self {
             cursor: 0,
             stale: true,
-            restyled: false,
+            changed: FxHashSet::default(),
+            restyled: FxHashSet::default(),
             layout: Layout::default(),
             generation: 0,
             watch: None,
@@ -137,15 +143,13 @@ impl Gui {
     /// A requested image loaded (`None`: it can't be had). What shows it
     /// draws again, and its `IsLoaded` turns true.
     pub fn image_arrived(&mut self, url: &str, image: Option<GuiImage>) {
-        if self.images.arrived(url, image) {
-            self.stale = true;
-        }
+        self.changed.extend(self.images.arrived(url, image));
     }
 
     /// The image at `url` if it has loaded, asking for it the first time
     /// (the mouse's icon loads this way).
     pub fn image(&mut self, url: &str) -> Option<GuiImage> {
-        self.images.get(url)
+        self.images.get(url, None)
     }
 
     /// Set a ScrollingFrame's `CanvasPosition` as a script does: measured,
@@ -181,21 +185,23 @@ impl Gui {
                     .extend(found.filter(|&id| world::is_world_gui(dom, id)));
             }
             if !self.stale {
-                match watch.touches(dom, change) {
-                    Touch::Layout => self.stale = true,
-                    Touch::Look => self.restyled = true,
-                    Touch::Nothing => {}
+                match (watch.touches(dom, change), change) {
+                    (Touch::All, _) => self.stale = true,
+                    (Touch::Layout, Change::Property { id, .. }) => _ = self.changed.insert(*id),
+                    (Touch::Look, Change::Property { id, .. }) => _ = self.restyled.insert(*id),
+                    _ => {}
                 }
             }
         }
         self.cursor = dom.journal().end();
     }
 
-    /// Lay out again if anything GUI changed, writing the `Absolute*`
-    /// properties that moved (their Changed signals are the caller's to
-    /// fire). World GUIs whose canvas alone changed size (a BillboardGui
-    /// sized in studs as the camera moves, a SurfaceGui sized by its part)
-    /// lay out again on their own.
+    /// Lay out again the GUI trees that changed (all of them when trees
+    /// came or went), writing the `Absolute*` properties that moved (their
+    /// Changed signals are the caller's to fire), and draw again those
+    /// whose look alone changed. World GUIs whose canvas alone changed
+    /// size (a BillboardGui sized in studs as the camera moves, a
+    /// SurfaceGui sized by its part) lay out again on their own.
     pub fn sync(&mut self, dom: &mut Dom) {
         self.note_changes(dom);
         if self.stale {
@@ -213,16 +219,27 @@ impl Gui {
             let previous = (&self.layout, &self.turning);
             self.layout = Layout::screens(dom, previous, &mut self.fonts, &world);
             self.stale = false;
-            self.restyled = false;
+            self.changed.clear();
+            self.restyled.clear();
             self.generation += 1;
             self.screen_drawn = None;
             self.canvases.clear();
             self.write(dom);
             return;
         }
-        if std::mem::take(&mut self.restyled) {
-            self.redraw();
+        // Trees not laid out (in storage, or a server's world GUI) wait for
+        // a script to read them.
+        let changed: Vec<InstanceId> = (tops(dom, std::mem::take(&mut self.changed)).into_iter())
+            .filter(|top| self.layout.placed.contains_key(top))
+            .collect();
+        if !changed.is_empty() {
+            profiling::scope!("Gui::layout trees");
+            (self.layout).redo(dom, &changed, (&mut self.fonts, &self.turning));
+            self.write_trees(dom, &changed);
+            self.redraw(dom, &changed);
         }
+        let restyled = tops(dom, std::mem::take(&mut self.restyled));
+        self.redraw(dom, &restyled);
         // A server draws nothing, so its billboards keep the size they were
         // laid out at.
         if dom.local_player().is_none() {
@@ -237,26 +254,20 @@ impl Gui {
             return;
         }
         profiling::scope!("Gui::layout world");
-        (self.layout).redo_world(dom, &resized, (&mut self.fonts, &self.turning));
-        self.generation += 1;
-        for id in &resized {
-            self.canvases.remove(id);
-        }
-        let trees: Vec<InstanceId> = (resized.iter())
-            .flat_map(|&id| std::iter::once(id).chain(dom.descendants(id)))
-            .collect();
-        self.write_ids(dom, &trees);
+        (self.layout).redo(dom, &resized, (&mut self.fonts, &self.turning));
+        self.write_trees(dom, &resized);
+        self.redraw(dom, &resized);
     }
 
     /// [`Gui::sync`], and lay out `id`'s tree too when it isn't on a screen
     /// (unparented, or kept in storage).
     pub fn sync_for(&mut self, dom: &mut Dom, id: InstanceId) {
         self.sync(dom);
-        if !self.layout.contains(id) {
-            (self.layout).add_tree(dom, id, (&mut self.fonts, &self.turning));
-            self.screen_drawn = None;
-            self.canvases.clear();
-            self.write(dom);
+        if !self.layout.contains(id)
+            && let Some(top) = layout::top_of(dom, id)
+        {
+            (self.layout).redo(dom, &[top], (&mut self.fonts, &self.turning));
+            self.write_trees(dom, &[top]);
         }
     }
 
@@ -273,14 +284,16 @@ impl Gui {
             Some(at) => self.turning.insert(layout, at) != Some(at),
             None => self.turning.remove(&layout).is_some(),
         };
-        self.stale |= changed;
+        if changed {
+            self.changed.insert(layout);
+        }
     }
 
     /// The TextBox that has focus, which shows its caret and selection.
     pub fn set_focus(&mut self, focus: Option<InstanceId>) {
         if self.focus != focus {
+            self.restyled.extend(self.focus.into_iter().chain(focus));
             self.focus = focus;
-            self.redraw();
         }
     }
 
@@ -293,11 +306,19 @@ impl Gui {
         block.index_at(placed.local_point(at))
     }
 
-    /// Draw everything again, as of the current layout.
-    fn redraw(&mut self) {
+    /// Draw the trees from `tops` again, as of the current layout.
+    fn redraw(&mut self, dom: &Dom, tops: &[InstanceId]) {
+        if tops.is_empty() {
+            return;
+        }
         self.generation += 1;
-        self.screen_drawn = None;
-        self.canvases.clear();
+        for top in tops {
+            if world::is_world_gui(dom, *top) {
+                self.canvases.remove(top);
+            } else {
+                self.screen_drawn = None;
+            }
+        }
     }
 
     /// Changes with every new layout or look.
@@ -307,33 +328,30 @@ impl Gui {
 
     /// What the local player's ScreenGuis draw, bottom first, as of the
     /// last layout.
-    pub fn draw(&mut self, dom: &Dom) -> Vec<GuiQuad> {
+    pub fn draw(&mut self, dom: &Dom) -> Arc<[GuiQuad]> {
         if let Some(drawn) = &self.screen_drawn {
             return drawn.clone();
         }
-        self.ask_for_images(dom);
         let mut text = draw::Text {
             fonts: &mut self.fonts,
             glyphs: &mut self.glyphs,
         };
-        let drawn = draw::quads(dom, &self.layout, &mut text, &mut self.images, self.focus);
+        let drawn: Arc<[GuiQuad]> =
+            draw::quads(dom, &self.layout, &mut text, &mut self.images, self.focus).into();
         self.screen_drawn = Some(drawn.clone());
         drawn
     }
 
     /// What the shown SurfaceGuis and BillboardGuis draw, as of the last
     /// layout; [`Gui::world_places`] says where each is. Only canvases laid
-    /// out since they were last drawn are drawn again.
-    pub fn draw_world(&mut self, dom: &Dom) -> Vec<WorldCanvas> {
+    /// out or restyled since they were last drawn are drawn again.
+    pub fn draw_world(&mut self, dom: &Dom) -> Vec<Arc<WorldCanvas>> {
         let laid = self.layout.world.iter().map(|(h, _)| h);
         self.world_drawn = world::drawn(dom, laid);
         let missing: Vec<InstanceId> = (self.world_drawn.iter())
             .map(|h| h.gui)
             .filter(|id| !self.canvases.contains_key(id))
             .collect();
-        if !missing.is_empty() {
-            self.ask_for_images(dom);
-        }
         let mut text = draw::Text {
             fonts: &mut self.fonts,
             glyphs: &mut self.glyphs,
@@ -346,7 +364,8 @@ impl Gui {
             &mut self.images,
             self.focus,
         );
-        self.canvases.extend(missing.into_iter().zip(drawn));
+        self.canvases
+            .extend(missing.into_iter().zip(drawn.into_iter().map(Arc::new)));
         (self.world_drawn.iter())
             .map(|h| self.canvases[&h.gui].clone())
             .collect()
@@ -358,18 +377,6 @@ impl Gui {
         self.world_drawn.iter().map(|h| h.place(dom)).collect()
     }
 
-    /// Ask for every laid-out image object's image, shown or not, so its
-    /// `IsLoaded` turns true as in Studio (scripts wait on it to show it).
-    fn ask_for_images(&mut self, dom: &Dom) {
-        for &id in self.layout.placed.keys() {
-            if draw::is_image(dom, id) {
-                for url in draw::all_images(dom, id) {
-                    self.images.get(&url);
-                }
-            }
-        }
-    }
-
     /// Write every laid-out object's outputs.
     fn write(&mut self, dom: &mut Dom) {
         let ids: Vec<InstanceId> = (self.layout.placed.keys())
@@ -379,9 +386,18 @@ impl Gui {
         self.write_ids(dom, &ids);
     }
 
+    /// Write the outputs of the trees from `tops`.
+    fn write_trees(&mut self, dom: &mut Dom, tops: &[InstanceId]) {
+        let ids: Vec<InstanceId> = (tops.iter())
+            .flat_map(|&id| std::iter::once(id).chain(dom.descendants(id)))
+            .collect();
+        self.write_ids(dom, &ids);
+    }
+
     /// Write the outputs of the objects among `ids` that were laid out.
     fn write_ids(&mut self, dom: &mut Dom, ids: &[InstanceId]) {
         let v2 = |v: glam::Vec2| Value::Vector2(Vector2(v));
+        let client = dom.local_player().is_some();
         for &id in ids {
             if let Some(placed) = self.layout.placed.get(&id) {
                 // Measured: a UIScale under a ScreenGui scales what it
@@ -396,6 +412,14 @@ impl Gui {
                 let _ = dom.set_property_by_name(id, "AbsoluteSize", v2(size));
                 let _ = dom.set_property_by_name(id, "AbsoluteRotation", Value::Float32(turn));
                 if draw::is_image(dom, id) {
+                    // A client asks for every image object's images, shown
+                    // or not, so `IsLoaded` turns true as in Studio
+                    // (scripts wait on it to show it).
+                    if client {
+                        for url in draw::all_images(dom, id).collect::<Vec<_>>() {
+                            self.images.get(&url, Some(id));
+                        }
+                    }
                     let url = dom.content_property(id, "ImageContent").unwrap_or_default();
                     let loaded = Value::Bool(self.images.is_loaded(&url));
                     let _ = dom.set_property_by_name(id, "IsLoaded", loaded);
@@ -440,6 +464,16 @@ impl Gui {
         // Our own writes aren't changes to lay out again for.
         self.cursor = dom.journal().end();
     }
+}
+
+/// The tops of the GUI trees holding `ids`, each once, in id order.
+fn tops(dom: &Dom, ids: FxHashSet<InstanceId>) -> Vec<InstanceId> {
+    let mut tops: Vec<InstanceId> = (ids.into_iter())
+        .filter_map(|id| layout::top_of(dom, id))
+        .collect();
+    tops.sort_unstable();
+    tops.dedup();
+    tops
 }
 
 #[cfg(test)]
