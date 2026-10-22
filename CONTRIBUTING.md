@@ -138,4 +138,20 @@ Build profiles:
 | `cargo build --release` | What players use |
 | `cargo build --profile profiling` | Release speed with full debug info. Add `--features tracy` to `rook-player` for a live Tracy timeline |
 
+A new crate gets its own `[profile.dev.package]` entry in the root `Cargo.toml` (`rook-tools drift` checks): the dev profile optimizes dependencies fully and lists Rook's crates to keep them quick to rebuild.
+
+Commands with `--workspace` share one build of the dependencies. `-p <crate>` alone resolves their features for that crate only, so it compiles many of them again (`cargo build --workspace --bin rook-player` builds just the player from the shared build).
+
+### Building in parallel
+
+Each session or worktree builds into its own `CARGO_TARGET_DIR` under `target/`, so builds never wait on each other's lock. `scripts\target.ps1` (Windows) starts that folder from a shared seed of compiled dependencies and warms it in the background:
+
+```powershell
+scripts\target.ps1 new <name>     # target\<name>: the seed's dependencies, then the gate's builds at low priority (target\<name>\warm.log)
+scripts\target.ps1 remove <name>  # stops its warm build and deletes the folder
+scripts\target.ps1 seed           # rebuilds target\seed from main; worth it when Cargo.lock changes
+```
+
+Warming is only a head start: `scripts\check.ps1` still builds and tests the tree as it is, and waits for a warm build that hasn't finished. The seed holds dependencies only, never Rook's crates, whose freshness Cargo judges by file times.
+
 Behavior changes are checked against Roblox Studio with the conformance suite; see [conformance/README.md](conformance/README.md).

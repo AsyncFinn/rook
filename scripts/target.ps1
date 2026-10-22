@@ -18,13 +18,16 @@ $checkout = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 # Every worktree shares the main checkout's target folder.
 $targets = Join-Path (Split-Path (git -C $checkout rev-parse --path-format=absolute --git-common-dir)) "target"
 $seed = Join-Path $targets "seed"
+# Rook's own outputs: never handed over, so the seed doesn't keep them.
+$own = @("rook*", "librook*")
 
 # Compiles what `scripts/check` compiles, so a warm folder has all of it;
 # returns the step that failed, if one did.
 function Build-Gate([string]$log) {
     $ErrorActionPreference = "Continue"
     $steps = @(
-        @("clippy", "--workspace", "--all-targets"),
+        # The gate's lint flags too: clippy re-lints crates whose flags differ.
+        @("clippy", "--workspace", "--all-targets", "--", "-D", "warnings"),
         @("test", "--workspace", "--no-run"),
         @("build", "--workspace", "--bin", "rook-tools"))
     foreach ($step in $steps) {
@@ -47,7 +50,7 @@ switch ($Command) {
         if (Test-Path $dir) { throw "$dir already exists" }
         if (Test-Path $seed) {
             try {
-                Copy-Folder $seed $dir @("rook*", "librook*", "cargo-timings", "seed.txt")
+                Copy-Folder $seed $dir ($own + "seed.txt")
             } catch {
                 Remove-Item -Recurse -Force $dir -ErrorAction SilentlyContinue
                 throw
@@ -113,6 +116,8 @@ switch ($Command) {
             git -C $checkout worktree remove --force $tree
         }
         if ($failed) { throw "seed: $failed failed; target/seed is unchanged" }
+        Get-ChildItem $next -Recurse -Force -Include $own |
+            Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
         Set-Content (Join-Path $next "seed.txt") $lock
         $old = Join-Path $targets "seed-old"
         if (Test-Path $seed) { Rename-Item $seed $old }
@@ -121,3 +126,5 @@ switch ($Command) {
         Write-Host "target/seed rebuilt"
     }
 }
+# Robocopy's 1 means files were copied, not a failure.
+exit 0
