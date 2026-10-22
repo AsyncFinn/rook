@@ -332,14 +332,6 @@ impl Game {
         }
     }
 
-    /// Whether the cursor is over a ClickDetector the player can click.
-    pub(crate) fn hovering_click_detector(&self) -> bool {
-        match &self.mode {
-            Mode::Play { client, .. } => client.client().hovered_click_detector().is_some(),
-            Mode::Run(_) => false,
-        }
-    }
-
     /// Whether GUI took the last input event, so the window shouldn't use
     /// it too.
     pub(crate) fn input_processed(&self) -> bool {

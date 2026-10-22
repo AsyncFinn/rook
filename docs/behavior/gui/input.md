@@ -141,3 +141,25 @@ hover images in `draw/frame.rs` and `draw/image.rs`, the caret in
   still processed.
 - **Tab** does nothing: the box stays focused. In a `MultiLine` box,
   Enter types a newline and keeps focus.
+
+## The cursor
+
+- **Roblox's own cursors** are images in the install's
+  `content/textures/Cursors/KeyboardMouse`: `ArrowFarCursor.png` is the
+  arrow, `ArrowCursor.png` a pointing hand and `IBeamCursor.png` an
+  I-beam. Each is 64 by 64 with its point at the center (Observed), so
+  they are drawn centered, like a script's icon. The gray
+  and black arrows directly in `textures/` are the 2009 client's.
+- **Which one** (Observed live on 2026-10-22 by eye; Studio's
+  `screen_capture` leaves the cursor out): Roblox's arrow, Roblox's hand
+  over a GUI button, and the system's own pointing hand, not Roblox's,
+  over a ClickDetector the player can reach. An I-beam over a TextBox is
+  Inference (the install has one). `Mouse.Icon` or
+  `UserInputService.MouseIcon` replaces them all, and `MouseIconEnabled`
+  off hides the cursor. The client also names DragDetector cursors
+  (`Cursors/DragDetector/HoverCursor.png` and `ActivatedCursor.png`),
+  which come with DragDetectors.
+- **`rbxasset://SystemCursors/<name>`** as an icon names one of the
+  system's cursors: `Arrow`, `PointingHand`, `IBeam`, `OpenHand` and
+  `ClosedHand` (Inference from the client's strings and scripts that use
+  them).

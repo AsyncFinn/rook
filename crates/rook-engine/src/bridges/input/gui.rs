@@ -202,6 +202,11 @@ impl DataModel {
         (hits.iter().copied()).find(|&id| w.dom.is_a(id, "GuiButton") || w.dom.is_a(id, "TextBox"))
     }
 
+    /// The button or TextBox a press would go to now.
+    pub(super) fn hovered_press_target(&self) -> Option<InstanceId> {
+        self.press_target(&self.input.gui.hovered)
+    }
+
     /// Mouse button 1 or 2 went down. Measured order: the top button's
     /// `MouseButton1Down`, `InputBegan` on everything under the cursor
     /// top first, then `GuiState` Press.

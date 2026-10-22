@@ -32,13 +32,61 @@ pub enum InputEvent {
     Wheel { delta: f32 },
 }
 
-/// What the cursor looks like, as scripts set it.
+/// What the cursor looks like: an image (Roblox's own or a script's
+/// icon), one of the system's, or hidden.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CursorLook {
     Hidden,
-    Default,
-    /// An image's content URL, drawn centered on the cursor.
+    /// An image's content URL, drawn centered on the cursor. Roblox's own
+    /// are 64 by 64 with the point at the center (Observed in the
+    /// install's `textures/Cursors/KeyboardMouse`).
     Image(String),
+    System(SystemCursor),
+}
+
+/// The platform's own cursors, which `rbxasset://SystemCursors/<name>`
+/// names.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SystemCursor {
+    Arrow,
+    PointingHand,
+    IBeam,
+    OpenHand,
+    ClosedHand,
+}
+
+const ARROW: &str = "rbxasset://textures/Cursors/KeyboardMouse/ArrowFarCursor.png";
+const HAND: &str = "rbxasset://textures/Cursors/KeyboardMouse/ArrowCursor.png";
+const IBEAM: &str = "rbxasset://textures/Cursors/KeyboardMouse/IBeamCursor.png";
+
+impl CursorLook {
+    /// What shows while this look's image loads, or when it can't: the
+    /// system's nearest for Roblox's own (no install), the arrow for a
+    /// script's icon.
+    pub fn stand_in(&self) -> Option<CursorLook> {
+        let CursorLook::Image(url) = self else {
+            return None;
+        };
+        Some(match url.as_str() {
+            ARROW => CursorLook::System(SystemCursor::Arrow),
+            HAND => CursorLook::System(SystemCursor::PointingHand),
+            IBEAM => CursorLook::System(SystemCursor::IBeam),
+            _ => CursorLook::Image(ARROW.to_owned()),
+        })
+    }
+
+    /// The look a script's icon names.
+    fn icon(url: String) -> CursorLook {
+        let system = match url.strip_prefix("rbxasset://SystemCursors/") {
+            Some("Arrow") => SystemCursor::Arrow,
+            Some("PointingHand") => SystemCursor::PointingHand,
+            Some("IBeam") => SystemCursor::IBeam,
+            Some("OpenHand") => SystemCursor::OpenHand,
+            Some("ClosedHand") => SystemCursor::ClosedHand,
+            _ => return CursorLook::Image(url),
+        };
+        CursorLook::System(system)
+    }
 }
 
 /// A ClickDetector interaction the client detected.
@@ -128,16 +176,12 @@ fn key_code_value(code: &str) -> Option<u32> {
 }
 
 impl DataModel {
-    /// The ClickDetector under the cursor, which the window shows as a
-    /// pointing hand.
-    pub fn hovered_click_detector(&self) -> Option<InstanceId> {
-        self.input.hover
-    }
-
-    /// The cursor scripts ask for: none with
-    /// `UserInputService.MouseIconEnabled` off, else
-    /// `UserInputService.MouseIcon`, else the Mouse's `Icon`
-    /// (Inference: UserInputService's wins when both are set).
+    /// What the cursor shows: none with `UserInputService.MouseIconEnabled`
+    /// off, else `UserInputService.MouseIcon`, else the Mouse's `Icon`
+    /// (Inference: UserInputService's wins when both are set). Else
+    /// Roblox's hand over a GUI button, the system's pointing hand over a
+    /// ClickDetector (Observed live), an I-beam over a TextBox
+    /// (Inference), or Roblox's arrow (docs/behavior/gui/input.md#the-cursor).
     pub fn cursor_look(&self) -> CursorLook {
         let w = self.runtime.world();
         let uis = w.dom.find_service("UserInputService");
@@ -148,10 +192,18 @@ impl DataModel {
             uis.and_then(|u| w.dom.content_property(u, "MouseIconContent")),
             (w.input.mouse_object).and_then(|m| w.dom.content_property(m, "IconContent")),
         ];
-        match icons.into_iter().flatten().find(|url| !url.is_empty()) {
-            Some(url) => CursorLook::Image(url),
-            None => CursorLook::Default,
+        if let Some(url) = icons.into_iter().flatten().find(|url| !url.is_empty()) {
+            return CursorLook::icon(url);
         }
+        let image = match self.hovered_press_target() {
+            Some(id) if w.dom.is_a(id, "TextBox") => IBEAM,
+            Some(_) => HAND,
+            None if self.input.hover.is_some() => {
+                return CursorLook::System(SystemCursor::PointingHand);
+            }
+            None => ARROW,
+        };
+        CursorLook::Image(image.to_owned())
     }
 
     /// The image at `url` if the GUI has loaded it, asking for it the
