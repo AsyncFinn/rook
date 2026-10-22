@@ -4,7 +4,8 @@
 //! file more than [`MAX_DEPTH`] folders below its crate's `src/` (so paths
 //! can be guessed). A comment block over [`MAX_COMMENT_LINES`] lines is a
 //! warning: findings go in `docs/behavior`. Test code is left out, except
-//! for depth.
+//! for depth. A workspace member without its own `[profile.dev.package]`
+//! entry is an error too: it would build at the dependencies' opt-level.
 
 use std::collections::BTreeMap;
 
@@ -25,7 +26,36 @@ pub(super) fn check(report: &mut Report) -> anyhow::Result<()> {
     report.errors.extend(environment(&sources));
     report.errors.extend(too_deep(&sources));
     report.warnings.extend(long_comments(&sources));
+    report.errors.extend(unprofiled_members()?);
     Ok(())
+}
+
+/// Members missing from the root manifest's per-crate dev opt-levels.
+fn unprofiled_members() -> anyhow::Result<Vec<String>> {
+    let root = fs_err::read_to_string("Cargo.toml")?;
+    let mut missing = Vec::new();
+    for manifest in tracked(&["crates/*/Cargo.toml", "apps/*/Cargo.toml"])? {
+        let text = fs_err::read_to_string(&manifest)?;
+        let Some(name) = package_name(&text) else {
+            continue;
+        };
+        if !root.contains(&format!("[profile.dev.package.{name}]")) {
+            missing.push(format!(
+                "{manifest}: add `[profile.dev.package.{name}]` with Rook's opt-level to Cargo.toml"
+            ));
+        }
+    }
+    Ok(missing)
+}
+
+/// The `name` in a manifest's `[package]` table.
+pub(super) fn package_name(manifest: &str) -> Option<&str> {
+    let package = manifest.split("[package]").nth(1)?;
+    let package = package.split("\n[").next()?;
+    package.lines().find_map(|line| {
+        let value = line.trim().strip_prefix("name")?.trim().strip_prefix('=')?;
+        Some(value.trim().trim_matches('"'))
+    })
 }
 
 fn duplicates(sources: &[Source]) -> Vec<String> {

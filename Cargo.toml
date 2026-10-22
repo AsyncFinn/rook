@@ -158,11 +158,57 @@ redundant_closure_for_method_calls = "warn"
 #              debug info for profilers. Builds into target/profiling, so
 #              it never collides with a running release build. Add
 #              `--features tracy` to rook-player for a live Tracy timeline.
+#
+# dev sets the dependencies' opt-level and lowers Rook's own crates by
+# name, rather than raising `package."*"`: Cargo ranks `package."*"` above
+# `build-override`, so it would also optimize proc macros and build-script
+# dependencies (syn, serde_derive, wesl, the build script's naga), which
+# only cost compile time. A crate missing from the list still builds, just
+# slower to rebuild; `rook-tools drift` checks every member is listed.
 [profile.dev]
-opt-level = 1
-
-[profile.dev.package."*"]
 opt-level = 3
+
+[profile.dev.build-override]
+opt-level = 0
+# Set, not left to Cargo's "when possible" default: that default picks
+# differently under `cargo check` and `cargo build`, so the two compiled
+# every build script twice, Luau's C++ included (about 3 minutes each).
+debug = false
+
+[profile.dev.package.rook-audio]
+opt-level = 1
+[profile.dev.package.rook-cli]
+opt-level = 1
+[profile.dev.package.rook-content]
+opt-level = 1
+[profile.dev.package.rook-dom]
+opt-level = 1
+[profile.dev.package.rook-engine]
+opt-level = 1
+[profile.dev.package.rook-formats]
+opt-level = 1
+[profile.dev.package.rook-gui]
+opt-level = 1
+[profile.dev.package.rook-lua]
+opt-level = 1
+[profile.dev.package.rook-net]
+opt-level = 1
+[profile.dev.package.rook-physics]
+opt-level = 1
+[profile.dev.package.rook-platform]
+opt-level = 1
+[profile.dev.package.rook-player]
+opt-level = 1
+[profile.dev.package.rook-reflection]
+opt-level = 1
+[profile.dev.package.rook-render]
+opt-level = 1
+[profile.dev.package.rook-terrain]
+opt-level = 1
+[profile.dev.package.rook-types]
+opt-level = 1
+[profile.dev.package.rook-view]
+opt-level = 1
 
 [profile.release]
 debug = "line-tables-only"

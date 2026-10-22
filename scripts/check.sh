@@ -11,7 +11,11 @@ cargo deny check bans
 # Code drift (copied functions, long comment blocks, environment reads
 # below rook-engine), docs drift (links, indexes, Studio check dates, the
 # roadmap's marks) and British spellings (apps/rook-cli/src/commands/drift.rs).
-cargo run -q -p rook-cli --bin rook-tools -- drift
+# Built with `--workspace`, not run with `-p rook-cli`: one package alone
+# resolves its dependencies' features differently, which compiled about a
+# hundred of them again.
+cargo build -q --workspace --bin rook-tools
+"${CARGO_TARGET_DIR:-target}/debug/rook-tools" drift
 # A file's topics decide when it's split, not its length (see CONTRIBUTING);
 # very long ones are pointed out as worth a look. Comments and blank lines
 # don't count.
