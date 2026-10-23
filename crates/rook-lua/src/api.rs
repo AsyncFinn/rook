@@ -18,5 +18,6 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     scripts::install(lua)?;
     methods::assets::install(lua)?;
     methods::remotes::install(lua)?;
+    methods::text_chat::install(lua)?;
     Ok(())
 }

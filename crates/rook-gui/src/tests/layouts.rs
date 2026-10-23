@@ -400,6 +400,69 @@ fn nested_automatic_sizes() {
     near(rect(&dom, inner, b), ([5.0, 5.0], [37.0, 29.0]));
 }
 
+/// Roblox's report rows: an automatic frame around full-size children,
+/// the innermost listing rows, grows to the rows.
+#[test]
+fn automatic_sizes_reach_a_scaled_childs_list() {
+    let (mut dom, b) = boxed();
+    let group = frame(&mut dom, b, udim2(0.0, 100, 0.0, 0));
+    set_enum(&mut dom, group, "AutomaticSize", "Y");
+    let middle = frame(&mut dom, group, udim2(1.0, 0, 1.0, 0));
+    let rows = frame(&mut dom, middle, udim2(1.0, 0, 1.0, 0));
+    child(&mut dom, "UIListLayout", rows, &[]);
+    for _ in 0..3 {
+        frame(&mut dom, rows, udim2(1.0, 0, 0.0, 20));
+    }
+    laid_out(&mut dom);
+    near(rect(&dom, group, b), ([0.0, 0.0], [100.0, 60.0]));
+    near(rect(&dom, rows, b), ([0.0, 0.0], [100.0, 60.0]));
+}
+
+/// Roblox's report rows: inside a frame that grows, a growing row's part
+/// sized 1 tall by scale across its list is as tall as the row's label,
+/// not the room left.
+#[test]
+fn automatic_rows_in_growing_frames_hold_scaled_parts() {
+    let (mut dom, b) = boxed();
+    let page = frame(&mut dom, b, udim2(1.0, 0, 0.0, 0));
+    set_enum(&mut dom, page, "AutomaticSize", "Y");
+    let row = frame(&mut dom, page, udim2(1.0, 0, 0.0, 0));
+    set_enum(&mut dom, row, "AutomaticSize", "Y");
+    let list = child(&mut dom, "UIListLayout", row, &[]);
+    set_enum(&mut dom, list, "FillDirection", "Horizontal");
+    frame(&mut dom, row, udim2(0.0, 100, 0.0, 42));
+    let part = frame(&mut dom, row, udim2(0.0, 50, 1.0, 0));
+    laid_out(&mut dom);
+    near(rect(&dom, row, b), ([0.0, 0.0], [400.0, 42.0]));
+    near(rect(&dom, part, b), ([100.0, 0.0], [50.0, 42.0]));
+}
+
+/// Roblox's key combos: wrapping rows that size to their items keep the
+/// items on one line when there's room.
+#[test]
+fn automatic_wrapping_rows_fit_their_items() {
+    let (mut dom, b) = boxed();
+    let wrapping = |dom: &mut Dom, parent| {
+        let row = frame(dom, parent, udim2(0.0, 0, 0.0, 0));
+        set_enum(dom, row, "AutomaticSize", "XY");
+        let list = child(dom, "UIListLayout", row, &[("Wraps", Value::Bool(true))]);
+        set_enum(dom, list, "FillDirection", "Horizontal");
+        row
+    };
+    let outer = wrapping(&mut dom, b);
+    let first = frame(&mut dom, outer, udim2(0.0, 11, 0.0, 17));
+    let plain = frame(&mut dom, outer, udim2(0.0, 0, 0.0, 0));
+    set_enum(&mut dom, plain, "AutomaticSize", "XY");
+    let combo = wrapping(&mut dom, plain);
+    let separator = frame(&mut dom, combo, udim2(0.0, 5, 0.0, 17));
+    let key = frame(&mut dom, combo, udim2(0.0, 47, 0.0, 17));
+    laid_out(&mut dom);
+    near(rect(&dom, first, b), ([0.0, 0.0], [11.0, 17.0]));
+    near(rect(&dom, separator, b), ([11.0, 0.0], [5.0, 17.0]));
+    near(rect(&dom, key, b), ([16.0, 0.0], [47.0, 17.0]));
+    near(rect(&dom, outer, b), ([0.0, 0.0], [63.0, 17.0]));
+}
+
 #[test]
 fn reads_lay_out_unparented_trees() {
     let (mut dom, _) = client();

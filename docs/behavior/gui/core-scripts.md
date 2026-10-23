@@ -62,11 +62,14 @@ Code: loading in `rook-engine`'s `core_scripts.rs` (and the
   as if offline.
 - `GetEngineFeature` says no except for the features whose API Rook has
   and the scripts need to take their current path (`AvatarChatServiceEnabled`,
-  without which the menu's voice settings find no service). Saying yes to
-  every feature stops the top bar.
+  without which the menu's voice settings find no service, and
+  `TextChatServiceSettingsSaved`, without which the chat window shows its
+  translation tip every time). Saying yes to every feature stops the top
+  bar.
 - Roblox still answers a few spellings its API dump no longer lists, and
   the CoreScripts use them: `RunService.renderStepped`, `Instance.name`,
-  `UDim2:lerp`.
+  `RbxAnalyticsService:setRBXEventStream` (without it the settings menu
+  stops halfway, its bottom buttons unsized) and `UDim2:lerp`.
 
 ## What runs
 
@@ -82,9 +85,12 @@ player list. `RobloxGui` stacks its objects by sibling
 `GuiObject:TweenPositionInternal`, the CoreScripts' own copy of
 `TweenPosition`. The settings menu, backpack,
 emotes menu, purchase prompts, screenshots and the fullscreen title bar
-load. Chat's stores need `Player.ChatAvailabilityStatus` (a string
-starting `Enabled` when the player may chat), which Rook's API snapshot
-doesn't have; Rook gives `Enabled`.
+load. Clicking the menu's tabs shows the People, Report and Help pages
+laid out as in Roblox. The chat window shows messages sent and received
+through [TextChatService](chat.md), with each speaker's name. Chat's
+stores need `Player.ChatAvailabilityStatus` (a string starting `Enabled`
+when the player may chat), which Rook's API snapshot doesn't have; Rook
+gives `Enabled`.
 
 ## StyleSheets
 
@@ -120,7 +126,7 @@ above, by calls:
 | Experiments | `IXPService` (`InitializeUserLayers`, `RegisterUserLayers`, `GetUserLayerLoadingStatus`) |
 | Gamepad and keyboard navigation | `GuiService` (`AddKey` 22, `AddSpecialKey`, `AddSelectionParent`, `SelectedCoreObject`), `ContextActionService` (`BindCoreAction` 14, `UnbindCoreAction`, `BindAction`) |
 | The top bar's space | `GuiService:SetGlobalGuiInset`, `GuiService:SetTopbarInset`, `GuiService.CoreGuiFolder`, `CoreEffectFolder`, `SendCoreUiNotification` |
-| Chat and voice | `Chat:CanUserChatAsync`, `Chat.IsAutoMigrated`, `Player.ChatAvailabilityStatus`, `TextChatService.ChatTranslationToggleEnabled`, `VoiceChatService:IsVoiceEnabledForUserIdAsync`, `AudioFocusService:GetFocusedContextId`, `FaceAnimatorService` |
+| Chat and voice | `TextChatService.ChatTranslationToggleEnabled`, `VoiceChatService:IsVoiceEnabledForUserIdAsync`, `AudioFocusService:GetFocusedContextId`, `FaceAnimatorService` |
 | Other | `GuiService:GetNotificationTypeList`, `LocalizationService:GetCountryRegionForPlayerAsync`, `ScreenGui.OnTopOfCoreBlur`, `StarterPlayer.PlayerModuleStatus` |
 
 Game scripts need some of these too, and lacked them before this step;

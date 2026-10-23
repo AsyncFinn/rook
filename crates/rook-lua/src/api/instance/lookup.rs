@@ -84,10 +84,16 @@ pub(crate) type MemberTable = FxHashMap<&'static str, Member>;
 
 /// Deprecated spellings Roblox still answers that the API dump no longer
 /// lists: `(class, alias, member)`. Observed: Roblox's own CoreScripts
-/// connect to `RunService.renderStepped` and read `.name`.
+/// connect to `RunService.renderStepped`, read `.name` and call
+/// `RbxAnalyticsService:setRBXEventStream`.
 const HIDDEN_ALIASES: &[(&str, &str, &str)] = &[
     ("RunService", "renderStepped", "RenderStepped"),
     ("Instance", "name", "Name"),
+    (
+        "RbxAnalyticsService",
+        "setRBXEventStream",
+        "SetRBXEventStream",
+    ),
 ];
 
 /// Build a class's member table as `identity` sees it. `known` is false
@@ -367,15 +373,13 @@ pub(crate) fn get_member(
                 // CoreScripts read: nil, counted (see `calls::method_function`).
                 None if crate::api::scripts::caller_is_core(lua) => {
                     let class = with_world(lua, |w| w.dom.class_name(id).to_owned());
-                    match methods::core::hidden_property(&class, key) {
-                        Some(v) => Ok(LuaValue::String(lua.create_string(v)?)),
-                        None => {
-                            with_world(lua, |w| {
-                                w.count_unimplemented(format!("{class}.{key} (unknown)"));
-                            });
-                            Ok(LuaValue::Nil)
-                        }
+                    let value = methods::core::hidden_property(lua, &class, key)?;
+                    if value.is_nil() {
+                        with_world(lua, |w| {
+                            w.count_unimplemented(format!("{class}.{key} (unknown)"));
+                        });
                     }
+                    Ok(value)
                 }
                 None => Err(not_a_member(lua, id, key)),
             }

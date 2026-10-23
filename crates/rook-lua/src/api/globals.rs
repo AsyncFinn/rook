@@ -206,6 +206,9 @@ fn user_game_settings(lua: &Lua, game: rook_dom::InstanceId) -> mlua::Result<()>
     values.raw_set("ReducedMotion", false)?;
     values.raw_set("PerformanceStatsVisible", false)?;
     values.raw_set("ChatVisible", true)?;
+    // Translating needs Roblox's servers, so there's nothing to introduce.
+    values.raw_set("ChatTranslationEnabled", false)?;
+    values.raw_set("ChatTranslationFTUXShown", true)?;
     values.raw_set("VREnabled", false)?;
     values.raw_set("MasterVolume", 1.0)?;
     values.raw_set("HasEverUsedVR", false)?;
@@ -256,7 +259,15 @@ fn install_engine_helpers(lua: &Lua) -> mlua::Result<()> {
     use mlua::AnyUserData;
     let std: Table = lua.named_registry_value("rook.std")?;
     let g = lua.globals();
-    for name in ["typeof", "pairs", "setmetatable", "math", "tostring"] {
+    for name in [
+        "typeof",
+        "pairs",
+        "ipairs",
+        "setmetatable",
+        "math",
+        "string",
+        "tostring",
+    ] {
         std.set(name, g.get::<LuaValue>(name)?)?;
     }
     std.set(
@@ -265,8 +276,14 @@ fn install_engine_helpers(lua: &Lua) -> mlua::Result<()> {
             |lua, (inst, name, value): (AnyUserData, String, LuaValue)| {
                 let id = inst.borrow::<super::instance::LuaInstance>()?.0;
                 let known = with_world(lua, |w| w.dom.property_id(id, &name).is_some());
-                if !known {
-                    // Not a stored property: keep it as a runtime value.
+                // Not a stored property, or a value Rook can't store (a
+                // DateTime): keep it as a runtime value, which reads first.
+                if !known
+                    || !matches!(
+                        super::instance::write_property(lua, id, &name, &value),
+                        Ok(Ok(()))
+                    )
+                {
                     let all = super::instance::runtime_properties(lua)?;
                     crate::ctx::ctx(lua)
                         .runtime_prop_ids
@@ -282,11 +299,7 @@ fn install_engine_helpers(lua: &Lua) -> mlua::Result<()> {
                     };
                     return t.raw_set(name, value);
                 }
-                match super::instance::write_property(lua, id, &name, &value) {
-                    Ok(Ok(())) => Ok(()),
-                    Ok(Err(e)) => Err(mlua::Error::RuntimeError(e.0)),
-                    Err(e) => Err(mlua::Error::RuntimeError(e)),
-                }
+                Ok(())
             },
         )?,
     )?;
@@ -299,6 +312,9 @@ fn install_engine_helpers(lua: &Lua) -> mlua::Result<()> {
                 let event: &'static str = match name.as_str() {
                     "Completed" => "Completed",
                     "Stopped" => "Stopped",
+                    "MessageReceived" => "MessageReceived",
+                    "SendingMessage" => "SendingMessage",
+                    "Chatted" => "Chatted",
                     _ => {
                         return Err(mlua::Error::RuntimeError(format!(
                             "unknown engine event {name}"

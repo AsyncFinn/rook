@@ -6,6 +6,7 @@
 //! only query theirs. See `docs/design/architecture.md#signals-and-scheduler-rook-luas-signal-and-scheduler` for the frame order.
 
 mod bridges;
+mod chat;
 pub mod console;
 pub mod core_scripts;
 pub mod data_folder;
@@ -261,8 +262,9 @@ impl DataModel {
             }
         }
         ensure_camera(&mut dom);
-        if role == Role::Server {
-            ensure_chat_configuration(&mut dom);
+        match role {
+            Role::Server => chat::set_up(&mut dom),
+            Role::Client => chat::set_up_client(&mut dom),
         }
         dom.journal_mut().set_enabled(true);
         let run_service = dom.get_service("RunService").expect("RunService class");
@@ -416,33 +418,6 @@ fn ensure_camera(dom: &mut Dom) {
     dom.attach_unchecked(camera, ws);
     if let Some(p) = dom.property_id(ws, "CurrentCamera") {
         dom.load_property(ws, p, Value::Ref(Some(camera.to_ref())));
-    }
-}
-
-/// TextChatService always holds its configuration objects, which the
-/// chat CoreScripts look for (Inference: new places save them, and
-/// Roblox's chat window reads them in places saved before they existed);
-/// clients get them by replication.
-fn ensure_chat_configuration(dom: &mut Dom) {
-    let Ok(chat) = dom.get_service("TextChatService") else {
-        return;
-    };
-    for class in [
-        "ChatWindowConfiguration",
-        "ChatInputBarConfiguration",
-        "BubbleChatConfiguration",
-        "ChannelTabsConfiguration",
-    ] {
-        if dom.find_first_child_of_class(chat, class).is_some() {
-            continue;
-        }
-        let Ok(config) = dom.create_by_name(class) else {
-            continue;
-        };
-        if let Err(e) = dom.set_name(config, class.into()) {
-            tracing::warn!("naming the {class} failed: {e}");
-        }
-        dom.attach_unchecked(config, chat);
     }
 }
 

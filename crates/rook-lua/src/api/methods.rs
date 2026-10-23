@@ -58,6 +58,7 @@ mod sound;
 mod styles;
 mod terrain;
 mod text;
+pub(crate) mod text_chat;
 pub(crate) mod textbox;
 mod tree;
 mod tweens;
@@ -266,6 +267,7 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
                 text::native,
                 player_scripts::native,
                 styles::native,
+                text_chat::native,
             ]
             .iter()
             .find_map(|topic| topic(owner, name));
@@ -297,6 +299,7 @@ pub(crate) fn luau_source(owner: &str, name: &str) -> Option<&'static str> {
             data_stores::luau_source,
             remotes::luau_source,
             core::luau_source,
+            text_chat::luau_source,
         ]
         .iter()
         .find_map(|topic| topic(owner, name)),

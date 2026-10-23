@@ -576,9 +576,15 @@ impl<'a> Pass<'a> {
     /// by `SizeConstraint`, grown by `AutomaticSize`, then held by its
     /// size constraints.
     fn size_of(&mut self, id: InstanceId, parent: Vec2) -> Vec2 {
+        self.size_within(id, parent, parent)
+    }
+
+    /// [`Pass::size_of`] with `Size` against `parent` but room to grow
+    /// in `area` (an automatic parent measuring its children).
+    fn size_within(&mut self, id: InstanceId, parent: Vec2, area: Vec2) -> Vec2 {
         let dom = self.dom;
         let base = base_size(dom, id, parent);
-        let room = (parent - resolve(position_of(dom, id), parent)).max(base);
+        let room = (area - resolve(position_of(dom, id), parent)).max(base);
         let grown = automatic::grow(self, id, base, room);
         constraints::apply(dom, id, grown, parent)
     }

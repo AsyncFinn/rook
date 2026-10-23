@@ -38,8 +38,9 @@ property in the database (the rest are server- or Studio-only):
 - pairs with nothing in their names to go by: Sound's `PlaybackSpeed`
   (replicated as `Pitch`), Player's `Team` (Roblox clients read their
   team), Workspace's `CollisionGroups` (clients know the registered
-  groups) and Terrain's `SmoothGrid` (Roblox streams voxels to clients
-  its own way; clients see the terrain).
+  groups), Terrain's `SmoothGrid` (Roblox streams voxels to clients
+  its own way; clients see the terrain) and TextSource's `UserId`
+  (Roblox's chat on clients finds the local player's TextSource by it).
 
 Confirmed for Sound's three (the server's sounds are heard on clients,
 at their speed); Inference from the database for the rest.

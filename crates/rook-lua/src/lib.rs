@@ -350,8 +350,26 @@ impl Runtime {
         for a in args {
             values.push(net::from_net(lua, a).unwrap_or(mlua::Value::Nil));
         }
+        // Chat messages travel as TextChatService's own firings.
+        let chat = self.world().dom.class_name(remote) == "TextChatService";
         self.guarded(|| {
-            threads::fire(lua, &SignalKey::event(remote, event), &values);
+            if chat {
+                let handler = if self.world().is_client {
+                    "onClient"
+                } else {
+                    "onServer"
+                };
+                let api = lua
+                    .named_registry_value::<mlua::Table>("rook.std")
+                    .and_then(|std| std.get::<mlua::Table>("text_chat"))
+                    .and_then(|api| api.get::<mlua::Function>(handler));
+                if let Ok(f) = api {
+                    // Errors are the thread's to report.
+                    let _ = threads::spawn(lua, f, mlua::MultiValue::from_vec(values));
+                }
+            } else {
+                threads::fire(lua, &SignalKey::event(remote, event), &values);
+            }
             threads::drain_deferred(lua);
         });
     }

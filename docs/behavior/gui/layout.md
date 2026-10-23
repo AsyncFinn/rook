@@ -111,11 +111,20 @@ Nested automatic sizes add up from the inside.
 - **With a UI layout**, children sized by scale are sized against the room
   left in the parent past the object's `Position`, and the object grows to
   the layout's content (a child 1 wide in a list, 45 pixels into a 400
-  box: 355).
+  box: 355). Measured with a parent that doesn't grow; inside one that
+  does, Rook sizes them across a list against the object's `Size`
+  instead (Approximation: Roblox's report menu rows, a label beside a part
+  1 tall by scale, in frames that grow, are as tall as the label).
 - **Without one**, Studio's results for children sized by scale depend on
   earlier layouts (a 0.5-wide child with offset 30 gave a 50-wide parent).
   Rook sizes them against the object's `Size` (Approximation); children
-  sized by offset, the usual case, are exact.
+  sized by offset, the usual case, are exact. A child sized by scale on
+  an axis the object grows on reaches at least as far as its own content,
+  measured as if it grew there too, from its offset (Inference: Roblox's
+  help and report menus group rows in full-size children of frames that
+  grow, and nothing overlaps there). Children that grow themselves on an
+  axis they aren't scaled on may grow into the object's room, so wrapping
+  lists in them don't break early.
 - Text objects grow to their text too ([GUI text](text.md#automaticsize)).
 
 ### When layout runs

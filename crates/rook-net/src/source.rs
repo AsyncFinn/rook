@@ -183,6 +183,7 @@ fn replicated_by_twin(db: &rook_reflection::Database, prop: &rook_reflection::Pr
             | ("Player", "Team")
             | ("Workspace", "CollisionGroups")
             | ("Terrain", "SmoothGrid")
+            | ("TextSource", "UserId")
     ) {
         return true;
     }
@@ -225,6 +226,7 @@ mod twin_tests {
                 "Sound.Playing",
                 "Sound.TimePosition",
                 "Terrain.SmoothGrid",
+                "TextSource.UserId",
                 "VideoFrame.Playing",
                 "VideoFrame.TimePosition",
                 "Workspace.CollisionGroups",

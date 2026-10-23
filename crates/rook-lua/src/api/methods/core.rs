@@ -112,15 +112,19 @@ fn platform(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
 /// need a value of the right type from (the rest read as nil): the
 /// version strings the settings menu shows, the player's console name and
 /// whether they may chat.
-pub(crate) fn hidden_property(class: &str, key: &str) -> Option<&'static str> {
-    Some(match (class, key) {
+pub(crate) fn hidden_property(lua: &Lua, class: &str, key: &str) -> mlua::Result<LuaValue> {
+    let text = match (class, key) {
         ("RunService", "ClientGitHash") => "rook",
         ("Player", "PlatformName") => "",
         // Observed: chat's stores test it for an "Enabled" prefix; a local
         // player is never region-locked or age-gated.
         ("Player", "ChatAvailabilityStatus") => "Enabled",
-        _ => return None,
-    })
+        // Every experience runs TextChatService since the 2025 migration
+        // (see `rook-engine`'s `chat.rs`).
+        ("Chat", "IsAutoMigrated") => return Ok(LuaValue::Boolean(true)),
+        _ => return Ok(LuaValue::Nil),
+    };
+    Ok(LuaValue::String(lua.create_string(text)?))
 }
 
 /// `HttpService:RequestInternal(options)` gives a request whose
@@ -257,8 +261,10 @@ fn engine_flag(name: &str) -> Option<&'static str> {
 
 /// Engine features Rook has, whose API is in its snapshot, and which the
 /// CoreScripts take a newer path for (the settings menu reads voice
-/// settings through AvatarChatService only with its feature).
-const ENGINE_FEATURES: &[&str] = &["AvatarChatServiceEnabled"];
+/// settings through AvatarChatService only with its feature; the chat
+/// window shows its translation tip every time without
+/// `TextChatServiceSettingsSaved`).
+const ENGINE_FEATURES: &[&str] = &["AvatarChatServiceEnabled", "TextChatServiceSettingsSaved"];
 
 /// Engine features name what the engine can do: Rook says yes only to
 /// [`ENGINE_FEATURES`], so scripts otherwise keep to the older ways

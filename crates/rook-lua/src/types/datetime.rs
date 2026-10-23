@@ -196,9 +196,9 @@ impl UserData for LDateTime {
         m.add_meta_method(MetaMethod::Eq, |_, t, o: UserDataRef<Self>| Ok(*t == *o));
         m.add_meta_method(MetaMethod::Lt, |_, t, o: UserDataRef<Self>| Ok(*t < *o));
         m.add_meta_method(MetaMethod::Le, |_, t, o: UserDataRef<Self>| Ok(*t <= *o));
-        m.add_meta_method(MetaMethod::ToString, |_, t, ()| {
-            Ok(t.utc().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string())
-        });
+        // Inference: the Unix milliseconds, from Roblox's bubble chat
+        // ordering bubbles by `tonumber(tostring(timestamp):sub(-9))`.
+        m.add_meta_method(MetaMethod::ToString, |_, t, ()| Ok(t.millis.to_string()));
     }
 }
 
