@@ -13,19 +13,21 @@ pub(super) fn luau_source(owner: &str, name: &str) -> Option<&'static str> {
         ("TweenBase", "Play") => "local t = (...).tween return function(self) t.play(self) end",
         ("TweenBase", "Pause") => "local t = (...).tween return function(self) t.pause(self) end",
         ("TweenBase", "Cancel") => "local t = (...).tween return function(self) t.cancel(self) end",
-        ("GuiObject", "TweenPosition") => {
+        // The `Internal` forms are Roblox's own scripts' copies (their
+        // menu slides in with one), with the same parameters.
+        ("GuiObject", "TweenPosition" | "TweenPositionInternal") => {
             r#"local t = (...).tween
             return function(self, position, direction, style, time, override, callback)
                 return t.gui(self, { Position = position }, direction, style, time, override, callback)
             end"#
         }
-        ("GuiObject", "TweenSize") => {
+        ("GuiObject", "TweenSize" | "TweenSizeInternal") => {
             r#"local t = (...).tween
             return function(self, size, direction, style, time, override, callback)
                 return t.gui(self, { Size = size }, direction, style, time, override, callback)
             end"#
         }
-        ("GuiObject", "TweenSizeAndPosition") => {
+        ("GuiObject", "TweenSizeAndPosition" | "TweenSizeAndPositionInternal") => {
             r#"local t = (...).tween
             return function(self, size, position, direction, style, time, override, callback)
                 return t.gui(self, { Size = size, Position = position }, direction, style, time, override, callback)

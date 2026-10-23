@@ -5,7 +5,7 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 
 use rook_engine::session::Session;
-use rook_engine::{DataModel, Options, Server};
+use rook_engine::{DataModel, Options, ScreenPoint, Server};
 use rook_lua::{LogEntry, MessageType};
 
 /// How to run (the command's flags).
@@ -22,6 +22,9 @@ pub(crate) struct Run<'a> {
     /// Print the client's tree from this instance (`CoreGui.RobloxGui`)
     /// at the end, with what places and shows its GUI.
     pub dump: Option<&'a str>,
+    /// Points the joined player clicks after `seconds`, in window pixels,
+    /// half a second apart; the run goes on a second after the last.
+    pub clicks: &'a [ScreenPoint],
     #[cfg(feature = "repl")]
     pub repl: bool,
 }
@@ -54,6 +57,15 @@ pub(crate) fn run(file: &Path, how: &Run<'_>) -> anyhow::Result<()> {
             client.set_viewport(1280, 720);
         }
         session.run_for(how.seconds);
+        for point in how.clicks {
+            for event in point.click() {
+                session.input(index, event);
+                session.run_for(0.15);
+            }
+        }
+        if !how.clicks.is_empty() {
+            session.run_for(1.0);
+        }
         let server_log = session.server().take_log();
         let client = session.client(0).expect("joined");
         let client_log = client.take_log();

@@ -50,36 +50,36 @@ health bars and leaderboards are GUI.
    - *Done when*: a ViewportFrame's parts draw as in Studio's screenshots
      within step 4's tolerance, and raycasts against a WorldModel's parts
      return what Studio's do.
-9. **The GUI Roblox draws itself**, from the CoreScripts in the user's
-   Studio install, loaded at runtime and never shipped (see the
-   [content policy](../design/policies.md#content-and-assets)). They
-   draw the top bar, player list, backpack, health bar, ProximityPrompts
-   (157 files), the legacy Dialog (352 files, through
-   `MainBotChatScript2`), `Kick` and error prompts, and they answer
+9. **The GUI Roblox draws itself**: the top bar and its menu, player
+   list, backpack, health bar, ProximityPrompts (157 files), the legacy
+   Dialog (352 files), `Kick` and error prompts, and what they answer:
    `SetCoreGuiEnabled` (1,295 files), `SetCore` (868) and `GetCore`
-   (472).
+   (472). Piece by piece, Roblox's real CoreGui works in Rook first, then
+   Rook's own copy of it.
    - *Scope*:
-     - A loader that reads Studio's `DataModelPatch.rbxm`, where the
-       CoreScripts and CorePackages are all kept as Luau bytecode (the
-       plain `.lua` copies leave out `CorePackages.Workspace`), and runs
-       `StarterScript` with CoreScript identity into CoreGui's
-       `RobloxGui`. Running: see
-       [Roblox's CoreScripts](../behavior/gui/core-scripts.md).
-     - StyleSheets, which the new GUI (Foundation, the top bar) is sized
-       and colored by: started, without `@` queries.
-     - The engine side the scripts expect: CoreGui and its security,
-       GuiService's core members, the top bar inset, and stand-ins for
-       services that talk to Roblox's website (friends, purchases,
-       analytics, voice), which do nothing locally.
-     - ProximityPromptService's engine half: which prompts are shown
-       (distance, `RequiresLineOfSight`, `Exclusivity`), the key and
-       `HoldDuration`, `Triggered` and `TriggerEnded`, and `Style` Custom
-       for places that draw their own.
-     - Without a Studio install: the 2018 Core-Scripts (Apache-2.0)
-       shipped as a fallback, or no core GUI, chosen by setting.
+     - Roblox's real CoreScripts, from the user's install at runtime and
+       never shipped (see the
+       [content policy](../design/policies.md#content-and-assets)): the
+       loader reads Studio's `DataModelPatch.rbxm` and runs
+       `StarterScript` with CoreScript identity (see
+       [Roblox's core scripts](../behavior/gui/core-scripts.md)). Each
+       piece works in every state: the reference for Rook's own, and
+       the GUI players with Roblox installed get.
+     - The engine side they and games share: StyleSheets (started,
+       without `@` queries), GuiService's core members, input reaching
+       CoreGui, ContextActionService, health, the Backpack and Tools,
+       ProximityPromptService (which prompts show by distance,
+       `RequiresLineOfSight` and `Exclusivity`; the key and
+       `HoldDuration`; `Triggered`; `Style` Custom). Services that ask
+       Roblox's website (friends, purchases, analytics, voice) do
+       nothing locally.
+     - Rook's own CoreGui, in Luau and shipped: each piece laid out,
+       colored and animated as Roblox's, with values from `--dump` of the
+       real one, and behaving as it does; Rook's own logo and icons at
+       the same sizes, never Roblox's art.
    - *Evidence*: what the CoreScripts call that Rook lacks is listed on
      [the behavior page](../behavior/gui/core-scripts.md#what-rook-lacks),
-     from running them; nothing had to be turned off.
+     from running them.
    - *Studio questions*: what `SetCoreGuiEnabled` hides for each
      `CoreGuiType`, and which `SetCore` keys the archive uses
      (`SendNotification`, `ResetButtonCallback`, `TopbarEnabled`, ...),
@@ -87,12 +87,14 @@ health bars and leaderboards are GUI.
    - *Done when*: in `rook-player` an archive place shows the player list
      with its leaderstats, the backpack with StarterPack's tools,
      working ProximityPrompts and Dialogs, and hides what its scripts
-     turn off.
+     turn off, with Roblox's CoreScripts and with Rook's own; each piece
+     of Rook's matches Roblox's in Rook's screenshots within step 4's
+     tolerance, but for the art.
 10. **Chat**: TextChatService and what the archive's scripts expect of
    the legacy Chat service (`Chat:Chat` bubbles in 561 files, `Chatted`
    handlers in about 830).
    - *Scope*: the chat window and input bar from the CoreScripts
-     (`ExperienceChatMain`), TextChannels, `SendAsync`,
+     (`ExperienceChatMain`), then Rook's own as step 9's pieces, TextChannels, `SendAsync`,
      `DisplaySystemMessage`, bubble chat over characters and parts, the
      configuration objects modern places save (ChatWindowConfiguration,
      BubbleChatConfiguration, ChatInputBarConfiguration in about 1,200

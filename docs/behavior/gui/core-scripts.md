@@ -60,6 +60,10 @@ Code: loading in `rook-engine`'s `core_scripts.rs` (and the
   voice, purchases, friends), and one missing member mustn't stop the
   whole GUI. Requests through `HttpService:RequestInternal` fail at once,
   as if offline.
+- `GetEngineFeature` says no except for the features whose API Rook has
+  and the scripts need to take their current path (`AvatarChatServiceEnabled`,
+  without which the menu's voice settings find no service). Saying yes to
+  every feature stops the top bar.
 - Roblox still answers a few spellings its API dump no longer lists, and
   the CoreScripts use them: `RunService.renderStepped`, `Instance.name`,
   `UDim2:lerp`.
@@ -69,7 +73,12 @@ Code: loading in `rook-engine`'s `core_scripts.rs` (and the
 On an empty baseplate, 29 CoreScripts start and run without errors.
 The top bar (Roblox's logo button, and the menu and chat buttons in their
 pill), the player list and Roblox's notification toasts draw (Roblox's
-own React code, laid out by Rook's GUI). The settings menu, backpack,
+own React code, laid out by Rook's GUI). Clicking the logo button opens
+the in-game menu (its People, Settings, Report and Help tabs), dimming the
+screen and hiding the player list; its bottom bar of Leave, Reset and
+Resume doesn't show yet. The menu slides in with
+`GuiObject:TweenPositionInternal`, the CoreScripts' own copy of
+`TweenPosition`. The settings menu, backpack,
 emotes menu, purchase prompts, screenshots and the fullscreen title bar
 load. Chat's stores need `Player.ChatAvailabilityStatus` (a string
 starting `Enabled` when the player may chat), which Rook's API snapshot

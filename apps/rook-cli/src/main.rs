@@ -96,6 +96,10 @@ enum Command {
         /// object's size and whether it shows.
         #[arg(long, requires = "join")]
         dump: Option<String>,
+        /// With `--join`: after `--seconds`, the player clicks here (`x,y`
+        /// in pixels of a 1280 × 720 window); repeat for more clicks.
+        #[arg(long, requires = "join")]
+        click: Vec<rook_engine::ScreenPoint>,
         /// After `--seconds`, keep running in real time with a `>` prompt
         /// that runs Luau on the server, until input ends (Ctrl+C on an
         /// empty line, or Ctrl+D).
@@ -336,6 +340,7 @@ fn command(command: Command) -> anyhow::Result<()> {
             join,
             core_scripts,
             dump,
+            click,
             #[cfg(feature = "repl")]
             repl,
         } => run::run(
@@ -348,6 +353,7 @@ fn command(command: Command) -> anyhow::Result<()> {
                 join,
                 core_scripts,
                 dump: dump.as_deref(),
+                clicks: &click,
                 #[cfg(feature = "repl")]
                 repl,
             },

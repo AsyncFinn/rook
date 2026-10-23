@@ -32,6 +32,44 @@ pub enum InputEvent {
     Wheel { delta: f32 },
 }
 
+/// A point in window pixels, written `x,y` (command lines' `--click`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ScreenPoint {
+    pub x: f32,
+    pub y: f32,
+}
+
+impl std::str::FromStr for ScreenPoint {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, String> {
+        let (x, y) = s.split_once(',').ok_or("expected x,y")?;
+        let n = |v: &str| v.trim().parse::<f32>().map_err(|e| e.to_string());
+        Ok(Self { x: n(x)?, y: n(y)? })
+    }
+}
+
+impl ScreenPoint {
+    /// Clicking here with button 1: the cursor moves here, then presses
+    /// and releases.
+    pub fn click(self) -> [InputEvent; 3] {
+        [
+            InputEvent::MouseMove {
+                x: self.x,
+                y: self.y,
+            },
+            InputEvent::MouseButton {
+                button: 1,
+                down: true,
+            },
+            InputEvent::MouseButton {
+                button: 1,
+                down: false,
+            },
+        ]
+    }
+}
+
 /// What the cursor looks like: an image (Roblox's own or a script's
 /// icon), one of the system's, or hidden.
 #[derive(Debug, Clone, PartialEq, Eq)]

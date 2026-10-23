@@ -255,9 +255,16 @@ fn engine_flag(name: &str) -> Option<&'static str> {
     })
 }
 
-/// Engine features name what the engine can do, so Rook says no: scripts
-/// then keep to the older ways (Inference: CoreScripts guard newer API
-/// behind them).
-fn engine_feature(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
-    Outcome::ret(lua, false)
+/// Engine features Rook has, whose API is in its snapshot, and which the
+/// CoreScripts take a newer path for (the settings menu reads voice
+/// settings through AvatarChatService only with its feature).
+const ENGINE_FEATURES: &[&str] = &["AvatarChatServiceEnabled"];
+
+/// Engine features name what the engine can do: Rook says yes only to
+/// [`ENGINE_FEATURES`], so scripts otherwise keep to the older ways
+/// (Inference: CoreScripts guard newer API behind them; saying yes to all
+/// of them stops the top bar).
+fn engine_feature(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
+    let name = a.string(0)?;
+    Outcome::ret(lua, ENGINE_FEATURES.contains(&name.as_str()))
 }

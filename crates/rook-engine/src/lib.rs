@@ -15,7 +15,7 @@ mod scripts;
 pub mod session;
 pub mod settings;
 
-pub use bridges::input::{CursorLook, InputEvent, SystemCursor};
+pub use bridges::input::{CursorLook, InputEvent, ScreenPoint, SystemCursor};
 
 pub use bridges::render_changes::{
     RenderChanges, adorned_part, humanoid_of_root, humanoid_root_part, is_effect_class,

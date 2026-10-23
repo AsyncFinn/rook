@@ -89,6 +89,10 @@ struct Args {
     /// Run the place's scripts for this many seconds before showing it.
     #[arg(long, default_value_t = 0.0)]
     seconds: f64,
+    /// After `--seconds`, the player clicks here (`x,y` in window pixels),
+    /// half a second apart, a second before the shot; repeat for more.
+    #[arg(long)]
+    click: Vec<rook_engine::ScreenPoint>,
     /// Also run this Luau file as a server script.
     #[arg(long)]
     script: Option<PathBuf>,
@@ -150,6 +154,15 @@ fn prepare(game: &mut Game, args: &Args, content: &Arc<Resolver>) -> (SceneCache
     game.set_viewport(args.width, args.height);
     if args.seconds > 0.0 {
         game.run_for(args.seconds);
+    }
+    for point in &args.click {
+        for event in point.click() {
+            game.input(event);
+            game.run_for(0.15);
+        }
+    }
+    if !args.click.is_empty() {
+        game.run_for(1.0);
     }
     // The camera the place was saved with (clients start with a fresh one).
     let mut camera = game.saved_camera;
