@@ -59,7 +59,7 @@ fn environment(lua: &Lua, arg: LuaValue) -> Result<Table, String> {
         }
         other => return Err(format!("number expected, got {}", type_name(&other))),
     };
-    let env = match function.filter(|f| is_script_code(f)) {
+    let env = match function.filter(is_script_code) {
         Some(f) => f.environment(),
         None => None,
     };
@@ -80,10 +80,19 @@ fn function_at(lua: &Lua, level: usize) -> Result<Option<Function>, String> {
         return Ok(None);
     }
     // Past this function and the shim.
-    match lua.inspect_stack(level + 1, |d| d.function()) {
+    match running(lua, level + 1) {
         Some(f) => Ok(Some(f)),
         None => Err("invalid level".into()),
     }
+}
+
+/// The function running `level` calls up from this one.
+#[expect(
+    clippy::redundant_closure_for_method_calls,
+    reason = "`Debug::function` can't be passed for every lifetime"
+)]
+fn running(lua: &Lua, level: usize) -> Option<Function> {
+    lua.inspect_stack(level, |d| d.function())
 }
 
 /// A Luau function of a script's, not a C function or Rook's own Luau.
@@ -97,7 +106,7 @@ fn is_script_code(f: &Function) -> bool {
 fn script_environment(lua: &Lua) -> Table {
     let mut found = None;
     let mut level = 1;
-    while let Some(f) = lua.inspect_stack(level, |d| d.function()) {
+    while let Some(f) = running(lua, level) {
         if is_script_code(&f)
             && let Some(env) = f.environment()
         {
