@@ -13,6 +13,7 @@ mod runs;
 mod timing;
 mod tonemap;
 mod transparent;
+mod waiting;
 
 use super::*;
 use effects::particles::GpuParticles;
@@ -87,7 +88,7 @@ pub struct Renderer {
     /// How each entry of the scene is drawn, by its index in the scene.
     placements: Vec<Placement>,
     /// Entries waiting for an upload, placed once it's done.
-    waiting: HashMap<usize, PartInstance>,
+    waiting: waiting::Waiting,
     /// Transparent parts, sorted back to front as the view changes.
     transparent: TransparentParts,
     /// The parts Highlights cover, drawn into their mask.
@@ -311,7 +312,7 @@ impl Renderer {
             opaque: Batches::default(),
             layers: Batches::default(),
             placements: Vec::new(),
-            waiting: HashMap::default(),
+            waiting: waiting::Waiting::default(),
             transparent: TransparentParts::default(),
             highlights: HighlightParts::default(),
             lighting: Lighting::default(),

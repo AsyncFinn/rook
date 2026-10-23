@@ -1,6 +1,7 @@
 //! Which batch or slot each scene entry is drawn in, and the uploads it
 //! waits on.
 
+use super::waiting::File;
 use super::*;
 
 /// How a scene entry should be drawn now.
@@ -87,7 +88,7 @@ impl Renderer {
         changed.sort_by_key(|&i| (crate::batch::cull::spatial_key(scene.parts[i].position), i));
         for i in changed {
             let part = scene.parts[i];
-            self.waiting.remove(&i);
+            self.waiting.remove(i);
             let target = self.target(&part, Some(scene));
             self.place(i, &part, target);
         }
@@ -110,7 +111,7 @@ impl Renderer {
                 Placement::Layer { batch, slot } => self.layers.moved(batch, slot, part),
                 Placement::Transparent(t) => self.transparent.moved(t, part),
                 Placement::Hidden => {
-                    if let Some(waiting) = self.waiting.get_mut(&i) {
+                    if let Some(waiting) = self.waiting.get_mut(i) {
                         *waiting = *part;
                     }
                 }
@@ -153,9 +154,9 @@ impl Renderer {
             return;
         }
         self.add_images(&images);
-        let mut waiting: Vec<(usize, PartInstance)> = self.waiting.drain().collect();
-        waiting.sort_by_key(|(i, p)| (crate::batch::cull::spatial_key(p.position), *i));
-        for (i, part) in waiting {
+        let uploaded =
+            (meshes.into_iter().map(File::Mesh)).chain(images.into_iter().map(File::Image));
+        for (i, part) in self.waiting.take(uploaded) {
             let target = self.target(&part, None);
             self.place(i, &part, target);
         }
@@ -188,7 +189,8 @@ impl Renderer {
             (old, _) => {
                 self.vacate(old);
                 if target == Target::Waiting {
-                    self.waiting.insert(i, *part);
+                    let files = self.queued_files(part);
+                    self.waiting.insert(i, *part, &files);
                 }
                 self.placements[i] = self.occupy(part, target);
             }
@@ -303,6 +305,15 @@ impl Renderer {
             }
             None => Readiness::Missing,
         }
+    }
+
+    /// The files an entry waits on: its mesh and images queued for upload.
+    fn queued_files(&self, part: &PartInstance) -> Vec<File> {
+        let mesh = (self.meshes.is_queued(&part.shape)).then_some(File::Mesh(part.shape));
+        let images = (image_set(part).into_iter().flatten())
+            .filter(|h| self.images.is_queued(h))
+            .map(File::Image);
+        mesh.into_iter().chain(images).collect()
     }
 
     /// Free the slot an entry was drawn in.
