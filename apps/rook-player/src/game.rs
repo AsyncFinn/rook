@@ -66,12 +66,14 @@ impl Loading {
         content: Arc<rook_content::Resolver>,
         script: Option<String>,
         wait_for_sounds: bool,
+        core_scripts: Option<Arc<rook_engine::core_scripts::CorePatch>>,
     ) -> anyhow::Result<Self> {
         let load_start = std::time::Instant::now();
         let bytes = fs_err::read(path)?;
         let options = Options {
             content: Some(content),
             wait_for_sounds,
+            core_scripts,
             ..Options::default()
         };
         let (stage, script) = if play {
@@ -156,8 +158,9 @@ impl Game {
         content: Arc<rook_content::Resolver>,
         script: Option<String>,
         wait_for_sounds: bool,
+        core_scripts: Option<Arc<rook_engine::core_scripts::CorePatch>>,
     ) -> anyhow::Result<Self> {
-        let loading = Loading::begin(path, play, content, script, wait_for_sounds)?;
+        let loading = Loading::begin(path, play, content, script, wait_for_sounds, core_scripts)?;
         match loading.stage {
             Stage::Server(starting) => loading.finish.joined(starting.wait()?),
             Stage::Run(bytes) => loading.finish.run(&bytes),

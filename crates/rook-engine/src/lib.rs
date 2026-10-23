@@ -7,6 +7,7 @@
 
 mod bridges;
 pub mod console;
+pub mod core_scripts;
 pub mod data_folder;
 mod frame;
 pub mod logging;
@@ -83,6 +84,9 @@ pub struct Options {
     /// (headless runs, conformance, tests). The player loads in the
     /// background instead, as Roblox does.
     pub wait_for_sounds: bool,
+    /// Roblox's CoreScripts, which clients run for the GUI Roblox draws
+    /// itself (`settings::core_scripts`); `None` runs without them.
+    pub core_scripts: Option<Arc<core_scripts::CorePatch>>,
 }
 
 impl Default for Options {
@@ -93,6 +97,7 @@ impl Default for Options {
             memory_limit: 1 << 30,
             content: None,
             wait_for_sounds: true,
+            core_scripts: None,
         }
     }
 }
@@ -255,6 +260,9 @@ impl DataModel {
             }
         }
         ensure_camera(&mut dom);
+        if role == Role::Server {
+            ensure_chat_configuration(&mut dom);
+        }
         dom.journal_mut().set_enabled(true);
         let run_service = dom.get_service("RunService").expect("RunService class");
         // Workspace.SignalBehavior: Default currently means Immediate
@@ -407,6 +415,33 @@ fn ensure_camera(dom: &mut Dom) {
     dom.attach_unchecked(camera, ws);
     if let Some(p) = dom.property_id(ws, "CurrentCamera") {
         dom.load_property(ws, p, Value::Ref(Some(camera.to_ref())));
+    }
+}
+
+/// TextChatService always holds its configuration objects, which the
+/// chat CoreScripts look for (Inference: new places save them, and
+/// Roblox's chat window reads them in places saved before they existed);
+/// clients get them by replication.
+fn ensure_chat_configuration(dom: &mut Dom) {
+    let Ok(chat) = dom.get_service("TextChatService") else {
+        return;
+    };
+    for class in [
+        "ChatWindowConfiguration",
+        "ChatInputBarConfiguration",
+        "BubbleChatConfiguration",
+        "ChannelTabsConfiguration",
+    ] {
+        if dom.find_first_child_of_class(chat, class).is_some() {
+            continue;
+        }
+        let Ok(config) = dom.create_by_name(class) else {
+            continue;
+        };
+        if let Err(e) = dom.set_name(config, class.into()) {
+            tracing::warn!("naming the {class} failed: {e}");
+        }
+        dom.attach_unchecked(config, chat);
     }
 }
 

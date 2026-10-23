@@ -99,6 +99,29 @@ impl Dom {
         Ok(())
     }
 
+    /// Whether `property` was set on `id`, rather than reading its class
+    /// default.
+    pub fn is_set(&self, id: InstanceId, property: PropertyId) -> bool {
+        self.instances
+            .get(id)
+            .is_some_and(|i| i.properties.contains_key(&property))
+    }
+
+    /// Return a property to its class default, recording a change if that
+    /// changes its value.
+    pub fn reset_property(&mut self, id: InstanceId, property: PropertyId) -> Result<(), DomError> {
+        let inst = self.inst_mut(id)?;
+        let Some(old) = inst.properties.remove(&property) else {
+            return Ok(());
+        };
+        self.unlink(id, property, &old);
+        let class = self.inst(id)?.class;
+        if !self.default_is(class, property, &old) {
+            self.journal.push(Change::Property { id, property });
+        }
+        Ok(())
+    }
+
     /// Store a property from a file without recording a change.
     pub fn load_property(&mut self, id: InstanceId, property: PropertyId, value: Value) {
         let value = coerce(self.db.property(property).ty, value);

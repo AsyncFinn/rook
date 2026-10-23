@@ -15,6 +15,8 @@ use crate::types::LVector2;
 pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
     Some(match (owner, name) {
         ("GuiService", "GetGuiInset") => get_gui_inset,
+        ("GuiService", "GetInsetArea") => get_inset_area,
+        ("GuiService", "GetHardwareSafeViewport") => get_hardware_safe_viewport,
         ("BasePlayerGui", "GetGuiObjectsAtPosition") => get_gui_objects_at_position,
         ("PlayerGui", "GetTopbarTransparency") => get_topbar_transparency,
         ("PlayerGui", "SetTopbarTransparency") => set_topbar_transparency,
@@ -58,6 +60,34 @@ pub(crate) fn gui_inset(lua: &Lua) -> f32 {
 fn get_gui_inset(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
     let top_left = LVector2(Vector2::new(0.0, gui_inset(lua)));
     Outcome::ret(lua, (top_left, LVector2(Vector2::new(0.0, 0.0))))
+}
+
+/// The window's size: the current camera's `ViewportSize`.
+fn viewport_size(lua: &Lua) -> Vector2 {
+    with_world(lua, |w| {
+        let dom = &w.dom;
+        dom.find_service("Workspace")
+            .and_then(|ws| dom.ref_property(ws, "CurrentCamera"))
+            .and_then(|c| dom.vector2_property(c, "ViewportSize"))
+            .unwrap_or(Vector2::new(0.0, 0.0))
+    })
+}
+
+/// The part of the screen no hardware covers (notches, rounded corners):
+/// all of it on a desktop.
+fn get_hardware_safe_viewport(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
+    Outcome::ret(lua, LVector2(viewport_size(lua)))
+}
+
+/// The screen below the top bar, for any `Enum.ScreenInsets` (Inference:
+/// the top bar is the only inset a desktop has).
+fn get_inset_area(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
+    let size = viewport_size(lua);
+    let area = rbx_types::Rect::new(
+        rbx_types::Vector2::new(0.0, gui_inset(lua)),
+        rbx_types::Vector2::new(size.0.x, size.0.y),
+    );
+    Outcome::ret(lua, crate::types::LRect(area))
 }
 
 /// Measured: 0.5 until a script sets it.

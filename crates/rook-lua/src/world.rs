@@ -215,6 +215,31 @@ pub struct World {
     /// Threads that ended with an error.
     pub errors: u64,
     pub(crate) modules: ModuleState,
+    /// Luau bytecode for scripts that came without source (Roblox's own
+    /// packages: see `rook_formats::compiled_scripts`), run in its place.
+    pub bytecode: HashMap<InstanceId, std::sync::Arc<[u8]>>,
+    /// The folder of CoreScripts `ScriptContext:AddCoreScriptLocal`
+    /// starts from, outside the DataModel (clients running Roblox's
+    /// CoreScripts).
+    pub core_scripts: Option<InstanceId>,
+    /// Fast flags by full name (`FFlagX`, `DFIntY`), as Studio last
+    /// downloaded them, for CoreScripts' `DefineFastFlag` and the like.
+    pub fast_flags: std::sync::Arc<HashMap<String, String>>,
+    /// Flags scripts defined that Studio has no value for, with their
+    /// defaults.
+    pub(crate) defined_flags: HashMap<String, String>,
+    /// LocalizationTables' entries, parsed from `Contents` when first used.
+    pub(crate) localization:
+        HashMap<InstanceId, std::rc::Rc<Vec<crate::api::methods::localization::Entry>>>,
+    /// Each Translator's table (`None`: the game's tables, for one from
+    /// LocalizationService).
+    pub(crate) translators: HashMap<InstanceId, Option<InstanceId>>,
+    /// `Enum.CoreGuiType`s scripts turned off with `SetCoreGuiEnabled`.
+    pub(crate) core_gui_disabled: HashSet<&'static str>,
+    /// Movement modes registered with each PlayerScripts, by kind
+    /// (`player_scripts::KINDS`), as enum values.
+    pub(crate) movement_modes: HashMap<(InstanceId, usize), Vec<u32>>,
+    pub(crate) styles: crate::styles::Styles,
     /// Running scripts and the environment each runs in, so they don't
     /// start twice and stopping one can find its threads.
     pub(crate) started: HashMap<InstanceId, Table>,
@@ -259,6 +284,15 @@ impl World {
             inert: BTreeMap::new(),
             errors: 0,
             modules: ModuleState::default(),
+            bytecode: HashMap::new(),
+            core_scripts: None,
+            fast_flags: Default::default(),
+            defined_flags: HashMap::new(),
+            localization: HashMap::new(),
+            translators: HashMap::new(),
+            core_gui_disabled: HashSet::new(),
+            movement_modes: HashMap::new(),
+            styles: Default::default(),
             started: HashMap::new(),
             any_stopped: false,
             sounds: HashMap::new(),

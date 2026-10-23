@@ -120,8 +120,9 @@ pub(crate) struct Laid {
 }
 
 impl Layout {
-    /// Lay out the GUI scripts see: every player's PlayerGui, StarterGui
-    /// and the world GUIs in `world`. `previous` is the last layout, where
+    /// Lay out the GUI scripts see: every player's PlayerGui, StarterGui,
+    /// CoreGui (what Roblox's CoreScripts draw) and the world GUIs in
+    /// `world`. `previous` is the last layout, where
     /// hidden children of a UI layout stay; `turning` says where each
     /// turning UIPageLayout's view is.
     pub(crate) fn screens(
@@ -136,7 +137,8 @@ impl Layout {
             .into_iter()
             .flat_map(|p| dom.children(p).iter().copied())
             .filter_map(|p| dom.find_first_child_of_class(p, "PlayerGui"))
-            .chain(dom.find_service("StarterGui"));
+            .chain(dom.find_service("StarterGui"))
+            .chain(dom.find_service("CoreGui"));
         for holder in holders {
             for root in through_folders(dom, holder, |id| dom.is_a(id, "GuiBase2d")) {
                 pass.root(root);

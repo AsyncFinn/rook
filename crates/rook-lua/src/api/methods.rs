@@ -38,20 +38,26 @@ mod audio_api;
 mod bindables;
 pub(crate) mod camera;
 mod characters;
+pub(crate) mod core;
+mod core_gui;
 pub(crate) mod data_stores;
 mod effects;
 mod gui;
 mod http;
 mod input;
+pub(crate) mod localization;
 mod materials;
 mod models;
 mod physics;
+mod player_scripts;
 pub(crate) mod preload;
 mod queries;
 pub(crate) mod remotes;
 mod services;
 mod sound;
+mod styles;
 mod terrain;
+mod text;
 pub(crate) mod textbox;
 mod tree;
 mod tweens;
@@ -126,6 +132,12 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("Instance", "HasTag") => has_tag,
         ("Instance", "GetTags") => get_tags,
         ("Instance", "GetActor") => nil,
+        ("CollectionService", "AddTag") => |l, t, a| collection_tag(l, t, a, add_tag),
+        ("CollectionService", "RemoveTag") => |l, t, a| collection_tag(l, t, a, remove_tag),
+        ("CollectionService", "HasTag") => |l, t, a| collection_tag(l, t, a, has_tag),
+        ("CollectionService", "GetTags") => |l, t, a| collection_tag(l, t, a, get_tags),
+        ("CollectionService", "GetTagged") => get_tagged,
+        ("CollectionService", "GetAllTags") => get_all_tags,
         ("ServiceProvider", "GetService" | "service") => get_service,
         ("ServiceProvider", "FindService") => find_service,
         ("DataModel", "IsLoaded") => true_,
@@ -135,7 +147,9 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("MaterialService", "SetBaseMaterialOverride") => set_base_material_override,
         ("MaterialService", "GetMaterialVariant") => get_material_variant,
         ("RunService", "IsRunning") => true_,
-        ("RunService", "IsStudio" | "IsRunMode") => false_,
+        ("RunService", "IsStudio" | "IsRunMode" | "IsEdit") => false_,
+        ("PolicyService", "GetPolicyInfoForPlayerAsync") => policy_info,
+        ("Workspace", "GetServerTimeNow") => server_time_now,
         ("RunService", "IsServer") => is_server,
         ("RunService", "IsClient") => is_client,
         ("BindableEvent", "Fire") => bindable_fire,
@@ -143,6 +157,7 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("Players", "GetPlayers" | "getPlayers" | "players") => get_players,
         ("Players", "GetPlayerFromCharacter" | "playerFromCharacter") => player_from_character,
         ("Players", "GetPlayerByUserId") => player_by_user_id,
+        ("Teams", "GetTeams") => get_teams,
         ("Player", "LoadCharacter" | "LoadCharacterAsync") => load_character,
         ("Humanoid", "TakeDamage") => take_damage,
         ("PVInstance", "GetPivot") => get_pivot,
@@ -245,6 +260,12 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
                 camera::native,
                 gui::native,
                 textbox::native,
+                core::native,
+                core_gui::native,
+                localization::native,
+                text::native,
+                player_scripts::native,
+                styles::native,
             ]
             .iter()
             .find_map(|topic| topic(owner, name));
@@ -262,12 +283,20 @@ pub(crate) fn luau_source(owner: &str, name: &str) -> Option<&'static str> {
         // timeOut; without one, warns about a possible infinite yield after
         // 5 seconds). Warning text is Inference.
         ("Instance", "WaitForChild") => Some(include_str!("luau/wait_for_child.luau")),
+        // `luau/render_step.luau`, which the engine steps each frame.
+        ("RunService", "BindToRenderStep") => Some(
+            "local r = (...).render_step return function(_, name, priority, fn) r.bind(name, priority, fn) end",
+        ),
+        ("RunService", "UnbindFromRenderStep") => {
+            Some("local r = (...).render_step return function(_, name) r.unbind(name) end")
+        }
         _ => [
             tweens::luau_source,
             gui::luau_source,
             bindables::luau_source,
             data_stores::luau_source,
             remotes::luau_source,
+            core::luau_source,
         ]
         .iter()
         .find_map(|topic| topic(owner, name)),

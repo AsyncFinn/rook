@@ -23,6 +23,8 @@ rook-audio.workspace = true
 rbx_types.workspace = true
 mlua.workspace = true
 glam.workspace = true
+serde.workspace = true
+chrono.workspace = true
 serde_json.workspace = true
 profiling.workspace = true
 

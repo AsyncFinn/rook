@@ -201,6 +201,25 @@ pub(crate) fn get(w: &World, id: InstanceId, name: &str) -> Option<Value> {
     }
     match name {
         "ClockTime" if dom.is_a(id, "Lighting") => Some(Value::Float32(dom.clock_time(id) as f32)),
+        // The top bar's free space, between Roblox's buttons (creator-docs
+        // GuiService.TopbarInset). Approximation: all of it, until Rook
+        // measures where the CoreScripts' buttons end; a server has none.
+        "TopbarInset" if dom.class_name(id) == "GuiService" => {
+            let height = if w.is_client {
+                rook_gui::GUI_INSET
+            } else {
+                0.0
+            };
+            let width = dom
+                .find_service("Workspace")
+                .and_then(|ws| dom.ref_property(ws, "CurrentCamera"))
+                .and_then(|c| dom.vector2_property(c, "ViewportSize"))
+                .map_or(0.0, |v| v.0.x);
+            Some(Value::Rect(rbx_types::Rect::new(
+                rbx_types::Vector2::new(0.0, 0.0),
+                rbx_types::Vector2::new(width, height),
+            )))
+        }
         // Measured: a view of ScreenInsets, true for all but
         // CoreUISafeInsets (files migrate it to ScreenInsets, and only
         // that replicates).

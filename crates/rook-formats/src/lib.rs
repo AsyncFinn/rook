@@ -13,10 +13,12 @@
 //! [`LoadError`], never a crash.
 
 mod compare;
+mod compiled;
 mod convert;
 pub mod legacy;
 
 pub use compare::{CompareOptions, compare, compare_with};
+pub use compiled::{CompiledScript, compiled_scripts};
 pub use convert::{from_dom, into_dom};
 
 use std::io::Cursor;

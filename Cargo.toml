@@ -84,6 +84,9 @@ rbx_mesh = { version = "0.8.2", default-features = false }
 # KTX2 images (rook-content): levels are Zstandard-compressed (the same
 # zstd rbx_binary uses)
 zstd = "0.13"
+# The LZ4 chunks of binary files, read beside rbx_binary for the compiled
+# scripts it skips (rook-formats' `compiled`); the version rbx_binary uses
+lz4_flex = "0.13"
 slotmap = "1.1"
 # Fast, deterministic hashing for engine-internal maps keyed by ids and names
 rustc-hash = "2.1"

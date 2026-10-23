@@ -65,7 +65,8 @@ pub(super) fn read(
 
 /// `inst[key] = value` for scripts.
 pub(crate) fn set_member(lua: &Lua, id: InstanceId, key: &str, value: LuaValue) -> ApiResult<()> {
-    let p = match find_member(lua, id, key) {
+    let (member, identity) = find_member(lua, id, key, true);
+    let p = match member {
         Some(Member::Property(p)) => p,
         Some(Member::Callback(name)) => {
             let f = match value {
@@ -81,9 +82,18 @@ pub(crate) fn set_member(lua: &Lua, id: InstanceId, key: &str, value: LuaValue) 
             methods::set_callback(lua, id, name, f)?;
             return Ok(());
         }
+        // Roblox's CoreScripts set members newer than Rook's API snapshot
+        // (`ScreenGui.OnTopOfCoreBlur`): ignored, counted.
+        None if crate::api::scripts::caller_is_core(lua) => {
+            with_world(lua, |w| {
+                let class = w.dom.class_name(id).to_owned();
+                w.count_unimplemented(format!("{class}.{key} (unknown)"));
+            });
+            return Ok(());
+        }
         _ => return Err(not_a_member(lua, id, key)),
     };
-    if !allowed(p.security[1]) {
+    if !allowed(p.security[1], identity) {
         return Err(ScriptError(format!(
             "The current thread cannot write '{key}' (lacking capability {})",
             p.security[1].capability()

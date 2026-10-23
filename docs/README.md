@@ -35,6 +35,7 @@
     - [GUI input](behavior/gui/input.md): what takes a click, buttons, the wheel, TextBox focus and typing
     - [GUI legacy styles](behavior/gui/styles.md): Frame and GuiButton `Style`, their textures, states and insets
     - [GUI modern UI objects](behavior/gui/modern.md): UICorner, UIStroke, UIGradient, flex, UITableLayout, UIPageLayout, CanvasGroup
+    - [Roblox's CoreScripts](behavior/gui/core-scripts.md): where Studio keeps them, running them as Roblox's own code, StyleSheets, what Rook lacks
   - Lighting
     - [Local lights](behavior/lighting/local-lights.md): PointLight, SpotLight and SurfaceLight
     - [Ambient and OutdoorAmbient](behavior/lighting/ambient.md)

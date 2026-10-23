@@ -125,6 +125,20 @@ impl Gui {
         self.stale = true;
     }
 
+    /// How big `text` is in `font` at `size` pixels, wrapped to `frame`'s
+    /// width: `TextService:GetTextSize` (creator-docs), measured as a
+    /// TextLabel would lay it out.
+    pub fn text_size(
+        &mut self,
+        text: &str,
+        font: rook_types::Font,
+        size: f32,
+        frame: Vec2,
+    ) -> Vec2 {
+        let source = text::Source::plain(text, font, size);
+        text::lay_out(&mut self.fonts, &source, frame, Some(Some(frame.x))).bounds
+    }
+
     /// Fonts by asset id (`rbxassetid://...`) text is waiting for, each
     /// asked for once; hand each back with [`Gui::font_arrived`].
     pub fn take_font_requests(&mut self) -> Vec<String> {

@@ -119,6 +119,64 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
             Ok(())
         })?,
     )?;
+    // `settings()` and `UserSettings()`: one of each per DataModel, outside
+    // its tree.
+    for (global, class) in [
+        ("settings", "GlobalSettings"),
+        ("UserSettings", "UserSettings"),
+    ] {
+        let key = format!("rook.{class}");
+        g.set(
+            global,
+            lua.create_function(move |lua, ()| {
+                if let Some(ud) = lua.named_registry_value::<Option<mlua::AnyUserData>>(&key)? {
+                    return Ok(ud);
+                }
+                let (id, game) = with_world(lua, |w| -> Result<_, rook_dom::DomError> {
+                    let id = w.dom.create_by_name(class)?;
+                    w.dom.set_name(id, class.to_owned())?;
+                    // Scripts read `settings().Rendering` and
+                    // `UserSettings().GameSettings` without asking for the
+                    // service first.
+                    if class != "UserSettings" {
+                        for (child, name) in [
+                            ("RenderSettings", "Rendering"),
+                            ("NetworkSettings", "Network"),
+                            ("PhysicsSettings", "Physics"),
+                            ("DebugSettings", "Diagnostics"),
+                        ] {
+                            let c = w.dom.create_by_name(child)?;
+                            w.dom.set_name(c, name.into())?;
+                            w.dom.set_parent(c, Some(id))?;
+                        }
+                        return Ok((id, None));
+                    }
+                    let game = w.dom.create_by_name("UserGameSettings")?;
+                    w.dom.set_name(game, "GameSettings".into())?;
+                    w.dom.set_parent(game, Some(id))?;
+                    Ok((id, Some(game)))
+                })
+                .map_err(|e| mlua::Error::RuntimeError(e.to_string()))?;
+                if let Some(game) = game {
+                    user_game_settings(lua, game)?;
+                }
+                let ud = push_instance(lua, id)?;
+                lua.set_named_registry_value(&key, &ud)?;
+                Ok(ud)
+            })?,
+        )?;
+    }
+    // Roblox's profiler and memory-category marks: no profiler to feed.
+    let debug: Table = g.get("debug")?;
+    let noop = lua.create_function(|_, _: MultiValue| Ok(()))?;
+    for name in [
+        "profilebegin",
+        "profileend",
+        "setmemorycategory",
+        "resetmemorycategory",
+    ] {
+        debug.set(name, noop.clone())?;
+    }
     g.set("ypcall", g.get::<Function>("pcall")?)?;
     g.set("shared", lua.create_table()?)?;
     g.set("Instance", instance_table(lua)?)?;
@@ -137,6 +195,58 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     }
     install_engine_helpers(lua)?;
     Ok(())
+}
+
+/// The player's settings scripts read that Rook's API snapshot leaves
+/// out, at the defaults creator-docs UserGameSettings gives; Rook has no
+/// settings menu to change them yet.
+fn user_game_settings(lua: &Lua, game: rook_dom::InstanceId) -> mlua::Result<()> {
+    let values = lua.create_table()?;
+    values.raw_set("PreferredTransparency", 1.0)?;
+    values.raw_set("ReducedMotion", false)?;
+    values.raw_set("PerformanceStatsVisible", false)?;
+    values.raw_set("ChatVisible", true)?;
+    values.raw_set("VREnabled", false)?;
+    values.raw_set("MasterVolume", 1.0)?;
+    values.raw_set("HasEverUsedVR", false)?;
+    values.raw_set("IsUsingCameraYInverted", false)?;
+    values.raw_set("HapticStrength", 1.0)?;
+    values.raw_set("Fullscreen", false)?;
+    values.raw_set("GraphicsQualityLevel", 0)?;
+    values.raw_set("CameraYInverted", false)?;
+    values.raw_set("UiNavigationKeyBindEnabled", true)?;
+    values.raw_set("OnScreenProfilerEnabled", false)?;
+    values.raw_set("MicroProfilerWebServerEnabled", false)?;
+    values.raw_set("MicroProfilerWebServerIP", "0.0.0.0")?;
+    values.raw_set("MicroProfilerWebServerPort", 0)?;
+    // Approximation: sensitivity 1 everywhere, the middle of Roblox's slider.
+    values.raw_set("MouseSensitivity", 1.0)?;
+    let one = crate::types::LVector2(rook_types::Vector2::new(1.0, 1.0));
+    values.raw_set("MouseSensitivityFirstPerson", one)?;
+    values.raw_set("MouseSensitivityThirdPerson", one)?;
+    for (property, item) in [
+        ("ComputerCameraMovementMode", "Default"),
+        ("ComputerMovementMode", "Default"),
+        ("TouchCameraMovementMode", "Default"),
+        ("TouchMovementMode", "Default"),
+        ("ControlMode", "Classic"),
+        ("RotationType", "MovementRelative"),
+    ] {
+        values.raw_set(
+            property,
+            crate::types::enums::named_item(lua, property, item)?,
+        )?;
+    }
+    values.raw_set(
+        "PreferredTextSize",
+        crate::types::enums::named_item(lua, "PreferredTextSize", "Medium")?,
+    )?;
+    let all = super::instance::runtime_properties(lua)?;
+    crate::ctx::ctx(lua)
+        .runtime_prop_ids
+        .borrow_mut()
+        .insert(game);
+    all.raw_set(push_instance(lua, game)?, values)
 }
 
 /// Helpers for engine features written in Luau (tweens, UIPageLayout).
@@ -247,5 +357,11 @@ fn install_engine_helpers(lua: &Lua) -> mlua::Result<()> {
             .call(std.clone())?;
         std.set("page_layout", pages)?;
     }
+    let render: Table = lua
+        .load(include_str!("luau/render_step.luau"))
+        .set_name("=[rook] RenderStep")
+        .call(std.clone())?;
+    lua.set_named_registry_value("rook.render_step", render.get::<Function>("step")?)?;
+    std.set("render_step", render)?;
     Ok(())
 }

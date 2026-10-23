@@ -138,3 +138,48 @@ pub(super) fn get_tags(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outco
     });
     Outcome::ret(lua, lua.create_sequence_from(tags)?)
 }
+
+/// CollectionService's forms of the tag methods, which take the instance
+/// first (creator-docs CollectionService).
+pub(super) fn collection_tag(
+    lua: &Lua,
+    _: InstanceId,
+    a: &Args,
+    method: fn(&Lua, InstanceId, &Args) -> ApiResult<Outcome>,
+) -> ApiResult<Outcome> {
+    let instance = a.instance(0)?;
+    let rest = Args::new(a.rest(1).into_iter().collect(), "CollectionService");
+    method(lua, instance, &rest)
+}
+
+/// Every instance in the DataModel with `tag`, in tree order.
+pub(super) fn get_tagged(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
+    let tag = a.string(0)?;
+    let found = with_world(lua, |w| {
+        let root = w.dom.root();
+        w.dom
+            .descendants(root)
+            .into_iter()
+            .filter(|&d| w.dom.has_tag(d, &tag))
+            .collect::<Vec<_>>()
+    });
+    ret_instances(lua, &found)
+}
+
+/// Every tag some instance in the DataModel has.
+pub(super) fn get_all_tags(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
+    let tags = with_world(lua, |w| {
+        let root = w.dom.root();
+        let mut all: Vec<String> = w
+            .dom
+            .descendants(root)
+            .into_iter()
+            .filter_map(|d| w.dom.get(d))
+            .flat_map(|i| i.tags.iter().cloned())
+            .collect();
+        all.sort();
+        all.dedup();
+        all
+    });
+    Outcome::ret(lua, lua.create_sequence_from(tags)?)
+}

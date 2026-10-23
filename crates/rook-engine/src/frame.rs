@@ -18,7 +18,9 @@ impl DataModel {
         let rs = self.run_service;
         if self.role == Role::Client {
             // Before the frame is drawn (creator-docs RunService.PreRender;
-            // RenderStepped is its older name).
+            // RenderStepped is its older name), after the functions bound to
+            // the render step.
+            self.runtime.render_step(dt);
             self.fire(rs, "RenderStepped", dt);
             self.fire(rs, "PreRender", dt);
         }
@@ -27,7 +29,9 @@ impl DataModel {
             self.sync_viewport_size();
             self.ease_scrolls();
         }
-        // Measured: GUI is laid out after RenderStepped.
+        // Measured: GUI is laid out after RenderStepped. Styles apply
+        // first, as they decide where and how big things are.
+        self.runtime.restyle();
         self.runtime.sync_gui();
         if self.role == Role::Client {
             self.refresh_gui_hover();

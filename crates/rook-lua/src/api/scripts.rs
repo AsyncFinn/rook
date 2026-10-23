@@ -30,15 +30,54 @@ fn compiler() -> Compiler {
     Compiler::new().set_disabled_builtins(["typeof"])
 }
 
-/// Compile a script's source to run in `env`. Chunk names are full names,
-/// so errors read `Workspace.Script:3: ...` as on Roblox.
+/// Compile a script's source to run in `env`, or load its bytecode if it
+/// came compiled. Chunk names are full names, so errors read
+/// `Workspace.Script:3: ...` as on Roblox.
 fn compile(lua: &Lua, id: InstanceId, env: Table) -> mlua::Result<Function> {
-    let name = with_world(lua, |w| w.dom.full_name(id));
-    lua.load(source_of(lua, id))
+    let (name, bytecode) = with_world(lua, |w| (w.dom.full_name(id), w.bytecode.get(&id).cloned()));
+    let chunk = match &bytecode {
+        Some(code) => {
+            core_envs(lua)?.raw_set(env.clone(), true)?;
+            lua.load(&code[..]).set_mode(mlua::chunk::ChunkMode::Binary)
+        }
+        None => lua.load(source_of(lua, id)).set_compiler(compiler()),
+    };
+    chunk
         .set_name(format!("={name}"))
-        .set_compiler(compiler())
         .set_environment(env)
         .into_function()
+}
+
+/// The environments of scripts that came compiled: Roblox's own, which
+/// run as [`Identity::Core`](super::instance::Identity) (weak keys).
+fn core_envs(lua: &Lua) -> mlua::Result<Table> {
+    lua.named_registry_value("rook.core_envs")
+}
+
+/// Whether the code running now is Roblox's own: the nearest frame of a
+/// script's code (not Rook's own Luau, named `[rook] ...`, nor native
+/// functions) belongs to a script that came compiled. Only asked when a
+/// member needs more than the game identity, so stack walks stay off the
+/// common paths.
+pub(crate) fn caller_is_core(lua: &Lua) -> bool {
+    let Ok(core) = core_envs(lua) else {
+        return false;
+    };
+    for level in 0.. {
+        let frame = lua.inspect_stack(level, |d| {
+            let rook = d
+                .source()
+                .source
+                .is_some_and(|s| s.trim_start_matches('=').starts_with("[rook]"));
+            (!rook).then(|| d.function().environment()).flatten()
+        });
+        match frame {
+            None => return false,
+            Some(Some(env)) => return core.raw_get::<bool>(env).unwrap_or(false),
+            Some(None) => {}
+        }
+    }
+    false
 }
 
 /// Start a Script on a new thread. Compile errors go to the output.
@@ -216,7 +255,11 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     // Stopped scripts' environments, and the function each thread `task.*`
     // made calls (see `threads::thread_for`). Weak, so entries go with
     // what they describe.
-    for key in ["rook.stopped_envs", "rook.thread_functions"] {
+    for key in [
+        "rook.stopped_envs",
+        "rook.thread_functions",
+        "rook.core_envs",
+    ] {
         let t = lua.create_table()?;
         let mt = lua.create_table()?;
         mt.raw_set("__mode", "k")?;

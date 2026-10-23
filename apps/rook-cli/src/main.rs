@@ -83,6 +83,19 @@ enum Command {
         /// Also run this Luau file as a server script after the place starts.
         #[arg(long)]
         script: Option<PathBuf>,
+        /// A player joins, and their client runs too; its output and the
+        /// members it lacks are printed after the server's.
+        #[arg(long)]
+        join: bool,
+        /// The joined client runs Roblox's CoreScripts from the Studio
+        /// install (the `coreScripts` setting).
+        #[arg(long, requires = "join")]
+        core_scripts: bool,
+        /// With `--join`: print the client's tree from this instance at the
+        /// end (names by dots, as `CoreGui.RobloxGui`), with each GUI
+        /// object's size and whether it shows.
+        #[arg(long, requires = "join")]
+        dump: Option<String>,
         /// After `--seconds`, keep running in real time with a `>` prompt
         /// that runs Luau on the server, until input ends (Ctrl+C on an
         /// empty line, or Ctrl+D).
@@ -320,16 +333,24 @@ fn command(command: Command) -> anyhow::Result<()> {
             timeout,
             quiet,
             script,
+            join,
+            core_scripts,
+            dump,
             #[cfg(feature = "repl")]
             repl,
         } => run::run(
             &file,
-            seconds,
-            timeout,
-            quiet,
-            script.as_deref(),
-            #[cfg(feature = "repl")]
-            repl,
+            &run::Run {
+                seconds,
+                timeout,
+                quiet,
+                script: script.as_deref(),
+                join,
+                core_scripts,
+                dump: dump.as_deref(),
+                #[cfg(feature = "repl")]
+                repl,
+            },
         ),
     }
 }

@@ -12,6 +12,7 @@ mod net;
 mod removal;
 pub mod scheduler;
 mod signal;
+mod styles;
 mod threads;
 mod types;
 mod world;
@@ -206,6 +207,32 @@ impl Runtime {
     pub fn dispatch_since(&self, start: u64) {
         profiling::scope!("dispatch_since");
         self.guarded(|| threads::dispatch(&self.lua, start));
+    }
+
+    /// Run what scripts bound with `RunService:BindToRenderStep`, by
+    /// priority (clients, each frame before RenderStepped).
+    pub fn render_step(&self, dt: f64) {
+        let Ok(step) = self
+            .lua
+            .named_registry_value::<mlua::Function>("rook.render_step")
+        else {
+            return;
+        };
+        self.guarded(|| {
+            // Each binding runs on its own thread and reports its own errors.
+            let _ = step.call::<()>(dt);
+            threads::drain_deferred(&self.lua);
+        });
+    }
+
+    /// Apply StyleSheets to what changed since the last call.
+    pub fn restyle(&self) {
+        let start = self.world().dom.journal().end();
+        let styled = self.guarded(|| styles::restyle(&self.lua));
+        if let Err(e) = styled {
+            tracing::warn!("styling failed: {e}");
+        }
+        self.dispatch_since(start);
     }
 
     /// Lay GUI out again if it changed, as Roblox does each frame after

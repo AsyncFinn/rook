@@ -13,9 +13,36 @@ pub(super) fn property_security(owner: &str, name: &str) -> [Security; 2] {
         .unwrap_or([Security::None; 2])
 }
 
-/// Game scripts run at the normal game identity: `None` security only.
-pub(super) fn allowed(sec: Security) -> bool {
-    sec == Security::None
+/// Who is running code, which decides the members it reaches.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) enum Identity {
+    /// Game scripts: `None` security only.
+    Game,
+    /// Roblox's own CoreScripts and the modules they require (code that
+    /// came compiled), which also reach Plugin, LocalUser and RobloxScript
+    /// members (creator-docs SecurityCapabilities: CoreScripts hold
+    /// RobloxScript).
+    Core,
+}
+
+pub(super) fn allowed(sec: Security, identity: Identity) -> bool {
+    match identity {
+        Identity::Game => sec == Security::None,
+        Identity::Core => !matches!(
+            sec,
+            Security::RobloxSecurity | Security::NotAccessibleSecurity
+        ),
+    }
+}
+
+/// Whether a member the game identity found needs a higher one: it was
+/// denied, or is a property it may not use this way (`write`).
+pub(super) fn needs_core(member: Option<Member>, write: bool) -> bool {
+    match member {
+        Some(Member::Denied { .. }) => true,
+        Some(Member::Property(p)) => !allowed(p.security[usize::from(write)], Identity::Game),
+        _ => false,
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -55,9 +82,19 @@ pub(crate) enum Member {
 /// superclasses, then callbacks.
 pub(crate) type MemberTable = FxHashMap<&'static str, Member>;
 
-/// Build a class's member table. `known` is false for instances of classes
-/// the database doesn't have, which get no properties.
-pub(super) fn member_table(class: ClassId, known: bool) -> MemberTable {
+/// Deprecated spellings Roblox still answers that the API dump no longer
+/// lists: `(class, alias, member)`. Observed: Roblox's own CoreScripts
+/// connect to `RunService.renderStepped` and read `.name`.
+const HIDDEN_ALIASES: &[(&str, &str, &str)] = &[
+    ("RunService", "renderStepped", "RenderStepped"),
+    ("Instance", "name", "Name"),
+];
+
+/// Build a class's member table as `identity` sees it. `known` is false
+/// for instances of classes the database doesn't have, which get no
+/// properties.
+pub(super) fn member_table(class: ClassId, known: bool, identity: Identity) -> MemberTable {
+    let allowed = |sec| allowed(sec, identity);
     let db = database();
     let mut table = MemberTable::default();
     if known {
@@ -130,6 +167,13 @@ pub(super) fn member_table(class: ClassId, known: bool) -> MemberTable {
             table.entry(e.name.as_str()).or_insert(member);
         }
     }
+    for &(owner, alias, member) in HIDDEN_ALIASES {
+        if db.superclasses(class).any(|c| c.name == owner)
+            && let Some(&found) = table.get(member)
+        {
+            table.entry(alias).or_insert(found);
+        }
+    }
     for (_, m) in chain() {
         for cb in m.callbacks.iter().filter(|cb| allowed(cb.security)) {
             table
@@ -166,15 +210,33 @@ fn capitalized_twin(
     db.find_canonical_property(class, twin.name)
 }
 
-/// What `key` names on an instance's class, if anything.
-pub(super) fn find_member(lua: &Lua, id: InstanceId, key: &str) -> Option<Member> {
-    find_member_in(&ctx(lua), id, key).map(|(_, m)| m)
+/// What `key` names on an instance's class for the running code, if
+/// anything (`write`: for assigning it), and who that code is.
+pub(super) fn find_member(
+    lua: &Lua,
+    id: InstanceId,
+    key: &str,
+    write: bool,
+) -> (Option<Member>, Identity) {
+    let c = ctx(lua);
+    let found = find_member_in(&c, id, key, Identity::Game).map(|(_, m)| m);
+    if needs_core(found, write) && crate::api::scripts::caller_is_core(lua) {
+        let core = find_member_in(&c, id, key, Identity::Core).map(|(_, m)| m);
+        return (core, Identity::Core);
+    }
+    (found, Identity::Game)
 }
 
-/// [`find_member`] with the context already fetched (fetching it costs
-/// as much as a lookup, and `inst.Key` needs it several times).
-/// Also gives the member table's own (static) copy of the key.
-pub(super) fn find_member_in(c: &Ctx, id: InstanceId, key: &str) -> Option<(&'static str, Member)> {
+/// [`find_member`] for one identity, with the context already fetched
+/// (fetching it costs as much as a lookup, and `inst.Key` needs it
+/// several times). Also gives the member table's own (static) copy of
+/// the key.
+pub(super) fn find_member_in(
+    c: &Ctx,
+    id: InstanceId,
+    key: &str,
+    identity: Identity,
+) -> Option<(&'static str, Member)> {
     let (class, known) = c
         .world
         .borrow()
@@ -182,12 +244,14 @@ pub(super) fn find_member_in(c: &Ctx, id: InstanceId, key: &str) -> Option<(&'st
         .get(id)
         .map(|i| (i.class, i.unknown_class.is_none()))?;
     let found = |table: &MemberTable| table.get_key_value(key).map(|(k, m)| (*k, *m));
-    if let Some(table) = c.member_tables.borrow().get(&(class, known)) {
+    if let Some(table) = c.member_tables.borrow().get(&(class, known, identity)) {
         return found(table);
     }
-    let table = member_table(class, known);
+    let table = member_table(class, known, identity);
     let result = found(&table);
-    c.member_tables.borrow_mut().insert((class, known), table);
+    c.member_tables
+        .borrow_mut()
+        .insert((class, known, identity), table);
     result
 }
 
@@ -238,13 +302,22 @@ pub(crate) fn get_member(
         let name = with_world(lua, |w| w.dom.class_name(id).to_owned());
         return Ok((LuaValue::String(lua.create_string(name)?), false, None));
     }
-    let found = find_member_in(&c, id, key);
+    let mut found = find_member_in(&c, id, key, Identity::Game);
+    // Members CoreScripts reach aren't cached for the class (as a method
+    // or a fast read), or game scripts would reach them too.
+    let identity =
+        if needs_core(found.map(|(_, m)| m), false) && crate::api::scripts::caller_is_core(lua) {
+            found = find_member_in(&c, id, key, Identity::Core);
+            Identity::Core
+        } else {
+            Identity::Game
+        };
     let member = found.map(|(_, m)| m);
-    let method = matches!(member, Some(Member::Method { .. }));
+    let method = matches!(member, Some(Member::Method { .. })) && identity == Identity::Game;
     let mut fast = None;
     let value = match member {
         Some(Member::Property(p)) => {
-            if !allowed(p.security[0]) {
+            if !allowed(p.security[0], identity) {
                 return Err(ScriptError(format!(
                     "The current thread cannot access '{key}' (lacking capability {})",
                     p.security[0].capability()
@@ -254,7 +327,10 @@ pub(crate) fn get_member(
                 return Err(ScriptError(format!("{key} is a write-only member")));
             }
             let (value, plain) = read(lua, &c, id, p.name, Some((p.id, p.enum_id)))?;
-            if plain && let Some((static_key, _)) = found {
+            if plain
+                && identity == Identity::Game
+                && let Some((static_key, _)) = found
+            {
                 fast = Some(register_fast_read(&c, id, static_key, p));
             }
             Ok(value)
@@ -287,6 +363,20 @@ pub(crate) fn get_member(
             let child = with_world(lua, |w| w.dom.find_first_child(id, key, false));
             match child {
                 Some(child) => Ok(LuaValue::UserData(push_instance(lua, child)?)),
+                // Members newer than Rook's API snapshot that Roblox's
+                // CoreScripts read: nil, counted (see `calls::method_function`).
+                None if crate::api::scripts::caller_is_core(lua) => {
+                    let class = with_world(lua, |w| w.dom.class_name(id).to_owned());
+                    match methods::core::hidden_property(&class, key) {
+                        Some(v) => Ok(LuaValue::String(lua.create_string(v)?)),
+                        None => {
+                            with_world(lua, |w| {
+                                w.count_unimplemented(format!("{class}.{key} (unknown)"));
+                            });
+                            Ok(LuaValue::Nil)
+                        }
+                    }
+                }
                 None => Err(not_a_member(lua, id, key)),
             }
         }

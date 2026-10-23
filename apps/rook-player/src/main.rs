@@ -102,6 +102,10 @@ struct Args {
     /// someone looking around does (default: it holds still).
     #[arg(long, default_value_t = 0.0)]
     turn: f32,
+    /// Run Roblox's own CoreScripts (top bar, player list, chat...) from
+    /// the Studio install (overrides `coreScripts` in settings.json).
+    #[arg(long)]
+    core_scripts: bool,
     /// Present frames as fast as they're drawn instead of at the monitor's
     /// refresh rate.
     #[arg(long)]
@@ -212,6 +216,7 @@ fn play(args: Args) -> anyhow::Result<()> {
     // A recording waits for each sound to load, so it keeps to game time
     // however fast it runs.
     let wait_for_sounds = args.record_audio.is_some();
+    let core_scripts = rook_engine::settings::core_scripts(args.core_scripts.then_some(true));
     let windowed = args.record_audio.is_none() && args.bench.is_none() && args.screenshot.is_none();
     if windowed && !args.crash_test {
         // The window opens at once and shows a loading screen while the
@@ -222,6 +227,7 @@ fn play(args: Args) -> anyhow::Result<()> {
             content.clone(),
             script,
             wait_for_sounds,
+            core_scripts,
         )?;
         let mut launch = Launch::new(args, content, install, loading);
         let event_loop = EventLoop::new()?;
@@ -235,6 +241,7 @@ fn play(args: Args) -> anyhow::Result<()> {
         content.clone(),
         script,
         wait_for_sounds,
+        core_scripts,
     )?;
     if let Some(out) = &args.record_audio {
         let seconds = if args.seconds > 0.0 {

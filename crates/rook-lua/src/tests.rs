@@ -20,6 +20,8 @@ fn run(source: &str, frames: u32) -> Vec<String> {
 
 fn step(rt: &Runtime) {
     let dt = rt.world_mut().scheduler.begin_frame();
+    rt.render_step(dt);
+    rt.restyle();
     rt.resume_due(Queue::Legacy);
     let rs = rt.world().dom.find_service("RunService");
     if let Some(rs) = rs {
@@ -522,6 +524,7 @@ fn descendant_removing_connected_mid_destroy() {
     );
 }
 
+mod core_gui;
 mod gui;
 mod models;
 mod tweens;

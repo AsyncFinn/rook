@@ -14,6 +14,7 @@ rook-types.workspace = true
 rook-reflection.workspace = true
 rook-dom.workspace = true
 rook-formats.workspace = true
+rbx_dom_weak.workspace = true
 rook-lua.workspace = true
 rook-gui.workspace = true
 rook-net.workspace = true

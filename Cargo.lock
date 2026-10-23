@@ -3330,6 +3330,7 @@ dependencies = [
  "glam 0.34.0",
  "mlua",
  "profiling",
+ "rbx_dom_weak",
  "rook-audio",
  "rook-content",
  "rook-dom",
@@ -3355,6 +3356,7 @@ name = "rook-formats"
 version = "0.7.2"
 dependencies = [
  "base64 0.23.1",
+ "lz4_flex",
  "quick-xml 0.42.0",
  "rbx_binary",
  "rbx_dom_weak",
@@ -3364,6 +3366,7 @@ dependencies = [
  "rook-reflection",
  "rook-types",
  "thiserror 2.0.21",
+ "zstd",
 ]
 
 [[package]]
@@ -3388,6 +3391,7 @@ dependencies = [
 name = "rook-lua"
 version = "0.7.2"
 dependencies = [
+ "chrono",
  "glam 0.34.0",
  "mlua",
  "profiling",
@@ -3401,6 +3405,7 @@ dependencies = [
  "rook-terrain",
  "rook-types",
  "rustc-hash 2.1.3",
+ "serde",
  "serde_json",
  "slotmap",
  "tracing",

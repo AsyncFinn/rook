@@ -23,6 +23,8 @@ rook-tools roundtrip place.rbxl                  # load, save, reload, report di
 rook-tools roundtrip place.rbxl --to xml         # same, converting to XML
 rook-tools run-headless place.rbxl --seconds 10  # run server scripts, print output
 rook-tools run-headless place.rbxl --repl        # then open a command bar (see getting-started.md)
+rook-tools run-headless place.rbxl --join --core-scripts --dump CoreGui
+                                                 # a player's client too, running Roblox's CoreScripts; print its CoreGui
 ```
 
 ## Content and assets
@@ -53,6 +55,7 @@ Rook finds your Roblox install by itself. Every setting is in `settings.json` in
 | `uncapped` | | `--uncapped` | `false` | Draw as fast as possible instead of at the display's rate |
 | `frameTimes` | | `--frame-times` | `false` | Print frame times to the terminal |
 | `logLevel` | `ROOK_LOG` (a level or subsystems) | `--verbose` | `info` | What the terminal shows: `error`, `warn`, `info`, `debug`, `trace` |
+| `coreScripts` | `ROOK_CORE_SCRIPTS` (`on`/`off`) | `--core-scripts` (`rook-player`, `rook-tools run-headless --join`) | `false` | Run Roblox's own CoreScripts (top bar, player list, menus) on each client, from the Studio install `robloxInstall` names or the newest one (see [CoreScripts](../behavior/gui/core-scripts.md)) |
 | | `ROOK_DATA_DIR` | | `%LOCALAPPDATA%\Rook` on Windows | Where settings, logs, crash reports and kept content live (so it can't be in `settings.json`) |
 
 ## Logs and failures

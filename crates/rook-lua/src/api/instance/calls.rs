@@ -59,6 +59,12 @@ pub(super) fn method_function(
                 w.count_unimplemented(format!("{owner}.{name}"));
                 w.dom.class_name(this).to_owned()
             });
+            // Roblox's CoreScripts call many members (Roblox's website,
+            // voice, purchases) that only matter online; one missing member
+            // mustn't stop the whole GUI, so for them it does nothing.
+            if crate::api::scripts::caller_is_core(lua) {
+                return Outcome::ret(lua, ());
+            }
             Err(ScriptError(format!(
                 "{class}:{name} is not implemented in Rook yet"
             )))

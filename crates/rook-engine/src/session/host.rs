@@ -339,6 +339,9 @@ impl ClientHost {
         }
         client.reset_cursors();
         client.ensure_mouse();
+        if let Some(patch) = &options.core_scripts {
+            patch.install(&client);
+        }
         client.start();
         Ok(Self {
             client,

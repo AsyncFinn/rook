@@ -8,8 +8,9 @@ use rook_types::GuiQuad;
 
 use crate::layout::{Layout, Placed, gui_children, through_folders, visible};
 
-/// The local player's ScreenGuis that show, bottom first. Measured:
-/// ScreenGuis stack by `DisplayOrder`, later ones on top on a tie.
+/// The local player's ScreenGuis that show, bottom first, then CoreGui's
+/// over them all (what Roblox's CoreScripts draw). Measured: ScreenGuis
+/// stack by `DisplayOrder`, later ones on top on a tie.
 pub(crate) fn screens(dom: &Dom) -> Vec<InstanceId> {
     let Some(player_gui) = dom
         .local_player()
@@ -17,9 +18,16 @@ pub(crate) fn screens(dom: &Dom) -> Vec<InstanceId> {
     else {
         return Vec::new();
     };
-    let mut screens = through_folders(dom, player_gui, |id| dom.class_name(id) == "ScreenGui");
-    screens.retain(|&s| dom.bool_property(s, "Enabled") != Some(false));
-    screens.sort_by_key(|&s| dom.number_property(s, "DisplayOrder").unwrap_or(0.0) as i64);
+    let ordered = |holder: InstanceId| {
+        let mut screens = through_folders(dom, holder, |id| dom.class_name(id) == "ScreenGui");
+        screens.retain(|&s| dom.bool_property(s, "Enabled") != Some(false));
+        screens.sort_by_key(|&s| dom.number_property(s, "DisplayOrder").unwrap_or(0.0) as i64);
+        screens
+    };
+    let mut screens = ordered(player_gui);
+    if let Some(core) = dom.find_service("CoreGui") {
+        screens.extend(ordered(core));
+    }
     screens
 }
 

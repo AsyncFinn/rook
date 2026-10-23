@@ -53,8 +53,9 @@ pub(crate) struct Ctx {
     pub(crate) instance_keys: Table,
     /// Method functions by `(owning class, name)`, so `a.Destroy == b.Destroy`.
     pub(crate) methods: RefCell<FxHashMap<(&'static str, &'static str), Function>>,
-    /// Member tables by class, and whether the class is known.
-    pub(crate) member_tables: RefCell<FxHashMap<(ClassId, bool), MemberTable>>,
+    /// Member tables by class, whether the class is known, and who looks.
+    pub(crate) member_tables:
+        RefCell<FxHashMap<(ClassId, bool, crate::api::instance::Identity), MemberTable>>,
     /// Each instance userdata's method cache (weak keys): a table shared by
     /// every instance of its class (and whether the class is known), which
     /// `__index` fills with the class's methods as scripts look them up.

@@ -1,60 +1,155 @@
-//! `rook-tools run-headless`: run a place's server Scripts without a window.
+//! `rook-tools run-headless`: run a place's server Scripts without a window,
+//! and with `--join` a player's client too.
 
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use rook_engine::{Options, Server};
-use rook_lua::MessageType;
+use rook_engine::session::Session;
+use rook_engine::{DataModel, Options, Server};
+use rook_lua::{LogEntry, MessageType};
 
-pub(crate) fn run(
-    file: &Path,
-    seconds: f64,
-    timeout: f64,
-    quiet: bool,
-    script: Option<&Path>,
-    #[cfg(feature = "repl")] repl: bool,
-) -> anyhow::Result<()> {
+/// How to run (the command's flags).
+#[derive(Debug)]
+pub(crate) struct Run<'a> {
+    pub seconds: f64,
+    pub timeout: f64,
+    pub quiet: bool,
+    pub script: Option<&'a Path>,
+    /// A player joins, with a client of their own.
+    pub join: bool,
+    /// The client runs Roblox's CoreScripts (`settings::core_scripts`).
+    pub core_scripts: bool,
+    /// Print the client's tree from this instance (`CoreGui.RobloxGui`)
+    /// at the end, with what places and shows its GUI.
+    pub dump: Option<&'a str>,
+    #[cfg(feature = "repl")]
+    pub repl: bool,
+}
+
+pub(crate) fn run(file: &Path, how: &Run<'_>) -> anyhow::Result<()> {
     let bytes = fs_err::read(file)?;
     let options = Options {
-        script_timeout: Duration::from_secs_f64(timeout),
+        script_timeout: Duration::from_secs_f64(how.timeout),
+        core_scripts: rook_engine::settings::core_scripts(how.core_scripts.then_some(true)),
         ..Options::default()
     };
+    anyhow::ensure!(
+        !how.core_scripts || options.core_scripts.is_some(),
+        "no CoreScripts to run (see the warning above)"
+    );
     let started = Instant::now();
     let mut server = Server::load_place(&bytes, &options)?;
     server.start();
-    if let Some(script) = script {
+    if let Some(script) = how.script {
         let source = fs_err::read_to_string(script)?;
         server
             .run_extra_script(&source)
             .map_err(anyhow::Error::msg)?;
     }
-    server.run_for(seconds);
+    if how.join {
+        let mut session = Session::new(server, options);
+        let index = session.join("Player1", 1)?;
+        // GUI lays out on a screen the size of rook-player's window.
+        if let Some(client) = session.client_mut(index) {
+            client.set_viewport(1280, 720);
+        }
+        session.run_for(how.seconds);
+        let server_log = session.server().take_log();
+        let client = session.client(0).expect("joined");
+        let client_log = client.take_log();
+        if !how.quiet {
+            for entry in &server_log {
+                rook_engine::console::print_entry("Server", entry);
+            }
+            for entry in &client_log {
+                rook_engine::console::print_entry("Client", entry);
+            }
+        }
+        summary("Server", session.server(), &server_log, started);
+        summary("Client", client, &client_log, started);
+        if let Some(path) = how.dump {
+            dump(client, path);
+        }
+        return Ok(());
+    }
+    server.run_for(how.seconds);
     let log = server.take_log();
-    if !quiet {
+    if !how.quiet {
         for entry in &log {
             rook_engine::console::print_entry("Server", entry);
         }
     }
     #[cfg(feature = "repl")]
-    let log = if repl {
+    let log = if how.repl {
         [log, interactive(&mut server)].concat()
     } else {
         log
     };
+    summary("Server", &server, &log, started);
+    Ok(())
+}
+
+/// Print the tree at `path` (names from the DataModel down, by dots):
+/// each instance's class and tags, and for GUI its absolute size and
+/// whether it shows.
+fn dump(dm: &DataModel, path: &str) {
+    let world = dm.runtime().world();
+    let dom = &world.dom;
+    let mut at = Some(dom.root());
+    for name in path.split('.') {
+        at = at.and_then(|id| dom.find_first_child(id, name, false));
+    }
+    let Some(top) = at else {
+        println!("\nno {path} on the client");
+        return;
+    };
+    println!("\n{path}:");
+    let mut stack = vec![(top, 0usize)];
+    while let Some((id, depth)) = stack.pop() {
+        let mut line = format!(
+            "{}{} [{}]",
+            "  ".repeat(depth),
+            dom.name(id),
+            dom.class_name(id)
+        );
+        if let Some(inst) = dom.get(id)
+            && !inst.tags.is_empty()
+        {
+            line.push_str(&format!(" .{}", inst.tags.join(" .")));
+        }
+        if dom.is_a(id, "GuiBase2d") {
+            if let Some(size) = dom.vector2_property(id, "AbsoluteSize") {
+                line.push_str(&format!(" {}x{}", size.0.x, size.0.y));
+            }
+            if dom.bool_property(id, "Visible") == Some(false)
+                || dom.bool_property(id, "Enabled") == Some(false)
+            {
+                line.push_str(" hidden");
+            }
+        }
+        println!("{line}");
+        for &c in dom.children(id).iter().rev() {
+            stack.push((c, depth + 1));
+        }
+    }
+}
+
+/// What ran on one side, and the members it called that Rook lacks.
+fn summary(side: &str, dm: &DataModel, log: &[LogEntry], started: Instant) {
     let errors = log.iter().filter(|e| e.kind == MessageType::Error).count();
-    let world = server.runtime().world();
+    let world = dm.runtime().world();
     println!(
-        "\n{} scripts started, {} log lines, {errors} errors, {:.1}s simulated in {:.2}s",
-        server.started_scripts(),
+        "\n{side}: {} scripts started, {} log lines, {errors} errors, {:.1}s simulated in {:.2}s",
+        dm.started_scripts(),
         log.len(),
-        server.now(),
+        dm.now(),
         started.elapsed().as_secs_f64()
     );
     if !world.unimplemented.is_empty() {
         println!("Not implemented in Rook yet (calls):");
         let mut list: Vec<_> = world.unimplemented.iter().collect();
         list.sort_by(|a, b| b.1.cmp(a.1));
-        for (member, n) in list.iter().take(20) {
+        for (member, n) in &list {
             println!("  {n:>6}  {member}");
         }
     }
@@ -64,7 +159,6 @@ pub(crate) fn run(
             println!("  {n:>6}  {member}");
         }
     }
-    Ok(())
 }
 
 /// Run in real time at 60 Hz with the command prompt until input ends,

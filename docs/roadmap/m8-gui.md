@@ -59,10 +59,14 @@ health bars and leaderboards are GUI.
    `SetCoreGuiEnabled` (1,295 files), `SetCore` (868) and `GetCore`
    (472).
    - *Scope*:
-     - A loader that finds Studio's `ExtraContent/scripts/CoreScripts`
-       and `LuaPackages` (about 2,400 and 4,700 files) and runs
+     - A loader that reads Studio's `DataModelPatch.rbxm`, where the
+       CoreScripts and CorePackages are all kept as Luau bytecode (the
+       plain `.lua` copies leave out `CorePackages.Workspace`), and runs
        `StarterScript` with CoreScript identity into CoreGui's
-       `RobloxGui`.
+       `RobloxGui`. Running: see
+       [Roblox's CoreScripts](../behavior/gui/core-scripts.md).
+     - StyleSheets, which the new GUI (Foundation, the top bar) is sized
+       and colored by: started, without `@` queries.
      - The engine side the scripts expect: CoreGui and its security,
        GuiService's core members, the top bar inset, and stand-ins for
        services that talk to Roblox's website (friends, purchases,
@@ -73,10 +77,10 @@ health bars and leaderboards are GUI.
        for places that draw their own.
      - Without a Studio install: the 2018 Core-Scripts (Apache-2.0)
        shipped as a fallback, or no core GUI, chosen by setting.
-   - *Evidence first*: run Rook's script scan over the CoreScripts to
-     list the services and members they call that Rook lacks, by the
-     scripts StarterScript starts. That list sizes this step and says
-     which scripts to turn off (voice, purchases, sharing).
+   - *Evidence*: what the CoreScripts call that Rook lacks is listed on
+     [the behavior page](../behavior/gui/core-scripts.md#what-rook-lacks),
+     from running them; nothing had to be turned off. Left: the top bar,
+     which waits on chat's stores (step 10).
    - *Studio questions*: what `SetCoreGuiEnabled` hides for each
      `CoreGuiType`, and which `SetCore` keys the archive uses
      (`SendNotification`, `ResetButtonCallback`, `TopbarEnabled`, ...),

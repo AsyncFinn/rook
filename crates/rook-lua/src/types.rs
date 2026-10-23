@@ -12,6 +12,7 @@
 
 pub(crate) mod cframe;
 pub(crate) mod color;
+pub(crate) mod datetime;
 pub(crate) mod enums;
 pub(crate) mod font;
 pub(crate) mod geometry;
@@ -48,6 +49,7 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     font::install(lua)?;
     misc::install(lua)?;
     query::install(lua)?;
+    datetime::install(lua)?;
     Ok(())
 }
 

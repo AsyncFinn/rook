@@ -40,6 +40,8 @@ pub mod env {
     pub const AUDIO_DEVICE: &str = "ROOK_AUDIO";
     pub const THREADS: &str = "ROOK_THREADS";
     pub const LOG: &str = "ROOK_LOG";
+    /// `on` or `off`.
+    pub const CORE_SCRIPTS: &str = "ROOK_CORE_SCRIPTS";
     /// Moves the data folder, `settings.json` with it, so it has no key.
     pub const DATA_FOLDER: &str = "ROOK_DATA_DIR";
 }
@@ -60,6 +62,7 @@ pub struct Settings {
     pub uncapped: Option<bool>,
     pub frame_times: Option<bool>,
     pub log_level: Option<String>,
+    pub core_scripts: Option<bool>,
 }
 
 /// What Rook writes when there is no file yet: every key at its default,
@@ -92,7 +95,10 @@ const WRITTEN: &str = r#"{
   // Print each frame's timings in the terminal.
   "frameTimes": false,
   // What the terminal shows: error, warn, info, debug or trace.
-  "logLevel": "info"
+  "logLevel": "info",
+  // Run Roblox's own CoreScripts (top bar, player list, chat...) from the
+  // Studio install on each player's client. Unfinished, so off by default.
+  "coreScripts": false
 }
 "#;
 
@@ -275,6 +281,45 @@ pub fn local_content() -> std::sync::Arc<rook_content::Resolver> {
             config.cache_max = None;
             config.kept_dir = None;
             std::sync::Arc::new(rook_content::Resolver::new(config))
+        })
+        .clone()
+}
+
+/// Roblox's CoreScripts for clients to run, if `--core-scripts`, then
+/// `ROOK_CORE_SCRIPTS`, then `coreScripts` turns them on: the patch from
+/// the chosen Roblox install (`robloxInstall`) or the newest Studio one
+/// that has it, read once per run. Problems are logged and give `None`.
+pub fn core_scripts(flag: Option<bool>) -> Option<std::sync::Arc<crate::core_scripts::CorePatch>> {
+    let env = var(env::CORE_SCRIPTS).and_then(|v| rook_content::resolver::parse_switch(&v));
+    if !pick(flag, env, file().core_scripts, false) {
+        return None;
+    }
+    static PATCH: OnceLock<Option<std::sync::Arc<crate::core_scripts::CorePatch>>> =
+        OnceLock::new();
+    PATCH
+        .get_or_init(|| {
+            let chosen = var_os(env::ROBLOX_INSTALL)
+                .or_else(|| file().roblox_install.clone().map(Into::into));
+            let patch = install::find_from(chosen.as_deref(), &install_places())
+                .into_iter()
+                .map(|i| i.root.join(crate::core_scripts::PATCH))
+                .find(|p| p.is_file());
+            let Some(patch) = patch else {
+                tracing::warn!(
+                    "coreScripts: no Roblox Studio install with {}",
+                    crate::core_scripts::PATCH
+                );
+                return None;
+            };
+            let flags = data_folder::local_app_data()
+                .map(|d| d.join("Roblox/ClientSettings/StudioAppSettings.json"));
+            match crate::core_scripts::CorePatch::load(&patch, flags.as_deref()) {
+                Ok(p) => Some(std::sync::Arc::new(p)),
+                Err(e) => {
+                    tracing::warn!("coreScripts: {e}");
+                    None
+                }
+            }
         })
         .clone()
 }

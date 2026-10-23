@@ -1,4 +1,5 @@
-//! UDim and UDim2.
+//! UDim and UDim2, and Path2DControlPoint, a point of a GUI path made of
+//! them.
 
 use mlua::{
     Lua, MetaMethod, MultiValue, UserData, UserDataFields, UserDataMethods, UserDataRef,
@@ -14,6 +15,29 @@ pub(crate) struct LUDim(pub UDim);
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct LUDim2(pub UDim2);
+
+/// A Path2D's point: where it is and its tangents (creator-docs
+/// Path2DControlPoint). Rook doesn't draw Path2D yet; scripts can still
+/// make and read points.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct LPath2DControlPoint {
+    position: UDim2,
+    left: UDim2,
+    right: UDim2,
+}
+
+impl UserData for LPath2DControlPoint {
+    fn add_fields<F: UserDataFields<Self>>(f: &mut F) {
+        f.add_meta_field("__type", "Path2DControlPoint");
+        f.add_field_method_get("Position", |_, t| Ok(LUDim2(t.position)));
+        f.add_field_method_get("LeftTangent", |_, t| Ok(LUDim2(t.left)));
+        f.add_field_method_get("RightTangent", |_, t| Ok(LUDim2(t.right)));
+    }
+
+    fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
+        m.add_meta_method(MetaMethod::Eq, |_, t, o: UserDataRef<Self>| Ok(*t == *o));
+    }
+}
 
 /// Offsets are integers; Roblox truncates fractional offsets (Inference).
 fn offset(v: Option<f64>) -> i32 {
@@ -58,9 +82,12 @@ impl UserData for LUDim2 {
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
-        m.add_method("Lerp", |_, t, (o, a): (UserDataRef<LUDim2>, f32)| {
-            Ok(LUDim2(t.0.lerp(o.0, a)))
-        });
+        // Observed: Roblox's own CoreScripts call the lowercase spelling.
+        for name in ["Lerp", "lerp"] {
+            m.add_method(name, |_, t, (o, a): (UserDataRef<LUDim2>, f32)| {
+                Ok(LUDim2(t.0.lerp(o.0, a)))
+            });
+        }
         m.add_meta_method(MetaMethod::Add, |_, t, o: UserDataRef<LUDim2>| {
             Ok(LUDim2(t.0 + o.0))
         });
@@ -131,5 +158,23 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
         })?,
     )?;
     lua.globals().set("UDim2", u2)?;
+
+    // `Path2DControlPoint.new(position, leftTangent, rightTangent)`, each
+    // optional.
+    type Point = Option<UserDataRef<LUDim2>>;
+    let point = lua.create_function(|_, (position, left, right): (Point, Point, Point)| {
+        let or_zero = |u: Point| u.map_or(UDim2::default(), |u| u.0);
+        Ok(LPath2DControlPoint {
+            position: or_zero(position),
+            left: or_zero(left),
+            right: or_zero(right),
+        })
+    })?;
+    let point = {
+        let t = lua.create_table()?;
+        t.set("new", point)?;
+        t
+    };
+    lua.globals().set("Path2DControlPoint", point)?;
     Ok(())
 }

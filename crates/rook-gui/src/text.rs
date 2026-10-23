@@ -117,6 +117,31 @@ impl Source {
             carets,
         })
     }
+
+    /// Plain, left-aligned text in one font, as `TextService` measures it.
+    pub(crate) fn plain(text: &str, font: Font, size: f32) -> Self {
+        Self {
+            text: text.to_owned(),
+            rich: false,
+            style: Style {
+                font,
+                size,
+                color: [0.0; 3],
+                transparency: 0.0,
+                underline: false,
+                strike: false,
+                stroke: None,
+                mark: None,
+                case: Case::AsWritten,
+            },
+            wrapped: true,
+            scaled: false,
+            align: Vec2::ZERO,
+            line_height: 1.0,
+            visible: None,
+            carets: Carets::None,
+        }
+    }
 }
 
 /// Whether `id` shows text of its own.
