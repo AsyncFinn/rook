@@ -1,4 +1,4 @@
-# Roblox's CoreScripts
+# Roblox's core scripts
 
 Checked against Studio 0.744 on 2026-10-23.
 
