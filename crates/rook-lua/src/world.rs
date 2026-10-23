@@ -320,6 +320,12 @@ impl World {
         });
     }
 
+    /// Look at the journal for what StyleSheets must style again, before
+    /// it's trimmed.
+    pub fn note_style_changes(&mut self) {
+        self.styles.note_changes(&self.dom);
+    }
+
     pub(crate) fn count_unimplemented(&mut self, what: String) {
         *self.unimplemented.entry(what).or_default() += 1;
     }

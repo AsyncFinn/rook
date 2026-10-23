@@ -51,6 +51,42 @@ impl Styles {
     pub(crate) fn invalidate(&mut self) {
         self.all = true;
     }
+
+    /// Note what the journal says must be styled again: called before each
+    /// restyle, and before the journal is trimmed at the end of a frame
+    /// (scripts change most things after the restyle).
+    pub(crate) fn note_changes(&mut self, dom: &Dom) {
+        let is_style = |id: InstanceId| STYLE_CLASSES.iter().any(|c| dom.is_a(id, c));
+        for change in dom.journal().since(self.cursor) {
+            match change {
+                Change::Reparented { id, subtree, .. } => {
+                    for &d in subtree {
+                        if dom.class_name(d) == "StyleLink" {
+                            self.links.insert(d);
+                        }
+                    }
+                    if subtree.iter().any(|&d| is_style(d)) {
+                        self.all = true;
+                    } else {
+                        self.pending.insert(*id);
+                    }
+                }
+                Change::Property { id, .. } | Change::Attribute { id, .. } if is_style(*id) => {
+                    self.all = true;
+                }
+                Change::Property { id, property }
+                    if dom.database().property(*property).name == "GuiState" =>
+                {
+                    self.pending.insert(*id);
+                }
+                Change::TagAdded { id, .. } | Change::TagRemoved { id, .. } => {
+                    self.pending.insert(*id);
+                }
+                _ => {}
+            }
+        }
+        self.cursor = dom.journal().end();
+    }
 }
 
 /// One rule, ready to match.
@@ -65,36 +101,7 @@ pub(crate) fn restyle(lua: &Lua) -> mlua::Result<()> {
     let work = with_world(lua, |w| {
         let s = &mut w.styles;
         let dom = &w.dom;
-        let is_style = |id: InstanceId| STYLE_CLASSES.iter().any(|c| dom.is_a(id, c));
-        for change in dom.journal().since(s.cursor) {
-            match change {
-                Change::Reparented { id, subtree, .. } => {
-                    for &d in subtree {
-                        if dom.class_name(d) == "StyleLink" {
-                            s.links.insert(d);
-                        }
-                    }
-                    if subtree.iter().any(|&d| is_style(d)) {
-                        s.all = true;
-                    } else {
-                        s.pending.insert(*id);
-                    }
-                }
-                Change::Property { id, .. } | Change::Attribute { id, .. } if is_style(*id) => {
-                    s.all = true;
-                }
-                Change::Property { id, property }
-                    if dom.database().property(*property).name == "GuiState" =>
-                {
-                    s.pending.insert(*id);
-                }
-                Change::TagAdded { id, .. } | Change::TagRemoved { id, .. } => {
-                    s.pending.insert(*id);
-                }
-                _ => {}
-            }
-        }
-        s.cursor = dom.journal().end();
+        s.note_changes(dom);
         if !s.scanned {
             s.scanned = true;
             s.all = true;

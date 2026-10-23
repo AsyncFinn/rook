@@ -139,6 +139,20 @@ impl CorePatch {
         let robloxgui = dom.create_by_name("ScreenGui").map_err(|e| e.to_string())?;
         dom.set_name(robloxgui, "RobloxGui".into())
             .map_err(|e| e.to_string())?;
+        // Observed: the in-game menu's new buttons (ZIndex 1) show over its
+        // older panel (higher ZIndex), so objects stack by sibling here.
+        let sibling = dom
+            .database()
+            .enum_by_name("ZIndexBehavior")
+            .and_then(|e| e.items.iter().find(|(name, _)| *name == "Sibling"))
+            .map(|&(_, value)| value)
+            .ok_or_else(|| missing("ZIndexBehavior.Sibling"))?;
+        dom.set_property_by_name(
+            robloxgui,
+            "ZIndexBehavior",
+            rook_types::Value::Enum(sibling),
+        )
+        .map_err(|e| e.to_string())?;
         for c in dom.children(patch_robloxgui).to_vec() {
             dom.set_parent(c, Some(robloxgui))
                 .map_err(|e| e.to_string())?;

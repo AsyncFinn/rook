@@ -74,9 +74,11 @@ On an empty baseplate, 29 CoreScripts start and run without errors.
 The top bar (Roblox's logo button, and the menu and chat buttons in their
 pill), the player list and Roblox's notification toasts draw (Roblox's
 own React code, laid out by Rook's GUI). Clicking the logo button opens
-the in-game menu (its People, Settings, Report and Help tabs), dimming the
-screen and hiding the player list; its bottom bar of Leave, Reset and
-Resume doesn't show yet. The menu slides in with
+the in-game menu (its People, Settings, Report and Help tabs, and Leave,
+Respawn and Resume with their keys), dimming the screen and hiding the
+player list. `RobloxGui` stacks its objects by sibling
+(`ZIndexBehavior` Sibling; Observed: the menu's newer buttons, at ZIndex
+1, show over its older panel). The menu slides in with
 `GuiObject:TweenPositionInternal`, the CoreScripts' own copy of
 `TweenPosition`. The settings menu, backpack,
 emotes menu, purchase prompts, screenshots and the fullscreen title bar

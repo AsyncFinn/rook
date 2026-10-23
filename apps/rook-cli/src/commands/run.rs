@@ -129,6 +129,9 @@ fn dump(dm: &DataModel, path: &str) {
         {
             line.push_str(&format!(" .{}", inst.tags.join(" .")));
         }
+        if let Some(selector) = dom.string_property(id, "Selector") {
+            line.push_str(&format!(" {selector:?}"));
+        }
         if dom.is_a(id, "GuiBase2d") {
             if let Some(size) = dom.vector2_property(id, "AbsoluteSize") {
                 line.push_str(&format!(" {}x{}", size.0.x, size.0.y));
@@ -148,6 +151,11 @@ fn dump(dm: &DataModel, path: &str) {
             }
             if let Some(at) = dom.vector2_property(id, "AbsolutePosition") {
                 line.push_str(&format!(" at {}, {}", at.0.x, at.0.y));
+            }
+            if let Some(text) = dom.string_property(id, "Text")
+                && !text.is_empty()
+            {
+                line.push_str(&format!(" text {text:?}"));
             }
             if let Some(image) = dom.string_property(id, "Image")
                 && !image.is_empty()

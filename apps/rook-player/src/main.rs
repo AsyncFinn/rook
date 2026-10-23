@@ -278,6 +278,11 @@ fn play(args: Args) -> anyhow::Result<()> {
         // A screenshot isn't a frame: it waits for the place's mesh files
         // and images, and their uploads.
         scene.load_all(game.view(), camera.position);
+        // GUI laid out again around the images that arrived fires Changed,
+        // and scripts answer it (Roblox's React GUI re-renders): a few
+        // frames let that settle, as it would in a window, before the shot.
+        game.run_for(0.25);
+        scene.load_all(game.view(), camera.position);
         let mut renderer = Renderer::headless()?;
         note_gpu(&renderer);
         install.apply(&mut renderer);

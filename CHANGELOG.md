@@ -5,7 +5,9 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
-- With `--core-scripts`, clicking Roblox's logo button opens Roblox's in-game menu (People, Settings, Report and Help), sliding in as in Roblox: the CoreScripts' own `TweenPositionInternal`, `TweenSizeInternal` and `TweenSizeAndPositionInternal` now tween as their public forms do. `rook-player --click x,y` and `rook-tools run-headless --join --click x,y` click after `--seconds`, before the screenshot or dump.
+- StyleSheets style what scripts change during the frame: changes made after the frame's styling (a tag added on Heartbeat, GUI made after `task.wait`) were dropped when the frame ended, so styles applied only to what existed when styling first ran.
+- `rook-player --screenshot` lets the game run a quarter of a second after the GUI's images arrive, so GUI that scripts lay out around them (Roblox's React GUI) has settled when the shot is taken, as it would in a window.
+- With `--core-scripts`, clicking Roblox's logo button opens Roblox's in-game menu (People, Settings, Report and Help, and Leave, Respawn and Resume), sliding in as in Roblox: the CoreScripts' own `TweenPositionInternal`, `TweenSizeInternal` and `TweenSizeAndPositionInternal` now tween as their public forms do. `rook-player --click x,y` and `rook-tools run-headless --join --click x,y` click after `--seconds`, before the screenshot or dump.
 
 - Rounded and gradient GUI on the screen draws where it is. A UICorner's rounding and a UIGradient's colors were placed 58 pixels too high on ScreenGuis (the top bar's height), so a rounded object was cut by a shape above it, and short ones such as pills vanished; SurfaceGuis and BillboardGuis were right.
 - Roblox's top bar draws with `--core-scripts`: its logo button and its menu and chat buttons, as in Roblox. Chat's stores read the player's `ChatAvailabilityStatus`, which Rook now gives as `Enabled`. `rook-tools run-headless --dump` also prints each GUI object's position, background and image.
