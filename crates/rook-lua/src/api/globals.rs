@@ -1,5 +1,5 @@
 //! Roblox globals: output, legacy and `task` scheduling, `typeof`,
-//! `Instance.new`, `game`/`workspace`.
+//! `getfenv`, `Instance.new`, `game`/`workspace`.
 //!
 //! The list follows creator-docs "Roblox globals" and the `task` library
 //! page.
@@ -7,6 +7,7 @@
 use crate::scheduler::{LEGACY_MIN_WAIT, Queue};
 use mlua::{Function, Lua, MultiValue, Table, Thread, Value as LuaValue};
 
+mod getfenv;
 mod instance_new;
 mod new_name;
 mod output;
@@ -92,6 +93,7 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
         api_ret(lua, move |lua, _| Ok(start_epoch + now(lua)))?,
     )?;
     g.set("typeof", api_ret(lua, typeof_)?)?;
+    g.set("getfenv", getfenv::getfenv(lua, std.get("error")?)?)?;
     std.set(
         "datastore",
         super::methods::data_stores::datastore_helpers(lua)?,

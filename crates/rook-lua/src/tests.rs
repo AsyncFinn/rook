@@ -525,3 +525,30 @@ fn descendant_removing_connected_mid_destroy() {
 mod gui;
 mod models;
 mod tweens;
+
+/// Every level of a script's stack has the script's environment, as in
+/// Roblox: C functions, Rook's own Luau and level 0 included. Anti-tamper
+/// scripts hang on purpose when one doesn't.
+#[test]
+fn getfenv_gives_the_script_environment_at_every_level() {
+    expect(
+        r#"
+        local env = getfenv()
+        xpcall(function() return game.missing end, function()
+            local same = true
+            for level = 0, 6 do
+                same = same and getfenv(level) == env
+            end
+            print(same, getfenv(print) == env)
+        end)
+        print(pcall(getfenv, 50))
+        print(pcall(getfenv, -1))
+        "#,
+        0,
+        &[
+            "true true",
+            "false invalid argument #1 to 'getfenv' (invalid level)",
+            "false invalid argument #1 to 'getfenv' (level must be non-negative)",
+        ],
+    );
+}
