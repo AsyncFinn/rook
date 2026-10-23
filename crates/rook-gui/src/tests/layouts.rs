@@ -427,3 +427,25 @@ fn only_gui_changes_lay_out_again() {
     assert_eq!(gui.generation(), first + 1);
     assert_eq!(vec2_of(&dom, b, "AbsoluteSize"), Vec2::new(10.0, 10.0));
 }
+
+/// An object moved, resized or turned is placed again on its own, or with
+/// its whole tree when a UI layout places it, ending where a whole layout
+/// puts everything.
+#[test]
+fn objects_placed_again_alone_match_a_whole_layout() {
+    let (mut dom, b, _, [a, bb, c]) = list_case();
+    let r = frame(&mut dom, a, udim2(0.0, 20, 0.0, 10));
+    let inner = frame(&mut dom, r, udim2(0.5, 0, 0.5, 0));
+    let mut gui = laid_out(&mut dom);
+    set(&mut dom, r, "Rotation", Value::Float32(30.0));
+    set(&mut dom, r, "Position", udim2(0.5, 3, 0.0, 7));
+    set(&mut dom, bb, "Size", udim2(0.0, 70, 0.0, 15));
+    gui.sync(&mut dom);
+    let ids = [a, bb, c, r, inner];
+    let read =
+        |dom: &Dom| ids.map(|id| (rect(dom, id, b), dom.float_property(id, "AbsoluteRotation")));
+    let alone = read(&dom);
+    laid_out(&mut dom);
+    assert_eq!(alone, read(&dom));
+    assert_eq!(alone[4].1, Some(30.0));
+}

@@ -17,10 +17,17 @@ pub(crate) struct Watch {
     /// `Workspace.CurrentCamera`, which camera's it is.
     viewport: Option<PropertyId>,
     current_camera: Option<PropertyId>,
-    /// Properties input sets that change only the drawing: `GuiState`
-    /// (AutoButtonColor's tints, a button's hover and pressed images),
-    /// and a TextBox's caret and selection.
-    looks: [Option<PropertyId>; 3],
+    /// Properties that change only the drawing, which layout never
+    /// reads: colors and transparencies scripts tween, the UI components
+    /// drawn on a quad, and what input sets (`GuiState`, for
+    /// AutoButtonColor's tints and a button's hover and pressed images; a
+    /// TextBox's caret and selection).
+    looks: Vec<PropertyId>,
+    /// Properties that place the changed object alone: where it goes and
+    /// how big it is in its parent, turned or shown. Its siblings and
+    /// parent don't depend on them unless the parent arranges, sizes or
+    /// scrolls by its children.
+    places: Vec<PropertyId>,
 }
 
 /// What a change does to GUI.
@@ -29,6 +36,8 @@ pub(crate) enum Touch {
     Nothing,
     /// How the changed object's tree looks.
     Look,
+    /// Where the changed object and what it holds are.
+    Place,
     /// Where things are in the changed object's tree.
     Layout,
     /// Which trees there are, or the screen they're laid out on.
@@ -51,23 +60,50 @@ impl Watch {
             viewport: property("Camera", "ViewportSize"),
             current_camera: property("Workspace", "CurrentCamera"),
             looks: [
-                property("GuiObject", "GuiState"),
-                property("TextBox", "CursorPosition"),
-                property("TextBox", "SelectionStart"),
-            ],
+                ("GuiObject", "BackgroundColor3"),
+                ("GuiObject", "BackgroundTransparency"),
+                ("GuiObject", "BorderColor3"),
+                ("GuiObject", "GuiState"),
+                ("TextLabel", "TextColor3"),
+                ("TextButton", "TextColor3"),
+                ("TextBox", "TextColor3"),
+                ("TextLabel", "TextStrokeColor3"),
+                ("TextButton", "TextStrokeColor3"),
+                ("TextBox", "TextStrokeColor3"),
+                ("TextBox", "CursorPosition"),
+                ("TextBox", "SelectionStart"),
+                ("ImageLabel", "ImageColor3"),
+                ("ImageButton", "ImageColor3"),
+                ("ImageLabel", "ImageTransparency"),
+                ("ImageButton", "ImageTransparency"),
+                ("UICorner", "CornerRadius"),
+                ("UIGradient", "Color"),
+                ("UIGradient", "Offset"),
+                ("UIGradient", "Rotation"),
+                ("UIGradient", "Transparency"),
+                ("UIStroke", "Color"),
+                ("UIStroke", "Transparency"),
+                ("UIStroke", "Thickness"),
+            ]
+            .into_iter()
+            .filter_map(|(owner, name)| property(owner, name))
+            .collect(),
+            places: ["AnchorPoint", "Position", "Rotation", "Size", "Visible"]
+                .into_iter()
+                .filter_map(|name| property("GuiObject", name))
+                .collect(),
         }
     }
 
     pub(crate) fn touches(&self, dom: &Dom, change: &Change) -> Touch {
         match change {
-            Change::Property { property, .. } if self.looks.contains(&Some(*property)) => {
-                Touch::Look
-            }
+            Change::Property { property, .. } if self.looks.contains(property) => Touch::Look,
             Change::Property { property, .. }
                 if [self.viewport, self.current_camera].contains(&Some(*property)) =>
             {
                 Touch::All
             }
+            Change::Property { property, .. } if self.places.contains(property) => Touch::Place,
             Change::Property { id, .. } if self.is_gui(dom, *id) => Touch::Layout,
             // A Folder or a Player carrying GUI counts, so the whole
             // subtree is looked at.

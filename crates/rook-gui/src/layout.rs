@@ -165,6 +165,79 @@ impl Layout {
         }
         *self = pass.out;
     }
+
+    /// `ids` split into the objects that can be placed again on their own
+    /// (laid out, their parent placing them by `Position` and `Size`
+    /// alone, nothing growing to hold them), and the rest, whose trees
+    /// must lay out again.
+    pub(crate) fn alone(
+        &self,
+        dom: &Dom,
+        ids: impl IntoIterator<Item = InstanceId>,
+    ) -> (Vec<InstanceId>, Vec<InstanceId>) {
+        let free = |id: InstanceId| {
+            let Some(parent) = gui_parent(dom, id) else {
+                return false;
+            };
+            if !self.placed.contains_key(&id)
+                || !self.placed.contains_key(&parent)
+                || dom.class_name(parent) == "ScrollingFrame"
+                || arranger(dom, parent).is_some()
+                || dom
+                    .enum_item_property(parent, "AutomaticSize")
+                    .is_some_and(|a| a != "None")
+            {
+                return false;
+            }
+            // A UITableLayout places its rows' cells.
+            let table = gui_parent(dom, parent)
+                .and_then(|g| arranger(dom, g))
+                .is_some_and(|l| dom.class_name(l) == "UITableLayout");
+            if table {
+                return false;
+            }
+            // A ScrollingFrame's automatic canvas reaches what all its
+            // GUI holds, up to the next ScrollingFrame in.
+            let mut at = gui_parent(dom, parent);
+            while let Some(a) = at {
+                if dom.class_name(a) == "ScrollingFrame" {
+                    return dom.enum_item_property(a, "AutomaticCanvasSize") == Some("None");
+                }
+                at = gui_parent(dom, a);
+            }
+            true
+        };
+        ids.into_iter().partition(|&id| free(id))
+    }
+
+    /// Place `ids` again, with what they hold, where their parents put
+    /// them now; each must be one [`Layout::alone`] allows.
+    pub(crate) fn place_again(
+        &mut self,
+        dom: &Dom,
+        ids: &[InstanceId],
+        (fonts, turning): Fonted<'_>,
+    ) {
+        let previous = Layout::default();
+        let mut pass = Pass::new(dom, (&previous, turning), fonts, std::mem::take(self));
+        for &id in ids {
+            pass.place_alone(id);
+        }
+        *self = pass.out;
+    }
+}
+
+/// The GUI object or LayerCollector placing `id`: its parent, past
+/// Folders.
+fn gui_parent(dom: &Dom, id: InstanceId) -> Option<InstanceId> {
+    let mut at = dom.parent(id);
+    while let Some(p) = at {
+        if dom.class_name(p) != "Folder" {
+            return dom.is_a(p, "GuiBase2d").then_some(p);
+        }
+        at = dom.parent(p);
+    }
+    None
 }
 
 /// The top of the GUI tree holding `id` (a GUI object, or a UI component
@@ -363,6 +436,20 @@ impl<'a> Pass<'a> {
             }
             _ => (Vec2::ZERO, Vec2::ZERO),
         }
+    }
+
+    /// Place `id` again in its parent as it is placed now, then lay out
+    /// inside it.
+    fn place_alone(&mut self, id: InstanceId) {
+        let dom = self.dom;
+        let Some(parent) = gui_parent(dom, id) else {
+            return;
+        };
+        let Some(&at) = self.out.placed.get(&parent) else {
+            return;
+        };
+        let inner = padding::inner(dom, parent, at.local);
+        self.place_children(at, &[id], inner, None);
     }
 
     /// Lay out what `parent` (already placed in an `area` of its parent)

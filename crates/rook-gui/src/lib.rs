@@ -60,6 +60,10 @@ pub struct Gui {
     stale: bool,
     /// Objects changed since the last layout; their trees lay out again.
     changed: FxHashSet<InstanceId>,
+    /// Objects whose own place changed since the last layout; each is
+    /// placed again with what it holds, or its tree laid out again when
+    /// its parent depends on where its children are.
+    shifted: FxHashSet<InstanceId>,
     /// Objects whose look alone changed since they were drawn; their trees
     /// draw again.
     restyled: FxHashSet<InstanceId>,
@@ -94,6 +98,7 @@ impl Default for Gui {
             cursor: 0,
             stale: true,
             changed: FxHashSet::default(),
+            shifted: FxHashSet::default(),
             restyled: FxHashSet::default(),
             layout: Layout::default(),
             generation: 0,
@@ -188,6 +193,7 @@ impl Gui {
                 match (watch.touches(dom, change), change) {
                     (Touch::All, _) => self.stale = true,
                     (Touch::Layout, Change::Property { id, .. }) => _ = self.changed.insert(*id),
+                    (Touch::Place, Change::Property { id, .. }) => _ = self.shifted.insert(*id),
                     (Touch::Look, Change::Property { id, .. }) => _ = self.restyled.insert(*id),
                     _ => {}
                 }
@@ -220,6 +226,7 @@ impl Gui {
             self.layout = Layout::screens(dom, previous, &mut self.fonts, &world);
             self.stale = false;
             self.changed.clear();
+            self.shifted.clear();
             self.restyled.clear();
             self.generation += 1;
             self.screen_drawn = None;
@@ -227,6 +234,8 @@ impl Gui {
             self.write(dom);
             return;
         }
+        let (shifted, whole) = self.layout.alone(dom, std::mem::take(&mut self.shifted));
+        self.changed.extend(whole);
         // Trees not laid out (in storage, or a server's world GUI) wait for
         // a script to read them.
         let changed: Vec<InstanceId> = (tops(dom, std::mem::take(&mut self.changed)).into_iter())
@@ -237,6 +246,16 @@ impl Gui {
             (self.layout).redo(dom, &changed, (&mut self.fonts, &self.turning));
             self.write_trees(dom, &changed);
             self.redraw(dom, &changed);
+        }
+        // Those in a tree just laid out are already in place.
+        let shifted: Vec<InstanceId> = (shifted.into_iter())
+            .filter(|&id| layout::top_of(dom, id).is_some_and(|top| !changed.contains(&top)))
+            .collect();
+        if !shifted.is_empty() {
+            profiling::scope!("Gui::layout objects");
+            (self.layout).place_again(dom, &shifted, (&mut self.fonts, &self.turning));
+            self.write_trees(dom, &shifted);
+            self.redraw(dom, &tops(dom, shifted.into_iter().collect()));
         }
         let restyled = tops(dom, std::mem::take(&mut self.restyled));
         self.redraw(dom, &restyled);
