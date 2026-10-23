@@ -161,6 +161,7 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
             lua.create_table()?,
             ctx(lua).instances.clone(),
             create.clone(),
+            crate::ctx::weak_table(lua, "k")?,
         ))?;
     lua.set_named_registry_value("rook.instance.index", get)?;
     lua.set_named_registry_value("rook.instance.newindex", set)?;

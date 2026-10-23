@@ -1,5 +1,5 @@
 local keys, methods, index, newindex, index_other, newindex_other,
-    fast_index, member_ids, instances, create = ...
+    fast_index, member_ids, instances, create, class_names = ...
 -- Keys some class has as a method. Property reads skip the
 -- per-instance cache lookup below, which costs a table miss
 -- per instance when a script reads thousands of them.
@@ -8,6 +8,20 @@ local function get(self, key)
     local k = keys[self]
     if k == nil or type(key) ~= "string" then
         return index_other(self, key)
+    end
+    -- An instance's class never changes, and old places check the
+    -- class of thousands of instances a frame: keep it (weak keys).
+    if key == "ClassName" or key == "className" then
+        local name = class_names[self]
+        if name == nil then
+            local err
+            name, err = index(k, key)
+            if err then
+                error(err, 0)
+            end
+            class_names[self] = name
+        end
+        return name
     end
     if method_names[key] then
         local method = methods[self][key]
