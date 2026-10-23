@@ -27,7 +27,7 @@ Rook is an independent implementation.
 - Not allowed: leaked Roblox source or documents derived from it, decompiled or disassembled Roblox binaries, and projects built from either (e.g. libreblox-roblox).
 - Each subsystem's design note records where its behavior came from (see [architecture](architecture.md#behavior-provenance)).
 - **GUI is citation-only.** Every GUI behavior entry must cite creator-docs or a committed Studio conformance recording. No GUI behavior is accepted on recall or "known behavior" alone.
-- Community knowledge (revival communities, forums, word of mouth) is a lead, not a source. Before relying on it, verify it in Studio or find a public citation.
+- Community knowledge (forums, word of mouth) is a lead, not a source. Before relying on it, verify it in Studio or find a public citation.
 - **Files shipped in official Roblox builds** (shader packs such as `shaders_glsl3.pack`, the plain-text shaders in some 2016 player builds, terrain and material tables) carry no license, but they may be read for facts: formulas, constants, which inputs feed which terms. Rook uses those facts exactly, aiming for the same results as Studio, in its own functions shaped for its own renderer. Their code is never pasted or transliterated statement by statement into the repository, and the files themselves are never committed. Docs may name the file a fact came from. Behavior read this way is an Inference until it matches Studio (golden images or conformance recordings), then Confirmed. Content from a user's Roblox install may still be loaded at runtime ([Content and assets](#content-and-assets)).
 
 ## Content and assets
