@@ -79,8 +79,7 @@ health bars and leaderboards are GUI.
        shipped as a fallback, or no core GUI, chosen by setting.
    - *Evidence*: what the CoreScripts call that Rook lacks is listed on
      [the behavior page](../behavior/gui/core-scripts.md#what-rook-lacks),
-     from running them; nothing had to be turned off. Left: the top bar,
-     which waits on chat's stores (step 10).
+     from running them; nothing had to be turned off.
    - *Studio questions*: what `SetCoreGuiEnabled` hides for each
      `CoreGuiType`, and which `SetCore` keys the archive uses
      (`SendNotification`, `ResetButtonCallback`, `TopbarEnabled`, ...),

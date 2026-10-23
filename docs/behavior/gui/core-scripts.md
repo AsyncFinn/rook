@@ -66,13 +66,14 @@ Code: loading in `rook-engine`'s `core_scripts.rs` (and the
 
 ## What runs
 
-On an empty baseplate, 29 CoreScripts start and run with one error in
-five seconds. The player list and Roblox's notification toasts draw
-(Roblox's own React code, laid out by Rook's GUI). The settings menu,
-backpack, emotes menu, purchase prompts, screenshots and the fullscreen
-title bar load. The top bar (`Chrome`'s Unibar) mounts, then stops: a
-chat store it reads (`ExpChat.Stores.GetChatTooltipStore`) is nil, so
-its React tree unmounts. That waits on chat (step 10).
+On an empty baseplate, 29 CoreScripts start and run without errors.
+The top bar (Roblox's logo button, and the menu and chat buttons in their
+pill), the player list and Roblox's notification toasts draw (Roblox's
+own React code, laid out by Rook's GUI). The settings menu, backpack,
+emotes menu, purchase prompts, screenshots and the fullscreen title bar
+load. Chat's stores need `Player.ChatAvailabilityStatus` (a string
+starting `Enabled` when the player may chat), which Rook's API snapshot
+doesn't have; Rook gives `Enabled`.
 
 ## StyleSheets
 

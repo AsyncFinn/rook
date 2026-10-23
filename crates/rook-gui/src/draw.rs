@@ -62,11 +62,18 @@ pub(crate) fn quads(
         draw.collector(screen, Clip::NONE);
     }
     // Laid out in GUI coordinates, drawn in the window's, below the top
-    // bar.
+    // bar: the quads, what clips them, and the corners and gradients they
+    // carry, which are placed in the same pixels.
     for q in draw.out.iter_mut() {
         q.center.y += GUI_INSET;
         q.clip[1] += GUI_INSET;
         q.clip[3] += GUI_INSET;
+        if let Some(shape) = &mut q.shape {
+            shape.center.y += GUI_INSET;
+        }
+        if let Some(gradient) = &mut q.gradient {
+            gradient.origin.y += GUI_INSET;
+        }
     }
     messages::emit(dom, draw.text, draw.out);
     out

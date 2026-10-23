@@ -202,6 +202,10 @@ fn corners_gradients_strokes_and_groups() {
     assert_eq!(shape.radii, [100.0, 8.0, 8.0, 8.0]);
     let g = quads[0].gradient.as_ref().expect("graded");
     assert_eq!(g.step, Vec2::new(1.0 / 200.0, 0.0));
+    // Moved below the top bar with their quad, or the corner cuts a
+    // shape 58 pixels above what it rounds.
+    assert_eq!(shape.center, quads[0].center);
+    assert_eq!(g.origin, quads[0].center);
     let band = quads[1].shape.expect("a band");
     assert_eq!((band.ring, band.size), (4.0, Vec2::splat(208.0)));
     assert_eq!(band.radii, [104.0, 12.0, 12.0, 12.0]);

@@ -110,12 +110,15 @@ fn platform(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
 
 /// Properties missing from Rook's API snapshot that CoreScripts read and
 /// need a value of the right type from (the rest read as nil): the
-/// version strings the settings menu shows, and the player's console
-/// name.
+/// version strings the settings menu shows, the player's console name and
+/// whether they may chat.
 pub(crate) fn hidden_property(class: &str, key: &str) -> Option<&'static str> {
     Some(match (class, key) {
         ("RunService", "ClientGitHash") => "rook",
         ("Player", "PlatformName") => "",
+        // Observed: chat's stores test it for an "Enabled" prefix; a local
+        // player is never region-locked or age-gated.
+        ("Player", "ChatAvailabilityStatus") => "Enabled",
         _ => return None,
     })
 }

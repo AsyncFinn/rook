@@ -5,6 +5,9 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- Rounded and gradient GUI on the screen draws where it is. A UICorner's rounding and a UIGradient's colors were placed 58 pixels too high on ScreenGuis (the top bar's height), so a rounded object was cut by a shape above it, and short ones such as pills vanished; SurfaceGuis and BillboardGuis were right.
+- Roblox's top bar draws with `--core-scripts`: its logo button and its menu and chat buttons, as in Roblox. Chat's stores read the player's `ChatAvailabilityStatus`, which Rook now gives as `Enabled`. `rook-tools run-headless --dump` also prints each GUI object's position, background and image.
+
 ## [0.7.3] - 2026-10-23 - M8 steps 6 and 7, Roblox's CoreScripts, faster large places
 
 Pinned Roblox version: 0.741.19.

@@ -126,6 +126,22 @@ fn dump(dm: &DataModel, path: &str) {
             {
                 line.push_str(" hidden");
             }
+            if let Some(t) = dom.float_property(id, "BackgroundTransparency")
+                && t < 1.0
+            {
+                let c = dom
+                    .color3_property(id, "BackgroundColor3")
+                    .unwrap_or_default();
+                line.push_str(&format!(" background {t} ({}, {}, {})", c.r, c.g, c.b));
+            }
+            if let Some(at) = dom.vector2_property(id, "AbsolutePosition") {
+                line.push_str(&format!(" at {}, {}", at.0.x, at.0.y));
+            }
+            if let Some(image) = dom.string_property(id, "Image")
+                && !image.is_empty()
+            {
+                line.push_str(&format!(" image {image}"));
+            }
         }
         println!("{line}");
         for &c in dom.children(id).iter().rev() {
