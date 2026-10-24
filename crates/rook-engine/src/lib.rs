@@ -12,6 +12,7 @@ pub mod core_scripts;
 pub mod data_folder;
 mod frame;
 pub mod logging;
+mod rigs;
 mod scripts;
 pub mod session;
 pub mod settings;
@@ -186,10 +187,11 @@ impl DataModel {
             dm.user_settings = Some(kept);
         }
         w.is_client = true;
-        // Only the server simulates for now: it owns every part (network
-        // ownership comes with characters). The client's world answers its
-        // LocalScripts' and the mouse's queries.
-        w.physics = rook_physics::Physics::for_queries();
+        // A client simulates its own character and nothing else; the rest
+        // of its world follows replication and answers its LocalScripts'
+        // and the mouse's queries.
+        w.physics =
+            rook_physics::Physics::with_authority(rook_physics::Authority::Only(Vec::new()));
         drop(w);
         Ok(dm)
     }
@@ -320,12 +322,14 @@ impl DataModel {
         .map_err(|e| EngineError::Lua(e.to_string()))?;
         runtime.set_script_timeout(options.script_timeout);
         runtime.world_mut().signal_behavior = signal_behavior;
-        runtime.world_mut().gui.set_content(
-            options
-                .content
-                .clone()
-                .unwrap_or_else(settings::local_content),
-        );
+        let content = options
+            .content
+            .clone()
+            .unwrap_or_else(settings::local_content);
+        if role == Role::Server {
+            runtime.world_mut().rigs = Some(rigs::source(content.clone()));
+        }
+        runtime.world_mut().gui.set_content(content);
         runtime.set_endpoints(
             options
                 .endpoints

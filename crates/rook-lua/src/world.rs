@@ -205,8 +205,7 @@ pub struct World {
     pub(crate) filter_results: HashMap<InstanceId, crate::api::methods::filtering::Filtered>,
     /// The physics world. Scripts query it (raycasts, regions), which
     /// brings it up to date with the DOM first, so it lives here with the
-    /// DOM. Servers step it; a client's only answers queries (see
-    /// `rook_physics::Physics::for_queries`).
+    /// DOM. Each side steps what it owns (`characters::ownership`).
     pub physics: rook_physics::Physics,
     /// GUI layout. Scripts read it (`AbsoluteSize` and the like), which
     /// lays out again first when GUI changed, so it lives here too.
@@ -269,6 +268,17 @@ pub struct World {
     /// Players that have had a character, whose next spawns reset their
     /// PlayerGui.
     pub(crate) spawned: HashSet<InstanceId>,
+    /// Builds R15 bodies from Roblox's rig file; the engine sets it on
+    /// servers. Without it, characters are R6, which Rook builds itself.
+    pub rigs: Option<crate::api::methods::characters::RigSource>,
+    /// Players' looks from the avatar API; the rest have the default look.
+    pub(crate) avatars: HashMap<InstanceId, crate::api::methods::characters::Avatar>,
+    /// Players whose look is still on its way, whose first spawn waits.
+    pub avatars_pending: HashSet<InstanceId>,
+    /// Players whose clients simulate their characters (a server's).
+    pub client_players: HashSet<InstanceId>,
+    /// Picks spawns and spots on them.
+    pub(crate) spawn_random: crate::types::misc::LRandom,
     /// PlayerGuis' `SetTopbarTransparency`, for those a script set.
     pub(crate) topbar_transparency: HashMap<InstanceId, f32>,
 }
@@ -315,6 +325,12 @@ impl World {
             audio: AudioState::default(),
             effect_calls: Vec::new(),
             spawned: HashSet::new(),
+            rigs: None,
+            avatars: HashMap::new(),
+            avatars_pending: HashSet::new(),
+            client_players: HashSet::new(),
+            // A fixed seed: runs repeat exactly.
+            spawn_random: crate::types::misc::LRandom::new(1),
             topbar_transparency: HashMap::new(),
         }
     }

@@ -118,10 +118,10 @@ impl Physics {
         blast
     }
 
-    /// Push the parts `blast` hit, after its joints are gone. A world that
-    /// only answers queries (a client's) pushes nothing.
+    /// Push the parts `blast` hit, after its joints are gone. Only bodies
+    /// this world simulates move.
     pub fn push(&mut self, dom: &mut Dom, blast: &Blast) {
-        if self.query_only || blast.pushes.is_empty() {
+        if blast.pushes.is_empty() {
             return;
         }
         self.sync(dom);

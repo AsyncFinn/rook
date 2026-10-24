@@ -104,6 +104,17 @@ pub(crate) fn call(lua: &Lua, request: WebRequest, decode: Decode) -> ApiResult<
     ))
 }
 
+/// Send `request` for Rook itself: no script waits, and `decode` runs on
+/// the answer for what it does to the World.
+pub(crate) fn send(lua: &Lua, request: WebRequest, decode: Decode) {
+    with_world(lua, |w| {
+        let web = &mut w.web;
+        web.next += 1;
+        web.outbox.push((web.next, request));
+        web.waiting.insert(web.next, (None, decode));
+    });
+}
+
 /// The JSON body of a 2xx answer, or the error a member raises for it.
 pub(crate) fn json(answer: WebAnswer) -> Result<serde_json::Value, String> {
     let response = answer.map_err(|e| format!("HttpError: ConnectFail ({e})"))?;
@@ -127,9 +138,13 @@ fn wait(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
 }
 
 /// Resume the thread waiting on `request` with `(true, results)` or
-/// `(false, error)`.
+/// `(false, error)`; a request of Rook's own ([`send`]) is only decoded.
 pub(crate) fn deliver(lua: &Lua, request: u64, answer: WebAnswer) {
-    let Some((Some(thread), decode)) = with_world(lua, |w| w.web.waiting.remove(&request)) else {
+    let Some((thread, decode)) = with_world(lua, |w| w.web.waiting.remove(&request)) else {
+        return;
+    };
+    let Some(thread) = thread else {
+        let _ = decode(lua, answer);
         return;
     };
     let packed = decode(lua, answer).and_then(|values| {

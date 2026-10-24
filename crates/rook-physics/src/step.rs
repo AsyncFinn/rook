@@ -7,7 +7,7 @@ impl Physics {
     pub fn step(&mut self, dt: f64) {
         profiling::scope!("Physics::step");
         self.last_dt = dt;
-        if self.query_only || self.bodies.values().all(|b| b.asm.anchored) {
+        if !self.moves_anything() {
             return;
         }
         self.build_terrain_near_bodies(dt as f32);
@@ -60,6 +60,13 @@ impl Physics {
             };
             let rb = &self.world.bodies[handle];
             let root = cframe_of(rb.position());
+            if body.remote {
+                // Its machine writes it; it falls out of the world here too.
+                if root.position.y < self.fallen_height {
+                    fallen.extend(body.asm.members.iter().map(|m| m.part));
+                }
+                continue;
+            }
             let linvel = Value::Vector3(Vector3(to_glam(rb.linvel())));
             let angvel = Value::Vector3(Vector3(to_glam(rb.angvel())));
             for m in &body.asm.members {

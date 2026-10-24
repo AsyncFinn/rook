@@ -418,10 +418,10 @@ fn sphere_casts_report_travel_and_skip_parts_they_start_in() {
 }
 
 #[test]
-fn query_worlds_never_simulate() {
+fn worlds_owning_nothing_never_simulate() {
     let mut dom = Dom::new();
     let p = block(&mut dom, O, false);
-    let mut physics = Physics::for_queries();
+    let mut physics = Physics::with_authority(Authority::Only(Vec::new()));
     run(&mut physics, &mut dom, 0.5);
     assert_eq!(position(&dom, p), O);
     let hit = ray(

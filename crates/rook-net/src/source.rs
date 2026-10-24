@@ -7,11 +7,28 @@ pub struct Source {
     cursor: u64,
     /// The server-side Player this client is, for PlayerReplicated containers.
     pub(crate) player: Option<InstanceId>,
+    /// Values this client sent the server itself (its character's pose),
+    /// which it isn't sent back while the server's value is still that.
+    echoes: HashMap<(InstanceId, PropertyId), Value>,
 }
 
 impl Source {
     pub fn new(player: Option<InstanceId>) -> Self {
-        Self { cursor: 0, player }
+        Self {
+            cursor: 0,
+            player,
+            echoes: HashMap::new(),
+        }
+    }
+
+    /// The server took `value` for `property` from this client: a change
+    /// to it that still holds `value` isn't sent back.
+    pub fn echo(&mut self, id: InstanceId, property: PropertyId, value: Value) {
+        self.echoes.insert((id, property), value);
+    }
+
+    fn echoed(&self, id: InstanceId, property: PropertyId, value: &Value) -> bool {
+        self.echoes.get(&(id, property)) == Some(value)
     }
 
     /// Whether `id` and all its ancestors may be seen by this client.
@@ -60,6 +77,7 @@ impl Source {
     pub fn updates(&mut self, server: &Dom) -> Vec<Update> {
         profiling::scope!("Source::updates");
         let mut out = Vec::new();
+        let mut destroyed = Vec::new();
         let visible = |id| self.visible(server, id);
         for change in server.journal().since(self.cursor) {
             match change {
@@ -70,7 +88,10 @@ impl Source {
                     },
                     _ => Update::Hide(*id),
                 }),
-                Change::Destroying(id) => out.push(Update::Destroying(*id)),
+                Change::Destroying(id) => {
+                    destroyed.push(*id);
+                    out.push(Update::Destroying(*id));
+                }
                 Change::Property { id, property } if visible(*id) => {
                     if *property == server.name_property() {
                         out.push(Update::Name {
@@ -79,6 +100,7 @@ impl Source {
                         });
                     } else if *property != server.parent_property()
                         && let Some(value) = replicated_value(server, *id, *property)
+                        && !self.echoed(*id, *property, &value)
                     {
                         out.push(Update::Property {
                             id: *id,
@@ -102,6 +124,9 @@ impl Source {
                 }),
                 _ => {}
             }
+        }
+        if !destroyed.is_empty() {
+            self.echoes.retain(|(id, _), _| !destroyed.contains(id));
         }
         self.cursor = server.journal().end();
         out

@@ -14,7 +14,7 @@ made inert without an entry in the first table.
 
 | Member | What it does on Roblox | Taken over by |
 |---|---|---|
-| `BasePart:SetNetworkOwner` | Chooses which machine simulates the part's assembly | Networking (single machine until then) |
+| `BasePart:SetNetworkOwner` | Chooses which machine simulates the part's assembly (Rook gives each player's client its character and the server the rest; see [ownership](../behavior/characters/ownership.md)) | M10 Networking |
 | `BasePart:SetNetworkOwnershipAuto` | Returns network ownership to the engine | Networking |
 | `ContentProvider:Preload` | Queues an asset for download (deprecated; not checked in Studio) | Content |
 | `InsertService:ApproveAssetId` | Allowed a place to `LoadAsset` a specific asset (legacy) | Stays inert: Rook's `LoadAsset` doesn't check approvals or ownership |
@@ -86,8 +86,8 @@ made inert without an entry in the first table.
 | Collision groups in older files | Places with only the old `Workspace.CollisionGroups` string get just `Default` | Reading that string's groups; the archive's samples list only `Default` | Conformance |
 | `Workspace.TouchEventsUseCollisionGroups` | Not read; `TouchesUseCollisionGroups` decides whether groups that don't collide also don't touch | The newer enum's meaning | Conformance |
 | Physics: timestep | Always 240 Hz | Adaptive 240/120/60 Hz per assembly | Physics, later |
-| Characters | A player's character spawns on joining (with `Players.CharacterAutoLoads`) and on `Player:LoadCharacter()`, in Roblox's order: StarterCharacterScripts copied in, Backpack and PlayerGui refilled, `Player.Character` set, CharacterAdded, then parented to Workspace. Its body is a Humanoid and an invisible, anchored HumanoidRootPart that nothing collides with or touches, on the first enabled SpawnLocation | R6 and R15 rigs, walking, the Humanoid's states, health and death, respawning, team spawns, the camera following it | M9 |
-| Physics: who simulates | The server simulates every part; clients only see replicated results, and their physics world only answers queries | Network ownership | Characters |
+| Characters | Players spawn as R15 (Roblox's rig file) or R6 rigs, or StarterCharacter, on a random SpawnLocation they may use, with teams, ForceFields and respawning after death ([rigs](../behavior/characters/rigs.md), [spawning](../behavior/characters/spawning.md)). Until the Humanoid controller, a character is held upright at standing height over the floor below it, and doesn't walk | Walking, jumping and the Humanoid's states; health, regeneration and the body falling apart; names and health over heads; the camera following it; body parts, clothes and accessories from HumanoidDescriptions; Studio's AnimationConstraint joints | M9; M11 |
+| Physics: who simulates | Each client simulates its own character; the server simulates everything else and moves clients' characters where they say, one session frame later ([ownership](../behavior/characters/ownership.md)) | `SetNetworkOwner`, automatic ownership of parts near players, and Roblox's lower send rate and delay | M10 |
 | Physics: MeshParts, unions, trusses | Box colliders, in queries too | Their real shapes and `CollisionFidelity` (Box, Hull, Default/PreciseConvexDecomposition) | M15 (step 1) |
 | Physics queries: result order | Regions and overlaps list parts in internal id order (usually creation order), so `maxParts`/`MaxParts` keeps the oldest | Roblox's own order (parts made in a row came back in that order, but three parts once came back as 1st, 3rd, 2nd) | Conformance |
 | `FindPartsInRegion3` and parts made this frame | Found at once, like every other query | Studio sometimes missed parts made in the same frame until the next step (other times found them); rays and `GetPartBoundsInBox` found them at once | Conformance |

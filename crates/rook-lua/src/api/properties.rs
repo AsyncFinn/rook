@@ -10,6 +10,7 @@ use rook_physics::joints;
 use rook_reflection::{PropertyId, PropertyKind, PropertyType, Serialization};
 use rook_types::{CFrame, Color3, Value, Vector3};
 
+use crate::api::methods::characters::spawning;
 use crate::types::color::closest_brick_color;
 
 mod attachment;
@@ -469,6 +470,22 @@ pub(crate) fn set(
         ("Enabled", Value::Bool(b)) if w.dom.is_a(id, "BaseScript") => {
             let pid = w.dom.property_id(id, "Disabled")?;
             Some(w.dom.set_property(id, pid, Value::Bool(!b)))
+        }
+        // A player's team, team color and neutrality follow each other
+        // (creator-docs Player.Team, Player.TeamColor).
+        ("Team", Value::Ref(team)) if w.dom.is_a(id, "Player") => {
+            let team = team.map(InstanceId::from_ref);
+            Some(spawning::join_team(&mut w.dom, id, team))
+        }
+        ("TeamColor", color @ Value::BrickColor(b)) if w.dom.is_a(id, "Player") => {
+            let team = spawning::team_of_color(&w.dom, *b);
+            Some(
+                spawning::join_team(&mut w.dom, id, team)
+                    .and_then(|()| set_named(w, id, "TeamColor", color.clone())),
+            )
+        }
+        ("Neutral", Value::Bool(true)) if w.dom.is_a(id, "Player") => {
+            Some(spawning::join_team(&mut w.dom, id, None))
         }
         ("WorldPivot", Value::CFrame(c)) if w.dom.is_a(id, "Model") => {
             let pid = w.dom.property_id(id, "WorldPivotData")?;

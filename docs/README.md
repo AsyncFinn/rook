@@ -19,6 +19,10 @@
     - [3D sound](behavior/audio/3d-sound.md): roll-off, left and right, the listener
     - [SoundService, SoundGroups and effects](behavior/audio/soundgroups-and-effects.md)
     - [The audio API](behavior/audio/audio-api.md): AudioPlayer, wires, emitters and listeners, effects
+  - Characters
+    - [Rigs and looks](behavior/characters/rigs.md): R15 and R6 bodies, StarterCharacter, avatars and HumanoidDescriptions
+    - [Spawning and teams](behavior/characters/spawning.md): which spawn, where on it, team assignment, respawning
+    - [Who simulates a character](behavior/characters/ownership.md): the client owns it, what the server sees
   - Content
     - [Asset fetching](behavior/content/asset-fetching.md): where archived places' content comes from
     - [Client packages](behavior/content/client-packages.md): Roblox's client files, downloaded from its CDN as needed

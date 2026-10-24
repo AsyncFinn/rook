@@ -113,11 +113,11 @@ impl Physics {
         }
         // The broad phase keeps what `set_aabb` changed until its next
         // update, which a step does. A world that isn't stepping (a
-        // client's, or a server's with nothing unanchored) updates it here
+        // client's with no character, or one with nothing unanchored) updates it here
         // so the list doesn't grow. The pairs it reports are dropped:
         // fixed bodies don't touch each other, and parts that start
         // simulating get new colliders, whose pairs are reported then.
-        if self.query_only || self.bodies.values().all(|b| b.asm.anchored) {
+        if !self.moves_anything() {
             let mut pairs = Vec::new();
             self.world.broad_phase.update(
                 &params,

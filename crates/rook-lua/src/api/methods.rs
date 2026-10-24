@@ -37,7 +37,7 @@ mod attributes;
 mod audio_api;
 mod bindables;
 pub(crate) mod camera;
-mod characters;
+pub(crate) mod characters;
 pub(crate) mod core;
 mod core_gui;
 pub(crate) mod data_stores;
@@ -271,6 +271,7 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
                 localization::native,
                 text::native,
                 player_scripts::native,
+                characters::native,
                 styles::native,
                 text_chat::native,
                 tools::native,
@@ -326,7 +327,7 @@ pub(crate) fn mutate<R>(
     result.map_err(ScriptError::from)
 }
 
-fn ret_instance(lua: &Lua, id: Option<InstanceId>) -> ApiResult<Outcome> {
+pub(crate) fn ret_instance(lua: &Lua, id: Option<InstanceId>) -> ApiResult<Outcome> {
     match id {
         Some(id) => Outcome::ret(lua, push_instance(lua, id)?),
         None => Outcome::ret(lua, LuaValue::Nil),

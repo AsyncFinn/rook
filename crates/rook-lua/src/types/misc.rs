@@ -88,7 +88,7 @@ pub(crate) struct LRandom {
 }
 
 impl LRandom {
-    fn new(seed: u64) -> Self {
+    pub(crate) fn new(seed: u64) -> Self {
         let mut r = Self {
             state: 0,
             inc: (0xda3e_39cb_94b9_5bdb << 1) | 1,
@@ -110,7 +110,7 @@ impl LRandom {
     }
 
     /// Uniform in [0, 1).
-    fn next_f64(&mut self) -> f64 {
+    pub(crate) fn next_f64(&mut self) -> f64 {
         let hi = u64::from(self.next_u32()) << 21;
         let lo = u64::from(self.next_u32()) >> 11;
         ((hi | lo) as f64) / ((1u64 << 53) as f64)

@@ -1,6 +1,27 @@
-//! Players and Humanoids.
+//! Players and their characters: spawning (`spawning`), bodies (`rigs`),
+//! looks (`appearance`) and who simulates them (`ownership`).
+
+mod appearance;
+pub(crate) mod ownership;
+mod rigs;
+pub(crate) mod spawning;
 
 use super::*;
+
+pub(crate) use appearance::request as request_avatar;
+pub use appearance::{Avatar, Scales};
+pub use rigs::{BuildRig, RigSource, RigType};
+
+pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
+    Some(match (owner, name) {
+        ("Players", "GetHumanoidDescriptionFromUserId") => appearance::description_from_user_id,
+        ("Humanoid", "ApplyDescription" | "ApplyDescriptionReset") => appearance::apply_description,
+        ("Humanoid", "GetAppliedDescription") => appearance::get_applied_description,
+        ("BasePart", "GetNetworkOwner") => ownership::get_network_owner,
+        ("BasePart", "GetNetworkOwnershipAuto") => ownership::get_network_ownership_auto,
+        _ => return None,
+    })
+}
 
 pub(super) fn players_of(w: &World, this: InstanceId) -> Vec<InstanceId> {
     w.dom
@@ -76,13 +97,11 @@ pub(super) fn load_character(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult
 
 /// Spawn `player` a new character, in creator-docs order (Player:
 /// LoadCharacter, CharacterAdded, StarterGui, StarterPack): the old
-/// character is removed; the new one is built with StarterCharacterScripts'
-/// contents; the Backpack and PlayerGui are refilled; `Player.Character` is
-/// set and CharacterAdded fires, and only then is the character parented
-/// to Workspace.
-///
-/// The body is a Humanoid and an invisible, anchored HumanoidRootPart that
-/// nothing collides with or touches, until rigs, walking and physics come.
+/// character is removed; the new one is built (`rigs::body`) with
+/// StarterCharacterScripts' contents and placed on a spawn; the Backpack
+/// and PlayerGui are refilled; `Player.Character` is set and
+/// CharacterAdded fires, and only then is the character parented to
+/// Workspace.
 pub(crate) fn spawn_character(lua: &Lua, player: InstanceId) -> ApiResult<InstanceId> {
     let old = with_world(lua, |w| w.dom.ref_property(player, "Character"));
     if let Some(old) = old {
@@ -96,14 +115,20 @@ pub(crate) fn spawn_character(lua: &Lua, player: InstanceId) -> ApiResult<Instan
     }
     let character = mutate(lua, |w| {
         let first = w.spawned.insert(player);
+        let character = rigs::body(w, player)?;
+        let (at, spawn) = spawning::spawn_point(w, player, character);
         let dom = &mut w.dom;
-        let character = build_body(dom, player)?;
+        if let Some(root) = dom.find_first_child(character, "HumanoidRootPart", false) {
+            rigs::place_at(dom, character, root, at)?;
+        }
         if let Some(scripts) = dom
             .find_service("StarterPlayer")
             .and_then(|sp| dom.find_first_child(sp, "StarterCharacterScripts", false))
         {
             copy_children(dom, scripts, character)?;
         }
+        spawning::protect(w, character, spawn)?;
+        let dom = &mut w.dom;
         refill_backpack(dom, player)?;
         reset_player_gui(dom, player, first)?;
         dom.set_property_by_name(player, "Character", Value::Ref(Some(character.to_ref())))?;
@@ -120,54 +145,6 @@ pub(crate) fn spawn_character(lua: &Lua, player: InstanceId) -> ApiResult<Instan
         w.dom.set_parent(character, Some(workspace))
     })?;
     Ok(character)
-}
-
-/// A Model named after the player holding a Humanoid and its root part,
-/// standing on the first enabled SpawnLocation.
-fn build_body(dom: &mut rook_dom::Dom, player: InstanceId) -> Result<InstanceId, DomError> {
-    let model = dom.create_by_name("Model")?;
-    dom.set_name(model, dom.name(player).to_owned())?;
-    let humanoid = dom.create_by_name("Humanoid")?;
-    dom.set_parent(humanoid, Some(model))?;
-    let root = dom.create_by_name("Part")?;
-    dom.set_name(root, "HumanoidRootPart".into())?;
-    let at = spawn_point(dom);
-    for (name, value) in [
-        ("Size", Value::Vector3(Vector3::new(2.0, 2.0, 1.0))),
-        ("CFrame", Value::CFrame(CFrame::from_position(at))),
-        ("Transparency", Value::Float32(1.0)),
-        ("Anchored", Value::Bool(true)),
-        ("CanCollide", Value::Bool(false)),
-        ("CanTouch", Value::Bool(false)),
-        ("CanQuery", Value::Bool(false)),
-    ] {
-        dom.set_property_by_name(root, name, value)?;
-    }
-    dom.set_parent(root, Some(model))?;
-    dom.set_property_by_name(model, "PrimaryPart", Value::Ref(Some(root.to_ref())))?;
-    Ok(model)
-}
-
-/// Where a root part spawns: 3 studs above the top of the first enabled
-/// SpawnLocation in Workspace, or 3 above the origin without one
-/// (Inference: Roblox picks randomly among the ones the player's team
-/// may use; teams come with M9).
-fn spawn_point(dom: &rook_dom::Dom) -> glam::Vec3 {
-    let spawn = dom.find_service("Workspace").and_then(|ws| {
-        dom.find_descendant(ws, &|d| {
-            dom.is_a(d, "SpawnLocation") && dom.bool_property(d, "Enabled") != Some(false)
-        })
-    });
-    let Some(spawn) = spawn else {
-        return glam::Vec3::new(0.0, 3.0, 0.0);
-    };
-    let (Some(cf), Some(size)) = (
-        dom.cframe_property(spawn, "CFrame"),
-        dom.vector3_property(spawn, "Size"),
-    ) else {
-        return glam::Vec3::new(0.0, 3.0, 0.0);
-    };
-    cf.position + glam::Vec3::new(0.0, size.y / 2.0 + 3.0, 0.0)
 }
 
 /// Copies of `from`'s archivable children under `to`.
@@ -233,4 +210,25 @@ fn reset_player_gui(
         }
     }
     Ok(())
+}
+
+/// Characters this DataModel simulates whose Humanoids are alive, with
+/// their root parts and how far their feet reach below them, for physics
+/// to hold standing until the Humanoid controller (`rook_physics::Physics::stand`).
+pub fn standing(w: &World) -> Vec<(InstanceId, InstanceId, f32)> {
+    let rook_physics::Authority::Only(characters) = ownership::authority(w) else {
+        return Vec::new();
+    };
+    characters
+        .into_iter()
+        .filter_map(|c| {
+            let humanoid = w.dom.find_first_child_of_class(c, "Humanoid")?;
+            let alive = w
+                .dom
+                .number_property(humanoid, "Health_XML")
+                .is_none_or(|h| h > 0.0);
+            let root = w.dom.find_first_child(c, "HumanoidRootPart", false)?;
+            alive.then(|| (c, root, spawning::feet_below_root(&w.dom, c)))
+        })
+        .collect()
 }

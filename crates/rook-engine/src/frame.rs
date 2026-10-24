@@ -181,20 +181,33 @@ impl DataModel {
         sounds_done
     }
 
-    /// Step physics and write the results into the DOM, Explosions going
-    /// off first. Parts that fell below Workspace.FallenPartsDestroyHeight
-    /// are destroyed.
+    /// Step physics and write the results into the DOM. Each side
+    /// simulates what it owns (`rook_lua::authority`): a client its own
+    /// character, the server the rest, with Explosions going off first.
+    /// Parts that fell below Workspace.FallenPartsDestroyHeight are
+    /// destroyed on the server.
     fn simulate(&mut self, dt: f64) {
-        if self.role == Role::Client {
+        let server = self.role == Role::Server;
+        let authority = rook_lua::authority(&self.runtime.world());
+        if authority == rook_physics::Authority::Only(Vec::new()) {
+            // A client with no character: its world only answers queries.
             return;
         }
-        self.age_explosions(dt);
-        let blasts = self.set_off_explosions();
+        let blasts = if server {
+            self.age_explosions(dt);
+            self.set_off_explosions()
+        } else {
+            Vec::new()
+        };
         let (fallen, touches, reached) = {
             let mut w = self.runtime.world_mut();
             let w = &mut *w;
+            w.physics.set_authority(&w.dom, authority);
             w.physics.sync(&mut w.dom);
             w.physics.step(dt);
+            for (model, root, drop) in rook_lua::standing(w) {
+                w.physics.stand(&mut w.dom, model, root, drop);
+            }
             let fallen = w.physics.write_back(&mut w.dom);
             (fallen, w.physics.take_touches(), w.physics.take_reached())
         };
@@ -207,14 +220,20 @@ impl DataModel {
                 if let Ok(other) = self.runtime.push_instance(other) {
                     self.runtime.fire_event(part, event, other);
                 }
+                let is_spawn = self.runtime.world().dom.is_a(part, "SpawnLocation");
+                if server && t.began && is_spawn {
+                    self.runtime.spawn_touched(part, other);
+                }
             }
         }
         for rocket in reached {
             self.runtime.fire_event(rocket, "ReachedTarget", ());
         }
         self.runtime.drain_deferred();
-        for id in fallen {
-            self.runtime.destroy(id);
+        if server {
+            for id in fallen {
+                self.runtime.destroy(id);
+            }
         }
     }
 }

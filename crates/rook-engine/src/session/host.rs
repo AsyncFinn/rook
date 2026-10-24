@@ -31,7 +31,7 @@ pub enum ToClient {
 }
 
 /// From a client to the server, with the server's instance ids.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ToServer {
     Remote(RemoteMessage),
     /// The player clicked a ClickDetector: its events fire on the server
@@ -46,6 +46,14 @@ pub enum ToServer {
     MoveTool {
         tool: InstanceId,
         parent: InstanceId,
+    },
+    /// Where the client's simulation put its character: the root part of
+    /// the assembly, which the rest of it follows (network ownership).
+    Pose {
+        part: InstanceId,
+        cframe: rook_types::CFrame,
+        linear: glam::Vec3,
+        angular: glam::Vec3,
     },
 }
 
@@ -74,8 +82,12 @@ pub struct ServerHost {
     /// its own number for the call.
     calls: HashMap<u64, (usize, u64)>,
     next_call: u64,
-    /// Players whose first character spawns at the start of the next step.
+    /// Players whose first character spawns at the start of a step, once
+    /// their look has arrived.
     spawning: Vec<InstanceId>,
+    /// Humanoids that died, and when their players respawn (`None`
+    /// without `CharacterAutoLoads`).
+    dead: HashMap<InstanceId, (InstanceId, Option<f64>)>,
 }
 
 impl ServerHost {
@@ -89,6 +101,7 @@ impl ServerHost {
             calls: HashMap::new(),
             next_call: 0,
             spawning: Vec::new(),
+            dead: HashMap::new(),
         }
     }
 
@@ -125,10 +138,12 @@ impl ServerHost {
                 dom.set_parent(c, Some(player))?;
             }
             dom.set_parent(player, Some(players))?;
+            w.client_players.insert(player);
             (player, start)
         };
         let players = self.server.runtime().world().dom.find_service("Players");
         self.server.runtime().dispatch_since(start);
+        self.server.runtime().welcome_player(player);
         if let Some(players) = players {
             let ud = self.server.runtime().push_instance(player);
             if let Ok(ud) = ud {
@@ -163,15 +178,73 @@ impl ServerHost {
         ))
     }
 
-    /// One frame of the server.
+    /// One frame of the server: players whose looks arrived and dead ones
+    /// whose `Players.RespawnTime` passed spawn first, and characters that
+    /// died during it are noticed after.
     pub fn step(&mut self) {
-        for player in std::mem::take(&mut self.spawning) {
+        let now = self.server.now();
+        let mut due = Vec::new();
+        let pending = self.server.runtime().world().avatars_pending.clone();
+        self.spawning.retain(|&p| {
+            let waiting = pending.contains(&p);
+            if !waiting {
+                due.push(p);
+            }
+            waiting
+        });
+        self.dead.retain(|_, (p, at)| {
+            let respawn = at.is_some_and(|at| at <= now + 1e-9);
+            if respawn {
+                due.push(*p);
+            }
+            !respawn
+        });
+        for player in due {
+            let gone = self.server.runtime().world().dom.parent(player).is_none();
+            if gone {
+                continue;
+            }
             if let Err(e) = self.server.runtime().load_character(player) {
                 let mut w = self.server.runtime().world_mut();
                 w.push_log(rook_lua::MessageType::Error, format!("LoadCharacter: {e}"));
             }
         }
         self.server.step();
+        self.notice_deaths();
+    }
+
+    /// Fire `Died` for players' Humanoids whose health reached 0, and set
+    /// their respawn (creator-docs Players.RespawnTime; measured in Studio
+    /// 0.744: the new character came 5.3 s after Died with the default 5).
+    /// Approximation: the body stays whole until health and death (M9
+    /// step 4) break its joints.
+    fn notice_deaths(&mut self) {
+        let now = self.server.now();
+        let died: Vec<(InstanceId, InstanceId, Option<f64>)> = {
+            let w = self.server.runtime().world();
+            let dom = &w.dom;
+            let players = dom.find_service("Players");
+            let respawn_time = players
+                .and_then(|p| dom.number_property(p, "RespawnTime"))
+                .unwrap_or(5.0);
+            let auto_loads =
+                players.is_none_or(|p| dom.bool_property(p, "CharacterAutoLoads") != Some(false));
+            self.clients
+                .iter()
+                .filter_map(|c| {
+                    let character = dom.ref_property(c.player, "Character")?;
+                    let humanoid = dom.find_first_child_of_class(character, "Humanoid")?;
+                    let health = dom.number_property(humanoid, "Health_XML")?;
+                    (health <= 0.0 && !self.dead.contains_key(&humanoid))
+                        .then(|| (humanoid, c.player, auto_loads.then_some(now + respawn_time)))
+                })
+                .collect()
+        };
+        for (humanoid, player, respawn) in died {
+            self.dead.insert(humanoid, (player, respawn));
+            self.server.runtime().fire_event(humanoid, "Died", ());
+            self.server.runtime().drain_deferred();
+        }
     }
 
     /// The replicated changes since the last call, for each client in turn.
@@ -254,6 +327,49 @@ impl ServerHost {
         out
     }
 
+    /// Take client `index`'s simulation of its character: the assembly of
+    /// `part` moves there, as a script's move would, if its player's client
+    /// owns it. Other clients see the move; the sender isn't sent its own
+    /// move back (its later changes by the server's scripts do reach it).
+    /// Physics writes fire no Changed signals, and neither does this.
+    fn apply_pose(
+        &mut self,
+        index: usize,
+        player: InstanceId,
+        part: InstanceId,
+        cframe: rook_types::CFrame,
+        [linear, angular]: [glam::Vec3; 2],
+    ) {
+        let mut w = self.server.runtime().world_mut();
+        let owned = w
+            .dom
+            .ref_property(player, "Character")
+            .is_some_and(|c| w.dom.is_ancestor_of(c, part));
+        if !owned {
+            return;
+        }
+        let start = w.dom.journal().end();
+        let dom = &mut w.dom;
+        let moved = rook_physics::assembly::move_part(dom, part, cframe)
+            .and_then(|()| {
+                rook_physics::assembly::set_velocity(dom, part, "AssemblyLinearVelocity", linear)
+            })
+            .and_then(|()| {
+                rook_physics::assembly::set_velocity(dom, part, "AssemblyAngularVelocity", angular)
+            });
+        if let Err(e) = moved {
+            tracing::warn!("a client's character move failed: {e}");
+        }
+        let source = &mut self.clients[index].source;
+        for change in w.dom.journal().since(start) {
+            if let rook_dom::Change::Property { id, property } = change
+                && let Some(value) = w.dom.property(*id, *property)
+            {
+                source.echo(*id, *property, value);
+            }
+        }
+    }
+
     /// Deliver a message from client `index`.
     pub fn deliver(&mut self, index: usize, msg: ToServer) {
         let Some(player) = self.player(index) else {
@@ -271,6 +387,12 @@ impl ServerHost {
                 rt.repeat_tool_move(player, tool, parent);
                 rt.drain_deferred();
             }
+            ToServer::Pose {
+                part,
+                cframe,
+                linear,
+                angular,
+            } => self.apply_pose(index, player, part, cframe, [linear, angular]),
             ToServer::Remote(RemoteMessage { remote, kind, args }) => match kind {
                 RemoteKind::FireServer => {
                     if let Some(r) = remote {
@@ -311,6 +433,8 @@ pub struct ClientHost {
     /// called in the same server frame), tried again after the next
     /// updates.
     early_effects: Vec<(InstanceId, EffectCall)>,
+    /// The character pose last sent, so a still character sends nothing.
+    last_pose: Option<ToServer>,
 }
 
 impl ClientHost {
@@ -360,6 +484,7 @@ impl ClientHost {
             calls: HashMap::new(),
             next_call: 0,
             early_effects: Vec::new(),
+            last_pose: None,
         })
     }
 
@@ -471,11 +596,38 @@ impl ClientHost {
         }
     }
 
-    /// Remote calls and Tool moves the client's scripts made since the
-    /// last call. An invoke of a RemoteFunction the server doesn't share
-    /// fails at once.
+    /// Where the client's simulation has its character, by the server's
+    /// ids: the root part's CFrame and its assembly's velocities.
+    fn character_pose(&self) -> Option<ToServer> {
+        let w = self.client.runtime().world();
+        let character = w.dom.ref_property(w.dom.local_player()?, "Character")?;
+        let root = w
+            .dom
+            .ref_property(character, "PrimaryPart")
+            .or_else(|| w.dom.find_first_child(character, "HumanoidRootPart", false))?;
+        if !w.physics.simulates(root) {
+            return None;
+        }
+        let velocity = |name| w.dom.vector3_property(root, name).unwrap_or_default();
+        Some(ToServer::Pose {
+            part: self.sink.server_id(root)?,
+            cframe: w.dom.cframe_property(root, "CFrame")?,
+            linear: velocity("AssemblyLinearVelocity"),
+            angular: velocity("AssemblyAngularVelocity"),
+        })
+    }
+
+    /// Remote calls, Tool moves and the character's pose since the last
+    /// call (a pose only when it changed). An invoke of a RemoteFunction
+    /// the server doesn't share fails at once.
     pub fn outgoing(&mut self) -> Vec<ToServer> {
         let mut out = Vec::new();
+        if let Some(pose) = self.character_pose()
+            && self.last_pose.as_ref() != Some(&pose)
+        {
+            self.last_pose = Some(pose.clone());
+            out.push(pose);
+        }
         for (tool, parent) in self.client.runtime().take_tool_moves() {
             if let (Some(tool), Some(parent)) =
                 (self.sink.server_id(tool), self.sink.server_id(parent))

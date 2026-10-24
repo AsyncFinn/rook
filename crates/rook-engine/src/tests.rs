@@ -179,6 +179,7 @@ fn step_until(dm: &mut DataModel, mut done: impl FnMut(&[String]) -> bool) -> Ve
 mod adornments;
 mod assets;
 mod audio_api;
+mod characters;
 mod client_tweens;
 mod effects;
 mod explosions;

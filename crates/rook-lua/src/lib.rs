@@ -22,6 +22,8 @@ use threads::watchdog;
 
 pub use api::methods::assets::AssetFill;
 pub use api::methods::camera::{Lens, viewport_ray};
+pub use api::methods::characters::ownership::authority;
+pub use api::methods::characters::{Avatar, BuildRig, RigSource, RigType, Scales, standing};
 pub use api::methods::web::{WebAnswer, WebRequest};
 pub use net::{NetValue, RemoteKind, RemoteMessage};
 pub use world::{EffectCall, Listener, LogEntry, MessageType, SignalBehavior, SoundControl};
@@ -315,6 +317,34 @@ impl Runtime {
             threads::drain_deferred(&self.lua);
             r
         })
+    }
+
+    /// A player joined: it goes on an auto-assignable team, and its look
+    /// is asked of the avatar API. Returns whether the look is on its way
+    /// (its first spawn waits for it: `World::avatars_pending`).
+    pub fn welcome_player(&self, player: InstanceId) -> bool {
+        let start = self.world().dom.journal().end();
+        {
+            let mut w = self.world_mut();
+            if let Err(e) = api::methods::characters::spawning::assign_team(&mut w.dom, player) {
+                w.push_log(MessageType::Error, format!("assigning a team: {e}"));
+            }
+        }
+        self.dispatch_since(start);
+        api::methods::characters::request_avatar(&self.lua, player)
+    }
+
+    /// A part touched a SpawnLocation (team changes on touch).
+    pub fn spawn_touched(&self, spawn: InstanceId, part: InstanceId) {
+        let start = self.world().dom.journal().end();
+        {
+            let mut w = self.world_mut();
+            let result = api::methods::characters::spawning::spawn_touched(&mut w.dom, spawn, part);
+            if let Err(e) = result {
+                w.push_log(MessageType::Error, format!("changing team on touch: {e}"));
+            }
+        }
+        self.dispatch_since(start);
     }
 
     /// Drain the deferred queue (a resumption point).

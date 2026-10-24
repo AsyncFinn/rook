@@ -10,6 +10,7 @@ mod forces;
 mod joints;
 mod make_joints;
 mod movers;
+mod ownership;
 mod queries;
 mod unions;
 

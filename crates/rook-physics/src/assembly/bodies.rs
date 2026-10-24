@@ -10,6 +10,9 @@ pub(crate) struct Body {
     pub(crate) colliders: Vec<Option<(ColliderHandle, Pose)>>,
     /// Motors inside the assembly, stepped every frame.
     pub(crate) motors: Vec<Joint>,
+    /// Another machine simulates it: the body follows where the DOM puts
+    /// it ([`Authority`]).
+    pub(crate) remote: bool,
 }
 
 /// A part's collider mass and material. Massless parts add no mass unless
@@ -117,11 +120,17 @@ impl Physics {
             Some(Value::Vector3(v)) => to_rapier(v.0),
             _ => Vector::ZERO,
         };
+        let remote = !asm.anchored
+            && !self
+                .authority
+                .simulates(dom, asm.members.iter().map(|m| m.part));
         let builder = if asm.anchored {
             // An anchored part keeps its velocity and carries what touches
             // it along: a conveyor (observed).
             RigidBodyBuilder::fixed()
                 .user_data(contacts::pack_velocity(vector(props.linear_velocity)))
+        } else if remote {
+            RigidBodyBuilder::kinematic_position_based()
         } else {
             // Rapier caps spin at a quarter turn per step (for CCD, which
             // Rook doesn't use); Roblox spins a RotateV rotor at 1,550
@@ -146,7 +155,8 @@ impl Physics {
             .filter(|j| matches!(j.kind, JointKind::Motor | JointKind::Motor6D))
             .copied()
             .collect();
-        if !motors.is_empty() {
+        // A remote assembly's machine turns its motors.
+        if !motors.is_empty() && !remote {
             self.motored.insert(handle);
         }
         // Snap the members to where the joints hold them.
@@ -160,6 +170,7 @@ impl Physics {
                 asm,
                 colliders,
                 motors,
+                remote,
             },
         );
         handle
@@ -211,6 +222,19 @@ impl Physics {
             // Non-colliding parts still fall; they just don't push anything.
             .sensor(!can_collide)
             .position(pose_of(&offset) * shape_pose);
+        // A server's Touched fires for a client's character against
+        // anchored parts and other characters (observed in Studio 0.744).
+        let collider = if self.world.bodies[body].is_kinematic()
+            && matches!(self.authority, Authority::Except(_))
+        {
+            collider.active_collision_types(
+                ActiveCollisionTypes::default()
+                    | ActiveCollisionTypes::KINEMATIC_FIXED
+                    | ActiveCollisionTypes::KINEMATIC_KINEMATIC,
+            )
+        } else {
+            collider
+        };
         let handle = self.world.insert_collider(collider, Some(body));
         self.set_hooks(handle);
         self.colliders.insert(handle, part);
@@ -370,7 +394,7 @@ impl Physics {
         if rb.is_dynamic() {
             rb.set_linvel(vector(props.linear_velocity), true);
             rb.set_angvel(vector(props.angular_velocity), true);
-        } else {
+        } else if !body.remote {
             rb.user_data = contacts::pack_velocity(vector(props.linear_velocity));
         }
         // Keep the rest of the assembly with it.

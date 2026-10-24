@@ -12,9 +12,18 @@ R15 Animate script and the health regeneration script. Which of those
 Rook runs, against the 2018 Core-Scripts it can ship, is
 [undecided](unscheduled.md#undecided) and is settled before step 5.
 
-1. **Rigs and spawning**. Begun: the spawn flow (`LoadCharacter`,
-   `CharacterAutoLoads`, StarterCharacterScripts, Backpack and PlayerGui
-   refills, CharacterAdded) with a bare, anchored body.
+1. **Rigs and spawning**. Mostly done ([rigs and looks](../behavior/characters/rigs.md),
+   [spawning and teams](../behavior/characters/spawning.md)): R15 from
+   Roblox's rig file and R6 built as Studio builds it, StarterCharacter,
+   `GameSettingsAvatar`, looks from the avatar API with the classic default
+   offline, body colors and classic scaling in HumanoidDescriptions and
+   `ApplyDescription`, spawn choice, placement and ForceFields measured in
+   Studio, team assignment and team spawns, and respawning after `Died`.
+   Left: names and health over heads; conformance cases for spawn order and
+   team assignment (recording needs Studio's MCP server, and Rook's
+   conformance runs have no players yet); whether team auto-assignment
+   balances, which needs several players in Studio; R15 body parts from
+   descriptions and Studio's AnimationConstraint joints (M11).
    - *Scope*:
      - The default R15 and R6 rigs: parts, Motor6Ds (1,674 files) and
        attachments, `HipHeight`, `RigType`; StarterPlayer's
@@ -40,7 +49,7 @@ Rook runs, against the 2018 Core-Scripts it can ship, is
    - *Done when*: joining an archive place spawns the right rig on the
      right team's SpawnLocation, and conformance cases for spawn order
      and team assignment pass.
-2. **The client simulates its character**. On Roblox a player's client
+2. ✅ [**The client simulates its character**](../behavior/characters/ownership.md). On Roblox a player's client
    owns its character's assembly: it steps the physics and sends the
    result to the server. Today Rook's server simulates everything and
    a client's physics world only answers queries, so this comes before

@@ -5,8 +5,9 @@
 //! parts' CFrames and velocities back. Rigidly joined parts form one body
 //! ([`assembly`]); [`joints`] covers joints, constraints and movers;
 //! [`contacts`] materials, collision groups and Touched; [`query`] scripts'
-//! scene queries, which a client's world only answers
-//! ([`Physics::for_queries`]). Findings are in `docs/behavior/physics/` and
+//! scene queries. Each world simulates the assemblies its machine owns
+//! ([`Authority`]); the rest follow where replication puts them. Findings
+//! are in `docs/behavior/physics/` and
 //! `docs/behavior/physics/collision-shapes.md`.
 
 pub mod assembly;
@@ -16,6 +17,7 @@ mod explosion;
 pub mod joints;
 pub mod query;
 mod shape;
+mod stand;
 mod step;
 mod sync;
 
@@ -133,6 +135,50 @@ pub enum Command {
     AbortRocket(InstanceId),
 }
 
+/// Which unanchored assemblies a world simulates (network ownership). An
+/// assembly belongs to a model when one of its parts is inside it; the
+/// models are players' characters, the one thing whose ownership moves
+/// for now (`SetNetworkOwner` and automatic ownership are M10's).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Authority {
+    /// Every one but those of these models, which clients simulate and
+    /// send (a server).
+    Except(Vec<InstanceId>),
+    /// Only those of these models (a client: its own character). With
+    /// none, the world never steps and only answers queries.
+    Only(Vec<InstanceId>),
+}
+
+impl Default for Authority {
+    fn default() -> Self {
+        Self::Except(Vec::new())
+    }
+}
+
+impl Authority {
+    /// Whether this world simulates the assembly holding `parts`.
+    fn simulates(&self, dom: &Dom, parts: impl IntoIterator<Item = InstanceId>) -> bool {
+        let (models, inside) = match self {
+            Self::Except(models) => (models, false),
+            Self::Only(models) => (models, true),
+        };
+        if models.is_empty() {
+            return !inside;
+        }
+        let owned = parts.into_iter().any(|part| {
+            let mut cur = dom.parent(part);
+            while let Some(c) = cur {
+                if models.contains(&c) {
+                    return true;
+                }
+                cur = dom.parent(c);
+            }
+            false
+        });
+        owned == inside
+    }
+}
+
 /// A DataModel's physics world.
 pub struct Physics {
     world: PhysicsWorld,
@@ -182,8 +228,10 @@ pub struct Physics {
     /// Bodies added or moved since the last step, whose colliders queries
     /// must put in place first (Rapier does that when it steps).
     stale: HashSet<RigidBodyHandle>,
-    /// The world only answers queries; it never steps (clients).
-    query_only: bool,
+    /// Which assemblies this world simulates.
+    authority: Authority,
+    /// Parts whose assemblies change hands at the next sync.
+    handed_over: Vec<InstanceId>,
     unions: unions::Unions,
     terrain: terrain::Terrain,
     /// Terrain colliders were added since the last query.
@@ -242,21 +290,52 @@ impl Physics {
             constraints: HashMap::default(),
             drives: HashMap::default(),
             stale: HashSet::default(),
-            query_only: false,
+            authority: Authority::default(),
+            handed_over: Vec::new(),
             unions: unions::Unions::default(),
             terrain: terrain::Terrain::default(),
             terrain_placed: false,
         }
     }
 
-    /// A world that only answers queries, for a DataModel that doesn't
-    /// simulate (a client: the server simulates every part until network
-    /// ownership exists). Its parts stay where replication puts them.
-    pub fn for_queries() -> Self {
+    /// A world that simulates only what `authority` gives it.
+    pub fn with_authority(authority: Authority) -> Self {
         Self {
-            query_only: true,
+            authority,
             ..Self::new()
         }
+    }
+
+    /// Hand assemblies over: those that change hands are rebuilt at the
+    /// next sync, simulated here or following the DOM.
+    pub fn set_authority(&mut self, dom: &Dom, authority: Authority) {
+        if authority == self.authority {
+            return;
+        }
+        self.authority = authority;
+        for body in self.bodies.values() {
+            let parts = body.asm.members.iter().map(|m| m.part);
+            if !body.asm.anchored && self.authority.simulates(dom, parts) == body.remote {
+                self.handed_over.push(body.asm.root());
+            }
+        }
+    }
+
+    /// Whether stepping can move anything: an assembly this world
+    /// simulates, or (on a server) one a client moves, for its touches.
+    fn moves_anything(&self) -> bool {
+        let touches_remote = matches!(self.authority, Authority::Except(_));
+        self.bodies
+            .values()
+            .any(|b| !b.asm.anchored && (!b.remote || touches_remote))
+    }
+
+    /// Whether this world simulates `part`'s assembly (`false` for an
+    /// anchored one or one outside the world).
+    pub fn simulates(&self, part: InstanceId) -> bool {
+        self.parts
+            .get(&part)
+            .is_some_and(|h| !self.bodies[h].asm.anchored && !self.bodies[h].remote)
     }
 
     /// Whether the world has been built from the DOM (by a sync).
@@ -327,9 +406,15 @@ impl Physics {
             return;
         };
         if !self.built {
+            self.handed_over.clear();
             self.build(dom, &props);
         } else {
             self.apply_changes(dom, &props);
+        }
+        let handed_over = std::mem::take(&mut self.handed_over);
+        if !handed_over.is_empty() {
+            self.all_dirty = true;
+            self.rebuild(dom, &props, handed_over);
         }
         self.reshape_unions(dom, &props);
         self.refresh_terrain(dom);

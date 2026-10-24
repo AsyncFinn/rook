@@ -44,3 +44,11 @@ property in the database (the rest are server- or Studio-only):
 
 Confirmed for Sound's three (the server's sounds are heard on clients,
 at their speed); Inference from the database for the rest.
+
+## From clients
+
+Changes made on a client stay there, except what Roblox takes from
+clients: the moves of a player's own character, which its client
+simulates (network ownership; see
+[who simulates a character](characters/ownership.md)), and the Tools it
+equips. Remote events and ClickDetector clicks also reach the server.
