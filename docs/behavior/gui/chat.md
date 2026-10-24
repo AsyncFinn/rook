@@ -1,5 +1,7 @@
 # Chat
 
+Checked against Studio 0.744 on 2026-10-23.
+
 [M8](../../roadmap/m8-gui.md) step 10: TextChatService, which Roblox's
 chat window and bubbles and games' chat code run on. Checked by running
 Roblox's own chat CoreScripts ([Roblox's core scripts](core-scripts.md))
