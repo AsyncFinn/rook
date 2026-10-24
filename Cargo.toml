@@ -111,7 +111,9 @@ windows-sys = "0.61"
 cpal = "0.15"
 
 # Rendering
-wgpu = "30"
+# Rook draws through DX12, Vulkan or Metal; leaving out the GL backend and
+# its shader translator saves a few megabytes of every exe.
+wgpu = { version = "30", default-features = false, features = ["std", "parking_lot", "dx12", "metal", "vulkan", "wgsl"] }
 winit = "0.30"
 # Shader modules (rook-render's build script): imports and @if over
 # WGSL, with its own parser, so wgpu upgrades never wait on it (`naga-ext`
@@ -222,6 +224,10 @@ opt-level = 1
 
 [profile.release]
 debug = "line-tables-only"
+# Whole-program optimization: rook-player is about 15% smaller, at the cost
+# of a slower release build (dev builds are unaffected).
+lto = "fat"
+codegen-units = 1
 
 [profile.profiling]
 inherits = "release"

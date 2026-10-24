@@ -27,8 +27,21 @@ pub use overlay::{Overlay, OverlayError};
 
 use std::sync::LazyLock;
 
+/// An API data file, compressed by `build.rs`. The data parsed from it
+/// lives as long as the process and may borrow from it, as it did from the
+/// exe when embedded raw.
+fn unpack(packed: &[u8]) -> &'static [u8] {
+    zstd::decode_all(packed)
+        .expect("build.rs compressed it")
+        .leak()
+}
+
 static UPSTREAM: LazyLock<rbx_reflection::ReflectionDatabase<'static>> = LazyLock::new(|| {
-    rmp_serde::from_slice(include_bytes!("../data/database.msgpack"))
+    let bytes = unpack(include_bytes!(concat!(
+        env!("OUT_DIR"),
+        "/database.msgpack.zst"
+    )));
+    rmp_serde::from_slice(bytes)
         .expect("data/database.msgpack is valid; regenerate with `rook-tools gen-api`")
 });
 
@@ -46,7 +59,11 @@ pub fn rbx_database() -> &'static rbx_reflection::ReflectionDatabase<'static> {
 }
 
 static MEMBERS: LazyLock<Members> = LazyLock::new(|| {
-    serde_json::from_str(include_str!("../data/members.json"))
+    let bytes = unpack(include_bytes!(concat!(
+        env!("OUT_DIR"),
+        "/members.json.zst"
+    )));
+    serde_json::from_slice(bytes)
         .expect("data/members.json is valid; regenerate with `rook-tools gen-api`")
 });
 

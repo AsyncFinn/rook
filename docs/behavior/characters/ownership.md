@@ -1,4 +1,4 @@
-# Who simulates a character
+# Character ownership: who simulates a character
 
 Checked against Studio 0.744 on 2026-10-24.
 
