@@ -34,6 +34,9 @@ pub(crate) struct Source {
     pub(crate) style: Style,
     pub(crate) wrapped: bool,
     pub(crate) scaled: bool,
+    /// A UITextSizeConstraint's `MinTextSize` and `MaxTextSize`, which
+    /// hold scaled text's `TextSize` (creator-docs UITextSizeConstraint).
+    pub(crate) size_limits: Option<(f32, f32)>,
     /// `TextXAlignment` and `TextYAlignment` as the share of spare room
     /// before the text.
     pub(crate) align: Vec2,
@@ -108,6 +111,16 @@ impl Source {
             style,
             wrapped: dom.bool_property(id, "TextWrapped") == Some(true),
             scaled: dom.bool_property(id, "TextScaled") == Some(true),
+            size_limits: dom
+                .find_first_child_of_class(id, "UITextSizeConstraint")
+                .map(|c| {
+                    let limit =
+                        |name, default: f64| dom.number_property(c, name).unwrap_or(default);
+                    (
+                        limit("MinTextSize", 1.0) as f32,
+                        limit("MaxTextSize", 100.0) as f32,
+                    )
+                }),
             align: Vec2::new(
                 share("TextXAlignment", "Left", "Right"),
                 share("TextYAlignment", "Top", "Bottom"),
@@ -136,6 +149,7 @@ impl Source {
             },
             wrapped: true,
             scaled: false,
+            size_limits: None,
             align: Vec2::ZERO,
             line_height: 1.0,
             visible: None,
@@ -325,12 +339,20 @@ pub(crate) fn lay_out(
 /// The biggest whole-pixel line height (up to 100) whose text, wrapped,
 /// fits the area without splitting a word (measured: "Hi" in a 200 × 50
 /// Legacy label is 50 pixels tall; "Hello, world!" in 100 × 200 wraps to
-/// two 41-pixel lines). Nothing fitting gives 1.
+/// two 41-pixel lines). Nothing fitting gives 1. A UITextSizeConstraint
+/// holds it between its sizes, the least even when that doesn't fit.
 fn scaled(fonts: &mut Fonts, source: &Source, spans: &[rich::Span], size: Vec2) -> Set {
     let try_px =
         |fonts: &mut Fonts, px: u32| set_lines(fonts, source, spans, Some(px as f32), Some(size.x));
     let fits = |s: &Set| !s.split && s.size.x <= size.x && s.size.y <= size.y;
     let (mut lo, mut hi) = (1, MAX_SCALED_PX);
+    if let Some((min, max)) = source.size_limits {
+        // The limits are `TextSize`s; lines are that times the font's scale.
+        let scale = fonts.pick(&source.style.font).map_or(1.0, |p| p.scale);
+        let px = |s: f32| ((s * scale).round() as u32).clamp(1, MAX_SCALED_PX);
+        lo = px(min);
+        hi = px(max).max(lo);
+    }
     while lo < hi {
         let mid = (lo + hi).div_ceil(2);
         if fits(&try_px(fonts, mid)) {

@@ -37,6 +37,7 @@ fn source(text: &str, font: &str, size: f32) -> Source {
         },
         wrapped: false,
         scaled: false,
+        size_limits: None,
         align: Vec2::splat(0.5),
         line_height: 1.0,
         visible: None,
@@ -146,6 +147,10 @@ fn wrapping_and_scaling() {
     hi.scaled = true;
     assert_eq!(bounds(&mut f, &hi, (200.0, 50.0)), (43.0, 50.0, true));
     assert_eq!(bounds(&mut f, &hi, (600.0, 400.0)), (85.0, 100.0, true));
+    // A UITextSizeConstraint holds the TextSize: 20, so 30-pixel lines.
+    hi.size_limits = Some((1.0, 20.0));
+    assert_eq!(bounds(&mut f, &hi, (200.0, 50.0)).1, 30.0);
+    hi.size_limits = None;
     let mut hello = source("Hello, world!", "Legacy", 24.0);
     hello.scaled = true;
     // Studio: two 41-pixel lines; Rook's rounding makes "world!" 102 wide

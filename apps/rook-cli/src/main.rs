@@ -105,6 +105,10 @@ enum Command {
         /// and are saved to it at the end.
         #[arg(long, requires = "join")]
         user_settings: Option<PathBuf>,
+        /// With `--join`: after the clicks, the player presses this key (an
+        /// `Enum.KeyCode` name: `One`, `Backquote`); repeat for more keys.
+        #[arg(long, requires = "join")]
+        key: Vec<String>,
         /// After `--seconds`, keep running in real time with a `>` prompt
         /// that runs Luau on the server, until input ends (Ctrl+C on an
         /// empty line, or Ctrl+D).
@@ -347,6 +351,7 @@ fn command(command: Command) -> anyhow::Result<()> {
             dump,
             click,
             user_settings,
+            key,
             #[cfg(feature = "repl")]
             repl,
         } => run::run(
@@ -361,6 +366,7 @@ fn command(command: Command) -> anyhow::Result<()> {
                 dump: dump.as_deref(),
                 clicks: &click,
                 user_settings: user_settings.as_deref(),
+                keys: &key,
                 #[cfg(feature = "repl")]
                 repl,
             },

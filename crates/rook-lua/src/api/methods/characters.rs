@@ -51,8 +51,12 @@ pub(super) fn take_damage(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Ou
         if protected {
             return Ok(());
         }
-        let health = w.dom.number_property(this, "Health").unwrap_or(0.0);
-        let pid = w.dom.property_id(this, "Health").ok_or(DomError::Stale)?;
+        // `Health` is a view of the stored `Health_XML`.
+        let health = w.dom.number_property(this, "Health_XML").unwrap_or(0.0);
+        let pid = w
+            .dom
+            .property_id(this, "Health_XML")
+            .ok_or(DomError::Stale)?;
         w.dom
             .set_property(this, pid, Value::Float32((health - amount).max(0.0) as f32))
     })?;

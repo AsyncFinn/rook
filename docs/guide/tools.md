@@ -29,6 +29,8 @@ rook-tools run-headless place.rbxl --join --core-scripts --click 38,34 --dump Co
                                                  # the same after clicking at (38, 34) in a 1280 x 720 window
 rook-tools run-headless place.rbxl --join --core-scripts --user-settings settings.xml
                                                  # the player's settings load from settings.xml and are saved back
+rook-tools run-headless place.rbxl --join --core-scripts --key One --dump CoreGui
+                                                 # the same after pressing 1 (an Enum.KeyCode name)
 ```
 
 ## Content and assets

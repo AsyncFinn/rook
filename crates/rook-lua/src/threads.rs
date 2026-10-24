@@ -376,7 +376,7 @@ pub(crate) fn dispatch(lua: &Lua, start: u64) {
             if w.signals.is_empty() {
                 return None;
             }
-            Some(crate::signal::expand(change, &w.signals))
+            Some(crate::signal::expand(change, &w.signals, &w.dom))
         });
         for firing in firings.into_iter().flatten() {
             if let Some(args) = firing_args(lua, &firing) {
@@ -405,11 +405,24 @@ fn firing_args(lua: &Lua, firing: &Firing) -> Option<Vec<LuaValue>> {
             parent.and_then(inst).unwrap_or(LuaValue::Nil),
         ],
         FireArgs::Attribute(name) => vec![LuaValue::String(lua.create_string(name).ok()?)],
+        FireArgs::Health(pid) => {
+            // `Health` reads the stored `Health_XML`.
+            if with_world(lua, |w| w.dom.database().property(*pid).name) != "Health_XML" {
+                return None;
+            }
+            vec![crate::api::instance::read_property(lua, firing.key.instance, "Health").ok()?]
+        }
+        FireArgs::Mouse => vec![
+            with_world(lua, |w| w.input.mouse_object)
+                .and_then(inst)
+                .unwrap_or(LuaValue::Nil),
+        ],
         FireArgs::Property(pid) => {
             let id = firing.key.instance;
             let (is_value_base, name) = with_world(lua, |w| {
                 let db = w.dom.database();
-                (w.dom.is_a(id, "ValueBase"), db.property(*pid).name)
+                let name = crate::api::properties::changed_name(w, id, db.property(*pid).name);
+                (w.dom.is_a(id, "ValueBase"), name)
             });
             if is_value_base {
                 // Confirmed: creator-docs ValueBase classes: Changed fires

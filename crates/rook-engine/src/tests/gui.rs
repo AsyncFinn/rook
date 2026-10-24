@@ -45,6 +45,58 @@ fn styles_reach_changes_made_later_in_the_frame() {
     assert_eq!(lines(client), ["0.5 0.5"]);
 }
 
+/// Where StyleLinks nest, the nearest one styles a tree: an outer empty
+/// sheet (CoreGui's own) doesn't undo an inner one's styles.
+#[test]
+fn the_nearest_style_link_styles_a_tree() {
+    let mut server = Server::new(&Options::default()).unwrap();
+    let starter = service(&server, "StarterGui");
+    let screen = add_under(&server, starter, "ScreenGui", "Hud", "");
+    add_under(
+        &server,
+        screen,
+        "LocalScript",
+        "Style",
+        r#"
+        local gui = script.Parent
+        local function link(parent)
+            local sheet = Instance.new("StyleSheet")
+            sheet.Parent = parent
+            local l = Instance.new("StyleLink")
+            l.StyleSheet = sheet
+            l.Parent = parent
+            return sheet
+        end
+        link(gui)
+        local frames = {}
+        for i = 1, 8 do
+            local group = Instance.new("Frame")
+            local rule = Instance.new("StyleRule")
+            rule.Selector = ".dim"
+            rule:SetProperties({ BackgroundTransparency = 0.5 })
+            rule.Parent = link(group)
+            local f = Instance.new("Frame")
+            f:AddTag("dim")
+            f.Parent = group
+            group.Parent = gui
+            frames[i] = f
+        end
+        task.wait(0.2)
+        local seen = {}
+        for _, f in frames do
+            table.insert(seen, f.BackgroundTransparency)
+        end
+        print(table.concat(seen, " "))
+        "#,
+    );
+    server.start();
+    let mut session = Session::new(server, Options::default());
+    let index = session.join("Styler", 1).unwrap();
+    session.run_for(0.5);
+    let client = session.client_mut(index).unwrap();
+    assert_eq!(lines(client), ["0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5"]);
+}
+
 /// A window resize reaches scripts and GUI layout the frame it happens,
 /// and a camera a script swaps in gets the window's size.
 #[test]
