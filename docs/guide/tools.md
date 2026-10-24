@@ -27,6 +27,8 @@ rook-tools run-headless place.rbxl --join --core-scripts --dump CoreGui
                                                  # a player's client too, running Roblox's CoreScripts; print its CoreGui
 rook-tools run-headless place.rbxl --join --core-scripts --click 38,34 --dump CoreGui
                                                  # the same after clicking at (38, 34) in a 1280 x 720 window
+rook-tools run-headless place.rbxl --join --core-scripts --key One --dump CoreGui
+                                                 # the same after pressing 1 (an Enum.KeyCode name)
 ```
 
 ## Content and assets

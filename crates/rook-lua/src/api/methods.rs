@@ -61,6 +61,7 @@ mod terrain;
 mod text;
 pub(crate) mod text_chat;
 pub(crate) mod textbox;
+pub(crate) mod tools;
 mod tree;
 mod tweens;
 mod users;
@@ -271,6 +272,7 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
                 player_scripts::native,
                 styles::native,
                 text_chat::native,
+                tools::native,
                 users::native,
                 filtering::native,
             ]

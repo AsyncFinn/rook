@@ -63,8 +63,15 @@ impl DataModel {
         match run_context(dom, id) {
             Some(RunContext::Server) => !(is_starter(top_class) || top_class == "ServerStorage"),
             Some(RunContext::Client | RunContext::Plugin) => false,
+            // A player's Backpack too: classic gear's server Scripts hear
+            // their tool's first `Equipped` there (Inference, from gear
+            // like the LinkedSword working on the first equip).
             Some(RunContext::Legacy) | None => {
                 matches!(top_class, "Workspace" | "ServerScriptService")
+                    || dom.ancestors(id).any(|a| {
+                        dom.class_name(a) == "Backpack"
+                            && dom.parent(a).is_some_and(|p| dom.is_a(p, "Player"))
+                    })
             }
         }
     }

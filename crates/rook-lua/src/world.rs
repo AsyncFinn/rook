@@ -193,6 +193,9 @@ pub struct World {
     pub input: InputState,
     /// Remote calls waiting for the session to deliver them.
     pub outbox: Vec<crate::net::RemoteMessage>,
+    /// Tools a client's scripts moved between its player's Backpack and
+    /// character, and where to, for the server to repeat.
+    pub(crate) tool_moves: Vec<(InstanceId, InstanceId)>,
     /// ContentProvider requests waiting for the engine to resolve them.
     pub content: crate::api::methods::preload::ContentRequests,
     pub assets: crate::api::methods::assets::AssetRequests,
@@ -277,6 +280,7 @@ impl World {
             is_client: false,
             input: InputState::default(),
             outbox: Vec::new(),
+            tool_moves: Vec::new(),
             content: Default::default(),
             assets: Default::default(),
             web: Default::default(),

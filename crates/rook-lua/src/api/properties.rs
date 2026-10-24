@@ -157,6 +157,26 @@ fn view<'a>(
         .map(|(_, _, target)| *target)
 }
 
+/// The stored property whose changes a property's changed signal hears: a
+/// view's own name for the ones that read another property.
+pub(crate) fn stored_name<'a>(w: &World, id: InstanceId, name: &'a str) -> &'a str {
+    view(w, id, name, SAME_AS).unwrap_or(name)
+}
+
+/// The name `Changed` gives a stored property scripts can't see
+/// (`Health_XML` changes as `Health`).
+pub(crate) fn changed_name(w: &World, id: InstanceId, stored: &'static str) -> &'static str {
+    SAME_AS
+        .iter()
+        .find(|(class, _, target)| *target == stored && w.dom.is_a(id, class))
+        .filter(|_| {
+            w.dom.property_id(id, stored).is_some_and(|p| {
+                w.dom.database().property(p).scriptability == rook_reflection::Scriptability::None
+            })
+        })
+        .map_or(stored, |(_, view, _)| *view)
+}
+
 fn set_named(w: &mut World, id: InstanceId, name: &str, value: Value) -> Result<(), DomError> {
     w.dom.set_property_by_name(id, name, value)
 }

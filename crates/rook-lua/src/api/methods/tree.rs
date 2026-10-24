@@ -48,8 +48,11 @@ pub(super) fn is_a(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> 
 
 pub(super) fn property_changed_signal(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let name = a.string(0)?;
-    let pid = with_world(lua, |w| w.dom.property_id(this, &name))
-        .ok_or_else(|| ScriptError(format!("{name} is not a valid property name.")))?;
+    let pid = with_world(lua, |w| {
+        let stored = crate::api::properties::stored_name(w, this, &name);
+        w.dom.property_id(this, stored)
+    })
+    .ok_or_else(|| ScriptError(format!("{name} is not a valid property name.")))?;
     Outcome::ret(
         lua,
         LSignal {

@@ -100,6 +100,10 @@ enum Command {
         /// in pixels of a 1280 × 720 window); repeat for more clicks.
         #[arg(long, requires = "join")]
         click: Vec<rook_engine::ScreenPoint>,
+        /// With `--join`: after the clicks, the player presses this key (an
+        /// `Enum.KeyCode` name: `One`, `Backquote`); repeat for more keys.
+        #[arg(long, requires = "join")]
+        key: Vec<String>,
         /// After `--seconds`, keep running in real time with a `>` prompt
         /// that runs Luau on the server, until input ends (Ctrl+C on an
         /// empty line, or Ctrl+D).
@@ -341,6 +345,7 @@ fn command(command: Command) -> anyhow::Result<()> {
             core_scripts,
             dump,
             click,
+            key,
             #[cfg(feature = "repl")]
             repl,
         } => run::run(
@@ -354,6 +359,7 @@ fn command(command: Command) -> anyhow::Result<()> {
                 core_scripts,
                 dump: dump.as_deref(),
                 clicks: &click,
+                keys: &key,
                 #[cfg(feature = "repl")]
                 repl,
             },
