@@ -332,6 +332,18 @@ impl Runtime {
         std::mem::take(&mut self.world_mut().outbox)
     }
 
+    /// Tools the client's scripts moved between its player's Backpack and
+    /// character since the last call, with where each went.
+    pub fn take_tool_moves(&self) -> Vec<(InstanceId, InstanceId)> {
+        std::mem::take(&mut self.world_mut().tool_moves)
+    }
+
+    /// On the server, repeat a Tool move `player`'s client made, if the
+    /// Tool is that player's.
+    pub fn repeat_tool_move(&self, player: InstanceId, tool: InstanceId, parent: InstanceId) {
+        self.guarded(|| api::methods::tools::repeat_move(&self.lua, player, tool, parent));
+    }
+
     /// Deliver a RemoteEvent firing: `OnServerEvent(player, ...)` on a
     /// server, `OnClientEvent(...)` on a client.
     pub fn deliver_event(&self, remote: InstanceId, player: Option<InstanceId>, args: &[NetValue]) {

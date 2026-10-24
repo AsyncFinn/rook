@@ -5,7 +5,7 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 
 use rook_engine::session::Session;
-use rook_engine::{DataModel, Options, ScreenPoint, Server};
+use rook_engine::{DataModel, InputEvent, Options, ScreenPoint, Server};
 use rook_lua::{LogEntry, MessageType};
 
 /// How to run (the command's flags).
@@ -25,6 +25,9 @@ pub(crate) struct Run<'a> {
     /// Points the joined player clicks after `seconds`, in window pixels,
     /// half a second apart; the run goes on a second after the last.
     pub clicks: &'a [ScreenPoint],
+    /// Keys (`Enum.KeyCode` names) the player presses after the clicks,
+    /// half a second apart.
+    pub keys: &'a [String],
     #[cfg(feature = "repl")]
     pub repl: bool,
 }
@@ -63,7 +66,14 @@ pub(crate) fn run(file: &Path, how: &Run<'_>) -> anyhow::Result<()> {
                 session.run_for(0.15);
             }
         }
-        if !how.clicks.is_empty() {
+        for code in how.keys {
+            for down in [true, false] {
+                let code = code.clone();
+                session.input(index, InputEvent::Key { code, down });
+                session.run_for(0.25);
+            }
+        }
+        if !how.clicks.is_empty() || !how.keys.is_empty() {
             session.run_for(1.0);
         }
         let server_log = session.server().take_log();

@@ -138,7 +138,13 @@ pub(crate) fn write_property(
         let rook_types::Value::Ref(r) = converted else {
             return Ok(Ok(()));
         };
-        let result = crate::removal::set_parent(lua, id, r.map(InstanceId::from_ref));
+        let parent = r.map(InstanceId::from_ref);
+        let result = crate::removal::set_parent(lua, id, parent);
+        if result.is_ok() {
+            with_world(lua, |w| {
+                crate::api::methods::tools::note_move(w, id, parent);
+            });
+        }
         return Ok(result.map_err(ScriptError::from));
     }
     let result = with_world(lua, |w| {

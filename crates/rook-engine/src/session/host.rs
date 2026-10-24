@@ -40,6 +40,13 @@ pub enum ToServer {
         detector: InstanceId,
         event: &'static str,
     },
+    /// The client's scripts moved one of its player's Tools between their
+    /// Backpack and character (equipping or unequipping it), which the
+    /// server repeats.
+    MoveTool {
+        tool: InstanceId,
+        parent: InstanceId,
+    },
 }
 
 /// What a client needs to start: the replicated game and who it is.
@@ -260,6 +267,10 @@ impl ServerHost {
                     rt.drain_deferred();
                 }
             }
+            ToServer::MoveTool { tool, parent } => {
+                rt.repeat_tool_move(player, tool, parent);
+                rt.drain_deferred();
+            }
             ToServer::Remote(RemoteMessage { remote, kind, args }) => match kind {
                 RemoteKind::FireServer => {
                     if let Some(r) = remote {
@@ -460,10 +471,18 @@ impl ClientHost {
         }
     }
 
-    /// Remote calls the client's scripts made since the last call. An
-    /// invoke of a RemoteFunction the server doesn't share fails at once.
+    /// Remote calls and Tool moves the client's scripts made since the
+    /// last call. An invoke of a RemoteFunction the server doesn't share
+    /// fails at once.
     pub fn outgoing(&mut self) -> Vec<ToServer> {
         let mut out = Vec::new();
+        for (tool, parent) in self.client.runtime().take_tool_moves() {
+            if let (Some(tool), Some(parent)) =
+                (self.sink.server_id(tool), self.sink.server_id(parent))
+            {
+                out.push(ToServer::MoveTool { tool, parent });
+            }
+        }
         for msg in self.client.runtime().take_outbox() {
             let RemoteMessage { remote, kind, args } = msg;
             let args: Vec<NetValue> = args
