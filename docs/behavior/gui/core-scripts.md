@@ -4,8 +4,9 @@ Checked against Studio 0.744 on 2026-10-23.
 
 [M8](../../roadmap/m8-gui.md) step 9: the GUI Roblox draws itself (top
 bar, player list, backpack, menus, prompts, chat) comes from Roblox's own
-Luau CoreScripts, which Rook runs from the user's Studio install and never
-ships ([content policy](../../design/policies.md#content-and-assets)). Read
+Luau CoreScripts, which Rook runs from Studio's packages (downloaded from
+Roblox's CDN, see [client packages](../content/client-packages.md)) or the
+user's Studio install, and never ships ([content policy](../../design/policies.md#content-and-assets)). Read
 from Studio 0.744's install on 2026-10-23 and run headless with
 `rook-tools run-headless --join --core-scripts` on an empty baseplate;
 looks from `rook-player --core-scripts --screenshot`.
@@ -34,8 +35,10 @@ Code: loading in `rook-engine`'s `core_scripts.rs` (and the
   types version 3, saved as property type 0x1D, which `rbx_binary`
   skips. The opcodes aren't encoded: Rook's Luau (0.740) loads all 42,990
   as they are, and they run.
-- The player install's `InExperience.rbxm` is the same kind of file, so a
-  player install would do too; Rook looks for Studio's.
+- The player's packages hold
+  `ExtraContent/models/InExperience/InExperience.rbxm` in its place, which
+  doesn't run in Rook yet: its `StarterScript` fails with "attempt to load
+  a text chunk" (2026-10-24). Rook takes Studio's.
 - `%LOCALAPPDATA%\Roblox\ClientSettings\StudioAppSettings.json` holds the
   fast flags Studio last downloaded (`FFlagX`, `DFIntY`, ... as strings),
   so the scripts take the paths they take in Studio. Engine-side flags

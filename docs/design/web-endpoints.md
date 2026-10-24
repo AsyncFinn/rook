@@ -8,7 +8,7 @@ Roblox's web API is split across domains named `<domain>.roblox.com` (`users`, `
 
 - A domain listed in `webDomains` goes to the URL given there, or nowhere for `"off"`.
 - Otherwise `webBase` decides: `"off"` sends nothing anywhere; a domain such as `example.com` sends `users.roblox.com`'s requests to `https://users.example.com`; a URL such as `http://127.0.0.1:8080` sends them to `http://127.0.0.1:8080/users`, so one server can answer every domain.
-- With neither set, `assetdelivery` goes to Roblox, as Rook always did, and every other domain answers locally.
+- With neither set, `assetdelivery` goes to Roblox, as Rook always did, and so do `clientsettings` and `setup` (Roblox's client packages); every other domain answers locally.
 
 A request's path and query are kept as they are: `https://users.roblox.com/v1/users/1` becomes `<users endpoint>/v1/users/1`. Scripts still see Roblox's URLs (`ContentProvider.BaseUrl` stays `https://www.roblox.com/`); Rook rewrites them as they are sent. `roblox.com` with no domain is the `www` domain. URLs that aren't on a Roblox web domain are never sent this way.
 
@@ -19,6 +19,8 @@ Requests go out from the engine on a thread each, and the script that asked wait
 | What | Domain | Request | Without an endpoint |
 |---|---|---|---|
 | Asset ids (`rbxassetid://`, meshes, images, sounds, `InsertService:LoadAsset`, `require(assetId)`) | `assetdelivery` | `GET /v2/assetId/{id}` (or `/v2/assetId/{id}/version/{v}`), answering `{"locations": [{"assetFormat": "source", "location": "<url>"}]}`, then a `GET` of that location | Only the cache and local content answer |
+| Roblox's live client version, for its packages | `clientsettings` | `GET /v2/client-version/WindowsStudio64`, reading `clientVersionUpload` | Packages already downloaded answer, then the install |
+| Roblox's client packages (`rbxasset://` files, the CoreScripts model) | `setup` (Roblox's is `https://setup.rbxcdn.com`, not a `roblox.com` domain) | `GET /{version}-rbxPkgManifest.txt`, then `GET /{version}-{package}.zip` for each package a path needs ([client packages](../behavior/content/client-packages.md)) | Packages already downloaded answer, then the install |
 | Assets refused anonymously, with an Open Cloud key | none | `GET https://apis.roblox.com/asset-delivery-api/v1/assetId/{id}` with the key in `x-api-key` | The key is a Roblox credential, so it goes only to Roblox, and only while `assetdelivery` goes to Roblox; a mirror's refusals stand |
 | `rbxthumb://` thumbnails | `thumbnails` | Not fetched yet | Fail as unsupported |
 | `HttpService:GetAsync`, `PostAsync`, `RequestAsync` (game scripts) | none | Refused, as with `HttpEnabled` off; these reach any site, not Roblox's web API | Refused |

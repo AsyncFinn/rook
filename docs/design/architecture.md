@@ -76,7 +76,7 @@ Guards keep it that way:
 
 Known exceptions, each marked with an `#[expect]` saying why:
 
-- `rook-content` is the loader: its cache, the install lookup, local file reads, its decode workers and the cache-trimming thread still use std directly.
+- `rook-content` is the loader: its cache, the install lookup, Roblox's client packages (downloaded and extracted into the data folder), local file reads, its decode workers and the cache-trimming thread still use std directly.
 - `rook-physics`: Rapier's `parallel` feature runs a step on Rayon's global pool, which `rook-physics` sizes (`size_worker_pool`); `rook-platform`'s native workers share that pool.
 - `rook-engine`: the data folder's location (`directories`) and the console's line editor (rustyline, behind the `repl` feature), which keeps its own history file.
 - Tests and examples set up files on the machine running them.

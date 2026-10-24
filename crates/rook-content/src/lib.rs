@@ -34,6 +34,9 @@ pub enum SourceKind {
     Defaults,
     /// The user's Roblox install.
     Install,
+    /// Roblox's packages, downloaded into Rook's data folder
+    /// ([`resolver::packages`]).
+    Package,
     /// A folder the user pointed Rook at (`ROOK_CONTENT_DIRS`).
     Folder,
     /// Content Rook keeps for good in its data folder
@@ -50,6 +53,7 @@ impl SourceKind {
         match self {
             Self::Defaults => "rook defaults",
             Self::Install => "roblox install",
+            Self::Package => "roblox package",
             Self::Folder => "content folder",
             Self::Kept => "kept content",
             Self::Cache => "cache",

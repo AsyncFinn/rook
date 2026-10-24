@@ -1,5 +1,6 @@
-//! Roblox's own CoreScripts and CorePackages, read from the user's Studio
-//! install at runtime and never shipped (docs/design/policies.md#content-and-assets).
+//! Roblox's own CoreScripts and CorePackages, read at runtime from
+//! Studio's packages (downloaded as needed) or the user's Studio install,
+//! and never shipped (docs/design/policies.md#content-and-assets).
 //!
 //! Studio keeps all of them, compiled, in
 //! `ExtraContent/models/DataModelPatch/DataModelPatch.rbxm`; its plain
@@ -18,8 +19,9 @@ use rook_dom::{Dom, InstanceId};
 
 use crate::DataModel;
 
-/// The patch file under an install's version folder.
-pub const PATCH: &str = "ExtraContent/models/DataModelPatch/DataModelPatch.rbxm";
+/// The patch file's `rbxasset://` path: under `ExtraContent` in an
+/// install's version folder.
+pub const PATCH: &str = "models/DataModelPatch/DataModelPatch.rbxm";
 
 /// A loaded patch, shared by every client of a run.
 pub struct CorePatch {

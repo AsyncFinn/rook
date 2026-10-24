@@ -39,7 +39,12 @@ pub(crate) fn run(file: &Path, how: &Run<'_>) -> anyhow::Result<()> {
     let bytes = fs_err::read(file)?;
     let options = Options {
         script_timeout: Duration::from_secs_f64(how.timeout),
-        core_scripts: rook_engine::settings::core_scripts(how.core_scripts.then_some(true)),
+        // Headless runs download nothing unless assetDelivery says so, as
+        // the place's own content resolves.
+        core_scripts: rook_engine::settings::core_scripts(
+            how.core_scripts.then_some(true),
+            &rook_content::Resolver::new(rook_engine::settings::content_config(false)),
+        ),
         user_settings: how.user_settings.map(Path::to_owned),
         ..Options::default()
     };
