@@ -16,16 +16,22 @@ pub mod delivery;
 )]
 pub mod install;
 pub mod kept;
+#[expect(
+    clippy::disallowed_methods,
+    reason = "the content cache, install lookup and decode workers are rook-platform's known exception (docs/design/architecture.md#crate-layout)"
+)]
+pub mod packages;
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use crate::materials::{self, TexturePack};
 use crate::{ContentRef, Failure, FailureKind, Fetched, MaterialMap, SourceKind};
 use cache::{Cache, Cached};
 use delivery::Delivery;
 use install::Install;
+use packages::Packages;
 
 pub use config::{Config, ProviderKind, parse_switch};
 
@@ -35,6 +41,10 @@ pub use config::{Config, ProviderKind, parse_switch};
 pub struct Resolver {
     order: Vec<ProviderKind>,
     install: Option<Install>,
+    /// Roblox's packages, asked before the install.
+    packages: Option<Arc<Packages>>,
+    /// Whether a package a path needs may be downloaded.
+    download_packages: bool,
     folders: Vec<PathBuf>,
     delivery: Option<Delivery>,
     cache: Option<Cache>,
@@ -50,6 +60,8 @@ impl Resolver {
         Self {
             order: config.order,
             install: config.install,
+            packages: config.packages,
+            download_packages: config.network,
             folders: config.folders,
             delivery: config
                 .network
@@ -85,6 +97,15 @@ impl Resolver {
 
     pub fn install(&self) -> Option<&Install> {
         self.install.as_ref()
+    }
+
+    pub fn packages(&self) -> Option<&Packages> {
+        self.packages.as_deref()
+    }
+
+    /// Whether a package a path needs may be downloaded.
+    pub fn downloads_packages(&self) -> bool {
+        self.download_packages && self.packages.as_ref().is_some_and(|p| p.downloads())
     }
 
     pub fn folders(&self) -> &[PathBuf] {
@@ -147,10 +168,19 @@ impl Resolver {
         };
         self.order.iter().find_map(|kind| {
             let (roots, source): (&[PathBuf], _) = match kind {
-                ProviderKind::Install => (
-                    self.install.as_ref().map_or(&[], |i| &i.content),
-                    SourceKind::Install,
-                ),
+                ProviderKind::Install => {
+                    let package = self
+                        .packages
+                        .as_ref()
+                        .and_then(|p| p.find(path, self.download_packages));
+                    if let Some(file) = package {
+                        return Some((SourceKind::Package, file));
+                    }
+                    (
+                        self.install.as_ref().map_or(&[], |i| &i.content),
+                        SourceKind::Install,
+                    )
+                }
                 ProviderKind::Folders => (&self.folders, SourceKind::Folder),
                 ProviderKind::Defaults | ProviderKind::Delivery => {
                     return None;
@@ -188,9 +218,15 @@ impl Resolver {
                         ContentRef::Asset { id, version: None }
                     }
                     _ => {
-                        let why = match &self.install {
-                            Some(_) => "no such file in the Roblox install",
-                            None => "no Roblox install found",
+                        let downloaded = self
+                            .packages
+                            .as_ref()
+                            .is_some_and(|p| p.version().is_some());
+                        let why = match (downloaded, &self.install) {
+                            (false, None) => {
+                                "no Roblox install found, and no Roblox packages downloaded"
+                            }
+                            _ => "no such file in Roblox's packages or install",
                         };
                         return Err(Failure::new(FailureKind::NotFound, why));
                     }

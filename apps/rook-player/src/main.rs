@@ -231,7 +231,8 @@ fn play(args: Args) -> anyhow::Result<()> {
     // A recording waits for each sound to load, so it keeps to game time
     // however fast it runs.
     let wait_for_sounds = args.record_audio.is_some();
-    let core_scripts = rook_engine::settings::core_scripts(args.core_scripts.then_some(true));
+    let core_scripts =
+        rook_engine::settings::core_scripts(args.core_scripts.then_some(true), &content);
     let windowed = args.record_audio.is_none() && args.bench.is_none() && args.screenshot.is_none();
     if windowed && !args.crash_test {
         // The player's settings, which only a window's player changes.

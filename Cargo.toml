@@ -84,6 +84,10 @@ rbx_mesh = { version = "0.8.2", default-features = false }
 # KTX2 images (rook-content): levels are Zstandard-compressed (the same
 # zstd rbx_binary uses)
 zstd = "0.13"
+# Roblox's client packages (rook-content's `packages`): Deflate zips,
+# checked against their manifest's MD5
+zip = { version = "9", default-features = false, features = ["deflate-flate2"] }
+md5 = "0.8"
 # The LZ4 chunks of binary files, read beside rbx_binary for the compiled
 # scripts it skips (rook-formats' `compiled`); the version rbx_binary uses
 lz4_flex = "0.13"

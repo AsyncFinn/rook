@@ -10,7 +10,8 @@ pub enum ProviderKind {
     /// What Rook knows itself ([`defaults`]): the legacy `rbxasset://`
     /// paths that now stand for public assets.
     Defaults,
-    /// The user's Roblox install, for `rbxasset://` paths.
+    /// Roblox's own files, for `rbxasset://` paths: its packages
+    /// ([`packages`]), then the user's Roblox install.
     Install,
     /// Folders the user points at, laid out like
     /// the install's `content` folder: downloaded content packages or
@@ -44,9 +45,12 @@ impl ProviderKind {
 pub struct Config {
     pub order: Vec<ProviderKind>,
     pub install: Option<Install>,
+    /// Roblox's packages, shared by a run's resolvers.
+    pub packages: Option<Arc<Packages>>,
     pub folders: Vec<PathBuf>,
-    /// Whether asset delivery may use the network. With it off, only the
-    /// cache answers asset ids.
+    /// Whether content may come over the network: asset delivery, and
+    /// Roblox's packages a path needs. With it off, only the cache answers
+    /// asset ids, and only packages already downloaded answer paths.
     pub network: bool,
     /// Sent only to Roblox's own Open Cloud host
     /// ([`Endpoints::is_roblox`]).
@@ -70,6 +74,7 @@ impl Config {
         Self {
             order: ProviderKind::ALL.to_vec(),
             install: None,
+            packages: None,
             folders: Vec::new(),
             network: false,
             api_key: None,

@@ -76,8 +76,9 @@ impl DataDir {
         self.logs.join("crashes")
     }
 
-    /// Content Rook itself loads in nearly every place, kept for good
-    /// (`rook_content::resolver::kept`).
+    /// Content kept for good: what Rook itself loads in nearly every place
+    /// (`rook_content::resolver::kept`) and Roblox's client packages,
+    /// downloaded as needed (`rook_content::resolver::packages`).
     pub fn content(&self) -> PathBuf {
         self.root.join("content")
     }

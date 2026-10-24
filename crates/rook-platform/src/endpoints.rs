@@ -6,10 +6,16 @@
 
 use std::collections::HashMap;
 
-/// The domains Rook sends to Roblox's own hosts when nothing is set: the
-/// ones it called before endpoints were configurable. Every other domain
-/// has no endpoint by default, and its APIs answer locally.
-const ROBLOX_BY_DEFAULT: &[&str] = &["assetdelivery"];
+/// The domains Rook sends to Roblox's own hosts when nothing is set: asset
+/// delivery, which it called before endpoints were configurable, and the
+/// two Roblox's client packages come from (the live version, then the
+/// packages). Every other domain has no endpoint by default, and its APIs
+/// answer locally.
+const ROBLOX_BY_DEFAULT: &[&str] = &["assetdelivery", "clientsettings", "setup"];
+
+/// Roblox's deployment CDN, the `setup` domain: the one Roblox host Rook
+/// calls that isn't a `<name>.roblox.com`.
+const SETUP: &str = "https://setup.rbxcdn.com";
 
 /// Roblox's web domains, each a `<name>.roblox.com` host.
 const ROBLOX: &str = "roblox.com";
@@ -128,7 +134,10 @@ impl Endpoints {
 }
 
 fn roblox_host(domain: &str) -> String {
-    format!("https://{domain}.{ROBLOX}")
+    match domain {
+        "setup" => SETUP.to_owned(),
+        _ => format!("https://{domain}.{ROBLOX}"),
+    }
 }
 
 #[cfg(test)]
@@ -143,6 +152,10 @@ mod tests {
             Some("https://assetdelivery.roblox.com/v2/assetId/1")
         );
         assert!(e.is_roblox("assetdelivery"));
+        assert_eq!(
+            e.url("setup", "/version-1-rbxPkgManifest.txt").as_deref(),
+            Some("https://setup.rbxcdn.com/version-1-rbxPkgManifest.txt")
+        );
         assert_eq!(e.base("apis"), None);
         assert_eq!(e.base("users"), None);
         assert_eq!(e.rewrite("https://users.roblox.com/v1/users/1"), None);

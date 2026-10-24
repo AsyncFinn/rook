@@ -21,6 +21,7 @@
     - [The audio API](behavior/audio/audio-api.md): AudioPlayer, wires, emitters and listeners, effects
   - Content
     - [Asset fetching](behavior/content/asset-fetching.md): where archived places' content comes from
+    - [Client packages](behavior/content/client-packages.md): Roblox's client files, downloaded from its CDN as needed
     - [Legacy XML](behavior/content/legacy-xml.md): how 2006 to 2010 files are upgraded
   - Effects
     - [Fire, Smoke and Sparkles](behavior/effects/fire-smoke-and-sparkles.md)

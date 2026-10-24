@@ -23,6 +23,7 @@ use serde::{Deserialize, Serialize};
 use crate::data_folder::{self, DataDir};
 use rook_content::resolver::cache::{self, Cache};
 use rook_content::resolver::install::{self, Places};
+use rook_content::resolver::packages::Packages;
 use rook_content::{Config, ProviderKind};
 use rook_platform::endpoints::Endpoints;
 
@@ -74,11 +75,14 @@ pub struct Settings {
 /// with what it does.
 const WRITTEN: &str = r#"{
   // Where content comes from, in order: defaults, install, folders, delivery.
+  // "install" is Roblox's own files: its packages, downloaded into the
+  // content folder as needed, then your Roblox install.
   "contentOrder": ["defaults", "install", "folders", "delivery"],
   // Folders laid out like the Roblox install's `content` folder.
   "contentFolders": [],
-  // Whether asset delivery may use the network; null leaves it to each
-  // program (on in the player and `rook-tools content`, off in headless runs).
+  // Whether content may be downloaded (asset delivery, Roblox's packages);
+  // null leaves it to each program (on in the player and `rook-tools
+  // content`, off in headless runs).
   "assetDelivery": null,
   // The Roblox install to read rbxasset:// files from (a version or content
   // folder, or "off"); null uses the newest one found.
@@ -99,11 +103,13 @@ const WRITTEN: &str = r#"{
   "frameTimes": false,
   // What the terminal shows: error, warn, info, debug or trace.
   "logLevel": "info",
-  // Run Roblox's own CoreScripts (top bar, player list, chat...) from the
-  // Studio install on each player's client. Unfinished, so off by default.
+  // Run Roblox's own CoreScripts (top bar, player list, chat...) on each
+  // player's client, from Studio's packages or install. Unfinished, so off
+  // by default.
   "coreScripts": false,
-  // Where web requests go (asset delivery, users, filtering...): null uses
-  // Roblox for asset delivery and answers the rest locally; "off" answers
+  // Where web requests go (asset delivery, Roblox's packages, users,
+  // filtering...): null uses Roblox for asset delivery and its packages
+  // and answers the rest locally; "off" answers
   // everything locally; "example.com" sends users.roblox.com's requests to
   // users.example.com; a URL ("http://127.0.0.1:8080") sends them to
   // <URL>/users.
@@ -254,8 +260,21 @@ pub fn endpoints() -> std::sync::Arc<Endpoints> {
         .clone()
 }
 
+/// Roblox's client packages in the data folder's content folder, shared
+/// by every resolver of the run so the live version is asked once; `None`
+/// without a data folder.
+pub fn packages() -> Option<std::sync::Arc<Packages>> {
+    static PACKAGES: OnceLock<Option<std::sync::Arc<Packages>>> = OnceLock::new();
+    PACKAGES
+        .get_or_init(|| {
+            let dir = DataDir::locate()?.content();
+            Some(std::sync::Arc::new(Packages::new(dir, &endpoints())))
+        })
+        .clone()
+}
+
 /// Where content resolves from, with `network` as the program's default
-/// for asset delivery. Moves a cache left in the old Windows place first.
+/// for downloads (asset delivery, Roblox's packages). Moves a cache left in the old Windows place first.
 pub fn content_config(network: bool) -> Config {
     let settings = file();
     let order = var(env::CONTENT_ORDER)
@@ -287,6 +306,7 @@ pub fn content_config(network: bool) -> Config {
     Config {
         order,
         install: install::newest_from(chosen_install.as_deref(), &install_places()),
+        packages: packages(),
         folders: folders.into_iter().filter(|p| p.is_dir()).collect(),
         network: pick(None, delivery, settings.asset_delivery, network),
         api_key: open_cloud_key(),
@@ -317,9 +337,13 @@ pub fn local_content() -> std::sync::Arc<rook_content::Resolver> {
 
 /// Roblox's CoreScripts for clients to run, if `--core-scripts`, then
 /// `ROOK_CORE_SCRIPTS`, then `coreScripts` turns them on: the patch from
-/// the chosen Roblox install (`robloxInstall`) or the newest Studio one
-/// that has it, read once per run. Problems are logged and give `None`.
-pub fn core_scripts(flag: Option<bool>) -> Option<std::sync::Arc<crate::core_scripts::CorePatch>> {
+/// Roblox's packages (downloaded if `content` downloads), else from the
+/// chosen Roblox install (`robloxInstall`) or the newest Studio one that
+/// has it, read once per run. Problems are logged and give `None`.
+pub fn core_scripts(
+    flag: Option<bool>,
+    content: &rook_content::Resolver,
+) -> Option<std::sync::Arc<crate::core_scripts::CorePatch>> {
     let env = var(env::CORE_SCRIPTS).and_then(|v| rook_content::resolver::parse_switch(&v));
     if !pick(flag, env, file().core_scripts, false) {
         return None;
@@ -328,15 +352,30 @@ pub fn core_scripts(flag: Option<bool>) -> Option<std::sync::Arc<crate::core_scr
         OnceLock::new();
     PATCH
         .get_or_init(|| {
+            let packages = content.packages();
+            let downloaded = packages
+                .and_then(|p| p.find(crate::core_scripts::PATCH, content.downloads_packages()));
             let chosen = var_os(env::ROBLOX_INSTALL)
                 .or_else(|| file().roblox_install.clone().map(Into::into));
-            let patch = install::find_from(chosen.as_deref(), &install_places())
-                .into_iter()
-                .map(|i| i.root.join(crate::core_scripts::PATCH))
-                .find(|p| p.is_file());
+            let patch = downloaded.or_else(|| {
+                install::find_from(chosen.as_deref(), &install_places())
+                    .into_iter()
+                    .map(|i| i.root.join("ExtraContent").join(crate::core_scripts::PATCH))
+                    .find(|p| p.is_file())
+            });
             let Some(patch) = patch else {
+                let packages = match packages {
+                    None => "there is no data folder to download Roblox's packages into",
+                    Some(p) if !p.downloads() => {
+                        "Roblox's packages are off (the clientsettings or setup web endpoint)"
+                    }
+                    Some(_) if !content.downloads_packages() => {
+                        "this program doesn't download Roblox's packages unless assetDelivery is on"
+                    }
+                    Some(_) => "Roblox's packages couldn't be downloaded",
+                };
                 tracing::warn!(
-                    "coreScripts: no Roblox Studio install with {}",
+                    "coreScripts: running without Roblox's UI: {packages}, and no Roblox Studio install has {}",
                     crate::core_scripts::PATCH
                 );
                 return None;

@@ -15,7 +15,11 @@ Everything Rook keeps for itself lives in one folder: `%LOCALAPPDATA%\Rook` on W
 │  └─ crashes\<program>-<YYYY-MM-DD_HH-MM-SS>.txt
 ├─ content\
 │  ├─ blobs\<first 2 hex>\<blake3>
-│  └─ refs\asset-<id>-v<version>
+│  ├─ refs\asset-<id>-v<version>
+│  ├─ version.txt, manifest.txt
+│  ├─ fonts\, textures\, sky\, ...
+│  ├─ ExtraContent\models\, ...
+│  └─ PlatformContent\pc\fonts\, ...
 └─ state\
    └─ repl-history.txt
 
@@ -25,7 +29,7 @@ Everything Rook keeps for itself lives in one folder: `%LOCALAPPDATA%\Rook` on W
 
 On macOS the data is in `~/Library/Application Support/Rook` and the logs in `~/Library/Logs/Rook`. On Linux the data is in `$XDG_DATA_HOME/rook`, and logs and state in `$XDG_STATE_HOME/rook`. The `directories` crate finds those folders.
 
-The download cache is not in the data folder. It stays in `%TEMP%\Rook\cache` (`rook_content::resolver::cache::Cache`) so Windows can clear it; anything cleared is fetched again. Two things are deliberately elsewhere too. The Open Cloud API key belongs in the OS credential store ([content policy](policies.md#content-and-assets)). The Roblox install's files are read where they are, never copied in.
+The download cache is not in the data folder. It stays in `%TEMP%\Rook\cache` (`rook_content::resolver::cache::Cache`) so Windows can clear it; anything cleared is fetched again. Two things are deliberately elsewhere too. The Open Cloud API key belongs in the OS credential store ([content policy](policies.md#content-and-assets)). A Roblox install's files are read where they are, never copied in; Roblox's packages, downloaded from its CDN when an install is missing a file or there is none, go in `content` ([client packages](../behavior/content/client-packages.md)).
 
 `state\recent.json` (recent places, the window's size and place) has its path reserved (`DataDir::recent`). Nothing writes it yet.
 
@@ -37,9 +41,9 @@ JSON rather than TOML because Roblox developers know JSON. It is read leniently:
 
 | Key | Environment variable | Flag | Default | What it does |
 |---|---|---|---|---|
-| `contentOrder` | `ROOK_CONTENT_ORDER` (comma-separated) | | `defaults, install, folders, delivery` | Where content comes from, in order |
+| `contentOrder` | `ROOK_CONTENT_ORDER` (comma-separated) | | `defaults, install, folders, delivery` | Where content comes from, in order. `install` is Roblox's own files: its packages, downloaded as needed, then your install (see [client packages](../behavior/content/client-packages.md)) |
 | `contentFolders` | `ROOK_CONTENT_DIRS` (separated like `PATH`) | | none | Folders laid out like the install's `content` (content packages, local overrides) |
-| `assetDelivery` | `ROOK_ASSET_DELIVERY` (`on`/`off`) | `rook-tools content --offline` | on in `rook-player` and `rook-tools content`, off in headless runs | Whether asset delivery may use the network |
+| `assetDelivery` | `ROOK_ASSET_DELIVERY` (`on`/`off`) | `rook-tools content --offline` | on in `rook-player` and `rook-tools content`, off in headless runs | Whether Rook may download content: asset delivery, and Roblox's packages a path needs |
 | `robloxInstall` | `ROOK_ROBLOX_INSTALL` | | the newest install found | A Roblox version or `content` folder to use instead, or `"off"` |
 | `cacheFolder` | `ROOK_CACHE_DIR` | | `%TEMP%\Rook\cache` on Windows, `~/Library/Caches/Rook` on macOS, `$XDG_CACHE_HOME/rook` elsewhere | Where downloads are cached |
 | `cacheMaxSize` | `ROOK_CACHE_MAX` | | `2GB` | The cache's size limit (`500MB`, `5GB`, ...); Rook drops what was used least recently |
@@ -49,7 +53,7 @@ JSON rather than TOML because Roblox developers know JSON. It is read leniently:
 | `uncapped` | | `--uncapped` | `false` | Draw as fast as possible instead of at the display's rate |
 | `frameTimes` | | `--frame-times` | `false` | Print frame times to the terminal |
 | `logLevel` | `ROOK_LOG` (a level or subsystems) | `--verbose` | `info` | What the terminal shows: `error`, `warn`, `info`, `debug`, `trace` |
-| | `ROOK_DATA_DIR` | | `%LOCALAPPDATA%\Rook` on Windows | Where settings, logs, crash reports and kept content live (so it can't be in `settings.json`) |
+| | `ROOK_DATA_DIR` | | `%LOCALAPPDATA%\Rook` on Windows | Where settings, logs, crash reports, kept content and Roblox's packages live (so it can't be in `settings.json`) |
 
 Each value comes from the first of these that sets it: the command-line flag, the `ROOK_*` environment variable, `settings.json`, then Rook's default (`settings::pick`). `rook-engine`'s `settings` module resolves every one and hands plain values down (`rook_content::Config`, the audio device, the thread budget); no other crate reads the environment. `ROOK_STUDIO`, which picks the Studio window `rook-tools conformance` drives, is a developer's variable of `rook-cli` alone.
 

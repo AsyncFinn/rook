@@ -89,6 +89,19 @@ pub(crate) fn cache(command: CacheCommand) -> anyhow::Result<()> {
 }
 
 fn print_setup(r: &Resolver) {
+    match r.packages() {
+        Some(p) => println!(
+            "Roblox packages: {} ({}, {})",
+            p.dir().display(),
+            p.version().as_deref().unwrap_or("none yet"),
+            if r.downloads_packages() {
+                "downloaded as needed"
+            } else {
+                "downloads off"
+            }
+        ),
+        None => println!("Roblox packages: off (no data folder)"),
+    }
     match r.install() {
         Some(i) => println!("Roblox install: {} ({:?})", i.root.display(), i.kind),
         None => println!(
