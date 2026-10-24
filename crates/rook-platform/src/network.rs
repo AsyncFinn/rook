@@ -1,13 +1,18 @@
-//! Fetching URLs (asset delivery, `rook-content`).
+//! HTTP requests (asset delivery, scripts' web APIs) to the URLs
+//! [`crate::endpoints`] gives.
 
 use std::fmt::Debug;
 
-/// An HTTP GET.
+/// An HTTP request.
 #[derive(Debug, Clone, Copy)]
 pub struct Request<'a> {
+    /// `GET`, `POST`, ...
+    pub method: &'a str,
     pub url: &'a str,
     pub headers: &'a [(&'a str, &'a str)],
-    /// The body is cut off past this.
+    /// Sent when not empty.
+    pub body: &'a [u8],
+    /// The answer's body is cut off past this.
     pub max_bytes: u64,
 }
 
@@ -33,7 +38,7 @@ impl Response {
 pub trait Network: Send + Sync + Debug {
     /// Blocks until the answer has arrived. `Err` is a failure to get one
     /// at all (no connection, a timeout), described.
-    fn get(&self, request: &Request<'_>) -> Result<Response, String>;
+    fn send(&self, request: &Request<'_>) -> Result<Response, String>;
 }
 
 /// HTTPS through ureq (rustls, gzip), a minute per request at most.
@@ -69,13 +74,18 @@ impl Default for Ureq {
 
 #[cfg(feature = "native")]
 impl Network for Ureq {
-    fn get(&self, request: &Request<'_>) -> Result<Response, String> {
+    fn send(&self, request: &Request<'_>) -> Result<Response, String> {
         use std::io::Read;
-        let mut call = self.agent.get(request.url);
+        let mut call = ureq::http::Request::builder()
+            .method(request.method)
+            .uri(request.url);
         for (name, value) in request.headers {
             call = call.header(*name, *value);
         }
-        let mut response = call.call().map_err(|e| e.to_string())?;
+        let call = call
+            .body(request.body.to_vec())
+            .map_err(|e| e.to_string())?;
+        let mut response = self.agent.run(call).map_err(|e| e.to_string())?;
         let headers = response
             .headers()
             .iter()

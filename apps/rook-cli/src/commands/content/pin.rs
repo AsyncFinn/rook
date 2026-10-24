@@ -7,6 +7,7 @@ use std::path::Path;
 
 use rook_content::materials::TexturePack;
 use rook_content::resolver::delivery::Delivery;
+use rook_platform::endpoints::Endpoints;
 
 /// Every pack Rook loads itself: part materials' and terrain's.
 fn packs() -> BTreeSet<u64> {
@@ -16,7 +17,9 @@ fn packs() -> BTreeSet<u64> {
 }
 
 pub(crate) fn pin(out: &Path) -> anyhow::Result<()> {
-    let delivery = Delivery::new(None);
+    // Versions are Roblox's, whatever endpoints the settings choose.
+    let delivery = Delivery::new(None, &Endpoints::default())
+        .expect("asset delivery has an endpoint by default");
     let mut lines = vec![
         "# Content Rook keeps for good: built-in materials' and terrain's".to_owned(),
         "# texture packs and the images they name, each pinned to a version".to_owned(),

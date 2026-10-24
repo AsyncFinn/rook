@@ -13,6 +13,7 @@
 
 pub mod jsonc;
 
+use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
@@ -23,6 +24,7 @@ use crate::data_folder::{self, DataDir};
 use rook_content::resolver::cache::{self, Cache};
 use rook_content::resolver::install::{self, Places};
 use rook_content::{Config, ProviderKind};
+use rook_platform::endpoints::Endpoints;
 
 /// The environment variables, one per setting that has one.
 pub mod env {
@@ -44,6 +46,8 @@ pub mod env {
     pub const CORE_SCRIPTS: &str = "ROOK_CORE_SCRIPTS";
     /// Moves the data folder, `settings.json` with it, so it has no key.
     pub const DATA_FOLDER: &str = "ROOK_DATA_DIR";
+    /// `off`, a domain (`example.com`) or a URL; see [`super::endpoints`].
+    pub const WEB_BASE: &str = "ROOK_WEB_BASE";
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -63,6 +67,8 @@ pub struct Settings {
     pub frame_times: Option<bool>,
     pub log_level: Option<String>,
     pub core_scripts: Option<bool>,
+    pub web_base: Option<String>,
+    pub web_domains: Option<BTreeMap<String, String>>,
 }
 
 /// What Rook writes when there is no file yet: every key at its default,
@@ -98,7 +104,16 @@ const WRITTEN: &str = r#"{
   "logLevel": "info",
   // Run Roblox's own CoreScripts (top bar, player list, chat...) from the
   // Studio install on each player's client. Unfinished, so off by default.
-  "coreScripts": false
+  "coreScripts": false,
+  // Where web requests go (asset delivery, users, filtering...): null uses
+  // Roblox for asset delivery and answers the rest locally; "off" answers
+  // everything locally; "example.com" sends users.roblox.com's requests to
+  // users.example.com; a URL ("http://127.0.0.1:8080") sends them to
+  // <URL>/users.
+  "webBase": null,
+  // Per domain, winning over webBase: a base URL, or "off".
+  // Example: { "users": "https://users.example.com", "badges": "off" }
+  "webDomains": {}
 }
 "#;
 
@@ -225,6 +240,23 @@ fn open_cloud_key() -> Option<String> {
     })
 }
 
+/// Where web requests go: `ROOK_WEB_BASE`, then `webBase`, with
+/// `webDomains` winning over either for their domains. Read once.
+pub fn endpoints() -> std::sync::Arc<Endpoints> {
+    static ENDPOINTS: OnceLock<std::sync::Arc<Endpoints>> = OnceLock::new();
+    ENDPOINTS
+        .get_or_init(|| {
+            let settings = file();
+            let base = var(env::WEB_BASE).or_else(|| settings.web_base.clone());
+            let domains = settings.web_domains.iter().flatten();
+            std::sync::Arc::new(Endpoints::new(
+                base.as_deref(),
+                domains.map(|(d, url)| (d.as_str(), url.as_str())),
+            ))
+        })
+        .clone()
+}
+
 /// Where content resolves from, with `network` as the program's default
 /// for asset delivery. Moves a cache left in the old Windows place first.
 pub fn content_config(network: bool) -> Config {
@@ -261,6 +293,7 @@ pub fn content_config(network: bool) -> Config {
         folders: folders.into_iter().filter(|p| p.is_dir()).collect(),
         network: pick(None, delivery, settings.asset_delivery, network),
         api_key: open_cloud_key(),
+        endpoints: (*endpoints()).clone(),
         cache_dir,
         cache_max: Some(cache_max()),
         kept_dir: DataDir::locate().map(|d| d.content()),

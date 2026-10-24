@@ -2,6 +2,7 @@
 //! its cache and folders are.
 
 use super::*;
+use rook_platform::endpoints::Endpoints;
 
 /// The providers, in the order a [`Config`] lists them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -47,7 +48,11 @@ pub struct Config {
     /// Whether asset delivery may use the network. With it off, only the
     /// cache answers asset ids.
     pub network: bool,
+    /// Sent only to Roblox's own Open Cloud host
+    /// ([`Endpoints::is_roblox`]).
     pub api_key: Option<String>,
+    /// Where asset delivery's requests go.
+    pub endpoints: Endpoints,
     /// `None` keeps nothing on disk.
     pub cache_dir: Option<PathBuf>,
     /// The cache's size limit, kept by a trim in the background when the
@@ -68,6 +73,7 @@ impl Config {
             folders: Vec::new(),
             network: false,
             api_key: None,
+            endpoints: Endpoints::default(),
             cache_dir: None,
             cache_max: None,
             kept_dir: None,

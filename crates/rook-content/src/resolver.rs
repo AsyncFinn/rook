@@ -51,7 +51,10 @@ impl Resolver {
             order: config.order,
             install: config.install,
             folders: config.folders,
-            delivery: config.network.then(|| Delivery::new(config.api_key)),
+            delivery: config
+                .network
+                .then(|| Delivery::new(config.api_key, &config.endpoints))
+                .flatten(),
             cache: config.cache_dir.and_then(|dir| {
                 let cache = open_store(&dir)?;
                 if let Some(max) = config.cache_max {
