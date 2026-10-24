@@ -196,6 +196,10 @@ pub struct World {
     /// ContentProvider requests waiting for the engine to resolve them.
     pub content: crate::api::methods::preload::ContentRequests,
     pub assets: crate::api::methods::assets::AssetRequests,
+    /// Web requests waiting for the engine to send them.
+    pub web: crate::api::methods::web::WebRequests,
+    /// What each TextFilterResult holds.
+    pub(crate) filter_results: HashMap<InstanceId, crate::api::methods::filtering::Filtered>,
     /// The physics world. Scripts query it (raycasts, regions), which
     /// brings it up to date with the DOM first, so it lives here with the
     /// DOM. Servers step it; a client's only answers queries (see
@@ -275,6 +279,8 @@ impl World {
             outbox: Vec::new(),
             content: Default::default(),
             assets: Default::default(),
+            web: Default::default(),
+            filter_results: HashMap::new(),
             physics: rook_physics::Physics::new(),
             gui: rook_gui::Gui::default(),
             pending_calls: HashMap::new(),

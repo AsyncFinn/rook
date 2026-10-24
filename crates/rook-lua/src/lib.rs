@@ -21,6 +21,7 @@ use threads::watchdog;
 
 pub use api::methods::assets::AssetFill;
 pub use api::methods::camera::{Lens, viewport_ray};
+pub use api::methods::web::{WebAnswer, WebRequest};
 pub use net::{NetValue, RemoteKind, RemoteMessage};
 pub use world::{EffectCall, Listener, LogEntry, MessageType, SignalBehavior, SoundControl};
 
@@ -477,6 +478,26 @@ impl Runtime {
     pub fn deliver_asset(&self, request: u64, fill: AssetFill) {
         self.guarded(|| {
             api::methods::assets::deliver(&self.lua, request, fill);
+            threads::drain_deferred(&self.lua);
+        });
+    }
+
+    /// Where scripts' web requests go (`rook_platform::endpoints`); set
+    /// before scripts run.
+    pub fn set_endpoints(&self, endpoints: std::sync::Arc<rook_platform::endpoints::Endpoints>) {
+        self.world_mut().web.endpoints = endpoints;
+    }
+
+    /// Web requests members wait on, by request id, asked for
+    /// since the last call.
+    pub fn take_web_requests(&self) -> Vec<(u64, WebRequest)> {
+        std::mem::take(&mut self.world_mut().web.outbox)
+    }
+
+    /// Deliver a web request's answer: the member waiting on it returns.
+    pub fn deliver_web(&self, request: u64, answer: WebAnswer) {
+        self.guarded(|| {
+            api::methods::web::deliver(&self.lua, request, answer);
             threads::drain_deferred(&self.lua);
         });
     }

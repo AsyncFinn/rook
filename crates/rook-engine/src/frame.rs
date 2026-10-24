@@ -37,6 +37,7 @@ impl DataModel {
             self.refresh_gui_hover();
         }
         self.update_content();
+        self.update_web();
         self.advance_sounds(dt);
         self.update_audio(dt);
         self.runtime.resume_due(Queue::Legacy);
@@ -75,6 +76,17 @@ impl DataModel {
             self.sound_loaded(r, outcome, &mut events);
         }
         self.fire_sound_events(start, events);
+    }
+
+    /// Send scripts' new web requests and deliver the answers that came
+    /// back, all of them when runs must repeat exactly (as for sounds).
+    fn update_web(&mut self) {
+        for (id, request) in self.runtime.take_web_requests() {
+            self.web.send(id, request);
+        }
+        for (id, answer) in self.web.finished(self.content.wait_for_sounds) {
+            self.runtime.deliver_web(id, answer);
+        }
     }
 
     /// Hand scripts' new content requests and sounds' files to the loader

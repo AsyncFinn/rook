@@ -32,7 +32,7 @@ use rook_lua::{LogEntry, MessageType, Runtime};
 use rook_types::Value;
 
 use bridges::journal_watch::JournalWatch;
-use bridges::{explosions, input, sounds, unions};
+use bridges::{explosions, input, sounds, unions, web};
 use session::threads;
 
 #[derive(Debug, thiserror::Error)]
@@ -88,6 +88,8 @@ pub struct Options {
     /// Roblox's CoreScripts, which clients run for the GUI Roblox draws
     /// itself (`settings::core_scripts`); `None` runs without them.
     pub core_scripts: Option<Arc<core_scripts::CorePatch>>,
+    /// Where scripts' web requests go; `None` uses `settings::endpoints`.
+    pub endpoints: Option<Arc<rook_platform::endpoints::Endpoints>>,
 }
 
 impl Default for Options {
@@ -99,6 +101,7 @@ impl Default for Options {
             content: None,
             wait_for_sounds: true,
             core_scripts: None,
+            endpoints: None,
         }
     }
 }
@@ -137,6 +140,7 @@ pub struct DataModel {
     sounds: sounds::Sounds,
     unions: unions::Unions,
     explosions: explosions::Explosions,
+    web: web::Web,
 }
 
 /// Content requests from scripts, resolved off the engine thread.
@@ -298,6 +302,12 @@ impl DataModel {
                 .clone()
                 .unwrap_or_else(settings::local_content),
         );
+        runtime.set_endpoints(
+            options
+                .endpoints
+                .clone()
+                .unwrap_or_else(settings::endpoints),
+        );
         runtime.set_heap_limit(options.memory_limit);
         if !loadstring_enabled {
             // Confirmed: creator-docs ServerScriptService.LoadStringEnabled.
@@ -326,6 +336,7 @@ impl DataModel {
             sounds: Default::default(),
             unions: Default::default(),
             explosions: Default::default(),
+            web: Default::default(),
         })
     }
 

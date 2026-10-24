@@ -127,26 +127,6 @@ pub(crate) fn hidden_property(lua: &Lua, class: &str, key: &str) -> mlua::Result
     Ok(LuaValue::String(lua.create_string(text)?))
 }
 
-/// `HttpService:RequestInternal(options)` gives a request whose
-/// `Start(callback)` calls back with a failure: Roblox's web APIs are out
-/// of reach locally, and the CoreScripts handle that as being offline.
-pub(super) fn luau_source(owner: &str, name: &str) -> Option<&'static str> {
-    Some(match (owner, name) {
-        ("HttpService", "RequestInternal") => {
-            r#"local task = (...).task
-            return function(_, _options)
-                local request = {}
-                function request:Start(callback)
-                    task.spawn(callback, false, { StatusCode = 0, Body = "", HttpError = "ConnectFail" })
-                end
-                function request:Cancel() end
-                return request
-            end"#
-        }
-        _ => return None,
-    })
-}
-
 /// Start the CoreScript `name` (`"CoreScripts/PlayerList"`) under
 /// `parent`, as a new CoreScript instance running its bytecode.
 fn add_core_script_local(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {

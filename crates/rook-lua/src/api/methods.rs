@@ -42,8 +42,9 @@ pub(crate) mod core;
 mod core_gui;
 pub(crate) mod data_stores;
 mod effects;
+pub(crate) mod filtering;
 mod gui;
-mod http;
+pub(crate) mod http;
 mod input;
 pub(crate) mod localization;
 mod materials;
@@ -62,6 +63,8 @@ pub(crate) mod text_chat;
 pub(crate) mod textbox;
 mod tree;
 mod tweens;
+mod users;
+pub(crate) mod web;
 
 use assemblies::*;
 use attributes::*;
@@ -268,6 +271,8 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
                 player_scripts::native,
                 styles::native,
                 text_chat::native,
+                users::native,
+                filtering::native,
             ]
             .iter()
             .find_map(|topic| topic(owner, name));
@@ -298,7 +303,7 @@ pub(crate) fn luau_source(owner: &str, name: &str) -> Option<&'static str> {
             bindables::luau_source,
             data_stores::luau_source,
             remotes::luau_source,
-            core::luau_source,
+            http::luau_source,
             text_chat::luau_source,
         ]
         .iter()

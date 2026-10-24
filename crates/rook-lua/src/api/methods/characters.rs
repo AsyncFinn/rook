@@ -2,7 +2,7 @@
 
 use super::*;
 
-fn players_of(w: &World, this: InstanceId) -> Vec<InstanceId> {
+pub(super) fn players_of(w: &World, this: InstanceId) -> Vec<InstanceId> {
     w.dom
         .children(this)
         .iter()

@@ -58,13 +58,24 @@ Rook finds your Roblox install by itself. Every setting is in `settings.json` in
 | `frameTimes` | | `--frame-times` | `false` | Print frame times to the terminal |
 | `logLevel` | `ROOK_LOG` (a level or subsystems) | `--verbose` | `info` | What the terminal shows: `error`, `warn`, `info`, `debug`, `trace` |
 | `coreScripts` | `ROOK_CORE_SCRIPTS` (`on`/`off`) | `--core-scripts` (`rook-player`, `rook-tools run-headless --join`) | `false` | Run Roblox's own CoreScripts (top bar, player list, menus) on each client, from the Studio install `robloxInstall` names or the newest one (see [CoreScripts](../behavior/gui/core-scripts.md)) |
+| `webBase` | `ROOK_WEB_BASE` | | none | Where web requests go (see [web endpoints](#web-endpoints)): `"off"`, a domain (`example.com`), or a URL (`http://127.0.0.1:8080`) |
+| `webDomains` | | | `{}` | Per Roblox web domain (`"users"`, `"assetdelivery"`, ...), a base URL or `"off"`, winning over `webBase` |
 | | `ROOK_DATA_DIR` | | `%LOCALAPPDATA%\Rook` on Windows | Where settings, logs, crash reports and kept content live (so it can't be in `settings.json`) |
 
 ## Logs and failures
 
 After loading, `rook-player` prints one summary of what didn't load, grouped by cause. `--verbose` lists every failure with its instance, reference and reason; `--verbose content` (or `terrain`, `render`, ...) shows everything one area logs. Each player run writes a full log (`rook-tools logs` prints its path), and a crash leaves a report in the logs' `crashes` folder. See [data and logging](../design/data-and-logging.md).
 
-Asset delivery only talks to Roblox's asset endpoints. Rook never reads browser cookies or stored credentials.
+## Web endpoints
+
+Every web request Rook makes, and every scripting API Roblox answers from its servers (user lookups, friends, groups, badges, text filtering, the CoreScripts' requests), goes through one setting, so you choose where they go:
+
+- **Unset** (the default): asset delivery uses Roblox, and everything else answers on your machine. Text passes through unfiltered, the session's players are the only users, and nobody is in a group or owns a badge.
+- **Offline**: `"webBase": "off"` sends nothing anywhere; assets come only from your install, content folders and cache.
+- **A mirror or your own server**: `"webBase": "example.com"` sends `users.roblox.com`'s requests to `users.example.com`, and so on for every domain. `"webBase": "http://127.0.0.1:8080"` sends them all to one server, under `/users`, `/assetdelivery`, ...
+- **Per domain**: `"webDomains": { "users": "https://users.example.com", "badges": "off" }` overrides `webBase` for those domains only.
+
+A server answers in Roblox's request and response shapes; [web endpoints](../design/web-endpoints.md) lists every request and what each API does without one. An Open Cloud key is only ever sent to Roblox, and only while asset delivery goes to Roblox. Rook never reads browser cookies or stored credentials.
 
 ## Working with an archive
 

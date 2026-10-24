@@ -20,6 +20,7 @@ rook-gui.workspace = true
 rook-terrain.workspace = true
 rook-content.workspace = true
 rook-audio.workspace = true
+rook-platform.workspace = true
 rbx_types.workspace = true
 mlua.workspace = true
 glam.workspace = true

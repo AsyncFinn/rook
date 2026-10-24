@@ -58,8 +58,9 @@ Code: loading in `rook-engine`'s `core_scripts.rs` (and the
   counted under "Not implemented in Rook yet" (game scripts still get an
   error): most of them talk to Roblox's website (analytics, experiments,
   voice, purchases, friends), and one missing member mustn't stop the
-  whole GUI. Requests through `HttpService:RequestInternal` fail at once,
-  as if offline.
+  whole GUI. Requests through `HttpService:RequestInternal` and
+  HttpRbxApiService fail at once, as if offline, unless their web domain
+  has an endpoint ([web endpoints](../../design/web-endpoints.md)).
 - `GetEngineFeature` says no except for the features whose API Rook has
   and the scripts need to take their current path (`AvatarChatServiceEnabled`,
   without which the menu's voice settings find no service, and
@@ -121,7 +122,7 @@ above, by calls:
 | Calls | Members |
 |---|---|
 | Analytics and telemetry | `RbxAnalyticsService` (`SetRBXEventStream` 43, `GetPlaySessionId`, `GetSessionId`, `ReportCounter`), `EventIngestService:SendEventDeferred` |
-| Roblox's app and website | `MessageBusService` (`Call`, `Publish`, `Subscribe`), `HttpRbxApiService:GetAsyncFullUrl`, `LinkingService:RegisterLuaUrl`, `SessionService:SessionExists`, `ThirdPartyUserService:IsSingleSignOnSupported`, `AchievementService:IsAvailable`, `CaptureService:RetrieveCaptures`, `InsertService:LoadLocalAsset` |
+| Roblox's app and website | `MessageBusService` (`Call`, `Publish`, `Subscribe`), `LinkingService:RegisterLuaUrl`, `SessionService:SessionExists`, `ThirdPartyUserService:IsSingleSignOnSupported`, `AchievementService:IsAvailable`, `CaptureService:RetrieveCaptures`, `InsertService:LoadLocalAsset` |
 | Stored settings | `MemStorageService` (`GetItem` 21, `BindAndFire`), `LocalStorageService` (`GetItem`, `WhenLoaded`) |
 | Experiments | `IXPService` (`InitializeUserLayers`, `RegisterUserLayers`, `GetUserLayerLoadingStatus`) |
 | Gamepad and keyboard navigation | `GuiService` (`AddKey` 22, `AddSpecialKey`, `AddSelectionParent`, `SelectedCoreObject`), `ContextActionService` (`BindCoreAction` 14, `UnbindCoreAction`, `BindAction`) |

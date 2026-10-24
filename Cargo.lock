@@ -3401,6 +3401,7 @@ dependencies = [
  "rook-dom",
  "rook-gui",
  "rook-physics",
+ "rook-platform",
  "rook-reflection",
  "rook-terrain",
  "rook-types",
