@@ -85,6 +85,11 @@ wrapped to the object's width, fits without splitting a word: "Hi" in a
 on ("Hello, world!" in 100 × 200 is two 41-pixel lines; Rook's rounding
 makes "world!" two pixels too wide there and picks 40).
 
+A UITextSizeConstraint child holds the scaled `TextSize` between its
+`MinTextSize` and `MaxTextSize` (Confirmed: creator-docs
+UITextSizeConstraint), the least even when the text then doesn't fit.
+Roblox's top bar menu caps its scaled labels this way.
+
 ## AutomaticSize
 
 A text object grows to its `TextBounds` inside its padding, along with

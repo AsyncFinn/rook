@@ -129,6 +129,10 @@ pub(crate) fn restyle(lua: &Lua) -> mlua::Result<()> {
     let Some((all, pending, links)) = work else {
         return Ok(());
     };
+    // Confirmed: creator-docs "UI styling" (only one StyleSheet applies to
+    // a given tree). Inference: where links nest, the nearest one does, so
+    // CoreGui's own link doesn't undo the chat's.
+    let scopes: HashSet<InstanceId> = links.iter().map(|&(scope, _)| scope).collect();
     for (scope, sheet) in links {
         let tops: Vec<InstanceId> = if all {
             vec![scope]
@@ -150,6 +154,7 @@ pub(crate) fn restyle(lua: &Lua) -> mlua::Result<()> {
             let targets = with_world(lua, |w| {
                 let mut all = vec![top];
                 all.extend(w.dom.descendants(top));
+                all.retain(|&id| nearest_scope(&w.dom, &scopes, id) == Some(scope));
                 all
             });
             for id in targets {
@@ -157,9 +162,24 @@ pub(crate) fn restyle(lua: &Lua) -> mlua::Result<()> {
             }
         }
     }
-    // What styling itself changed needn't be looked at again.
-    with_world(lua, |w| w.styles.cursor = w.dom.journal().end());
+    // The journal since the last note is looked at again next time, styling's
+    // own writes included: they fire Changed at once, and what scripts do
+    // then (React making objects and tagging them) must be styled too. Only
+    // pseudo-instances come back from styling itself, and their owners
+    // style them.
     Ok(())
+}
+
+/// The nearest of `scopes` at or above `id`.
+fn nearest_scope(dom: &Dom, scopes: &HashSet<InstanceId>, id: InstanceId) -> Option<InstanceId> {
+    let mut at = Some(id);
+    while let Some(i) = at {
+        if scopes.contains(&i) {
+            return Some(i);
+        }
+        at = dom.parent(i);
+    }
+    None
 }
 
 /// A sheet and those it derives from, nearest first.
@@ -247,6 +267,17 @@ fn style_one(
     rules: &[Rule],
     id: InstanceId,
 ) -> mlua::Result<()> {
+    // A pseudo-instance's values come from its owner's rules; styling it as
+    // an object of its own would reset them.
+    let pseudo_child = with_world(lua, |w| {
+        w.dom.parent(id).is_some_and(|owner| {
+            let key = (owner, w.dom.class_name(id).to_owned());
+            w.styles.pseudo.get(&key) == Some(&id)
+        })
+    });
+    if pseudo_child {
+        return Ok(());
+    }
     let (own, pseudo) = with_world(lua, |w| {
         if w.dom.get(id).is_none() || !w.dom.is_a(id, "Instance") {
             return (Vec::new(), Vec::new());

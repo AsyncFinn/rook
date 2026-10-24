@@ -102,6 +102,9 @@ applies them each frame before GUI lays out:
 
 - A StyleLink attaches its `StyleSheet` to its parent's tree; StyleDerive
   children of a sheet add another sheet's rules, at lower precedence.
+  Only one sheet applies to a tree (Confirmed: creator-docs "UI styling");
+  where links nest, the nearest one styles what's under it (Inference:
+  CoreGui has a link of its own, and the chat's must still apply).
 - Selectors: a class name, `#Name`, `.tag`s and `:Hover`, `:Press` or
   `:NonInteractable` (the object's `GuiState`), chained by `>` (child) and
   `>>` (descendant), comma-separated; `::Class` makes a pseudo-instance of

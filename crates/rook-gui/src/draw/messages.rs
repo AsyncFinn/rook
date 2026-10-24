@@ -80,6 +80,7 @@ pub(super) fn emit(dom: &Dom, text: &mut Text<'_>, out: &mut Vec<GuiQuad>) {
             },
             wrapped: !hint,
             scaled: false,
+            size_limits: None,
             align: Vec2::splat(0.5),
             line_height: 1.0,
             visible: None,
