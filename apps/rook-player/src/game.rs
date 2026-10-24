@@ -2,11 +2,12 @@
 //! server runs on its own thread, or the server alone (Studio's Run mode),
 //! which the window draws itself.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use rook_engine::console::repl::Side;
 use rook_engine::session::host::{ClientHost, ServerHost};
+use rook_engine::user_settings::PlayerSettings;
 use rook_engine::{DataModel, InputEvent, Options, console};
 use rook_lua::MessageType;
 use rook_render::Camera;
@@ -67,6 +68,7 @@ impl Loading {
         script: Option<String>,
         wait_for_sounds: bool,
         core_scripts: Option<Arc<rook_engine::core_scripts::CorePatch>>,
+        user_settings: Option<PathBuf>,
     ) -> anyhow::Result<Self> {
         let load_start = std::time::Instant::now();
         let bytes = fs_err::read(path)?;
@@ -74,6 +76,7 @@ impl Loading {
             content: Some(content),
             wait_for_sounds,
             core_scripts,
+            user_settings,
             ..Options::default()
         };
         let (stage, script) = if play {
@@ -160,7 +163,16 @@ impl Game {
         wait_for_sounds: bool,
         core_scripts: Option<Arc<rook_engine::core_scripts::CorePatch>>,
     ) -> anyhow::Result<Self> {
-        let loading = Loading::begin(path, play, content, script, wait_for_sounds, core_scripts)?;
+        // Nothing the player changes here is saved: these runs aren't played.
+        let loading = Loading::begin(
+            path,
+            play,
+            content,
+            script,
+            wait_for_sounds,
+            core_scripts,
+            None,
+        )?;
         match loading.stage {
             Stage::Server(starting) => loading.finish.joined(starting.wait()?),
             Stage::Run(bytes) => loading.finish.run(&bytes),
@@ -349,6 +361,22 @@ impl Game {
         match &self.mode {
             Mode::Play { client, .. } => client.client().focused_text_box().is_some(),
             Mode::Run(_) => false,
+        }
+    }
+
+    /// The player's settings as the local player's client has them (Run
+    /// mode has no player to change them).
+    pub(crate) fn player_settings(&self) -> Option<PlayerSettings> {
+        match &self.mode {
+            Mode::Play { client, .. } => client.client().player_settings(),
+            Mode::Run(_) => None,
+        }
+    }
+
+    /// Save the player's settings if they changed, before exiting.
+    pub(crate) fn save_user_settings(&mut self) {
+        if let Mode::Play { client, .. } = &mut self.mode {
+            client.client_mut().save_user_settings();
         }
     }
 

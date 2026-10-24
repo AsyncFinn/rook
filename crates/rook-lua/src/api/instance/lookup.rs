@@ -110,9 +110,23 @@ pub(super) fn member_table(class: ClassId, known: bool, identity: Identity) -> M
             let Some(p) = db.find_property(class, name) else {
                 continue;
             };
-            if p.scriptability == Scriptability::None {
-                continue;
-            }
+            let security = property_security(db.class(p.owner).name, p.name);
+            // rbx-dom's database calls the properties only Roblox's own
+            // code reaches (`UserGameSettings.MasterVolume`) not
+            // scriptable; the API dump's security says who reaches them.
+            let scriptability = match p.scriptability {
+                Scriptability::None
+                    if !p.flags.not_scriptable && security != [Security::None; 2] =>
+                {
+                    if p.flags.read_only {
+                        Scriptability::Read
+                    } else {
+                        Scriptability::ReadWrite
+                    }
+                }
+                Scriptability::None => continue,
+                s => s,
+            };
             // Aliases read and write their canonical property, but keep
             // their own scriptability (`size` is an alias scripts can't use).
             let canonical = db.find_canonical_property(class, name).unwrap_or(p);
@@ -126,9 +140,9 @@ pub(super) fn member_table(class: ClassId, known: bool, identity: Identity) -> M
                         PropertyType::Enum(e) => Some(e),
                         PropertyType::Value(_) => None,
                     },
-                    scriptability: p.scriptability,
+                    scriptability,
                     flags: p.flags,
-                    security: property_security(db.class(p.owner).name, p.name),
+                    security,
                 }),
             );
         }

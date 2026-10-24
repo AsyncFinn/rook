@@ -58,6 +58,7 @@ impl DataModel {
         self.check_sounds();
         self.check_unions();
         self.check_explosions();
+        self.check_user_settings();
         if self.auto_trim {
             self.trim_journal();
         }

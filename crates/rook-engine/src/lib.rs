@@ -15,6 +15,7 @@ pub mod logging;
 mod scripts;
 pub mod session;
 pub mod settings;
+pub mod user_settings;
 
 pub use bridges::input::{CursorLook, InputEvent, ScreenPoint, SystemCursor};
 
@@ -90,6 +91,10 @@ pub struct Options {
     pub core_scripts: Option<Arc<core_scripts::CorePatch>>,
     /// Where scripts' web requests go; `None` uses `settings::endpoints`.
     pub endpoints: Option<Arc<rook_platform::endpoints::Endpoints>>,
+    /// The player's settings file (`UserSettings().GameSettings`, see
+    /// [`user_settings`]): clients load it and save it when the player
+    /// changes something. `None` keeps Roblox's defaults, unsaved.
+    pub user_settings: Option<std::path::PathBuf>,
 }
 
 impl Default for Options {
@@ -102,6 +107,7 @@ impl Default for Options {
             wait_for_sounds: true,
             core_scripts: None,
             endpoints: None,
+            user_settings: None,
         }
     }
 }
@@ -141,6 +147,8 @@ pub struct DataModel {
     unions: unions::Unions,
     explosions: explosions::Explosions,
     web: web::Web,
+    /// The player's settings, on a client given a file for them.
+    user_settings: Option<user_settings::Kept>,
 }
 
 /// Content requests from scripts, resolved off the engine thread.
@@ -170,8 +178,13 @@ impl DataModel {
 
     /// An empty client DataModel, filled by replication.
     pub fn new_client(options: &Options) -> Result<Self, EngineError> {
-        let dm = Self::with_dom(Dom::new(), options, Role::Client)?;
+        let mut dm = Self::with_dom(Dom::new(), options, Role::Client)?;
         let mut w = dm.runtime.world_mut();
+        if let Some(path) = &options.user_settings {
+            let (root, kept) = user_settings::Kept::install(&mut w.dom, path);
+            w.user_settings = Some(root);
+            dm.user_settings = Some(kept);
+        }
         w.is_client = true;
         // Only the server simulates for now: it owns every part (network
         // ownership comes with characters). The client's world answers its
@@ -199,6 +212,9 @@ impl DataModel {
         self.sounds.watch.rescan(end);
         self.unions.watch.rescan(end);
         self.explosions.watch.rescan(end);
+        if let Some(kept) = &mut self.user_settings {
+            kept.rescan(end);
+        }
     }
 
     /// Drop journal entries every reader has seen. Physics catches up first
@@ -266,6 +282,14 @@ impl DataModel {
             }
         }
         ensure_camera(&mut dom);
+        // Roblox's client names its build here; the menu's version label shows it.
+        if let Some(rs) = dom.find_service("RunService") {
+            rook_dom::ignore_stale(dom.set_property_by_name(
+                rs,
+                "ClientGitHash",
+                Value::String("rook".into()),
+            ));
+        }
         match role {
             Role::Server => chat::set_up(&mut dom),
             Role::Client => chat::set_up_client(&mut dom),
@@ -337,6 +361,7 @@ impl DataModel {
             unions: Default::default(),
             explosions: Default::default(),
             web: Default::default(),
+            user_settings: None,
         })
     }
 

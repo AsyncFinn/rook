@@ -63,6 +63,7 @@ pub(crate) mod text_chat;
 pub(crate) mod textbox;
 mod tree;
 mod tweens;
+mod user_settings;
 mod users;
 pub(crate) mod web;
 
@@ -273,6 +274,7 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
                 text_chat::native,
                 users::native,
                 filtering::native,
+                user_settings::native,
             ]
             .iter()
             .find_map(|topic| topic(owner, name));

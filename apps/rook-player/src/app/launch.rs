@@ -21,6 +21,8 @@ pub(crate) struct Launch {
     gfx: Option<Gfx>,
     app: Option<App>,
     failed: Option<anyhow::Error>,
+    /// The player's settings as saved, until the game is there.
+    player: PlayerSettings,
 }
 
 impl Launch {
@@ -29,6 +31,7 @@ impl Launch {
         content: Arc<Resolver>,
         install: Installed,
         loading: game::Loading,
+        player: PlayerSettings,
     ) -> Self {
         Self {
             args,
@@ -38,6 +41,7 @@ impl Launch {
             gfx: None,
             app: None,
             failed: None,
+            player,
         }
     }
 
@@ -46,9 +50,12 @@ impl Launch {
     }
 
     /// After the window closes: the load's error, or the run's summary.
-    pub(crate) fn finish(self) -> anyhow::Result<()> {
+    pub(crate) fn finish(mut self) -> anyhow::Result<()> {
         if let Some(e) = self.failed {
             return Err(e);
+        }
+        if let Some(app) = &mut self.app {
+            app.game.save_user_settings();
         }
         if let Some(app) = &self.app
             && rook_engine::settings::frame_times(self.args.frame_times)
@@ -123,9 +130,12 @@ impl Launch {
             readout: Readout::new(rook_engine::settings::frame_times(args.frame_times)),
             // Only the window plays sound: headless runs, `--bench`,
             // `--screenshot` and `--record-audio` never open a device.
+            // `--volume` holds until the player changes the volume.
             audio: rook_engine::settings::audio_device().map(|device| {
-                rook_audio::Output::new(device, rook_engine::settings::master_volume(args.volume))
+                let volume = args.volume.unwrap_or(self.player.master_volume);
+                rook_audio::Output::new(device, volume.clamp(0.0, 1.0))
             }),
+            player: self.player,
             #[cfg(feature = "repl")]
             repl: if args.no_repl {
                 None
@@ -153,7 +163,10 @@ impl ApplicationHandler for Launch {
                 &title,
                 rook_engine::settings::uncapped(self.args.uncapped),
             ) {
-                Ok(gfx) => self.gfx = Some(gfx),
+                Ok(gfx) => {
+                    gfx.set_fullscreen(self.player.fullscreen);
+                    self.gfx = Some(gfx);
+                }
                 Err(e) => no_renderer(event_loop, &e),
             }
         }

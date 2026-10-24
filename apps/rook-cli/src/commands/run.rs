@@ -25,6 +25,9 @@ pub(crate) struct Run<'a> {
     /// Points the joined player clicks after `seconds`, in window pixels,
     /// half a second apart; the run goes on a second after the last.
     pub clicks: &'a [ScreenPoint],
+    /// The joined player's settings load from this file and are saved to
+    /// it at the end (`rook_engine::user_settings`).
+    pub user_settings: Option<&'a Path>,
     #[cfg(feature = "repl")]
     pub repl: bool,
 }
@@ -34,6 +37,7 @@ pub(crate) fn run(file: &Path, how: &Run<'_>) -> anyhow::Result<()> {
     let options = Options {
         script_timeout: Duration::from_secs_f64(how.timeout),
         core_scripts: rook_engine::settings::core_scripts(how.core_scripts.then_some(true)),
+        user_settings: how.user_settings.map(Path::to_owned),
         ..Options::default()
     };
     anyhow::ensure!(
@@ -65,6 +69,9 @@ pub(crate) fn run(file: &Path, how: &Run<'_>) -> anyhow::Result<()> {
         }
         if !how.clicks.is_empty() {
             session.run_for(1.0);
+        }
+        if let Some(client) = session.client_mut(index) {
+            client.save_user_settings();
         }
         let server_log = session.server().take_log();
         let client = session.client(0).expect("joined");

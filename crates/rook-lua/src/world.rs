@@ -226,6 +226,9 @@ pub struct World {
     /// starts from, outside the DataModel (clients running Roblox's
     /// CoreScripts).
     pub core_scripts: Option<InstanceId>,
+    /// `UserSettings()`, outside the DataModel: the engine fills it from
+    /// the player's saved settings (`crate::user_settings`).
+    pub user_settings: Option<InstanceId>,
     /// Fast flags by full name (`FFlagX`, `DFIntY`), as Studio last
     /// downloaded them, for CoreScripts' `DefineFastFlag` and the like.
     pub fast_flags: std::sync::Arc<HashMap<String, String>>,
@@ -292,6 +295,7 @@ impl World {
             modules: ModuleState::default(),
             bytecode: HashMap::new(),
             core_scripts: None,
+            user_settings: None,
             fast_flags: Default::default(),
             defined_flags: HashMap::new(),
             localization: HashMap::new(),

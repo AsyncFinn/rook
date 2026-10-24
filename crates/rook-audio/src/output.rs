@@ -41,6 +41,16 @@ impl<K: Hash + Eq + Copy + Send + 'static> Output<K> {
         }
     }
 
+    /// Hear everything at `volume` (0 to 1) from now on.
+    pub fn set_master_volume(&mut self, volume: f32) {
+        self.master_volume = volume;
+        if let Some(mixer) = &self.mixer
+            && let Ok(mut m) = mixer.lock()
+        {
+            m.set_master_volume(volume);
+        }
+    }
+
     /// Play exactly `wanted` from now on.
     pub fn sync(&mut self, wanted: &Mix<K>) {
         if self.mixer.is_none() {

@@ -62,7 +62,6 @@ pub struct Settings {
     pub open_cloud_key_file: Option<PathBuf>,
     pub threads: Option<usize>,
     pub audio_device: Option<String>,
-    pub master_volume: Option<f32>,
     pub uncapped: Option<bool>,
     pub frame_times: Option<bool>,
     pub log_level: Option<String>,
@@ -94,8 +93,6 @@ const WRITTEN: &str = r#"{
   "threads": null,
   // The output device: "default", "off", or a device's name.
   "audioDevice": "default",
-  // Everything heard, from 0 (silent) to 1, as Roblox's in-game volume.
-  "masterVolume": 1,
   // Draw as fast as possible instead of waiting for the display.
   "uncapped": false,
   // Print each frame's timings in the terminal.
@@ -374,11 +371,6 @@ pub fn audio_device() -> Option<rook_audio::Device> {
         Some(v) if v.eq_ignore_ascii_case("off") => None,
         Some(name) => Some(rook_audio::Device::Named(name.to_owned())),
     }
-}
-
-/// The master volume, 0 to 1: `--volume`, then `masterVolume`.
-pub fn master_volume(flag: Option<f32>) -> f32 {
-    pick(flag, None, file().master_volume, 1.0).clamp(0.0, 1.0)
 }
 
 /// Whether to draw without waiting for the display: `--uncapped`, then

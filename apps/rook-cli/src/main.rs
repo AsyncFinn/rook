@@ -100,6 +100,11 @@ enum Command {
         /// in pixels of a 1280 × 720 window); repeat for more clicks.
         #[arg(long, requires = "join")]
         click: Vec<rook_engine::ScreenPoint>,
+        /// With `--join`: the player's settings (`UserSettings().GameSettings`)
+        /// load from this file, as rook-player's `GlobalBasicSettings.xml`,
+        /// and are saved to it at the end.
+        #[arg(long, requires = "join")]
+        user_settings: Option<PathBuf>,
         /// After `--seconds`, keep running in real time with a `>` prompt
         /// that runs Luau on the server, until input ends (Ctrl+C on an
         /// empty line, or Ctrl+D).
@@ -341,6 +346,7 @@ fn command(command: Command) -> anyhow::Result<()> {
             core_scripts,
             dump,
             click,
+            user_settings,
             #[cfg(feature = "repl")]
             repl,
         } => run::run(
@@ -354,6 +360,7 @@ fn command(command: Command) -> anyhow::Result<()> {
                 core_scripts,
                 dump: dump.as_deref(),
                 clicks: &click,
+                user_settings: user_settings.as_deref(),
                 #[cfg(feature = "repl")]
                 repl,
             },

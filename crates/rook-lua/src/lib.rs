@@ -15,6 +15,7 @@ mod signal;
 mod styles;
 mod threads;
 mod types;
+pub mod user_settings;
 mod world;
 
 use threads::watchdog;

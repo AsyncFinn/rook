@@ -9,6 +9,7 @@ Everything Rook keeps for itself lives in one folder: `%LOCALAPPDATA%\Rook` on W
 ```
 %LOCALAPPDATA%\Rook\
 ├─ settings.json
+├─ GlobalBasicSettings.xml
 ├─ logs\
 │  ├─ <program>-<YYYY-MM-DD_HH-MM-SS>.log
 │  └─ crashes\<program>-<YYYY-MM-DD_HH-MM-SS>.txt
@@ -45,15 +46,14 @@ JSON rather than TOML because Roblox developers know JSON. It is read leniently:
 | `openCloudKeyFile` | `ROOK_OPEN_CLOUD_API_KEY` (the key itself) | | none | A file holding an Open Cloud key, tried for assets refused anonymously (needs the `legacy-asset:manage` scope). The key never goes in `settings.json` |
 | `threads` | `ROOK_THREADS` | | the machine's logical cores | The cores Rook plans background threads for |
 | `audioDevice` | `ROOK_AUDIO` | | `default` | `default`, `off` (`rook-player` never opens a device), or an output device's name |
-| `masterVolume` | | `--volume` | `1` | Everything heard, 0 to 1, like Roblox's in-game volume |
 | `uncapped` | | `--uncapped` | `false` | Draw as fast as possible instead of at the display's rate |
 | `frameTimes` | | `--frame-times` | `false` | Print frame times to the terminal |
 | `logLevel` | `ROOK_LOG` (a level or subsystems) | `--verbose` | `info` | What the terminal shows: `error`, `warn`, `info`, `debug`, `trace` |
 | | `ROOK_DATA_DIR` | | `%LOCALAPPDATA%\Rook` on Windows | Where settings, logs, crash reports and kept content live (so it can't be in `settings.json`) |
 
-Each value comes from the first of these that sets it: the command-line flag, the `ROOK_*` environment variable, `settings.json`, then Rook's default (`settings::pick`). `rook-engine`'s `settings` module resolves every one and hands plain values down (`rook_content::Config`, the audio device and volume, the thread budget); no other crate reads the environment. `ROOK_STUDIO`, which picks the Studio window `rook-tools conformance` drives, is a developer's variable of `rook-cli` alone.
+Each value comes from the first of these that sets it: the command-line flag, the `ROOK_*` environment variable, `settings.json`, then Rook's default (`settings::pick`). `rook-engine`'s `settings` module resolves every one and hands plain values down (`rook_content::Config`, the audio device, the thread budget); no other crate reads the environment. `ROOK_STUDIO`, which picks the Studio window `rook-tools conformance` drives, is a developer's variable of `rook-cli` alone.
 
-`masterVolume` is Rook's version of the in-game menu's volume, `UserGameSettings.MasterVolume`. Once `UserGameSettings` exists (branch `feat/user-settings`), its `MasterVolume` should read and write this setting.
+`settings.json` holds the engine's and developers' options only. What a player chooses in the in-game menu (volume, camera sensitivity, fullscreen, graphics) is theirs, not the engine's: it lives on `UserSettings().GameSettings` and is saved in `GlobalBasicSettings.xml`, as Roblox's client saves it ([user settings](../behavior/user-settings.md)). `rook-player --volume` sets the volume for one run, until the menu changes it.
 
 ## Logging
 

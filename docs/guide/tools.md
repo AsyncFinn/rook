@@ -27,6 +27,8 @@ rook-tools run-headless place.rbxl --join --core-scripts --dump CoreGui
                                                  # a player's client too, running Roblox's CoreScripts; print its CoreGui
 rook-tools run-headless place.rbxl --join --core-scripts --click 38,34 --dump CoreGui
                                                  # the same after clicking at (38, 34) in a 1280 x 720 window
+rook-tools run-headless place.rbxl --join --core-scripts --user-settings settings.xml
+                                                 # the player's settings load from settings.xml and are saved back
 ```
 
 ## Content and assets
@@ -53,7 +55,6 @@ Rook finds your Roblox install by itself. Every setting is in `settings.json` in
 | `openCloudKeyFile` | `ROOK_OPEN_CLOUD_API_KEY` (the key itself) | | none | A file holding an Open Cloud key, tried for assets refused anonymously (needs the `legacy-asset:manage` scope). The key never goes in `settings.json` |
 | `threads` | `ROOK_THREADS` | | the machine's logical cores | The cores Rook plans background threads for |
 | `audioDevice` | `ROOK_AUDIO` | | `default` | `default`, `off` (`rook-player` never opens a device), or an output device's name |
-| `masterVolume` | | `--volume` | `1` | Everything heard, 0 to 1, like Roblox's in-game volume |
 | `uncapped` | | `--uncapped` | `false` | Draw as fast as possible instead of at the display's rate |
 | `frameTimes` | | `--frame-times` | `false` | Print frame times to the terminal |
 | `logLevel` | `ROOK_LOG` (a level or subsystems) | `--verbose` | `info` | What the terminal shows: `error`, `warn`, `info`, `debug`, `trace` |
@@ -61,6 +62,8 @@ Rook finds your Roblox install by itself. Every setting is in `settings.json` in
 | `webBase` | `ROOK_WEB_BASE` | | none | Where web requests go (see [web endpoints](#web-endpoints)): `"off"`, a domain (`example.com`), or a URL (`http://127.0.0.1:8080`) |
 | `webDomains` | | | `{}` | Per Roblox web domain (`"users"`, `"assetdelivery"`, ...), a base URL or `"off"`, winning over `webBase` |
 | | `ROOK_DATA_DIR` | | `%LOCALAPPDATA%\Rook` on Windows | Where settings, logs, crash reports and kept content live (so it can't be in `settings.json`) |
+
+`settings.json` holds the engine's and developers' options only. Your own choices as a player are where Roblox keeps them: volume, camera sensitivity, fullscreen and the rest of the in-game menu's Settings page are on `UserSettings().GameSettings`, saved as `GlobalBasicSettings.xml` in the data folder (see [user settings](../behavior/user-settings.md)). The file has the same format as the Roblox client's own `GlobalBasicSettings_13.xml`, though Rook never reads that one: it starts from Roblox's defaults. `masterVolume` moved there as `MasterVolume`; `rook-player --volume` still sets the volume for one run, until you change it in the menu.
 
 ## Logs and failures
 

@@ -67,6 +67,11 @@ impl DataDir {
         self.root.join("settings.json")
     }
 
+    /// The player's own settings (`crate::user_settings`).
+    pub fn user_settings(&self) -> PathBuf {
+        self.root.join(crate::user_settings::FILE)
+    }
+
     pub fn crashes(&self) -> PathBuf {
         self.logs.join("crashes")
     }

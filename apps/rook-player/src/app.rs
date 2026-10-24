@@ -48,6 +48,8 @@ pub(crate) struct App {
     pub(crate) readout: Readout,
     /// Where the game's sounds are heard; `None` with `ROOK_AUDIO=off`.
     pub(crate) audio: Option<rook_audio::Output<rook_dom::InstanceId>>,
+    /// The player's settings the window last followed.
+    pub(crate) player: PlayerSettings,
     /// The terminal command prompt, when the terminal is interactive.
     #[cfg(feature = "repl")]
     pub(crate) repl: Option<rook_engine::console::repl::Repl>,
@@ -101,6 +103,13 @@ impl Gfx {
             config,
             renderer,
         })
+    }
+
+    /// Fill the screen, or go back to a window, as the player's
+    /// `Fullscreen` setting says.
+    pub(crate) fn set_fullscreen(&self, on: bool) {
+        let mode = on.then_some(winit::window::Fullscreen::Borderless(None));
+        self.window.set_fullscreen(mode);
     }
 
     /// Take a new window size.
@@ -204,6 +213,11 @@ impl App {
             self.accumulator = 0.0;
         }
         self.game.advance(steps);
+        if let Some(now) = self.game.player_settings()
+            && now != self.player
+        {
+            self.follow(now);
+        }
         if let Some(audio) = &mut self.audio {
             audio.sync(&self.game.sounds());
         }
@@ -236,6 +250,22 @@ impl App {
 }
 
 impl App {
+    /// Follow the settings the player changed: the volume, fullscreen.
+    /// The camera reads its sensitivity as it turns.
+    fn follow(&mut self, now: PlayerSettings) {
+        if now.master_volume != self.player.master_volume
+            && let Some(audio) = &mut self.audio
+        {
+            audio.set_master_volume(now.master_volume);
+        }
+        if now.fullscreen != self.player.fullscreen
+            && let Some(gfx) = &self.gfx
+        {
+            gfx.set_fullscreen(now.fullscreen);
+        }
+        self.player = now;
+    }
+
     /// Start or stop looking around with the right mouse button: the
     /// cursor hides and stays where it was, as in Studio, instead of
     /// wandering out of the window while the camera turns.
@@ -392,8 +422,16 @@ impl ApplicationHandler for App {
         if let DeviceEvent::MouseMotion { delta } = event
             && self.looking
         {
-            self.camera.yaw -= delta.0 as f32 * 0.003;
-            self.camera.pitch -= delta.1 as f32 * 0.003;
+            // Radians per pixel at Roblox's default sensitivity of 1.
+            const TURN: f32 = 0.003;
+            let (across, up) = self.player.mouse_sensitivity;
+            let invert = if self.player.camera_y_inverted {
+                -1.0
+            } else {
+                1.0
+            };
+            self.camera.yaw -= delta.0 as f32 * TURN * across;
+            self.camera.pitch -= delta.1 as f32 * TURN * up * invert;
             self.camera.update_rotation();
             // Where the cursor can only be confined to the window (Windows),
             // put it back after each move.

@@ -31,6 +31,7 @@ use clap::Parser;
 use game::Game;
 use glam::{EulerRot, Mat3, Vec3};
 use rook_content::Resolver;
+use rook_engine::user_settings::PlayerSettings;
 use rook_engine::{InputEvent, console};
 use rook_lua::MessageType;
 use rook_render::{Camera, Renderer};
@@ -117,7 +118,8 @@ struct Args {
     /// Print frame times to the terminal every second, and a summary at exit.
     #[arg(long)]
     frame_times: bool,
-    /// The master volume, 0 to 1 (overrides `masterVolume` in settings.json).
+    /// The master volume, 0 to 1, until the in-game menu changes it (the
+    /// menu's volume is kept with the player's settings).
     #[arg(long)]
     volume: Option<f32>,
     /// Don't show the `>` command prompt in the terminal.
@@ -232,6 +234,8 @@ fn play(args: Args) -> anyhow::Result<()> {
     let core_scripts = rook_engine::settings::core_scripts(args.core_scripts.then_some(true));
     let windowed = args.record_audio.is_none() && args.bench.is_none() && args.screenshot.is_none();
     if windowed && !args.crash_test {
+        // The player's settings, which only a window's player changes.
+        let user_settings = rook_engine::data_folder::DataDir::locate().map(|d| d.user_settings());
         // The window opens at once and shows a loading screen while the
         // place loads, as Roblox's does.
         let loading = game::Loading::begin(
@@ -241,8 +245,10 @@ fn play(args: Args) -> anyhow::Result<()> {
             script,
             wait_for_sounds,
             core_scripts,
+            user_settings.clone(),
         )?;
-        let mut launch = Launch::new(args, content, install, loading);
+        let player = PlayerSettings::load(user_settings.as_deref());
+        let mut launch = Launch::new(args, content, install, loading, player);
         let event_loop = EventLoop::new()?;
         event_loop.set_control_flow(ControlFlow::Poll);
         event_loop.run_app(&mut launch)?;

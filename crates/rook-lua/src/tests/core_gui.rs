@@ -98,12 +98,15 @@ fn date_time_and_settings() {
         r#"
         local d = DateTime.fromUniversalTime(2020, 2, 30, 13, 5)
         print(d.UnixTimestamp, d:ToIsoDate(), d:FormatUniversalTime("LL", "en-us"))
-        print(settings().Rendering ~= nil, UserSettings().GameSettings.ReducedMotion)
+        print(settings().Rendering ~= nil, UserSettings().GameSettings.ComputerMovementMode)
+        -- Only Roblox's own code reads most of the player's settings.
+        print(pcall(function() return UserSettings().GameSettings.ReducedMotion end))
         "#,
         1,
         &[
             "1583067900 2020-03-01T13:05:00.000Z March 1, 2020",
-            "true false",
+            "true Enum.ComputerMovementMode.Default",
+            "false The current thread cannot access 'ReducedMotion' (lacking capability RobloxScript)",
         ],
     );
 }

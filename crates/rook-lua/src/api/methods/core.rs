@@ -27,7 +27,6 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("GuiService", "IsTenFootInterface") => no,
         ("UserInputService", "GetPlatform") => platform,
         ("Player", "GetUnder13") => no,
-        ("UserGameSettings", "InFullScreen") => no,
         ("RenderSettings", "GetMaxQualityLevel") => max_quality_level,
         ("UserSettings", "IsUserFeatureEnabled") => no,
         ("UserInputService", "GetGamepadConnected") => no,
@@ -114,7 +113,6 @@ fn platform(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
 /// whether they may chat.
 pub(crate) fn hidden_property(lua: &Lua, class: &str, key: &str) -> mlua::Result<LuaValue> {
     let text = match (class, key) {
-        ("RunService", "ClientGitHash") => "rook",
         ("Player", "PlatformName") => "",
         // Observed: chat's stores test it for an "Enabled" prefix; a local
         // player is never region-locked or age-gated.
