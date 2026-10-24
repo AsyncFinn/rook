@@ -1,17 +1,15 @@
 //! Functions, events and callbacks of every class, plus property security.
 //!
-//! `rbx_reflection_database` only describes properties, so Rook keeps its
-//! own compact list of the rest, generated from Roblox's Full API dump for
-//! the same pinned version and committed as `data/members.json`.
+//! The reflection database only describes properties, so Rook keeps its
+//! own compact list of the rest, generated from the same Full API dump as
+//! the database and committed as `data/members.json`.
 //!
-//! Regenerate with `rook-tools gen-members <Full-API-Dump.json>`. The file has
+//! Regenerate with `rook-tools gen-api` ([`crate::update`]). The file has
 //! one class per line so updates diff cleanly.
 //!
 //! Types are written `<kind>:<name>`, where the kind is `p` (primitive),
 //! `d` (data type), `c` (class), `e` (enum) or `g` (group, such as `Tuple`).
 //! A trailing `?` on the name means the value may be nil.
-
-mod generate;
 
 use std::collections::BTreeMap;
 
@@ -130,7 +128,7 @@ impl TypeKind {
         }
     }
 
-    fn from_api_dump(category: &str) -> Option<Self> {
+    pub(crate) fn from_api_dump(category: &str) -> Option<Self> {
         Some(match category {
             "Primitive" => Self::Primitive,
             "DataType" => Self::DataType,
@@ -245,4 +243,14 @@ pub enum Tag {
 }
 
 #[cfg(test)]
-mod tests;
+mod tests {
+    use super::*;
+
+    #[test]
+    fn nullable_types_parse() {
+        let t: TypeRef = "p:string?".parse().unwrap();
+        assert!(t.nullable);
+        assert_eq!(t.name, "string");
+        assert_eq!(t.to_string(), "p:string?");
+    }
+}

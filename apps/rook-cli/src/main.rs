@@ -3,7 +3,7 @@
 mod commands;
 
 use commands::{
-    conformance, content, corpus, drift, dump, gen_members, logs, roundtrip, run, studio_defaults,
+    conformance, content, corpus, drift, dump, gen_api, logs, roundtrip, run, studio_defaults,
     terrain,
 };
 use std::path::PathBuf;
@@ -190,18 +190,28 @@ enum Command {
     /// indexes); `scripts/check` runs it.
     #[command(hide = true)]
     Drift,
-    /// Regenerate crates/rook-reflection/data/members.json from a Full API dump.
+    /// Update the API data (crates/rook-reflection/data/database.msgpack and
+    /// members.json) to a new Roblox version from its Full API dump.
     ///
-    /// The dump must match the pinned Roblox version; Roblox-Client-Tracker
-    /// keeps one per version.
-    GenMembers {
-        /// Path to Full-API-Dump.json.
+    /// Also takes the dump the current data was built from (members.json
+    /// names it), to tell what Roblox changed. Roblox-Client-Tracker keeps
+    /// one dump per version.
+    GenApi {
+        /// Path to the new version's Full-API-Dump.json.
         dump: PathBuf,
-        /// Where the dump came from, recorded in the output.
+        /// Path to the Full-API-Dump.json the current data was built from.
+        #[arg(long)]
+        previous: PathBuf,
+        /// The new Roblox version, as `major.minor.patch.build`.
+        #[arg(long)]
+        version: String,
+        /// Where the dump came from, recorded in members.json.
         #[arg(long)]
         source: String,
+        #[arg(long, default_value = "crates/rook-reflection/data/database.msgpack")]
+        database: PathBuf,
         #[arg(long, default_value = "crates/rook-reflection/data/members.json")]
-        out: PathBuf,
+        members: PathBuf,
     },
     /// Measure in Studio (through its MCP server) the property defaults
     /// the reflection database leaves out, and regenerate Rook's table.
@@ -287,7 +297,23 @@ fn command(command: Command) -> anyhow::Result<()> {
             jobs,
             large_mb,
         } => corpus::run(&dir, &out, jobs, large_mb),
-        Command::GenMembers { dump, source, out } => gen_members::run(&dump, &source, &out),
+        Command::GenApi {
+            dump,
+            previous,
+            version,
+            source,
+            database,
+            members,
+        } => gen_api::run(
+            &gen_api::Paths {
+                dump: &dump,
+                previous_dump: &previous,
+                database: &database,
+                members: &members,
+            },
+            &version,
+            &source,
+        ),
         Command::StudioDefaults { list, out } => studio_defaults::run(list, &out),
         Command::Terrain { paths, scan, jobs } => {
             if scan {

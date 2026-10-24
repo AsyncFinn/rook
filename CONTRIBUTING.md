@@ -29,7 +29,7 @@ Rook is a Cargo workspace of small crates whose dependencies only point downward
 | Crate | What it does |
 |---|---|
 | [`rook-types`](crates/rook-types) | Roblox datatypes and the lossless dynamic `Value` |
-| [`rook-reflection`](crates/rook-reflection) | Class, property and enum database, plus the member list for the pinned Roblox version |
+| [`rook-reflection`](crates/rook-reflection) | Class, property and enum database, plus the member list, for the live Roblox version |
 | [`rook-formats`](crates/rook-formats) | Loading and saving `.rbxl`, `.rbxm`, `.rbxlx`, `.rbxmx`, including legacy XML |
 | [`rook-dom`](crates/rook-dom) | The runtime instance tree and its change journal |
 | [`rook-platform`](crates/rook-platform) | The host machine as the portable crates reach it: files, threads, parallel work, the network, the clipboard (desktop implementation behind `native`) |
@@ -116,7 +116,21 @@ Rook's version says how far along the roadmap it is:
 - Commits go to GitHub as they land, so [Unreleased] on GitHub shows what the next version will hold.
 - Before 1.0, any release may break things.
 
-Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z` in git. The pinned Roblox version (currently 0.741.19) is separate and listed under each release.
+Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z` in git. Rook tracks the live Roblox version rather than pinning one, so each release's notes open with the Roblox version its API data was checked against: `Checked against Roblox 0.744.0.` Older entries still read "Pinned Roblox version", from before Rook tracked the live one.
+
+### Keeping up with Roblox
+
+Rook's API data is the reflection database (`crates/rook-reflection/data/database.msgpack`, rbx-dom's format) and the member list (`members.json` beside it). Both are updated together from Roblox's Full API dump, which [Roblox-Client-Tracker](https://github.com/MaximumADHD/Roblox-Client-Tracker) keeps for every version. When Roblox ships, take the new dump and the one the data was built from (`members.json`'s `source` names its commit):
+
+```sh
+curl -o new.json https://raw.githubusercontent.com/MaximumADHD/Roblox-Client-Tracker/<commit>/Full-API-Dump.json
+curl -o old.json https://raw.githubusercontent.com/MaximumADHD/Roblox-Client-Tracker/<previous commit>/Full-API-Dump.json
+cargo run --bin rook-tools -- gen-api new.json --previous old.json --version <version.txt at that commit> --source "MaximumADHD/Roblox-Client-Tracker@<commit> Full-API-Dump.json"
+```
+
+It prints what changed: classes, properties and enums added and removed, and properties whose type, tags, scriptability or saving changed. Fields the dump states follow it; what rbx-dom's patches added (aliases, legacy serialized names, migrations) carries over, and new properties take the default the dump prints where it parses. Then run `rook-tools studio-defaults` for the new properties' remaining defaults ([property defaults](docs/behavior/property-defaults.md)), fix what the check turns up (removed members Rook implements, tests naming them), and add the version to the next release's notes.
+
+Behavior pages keep their own `Checked against Studio <version> on <date>.` line: it says when their findings were last measured, not which version Rook targets, and changes only when the page is measured again.
 
 ## Development
 

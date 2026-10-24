@@ -6,7 +6,7 @@ The background behind them is in [research](research.md).
 
 ## Scope
 
-**Decision:** Rook targets **modern Roblox**, pinned to a specific API snapshot. Old archived content must also work, *to the extent that modern Roblox itself still runs it*.
+**Decision:** Rook targets **modern Roblox**, tracking the live version rather than a pinned API snapshot (Roblox moves too fast for a pin to stay useful). Old archived content must also work, *to the extent that modern Roblox itself still runs it*.
 
 - Modern Roblox's behavior is the single source of truth, including when it loads old content. There is no separate "2016 mode".
 - Deprecated members are part of the modern API (the current API dump still lists `FormFactor`, `Instance:remove()`, `:connect()`, BodyMovers, `wait()`/`spawn()` and so on, tagged `Deprecated`). They are implemented as modern Roblox implements them, and their priority comes from how often archived content uses them.

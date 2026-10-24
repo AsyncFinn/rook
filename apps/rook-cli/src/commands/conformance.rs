@@ -210,7 +210,7 @@ pub(crate) fn run(root: &Path, filter: Option<&str>) -> anyhow::Result<()> {
             Ok(a) => a,
             Err(e) => format!("ROOK FAILED: {e}"),
         };
-        // The Studio version line is informational; Rook reports its pinned version.
+        // The Studio version line is informational; Rook reports its own API version.
         let body = |s: &str| -> Vec<String> {
             s.lines()
                 .filter(|l| !l.starts_with("-- studio "))

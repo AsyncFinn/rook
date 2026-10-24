@@ -11,8 +11,8 @@ rust-version.workspace = true
 [dependencies]
 rustc-hash.workspace = true
 rbx_reflection.workspace = true
-rbx_reflection_database.workspace = true
 rbx_types.workspace = true
+rmp-serde.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

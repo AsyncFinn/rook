@@ -1,6 +1,6 @@
 //! Loading and saving Roblox place and model files.
 //!
-//! Wraps `rbx_binary` and `rbx_xml`, pinned to Rook's reflection database.
+//! Wraps `rbx_binary` and `rbx_xml`, with Rook's reflection database.
 //! Both decoders map legacy serialized names to canonical properties (for
 //! example `size` → `Size`) and run the database's migrations, the same way
 //! Studio upgrades old files on load. Properties neither decoder recognizes

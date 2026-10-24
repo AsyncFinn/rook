@@ -11,5 +11,5 @@ it, and covers what doesn't fit anywhere else.
 2. Classes modern places use that no milestone covered: EditableImage and
    EditableMesh, VideoFrame, Packages (PackageLink), and whatever the
    reference set turns up.
-3. The API dump's newest members, checked against the pinned Roblox
-   version when it moves.
+3. The API dump's newest members, checked against live Roblox as Rook
+   catches up with each version.

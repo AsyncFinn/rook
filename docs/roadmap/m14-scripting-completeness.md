@@ -16,5 +16,5 @@ the target counts only errors Rook causes, checked against Studio.
 4. TeleportService between places in one folder (multi-place games).
 5. HttpService, opt-in per place.
 6. Modern Luau: Parallel Luau (Actor, `task.desynchronize`, SharedTable),
-   `buffer`, and the libraries and syntax the pinned Luau version has.
+   `buffer`, and the libraries and syntax of the Luau live Roblox runs.
 7. Client scripts in the corpus run too, once characters and GUI exist.

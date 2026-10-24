@@ -18,7 +18,7 @@ The target and why it's modern Roblox are in [policies](policies.md#scope). Why 
 - 2016 client content packages are no longer downloadable: the setup CDN returns 403 for the December 2016 manifest.
 - 2016 behavior cannot be observed anymore. Its only detailed record is leaked source, which Rook must not use (see the [clean-implementation policy](policies.md#clean-implementation)).
 
-The modern snapshot has roughly 682 classes (rbx-native's count from the current dump). The pinned version is the one bundled in `rbx_reflection_database` (currently `3.0.1+roblox-741`).
+The modern snapshot has roughly 682 classes (rbx-native's count from the current dump). Rook keeps its own copy of the database, started from `rbx_reflection_database` `3.0.1+roblox-741` and updated from each new API dump.
 
 ---
 
@@ -83,7 +83,7 @@ Versions are as of 2026-10-04 (crates.io).
 | XML formats | `rbx_xml` | 3.0.1 | Load/save `.rbxlx`/`.rbxmx`. Use as-is. |
 | Interchange DOM | `rbx_dom_weak` | 4.2.0 | I/O-boundary tree only. Converted to and from Rook's runtime DOM (see architecture). |
 | Value types | `rbx_types` | 3.1.0 | `Variant` interchange and the BrickColor table; Rook wraps these in its own math types. |
-| Reflection | `rbx_reflection` + `rbx_reflection_database` | 7.0.0 / 3.0.1+roblox-741 | Classes, properties, enums, defaults. Pin the version. |
+| Reflection | `rbx_reflection` | 7.0.0 | Classes, properties, enums, defaults, in Rook's copy of the database (started from `rbx_reflection_database` 3.0.1+roblox-741), updated from each API dump. |
 | Luau VM | `mlua` | 0.12.2 | Features `luau` (+ `luau-jit` later), `vendored`. Provides interrupts, threads (coroutines) and userdata. |
 | Lua parsing | `full_moon` | 3.0.0 | Corpus scanner: parse scripts to find which APIs they use. |
 | Mesh files | `rbx_mesh` | 0.8.0 | Evaluate against rbx-native's v1–v5 coverage; write our own if it falls short. |
@@ -104,7 +104,7 @@ Format edge cases to be aware of (from rbx-native's findings, **Inference** unti
 
 | Source | What it gives | Notes |
 |---|---|---|
-| `rbx_reflection_database` | Modern class/property/enum database with defaults | Primary source. MIT. |
+| `rbx_reflection_database` | Modern class/property/enum database with defaults | Where Rook's copy started. MIT. |
 | Roblox setup CDN (`setup.rbxcdn.com`) | `{version}-API-Dump.json`, `Full-API-Dump.json`, per-version `rbxPkgManifest.txt` | **Confirmed** current manifests are public and list `content-*.zip` packages with MD5 sizes and hashes. Old versions disappear (2016 → 403). |
 | `RobloxAPI/build-archive` | API dumps + ReflectionMetadata from 2011 onward (65 builds in 2016) | Deprecated by its maintainer but still readable. Useful for "when did X appear" questions. |
 | `Roblox/creator-docs` | Official engine documentation (CC-BY-4.0) | Main behavioral reference. Citing and quoting with attribution is allowed. |

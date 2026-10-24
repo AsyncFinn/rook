@@ -1,8 +1,9 @@
 //! Class, property and enum database for Rook.
 //!
-//! Built from the pinned `rbx_reflection_database` bundled with the crate.
-//! Rook always uses the bundled copy (never a locally installed override)
-//! so behavior doesn't depend on the machine it runs on.
+//! Built from Rook's copy of the reflection database (`data/database.msgpack`,
+//! rbx-dom's format), which tracks the live Roblox version: `rook-tools
+//! gen-api` updates it from each new API dump ([`update`]). It's compiled
+//! in, so behavior doesn't depend on the machine Rook runs on.
 //!
 //! At first use the database is compiled into dense numeric IDs
 //! ([`ClassId`], [`PropertyId`], [`EnumId`]). Each class gets a full property
@@ -15,6 +16,7 @@
 mod database;
 pub mod members;
 mod overlay;
+pub mod update;
 
 pub use database::{
     ClassId, Database, EnumId, Property, PropertyFlags, PropertyId, PropertyKind, PropertyType,
@@ -25,26 +27,30 @@ pub use overlay::{Overlay, OverlayError};
 
 use std::sync::LazyLock;
 
-static DATABASE: LazyLock<Database> =
-    LazyLock::new(|| Database::build(rbx_reflection_database::get_bundled()));
+static UPSTREAM: LazyLock<rbx_reflection::ReflectionDatabase<'static>> = LazyLock::new(|| {
+    rmp_serde::from_slice(include_bytes!("../data/database.msgpack"))
+        .expect("data/database.msgpack is valid; regenerate with `rook-tools gen-api`")
+});
+
+static DATABASE: LazyLock<Database> = LazyLock::new(|| Database::build(&UPSTREAM));
 
 /// The process-wide Rook database, built on first use.
 pub fn database() -> &'static Database {
     &DATABASE
 }
 
-/// The pinned upstream database, for crates (like `rbx_binary` and `rbx_xml`)
-/// that take one directly.
+/// The database in rbx-dom's format, for crates (like `rbx_binary` and
+/// `rbx_xml`) that take one directly.
 pub fn rbx_database() -> &'static rbx_reflection::ReflectionDatabase<'static> {
-    rbx_reflection_database::get_bundled()
+    &UPSTREAM
 }
 
 static MEMBERS: LazyLock<Members> = LazyLock::new(|| {
     serde_json::from_str(include_str!("../data/members.json"))
-        .expect("data/members.json is valid; regenerate with `rook-tools gen-members`")
+        .expect("data/members.json is valid; regenerate with `rook-tools gen-api`")
 });
 
-/// Functions, events and callbacks for the pinned Roblox version.
+/// Functions, events and callbacks for the same Roblox version as the database.
 pub fn members() -> &'static Members {
     &MEMBERS
 }
@@ -60,7 +66,8 @@ pub fn enum_item_value(id: EnumId, name: &str) -> Option<u32> {
     })
 }
 
-/// The pinned Roblox version, as `major.minor.patch.build`.
+/// The Roblox version Rook's API data was built from, as
+/// `major.minor.patch.build`.
 pub fn roblox_version() -> String {
     let [a, b, c, d] = rbx_database().version;
     format!("{a}.{b}.{c}.{d}")
@@ -72,7 +79,7 @@ mod tests {
     use members::{Security, Tag};
 
     #[test]
-    fn member_list_matches_pinned_version() {
+    fn member_list_matches_database_version() {
         assert_eq!(members().version, roblox_version());
     }
 

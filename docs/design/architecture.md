@@ -4,7 +4,7 @@ The current design, first drafted 2026-10-04 and kept up to date as the mileston
 
 ## Goals that shape the architecture
 
-1. **Modern Roblox is the single source of truth**, pinned to one API snapshot. Old content works to the extent modern Roblox runs it. There is no separate legacy mode.
+1. **Modern Roblox is the single source of truth**, tracking the live version. Old content works to the extent modern Roblox runs it. There is no separate legacy mode.
 2. **Instance-first.** Everything (files, scripts, physics, rendering, GUI) goes through one runtime DataModel. The pipeline for a Part is `file → instances → properties → hierarchy → change journal → physics / render / GUI → scripts → events`, never `file → cube`.
 3. **Every class exists.** Every class in the reflection database can be created, parented, read, written, saved and scripted, even before Rook gives it any behavior.
 4. **Verifiable.** Behavior is checked against values recorded from live Studio, and every behavior has a documented source.
@@ -16,7 +16,7 @@ The current design, first drafted 2026-10-04 and kept up to date as the mileston
 crates/
   rook-platform     The host machine as the portable crates reach it: files, long-lived threads, parallel work, the network, the clipboard
   rook-types        Roblox datatypes (Vector3, CFrame, Color3, UDim2, BrickColor, sequences, enums, Value)
-  rook-reflection   Class/property/enum/event database: pinned rbx_reflection_database + Rook overlay
+  rook-reflection   Class/property/enum/event database: Rook's copy of rbx-dom's, kept current + Rook overlay
   rook-dom          Runtime instance tree, property storage, change journal, class behavior registry
   rook-formats      rbxl/rbxm/rbxlx/rbxmx <-> rook-dom (via rbx_binary / rbx_xml / rbx_dom_weak)
   rook-lua          mlua/Luau bridge: Instance & datatype userdata, globals, script environments, require;
@@ -90,10 +90,10 @@ Known exceptions, each marked with an `#[expect]` saying why:
 
 ## Reflection (`rook-reflection`)
 
-- Source: pinned `rbx_reflection_database`. It includes the class tree, members, tags (`Deprecated`, `NotCreatable`, `Service`, security levels) and per-class defaults.
+- Source: Rook's own copy of rbx-dom's reflection database (`data/database.msgpack`), started from `rbx_reflection_database` 3.0.1 (Roblox 0.741) and updated by `rook-tools gen-api` from each new API dump, since rbx-dom's releases trail Roblox's. It includes the class tree, members, tags (`Deprecated`, `NotCreatable`, `Service`, security levels) and per-class defaults.
 - **Overlay data** (Rook-owned, in-repo TOML/JSON): which members Rook has implemented, how each property is stored ([Runtime DOM](#runtime-dom-rook-dom)), behavior notes and provenance IDs, and extension classes/members marked `rook_extension = true`.
 - At startup the database is compiled into dense IDs: `ClassId(u16)`, `PropertyId`, `EnumId`. Each class gets a **layout**: its full inherited property list, mapped to slots. Name lookups go through interned atoms and a per-class `(name → member)` cache.
-- Updating the pinned snapshot is a deliberate change: bump the crate version, regenerate, review the diff of added and removed members, then run the conformance suite.
+- Updating to a new Roblox version is a deliberate change: run `gen-api`, review its list of added, removed and changed members, then run the checks and the conformance suite ([CONTRIBUTING](../../CONTRIBUTING.md#keeping-up-with-roblox)).
 
 ## Runtime DOM (`rook-dom`)
 

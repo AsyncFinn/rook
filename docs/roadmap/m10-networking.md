@@ -54,7 +54,7 @@ character it owns. This milestone puts all of them on the wire.
    with the server.
    - *Studio questions*: the automatic ownership radius and its
      hysteresis, what happens to an assembly mid-hand-off, and what
-     `Workspace.AuthorityMode` (in the pinned API) does, with whether
+     `Workspace.AuthorityMode` (in the current API) does, with whether
      any archive place saves it.
    - *Done when*: an unanchored pile pushed by two players moves
      consistently for both, and ownership cases match Studio.

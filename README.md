@@ -34,7 +34,7 @@ Millions of places have been built on Roblox since 2006, and today they run in e
 
 **Why you can trust it**
 
-- **Modern Roblox is the reference.** Pinned to API 0.741.19, with no separate legacy mode. Old content works as far as modern Roblox runs it.
+- **Modern Roblox is the reference.** Rook tracks the live Roblox version and catches up as Roblox ships, with no separate legacy mode. Old content works as far as modern Roblox runs it.
 - **Checked against Studio.** Behavior is diffed against real Studio recordings, and each behavior cites its source.
 - **Measured on real places.** Progress is tracked on an archive of about 3,000 places, not hand-picked demos.
 

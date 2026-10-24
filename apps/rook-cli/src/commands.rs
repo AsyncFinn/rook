@@ -5,7 +5,7 @@ pub(crate) mod content;
 pub(crate) mod corpus;
 pub(crate) mod drift;
 pub(crate) mod dump;
-pub(crate) mod gen_members;
+pub(crate) mod gen_api;
 pub(crate) mod logs;
 pub(crate) mod roundtrip;
 pub(crate) mod run;

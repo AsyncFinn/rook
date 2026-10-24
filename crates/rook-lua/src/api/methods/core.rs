@@ -55,7 +55,7 @@ fn empty_table(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
     Outcome::ret(lua, lua.create_table()?)
 }
 
-/// The Roblox version Rook's API is pinned to, as `version()` gives.
+/// The Roblox version Rook's API data comes from, as `version()` gives.
 fn roblox_version(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
     Outcome::ret(lua, rook_reflection::roblox_version())
 }
