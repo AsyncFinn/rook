@@ -117,7 +117,7 @@ cpal = "0.15"
 # its shader translator saves a few megabytes of every exe.
 wgpu = { version = "30", default-features = false, features = ["std", "parking_lot", "dx12", "metal", "vulkan", "wgsl"] }
 winit = "0.30"
-# Message boxes for errors rook-player has no window to show in. On Linux they
+# Message boxes for what ends a rook-player run. On Linux they
 # go through zenity, which needs neither the portal's async runtime nor
 # Wayland's crates.
 rfd = { version = "0.17", default-features = false, features = ["xdg-portal"] }

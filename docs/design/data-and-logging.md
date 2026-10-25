@@ -118,7 +118,7 @@ Each run of the player writes one file, `logs\rook-player-<time>.log`. `rook-too
 
 `rook-tools logs` prints the newest log's path. `rook-tools logs --open` opens the folder.
 
-Release builds of `rook-player` on Windows have no console (the GUI subsystem), since players open places from Explorer, so the log file is the only record there. What a player must see is drawn in the window with the log's path, in Rook's own GUI (`apps/rook-player/src/app/notice.rs`): a place that can't be read or fails to start, or the request for a place when none was given. A native message box is kept for what leaves no window to draw in: a GPU Rook can't draw with, a crash, and mistyped flags (`apps/rook-player/src/alert.rs`); builds with a console only print those. Runs that make a file or a measurement (`--screenshot`, `--bench`, `--record-audio`) never show one, so scripts aren't held up.
+Release builds of `rook-player` on Windows have no console (the GUI subsystem), since players open places from Explorer, so the log file is the only record there. What ends a windowed run is shown in a native message box, what failed as its title and why as its text (`apps/rook-player/src/alert.rs`): a place that can't be read or fails to start, a GPU Rook can't draw with, a crash. Rook has no CoreGui of its own yet to show these in its window. Runs that make a file or a measurement (`--screenshot`, `--bench`, `--record-audio`) only print, so scripts aren't held up.
 
 ### Crash reports
 

@@ -21,7 +21,6 @@ rook-reflection.workspace = true
 rook-dom.workspace = true
 rook-render.workspace = true
 rook-view.workspace = true
-rook-gui.workspace = true
 rook-platform = { workspace = true, features = ["native"] }
 rook-content.workspace = true
 rook-audio = { workspace = true, features = ["output"] }

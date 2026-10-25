@@ -71,9 +71,8 @@ use winit::window::{CursorGrabMode, CursorIcon, Window, WindowId};
 #[derive(Debug, Parser)]
 #[command(name = "rook-player", version, about = "Open a Roblox place in Rook")]
 struct Args {
-    /// Place file (.rbxl, .rbxlx, .rbxm or .rbxmx). Without one, the
-    /// window asks for a place to be dropped on it.
-    place: Option<PathBuf>,
+    /// Place file (.rbxl, .rbxlx, .rbxm or .rbxmx).
+    place: PathBuf,
     /// Render one frame to this PNG instead of opening a window.
     #[arg(long)]
     screenshot: Option<PathBuf>,
@@ -177,12 +176,7 @@ fn parse_vec3(s: &str) -> Result<Vec3, String> {
 /// Get a loaded game ready to show: run `--seconds`, pick the camera,
 /// build the scene (files near the camera load first) and say what
 /// loaded.
-fn prepare(
-    game: &mut Game,
-    place: &Path,
-    args: &Args,
-    content: &Arc<Resolver>,
-) -> (SceneCache, Camera) {
+fn prepare(game: &mut Game, args: &Args, content: &Arc<Resolver>) -> (SceneCache, Camera) {
     let load_time = game.load_start.elapsed().as_secs_f64();
     // GUI lays out in the window it's drawn in.
     game.set_viewport(args.width, args.height);
@@ -216,7 +210,7 @@ fn prepare(
         camera.fov_y = fov;
     }
     let scene = SceneCache::for_data_model(game.view_mut(), content, camera.position);
-    let name = place_name(place);
+    let name = place_name(&args.place);
     let terrain = scene.terrain_meshes();
     let terrain = if terrain > 0 {
         format!(", terrain in {} meshes", thousands(terrain))
@@ -251,14 +245,7 @@ fn main() -> ExitCode {
     #[cfg(feature = "tracy")]
     profiling::tracy_client::Client::start();
     let argv = rook_engine::logging::fix_verbose_args(std::env::args());
-    let args = match Args::try_parse_from(&argv) {
-        Ok(args) => args,
-        Err(e) if alert::CONSOLE => e.exit(),
-        Err(e) => {
-            alert::show(&e.to_string());
-            return ExitCode::from(u8::try_from(e.exit_code()).unwrap_or(1));
-        }
-    };
+    let args = Args::parse_from(argv);
     rook_engine::logging::init(&rook_engine::logging::Options {
         program: "rook-player",
         verbose: args.verbose.clone(),
@@ -267,7 +254,7 @@ fn main() -> ExitCode {
     let windowed = args.windowed();
     let crashed = |message: &str| {
         if windowed {
-            alert::show(message);
+            alert::show("Rook crashed", message);
         }
     };
     match rook_engine::logging::run(|| play(args), crashed) {
@@ -310,22 +297,19 @@ fn play(args: Args) -> anyhow::Result<()> {
         // The player's settings, which only a window's player changes.
         setup.user_settings =
             rook_engine::data_folder::DataDir::locate().map(|d| d.user_settings());
+        // The place loads while the window opens, hidden until the game
+        // has drawn into it.
+        let loading = game::Loading::begin(&args.place, &setup)
+            .with_context(|| format!("Couldn't open {}", place_name(&args.place)))?;
         let player = PlayerSettings::load(setup.user_settings.as_deref());
-        let mut launch = Launch::new(args, setup, install, player);
+        let mut launch = Launch::new(args, setup, install, loading, player);
         let event_loop = EventLoop::new()?;
         event_loop.set_control_flow(ControlFlow::Poll);
         event_loop.run_app(&mut launch)?;
-        launch.finish();
-        return Ok(());
+        return launch.finish();
     }
-    let Some(place) = args.place.clone() else {
-        if let Some(out) = &args.screenshot {
-            return screenshot_notice(out, &args, &content);
-        }
-        anyhow::bail!("--bench and --record-audio need a place file");
-    };
-    let mut game = Game::load(&place, &setup)
-        .with_context(|| format!("Couldn't open {}", place_name(&place)))?;
+    let mut game = Game::load(&args.place, &setup)
+        .with_context(|| format!("Couldn't open {}", place_name(&args.place)))?;
     if let Some(out) = &args.record_audio {
         let seconds = if args.seconds > 0.0 {
             args.seconds
@@ -334,7 +318,7 @@ fn play(args: Args) -> anyhow::Result<()> {
         };
         return record::record(&mut game, seconds, out);
     }
-    let (mut scene, camera) = prepare(&mut game, &place, &args, &content);
+    let (mut scene, camera) = prepare(&mut game, &args, &content);
 
     if args.crash_test {
         panic!("--crash-test");
@@ -361,39 +345,20 @@ fn play(args: Args) -> anyhow::Result<()> {
         renderer.finish_uploads();
         // Effects as they look once going: Smoke's puffs live 5 seconds.
         renderer.settle_particles(6.0);
-        return save_shot(&mut renderer, &camera, out, &args);
+        let pixels = renderer.render_to_image(args.width, args.height, &camera)?;
+        image::save_buffer(
+            out,
+            &pixels,
+            args.width,
+            args.height,
+            image::ColorType::Rgba8,
+        )?;
+        console::print_message(
+            MessageType::Info,
+            &format!("Saved screenshot to {}", out.display()),
+        );
+        return Ok(());
     }
 
     unreachable!("the window opens above")
-}
-
-/// `--screenshot` without a place: what the window shows until one is
-/// dropped on it.
-fn screenshot_notice(out: &Path, args: &Args, content: &Arc<Resolver>) -> anyhow::Result<()> {
-    let mut renderer = Renderer::headless()?;
-    note_gpu(&renderer);
-    app::notice::Notice::drop_here(content).show(&mut renderer, args.width, args.height);
-    renderer.finish_uploads();
-    save_shot(&mut renderer, &app::notice::CAMERA, out, args)
-}
-
-fn save_shot(
-    renderer: &mut Renderer,
-    camera: &Camera,
-    out: &Path,
-    args: &Args,
-) -> anyhow::Result<()> {
-    let pixels = renderer.render_to_image(args.width, args.height, camera)?;
-    image::save_buffer(
-        out,
-        &pixels,
-        args.width,
-        args.height,
-        image::ColorType::Rgba8,
-    )?;
-    console::print_message(
-        MessageType::Info,
-        &format!("Saved screenshot to {}", out.display()),
-    );
-    Ok(())
 }

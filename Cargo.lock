@@ -3459,7 +3459,6 @@ dependencies = [
  "rook-content",
  "rook-dom",
  "rook-engine",
- "rook-gui",
  "rook-lua",
  "rook-physics",
  "rook-platform",

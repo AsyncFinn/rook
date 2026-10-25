@@ -5,7 +5,6 @@ pub(crate) mod cursor;
 pub(crate) mod icon;
 pub(crate) mod keys;
 pub(crate) mod launch;
-pub(crate) mod notice;
 pub(crate) mod readout;
 
 use crate::*;
@@ -14,8 +13,6 @@ pub(crate) struct Gfx {
     pub(crate) window: Arc<Window>,
     pub(crate) surface: wgpu::Surface<'static>,
     pub(crate) config: wgpu::SurfaceConfiguration,
-    /// For a fresh renderer when another place opens in the window.
-    adapter: wgpu::Adapter,
     pub(crate) renderer: Renderer,
 }
 
@@ -88,7 +85,9 @@ impl Gfx {
             event_loop.create_window(
                 Window::default_attributes()
                     .with_title(title)
-                    .with_inner_size(winit::dpi::LogicalSize::new(1280, 720)),
+                    .with_inner_size(winit::dpi::LogicalSize::new(1280, 720))
+                    // Shown once the game has drawn into it (`App::about_to_wait`).
+                    .with_visible(false),
             )?,
         );
         icon::set(&window, window.scale_factor());
@@ -119,17 +118,8 @@ impl Gfx {
             window,
             surface,
             config,
-            adapter,
             renderer,
         })
-    }
-
-    /// Start over with an empty renderer, so a place drawn before leaves
-    /// none of its meshes and images on the GPU.
-    pub(crate) fn clear_renderer(&mut self) {
-        let device = self.renderer.device.clone();
-        let queue = self.renderer.queue.clone();
-        self.renderer = Renderer::new(&self.adapter, device, queue, self.config.format);
     }
 
     /// Fill the screen, or go back to a window, as the player's
@@ -261,12 +251,13 @@ impl App {
         }
     }
 
-    pub(crate) fn draw(&mut self) {
+    /// Draw a frame; whether one was presented.
+    pub(crate) fn draw(&mut self) -> bool {
         let Some(gfx) = &mut self.gfx else {
-            return;
+            return false;
         };
         let Some(frame) = gfx.next_frame() else {
-            return;
+            return false;
         };
         let view = frame.texture.create_view(&Default::default());
         // Wrapped so the shader's sines stay precise in long sessions.
@@ -279,6 +270,25 @@ impl App {
         );
         gfx.window.pre_present_notify();
         gfx.renderer.queue.present(frame);
+        true
+    }
+
+    /// Step the game, then draw it; whether a frame was presented.
+    fn frame(&mut self, event_loop: &ActiveEventLoop) -> bool {
+        let now = Instant::now();
+        let elapsed = now - self.last_frame;
+        let dt = elapsed.as_secs_f32().min(0.1);
+        self.last_frame = now;
+        self.update(dt);
+        self.show_cursor(event_loop);
+        let presented = self.draw();
+        if let Some(title) = self.readout.frame(elapsed, &self.game)
+            && let Some(gfx) = &self.gfx
+        {
+            gfx.window.set_title(&format!("{}  |  {title}", self.title));
+        }
+        profiling::finish_frame!();
+        presented
     }
 }
 
@@ -337,10 +347,12 @@ impl App {
 }
 
 pub(crate) fn no_renderer(event_loop: &ActiveEventLoop, e: anyhow::Error) {
-    let e = e.context(
-        "Couldn't start drawing. Rook needs a graphics card that supports \
-         DirectX 12, Vulkan or Metal, with up-to-date drivers.",
-    );
+    let e = e
+        .context(
+            "Rook needs a graphics card that supports DirectX 12, Vulkan or Metal, \
+             with up-to-date drivers.",
+        )
+        .context("Couldn't start drawing");
     crate::alert::error(&e);
     event_loop.exit();
 }
@@ -444,19 +456,7 @@ impl ApplicationHandler for App {
                 }
             }
             WindowEvent::RedrawRequested => {
-                let now = Instant::now();
-                let elapsed = now - self.last_frame;
-                let dt = elapsed.as_secs_f32().min(0.1);
-                self.last_frame = now;
-                self.update(dt);
-                self.show_cursor(event_loop);
-                self.draw();
-                if let Some(title) = self.readout.frame(elapsed, &self.game)
-                    && let Some(gfx) = &self.gfx
-                {
-                    gfx.window.set_title(&format!("{}  |  {title}", self.title));
-                }
-                profiling::finish_frame!();
+                self.frame(event_loop);
             }
             _ => {}
         }
@@ -490,6 +490,16 @@ impl ApplicationHandler for App {
         let Some(gfx) = &self.gfx else {
             return;
         };
+        // A hidden window is never asked to redraw: its first frame is
+        // drawn here, and it shows once that frame is presented.
+        if gfx.window.is_visible() == Some(false) {
+            if self.frame(event_loop)
+                && let Some(gfx) = &self.gfx
+            {
+                gfx.window.set_visible(true);
+            }
+            return;
+        }
         if let Pacing::Cap(fps) = self.pacing() {
             let due = self.last_frame + Duration::from_secs_f64(1.0 / f64::from(fps));
             if Instant::now() < due {

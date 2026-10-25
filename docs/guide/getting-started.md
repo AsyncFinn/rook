@@ -20,9 +20,9 @@ Use places you made or have the rights to, for example saved from Roblox Studio 
 
 ## Opening a place without a terminal
 
-Drop a place file onto `rook-player.exe` (or a shortcut to it) and it opens. Once a place is open, drop another file onto Rook's window to switch to it: the open place stops, and the window shows the loading screen until the new one is ready. To open places by double-clicking them, choose *Open with → Choose another app* on a `.rbxl` file and pick `rook-player.exe`.
+Drop a place file onto `rook-player.exe` (or a shortcut to it) in Explorer and it opens. To open places by double-clicking them, choose *Open with → Choose another app* on a `.rbxl` file and pick `rook-player.exe`. The window appears once the place has loaded and drawn its first frame, as Roblox's does, so no blank window waits on the load.
 
-Started with no place, `rook-player` opens its window and asks for a place file to be dropped on it. If a place can't be opened (the file is damaged or isn't a place, or the game fails to start), the window says what went wrong and where the log file is, and waits for another. Only what leaves no window to draw in, a graphics card Rook can't draw with or a crash, shows a message box. `rook-player --screenshot out.png` without a place saves what the window shows before one is dropped.
+If the place can't be opened (the file is damaged or isn't a place, or the game fails to start), a message box says what went wrong, and no window opens. A graphics card Rook can't draw with and a crash are reported the same way. Started with no place, `rook-player` prints its usage and exits.
 
 Release builds open no console window. Rook's messages, script output included, still go to the log file in `%LOCALAPPDATA%\Rook\logs` ([data and logging](../design/data-and-logging.md#log-files)). The file always has the detail `--verbose` would show, and `--verbose <subsystem>` adds everything that area logs. A build made without `--release` keeps its console.
 
