@@ -143,7 +143,16 @@ fn split_content(data: &DataDir) -> std::io::Result<()> {
             &packages
         };
         files.create_dir_all(into)?;
-        files.rename(&entry.path, &into.join(name))?;
+        let target = into.join(name);
+        // An older Rook run after the split puts its files back here; what
+        // the split folders hold already wins.
+        if !files.exists(&target) {
+            files.rename(&entry.path, &target)?;
+        } else if entry.is_file {
+            files.remove_file(&entry.path)?;
+        } else {
+            Cache::move_legacy(&entry.path, &target)?;
+        }
     }
     Ok(())
 }
@@ -193,7 +202,17 @@ mod tests {
         assert!(data.packages().join("fonts/a.ttf").is_file());
         assert!(data.packages().join("version.txt").is_file());
 
+        // An older Rook run since put files back where it kept them.
+        std::fs::create_dir_all(data.content().join("fonts")).unwrap();
+        std::fs::write(data.content().join("fonts/b.ttf"), b"font").unwrap();
+        std::fs::write(data.content().join("version.txt"), b"version-0").unwrap();
         assert_eq!(run(&data, &[old_cache]), Vec::<String>::new());
+        assert!(data.packages().join("fonts/b.ttf").is_file());
+        assert_eq!(
+            std::fs::read(data.packages().join("version.txt")).unwrap(),
+            b"version-1"
+        );
+        assert!(!data.content().join("fonts").exists());
         let _ = std::fs::remove_dir_all(&root);
     }
 }

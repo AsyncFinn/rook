@@ -47,7 +47,10 @@ pub mod env {
 /// kept only in builds that allow them; elsewhere it is as if it weren't
 /// given, and a warning says so once.
 pub fn developer<T>(name: &'static str, value: Option<T>) -> Option<T> {
-    if value.is_some() && !build_config::DEVELOPER_OVERRIDES {
+    // Before logging starts (the data folder is found first) a warning
+    // would go nowhere, so it waits for a later read.
+    if value.is_some() && !build_config::DEVELOPER_OVERRIDES && tracing::dispatcher::has_been_set()
+    {
         static WARNED: std::sync::Mutex<Vec<&str>> = std::sync::Mutex::new(Vec::new());
         let mut warned = WARNED
             .lock()

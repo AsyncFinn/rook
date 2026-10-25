@@ -1,15 +1,15 @@
 //! `rook-player`: open a place in a window.
 //!
 //! Loads a place, starts a play session with one local player (or the
-//! server alone with `--run`), and draws what that player's client sees. Hold the right mouse button to look, WASD to move, Q/E to go
-//! down/up, Shift to move faster, and the mouse wheel to change speed.
+//! server alone with `--run`), and draws what that player's client sees.
+//! Hold the right mouse button to look, WASD to move, Q/E to go down/up,
+//! Shift to move faster, and the mouse wheel to change speed.
 //! `--screenshot out.png` renders one frame offscreen instead, and
 //! `--record-audio out.wav` mixes the first `--seconds` to a file.
 //!
 //! In Play mode the server runs on its own thread at 60 Hz, so the window
-//! waits only on its client and the renderer. `--uncapped` draws as fast
-//! as it can instead of at the monitor's refresh rate; the window title
-//! shows frame times (`--frame-times` prints them too).
+//! waits only on its client and the renderer, at the player's
+//! `FramerateCap`; the title shows frame times (`--frame-times` prints them).
 //!
 //! With the `repl` feature (default) and an interactive terminal, the
 //! terminal shows a `> ` prompt that runs Luau in the open place.
@@ -37,7 +37,7 @@ use clap::Parser;
 use game::Game;
 use glam::{EulerRot, Mat3, Vec3};
 use rook_content::Resolver;
-use rook_engine::user_settings::PlayerSettings;
+use rook_engine::user_settings::{Pacing, PlayerSettings};
 use rook_engine::{InputEvent, console};
 use rook_lua::MessageType;
 use rook_render::{Camera, Renderer};
@@ -115,14 +115,16 @@ struct Args {
     #[arg(long, default_value_t = 0.0)]
     turn: f32,
     /// Run Roblox's own CoreScripts (top bar, player list, chat...) from
-    /// the Studio install (overrides `coreScripts` in settings.json).
+    /// Roblox's packages or the Studio install, whatever the build's
+    /// `coreScripts` says (a developer override).
     #[arg(long)]
     core_scripts: bool,
-    /// Present frames as fast as they're drawn instead of at the monitor's
-    /// refresh rate.
+    /// Present frames as fast as they're drawn, whatever the player's
+    /// `FramerateCap` says (a developer override).
     #[arg(long)]
     uncapped: bool,
-    /// Print frame times to the terminal every second, and a summary at exit.
+    /// Print frame times to the terminal every second, and a summary at
+    /// exit (a developer override).
     #[arg(long)]
     frame_times: bool,
     /// The master volume, 0 to 1, until the in-game menu changes it (the
@@ -148,6 +150,16 @@ impl Args {
     /// file or a measurement.
     fn windowed(&self) -> bool {
         self.record_audio.is_none() && self.bench.is_none() && self.screenshot.is_none()
+    }
+
+    /// `--uncapped`, in builds with developer overrides.
+    fn uncapped(&self) -> bool {
+        rook_engine::settings::developer("--uncapped", self.uncapped.then_some(())).is_some()
+    }
+
+    /// `--frame-times`, in builds with developer overrides.
+    fn frame_times(&self) -> bool {
+        rook_engine::settings::developer("--frame-times", self.frame_times.then_some(())).is_some()
     }
 }
 

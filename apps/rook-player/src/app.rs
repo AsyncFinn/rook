@@ -46,7 +46,7 @@ pub(crate) struct App {
     pub(crate) ime: bool,
     /// What the renderer takes from the user's install.
     pub(crate) install: Installed,
-    /// Present without waiting for the display (`--uncapped`).
+    /// `--uncapped`, over the player's `FramerateCap`.
     pub(crate) uncapped: bool,
     pub(crate) readout: Readout,
     /// Where the game's sounds are heard; `None` with `ROOK_AUDIO=off`.
@@ -58,12 +58,31 @@ pub(crate) struct App {
     pub(crate) repl: Option<rook_engine::console::repl::Repl>,
 }
 
+/// How often the window draws: as the player's `FramerateCap` says, unless
+/// `--uncapped`.
+pub(crate) fn pacing(uncapped: bool, player: &PlayerSettings) -> Pacing {
+    if uncapped {
+        Pacing::Uncapped
+    } else {
+        player.pacing()
+    }
+}
+
+fn present_mode(vsync: bool) -> wgpu::PresentMode {
+    if vsync {
+        wgpu::PresentMode::AutoVsync
+    } else {
+        wgpu::PresentMode::AutoNoVsync
+    }
+}
+
 impl Gfx {
-    /// Open the window and its GPU device.
+    /// Open the window and its GPU device, presenting at the display's
+    /// rate with `vsync`.
     pub(crate) fn open(
         event_loop: &ActiveEventLoop,
         title: &str,
-        uncapped: bool,
+        vsync: bool,
     ) -> anyhow::Result<Self> {
         let window = Arc::new(
             event_loop.create_window(
@@ -92,11 +111,7 @@ impl Gfx {
         if let Some(srgb) = caps.formats.iter().find(|f| f.is_srgb()) {
             config.format = *srgb;
         }
-        config.present_mode = if uncapped {
-            wgpu::PresentMode::AutoNoVsync
-        } else {
-            wgpu::PresentMode::AutoVsync
-        };
+        config.present_mode = present_mode(vsync);
         surface.configure(&device, &config);
         let renderer = Renderer::new(&adapter, device, queue, config.format);
         crate::note_gpu(&renderer);
@@ -122,6 +137,12 @@ impl Gfx {
     pub(crate) fn set_fullscreen(&self, on: bool) {
         let mode = on.then_some(winit::window::Fullscreen::Borderless(None));
         self.window.set_fullscreen(mode);
+    }
+
+    /// Present at the display's rate, or as soon as each frame is drawn.
+    fn set_vsync(&mut self, vsync: bool) {
+        self.config.present_mode = present_mode(vsync);
+        self.surface.configure(&self.renderer.device, &self.config);
     }
 
     /// Take a new window size.
@@ -262,9 +283,19 @@ impl App {
 }
 
 impl App {
-    /// Follow the settings the player changed: the volume, fullscreen.
-    /// The camera reads its sensitivity as it turns.
+    fn pacing(&self) -> Pacing {
+        pacing(self.uncapped, &self.player)
+    }
+
+    /// Follow the settings the player changed: the volume, fullscreen,
+    /// the frame rate cap. The camera reads its sensitivity as it turns.
     fn follow(&mut self, now: PlayerSettings) {
+        let vsync = pacing(self.uncapped, &now) == Pacing::Display;
+        if vsync != (self.pacing() == Pacing::Display)
+            && let Some(gfx) = &mut self.gfx
+        {
+            gfx.set_vsync(vsync);
+        }
         if now.master_volume != self.player.master_volume
             && let Some(audio) = &mut self.audio
         {
@@ -319,7 +350,7 @@ impl ApplicationHandler for App {
         if self.gfx.is_some() {
             return;
         }
-        match Gfx::open(event_loop, &self.title, self.uncapped) {
+        match Gfx::open(event_loop, &self.title, self.pacing() == Pacing::Display) {
             Ok(gfx) => self.attach(gfx),
             Err(e) => no_renderer(event_loop, e),
         }
@@ -455,9 +486,18 @@ impl ApplicationHandler for App {
         }
     }
 
-    fn about_to_wait(&mut self, _: &ActiveEventLoop) {
-        if let Some(gfx) = &self.gfx {
-            gfx.window.request_redraw();
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        let Some(gfx) = &self.gfx else {
+            return;
+        };
+        if let Pacing::Cap(fps) = self.pacing() {
+            let due = self.last_frame + Duration::from_secs_f64(1.0 / f64::from(fps));
+            if Instant::now() < due {
+                event_loop.set_control_flow(ControlFlow::WaitUntil(due));
+                return;
+            }
         }
+        event_loop.set_control_flow(ControlFlow::Poll);
+        gfx.window.request_redraw();
     }
 }

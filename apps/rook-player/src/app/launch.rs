@@ -92,7 +92,7 @@ impl Launch {
             app.game.save_user_settings();
         }
         if let Some(app) = &self.app
-            && rook_engine::settings::frame_times(self.args.frame_times)
+            && self.args.frame_times()
         {
             app.readout.print_run(&app.game);
         }
@@ -220,16 +220,18 @@ impl Launch {
             last_frame: Instant::now(),
             pending_mouse: None,
             install: self.install.take().expect("one game at a time"),
-            uncapped: rook_engine::settings::uncapped(args.uncapped),
-            readout: Readout::new(rook_engine::settings::frame_times(args.frame_times)),
+            uncapped: args.uncapped(),
+            readout: Readout::new(args.frame_times()),
             // Only the window plays sound: headless runs, `--bench`,
             // `--screenshot` and `--record-audio` never open a device.
             // `--volume` holds until the player changes the volume.
-            audio: rook_engine::settings::audio_device().map(|device| {
-                let volume = args.volume.unwrap_or(self.player.master_volume);
-                rook_audio::Output::new(device, volume.clamp(0.0, 1.0))
-            }),
-            player: self.player,
+            audio: rook_engine::settings::audio_device(self.player.output_device.as_deref()).map(
+                |device| {
+                    let volume = args.volume.unwrap_or(self.player.master_volume);
+                    rook_audio::Output::new(device, volume.clamp(0.0, 1.0))
+                },
+            ),
+            player: self.player.clone(),
             #[cfg(feature = "repl")]
             repl: self.repl.take(),
         };
@@ -247,11 +249,8 @@ impl ApplicationHandler for Launch {
             return app.resumed(event_loop);
         }
         if self.gfx.is_none() {
-            match Gfx::open(
-                event_loop,
-                &self.window_title(),
-                rook_engine::settings::uncapped(self.args.uncapped),
-            ) {
+            let vsync = pacing(self.args.uncapped(), &self.player) == Pacing::Display;
+            match Gfx::open(event_loop, &self.window_title(), vsync) {
                 Ok(gfx) => {
                     gfx.set_fullscreen(self.player.fullscreen);
                     self.gfx = Some(gfx);

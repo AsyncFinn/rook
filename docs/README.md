@@ -10,7 +10,7 @@
   - [Architecture](design/architecture.md): crates, data flow and the rules every behavior follows
   - [Policies](design/policies.md): what Rook targets, where its knowledge of Roblox may come from, and what content it ships
   - [Research](design/research.md): background, prior work, libraries and sources
-  - [Data and logging](design/data-and-logging.md): the data folder, settings.json, logs, crash reports and kept content
+  - [Data and logging](design/data-and-logging.md): the data folder, build settings, developer overrides, logs, crash reports and kept content
   - [Web endpoints](design/web-endpoints.md): where web requests go, and what each web-backed API asks for
 - **[behavior/](behavior/)**: what Rook found in Studio and the archive, topic by topic. Each page opens with when it was last checked against Studio.
   - Audio
