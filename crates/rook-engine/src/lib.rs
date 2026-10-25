@@ -6,6 +6,7 @@
 //! only query theirs. See `docs/design/architecture.md#signals-and-scheduler-rook-luas-signal-and-scheduler` for the frame order.
 
 mod bridges;
+pub mod build_config;
 mod chat;
 pub mod console;
 pub mod core_scripts;
@@ -78,9 +79,9 @@ pub struct Options {
     pub memory_limit: usize,
     /// Where content requests (`ContentProvider:PreloadAsync`) resolve.
     /// `None` uses `settings::content_config(false)`: the install,
-    /// content folders and the cache, with asset delivery off unless
-    /// `ROOK_ASSET_DELIVERY=on` or `settings.json` turns it on. Shared by
-    /// a session's DataModels.
+    /// content folders and the cache, with asset delivery off unless the
+    /// build's `assetDelivery` or `ROOK_ASSET_DELIVERY=on` turns it on.
+    /// Shared by a session's DataModels.
     pub content: Option<Arc<rook_content::Resolver>>,
     /// Finish loading sound files within the frame that asks for them, so
     /// simulated time can't run ahead of loading and runs repeat exactly

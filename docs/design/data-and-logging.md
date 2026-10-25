@@ -1,63 +1,95 @@
 # Data folder, settings and logging
 
-How Rook reports what went wrong, and where it keeps what outlives a run. The code is in `rook-engine`'s `data_folder`, `settings` and `logging` modules; content's part is in `rook-content`'s `resolver::kept`.
+How Rook reports what went wrong, where it keeps what outlives a run, and where its settings come from. The code is in `rook-engine`'s `data_folder`, `build_config`, `settings`, `user_settings` and `logging` modules; content's part is in `rook-content`'s `resolver::kept`, `resolver::packages` and `resolver::cache`.
 
 ## The data folder
 
-Everything Rook keeps for itself lives in one folder: `%LOCALAPPDATA%\Rook` on Windows. `ROOK_DATA_DIR` moves all of it.
+Everything Rook keeps for itself lives in one folder: `%LOCALAPPDATA%\Rook` on Windows. Rook ships no content files; what it downloads goes here.
 
 ```
 %LOCALAPPDATA%\Rook\
-├─ settings.json
-├─ GlobalBasicSettings.xml
+├─ GlobalBasicSettings.xml        the player's settings
 ├─ logs\
 │  ├─ <program>-<YYYY-MM-DD_HH-MM-SS>.log
 │  └─ crashes\<program>-<YYYY-MM-DD_HH-MM-SS>.txt
-├─ content\
+├─ cache\                         downloads, kept under cacheMaxSize
 │  ├─ blobs\<first 2 hex>\<blake3>
-│  ├─ refs\asset-<id>-v<version>
-│  ├─ version.txt, manifest.txt
-│  ├─ fonts\, textures\, sky\, ...
-│  ├─ ExtraContent\models\, ...
-│  └─ PlatformContent\pc\fonts\, ...
+│  └─ refs\
+├─ content\
+│  ├─ packages\                   Roblox's client packages, laid out like an install
+│  │  ├─ version.txt, manifest.txt
+│  │  ├─ fonts\, textures\, sky\, ...
+│  │  ├─ ExtraContent\models\, ...
+│  │  └─ PlatformContent\pc\fonts\, ...
+│  └─ assets\                     what Rook itself loads in nearly every place
+│     ├─ blobs\<first 2 hex>\<blake3>
+│     └─ refs\asset-<id>-v<version>
 └─ state\
    └─ repl-history.txt
-
-%TEMP%\Rook\
-└─ cache\
 ```
 
-On macOS the data is in `~/Library/Application Support/Rook` and the logs in `~/Library/Logs/Rook`. On Linux the data is in `$XDG_DATA_HOME/rook`, and logs and state in `$XDG_STATE_HOME/rook`. The `directories` crate finds those folders.
+On macOS the data is in `~/Library/Application Support/Rook` and the logs in `~/Library/Logs/Rook`. On Linux the data is in `$XDG_DATA_HOME/rook`, and logs and state in `$XDG_STATE_HOME/rook`. The `directories` crate finds those folders. `ROOK_DATA_DIR` moves all of it under one folder, in builds with [developer overrides](#developer-overrides).
 
-The download cache is not in the data folder. It stays in `%TEMP%\Rook\cache` (`rook_content::resolver::cache::Cache`) so Windows can clear it; anything cleared is fetched again. Two things are deliberately elsewhere too. The Open Cloud API key belongs in the OS credential store ([content policy](policies.md#content-and-assets)). A Roblox install's files are read where they are, never copied in; Roblox's packages, downloaded from its CDN when an install is missing a file or there is none, go in `content` ([client packages](../behavior/content/client-packages.md)).
+The cache (`rook_content::resolver::cache::Cache`) is the part Rook trims itself: under the build's `cacheMaxSize`, dropping what was used least recently. `rook-tools cache` shows it and prunes, trims or clears it, and anything dropped is fetched again. `content\` is never trimmed: `packages\` follows Roblox's live version ([client packages](../behavior/content/client-packages.md)), and `assets\` holds a fixed list ([kept content](#kept-content)).
+
+Two things are deliberately elsewhere. The Open Cloud API key belongs in the OS credential store ([content policy](policies.md#content-and-assets)); until Rook reads one, it comes from `ROOK_OPEN_CLOUD_API_KEY`. A Roblox install's files are read where they are, never copied in.
 
 `state\recent.json` (recent places, the window's size and place) has its path reserved (`DataDir::recent`). Nothing writes it yet.
 
-## settings.json
+### Older data folders
 
-Rook writes `settings.json` the first time it runs, with every key at its default and a `//` comment saying what each does.
+`logging::init` brings a folder older Rooks laid out up to date (`data_folder::migrate`), logging each change. Each step finds nothing to do on later runs.
 
-JSON rather than TOML because Roblox developers know JSON. It is read leniently: `//` and `/* */` comments and trailing commas are allowed, and unknown keys are ignored. A file that doesn't parse is reported once and Rook's defaults are used; the file is left as it is.
+- `settings.json` is removed. What still has a home moves to `GlobalBasicSettings.xml`, unless that file already holds it: `uncapped: true` becomes `FramerateCap` 0, `audioDevice` becomes `RookOutputDevice`, and `masterVolume` becomes `MasterVolume`. Every other key that was set is logged as dropped. A file that doesn't parse is dropped whole.
+- A download cache in `%TEMP%\Rook\cache` (`~/Library/Caches/Rook` on macOS, `$XDG_CACHE_HOME/rook` elsewhere) moves into `cache\`, and the old folder is removed.
+- What sat straight in `content\` is sorted: `blobs\` and `refs\` into `content\assets\`, the rest (Roblox's packages and their markers) into `content\packages\`.
 
-| Key | Environment variable | Flag | Default | What it does |
-|---|---|---|---|---|
-| `contentOrder` | `ROOK_CONTENT_ORDER` (comma-separated) | | `defaults, install, folders, delivery` | Where content comes from, in order. `install` is Roblox's own files: its packages, downloaded as needed, then your install (see [client packages](../behavior/content/client-packages.md)) |
-| `contentFolders` | `ROOK_CONTENT_DIRS` (separated like `PATH`) | | none | Folders laid out like the install's `content` (content packages, local overrides) |
-| `assetDelivery` | `ROOK_ASSET_DELIVERY` (`on`/`off`) | `rook-tools content --offline` | on in `rook-player` and `rook-tools content`, off in headless runs | Whether Rook may download content: asset delivery, and Roblox's packages a path needs |
-| `robloxInstall` | `ROOK_ROBLOX_INSTALL` | | the newest install found | A Roblox version or `content` folder to use instead, or `"off"` |
-| `cacheFolder` | `ROOK_CACHE_DIR` | | `%TEMP%\Rook\cache` on Windows, `~/Library/Caches/Rook` on macOS, `$XDG_CACHE_HOME/rook` elsewhere | Where downloads are cached |
-| `cacheMaxSize` | `ROOK_CACHE_MAX` | | `2GB` | The cache's size limit (`500MB`, `5GB`, ...); Rook drops what was used least recently |
-| `openCloudKeyFile` | `ROOK_OPEN_CLOUD_API_KEY` (the key itself) | | none | A file holding an Open Cloud key, tried for assets refused anonymously (needs the `legacy-asset:manage` scope). The key never goes in `settings.json` |
-| `threads` | `ROOK_THREADS` | | the machine's logical cores | The cores Rook plans background threads for |
-| `audioDevice` | `ROOK_AUDIO` | | `default` | `default`, `off` (`rook-player` never opens a device), or an output device's name |
-| `uncapped` | | `--uncapped` | `false` | Draw as fast as possible instead of at the display's rate |
-| `frameTimes` | | `--frame-times` | `false` | Print frame times to the terminal |
-| `logLevel` | `ROOK_LOG` (a level or subsystems) | `--verbose` | `info` | What the terminal shows: `error`, `warn`, `info`, `debug`, `trace` |
-| | `ROOK_DATA_DIR` | | `%LOCALAPPDATA%\Rook` on Windows | Where settings, logs, crash reports, kept content and Roblox's packages live (so it can't be in `settings.json`) |
+## Settings
 
-Each value comes from the first of these that sets it: the command-line flag, the `ROOK_*` environment variable, `settings.json`, then Rook's default (`settings::pick`). `rook-engine`'s `settings` module resolves every one and hands plain values down (`rook_content::Config`, the audio device, the thread budget); no other crate reads the environment. `ROOK_STUDIO`, which picks the Studio window `rook-tools conformance` drives, is a developer's variable of `rook-cli` alone.
+Every setting is one of three kinds. `rook-engine`'s `settings` module resolves them and hands plain values down (`rook_content::Config`, the audio device, the thread budget); no other crate reads the environment.
 
-`settings.json` holds the engine's and developers' options only. What a player chooses in the in-game menu (volume, camera sensitivity, fullscreen, graphics) is theirs, not the engine's: it lives on `UserSettings().GameSettings` and is saved in `GlobalBasicSettings.xml`, as Roblox's client saves it ([user settings](../behavior/user-settings.md)). `rook-player --volume` sets the volume for one run, until the menu changes it.
+- **Build settings**: whoever builds Rook decides them, and they are compiled in.
+- **The player's settings**: what a player chooses, on `UserSettings().GameSettings`, saved in `GlobalBasicSettings.xml` as Roblox's client saves its own ([user settings](../behavior/user-settings.md)).
+- **Developer overrides**: flags and `ROOK_*` variables, which win over the other two only in builds that allow them.
+
+### Build settings
+
+`rook-build.toml` at the repository's root holds Rook's defaults. A build with `ROOK_BUILD_CONFIG=<file>` (relative to the repository, or absolute) reads that file over it: its keys win, and the keys it leaves out keep Rook's. `rook-engine`'s `build.rs` reads them into the constants of `build_config`; an unknown key or a bad value fails the build, naming the file, the key and what is wrong. TOML, like `Cargo.toml` and `clippy.toml`, because only the build reads it.
+
+They are constants so that nothing on a player's machine changes them, and so the compiler leaves out what a build turns off: with `coreScripts = false` and no developer overrides, the CoreScripts loader is not in the program.
+
+| Key | Default | What it does |
+|---|---|---|
+| `webBase` | left out | Where web requests go ([web endpoints](web-endpoints.md)). Left out, asset delivery and Roblox's packages use Roblox and every other API answers locally; else `"off"`, a domain (`example.com`) or a URL (`http://127.0.0.1:8080`) |
+| `webDomains` | none | Per Roblox web domain (`users`, `assetdelivery`, ...), a base URL or `"off"`, winning over `webBase` |
+| `coreScripts` | `false` | Run Roblox's own CoreScripts on each client ([CoreScripts](../behavior/gui/core-scripts.md)) |
+| `contentOrder` | `defaults, install, folders, delivery` | Where content comes from, in order. `install` is Roblox's packages, downloaded as needed, then a Roblox install ([client packages](../behavior/content/client-packages.md)) |
+| `assetDelivery` | left out | Whether content may be downloaded. Left out, each program decides: on in `rook-player` and `rook-tools content`, off in headless runs |
+| `cacheMaxSize` | `"2GB"` | The cache's size limit, with a unit (`500MB`, `5GB`) |
+| `threads` | left out | Logical cores to plan background threads for; left out, the machine's |
+| `developerOverrides` | left out | Whether developer overrides work. Left out, on in debug builds and off in release builds |
+
+### Developer overrides
+
+In a build with `developerOverrides` (every debug build, unless its build settings say otherwise), these win. In other builds they are ignored, as if they weren't given.
+
+| Variable or flag | Over | What it does |
+|---|---|---|
+| `ROOK_DATA_DIR` | the data folder | Everything under one folder |
+| `ROOK_CACHE_DIR` | `cache\` | Where downloads are cached |
+| `ROOK_CACHE_MAX` | `cacheMaxSize` | The cache's size limit (`500MB`; a bare number is MB) |
+| `ROOK_CONTENT_ORDER` | `contentOrder` | Comma-separated |
+| `ROOK_CONTENT_DIRS` | | Folders laid out like an install's `content` (content packages, local overrides), separated like `PATH` |
+| `ROOK_ASSET_DELIVERY` | `assetDelivery` | `on` or `off` |
+| `ROOK_ROBLOX_INSTALL` | the newest install found | A Roblox version or `content` folder, or `off` |
+| `ROOK_THREADS` | `threads` | |
+| `--core-scripts`, `ROOK_CORE_SCRIPTS` | `coreScripts` | The flag (`rook-player`, `rook-tools run-headless --join`), then the variable (`on` or `off`) |
+| `ROOK_WEB_BASE` | `webBase` | |
+| `ROOK_AUDIO` | the player's output device | `default`, `off` (`rook-player` opens no device), or a device's name |
+| `rook-player --uncapped` | the player's `FramerateCap` | Present as fast as frames are drawn |
+| `rook-player --frame-times` | | Print frame times every second and a summary at exit |
+
+These work in every build: `--verbose` and `ROOK_LOG` ([logging](#logging)), and the Open Cloud key, `ROOK_OPEN_CLOUD_API_KEY`, tried for assets refused anonymously (it needs the `legacy-asset:manage` scope) and only ever sent to Roblox. `ROOK_STUDIO`, which picks the Studio window `rook-tools conformance` drives, is a variable of `rook-cli` alone.
 
 ## Logging
 
@@ -98,8 +130,8 @@ Content failures are `rook_content::Failure`: a `FailureKind` (`not-found`, `for
 
 ## Kept content
 
-Some content Rook loads itself in nearly every place: the built-in materials' texture packs, terrain's packs, and the images those name. These are kept for good in `content\` rather than the cache. The list is fixed (`crates/rook-content/data/kept.txt`), never what places happen to load. Each asset is pinned to a version, because an asset id can be uploaded again and a version never changes. Asset delivery gives the version in its `roblox-assetversionnumber` header.
+Some content Rook loads itself in nearly every place: the built-in materials' texture packs, terrain's packs, and the images those name. These are kept for good in `content\assets\` rather than the cache. The list is fixed (`crates/rook-content/data/kept.txt`), never what places happen to load. Each asset is pinned to a version, because an asset id can be uploaded again and a version never changes. Asset delivery gives the version in its `roblox-assetversionnumber` header.
 
-A request for a kept asset by its bare id is answered at the pinned version: from `content\` first, then the cache (copying it into `content\`), then asset delivery, which writes it into `content\`. `content\` is never trimmed. It has the cache's layout, blobs by hash and one ref file per key (`asset-<id>-v<version>`), so one reader handles both. `rook-tools content --pin` writes the list again from the materials' and terrain's tables with each asset's version today. A test checks that every pack in those tables is listed.
+A request for a kept asset by its bare id is answered at the pinned version: from `content\assets\` first, then the cache (copying it there), then asset delivery, which writes it there. It is never trimmed. It has the cache's layout, blobs by hash and one ref file per key (`asset-<id>-v<version>`), so one reader handles both. `rook-tools content --pin` writes the list again from the materials' and terrain's tables with each asset's version today. A test checks that every pack in those tables is listed.
 
-The default sky is not in `content\`. It comes from the Roblox install, read in place, and without one Rook draws its own plain sky.
+The default sky is not kept. It comes from Roblox's packages or install, and without one Rook draws its own plain sky.

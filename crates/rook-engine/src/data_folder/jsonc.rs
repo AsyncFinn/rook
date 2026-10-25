@@ -3,7 +3,7 @@
 
 /// `text` as plain JSON: comments become spaces (so error positions still
 /// point at the right line), and a comma before `}` or `]` is dropped.
-pub fn to_json(text: &str) -> String {
+pub(super) fn to_json(text: &str) -> String {
     let chars: Vec<char> = text.chars().collect();
     let mut out = String::with_capacity(text.len());
     // Where in `out` the last comma outside a string is, until something

@@ -2,9 +2,10 @@
 //! Roblox's own bootstrapper installs them, so `rbxasset://` paths and the
 //! CoreScripts resolve with no Roblox install. A package is downloaded only
 //! when a path needs its folder, checked against the version's manifest,
-//! and extracted into Rook's content folder, laid out like an install's
-//! with its `content` folder as the top. A marker names the version the
-//! folder holds; when the live version differs, the packages are removed
+//! and extracted into the data folder's `content\packages`, laid out
+//! like an install's with its `content` folder as the top. A marker names
+//! the version the folder holds; when the live version differs, the
+//! packages are removed
 //! and come again as they're needed. Without the network, what is there
 //! answers. See docs/behavior/content/client-packages.md.
 
@@ -257,10 +258,9 @@ impl Packages {
         Ok(())
     }
 
-    /// Remove every package's folder, before `version`'s come. The rest of
-    /// the content folder (Rook's kept content) stays. A file still open
-    /// elsewhere (another Rook running) can't go: the folder keeps its
-    /// version this run, and the removal is tried again next run.
+    /// Remove every package's folder, before `version`'s come. A file
+    /// still open elsewhere (another Rook running) can't go: the folder
+    /// keeps its version this run, and the removal is tried again next run.
     fn remove_packages(&self, version: &str) -> Result<(), String> {
         tracing::info!(
             target: "content",
@@ -379,14 +379,6 @@ mod tests {
         assert!(is_version("version-9ac8595712b447a7"));
         assert!(!is_version("version-"));
         assert!(!is_version("version-../x"));
-    }
-
-    #[test]
-    fn package_folders_stay_clear_of_kept_content() {
-        for (_, folder) in FOLDERS {
-            let top = folder.split('/').next().unwrap();
-            assert!(!["blobs", "refs"].contains(&top), "{folder}");
-        }
     }
 
     #[test]

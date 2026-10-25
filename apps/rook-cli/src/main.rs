@@ -177,10 +177,9 @@ enum Command {
     },
     /// Show the download cache's folder and size, or clean it.
     ///
-    /// The cache is `ROOK_CACHE_DIR`, else `%TEMP%\Rook\cache` on Windows,
-    /// `~/Library/Caches/Rook` on macOS and `$XDG_CACHE_HOME/rook`
-    /// elsewhere. Rook keeps it under `ROOK_CACHE_MAX` (2GB by default)
-    /// itself, dropping what was used least recently.
+    /// The cache is `cache` in the data folder (`%LOCALAPPDATA%\Rook\cache`
+    /// on Windows). Rook keeps it under the build's `cacheMaxSize` (2GB by
+    /// default) itself, dropping what was used least recently.
     Cache {
         #[command(subcommand)]
         action: Option<CacheAction>,
@@ -238,7 +237,7 @@ enum CacheAction {
         older_than: u64,
     },
     /// Delete what was used least recently until the cache is under
-    /// `ROOK_CACHE_MAX` (what Rook does by itself when it starts).
+    /// its size limit (what Rook does by itself when it starts).
     Trim,
     /// Delete everything.
     Clear,

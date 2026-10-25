@@ -1,0 +1,45 @@
+# Rook's build settings: whoever builds Rook decides them, and they are
+# compiled in, so nothing on a player's machine changes them. A build with
+# `ROOK_BUILD_CONFIG=<file>` reads that file over this one: its keys win,
+# and keys it leaves out keep the values here. An unknown key or a bad
+# value fails the build. See docs/design/data-and-logging.md#build-settings.
+
+# Where web requests go (asset delivery, Roblox's packages, users,
+# filtering...). Left out: Roblox for asset delivery and its packages, and
+# every other API answers locally. "off" answers everything locally;
+# "example.com" sends users.roblox.com's requests to users.example.com; a
+# URL ("http://127.0.0.1:8080") sends them to <URL>/users.
+# webBase = "example.com"
+
+# Run Roblox's own CoreScripts (top bar, player list, chat...) on each
+# player's client, from Roblox's packages or a Studio install. Unfinished,
+# so off. Off and without developer overrides, the build leaves the
+# CoreScripts loader out.
+coreScripts = false
+
+# Where content comes from, in order: "defaults", "install" (Roblox's
+# packages, downloaded as needed, then a Roblox install), "folders",
+# "delivery".
+contentOrder = ["defaults", "install", "folders", "delivery"]
+
+# Whether content may be downloaded (asset delivery, Roblox's packages).
+# Left out, each program decides: on in the player and `rook-tools
+# content`, off in headless runs.
+# assetDelivery = false
+
+# The download cache's size limit, with a unit: "500MB", "2GB".
+cacheMaxSize = "2GB"
+
+# Logical cores to plan background threads for. Left out: the machine's.
+# threads = 8
+
+# Whether flags and ROOK_* variables may override these settings and
+# where Rook keeps its data (docs/guide/tools.md). Left out: on in debug
+# builds, off in release builds. Logging (--verbose, ROOK_LOG) and the
+# Open Cloud key work either way.
+# developerOverrides = true
+
+# Per web domain, winning over webBase: a base URL, or "off".
+[webDomains]
+# users = "https://users.example.com"
+# badges = "off"

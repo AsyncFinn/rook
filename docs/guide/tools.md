@@ -44,28 +44,15 @@ rook-tools cache                                       # where downloads are cac
 rook-tools cache prune --older-than 30                 # delete what hasn't been used for 30 days
 ```
 
-Rook downloads the Roblox client files it needs (fonts, textures, the CoreScripts) from Roblox's CDN into its content folder as places ask for them, one package at a time and announced in the terminal, and uses your Roblox install when downloads are off or fail; it finds the install by itself ([client packages](../behavior/content/client-packages.md)). Every setting is in `settings.json` in the data folder (`%LOCALAPPDATA%\Rook`), written the first time Rook runs with each key at its default and a comment saying what it does. An environment variable overrides the file (for `rook-tools`, `rook-player` and headless runs alike), and a command-line flag overrides both:
+Rook downloads the Roblox client files it needs (fonts, textures, the CoreScripts) from Roblox's CDN into its data folder (`%LOCALAPPDATA%\Rook\content\packages`) as places ask for them, one package at a time and announced in the terminal, and uses your Roblox install when downloads are off or fail; it finds the install by itself ([client packages](../behavior/content/client-packages.md)). Downloads are cached in `%LOCALAPPDATA%\Rook\cache`, kept under 2 GB.
 
-| Key | Environment variable | Flag | Default | What it does |
-|---|---|---|---|---|
-| `contentOrder` | `ROOK_CONTENT_ORDER` (comma-separated) | | `defaults, install, folders, delivery` | Where content comes from, in order. `install` is Roblox's own files: its packages, downloaded as needed, then your install (see [client packages](../behavior/content/client-packages.md)) |
-| `contentFolders` | `ROOK_CONTENT_DIRS` (separated like `PATH`) | | none | Folders laid out like the install's `content` (content packages, local overrides) |
-| `assetDelivery` | `ROOK_ASSET_DELIVERY` (`on`/`off`) | `rook-tools content --offline` | on in `rook-player` and `rook-tools content`, off in headless runs | Whether Rook may download content: asset delivery, and Roblox's packages a path needs |
-| `robloxInstall` | `ROOK_ROBLOX_INSTALL` | | the newest install found | A Roblox version or `content` folder to use instead, or `"off"` |
-| `cacheFolder` | `ROOK_CACHE_DIR` | | `%TEMP%\Rook\cache` on Windows, `~/Library/Caches/Rook` on macOS, `$XDG_CACHE_HOME/rook` elsewhere | Where downloads are cached |
-| `cacheMaxSize` | `ROOK_CACHE_MAX` | | `2GB` | The cache's size limit (`500MB`, `5GB`, ...); Rook drops what was used least recently |
-| `openCloudKeyFile` | `ROOK_OPEN_CLOUD_API_KEY` (the key itself) | | none | A file holding an Open Cloud key, tried for assets refused anonymously (needs the `legacy-asset:manage` scope). The key never goes in `settings.json` |
-| `threads` | `ROOK_THREADS` | | the machine's logical cores | The cores Rook plans background threads for |
-| `audioDevice` | `ROOK_AUDIO` | | `default` | `default`, `off` (`rook-player` never opens a device), or an output device's name |
-| `uncapped` | | `--uncapped` | `false` | Draw as fast as possible instead of at the display's rate |
-| `frameTimes` | | `--frame-times` | `false` | Print frame times to the terminal |
-| `logLevel` | `ROOK_LOG` (a level or subsystems) | `--verbose` | `info` | What the terminal shows: `error`, `warn`, `info`, `debug`, `trace` |
-| `coreScripts` | `ROOK_CORE_SCRIPTS` (`on`/`off`) | `--core-scripts` (`rook-player`, `rook-tools run-headless --join`) | `false` | Run Roblox's own CoreScripts (top bar, player list, menus) on each client, from Studio's packages (downloaded as needed), else the Studio install `robloxInstall` names or the newest one (see [CoreScripts](../behavior/gui/core-scripts.md)) |
-| `webBase` | `ROOK_WEB_BASE` | | none | Where web requests go (see [web endpoints](#web-endpoints)): `"off"`, a domain (`example.com`), or a URL (`http://127.0.0.1:8080`) |
-| `webDomains` | | | `{}` | Per Roblox web domain (`"users"`, `"assetdelivery"`, ...), a base URL or `"off"`, winning over `webBase` |
-| | `ROOK_DATA_DIR` | | `%LOCALAPPDATA%\Rook` on Windows | Where settings, logs, crash reports, kept content and Roblox's packages live (so it can't be in `settings.json`) |
+Rook's settings come in three kinds ([settings](../design/data-and-logging.md#settings) has every key, variable and flag):
 
-`settings.json` holds the engine's and developers' options only. Your own choices as a player are where Roblox keeps them: volume, camera sensitivity, fullscreen and the rest of the in-game menu's Settings page are on `UserSettings().GameSettings`, saved as `GlobalBasicSettings.xml` in the data folder (see [user settings](../behavior/user-settings.md)). The file has the same format as the Roblox client's own `GlobalBasicSettings_13.xml`, though Rook never reads that one: it starts from Roblox's defaults. `masterVolume` moved there as `MasterVolume`; `rook-player --volume` still sets the volume for one run, until you change it in the menu.
+- **Build settings** are decided by whoever builds Rook, in `rook-build.toml` at the repository's root (or a file of your own over it, named by `ROOK_BUILD_CONFIG` when you build): where web requests go, whether clients run Roblox's CoreScripts, where content comes from, the cache's size. They are compiled in; editing the file means building again.
+- **Your own choices as a player** are where Roblox keeps them: volume, camera sensitivity, fullscreen, the frame rate cap and the rest of the in-game menu's Settings page are on `UserSettings().GameSettings`, saved as `GlobalBasicSettings.xml` in the data folder (see [user settings](../behavior/user-settings.md)). The file has the same format as the Roblox client's own `GlobalBasicSettings_13.xml`, though Rook never reads that one: it starts from Roblox's defaults. `rook-player --volume` sets the volume for one run, until you change it in the menu.
+- **Developer overrides** are flags and `ROOK_*` variables (`ROOK_CACHE_DIR`, `ROOK_ROBLOX_INSTALL`, `ROOK_ASSET_DELIVERY`, `--core-scripts`, `--uncapped`, ...), for `rook-tools`, `rook-player` and headless runs alike. They work in debug builds; a release build ignores them unless its build settings turn on `developerOverrides`. `--verbose`, `ROOK_LOG` and `ROOK_OPEN_CLOUD_API_KEY` work in every build.
+
+Rook used to keep its settings in `settings.json`; the first run of a newer Rook carries what still has a home over to your player settings, logs what it dropped, and removes the file ([older data folders](../design/data-and-logging.md#older-data-folders)).
 
 ## Logs and failures
 
@@ -73,13 +60,13 @@ After loading, `rook-player` prints one summary of what didn't load, grouped by 
 
 ## Web endpoints
 
-Every web request Rook makes, and every scripting API Roblox answers from its servers (user lookups, friends, groups, badges, text filtering, the CoreScripts' requests), goes through one setting, so you choose where they go:
+Every web request Rook makes, and every scripting API Roblox answers from its servers (user lookups, friends, groups, badges, text filtering, the CoreScripts' requests), goes through one build setting, `webBase` in `rook-build.toml` (and `ROOK_WEB_BASE` over it, in builds with developer overrides), so whoever builds Rook chooses where they go:
 
-- **Unset** (the default): asset delivery uses Roblox, and everything else answers on your machine. Text passes through unfiltered, the session's players are the only users, and nobody is in a group or owns a badge.
-- **Offline**: `"webBase": "off"` sends nothing anywhere; assets and Roblox's files come only from your install, content folders, cache and the packages already downloaded.
-- **A mirror or your own server**: `"webBase": "example.com"` sends `users.roblox.com`'s requests to `users.example.com`, and so on for every domain. `"webBase": "http://127.0.0.1:8080"` sends them all to one server, under `/users`, `/assetdelivery`, ...
-- **Per domain**: `"webDomains": { "users": "https://users.example.com", "badges": "off" }` overrides `webBase` for those domains only.
-- **Roblox's client packages**: they come from the `clientsettings` (the live version) and `setup` (`setup.rbxcdn.com`) domains; `"webDomains": { "setup": "off" }` stops downloading them, and the packages already downloaded and your install answer instead.
+- **Left out** (the default): asset delivery uses Roblox, and everything else answers on your machine. Text passes through unfiltered, the session's players are the only users, and nobody is in a group or owns a badge.
+- **Offline**: `webBase = "off"` sends nothing anywhere; assets and Roblox's files come only from your install, content folders, cache and the packages already downloaded.
+- **A mirror or your own server**: `webBase = "example.com"` sends `users.roblox.com`'s requests to `users.example.com`, and so on for every domain. `webBase = "http://127.0.0.1:8080"` sends them all to one server, under `/users`, `/assetdelivery`, ...
+- **Per domain**: under `[webDomains]`, `users = "https://users.example.com"` or `badges = "off"` overrides `webBase` for that domain only.
+- **Roblox's client packages**: they come from the `clientsettings` (the live version) and `setup` (`setup.rbxcdn.com`) domains; `setup = "off"` under `[webDomains]` stops downloading them, and the packages already downloaded and your install answer instead.
 
 A server answers in Roblox's request and response shapes; [web endpoints](../design/web-endpoints.md) lists every request and what each API does without one. An Open Cloud key is only ever sent to Roblox, and only while asset delivery goes to Roblox. Rook never reads browser cookies or stored credentials.
 

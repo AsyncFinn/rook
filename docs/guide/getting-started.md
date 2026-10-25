@@ -12,6 +12,8 @@ cargo build --release
 
 This builds two programs in `target/release`: `rook-player` (the windowed player) and `rook-tools` (the command-line tool, see [tools.md](tools.md)).
 
+What the build does is set in `rook-build.toml` at the repository's root: where web requests go, whether clients run Roblox's CoreScripts, where content comes from, the cache's size. To build with your own, write a file with the keys you want different and build with `ROOK_BUILD_CONFIG=<file>`. A release build ignores the developer flags and `ROOK_*` variables (`--core-scripts`, `--uncapped`, `--frame-times`, `ROOK_CACHE_DIR`, ...) unless its file has `developerOverrides = true`; a debug build (`cargo build`) takes them. See [settings](../design/data-and-logging.md#settings).
+
 ## Getting a place to open
 
 Use places you made or have the rights to, for example saved from Roblox Studio with *File → Save to File*. Rook opens `.rbxl`, `.rbxm`, `.rbxlx` and `.rbxmx` files. It ships no Roblox content.
@@ -27,8 +29,8 @@ rook-player place.rbxl --camera 0,500,0.01 --look-at 0,0,0 --fov 20 --screenshot
 rook-player place.rbxl --seconds 5 --screenshot out.png   # run scripts for 5 s first
 rook-player place.rbxl --seconds 20 --record-audio out.wav  # mix 20 s of sound to a file, silently
 rook-player place.rbxl --script extra.luau                # also run a Luau file as a server script
-rook-player place.rbxl --uncapped                         # draw as fast as possible, not at the monitor's refresh rate
-rook-player place.rbxl --frame-times                      # print frame and step times every second, and a summary at exit
+rook-player place.rbxl --uncapped                         # draw as fast as possible (developer overrides)
+rook-player place.rbxl --frame-times                      # print frame and step times every second, and a summary at exit (developer overrides)
 rook-player place.rbxl --seconds 60 --bench 600           # run 600 frames offscreen and print where the time goes
 ```
 
@@ -36,7 +38,7 @@ By default the player starts a session with one local player and draws what that
 
 ### Frame times
 
-The window title shows, for the last second: frames per second, the median frame time, the slowest 1% of frames (their average), the longest frame, how many frames took longer than 16.7 ms (a 60 Hz frame), and the median and longest server and client steps. `--frame-times` prints the same line to the terminal every second and a summary of the whole run when the window closes. Scripts always run at 60 steps a second, as on Roblox; the frame rate is separate. Without `--uncapped` the window presents at the monitor's refresh rate.
+The window title shows, for the last second: frames per second, the median frame time, the slowest 1% of frames (their average), the longest frame, how many frames took longer than 16.7 ms (a 60 Hz frame), and the median and longest server and client steps. `--frame-times` prints the same line to the terminal every second and a summary of the whole run when the window closes. Scripts always run at 60 steps a second, as on Roblox; the frame rate is separate. The window presents at the monitor's refresh rate unless the player's `FramerateCap` caps it or turns the cap off ([user settings](../behavior/user-settings.md#what-rook-follows)), or `--uncapped` draws as fast as it can.
 
 `--bench N` runs N frames offscreen with the server and client in lockstep (the same every run) and prints the time per stage, then the median, slowest 1% and longest server step, client step and both together.
 

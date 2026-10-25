@@ -49,14 +49,10 @@ pub(crate) enum CacheCommand {
 
 /// `rook-tools cache`: the download cache's folder and size, or a clean-up.
 pub(crate) fn cache(command: CacheCommand) -> anyhow::Result<()> {
-    // Making the config moves a cache left in the old place first.
     let config = rook_engine::settings::content_config(false);
-    let dir = config.cache_dir.ok_or_else(|| {
-        anyhow::anyhow!(
-            "no cache folder (set {})",
-            rook_engine::settings::env::CACHE_FOLDER
-        )
-    })?;
+    let dir = config
+        .cache_dir
+        .ok_or_else(|| anyhow::anyhow!("no data folder for the cache"))?;
     let cache = rook_content::resolver::cache::Cache::open(&dir)?;
     let mb = |bytes: u64| bytes as f64 / (1 << 20) as f64;
     let freed = match command {
@@ -81,9 +77,8 @@ pub(crate) fn cache(command: CacheCommand) -> anyhow::Result<()> {
         mb(bytes)
     );
     println!(
-        "limit:  {:.0} MB ({})",
+        "limit:  {:.0} MB (the build's cacheMaxSize)",
         mb(rook_engine::settings::cache_max()),
-        rook_engine::settings::env::CACHE_MAX_SIZE
     );
     Ok(())
 }

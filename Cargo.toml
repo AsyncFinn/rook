@@ -88,6 +88,8 @@ zstd = "0.13"
 # checked against their manifest's MD5
 zip = { version = "9", default-features = false, features = ["deflate-flate2"] }
 md5 = "0.8"
+# rook-engine's build script: the build settings, rook-build.toml
+toml = "1"
 # The LZ4 chunks of binary files, read beside rbx_binary for the compiled
 # scripts it skips (rook-formats' `compiled`); the version rbx_binary uses
 lz4_flex = "0.13"

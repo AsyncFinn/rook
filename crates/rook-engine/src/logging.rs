@@ -5,7 +5,7 @@
 //! The terminal shows `info` and up by default; `--verbose` shows `debug`
 //! (every content failure, with its instance and reason), and `--verbose
 //! <subsystem>` shows everything one area logs (`content`, `terrain`, ...).
-//! The flag beats `ROOK_LOG`, which beats `settings.json`'s `logLevel`.
+//! The flag beats `ROOK_LOG`; both work in every build.
 //! The log file gets `debug` and up whatever the terminal shows, plus
 //! every line the terminal printed (script output too), without colors.
 //!
@@ -164,20 +164,13 @@ pub fn log_path() -> Option<PathBuf> {
         .clone()
 }
 
-/// Start logging: the terminal filter from `--verbose`, `ROOK_LOG` and
-/// `settings.json`, the log file (after cleaning old ones), and the crash
-/// hook. Call once, first thing in `main`.
+/// Start logging: the terminal filter from `--verbose` and `ROOK_LOG`,
+/// the log file (after cleaning old ones), and the crash hook; then bring
+/// an older data folder up to date ([`crate::data_folder::migrate`]),
+/// logging what changed. Call once, first thing in `main`.
 pub fn init(options: &Options) {
-    let loaded = crate::settings::get();
-    let mut problems: Vec<String> = loaded.problem.iter().cloned().collect();
-    let file_level = loaded.settings.log_level.as_deref().and_then(|l| {
-        let level = parse_level(l);
-        if level.is_none() {
-            problems.push(format!("settings.json: unknown logLevel {l:?}"));
-        }
-        level
-    });
-    let base = file_level.unwrap_or(Level::INFO);
+    let mut problems = Vec::new();
+    let base = Level::INFO;
     let env = std::env::var(crate::settings::env::LOG).ok().and_then(|v| {
         let filter = Filter::parse(&v, base);
         if filter.is_none() {
@@ -198,11 +191,7 @@ pub fn init(options: &Options) {
         }
         filter
     });
-    let file_filter = file_level.map(|level| Filter {
-        level,
-        detail: Vec::new(),
-    });
-    let filter = crate::settings::pick(flag, env, file_filter, Filter::default());
+    let filter = flag.or(env).unwrap_or_default();
 
     let data = DataDir::locate();
     if options.file
@@ -210,7 +199,7 @@ pub fn init(options: &Options) {
     {
         open_file(&data.logs, options.program, &mut problems);
     }
-    crash::install(options.program, data.map(|d| d.crashes()));
+    crash::install(options.program, data.as_ref().map(DataDir::crashes));
 
     use tracing_subscriber::layer::SubscriberExt;
     let subscriber = tracing_subscriber::registry().with(layer::ConsoleLayer::new(filter));
@@ -219,6 +208,12 @@ pub fn init(options: &Options) {
     }
     for problem in problems {
         tracing::warn!(target: "rook", "{problem}");
+    }
+    if let Some(data) = &data {
+        let old_caches = crate::data_folder::migrate::old_cache_dirs();
+        for change in crate::data_folder::migrate::run(data, &old_caches) {
+            tracing::info!(target: "rook", "{change}");
+        }
     }
 }
 

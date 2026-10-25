@@ -28,6 +28,8 @@ pub trait Files: Send + Sync + Debug {
     /// left out.
     fn list(&self, dir: &Path) -> io::Result<Vec<Entry>>;
     fn remove_file(&self, path: &Path) -> io::Result<()>;
+    /// Move a file or folder, on the same volume.
+    fn rename(&self, from: &Path, to: &Path) -> io::Result<()>;
     fn exists(&self, path: &Path) -> bool;
 }
 
@@ -79,6 +81,10 @@ impl Files for NativeFiles {
 
     fn remove_file(&self, path: &Path) -> io::Result<()> {
         std::fs::remove_file(path)
+    }
+
+    fn rename(&self, from: &Path, to: &Path) -> io::Result<()> {
+        std::fs::rename(from, to)
     }
 
     fn exists(&self, path: &Path) -> bool {

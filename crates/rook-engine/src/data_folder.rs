@@ -1,19 +1,23 @@
-//! Rook's data folder: settings, logs, crash reports, kept content and
-//! state between runs (`docs/design/data-and-logging.md`).
+//! Rook's data folder: the player's settings, logs, crash reports, the
+//! download cache, content and state between runs
+//! (`docs/design/data-and-logging.md`).
 //!
 //! On Windows everything is under `%LOCALAPPDATA%\Rook`. macOS keeps data
 //! in `~/Library/Application Support/Rook` and logs in
 //! `~/Library/Logs/Rook`; elsewhere data is under `$XDG_DATA_HOME/rook`
 //! and logs and state under `$XDG_STATE_HOME/rook`. `ROOK_DATA_DIR` puts
-//! all of it under one folder instead. The download cache is not here: it
-//! stays where the system may clear it ([`default_cache_dir`]).
+//! all of it under one folder instead, in builds with developer overrides.
+//! [`migrate`] brings a folder older Rooks laid out up to date.
+
+mod jsonc;
+pub mod migrate;
 
 use std::path::{Path, PathBuf};
 
 /// Where each part of Rook's data lives.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DataDir {
-    /// `settings.json` and `content\`.
+    /// The player's settings, `cache\` and `content\`.
     pub root: PathBuf,
     /// A log file per run.
     pub logs: PathBuf,
@@ -25,9 +29,7 @@ impl DataDir {
     /// `ROOK_DATA_DIR`, or the platform's folders. `None` only where the
     /// system names no home folder.
     pub fn locate() -> Option<Self> {
-        if let Some(dir) =
-            std::env::var_os(crate::settings::env::DATA_FOLDER).filter(|d| !d.is_empty())
-        {
+        if let Some(dir) = crate::settings::var_os(crate::settings::env::DATA_FOLDER) {
             return Some(Self::under(PathBuf::from(dir)));
         }
         if cfg!(windows) {
@@ -63,10 +65,6 @@ impl DataDir {
         }
     }
 
-    pub fn settings(&self) -> PathBuf {
-        self.root.join("settings.json")
-    }
-
     /// The player's own settings (`crate::user_settings`).
     pub fn user_settings(&self) -> PathBuf {
         self.root.join(crate::user_settings::FILE)
@@ -76,11 +74,28 @@ impl DataDir {
         self.logs.join("crashes")
     }
 
-    /// Content kept for good: what Rook itself loads in nearly every place
-    /// (`rook_content::resolver::kept`) and Roblox's client packages,
-    /// downloaded as needed (`rook_content::resolver::packages`).
+    /// Downloads, trimmed to the cache's size limit
+    /// (`rook_content::resolver::cache`); anything dropped is fetched again.
+    pub fn cache(&self) -> PathBuf {
+        self.root.join("cache")
+    }
+
+    /// Content kept for good, in two parts: [`DataDir::packages`] and
+    /// [`DataDir::assets`].
     pub fn content(&self) -> PathBuf {
         self.root.join("content")
+    }
+
+    /// Roblox's client packages, downloaded as needed
+    /// (`rook_content::resolver::packages`), laid out like an install.
+    pub fn packages(&self) -> PathBuf {
+        self.content().join("packages")
+    }
+
+    /// What Rook itself loads in nearly every place, pinned to a version
+    /// (`rook_content::resolver::kept`), in the cache's layout.
+    pub fn assets(&self) -> PathBuf {
+        self.content().join("assets")
     }
 
     pub fn repl_history(&self) -> PathBuf {
@@ -93,29 +108,9 @@ impl DataDir {
 }
 
 /// `%LOCALAPPDATA%` on Windows: the data folder's base, and where Roblox
-/// installs and older Rook caches live. Read here and nowhere else.
+/// installs live. Read here and nowhere else.
 pub fn local_app_data() -> Option<PathBuf> {
     std::env::var_os("LOCALAPPDATA")
         .filter(|d| !d.is_empty())
         .map(PathBuf::from)
-}
-
-/// Where the download cache goes when no setting moves it: where the
-/// system expects caches, so the system may clear it (`%TEMP%\Rook\cache`
-/// on Windows, where Storage Sense and cleanup tools can empty it,
-/// `~/Library/Caches/Rook` on macOS, `$XDG_CACHE_HOME/rook` elsewhere).
-pub fn default_cache_dir() -> Option<PathBuf> {
-    if cfg!(windows) {
-        return Some(std::env::temp_dir().join("Rook").join("cache"));
-    }
-    let dirs = directories::ProjectDirs::from("", "", "Rook")?;
-    Some(dirs.cache_dir().to_path_buf())
-}
-
-/// Where Windows caches lived before 2026-10-13, moved from once.
-pub fn legacy_cache_dir() -> Option<PathBuf> {
-    if !cfg!(windows) {
-        return None;
-    }
-    Some(local_app_data()?.join("Rook").join("cache"))
 }
