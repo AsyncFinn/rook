@@ -86,9 +86,11 @@ Each run of the player writes one file, `logs\rook-player-<time>.log`. `rook-too
 
 `rook-tools logs` prints the newest log's path. `rook-tools logs --open` opens the folder.
 
+Release builds of `rook-player` on Windows have no console (the GUI subsystem), since players open places from Explorer, so the log file is the only record there. What a player must see is drawn in the window with the log's path, in Rook's own GUI (`apps/rook-player/src/app/notice.rs`): a place that can't be read or fails to start, or the request for a place when none was given. A native message box is kept for what leaves no window to draw in: a GPU Rook can't draw with, a crash, and mistyped flags (`apps/rook-player/src/alert.rs`); builds with a console only print those. Runs that make a file or a measurement (`--screenshot`, `--bench`, `--record-audio`) never show one, so scripts aren't held up.
+
 ### Crash reports
 
-`logging::init` installs a panic hook that notes each panic: message, place, thread and a backtrace. Rook catches some panics on purpose, such as a decoder that panics on a damaged file, so the hook writes nothing itself. The program's `main` runs inside `logging::run`. When a panic gets there, `run` writes `logs\crashes\<program>-<time>.txt` and exits with code 101. The report holds the panic, the backtrace, the OS, the GPU and driver (once a renderer exists), the log file's path and the last 200 lines logged. `rook-player --crash-test` (hidden) panics after loading, to check this.
+`logging::init` installs a panic hook that notes each panic: message, place, thread and a backtrace. Rook catches some panics on purpose, such as a decoder that panics on a damaged file, so the hook writes nothing itself. The program's `main` runs inside `logging::run`. When a panic gets there, `run` writes `logs\crashes\<program>-<time>.txt`, prints where it is and hands that line to the program (the player shows it in a message box), then exits with code 101. The report holds the panic, the backtrace, the OS, the GPU and driver (once a renderer exists), the log file's path and the last 200 lines logged. `rook-player --crash-test` (hidden) panics after loading, to check this.
 
 ## Failures carry their reason
 

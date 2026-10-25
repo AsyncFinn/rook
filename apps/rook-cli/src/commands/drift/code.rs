@@ -105,6 +105,8 @@ fn environment(sources: &[Source]) -> Vec<String> {
     sources
         .iter()
         .filter(|s| s.path.starts_with("crates/") && !s.path.starts_with("crates/rook-engine/"))
+        // Build scripts read what cargo sets for them, not settings.
+        .filter(|s| !s.path.ends_with("/build.rs"))
         .filter(|s| s.code_contains("env::var"))
         .map(|s| {
             format!(

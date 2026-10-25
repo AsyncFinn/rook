@@ -5,6 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- `rook-player` works without a terminal. Drop a place file onto `rook-player.exe` to open it, or onto its window to switch places: the open place stops and its content is freed before the new one loads. Started with no place, the window asks for one to be dropped on it, and a place that can't be opened is explained in the window, with where the log file is, until another is dropped; both are drawn with Rook's own GUI. Only a graphics card Rook can't draw with, or a crash, shows a message box. Release builds open no console window; everything still goes to the log file. See [getting started](docs/guide/getting-started.md#opening-a-place-without-a-terminal).
 - Release builds are a fifth smaller: `rook-player.exe` went from 36.3 to 29.1 MB, and frames take the same time or slightly less. Release builds now optimize the whole program at once (`lto = "fat"`, one codegen unit), which saves about 5 MB but makes a release build take about 7.5 minutes instead of 3 (dev builds are unchanged). wgpu no longer builds its OpenGL backend, which Rook never used (it draws through DX12, Vulkan or Metal). The API data Rook embeds is compressed (1.4 MB to 160 KB) and unpacked once at startup.
 
 Checked against Roblox 0.744.0.

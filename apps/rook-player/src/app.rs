@@ -5,6 +5,7 @@ pub(crate) mod cursor;
 pub(crate) mod icon;
 pub(crate) mod keys;
 pub(crate) mod launch;
+pub(crate) mod notice;
 pub(crate) mod readout;
 
 use crate::*;
@@ -13,6 +14,8 @@ pub(crate) struct Gfx {
     pub(crate) window: Arc<Window>,
     pub(crate) surface: wgpu::Surface<'static>,
     pub(crate) config: wgpu::SurfaceConfiguration,
+    /// For a fresh renderer when another place opens in the window.
+    adapter: wgpu::Adapter,
     pub(crate) renderer: Renderer,
 }
 
@@ -101,8 +104,17 @@ impl Gfx {
             window,
             surface,
             config,
+            adapter,
             renderer,
         })
+    }
+
+    /// Start over with an empty renderer, so a place drawn before leaves
+    /// none of its meshes and images on the GPU.
+    pub(crate) fn clear_renderer(&mut self) {
+        let device = self.renderer.device.clone();
+        let queue = self.renderer.queue.clone();
+        self.renderer = Renderer::new(&self.adapter, device, queue, self.config.format);
     }
 
     /// Fill the screen, or go back to a window, as the player's
@@ -293,11 +305,12 @@ impl App {
     }
 }
 
-pub(crate) fn no_renderer(event_loop: &ActiveEventLoop, e: &anyhow::Error) {
-    console::print_message(
-        MessageType::Error,
-        &format!("Could not start the renderer: {e:#}"),
+pub(crate) fn no_renderer(event_loop: &ActiveEventLoop, e: anyhow::Error) {
+    let e = e.context(
+        "Couldn't start drawing. Rook needs a graphics card that supports \
+         DirectX 12, Vulkan or Metal, with up-to-date drivers.",
     );
+    crate::alert::error(&e);
     event_loop.exit();
 }
 
@@ -308,7 +321,7 @@ impl ApplicationHandler for App {
         }
         match Gfx::open(event_loop, &self.title, self.uncapped) {
             Ok(gfx) => self.attach(gfx),
-            Err(e) => no_renderer(event_loop, &e),
+            Err(e) => no_renderer(event_loop, e),
         }
     }
 

@@ -279,7 +279,7 @@ fn main() -> anyhow::Result<()> {
         verbose: cli.verbose.clone(),
         file: long,
     });
-    rook_engine::logging::run(|| command(cli.command))
+    rook_engine::logging::run(|| command(cli.command), |_| {})
 }
 
 fn command(command: Command) -> anyhow::Result<()> {

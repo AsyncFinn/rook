@@ -21,6 +21,7 @@ rook-reflection.workspace = true
 rook-dom.workspace = true
 rook-render.workspace = true
 rook-view.workspace = true
+rook-gui.workspace = true
 rook-platform = { workspace = true, features = ["native"] }
 rook-content.workspace = true
 rook-audio = { workspace = true, features = ["output"] }
@@ -30,6 +31,7 @@ rook-physics.workspace = true
 rook-terrain.workspace = true
 wgpu.workspace = true
 winit.workspace = true
+rfd.workspace = true
 pollster.workspace = true
 glam.workspace = true
 image.workspace = true

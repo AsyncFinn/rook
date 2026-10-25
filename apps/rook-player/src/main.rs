@@ -14,6 +14,11 @@
 //! With the `repl` feature (default) and an interactive terminal, the
 //! terminal shows a `> ` prompt that runs Luau in the open place.
 
+// Release builds are for players, who open places from Explorer: no
+// console window opens with the game. Logs still go to the log file.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+mod alert;
 mod app;
 mod bench;
 mod game;
@@ -22,7 +27,8 @@ mod server;
 mod stats;
 
 use std::collections::HashSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::process::ExitCode;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -65,8 +71,9 @@ use winit::window::{CursorGrabMode, CursorIcon, Window, WindowId};
 #[derive(Debug, Parser)]
 #[command(name = "rook-player", version, about = "Open a Roblox place in Rook")]
 struct Args {
-    /// Place file (.rbxl or .rbxlx).
-    place: PathBuf,
+    /// Place file (.rbxl, .rbxlx, .rbxm or .rbxmx). Without one, the
+    /// window asks for a place to be dropped on it.
+    place: Option<PathBuf>,
     /// Render one frame to this PNG instead of opening a window.
     #[arg(long)]
     screenshot: Option<PathBuf>,
@@ -136,6 +143,14 @@ struct Args {
     crash_test: bool,
 }
 
+impl Args {
+    /// Whether this run opens a window for a player, rather than making a
+    /// file or a measurement.
+    fn windowed(&self) -> bool {
+        self.record_audio.is_none() && self.bench.is_none() && self.screenshot.is_none()
+    }
+}
+
 fn parse_vec3(s: &str) -> Result<Vec3, String> {
     let parts: Vec<f32> = s
         .split(',')
@@ -150,7 +165,12 @@ fn parse_vec3(s: &str) -> Result<Vec3, String> {
 /// Get a loaded game ready to show: run `--seconds`, pick the camera,
 /// build the scene (files near the camera load first) and say what
 /// loaded.
-fn prepare(game: &mut Game, args: &Args, content: &Arc<Resolver>) -> (SceneCache, Camera) {
+fn prepare(
+    game: &mut Game,
+    place: &Path,
+    args: &Args,
+    content: &Arc<Resolver>,
+) -> (SceneCache, Camera) {
     let load_time = game.load_start.elapsed().as_secs_f64();
     // GUI lays out in the window it's drawn in.
     game.set_viewport(args.width, args.height);
@@ -184,7 +204,7 @@ fn prepare(game: &mut Game, args: &Args, content: &Arc<Resolver>) -> (SceneCache
         camera.fov_y = fov;
     }
     let scene = SceneCache::for_data_model(game.view_mut(), content, camera.position);
-    let name = args.place.file_name().unwrap_or_default().to_string_lossy();
+    let name = place_name(place);
     let terrain = scene.terrain_meshes();
     let terrain = if terrain > 0 {
         format!(", terrain in {} meshes", thousands(terrain))
@@ -201,22 +221,56 @@ fn prepare(game: &mut Game, args: &Args, content: &Arc<Resolver>) -> (SceneCache
     (scene, camera)
 }
 
+/// A place's file name, as the window and messages call it.
+fn place_name(path: &Path) -> String {
+    path.file_name().map_or_else(
+        || path.display().to_string(),
+        |name| name.to_string_lossy().into_owned(),
+    )
+}
+
 /// Put the GPU in the log and in any crash report.
 fn note_gpu(renderer: &Renderer) {
     rook_engine::logging::set_context("GPU", renderer.gpu().to_owned());
     tracing::debug!(target: "render", "GPU: {}", renderer.gpu());
 }
 
-fn main() -> anyhow::Result<()> {
+fn main() -> ExitCode {
     #[cfg(feature = "tracy")]
     profiling::tracy_client::Client::start();
-    let args = Args::parse_from(rook_engine::logging::fix_verbose_args(std::env::args()));
+    let argv = rook_engine::logging::fix_verbose_args(std::env::args());
+    let args = match Args::try_parse_from(&argv) {
+        Ok(args) => args,
+        Err(e) if alert::CONSOLE => e.exit(),
+        Err(e) => {
+            alert::show(&e.to_string());
+            return ExitCode::from(u8::try_from(e.exit_code()).unwrap_or(1));
+        }
+    };
     rook_engine::logging::init(&rook_engine::logging::Options {
         program: "rook-player",
         verbose: args.verbose.clone(),
         file: true,
     });
-    rook_engine::logging::run(|| play(args))
+    let windowed = args.windowed();
+    let crashed = |message: &str| {
+        if windowed {
+            alert::show(message);
+        }
+    };
+    match rook_engine::logging::run(|| play(args), crashed) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            // Runs that make a file or a measurement come from a terminal
+            // or a script, which a message box would hold up.
+            if windowed {
+                alert::error(&e);
+            } else {
+                console::print_message(MessageType::Error, &format!("{e:#}"));
+            }
+            ExitCode::FAILURE
+        }
+    }
 }
 
 fn play(args: Args) -> anyhow::Result<()> {
@@ -228,41 +282,38 @@ fn play(args: Args) -> anyhow::Result<()> {
         Some(path) => Some(fs_err::read_to_string(path)?),
         None => None,
     };
-    // A recording waits for each sound to load, so it keeps to game time
-    // however fast it runs.
-    let wait_for_sounds = args.record_audio.is_some();
     let core_scripts =
         rook_engine::settings::core_scripts(args.core_scripts.then_some(true), &content);
-    let windowed = args.record_audio.is_none() && args.bench.is_none() && args.screenshot.is_none();
-    if windowed && !args.crash_test {
+    let mut setup = game::Setup {
+        play: !args.run,
+        content: content.clone(),
+        script,
+        // A recording waits for each sound to load, so it keeps to game
+        // time however fast it runs.
+        wait_for_sounds: args.record_audio.is_some(),
+        core_scripts,
+        user_settings: None,
+    };
+    if args.windowed() && !args.crash_test {
         // The player's settings, which only a window's player changes.
-        let user_settings = rook_engine::data_folder::DataDir::locate().map(|d| d.user_settings());
-        // The window opens at once and shows a loading screen while the
-        // place loads, as Roblox's does.
-        let loading = game::Loading::begin(
-            &args.place,
-            !args.run,
-            content.clone(),
-            script,
-            wait_for_sounds,
-            core_scripts,
-            user_settings.clone(),
-        )?;
-        let player = PlayerSettings::load(user_settings.as_deref());
-        let mut launch = Launch::new(args, content, install, loading, player);
+        setup.user_settings =
+            rook_engine::data_folder::DataDir::locate().map(|d| d.user_settings());
+        let player = PlayerSettings::load(setup.user_settings.as_deref());
+        let mut launch = Launch::new(args, setup, install, player);
         let event_loop = EventLoop::new()?;
         event_loop.set_control_flow(ControlFlow::Poll);
         event_loop.run_app(&mut launch)?;
-        return launch.finish();
+        launch.finish();
+        return Ok(());
     }
-    let mut game = Game::load(
-        &args.place,
-        !args.run,
-        content.clone(),
-        script,
-        wait_for_sounds,
-        core_scripts,
-    )?;
+    let Some(place) = args.place.clone() else {
+        if let Some(out) = &args.screenshot {
+            return screenshot_notice(out, &args, &content);
+        }
+        anyhow::bail!("--bench and --record-audio need a place file");
+    };
+    let mut game = Game::load(&place, &setup)
+        .with_context(|| format!("Couldn't open {}", place_name(&place)))?;
     if let Some(out) = &args.record_audio {
         let seconds = if args.seconds > 0.0 {
             args.seconds
@@ -271,7 +322,7 @@ fn play(args: Args) -> anyhow::Result<()> {
         };
         return record::record(&mut game, seconds, out);
     }
-    let (mut scene, camera) = prepare(&mut game, &args, &content);
+    let (mut scene, camera) = prepare(&mut game, &place, &args, &content);
 
     if args.crash_test {
         panic!("--crash-test");
@@ -281,7 +332,7 @@ fn play(args: Args) -> anyhow::Result<()> {
         return bench(&mut game, scene, frames, camera, &args, &install);
     }
 
-    if let Some(out) = args.screenshot {
+    if let Some(out) = &args.screenshot {
         // A screenshot isn't a frame: it waits for the place's mesh files
         // and images, and their uploads.
         scene.load_all(game.view(), camera.position);
@@ -298,20 +349,39 @@ fn play(args: Args) -> anyhow::Result<()> {
         renderer.finish_uploads();
         // Effects as they look once going: Smoke's puffs live 5 seconds.
         renderer.settle_particles(6.0);
-        let pixels = renderer.render_to_image(args.width, args.height, &camera)?;
-        image::save_buffer(
-            &out,
-            &pixels,
-            args.width,
-            args.height,
-            image::ColorType::Rgba8,
-        )?;
-        console::print_message(
-            MessageType::Info,
-            &format!("Saved screenshot to {}", out.display()),
-        );
-        return Ok(());
+        return save_shot(&mut renderer, &camera, out, &args);
     }
 
     unreachable!("the window opens above")
+}
+
+/// `--screenshot` without a place: what the window shows until one is
+/// dropped on it.
+fn screenshot_notice(out: &Path, args: &Args, content: &Arc<Resolver>) -> anyhow::Result<()> {
+    let mut renderer = Renderer::headless()?;
+    note_gpu(&renderer);
+    app::notice::Notice::drop_here(content).show(&mut renderer, args.width, args.height);
+    renderer.finish_uploads();
+    save_shot(&mut renderer, &app::notice::CAMERA, out, args)
+}
+
+fn save_shot(
+    renderer: &mut Renderer,
+    camera: &Camera,
+    out: &Path,
+    args: &Args,
+) -> anyhow::Result<()> {
+    let pixels = renderer.render_to_image(args.width, args.height, camera)?;
+    image::save_buffer(
+        out,
+        &pixels,
+        args.width,
+        args.height,
+        image::ColorType::Rgba8,
+    )?;
+    console::print_message(
+        MessageType::Info,
+        &format!("Saved screenshot to {}", out.display()),
+    );
+    Ok(())
 }
