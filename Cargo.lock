@@ -3236,7 +3236,7 @@ checksum = "4e27ee8bb91ca0adcf0ecb116293afa12d393f9c2b9b9cd54d33e8078fe19839"
 
 [[package]]
 name = "rook-audio"
-version = "0.7.3"
+version = "0.3.0"
 dependencies = [
  "cpal",
  "glam 0.34.0",
@@ -3246,7 +3246,7 @@ dependencies = [
 
 [[package]]
 name = "rook-cli"
-version = "0.7.3"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "blake3",
@@ -3275,7 +3275,7 @@ dependencies = [
 
 [[package]]
 name = "rook-content"
-version = "0.7.3"
+version = "0.3.0"
 dependencies = [
  "bcdec_rs",
  "blake3",
@@ -3300,7 +3300,7 @@ dependencies = [
 
 [[package]]
 name = "rook-dom"
-version = "0.7.3"
+version = "0.3.0"
 dependencies = [
  "glam 0.34.0",
  "rbx_types",
@@ -3313,7 +3313,7 @@ dependencies = [
 
 [[package]]
 name = "rook-engine"
-version = "0.7.3"
+version = "0.3.0"
 dependencies = [
  "anstream",
  "anstyle",
@@ -3345,7 +3345,7 @@ dependencies = [
 
 [[package]]
 name = "rook-formats"
-version = "0.7.3"
+version = "0.3.0"
 dependencies = [
  "base64 0.23.1",
  "lz4_flex",
@@ -3363,7 +3363,7 @@ dependencies = [
 
 [[package]]
 name = "rook-gui"
-version = "0.7.3"
+version = "0.3.0"
 dependencies = [
  "glam 0.34.0",
  "harfrust",
@@ -3381,7 +3381,7 @@ dependencies = [
 
 [[package]]
 name = "rook-lua"
-version = "0.7.3"
+version = "0.3.0"
 dependencies = [
  "chrono",
  "glam 0.34.0",
@@ -3406,7 +3406,7 @@ dependencies = [
 
 [[package]]
 name = "rook-net"
-version = "0.7.3"
+version = "0.3.0"
 dependencies = [
  "profiling",
  "rook-dom",
@@ -3417,7 +3417,7 @@ dependencies = [
 
 [[package]]
 name = "rook-physics"
-version = "0.7.3"
+version = "0.3.0"
 dependencies = [
  "glam 0.34.0",
  "profiling",
@@ -3433,7 +3433,7 @@ dependencies = [
 
 [[package]]
 name = "rook-platform"
-version = "0.7.3"
+version = "0.3.0"
 dependencies = [
  "arboard",
  "rayon",
@@ -3442,7 +3442,7 @@ dependencies = [
 
 [[package]]
 name = "rook-player"
-version = "0.7.3"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -3474,7 +3474,7 @@ dependencies = [
 
 [[package]]
 name = "rook-reflection"
-version = "0.7.3"
+version = "0.3.0"
 dependencies = [
  "rbx_reflection",
  "rbx_types",
@@ -3488,7 +3488,7 @@ dependencies = [
 
 [[package]]
 name = "rook-render"
-version = "0.7.3"
+version = "0.3.0"
 dependencies = [
  "bytemuck",
  "glam 0.34.0",
@@ -3507,7 +3507,7 @@ dependencies = [
 
 [[package]]
 name = "rook-terrain"
-version = "0.7.3"
+version = "0.3.0"
 dependencies = [
  "glam 0.34.0",
  "rook-types",
@@ -3518,7 +3518,7 @@ dependencies = [
 
 [[package]]
 name = "rook-types"
-version = "0.7.3"
+version = "0.3.0"
 dependencies = [
  "glam 0.34.0",
  "rbx_types",
@@ -3528,7 +3528,7 @@ dependencies = [
 
 [[package]]
 name = "rook-view"
-version = "0.7.3"
+version = "0.3.0"
 dependencies = [
  "blake3",
  "glam 0.34.0",

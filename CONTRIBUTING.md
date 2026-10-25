@@ -108,13 +108,16 @@ Every behavior Rook implements is recorded with its source and one of four statu
 
 ## Versioning
 
-Rook's version says how far along the roadmap it is:
+Rook is a rolling release: work lands on main all the time, and a release is a snapshot of main cut on purpose, about once a week. Like Roblox's own version, the middle number counts releases, so it grows steadily and says nothing about how complete Rook is; the [roadmap](docs/roadmap/README.md) says that.
 
 - Every change goes under **[Unreleased]** in [CHANGELOG.md](CHANGELOG.md) as it lands, without a version of its own.
-- **Minor** (`0.N.0`): finishing milestone N releases what's collected. 0.3.0 finished M3 Physics, 0.4.0 M4 Content and 0.5.0 M5 Audio. Version 1.0 comes with M22, the release; after it a minor comes with each finished set of new features.
-- **Patch** (`0.N.y`): on a day behavior fixes land, they're released together with whatever else is under [Unreleased] as one patch, at most one a day. A milestone's last step gets the minor instead; single fixes, roadmap steps and pushes don't get a version of their own.
-- Commits go to GitHub as they land, so [Unreleased] on GitHub shows what the next version will hold.
-- Before 1.0, any release may break things.
+- **Minor** (`0.N.0`): the weekly release, when anything new landed since the last one.
+- **Patch** (`0.N.y`): fixes only. Either a week in which only fixes landed, or a hotfix to the latest release: branch from its tag, cherry-pick the fix (already on main), tag `v0.N.y` and delete the branch. Patches only ever go on top of the latest release; older releases aren't maintained.
+- Builds between releases are development builds of the next version.
+- Commits go to GitHub as they land, so [Unreleased] on GitHub shows what the next release will hold.
+- Before 1.0, any release may break things. 1.0 comes when Rook commits to a stable public interface: its build settings, saved data and network protocol.
+
+Releases before 2026-10-25 were renumbered to one per week then (the old tags' commits are kept as `refs/backup/tags-2026-10-25/*`); each week's release lists its old releases as dated sections.
 
 Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z` in git. Rook tracks the live Roblox version rather than pinning one, so each release's notes open with the Roblox version its API data was checked against: `Checked against Roblox 0.744.0.` Older entries still read "Pinned Roblox version", from before Rook tracked the live one.
 

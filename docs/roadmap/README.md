@@ -51,12 +51,12 @@ milestones' steps.
 |---|---|---|
 | ✅ | **M0** File formats, datatypes, reflection, CLI | All test fixtures round-trip; 99.3% of the archive loads (v0.1.0) |
 | ✅ | **M1** Instance tree, signals, scheduler, Luau, server Scripts, conformance | First conformance batch passes; baseline of archive scripts running (v0.1.0) |
-| ✅ | **M2** Renderer v0, client/server split, LocalScripts, basic input | Archived places render recognisably; client scripts run alongside server scripts (v0.2.0) |
+| ✅ | **M2** Renderer v0, client/server split, LocalScripts, basic input | Archived places render recognisably; client scripts run alongside server scripts (v0.1.0) |
 | ✅ | [**M3** Physics](m3-physics.md) | Physics conformance batch passes; unanchored places settle plausibly |
-| ✅ | [**M4** Content: meshes, materials, textures, decals](m4-content.md) | Places render with their meshes, materials (2022 and legacy, MaterialVariants, SurfaceAppearance), decals and textures (v0.4.0) |
-| ✅ | [**M5** Audio](m5-audio.md) | Archived places play their sounds, positioned in 3D; the audio conformance batch passes (v0.5.0) |
-| ✅ | [**M6** Terrain](m6-terrain.md) | Archived places with terrain show it, and parts and queries collide with it (v0.6.0) |
-| ✅ | [**M7** Lights and effects](m7-lights-and-effects.md) | Local lights light the scene; Fire, Smoke, Sparkles and ParticleEmitters draw as in Studio (v0.7.0) |
+| ✅ | [**M4** Content: meshes, materials, textures, decals](m4-content.md) | Places render with their meshes, materials (2022 and legacy, MaterialVariants, SurfaceAppearance), decals and textures (v0.2.0) |
+| ✅ | [**M5** Audio](m5-audio.md) | Archived places play their sounds, positioned in 3D; the audio conformance batch passes (v0.2.0) |
+| ✅ | [**M6** Terrain](m6-terrain.md) | Archived places with terrain show it, and parts and queries collide with it (v0.2.0) |
+| ✅ | [**M7** Lights and effects](m7-lights-and-effects.md) | Local lights light the scene; Fire, Smoke, Sparkles and ParticleEmitters draw as in Studio (v0.3.0) |
 | 🟨 | [**M8** GUI](m8-gui.md) | GUI conformance batch passes; archived places' GUIs draw and take input |
 | 🟨 | [**M9** Characters](m9-characters.md) | Spawn, walk, jump, sit and use tools in an archived place |
 | ⬜ | [**M10** Networking](m10-networking.md) | Two players on two machines play an archived place together |
