@@ -79,6 +79,17 @@ impl Starting {
     }
 }
 
+impl Drop for Starting {
+    /// A place given up while loading (another was dropped on the window)
+    /// isn't waited for: the thread ends by itself once it has loaded and
+    /// finds nobody listening.
+    fn drop(&mut self) {
+        if let Some(server) = &mut self.server {
+            server.thread.take();
+        }
+    }
+}
+
 impl ServerThread {
     /// Load `place` on a new thread, start its scripts, run `script` (the
     /// `--script` file) and let one player join.

@@ -18,6 +18,14 @@ What the build does is set in `rook-build.toml` at the repository's root: where 
 
 Use places you made or have the rights to, for example saved from Roblox Studio with *File → Save to File*. Rook opens `.rbxl`, `.rbxm`, `.rbxlx` and `.rbxmx` files. It ships no Roblox content.
 
+## Opening a place without a terminal
+
+Drop a place file onto `rook-player.exe` (or a shortcut to it) and it opens. Once a place is open, drop another file onto Rook's window to switch to it: the open place stops, and the window shows the loading screen until the new one is ready. To open places by double-clicking them, choose *Open with → Choose another app* on a `.rbxl` file and pick `rook-player.exe`.
+
+Started with no place, `rook-player` opens its window and asks for a place file to be dropped on it. If a place can't be opened (the file is damaged or isn't a place, or the game fails to start), the window says what went wrong and where the log file is, and waits for another. Only what leaves no window to draw in, a graphics card Rook can't draw with or a crash, shows a message box. `rook-player --screenshot out.png` without a place saves what the window shows before one is dropped.
+
+Release builds open no console window. Rook's messages, script output included, still go to the log file in `%LOCALAPPDATA%\Rook\logs` ([data and logging](../design/data-and-logging.md#log-files)). The file always has the detail `--verbose` would show, and `--verbose <subsystem>` adds everything that area logs. A build made without `--release` keeps its console.
+
 ## Playing a place
 
 ```sh

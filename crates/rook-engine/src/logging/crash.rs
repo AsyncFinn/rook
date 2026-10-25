@@ -90,16 +90,19 @@ fn note(info: &PanicHookInfo<'_>) {
     state().panic = Some(text);
 }
 
-/// Run a program's `main`; if it panics, write a crash report and exit
-/// with code 101 (as a panic would).
-pub fn run<T>(main: impl FnOnce() -> T) -> T {
+/// Run a program's `main`; if it panics, write a crash report, hand
+/// `crashed` the line saying where it is (a program without a terminal
+/// shows it), and exit with code 101 (as a panic would).
+pub fn run<T>(main: impl FnOnce() -> T, crashed: impl FnOnce(&str)) -> T {
     match std::panic::catch_unwind(AssertUnwindSafe(main)) {
         Ok(value) => value,
         Err(_) => {
-            match write_report() {
-                Some(path) => eprintln!("Rook crashed. Crash report: {}", path.display()),
-                None => eprintln!("Rook crashed (no crash report folder)"),
-            }
+            let message = match write_report() {
+                Some(path) => format!("Rook crashed. Crash report: {}", path.display()),
+                None => "Rook crashed (no crash report folder)".to_owned(),
+            };
+            eprintln!("{message}");
+            crashed(&message);
             std::process::exit(101);
         }
     }

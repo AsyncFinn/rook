@@ -12,6 +12,7 @@ multiple-versions = "allow"
 wildcards = "allow"
 deny = [
     { crate = "winit", wrappers = ["rook-player"], reason = "windows belong to the apps" },
+    { crate = "rfd", wrappers = ["rook-player"], reason = "dialogs belong to the apps" },
     { crate = "cpal", wrappers = ["rook-audio"], reason = "the audio device, behind rook-audio's `output` feature" },
     { crate = "ureq", wrappers = ["rook-platform"], reason = "the network goes through rook-platform" },
     # Rapier and Parry run their own parallel steps (rook-physics' known

@@ -59,27 +59,40 @@ struct Finish {
     load_start: std::time::Instant,
 }
 
+/// How every place the player opens is run, whichever place it is.
+#[derive(Clone)]
+pub(crate) struct Setup {
+    /// A local player joins and the window shows that player's client, as
+    /// in Studio's Play mode; otherwise the server alone (Run mode).
+    pub play: bool,
+    /// Where content requests resolve.
+    pub content: Arc<rook_content::Resolver>,
+    /// The `--script` file's source, run as a server script once the
+    /// place starts.
+    pub script: Option<String>,
+    /// Sounds load in the background while the game runs, as in Roblox,
+    /// unless this holds each frame until they have.
+    pub wait_for_sounds: bool,
+    pub core_scripts: Option<Arc<rook_engine::core_scripts::CorePatch>>,
+    /// The player's settings file; `None` for runs that aren't played,
+    /// whose changes aren't saved.
+    pub user_settings: Option<PathBuf>,
+}
+
 impl Loading {
     /// Start loading a place (see [`Game::load`]).
-    pub(crate) fn begin(
-        path: &Path,
-        play: bool,
-        content: Arc<rook_content::Resolver>,
-        script: Option<String>,
-        wait_for_sounds: bool,
-        core_scripts: Option<Arc<rook_engine::core_scripts::CorePatch>>,
-        user_settings: Option<PathBuf>,
-    ) -> anyhow::Result<Self> {
+    pub(crate) fn begin(path: &Path, setup: &Setup) -> anyhow::Result<Self> {
         let load_start = std::time::Instant::now();
         let bytes = fs_err::read(path)?;
         let options = Options {
-            content: Some(content),
-            wait_for_sounds,
-            core_scripts,
-            user_settings,
+            content: Some(setup.content.clone()),
+            wait_for_sounds: setup.wait_for_sounds,
+            core_scripts: setup.core_scripts.clone(),
+            user_settings: setup.user_settings.clone(),
             ..Options::default()
         };
-        let (stage, script) = if play {
+        let script = setup.script.clone();
+        let (stage, script) = if setup.play {
             let starting = ServerThread::spawn(bytes, options.clone(), script, ("Player1", 1))?;
             (Stage::Server(starting), None)
         } else {
@@ -148,31 +161,9 @@ impl Finish {
 }
 
 impl Game {
-    /// Load a place and start it, waiting until it has. With `play`, a
-    /// local player joins and the window shows that player's client, as
-    /// in Studio's Play mode. Content requests resolve through `content`;
-    /// `script` (the `--script` file) runs as a server script once the
-    /// place starts. Sounds load in the background while the game runs, as
-    /// in Roblox, unless `wait_for_sounds` holds each frame until they
-    /// have.
-    pub(crate) fn load(
-        path: &Path,
-        play: bool,
-        content: Arc<rook_content::Resolver>,
-        script: Option<String>,
-        wait_for_sounds: bool,
-        core_scripts: Option<Arc<rook_engine::core_scripts::CorePatch>>,
-    ) -> anyhow::Result<Self> {
-        // Nothing the player changes here is saved: these runs aren't played.
-        let loading = Loading::begin(
-            path,
-            play,
-            content,
-            script,
-            wait_for_sounds,
-            core_scripts,
-            None,
-        )?;
+    /// Load a place and start it, waiting until it has.
+    pub(crate) fn load(path: &Path, setup: &Setup) -> anyhow::Result<Self> {
+        let loading = Loading::begin(path, setup)?;
         match loading.stage {
             Stage::Server(starting) => loading.finish.joined(starting.wait()?),
             Stage::Run(bytes) => loading.finish.run(&bytes),

@@ -117,6 +117,10 @@ cpal = "0.15"
 # its shader translator saves a few megabytes of every exe.
 wgpu = { version = "30", default-features = false, features = ["std", "parking_lot", "dx12", "metal", "vulkan", "wgsl"] }
 winit = "0.30"
+# Message boxes for errors rook-player has no window to show in. On Linux they
+# go through zenity, which needs neither the portal's async runtime nor
+# Wayland's crates.
+rfd = { version = "0.17", default-features = false, features = ["xdg-portal"] }
 # Shader modules (rook-render's build script): imports and @if over
 # WGSL, with its own parser, so wgpu upgrades never wait on it (`naga-ext`
 # only lets it parse wgpu's `binding_array`);
