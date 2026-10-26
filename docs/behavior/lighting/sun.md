@@ -70,23 +70,50 @@ faces away from the highlight 5 to 10 high, from the sky's reflection.
 
 ## Shadows
 
-Checked against Studio on 2026-10-22, by eye.
+Checked against Studio 0.744 on 2026-10-26, in the Baseplate (LightingStyle
+Soft), by `screen_capture` with `PrioritizeLightingQuality` set from a
+script each way. Studio no longer has `Lighting.Technology`: every place
+gets the same lighting, whatever a file saved (scripts still can't read
+the hidden property).
 
-Studio no longer has `Lighting.Technology`: every place gets the same
-lighting, whatever a file saved (scripts still can't read the hidden
-property). `LightingStyle` and `PrioritizeLightingQuality` weren't read
-in either check below, so which settings each ran under is unknown.
+**`PrioritizeLightingQuality` picks how the sun shadows** (Observed):
 
-- **On the Baseplate the shadow reached far.** An opaque 154×39×119
-  part (CastShadow on, a FileMesh scaled about 10000 × 100 × 12000, a
-  cloud deck) hung 286 studs over the Baseplate darkened the whole plate
-  out to its edge about 1000 studs away, with no ring near the camera.
-- **In an archive place the same deck cast nothing** (reported by the
-  user): the lighting under it didn't change.
-- **The ring itself** shows in Studio with Prioritize Lighting Quality
-  on: larger and fainter than Rook's (reported by the user). Without
-  it, Studio shows no ring.
+- **On: a shadow map.** Sharp shadows: a slab's square, a post's long
+  thin shadow. A 2048-stud deck 286 studs up shaded the ground out to
+  about 580 studs from a camera 40 studs up, and lit it beyond: the ring.
+- **Off: the light voxels.** No sharp shadow at all. Shadows are soft,
+  blocky blobs from the same 1024 × 256 × 1024-stud grid of 4-stud voxels
+  the local lights use ([local lights](local-lights.md#how-far-the-grid-reaches)),
+  so they reach only as far as the grid. The deck 286 studs up cast
+  nothing (it's above the grid); moved down to 60 it cast a soft shadow
+  that leaked light at the seams between its plates. From 200 studs up,
+  looking down, nothing on the ground cast anything (the grid followed
+  the camera's focus up, off the floor). A 1-stud slab dims the sun
+  rather than blocking it, and a 6-stud cube on the ground leaves only
+  a faint shadow.
+- **Unsaved, it's off** (Observed by the user: an archive place showed
+  no ring and no shadow from the deck until they turned it on). Studio's
+  Baseplate template saves it on.
 
-Rook's single map reaches 300 studs and fades over the last 60 in every
-place, so a high deck draws a dark disc around the camera, and distant
-shadows fade out where Studio's stay.
+**Rook** (`sunlit` in `shaders/light_volume.wgsl`, `voxel_sun_visibility`
+in `shaders/lighting.wgsl`; Approximation, fitted): with
+`PrioritizeLightingQuality` on, the shadow map as before, one 2048²
+cascade out to 300 studs, fading over the last 60. With it off, no
+shadow pass: the light volume also holds how much of the sun reaches
+each voxel. The blockers record how much of each voxel opaque
+`CastShadow` parts fill (exactly for parts square to the axes, by 64
+points for turned ones), and each voxel's ray to the sun dims by
+e^(−2 × fill × voxels crossed) through every voxel it crosses, until it
+leaves the volume. Surfaces read that 6 studs out along their normal,
+like the local lights, averaged over a 3 × 3 pattern 4 studs apart. The
+voxels take the sun again when it turns more than about half a degree.
+
+Against Studio, a 16 × 1 × 16 slab 30 studs up, a 40 × 20 × 2 wall and a
+6-stud cube, from 85 studs up looking down: the shadows fall in the same
+places with the same shapes. The wall's shadow is within 5 levels of
+Studio's out to its foot, where they differ by up to 11; the slab's
+dips 22 levels where Studio's dips 28; the cube's is a little darker
+than Studio's faint one. The deck 286 studs up casts nothing in either.
+
+Left: with `PrioritizeLightingQuality` on, Rook's shadow map still
+reaches 300 studs where Studio's reaches about 580.

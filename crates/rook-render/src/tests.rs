@@ -73,6 +73,12 @@ fn updating_parts_draws_what_a_new_scene_draws() {
             decal(-6.0),
         ],
         images: HashMap::from([(hash, image())]),
+        // The shadow map: voxel shadows take moved parts only every half
+        // second, so they'd still show where the parts were.
+        lighting: Lighting {
+            prioritize_quality: true,
+            ..Lighting::default()
+        },
         ..Scene::default()
     };
     scene.parts[3].material = Material::Plastic;
@@ -213,6 +219,7 @@ fn parts_out_of_view_still_cast_shadows() {
         parts: vec![ground],
         lighting: Lighting {
             sun_direction: Vec3::new(0.0, 1.0, 1.0).normalize(),
+            prioritize_quality: true,
             ..Lighting::default()
         },
         ..Scene::default()
@@ -226,6 +233,42 @@ fn parts_out_of_view_still_cast_shadows() {
     assert_eq!(r.draw_counts().main.draws, 1, "the tower is out of view");
     assert_eq!(r.draw_counts().shadow.draws, 2);
     assert_ne!(lit, shadowed);
+}
+
+/// Without PrioritizeLightingQuality the sun shadows through the light
+/// voxels, with no shadow pass: a slab over the ground darkens it, and the
+/// same slab above the voxels' reach casts nothing, as in Studio.
+#[test]
+fn without_quality_the_voxels_shadow_the_sun() {
+    let Ok(mut r) = Renderer::headless() else {
+        return;
+    };
+    let mut ground = part(PartShape::Block, 0.0, [0.8; 3], 0.0);
+    ground.position.y = -0.5;
+    ground.size = Vec3::new(200.0, 1.0, 200.0);
+    let mut slab = part(PartShape::Block, 0.0, [0.8; 3], 0.0);
+    slab.size = Vec3::new(40.0, 4.0, 40.0);
+    let mut scene = Scene {
+        parts: vec![ground],
+        lighting: Lighting {
+            sun_direction: Vec3::Y,
+            ..Lighting::default()
+        },
+        ..Scene::default()
+    };
+    let camera = Camera::look_at(Vec3::new(0.0, 30.0, 30.0), Vec3::ZERO);
+    r.set_scene(&scene);
+    let lit = r.render_to_image(64, 64, &camera).unwrap();
+    scene.parts.push(slab);
+    scene.parts[1].position.y = 20.0;
+    r.set_scene(&scene);
+    let shadowed = r.render_to_image(64, 64, &camera).unwrap();
+    assert_eq!(r.draw_counts().shadow.draws, 0);
+    assert_ne!(lit, shadowed);
+    // Out of view, and above the voxels around the camera.
+    scene.parts[1].position.y = 400.0;
+    r.set_scene(&scene);
+    assert_eq!(r.render_to_image(64, 64, &camera).unwrap(), lit);
 }
 
 /// A small mesh file: a square of two triangles facing +Z, `side` wide.

@@ -45,6 +45,12 @@ pub(super) fn lighting(dom: &Dom) -> (Lighting, f32) {
     if let Some(s) = dom.bool_property(id, "GlobalShadows") {
         l.global_shadows = s;
     }
+    // Off when unsaved, as archive places open in Studio (observed: the
+    // user's archive place had it off, and turning it on brought the
+    // shadow map's ring). New places save it on.
+    l.prioritize_quality = dom
+        .bool_property(id, "PrioritizeLightingQuality")
+        .unwrap_or(false);
     // Observed in Studio 0.742: a place saved without it reads 0, and at 0
     // nothing reflects the sky (docs/behavior/rendering/materials.md).
     l.environment_specular = dom

@@ -44,6 +44,10 @@ pub struct Lighting {
     pub skybox: Option<[ImageHash; 6]>,
     /// `Lighting.GlobalShadows`: false draws no shadows at all.
     pub global_shadows: bool,
+    /// `Lighting.PrioritizeLightingQuality`: on, the sun casts sharp
+    /// shadows through the shadow map; off, soft ones through the light
+    /// voxels, and only within their reach (docs/behavior/lighting/sun.md).
+    pub prioritize_quality: bool,
     /// `Lighting.EnvironmentSpecularScale`, 0 to 1: how much parts reflect
     /// the sky, and how far metals trade their diffuse light for it.
     pub environment_specular: f32,
@@ -70,6 +74,14 @@ pub enum Tonemapper {
     Retro,
 }
 
+impl Lighting {
+    /// Whether the sun shadows through the light voxels rather than the
+    /// shadow map.
+    pub fn sun_in_voxels(&self) -> bool {
+        self.global_shadows && !self.prioritize_quality
+    }
+}
+
 impl Default for Lighting {
     fn default() -> Self {
         Self {
@@ -85,6 +97,7 @@ impl Default for Lighting {
             sky_bottom: [0.75, 0.84, 0.95],
             skybox: None,
             global_shadows: true,
+            prioritize_quality: false,
             environment_specular: 0.0,
             environment_diffuse: 0.0,
             exposure: 1.0,

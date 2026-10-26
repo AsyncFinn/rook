@@ -2,7 +2,8 @@
 // one layer per dispatch from the top: each voxel sums what every light
 // listed in its cube's bucket of the lights' spatial hash writes into it
 // (less what parts block, for lights with `Shadows`), and takes the sky's
-// diffuse light (in alpha) from the layer above.
+// diffuse light (in alpha) from the layer above; and, when the sun shadows
+// through the voxels, how much of the sun reaches each one.
 
 import package::lights::{Light, VOXEL, light_at_voxel};
 
@@ -12,8 +13,10 @@ struct Params {
     // x: the hash's buckets - 1; yzw: voxels along each axis.
     size: vec4<u32>,
     // x: there are lights to fill; y: the sky's light to carry down; z:
-    // `solid` holds the parts (some light has `Shadows`).
+    // `solid` holds the parts; w: the sun's light to take.
     flags: vec4<u32>,
+    // xyz: towards the sun (unit).
+    sun: vec4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> params: Params;
@@ -30,6 +33,11 @@ struct Params {
 @group(0) @binding(7) var<storage, read_write> rows: array<f32>;
 // Whether each column is open to the sky down to the last layer.
 @group(0) @binding(8) var<storage, read_write> columns: array<u32>;
+// How much of the sun reaches each voxel (red).
+@group(0) @binding(9) var sun_voxels: texture_storage_3d<rgba8unorm, write>;
+// A byte per voxel, four to a word in `solid`'s order: how much of it
+// parts fill (255 full).
+@group(0) @binding(10) var<storage, read> fills: array<u32>;
 
 // The bucket a point's cube hashes to (`renderer/lighting/local.rs`, `bucket`).
 fn bucket(p: vec3<f32>) -> vec2<u32> {
@@ -97,6 +105,53 @@ fn unblocked(light: Light, v: vec3<f32>) -> f32 {
     return open / 16.0;
 }
 
+// How much of voxel `c` parts fill, 0 to 1.
+fn fill_at(c: vec3<i32>) -> f32 {
+    let u = vec3<u32>(c);
+    let i = u.x + params.size.y * (u.z + params.size.w * u.y);
+    return f32((fills[i >> 2u] >> ((i & 3u) * 8u)) & 255u) / 255.0;
+}
+
+// How much one voxel's length of a full voxel dims the sun: through a voxel
+// a fraction `f` full, over `d` voxels' length, `exp(-SUN_DENSITY f d)`
+// gets through (fitted to Studio's shadows of a 1-stud slab and a 2-stud
+// wall, docs/behavior/lighting/sun.md).
+const SUN_DENSITY: f32 = 2.0;
+
+// How much of the sun reaches voxel `cell`: the voxels on the way to the
+// sun, itself first, each dimming it by how full it is and how far the ray
+// runs through it, until the ray leaves the volume. Outside it nothing
+// blocks, as in Studio, where a part above the grid casts nothing
+// (docs/behavior/lighting/sun.md).
+fn sunlit(cell: vec3<u32>) -> f32 {
+    let d = params.sun.xyz;
+    let n = vec3<i32>(params.size.yzw);
+    let step = vec3<i32>(sign(d));
+    // How far along the ray (in voxels) each axis's next face is, and
+    // between faces; the ray starts at the voxel's center.
+    let delta = 1.0 / max(abs(d), vec3(1e-6));
+    var next = delta * 0.5;
+    var c = vec3<i32>(cell);
+    var t = 0.0;
+    var depth = 0.0;
+    while all(c >= vec3(0)) && all(c < n) && depth < 5.5 {
+        let exit = min(next.x, min(next.y, next.z));
+        depth += fill_at(c) * (exit - t);
+        t = exit;
+        if next.x == exit {
+            c.x += step.x;
+            next.x += delta.x;
+        } else if next.y == exit {
+            c.y += step.y;
+            next.y += delta.y;
+        } else {
+            c.z += step.z;
+            next.z += delta.z;
+        }
+    }
+    return exp(-SUN_DENSITY * depth);
+}
+
 // How much of the sky's light reaches voxel (x, y, z), as Studio's voxels
 // carry it (fitted to Studio 0.742 under roofs and beside walls,
 // docs/behavior/rendering/materials.md, "The sky's diffuse light"): all of it where
@@ -148,9 +203,9 @@ fn fill(@builtin(global_invocation_id) id: vec3<u32>) {
         return;
     }
     let cell = vec3(id.x, layer.x, id.y);
+    let v = params.origin.xyz + vec3<f32>(cell) * VOXEL;
     var sum = vec3(0.0);
     if params.flags.x != 0u {
-        let v = params.origin.xyz + vec3<f32>(cell) * VOXEL;
         let range = bucket(v);
         for (var i = 0u; i < range.y; i++) {
             let light = lights[entries[range.x + i]];
@@ -166,4 +221,7 @@ fn fill(@builtin(global_invocation_id) id: vec3<u32>) {
         sky = sky_at(cell.x, cell.y, cell.z);
     }
     textureStore(voxels, cell, vec4(sum, sky));
+    if params.flags.w != 0u {
+        textureStore(sun_voxels, cell, vec4(sunlit(cell), 0.0, 0.0, 1.0));
+    }
 }

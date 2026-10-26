@@ -22,11 +22,14 @@ struct LightVolume {
     // xyz: voxels along each axis; w: 1 when their alpha holds how much
     // of the sky's diffuse light reaches them.
     size: vec4<f32>,
+    // x: 1 when `sun_voxels` hold how much of the sun reaches them.
+    sun: vec4<f32>,
 };
 
 @group(3) @binding(0) var<uniform> light_volume: LightVolume;
 @group(3) @binding(1) var light_voxels: texture_3d<f32>;
 @group(3) @binding(2) var light_sampler: sampler;
+@group(3) @binding(3) var sun_voxels: texture_3d<f32>;
 
 // How far out along the normal a surface reads the voxels (Studio's
 // shaders).
@@ -79,12 +82,48 @@ fn sky_visibility(world: vec3<f32>, n: vec3<f32>) -> f32 {
         + sky_voxel(q - (t + b) * s) + sky_voxel(q - (t - b) * s));
 }
 
-// How much of the sun reaches a point: 3x3 comparison samples (each one
-// filtered 2x2 by the sampler), fading out towards the edge of the
-// shadowed distance.
+// How far across the surface `voxel_sun_visibility` spreads its samples,
+// in studs (fitted).
+const SUN_SPREAD: f32 = 4.0;
+
+// The sun voxels' share of the sun at `p`, blended trilinearly; all of it
+// outside the volume.
+fn sun_voxel(p: vec3<f32>) -> f32 {
+    let uvw = ((p - light_volume.origin.xyz) / VOXEL + 0.5) / light_volume.size.xyz;
+    if any(uvw < vec3(0.0)) || any(uvw > vec3(1.0)) {
+        return 1.0;
+    }
+    return textureSampleLevel(sun_voxels, light_sampler, uvw, 0.0).r;
+}
+
+// How much of the sun reaches a surface at `world` facing `n` (unit)
+// without PrioritizeLightingQuality, where Studio shadows the sun through
+// its light voxels: soft, blocky, and only within the voxels' reach
+// (docs/behavior/lighting/sun.md). The voxels around the point 6 studs out
+// along the normal, as for the sky, averaged over a 3x3 pattern
+// `SUN_SPREAD` apart across the surface.
+fn voxel_sun_visibility(world: vec3<f32>, n: vec3<f32>) -> f32 {
+    let q = world + n * VOXEL_OFFSET;
+    let t = normalize(cross(n, select(vec3(0.0, 1.0, 0.0), vec3(1.0, 0.0, 0.0), abs(n.y) > 0.9)));
+    let b = cross(n, t);
+    var lit = 0.0;
+    for (var j = -1; j <= 1; j++) {
+        for (var i = -1; i <= 1; i++) {
+            lit += sun_voxel(q + (t * f32(i) + b * f32(j)) * SUN_SPREAD);
+        }
+    }
+    return lit / 9.0;
+}
+
+// How much of the sun reaches a point: through the shadow map, 3x3
+// comparison samples (each one filtered 2x2 by the sampler), fading out
+// towards the edge of the shadowed distance; or through the voxels.
 fn sun_visibility(world: vec3<f32>, n: vec3<f32>) -> f32 {
     let reach = g.shadow.w;
     if reach == 0.0 {
+        if light_volume.sun.x != 0.0 {
+            return voxel_sun_visibility(world, n);
+        }
         return 1.0;
     }
     let p = g.shadow_view_proj * vec4(world + n * g.shadow.y, 1.0);

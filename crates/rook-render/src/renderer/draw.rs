@@ -74,9 +74,11 @@ impl Renderer {
         let aspect = width as f32 / height.max(1) as f32;
         let sun = l.sun_direction.normalize_or(Vec3::Y);
         // No shadow pass at all with GlobalShadows off, or with the sun
-        // below the horizon, where it lights nothing from above.
-        let shadow =
-            (l.global_shadows && sun.y > 0.0).then(|| ShadowView::fit(camera, aspect, sun));
+        // below the horizon, where it lights nothing from above; without
+        // PrioritizeLightingQuality the voxels shadow the sun instead.
+        let shadow = (l.global_shadows && l.prioritize_quality && sun.y > 0.0)
+            .then(|| ShadowView::fit(camera, aspect, sun));
+        let voxel_sun = (l.sun_in_voxels() && sun.y > 0.0).then_some(sun);
         // What each pass can see; batches wholly outside draw nothing.
         let view_proj = camera.view_projection(aspect);
         let view = Frustum::of(view_proj);
@@ -114,6 +116,7 @@ impl Renderer {
             &mut encoder,
             camera,
             l.environment_diffuse > 0.0,
+            voxel_sun,
         );
         self.update_sky_cube(&mut encoder);
         self.gui.record_groups(&self.queue, &mut encoder);

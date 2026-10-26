@@ -5,8 +5,9 @@
 //! compute pass fills (`shaders/light_volume.wgsl`) and surfaces sample
 //! (`shaders/lighting.wgsl`). The voxels are filled again only when a light
 //! changes or the camera leaves the volume's middle; parts marked into them
-//! (`blockers.rs`) carry the sky's light down and shadow lights. What Studio
-//! does is in `docs/behavior/lighting/local-lights.md`.
+//! (`blockers.rs`) carry the sky's light down, shadow lights and, without
+//! `PrioritizeLightingQuality`, shadow the sun. What Studio does is in
+//! `docs/behavior/lighting/local-lights.md` and `docs/behavior/lighting/sun.md`.
 
 mod blockers;
 mod hash;
@@ -32,6 +33,10 @@ const AHEAD: f32 = 256.0;
 /// How far the volume's center may drift from where it should be before
 /// the volume follows, in studs.
 const RECENTER: f32 = 64.0;
+/// How far the sun may turn (the cosine of the angle) before the voxels
+/// take its light again; a script turning `ClockTime` would otherwise
+/// fill them every frame.
+const SUN_TURN: f32 = 0.99995;
 
 /// Bytes between the layers' entries in [`SkyBuffers::layers`] (the
 /// alignment WebGPU allows dynamic offsets at).
@@ -44,8 +49,10 @@ struct FillParams {
     origin: [f32; 4],
     size: [u32; 4],
     /// x: there are lights to fill; y: the sky's light to carry down; z:
-    /// the blockers are marked (some light has `Shadows`).
+    /// the blockers are marked; w: the sun's light to take.
     flags: [u32; 4],
+    /// Towards the sun (unit).
+    sun: [f32; 4],
 }
 
 /// The buffers the fill pass carries the sky's light down with.
@@ -55,6 +62,8 @@ struct SkyBuffers {
     layers: wgpu::Buffer,
     /// One bit per voxel: a part blocks it ([`Blockers::mark`]).
     solid: wgpu::Buffer,
+    /// A byte per voxel: how much of it parts fill.
+    fills: wgpu::Buffer,
     /// The sky's light in the last two layers filled.
     rows: wgpu::Buffer,
     /// Whether each column is still open to the sky.
@@ -68,6 +77,8 @@ struct SkyBuffers {
 struct VolumeUniform {
     origin: [f32; 4],
     size: [f32; 4],
+    /// x: 1 when the sun voxels hold how much of the sun reaches them.
+    sun: [f32; 4],
 }
 
 /// The lights' buffers and hash, the voxel volume and the pass that fills
@@ -89,6 +100,8 @@ pub(crate) struct GpuLights {
     params: wgpu::Buffer,
     volume: wgpu::Buffer,
     voxels: wgpu::TextureView,
+    /// How much of the sun reaches each voxel (red), past the parts.
+    sun_voxels: wgpu::TextureView,
     fill: wgpu::ComputePipeline,
     fill_layout: wgpu::BindGroupLayout,
     fill_group: wgpu::BindGroup,
@@ -102,6 +115,9 @@ pub(crate) struct GpuLights {
     sky: bool,
     /// Some light has `Shadows`.
     shadows: bool,
+    /// The sun (towards it) the voxels were filled with, if they hold its
+    /// light.
+    sun: Option<Vec3>,
     /// The blockers are marked for the volume where it is now.
     marked: bool,
 }
@@ -150,6 +166,11 @@ impl SkyBuffers {
                 (nx * ny * nz).div_ceil(32),
                 wgpu::BufferUsages::COPY_DST,
             ),
+            fills: storage(
+                "rook light blocker fills",
+                (nx * ny * nz).div_ceil(4),
+                wgpu::BufferUsages::COPY_DST,
+            ),
             rows: storage("rook sky rows", 2 * nx * nz, wgpu::BufferUsages::empty()),
             columns: storage("rook sky columns", nx * nz, wgpu::BufferUsages::empty()),
         }
@@ -177,6 +198,16 @@ impl GpuLights {
                     binding: 2,
                     visibility: fragment,
                     ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: fragment,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D3,
+                        multisampled: false,
+                    },
                     count: None,
                 },
             ],
@@ -214,6 +245,17 @@ impl GpuLights {
                 buffer_entry(6, storage, compute),
                 buffer_entry(7, read_write, compute),
                 buffer_entry(8, read_write, compute),
+                wgpu::BindGroupLayoutEntry {
+                    binding: 9,
+                    visibility: compute,
+                    ty: wgpu::BindingType::StorageTexture {
+                        access: wgpu::StorageTextureAccess::WriteOnly,
+                        format: wgpu::TextureFormat::Rgba8Unorm,
+                        view_dimension: wgpu::TextureViewDimension::D3,
+                    },
+                    count: None,
+                },
+                buffer_entry(10, storage, compute),
             ],
         });
         let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -233,21 +275,27 @@ impl GpuLights {
             compilation_options: Default::default(),
             cache: None,
         });
-        let texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("rook light voxels"),
-            size: wgpu::Extent3d {
-                width: VOLUME[0],
-                height: VOLUME[1],
-                depth_or_array_layers: VOLUME[2],
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D3,
-            format: wgpu::TextureFormat::Rgba16Float,
-            usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
-            view_formats: &[],
-        });
-        let voxels = texture.create_view(&Default::default());
+        let volume_texture = |label, format| {
+            device
+                .create_texture(&wgpu::TextureDescriptor {
+                    label: Some(label),
+                    size: wgpu::Extent3d {
+                        width: VOLUME[0],
+                        height: VOLUME[1],
+                        depth_or_array_layers: VOLUME[2],
+                    },
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: wgpu::TextureDimension::D3,
+                    format,
+                    usage: wgpu::TextureUsages::STORAGE_BINDING
+                        | wgpu::TextureUsages::TEXTURE_BINDING,
+                    view_formats: &[],
+                })
+                .create_view(&Default::default())
+        };
+        let voxels = volume_texture("rook light voxels", wgpu::TextureFormat::Rgba16Float);
+        let sun_voxels = volume_texture("rook sun voxels", wgpu::TextureFormat::Rgba8Unorm);
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("rook light voxels"),
             mag_filter: wgpu::FilterMode::Linear,
@@ -280,6 +328,10 @@ impl GpuLights {
                     binding: 2,
                     resource: wgpu::BindingResource::Sampler(&sampler),
                 },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::TextureView(&sun_voxels),
+                },
             ],
         });
         let hash = LightHash::build(&[]);
@@ -290,7 +342,7 @@ impl GpuLights {
             &fill_layout,
             [&params, &light_buffer, &bucket_buffer, &entry_buffer],
             &sky_buffers,
-            &voxels,
+            [&voxels, &sun_voxels],
         );
         Self {
             layout,
@@ -305,6 +357,7 @@ impl GpuLights {
             params,
             volume,
             voxels,
+            sun_voxels,
             fill,
             fill_layout,
             fill_group,
@@ -314,6 +367,7 @@ impl GpuLights {
             dirty: true,
             sky: false,
             shadows: false,
+            sun: None,
             marked: false,
         }
     }
@@ -366,7 +420,7 @@ impl GpuLights {
                 &self.entry_buffer,
             ],
             &self.sky_buffers,
-            &self.voxels,
+            [&self.voxels, &self.sun_voxels],
         );
     }
 
@@ -377,23 +431,27 @@ impl GpuLights {
 
     /// Take the parts at `changed` (indices into `scene.parts`) as they
     /// block light now. Only noted while nothing reads the blockers (the
-    /// sky lights nothing and no light has `Shadows`), and taken once
-    /// something does.
+    /// sky lights nothing, the sun shadows through the shadow map and no
+    /// light has `Shadows`), and taken once something does.
     pub(crate) fn update_blockers(&mut self, scene: &Scene, changed: &[usize]) {
-        let used = scene.lighting.environment_diffuse > 0.0 || self.shadows;
+        let l = &scene.lighting;
+        let used = l.environment_diffuse > 0.0 || l.sun_in_voxels() || self.shadows;
         self.blockers.update(scene, changed, used);
     }
 
     /// Fill the voxels again if the lights changed, the volume's center
-    /// drifted [`RECENTER`] from where the camera puts it, or, when the
-    /// place lights with the sky (`sky`) or a light has `Shadows`, the
-    /// parts blocking light changed.
+    /// drifted [`RECENTER`] from where the camera puts it, the sun the
+    /// voxels shadow (`sun`, towards it) came, went or turned past
+    /// [`SUN_TURN`], or, when the place lights with the sky (`sky`), the
+    /// sun shadows here or a light has `Shadows`, the parts blocking light
+    /// changed.
     pub(crate) fn fill(
         &mut self,
         queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
         camera: &Camera,
         sky: bool,
+        sun: Option<Vec3>,
     ) {
         let dims = Vec3::new(VOLUME[0] as f32, VOLUME[1] as f32, VOLUME[2] as f32);
         let half = dims * (VOXEL * 0.5);
@@ -402,9 +460,13 @@ impl GpuLights {
         let centered = self
             .origin
             .is_some_and(|o| (o + half - center).abs().max_element() <= RECENTER);
-        let solid = sky || self.shadows;
+        let solid = sky || sun.is_some() || self.shadows;
         let blocked = solid && (self.blockers.due() || !self.marked);
-        if !self.dirty && centered && !blocked && sky == self.sky {
+        let sun_kept = match (sun, self.sun) {
+            (Some(a), Some(b)) => a.dot(b) >= SUN_TURN,
+            (a, b) => a.is_none() && b.is_none(),
+        };
+        if !self.dirty && centered && !blocked && sky == self.sky && sun_kept {
             return;
         }
         profiling::scope!("GpuLights::fill");
@@ -415,13 +477,20 @@ impl GpuLights {
             // Voxels are centered at 4k + 2.
             ((center - half) / VOXEL).floor() * VOXEL + Vec3::splat(VOXEL * 0.5)
         };
-        if solid && (blocked || !centered) {
-            let bits = self.blockers.mark(origin, VOLUME);
+        // The fills go up only while the sun reads them, so a sun that
+        // just came takes them afresh.
+        let sun_came = sun.is_some() && self.sun.is_none();
+        if solid && (blocked || !centered || sun_came) {
+            let (bits, fills) = self.blockers.mark(origin, VOLUME);
             queue.write_buffer(&self.sky_buffers.solid, 0, bytemuck::cast_slice(bits));
+            if sun.is_some() {
+                queue.write_buffer(&self.sky_buffers.fills, 0, bytemuck::cast_slice(fills));
+            }
         }
         self.marked = solid;
         self.origin = Some(origin);
         self.sky = sky;
+        self.sun = sun;
         let lit = !self.lights.is_empty();
         queue.write_buffer(
             &self.volume,
@@ -429,9 +498,10 @@ impl GpuLights {
             bytemuck::bytes_of(&VolumeUniform {
                 origin: [origin.x, origin.y, origin.z, f32::from(u8::from(lit))],
                 size: [dims.x, dims.y, dims.z, f32::from(u8::from(sky))],
+                sun: [f32::from(u8::from(sun.is_some())), 0.0, 0.0, 0.0],
             }),
         );
-        if !lit && !sky {
+        if !lit && !sky && sun.is_none() {
             return;
         }
         queue.write_buffer(
@@ -445,7 +515,13 @@ impl GpuLights {
                     VOLUME[1],
                     VOLUME[2],
                 ],
-                flags: [u32::from(lit), u32::from(sky), u32::from(solid), 0],
+                flags: [
+                    u32::from(lit),
+                    u32::from(sky),
+                    u32::from(solid),
+                    u32::from(sun.is_some()),
+                ],
+                sun: sun.unwrap_or(Vec3::Y).extend(0.0).to_array(),
             }),
         );
         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
@@ -505,12 +581,14 @@ fn buffers(
     )
 }
 
+/// The fill pass's bind group; `voxels` are the light voxels and the sun
+/// voxels.
 fn fill_group(
     device: &wgpu::Device,
     layout: &wgpu::BindGroupLayout,
     buffers: [&wgpu::Buffer; 4],
     sky: &SkyBuffers,
-    voxels: &wgpu::TextureView,
+    [voxels, sun_voxels]: [&wgpu::TextureView; 2],
 ) -> wgpu::BindGroup {
     let mut entries: Vec<_> = buffers
         .iter()
@@ -532,12 +610,21 @@ fn fill_group(
             size: wgpu::BufferSize::new(16),
         }),
     });
-    for (binding, buffer) in [(6, &sky.solid), (7, &sky.rows), (8, &sky.columns)] {
+    for (binding, buffer) in [
+        (6, &sky.solid),
+        (7, &sky.rows),
+        (8, &sky.columns),
+        (10, &sky.fills),
+    ] {
         entries.push(wgpu::BindGroupEntry {
             binding,
             resource: buffer.as_entire_binding(),
         });
     }
+    entries.push(wgpu::BindGroupEntry {
+        binding: 9,
+        resource: wgpu::BindingResource::TextureView(sun_voxels),
+    });
     device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("rook light volume fill"),
         layout,
