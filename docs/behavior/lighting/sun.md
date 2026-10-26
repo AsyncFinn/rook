@@ -72,16 +72,21 @@ faces away from the highlight 5 to 10 high, from the sky's reflection.
 
 Checked against Studio on 2026-10-22, by eye.
 
-- **ShadowMap reaches far.** An opaque 154×39×119 part (CastShadow on,
-  a FileMesh scaled about 10000 × 100 × 12000, a cloud deck) hung 286
-  studs over the Baseplate darkened the whole plate out to its edge
-  about 1000 studs away, with no ring near the camera. Rook's single map
-  reaches 300 studs and fades over the last 60, so the same part draws
-  a dark disc around the camera (and distant shadows fade out where
-  Studio's stay).
-- **Compatibility doesn't shadow from such a deck** (reported by the
-  user, in a place saved `Compatibility`): the lighting under it didn't
-  change. Not measured: scripts can't set `Technology`, so this needs a
-  place saved with that technology open in Studio.
+Studio no longer has `Lighting.Technology`: every place gets the same
+lighting, whatever a file saved (scripts still can't read the hidden
+property). `LightingStyle` and `PrioritizeLightingQuality` weren't read
+in either check below, so which settings each ran under is unknown.
+
+- **On the Baseplate the shadow reached far.** An opaque 154×39×119
+  part (CastShadow on, a FileMesh scaled about 10000 × 100 × 12000, a
+  cloud deck) hung 286 studs over the Baseplate darkened the whole plate
+  out to its edge about 1000 studs away, with no ring near the camera.
+- **In an archive place the same deck cast nothing** (reported by the
+  user): the lighting under it didn't change.
 - **The ring itself** shows in Studio with Prioritize Lighting Quality
-  on: larger and fainter than Rook's (reported by the user).
+  on: larger and fainter than Rook's (reported by the user). Without
+  it, Studio shows no ring.
+
+Rook's single map reaches 300 studs and fades over the last 60 in every
+place, so a high deck draws a dark disc around the camera, and distant
+shadows fade out where Studio's stay.
