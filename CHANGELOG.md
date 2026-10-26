@@ -5,6 +5,8 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- A MeshPart or mesh with any `Transparency` is see-through where its texture is, as in Studio: a potted plant's leaves at 0.1 drew as solid squares, as the texture's alpha was ignored. At Transparency 0 it still is, as in Studio. See [mesh textures](docs/behavior/rendering/textures-and-decals.md).
+- SurfaceGuis and BillboardGuis sort among see-through parts by distance, so a transparent part in front covers a sign instead of the sign drawing over it. See [world GUI](docs/behavior/gui/world.md).
 - Sun shadows follow `Lighting.PrioritizeLightingQuality`, as in Studio. Archive places, which don't save it, have it off: the sun casts soft, blocky shadows through the same 4-stud light voxels the local lights use, only as far as those reach, so the dark disc a high cloud or roof drew around the camera, and the ring where shadows faded out 300 studs away, are gone (Studio shadows nothing from that high). A thin roof dims the sun rather than blocking it. Places that save it on keep the sharp shadow map.
 
 ## [0.3.0] - 2026-10-25 - M7 lights and effects, M8 GUI under way, first characters

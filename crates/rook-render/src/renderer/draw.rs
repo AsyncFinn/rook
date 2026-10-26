@@ -100,8 +100,13 @@ impl Renderer {
 
         let (highlight_runs, looks) = self.highlights.upload(&self.device, &self.queue);
         // Each pass's draws, joined into runs that share what's bound.
-        let ([mut shadow_runs, mut main_runs, mut mask_runs], starts) =
-            self.build_draws(shadow, &view, margin, transparent_runs, highlight_runs);
+        let ([mut shadow_runs, mut main_runs, mut mask_runs], starts) = self.build_draws(
+            shadow,
+            &view,
+            margin,
+            (transparent_runs, &world_gui_runs),
+            highlight_runs,
+        );
 
         stage(&mut times.draws);
         let depth = self.depth_view(width, height);
@@ -262,7 +267,7 @@ impl Renderer {
             multiview_mask: None,
         });
         pass.set_bind_group(0, &self.bind_group, &[]);
-        self.record(&mut pass, runs, start);
+        self.record(&mut pass, runs, start, |_, _| {});
     }
 
     /// The sky, the parts, the effects and the world GUI into the frame.
@@ -311,21 +316,28 @@ impl Renderer {
             pass.set_bind_group(2, self.group(&[None; 5]), &[]);
         }
         self.record_sky(&mut pass);
-        self.record(&mut pass, runs, start);
+        let mut drawn = 0;
+        self.record(&mut pass, runs, start, |pass, canvases| {
+            self.gui.record_world(pass, &world_gui[drawn..canvases]);
+            drawn = canvases;
+        });
         self.record_ribbons(&mut pass, ribbons);
         self.record_particles(&mut pass, particles);
-        self.gui.record_world(&mut pass, world_gui);
+        // Canvases nearer than every transparent part, and those on top.
+        self.gui
+            .record_world(&mut pass, &world_gui[runs.canvases_cut()..]);
     }
 
     /// Each pass's draws, joined into runs that share what's bound, with
     /// their arguments uploaded: (the shadow, main and Highlight mask
-    /// passes, where each pass's arguments start).
+    /// passes, where each pass's arguments start). The world GUI's
+    /// canvases cut into the transparent draws where they sort among them.
     fn build_draws(
         &mut self,
         shadow: Option<ShadowView>,
         view: &Frustum,
         margin: f32,
-        transparent_runs: Vec<TransparentRun>,
+        (transparent_runs, world_gui): (Vec<TransparentRun>, &WorldRuns),
         highlight_runs: Vec<HighlightRun>,
     ) -> ([Runs; 3], Vec<usize>) {
         profiling::scope!("build draws");
@@ -389,18 +401,32 @@ impl Renderer {
                 self.push_draw(&mut main_runs, pipe, source, mesh, key, run);
             }
         }
+        // A canvas farther than a transparent part is drawn before it, so
+        // the part covers it.
+        let tested = world_gui.iter().take_while(|d| !d.on_top).count();
+        let distances = self.transparent.distances();
+        let mut cut = 0;
         for (key, pass, instances) in transparent_runs {
             let Some(mesh) = self.meshes.get(&key.shape) else {
                 continue;
             };
-            self.push_draw(
-                &mut main_runs,
-                pass.pipe(),
-                Source::Transparent,
-                mesh,
-                &key,
-                instances,
-            );
+            let (pipe, source) = (pass.pipe(), Source::Transparent);
+            let (mut start, end) = (instances.start, instances.end);
+            for i in instances {
+                if cut == tested {
+                    break;
+                }
+                let d = distances[i as usize];
+                let behind = (cut..tested)
+                    .find(|&c| world_gui[c].distance.powi(2) <= d)
+                    .unwrap_or(tested);
+                if behind > cut {
+                    self.push_draw(&mut main_runs, pipe, source, mesh, &key, start..i);
+                    main_runs.cut(behind);
+                    (cut, start) = (behind, i);
+                }
+            }
+            self.push_draw(&mut main_runs, pipe, source, mesh, &key, start..end);
         }
         let mut mask_runs = Runs::default();
         for (key, on_top, instances) in highlight_runs {

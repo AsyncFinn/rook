@@ -90,9 +90,12 @@ inf.
   the tone curve as an unlit adornment's does: a red frame drew 223, as
   in Rook. `LightInfluence` 1 lights it as a surface (Approximation:
   particles' lighting); `Brightness` multiplies the unlit color.
-- **Order**: Rook draws world GUI after the particles, back to front,
-  then those `AlwaysOnTop`, under the screen's GUI. Inference: SurfaceGui
-  `ZOffset` isn't used yet.
+- **Order**: Rook draws world GUI back to front among the transparent
+  parts (by the canvas's middle and the part's center), so a see-through
+  part in front covers a sign (Rook drew signs over a potted plant's
+  Transparency 0.1 leaves until 2026-10-26); those nearer than every
+  transparent part after the particles, then those `AlwaysOnTop`, under
+  the screen's GUI. Inference: SurfaceGui `ZOffset` isn't used yet.
 - `MaxDistance` hides one further than that from the camera.
 - **Sharpness**: Studio's world GUI text stays sharp however near it's
   seen, like vector text, even on a 200 × 200 canvas stretched over a

@@ -219,9 +219,11 @@ fn neon(albedo: vec3<f32>) -> vec3<f32> {
     return 13.6 * c * c * c * c;
 }
 
-// Parts and their mesh textures. A texture's alpha is ignored (observed),
-// except on adornments drawn without light (an ImageHandleAdornment's
-// image; Inference).
+// Parts and their mesh textures. A texture's alpha is ignored on an opaque
+// part, but on one with any Transparency it multiplies the opacity,
+// blended rather than cut (observed on a MeshPart's leaf texture at
+// Transparency 0, 0.02, 0.1 and 0.5), and on adornments drawn without
+// light (an ImageHandleAdornment's image; Inference).
 @fragment
 fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
     let image = sample_image(in.images, in.uv);
@@ -265,6 +267,9 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
     var roughness = in.material.y;
     var metalness = in.material.z;
     var alpha = surface_alpha(in);
+    if in.color.a < 1.0 {
+        alpha *= image.a;
+    }
     if on_uv {
         let c = sample_map(in.images, COLOR_MAP, uv, duv_x, duv_y);
         let a = surface_appearance(in, c);

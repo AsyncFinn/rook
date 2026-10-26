@@ -97,6 +97,9 @@ pub(crate) struct TransparentParts {
     changed: bool,
     drawn_for: Option<DrawnFor>,
     runs: Vec<TransparentRun>,
+    /// Each sorted instance's squared distance from the camera (those on
+    /// top nearer than anything).
+    distances: Vec<f32>,
     /// The sorted instances, and how many it holds.
     buffer: Option<(wgpu::Buffer, usize)>,
 }
@@ -146,6 +149,12 @@ impl TransparentParts {
         self.buffer.as_ref().map(|(b, _)| b)
     }
 
+    /// Each of the last upload's instances' squared distance from the
+    /// camera, by instance.
+    pub(crate) fn distances(&self) -> &[f32] {
+        &self.distances
+    }
+
     /// Upload the parts `view` reaches, sorted back to front for `camera`
     /// (an image on a transparent part just after its part, and those on
     /// top after the rest), unless
@@ -182,10 +191,13 @@ impl TransparentParts {
         });
         let mut instances: Vec<Instance> = Vec::with_capacity(order.len());
         let mut runs: Vec<TransparentRun> = Vec::new();
-        for &(_, e) in &order {
+        self.distances.clear();
+        for &(d, e) in &order {
+            let d = if e.on_top { f32::NEG_INFINITY } else { d };
             for &pass in e.passes {
                 let i = instances.len() as u32;
                 instances.push(e.instance);
+                self.distances.push(d);
                 match runs.last_mut() {
                     Some((k, q, r)) if *k == e.key && *q == pass => r.end = i + 1,
                     _ => runs.push((e.key, pass, i..i + 1)),

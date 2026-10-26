@@ -63,7 +63,22 @@ pub(crate) struct Run {
 pub(crate) struct Runs {
     pub(crate) args: Vec<DrawArgs>,
     pub(crate) runs: Vec<Run>,
+    /// Where something else is drawn between runs: before run `.0`, the
+    /// world GUI's canvases up to `.1` (`Runs::cut`).
+    pub(crate) cuts: Vec<(usize, usize)>,
     pub(crate) counts: PassCounts,
+}
+
+impl Runs {
+    /// Draw the world GUI's canvases up to `canvases` before the next run.
+    pub(crate) fn cut(&mut self, canvases: usize) {
+        self.cuts.push((self.runs.len(), canvases));
+    }
+
+    /// The world GUI's canvases drawn between runs.
+    pub(crate) fn canvases_cut(&self) -> usize {
+        self.cuts.last().map_or(0, |c| c.1)
+    }
 }
 
 impl Renderer {
@@ -100,10 +115,12 @@ impl Renderer {
         });
         runs.counts.draws += 1;
         runs.counts.triangles += mesh.indices.len() as u64 / 3 * instances.len() as u64;
+        let cut = runs.cuts.last().is_some_and(|c| c.0 == runs.runs.len());
         match runs.runs.last_mut() {
             Some(r)
                 if (r.pipe, r.source, r.page, r.images) == (pipe, source, mesh.page, images)
-                    && r.args.end == at =>
+                    && r.args.end == at
+                    && !cut =>
             {
                 r.args.end += 1;
             }
@@ -153,8 +170,15 @@ impl Renderer {
     }
 
     /// Record a pass's runs, whose arguments start at draw `base` of the
-    /// indirect buffer. Group 2 is bound here only without a table.
-    pub(crate) fn record(&self, pass: &mut wgpu::RenderPass<'_>, runs: &mut Runs, base: usize) {
+    /// indirect buffer, calling `cut` at each of its cuts with how many
+    /// canvases to have drawn. Group 2 is bound here only without a table.
+    pub(crate) fn record(
+        &self,
+        pass: &mut wgpu::RenderPass<'_>,
+        runs: &mut Runs,
+        base: usize,
+        mut cut: impl FnMut(&mut wgpu::RenderPass<'_>, usize),
+    ) {
         let mut bound: (
             Option<Pipe>,
             Option<Source>,
@@ -166,7 +190,16 @@ impl Renderer {
         // draws each pixel once (`Pipelines::new`). After 255 runs the
         // references come round again.
         let mut stencil = 0u32;
-        for run in &runs.runs {
+        let mut cuts = runs.cuts.iter().peekable();
+        for (i, run) in runs.runs.iter().enumerate() {
+            while let Some(&(_, canvases)) = cuts.next_if(|c| c.0 == i) {
+                cut(pass, canvases);
+                // The GUI binds its own pipeline, buffers and group 2.
+                bound = (None, None, None, None);
+                if let ImageBinding::Table(_) = &self.image_binding {
+                    pass.set_bind_group(2, self.group(&[None; 5]), &[]);
+                }
+            }
             if matches!(run.pipe, Pipe::GlassFilter | Pipe::GlassSurface) {
                 stencil = stencil % 255 + 1;
                 pass.set_stencil_reference(stencil);
@@ -213,6 +246,10 @@ impl Renderer {
                     }
                 }
             }
+        }
+        // Cuts after the last run (its draw was empty).
+        for &(_, canvases) in cuts {
+            cut(pass, canvases);
         }
     }
 

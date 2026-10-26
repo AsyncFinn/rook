@@ -1,5 +1,6 @@
 //! World GUI on the GPU: each SurfaceGui's and BillboardGui's quads drawn
-//! straight into the world on its canvas's plane, after the particles,
+//! straight into the world on its canvas's plane, among the transparent
+//! parts by distance (those nearer than every one after the particles),
 //! depth tested unless it's AlwaysOnTop, so edges and text stay sharp
 //! however near they're seen (docs/behavior/gui/world.md). Each canvas's
 //! quads stay on the GPU until that canvas changes; each frame only where
@@ -50,12 +51,14 @@ struct Canvas {
 }
 
 /// One canvas drawn this frame: its frame's slot in the uniform buffer,
-/// which canvas it is, and whether it's drawn over everything.
+/// which canvas it is, whether it's drawn over everything, and how far
+/// its middle is from the camera.
 #[derive(Debug, Clone)]
 pub(crate) struct WorldDraw {
     slot: u32,
     canvas: usize,
-    on_top: bool,
+    pub(crate) on_top: bool,
+    pub(crate) distance: f32,
 }
 
 /// The frame's canvases, back to front, those always on top last.
@@ -309,10 +312,11 @@ impl WorldGui {
         queue.write_buffer(&frames.buffer, 0, &bytes);
         seen.into_iter()
             .enumerate()
-            .map(|(i, (on_top, _, _, canvas))| WorldDraw {
+            .map(|(i, (on_top, distance, _, canvas))| WorldDraw {
                 slot: i as u32,
                 canvas,
                 on_top,
+                distance,
             })
             .collect()
     }
@@ -380,8 +384,8 @@ impl WorldGui {
         }
     }
 
-    /// Draw the frame's canvases (last in the main pass).
-    pub(crate) fn record(&self, pass: &mut wgpu::RenderPass<'_>, runs: &WorldRuns) {
+    /// Draw some of the frame's canvases, in the order given.
+    pub(crate) fn record(&self, pass: &mut wgpu::RenderPass<'_>, runs: &[WorldDraw]) {
         let Some(frames) = &self.frames else {
             return;
         };

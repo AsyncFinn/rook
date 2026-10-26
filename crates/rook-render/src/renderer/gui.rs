@@ -24,7 +24,7 @@ use groups::Groups;
 use images::{GuiImages, ImageKey, Run, runs};
 use pipelines::BindLayouts;
 use ramps::Ramps;
-use world::{WorldGui, WorldRuns};
+use world::{WorldDraw, WorldGui, WorldRuns};
 
 /// A list of quads as the shader reads them, each with its image.
 type Packed = Vec<(GpuQuad, Option<ImageKey>)>;
@@ -470,8 +470,8 @@ impl GuiPass {
         self.world.upload(device, queue, images, camera, height)
     }
 
-    /// Lay the world GUI's canvases in the world (last in the main pass).
-    pub(crate) fn record_world(&self, pass: &mut wgpu::RenderPass<'_>, runs: &WorldRuns) {
+    /// Lay some of the world GUI's canvases in the world.
+    pub(crate) fn record_world(&self, pass: &mut wgpu::RenderPass<'_>, runs: &[WorldDraw]) {
         self.world.record(pass, runs);
     }
 

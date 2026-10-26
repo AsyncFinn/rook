@@ -84,7 +84,11 @@ marked):
   FileMesh and FileMesh, including the empty-`MeshId` box, which shows the
   image on every face); a Head, Sphere or Brick SpecialMesh ignores it. The
   texture replaces the part's color, `VertexColor` multiplies it (red made
-  green and blue black), and its alpha is ignored. `VertexColor` on a mesh
+  green and blue black), and its alpha is ignored at Transparency 0. At
+  any Transparency above 0 the alpha multiplies the opacity, blended with
+  soft edges, not cut (a MeshPart's leaf texture at 0.02, 0.1 and 0.5,
+  checked 2026-10-26; Rook drew them as solid squares until then).
+  `VertexColor` on a mesh
   without a texture, and per-vertex colors in a 2.00 mesh, changed nothing.
   MeshPart `TextureID` draws the same way (a MeshPart loaded from a test
   model).
