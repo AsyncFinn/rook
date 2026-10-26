@@ -118,7 +118,7 @@ Each run of the player writes one file, `logs\rook-player-<time>.log`. `rook-too
 
 `rook-tools logs` prints the newest log's path. `rook-tools logs --open` opens the folder.
 
-Release builds of `rook-player` on Windows have no console (the GUI subsystem), since players open places from Explorer, so the log file is the only record there. What ends a windowed run is shown in a native message box, what failed as its title and why as its text (`apps/rook-player/src/alert.rs`): a place that can't be read or fails to start, a GPU Rook can't draw with, a crash. Rook has no CoreGui of its own yet to show these in its window. Runs that make a file or a measurement (`--screenshot`, `--bench`, `--record-audio`) only print, so scripts aren't held up.
+`rook-player` is a console program, so a terminal waits for it and it prints there, but opened from Explorer it has no console, so the log file is the only record there. Its manifest (`apps/rook-player/rook-player.manifest`) asks Windows 11 24H2 and later not to make one (the [console allocation policy](https://learn.microsoft.com/en-us/windows/console/console-allocation-policy)); on older Windows it closes the one it was given at startup when no other program shares it (`apps/rook-player/src/console_window.rs`). What ends a windowed run is shown in a native message box, what failed as its title and why as its text (`apps/rook-player/src/alert.rs`): a place that can't be read or fails to start, a GPU Rook can't draw with, a crash. Rook has no CoreGui of its own yet to show these in its window. Runs that make a file or a measurement (`--screenshot`, `--bench`, `--record-audio`) only print, so scripts aren't held up.
 
 ### Crash reports
 

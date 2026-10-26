@@ -24,7 +24,7 @@ Drop a place file onto `rook-player.exe` (or a shortcut to it) in Explorer and i
 
 If the place can't be opened (the file is damaged or isn't a place, or the game fails to start), a message box says what went wrong, and no window opens. A graphics card Rook can't draw with and a crash are reported the same way. Started with no place, `rook-player` prints its usage and exits.
 
-Release builds open no console window. Rook's messages, script output included, still go to the log file in `%LOCALAPPDATA%\Rook\logs` ([data and logging](../design/data-and-logging.md#log-files)). The file always has the detail `--verbose` would show, and `--verbose <subsystem>` adds everything that area logs. A build made without `--release` keeps its console.
+Opened this way, Rook opens no console window. Rook's messages, script output included, still go to the log file in `%LOCALAPPDATA%\Rook\logs` ([data and logging](../design/data-and-logging.md#log-files)). The file always has the detail `--verbose` would show, and `--verbose <subsystem>` adds everything that area logs. Run from a terminal, `rook-player` prints there, the terminal waits for it, and `--help` and the `>` prompt work. On Windows older than 11 24H2 a console window flashes up as it starts.
 
 ## Playing a place
 

@@ -5,6 +5,8 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- `rook-player` works from a terminal again in release builds: `--help`, the `>` prompt and printed messages show there, and the terminal waits for it. Since 0.3.0 release builds were Windows GUI programs, which no terminal can talk to. Opened from Explorer, it still opens no console window (on Windows 11 24H2 and later; older versions flash one briefly). See [getting started](docs/guide/getting-started.md#opening-a-place-without-a-terminal).
+
 - Binary files from about 2016, which saved text objects' `TextSize` as a whole number, load again. Rook's API data says it's a decimal, as Roblox's does now, and the decoder rejected the whole file ("Type mismatch: Property TextBox.TextSize"); such properties are now converted on load, as Studio does.
 - A MeshPart or mesh with any `Transparency` is see-through where its texture is, as in Studio: a potted plant's leaves at 0.1 drew as solid squares, as the texture's alpha was ignored. At Transparency 0 it still is, as in Studio. See [mesh textures](docs/behavior/rendering/textures-and-decals.md).
 - SurfaceGuis and BillboardGuis sort among see-through parts by distance, so a transparent part in front covers a sign instead of the sign drawing over it. See [world GUI](docs/behavior/gui/world.md).

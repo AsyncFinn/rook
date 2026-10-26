@@ -14,13 +14,10 @@
 //! With the `repl` feature (default) and an interactive terminal, the
 //! terminal shows a `> ` prompt that runs Luau in the open place.
 
-// Release builds are for players, who open places from Explorer: no
-// console window opens with the game. Logs still go to the log file.
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-
 mod alert;
 mod app;
 mod bench;
+mod console_window;
 mod game;
 mod record;
 mod server;
@@ -242,6 +239,7 @@ fn note_gpu(renderer: &Renderer) {
 }
 
 fn main() -> ExitCode {
+    console_window::close_unshared();
     #[cfg(feature = "tracy")]
     profiling::tracy_client::Client::start();
     let argv = rook_engine::logging::fix_verbose_args(std::env::args());

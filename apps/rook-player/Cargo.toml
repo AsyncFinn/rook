@@ -7,7 +7,7 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 rust-version.workspace = true
-# Embeds the app icon (resources/README.md)
+# Embeds the app icon and manifest (resources/README.md)
 build = "../build.rs"
 
 [[bin]]
@@ -39,6 +39,9 @@ clap.workspace = true
 tracing.workspace = true
 profiling.workspace = true
 mimalloc.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = ["Win32_System_Console"] }
 
 [features]
 default = ["repl"]

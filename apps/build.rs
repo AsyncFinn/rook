@@ -1,6 +1,7 @@
 //! Both apps' build script: renders `resources/rook.svg` into a Windows icon and
 //! embeds it in the executable as icon resource 1, which the player's window
-//! also loads. See resources/README.md.
+//! also loads, and `<app>/<app>.manifest` as its manifest where there is
+//! one. See resources/README.md.
 
 use std::{env, fs, path::PathBuf};
 
@@ -24,12 +25,26 @@ fn main() {
     let out = PathBuf::from(env::var("OUT_DIR").expect("set by cargo"));
     let ico = out.join("rook.ico");
     fs::write(&ico, ico_file(&tree)).expect("write rook.ico");
-    let rc = out.join("icon.rc");
-    let ico_path = ico.display().to_string().replace('\\', "/");
-    fs::write(&rc, format!("1 ICON \"{ico_path}\"\n")).expect("write icon.rc");
+    let rc = out.join("resources.rc");
+    let mut resources = format!("1 ICON \"{}\"\n", rc_path(&ico));
+    // An app's own manifest, as resource 1 of type 24 (RT_MANIFEST).
+    let app_manifest = manifest.join(format!(
+        "{}.manifest",
+        env::var("CARGO_PKG_NAME").expect("set by cargo")
+    ));
+    if app_manifest.exists() {
+        println!("cargo::rerun-if-changed={}", app_manifest.display());
+        resources += &format!("1 24 \"{}\"\n", rc_path(&app_manifest));
+    }
+    fs::write(&rc, resources).expect("write resources.rc");
     embed_resource::compile(&rc, embed_resource::NONE)
         .manifest_required()
-        .expect("compile icon.rc");
+        .expect("compile resources.rc");
+}
+
+/// A path as a resource script quotes it.
+fn rc_path(path: &std::path::Path) -> String {
+    path.display().to_string().replace('\\', "/")
 }
 
 /// An .ico holding a PNG of the icon at each of [`SIZES`].

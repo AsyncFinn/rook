@@ -107,7 +107,7 @@ symphonia = { version = "0.5", default-features = false, features = ["wav", "pcm
 harfrust = "0.12"
 skrifa = "0.44"
 zeno = "0.3"
-# Thread priority on Windows (rook-content)
+# Thread priority (rook-content) and the console window (rook-player) on Windows
 windows-sys = "0.61"
 # Audio output device (rook-audio)
 cpal = "0.15"
