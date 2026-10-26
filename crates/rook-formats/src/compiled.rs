@@ -7,6 +7,7 @@
 //! caller can match them to the tree `load` builds.
 
 use crate::LoadError;
+use crate::chunks::{Reader, chunks};
 
 /// One compiled script: the child indices from the file's top level down
 /// to it (`[2, 0]` is the first child of the third top-level instance),
@@ -23,38 +24,18 @@ const BYTECODE: u8 = 0x1D;
 /// Every compiled script in a binary file. Files without any (all places
 /// and models people make) give an empty list.
 pub fn compiled_scripts(bytes: &[u8]) -> Result<Vec<CompiledScript>, LoadError> {
-    let bad = |what: &str| LoadError::Binary(format!("compiled scripts: {what}"));
-    if !bytes.starts_with(b"<roblox!") || bytes.len() < 32 {
-        return Err(LoadError::UnknownFormat);
-    }
     // Referents by class, the bytecode by referent, and each referent's
     // parent in file order (the order `rbx_binary` adds children in).
     let mut referents: Vec<(u32, Vec<i32>)> = Vec::new();
     let mut code: Vec<(i32, Vec<u8>)> = Vec::new();
     let mut parents: Vec<(i32, i32)> = Vec::new();
-    let mut pos = 32;
-    while pos + 16 <= bytes.len() {
-        let name = &bytes[pos..pos + 4];
-        let compressed = read_u32(bytes, pos + 4) as usize;
-        let size = read_u32(bytes, pos + 8) as usize;
-        pos += 16;
-        let stored = if compressed == 0 { size } else { compressed };
-        let raw = bytes
-            .get(pos..pos + stored)
-            .ok_or_else(|| bad("truncated chunk"))?;
-        pos += stored;
-        if name == b"END\0" {
-            break;
-        }
-        if !matches!(name, b"INST" | b"PROP" | b"PRNT") {
+    for chunk in chunks(bytes)? {
+        if !matches!(chunk.name, b"INST" | b"PROP" | b"PRNT") {
             continue;
         }
-        let chunk = decompress(raw, compressed, size).ok_or_else(|| bad("bad compression"))?;
-        let mut r = Reader {
-            bytes: &chunk,
-            at: 0,
-        };
-        match name {
+        let data = chunk.data()?;
+        let mut r = Reader::new(&data);
+        match chunk.name {
             b"INST" => {
                 let class = r.u32()?;
                 let _name = r.string()?;
@@ -69,7 +50,9 @@ pub fn compiled_scripts(bytes: &[u8]) -> Result<Vec<CompiledScript>, LoadError> 
                     continue;
                 }
                 let Some((_, refs)) = referents.iter().find(|(c, _)| *c == class) else {
-                    return Err(bad("PROP before its INST"));
+                    return Err(LoadError::Binary(
+                        "compiled scripts: PROP before its INST".into(),
+                    ));
                 };
                 for &referent in refs {
                     code.push((referent, r.string()?.to_vec()));
@@ -113,87 +96,9 @@ pub fn compiled_scripts(bytes: &[u8]) -> Result<Vec<CompiledScript>, LoadError> 
     Ok(out)
 }
 
-fn read_u32(bytes: &[u8], at: usize) -> u32 {
-    bytes
-        .get(at..at + 4)
-        .map_or(0, |b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
-}
-
-fn decompress(raw: &[u8], compressed: usize, size: usize) -> Option<Vec<u8>> {
-    if compressed == 0 {
-        return Some(raw.to_vec());
-    }
-    if raw.starts_with(&[0x28, 0xB5, 0x2F, 0xFD]) {
-        zstd::bulk::decompress(raw, size).ok()
-    } else {
-        lz4_flex::block::decompress(raw, size).ok()
-    }
-}
-
-struct Reader<'a> {
-    bytes: &'a [u8],
-    at: usize,
-}
-
-impl Reader<'_> {
-    fn take(&mut self, n: usize) -> Result<&[u8], LoadError> {
-        let out = self
-            .bytes
-            .get(self.at..self.at + n)
-            .ok_or_else(|| LoadError::Binary("compiled scripts: truncated chunk".into()))?;
-        self.at += n;
-        Ok(out)
-    }
-
-    fn u8(&mut self) -> Result<u8, LoadError> {
-        Ok(self.take(1)?[0])
-    }
-
-    fn u32(&mut self) -> Result<u32, LoadError> {
-        let b = self.take(4)?;
-        Ok(u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
-    }
-
-    fn string(&mut self) -> Result<&[u8], LoadError> {
-        let n = self.u32()? as usize;
-        self.take(n)
-    }
-
-    /// `count` referents: big-endian i32s split into four byte planes,
-    /// zigzag-encoded, each the difference from the one before.
-    fn referents(&mut self, count: usize) -> Result<Vec<i32>, LoadError> {
-        let planes = self.take(count * 4)?;
-        let mut out = Vec::with_capacity(count);
-        let mut last = 0i32;
-        for i in 0..count {
-            let v = u32::from_be_bytes([
-                planes[i],
-                planes[count + i],
-                planes[2 * count + i],
-                planes[3 * count + i],
-            ]);
-            let delta = ((v >> 1) as i32) ^ -((v & 1) as i32);
-            last = last.wrapping_add(delta);
-            out.push(last);
-        }
-        Ok(out)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn referents_undo_zigzag_and_deltas() {
-        // 1, then +2, then -1: zigzag 2, 4, 1, as four byte planes.
-        let planes = [0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 4, 1];
-        let mut r = Reader {
-            bytes: &planes,
-            at: 0,
-        };
-        assert_eq!(r.referents(3).unwrap(), vec![1, 3, 2]);
-    }
 
     #[test]
     fn files_without_bytecode_give_nothing() {

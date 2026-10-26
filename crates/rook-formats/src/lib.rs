@@ -7,15 +7,18 @@
 //! are kept, so saving a file never silently drops data.
 //!
 //! Legacy XML (roughly 2006–2010) that `rbx_xml` rejects is retried through
-//! the [`legacy`] upgrade pass. Files that load normally are never rewritten.
+//! the [`legacy`] upgrade pass, and binary files with a property stored as an
+//! older type through `retype`. Files that load normally are never rewritten.
 //!
 //! Decoders are run behind a panic guard: a corrupt file produces a
 //! [`LoadError`], never a crash.
 
+mod chunks;
 mod compare;
 mod compiled;
 mod convert;
 pub mod legacy;
+mod retype;
 
 pub use compare::{CompareOptions, compare, compare_with};
 pub use compiled::{CompiledScript, compiled_scripts};
@@ -101,6 +104,12 @@ pub fn load(bytes: &[u8]) -> Result<Loaded, LoadError> {
             dom,
             legacy: None,
         }),
+        Err(LoadError::Binary(original)) if original.starts_with("Type mismatch") => {
+            load_retyped(bytes).map_err(|retry| match retry {
+                Some(e) => LoadError::Binary(format!("{original} (retyping also failed: {e})")),
+                None => LoadError::Binary(original),
+            })
+        }
         Err(LoadError::Xml(original)) => load_legacy_xml(bytes).map_err(|retry| {
             // Report the original failure; mention the retry only if it got further.
             match retry {
@@ -127,6 +136,22 @@ fn load_legacy_xml(bytes: &[u8]) -> Result<Loaded, Option<String>> {
         format: Format::Xml,
         dom,
         legacy: Some(report),
+    })
+}
+
+/// Retry a binary file with its properties stored as older types
+/// rewritten. `Err(None)` means there was nothing to rewrite, so the
+/// original error stands. (`rbx_binary`'s errors are opaque: its type
+/// mismatch is told from its message.)
+fn load_retyped(bytes: &[u8]) -> Result<Loaded, Option<String>> {
+    let retyped = retype::retype(bytes, rook_reflection::rbx_database())
+        .map_err(|e| Some(e.to_string()))?
+        .ok_or(None)?;
+    let dom = decode(&retyped, Format::Binary).map_err(|e| Some(e.to_string()))?;
+    Ok(Loaded {
+        format: Format::Binary,
+        dom,
+        legacy: None,
     })
 }
 

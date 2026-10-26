@@ -3352,6 +3352,7 @@ dependencies = [
  "quick-xml 0.42.0",
  "rbx_binary",
  "rbx_dom_weak",
+ "rbx_reflection",
  "rbx_types",
  "rbx_xml",
  "rook-dom",

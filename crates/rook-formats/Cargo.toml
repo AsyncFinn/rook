@@ -14,6 +14,7 @@ rook-types.workspace = true
 rook-dom.workspace = true
 rbx_dom_weak.workspace = true
 rbx_types.workspace = true
+rbx_reflection.workspace = true
 rbx_binary.workspace = true
 rbx_xml.workspace = true
 thiserror.workspace = true
