@@ -229,6 +229,27 @@ impl Runtime {
         });
     }
 
+    /// Offer an InputObject GUI didn't take to ContextActionService's
+    /// bindings. Returns whether one took it.
+    pub fn context_action(&self, object: InstanceId) -> bool {
+        let Ok(offer) = self
+            .lua
+            .named_registry_value::<mlua::Function>("rook.context_action")
+        else {
+            return false;
+        };
+        self.guarded(|| {
+            let taken = api::instance::push_instance(&self.lua, object)
+                .and_then(|obj| offer.call::<bool>(obj))
+                .unwrap_or_else(|e| {
+                    tracing::warn!("ContextActionService: {e}");
+                    false
+                });
+            threads::drain_deferred(&self.lua);
+            taken
+        })
+    }
+
     /// Apply StyleSheets to what changed since the last call.
     pub fn restyle(&self) {
         let start = self.world().dom.journal().end();

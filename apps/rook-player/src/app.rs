@@ -392,7 +392,8 @@ impl ApplicationHandler for App {
             WindowEvent::Focused(false) if self.looking => self.look(false),
             WindowEvent::KeyboardInput { event, .. } => {
                 let pressed = event.state == ElementState::Pressed;
-                // Escape ends typing in a TextBox rather than the player.
+                // Escape ends typing in a TextBox, or opens Roblox's menu,
+                // rather than closing the player.
                 let typing = self.game.typing();
                 if let PhysicalKey::Code(code) = event.physical_key {
                     // Repeats only edit a TextBox; the engine drops the rest.
@@ -404,7 +405,7 @@ impl ApplicationHandler for App {
                     }
                     match event.state {
                         ElementState::Pressed => {
-                            if code == KeyCode::Escape && !typing {
+                            if code == KeyCode::Escape && !typing && !self.game.core_menu {
                                 event_loop.exit();
                             }
                             self.keys.insert(code);

@@ -36,6 +36,8 @@ pub(crate) struct Game {
     delivering: std::time::Duration,
     /// When loading the place started (`--bench` times content from it).
     pub load_start: std::time::Instant,
+    /// The client runs Roblox's CoreScripts, whose menu Escape opens.
+    pub core_menu: bool,
 }
 
 /// A place on its way to being a [`Game`], for a window that keeps
@@ -147,7 +149,9 @@ impl Finish {
     }
 
     fn game(&self, mode: Mode, saved_camera: Camera) -> Game {
+        let core_menu = matches!(mode, Mode::Play { .. }) && self.options.core_scripts.is_some();
         let game = Game {
+            core_menu,
             mode,
             saved_camera,
             server_steps: Times::default(),

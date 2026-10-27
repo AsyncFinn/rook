@@ -80,7 +80,8 @@ Code: loading in `rook-engine`'s `core_scripts.rs` (and the
 On an empty baseplate, 29 CoreScripts start and run without errors.
 The top bar (Roblox's logo button, and the menu and chat buttons in their
 pill), the player list and Roblox's notification toasts draw (Roblox's
-own React code, laid out by Rook's GUI). Clicking the logo button opens
+own React code, laid out by Rook's GUI). Clicking the logo button, or Escape (the menu's
+`ContextActionService` core action), opens
 the in-game menu (its People, Settings, Report and Help tabs, and Leave,
 Respawn and Resume with their keys), dimming the screen and hiding the
 player list. `RobloxGui` stacks its objects by sibling
@@ -90,7 +91,14 @@ player list. `RobloxGui` stacks its objects by sibling
 `TweenPosition`. The settings menu, backpack,
 emotes menu, purchase prompts, screenshots and the fullscreen title bar
 load. Clicking the menu's tabs shows the People, Report and Help pages
-laid out as in Roblox. The chat window shows messages sent and received
+laid out as in Roblox. The Report page is the legacy one: Studio
+reads `SwitchOverToAbuseReportMenuV2` as true (Observed 2026-10-26,
+`GetFastFlag` in a Studio client), but only through an experiment
+(`FFlagSwitchOverToAbuseReportMenuV2_IXP`) Rook has no layers for, so
+the script's default, false, applies. In the legacy page an experience's
+"Reason for Abuse?" is text by design (only Inappropriate Content), and
+"Experience or Person?" switches only with other players to report.
+The chat window shows messages sent and received
 through [TextChatService](chat.md), with each speaker's name. Chat's
 stores need `Player.ChatAvailabilityStatus` (a string starting `Enabled`
 when the player may chat), which Rook's API snapshot doesn't have; Rook
@@ -158,7 +166,10 @@ applies them each frame before GUI lays out:
 - Higher `Priority` wins, then the later rule. A rule sets a property only
   where the object hasn't set it itself (Inference, from Foundation
   setting some properties directly and leaving the rest to styles); a
-  property no rule sets any more goes back to its default.
+  property no rule sets any more goes back to its default. A script's
+  own write makes a property its own again, and `ResetPropertyToDefault`
+  hands it back to the rules at once (React clears props that way: the
+  player list's hover color).
 
 ## What Rook lacks
 
@@ -171,7 +182,7 @@ above, by calls:
 | Roblox's app and website | `MessageBusService` (`Call`, `Publish`, `Subscribe`), `LinkingService:RegisterLuaUrl`, `SessionService:SessionExists`, `ThirdPartyUserService:IsSingleSignOnSupported`, `AchievementService:IsAvailable`, `CaptureService:RetrieveCaptures`, `InsertService:LoadLocalAsset` |
 | Stored settings | `MemStorageService` (`GetItem` 21, `BindAndFire`), `LocalStorageService` (`GetItem`, `WhenLoaded`) |
 | Experiments | `IXPService` (`InitializeUserLayers`, `RegisterUserLayers`, `GetUserLayerLoadingStatus`) |
-| Gamepad and keyboard navigation | `GuiService` (`AddKey` 22, `AddSpecialKey`, `AddSelectionParent`, `SelectedCoreObject`), `ContextActionService` (`BindCoreAction` 14, `UnbindCoreAction`, `BindAction`) |
+| Gamepad and keyboard navigation | `GuiService` (`AddKey` 22, `AddSpecialKey`, `AddSelectionParent`, `SelectedCoreObject`) |
 | The top bar's space | `GuiService:SetGlobalGuiInset`, `GuiService:SetTopbarInset`, `GuiService.CoreGuiFolder`, `CoreEffectFolder`, `SendCoreUiNotification` |
 | Chat and voice | `TextChatService.ChatTranslationToggleEnabled`, `VoiceChatService:IsVoiceEnabledForUserIdAsync`, `AudioFocusService:GetFocusedContextId`, `FaceAnimatorService` |
 | Other | `GuiService:GetNotificationTypeList`, `LocalizationService:GetCountryRegionForPlayerAsync`, `ScreenGui.OnTopOfCoreBlur`, `StarterPlayer.PlayerModuleStatus` |

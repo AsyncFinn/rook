@@ -45,6 +45,53 @@ fn styles_reach_changes_made_later_in_the_frame() {
     assert_eq!(lines(client), ["0.5 0.5"]);
 }
 
+/// A property a script set itself after a rule did stays the script's
+/// when the rule stops matching, and once reset to its default the rule
+/// sets it again (React clears the player list's hover color so).
+#[test]
+fn a_script_write_outlasts_the_rule_it_replaced() {
+    let mut server = Server::new(&Options::default()).unwrap();
+    let starter = service(&server, "StarterGui");
+    let screen = add_under(&server, starter, "ScreenGui", "Hud", "");
+    add_under(
+        &server,
+        screen,
+        "LocalScript",
+        "Style",
+        r#"
+        local gui = script.Parent
+        local sheet = Instance.new("StyleSheet")
+        sheet.Parent = gui
+        local link = Instance.new("StyleLink")
+        link.StyleSheet = sheet
+        link.Parent = gui
+        local rule = Instance.new("StyleRule")
+        rule.Selector = ".hot"
+        rule:SetProperties({ BackgroundColor3 = Color3.new(1, 0, 0) })
+        rule.Parent = sheet
+        local f = Instance.new("Frame")
+        f:AddTag("hot")
+        f.Parent = gui
+        task.wait(0.1)
+        print(f.BackgroundColor3)
+        f.BackgroundColor3 = Color3.new(0, 0, 1)
+        f:RemoveTag("hot")
+        task.wait(0.1)
+        print(f.BackgroundColor3)
+        f:AddTag("hot")
+        f:ResetPropertyToDefault("BackgroundColor3")
+        task.wait(0.1)
+        print(f.BackgroundColor3)
+        "#,
+    );
+    server.start();
+    let mut session = Session::new(server, Options::default());
+    let index = session.join("Styler", 1).unwrap();
+    session.run_for(0.5);
+    let client = session.client_mut(index).unwrap();
+    assert_eq!(lines(client), ["1, 0, 0", "0, 0, 1", "1, 0, 0"]);
+}
+
 /// Where StyleLinks nest, the nearest one styles a tree: an outer empty
 /// sheet (CoreGui's own) doesn't undo an inner one's styles.
 #[test]

@@ -38,6 +38,7 @@ mod audio_api;
 mod bindables;
 pub(crate) mod camera;
 pub(crate) mod characters;
+mod context_actions;
 pub(crate) mod core;
 mod core_gui;
 pub(crate) mod data_stores;
@@ -304,6 +305,7 @@ pub(crate) fn luau_source(owner: &str, name: &str) -> Option<&'static str> {
         }
         _ => [
             tweens::luau_source,
+            context_actions::luau_source,
             gui::luau_source,
             bindables::luau_source,
             data_stores::luau_source,

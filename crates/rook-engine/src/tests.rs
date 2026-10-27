@@ -181,6 +181,7 @@ mod assets;
 mod audio_api;
 mod characters;
 mod client_tweens;
+mod context_actions;
 mod effects;
 mod explosions;
 mod gui;

@@ -106,7 +106,9 @@ pub(crate) fn set_member(lua: &Lua, id: InstanceId, key: &str, value: LuaValue) 
     }
     write_property(lua, id, p.name, &value)
         .map_err(|e| ScriptError(format!("Unable to assign property {key}. {e}")))
-        .and_then(|r| r)
+        .and_then(|r| r)?;
+    with_world(lua, |w| w.styles.script_wrote(id, p.name));
+    Ok(())
 }
 
 /// Convert and store a property, then fire its signals. The outer error is

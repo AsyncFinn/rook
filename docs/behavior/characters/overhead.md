@@ -1,4 +1,4 @@
-# Names and health over heads
+# Overhead names and health
 
 Checked against Studio 0.744 on 2026-10-26.
 

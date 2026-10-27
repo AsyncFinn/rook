@@ -319,5 +319,11 @@ fn install_engine_helpers(lua: &Lua) -> mlua::Result<()> {
         .call(std.clone())?;
     lua.set_named_registry_value("rook.render_step", render.get::<Function>("step")?)?;
     std.set("render_step", render)?;
+    let actions: Table = lua
+        .load(include_str!("luau/context_action.luau"))
+        .set_name("=[rook] ContextActionService")
+        .call(std.clone())?;
+    lua.set_named_registry_value("rook.context_action", actions.get::<Function>("input")?)?;
+    std.set("context_action", actions)?;
     Ok(())
 }

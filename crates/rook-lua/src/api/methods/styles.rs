@@ -75,12 +75,15 @@ fn get_property(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     Outcome::ret(lua, table_of(lua, this)?.raw_get::<LuaValue>(name)?)
 }
 
-/// Confirmed: creator-docs Instance:ResetPropertyToDefault.
+/// Confirmed: creator-docs Instance:ResetPropertyToDefault. The property
+/// is unset, so styles may set it again: React clears a hover color this
+/// way, and the row's StyleSheet value must come back at once.
 fn reset_property(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let name = a.string(0)?;
     super::mutate(lua, |w| match w.dom.property_id(this, &name) {
         Some(p) => w.dom.reset_property(this, p),
         None => Ok(()),
     })?;
+    with_world(lua, |w| w.styles.restyle_later(this));
     Outcome::ret(lua, ())
 }

@@ -313,6 +313,15 @@ impl DataModel {
         }
     }
 
+    /// Give ContextActionService's bindings what GUI didn't take, after
+    /// UserInputService has heard of it (Inference: the order isn't
+    /// measured).
+    fn offer_action(&self, object: InstanceId, processed: bool) {
+        if !processed {
+            self.runtime.context_action(object);
+        }
+    }
+
     fn mouse_object(&self) -> Option<InstanceId> {
         self.runtime.world().input.mouse_object
     }
@@ -468,6 +477,7 @@ impl DataModel {
                 self.edit_key(code, obj);
             }
             self.fire_input("InputBegan", obj, processed);
+            self.offer_action(obj, processed);
         } else {
             if !self.runtime.world_mut().input.keys.remove(&value) {
                 return processed;
@@ -486,6 +496,7 @@ impl DataModel {
             };
             self.set_property(obj, "UserInputState", UserInputState::End.into());
             self.fire_input("InputEnded", obj, processed);
+            self.offer_action(obj, processed);
         }
         if !processed && let (Some(m), Some(s)) = (self.mouse_object(), legacy_key_string(code)) {
             self.fire(m, if down { "KeyDown" } else { "KeyUp" }, s);
@@ -527,6 +538,7 @@ impl DataModel {
                 obj,
                 processed,
             );
+            self.offer_action(obj, processed);
         }
         let detector = self.refresh_mouse(clicks);
         if let Some(m) = self.mouse_object()

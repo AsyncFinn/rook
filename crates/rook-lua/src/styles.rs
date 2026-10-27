@@ -47,6 +47,20 @@ pub(crate) struct Styles {
 }
 
 impl Styles {
+    /// A script set `name` on `id`: the property is its own from now on,
+    /// so a rule that stops matching leaves it be rather than resetting
+    /// it (the player list sets its own colors when hovered and left).
+    pub(crate) fn script_wrote(&mut self, id: InstanceId, name: &str) {
+        if let Some(names) = self.styled.get_mut(&id) {
+            names.remove(name);
+        }
+    }
+
+    /// Style `id`'s tree again at the next restyle.
+    pub(crate) fn restyle_later(&mut self, id: InstanceId) {
+        self.pending.insert(id);
+    }
+
     /// Rules changed: style every linked tree again.
     pub(crate) fn invalidate(&mut self) {
         self.all = true;
