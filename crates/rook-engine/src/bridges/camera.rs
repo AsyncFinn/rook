@@ -54,6 +54,8 @@ impl DataModel {
     /// `UserInputService.MouseBehavior` says, unless a shown GuiButton is
     /// `Modal` or a TextBox has focus (Inference: typing frees it).
     pub fn mouse_lock(&self) -> MouseLock {
+        // Asked first: it borrows the World itself.
+        let typing = self.runtime.focused_text_box().is_some();
         let w = self.runtime.world();
         let behavior = w
             .dom
@@ -64,7 +66,7 @@ impl DataModel {
             Some("LockCurrentPosition") => MouseLock::InPlace,
             _ => return MouseLock::Free,
         };
-        if w.gui.modal_shown(&w.dom) || self.runtime.focused_text_box().is_some() {
+        if typing || w.gui.modal_shown(&w.dom) {
             return MouseLock::Free;
         }
         lock

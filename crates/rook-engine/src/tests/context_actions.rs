@@ -61,3 +61,39 @@ fn bindings_take_keys_by_priority_then_newest() {
         ]
     );
 }
+
+/// A script locking the mouse holds it, and the held mouse's movement
+/// reaches InputChanged as a Delta (what the default camera turns by).
+#[test]
+fn a_locked_mouse_moves_by_deltas() {
+    let mut server = Server::new(&Options::default()).unwrap();
+    let starter = service(&server, "StarterGui");
+    let screen = add_under(&server, starter, "ScreenGui", "Hud", "");
+    add_under(
+        &server,
+        screen,
+        "LocalScript",
+        "Lock",
+        r#"
+        local uis = game:GetService("UserInputService")
+        uis.MouseBehavior = Enum.MouseBehavior.LockCenter
+        uis.InputChanged:Connect(function(input)
+            print(input.UserInputType.Name, input.Delta.X, input.Delta.Y)
+        end)
+        "#,
+    );
+    server.start();
+    let mut session = Session::new(server, Options::default());
+    let index = session.join("Looker", 1).unwrap();
+    session.run_for(0.1);
+    assert_eq!(
+        session.client(index).unwrap().mouse_lock(),
+        crate::MouseLock::Center
+    );
+    session.input(index, InputEvent::MouseMotion { dx: 3.0, dy: -2.0 });
+    session.run_for(0.05);
+    assert_eq!(
+        lines(session.client(index).unwrap()),
+        ["MouseMovement 3 -2"]
+    );
+}
