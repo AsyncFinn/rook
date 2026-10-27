@@ -109,4 +109,4 @@ Rook gets better with every place people throw at it. The most useful thing you 
 
 ## License
 
-Rook is licensed under the [Apache License 2.0](LICENSE). See [NOTICE](NOTICE) for attribution.
+Rook is copyright the Rook Contributors and licensed under the [Apache License 2.0](LICENSE). See [NOTICE](NOTICE) for attribution.

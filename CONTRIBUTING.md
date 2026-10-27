@@ -1,6 +1,6 @@
 # Contributing to Rook
 
-Rook is maintained by [AsyncFinn](https://github.com/AsyncFinn). Rook gets better with every place people throw at it, and bug reports are the most useful contribution there is. [Pull requests](#pull-requests) are welcome too.
+Rook is built by the Rook Contributors: everyone who has reported a problem, sent a fix or shared what they learned. [AsyncFinn](https://github.com/AsyncFinn) maintains it. Rook gets better with every place people throw at it, and bug reports are the most useful contribution there is. [Pull requests](#pull-requests) are welcome too, and so are questions: open an issue if anything here is unclear.
 
 ## Reporting a problem
 
@@ -20,7 +20,9 @@ Calling a member that Rook doesn't support yet gives an `"is not implemented in 
 
 ## Pull requests
 
-A pull request is merged when it makes Rook genuinely better, comes with the code done (passing `scripts/check` and following the rules below), and fits where Rook is going. Rook has one maintainer, who decides, and may turn down good work that doesn't fit. Before something big (a new feature, a new crate, a change of direction), open an issue to ask first, so no one's work is wasted. Behavior changes say where the behavior comes from (see [behavior provenance](#behavior-provenance)).
+Small fixes need no issue first: send them straight in. A pull request is merged when it makes Rook better, comes with the code done (passing `scripts/check` and following the rules below), and fits where Rook is going. The maintainer reviews every pull request and will help get it there; work that doesn't fit Rook's direction may be turned down, however good. Before something big (a new feature, a new crate, a change of direction), open an issue to talk it through first, so no one's work is wasted. Behavior changes say where the behavior comes from (see [behavior provenance](#behavior-provenance)).
+
+By sending a pull request, you agree that your contribution is licensed under the [Apache License 2.0](LICENSE) like the rest of Rook (section 5 of the license). You keep the copyright to your work and join the Rook Contributors.
 
 ## Finding your way around
 

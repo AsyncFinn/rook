@@ -6,7 +6,7 @@ members = ["crates/*", "apps/*"]
 version = "0.3.0"
 edition = "2024"
 license = "Apache-2.0"
-authors = ["AsyncFinn"]
+authors = ["The Rook Contributors"]
 repository = "https://github.com/AsyncFinn/rook"
 rust-version = "1.97.1"
 

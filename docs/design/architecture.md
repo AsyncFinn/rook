@@ -277,4 +277,4 @@ Status is one of **Confirmed**, **Inference**, **Approximation** or **Rook exten
 1. **HopperBin**: see [Unscheduled](../roadmap/unscheduled.md#undecided).
 2. **`null` numbers in legacy XML** (3 values in the archive) are read as 0; verify against Studio.
 
-Settled: license is Apache-2.0 with a `NOTICE` file crediting AsyncFinn. The repository is initialized, with a `.gitignore` that excludes Roblox files, caches, reports and credentials. The methods/events list is committed as a compact generated file inside `rook-reflection`.
+Settled: license is Apache-2.0 with a `NOTICE` file crediting the Rook Contributors. The repository is initialized, with a `.gitignore` that excludes Roblox files, caches, reports and credentials. The methods/events list is committed as a compact generated file inside `rook-reflection`.
