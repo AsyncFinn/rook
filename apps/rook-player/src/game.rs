@@ -12,6 +12,7 @@ use rook_engine::{DataModel, InputEvent, Options, console};
 use rook_lua::MessageType;
 use rook_render::Camera;
 
+use crate::STEP;
 use crate::server::{ServerThread, Started};
 use crate::stats::Times;
 
@@ -34,6 +35,8 @@ pub(crate) struct Game {
     pub client_steps: Times,
     /// Time spent applying server frames since the last client step.
     delivering: std::time::Duration,
+    /// Run mode: real time the server hasn't stepped yet, in seconds.
+    behind: f64,
     /// When loading the place started (`--bench` times content from it).
     pub load_start: std::time::Instant,
     /// The client runs Roblox's CoreScripts, whose menu Escape opens.
@@ -157,6 +160,7 @@ impl Finish {
             server_steps: Times::default(),
             client_steps: Times::default(),
             delivering: std::time::Duration::ZERO,
+            behind: 0.0,
             load_start: self.load_start,
         };
         game.print_logs();
@@ -286,9 +290,11 @@ impl Game {
         }
     }
 
-    /// Live play: apply what the running server sent, then step the client
-    /// `steps` times. In Run mode the server steps here.
-    pub(crate) fn advance(&mut self, steps: u32) {
+    /// Live play, `dt` seconds after the last call: apply what the running
+    /// server sent, then step the client once, `dt` long, as Roblox runs a
+    /// client frame per drawn frame. In Run mode the server steps here at
+    /// 60 Hz, catching up at most four steps.
+    pub(crate) fn advance(&mut self, dt: f64) {
         match &mut self.mode {
             Mode::Play { server, client } => {
                 let start = std::time::Instant::now();
@@ -301,20 +307,25 @@ impl Game {
                 // Applying the server's changes counts towards the client's
                 // next step, as it does in lockstep.
                 self.delivering += start.elapsed();
-                for _ in 0..steps {
-                    let start = std::time::Instant::now();
-                    client.step();
-                    for msg in client.outgoing() {
-                        server.deliver(msg);
-                    }
-                    let took = start.elapsed() + std::mem::take(&mut self.delivering);
-                    self.client_steps.push(took);
+                let start = std::time::Instant::now();
+                client.step_by(dt);
+                for msg in client.outgoing() {
+                    server.deliver(msg);
                 }
+                let took = start.elapsed() + std::mem::take(&mut self.delivering);
+                self.client_steps.push(took);
                 self.print_logs();
             }
             Mode::Run(_) => {
-                for _ in 0..steps {
+                self.behind += dt;
+                let mut steps = 0;
+                while self.behind >= STEP && steps < 4 {
+                    self.behind -= STEP;
+                    steps += 1;
                     self.step();
+                }
+                if steps == 4 {
+                    self.behind = 0.0;
                 }
             }
         }

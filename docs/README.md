@@ -25,6 +25,7 @@
     - [Character ownership](behavior/characters/ownership.md): the client owns it, what the server sees
     - [Overhead names and health](behavior/characters/overhead.md): which show, how far, and how they look
     - [Humanoid movement and states](behavior/characters/movement.md): standing, walking, jumping, climbing, swimming, MoveTo, the state machine
+    - [The default camera and controls](behavior/characters/camera.md): Roblox's PlayerModule, the camera's subject, zoom and occlusion, the mouse, `Camera:Interpolate`
   - Content
     - [Asset fetching](behavior/content/asset-fetching.md): where archived places' content comes from
     - [Client packages](behavior/content/client-packages.md): Roblox's client files, downloaded from its CDN as needed

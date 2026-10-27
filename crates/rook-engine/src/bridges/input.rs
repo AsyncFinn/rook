@@ -349,16 +349,19 @@ impl DataModel {
         clicks
     }
 
+    /// The cursor moved while the mouse is free. Observed: its
+    /// InputChanged `Delta` and `GetMouseDelta` are zero then; only a held
+    /// mouse ([`InputEvent::MouseMotion`]) moves by deltas, which the
+    /// default camera turns by.
     fn mouse_move(&mut self, x: f32, y: f32, clicks: &mut Vec<ClickEvent>) -> bool {
-        let (dx, dy) = {
+        {
             let mut w = self.runtime.world_mut();
-            let (ox, oy) = w.input.mouse;
             w.input.mouse = (x, y);
-            w.input.mouse_delta = (x - ox, y - oy);
-            w.input.mouse_delta
-        };
+            w.input.mouse_delta = (0.0, 0.0);
+        }
         let (gx, gy) = gui_point((x, y));
-        let obj = self.changed_input_object(UserInputType::MouseMovement, (gx, gy, 0.0), (dx, dy));
+        let obj =
+            self.changed_input_object(UserInputType::MouseMovement, (gx, gy, 0.0), (0.0, 0.0));
         let processed = self.gui_move(obj);
         if let Some(obj) = obj {
             self.fire_input("InputChanged", obj, processed);

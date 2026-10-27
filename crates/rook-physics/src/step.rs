@@ -3,15 +3,25 @@
 use super::*;
 
 impl Physics {
-    /// Advance the simulation by `dt` seconds in fixed 240 Hz steps.
+    /// Advance the simulation by `dt` seconds in fixed 240 Hz steps; what
+    /// a frame leaves over a whole step carries to the next, so a client
+    /// drawing at any rate simulates at the right pace (a 60 Hz frame is
+    /// exactly 4 steps).
     pub fn step(&mut self, dt: f64) {
         profiling::scope!("Physics::step");
         self.last_dt = dt;
         if !self.moves_anything() {
+            self.pending = 0.0;
             return;
         }
+        let due = self.pending + dt;
+        let steps = (due * STEP_HZ + 1e-6).floor() as u32;
+        self.pending = (due - f64::from(steps) / STEP_HZ).max(0.0);
+        if steps == 0 {
+            return;
+        }
+        let dt = f64::from(steps) / STEP_HZ;
         self.build_terrain_near_bodies(dt as f32);
-        let steps = (dt * STEP_HZ).round().max(1.0) as u32;
         self.drive_joints(dt, steps);
         let events = contacts::Collector::default();
         let h = self.world.integration_parameters.dt;

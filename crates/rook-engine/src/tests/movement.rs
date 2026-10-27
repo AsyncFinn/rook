@@ -17,6 +17,18 @@ const FLOOR: &str = r#"local b = Instance.new("Part")
 /// the character `c`, its Humanoid `h` and root `r` have settled at
 /// `start`) ran for `seconds`.
 fn drive(setup: &str, start: &str, local: &str, seconds: f64) -> Vec<String> {
+    drive_at(setup, start, local, seconds, None)
+}
+
+/// [`drive`], with the client stepped `client_hz` times a second, as a
+/// window drawing at that rate steps it, and the server at 60.
+fn drive_at(
+    setup: &str,
+    start: &str,
+    local: &str,
+    seconds: f64,
+    client_hz: Option<f64>,
+) -> Vec<String> {
     let server = Server::new(&Options::default()).unwrap();
     use_r6(&server);
     add_script(
@@ -42,7 +54,20 @@ fn drive(setup: &str, start: &str, local: &str, seconds: f64) -> Vec<String> {
     server.start();
     let mut session = Session::new(server, Options::default());
     session.join("A", 1).unwrap();
-    session.run_for(seconds + 1.0);
+    match client_hz {
+        None => session.run_for(seconds + 1.0),
+        Some(hz) => {
+            let (mut server, mut client) = (0.0, 0.0);
+            while client < seconds + 1.0 {
+                client += 1.0 / hz;
+                while server < client {
+                    server += 1.0 / 60.0;
+                    session.step_server();
+                }
+                session.step_clients_by(1.0 / hz);
+            }
+        }
+    }
     let client = session.client(0).unwrap();
     lines(client)
 }
@@ -100,6 +125,31 @@ fn jumping_reaches_its_height() {
             .any(|l| l.ends_with("false Jumping,Freefall,Landed,Running")),
         "{out:?}"
     );
+}
+
+/// A client drawn at 144 Hz walks at WalkSpeed and jumps as high as at
+/// 60 (Inference: Roblox simulates in 240 Hz steps whatever the frame
+/// rate; Studio's playtest client ran at 60, so only that is measured).
+#[test]
+fn walking_and_jumping_keep_pace_at_any_frame_rate() {
+    let local = r#"local z0, t0 = r.Position.Z, time()
+        h:Move(Vector3.new(0, 0, -1))
+        task.wait(0.5)
+        print(("walk %.3f %.3f"):format((z0 - r.Position.Z) / (time() - t0), -r.AssemblyLinearVelocity.Z))
+        h:Move(Vector3.zero)
+        task.wait(0.3)
+        h.UseJumpPower = false
+        h.JumpHeight = 7.2
+        local y0, top = r.Position.Y, r.Position.Y
+        h.Jump = true
+        local t1 = time()
+        while time() - t1 < 0.8 do RunService.Heartbeat:Wait(); top = math.max(top, r.Position.Y) end
+        print(("jump %.3f"):format(top - y0))"#;
+    let out = drive_at("", "CFrame.new(0, 3, 0)", local, 2.5, Some(144.0));
+    let walk = numbers(&out, "walk");
+    assert!(near(walk[0], 16.0, 0.4), "{out:?}");
+    assert!(near(walk[1], 16.0, 0.01), "{out:?}");
+    assert!(near(numbers(&out, "jump")[0], 7.52, 0.3), "{out:?}");
 }
 
 /// Measured: walking off a ledge stays Running for 0.1 s with no floor,

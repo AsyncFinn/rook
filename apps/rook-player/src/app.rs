@@ -21,8 +21,6 @@ pub(crate) struct App {
     pub(crate) title: String,
     pub(crate) scene: SceneCache,
     pub(crate) game: Game,
-    /// Real time not yet simulated, in seconds.
-    pub(crate) accumulator: f64,
     /// Seconds since the window opened, which water and grass move by.
     pub(crate) clock: f64,
     pub(crate) camera: FlyCamera,
@@ -217,19 +215,10 @@ impl App {
             repl.poll(game.has_client(), |side, line| game.repl(side, line));
         }
 
-        // The client steps at 60 Hz, catching up at most a few per frame;
-        // the server keeps its own pace on its thread.
-        self.accumulator += f64::from(dt);
+        // The client steps once a drawn frame; the server keeps its own
+        // pace on its thread.
         self.clock += f64::from(dt);
-        let mut steps = 0;
-        while self.accumulator >= STEP && steps < 4 {
-            self.accumulator -= STEP;
-            steps += 1;
-        }
-        if steps == 4 {
-            self.accumulator = 0.0;
-        }
-        self.game.advance(steps);
+        self.game.advance(f64::from(dt));
         if let Some(now) = self.game.player_settings()
             && now != self.player
         {

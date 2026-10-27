@@ -121,6 +121,15 @@ impl<T> Scheduler<T> {
         self.frame
     }
 
+    /// Start a frame `dt` seconds after the last, whatever the clock says
+    /// (a client stepped once per drawn frame). Returns `dt`.
+    pub fn begin_frame_by(&mut self, dt: f64) -> f64 {
+        self.delta = dt;
+        self.now += dt;
+        self.frame += 1;
+        dt
+    }
+
     /// Start a new frame, advancing the clock. Returns the frame's delta.
     pub fn begin_frame(&mut self) -> f64 {
         let next = match self.clock {

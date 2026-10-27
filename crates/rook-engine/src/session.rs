@@ -71,6 +71,25 @@ impl Session {
         self.route();
     }
 
+    /// One server frame, its changes delivered to the clients without
+    /// stepping them: with [`Session::step_clients_by`], clients drawn at
+    /// their own rate, as `rook-player` runs them.
+    pub fn step_server(&mut self) {
+        self.server.step();
+        self.route();
+        for (client, updates) in self.clients.iter_mut().zip(self.server.updates()) {
+            client.deliver(&ToClient::Updates(updates));
+        }
+    }
+
+    /// One frame of every client, `dt` seconds long.
+    pub fn step_clients_by(&mut self, dt: f64) {
+        for client in &mut self.clients {
+            client.step_by(dt);
+        }
+        self.route();
+    }
+
     /// Deliver queued remote calls in both directions. Messages arrive in
     /// the order they were sent; each crosses within the same session frame
     /// (Approximation: Roblox delivers on the next network tick).

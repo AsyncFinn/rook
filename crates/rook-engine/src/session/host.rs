@@ -554,6 +554,11 @@ impl ClientHost {
         self.client.step();
     }
 
+    /// One frame of the client, `dt` seconds long.
+    pub fn step_by(&mut self, dt: f64) {
+        self.client.step_by(dt);
+    }
+
     /// Deliver a message from the server.
     pub fn deliver(&mut self, msg: &ToClient) {
         let rt = self.client.runtime();

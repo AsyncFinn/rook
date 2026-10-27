@@ -9,10 +9,24 @@ impl DataModel {
     /// legacy resumption (`wait`, `spawn`, `delay`), Stepped/PreSimulation,
     /// [physics], PostSimulation, Heartbeat, `task` resumption.
     pub fn step(&mut self) {
+        self.step_frame(None);
+    }
+
+    /// Run one frame `dt` seconds long, as a client drawn at any rate
+    /// does: Roblox runs one frame per drawn frame, its physics in 240 Hz
+    /// steps within it.
+    pub fn step_by(&mut self, dt: f64) {
+        self.step_frame(Some(dt));
+    }
+
+    fn step_frame(&mut self, dt: Option<f64>) {
         profiling::scope!("DataModel::step");
         let (now, dt) = {
             let mut w = self.runtime.world_mut();
-            let dt = w.scheduler.begin_frame();
+            let dt = match dt {
+                Some(dt) => w.scheduler.begin_frame_by(dt),
+                None => w.scheduler.begin_frame(),
+            };
             (w.scheduler.now(), dt)
         };
         let rs = self.run_service;

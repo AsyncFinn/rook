@@ -82,7 +82,9 @@ Studio, which Rook's run matches.
   client only.
 - Holding the right button makes `MouseBehavior` LockCurrentPosition, and
   releasing it Default; mouse movement turns the camera through
-  InputChanged's `Delta`.
+  InputChanged's `Delta`. While the mouse is free, a move's `Delta` and
+  `GetMouseDelta` are zero (Observed), so the camera only turns while the
+  mouse is held.
 - An opaque 20 × 20 × 1 wall 5.5 to 6.5 studs behind the character pulls
   the camera in to 5.775 from its focus: its near plane stops at the wall,
   so the eye is a little inside it. A wall with `CanCollide` off, or
@@ -141,6 +143,10 @@ Studio, which Rook's run matches.
   LockCenter.
 - `PointerAction` fires after the wheel's InputChanged (Inference), with
   no pan or pinch.
+- The client steps once per drawn frame, that frame's length, as Roblox
+  runs a frame per drawn frame (Studio's playtest client ran at 60);
+  physics simulates whole 240 Hz steps and carries what's left to the
+  next frame, so walking and jumping keep Studio's pace at any frame rate.
 - Interpolations and a Scriptable camera's Focus are updated after
   RenderStepped, before drawing (Inference).
 

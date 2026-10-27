@@ -83,7 +83,6 @@ impl Launch {
             title: self.title(),
             scene,
             game,
-            accumulator: 0.0,
             clock: 0.0,
             camera: FlyCamera::new(camera),
             gfx: None,
