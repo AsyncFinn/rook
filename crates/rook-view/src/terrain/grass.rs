@@ -130,9 +130,37 @@ impl SceneCache {
         changed
     }
 
-    /// The meshes of grass tiles no longer drawn, for
+    /// The level-0 chunks' Grass tops changed over `tiles`: gather them
+    /// again, and stop drawing those tiles' blades, which
+    /// [`SceneCache::update_grass`] grows again from the new tops. Returns
+    /// the entries that changed.
+    pub(super) fn grass_tops_changed(&mut self, tiles: &HashSet<IVec2>) -> Vec<usize> {
+        let mut chunks: Vec<&IVec3> = self.terrain.tops.keys().collect();
+        chunks.sort_unstable_by_key(|c| (c.x, c.y, c.z));
+        let mut tops = GrassTops::default();
+        for c in chunks {
+            for (tile, tris) in &self.terrain.tops[c] {
+                tops.entry(*tile).or_default().extend(tris);
+            }
+        }
+        self.terrain.grass.tops = tops;
+        let mut changed = Vec::new();
+        for tile in tiles {
+            if let Some((i, mesh)) = self.terrain.grass.shown.remove(tile) {
+                self.terrain.grass.dropped.push(mesh);
+                self.scene.meshes.remove(&mesh);
+                self.release(i);
+                changed.push(i);
+            }
+        }
+        changed
+    }
+
+    /// The meshes of grass tiles and terrain chunks no longer drawn, for
     /// [`Renderer::drop_mesh`] once the renderer has their entries hidden.
     pub(crate) fn take_dropped_meshes(&mut self) -> Vec<MeshHash> {
-        std::mem::take(&mut self.terrain.grass.dropped)
+        let mut out = std::mem::take(&mut self.terrain.grass.dropped);
+        out.append(&mut self.terrain.dropped);
+        out
     }
 }

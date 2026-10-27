@@ -70,6 +70,7 @@
   - Terrain
     - [Voxels](behavior/terrain/voxels.md): `SmoothGrid` and legacy terrain
     - [Surface](behavior/terrain/surface.md): the surface Roblox builds from the voxels
+    - [Level of detail](behavior/terrain/detail.md): far terrain from coarser voxels, in rings
     - [Materials](behavior/terrain/materials.md): textures, colors and MaterialVariants
     - [Blending](behavior/terrain/blending.md): between materials, and between top and side
     - [Water](behavior/terrain/water.md): shape, waves, color and reflections

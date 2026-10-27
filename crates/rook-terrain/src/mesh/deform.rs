@@ -5,21 +5,22 @@
 
 use glam::{IVec3, Vec3};
 
-use crate::grid::VOXEL_STUDS;
 use crate::material::Look;
 use crate::random::Random;
 
 /// Move vertex `p` of the cell whose first corner (the center of its first
-/// voxel) is `first` and whose first voxel is `cell` in the grid.
-pub(super) fn deform(p: Vec3, first: Vec3, look: &Look, cell: IVec3) -> Vec3 {
-    let center = first + Vec3::splat(VOXEL_STUDS / 2.0);
+/// voxel) is `first` and whose first voxel is `cell` in the grid, its
+/// voxels `scale` studs on a side (coarser far away: the moves scale with
+/// the cell, so a far Brick ball is still boxes, of the coarse cells).
+pub(super) fn deform(p: Vec3, first: Vec3, scale: f32, look: &Look, cell: IVec3) -> Vec3 {
+    let center = first + Vec3::splat(scale / 2.0);
     let mut p = p;
     if look.shift > 0.0 {
         // Studio offsets each vertex pseudo-randomly, fixed by position;
         // its hash isn't known, so Rook's own picks the offsets, up to the
         // material's shift either way along each axis, in half-cells
         // (Approximation: Rock in Studio moved by up to about a stud).
-        p += (shift(cell) * 2.0 - 1.0) * look.shift * VOXEL_STUDS / 2.0;
+        p += (shift(cell) * 2.0 - 1.0) * look.shift * scale / 2.0;
     }
     if look.cubify > 0.0 {
         // Towards the cell's center: all the way for Brick and WoodPlanks,
@@ -27,7 +28,7 @@ pub(super) fn deform(p: Vec3, first: Vec3, look: &Look, cell: IVec3) -> Vec3 {
         p = p.lerp(center, look.cubify);
     }
     if look.quantize > 0.0 {
-        p = quantize(p, center, look.quantize * VOXEL_STUDS);
+        p = quantize(p, center, look.quantize * scale);
     }
     p
 }

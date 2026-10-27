@@ -110,6 +110,11 @@ struct Args {
     /// someone looking around does (default: it holds still).
     #[arg(long, default_value_t = 0.0)]
     turn: f32,
+    /// With `--bench`: fly the camera this many studs each frame the way
+    /// it looks, level, as someone crossing a map does (default: it holds
+    /// still).
+    #[arg(long, default_value_t = 0.0)]
+    fly: f32,
     /// Run Roblox's own CoreScripts (top bar, player list, chat...) from
     /// Roblox's packages or the Studio install, whatever the build's
     /// `coreScripts` says (a developer override).

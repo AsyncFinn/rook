@@ -7,7 +7,7 @@ use glam::{IVec3, Vec3};
 use serde_json::Value as Json;
 
 use crate::grid::decode::DecodeError;
-use crate::mesh::mesh_chunk_with;
+use crate::mesh::{Detail, mesh_chunk_with};
 use crate::*;
 
 /// Encode chunks given in `SmoothGrid` order.
@@ -62,7 +62,7 @@ fn rejects_damaged_data() {
 fn triangles(grid: &Grid, diagonals: [[bool; 2]; 3]) -> Vec<([Vec3; 3], TerrainMaterial)> {
     let mut out = Vec::new();
     for chunk in chunks_to_mesh(grid) {
-        let mesh = mesh_chunk_with(grid, chunk, diagonals);
+        let mesh = mesh_chunk_with(grid, chunk, Detail::FULL, diagonals);
         for s in &mesh.surfaces {
             for t in s.indices.chunks(3) {
                 let p = |i: u32| mesh.origin() + Vec3::from(s.positions[i as usize]);

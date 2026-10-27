@@ -83,8 +83,8 @@ the material's `Terrain.MaterialColors` color (the default table when the
 place saved none; textured since step 2). Water is drawn in `WaterColor` at `WaterTransparency`
 and casts no shadow. In Play mode the client draws its own copy: Rook
 replicates `SmoothGrid`, which the API dump marks NotReplicated because
-Roblox streams voxels to clients its own way. Every chunk is meshed at full detail: Roblox's level
-of detail and chunk skirts aren't needed at the archive's sizes.
+Roblox streams voxels to clients its own way. Far chunks are meshed from coarser voxels and hung
+with skirts: see [level of detail](detail.md).
 
 *Screenshot comparison* (2026-10-15): a FillBall of Grass, FillBlocks of
 Brick and Concrete, a FillBall of Pavement, a random Snow heightfield and

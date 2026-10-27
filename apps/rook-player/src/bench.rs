@@ -77,6 +77,8 @@ pub(crate) fn bench(
         game.step();
         m.sim += secs(t);
         camera.rotation = turn * camera.rotation;
+        let ahead = (camera.rotation * -Vec3::Z) * Vec3::new(1.0, 0.0, 1.0);
+        camera.position += ahead.normalize_or_zero() * args.fly;
         let t = Instant::now();
         renderer.set_time(frame as f32 / 60.0);
         if cache.refresh(game.view_mut(), &mut renderer, camera.position) {

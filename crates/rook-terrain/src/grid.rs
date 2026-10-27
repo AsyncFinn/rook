@@ -2,6 +2,7 @@
 //! `SmoothGrid` stores them.
 
 pub mod cells;
+mod coarse;
 pub(crate) mod decode;
 pub mod edit;
 

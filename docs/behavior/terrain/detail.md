@@ -1,0 +1,122 @@
+# Terrain level of detail
+
+Checked against Studio 0.744 on 2026-10-27.
+
+Studio draws far terrain from coarser voxels: rings around the camera,
+each meshed from voxels twice the size of the ring inside it, the
+cascaded level of detail zeux describes (2014, 2016; see
+`docs/design/research.md`). An rbxl stores only the 4-stud voxels
+(`Terrain.SmoothGrid`), so Studio builds the coarse levels at runtime.
+
+## How it was measured
+
+On the Baseplate place, at Studio's default graphics settings
+(`settings().Rendering.QualityLevel` reads `Level21`, `EditQualityLevel`
+`Automatic`), a strip of Snow 4,096 studs long with its corner on a
+4,096-stud grid line: a full layer of voxels with three lanes of
+checkerboard bumps on it, of 1, 2 and 4 voxels (periods of 8, 16 and 32
+studs), and a row of Brick balls of radius 40 every 128 studs beside it.
+Brick moves each vertex to its cell's center
+([surface](surface.md)), so a ball is a stack of boxes exactly one cell
+wide: the steps of its outline give the cell size wherever it stands. A
+lane of bumps flattens where the cells grow too big to hold them, and
+where a ring ends the strip's surface steps up or down, since coarser
+voxels sit higher (below). Neon posts beside the strip every 32 studs
+gave distances, read by projecting them with the camera's known pose.
+
+Two traps:
+
+- The levels follow the camera Studio draws from, and catch up over a
+  few frames, a piece at a time: a screenshot taken from a temporary
+  camera (the MCP capture's `camera_position`) shows the levels of the
+  camera before it, except the terrain right under the temporary camera,
+  part of which (a 512-stud block, once) refines during the capture. The
+  clean shots set `Workspace.CurrentCamera.CFrame` by script, waited 4 to
+  5 seconds, and captured from that camera.
+- Studio's edit camera puts `Camera.Focus` back next to itself, so
+  whether the levels follow the camera or its Focus wasn't separated
+  (they follow the pair).
+
+## What Studio draws
+
+| Cells (studs) | From the camera, along the strip | Seen by | Confidence |
+|---:|---|---|---|
+| 4 | out to 256 | balls at 192 in 4-stud steps; every lane bumpy | Confirmed |
+| 8 | 256 to about 768 | balls at 320 to 704 in 8-stud steps; the 1-voxel lane flat, the strip steps at 256 | Confirmed |
+| 16 | about 768 to 1,024 | balls at 832 and 960 in 16-stud steps | Observed (balls only) |
+| 32 | 1,024 to about 2,048 | the 4-voxel lane flat past 1,024 with a step there; balls merged into 64-stud blocks | Confirmed |
+| 64 and up | past about 2,048 | another step at 2,048 to 2,100 | Observed |
+
+- The rings stay put in the world: with the camera moved 128 studs along
+  the strip, the steps at 1,024 and 2,048 didn't move. Each level's ring
+  snaps to a grid of that level's chunks rather than following the camera
+  smoothly (Confirmed).
+- Coarser levels sit higher and fatter: a coarse voxel averages its eight
+  smaller ones, and a surface reaches half a voxel past its solid voxels
+  ([surface](surface.md)), so each ring's surface sits a little above the
+  one inside it and the strip shows a step at every ring's edge
+  (Observed). No cracks showed at the steps.
+- Nothing is cut off far away: from 20,000 studs off, the strip still
+  draws, as one thick slab of the coarsest level (Observed).
+- How far each ring reaches by graphics quality wasn't measured: Studio
+  ran at its top level, which is what Rook draws.
+
+The 768-stud edge is the odd one: 256, 1,024 and 2,048 are powers of two,
+and a ring of 8-stud cells reaching 768 doesn't fit the nesting of the
+others (a level's ring made of the next level's whole chunks). It rests
+on balls 704 and 832 studs out, seen from 400 studs up, with nothing on
+the strip to confirm it.
+
+## How Rook does it
+
+`rook_terrain::lod`, drawn by `rook-view`'s terrain cache:
+
+- Six levels, cells of 4 to 128 studs. Each level's voxels average the
+  2×2×2 blocks of the level below: a coarse voxel holds the eight's mean
+  occupancy of whichever of solid or water holds more, solids taking the
+  material with the most occupancy. Materials that move their vertices
+  move them by the coarse cell, so far Brick is boxes of the coarse cells,
+  as in Studio. The levels are made once when the voxels load, and an
+  edit averages again only the coarse chunks over what it changed.
+- Level `k` draws a box of 4×4×4 of its 32-voxel chunks (256 studs
+  across each side of its center at level 0, doubling), less the box of
+  the level inside it; the last level draws everything outside the box
+  before it, however far. Each box's center is a corner of the next
+  level's chunks, so the hole it leaves there is whole chunks, and moves
+  only once the camera is half that chunk and a sixteenth more away, so a
+  camera at an edge doesn't flip it back and forth. Boxes are 3D, and
+  each is kept inside the next.
+- From a camera on a grid corner that puts the edges at 256, 512, 1,024,
+  2,048 and 4,096 studs: Studio's except the 8-stud ring, which ends at
+  512 instead of about 768 (Approximation: a ring ending at 768 isn't
+  whole chunks of the next level, so it can't nest the same way).
+- Chunks are hung with skirts: from every edge where a chunk's surface
+  ends at the chunk's side, a strip two of its voxels deep, down along the
+  vertices' normals, in the surface's own layers. Where rings meet, the
+  higher side's strip covers the crack; inside a ring the strips lie in
+  the solid. Skirts are drawn only: collisions use the bare 4-stud
+  surface.
+- Water has no skirts (they'd show through it). Coarse water is moved
+  down by what its surface gains from the coarser voxels, so open water
+  lies at the same height in every ring and meets without a step
+  (Rook's choice; Studio's far water wasn't measured).
+- When the camera moves a box, the chunks whose level changed are meshed
+  on a thread of their own, one after another, while the old ones stay
+  drawn, then swapped in all at once: no hole, nothing drawn twice, and
+  the frame never waits (Studio, too, catches up over a few frames). A
+  screenshot meshes in place and waits.
+- Grass blades need the 4-stud surface out to their 200 studs, past where
+  level 0 may end, so the level-0 chunks within reach of the camera are
+  meshed for their Grass tops whatever level draws them.
+
+*Costs* (dev build, the 103k-instance place of M21 step 2, holding
+still): the main pass draws 4.3 million triangles in 782 draws instead
+of 10.7 million in 5,445, and takes 3.3 to 3.6 ms of GPU instead of 5.7
+to 6.3. Flying 8 studs a frame for 300 frames (2,400 studs, across
+every ring), scene updates take the same time as before (median 2.6 to
+2.8 ms against 2.5 to 3.0, the same two load-time frames over 16.7 ms),
+with 2.5 million triangles instead of 7.2. Screenshots from above the
+place's terrain, before and after: the terrain near the camera matches
+(the pixels that differ are moving parts), and only the far shore
+differs, coarser. Level 0 is meshed exactly as before, so near terrain
+keeps its comparison with Studio ([surface](surface.md)).

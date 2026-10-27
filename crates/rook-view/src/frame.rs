@@ -35,6 +35,7 @@ impl SceneCache {
                 break;
             }
         }
+        self.update_terrain(camera, true);
         self.update_grass(camera);
     }
 
@@ -53,6 +54,7 @@ impl SceneCache {
         };
         self.follow_camera(dom, camera);
         let mut loaded = self.poll_files(dom, false);
+        loaded.extend(self.update_terrain(camera, false));
         loaded.extend(self.update_grass(camera));
         let change = match change {
             // A skybox image arrived: the lighting alone changed.

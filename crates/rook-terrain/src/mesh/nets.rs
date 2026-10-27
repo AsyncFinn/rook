@@ -9,8 +9,14 @@ pub(super) const SPAN: i32 = CHUNK_VOXELS + 2 * PAD;
 const CELLS: i32 = SPAN - 1;
 pub(super) const NONE: u32 = u32::MAX;
 
-pub(crate) fn mesh_chunk_with(grid: &Grid, chunk: IVec3, diagonals: [[bool; 2]; 3]) -> ChunkMesh {
+pub(crate) fn mesh_chunk_with(
+    grid: &Grid,
+    chunk: IVec3,
+    detail: Detail,
+    diagonals: [[bool; 2]; 3],
+) -> ChunkMesh {
     let first = chunk * CHUNK_VOXELS - IVec3::splat(PAD);
+    let scale = detail.voxel_studs();
     let mut voxels = Vec::new();
     grid.read_block(first, IVec3::splat(SPAN), &mut voxels);
     let block = Block { voxels };
@@ -20,6 +26,7 @@ pub(crate) fn mesh_chunk_with(grid: &Grid, chunk: IVec3, diagonals: [[bool; 2]; 
         let mut mesher = Mesher {
             block: &block,
             pass,
+            scale,
             origin: chunk * CHUNK_VOXELS - IVec3::splat(PAD),
             cells: vec![NONE; (CELLS * CELLS * CELLS) as usize],
             positions: Vec::new(),
@@ -28,11 +35,15 @@ pub(crate) fn mesh_chunk_with(grid: &Grid, chunk: IVec3, diagonals: [[bool; 2]; 
             triangles: Vec::new(),
         };
         mesher.run(diagonals);
-        mesher.draws(&mut draws);
         mesher.split(&mut surfaces);
+        if detail.skirts && pass == Pass::Solid {
+            mesher.add_skirts();
+        }
+        mesher.draws(&mut draws);
     }
     ChunkMesh {
         chunk,
+        level: detail.level,
         surfaces,
         draws,
     }
@@ -74,11 +85,6 @@ impl Block {
     }
 }
 
-/// Where voxel `p` of the block has its center, from the chunk's corner.
-fn center(p: IVec3) -> Vec3 {
-    ((p - IVec3::splat(PAD)).as_vec3() + 0.5) * VOXEL_STUDS
-}
-
 /// The twelve edges of a cell, as pairs of corner offsets.
 const CELL_EDGES: [(IVec3, IVec3); 12] = {
     const fn v(x: i32, y: i32, z: i32) -> IVec3 {
@@ -103,6 +109,8 @@ const CELL_EDGES: [(IVec3, IVec3); 12] = {
 pub(super) struct Mesher<'a> {
     pub(super) block: &'a Block,
     pub(super) pass: Pass,
+    /// A voxel's edge in studs, at the level meshed.
+    pub(super) scale: f32,
     /// The block's first voxel in the grid (seeds the shift).
     pub(super) origin: IVec3,
     /// Each cell's vertex, by cell, once made.
@@ -116,6 +124,12 @@ pub(super) struct Mesher<'a> {
 }
 
 impl Mesher<'_> {
+    /// Where voxel `p` of the block has its center, from the chunk's
+    /// corner.
+    fn center(&self, p: IVec3) -> Vec3 {
+        ((p - IVec3::splat(PAD)).as_vec3() + 0.5) * self.scale
+    }
+
     fn inside(&self, p: IVec3) -> bool {
         self.pass.inside(self.block.at(p))
     }
@@ -136,18 +150,25 @@ impl Mesher<'_> {
             }
             let (from, to) = if ia { (a, b) } else { (b, a) };
             let fill = self.block.at(from).fill();
-            sum += center(from) + (center(to) - center(from)) * fill;
+            sum += self.center(from) + (self.center(to) - self.center(from)) * fill;
             n += 1;
         }
         let mut position = sum / n.max(1) as f32;
         let material = match self.pass {
             Pass::Solid => {
                 let material = self.dominant(c);
-                position = deform(position, center(c), material.shape(), self.origin + c);
+                let first = self.center(c);
+                position = deform(
+                    position,
+                    first,
+                    self.scale,
+                    material.shape(),
+                    self.origin + c,
+                );
                 material
             }
             Pass::Water => {
-                position.y -= WATER_DROP;
+                position.y -= water_drop(self.scale);
                 TerrainMaterial::Water
             }
         };
@@ -233,7 +254,7 @@ impl Mesher<'_> {
     }
 
     /// Add the triangles to `surfaces`, one per material.
-    fn split(self, surfaces: &mut Vec<Surface>) {
+    fn split(&self, surfaces: &mut Vec<Surface>) {
         let positions = &self.positions;
         // Split by facing only where the material's textures differ by it,
         // so each draw covers as much as it can.

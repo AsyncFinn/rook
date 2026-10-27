@@ -5,6 +5,9 @@
 //! Water is meshed the same way in a second pass and moved down
 //! [`WATER_DROP`]. [`ChunkMesh::surfaces`] split the triangles by material
 //! for collisions; [`ChunkMesh::draws`] by the layers drawn ([`draws`]).
+//! Far terrain is meshed the same way from coarser voxels ([`Detail`],
+//! `crate::lod`), its chunks hung with [`skirts`] that hide the cracks
+//! where rings of different detail meet.
 
 use glam::{IVec3, Vec3};
 
@@ -14,6 +17,7 @@ use crate::grid::{CHUNK_VOXELS, Grid, VOXEL_STUDS, Voxel};
 mod deform;
 pub mod draws;
 mod nets;
+mod skirts;
 
 use deform::deform;
 pub use draws::{Corner, Draw, Layer, Seam};
@@ -65,7 +69,11 @@ impl Facing {
 /// The surface of one chunk: the quads of the voxel edges starting in it.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ChunkMesh {
+    /// The chunk, in chunks of its level.
     pub chunk: IVec3,
+    /// Its level of detail: 0 for the 4-stud voxels, each level after
+    /// twice as coarse ([`Detail`]).
+    pub level: u8,
     /// By material, solids first and water last.
     pub surfaces: Vec<Surface>,
     /// What's drawn, by layer, solids first and water last.
@@ -75,7 +83,7 @@ pub struct ChunkMesh {
 impl ChunkMesh {
     /// Where the chunk's corner is in the world.
     pub fn origin(&self) -> Vec3 {
-        chunk_origin(self.chunk)
+        chunk_origin_at(self.chunk, self.level)
     }
 
     pub fn triangles(&self) -> usize {
@@ -84,7 +92,42 @@ impl ChunkMesh {
 }
 
 pub fn chunk_origin(chunk: IVec3) -> Vec3 {
-    (chunk * CHUNK_VOXELS).as_vec3() * VOXEL_STUDS
+    chunk_origin_at(chunk, 0)
+}
+
+/// Where the corner of chunk `chunk` of `level` is in the world.
+pub fn chunk_origin_at(chunk: IVec3, level: u8) -> Vec3 {
+    (chunk * CHUNK_VOXELS).as_vec3() * Detail::at(level).voxel_studs()
+}
+
+/// How a chunk is meshed: at which level of detail, and whether it's hung
+/// with skirts (drawn chunks are, since a neighbor may be coarser or
+/// finer; collisions use the bare 4-stud surface).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Detail {
+    pub level: u8,
+    pub skirts: bool,
+}
+
+impl Detail {
+    /// The 4-stud surface, bare.
+    pub const FULL: Detail = Detail {
+        level: 0,
+        skirts: false,
+    };
+
+    /// `level`, as drawn: with skirts.
+    pub fn at(level: u8) -> Self {
+        Detail {
+            level,
+            skirts: true,
+        }
+    }
+
+    /// A voxel's edge in studs at this level.
+    pub fn voxel_studs(self) -> f32 {
+        VOXEL_STUDS * f32::from(1u16 << self.level)
+    }
 }
 
 /// Which diagonal splits the quad of an edge along each axis (X, Y, Z):
@@ -105,8 +148,14 @@ pub fn chunks_to_mesh(grid: &Grid) -> Vec<IVec3> {
         .collect();
     out.sort_by_key(|c| (c.x, c.y, c.z));
     out.dedup();
-    out.retain(|c| !all_uniform(grid, *c));
+    out.retain(|c| can_have_surface(grid, *c));
     out
+}
+
+/// Whether chunk `chunk` of `grid` can have a surface: some of the 27
+/// chunks around it differ.
+pub fn can_have_surface(grid: &Grid, chunk: IVec3) -> bool {
+    !all_uniform(grid, chunk)
 }
 
 /// Whether the 27 chunks around `chunk` are all the same uniform voxel.
@@ -126,6 +175,16 @@ fn all_uniform(grid: &Grid, chunk: IVec3) -> bool {
 /// solid slab's does, 2 studs lower).
 pub const WATER_DROP: f32 = VOXEL_STUDS / 2.0;
 
+/// How far water's surface is moved down at voxels `scale` studs on a
+/// side: [`WATER_DROP`], and on coarser voxels also what their surface
+/// gains by reaching half a coarser voxel out, so open water lies at the
+/// same height in every ring and meets itself without a step or a crack
+/// (Rook's choice: skirts would show through it; Studio's far water
+/// wasn't measured).
+fn water_drop(scale: f32) -> f32 {
+    WATER_DROP + (scale - VOXEL_STUDS) / 2.0
+}
+
 /// Voxels read before a chunk's first one: edges start one voxel before
 /// it (for the normals of the faces just outside), and their cells one
 /// more.
@@ -134,7 +193,12 @@ const PAD: i32 = 2;
 /// voxel changes the surfaces of the chunks within this many voxels of it.
 pub const MESH_REACH: i32 = PAD;
 
-/// Mesh one chunk.
+/// Mesh one chunk of the 4-stud voxels, bare (for collisions and tools).
 pub fn mesh_chunk(grid: &Grid, chunk: IVec3) -> ChunkMesh {
-    mesh_chunk_with(grid, chunk, DIAGONALS)
+    mesh_chunk_with(grid, chunk, Detail::FULL, DIAGONALS)
+}
+
+/// Mesh chunk `chunk` of `grid`, whose voxels are `detail`'s level's.
+pub fn mesh_chunk_at(grid: &Grid, chunk: IVec3, detail: Detail) -> ChunkMesh {
+    mesh_chunk_with(grid, chunk, detail, DIAGONALS)
 }

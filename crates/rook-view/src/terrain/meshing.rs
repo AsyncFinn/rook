@@ -1,79 +1,76 @@
-//! Meshing the voxels a chunk at a time, and handing each chunk's
-//! surfaces to the scene as meshes.
+//! New voxels: the levels of detail made from them, the chunks the
+//! rings draw meshed (all at once when the place loads, only those the
+//! change reached at each level after a script's edit), and each chunk's
+//! surfaces handed to the scene as meshes.
+
+use rook_terrain::MESH_REACH;
+use rook_terrain::lod::{pyramid, update_pyramid};
 
 use super::*;
 
 impl SceneCache {
-    /// Mesh the chunks of `grid` that differ from the voxels meshed last
-    /// (all of them the first time), and the neighbors whose surfaces
-    /// reach the voxels that changed.
+    /// Take `grid` as the terrain's voxels, and mesh what the rings around
+    /// the camera draw of it that changed (all of it the first time).
     pub(super) fn mesh_terrain(&mut self, grid: Grid) {
         profiling::scope!("mesh_terrain");
-        let wanted: HashSet<IVec3> = chunks_to_mesh(&grid).into_iter().collect();
-        let mut remesh: HashSet<IVec3> = HashSet::new();
-        if self.terrain.chunks.is_empty() {
-            remesh.extend(&wanted);
+        // The voxels change in place once the mesher has let go of them;
+        // what it was meshing is of the old ones.
+        self.terrain.background.wait();
+        let t = &mut self.terrain;
+        t.epoch += 1;
+        let mut reached: Vec<HashSet<IVec3>> = Vec::new();
+        if t.levels.is_empty() {
+            t.levels = Arc::new(pyramid(grid));
         } else {
-            for bounds in self.terrain.grid.changes(&grid) {
-                remesh.extend(bounds.chunks(rook_terrain::MESH_REACH));
-            }
+            let levels = Arc::get_mut(&mut t.levels).expect("the mesher let go of the voxels");
+            let changes = levels[0].changes(&grid);
+            levels[0] = grid;
+            reached = update_pyramid(levels, &changes)
+                .into_iter()
+                .map(|level| level.iter().flat_map(|b| b.chunks(MESH_REACH)).collect())
+                .collect();
         }
-        let terrain = &mut self.terrain;
-        let gone: Vec<IVec3> = terrain
-            .chunks
-            .keys()
-            .filter(|c| remesh.contains(c) || !wanted.contains(c))
-            .copied()
+        let fine = &t.levels[0];
+        let counts = fine.counts();
+        t.materials = TerrainMaterial::ALL
+            .into_iter()
+            .filter(|m| counts[*m as usize] > 0)
             .collect();
-        for c in gone {
-            for s in terrain.chunks.remove(&c).expect("meshed").surfaces {
-                self.scene.meshes.remove(&s.mesh);
+        let rows: Vec<i32> = fine.chunks().map(|c| c.y).collect();
+        // The chunks just below stored ones hold surfaces too.
+        t.rows = (
+            rows.iter().min().map_or(0, |y| y - 1),
+            rows.iter().max().copied().unwrap_or(0),
+        );
+        for (level, chunks) in reached.iter().enumerate() {
+            for c in chunks {
+                self.drop_chunk((level as u8, *c));
+                if level == 0 {
+                    self.terrain.tops.remove(c);
+                }
             }
         }
-        terrain.epoch += 1;
-        let todo: Vec<IVec3> = remesh.into_iter().filter(|c| wanted.contains(c)).collect();
-        let meshes: Vec<ChunkMesh> = rook_platform::get()
-            .workers
-            .map(&todo, |c| mesh_chunk(&grid, *c));
-        for chunk in meshes {
-            let meshed = self.add_chunk_meshes(chunk);
-            self.terrain.chunks.insert(meshed.0, meshed.1);
-        }
-        let terrain = &mut self.terrain;
-        terrain.grid = grid;
-        let mut order: Vec<&IVec3> = terrain.chunks.keys().collect();
-        order.sort_unstable_by_key(|c| (c.x, c.y, c.z));
-        terrain.surfaces = order
-            .iter()
-            .flat_map(|c| terrain.chunks[*c].surfaces.iter().copied())
-            .collect();
-        let mut tops = GrassTops::default();
-        for c in order {
-            for (tile, tris) in &terrain.chunks[c].tops {
-                tops.entry(*tile).or_default().extend(tris);
-            }
-        }
-        terrain.grass.tops = tops;
+        let focus = self.focus;
+        let target = *self
+            .terrain
+            .target
+            .get_or_insert_with(|| Rings::around(focus));
+        let job = self.plan(target, focus);
+        let todo = self.todo(&job);
+        let meshes = super::rings::mesh_in_place(&self.terrain.levels, &todo);
+        // The rebuilt scene places every chunk.
+        self.install(&job, meshes, false);
     }
 
     /// Put a chunk's surfaces in the scene's meshes.
-    fn add_chunk_meshes(&mut self, chunk: ChunkMesh) -> (IVec3, MeshedChunk) {
-        let mut tops = GrassTops::default();
-        add_grass_tops(&chunk, &mut tops);
+    pub(super) fn add_chunk_meshes(&mut self, chunk: ChunkMesh) -> MeshedChunk {
         let origin = chunk.origin();
         let mut surfaces = Vec::new();
         for draw in chunk.draws {
+            self.terrain.serial += 1;
             let mut key = blake3::Hasher::new();
-            key.update(&self.terrain.epoch.to_le_bytes());
-            let seam = match draw.seam {
-                None => 0,
-                Some(Seam::First) => 1,
-                Some(Seam::Over) => 2,
-            };
-            key.update(&[draw.layer.index() as u8, seam]);
-            for v in chunk.chunk.to_array() {
-                key.update(&v.to_le_bytes());
-            }
+            key.update(b"terrain");
+            key.update(&self.terrain.serial.to_le_bytes());
             let mesh = MeshHash(*key.finalize().as_bytes());
             let count = draw.positions.len();
             let material = draw.layer.material;
@@ -113,6 +110,9 @@ impl SceneCache {
                 seam: draw.seam,
             });
         }
-        (chunk.chunk, MeshedChunk { surfaces, tops })
+        MeshedChunk {
+            surfaces,
+            entries: Vec::new(),
+        }
     }
 }

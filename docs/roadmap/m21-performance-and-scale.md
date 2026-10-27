@@ -17,10 +17,16 @@
      (858 parts moving each frame, 2.4 ms with the particles' step), the
      light voxels ([local lights](../behavior/lighting/local-lights.md#how-rook-does-it)),
      world GUI binding ([world GUI](../behavior/gui/world.md#drawing)).
-   - Before building any: what Studio draws far away (terrain's coarser
-     levels, view distance by graphics quality, small parts culled at a
-     distance), measured in Studio. `RenderFidelity` is measured (file
+   - Before building any: what Studio draws far away (view distance by
+     graphics quality, small parts culled at a distance), measured in
+     Studio. `RenderFidelity` is measured (file
      meshes, above); the levels Roblox makes for old MeshPart meshes
      aren't fetched yet.
+   - Terrain (built 2026-10-27): far terrain is drawn from coarser voxels
+     in rings around the camera, as Studio does, and crossing a ring
+     meshes only the chunks whose level changed, off the frame; the same
+     place draws 4.3M triangles in 782 draws holding still
+     ([terrain level of detail](../behavior/terrain/detail.md)). Left:
+     how far Studio's rings reach at lower graphics quality.
 3. StreamingEnabled as Roblox does it, server and client.
 4. Script performance where the corpus run shows it matters.
