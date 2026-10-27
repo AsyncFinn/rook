@@ -24,12 +24,18 @@ pub(crate) type Looks = [[f32; 4]; 2 * HIGHLIGHT_LIMIT];
 /// where seen.
 pub(crate) type HighlightRun = (BatchKey, bool, Range<u32>);
 
+/// The mask's instances of one shape drawn alike, each with its scene
+/// entry.
+type Group = ((BatchKey, bool), Vec<(u32, Instance)>);
+
 #[derive(Debug)]
 pub(crate) struct HighlightParts {
     /// The highlighted entries, by their index in the scene.
     entries: BTreeMap<usize, (Highlight, BatchKey, Instance)>,
     changed: bool,
     runs: Vec<HighlightRun>,
+    /// Each uploaded instance's scene entry and box in the world.
+    picks: Vec<(u32, Aabb)>,
     looks: Looks,
     /// The mask's instances, and how many it holds.
     buffer: Option<(wgpu::Buffer, usize)>,
@@ -41,6 +47,7 @@ impl Default for HighlightParts {
             entries: BTreeMap::new(),
             changed: false,
             runs: Vec::new(),
+            picks: Vec::new(),
             looks: [[0.0; 4]; 2 * HIGHLIGHT_LIMIT],
             buffer: None,
         }
@@ -80,6 +87,11 @@ impl HighlightParts {
         self.buffer.as_ref().map(|(b, _)| b)
     }
 
+    /// Each of the last upload's instances' scene entry and box.
+    pub(crate) fn picks(&self) -> &[(u32, Aabb)] {
+        &self.picks
+    }
+
     /// Upload the mask's instances, unless nothing changed: the draws,
     /// and each Highlight's look by its number - 1.
     pub(crate) fn upload(
@@ -104,8 +116,8 @@ impl HighlightParts {
             looks[n * 2 + 1] = h.outline;
         }
         // Grouped by what they draw, so each group is one run.
-        let mut groups: Vec<((BatchKey, bool), Vec<Instance>)> = Vec::new();
-        for (h, key, instance) in self.entries.values() {
+        let mut groups: Vec<Group> = Vec::new();
+        for (&i, (h, key, instance)) in &self.entries {
             let Some(&number) = numbers.get(&h.key) else {
                 continue;
             };
@@ -117,13 +129,17 @@ impl HighlightParts {
                     groups.len() - 1
                 }
             };
-            groups[at].1.push(instance.numbered(number));
+            groups[at].1.push((i as u32, instance.numbered(number)));
         }
         let mut runs: Vec<HighlightRun> = Vec::new();
         let mut instances: Vec<Instance> = Vec::new();
+        self.picks.clear();
         for ((key, on_top), group) in groups {
             let start = instances.len() as u32;
-            instances.extend(group);
+            for (i, instance) in group {
+                self.picks.push((i, instance.world_box()));
+                instances.push(instance);
+            }
             runs.push((key, on_top, start..instances.len() as u32));
         }
         if !instances.is_empty() {

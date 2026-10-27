@@ -53,6 +53,7 @@ impl Renderer {
         self.opaque.clear();
         self.layers.clear();
         self.placements.clear();
+        self.detail.clear();
         self.waiting.clear();
         self.transparent.clear();
         self.highlights.clear();
@@ -164,6 +165,7 @@ impl Renderer {
 
     /// Draw entry `i` as `target`, leaving where it was drawn before.
     fn place(&mut self, i: usize, part: &PartInstance, target: Target) {
+        self.detail.set(i, part);
         let drawn = !matches!(target, Target::Hidden | Target::Waiting);
         let masked = (drawn && part.layer == Layer::Base && part.highlight.is_some())
             .then(|| self.instance(part));
@@ -172,7 +174,7 @@ impl Renderer {
             (Placement::Hidden, Target::Hidden) => {}
             (Placement::Transparent(t), Target::Transparent) => {
                 let instance = self.instance(part);
-                self.transparent.set(t, part, instance);
+                self.transparent.set(t, i as u32, part, instance);
             }
             (Placement::Opaque { batch, slot }, Target::Opaque(key))
                 if self.opaque.list[batch].key == key =>
@@ -192,7 +194,7 @@ impl Renderer {
                     let files = self.queued_files(part);
                     self.waiting.insert(i, *part, &files);
                 }
-                self.placements[i] = self.occupy(part, target);
+                self.placements[i] = self.occupy(i, part, target);
             }
         }
     }
@@ -326,18 +328,21 @@ impl Renderer {
         }
     }
 
-    /// Take a slot to draw an entry in.
-    pub(crate) fn occupy(&mut self, part: &PartInstance, target: Target) -> Placement {
+    /// Take a slot to draw entry `i` in.
+    pub(crate) fn occupy(&mut self, i: usize, part: &PartInstance, target: Target) -> Placement {
         let instance = self.instance(part);
+        let entry = i as u32;
         match target {
             Target::Hidden | Target::Waiting => Placement::Hidden,
-            Target::Transparent => Placement::Transparent(self.transparent.occupy(part, instance)),
+            Target::Transparent => {
+                Placement::Transparent(self.transparent.occupy(entry, part, instance))
+            }
             Target::Opaque(key) => {
-                let (batch, slot) = self.opaque.occupy(0, key, instance);
+                let (batch, slot) = self.opaque.occupy(0, key, entry, instance);
                 Placement::Opaque { batch, slot }
             }
             Target::Layer(z, key) => {
-                let (batch, slot) = self.layers.occupy(z, key, instance);
+                let (batch, slot) = self.layers.occupy(z, key, entry, instance);
                 Placement::Layer { batch, slot }
             }
         }

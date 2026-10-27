@@ -27,10 +27,28 @@ pub(super) fn decode(bytes: &[u8]) -> Result<Mesh, MeshError> {
             out.indices = (0..out.positions.len() as u32).collect();
             out
         }
-        Versioned::V2(m) => from_parts(&m.vertices, &m.faces, &[]),
-        Versioned::V3(m) => from_parts(&m.vertices, &m.faces, &lods(&m.lods)),
-        Versioned::V4(m) => from_parts(&Vertices2::Full(m.vertices), &m.faces, &lods(&m.lods)),
-        Versioned::V5(m) => from_parts(&Vertices2::Full(m.vertices), &m.faces, &lods(&m.lods)),
+        Versioned::V2(m) => from_parts(&m.vertices, &m.faces, &[], 1),
+        // Version 3 doesn't say which levels are high quality: all are
+        // taken to be (Inference; none was seen in Studio).
+        Versioned::V3(m) => from_parts(&m.vertices, &m.faces, &lods(&m.lods), u8::MAX),
+        Versioned::V4(m) => {
+            let lods = lods(&m.lods);
+            from_parts(
+                &Vertices2::Full(m.vertices),
+                &m.faces,
+                &lods,
+                m.lod_hq_count,
+            )
+        }
+        Versioned::V5(m) => {
+            let lods = lods(&m.lods);
+            from_parts(
+                &Vertices2::Full(m.vertices),
+                &m.faces,
+                &lods,
+                m.lod_hq_count,
+            )
+        }
     };
     Ok(out)
 }
@@ -46,9 +64,12 @@ fn lods(lods: &[rbx_mesh::mesh::Lod3]) -> Vec<u32> {
     lods.iter().map(|l| l.0).collect()
 }
 
-/// Vertices and the faces of the first level of detail (`lods` gives each
-/// level's first face; none means every face).
-fn from_parts(vertices: &Vertices2, faces: &[Face2], lods: &[u32]) -> Mesh {
+/// Vertices and every level of detail's faces: `lods` gives each level's
+/// first face and, last, where the last ends (none means one level of
+/// every face). The table is read while it runs forward within the faces;
+/// empty levels are left out. `high_quality` is the file's count of high
+/// quality levels.
+fn from_parts(vertices: &Vertices2, faces: &[Face2], lods: &[u32], high_quality: u8) -> Mesh {
     let mut out = Mesh::default();
     let mut push = |pos: [f32; 3], norm: [f32; 3], tex: [f32; 2]| {
         out.positions.push(pos);
@@ -59,15 +80,22 @@ fn from_parts(vertices: &Vertices2, faces: &[Face2], lods: &[u32]) -> Mesh {
         Vertices2::Full(all) => all.iter().for_each(|v| push(v.pos, v.norm, v.tex)),
         Vertices2::Truncated(all) => all.iter().for_each(|v| push(v.pos, v.norm, v.tex)),
     }
-    let first = match lods {
-        [start, end, ..] if start <= end => {
-            (*start as usize).min(faces.len())..(*end as usize).min(faces.len())
-        }
-        _ => 0..faces.len(),
-    };
-    out.indices = faces[first]
-        .iter()
-        .flat_map(|f| f.0.iter().map(|v| v.0))
+    let mut ranges: Vec<_> = lods
+        .windows(2)
+        .map(|w| w[0] as usize..w[1] as usize)
+        .take_while(|r| r.start <= r.end && r.end <= faces.len())
+        .filter(|r| !r.is_empty())
         .collect();
+    if ranges.is_empty() {
+        ranges.push(0..faces.len());
+    }
+    for (i, range) in ranges.into_iter().enumerate() {
+        if i > 0 {
+            out.levels.starts.push(out.indices.len() as u32);
+        }
+        out.indices
+            .extend(faces[range].iter().flat_map(|f| f.0.iter().map(|v| v.0)));
+    }
+    out.levels.high_quality = high_quality.max(1);
     out
 }

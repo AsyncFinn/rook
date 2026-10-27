@@ -54,5 +54,6 @@ pub(crate) fn from_file(m: &rook_content::decode::mesh::Mesh) -> MeshData {
     MeshData {
         vertices,
         indices: m.indices.clone(),
+        levels: m.levels.clone(),
     }
 }

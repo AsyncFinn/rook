@@ -27,6 +27,8 @@ pub(crate) struct Batch {
     region: Range<u32>,
     len: u32,
     free: Vec<u32>,
+    /// The scene entry each slot draws.
+    entries: Vec<u32>,
     /// A box like [`Batches::bounds`] per run of `CULL_SLOTS` slots, so a pass can
     /// skip the runs out of its view. Widened and worked out afresh with
     /// `bounds`.
@@ -195,8 +197,15 @@ impl Batches {
         self.set(batch, slot, instance);
     }
 
-    /// Take a slot for `instance` in the batch of `(z, key)`.
-    pub(crate) fn occupy(&mut self, z: i32, key: BatchKey, instance: Instance) -> (usize, u32) {
+    /// Take a slot for scene entry `entry`, drawn as `instance`, in the
+    /// batch of `(z, key)`.
+    pub(crate) fn occupy(
+        &mut self,
+        z: i32,
+        key: BatchKey,
+        entry: u32,
+        instance: Instance,
+    ) -> (usize, u32) {
         let batch = match self.of.get(&(z, key)) {
             Some(&b) => b,
             None => {
@@ -206,6 +215,7 @@ impl Batches {
                     region: 0..0,
                     len: 0,
                     free: Vec::new(),
+                    entries: Vec::new(),
                     chunks: Vec::new(),
                     changes: 0,
                 });
@@ -234,9 +244,11 @@ impl Batches {
                     b.region = region;
                 }
                 b.len += 1;
+                b.entries.push(0);
                 b.len - 1
             }
         };
+        b.entries[slot as usize] = entry;
         self.set(batch, slot, instance);
         (batch, slot)
     }
@@ -305,6 +317,15 @@ impl Batches {
                 }
             });
         out
+    }
+
+    /// The scene entry and world box of the instance at `at` in the shared
+    /// buffer, which batch `k` (in drawing order) holds (an empty box for
+    /// a free slot).
+    pub(crate) fn picked(&self, k: usize, at: u32) -> (u32, Aabb) {
+        let b = &self.list[self.order[k]];
+        let entry = b.entries[(at - b.region.start) as usize];
+        (entry, self.pool.instances[at as usize].world_box())
     }
 
     /// The batch `k`th in drawing order: its key, instances in the shared

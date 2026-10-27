@@ -201,7 +201,7 @@ fn physics_detail(bytes: &[u8]) -> String {
     )
 }
 
-/// A decoded mesh's triangles, size and center.
+/// A decoded mesh's triangles (its levels of detail), size and center.
 fn mesh_detail(m: &rook_content::decode::mesh::Mesh) -> String {
     let (lo, hi) = m.bounds();
     let size = [0, 1, 2].map(|i| format!("{:.3}", hi[i] - lo[i]));
@@ -215,9 +215,19 @@ fn mesh_detail(m: &rook_content::decode::mesh::Mesh) -> String {
             uv[3].max(t[1]),
         ];
     }
+    let mut levels = m.levels().map(|l| (l.len() / 3).to_string());
+    let full = levels.next().unwrap_or_default();
+    let lower: Vec<_> = levels.collect();
+    let lower = match lower.is_empty() {
+        true => String::new(),
+        false => format!(
+            " (lower levels {}, {} high quality)",
+            lower.join(", "),
+            m.levels.high_quality
+        ),
+    };
     format!(
-        "{} triangles, {} studs, centered at ({}), UVs {:.2}..{:.2} x {:.2}..{:.2}",
-        m.indices.len() / 3,
+        "{full} triangles{lower}, {} studs, centered at ({}), UVs {:.2}..{:.2} x {:.2}..{:.2}",
         size.join(" x "),
         center.join(", "),
         uv[0],

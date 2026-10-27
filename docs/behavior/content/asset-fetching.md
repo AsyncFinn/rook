@@ -198,8 +198,9 @@ and a 2008 place gave identical output in the same time as before (a large place
 22.3 s against 22.5 s, four alternating runs each).
 
 *Mesh files are read with the `rbx_mesh` crate* (krakow10, MIT or
-Apache-2.0, a Rojo contributor's), versions 1.00 to 5.00; Rook keeps only
-the highest level of detail and checks face indices. 6.00 and 7.00 aren't
+Apache-2.0, a Rojo contributor's), versions 1.00 to 5.00; Rook keeps every
+level of detail ([file meshes](../meshes/file-meshes.md#levels-of-detail))
+and checks face indices. 6.00 and 7.00 aren't
 read yet. `rook-tools content` decodes meshes it shows: `fonts/sword.mesh` (1.00)
 is 198 triangles, 1.15 x 0.34 x 4.37 studs; version 1 of asset 12221462
 (1.00) is 56 x 40 x 45 studs, the giant mesh Studio drew for it.

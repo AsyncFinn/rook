@@ -84,6 +84,7 @@ impl Renderer {
         let view = Frustum::of(view_proj);
         let margin = MOTION_STUDS.max(self.terrain.wave_size.abs());
         self.write_globals(camera, (aspect, height), sun, shadow);
+        self.detail.view(camera);
 
         stage(&mut times.setup);
         let transparent_runs = {
@@ -381,16 +382,17 @@ impl Renderer {
             let Some(mesh) = self.meshes.get(&key.shape) else {
                 continue;
             };
+            let picked = |at| self.opaque.picked(k, at);
             if let Some(sun) = sun {
                 let (pipe, source) = (Pipe::Shadow, Source::Opaque);
                 for run in seen_runs(sun, chunks, CULL_SLOTS, margin, instances.clone()) {
-                    self.push_draw(&mut shadow_runs, pipe, source, mesh, key, run);
+                    self.push_draws(&mut shadow_runs, pipe, source, mesh, key, run, picked);
                 }
             }
             if seen {
                 let (pipe, source) = (Pipe::Opaque, Source::Opaque);
                 for run in seen_runs(view, chunks, CULL_SLOTS, margin, instances) {
-                    self.push_draw(&mut main_runs, pipe, source, mesh, key, run);
+                    self.push_draws(&mut main_runs, pipe, source, mesh, key, run, picked);
                 }
             }
         }
@@ -408,14 +410,16 @@ impl Renderer {
                 Pipe::Layer
             };
             let source = Source::Layers;
+            let picked = |at| self.layers.picked(k, at);
             for run in seen_runs(view, chunks, CULL_SLOTS, margin, instances) {
-                self.push_draw(&mut main_runs, pipe, source, mesh, key, run);
+                self.push_draws(&mut main_runs, pipe, source, mesh, key, run, picked);
             }
         }
         // A canvas farther than a transparent part is drawn before it, so
         // the part covers it.
         let tested = world_gui.iter().take_while(|d| !d.on_top).count();
         let distances = self.transparent.distances();
+        let picked = |at: u32| self.transparent.picks()[at as usize];
         let mut cut = 0;
         for (key, pass, instances) in transparent_runs {
             let Some(mesh) = self.meshes.get(&key.shape) else {
@@ -432,12 +436,13 @@ impl Renderer {
                     .find(|&c| world_gui[c].distance.powi(2) <= d)
                     .unwrap_or(tested);
                 if behind > cut {
-                    self.push_draw(&mut main_runs, pipe, source, mesh, &key, start..i);
+                    let run = start..i;
+                    self.push_draws(&mut main_runs, pipe, source, mesh, &key, run, picked);
                     main_runs.cut(behind);
                     (cut, start) = (behind, i);
                 }
             }
-            self.push_draw(&mut main_runs, pipe, source, mesh, &key, start..end);
+            self.push_draws(&mut main_runs, pipe, source, mesh, &key, start..end, picked);
         }
         let mut mask_runs = Runs::default();
         for (key, on_top, instances) in highlight_runs {
@@ -450,7 +455,8 @@ impl Renderer {
                 Pipe::HighlightOccluded
             };
             let source = Source::Highlights;
-            self.push_draw(&mut mask_runs, pipe, source, mesh, &key, instances);
+            let picked = |at: u32| self.highlights.picks()[at as usize];
+            self.push_draws(&mut mask_runs, pipe, source, mesh, &key, instances, picked);
         }
         let starts = self.upload_args(&[&shadow_runs, &main_runs, &mask_runs]);
         ([shadow_runs, main_runs, mask_runs], starts)

@@ -283,6 +283,52 @@ fn square(side: f32) -> Arc<Mesh> {
     })
 }
 
+/// A mesh file of two levels of detail drawn near, then past Studio's
+/// first threshold: the far one draws its coarser level, and the decal on
+/// it follows its part.
+#[test]
+fn far_meshes_draw_their_lower_level() {
+    let Ok(mut r) = Renderer::headless() else {
+        return;
+    };
+    let (mesh, picture) = (MeshHash([5; 32]), ImageHash([6; 32]));
+    let mut two = Arc::unwrap_or_clone(square(2.0));
+    two.indices.extend([0, 1, 2]);
+    two.levels = rook_content::decode::mesh::Levels {
+        starts: vec![6],
+        high_quality: 2,
+    };
+    let base = PartInstance {
+        fidelity: Fidelity::Automatic,
+        ..PartInstance::plain(DrawShape::File(mesh), Vec3::ZERO, Mat3::IDENTITY, Vec3::ONE)
+    };
+    let decal = PartInstance {
+        layer: Layer::Image {
+            image: picture,
+            placement: ImagePlacement::MeshUv,
+            z: 1,
+            on_transparent: false,
+        },
+        fidelity: Fidelity::Precise,
+        drawn_over: Some(0),
+        ..base
+    };
+    r.set_scene(&Scene {
+        parts: vec![base, decal],
+        images: HashMap::from([(picture, image())]),
+        meshes: HashMap::from([(mesh, Arc::new(two))]),
+        ..Scene::default()
+    });
+    let mut triangles = |z: f32| {
+        let camera = Camera::look_at(Vec3::new(0.0, 0.0, z), Vec3::ZERO);
+        r.render_to_image(16, 16, &camera).unwrap();
+        r.draw_counts().main.triangles
+    };
+    assert_eq!(triangles(100.0), 4);
+    // 250 studs from the box, which reaches 1 stud out of 0.
+    assert_eq!(triangles(252.0), 2);
+}
+
 /// A scene drawing with everything that binds images or meshes: mesh
 /// files, a mesh texture, material maps, a decal, transparent parts,
 /// Glass, a ForceField and a skybox.

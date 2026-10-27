@@ -1,5 +1,6 @@
 //! The renderer: GPU objects, pipelines and what the scene needs on the GPU.
 
+mod detail;
 mod draw;
 mod effects;
 mod gui;
@@ -87,6 +88,8 @@ pub struct Renderer {
     layers: Batches,
     /// How each entry of the scene is drawn, by its index in the scene.
     placements: Vec<Placement>,
+    /// Which level of detail each entry's mesh draws at.
+    detail: detail::Detail,
     /// Entries waiting for an upload, placed once it's done.
     waiting: waiting::Waiting,
     /// Transparent parts, sorted back to front as the view changes.
@@ -315,6 +318,7 @@ impl Renderer {
             opaque: Batches::default(),
             layers: Batches::default(),
             placements: Vec::new(),
+            detail: detail::Detail::default(),
             waiting: waiting::Waiting::default(),
             transparent: TransparentParts::default(),
             highlights: HighlightParts::default(),

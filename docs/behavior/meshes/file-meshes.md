@@ -1,17 +1,17 @@
 # File meshes
 
-Checked against Studio 0.742 on 2026-10-13.
+Checked against Studio 0.744 on 2026-10-27.
 
 SpecialMesh `MeshId`, FileMesh and MeshPart. How loading and drawing work
 is in [architecture](../../design/architecture.md#rendering-rook-render); what's left is in
 `docs/guide/stubs.md`.
 
-*Levels of detail* (Inference from the community format specification,
-Maximum_ADHD's "Roblox Mesh Format" on the DevForum): from version 3.00
-on, a file holds every level of detail in one face list, and its LOD
-table gives where each starts; Rook keeps only the first, highest-detail
-range. Checked against the user's `head.mesh` (version 2.00, 517
-vertices, 846 triangles) when an install is found.
+From version 3.00 on, a file holds every level of detail in one face list,
+and its LOD table gives where each starts (the community format
+specification, Maximum_ADHD's "Roblox Mesh Format" on the DevForum);
+Rook keeps them all ([levels of detail](#levels-of-detail)). Checked
+against the user's `head.mesh` (version 2.00, 517 vertices, 846
+triangles) when an install is found.
 
 *What the archive uses* (`rook-tools corpus-scan`, 3,058 files that load; the
 scan now counts mesh instances by kind):
@@ -109,7 +109,73 @@ s against 20.75 s, a small place 0.36 against 0.37, a 2008 place 0.27 against 0.
 render 1.49 against 1.47 ms); a large modern place draws 86 mesh files and its frame
 grew by about 2.8 ms (upload 3.6 to 4.9 ms, render 11.8 to 12.9 ms).
 
-*Not done yet:* MeshPart collision and mass per `CollisionFidelity`
+## Levels of detail
+
+Measured in Studio 0.744 on 2026-10-27 with `Stats.SceneTriangleCount`
+(the drawn triangles, read with the mesh shown and hidden), edit mode,
+default graphics quality (`EditQualityLevel` Automatic). Meshes used: a
+200-stud sphere (version 4.01, levels of 9,800, 4,900, 2,418, 914 and 478
+triangles, 2 high quality), a horse statue (4.01, 9,812 down to 490, 5
+high quality), a small statue (4.01, 1,970 down to 75, 1 high quality)
+and a 2016 MeshPart whose file Rook gets as version 2.00.
+
+- *Only MeshParts switch.* A SpecialMesh FileMesh drew its full level at
+  every distance, whatever its `Scale` or part size (the sphere's mesh to
+  30,000 studs, and the 2016 mesh); so did a MeshPart made from an
+  EditableMesh, which has one level.
+- *Distance, not screen size:* a level begins where the camera is a set
+  distance from the part's box along the world axes (the box of `Size`
+  turned with the part, then boxed again: a part turned 45 degrees and seen
+  along a diagonal switched within 0.1 stud of that box, 80 studs off the
+  turned box's distance). The part's size matters only through where its
+  box is: the sphere at Size 200 switched 350 studs from its center, at
+  Size 100 at 300, and stretched to 200 x 20 x 20 at 260 seen along Z and
+  350 along X.
+- *The view's width scales it:* with `FieldOfView` 20 the first switch
+  moved out to 992.76 studs from the box, exactly 250 x tan 35 / tan 10. The
+  distances are for a 70 degree view.
+- *Thresholds* (studs from the box at 70 degrees, each to 0.01): level 1
+  from 250, level 2 from 500, level 3 from 2,000, level 4 from 3,000.
+- *`RenderFidelity`:* Precise draws the full level always; Performance
+  walks down every level; Automatic only the levels the file counts as high
+  quality (the sphere stopped at level 1 out to 30,000 studs, the horse
+  went down all five, the small statue never left level 0). A version 3
+  file doesn't say; Rook lets Automatic use all its levels (Inference).
+- *No hysteresis:* walking out and back in half a stud at a time, the
+  sphere switched at 350.0 going out and back at 349.5 coming in.
+- *Old meshes get levels from Roblox:* the 2016 MeshPart's mesh, which
+  asset delivery gives Rook as version 2.00 with one level, drew at five
+  (2,657, 1,328, 645, 246, 125) in Studio, as a MeshPart only. Studio asks
+  asset delivery's batch API for a content representation
+  (`contentRepresentationSpecifier` in its logs, `fidelity` and
+  `skipGenerationIfNotExist` in the executable); Rook's requests for a
+  `mesh` representation got the source file or "not found". Rook draws
+  such meshes at their one level for now.
+- *Not levels, but nearby:* at `EditQualityLevel` 1 to 10 the sphere
+  wasn't drawn at all from 1,000 studs, and the 2.5-stud statue vanished
+  past about 600 studs at the default quality: view distance and small
+  part culling, which Rook doesn't do yet ([M21](../../roadmap/m21-performance-and-scale.md)).
+
+*How Rook does it:* every level goes into the mesh pool, and each frame
+the instances in runs a pass sees pick their level by the rule above; see
+[architecture](../../design/architecture.md#rendering-rook-render). Where
+Rook differs: a coarser level holds until the camera comes 5% nearer than
+its threshold, so a camera hovering there doesn't flip it each frame, and
+image layers draw at their part's level.
+
+*Performance* (dev builds, base = the previous commit, two alternating
+`rook-player --bench 200` runs each): a test place of 1,600 horse statues
+(Automatic) on a 40-stud grid, seen from 100 studs off one side, drew
+4,434,364 triangles a frame instead of 14,917,680, in 66 draws instead
+of 17; render and readback took 2.5 to 2.8 ms instead of 4.5 to 4.6, and
+building the draws 0.10 to 0.12 ms instead of 0.06. Every horse nearer
+than 250 studs drew the same pixels; only rows past it differ. The
+103k-instance place in [M21](../../roadmap/m21-performance-and-scale.md)
+drew the same 5,445 draws and 10.67M triangles (its meshes have one
+level), with CPU recording 6.6 to 7.2 ms against 6.7 to 7.0.
+
+*Not done yet:* the levels Roblox makes for old MeshPart meshes (above);
+MeshPart collision and mass per `CollisionFidelity`
 ([M15](../../roadmap/m15-physics-completeness.md), which the loader can
 already hand a mesh);
 CharacterMesh (with characters); mesh versions 6.00 and 7.00 if they turn

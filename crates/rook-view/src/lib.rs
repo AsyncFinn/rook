@@ -18,8 +18,8 @@ use rook_dom::{Dom, InstanceId};
 use rook_engine::RenderChanges;
 use rook_physics::{is_part, part_shape, workspace_parts};
 use rook_render::{
-    Curve, DrawShape, ImageHash, ImagePlacement, Layer, Lighting, MapAlpha, MaterialMaps, MeshHash,
-    PartInstance, Scene, Sequence,
+    Curve, DrawShape, Fidelity, ImageHash, ImagePlacement, Layer, Lighting, MapAlpha, MaterialMaps,
+    MeshHash, PartInstance, Scene, Sequence,
 };
 use rook_types::{
     CFrame, Color3, Material, MaterialSet, MeshHost, MeshKind, MeshLook, MeshType, NormalId,
@@ -186,13 +186,17 @@ impl SceneCache {
         self.layers.clear();
         for id in workspace_parts(dom) {
             if let Some(drawn) = self.part(dom, id) {
-                self.index.insert(id, self.scene.parts.len());
+                let base = self.scene.parts.len();
+                self.index.insert(id, base);
                 self.scene.parts.push(drawn.part);
                 self.poses.push(drawn.pose);
                 let mut layers = Vec::new();
                 for (layer, pose) in drawn.layers {
                     layers.push(self.scene.parts.len());
-                    self.scene.parts.push(layer);
+                    self.scene.parts.push(PartInstance {
+                        drawn_over: Some(base),
+                        ..layer
+                    });
                     self.poses.push(pose);
                 }
                 if !layers.is_empty() {
@@ -321,22 +325,27 @@ impl SceneCache {
             }
             return;
         };
-        match self.index.get(&id) {
+        let base = match self.index.get(&id) {
             Some(&i) => {
                 self.scene.parts[i] = part;
                 self.poses[i] = pose;
-                changed.push(i);
+                i
             }
             None => {
                 let i = self.take_index(part, pose);
                 self.index.insert(id, i);
-                changed.push(i);
+                i
             }
-        }
+        };
+        changed.push(base);
         // Layers keep their indices in order; extra ones are released.
         let mut kept = Vec::with_capacity(layers.len());
         let mut old = old_layers.into_iter();
         for (layer, pose) in layers {
+            let layer = PartInstance {
+                drawn_over: Some(base),
+                ..layer
+            };
             let i = match old.next() {
                 Some(i) => {
                     self.scene.parts[i] = layer;

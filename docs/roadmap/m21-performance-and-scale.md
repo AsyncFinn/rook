@@ -6,8 +6,10 @@
    - Evidence (2026-10-27, dev build, a 103k-instance place with 85,674
      parts and terrain in 10,975 meshes, holding still): the main pass
      draws 9.4M triangles in 5,445 draws, everything inside the view at
-     full detail, terrain included; mesh files' own lower levels of detail
-     are dropped on load ([file meshes](../behavior/meshes/file-meshes.md)).
+     full detail, terrain included. Mesh files now draw their own lower
+     levels where Studio does ([file meshes](../behavior/meshes/file-meshes.md#levels-of-detail),
+     2026-10-27), but that place's 136 mesh files are versions 1.00 to
+     2.00 with one level each: its triangles are terrain and unions.
      Culling tests every run of 16 instances in the place against the
      view each frame (1.2 to 1.3 ms of CPU recording), with no hierarchy.
      Particles step every emitter each frame, seen or not (small there).
@@ -16,7 +18,9 @@
      light voxels ([local lights](../behavior/lighting/local-lights.md#how-rook-does-it)),
      world GUI binding ([world GUI](../behavior/gui/world.md#drawing)).
    - Before building any: what Studio draws far away (terrain's coarser
-     levels, `RenderFidelity` Automatic, view distance by graphics
-     quality), measured in Studio.
+     levels, view distance by graphics quality, small parts culled at a
+     distance), measured in Studio. `RenderFidelity` is measured (file
+     meshes, above); the levels Roblox makes for old MeshPart meshes
+     aren't fetched yet.
 3. StreamingEnabled as Roblox does it, server and client.
 4. Script performance where the corpus run shows it matters.

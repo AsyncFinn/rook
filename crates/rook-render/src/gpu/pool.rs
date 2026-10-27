@@ -91,8 +91,20 @@ pub(crate) struct GpuMesh {
     pub(crate) page: usize,
     pub(crate) vertices: Range<u32>,
     pub(crate) indices: Range<u32>,
+    /// Each level of detail's part of `indices`, the full one first: one
+    /// level for all but mesh files that have more.
+    pub(crate) levels: Box<[Range<u32>]>,
+    /// How many of `levels` the file counts as high quality.
+    pub(crate) high_quality: usize,
     /// The mesh's bounds in its own units.
     pub(crate) bounds: (Vec3, Vec3),
+}
+
+impl GpuMesh {
+    /// Level `level`'s indices, or the coarsest's past the last.
+    pub(crate) fn level(&self, level: usize) -> Range<u32> {
+        self.levels[level.min(self.levels.len() - 1)].clone()
+    }
 }
 
 /// One page's buffers.
@@ -266,6 +278,8 @@ impl MeshPool {
             page: 0,
             vertices: 0..0,
             indices: 0..0,
+            levels: std::iter::once(0..0).collect(),
+            high_quality: 1,
             bounds,
         };
         let most = page_bytes(&self.device);
@@ -322,10 +336,15 @@ impl MeshPool {
             at(i, INDEX),
             bytemuck::cast_slice(&data.indices),
         );
+        let starts = std::iter::once(0).chain(data.levels.starts.iter().copied());
+        let ends = data.levels.starts.iter().copied().chain([indices]);
+        let levels: Box<[Range<u32>]> = starts.zip(ends).map(|(s, e)| i + s..i + e).collect();
         GpuMesh {
             page,
             vertices: v..v + vertices,
             indices: i..i + indices,
+            high_quality: usize::from(data.levels.high_quality).clamp(1, levels.len()),
+            levels,
             bounds,
         }
     }

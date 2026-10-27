@@ -57,6 +57,8 @@ pub(crate) type TransparentRun = (BatchKey, Pass, Range<u32>);
 /// A transparent part, with what drawing it needs.
 #[derive(Debug, Clone, Copy)]
 struct Entry {
+    /// Its index in the scene.
+    entry: u32,
     position: Vec3,
     /// An image layer (drawn just after its part at the same distance).
     image: bool,
@@ -68,8 +70,9 @@ struct Entry {
 }
 
 impl Entry {
-    fn new(part: &PartInstance, instance: Instance) -> Self {
+    fn new(entry: u32, part: &PartInstance, instance: Instance) -> Self {
         Self {
+            entry,
             position: part.position,
             image: part.layer != Layer::Base,
             on_top: part.on_top,
@@ -100,6 +103,8 @@ pub(crate) struct TransparentParts {
     /// Each sorted instance's squared distance from the camera (those on
     /// top nearer than anything).
     distances: Vec<f32>,
+    /// Each sorted instance's scene entry and box in the world.
+    picks: Vec<(u32, Aabb)>,
     /// The sorted instances, and how many it holds.
     buffer: Option<(wgpu::Buffer, usize)>,
 }
@@ -111,8 +116,8 @@ impl TransparentParts {
         self.changed = true;
     }
 
-    /// Take a slot for `part`.
-    pub(crate) fn occupy(&mut self, part: &PartInstance, instance: Instance) -> usize {
+    /// Take a slot for scene entry `entry`, drawn as `part`.
+    pub(crate) fn occupy(&mut self, entry: u32, part: &PartInstance, instance: Instance) -> usize {
         let t = match self.free.pop() {
             Some(t) => t,
             None => {
@@ -120,12 +125,12 @@ impl TransparentParts {
                 self.slots.len() - 1
             }
         };
-        self.set(t, part, instance);
+        self.set(t, entry, part, instance);
         t
     }
 
-    pub(crate) fn set(&mut self, t: usize, part: &PartInstance, instance: Instance) {
-        self.slots[t] = Some(Entry::new(part, instance));
+    pub(crate) fn set(&mut self, t: usize, entry: u32, part: &PartInstance, instance: Instance) {
+        self.slots[t] = Some(Entry::new(entry, part, instance));
         self.changed = true;
     }
 
@@ -153,6 +158,11 @@ impl TransparentParts {
     /// camera, by instance.
     pub(crate) fn distances(&self) -> &[f32] {
         &self.distances
+    }
+
+    /// Each of the last upload's instances' scene entry and box.
+    pub(crate) fn picks(&self) -> &[(u32, Aabb)] {
+        &self.picks
     }
 
     /// Upload the parts `view` reaches, sorted back to front for `camera`
@@ -192,12 +202,14 @@ impl TransparentParts {
         let mut instances: Vec<Instance> = Vec::with_capacity(order.len());
         let mut runs: Vec<TransparentRun> = Vec::new();
         self.distances.clear();
+        self.picks.clear();
         for &(d, e) in &order {
             let d = if e.on_top { f32::NEG_INFINITY } else { d };
             for &pass in e.passes {
                 let i = instances.len() as u32;
                 instances.push(e.instance);
                 self.distances.push(d);
+                self.picks.push((e.entry, e.world));
                 match runs.last_mut() {
                     Some((k, q, r)) if *k == e.key && *q == pass => r.end = i + 1,
                     _ => runs.push((e.key, pass, i..i + 1)),

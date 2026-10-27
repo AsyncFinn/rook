@@ -82,9 +82,12 @@ impl Runs {
 }
 
 impl Renderer {
-    /// Add a batch's draw of `mesh` to `runs`, joining the last run if it
-    /// shares everything bound.
-    pub(crate) fn push_draw(
+    /// Add a batch's draws of `mesh` to `runs`: `instances` (in their
+    /// source's buffer), a draw for each stretch at one level of detail.
+    /// `picked(n)` is instance `n`'s scene entry and box in the world; free
+    /// slots, which draw nothing, join whichever stretch they're in.
+    #[expect(clippy::too_many_arguments, reason = "what one draw binds")]
+    pub(crate) fn push_draws(
         &self,
         runs: &mut Runs,
         pipe: Pipe,
@@ -92,8 +95,43 @@ impl Renderer {
         mesh: &GpuMesh,
         key: &BatchKey,
         instances: Range<u32>,
+        picked: impl Fn(u32) -> (u32, Aabb),
     ) {
-        if mesh.indices.is_empty() || instances.is_empty() {
+        if mesh.levels.len() == 1 {
+            self.push_draw(runs, (pipe, source), mesh, key, 0, instances);
+            return;
+        }
+        let (mut start, mut level) = (instances.start, None);
+        for n in instances.clone() {
+            let (entry, world) = picked(n);
+            let Some(now) = self.detail.pick(entry, mesh, world) else {
+                continue;
+            };
+            if let Some(was) = level
+                && was != now
+            {
+                self.push_draw(runs, (pipe, source), mesh, key, was, start..n);
+                start = n;
+            }
+            level = Some(now);
+        }
+        let level = level.unwrap_or(0);
+        self.push_draw(runs, (pipe, source), mesh, key, level, start..instances.end);
+    }
+
+    /// Add a draw of `mesh` at `level` to `runs`, joining the last run if
+    /// it shares everything bound.
+    fn push_draw(
+        &self,
+        runs: &mut Runs,
+        (pipe, source): (Pipe, Source),
+        mesh: &GpuMesh,
+        key: &BatchKey,
+        level: usize,
+        instances: Range<u32>,
+    ) {
+        let indices = mesh.level(level);
+        if indices.is_empty() || instances.is_empty() {
             return;
         }
         // The shadow and mask passes read no image.
@@ -107,14 +145,14 @@ impl Renderer {
         };
         let at = runs.args.len();
         runs.args.push(DrawArgs {
-            index_count: mesh.indices.len() as u32,
+            index_count: indices.len() as u32,
             instance_count: instances.len() as u32,
-            first_index: mesh.indices.start,
+            first_index: indices.start,
             base_vertex: mesh.vertices.start as i32,
             first_instance: instances.start,
         });
         runs.counts.draws += 1;
-        runs.counts.triangles += mesh.indices.len() as u64 / 3 * instances.len() as u64;
+        runs.counts.triangles += indices.len() as u64 / 3 * instances.len() as u64;
         let cut = runs.cuts.last().is_some_and(|c| c.0 == runs.runs.len());
         match runs.runs.last_mut() {
             Some(r)

@@ -26,6 +26,11 @@ impl SceneCache {
             FileDraw::Mesh(hash) => {
                 out.shape = DrawShape::File(hash);
                 out.size = scale;
+                out.fidelity = match dom.enum_property(id, "RenderFidelity") {
+                    Some(1) => Fidelity::Precise,
+                    Some(2) => Fidelity::Performance,
+                    _ => Fidelity::Automatic,
+                };
                 self.mesh_texture(dom, id, id, &mut out, [1.0; 3]);
             }
             FileDraw::Empty => {}

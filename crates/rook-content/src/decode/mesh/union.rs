@@ -10,7 +10,7 @@ use rbx_mesh::union_graphics::{Mesh2, NormalId as UnionNormal, UnionGraphics};
 use rbx_types::Variant;
 use rook_types::NormalId;
 
-use super::{Mesh, MeshError};
+use super::{Levels, Mesh, MeshError};
 
 /// What a `MeshData` blob holds, by its first bytes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -122,6 +122,7 @@ pub(super) fn decode(bytes: &[u8]) -> Result<Mesh, MeshError> {
                 normals: m.normals.iter().map(|q| q.0).collect(),
                 uvs: m.tex,
                 indices: m.faces.indices,
+                levels: Levels::default(),
                 colors: m.colors,
                 faces: m.normal_ids.iter().map(|f| normal_id(f.0)).collect(),
                 terrain: None,

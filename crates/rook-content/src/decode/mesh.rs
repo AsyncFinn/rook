@@ -1,9 +1,9 @@
 //! Reading Roblox mesh files, through the `rbx_mesh` crate (versions 1.00
 //! to 5.00; 6.00 and 7.00 aren't read yet), into the one layout Rook draws.
 //! `rbx_mesh` corrects version 1.00's doubled positions and flipped UVs;
-//! Rook keeps only the highest level of detail (`docs/behavior/meshes/file-meshes.md`)
-//! and rejects faces pointing past the vertex list, so a damaged file can't
-//! reach the renderer. A union's geometry decodes into the same [`Mesh`]
+//! Rook keeps every level of detail a file holds ([`Levels`],
+//! `docs/behavior/meshes/file-meshes.md`) and rejects faces pointing past
+//! the vertex list, so a damaged file can't reach the renderer. A union's geometry decodes into the same [`Mesh`]
 //! ([`union`]), so unions load and draw through the same path.
 
 mod file;
@@ -17,8 +17,10 @@ pub struct Mesh {
     pub positions: Vec<[f32; 3]>,
     pub normals: Vec<[f32; 3]>,
     pub uvs: Vec<[f32; 2]>,
-    /// Three vertex indices per triangle.
+    /// Three vertex indices per triangle: every level of detail's, the
+    /// full one first ([`Levels`]).
     pub indices: Vec<u32>,
+    pub levels: Levels,
     /// Union geometry only (empty for mesh files): each vertex's color,
     /// sRGB with alpha, the color of the part it was cut from.
     pub colors: Vec<[u8; 4]>,
@@ -31,6 +33,19 @@ pub struct Mesh {
     /// Terrain seams only (empty elsewhere): each vertex's place in the
     /// blend of its triangle's layers (`rook_terrain::mesh::draws`).
     pub terrain_corners: Vec<TerrainCorner>,
+}
+
+/// A mesh file's levels of detail (from version 3.00): `indices` holds the
+/// full-detail triangles, then each lower level's, coarser as they go. All
+/// share the vertices.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Levels {
+    /// Where each level after the first starts in `indices`; empty for a
+    /// mesh of one level.
+    pub starts: Vec<u32>,
+    /// How many levels, from the first, the file counts as high quality:
+    /// the ones `RenderFidelity` Automatic draws.
+    pub high_quality: u8,
 }
 
 /// A terrain seam vertex: the layers (`rook_terrain::Layer::index`) of
@@ -98,6 +113,13 @@ impl Mesh {
             return Err(MeshError::Damaged("faces aren't whole triangles".into()));
         }
         Ok(out)
+    }
+
+    /// Each level of detail's range of `indices`, the full one first.
+    pub fn levels(&self) -> impl Iterator<Item = std::ops::Range<usize>> + '_ {
+        let starts = std::iter::once(0).chain(self.levels.starts.iter().map(|&s| s as usize));
+        let ends = (self.levels.starts.iter().map(|&s| s as usize)).chain([self.indices.len()]);
+        starts.zip(ends).map(|(s, e)| s..e)
     }
 
     /// The smallest box holding every vertex: (min, max).

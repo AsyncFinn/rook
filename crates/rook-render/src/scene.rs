@@ -304,6 +304,25 @@ pub struct PartInstance {
     /// Outlined and filled over the finished frame, as a Highlight on it
     /// draws.
     pub highlight: Option<Highlight>,
+    /// Which of its mesh file's levels of detail it may draw.
+    pub fidelity: Fidelity,
+    /// An image layer's or adornment's part: the scene entry it's drawn
+    /// over, whose level of detail its mesh shares so the two stay
+    /// together.
+    pub drawn_over: Option<usize>,
+}
+
+/// Which of a mesh file's levels of detail a part may draw, by
+/// `MeshPart.RenderFidelity`; SpecialMeshes and everything else draw only
+/// the full one (docs/behavior/meshes/file-meshes.md).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Fidelity {
+    #[default]
+    Precise,
+    /// The levels the file counts as high quality.
+    Automatic,
+    /// Every level.
+    Performance,
 }
 
 /// A Highlight's look on the parts it covers. Parts with the same `key`
@@ -346,6 +365,8 @@ impl PartInstance {
             on_top: false,
             grows: None,
             highlight: None,
+            fidelity: Fidelity::Precise,
+            drawn_over: None,
         }
     }
 }

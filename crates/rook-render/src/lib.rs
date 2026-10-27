@@ -18,8 +18,8 @@ mod surfaces;
 
 pub use scene::{
     AdornShape, Anchor, Beam, Camera, Curve, Detile, DrawShape, Emitter, EmitterLook, EmitterShape,
-    Flipbook, FlipbookMode, FloorWire, Grow, Highlight, ImageHash, ImagePlacement, InOut, Layer,
-    Light, LightShape, Lighting, LocalLight, MapAlpha, MaterialMaps, MeshHash, Orientation,
+    Fidelity, Flipbook, FlipbookMode, FloorWire, Grow, Highlight, ImageHash, ImagePlacement, InOut,
+    Layer, Light, LightShape, Lighting, LocalLight, MapAlpha, MaterialMaps, MeshHash, Orientation,
     PartInstance, RibbonLook, SKYBOX_FACES, Scene, Sequence, Spawn, TERRAIN_LAYERS, TerrainLayer,
     TerrainLook, TextureMode, Tonemapper, Trail,
 };

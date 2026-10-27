@@ -29,6 +29,50 @@ fn reads_version_2() {
     assert_eq!(mesh.bounds(), ([0.0; 3], [2.0, 0.0, 0.0]));
 }
 
+/// A synthetic version 4.00 file: three vertices, faces `faces`, the LOD
+/// table `lods` and `high_quality` high quality levels.
+fn version_4(faces: &[[u32; 3]], lods: &[u32], high_quality: u8) -> Vec<u8> {
+    let mut b = b"version 4.00
+"
+    .to_vec();
+    b.extend_from_slice(&24u16.to_le_bytes());
+    b.extend_from_slice(&3u16.to_le_bytes());
+    b.extend_from_slice(&3u32.to_le_bytes());
+    b.extend_from_slice(&(faces.len() as u32).to_le_bytes());
+    b.extend_from_slice(&(lods.len() as u16).to_le_bytes());
+    b.extend_from_slice(&0u16.to_le_bytes());
+    b.extend_from_slice(&0u32.to_le_bytes());
+    b.extend_from_slice(&0u16.to_le_bytes());
+    b.extend_from_slice(&[high_quality, 0]);
+    for i in 0..3 {
+        for f in [i as f32, 0.0, 0.0, 0.0, 1.0, 0.0, 0.5, 0.5] {
+            b.extend_from_slice(&f.to_le_bytes());
+        }
+        b.extend_from_slice(&[0, 0, 127, 127, 255, 255, 255, 255]);
+    }
+    for i in faces.iter().flatten().chain(lods) {
+        b.extend_from_slice(&i.to_le_bytes());
+    }
+    b
+}
+
+/// Every level in the LOD table is kept, the full one first; a table
+/// running backwards or past the faces stops where it goes wrong.
+#[test]
+fn keeps_every_level_of_detail() {
+    let faces = [[0, 1, 2], [0, 2, 1], [1, 2, 0]];
+    let mesh = Mesh::decode(&version_4(&faces, &[0, 2, 3], 1)).unwrap();
+    assert_eq!(mesh.indices, [0, 1, 2, 0, 2, 1, 1, 2, 0]);
+    assert_eq!(mesh.levels.starts, [6]);
+    assert_eq!(mesh.levels.high_quality, 1);
+    let levels = |m: &Mesh| m.levels().map(|r| (r.start, r.end)).collect::<Vec<_>>();
+    assert_eq!(levels(&mesh), [(0, 6), (6, 9)]);
+    let broken = Mesh::decode(&version_4(&faces, &[0, 2, 1, 3], 2)).unwrap();
+    assert_eq!(levels(&broken), [(0, 6)]);
+    let none = Mesh::decode(&version_4(&faces, &[], 0)).unwrap();
+    assert_eq!(levels(&none), [(0, 9)]);
+}
+
 /// Version 1.00 is text at twice the size, with V upside down.
 #[test]
 fn reads_version_1() {

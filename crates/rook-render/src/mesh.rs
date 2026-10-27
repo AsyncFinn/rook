@@ -14,7 +14,7 @@ mod truss;
 use bytemuck::{Pod, Zeroable};
 use glam::Vec3;
 
-use rook_content::decode::mesh::TerrainMapping;
+use rook_content::decode::mesh::{Levels, TerrainMapping};
 
 use rook_types::{NormalId, PartShape, TrussShape};
 
@@ -74,6 +74,8 @@ impl Vertex {
 pub(crate) struct MeshData {
     pub vertices: Vec<Vertex>,
     pub indices: Vec<u32>,
+    /// A mesh file's levels of detail in `indices` (one for the rest).
+    pub levels: Levels,
 }
 
 impl MeshData {
