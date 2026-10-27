@@ -12,18 +12,20 @@ R15 Animate script and the health regeneration script. Which of those
 Rook runs, against the 2018 Core-Scripts it can ship, is
 [undecided](unscheduled.md#undecided) and is settled before step 5.
 
-1. **Rigs and spawning**. Mostly done ([rigs and looks](../behavior/characters/rigs.md),
-   [spawning and teams](../behavior/characters/spawning.md)): R15 from
-   Roblox's rig file and R6 built as Studio builds it, StarterCharacter,
-   `GameSettingsAvatar`, looks from the avatar API with the classic default
-   offline, body colors and classic scaling in HumanoidDescriptions and
-   `ApplyDescription`, spawn choice, placement and ForceFields measured in
-   Studio, team assignment and team spawns, and respawning after `Died`.
-   Left: names and health over heads; conformance cases for spawn order and
-   team assignment (recording needs Studio's MCP server, and Rook's
-   conformance runs have no players yet); whether team auto-assignment
-   balances, which needs several players in Studio; R15 body parts from
-   descriptions and Studio's AnimationConstraint joints (M11).
+1. ✅ **Rigs and spawning** ([rigs and looks](../behavior/characters/rigs.md),
+   [spawning and teams](../behavior/characters/spawning.md),
+   [names and health over heads](../behavior/characters/overhead.md)):
+   R15 from Roblox's rig file and R6 built as Studio builds it,
+   StarterCharacter, `GameSettingsAvatar`, looks from the avatar API with
+   the classic default offline, body colors and classic scaling in
+   HumanoidDescriptions and `ApplyDescription`, spawn choice, placement,
+   facing and ForceFields measured in Studio, team assignment, the team
+   property rules and team spawns, respawning after `Died`, and the names
+   and health bars over heads. The conformance cases
+   `characters/spawn_choice` and `characters/team_properties` pass.
+   Whether auto-assignment balances teams moved to M10 (it needs several
+   clients); R15 body parts from descriptions and AnimationConstraint
+   joints are M11's.
    - *Scope*:
      - The default R15 and R6 rigs: parts, Motor6Ds (1,674 files) and
        attachments, `HipHeight`, `RigType`; StarterPlayer's
@@ -45,7 +47,7 @@ Rook runs, against the 2018 Core-Scripts it can ship, is
      local place with no game settings, and which rig type it gets; the
      spawn point with no SpawnLocation, with only disabled ones, and
      with team spawns but no matching team; how high above the spawn
-     the root part appears; whether team auto-assignment balances.
+     the root part appears.
    - *Done when*: joining an archive place spawns the right rig on the
      right team's SpawnLocation, and conformance cases for spawn order
      and team assignment pass.

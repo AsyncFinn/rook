@@ -63,12 +63,17 @@ pub(super) fn spawn_point(
         };
         let (x, z) = (offset(size.x), offset(size.z));
         let top = cf * CFrame::from_position(Vec3::new(x, size.y / 2.0, z));
-        Some(top.position)
+        Some((top.position, cf.rotation * Vec3::NEG_Z))
     });
-    let feet = at.unwrap_or(Vec3::new(0.0, NO_SPAWN_HEIGHT, 0.0));
+    let (feet, look) = at.unwrap_or((Vec3::new(0.0, NO_SPAWN_HEIGHT, 0.0), Vec3::NEG_Z));
     let mut root = feet + Vec3::new(0.0, drop + CLEARANCE, 0.0);
     root.y = clear_of_parts(w, body, root, picked);
-    (CFrame::from_position(root), picked)
+    // Measured: the character faces the way its spawn does. Inference: a
+    // tilted spawn's way, kept level.
+    let level = Vec3::new(look.x, 0.0, look.z)
+        .try_normalize()
+        .unwrap_or(Vec3::NEG_Z);
+    (CFrame::look_at(root, root + level, Vec3::Y), picked)
 }
 
 /// How far a part reaches from its center along each world axis.
@@ -201,6 +206,60 @@ pub(crate) fn join_team(
     dom.set_property_by_name(player, "Neutral", Value::Bool(team.is_none()))?;
     if let Some(color) = team.and_then(|t| dom.brick_color_property(t, "TeamColor")) {
         dom.set_property_by_name(player, "TeamColor", Value::BrickColor(color))?;
+    }
+    Ok(())
+}
+
+/// Set a player's `TeamColor`: it joins the first team of that color, or
+/// (measured) is on none with `Neutral` as it was.
+pub(crate) fn take_color(
+    dom: &mut Dom,
+    player: InstanceId,
+    color: BrickColor,
+) -> Result<(), DomError> {
+    match team_of_color(dom, color) {
+        Some(team) => join_team(dom, player, Some(team)),
+        None => dom.set_property_by_name(player, "Team", Value::Ref(None)),
+    }?;
+    dom.set_property_by_name(player, "TeamColor", Value::BrickColor(color))
+}
+
+/// Set a player's `Neutral`: true leaves its team; false (measured) joins
+/// the first team of its `TeamColor`, if any.
+pub(crate) fn set_neutral(
+    dom: &mut Dom,
+    player: InstanceId,
+    neutral: bool,
+) -> Result<(), DomError> {
+    if neutral {
+        return join_team(dom, player, None);
+    }
+    dom.set_property_by_name(player, "Neutral", Value::Bool(false))?;
+    let team = dom
+        .brick_color_property(player, "TeamColor")
+        .and_then(|c| team_of_color(dom, c));
+    dom.set_property_by_name(player, "Team", Value::Ref(team.map(InstanceId::to_ref)))
+}
+
+/// Players whose team left Teams or changed color are moved to the first
+/// team of their `TeamColor`, or none (measured in Studio 0.744: a
+/// recolored team loses its players; one taken out of Teams hands them to
+/// another of the same color). Checked once a frame.
+pub(crate) fn keep_teams(dom: &mut Dom) -> Result<(), DomError> {
+    let (Some(players), teams) = (dom.find_service("Players"), dom.find_service("Teams")) else {
+        return Ok(());
+    };
+    for player in dom.children(players).to_vec() {
+        let Some(team) = dom.ref_property(player, "Team") else {
+            continue;
+        };
+        let color = dom.brick_color_property(player, "TeamColor");
+        let kept = teams.is_some_and(|t| dom.parent(team) == Some(t))
+            && dom.brick_color_property(team, "TeamColor") == color;
+        if !kept {
+            let next = color.and_then(|c| team_of_color(dom, c));
+            dom.set_property_by_name(player, "Team", Value::Ref(next.map(InstanceId::to_ref)))?;
+        }
     }
     Ok(())
 }

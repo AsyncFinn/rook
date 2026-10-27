@@ -544,6 +544,7 @@ fn world_gui_draws_in_the_world() {
         brightness: 1.0,
         always_on_top: on_top,
         max_distance: f32::INFINITY,
+        untoned: false,
     };
     // Red on the left half of a canvas 4 pixels across, a stud each.
     let surface = canvas(

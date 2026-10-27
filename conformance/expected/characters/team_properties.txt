@@ -1,0 +1,18 @@
+-- studio 0.744.0.7441077
+-- signals: deferred
+start team nil color White neutral true
+set Team team Blue color Bright blue neutral false
+blue players 1 red players 0
+set TeamColor to a shared color team Red color Bright red neutral false
+set Team to the second of a color team Red color Bright red neutral false
+a frame later team Red color Bright red neutral false
+same color again team Red color Bright red neutral false
+color no team has team nil color Lime green neutral false
+set Neutral team nil color Bright blue neutral true
+not Neutral again team Blue color Bright blue neutral false
+team recolored team nil color Bright blue neutral false
+rejoined team Blue color Bright yellow neutral false
+team destroyed team nil color Bright yellow neutral false
+team unparented team Red2 color Bright red neutral false
+red2 players 1
+unparented players false Team:GetPlayers() failed because team must be a child of the Teams service

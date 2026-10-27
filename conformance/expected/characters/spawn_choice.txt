@@ -1,0 +1,12 @@
+-- studio 0.744.0.7441077
+-- signals: deferred
+no spawns on none y 100 x 0 z 0 look 0 -1 forcefield false
+one neutral on A y 20 x 0 z 300 look 0 -1 forcefield true
+only disabled on none y 100 x 0 z 0 look 0 -1 forcefield false
+turned, no duration on A y 20 x 0 z 300 look -1 0 forcefield false
+inside a model on A y 20 x 0 z 300 look -1 0 forcefield true
+in storage on none y 100 x 0 z 0 look 0 -1 forcefield false
+neutral player, red spawn on none y 100 x 0 z 0 look 0 -1 forcefield false
+red player, red spawn on A y 20 x 0 z 300 look -1 0 forcefield true
+red player, blue spawn on none y 100 x 0 z 0 look 0 -1 forcefield false
+red player, neutral spawn on B y 20 x 20 z 300 look 0 -1 forcefield true

@@ -247,6 +247,25 @@ impl Runtime {
             let w = &mut *w;
             let start = w.dom.journal().end();
             w.gui.sync(&mut w.dom);
+            let physics = &mut w.physics;
+            w.gui.sync_overheads(&mut w.dom, |dom, from, to, ignore| {
+                let filter = rook_physics::Filter::legacy_ray(ignore.to_vec(), false);
+                physics.raycast(dom, from, to - from, &filter).is_some()
+            });
+            start
+        };
+        self.dispatch_since(start);
+    }
+
+    /// Move players whose team left Teams or changed color, firing what
+    /// that fires (once a frame, before scripts resume).
+    pub fn keep_teams(&self) {
+        let start = {
+            let mut w = self.world_mut();
+            let start = w.dom.journal().end();
+            if let Err(e) = api::methods::characters::spawning::keep_teams(&mut w.dom) {
+                tracing::warn!("keeping teams failed: {e}");
+            }
             start
         };
         self.dispatch_since(start);

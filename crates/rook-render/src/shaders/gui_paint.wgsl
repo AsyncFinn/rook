@@ -4,11 +4,21 @@
 // level over about a pixel and a third on screen, as Roblox's GUI shader
 // draws text (its UI pixel shader, 0.743: smoothstep about 0.5 by 0.65 ×
 // fwidth), so text stays sharp at any size; the image's texel,
-// premultiplied (3); or a group's texel, drawn premultiplied (4). Multiply
-// the quad's premultiplied color by it. Call it in uniform control flow.
+// premultiplied (3); a group's texel, drawn premultiplied (4); or a
+// distance field with its edge moved out `mode - 5` screen pixels, a text
+// outline (5 and up). Multiply the quad's premultiplied color by it. Call
+// it in uniform control flow.
 fn gui_paint(glyph: f32, texel: vec4<f32>, mode: f32) -> vec4<f32> {
-    let w = max(0.65 * fwidth(glyph), 1e-4);
+    let per_pixel = fwidth(glyph);
+    let w = max(0.65 * per_pixel, 1e-4);
     let field = smoothstep(0.5 - w, 0.5 + w, glyph);
+    if mode > 4.5 {
+        // Measured on the names over heads: Studio's outline fades over
+        // about a pixel each side of its edge, softer than the glyph's.
+        let edge = 0.5 - (mode - 5.0) * per_pixel;
+        let soft = max(per_pixel, 1e-4);
+        return vec4(smoothstep(edge - soft, edge + soft, glyph));
+    }
     if mode > 3.5 {
         return texel;
     }

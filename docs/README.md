@@ -23,6 +23,7 @@
     - [Rigs and looks](behavior/characters/rigs.md): R15 and R6 bodies, StarterCharacter, avatars and HumanoidDescriptions
     - [Spawning and teams](behavior/characters/spawning.md): which spawn, where on it, team assignment, respawning
     - [Character ownership](behavior/characters/ownership.md): the client owns it, what the server sees
+    - [Names and health over heads](behavior/characters/overhead.md): which show, how far, and how they look
   - Content
     - [Asset fetching](behavior/content/asset-fetching.md): where archived places' content comes from
     - [Client packages](behavior/content/client-packages.md): Roblox's client files, downloaded from its CDN as needed
@@ -73,6 +74,7 @@
     - [Grass](behavior/terrain/grass.md): blades, sway and wind
     - [Collision and queries](behavior/terrain/collision.md)
     - [The Terrain API](behavior/terrain/api.md)
+  - [Pivots](behavior/pivots.md): where models and parts pivot from
   - [Property defaults](behavior/property-defaults.md): what unsaved properties read before anything sets them
   - [Replication](behavior/replication.md): what a client receives from the server
   - [User settings](behavior/user-settings.md): the player's settings, where they are saved and what Rook follows

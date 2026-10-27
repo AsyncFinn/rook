@@ -128,9 +128,12 @@ small caps are drawn as capitals (Approximation).
   field glyphs are stretched from one field per glyph. Either is drawn
   over the object's background and clipped with it, in `TextColor3` at
   `TextTransparency`.
-- Inference: `TextStrokeTransparency` below 1 outlines each glyph a pixel
-  wide in `TextStrokeColor3` (the glyph drawn again under it, moved each
-  way), fading with the text; underlines and strikethroughs are a
+- `TextStrokeTransparency` below 1 outlines each glyph a pixel wide in
+  `TextStrokeColor3`, fading with the text: one layer at that
+  transparency, its edge soft over about a pixel each side, so it's no
+  darker where letters' outlines overlap (measured on the names over
+  heads, which outline this way; Rook grows the glyph's distance field,
+  so the outline is drawn as a field at any text size); underlines and strikethroughs are a
   sixteenth of the line thick, at least a pixel.
 - Inference: an empty TextBox shows `PlaceholderText` in
   `PlaceholderColor3`.

@@ -5,7 +5,8 @@
 //! however near they're seen (docs/behavior/gui/world.md). Each canvas's
 //! quads stay on the GPU until that canvas changes; each frame only where
 //! each canvas is goes up, in a uniform its draw reads, bound with each
-//! run's image.
+//! run's image. Untoned canvases (the names over heads) are drawn with the
+//! screen's GUI instead, moved to where they are on the screen each frame.
 
 use glam::Vec2;
 use std::sync::Arc;
@@ -48,6 +49,8 @@ struct Canvas {
     brightness: f32,
     on_top: bool,
     max_distance: f32,
+    /// An untoned canvas's quads, kept here to draw with the screen's GUI.
+    overlay: Option<Packed>,
 }
 
 /// One canvas drawn this frame: its frame's slot in the uniform buffer,
@@ -218,7 +221,10 @@ impl WorldGui {
                 continue;
             }
             let (quads, held) = fresh.next().expect("one per canvas not kept");
-            let gpu: Vec<GpuQuad> = quads.iter().map(|(q, _)| *q).collect();
+            let gpu: Vec<GpuQuad> = match c.untoned {
+                true => Vec::new(),
+                false => quads.iter().map(|(q, _)| *q).collect(),
+            };
             self.canvases.push(Canvas {
                 source: c.clone(),
                 held,
@@ -235,6 +241,7 @@ impl WorldGui {
                 brightness: c.brightness,
                 on_top: c.always_on_top,
                 max_distance: c.max_distance,
+                overlay: c.untoned.then_some(quads),
             });
         }
     }
@@ -267,7 +274,7 @@ impl WorldGui {
             .iter()
             .enumerate()
             .zip(&self.places)
-            .filter(|((_, c), _)| !c.runs.is_empty())
+            .filter(|((_, c), _)| !c.runs.is_empty() && c.overlay.is_none())
             .filter_map(|((i, c), place)| {
                 let (origin, right, down, one_sided) = lay(c, place.as_ref()?, camera, height)?;
                 let middle = origin + (right * c.size.x + down * c.size.y) * 0.5;
@@ -317,6 +324,29 @@ impl WorldGui {
                 canvas,
                 on_top,
                 distance,
+            })
+            .collect()
+    }
+
+    /// The untoned canvases' quads where `camera` sees them in a `size`
+    /// window, as screen GUI quads, back to front.
+    pub(crate) fn overlay(&self, camera: &Camera, size: (u32, u32)) -> Packed {
+        let mut seen: Vec<(f32, Vec2, f32, &Packed)> = (self.canvases.iter().zip(&self.places))
+            .filter_map(|(c, place)| {
+                let quads = c.overlay.as_ref()?;
+                let (origin, right, _, _) = lay(c, place.as_ref()?, camera, size.1)?;
+                let corner = on_screen(origin, camera, size)?;
+                let k = on_screen(origin + right, camera, size)?.distance(corner);
+                let distance = origin.distance(camera.position);
+                (distance <= c.max_distance).then_some((distance, corner, k, quads))
+            })
+            .collect();
+        seen.sort_by(|a, b| b.0.total_cmp(&a.0));
+        (seen.into_iter())
+            .flat_map(|(_, corner, k, quads)| {
+                quads
+                    .iter()
+                    .map(move |(q, image)| (q.moved(corner, k), *image))
             })
             .collect()
     }
@@ -410,6 +440,18 @@ impl WorldGui {
             }
         }
     }
+}
+
+/// Where `point` is in a `size` window `camera` looks through, in pixels
+/// from its top left; `None` behind the camera.
+fn on_screen(point: Vec3, camera: &Camera, (width, height): (u32, u32)) -> Option<Vec2> {
+    let v = camera.rotation.transpose() * (point - camera.position);
+    if v.z > -0.05 {
+        return None;
+    }
+    let f = height as f32 / (2.0 * (camera.fov_y.to_radians() * 0.5).tan());
+    let at = Vec2::new(v.x, -v.y) * (f / -v.z);
+    Some(Vec2::new(width as f32, height as f32) * 0.5 + at)
 }
 
 /// A canvas in the world: its top left corner, the world step per canvas

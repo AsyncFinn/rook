@@ -1,9 +1,10 @@
-//! World GUI: SurfaceGuis laid on a part's face and BillboardGuis facing
-//! the camera. Which are shown, their canvas sizes, and where they are each
+//! World GUI: SurfaceGuis laid on a part's face, BillboardGuis facing
+//! the camera, and the names and health bars over Humanoids' heads. Which are shown, their canvas sizes, and where they are each
 //! frame; their contents are laid out and drawn like a ScreenGui's
 //! (docs/behavior/gui/world.md).
 
 mod billboard;
+pub(crate) mod overhead;
 mod surface;
 
 use glam::{Mat3, Vec2, Vec3};

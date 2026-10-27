@@ -40,10 +40,13 @@ character it owns. This milestone puts all of them on the wire.
      loss passes the replication tests.
 2. **Several clients**, each with its own player, character and
    PlayerGui; `GetPlayers` order; what one player sees of another's
-   character (positions interpolated between updates).
+   character (positions interpolated between updates); whether team
+   auto-assignment balances teams (M9 puts joiners on the team with the
+   fewest players, the first on a tie, from creator-docs).
    - *Studio questions*: how far behind the owner another client sees a
      character, and whether `Workspace.InterpolationThrottling` changes
-     it. Studio's multi-client test runs several clients; first check
+     it; which team each of four joining players gets with two and
+     three `AutoAssignable` teams. Studio's multi-client test runs several clients; first check
      whether the MCP reaches each of them.
    - *Done when*: four clients, in one process and over the network,
      play an archive place and see each other move smoothly.

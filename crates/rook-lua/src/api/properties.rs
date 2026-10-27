@@ -472,20 +472,19 @@ pub(crate) fn set(
             Some(w.dom.set_property(id, pid, Value::Bool(!b)))
         }
         // A player's team, team color and neutrality follow each other
-        // (creator-docs Player.Team, Player.TeamColor).
+        // (creator-docs Player.Team, Player.TeamColor; measured: set to the
+        // second team of a color, it joins the first).
         ("Team", Value::Ref(team)) if w.dom.is_a(id, "Player") => {
             let team = team.map(InstanceId::from_ref);
-            Some(spawning::join_team(&mut w.dom, id, team))
+            let color = team.and_then(|t| w.dom.brick_color_property(t, "TeamColor"));
+            let first = color.and_then(|c| spawning::team_of_color(&w.dom, c));
+            Some(spawning::join_team(&mut w.dom, id, first.or(team)))
         }
-        ("TeamColor", color @ Value::BrickColor(b)) if w.dom.is_a(id, "Player") => {
-            let team = spawning::team_of_color(&w.dom, *b);
-            Some(
-                spawning::join_team(&mut w.dom, id, team)
-                    .and_then(|()| set_named(w, id, "TeamColor", color.clone())),
-            )
+        ("TeamColor", Value::BrickColor(b)) if w.dom.is_a(id, "Player") => {
+            Some(spawning::take_color(&mut w.dom, id, *b))
         }
-        ("Neutral", Value::Bool(true)) if w.dom.is_a(id, "Player") => {
-            Some(spawning::join_team(&mut w.dom, id, None))
+        ("Neutral", Value::Bool(b)) if w.dom.is_a(id, "Player") => {
+            Some(spawning::set_neutral(&mut w.dom, id, *b))
         }
         ("WorldPivot", Value::CFrame(c)) if w.dom.is_a(id, "Model") => {
             let pid = w.dom.property_id(id, "WorldPivotData")?;

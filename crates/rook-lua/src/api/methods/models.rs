@@ -17,7 +17,9 @@ fn primary_part(w: &World, model: InstanceId) -> Option<InstanceId> {
     }
 }
 
-/// `PVInstance:GetPivot` for a part is `CFrame * PivotOffset`.
+/// `PVInstance:GetPivot` for a part is `CFrame * PivotOffset`; a model
+/// with a PrimaryPart pivots on that part, whatever its stored pivot says
+/// (measured in Studio 0.744: `WorldPivot` still reads the stored one).
 pub(crate) fn pivot_of(w: &World, id: InstanceId) -> CFrame {
     if w.dom.is_a(id, "BasePart") {
         let offset = w
@@ -26,16 +28,12 @@ pub(crate) fn pivot_of(w: &World, id: InstanceId) -> CFrame {
             .unwrap_or(CFrame::IDENTITY);
         return cframe(w, id) * offset;
     }
-    match crate::api::properties::get(w, id, "WorldPivot") {
-        Some(Value::CFrame(c))
-            if primary_part(w, id).is_some()
-                || w.dom
-                    .optional_cframe_property(id, "WorldPivotData")
-                    .is_some() =>
-        {
-            c
-        }
-        _ => bounding_box(w, id).0,
+    if let Some(primary) = primary_part(w, id) {
+        return pivot_of(w, primary);
+    }
+    match w.dom.optional_cframe_property(id, "WorldPivotData") {
+        Some(c) => c,
+        None => bounding_box(w, id).0,
     }
 }
 

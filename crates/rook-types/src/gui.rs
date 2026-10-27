@@ -84,6 +84,10 @@ pub enum Paint {
     /// The color drawn through a glyph's coverage, stretched over the
     /// rectangle.
     Glyph(Arc<GlyphMask>),
+    /// The color drawn through a glyph's distance field with its edge
+    /// moved out this many pixels on screen: a text outline, one layer
+    /// thick wherever it is.
+    Outline(Arc<GlyphMask>, f32),
     /// Part of an image, tinted by the color.
     Image(ImagePaint),
     /// A group of quads drawn apart into a texture of its own, then laid
@@ -136,6 +140,10 @@ pub struct WorldCanvas {
     pub always_on_top: bool,
     /// Hidden past this many studs from the camera.
     pub max_distance: f32,
+    /// Drawn with the screen's GUI where it is on the screen, over the
+    /// world, in its own colors and blended as screen GUI is: no lighting,
+    /// tone curve or fog (the names over heads).
+    pub untoned: bool,
 }
 
 /// Where a [`WorldCanvas`] is this frame.

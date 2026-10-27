@@ -19,6 +19,7 @@ pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("Humanoid", "GetAppliedDescription") => appearance::get_applied_description,
         ("BasePart", "GetNetworkOwner") => ownership::get_network_owner,
         ("BasePart", "GetNetworkOwnershipAuto") => ownership::get_network_ownership_auto,
+        ("Team", "GetPlayers") => team_players,
         _ => return None,
     })
 }
@@ -34,6 +35,29 @@ pub(super) fn players_of(w: &World, this: InstanceId) -> Vec<InstanceId> {
 
 pub(super) fn get_players(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
     ret_instances(lua, &with_world(lua, |w| players_of(w, this)))
+}
+
+/// `Team:GetPlayers()`: the players on it, which only a team in Teams has
+/// (measured: the error, for one out of Teams).
+fn team_players(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
+    let players = with_world(lua, |w| {
+        let dom = &w.dom;
+        let in_teams = dom
+            .parent(this)
+            .is_some_and(|p| dom.class_name(p) == "Teams");
+        let all = dom.find_service("Players").map(|p| players_of(w, p));
+        in_teams.then(|| {
+            (all.unwrap_or_default().into_iter())
+                .filter(|&p| dom.ref_property(p, "Team") == Some(this))
+                .collect::<Vec<_>>()
+        })
+    })
+    .ok_or_else(|| {
+        ScriptError(
+            "Team:GetPlayers() failed because team must be a child of the Teams service".into(),
+        )
+    })?;
+    ret_instances(lua, &players)
 }
 
 pub(super) fn player_from_character(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
@@ -120,6 +144,13 @@ pub(crate) fn spawn_character(lua: &Lua, player: InstanceId) -> ApiResult<Instan
         let dom = &mut w.dom;
         if let Some(root) = dom.find_first_child(character, "HumanoidRootPart", false) {
             rigs::place_at(dom, character, root, at)?;
+        }
+        // Measured: the character's Humanoid shows the player's DisplayName.
+        if let (Some(humanoid), Some(name)) = (
+            dom.find_first_child_of_class(character, "Humanoid"),
+            dom.string_property(player, "DisplayName"),
+        ) {
+            dom.set_property_by_name(humanoid, "DisplayName", Value::String(name))?;
         }
         if let Some(scripts) = dom
             .find_service("StarterPlayer")

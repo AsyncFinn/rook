@@ -2,8 +2,8 @@
 //! object's background and border (or legacy style), a ScrollingFrame's
 //! bars, then its image or text, cut by its UICorner and colored by its
 //! UIGradient, then its UIStroke; CanvasGroups drawn apart and laid over
-//! as one; and any Hint or Message over it all; and what each world GUI's
-//! canvas draws, the same way. Order and clipping rules:
+//! as one; and any Hint or Message over it all; what each world GUI's
+//! canvas draws, the same way; and the names and health bars over heads. Order and clipping rules:
 //! docs/behavior/gui/layout.md#drawing, docs/behavior/gui/modern.md.
 
 mod caret;
@@ -13,6 +13,7 @@ mod gradient;
 mod group;
 mod image;
 mod messages;
+pub(crate) mod overhead;
 mod scrolling;
 mod stroke;
 mod style;
@@ -116,6 +117,7 @@ pub(crate) fn world(
             brightness: dom.float_property(gui, "Brightness").unwrap_or(1.0),
             always_on_top: dom.bool_property(gui, "AlwaysOnTop") == Some(true),
             max_distance: order::max_distance(dom, gui),
+            untoned: false,
         });
     }
     canvases

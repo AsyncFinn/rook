@@ -16,6 +16,11 @@ impl DataModel {
             (w.scheduler.now(), dt)
         };
         let rs = self.run_service;
+        if self.role == Role::Server {
+            // Inference: before scripts resume, so one that waited a frame
+            // sees its players moved off a removed or recolored team.
+            self.runtime.keep_teams();
+        }
         if self.role == Role::Client {
             // Before the frame is drawn (creator-docs RunService.PreRender;
             // RenderStepped is its older name), after the functions bound to

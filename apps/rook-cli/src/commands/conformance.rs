@@ -11,6 +11,8 @@
 //! A case whose source has a `--! client input ...` line runs on the
 //! playtest client instead, with the mouse and keyboard steps it lists
 //! played while it runs (input only reaches clients; see [`client`]).
+//! A server case with a `--! player` line needs the player a Studio
+//! playtest has; Rook joins one for it.
 
 mod client;
 
@@ -58,6 +60,8 @@ struct Case {
     source: String,
     /// For client cases, the input played while the case runs.
     input: Option<Vec<client::Step>>,
+    /// It needs a player on the server, as a Studio playtest has.
+    player: bool,
 }
 
 fn cases(root: &Path, filter: Option<&str>) -> anyhow::Result<Vec<Case>> {
@@ -79,7 +83,13 @@ fn cases(root: &Path, filter: Option<&str>) -> anyhow::Result<Vec<Case>> {
         }
         let source = fs_err::read_to_string(path)?;
         let input = client::steps(&source)?;
-        out.push(Case { id, source, input });
+        let player = source.lines().any(|l| l.trim() == "--! player");
+        out.push(Case {
+            id,
+            source,
+            input,
+            player,
+        });
     }
     anyhow::ensure!(!out.is_empty(), "no cases found under {}", dir.display());
     Ok(out)
@@ -136,6 +146,9 @@ fn run_in_rook(case: &Case, deferred: bool) -> anyhow::Result<String> {
     let server = Server::new(&Options::default())?;
     server.runtime().world_mut().signal_behavior = behavior;
     let mut session = Session::new(server, Options::default());
+    if case.player && case.input.is_none() {
+        session.join("Player1", 1)?;
+    }
     let client = match case.input {
         Some(_) => {
             let index = session.join("Player1", 1)?;

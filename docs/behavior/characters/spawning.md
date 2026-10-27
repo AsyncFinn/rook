@@ -1,11 +1,12 @@
 # Spawning and teams
 
-Checked against Studio 0.744 on 2026-10-24.
+Checked against Studio 0.744 on 2026-10-26.
 
 Where characters appear, which team players are on, and respawning:
 `rook_lua`'s `characters::spawning` and `rook_engine`'s session host.
 Measured in a Baseplate playtest by respawning one player with
-`LoadCharacter` under each condition.
+`LoadCharacter` under each condition; the conformance cases
+`characters/spawn_choice` and `characters/team_properties` record it.
 
 ## The spawn
 
@@ -30,6 +31,11 @@ Measured in a Baseplate playtest by respawning one player with
 - A part sitting on the spawn: Studio put the character inside it and
   physics pushed it out on top. Rook raises it clear of colliding parts
   in its box at once (the outcome Studio settled to).
+- Spawns anywhere under Workspace count (one inside a Model did), and
+  none outside it (one in ReplicatedStorage didn't).
+- The character faces the way its spawn does (measured: a spawn turned
+  90° turned the character with it). Inference: a tilted spawn's way,
+  kept level.
 - A spawn with a `Duration` gives the new character a ForceField for that
   many seconds (creator-docs; measured: the default 10 gave one, 0 none).
 
@@ -38,11 +44,23 @@ Measured in a Baseplate playtest by respawning one player with
 - A joining player goes on the `AutoAssignable` team with the fewest
   players, the first such team in Teams on a tie (creator-docs for the
   fewest; the tie rule is Inference, as balancing needs several players
-  in Studio). With no such team, the player stays neutral.
-- Setting a player's `Team` sets its `TeamColor` to the team's and
-  `Neutral` to whether it has none; setting `TeamColor` joins the first
-  team of that color (or none); setting `Neutral` leaves its team
-  (creator-docs Player).
+  in Studio, M10). With no such team, the player stays neutral.
+- A player's team follows its `TeamColor`: unless `Neutral`, it's on the
+  first team in Teams of that color. Measured, setting each in turn:
+  - `Team` sets `TeamColor` to the team's and `Neutral` false; set to the
+    second of two teams of one color, the player is on the first.
+  - `TeamColor` joins the first team of that color; a color no team has
+    leaves the player on no team with `Neutral` as it was (false).
+  - `Neutral` true leaves the team, keeping `TeamColor`; false joins the
+    first team of `TeamColor` again.
+  - A team recolored loses its players (they keep their color, on no
+    team, until a team has it); a team taken out of Teams hands them to
+    the next of their color, and a destroyed one leaves them on none.
+    Rook moves them once a frame, before scripts resume (Inference: the
+    cases read it a frame later).
+- `Team:GetPlayers()` lists the players on it, and errors for a team not
+  in Teams. The order of the Changed signals these fire isn't followed
+  (Studio fires `TeamColor` twice on joining a team).
 - Touching a non-neutral SpawnLocation with `AllowTeamChangeOnTouch`
   puts the character's player on the spawn's team (creator-docs; on the
   server, where touches of a client's character are seen).

@@ -96,11 +96,31 @@ impl GpuQuad {
                 Paint::Glyph(_) => 1.0,
                 Paint::Image(_) => 3.0,
                 Paint::Group(_) => 4.0,
+                Paint::Outline(_, grow) => 5.0 + grow,
             },
             shape_rect,
             radii,
             shape: [ring, bevel, ramp.map_or(-1.0, |r| r as f32), 0.0],
             gradient,
+        }
+    }
+
+    /// The quad as drawn `k` times bigger with its origin at `corner`
+    /// (a canvas's quads laid on the screen).
+    fn moved(self, corner: glam::Vec2, k: f32) -> Self {
+        let at = |x: f32, y: f32| [corner.x + x * k, corner.y + y * k];
+        let [l, t] = at(self.clip[0], self.clip[1]);
+        let [r, b] = at(self.clip[2], self.clip[3]);
+        let [sx, sy] = at(self.shape_rect[0], self.shape_rect[1]);
+        let [gx, gy] = at(self.gradient[0], self.gradient[1]);
+        Self {
+            center: at(self.center[0], self.center[1]),
+            half_size: self.half_size.map(|h| h * k),
+            clip: [l, t, r, b],
+            shape_rect: [sx, sy, self.shape_rect[2] * k, self.shape_rect[3] * k],
+            radii: self.radii.map(|r| r * k),
+            gradient: [gx, gy, self.gradient[2] / k, self.gradient[3] / k],
+            ..self
         }
     }
 
@@ -209,6 +229,8 @@ pub(crate) struct GuiPass {
     ramps_view: wgpu::TextureView,
     sampler: wgpu::Sampler,
     screen: Target,
+    /// The untoned world canvases, under the screen's GUI.
+    overlay: Target,
     /// The screen's quads last given, and the groups they hold.
     screen_source: Option<(Arc<[GuiQuad]>, Held)>,
     groups: Groups,
@@ -318,10 +340,12 @@ impl GuiPass {
             sampler: &sampler,
         };
         let screen = Target::new(device, binds);
+        let overlay = Target::new(device, binds);
         let world = WorldGui::new(device, layouts, table, (&glyphs, &ramps_view));
         Self {
             pipeline,
             screen,
+            overlay,
             screen_source: None,
             groups: Groups::default(),
             world,
@@ -428,7 +452,7 @@ impl GuiPass {
                         .filter_map(|q| {
                             let (uv, image) = match &q.paint {
                                 Paint::Solid => ([0.0; 4], None),
-                                Paint::Glyph(mask) => {
+                                Paint::Glyph(mask) | Paint::Outline(mask, _) => {
                                     (atlas.place(queue, mask)?.map(|t| t * scale), None)
                                 }
                                 Paint::Image(image) => (image.uv, Some(ImageKey::of(image))),
@@ -452,22 +476,25 @@ impl GuiPass {
     }
 
     /// Bind the images the GUI draws that are on the GPU now (`cache`),
-    /// and upload the world GUI's canvases `camera` sees this frame, in a
-    /// `height`-pixel window.
+    /// and upload the world GUI's canvases `camera` sees this frame in a
+    /// `size` window, the untoned ones as screen quads.
     pub(crate) fn upload(
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         cache: &GpuCache<ImageHash, Image>,
         camera: &Camera,
-        height: u32,
+        size: (u32, u32),
     ) -> WorldRuns {
+        let overlay = self.world.overlay(camera, size);
+        self.overlay.set(device, queue, &overlay);
+        self.images.bind(device, &self.overlay.runs, cache);
         self.images.bind(device, &self.screen.runs, cache);
         for (target, _, _) in self.groups.drawn() {
             self.images.bind(device, &target.runs, cache);
         }
         let images = (&self.images, cache);
-        self.world.upload(device, queue, images, camera, height)
+        self.world.upload(device, queue, images, camera, size.1)
     }
 
     /// Lay some of the world GUI's canvases in the world.
@@ -479,12 +506,12 @@ impl GuiPass {
     /// anything that shows them.
     pub(crate) fn record_groups(&self, queue: &wgpu::Queue, encoder: &mut wgpu::CommandEncoder) {
         for (target, view, size) in self.groups.drawn() {
-            self.draw(queue, encoder, target, view, size);
+            self.draw(queue, encoder, target, view, size, true);
         }
     }
 
-    /// Draw the GUI layer into `target`, if there's any GUI. Whether there
-    /// was.
+    /// Draw the GUI layer into `target`, if there's any GUI: the untoned
+    /// world canvases, then the screen's. Whether there was.
     pub(crate) fn record(
         &self,
         queue: &wgpu::Queue,
@@ -492,10 +519,13 @@ impl GuiPass {
         target: &wgpu::TextureView,
         size: (u32, u32),
     ) -> bool {
-        self.draw(queue, encoder, &self.screen, target, size)
+        let under = self.draw(queue, encoder, &self.overlay, target, size, true);
+        let over = self.draw(queue, encoder, &self.screen, target, size, !under);
+        under || over
     }
 
-    /// Draw `quads` into `view`, cleared first. Whether there were any.
+    /// Draw `quads` into `view`, cleared first when `clear`. Whether there
+    /// were any.
     fn draw(
         &self,
         queue: &wgpu::Queue,
@@ -503,6 +533,7 @@ impl GuiPass {
         quads: &Target,
         view: &wgpu::TextureView,
         (width, height): (u32, u32),
+        clear: bool,
     ) -> bool {
         let Some((buffer, count)) = &quads.quads else {
             return false;
@@ -516,7 +547,10 @@ impl GuiPass {
                 depth_slice: None,
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                    load: match clear {
+                        true => wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                        false => wgpu::LoadOp::Load,
+                    },
                     store: wgpu::StoreOp::Store,
                 },
             })],

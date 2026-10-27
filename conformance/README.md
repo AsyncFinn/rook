@@ -17,7 +17,9 @@ checked against it.
   coordinates, below the top bar), `down`, `up`, `down2` and `up2` press
   and release button 1 or 2, `wheelup` and `wheeldown` turn the wheel a
   notch, `key:Return` presses a key, `text:abc` types text and `wait`
-  does nothing for a step. A bare `--! client` line plays nothing. Studio
+  does nothing for a step. A bare `--! client` line plays nothing.
+- A server case with a `--! player` line needs the player a Studio playtest
+  has: Rook joins one before it runs. Studio
   eases each move over a few events and Rook sends one, and Studio's MCP
   is slower than 0.2 s a step, so client cases log what holds either way
   rather than positions mid-move or timings.

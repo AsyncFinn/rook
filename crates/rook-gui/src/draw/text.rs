@@ -8,19 +8,6 @@ use super::Text;
 use crate::layout::Placed;
 use crate::text::{FIELD_PX, PlacedGlyph, TextBlock};
 
-/// Inference: an outline is the glyph drawn again under it, moved its
-/// thickness each way and diagonally.
-const OUTLINE: [Vec2; 8] = [
-    Vec2::new(-1.0, 0.0),
-    Vec2::new(1.0, 0.0),
-    Vec2::new(0.0, -1.0),
-    Vec2::new(0.0, 1.0),
-    Vec2::new(-1.0, -1.0),
-    Vec2::new(1.0, -1.0),
-    Vec2::new(-1.0, 1.0),
-    Vec2::new(1.0, 1.0),
-];
-
 /// Screen text this big or bigger, in pixels as drawn, is drawn from
 /// distance fields; smaller text from masks at its size. Inference from
 /// Roblox's flags (docs/behavior/gui/text.md#drawing): SDF fonts are on,
@@ -67,10 +54,25 @@ pub(super) fn emit(
             Some((c, width)) => Some(([c[0], c[1], c[2], c[3] * g.color[3]], width)),
             None => g.stroke,
         };
+        // Measured on the names over heads: the outline is one layer at
+        // its transparency, the glyph's field grown by its thickness, not
+        // copies that darken where they overlap.
         if let Some((color, thickness)) = stroke.filter(|(c, _)| c[3] > 0.0) {
-            for step in OUTLINE {
-                glyph(g, step * thickness, color, text, out);
-            }
+            // Under a mask glyph, on the whole pixel that glyph sits on.
+            let masked = !(world || g.px * p.scale >= FIELDS_FROM) && p.rotation == 0.0;
+            let pen = p.screen_point(g.pen);
+            let snap = if masked {
+                pen.round() - pen
+            } else {
+                Vec2::ZERO
+            };
+            out.extend(field_glyph(g, p, snap, color, clip, text).map(|q| GuiQuad {
+                paint: match q.paint {
+                    Paint::Glyph(mask) => Paint::Outline(mask, thickness),
+                    other => other,
+                },
+                ..q
+            }));
         }
     }
     for g in block.glyphs.iter().filter(|g| g.color[3] > 0.0) {

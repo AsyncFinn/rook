@@ -1,8 +1,9 @@
 //! 2D GUI: where every GUI object is and what its text says (the
 //! `Absolute*` and `Text*` properties scripts read, laid out on the
 //! DataModel's thread as Roblox does), what the local player's ScreenGuis
-//! draw, and the SurfaceGuis and BillboardGuis drawn in the world. Rules
-//! measured in Studio are in `docs/behavior/gui/`.
+//! draw, and the SurfaceGuis and BillboardGuis drawn in the world, with
+//! the names and health bars over heads. Rules measured in Studio are in
+//! `docs/behavior/gui/` and `docs/behavior/characters/overhead.md`.
 
 mod changes;
 mod draw;
@@ -17,7 +18,7 @@ mod world;
 
 use std::sync::Arc;
 
-use glam::Vec2;
+use glam::{Vec2, Vec3};
 use rook_dom::{Change, Dom, DomError, InstanceId};
 use rook_types::{GuiQuad, Value, Vector2, WorldCanvas, WorldPlace};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -87,6 +88,9 @@ pub struct Gui {
     /// Each world GUI's canvas as of the last layout, once drawn; one
     /// still drawn is the same `Arc`, so a renderer can keep its copy.
     canvases: FxHashMap<InstanceId, Arc<WorldCanvas>>,
+    /// The tags over heads, and each one's canvas as last drawn.
+    overheads: world::overhead::Overheads,
+    tags: FxHashMap<InstanceId, (world::overhead::Look, Arc<WorldCanvas>)>,
     fonts: text::Fonts,
     glyphs: text::Glyphs,
     images: images::Images,
@@ -110,6 +114,8 @@ impl Default for Gui {
             scrolling: FxHashMap::default(),
             turning: Turning::default(),
             canvases: FxHashMap::default(),
+            overheads: world::overhead::Overheads::default(),
+            tags: FxHashMap::default(),
             fonts: text::Fonts::default(),
             glyphs: text::Glyphs::default(),
             images: images::Images::default(),
@@ -191,14 +197,16 @@ impl Gui {
         if self.watch.is_none() {
             self.watch = Some(Watch::new(dom));
             if let Some(ws) = dom.find_service("Workspace") {
-                let found = dom.descendants(ws).into_iter();
+                let found = dom.descendants(ws);
+                (self.overheads).note(dom, found.iter().copied());
                 self.in_world
-                    .extend(found.filter(|&id| world::is_world_gui(dom, id)));
+                    .extend(found.into_iter().filter(|&id| world::is_world_gui(dom, id)));
             }
         }
         let watch = self.watch.as_ref().expect("made above");
         for change in dom.journal().since(self.cursor) {
             if let Change::Reparented { subtree, .. } = change {
+                self.overheads.note(dom, subtree.iter().copied());
                 let found = subtree.iter().copied();
                 self.in_world
                     .extend(found.filter(|&id| world::is_world_gui(dom, id)));
@@ -292,6 +300,19 @@ impl Gui {
         self.redraw(dom, &resized);
     }
 
+    /// Work out this frame's names and health bars over heads, on a
+    /// client. `blocked(dom, from, to, ignore)` says whether a part outside
+    /// `ignore` is between two points. They draw again when one changed.
+    pub fn sync_overheads(
+        &mut self,
+        dom: &mut Dom,
+        mut blocked: impl FnMut(&mut Dom, Vec3, Vec3, &[InstanceId]) -> bool,
+    ) {
+        if self.overheads.update(dom, &mut blocked) {
+            self.generation += 1;
+        }
+    }
+
     /// [`Gui::sync`], and lay out `id`'s tree too when it isn't on a screen
     /// (unparented, or kept in storage).
     pub fn sync_for(&mut self, dom: &mut Dom, id: InstanceId) {
@@ -376,8 +397,9 @@ impl Gui {
     }
 
     /// What the shown SurfaceGuis and BillboardGuis draw, as of the last
-    /// layout; [`Gui::world_places`] says where each is. Only canvases laid
-    /// out or restyled since they were last drawn are drawn again.
+    /// layout, then the tags over heads; [`Gui::world_places`] says where
+    /// each is. Only canvases laid out or restyled since they were last
+    /// drawn, and tags whose look changed, are drawn again.
     pub fn draw_world(&mut self, dom: &Dom) -> Vec<Arc<WorldCanvas>> {
         let laid = self.layout.world.iter().map(|(h, _)| h);
         self.world_drawn = world::drawn(dom, laid);
@@ -399,15 +421,38 @@ impl Gui {
         );
         self.canvases
             .extend(missing.into_iter().zip(drawn.into_iter().map(Arc::new)));
-        (self.world_drawn.iter())
+        let mut out: Vec<Arc<WorldCanvas>> = (self.world_drawn.iter())
             .map(|h| self.canvases[&h.gui].clone())
-            .collect()
+            .collect();
+        let shown = &self.overheads.shown;
+        self.tags
+            .retain(|h, _| shown.iter().any(|s| s.humanoid == *h));
+        for tag in shown {
+            let kept = self
+                .tags
+                .get(&tag.humanoid)
+                .filter(|(look, _)| *look == tag.look);
+            let canvas = match kept {
+                Some((_, canvas)) => canvas.clone(),
+                None => {
+                    let canvas = draw::overhead::canvas(&tag.look, &mut text);
+                    (self.tags).insert(tag.humanoid, (tag.look.clone(), canvas.clone()));
+                    canvas
+                }
+            };
+            out.push(canvas);
+        }
+        out
     }
 
     /// Where each canvas the last [`Gui::draw_world`] gave is now (`None`:
     /// it can't be drawn, its part gone).
     pub fn world_places(&self, dom: &Dom) -> Vec<Option<WorldPlace>> {
-        self.world_drawn.iter().map(|h| h.place(dom)).collect()
+        let tags = (self.overheads.shown.iter())
+            .map(|tag| Some(tag.place(draw::overhead::size(&tag.look))));
+        (self.world_drawn.iter().map(|h| h.place(dom)))
+            .chain(tags)
+            .collect()
     }
 
     /// Write every laid-out object's outputs.
