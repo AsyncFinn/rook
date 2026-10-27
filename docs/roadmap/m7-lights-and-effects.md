@@ -35,5 +35,20 @@ create.
    ([`docs/behavior/rendering/adornments.md`](../behavior/rendering/adornments.md),
    [`docs/behavior/rendering/highlight.md`](../behavior/rendering/highlight.md)).
 
-M7's exit criterion is met: local lights light the scene, and Fire,
-Smoke, Sparkles and ParticleEmitters draw as in Studio.
+7. **Match Studio**: close every difference left in what steps 1 to 6
+   built.
+   - *Scope*: SurfaceLight's spread (fitted to one face size, within 17
+     levels); the light voxels' shadow fit; the grid catching up over a
+     few seconds as Studio's does; local lights near the camera with
+     `PrioritizeLightingQuality` on; the Approximations in the effects,
+     adornments and Highlight pages. Out: the sun, sky and sun shadows
+     (M13).
+   - *Evidence*: the [stubs](../guide/stubs.md) rows taken over by this
+     step, and the open Approximations and Inferences
+     on the lighting, effects and adornment pages.
+   - *Done when*: the [Match Studio](README.md#match-studio) bar holds
+     for steps 1 to 6 (correct, edge cases measured,
+     indistinguishable side by side), and no stubs row names this
+     step.
+
+Steps 1 to 6 met the old exit criterion; step 7 holds them to Studio.

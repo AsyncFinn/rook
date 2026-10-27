@@ -40,7 +40,14 @@ Observed:
 - **Color**: one flat color per blade whatever it faces and on slopes,
   the ground's average color around it: by luminance 0.78 of it in the
   default color, 0.97 with Grass red. Black Grass grows black blades,
-  so there's no light added of their own.
+  so there's no light added of their own. *Contradicted* (the user's
+  close-up of a clump in Studio, 2026-10-27): blades in one clump differ
+  in shade, from pale yellow-green to dark green, some along their
+  length, and the ground under the clump is darker than the open ground
+  around it. So a blade's shade depends on how it faces the light or on
+  its height, and either the blades shadow the ground or Studio darkens
+  it under them. The flat color above held only in the averaged shots
+  it was measured from (Unknown which rule; M6 step 5 measures it).
 - **Sway** (no wind): tips 3 studs up swing about 0.1 studs either way
   over 2.5 to 4 seconds; blades under a stud apart move together, 1.3
   studs apart opposite, as if a wave crosses the grass.

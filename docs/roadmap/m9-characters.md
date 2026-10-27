@@ -165,3 +165,17 @@ the packages, as it does the CoreScripts, and never ships them (decided
      seat takes someone again, and VehicleSeat's driving forces against
      a reference car.
    - *Done when*: characters sit and stand, and an archive car drives.
+9. **Match Studio**: close every difference left in what steps 1 to 8
+   built.
+   - *Scope*: whatever steps 1 to 8 leave as Approximation or Inference
+     on the characters pages; shift lock compared with Studio;
+     `DiagonalFieldOfView` and `MaxAxisFieldOfView`. Out: avatars,
+     clothes and AnimationConstraint joints (M11), gamepad and touch
+     (M19).
+   - *Evidence*: the [stubs](../guide/stubs.md) rows taken over by this
+     step, and the open Approximations and Inferences
+     on the characters pages.
+   - *Done when*: the [Match Studio](README.md#match-studio) bar holds
+     for steps 1 to 8 (correct, edge cases measured,
+     indistinguishable side by side), and no stubs row names this
+     step.

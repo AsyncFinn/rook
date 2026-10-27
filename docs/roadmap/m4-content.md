@@ -72,6 +72,37 @@ renderer draws all of these as their part's plain box.
    `UsePartColor`, and what a union draws while loading or after failing.
    Unions' collision hulls from `PhysicsData` go with MeshPart collision
    fidelity (M15). Counts and findings: [meshes.md](../behavior/meshes/unions.md).
+7. **Match Studio**: close every difference left in what steps 1 to 6
+   built.
+   - *Scope*:
+     - Materials: Studio's own Wang tile picks (`wangIndex.dds`), a
+       variant's emissive mask, ForceField's moving pattern and lit
+       edges, Plastic's own texture and 2022 normal map.
+     - Surfaces: studs on balls, cylinders and wedge slopes as Studio
+       counts them; Hinge, Motor and SteppingMotor pins.
+     - Decals: the order of equal `ZIndex`; whether large images are
+       halved.
+     - Meshes: versions 6.00 and 7.00; the Head's cap UVs; per-vertex
+       colors; material looks on file meshes; meshes under unions left
+       untinted; a truss's mesh child cut with holes; corner wedge
+       orientation checked.
+     - Unions: geometry saved in the file; `MeshData` 4 and 5 checked;
+       the NegateOperation color; material tiling.
+     - Content: assets that need an account, `rbxthumb://` and version
+       ids, old `rbxasset://` paths; `PreloadAsync`'s `Loading`,
+       `TimedOut` and timing; `RequestQueueSize`; the other
+       ContentProvider members; `Changed` firing for the legacy content
+       names.
+     - Out: the indoor reflection cube, the reflections' fade and sky
+       light blocked by real shapes (M13 step 3); collision shapes
+       (M15).
+   - *Evidence*: the [stubs](../guide/stubs.md) rows taken over by this
+     step, and the open Approximations and Inferences
+     on the content, meshes and rendering pages.
+   - *Done when*: the [Match Studio](README.md#match-studio) bar holds
+     for steps 1 to 6 (correct, edge cases measured,
+     indistinguishable side by side), and no stubs row names this
+     step.
 
 Physics picks up the real shapes of MeshParts and unions in M15 (unions
 done: [collision.md](../behavior/physics/collision-shapes.md#unions)).

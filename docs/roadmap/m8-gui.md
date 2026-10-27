@@ -108,3 +108,22 @@ health bars and leaderboards are GUI.
    - *Done when*: a player chats in an archive place, with bubbles over
      their character, and the place's `Chatted` commands run. Chat
      between machines comes with M10's remotes.
+11. **Match Studio**: close every difference left in what steps 1 to 10
+    built.
+    - *Scope*: UIStroke round text drawn as Studio strokes it, not eight
+      offset copies; a styled object's UICorner rounding each piece;
+      CanvasGroup checked on a machine where Studio draws it into a
+      texture; UIPageLayout's `PageEnter` and `PageLeave`; glyph
+      advances (Studio's hinting); `TextTruncate`, `TextDirection`,
+      `OpenTypeFeatures`, localization, real small caps and fallback
+      faces; text stroke, underline, Hint and Message measured; the
+      TextBox's scrolling caret, Up and Down, blinking, composition and
+      selection color; `AutomaticSize` with scaled children; the
+      Inferences in the GUI pages. Out: touch and gamepad (M19).
+    - *Evidence*: the [stubs](../guide/stubs.md) rows taken over by this
+      step, and the open Approximations and Inferences
+      on the GUI pages.
+    - *Done when*: the [Match Studio](README.md#match-studio) bar holds
+      for steps 1 to 10 (correct, edge cases measured,
+      indistinguishable side by side), and no stubs row names this
+      step.

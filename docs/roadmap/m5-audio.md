@@ -12,3 +12,20 @@ state. It's self-contained, and every place sounds wrong without it.
 5. ✅ The audio API modern places use (AudioPlayer, AudioEmitter,
    AudioListener, AudioDeviceOutput, Wire and the Audio effects), on the
    same engine as Sound (see [audio](../behavior/audio/audio-api.md)).
+6. **Match Studio**: close every difference left in what steps 1 to 5
+   built.
+   - *Scope*: how loud `Volume` is (a plain gain today); the Doppler
+     effect; ReverbSoundEffect and PitchShiftSoundEffect as Studio sounds
+     them, not Rook's own matched to its levels; the `AmbientReverb`
+     presets measured; AudioEcho with feedback (29% too loud) and
+     AudioCompressor (0.6 as loud); `PlaybackRegion` and `LoopRegion`;
+     7.1 layouts and near-field spread; attenuation curves saved in
+     files; AudioChannelMixer wired. Out: sound effects and audio
+     classes not heard yet (M16).
+   - *Evidence*: the [stubs](../guide/stubs.md) rows taken over by this
+     step, and the open Approximations and Inferences
+     on the audio pages.
+   - *Done when*: the [Match Studio](README.md#match-studio) bar holds
+     for steps 1 to 5 (correct, edge cases measured,
+     indistinguishable side by side), and no stubs row names this
+     step.
