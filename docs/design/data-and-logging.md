@@ -112,6 +112,19 @@ What the terminal shows:
 
 Libraries' own events reach the terminal only as warnings and errors.
 
+### Output off the game thread
+
+Printing a line costs the thread that printed it only the crash report's copy (`logging::crash::remember`) and a channel send. A thread of its own, `rook-output` (`console::writer`), writes the terminal and the log file, in the order lines were printed. A Windows console write takes tens of microseconds and the log file flushes every line, so a game that prints or errors every frame used to pay both in frame time. A Baseplate whose script prints 20 lines and raises 5 errors every Heartbeat, run with `--bench 600` in a Windows console, took a median 6.1 to 7.2 ms a server step before and 0.26 to 0.33 ms after (2026-10-26); with output to a pipe, simulation went from 0.72 to 0.52 ms a frame. The crash report's tail stays on the printing thread, so a report still has the lines printed just before a panic. `console::flush` waits for the thread; `logging::run` calls it when `main` returns or panics, and commands that print straight to stdout after the game's output (`rook-tools run`'s tree and summary) call it first. Lines for the REPL's prompt (`set_output`) go out from that thread too.
+
+What Roblox does, measured in Studio 0.744 (Baseplate, play mode, 2026-10-26):
+
+- **No throttling or collapsing.** 5,000 identical `print`s each cost as much as 5,000 different ones (about 50 µs a call on the server, 110 µs on the client), and every one reached the Output window and the log file. Rook doesn't collapse repeats either.
+- **Studio pays on its main thread.** At 2,000 prints a frame the server's median Heartbeat step was 1.6 s instead of 3 ms; the log file had written those lines within 150 ms, so the Output window, not the file, is the cost. Frames stayed slow (0.44 s) for seconds after the printing stopped while the window caught up, and the client drew almost no frames meanwhile.
+- **The log file** (`%LOCALAPPDATA%\Roblox\logs\*_Studio_*_last.log`) gets every line as `<UTC time>,<seconds>,<thread id hex>,6,Info [FLog::CreatorOutput] <message>` (`Warning [FLog::CreatorWarning] Warning: ...`, `Error [FLog::CreatorError] Error: ...`). The thread id is the printing script's, and the time advances call by call, so each line is stamped when printed; whether the disk write happens later can't be seen. An error is three lines: the message, `Info: Stack Begin` and `Info: Stack End` (with the stack between when there is one).
+- **`LogService.MessageOut` is deferred:** none of 5,000 prints fired it during the loop that printed them; all fired after the script yielded. `GetLogHistory` keeps the last 512 messages. Rook has neither yet.
+
+What a live client does can't be measured here; nothing public says it writes output differently.
+
 ### Log files
 
 Each run of the player writes one file, `logs\rook-player-<time>.log`. `rook-tools` writes one only for long commands (`corpus-scan`, `corpus-run`, `conformance`). The file gets Rook's `debug` and up whatever the terminal shows, plus every line the terminal printed, script output included. It is plain text without colors, in the terminal's line format. At startup, old logs are cleaned: a file is deleted once it is beyond the newest 30 runs and older than 14 days, and the oldest go first past 100 MB in total. Crash reports are cleaned by the same rules.

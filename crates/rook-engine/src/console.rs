@@ -5,15 +5,20 @@
 //! Output normally goes straight to stdout. While a prompt owns the
 //! terminal line (the `repl` feature), [`set_output`] routes it there
 //! instead, so it prints above the prompt. Every line printed also goes to
-//! the run's log file ([`crate::logging`]).
+//! the run's log file ([`crate::logging`]). Both are written on their own
+//! thread ([`writer`]), so printing costs the printing thread little;
+//! [`flush`] waits for them.
 
 #[cfg(feature = "repl")]
 pub mod repl;
+mod writer;
 
 use std::sync::Mutex;
 
 use anstyle::{AnsiColor, Style};
 use rook_lua::{LogEntry, MessageType};
+
+pub use writer::flush;
 
 type Output = Box<dyn FnMut(String) + Send>;
 
@@ -28,19 +33,21 @@ pub fn set_output(output: Option<Output>) {
 }
 
 /// Print a line to the terminal and the log file, or (`terminal` off)
-/// only the log file.
+/// only the log file. The writes happen on the output thread
+/// ([`writer`]); only the crash report's tail is kept here, so a crash
+/// still shows the last lines.
 fn emit(line: String, terminal: bool) {
-    crate::logging::record(&line);
-    if !terminal {
-        return;
-    }
+    crate::logging::crash::remember(&line);
+    writer::line(line, terminal);
+}
+
+/// Write a line to the terminal or the prompt: on the output thread.
+fn show(line: String, no_color: bool) {
     let mut output = OUTPUT
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     match output.as_mut() {
-        Some(f) if std::env::var_os("NO_COLOR").is_some() => {
-            f(anstream::adapter::strip_str(&line).to_string());
-        }
+        Some(f) if no_color => f(anstream::adapter::strip_str(&line).to_string()),
         Some(f) => f(line),
         None => anstream::println!("{line}"),
     }

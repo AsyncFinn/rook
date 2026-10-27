@@ -42,7 +42,10 @@ fn state() -> std::sync::MutexGuard<'static, State> {
         .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
-pub(super) fn remember(line: &str) {
+/// Keep a printed line (with its color codes, stripped in the report)
+/// for the report. Called on the printing thread, not the output thread,
+/// so a crash's report has the lines printed just before it.
+pub(crate) fn remember(line: &str) {
     let mut state = state();
     if state.tail.len() == TAIL {
         state.tail.pop_front();
@@ -90,11 +93,14 @@ fn note(info: &PanicHookInfo<'_>) {
     state().panic = Some(text);
 }
 
-/// Run a program's `main`; if it panics, write a crash report, hand
-/// `crashed` the line saying where it is (a program without a terminal
-/// shows it), and exit with code 101 (as a panic would).
+/// Run a program's `main`, then write out everything it printed
+/// ([`crate::console::flush`]); if it panics, also write a crash report,
+/// hand `crashed` the line saying where it is (a program without a
+/// terminal shows it), and exit with code 101 (as a panic would).
 pub fn run<T>(main: impl FnOnce() -> T, crashed: impl FnOnce(&str)) -> T {
-    match std::panic::catch_unwind(AssertUnwindSafe(main)) {
+    let result = std::panic::catch_unwind(AssertUnwindSafe(main));
+    crate::console::flush();
+    match result {
         Ok(value) => value,
         Err(_) => {
             let message = match write_report() {
@@ -133,7 +139,7 @@ fn write_report() -> Option<PathBuf> {
     }
     text.push_str(&format!("\nLast {} lines logged:\n", state.tail.len()));
     for line in &state.tail {
-        text.push_str(line);
+        text.push_str(&anstream::adapter::strip_str(line).to_string());
         text.push('\n');
     }
     let path = dir.join(format!("{}-{}.txt", state.program, super::files::stamp()));
