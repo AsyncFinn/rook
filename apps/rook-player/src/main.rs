@@ -262,7 +262,9 @@ fn main() -> ExitCode {
             alert::show("Rook crashed", message);
         }
     };
-    match rook_engine::logging::run(|| play(args), crashed) {
+    // The error prints inside `run`, which writes out everything printed
+    // before it returns.
+    let main = || match play(args) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             // Runs that make a file or a measurement come from a terminal
@@ -274,7 +276,8 @@ fn main() -> ExitCode {
             }
             ExitCode::FAILURE
         }
-    }
+    };
+    rook_engine::logging::run(main, crashed)
 }
 
 fn play(args: Args) -> anyhow::Result<()> {

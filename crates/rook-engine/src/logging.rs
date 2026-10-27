@@ -129,7 +129,7 @@ pub struct Options {
     pub file: bool,
 }
 
-/// The run's log file and the last lines for a crash report.
+/// The run's log file.
 struct Sink {
     file: Option<LineWriter<Box<dyn Write + Send>>>,
     path: Option<PathBuf>,
@@ -140,16 +140,14 @@ static SINK: Mutex<Sink> = Mutex::new(Sink {
     path: None,
 });
 
-/// Write a line, without colors, to the log file and the crash report's
-/// tail.
+/// Write a line, without colors, to the log file: on the output thread
+/// ([`crate::console`]).
 pub(crate) fn record(line: &str) {
-    let plain = anstream::adapter::strip_str(line).to_string();
-    crash::remember(&plain);
     let mut sink = SINK
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     if let Some(file) = sink.file.as_mut()
-        && writeln!(file, "{plain}").is_err()
+        && writeln!(file, "{}", anstream::adapter::strip_str(line)).is_err()
     {
         // A full disk shouldn't stop the run; the terminal still shows it.
         sink.file = None;

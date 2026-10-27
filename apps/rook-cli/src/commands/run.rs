@@ -133,6 +133,8 @@ pub(crate) fn run(file: &Path, how: &Run<'_>) -> anyhow::Result<()> {
 /// each instance's class and tags, and for GUI its absolute size and
 /// whether it shows.
 fn dump(dm: &DataModel, path: &str) {
+    // After the game's output, which prints on its own thread.
+    rook_engine::console::flush();
     let world = dm.runtime().world();
     let dom = &world.dom;
     let mut at = Some(dom.root());
@@ -200,6 +202,7 @@ fn dump(dm: &DataModel, path: &str) {
 
 /// What ran on one side, and the members it called that Rook lacks.
 fn summary(side: &str, dm: &DataModel, log: &[LogEntry], started: Instant) {
+    rook_engine::console::flush();
     let errors = log.iter().filter(|e| e.kind == MessageType::Error).count();
     let world = dm.runtime().world();
     println!(

@@ -84,3 +84,27 @@ fn tweens_replay_after_finishing() {
         ],
     );
 }
+
+#[test]
+fn tweens_cancel_and_override() {
+    expect(
+        r#"
+        local TweenService = game:GetService("TweenService")
+        local p = Instance.new("Part")
+        local a = TweenService:Create(p, TweenInfo.new(1), { Transparency = 1 })
+        local b = TweenService:Create(p, TweenInfo.new(1), { Transparency = 0 })
+        a.Completed:Connect(function(state) print("a", state) end)
+        a:Play()
+        b:Play()
+        print(b.PlaybackState)
+        b:Cancel()
+        print(b.PlaybackState)
+        "#,
+        30,
+        &[
+            "a Enum.PlaybackState.Cancelled",
+            "Enum.PlaybackState.Playing",
+            "Enum.PlaybackState.Cancelled",
+        ],
+    );
+}
