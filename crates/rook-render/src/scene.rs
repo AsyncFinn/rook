@@ -374,6 +374,9 @@ pub struct Scene {
     pub images: HashMap<ImageHash, Arc<Image>>,
 }
 
+/// How far ahead of Studio's edit camera its Focus sits, in studs.
+const EDIT_FOCUS: f32 = 20.0;
+
 /// A camera: Roblox convention, looking down its -Z axis, Y up.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Camera {
@@ -381,6 +384,9 @@ pub struct Camera {
     pub rotation: Mat3,
     /// Vertical field of view in degrees (Roblox's default is 70).
     pub fov_y: f32,
+    /// `Camera.Focus` while a script drives the camera; otherwise 20 studs
+    /// ahead, where Studio's edit camera keeps it ([`Camera::focus`]).
+    pub focus: Option<Vec3>,
 }
 
 impl Camera {
@@ -392,11 +398,19 @@ impl Camera {
             position,
             rotation: Mat3::from_cols(right, up, -forward),
             fov_y: 70.0,
+            focus: None,
         }
     }
 
     pub fn forward(&self) -> Vec3 {
         -self.rotation.z_axis
+    }
+
+    /// Where the camera looks at: what the light voxels follow
+    /// (docs/behavior/lighting/local-lights.md).
+    pub fn focus(&self) -> Vec3 {
+        self.focus
+            .unwrap_or(self.position + self.forward() * EDIT_FOCUS)
     }
 
     /// From clip space to directions from the camera (its rotation only),

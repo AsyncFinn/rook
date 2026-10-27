@@ -16,6 +16,7 @@ use wesl_core::include_wesl;
 
 use super::*;
 use blockers::Blockers;
+use glam::IVec3;
 use hash::{GpuLight, LightHash};
 
 /// How far a light may move from where the hash placed it before the hash
@@ -26,10 +27,11 @@ const VOXEL: f32 = 4.0;
 /// The voxel volume: voxels along each axis (1024 x 256 x 1024 studs, as
 /// Studio's grid: docs/behavior/lighting/local-lights.md). Light stops at its faces.
 const VOLUME: [u32; 3] = [256, 64, 256];
-/// How far ahead of the camera the volume's center sits, along the view
-/// direction flattened onto the ground (Studio's grid reaches about 760
-/// studs ahead and 260 behind; looking straight down, it's centered).
-const AHEAD: f32 = 256.0;
+/// How far ahead of the camera's Focus the volume's center sits, along the
+/// view direction with its height dropped (Studio's grid reaches about 760
+/// studs ahead of its edit camera, whose Focus is 20 ahead, and 260 behind;
+/// looking straight down, it's centered).
+const AHEAD: f32 = 236.0;
 /// How far the volume's center may drift from where it should be before
 /// the volume follows, in studs.
 const RECENTER: f32 = 64.0;
@@ -48,6 +50,9 @@ const LAYER_STRIDE: u64 = 256;
 struct FillParams {
     origin: [f32; 4],
     size: [u32; 4],
+    /// Where voxel (0, 0, 0) is kept in the blockers' bits and fills: they
+    /// are anchored to the world (`Blockers::mark`).
+    ring: [u32; 4],
     /// x: there are lights to fill; y: the sky's light to carry down; z:
     /// the blockers are marked; w: the sun's light to take.
     flags: [u32; 4],
@@ -453,10 +458,11 @@ impl GpuLights {
         sky: bool,
         sun: Option<Vec3>,
     ) {
-        let dims = Vec3::new(VOLUME[0] as f32, VOLUME[1] as f32, VOLUME[2] as f32);
+        let size = IVec3::new(VOLUME[0] as i32, VOLUME[1] as i32, VOLUME[2] as i32);
+        let dims = size.as_vec3();
         let half = dims * (VOXEL * 0.5);
         let forward = camera.forward();
-        let center = camera.position + Vec3::new(forward.x, 0.0, forward.z) * AHEAD;
+        let center = camera.focus() + Vec3::new(forward.x, 0.0, forward.z) * AHEAD;
         let centered = self
             .origin
             .is_some_and(|o| (o + half - center).abs().max_element() <= RECENTER);
@@ -470,23 +476,37 @@ impl GpuLights {
             return;
         }
         profiling::scope!("GpuLights::fill");
-        self.dirty = false;
-        let origin = if centered {
-            self.origin.unwrap_or_default()
-        } else {
-            // Voxels are centered at 4k + 2.
-            ((center - half) / VOXEL).floor() * VOXEL + Vec3::splat(VOXEL * 0.5)
+        let dirty = std::mem::take(&mut self.dirty);
+        // Voxel k is centered at 4k + 2.
+        let kept = self.origin.map(|o| (o / VOXEL).floor().as_ivec3());
+        let mut low = match kept {
+            Some(low) if centered => low,
+            _ => ((center - half) / VOXEL).floor().as_ivec3(),
         };
         // The fills go up only while the sun reads them, so a sun that
         // just came takes them afresh.
         let sun_came = sun.is_some() && self.sun.is_none();
         if solid && (blocked || !centered || sun_came) {
-            let (bits, fills) = self.blockers.mark(origin, VOLUME);
-            queue.write_buffer(&self.sky_buffers.solid, 0, bytemuck::cast_slice(bits));
-            if sun.is_some() {
-                queue.write_buffer(&self.sky_buffers.fills, 0, bytemuck::cast_slice(fills));
+            match self.blockers.mark(low, size) {
+                Some((bits, fills)) => {
+                    queue.write_buffer(&self.sky_buffers.solid, 0, bytemuck::cast_slice(bits));
+                    if sun.is_some() {
+                        queue.write_buffer(&self.sky_buffers.fills, 0, bytemuck::cast_slice(fills));
+                    }
+                }
+                // The voxels it moved onto aren't marked yet: it stays
+                // where it was, the blockers there still on the GPU, and
+                // is filled there only if something else changed.
+                None => match kept {
+                    Some(kept) if dirty || sky != self.sky || !sun_kept => low = kept,
+                    _ => {
+                        self.dirty = dirty;
+                        return;
+                    }
+                },
             }
         }
+        let origin = low.as_vec3() * VOXEL + VOXEL * 0.5;
         self.marked = solid;
         self.origin = Some(origin);
         self.sky = sky;
@@ -515,6 +535,7 @@ impl GpuLights {
                     VOLUME[1],
                     VOLUME[2],
                 ],
+                ring: low.rem_euclid(size).as_uvec3().extend(0).to_array(),
                 flags: [
                     u32::from(lit),
                     u32::from(sky),

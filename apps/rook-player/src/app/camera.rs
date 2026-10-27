@@ -34,6 +34,7 @@ impl FlyCamera {
         self.camera.position = view.cframe.position;
         self.camera.rotation = view.cframe.rotation;
         self.camera.fov_y = view.fov;
+        self.camera.focus = Some(view.focus);
         let f = self.camera.forward();
         self.yaw = (-f.x).atan2(-f.z);
         self.pitch = f.y.clamp(-1.0, 1.0).asin();
@@ -44,6 +45,7 @@ impl App {
     /// Fly the window's camera with the keys, and give the game it as
     /// Workspace.CurrentCamera, as Studio's editor camera does.
     pub(crate) fn fly(&mut self, dt: f32, typing: bool) {
+        self.camera.camera.focus = None;
         let mut dir = Vec3::ZERO;
         let rot = self.camera.camera.rotation;
         for (key, v) in [

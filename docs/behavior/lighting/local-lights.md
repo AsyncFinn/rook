@@ -147,14 +147,25 @@ The renderer (`renderer/lighting/local.rs`) keeps the lights in a buffer and a
 spatial hash (16-stud cubes hashed into buckets, padded 8 studs so that
 lights that move a little don't rebuild it). A compute pass
 (`shaders/light_volume.wgsl`) fills a 256 × 64 × 256 volume of 4-stud
-voxels (Studio's grid, below) centered 256 studs ahead of the camera
-along its view direction with the height dropped, again only when lights
+voxels (Studio's grid, below) centered 236 studs ahead of `Camera.Focus`
+along the view direction with the height dropped, again only when lights
 change or that center drifts 64 studs, and parts, decals and terrain
 (water included) sample it as Studio does (`local_light` in
 `shaders/lighting.wgsl`). Surfaces outside it get no local light, as in
 Studio. When a light has `Shadows`, the parts are marked into a bit per
 voxel (`renderer/lighting/local/blockers.rs`, shared with the sky's light) and
-the fill pass casts that light's rays through them.
+the fill pass casts that light's rays through them. Those marks are kept
+by world position (a voxel's slot is its world index modulo the volume's
+size), with the parts listed by 64-stud column, so a volume that moves
+marks only the slabs it came onto, about 1 ms of them a frame, and is
+filled at its new place once they are all marked; until then the old
+volume stays drawn. The first volume is marked whole at once.
+
+Cost, on an archive place with about 103k instances (dev build, 200
+frames, `--bench 200 --turn 3`, 2026-10-27): the light voxels' CPU time
+while the camera turns 3° a frame went from a mean of 17.7 ms (34 frames
+over 16.7 ms, the longest 180 ms) to 1.6 ms (1 over, the first full
+mark); holding still, 1.0 → 0.7 ms (that same first mark, 75 → 43 ms).
 
 Cost, on an archive place with 1,900 lights, about 55 of them on parts
 that move every frame (dev build, 300 frames, before → after): scene
@@ -188,12 +199,15 @@ each, and red markers every 128 studs). No flag in
 - **It follows `Camera.Focus`, not the camera** (Observed: moving Focus
   300 studs along +X, the camera staying put, lit 9 more pools that way).
   In Studio's edit camera Focus sits 20 studs ahead of the camera, and in
-  play it is the camera's subject; Rook's grid still follows the camera's
-  position.
+  play it is the camera's subject. Rook's grid follows the game camera's
+  Focus while a script drives the camera, and a point 20 studs ahead of
+  its free camera otherwise.
 - **It moves in chunks, asynchronously**: after the camera jumps hundreds
   of studs Studio keeps drawing the old grid for several seconds, and a
   freshly opened place can draw no local light at all for the first few.
-  Rook fills its volume in the frame it moves.
+  Rook also keeps its old volume while it marks the parts where the new
+  one goes, a millisecond a frame (How Rook does it, above); it opens a
+  place with its first volume already filled.
 
 ## Method
 

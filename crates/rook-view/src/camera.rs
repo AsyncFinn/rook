@@ -39,5 +39,6 @@ pub fn initial_camera(saved: Option<SavedCamera>) -> Camera {
             cf.rotation.z_axis.normalize(),
         ),
         fov_y,
+        focus: None,
     }
 }

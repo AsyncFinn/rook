@@ -12,6 +12,9 @@ struct Params {
     origin: vec4<f32>,
     // x: the hash's buckets - 1; yzw: voxels along each axis.
     size: vec4<u32>,
+    // xyz: where voxel (0, 0, 0) is kept in `solid` and `fills`, which are
+    // anchored to the world (`renderer/lighting/local/blockers.rs`).
+    ring: vec4<u32>,
     // x: there are lights to fill; y: the sky's light to carry down; z:
     // `solid` holds the parts; w: the sun's light to take.
     flags: vec4<u32>,
@@ -27,7 +30,7 @@ struct Params {
 @group(0) @binding(4) var voxels: texture_storage_3d<rgba16float, write>;
 // x: the layer this dispatch fills.
 @group(0) @binding(5) var<uniform> layer: vec4<u32>;
-// One bit per voxel, x + nx * (z + nz * y): a part blocks it.
+// One bit per voxel, at `slot`: a part blocks it.
 @group(0) @binding(6) var<storage, read> solid: array<u32>;
 // The sky's light in the last two layers (by the layer's parity).
 @group(0) @binding(7) var<storage, read_write> rows: array<f32>;
@@ -35,8 +38,8 @@ struct Params {
 @group(0) @binding(8) var<storage, read_write> columns: array<u32>;
 // How much of the sun reaches each voxel (red).
 @group(0) @binding(9) var sun_voxels: texture_storage_3d<rgba8unorm, write>;
-// A byte per voxel, four to a word in `solid`'s order: how much of it
-// parts fill (255 full).
+// A byte per voxel, four to a word at `slot`: how much of it parts fill
+// (255 full).
 @group(0) @binding(10) var<storage, read> fills: array<u32>;
 
 // The bucket a point's cube hashes to (`renderer/lighting/local.rs`, `bucket`).
@@ -46,8 +49,16 @@ fn bucket(p: vec3<f32>) -> vec2<u32> {
     return buckets[h & params.size.x];
 }
 
+// Where voxel `c` of the volume is kept in `solid` and `fills`: the world's
+// voxel index modulo the volume's size, x + nx * (z + nz * y).
+fn slot(c: vec3<u32>) -> u32 {
+    let n = params.size.yzw;
+    let r = (c + params.ring.xyz) % n;
+    return r.x + n.x * (r.z + n.z * r.y);
+}
+
 fn is_solid(x: u32, y: u32, z: u32) -> bool {
-    let i = x + params.size.y * (z + params.size.w * y);
+    let i = slot(vec3(x, y, z));
     return ((solid[i >> 5u] >> (i & 31u)) & 1u) != 0u;
 }
 
@@ -107,8 +118,7 @@ fn unblocked(light: Light, v: vec3<f32>) -> f32 {
 
 // How much of voxel `c` parts fill, 0 to 1.
 fn fill_at(c: vec3<i32>) -> f32 {
-    let u = vec3<u32>(c);
-    let i = u.x + params.size.y * (u.z + params.size.w * u.y);
+    let i = slot(vec3<u32>(c));
     return f32((fills[i >> 2u] >> ((i & 3u) * 8u)) & 255u) / 255.0;
 }
 

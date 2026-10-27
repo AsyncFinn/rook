@@ -208,6 +208,7 @@ fn prepare(game: &mut Game, args: &Args, content: &Arc<Resolver>) -> (SceneCache
             position: view.cframe.position,
             rotation: view.cframe.rotation,
             fov_y: view.fov,
+            focus: Some(view.focus),
         };
     }
     if let Some(fov) = args.fov {

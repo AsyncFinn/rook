@@ -3,6 +3,7 @@
 //! mouse is held (`UserInputService.MouseBehavior`). See
 //! docs/behavior/characters/camera.md.
 
+use glam::Vec3;
 use rook_types::CFrame;
 
 use crate::*;
@@ -23,6 +24,8 @@ pub struct CameraView {
     pub cframe: CFrame,
     /// Vertical, in degrees.
     pub fov: f32,
+    /// `Camera.Focus`'s position.
+    pub focus: Vec3,
 }
 
 impl DataModel {
@@ -42,11 +45,17 @@ impl DataModel {
             dom.ref_property(p, "Character").is_some()
                 && (has("PlayerModule") || has("CameraScript"))
         });
-        (scriptable || followed).then(|| CameraView {
-            cframe: dom
+        (scriptable || followed).then(|| {
+            let cframe = dom
                 .cframe_property(camera, "CFrame")
-                .unwrap_or(CFrame::IDENTITY),
-            fov: dom.float_property(camera, "FieldOfView").unwrap_or(70.0),
+                .unwrap_or(CFrame::IDENTITY);
+            CameraView {
+                cframe,
+                fov: dom.float_property(camera, "FieldOfView").unwrap_or(70.0),
+                focus: dom
+                    .cframe_property(camera, "Focus")
+                    .map_or(cframe.position, |f| f.position),
+            }
         })
     }
 
