@@ -126,7 +126,7 @@ impl Physics {
         }
         self.sync(dom);
         for &(part, impulse, spin) in &blast.pushes {
-            let Some(&h) = self.parts.get(&part) else {
+            let Some(h) = self.body_of(part) else {
                 continue;
             };
             let Some(at) = size_and_position(dom, part).map(|(_, at)| at) else {

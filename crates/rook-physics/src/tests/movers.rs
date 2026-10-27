@@ -275,7 +275,8 @@ fn movers_holding_still_let_their_body_sleep() {
         &[("Velocity", v3(0.0, 0.0, 0.0))],
     );
     let mut physics = Physics::new();
-    let sleeping = |physics: &Physics| physics.world.bodies[physics.parts[&p]].is_sleeping();
+    let sleeping =
+        |physics: &Physics| physics.world.bodies[physics.body_of(p).unwrap()].is_sleeping();
     // Observed: a gyro at its target and a zero BodyVelocity sleep.
     run(&mut physics, &mut dom, 3.0);
     assert!(sleeping(&physics));

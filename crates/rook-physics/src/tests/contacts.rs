@@ -335,3 +335,29 @@ fn friction_changes_act_at_once_on_resting_parts() {
         assert_eq!(physics.root_of(block), root);
     }
 }
+
+/// An anchored floor on its own shares one fixed body with the rest of
+/// the map; a velocity given later makes it a conveyor, and destroying it
+/// drops what rests on it.
+#[test]
+fn a_shared_static_floor_becomes_a_conveyor_and_goes() {
+    let mut dom = Dom::new();
+    let floor = floor(&mut dom);
+    let block = block(&mut dom, Vec3::new(0.0, 1.5, 0.0), false);
+    let mut physics = Physics::new();
+    run(&mut physics, &mut dom, 1.0);
+    let rest = position(&dom, block);
+    set(
+        &mut dom,
+        floor,
+        "AssemblyLinearVelocity",
+        super::v3(5.0, 0.0, 0.0),
+    );
+    run(&mut physics, &mut dom, 1.0);
+    let carried = position(&dom, block);
+    assert!(carried.x - rest.x > 3.0, "{rest} -> {carried}");
+    dom.destroy(floor).unwrap();
+    run(&mut physics, &mut dom, 0.5);
+    let fell = position(&dom, block);
+    assert!(carried.y - fell.y > 5.0, "{carried} -> {fell}");
+}

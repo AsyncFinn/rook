@@ -44,14 +44,13 @@ impl Physics {
         let Some(j) = active_joint(dom, id).filter(|j| j.kind == JointKind::Hinge) else {
             return;
         };
-        let (Some(&b0), Some(&b1)) = (self.parts.get(&j.part0), self.parts.get(&j.part1)) else {
+        let (Some((b0, off0)), Some((b1, off1))) = (self.frame_of(j.part0), self.frame_of(j.part1))
+        else {
             return;
         };
         if b0 == b1 {
             return;
         }
-        let off0 = self.bodies[&b0].asm.offset_of(j.part0).unwrap_or_default();
-        let off1 = self.bodies[&b1].asm.offset_of(j.part1).unwrap_or_default();
         let (c0, c1) = joints::hinge_frames(dom, &j);
         let joint = GenericJointBuilder::new(JointAxesMask::LOCKED_REVOLUTE_AXES)
             .local_frame1(hinge_pose(off0 * c0))

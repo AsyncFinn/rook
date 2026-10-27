@@ -133,11 +133,9 @@ impl Physics {
         let mut refreshed = HashSet::default();
         for part in materials {
             // A rebuilt body's colliders already read the new values.
-            if let Some(&h) = self.parts.get(&part)
-                && !rebuilt.contains(&h)
-                && refreshed.insert(part)
-            {
-                self.refresh_surface(dom, props, h, part);
+            let fresh = self.body_of(part).is_some_and(|h| rebuilt.contains(&h));
+            if self.parts.contains_key(&part) && !fresh && refreshed.insert(part) {
+                self.refresh_surface(dom, props, part);
             }
         }
 
@@ -146,18 +144,23 @@ impl Physics {
             let Some(&[p0, _]) = self.joints.get(&j) else {
                 continue;
             };
-            if let Some(&h) = self.parts.get(&p0)
+            if let Some(h) = self.body_of(p0)
                 && done.insert(h)
             {
                 self.refresh_offsets(dom, h);
             }
         }
         let mut posed_bodies = rebuilt;
+        let mut posed_statics = HashSet::default();
         for part in posed {
-            if let Some(&h) = self.parts.get(&part)
-                && posed_bodies.insert(h)
-            {
-                self.teleport(dom, props, h, part);
+            match self.parts.get(&part) {
+                Some(&Home::Body(h)) if posed_bodies.insert(h) => {
+                    self.teleport(dom, props, h, part);
+                }
+                Some(Home::Static) if posed_statics.insert(part) => {
+                    self.teleport_static(dom, props, part);
+                }
+                _ => {}
             }
         }
     }

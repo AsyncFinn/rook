@@ -35,6 +35,7 @@ impl Physics {
         self.update_humanoids(dt as f32);
         // Stepping put every collider in place.
         self.stale.clear();
+        self.stale_statics.clear();
         for m in self.movers.values() {
             if let Some(inside) = movers::rocket_arrived(&self.world, m)
                 && let Some(was) = self.rockets.get_mut(&m.id)

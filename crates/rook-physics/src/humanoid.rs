@@ -288,7 +288,7 @@ impl Physics {
 
     /// The root body of `root`, when this world simulates it.
     fn rooted(&self, root: InstanceId) -> Option<Rooted> {
-        let &body = self.parts.get(&root)?;
+        let body = self.body_of(root)?;
         let b = self.bodies.get(&body)?;
         if b.remote || b.asm.anchored {
             return None;

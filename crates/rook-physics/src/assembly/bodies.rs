@@ -15,6 +15,22 @@ pub(crate) struct Body {
     pub(crate) remote: bool,
 }
 
+/// Where a part's assembly lives.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Home {
+    Body(RigidBodyHandle),
+    /// A [`Static`] on the shared fixed body.
+    Static,
+}
+
+/// An anchored part on its own (no joints, no velocity), its collider on
+/// the shared fixed body ([`Physics::is_static`]).
+#[derive(Debug)]
+pub(crate) struct Static {
+    pub(crate) collider: Option<(ColliderHandle, Pose)>,
+    pub(crate) cframe: CFrame,
+}
+
 /// A part's collider mass and material. Massless parts add no mass unless
 /// they're the root (creator-docs BasePart.Massless).
 fn collider_surface(dom: &Dom, part: InstanceId, is_root: bool) -> (f32, materials::Properties) {
@@ -53,10 +69,14 @@ impl Physics {
         }
         let mut todo = Vec::with_capacity(seeds_and_neighbors.len());
         for part in seeds_and_neighbors {
-            if let Some(&h) = self.parts.get(&part)
-                && let Some(body) = self.remove_body(h)
-            {
-                todo.extend(body.asm.members.iter().map(|m| m.part));
+            match self.parts.get(&part) {
+                Some(&Home::Body(h)) => {
+                    if let Some(body) = self.remove_body(h) {
+                        todo.extend(body.asm.members.iter().map(|m| m.part));
+                    }
+                }
+                Some(Home::Static) => self.remove_static(part),
+                None => {}
             }
             todo.push(part);
         }
@@ -73,7 +93,9 @@ impl Physics {
             };
             if let Some(asm) = asm {
                 hinges.extend(asm.hinges.iter().map(|h| h.id));
-                added.insert(self.add(dom, props, asm));
+                if let Some(h) = self.add(dom, props, asm) {
+                    added.insert(h);
+                }
             }
         }
         for joint in hinges {
@@ -109,13 +131,60 @@ impl Physics {
         Some(body)
     }
 
-    fn add(&mut self, dom: &mut Dom, props: &Props, asm: Assembly) -> RigidBodyHandle {
+    fn remove_static(&mut self, part: InstanceId) {
+        let Some(s) = self.statics.remove(&part) else {
+            return;
+        };
+        self.stale_statics.remove(&part);
+        self.parts.remove(&part);
+        self.touch.forget(part);
+        if let Some((collider, _)) = s.collider {
+            self.world.remove_collider(collider);
+            self.colliders.remove(&collider);
+            self.touch.retire(collider, part);
+        }
+    }
+
+    /// Whether `asm` goes on the shared fixed body: one anchored part, with
+    /// no joints to anything and no velocity (a conveyor keeps its own
+    /// body, which carries the velocity). A joint or a velocity added later
+    /// rebuilds it onto a body of its own.
+    fn is_static(dom: &Dom, props: &Props, asm: &Assembly) -> bool {
+        let root = asm.root();
+        let still = |p| match dom.property(root, p) {
+            Some(Value::Vector3(v)) => v.0 == glam::Vec3::ZERO,
+            _ => true,
+        };
+        asm.anchored
+            && asm.members.len() == 1
+            && asm.hinges.is_empty()
+            && joints::part_joints(dom, root).is_empty()
+            && still(props.linear_velocity)
+            && still(props.angular_velocity)
+    }
+
+    /// Add `asm`; returns its body, or `None` for a [`Static`].
+    fn add(&mut self, dom: &mut Dom, props: &Props, asm: Assembly) -> Option<RigidBodyHandle> {
         profiling::scope!("Physics::add");
         let root = asm.root();
         let root_cf = match dom.property(root, props.cframe) {
             Some(Value::CFrame(cf)) => cf,
             _ => CFrame::IDENTITY,
         };
+        if Self::is_static(dom, props, &asm) {
+            let shared = self.shared;
+            let collider = self.add_collider(dom, props, shared, root, root_cf, true);
+            self.parts.insert(root, Home::Static);
+            self.stale_statics.insert(root);
+            self.statics.insert(
+                root,
+                Static {
+                    collider,
+                    cframe: root_cf,
+                },
+            );
+            return None;
+        }
         let vector = |p| match dom.property(root, p) {
             Some(Value::Vector3(v)) => to_rapier(v.0),
             _ => Vector::ZERO,
@@ -144,7 +213,7 @@ impl Physics {
         self.stale.insert(handle);
         let mut colliders = Vec::with_capacity(asm.members.len());
         for (i, m) in asm.members.iter().enumerate() {
-            self.parts.insert(m.part, handle);
+            self.parts.insert(m.part, Home::Body(handle));
             colliders.push(self.add_collider(dom, props, handle, m.part, m.offset, i == 0));
         }
         for j in asm.joints().chain(&asm.hinges) {
@@ -173,7 +242,7 @@ impl Physics {
                 remote,
             },
         );
-        handle
+        Some(handle)
     }
 
     fn add_collider(
@@ -270,20 +339,21 @@ impl Physics {
     /// same. What rests on it reacts at once (observed in Studio 0.742: a
     /// part at rest on a 30° ramp slid as soon as its friction was set to
     /// 0), so its body and everything touching it wake up.
-    pub(crate) fn refresh_surface(
-        &mut self,
-        dom: &Dom,
-        props: &Props,
-        h: RigidBodyHandle,
-        part: InstanceId,
-    ) {
-        let Some(body) = self.bodies.get(&h) else {
-            return;
+    pub(crate) fn refresh_surface(&mut self, dom: &Dom, props: &Props, part: InstanceId) {
+        let (h, i, collider) = match self.parts.get(&part) {
+            Some(&Home::Body(h)) => {
+                let Some(body) = self.bodies.get(&h) else {
+                    return;
+                };
+                let Some(i) = body.asm.members.iter().position(|m| m.part == part) else {
+                    return;
+                };
+                (h, i, body.colliders[i])
+            }
+            Some(Home::Static) => (self.shared, 0, self.statics[&part].collider),
+            None => return,
         };
-        let Some(i) = body.asm.members.iter().position(|m| m.part == part) else {
-            return;
-        };
-        let Some((collider, _)) = body.colliders[i] else {
+        let Some((collider, _)) = collider else {
             return;
         };
         self.read_can_touch(dom, props, part);
@@ -344,8 +414,11 @@ impl Physics {
 
     /// A part's body and its pose in it.
     pub(crate) fn frame_of(&self, part: InstanceId) -> Option<(RigidBodyHandle, CFrame)> {
-        let h = *self.parts.get(&part)?;
-        Some((h, self.bodies.get(&h)?.asm.offset_of(part)?))
+        match *self.parts.get(&part)? {
+            Home::Body(h) => Some((h, self.bodies.get(&h)?.asm.offset_of(part)?)),
+            // The shared body sits at the origin.
+            Home::Static => Some((self.shared, self.statics.get(&part)?.cframe)),
+        }
     }
 
     /// Re-read a body's joint offsets, move its colliders and write its
@@ -366,6 +439,37 @@ impl Physics {
         rook_dom::ignore_stale(body.asm.place(dom, root));
         self.world.wake_up(h, true);
         self.stale.insert(h);
+    }
+
+    /// A script moved a [`Static`] (or set its velocity): its collider goes
+    /// there, or, given a velocity, it's rebuilt onto a body of its own.
+    pub(crate) fn teleport_static(&mut self, dom: &mut Dom, props: &Props, part: InstanceId) {
+        let Some(Value::CFrame(cf)) = dom.property(part, props.cframe) else {
+            return;
+        };
+        let moving = [props.linear_velocity, props.angular_velocity]
+            .into_iter()
+            .any(|p| matches!(dom.property(part, p), Some(Value::Vector3(v)) if v.0 != glam::Vec3::ZERO));
+        if moving {
+            self.all_dirty = true;
+            self.rebuild(dom, props, vec![part]);
+            return;
+        }
+        let Some(s) = self.statics.get_mut(&part) else {
+            return;
+        };
+        s.cframe = cf;
+        if let Some((collider, shape_pose)) = s.collider
+            && let Some(co) = self.world.colliders.get_mut(collider)
+        {
+            co.set_position_wrt_parent(pose_of(&cf) * shape_pose);
+        }
+        // Queries put it in place first, as for a moved body.
+        self.stale_statics.insert(part);
+        // Constraints and movers hold it by its place on the shared body.
+        if !self.constraints.is_empty() || !self.drives.is_empty() || !self.movers.is_empty() {
+            self.all_dirty = true;
+        }
     }
 
     /// A script moved `part` (or set its velocity): move its body to match.

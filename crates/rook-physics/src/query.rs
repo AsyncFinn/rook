@@ -93,22 +93,31 @@ impl Physics {
         profiling::scope!("Physics::prepare_query");
         self.sync(dom);
         let terrain_placed = std::mem::take(&mut self.terrain_placed);
-        if self.stale.is_empty() && !terrain_placed {
+        if self.stale.is_empty() && self.stale_statics.is_empty() && !terrain_placed {
             return;
         }
         let params = self.world.integration_parameters;
+        let place = |world: &mut PhysicsWorld, pose: Pose, collider: ColliderHandle| {
+            if let Some(co) = world.colliders.get_mut(collider) {
+                let local = co.position_wrt_parent().copied().unwrap_or_default();
+                co.set_position(pose * local);
+                let aabb = co.compute_broad_phase_aabb(&params, &world.bodies);
+                world.broad_phase.set_aabb(&params, collider, aabb);
+            }
+        };
         for h in std::mem::take(&mut self.stale) {
             let Some(body) = self.bodies.get(&h) else {
                 continue;
             };
             let pose = *self.world.bodies[h].position();
             for (collider, _) in body.colliders.iter().flatten() {
-                if let Some(co) = self.world.colliders.get_mut(*collider) {
-                    let local = co.position_wrt_parent().copied().unwrap_or_default();
-                    co.set_position(pose * local);
-                    let aabb = co.compute_broad_phase_aabb(&params, &self.world.bodies);
-                    self.world.broad_phase.set_aabb(&params, *collider, aabb);
-                }
+                place(&mut self.world, pose, *collider);
+            }
+        }
+        let shared = *self.world.bodies[self.shared].position();
+        for part in std::mem::take(&mut self.stale_statics) {
+            if let Some((collider, _)) = self.statics.get(&part).and_then(|s| s.collider) {
+                place(&mut self.world, shared, collider);
             }
         }
         // The broad phase keeps what `set_aabb` changed until its next

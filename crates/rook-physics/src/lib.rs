@@ -35,7 +35,7 @@ pub use shape::{is_part, part_shape, workspace_parts};
 pub use explosion::Blast;
 pub use query::{CastShape, Filter, Hit, Region};
 
-use assembly::bodies::Body;
+use assembly::bodies::{Body, Home, Static};
 use assembly::{Assembly, is_massless};
 use contacts::groups::CollisionGroups;
 use convert::{cframe_of, pose_of, to_glam, to_rapier};
@@ -188,7 +188,14 @@ pub struct Physics {
     /// body (a place with 79k bodies spent milliseconds a frame finding its
     /// two).
     motored: HashSet<RigidBodyHandle>,
-    parts: HashMap<InstanceId, RigidBodyHandle>,
+    parts: HashMap<InstanceId, Home>,
+    /// Anchored parts on their own, with no joints and no velocity: most
+    /// of a large place. Their colliders share one fixed body, `shared`,
+    /// as Rapier's every step costs time for each body, moving or not
+    /// (84k fixed bodies took 1.4 ms a 240 Hz step, the same colliders on
+    /// one body 0.3).
+    statics: HashMap<InstanceId, Static>,
+    shared: RigidBodyHandle,
     /// Joints in the world and the parts they joined, so a changed joint's
     /// former parts are rebuilt too.
     joints: HashMap<InstanceId, [InstanceId; 2]>,
@@ -231,6 +238,8 @@ pub struct Physics {
     /// Bodies added or moved since the last step, whose colliders queries
     /// must put in place first (Rapier does that when it steps).
     stale: HashSet<RigidBodyHandle>,
+    /// The same for [`Static`]s added or moved.
+    stale_statics: HashSet<InstanceId>,
     /// Which assemblies this world simulates.
     authority: Authority,
     /// Parts whose assemblies change hands at the next sync.
@@ -272,12 +281,16 @@ impl Physics {
         // thin one, and Rapier's sweeps cost ~19 ms a frame on 60k-part
         // places.
         world.integration_parameters.max_ccd_substeps = 0;
+        // At the origin, so its colliders' poses are where they are.
+        let shared = world.insert_body(RigidBodyBuilder::fixed());
         Self {
             world,
             props: None,
             bodies: HashMap::default(),
             motored: HashSet::default(),
             parts: HashMap::default(),
+            statics: HashMap::default(),
+            shared,
             joints: HashMap::default(),
             hinges: HashMap::default(),
             cursor: 0,
@@ -300,6 +313,7 @@ impl Physics {
             constraints: HashMap::default(),
             drives: HashMap::default(),
             stale: HashSet::default(),
+            stale_statics: HashSet::default(),
             authority: Authority::default(),
             handed_over: Vec::new(),
             unions: unions::Unions::default(),
@@ -346,9 +360,16 @@ impl Physics {
     /// Whether this world simulates `part`'s assembly (`false` for an
     /// anchored one or one outside the world).
     pub fn simulates(&self, part: InstanceId) -> bool {
-        self.parts
-            .get(&part)
-            .is_some_and(|h| !self.bodies[h].asm.anchored && !self.bodies[h].remote)
+        self.body_of(part)
+            .is_some_and(|h| !self.bodies[&h].asm.anchored && !self.bodies[&h].remote)
+    }
+
+    /// The body of `part`'s assembly, unless it's on the shared one.
+    pub(crate) fn body_of(&self, part: InstanceId) -> Option<RigidBodyHandle> {
+        match self.parts.get(&part)? {
+            Home::Body(h) => Some(*h),
+            Home::Static => None,
+        }
     }
 
     /// Whether the world has been built from the DOM (by a sync).
@@ -394,7 +415,10 @@ impl Physics {
 
     /// The root part of the assembly `part` is simulated in.
     pub fn root_of(&self, part: InstanceId) -> Option<InstanceId> {
-        Some(self.bodies[self.parts.get(&part)?].asm.root())
+        match self.parts.get(&part)? {
+            Home::Body(h) => Some(self.bodies[h].asm.root()),
+            Home::Static => Some(part),
+        }
     }
 
     /// A union's collision geometry, loaded (or `None`: it collides as its
