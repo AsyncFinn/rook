@@ -468,6 +468,8 @@ pub struct ClientHost {
     early_effects: Vec<(InstanceId, EffectCall)>,
     /// The character pose last sent, so a still character sends nothing.
     last_pose: Option<ToServer>,
+    /// ClickDetector hovers the frame's own mouse refresh found, to send.
+    hover_out: Vec<ToServer>,
 }
 
 impl ClientHost {
@@ -518,6 +520,7 @@ impl ClientHost {
             next_call: 0,
             early_effects: Vec::new(),
             last_pose: None,
+            hover_out: Vec::new(),
         })
     }
 
@@ -552,11 +555,22 @@ impl ClientHost {
     /// One frame of the client.
     pub fn step(&mut self) {
         self.client.step();
+        self.hover();
     }
 
     /// One frame of the client, `dt` seconds long.
     pub fn step_by(&mut self, dt: f64) {
         self.client.step_by(dt);
+        self.hover();
+    }
+
+    /// The mouse sees what's under it after the frame moved the camera and
+    /// the world, as Mouse.Hit follows the camera in Roblox while the
+    /// mouse holds still.
+    fn hover(&mut self) {
+        let clicks = self.client.refresh_hover();
+        let out = self.fire_clicks(clicks);
+        self.hover_out.extend(out);
     }
 
     /// Deliver a message from the server.
@@ -684,7 +698,7 @@ impl ClientHost {
     /// call (a pose only when it changed). An invoke of a RemoteFunction
     /// the server doesn't share fails at once.
     pub fn outgoing(&mut self) -> Vec<ToServer> {
-        let mut out = Vec::new();
+        let mut out = std::mem::take(&mut self.hover_out);
         if let Some(pose) = self.character_pose()
             && self.last_pose.as_ref() != Some(&pose)
         {
@@ -739,6 +753,12 @@ impl ClientHost {
     /// server (creator-docs ClickDetector: the events fire on both).
     pub fn input(&mut self, event: InputEvent) -> Vec<ToServer> {
         let clicks = self.client.input(event);
+        self.fire_clicks(clicks)
+    }
+
+    /// Fire ClickDetector interactions here, and give the server's copies
+    /// to send.
+    fn fire_clicks(&self, clicks: Vec<crate::bridges::input::ClickEvent>) -> Vec<ToServer> {
         let mut out = Vec::new();
         for click in clicks {
             let event = click.kind.event();

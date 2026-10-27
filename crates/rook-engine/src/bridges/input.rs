@@ -326,6 +326,14 @@ impl DataModel {
         }
     }
 
+    /// Look under the mouse again after a frame; the ClickDetector hovers
+    /// it changed.
+    pub fn refresh_hover(&mut self) -> Vec<ClickEvent> {
+        let mut clicks = Vec::new();
+        self.refresh_mouse(&mut clicks);
+        clicks
+    }
+
     fn mouse_object(&self) -> Option<InstanceId> {
         self.runtime.world().input.mouse_object
     }

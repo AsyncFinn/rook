@@ -84,8 +84,8 @@ impl DataModel {
         );
 
         // Measured: a detector's hover goes on under an Active GUI object.
-        let detector =
-            click_hit.and_then(|h| self.detector_for(h.part, origin.distance(h.position)));
+        let from = self.character_position().unwrap_or(origin);
+        let detector = click_hit.and_then(|h| self.detector_for(h.part, from.distance(h.position)));
         if detector != self.input.hover {
             if let Some(old) = self.input.hover {
                 clicks.push(ClickEvent {
@@ -104,10 +104,19 @@ impl DataModel {
         detector
     }
 
+    /// Where the local player's character is: its root part.
+    fn character_position(&self) -> Option<glam::Vec3> {
+        let w = self.runtime.world();
+        let dom = &w.dom;
+        let character = dom.ref_property(dom.local_player()?, "Character")?;
+        let root = dom.find_first_child(character, "HumanoidRootPart", false)?;
+        Some(dom.cframe_property(root, "CFrame")?.position)
+    }
+
     /// The ClickDetector that handles clicks on `part`: one inside the part,
     /// or inside the nearest Model containing it, if within its
-    /// MaxActivationDistance. Distance is measured from the camera until
-    /// characters exist (Inference; Roblox measures from the character).
+    /// MaxActivationDistance, from the character (creator-docs
+    /// ClickDetector.MaxActivationDistance), or the camera without one.
     fn detector_for(&self, part: InstanceId, distance: f32) -> Option<InstanceId> {
         let w = self.runtime.world();
         let dom = &w.dom;

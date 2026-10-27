@@ -153,7 +153,9 @@ hover images in `draw/frame.rs` and `draw/image.rs`, the caret in
 - **Which one** (Observed live on 2026-10-22 by eye; Studio's
   `screen_capture` leaves the cursor out): Roblox's arrow, Roblox's hand
   over a GUI button, and the system's own pointing hand, not Roblox's,
-  over a ClickDetector the player can reach. An I-beam over a TextBox is
+  over a ClickDetector the player can reach: within its
+  `MaxActivationDistance` of the character's root part (creator-docs), or
+  of the camera without a character. An I-beam over a TextBox is
   Inference (the install has one). `Mouse.Icon` or
   `UserInputService.MouseIcon` replaces them all, and `MouseIconEnabled`
   off hides the cursor. The client also names DragDetector cursors

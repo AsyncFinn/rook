@@ -3,28 +3,23 @@
 use super::*;
 
 impl Physics {
-    /// Advance the simulation by `dt` seconds in fixed 240 Hz steps; what
-    /// a frame leaves over a whole step carries to the next, so a client
-    /// drawing at any rate simulates at the right pace (a 60 Hz frame is
-    /// exactly 4 steps).
+    /// Advance the simulation by `dt` seconds in even steps of at most
+    /// 1/240 s: a 60 Hz frame is exactly four 240 Hz steps, and a frame of
+    /// any other length moves things by its own length, so a client drawn
+    /// at 144 Hz moves as smoothly as its frames come (whole 240 Hz steps
+    /// with the rest carried over moved it by one step, then two).
     pub fn step(&mut self, dt: f64) {
         profiling::scope!("Physics::step");
         self.last_dt = dt;
-        if !self.moves_anything() {
-            self.pending = 0.0;
+        if !self.moves_anything() || dt <= 0.0 {
             return;
         }
-        let due = self.pending + dt;
-        let steps = (due * STEP_HZ + 1e-6).floor() as u32;
-        self.pending = (due - f64::from(steps) / STEP_HZ).max(0.0);
-        if steps == 0 {
-            return;
-        }
-        let dt = f64::from(steps) / STEP_HZ;
+        let steps = (dt * STEP_HZ - 1e-6).ceil().max(1.0) as u32;
+        let h = (dt / f64::from(steps)) as f32;
+        self.world.integration_parameters.dt = h;
         self.build_terrain_near_bodies(dt as f32);
         self.drive_joints(dt, steps);
         let events = contacts::Collector::default();
-        let h = self.world.integration_parameters.dt;
         for _ in 0..steps {
             if !self.movers.is_empty() || !self.forced.is_empty() {
                 movers::apply(&mut self.world, self.movers.values(), h, &mut self.forced);

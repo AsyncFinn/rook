@@ -206,9 +206,6 @@ pub struct Physics {
     pub(crate) fallen_height: f32,
     /// The last step's length, for advancing motors.
     last_dt: f64,
-    /// Time stepped but not yet simulated, less than one 240 Hz step:
-    /// frames of any length simulate whole steps and carry the rest.
-    pending: f64,
     /// Which part each collider belongs to.
     pub(crate) colliders: HashMap<ColliderHandle, InstanceId>,
     groups: CollisionGroups,
@@ -297,7 +294,6 @@ impl Physics {
             built: false,
             fallen_height: DEFAULT_FALLEN_HEIGHT,
             last_dt: 0.0,
-            pending: 0.0,
             colliders: HashMap::default(),
             groups: CollisionGroups::default(),
             touches_use_groups: false,

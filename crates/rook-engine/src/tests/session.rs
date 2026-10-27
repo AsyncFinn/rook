@@ -164,6 +164,11 @@ fn input_mouse_and_click_detectors() {
     let button = add_under(&server, ws, "Part", "Button", "");
     {
         let mut w = server.runtime.world_mut();
+        // No character: reach is then measured from the camera.
+        let players = w.dom.get_service("Players").unwrap();
+        w.dom
+            .set_property_by_name(players, "CharacterAutoLoads", Value::Bool(false))
+            .unwrap();
         let cf = rook_types::CFrame::from_position(glam::Vec3::new(0.0, 0.0, -10.0));
         w.dom
             .set_property_by_name(button, "CFrame", Value::CFrame(cf))

@@ -160,8 +160,13 @@ Studio, which Rook's run matches.
   Studio's overshoot (Approximation).
 - The client steps once per drawn frame, that frame's length, as Roblox
   runs a frame per drawn frame (Studio's playtest client ran at 60);
-  physics simulates whole 240 Hz steps and carries what's left to the
-  next frame, so walking and jumping keep Studio's pace at any frame rate.
+  physics splits each frame into even steps of at most 1/240 s (a 60 Hz
+  frame is exactly four 240 Hz steps), so walking and jumping keep
+  Studio's pace at any frame rate and move by each frame's own length.
+  Whole 240 Hz steps with the rest carried over moved a 144 Hz client one
+  step, then two, which stuttered.
+- After each client frame the mouse looks under itself again (Mouse.Hit,
+  Target, ClickDetector hovers), as the camera moves while it holds still.
 - Interpolations and a Scriptable camera's Focus are updated after
   RenderStepped, before drawing (Inference).
 
