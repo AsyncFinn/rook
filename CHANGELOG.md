@@ -5,6 +5,8 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- The camera keeps up with your character. A client ran Roblox's camera script before the frame's physics and drew after it, so the camera aimed at where you were a frame ago and trailed you while walking; the render step now comes after physics, just before drawing, as Roblox's cycle has it.
+- In first person and shift lock your character turns to face where the camera looks, as in Roblox (`UserGameSettings.RotationType` CameraRelative).
 - Large places simulate much faster. Every anchored part had a physics body of its own, and the physics engine spends time on each body every step, moving or not; on an 85k-part place that was most of the client's frame once it simulated its own character, and much of the server's. Anchored parts on their own, with no joints and no velocity, now share one body.
 - The camera no longer turns when you move the mouse without holding the right button. Mouse movement reported how far the cursor moved, which Roblox's camera turns by; Roblox reports no movement while the mouse is free, only while it's held. `rook-player` also no longer crashes ("RefCell already borrowed") when a script locks the mouse.
 - Your character and camera move smoothly at any frame rate. `rook-player` stepped the game 60 times a second while drawing faster, so most frames repeated the last one; the client now runs one frame per drawn frame, as Roblox does, with physics in 240 Hz steps that carry over between frames, so walking and jumping keep their speed and height.

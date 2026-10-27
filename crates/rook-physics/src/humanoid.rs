@@ -141,6 +141,10 @@ pub struct Drive {
     /// MaxSlopeAngle, in radians.
     pub max_slope: f32,
     pub auto_rotate: bool,
+    /// With AutoRotate, face this horizontal way rather than the walk's:
+    /// the player's camera, while `UserGameSettings.RotationType` is
+    /// CameraRelative (first person, shift lock).
+    pub face: Option<glam::Vec3>,
     pub platform_stand: bool,
     pub sit: bool,
     /// Health is 0.

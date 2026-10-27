@@ -22,6 +22,9 @@ const DAMPING: f32 = 80.0;
 /// most about 20 degrees a frame).
 const TURN_RATE: f32 = 9.0;
 const MAX_TURN: f32 = 20.0;
+/// Facing the camera closes the turn within a 60 Hz frame (Observed: 90
+/// degrees in one frame, with a 4-degree overshoot Rook leaves out).
+const FACE_RATE: f32 = 240.0;
 
 /// Climbing goes at this share of WalkSpeed (measured: 11.2 at 16), with
 /// the root drawn in to this far from the face (measured: 1.5) but never
@@ -115,12 +118,14 @@ impl Physics {
         }
         rb.set_linvel(to_rapier(v), true);
         if turn {
-            let spin = if c.drive.auto_rotate && walk != glam::Vec3::ZERO {
-                let look = horizontal(root.rotation * glam::Vec3::NEG_Z);
-                let angle = look.cross(walk).y.atan2(look.dot(walk));
-                (angle * TURN_RATE).clamp(-MAX_TURN, MAX_TURN)
-            } else {
-                0.0
+            let look = horizontal(root.rotation * glam::Vec3::NEG_Z);
+            let angle_to = |way: glam::Vec3| look.cross(way).y.atan2(look.dot(way));
+            let spin = match c.drive.face {
+                Some(face) if c.drive.auto_rotate => angle_to(face) * FACE_RATE,
+                _ if c.drive.auto_rotate && walk != glam::Vec3::ZERO => {
+                    (angle_to(walk) * TURN_RATE).clamp(-MAX_TURN, MAX_TURN)
+                }
+                _ => 0.0,
             };
             rb.set_angvel(Vector::new(0.0, spin, 0.0), true);
         }

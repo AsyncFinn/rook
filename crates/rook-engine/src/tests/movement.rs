@@ -365,3 +365,71 @@ fn server_humanoids_walk_and_characters_take_starter_settings() {
     let out = lines(session.server());
     assert!(out.iter().any(|l| l == "npc true 24.0"), "{out:?}");
 }
+
+/// A camera following the character from the render step, as Roblox's
+/// does, is drawn exactly where the character is drawn: the render step
+/// comes after the frame's physics, so both show the same pose.
+#[test]
+fn a_render_step_camera_keeps_up_with_its_character() {
+    let mut server = Server::new(&Options::default()).unwrap();
+    use_r6(&server);
+    add_script(&server, "ServerScriptService", "Setup", FLOOR);
+    add_local_script(
+        &server,
+        "Follow",
+        r#"local p = game.Players.LocalPlayer
+        local c = p.Character or p.CharacterAdded:Wait()
+        local h = c:WaitForChild("Humanoid")
+        local r = c:WaitForChild("HumanoidRootPart")
+        local camera = workspace.CurrentCamera
+        camera.CameraType = Enum.CameraType.Scriptable
+        game:GetService("RunService"):BindToRenderStep("follow", 200, function()
+            camera.CFrame = CFrame.new(r.Position + Vector3.new(0, 5, 10))
+        end)
+        task.wait(0.5)
+        h:Move(Vector3.new(0, 0, -1))"#,
+    );
+    server.start();
+    let mut session = Session::new(server, Options::default());
+    session.join("A", 1).unwrap();
+    session.run_for(1.5);
+    let client = session.client(0).unwrap();
+    let w = client.runtime().world();
+    let camera = client.current_camera().unwrap();
+    let local = w.dom.local_player().unwrap();
+    let character = w.dom.ref_property(local, "Character").unwrap();
+    let root = w
+        .dom
+        .find_first_child(character, "HumanoidRootPart", false)
+        .unwrap();
+    let speed = w
+        .dom
+        .vector3_property(root, "AssemblyLinearVelocity")
+        .unwrap()
+        .length();
+    let gap = w.dom.cframe_property(camera, "CFrame").unwrap().position
+        - w.dom.cframe_property(root, "CFrame").unwrap().position;
+    assert!(speed > 15.0, "walking at {speed}");
+    assert!(
+        (gap - glam::Vec3::new(0.0, 5.0, 10.0)).length() < 1e-3,
+        "{gap}"
+    );
+}
+
+/// Measured: with `RotationType` CameraRelative (what the default camera
+/// sets in first person and shift lock), the character turns to face the
+/// camera's heading within a frame or two, standing still.
+#[test]
+fn camera_relative_rotation_faces_the_camera() {
+    let local = r#"UserSettings():GetService("UserGameSettings").RotationType = Enum.RotationType.CameraRelative
+        local camera = workspace.CurrentCamera
+        camera.CameraType = Enum.CameraType.Scriptable
+        RunService:BindToRenderStep("pin", 200, function()
+            camera.CFrame = CFrame.new(r.Position) * CFrame.Angles(0, math.rad(90), 0)
+        end)
+        frames(3)
+        local _, yaw = r.CFrame:ToEulerAnglesYXZ()
+        print(("yaw %.2f"):format(math.deg(yaw)))"#;
+    let out = drive("", "CFrame.new(0, 3, 0)", local, 1.0);
+    assert!(near(numbers(&out, "yaw")[0], 90.0, 1.0), "{out:?}");
+}

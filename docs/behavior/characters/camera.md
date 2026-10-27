@@ -95,6 +95,13 @@ Studio, which Rook's run matches.
   The PlayerModule then locks the mouse to the center
   (`MouseBehavior` LockCenter) with LeftShift.
 
+- With `UserGameSettings.RotationType` CameraRelative, which the
+  PlayerModule sets in first person and shift lock, the engine turns the
+  character to face the camera's heading, standing still too: 90° within
+  one frame, overshooting 4° and settling over two more (Observed with a
+  Scriptable camera turned 90°). MovementRelative, the default, turns it
+  toward where it walks.
+
 ## Controls
 
 - The keyboard controls bind `Enum.PlayerActions` items, not keys. A
@@ -143,6 +150,13 @@ Studio, which Rook's run matches.
   LockCenter.
 - `PointerAction` fires after the wheel's InputChanged (Inference), with
   no pan or pinch.
+- A client's frame runs the render step (RenderStepped, the PlayerModule's
+  camera) and lays out GUI after its physics, just before it's drawn, so
+  Roblox's cycle (RenderStepped, draw, physics) holds and the camera aims
+  at the pose that's drawn; run first, it aimed at the last frame's, and
+  trailed a walking character.
+- Facing the camera closes the turn within a 60 Hz frame, leaving out
+  Studio's overshoot (Approximation).
 - The client steps once per drawn frame, that frame's length, as Roblox
   runs a frame per drawn frame (Studio's playtest client ran at 60);
   physics simulates whole 240 Hz steps and carries what's left to the

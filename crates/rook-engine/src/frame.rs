@@ -7,7 +7,8 @@ impl DataModel {
     ///
     /// Order (Inference from the creator-docs task scheduler diagram):
     /// legacy resumption (`wait`, `spawn`, `delay`), Stepped/PreSimulation,
-    /// [physics], PostSimulation, Heartbeat, `task` resumption.
+    /// [physics], PostSimulation, Heartbeat, `task` resumption; then, on a
+    /// client, the render step and GUI layout, just before it's drawn.
     pub fn step(&mut self) {
         self.step_frame(None);
     }
@@ -35,28 +36,8 @@ impl DataModel {
             // sees its players moved off a removed or recolored team.
             self.runtime.keep_teams();
         }
-        if self.role == Role::Client {
-            // Before the frame is drawn (creator-docs RunService.PreRender;
-            // RenderStepped is its older name), after the functions bound to
-            // the render step.
-            self.runtime.render_step(dt);
-            self.fire(rs, "RenderStepped", dt);
-            self.fire(rs, "PreRender", dt);
-            // Inference: the engine's own camera moves come after the
-            // scripts', just before drawing.
-            self.runtime.step_cameras();
-        }
-        if self.role == Role::Client {
-            // A script may have replaced the current camera.
-            self.sync_viewport_size();
-            self.ease_scrolls();
-        }
-        // Measured: GUI is laid out after RenderStepped. Styles apply
-        // first, as they decide where and how big things are.
-        self.runtime.restyle();
-        self.runtime.sync_gui();
-        if self.role == Role::Client {
-            self.refresh_gui_hover();
+        if self.role == Role::Server {
+            self.lay_out_gui();
         }
         self.update_content();
         self.update_web();
@@ -69,6 +50,13 @@ impl DataModel {
         self.fire(rs, "PostSimulation", dt);
         self.fire(rs, "Heartbeat", dt);
         self.runtime.resume_due(Queue::Task);
+        if self.role == Role::Client {
+            // A client's frame ends as Roblox's begins, with what's drawn:
+            // the render step, then GUI, so the camera script sees the
+            // pose this frame's physics left and the drawing shows the
+            // same (Roblox: RenderStepped, draw, physics, each frame).
+            self.render_phase(dt);
+        }
         self.start_new_scripts();
         {
             // Scripts' terrain edits, for the renderer and replication.
@@ -84,6 +72,31 @@ impl DataModel {
         if self.auto_trim {
             self.trim_journal();
         }
+    }
+
+    /// Before the frame is drawn (creator-docs RunService.PreRender;
+    /// RenderStepped is its older name), after the functions bound to the
+    /// render step; then GUI.
+    fn render_phase(&mut self, dt: f64) {
+        let rs = self.run_service;
+        self.runtime.render_step(dt);
+        self.fire(rs, "RenderStepped", dt);
+        self.fire(rs, "PreRender", dt);
+        // Inference: the engine's own camera moves come after the
+        // scripts', just before drawing.
+        self.runtime.step_cameras();
+        // A script may have replaced the current camera.
+        self.sync_viewport_size();
+        self.ease_scrolls();
+        self.lay_out_gui();
+        self.refresh_gui_hover();
+    }
+
+    /// Measured: GUI is laid out after RenderStepped. Styles apply first,
+    /// as they decide where and how big things are.
+    fn lay_out_gui(&self) {
+        self.runtime.restyle();
+        self.runtime.sync_gui();
     }
 
     /// Content, sounds and unions, just before `wait()` resumption: sounds

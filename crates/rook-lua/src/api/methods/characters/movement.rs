@@ -261,6 +261,7 @@ pub fn drives(w: &mut World) -> Vec<Drive> {
     let gravity = (w.dom.find_service("Workspace"))
         .and_then(|ws| w.dom.float_property(ws, "Gravity"))
         .unwrap_or(196.2);
+    let facing = camera_facing(w);
     let mut drives = Vec::new();
     for humanoid in ids {
         let dom = &w.dom;
@@ -328,6 +329,7 @@ pub fn drives(w: &mut World) -> Vec<Drive> {
             jump_speed,
             max_slope: f("MaxSlopeAngle", 89.0).to_radians(),
             auto_rotate: b("AutoRotate", true),
+            face: facing.filter(|&(c, _)| c == model).map(|(_, way)| way),
             platform_stand: b("PlatformStand", false),
             sit: b("Sit", false),
             dead: dom
@@ -337,6 +339,26 @@ pub fn drives(w: &mut World) -> Vec<Drive> {
         });
     }
     drives
+}
+
+/// On a client whose `UserGameSettings.RotationType` is CameraRelative, its
+/// character and the camera's heading, which the character faces
+/// (Observed: the engine turns it, not the PlayerModule).
+fn camera_facing(w: &World) -> Option<(InstanceId, glam::Vec3)> {
+    if !w.is_client {
+        return None;
+    }
+    let dom = &w.dom;
+    let settings = w
+        .user_settings
+        .and_then(|r| crate::user_settings::game_settings(dom, r))?;
+    if dom.enum_item_property(settings, "RotationType") != Some("CameraRelative") {
+        return None;
+    }
+    let character = dom.ref_property(dom.local_player()?, "Character")?;
+    let look = current_camera(dom)?.rotation * glam::Vec3::NEG_Z;
+    let way = glam::Vec3::new(look.x, 0.0, look.z).try_normalize()?;
+    Some((character, way))
 }
 
 /// Where a walk goes: WalkToPoint, in WalkToPart's space when it has one.
