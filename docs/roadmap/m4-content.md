@@ -82,7 +82,7 @@ renderer draws all of these as their part's plain box.
        counts them; Hinge, Motor and SteppingMotor pins.
      - Decals: the order of equal `ZIndex`; whether large images are
        halved.
-     - Meshes: versions 6.00 and 7.00; the Head's cap UVs; per-vertex
+     - Meshes: the Head's cap UVs; per-vertex
        colors; material looks on file meshes; meshes under unions left
        untinted; a truss's mesh child cut with holes; corner wedge
        orientation checked.
@@ -93,7 +93,11 @@ renderer draws all of these as their part's plain box.
        `TimedOut` and timing; `RequestQueueSize`; the other
        ContentProvider members; `Changed` firing for the legacy content
        names.
-     - Out: the indoor reflection cube, the reflections' fade and sky
+     - Out: mesh versions 6.00 and 7.00, which Rook reads through
+       `rbx_mesh` and takes by upgrading it (7.00 is the draft
+       [krakow10/rbx_mesh#18](https://github.com/krakow10/rbx_mesh/pull/18);
+       6.00 has no PR; the archive has neither among meshes that load
+       anonymously); the indoor reflection cube, the reflections' fade and sky
        light blocked by real shapes (M13 step 3); collision shapes
        (M15).
    - *Evidence*: the [stubs](../guide/stubs.md) rows taken over by this

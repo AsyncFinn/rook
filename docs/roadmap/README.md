@@ -46,8 +46,10 @@ Studio is the bar. A step is ✅ only when what it covers behaves and
 looks as it does in Studio. Every difference found is either fixed or
 taken over by a named step of a later milestone that owns that area:
 lighting in M13; collision shapes, the remaining constraints, buoyancy
-and timesteps in M15; inert classes in M16. "Conformance", "later" and
-"Renderer" own nothing.
+and timesteps in M15; inert classes in M16. A format an upstream
+crate reads for Rook is owned by that crate, named with its issue or
+PR, and Rook takes it by upgrading rather than writing a parser of its
+own. "Conformance", "later" and "Renderer" own nothing.
 
 Every milestone that reproduces Roblox ends with a **Match Studio**
 step, added as its last step when its first step starts. It owns what
