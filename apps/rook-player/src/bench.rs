@@ -32,7 +32,7 @@ struct Measured {
     mouse_times: stats::Times,
     update_times: stats::Times,
     /// The renderer's CPU recording by stage (`StageTimes`, in order).
-    stage_times: [stats::Times; 6],
+    stage_times: [stats::Times; 7],
     whole: stats::Times,
     /// When the content loaders last ran out of work, and the frames
     /// until then.
@@ -96,6 +96,7 @@ pub(crate) fn bench(
             s.instances,
             s.effects,
             s.draws,
+            s.lights,
             s.passes,
         ];
         for (times, stage) in m.stage_times.iter_mut().zip(stages) {
@@ -173,12 +174,19 @@ impl Measured {
             "render medians: CPU recording {record:.2} ms (mean {:.2} ms), render+readback {with_readback:.2} ms",
             stats::ms(self.render_times[0].summary().total) / f64::from(frames.max(1))
         );
-        let [uploads, setup, instances, effects, draws, passes] = self
+        let [uploads, setup, instances, effects, draws, lights, passes] = self
             .stage_times
             .each_ref()
             .map(|t| stats::ms(t.summary().median));
         eprintln!(
-            "CPU recording medians by stage: uploads {uploads:.2} ms, setup {setup:.2} ms, instances {instances:.2} ms, effects {effects:.2} ms, draws {draws:.2} ms, passes {passes:.2} ms"
+            "CPU recording medians by stage: uploads {uploads:.2} ms, setup {setup:.2} ms, instances {instances:.2} ms, effects {effects:.2} ms, draws {draws:.2} ms, lights {lights:.2} ms, passes {passes:.2} ms"
+        );
+        // The light voxels fill only when something moves on, so their
+        // median hides what turning the camera costs.
+        let fills = self.stage_times[5].summary();
+        eprintln!(
+            "light voxels: mean {:.2} ms, {fills}",
+            stats::ms(fills.total) / f64::from(frames.max(1))
         );
         if timing_gpu {
             eprintln!(

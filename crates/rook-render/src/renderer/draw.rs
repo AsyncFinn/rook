@@ -128,6 +128,7 @@ impl Renderer {
             l.environment_diffuse > 0.0,
             voxel_sun,
         );
+        stage(&mut times.lights);
         self.update_sky_cube(&mut encoder);
         self.gui.record_groups(&self.queue, &mut encoder);
         if shadow.is_some() {

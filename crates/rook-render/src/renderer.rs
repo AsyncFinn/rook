@@ -135,6 +135,9 @@ pub struct StageTimes {
     pub effects: std::time::Duration,
     /// Culling and the draws' arguments.
     pub draws: std::time::Duration,
+    /// The light voxels filled, when the lights or the parts blocking them
+    /// changed or the view moved on (the frame's encoder made first).
+    pub lights: std::time::Duration,
     /// Recording the passes and submitting them.
     pub passes: std::time::Duration,
 }
