@@ -179,7 +179,7 @@ local function play(s)
 	for name in s.goals do
 		local other = byProp[name]
 		if other and other ~= s then
-			finish(other, PlaybackState.Canceled)
+			finish(other, PlaybackState.Cancelled)
 		end
 		byProp[name] = s
 	end
@@ -236,8 +236,8 @@ end
 
 function tween.cancel(t)
 	local s = states[t]
-	if s and s.state ~= PlaybackState.Completed and s.state ~= PlaybackState.Canceled then
-		finish(s, PlaybackState.Canceled)
+	if s and s.state ~= PlaybackState.Completed and s.state ~= PlaybackState.Cancelled then
+		finish(s, PlaybackState.Cancelled)
 		s.elapsed = 0
 	end
 end
@@ -259,7 +259,7 @@ function tween.gui(object, goals, direction, style, time, override, callback)
 		if not override then
 			return false
 		end
-		finish(running, PlaybackState.Canceled)
+		finish(running, PlaybackState.Cancelled)
 	end
 	local info = TweenInfo.new(time or 1, style or Enum.EasingStyle.Quad, direction or Enum.EasingDirection.Out)
 	local s = { target = object, info = info, goals = goals, state = PlaybackState.Begin }
