@@ -17,6 +17,8 @@ use crate::threads::fire;
 use crate::types::enums::{enum_item, item_name};
 use crate::world::World;
 
+use super::root_part;
+
 /// MoveTo gives up after this long (measured: MoveToFinished(false) 8 s
 /// after a walk into a wall).
 const WALK_TIMEOUT: f64 = 8.0;
@@ -73,29 +75,55 @@ fn set(dom: &mut Dom, id: InstanceId, name: &str, value: Value) -> Result<(), Do
 fn move_humanoid(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let direction = a.vector3(0)?.0;
     let relative = a.truthy(1);
+    mutate(lua, |w| walk_toward(w, this, direction, relative))?;
+    Outcome::ret(lua, ())
+}
+
+/// `Player:Move(direction, relativeToCamera)`: its character's Humanoid
+/// moves (creator-docs Player.Move); without one, nothing happens. The
+/// PlayerModule's controls call this every frame.
+pub(super) fn move_player(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
+    let direction = a.vector3(0)?.0;
+    let relative = a.truthy(1);
     mutate(lua, |w| {
-        let mut d = direction;
-        if relative && let Some(camera) = current_camera(&w.dom) {
-            let flat = |v: glam::Vec3| glam::Vec3::new(v.x, 0.0, v.z).normalize_or_zero();
-            let right = flat(camera.rotation * glam::Vec3::X);
-            let back = flat(camera.rotation * glam::Vec3::Z);
-            d = right * d.x + back * d.z;
+        let humanoid = w
+            .dom
+            .ref_property(this, "Character")
+            .and_then(|c| w.dom.find_first_child_of_class(c, "Humanoid"));
+        match humanoid {
+            Some(h) => walk_toward(w, h, direction, relative),
+            None => Ok(()),
         }
-        d.y = 0.0;
-        let d = d.clamp_length_max(1.0);
-        if d != glam::Vec3::ZERO
-            && let Some(walk) = w.movement.walks.get_mut(&this)
-        {
-            walk.active = false;
-        }
-        set(
-            &mut w.dom,
-            this,
-            "MoveDirection",
-            Value::Vector3(Vector3(d)),
-        )
     })?;
     Outcome::ret(lua, ())
+}
+
+fn walk_toward(
+    w: &mut World,
+    humanoid: InstanceId,
+    direction: glam::Vec3,
+    relative: bool,
+) -> Result<(), DomError> {
+    let mut d = direction;
+    if relative && let Some(camera) = current_camera(&w.dom) {
+        let flat = |v: glam::Vec3| glam::Vec3::new(v.x, 0.0, v.z).normalize_or_zero();
+        let right = flat(camera.rotation * glam::Vec3::X);
+        let back = flat(camera.rotation * glam::Vec3::Z);
+        d = right * d.x + back * d.z;
+    }
+    d.y = 0.0;
+    let d = d.clamp_length_max(1.0);
+    if d != glam::Vec3::ZERO
+        && let Some(walk) = w.movement.walks.get_mut(&humanoid)
+    {
+        walk.active = false;
+    }
+    set(
+        &mut w.dom,
+        humanoid,
+        "MoveDirection",
+        Value::Vector3(Vector3(d)),
+    )
 }
 
 fn current_camera(dom: &Dom) -> Option<rook_types::CFrame> {
@@ -202,14 +230,6 @@ fn get_state_enabled(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome
         w.movement.disabled.get(&this).copied().unwrap_or(0)
     });
     Outcome::ret(lua, disabled & state.bit() == 0)
-}
-
-/// A Humanoid's root part: HumanoidRootPart, or a legacy body's Torso
-/// (Inference from creator-docs Humanoid.RootPart).
-fn root_part(dom: &Dom, model: InstanceId) -> Option<InstanceId> {
-    dom.find_first_child(model, "HumanoidRootPart", false)
-        .or_else(|| dom.find_first_child(model, "Torso", false))
-        .filter(|&p| dom.is_a(p, "BasePart"))
 }
 
 /// How high a root part's center stands above the floor: HipHeight from

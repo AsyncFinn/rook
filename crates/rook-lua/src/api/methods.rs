@@ -37,6 +37,7 @@ mod attributes;
 mod audio_api;
 mod bindables;
 pub(crate) mod camera;
+pub(crate) mod camera_moves;
 pub(crate) mod characters;
 mod context_actions;
 pub(crate) mod core;
@@ -265,6 +266,7 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
                 physics::native,
                 queries::native,
                 camera::native,
+                camera_moves::native,
                 gui::native,
                 textbox::native,
                 core::native,

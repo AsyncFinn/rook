@@ -36,9 +36,12 @@ fn compiler() -> Compiler {
 fn compile(lua: &Lua, id: InstanceId, env: Table) -> mlua::Result<Function> {
     let (name, bytecode) = with_world(lua, |w| (w.dom.full_name(id), w.bytecode.get(&id).cloned()));
     let chunk = match &bytecode {
-        Some(code) => {
-            core_envs(lua)?.raw_set(env.clone(), true)?;
-            lua.load(&code[..]).set_mode(mlua::chunk::ChunkMode::Binary)
+        Some(compiled) => {
+            if compiled.core {
+                core_envs(lua)?.raw_set(env.clone(), true)?;
+            }
+            lua.load(&compiled.code[..])
+                .set_mode(mlua::chunk::ChunkMode::Binary)
         }
         None => lua.load(source_of(lua, id)).set_compiler(compiler()),
     };

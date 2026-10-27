@@ -13,6 +13,16 @@ pub(crate) use appearance::request as request_avatar;
 pub use appearance::{Avatar, Scales};
 pub use rigs::{BuildRig, RigSource, RigType};
 
+/// A Humanoid's root part (`RootPart`, and the legacy `Torso`, which reads
+/// the same): its model's HumanoidRootPart, else a legacy body's Torso,
+/// else an R15 body's UpperTorso (Observed).
+pub(crate) fn root_part(dom: &rook_dom::Dom, model: InstanceId) -> Option<InstanceId> {
+    ["HumanoidRootPart", "Torso", "UpperTorso"]
+        .into_iter()
+        .filter_map(|name| dom.find_first_child(model, name, false))
+        .find(|&p| dom.is_a(p, "BasePart"))
+}
+
 pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
     if owner == "Humanoid"
         && let Some(m) = movement::native(name)
@@ -26,6 +36,7 @@ pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("BasePart", "GetNetworkOwner") => ownership::get_network_owner,
         ("BasePart", "GetNetworkOwnershipAuto") => ownership::get_network_ownership_auto,
         ("Team", "GetPlayers") => team_players,
+        ("Player", "Move") => movement::move_player,
         _ => return None,
     })
 }

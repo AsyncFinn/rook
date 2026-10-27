@@ -109,6 +109,10 @@ enum Command {
         /// `Enum.KeyCode` name: `One`, `Backquote`); repeat for more keys.
         #[arg(long, requires = "join")]
         key: Vec<String>,
+        /// With `--join`: after the keys, the mouse wheel turns this many
+        /// steps (positive is forward); repeat for more turns.
+        #[arg(long, requires = "join", allow_hyphen_values = true)]
+        wheel: Vec<f32>,
         /// After `--seconds`, keep running in real time with a `>` prompt
         /// that runs Luau on the server, until input ends (Ctrl+C on an
         /// empty line, or Ctrl+D).
@@ -377,6 +381,7 @@ fn command(command: Command) -> anyhow::Result<()> {
             click,
             user_settings,
             key,
+            wheel,
             #[cfg(feature = "repl")]
             repl,
         } => run::run(
@@ -392,6 +397,7 @@ fn command(command: Command) -> anyhow::Result<()> {
                 clicks: &click,
                 user_settings: user_settings.as_deref(),
                 keys: &key,
+                wheel: &wheel,
                 #[cfg(feature = "repl")]
                 repl,
             },

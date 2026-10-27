@@ -50,6 +50,19 @@ The window title shows, for the last second: frames per second, the median frame
 
 `--bench N` runs N frames offscreen with the server and client in lockstep (the same every run) and prints the time per stage, then the median, slowest 1% and longest server step, client step and both together.
 
+With Roblox's CoreScripts on (the `coreScripts` build setting, or `--core-scripts` in a debug build), you play your own character with Roblox's own controls ([camera and controls](../behavior/characters/camera.md)):
+
+| Control | Action |
+|---|---|
+| W A S D, Up and Down | Walk |
+| Space | Jump |
+| Right mouse button (hold) | Turn the camera |
+| Left and Right | Turn the camera |
+| Mouse wheel, I / O | Zoom (all the way in is first person) |
+| Escape | Roblox's menu |
+
+Without them, or while you have no character, the window flies its own camera:
+
 | Control | Action |
 |---|---|
 | Right mouse button (hold) | Look around |

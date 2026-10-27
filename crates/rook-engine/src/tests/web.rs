@@ -172,7 +172,11 @@ fn request_internal_goes_only_where_configured() {
     // Only Roblox's own scripts, which come compiled, may call it.
     let script = add_under(&s, service(&s, "ServerScriptService"), "Script", "Core", "");
     let code = mlua::chunk::Compiler::new().compile(source).unwrap();
-    s.runtime().world_mut().bytecode.insert(script, code.into());
+    let compiled = rook_lua::Compiled {
+        code: code.into(),
+        core: true,
+    };
+    s.runtime().world_mut().bytecode.insert(script, compiled);
     let mut out = step_until(&mut s, |out| out.iter().any(|l| l == "done"));
     out.sort();
     assert_eq!(

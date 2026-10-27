@@ -63,6 +63,16 @@ pub enum Job {
 }
 
 /// Output message type, as in `Enum.MessageType`.
+/// A script's code as it came compiled from Roblox's packages.
+#[derive(Debug, Clone)]
+pub struct Compiled {
+    pub code: std::sync::Arc<[u8]>,
+    /// Runs as Roblox's own code (the CoreScripts), reaching members game
+    /// scripts can't. The PlayerModule runs as a game script, as on
+    /// Roblox, where developers may replace it.
+    pub core: bool,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MessageType {
     Output,
@@ -223,7 +233,7 @@ pub struct World {
     pub(crate) modules: ModuleState,
     /// Luau bytecode for scripts that came without source (Roblox's own
     /// packages: see `rook_formats::compiled_scripts`), run in its place.
-    pub bytecode: HashMap<InstanceId, std::sync::Arc<[u8]>>,
+    pub bytecode: HashMap<InstanceId, Compiled>,
     /// The folder of CoreScripts `ScriptContext:AddCoreScriptLocal`
     /// starts from, outside the DataModel (clients running Roblox's
     /// CoreScripts).
@@ -283,6 +293,9 @@ pub struct World {
     pub(crate) topbar_transparency: HashMap<InstanceId, f32>,
     /// Humanoids' walks and disabled states.
     pub(crate) movement: crate::api::methods::characters::movement::Movement,
+    /// Cameras moving by `Camera:Interpolate`.
+    pub(crate) interpolations:
+        HashMap<InstanceId, crate::api::methods::camera_moves::Interpolation>,
 }
 
 impl World {
@@ -335,6 +348,7 @@ impl World {
             spawn_random: crate::types::misc::LRandom::new(1),
             topbar_transparency: HashMap::new(),
             movement: Default::default(),
+            interpolations: HashMap::new(),
         }
     }
 

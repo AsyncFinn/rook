@@ -188,8 +188,8 @@ each, and red markers every 128 studs). No flag in
 - **It follows `Camera.Focus`, not the camera** (Observed: moving Focus
   300 studs along +X, the camera staying put, lit 9 more pools that way).
   In Studio's edit camera Focus sits 20 studs ahead of the camera, and in
-  play it is the camera's subject; Rook has no Focus yet and uses the
-  camera's position.
+  play it is the camera's subject; Rook's grid still follows the camera's
+  position.
 - **It moves in chunks, asynchronously**: after the camera jumps hundreds
   of studs Studio keeps drawing the old grid for several seconds, and a
   freshly opened place can draw no local light at all for the first few.

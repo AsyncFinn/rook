@@ -31,6 +31,8 @@ pub(crate) struct Run<'a> {
     /// Keys (`Enum.KeyCode` names) the player presses after the clicks,
     /// half a second apart.
     pub keys: &'a [String],
+    /// Wheel turns after the keys, in steps, a second apart.
+    pub wheel: &'a [f32],
     #[cfg(feature = "repl")]
     pub repl: bool,
 }
@@ -81,6 +83,10 @@ pub(crate) fn run(file: &Path, how: &Run<'_>) -> anyhow::Result<()> {
                 session.input(index, InputEvent::Key { code, down });
                 session.run_for(0.25);
             }
+        }
+        for &delta in how.wheel {
+            session.input(index, InputEvent::Wheel { delta });
+            session.run_for(1.0);
         }
         if !how.clicks.is_empty() || !how.keys.is_empty() {
             session.run_for(1.0);

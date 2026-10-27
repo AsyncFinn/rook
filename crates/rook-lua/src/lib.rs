@@ -27,7 +27,9 @@ pub use api::methods::characters::ownership::authority;
 pub use api::methods::characters::{Avatar, BuildRig, RigSource, RigType, Scales};
 pub use api::methods::web::{WebAnswer, WebRequest};
 pub use net::{NetValue, RemoteKind, RemoteMessage};
-pub use world::{EffectCall, Listener, LogEntry, MessageType, SignalBehavior, SoundControl};
+pub use world::{
+    Compiled, EffectCall, Listener, LogEntry, MessageType, SignalBehavior, SoundControl,
+};
 
 use ctx::ScriptError;
 use world::World;
@@ -205,6 +207,25 @@ impl Runtime {
             }
         };
         self.guarded(|| threads::fire(&self.lua, &SignalKey::event(instance, event), &args));
+    }
+
+    /// Fire `UserInputService.PointerAction(wheel, pan, pinch,
+    /// gameProcessedEvent)`: what the default camera zooms by.
+    pub fn pointer_action(&self, wheel: f32, pan: (f32, f32), pinch: f32, processed: bool) {
+        let Some(uis) = self.world().dom.find_service("UserInputService") else {
+            return;
+        };
+        let pan = types::LVector2(rook_types::Vector2::new(pan.0, pan.1));
+        self.fire_event(uis, "PointerAction", (wheel, pan, pinch, processed));
+    }
+
+    /// Move interpolating cameras and keep a Scriptable camera's Focus
+    /// (clients, each frame after RenderStepped).
+    pub fn step_cameras(&self) {
+        self.guarded(|| {
+            api::methods::camera_moves::step(&self.lua);
+            threads::drain_deferred(&self.lua);
+        });
     }
 
     /// Fire signals for journal entries recorded since `start` by code

@@ -137,6 +137,22 @@ impl ServerHost {
                 let c = dom.create_by_name(container)?;
                 dom.set_parent(c, Some(player))?;
             }
+            // Observed: a Player takes these from StarterPlayer once, as it
+            // joins; later changes to StarterPlayer don't reach it.
+            if let Some(starter) = dom.find_service("StarterPlayer") {
+                for (from, to) in STARTER_PLAYER_COPIES {
+                    #[expect(
+                        clippy::disallowed_methods,
+                        reason = "copied as they are, whatever their types"
+                    )]
+                    let copied = dom
+                        .property_by_name(starter, from)
+                        .map(|v| dom.set_property_by_name(player, to, v));
+                    if let Some(Err(e)) = copied {
+                        tracing::warn!("Player.{to} not copied from StarterPlayer: {e}");
+                    }
+                }
+            }
             dom.set_parent(player, Some(players))?;
             w.client_players.insert(player);
             (player, start)
@@ -420,6 +436,23 @@ impl ServerHost {
     }
 }
 
+/// StarterPlayer's properties a joining Player copies, as (StarterPlayer
+/// name, Player name).
+const STARTER_PLAYER_COPIES: [(&str, &str); 12] = [
+    ("CameraMaxZoomDistance", "CameraMaxZoomDistance"),
+    ("CameraMinZoomDistance", "CameraMinZoomDistance"),
+    ("CameraMode", "CameraMode"),
+    ("DevCameraOcclusionMode", "DevCameraOcclusionMode"),
+    ("DevComputerCameraMovementMode", "DevComputerCameraMode"),
+    ("DevComputerMovementMode", "DevComputerMovementMode"),
+    ("DevTouchCameraMovementMode", "DevTouchCameraMode"),
+    ("DevTouchMovementMode", "DevTouchMovementMode"),
+    ("EnableMouseLockOption", "DevEnableMouseLock"),
+    ("AutoJumpEnabled", "AutoJumpEnabled"),
+    ("HealthDisplayDistance", "HealthDisplayDistance"),
+    ("NameDisplayDistance", "NameDisplayDistance"),
+];
+
 /// A client end: its DataModel and how its instances map to the server's.
 #[derive(Debug)]
 pub struct ClientHost {
@@ -553,6 +586,7 @@ impl ClientHost {
                 {
                     rt.fire_event(local, "CharacterAdded", ud);
                     rt.drain_deferred();
+                    self.follow_character(character);
                 }
             }
             ToClient::Effects(calls) => {
@@ -594,6 +628,30 @@ impl ClientHost {
                 }
             }
         }
+    }
+
+    /// The camera follows a new character: after `CharacterAdded`, the
+    /// current camera's CameraSubject becomes its Humanoid and its
+    /// CameraType goes back to Custom (Observed, also after a script made
+    /// it Scriptable; the PlayerModule sets neither).
+    fn follow_character(&self, character: InstanceId) {
+        let humanoid = {
+            let w = self.client.runtime().world();
+            w.dom.find_first_child_of_class(character, "Humanoid")
+        };
+        let (Some(humanoid), Some(camera)) = (humanoid, self.client.current_camera()) else {
+            return;
+        };
+        let custom = rook_reflection::database()
+            .enum_by_name("CameraType")
+            .and_then(|e| e.items.iter().find(|(name, _)| *name == "Custom"))
+            .map(|&(_, value)| value);
+        if let Some(custom) = custom {
+            self.client
+                .set_property(camera, "CameraType", Value::Enum(custom));
+        }
+        self.client
+            .set_property(camera, "CameraSubject", Value::Ref(Some(humanoid.to_ref())));
     }
 
     /// Where the client's simulation has its character, by the server's

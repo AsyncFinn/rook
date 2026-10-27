@@ -270,6 +270,14 @@ pub(crate) fn get(w: &World, id: InstanceId, name: &str) -> Option<Value> {
         )),
         // Observed: a part outside Workspace has no root, and an anchored
         // assembly's mass is infinite.
+        // Observed in Studio 0.744: fixed, and not where rays start (see
+        // `methods::camera`). The default camera's occlusion reads it.
+        "NearPlaneZ" if dom.class_name(id) == "Camera" => Some(Value::Float32(-0.1)),
+        "RootPart" | "Torso" if dom.class_name(id) == "Humanoid" => Some(Value::Ref(
+            dom.parent(id)
+                .and_then(|model| super::methods::characters::root_part(dom, model))
+                .map(InstanceId::to_ref),
+        )),
         "AssemblyRootPart" if dom.is_a(id, "BasePart") => {
             Some(Value::Ref(Assembly::of(dom, id).map(|a| a.root().to_ref())))
         }

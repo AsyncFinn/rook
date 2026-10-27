@@ -70,11 +70,17 @@ the packages, as it does the CoreScripts, and never ships them (decided
      the Source and Sink pair, limited to owned assemblies.
    - *Done when*: a character moved on the client is where the server
      reads it the next frame, and server Touched handlers fire for it.
-3. [**Movement and states**](../behavior/characters/movement.md): the
+3. ✅ [**Movement and states**](../behavior/characters/movement.md): the
    Humanoid controller. Built on 2026-10-26 and checked against Studio's
    recordings (walk, jump, ledge, steps, slope, conveyor, truss, water,
-   MoveTo, state requests); walking an archive obby waits for step 4's
-   controls, since nothing turns keys into `Move` until then.
+   MoveTo, state requests). On 2026-10-27, with step 4's controls, a
+   client walked an archive obby built of trusses through `Player:Move`:
+   round a wall, over a 2-stud truss lying on the floor, up a 32-stud
+   truss onto a truss walkway, along it and up a 34-stud truss. The
+   low truss showed a bug: Rook pushed a climbing root back out to 1.5
+   studs from the face, so it flipped between Climbing and Running in
+   front of the truss forever; Studio climbs it in hops and gets over,
+   and Rook now does too.
    - *Scope*: floor detection, `HipHeight`, `WalkSpeed`, `MoveDirection`,
      `Move` (277 files), `MoveTo` (2,138) with `MoveToFinished`,
      `WalkToPoint`, `JumpPower`, `JumpHeight` and `UseJumpPower`,
@@ -93,9 +99,15 @@ the packages, as it does the CoreScripts, and never ships them (decided
    - *Done when*: the recordings match within a tenth of a stud, the
      state sequences match, and a character walks, jumps and climbs
      through an archive obby.
-4. **Camera and controls**: the default camera and control scripts
-   (Roblox's PlayerModule, as decided above), and the engine members
-   they use.
+4. [**Camera and controls**](../behavior/characters/camera.md): the
+   default camera and control scripts (Roblox's PlayerModule, as decided
+   above), and the engine members they use. Built on 2026-10-27: the
+   PlayerModule and `RbxCharacterSounds` run on clients, and a player
+   walks, jumps and climbs with WASD and Space, turns the camera with
+   the right button, zooms with the wheel into first person, and the
+   camera follows, zooms and collides as in Studio (measured);
+   `Camera:Interpolate` matches Studio's. Left: shift lock compared with
+   Studio, and an archive cutscene played.
    - *Scope*: `CameraType` (Custom, Scriptable for the archive's
      cutscenes, Follow, Track, Attach, Watch, Fixed, Orbital),
      `CameraSubject`, zoom limits, first person (`CameraMode`), shift

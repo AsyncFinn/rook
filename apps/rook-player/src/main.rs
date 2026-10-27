@@ -35,7 +35,7 @@ use game::Game;
 use glam::{EulerRot, Mat3, Vec3};
 use rook_content::Resolver;
 use rook_engine::user_settings::{Pacing, PlayerSettings};
-use rook_engine::{InputEvent, console};
+use rook_engine::{InputEvent, MouseLock, console};
 use rook_lua::MessageType;
 use rook_render::{Camera, Renderer};
 use rook_types::{CFrame, Value};
@@ -201,6 +201,13 @@ fn prepare(game: &mut Game, args: &Args, content: &Arc<Resolver>) -> (SceneCache
         camera = Camera {
             fov_y: camera.fov_y,
             ..Camera::look_at(camera.position, target)
+        };
+    } else if let Some(view) = game.view().scripted_camera() {
+        // What the window would show: the game's camera.
+        camera = Camera {
+            position: view.cframe.position,
+            rotation: view.cframe.rotation,
+            fov_y: view.fov,
         };
     }
     if let Some(fov) = args.fov {

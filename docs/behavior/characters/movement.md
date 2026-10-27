@@ -68,6 +68,12 @@ Workspace gravity 196.2. R6 steps were measured on a body from
 - Walking into a TrussPart climbs it: Climbing, at 0.7 × `WalkSpeed`
   (11.2), with the root's center held 1.5 studs from the face. With no
   input it holds still, still Climbing.
+- A 2-stud truss lying on the floor is climbed in hops (Observed
+  2026-10-27): Climbing from 1.64 studs off its face until the root is
+  4.7 up (0.15 s), Running forward at 16 while the legs pull it down, then
+  Climbing again from 0.09 studs off the face, where it stays, and Running
+  over the top. Climbing draws the root in to 1.5 studs but doesn't push
+  it out.
 - In terrain water it's Swimming: the root floats about half a stud under
   the surface and swims at about 11.8 (`WalkSpeed` 16). A jump at the
   surface goes Jumping, Freefall, and back to Swimming in the water.
@@ -112,6 +118,8 @@ Workspace gravity 196.2. R6 steps were measured on a body from
   gravity itself; FallingDown, Ragdoll, PlatformStanding, Physics and Dead
   leave the body to physics. A body that becomes upright again is stood
   up at once (Approximation: Roblox rises over GettingUp).
+- Climbing draws the root in to 1.5 studs from the face and never
+  pushes it out, so a low truss is climbed in hops as in Studio.
 - Climbing: six rays ahead at heights from the feet to above the root,
   2 studs long, find a TrussPart, or a ladder (parts hit with a gap
   between them). Approximation: Roblox's sensor isn't documented.

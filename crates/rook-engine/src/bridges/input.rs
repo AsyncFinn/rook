@@ -28,6 +28,10 @@ pub enum InputEvent {
     MouseButton { button: u8, down: bool },
     /// Cursor position in pixels from the viewport's top left.
     MouseMove { x: f32, y: f32 },
+    /// The mouse moved by this many pixels while the window holds it
+    /// ([`crate::MouseLock`]): the cursor stays put, but scripts see the
+    /// movement's `Delta`.
+    MouseMotion { dx: f32, dy: f32 },
     /// Wheel steps; positive is forward.
     Wheel { delta: f32 },
 }
@@ -339,6 +343,7 @@ impl DataModel {
                 self.mouse_button(button, down, &mut clicks)
             }
             InputEvent::MouseMove { x, y } => self.mouse_move(x, y, &mut clicks),
+            InputEvent::MouseMotion { dx, dy } => self.mouse_motion(dx, dy),
             InputEvent::Wheel { delta } => self.wheel(delta),
         };
         clicks
@@ -365,6 +370,29 @@ impl DataModel {
         processed
     }
 
+    /// Movement of a held mouse: InputChanged with the movement in
+    /// `Delta`, the cursor at the window's center for
+    /// [`MouseLock::Center`](crate::MouseLock) (Inference: where Roblox
+    /// draws it in first person), else where it was.
+    fn mouse_motion(&mut self, dx: f32, dy: f32) -> bool {
+        let centered = self.mouse_lock() == crate::MouseLock::Center;
+        let (vw, vh) = self.input.viewport;
+        let pos = {
+            let mut w = self.runtime.world_mut();
+            if centered {
+                w.input.mouse = (vw as f32 / 2.0, vh as f32 / 2.0);
+            }
+            w.input.mouse_delta = (dx, dy);
+            w.input.mouse
+        };
+        let (gx, gy) = gui_point(pos);
+        let obj = self.changed_input_object(UserInputType::MouseMovement, (gx, gy, 0.0), (dx, dy));
+        if let Some(obj) = obj {
+            self.fire_input("InputChanged", obj, false);
+        }
+        false
+    }
+
     fn wheel(&mut self, delta: f32) -> bool {
         let pos = gui_point(self.runtime.world().input.mouse);
         // The wheel amount is in Position.Z (creator-docs InputObject).
@@ -374,6 +402,9 @@ impl DataModel {
         if let Some(obj) = obj {
             self.fire_input("InputChanged", obj, processed);
         }
+        // Inference: after InputChanged, as Roblox's camera reads both.
+        self.runtime
+            .pointer_action(delta, (0.0, 0.0), 0.0, processed);
         if let Some(m) = self.mouse_object() {
             let event = if delta > 0.0 {
                 "WheelForward"

@@ -58,6 +58,19 @@ impl Gui {
         out
     }
 
+    /// Whether a shown on-screen GuiButton has `Modal` on, which frees
+    /// the mouse while the camera would lock it (creator-docs
+    /// GuiButton.Modal), as of the last layout.
+    pub fn modal_shown(&self, dom: &Dom) -> bool {
+        order::screens(dom).into_iter().any(|screen| {
+            order::stack(dom, &self.layout, screen, Clip::NONE)
+                .iter()
+                .any(|s| {
+                    dom.is_a(s.id, "GuiButton") && dom.bool_property(s.id, "Modal") == Some(true)
+                })
+        })
+    }
+
     /// The nearest `Active` world GUI the ray from `origin` along `dir`
     /// (a unit vector) meets on an object, seen by `viewer`, as of the
     /// last layout.

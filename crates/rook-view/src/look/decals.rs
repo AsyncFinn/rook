@@ -53,7 +53,7 @@ impl SceneCache {
                     .color3_property(child, "Color3")
                     .map(Color3::to_array)
                     .unwrap_or([1.0; 3]),
-                transparency: dom.float_property(child, "Transparency").unwrap_or(0.0),
+                transparency: super::transparency(dom, child),
                 texture: None,
                 surfaces: [None; 6],
                 material: Material::SmoothPlastic,

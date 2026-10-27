@@ -72,11 +72,24 @@ function api.info(kind)
 	return all
 end
 
--- A binding's input is an Enum.KeyCode, an Enum.UserInputType, or a
--- one-character string naming a key.
+-- The keys each Enum.PlayerActions item stands for on a keyboard
+-- (Observed; the arrows Left and Right turn the camera instead).
+local PLAYER_ACTIONS = {
+	CharacterForward = { W = true, Up = true },
+	CharacterBackward = { S = true, Down = true },
+	CharacterLeft = { A = true },
+	CharacterRight = { D = true },
+	CharacterJump = { Space = true },
+}
+
+-- A binding's input is an Enum.KeyCode, an Enum.UserInputType, an
+-- Enum.PlayerActions item, or a one-character string naming a key.
 local function matches(want, key, inputType)
 	local t = typeof(want)
 	if t == "EnumItem" then
+		if want.EnumType == Enum.PlayerActions then
+			return PLAYER_ACTIONS[want.Name][key.Name] == true
+		end
 		return want == key or want == inputType
 	elseif t == "string" then
 		return string.upper(want) == key.Name

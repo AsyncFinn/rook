@@ -5,6 +5,7 @@ pub(crate) mod cursor;
 pub(crate) mod icon;
 pub(crate) mod keys;
 pub(crate) mod launch;
+pub(crate) mod mouse;
 pub(crate) mod readout;
 
 use crate::*;
@@ -27,10 +28,18 @@ pub(crate) struct App {
     pub(crate) camera: FlyCamera,
     pub(crate) gfx: Option<Gfx>,
     pub(crate) keys: HashSet<KeyCode>,
+    /// Flying the window's own camera: nothing in the game drives the
+    /// current camera ([`rook_engine::DataModel::scripted_camera`]).
+    pub(crate) flying: bool,
+    /// Turning the flying camera with the right mouse button.
     pub(crate) looking: bool,
-    /// Where the cursor was when looking started; it stays there (see
-    /// [`App::look`]).
-    pub(crate) look_anchor: Option<PhysicalPosition<f64>>,
+    /// How the window holds the mouse for the game.
+    pub(crate) held: MouseLock,
+    /// Where a held cursor is put back to after each move, where the
+    /// platform can only confine it (see [`App::hold`]).
+    pub(crate) anchor: Option<PhysicalPosition<f64>>,
+    /// Mouse movement while held, not yet sent to the game.
+    pub(crate) pending_motion: (f32, f32),
     /// The cursor's last position in the window.
     pub(crate) cursor: PhysicalPosition<f64>,
     pub(crate) last_frame: Instant,
@@ -177,42 +186,27 @@ impl App {
             gfx.window.set_ime_allowed(typing);
             self.ime = typing;
         }
-        let mut dir = Vec3::ZERO;
-        let rot = self.camera.camera.rotation;
-        for (key, v) in [
-            (KeyCode::KeyW, -rot.z_axis),
-            (KeyCode::KeyS, rot.z_axis),
-            (KeyCode::KeyA, -rot.x_axis),
-            (KeyCode::KeyD, rot.x_axis),
-            (KeyCode::KeyE, Vec3::Y),
-            (KeyCode::Space, Vec3::Y),
-            (KeyCode::KeyQ, -Vec3::Y),
-        ] {
-            // Keys typed into a TextBox don't fly the camera.
-            if self.keys.contains(&key) && !typing {
-                dir += v;
+        match self.game.view().scripted_camera() {
+            Some(view) => {
+                self.flying = false;
+                self.camera.follow(view);
+            }
+            None => {
+                self.flying = true;
+                self.fly(dt, typing);
             }
         }
-        let boost = if self.keys.contains(&KeyCode::ShiftLeft) {
-            4.0
-        } else {
-            1.0
-        };
-        self.camera.camera.position += dir.normalize_or_zero() * self.camera.speed * boost * dt;
-
-        // The editor camera drives Workspace.CurrentCamera, as Studio's does.
-        if let Some(cam) = self.game.view().current_camera() {
-            let c = &self.camera.camera;
-            self.game.view().set_property(
-                cam,
-                "CFrame",
-                Value::CFrame(CFrame {
-                    position: c.position,
-                    rotation: c.rotation,
-                }),
-            );
+        // A script took the camera while the player was turning it.
+        if !self.flying && self.looking {
+            self.look(false);
         }
-
+        let motion = std::mem::take(&mut self.pending_motion);
+        if motion != (0.0, 0.0) {
+            self.game.input(InputEvent::MouseMotion {
+                dx: motion.0,
+                dy: motion.1,
+            });
+        }
         if let Some((x, y)) = self.pending_mouse.take() {
             self.game.input(InputEvent::MouseMove { x, y });
         }
@@ -280,6 +274,7 @@ impl App {
         let dt = elapsed.as_secs_f32().min(0.1);
         self.last_frame = now;
         self.update(dt);
+        self.follow_mouse_lock();
         self.show_cursor(event_loop);
         let presented = self.draw();
         if let Some(title) = self.readout.frame(elapsed, &self.game)
@@ -317,32 +312,6 @@ impl App {
             gfx.set_fullscreen(now.fullscreen);
         }
         self.player = now;
-    }
-
-    /// Start or stop looking around with the right mouse button: the
-    /// cursor hides and stays where it was, as in Studio, instead of
-    /// wandering out of the window while the camera turns.
-    pub(crate) fn look(&mut self, on: bool) {
-        self.looking = on;
-        self.look_anchor = None;
-        // Looking hides the cursor; whatever ends it shows it again.
-        self.cursor_shown.look = None;
-        let Some(gfx) = &self.gfx else {
-            return;
-        };
-        let window = &gfx.window;
-        window.set_cursor_visible(!on);
-        // Grabbing is best effort: platforms support different modes.
-        if !on {
-            let _ = window.set_cursor_grab(CursorGrabMode::None);
-            return;
-        }
-        // Locked holds the cursor still where the platform can; otherwise
-        // confine it and warp it back after each move.
-        if window.set_cursor_grab(CursorGrabMode::Locked).is_err() {
-            let _ = window.set_cursor_grab(CursorGrabMode::Confined);
-            self.look_anchor = Some(self.cursor);
-        }
     }
 }
 
@@ -382,9 +351,9 @@ impl ApplicationHandler for App {
                 }
             }
             WindowEvent::CursorMoved { position, .. } => {
-                // While looking around the cursor is held in place; its
-                // moves (and our own warps back) aren't mouse moves.
-                if !self.looking {
+                // A held cursor stays in place; its moves (and our own
+                // warps back) aren't mouse moves.
+                if !self.mouse_held() {
                     self.cursor = position;
                     self.pending_mouse = Some((position.x as f32, position.y as f32));
                 }
@@ -441,7 +410,9 @@ impl ApplicationHandler for App {
                 if let Some(button) = number {
                     self.game.input(InputEvent::MouseButton { button, down });
                 }
-                if button == MouseButton::Right {
+                // The right button turns the flying camera; the game's
+                // camera turns with it on its own.
+                if button == MouseButton::Right && down == !self.looking && (self.flying || !down) {
                     self.look(down);
                 }
             }
@@ -452,7 +423,7 @@ impl ApplicationHandler for App {
                 };
                 self.game.input(InputEvent::Wheel { delta: steps });
                 // A wheel that scrolled GUI doesn't change the speed.
-                if !self.game.input_processed() {
+                if self.flying && !self.game.input_processed() {
                     self.camera.speed = (self.camera.speed * 1.2f32.powf(steps)).clamp(1.0, 2000.0);
                 }
             }
@@ -464,26 +435,8 @@ impl ApplicationHandler for App {
     }
 
     fn device_event(&mut self, _: &ActiveEventLoop, _: DeviceId, event: DeviceEvent) {
-        if let DeviceEvent::MouseMotion { delta } = event
-            && self.looking
-        {
-            // Radians per pixel at Roblox's default sensitivity of 1.
-            const TURN: f32 = 0.003;
-            let (across, up) = self.player.mouse_sensitivity;
-            let invert = if self.player.camera_y_inverted {
-                -1.0
-            } else {
-                1.0
-            };
-            self.camera.yaw -= delta.0 as f32 * TURN * across;
-            self.camera.pitch -= delta.1 as f32 * TURN * up * invert;
-            self.camera.update_rotation();
-            // Where the cursor can only be confined to the window (Windows),
-            // put it back after each move.
-            if let (Some(anchor), Some(gfx)) = (self.look_anchor, &self.gfx) {
-                // Best effort, as grabbing is.
-                let _ = gfx.window.set_cursor_position(anchor);
-            }
+        if let DeviceEvent::MouseMotion { delta } = event {
+            self.mouse_motion(delta);
         }
     }
 

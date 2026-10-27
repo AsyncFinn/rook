@@ -16,6 +16,7 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("UserGameSettings", "InFullScreen") => in_full_screen,
         ("UserGameSettings", "GetCameraYInvertValue") => camera_y_invert_value,
         ("UserGameSettings", "SetCameraYInvertVisible") => camera_y_invert_visible,
+        ("UserGameSettings", "SetGamepadCameraSensitivityVisible") => gamepad_sensitivity_visible,
         ("GuiService", "ToggleFullscreen") => toggle_fullscreen,
         _ => return None,
     })
@@ -48,6 +49,17 @@ fn camera_y_invert_visible(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<O
     mutate(lua, |w| {
         w.dom
             .set_property_by_name(this, "IsUsingCameraYInverted", Value::Bool(true))
+    })?;
+    Outcome::ret(lua, ())
+}
+
+/// The camera scripts say they follow `GamepadCameraSensitivity`, so the
+/// menu offers it (creator-docs
+/// UserGameSettings:SetGamepadCameraSensitivityVisible).
+fn gamepad_sensitivity_visible(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
+    mutate(lua, |w| {
+        w.dom
+            .set_property_by_name(this, "IsUsingGamepadCameraSensitivity", Value::Bool(true))
     })?;
     Outcome::ret(lua, ())
 }

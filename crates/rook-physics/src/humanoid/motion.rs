@@ -24,7 +24,9 @@ const TURN_RATE: f32 = 9.0;
 const MAX_TURN: f32 = 20.0;
 
 /// Climbing goes at this share of WalkSpeed (measured: 11.2 at 16), with
-/// the root held this far from the face (measured: 1.5).
+/// the root drawn in to this far from the face (measured: 1.5) but never
+/// pushed out: climbing a 2-stud truss from beside it, Studio climbed on
+/// at 0.09 studs from the face and so got over the top.
 const CLIMB_SHARE: f32 = 0.7;
 const CLIMB_HOLD: f32 = 1.5;
 const CLIMB_SNAP: f32 = 20.0;
@@ -96,7 +98,8 @@ impl Physics {
                     let input = walk.dot(toward) / c.drive.walk_speed.max(f32::EPSILON);
                     let up = c.drive.walk_speed * CLIMB_SHARE * input.clamp(-1.0, 1.0);
                     let off = (root.position - climb.point).dot(climb.normal);
-                    v = climb.normal * (CLIMB_HOLD - off) * CLIMB_SNAP + glam::Vec3::Y * up;
+                    let closer = (CLIMB_HOLD - off).min(0.0);
+                    v = climb.normal * closer * CLIMB_SNAP + glam::Vec3::Y * up;
                 }
             }
             State::Swimming => {

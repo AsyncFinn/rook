@@ -9,6 +9,10 @@
 //! `CorePackages`, and `StarterScript` running as a CoreScript, which
 //! starts the rest with `ScriptContext:AddCoreScriptLocal`. See
 //! docs/behavior/gui/core-scripts.md.
+//!
+//! The patch's `PlayerScripts` hold the PlayerModule (camera and
+//! controls) and `RbxCharacterSounds`, which a client's PlayerScripts get
+//! as Roblox gives them (docs/behavior/characters/camera.md).
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -16,6 +20,8 @@ use std::sync::Arc;
 
 use rbx_dom_weak::WeakDom;
 use rook_dom::{Dom, InstanceId};
+use rook_lua::Compiled;
+use rook_types::Value;
 
 use crate::DataModel;
 
@@ -111,7 +117,7 @@ impl CorePatch {
     fn build(
         &self,
         dom: &mut Dom,
-        bytecode: &mut HashMap<InstanceId, Arc<[u8]>>,
+        bytecode: &mut HashMap<InstanceId, Compiled>,
     ) -> Result<(InstanceId, InstanceId), String> {
         let missing = |what: &str| format!("the patch has no {what}");
         let holder = dom.create_by_name("Folder").map_err(|e| e.to_string())?;
@@ -122,7 +128,8 @@ impl CorePatch {
                 at = at.and_then(|id| dom.children(id).get(i as usize).copied());
             }
             if let Some(id) = at {
-                bytecode.insert(id, code.clone());
+                let code = code.clone();
+                bytecode.insert(id, Compiled { code, core: true });
             }
         }
         let root = *tops.first().ok_or_else(|| missing("PatchRoot"))?;
@@ -132,6 +139,7 @@ impl CorePatch {
         };
         let scripts = child(dom, root, "CoreScripts")?;
         let instances = child(dom, root, "DataModelInstances")?;
+        Self::player_scripts(dom, bytecode, child(dom, root, "PlayerScripts")?)?;
 
         // CoreGui.RobloxGui is a ScreenGui (Folder in the patch) holding
         // the shared Modules.
@@ -149,12 +157,8 @@ impl CorePatch {
             .and_then(|e| e.items.iter().find(|(name, _)| *name == "Sibling"))
             .map(|&(_, value)| value)
             .ok_or_else(|| missing("ZIndexBehavior.Sibling"))?;
-        dom.set_property_by_name(
-            robloxgui,
-            "ZIndexBehavior",
-            rook_types::Value::Enum(sibling),
-        )
-        .map_err(|e| e.to_string())?;
+        dom.set_property_by_name(robloxgui, "ZIndexBehavior", Value::Enum(sibling))
+            .map_err(|e| e.to_string())?;
         for c in dom.children(patch_robloxgui).to_vec() {
             dom.set_parent(c, Some(robloxgui))
                 .map_err(|e| e.to_string())?;
@@ -181,5 +185,72 @@ impl CorePatch {
         dom.set_parent(starter, Some(core_gui))
             .map_err(|e| e.to_string())?;
         Ok((scripts, starter))
+    }
+
+    /// Give the local player's PlayerScripts what Roblox puts there
+    /// unless StarterPlayerScripts has one of the same name: the
+    /// PlayerModule, a `PlayerScriptsLoader` that requires it, and
+    /// `RbxCharacterSounds`. A place with its own legacy `CameraScript` or
+    /// `ControlScript` gets no PlayerModule (Observed: Roblox gives it its
+    /// 2017 scripts instead, which the patch doesn't hold). They run as
+    /// game scripts.
+    fn player_scripts(
+        dom: &mut Dom,
+        bytecode: &mut HashMap<InstanceId, Compiled>,
+        patch: InstanceId,
+    ) -> Result<(), String> {
+        let Some(scripts) = dom
+            .local_player()
+            .and_then(|p| dom.find_first_child(p, "PlayerScripts", false))
+        else {
+            return Ok(());
+        };
+        for id in dom.descendants(patch) {
+            if let Some(c) = bytecode.get_mut(&id) {
+                c.core = false;
+            }
+        }
+        let has = |dom: &Dom, name: &str| dom.find_first_child(scripts, name, false).is_some();
+        let legacy = has(dom, "CameraScript") || has(dom, "ControlScript");
+        let find = |dom: &Dom, path: [&str; 2]| {
+            dom.find_first_child(patch, path[0], false)
+                .and_then(|f| dom.find_first_child(f, path[1], false))
+                .ok_or_else(|| format!("the patch has no {}", path.join(".")))
+        };
+        let module = find(dom, ["StarterPlayerScripts", "PlayerModule"])?;
+        if !legacy && !has(dom, "PlayerScriptsLoader") {
+            let loader = dom
+                .create_by_name("LocalScript")
+                .map_err(|e| e.to_string())?;
+            dom.set_name(loader, "PlayerScriptsLoader".into())
+                .map_err(|e| e.to_string())?;
+            let source = r#"require(script.Parent:WaitForChild("PlayerModule"))"#;
+            dom.set_property_by_name(loader, "Source", Value::String(source.into()))
+                .map_err(|e| e.to_string())?;
+            dom.set_parent(loader, Some(scripts))
+                .map_err(|e| e.to_string())?;
+        }
+        if !legacy && !has(dom, "PlayerModule") {
+            dom.set_parent(module, Some(scripts))
+                .map_err(|e| e.to_string())?;
+        }
+        // A ModuleScript in the patch, a LocalScript on Roblox.
+        let sounds = find(dom, ["StarterPlayerScriptsCommon", "RbxCharacterSounds"])?;
+        if !has(dom, "RbxCharacterSounds") {
+            let script = dom
+                .create_by_name("LocalScript")
+                .map_err(|e| e.to_string())?;
+            dom.set_name(script, "RbxCharacterSounds".into())
+                .map_err(|e| e.to_string())?;
+            if let Some(code) = bytecode.get(&sounds).cloned() {
+                bytecode.insert(script, code);
+            }
+            for c in dom.children(sounds).to_vec() {
+                dom.set_parent(c, Some(script)).map_err(|e| e.to_string())?;
+            }
+            dom.set_parent(script, Some(scripts))
+                .map_err(|e| e.to_string())?;
+        }
+        Ok(())
     }
 }

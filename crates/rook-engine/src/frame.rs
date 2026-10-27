@@ -28,6 +28,9 @@ impl DataModel {
             self.runtime.render_step(dt);
             self.fire(rs, "RenderStepped", dt);
             self.fire(rs, "PreRender", dt);
+            // Inference: the engine's own camera moves come after the
+            // scripts', just before drawing.
+            self.runtime.step_cameras();
         }
         if self.role == Role::Client {
             // A script may have replaced the current camera.

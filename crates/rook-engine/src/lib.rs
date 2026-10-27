@@ -19,6 +19,7 @@ pub mod session;
 pub mod settings;
 pub mod user_settings;
 
+pub use bridges::camera::{CameraView, MouseLock};
 pub use bridges::input::{CursorLook, InputEvent, ScreenPoint, SystemCursor};
 
 pub use bridges::render_changes::{

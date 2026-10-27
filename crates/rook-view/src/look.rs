@@ -87,7 +87,7 @@ impl SceneCache {
                 .color3_property(id, "Color")
                 .map(Color3::to_array)
                 .unwrap_or([0.64, 0.64, 0.65]),
-            transparency: dom.float_property(id, "Transparency").unwrap_or(0.0),
+            transparency: transparency(dom, id),
             // Confirmed: creator-docs BasePart.CastShadow, on by default;
             // places saved before it existed cast.
             cast_shadow: dom.bool_property(id, "CastShadow").unwrap_or(true),
@@ -209,4 +209,15 @@ impl SceneCache {
         };
         Some((out, decals))
     }
+}
+
+/// How transparent a part or decal draws: its `Transparency`, raised
+/// towards 1 by its `LocalTransparencyModifier` (creator-docs: the client
+/// alone sees it; the default camera hides the body in first person).
+pub(crate) fn transparency(dom: &Dom, id: InstanceId) -> f32 {
+    let own = dom.float_property(id, "Transparency").unwrap_or(0.0);
+    let local = dom
+        .float_property(id, "LocalTransparencyModifier")
+        .unwrap_or(0.0);
+    own + (1.0 - own) * local
 }
