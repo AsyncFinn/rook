@@ -194,11 +194,8 @@ impl Renderer {
         for (i, run) in runs.runs.iter().enumerate() {
             while let Some(&(_, canvases)) = cuts.next_if(|c| c.0 == i) {
                 cut(pass, canvases);
-                // The GUI binds its own pipeline, buffers and group 2.
+                // The GUI binds its own pipeline and buffers.
                 bound = (None, None, None, None);
-                if let ImageBinding::Table(_) = &self.image_binding {
-                    pass.set_bind_group(2, self.group(&[None; 5]), &[]);
-                }
             }
             if matches!(run.pipe, Pipe::GlassFilter | Pipe::GlassSurface) {
                 stencil = stencil % 255 + 1;

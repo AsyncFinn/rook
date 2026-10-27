@@ -80,6 +80,11 @@ struct Frames {
 pub(crate) struct WorldGui {
     tested: wgpu::RenderPipeline,
     on_top: wgpu::RenderPipeline,
+    shader: wgpu::ShaderModule,
+    /// Group 3: the light group's entries, then the canvas's frame and
+    /// what its runs draw with. Groups 0 to 2 are the parts', so drawing
+    /// canvases among the transparent parts leaves the parts' images
+    /// bound; only this group changes.
     group_layout: wgpu::BindGroupLayout,
     /// The glyph atlas, which text quads draw through, and the
     /// gradients' ramps.
@@ -101,52 +106,36 @@ impl WorldGui {
         (glyphs, ramps): (&wgpu::TextureView, &wgpu::TextureView),
     ) -> Self {
         let size = std::mem::size_of::<CanvasFrame>() as u64;
+        let texture = |binding| wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Texture {
+                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                view_dimension: wgpu::TextureViewDimension::D2,
+                multisampled: false,
+            },
+            count: None,
+        };
+        let mut entries = GpuLights::layout_entries().to_vec();
+        entries.extend([
+            wgpu::BindGroupLayoutEntry {
+                binding: 4,
+                visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: true,
+                    min_binding_size: wgpu::BufferSize::new(size),
+                },
+                count: None,
+            },
+            texture(5),
+            image_entries(6)[0],
+            image_entries(6)[1],
+            texture(8),
+        ]);
         let group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("rook world gui"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: true,
-                        min_binding_size: wgpu::BufferSize::new(size),
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-                image_entries(2)[0],
-                image_entries(2)[1],
-                wgpu::BindGroupLayoutEntry {
-                    binding: 4,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-            ],
-        });
-        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("rook world gui"),
-            bind_group_layouts: &[
-                Some(layouts.globals),
-                Some(layouts.main),
-                Some(&group_layout),
-                Some(layouts.lights),
-            ],
-            immediate_size: 0,
+            entries: &entries,
         });
         let source = if table {
             include_wesl!("world_gui_table")
@@ -157,21 +146,12 @@ impl WorldGui {
             label: Some("rook world gui"),
             source: wgpu::ShaderSource::Wgsl(source.into()),
         });
-        let pipeline = |compare| {
-            blended_pipeline(
-                device,
-                "rook world gui",
-                &layout,
-                (&shader, "vs_world_gui", "fs_world_gui"),
-                GpuQuad::layout(),
-                (FRAME_FORMAT, main_depth_format(device)),
-                compare,
-            )
-        };
+        let [tested, on_top] = pipelines(device, layouts, &group_layout, &shader);
         let align = device.limits().min_uniform_buffer_offset_alignment as u64;
         Self {
-            tested: pipeline(wgpu::CompareFunction::Greater),
-            on_top: pipeline(wgpu::CompareFunction::Always),
+            tested,
+            on_top,
+            shader,
             group_layout,
             glyphs: glyphs.clone(),
             ramps: ramps.clone(),
@@ -180,6 +160,12 @@ impl WorldGui {
             places: Vec::new(),
             frames: None,
         }
+    }
+
+    /// Make the pipelines again for the parts' new image layout (the
+    /// table grew).
+    pub(crate) fn rebuild(&mut self, device: &wgpu::Device, layouts: BindLayouts<'_>) {
+        [self.tested, self.on_top] = pipelines(device, layouts, &self.group_layout, &self.shader);
     }
 
     /// For each of `canvases`, the canvas drawn now it was given as (the
@@ -266,6 +252,7 @@ impl WorldGui {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         images: (&GuiImages, &GpuCache<ImageHash, Image>),
+        lights: &GpuLights,
         camera: &Camera,
         height: u32,
     ) -> WorldRuns {
@@ -307,7 +294,7 @@ impl WorldGui {
             .flat_map(|s| self.canvases[s.3].runs.iter().map(|r| r.image))
             .collect();
         for key in keys {
-            self.bind(device, key, images);
+            self.bind(device, key, images, lights);
         }
         let frames = self.frames.as_ref().expect("made above");
         let mut bytes = vec![0u8; seen.len() * self.stride as usize];
@@ -357,6 +344,7 @@ impl WorldGui {
         device: &wgpu::Device,
         image: Option<ImageKey>,
         (images, cache): (&GuiImages, &GpuCache<ImageHash, Image>),
+        lights: &GpuLights,
     ) {
         let Some(frames) = &mut self.frames else {
             return;
@@ -367,35 +355,37 @@ impl WorldGui {
         let Some((view, sampler)) = images.view(image, cache) else {
             return;
         };
+        let mut entries = lights.entries().to_vec();
+        entries.extend([
+            wgpu::BindGroupEntry {
+                binding: 4,
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer: &frames.buffer,
+                    offset: 0,
+                    size: wgpu::BufferSize::new(std::mem::size_of::<CanvasFrame>() as u64),
+                }),
+            },
+            wgpu::BindGroupEntry {
+                binding: 5,
+                resource: wgpu::BindingResource::TextureView(&self.glyphs),
+            },
+            wgpu::BindGroupEntry {
+                binding: 6,
+                resource: wgpu::BindingResource::TextureView(view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 7,
+                resource: wgpu::BindingResource::Sampler(sampler),
+            },
+            wgpu::BindGroupEntry {
+                binding: 8,
+                resource: wgpu::BindingResource::TextureView(&self.ramps),
+            },
+        ]);
         let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("rook world gui"),
             layout: &self.group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                        buffer: &frames.buffer,
-                        offset: 0,
-                        size: wgpu::BufferSize::new(std::mem::size_of::<CanvasFrame>() as u64),
-                    }),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&self.glyphs),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::TextureView(view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: wgpu::BindingResource::Sampler(sampler),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 4,
-                    resource: wgpu::BindingResource::TextureView(&self.ramps),
-                },
-            ],
+            entries: &entries,
         });
         frames.groups.insert(image, group);
     }
@@ -434,12 +424,47 @@ impl WorldGui {
             // Runs whose image isn't up yet draw nothing.
             for run in &canvas.runs {
                 if let Some(group) = frames.groups.get(&run.image) {
-                    pass.set_bind_group(2, group, &[offset]);
+                    pass.set_bind_group(3, group, &[offset]);
                     pass.draw(0..6, run.quads.clone());
                 }
             }
         }
     }
+}
+
+/// The world GUI's pipelines, depth tested and always on top: the parts'
+/// groups 0 to 2 (`layouts`), then `group_layout`.
+fn pipelines(
+    device: &wgpu::Device,
+    layouts: BindLayouts<'_>,
+    group_layout: &wgpu::BindGroupLayout,
+    shader: &wgpu::ShaderModule,
+) -> [wgpu::RenderPipeline; 2] {
+    let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("rook world gui"),
+        bind_group_layouts: &[
+            Some(layouts.globals),
+            Some(layouts.main),
+            Some(layouts.image),
+            Some(group_layout),
+        ],
+        immediate_size: 0,
+    });
+    [
+        wgpu::CompareFunction::Greater,
+        wgpu::CompareFunction::Always,
+    ]
+    .map(|compare| {
+        blended_pipeline(
+            device,
+            "rook world gui",
+            &layout,
+            (shader, "vs_world_gui", "fs_world_gui"),
+            GpuQuad::layout(),
+            (FRAME_FORMAT, main_depth_format(device)),
+            compare,
+        )
+    })
 }
 
 /// Where `point` is in a `size` window `camera` looks through, in pixels

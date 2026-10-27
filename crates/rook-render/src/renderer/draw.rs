@@ -98,6 +98,7 @@ impl Renderer {
             &self.device,
             &self.queue,
             &self.images,
+            &self.lights,
             camera,
             (width, height),
         );
@@ -318,13 +319,17 @@ impl Renderer {
         pass.set_bind_group(0, &self.bind_group, &[]);
         pass.set_bind_group(1, &self.main_bind_group, &[]);
         pass.set_bind_group(3, &self.lights.bind_group, &[]);
-        if let ImageBinding::Table(_) = &self.image_binding {
-            pass.set_bind_group(2, self.group(&[None; 5]), &[]);
-        }
+        // The table, or the defaults' set until a run binds its own: the
+        // world GUI's canvases share this group, so one is bound before
+        // any of them draws.
+        pass.set_bind_group(2, self.group(&[None; 5]), &[]);
         self.record_sky(&mut pass);
         let mut drawn = 0;
         self.record(&mut pass, runs, start, |pass, canvases| {
             self.gui.record_world(pass, &world_gui[drawn..canvases]);
+            // The canvases bind their own group 3; the parts' groups 0 to
+            // 2 stay (`WorldGui::group_layout`).
+            pass.set_bind_group(3, &self.lights.bind_group, &[]);
             drawn = canvases;
         });
         self.record_ribbons(&mut pass, ribbons);

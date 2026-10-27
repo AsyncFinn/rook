@@ -483,6 +483,7 @@ impl GuiPass {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         cache: &GpuCache<ImageHash, Image>,
+        lights: &GpuLights,
         camera: &Camera,
         size: (u32, u32),
     ) -> WorldRuns {
@@ -494,7 +495,14 @@ impl GuiPass {
             self.images.bind(device, &target.runs, cache);
         }
         let images = (&self.images, cache);
-        self.world.upload(device, queue, images, camera, size.1)
+        self.world
+            .upload(device, queue, images, lights, camera, size.1)
+    }
+
+    /// Make the world GUI's pipelines again for the parts' new image
+    /// layout.
+    pub(crate) fn rebuild_world(&mut self, device: &wgpu::Device, layouts: BindLayouts<'_>) {
+        self.world.rebuild(device, layouts);
     }
 
     /// Lay some of the world GUI's canvases in the world.

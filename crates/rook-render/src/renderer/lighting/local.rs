@@ -107,6 +107,7 @@ pub(crate) struct GpuLights {
     voxels: wgpu::TextureView,
     /// How much of the sun reaches each voxel (red), past the parts.
     sun_voxels: wgpu::TextureView,
+    sampler: wgpu::Sampler,
     fill: wgpu::ComputePipeline,
     fill_layout: wgpu::BindGroupLayout,
     fill_group: wgpu::BindGroup,
@@ -184,38 +185,9 @@ impl SkyBuffers {
 
 impl GpuLights {
     pub(crate) fn new(device: &wgpu::Device) -> Self {
-        let fragment = wgpu::ShaderStages::FRAGMENT;
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("rook light volume"),
-            entries: &[
-                buffer_entry(0, wgpu::BufferBindingType::Uniform, fragment),
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: fragment,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D3,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 2,
-                    visibility: fragment,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 3,
-                    visibility: fragment,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D3,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-            ],
+            entries: &Self::layout_entries(),
         });
         let compute = wgpu::ShaderStages::COMPUTE;
         let storage = wgpu::BufferBindingType::Storage { read_only: true };
@@ -320,24 +292,7 @@ impl GpuLights {
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("rook light volume"),
             layout: &layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: volume.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&voxels),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::Sampler(&sampler),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: wgpu::BindingResource::TextureView(&sun_voxels),
-                },
-            ],
+            entries: &group_entries(&volume, [&voxels, &sun_voxels], &sampler),
         });
         let hash = LightHash::build(&[]);
         let (light_buffer, bucket_buffer, entry_buffer) = buffers(device, &[], &hash);
@@ -363,6 +318,7 @@ impl GpuLights {
             volume,
             voxels,
             sun_voxels,
+            sampler,
             fill,
             fill_layout,
             fill_group,
@@ -375,6 +331,51 @@ impl GpuLights {
             sun: None,
             marked: false,
         }
+    }
+
+    /// The light group's layout entries (bindings 0 to 3), which other
+    /// groups bound in its place (the world GUI's) start with.
+    pub(crate) fn layout_entries() -> [wgpu::BindGroupLayoutEntry; 4] {
+        let fragment = wgpu::ShaderStages::FRAGMENT;
+        [
+            buffer_entry(0, wgpu::BufferBindingType::Uniform, fragment),
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: fragment,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D3,
+                    multisampled: false,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 2,
+                visibility: fragment,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 3,
+                visibility: fragment,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D3,
+                    multisampled: false,
+                },
+                count: None,
+            },
+        ]
+    }
+
+    /// The light group's resources, at [`GpuLights::layout_entries`]'s
+    /// bindings.
+    pub(crate) fn entries(&self) -> [wgpu::BindGroupEntry<'_>; 4] {
+        group_entries(
+            &self.volume,
+            [&self.voxels, &self.sun_voxels],
+            &self.sampler,
+        )
     }
 
     /// Bring the GPU's lights up to date with the scene's. The hash is
@@ -558,6 +559,33 @@ impl GpuLights {
             pass.dispatch_workgroups(VOLUME[0] / 8, VOLUME[2] / 8, 1);
         }
     }
+}
+
+/// The light group's entries: where the voxels are, the light and sun
+/// voxels, and how they're sampled.
+fn group_entries<'a>(
+    volume: &'a wgpu::Buffer,
+    [voxels, sun_voxels]: [&'a wgpu::TextureView; 2],
+    sampler: &'a wgpu::Sampler,
+) -> [wgpu::BindGroupEntry<'a>; 4] {
+    [
+        wgpu::BindGroupEntry {
+            binding: 0,
+            resource: volume.as_entire_binding(),
+        },
+        wgpu::BindGroupEntry {
+            binding: 1,
+            resource: wgpu::BindingResource::TextureView(voxels),
+        },
+        wgpu::BindGroupEntry {
+            binding: 2,
+            resource: wgpu::BindingResource::Sampler(sampler),
+        },
+        wgpu::BindGroupEntry {
+            binding: 3,
+            resource: wgpu::BindingResource::TextureView(sun_voxels),
+        },
+    ]
 }
 
 /// The lights' bytes; an empty list still binds one (unlit) light.

@@ -183,17 +183,14 @@ impl Renderer {
                 .min(room);
             let capacity = table.capacity;
             self.image_layout = image_layout(&self.device, Some(capacity));
-            self.pipelines = Pipelines::new(
-                &self.device,
-                self.color_format,
-                BindLayouts {
-                    globals: &self.globals_layout,
-                    main: &self.main_layout,
-                    image: &self.image_layout,
-                    lights: &self.lights.layout,
-                },
-                true,
-            );
+            let layouts = BindLayouts {
+                globals: &self.globals_layout,
+                main: &self.main_layout,
+                image: &self.image_layout,
+                lights: &self.lights.layout,
+            };
+            self.pipelines = Pipelines::new(&self.device, self.color_format, layouts, true);
+            self.gui.rebuild_world(&self.device, layouts);
         }
     }
 

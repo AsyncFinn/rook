@@ -96,6 +96,15 @@ inf.
   Transparency 0.1 leaves until 2026-10-26); those nearer than every
   transparent part after the particles, then those `AlwaysOnTop`, under
   the screen's GUI. Inference: SurfaceGui `ZOffset` isn't used yet.
+  Rook's canvases share the parts' bind groups 0 to 2 (the image table
+  among them) and bind only their own group 3, which holds the light
+  group's bindings and then theirs (`renderer/gui/world.rs`), so drawing
+  one between transparent parts leaves the parts' images bound. Until
+  2026-10-27 each canvas had its own group 2, and the table, which holds
+  every image in the place, was bound again after each one; wgpu tracks
+  every texture of a group each time it's bound, so on a 103k-instance
+  place with 85 canvases among its transparent parts that cost 5.3 ms of
+  the frame's 9.3 ms of CPU recording (dev build; now 1.8 of 5.8).
 - `MaxDistance` hides one further than that from the camera.
 - **Sharpness**: Studio's world GUI text stays sharp however near it's
   seen, like vector text, even on a 200 × 200 canvas stretched over a

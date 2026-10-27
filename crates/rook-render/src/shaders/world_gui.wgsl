@@ -25,13 +25,15 @@ struct Canvas {
     look: vec4<f32>,
 };
 
-@group(2) @binding(0) var<uniform> canvas: Canvas;
-@group(2) @binding(1) var glyphs: texture_2d<f32>;
+// Group 3 after the light group's bindings (`lighting.wgsl`), so the parts'
+// groups stay bound while canvases draw among them.
+@group(3) @binding(4) var<uniform> canvas: Canvas;
+@group(3) @binding(5) var glyphs: texture_2d<f32>;
 // The run's image (white for fills and glyphs), raw sRGB.
-@group(2) @binding(2) var image: texture_2d<f32>;
-@group(2) @binding(3) var paint_sampler: sampler;
+@group(3) @binding(6) var image: texture_2d<f32>;
+@group(3) @binding(7) var paint_sampler: sampler;
 // Gradients' ramps, one a row (`GuiRamp`), raw sRGB and opacity.
-@group(2) @binding(4) var ramps: texture_2d<f32>;
+@group(3) @binding(8) var ramps: texture_2d<f32>;
 
 struct Quad {
     @location(0) center: vec2<f32>,
