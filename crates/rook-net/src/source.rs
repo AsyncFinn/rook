@@ -182,7 +182,7 @@ fn withheld(server: &Dom, id: InstanceId, property: PropertyId) -> bool {
         PropertyKind::Canonical(Serialization::SerializesAs(_))
     );
     if prop.flags.not_replicated && !replicated_as_other && !replicated_by_twin(db, prop) {
-        return true;
+        return !carried_velocity(server, id, prop);
     }
     if prop.name == "Source" && server.class_name(id) == "Script" {
         // RunContext Client scripts run on the client, so their source goes.
@@ -195,6 +195,17 @@ fn withheld(server: &Dom, id: InstanceId, property: PropertyId) -> bool {
             prop.kind,
             PropertyKind::Canonical(Serialization::Migrate { .. })
         )
+}
+
+/// An anchored part's velocity, which carries what stands on it (a
+/// conveyor) on the clients that simulate their characters too (observed:
+/// a client-owned character rides one). A moving part's goes with its
+/// pose instead.
+fn carried_velocity(server: &Dom, id: InstanceId, prop: &rook_reflection::Property) -> bool {
+    matches!(
+        prop.name,
+        "AssemblyLinearVelocity" | "AssemblyAngularVelocity"
+    ) && server.bool_property(id, "Anchored") == Some(true)
 }
 
 /// Whether Roblox sends a NotReplicated property to clients through a

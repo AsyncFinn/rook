@@ -271,7 +271,7 @@ impl Physics {
 
     /// The `Enum.Material` value a hit on collider `h` of `part` reports:
     /// the part's, or the terrain material the collider is made of.
-    fn material_of(&self, dom: &Dom, h: ColliderHandle, part: InstanceId) -> u32 {
+    pub(crate) fn material_of(&self, dom: &Dom, h: ColliderHandle, part: InstanceId) -> u32 {
         match self.terrain.material(h) {
             Some(m) => m.material() as u32,
             None => dom.enum_property(part, "Material").unwrap_or(0),

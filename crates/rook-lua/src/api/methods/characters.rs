@@ -2,6 +2,7 @@
 //! looks (`appearance`) and who simulates them (`ownership`).
 
 mod appearance;
+pub(crate) mod movement;
 pub(crate) mod ownership;
 mod rigs;
 pub(crate) mod spawning;
@@ -13,6 +14,11 @@ pub use appearance::{Avatar, Scales};
 pub use rigs::{BuildRig, RigSource, RigType};
 
 pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
+    if owner == "Humanoid"
+        && let Some(m) = movement::native(name)
+    {
+        return Some(m);
+    }
     Some(match (owner, name) {
         ("Players", "GetHumanoidDescriptionFromUserId") => appearance::description_from_user_id,
         ("Humanoid", "ApplyDescription" | "ApplyDescriptionReset") => appearance::apply_description,
@@ -140,6 +146,7 @@ pub(crate) fn spawn_character(lua: &Lua, player: InstanceId) -> ApiResult<Instan
     let character = mutate(lua, |w| {
         let first = w.spawned.insert(player);
         let character = rigs::body(w, player)?;
+        movement::apply_starter_settings(&mut w.dom, character)?;
         let (at, spawn) = spawning::spawn_point(w, player, character);
         let dom = &mut w.dom;
         if let Some(root) = dom.find_first_child(character, "HumanoidRootPart", false) {
@@ -241,25 +248,4 @@ fn reset_player_gui(
         }
     }
     Ok(())
-}
-
-/// Characters this DataModel simulates whose Humanoids are alive, with
-/// their root parts and how far their feet reach below them, for physics
-/// to hold standing until the Humanoid controller (`rook_physics::Physics::stand`).
-pub fn standing(w: &World) -> Vec<(InstanceId, InstanceId, f32)> {
-    let rook_physics::Authority::Only(characters) = ownership::authority(w) else {
-        return Vec::new();
-    };
-    characters
-        .into_iter()
-        .filter_map(|c| {
-            let humanoid = w.dom.find_first_child_of_class(c, "Humanoid")?;
-            let alive = w
-                .dom
-                .number_property(humanoid, "Health_XML")
-                .is_none_or(|h| h > 0.0);
-            let root = w.dom.find_first_child(c, "HumanoidRootPart", false)?;
-            alive.then(|| (c, root, spawning::feet_below_root(&w.dom, c)))
-        })
-        .collect()
 }

@@ -65,6 +65,11 @@ impl Terrain {
     pub(crate) fn is_water(&self, collider: ColliderHandle) -> bool {
         self.material(collider) == Some(TerrainMaterial::Water)
     }
+
+    /// The voxels.
+    pub(crate) fn grid(&self) -> &Grid {
+        &self.grid
+    }
 }
 
 /// One material's surface in a chunk, as a collider shape.

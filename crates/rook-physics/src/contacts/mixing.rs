@@ -44,12 +44,15 @@ pub(crate) fn hooks_for(collider_data: u128, body_data: u128) -> ActiveHooks {
     }
 }
 
-fn surface_velocity(context: &ContactModificationContext, body: Option<RigidBodyHandle>) -> Vector {
-    let Some(rb) = body.and_then(|b| context.bodies.get(b)) else {
-        return Vector::ZERO;
-    };
-    let [x, y, z, _] = unpack(rb.user_data);
+/// The surface velocity [`pack_velocity`] stored.
+pub(crate) fn unpack_velocity(data: u128) -> Vector {
+    let [x, y, z, _] = unpack(data);
     Vector::new(x, y, z)
+}
+
+fn surface_velocity(context: &ContactModificationContext, body: Option<RigidBodyHandle>) -> Vector {
+    body.and_then(|b| context.bodies.get(b))
+        .map_or(Vector::ZERO, |rb| unpack_velocity(rb.user_data))
 }
 
 /// Sets each contact's friction and elasticity to the two parts' values

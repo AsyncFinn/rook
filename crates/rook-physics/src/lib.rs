@@ -14,10 +14,10 @@ pub mod assembly;
 pub mod contacts;
 mod convert;
 mod explosion;
+pub mod humanoid;
 pub mod joints;
 pub mod query;
 mod shape;
-mod stand;
 mod step;
 mod sync;
 
@@ -236,6 +236,12 @@ pub struct Physics {
     terrain: terrain::Terrain,
     /// Terrain colliders were added since the last query.
     terrain_placed: bool,
+    /// Humanoids seen in Workspace (some may have left it since).
+    humanoid_ids: HashSet<InstanceId>,
+    /// TrussParts seen in Workspace, which Humanoids climb.
+    trusses: HashSet<InstanceId>,
+    /// The Humanoids this world drives, in id order.
+    controllers: BTreeMap<InstanceId, humanoid::Controller>,
 }
 
 impl std::fmt::Debug for Physics {
@@ -295,6 +301,9 @@ impl Physics {
             unions: unions::Unions::default(),
             terrain: terrain::Terrain::default(),
             terrain_placed: false,
+            humanoid_ids: HashSet::default(),
+            trusses: HashSet::default(),
+            controllers: BTreeMap::new(),
         }
     }
 

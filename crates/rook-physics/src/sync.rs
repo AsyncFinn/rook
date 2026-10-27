@@ -17,6 +17,7 @@ impl Physics {
         if let Some(ws) = dom.find_service("Workspace") {
             for id in dom.descendants(ws) {
                 self.notice(dom, id);
+                self.notice_humanoid(dom, id);
             }
         }
         self.built = true;
@@ -70,6 +71,7 @@ impl Physics {
                 }
                 Change::Reparented { subtree, .. } => {
                     for &i in subtree {
+                        self.notice_humanoid(dom, i);
                         if Some(i) == self.terrain.instance || dom.class_name(i) == "Terrain" {
                             self.terrain.stale = true;
                         } else if self.parts.contains_key(&i) || is_part(dom, i) {

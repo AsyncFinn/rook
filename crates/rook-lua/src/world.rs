@@ -281,6 +281,8 @@ pub struct World {
     pub(crate) spawn_random: crate::types::misc::LRandom,
     /// PlayerGuis' `SetTopbarTransparency`, for those a script set.
     pub(crate) topbar_transparency: HashMap<InstanceId, f32>,
+    /// Humanoids' walks and disabled states.
+    pub(crate) movement: crate::api::methods::characters::movement::Movement,
 }
 
 impl World {
@@ -332,6 +334,7 @@ impl World {
             // A fixed seed: runs repeat exactly.
             spawn_random: crate::types::misc::LRandom::new(1),
             topbar_transparency: HashMap::new(),
+            movement: Default::default(),
         }
     }
 

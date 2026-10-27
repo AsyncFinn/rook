@@ -15,6 +15,6 @@ use rook_dom::InstanceId;
 
 use crate::contacts::materials::{Properties, mix};
 
-pub(crate) use mixing::{Mixer, hooks_for, pack, pack_velocity};
+pub(crate) use mixing::{Mixer, hooks_for, pack, pack_velocity, unpack_velocity};
 pub use touches::Touch;
 pub(crate) use touches::{Collector, Tracker};

@@ -176,6 +176,57 @@ fn step_until(dm: &mut DataModel, mut done: impl FnMut(&[String]) -> bool) -> Ve
     out
 }
 
+/// Characters spawn as R6, which Rook builds itself.
+fn use_r6(server: &Server) {
+    let sp = service(server, "StarterPlayer");
+    let r6 = rook_types::Value::Enum(0);
+    (server.runtime.world_mut().dom)
+        .set_property_by_name(sp, "GameSettingsAvatar", r6)
+        .unwrap();
+}
+
+/// A server whose place `setup` builds (a Script run at start), with
+/// `players` joined and `seconds` run. Characters are R6 unless
+/// `options` give content.
+fn session_with(setup: &str, players: &[&str], seconds: f64, options: &Options) -> Session {
+    let mut server = Server::new(options).unwrap();
+    // Rigs are R6 unless the rig file is given: tests can't rely on the
+    // machine's Roblox content (scripts can't set this).
+    if options.content.is_none() {
+        use_r6(&server);
+    }
+    add_script(&server, "ServerScriptService", "Setup", setup);
+    server.start();
+    let mut session = Session::new(server, options.clone());
+    for (i, name) in players.iter().enumerate() {
+        session.join(name, i as i64 + 1).unwrap();
+    }
+    session.run_for(seconds);
+    session
+}
+
+/// The character of the server's player `index` (its model and root part).
+fn character(dm: &DataModel, name: &str) -> (InstanceId, InstanceId) {
+    let w = dm.runtime.world();
+    let players = w.dom.find_service("Players").unwrap();
+    let player = w.dom.find_first_child(players, name, false).unwrap();
+    let model = w.dom.ref_property(player, "Character").unwrap();
+    let root = w
+        .dom
+        .find_first_child(model, "HumanoidRootPart", false)
+        .unwrap();
+    (model, root)
+}
+
+fn position(dm: &DataModel, part: InstanceId) -> glam::Vec3 {
+    dm.runtime
+        .world()
+        .dom
+        .cframe_property(part, "CFrame")
+        .unwrap()
+        .position
+}
+
 mod adornments;
 mod assets;
 mod audio_api;
@@ -185,6 +236,7 @@ mod context_actions;
 mod effects;
 mod explosions;
 mod gui;
+mod movement;
 mod preload;
 mod scripts;
 mod session;

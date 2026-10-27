@@ -204,18 +204,24 @@ impl DataModel {
         } else {
             Vec::new()
         };
-        let (fallen, touches, reached) = {
+        let (fallen, touches, reached, humanoids) = {
             let mut w = self.runtime.world_mut();
             let w = &mut *w;
             w.physics.set_authority(&w.dom, authority);
             w.physics.sync(&mut w.dom);
+            let drives = rook_lua::humanoid_drives(w);
+            w.physics.drive_humanoids(drives);
             w.physics.step(dt);
-            for (model, root, drop) in rook_lua::standing(w) {
-                w.physics.stand(&mut w.dom, model, root, drop);
-            }
             let fallen = w.physics.write_back(&mut w.dom);
-            (fallen, w.physics.take_touches(), w.physics.take_reached())
+            let humanoids = w.physics.humanoid_reports(&w.dom);
+            (
+                fallen,
+                w.physics.take_touches(),
+                w.physics.take_reached(),
+                humanoids,
+            )
         };
+        self.runtime.humanoids_stepped(humanoids);
         self.fire_explosion_hits(blasts);
         // Both parts fire, the lower id first (observed: the part made
         // first fired first in Studio; the real order is unknown).

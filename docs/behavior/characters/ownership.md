@@ -42,9 +42,8 @@ process, so no real network delay):
   server scripts' moves of its character do reach it.
 - Only the player's own character is taken from its client: a pose for
   any other part is ignored.
-- Until the Humanoid controller (step 3), a client holds its character
-  upright at standing height over the floor below it (Approximation;
-  `rook_physics::Physics::stand`), so it stands on its feet.
+- The Humanoid controller runs where the character is simulated: on its
+  client ([movement](movement.md)).
 - `GetNetworkOwner` answers the player for its character's assemblies
   and nil (the server) for everything else; it and
   `GetNetworkOwnershipAuto` raise on a client and for parts outside

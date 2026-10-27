@@ -19,8 +19,10 @@ impl Physics {
             if !self.movers.is_empty() || !self.forced.is_empty() {
                 movers::apply(&mut self.world, self.movers.values(), h, &mut self.forced);
             }
+            self.steer_humanoids(h);
             self.world.step_with_events(&contacts::Mixer, &events);
         }
+        self.update_humanoids(dt as f32);
         // Stepping put every collider in place.
         self.stale.clear();
         for m in self.movers.values() {

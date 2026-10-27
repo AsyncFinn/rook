@@ -22,8 +22,9 @@ use threads::watchdog;
 
 pub use api::methods::assets::AssetFill;
 pub use api::methods::camera::{Lens, viewport_ray};
+pub use api::methods::characters::movement::drives as humanoid_drives;
 pub use api::methods::characters::ownership::authority;
-pub use api::methods::characters::{Avatar, BuildRig, RigSource, RigType, Scales, standing};
+pub use api::methods::characters::{Avatar, BuildRig, RigSource, RigType, Scales};
 pub use api::methods::web::{WebAnswer, WebRequest};
 pub use net::{NetValue, RemoteKind, RemoteMessage};
 pub use world::{EffectCall, Listener, LogEntry, MessageType, SignalBehavior, SoundControl};
@@ -385,6 +386,19 @@ impl Runtime {
             }
         }
         self.dispatch_since(start);
+    }
+
+    /// The Humanoid controller stepped: its reports' property changes and
+    /// state events.
+    pub fn humanoids_stepped(&self, reports: Vec<rook_physics::humanoid::Report>) {
+        if reports.is_empty() {
+            return;
+        }
+        let result =
+            self.guarded(|| api::methods::characters::movement::stepped(&self.lua, reports));
+        if let Err(e) = result {
+            tracing::warn!("Humanoid events: {e}");
+        }
     }
 
     /// Drain the deferred queue (a resumption point).

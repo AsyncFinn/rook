@@ -45,6 +45,13 @@ property in the database (the rest are server- or Studio-only):
 Confirmed for Sound's three (the server's sounds are heard on clients,
 at their speed); Inference from the database for the rest.
 
+An anchored part's `AssemblyLinearVelocity` and `AssemblyAngularVelocity`
+reach clients too: Roblox sends parts' velocities with their physics, and
+a client-simulated character rides an anchored conveyor in Studio
+(measured 2026-10-26; [movement](characters/movement.md)). A moving
+part's velocities don't: its pose and velocity come with physics, which
+Rook doesn't replicate that way yet (M10).
+
 ## From clients
 
 Changes made on a client stay there, except what Roblox takes from

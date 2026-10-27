@@ -70,7 +70,11 @@ Rook runs, against the 2018 Core-Scripts it can ship, is
      the Source and Sink pair, limited to owned assemblies.
    - *Done when*: a character moved on the client is where the server
      reads it the next frame, and server Touched handlers fire for it.
-3. **Movement and states**: the Humanoid controller.
+3. [**Movement and states**](../behavior/characters/movement.md): the
+   Humanoid controller. Built on 2026-10-26 and checked against Studio's
+   recordings (walk, jump, ledge, steps, slope, conveyor, truss, water,
+   MoveTo, state requests); walking an archive obby waits for step 5's
+   controls, since nothing turns keys into `Move` until then.
    - *Scope*: floor detection, `HipHeight`, `WalkSpeed`, `MoveDirection`,
      `Move` (277 files), `MoveTo` (2,138) with `MoveToFinished`,
      `WalkToPoint`, `JumpPower`, `JumpHeight` and `UseJumpPower`,
