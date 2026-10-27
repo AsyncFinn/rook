@@ -677,11 +677,7 @@ impl ClientHost {
     /// ids: the root part's CFrame and its assembly's velocities.
     fn character_pose(&self) -> Option<ToServer> {
         let w = self.client.runtime().world();
-        let character = w.dom.ref_property(w.dom.local_player()?, "Character")?;
-        let root = w
-            .dom
-            .ref_property(character, "PrimaryPart")
-            .or_else(|| w.dom.find_first_child(character, "HumanoidRootPart", false))?;
+        let root = rook_lua::character_root(&w.dom, w.dom.local_player()?)?;
         if !w.physics.simulates(root) {
             return None;
         }

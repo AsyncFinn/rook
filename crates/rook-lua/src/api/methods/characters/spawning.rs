@@ -98,7 +98,7 @@ fn body_parts(dom: &Dom, body: InstanceId) -> Vec<(Vec3, Vec3)> {
 
 /// How far the lowest point of `body` is below its root part.
 pub(super) fn feet_below_root(dom: &Dom, body: InstanceId) -> f32 {
-    let root = dom.find_first_child(body, "HumanoidRootPart", false);
+    let root = super::root_part(dom, body);
     let Some(root_y) = root
         .and_then(|r| dom.cframe_property(r, "CFrame"))
         .map(|c| c.position.y)

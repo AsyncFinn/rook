@@ -145,7 +145,9 @@ Studio, which Rook's run matches.
   moves, as before, and gives the game its CFrame.
 - The window holds the mouse as `MouseBehavior` says, unless a shown
   GuiButton is `Modal` or a TextBox has focus (Inference: typing frees it),
-  and only while it's focused. A held mouse's movement reaches scripts as
+  and only while it's focused. GUI keeps the buttons with `Modal` set as
+  the journal changes them, so asking costs nothing for the rest of the
+  GUI; the window asks every frame and on every held-mouse movement. A held mouse's movement reaches scripts as
   InputChanged with its `Delta` (summed over the frame, as the camera
   reads only the last), with the cursor at the window's center for
   LockCenter.
@@ -159,14 +161,28 @@ Studio, which Rook's run matches.
 - Facing the camera closes the turn within a 60 Hz frame, leaving out
   Studio's overshoot (Approximation).
 - The client steps once per drawn frame, that frame's length, as Roblox
-  runs a frame per drawn frame (Studio's playtest client ran at 60);
-  physics splits each frame into even steps of at most 1/240 s (a 60 Hz
-  frame is exactly four 240 Hz steps), so walking and jumping keep
-  Studio's pace at any frame rate and move by each frame's own length.
-  Whole 240 Hz steps with the rest carried over moved a 144 Hz client one
-  step, then two, which stuttered.
-- After each client frame the mouse looks under itself again (Mouse.Hit,
-  Target, ClickDetector hovers), as the camera moves while it holds still.
+  runs a frame per drawn frame (Studio's playtest client ran at 60).
+  Physics runs whole 240 Hz steps and carries the rest to the next frame.
+  Measured: a script reading a moving part each frame, in frames of 13
+  to 18 ms, saw it move by exactly 3, 4 or 5 steps, never part of one, so
+  scripts see the stepped state. Drawing doesn't: each moving part this
+  side simulates is drawn between its last two steps, by how far the
+  carried time is into the next (the standard interpolation, at most a
+  step behind), and the current camera is moved by as much as its
+  subject's root part is drawn away from where scripts see it, so the
+  character stays still on screen while the world moves evenly. A 144 Hz
+  client drawn at the stepped state moved one step, then two, frame to
+  frame. `Dom::drawn_cframe` is where anything draws a part or looks
+  through the camera.
+- The mouse looks under the cursor again (Mouse.Hit, Target,
+  ClickDetector hovers) when the camera, the cursor, `TargetFilter` or
+  anything queries see changed (`Physics::generation`), not every frame.
+  Measured: Mouse fires no `Changed` for any of its properties, moving the
+  cursor or the camera (`Move` fires), so Rook writes them without
+  signals.
+- A character's root part, wherever Rook needs it (movement,
+  `Humanoid.RootPart`, ClickDetector reach, the client sending its pose,
+  lassos), is one rule: `rook_lua::root_part`.
 - Interpolations and a Scriptable camera's Focus are updated after
   RenderStepped, before drawing (Inference).
 

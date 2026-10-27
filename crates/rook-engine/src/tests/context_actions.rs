@@ -97,3 +97,69 @@ fn a_locked_mouse_moves_by_deltas() {
         ["MouseMovement 3 -2"]
     );
 }
+
+/// A shown Modal button frees a locked mouse; hiding it, or turning Modal
+/// off, locks it again. Asking costs nothing for the rest of the GUI: a
+/// thousand asks over 5,000 other objects stay well under a frame.
+#[test]
+fn a_shown_modal_button_frees_the_mouse() {
+    let mut server = Server::new(&Options::default()).unwrap();
+    let starter = service(&server, "StarterGui");
+    let screen = add_under(&server, starter, "ScreenGui", "Hud", "");
+    add_under(
+        &server,
+        screen,
+        "LocalScript",
+        "Lock",
+        r#"
+        game:GetService("UserInputService").MouseBehavior = Enum.MouseBehavior.LockCenter
+        local hud = script.Parent
+        for i = 1, 5000 do
+            Instance.new("Frame", hud)
+        end
+        local menu = Instance.new("Frame")
+        menu.Name = "Menu"
+        local button = Instance.new("TextButton")
+        button.Name = "Close"
+        button.Modal = true
+        button.Parent = menu
+        menu.Parent = hud
+        "#,
+    );
+    server.start();
+    let mut session = Session::new(server, Options::default());
+    let index = session.join("Looker", 1).unwrap();
+    session.run_for(0.1);
+    let lock = |session: &Session| session.client(index).unwrap().mouse_lock();
+    assert_eq!(lock(&session), crate::MouseLock::Free);
+
+    let client = session.client(index).unwrap();
+    let start = std::time::Instant::now();
+    for _ in 0..1000 {
+        assert_eq!(client.mouse_lock(), crate::MouseLock::Free);
+    }
+    let took = start.elapsed();
+    assert!(took.as_millis() < 100, "a thousand asks took {took:?}");
+
+    let (menu, close) = {
+        let w = client.runtime().world();
+        let dom = &w.dom;
+        let gui = dom.find_first_child_of_class(dom.local_player().unwrap(), "PlayerGui");
+        let hud = dom.find_first_child(gui.unwrap(), "Hud", false).unwrap();
+        let menu = dom.find_first_child(hud, "Menu", false).unwrap();
+        (menu, dom.find_first_child(menu, "Close", false).unwrap())
+    };
+    let client = session.client_mut(index).unwrap();
+    client.set_property(menu, "Visible", Value::Bool(false));
+    session.run_for(0.05);
+    assert_eq!(lock(&session), crate::MouseLock::Center);
+    let client = session.client_mut(index).unwrap();
+    client.set_property(menu, "Visible", Value::Bool(true));
+    client.set_property(close, "Modal", Value::Bool(false));
+    session.run_for(0.05);
+    assert_eq!(lock(&session), crate::MouseLock::Center);
+    let client = session.client_mut(index).unwrap();
+    client.set_property(close, "Modal", Value::Bool(true));
+    session.run_for(0.05);
+    assert_eq!(lock(&session), crate::MouseLock::Free);
+}

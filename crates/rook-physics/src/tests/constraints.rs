@@ -418,3 +418,31 @@ fn hinge_held_part_overlapping_an_anchored_one_rests() {
     }
     assert!(most < 0.005, "moves {most} a frame");
 }
+
+/// Moving an anchored part re-reads only the constraints holding it, and
+/// what hangs from it follows.
+#[test]
+fn moving_a_part_rereads_only_its_constraints() {
+    let mut dom = Dom::new();
+    let rope = [("Length", Value::Float32(6.0))];
+    hanging(&mut dom, "RopeConstraint", &rope);
+    let moved = hanging(&mut dom, "RopeConstraint", &rope);
+    let ropes: Vec<InstanceId> = dom
+        .descendants(dom.find_service("Workspace").unwrap())
+        .into_iter()
+        .filter(|&i| dom.class_name(i) == "RopeConstraint")
+        .collect();
+    let base = dom.parent(ropes[1]).unwrap();
+    let mut physics = Physics::new();
+    run(&mut physics, &mut dom, 0.5);
+    let at = CFrame::from_position(Vec3::new(4.0, 1000.0, 0.0));
+    set(&mut dom, base, "CFrame", Value::CFrame(at));
+    physics.reread.clear();
+    run(&mut physics, &mut dom, 1.0 / 60.0);
+    assert_eq!(physics.reread, [ropes[1]]);
+    run(&mut physics, &mut dom, 3.0);
+    // Pulled along, it hangs within the rope (6) and its attachment (1)
+    // of the base.
+    let rope_end = position(&dom, moved) - Vec3::new(4.0, 999.5, 0.0);
+    assert!(rope_end.length() < 7.05, "{rope_end}");
+}

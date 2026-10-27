@@ -38,7 +38,7 @@ pub use query::{CastShape, Filter, Hit, Region};
 use assembly::bodies::{Body, Home, Static};
 use assembly::{Assembly, is_massless};
 use contacts::groups::CollisionGroups;
-use convert::{cframe_of, pose_of, to_glam, to_rapier};
+use convert::{between, cframe_of, pose_of, to_glam, to_rapier};
 use joints::constraints::{Drive, Spec, apply_drive, hinge_constraint_drive, revolute_angle};
 use joints::drives::{BuiltConstraint, DriveSource, Driven};
 use joints::movers::Mover;
@@ -206,6 +206,11 @@ pub struct Physics {
     pub(crate) fallen_height: f32,
     /// The last step's length, for advancing motors.
     last_dt: f64,
+    /// Time carried over to the next step, less than one.
+    pending: f64,
+    /// The moving bodies' poses before the last step, which drawing
+    /// interpolates from.
+    before_last_step: HashMap<RigidBodyHandle, Pose>,
     /// Which part each collider belongs to.
     pub(crate) colliders: HashMap<ColliderHandle, InstanceId>,
     groups: CollisionGroups,
@@ -226,9 +231,12 @@ pub struct Physics {
     reached: Vec<InstanceId>,
     /// Attachment constraints seen in the world.
     constraint_ids: HashSet<InstanceId>,
-    /// Movers and constraints to re-read at the next sync, or all of them.
+    /// Movers and constraints to re-read at the next sync.
     dirty: HashSet<InstanceId>,
-    all_dirty: bool,
+    attached: joints::attached::Attached,
+    /// The constraints the last syncs re-read, for tests.
+    #[cfg(test)]
+    reread: Vec<InstanceId>,
     constraints: HashMap<InstanceId, BuiltConstraint>,
     /// Driven revolute joints: RotateV, RotateP and HingeConstraints.
     drives: HashMap<InstanceId, Driven>,
@@ -245,6 +253,9 @@ pub struct Physics {
     terrain: terrain::Terrain,
     /// Terrain colliders were added since the last query.
     terrain_placed: bool,
+    /// Counts changes to what queries see: parts added, removed, moved or
+    /// changed, bodies stepped, terrain built.
+    generation: u64,
     /// Humanoids seen in Workspace (some may have left it since).
     humanoid_ids: HashSet<InstanceId>,
     /// TrussParts seen in Workspace, which Humanoids climb.
@@ -294,6 +305,8 @@ impl Physics {
             built: false,
             fallen_height: DEFAULT_FALLEN_HEIGHT,
             last_dt: 0.0,
+            pending: 0.0,
+            before_last_step: HashMap::default(),
             colliders: HashMap::default(),
             groups: CollisionGroups::default(),
             touches_use_groups: false,
@@ -305,7 +318,10 @@ impl Physics {
             reached: Vec::new(),
             constraint_ids: HashSet::default(),
             dirty: HashSet::default(),
-            all_dirty: false,
+            attached: Default::default(),
+            #[cfg(test)]
+            reread: Vec::new(),
+            generation: 0,
             constraints: HashMap::default(),
             drives: HashMap::default(),
             stale: HashSet::default(),
@@ -399,6 +415,13 @@ impl Physics {
         self.touch.take()
     }
 
+    /// A number that changes whenever what queries see may have: compare
+    /// it after a [`Physics::sync`] to know whether a query's answer can
+    /// be reused.
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
+
     /// Parts in the world.
     pub fn part_count(&self) -> usize {
         self.parts.len()
@@ -446,15 +469,13 @@ impl Physics {
         }
         let handed_over = std::mem::take(&mut self.handed_over);
         if !handed_over.is_empty() {
-            self.all_dirty = true;
             self.rebuild(dom, &props, handed_over);
         }
         self.reshape_unions(dom, &props);
         self.refresh_terrain(dom);
-        let all = std::mem::take(&mut self.all_dirty);
         let dirty = std::mem::take(&mut self.dirty);
-        self.refresh_constraints(dom, all, &dirty);
-        self.refresh_movers(dom, all, &dirty);
+        self.refresh_constraints(dom, &dirty);
+        self.refresh_movers(dom, &dirty);
         // Our own snapping writes aren't changes to apply next time.
         self.cursor = dom.journal().end();
         self.props = Some(props);

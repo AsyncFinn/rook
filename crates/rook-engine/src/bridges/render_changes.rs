@@ -92,32 +92,82 @@ pub fn adorned_part(dom: &Dom, id: InstanceId) -> Option<InstanceId> {
         "FloorWire" => dom.ref_property(id, "From"),
         "SelectionPartLasso" => dom
             .ref_property(id, "Humanoid")
-            .and_then(|h| humanoid_root_part(dom, h)),
+            .and_then(|h| rook_lua::humanoid_root(dom, h)),
         "Highlight" => dom.ref_property(id, "Adornee").or_else(|| dom.parent(id)),
         _ => dom.ref_property(id, "Adornee"),
     }
 }
 
-/// A Humanoid's root part as a lasso starts from it (measured: the
-/// HumanoidRootPart, not the Torso beside it), else its Torso
-/// (Inference).
-pub fn humanoid_root_part(dom: &Dom, humanoid: InstanceId) -> Option<InstanceId> {
-    let model = dom.parent(humanoid)?;
-    ["HumanoidRootPart", "Torso"]
-        .into_iter()
-        .filter_map(|name| dom.find_first_child(model, name, false))
-        .find(|&p| dom.is_a(p, "BasePart"))
+/// A Model's parts all redraw (a Highlight covers them).
+fn mark_part(dom: &Dom, changes: &mut RenderChanges, part: Option<InstanceId>) {
+    let Some(part) = part.filter(|_| !changes.full) else {
+        return;
+    };
+    if dom.is_a(part, "BasePart") {
+        changes.parts.insert(part);
+    } else if dom.is_a(part, "Model") && !dom.is_a(part, "WorldRoot") {
+        let parts = dom.descendants(part).into_iter();
+        changes
+            .parts
+            .extend(parts.filter(|&p| dom.is_a(p, "BasePart")));
+    }
 }
 
-/// The Humanoid whose root part `part` is.
-pub fn humanoid_of_root(dom: &Dom, part: InstanceId) -> Option<InstanceId> {
-    let model = dom.parent(part)?;
-    let humanoid = dom
-        .children(model)
-        .iter()
-        .copied()
-        .find(|&c| dom.class_name(c) == "Humanoid")?;
-    (humanoid_root_part(dom, humanoid) == Some(part)).then_some(humanoid)
+/// `id` is drawn somewhere else: it moves, and so do the FloorWires and
+/// lassos drawn with it (a FloorWire's path bends as either of its parts
+/// moves, and a lasso's as its Part or root part does).
+fn part_moved(dom: &Dom, changes: &mut RenderChanges, id: InstanceId) {
+    if !changes.full && !changes.parts.contains(&id) && dom.is_a(id, "BasePart") {
+        changes.moved.insert(id);
+    }
+    for &(r, _) in dom.referrers(id) {
+        if dom.class_name(r) == "FloorWire" || dom.class_name(r) == "SelectionPartLasso" {
+            mark_part(dom, changes, adorned_part(dom, r));
+        }
+    }
+    if let Some(h) = rook_lua::humanoid_of_root(dom, id)
+        && (dom.referrers(h).iter()).any(|&(r, _)| adorned_part(dom, r) == Some(id))
+    {
+        mark_part(dom, changes, Some(id));
+    }
+}
+
+impl DataModel {
+    /// Where this frame draws the moving parts this side simulates
+    /// (between their last two physics steps), and the current camera
+    /// moved with them when it follows one: a camera script places it
+    /// from where scripts see its subject, so it's moved by as much as the
+    /// subject's root part is drawn away from there, which keeps the
+    /// subject still on screen. Parts drawn somewhere new redraw.
+    pub(crate) fn place_drawn(&mut self) {
+        let camera = self.current_camera();
+        let mut w = self.runtime.world_mut();
+        let w = &mut *w;
+        let mut drawn: Vec<(InstanceId, rook_types::CFrame)> = w.physics.drawn_poses().collect();
+        if drawn.is_empty() && w.dom.drawn_ids().next().is_none() {
+            return;
+        }
+        let dom = &w.dom;
+        let followed = camera.and_then(|c| {
+            let subject = dom.ref_property(c, "CameraSubject")?;
+            let root = if dom.is_a(subject, "Humanoid") {
+                rook_lua::humanoid_root(dom, subject)?
+            } else {
+                subject
+            };
+            let at = drawn.iter().find(|(id, _)| *id == root)?.1.position;
+            let mut cf = dom.cframe_property(c, "CFrame")?;
+            cf.position += at - dom.cframe_property(root, "CFrame")?.position;
+            Some((c, cf))
+        });
+        drawn.extend(followed);
+        let before = w.dom.set_drawn(drawn);
+        let dom = &w.dom;
+        let changes = &mut self.render_changes;
+        for id in dom.drawn_ids().chain(before) {
+            part_moved(dom, changes, id);
+        }
+    }
 }
 
 /// The part properties render-change tracking treats specially.
@@ -187,20 +237,7 @@ impl DataModel {
         let wire = |id: InstanceId| dom.class_name(id) == "FloorWire";
         let materials =
             |id: InstanceId| dom.is_a(id, "MaterialService") || dom.is_a(id, "MaterialVariant");
-        // A Model's parts all redraw (a Highlight covers them).
-        let mark_part = |changes: &mut RenderChanges, part: Option<InstanceId>| {
-            let Some(part) = part.filter(|_| !changes.full) else {
-                return;
-            };
-            if dom.is_a(part, "BasePart") {
-                changes.parts.insert(part);
-            } else if dom.is_a(part, "Model") && !dom.is_a(part, "WorldRoot") {
-                let parts = dom.descendants(part).into_iter();
-                changes
-                    .parts
-                    .extend(parts.filter(|&p| dom.is_a(p, "BasePart")));
-            }
-        };
+        let mark_part = |changes: &mut RenderChanges, part| mark_part(dom, changes, part);
         // An adornment draws on its Adornee: its old and new ones change.
         let adorn = |changes: &mut RenderChanges,
                      adorned: &mut HashMap<InstanceId, InstanceId>,
@@ -234,29 +271,7 @@ impl DataModel {
                         // Physics writes these for every moving part every
                         // step; nothing draws them.
                     } else if *property == props.cframe {
-                        if !changes.full && !changes.parts.contains(id) && dom.is_a(*id, "BasePart")
-                        {
-                            changes.moved.insert(*id);
-                        }
-                        // A FloorWire's path bends as either of its parts
-                        // moves, and a lasso's as its Part does, so the
-                        // part they're drawn with is drawn again.
-                        for &(r, _) in dom.referrers(*id) {
-                            if wire(r) || dom.class_name(r) == "SelectionPartLasso" {
-                                mark_part(changes, adorned_part(dom, r));
-                            }
-                        }
-                        if matches!(dom.name(*id), "HumanoidRootPart" | "Torso") {
-                            let lassos = humanoid_of_root(dom, *id)
-                                .map(|h| dom.referrers(h))
-                                .unwrap_or_default();
-                            if lassos
-                                .iter()
-                                .any(|&(r, _)| adorned_part(dom, r) == Some(*id))
-                            {
-                                mark_part(changes, Some(*id));
-                            }
-                        }
+                        part_moved(dom, changes, *id);
                     } else if decorates(*id) {
                         mark_part(changes, dom.parent(*id));
                     } else if adornment(*id) {

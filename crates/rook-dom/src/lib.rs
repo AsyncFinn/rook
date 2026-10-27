@@ -15,6 +15,7 @@
 //! Roblox. Error texts are Inference until the conformance suite pins them.
 
 mod attributes;
+mod drawn;
 mod instance;
 mod journal;
 mod properties;
@@ -100,6 +101,8 @@ pub struct Dom {
     referrers: FxHashMap<InstanceId, Vec<(InstanceId, PropertyId)>>,
     name_prop: PropertyId,
     parent_prop: PropertyId,
+    /// Where things are drawn this frame, where it isn't their `CFrame`.
+    drawn: FxHashMap<InstanceId, rook_types::CFrame>,
 }
 
 impl Dom {
@@ -122,6 +125,7 @@ impl Dom {
             referrers: FxHashMap::default(),
             name_prop: prop("Name"),
             parent_prop: prop("Parent"),
+            drawn: FxHashMap::default(),
         }
     }
 

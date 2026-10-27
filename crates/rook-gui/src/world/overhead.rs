@@ -172,7 +172,7 @@ fn look(dom: &Dom, humanoid: InstanceId, viewer: &Viewer, eye: &Eye) -> Option<(
     let head = dom
         .find_first_child(model, "Head", false)
         .filter(|&h| dom.is_a(h, "BasePart"))?;
-    let head = dom.cframe_property(head, "CFrame")?.position;
+    let head = dom.drawn_cframe(head)?.position;
     // creator-docs HumanoidDisplayDistanceType: None hides it; Subject
     // uses its own distances, Viewer the viewer's (measured: raising the
     // viewer's showed tags 300 studs off).

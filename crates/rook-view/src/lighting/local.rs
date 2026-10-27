@@ -37,7 +37,7 @@ fn light(dom: &Dom, id: InstanceId) -> Option<LocalLight> {
     } else {
         return None;
     };
-    let part_cf = dom.cframe_property(part, "CFrame")?;
+    let part_cf = dom.drawn_cframe(part)?;
     let part_size = dom.vector3_property(part, "Size").unwrap_or(Vec3::ONE);
     let (cf, size) = if part == parent {
         (part_cf, part_size)

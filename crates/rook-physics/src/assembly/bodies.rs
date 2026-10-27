@@ -80,6 +80,8 @@ impl Physics {
             }
             todo.push(part);
         }
+        self.generation += 1;
+        let mut touched = todo.clone();
         let mut added = HashSet::default();
         let mut hinges = Vec::new();
         let mut clusters = assembly::Clusters::default();
@@ -102,6 +104,13 @@ impl Physics {
             if !self.hinges.contains_key(&joint) {
                 self.add_hinge(dom, joint);
             }
+        }
+        // Constraints and movers on these parts held bodies that are gone.
+        for h in &added {
+            touched.extend(self.bodies[h].asm.members.iter().map(|m| m.part));
+        }
+        for part in touched {
+            self.dirty.extend(self.attached.holders(part));
         }
         added
     }
@@ -451,7 +460,6 @@ impl Physics {
             .into_iter()
             .any(|p| matches!(dom.property(part, p), Some(Value::Vector3(v)) if v.0 != glam::Vec3::ZERO));
         if moving {
-            self.all_dirty = true;
             self.rebuild(dom, props, vec![part]);
             return;
         }
@@ -467,9 +475,7 @@ impl Physics {
         // Queries put it in place first, as for a moved body.
         self.stale_statics.insert(part);
         // Constraints and movers hold it by its place on the shared body.
-        if !self.constraints.is_empty() || !self.drives.is_empty() || !self.movers.is_empty() {
-            self.all_dirty = true;
-        }
+        self.dirty.extend(self.attached.holders(part));
     }
 
     /// A script moved `part` (or set its velocity): move its body to match.
@@ -493,6 +499,8 @@ impl Physics {
             _ => Vector::ZERO,
         };
         self.stale.insert(h);
+        // Drawn where it was put, not on the way there.
+        self.before_last_step.remove(&h);
         let rb = &mut self.world.bodies[h];
         rb.set_position(pose_of(&root), true);
         if rb.is_dynamic() {

@@ -46,15 +46,17 @@ impl DataModel {
                 && (has("PlayerModule") || has("CameraScript"))
         });
         (scriptable || followed).then(|| {
-            let cframe = dom
+            let cframe = dom.drawn_cframe(camera).unwrap_or(CFrame::IDENTITY);
+            // Drawn moved with its subject, Focus with it.
+            let shift = dom
                 .cframe_property(camera, "CFrame")
-                .unwrap_or(CFrame::IDENTITY);
+                .map_or(Vec3::ZERO, |cf| cframe.position - cf.position);
             CameraView {
                 cframe,
                 fov: dom.float_property(camera, "FieldOfView").unwrap_or(70.0),
                 focus: dom
                     .cframe_property(camera, "Focus")
-                    .map_or(cframe.position, |f| f.position),
+                    .map_or(cframe.position, |f| f.position + shift),
             }
         })
     }

@@ -62,7 +62,7 @@ pub(super) fn body(w: &mut World, player: InstanceId) -> Result<InstanceId, DomE
         }
     };
     w.dom.set_name(model, w.dom.name(player).to_owned())?;
-    if let Some(root) = w.dom.find_first_child(model, "HumanoidRootPart", false) {
+    if let Some(root) = super::root_part(&w.dom, model) {
         place_at(&mut w.dom, model, root, CFrame::IDENTITY)?;
         w.dom
             .set_property_by_name(model, "PrimaryPart", Value::Ref(Some(root.to_ref())))?;

@@ -1,5 +1,5 @@
 //! SelectionPartLasso: a bar from a Humanoid's root part
-//! (`rook_engine::humanoid_root_part`) to `Part`, drawn with the root
+//! (`rook_lua::humanoid_root`) to `Part`, drawn with the root
 //! part.
 
 use glam::Quat;
@@ -18,7 +18,7 @@ const THICKNESS: f32 = 0.25;
 pub(super) fn lasso(dom: &Dom, id: InstanceId, from: CFrame) -> Vec<(PartInstance, Pose)> {
     let Some(to) = dom
         .ref_property(id, "Part")
-        .and_then(|p| dom.cframe_property(p, "CFrame"))
+        .and_then(|p| dom.drawn_cframe(p))
     else {
         return Vec::new();
     };

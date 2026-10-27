@@ -85,6 +85,7 @@ impl DataModel {
         // Inference: the engine's own camera moves come after the
         // scripts', just before drawing.
         self.runtime.step_cameras();
+        self.place_drawn();
         // A script may have replaced the current camera.
         self.sync_viewport_size();
         self.ease_scrolls();

@@ -105,7 +105,7 @@ pub(crate) fn path(dom: &Dom, id: InstanceId) -> Option<Vec<Vec3>> {
 /// Part `id`'s center and the half size of its box in the world.
 fn world_box(dom: &Dom, id: InstanceId) -> Option<(Vec3, Vec3)> {
     let size = dom.vector3_property(id, "Size")?;
-    let cf = dom.cframe_property(id, "CFrame")?;
+    let cf = dom.drawn_cframe(id)?;
     let r = cf.rotation;
     let half = Mat3::from_cols(r.x_axis.abs(), r.y_axis.abs(), r.z_axis.abs()) * (size * 0.5);
     Some((cf.position, half))

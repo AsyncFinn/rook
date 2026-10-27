@@ -21,6 +21,7 @@ impl Physics {
             }
         }
         self.built = true;
+        self.generation += 1;
     }
 
     pub(crate) fn apply_changes(&mut self, dom: &mut Dom, props: &Props) {
@@ -33,11 +34,13 @@ impl Physics {
         let mut materials: Vec<InstanceId> = Vec::new();
         let mut attachments: Vec<InstanceId> = Vec::new();
         let mut workspace_changed = false;
+        let mut seen = false;
         let db = dom.database();
         for change in dom.journal().since(self.cursor) {
             match change {
                 Change::Property { id, property } => {
                     let p = *property;
+                    seen |= self.parts.contains_key(id) || Some(*id) == self.terrain.instance;
                     if Some(*id) == self.terrain.instance {
                         // Its voxels, or its collision group.
                         if Some(p) == props.smooth_grid || props.is_structural(p) {
@@ -70,6 +73,7 @@ impl Physics {
                     }
                 }
                 Change::Reparented { subtree, .. } => {
+                    seen = true;
                     for &i in subtree {
                         self.notice_humanoid(dom, i);
                         if Some(i) == self.terrain.instance || dom.class_name(i) == "Terrain" {
@@ -90,6 +94,9 @@ impl Physics {
         }
         if workspace_changed {
             self.read_workspace(dom, props);
+        }
+        if seen || workspace_changed {
+            self.generation += 1;
         }
         // A hinge's frames are fixed when it's created, so moving one
         // recreates it.
@@ -116,8 +123,6 @@ impl Physics {
         let rebuilt = if structural.is_empty() {
             HashSet::default()
         } else {
-            // Bodies the movers pushed and constraints joined may be gone.
-            self.all_dirty = true;
             self.rebuild(dom, props, structural)
         };
         for part in surfaces {
@@ -170,7 +175,6 @@ impl Physics {
         let mut parts = std::mem::take(&mut self.unions.reshaped);
         parts.retain(|p| self.parts.contains_key(p));
         if !parts.is_empty() {
-            self.all_dirty = true;
             self.rebuild(dom, props, parts);
         }
     }

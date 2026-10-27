@@ -6,6 +6,7 @@
 //!
 //! Facts below were observed in Studio 0.741 unless marked otherwise.
 
+pub(crate) mod attached;
 pub(crate) mod constraints;
 pub(crate) mod drives;
 pub(crate) mod movers;

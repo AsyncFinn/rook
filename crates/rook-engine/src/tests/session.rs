@@ -319,3 +319,130 @@ fn player_gui_from_the_server_reaches_only_its_player() {
     assert!(guis(&session, a).is_empty());
     assert_eq!(guis(&session, b), ["B.Early", "B.Late"]);
 }
+
+/// A ClickDetector's reach is measured from the character's root part,
+/// whatever it is called: here a body with a Torso and no
+/// HumanoidRootPart stands beside a detector the camera is too far from.
+#[test]
+fn click_detectors_reach_from_a_torso_root() {
+    let mut server = Server::new(&Options::default()).unwrap();
+    add_script(
+        &server,
+        "ServerScriptService",
+        "Main",
+        r#"
+        game.Players.CharacterAutoLoads = false
+        local button = Instance.new("Part")
+        button.Name = "Button"
+        button.Anchored = true
+        button.Size = Vector3.new(4, 4, 1)
+        button.CFrame = CFrame.new(0, 0, -10)
+        local cd = Instance.new("ClickDetector")
+        cd.MaxActivationDistance = 5
+        cd.Parent = button
+        button.Parent = workspace
+        game.Players.PlayerAdded:Connect(function(p)
+            local body = Instance.new("Model")
+            body.Name = p.Name
+            local torso = Instance.new("Part")
+            torso.Name = "Torso"
+            torso.Anchored = true
+            torso.CanQuery = false
+            torso.CFrame = CFrame.new(3, 0, -7)
+            torso.Parent = body
+            Instance.new("Humanoid").Parent = body
+            body.Parent = workspace
+            p.Character = body
+        end)
+        "#,
+    );
+    add_local_script(
+        &server,
+        "Input",
+        r#"
+        local cd = workspace:WaitForChild("Button"):WaitForChild("ClickDetector")
+        cd.MouseHoverEnter:Connect(function(p) print("hover", p.Name) end)
+        "#,
+    );
+    server.start();
+    let mut session = Session::new(server, Options::default());
+    let index = session.join("Clicker", 7).unwrap();
+    session.run_for(0.2);
+    {
+        let client = session.client_mut(index).unwrap();
+        client.set_viewport(800, 600);
+        let camera = client.current_camera().unwrap();
+        client.set_property(
+            camera,
+            "CFrame",
+            Value::CFrame(rook_types::CFrame::IDENTITY),
+        );
+    }
+    session.input(index, InputEvent::MouseMove { x: 400.0, y: 300.0 });
+    session.run_for(0.1);
+    assert_eq!(lines(session.client(index).unwrap()), ["hover Clicker"]);
+}
+
+/// The mouse looks under the cursor again only when the camera, the
+/// cursor or the world changed, and Mouse fires no Changed for what it
+/// writes (measured in Studio: none while the cursor and camera moved).
+#[test]
+fn the_mouse_looks_again_only_when_something_changed() {
+    let mut server = Server::new(&Options::default()).unwrap();
+    add_script(
+        &server,
+        "ServerScriptService",
+        "Main",
+        r#"
+        game.Players.CharacterAutoLoads = false
+        local wall = Instance.new("Part")
+        wall.Name = "Wall"
+        wall.Anchored = true
+        wall.Size = Vector3.new(8, 8, 1)
+        wall.CFrame = CFrame.new(0, 0, -10)
+        wall.Parent = workspace
+        task.wait(0.5)
+        wall.CFrame = CFrame.new(0, 0, -20)
+        "#,
+    );
+    add_local_script(
+        &server,
+        "Watch",
+        r#"
+        local mouse = game.Players.LocalPlayer:GetMouse()
+        mouse.Changed:Connect(function(name) print("changed", name) end)
+        "#,
+    );
+    server.start();
+    let mut session = Session::new(server, Options::default());
+    let index = session.join("Looker", 7).unwrap();
+    session.run_for(0.1);
+    {
+        let client = session.client_mut(index).unwrap();
+        client.set_viewport(800, 600);
+        let camera = client.current_camera().unwrap();
+        let cf = rook_types::CFrame::IDENTITY;
+        client.set_property(camera, "CFrame", Value::CFrame(cf));
+    }
+    session.input(index, InputEvent::MouseMove { x: 400.0, y: 300.0 });
+    session.run_for(0.05);
+    let looks = |session: &Session| session.client(index).unwrap().input.looks;
+    let target_z = |session: &Session| {
+        let client = session.client(index).unwrap();
+        let w = client.runtime().world();
+        let mouse = w.input.mouse_object.unwrap();
+        w.dom
+            .cframe_property(mouse, "Hit")
+            .unwrap()
+            .position
+            .z
+            .round()
+    };
+    let before = looks(&session);
+    session.run_for(0.2);
+    assert_eq!(looks(&session), before, "idle frames looked again");
+    assert_eq!(target_z(&session), -10.0);
+    session.run_for(0.4);
+    assert_eq!(target_z(&session), -20.0);
+    assert!(lines(session.client(index).unwrap()).is_empty());
+}

@@ -22,9 +22,7 @@ pub mod user_settings;
 pub use bridges::camera::{CameraView, MouseLock};
 pub use bridges::input::{CursorLook, InputEvent, ScreenPoint, SystemCursor};
 
-pub use bridges::render_changes::{
-    RenderChanges, adorned_part, humanoid_of_root, humanoid_root_part, is_effect_class,
-};
+pub use bridges::render_changes::{RenderChanges, adorned_part, is_effect_class};
 
 use std::collections::HashMap;
 use std::sync::Arc;

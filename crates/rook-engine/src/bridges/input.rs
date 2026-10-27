@@ -173,6 +173,11 @@ pub(crate) struct InputTracker {
     hover: Option<InstanceId>,
     /// The detector under the cursor when buttons 1 and 2 went down.
     pressed: [Option<InstanceId>; 2],
+    /// What the mouse last saw, and from where.
+    under: Option<world::Under>,
+    /// How many times the mouse has looked, for tests.
+    #[cfg(test)]
+    pub(crate) looks: u32,
     gui: gui::GuiInput,
     /// GUI took the last event (its `gameProcessedEvent`).
     processed: bool,

@@ -143,6 +143,7 @@ impl Physics {
             return;
         }
         profiling::scope!("Physics::refresh_terrain");
+        self.generation += 1;
         if self.update_terrain(dom) {
             return;
         }
@@ -249,6 +250,7 @@ impl Physics {
             let aabb = co.compute_broad_phase_aabb(&params, &self.world.bodies);
             self.world.broad_phase.set_aabb(&params, handle, aabb);
             self.terrain_placed = true;
+            self.generation += 1;
         }
     }
 

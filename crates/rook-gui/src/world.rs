@@ -33,7 +33,7 @@ impl Eye {
         let camera = dom
             .find_service("Workspace")
             .and_then(|ws| dom.ref_property(ws, "CurrentCamera"))?;
-        let frame = dom.cframe_property(camera, "CFrame")?;
+        let frame = dom.drawn_cframe(camera)?;
         let fov = dom.float_property(camera, "FieldOfView").unwrap_or(70.0);
         let height = dom.vector2_property(camera, "ViewportSize")?.0.y;
         Some(Self {
@@ -93,7 +93,7 @@ impl Hung {
         let on = self.on?;
         if dom.is_a(on, "BasePart") {
             return Some(Spot {
-                frame: dom.cframe_property(on, "CFrame")?,
+                frame: dom.drawn_cframe(on)?,
                 size: dom.vector3_property(on, "Size").unwrap_or(Vec3::ZERO),
             });
         }
@@ -103,7 +103,7 @@ impl Hung {
         let part = dom.parent(on).filter(|&p| dom.is_a(p, "BasePart"))?;
         let local = dom.cframe_property(on, "CFrame").unwrap_or_default();
         Some(Spot {
-            frame: dom.cframe_property(part, "CFrame")? * local,
+            frame: dom.drawn_cframe(part)? * local,
             size: Vec3::ZERO,
         })
     }

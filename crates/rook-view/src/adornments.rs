@@ -56,14 +56,11 @@ impl SceneCache {
 }
 
 fn adornments(dom: &Dom, id: InstanceId, cx: &mut Context<'_>) -> Vec<(PartInstance, Pose)> {
-    let (Some(size), Some(cf)) = (
-        dom.vector3_property(id, "Size"),
-        dom.cframe_property(id, "CFrame"),
-    ) else {
+    let (Some(size), Some(cf)) = (dom.vector3_property(id, "Size"), dom.drawn_cframe(id)) else {
         return Vec::new();
     };
     let mut holders: Vec<InstanceId> = Vec::new();
-    let lassos = rook_engine::humanoid_of_root(dom, id)
+    let lassos = rook_lua::humanoid_of_root(dom, id)
         .map(|h| dom.referrers(h))
         .unwrap_or_default();
     for &(holder, _) in dom.referrers(id).iter().chain(lassos) {

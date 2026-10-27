@@ -368,7 +368,7 @@ fn scale(dom: &mut Dom, model: InstanceId, from: Scales, to: Scales) -> Result<(
 /// automatically scaled R15 Humanoid's HipHeight follows (Studio 0.744:
 /// 2 for the rig file as it is, 2.1924 for a new description's body).
 fn hip_height(dom: &Dom, model: InstanceId) -> Option<f32> {
-    let root = dom.find_first_child(model, "HumanoidRootPart", false)?;
+    let root = super::root_part(dom, model)?;
     let to_root = dom.cframe_property(root, "CFrame")?.inverse();
     let root_half = dom.vector3_property(root, "Size")?.y / 2.0;
     let lowest = dom
@@ -389,7 +389,7 @@ fn hip_height(dom: &Dom, model: InstanceId) -> Option<f32> {
 
 /// Put each part where its joints hold it, from the root part out.
 fn snap(dom: &mut Dom, model: InstanceId) -> Result<(), DomError> {
-    let Some(root) = dom.find_first_child(model, "HumanoidRootPart", false) else {
+    let Some(root) = super::root_part(dom, model) else {
         return Ok(());
     };
     let joints: Vec<(InstanceId, InstanceId, CFrame, CFrame)> = dom

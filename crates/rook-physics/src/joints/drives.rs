@@ -87,17 +87,13 @@ impl Physics {
         self.dirty.insert(id);
     }
 
-    /// Re-read the movers that changed (`all` after a rebuild), and every
+    /// Re-read the movers that changed or whose parts did, and every
     /// fired rocket, whose target may have moved. A mover that changed
     /// wakes the bodies it acts on.
-    pub(crate) fn refresh_movers(&mut self, dom: &Dom, all: bool, dirty: &HashSet<InstanceId>) {
+    pub(crate) fn refresh_movers(&mut self, dom: &Dom, dirty: &HashSet<InstanceId>) {
         profiling::scope!("Physics::refresh_movers");
-        let ids: Vec<InstanceId> = if all {
-            self.mover_ids.iter().copied().collect()
-        } else {
-            let changed = dirty.iter().filter(|i| self.mover_ids.contains(i));
-            changed.chain(self.rockets.keys()).copied().collect()
-        };
+        let changed = dirty.iter().filter(|i| self.mover_ids.contains(i));
+        let ids: Vec<InstanceId> = changed.chain(self.rockets.keys()).copied().collect();
         let ws = dom.find_service("Workspace");
         for id in ids {
             let destroyed = dom.is_destroyed(id);
@@ -106,9 +102,16 @@ impl Physics {
                 self.rockets.remove(&id);
             }
             let fired = self.rockets.contains_key(&id);
+            let read = std::cell::RefCell::new(Vec::new());
             let mover = ws
                 .filter(|ws| !destroyed && dom.is_ancestor_of(*ws, id))
-                .and_then(|_| Mover::read(dom, id, fired, |p| self.frame_of(p)));
+                .and_then(|_| {
+                    Mover::read(dom, id, fired, |p| {
+                        read.borrow_mut().push(p);
+                        self.frame_of(p)
+                    })
+                });
+            self.attached.set(id, read.into_inner());
             let old = self.movers.remove(&id);
             if old != mover {
                 let bodies: Vec<_> = old.iter().chain(&mover).flat_map(Mover::bodies).collect();
@@ -122,33 +125,29 @@ impl Physics {
         }
     }
 
-    /// Build, rebuild or remove the joints of constraints that changed.
-    pub(crate) fn refresh_constraints(
-        &mut self,
-        dom: &Dom,
-        all: bool,
-        dirty: &HashSet<InstanceId>,
-    ) {
+    /// Build, rebuild or remove the joints of constraints that changed or
+    /// whose parts did.
+    pub(crate) fn refresh_constraints(&mut self, dom: &Dom, dirty: &HashSet<InstanceId>) {
         profiling::scope!("Physics::refresh_constraints");
-        let ids: Vec<InstanceId> = if all {
-            self.constraint_ids.iter().copied().collect()
-        } else {
-            let changed = dirty.iter().filter(|i| self.constraint_ids.contains(i));
-            changed.copied().collect()
-        };
+        let changed = dirty.iter().filter(|i| self.constraint_ids.contains(i));
+        let ids: Vec<InstanceId> = changed.copied().collect();
+        #[cfg(test)]
+        self.reread.extend(&ids);
         let ws = dom.find_service("Workspace");
         for id in ids {
             if dom.is_destroyed(id) {
                 self.constraint_ids.remove(&id);
             }
-            let wanted = ws
+            let spec = ws
                 .filter(|ws| dom.is_ancestor_of(*ws, id))
-                .and_then(|_| Spec::read(dom, id))
-                .and_then(|spec| {
-                    let (b0, o0) = self.frame_of(spec.parts[0])?;
-                    let (b1, o1) = self.frame_of(spec.parts[1])?;
-                    (b0 != b1).then_some((spec, [b0, b1], [o0, o1]))
-                });
+                .and_then(|_| Spec::read(dom, id));
+            let parts = spec.as_ref().map(|s| s.parts.to_vec()).unwrap_or_default();
+            self.attached.set(id, parts);
+            let wanted = spec.and_then(|spec| {
+                let (b0, o0) = self.frame_of(spec.parts[0])?;
+                let (b1, o1) = self.frame_of(spec.parts[1])?;
+                (b0 != b1).then_some((spec, [b0, b1], [o0, o1]))
+            });
             let current = self.constraints.get(&id).filter(|c| {
                 self.world.impulse_joints.get(c.joint).is_some()
                     && wanted.as_ref().is_some_and(|(spec, bodies, offsets)| {

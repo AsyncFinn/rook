@@ -433,3 +433,64 @@ fn camera_relative_rotation_faces_the_camera() {
     let out = drive("", "CFrame.new(0, 3, 0)", local, 1.0);
     assert!(near(numbers(&out, "yaw")[0], 90.0, 1.0), "{out:?}");
 }
+
+/// A client drawn at 144 Hz draws its walking character the same
+/// distance every frame, between its 240 Hz steps, with the camera
+/// following what's drawn; scripts still see whole steps (measured in
+/// Studio: a part moved 3, 4 or 5 steps a frame, never part of one).
+#[test]
+fn a_144_hz_client_draws_its_character_moving_evenly() {
+    let mut server = Server::new(&Options::default()).unwrap();
+    use_r6(&server);
+    add_script(&server, "ServerScriptService", "Setup", FLOOR);
+    add_local_script(
+        &server,
+        "Walk",
+        r#"local p = game.Players.LocalPlayer
+        local c = p.Character or p.CharacterAdded:Wait()
+        local h = c:WaitForChild("Humanoid")
+        local r = c:WaitForChild("HumanoidRootPart")
+        local camera = workspace.CurrentCamera
+        camera.CameraType = Enum.CameraType.Scriptable
+        game:GetService("RunService"):BindToRenderStep("follow", 200, function()
+            camera.CFrame = CFrame.new(r.Position + Vector3.new(0, 5, 10))
+        end)
+        task.wait(0.5)
+        h:Move(Vector3.new(0, 0, -1))"#,
+    );
+    server.start();
+    let mut session = Session::new(server, Options::default());
+    session.join("A", 1).unwrap();
+    let hz = 144.0;
+    let (mut server_time, mut client_time) = (0.0, 0.0);
+    let mut drawn = Vec::new();
+    let mut seen = Vec::new();
+    while client_time < 1.5 {
+        client_time += 1.0 / hz;
+        while server_time < client_time {
+            server_time += 1.0 / 60.0;
+            session.step_server();
+        }
+        session.step_clients_by(1.0 / hz);
+        let client = session.client(0).unwrap();
+        let w = client.runtime().world();
+        let root = rook_lua::character_root(&w.dom, w.dom.local_player().unwrap()).unwrap();
+        let camera = client.current_camera().unwrap();
+        let at = w.dom.drawn_cframe(root).unwrap().position;
+        let gap = w.dom.drawn_cframe(camera).unwrap().position - at;
+        drawn.push((at.z, gap));
+        seen.push(w.dom.cframe_property(root, "CFrame").unwrap().position.z);
+    }
+    // The last half second, walking at 16 studs a second.
+    let last = &drawn[drawn.len() - 72..];
+    for pair in last.windows(2) {
+        let moved = pair[0].0 - pair[1].0;
+        assert!((moved - 16.0 / hz as f32).abs() < 0.005, "{moved}");
+        assert!((pair[1].1 - glam::Vec3::new(0.0, 5.0, 10.0)).length() < 1e-3);
+    }
+    let step = 16.0 / 240.0;
+    for pair in seen[seen.len() - 72..].windows(2) {
+        let steps = (pair[0] - pair[1]) / step;
+        assert!((steps - steps.round()).abs() < 0.01, "{steps} steps");
+    }
+}

@@ -77,7 +77,7 @@ impl SceneCache {
         id: InstanceId,
         pose: &mut Pose,
     ) -> Option<(PartInstance, Decals)> {
-        let cf = dom.cframe_property(id, "CFrame")?;
+        let cf = dom.drawn_cframe(id)?;
         self.near = cf.position;
         let size = dom.vector3_property(id, "Size")?;
         let own = part_shape(dom, id);

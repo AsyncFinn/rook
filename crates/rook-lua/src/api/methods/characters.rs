@@ -13,14 +13,41 @@ pub(crate) use appearance::request as request_avatar;
 pub use appearance::{Avatar, Scales};
 pub use rigs::{BuildRig, RigSource, RigType};
 
-/// A Humanoid's root part (`RootPart`, and the legacy `Torso`, which reads
-/// the same): its model's HumanoidRootPart, else a legacy body's Torso,
-/// else an R15 body's UpperTorso (Observed).
-pub(crate) fn root_part(dom: &rook_dom::Dom, model: InstanceId) -> Option<InstanceId> {
-    ["HumanoidRootPart", "Torso", "UpperTorso"]
+/// The names a character's root part goes by, in the order they're looked
+/// for.
+const ROOT_NAMES: [&str; 3] = ["HumanoidRootPart", "Torso", "UpperTorso"];
+
+/// A character's root part, the one answer to "where is this character"
+/// (movement, `Humanoid.RootPart`, ClickDetector reach, the client's pose
+/// sync, lassos): its model's HumanoidRootPart, else a legacy body's
+/// Torso, else an R15 body's UpperTorso (Observed for `RootPart`; a lasso
+/// measured starting at the HumanoidRootPart, not the Torso beside it).
+pub fn root_part(dom: &rook_dom::Dom, model: InstanceId) -> Option<InstanceId> {
+    ROOT_NAMES
         .into_iter()
         .filter_map(|name| dom.find_first_child(model, name, false))
         .find(|&p| dom.is_a(p, "BasePart"))
+}
+
+/// `player`'s character's root part.
+pub fn character_root(dom: &rook_dom::Dom, player: InstanceId) -> Option<InstanceId> {
+    root_part(dom, dom.ref_property(player, "Character")?)
+}
+
+/// The root part of `humanoid`'s character.
+pub fn humanoid_root(dom: &rook_dom::Dom, humanoid: InstanceId) -> Option<InstanceId> {
+    root_part(dom, dom.parent(humanoid)?)
+}
+
+/// The Humanoid whose root part `part` is. Cheap for any other part: it
+/// looks no further than the part's name.
+pub fn humanoid_of_root(dom: &rook_dom::Dom, part: InstanceId) -> Option<InstanceId> {
+    if !ROOT_NAMES.contains(&dom.name(part)) {
+        return None;
+    }
+    let model = dom.parent(part)?;
+    let humanoid = dom.find_first_child_of_class(model, "Humanoid")?;
+    (root_part(dom, model) == Some(part)).then_some(humanoid)
 }
 
 pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
@@ -160,7 +187,7 @@ pub(crate) fn spawn_character(lua: &Lua, player: InstanceId) -> ApiResult<Instan
         movement::apply_starter_settings(&mut w.dom, character)?;
         let (at, spawn) = spawning::spawn_point(w, player, character);
         let dom = &mut w.dom;
-        if let Some(root) = dom.find_first_child(character, "HumanoidRootPart", false) {
+        if let Some(root) = root_part(dom, character) {
             rigs::place_at(dom, character, root, at)?;
         }
         // Measured: the character's Humanoid shows the player's DisplayName.

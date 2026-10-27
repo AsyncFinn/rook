@@ -10,6 +10,7 @@ mod draw;
 mod hits;
 mod images;
 mod layout;
+mod modal;
 mod order;
 mod scroll_input;
 mod style;
@@ -81,6 +82,8 @@ pub struct Gui {
     screen_drawn: Option<Arc<[GuiQuad]>>,
     /// The focused TextBox, which draws its caret.
     focus: Option<InstanceId>,
+    /// The GuiButtons with `Modal` set.
+    modals: modal::Modals,
     /// ScrollingFrames the wheel is moving.
     scrolling: FxHashMap<InstanceId, scroll_input::Eased>,
     /// Where each turning UIPageLayout's view is.
@@ -111,6 +114,7 @@ impl Default for Gui {
             world_drawn: Vec::new(),
             screen_drawn: None,
             focus: None,
+            modals: modal::Modals::default(),
             scrolling: FxHashMap::default(),
             turning: Turning::default(),
             canvases: FxHashMap::default(),
@@ -196,6 +200,7 @@ impl Gui {
     pub fn note_changes(&mut self, dom: &Dom) {
         if self.watch.is_none() {
             self.watch = Some(Watch::new(dom));
+            self.modals.seed(dom);
             if let Some(ws) = dom.find_service("Workspace") {
                 let found = dom.descendants(ws);
                 (self.overheads).note(dom, found.iter().copied());
@@ -205,6 +210,7 @@ impl Gui {
         }
         let watch = self.watch.as_ref().expect("made above");
         for change in dom.journal().since(self.cursor) {
+            self.modals.note(dom, change);
             if let Change::Reparented { subtree, .. } = change {
                 self.overheads.note(dom, subtree.iter().copied());
                 let found = subtree.iter().copied();

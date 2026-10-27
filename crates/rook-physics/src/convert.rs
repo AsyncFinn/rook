@@ -20,6 +20,16 @@ pub(crate) fn pose_of(cf: &CFrame) -> Pose {
     )
 }
 
+/// The pose `along` the way from `a` to `b` (0 to 1).
+pub(crate) fn between(a: &Pose, b: &Pose, along: f32) -> CFrame {
+    let (a, b) = (cframe_of(a), cframe_of(b));
+    let turn = glam::Quat::from_mat3(&a.rotation).slerp(glam::Quat::from_mat3(&b.rotation), along);
+    CFrame {
+        position: a.position.lerp(b.position, along),
+        rotation: glam::Mat3::from_quat(turn),
+    }
+}
+
 pub(crate) fn cframe_of(pose: &Pose) -> CFrame {
     let r = pose.rotation;
     let q = glam::Quat::from_xyzw(r.x, r.y, r.z, r.w);

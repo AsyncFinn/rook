@@ -131,8 +131,6 @@ pub struct SceneCache {
     model_highlights: adornments::highlight::ModelHighlights,
     /// Files that didn't load, reported once loading settles.
     report: Report,
-    /// `BasePart.CFrame`, which moved parts are read again by.
-    cframe: Option<rook_reflection::PropertyId>,
     /// The GUI layout the renderer was last given.
     gui_generation: Option<u64>,
     /// The GUI's images still loading, with the URLs it asked for each by.
@@ -169,11 +167,6 @@ impl SceneCache {
             wire_lines: Default::default(),
             model_highlights: Default::default(),
             report: Report::default(),
-            cframe: dom
-                .database()
-                .class_by_name("BasePart")
-                .and_then(|base| dom.database().find_canonical_property(base.id, "CFrame"))
-                .map(|p| p.id),
             gui_generation: None,
             gui_waiting: HashMap::new(),
             gui_arrived: Vec::new(),
@@ -261,7 +254,7 @@ impl SceneCache {
             let Some(&i) = self.index.get(id) else {
                 continue;
             };
-            let Some(Value::CFrame(cf)) = self.cframe.and_then(|p| dom.property(*id, p)) else {
+            let Some(cf) = dom.drawn_cframe(*id) else {
                 continue;
             };
             let entries =
