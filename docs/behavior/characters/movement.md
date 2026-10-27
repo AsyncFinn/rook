@@ -12,7 +12,8 @@ character ([ownership](ownership.md)), with the PlayerModule's controls
 turned off and `Humanoid:Move` and `Jump` set from a render-step binding
 after them (with the controls off, they still clear `MoveDirection` and
 `Jump` every frame). Positions and velocities were logged every
-Heartbeat. The default R15 body has `HipHeight` 2.0075, `WalkSpeed` 16,
+Heartbeat. The playtest body (the signed-in user's avatar, not the
+[default](rigs.md#r15)) has `HipHeight` 2.0075, `WalkSpeed` 16,
 `JumpHeight` 7.2 with `UseJumpPower` off, `MaxSlopeAngle` 89, under
 Workspace gravity 196.2. R6 steps were measured on a body from
 `Players:CreateHumanoidModelFromDescription`.

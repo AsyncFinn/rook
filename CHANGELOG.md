@@ -5,6 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- The default R15 character is the one Studio builds today, so the camera orbits at its head instead of its neck. Rook used Roblox's 2017 rig file, a shorter body with its head 2.15 studs above the root and `HipHeight` 1.35; it now uses the current one (the newer body and head meshes) and scales it the way Studio does, including `BodyTypeScale` and `ProportionScale`, which a new HumanoidDescription sets to 0.3 and 1. Sizes match Studio's and offsets are within 0.003 studs, with `HipHeight` 2.19. `HipHeight` now follows the legs whenever a body is rescaled. See [rigs and looks](docs/behavior/characters/rigs.md#r15).
 - The camera keeps up with your character. A client ran Roblox's camera script before the frame's physics and drew after it, so the camera aimed at where you were a frame ago and trailed you while walking; the render step now comes after physics, just before drawing, as Roblox's cycle has it.
 - In first person and shift lock your character turns to face where the camera looks, as in Roblox (`UserGameSettings.RotationType` CameraRelative).
 - Large places simulate much faster. Every anchored part had a physics body of its own, and the physics engine spends time on each body every step, moving or not; on an 85k-part place that was most of the client's frame once it simulated its own character, and much of the server's. Anchored parts on their own, with no joints and no velocity, now share one body.

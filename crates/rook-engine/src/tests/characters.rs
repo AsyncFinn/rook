@@ -80,7 +80,11 @@ fn r15_characters_come_from_the_rig_file() {
           <Vector3 name="size"><X>2</X><Y>1.6</Y><Z>1</Z></Vector3></Properties></Item>
         <Item class="Humanoid" referent="H"><Properties><string name="Name">Humanoid</string><token name="RigType">1</token><float name="HipHeight">1.35</float></Properties></Item>
         </Item></roblox>"#;
-    std::fs::write(dir.join("content/avatar/characterR15.rbxm"), rig).unwrap();
+    std::fs::write(
+        dir.join("content/avatar/characterR15DynamicHeadV2.rbxm"),
+        rig,
+    )
+    .unwrap();
     let session = session_with("", &["A"], 1.0 / 60.0, &install_options(&dir));
     let server = session.server();
     let (model, root) = character(server, "A");
@@ -97,6 +101,15 @@ fn r15_characters_come_from_the_rig_file() {
     let at = position(server, root);
     assert!((at.y - (100.0 + 1.0 + 0.01)).abs() < 0.05, "{at}");
     assert!((position(server, torso).y - at.y - 0.2).abs() < 1e-3);
+    // A new description's BodyTypeScale 0.3 (Studio: 1.9432, 1.6980, 1.0040).
+    let size = dom.vector3_property(torso, "Size").unwrap();
+    assert!(
+        (size - glam::Vec3::new(1.9432, 1.698, 1.004))
+            .abs()
+            .max_element()
+            < 1e-3,
+        "{size}"
+    );
     drop(w);
     let _ = std::fs::remove_dir_all(&dir);
 }

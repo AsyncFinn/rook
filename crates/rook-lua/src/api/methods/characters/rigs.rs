@@ -19,7 +19,7 @@ pub enum RigType {
 }
 
 /// Builds the default body of a rig type, detached in `dom` (the engine's,
-/// from Roblox's `avatar/characterR15.rbxm`), or `None` when its file
+/// from Roblox's `avatar/characterR15DynamicHeadV2.rbxm`), or `None` when its file
 /// can't be had.
 /// The builder itself.
 pub type BuildRig = dyn Fn(&mut Dom, RigType) -> Option<InstanceId> + Send + Sync;

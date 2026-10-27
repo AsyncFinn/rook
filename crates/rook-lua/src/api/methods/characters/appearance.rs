@@ -1,7 +1,7 @@
 //! How characters look: a player's avatar from the `avatar` web domain
 //! ([`super::super::web`]) when it has an endpoint, else Roblox's classic
 //! default look, and HumanoidDescriptions as far as body colors and
-//! scale. Body part meshes, clothes and accessories are M11's.
+//! scales. Body part meshes, clothes and accessories are M11's.
 
 use mlua::{Lua, MultiValue};
 use rook_dom::{Dom, DomError, InstanceId};
@@ -25,25 +25,81 @@ pub struct Avatar {
     pub scales: Scales,
 }
 
-/// HumanoidDescription's classic body scales.
+/// HumanoidDescription's body scales.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Scales {
     pub height: f32,
     pub width: f32,
     pub depth: f32,
     pub head: f32,
+    /// How far parts blend from their own sizes toward Rthro's (`BodyTypeScale`).
+    pub body_type: f32,
+    /// How far that Rthro shape is slender rather than wide (`ProportionScale`).
+    pub proportion: f32,
+}
+
+impl Scales {
+    /// The rig file's own sizes.
+    const UNSCALED: Self = Self {
+        height: 1.0,
+        width: 1.0,
+        depth: 1.0,
+        head: 1.0,
+        body_type: 0.0,
+        proportion: 0.0,
+    };
 }
 
 impl Default for Scales {
+    /// A new HumanoidDescription's.
     fn default() -> Self {
         Self {
-            height: 1.0,
-            width: 1.0,
-            depth: 1.0,
-            head: 1.0,
+            body_type: 0.3,
+            proportion: 1.0,
+            ..Self::UNSCALED
         }
     }
 }
+
+/// Each R15 part's size factor at `BodyTypeScale` 1, by its name without
+/// Left or Right: with `ProportionScale` 0 (wide), then 1 (slender).
+/// Factors between are bilinear in the two (Studio 0.744, measured to
+/// within 1e-5).
+const RTHRO: [(&str, [f32; 3], [f32; 3]); 9] = [
+    ("Head", [0.942, 0.942, 0.942], [0.896289, 0.942, 0.896289]),
+    (
+        "UpperTorso",
+        [1.033, 1.309, 1.14],
+        [0.905346, 1.204232, 1.013333],
+    ),
+    (
+        "LowerTorso",
+        [1.033, 1.309, 1.14],
+        [0.985687, 1.004605, 1.013333],
+    ),
+    (
+        "UpperArm",
+        [1.129, 1.342, 1.132],
+        [1.003556, 1.207921, 1.006222],
+    ),
+    (
+        "LowerArm",
+        [1.129, 1.342, 1.132],
+        [1.003556, 1.207921, 1.006222],
+    ),
+    ("Hand", [1.066, 1.174, 1.231], [0.947556, 1.174, 1.094222]),
+    (
+        "UpperLeg",
+        [1.023, 1.506, 1.023],
+        [0.976145, 1.40093, 0.909333],
+    ),
+    (
+        "LowerLeg",
+        [1.023, 1.506, 1.023],
+        [0.976145, 1.300518, 0.909333],
+    ),
+    ("Foot", [1.079, 1.267, 1.129], [1.02958, 1.133274, 1.003556]),
+];
 
 /// BrickColor numbers of Roblox's classic default look: Bright yellow
 /// head and arms, Bright blue torso, Br. yellowish green legs.
@@ -103,7 +159,9 @@ fn from_json(json: &Json) -> Avatar {
         "leftLegColorId",
         "rightLegColorId",
     ];
-    let scale = |key: &str| json["scales"][key].as_f64().unwrap_or(1.0) as f32;
+    let scale =
+        |key: &str, default: f32| json["scales"][key].as_f64().map_or(default, |v| v as f32);
+    let defaults = Scales::default();
     Avatar {
         rig: match json["playerAvatarType"].as_str() {
             Some("R6") => RigType::R6,
@@ -111,10 +169,12 @@ fn from_json(json: &Json) -> Avatar {
         },
         colors: std::array::from_fn(|i| brick(id(keys[i], DEFAULT_COLORS[i]))),
         scales: Scales {
-            height: scale("height"),
-            width: scale("width"),
-            depth: scale("depth"),
-            head: scale("head"),
+            height: scale("height", defaults.height),
+            width: scale("width", defaults.width),
+            depth: scale("depth", defaults.depth),
+            head: scale("head", defaults.head),
+            body_type: scale("bodyType", defaults.body_type),
+            proportion: scale("proportion", defaults.proportion),
         },
     }
 }
@@ -166,7 +226,7 @@ pub(super) fn dress(dom: &mut Dom, model: InstanceId, avatar: &Avatar) -> Result
     let Some(humanoid) = dom.find_first_child_of_class(model, "Humanoid") else {
         return Ok(());
     };
-    scale(dom, model, Scales::default(), avatar.scales)?;
+    scale(dom, model, Scales::UNSCALED, avatar.scales)?;
     let description = dom.create_by_name("HumanoidDescription")?;
     write_description(dom, description, avatar)?;
     dom.set_parent(description, Some(humanoid))
@@ -193,6 +253,8 @@ fn write_description(dom: &mut Dom, d: InstanceId, avatar: &Avatar) -> Result<()
         ("WidthScale", s.width),
         ("DepthScale", s.depth),
         ("HeadScale", s.head),
+        ("BodyTypeScale", s.body_type),
+        ("ProportionScale", s.proportion),
     ] {
         dom.set_property_by_name(d, name, Value::Float32(v))?;
     }
@@ -206,22 +268,48 @@ fn read_description(dom: &Dom, d: InstanceId) -> Avatar {
             avatar.colors[i] = c;
         }
     }
-    let scale = |name| dom.float_property(d, name).unwrap_or(1.0);
+    let s = avatar.scales;
+    let scale = |name, default| dom.float_property(d, name).unwrap_or(default);
     avatar.scales = Scales {
-        height: scale("HeightScale"),
-        width: scale("WidthScale"),
-        depth: scale("DepthScale"),
-        head: scale("HeadScale"),
+        height: scale("HeightScale", s.height),
+        width: scale("WidthScale", s.width),
+        depth: scale("DepthScale", s.depth),
+        head: scale("HeadScale", s.head),
+        body_type: scale("BodyTypeScale", s.body_type),
+        proportion: scale("ProportionScale", s.proportion),
     };
     avatar
 }
 
-/// Resize an R15 body from scales `from` to `to` the classic way: each
-/// part, its attachments and its ends of joints by width, height and
-/// depth (the head by its own scale), and the Humanoid's HipHeight by
-/// height, when the Humanoid scales automatically. Approximation: Roblox
-/// also blends toward its Rthro proportions (`BodyTypeScale`,
-/// `ProportionScale`) and keeps parts' original sizes to scale from.
+/// A part's size factor at `scales`: its Rthro blend times the classic
+/// scales (the head's own, the rest's width, height and depth), which
+/// multiply in Studio 0.744.
+fn part_factor(name: &str, scales: Scales) -> glam::Vec3 {
+    let side = name
+        .strip_prefix("Left")
+        .or_else(|| name.strip_prefix("Right"))
+        .unwrap_or(name);
+    let rthro =
+        RTHRO
+            .iter()
+            .find(|(n, ..)| *n == side)
+            .map_or(glam::Vec3::ONE, |&(_, wide, slender)| {
+                let shape = glam::Vec3::from(wide).lerp(slender.into(), scales.proportion);
+                glam::Vec3::ONE.lerp(shape, scales.body_type)
+            });
+    let classic = if name == "Head" {
+        glam::Vec3::splat(scales.head)
+    } else {
+        glam::Vec3::new(scales.width, scales.height, scales.depth)
+    };
+    rthro * classic
+}
+
+/// Resize an R15 body from scales `from` to `to`, when its Humanoid
+/// scales automatically: each part, its attachments and its ends of
+/// joints by [`part_factor`], then its HipHeight to the legs' new
+/// length. Matches Studio for bodies of Classic parts (the rig file's);
+/// other `AvatarPartScaleType`s are M11's.
 fn scale(dom: &mut Dom, model: InstanceId, from: Scales, to: Scales) -> Result<(), DomError> {
     let Some(humanoid) = dom.find_first_child_of_class(model, "Humanoid") else {
         return Ok(());
@@ -233,15 +321,8 @@ fn scale(dom: &mut Dom, model: InstanceId, from: Scales, to: Scales) -> Result<(
         return Ok(());
     }
     let factor = |part: InstanceId, dom: &Dom| {
-        if dom.name(part) == "Head" {
-            glam::Vec3::splat(to.head / from.head)
-        } else {
-            glam::Vec3::new(
-                to.width / from.width,
-                to.height / from.height,
-                to.depth / from.depth,
-            )
-        }
+        let name = dom.name(part);
+        part_factor(name, to) / part_factor(name, from)
     };
     let parts: Vec<InstanceId> = dom
         .descendants(model)
@@ -276,11 +357,34 @@ fn scale(dom: &mut Dom, model: InstanceId, from: Scales, to: Scales) -> Result<(
             }
         }
     }
-    if let Some(hip) = dom.float_property(humanoid, "HipHeight") {
-        let hip = hip * to.height / from.height;
+    snap(dom, model)?;
+    if let Some(hip) = hip_height(dom, model) {
         dom.set_property_by_name(humanoid, "HipHeight", Value::Float32(hip))?;
     }
-    snap(dom, model)
+    Ok(())
+}
+
+/// How far the legs reach below the root part's bottom, which an
+/// automatically scaled R15 Humanoid's HipHeight follows (Studio 0.744:
+/// 2 for the rig file as it is, 2.1924 for a new description's body).
+fn hip_height(dom: &Dom, model: InstanceId) -> Option<f32> {
+    let root = dom.find_first_child(model, "HumanoidRootPart", false)?;
+    let to_root = dom.cframe_property(root, "CFrame")?.inverse();
+    let root_half = dom.vector3_property(root, "Size")?.y / 2.0;
+    let lowest = dom
+        .children(model)
+        .iter()
+        .filter(|&&p| {
+            let name = dom.name(p);
+            dom.is_a(p, "BasePart") && (name.contains("Leg") || name.contains("Foot"))
+        })
+        .filter_map(|&p| {
+            let at = to_root * dom.cframe_property(p, "CFrame")?;
+            let size = dom.vector3_property(p, "Size")?;
+            Some(at.position.y - at.box_reach(size).y)
+        })
+        .reduce(f32::min)?;
+    Some(-lowest - root_half)
 }
 
 /// Put each part where its joints hold it, from the root part out.

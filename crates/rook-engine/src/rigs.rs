@@ -1,4 +1,4 @@
-//! Roblox's R15 rig for characters' bodies: `avatar/characterR15.rbxm`
+//! Roblox's R15 rig for characters' bodies: `avatar/characterR15DynamicHeadV2.rbxm`
 //! from its client packages or the user's install, read when the first
 //! R15 character spawns and never shipped
 //! (docs/design/policies.md#content-and-assets). Its parts, Motor6Ds and
@@ -11,7 +11,7 @@ use rbx_dom_weak::WeakDom;
 use rook_lua::{RigSource, RigType};
 
 /// The rig file's `rbxasset://` path.
-const R15: &str = "rbxasset://avatar/characterR15.rbxm";
+const R15: &str = "rbxasset://avatar/characterR15DynamicHeadV2.rbxm";
 
 /// Bodies for a server, read through `resolver`.
 pub(crate) fn source(resolver: Arc<rook_content::Resolver>) -> RigSource {

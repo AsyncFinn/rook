@@ -8,7 +8,8 @@ controls are Roblox's own PlayerModule, run from Roblox's packages as the
 the engine members it uses and what Studio's engine does around it.
 Measured in a Baseplate playtest on the client over Studio's MCP: wheel
 and right-button input through `user_mouse_input`, keys through
-`user_keyboard_input`, reads from `execute_luau`. The default R15 body has
+`user_keyboard_input`, reads from `execute_luau`. The playtest body (the
+signed-in user's avatar, not the [default](rigs.md#r15)) has
 `HipHeight` 2.0075; the place's StarterPlayer has `CameraMaxZoomDistance`
 128.
 
