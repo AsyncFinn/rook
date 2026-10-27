@@ -71,4 +71,4 @@ When a player's Humanoid's health reaches 0, `Died` fires on the server
 and, with `Players.CharacterAutoLoads`, the player respawns
 `Players.RespawnTime` later (measured: the new character came 5.3 s
 after Died with the default 5; Rook takes exactly `RespawnTime`). The
-body falling apart, regeneration and `Died` on the client are step 4's.
+body falling apart, regeneration and `Died` on the client are step 5's.

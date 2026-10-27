@@ -9,3 +9,7 @@ stop being downloadable.
 2. A pack format that's documented and checked (hashes, versions), so
    archives can share packs.
 3. Reports of what a place still can't find, offline.
+4. Rook's own PlayerModule and CoreGui, matching modern Roblox's behavior
+   by behavior, checked against Roblox's running in Rook, so a place
+   plays with nothing of Roblox's but its assets
+   ([decided](../design/research.md#open-questions) 2026-10-26).

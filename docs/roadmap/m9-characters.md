@@ -6,11 +6,11 @@ Animation 1,812, HopperBin 1,813, Team 1,086, Animator 964, VehicleSeat
 `LoadAnimation` in 2,022. Needs physics, the head mesh, terrain and GUI
 (the backpack and health bar are M8's CoreScripts).
 
-Roblox's own character scripts are in the user's Studio install as plain
-Luau: the PlayerModule (camera and controls), `RbxCharacterSounds`, the
-R15 Animate script and the health regeneration script. Which of those
-Rook runs, against the 2018 Core-Scripts it can ship, is
-[undecided](unscheduled.md#undecided) and is settled before step 5.
+Roblox's own character scripts are in its client packages as Luau: the
+PlayerModule (camera and controls), `RbxCharacterSounds`, the R15
+Animate script and the health regeneration script. Rook runs them from
+the packages, as it does the CoreScripts, and never ships them (decided
+2026-10-26); its own replacements are [M18](m18-offline-content.md)'s.
 
 1. ✅ **Rigs and spawning** ([rigs and looks](../behavior/characters/rigs.md),
    [spawning and teams](../behavior/characters/spawning.md),
@@ -73,7 +73,7 @@ Rook runs, against the 2018 Core-Scripts it can ship, is
 3. [**Movement and states**](../behavior/characters/movement.md): the
    Humanoid controller. Built on 2026-10-26 and checked against Studio's
    recordings (walk, jump, ledge, steps, slope, conveyor, truss, water,
-   MoveTo, state requests); walking an archive obby waits for step 5's
+   MoveTo, state requests); walking an archive obby waits for step 4's
    controls, since nothing turns keys into `Move` until then.
    - *Scope*: floor detection, `HipHeight`, `WalkSpeed`, `MoveDirection`,
      `Move` (277 files), `MoveTo` (2,138) with `MoveToFinished`,
@@ -93,16 +93,9 @@ Rook runs, against the 2018 Core-Scripts it can ship, is
    - *Done when*: the recordings match within a tenth of a stud, the
      state sequences match, and a character walks, jumps and climbs
      through an archive obby.
-4. **Health and death**: `Health`, `MaxHealth`, `TakeDamage` (blocked by
-   a ForceField), regeneration, `Died`, `BreakJointsOnDeath`,
-   `RequiresNeck`, `BreakJoints` (2,108 files) and `MakeJoints` (2,212)
-   on characters, a body falling apart, and respawning.
-   - *Studio questions*: the order of `Died`, `HealthChanged`, state
-     changes and joint breaking; what removing the Neck does; regen rate.
-   - *Done when*: conformance cases for damage and death pass, and a
-     killed character falls apart and respawns as in Studio.
-5. **Camera and controls**: the default camera and control scripts
-   (source as decided above), and the engine members they use.
+4. **Camera and controls**: the default camera and control scripts
+   (Roblox's PlayerModule, as decided above), and the engine members
+   they use.
    - *Scope*: `CameraType` (Custom, Scriptable for the archive's
      cutscenes, Follow, Track, Attach, Watch, Fixed, Orbital),
      `CameraSubject`, zoom limits, first person (`CameraMode`), shift
@@ -114,6 +107,14 @@ Rook runs, against the 2018 Core-Scripts it can ship, is
      they call that Rook lacks; the list is this step's work.
    - *Done when*: the camera follows, zooms, collides and locks as in
      Studio in a reference place, and archive cutscenes play.
+5. **Health and death**: `Health`, `MaxHealth`, `TakeDamage` (blocked by
+   a ForceField), regeneration, `Died`, `BreakJointsOnDeath`,
+   `RequiresNeck`, `BreakJoints` (2,108 files) and `MakeJoints` (2,212)
+   on characters, a body falling apart, and respawning.
+   - *Studio questions*: the order of `Died`, `HealthChanged`, state
+     changes and joint breaking; what removing the Neck does; regen rate.
+   - *Done when*: conformance cases for damage and death pass, and a
+     killed character falls apart and respawns as in Studio.
 6. **Animation**, enough for the Animate scripts: Animator (964 files),
    `LoadAnimation`, `AnimationTrack` play, stop, fade, `AdjustSpeed`
    (1,172 files), `AdjustWeight`, `Looped`, priorities and blending (the
