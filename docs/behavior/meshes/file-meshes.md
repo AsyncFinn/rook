@@ -147,8 +147,7 @@ and a 2016 MeshPart whose file Rook gets as version 2.00.
   asset delivery gives Rook as version 2.00 with one level, drew at five
   (2,657, 1,328, 645, 246, 125) in Studio, as a MeshPart only. Studio asks
   asset delivery's batch API for a content representation
-  (`contentRepresentationSpecifier` in its logs, `fidelity` and
-  `skipGenerationIfNotExist` in the executable); Rook's requests for a
+  (`contentRepresentationSpecifier` in its logs); Rook's requests for a
   `mesh` representation got the source file or "not found". Rook draws
   such meshes at their one level for now.
 - *Not levels, but nearby:* at `EditQualityLevel` 1 to 10 the sphere
