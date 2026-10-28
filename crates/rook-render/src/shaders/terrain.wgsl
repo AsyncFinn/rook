@@ -86,12 +86,29 @@ fn wave(p: vec2<f32>) -> vec3<f32> {
     return vec3(h, d);
 }
 
+// The width of a tile of blades (`rook_terrain::grass::TILE_STUDS`),
+// placed at its corner.
+const BLADE_TILE_STUDS: f32 = 32.0;
+
+// Whether the blade numbered `n` (0 to 1) of the tile placed at `tile`
+// is drawn, in the frame and in the shadow map alike. As Studio's grass
+// shaders cull (`FFlagGrassGPUDensityCull`): one density for the whole
+// draw, from how far it is, against a number per blade; a culled blade's
+// vertices all go to one point, so it's never rasterized. Rook's density
+// is 1 out to 60 studs from the tile's center, falling to 0.4 at the
+// edge of where grass is drawn (observed: Studio's blades are as dense
+// at 100 studs, sparser at 200; Approximation for the curve).
+fn blade_drawn(tile: vec3<f32>, n: f32) -> bool {
+    let center = tile.xz + vec2(BLADE_TILE_STUDS * 0.5);
+    let dist = distance(center, g.camera_pos.xz);
+    return n <= 1.0 - 0.6 * smoothstep(60.0, g.terrain.w, dist);
+}
+
 // Where a terrain vertex at `world` is drawn: water moved by the waves;
 // a grass blade's vertex (`uv`: a number from 0 to 1 for its blade, its
 // height above the blade's foot) swayed, leant into GlobalWind, and sunk
-// into the ground as blades thin out from 60 studs away (observed:
-// Studio's blades are as dense at 100 studs, sparser at 200) and towards
-// the edge of where grass is drawn.
+// into the ground towards the edge of where grass is drawn, as Studio's
+// grass vertex shaders sink them by their distance.
 fn terrain_motion(world: vec3<f32>, packed: u32, uv: vec2<f32>) -> vec3<f32> {
     var p = world;
     if (packed & TERRAIN_WATER) != 0u {
@@ -114,10 +131,7 @@ fn terrain_motion(world: vec3<f32>, packed: u32, uv: vec2<f32>) -> vec3<f32> {
         p += side * (sin(lean) * h + sway) - vec3(0.0, (1.0 - cos(lean)) * h, 0.0);
         let reach = g.terrain.w;
         let dist = distance(p, g.camera_pos.xyz);
-        var grow = clamp((reach - dist) / (reach * 0.25), 0.0, 1.0);
-        if uv.x > 1.0 - 0.6 * smoothstep(60.0, reach, dist) {
-            grow = 0.0;
-        }
+        let grow = clamp((reach - dist) / (reach * 0.25), 0.0, 1.0);
         p.y -= (h + 0.1) * (1.0 - grow);
     }
     return p;

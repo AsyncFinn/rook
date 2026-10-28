@@ -62,6 +62,13 @@ Observed:
   a blade, read off its pixels: Approximation for the uniforms). This
   settles the user's 2026-10-27 close-up, where shades varied and the
   ground under a clump was darker: facing and shadows.
+- **Culling** (the same shaders): each draw of blades has one density
+  (a uniform), and a blade whose hash of its index is above it puts all
+  its vertices at one point, so it's never rasterized, in the frame and
+  in the shadow map alike (`FFlagGrassGPUDensityCull` in Studio's
+  settings); blades also sink into the ground by their distance from
+  the camera. How the density falls with distance isn't in the shaders
+  (observed: as dense at 100 studs, sparser at 200; Approximation).
   The vertex shaders also pick a color per blade from a 64-entry table
   (`CB3`), but no GLSL grass fragment shader reads it (Unknown whether
   another API's does; the shades seen are explained without it).
@@ -79,14 +86,17 @@ from both sides, in Grass's top texture's average recolored as the ground
 is (`blade_color`), lit as Studio's shaders light them (`blade_surface`,
 the foot taking half the tip's sun), and casting into the shadow map
 where they're drawn (the shadow pass sways and sinks them as the frame
-does). Measured on the same views, Rook covers
+does), and culled as Studio culls them: one density per 32-stud tile
+from its distance (full out to 60 studs, 0.4 at the edge) against each
+blade's number, a culled blade collapsed to a point in both passes
+(`blade_drawn`). Measured on the same views, Rook covers
 within 0.04 of Studio at every height side on, and 0.43 of the ground
 from above against 0.50. The player builds blades in 32-stud tiles
 within 200 studs of the camera and drops a tile's mesh when the camera
 leaves; in the shader they sway (a wave of 2.6 studs crossing in 3
 seconds, 0.035 studs per stud of height), turn into the wind by 50 ×
-tanh(speed / 15) degrees, thin out from 60 studs away to 40% at the
-edge, and sink into the ground over the last quarter. Approximation: the
+tanh(speed / 15) degrees, and sink into the ground over the last
+quarter of the reach. Approximation: the
 planting points and sway are Rook's own, fitted to the measurements
 (Studio's vertex shaders sway by value noise on the blade's position,
 from uniforms they don't fix).
@@ -97,3 +107,10 @@ runs each from the grass and two from the saved camera): no difference
 beyond the noise (medians 4.5 to 9.9 ms for both, other builds running
 alongside). There are 2.3 times as many blades as first built but each is
 2 triangles instead of 6, and water takes a second texture sample.
+ Blades lit by
+Studio's terms and casting into the shadow map, culled per tile as
+Studio culls per draw (2026-10-28, `--bench 300` on the Baseplate with a
+1024-stud Grass field, the camera at blade height, shadow map on,
+alternating with the build before): the shadow pass from 0.13 to 0.28
+ms, the main pass unchanged at 0.35. Casting every blade without the
+cull took the shadow pass from 2.8 to 10.4 ms on a loaded machine.

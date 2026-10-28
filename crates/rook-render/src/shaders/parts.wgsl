@@ -27,7 +27,7 @@ import package::lighting::{shade, shade_pbr, fog_units};
 import package::tone::{albedo_units, frame, frame_of, linear_to_srgb, srgb_to_linear};
 import package::terrain::{
     terrain_motion, terrain_position, terrain_share, water_surface, recolor, blade_surface,
-    BLADE_FOOT_SUN, BLADE_TIP_SUN,
+    BLADE_FOOT_SUN, BLADE_TIP_SUN, blade_drawn,
 };
 
 @vertex
@@ -41,6 +41,10 @@ fn vs_main(v: VertexIn) -> VertexOut {
     let local_normal = normalize(v.normal / max(abs(v.i_size), vec3(1e-4)) * sign(v.i_size));
     var out: VertexOut;
     out.clip = g.view_proj * vec4(world, 1.0);
+    if packed >= TERRAIN_FACE && packed != 255u && (packed & TERRAIN_BLADES) != 0u
+        && !blade_drawn(v.i_position, v.uv.x) {
+        out.clip = vec4(0.0, 0.0, 0.0, 1.0);
+    }
     out.world = world;
     out.normal = normalize(instance_rotation(v) * local_normal);
     out.color = vec4(srgb_to_linear(v.i_color.rgb), v.i_color.a);
@@ -107,9 +111,12 @@ fn vs_shadow(v: ShadowIn) -> @builtin(position) vec4<f32> {
     }
     let rotation = mat3x3<f32>(v.i_right, v.i_up, v.i_back);
     var world = placed(v.position, v.i_position, rotation, v.i_size);
-    // Waves and blades cast where they're drawn.
+    // Waves and blades cast where they're drawn, culled blades not at all.
     let packed = v.face & 255u;
     if packed >= TERRAIN_FACE && packed != 255u {
+        if (packed & TERRAIN_BLADES) != 0u && !blade_drawn(v.i_position, v.uv.x) {
+            return vec4(0.0, 0.0, 0.0, 1.0);
+        }
         world = terrain_motion(world, packed, v.uv);
     }
     return g.shadow_view_proj * vec4(world, 1.0);
