@@ -247,13 +247,15 @@ impl Renderer {
         match z {
             None if part.over => Target::Layer(OVER_Z, key),
             Some(z) => Target::Layer(z, key),
-            // ForceField always shows what's behind it (observed); an
-            // unlit adornment's image is cut out by its alpha.
+            // ForceField always shows what's behind it (observed), and
+            // terrain water draws both its sides; an unlit adornment's
+            // image is cut out by its alpha.
             None if part.transparency > 0.0
                 || part.on_top
                 || (part.light != Light::Lit && part.texture.is_some())
                 || part.layer != Layer::Base
                 || part.material == Material::ForceField
+                || part.material == Material::Water
                 || part.maps.alpha == MapAlpha::Transparency =>
             {
                 Target::Transparent

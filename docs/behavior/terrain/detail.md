@@ -1,6 +1,6 @@
 # Terrain level of detail
 
-Checked against Studio 0.744 on 2026-10-27.
+Checked against Studio 0.744 on 2026-10-28.
 
 Studio draws far terrain from coarser voxels: rings around the camera,
 each meshed from voxels twice the size of the ring inside it, the
@@ -51,11 +51,21 @@ Two traps:
   the strip, the steps at 1,024 and 2,048 didn't move. Each level's ring
   snaps to a grid of that level's chunks rather than following the camera
   smoothly (Confirmed).
-- Coarser levels sit higher and fatter: a coarse voxel averages its eight
-  smaller ones, and a surface reaches half a voxel past its solid voxels
-  ([surface](surface.md)), so each ring's surface sits a little above the
-  one inside it and the strip shows a step at every ring's edge
-  (Observed). No cracks showed at the steps.
+- Far rings lie where near ones do (Observed, 2026-10-28, on a 3,072-stud
+  Grass slab 24 studs thick with hills and a lake): seen along the slab's
+  side from its corner, its top and bottom edges run straight to the
+  horizon across every ring, where a coarse surface reaching half its own
+  voxel past its solid would step up 2 to 62 studs. A small step does
+  show at a ring's edge where a hill crosses it (seen at 4 degrees). No
+  cracks showed at the steps.
+- The rings are squares on the ground, not boxes (Observed, 2026-10-28):
+  straight above the lake, from 320, 1,200 and 4,000 studs up (fields of
+  view 70, 20 and 6 degrees), the shore, a 14-stud rock and a sand island
+  draw in 4-stud cells, as close up. A box 256 studs across each way
+  around the camera would draw them in 32-stud cells or coarser from
+  1,200 up.
+- Small shapes fade into far rings rather than standing out: the slab's
+  14-stud rock and the hills' rock faces stay smooth at 1,500 studs.
 - Nothing is cut off far away: from 20,000 studs off, the strip still
   draws, as one thick slab of the coarsest level (Observed).
 - How far each ring reaches by graphics quality wasn't measured: Studio
@@ -78,28 +88,44 @@ the strip to confirm it.
   move them by the coarse cell, so far Brick is boxes of the coarse cells,
   as in Studio. The levels are made once when the voxels load, and an
   edit averages again only the coarse chunks over what it changed.
-- Level `k` draws a box of 4×4×4 of its 32-voxel chunks (256 studs
-  across each side of its center at level 0, doubling), less the box of
-  the level inside it; the last level draws everything outside the box
-  before it, however far. Each box's center is a corner of the next
-  level's chunks, so the hole it leaves there is whole chunks, and moves
-  only once the camera is half that chunk and a sixteenth more away, so a
-  camera at an edge doesn't flip it back and forth. Boxes are 3D, and
-  each is kept inside the next.
+- Level `k` draws a square of 4×4 columns of its 32-voxel chunks (256
+  studs across each side of its center at level 0, doubling), every chunk
+  in them however high or low, less the square of the level inside it;
+  the last level draws everything outside the square before it, however
+  far. Each square's center is a corner of the next level's chunks, so
+  the hole it leaves there is whole columns, and moves only once the
+  camera is half that chunk and a sixteenth more away, so a camera at an
+  edge doesn't flip it back and forth. Each square is kept inside the
+  next.
+- A coarse voxel's surface crosses where its eight 4-stud voxels' would:
+  half a 4-stud voxel past the solid it holds, measured from its own
+  bottom, rather than half its own voxel past it, so thick ground lies at
+  the same height in every ring. A voxel too empty to reach past its
+  center crosses there, so shapes smaller than half its voxel shrink
+  away. Rock's random vertex shift stays its 4-stud size far away
+  (scaled with the coarse cell, it threw far rock's vertices tens of
+  studs about); Brick's cubes and the quantized materials' steps still
+  scale with the cell.
 - From a camera on a grid corner that puts the edges at 256, 512, 1,024,
   2,048 and 4,096 studs: Studio's except the 8-stud ring, which ends at
   512 instead of about 768 (Approximation: a ring ending at 768 isn't
   whole chunks of the next level, so it can't nest the same way).
-- Chunks are hung with skirts: from every edge where a chunk's surface
-  ends at the chunk's side, a strip two of its voxels deep, down along the
-  vertices' normals, in the surface's own layers. Where rings meet, the
-  higher side's strip covers the crack; inside a ring the strips lie in
-  the solid. Skirts are drawn only: collisions use the bare 4-stud
-  surface.
-- Water has no skirts (they'd show through it). Coarse water is moved
-  down by what its surface gains from the coarser voxels, so open water
-  lies at the same height in every ring and meets without a step
-  (Rook's choice; Studio's far water wasn't measured).
+- Chunks are hung with skirts: from every edge where a chunk's
+  upward-facing surface ends at the chunk's side, a strip one of its
+  voxels deep, straight down, in the surface's own layers (Ulrich's
+  chunked level of detail hangs them so). Where rings meet, the higher
+  side's strip covers the crack; inside a ring the strips lie in the
+  solid. Strips hung from undersides, along the normals and two voxels
+  deep, stood up through any slab thinner than that as walls and shards
+  (the stray triangles seen from 300 studs up). Skirts are drawn only:
+  collisions use the bare 4-stud surface.
+- Water has no skirts (they'd show through it); its surface crosses as a
+  solid's does, so open water lies at the same height in every ring.
+- Left (Approximation): a slab thinner than a coarse voxel collapses to
+  the voxel's middle in that ring, a step of up to half the voxel where
+  rings meet (a 24-stud slab drops 26 studs past 2,048 studs out);
+  Studio's thin slabs that far out weren't measured. Settled by the
+  slab's side seen at a narrow field of view past 2,048 studs.
 - When the camera moves a box, the chunks whose level changed are meshed
   on a thread of their own, one after another, while the old ones stay
   drawn, then swapped in all at once: no hole, nothing drawn twice, and
@@ -120,3 +146,12 @@ place's terrain, before and after: the terrain near the camera matches
 (the pixels that differ are moving parts), and only the far shore
 differs, coarser. Level 0 is meshed exactly as before, so near terrain
 keeps its comparison with Studio ([surface](surface.md)).
+
+*Costs of the 2026-10-28 rings* (release builds, `--bench 300 --fly 8`
+across each place's terrain, base and new runs alternating, twice, on the
+archive's three largest voxel places): frames, scene updates and the
+slowest ring moves unchanged within noise (the largest, 25 million water
+voxels: median frame 3.40 and 2.81 ms before, 3.01 and 3.06 after; 72k
+to 89k triangles before, 55k to 62k after; the mountain place's frames
+are its content loading in both builds). A ring move meshes whole
+columns, but the empty chunks in them are skipped as before.

@@ -26,6 +26,8 @@ pub(crate) enum Pipe {
     Opaque,
     Layer,
     Transparent,
+    /// Terrain water, both sides.
+    Water,
     GlassDepth,
     GlassFilter,
     GlassSurface,
@@ -292,6 +294,7 @@ impl Renderer {
             Pipe::Opaque => &p.opaque,
             Pipe::Layer => &p.layer,
             Pipe::Transparent => &p.transparent,
+            Pipe::Water => &p.water,
             Pipe::GlassDepth => &p.glass_depth,
             Pipe::GlassFilter => &p.glass_filter,
             Pipe::GlassSurface => &p.glass_surface,

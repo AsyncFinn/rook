@@ -176,14 +176,16 @@ fn all_uniform(grid: &Grid, chunk: IVec3) -> bool {
 /// solid slab's does, 2 studs lower).
 pub const WATER_DROP: f32 = VOXEL_STUDS / 2.0;
 
-/// How far water's surface is moved down at voxels `scale` studs on a
-/// side: [`WATER_DROP`], and on coarser voxels also what their surface
-/// gains by reaching half a coarser voxel out, so open water lies at the
-/// same height in every ring and meets itself without a step or a crack
-/// (Rook's choice: skirts would show through it; Studio's far water
-/// wasn't measured).
-fn water_drop(scale: f32) -> f32 {
-    WATER_DROP + (scale - VOXEL_STUDS) / 2.0
+/// How far from an inside voxel's center towards its outside neighbor's
+/// its surface crosses, as a share of the way, the voxels `scale` studs on
+/// a side and the inside one `fill` full: where the 4-stud voxels it
+/// averages would put it, half a 4-stud voxel past their solid, rather than
+/// half a coarse voxel past it, so far rings lie where near ones do and
+/// meet without a step (Studio's do: a slab's edge runs straight to the
+/// horizon across them). At 4 studs, `fill` itself; a coarse voxel too
+/// empty to reach past its center crosses there.
+fn crossing(fill: f32, scale: f32) -> f32 {
+    ((fill * scale - (scale - VOXEL_STUDS) / 2.0) / scale).clamp(0.0, 1.0)
 }
 
 /// Voxels read before a chunk's first one: edges start one voxel before

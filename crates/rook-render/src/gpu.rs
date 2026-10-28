@@ -171,10 +171,12 @@ impl Instance {
                 // and SmoothPlastic parts and meshes without a texture
                 // (observed: Metal, Wood, Neon and a textured mesh at 1
                 // show none of the sky; `shaders_glsl3.pack` has it in no
-                // other shader).
-                let reflects = matches!(p.material, Material::Plastic | Material::SmoothPlastic)
-                    && p.texture.is_none()
-                    && !maps.on_mesh_uv;
+                // other shader). Terrain water reflects by its own
+                // `WaterReflectance`, in the water shaders.
+                let reflects = p.material == Material::Water
+                    || matches!(p.material, Material::Plastic | Material::SmoothPlastic)
+                        && p.texture.is_none()
+                        && !maps.on_mesh_uv;
                 material = [
                     // In 255ths, as Studio's vertices carry it.
                     if reflects {

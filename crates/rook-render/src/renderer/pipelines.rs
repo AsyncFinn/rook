@@ -36,6 +36,8 @@ pub(crate) struct BindLayouts<'a> {
 pub(crate) struct Pipelines {
     pub(crate) opaque: wgpu::RenderPipeline,
     pub(crate) transparent: wgpu::RenderPipeline,
+    /// Terrain water: transparent, not culled.
+    pub(crate) water: wgpu::RenderPipeline,
     /// Decals and Textures over what's drawn.
     pub(crate) layer: wgpu::RenderPipeline,
     /// See-through Glass's nearest depth, before its filter, so a union's
@@ -153,13 +155,14 @@ impl Pipelines {
         } else {
             wgpu::StencilState::default()
         };
-        let make = |label,
-                    fragment,
-                    blend: Option<wgpu::BlendState>,
-                    depth_write: bool,
-                    compare: wgpu::CompareFunction,
-                    bias: wgpu::DepthBiasState,
-                    stencil: wgpu::StencilState| {
+        let make_faces = |cull: Option<wgpu::Face>,
+                          label,
+                          fragment,
+                          blend: Option<wgpu::BlendState>,
+                          depth_write: bool,
+                          compare: wgpu::CompareFunction,
+                          bias: wgpu::DepthBiasState,
+                          stencil: wgpu::StencilState| {
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some(label),
                 layout: Some(&pipeline_layout),
@@ -170,7 +173,7 @@ impl Pipelines {
                     buffers: &buffers,
                 },
                 primitive: wgpu::PrimitiveState {
-                    cull_mode: Some(wgpu::Face::Back),
+                    cull_mode: cull,
                     ..Default::default()
                 },
                 depth_stencil: Some(wgpu::DepthStencilState {
@@ -195,6 +198,18 @@ impl Pipelines {
                 cache: None,
             })
         };
+        let make = |label, fragment, blend, depth_write, compare, bias, stencil| {
+            make_faces(
+                Some(wgpu::Face::Back),
+                label,
+                fragment,
+                blend,
+                depth_write,
+                compare,
+                bias,
+                stencil,
+            )
+        };
         let shadow_pipeline = shadow(device, layouts.globals, &shader, &shadow_buffers);
         let highlight = |on_top| {
             super::highlights::pipeline(device, layouts.globals, &shader, &buffers, on_top)
@@ -212,6 +227,18 @@ impl Pipelines {
         );
         let transparent_pipeline = make(
             "rook transparent",
+            "fs_main",
+            Some(wgpu::BlendState::ALPHA_BLENDING),
+            false,
+            wgpu::CompareFunction::Greater,
+            Default::default(),
+            Default::default(),
+        );
+        // Terrain water, seen from either side: Studio draws its underside
+        // (`docs/behavior/terrain/water.md#seen-from-below`).
+        let water_pipeline = make_faces(
+            None,
+            "rook water",
             "fs_main",
             Some(wgpu::BlendState::ALPHA_BLENDING),
             false,
@@ -385,6 +412,7 @@ impl Pipelines {
             ribbons,
             opaque: opaque_pipeline,
             transparent: transparent_pipeline,
+            water: water_pipeline,
             layer: layer_pipeline,
             glass_depth,
             glass_filter,

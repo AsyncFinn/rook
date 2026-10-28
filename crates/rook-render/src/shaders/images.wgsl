@@ -166,8 +166,9 @@ fn sky_uv(face: u32, d: vec3<f32>) -> vec2<f32> {
 }
 
 // The sky's linear light towards `d`: the skybox image facing nearest it,
-// a mip down (reflections pick their face per pixel, so there are no
-// derivatives to pick one), or the sky's color from the horizon to
+// at full detail as Studio's water samples its sky (its smooth water
+// shaders read the sky at mip 0; reflections pick their face per pixel, so
+// there are no derivatives to pick a mip by), or the sky's color from the horizon to
 // overhead before its images are up and without the image table.
 @if(image_table)
 fn sky_toward(d: vec3<f32>) -> vec3<f32> {
@@ -183,7 +184,7 @@ fn sky_toward(d: vec3<f32>) -> vec3<f32> {
     if sky_slot(face) == 0u {
         return plain_sky_toward(d);
     }
-    return textureSampleLevel(images_srgb[sky_slot(face)], image_sampler, sky_uv(face, d), 1.0).rgb;
+    return textureSampleLevel(images_srgb[sky_slot(face)], image_sampler, sky_uv(face, d), 0.0).rgb;
 }
 @else
 fn sky_toward(d: vec3<f32>) -> vec3<f32> {

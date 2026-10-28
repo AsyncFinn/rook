@@ -64,7 +64,7 @@ impl SceneCache {
         let levels = &self.terrain.levels;
         let mut draw = HashSet::new();
         for level in 0..LEVELS {
-            for c in rings.chunks(level, &levels[usize::from(level)]) {
+            for c in rings.chunks(level, &levels[usize::from(level)], self.terrain.rows) {
                 draw.insert((level, c));
             }
         }

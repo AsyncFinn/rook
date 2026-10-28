@@ -186,8 +186,8 @@ impl Mesher<'_> {
                 continue;
             }
             let (from, to) = if ia { (a, b) } else { (b, a) };
-            let fill = self.pass.fill(self.block.at(from));
-            sum += self.center(from) + (self.center(to) - self.center(from)) * fill;
+            let t = crossing(self.pass.fill(self.block.at(from)), self.scale);
+            sum += self.center(from) + (self.center(to) - self.center(from)) * t;
             n += 1;
         }
         let mut position = sum / n.max(1) as f32;
@@ -205,7 +205,7 @@ impl Mesher<'_> {
                 material
             }
             Pass::Water => {
-                position.y -= water_drop(self.scale);
+                position.y -= WATER_DROP;
                 TerrainMaterial::Water
             }
         };

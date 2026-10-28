@@ -2,19 +2,15 @@
 //! around the camera, as Studio does (`docs/behavior/terrain/detail.md`)
 //! and as clipmaps do (Losasso and Hoppe, "Geometry clipmaps", 2004).
 //!
-//! Level 0 is the 4-stud voxels; each level after averages the one
-//! before's 2×2×2 blocks ([`pyramid`]), so its voxels are twice the size
-//! and so are its chunks of 32. Level `k` draws a box of 4×4×4 of its
-//! chunks around the camera (half-width 256 studs at level 0, doubling)
-//! less the box of level `k - 1` inside it; the last level draws all its
-//! chunks outside the box before it, however far. Each box sits on the
-//! grid of the next level's chunks, so the hole it leaves in that level
-//! is whole chunks, and only moves when the camera has gone more than
-//! half that chunk (and a little, so it doesn't flicker back and forth)
-//! from its center: crossing a ring re-meshes only the chunks whose level
-//! changed ([`Rings::follow`]).
+//! Each level averages the one before's 2×2×2 blocks ([`pyramid`]).
+//! Level `k` draws a square of 4×4 columns of its chunks around the
+//! camera, every chunk in them however high or low, less the square of
+//! level `k - 1`; the last level draws everything outside. Each square
+//! sits on the next level's chunk grid and moves only once the camera is
+//! more than half that chunk (and a little) from its center, so crossing a
+//! ring re-meshes only the chunks whose level changed ([`Rings::follow`]).
 
-use glam::{IVec3, Vec3};
+use glam::{IVec2, IVec3, Vec3};
 
 use crate::grid::edit::Bounds;
 use crate::mesh::{Detail, can_have_surface, chunks_to_mesh};
@@ -28,8 +24,8 @@ pub const LEVELS: u8 = 6;
 /// The coarsest level, drawn everywhere the others aren't.
 const LAST: u8 = LEVELS - 1;
 
-/// How much farther than half a chunk the camera goes from a box's center
-/// before the box moves, in chunks.
+/// How much farther than half a chunk the camera goes from a square's center
+/// before the square moves, in chunks.
 const SLACK: f32 = 1.0 / 16.0;
 
 /// A chunk's edge in studs at `level`.
@@ -72,24 +68,25 @@ pub fn update_pyramid(levels: &mut [Grid], changed: &[Bounds]) -> Vec<Vec<Bounds
     out
 }
 
-/// Where each level's box is: for levels 0 to the one before the last,
-/// its center, a corner of the next level's chunks (in those chunks).
+/// Where each level's square is: for levels 0 to the one before the
+/// last, its center on the ground (X and Z), a corner of the next level's
+/// chunks (in those chunks).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Rings {
-    centers: [IVec3; LAST as usize],
+    centers: [IVec2; LAST as usize],
 }
 
 impl Rings {
     /// The rings around `camera`.
     pub fn around(camera: Vec3) -> Self {
         let mut rings = Rings {
-            centers: [IVec3::ZERO; LAST as usize],
+            centers: [IVec2::ZERO; LAST as usize],
         };
         rings.place(camera, true);
         rings
     }
 
-    /// Move the boxes the camera has left. Returns whether any moved.
+    /// Move the squares the camera has left. Returns whether any moved.
     pub fn follow(&mut self, camera: Vec3) -> bool {
         let old = *self;
         self.place(camera, false);
@@ -98,12 +95,12 @@ impl Rings {
 
     fn place(&mut self, camera: Vec3, fresh: bool) {
         for k in (0..LAST as usize).rev() {
-            let at = camera / chunk_studs(k as u8 + 1);
+            let at = glam::Vec2::new(camera.x, camera.z) / chunk_studs(k as u8 + 1);
             let center = &mut self.centers[k];
-            if fresh || (at - center.as_vec3()).abs().max_element() > 0.5 + SLACK {
-                *center = at.round().as_ivec3();
+            if fresh || (at - center.as_vec2()).abs().max_element() > 0.5 + SLACK {
+                *center = at.round().as_ivec2();
             }
-            // Inside the next box, so the levels nest.
+            // Inside the next square, so the levels nest.
             if let Some(outer) = self.centers.get(k + 1).map(|c| *c * 2) {
                 self.centers[k] = self.centers[k].clamp(outer - 1, outer + 1);
             }
@@ -112,7 +109,8 @@ impl Rings {
 
     /// Whether chunk `chunk` of `level` is drawn at that level.
     pub fn draws(&self, level: u8, chunk: IVec3) -> bool {
-        let within = |lo: IVec3, hi: IVec3| chunk.cmpge(lo).all() && chunk.cmplt(hi).all();
+        let column = IVec2::new(chunk.x, chunk.z);
+        let within = |lo: IVec2, hi: IVec2| column.cmpge(lo).all() && column.cmplt(hi).all();
         let k = usize::from(level);
         let outer = level == LAST || within(self.centers[k] * 2 - 2, self.centers[k] * 2 + 2);
         let inner = level > 0 && within(self.centers[k - 1] - 1, self.centers[k - 1] + 1);
@@ -120,8 +118,9 @@ impl Rings {
     }
 
     /// The chunks of `level` drawn at it that can have a surface, `grid`
-    /// holding that level's voxels, in chunk order.
-    pub fn chunks(&self, level: u8, grid: &Grid) -> Vec<IVec3> {
+    /// holding that level's voxels and `rows` the lowest and highest
+    /// level-0 chunk rows that can, in chunk order.
+    pub fn chunks(&self, level: u8, grid: &Grid, rows: (i32, i32)) -> Vec<IVec3> {
         if level == LAST {
             return chunks_to_mesh(grid)
                 .into_iter()
@@ -129,11 +128,13 @@ impl Rings {
                 .collect();
         }
         let first = self.centers[usize::from(level)] * 2 - 2;
+        let step = 1 << level;
+        let (lo, hi) = (rows.0.div_euclid(step) - 1, rows.1.div_euclid(step));
         let mut out = Vec::new();
         for x in 0..4 {
-            for y in 0..4 {
+            for y in lo..=hi {
                 for z in 0..4 {
-                    let c = first + IVec3::new(x, y, z);
+                    let c = IVec3::new(first.x + x, y, first.y + z);
                     if self.draws(level, c) && can_have_surface(grid, c) {
                         out.push(c);
                     }

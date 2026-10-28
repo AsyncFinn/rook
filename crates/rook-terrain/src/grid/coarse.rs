@@ -2,9 +2,9 @@
 //! block of the finer one, as far terrain is meshed
 //! (`docs/behavior/terrain/detail.md`). A coarse voxel holds the eight's
 //! mean occupancy of whichever of solid or water holds more (water
-//! counting what solid voxels hold), solids taking the material with the most occupancy among them, so a coarse
-//! surface lies where the fine one does, half a coarse voxel out instead
-//! of half a fine one (Studio's coarser rings sit higher too).
+//! counting what solid voxels hold), solids taking the material with the
+//! most occupancy among them, so it holds as much as they do; the mesher
+//! places its surface where theirs would lie (`mesh::crossing`).
 
 use glam::IVec3;
 

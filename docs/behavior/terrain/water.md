@@ -73,8 +73,39 @@ shores) and frames unchanged.
 With the camera under the island lake's surface (Studio 0.744), Studio
 draws the surface's underside: rippled and pale, the sky and the island
 above the water showing faintly through it, the island's foot below the
-water clear. Rook culls water's back faces, so from below its surface
-isn't drawn (owned by M6 step 5).
+water clear. Its water shaders have no side of their own (below), so the
+underside is the same surface seen from below: its reflection weight
+takes the view's cosine either way, and it reflects the sky's lower half.
+Rook draws water in a transparent pass of its own that culls neither
+side, with the same shader; from 20 studs under a lake (2026-10-28) both
+show a rippled sky-blue underside over the shore's grass.
+
+## What Studio's water shaders say
+
+Studio's smooth water shaders (the entries using `WaterParams` in the
+install's `shaders/shaders_glsl3.pack`, version-5a21b87bbc2641cf, read
+2026-10-28) settle what the measurements below fitted:
+
+- **Normal frames** lie 20 studs a repeat (coordinates of 0.05 per stud)
+  on one of the 18 planes terrain textures use, picked per vertex, each
+  vertex shifting them by its own random number, `(r, floor(r × 2.665))
+  × 0.1`, the three vertices' samples blended across the triangle: the
+  detiling terrain textures get. Two frames are bound and crossfaded.
+  That's why no single frame laid plainly matched Studio's ripples.
+- **The rippled normal** is the frames' whole slope; the reflection uses
+  the surface normal moved a quarter of the way to it.
+- **The reflection's weight** is `WaterReflectance × (clamp(0.78 - 2.5 ×
+  |n·v|, 0, 1) + 0.3)`: 0.3 looking down, 0.65 at 10 degrees, 0.86 at 5,
+  0.95 at 3 (measured: 0.27 to 0.3, 0.69, 0.80, 0.91).
+- **The sky** is the skybox along the reflection at full detail (mip 0),
+  times the sky's gradient, below the horizon as well as above.
+- **The glint** is a GGX highlight off the full ripples, the frames' red
+  channel giving the roughness (0.089 to 1), with a Fresnel of 0.02.
+- **Distance**: the blended variant's opacity rises with the view depth
+  × 0.004, so water lets nothing through from 250 studs.
+- **Waves** move each vertex by `(sin((z - x)k - t) + sin((z + x)k + t)) ×
+  A`, times a per-vertex weight and a fade with view depth; `k`, `A` and
+  the fade come from uniforms not measured yet.
 
 ## Waves
 
@@ -116,20 +147,24 @@ Observed:
   match, so Studio doesn't lay one frame plainly (Unknown how).
 
 Rook: two sines rise and fall `WaterWaveSize` studs (wavelengths 60 and
-45 studs, periods 40 and 25 units of phase); the 25 frames (the
+45 studs, periods 40 and 25 units of phase; Approximation, Studio's two
+diagonal sines of one wavelength not measured yet); the 25 frames (the
 renderer's texture array, from the install) play at 1.25 per unit, each
-fading into the next, laid at 44 studs per repeat without scrolling, on
-the top and the sides alike (the three axes' planes, blended by how much
-the surface faces each). The surface is `WaterColor` lit as a part's top
-is (on every face, 1.2 times brighter), mixed towards the skybox, sampled
-where the reflection points, by `WaterReflectance` × 0.27 looking down
-rising to all of it along the surface (Schlick's Fresnel), rippled half
-as steeply as the frames, with a sun glint off the frames' ripples; a
-fifth of `WaterTransparency` of what's behind shows through. Before:
-the pattern's contrast and autocorrelation were fitted from above
-(luminance deviation 2.06 against Studio's 2.07); that tiling is kept.
-Approximation: the tiling scale, the waves' shape and the ripples'
-strength are fitted.
+fading into the next, laid as Studio's shaders lay them (above: 20
+studs a repeat on the plane the surface faces most, shifted by a random
+number in tenths per point of the 4-stud lattice, as Rook's terrain
+textures are, since its vertices don't carry one). The surface is
+`WaterColor` lit as a part's top is (on every face, 1.2 times brighter),
+mixed towards the skybox at full detail, sampled where the reflection
+points, by Studio's weight, with Studio's GGX glint; a fifth of
+`WaterTransparency` of what's behind shows through, falling to none at
+250 studs. Until 2026-10-28 `WaterReflectance` never reached the shader
+(only Plastic's reflectance was passed on), so Rook's water reflected no
+sky at all: from 320 studs above the island lake its middle drew 12,
+120, 141 where Studio's draws 35, 128, 160; it now draws 40, 127, 159,
+and along the surface it is the pale, rippled sky Studio's is. The
+color table below was measured against that build. Approximation: the
+waves' shape and how far the glint fades.
 
 ## Color and transparency
 
