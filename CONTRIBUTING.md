@@ -92,6 +92,52 @@ no roadmap steps (the changelog records those). Rook's own words use
 American spelling, as Roblox's API does; names taken from elsewhere keep
 theirs.
 
+### Built right the first time
+
+Rook is a hobby, not a prototype. Every change is what a mature engine
+would ship, because a shortcut costs more to rip out later than doing it
+right costs now. Fixing one has meant re-measuring in Studio,
+redesigning, and moving every caller. "It works and the tests pass" is
+not done.
+
+- **Design first.** Before writing a system, name how established
+  engines do it, concretely (a dirty-chunk remesh, a change journal, a
+  fixed timestep with interpolation). Stopping at two options of your
+  own means the search stopped early. Effort is never a reason to pick
+  the lesser design.
+- **Cost scales with what changes, from the first version.** Each frame
+  and each edit costs in proportion to what changed, never to the size
+  of the place. Updates flow from the change journal or a dirty set, not
+  from a rescan, a full rebuild or "re-encode everything". Per-object
+  library costs count too (one Rapier body, draw or buffer per part).
+  Before landing, bench the change on the archive's largest places
+  alongside the build before it.
+- **The real rule, not a fit.** Where Studio's rule can be found (its
+  shaders, settings, data tables, creator docs, or a measurement that
+  isolates it), implement that rule. Fitting constants to screenshots is
+  the last resort. A fit that remains is an Approximation, recorded with
+  what would settle it and owned by a roadmap step.
+- **One owner per decision.** Every rule (a character's root part, who
+  holds the mouse, which camera draws, the time) has one place that
+  decides it, and everything else asks there. A second copy of a rule is
+  a bug waiting to diverge.
+- **No stand-ins.** No "for now", "until X exists" or guessing from
+  names in place of explicit state. When the feature a stand-in waited
+  for lands, the stand-in goes in the same change. Computed state that
+  nothing reads is a missing consumer or dead code.
+- **Guard the class, not the case.** Fix a bug where every case flows
+  through, or make the wrong thing impossible to write, rather than
+  patching the instance you saw.
+- **Lean on maintained crates.** A format or algorithm a maintained
+  crate covers comes from that crate, upgraded when it adds what Rook
+  needs, not from a parser Rook writes and later rips out.
+- **Finished means Studio's.** A roadmap step is done only at the
+  [Match Studio](docs/roadmap/README.md#match-studio) bar, with every
+  gap left named in [stubs](docs/guide/stubs.md) and owned by a step.
+
+If the right design is bigger than the task at hand, say so and do it,
+or plan it as its own step; don't land the shortcut quietly.
+
 ### Keeping it clean
 
 `scripts/check` enforces these, so drift fails the check instead of waiting for someone to notice:

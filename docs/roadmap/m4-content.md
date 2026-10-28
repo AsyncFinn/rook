@@ -104,9 +104,7 @@ renderer draws all of these as their part's plain box.
      step, and the open Approximations and Inferences
      on the content, meshes and rendering pages.
    - *Done when*: the [Match Studio](README.md#match-studio) bar holds
-     for steps 1 to 6 (correct, edge cases measured,
-     indistinguishable side by side), and no stubs row names this
-     step.
+     for steps 1 to 6, and no stubs row names this step.
 
 Physics picks up the real shapes of MeshParts and unions in M15 (unions
 done: [collision.md](../behavior/physics/collision-shapes.md#unions)).

@@ -176,6 +176,4 @@ the packages, as it does the CoreScripts, and never ships them (decided
      step, and the open Approximations and Inferences
      on the characters pages.
    - *Done when*: the [Match Studio](README.md#match-studio) bar holds
-     for steps 1 to 8 (correct, edge cases measured,
-     indistinguishable side by side), and no stubs row names this
-     step.
+     for steps 1 to 8, and no stubs row names this step.

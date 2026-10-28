@@ -57,7 +57,13 @@ the milestone's other steps leave: the [stubs](../guide/stubs.md) rows
 taken over by it, and each Approximation or Inference on the
 milestone's behavior pages that a Studio measurement could settle. The
 milestone stays 🟨 until that step is done, and the step is done when
-all three of these hold for everything the milestone built:
+all four of these hold for everything the milestone built:
+
+- **Built right**: [built right the first
+  time](../../CONTRIBUTING.md#built-right-the-first-time). Each part has
+  the design established engines use, and its frame and edit costs scale
+  with what changed, benched on the archive's largest places. A part
+  that rebuilds or rescans everything isn't done, however it looks.
 
 - **Correct**: every rule a script can observe (values, events and
   their order, errors, timing in frames) matches Studio. Each rule has a
@@ -83,6 +89,25 @@ all three of these hold for everything the milestone built:
 
 The exit criteria below are met only in this sense, never
 "recognisably" or "plausibly".
+
+## Steps
+
+Each step on a milestone page says:
+
+- **Scope**: what's in, what's out, and where the out goes.
+- **Evidence**: corpus counts, Studio questions, sources.
+- **Design**: written before the step's first code. How established
+  engines solve it, named concretely; how changes flow (which change
+  list or dirty set drives each update); and what a frame and an edit
+  may cost on the archive's largest places. Only the step about to
+  start needs this, since it goes stale.
+- **Done when**: the check, at the Match Studio bar for what the step
+  covers, including the cost from its Design measured against the build
+  before it.
+
+A step without a written Design doesn't start. Most shortcuts Rook has
+had to rip out were fixed in the first version's design, not in its
+code, so this is where they're caught.
 
 ## Milestones
 

@@ -28,6 +28,5 @@ the target counts only errors Rook causes, checked against Studio.
      step, and the open Approximations and Inferences
      on the scripting pages.
    - *Done when*: the [Match Studio](README.md#match-studio) bar holds
-     for steps 1 to 7 and the runtime M1 built (correct, edge cases
-     measured, indistinguishable side by side), and no stubs row names this
-     step.
+     for steps 1 to 7 and the runtime M1 built, and no stubs row names
+     this step.

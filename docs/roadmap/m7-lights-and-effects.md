@@ -47,8 +47,6 @@ create.
      step, and the open Approximations and Inferences
      on the lighting, effects and adornment pages.
    - *Done when*: the [Match Studio](README.md#match-studio) bar holds
-     for steps 1 to 6 (correct, edge cases measured,
-     indistinguishable side by side), and no stubs row names this
-     step.
+     for steps 1 to 6, and no stubs row names this step.
 
 Steps 1 to 6 met the old exit criterion; step 7 holds them to Studio.

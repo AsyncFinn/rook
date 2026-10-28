@@ -124,6 +124,4 @@ health bars and leaderboards are GUI.
       step, and the open Approximations and Inferences
       on the GUI pages.
     - *Done when*: the [Match Studio](README.md#match-studio) bar holds
-      for steps 1 to 10 (correct, edge cases measured,
-      indistinguishable side by side), and no stubs row names this
-      step.
+      for steps 1 to 10, and no stubs row names this step.

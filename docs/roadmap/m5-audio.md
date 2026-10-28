@@ -26,6 +26,4 @@ state. It's self-contained, and every place sounds wrong without it.
      step, and the open Approximations and Inferences
      on the audio pages.
    - *Done when*: the [Match Studio](README.md#match-studio) bar holds
-     for steps 1 to 5 (correct, edge cases measured,
-     indistinguishable side by side), and no stubs row names this
-     step.
+     for steps 1 to 5, and no stubs row names this step.

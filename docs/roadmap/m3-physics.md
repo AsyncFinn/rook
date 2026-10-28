@@ -35,9 +35,7 @@ Rapier underneath, Roblox's rules on top, every rule checked in Studio.
      step, and the open Approximations and Inferences
      on the physics pages.
    - *Done when*: the [Match Studio](README.md#match-studio) bar holds
-     for steps 1 to 5 (correct, edge cases measured,
-     indistinguishable side by side), and no stubs row names this
-     step.
+     for steps 1 to 5, and no stubs row names this step.
 
 Steps 1 to 5 met the old exit criterion (the conformance batch, `physics/*`,
 passes and unanchored places settle plausibly); step 6 holds them to Studio.

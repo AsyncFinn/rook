@@ -59,11 +59,9 @@ Terrain comes before characters, who walk on it.
      step, and the open Approximations and Inferences
      on the terrain pages.
    - *Done when*: the [Match Studio](README.md#match-studio) bar holds
-     for steps 1 to 4 (correct, edge cases measured,
-     indistinguishable side by side), and no stubs row names this
-     step. Side by side means every material, water from above, along
-     its surface and at its shores, and grass close up and to the
-     horizon.
+     for steps 1 to 4, and no stubs row names this step. Side by side
+     means every material, water from above, along its surface and at
+     its shores, and grass close up and to the horizon.
 
 Steps 1 to 4 met the old exit criterion (terrain shows, parts rest on it,
 queries find it, scripts build and dig it); step 5 holds them to Studio.
