@@ -58,6 +58,52 @@ Terrain comes before characters, who walk on it.
    - *Evidence*: the [stubs](../guide/stubs.md) rows taken over by this
      step, and the open Approximations and Inferences
      on the terrain pages.
+   - *Design* (2026-10-27), one per part, in the order they land:
+     - *Colors and grass*: Studio's rule rather than a fit, from the
+       sources the [clean-implementation policy](../design/policies.md)
+       allows: the terrain and grass shaders in the install's
+       `shaders_glsl3.pack` (which inputs reach a texel and a blade, and
+       how), the terrain tables in Studio's settings, and Studio
+       measurements in a fresh process for what those leave open, in
+       both material sets. One owner for how a material's color becomes
+       what's drawn, read by the ground's looks and the blades alike.
+       Blades shade and cast shadows as the grass shaders say. Changes
+       flow from `MaterialColors` and the lighting properties: a color
+       change rebuilds the per-layer looks (23 materials by 3 facings),
+       never a mesh. Cost per frame: a few shader terms per pixel and the
+       blades' tiles within reach in the shadow pass; benched on the
+       largest grass place against the build before.
+     - *Shoreline water*: the way voxel engines keep a second fluid in
+       a solid's cell (Minecraft's waterlogged blocks, Studio's own water
+       occupancy per voxel beside its solid material): water gets its own
+       occupancy field and its own surface, meshed from that field per
+       chunk with faces against solid dropped, after measuring in Studio
+       where the two surfaces meet (islands, slopes, walls, lone voxels,
+       half occupancies) and how water looks from below. Changes flow
+       through the same dirty-chunk list as solid terrain: a chunk's
+       water is remeshed only when its voxels or a neighbor's border
+       changed. Cost: water meshing on load scales with the water's
+       chunks; an edit, with the chunks it touches.
+     - *Edits cost only what changed*: one owner of the voxels (the
+       Terrain's grid, which physics, the renderer, grass and
+       replication read, as Roblox's Terrain is the one store its
+       `SmoothGrid` serializes), and edits that append the chunks they
+       dirty to a change list each consumer reads from its own cursor,
+       as engines with chunked worlds remesh dirty chunks (Minecraft's
+       dirty sections, Unity's terrain dirty regions). Colliders, meshes
+       and grass tops rebuild only listed chunks; the scene list updates
+       only their entries; `SmoothGrid` is encoded only when something
+       reads it (saving, replication of a whole grid, a script reading
+       the property), from per-chunk encodings kept until their chunk is
+       dirtied. Cost: a frame with no edit costs nothing for terrain; an
+       edit costs its changed voxels plus the chunks they touch, whatever
+       the place's size. Benched with `--bench` on two or three terrain
+       places and a script digging every frame, before and after.
+     - *The rest of the Scope* (detiling per vertex, seams, height maps
+       without binding arrays, the bent-quad diagonal, water frames and
+       sky detail, `CountCells`, `WorldToCellPreferEmpty`, voxel
+       channels, small parts at the water surface) gets its Design here
+       before its code, once the parts above have landed.
    - *Done when*: the [Match Studio](README.md#match-studio) bar holds
      for steps 1 to 4, and no stubs row names this step. Side by side
      means every material, water from above, along its surface and at
