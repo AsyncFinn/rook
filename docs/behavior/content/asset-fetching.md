@@ -17,7 +17,7 @@ million empty ones. By what `rook-content` makes of them:
 | Asset id (`rbxassetid://` or an asset URL) | 1,803 | 990,851 |
 | Asset id with `version=` | 657 | 5,615 |
 | `rbxasset://` path in today's install | 324 | 5,491 |
-| `rbxasset://` path of the 2009 client, now a public asset (table below) | 1,516 | 77,222 |
+| `rbxasset://` path of the 2009 client's 2009-06-24 upload (all 262, counted before the table below took Studio's 200) | 1,516 | 77,222 |
 | `rbxasset://` path found nowhere (`textures/rocket.png`, `fonts/paintballgun.mesh`, ...) | 419 | 2,138 |
 | `rbxasset://../../../shareddata/...` (2006-2008 server paths) | 470 | 5,375 |
 | No content (other URLs, junk) | 411 | 9,422 |
@@ -103,18 +103,52 @@ first, not yet the second. Files store these values in the `Content`
 properties (`MeshContent`, `TextureContent`, `AudioContent`), and Rook's
 scripts read `MeshId` and the others through them.
 
-*The 2009 client's paths* (observed): modern Studio loads
-`rbxasset://textures/SpawnLocation.png`, `sky/null_plainsky512_bk.jpg` and
-`fonts/sword.mesh` although no install has them. On 2009-06-24 Roblox
-uploaded every file of that client's `fonts`, `music`, `sky`, `sounds` and
-`textures` folders as a public asset whose description is the old path, in
-alphabetical order (ids 12220916 to 12224353, 262 files);
-`MarketplaceService:GetProductInfo` over that range gave Rook's table
-(`rook-content/src/resolver/defaults.rs`). Asset 12221462 is byte-identical to the
-install's `avatar/heads/head.mesh` (same BLAKE3). Studio also loads a few
-old paths that aren't in that upload (`textures/rocket.png`,
-`TrowelTexture.png`, `paintballicon.png`, `rocketboots.png`; 2,138 uses
-together with the rest); how is unknown.
+*The 2009 client's paths* (observed 2026-10-28, Studio 0.744): modern
+Studio loads `rbxasset://textures/SpawnLocation.png`,
+`sky/null_plainsky512_bk.jpg` and `fonts/sword.mesh` although no install
+has them, by fetching a public asset for each. Which asset:
+- *The uploads.* Public asset details (`economy.roblox.com/v2/assets/<id>/details`)
+  over the ids near asset 12221720 show that on 2009-06-24 Roblox (user 1)
+  uploaded every file of the 2009 client's `fonts`, `music`, `sky`,
+  `sounds` and `textures` folders as an asset whose description is its old
+  path, in alphabetical order (ids 12220916 to 12224353, 262 files), and
+  13 more on 2009-06-25 (12229442 to 12229518, `textures/PaintballIcon.png`,
+  `TrowelTexture.png`, `J_Key.png` and others). On 2017-07-11 and 12 it
+  uploaded some of the sounds and cursor textures again, named by file
+  without the extension (`bass` 911769342 to `wrench` 911894116).
+- *What Studio fetches.* `ContentProvider:GetAssetFetchStatus("rbxassetid://<id>")`
+  turns from None to Success when Studio fetches an asset for any reason,
+  an old path's included. Loading each old path alone in a Studio that
+  hadn't loaded any (one `PreloadAsync` per path, a SpecialMesh, Sound or
+  Decal by extension) and checking its candidates: 155 of the 2009-06-24
+  paths fetched their 2009 asset, 35 their 2017 one (every 2017 sound and
+  cursor, `textures/CloneOverCursor.png` the one whose public name is
+  filtered), and 8 of the 2009-06-25 paths theirs (`HopperPanel.png` the
+  first of its two). The bytes agree: Studio's cached `fonts/sword.mesh` is
+  asset 12221720's file byte for byte, every mesh's face count matches its
+  asset's, 133 images match their asset pixel for pixel (2 JPEGs within
+  decoding, `Snowflake.png` in size and alpha), and the sounds' CDN hashes
+  in `rbx-storage` are their assets'. When a fetch fails, Studio's Output
+  names the asset (`ContentId: rbxassetid://911864050 failed due to: Asset
+  is not approved for the requester` for `sounds/swoosh.wav`).
+- *What it doesn't.* 18 paths are still files in the install
+  (`textures/face.png`, `ArrowCursor.png`, `FlatCursor.png` and other
+  cursors, `sky/sun.jpg`), and Studio draws those, not their assets, which
+  differ. 53 fail to load though their 2009 asset is deliverable: the seven
+  `.rbxm` models, `music/bass.wav`, `sounds/pageturn.wav`, `swoosh.wav`,
+  both `Rubber band` sounds, and 41 textures (the `Camera*`, `Chat*`,
+  `ReportAbuse*`, `Surfaces*` and `nosurfaces*` families, the `.dds` files,
+  `GameTool.png`, `script.png`, `WoodFallback.png` and a few more).
+
+Rook's table (`rook-content/src/resolver/defaults.rs`) holds the 200 paths
+Studio fetches an asset for, with that asset; the rest resolve to the
+install or fail, as in Studio. `sounds/snap.wav` and `uuhhh.wav` load in
+Studio but fetched neither their 2009 nor any 2017 asset, so the 2009 one
+stands in (Inference: the asset Studio fetches for them would settle it;
+`snap.wav`'s CDN hash in `rbx-storage` is `sc0/82bd55bb...`).
+`textures/rocket.png`, `rocketboots.png`, `fonts/headf.mesh` and
+`paintballgun.mesh` load in Studio from assets not found yet, so Rook
+can't load them.
 
 *PreloadAsync* (observed on a playtest client, a server and in edit mode;
 the server part is the conformance case `content/preload`): on a client it

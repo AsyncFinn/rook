@@ -60,16 +60,13 @@ clothing meshes): these are no longer files in the install. Roblox
 uploaded each one in 2009 as an ordinary asset by @Roblox whose
 description is its old path (`head.mesh`, asset 12221462, description
 `\fonts\head.mesh`, created 2009-06-24, updated 2017-08-23; `leftarm.mesh`
-12221505, `rightleg.mesh` 12221626), and Studio's executable holds a table
-pairing each old path with its asset id (the id comes just before its
-path). Asset 12221462 is byte-identical to the install's `head.mesh`: two
+12221505, `rightleg.mesh` 12221626), and loading `fonts/head.mesh` in a
+fresh Studio fetches exactly that asset (`ContentProvider`'s fetch status
+for it turns from None to Success; see "The 2009 client's paths" in
+[asset fetching](../content/asset-fetching.md)), the table Rook follows.
+Asset 12221462 is byte-identical to the install's `head.mesh`: two
 entries in Studio's download cache (`rbx-storage`) are a 37-byte `RBXH`
-header followed by exactly that file. One of them was written while
-`fonts/head.mesh` FileMeshes were first loaded, with the local file still
-present, and `fonts/head.mesh` kept loading after the local file was
-renamed, so the old path is fetched as its asset (Inference from the
-timing; not yet proved by forcing a fresh download). Step 2 confirmed it
-and built Rook's own path → asset id table (see "Asset fetching" below).
+header followed by exactly that file.
 
 So the Head MeshType, `rbxasset://fonts/head.mesh` and asset 12221462 are
 the same mesh. They differ only in sizing: the Head type is fitted to the

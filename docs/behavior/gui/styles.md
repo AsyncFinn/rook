@@ -35,11 +35,13 @@ image and ships none, per the
 | RobloxRound | `rbxasset://textures/blackBkg_round.png` | |
 | DropShadow | `rbxasset://textures/ui/newBkg_square.png` | |
 
-The names sit together in Studio's executable next to each enum's use;
-which is which was matched by eye from the captures. The Chat textures
-are white bubbles with a colored strip down the left edge, not colored
-bubbles. `rbxasset://textures/ui/btn_greyTransp.png`, named with them, showed in no state
-tried.
+Which file each style reads was observed on 2026-10-28 (Studio 0.744, a
+fresh process on a copy of Baseplate) from the install files' last-access
+times (Windows keeps them): each style parented on a SurfaceGui, five
+seconds apart, read exactly one file in its window, the one in the first
+column; each button style with `Interactable` false read the one in the
+last. The captures match. The Chat textures are white bubbles with a
+colored strip down the left edge, not colored bubbles.
 
 ## Drawing
 
