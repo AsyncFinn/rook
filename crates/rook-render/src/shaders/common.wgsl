@@ -40,10 +40,6 @@ struct Globals {
     sky_bottom: vec4<f32>,
     // Each skybox image's slot in the image table, when there is one.
     sky_images: array<vec4<u32>, 2>,
-    // Each terrain layer's blend, two per layer: the height's multiplier
-    // and offset, the edge's softness, studs per repeat; then the height
-    // map's slot and whether it's laid like a box (`TerrainLayer`).
-    terrain_layers: array<vec4<f32>, 138>,
 };
 
 @group(0) @binding(0) var<uniform> g: Globals;
@@ -108,9 +104,10 @@ const CENTERED: u32 = 256u;
 const ALPHA_OVERLAY: u32 = 1u;
 const ALPHA_TRANSPARENCY: u32 = 2u;
 const ALPHA_TINT_MASK: u32 = 3u;
-// In a terrain instance's surface bits: its color recolors its color map
-// (`gpu::TERRAIN_RECOLOR`).
+// In a terrain instance's surface bits: its color recolors its color map,
+// or tints it by the map's alpha (`gpu::TERRAIN_RECOLOR`, `TERRAIN_TINT`).
 const TERRAIN_RECOLOR: u32 = 3u;
+const TERRAIN_TINT: u32 = 1u;
 
 struct VertexIn {
     @location(0) position: vec3<f32>,

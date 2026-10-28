@@ -8,7 +8,7 @@ import package::common::{
     g, image_sampler, water_normals, VertexOut, TERRAIN_WATER, TERRAIN_BLADES,
     TERRAIN_DRAWN_SHIFT, terrain_taps,
 };
-import package::images::{layer_height, sky_toward};
+import package::images::sky_toward;
 import package::lighting::{diffuse_light, sun_light, sun_visibility, fog_units};
 import package::tone::{albedo_units, frame, light_units3};
 
@@ -241,55 +241,16 @@ fn blade_surface(in: VertexOut, dp_x: vec3<f32>, dp_y: vec3<f32>) -> vec4<f32> {
     return vec4(frame(fog_units(c, in.world)), 1.0);
 }
 
-// A terrain seam fragment's share of its draw's layer (Studio 0.742's
-// terrain shader, read from its GLSL): each of the triangle's corners
-// weighs its barycentric weight times its layer's height there (remapped
-// to 0 to 1); each weight beyond the highest of the others, plus half the
-// edge's softness (the corners' softness, blended), over that softness,
-// gives the corner's share, the shares then summing to 1. Where the
-// textures shrink to under 7 pixels a repeat, the shares fade to the plain
-// barycentric weights, as they do near the edge between two corners of
-// one layer. The draw's share is that of the corners its layer holds.
-// Every draw of a triangle works the shares out alike (the triangle's own
-// normal, not its vertices', picks the planes), so they add up to the
-// whole.
-fn terrain_share(in: VertexOut, dp_x: vec3<f32>, dp_y: vec3<f32>) -> f32 {
+// A terrain seam fragment's share of its draw's layer: the barycentric
+// weights of the triangle's corners that hold its layer. Studio's terrain
+// shaders mix a seam's three layers by these plain weights (read from its
+// GLSL), so seams are linear ramps a cell wide whatever the textures. The
+// draws of a triangle add up to the whole.
+fn terrain_share(in: VertexOut) -> f32 {
     let drawn = in.face >> TERRAIN_DRAWN_SHIFT;
     let b = vec3(in.uv.x, in.uv.y, 1.0 - in.uv.x - in.uv.y);
-    let ids = vec3<u32>(round(in.local));
-    var n = cross(dp_x, dp_y);
-    n = normalize(select(n, -n, dot(n, in.normal) < 0.0));
-    var h = vec3(0.0);
-    var softness = 0.0;
-    var minified = 0.0;
-    for (var k = 0u; k < 3u; k++) {
-        let a = g.terrain_layers[ids[k] * 2u];
-        let c = g.terrain_layers[ids[k] * 2u + 1u];
-        let cube = c.y > 0.5;
-        let studs = max(a.w, 1e-3);
-        let taps = terrain_taps(terrain_position(in.world, n, cube), studs, c.z, c.w);
-        // The planes' coordinates are linear in the position.
-        let dx = terrain_position(dp_x, n, cube) / studs;
-        let dy = terrain_position(dp_y, n, cube) / studs;
-        h[k] = clamp(layer_height(u32(c.x), taps, dx, dy) * a.x + a.y, 0.0, 1.0);
-        softness += b[k] * a.z;
-        if k == 0u {
-            minified = sqrt(max(dot(dx, dx), dot(dy, dy))) * 7.0;
-        }
-    }
-    let w = b * h;
-    let others = vec3(max(w.y, w.z), max(w.x, w.z), max(w.x, w.y));
-    let soft = max(softness, 1e-4);
-    var s = clamp((w - others + 0.5 * soft) / soft, vec3(0.0), vec3(1.0));
-    s /= max(s.x + s.y + s.z, 1e-4);
-    let paired = vec3(
-        f32(ids.x == ids.y || ids.x == ids.z),
-        f32(ids.y == ids.x || ids.y == ids.z),
-        f32(ids.z == ids.x || ids.z == ids.y),
-    );
-    s = mix(s, b, clamp(minified + dot(paired, b) * 20.0 - 19.0, 0.0, 1.0));
     let mine = vec3(f32(drawn & 1u), f32((drawn >> 1u) & 1u), f32((drawn >> 2u) & 1u));
-    return dot(s, mine);
+    return dot(b, mine);
 }
 
 // Where a terrain point is on its material's textures, in world studs

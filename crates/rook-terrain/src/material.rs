@@ -5,7 +5,7 @@
 mod looks;
 mod recolor;
 
-pub use recolor::Recolor;
+pub use recolor::{Coloring, Recolor};
 
 use rook_types::{Color3uint8, Material, MaterialColors, MaterialSet, TerrainMaterials};
 
@@ -110,31 +110,6 @@ pub struct Texture {
     /// How far Studio turns the texture at random: 1 up to 90 degrees
     /// either way.
     pub rotation: f32,
-    /// How it blends with the textures around it.
-    pub blend: Blend,
-}
-
-/// How a texture blends into its neighbors' where materials (or top and
-/// side) meet, by its pack's height map: the map's 0 to 1 stands from
-/// `min` to `max` (clamped to 0 to 1), so a texture with a low range, such
-/// as Sand's, gives way to its neighbors; `scale` is how soft the edge
-/// between two textures is, in those units (Studio's `blend`, per texture,
-/// or the material's for textures without one). Inference: Studio's
-/// shader scales and offsets the height by two per-texture numbers; this
-/// reading of them gives seams as wide as Studio's, the other (`min` to
-/// `max` stretched to 0 to 1) far narrower ones.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Blend {
-    pub min: f32,
-    pub max: f32,
-    pub scale: f32,
-}
-
-impl Blend {
-    /// The height's multiplier and offset: `height * a + b`.
-    pub fn remap(&self) -> (f32, f32) {
-        (self.max - self.min, self.min)
-    }
 }
 
 impl Texture {
@@ -175,35 +150,50 @@ pub struct Look {
     pub bottom: Option<Texture>,
 }
 
-/// Every texture pack terrain uses (tools: Rook keeps these,
-/// `rook-tools content --pin`).
+/// Every texture pack terrain uses, in either set (tools: Rook keeps
+/// these, `rook-tools content --pin`).
 pub fn all_packs() -> impl Iterator<Item = u64> {
     TerrainMaterial::ALL.into_iter().flat_map(|m| {
-        let look = m.look();
-        [look.top, look.side, look.bottom]
+        [MaterialSet::Legacy, MaterialSet::Materials2022]
             .into_iter()
+            .flat_map(move |set| {
+                let look = m.textures(set);
+                [look.top, look.side, look.bottom]
+            })
             .flatten()
             .map(|t| t.pack)
     })
 }
 
 impl TerrainMaterial {
-    /// How this material shapes, shades and textures the surface: as
-    /// Studio's legacy (`Pre2022`) table says, in places of either
-    /// material set. Observed in places saved with `Use2022Materials` on
-    /// and off: Concrete stepped by half cells, Slate and Basalt shifted
-    /// and Cobblestone quantized, as only the legacy table has them; and
-    /// terrain drawn pixel for pixel alike in both, with the legacy
-    /// textures, while the same places' parts switched sets.
+    /// How this material shapes and shades the surface: as Studio's
+    /// legacy (`Pre2022`) table says, in places of either material set
+    /// (observed in places saved with `Use2022Materials` on and off:
+    /// Concrete stepped by half cells, Slate and Basalt shifted and
+    /// Cobblestone quantized, as only the legacy table has them).
     pub fn look(self) -> &'static Look {
         &looks::LOOKS[self as usize]
     }
 
-    /// Whether its top, side and bottom textures differ, so its surfaces
-    /// are split by which way they face.
+    /// Its textures in a place of `set` (observed 2026-10-28: switching
+    /// `Use2022Materials` in Studio switches terrain between the tables'
+    /// packs, the 2022 ones tinted by `MaterialColors`).
+    pub fn textures(self, set: MaterialSet) -> &'static Look {
+        match set {
+            MaterialSet::Legacy => &looks::LOOKS[self as usize],
+            MaterialSet::Materials2022 => &looks::LOOKS_2022[self as usize],
+        }
+    }
+
+    /// Whether its top, side and bottom textures differ in either set, so
+    /// its surfaces are split by which way they face.
     pub fn faces_differ(self) -> bool {
-        let look = self.look();
-        look.top != look.side || look.side != look.bottom
+        [MaterialSet::Legacy, MaterialSet::Materials2022]
+            .iter()
+            .any(|&set| {
+                let look = self.textures(set);
+                look.top != look.side || look.side != look.bottom
+            })
     }
 
     /// Its color in `Terrain.MaterialColors`, or `set`'s default when the

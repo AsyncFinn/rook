@@ -46,11 +46,6 @@ pub(crate) struct Globals {
     pub(crate) sky_bottom: [f32; 4],
     /// Each skybox image's slot in the image table, when there is one.
     pub(crate) sky_images: [[u32; 4]; 2],
-    /// Each terrain layer's blend ([`TerrainLayer`]), two per layer: the
-    /// height's multiplier and offset, the edge's softness and the studs
-    /// per repeat; then its height map's slot in the image table, whether
-    /// it's laid like a box, and its [`Detile`].
-    pub(crate) terrain_layers: [[f32; 4]; 2 * TERRAIN_LAYERS],
 }
 
 /// Instance flags (see `shaders/common.wgsl`).
@@ -74,9 +69,11 @@ pub(crate) const FACES_CAMERA: u32 = 1 << 6;
 pub(crate) const SURFACES_SHIFT: u32 = 8;
 /// The part has material textures, tiled at `tile.xy` studs.
 pub(crate) const MAPS: u32 = 1 << 26;
-/// In a terrain instance's surface bits: its color is a recoloring of its
-/// color map (`MaterialMaps::recolored`), after the alpha modes.
+/// In a terrain instance's surface bits (`MaterialMaps::terrain_color`):
+/// its color is a recoloring of its color map, or tints it by the map's
+/// alpha.
 pub(crate) const TERRAIN_RECOLOR: u32 = 3;
+pub(crate) const TERRAIN_TINT: u32 = 1;
 /// Glass and ForceField draw their own way (`shaders/parts.wgsl`).
 pub(crate) const GLASS: u32 = 1 << 27;
 pub(crate) const FORCE_FIELD: u32 = 1 << 28;
@@ -204,10 +201,10 @@ impl Instance {
                 } else if maps.any() {
                     // Only terrain's maps say how their color is used, in
                     // the bits Plastic's surfaces use otherwise.
-                    let mode = if maps.recolored {
-                        TERRAIN_RECOLOR
-                    } else {
-                        maps.alpha as u32
+                    let mode = match maps.terrain_color {
+                        TerrainColor::Recolor => TERRAIN_RECOLOR,
+                        TerrainColor::Tint => TERRAIN_TINT,
+                        TerrainColor::Plain => maps.alpha as u32,
                     };
                     flags |= MAPS | mode << SURFACES_SHIFT;
                     if matches!(

@@ -75,14 +75,21 @@ impl Pass {
     }
 
     /// How far toward its outside neighbor this inside voxel's surface
-    /// crosses: for water, by the water it holds, whatever its solid
-    /// occupancy (observed: Rock at 0, 0.25 and 0.5 occupancy holding the
-    /// same water draws the same water box); a dry solid by its own
-    /// occupancy (Inference: it lies under that solid's surface).
-    fn fill(self, v: Voxel) -> f32 {
+    /// crosses, in a cell with water at a corner (`wet`) or not. Water's
+    /// surface lies flat at its level across the solids in a wet cell
+    /// ([`Voxel::water_surface_fill`]) and, a cell on, dips to a dry
+    /// solid's own surface less the drop, under the land: so its edge is
+    /// never in sight, and the shore is where the land rises through the
+    /// water, along the land's own slope (observed: Studio's shores are
+    /// smooth curves where the water's last voxels meet dry land lying
+    /// below the water's level; ending the surface at the wet cells drew
+    /// them as the voxels' stair steps).
+    fn fill(self, v: Voxel, wet: bool) -> f32 {
         match self {
-            Pass::Water if v.is_solid() && v.water > 0 => v.water_fill(),
-            _ => v.fill(),
+            Pass::Water if wet => v.water_surface_fill(),
+            Pass::Water if v.is_solid() && v.water == 0 => v.fill(),
+            Pass::Water => v.water_surface_fill(),
+            Pass::Solid => v.fill(),
         }
     }
 }
@@ -149,8 +156,9 @@ pub(super) struct Mesher<'a> {
     /// Each cell's vertex, by cell, once made.
     pub(super) cells: Vec<u32>,
     /// Water only: which cells have water at a corner. A water quad is
-    /// kept when its four cells do, so solids touching water carry the
-    /// surface across them and dry terrain has none.
+    /// kept when one of its four cells does, so solids touching water
+    /// carry the surface across them, it runs on a cell into the land
+    /// around and dry terrain away from water has none.
     pub(super) wet: Vec<bool>,
     pub(super) positions: Vec<Vec3>,
     pub(super) normals: Vec<Vec3>,
@@ -177,6 +185,7 @@ impl Mesher<'_> {
         if self.cells[slot] != NONE {
             return self.cells[slot];
         }
+        let wet = self.wet.get(slot).copied().unwrap_or(false);
         let mut sum = Vec3::ZERO;
         let mut n = 0;
         for (a, b) in CELL_EDGES {
@@ -186,7 +195,7 @@ impl Mesher<'_> {
                 continue;
             }
             let (from, to) = if ia { (a, b) } else { (b, a) };
-            let t = crossing(self.pass.fill(self.block.at(from)), self.scale);
+            let t = crossing(self.pass.fill(self.block.at(from), wet), self.scale);
             sum += self.center(from) + (self.center(to) - self.center(from)) * t;
             n += 1;
         }
@@ -263,7 +272,7 @@ impl Mesher<'_> {
         if self.pass == Pass::Water
             && ![a - u - w, a - w, a, a - u]
                 .iter()
-                .all(|&c| self.wet[cell(c)])
+                .any(|&c| self.wet[cell(c)])
         {
             return;
         }

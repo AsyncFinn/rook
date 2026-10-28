@@ -48,12 +48,10 @@ pub struct Levels {
     pub high_quality: u8,
 }
 
-/// A terrain seam vertex: the layers (`rook_terrain::Layer::index`) of
-/// its triangle's three corners, which corner it is, and which corners'
-/// layer the mesh draws (a bit per corner).
+/// A terrain seam vertex: which of its triangle's corners it is, and
+/// which corners' layer the mesh draws (a bit per corner).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct TerrainCorner {
-    pub layers: [u8; 3],
     pub corner: u8,
     pub drawn: u8,
 }

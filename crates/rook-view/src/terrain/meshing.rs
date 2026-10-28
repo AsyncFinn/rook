@@ -78,7 +78,6 @@ impl SceneCache {
                 .corners
                 .iter()
                 .map(|c| TerrainCorner {
-                    layers: c.layers.map(|l| l.index() as u8),
                     corner: c.corner,
                     drawn: (0..3)
                         .filter(|&k| c.layers[k] == draw.layer)

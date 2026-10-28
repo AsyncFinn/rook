@@ -20,8 +20,8 @@ pub use scene::{
     AdornShape, Anchor, Beam, Camera, Curve, Detile, DrawShape, Emitter, EmitterLook, EmitterShape,
     Fidelity, Flipbook, FlipbookMode, FloorWire, Grow, Highlight, ImageHash, ImagePlacement, InOut,
     Layer, Light, LightShape, Lighting, LocalLight, MapAlpha, MaterialMaps, MeshHash, Orientation,
-    PartInstance, RibbonLook, SKYBOX_FACES, Scene, Sequence, Spawn, TERRAIN_LAYERS, TerrainLayer,
-    TerrainLook, TextureMode, Tonemapper, Trail,
+    PartInstance, RibbonLook, SKYBOX_FACES, Scene, Sequence, Spawn, TerrainColor, TerrainLook,
+    TextureMode, Tonemapper, Trail,
 };
 
 // Content hashes are 32 bytes: FxHash keeps lookups by them cheap.

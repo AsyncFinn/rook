@@ -1,16 +1,15 @@
-//! What each terrain layer's surfaces are drawn with: textures, color and
-//! blending.
+//! What each terrain layer's surfaces are drawn with: textures and color.
 
 use super::*;
 
 impl SceneCache {
-    /// The textures and color of `layer`'s surfaces, and how it blends on
-    /// seams: a MaterialVariant MaterialService puts in the material's
+    /// The textures and color of `layer`'s surfaces: a MaterialVariant MaterialService puts in the material's
     /// place, tinted by the material's color, or else the material's own
-    /// pack, recolored for it ([`TerrainMaterial::recolor`], sent in the
-    /// color's place); untextured, a material shows its color. `set` gives
+    /// pack in the place's set, colored as that set is
+    /// ([`TerrainMaterial::coloring`]; a recoloring is sent in the color's
+    /// place); untextured, a material shows its color. `set` also gives
     /// the default colors of a place that saved none. How Studio colors
-    /// and blends them is in `docs/behavior/terrain/materials.md`.
+    /// them is in `docs/behavior/terrain/materials.md`.
     pub(super) fn terrain_look(
         &mut self,
         dom: &Dom,
@@ -18,9 +17,9 @@ impl SceneCache {
         layer: Layer,
         set: MaterialSet,
         colors: Option<&MaterialColors>,
-    ) -> (MaterialMaps, [f32; 3], TerrainLayer) {
+    ) -> (MaterialMaps, [f32; 3]) {
         let Layer { material, facing } = layer;
-        let look = material.look();
+        let look = material.textures(set);
         let texture = match facing {
             Facing::Top => look.top,
             Facing::Side => look.side,
@@ -32,12 +31,6 @@ impl SceneCache {
             shift: t.shift(),
             turn: t.rotation,
         });
-        let mut blend = TerrainLayer {
-            cube: look.cube,
-            scale: texture.map_or(1.0, |t| t.blend.scale),
-            detile,
-            ..TerrainLayer::default()
-        };
         let c = material
             .color(colors, set)
             .unwrap_or(rook_types::Color3uint8::new(255, 255, 255));
@@ -68,11 +61,10 @@ impl SceneCache {
                 detile,
                 ..MaterialMaps::NONE
             };
-            blend.studs = maps.studs_per_tile.x;
-            return (maps, color, blend);
+            return (maps, color);
         }
         let Some(texture) = texture else {
-            return (MaterialMaps::NONE, color, blend);
+            return (MaterialMaps::NONE, color);
         };
         let mut map = |m: MaterialMap| match self.file_state_of(
             terrain,
@@ -90,19 +82,25 @@ impl SceneCache {
             metalness: roughness_metalness,
             studs_per_tile: Vec2::splat(texture.studs()),
             detile,
-            recolored: true,
             ..MaterialMaps::NONE
         };
-        let color = match maps.color {
-            Some(_) => material.recolor(c).to_array(),
-            None => color,
+        let (maps, color) = match (maps.color, material.coloring(set, c)) {
+            (None, _) => (maps, color),
+            (Some(_), Coloring::Recolor(r)) => (
+                MaterialMaps {
+                    terrain_color: TerrainColor::Recolor,
+                    ..maps
+                },
+                r.to_array(),
+            ),
+            (Some(_), Coloring::Tint(t)) => (
+                MaterialMaps {
+                    terrain_color: TerrainColor::Tint,
+                    ..maps
+                },
+                t,
+            ),
         };
-        let (a, b) = texture.blend.remap();
-        blend.studs = texture.studs();
-        if roughness_metalness.is_some() {
-            blend.remap = [a, b];
-            blend.height = roughness_metalness;
-        }
-        (maps, color, blend)
+        (maps, color)
     }
 }

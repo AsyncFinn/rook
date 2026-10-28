@@ -11,7 +11,7 @@
 //! (Approximation).
 
 use glam::{IVec2, IVec3, Vec3};
-use rook_types::Color3uint8;
+use rook_types::{Color3uint8, MaterialSet};
 use rustc_hash::FxHashMap;
 
 use crate::random::Random;
@@ -32,17 +32,26 @@ const BLADE_WIDTH: f32 = 0.45;
 /// linear light.
 const GRASS_TOP_AVERAGE: [f32; 3] = [75.6 / 255.0, 78.4 / 255.0, 36.0 / 255.0];
 
-/// The blades' color (sRGB) for Grass's `MaterialColors` color: the top
-/// texture's average texel recolored as the ground is
-/// ([`TerrainMaterial::recolor`]). Measured in Studio under ambient light
+/// The average texel (sRGB) of the 2022 set's Grass top texture: Studio's
+/// `avgAlbedo2022` for Grass (Approximation: that table's averages are
+/// root mean squares, and its tint mask is taken as whole).
+const GRASS_TOP_AVERAGE_2022: [f32; 3] = [196.0 / 255.0, 196.0 / 255.0, 189.0 / 255.0];
+
+/// The blades' color (sRGB) for Grass's `MaterialColors` color in a place
+/// of `set`: the top texture's average texel colored as the ground is
+/// ([`TerrainMaterial::coloring`]). Measured in Studio under ambient light
 /// only, every blade drew one color, equal to the ground's average at
 /// white (146 against 146 of 255) and red (green and blue within 4); in
 /// the default color its blue came out 12 under (Approximation). How a
 /// blade is lit is the renderer's (`terrain.wgsl`, `blade_surface`).
-pub fn blade_color(grass: Color3uint8) -> [f32; 3] {
+pub fn blade_color(grass: Color3uint8, set: MaterialSet) -> [f32; 3] {
+    let average = match set {
+        MaterialSet::Legacy => GRASS_TOP_AVERAGE,
+        MaterialSet::Materials2022 => GRASS_TOP_AVERAGE_2022,
+    };
     TerrainMaterial::Grass
-        .recolor(grass)
-        .apply(GRASS_TOP_AVERAGE)
+        .coloring(set, grass)
+        .apply(average, 1.0)
 }
 
 /// Grass's upward triangles in world studs, by the tile their center is in.
@@ -201,14 +210,14 @@ mod tests {
     #[test]
     fn blades_take_the_grounds_average() {
         // In Grass's legacy default color, the texture's own average.
-        let c = blade_color(Color3uint8::new(106, 127, 63));
+        let c = blade_color(Color3uint8::new(106, 127, 63), MaterialSet::Legacy);
         assert!(
             c.iter()
                 .zip(&GRASS_TOP_AVERAGE)
                 .all(|(a, b)| (a - b).abs() < 1e-5)
         );
         // White draws its luma, twice as bright.
-        let c = blade_color(Color3uint8::new(255, 255, 255));
+        let c = blade_color(Color3uint8::new(255, 255, 255), MaterialSet::Legacy);
         assert!(
             (c[0] - c[2]).abs() < 1e-5 && (c[1] - 0.526).abs() < 0.001,
             "{c:?}"

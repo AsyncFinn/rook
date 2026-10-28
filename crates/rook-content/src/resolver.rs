@@ -265,14 +265,8 @@ impl Resolver {
             _ => Ok(None),
         };
         let metalness = extra(pack.metalness)?;
-        let height = extra(pack.height)?;
-        let decoded = materials::build(
-            map,
-            &image.bytes,
-            metalness.as_ref().map(|m| &*m.bytes),
-            height.as_ref().map(|h| &*h.bytes),
-        )
-        .map_err(|e| Failure::new(FailureKind::Invalid, e.to_string()))?;
+        let decoded = materials::build(map, &image.bytes, metalness.as_ref().map(|m| &*m.bytes))
+            .map_err(|e| Failure::new(FailureKind::Invalid, e.to_string()))?;
         let name = format!(
             "{} rbxassetid://{pack_id} {} {}x{}",
             image.source.location,

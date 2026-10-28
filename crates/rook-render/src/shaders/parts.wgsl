@@ -17,7 +17,7 @@ import package::common::{
     instance_rotation, world_position, placed, adorn_bits, CAST, NEON, UNLIT, EXACT, MODE_FACE, MODE_TILED,
     MODE_MESH_UV, UPRIGHT, SURFACES_SHIFT, MAPS, GLASS, SLOPED, MAPS_UV, VERTEX_COLORS,
     UNION_FACE, TERRAIN_FACE, TERRAIN_WATER, TERRAIN_DRAWN_SHIFT, CENTERED, ALPHA_OVERLAY, ALPHA_TRANSPARENCY,
-    ALPHA_TINT_MASK, TERRAIN_RECOLOR, TERRAIN_BLADES, PATTERN_SHIFT, one_tap, tile_taps, terrain_taps,
+    ALPHA_TINT_MASK, TERRAIN_RECOLOR, TERRAIN_TINT, TERRAIN_BLADES, PATTERN_SHIFT, one_tap, tile_taps, terrain_taps,
 };
 import package::images::{
     sample_image, image_size, sample_map, sample_taps, normal_taps, IMAGE, COLOR_MAP, ROUGHNESS_MAP,
@@ -49,9 +49,11 @@ fn vs_main(v: VertexIn) -> VertexOut {
     out.normal = normalize(instance_rotation(v) * local_normal);
     out.color = vec4(srgb_to_linear(v.i_color.rgb), v.i_color.a);
     let is_terrain = packed >= TERRAIN_FACE && packed != 255u;
+    let terrain_mode = (v.i_flags.x >> SURFACES_SHIFT) & 3u;
     if is_terrain && (v.i_flags.x & MAPS) != 0u
-        && ((v.i_flags.x >> SURFACES_SHIFT) & 3u) == TERRAIN_RECOLOR {
-        // Not a color: how the color map is recolored (`recolor`).
+        && (terrain_mode == TERRAIN_RECOLOR || terrain_mode == TERRAIN_TINT) {
+        // Not a linear color: how the color map is recolored (`recolor`),
+        // or the sRGB tint it's multiplied by.
         out.color = v.i_color;
     }
     if (v.i_flags.x & VERTEX_COLORS) != 0u {
@@ -310,6 +312,12 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
         // sRGB, before Studio's shader squares them (`recolor`).
         let c = sample_taps(in.images, COLOR_MAP, taps, duv_x, duv_y);
         albedo = srgb_to_linear(recolor(linear_to_srgb(c.rgb), in.color.rgb));
+    } else if terrain && (in.flags & MAPS) != 0u && (in.surfaces & 3u) == TERRAIN_TINT {
+        // The 2022 set's: tinted by the material's color where the map's
+        // alpha says, in sRGB, as Studio's terrain shader does
+        // (`rook_terrain::Coloring::Tint`).
+        let c = sample_taps(in.images, COLOR_MAP, taps, duv_x, duv_y);
+        albedo = srgb_to_linear(mix(vec3(1.0), in.color.rgb, c.a) * linear_to_srgb(c.rgb));
     } else if (in.flags & MAPS) != 0u {
         albedo *= sample_taps(in.images, COLOR_MAP, taps, duv_x, duv_y).rgb;
     }
@@ -340,7 +348,7 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
     let lit = shade_pbr(albedo_units(albedo), in.world, normal, roughness, metalness, in.material.x);
     var out = frame(lit);
     if terrain && (in.face >> TERRAIN_DRAWN_SHIFT) != 0u {
-        out *= terrain_share(in, dp_x, dp_y);
+        out *= terrain_share(in);
     }
     return vec4(out, alpha);
 }

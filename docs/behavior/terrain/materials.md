@@ -1,6 +1,6 @@
 # Terrain materials
 
-Checked against Studio 0.743 on 2026-10-28.
+Checked against Studio 0.744 on 2026-10-28.
 
 Terrain is drawn with
 its materials' textures, recolored by `Terrain.MaterialColors`; MaterialService
@@ -17,13 +17,15 @@ for each terrain material its `shift`, `cubify` and `quantize` amounts, its
 `type` (`hard`, `hardsoft`, else soft), `mapping` (`cube` for Brick and
 WoodPlanks), and one TexturePack for every face or separate
 `texture_top`, `texture_side` and `texture_bottom` ones, each with
-`tiling`, `detiling`, `rotation` and `blend` settings; Water has
+`tiling`, `detiling`, `rotation` and `blend` settings (`blend` goes
+unused: [Blending](blending.md)); Water has
 `"water": 0.5`. `FStringTerrainColorTable` holds each set's default
 colors (`baseColors...`) and each map's average (`avgAlbedo...`: the root
 mean square of its texels, in linear light; Grass's legacy top map
-measures (89, 94, 50) against the table's (91, 96, 51)). Studio draws
-terrain with the Pre2022 table only (below), which Rook keeps in
-`rook-terrain` (`src/material/looks.rs`) with both sets' default colors.
+measures (89, 94, 50) against the table's (91, 96, 51)). Studio shapes
+terrain by the Pre2022 table only and textures it by the place's set's
+(below); Rook keeps both in `rook-terrain` (`src/material/looks.rs`)
+with both sets' default colors.
 
 - **Shapes follow the Pre2022 table in every place** (Confirmed): every
   shape step 1 measured matches it (Concrete quantize 0.5, Pavement 0.25,
@@ -31,19 +33,19 @@ terrain with the Pre2022 table only (below), which Rook keeps in
   both shift 0.1), measured in a place saved with `Use2022Materials` on,
   where the 2022 table would step Concrete by whole cells and shift
   neither Slate nor Basalt. Studio drew the copy saved with it off alike.
-- **Textures are the legacy table's in every place** (Confirmed,
-  Studio 0.743, 2026-10-28): two copies of one place, one saved with
-  `Use2022MaterialsXml` true and one false, each opened in a fresh Studio
-  process, drew 21 terrain materials byte for byte alike in white and in
-  red, with the legacy packs (CrackedLava's orange cracks on dark rock in
-  its legacy color), while Brick and Granite parts in the same two places
-  drew the 2022 and the legacy sets. So the `FStringTerrainMaterialTable2022`
-  table isn't drawn, and Rook keeps only the Pre2022 one. This replaces
-  the 2026-10-16 claim that textures follow the place's set, which saw
-  only that a legacy place draws the legacy textures.
-- **The color maps are colored**: their packs say `alphamode` 1 (opaque)
-  and every texel is recolored ([Colors](#colors)). The 2022 packs' tint
-  masks (`alphamode` 2) aren't drawn on terrain.
+- **Textures follow the place's set** (Confirmed, Studio 0.744,
+  2026-10-28): `MaterialService.Use2022Materials` (saved as
+  `Use2022MaterialsXml`) switches terrain between the Pre2022 and 2022
+  tables' packs: switched in Studio on a large terrain place, the
+  terrain's textures changed with it (Sand from tan to near white, Mud
+  from brown to gray-violet), and with it off, Mud set to red drew bright
+  pink, the legacy recolor, where the 2022 tint would draw it dark red.
+  This reverses an earlier same-day claim that two copies of a place
+  saved with it on and off drew terrain alike (Studio keeps material
+  textures cached; see the measurement notes on fresh processes).
+- **The color maps are colored** ([Colors](#colors)): the legacy packs
+  say `alphamode` 1 (opaque) and every texel is recolored; the 2022 packs'
+  alpha is a tint mask (`alphamode` 2) and the texels are tinted.
 - **Top, side and bottom textures**: a vertex takes its material's top
   texture when its normal faces more than 22.5 degrees up (closer to one
   of the five upward projection planes than to a vertical one), the
@@ -77,10 +79,9 @@ terrain with the Pre2022 table only (below), which Rook keeps in
   diagonal, with *r* from a hash (Approximation). A 200-stud grass block
   seen straight down shows no repeat in either (no autocorrelation peak
   over 46 studs, Studio 0.743 and Rook), where Rook used to repeat every
-  16 studs. The same random number moves the layer's height map
-  ([Blending](blending.md)).
+  16 studs.
 - **Colors**: a place that saved no `MaterialColors` gets its set's
-  defaults (a new place saves the 2022 set's). How a color recolors the
+  defaults (a new place saves the 2022 set's). How a color colors the
   textures is in [Colors](#colors) below.
 
 *MaterialVariants* (Inference, by parts' rules): a MaterialVariant that
@@ -112,10 +113,9 @@ YCoCg (luma in green, Co and Cg in red and blue biased by 0.5) and squared
 after decoding. No shader in the packs applies `MaterialColors`, so
 Studio colors the textures when it builds that array.
 
-*What it does* (Confirmed): each texel (sRGB, 0 to 1) is moved in YCoCg
-by how the color differs from the material's legacy default color
-(`FStringTerrainColorTable`'s `baseColorsPre2022`), in places of either
-set:
+*What it does with the legacy textures* (Confirmed): each texel (sRGB, 0
+to 1) is moved in YCoCg by how the color differs from the material's
+legacy default color (`FStringTerrainColorTable`'s `baseColorsPre2022`):
 
 - **Luma** times *k* = min(2, the color's HSV value over the default's).
   White and gray 128 draw Grass at 2 and 1 times its default luma; Mud's
@@ -133,12 +133,25 @@ set:
 Per pixel, this rule draws the 126 shots within 4.5 of 255 on average,
 JPEG noise included (Limestone and Ice, the brightest, within 9.3). Caps
 of 1.5 or 2.5 instead of 2 miss by 23 and 11; turning the hue in HSV per
-texel instead of in the chroma plane misses by 22. In the 2022 copy,
-the 2022 default colors draw through the same rule: CrackedLava's (255,
-24, 67) draws its legacy cracks magenta-pink in Studio too.
+texel instead of in the chroma plane misses by 22.
 
-Rook (`rook_terrain::TerrainMaterial::recolor`, `src/material/recolor.rs`,
-and `recolor` in `shaders/terrain.wgsl`): the gain and turn go to the
-renderer in the surface's color, and the shader recolors each filtered
-texel in sRGB before squaring it as Studio does (Studio recolors before
-filtering; the two differ only where the clamps act).
+*What it does with the 2022 textures* (Confirmed, from its shaders; checked
+on Mud): each texel (sRGB) is multiplied by `mix(1, color, alpha)`, the
+color map's alpha being its tint mask, as the terrain shaders in
+`shaders_glsl3.pack` tint each layer (`mix(vec3(1.0), tint, albedo.w) *
+albedo.xyz`, before squaring). Mud's 2022 texture, its average albedo 193
+of 255, draws about 107 of 255 lit in its 2022 default color (121, 112,
+98), beside Sand drawn by the same rule. On the large terrain place
+with the setting on (Mud in its legacy default color, nearly untinted
+where its mask is low), Studio and Rook draw Mud 104, 105, 112 and 110,
+109, 113, Sand 210, 212, 204 and 212, 213, 203, and Ground 109, 112, 111
+and 119, 120, 115. Grass blades take the 2022 top
+texture's average (`avgAlbedo2022`) times the color (Approximation: that
+average is a root mean square, and the mask is taken as whole).
+
+Rook (`rook_terrain::TerrainMaterial::coloring`, `src/material/recolor.rs`,
+`recolor` in `shaders/terrain.wgsl` and the tint in `parts.wgsl`): the
+legacy gain and turn, or the 2022 tint, go to the renderer in the
+surface's color, and the shader colors each filtered texel in sRGB before
+squaring it as Studio does (Studio recolors before filtering; the two
+differ only where the clamps act).

@@ -22,7 +22,7 @@ pub use emitters::{
 };
 pub use lighting::{LightShape, Lighting, LocalLight, SKYBOX_FACES, Tonemapper};
 pub use ribbons::{Anchor, Beam, FloorWire, RibbonLook, TextureMode, Trail};
-pub use terrain::{TERRAIN_LAYERS, TerrainLayer, TerrainLook};
+pub use terrain::TerrainLook;
 
 /// A mesh file, by the BLAKE3 hash of its bytes: parts that use the same
 /// file share one GPU mesh, however they refer to it.
@@ -114,9 +114,22 @@ pub struct MaterialMaps {
     pub alpha: MapAlpha,
     /// Multiplies the color map (a SurfaceAppearance's `Color`; sRGB).
     pub tint: [f32; 3],
-    /// On terrain, the part's color is a `rook_terrain::Recolor` (gain and
-    /// turn) applied to each texel of the color map, rather than a color.
-    pub recolored: bool,
+    /// On terrain, how the part's color takes the color map.
+    pub terrain_color: TerrainColor,
+}
+
+/// How a terrain surface's color takes its color map
+/// (`rook_terrain::Coloring`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TerrainColor {
+    /// Multiplies it, as a part's does.
+    #[default]
+    Plain,
+    /// The color is a `rook_terrain::Recolor` (gain and turn) applied to
+    /// each texel (the legacy set).
+    Recolor,
+    /// The color (sRGB) tints each texel by the map's alpha (the 2022 set).
+    Tint,
 }
 
 impl MaterialMaps {
@@ -132,7 +145,7 @@ impl MaterialMaps {
         on_mesh_uv: false,
         alpha: MapAlpha::Ignore,
         tint: [1.0; 3],
-        recolored: false,
+        terrain_color: TerrainColor::Plain,
     };
 
     pub fn any(&self) -> bool {
@@ -292,7 +305,7 @@ pub struct PartInstance {
     pub layer: Layer,
     /// Added over what's drawn at the same depth instead of covering it:
     /// a terrain seam's later layers, each its share of the blend
-    /// ([`TerrainLayer`]). Never casts shadows.
+    /// (`docs/behavior/terrain/blending.md`). Never casts shadows.
     pub over: bool,
     pub light: Light,
     /// Turned to face the camera about `position` (its +Z towards it), as

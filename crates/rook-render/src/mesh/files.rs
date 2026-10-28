@@ -34,7 +34,6 @@ pub(crate) fn from_file(m: &rook_content::decode::mesh::Mesh) -> MeshData {
                 f32::from(u8::from(c.corner == 0)),
                 f32::from(u8::from(c.corner == 1)),
             ];
-            v.box_point = c.layers.map(f32::from);
             v.face |= u32::from(c.drawn) << TERRAIN_DRAWN_SHIFT;
         }
     }

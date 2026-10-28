@@ -53,8 +53,7 @@ pub(crate) const TERRAIN_FACE: u32 = 128;
 
 /// Where a terrain seam vertex's face holds which corners' layer its mesh
 /// draws (`TerrainCorner::drawn`, 3 bits). The vertex's UV is its
-/// barycentric weights' first two, and its box point its triangle's
-/// corners' layers.
+/// barycentric weights' first two.
 pub(crate) const TERRAIN_DRAWN_SHIFT: u32 = 9;
 
 impl Vertex {

@@ -120,7 +120,14 @@ the strip to confirm it.
   (the stray triangles seen from 300 studs up). Skirts are drawn only:
   collisions use the bare 4-stud surface.
 - Water has no skirts (they'd show through it); its surface crosses as a
-  solid's does, so open water lies at the same height in every ring.
+  solid's does, so open water lies at the same height in every ring. A
+  coarse voxel near water holds the eight's mean reach of water's surface
+  (`Voxel::water_surface_fill`: a Water voxel's occupancy, a solid's water,
+  a whole voxel for a dry solid), as water rests on what's under it.
+  Averaging the water alone sank a lake one voxel deep into its bed once
+  the coarse voxels grew past four times its depth (a level-2 lake drew at
+  -10); with the solids counted it lies at its level in every ring
+  (`far_lakes_lie_at_their_level`).
 - Left (Approximation): a slab thinner than a coarse voxel collapses to
   the voxel's middle in that ring, a step of up to half the voxel where
   rings meet (a 24-stud slab drops 26 studs past 2,048 studs out);

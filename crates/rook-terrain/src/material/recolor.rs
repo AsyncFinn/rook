@@ -1,8 +1,10 @@
-//! How Studio colors a material's textures by its `MaterialColors` color:
-//! it moves each texel in YCoCg by how the color differs from the
-//! material's default (`docs/behavior/terrain/materials.md#colors`).
+//! How Studio colors a material's textures by its `MaterialColors` color
+//! (`docs/behavior/terrain/materials.md#colors`): the legacy set's by
+//! moving each texel in YCoCg by how the color differs from the material's
+//! default, the 2022 set's by tinting them by the color where their mask
+//! says.
 
-use rook_types::Color3uint8;
+use rook_types::{Color3uint8, MaterialSet};
 
 use super::{TerrainMaterial, looks};
 
@@ -46,6 +48,30 @@ impl Recolor {
     }
 }
 
+/// How a material's textures take its color in a place of one set.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Coloring {
+    /// The legacy set's: each texel moved ([`Recolor`]).
+    Recolor(Recolor),
+    /// The 2022 set's: each texel (sRGB) times `mix(1, color, alpha)`, the
+    /// color map's alpha its tint mask, as Studio's terrain shader does
+    /// for layers it gives a tint (`shaders_glsl3.pack`'s terrain shaders;
+    /// measured: Mud's 2022 texture, its average albedo 193 of 255, draws
+    /// 107 of 255 lit in its default color (121, 112, 98) beside Sand
+    /// drawn as the same rule gives it).
+    Tint([f32; 3]),
+}
+
+impl Coloring {
+    /// The texel `srgb` (its alpha the tint mask) colored.
+    pub fn apply(self, srgb: [f32; 3], mask: f32) -> [f32; 3] {
+        match self {
+            Coloring::Recolor(r) => r.apply(srgb),
+            Coloring::Tint(t) => [0, 1, 2].map(|i| (1.0 + (t[i] - 1.0) * mask) * srgb[i]),
+        }
+    }
+}
+
 /// HSV hue (in turns), saturation and value.
 fn hsv([r, g, b]: [f32; 3]) -> [f32; 3] {
     let max = r.max(g).max(b);
@@ -64,10 +90,18 @@ fn hsv([r, g, b]: [f32; 3]) -> [f32; 3] {
 }
 
 impl TerrainMaterial {
-    /// How its textures are recolored for its `MaterialColors` color, in
-    /// places of either material set (Studio draws terrain with the
-    /// legacy set's textures in both). Against the material's legacy
-    /// default color: the texel's chroma turns by the color's HSV hue less
+    /// How its textures in a place of `set` take `color`.
+    pub fn coloring(self, set: MaterialSet, color: Color3uint8) -> Coloring {
+        match set {
+            MaterialSet::Legacy => Coloring::Recolor(self.recolor(color)),
+            MaterialSet::Materials2022 => {
+                Coloring::Tint([color.r, color.g, color.b].map(|v| f32::from(v) / 255.0))
+            }
+        }
+    }
+
+    /// How its legacy textures are recolored for its `MaterialColors`
+    /// color, against the material's legacy default color: the texel's chroma turns by the color's HSV hue less
     /// the default's, and scales by the color's saturation over the
     /// default's, at most twice; its luma, and its chroma again, scale by
     /// the color's value over the default's, at most twice. So the

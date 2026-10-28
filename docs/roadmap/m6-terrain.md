@@ -36,21 +36,25 @@ Terrain comes before characters, who walk on it.
    steps with the voxels where Studio's rounds off, and grass blades are
    flat with no darkening under them.
    - *Scope*:
-     - ✅ Colors (2026-10-28): Studio's recoloring rule, measured
-       per pixel on every material in both sets, and the legacy textures
-       in every place. Left: the textures filtered in gamma space as
+     - ✅ Colors (2026-10-28): Studio's recoloring rule for the legacy
+       textures, measured per pixel on every material, and the 2022
+       textures with their tint in places saved with `Use2022Materials`
+       ([materials](../behavior/terrain/materials.md#colors)). Left: the textures filtered in gamma space as
        Studio's YCoCg array is (Rook draws them about 7 of 255 brighter
        at their default colors).
      - ✅ Shoreline water (2026-10-28): the water solid voxels hold is
        drawn and solids count as inside water's surface, so shores round
        off where the surfaces cross, as Studio's do
-       ([water](../behavior/terrain/water.md#shorelines)). Left: a dry
-       solid's crossing in water's surface (its own occupancy, an
-       Inference).
+       ([water](../behavior/terrain/water.md#shorelines)); water lies
+       flat over the dry land at its edge and dips under it a cell on,
+       so shores follow the land's curve. Left: where the surface dips
+       (an Inference), and a few stair steps where flat land lies just
+       under the water's level.
      - ✅ Far rings (2026-10-28): squares on the ground, far surfaces
        lying where near ones do, skirts hung straight down from upward
        faces only, so no walls, seams or stray triangles show where
-       rings meet ([detail](../behavior/terrain/detail.md)). Left: a
+       rings meet, and lakes at their level in every ring
+       ([detail](../behavior/terrain/detail.md)). Left: a
        slab thinner than a coarse voxel drops to the voxel's middle in
        that ring (Studio's thin slabs past 2,048 studs unmeasured;
        settled by the slab's side at a narrow field of view).
@@ -65,9 +69,11 @@ Terrain comes before characters, who walk on it.
        the grass shaders' terms and casting shadows
        ([grass](../behavior/terrain/grass.md)). Left: the foot-to-tip
        light isolated rather than read off pixels.
-     - Surface: the per-vertex detiling numbers; seams as wide as
-       Studio's; height maps without binding arrays; Roblox's diagonal
-       for bent quads.
+     - ✅ Seams (2026-10-28): layers mixed by the plain barycentric
+       weights, linear ramps a cell wide, as Studio draws them in both
+       sets ([blending](../behavior/terrain/blending.md)).
+     - Surface: the per-vertex detiling numbers; Roblox's diagonal for
+       bent quads.
      - API: `CountCells`, `WorldToCellPreferEmpty` inside solid terrain,
        `ReadVoxelChannels` and `WriteVoxelChannels`; fast small parts
        against the water surface.
@@ -169,8 +175,25 @@ Terrain comes before characters, who walk on it.
        with distance as Studio's blended shader makes it, by 250 studs.
        Cost: the same draws, with the water's triangles drawn from both
        sides; one more pipeline.
-     - *The rest of the Scope* (detiling per vertex, seams, height maps
-       without binding arrays, the bent-quad diagonal, water's waves,
+     - *Shores, far lakes, seams and the 2022 set* (2026-10-28, against
+       Studio on a large terrain place): engines that store water beside
+       solids (Minecraft's waterlogged blocks, Roblox's
+       `LiquidOccupancy`) mesh water as its own surface; Rook's water
+       pass counts dry solids as full of water inside cells that touch
+       water, so the surface stays flat at its level over the land at
+       its edge, and lets it dip under the land one cell on, so the
+       shoreline is where the land rises through it. The coarse levels
+       average that same reach of water's surface rather than the water
+       alone, as a mip of a density field keeps its iso-surface. Seams
+       follow Studio's terrain shader variant that mixes layers by the
+       barycentric weights alone (the height-sharpened one isn't what
+       Studio draws: its seams look the same in both sets, whose height
+       maps differ), which also drops the per-frame layer table. The
+       2022 set's textures and tint come from Studio's own table and
+       shader. Cost: shores add a cell of water triangles; the seam
+       shader gets cheaper (no height samples).
+     - *The rest of the Scope* (detiling per vertex, the bent-quad
+       diagonal, water's waves,
        `CountCells`, `WorldToCellPreferEmpty`, voxel
        channels, small parts at the water surface) gets its Design here
        before its code, once the parts above have landed.

@@ -2,7 +2,7 @@
 //! are, at an eighth (BC1) or a quarter (BC3, BC7) of RGBA8's memory.
 //! Material textures are kept this way at their full 1024 × 1024, as
 //! Roblox serves them in BC1 and BC3 ([`super::ktx2`]); the
-//! roughness-metalness-height map Rook packs from three images is BC7,
+//! roughness-metalness map Rook packs from two images is BC7,
 //! whose blocks keep the three channels apart. Encoding goes through
 //! Intel's ISPC texture compressor (`intel_tex_2`), decoding (for devices
 //! that can't sample blocks) through `bcdec_rs`.

@@ -77,10 +77,16 @@ impl Grid {
     }
 }
 
-/// The coarse voxel of eight fine ones.
+/// The coarse voxel of eight fine ones. Its water is the eight's mean
+/// [`Voxel::water_surface_fill`] when any holds water: water rests on
+/// what's under it, so that puts the coarse surface at the fine one's
+/// level, where averaging the water alone sank a lake one voxel deep into
+/// its bed once the voxels grew past four times its depth.
 fn average(voxels: impl Iterator<Item = Voxel>) -> Voxel {
     let mut solid = [0.0f32; TerrainMaterial::ALL.len()];
     let mut water = 0.0;
+    let mut surface = 0.0;
+    let mut wet = false;
     for v in voxels {
         if v.is_solid() {
             solid[v.material as usize] += v.fill();
@@ -88,11 +94,14 @@ fn average(voxels: impl Iterator<Item = Voxel>) -> Voxel {
         } else if v.material == TerrainMaterial::Water {
             water += v.fill();
         }
+        surface += v.water_surface_fill();
+        wet |= v.is_wet();
     }
     let solids: f32 = solid.iter().sum();
     if solids == 0.0 && water == 0.0 {
         return Voxel::AIR;
     }
+    let surface = if wet { surface / 8.0 } else { 0.0 };
     if solids >= water {
         // The first by index on a tie, as a cell's dominant material.
         let best = (0..solid.len())
@@ -102,11 +111,10 @@ fn average(voxels: impl Iterator<Item = Voxel>) -> Voxel {
         return Voxel {
             material: TerrainMaterial::ALL[best],
             occupancy: byte(solids / 8.0),
-            water: byte(water / 8.0),
+            water: if wet { byte(surface).max(1) } else { 0 },
         };
     }
-    // Mostly water: solids count as inside for the water's surface.
-    Voxel::new(TerrainMaterial::Water, byte((solids + water) / 8.0))
+    Voxel::new(TerrainMaterial::Water, byte(surface))
 }
 
 /// The occupancy byte nearest `fill` (byte `b` is `(b + 1) / 256` full).

@@ -6,8 +6,8 @@
 //! materials whose top and side textures differ, the facing of its smooth
 //! normal: its [`Layer`]. A triangle whose three corners share a layer is
 //! drawn with it alone. One whose corners differ (a seam) blends the
-//! corners' layers across it by their weights (the barycentric ones,
-//! sharpened by the layers' height maps), so materials meet over a cell
+//! corners' layers across it by their barycentric weights, so materials
+//! meet over a cell
 //! instead of along the voxels' stair steps. Rook draws a seam triangle
 //! once per layer it holds: the first corner's layer opaque, the others
 //! added over it ([`Seam`]).
@@ -23,16 +23,6 @@ use crate::TerrainMaterial;
 pub struct Layer {
     pub material: TerrainMaterial,
     pub facing: Facing,
-}
-
-impl Layer {
-    /// How many layers there are: three facings of each material.
-    pub const COUNT: usize = TerrainMaterial::ALL.len() * 3;
-
-    /// Its place among the [`Layer::COUNT`] layers.
-    pub fn index(self) -> usize {
-        self.material as usize * 3 + self.facing as usize
-    }
 }
 
 /// How a draw of seam triangles is drawn.

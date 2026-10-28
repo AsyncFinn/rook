@@ -53,15 +53,29 @@ Observed:
   its edge, under their surface, and the shoreline is where the two
   surfaces cross (a Grass ball in a lake meets the water in a circle).
 
-Rook: water's surface is surface nets over every non-air voxel, each
-crossing placed by the water a voxel holds (a Water voxel's occupancy,
-a solid's water) or, for a dry solid, by its own occupancy (Inference:
-that keeps it under the solid's surface; a profile along a slab across a
-dry 0.25 voxel against a full one would settle it). A cell has a water
-vertex only when one of its corners holds water, and a quad needs its
-four cells, so water meets solids without a face, dry terrain has none,
-and a chunk with no water skips the pass. Far rings average a solid's
-water with the Water voxels'. Benched against the build before
+- **Shores are smooth where the land under the water is dry**: in
+  TerrainTest (2026-10-28), lakes whose last voxels meet partly filled
+  solids holding no water still lie flat at their level up to where the
+  land rises through them, and the shoreline follows the land's own
+  curve, not the voxels' steps.
+
+Rook: water's surface is surface nets over every non-air voxel. A cell
+has a water vertex when one of its corners is non-air, and a quad is
+kept when one of its four cells has water at a corner (wet), so the
+surface runs one cell on past the water into the land around, and dry
+terrain away from water has none; a chunk with no water skips the pass.
+In a wet cell each crossing is placed by how far water's surface reaches
+out of a voxel (`Voxel::water_surface_fill`): a Water voxel's occupancy,
+the water a solid holds, a whole voxel for a dry solid. So the water lies
+flat at its level over the dry solids at its edge. In the cells one step
+past, a dry solid's crossing is placed by its own occupancy instead, so
+the surface dips down under the land's surface there and its edge is
+never in sight: the shoreline is where the land rises through the flat
+water (Inference, matching Studio's shores in TerrainTest: the grass spit
+at (-832, -4, -100) draws as Studio's). A few stair steps remain where
+flat land lies just under the water's level, as the dip then shows
+through it (Approximation). Far rings average the same
+reach ([detail](detail.md#how-rook-does-it)), so lakes keep their level. Benched against the build before
 (2026-10-28, `--bench 300`, alternating runs): on the archive's largest
 water place (25 million water voxels) frames and loading are unchanged
 within noise (median frame 1.90 and 2.12 ms before, 2.03 and 2.19

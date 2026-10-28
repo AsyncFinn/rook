@@ -109,25 +109,6 @@ fn normal_taps(images: vec3<u32>, taps: Taps, dx: vec2<f32>, dy: vec2<f32>) -> v
     return sum;
 }
 
-// A terrain layer's height (blue of its roughness-metalness map) at its
-// `taps`, from its slot in the table. Without a table only the draw's own
-// images are bound, so every layer counts as full height and seams blend
-// by their corners' weights alone.
-@if(image_table)
-fn layer_height(slot: u32, taps: Taps, dx: vec2<f32>, dy: vec2<f32>) -> f32 {
-    var sum = 0.0;
-    for (var k = 0u; k < taps.count; k++) {
-        let turn = taps.turn[k];
-        sum += taps.weight[k]
-            * textureSampleGrad(images_linear[slot], image_sampler, taps.uv[k], turned(dx, turn), turned(dy, turn)).b;
-    }
-    return sum;
-}
-@else
-fn layer_height(slot: u32, taps: Taps, dx: vec2<f32>, dy: vec2<f32>) -> f32 {
-    return 1.0;
-}
-
 // A skybox face's image: its slot in the table (`Globals::sky_images`),
 // or bound for its draw.
 @if(image_table)

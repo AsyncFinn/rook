@@ -44,7 +44,6 @@ pub(crate) fn pin(out: &Path) -> anyhow::Result<()> {
             ("normal", parsed.normal),
             ("metalness", parsed.metalness),
             ("roughness", parsed.roughness),
-            ("height", parsed.height),
         ];
         for (name, image) in maps {
             let Some(image) = image.filter(|&i| seen.insert(i)) else {

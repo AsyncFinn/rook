@@ -149,3 +149,40 @@ fn rings_are_squares_on_the_ground() {
     assert_eq!(levels_at(&rings, Vec3::new(10.0, 0.0, 10.0)), [0]);
     assert_eq!(levels_at(&rings, Vec3::new(10.0, -3000.0, 10.0)), [0]);
 }
+
+#[test]
+fn far_lakes_lie_at_their_level() {
+    // A lake one voxel deep on a bed of Rock: averaged alone, its water
+    // sank into the bed from 16-stud voxels on, and far lakes drew as bare
+    // ground.
+    let mut grid = Grid::new();
+    for x in -384..384 {
+        for z in -384..384 {
+            for y in -40..-1 {
+                grid.set(IVec3::new(x, y, z), Voxel::new(TerrainMaterial::Rock, 255));
+            }
+            grid.set(
+                IVec3::new(x, -2, z),
+                Voxel::new(TerrainMaterial::Water, 255),
+            );
+        }
+    }
+    let levels = pyramid(grid);
+    for level in 0..LEVELS {
+        let mesh = mesh_chunk_at(
+            &levels[usize::from(level)],
+            IVec3::new(0, -1, 0),
+            Detail::at(level),
+        );
+        let y = mesh.origin().y;
+        let water: Vec<f32> = mesh
+            .draws
+            .iter()
+            .filter(|d| d.layer.material == TerrainMaterial::Water)
+            .flat_map(|d| d.positions.iter().map(|p| p[1] + y))
+            .collect();
+        assert!(!water.is_empty(), "level {level}: no water");
+        let top = water.iter().copied().fold(f32::MIN, f32::max);
+        assert!((top + 4.0).abs() < 1e-3, "level {level}: water at {top}");
+    }
+}

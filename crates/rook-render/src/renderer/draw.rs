@@ -250,7 +250,6 @@ impl Renderer {
             sky_horizon: rgb(l.sky_horizon, l.environment_specular),
             sky_bottom: rgb(l.sky_bottom, 0.0),
             sky_images,
-            terrain_layers: self.terrain_layers(),
         };
         self.queue
             .write_buffer(&self.globals, 0, bytemuck::bytes_of(&globals));
@@ -460,22 +459,6 @@ impl Renderer {
         }
         let starts = self.upload_args(&[&shadow_runs, &main_runs, &mask_runs]);
         ([shadow_runs, main_runs, mask_runs], starts)
-    }
-
-    /// Each terrain layer's blend, as the shader reads it.
-    fn terrain_layers(&self) -> [[f32; 4]; 2 * TERRAIN_LAYERS] {
-        let mut out = [[0.0; 4]; 2 * TERRAIN_LAYERS];
-        for (i, l) in self.terrain.layers.iter().enumerate() {
-            let slot = self.image_slots(&[None, None, None, l.height, None])[3];
-            out[i * 2] = [l.remap[0], l.remap[1], l.scale, l.studs];
-            out[i * 2 + 1] = [
-                slot as f32,
-                f32::from(u8::from(l.cube)),
-                l.detile.shift,
-                l.detile.turn,
-            ];
-        }
-        out
     }
 
     /// Build the sky's reflection cube again if the sky changed: from the

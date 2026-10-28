@@ -74,6 +74,23 @@ impl Voxel {
         }
         (f32::from(self.water) + 1.0) / 256.0
     }
+
+    /// How far water's surface reaches out of this voxel, from 0 to 1 as
+    /// an occupancy: a Water voxel's occupancy, the water a solid holds, a
+    /// whole voxel for a dry solid, none for air. Solids count as inside
+    /// water's surface, a dry one wholly (observed: at shores where the
+    /// partly filled solids hold no water, Studio's water stays flat at
+    /// its level up to where the land rises through it, and a dry Rock
+    /// voxel in a slab's top leaves no dip), so water meets land where
+    /// the two surfaces cross (`docs/behavior/terrain/water.md#shorelines`).
+    pub fn water_surface_fill(self) -> f32 {
+        match self.material {
+            TerrainMaterial::Air => 0.0,
+            TerrainMaterial::Water => self.fill(),
+            _ if self.water > 0 => self.water_fill(),
+            _ => 1.0,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

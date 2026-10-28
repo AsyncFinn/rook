@@ -15,13 +15,10 @@ mod rings;
 use glam::IVec3;
 use rook_content::MaterialMap;
 use rook_content::decode::mesh::{Mesh, TerrainCorner, TerrainMapping};
-use rook_render::{Detile, TERRAIN_LAYERS, TerrainLayer, TerrainLook};
+use rook_render::{Detile, TerrainColor, TerrainLook};
 use rook_terrain::grass::{GrassTops, add_grass_tops, blade_color};
 use rook_terrain::lod::Rings;
-use rook_terrain::{ChunkMesh, Facing, Grid, Layer, Seam, TerrainMaterial};
-
-// The renderer's table holds every layer.
-const _: () = assert!(Layer::COUNT <= TERRAIN_LAYERS);
+use rook_terrain::{ChunkMesh, Coloring, Facing, Grid, Layer, Seam, TerrainMaterial};
 use rook_types::MaterialColors;
 
 use super::*;
@@ -188,9 +185,10 @@ impl SceneCache {
         let colors = terrain.and_then(|t| dom.material_colors_property(t, "MaterialColors"));
         let grass = &mut self.terrain.grass;
         grass.on = self.scene.terrain.grass_reach > 0.0;
+        let set = look::materials::material_set(dom);
         grass.color = TerrainMaterial::Grass
-            .color(colors.as_ref(), look::materials::material_set(dom))
-            .map(blade_color)
+            .color(colors.as_ref(), set)
+            .map(|c| blade_color(c, set))
             .unwrap_or_default();
     }
 
@@ -277,7 +275,6 @@ impl SceneCache {
                 .unwrap_or(1.0),
             layers: HashMap::new(),
         };
-        let mut blends = [TerrainLayer::default(); TERRAIN_LAYERS];
         for material in self.terrain.materials.clone() {
             if material == TerrainMaterial::Water {
                 continue;
@@ -289,13 +286,10 @@ impl SceneCache {
             };
             for &facing in facings {
                 let layer = Layer { material, facing };
-                let (maps, color, blend) =
-                    self.terrain_look(dom, terrain, layer, set, colors.as_ref());
-                blends[layer.index()] = blend;
+                let (maps, color) = self.terrain_look(dom, terrain, layer, set, colors.as_ref());
                 looks.layers.insert(layer, (maps, color));
             }
         }
-        self.scene.terrain.layers = blends;
         self.terrain.looks = looks;
     }
 }

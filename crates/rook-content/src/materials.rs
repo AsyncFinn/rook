@@ -119,16 +119,13 @@ pub struct TexturePack {
     pub normal: Option<u64>,
     pub metalness: Option<u64>,
     pub roughness: Option<u64>,
-    /// How high each point of the surface stands (terrain's packs: where
-    /// materials meet, the higher one shows).
-    pub height: Option<u64>,
 }
 
 impl TexturePack {
     /// Read a TexturePack asset: `<roblox>` holding `<color>`, `<normal>`,
-    /// `<metalness>`, `<roughness>` and `<height>` image ids (and settings
-    /// Rook doesn't use: `<usage>`, `<alphamode>`, `<tiling>`,
-    /// `<emissive...>`).
+    /// `<metalness>` and `<roughness>` image ids (and what Rook doesn't
+    /// use: `<height>`, which terrain's packs name but Studio's terrain
+    /// doesn't draw, `<usage>`, `<alphamode>`, `<tiling>`, `<emissive...>`).
     pub fn parse(bytes: &[u8]) -> Option<Self> {
         let text = std::str::from_utf8(bytes).ok()?;
         if !text.trim_start().starts_with("<roblox") {
@@ -145,23 +142,17 @@ impl TexturePack {
             normal: id("normal"),
             metalness: id("metalness"),
             roughness: id("roughness"),
-            height: id("height"),
         })
     }
 }
 
 /// A material map from its image files, block-compressed at its full size
 /// (Roblox's are 1024 × 1024): the color or normal map as BC1 (BC3 where
-/// it has alpha), the roughness-metalness-height map as BC7. A material's
+/// it has alpha), the roughness-metalness map as BC7. A material's
 /// three maps hold 2.7 MB with their mips, where RGBA8 would hold 16 MB
 /// (40 materials: 107 MB against 640).
-pub fn build(
-    map: MaterialMap,
-    main: &[u8],
-    metalness: Option<&[u8]>,
-    height: Option<&[u8]>,
-) -> Result<Image, ImageError> {
-    let (rgba, format) = packed(map, main, metalness, height)?;
+pub fn build(map: MaterialMap, main: &[u8], metalness: Option<&[u8]>) -> Result<Image, ImageError> {
+    let (rgba, format) = packed(map, main, metalness)?;
     let image = Image::from_rgba(rgba, format, MAX_SIZE)?;
     let encoding = match map {
         MaterialMap::RoughnessMetalness => Encoding::Bc7,
@@ -173,32 +164,27 @@ pub fn build(
 
 /// A material map's pixels: the color or normal map as it is (normals
 /// are ordinary RGB normal maps), or roughness (into green), metalness
-/// (into red, 0 when the pack has none) and height (into blue, full when
-/// it has none) packed into one, with an opaque alpha so mips aren't
-/// weighted by it.
+/// (into red, 0 when the pack has none) packed into one, with an opaque
+/// alpha so mips aren't weighted by it.
 fn packed(
     map: MaterialMap,
     main: &[u8],
     metalness: Option<&[u8]>,
-    height: Option<&[u8]>,
 ) -> Result<(::image::RgbaImage, ImageFormat), ImageError> {
     let (mut rgba, format) = crate::decode::image::decode_rgba(main)?;
     if map == MaterialMap::RoughnessMetalness {
-        let (w, h) = rgba.dimensions();
-        let sized = |bytes: Option<&[u8]>| -> Result<_, ImageError> {
-            let Some(bytes) = bytes else {
-                return Ok(None);
-            };
-            let (m, _) = crate::decode::image::decode_rgba(bytes)?;
-            let filter = ::image::imageops::FilterType::Triangle;
-            Ok(Some(::image::imageops::resize(&m, w, h, filter)))
+        let metal = match metalness {
+            Some(bytes) => {
+                let (m, _) = crate::decode::image::decode_rgba(bytes)?;
+                let (w, h) = rgba.dimensions();
+                let filter = ::image::imageops::FilterType::Triangle;
+                Some(::image::imageops::resize(&m, w, h, filter))
+            }
+            None => None,
         };
-        let metal = sized(metalness)?;
-        let height = sized(height)?;
         for (x, y, p) in rgba.enumerate_pixels_mut() {
             let m = metal.as_ref().map_or(0, |m| m.get_pixel(x, y)[0]);
-            let h = height.as_ref().map_or(255, |h| h.get_pixel(x, y)[0]);
-            p.0 = [m, p[0], h, 255];
+            p.0 = [m, p[0], 0, 255];
         }
     }
     Ok((rgba, format))
@@ -226,7 +212,6 @@ mod tests {
                 normal: Some(11498586912),
                 metalness: Some(11498586281),
                 roughness: Some(11498587586),
-                height: None,
             })
         );
         let normal_only = b"<roblox><usage>3</usage><normal>9438453869</normal></roblox>";
@@ -272,18 +257,12 @@ mod tests {
             .unwrap();
             out
         };
-        let (rm, _) = packed(
-            MaterialMap::RoughnessMetalness,
-            &png(200),
-            Some(&png(30)),
-            Some(&png(70)),
-        )
-        .unwrap();
-        assert_eq!(rm.get_pixel(0, 0).0, [30, 200, 70, 255]);
-        let (r, _) = packed(MaterialMap::RoughnessMetalness, &png(90), None, None).unwrap();
-        assert_eq!(r.get_pixel(0, 0).0, [0, 90, 255, 255]);
+        let (rm, _) = packed(MaterialMap::RoughnessMetalness, &png(200), Some(&png(30))).unwrap();
+        assert_eq!(rm.get_pixel(0, 0).0, [30, 200, 0, 255]);
+        let (r, _) = packed(MaterialMap::RoughnessMetalness, &png(90), None).unwrap();
+        assert_eq!(r.get_pixel(0, 0).0, [0, 90, 0, 255]);
         // Built, it's BC7.
-        let built = build(MaterialMap::RoughnessMetalness, &png(90), None, None).unwrap();
+        let built = build(MaterialMap::RoughnessMetalness, &png(90), None).unwrap();
         assert_eq!(built.encoding, Encoding::Bc7);
     }
 }
