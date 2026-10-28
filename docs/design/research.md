@@ -165,7 +165,7 @@ Not established from public sources: anything beyond the above. Studio's About d
 
 ### Not to be used
 
-Decompiling or disassembling Roblox executables, even though some projects do. Files a Roblox install ships as data (shader packs, content, tables) are leads under the [clean-implementation policy](policies.md#clean-implementation).
+Anything read out of Roblox's executables, by disassembly, decompiling or string search, even though some projects do ([policy](policies.md#clean-implementation)). Files a Roblox install ships as data (shader packs, content, tables) are leads under the [clean-implementation policy](policies.md#clean-implementation).
 
 ---
 

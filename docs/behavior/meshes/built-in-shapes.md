@@ -32,8 +32,7 @@ which matters for the textures step.
   Studio's install (a version 2.00 mesh, 28,789 bytes, about 1.2 studs each
   way at its own size). Proof: with that file renamed, setting `MeshType`
   to Head changed the enum but not the drawing (a Sphere stayed a sphere,
-  with no error), and the executable names `rbxasset://avatar/heads/head.mesh`
-  among the render mesh manager's strings.
+  with no error).
 - *How it's sized:* the mesh is scaled by (min(X, Z), Y, min(X, Z)) / 1.25
   of the part's Size. So it's round from above and never stretched along the
   longer of X and Z (on 2 × 1 × 50 and 50 × 1 × 2 it is a 2-stud head).
