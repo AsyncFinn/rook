@@ -94,7 +94,7 @@ impl SceneCache {
                     indices: draw.indices,
                     terrain: Some(if material == TerrainMaterial::Water {
                         TerrainMapping::Water
-                    } else if material.shape().cube {
+                    } else if material.look().cube {
                         TerrainMapping::Cube
                     } else {
                         TerrainMapping::Planes

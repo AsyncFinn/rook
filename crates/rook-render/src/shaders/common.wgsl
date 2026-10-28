@@ -108,6 +108,9 @@ const CENTERED: u32 = 256u;
 const ALPHA_OVERLAY: u32 = 1u;
 const ALPHA_TRANSPARENCY: u32 = 2u;
 const ALPHA_TINT_MASK: u32 = 3u;
+// In a terrain instance's surface bits: its color recolors its color map
+// (`gpu::TERRAIN_RECOLOR`).
+const TERRAIN_RECOLOR: u32 = 3u;
 
 struct VertexIn {
     @location(0) position: vec3<f32>,
@@ -162,9 +165,12 @@ struct VertexOut {
     @location(13) @interpolate(flat) images: vec3<u32>,
 };
 
-// What the shadow pass reads: positions only, and where the instance is.
+// What the shadow pass reads: positions, what terrain moves its vertices
+// by, and where the instance is.
 struct ShadowIn {
     @location(0) position: vec3<f32>,
+    @location(2) uv: vec2<f32>,
+    @location(4) face: u32,
     @location(5) i_position: vec3<f32>,
     @location(6) i_right: vec3<f32>,
     @location(7) i_up: vec3<f32>,

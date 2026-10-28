@@ -36,18 +36,22 @@ Terrain comes before characters, who walk on it.
    steps with the voxels where Studio's rounds off, and grass blades are
    flat with no darkening under them.
    - *Scope*:
-     - Colors: CrackedLava's tint (the fitted matrix turns its default
-       (255, 24, 67) pink, blue above green); the tint rule read rather
-       than fitted; the default Grass color against Studio.
+     - ✅ Colors (2026-10-28): Studio's recoloring rule, measured
+       per pixel on every material in both sets, and the legacy textures
+       in every place. Left: the textures filtered in gamma space as
+       Studio's YCoCg array is (Rook draws them about 7 of 255 brighter
+       at their default colors).
      - Water: shoreline water inside solid voxels drawn, so shores round
        off; water seen from below; how Studio lays its water frames and
        the sky detail its water reflects.
-     - Grass: blades shaded as Studio's (each blade's shade varies and
-       the ground darkens under a clump,
-       [grass](../behavior/terrain/grass.md)).
+     - ✅ Grass (2026-10-28): blades in the ground's average, lit by
+       the grass shaders' terms and casting shadows
+       ([grass](../behavior/terrain/grass.md)). Left: the foot-to-tip
+       light isolated rather than read off pixels.
      - Surface: the per-vertex detiling numbers; seams as wide as
        Studio's; height maps without binding arrays; Roblox's diagonal
-       for bent quads.
+       for bent quads; far rings drawing stray triangles across chunks
+       (seen 2026-10-28 on 21 slabs from 300 studs up, on main too).
      - API: `CountCells`, `WorldToCellPreferEmpty` inside solid terrain,
        `ReadVoxelChannels` and `WriteVoxelChannels`; fast small parts
        against the water surface.

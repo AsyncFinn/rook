@@ -3,7 +3,9 @@
 //! materials and `Terrain.MaterialColors`).
 
 mod looks;
-mod tint;
+mod recolor;
+
+pub use recolor::Recolor;
 
 use rook_types::{Color3uint8, Material, MaterialColors, MaterialSet, TerrainMaterials};
 
@@ -173,56 +175,35 @@ pub struct Look {
     pub bottom: Option<Texture>,
 }
 
-/// Every texture pack terrain uses, in either set (tools: Rook keeps
-/// these, `rook-tools content --pin`).
+/// Every texture pack terrain uses (tools: Rook keeps these,
+/// `rook-tools content --pin`).
 pub fn all_packs() -> impl Iterator<Item = u64> {
     TerrainMaterial::ALL.into_iter().flat_map(|m| {
-        [MaterialSet::Legacy, MaterialSet::Materials2022]
+        let look = m.look();
+        [look.top, look.side, look.bottom]
             .into_iter()
-            .flat_map(move |set| {
-                let look = m.textures(set);
-                [look.top, look.side, look.bottom]
-            })
             .flatten()
             .map(|t| t.pack)
     })
 }
 
 impl TerrainMaterial {
-    /// How this material looks in `set`.
-    pub fn look(self, set: MaterialSet) -> &'static Look {
-        let table = match set {
-            MaterialSet::Legacy => &looks::LEGACY,
-            MaterialSet::Materials2022 => &looks::MATERIALS_2022,
-        };
-        &table[self as usize]
+    /// How this material shapes, shades and textures the surface: as
+    /// Studio's legacy (`Pre2022`) table says, in places of either
+    /// material set. Observed in places saved with `Use2022Materials` on
+    /// and off: Concrete stepped by half cells, Slate and Basalt shifted
+    /// and Cobblestone quantized, as only the legacy table has them; and
+    /// terrain drawn pixel for pixel alike in both, with the legacy
+    /// textures, while the same places' parts switched sets.
+    pub fn look(self) -> &'static Look {
+        &looks::LOOKS[self as usize]
     }
 
-    /// How this material shapes and shades the surface: as the legacy
-    /// set's table says, in places of either set (observed in places saved
-    /// with `Use2022Materials` on and off: Concrete stepped by half cells,
-    /// Slate and Basalt shifted and Cobblestone quantized, as only the
-    /// legacy table has them).
-    pub fn shape(self) -> &'static Look {
-        self.look(MaterialSet::Legacy)
-    }
-
-    /// Its textures: those of the place's set (observed: Studio draws a
-    /// legacy place's Sandstone with the legacy set's cracked red rock,
-    /// not the 2022 set's pale stone).
-    pub fn textures(self, set: MaterialSet) -> &'static Look {
-        self.look(set)
-    }
-
-    /// Whether its top, side and bottom textures differ in either set, so
-    /// its surfaces are split by which way they face.
+    /// Whether its top, side and bottom textures differ, so its surfaces
+    /// are split by which way they face.
     pub fn faces_differ(self) -> bool {
-        [MaterialSet::Legacy, MaterialSet::Materials2022]
-            .iter()
-            .any(|&set| {
-                let look = self.textures(set);
-                look.top != look.side || look.side != look.bottom
-            })
+        let look = self.look();
+        look.top != look.side || look.side != look.bottom
     }
 
     /// Its color in `Terrain.MaterialColors`, or `set`'s default when the

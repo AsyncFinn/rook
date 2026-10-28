@@ -1,6 +1,8 @@
-// Terrain's moving surfaces: water's waves and normal frames, and grass
-// blades' sway and lean (docs/behavior/terrain/grass.md). What Studio 0.742
-// shows was measured; the shapes chosen to match it are Approximations.
+// Terrain's own looks: its textures recolored by MaterialColors
+// (docs/behavior/terrain/materials.md#colors), water's waves and normal
+// frames, and grass blades' light, sway and lean
+// (docs/behavior/terrain/grass.md). What Studio 0.742 shows was measured;
+// the shapes chosen to match it are Approximations.
 
 import package::common::{
     g, image_sampler, water_normals, VertexOut, TERRAIN_WATER, TERRAIN_BLADES,
@@ -9,6 +11,27 @@ import package::common::{
 import package::images::{layer_height, sky_toward};
 import package::lighting::{diffuse_light, sun_light, sun_visibility, fog_units};
 import package::tone::{albedo_units, frame, light_units3};
+
+// A texel of a terrain color map (sRGB) recolored by its material's color,
+// as Studio builds its YCoCg texture array (`rook_terrain::Recolor`; `r`:
+// the gain, then the turn): the luma times the gain, at most 1, and the
+// chroma turned and scaled, within 0.5 either way. Channels may pass 1,
+// as Studio's do.
+fn recolor(s: vec3<f32>, r: vec3<f32>) -> vec3<f32> {
+    let y = clamp(dot(s, vec3(0.25, 0.5, 0.25)) * r.x, 0.0, 1.0);
+    let co = (s.r - s.b) * 0.5;
+    let cg = dot(s, vec3(-0.25, 0.5, -0.25));
+    let co2 = clamp(r.y * co - r.z * cg, -0.5, 0.5);
+    let cg2 = clamp(r.z * co + r.y * cg, -0.5, 0.5);
+    return max(vec3(y + co2 - cg2, y + cg2, y - co2 - cg2), vec3(0.0));
+}
+
+// How much of the sun a blade's foot and tip take (Studio's grass vertex
+// shaders give each vertex exp2((-foot x a + b) x c), from three uniforms
+// Rook can't read; measured from the side under the sun alone, a blade's
+// foot draws about half as lit as its tip: Approximation).
+const BLADE_FOOT_SUN: f32 = 0.5;
+const BLADE_TIP_SUN: f32 = 1.0;
 
 // Studs per repeat of water's normal frames (Approximation: Studio's
 // ripples are 1 to 3 studs across, about two of the maps' bumps, and
@@ -166,6 +189,40 @@ fn water_surface(in: VertexOut, dp_x: vec3<f32>, dp_y: vec3<f32>) -> vec4<f32> {
     }
     let passes = (1.0 - in.color.a) * WATER_PASSES;
     return vec4(frame(fog_units(c, in.world)), 1.0 - passes);
+}
+
+// A grass blade's light, as Studio's grass shaders give it
+// (`shaders_glsl3.pack`, 0.743): the blade's color times the ambient and
+// sky light, plus the sun on it (`sun`: the share its foot or tip takes,
+// interpolated, in `uv.y`) by (|n.l| + 0.9) / 1.9, so blades edge-on to
+// the sun keep about half; and where Studio's high quality grass adds
+// them, the light through a blade seen against the sun, (|n.l| / 2 +
+// 0.5) cubed times the view's cosine to the sun, and a sharp highlight,
+// both fading out over the last 40 studs of where grass is drawn. The
+// blade is one triangle seen from both sides, so its normal's sign is
+// whichever faces the sun. Shadowed through the shadow map, which blades
+// cast into.
+fn blade_surface(in: VertexOut, dp_x: vec3<f32>, dp_y: vec3<f32>) -> vec4<f32> {
+    let albedo = albedo_units(in.color.rgb);
+    let l = g.sun_dir.xyz;
+    var n = normalize(cross(dp_x, dp_y));
+    if dot(n, l) < 0.0 {
+        n = -n;
+    }
+    let facing = abs(dot(n, l));
+    let sun = in.uv.y;
+    let shadow = sun_visibility(in.world, n);
+    let lit = g.sun_color.rgb * shadow;
+    var c = diffuse_light(albedo, in.world, vec3(0.0, 1.0, 0.0), lit * clamp((facing + 0.9) / 1.9, 0.0, 1.0) * sun);
+    let to_camera = g.camera_pos.xyz - in.world;
+    let distance = length(to_camera);
+    let v = to_camera / max(distance, 1e-3);
+    let fade = 1.0 - clamp((distance - g.terrain.w + 40.0) / 40.0, 0.0, 1.0);
+    let half = normalize(l + v);
+    let through = clamp(-dot(v, l) * fade * sun * pow(facing * 0.5 + 0.5, 3.0), 0.0, 1.0);
+    let highlight = pow(abs(dot(half, n)), 12.0) * pow(clamp(half.y, 0.0, 1.0), 8.0) * fade * sun;
+    c += (albedo * through + vec3(highlight)) * lit;
+    return vec4(frame(fog_units(c, in.world)), 1.0);
 }
 
 // A terrain seam fragment's share of its draw's layer (Studio 0.742's

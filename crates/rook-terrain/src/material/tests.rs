@@ -21,7 +21,7 @@ fn indices_and_names() {
 #[test]
 fn looks() {
     use TerrainMaterial::*;
-    let legacy = |m: TerrainMaterial| m.look(MaterialSet::Legacy);
+    let legacy = |m: TerrainMaterial| m.look();
     assert_eq!(legacy(Concrete).quantize, 0.5);
     assert_eq!(legacy(Pavement).quantize, 0.25);
     assert_eq!(legacy(Brick).cubify, 1.0);
@@ -30,39 +30,39 @@ fn looks() {
     assert_eq!(legacy(Grass).top.unwrap().pack, 7547336797);
     assert_eq!(legacy(Grass).top.unwrap().studs(), 16.0);
     assert!(legacy(Air).top.is_none() && legacy(Water).side.is_none());
-    let modern = Concrete.look(MaterialSet::Materials2022);
-    assert_eq!(modern.quantize, 1.0);
 }
 
-/// The tints' shapes measured in Studio (docs/behavior/terrain/materials.md).
+/// Studio's recoloring, as measured on every material in both sets
+/// (docs/behavior/terrain/materials.md#colors).
 #[test]
-fn tints() {
+fn recolors() {
     use TerrainMaterial::*;
     let rgb = |r, g, b| Color3uint8::new(r, g, b);
-    let m22 = MaterialSet::Materials2022;
-    // White keeps the texture's gray, and gray dims it.
-    assert_eq!(Grass.tint(rgb(255, 255, 255), m22), [1.0; 3]);
-    assert!(
-        Sand.tint(rgb(128, 128, 128), m22)
-            .iter()
-            .all(|&x| (x - 0.502).abs() < 0.001)
-    );
-    // Red turns magenta on Grass, and teal on Basalt.
-    let [r, g, b] = Grass.tint(rgb(255, 0, 0), m22);
-    assert!(r > b && b > g);
-    let [r, g, b] = Basalt.tint(rgb(255, 0, 0), m22);
-    assert!(g > r && b > r);
-    // Rock's chroma tops out: pink and red look alike.
+    let near = |a: [f32; 3], b: [f32; 3]| a.iter().zip(&b).all(|(x, y)| (x - y).abs() < 1e-4);
+    // The legacy default color leaves the texture as it is.
+    let texel = [0.3, 0.33, 0.15];
+    assert!(near(Grass.recolor(rgb(106, 127, 63)).apply(texel), texel));
+    assert!(near(
+        Sandstone.recolor(rgb(137, 90, 71)).apply(texel),
+        texel
+    ));
+    // White keeps only the luma, brightened at most twice.
+    let luma = (0.3 + 0.66 + 0.15) / 4.0;
+    assert!(near(
+        Grass.recolor(rgb(255, 255, 255)).apply(texel),
+        [luma * 2.0; 3]
+    ));
+    // Mud's dark default: gray 128 is already as bright as white.
     assert_eq!(
-        Rock.tint(rgb(255, 128, 128), m22),
-        Rock.tint(rgb(255, 0, 0), m22)
+        Mud.recolor(rgb(128, 128, 128)).gain,
+        Mud.recolor(rgb(255, 255, 255)).gain
     );
-    // Basalt is as bright in its default color as in white.
-    let luma = |[r, g, b]: [f32; 3]| (r + 2.0 * g + b) / 4.0;
-    assert_eq!(luma(Basalt.tint(rgb(75, 74, 74), m22)), 0.6);
-    assert_eq!(luma(Basalt.tint(rgb(255, 255, 255), m22)), 0.6);
-    assert_eq!(Water.tint(rgb(255, 0, 0), m22), [1.0, 0.0, 0.0]);
-    // The legacy set's textures draw as they are in its default colors.
-    let legacy = MaterialSet::Legacy;
-    assert_eq!(Sandstone.tint(rgb(137, 90, 71), legacy), [1.0; 3]);
+    // Red turns a green texel magenta on Grass and Basalt's beige teal.
+    let [r, g, b] = Grass.recolor(rgb(255, 0, 0)).apply(texel);
+    assert!(r > b && b > g);
+    let [r, g, b] = Basalt.recolor(rgb(255, 0, 0)).apply([0.18, 0.18, 0.16]);
+    assert!(g > r && b > r);
+    // Strong chroma passes 1 in a channel, as Studio's YCoCg does.
+    assert!(Sand.recolor(rgb(255, 0, 0)).apply([0.6, 0.5, 0.35])[0] > 1.0);
+    assert_eq!(Water.recolor(rgb(255, 0, 0)), Recolor::NONE);
 }

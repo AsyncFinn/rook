@@ -162,7 +162,7 @@ impl Mesher<'_> {
                     position,
                     first,
                     self.scale,
-                    material.shape(),
+                    material.look(),
                     self.origin + c,
                 );
                 material
@@ -280,7 +280,7 @@ impl Mesher<'_> {
                 ..Surface::default()
             };
             remap.fill(NONE);
-            let flat = material.shape().edges.flat();
+            let flat = material.look().edges.flat();
             for (t, m) in &self.triangles {
                 if *m != material || facing(t, *m) != side {
                     continue;

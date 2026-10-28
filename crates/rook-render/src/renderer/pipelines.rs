@@ -127,7 +127,9 @@ impl Pipelines {
             }),
             Some(instances.clone()),
         ];
-        let shadow_buffers = [Some(positions), Some(instances)];
+        // The shadow pass moves terrain's waves and blades as the main
+        // pass does, so it reads their vertices' uv and face too.
+        let shadow_buffers = buffers.clone();
         let depth_format = main_depth_format(device);
         // See-through Glass's filter and surface each draw a pixel once
         // per part: the first fragment there stamps the part's reference

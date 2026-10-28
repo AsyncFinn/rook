@@ -71,15 +71,14 @@ pub enum ImagePlacement {
 /// observed in Studio 0.742 and the creator docs).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MapAlpha {
-    /// Ignored: material textures, MaterialVariants, the legacy set's
-    /// terrain textures, and `Opaque`.
+    /// Ignored: material textures, MaterialVariants, terrain's textures,
+    /// and `Opaque`.
     Ignore = 0,
     /// The map over the part's Color, by its alpha.
     Overlay = 1,
     /// The alpha is the surface's opacity.
     Transparency = 2,
-    /// The alpha says where the tint applies (on terrain, the 2022 set's
-    /// tint, on the texel's luma).
+    /// The alpha says where the tint applies.
     TintMask = 3,
 }
 
@@ -115,6 +114,9 @@ pub struct MaterialMaps {
     pub alpha: MapAlpha,
     /// Multiplies the color map (a SurfaceAppearance's `Color`; sRGB).
     pub tint: [f32; 3],
+    /// On terrain, the part's color is a `rook_terrain::Recolor` (gain and
+    /// turn) applied to each texel of the color map, rather than a color.
+    pub recolored: bool,
 }
 
 impl MaterialMaps {
@@ -130,6 +132,7 @@ impl MaterialMaps {
         on_mesh_uv: false,
         alpha: MapAlpha::Ignore,
         tint: [1.0; 3],
+        recolored: false,
     };
 
     pub fn any(&self) -> bool {

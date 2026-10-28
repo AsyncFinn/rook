@@ -17,7 +17,7 @@ import package::common::{
     instance_rotation, world_position, placed, adorn_bits, CAST, NEON, UNLIT, EXACT, MODE_FACE, MODE_TILED,
     MODE_MESH_UV, UPRIGHT, SURFACES_SHIFT, MAPS, GLASS, SLOPED, MAPS_UV, VERTEX_COLORS,
     UNION_FACE, TERRAIN_FACE, TERRAIN_WATER, TERRAIN_DRAWN_SHIFT, CENTERED, ALPHA_OVERLAY, ALPHA_TRANSPARENCY,
-    ALPHA_TINT_MASK, PATTERN_SHIFT, one_tap, tile_taps, terrain_taps,
+    ALPHA_TINT_MASK, TERRAIN_RECOLOR, TERRAIN_BLADES, PATTERN_SHIFT, one_tap, tile_taps, terrain_taps,
 };
 import package::images::{
     sample_image, image_size, sample_map, sample_taps, normal_taps, IMAGE, COLOR_MAP, ROUGHNESS_MAP,
@@ -25,7 +25,10 @@ import package::images::{
 };
 import package::lighting::{shade, shade_pbr, fog_units};
 import package::tone::{albedo_units, frame, frame_of, linear_to_srgb, srgb_to_linear};
-import package::terrain::{terrain_motion, terrain_position, terrain_share, water_surface};
+import package::terrain::{
+    terrain_motion, terrain_position, terrain_share, water_surface, recolor, blade_surface,
+    BLADE_FOOT_SUN, BLADE_TIP_SUN,
+};
 
 @vertex
 fn vs_main(v: VertexIn) -> VertexOut {
@@ -41,11 +44,22 @@ fn vs_main(v: VertexIn) -> VertexOut {
     out.world = world;
     out.normal = normalize(instance_rotation(v) * local_normal);
     out.color = vec4(srgb_to_linear(v.i_color.rgb), v.i_color.a);
+    let is_terrain = packed >= TERRAIN_FACE && packed != 255u;
+    if is_terrain && (v.i_flags.x & MAPS) != 0u
+        && ((v.i_flags.x >> SURFACES_SHIFT) & 3u) == TERRAIN_RECOLOR {
+        // Not a color: how the color map is recolored (`recolor`).
+        out.color = v.i_color;
+    }
     if (v.i_flags.x & VERTEX_COLORS) != 0u {
         let c = vec3((v.face >> 8u) & 255u, (v.face >> 16u) & 255u, v.face >> 24u);
         out.color = vec4(srgb_to_linear(vec3<f32>(c) / 255.0), v.i_color.a);
     }
     out.uv = v.uv;
+    if is_terrain && (packed & TERRAIN_BLADES) != 0u {
+        // A blade's foot (its vertices at height 0) and tip take their
+        // shares of the sun, blended along it (`blade_surface`).
+        out.uv.y = select(BLADE_TIP_SUN, BLADE_FOOT_SUN, v.uv.y <= 0.0);
+    }
     let lo = v.i_box_min * v.i_size;
     let hi = v.i_box_max * v.i_size;
     var local = v.box_point * v.i_size;
@@ -92,7 +106,13 @@ fn vs_shadow(v: ShadowIn) -> @builtin(position) vec4<f32> {
         return vec4(0.0, 0.0, -1.0, 1.0);
     }
     let rotation = mat3x3<f32>(v.i_right, v.i_up, v.i_back);
-    return g.shadow_view_proj * vec4(placed(v.position, v.i_position, rotation, v.i_size), 1.0);
+    var world = placed(v.position, v.i_position, rotation, v.i_size);
+    // Waves and blades cast where they're drawn.
+    let packed = v.face & 255u;
+    if packed >= TERRAIN_FACE && packed != 255u {
+        world = terrain_motion(world, packed, v.uv);
+    }
+    return g.shadow_view_proj * vec4(world, 1.0);
 }
 
 // A highlighted part into the Highlight mask: its Highlight's number,
@@ -255,6 +275,9 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
     if terrain && (packed & TERRAIN_WATER) != 0u {
         return water_surface(in, dp_x, dp_y);
     }
+    if terrain && (packed & TERRAIN_BLADES) != 0u {
+        return blade_surface(in, dp_x, dp_y);
+    }
     // Where the textures are read, their repeats broken up as Studio
     // breaks them (`tile_taps`, `terrain_taps`).
     var taps = one_tap(uv);
@@ -275,15 +298,11 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
         let a = surface_appearance(in, c);
         albedo = a.rgb;
         alpha *= a.a;
-    } else if terrain && (in.flags & MAPS) != 0u && (in.surfaces & 3u) == ALPHA_TINT_MASK {
-        // The 2022 set's terrain color maps are tint masks (their packs'
-        // `alphamode` 2, TintMask): where they're opaque, Studio keeps
-        // only the texel's luma, times the material's tint for its color
-        // (`TerrainMaterial::tint`, the instance color). The legacy set's
-        // are multiplied by it, as below.
+    } else if terrain && (in.flags & MAPS) != 0u && (in.surfaces & 3u) == TERRAIN_RECOLOR {
+        // Terrain's color maps are recolored by the material's color in
+        // sRGB, before Studio's shader squares them (`recolor`).
         let c = sample_taps(in.images, COLOR_MAP, taps, duv_x, duv_y);
-        let luma = dot(c.rgb, vec3(0.25, 0.5, 0.25));
-        albedo = mix(c.rgb, luma * in.color.rgb, c.a);
+        albedo = srgb_to_linear(recolor(linear_to_srgb(c.rgb), in.color.rgb));
     } else if (in.flags & MAPS) != 0u {
         albedo *= sample_taps(in.images, COLOR_MAP, taps, duv_x, duv_y).rgb;
     }

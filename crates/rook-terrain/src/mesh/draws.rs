@@ -112,7 +112,7 @@ impl Mesher<'_> {
                 ..Draw::default()
             };
             remap.fill(NONE);
-            let flat = layer.material.shape().edges.flat();
+            let flat = layer.material.look().edges.flat();
             for &(_, n) in &keyed[start..end] {
                 let t = self.triangles[n].0;
                 let p = t.map(|i| self.positions[i as usize]);
