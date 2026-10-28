@@ -41,9 +41,16 @@ Terrain comes before characters, who walk on it.
        in every place. Left: the textures filtered in gamma space as
        Studio's YCoCg array is (Rook draws them about 7 of 255 brighter
        at their default colors).
-     - Water: shoreline water inside solid voxels drawn, so shores round
-       off; water seen from below; how Studio lays its water frames and
-       the sky detail its water reflects.
+     - ✅ Shoreline water (2026-10-28): the water solid voxels hold is
+       drawn and solids count as inside water's surface, so shores round
+       off where the surfaces cross, as Studio's do
+       ([water](../behavior/terrain/water.md#shorelines)). Left: a dry
+       solid's crossing in water's surface (its own occupancy, an
+       Inference).
+     - Water: its surface seen from below (Studio draws the underside,
+       rippled, the world above faint through it; Rook culls it); how
+       Studio lays its water frames and the sky detail its water
+       reflects.
      - ✅ Grass (2026-10-28): blades in the ground's average, lit by
        the grass shaders' terms and casting shadows
        ([grass](../behavior/terrain/grass.md)). Left: the foot-to-tip
@@ -77,17 +84,25 @@ Terrain comes before characters, who walk on it.
        never a mesh. Cost per frame: a few shader terms per pixel and the
        blades' tiles within reach in the shadow pass; benched on the
        largest grass place against the build before.
-     - *Shoreline water*: the way voxel engines keep a second fluid in
-       a solid's cell (Minecraft's waterlogged blocks, Studio's own water
-       occupancy per voxel beside its solid material): water gets its own
-       occupancy field and its own surface, meshed from that field per
-       chunk with faces against solid dropped, after measuring in Studio
-       where the two surfaces meet (islands, slopes, walls, lone voxels,
-       half occupancies) and how water looks from below. Changes flow
-       through the same dirty-chunk list as solid terrain: a chunk's
-       water is remeshed only when its voxels or a neighbor's border
-       changed. Cost: water meshing on load scales with the water's
-       chunks; an edit, with the chunks it touches.
+     - *Shoreline water* (refined 2026-10-28 by measurement): voxel
+       engines keep a second fluid in a solid's cell beside the solid
+       (Minecraft's waterlogged blocks; Roblox's own `LiquidOccupancy`
+       channel beside `SolidMaterial` and `SolidOccupancy`), and mesh it
+       as its own surface. Studio, as observed: water's surface is
+       surface nets over every non-air voxel, each crossing placed by the
+       water the voxel holds, whatever its solid occupancy; solids count
+       as inside it, so water meets solid with no face at all (a camera
+       inside a rock wall sees none, a dry rock in a slab's top leaves no
+       hole); and dry terrain away from water has no water surface (none
+       under a thin dry slab). Studio's own saving is the faces it never
+       makes: water against solid and water over dry land. Rook does the
+       same in the chunk's water pass: a cell has a water vertex only
+       when a corner holds water, a quad only when its four cells do, and
+       a chunk whose voxels and border hold no water skips the pass. The
+       water pass is part of the chunk's mesh, so it's remeshed through
+       the same dirty-chunk list as solid terrain, only when its voxels
+       or a neighbor's border change. Cost: load meshes water only in
+       chunks that have some; an edit, the chunks it touches.
      - *Edits cost only what changed*: one owner of the voxels (the
        Terrain's grid, which physics, the renderer, grass and
        replication read, as Roblox's Terrain is the one store its

@@ -10,8 +10,71 @@ studs below its center, a half-full one 2.667 to 1.333 below; a full
 one-voxel slab spans 6 below to 2 above, its edge sloping as a solid's
 does, 2 studs lower. Rook draws it in `WaterColor` at `WaterTransparency`,
 mixed halfway towards the sky's color by `WaterReflectance` (Studio's
-water is mostly the sky it reflects; Approximation). Not yet: the
-shoreline water inside solid voxels, and how water looks from below.
+water is mostly the sky it reflects; Approximation).
+
+## Shorelines
+
+Measured in Studio 0.744 on 2026-10-28, built with `FillBlock`,
+`FillWedge`, `FillBall` and `WriteVoxelChannels`, read back with
+`ReadVoxelChannels` (`SolidMaterial`, `SolidOccupancy`,
+`LiquidOccupancy`), and captured from the side and above at 4 to 20
+degree fields of view (camera distance and field of view give studs per
+pixel). Studio meshes terrain a moment after an edit, so a capture right
+after one can show the old surface: capture again.
+
+*What Studio stores*: a voxel holds a solid material with its occupancy
+and, beside it, water (`LiquidOccupancy`). Water filled over terrain
+(`FillBlock` of Water to y = 10 over a Sand slope) gives each partly
+filled solid voxel the water the fill would have given air (Sand 0.25,
+0.51 and 0.75 holding 1.0 below the water's top row, 0.5 in it), and
+full solids none. `WriteVoxelChannels` stores what it's given, except
+that a full solid drops its water (Rock 1.0 with water 1.0 reads back
+water 0) and a solid of occupancy 0 becomes a Water voxel. `ReadVoxels`
+reports a solid voxel's solid only. The channels read occupancy as the
+byte over 255 (127 is 0.498), `ReadVoxels` as (byte + 1) / 256 (0.496).
+
+Observed:
+
+- **A solid voxel's water is drawn by its water alone**: lone Rock voxels
+  of occupancy 0, 0.25 and 0.5, each holding water 0.25, 0.5, 0.75 and
+  1.0, draw water boxes 0.64, 1.43, 2.11 and 2.87 studs across (lone
+  Water voxels that full: 0.67, 1.33, 2.0 and 2.67, by [Shape](#shape)), the
+  same for every solid occupancy, half a voxel low as Water voxels are,
+  and whole where the rock overlaps them.
+- **Solids count as inside water's surface**: a dry Rock voxel (0.25 or
+  full) set into the top layer of a water slab leaves its surface whole,
+  with no hole or dip to see from above or along it; a camera inside a
+  rock wall 3 studs from the water beside it sees no water face at the
+  wall, where one would lie if water stopped at solids.
+- **Dry terrain away from water has no water**: a 5 × 5 slab of Rock at
+  0.25, seen from below, shows only rock, where a water surface at the
+  voxels' centers moved half a voxel down would show beneath it.
+- So shores round off: water continues over the partly filled solids at
+  its edge, under their surface, and the shoreline is where the two
+  surfaces cross (a Grass ball in a lake meets the water in a circle).
+
+Rook: water's surface is surface nets over every non-air voxel, each
+crossing placed by the water a voxel holds (a Water voxel's occupancy,
+a solid's water) or, for a dry solid, by its own occupancy (Inference:
+that keeps it under the solid's surface; a profile along a slab across a
+dry 0.25 voxel against a full one would settle it). A cell has a water
+vertex only when one of its corners holds water, and a quad needs its
+four cells, so water meets solids without a face, dry terrain has none,
+and a chunk with no water skips the pass. Far rings average a solid's
+water with the Water voxels'. Benched against the build before
+(2026-10-28, `--bench 300`, alternating runs): on the archive's largest
+water place (25 million water voxels) frames and loading are unchanged
+within noise (median frame 1.90 and 2.12 ms before, 2.03 and 2.19
+after); on a 1,024-stud lake with 64 islands, 2% more triangles (the
+shores) and frames unchanged.
+
+## Seen from below
+
+With the camera under the island lake's surface (Studio 0.744), Studio
+draws the surface's underside: rippled and pale, the sky and the island
+above the water showing faintly through it, the island's foot below the
+water clear. Rook culls water's back faces, so from below its surface
+isn't drawn (owned by M6 step 5).
 
 ## Waves
 

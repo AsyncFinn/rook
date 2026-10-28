@@ -2,7 +2,8 @@
 //! (`docs/behavior/terrain/surface.md`). Each dual cell where solid meets air holds
 //! one vertex, the mean of its edges' crossings; each crossing voxel edge
 //! gets a quad of the solid voxel's material, split along [`DIAGONALS`].
-//! Water is meshed the same way in a second pass and moved down
+//! Water is meshed the same way in a second pass, from the water each
+//! voxel holds with solids counted as inside, and moved down
 //! [`WATER_DROP`]. [`ChunkMesh::surfaces`] split the triangles by material
 //! for collisions; [`ChunkMesh::draws`] by the layers drawn ([`draws`]).
 //! Far terrain is meshed the same way from coarser voxels ([`Detail`],

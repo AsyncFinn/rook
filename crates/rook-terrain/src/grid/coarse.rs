@@ -1,8 +1,8 @@
 //! A grid at half the resolution: each voxel of it stands for a 2×2×2
 //! block of the finer one, as far terrain is meshed
 //! (`docs/behavior/terrain/detail.md`). A coarse voxel holds the eight's
-//! mean occupancy of whichever of solid or water holds more, solids
-//! taking the material with the most occupancy among them, so a coarse
+//! mean occupancy of whichever of solid or water holds more (water
+//! counting what solid voxels hold), solids taking the material with the most occupancy among them, so a coarse
 //! surface lies where the fine one does, half a coarse voxel out instead
 //! of half a fine one (Studio's coarser rings sit higher too).
 
@@ -84,6 +84,7 @@ fn average(voxels: impl Iterator<Item = Voxel>) -> Voxel {
     for v in voxels {
         if v.is_solid() {
             solid[v.material as usize] += v.fill();
+            water += v.water_fill();
         } else if v.material == TerrainMaterial::Water {
             water += v.fill();
         }
