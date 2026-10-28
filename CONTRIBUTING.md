@@ -114,7 +114,11 @@ not done.
   alongside the build before it.
 - **The real rule, not a fit.** Where Studio's rule can be found (its
   shaders, settings, data tables, creator docs, or a measurement that
-  isolates it), implement that rule. Fitting constants to screenshots is
+  isolates it), implement that rule. Only the sources the
+  [clean-implementation policy](docs/design/policies.md#clean-implementation)
+  allows count: never a disassembled or decompiled Roblox executable,
+  however much faster it would be. A rule that can't be found from
+  allowed sources is measured until it's isolated. Fitting constants to screenshots is
   the last resort. A fit that remains is an Approximation, recorded with
   what would settle it and owned by a roadmap step.
 - **One owner per decision.** Every rule (a character's root part, who
