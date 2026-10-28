@@ -60,6 +60,20 @@ impl Voxel {
     pub fn fill(self) -> f32 {
         (f32::from(self.occupancy) + 1.0) / 256.0
     }
+
+    /// Holding water: a Water voxel, or a solid one with water in it.
+    pub fn is_wet(self) -> bool {
+        self.material == TerrainMaterial::Water || self.is_solid() && self.water > 0
+    }
+
+    /// How full of water a solid voxel is, from 0 to 1, read as a Water
+    /// voxel's occupancy byte is (0 is dry).
+    pub fn water_fill(self) -> f32 {
+        if self.water == 0 {
+            return 0.0;
+        }
+        (f32::from(self.water) + 1.0) / 256.0
+    }
 }
 
 #[derive(Debug, Clone)]

@@ -1,14 +1,16 @@
-//! What each terrain layer's surfaces are drawn with: textures, tint and
+//! What each terrain layer's surfaces are drawn with: textures, color and
 //! blending.
 
 use super::*;
 
 impl SceneCache {
-    /// The textures and tint of `layer`'s surfaces, and how it blends on seams:
-    /// a MaterialVariant MaterialService puts in the material's place, or else
-    /// the material's own pack in `set`, colored by the material's tint
-    /// ([`TerrainMaterial::tint`]); untextured, a material shows its color.
-    /// How Studio tints and blends them is in `docs/behavior/terrain/materials.md`.
+    /// The textures and color of `layer`'s surfaces, and how it blends on
+    /// seams: a MaterialVariant MaterialService puts in the material's
+    /// place, tinted by the material's color, or else the material's own
+    /// pack, recolored for it ([`TerrainMaterial::recolor`], sent in the
+    /// color's place); untextured, a material shows its color. `set` gives
+    /// the default colors of a place that saved none. How Studio colors
+    /// and blends them is in `docs/behavior/terrain/materials.md`.
     pub(super) fn terrain_look(
         &mut self,
         dom: &Dom,
@@ -18,7 +20,7 @@ impl SceneCache {
         colors: Option<&MaterialColors>,
     ) -> (MaterialMaps, [f32; 3], TerrainLayer) {
         let Layer { material, facing } = layer;
-        let look = material.textures(set);
+        let look = material.look();
         let texture = match facing {
             Facing::Top => look.top,
             Facing::Side => look.side,
@@ -31,7 +33,7 @@ impl SceneCache {
             turn: t.rotation,
         });
         let mut blend = TerrainLayer {
-            cube: material.shape().cube,
+            cube: look.cube,
             scale: texture.map_or(1.0, |t| t.blend.scale),
             detile,
             ..TerrainLayer::default()
@@ -88,14 +90,11 @@ impl SceneCache {
             metalness: roughness_metalness,
             studs_per_tile: Vec2::splat(texture.studs()),
             detile,
-            alpha: match set {
-                MaterialSet::Legacy => MapAlpha::Ignore,
-                MaterialSet::Materials2022 => MapAlpha::TintMask,
-            },
+            recolored: true,
             ..MaterialMaps::NONE
         };
         let color = match maps.color {
-            Some(_) => material.tint(c, set),
+            Some(_) => material.recolor(c).to_array(),
             None => color,
         };
         let (a, b) = texture.blend.remap();

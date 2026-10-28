@@ -11,6 +11,8 @@ use runs::Pipe;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Pass {
     Part,
+    /// Terrain water, seen from either side.
+    Water,
     Image,
     /// See-through Glass: its nearest depth, then its filter on what's
     /// behind, then its surface.
@@ -26,6 +28,7 @@ impl Pass {
     pub(crate) fn pipe(self) -> Pipe {
         match self {
             Pass::Part => Pipe::Transparent,
+            Pass::Water => Pipe::Water,
             Pass::Image => Pipe::Layer,
             Pass::GlassDepth => Pipe::GlassDepth,
             Pass::GlassFilter => Pipe::GlassFilter,
@@ -46,6 +49,7 @@ impl Pass {
                 &[Pass::GlassDepth, Pass::GlassFilter, Pass::GlassSurface]
             }
             (Layer::Base, Material::ForceField) => &[Pass::ForceField],
+            (Layer::Base, Material::Water) => &[Pass::Water],
             (Layer::Base, _) => &[Pass::Part],
         }
     }

@@ -90,3 +90,62 @@ fn skirts_are_drawn_but_not_collided_with() {
     // A 32 × 32 top has 128 open edges, each hung with two triangles.
     assert_eq!(drawn(&hung) - drawn(&bare), 128 * 2 * 3);
 }
+
+/// The highest and lowest drawn point of chunk `chunk` of `level`, in
+/// world studs.
+fn drawn_heights(levels: &[Grid], level: u8, chunk: IVec3) -> (f32, f32) {
+    let mesh = mesh_chunk_at(&levels[usize::from(level)], chunk, Detail::at(level));
+    let origin = mesh.origin();
+    let ys = mesh
+        .draws
+        .iter()
+        .flat_map(|d| d.positions.iter())
+        .map(|p| p[1] + origin.y);
+    ys.fold((f32::MIN, f32::MAX), |(hi, lo), y| (hi.max(y), lo.min(y)))
+}
+
+/// A Grass slab under a 3,072-stud square, its top at y = 0 and `depth`
+/// voxels thick.
+fn slab(depth: i32) -> Vec<Grid> {
+    let mut grid = Grid::new();
+    for x in -384..384 {
+        for z in -384..384 {
+            for y in -depth..0 {
+                grid.set(IVec3::new(x, y, z), Voxel::new(TerrainMaterial::Grass, 255));
+            }
+        }
+    }
+    pyramid(grid)
+}
+
+#[test]
+fn far_ground_lies_where_near_ground_does() {
+    // Studio's slab edge runs straight to the horizon across its rings; a
+    // coarse voxel's surface half its own voxel out stood 2 to 62 studs
+    // higher.
+    let levels = slab(40);
+    for level in 0..LEVELS {
+        let (top, _) = drawn_heights(&levels, level, IVec3::new(0, -1, 0));
+        assert!((top - 2.0).abs() < 1e-3, "level {level}: top at {top}");
+    }
+}
+
+#[test]
+fn skirts_never_rise_above_the_ground() {
+    // Under a slab thinner than a coarse voxel, skirts hung from its
+    // underside stood up through it as walls and shards.
+    let levels = slab(6);
+    for level in 0..LEVELS {
+        let (top, _) = drawn_heights(&levels, level, IVec3::new(0, -1, 0));
+        assert!(top <= 2.0 + 1e-3, "level {level}: reaches {top}");
+    }
+}
+
+#[test]
+fn rings_are_squares_on_the_ground() {
+    // Studio draws the terrain under a camera 4,000 studs up in 4-stud
+    // cells.
+    let rings = Rings::around(Vec3::new(10.0, 4000.0, 10.0));
+    assert_eq!(levels_at(&rings, Vec3::new(10.0, 0.0, 10.0)), [0]);
+    assert_eq!(levels_at(&rings, Vec3::new(10.0, -3000.0, 10.0)), [0]);
+}

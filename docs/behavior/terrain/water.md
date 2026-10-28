@@ -10,8 +10,102 @@ studs below its center, a half-full one 2.667 to 1.333 below; a full
 one-voxel slab spans 6 below to 2 above, its edge sloping as a solid's
 does, 2 studs lower. Rook draws it in `WaterColor` at `WaterTransparency`,
 mixed halfway towards the sky's color by `WaterReflectance` (Studio's
-water is mostly the sky it reflects; Approximation). Not yet: the
-shoreline water inside solid voxels, and how water looks from below.
+water is mostly the sky it reflects; Approximation).
+
+## Shorelines
+
+Measured in Studio 0.744 on 2026-10-28, built with `FillBlock`,
+`FillWedge`, `FillBall` and `WriteVoxelChannels`, read back with
+`ReadVoxelChannels` (`SolidMaterial`, `SolidOccupancy`,
+`LiquidOccupancy`), and captured from the side and above at 4 to 20
+degree fields of view (camera distance and field of view give studs per
+pixel). Studio meshes terrain a moment after an edit, so a capture right
+after one can show the old surface: capture again.
+
+*What Studio stores*: a voxel holds a solid material with its occupancy
+and, beside it, water (`LiquidOccupancy`). Water filled over terrain
+(`FillBlock` of Water to y = 10 over a Sand slope) gives each partly
+filled solid voxel the water the fill would have given air (Sand 0.25,
+0.51 and 0.75 holding 1.0 below the water's top row, 0.5 in it), and
+full solids none. `WriteVoxelChannels` stores what it's given, except
+that a full solid drops its water (Rock 1.0 with water 1.0 reads back
+water 0) and a solid of occupancy 0 becomes a Water voxel. `ReadVoxels`
+reports a solid voxel's solid only. The channels read occupancy as the
+byte over 255 (127 is 0.498), `ReadVoxels` as (byte + 1) / 256 (0.496).
+
+Observed:
+
+- **A solid voxel's water is drawn by its water alone**: lone Rock voxels
+  of occupancy 0, 0.25 and 0.5, each holding water 0.25, 0.5, 0.75 and
+  1.0, draw water boxes 0.64, 1.43, 2.11 and 2.87 studs across (lone
+  Water voxels that full: 0.67, 1.33, 2.0 and 2.67, by [Shape](#shape)), the
+  same for every solid occupancy, half a voxel low as Water voxels are,
+  and whole where the rock overlaps them.
+- **Solids count as inside water's surface**: a dry Rock voxel (0.25 or
+  full) set into the top layer of a water slab leaves its surface whole,
+  with no hole or dip to see from above or along it; a camera inside a
+  rock wall 3 studs from the water beside it sees no water face at the
+  wall, where one would lie if water stopped at solids.
+- **Dry terrain away from water has no water**: a 5 × 5 slab of Rock at
+  0.25, seen from below, shows only rock, where a water surface at the
+  voxels' centers moved half a voxel down would show beneath it.
+- So shores round off: water continues over the partly filled solids at
+  its edge, under their surface, and the shoreline is where the two
+  surfaces cross (a Grass ball in a lake meets the water in a circle).
+
+Rook: water's surface is surface nets over every non-air voxel, each
+crossing placed by the water a voxel holds (a Water voxel's occupancy,
+a solid's water) or, for a dry solid, by its own occupancy (Inference:
+that keeps it under the solid's surface; a profile along a slab across a
+dry 0.25 voxel against a full one would settle it). A cell has a water
+vertex only when one of its corners holds water, and a quad needs its
+four cells, so water meets solids without a face, dry terrain has none,
+and a chunk with no water skips the pass. Far rings average a solid's
+water with the Water voxels'. Benched against the build before
+(2026-10-28, `--bench 300`, alternating runs): on the archive's largest
+water place (25 million water voxels) frames and loading are unchanged
+within noise (median frame 1.90 and 2.12 ms before, 2.03 and 2.19
+after); on a 1,024-stud lake with 64 islands, 2% more triangles (the
+shores) and frames unchanged.
+
+## Seen from below
+
+With the camera under the island lake's surface (Studio 0.744), Studio
+draws the surface's underside: rippled and pale, the sky and the island
+above the water showing faintly through it, the island's foot below the
+water clear. Its water shaders have no side of their own (below), so the
+underside is the same surface seen from below: its reflection weight
+takes the view's cosine either way, and it reflects the sky's lower half.
+Rook draws water in a transparent pass of its own that culls neither
+side, with the same shader; from 20 studs under a lake (2026-10-28) both
+show a rippled sky-blue underside over the shore's grass.
+
+## What Studio's water shaders say
+
+Studio's smooth water shaders (the entries using `WaterParams` in the
+install's `shaders/shaders_glsl3.pack`, version-5a21b87bbc2641cf, read
+2026-10-28) settle what the measurements below fitted:
+
+- **Normal frames** lie 20 studs a repeat (coordinates of 0.05 per stud)
+  on one of the 18 planes terrain textures use, picked per vertex, each
+  vertex shifting them by its own random number, `(r, floor(r × 2.665))
+  × 0.1`, the three vertices' samples blended across the triangle: the
+  detiling terrain textures get. Two frames are bound and crossfaded.
+  That's why no single frame laid plainly matched Studio's ripples.
+- **The rippled normal** is the frames' whole slope; the reflection uses
+  the surface normal moved a quarter of the way to it.
+- **The reflection's weight** is `WaterReflectance × (clamp(0.78 - 2.5 ×
+  |n·v|, 0, 1) + 0.3)`: 0.3 looking down, 0.65 at 10 degrees, 0.86 at 5,
+  0.95 at 3 (measured: 0.27 to 0.3, 0.69, 0.80, 0.91).
+- **The sky** is the skybox along the reflection at full detail (mip 0),
+  times the sky's gradient, below the horizon as well as above.
+- **The glint** is a GGX highlight off the full ripples, the frames' red
+  channel giving the roughness (0.089 to 1), with a Fresnel of 0.02.
+- **Distance**: the blended variant's opacity rises with the view depth
+  × 0.004, so water lets nothing through from 250 studs.
+- **Waves** move each vertex by `(sin((z - x)k - t) + sin((z + x)k + t)) ×
+  A`, times a per-vertex weight and a fade with view depth; `k`, `A` and
+  the fade come from uniforms not measured yet.
 
 ## Waves
 
@@ -53,20 +147,24 @@ Observed:
   match, so Studio doesn't lay one frame plainly (Unknown how).
 
 Rook: two sines rise and fall `WaterWaveSize` studs (wavelengths 60 and
-45 studs, periods 40 and 25 units of phase); the 25 frames (the
+45 studs, periods 40 and 25 units of phase; Approximation, Studio's two
+diagonal sines of one wavelength not measured yet); the 25 frames (the
 renderer's texture array, from the install) play at 1.25 per unit, each
-fading into the next, laid at 44 studs per repeat without scrolling, on
-the top and the sides alike (the three axes' planes, blended by how much
-the surface faces each). The surface is `WaterColor` lit as a part's top
-is (on every face, 1.2 times brighter), mixed towards the skybox, sampled
-where the reflection points, by `WaterReflectance` × 0.27 looking down
-rising to all of it along the surface (Schlick's Fresnel), rippled half
-as steeply as the frames, with a sun glint off the frames' ripples; a
-fifth of `WaterTransparency` of what's behind shows through. Before:
-the pattern's contrast and autocorrelation were fitted from above
-(luminance deviation 2.06 against Studio's 2.07); that tiling is kept.
-Approximation: the tiling scale, the waves' shape and the ripples'
-strength are fitted.
+fading into the next, laid as Studio's shaders lay them (above: 20
+studs a repeat on the plane the surface faces most, shifted by a random
+number in tenths per point of the 4-stud lattice, as Rook's terrain
+textures are, since its vertices don't carry one). The surface is
+`WaterColor` lit as a part's top is (on every face, 1.2 times brighter),
+mixed towards the skybox at full detail, sampled where the reflection
+points, by Studio's weight, with Studio's GGX glint; a fifth of
+`WaterTransparency` of what's behind shows through, falling to none at
+250 studs. Until 2026-10-28 `WaterReflectance` never reached the shader
+(only Plastic's reflectance was passed on), so Rook's water reflected no
+sky at all: from 320 studs above the island lake its middle drew 12,
+120, 141 where Studio's draws 35, 128, 160; it now draws 40, 127, 159,
+and along the surface it is the pale, rippled sky Studio's is. The
+color table below was measured against that build. Approximation: the
+waves' shape and how far the glint fades.
 
 ## Color and transparency
 

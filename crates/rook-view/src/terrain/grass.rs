@@ -119,9 +119,11 @@ impl SceneCache {
                     Vec3::ONE,
                 );
                 part.material = Material::Grass;
-                part.material_set = MaterialSet::Materials2022;
                 part.color = grass.color;
-                part.cast_shadow = false;
+                // Blades shade the ground and each other (Studio's grass
+                // has shadow shaders; observed: the ground under a clump
+                // is darker than open ground in the sun).
+                part.cast_shadow = true;
                 let i = self.take_index(part, Pose::default());
                 self.terrain.grass.shown.insert(tile, (i, mesh));
                 changed.push(i);

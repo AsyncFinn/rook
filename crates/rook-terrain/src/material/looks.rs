@@ -1,7 +1,8 @@
-//! Each terrain material's shape and textures in the two material sets,
-//! from Studio's `FStringTerrainMaterialTablePre2022` and
-//! `FStringTerrainMaterialTable2022` settings (Studio 0.742's
-//! `ClientSettings`), in `TerrainMaterial` order. See [`Look`].
+//! Each terrain material's shape and textures, from Studio's
+//! `FStringTerrainMaterialTablePre2022` setting (Studio 0.742's
+//! `ClientSettings`), in `TerrainMaterial` order. See [`Look`]. Studio
+//! draws terrain with this table in places of either material set, so its
+//! `FStringTerrainMaterialTable2022` isn't kept.
 
 use super::{Blend, Edges, Look, Texture};
 
@@ -20,7 +21,7 @@ const fn blend(min: f32, max: f32, scale: f32) -> Blend {
 }
 
 #[rustfmt::skip]
-pub(super) const LEGACY: [Look; 23] = [
+pub(super) const LOOKS: [Look; 23] = [
     // Air
     Look { shift: 0.0, cubify: 0.0, quantize: 0.0, edges: Edges::Soft, cube: false, top: None, side: None, bottom: None },
     // Water
@@ -69,59 +70,11 @@ pub(super) const LEGACY: [Look; 23] = [
     Look { shift: 0.0, cubify: 0.0, quantize: 0.25, edges: Edges::HardSoft, cube: false, top: Some(tex(7547679257, 0.46, 4.0, 0.0, blend(0.2169, 0.9829, 0.12))), side: Some(tex(7547684004, 0.46, 4.0, 0.0, blend(-0.133, 1.067, 0.1152))), bottom: Some(tex(7547684004, 0.46, 4.0, 0.0, blend(-0.133, 1.067, 0.1152))) },
 ];
 
-#[rustfmt::skip]
-pub(super) const MATERIALS_2022: [Look; 23] = [
-    // Air
-    Look { shift: 0.0, cubify: 0.0, quantize: 0.0, edges: Edges::Soft, cube: false, top: None, side: None, bottom: None },
-    // Water
-    Look { shift: 0.0, cubify: 0.0, quantize: 0.0, edges: Edges::Soft, cube: false, top: None, side: None, bottom: None },
-    // Grass
-    Look { shift: 0.0, cubify: 0.0, quantize: 0.0, edges: Edges::Soft, cube: false, top: Some(tex(9920552044, 0.5, 3.717, 0.5, blend(0.032, 0.308, 0.603))), side: Some(tex(9932815429, 0.5, 5.0, 0.0, blend(0.196, 0.419, 0.611))), bottom: Some(tex(9933024903, 0.5, 2.222, 0.0, blend(0.467, 0.552, 0.93))) },
-    // Slate
-    Look { shift: 0.0, cubify: 0.0, quantize: 0.0, edges: Edges::Soft, cube: false, top: Some(tex(9920600052, 0.5, 1.292, 0.0, blend(0.0, 0.484, 1.0))), side: Some(tex(9920614301, 0.5, 2.222, 0.0, blend(0.398, 0.738, 0.75))), bottom: Some(tex(9920614301, 0.5, 2.222, 0.0, blend(0.398, 0.738, 0.75))) },
-    // Concrete
-    Look { shift: 0.0, cubify: 0.0, quantize: 1.0, edges: Edges::Hard, cube: false, top: Some(tex(9920484334, 0.5, 3.134, 0.0, blend(0.121, 0.403, 0.583))), side: Some(tex(9920484334, 0.5, 3.134, 0.0, blend(0.121, 0.403, 0.583))), bottom: Some(tex(9920484334, 0.5, 3.134, 0.0, blend(0.121, 0.403, 0.583))) },
-    // Brick
-    Look { shift: 0.0, cubify: 1.0, quantize: 0.0, edges: Edges::Hard, cube: true, top: Some(tex(9920482992, 0.5, 1.0, 0.0, blend(0.133, 0.621, 0.263))), side: Some(tex(9920482992, 0.5, 1.0, 0.0, blend(0.133, 0.621, 0.263))), bottom: Some(tex(9920482992, 0.5, 1.0, 0.0, blend(0.133, 0.621, 0.263))) },
-    // Sand
-    Look { shift: 0.0, cubify: 0.0, quantize: 0.0, edges: Edges::Soft, cube: false, top: Some(tex(9920591862, 0.5, 3.793, 0.0, blend(-0.297, 0.798, 0.72))), side: Some(tex(9920592389, 0.5, 10.0, 0.0, blend(0.377, 0.744, 0.528))), bottom: Some(tex(9920592389, 0.5, 10.0, 0.0, blend(0.377, 0.744, 0.528))) },
-    // WoodPlanks
-    Look { shift: 0.0, cubify: 1.0, quantize: 0.0, edges: Edges::Hard, cube: true, top: Some(tex(9920626896, 0.5, 1.0, 0.0, blend(0.456, 0.579, 0.06))), side: Some(tex(9920626896, 0.5, 1.0, 0.0, blend(0.456, 0.579, 0.06))), bottom: Some(tex(9920626896, 0.5, 1.0, 0.0, blend(0.456, 0.579, 0.06))) },
-    // Rock
-    Look { shift: 0.299, cubify: 0.0, quantize: 0.0, edges: Edges::HardSoft, cube: false, top: Some(tex(10129366149, 0.5, 1.73, 0.0, blend(-0.096, 0.297, 0.518))), side: Some(tex(10129366149, 0.5, 1.73, 0.0, blend(-0.096, 0.297, 0.518))), bottom: Some(tex(10129366149, 0.5, 1.73, 0.0, blend(-0.096, 0.297, 0.518))) },
-    // Glacier
-    Look { shift: 0.0, cubify: 0.0, quantize: 0.0, edges: Edges::Soft, cube: false, top: Some(tex(9920518995, 0.5, 6.0, 0.0, blend(-0.079, 0.409, 0.802))), side: Some(tex(9920520478, 0.5, 6.0, 0.0, blend(0.314, 0.595, 0.629))), bottom: Some(tex(9920521186, 0.5, 6.0, 0.0, blend(0.319, 0.829, 0.662))) },
-    // Snow
-    Look { shift: 0.0, cubify: 0.0, quantize: 0.0, edges: Edges::Soft, cube: false, top: Some(tex(9920620451, 0.5, 2.73, 0.0, blend(-0.452, 0.6, 1.0))), side: Some(tex(9920621070, 0.5, 3.0, 0.0, blend(0.382, 0.542, 0.954))), bottom: Some(tex(9920621070, 0.5, 3.0, 0.0, blend(0.382, 0.542, 0.954))) },
-    // Sandstone
-    Look { shift: 0.0, cubify: 0.0, quantize: 0.0, edges: Edges::Soft, cube: false, top: Some(tex(9920596353, 0.5, 7.222, 0.0, blend(0.366, 0.6, 0.625))), side: Some(tex(9920628394, 0.5, 2.222, 0.0, blend(0.212, 0.839, 0.768))), bottom: Some(tex(9920628394, 0.5, 2.222, 0.0, blend(0.212, 0.839, 0.768))) },
-    // Mud
-    Look { shift: 0.0, cubify: 0.0, quantize: 0.0, edges: Edges::Soft, cube: false, top: Some(tex(9920578676, 0.5, 1.3, 0.0, blend(0.121, 0.787, 0.494))), side: Some(tex(9920578676, 0.5, 1.3, 0.0, blend(0.121, 0.787, 0.494))), bottom: Some(tex(9920578676, 0.5, 1.3, 0.0, blend(0.121, 0.787, 0.494))) },
-    // Basalt
-    Look { shift: 0.0, cubify: 0.0, quantize: 0.0, edges: Edges::HardSoft, cube: false, top: Some(tex(9920482224, 0.5, 1.0, 0.0, blend(0.25, 0.516, 0.347))), side: Some(tex(9920482224, 0.5, 1.0, 0.0, blend(0.25, 0.516, 0.347))), bottom: Some(tex(9920482224, 0.5, 1.0, 0.0, blend(0.25, 0.516, 0.347))) },
-    // Ground
-    Look { shift: 0.0, cubify: 0.0, quantize: 0.0, edges: Edges::Soft, cube: false, top: Some(tex(9920554695, 0.5, 2.79, 0.0, blend(0.105, 0.644, 0.706))), side: Some(tex(9920554695, 0.5, 2.79, 0.0, blend(0.105, 0.644, 0.706))), bottom: Some(tex(9920554695, 0.5, 2.79, 0.0, blend(0.105, 0.644, 0.706))) },
-    // CrackedLava
-    Look { shift: 0.0, cubify: 0.0, quantize: 0.0, edges: Edges::Soft, cube: false, top: Some(tex(9920485426, 0.5, 2.0, 0.0, blend(0.552, 0.839, 0.3))), side: Some(tex(9920485426, 0.5, 2.0, 0.0, blend(0.552, 0.839, 0.3))), bottom: Some(tex(9920485426, 0.5, 2.0, 0.0, blend(0.552, 0.839, 0.3))) },
-    // Asphalt
-    Look { shift: 0.0, cubify: 0.0, quantize: 0.0, edges: Edges::Soft, cube: false, top: Some(tex(9930003180, 0.5, 2.898, 0.0, blend(0.6, 1.059, 0.422))), side: Some(tex(9930005889, 0.5, 2.898, 0.0, blend(-0.004, 0.286, 0.444))), bottom: Some(tex(9930005889, 0.5, 2.898, 0.0, blend(-0.004, 0.286, 0.444))) },
-    // Cobblestone
-    Look { shift: 0.0, cubify: 0.0, quantize: 0.0, edges: Edges::HardSoft, cube: false, top: Some(tex(9919719550, 0.5, 1.0, 0.0, blend(0.532, 0.978, 0.233))), side: Some(tex(9919719550, 0.5, 1.0, 0.0, blend(0.532, 0.978, 0.233))), bottom: Some(tex(9919719550, 0.5, 1.0, 0.0, blend(0.532, 0.978, 0.233))) },
-    // Ice
-    Look { shift: 0.149, cubify: 0.0, quantize: 0.0, edges: Edges::Soft, cube: false, top: Some(tex(9920556429, 0.5, 3.78, 0.0, blend(0.33, 0.552, 0.93))), side: Some(tex(9920556887, 0.5, 8.0, 0.0, blend(-0.016, 0.532, 0.542))), bottom: Some(tex(9920556887, 0.5, 8.0, 0.0, blend(-0.016, 0.532, 0.542))) },
-    // LeafyGrass
-    Look { shift: 0.0, cubify: 0.0, quantize: 0.0, edges: Edges::Soft, cube: false, top: Some(tex(9920558145, 0.5, 3.793, 0.0, blend(0.01, 0.18, 0.883))), side: Some(tex(9933025110, 0.5, 3.71, 0.0, blend(0.302, 0.579, 0.611))), bottom: Some(tex(9933025110, 0.5, 3.71, 0.0, blend(0.302, 0.579, 0.611))) },
-    // Salt
-    Look { shift: 0.0, cubify: 0.0, quantize: 0.0, edges: Edges::Soft, cube: false, top: Some(tex(9920590478, 0.5, 2.0, 0.0, blend(0.0, 0.808, 0.394))), side: Some(tex(9920590955, 0.5, 5.0, 0.0, blend(0.85, 0.915, 0.837))), bottom: Some(tex(9920590955, 0.5, 5.0, 0.0, blend(0.85, 0.915, 0.837))) },
-    // Limestone
-    Look { shift: 0.0, cubify: 0.0, quantize: 0.0, edges: Edges::Soft, cube: false, top: Some(tex(9920561624, 0.5, 6.0, 0.0, blend(0.048, 0.419, 0.785))), side: Some(tex(9920562806, 0.5, 6.0, 0.0, blend(0.345, 0.712, 0.523))), bottom: Some(tex(9920562806, 0.5, 6.0, 0.0, blend(0.345, 0.712, 0.523))) },
-    // Pavement
-    Look { shift: 0.0, cubify: 0.0, quantize: 0.25, edges: Edges::HardSoft, cube: false, top: Some(tex(9920580094, 0.5, 1.0, 0.0, blend(0.532, 0.696, 0.504))), side: Some(tex(9920580503, 0.5, 6.0, 0.0, blend(0.345, 0.712, 0.523))), bottom: Some(tex(9920580503, 0.5, 6.0, 0.0, blend(0.345, 0.712, 0.523))) },
-];
-
-/// Each material's default color (`MaterialColors` in a new place) per
-/// set, from Studio's `FStringTerrainColorTable` setting, in
-/// `TerrainMaterial` order.
+/// Each material's default color per set, from Studio's
+/// `FStringTerrainColorTable` setting (`baseColorsPre2022` and
+/// `baseColors2022`), in `TerrainMaterial` order. The legacy set's are
+/// the colors [`LOOKS`]' textures draw as they are
+/// ([`super::Recolor`]); a new place saves the 2022 set's.
 #[rustfmt::skip]
 pub(super) const BASE_LEGACY: [[u8; 3]; 23] = [
     [0, 0, 0],

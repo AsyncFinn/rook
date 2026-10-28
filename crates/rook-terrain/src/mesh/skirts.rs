@@ -1,37 +1,45 @@
 //! Skirts: where a chunk's surface ends at the chunk's side, a strip
-//! hanging from the open edge into the solid. Chunks of different detail
-//! meet with their surfaces a little apart (a coarse surface sits up to
-//! half its voxel off the fine one, [`crate::grid`]'s coarse voxels), and
-//! the strip of whichever side lies higher closes the crack. Inside a
-//! ring, neighbors' surfaces meet exactly and the strips stay hidden in
-//! the solid. The usual fix for cracks between levels of a chunked
-//! surface (Ulrich, "Rendering massive terrains using chunked level of
-//! detail control", 2002). Studio's rings showed no cracks at their steps
+//! hanging straight down from the open edge into the solid. Chunks of
+//! different detail meet with their surfaces a little apart (a coarse
+//! surface lies where the fine one does, give or take the shapes too small
+//! for its voxels, half a voxel of it), and the strip of whichever side
+//! lies higher closes the crack. Inside a ring, neighbors' surfaces meet
+//! exactly and the strips stay hidden in the solid. The usual fix for
+//! cracks between levels of a chunked surface, hung vertically as there
+//! (Ulrich, "Rendering massive terrains using chunked level of detail
+//! control", 2002); only from surfaces facing up, as one hung from an
+//! underside would rise through a slab thinner than it and stand above
+//! the ground. Studio's rings showed no cracks at their steps
 //! (`docs/behavior/terrain/detail.md`).
 
 use rustc_hash::FxHashSet;
 
 use super::nets::Mesher;
 
-/// How far a skirt hangs, in the chunk's voxels: past where the next
-/// coarser level's surface can lie (half its voxel, one of these) and its
-/// shape's own error.
-const DEPTH: f32 = 2.0;
+/// How far a skirt hangs, in the chunk's voxels: to where the next
+/// coarser level's surface can lie (half its voxel, one of these).
+const DEPTH: f32 = 1.0;
 
 impl Mesher<'_> {
-    /// Hang a skirt from each edge of the chunk's triangles that no other
-    /// of them shares: a quad down along the edge's vertices' normals,
-    /// turned as the triangle is, of the vertices' own materials and
-    /// normals so it draws in the surface's layers.
+    /// Hang a skirt from each edge of the chunk's upward-facing triangles
+    /// that no other of them shares: a quad straight down, turned as the
+    /// triangle is, of the vertices' own materials and normals so it draws
+    /// in the surface's layers.
     pub(super) fn add_skirts(&mut self) {
         let edges: FxHashSet<(u32, u32)> = self
             .triangles
             .iter()
             .flat_map(|(t, _)| [(t[0], t[1]), (t[1], t[2]), (t[2], t[0])])
             .collect();
+        let positions = &self.positions;
+        let up = |t: &[u32; 3]| {
+            let p = t.map(|i| positions[i as usize]);
+            (p[1] - p[0]).cross(p[2] - p[0]).y > 0.0
+        };
         let open: Vec<((u32, u32), _)> = self
             .triangles
             .iter()
+            .filter(|(t, _)| up(t))
             .flat_map(|(t, m)| [((t[0], t[1]), *m), ((t[1], t[2]), *m), ((t[2], t[0]), *m)])
             .filter(|((a, b), _)| !edges.contains(&(*b, *a)))
             .collect();
@@ -40,8 +48,8 @@ impl Mesher<'_> {
         let mut below = |m: &mut Self, i: u32| -> u32 {
             *hung.entry(i).or_insert_with(|| {
                 let n = m.normals[i as usize];
-                let p = m.positions[i as usize] - n.normalize_or(glam::Vec3::Y) * depth;
-                m.positions.push(p);
+                m.positions
+                    .push(m.positions[i as usize] - glam::Vec3::Y * depth);
                 m.normals.push(n);
                 m.materials.push(m.materials[i as usize]);
                 (m.positions.len() - 1) as u32

@@ -74,6 +74,9 @@ pub(crate) const FACES_CAMERA: u32 = 1 << 6;
 pub(crate) const SURFACES_SHIFT: u32 = 8;
 /// The part has material textures, tiled at `tile.xy` studs.
 pub(crate) const MAPS: u32 = 1 << 26;
+/// In a terrain instance's surface bits: its color is a recoloring of its
+/// color map (`MaterialMaps::recolored`), after the alpha modes.
+pub(crate) const TERRAIN_RECOLOR: u32 = 3;
 /// Glass and ForceField draw their own way (`shaders/parts.wgsl`).
 pub(crate) const GLASS: u32 = 1 << 27;
 pub(crate) const FORCE_FIELD: u32 = 1 << 28;
@@ -168,10 +171,12 @@ impl Instance {
                 // and SmoothPlastic parts and meshes without a texture
                 // (observed: Metal, Wood, Neon and a textured mesh at 1
                 // show none of the sky; `shaders_glsl3.pack` has it in no
-                // other shader).
-                let reflects = matches!(p.material, Material::Plastic | Material::SmoothPlastic)
-                    && p.texture.is_none()
-                    && !maps.on_mesh_uv;
+                // other shader). Terrain water reflects by its own
+                // `WaterReflectance`, in the water shaders.
+                let reflects = p.material == Material::Water
+                    || matches!(p.material, Material::Plastic | Material::SmoothPlastic)
+                        && p.texture.is_none()
+                        && !maps.on_mesh_uv;
                 material = [
                     // In 255ths, as Studio's vertices carry it.
                     if reflects {
@@ -197,9 +202,14 @@ impl Instance {
                     tile = [1.0, 1.0, t[0], t[1]];
                     material[3] = t[2];
                 } else if maps.any() {
-                    // Only terrain's maps say how their alpha is used, in
+                    // Only terrain's maps say how their color is used, in
                     // the bits Plastic's surfaces use otherwise.
-                    flags |= MAPS | (maps.alpha as u32) << SURFACES_SHIFT;
+                    let mode = if maps.recolored {
+                        TERRAIN_RECOLOR
+                    } else {
+                        maps.alpha as u32
+                    };
+                    flags |= MAPS | mode << SURFACES_SHIFT;
                     if matches!(
                         p.shape,
                         DrawShape::Part(PartShape::Wedge | PartShape::CornerWedge)

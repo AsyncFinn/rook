@@ -11,7 +11,7 @@
 //! (Approximation).
 
 use glam::{IVec2, IVec3, Vec3};
-use rook_types::{Color3uint8, MaterialSet, linear_to_srgb, srgb_to_linear};
+use rook_types::Color3uint8;
 use rustc_hash::FxHashMap;
 
 use crate::random::Random;
@@ -26,29 +26,23 @@ pub const BLADE_HEIGHT: f32 = 3.6;
 /// A blade's width at its foot.
 const BLADE_WIDTH: f32 = 0.45;
 
-/// Grass's top texture's average color, and how much of it its color
-/// tints (alpha): Studio's `FStringTerrainColorTable`, `avgAlbedo2022`.
-const GRASS_AVERAGE: [u8; 4] = [196, 196, 189, 241];
+/// The average texel (sRGB) of Grass's top texture (pack 7547336797's
+/// color map, measured from the file). Its root mean square, (89, 94, 50),
+/// is Studio's `avgAlbedoPre2022` for Grass, so that table averages in
+/// linear light.
+const GRASS_TOP_AVERAGE: [f32; 3] = [75.6 / 255.0, 78.4 / 255.0, 36.0 / 255.0];
 
-/// How much darker blades are than the ground's average, in linear light
-/// (measured in Studio: a blade is one flat color, close to the ground's
-/// average around it, by luminance 0.78 of it in the default color and
-/// 0.97 with Grass red; Rook's blades at 0.7 come out 0.82 of Rook's own
-/// ground in the default color; Approximation).
-const BLADE_SHADE: f32 = 0.7;
-
-/// The blades' color (sRGB) for Grass's `MaterialColors` color: the
-/// ground's average (its texture's luma times [`TerrainMaterial::tint`]
-/// where its tint mask is opaque, as the ground is drawn), darkened by
-/// [`BLADE_SHADE`] in linear light.
+/// The blades' color (sRGB) for Grass's `MaterialColors` color: the top
+/// texture's average texel recolored as the ground is
+/// ([`TerrainMaterial::recolor`]). Measured in Studio under ambient light
+/// only, every blade drew one color, equal to the ground's average at
+/// white (146 against 146 of 255) and red (green and blue within 4); in
+/// the default color its blue came out 12 under (Approximation). How a
+/// blade is lit is the renderer's (`terrain.wgsl`, `blade_surface`).
 pub fn blade_color(grass: Color3uint8) -> [f32; 3] {
-    let [r, g, b, a] = GRASS_AVERAGE.map(|v| f32::from(v) / 255.0);
-    let average = srgb_to_linear([r, g, b]);
-    let luma = (average[0] + 2.0 * average[1] + average[2]) / 4.0;
-    let tint = srgb_to_linear(TerrainMaterial::Grass.tint(grass, MaterialSet::Materials2022));
-    linear_to_srgb(
-        [0, 1, 2].map(|i| (average[i] + (luma * tint[i] - average[i]) * a) * BLADE_SHADE),
-    )
+    TerrainMaterial::Grass
+        .recolor(grass)
+        .apply(GRASS_TOP_AVERAGE)
 }
 
 /// Grass's upward triangles in world studs, by the tile their center is in.
@@ -205,10 +199,19 @@ mod tests {
     }
 
     #[test]
-    fn blades_are_darker_than_the_ground() {
-        let c = blade_color(Color3uint8::new(111, 126, 62));
-        assert!(c.iter().all(|v| (0.0..0.6).contains(v)), "{c:?}");
-        // Olive, as Studio's ground is in the default color: (82, 84, 43).
-        assert!((c[0] - c[1]).abs() < 0.02 && c[1] > c[2] + 0.1, "{c:?}");
+    fn blades_take_the_grounds_average() {
+        // In Grass's legacy default color, the texture's own average.
+        let c = blade_color(Color3uint8::new(106, 127, 63));
+        assert!(
+            c.iter()
+                .zip(&GRASS_TOP_AVERAGE)
+                .all(|(a, b)| (a - b).abs() < 1e-5)
+        );
+        // White draws its luma, twice as bright.
+        let c = blade_color(Color3uint8::new(255, 255, 255));
+        assert!(
+            (c[0] - c[2]).abs() < 1e-5 && (c[1] - 0.526).abs() < 0.001,
+            "{c:?}"
+        );
     }
 }

@@ -36,15 +36,35 @@ Terrain comes before characters, who walk on it.
    steps with the voxels where Studio's rounds off, and grass blades are
    flat with no darkening under them.
    - *Scope*:
-     - Colors: CrackedLava's tint (the fitted matrix turns its default
-       (255, 24, 67) pink, blue above green); the tint rule read rather
-       than fitted; the default Grass color against Studio.
-     - Water: shoreline water inside solid voxels drawn, so shores round
-       off; water seen from below; how Studio lays its water frames and
-       the sky detail its water reflects.
-     - Grass: blades shaded as Studio's (each blade's shade varies and
-       the ground darkens under a clump,
-       [grass](../behavior/terrain/grass.md)).
+     - ✅ Colors (2026-10-28): Studio's recoloring rule, measured
+       per pixel on every material in both sets, and the legacy textures
+       in every place. Left: the textures filtered in gamma space as
+       Studio's YCoCg array is (Rook draws them about 7 of 255 brighter
+       at their default colors).
+     - ✅ Shoreline water (2026-10-28): the water solid voxels hold is
+       drawn and solids count as inside water's surface, so shores round
+       off where the surfaces cross, as Studio's do
+       ([water](../behavior/terrain/water.md#shorelines)). Left: a dry
+       solid's crossing in water's surface (its own occupancy, an
+       Inference).
+     - ✅ Far rings (2026-10-28): squares on the ground, far surfaces
+       lying where near ones do, skirts hung straight down from upward
+       faces only, so no walls, seams or stray triangles show where
+       rings meet ([detail](../behavior/terrain/detail.md)). Left: a
+       slab thinner than a coarse voxel drops to the voxel's middle in
+       that ring (Studio's thin slabs past 2,048 studs unmeasured;
+       settled by the slab's side at a narrow field of view).
+     - ✅ Water's look (2026-10-28): its underside drawn, its normal
+       frames, reflection, sky detail, glint and distance as Studio's
+       water shaders have them, and `WaterReflectance` reaching the
+       shader at all ([water](../behavior/terrain/water.md#what-studios-water-shaders-say)).
+       Left: the waves' shape (Studio's two diagonal sines, their
+       wavelength, height and fade with distance, read off a side view
+       of a long frozen strip close up) and how far the glint fades.
+     - ✅ Grass (2026-10-28): blades in the ground's average, lit by
+       the grass shaders' terms and casting shadows
+       ([grass](../behavior/terrain/grass.md)). Left: the foot-to-tip
+       light isolated rather than read off pixels.
      - Surface: the per-vertex detiling numbers; seams as wide as
        Studio's; height maps without binding arrays; Roblox's diagonal
        for bent quads.
@@ -73,17 +93,25 @@ Terrain comes before characters, who walk on it.
        never a mesh. Cost per frame: a few shader terms per pixel and the
        blades' tiles within reach in the shadow pass; benched on the
        largest grass place against the build before.
-     - *Shoreline water*: the way voxel engines keep a second fluid in
-       a solid's cell (Minecraft's waterlogged blocks, Studio's own water
-       occupancy per voxel beside its solid material): water gets its own
-       occupancy field and its own surface, meshed from that field per
-       chunk with faces against solid dropped, after measuring in Studio
-       where the two surfaces meet (islands, slopes, walls, lone voxels,
-       half occupancies) and how water looks from below. Changes flow
-       through the same dirty-chunk list as solid terrain: a chunk's
-       water is remeshed only when its voxels or a neighbor's border
-       changed. Cost: water meshing on load scales with the water's
-       chunks; an edit, with the chunks it touches.
+     - *Shoreline water* (refined 2026-10-28 by measurement): voxel
+       engines keep a second fluid in a solid's cell beside the solid
+       (Minecraft's waterlogged blocks; Roblox's own `LiquidOccupancy`
+       channel beside `SolidMaterial` and `SolidOccupancy`), and mesh it
+       as its own surface. Studio, as observed: water's surface is
+       surface nets over every non-air voxel, each crossing placed by the
+       water the voxel holds, whatever its solid occupancy; solids count
+       as inside it, so water meets solid with no face at all (a camera
+       inside a rock wall sees none, a dry rock in a slab's top leaves no
+       hole); and dry terrain away from water has no water surface (none
+       under a thin dry slab). Studio's own saving is the faces it never
+       makes: water against solid and water over dry land. Rook does the
+       same in the chunk's water pass: a cell has a water vertex only
+       when a corner holds water, a quad only when its four cells do, and
+       a chunk whose voxels and border hold no water skips the pass. The
+       water pass is part of the chunk's mesh, so it's remeshed through
+       the same dirty-chunk list as solid terrain, only when its voxels
+       or a neighbor's border change. Cost: load meshes water only in
+       chunks that have some; an edit, the chunks it touches.
      - *Edits cost only what changed*: one owner of the voxels (the
        Terrain's grid, which physics, the renderer, grass and
        replication read, as Roblox's Terrain is the one store its
@@ -99,9 +127,51 @@ Terrain comes before characters, who walk on it.
        edit costs its changed voxels plus the chunks they touch, whatever
        the place's size. Benched with `--bench` on two or three terrain
        places and a script digging every frame, before and after.
+     - *Far rings* (2026-10-28, measured on a hill-and-lake place from
+       the same cameras): clipmaps (Losasso and Hoppe) and CDLOD
+       (Strugar) select levels by distance on the ground; Studio, as
+       observed, does too (straight above, it draws the ground below in
+       4-stud cells from 4,000 studs up), so the rings become squares of
+       chunk columns, the same nesting and hysteresis as before. Engines
+       downsampling a density field keep the iso-surface in place
+       (Transvoxel's coarse cells sample the same field); Roblox's
+       crossing rule puts a surface half a voxel past its solid, so a
+       coarse voxel crosses where its 4-stud voxels' surface would, half
+       a 4-stud voxel past the solid it holds, and Studio's far ground
+       lies where its near ground does (a slab's side runs straight to
+       the horizon). Skirts hang vertically as in chunked LOD (Ulrich),
+       one voxel, from upward faces only: hung from undersides they rose
+       through thin slabs as walls and shards (the stray triangles).
+       Studio shows no morphing between levels in stills; geomorphing
+       isn't added (the rings now meet without a step to blend). Cost:
+       a ring move meshes whole columns of the chunks whose level
+       changed, their empty chunks skipped as before.
+     - *Water's look* (2026-10-28, from Studio's smooth water shaders in
+       `shaders_glsl3.pack`, which say what Studio does, measured where
+       they leave numbers open): engines draw water double-sided with one
+       shader whose terms take the view's side into account (Unity's and
+       Unreal's two-sided translucent water); Studio's water shader has
+       no side of its own (its reflection weight takes `abs` of the
+       view's cosine), so its underside is the same surface seen from
+       below, reflecting the sky's lower half. Rook gives water its own
+       transparent pass with no culling. Its normal frames are laid as
+       Studio's are: 20 studs a repeat on the plane the surface faces
+       most (of the 18 terrain picks), each vertex shifting them by a
+       random number in tenths, blended across the triangle, the
+       detiling Rook's terrain textures already do on their 4-stud
+       lattice; the rippled normal is the frames' full slope, a quarter
+       of it in the reflection; the reflection's weight is Studio's
+       `clamp(0.78 - 2.5 |n.v|) + 0.3` times `WaterReflectance` (it fits
+       the angles measured before, which Rook's fitted Fresnel matched
+       within 0.06); the sky is the skybox at full detail along the
+       reflection, below the horizon too; the glint is Studio's GGX term
+       with the frames' red channel as roughness; and water grows opaque
+       with distance as Studio's blended shader makes it, by 250 studs.
+       Cost: the same draws, with the water's triangles drawn from both
+       sides; one more pipeline.
      - *The rest of the Scope* (detiling per vertex, seams, height maps
-       without binding arrays, the bent-quad diagonal, water frames and
-       sky detail, `CountCells`, `WorldToCellPreferEmpty`, voxel
+       without binding arrays, the bent-quad diagonal, water's waves,
+       `CountCells`, `WorldToCellPreferEmpty`, voxel
        channels, small parts at the water surface) gets its Design here
        before its code, once the parts above have landed.
    - *Done when*: the [Match Studio](README.md#match-studio) bar holds

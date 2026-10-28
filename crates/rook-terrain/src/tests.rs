@@ -332,6 +332,69 @@ fn water_sits_half_a_voxel_low() {
     }
 }
 
+/// The water triangles' first hit straight down from `from`, as a height.
+fn water_below(grid: &Grid, from: Vec3) -> Option<f32> {
+    let tris: Vec<_> = triangles(grid, mesh::DIAGONALS)
+        .into_iter()
+        .filter(|(_, m)| *m == TerrainMaterial::Water)
+        .collect();
+    cast(&tris, from, Vec3::NEG_Y).map(|(t, ..)| from.y - t)
+}
+
+#[test]
+fn solids_holding_water_draw_it() {
+    // Measured: Rock at 0, 0.25 and 0.5 occupancy holding the same water
+    // draws the same water as a lone Water voxel that full.
+    for (occupancy, water, top) in [(127, 255, -0.667), (63, 127, -1.333), (127, 127, -1.333)] {
+        let mut grid = Grid::new();
+        grid.set(
+            IVec3::new(3, 3, 3),
+            Voxel {
+                material: TerrainMaterial::Rock,
+                occupancy,
+                water,
+            },
+        );
+        let center = Vec3::splat(14.0);
+        let y = water_below(&grid, center + Vec3::Y * 10.0).expect("water drawn");
+        assert!(
+            (y - 14.0 - top).abs() < 1e-3,
+            "{occupancy}, {water}: top {}",
+            y - 14.0
+        );
+    }
+}
+
+#[test]
+fn water_crosses_solids_it_touches_only() {
+    use TerrainMaterial::{Rock, Water};
+    // A water slab with a dry Rock voxel in its top layer: observed, its
+    // surface goes on across the Rock without a hole.
+    let mut grid = Grid::new();
+    for z in 0..5 {
+        for y in 0..2 {
+            for x in 0..5 {
+                grid.set(IVec3::new(x, y, z), Voxel::new(Water, 255));
+            }
+        }
+    }
+    grid.set(IVec3::new(2, 1, 2), Voxel::new(Rock, 63));
+    let top = water_below(&grid, Vec3::new(10.0, 20.0, 10.0)).expect("no hole");
+    assert!(top > 5.0, "surface at {top}");
+    // Dry terrain away from water has none (observed under a thin slab).
+    let mut grid = Grid::new();
+    for z in 0..5 {
+        for x in 0..5 {
+            grid.set(IVec3::new(x, 0, z), Voxel::new(Rock, 63));
+        }
+    }
+    let water = triangles(&grid, mesh::DIAGONALS)
+        .iter()
+        .filter(|(_, m)| *m == Water)
+        .count();
+    assert_eq!(water, 0);
+}
+
 /// Where a Grass slab meets a Rock one, the triangles whose corners take
 /// different layers are drawn once per layer they hold, the first corner's
 /// opaque: every triangle is drawn opaque once, the materials' seams lie

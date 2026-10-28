@@ -26,6 +26,8 @@ pub(crate) enum Pipe {
     Opaque,
     Layer,
     Transparent,
+    /// Terrain water, both sides.
+    Water,
     GlassDepth,
     GlassFilter,
     GlassSurface,
@@ -239,7 +241,6 @@ impl Renderer {
                 stencil = stencil % 255 + 1;
                 pass.set_stencil_reference(stencil);
             }
-            let shadow = run.pipe == Pipe::Shadow;
             let Some(instances) = self.instance_buffer(run.source) else {
                 continue;
             };
@@ -248,15 +249,13 @@ impl Renderer {
                 bound.0 = Some(run.pipe);
             }
             if bound.1 != Some(run.source) {
-                pass.set_vertex_buffer(if shadow { 1 } else { 2 }, instances.slice(..));
+                pass.set_vertex_buffer(2, instances.slice(..));
                 bound.1 = Some(run.source);
             }
             if bound.2 != Some(run.page) {
                 let page = &self.pool.pages[run.page];
                 pass.set_vertex_buffer(0, page.positions.slice(..));
-                if !shadow {
-                    pass.set_vertex_buffer(1, page.attributes.slice(..));
-                }
+                pass.set_vertex_buffer(1, page.attributes.slice(..));
                 pass.set_index_buffer(page.indices.slice(..), wgpu::IndexFormat::Uint32);
                 bound.2 = Some(run.page);
             }
@@ -295,6 +294,7 @@ impl Renderer {
             Pipe::Opaque => &p.opaque,
             Pipe::Layer => &p.layer,
             Pipe::Transparent => &p.transparent,
+            Pipe::Water => &p.water,
             Pipe::GlassDepth => &p.glass_depth,
             Pipe::GlassFilter => &p.glass_filter,
             Pipe::GlassSurface => &p.glass_surface,

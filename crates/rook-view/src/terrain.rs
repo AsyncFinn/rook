@@ -189,7 +189,7 @@ impl SceneCache {
         let grass = &mut self.terrain.grass;
         grass.on = self.scene.terrain.grass_reach > 0.0;
         grass.color = TerrainMaterial::Grass
-            .color(colors.as_ref(), MaterialSet::Materials2022)
+            .color(colors.as_ref(), look::materials::material_set(dom))
             .map(blade_color)
             .unwrap_or_default();
     }
@@ -252,10 +252,10 @@ impl SceneCache {
     }
 
     /// Read what each layer the voxels hold is drawn with: its textures as
-    /// far as they've loaded (the Terrain waits for the rest), tint and
-    /// blending, and the water's look. Terrain draws the place's set of
-    /// textures and default colors (`TerrainMaterial::textures`), as parts
-    /// do.
+    /// far as they've loaded (the Terrain waits for the rest), color and
+    /// blending, and the water's look. Terrain draws the legacy set's
+    /// textures in every place (`TerrainMaterial::look`), with the place's
+    /// set's default colors where it saved none.
     fn read_looks(&mut self, dom: &Dom) {
         let Some(terrain) = self.terrain.instance else {
             return;

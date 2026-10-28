@@ -23,12 +23,19 @@ pub(crate) fn mesh_chunk_with(
     let mut surfaces = Vec::new();
     let mut draws = Vec::new();
     for pass in [Pass::Solid, Pass::Water] {
+        if pass == Pass::Water && !block.voxels.iter().any(|v| v.is_wet()) {
+            continue;
+        }
         let mut mesher = Mesher {
             block: &block,
             pass,
             scale,
             origin: chunk * CHUNK_VOXELS - IVec3::splat(PAD),
             cells: vec![NONE; (CELLS * CELLS * CELLS) as usize],
+            wet: match pass {
+                Pass::Solid => Vec::new(),
+                Pass::Water => wet_cells(&block),
+            },
             positions: Vec::new(),
             normals: Vec::new(),
             materials: Vec::new(),
@@ -53,7 +60,9 @@ pub(crate) fn mesh_chunk_with(
 pub(super) enum Pass {
     /// Solid voxels against air and water.
     Solid,
-    /// Water voxels against air (solids count as inside).
+    /// Water against air: water voxels and the water solid voxels hold,
+    /// with solids counted as inside, so water meets solid with no face.
+    /// Only cells with water in them have a vertex ([`Mesher::wet`]).
     Water,
 }
 
@@ -65,11 +74,15 @@ impl Pass {
         }
     }
 
-    /// Whether faces of this inside voxel are kept.
-    fn keeps(self, v: Voxel) -> bool {
+    /// How far toward its outside neighbor this inside voxel's surface
+    /// crosses: for water, by the water it holds, whatever its solid
+    /// occupancy (observed: Rock at 0, 0.25 and 0.5 occupancy holding the
+    /// same water draws the same water box); a dry solid by its own
+    /// occupancy (Inference: it lies under that solid's surface).
+    fn fill(self, v: Voxel) -> f32 {
         match self {
-            Pass::Solid => true,
-            Pass::Water => v.material == TerrainMaterial::Water,
+            Pass::Water if v.is_solid() && v.water > 0 => v.water_fill(),
+            _ => v.fill(),
         }
     }
 }
@@ -83,6 +96,26 @@ impl Block {
     fn at(&self, p: IVec3) -> Voxel {
         self.voxels[(p.x + SPAN * (p.y + SPAN * p.z)) as usize]
     }
+}
+
+/// The slot of the cell whose first corner is voxel `c` of the block.
+fn cell(c: IVec3) -> usize {
+    (c.x + CELLS * (c.y + CELLS * c.z)) as usize
+}
+
+/// Which of the block's cells have a corner holding water.
+fn wet_cells(block: &Block) -> Vec<bool> {
+    let mut wet = vec![false; (CELLS * CELLS * CELLS) as usize];
+    for z in 0..CELLS {
+        for y in 0..CELLS {
+            for x in 0..CELLS {
+                let c = IVec3::new(x, y, z);
+                wet[cell(c)] =
+                    (0..8).any(|i| block.at(c + IVec3::new(i & 1, i >> 1 & 1, i >> 2)).is_wet());
+            }
+        }
+    }
+    wet
 }
 
 /// The twelve edges of a cell, as pairs of corner offsets.
@@ -115,6 +148,10 @@ pub(super) struct Mesher<'a> {
     pub(super) origin: IVec3,
     /// Each cell's vertex, by cell, once made.
     pub(super) cells: Vec<u32>,
+    /// Water only: which cells have water at a corner. A water quad is
+    /// kept when its four cells do, so solids touching water carry the
+    /// surface across them and dry terrain has none.
+    pub(super) wet: Vec<bool>,
     pub(super) positions: Vec<Vec3>,
     pub(super) normals: Vec<Vec3>,
     /// Each vertex's material: its cell's ([`Mesher::dominant`]), or Water.
@@ -136,7 +173,7 @@ impl Mesher<'_> {
 
     /// The vertex of the cell whose first corner is voxel `c`.
     fn vertex(&mut self, c: IVec3) -> u32 {
-        let slot = (c.x + CELLS * (c.y + CELLS * c.z)) as usize;
+        let slot = cell(c);
         if self.cells[slot] != NONE {
             return self.cells[slot];
         }
@@ -149,8 +186,8 @@ impl Mesher<'_> {
                 continue;
             }
             let (from, to) = if ia { (a, b) } else { (b, a) };
-            let fill = self.block.at(from).fill();
-            sum += self.center(from) + (self.center(to) - self.center(from)) * fill;
+            let t = crossing(self.pass.fill(self.block.at(from)), self.scale);
+            sum += self.center(from) + (self.center(to) - self.center(from)) * t;
             n += 1;
         }
         let mut position = sum / n.max(1) as f32;
@@ -162,13 +199,13 @@ impl Mesher<'_> {
                     position,
                     first,
                     self.scale,
-                    material.shape(),
+                    material.look(),
                     self.origin + c,
                 );
                 material
             }
             Pass::Water => {
-                position.y -= water_drop(self.scale);
+                position.y -= WATER_DROP;
                 TerrainMaterial::Water
             }
         };
@@ -221,11 +258,19 @@ impl Mesher<'_> {
             return;
         }
         let solid = self.block.at(if ia { a } else { b });
-        if !self.pass.keeps(solid) {
-            return;
-        }
         let u = IVec3::AXES[(axis + 1) % 3];
         let w = IVec3::AXES[(axis + 2) % 3];
+        if self.pass == Pass::Water
+            && ![a - u - w, a - w, a, a - u]
+                .iter()
+                .all(|&c| self.wet[cell(c)])
+        {
+            return;
+        }
+        let material = match self.pass {
+            Pass::Solid => solid.material,
+            Pass::Water => TerrainMaterial::Water,
+        };
         let q00 = self.vertex(a - u - w);
         let q10 = self.vertex(a - w);
         let q11 = self.vertex(a);
@@ -248,7 +293,7 @@ impl Mesher<'_> {
                 self.normals[i as usize] += face;
             }
             if mine {
-                self.triangles.push((t, solid.material));
+                self.triangles.push((t, material));
             }
         }
     }
@@ -280,7 +325,7 @@ impl Mesher<'_> {
                 ..Surface::default()
             };
             remap.fill(NONE);
-            let flat = material.shape().edges.flat();
+            let flat = material.look().edges.flat();
             for (t, m) in &self.triangles {
                 if *m != material || facing(t, *m) != side {
                     continue;
