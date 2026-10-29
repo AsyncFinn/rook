@@ -113,7 +113,23 @@ fourth power; a cell dipping whole when it holds land above the water
 that doesn't touch it) matches the bank to 0.05 studs but draws large
 banks in stair steps, where Studio's are smooth; the share unraised
 stays smooth but meets the bank at 30.7. So Studio varies the dip
-smoothly by something these don't see. Studio's shores also show a
+smoothly by something these don't see.
+
+The same bank built by one script (`WriteVoxels`) in Studio and in
+Rook (`rook-player --script`) on the Baseplate place, with a line of
+neon plates every 0.25 studs across the shore at heights 46.5 to 48.25,
+gives both profiles from the same pixels: the land agrees within 0.25
+studs everywhere; Studio's water drops below 47.75, 47.5, 47.25 and 47
+at 28.75, 29.5, 29.75 and 30 studs along, Rook's below 47.75 at 29.5
+and 47.5 at 30.75 and never lower before the land. Studio's wireframe
+seen from above shows why: its water vertices sit on the 4-stud dual
+grid up to the last column, which is pulled about 0.7 studs toward the
+water (27.3 instead of 28), and from there its triangles fan to the
+land's own first vertices (about 29.3 along), so its water ends on the
+land's vertices instead of a cell further on. Rook has no vertex
+between 28 and 32. The heights of those vertices aren't read yet (a
+side view along the slab mixes the slab's near face with its inner
+rows). Studio's shores also show a
 pale band: on a large terrain place it lies over dry land in the
 water's own layer, 0.01 to 0.45 full and so under the water's level,
 near the water's edge, where Studio keeps a thin film of water and
