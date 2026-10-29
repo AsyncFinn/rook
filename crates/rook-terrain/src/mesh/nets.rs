@@ -75,18 +75,18 @@ impl Pass {
     }
 
     /// How far toward its outside neighbor this inside voxel's surface
-    /// crosses, in a cell with water at a corner (`wet`) or not. Water's
-    /// surface lies flat at its level across the solids in a wet cell
-    /// ([`Voxel::water_surface_fill`]) and, a cell on, dips to a dry
+    /// crosses, at a vertex where water's surface lies `flat` or not.
+    /// Water's surface lies flat at its level across solids
+    /// ([`Voxel::water_surface_fill`]) and, at its edge, dips to a dry
     /// solid's own surface less the drop, under the land: so its edge is
     /// never in sight, and the shore is where the land rises through the
     /// water, along the land's own slope (observed: Studio's shores are
     /// smooth curves where the water's last voxels meet dry land lying
     /// below the water's level; ending the surface at the wet cells drew
     /// them as the voxels' stair steps).
-    fn fill(self, v: Voxel, wet: bool) -> f32 {
+    fn fill(self, v: Voxel, flat: bool) -> f32 {
         match self {
-            Pass::Water if wet => v.water_surface_fill(),
+            Pass::Water if flat => v.water_surface_fill(),
             Pass::Water if v.is_solid() && v.water == 0 => v.fill(),
             Pass::Water => v.water_surface_fill(),
             Pass::Solid => v.fill(),
@@ -185,7 +185,7 @@ impl Mesher<'_> {
         if self.cells[slot] != NONE {
             return self.cells[slot];
         }
-        let wet = self.wet.get(slot).copied().unwrap_or(false);
+        let flat = self.pass == Pass::Solid || !self.at_water_edge(c);
         let mut sum = Vec3::ZERO;
         let mut n = 0;
         for (a, b) in CELL_EDGES {
@@ -195,7 +195,7 @@ impl Mesher<'_> {
                 continue;
             }
             let (from, to) = if ia { (a, b) } else { (b, a) };
-            let t = crossing(self.pass.fill(self.block.at(from), wet), self.scale);
+            let t = crossing(self.pass.fill(self.block.at(from), flat), self.scale);
             sum += self.center(from) + (self.center(to) - self.center(from)) * t;
             n += 1;
         }
@@ -224,6 +224,39 @@ impl Mesher<'_> {
         self.normals.push(Vec3::ZERO);
         self.cells[slot] = index;
         index
+    }
+
+    /// Water only: whether cell `c`'s vertex lies on the edge of water's
+    /// surface, where it dips under the land: the cell has no water at a
+    /// corner and one of the quads it would join isn't kept. Inside the
+    /// surface it stays flat, so water covers dry land just under its
+    /// level that it surrounds (observed in Studio: dry strips just under
+    /// a water layer, 1 and 2 voxels wide, lie under flat water; 3, 4 and
+    /// 6 wide show land a voxel narrower than the strip).
+    fn at_water_edge(&self, c: IVec3) -> bool {
+        if self.wet_cell(c) {
+            return false;
+        }
+        CELL_EDGES.iter().any(|&(a, b)| {
+            let (a, b) = (c + a, c + b);
+            let axis = (b - a).to_array().iter().position(|&d| d != 0).unwrap_or(0);
+            self.inside(a) != self.inside(b) && !self.quad_kept(a, axis)
+        })
+    }
+
+    /// Whether cell `c` has water at a corner (none out of the block).
+    fn wet_cell(&self, c: IVec3) -> bool {
+        c.cmpge(IVec3::ZERO).all() && c.cmplt(IVec3::splat(CELLS)).all() && self.wet[cell(c)]
+    }
+
+    /// Water only: whether the quad of the edge from voxel `a` along
+    /// `axis` is kept, by a cell around it with water at a corner.
+    fn quad_kept(&self, a: IVec3, axis: usize) -> bool {
+        let u = IVec3::AXES[(axis + 1) % 3];
+        let w = IVec3::AXES[(axis + 2) % 3];
+        [a - u - w, a - w, a, a - u]
+            .iter()
+            .any(|&c| self.wet_cell(c))
     }
 
     /// The material of the cell's solid corners with the most occupancy
@@ -269,11 +302,7 @@ impl Mesher<'_> {
         let solid = self.block.at(if ia { a } else { b });
         let u = IVec3::AXES[(axis + 1) % 3];
         let w = IVec3::AXES[(axis + 2) % 3];
-        if self.pass == Pass::Water
-            && ![a - u - w, a - w, a, a - u]
-                .iter()
-                .any(|&c| self.wet[cell(c)])
-        {
+        if self.pass == Pass::Water && !self.quad_kept(a, axis) {
             return;
         }
         let material = match self.pass {

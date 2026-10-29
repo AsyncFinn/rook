@@ -395,6 +395,35 @@ fn water_crosses_solids_it_touches_only() {
     assert_eq!(water, 0);
 }
 
+#[test]
+fn water_covers_thin_dry_land_it_surrounds() {
+    use TerrainMaterial::{Grass, Rock, Water};
+    // Measured: dry Grass strips at 0.35 in a water layer's voxels, just
+    // under its level: 2 voxels wide, flat water covers it; 3 wide, the
+    // land shows along its middle.
+    let mut grid = Grid::new();
+    for z in 0..16 {
+        for x in 0..20 {
+            grid.set(IVec3::new(x, 0, z), Voxel::new(Rock, 255));
+            let strip = (4..16).contains(&x) && matches!(z, 4 | 5 | 9 | 10 | 11);
+            let v = if strip {
+                Voxel::new(Grass, 89)
+            } else {
+                Voxel::new(Water, 255)
+            };
+            grid.set(IVec3::new(x, 1, z), v);
+        }
+    }
+    let at = |z: f32| water_below(&grid, Vec3::new(42.0, 40.0, z)).unwrap_or(f32::MIN);
+    let open = at(58.0);
+    assert!(
+        (at(20.0) - open).abs() < 1e-3,
+        "2 wide: {} against {open}",
+        at(20.0)
+    );
+    assert!(at(42.0) < open - 1.0, "3 wide: {} against {open}", at(42.0));
+}
+
 /// Where a Grass slab meets a Rock one, the triangles whose corners take
 /// different layers are drawn once per layer they hold, the first corner's
 /// opaque: every triangle is drawn opaque once, the materials' seams lie

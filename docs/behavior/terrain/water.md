@@ -58,6 +58,11 @@ Observed:
   solids holding no water still lie flat at their level up to where the
   land rises through them, and the shoreline follows the land's own
   curve, not the voxels' steps.
+- **Thin dry land under the water's level stays covered**: dry Grass
+  strips at 0.35 in a water layer's voxels (Studio 0.744, 2026-10-28,
+  from above): 1 and 2 voxels wide, flat water covers them and only the
+  blades show; 3, 4 and 6 wide, the land shows a voxel narrower than the
+  strip; a 13 × 10 patch shows likewise.
 
 Rook: water's surface is surface nets over every non-air voxel. A cell
 has a water vertex when one of its corners is non-air, and a quad is
@@ -67,14 +72,16 @@ terrain away from water has none; a chunk with no water skips the pass.
 In a wet cell each crossing is placed by how far water's surface reaches
 out of a voxel (`Voxel::water_surface_fill`): a Water voxel's occupancy,
 the water a solid holds, a whole voxel for a dry solid. So the water lies
-flat at its level over the dry solids at its edge. In the cells one step
-past, a dry solid's crossing is placed by its own occupancy instead, so
-the surface dips down under the land's surface there and its edge is
-never in sight: the shoreline is where the land rises through the flat
+flat at its level over the dry solids at its edge, and so does every
+vertex inside the surface (all the quads around it kept), so water covers
+thin dry land it surrounds. A vertex on the surface's edge, in a cell
+with no water at a corner, places a dry solid's crossing by its own
+occupancy instead, so the surface dips down under the land's surface
+there and its edge is never in sight: the shoreline is where the land rises through the flat
 water (Inference, matching Studio's shores in TerrainTest: the grass spit
 at (-832, -4, -100) draws as Studio's). A few stair steps remain where
 flat land lies just under the water's level, as the dip then shows
-through it (Approximation). Far rings average the same
+through it (Approximation). Keeping inner vertices flat costs little: the 25-million-water-voxel place meshes whole in 375 to 393 ms against 356 before, with 0.06% more triangles. Far rings average the same
 reach ([detail](detail.md#how-rook-does-it)), so lakes keep their level. Benched against the build before
 (2026-10-28, `--bench 300`, alternating runs): on the archive's largest
 water place (25 million water voxels) frames and loading are unchanged
