@@ -100,12 +100,24 @@ Studio's water dips under the land sooner. Deciding flat or dipped per
 cell when all of a cell's dry corners touch water puts the shore at
 30.0 and keeps the strips, but draws banks in stair steps again;
 raising each cell's dry crossings by the share of them touching water
-gives 30.7. The rule that fits both isn't known: a side view of
-Studio's water across a bank, away from the slab's ends, would show
-where its dip starts. Studio's shores also show a pale band, likely
-its water refracting the shallow land (its higher-quality water shader
-shifts what it shows by the ripples, up to 5% of the screen), which
-Rook doesn't do.
+gives 30.7. Tiny neon plates at known heights across that bank,
+seen from above (bright above the water, tinted under it, hidden under
+the land), trace Studio's water: flat at 8 studs above the water
+layer's floor up to 27.5 along, then 7.9, 7.6, 7.4 and 7.1 at 28, 28.5,
+29 and 29.5, meeting the land at 30; Rook's starts dipping at the same
+place but only reaches 7.6 at 30. Every rule that dips that steeply by
+a yes-or-no test (a cell flat only when all its dry corners touch
+water, also counting edge and corner contact; dry voxels counted full
+by the share of a cell's dry corners touching water, raised to the
+fourth power; a cell dipping whole when it holds land above the water
+that doesn't touch it) matches the bank to 0.05 studs but draws large
+banks in stair steps, where Studio's are smooth; the share unraised
+stays smooth but meets the bank at 30.7. So Studio varies the dip
+smoothly by something these don't see. Studio's shores also show a
+pale band: on a large terrain place it lies over dry land in the
+water's own layer, 0.01 to 0.45 full and so under the water's level,
+near the water's edge, where Studio keeps a thin film of water and
+Rook shows the land.
 
 Meshing costs the same: the 25-million-water-voxel place meshes whole
 in 339 to 366 ms against 356 before. Far rings average the same
