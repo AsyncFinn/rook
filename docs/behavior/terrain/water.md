@@ -88,6 +88,25 @@ the voxels' steps (matching Studio's strips, patch and diagonal shelf
 above, a grass spit and a mud bank on a large terrain place). Deciding
 it by cell instead (flat in cells touching water, dipping in the others)
 drew banks in stair steps and opened water along a two-voxel spit.
+
+Left (Approximation): on a bank Rook's shore lies about a stud too far
+inland. Measured in Studio 0.744 from above, dry Sand rising out of a
+full water layer (by column 0.35, 0.6, 0.85, then full in the water's
+layer; 0.1, 0.35, 0.6, 0.85, then full above it) meets the water 30.0
+studs along, where the land still lies a stud under the water's level;
+Rook meets it at 31. The water's level (a plate at 48.0 under it, one
+at 48.25 above) and the land's profile (by raycast) match Rook's, so
+Studio's water dips under the land sooner. Deciding flat or dipped per
+cell when all of a cell's dry corners touch water puts the shore at
+30.0 and keeps the strips, but draws banks in stair steps again;
+raising each cell's dry crossings by the share of them touching water
+gives 30.7. The rule that fits both isn't known: a side view of
+Studio's water across a bank, away from the slab's ends, would show
+where its dip starts. Studio's shores also show a pale band, likely
+its water refracting the shallow land (its higher-quality water shader
+shifts what it shows by the ripples, up to 5% of the screen), which
+Rook doesn't do.
+
 Meshing costs the same: the 25-million-water-voxel place meshes whole
 in 339 to 366 ms against 356 before. Far rings average the same
 reach ([detail](detail.md#how-rook-does-it)), so lakes keep their level. Benched against the build before
