@@ -127,9 +127,22 @@ grid up to the last column, which is pulled about 0.7 studs toward the
 water (27.3 instead of 28), and from there its triangles fan to the
 land's own first vertices (about 29.3 along), so its water ends on the
 land's vertices instead of a cell further on. Rook has no vertex
-between 28 and 32. The heights of those vertices aren't read yet (a
-side view along the slab mixes the slab's near face with its inner
-rows). Studio's shores also show a
+between 28 and 32. Correction (Studio's wireframe against a black sky,
+2026-10-29): those white lines are the Snow floor under the water, not
+the water; the water's own mesh (cyan) has its vertices on the same
+4-stud dual grid as Rook's, at 28 flat and at 32 about 2 studs under
+the water's level. A 2-voxel dry Sand strip at 0.35 keeps the water
+flat over its middle cell. Both fit "a cell is flat when it has water
+at a corner or every dry solid at its corners touches water", but on
+real terrain that rule draws stair steps where Studio's shore is
+smooth: 15 × 5 × 14 voxels of a lake bank read from a large terrain
+place and rebuilt by the same script in both engines (`WriteVoxels`,
+`rook-player --script`) show Rook as it is within about a stud of
+Studio's shoreline all along, with one small jog of about 1.7 studs at
+a 0.53 voxel just above the water's level that touches water only
+diagonally; that per-cell rule steps badly there, and counting
+diagonal contact as touching moves the whole shore 1 to 2 studs too
+far out. So the rule stays as it is. Studio's shores also show a
 pale band: on a large terrain place it lies over dry land in the
 water's own layer, 0.01 to 0.45 full and so under the water's level,
 near the water's edge, where Studio keeps a thin film of water and
