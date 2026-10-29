@@ -102,6 +102,14 @@ fn laid_out(dom: &mut Dom) -> Gui {
     gui
 }
 
+/// What the screen draws, its pieces one after another.
+fn drawn(gui: &mut Gui, dom: &Dom) -> Vec<rook_types::GuiQuad> {
+    gui.draw(dom)
+        .iter()
+        .flat_map(|p| p.iter().cloned())
+        .collect()
+}
+
 fn vec2_of(dom: &Dom, id: InstanceId, name: &str) -> Vec2 {
     dom.vector2_property(id, name).unwrap().0
 }

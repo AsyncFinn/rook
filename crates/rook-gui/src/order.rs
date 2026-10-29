@@ -72,11 +72,13 @@ pub(crate) fn max_distance(dom: &Dom, gui: InstanceId) -> f32 {
 
 /// A visible object in the stack: where it is and the rectangle its
 /// ancestors clip it to.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct Stacked {
     pub(crate) id: InstanceId,
     pub(crate) placed: Placed,
     pub(crate) clip: [f32; 4],
+    /// An ancestor is turned (which turns clipping off below it).
+    pub(crate) turned: bool,
 }
 
 /// What a LayerCollector holds, bottom first, in its `ZIndexBehavior`'s
@@ -112,40 +114,70 @@ fn collect(dom: &Dom, layout: &Layout, parent: InstanceId, clip: Clip, out: &mut
         if !visible(dom, kid) {
             continue;
         }
-        let turned = clip.turned || placed.rotation != 0.0;
-        let mut inside = Clip {
-            rect: clip.rect,
-            turned,
+        let stacked = Stacked {
+            id: kid,
+            placed,
+            clip: clip.rect,
+            turned: clip.turned,
         };
-        if !turned && dom.bool_property(kid, "ClipsDescendants") == Some(true) {
-            // A ScrollingFrame clips to its window, not its bars.
-            let (lo, hi) = match layout.scrolls.get(&kid) {
-                Some(s) => (
-                    placed.screen_point(s.window_at),
-                    placed.screen_point(s.window_at + s.window),
-                ),
-                None => (placed.top_left(), placed.top_left() + placed.size()),
-            };
-            let r = clip.rect;
-            inside.rect = [
-                r[0].max(lo.x),
-                r[1].max(lo.y),
-                r[2].min(hi.x),
-                r[3].min(hi.y),
-            ];
-        }
         let mut kids = Vec::new();
-        collect(dom, layout, kid, inside, &mut kids);
+        collect(dom, layout, kid, inside(dom, layout, &stacked), &mut kids);
         out.push(Node {
-            stacked: Stacked {
-                id: kid,
-                placed,
-                clip: clip.rect,
-            },
+            stacked,
             z: dom.number_property(kid, "ZIndex").unwrap_or(1.0) as i64,
             kids,
         });
     }
+}
+
+/// What clips what `s` holds: what clips `s`, cut to `s` when it has
+/// `ClipsDescendants` and nothing turns it.
+fn inside(dom: &Dom, layout: &Layout, s: &Stacked) -> Clip {
+    let (kid, placed) = (s.id, s.placed);
+    let turned = s.turned || placed.rotation != 0.0;
+    let mut inside = Clip {
+        rect: s.clip,
+        turned,
+    };
+    if !turned && dom.bool_property(kid, "ClipsDescendants") == Some(true) {
+        // A ScrollingFrame clips to its window, not its bars.
+        let (lo, hi) = match layout.scrolls.get(&kid) {
+            Some(sc) => (
+                placed.screen_point(sc.window_at),
+                placed.screen_point(sc.window_at + sc.window),
+            ),
+            None => (placed.top_left(), placed.top_left() + placed.size()),
+        };
+        let r = s.clip;
+        inside.rect = [
+            r[0].max(lo.x),
+            r[1].max(lo.y),
+            r[2].min(hi.x),
+            r[3].min(hi.y),
+        ];
+    }
+    inside
+}
+
+/// `s` as placed now, with what it holds, in no particular order: the
+/// stack entries an object placed again on its own changes. `None` when
+/// what shows changed (`s` or something it holds was hidden or shown),
+/// which only restacking its LayerCollector covers.
+pub(crate) fn restacked(dom: &Dom, layout: &Layout, s: &Stacked) -> Option<Vec<Stacked>> {
+    if !visible(dom, s.id) {
+        return None;
+    }
+    let top = Stacked {
+        placed: *layout.placed.get(&s.id)?,
+        ..*s
+    };
+    let mut tree = Vec::new();
+    collect(dom, layout, s.id, inside(dom, layout, &top), &mut tree);
+    let mut out = vec![top];
+    let mut flat = Vec::new();
+    flatten(tree, &mut flat);
+    out.extend(flat.into_iter().map(|n| n.stacked));
+    Some(out)
 }
 
 fn flatten(nodes: Vec<Node>, out: &mut Vec<Node>) {

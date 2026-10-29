@@ -11,6 +11,7 @@ mod atlas;
 mod groups;
 mod images;
 mod ramps;
+mod screen;
 pub(crate) mod world;
 
 use std::sync::Arc;
@@ -24,6 +25,7 @@ use groups::Groups;
 use images::{GuiImages, ImageKey, Run, runs};
 use pipelines::BindLayouts;
 use ramps::Ramps;
+use screen::ScreenPieces;
 use world::{WorldDraw, WorldGui, WorldRuns};
 
 /// A list of quads as the shader reads them, each with its image.
@@ -210,6 +212,22 @@ impl Target {
     }
 }
 
+impl Target {
+    /// Write `packed` over the quads from the `at`th on, which must be
+    /// in the buffer already.
+    fn write(&self, queue: &wgpu::Queue, at: u32, packed: &Packed) {
+        let Some((buffer, _)) = &self.quads else {
+            return;
+        };
+        if packed.is_empty() {
+            return;
+        }
+        let gpu: Vec<GpuQuad> = packed.iter().map(|(q, _)| *q).collect();
+        let offset = u64::from(at) * std::mem::size_of::<GpuQuad>() as u64;
+        queue.write_buffer(buffer, offset, bytemuck::cast_slice(&gpu));
+    }
+}
+
 /// What a [`Target`]'s bind group binds.
 #[derive(Clone, Copy)]
 struct Binds<'a> {
@@ -231,8 +249,8 @@ pub(crate) struct GuiPass {
     screen: Target,
     /// The untoned world canvases, under the screen's GUI.
     overlay: Target,
-    /// The screen's quads last given, and the groups they hold.
-    screen_source: Option<(Arc<[GuiQuad]>, Held)>,
+    /// The screen's pieces last given, and what was made of each.
+    screen_pieces: ScreenPieces,
     groups: Groups,
     world: WorldGui,
     atlas: Atlas,
@@ -346,7 +364,7 @@ impl GuiPass {
             pipeline,
             screen,
             overlay,
-            screen_source: None,
+            screen_pieces: ScreenPieces::default(),
             groups: Groups::default(),
             world,
             layout,
@@ -359,21 +377,29 @@ impl GuiPass {
         }
     }
 
-    /// Draw `screen` on the screen from now on, bottom first, and the
-    /// world GUI's `canvases`, with the groups they hold. Only lists not
-    /// given last time (another `Arc`) are packed and uploaded; those are
-    /// returned.
+    /// Draw `screen`'s pieces on the screen from now on, bottom first, and
+    /// the world GUI's `canvases`, with the groups they hold. Only pieces
+    /// and canvases not given last time (another `Arc`) are packed and
+    /// uploaded; those are returned.
     pub(crate) fn set<'a>(
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        screen: &'a Arc<[GuiQuad]>,
+        screen: &'a Arc<[Arc<[GuiQuad]>]>,
         canvases: &'a [Arc<WorldCanvas>],
     ) -> Vec<&'a [GuiQuad]> {
-        let old_screen = (self.screen_source.as_ref()).filter(|(s, _)| Arc::ptr_eq(s, screen));
-        let new_screen = old_screen.is_none();
+        let new_screen = !self.screen_pieces.is(screen);
+        let screen_kept = self.screen_pieces.kept(screen);
+        let fresh_screen: Vec<&[GuiQuad]> = match new_screen {
+            true => (screen.iter().zip(&screen_kept))
+                .filter(|(_, k)| k.is_none())
+                .map(|(p, _)| &p[..])
+                .collect(),
+            false => Vec::new(),
+        };
+        let fresh_pieces = fresh_screen.len();
         let kept = self.world.kept(canvases);
-        let fresh: Vec<&[GuiQuad]> = (new_screen.then_some(&screen[..]).into_iter())
+        let fresh: Vec<&[GuiQuad]> = (fresh_screen.into_iter())
             .chain(
                 canvases
                     .iter()
@@ -385,7 +411,7 @@ impl GuiPass {
         let fresh_held: Vec<Held> = fresh.iter().map(|q| groups::held(&[q])).collect();
         // Every group shown, inner ones first, each once.
         let mut shown: Vec<Arc<GuiGroup>> = Vec::new();
-        let lists_held = (old_screen.map(|(_, held)| held).into_iter())
+        let lists_held = (self.screen_pieces.held(&screen_kept))
             .chain(self.world.held(&kept))
             .chain(&fresh_held);
         for group in lists_held.flatten() {
@@ -400,8 +426,8 @@ impl GuiPass {
         let (packed, reset) = self.pack(queue, &lists);
         // The masks or ramps what was kept points at were written over:
         // place everything again.
-        if reset && lists.len() < 1 + canvases.len() + shown.len() {
-            self.screen_source = None;
+        if reset && lists.len() < screen.len() + canvases.len() + shown.len() {
+            self.screen_pieces.forget();
             self.world.forget();
             self.groups.forget();
             return self.set(device, queue, screen, canvases);
@@ -409,10 +435,18 @@ impl GuiPass {
         let mut packed = packed.into_iter();
         let mut fresh_held = fresh_held.into_iter();
         if new_screen {
-            self.screen
-                .set(device, queue, &packed.next().expect("packed"));
-            let held = fresh_held.next().expect("one per list");
-            self.screen_source = Some((screen.clone(), held));
+            let pieces: Vec<(Packed, Held)> = (&mut packed)
+                .zip(&mut fresh_held)
+                .take(fresh_pieces)
+                .collect();
+            (self.screen_pieces).set(
+                device,
+                queue,
+                &mut self.screen,
+                screen,
+                &screen_kept,
+                pieces,
+            );
         }
         let world: Vec<(Packed, Held)> = (&mut packed).zip(&mut fresh_held).collect();
         self.world.set(device, canvases, kept, world);

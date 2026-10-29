@@ -8,6 +8,7 @@
 use glam::Vec2;
 use rook_dom::{Dom, InstanceId};
 use rook_types::{GuiQuad, Paint, font_from_enum};
+use rustc_hash::FxHashSet;
 
 use super::Text;
 use crate::layout::{Placed, screen_size};
@@ -18,13 +19,22 @@ const HINT_HEIGHT: f32 = 20.0;
 const HINT_TEXT: f32 = 12.0;
 const MESSAGE_TEXT: f32 = 18.0;
 
-pub(super) fn emit(dom: &Dom, text: &mut Text<'_>, out: &mut Vec<GuiQuad>) {
-    let holders = dom
-        .find_service("Workspace")
-        .into_iter()
-        .chain(dom.local_player());
-    let mut shown: Vec<InstanceId> = holders
-        .flat_map(|h| dom.children(h).iter().copied())
+/// Whether `id` is a Hint or a Message (a Hint is a Message).
+pub(crate) fn is_message(dom: &Dom, id: InstanceId) -> bool {
+    dom.is_a(id, "Message")
+}
+
+/// Draw those of `candidates` (Hints and Messages that have been in the
+/// Workspace or a player) that show.
+pub(super) fn emit(
+    dom: &Dom,
+    candidates: &FxHashSet<InstanceId>,
+    text: &mut Text<'_>,
+    out: &mut Vec<GuiQuad>,
+) {
+    let holders = [dom.find_service("Workspace"), dom.local_player()];
+    let mut shown: Vec<InstanceId> = (candidates.iter().copied())
+        .filter(|&c| dom.parent(c).is_some_and(|p| holders.contains(&Some(p))))
         .filter(|&c| match dom.class_name(c) {
             "Hint" => true,
             "Message" => !dom

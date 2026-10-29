@@ -76,10 +76,14 @@ pub struct Gui {
     /// SurfaceGuis and BillboardGuis that have been in the Workspace, so
     /// layout needn't search it; ones that left are dropped at layout.
     in_world: FxHashSet<InstanceId>,
+    /// Hints and Messages that have been in the Workspace or a player, so
+    /// drawing needn't search for them; ones that left are dropped at
+    /// layout.
+    messages: FxHashSet<InstanceId>,
     /// The world GUIs the last [`Gui::draw_world`] drew, in its order.
     world_drawn: Vec<world::Hung>,
-    /// What the screen draws as of the last layout, once drawn.
-    screen_drawn: Option<Arc<[GuiQuad]>>,
+    /// What the screen draws, in pieces kept until they change.
+    screen: draw::Screen,
     /// The focused TextBox, which draws its caret.
     focus: Option<InstanceId>,
     /// The GuiButtons with `Modal` set.
@@ -111,8 +115,9 @@ impl Default for Gui {
             generation: 0,
             watch: None,
             in_world: FxHashSet::default(),
+            messages: FxHashSet::default(),
             world_drawn: Vec::new(),
-            screen_drawn: None,
+            screen: draw::Screen::default(),
             focus: None,
             modals: modal::Modals::default(),
             scrolling: FxHashMap::default(),
@@ -207,12 +212,24 @@ impl Gui {
                 self.in_world
                     .extend(found.into_iter().filter(|&id| world::is_world_gui(dom, id)));
             }
+            let holders = (dom.find_service("Workspace").into_iter()).chain(
+                dom.find_service("Players")
+                    .map_or(Vec::new(), |p| dom.children(p).to_vec()),
+            );
+            let held: Vec<InstanceId> = holders.flat_map(|h| dom.children(h).to_vec()).collect();
+            self.messages
+                .extend(held.into_iter().filter(|&id| draw::is_message(dom, id)));
         }
         let watch = self.watch.as_ref().expect("made above");
         for change in dom.journal().since(self.cursor) {
             self.modals.note(dom, change);
             if let Change::Reparented { subtree, .. } = change {
                 self.overheads.note(dom, subtree.iter().copied());
+                let messages = subtree
+                    .iter()
+                    .copied()
+                    .filter(|&id| draw::is_message(dom, id));
+                self.messages.extend(messages);
                 let found = subtree.iter().copied();
                 self.in_world
                     .extend(found.filter(|&id| world::is_world_gui(dom, id)));
@@ -243,6 +260,7 @@ impl Gui {
             let workspace = dom.find_service("Workspace");
             self.in_world
                 .retain(|&id| workspace.is_some_and(|ws| dom.is_ancestor_of(ws, id)));
+            self.messages.retain(|&id| dom.parent(id).is_some());
             // A server draws no world GUI: it lays one out only when a
             // script reads it, as it does GUI in storage.
             let mut world: Vec<InstanceId> = match dom.local_player() {
@@ -257,7 +275,7 @@ impl Gui {
             self.shifted.clear();
             self.restyled.clear();
             self.generation += 1;
-            self.screen_drawn = None;
+            self.screen.forget();
             self.canvases.clear();
             self.write(dom);
             return;
@@ -266,7 +284,8 @@ impl Gui {
         self.changed.extend(whole);
         // Trees not laid out (in storage, or a server's world GUI) wait for
         // a script to read them.
-        let changed: Vec<InstanceId> = (tops(dom, std::mem::take(&mut self.changed)).into_iter())
+        let touched: Vec<InstanceId> = std::mem::take(&mut self.changed).into_iter().collect();
+        let changed: Vec<InstanceId> = (tops(dom, touched.iter().copied().collect()).into_iter())
             .filter(|top| self.layout.placed.contains_key(top))
             .collect();
         if !changed.is_empty() {
@@ -274,6 +293,15 @@ impl Gui {
             (self.layout).redo(dom, &changed, (&mut self.fonts, &self.turning));
             self.write_trees(dom, &changed);
             self.redraw(dom, &changed);
+            // What moved draws again with its tree's new stack; what
+            // changed in place (a label's text, an image arriving) is named.
+            self.repaint(dom, &touched, false);
+        } else {
+            // Hints and Messages are in no tree.
+            let messages: Vec<InstanceId> = (touched.into_iter())
+                .filter(|&id| draw::is_message(dom, id))
+                .collect();
+            self.repaint(dom, &messages, false);
         }
         // Those in a tree just laid out are already in place.
         let shifted: Vec<InstanceId> = (shifted.into_iter())
@@ -283,10 +311,10 @@ impl Gui {
             profiling::scope!("Gui::layout objects");
             (self.layout).place_again(dom, &shifted, (&mut self.fonts, &self.turning));
             self.write_trees(dom, &shifted);
-            self.redraw(dom, &tops(dom, shifted.into_iter().collect()));
+            self.repaint(dom, &shifted, true);
         }
-        let restyled = tops(dom, std::mem::take(&mut self.restyled));
-        self.redraw(dom, &restyled);
+        let restyled: Vec<InstanceId> = std::mem::take(&mut self.restyled).into_iter().collect();
+        self.repaint(dom, &restyled, false);
         // A server draws nothing, so its billboards keep the size they were
         // laid out at.
         if dom.local_player().is_none() {
@@ -376,7 +404,28 @@ impl Gui {
             if world::is_world_gui(dom, *top) {
                 self.canvases.remove(top);
             } else {
-                self.screen_drawn = None;
+                self.screen.restack(*top);
+            }
+        }
+    }
+
+    /// Draw `ids` again, placed again on their own (`placed`, with what
+    /// they hold) or only restyled; a world GUI's whole canvas.
+    fn repaint(&mut self, dom: &Dom, ids: &[InstanceId], placed: bool) {
+        if ids.is_empty() {
+            return;
+        }
+        self.generation += 1;
+        for &id in ids {
+            if draw::is_message(dom, id) {
+                self.screen.repaint_messages();
+                continue;
+            }
+            match layout::top_of(dom, id) {
+                Some(top) if world::is_world_gui(dom, top) => _ = self.canvases.remove(&top),
+                Some(_) if placed => self.screen.placed(id),
+                Some(_) => self.screen.repaint(id),
+                None => {}
             }
         }
     }
@@ -387,19 +436,21 @@ impl Gui {
     }
 
     /// What the local player's ScreenGuis draw, bottom first, as of the
-    /// last layout.
-    pub fn draw(&mut self, dom: &Dom) -> Arc<[GuiQuad]> {
-        if let Some(drawn) = &self.screen_drawn {
-            return drawn.clone();
-        }
+    /// last layout: in pieces, one per object, each the same `Arc` until
+    /// what it draws changes, so a renderer can keep what it made of it.
+    pub fn draw(&mut self, dom: &Dom) -> Arc<[Arc<[GuiQuad]>]> {
         let mut text = draw::Text {
             fonts: &mut self.fonts,
             glyphs: &mut self.glyphs,
         };
-        let drawn: Arc<[GuiQuad]> =
-            draw::quads(dom, &self.layout, &mut text, &mut self.images, self.focus).into();
-        self.screen_drawn = Some(drawn.clone());
-        drawn
+        let (layout, messages) = (&self.layout, &self.messages);
+        (self.screen).draw(
+            dom,
+            layout,
+            (&mut text, &mut self.images),
+            self.focus,
+            messages,
+        )
     }
 
     /// What the shown SurfaceGuis and BillboardGuis draw, as of the last

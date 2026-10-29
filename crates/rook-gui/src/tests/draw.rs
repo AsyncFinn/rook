@@ -24,7 +24,7 @@ fn square(dom: &mut Dom, parent: InstanceId, z: i32, tag: f32) -> InstanceId {
 
 fn order(dom: &mut Dom) -> Vec<f32> {
     let mut gui = laid_out(dom);
-    gui.draw(dom).iter().map(|q| q.color[0]).collect()
+    drawn(&mut gui, dom).iter().map(|q| q.color[0]).collect()
 }
 
 #[test]
@@ -64,7 +64,7 @@ fn clipping_and_hidden_objects() {
     set(&mut dom, hidden, "Visible", Value::Bool(false));
     square(&mut dom, hidden, 1, 0.4);
     let mut gui = laid_out(&mut dom);
-    let quads = gui.draw(&dom);
+    let quads = drawn(&mut gui, &dom);
     assert_eq!(quads.len(), 2);
     assert_eq!(quads[0].clip, GuiQuad::NO_CLIP);
     assert_eq!(quads[1].clip, [600.0, 358.0, 800.0, 558.0]);
@@ -72,7 +72,7 @@ fn clipping_and_hidden_objects() {
     // A turned clipper clips nothing (creator-docs ClipsDescendants).
     set(&mut dom, p, "Rotation", Value::Float32(10.0));
     let mut gui = laid_out(&mut dom);
-    assert_eq!(gui.draw(&dom)[1].clip, GuiQuad::NO_CLIP);
+    assert_eq!(drawn(&mut gui, &dom)[1].clip, GuiQuad::NO_CLIP);
 }
 
 #[test]
@@ -84,7 +84,7 @@ fn borders_go_around_the_background() {
     set(&mut dom, f, "BorderSizePixel", Value::Int32(2));
     set(&mut dom, f, "BackgroundTransparency", Value::Float32(0.25));
     let mut gui = laid_out(&mut dom);
-    let quads = gui.draw(&dom);
+    let quads = drawn(&mut gui, &dom);
     // Four strips outside a 200 × 200 background, all 75% opaque.
     assert_eq!(quads.len(), 5);
     assert_eq!(quads[0].center, Vec2::new(700.0, 299.0));
@@ -94,7 +94,7 @@ fn borders_go_around_the_background() {
     assert!(quads.iter().all(|q| q.color[3] == 0.75));
     set_enum(&mut dom, f, "BorderMode", "Inset");
     let mut gui = laid_out(&mut dom);
-    assert_eq!(gui.draw(&dom)[4].size, Vec2::new(196.0, 196.0));
+    assert_eq!(drawn(&mut gui, &dom)[4].size, Vec2::new(196.0, 196.0));
 }
 
 #[test]
@@ -104,10 +104,13 @@ fn hints_and_messages() {
     let mut gui = laid_out(&mut dom);
     let empty_message = child(&mut dom, "Message", ws, &[]);
     gui.sync(&mut dom);
-    assert!(gui.draw(&dom).is_empty(), "an empty Message shows nothing");
+    assert!(
+        drawn(&mut gui, &dom).is_empty(),
+        "an empty Message shows nothing"
+    );
     let hint = child(&mut dom, "Hint", ws, &[]);
     gui.sync(&mut dom);
-    let quads = gui.draw(&dom);
+    let quads = drawn(&mut gui, &dom);
     assert_eq!(quads.len(), 1, "an empty Hint shows its bar");
     assert_eq!(quads[0].color, [0.0, 0.0, 0.0, 1.0]);
     assert_eq!(quads[0].center.y, 10.0);
@@ -121,11 +124,15 @@ fn hints_and_messages() {
     let message = child(&mut dom, "Message", ws, &[]);
     set(&mut dom, message, "Text", Value::String(" ".into()));
     gui.sync(&mut dom);
-    let quads = gui.draw(&dom);
+    let quads = drawn(&mut gui, &dom);
     assert_eq!(quads.last().unwrap().color[3], 0.5);
     dom.set_parent(hint, None).unwrap();
     gui.sync(&mut dom);
-    assert_eq!(gui.draw(&dom).len(), 1);
+    assert_eq!(drawn(&mut gui, &dom).len(), 1);
+    // Its text emptied, the Message shows nothing again.
+    set(&mut dom, message, "Text", Value::String(String::new()));
+    gui.sync(&mut dom);
+    assert!(drawn(&mut gui, &dom).is_empty());
 }
 
 /// Screen text 34 pixels or bigger is drawn from distance fields, smaller
@@ -170,10 +177,10 @@ fn big_screen_text_draws_from_distance_fields() {
             })
             .collect()
     };
-    assert_eq!(fields(&gui.draw(&dom)), [false, false]);
+    assert_eq!(fields(&drawn(&mut gui, &dom)), [false, false]);
     label(&mut dom, 40.0);
     gui.sync(&mut dom);
-    assert_eq!(fields(&gui.draw(&dom)), [false, false, true, true]);
+    assert_eq!(fields(&drawn(&mut gui, &dom)), [false, false, true, true]);
 }
 
 /// A UICorner rounds the object's own quads and drops its border, a
@@ -195,7 +202,7 @@ fn corners_gradients_strokes_and_groups() {
         &[("Thickness", Value::Float32(4.0))],
     );
     let mut gui = laid_out(&mut dom);
-    let quads = gui.draw(&dom);
+    let quads = drawn(&mut gui, &dom);
     assert_eq!(quads.len(), 2, "background and stroke, no border");
     let shape = quads[0].shape.expect("rounded");
     // Held to half the shorter side; the others keep the default 8.
@@ -224,7 +231,7 @@ fn corners_gradients_strokes_and_groups() {
     let inner = square(&mut dom, group, 1, 0.5);
     set(&mut dom, inner, "Position", udim2(0.0, 5, 0.0, 5));
     let mut gui = laid_out(&mut dom);
-    let quads = gui.draw(&dom);
+    let quads = drawn(&mut gui, &dom);
     let Paint::Group(drawn) = &quads.last().unwrap().paint else {
         panic!("a group quad last");
     };
@@ -232,4 +239,57 @@ fn corners_gradients_strokes_and_groups() {
     assert_eq!(drawn.size, [100, 50]);
     assert_eq!(drawn.quads.len(), 2);
     assert_eq!(drawn.quads[1].center, Vec2::new(105.0, 105.0));
+}
+
+/// A change draws again only the pieces it touches: a color its object's,
+/// a turn its object's and what it holds, showing a hidden object or a
+/// layout change only what the ScreenGui's new stack moved. Every other
+/// piece stays the same `Arc`, and the screen ends as a fresh drawing
+/// draws it.
+#[test]
+fn changes_draw_again_only_their_pieces() {
+    let (mut dom, player_gui) = client();
+    let screen = child(&mut dom, "ScreenGui", player_gui, &[]);
+    let clipper = square(&mut dom, screen, 1, 0.1);
+    set(&mut dom, clipper, "ClipsDescendants", Value::Bool(true));
+    square(&mut dom, clipper, 1, 0.2);
+    let other = square(&mut dom, screen, 2, 0.3);
+    let hidden = square(&mut dom, screen, 3, 0.4);
+    set(&mut dom, hidden, "Visible", Value::Bool(false));
+    let mut gui = laid_out(&mut dom);
+    let mut before = gui.draw(&dom);
+    // Which pieces are those drawn last time, and whether the screen is
+    // as a fresh drawing draws it.
+    let mut step = |dom: &mut Dom, name: &str, value: Value, id: InstanceId| {
+        set(dom, id, name, value);
+        gui.sync(dom);
+        let now = gui.draw(dom);
+        let kept: Vec<bool> = (now.iter())
+            .map(|p| before.iter().any(|b| Arc::ptr_eq(b, p)))
+            .collect();
+        before = now;
+        assert_eq!(drawn(&mut gui, dom), drawn(&mut laid_out(dom), dom));
+        kept
+    };
+    let red = Value::Color3(Color3::new(0.9, 0.0, 0.0));
+    assert_eq!(
+        step(&mut dom, "BackgroundColor3", red, other),
+        [true, true, false]
+    );
+    let turn = Value::Float32(20.0);
+    assert_eq!(
+        step(&mut dom, "Rotation", turn, clipper),
+        [false, false, true]
+    );
+    let shown = step(&mut dom, "Visible", Value::Bool(true), hidden);
+    assert_eq!(shown, [true, true, true, false]);
+    let size = udim2(0.0, 100, 0.0, 100);
+    assert_eq!(
+        step(&mut dom, "Size", size, hidden),
+        [true, true, true, false]
+    );
+    // Laid out again, but only its border's look changed.
+    let border = Value::Int32(3);
+    let bordered = step(&mut dom, "BorderSizePixel", border, other);
+    assert_eq!(bordered, [true, true, false, true]);
 }

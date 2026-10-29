@@ -14,6 +14,7 @@ mod group;
 mod image;
 mod messages;
 pub(crate) mod overhead;
+mod screen;
 mod scrolling;
 mod stroke;
 mod style;
@@ -24,7 +25,7 @@ use rook_dom::{Dom, InstanceId};
 use rook_types::{GuiQuad, WorldCanvas};
 
 use crate::images::Images;
-use crate::layout::{GUI_INSET, Layout, Placed, turn};
+use crate::layout::{Layout, Placed, turn};
 use crate::order::{self, Clip, Stacked};
 
 /// The fonts and glyph masks text is drawn with.
@@ -34,50 +35,12 @@ pub(crate) struct Text<'a> {
 }
 
 pub(crate) use image::all_images;
+pub(crate) use messages::is_message;
+pub(crate) use screen::Screen;
 
 /// Whether `id` draws an image.
 pub(crate) fn is_image(dom: &Dom, id: InstanceId) -> bool {
     matches!(dom.class_name(id), "ImageLabel" | "ImageButton")
-}
-
-/// Bottom first.
-pub(crate) fn quads(
-    dom: &Dom,
-    layout: &Layout,
-    text: &mut Text<'_>,
-    images: &mut Images,
-    focus: Option<InstanceId>,
-) -> Vec<GuiQuad> {
-    let mut out = Vec::new();
-    let mut draw = Draw {
-        dom,
-        layout,
-        text,
-        images,
-        out: &mut out,
-        fields: false,
-        focus,
-        canvas: GuiQuad::NO_CLIP,
-    };
-    for screen in order::screens(dom) {
-        draw.collector(screen, Clip::NONE);
-    }
-    // Laid out in GUI coordinates, drawn in the window's, below the top
-    // bar: the quads, what clips them, and the corners and gradients they
-    // carry, which are placed in the same pixels.
-    for q in draw.out.iter_mut() {
-        q.center.y += GUI_INSET;
-        q.clip[1] += GUI_INSET;
-        q.clip[3] += GUI_INSET;
-        if let Some(shape) = &mut q.shape {
-            shape.center.y += GUI_INSET;
-        }
-        if let Some(gradient) = &mut q.gradient {
-            gradient.origin.y += GUI_INSET;
-        }
-    }
-    messages::emit(dom, draw.text, draw.out);
-    out
 }
 
 /// What each of `guis` (world GUIs, laid out) draws on its canvas. Its

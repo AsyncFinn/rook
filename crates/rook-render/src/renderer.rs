@@ -361,13 +361,14 @@ impl Renderer {
         }
     }
 
-    /// Draw `screen` over the scene from now on, bottom first, and the
-    /// world GUI's canvases; the images they draw are in `images`, and go
-    /// up as others do (quads draw nothing until theirs is up). Lists given
-    /// last time (the same `Arc`) stay on the GPU as they are.
+    /// Draw `screen`'s pieces over the scene from now on, bottom first, and
+    /// the world GUI's canvases; the images they draw are in `images`, and
+    /// go up as others do (quads draw nothing until theirs is up). Pieces
+    /// and canvases given last time (the same `Arc`) stay on the GPU as
+    /// they are.
     pub fn set_gui(
         &mut self,
-        screen: &std::sync::Arc<[GuiQuad]>,
+        screen: &std::sync::Arc<[std::sync::Arc<[GuiQuad]>]>,
         world: &[std::sync::Arc<WorldCanvas>],
         images: &std::collections::HashMap<ImageHash, std::sync::Arc<Image>>,
     ) {

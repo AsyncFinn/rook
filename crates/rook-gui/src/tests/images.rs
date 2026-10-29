@@ -19,7 +19,7 @@ fn label(w: i32, h: i32, props: &[(&str, Value)]) -> (Dom, Gui, InstanceId) {
     all.extend(props.iter().cloned());
     let id = child(&mut dom, "ImageLabel", frame, &all);
     let mut gui = laid_out(&mut dom);
-    gui.draw(&dom);
+    drawn(&mut gui, &dom);
     assert_eq!(gui.take_image_requests(), [URL]);
     assert_eq!(dom.bool_property(id, "IsLoaded"), Some(false));
     let image = GuiImage {
@@ -39,7 +39,7 @@ fn pieces(dom: &Dom, gui: &mut Gui, id: InstanceId) -> Vec<([f32; 2], [f32; 2], 
     // Drawn in the window, below the top bar.
     let origin = vec2_of(dom, id, "AbsolutePosition") + Vec2::new(0.0, GUI_INSET);
     let round = |v: Vec2| (v * 1000.0).round().to_array().map(|x| x / 1000.0);
-    gui.draw(dom)
+    drawn(gui, dom)
         .iter()
         .filter_map(|q| match q.paint {
             Paint::Image(p) => Some((
@@ -108,7 +108,7 @@ fn tiles_repeat_from_the_top_left() {
     let (mut dom, mut gui, id) = label(180, 120, &[("TileSize", udim2(0.0, 48, 0.0, 36))]);
     set_enum(&mut dom, id, "ScaleType", "Tile");
     gui.sync(&mut dom);
-    let quads = gui.draw(&dom);
+    let quads = drawn(&mut gui, &dom);
     let Some(Paint::Image(p)) = quads.last().map(|q| q.paint.clone()) else {
         panic!("no image");
     };

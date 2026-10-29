@@ -689,7 +689,7 @@ fn gui_images_draw_their_texels() {
         missing,
     ];
     let images = [(ImageHash(hash), image())].into_iter().collect();
-    r.set_gui(&Arc::from(screen), &[], &images);
+    r.set_gui(&Arc::from([Arc::<[GuiQuad]>::from(screen)]), &[], &images);
     r.finish_uploads();
     let camera = Camera::look_at(Vec3::new(0.0, 0.0, 10.0), Vec3::ZERO);
     let (w, h) = (80, 16);
@@ -777,7 +777,7 @@ fn gui_shapes_gradients_and_groups_draw() {
             [0.0, 1.0, 1.0, 1.0],
         )
     };
-    let screen = Arc::from([rounded, band, graded, grouped]);
+    let screen = Arc::from([Arc::<[GuiQuad]>::from([rounded, band, graded, grouped])]);
     r.set_gui(&screen, &[], &Default::default());
     let camera = Camera::look_at(Vec3::new(0.0, 0.0, 10.0), Vec3::ZERO);
     let (w, h) = (64, 16);
@@ -799,4 +799,50 @@ fn gui_shapes_gradients_and_groups_draw() {
     // Red, then yellow, both tinted cyan.
     assert_eq!(at(50, 8), [0, 0, 0]);
     assert_eq!(at(62, 8), [0, 255, 0]);
+}
+
+/// Screen GUI pieces given again are kept, and a changed one draws as a
+/// fresh renderer draws the whole list: written alone when it keeps its
+/// size, with everything after it when it grows.
+#[test]
+fn gui_pieces_redraw_as_given() {
+    let (Ok(mut kept), Ok(mut fresh)) = (Renderer::headless(), Renderer::headless()) else {
+        return;
+    };
+    let square = |x: f32, color: [f32; 3]| GuiQuad {
+        center: Vec2::new(x, 8.0),
+        size: Vec2::splat(16.0),
+        rotation: 0.0,
+        color: [color[0], color[1], color[2], 1.0],
+        clip: GuiQuad::NO_CLIP,
+        paint: rook_types::Paint::Solid,
+        shape: None,
+        gradient: None,
+    };
+    let piece = |quads: Vec<GuiQuad>| -> Arc<[GuiQuad]> { quads.into() };
+    let (red, green, blue) = ([1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]);
+    let a = piece(vec![square(8.0, red)]);
+    let b = piece(vec![square(24.0, green)]);
+    let c = piece(vec![square(40.0, blue)]);
+    let camera = Camera::look_at(Vec3::new(0.0, 0.0, 10.0), Vec3::ZERO);
+    let draw = |r: &mut Renderer, list: &[Arc<[GuiQuad]>]| {
+        r.set_scene(&Scene::default());
+        r.set_gui(&Arc::from(list), &[], &Default::default());
+        r.render_to_image(48, 16, &camera).unwrap()
+    };
+    draw(&mut kept, &[a.clone(), b, c.clone()]);
+    for list in [
+        // The same size: written alone.
+        vec![a.clone(), piece(vec![square(24.0, blue)]), c.clone()],
+        // Grown: the pieces after it move along.
+        vec![
+            a.clone(),
+            piece(vec![square(24.0, red), square(24.0, green)]),
+            c.clone(),
+        ],
+        // One fewer.
+        vec![a, c],
+    ] {
+        assert_eq!(draw(&mut kept, &list), draw(&mut fresh, &list));
+    }
 }

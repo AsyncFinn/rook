@@ -86,7 +86,7 @@ fn auto_button_color_tints_the_background() {
     let mut drawn = |dom: &mut Dom, state: &str| {
         set_enum(dom, b, "GuiState", state);
         gui.sync(dom);
-        let c = gui.draw(dom)[0].color;
+        let c = drawn(&mut gui, dom)[0].color;
         [c[0], c[1], c[2]].map(|v| (v * 255.0).round())
     };
     // Measured: (140, 70, 35) hovered and (216, 147, 110) pressed.
