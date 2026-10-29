@@ -75,15 +75,9 @@ impl Pass {
     }
 
     /// How far toward its outside neighbor this inside voxel's surface
-    /// crosses, at a vertex where water's surface lies `flat` or not.
-    /// Water's surface lies flat at its level across solids
-    /// ([`Voxel::water_surface_fill`]) and, at its edge, dips to a dry
-    /// solid's own surface less the drop, under the land: so its edge is
-    /// never in sight, and the shore is where the land rises through the
-    /// water, along the land's own slope (observed: Studio's shores are
-    /// smooth curves where the water's last voxels meet dry land lying
-    /// below the water's level; ending the surface at the wet cells drew
-    /// them as the voxels' stair steps).
+    /// crosses: water's at its level when `flat`
+    /// ([`Voxel::water_surface_fill`]), else a dry solid at its own
+    /// surface ([`Mesher::touches_water`]).
     fn fill(self, v: Voxel, flat: bool) -> f32 {
         match self {
             Pass::Water if flat => v.water_surface_fill(),
@@ -185,21 +179,7 @@ impl Mesher<'_> {
         if self.cells[slot] != NONE {
             return self.cells[slot];
         }
-        let flat = self.pass == Pass::Solid || !self.at_water_edge(c);
-        let mut sum = Vec3::ZERO;
-        let mut n = 0;
-        for (a, b) in CELL_EDGES {
-            let (a, b) = (c + a, c + b);
-            let (ia, ib) = (self.inside(a), self.inside(b));
-            if ia == ib {
-                continue;
-            }
-            let (from, to) = if ia { (a, b) } else { (b, a) };
-            let t = crossing(self.pass.fill(self.block.at(from), flat), self.scale);
-            sum += self.center(from) + (self.center(to) - self.center(from)) * t;
-            n += 1;
-        }
-        let mut position = sum / n.max(1) as f32;
+        let mut position = self.crossings(c);
         let material = match self.pass {
             Pass::Solid => {
                 let material = self.dominant(c);
@@ -226,22 +206,45 @@ impl Mesher<'_> {
         index
     }
 
-    /// Water only: whether cell `c`'s vertex lies on the edge of water's
-    /// surface, where it dips under the land: the cell has no water at a
-    /// corner and one of the quads it would join isn't kept. Inside the
-    /// surface it stays flat, so water covers dry land just under its
-    /// level that it surrounds (observed in Studio: dry strips just under
-    /// a water layer, 1 and 2 voxels wide, lie under flat water; 3, 4 and
-    /// 6 wide show land a voxel narrower than the strip).
-    fn at_water_edge(&self, c: IVec3) -> bool {
-        if self.wet_cell(c) {
-            return false;
-        }
-        CELL_EDGES.iter().any(|&(a, b)| {
+    /// Where cell `c`'s surface crosses its edges, on average.
+    fn crossings(&self, c: IVec3) -> Vec3 {
+        let mut sum = Vec3::ZERO;
+        let mut n = 0;
+        for (a, b) in CELL_EDGES {
             let (a, b) = (c + a, c + b);
-            let axis = (b - a).to_array().iter().position(|&d| d != 0).unwrap_or(0);
-            self.inside(a) != self.inside(b) && !self.quad_kept(a, axis)
-        })
+            let (ia, ib) = (self.inside(a), self.inside(b));
+            if ia == ib {
+                continue;
+            }
+            let (from, to) = if ia { (a, b) } else { (b, a) };
+            let v = self.block.at(from);
+            // Only a dry solid's crossing depends on its neighbors.
+            let dry = v.is_solid() && v.water == 0;
+            let flat = self.pass == Pass::Water && (!dry || self.touches_water(from));
+            let t = crossing(self.pass.fill(v, flat), self.scale);
+            sum += self.center(from) + (self.center(to) - self.center(from)) * t;
+            n += 1;
+        }
+        sum / n.max(1) as f32
+    }
+
+    /// Water only: whether voxel `p` touches a voxel holding water across
+    /// a face. Water's surface lies flat at its level over
+    /// such a dry solid and crosses any other at the solid's own surface,
+    /// so across a cell it slopes from one to the other: down under land
+    /// that lies further from the water, along the land's own line
+    /// (observed in Studio: dry strips just under a water layer, 1 and 2
+    /// voxels wide, lie under flat water; 3, 4 and 6 wide, and a wide
+    /// patch, show land about a voxel narrower; a dry shelf whose edge
+    /// runs diagonally across the voxels meets the water in a straight
+    /// line, under the water's level or above it).
+    fn touches_water(&self, p: IVec3) -> bool {
+        let inside = |q: IVec3| q.cmpge(IVec3::ZERO).all() && q.cmplt(IVec3::splat(SPAN)).all();
+        IVec3::AXES
+            .iter()
+            .flat_map(|&a| [a, -a])
+            .map(|d| p + d)
+            .any(|q| inside(q) && self.block.at(q).is_wet())
     }
 
     /// Whether cell `c` has water at a corner (none out of the block).

@@ -499,3 +499,56 @@ fn faint_voxels_keep_their_material() {
         }
     }
 }
+
+#[test]
+fn water_meets_a_slanted_bank_along_its_line() {
+    use TerrainMaterial::{Mud, Water};
+    // Observed: where land rises gently out of water along a line slanted
+    // across the voxels (a bank's dry voxels partly filled, as water
+    // filled over terrain leaves them), Studio's shore is a smooth line;
+    // flat water only in cells touching water, dipping beyond, drew it
+    // in voxel stair steps. Along lines parallel to the bank (1 in 3),
+    // water shows all along or not at all but where the shore crosses.
+    let normal = Vec3::new(1.0, 0.0, 3.0).normalize();
+    let along = Vec3::new(3.0, 0.0, -1.0).normalize();
+    let center = Vec3::new(64.0, 0.0, 64.0);
+    // The land's height: 7 studs at the line, rising 0.4 a stud inland;
+    // the water fills its layer (4 to 8 studs) wherever the land is under.
+    let height = |p: Vec3| 7.0 + 0.4 * (p - center).dot(normal);
+    let mut grid = Grid::new();
+    for z in 0..32 {
+        for x in 0..32 {
+            let h = height(Vec3::new(x as f32 * 4.0 + 2.0, 0.0, z as f32 * 4.0 + 2.0));
+            for y in 0..4 {
+                let fill = ((h - (y as f32 * 4.0 + 2.0)) / 4.0 + 0.5).clamp(0.0, 1.0);
+                let byte = (fill * 256.0).round() as i32 - 1;
+                let v = if byte >= 0 {
+                    Voxel::new(Mud, byte.min(255) as u8)
+                } else if y == 1 {
+                    Voxel::new(Water, 255)
+                } else {
+                    continue;
+                };
+                grid.set(IVec3::new(x, y, z), v);
+            }
+        }
+    }
+    let tris = triangles(&grid, mesh::DIAGONALS);
+    let mut mixed = 0;
+    for k in -40..40 {
+        let line = center + normal * (k as f32 * 0.5) + Vec3::Y * 40.0;
+        let mut water = 0;
+        for i in -20..20 {
+            let at = line + along * (i as f32 * 1.5);
+            if let Some((_, _, m)) = cast(&tris, at, Vec3::NEG_Y) {
+                water += usize::from(m == Water);
+            }
+        }
+        if (4..=36).contains(&water) {
+            mixed += 1;
+        }
+    }
+    // Steps wander the shore over a wider band: 3 lines half a stud
+    // apart with them, 2 without.
+    assert!(mixed <= 2, "{mixed} lines mix water and land");
+}

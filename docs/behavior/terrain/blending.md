@@ -23,7 +23,7 @@ screenshots in Studio and Rook of the same fills.
   `blend` numbers in the material tables), but falls back to the plain
   weights when a per-vertex value is 1 or more, and fades to them far
   away. What picks between them isn't known.
-- Studio draws the plain ramp: screenshots of the same seams in TerrainTest
+- Studio draws the plain ramp: screenshots of the same seams on a large terrain place
   show the same soft, even edges with the legacy and the 2022 textures,
   whose height maps differ, so the heights play no part (checked
   2026-10-28). The `blend` numbers go unused in Rook.
