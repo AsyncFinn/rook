@@ -207,13 +207,16 @@ impl Kept {
 
     /// Look at the frame's changes; save once they have settled.
     pub(crate) fn check(&mut self, dom: &Dom, now: f64) {
-        let (_, changes) = self.watch.look(dom);
+        let (first, changes) = self.watch.look(dom);
         let game = self.game;
-        if changes
+        let changed = changes
             .iter()
-            .any(|c| matches!(c, Change::Property { id, .. } if *id == game))
-        {
+            .any(|c| matches!(c, Change::Property { id, .. } if *id == game));
+        // A first look reads them whole, as any watch's does.
+        if first || changed {
             self.current = PlayerSettings::read(dom, game);
+        }
+        if changed {
             self.changed = Some(now);
         }
         if self.changed.is_some_and(|t| now - t >= SAVE_DELAY) {

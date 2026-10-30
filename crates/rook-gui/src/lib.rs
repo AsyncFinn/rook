@@ -377,7 +377,14 @@ impl Gui {
         }
     }
 
-    /// The TextBox that has focus, which shows its caret and selection.
+    /// The TextBox keys type into, which shows its caret and selection:
+    /// the one record of it, which `UserInputService:GetFocusedTextBox`
+    /// reads too, so the caret drawn and the box scripts see never differ.
+    pub fn focus(&self) -> Option<InstanceId> {
+        self.focus
+    }
+
+    /// Give `focus` the keys (`None`: no TextBox has them).
     pub fn set_focus(&mut self, focus: Option<InstanceId>) {
         if self.focus != focus {
             self.restyled.extend(self.focus.into_iter().chain(focus));

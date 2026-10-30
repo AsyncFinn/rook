@@ -397,13 +397,9 @@ impl DataModel {
     /// [`MouseLock::Center`](crate::MouseLock) (Inference: where Roblox
     /// draws it in first person), else where it was.
     fn mouse_motion(&mut self, dx: f32, dy: f32) -> bool {
-        let centered = self.mouse_lock() == crate::MouseLock::Center;
-        let (vw, vh) = self.input.viewport;
+        self.hold_mouse();
         let pos = {
             let mut w = self.runtime.world_mut();
-            if centered {
-                w.input.mouse = (vw as f32 / 2.0, vh as f32 / 2.0);
-            }
             w.input.mouse_delta = (dx, dy);
             w.input.mouse
         };
@@ -413,6 +409,20 @@ impl DataModel {
             self.fire_input("InputChanged", obj, false);
         }
         false
+    }
+
+    /// Put the mouse where [`DataModel::mouse_lock`] holds it: at the
+    /// window's center for [`MouseLock::Center`](crate::MouseLock), as soon
+    /// as the lock comes (on each held move, and each client frame once
+    /// scripts have set `MouseBehavior`), not where the cursor was when it
+    /// came. The engine's alone: a window only reports where its cursor
+    /// is. No signal fires (Inference).
+    pub(crate) fn hold_mouse(&self) {
+        if self.mouse_lock() != crate::MouseLock::Center {
+            return;
+        }
+        let (vw, vh) = self.input.viewport;
+        self.runtime.world_mut().input.mouse = (vw as f32 / 2.0, vh as f32 / 2.0);
     }
 
     fn wheel(&mut self, delta: f32) -> bool {

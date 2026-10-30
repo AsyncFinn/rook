@@ -64,13 +64,11 @@ impl DataModel {
             let w = &mut *w;
             w.physics.write_terrain(&mut w.dom);
         }
-        self.check_render_changes();
-        self.check_sounds();
-        self.check_unions();
-        self.check_explosions();
-        self.check_user_settings();
         if self.auto_trim {
             self.trim_journal();
+        } else {
+            // The session trims once the replicator has read the frame.
+            self.read_journal();
         }
     }
 
@@ -85,6 +83,9 @@ impl DataModel {
         // Inference: the engine's own camera moves come after the
         // scripts', just before drawing.
         self.runtime.step_cameras();
+        // Scripts set MouseBehavior in the render step; the mouse the
+        // frame's Mouse.Hit looks through is held from now.
+        self.hold_mouse();
         self.place_drawn();
         // A script may have replaced the current camera.
         self.sync_viewport_size();

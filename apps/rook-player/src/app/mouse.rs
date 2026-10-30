@@ -13,11 +13,8 @@ impl App {
     /// wandering out of the window while the camera turns.
     pub(crate) fn look(&mut self, on: bool) {
         self.looking = on;
-        // Looking hides the cursor; whatever ends it shows it again.
+        // Looking hides the cursor: shown again as the frame shows it.
         self.cursor_shown.look = None;
-        if let Some(gfx) = &self.gfx {
-            gfx.window.set_cursor_visible(!on);
-        }
         self.hold(on.then_some(self.cursor));
     }
 
@@ -75,9 +72,9 @@ impl App {
     }
 
     /// Put the system cursor at `at`. The one place the window moves it,
-    /// so the game always reads the mouse where it is: a lock to the
-    /// center puts Roblox's GetMouseLocation and Mouse.Hit there, not
-    /// where the mouse was when the lock came. Best effort, as grabbing is.
+    /// and it tells the game where it went, so the two never differ (the
+    /// engine has already put a mouse locked to the center there). Best
+    /// effort, as grabbing is.
     fn warp(&mut self, at: PhysicalPosition<f64>) {
         let Some(gfx) = &self.gfx else {
             return;

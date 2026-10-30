@@ -572,8 +572,15 @@ fn renames_are_seen_by_the_next_read() {
     rename("C", "D");
     step(&rt);
     rename("D", "E");
-    let end = rt.world().dom.journal().end();
-    rt.world_mut().dom.journal_mut().trim(end);
+    {
+        // Trimmed as the engine trims: once its readers have read.
+        let mut w = rt.world_mut();
+        let w = &mut *w;
+        w.gui.note_changes(&w.dom);
+        w.note_style_changes();
+        let end = w.dom.journal().end();
+        w.dom.journal_mut().trim(end);
+    }
     step(&rt);
     rt.world_mut().dom.journal_mut().set_enabled(false);
     rename("E", "F");
