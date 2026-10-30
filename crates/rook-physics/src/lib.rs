@@ -190,11 +190,15 @@ pub struct Physics {
     motored: HashSet<RigidBodyHandle>,
     parts: HashMap<InstanceId, Home>,
     /// Anchored parts on their own, with no joints and no velocity: most
-    /// of a large place. Their colliders share one fixed body, `shared`,
-    /// as Rapier's every step costs time for each body, moving or not
-    /// (84k fixed bodies took 1.4 ms a 240 Hz step, the same colliders on
-    /// one body 0.3).
+    /// of a large place. Their colliders have no body at all, Rapier's
+    /// (and PhysX's and Jolt's) static geometry: every body costs time each
+    /// step, moving or not (84k fixed bodies took 1.4 ms a 240 Hz step),
+    /// and every collider on a body is read again whenever one on it moves
+    /// (267k colliders on one shared body made a script turning one
+    /// anchored part cost 88 ms a step).
     statics: HashMap<InstanceId, Static>,
+    /// An empty fixed body at the origin, which constraints and movers
+    /// holding a static part are attached to, at the part's place.
     shared: RigidBodyHandle,
     /// Joints in the world and the parts they joined, so a changed joint's
     /// former parts are rebuilt too.
@@ -289,7 +293,7 @@ impl Physics {
         // thin one, and Rapier's sweeps cost ~19 ms a frame on 60k-part
         // places.
         world.integration_parameters.max_ccd_substeps = 0;
-        // At the origin, so its colliders' poses are where they are.
+        // At the origin, so a static part's place on it is its CFrame.
         let shared = world.insert_body(RigidBodyBuilder::fixed());
         Self {
             world,
@@ -376,7 +380,7 @@ impl Physics {
             .is_some_and(|h| !self.bodies[&h].asm.anchored && !self.bodies[&h].remote)
     }
 
-    /// The body of `part`'s assembly, unless it's on the shared one.
+    /// The body of `part`'s assembly; a static part has none.
     pub(crate) fn body_of(&self, part: InstanceId) -> Option<RigidBodyHandle> {
         match self.parts.get(&part)? {
             Home::Body(h) => Some(*h),

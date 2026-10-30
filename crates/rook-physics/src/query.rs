@@ -114,10 +114,13 @@ impl Physics {
                 place(&mut self.world, pose, *collider);
             }
         }
-        let shared = *self.world.bodies[self.shared].position();
+        // A static's collider is already in place: only its box moves.
         for part in std::mem::take(&mut self.stale_statics) {
-            if let Some((collider, _)) = self.statics.get(&part).and_then(|s| s.collider) {
-                place(&mut self.world, shared, collider);
+            if let Some((collider, _)) = self.statics.get(&part).and_then(|s| s.collider)
+                && let Some(co) = self.world.colliders.get(collider)
+            {
+                let aabb = co.compute_broad_phase_aabb(&params, &self.world.bodies);
+                self.world.broad_phase.set_aabb(&params, collider, aabb);
             }
         }
         // The broad phase keeps what `set_aabb` changed until its next

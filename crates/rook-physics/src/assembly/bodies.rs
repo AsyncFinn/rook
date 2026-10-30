@@ -19,12 +19,12 @@ pub(crate) struct Body {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Home {
     Body(RigidBodyHandle),
-    /// A [`Static`] on the shared fixed body.
+    /// A [`Static`]: a collider with no body.
     Static,
 }
 
-/// An anchored part on its own (no joints, no velocity), its collider on
-/// the shared fixed body ([`Physics::is_static`]).
+/// An anchored part on its own (no joints, no velocity), its collider
+/// with no body, in place in the world ([`Physics::is_static`]).
 #[derive(Debug)]
 pub(crate) struct Static {
     pub(crate) collider: Option<(ColliderHandle, Pose)>,
@@ -154,7 +154,7 @@ impl Physics {
         }
     }
 
-    /// Whether `asm` goes on the shared fixed body: one anchored part, with
+    /// Whether `asm` is a [`Static`]: one anchored part, with
     /// no joints to anything and no velocity (a conveyor keeps its own
     /// body, which carries the velocity). A joint or a velocity added later
     /// rebuilds it onto a body of its own.
@@ -181,8 +181,7 @@ impl Physics {
             _ => CFrame::IDENTITY,
         };
         if Self::is_static(dom, props, &asm) {
-            let shared = self.shared;
-            let collider = self.add_collider(dom, props, shared, root, root_cf, true);
+            let collider = self.add_collider(dom, props, None, root, root_cf, true);
             self.parts.insert(root, Home::Static);
             self.stale_statics.insert(root);
             self.statics.insert(
@@ -223,7 +222,7 @@ impl Physics {
         let mut colliders = Vec::with_capacity(asm.members.len());
         for (i, m) in asm.members.iter().enumerate() {
             self.parts.insert(m.part, Home::Body(handle));
-            colliders.push(self.add_collider(dom, props, handle, m.part, m.offset, i == 0));
+            colliders.push(self.add_collider(dom, props, Some(handle), m.part, m.offset, i == 0));
         }
         for j in asm.joints().chain(&asm.hinges) {
             self.joints.insert(j.id, [j.part0, j.part1]);
@@ -258,11 +257,14 @@ impl Physics {
         &mut self,
         dom: &Dom,
         props: &Props,
-        body: RigidBodyHandle,
+        body: Option<RigidBodyHandle>,
         part: InstanceId,
         offset: CFrame,
         is_root: bool,
     ) -> Option<(ColliderHandle, Pose)> {
+        // A collider with no body is fixed, placed in the world.
+        let fixed = body.is_none_or(|b| self.world.bodies[b].is_fixed());
+        let kinematic = body.is_some_and(|b| self.world.bodies[b].is_kinematic());
         let Some(Value::Vector3(size)) = dom.property(part, props.size) else {
             return None;
         };
@@ -271,7 +273,7 @@ impl Physics {
         // be tested against everything near it every step only for Touched
         // and queries (Approximation, for speed: a large modern place's spinning
         // rings and fans made a 5-second run 20% slower).
-        let union = if can_collide || self.world.bodies[body].is_fixed() {
+        let union = if can_collide || fixed {
             self.unions.shape(dom, part, size.0)
         } else {
             None
@@ -302,9 +304,7 @@ impl Physics {
             .position(pose_of(&offset) * shape_pose);
         // A server's Touched fires for a client's character against
         // anchored parts and other characters (observed in Studio 0.744).
-        let collider = if self.world.bodies[body].is_kinematic()
-            && matches!(self.authority, Authority::Except(_))
-        {
+        let collider = if kinematic && matches!(self.authority, Authority::Except(_)) {
             collider.active_collision_types(
                 ActiveCollisionTypes::default()
                     | ActiveCollisionTypes::KINEMATIC_FIXED
@@ -313,7 +313,7 @@ impl Physics {
         } else {
             collider
         };
-        let handle = self.world.insert_collider(collider, Some(body));
+        let handle = self.world.insert_collider(collider, body);
         self.set_hooks(handle);
         self.colliders.insert(handle, part);
         Some((handle, shape_pose))
@@ -357,9 +357,9 @@ impl Physics {
                 let Some(i) = body.asm.members.iter().position(|m| m.part == part) else {
                     return;
                 };
-                (h, i, body.colliders[i])
+                (Some(h), i, body.colliders[i])
             }
-            Some(Home::Static) => (self.shared, 0, self.statics[&part].collider),
+            Some(Home::Static) => (None, 0, self.statics[&part].collider),
             None => return,
         };
         let Some((collider, _)) = collider else {
@@ -376,7 +376,7 @@ impl Physics {
         c.user_data = contacts::pack(&material);
         self.set_hooks(collider);
         // Movers read the mass before the next step would recompute it.
-        if let Some(rb) = self.world.bodies.get_mut(h) {
+        if let Some(rb) = h.and_then(|h| self.world.bodies.get_mut(h)) {
             rb.recompute_mass_properties_from_colliders(&self.world.colliders);
         }
         let touching: Vec<RigidBodyHandle> = self
@@ -392,7 +392,9 @@ impl Physics {
                 self.world.colliders.get(other)?.parent()
             })
             .collect();
-        self.world.wake_up(h, true);
+        if let Some(h) = h {
+            self.world.wake_up(h, true);
+        }
         for b in touching {
             self.world.wake_up(b, true);
         }
@@ -470,7 +472,7 @@ impl Physics {
         if let Some((collider, shape_pose)) = s.collider
             && let Some(co) = self.world.colliders.get_mut(collider)
         {
-            co.set_position_wrt_parent(pose_of(&cf) * shape_pose);
+            co.set_position(pose_of(&cf) * shape_pose);
         }
         // Queries put it in place first, as for a moved body.
         self.stale_statics.insert(part);

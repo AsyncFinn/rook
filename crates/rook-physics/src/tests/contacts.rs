@@ -336,9 +336,9 @@ fn friction_changes_act_at_once_on_resting_parts() {
     }
 }
 
-/// An anchored floor on its own shares one fixed body with the rest of
-/// the map; a velocity given later makes it a conveyor, and destroying it
-/// drops what rests on it.
+/// An anchored floor on its own is static geometry, with no body; a
+/// velocity given later makes it a conveyor, and destroying it drops what
+/// rests on it.
 #[test]
 fn a_shared_static_floor_becomes_a_conveyor_and_goes() {
     let mut dom = Dom::new();
@@ -360,4 +360,27 @@ fn a_shared_static_floor_becomes_a_conveyor_and_goes() {
     run(&mut physics, &mut dom, 0.5);
     let fell = position(&dom, block);
     assert!(carried.y - fell.y > 5.0, "{carried} -> {fell}");
+}
+
+/// Static parts' colliders hang off no body, so moving one (a script
+/// turning a sign every frame) costs its own collider alone, and what
+/// rests on it meets it where it is now: on a body, Rapier reads every
+/// collider on it again whenever one moves.
+#[test]
+fn static_parts_have_no_body() {
+    let mut dom = Dom::new();
+    let floor = floor(&mut dom);
+    let block = block(&mut dom, Vec3::new(0.0, 1.5, 0.0), false);
+    let mut physics = Physics::new();
+    run(&mut physics, &mut dom, 1.0);
+    let rest = position(&dom, block);
+    let lower = CFrame::from_position(position(&dom, floor) - Vec3::Y * 2.0);
+    set(&mut dom, floor, "CFrame", Value::CFrame(lower));
+    run(&mut physics, &mut dom, 1.0);
+    // It rests on the floor where the floor is now.
+    let now = position(&dom, block);
+    assert!((rest.y - now.y - 2.0).abs() < 0.1, "{rest} -> {now}");
+    let collider = physics.statics[&floor].collider.unwrap().0;
+    assert!(physics.world.colliders[collider].parent().is_none());
+    assert!(physics.world.bodies[physics.shared].colliders().is_empty());
 }
