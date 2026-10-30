@@ -224,11 +224,15 @@ impl DataModel {
     /// `Died` handler or a remote routed between frames) is never lost to
     /// a reader that looks only at the next step. A physics world no query
     /// has built yet (a client's) reads the whole DOM when it is built.
+    /// Destroyed instances nothing holds are collected here too, once
+    /// every reader has heard so ([`rook_lua::Runtime::trim_journal`]);
+    /// input, which reads no journal, drops them as they are freed.
     pub fn trim_journal(&mut self) {
         self.read_journal();
-        let mut w = self.runtime.world_mut();
-        let end = w.dom.journal().end();
-        w.dom.journal_mut().trim(end);
+        let end = self.runtime.world().dom.journal().end();
+        for id in self.runtime.trim_journal(end) {
+            self.input.forget(id);
+        }
     }
 
     /// Every reader of the journal takes what it hasn't seen yet, noting

@@ -30,6 +30,14 @@ fn callbacks_table(lua: &Lua) -> mlua::Result<mlua::Table> {
     }
 }
 
+/// Drop `id`'s callbacks, as it's being freed.
+pub(crate) fn forget_callbacks(lua: &Lua, id: InstanceId) -> mlua::Result<()> {
+    match lua.named_registry_value::<Option<mlua::Table>>("rook.callbacks")? {
+        Some(all) => all.raw_set(crate::api::instance::key_of(id), mlua::Value::Nil),
+        None => Ok(()),
+    }
+}
+
 /// Store a callback member (`OnInvoke`, `OnServerInvoke`, ...).
 pub(crate) fn set_callback(
     lua: &Lua,

@@ -34,8 +34,7 @@ pub(crate) struct Explosions {
 
 /// Whether `id` is an Explosion in Workspace.
 fn in_workspace(dom: &Dom, id: InstanceId) -> bool {
-    dom.get(id).is_some()
-        && dom.class_name(id) == "Explosion"
+    dom.class_name(id) == "Explosion"
         && dom
             .find_service("Workspace")
             .is_some_and(|ws| dom.is_ancestor_of(ws, id))
@@ -56,8 +55,14 @@ impl DataModel {
             found.extend(dom.descendants(ws));
         }
         for c in changes {
-            if let Change::Reparented { subtree, .. } = c {
-                found.extend(subtree.iter().copied());
+            match c {
+                Change::Reparented { subtree, .. } => found.extend(subtree.iter().copied()),
+                Change::Collected(id) => {
+                    x.seen.remove(id);
+                    x.pending.retain(|p| p != id);
+                    x.live.retain(|(l, _)| l != id);
+                }
+                _ => {}
             }
         }
         for id in found {
@@ -119,7 +124,7 @@ impl DataModel {
         {
             let w = self.runtime.world();
             self.explosions.live.retain_mut(|(id, age)| {
-                if w.dom.get(*id).is_none() || w.dom.is_destroyed(*id) {
+                if w.dom.is_destroyed(*id) {
                     done.push(*id);
                     return false;
                 }

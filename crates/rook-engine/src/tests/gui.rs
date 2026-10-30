@@ -242,7 +242,10 @@ fn text_box_focus_is_one_record() {
     let client = session.client_mut(index).unwrap();
     let focused = client.focused_text_box().expect("the box has focus");
     assert_eq!(client.runtime.world().gui.focus(), Some(focused));
-    client.runtime.world_mut().dom.remove(focused);
+    client.runtime.destroy(focused);
+    client.runtime.lua().gc_collect().unwrap();
+    session.run_for(0.1);
+    let client = session.client_mut(index).unwrap();
     client.runtime.release_text_box(false, None);
     assert_eq!(client.focused_text_box(), None);
     assert_eq!(client.runtime.world().gui.focus(), None);

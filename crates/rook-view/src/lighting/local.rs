@@ -130,7 +130,9 @@ impl SceneCache {
     /// that did; whether any may have changed.
     pub(crate) fn lights_changed(&mut self, dom: &Dom, changes: &RenderChanges) -> bool {
         let holders = &self.light_holders;
-        let placed = changes.placed.iter().any(|id| holders.contains_key(id));
+        let placed = (changes.placed.iter())
+            .chain(&changes.collected)
+            .any(|id| holders.contains_key(id));
         if changes.lights_placed || placed {
             self.find_lights(dom);
             return true;

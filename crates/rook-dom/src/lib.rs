@@ -15,6 +15,7 @@
 //! Roblox. Error texts are Inference until the conformance suite pins them.
 
 mod attributes;
+mod collect;
 mod drawn;
 mod instance;
 mod journal;
@@ -104,6 +105,16 @@ pub struct Dom {
     /// Where things are drawn this frame, where it isn't their `CFrame`.
     drawn: FxHashMap<InstanceId, rook_types::CFrame>,
     rename_observer: Option<RenameObserver>,
+    /// Destroyed instances still in the arena, each trim checking whether
+    /// anything holds them (see `collect.rs`).
+    destroyed: Vec<InstanceId>,
+    /// Instances announced as [`Change::Collected`], freed at the next trim.
+    collecting: Vec<InstanceId>,
+    /// Debug builds remember freed ids, so reading one fails: a slot that
+    /// is gone reads like a removed one, and the holder that read it kept
+    /// it past its `Collected`.
+    #[cfg(debug_assertions)]
+    freed: rustc_hash::FxHashSet<InstanceId>,
 }
 
 /// Told of each rename as it happens (see [`Dom::set_rename_observer`]).
@@ -137,6 +148,10 @@ impl Dom {
             parent_prop: prop("Parent"),
             drawn: FxHashMap::default(),
             rename_observer: None,
+            destroyed: Vec::new(),
+            collecting: Vec::new(),
+            #[cfg(debug_assertions)]
+            freed: rustc_hash::FxHashSet::default(),
         }
     }
 
@@ -158,15 +173,26 @@ impl Dom {
     }
 
     pub fn get(&self, id: InstanceId) -> Option<&Instance> {
+        self.slot(id)
+    }
+
+    /// Every read of an instance goes through here or [`Dom::slot_mut`].
+    fn slot(&self, id: InstanceId) -> Option<&Instance> {
+        self.check_not_freed(id);
         self.instances.get(id)
     }
 
+    fn slot_mut(&mut self, id: InstanceId) -> Option<&mut Instance> {
+        self.check_not_freed(id);
+        self.instances.get_mut(id)
+    }
+
     fn inst(&self, id: InstanceId) -> Result<&Instance, DomError> {
-        self.instances.get(id).ok_or(DomError::Stale)
+        self.slot(id).ok_or(DomError::Stale)
     }
 
     fn inst_mut(&mut self, id: InstanceId) -> Result<&mut Instance, DomError> {
-        self.instances.get_mut(id).ok_or(DomError::Stale)
+        self.slot_mut(id).ok_or(DomError::Stale)
     }
 
     pub fn len(&self) -> usize {
@@ -212,11 +238,11 @@ impl Dom {
     /// When `id` was made, as an order: later instances (clones too) give
     /// greater numbers.
     pub fn creation_order(&self, id: InstanceId) -> Option<u64> {
-        self.instances.get(id).map(|i| i.created)
+        self.slot(id).map(|i| i.created)
     }
 
     pub fn class_name(&self, id: InstanceId) -> &str {
-        match self.instances.get(id) {
+        match self.slot(id) {
             Some(i) => i
                 .unknown_class
                 .as_deref()
@@ -226,15 +252,14 @@ impl Dom {
     }
 
     pub fn is_a(&self, id: InstanceId, class: &str) -> bool {
-        let (Some(inst), Some(target)) = (self.instances.get(id), self.db.class_by_name(class))
-        else {
+        let (Some(inst), Some(target)) = (self.slot(id), self.db.class_by_name(class)) else {
             return false;
         };
         self.db.is_a(inst.class, target.id)
     }
 
     pub fn name(&self, id: InstanceId) -> &str {
-        self.instances.get(id).map_or("<stale>", |i| &i.name)
+        self.slot(id).map_or("<stale>", |i| &i.name)
     }
 
     pub fn set_name(&mut self, id: InstanceId, name: String) -> Result<(), DomError> {
@@ -275,7 +300,7 @@ impl Dom {
 
     /// Mutable access for loaders. Changes made through it are not journaled.
     pub fn instance_mut(&mut self, id: InstanceId) -> Option<&mut Instance> {
-        self.instances.get_mut(id)
+        self.slot_mut(id)
     }
 
     /// Attach `id` under `parent` without checks or journaling (loaders only).

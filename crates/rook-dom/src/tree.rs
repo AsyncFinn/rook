@@ -5,7 +5,7 @@ use crate::properties::ref_target;
 
 impl Dom {
     pub fn parent(&self, id: InstanceId) -> Option<InstanceId> {
-        self.instances.get(id).and_then(|i| i.parent)
+        self.slot(id).and_then(|i| i.parent)
     }
 
     pub fn children(&self, id: InstanceId) -> &[InstanceId] {
@@ -17,7 +17,7 @@ impl Dom {
     /// A number that changes whenever one of `id`'s children is added or
     /// removed, so a kept copy of them can be checked.
     pub fn children_version(&self, id: InstanceId) -> Option<u64> {
-        self.instances.get(id).map(|i| i.children.version())
+        self.slot(id).map(|i| i.children.version())
     }
 
     /// Descendants in pre-order (the order `GetDescendants` returns).
@@ -103,11 +103,11 @@ impl Dom {
     }
 
     pub fn is_parent_locked(&self, id: InstanceId) -> bool {
-        self.instances.get(id).is_some_and(|i| i.parent_locked)
+        self.slot(id).is_some_and(|i| i.parent_locked)
     }
 
     pub fn is_destroyed(&self, id: InstanceId) -> bool {
-        self.instances.get(id).is_none_or(|i| i.destroyed)
+        self.slot(id).is_none_or(|i| i.destroyed)
     }
 
     /// A parent as the locked-Parent error names it: by `Name` alone
@@ -296,6 +296,7 @@ impl Dom {
         inst.destroyed = true;
         inst.parent_locked = true;
         let children = inst.children.as_slice().to_vec();
+        self.destroyed.push(id);
         self.journal.push(Change::Destroying(id));
         Ok(Some(children))
     }
@@ -321,27 +322,6 @@ impl Dom {
             }
         }
         Ok(())
-    }
-
-    /// Remove an instance and its descendants from the arena entirely.
-    /// Called by the engine once nothing references a destroyed instance.
-    pub fn remove(&mut self, id: InstanceId) {
-        if id == self.root {
-            return;
-        }
-        if self.parent(id).is_some() {
-            self.move_unchecked(id, None);
-        }
-        let mut doomed = vec![id];
-        self.collect_descendants(id, &mut doomed);
-        for d in doomed {
-            if let Some(inst) = self.instances.remove(d) {
-                for (property, value) in &inst.properties {
-                    self.unlink(d, *property, value);
-                }
-            }
-            self.referrers.remove(&d);
-        }
     }
 
     /// `Instance:Clone()`. Returns `None` when `id` isn't archivable;

@@ -201,6 +201,24 @@ impl Gui {
         };
         dom.set_property_by_name(id, "CanvasPosition", Value::Vector2(Vector2(at)))
     }
+    /// Drop what the GUI keeps about `id`, which is being freed.
+    fn forget(&mut self, id: InstanceId) {
+        self.changed.remove(&id);
+        self.shifted.remove(&id);
+        self.restyled.remove(&id);
+        self.in_world.remove(&id);
+        self.messages.remove(&id);
+        if self.focus == Some(id) {
+            self.focus = None;
+        }
+        self.modals.forget(id);
+        self.scrolling.remove(&id);
+        self.turning.remove(&id);
+        self.canvases.remove(&id);
+        self.overheads.forget(id);
+        self.tags.remove(&id);
+    }
+
     /// Look at the journal since last time, so it can be trimmed.
     pub fn note_changes(&mut self, dom: &Dom) {
         if self.watch.is_none() {
@@ -220,8 +238,11 @@ impl Gui {
             self.messages
                 .extend(held.into_iter().filter(|&id| draw::is_message(dom, id)));
         }
-        let watch = self.watch.as_ref().expect("made above");
         for change in dom.journal().since(self.cursor) {
+            if let Change::Collected(id) = change {
+                self.forget(*id);
+                continue;
+            }
             self.modals.note(dom, change);
             if let Change::Reparented { subtree, .. } = change {
                 self.overheads.note(dom, subtree.iter().copied());
@@ -235,6 +256,7 @@ impl Gui {
                     .extend(found.filter(|&id| world::is_world_gui(dom, id)));
             }
             if !self.stale {
+                let watch = self.watch.as_ref().expect("made above");
                 match (watch.touches(dom, change), change) {
                     (Touch::All, _) => self.stale = true,
                     (Touch::Layout, Change::Property { id, .. }) => _ = self.changed.insert(*id),

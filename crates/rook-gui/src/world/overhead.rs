@@ -101,6 +101,11 @@ impl Overheads {
         changed
     }
 
+    pub(crate) fn forget(&mut self, id: InstanceId) {
+        self.humanoids.remove(&id);
+        self.shown.retain(|s| s.humanoid != id);
+    }
+
     fn tags(&mut self, dom: &mut Dom, blocked: &mut Blocked<'_>) -> Vec<Shown> {
         let (Some(workspace), Some(player), Some(eye)) = (
             dom.find_service("Workspace"),
@@ -109,8 +114,7 @@ impl Overheads {
         ) else {
             return Vec::new();
         };
-        self.humanoids
-            .retain(|&h| dom.get(h).is_some() && dom.is_ancestor_of(workspace, h));
+        self.humanoids.retain(|&h| dom.is_ancestor_of(workspace, h));
         let viewer = Viewer::of(dom, player, eye.position);
         let mut humanoids: Vec<InstanceId> = self.humanoids.iter().copied().collect();
         humanoids.sort_unstable();

@@ -45,6 +45,10 @@ impl Modals {
         }
     }
 
+    pub(crate) fn forget(&mut self, id: InstanceId) {
+        self.buttons.remove(&id);
+    }
+
     fn check(&mut self, dom: &Dom, id: InstanceId) {
         let modal = !dom.is_destroyed(id)
             && dom.is_a(id, "GuiButton")

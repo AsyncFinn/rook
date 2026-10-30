@@ -151,19 +151,88 @@ fn attributes_and_tags() {
     assert_eq!(dom.get(a).unwrap().tags.len(), 1);
 }
 
+/// What the engine does at two trims: announce, then free.
+fn collect(dom: &mut Dom) -> Vec<InstanceId> {
+    collect_holding(dom, |_| false)
+}
+
+fn collect_holding(dom: &mut Dom, held: impl Fn(InstanceId) -> bool) -> Vec<InstanceId> {
+    dom.announce_collectable(&held);
+    dom.free_collected(&held)
+}
+
 #[test]
 fn stale_ids_never_alias() {
     let mut dom = Dom::new();
     let a = part(&mut dom, "A");
-    dom.remove(a);
+    dom.destroy(a).unwrap();
+    assert_eq!(collect(&mut dom), [a]);
     let b = part(&mut dom, "B");
-    assert!(dom.get(a).is_none());
     assert_ne!(a, b);
     assert_eq!(InstanceId::from_ref(b.to_ref()), b);
 }
 
 #[test]
-fn referrers_follow_reference_writes_clones_and_removal() {
+fn collects_destroyed_instances_nothing_holds() {
+    let mut dom = Dom::new();
+    let len = dom.len();
+    let model = dom.create_by_name("Model").unwrap();
+    let a = part(&mut dom, "A");
+    let b = part(&mut dom, "B");
+    for p in [a, b] {
+        dom.set_parent(p, Some(model)).unwrap();
+    }
+    // A live ObjectValue holds `a`, so `a` stays; a handle holds `b`.
+    let value = dom.create_by_name("ObjectValue").unwrap();
+    let pointer = dom.property_id(value, "Value").unwrap();
+    dom.set_property(value, pointer, Value::Ref(Some(a.to_ref())))
+        .unwrap();
+    dom.destroy(model).unwrap();
+    assert_eq!(collect_holding(&mut dom, |id| id == b), [model]);
+    assert!(dom.get(a).unwrap().is_destroyed());
+
+    // Announced, then held before the next trim: not freed.
+    dom.announce_collectable(|_| false);
+    assert!(dom.free_collected(|id| id == b).is_empty());
+
+    dom.set_property(value, pointer, Value::Ref(None)).unwrap();
+    let mut freed = collect(&mut dom);
+    freed.sort();
+    let mut expected = vec![a, b];
+    expected.sort();
+    assert_eq!(freed, expected);
+    assert_eq!(dom.len(), len + 1);
+    assert!(dom.journal().since(0).contains(&Change::Collected(a)));
+}
+
+#[test]
+fn destroyed_instances_hold_each_other() {
+    let mut dom = Dom::new();
+    let a = part(&mut dom, "A");
+    let weld = dom.create_by_name("Weld").unwrap();
+    let part0 = dom.property_id(weld, "Part0").unwrap();
+    dom.set_property(weld, part0, Value::Ref(Some(a.to_ref())))
+        .unwrap();
+    dom.destroy(a).unwrap();
+    dom.destroy(weld).unwrap();
+    // A handle on the weld holds the part it points at.
+    assert!(collect_holding(&mut dom, |id| id == weld).is_empty());
+    assert_eq!(collect(&mut dom).len(), 2);
+}
+
+#[test]
+#[cfg(debug_assertions)]
+#[should_panic = "was read after it was collected"]
+fn reading_a_freed_instance_fails() {
+    let mut dom = Dom::new();
+    let a = part(&mut dom, "A");
+    dom.destroy(a).unwrap();
+    collect(&mut dom);
+    let _ = dom.name(a);
+}
+
+#[test]
+fn referrers_follow_reference_writes_clones_and_collection() {
     let mut dom = Dom::new();
     let a = part(&mut dom, "A");
     let b = part(&mut dom, "B");
@@ -191,6 +260,7 @@ fn referrers_follow_reference_writes_clones_and_removal() {
     assert_eq!(dom.referrers(copied_a).len(), 2);
     assert_eq!(dom.referrers(a).len(), 2);
 
-    dom.remove(model);
+    dom.destroy(weld).unwrap();
+    assert_eq!(collect(&mut dom), [weld]);
     assert!(dom.referrers(a).is_empty());
 }

@@ -186,6 +186,25 @@ pub(crate) struct InputTracker {
     escape_ended_box: bool,
 }
 
+impl InputTracker {
+    /// Drop what is kept about `id`, which is being freed.
+    pub(crate) fn forget(&mut self, id: InstanceId) {
+        self.held.retain(|_, h| *h != id);
+        for slot in [
+            &mut self.mouse_movement,
+            &mut self.mouse_wheel,
+            &mut self.hover,
+        ]
+        .into_iter()
+        .chain(&mut self.pressed)
+        {
+            slot.take_if(|s| *s == id);
+        }
+        self.under.take_if(|u| u.names(id));
+        self.gui.forget(id);
+    }
+}
+
 /// What `Mouse.KeyDown` passes for a key: the character it types, for the
 /// keys that type one (creator-docs Mouse.KeyDown, deprecated).
 fn legacy_key_string(code: &str) -> Option<String> {
@@ -474,7 +493,7 @@ impl DataModel {
             &mut self.input.mouse_movement
         };
         // A script may have destroyed it.
-        let existing = slot.filter(|id| self.runtime.world().dom.get(*id).is_some());
+        let existing = slot.filter(|id| !self.runtime.world().dom.is_destroyed(*id));
         let id = match existing {
             Some(id) => id,
             None => {

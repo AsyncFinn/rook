@@ -365,6 +365,50 @@ impl World {
         });
     }
 
+    /// The instances the runtime holds outside the tree, as a script's
+    /// handle does: what it still uses later (see `collect.rs`).
+    pub(crate) fn held(&self) -> HashSet<InstanceId> {
+        let listened = match self.listener {
+            Listener::ObjectPosition(id) | Listener::ObjectCFrame(id) => Some(id),
+            Listener::Camera | Listener::CFrame(_) => None,
+        };
+        self.translators
+            .values()
+            .flatten()
+            .copied()
+            .chain(listened)
+            .chain(self.input.mouse_object)
+            .chain(self.audio.scheduled.iter().map(|s| s.player))
+            .chain(self.local_sounds.iter().copied())
+            .chain(self.effect_calls.iter().map(|(id, _)| *id))
+            .chain(self.tool_moves.iter().flat_map(|&(a, b)| [a, b]))
+            .chain(self.movement.held())
+            .collect()
+    }
+
+    /// Drop what the runtime keeps about `id`, which is being freed.
+    pub(crate) fn forget(&mut self, id: InstanceId) {
+        self.filter_results.remove(&id);
+        self.modules.results.remove(&id);
+        self.modules.loading.remove(&id);
+        self.modules.waiting.remove(&id);
+        self.bytecode.remove(&id);
+        self.localization.remove(&id);
+        self.translators.remove(&id);
+        self.movement_modes.retain(|(m, _), _| *m != id);
+        self.started.remove(&id);
+        self.sounds.remove(&id);
+        self.audio.spectra.remove(&id);
+        self.spawned.remove(&id);
+        self.avatars.remove(&id);
+        self.avatars_pending.remove(&id);
+        self.client_players.remove(&id);
+        self.topbar_transparency.remove(&id);
+        self.interpolations.remove(&id);
+        self.movement.forget(id);
+        self.styles.forget(id);
+    }
+
     /// Look at the journal for what StyleSheets must style again, before
     /// it's trimmed.
     pub fn note_style_changes(&mut self) {

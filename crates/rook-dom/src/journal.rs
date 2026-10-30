@@ -42,6 +42,9 @@ pub enum Change {
     Destroying(InstanceId),
     /// `Destroy` finished, children included: its connections go.
     Destroyed(InstanceId),
+    /// Nothing holds the destroyed instance any more: every reader drops
+    /// what it keeps of it, as its slot is freed at the next trim.
+    Collected(InstanceId),
     TagAdded {
         id: InstanceId,
         tag: String,
