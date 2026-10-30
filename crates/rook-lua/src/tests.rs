@@ -513,6 +513,28 @@ fn safe_environment_keeps_script_semantics() {
     );
 }
 
+/// Scripts compile at optimization level 2, as live games do, so small
+/// local functions are inlined into their caller (here the main chunk,
+/// whose name is empty) and `debug.info` sees it; `--!optimize 1` (Studio
+/// testing's level) keeps the calls.
+#[test]
+fn scripts_compile_as_live_games_do() {
+    let source = |header: &str| {
+        format!(
+            "{header}
+local function inner() local n = debug.info(1, \"n\") return n end
+             local function outer() local n = inner() return n end
+local n = outer() print(n)"
+        )
+    };
+    let rt = Runtime::new(Dom::new(), Clock::Fixed { step: 1.0 / 60.0 }).unwrap();
+    rt.run_source("Workspace.Live", &source(""), None).unwrap();
+    rt.run_source("Workspace.Studio", &source("--!optimize 1"), None)
+        .unwrap();
+    let log: Vec<String> = rt.take_log().into_iter().map(|e| e.message).collect();
+    assert_eq!(log, ["", "inner"]);
+}
+
 /// `DescendantRemoving` steps are skipped only while nothing listens: a
 /// handler connected by an earlier step of the same `Destroy` still hears
 /// every descendant.

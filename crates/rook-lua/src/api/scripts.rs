@@ -24,9 +24,11 @@ fn environment(lua: &Lua, script: InstanceId) -> mlua::Result<Table> {
     Ok(env)
 }
 
-/// How game code is compiled.
+/// How game code is compiled: optimization level 2, the default in live
+/// games (level 1 is Studio testing's; creator-docs Luau comments). A
+/// script's `--!optimize` comment still sets its own.
 fn compiler() -> Compiler {
-    Compiler::new()
+    Compiler::new().set_optimization_level(2)
 }
 
 /// Compile a script's source to run in `env`, or load its bytecode if it
