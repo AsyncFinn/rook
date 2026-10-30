@@ -103,6 +103,16 @@ pub struct Dom {
     parent_prop: PropertyId,
     /// Where things are drawn this frame, where it isn't their `CFrame`.
     drawn: FxHashMap<InstanceId, rook_types::CFrame>,
+    rename_observer: Option<RenameObserver>,
+}
+
+/// Told of each rename as it happens (see [`Dom::set_rename_observer`]).
+struct RenameObserver(Box<dyn FnMut(InstanceId)>);
+
+impl std::fmt::Debug for RenameObserver {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("RenameObserver")
+    }
 }
 
 impl Dom {
@@ -126,6 +136,7 @@ impl Dom {
             name_prop: prop("Name"),
             parent_prop: prop("Parent"),
             drawn: FxHashMap::default(),
+            rename_observer: None,
         }
     }
 
@@ -232,8 +243,18 @@ impl Dom {
             inst.name = name;
             let property = self.name_prop;
             self.journal.push(Change::Property { id, property });
+            if let Some(observer) = &mut self.rename_observer {
+                (observer.0)(id);
+            }
         }
         Ok(())
+    }
+
+    /// Call `observer` with each renamed instance, inside the rename, with
+    /// the journal on or off. For readers that keep names: the journal is
+    /// read later and can be off, and a kept name must never be read stale.
+    pub fn set_rename_observer(&mut self, observer: impl FnMut(InstanceId) + 'static) {
+        self.rename_observer = Some(RenameObserver(Box::new(observer)));
     }
 
     /// `Instance:GetFullName()`: dot-separated names up to, but not

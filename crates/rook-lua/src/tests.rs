@@ -524,6 +524,65 @@ fn descendant_removing_connected_mid_destroy() {
     );
 }
 
+/// `inst.Name` is kept in the index shim, so every rename must reach the
+/// next read: a script's own, one the engine makes while it waits, one
+/// whose journal entry is trimmed before the script runs again, and one
+/// made while the journal is off.
+#[test]
+fn renames_are_seen_by_the_next_read() {
+    let rt = Runtime::new(Dom::new(), Clock::Fixed { step: 1.0 / 60.0 }).unwrap();
+    rt.run_source(
+        "Workspace.Script",
+        r#"
+        local p = Instance.new("Part")
+        p.Name = "A"
+        p.Parent = workspace
+        -- Later reads come from the shim's copy.
+        local function read()
+            local name
+            for _ = 1, 3 do
+                name = p.Name
+            end
+            return name
+        end
+        -- No engine call between the copy, the rename and the read.
+        local first = read()
+        p.Name = "B"
+        print(first, read())
+        p.Changed:Connect(function()
+            print("changed", read())
+        end)
+        p.Name = "C"
+        task.wait()
+        print(read())
+        task.wait()
+        print(read())
+        task.wait()
+        print(read())
+        "#,
+        None,
+    )
+    .unwrap();
+    let rename = |from: &str, to: &str| {
+        let mut w = rt.world_mut();
+        let ws = w.dom.find_service("Workspace").unwrap();
+        let part = w.dom.find_first_child(ws, from, false).unwrap();
+        w.dom.set_name(part, to.into()).unwrap();
+    };
+    rename("C", "D");
+    step(&rt);
+    rename("D", "E");
+    let end = rt.world().dom.journal().end();
+    rt.world_mut().dom.journal_mut().trim(end);
+    step(&rt);
+    rt.world_mut().dom.journal_mut().set_enabled(false);
+    rename("E", "F");
+    rt.world_mut().dom.journal_mut().set_enabled(true);
+    step(&rt);
+    let log: Vec<String> = rt.take_log().into_iter().map(|e| e.message).collect();
+    assert_eq!(log, ["A B", "changed C", "D", "E", "F"]);
+}
+
 mod core_gui;
 mod gui;
 mod models;

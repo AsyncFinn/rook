@@ -423,7 +423,8 @@ pub(super) fn register_fast_read(c: &Ctx, id: InstanceId, key: &'static str, p: 
 /// `inst.Key` by member id, for keys [`get_member`] found to be plain
 /// stored properties of the instance's class. The second result is `None`
 /// for a value, 1 when the value is an instance's key (the shim turns it
-/// into the instance's userdata without a trip through Rust), and 0 when
+/// into the instance's userdata without a trip through Rust), 2 for the
+/// instance's `Name` (the shim keeps it until a rename), and 0 when
 /// the read must take the general path: another class, an unknown class,
 /// or an instance with runtime-only values.
 pub(super) fn fast_read(
@@ -447,7 +448,10 @@ pub(super) fn fast_read(
         // The most read property: made from the instance's own name, as
         // `property` would copy it first.
         if pid == w.dom.name_property() {
-            return Ok((LuaValue::String(lua.create_string(w.dom.name(id))?), None));
+            return Ok((
+                LuaValue::String(lua.create_string(w.dom.name(id))?),
+                Some(2),
+            ));
         }
         (w.dom.property(id, pid), enum_id)
     };

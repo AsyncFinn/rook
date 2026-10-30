@@ -76,6 +76,9 @@ pub(crate) struct Ctx {
     /// For each class and member id read so far: the stored property it
     /// reads (and its enum), when reading it is a plain DOM read.
     pub(crate) fast_reads: RefCell<FxHashMap<(ClassId, u32), FastRead>>,
+    /// Each instance userdata's `Name` as the `inst.Key` shim last read it
+    /// (weak keys), dropped as the instance is renamed.
+    pub(crate) names: Table,
 }
 
 pub(crate) fn ctx(lua: &Lua) -> Rc<Ctx> {
@@ -169,6 +172,7 @@ impl Ctx {
             enum_items,
             member_ids: RefCell::default(),
             fast_reads: RefCell::default(),
+            names: weak_table(lua, "k")?,
         });
         lua.set_app_data(ctx.clone());
         Ok(ctx)

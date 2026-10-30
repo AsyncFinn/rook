@@ -1,10 +1,26 @@
 local keys, methods, index, newindex, index_other, newindex_other,
-    fast_index, member_ids, instances, create, class_names = ...
+    fast_index, member_ids, instances, create, class_names, names,
+    verify_names = ...
 -- Keys some class has as a method. Property reads skip the
 -- per-instance cache lookup below, which costs a table miss
 -- per instance when a script reads thousands of them.
 local method_names = {}
 local function get(self, key)
+    -- The most read property, kept per instance and dropped inside
+    -- every rename (`names.rs`), so walks over thousands of instances
+    -- never leave Luau. Only instances have entries.
+    if key == "Name" then
+        local name = names[self]
+        if name ~= nil then
+            if verify_names then
+                local now, err = index(keys[self], key)
+                if err == nil and now ~= name then
+                    error(`[rook] kept Name {name} is stale: {now}`, 0)
+                end
+            end
+            return name
+        end
+    end
     local k = keys[self]
     if k == nil or type(key) ~= "string" then
         return index_other(self, key)
@@ -38,6 +54,9 @@ local function get(self, key)
             return value
         elseif tag == 1 then
             return instances[value] or create(value)
+        elseif tag == 2 then
+            names[self] = value
+            return value
         end
     end
     local value, err, is_method, fast_id = index(k, key)

@@ -28,6 +28,7 @@ use crate::threads::dispatch;
 mod access;
 mod calls;
 mod lookup;
+mod names;
 
 use access::*;
 use calls::*;
@@ -162,7 +163,10 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
             ctx(lua).instances.clone(),
             create.clone(),
             crate::ctx::weak_table(lua, "k")?,
+            ctx(lua).names.clone(),
+            cfg!(debug_assertions),
         ))?;
+    names::install(lua);
     lua.set_named_registry_value("rook.instance.index", get)?;
     lua.set_named_registry_value("rook.instance.newindex", set)?;
 
