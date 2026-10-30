@@ -364,24 +364,45 @@ pub(crate) fn fire(lua: &Lua, key: &SignalKey, args: &[LuaValue]) {
 /// Fire the signals for every journal entry from `start` to the journal's
 /// end as of this call. Entries added by handlers are dispatched by the
 /// mutation that added them, so Immediate handlers nest the way Roblox's do.
+/// A focused TextBox that moves, or whose ancestor does, loses focus here:
+/// before the move's signals when it leaves the DataModel, after them when
+/// it stays (measured; docs/behavior/gui/input.md#textbox).
 pub(crate) fn dispatch(lua: &Lua, start: u64) {
     let end = with_world(lua, |w| w.dom.journal().end());
     let mut destroyed: Vec<InstanceId> = Vec::new();
     for pos in start..end {
+        let mut moved_focus = None;
         let firings = with_world(lua, |w| {
             let change = w.dom.journal().get(pos)?;
-            if let Change::Destroyed(id) = change {
-                destroyed.push(*id);
+            match change {
+                Change::Destroyed(id) => destroyed.push(*id),
+                Change::Reparented {
+                    subtree,
+                    new_ancestors,
+                    ..
+                } => {
+                    let left = new_ancestors.last() != Some(&w.dom.root());
+                    moved_focus = (w.gui.focus())
+                        .filter(|f| subtree.contains(f))
+                        .map(|f| (f, left));
+                }
+                _ => {}
             }
             if w.signals.is_empty() {
                 return None;
             }
             Some(crate::signal::expand(change, &w.signals, &w.dom))
         });
+        if let Some((id, true)) = moved_focus {
+            release_moved(lua, id);
+        }
         for firing in firings.into_iter().flatten() {
             if let Some(args) = firing_args(lua, &firing) {
                 fire(lua, &firing.key, &args);
             }
+        }
+        if let Some((id, false)) = moved_focus {
+            release_moved(lua, id);
         }
     }
     if !destroyed.is_empty() {
@@ -390,6 +411,17 @@ pub(crate) fn dispatch(lua: &Lua, start: u64) {
                 w.signals.disconnect_instance(id);
             }
         });
+    }
+}
+
+/// Take focus from TextBox `id`, which moved, as `ReleaseFocus()` does.
+fn release_moved(lua: &Lua, id: InstanceId) {
+    // An Immediate handler may have moved focus elsewhere already.
+    if crate::api::methods::textbox::focused(lua) != Some(id) {
+        return;
+    }
+    if let Err(e) = crate::api::methods::textbox::release(lua, false, LuaValue::Nil, false) {
+        with_world(lua, |w| w.push_log(MessageType::Error, e.to_string()));
     }
 }
 

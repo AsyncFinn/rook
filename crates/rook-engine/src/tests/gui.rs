@@ -250,3 +250,32 @@ fn text_box_focus_is_one_record() {
     assert_eq!(client.focused_text_box(), None);
     assert_eq!(client.runtime.world().gui.focus(), None);
 }
+
+/// A focused TextBox a script destroys gives up the keys: the record keys
+/// type into empties with it, where it kept the destroyed box.
+#[test]
+fn destroyed_text_box_loses_focus() {
+    let mut server = Server::new(&Options::default()).unwrap();
+    let starter = service(&server, "StarterGui");
+    let screen = add_under(&server, starter, "ScreenGui", "Hud", "");
+    add_under(
+        &server,
+        screen,
+        "LocalScript",
+        "Focus",
+        r#"
+        local box = Instance.new("TextBox")
+        box.Parent = script.Parent
+        box:CaptureFocus()
+        task.wait()
+        box:Destroy()
+        "#,
+    );
+    server.start();
+    let mut session = Session::new(server, Options::default());
+    let index = session.join("Typist", 1).unwrap();
+    session.run_for(0.2);
+    let client = session.client_mut(index).unwrap();
+    assert_eq!(client.focused_text_box(), None);
+    assert_eq!(client.runtime.world().gui.focus(), None);
+}

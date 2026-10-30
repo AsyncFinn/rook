@@ -1,0 +1,54 @@
+-- studio 0.745.0.7451137
+-- signals: deferred
+destroy
+  now nil false -1
+  CursorPosition -1
+  FocusLost false nil nil
+  UIS TextBoxFocusReleased Box
+  AncestryChanged
+  a frame later nil
+parent nil
+  now nil false -1
+  CursorPosition -1
+  FocusLost false nil nil
+  UIS TextBoxFocusReleased Box
+  AncestryChanged
+  a frame later nil
+to a sibling frame
+  now nil false -1
+  AncestryChanged
+  CursorPosition -1
+  FocusLost false nil nil
+  UIS TextBoxFocusReleased Box
+  a frame later nil
+frame destroyed
+  now nil false -1
+  CursorPosition -1
+  FocusLost false nil nil
+  UIS TextBoxFocusReleased Box
+  AncestryChanged
+  AncestryChanged
+  a frame later nil
+screen to ReplicatedStorage
+  now nil false -1
+  AncestryChanged
+  CursorPosition -1
+  FocusLost false nil nil
+  UIS TextBoxFocusReleased Box
+  a frame later nil
+same parent
+  now Box true 3
+  a frame later Box
+  UIS TextBoxFocusReleased Box
+box hidden
+  now Box true 3
+  a frame later Box
+  UIS TextBoxFocusReleased Box
+frame hidden
+  now Box true 3
+  a frame later Box
+  UIS TextBoxFocusReleased Box
+screen disabled
+  now Box true 3
+  a frame later Box
+  UIS TextBoxFocusReleased Box
