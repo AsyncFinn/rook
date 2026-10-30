@@ -57,7 +57,10 @@ impl UserData for LuaInstance {
     }
 }
 
-fn key_of(id: InstanceId) -> LightUserData {
+/// An instance's key: what tables of per-instance state are keyed by, since
+/// the instance outlives any one userdata for it (a userdata no script
+/// holds is collected and made again on next use).
+pub(crate) fn key_of(id: InstanceId) -> LightUserData {
     LightUserData(id.to_ref().0 as usize as *mut c_void)
 }
 
@@ -193,8 +196,8 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
         .call((ctx(lua).instances.clone(), create.clone()))?;
     lua.set_named_registry_value("rook.instance.fill_array", fill_array)?;
 
-    // Wrappers for methods with a fast form. Results come back as values,
-    // an instance's key (1) or an array of keys (2).
+    // Wrappers for methods with a fast form. Results come back as values
+    // or an instance's key (1).
     let fast_method: Function = lua
         .load(include_str!("luau/fast_method.luau"))
         .set_name("=[rook] fast_method")
@@ -202,9 +205,19 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
         .call((
             ctx(lua).instance_keys.clone(),
             ctx(lua).instances.clone(),
-            create,
+            create.clone(),
         ))?;
     lua.set_named_registry_value("rook.instance.fast_method", fast_method)?;
+    let kept_children: Function = lua
+        .load(include_str!("luau/kept_children.luau"))
+        .set_name("=[rook] kept_children")
+        .set_environment(builtins_env(lua, &["table", "setmetatable"])?)
+        .call((
+            ctx(lua).instance_keys.clone(),
+            ctx(lua).instances.clone(),
+            create,
+        ))?;
+    lua.set_named_registry_value("rook.instance.kept_children", kept_children)?;
     Ok(())
 }
 

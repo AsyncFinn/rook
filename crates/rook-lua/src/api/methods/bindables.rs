@@ -21,7 +21,9 @@ fn callbacks_table(lua: &Lua) -> mlua::Result<mlua::Table> {
     match lua.named_registry_value::<Option<mlua::Table>>("rook.callbacks")? {
         Some(t) => Ok(t),
         None => {
-            let t = crate::ctx::weak_table(lua, "k")?;
+            // By instance key: a callback belongs to the instance, which
+            // outlives the userdata it was set through.
+            let t = lua.create_table()?;
             lua.set_named_registry_value("rook.callbacks", t.clone())?;
             Ok(t)
         }
@@ -35,13 +37,13 @@ pub(crate) fn set_callback(
     name: &str,
     f: Option<Function>,
 ) -> mlua::Result<()> {
-    let ud = push_instance(lua, id)?;
+    let key = crate::api::instance::key_of(id);
     let all = callbacks_table(lua)?;
-    let t: mlua::Table = match all.raw_get::<Option<mlua::Table>>(ud.clone())? {
+    let t: mlua::Table = match all.raw_get::<Option<mlua::Table>>(key)? {
         Some(t) => t,
         None => {
             let t = lua.create_table()?;
-            all.raw_set(ud, t.clone())?;
+            all.raw_set(key, t.clone())?;
             t
         }
     };
@@ -53,8 +55,8 @@ pub(crate) fn get_callback(
     id: InstanceId,
     name: &str,
 ) -> mlua::Result<Option<Function>> {
-    let ud = push_instance(lua, id)?;
-    match callbacks_table(lua)?.raw_get::<Option<mlua::Table>>(ud)? {
+    let key = crate::api::instance::key_of(id);
+    match callbacks_table(lua)?.raw_get::<Option<mlua::Table>>(key)? {
         Some(t) => t.raw_get(name),
         None => Ok(None),
     }

@@ -229,11 +229,12 @@ fn install_engine_helpers(lua: &Lua) -> mlua::Result<()> {
                         .runtime_prop_ids
                         .borrow_mut()
                         .insert(id);
-                    let t: Table = match all.raw_get::<Option<Table>>(inst.clone())? {
+                    let key = super::instance::key_of(id);
+                    let t: Table = match all.raw_get::<Option<Table>>(key)? {
                         Some(t) => t,
                         None => {
                             let t = lua.create_table()?;
-                            all.raw_set(inst, t.clone())?;
+                            all.raw_set(key, t.clone())?;
                             t
                         }
                     };

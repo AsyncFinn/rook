@@ -4,10 +4,10 @@ use super::*;
 use crate::removal;
 
 /// What a method with a fast form found.
+#[derive(Clone, Copy)]
 pub(crate) enum Found {
     Bool(bool),
     Instance(Option<InstanceId>),
-    Instances(Vec<InstanceId>),
 }
 
 /// The DOM work of a method with a fast form: the instance, its string
@@ -24,16 +24,22 @@ pub(crate) fn fast(owner: &str, name: &str) -> Option<(Core, bool)> {
     Some(match (owner, name) {
         ("Object", "IsA") => (is_a_core, true),
         ("Instance", "FindFirstChild") => (find_first_child_core, true),
-        ("Instance", "GetChildren" | "children") => (children_core, false),
         _ => return None,
     })
+}
+
+/// Methods whose fast form keeps the array it filled per instance and
+/// hands out copies while the DOM says the children are unchanged
+/// (`kept_children`): walks call `GetChildren` on the same parents every
+/// frame, and filling an array costs far more than copying one.
+pub(crate) fn keeps_children(owner: &str, name: &str) -> bool {
+    matches!((owner, name), ("Instance", "GetChildren" | "children"))
 }
 
 fn ret_found(lua: &Lua, found: Found) -> ApiResult<Outcome> {
     match found {
         Found::Bool(b) => Outcome::ret(lua, b),
         Found::Instance(id) => ret_instance(lua, id),
-        Found::Instances(ids) => ret_instances(lua, &ids),
     }
 }
 
@@ -153,12 +159,8 @@ pub(super) fn find_first_ancestor_which_is_a(
     find_ancestor_by(lua, this, |w, c| w.dom.is_a(c, &class))
 }
 
-fn children_core(w: &World, this: InstanceId, _: &str, _: bool) -> Found {
-    Found::Instances(w.dom.children(this).to_vec())
-}
-
 pub(super) fn get_children(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
-    ret_found(lua, with_world(lua, |w| children_core(w, this, "", false)))
+    ret_instances(lua, &with_world(lua, |w| w.dom.children(this).to_vec()))
 }
 
 pub(super) fn get_descendants(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {

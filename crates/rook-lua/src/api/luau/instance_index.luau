@@ -20,6 +20,11 @@ local function get(self, key)
             end
             return name
         end
+    elseif key == "ClassName" or key == "className" then
+        local name = class_names[self]
+        if name ~= nil then
+            return name
+        end
     end
     local k = keys[self]
     if k == nil or type(key) ~= "string" then
@@ -28,15 +33,11 @@ local function get(self, key)
     -- An instance's class never changes, and old places check the
     -- class of thousands of instances a frame: keep it (weak keys).
     if key == "ClassName" or key == "className" then
-        local name = class_names[self]
-        if name == nil then
-            local err
-            name, err = index(k, key)
-            if err then
-                error(err, 0)
-            end
-            class_names[self] = name
+        local name, err = index(k, key)
+        if err then
+            error(err, 0)
         end
+        class_names[self] = name
         return name
     end
     if method_names[key] then
