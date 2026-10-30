@@ -62,8 +62,8 @@ pub(crate) struct Ctx {
     pub(crate) method_caches: Table,
     /// The shared method cache tables, by class.
     pub(crate) class_method_caches: RefCell<FxHashMap<(ClassId, bool), Table>>,
-    /// Runtime-only property values by instance userdata (weak keys),
-    /// created when engine Luau code first sets one.
+    /// Runtime-only property values by instance key, created when engine
+    /// Luau code first sets one.
     pub(crate) runtime_props: RefCell<Option<Table>>,
     /// The instances that have runtime-only values, so reads of every
     /// other instance skip the table above.

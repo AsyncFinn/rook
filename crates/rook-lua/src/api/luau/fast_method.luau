@@ -2,11 +2,6 @@ local keys, instances, create = ...
 local function result(r, tag)
     if tag == 1 then
         return instances[r] or create(r)
-    elseif tag == 2 then
-        for i = 1, #r do
-            local key = r[i]
-            r[i] = instances[key] or create(key)
-        end
     end
     return r
 end

@@ -9,7 +9,15 @@ impl Dom {
     }
 
     pub fn children(&self, id: InstanceId) -> &[InstanceId] {
-        self.instances.get(id).map_or(&[], |i| &i.children)
+        self.instances
+            .get(id)
+            .map_or(&[], |i| i.children.as_slice())
+    }
+
+    /// A number that changes whenever one of `id`'s children is added or
+    /// removed, so a kept copy of them can be checked.
+    pub fn children_version(&self, id: InstanceId) -> Option<u64> {
+        self.instances.get(id).map(|i| i.children.version())
     }
 
     /// Descendants in pre-order (the order `GetDescendants` returns).
@@ -224,10 +232,7 @@ impl Dom {
         };
 
         if let Some(op) = old_parent {
-            let siblings = &mut self.instances[op].children;
-            if let Some(pos) = siblings.iter().position(|c| *c == id) {
-                siblings.remove(pos);
-            }
+            self.instances[op].children.remove(id);
         }
         self.instances[id].parent = parent;
         if let Some(np) = parent {
@@ -290,7 +295,7 @@ impl Dom {
         let inst = &mut self.instances[id];
         inst.destroyed = true;
         inst.parent_locked = true;
-        let children = inst.children.clone();
+        let children = inst.children.as_slice().to_vec();
         self.journal.push(Change::Destroying(id));
         Ok(Some(children))
     }
@@ -309,7 +314,7 @@ impl Dom {
 
     /// `Instance:ClearAllChildren()`: destroy every child.
     pub fn clear_all_children(&mut self, id: InstanceId) -> Result<(), DomError> {
-        for child in self.inst(id)?.children.clone() {
+        for child in self.inst(id)?.children.as_slice().to_vec() {
             // Locked children (services) are skipped, as in Roblox.
             if !self.is_parent_locked(child) {
                 self.destroy(child)?;
@@ -385,7 +390,7 @@ impl Dom {
         copy.attributes = src.attributes.clone();
         copy.tags = src.tags.clone();
         copy.parent = parent;
-        let children = src.children.clone();
+        let children = src.children.as_slice().to_vec();
         let new = self.instances.insert(copy);
         self.journal.push(Change::Created(new));
         map.insert(id, new);

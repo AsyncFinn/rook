@@ -55,7 +55,7 @@ pub struct Instance {
     pub unknown_class: Option<Box<str>>,
     pub(crate) name: String,
     pub(crate) parent: Option<InstanceId>,
-    pub(crate) children: Vec<InstanceId>,
+    pub(crate) children: Children,
     pub(crate) parent_locked: bool,
     pub(crate) destroyed: bool,
     /// Explicitly set properties. Missing ones read the class default.
@@ -71,6 +71,37 @@ pub struct Instance {
     pub(crate) created: u64,
 }
 
+/// An instance's children in order. They change only through `push` and
+/// `remove`, which count a new version, so a reader keeping a copy can
+/// always tell whether it's current.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct Children {
+    list: Vec<InstanceId>,
+    version: u64,
+}
+
+impl Children {
+    pub(crate) fn as_slice(&self) -> &[InstanceId] {
+        &self.list
+    }
+
+    pub(crate) fn version(&self) -> u64 {
+        self.version
+    }
+
+    pub(crate) fn push(&mut self, id: InstanceId) {
+        self.list.push(id);
+        self.version += 1;
+    }
+
+    pub(crate) fn remove(&mut self, id: InstanceId) {
+        if let Some(pos) = self.list.iter().position(|c| *c == id) {
+            self.list.remove(pos);
+            self.version += 1;
+        }
+    }
+}
+
 static CREATED: AtomicU64 = AtomicU64::new(0);
 
 impl Instance {
@@ -80,7 +111,7 @@ impl Instance {
             unknown_class: None,
             name,
             parent: None,
-            children: Vec::new(),
+            children: Children::default(),
             parent_locked: false,
             destroyed: false,
             properties: FxHashMap::default(),
@@ -100,7 +131,7 @@ impl Instance {
     }
 
     pub fn children(&self) -> &[InstanceId] {
-        &self.children
+        &self.children.list
     }
 
     pub fn is_destroyed(&self) -> bool {
