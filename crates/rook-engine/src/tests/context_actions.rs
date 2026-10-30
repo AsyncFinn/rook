@@ -98,6 +98,39 @@ fn a_locked_mouse_moves_by_deltas() {
     );
 }
 
+/// A mouse locked to the center is at the center from the frame the lock
+/// comes, before it moves: the engine holds it there, not a window's
+/// warp, so a host that only reports its cursor (or none) still gives
+/// scripts the center.
+#[test]
+fn a_mouse_locked_to_the_center_is_there_at_once() {
+    let mut server = Server::new(&Options::default()).unwrap();
+    let starter = service(&server, "StarterGui");
+    let screen = add_under(&server, starter, "ScreenGui", "Hud", "");
+    add_under(
+        &server,
+        screen,
+        "LocalScript",
+        "Lock",
+        r#"
+        local uis = game:GetService("UserInputService")
+        task.wait(0.1)
+        uis.MouseBehavior = Enum.MouseBehavior.LockCenter
+        task.wait(0.05)
+        print(uis:GetMouseLocation())
+        "#,
+    );
+    server.start();
+    let mut session = Session::new(server, Options::default());
+    let index = session.join("Looker", 1).unwrap();
+    session.client_mut(index).unwrap().set_viewport(800, 600);
+    session.input(index, InputEvent::MouseMove { x: 10.0, y: 20.0 });
+    session.run_for(0.2);
+    let client = session.client(index).unwrap();
+    assert_eq!(client.mouse_position(), (400.0, 300.0));
+    assert_eq!(lines(client), ["400, 300"]);
+}
+
 /// A shown Modal button frees a locked mouse; hiding it, or turning Modal
 /// off, locks it again. Asking costs nothing for the rest of the GUI: a
 /// thousand asks over 5,000 other objects stay well under a frame.

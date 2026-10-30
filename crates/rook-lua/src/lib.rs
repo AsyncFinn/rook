@@ -7,6 +7,7 @@
 
 mod api;
 pub mod audio_api;
+mod collect;
 mod ctx;
 mod net;
 mod removal;

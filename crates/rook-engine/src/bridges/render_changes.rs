@@ -14,7 +14,9 @@ use crate::*;
 /// for the visual effects ([`is_effect_class`]) in `effects` and
 /// `effects_placed`, plus the effect methods scripts called. A FloorWire
 /// is both an adornment of its `From` part (its wire) and an effect (its
-/// moving images); moving either of its parts redraws its wire.
+/// moving images); moving either of its parts redraws its wire. Instances
+/// freed since are in `collected` alone: a renderer drops what it keeps of
+/// them without reading them.
 #[derive(Debug, Clone, Default)]
 pub struct RenderChanges {
     pub full: bool,
@@ -31,6 +33,7 @@ pub struct RenderChanges {
     pub placed: std::collections::HashSet<InstanceId>,
     pub parts: std::collections::HashSet<InstanceId>,
     pub moved: std::collections::HashSet<InstanceId>,
+    pub collected: std::collections::HashSet<InstanceId>,
 }
 
 impl RenderChanges {
@@ -54,6 +57,18 @@ impl RenderChanges {
             && self.placed.is_empty()
             && self.parts.is_empty()
             && self.moved.is_empty()
+            && self.collected.is_empty()
+    }
+
+    /// `id` is being freed: no other change may name it.
+    fn collect(&mut self, id: InstanceId) {
+        self.lights.remove(&id);
+        self.effects.remove(&id);
+        self.effect_calls.retain(|(e, _)| *e != id);
+        self.placed.remove(&id);
+        self.parts.remove(&id);
+        self.moved.remove(&id);
+        self.collected.insert(id);
     }
 }
 
@@ -309,6 +324,10 @@ impl DataModel {
                         mark_part(changes, *old_parent);
                         mark_part(changes, *new_parent);
                     }
+                }
+                Change::Collected(id) => {
+                    changes.collect(*id);
+                    adorned.remove(id);
                 }
                 Change::Destroying(id) if dom.is_a(*id, "BasePart") => {
                     changes.placed.insert(*id);

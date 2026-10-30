@@ -38,7 +38,7 @@ impl Dom {
 
     /// An enum property's item name (`"Sphere"` for `Enum.ParticleEmitterShape.Sphere`).
     pub fn enum_item_property(&self, id: InstanceId, name: &str) -> Option<&'static str> {
-        let inst = self.instances.get(id)?;
+        let inst = self.slot(id)?;
         let prop = self.db.find_canonical_property(inst.class, name)?;
         let PropertyType::Enum(e) = prop.ty else {
             return None;

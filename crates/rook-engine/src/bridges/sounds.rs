@@ -77,6 +77,20 @@ pub(crate) struct Sounds {
     meter: Option<graph::Metering>,
 }
 
+impl Sounds {
+    /// Drop what is kept about `id`, which is being freed.
+    fn forget(&mut self, id: InstanceId) {
+        self.dirty.remove(&id);
+        self.tracked.remove(&id);
+        self.active.remove(&id);
+        self.seeks.remove(&id);
+        self.loudness.remove(&id);
+        self.local.retain(|(l, _)| *l != id);
+        self.seen_players.remove(&id);
+        self.graph_nodes.remove(&id);
+    }
+}
+
 fn sound_url(dom: &Dom, id: InstanceId) -> Option<ContentRef> {
     let value = dom
         .content_property(id, "AudioContent")
@@ -193,12 +207,12 @@ impl DataModel {
                         sounds.active.insert(*id);
                     }
                 }
+                Change::Collected(id) => sounds.forget(*id),
                 Change::Reparented { subtree, .. } => {
                     let moved = subtree.iter().filter(|&&i| is_sound(dom, i));
                     sounds.dirty.extend(moved);
                     for &i in subtree {
-                        if dom.get(i).is_some()
-                            && dom.is_ancestor_of(dom.root(), i)
+                        if dom.is_ancestor_of(dom.root(), i)
                             && rook_lua::audio_api::in_graph(dom.class_name(i))
                         {
                             sounds.graph_nodes.insert(i);
@@ -235,13 +249,6 @@ impl DataModel {
         let mut dirty: Vec<_> = sounds.dirty.drain().collect();
         dirty.sort();
         for id in dirty {
-            if dom.get(id).is_none() {
-                sounds.tracked.remove(&id);
-                sounds.active.remove(&id);
-                sounds.seen_players.remove(&id);
-                sounds.seeks.remove(&id);
-                continue;
-            }
             if !dom.is_ancestor_of(root, id) {
                 if let Some(audio) = sounds.audio(id).cloned()
                     && dom.bool_property(id, "PlayOnRemove").unwrap_or(false)
@@ -327,12 +334,10 @@ impl DataModel {
                 if *wants != r {
                     return true;
                 }
-                if dom.get(*id).is_some() {
-                    let at = playback::emitter(dom, *id);
-                    sounds
-                        .one_shots
-                        .push(playback::OneShot::new(dom, *id, audio.clone(), at));
-                }
+                let at = playback::emitter(dom, *id);
+                sounds
+                    .one_shots
+                    .push(playback::OneShot::new(dom, *id, audio.clone(), at));
                 false
             });
         } else {

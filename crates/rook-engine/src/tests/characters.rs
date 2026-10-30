@@ -180,6 +180,46 @@ fn players_respawn_after_dying() {
     );
 }
 
+/// What a `Died` handler changes after the server's step reaches every
+/// reader of the journal before the session trims it: a script it moves
+/// into ServerScriptService starts, and an Explosion it makes goes off.
+/// Both were lost, read only at the next step after the trim.
+#[test]
+fn changes_after_a_step_reach_every_reader() {
+    let options = Options::default();
+    let mut server = Server::new(&options).unwrap();
+    use_r6(&server);
+    add_script(&server, "ServerStorage", "Late", "print('late runs')");
+    let setup = r#"game.Players.PlayerAdded:Connect(function(p)
+            p.CharacterAdded:Connect(function(c)
+                c:WaitForChild("Humanoid").Died:Connect(function()
+                    game.ServerStorage.Late.Parent = game.ServerScriptService
+                    local x = Instance.new("Explosion")
+                    x.Position = c.HumanoidRootPart.Position
+                    local hit = false
+                    x.Hit:Connect(function()
+                        if not hit then
+                            hit = true
+                            print("blast hit")
+                        end
+                    end)
+                    x.Parent = workspace
+                end)
+            end)
+        end)
+        task.wait(0.5)
+        game.Players.A.Character.Humanoid.Health = 0
+        "#;
+    add_script(&server, "ServerScriptService", "Setup", setup);
+    server.start();
+    let mut session = Session::new(server, options);
+    session.join("A", 1).unwrap();
+    session.run_for(1.0);
+    let mut log = lines(session.server());
+    log.sort();
+    assert_eq!(log, ["blast hit", "late runs"]);
+}
+
 /// The client simulates its own character and the server takes what it
 /// sends: the server has the client's position after each session frame,
 /// other clients see it move, the server's Touched fires for it, and the

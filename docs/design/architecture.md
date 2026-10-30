@@ -113,6 +113,9 @@ Known exceptions, each marked with an `#[expect]` saying why:
 - **Change journal**: every mutation appends an event (`Created`, `PropertyChanged(id, prop)`, `ChildAdded`, `ChildRemoved`, `AncestryChanged`, `Destroying`). Two kinds of consumers read it:
   1. the signal dispatcher (`Changed`, `GetPropertyChangedSignal`, `ChildAdded`, `DescendantAdded`, `AncestryChanged`, ...), and
   2. engine systems (physics, GUI, render sync, audio). Each keeps its own cursor and processes dirty sets at its phase. Systems never get callbacks in the middle of a mutation.
+
+  Entries are dropped only by `DataModel::trim_journal`, which first has every reader read what it hasn't (`read_journal`), so a change made after a step (a `Died` handler, a remote between frames) reaches a reader that acts only at the next step. Debug builds check in `Journal::since` that no reader is behind a trim, so a reader left out fails the tests. Loads turn the journal off before anything reads it; their readers' first look scans the tree.
+- **Collection**: a destroyed instance leaves the arena once nothing holds it, as Roblox frees one once nothing, Lua included, references it. An instance holds its parent, children and reference targets; a destroyed one is held by a live instance holding it, a script's Lua handle (a userdata in the weak instance table), the few things the runtime keeps for later (`World::held`), or another destroyed instance held so. Live instances are never collected. Each `trim_journal` frees what the previous one announced, if still unheld, then records `Collected` for the destroyed instances nothing holds now, so every journal reader drops what it keeps of one (the renderer gets it in `RenderChanges::collected`, to drop without reading) a full frame before its slot goes; what the runtime and input keep is dropped as it's freed. A check costs what is destroyed and not yet freed, not the place's size. Debug builds fail any read of a freed id, so a holder that kept one fails the tests (`rook-dom/src/collect.rs`).
 - **No global state.** Several DataModels can exist in one process (server + client for Play mode, Studio edit + play). Each has its own DOM, Lua VM, scheduler and physics world.
 
 ## Signals and scheduler (`rook-lua`'s `signal` and `scheduler`)
@@ -186,6 +189,25 @@ Each DataModel's Luau, DOM and physics stay on one thread ([Signals and schedule
 - Run mode (no player) keeps the server on the main thread, since the window draws it.
 
 Scripts read some derived values synchronously: `AbsolutePosition`, `AbsoluteSize`, `TextBounds`, `TextFits`, raycasts, `GetPartsInPart`. So **GUI layout, text measurement and physics queries live on their DataModel's thread**. The renderer only consumes the client's scene, so no tree is ever shared between threads behind a lock.
+
+### Copies of state and their owners
+
+A copy of state another part owns, updated by its own code path, drifts from the owner and goes stale. Each copy below is either a cache the journal (or a key of everything it follows) invalidates, or kept by one choke point that the types or a lint make the only way to change it. Checked 2026-10-30.
+
+| Copy | Owner | Kept by |
+|---|---|---|
+| The physics world: bodies, colliders, joints, movers, Humanoids, gravity, fallen height, collision groups | The DOM | The journal, read at each sync; queries sync first |
+| The render scene (`SceneCache`), each adornment's Adornee, lights, effects | The DOM | `RenderChanges`, filled from the journal |
+| GUI layout and the `Absolute*`/`Text*` it writes; world GUIs, Hints, Modal buttons, tags over heads | The DOM | The journal (first look scans the tree); a script's read lays out first |
+| Scripts to start or stop, sounds, unions, Explosions, the player's settings (`Kept::current`) | The DOM | The journal, read before every trim |
+| The focused TextBox | `Gui::focus`, the one record; `GetFocusedTextBox` and the caret both read it | `UserInputService`'s focus and release |
+| Mouse `Hit`, `Target`, `Origin` and the ClickDetector under it | Camera, cursor, viewport, `TargetFilter`, physics | Recomputed when any of those (`Physics::generation`) changed |
+| The game's mouse position | The engine (`World.input.mouse`) | The window's moves; a mouse locked to the center is put there by the engine (`hold_mouse`), each held move and each frame |
+| The system cursor's place | The window | Only `App::warp` moves it, and tells the game (clippy ban) |
+| The system cursor's look and visibility | The game's `cursor_look`, and looking around | Only `App::show_cursor` changes it, once a frame (clippy ban) |
+| The drawn camera | The client step | `App::update` returns `Drawn` after the step, which `App::draw` takes |
+| `Camera.ViewportSize` | The window's size | The host's `set_viewport`, and each frame for a replaced camera |
+| What the window applied: its grab (`held`), IME, settings followed (`player`), its own held keys | The window | Compared with the game's answer after each step (`mouse_lock`, `typing`, `player_settings`); keys from the same handler that tells the game |
 
 ### Physics (`rook-physics`, `rook-humanoid`)
 

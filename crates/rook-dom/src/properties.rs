@@ -16,7 +16,7 @@ impl Dom {
     /// Read a property. Unset properties read the class default.
     /// `Name` and `Parent` are stored on the instance itself.
     pub fn property(&self, id: InstanceId, property: PropertyId) -> Option<Value> {
-        let inst = self.instances.get(id)?;
+        let inst = self.slot(id)?;
         if property == self.name_prop {
             return Some(Value::String(inst.name.clone()));
         }
@@ -32,15 +32,15 @@ impl Dom {
 
     /// Like [`Dom::property`], looked up by name (aliases resolved).
     pub fn property_by_name(&self, id: InstanceId, name: &str) -> Option<Value> {
-        let inst = self.instances.get(id)?;
+        let inst = self.slot(id)?;
         let prop = self.db.find_canonical_property(inst.class, name)?;
         self.property(id, prop.id)
     }
 
     /// The reference properties pointing at `id`, as (holder, property)
-    /// pairs. Holders may be destroyed; ones removed from the arena aren't
-    /// listed.
+    /// pairs. Holders may be destroyed; freed ones aren't listed.
     pub fn referrers(&self, id: InstanceId) -> &[(InstanceId, PropertyId)] {
+        self.check_not_freed(id);
         self.referrers.get(&id).map_or(&[], Vec::as_slice)
     }
 
@@ -57,7 +57,7 @@ impl Dom {
 
     /// The id of the property `name` (aliases resolved) on `id`'s class.
     pub fn property_id(&self, id: InstanceId, name: &str) -> Option<PropertyId> {
-        let inst = self.instances.get(id)?;
+        let inst = self.slot(id)?;
         Some(self.db.find_canonical_property(inst.class, name)?.id)
     }
 

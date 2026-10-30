@@ -219,6 +219,15 @@ impl SceneCache {
         self.effects.note_calls(&changes.effect_calls);
         let wired =
             adornments::wireframe::note_calls(dom, &mut self.wire_lines, &changes.effect_calls);
+        let mut changed = Vec::new();
+        // Freed: nothing of them may be read, only dropped.
+        for &id in &changes.collected {
+            self.place(dom, id, false, &mut changed);
+            self.wire_lines.remove(&id);
+            for parts in self.waiting.values_mut() {
+                parts.remove(&id);
+            }
+        }
         if changes.full {
             self.rebuild(dom);
             return SceneChange::Full;
@@ -229,7 +238,6 @@ impl SceneCache {
         let lights = self.lights_changed(dom, changes);
         let effects = self
             .with_effects(|effects, drawn, images| effects.changed(dom, changes, drawn, images));
-        let mut changed = Vec::new();
         let mut moved = Vec::new();
         if changes.terrain {
             match self.terrain_changed(dom) {

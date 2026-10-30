@@ -132,8 +132,8 @@ pub struct DataModel {
     /// for the server so the replicator can read the frame's changes first.
     auto_trim: bool,
     run_service: InstanceId,
-    /// Journal position up to which new scripts have been looked for.
-    script_cursor: u64,
+    /// Scripts the journal says to start or stop.
+    new_scripts: scripts::NewScripts,
     /// Where render-relevant changes have been checked up to.
     render_watch: JournalWatch,
     /// What a renderer draws that changed since it last asked.
@@ -208,7 +208,7 @@ impl DataModel {
     /// building the DataModel by hand, as a session does for clients).
     pub fn reset_cursors(&mut self) {
         let end = self.runtime.world().dom.journal().end();
-        self.script_cursor = end;
+        self.new_scripts = scripts::NewScripts::starting_at(end);
         self.render_watch.rescan(end);
         self.render_changes = RenderChanges::everything();
         self.sounds.watch.rescan(end);
@@ -219,20 +219,42 @@ impl DataModel {
         }
     }
 
-    /// Drop journal entries every reader has seen. Physics catches up first
-    /// so changes made after its step (by Heartbeat, or by remotes routed
-    /// between frames) aren't lost. A world no query has built yet (a
-    /// client's) reads the whole DOM when it is first built instead.
+    /// Drop the journal's entries, once every reader has read them: the
+    /// one way it's trimmed, so a change made after a step (by Heartbeat, a
+    /// `Died` handler or a remote routed between frames) is never lost to
+    /// a reader that looks only at the next step. A physics world no query
+    /// has built yet (a client's) reads the whole DOM when it is built.
+    /// Destroyed instances nothing holds are collected here too, once
+    /// every reader has heard so ([`rook_lua::Runtime::trim_journal`]);
+    /// input, which reads no journal, drops them as they are freed.
     pub fn trim_journal(&mut self) {
-        let mut w = self.runtime.world_mut();
-        let w = &mut *w;
-        if w.physics.is_built() {
-            w.physics.sync(&mut w.dom);
+        self.read_journal();
+        let end = self.runtime.world().dom.journal().end();
+        for id in self.runtime.trim_journal(end) {
+            self.input.forget(id);
         }
-        w.gui.note_changes(&w.dom);
-        w.note_style_changes();
-        let end = w.dom.journal().end();
-        w.dom.journal_mut().trim(end);
+    }
+
+    /// Every reader of the journal takes what it hasn't seen yet, noting
+    /// it for its own phase. Debug builds check that none has fallen behind
+    /// a trim ([`rook_dom::Journal::since`]), so a reader left out here
+    /// fails the tests.
+    fn read_journal(&mut self) {
+        {
+            let mut w = self.runtime.world_mut();
+            let w = &mut *w;
+            if w.physics.is_built() {
+                w.physics.sync(&mut w.dom);
+            }
+            w.gui.note_changes(&w.dom);
+            w.note_style_changes();
+        }
+        self.note_new_scripts();
+        self.check_render_changes();
+        self.check_sounds();
+        self.check_unions();
+        self.check_explosions();
+        self.check_user_settings();
     }
 
     /// Load a place file.
@@ -345,14 +367,14 @@ impl DataModel {
                 .raw_set("loadstring", mlua::Value::Nil)
                 .map_err(|e| EngineError::Lua(e.to_string()))?;
         }
-        let script_cursor = runtime.world().dom.journal().end();
+        let cursor = runtime.world().dom.journal().end();
         Ok(Self {
             runtime,
             role,
             auto_trim: true,
             run_service,
-            script_cursor,
-            render_watch: JournalWatch::starting_at(script_cursor),
+            new_scripts: scripts::NewScripts::starting_at(cursor),
+            render_watch: JournalWatch::starting_at(cursor),
             render_changes: RenderChanges::everything(),
             adorned: HashMap::new(),
             input: Default::default(),

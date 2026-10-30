@@ -79,7 +79,7 @@ use models::*;
 use services::*;
 use tree::*;
 
-pub(crate) use bindables::{get_callback, set_callback};
+pub(crate) use bindables::{forget_callbacks, get_callback, set_callback};
 pub(crate) use characters::spawn_character;
 pub(crate) use models::pivot_of;
 pub(crate) use terrain::region_voxels_of as terrain_region_voxels;

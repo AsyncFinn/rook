@@ -52,7 +52,7 @@ fn get_focused_text_box(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome
 /// The TextBox with focus, if it's still there.
 pub(crate) fn focused(lua: &Lua) -> Option<InstanceId> {
     with_world(lua, |w| {
-        let id = w.input.focused?;
+        let id = w.gui.focus()?;
         w.dom.get(id).is_some().then_some(id)
     })
 }
@@ -115,7 +115,6 @@ pub(crate) fn focus(lua: &Lua, id: InstanceId, caret: Option<usize>) -> mlua::Re
         let _ = w
             .dom
             .set_property_by_name(id, "SelectionStart", Value::Int32(-1));
-        w.input.focused = Some(id);
         w.gui.set_focus(Some(id));
         start
     });
@@ -140,7 +139,7 @@ pub(crate) fn release(
     stolen: bool,
 ) -> mlua::Result<()> {
     let Some(id) = focused(lua) else {
-        with_world(lua, |w| w.input.focused = None);
+        with_world(lua, |w| w.gui.set_focus(None));
         return Ok(());
     };
     let start = with_world(lua, |w| {
@@ -153,7 +152,6 @@ pub(crate) fn release(
                 .dom
                 .set_property_by_name(id, "SelectionStart", Value::Int32(-1));
         }
-        w.input.focused = None;
         w.gui.set_focus(None);
         start
     });

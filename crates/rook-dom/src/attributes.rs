@@ -4,7 +4,7 @@ use super::*;
 
 impl Dom {
     pub fn attribute(&self, id: InstanceId, name: &str) -> Option<&Value> {
-        self.instances.get(id)?.attributes.get(name)
+        self.slot(id)?.attributes.get(name)
     }
 
     pub fn set_attribute(

@@ -77,6 +77,7 @@ impl DataModel {
                     let moved = subtree.iter().filter(|&&i| dom.is_a(i, "PartOperation"));
                     unions.dirty.extend(moved);
                 }
+                Change::Collected(id) => _ = unions.dirty.remove(id),
                 _ => {}
             }
         }
@@ -98,8 +99,7 @@ impl DataModel {
         let mut dirty: Vec<_> = unions.dirty.drain().collect();
         dirty.sort();
         for id in dirty {
-            let in_workspace =
-                dom.get(id).is_some() && ws.is_some_and(|ws| dom.is_ancestor_of(ws, id));
+            let in_workspace = ws.is_some_and(|ws| dom.is_ancestor_of(ws, id));
             let collision = match saved_blob(dom, id) {
                 Some(blob) if in_workspace => match unions.saved.get(&blob) {
                     Some(c) => c.clone(),

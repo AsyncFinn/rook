@@ -167,9 +167,8 @@ impl EffectCache {
         mut drawn: EffectLists<'_>,
         images: &mut Images<'_>,
     ) -> bool {
-        let placed = changes
-            .placed
-            .iter()
+        let placed = (changes.placed.iter())
+            .chain(&changes.collected)
             .any(|id| self.holders.contains_key(id));
         // A FloorWire's change may give it other parts to hang from.
         let rewired = changes

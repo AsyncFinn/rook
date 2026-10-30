@@ -53,6 +53,19 @@ pub(crate) struct Movement {
     speeds: rustc_hash::FxHashMap<InstanceId, f32>,
 }
 
+impl Movement {
+    /// The parts walks head for.
+    pub(crate) fn held(&self) -> impl Iterator<Item = InstanceId> + '_ {
+        self.walks.values().filter_map(|w| w.part)
+    }
+
+    pub(crate) fn forget(&mut self, id: InstanceId) {
+        self.walks.remove(&id);
+        self.disabled.remove(&id);
+        self.speeds.remove(&id);
+    }
+}
+
 pub(super) fn native(name: &str) -> Option<super::RawMethod> {
     Some(match name {
         "Move" => move_humanoid,
