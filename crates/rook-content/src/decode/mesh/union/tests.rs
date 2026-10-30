@@ -1,3 +1,5 @@
+use rook_types::NormalId;
+
 use super::*;
 
 #[test]

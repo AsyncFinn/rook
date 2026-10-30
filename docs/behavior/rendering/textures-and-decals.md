@@ -93,8 +93,8 @@ marked):
   MeshPart `TextureID` draws the same way (a MeshPart loaded from a test
   model).
 - *Version 1.00 UVs:* a cube mesh written as 1.00 and as 2.00 with the same
-  UV numbers drew upside down relative to each other, so 1.00's V is flipped
-  (as `rbx_mesh` does): step 3's open question is settled.
+  UV numbers drew upside down relative to each other, so 1.00's V is flipped:
+  step 3's open question is settled.
 - *Setting `TextureId` or `MeshId`* (non-empty) on a SpecialMesh sets its
   `MeshType` to FileMesh, which scripts see (conformance case
   `content/decal`). Setting `Texture` on a Decal or Texture (or a Decal's

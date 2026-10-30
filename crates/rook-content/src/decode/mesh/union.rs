@@ -1,16 +1,16 @@
 //! A union's geometry (`UnionOperation`, `NegateOperation`,
-//! `IntersectOperation`), read from its `MeshData` blob through `rbx_mesh`'s
-//! `union_graphics`, with each vertex's color and the `NormalId` of the
-//! box face it was cut from. Where the blob is and its forms are in
+//! `IntersectOperation`), read from its `MeshData` blob ([`graphics`]),
+//! with each vertex's color and the `NormalId` of the box face it was cut
+//! from. Where the blob is and its forms are in
 //! `docs/behavior/meshes/unions.md`.
 
+mod edgebreaker;
+mod graphics;
 pub mod physics;
 
-use rbx_mesh::union_graphics::{Mesh2, NormalId as UnionNormal, UnionGraphics};
 use rbx_types::Variant;
-use rook_types::NormalId;
 
-use super::{Levels, Mesh, MeshError};
+use super::{Mesh, MeshError};
 
 /// What a `MeshData` blob holds, by its first bytes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -24,13 +24,11 @@ pub enum MeshDataKind {
 
 impl MeshDataKind {
     pub fn of(bytes: &[u8]) -> Self {
-        // `CSGMDL` XORed with `rbx_mesh`'s obfuscation key, then the version.
-        const CSGMDL: &[u8] = b"\x15\x7d\x29\x15\x75\x6c";
         if bytes.is_empty() {
             Self::Empty
         } else if bytes.starts_with(b"CSGK") {
             Self::Csgk
-        } else if bytes.starts_with(CSGMDL) && bytes.len() > 6 {
+        } else if bytes.starts_with(&graphics::MAGIC) && bytes.len() > 6 {
             // The version's first byte, XORed with the key's seventh (48).
             Self::Csgmdl(bytes[6] ^ 0x30)
         } else {
@@ -86,74 +84,12 @@ pub(super) fn decode(bytes: &[u8]) -> Result<Mesh, MeshError> {
         return decode(&asset_mesh_data(bytes)?);
     }
     match MeshDataKind::of(bytes) {
-        MeshDataKind::Csgmdl(2 | 4 | 5) => {}
-        MeshDataKind::Csgk | MeshDataKind::Empty => {
-            return Err(MeshError::Damaged(
-                "the union's MeshData has no geometry".into(),
-            ));
-        }
-        other => return Err(MeshError::UnsupportedUnion(other.name())),
-    }
-    let graphics = rbx_mesh::read_union_graphics_versioned(std::io::Cursor::new(bytes))
-        .map_err(|e| MeshError::Damaged(e.to_string()))?;
-    Ok(match graphics {
-        UnionGraphics::CSGK(_) => {
-            return Err(MeshError::Damaged(
-                "the union's MeshData has no geometry".into(),
-            ));
-        }
-        UnionGraphics::V2(m) => from_mesh2(&m.mesh),
-        UnionGraphics::V4(m) => from_mesh2(&m.mesh),
-        UnionGraphics::V5(m) => {
-            let n = m.positions.len();
-            if [
-                m.normals.len(),
-                m.colors.len(),
-                m.normal_ids.len(),
-                m.tex.len(),
-            ]
-            .iter()
-            .any(|&len| len != n)
-            {
-                return Err(MeshError::Damaged("vertex lists differ in length".into()));
-            }
-            Mesh {
-                positions: m.positions,
-                normals: m.normals.iter().map(|q| q.0).collect(),
-                uvs: m.tex,
-                indices: m.faces.indices,
-                levels: Levels::default(),
-                colors: m.colors,
-                faces: m.normal_ids.iter().map(|f| normal_id(f.0)).collect(),
-                terrain: None,
-                terrain_corners: Vec::new(),
-            }
-        }
-    })
-}
-
-fn from_mesh2(m: &Mesh2) -> Mesh {
-    let mut out = Mesh::default();
-    for v in &m.vertices {
-        out.positions.push(v.pos);
-        out.normals.push(v.norm);
-        out.uvs.push(v.tex);
-        out.colors.push(v.color);
-        out.faces.push(normal_id(v.normal_id.0));
-    }
-    out.indices = m.faces.iter().flat_map(|f| f.iter().map(|v| v.0)).collect();
-    out
-}
-
-/// `rbx_mesh` numbers faces from 1 in Roblox's order.
-fn normal_id(n: UnionNormal) -> NormalId {
-    match n {
-        UnionNormal::Right => NormalId::Right,
-        UnionNormal::Top => NormalId::Top,
-        UnionNormal::Back => NormalId::Back,
-        UnionNormal::Left => NormalId::Left,
-        UnionNormal::Bottom => NormalId::Bottom,
-        UnionNormal::Front => NormalId::Front,
+        MeshDataKind::Csgmdl(2 | 4) => graphics::csgmdl2(bytes),
+        MeshDataKind::Csgmdl(5) => graphics::csgmdl5(bytes),
+        MeshDataKind::Csgk | MeshDataKind::Empty => Err(MeshError::Damaged(
+            "the union's MeshData has no geometry".into(),
+        )),
+        other => Err(MeshError::UnsupportedUnion(other.name())),
     }
 }
 
