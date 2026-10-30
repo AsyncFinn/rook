@@ -208,7 +208,8 @@ Build profiles:
 | Command | Use |
 |---|---|
 | `cargo build` | Development. Rook's code is lightly optimized; dependencies are fully optimized so Luau and wgpu run at speed |
-| `cargo build --release` | What players use |
+| `cargo build --release` | What players use, and what benches time. Fast to rebuild |
+| `cargo build --profile dist` | Published builds: release with the whole program optimized at once, about 15% smaller with the same frame times, but many times slower to build |
 | `cargo build --profile profiling` | Release speed with full debug info. Add `--features tracy` to `rook-player` for a live Tracy timeline |
 
 A new crate gets its own `[profile.dev.package]` entry in the root `Cargo.toml` (`rook-tools drift` checks): the dev profile optimizes dependencies fully and lists Rook's crates to keep them quick to rebuild.

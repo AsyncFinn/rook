@@ -171,7 +171,13 @@ redundant_closure_for_method_calls = "warn"
 #   dev        `cargo build`: Rook's own code lightly optimized (fast to
 #              rebuild, keeps debug assertions); every dependency fully
 #              optimized so Luau, wgpu and the file decoders run at speed.
-#   release    `cargo build --release`: what players use.
+#   release    `cargo build --release`: what players use, and benches.
+#              Fast to rebuild: each crate optimized on its own, in
+#              parallel.
+#   dist       `cargo build --profile dist`: release, with the whole
+#              program optimized at once for published builds: about 15%
+#              smaller with the same frame times, but a build takes many
+#              times as long, one core at a time.
 #   profiling  `cargo build --profile profiling`: release speed plus full
 #              debug info for profilers. Builds into target/profiling, so
 #              it never collides with a running release build. Add
@@ -230,8 +236,9 @@ opt-level = 1
 
 [profile.release]
 debug = "line-tables-only"
-# Whole-program optimization: rook-player is about 15% smaller, at the cost
-# of a slower release build (dev builds are unaffected).
+
+[profile.dist]
+inherits = "release"
 lto = "fat"
 codegen-units = 1
 
