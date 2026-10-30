@@ -46,6 +46,7 @@ fn vs_main(v: VertexIn) -> VertexOut {
         out.clip = vec4(0.0, 0.0, 0.0, 1.0);
     }
     out.world = world;
+    out.view = world - g.camera_pos.xyz;
     out.normal = normalize(instance_rotation(v) * local_normal);
     out.color = vec4(srgb_to_linear(v.i_color.rgb), v.i_color.a);
     let is_terrain = packed >= TERRAIN_FACE && packed != 255u;
@@ -272,15 +273,21 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
     var uv = select(tiled / max(in.tile.xy, vec2(1e-3)), in.uv, on_uv);
     let packed = in.face & 255u;
     let terrain = packed >= TERRAIN_FACE && packed != 255u;
+    let dp_x = dpdx(in.view);
+    let dp_y = dpdy(in.view);
     var planar = vec2(0.0);
+    var duv_x = dpdx(uv);
+    var duv_y = dpdy(uv);
     if terrain {
-        planar = terrain_position(in.world, in.normal, (packed & 1u) != 0u);
-        uv = planar / max(in.tile.xy, vec2(1e-3));
+        let cube = (packed & 1u) != 0u;
+        let tile = max(in.tile.xy, vec2(1e-3));
+        planar = terrain_position(in.world, in.normal, cube);
+        uv = planar / tile;
+        // The plane is the same across the pixel's neighbors, so its
+        // footprint follows from the steps in position.
+        duv_x = terrain_position(dp_x, in.normal, cube) / tile;
+        duv_y = terrain_position(dp_y, in.normal, cube) / tile;
     }
-    let duv_x = dpdx(uv);
-    let duv_y = dpdy(uv);
-    let dp_x = dpdx(in.world);
-    let dp_y = dpdy(in.world);
     if terrain && (packed & TERRAIN_WATER) != 0u {
         return water_surface(in, dp_x, dp_y);
     }

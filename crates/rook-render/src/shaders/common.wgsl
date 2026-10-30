@@ -160,6 +160,10 @@ struct VertexOut {
     @location(12) @interpolate(flat) face: u32,
     // The images' slots in the image table.
     @location(13) @interpolate(flat) images: vec3<u32>,
+    // Studs from the camera: `world` far from the origin keeps too few bits
+    // for its change from one pixel to the next, so derivatives (normals,
+    // texture footprints) are taken of this instead.
+    @location(14) view: vec3<f32>,
 };
 
 // What the shadow pass reads: positions, what terrain moves its vertices
