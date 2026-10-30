@@ -1,4 +1,4 @@
-//! Roblox globals: output, legacy and `task` scheduling, `typeof`,
+//! Roblox globals: output, legacy and `task` scheduling,
 //! `getfenv`, `Instance.new`, `game`/`workspace`.
 //!
 //! The list follows creator-docs "Roblox globals" and the `task` library
@@ -12,16 +12,14 @@ mod instance_new;
 mod new_name;
 mod output;
 mod scheduling;
-mod type_of;
 
 use instance_new::instance_table;
 use new_name::new_name;
 use output::*;
 use scheduling::*;
-use type_of::typeof_;
 
 use super::instance::push_instance;
-use crate::ctx::args::{Args, display_value, type_name};
+use crate::ctx::args::{Args, display_value};
 use crate::ctx::{ApiResult, Outcome, ScriptError, api_fn, api_ret, with_world};
 use crate::threads::resume;
 use crate::world::{Job, MessageType, WaitKind};
@@ -92,7 +90,6 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
         "tick",
         api_ret(lua, move |lua, _| Ok(start_epoch + now(lua)))?,
     )?;
-    g.set("typeof", api_ret(lua, typeof_)?)?;
     g.set("getfenv", getfenv::getfenv(lua, std.get("error")?)?)?;
     std.set(
         "datastore",

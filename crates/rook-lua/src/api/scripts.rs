@@ -24,10 +24,9 @@ fn environment(lua: &Lua, script: InstanceId) -> mlua::Result<Table> {
     Ok(env)
 }
 
-/// How game code is compiled. `typeof` is Rook's own global (datatype
-/// names), so calls to it must reach the global, not Luau's builtin.
+/// How game code is compiled.
 fn compiler() -> Compiler {
-    Compiler::new().set_disabled_builtins(["typeof"])
+    Compiler::new()
 }
 
 /// Compile a script's source to run in `env`, or load its bytecode if it

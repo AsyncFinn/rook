@@ -4,15 +4,16 @@
 //! from Rust through async functions. Roblox scripts expect error values to
 //! be plain strings, and engine functions like `wait` to yield the calling
 //! coroutine. So every engine function is a raw Rust function wrapped in a
-//! small Luau shim. The Rust side returns its single result directly, or a
-//! private marker: an error marker followed by the message (the shim calls
-//! `error(msg, 0)`), a yield marker (the shim calls `coroutine.yield()`;
-//! the Rust side has already registered the current thread with whatever
-//! resumes it), a call marker followed by a function whose arguments are
-//! pending (the shim calls it from Lua, so it may yield; used by `require`
-//! and `Invoke`), or a multi marker when there are several results pending.
-//! Pending values are fetched with a second call; the shim takes two
-//! results, never varargs, which cost more than most engine functions.
+//! small Luau shim. The Rust side returns a value and a code: no code for a
+//! single result (the shim returns it after one nil test), or a [`Code`]:
+//! no results, several results pending, yield (the shim calls
+//! `coroutine.yield()`; the Rust side has already registered the current
+//! thread with whatever resumes it), call (the value is a function whose
+//! arguments are pending; the shim calls it from Lua, so it may yield; used
+//! by `require` and `Invoke`), or error (the value is the message; the shim
+//! calls `error(msg, 0)`). Pending values are fetched with a second call;
+//! the shim takes two results, never varargs, which cost more than most
+//! engine functions.
 
 pub(crate) mod args;
 pub(crate) mod convert;
@@ -36,14 +37,7 @@ pub(crate) type FastRead = (PropertyId, Option<EnumId>);
 #[derive(Debug)]
 pub(crate) struct Ctx {
     pub(crate) world: Rc<RefCell<World>>,
-    yield_marker: Table,
-    error_marker: Table,
-    call_marker: Table,
-    multi_marker: Table,
-    /// Returned for no results, which the shim turns back into none (one
-    /// nil would change `select('#', ...)`).
-    none_marker: Table,
-    /// Results or call arguments the shim fetches after seeing a marker.
+    /// Results or call arguments the shim fetches after seeing a code.
     pending: RefCell<MultiValue>,
     /// Wraps a raw function in the shim.
     pub(crate) wrap: Function,
@@ -96,54 +90,37 @@ pub(crate) fn with_world<R>(lua: &Lua, f: impl FnOnce(&mut World) -> R) -> R {
 
 impl Ctx {
     pub(crate) fn install(lua: &Lua, world: Rc<RefCell<World>>) -> mlua::Result<Rc<Self>> {
-        let yield_marker = lua.create_table()?;
-        let error_marker = lua.create_table()?;
-        let call_marker = lua.create_table()?;
-        let multi_marker = lua.create_table()?;
-        let none_marker = lua.create_table()?;
-        let markers = lua.create_table()?;
-        for m in [
-            &yield_marker,
-            &error_marker,
-            &call_marker,
-            &multi_marker,
-            &none_marker,
-        ] {
-            markers.raw_set(m, true)?;
-        }
         let take = lua.create_function(|lua, ()| Ok(ctx(lua).pending.take()))?;
         let co: Table = lua.globals().get("coroutine")?;
         let wrap: Function = lua
             .load(
                 r#"
-                local MARKERS, YIELD, CALL, MULTI, NONE, take, yield, error = ...
+                local NONE, MULTI, YIELD, CALL, take, yield, error = ...
                 return function(f)
                     return function(...)
-                        local r, x = f(...)
-                        if MARKERS[r] then
-                            if r == NONE then
-                                return
-                            elseif r == MULTI then
-                                return take()
-                            elseif r == YIELD then
-                                return yield()
-                            elseif r == CALL then
-                                return x(take())
-                            end
-                            error(x, 0)
+                        local r, code = f(...)
+                        if code == nil then
+                            return r
+                        elseif code == NONE then
+                            return
+                        elseif code == MULTI then
+                            return take()
+                        elseif code == YIELD then
+                            return yield()
+                        elseif code == CALL then
+                            return r(take())
                         end
-                        return r
+                        error(r, 0)
                     end
                 end
                 "#,
             )
             .set_name("=[rook]")
             .call((
-                markers,
-                yield_marker.clone(),
-                call_marker.clone(),
-                multi_marker.clone(),
-                none_marker.clone(),
+                Code::None as u8,
+                Code::Multi as u8,
+                Code::Yield as u8,
+                Code::Call as u8,
                 take,
                 co.get::<Function>("yield")?,
                 lua.globals().get::<Function>("error")?,
@@ -154,11 +131,6 @@ impl Ctx {
         let enum_items = lua.create_table()?;
         let ctx = Rc::new(Self {
             world,
-            yield_marker,
-            error_marker,
-            call_marker,
-            multi_marker,
-            none_marker,
             pending: RefCell::default(),
             wrap,
             instances,
@@ -249,6 +221,18 @@ stack traceback:",
 
 pub(crate) type ApiResult<T = MultiValue> = Result<T, ScriptError>;
 
+/// What the shim does with a raw engine function's value, when it isn't
+/// the single result.
+#[derive(Debug, Clone, Copy)]
+enum Code {
+    /// No results (one nil would change `select('#', ...)`).
+    None = 1,
+    Multi,
+    Yield,
+    Call,
+    Error,
+}
+
 /// What a raw engine function produced.
 #[derive(Debug)]
 pub(crate) enum Outcome {
@@ -272,26 +256,26 @@ where
 {
     let raw = lua.create_function(move |lua, args: MultiValue| {
         profiling::scope!("api");
-        let c = ctx(lua);
-        let marker = |m: &Table| LuaValue::Table(m.clone());
+        let pend = |v: MultiValue| *ctx(lua).pending.borrow_mut() = v;
+        let code = |c: Code| Some(c as u8);
         Ok(match f(lua, args) {
-            Ok(Outcome::Return(v)) if v.is_empty() => {
-                MultiValue::from_iter([marker(&c.none_marker)])
+            Ok(Outcome::Return(mut v)) if v.len() == 1 => {
+                (v.pop_front().unwrap_or(LuaValue::Nil), None)
             }
-            Ok(Outcome::Return(v)) if v.len() == 1 => v,
+            Ok(Outcome::Return(v)) if v.is_empty() => (LuaValue::Nil, code(Code::None)),
             Ok(Outcome::Return(v)) => {
-                *c.pending.borrow_mut() = v;
-                MultiValue::from_iter([marker(&c.multi_marker)])
+                pend(v);
+                (LuaValue::Nil, code(Code::Multi))
             }
-            Ok(Outcome::Yield) => MultiValue::from_iter([marker(&c.yield_marker)]),
+            Ok(Outcome::Yield) => (LuaValue::Nil, code(Code::Yield)),
             Ok(Outcome::Call(f, args)) => {
-                *c.pending.borrow_mut() = args;
-                MultiValue::from_iter([marker(&c.call_marker), LuaValue::Function(f)])
+                pend(args);
+                (LuaValue::Function(f), code(Code::Call))
             }
-            Err(e) => MultiValue::from_iter([
-                marker(&c.error_marker),
+            Err(e) => (
                 LuaValue::String(lua.create_string(&e.0)?),
-            ]),
+                code(Code::Error),
+            ),
         })
     })?;
     ctx(lua).wrap.call(raw)
