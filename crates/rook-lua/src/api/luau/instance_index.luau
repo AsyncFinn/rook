@@ -6,9 +6,9 @@ local keys, methods, index, newindex, index_other, newindex_other,
 -- per instance when a script reads thousands of them.
 local method_names = {}
 local function get(self, key)
-    -- The most read property, kept per instance until a rename
-    -- (`note_renames`), so walks over thousands of instances never
-    -- leave Luau. Only instances have entries.
+    -- The most read property, kept per instance and dropped inside
+    -- every rename (`names.rs`), so walks over thousands of instances
+    -- never leave Luau. Only instances have entries.
     if key == "Name" then
         local name = names[self]
         if name ~= nil then

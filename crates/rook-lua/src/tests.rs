@@ -525,8 +525,9 @@ fn descendant_removing_connected_mid_destroy() {
 }
 
 /// `inst.Name` is kept in the index shim, so every rename must reach the
-/// next read: a script's own, one the engine makes while it waits, and
-/// one whose journal entry is trimmed before the script runs again.
+/// next read: a script's own, one the engine makes while it waits, one
+/// whose journal entry is trimmed before the script runs again, and one
+/// made while the journal is off.
 #[test]
 fn renames_are_seen_by_the_next_read() {
     let rt = Runtime::new(Dom::new(), Clock::Fixed { step: 1.0 / 60.0 }).unwrap();
@@ -556,6 +557,8 @@ fn renames_are_seen_by_the_next_read() {
         print(read())
         task.wait()
         print(read())
+        task.wait()
+        print(read())
         "#,
         None,
     )
@@ -572,8 +575,12 @@ fn renames_are_seen_by_the_next_read() {
     let end = rt.world().dom.journal().end();
     rt.world_mut().dom.journal_mut().trim(end);
     step(&rt);
+    rt.world_mut().dom.journal_mut().set_enabled(false);
+    rename("E", "F");
+    rt.world_mut().dom.journal_mut().set_enabled(true);
+    step(&rt);
     let log: Vec<String> = rt.take_log().into_iter().map(|e| e.message).collect();
-    assert_eq!(log, ["A B", "changed C", "D", "E"]);
+    assert_eq!(log, ["A B", "changed C", "D", "E", "F"]);
 }
 
 mod core_gui;
