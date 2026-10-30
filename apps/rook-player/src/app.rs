@@ -2,7 +2,9 @@
 
 pub(crate) mod camera;
 pub(crate) mod cursor;
+pub(crate) mod frame_clock;
 pub(crate) mod icon;
+pub(crate) mod inbox;
 pub(crate) mod keys;
 pub(crate) mod launch;
 pub(crate) mod mouse;
@@ -33,17 +35,25 @@ pub(crate) struct App {
     pub(crate) looking: bool,
     /// How the window holds the mouse for the game.
     pub(crate) held: MouseLock,
-    /// Where a held cursor is put back to after each move, where the
-    /// platform can only confine it (see [`App::hold`]).
+    /// Where a held cursor is put back to once a frame after it moves,
+    /// where the platform can only confine it (see [`App::hold`]).
     pub(crate) anchor: Option<PhysicalPosition<f64>>,
-    /// Mouse movement while held, not yet sent to the game.
-    pub(crate) pending_motion: (f32, f32),
-    /// The cursor's last position in the window.
+    /// The held cursor moved since it was last put back.
+    pub(crate) strayed: bool,
+    /// What the window was told since the last frame.
+    pub(crate) inbox: inbox::Inbox,
+    /// The cursor's last position in the window, as the game knows it.
     pub(crate) cursor: PhysicalPosition<f64>,
     pub(crate) last_frame: Instant,
-    /// The latest cursor position not yet sent to the game. Moves are sent
-    /// once per frame because each costs a mouse raycast.
-    pub(crate) pending_mouse: Option<(f32, f32)>,
+    /// How far each frame steps the game.
+    pub(crate) frame_clock: frame_clock::FrameClock,
+    /// The monitor the window was on when its refresh rate was read, and
+    /// whether frames were shown at its rate then.
+    pub(crate) refresh_read: Option<(Option<winit::monitor::MonitorHandle>, bool)>,
+    /// The event loop ran (`about_to_wait`) since the last redraw. A
+    /// redraw without it comes from a loop that isn't winit's: Windows'
+    /// own, while the window is dragged or resized.
+    pub(crate) loop_ran: bool,
     /// What the cursor shows.
     pub(crate) cursor_shown: cursor::Shown,
     /// The platform's input method is on, while a TextBox has focus.
@@ -60,6 +70,13 @@ pub(crate) struct App {
     /// The terminal command prompt, when the terminal is interactive.
     #[cfg(feature = "repl")]
     pub(crate) repl: Option<rook_engine::console::repl::Repl>,
+}
+
+/// What a frame draws: the camera as the frame's step left it. Only
+/// [`App::update`] makes one, after stepping, and drawing reads the camera
+/// from it alone, so no frame can draw a camera from before its step.
+pub(crate) struct Drawn {
+    camera: Camera,
 }
 
 /// How often the window draws: as the player's `FramerateCap` says, unless
@@ -118,6 +135,10 @@ impl Gfx {
             config.format = *srgb;
         }
         config.present_mode = present_mode(vsync);
+        // One frame queued, not wgpu's default two: at the display's rate
+        // each frame waits for the screen before it starts, so it shows the
+        // mouse as it is then, rather than two or three refreshes late.
+        config.desired_maximum_frame_latency = 1;
         surface.configure(&device, &config);
         let renderer = Renderer::new(&adapter, device, queue, config.format);
         crate::note_gpu(&renderer);
@@ -174,9 +195,53 @@ impl App {
         gfx.renderer.set_scene(&self.scene.scene);
         self.game.set_viewport(gfx.config.width, gfx.config.height);
         self.gfx = Some(gfx);
+        self.read_refresh();
     }
 
-    pub(crate) fn update(&mut self, dt: f32) {
+    /// Step frames by the display's refreshes while they're shown at its
+    /// rate (on the monitor the window is on now). The rate is asked for
+    /// only when the monitor or the pacing changed: Windows sends hundreds
+    /// of moves while the window is dragged, and the rate is a slow driver
+    /// query.
+    fn read_refresh(&mut self) {
+        let Some(gfx) = &self.gfx else {
+            return;
+        };
+        #[expect(
+            clippy::disallowed_methods,
+            reason = "on attach, settings changes and moves, which the frame applies at most once"
+        )]
+        let monitor = gfx.window.current_monitor();
+        let vsync = self.pacing() == Pacing::Display;
+        let now = Some((monitor.clone(), vsync));
+        if self.refresh_read == now {
+            return;
+        }
+        self.refresh_read = now;
+        #[expect(
+            clippy::disallowed_methods,
+            reason = "only when the monitor or pacing changed"
+        )]
+        let mhz = monitor
+            .filter(|_| vsync)
+            .and_then(|m| m.refresh_rate_millihertz());
+        let hz = mhz.map(|mhz| f64::from(mhz) / 1000.0);
+        self.frame_clock.set_refresh(hz);
+    }
+
+    /// When the next frame may be drawn, under a frame rate cap.
+    fn next_due(&self) -> Option<Instant> {
+        match self.pacing() {
+            Pacing::Cap(fps) => {
+                Some(self.last_frame + Duration::from_secs_f64(1.0 / f64::from(fps)))
+            }
+            Pacing::Display | Pacing::Uncapped => None,
+        }
+    }
+
+    /// Step the game by `dt` seconds with the input the frame applied;
+    /// what to draw.
+    pub(crate) fn update(&mut self, dt: f32) -> Drawn {
         let typing = self.game.typing();
         if typing != self.ime
             && let Some(gfx) = &self.gfx
@@ -184,31 +249,14 @@ impl App {
             gfx.window.set_ime_allowed(typing);
             self.ime = typing;
         }
-        match self.game.view().scripted_camera() {
-            Some(view) => {
-                self.flying = false;
-                self.camera.follow(view);
-            }
-            None => {
-                self.flying = true;
-                self.fly(dt, typing);
-            }
+        self.flying = self.game.view().scripted_camera().is_none();
+        if self.flying {
+            self.fly(dt, typing);
         }
         // A script took the camera while the player was turning it.
         if !self.flying && self.looking {
             self.look(false);
         }
-        let motion = std::mem::take(&mut self.pending_motion);
-        if motion != (0.0, 0.0) {
-            self.game.input(InputEvent::MouseMotion {
-                dx: motion.0,
-                dy: motion.1,
-            });
-        }
-        if let Some((x, y)) = self.pending_mouse.take() {
-            self.game.input(InputEvent::MouseMove { x, y });
-        }
-
         #[cfg(feature = "repl")]
         if let Some(repl) = &mut self.repl {
             let game = &self.game;
@@ -219,6 +267,13 @@ impl App {
         // pace on its thread.
         self.clock += f64::from(dt);
         self.game.advance(f64::from(dt));
+        // Drawn as this step left it: the camera script has just turned it
+        // by this frame's mouse movement, and the character it follows
+        // stands where this step put it.
+        if let Some(view) = self.game.view().scripted_camera() {
+            self.flying = false;
+            self.camera.follow(view);
+        }
         if let Some(now) = self.game.player_settings()
             && now != self.player
         {
@@ -232,10 +287,13 @@ impl App {
             self.scene
                 .refresh(self.game.view_mut(), &mut gfx.renderer, camera);
         }
+        Drawn {
+            camera: self.camera.camera,
+        }
     }
 
     /// Draw a frame; whether one was presented.
-    pub(crate) fn draw(&mut self) -> bool {
+    pub(crate) fn draw(&mut self, drawn: &Drawn) -> bool {
         let Some(gfx) = &mut self.gfx else {
             return false;
         };
@@ -245,12 +303,8 @@ impl App {
         let view = frame.texture.create_view(&Default::default());
         // Wrapped so the shader's sines stay precise in long sessions.
         gfx.renderer.set_time((self.clock % 3600.0) as f32);
-        gfx.renderer.render(
-            &view,
-            gfx.config.width,
-            gfx.config.height,
-            &self.camera.camera,
-        );
+        gfx.renderer
+            .render(&view, gfx.config.width, gfx.config.height, &drawn.camera);
         gfx.window.pre_present_notify();
         gfx.renderer.queue.present(frame);
         true
@@ -260,12 +314,14 @@ impl App {
     fn frame(&mut self, event_loop: &ActiveEventLoop) -> bool {
         let now = Instant::now();
         let elapsed = now - self.last_frame;
-        let dt = elapsed.as_secs_f32().min(0.1);
+        let dt = self.frame_clock.step(elapsed.as_secs_f64()).min(0.1) as f32;
         self.last_frame = now;
-        self.update(dt);
+        self.apply_inbox(event_loop);
+        let drawn = self.update(dt);
+        self.return_cursor();
         self.follow_mouse_lock();
         self.show_cursor(event_loop);
-        let presented = self.draw();
+        let presented = self.draw(&drawn);
         if let Some(title) = self.readout.frame(elapsed, &self.game)
             && let Some(gfx) = &self.gfx
         {
@@ -301,6 +357,7 @@ impl App {
             gfx.set_fullscreen(now.fullscreen);
         }
         self.player = now;
+        self.read_refresh();
     }
 }
 
@@ -315,6 +372,35 @@ pub(crate) fn no_renderer(event_loop: &ActiveEventLoop, e: anyhow::Error) {
     event_loop.exit();
 }
 
+impl App {
+    /// The window asked to be drawn. While Windows drags or resizes it, it
+    /// runs a loop of its own, where winit's (and `about_to_wait`, which
+    /// asks for frames) doesn't run; only paints come through. So each
+    /// frame asks for the next, and the game keeps running then.
+    fn redraw(&mut self, event_loop: &ActiveEventLoop) {
+        let theirs = !std::mem::replace(&mut self.loop_ran, false);
+        if let Some(due) = self.next_due() {
+            let now = Instant::now();
+            if now < due {
+                if !theirs {
+                    // Early: our loop wakes it when due.
+                    return;
+                }
+                // Their loop has no wait to give: wait here.
+                #[expect(
+                    clippy::disallowed_methods,
+                    reason = "Windows' drag loop has no timer to wait in"
+                )]
+                std::thread::sleep(due - now);
+            }
+        }
+        self.frame(event_loop);
+        if let Some(gfx) = &self.gfx {
+            gfx.window.request_redraw();
+        }
+    }
+}
+
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.gfx.is_some() {
@@ -326,110 +412,19 @@ impl ApplicationHandler for App {
         }
     }
 
+    /// Events are only noted ([`inbox`]); the frame acts on them.
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _: WindowId, event: WindowEvent) {
-        if let Some(gfx) = &self.gfx {
-            icon::on_event(&gfx.window, &event);
-        }
-        match event {
-            WindowEvent::CloseRequested => event_loop.exit(),
-            WindowEvent::Resized(size) => {
-                if let Some(gfx) = &mut self.gfx
-                    && gfx.resize(size)
-                {
-                    self.game.set_viewport(size.width, size.height);
-                }
-            }
-            WindowEvent::CursorMoved { position, .. } => {
-                // A held cursor stays in place; its moves (and our own
-                // warps back) aren't mouse moves.
-                if !self.mouse_held() {
-                    self.cursor = position;
-                    self.pending_mouse = Some((position.x as f32, position.y as f32));
-                }
-            }
-            WindowEvent::Focused(false) if self.looking => self.look(false),
-            WindowEvent::KeyboardInput { event, .. } => {
-                let pressed = event.state == ElementState::Pressed;
-                // Escape ends typing in a TextBox, or opens Roblox's menu,
-                // rather than closing the player.
-                let typing = self.game.typing();
-                if let PhysicalKey::Code(code) = event.physical_key {
-                    // Repeats only edit a TextBox; the engine drops the rest.
-                    if let Some(name) = keys::roblox_key(code) {
-                        self.game.input(InputEvent::Key {
-                            code: name.to_owned(),
-                            down: pressed,
-                        });
-                    }
-                    match event.state {
-                        ElementState::Pressed => {
-                            if code == KeyCode::Escape && !typing && !self.game.core_menu {
-                                event_loop.exit();
-                            }
-                            self.keys.insert(code);
-                        }
-                        ElementState::Released => {
-                            self.keys.remove(&code);
-                        }
-                    }
-                }
-                if pressed
-                    && self.game.typing()
-                    && let Some(text) = event.text
-                {
-                    self.game.input(InputEvent::Text {
-                        text: text.to_string(),
-                    });
-                }
-            }
-            WindowEvent::Ime(Ime::Commit(text)) => {
-                self.game.input(InputEvent::Text { text });
-            }
-            WindowEvent::MouseInput { button, state, .. } => {
-                let down = state == ElementState::Pressed;
-                if let Some((x, y)) = self.pending_mouse.take() {
-                    self.game.input(InputEvent::MouseMove { x, y });
-                }
-                let number = match button {
-                    MouseButton::Left => Some(1),
-                    MouseButton::Right => Some(2),
-                    MouseButton::Middle => Some(3),
-                    _ => None,
-                };
-                if let Some(button) = number {
-                    self.game.input(InputEvent::MouseButton { button, down });
-                }
-                // The right button turns the flying camera; the game's
-                // camera turns with it on its own.
-                if button == MouseButton::Right && down == !self.looking && (self.flying || !down) {
-                    self.look(down);
-                }
-            }
-            WindowEvent::MouseWheel { delta, .. } => {
-                let steps = match delta {
-                    MouseScrollDelta::LineDelta(_, y) => y,
-                    MouseScrollDelta::PixelDelta(p) => p.y as f32 / 40.0,
-                };
-                self.game.input(InputEvent::Wheel { delta: steps });
-                // A wheel that scrolled GUI doesn't change the speed.
-                if self.flying && !self.game.input_processed() {
-                    self.camera.speed = (self.camera.speed * 1.2f32.powf(steps)).clamp(1.0, 2000.0);
-                }
-            }
-            WindowEvent::RedrawRequested => {
-                self.frame(event_loop);
-            }
-            _ => {}
+        if self.inbox.note(event) {
+            self.redraw(event_loop);
         }
     }
 
     fn device_event(&mut self, _: &ActiveEventLoop, _: DeviceId, event: DeviceEvent) {
-        if let DeviceEvent::MouseMotion { delta } = event {
-            self.mouse_motion(delta);
-        }
+        self.inbox.note_device(&event);
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        self.loop_ran = true;
         let Some(gfx) = &self.gfx else {
             return;
         };
@@ -443,12 +438,11 @@ impl ApplicationHandler for App {
             }
             return;
         }
-        if let Pacing::Cap(fps) = self.pacing() {
-            let due = self.last_frame + Duration::from_secs_f64(1.0 / f64::from(fps));
-            if Instant::now() < due {
-                event_loop.set_control_flow(ControlFlow::WaitUntil(due));
-                return;
-            }
+        if let Some(due) = self.next_due()
+            && Instant::now() < due
+        {
+            event_loop.set_control_flow(ControlFlow::WaitUntil(due));
+            return;
         }
         event_loop.set_control_flow(ControlFlow::Poll);
         gfx.window.request_redraw();

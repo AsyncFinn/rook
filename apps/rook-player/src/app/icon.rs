@@ -1,22 +1,7 @@
 //! The window's title bar and taskbar icons, loaded from the icon the build
 //! embeds in the executable (resources/README.md).
 
-use winit::event::WindowEvent;
 use winit::window::Window;
-
-/// Reload the window's icons when it gains focus or moves to a display with
-/// another scale.
-///
-/// Windows makes a window's taskbar button a moment after the window, and an
-/// icon set before then never reaches it; by the time the window has focus
-/// the button exists.
-pub(crate) fn on_event(window: &Window, event: &WindowEvent) {
-    match *event {
-        WindowEvent::Focused(true) => set(window, window.scale_factor()),
-        WindowEvent::ScaleFactorChanged { scale_factor, .. } => set(window, scale_factor),
-        _ => {}
-    }
-}
 
 /// Load each icon at its exact size for `scale`, so Windows shows the
 /// embedded image drawn for that size instead of shrinking a bigger one

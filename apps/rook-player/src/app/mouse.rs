@@ -41,10 +41,7 @@ impl App {
             PhysicalPosition::new(f64::from(size.width) / 2.0, f64::from(size.height) / 2.0);
         match want {
             MouseLock::Free => self.hold(None),
-            MouseLock::Center => {
-                self.cursor = center;
-                self.hold(Some(center));
-            }
+            MouseLock::Center => self.hold(Some(center)),
             MouseLock::InPlace => self.hold(Some(self.cursor)),
         }
     }
@@ -57,17 +54,43 @@ impl App {
         let Some(gfx) = &self.gfx else {
             return;
         };
-        let window = &gfx.window;
         // Looking only happens while flying, and the game holds the mouse
         // only while it isn't, so one never lets go of the other's hold.
         let Some(at) = at else {
-            let _ = window.set_cursor_grab(CursorGrabMode::None);
+            let _ = gfx.window.set_cursor_grab(CursorGrabMode::None);
             return;
         };
-        let _ = window.set_cursor_position(at);
-        if window.set_cursor_grab(CursorGrabMode::Locked).is_err() {
-            let _ = window.set_cursor_grab(CursorGrabMode::Confined);
+        // A lock clips the cursor to the pixel it's on (winit on Windows),
+        // and a warp can't leave the clip: let go first, then lock again
+        // where it lands.
+        let _ = gfx.window.set_cursor_grab(CursorGrabMode::None);
+        self.warp(at);
+        let Some(gfx) = &self.gfx else {
+            return;
+        };
+        if gfx.window.set_cursor_grab(CursorGrabMode::Locked).is_err() {
+            let _ = gfx.window.set_cursor_grab(CursorGrabMode::Confined);
             self.anchor = Some(at);
+        }
+    }
+
+    /// Put the system cursor at `at`. The one place the window moves it,
+    /// so the game always reads the mouse where it is: a lock to the
+    /// center puts Roblox's GetMouseLocation and Mouse.Hit there, not
+    /// where the mouse was when the lock came. Best effort, as grabbing is.
+    fn warp(&mut self, at: PhysicalPosition<f64>) {
+        let Some(gfx) = &self.gfx else {
+            return;
+        };
+        #[expect(
+            clippy::disallowed_methods,
+            reason = "the one warp, which tells the game"
+        )]
+        let _ = gfx.window.set_cursor_position(at);
+        self.cursor = at;
+        let (x, y) = (at.x as f32, at.y as f32);
+        if self.game.view().mouse_position() != (x, y) {
+            self.game.input(InputEvent::MouseMove { x, y });
         }
     }
 
@@ -76,13 +99,16 @@ impl App {
         self.looking || self.held != MouseLock::Free
     }
 
-    /// The mouse moved by `delta` (raw device units, about a pixel each):
-    /// the flying camera turns, or the game hears it, and a confined
-    /// cursor goes back.
+    /// The mouse moved by `delta` since the last frame (raw device units,
+    /// about a pixel each): the flying camera turns, or the game hears it,
+    /// and a confined cursor is marked to go back.
     pub(crate) fn mouse_motion(&mut self, delta: (f64, f64)) {
+        if delta == (0.0, 0.0) {
+            return;
+        }
         if self.held != MouseLock::Free {
-            self.pending_motion.0 += delta.0 as f32;
-            self.pending_motion.1 += delta.1 as f32;
+            let (dx, dy) = (delta.0 as f32, delta.1 as f32);
+            self.game.input(InputEvent::MouseMotion { dx, dy });
         } else if self.looking {
             // Radians per pixel at Roblox's default sensitivity of 1.
             const TURN: f32 = 0.003;
@@ -98,9 +124,20 @@ impl App {
         } else {
             return;
         }
-        if let (Some(anchor), Some(gfx)) = (self.anchor, &self.gfx) {
-            // Best effort, as grabbing is.
-            let _ = gfx.window.set_cursor_position(anchor);
+        self.strayed |= self.anchor.is_some();
+    }
+
+    /// Put a confined cursor that moved back where it's held, once a
+    /// frame: the camera reads raw motion, so the cursor need only stay in
+    /// the window, and warping it on every raw event (a thousand a second
+    /// from a gaming mouse) floods the window with moves, as SDL's
+    /// relative mode avoids.
+    pub(crate) fn return_cursor(&mut self) {
+        if !std::mem::take(&mut self.strayed) {
+            return;
+        }
+        if let Some(anchor) = self.anchor {
+            self.warp(anchor);
         }
     }
 }
