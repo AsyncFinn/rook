@@ -78,7 +78,7 @@ impl App {
 
     /// The mouse moved by `delta` (raw device units, about a pixel each):
     /// the flying camera turns, or the game hears it, and a confined
-    /// cursor goes back.
+    /// cursor is marked to go back.
     pub(crate) fn mouse_motion(&mut self, delta: (f64, f64)) {
         if self.held != MouseLock::Free {
             self.pending_motion.0 += delta.0 as f32;
@@ -96,6 +96,18 @@ impl App {
             self.camera.pitch -= delta.1 as f32 * TURN * up * invert;
             self.camera.update_rotation();
         } else {
+            return;
+        }
+        self.strayed |= self.anchor.is_some();
+    }
+
+    /// Put a confined cursor that moved back where it's held, once a
+    /// frame: the camera reads raw motion, so the cursor need only stay in
+    /// the window, and warping it on every raw event (a thousand a second
+    /// from a gaming mouse) floods the window with moves, as SDL's
+    /// relative mode avoids.
+    pub(crate) fn return_cursor(&mut self) {
+        if !std::mem::take(&mut self.strayed) {
             return;
         }
         if let (Some(anchor), Some(gfx)) = (self.anchor, &self.gfx) {

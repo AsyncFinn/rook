@@ -2,6 +2,7 @@
 
 pub(crate) mod camera;
 pub(crate) mod cursor;
+pub(crate) mod frame_clock;
 pub(crate) mod icon;
 pub(crate) mod keys;
 pub(crate) mod launch;
@@ -33,14 +34,18 @@ pub(crate) struct App {
     pub(crate) looking: bool,
     /// How the window holds the mouse for the game.
     pub(crate) held: MouseLock,
-    /// Where a held cursor is put back to after each move, where the
-    /// platform can only confine it (see [`App::hold`]).
+    /// Where a held cursor is put back to once a frame after it moves,
+    /// where the platform can only confine it (see [`App::hold`]).
     pub(crate) anchor: Option<PhysicalPosition<f64>>,
+    /// The held cursor moved since it was last put back.
+    pub(crate) strayed: bool,
     /// Mouse movement while held, not yet sent to the game.
     pub(crate) pending_motion: (f32, f32),
     /// The cursor's last position in the window.
     pub(crate) cursor: PhysicalPosition<f64>,
     pub(crate) last_frame: Instant,
+    /// How far each frame steps the game.
+    pub(crate) frame_clock: frame_clock::FrameClock,
     /// The latest cursor position not yet sent to the game. Moves are sent
     /// once per frame because each costs a mouse raycast.
     pub(crate) pending_mouse: Option<(f32, f32)>,
@@ -118,6 +123,10 @@ impl Gfx {
             config.format = *srgb;
         }
         config.present_mode = present_mode(vsync);
+        // One frame queued, not wgpu's default two: at the display's rate
+        // each frame waits for the screen before it starts, so it shows the
+        // mouse as it is then, rather than two or three refreshes late.
+        config.desired_maximum_frame_latency = 1;
         surface.configure(&device, &config);
         let renderer = Renderer::new(&adapter, device, queue, config.format);
         crate::note_gpu(&renderer);
@@ -174,6 +183,18 @@ impl App {
         gfx.renderer.set_scene(&self.scene.scene);
         self.game.set_viewport(gfx.config.width, gfx.config.height);
         self.gfx = Some(gfx);
+        self.read_refresh();
+    }
+
+    /// Step frames by the display's refreshes while they're shown at its
+    /// rate (on the monitor the window is on now).
+    fn read_refresh(&mut self) {
+        let hz = (self.gfx.as_ref())
+            .filter(|_| self.pacing() == Pacing::Display)
+            .and_then(|gfx| gfx.window.current_monitor())
+            .and_then(|m| m.refresh_rate_millihertz())
+            .map(|mhz| f64::from(mhz) / 1000.0);
+        self.frame_clock.set_refresh(hz);
     }
 
     pub(crate) fn update(&mut self, dt: f32) {
@@ -184,15 +205,9 @@ impl App {
             gfx.window.set_ime_allowed(typing);
             self.ime = typing;
         }
-        match self.game.view().scripted_camera() {
-            Some(view) => {
-                self.flying = false;
-                self.camera.follow(view);
-            }
-            None => {
-                self.flying = true;
-                self.fly(dt, typing);
-            }
+        self.flying = self.game.view().scripted_camera().is_none();
+        if self.flying {
+            self.fly(dt, typing);
         }
         // A script took the camera while the player was turning it.
         if !self.flying && self.looking {
@@ -219,6 +234,13 @@ impl App {
         // pace on its thread.
         self.clock += f64::from(dt);
         self.game.advance(f64::from(dt));
+        // Drawn as this step left it: the camera script has just turned it
+        // by this frame's mouse movement, and the character it follows
+        // stands where this step put it.
+        if let Some(view) = self.game.view().scripted_camera() {
+            self.flying = false;
+            self.camera.follow(view);
+        }
         if let Some(now) = self.game.player_settings()
             && now != self.player
         {
@@ -260,9 +282,10 @@ impl App {
     fn frame(&mut self, event_loop: &ActiveEventLoop) -> bool {
         let now = Instant::now();
         let elapsed = now - self.last_frame;
-        let dt = elapsed.as_secs_f32().min(0.1);
+        let dt = self.frame_clock.step(elapsed.as_secs_f64()).min(0.1) as f32;
         self.last_frame = now;
         self.update(dt);
+        self.return_cursor();
         self.follow_mouse_lock();
         self.show_cursor(event_loop);
         let presented = self.draw();
@@ -301,6 +324,7 @@ impl App {
             gfx.set_fullscreen(now.fullscreen);
         }
         self.player = now;
+        self.read_refresh();
     }
 }
 
@@ -332,6 +356,8 @@ impl ApplicationHandler for App {
         }
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
+            // It may be on another monitor now, refreshing at another rate.
+            WindowEvent::Moved(_) => self.read_refresh(),
             WindowEvent::Resized(size) => {
                 if let Some(gfx) = &mut self.gfx
                     && gfx.resize(size)
