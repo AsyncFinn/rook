@@ -52,3 +52,37 @@ fn destroyed_parts_are_freed_once_nothing_holds_them() {
     collect(&mut s);
     assert_eq!(s.runtime.world().dom.len(), before);
 }
+
+/// What `GetChildren` keeps for a parent never holds a child it lost: a
+/// part destroyed after its folder (still held) was listed, and never
+/// listed again, is freed like any other.
+#[test]
+fn kept_children_do_not_hold_what_left() {
+    let mut s = Server::new(&Options::default()).unwrap();
+    add_script(
+        &s,
+        "ServerScriptService",
+        "Script",
+        r#"
+        local folder = Instance.new("Folder")
+        folder.Parent = workspace
+        _G.folder = folder
+        task.wait(0.2)
+        Instance.new("Part").Parent = folder
+        local children = folder:GetChildren()
+        print(#children)
+        children[1]:Destroy()
+        children = nil
+        "#,
+    );
+    s.start();
+    s.run_for(0.1);
+    let before = s.runtime.world().dom.len();
+    s.run_for(0.3);
+    for _ in 0..2 {
+        s.runtime.lua().gc_collect().unwrap();
+        s.run_for(0.1);
+    }
+    assert_eq!(lines(&s), ["1"]);
+    assert_eq!(s.runtime.world().dom.len(), before);
+}

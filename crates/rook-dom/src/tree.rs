@@ -233,10 +233,12 @@ impl Dom {
 
         if let Some(op) = old_parent {
             self.instances[op].children.remove(id);
+            self.notify(Observed::ChildrenChanged(op));
         }
         self.instances[id].parent = parent;
         if let Some(np) = parent {
             self.instances[np].children.push(id);
+            self.notify(Observed::ChildrenChanged(np));
         }
 
         if journal {
@@ -378,6 +380,7 @@ impl Dom {
             if self.archivable(child) {
                 let c = self.clone_rec(child, Some(new), map);
                 self.instances[new].children.push(c);
+                self.notify(Observed::ChildrenChanged(new));
             }
         }
         new

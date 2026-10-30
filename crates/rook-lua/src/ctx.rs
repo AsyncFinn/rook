@@ -73,6 +73,9 @@ pub(crate) struct Ctx {
     /// Each instance userdata's `Name` as the `inst.Key` shim last read it
     /// (weak keys), dropped as the instance is renamed.
     pub(crate) names: Table,
+    /// Each instance userdata's children array as `GetChildren` last filled
+    /// it (weak keys), dropped as a child is added or removed.
+    pub(crate) kept_children: Table,
 }
 
 pub(crate) fn ctx(lua: &Lua) -> Rc<Ctx> {
@@ -145,6 +148,7 @@ impl Ctx {
             member_ids: RefCell::default(),
             fast_reads: RefCell::default(),
             names: weak_table(lua, "k")?,
+            kept_children: weak_table(lua, "k")?,
         });
         lua.set_app_data(ctx.clone());
         Ok(ctx)

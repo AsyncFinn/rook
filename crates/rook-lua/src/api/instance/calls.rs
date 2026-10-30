@@ -109,10 +109,11 @@ pub(super) fn fast_method(
     wrap.call((fast, general, takes_string))
 }
 
-/// `GetChildren`'s fast form (see [`methods::keeps_children`]). The Luau
-/// wrapper passes the version of the array it keeps for the instance; the
-/// children's keys come back only when the DOM's version differs, so a
-/// kept array is checked on every call and never handed out stale.
+/// `GetChildren`'s fast form (see [`methods::keeps_children`]): the
+/// children's keys and the DOM's version of them, or only the version when
+/// it equals `kept` (debug builds check every kept array this way). The
+/// Luau wrapper copies a kept array without calling this; it's dropped
+/// inside every change to the children (`kept.rs`).
 pub(super) fn kept_children(lua: &Lua, general: Function) -> mlua::Result<Function> {
     let c = ctx(lua);
     let fast = lua.create_function(move |lua, (key, kept): (LightUserData, Option<u64>)| {

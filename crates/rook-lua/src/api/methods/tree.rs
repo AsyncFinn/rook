@@ -29,9 +29,9 @@ pub(crate) fn fast(owner: &str, name: &str) -> Option<(Core, bool)> {
 }
 
 /// Methods whose fast form keeps the array it filled per instance and
-/// hands out copies while the DOM says the children are unchanged
-/// (`kept_children`): walks call `GetChildren` on the same parents every
-/// frame, and filling an array costs far more than copying one.
+/// hands out copies until the children change (`kept_children`): walks
+/// call `GetChildren` on the same parents every frame, and filling an
+/// array costs far more than copying one.
 pub(crate) fn keeps_children(owner: &str, name: &str) -> bool {
     matches!((owner, name), ("Instance", "GetChildren" | "children"))
 }

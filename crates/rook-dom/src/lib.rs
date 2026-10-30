@@ -19,11 +19,13 @@ mod collect;
 mod drawn;
 mod instance;
 mod journal;
+mod observe;
 mod properties;
 mod tree;
 
 pub use instance::Attributes;
 pub use journal::Change;
+pub use observe::Observed;
 pub use properties::zero_value;
 
 use instance::Instance;
@@ -104,7 +106,7 @@ pub struct Dom {
     parent_prop: PropertyId,
     /// Where things are drawn this frame, where it isn't their `CFrame`.
     drawn: FxHashMap<InstanceId, rook_types::CFrame>,
-    rename_observer: Option<RenameObserver>,
+    observer: Option<observe::Observer>,
     /// Destroyed instances still in the arena, each trim checking whether
     /// anything holds them (see `collect.rs`).
     destroyed: Vec<InstanceId>,
@@ -115,15 +117,6 @@ pub struct Dom {
     /// it past its `Collected`.
     #[cfg(debug_assertions)]
     freed: rustc_hash::FxHashSet<InstanceId>,
-}
-
-/// Told of each rename as it happens (see [`Dom::set_rename_observer`]).
-struct RenameObserver(Box<dyn FnMut(InstanceId)>);
-
-impl std::fmt::Debug for RenameObserver {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("RenameObserver")
-    }
 }
 
 impl Dom {
@@ -147,7 +140,7 @@ impl Dom {
             name_prop: prop("Name"),
             parent_prop: prop("Parent"),
             drawn: FxHashMap::default(),
-            rename_observer: None,
+            observer: None,
             destroyed: Vec::new(),
             collecting: Vec::new(),
             #[cfg(debug_assertions)]
@@ -268,18 +261,9 @@ impl Dom {
             inst.name = name;
             let property = self.name_prop;
             self.journal.push(Change::Property { id, property });
-            if let Some(observer) = &mut self.rename_observer {
-                (observer.0)(id);
-            }
+            self.notify(Observed::Renamed(id));
         }
         Ok(())
-    }
-
-    /// Call `observer` with each renamed instance, inside the rename, with
-    /// the journal on or off. For readers that keep names: the journal is
-    /// read later and can be off, and a kept name must never be read stale.
-    pub fn set_rename_observer(&mut self, observer: impl FnMut(InstanceId) + 'static) {
-        self.rename_observer = Some(RenameObserver(Box::new(observer)));
     }
 
     /// `Instance:GetFullName()`: dot-separated names up to, but not

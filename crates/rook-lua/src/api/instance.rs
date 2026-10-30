@@ -27,8 +27,8 @@ use crate::threads::dispatch;
 
 mod access;
 mod calls;
+mod kept;
 mod lookup;
-mod names;
 
 use access::*;
 use calls::*;
@@ -169,7 +169,7 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
             ctx(lua).names.clone(),
             cfg!(debug_assertions),
         ))?;
-    names::install(lua);
+    kept::install(lua);
     lua.set_named_registry_value("rook.instance.index", get)?;
     lua.set_named_registry_value("rook.instance.newindex", set)?;
 
@@ -211,11 +211,13 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     let kept_children: Function = lua
         .load(include_str!("luau/kept_children.luau"))
         .set_name("=[rook] kept_children")
-        .set_environment(builtins_env(lua, &["table", "setmetatable"])?)
+        .set_environment(builtins_env(lua, &["table", "setmetatable", "error"])?)
         .call((
             ctx(lua).instance_keys.clone(),
             ctx(lua).instances.clone(),
             create,
+            ctx(lua).kept_children.clone(),
+            cfg!(debug_assertions),
         ))?;
     lua.set_named_registry_value("rook.instance.kept_children", kept_children)?;
     Ok(())

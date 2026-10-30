@@ -7,7 +7,7 @@ local keys, methods, index, newindex, index_other, newindex_other,
 local method_names = {}
 local function get(self, key)
     -- The most read property, kept per instance and dropped inside
-    -- every rename (`names.rs`), so walks over thousands of instances
+    -- every rename (`kept.rs`), so walks over thousands of instances
     -- never leave Luau. Only instances have entries.
     if key == "Name" then
         local name = names[self]
