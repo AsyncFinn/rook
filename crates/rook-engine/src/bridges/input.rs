@@ -265,6 +265,12 @@ impl DataModel {
         self.input.processed
     }
 
+    /// Where the game reads the mouse, in window pixels: the last
+    /// [`InputEvent::MouseMove`].
+    pub fn mouse_position(&self) -> (f32, f32) {
+        self.runtime.world().input.mouse
+    }
+
     /// The TextBox keys are typing into, if any.
     pub fn focused_text_box(&self) -> Option<InstanceId> {
         self.runtime.focused_text_box()

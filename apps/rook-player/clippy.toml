@@ -1,0 +1,13 @@
+# The player's own rules, as clippy reads only the nearest clippy.toml:
+# apps/clippy.toml's, copied, and bans on calls that are slow or that the
+# window must make once a frame at most. Window and device events arrive
+# hundreds a second (a 1000 Hz mouse, a dragged window), so these belong
+# in the frame, never in an event handler; each site that needs one says
+# why with an `#[expect]`.
+disallowed-methods = [
+    { path = "rook_dom::Dom::property_by_name", reason = "use a typed reader such as Dom::float_property" },
+    { path = "winit::window::Window::current_monitor", reason = "a system query: read it when the window moves, at most once a frame (App::read_refresh)" },
+    { path = "winit::monitor::MonitorHandle::refresh_rate_millihertz", reason = "a slow driver query: only when the monitor changed (App::read_refresh)" },
+    { path = "winit::window::Window::set_cursor_position", reason = "only App::warp moves the cursor, so the game always hears where it is" },
+    { path = "std::thread::sleep", reason = "blocks the frame loop; only the frame pacer waits (App::redraw)" },
+]
