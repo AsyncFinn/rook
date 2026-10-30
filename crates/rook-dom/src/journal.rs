@@ -87,6 +87,11 @@ impl Journal {
         self.enabled = enabled;
     }
 
+    /// Absolute position of the first entry not yet trimmed.
+    pub fn start(&self) -> u64 {
+        self.base
+    }
+
     /// Absolute position after the last entry.
     pub fn end(&self) -> u64 {
         self.base + self.entries.len() as u64

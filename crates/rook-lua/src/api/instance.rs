@@ -28,6 +28,7 @@ use crate::threads::dispatch;
 mod access;
 mod calls;
 mod lookup;
+mod names;
 
 use access::*;
 use calls::*;
@@ -35,6 +36,7 @@ use lookup::*;
 
 pub(crate) use access::{read_property, write_property};
 pub(crate) use lookup::{Identity, MemberTable, get_member, runtime_properties};
+pub(crate) use names::note_renames;
 
 /// A script's handle to an instance. There is one userdata per instance,
 /// so `==`, `rawequal` and table keys behave as on Roblox.
@@ -162,6 +164,8 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
             ctx(lua).instances.clone(),
             create.clone(),
             crate::ctx::weak_table(lua, "k")?,
+            ctx(lua).names.clone(),
+            cfg!(debug_assertions),
         ))?;
     lua.set_named_registry_value("rook.instance.index", get)?;
     lua.set_named_registry_value("rook.instance.newindex", set)?;

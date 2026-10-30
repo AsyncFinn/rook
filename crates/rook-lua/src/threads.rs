@@ -28,6 +28,12 @@ pub(crate) fn resume(lua: &Lua, thread: &Thread, args: impl IntoLuaMulti) {
     if thread.status() != ThreadStatus::Resumable || stopped_thread(lua, thread) {
         return;
     }
+    // Renames made since Luau last ran (by the engine, or by Rust that
+    // runs this thread) must be seen by its next read.
+    if let Err(e) = crate::api::instance::note_renames(&crate::ctx::ctx(lua)) {
+        report_error(lua, thread, &e);
+        return;
+    }
     if let Err(e) = thread.resume::<MultiValue>(args) {
         report_error(lua, thread, &e);
     }

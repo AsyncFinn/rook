@@ -188,6 +188,9 @@ pub(crate) fn write_property(
             _ => w.dom.set_property(id, prop.id, converted),
         }
     });
+    if let Err(e) = note_renames(&ctx(lua)) {
+        return Ok(Err(e.into()));
+    }
     dispatch(lua, start);
     Ok(result.map_err(ScriptError::from))
 }

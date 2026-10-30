@@ -231,6 +231,17 @@ impl Runtime {
         });
     }
 
+    /// Read the journal up to its end, before it is trimmed: names scripts
+    /// read are dropped for the instances renamed in it.
+    pub fn note_changes(&self) {
+        if let Err(e) = api::instance::note_renames(&ctx::ctx(&self.lua)) {
+            let message = format!("dropping renamed instances' names: {e}");
+            self.world
+                .borrow_mut()
+                .push_log(MessageType::Error, message);
+        }
+    }
+
     /// Fire signals for journal entries recorded since `start` by code
     /// outside Lua (engine systems).
     pub fn dispatch_since(&self, start: u64) {

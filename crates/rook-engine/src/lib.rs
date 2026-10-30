@@ -224,6 +224,7 @@ impl DataModel {
     /// between frames) aren't lost. A world no query has built yet (a
     /// client's) reads the whole DOM when it is first built instead.
     pub fn trim_journal(&mut self) {
+        self.runtime.note_changes();
         let mut w = self.runtime.world_mut();
         let w = &mut *w;
         if w.physics.is_built() {

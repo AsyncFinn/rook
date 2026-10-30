@@ -17,7 +17,7 @@
 pub(crate) mod args;
 pub(crate) mod convert;
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use mlua::{Function, IntoLuaMulti, Lua, MultiValue, Table, Value as LuaValue};
@@ -76,6 +76,10 @@ pub(crate) struct Ctx {
     /// For each class and member id read so far: the stored property it
     /// reads (and its enum), when reading it is a plain DOM read.
     pub(crate) fast_reads: RefCell<FxHashMap<(ClassId, u32), FastRead>>,
+    /// Each instance userdata's `Name` as the `inst.Key` shim last read it
+    /// (weak keys), and the journal position renames are dropped up to.
+    pub(crate) names: Table,
+    pub(crate) names_cursor: Cell<u64>,
 }
 
 pub(crate) fn ctx(lua: &Lua) -> Rc<Ctx> {
@@ -149,6 +153,7 @@ impl Ctx {
         let instance_keys = weak_table(lua, "k")?;
         let method_caches = weak_table(lua, "k")?;
         let enum_items = lua.create_table()?;
+        let names_cursor = Cell::new(world.borrow().dom.journal().end());
         let ctx = Rc::new(Self {
             world,
             yield_marker,
@@ -169,6 +174,8 @@ impl Ctx {
             enum_items,
             member_ids: RefCell::default(),
             fast_reads: RefCell::default(),
+            names: weak_table(lua, "k")?,
+            names_cursor,
         });
         lua.set_app_data(ctx.clone());
         Ok(ctx)
@@ -270,7 +277,9 @@ where
         profiling::scope!("api");
         let c = ctx(lua);
         let marker = |m: &Table| LuaValue::Table(m.clone());
-        Ok(match f(lua, args) {
+        let outcome = f(lua, args);
+        crate::api::instance::note_renames(&c)?;
+        Ok(match outcome {
             Ok(Outcome::Return(v)) if v.is_empty() => {
                 MultiValue::from_iter([marker(&c.none_marker)])
             }
