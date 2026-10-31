@@ -30,6 +30,14 @@ process, so no real network delay):
   player's `Character`, and what's rigidly joined to them); everything
   else in its world follows replication. A client with no character
   steps nothing, and its world only answers queries.
+- A joint (a hinge surface, a constraint) is in a world's physics only
+  when a part on one side is simulated there: one between parts that
+  world only follows can't move anything, but Rapier solved it every
+  step all the same, as it does any joint with a moving kinematic side
+  (Jolt leaves such constraints out of its solve). Measured walking 60
+  s in a place with 228 server-driven contraptions and 246 joints: the
+  client's step went from 9.9 to 5.1 ms on average, its slowest from 42
+  to 16 ms.
 - The server simulates everything but its clients' characters, which it
   moves where their clients say. They are kinematic bodies there, so the
   server's Touched fires for them against anchored parts and other

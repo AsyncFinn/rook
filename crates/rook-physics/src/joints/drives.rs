@@ -39,6 +39,19 @@ fn hinge_pose(cf: CFrame) -> Pose {
 }
 
 impl Physics {
+    /// Whether a joint between `b0` and `b1` moves anything in this world:
+    /// one side is simulated here. Rapier solves every joint with an awake
+    /// kinematic side, so a client following another machine's
+    /// contraption solved all of its joints each step for nothing; such
+    /// joints aren't made, as Jolt leaves a constraint with no dynamic
+    /// body out of its solve. A body that starts being simulated here is
+    /// rebuilt, which makes its joints again.
+    fn joins_here(&self, b0: RigidBodyHandle, b1: RigidBodyHandle) -> bool {
+        [b0, b1]
+            .iter()
+            .any(|&b| self.world.bodies.get(b).is_some_and(|rb| rb.is_dynamic()))
+    }
+
     /// Join two bodies with a hinge (Rotate, RotateP, RotateV).
     pub(crate) fn add_hinge(&mut self, dom: &Dom, id: InstanceId) {
         let Some(j) = active_joint(dom, id).filter(|j| j.kind == JointKind::Hinge) else {
@@ -51,6 +64,10 @@ impl Physics {
         if b0 == b1 {
             return;
         }
+        self.joints.insert(id, [j.part0, j.part1]);
+        if !self.joins_here(b0, b1) {
+            return;
+        }
         let (c0, c1) = joints::hinge_frames(dom, &j);
         let joint = GenericJointBuilder::new(JointAxesMask::LOCKED_REVOLUTE_AXES)
             .local_frame1(hinge_pose(off0 * c0))
@@ -60,7 +77,6 @@ impl Physics {
             .contacts_enabled(false);
         let handle = self.world.insert_impulse_joint(b0, b1, joint);
         self.hinges.insert(id, handle);
-        self.joints.insert(id, [j.part0, j.part1]);
         if let Some(input) = hinge_input(dom, &j) {
             self.drives.insert(
                 id,
@@ -146,7 +162,7 @@ impl Physics {
             let wanted = spec.and_then(|spec| {
                 let (b0, o0) = self.frame_of(spec.parts[0])?;
                 let (b1, o1) = self.frame_of(spec.parts[1])?;
-                (b0 != b1).then_some((spec, [b0, b1], [o0, o1]))
+                (b0 != b1 && self.joins_here(b0, b1)).then_some((spec, [b0, b1], [o0, o1]))
             });
             let current = self.constraints.get(&id).filter(|c| {
                 self.world.impulse_joints.get(c.joint).is_some()

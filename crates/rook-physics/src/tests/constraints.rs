@@ -6,7 +6,7 @@ use rook_dom::{Dom, InstanceId};
 use rook_types::{CFrame, Value};
 
 use super::{block, child, part, position, run, set, v3};
-use crate::Physics;
+use crate::{Authority, Physics};
 
 /// A wheel's turn about world Y relative to the base.
 fn yaw(dom: &Dom, base: InstanceId, wheel: InstanceId) -> f32 {
@@ -224,6 +224,37 @@ fn hinge_constraint_holds_its_attachments_together() {
     run(&mut physics, &mut dom, 0.5);
     assert!((position(&dom, wheel) - Vec3::new(0.0, 1003.0, 0.0)).length() < 0.02);
     assert!(dom.float_property(h, "CurrentAngle").unwrap().abs() < 0.5);
+}
+
+/// A client following another machine's hinged parts makes no joints for
+/// them (they only slowed every step), and makes them once it simulates
+/// the parts, which then turn as before.
+#[test]
+fn joints_are_made_only_where_a_side_is_simulated() {
+    // A HingeConstraint motor, then a RotateV surface.
+    let setups: [fn(&mut Dom) -> InstanceId; 2] = [
+        |dom| {
+            let (_, wheel, h) = hinge(dom);
+            set(dom, h, "ActuatorType", Value::Enum(1));
+            set(dom, h, "AngularVelocity", Value::Float32(2.0));
+            set(dom, h, "MotorMaxTorque", Value::Float32(1e6));
+            wheel
+        },
+        |dom| surface_hinge(dom, MOTOR, CONSTANT, 0.0, 1.0).1,
+    ];
+    for setup in setups {
+        let mut dom = Dom::new();
+        let wheel = setup(&mut dom);
+        let mut physics = Physics::with_authority(Authority::Only(Vec::new()));
+        run(&mut physics, &mut dom, 0.1);
+        assert_eq!(physics.world.impulse_joints.len(), 0);
+
+        physics.set_authority(&dom, Authority::Except(Vec::new()));
+        run(&mut physics, &mut dom, 0.25);
+        assert_eq!(physics.world.impulse_joints.len(), 1);
+        let w = dom.vector3_property(wheel, "AssemblyAngularVelocity").unwrap();
+        assert!(w.y.abs() > 1.0, "{w}");
+    }
 }
 
 #[test]
