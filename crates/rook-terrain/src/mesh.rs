@@ -188,8 +188,12 @@ pub const WATER_DROP: f32 = VOXEL_STUDS / 2.0;
 /// thickness from the center, as one 4-stud voxel that full crosses.
 /// Resting, far rings of thick ground lie where near ones do and meet
 /// without a step (Studio's do: a slab's edge runs straight to the horizon
-/// across them), and a coarse voxel too empty to reach past its center
-/// crosses there. Measured in Studio with air on both sides: a one-voxel
+/// across them), and a voxel whose solid ends short of its center crosses
+/// there, between the voxel's back face and its center, so the share runs
+/// from -1/2. Clamped at the center, every coarse voxel holding a sliver
+/// grew to half its size: a tunnel's walls, floor and the small bits in it
+/// closed it into a block 260 studs out, where Studio shows the bits.
+/// Measured in Studio with air on both sides: a one-voxel
 /// slab a quarter full (20 to 24 studs) spans 21 to 23 near, then its
 /// coarse voxel's center and 1 either side, in 8-, 16- and 32-stud cells;
 /// a full slab from 8 to 32 spans 1.3 to 30.9 in 32-stud cells, where
@@ -198,14 +202,26 @@ pub const WATER_DROP: f32 = VOXEL_STUDS / 2.0;
 /// stepped against each other.
 fn crossing(fill: f32, scale: f32, resting: bool) -> f32 {
     let solid = fill * scale;
-    let past = if resting {
-        solid - (scale - VOXEL_STUDS) / 2.0
-    } else if solid < VOXEL_STUDS {
+    if resting {
+        return ((solid - (scale - VOXEL_STUDS) / 2.0) / scale).clamp(-0.5, 1.0);
+    }
+    let past = if solid < VOXEL_STUDS {
         solid
     } else {
         solid / 2.0 + VOXEL_STUDS / 2.0
     };
     (past / scale).clamp(0.0, 1.0)
+}
+
+/// How far a coarse voxel's crossings to its sides sit from its center
+/// toward the solid it rests on, the voxels `scale` studs on a side and it
+/// `fill` full: at the middle of the 4-stud voxels holding that solid, as
+/// they'd put them, rather than at the coarse voxel's middle. Zero at 4
+/// studs and for a full voxel. At the middle, a sliver on thick ground
+/// pulled its edge up to half the coarse voxel (22 studs, in 64-stud
+/// cells, over ground at 2.4).
+fn toward_solid(fill: f32, scale: f32) -> f32 {
+    (scale - (fill * scale).max(VOXEL_STUDS)) / 2.0
 }
 
 /// Voxels read before a chunk's first one: edges start one voxel before

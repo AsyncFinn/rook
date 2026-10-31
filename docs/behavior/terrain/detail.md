@@ -88,28 +88,41 @@ the strip to confirm it.
   move them by the coarse cell, so far Brick is boxes of the coarse cells,
   as in Studio. The levels are made once when the voxels load, and an
   edit averages again only the coarse chunks over what it changed.
-- Level `k` draws a square of 4×4 columns of its 32-voxel chunks (256
-  studs across each side of its center at level 0, doubling), every chunk
-  in them however high or low, less the square of the level inside it;
-  the last level draws everything outside the square before it, however
-  far. Each square's center is a corner of the next level's chunks, so
-  the hole it leaves there is whole columns, and moves only once the
-  camera is half that chunk and a sixteenth more away, so a camera at an
-  edge doesn't flip it back and forth. Each square is kept inside the
-  next.
+- Level `k` draws a square of columns of its 32-voxel chunks, every
+  chunk in them however high or low, less the square of the level inside
+  it; the last level draws everything outside the square before it,
+  however far. Level 0's square is 4×4 (256 studs each side of its
+  center) and moves only once the camera is a chunk and an eighth from
+  its center, so a camera at an edge doesn't flip it back and forth. Each
+  square after is 6×6 and holds the one inside with at least one of its
+  own chunks on every side, as clipmaps keep a border of each level
+  around the next finer, and moves only when that one would leave it.
+  Every square starts on a corner of the next level's chunks, so the hole
+  it leaves there is whole columns. With 4×4 squares at every level, a
+  square could sit against the edge of the one around it and that side
+  had none of the level: from inside a hallway 260 studs from its end,
+  the 4-stud ring met the 16-stud one, whose voxels, wider than half the
+  hallway, closed it into a block (`no_ring_is_ever_skipped`). Studio
+  skips none: 8-stud cells at 384, 16-stud ones at 900 and 1,500, 32-stud
+  at 3,000 (2026-10-30, below).
 - A coarse voxel's surface crosses where its eight 4-stud voxels' would:
   half a 4-stud voxel past the solid it holds, measured from its own
   bottom, rather than half its own voxel past it, so thick ground lies at
-  the same height in every ring. A voxel too empty to reach past its
-  center crosses there, so shapes smaller than half its voxel shrink
-  away. Rock's random vertex shift stays its 4-stud size far away
+  the same height in every ring. A voxel whose solid ends short of its
+  center crosses there too, between its back face and its center, and its
+  crossings to its sides sit at the middle of the 4-stud voxels holding
+  that solid, so a sliver on the ground stays a sliver in every ring
+  (`slivers_on_the_ground_stay_slivers_far_away`); clamped at the center,
+  each coarse voxel holding a sliver grew to half its size. Rock's random
+  vertex shift stays its 4-stud size far away
   (scaled with the coarse cell, it threw far rock's vertices tens of
   studs about); Brick's cubes and the quantized materials' steps still
   scale with the cell.
-- From a camera on a grid corner that puts the edges at 256, 512, 1,024,
-  2,048 and 4,096 studs: Studio's except the 8-stud ring, which ends at
-  512 instead of about 768 (Approximation: a ring ending at 768 isn't
-  whole chunks of the next level, so it can't nest the same way).
+- From a camera on a grid corner, the edges on one side are at 256, 512,
+  1,024, 2,048 and 4,096 studs, and a ring reaches farther on the other
+  (a 6-wide square on the next level's grid can't be centered on the
+  camera): Studio's except the 8-stud ring, which ends at 512 on that
+  side instead of about 768 (Approximation).
 - Chunks are hung with skirts: from every edge where a chunk's
   upward-facing surface ends at the chunk's side, a strip one of its
   voxels deep, straight down, in the surface's own layers (Ulrich's

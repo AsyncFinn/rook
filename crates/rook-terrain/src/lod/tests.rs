@@ -47,12 +47,12 @@ fn rings_match_studio_from_a_grid_corner() {
 fn small_moves_keep_the_rings() {
     let mut rings = Rings::around(Vec3::new(10.0, 10.0, 10.0));
     assert!(!rings.follow(Vec3::new(130.0, 10.0, -100.0)));
-    // Past half a level-1 chunk and the slack: the finest box moves, the
+    // Past a level-0 chunk and the slack: the finest box moves, the
     // coarser ones stay.
     let before = rings;
     assert!(rings.follow(Vec3::new(280.0, 10.0, 10.0)));
-    assert_ne!(rings.centers[0], before.centers[0]);
-    assert_eq!(rings.centers[1..], before.centers[1..]);
+    assert_ne!(rings.starts[0], before.starts[0]);
+    assert_eq!(rings.starts[1..], before.starts[1..]);
 }
 
 #[test]
@@ -237,6 +237,55 @@ fn no_level_comes_nearer_than_nearest_says() {
                 let p = camera + Vec3::new(angle.cos(), 0.0, angle.sin()) * d;
                 assert!(!levels_at(&rings, p).contains(&k), "level {k} at {p} from {camera}");
             }
+        }
+    }
+}
+
+#[test]
+fn slivers_on_the_ground_stay_slivers_far_away() {
+    // Thick ground up to 0 with a layer a tenth full on it: its surface is
+    // at 2.4 near (the layer's 0.4 studs, half a 4-stud voxel past). A
+    // coarse voxel holding only the layer reached its center (4 in 8-stud
+    // cells, 8 in 16, ...), so far rings raised the ground and slivers in
+    // a tunnel closed it.
+    let mut grid = Grid::new();
+    for x in -384..384 {
+        for z in -384..384 {
+            for y in -40..0 {
+                grid.set(IVec3::new(x, y, z), Voxel::new(TerrainMaterial::Snow, 255));
+            }
+            grid.set(IVec3::new(x, 0, z), Voxel::new(TerrainMaterial::Snow, 24));
+        }
+    }
+    let levels = pyramid(grid);
+    for level in 0..LEVELS {
+        let (top, _) = drawn_heights(&levels, level, IVec3::ZERO);
+        // Within a step of the coarse occupancy byte (1/256 of the voxel).
+        let step = Detail::at(level).voxel_studs() / 256.0;
+        assert!((top - 2.4).abs() < step + 0.05, "level {level}: top at {top}");
+    }
+}
+
+#[test]
+fn no_ring_is_ever_skipped() {
+    // Walking out from the camera, the level rises one at a time: Studio
+    // never skips one. The 4-wide squares let a level sit against the
+    // edge of the one around it, so from a hallway 260 studs out the
+    // 4-stud ring met the 16-stud one and closed the hallway.
+    let mut r = Random::at(IVec3::new(7, 8, 9));
+    let mut next = |span: f32| (r.next() * 2.0 - 1.0) * span;
+    let mut rings = Rings::around(Vec3::ZERO);
+    let mut camera = Vec3::ZERO;
+    for _ in 0..1000 {
+        camera += Vec3::new(next(300.0), 0.0, next(300.0));
+        rings.follow(camera);
+        let angle = next(std::f32::consts::PI);
+        let way = Vec3::new(angle.cos(), 0.0, angle.sin());
+        let mut level = 0;
+        for step in 0..2000 {
+            let now = levels_at(&rings, camera + way * (step as f32 * 8.0))[0];
+            assert!(now == level || now == level + 1, "{level} to {now} from {camera}");
+            level = now;
         }
     }
 }

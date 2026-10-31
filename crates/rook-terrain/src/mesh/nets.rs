@@ -221,9 +221,25 @@ impl Mesher<'_> {
             // Only a dry solid's crossing depends on its neighbors.
             let dry = v.is_solid() && v.water == 0;
             let flat = self.pass == Pass::Water && (!dry || self.touches_water(from));
+            let fill = self.pass.fill(v, flat);
             let resting = self.inside(from * 2 - to);
-            let t = crossing(self.pass.fill(v, flat), self.scale, resting);
-            sum += self.center(from) + (self.center(to) - self.center(from)) * t;
+            let t = crossing(fill, self.scale, resting);
+            let mut at = self.center(from) + (self.center(to) - self.center(from)) * t;
+            // Across the edge, toward the solid it rests on along each
+            // other axis.
+            let along = to - from;
+            let toward = toward_solid(fill, self.scale);
+            for axis in IVec3::AXES {
+                if axis == along || axis == -along {
+                    continue;
+                }
+                match (self.inside(from - axis), self.inside(from + axis)) {
+                    (true, false) => at -= axis.as_vec3() * toward,
+                    (false, true) => at += axis.as_vec3() * toward,
+                    _ => {}
+                }
+            }
+            sum += at;
             n += 1;
         }
         sum / n.max(1) as f32

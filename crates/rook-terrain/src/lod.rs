@@ -3,12 +3,16 @@
 //! and as clipmaps do (Losasso and Hoppe, "Geometry clipmaps", 2004).
 //!
 //! Each level averages the one before's 2×2×2 blocks ([`pyramid`]).
-//! Level `k` draws a square of 4×4 columns of its chunks around the
-//! camera, every chunk in them however high or low, less the square of
-//! level `k - 1`; the last level draws everything outside. Each square
-//! sits on the next level's chunk grid and moves only once the camera is
-//! more than half that chunk (and a little) from its center, so crossing a
-//! ring re-meshes only the chunks whose level changed ([`Rings::follow`]).
+//! Level `k` draws a square of columns of its chunks, every chunk in them
+//! however high or low, less the square of level `k - 1`; the last level
+//! draws everything outside. Level 0's square is 4×4 around the camera and
+//! moves only once the camera is more than a chunk (and a little) from its
+//! center; each square after is 6×6 and holds the one inside with at least
+//! one of its own chunks on every side, so no level is ever skipped (as
+//! clipmaps keep a border of each level around the next finer), and moves
+//! only when that one would leave it. Every square sits on the next
+//! level's chunk grid, so crossing a ring re-meshes only the chunks whose
+//! level changed ([`Rings::follow`]).
 
 use glam::{IVec2, IVec3, Vec3};
 
@@ -24,9 +28,14 @@ pub const LEVELS: u8 = 6;
 /// The coarsest level, drawn everywhere the others aren't.
 const LAST: u8 = LEVELS - 1;
 
-/// How much farther than half a chunk the camera goes from a square's center
-/// before the square moves, in chunks.
-const SLACK: f32 = 1.0 / 16.0;
+/// How much farther than a chunk the camera goes from level 0's center
+/// before its square moves, in chunks.
+const SLACK: f32 = 1.0 / 8.0;
+
+/// Level `k`'s square, in its chunks on a side.
+const fn width(level: usize) -> i32 {
+    if level == 0 { 4 } else { 6 }
+}
 
 /// A chunk's edge in studs at `level`.
 pub fn chunk_studs(level: u8) -> f32 {
@@ -34,13 +43,14 @@ pub fn chunk_studs(level: u8) -> f32 {
 }
 
 /// How close to the camera, across X and Z, a chunk drawn at `level` can
-/// be: the square of the level inside reaches two of its chunks each way
-/// from its center, which strays at most half a chunk of this level and
-/// [`SLACK`] from the camera.
+/// be: level 0's square reaches two of its chunks each way from its
+/// center, which strays at most a chunk and [`SLACK`] from the camera, and
+/// each square after reaches at least one of its chunks past the one
+/// inside.
 pub fn nearest(level: u8) -> f32 {
     match level {
         0 => 0.0,
-        k => chunk_studs(k - 1) * (2.0 - 2.0 * (0.5 + SLACK)),
+        k => chunk_studs(0) * (1.0 - SLACK) + (1..k).map(chunk_studs).sum::<f32>(),
     }
 }
 
@@ -79,19 +89,19 @@ pub fn update_pyramid(levels: &mut [Grid], changed: &[Bounds]) -> Vec<Vec<Bounds
     out
 }
 
-/// Where each level's square is: for levels 0 to the one before the
-/// last, its center on the ground (X and Z), a corner of the next level's
-/// chunks (in those chunks).
+/// Where each level's square is, but the last's: its first chunk across X
+/// and Z, in that level's chunks (an even one, a corner of the next
+/// level's chunks).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Rings {
-    centers: [IVec2; LAST as usize],
+    starts: [IVec2; LAST as usize],
 }
 
 impl Rings {
     /// The rings around `camera`.
     pub fn around(camera: Vec3) -> Self {
         let mut rings = Rings {
-            centers: [IVec2::ZERO; LAST as usize],
+            starts: [IVec2::ZERO; LAST as usize],
         };
         rings.place(camera, true);
         rings
@@ -105,15 +115,27 @@ impl Rings {
     }
 
     fn place(&mut self, camera: Vec3, fresh: bool) {
-        for k in (0..LAST as usize).rev() {
-            let at = glam::Vec2::new(camera.x, camera.z) / chunk_studs(k as u8 + 1);
-            let center = &mut self.centers[k];
-            if fresh || (at - center.as_vec2()).abs().max_element() > 0.5 + SLACK {
-                *center = at.round().as_ivec2();
-            }
-            // Inside the next square, so the levels nest.
-            if let Some(outer) = self.centers.get(k + 1).map(|c| *c * 2) {
-                self.centers[k] = self.centers[k].clamp(outer - 1, outer + 1);
+        // Level 0 follows the camera; each after holds the one inside.
+        let at = glam::Vec2::new(camera.x, camera.z) / chunk_studs(0);
+        let half = (width(0) / 2) as f32;
+        let center = self.starts[0].as_vec2() + half;
+        if fresh || (at - center).abs().max_element() > 1.0 + SLACK {
+            self.starts[0] = even((at - half) / 2.0);
+        }
+        for k in 1..LAST as usize {
+            let at = glam::Vec2::new(camera.x, camera.z) / chunk_studs(k as u8);
+            let inner = self.starts[k - 1] / 2;
+            let reach = width(k - 1) / 2;
+            // Starts that leave a chunk of this level each side of the one
+            // inside: from `inner + reach + 1 - width` to `inner - 1`.
+            let lo = inner + reach + 1 - width(k);
+            let hi = inner - 1;
+            let fits = |s: IVec2| s.cmpge(lo).all() && s.cmple(hi).all();
+            if fresh || !fits(self.starts[k]) {
+                let want = even((at - (width(k) / 2) as f32) / 2.0);
+                let lo = IVec2::new(round_up_even(lo.x), round_up_even(lo.y));
+                let hi = IVec2::new(round_down_even(hi.x), round_down_even(hi.y));
+                self.starts[k] = want.clamp(lo, hi);
             }
         }
     }
@@ -123,8 +145,11 @@ impl Rings {
         let column = IVec2::new(chunk.x, chunk.z);
         let within = |lo: IVec2, hi: IVec2| column.cmpge(lo).all() && column.cmplt(hi).all();
         let k = usize::from(level);
-        let outer = level == LAST || within(self.centers[k] * 2 - 2, self.centers[k] * 2 + 2);
-        let inner = level > 0 && within(self.centers[k - 1] - 1, self.centers[k - 1] + 1);
+        let outer = level == LAST || within(self.starts[k], self.starts[k] + width(k));
+        let inner = level > 0 && {
+            let lo = self.starts[k - 1] / 2;
+            within(lo, lo + width(k - 1) / 2)
+        };
         outer && !inner
     }
 
@@ -138,13 +163,14 @@ impl Rings {
                 .filter(|c| self.draws(level, *c))
                 .collect();
         }
-        let first = self.centers[usize::from(level)] * 2 - 2;
+        let first = self.starts[usize::from(level)];
+        let side = width(usize::from(level));
         let step = 1 << level;
         let (lo, hi) = (rows.0.div_euclid(step) - 1, rows.1.div_euclid(step));
         let mut out = Vec::new();
-        for x in 0..4 {
+        for x in 0..side {
             for y in lo..=hi {
-                for z in 0..4 {
+                for z in 0..side {
                     let c = IVec3::new(first.x + x, y, first.y + z);
                     if self.draws(level, c) && can_have_surface(grid, c) {
                         out.push(c);
@@ -158,3 +184,17 @@ impl Rings {
 
 #[cfg(test)]
 mod tests;
+
+/// The even point nearest `v` (in chunks), times 2: a corner of the next
+/// level's chunks.
+fn even(v: glam::Vec2) -> IVec2 {
+    v.round().as_ivec2() * 2
+}
+
+fn round_up_even(v: i32) -> i32 {
+    v + v.rem_euclid(2)
+}
+
+fn round_down_even(v: i32) -> i32 {
+    v - v.rem_euclid(2)
+}
