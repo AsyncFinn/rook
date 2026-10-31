@@ -249,6 +249,8 @@ pub(crate) struct GuiPass {
     screen: Target,
     /// The untoned world canvases, under the screen's GUI.
     overlay: Target,
+    /// The cursor, over everything.
+    cursor: Target,
     /// The screen's pieces last given, and what was made of each.
     screen_pieces: ScreenPieces,
     groups: Groups,
@@ -359,11 +361,13 @@ impl GuiPass {
         };
         let screen = Target::new(device, binds);
         let overlay = Target::new(device, binds);
+        let cursor = Target::new(device, binds);
         let world = WorldGui::new(device, layouts, table, (&glyphs, &ramps_view));
         Self {
             pipeline,
             screen,
             overlay,
+            cursor,
             screen_pieces: ScreenPieces::default(),
             groups: Groups::default(),
             world,
@@ -466,6 +470,25 @@ impl GuiPass {
         fresh
     }
 
+    /// Draw `quad`, an image quad, over everything from now on, or
+    /// nothing.
+    pub(crate) fn set_cursor(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        quad: Option<&GuiQuad>,
+    ) {
+        let packed: Packed = (quad.into_iter())
+            .filter_map(|q| match &q.paint {
+                Paint::Image(image) => {
+                    Some((GpuQuad::new(q, image.uv, None), Some(ImageKey::of(image))))
+                }
+                _ => None,
+            })
+            .collect();
+        self.cursor.set(device, queue, &packed);
+    }
+
     /// Where each world GUI canvas is from now on.
     pub(crate) fn place(&mut self, places: Vec<Option<WorldPlace>>) {
         self.world.place(places);
@@ -525,6 +548,7 @@ impl GuiPass {
         self.overlay.set(device, queue, &overlay);
         self.images.bind(device, &self.overlay.runs, cache);
         self.images.bind(device, &self.screen.runs, cache);
+        self.images.bind(device, &self.cursor.runs, cache);
         for (target, _, _) in self.groups.drawn() {
             self.images.bind(device, &target.runs, cache);
         }
@@ -553,7 +577,8 @@ impl GuiPass {
     }
 
     /// Draw the GUI layer into `target`, if there's any GUI: the untoned
-    /// world canvases, then the screen's. Whether there was.
+    /// world canvases, then the screen's, then the cursor. Whether there
+    /// was.
     pub(crate) fn record(
         &self,
         queue: &wgpu::Queue,
@@ -563,7 +588,8 @@ impl GuiPass {
     ) -> bool {
         let under = self.draw(queue, encoder, &self.overlay, target, size, true);
         let over = self.draw(queue, encoder, &self.screen, target, size, !under);
-        under || over
+        let cursor = self.draw(queue, encoder, &self.cursor, target, size, !under && !over);
+        under || over || cursor
     }
 
     /// Draw `quads` into `view`, cleared first when `clear`. Whether there

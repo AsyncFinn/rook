@@ -167,15 +167,40 @@ hover images in `draw/frame.rs` and `draw/image.rs`, the caret in
   and black arrows directly in `textures/` are the 2009 client's.
 - **Which one** (Observed live on 2026-10-22 by eye; Studio's
   `screen_capture` leaves the cursor out): Roblox's arrow, Roblox's hand
-  over a GUI button, and the system's own pointing hand, not Roblox's,
-  over a ClickDetector the player can reach: within its
-  `MaxActivationDistance` of the character's root part (creator-docs), or
-  of the camera without a character. An I-beam over a TextBox is
-  Inference (the install has one). `Mouse.Icon` or
+  over a GUI button, and a different hand over a ClickDetector the player
+  can reach: within its `MaxActivationDistance` of the character's root
+  part (creator-docs), or of the camera without a character. An I-beam
+  over a TextBox is Inference (the install has one). `Mouse.Icon` or
   `UserInputService.MouseIcon` replaces them all, and `MouseIconEnabled`
   off hides the cursor. The client also names DragDetector cursors
   (`Cursors/DragDetector/HoverCursor.png` and `ActivatedCursor.png`),
   which come with DragDetectors.
+- **The ClickDetector hand** is in no data file of the install (Observed:
+  `ArrowCursor.png` is the GUI button's hand). In a capture at 96 DPI
+  with a 32-pixel system cursor it is a white hand with a black outline,
+  index finger up and thumb out to the left, like Windows' classic "Link
+  Select" hand, filling 30 by 41 pixels with soft edges on every side,
+  so it is a small hand scaled up about 1.85 times with blending, not
+  the system's cursor (the user's scheme draws Aero's hand, which looks
+  different). Rook draws its own hand of that size and shape from
+  rectangles (`crates/rook-view/src/cursor/hand.rs`); that it points
+  from the fingertip's top is Inference. How it looks on macOS isn't
+  known: no capture of a Mac player over a ClickDetector was found.
+- **Drawn into the frame**: Roblox hides the system's cursor over the
+  window and draws its own into the frame. Every Roblox cursor shows in
+  window captures that leave the system's cursor out (Observed), and a
+  2020 DevForum report from macOS shows Roblox's cursor and the system's
+  at once in screenshots where macOS failed to hide its own
+  ("System mouse cursor shows up in screenshots on macOS Catalina"). So
+  Rook draws the cursor over everything, GUI included, at the mouse, with
+  the window's own hidden; outside the window the system's shows, and
+  `rbxasset://SystemCursors` icons show the system's own cursor
+  (Inference: the creator docs say their look depends on the platform).
+  A drawn cursor trails the mouse by the frame's latency, about a frame
+  more than the system's; that is Roblox's trade too. A 2026 DevForum
+  report says Roblox's cursor nearly doubles in size in exclusive
+  fullscreen ("Cursor in Roblox client doubles in size in
+  F11/Fullscreen mode"); Rook draws it at its image's size.
 - **`rbxasset://SystemCursors/<name>`** as an icon names one of the
   system's cursors: `Arrow`, `PointingHand`, `IBeam`, `OpenHand` and
   `ClosedHand` (Inference from the client's strings and scripts that use

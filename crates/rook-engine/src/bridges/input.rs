@@ -75,10 +75,13 @@ impl ScreenPoint {
 }
 
 /// What the cursor looks like: an image (Roblox's own or a script's
-/// icon), one of the system's, or hidden.
+/// icon), the ClickDetector hand, one of the system's, or hidden.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CursorLook {
     Hidden,
+    /// The hand over a ClickDetector the player can reach, which no data
+    /// file holds (docs/behavior/gui/input.md#the-cursor).
+    DetectorHand,
     /// An image's content URL, drawn centered on the cursor. Roblox's own
     /// are 64 by 64 with the point at the center (Observed in the
     /// install's `textures/Cursors/KeyboardMouse`).
@@ -245,7 +248,7 @@ impl DataModel {
     /// What the cursor shows: none with `UserInputService.MouseIconEnabled`
     /// off, else `UserInputService.MouseIcon`, else the Mouse's `Icon`
     /// (Inference: UserInputService's wins when both are set). Else
-    /// Roblox's hand over a GUI button, the system's pointing hand over a
+    /// Roblox's hand over a GUI button, the ClickDetector hand over a
     /// ClickDetector (Observed live), an I-beam over a TextBox
     /// (Inference), or Roblox's arrow (docs/behavior/gui/input.md#the-cursor).
     pub fn cursor_look(&self) -> CursorLook {
@@ -264,9 +267,7 @@ impl DataModel {
         let image = match self.hovered_press_target() {
             Some(id) if w.dom.is_a(id, "TextBox") => IBEAM,
             Some(_) => HAND,
-            None if self.input.hover.is_some() => {
-                return CursorLook::System(SystemCursor::PointingHand);
-            }
+            None if self.input.hover.is_some() => return CursorLook::DetectorHand,
             None => ARROW,
         };
         CursorLook::Image(image.to_owned())

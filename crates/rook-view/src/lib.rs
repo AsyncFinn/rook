@@ -6,6 +6,7 @@
 
 mod camera;
 mod content;
+mod cursor;
 mod frame;
 mod gui;
 
@@ -137,6 +138,8 @@ pub struct SceneCache {
     gui_waiting: HashMap<FileRef, Vec<String>>,
     /// The GUI's images that finished, for it to take.
     gui_arrived: Vec<(String, Option<rook_gui::GuiImage>)>,
+    /// Rook's ClickDetector hand and its hash, once it's been shown.
+    hand: Option<(Arc<rook_content::decode::image::Image>, ImageHash)>,
 }
 
 impl SceneCache {
@@ -170,6 +173,7 @@ impl SceneCache {
             gui_generation: None,
             gui_waiting: HashMap::new(),
             gui_arrived: Vec::new(),
+            hand: None,
         };
         cache.rebuild(dom);
         cache

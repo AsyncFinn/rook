@@ -92,7 +92,8 @@ struct Args {
     #[arg(long, default_value_t = 0.0)]
     seconds: f64,
     /// After `--seconds`, the player clicks here (`x,y` in window pixels),
-    /// half a second apart, a second before the shot; repeat for more.
+    /// half a second apart, a second before the shot; repeat for more. The
+    /// shot shows the cursor where the last click left it.
     #[arg(long)]
     click: Vec<rook_engine::ScreenPoint>,
     /// Also run this Luau file as a server script.
@@ -354,6 +355,10 @@ fn play(args: Args) -> anyhow::Result<()> {
         install.apply(&mut renderer);
         renderer.set_scene(&scene.scene);
         scene.show_gui(game.view(), &mut renderer);
+        if !args.click.is_empty() {
+            let (dm, look) = (game.view(), game.view().cursor_look());
+            scene.show_cursor(dm, &mut renderer, &look, Some(dm.mouse_position()));
+        }
         renderer.finish_uploads();
         // Effects as they look once going: Smoke's puffs live 5 seconds.
         renderer.settle_particles(6.0);

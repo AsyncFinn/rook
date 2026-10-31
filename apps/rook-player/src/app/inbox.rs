@@ -43,6 +43,8 @@ pub(crate) struct Inbox {
     pub(crate) motion: (f64, f64),
     /// Where the cursor last was in the window, if it moved.
     pub(crate) cursor: Option<PhysicalPosition<f64>>,
+    /// The mouse came into the window (true) or left it, last.
+    pub(crate) inside: Option<bool>,
     /// The window's new size, if it changed.
     pub(crate) resized: Option<PhysicalSize<u32>>,
     /// The window moved, perhaps onto another monitor.
@@ -71,6 +73,8 @@ impl Inbox {
                 self.at = position;
                 self.cursor = Some(position);
             }
+            WindowEvent::CursorEntered { .. } => self.inside = Some(true),
+            WindowEvent::CursorLeft { .. } => self.inside = Some(false),
             WindowEvent::Focused(false) => self.events.push(Noted::Unfocused),
             WindowEvent::Focused(true) => self.refocused = true,
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => self.scale = Some(scale_factor),
@@ -140,6 +144,9 @@ impl App {
         if inbox.moved {
             // It may be on another monitor now, refreshing at another rate.
             self.read_refresh();
+        }
+        if let Some(inside) = inbox.inside {
+            self.cursor_shown.inside = inside;
         }
         self.mouse_motion(inbox.motion);
         for event in inbox.events {

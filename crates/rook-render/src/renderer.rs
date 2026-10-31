@@ -395,6 +395,18 @@ impl Renderer {
         }
     }
 
+    /// Draw `cursor` over everything from now on, its image going up as
+    /// others do, or none (`None`): Roblox draws its cursors into the
+    /// frame (docs/behavior/gui/input.md#the-cursor).
+    pub fn set_cursor(&mut self, cursor: Option<(&GuiQuad, &std::sync::Arc<Image>)>) {
+        if let Some((quad, image)) = cursor
+            && let rook_types::Paint::Image(paint) = &quad.paint
+        {
+            self.images.request(ImageHash(paint.hash), image);
+        }
+        (self.gui).set_cursor(&self.device, &self.queue, cursor.map(|(quad, _)| quad));
+    }
+
     /// Where each canvas of the last [`Renderer::set_gui`]'s `world` is
     /// now (`None`: not drawn).
     pub fn place_world_gui(&mut self, places: Vec<Option<WorldPlace>>) {

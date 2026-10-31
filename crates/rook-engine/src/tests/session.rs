@@ -380,7 +380,9 @@ fn click_detectors_reach_from_a_torso_root() {
     }
     session.input(index, InputEvent::MouseMove { x: 400.0, y: 300.0 });
     session.run_for(0.1);
-    assert_eq!(lines(session.client(index).unwrap()), ["hover Clicker"]);
+    let client = session.client(index).unwrap();
+    assert_eq!(lines(client), ["hover Clicker"]);
+    assert_eq!(client.cursor_look(), crate::CursorLook::DetectorHand);
 }
 
 /// The mouse looks under the cursor again only when the camera, the

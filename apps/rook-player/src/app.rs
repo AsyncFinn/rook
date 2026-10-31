@@ -320,7 +320,7 @@ impl App {
         let drawn = self.update(dt);
         self.return_cursor();
         self.follow_mouse_lock();
-        self.show_cursor(event_loop);
+        self.show_cursor();
         let presented = self.draw(&drawn);
         if let Some(title) = self.readout.frame(elapsed, &self.game)
             && let Some(gfx) = &self.gfx
