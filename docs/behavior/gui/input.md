@@ -177,15 +177,18 @@ hover images in `draw/frame.rs` and `draw/image.rs`, the caret in
   which come with DragDetectors.
 - **The ClickDetector hand** is in no data file of the install (Observed:
   `ArrowCursor.png` is the GUI button's hand). In a capture at 96 DPI
-  with a 32-pixel system cursor it is a white hand with a black outline,
-  index finger up and thumb out to the left, like Windows' classic "Link
-  Select" hand, filling 30 by 41 pixels with soft edges on every side,
-  so it is a small hand scaled up about 1.85 times with blending, not
-  the system's cursor (the user's scheme draws Aero's hand, which looks
-  different). Rook draws its own hand of that size and shape from
-  rectangles (`crates/rook-view/src/cursor/hand.rs`); that it points
-  from the fingertip's top is Inference. How it looks on macOS isn't
-  known: no capture of a Mac player over a ClickDetector was found.
+  with a 32-pixel system cursor it is the classic pointing hand (white,
+  black outline, index finger up, thumb out to the left: Windows'
+  "Link Select" in its Standard scheme, not the system's own, which
+  here was Aero's), about 30 by 41 pixels with soft edges on every side.
+  Fitting the capture shows a hand of 17 by 22 cells drawn 1.82 times
+  bigger with its pixels blended (bilinear): rebuilt that way it
+  differs from the capture by 9 levels of 255 on average, mostly where
+  the capture's background shows through. Rook keeps those cells
+  (`crates/rook-view/src/cursor/hand.rs`) and draws them the same way.
+  That it points from the fingertip's top is Inference. How it looks on
+  macOS isn't known: no capture of a Mac player over a ClickDetector
+  was found.
 - **Drawn into the frame**: Roblox hides the system's cursor over the
   window and draws its own into the frame. Every Roblox cursor shows in
   window captures that leave the system's cursor out (Observed), and a

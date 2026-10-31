@@ -28,21 +28,22 @@ impl SceneCache {
         at: Option<(f32, f32)>,
     ) -> bool {
         let drawn = at.and_then(|at| {
-            let (image, hash, point) = self.cursor_image(dm, look)?;
-            Some((cursor_quad(&image, hash, Vec2::from(at) - point), image))
+            let (image, hash, offset, size) = self.cursor_image(dm, look)?;
+            let corner = Vec2::from(at).floor() + offset;
+            Some((cursor_quad(hash, corner, size), image))
         });
         let shown = drawn.is_some();
         renderer.set_cursor(drawn.as_ref().map(|(quad, image)| (quad, image)));
         shown
     }
 
-    /// The image `look` draws, its hash, and where in it the cursor
-    /// points.
+    /// The image `look` draws, its hash, where its top left is from the
+    /// top left of the mouse's pixel, and its size on screen.
     fn cursor_image(
         &mut self,
         dm: &DataModel,
         look: &CursorLook,
-    ) -> Option<(Arc<Image>, ImageHash, Vec2)> {
+    ) -> Option<(Arc<Image>, ImageHash, Vec2, Vec2)> {
         match look {
             CursorLook::DetectorHand => {
                 let (hand, hash) = self.hand.get_or_insert_with(|| {
@@ -50,26 +51,30 @@ impl SceneCache {
                     let hash = ImageHash(*blake3::hash(&hand.mips[0]).as_bytes());
                     (hand, hash)
                 });
-                Some((hand.clone(), *hash, hand::POINT))
+                let offset = Vec2::splat(0.5) - hand::POINT * hand::SCALE;
+                let size = image_size(hand) * hand::SCALE;
+                Some((hand.clone(), *hash, offset, size))
             }
             CursorLook::Image(url) => {
                 let hash = ImageHash(dm.gui_image(url)?.hash);
                 let image = self.scene.images.get(&hash)?;
                 // Inference: Roblox centers an icon on the cursor.
-                let point = Vec2::new(image.width as f32, image.height as f32) * 0.5;
-                Some((image.clone(), hash, point))
+                let size = image_size(image);
+                Some((image.clone(), hash, -(size * 0.5).floor(), size))
             }
             CursorLook::Hidden | CursorLook::System(_) => None,
         }
     }
 }
 
-/// `image` (hashed `hash`) drawn at its own size with its top left at
-/// `corner`, on whole pixels so it stays sharp.
-fn cursor_quad(image: &Image, hash: ImageHash, corner: Vec2) -> GuiQuad {
-    let size = Vec2::new(image.width as f32, image.height as f32);
+fn image_size(image: &Image) -> Vec2 {
+    Vec2::new(image.width as f32, image.height as f32)
+}
+
+/// The image hashed `hash` stretched over `size` pixels from `corner`.
+fn cursor_quad(hash: ImageHash, corner: Vec2, size: Vec2) -> GuiQuad {
     GuiQuad {
-        center: corner.round() + size * 0.5,
+        center: corner + size * 0.5,
         size,
         rotation: 0.0,
         color: [1.0; 4],
