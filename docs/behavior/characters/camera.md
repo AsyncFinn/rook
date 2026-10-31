@@ -174,6 +174,16 @@ Studio, which Rook's run matches.
   client drawn at the stepped state moved one step, then two, frame to
   frame. `Dom::drawn_cframe` is where anything draws a part or looks
   through the camera.
+- At the display's rate `rook-player` steps each frame by a whole number
+  of refreshes, never less than one, and carries what the measured time
+  leaves over or under (`app/frame_clock.rs`). After a late frame the
+  next is usually measured early by as much, yet is shown a refresh
+  later: at 60 Hz a 25 ms frame stepped two refreshes and the 8 ms one
+  after it only its 8 ms, so for one shown frame the character and the
+  camera on it moved a quarter as far, which looked like a jump backward
+  while walking. Frames step as measured only once the steps run more than two
+  refreshes ahead of the clock, as they can't while the display paces
+  them.
 - The mouse looks under the cursor again (Mouse.Hit, Target,
   ClickDetector hovers) when the camera, the cursor, `TargetFilter` or
   anything queries see changed (`Physics::generation`), not every frame.
