@@ -64,13 +64,13 @@ pub(super) struct TerrainCache {
     /// taken them since.
     shown: Option<Rings>,
     target: Option<Rings>,
-    /// The camera's level-0 column the Grass tops kept are around.
-    near: Option<glam::IVec2>,
     /// The chunks drawn, by level.
     chunks: HashMap<LevelChunk, MeshedChunk>,
-    /// The Grass tops of the level-0 chunks meshed (drawn there, or near
-    /// enough to the camera for blades).
-    tops: HashMap<IVec3, GrassTops>,
+    /// The Grass tops of the chunks drawn at levels blades can reach
+    /// (`rings::grows_grass`): blades stand on the ground that's drawn.
+    tops: HashMap<LevelChunk, GrassTops>,
+    /// Tiles whose tops went with a dropped chunk, to grow again.
+    stale_tiles: HashSet<glam::IVec2>,
     /// Counts the chunk meshes made: part of each mesh's key, so a chunk
     /// meshed again gets new keys.
     serial: u64,
@@ -245,6 +245,9 @@ impl SceneCache {
         }
         for &i in &chunk.entries {
             self.release(i);
+        }
+        if let Some(tops) = self.terrain.tops.remove(&key) {
+            self.terrain.stale_tiles.extend(tops.keys());
         }
         chunk.entries
     }

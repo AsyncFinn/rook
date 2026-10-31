@@ -7,7 +7,6 @@
 
 use std::sync::mpsc::{Receiver, Sender, TryRecvError, channel};
 
-use glam::IVec2;
 use rook_terrain::{Detail, mesh_chunk_at};
 
 use super::*;
@@ -20,10 +19,6 @@ pub(super) struct Job {
     pub(super) rings: Rings,
     /// The chunks to draw, by level.
     pub(super) draw: HashSet<LevelChunk>,
-    /// The level-0 chunks whose Grass tops to keep, and the camera's
-    /// level-0 column they're around (`None` without blades).
-    pub(super) tops: HashSet<IVec3>,
-    pub(super) near: Option<IVec2>,
 }
 
 #[derive(Debug)]

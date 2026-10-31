@@ -178,20 +178,40 @@ pub const WATER_DROP: f32 = VOXEL_STUDS / 2.0;
 
 /// How far from an inside voxel's center towards its outside neighbor's
 /// its surface crosses, as a share of the way, the voxels `scale` studs on
-/// a side and the inside one `fill` full: where the 4-stud voxels it
-/// averages would put it, half a 4-stud voxel past their solid, rather than
-/// half a coarse voxel past it, so far rings lie where near ones do and
-/// meet without a step (Studio's do: a slab's edge runs straight to the
-/// horizon across them). At 4 studs, `fill` itself; a coarse voxel too
-/// empty to reach past its center crosses there.
-fn crossing(fill: f32, scale: f32) -> f32 {
-    ((fill * scale - (scale - VOXEL_STUDS) / 2.0) / scale).clamp(0.0, 1.0)
+/// a side and the inside one `fill` full, `resting` when the voxel behind
+/// it is inside too. At 4 studs, `fill` itself either way.
+///
+/// A coarse voxel's solid, `fill * scale` studs of it, lies against the
+/// voxel behind when it rests on one, else centered in the voxel, and its
+/// surface lies where 4-stud voxels would put it: half a 4-stud voxel past
+/// the solid, or, for a solid thinner than a 4-stud voxel, its own
+/// thickness from the center, as one 4-stud voxel that full crosses.
+/// Resting, far rings of thick ground lie where near ones do and meet
+/// without a step (Studio's do: a slab's edge runs straight to the horizon
+/// across them), and a coarse voxel too empty to reach past its center
+/// crosses there. Measured in Studio with air on both sides: a one-voxel
+/// slab a quarter full (20 to 24 studs) spans 21 to 23 near, then its
+/// coarse voxel's center and 1 either side, in 8-, 16- and 32-stud cells;
+/// a full slab from 8 to 32 spans 1.3 to 30.9 in 32-stud cells, where
+/// this rule gives 2 to 30 (Approximation). Collapsed to the center, the
+/// thin slab drew a stud off Studio's in every ring, and the rings
+/// stepped against each other.
+fn crossing(fill: f32, scale: f32, resting: bool) -> f32 {
+    let solid = fill * scale;
+    let past = if resting {
+        solid - (scale - VOXEL_STUDS) / 2.0
+    } else if solid < VOXEL_STUDS {
+        solid
+    } else {
+        solid / 2.0 + VOXEL_STUDS / 2.0
+    };
+    (past / scale).clamp(0.0, 1.0)
 }
 
 /// Voxels read before a chunk's first one: edges start one voxel before
-/// it (for the normals of the faces just outside), and their cells one
-/// more.
-const PAD: i32 = 2;
+/// it (for the normals of the faces just outside), their cells one more,
+/// and a crossing reads the voxel behind its inside one, one more again.
+const PAD: i32 = 3;
 /// How far outside a chunk, in voxels, its surface reads: changing a
 /// voxel changes the surfaces of the chunks within this many voxels of it.
 pub const MESH_REACH: i32 = PAD;

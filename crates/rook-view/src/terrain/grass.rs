@@ -132,13 +132,13 @@ impl SceneCache {
         changed
     }
 
-    /// The level-0 chunks' Grass tops changed over `tiles`: gather them
+    /// The drawn chunks' Grass tops changed over `tiles`: gather them
     /// again, and stop drawing those tiles' blades, which
     /// [`SceneCache::update_grass`] grows again from the new tops. Returns
     /// the entries that changed.
     pub(super) fn grass_tops_changed(&mut self, tiles: &HashSet<IVec2>) -> Vec<usize> {
-        let mut chunks: Vec<&IVec3> = self.terrain.tops.keys().collect();
-        chunks.sort_unstable_by_key(|c| (c.x, c.y, c.z));
+        let mut chunks: Vec<&LevelChunk> = self.terrain.tops.keys().collect();
+        chunks.sort_unstable_by_key(|(l, c)| (*l, c.x, c.y, c.z));
         let mut tops = GrassTops::default();
         for c in chunks {
             for (tile, tris) in &self.terrain.tops[c] {

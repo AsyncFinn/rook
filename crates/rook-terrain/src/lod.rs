@@ -33,6 +33,17 @@ pub fn chunk_studs(level: u8) -> f32 {
     CHUNK_VOXELS as f32 * Detail::at(level).voxel_studs()
 }
 
+/// How close to the camera, across X and Z, a chunk drawn at `level` can
+/// be: the square of the level inside reaches two of its chunks each way
+/// from its center, which strays at most half a chunk of this level and
+/// [`SLACK`] from the camera.
+pub fn nearest(level: u8) -> f32 {
+    match level {
+        0 => 0.0,
+        k => chunk_studs(k - 1) * (2.0 - 2.0 * (0.5 + SLACK)),
+    }
+}
+
 /// The voxels of every level, the 4-stud ones first.
 pub fn pyramid(grid: Grid) -> Vec<Grid> {
     let mut levels = vec![grid];

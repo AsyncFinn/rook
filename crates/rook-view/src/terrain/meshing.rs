@@ -45,9 +45,6 @@ impl SceneCache {
         for (level, chunks) in reached.iter().enumerate() {
             for c in chunks {
                 self.drop_chunk((level as u8, *c));
-                if level == 0 {
-                    self.terrain.tops.remove(c);
-                }
             }
         }
         let focus = self.focus;
@@ -55,7 +52,7 @@ impl SceneCache {
             .terrain
             .target
             .get_or_insert_with(|| Rings::around(focus));
-        let job = self.plan(target, focus);
+        let job = self.plan(target);
         let todo = self.todo(&job);
         let meshes = super::rings::mesh_in_place(&self.terrain.levels, &todo);
         // The rebuilt scene places every chunk.

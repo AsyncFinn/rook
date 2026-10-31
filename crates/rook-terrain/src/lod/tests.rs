@@ -186,3 +186,57 @@ fn far_lakes_lie_at_their_level() {
         assert!((top + 4.0).abs() < 1e-3, "level {level}: water at {top}");
     }
 }
+
+#[test]
+fn thin_slabs_keep_their_thickness_far_away() {
+    // Measured in Studio: a slab one voxel thick (20 to 24 studs) and a
+    // quarter full spans 21 to 23 near, then its coarse voxel's center
+    // and 1 either side: 19 to 21 in 8-stud cells, 23 to 25 in 16 and 15
+    // to 17 in 32. Collapsed to the center, each ring drew it a stud lower
+    // and the rings stepped against each other.
+    let mut grid = Grid::new();
+    for x in -384..384 {
+        for z in -384..384 {
+            grid.set(IVec3::new(x, 5, z), Voxel::new(TerrainMaterial::Snow, 63));
+        }
+    }
+    let levels = pyramid(grid);
+    for (level, want) in [(0, 23.0), (1, 21.0), (2, 25.0), (3, 17.0)] {
+        let (top, _) = drawn_heights(&levels, level, IVec3::ZERO);
+        assert!((top - want).abs() < 1e-3, "level {level}: top at {top}");
+    }
+    // A full slab from 8 to 32 studs, in a 32-stud voxel with air on both
+    // sides: Studio's top was at 30.9 (near, 34).
+    let mut grid = Grid::new();
+    for x in -384..384 {
+        for z in -384..384 {
+            for y in 2..8 {
+                grid.set(IVec3::new(x, y, z), Voxel::new(TerrainMaterial::Snow, 255));
+            }
+        }
+    }
+    let (top, _) = drawn_heights(&pyramid(grid), 3, IVec3::ZERO);
+    assert!((top - 30.9).abs() < 1.0, "thick slab's top at {top}");
+}
+
+#[test]
+fn no_level_comes_nearer_than_nearest_says() {
+    // Grass grows on the drawn chunks of the levels `nearest` puts within
+    // its reach; a level drawn nearer would show bare ground.
+    let mut r = Random::at(IVec3::new(4, 5, 6));
+    let mut next = |span: f32| (r.next() * 2.0 - 1.0) * span;
+    let mut rings = Rings::around(Vec3::ZERO);
+    let mut camera = Vec3::ZERO;
+    for _ in 0..2000 {
+        camera += Vec3::new(next(150.0), 0.0, next(150.0));
+        rings.follow(camera);
+        for _ in 0..40 {
+            let angle = next(std::f32::consts::PI);
+            for k in 1..LEVELS {
+                let d = nearest(k) - 0.5;
+                let p = camera + Vec3::new(angle.cos(), 0.0, angle.sin()) * d;
+                assert!(!levels_at(&rings, p).contains(&k), "level {k} at {p} from {camera}");
+            }
+        }
+    }
+}

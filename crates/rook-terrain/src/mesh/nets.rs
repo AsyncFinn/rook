@@ -221,7 +221,8 @@ impl Mesher<'_> {
             // Only a dry solid's crossing depends on its neighbors.
             let dry = v.is_solid() && v.water == 0;
             let flat = self.pass == Pass::Water && (!dry || self.touches_water(from));
-            let t = crossing(self.pass.fill(v, flat), self.scale);
+            let resting = self.inside(from * 2 - to);
+            let t = crossing(self.pass.fill(v, flat), self.scale, resting);
             sum += self.center(from) + (self.center(to) - self.center(from)) * t;
             n += 1;
         }
@@ -280,9 +281,10 @@ impl Mesher<'_> {
 
     fn run(&mut self, diagonals: [[bool; 2]; 3]) {
         let own = PAD..PAD + CHUNK_VOXELS;
-        for z in 1..SPAN - 1 {
-            for y in 1..SPAN - 1 {
-                for x in 1..SPAN - 1 {
+        let edges = PAD - 1..PAD + CHUNK_VOXELS + 1;
+        for z in edges.clone() {
+            for y in edges.clone() {
+                for x in edges.clone() {
                     let a = IVec3::new(x, y, z);
                     let mine = own.contains(&x) && own.contains(&y) && own.contains(&z);
                     for (axis, diagonal) in diagonals.into_iter().enumerate() {

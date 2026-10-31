@@ -2,13 +2,11 @@
 //! follow it (`rook_terrain::lod::Rings::follow`), and when one moved, the
 //! chunks whose level changed are meshed in the background and swapped in
 //! all at once, the old ones drawn until then, so the terrain never shows
-//! a hole or a chunk drawn twice. Grass's blades need the 4-stud surface
-//! out to their reach wherever the finest ring ends, so the level-0
-//! chunks near the camera are meshed for their tops too.
+//! a hole or a chunk drawn twice. Grass's blades grow on the drawn
+//! chunks of the levels within their reach, so they stand on the ground
+//! that's drawn, as Studio plants them on the triangles it draws.
 
-use glam::IVec2;
-use rook_terrain::lod::LEVELS;
-use rook_terrain::mesh::can_have_surface;
+use rook_terrain::lod::{LEVELS, nearest};
 
 use super::background::{Job, mesh};
 use super::*;
@@ -38,12 +36,11 @@ impl SceneCache {
         };
         target.follow(camera);
         let target = *target;
-        let near = self.grass_column(camera);
-        if self.terrain.shown == Some(target) && self.terrain.near == near {
+        if self.terrain.shown == Some(target) {
             return changed;
         }
         profiling::scope!("SceneCache::update_terrain");
-        let job = self.plan(target, camera);
+        let job = self.plan(target);
         let todo = self.todo(&job);
         if todo.is_empty() || wait {
             let meshes = mesh_in_place(&self.terrain.levels, &todo);
@@ -58,9 +55,8 @@ impl SceneCache {
         changed
     }
 
-    /// What should be drawn with the rings at `rings` and the camera at
-    /// `camera`.
-    pub(super) fn plan(&self, rings: Rings, camera: Vec3) -> Job {
+    /// What should be drawn with the rings at `rings`.
+    pub(super) fn plan(&self, rings: Rings) -> Job {
         let levels = &self.terrain.levels;
         let mut draw = HashSet::new();
         for level in 0..LEVELS {
@@ -68,74 +64,50 @@ impl SceneCache {
                 draw.insert((level, c));
             }
         }
-        let near = self.grass_column(camera);
-        let mut tops = HashSet::new();
-        if let Some(column) = near {
-            let (lo, hi) = self.terrain.rows;
-            let r = grass_columns();
-            for x in column.x - r..=column.x + r {
-                for z in column.y - r..=column.y + r {
-                    for y in lo..=hi {
-                        let c = IVec3::new(x, y, z);
-                        if can_have_surface(&levels[0], c) {
-                            tops.insert(c);
-                        }
-                    }
-                }
-            }
-        }
         Job {
             epoch: self.terrain.epoch,
             rings,
             draw,
-            tops,
-            near,
         }
     }
 
-    /// The chunks `job` needs meshed: those to draw that aren't, and the
-    /// level-0 ones whose Grass tops it needs and doesn't have.
+    /// The chunks `job` draws that aren't meshed.
     pub(super) fn todo(&self, job: &Job) -> Vec<LevelChunk> {
-        let t = &self.terrain;
         let mut todo: Vec<LevelChunk> = job
             .draw
             .iter()
-            .filter(|k| !t.chunks.contains_key(k))
+            .filter(|k| !self.terrain.chunks.contains_key(k))
             .copied()
             .collect();
-        todo.extend(
-            job.tops
-                .iter()
-                .filter(|c| !t.tops.contains_key(c) && !t.chunks.contains_key(&(0, **c)))
-                .filter(|c| !job.draw.contains(&(0, **c)))
-                .map(|c| (0, *c)),
-        );
         todo.sort_unstable_by_key(|(l, c)| (*l, c.x, c.y, c.z));
         todo
     }
 
     /// Draw what `job` asked for with `meshes`, its chunks newly meshed:
-    /// add those, drop the chunks it doesn't draw, and keep the Grass tops
-    /// it needs. Places the new chunks' entries in the scene when `place`
-    /// (a rebuilt scene places every chunk itself). Returns the entries
-    /// that changed.
+    /// add those with their Grass tops, and drop the chunks it doesn't
+    /// draw. Places the new chunks' entries in the scene when `place` (a
+    /// rebuilt scene places every chunk itself). Returns the entries that
+    /// changed.
     pub(super) fn install(&mut self, job: &Job, meshes: Vec<ChunkMesh>, place: bool) -> Vec<usize> {
         let mut changed = Vec::new();
-        let mut tiles: HashSet<IVec2> = HashSet::new();
         let mut added = Vec::new();
+        let mut tiles = HashSet::new();
         for m in meshes {
             let key = (m.level, m.chunk);
-            if m.level == 0 {
+            if !job.draw.contains(&key) || self.terrain.chunks.contains_key(&key) {
+                continue;
+            }
+            if grows_grass(m.level) {
                 let mut tops = GrassTops::default();
                 add_grass_tops(&m, &mut tops);
-                tiles.extend(tops.keys());
-                self.terrain.tops.insert(m.chunk, tops);
+                if !tops.is_empty() {
+                    tiles.extend(tops.keys());
+                    self.terrain.tops.insert(key, tops);
+                }
             }
-            if job.draw.contains(&key) && !self.terrain.chunks.contains_key(&key) {
-                let meshed = self.add_chunk_meshes(m);
-                self.terrain.chunks.insert(key, meshed);
-                added.push(key);
-            }
+            let meshed = self.add_chunk_meshes(m);
+            self.terrain.chunks.insert(key, meshed);
+            added.push(key);
         }
         let gone: Vec<LevelChunk> = self
             .terrain
@@ -147,16 +119,7 @@ impl SceneCache {
         for key in gone {
             changed.extend(self.drop_chunk(key));
         }
-        let unneeded: Vec<IVec3> = self
-            .terrain
-            .tops
-            .keys()
-            .filter(|c| !job.tops.contains(c) && !job.draw.contains(&(0, **c)))
-            .copied()
-            .collect();
-        for c in unneeded {
-            tiles.extend(self.terrain.tops.remove(&c).expect("kept").keys());
-        }
+        tiles.extend(self.terrain.stale_tiles.drain());
         if place {
             added.sort_unstable_by_key(|(l, c)| (*l, c.x, c.y, c.z));
             changed.extend(self.place_chunks(&added));
@@ -165,31 +128,16 @@ impl SceneCache {
             changed.extend(self.grass_tops_changed(&tiles));
         }
         self.terrain.shown = Some(job.rings);
-        self.terrain.near = job.near;
         changed.sort_unstable();
         changed.dedup();
         changed
     }
-
-    /// The camera's level-0 column, around which chunks are meshed for
-    /// their Grass tops, when Grass grows blades.
-    fn grass_column(&self, camera: Vec3) -> Option<IVec2> {
-        self.terrain.grass.on.then(|| {
-            let c = (camera / chunk_studs()).floor().as_ivec3();
-            IVec2::new(c.x, c.z)
-        })
-    }
 }
 
-/// A level-0 chunk's edge, in studs.
-fn chunk_studs() -> f32 {
-    rook_terrain::lod::chunk_studs(0)
-}
-
-/// How many columns of level-0 chunks each side of the camera's hold the
-/// blades it draws.
-fn grass_columns() -> i32 {
-    (GRASS_REACH / chunk_studs()).ceil() as i32
+/// Whether chunks drawn at `level` can come within the blades' reach of
+/// the camera, so blades grow on them.
+fn grows_grass(level: u8) -> bool {
+    nearest(level) < GRASS_REACH
 }
 
 /// Mesh `chunks` on the frame's own workers, for a frame that waits.

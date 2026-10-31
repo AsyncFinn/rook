@@ -1,6 +1,6 @@
 # Terrain level of detail
 
-Checked against Studio 0.744 on 2026-10-28.
+Checked against Studio 0.744 on 2026-10-30.
 
 Studio draws far terrain from coarser voxels: rings around the camera,
 each meshed from voxels twice the size of the ring inside it, the
@@ -128,19 +128,34 @@ the strip to confirm it.
   the coarse voxels grew past four times its depth (a level-2 lake drew at
   -10); with the solids counted it lies at its level in every ring
   (`far_lakes_lie_at_their_level`).
-- Left (Approximation): a slab thinner than a coarse voxel collapses to
-  the voxel's middle in that ring, a step of up to half the voxel where
-  rings meet (a 24-stud slab drops 26 studs past 2,048 studs out);
-  Studio's thin slabs that far out weren't measured. Settled by the
-  slab's side seen at a narrow field of view past 2,048 studs.
+- A coarse voxel with air on both sides along a crossing (a slab
+  thinner than the voxel) holds its solid centered, not resting on the
+  voxel's floor: its surface lies the solid's own thickness from the
+  center when that's under 4 studs, as one 4-stud voxel that full
+  crosses, else half a 4-stud voxel past the solid. Measured on
+  2026-10-30 (Studio 0.744, Snow strips 4,096 studs long, each side seen
+  straight on at a narrow field of view beside a striped ruler at 96 to
+  3,000 studs): a one-voxel slab a quarter full (20 to 24 studs) spans
+  21.1 to 23.0 near, 19.1 to 21.1 in 8-stud cells, 23.0 to 25.0 in 16 and
+  15.1 to 17.1 in 32, each its coarse voxel's center and 1 either side,
+  which the rule gives exactly; a full slab from 8 to 32 spans 1.3 to
+  30.9 in 32-stud cells, where the rule gives 2 to 30 (Approximation).
+  So Studio's thin ground steps between rings too, by up to half a
+  coarse voxel. Collapsed to the voxel's center as before, thin ground
+  (a common painted layer) drew a stud off Studio's in every ring, and
+  past the finest ring it covered grass blades or left them floating.
 - When the camera moves a box, the chunks whose level changed are meshed
   on a thread of their own, one after another, while the old ones stay
   drawn, then swapped in all at once: no hole, nothing drawn twice, and
   the frame never waits (Studio, too, catches up over a few frames). A
   screenshot meshes in place and waits.
-- Grass blades need the 4-stud surface out to their 200 studs, past where
-  level 0 may end, so the level-0 chunks within reach of the camera are
-  meshed for their Grass tops whatever level draws them.
+- Grass blades grow on the drawn chunks of the levels that can come
+  within their 200 studs (`lod::nearest`: the 8-stud ring can start 112
+  studs out, the 16-stud one no nearer than 224), so they stand on the
+  ground that's drawn, as Studio plants them on the triangles it draws
+  (`FFlagRenderGrassUseBarycentricPlantingPoints`). Planted on the 4-stud
+  surface wherever a coarser ring drew the ground, they hung over it or
+  sank under it in a straight line along the ring's edge.
 
 *Costs* (dev build, the 103k-instance place of M21 step 2, holding
 still): the main pass draws 4.3 million triangles in 782 draws instead
