@@ -25,7 +25,9 @@ pub(crate) enum Showing {
 }
 
 impl App {
-    /// Show the cursor the game asks for.
+    /// Show the cursor the game asks for, hidden while looking around, once
+    /// a frame: the one place the window's cursor changes, so what it
+    /// shows is always what the game and the look say now.
     pub(crate) fn show_cursor(&mut self, event_loop: &ActiveEventLoop) {
         if self.gfx.is_none() {
             return;
@@ -39,6 +41,10 @@ impl App {
             return;
         };
         let window = &gfx.window;
+        #[expect(
+            clippy::disallowed_methods,
+            reason = "the one place the cursor changes"
+        )]
         match &want {
             Showing::Hidden => window.set_cursor_visible(false),
             Showing::Image(url) => {

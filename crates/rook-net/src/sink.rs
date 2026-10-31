@@ -105,10 +105,28 @@ impl Sink {
     fn unmap_subtree(&mut self, client: &Dom, root: InstanceId) {
         let mut ids = vec![root];
         ids.extend(client.descendants(root));
-        for c in ids {
+        for &c in &ids {
             if let Some(s) = self.to_server.remove(&c) {
                 self.to_client.remove(&s);
             }
+        }
+        // A reference waiting on a removed holder would be written to an
+        // instance that may be freed by the time its target arrives.
+        if !self.waiting.is_empty() {
+            let gone: HashSet<InstanceId> = ids.into_iter().collect();
+            let waiting_for = &mut self.waiting_for;
+            self.waiting.retain(|key, target| {
+                if !gone.contains(&key.0) {
+                    return true;
+                }
+                if let Some(set) = waiting_for.get_mut(target) {
+                    set.remove(key);
+                    if set.is_empty() {
+                        waiting_for.remove(target);
+                    }
+                }
+                false
+            });
         }
     }
 

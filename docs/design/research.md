@@ -86,7 +86,6 @@ Versions are as of 2026-10-04 (crates.io).
 | Reflection | `rbx_reflection` | 7.0.0 | Classes, properties, enums, defaults, in Rook's copy of the database (started from `rbx_reflection_database` 3.0.1+roblox-741), updated from each API dump. |
 | Luau VM | `mlua` | 0.12.2 | Features `luau` (+ `luau-jit` later), `vendored`. Provides interrupts, threads (coroutines) and userdata. |
 | Lua parsing | `full_moon` | 3.0.0 | Corpus scanner: parse scripts to find which APIs they use. |
-| Mesh files | `rbx_mesh` | 0.8.0 | Evaluate against rbx-native's v1–v5 coverage; write our own if it falls short. |
 | Compression | `lz4_flex`, `zstd` | 0.14 / 0.14 | Pulled in by rbx_binary; also for caches. |
 | Math | `glam` | 0.34 | Backing for Vector3/CFrame; f32 on the engine side, f64 where Luau semantics need it. |
 | GPU | `wgpu` | 30.0.1 | Renderer. |

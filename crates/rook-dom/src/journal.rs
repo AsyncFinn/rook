@@ -42,6 +42,9 @@ pub enum Change {
     Destroying(InstanceId),
     /// `Destroy` finished, children included: its connections go.
     Destroyed(InstanceId),
+    /// Nothing holds the destroyed instance any more: every reader drops
+    /// what it keeps of it, as its slot is freed at the next trim.
+    Collected(InstanceId),
     TagAdded {
         id: InstanceId,
         tag: String,
@@ -92,8 +95,16 @@ impl Journal {
         self.base + self.entries.len() as u64
     }
 
-    /// Entries from `cursor` to the end. Trimmed entries are skipped.
+    /// Entries from `cursor` to the end. A reader's cursor is never behind
+    /// a trim: the owner trims only what every reader has read, and debug
+    /// builds check it, as a reader that missed entries keeps a stale copy
+    /// of what they changed.
     pub fn since(&self, cursor: u64) -> &[Change] {
+        debug_assert!(
+            cursor >= self.base,
+            "a journal reader at {cursor} missed entries trimmed up to {}",
+            self.base
+        );
         let start = usize::try_from(cursor.saturating_sub(self.base)).unwrap_or(usize::MAX);
         self.entries.get(start..).unwrap_or(&[])
     }

@@ -186,6 +186,25 @@ pub(crate) struct InputTracker {
     escape_ended_box: bool,
 }
 
+impl InputTracker {
+    /// Drop what is kept about `id`, which is being freed.
+    pub(crate) fn forget(&mut self, id: InstanceId) {
+        self.held.retain(|_, h| *h != id);
+        for slot in [
+            &mut self.mouse_movement,
+            &mut self.mouse_wheel,
+            &mut self.hover,
+        ]
+        .into_iter()
+        .chain(&mut self.pressed)
+        {
+            slot.take_if(|s| *s == id);
+        }
+        self.under.take_if(|u| u.names(id));
+        self.gui.forget(id);
+    }
+}
+
 /// What `Mouse.KeyDown` passes for a key: the character it types, for the
 /// keys that type one (creator-docs Mouse.KeyDown, deprecated).
 fn legacy_key_string(code: &str) -> Option<String> {
@@ -397,13 +416,9 @@ impl DataModel {
     /// [`MouseLock::Center`](crate::MouseLock) (Inference: where Roblox
     /// draws it in first person), else where it was.
     fn mouse_motion(&mut self, dx: f32, dy: f32) -> bool {
-        let centered = self.mouse_lock() == crate::MouseLock::Center;
-        let (vw, vh) = self.input.viewport;
+        self.hold_mouse();
         let pos = {
             let mut w = self.runtime.world_mut();
-            if centered {
-                w.input.mouse = (vw as f32 / 2.0, vh as f32 / 2.0);
-            }
             w.input.mouse_delta = (dx, dy);
             w.input.mouse
         };
@@ -413,6 +428,20 @@ impl DataModel {
             self.fire_input("InputChanged", obj, false);
         }
         false
+    }
+
+    /// Put the mouse where [`DataModel::mouse_lock`] holds it: at the
+    /// window's center for [`MouseLock::Center`](crate::MouseLock), as soon
+    /// as the lock comes (on each held move, and each client frame once
+    /// scripts have set `MouseBehavior`), not where the cursor was when it
+    /// came. The engine's alone: a window only reports where its cursor
+    /// is. No signal fires (Inference).
+    pub(crate) fn hold_mouse(&self) {
+        if self.mouse_lock() != crate::MouseLock::Center {
+            return;
+        }
+        let (vw, vh) = self.input.viewport;
+        self.runtime.world_mut().input.mouse = (vw as f32 / 2.0, vh as f32 / 2.0);
     }
 
     fn wheel(&mut self, delta: f32) -> bool {
@@ -464,7 +493,7 @@ impl DataModel {
             &mut self.input.mouse_movement
         };
         // A script may have destroyed it.
-        let existing = slot.filter(|id| self.runtime.world().dom.get(*id).is_some());
+        let existing = slot.filter(|id| !self.runtime.world().dom.is_destroyed(*id));
         let id = match existing {
             Some(id) => id,
             None => {

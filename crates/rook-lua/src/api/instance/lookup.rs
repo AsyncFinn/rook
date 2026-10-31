@@ -282,13 +282,12 @@ pub(crate) fn runtime_properties(lua: &Lua) -> mlua::Result<mlua::Table> {
     if let Some(t) = &*c.runtime_props.borrow() {
         return Ok(t.clone());
     }
-    let t = crate::ctx::weak_table(lua, "k")?;
+    let t = lua.create_table()?;
     *c.runtime_props.borrow_mut() = Some(t.clone());
     Ok(t)
 }
 
 pub(super) fn runtime_property(
-    lua: &Lua,
     c: &Ctx,
     id: InstanceId,
     key: &str,
@@ -299,7 +298,7 @@ pub(super) fn runtime_property(
     let Some(all) = c.runtime_props.borrow().clone() else {
         return Ok(None);
     };
-    match all.raw_get::<Option<mlua::Table>>(push_instance(lua, id)?)? {
+    match all.raw_get::<Option<mlua::Table>>(key_of(id))? {
         Some(t) => Ok(t.raw_get::<Option<LuaValue>>(key)?),
         None => Ok(None),
     }
@@ -314,7 +313,7 @@ pub(crate) fn get_member(
     key: &str,
 ) -> ApiResult<(LuaValue, bool, Option<u32>)> {
     let c = ctx(lua);
-    if let Some(v) = runtime_property(lua, &c, id, key)? {
+    if let Some(v) = runtime_property(&c, id, key)? {
         return Ok((v, false, None));
     }
     // `className` is the deprecated lowercase name.

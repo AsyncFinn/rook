@@ -31,6 +31,16 @@ pub(super) struct Under {
     click_hit: Option<rook_physics::Hit>,
 }
 
+impl Under {
+    pub(super) fn names(&self, id: InstanceId) -> bool {
+        self.look.target_filter == Some(id)
+            || [&self.hit, &self.click_hit]
+                .into_iter()
+                .flatten()
+                .any(|h| h.part == id)
+    }
+}
+
 impl DataModel {
     /// The ray from the camera through the cursor (unit direction), the
     /// same as `Camera:ViewportPointToRay` but starting at the camera.

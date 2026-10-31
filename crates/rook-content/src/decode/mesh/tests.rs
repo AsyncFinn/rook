@@ -87,6 +87,66 @@ fn reads_version_1() {
     assert_eq!(mesh.indices, [0, 1, 2]);
 }
 
+/// A chunked file: each chunk an 8-byte name, a version and a size.
+fn chunked(version: &str, chunks: &[(&[u8; 8], u32, Vec<u8>)]) -> Vec<u8> {
+    let mut b = format!("version {version}\n").into_bytes();
+    for (name, v, body) in chunks {
+        b.extend_from_slice(*name);
+        b.extend_from_slice(&v.to_le_bytes());
+        b.extend_from_slice(&(body.len() as u32).to_le_bytes());
+        b.extend_from_slice(body);
+    }
+    b
+}
+
+/// Version 6's `COREMESH` 1 holds version 5's vertices and faces; `LODS`
+/// gives the levels; chunks Rook doesn't draw are stepped over.
+#[test]
+fn reads_version_6() {
+    let v4 = version_4(&[[0, 1, 2], [0, 2, 1]], &[], 1);
+    let vertices = &v4[13 + 24..][..3 * 40];
+    let mut core = 3u32.to_le_bytes().to_vec();
+    core.extend_from_slice(vertices);
+    core.extend_from_slice(&2u32.to_le_bytes());
+    for i in [0u32, 1, 2, 0, 2, 1] {
+        core.extend_from_slice(&i.to_le_bytes());
+    }
+    let mut lods = vec![2, 0, 1];
+    for i in [3u32, 0, 1, 2] {
+        lods.extend_from_slice(&i.to_le_bytes());
+    }
+    let file = chunked(
+        "6.00",
+        &[
+            (b"COREMESH", 1, core),
+            (b"SKINNING", 1, vec![9; 5]),
+            (b"LODS\0\0\0\0", 1, lods),
+        ],
+    );
+    let mesh = Mesh::decode(&file).unwrap();
+    assert_eq!(mesh.positions[2], [2.0, 0.0, 0.0]);
+    assert_eq!(mesh.indices, [0, 1, 2, 0, 2, 1]);
+    assert_eq!(mesh.levels.starts, [3]);
+    assert!(Mesh::decode(&file[..file.len() - 1]).is_err());
+}
+
+/// Version 7's `COREMESH` 2 is Draco compressed.
+#[test]
+fn reads_version_7() {
+    let draco = draco::tests::triangle();
+    let mut core = (draco.len() as u32).to_le_bytes().to_vec();
+    core.extend_from_slice(&draco);
+    let mesh = Mesh::decode(&chunked("7.00", &[(b"COREMESH", 2, core)])).unwrap();
+    assert_eq!(mesh.positions[1], [1.0, 0.0, 0.0]);
+    assert_eq!(mesh.indices, [0, 2, 1]);
+    assert_eq!(mesh.uvs[2], [0.0, 1.0]);
+    assert_eq!(
+        Mesh::decode(&chunked("7.00", &[(b"COREMESH", 3, vec![])])),
+        Err(MeshError::Unsupported("COREMESH 3".into()))
+    );
+    assert!(Mesh::decode(&chunked("7.00", &[])).is_err(), "no COREMESH");
+}
+
 #[test]
 fn rejects_damaged_files() {
     let full = triangle();
@@ -96,9 +156,13 @@ fn rejects_damaged_files() {
     ));
     assert_eq!(Mesh::decode(b"\x89PNG"), Err(MeshError::NotAMesh));
     assert_eq!(
-        Mesh::decode(b"version 7.00\n...."),
-        Err(MeshError::Unsupported("7.00".into()))
+        Mesh::decode(b"version 8.00\n...."),
+        Err(MeshError::Unsupported("8.00".into()))
     );
+    assert!(matches!(
+        Mesh::decode(b"version 7.00\n...."),
+        Err(MeshError::Damaged(_))
+    ));
     let mut bad_index = full;
     let n = bad_index.len();
     bad_index[n - 4..].copy_from_slice(&9u32.to_le_bytes());

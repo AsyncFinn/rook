@@ -40,11 +40,14 @@ archive is mostly `CSGK` (a pointer, no geometry; see
   inertia (10 floats); version 7 a geometry type byte before them. Each
   hull is a 40-byte header, the count of position floats, a 4 (Inference:
   a stride), the positions, the count of indices and the indices.
-  `rbx_mesh` 0.8 reads only the first hull of version 6, so Rook reads
-  versions 3 to 7 itself (the 77 × 77-stud floor union of a large modern place is
-  39 hulls, not one 9.6-stud one).
-- Version 8: the hulls packed with zstd and edgebreaker, read by
-  `rbx_mesh`. Neither large place uses it.
+  Every hull is read: the 77 × 77-stud floor union of a large modern
+  place is 39 hulls, not one 9.6-stud one.
+- Version 8: a geometry type byte and a zero, then everything zstd
+  packed: the hull, position and triangle counts, sizes, a bounding box,
+  any hulls stored as in version 3, then Edgebreaker codes (C as one 0
+  bit; S, L, R and E as a 1 and two bits) in 32-bit words read from the
+  top bit, and the other hulls' positions in the order the codes make
+  their vertices. Neither large place uses it.
 - The hulls are in the same space as `MeshData`: their bounds are the
   union's `InitialSize`, centered on its origin (every union decoded in
   both files). So they are scaled by `Size / InitialSize` like the drawn

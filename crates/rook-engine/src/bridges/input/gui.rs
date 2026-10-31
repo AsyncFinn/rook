@@ -29,6 +29,19 @@ pub(crate) struct GuiInput {
     hover_generation: u64,
 }
 
+impl GuiInput {
+    pub(super) fn forget(&mut self, id: InstanceId) {
+        self.hovered.retain(|&h| h != id);
+        for p in &mut self.pressed {
+            p.take_if(|p| *p == id);
+        }
+        for began in &mut self.began {
+            began.retain(|&b| b != id);
+        }
+        self.last_activation.take_if(|(a, ..)| *a == id);
+    }
+}
+
 impl DataModel {
     /// The GUI objects under the cursor that take the mouse, top first:
     /// on the screen, or else on the world GUI the mouse's ray meets
@@ -116,7 +129,7 @@ impl DataModel {
     fn update_gui_state(&self, id: InstanceId) {
         let state = {
             let w = self.runtime.world();
-            if w.dom.get(id).is_none() {
+            if w.dom.is_destroyed(id) {
                 return;
             }
             let hovered = self.input.gui.hovered.contains(&id);
@@ -150,7 +163,7 @@ impl DataModel {
         let old = std::mem::replace(&mut self.input.gui.hovered, hits.clone());
         let at = self.window_point();
         for &id in old.iter().filter(|id| !hits.contains(id)) {
-            if self.runtime.world().dom.get(id).is_none() {
+            if self.runtime.world().dom.is_destroyed(id) {
                 continue;
             }
             self.fire(id, "MouseLeave", at);
@@ -291,7 +304,7 @@ impl DataModel {
             }
         }
         for id in std::mem::take(&mut self.input.gui.began[index]) {
-            if self.runtime.world().dom.get(id).is_some() {
+            if !self.runtime.world().dom.is_destroyed(id) {
                 self.fire_object_input(id, "InputEnded", obj);
             }
         }

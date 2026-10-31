@@ -1,6 +1,6 @@
 # File meshes
 
-Checked against Studio 0.744 on 2026-10-27.
+Checked against Studio 0.745 on 2026-10-30.
 
 SpecialMesh `MeshId`, FileMesh and MeshPart. How loading and drawing work
 is in [architecture](../../design/architecture.md#rendering-rook-render); what's left is in
@@ -36,8 +36,10 @@ content --place` (which now decodes every mesh reference and totals the
 results) over 60 random archive places plus three with many MeshParts, 41
 of them with meshes: of the meshes that load anonymously, 358 distinct are
 version 1.00, 368 are 2.00, 12 are 1.01, 6 are 4.00, 6 are 4.01, 5 are 3.00
-and 1 is 3.01; none is 5.00, 6.00 or 7.00, so reading 6.00 and 7.00 can
-wait. 2,833 distinct meshes (34,329 uses, mostly MeshParts) are refused
+and 1 is 3.01; none is 5.00, 6.00 or 7.00. Modern avatar meshes are 7.00,
+though: the default R15 body's head (asset 123480233606534, refused
+anonymously) is, so every R15 character needs it ([layouts](#file-layouts)).
+2,833 distinct meshes (34,329 uses, mostly MeshParts) are refused
 without an account, so their versions are unknown. A 2017 place: 40 mesh
 uses, 39 decode (1.00 and 2.00), 1 refused. A large modern place: 827 uses, 788
 decode (1.00, 1.01, 2.00), 39 refused, including all 7 of its MeshParts'
@@ -84,8 +86,7 @@ meshes.
   unions. A truss treats a mesh child like any part (a Sphere filled a
   2 × 10 × 2 truss; a head.mesh FileMesh drew at its own size).
 - *Version 1.00 meshes:* `fonts/sword.mesh` and version 1 of asset
-  12221462 drew at the size `rbx_mesh` gives them (half the stored
-  positions), within 2 px at 26-50 px per stud. The V flip only shows with
+  12221462 drew at half their stored positions, within 2 px at 26-50 px per stud. The V flip only shows with
   textures (step 4).
 
 *Compared with Studio* (silhouette masks as in step 1, Studio captures
@@ -108,6 +109,58 @@ s against 20.75 s, a small place 0.36 against 0.37, a 2008 place 0.27 against 0.
 `rook-player --bench 300`: a small place and a 2008 place unchanged (0 and 1 mesh files;
 render 1.49 against 1.47 ms); a large modern place draws 86 mesh files and its frame
 grew by about 2.8 ms (upload 3.6 to 4.9 ms, render 11.8 to 12.9 ms).
+
+## File layouts
+
+Every file starts with a `version x.yy` line. Layouts for 1.00 to 5.00
+follow the community specification; 6.00 and 7.00 were read from the
+files themselves. Little-endian throughout.
+
+- *1.00, 1.01:* text: a face count, then each triangle's three corners as
+  `[position][normal][uv]`. 1.00 stores positions at twice the size; both
+  store V upside down.
+- *2.00, 3.00, 3.01:* a header starting with its own size (12, or 16 with
+  the LOD table's entry size and count), then the vertex and face sizes and
+  counts. Vertices are 36 or 40 bytes (position, normal, UV, a 4-byte
+  tangent, then a color in 40-byte ones), faces three u32s, and 3.00 ends
+  with the LOD table.
+- *4.00, 4.01, 5.00:* a 24-byte header (32 in 5.00, adding the facial
+  animation's format and size): the LOD type, the vertex, face, LOD, bone
+  and subset counts, the bone names' size and the count of high quality
+  levels. Then 40-byte vertices, each vertex's bone weights (8 bytes) when
+  the file has bones, the faces and the LOD table; the bones, names,
+  subsets and facial animation after it aren't drawn and are left unread.
+- *6.00, 7.00:* chunks, each an 8-byte name, a version and its size.
+  `COREMESH` 1 is a vertex count, 40-byte vertices, a face count and the
+  faces. `COREMESH` 2 is a Google Draco mesh (bitstream 2.2, sequential
+  connectivity, no metadata) whose five attributes are, in order, raw float
+  positions, normals as a generic three-float attribute quantized to 11
+  bits with difference prediction, raw float UVs, then 4-byte tangents and
+  4-byte colors as integers (Observed in every 7.00 mesh read). `LODS` 1 is
+  the LOD type, the count of high quality levels, then the LOD table; a
+  Draco mesh's table read 0, 0 (one level). `SKINNING` and `FACS` are read
+  past by their size.
+
+Rook refuses anything else as unsupported, Draco's other modes included,
+and a file that runs short, counts that run past it or faces that point
+past the vertices as damaged.
+
+*Checked against Studio 0.745* (2026-10-30): `AssetService:
+CreateEditableMeshAsync` hands scripts Studio's own decode of a file in
+the install's `content` folder, as `rbxasset://` (asset ids Studio refuses
+unless the account owns them). For 108 files (the install's 45 at 2.00 and
+4.01, and 63 cached meshes of every version from 1.00 to 4.01 plus the
+7.00 R15 head, copied into `content` for the check), the triangle count
+and the sums of every corner's position, normal and UV agree with Rook's
+full level of detail. The R15 head's bounds also match its `MeshSize`
+(1.19620 × 1.20294 × 1.19791) to 7 digits. Observed along the way:
+
+- Studio makes version 1's normals unit length (files store some up to
+  3.9 long) but keeps later versions' as stored: a 2.00 file of normals
+  100 long and the 7.00 head's quantized ones come back unchanged.
+- Studio welds a version 1 file's corners into vertices where position,
+  normal and UV all match (6,942 corners became 1,350 vertices); it draws
+  the same triangles either way.
 
 ## Levels of detail
 
@@ -177,5 +230,7 @@ level), with CPU recording 6.6 to 7.2 ms against 6.7 to 7.0.
 MeshPart collision and mass per `CollisionFidelity`
 ([M15](../../roadmap/m15-physics-completeness.md), which the loader can
 already hand a mesh);
-CharacterMesh (with characters); mesh versions 6.00 and 7.00 if they turn
-up; meshes that need an account.
+CharacterMesh (with characters); the skinning and facial animation data
+of versions 4.00 to 7.00, which Rook reads past until dynamic heads deform
+([M11](../../roadmap/m11-avatars-and-animation.md) step 3); meshes that
+need an account.

@@ -61,6 +61,7 @@
     - [Movers](behavior/physics/movers.md): BodyMovers and force constraints
     - [Scene queries](behavior/physics/queries.md)
     - [Collision shapes](behavior/physics/collision-shapes.md): what unions collide and are queried as
+    - [Sleeping](behavior/physics/sleeping.md): when assemblies sleep, how deep resting parts sit
   - Rendering
     - [Materials](behavior/rendering/materials.md): PBR shading, the built-in materials, MaterialVariant and SurfaceAppearance
     - [Textures and decals](behavior/rendering/textures-and-decals.md)

@@ -59,12 +59,9 @@ renderer draws all of these as their part's plain box.
 6. ✅ **Unions**: draw UnionOperations with their own geometry instead of
    their bounding box (`UnionOperation.Content`, the union's geometry
    asset, is set on 70,944 unions in 99 files; `NegateOperation` 6 in 2).
-   The `rbx_mesh` crate Rook already uses decodes union geometry too: its
-   `union_graphics` module reads the `MeshData` a union's asset holds
-   (versions 2, 4 and 5, plus the old `CSGK` stub), and `union_physics`
-   reads `PhysicsData` (versions 3 to 8; version 8 needs zstd, for which
-   the crate offers the pure-Rust `ruzstd`). Turning on those features
-   adds no new dependency. First count which forms the archive uses
+   Rook's mesh decoder reads the `MeshData` a union's asset holds
+   (versions 2, 4 and 5, plus the old `CSGK` stub) and its `PhysicsData`
+   (versions 3 to 8). First count which forms the archive uses
    (geometry in the file or behind an asset id, and whether those assets
    load anonymously), then decode through `rook_content::decode::mesh` and draw
    through step 3's mesh loader and GPU cache. Check in Studio how a
@@ -93,11 +90,7 @@ renderer draws all of these as their part's plain box.
        `TimedOut` and timing; `RequestQueueSize`; the other
        ContentProvider members; `Changed` firing for the legacy content
        names.
-     - Out: mesh versions 6.00 and 7.00, which Rook reads through
-       `rbx_mesh` and takes by upgrading it (7.00 is the draft
-       [krakow10/rbx_mesh#18](https://github.com/krakow10/rbx_mesh/pull/18);
-       6.00 has no PR; the archive has neither among meshes that load
-       anonymously); the indoor reflection cube, the reflections' fade and sky
+     - Out: the indoor reflection cube, the reflections' fade and sky
        light blocked by real shapes (M13 step 3); collision shapes
        (M15).
    - *Evidence*: the [stubs](../guide/stubs.md) rows taken over by this

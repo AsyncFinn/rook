@@ -13,7 +13,7 @@ impl DataModel {
         self.update_unions();
         let root = self.runtime.world().dom.root();
         self.start_scripts_under(root);
-        self.script_cursor = self.runtime.world().dom.journal().end();
+        self.new_scripts = NewScripts::starting_at(self.runtime.world().dom.journal().end());
     }
 
     fn start_scripts_under(&self, id: InstanceId) {
@@ -76,38 +76,41 @@ impl DataModel {
         }
     }
 
-    /// Start scripts that became runnable since the last check (moved into
-    /// a running location or enabled) and stop running ones that were
-    /// disabled. A script disabled and enabled again runs afresh, as on
-    /// Roblox (Confirmed, Studio recording 2026-10-17).
-    pub(crate) fn start_new_scripts(&mut self) {
-        profiling::scope!("start_new_scripts");
-        let end = self.runtime.world().dom.journal().end();
-        let mut candidates: Vec<InstanceId> = Vec::new();
-        // Scripts whose Disabled changed. The journal only records real
-        // changes, so a running one among them was disabled at some point.
-        let mut toggled: HashSet<InstanceId> = HashSet::new();
-        {
-            let world = self.runtime.world();
-            let db = world.dom.database();
-            // The name check first: most changes are other properties (physics
-            // writes every moving part's CFrame each frame).
-            let disabled = |id: InstanceId, property: rook_reflection::PropertyId| {
-                db.property(property).name == "Disabled"
-                    && world.dom.property_id(id, "Disabled") == Some(property)
-            };
-            for change in world.dom.journal().since(self.script_cursor) {
-                match change {
-                    Change::Reparented { subtree, .. } => candidates.extend(subtree),
-                    Change::Property { id, property } if disabled(*id, *property) => {
-                        candidates.push(*id);
-                        toggled.insert(*id);
-                    }
-                    _ => {}
+    /// Note the scripts the journal says may have become runnable (moved
+    /// into a running location, or enabled) or been disabled, to start or
+    /// stop at the next [`DataModel::start_new_scripts`]. Only reads, so
+    /// the journal's readers can all catch up before it's trimmed.
+    pub(crate) fn note_new_scripts(&mut self) {
+        let world = self.runtime.world();
+        let db = world.dom.database();
+        // The name check first: most changes are other properties (physics
+        // writes every moving part's CFrame each frame).
+        let disabled = |id: InstanceId, property: rook_reflection::PropertyId| {
+            db.property(property).name == "Disabled"
+                && world.dom.property_id(id, "Disabled") == Some(property)
+        };
+        let scripts = &mut self.new_scripts;
+        for change in world.dom.journal().since(scripts.cursor) {
+            match change {
+                Change::Reparented { subtree, .. } => scripts.candidates.extend(subtree),
+                Change::Property { id, property } if disabled(*id, *property) => {
+                    scripts.candidates.push(*id);
+                    scripts.toggled.insert(*id);
                 }
+                _ => {}
             }
         }
-        self.script_cursor = end;
+        scripts.cursor = world.dom.journal().end();
+    }
+
+    /// Start scripts that became runnable since the last check and stop
+    /// running ones that were disabled. A script disabled and enabled again
+    /// runs afresh, as on Roblox (Confirmed, Studio recording 2026-10-17).
+    pub(crate) fn start_new_scripts(&mut self) {
+        profiling::scope!("start_new_scripts");
+        self.note_new_scripts();
+        let candidates = std::mem::take(&mut self.new_scripts.candidates);
+        let toggled = std::mem::take(&mut self.new_scripts.toggled);
         let mut seen = HashSet::new();
         for id in candidates {
             if !seen.insert(id) {
@@ -119,6 +122,28 @@ impl DataModel {
             if self.should_run(id) {
                 self.runtime.run_script(id);
             }
+        }
+    }
+}
+
+/// What the journal said about scripts since they were last started.
+#[derive(Debug, Default)]
+pub(crate) struct NewScripts {
+    /// Journal position up to which scripts have been looked for.
+    cursor: u64,
+    /// Scripts that may have become runnable, in the order they changed.
+    candidates: Vec<InstanceId>,
+    /// Scripts whose Disabled changed. The journal only records real
+    /// changes, so a running one among them was disabled at some point.
+    toggled: HashSet<InstanceId>,
+}
+
+impl NewScripts {
+    /// Scripts are looked for from journal position `cursor` on.
+    pub(crate) fn starting_at(cursor: u64) -> Self {
+        Self {
+            cursor,
+            ..Self::default()
         }
     }
 }

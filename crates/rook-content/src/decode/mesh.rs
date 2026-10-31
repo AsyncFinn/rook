@@ -1,12 +1,14 @@
-//! Reading Roblox mesh files, through the `rbx_mesh` crate (versions 1.00
-//! to 5.00; 6.00 and 7.00 aren't read yet), into the one layout Rook draws.
-//! `rbx_mesh` corrects version 1.00's doubled positions and flipped UVs;
-//! Rook keeps every level of detail a file holds ([`Levels`],
-//! `docs/behavior/meshes/file-meshes.md`) and rejects faces pointing past
-//! the vertex list, so a damaged file can't reach the renderer. A union's geometry decodes into the same [`Mesh`]
-//! ([`union`]), so unions load and draw through the same path.
+//! Reading Roblox mesh files (versions 1.00 to 7.00, [`file`]) into the one
+//! layout Rook draws. Rook keeps every level of detail a file holds
+//! ([`Levels`], `docs/behavior/meshes/file-meshes.md`) and rejects faces
+//! pointing past the vertex list, so a damaged file can't reach the
+//! renderer. A union's geometry decodes into the same [`Mesh`] ([`union`]),
+//! so unions load and draw through the same path.
 
+mod chunks;
+mod draco;
 mod file;
+mod reader;
 pub mod union;
 
 use rook_types::NormalId;
@@ -92,7 +94,6 @@ impl MeshError {
     }
 }
 
-/// The versions `rbx_mesh` reads.
 impl Mesh {
     /// Decode a mesh file, a union's asset or its `MeshData`.
     pub fn decode(bytes: &[u8]) -> Result<Self, MeshError> {

@@ -487,21 +487,52 @@ fn legacy_enum_names_resolve() {
 }
 
 /// Script environments are `safeenv`, so Luau runs builtins natively; what
-/// scripts see must not change: Rook's `typeof`, globals a script assigns,
-/// and environments changed through `getfenv`.
+/// scripts see must not change: `typeof` (Luau's builtin, which reads
+/// datatypes' `__type`, the vector type's included, and ignores a proxy's),
+/// globals a script assigns, and environments changed through `getfenv`.
 #[test]
 fn safe_environment_keeps_script_semantics() {
     expect(
         r#"
         print(typeof(Vector3.new()), typeof(game), typeof(Enum.Material.Plastic))
+        local proxy = newproxy(true)
+        getmetatable(proxy).__type = "Fake"
+        print(typeof(proxy), typeof(CFrame.new()), typeof(nil), pcall(typeof))
         tostring = function() return "mine" end
         print(tostring(1))
         getfenv().type = function() return "custom" end
         print(type(1))
         "#,
         0,
-        &["Vector3 Instance EnumItem", "mine", "custom"],
+        &[
+            "Vector3 Instance EnumItem",
+            "userdata CFrame nil false missing argument #1",
+            "mine",
+            "custom",
+        ],
     );
+}
+
+/// Scripts compile at optimization level 2, as live games do, so small
+/// local functions are inlined into their caller (here the main chunk,
+/// whose name is empty) and `debug.info` sees it; `--!optimize 1` (Studio
+/// testing's level) keeps the calls.
+#[test]
+fn scripts_compile_as_live_games_do() {
+    let source = |header: &str| {
+        format!(
+            "{header}
+local function inner() local n = debug.info(1, \"n\") return n end
+             local function outer() local n = inner() return n end
+local n = outer() print(n)"
+        )
+    };
+    let rt = Runtime::new(Dom::new(), Clock::Fixed { step: 1.0 / 60.0 }).unwrap();
+    rt.run_source("Workspace.Live", &source(""), None).unwrap();
+    rt.run_source("Workspace.Studio", &source("--!optimize 1"), None)
+        .unwrap();
+    let log: Vec<String> = rt.take_log().into_iter().map(|e| e.message).collect();
+    assert_eq!(log, ["", "inner"]);
 }
 
 /// `DescendantRemoving` steps are skipped only while nothing listens: a
@@ -572,8 +603,15 @@ fn renames_are_seen_by_the_next_read() {
     rename("C", "D");
     step(&rt);
     rename("D", "E");
-    let end = rt.world().dom.journal().end();
-    rt.world_mut().dom.journal_mut().trim(end);
+    {
+        // Trimmed as the engine trims: once its readers have read.
+        let mut w = rt.world_mut();
+        let w = &mut *w;
+        w.gui.note_changes(&w.dom);
+        w.note_style_changes();
+        let end = w.dom.journal().end();
+        w.dom.journal_mut().trim(end);
+    }
     step(&rt);
     rt.world_mut().dom.journal_mut().set_enabled(false);
     rename("E", "F");
@@ -581,6 +619,115 @@ fn renames_are_seen_by_the_next_read() {
     step(&rt);
     let log: Vec<String> = rt.take_log().into_iter().map(|e| e.message).collect();
     assert_eq!(log, ["A B", "changed C", "D", "E", "F"]);
+}
+
+/// A callback and a runtime-only value belong to the instance, not to the
+/// userdata they were set through, which is collected once no script holds
+/// it and made again on the next use.
+#[test]
+fn instance_state_outlives_its_userdata() {
+    let rt = Runtime::new(Dom::new(), Clock::Fixed { step: 1.0 / 60.0 }).unwrap();
+    rt.run_source(
+        "Workspace.Script",
+        r#"
+        local f = Instance.new("BindableFunction")
+        f.Name = "F"
+        f.Parent = workspace
+        f.OnInvoke = function()
+            return "answered"
+        end
+        local part = Instance.new("Part")
+        part.Name = "P"
+        part.Parent = workspace
+        f, part = nil, nil
+        task.wait()
+        print(workspace.F:Invoke(), workspace.P.Extra)
+        "#,
+        None,
+    )
+    .unwrap();
+    // Engine Luau keeps values Rook can't store this way (`Tween.TweenInfo`).
+    let part = {
+        let w = rt.world();
+        let ws = w.dom.find_service("Workspace").unwrap();
+        w.dom.find_first_child(ws, "P", false).unwrap()
+    };
+    let std: mlua::Table = rt.lua().named_registry_value("rook.std").unwrap();
+    let set_internal: mlua::Function = std.get("set_internal").unwrap();
+    let ud = rt.push_instance(part).unwrap();
+    set_internal.call::<()>((ud, "Extra", "kept")).unwrap();
+    rt.lua().gc_collect().unwrap();
+    rt.lua().gc_collect().unwrap();
+    step(&rt);
+    let log: Vec<String> = rt.take_log().into_iter().map(|e| e.message).collect();
+    assert_eq!(log, ["answered kept"]);
+}
+
+/// `GetChildren` copies an array it keeps per parent, so every change to
+/// the children must reach the next call: from scripts (new, reparented,
+/// destroyed, cloned), from the engine while the script waits, and with
+/// the journal off; and what a script does to its copy stays its own.
+#[test]
+fn get_children_is_never_stale() {
+    let rt = Runtime::new(Dom::new(), Clock::Fixed { step: 1.0 / 60.0 }).unwrap();
+    rt.run_source(
+        "Workspace.Script",
+        r#"
+        local m = Instance.new("Model")
+        m.Name = "M"
+        m.Parent = workspace
+        local function names()
+            local list = {}
+            for _, c in m:GetChildren() do
+                table.insert(list, c.Name)
+            end
+            return table.concat(list, ",")
+        end
+        local a = Instance.new("Part")
+        a.Name = "A"
+        a.Parent = m
+        print(names(), names())
+        local b = Instance.new("Part")
+        b.Name = "B"
+        b.Parent = m
+        local first = names()
+        a.Parent = workspace
+        print(first, names())
+        b:Clone().Parent = m
+        print(names())
+        b:Destroy()
+        print(names())
+        local mine = m:GetChildren()
+        mine[1] = nil
+        table.insert(mine, workspace)
+        print(#mine, names(), mine ~= m:GetChildren())
+        task.wait()
+        print(names())
+        task.wait()
+        print(names())
+        "#,
+        None,
+    )
+    .unwrap();
+    let add = |name: &str| {
+        let mut w = rt.world_mut();
+        let ws = w.dom.find_service("Workspace").unwrap();
+        let m = w.dom.find_first_child(ws, "M", false).unwrap();
+        let part = w.dom.create_by_name("Part").unwrap();
+        w.dom.set_name(part, name.into()).unwrap();
+        w.dom.set_parent(part, Some(m)).unwrap();
+    };
+    add("C");
+    step(&rt);
+    rt.world_mut().dom.journal_mut().set_enabled(false);
+    add("D");
+    rt.world_mut().dom.journal_mut().set_enabled(true);
+    step(&rt);
+    let log: Vec<String> = rt.take_log().into_iter().map(|e| e.message).collect();
+    assert_eq!(
+        log,
+        ["A A", "A,B B", "B,B", "B", "1 B true", "B,C", "B,C,D"]
+    );
 }
 
 mod core_gui;

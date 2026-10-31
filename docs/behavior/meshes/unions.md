@@ -49,6 +49,19 @@ Cloud key was available to count what a key unlocks. A union asset is a
 model holding one `PartOperationAsset` with `MeshData`, `PhysicsData`
 and `ChildData` (the parts it was made from).
 
+*`MeshData` forms* (little-endian): `CSGK` and a 32-character id hold no
+geometry. `CSGMDL` 2 and 4 are XORed, from the first byte, with a
+repeating 31-byte key; under it are the magic and version, a 32-byte
+hash, the vertex count and size (84), the vertices (position, normal,
+color, the box face as 1 to 6 for Right, Top, Back, Left, Bottom, Front,
+UV, then a tangent between zeros) and the index count and indices; 4 adds
+a list after them. `CSGMDL` 5 is plain after its magic: positions,
+normals (three u16s offset by 32,767, over 32,767), colors, box faces (a
+byte each), UVs and tangents, each list after its own u16 count, then
+the indices as differences from the one before (a byte for -64 to 63,
+else three bytes) and range markers, of which the first two bound the
+drawn triangles (Inference: the rest are levels of detail).
+
 *The geometry* (`rook-tools content` on a small place's assets): its bounds equal the
 union's `InitialSize`, centered on its origin. Each vertex carries a
 color (that of the part it came from), the `NormalId` of the box face it

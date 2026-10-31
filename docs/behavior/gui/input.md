@@ -7,15 +7,16 @@ playtest client on Baseplate (Deferred signals), with clicks, the wheel
 and keys sent through the MCP's `user_mouse_input` and
 `user_keyboard_input`, and every event logged by a client script. The
 conformance cases `input/gui_buttons`, `input/gui_overlap`,
-`input/gui_wheel` and `input/textbox` hold the decisive orders; Rook
-passes all four.
+`input/gui_wheel`, `input/textbox` and `input/textbox_removal` hold the
+decisive orders; Rook passes all five.
 
 Code: hit-testing in `rook-gui` (`hits.rs`, walking `order.rs`, the
 draw order), the wheel and bar drags in `scroll_input.rs`, tints and
 hover images in `draw/frame.rs` and `draw/image.rs`, the caret in
 `draw/caret.rs`; the events in `rook-engine/src/bridges/input/`
 (`gui.rs`, `textbox.rs`); TextBox focus in
-`rook-lua/src/api/methods/textbox.rs`.
+`rook-lua/src/api/methods/textbox.rs`, lost to a move in
+`rook-lua/src/threads.rs` (`dispatch`).
 
 ## Coordinates
 
@@ -139,6 +140,20 @@ hover images in `draw/frame.rs` and `draw/image.rs`, the caret in
   `InputBegan` comes after, with `gameProcessedEvent` true; its
   `InputEnded`, with no box focused, false. Escape's `InputEnded` is
   still processed.
+- **Moving the box** loses focus at once: destroying it or an ancestor,
+  unparenting it, or reparenting it or an ancestor anywhere, even to a
+  sibling Frame in the same ScreenGui (measured 2026-10-30). Right after
+  the change `GetFocusedTextBox()` is nil and `CursorPosition` −1, and
+  the box fires what `ReleaseFocus()` fires: the `CursorPosition`
+  change, `FocusLost(false, nil)` and `TextBoxFocusReleased`. Leaving the
+  DataModel (destroyed, or `Parent` nil on it or an ancestor), that comes
+  before its `AncestryChanged`; moving within it (to ReplicatedStorage,
+  Workspace or another GUI object), after. Setting `Parent` to the parent
+  it has changes nothing.
+- **Hiding the box** keeps focus: `Visible` off on it or an ancestor,
+  its ScreenGui's `Enabled` off, `Active`, `Interactable` or
+  `TextEditable` off, or moving it off screen. Typed text still goes into
+  a hidden focused box.
 - **Tab** does nothing: the box stays focused. In a `MultiLine` box,
   Enter types a newline and keeps focus.
 

@@ -72,6 +72,7 @@ pub(super) fn method_function(
     };
     let f = match methods::fast(owner, resolved) {
         Some((core, takes_string)) => fast_method(lua, core, takes_string, f)?,
+        None if methods::keeps_children(owner, resolved) => kept_children(lua, f)?,
         None => f,
     };
     c.methods.borrow_mut().insert(key, f.clone());
@@ -88,7 +89,7 @@ pub(super) fn fast_method(
 ) -> mlua::Result<Function> {
     let c = ctx(lua);
     let fast = lua.create_function(
-        move |lua, (key, arg, flag): (LightUserData, Option<String>, LuaValue)| {
+        move |_, (key, arg, flag): (LightUserData, Option<String>, LuaValue)| {
             let found = core(
                 &c.world.borrow(),
                 id_of(key),
@@ -101,13 +102,30 @@ pub(super) fn fast_method(
                     (LuaValue::LightUserData(key_of(id)), Some(1))
                 }
                 methods::Found::Instance(None) => (LuaValue::Nil, None),
-                methods::Found::Instances(ids) => (
-                    LuaValue::Table(lua.create_sequence_from(ids.into_iter().map(key_of))?),
-                    Some(2),
-                ),
             })
         },
     )?;
     let wrap: Function = lua.named_registry_value("rook.instance.fast_method")?;
     wrap.call((fast, general, takes_string))
+}
+
+/// `GetChildren`'s fast form (see [`methods::keeps_children`]): the
+/// children's keys and the DOM's version of them, or only the version when
+/// it equals `kept` (debug builds check every kept array this way). The
+/// Luau wrapper copies a kept array without calling this; it's dropped
+/// inside every change to the children (`kept.rs`).
+pub(super) fn kept_children(lua: &Lua, general: Function) -> mlua::Result<Function> {
+    let c = ctx(lua);
+    let fast = lua.create_function(move |lua, (key, kept): (LightUserData, Option<u64>)| {
+        let w = c.world.borrow();
+        let id = id_of(key);
+        let version = w.dom.children_version(id);
+        if version.is_some() && version == kept {
+            return Ok((LuaValue::Nil, version));
+        }
+        let keys = lua.create_sequence_from(w.dom.children(id).iter().map(|&c| key_of(c)))?;
+        Ok((LuaValue::Table(keys), version))
+    })?;
+    let wrap: Function = lua.named_registry_value("rook.instance.kept_children")?;
+    wrap.call((fast, general))
 }

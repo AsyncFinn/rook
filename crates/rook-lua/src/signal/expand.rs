@@ -59,6 +59,7 @@ pub(crate) fn expand<H: Clone>(change: &Change, signals: &Signals<H>, dom: &Dom)
     match change {
         Change::Created(_)
         | Change::Destroyed(_)
+        | Change::Collected(_)
         | Change::TagAdded { .. }
         | Change::TagRemoved { .. } => {}
         Change::Removing {

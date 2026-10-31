@@ -61,6 +61,17 @@ impl Styles {
         self.pending.insert(id);
     }
 
+    /// Drop what styling keeps about `id`, which is being freed.
+    pub(crate) fn forget(&mut self, id: InstanceId) {
+        self.properties.remove(&id);
+        self.parsed.remove(&id);
+        self.links.remove(&id);
+        self.pending.remove(&id);
+        self.styled.remove(&id);
+        self.pseudo
+            .retain(|(under, _), made| *under != id && *made != id);
+    }
+
     /// Rules changed: style every linked tree again.
     pub(crate) fn invalidate(&mut self) {
         self.all = true;
