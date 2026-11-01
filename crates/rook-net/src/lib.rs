@@ -7,8 +7,8 @@
 //! Replication has two halves, so the server and a client can run on
 //! different threads (or, later, machines). A [`Source`] reads the server's
 //! journal and describes the server's *current* state of each instance a
-//! change touched as self-contained [`Update`]s, so several changes in one
-//! frame collapse into one update; a [`Sink`] applies them to the client,
+//! change touched as self-contained [`Update`]s, one per journal entry; a
+//! [`Sink`] applies them to the client,
 //! which alone knows which of its instances copy which server ones. New
 //! subtrees are built detached and parented last, so the client sees them
 //! arrive at once. [`Replicator`] is the two halves joined directly.

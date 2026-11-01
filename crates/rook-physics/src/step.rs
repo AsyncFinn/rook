@@ -106,8 +106,8 @@ impl Physics {
         let Some(props) = self.props.take() else {
             return Vec::new();
         };
-        self.step_motors(dom);
-        self.write_hinge_angles(dom);
+        self.step_motors(dom, &props);
+        self.write_hinge_angles(dom, &props);
         let mut fallen = Vec::new();
         for handle in self.world.islands.active_bodies() {
             let Some(body) = self.bodies.get(&handle) else {
@@ -130,16 +130,13 @@ impl Physics {
                     fallen.push(m.part);
                 }
                 rook_dom::ignore_stale(dom.set_property(m.part, props.cframe, Value::CFrame(cf)));
-                rook_dom::ignore_stale(dom.set_property(
-                    m.part,
-                    props.linear_velocity,
-                    linvel.clone(),
-                ));
-                rook_dom::ignore_stale(dom.set_property(
-                    m.part,
-                    props.angular_velocity,
-                    angvel.clone(),
-                ));
+                // No journal reader wants a moving part's velocities: no
+                // Changed fires for them, nothing draws them, and clients
+                // simulate from the pose. Journaled, they were two of
+                // every three entries each frame, which every reader
+                // looked at.
+                dom.load_property(m.part, props.linear_velocity, linvel.clone());
+                dom.load_property(m.part, props.angular_velocity, angvel.clone());
             }
         }
         // Our own writes aren't changes to apply next time.
@@ -149,7 +146,7 @@ impl Physics {
     }
 
     /// HingeConstraint.CurrentAngle, in degrees.
-    fn write_hinge_angles(&self, dom: &mut Dom) {
+    fn write_hinge_angles(&self, dom: &mut Dom, props: &Props) {
         for (&id, c) in &self.constraints {
             if !matches!(c.spec.kind, constraints::Kind::Hinge { .. }) {
                 continue;
@@ -162,25 +159,24 @@ impl Physics {
                 continue;
             };
             let angle = revolute_angle(&j.data, rb1.position(), rb2.position());
-            rook_dom::ignore_stale(dom.set_property_by_name(
+            rook_dom::ignore_stale(dom.set_property(
                 id,
-                "CurrentAngle",
+                props.hinge_angle,
                 Value::Float32(angle.to_degrees()),
             ));
         }
     }
 
-    fn step_motors(&mut self, dom: &mut Dom) {
+    fn step_motors(&mut self, dom: &mut Dom, props: &Props) {
         let dt = self.last_dt;
         let turned: Vec<RigidBodyHandle> = self
             .motored
             .iter()
             .filter(|h| {
                 // Every motor steps, even after one has turned.
-                self.bodies[*h]
-                    .motors
-                    .iter()
-                    .fold(false, |any, j| joints::drives::step_motor(dom, j, dt) | any)
+                self.bodies[*h].motors.iter().fold(false, |any, j| {
+                    joints::drives::step_motor(dom, props, j, dt) | any
+                })
             })
             .copied()
             .collect();

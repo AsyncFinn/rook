@@ -122,7 +122,9 @@ impl Dom {
         Ok(())
     }
 
-    /// Store a property from a file without recording a change.
+    /// Store a property without recording a change: a file's values, and
+    /// values that change every frame with no journal reader to tell
+    /// (time passing, physics' velocities).
     pub fn load_property(&mut self, id: InstanceId, property: PropertyId, value: Value) {
         let value = coerce(self.db.property(property).ty, value);
         // A load into a missing instance has nowhere to go.
