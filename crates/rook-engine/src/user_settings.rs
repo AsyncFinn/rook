@@ -141,7 +141,7 @@ fn install(dom: &mut Dom, path: Option<&Path>) -> (InstanceId, InstanceId) {
 fn install_saved(dom: &mut Dom, saved: Option<&WeakDom>) -> (InstanceId, InstanceId) {
     let root = rook_lua::user_settings::root(dom);
     if let Some(weak) = saved {
-        rook_formats::into_dom(weak, dom, root);
+        rook_formats::copy_into_dom(weak, dom, root);
     }
     (root, rook_lua::user_settings::complete(dom, root))
 }

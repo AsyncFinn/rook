@@ -1,20 +1,51 @@
 //! Conversion between `rbx_dom_weak` trees (files) and Rook's runtime [`Dom`].
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::sync::LazyLock;
 
-use rbx_dom_weak::{InstanceBuilder, WeakDom};
+use rbx_dom_weak::{InstanceBuilder, UstrMap, WeakDom};
 use rbx_types::{Ref, Variant};
 use rook_dom::{Dom, InstanceId};
+use rook_reflection::{ClassId, PropertyId};
 use rook_types::Value;
 
-/// Copy the top-level instances of `weak` (its root's children) under
-/// `parent` in `dom`. Returns the new top-level instances.
+/// What [`into_dom`] and [`copy_into_dom`] made.
+#[derive(Debug)]
+pub struct Converted {
+    /// The new top-level instances.
+    pub top: Vec<InstanceId>,
+    /// Two instances were saved under one `UniqueId` (nil ones, which old
+    /// files and new instances have, don't count).
+    pub duplicate_unique_ids: bool,
+}
+
+/// Move the top-level instances of `weak` (its root's children) under
+/// `parent` in `dom`, taking its property values rather than copying them:
+/// for a file loaded once.
 ///
 /// Loading isn't journaled. Top-level service instances placed under the
 /// DataModel get their `Parent` locked, as Roblox's services do. If the
 /// DataModel already has a service of that class, the loaded children are
 /// merged into it.
-pub fn into_dom(weak: &WeakDom, dom: &mut Dom, parent: InstanceId) -> Vec<InstanceId> {
+pub fn into_dom(mut weak: WeakDom, dom: &mut Dom, parent: InstanceId) -> Converted {
+    convert(&mut weak, dom, parent, |w, r| {
+        std::mem::take(&mut w.get_by_ref_mut(r).expect("referent exists").properties)
+    })
+}
+
+/// [`into_dom`], copying: for a tree put in many times (a rig, a patch).
+pub fn copy_into_dom(weak: &WeakDom, dom: &mut Dom, parent: InstanceId) -> Converted {
+    convert(weak, dom, parent, |w, r| {
+        w.get_by_ref(r).expect("referent exists").properties.clone()
+    })
+}
+
+fn convert<W: std::ops::Deref<Target = WeakDom>>(
+    mut weak: W,
+    dom: &mut Dom,
+    parent: InstanceId,
+    mut properties: impl FnMut(&mut W, Ref) -> UstrMap<Variant>,
+) -> Converted {
     let was_enabled = dom.journal().is_enabled();
     dom.journal_mut().set_enabled(false);
 
@@ -23,7 +54,7 @@ pub fn into_dom(weak: &WeakDom, dom: &mut Dom, parent: InstanceId) -> Vec<Instan
     let mut top = Vec::new();
     for &child in weak.root().children() {
         top.push(create_rec(
-            weak,
+            &weak,
             dom,
             child,
             parent,
@@ -33,21 +64,25 @@ pub fn into_dom(weak: &WeakDom, dom: &mut Dom, parent: InstanceId) -> Vec<Instan
     }
 
     // Second pass: properties, now that every referent has a Rook ID.
+    let velocities = SavedVelocities::get();
+    let mut unique_ids = HashSet::new();
+    let mut duplicate_unique_ids = false;
     for (id, source) in pending_refs {
-        let inst = weak.get_by_ref(source).expect("referent exists");
+        let props = properties(&mut weak, source);
         let class = dom.get(id).expect("just created").class;
         let unknown_class = dom.get(id).expect("just created").unknown_class.is_some();
         let db = dom.database();
-        for (name, variant) in &inst.properties {
+        text_size_from_font_size(dom, id, &props);
+        for (name, variant) in props {
             let name = name.as_str();
             let map_ref = |r| map.get(&r).map(|id: &InstanceId| id.to_ref());
             match (name, variant) {
                 ("Name", _) => {}
                 ("Attributes", Variant::Attributes(attrs)) => {
-                    for (key, v) in attrs.iter() {
-                        if let Ok(value) = Value::from_variant(v.clone(), map_ref) {
+                    for (key, v) in attrs {
+                        if let Ok(value) = Value::from_variant(v, map_ref) {
                             let inst = dom.instance_mut(id).expect("exists");
-                            inst.attributes.insert(key.clone(), value);
+                            inst.attributes.insert(key, value);
                         }
                     }
                 }
@@ -55,8 +90,11 @@ pub fn into_dom(weak: &WeakDom, dom: &mut Dom, parent: InstanceId) -> Vec<Instan
                     dom.instance_mut(id).expect("exists").tags =
                         tags.iter().map(str::to_owned).collect();
                 }
-                _ => {
-                    let Ok(value) = Value::from_variant(variant.clone(), map_ref) else {
+                (_, variant) => {
+                    if let Variant::UniqueId(u) = &variant {
+                        duplicate_unique_ids |= !u.is_nil() && !unique_ids.insert(*u);
+                    }
+                    let Ok(value) = Value::from_variant(variant, map_ref) else {
                         continue;
                     };
                     let prop = (!unknown_class)
@@ -73,21 +111,66 @@ pub fn into_dom(weak: &WeakDom, dom: &mut Dom, parent: InstanceId) -> Vec<Instan
                 }
             }
         }
-        text_size_from_font_size(dom, id, inst);
+        velocities.adopt(dom, id);
     }
 
     dom.journal_mut().set_enabled(was_enabled);
-    top
+    Converted {
+        top,
+        duplicate_unique_ids,
+    }
+}
+
+/// Files save a part's velocities in the deprecated `Velocity` and
+/// `RotVelocity`; physics and scripts use `AssemblyLinearVelocity` and
+/// `AssemblyAngularVelocity`, which aren't saved. Scripts see the old two
+/// as views of them (observed: setting either sets the assembly's velocity
+/// at once).
+struct SavedVelocities {
+    base_part: ClassId,
+    /// (saved, used) pairs.
+    pairs: [(PropertyId, PropertyId); 2],
+}
+
+impl SavedVelocities {
+    fn get() -> &'static Self {
+        static IDS: LazyLock<SavedVelocities> = LazyLock::new(|| {
+            let db = rook_reflection::database();
+            let base_part = db.class_by_name("BasePart").expect("BasePart").id;
+            let p = |name| db.find_canonical_property(base_part, name).expect(name).id;
+            SavedVelocities {
+                base_part,
+                pairs: [
+                    (p("Velocity"), p("AssemblyLinearVelocity")),
+                    (p("RotVelocity"), p("AssemblyAngularVelocity")),
+                ],
+            }
+        });
+        &IDS
+    }
+
+    fn adopt(&self, dom: &mut Dom, id: InstanceId) {
+        if !dom.is_a_class(id, self.base_part) {
+            return;
+        }
+        for (saved, used) in self.pairs {
+            if let Some(Value::Vector3(v)) = dom.property(id, saved)
+                && v != rook_types::Vector3::default()
+            {
+                dom.load_property(id, used, Value::Vector3(v));
+            }
+        }
+    }
 }
 
 /// Files from before `TextSize` (about 2016) save only the `FontSize`
 /// enum, which Studio shows as that `TextSize` (Inference: the enum names
 /// its size, and files since save both, agreeing).
-fn text_size_from_font_size(dom: &mut Dom, id: InstanceId, inst: &rbx_dom_weak::Instance) {
-    let Some(Variant::Enum(e)) = inst.properties.get(&"FontSize".into()) else {
+fn text_size_from_font_size(dom: &mut Dom, id: InstanceId, properties: &UstrMap<Variant>) {
+    let Some(Variant::Enum(e)) = properties.get(&"FontSize".into()) else {
         return;
     };
-    if inst.properties.contains_key(&"TextSize".into()) {
+    if properties.contains_key(&"TextSize".into()) {
         return;
     }
     let db = dom.database();
@@ -249,7 +332,7 @@ mod tests {
 
         let mut dom = Dom::new();
         let root = dom.root();
-        let top = into_dom(&loaded.dom, &mut dom, root);
+        let top = copy_into_dom(&loaded.dom, &mut dom, root).top;
         assert_eq!(top.len(), 1);
         let ws = dom.find_service("Workspace").unwrap();
         assert!(dom.is_parent_locked(ws));
@@ -263,6 +346,48 @@ mod tests {
         let back = from_dom(&dom, &[ws]);
         let diffs = compare(&loaded.dom, &back);
         assert!(diffs.is_empty(), "{diffs:#?}");
+    }
+
+    #[test]
+    fn saved_velocities_are_adopted() {
+        let part = InstanceBuilder::new("Part")
+            .with_property("Velocity", rbx_types::Vector3::new(50.0, 0.0, 0.0))
+            .with_property("RotVelocity", rbx_types::Vector3::new(0.0, 3.0, 0.0));
+        let weak = WeakDom::new(InstanceBuilder::new("DataModel").with_child(part));
+        let mut dom = Dom::new();
+        let root = dom.root();
+        let part = into_dom(weak, &mut dom, root).top[0];
+        let v = |name| dom.vector3_property(part, name).unwrap().to_array();
+        assert_eq!(v("AssemblyLinearVelocity"), [50.0, 0.0, 0.0]);
+        assert_eq!(v("AssemblyAngularVelocity"), [0.0, 3.0, 0.0]);
+    }
+
+    #[test]
+    fn duplicate_unique_ids_are_noticed() {
+        let id = rbx_types::UniqueId::new(1, 2, 3);
+        // Set after inserting, as decoders do: `WeakDom` replaces a
+        // duplicate given at insert.
+        let place = |second| {
+            let mut weak = WeakDom::new(
+                InstanceBuilder::new("DataModel")
+                    .with_child(InstanceBuilder::new("Folder"))
+                    .with_child(InstanceBuilder::new("Folder")),
+            );
+            let folders = weak.root().children().to_vec();
+            for (folder, unique_id) in folders.into_iter().zip([id, second]) {
+                let inst = weak.get_by_ref_mut(folder).unwrap();
+                inst.properties.insert("UniqueId".into(), unique_id.into());
+            }
+            weak
+        };
+        let duplicates = |weak| {
+            let mut dom = Dom::new();
+            let root = dom.root();
+            into_dom(weak, &mut dom, root).duplicate_unique_ids
+        };
+        assert!(duplicates(place(id)));
+        assert!(!duplicates(place(rbx_types::UniqueId::new(1, 2, 4))));
+        assert!(!duplicates(place(rbx_types::UniqueId::nil())));
     }
 
     #[test]
@@ -282,7 +407,7 @@ mod tests {
         );
         let mut dom = Dom::new();
         let root = dom.root();
-        into_dom(&weak, &mut dom, root);
+        into_dom(weak, &mut dom, root);
         let size = |name| {
             let id = dom.find_first_child(root, name, false).unwrap();
             dom.float_property(id, "TextSize")

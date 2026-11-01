@@ -205,7 +205,7 @@ fn every_fixture_survives_the_runtime_dom() {
             dom.attach_unchecked(folder, root);
             folder
         };
-        let top = rook_formats::into_dom(&loaded.dom, &mut dom, parent);
+        let top = rook_formats::copy_into_dom(&loaded.dom, &mut dom, parent).top;
         let back = rook_formats::from_dom(&dom, &top);
         let diffs = compare(&loaded.dom, &back);
         if !diffs.is_empty() {
