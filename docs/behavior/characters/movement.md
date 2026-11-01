@@ -104,14 +104,19 @@ Workspace gravity 196.2. R6 steps were measured on a body from
 - Each frame `rook_lua` reads the properties of every Humanoid whose root
   this DataModel simulates (players' characters on their clients, the
   rest on the server; the root is `HumanoidRootPart`, or `Torso`) into a
-  drive. The controller sets the root body's velocity every 240 Hz step;
-  after the frame's steps it feels the floor, a truss and water, and
-  moves through the states. Each driven Humanoid costs about a dozen ray
-  casts a frame while it walks, five while it stands.
+  drive. Every 240 Hz step the controller sets the root body's velocity,
+  then after the step feels the floor, a truss and water and moves
+  through the states, so a walk takes the same path at any frame rate.
+  Done once a frame instead, the steps of a slow frame steered by a floor
+  up to a frame old: walking up 0.4-stud stairs, a 20 Hz client's path
+  strayed up to 0.41 studs from a 60 Hz one's, so the legs bobbed more
+  the slower the frames. Jump and Sit, read once a frame, are used up at
+  the step that acts on them. Each driven Humanoid costs about a dozen
+  ray casts a step while it walks, five while it stands.
 - The floor is five rays down from the root part's bottom, at its center
   and its footprint's corners, to 2.5 studs below standing height; its
-  height is the average of the hits, extrapolated along the slope between
-  frames. Inference: this matches the ledge, the steps and the slope.
+  height is the average of the hits. Inference: this matches the ledge,
+  the steps and the slope.
 - The legs are a spring holding standing height, fitted to the landing
   (stiffness 2450, damping 80); it pulls down as well as up, so a
   character walking off a step lower than 2.5 studs follows it down.

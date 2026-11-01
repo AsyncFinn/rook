@@ -37,11 +37,11 @@ impl Physics {
             }
             self.steer_humanoids(h);
             self.world.step_with_events(&contacts::Mixer, &events);
+            self.update_humanoids(h);
         }
         if self.world.islands.active_bodies().next().is_some() {
             self.generation += 1;
         }
-        self.update_humanoids(dt as f32);
         // Stepping put every collider in place.
         self.stale.clear();
         self.stale_statics.clear();

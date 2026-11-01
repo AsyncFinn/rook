@@ -24,24 +24,6 @@ pub(super) struct Floor {
     pub(super) velocity: glam::Vec3,
     pub(super) part: InstanceId,
     pub(super) collider: ColliderHandle,
-    /// Where the root was when it was sensed.
-    pub(super) at: glam::Vec3,
-}
-
-impl Floor {
-    /// Its height under the root at `root`, `since` seconds after it was
-    /// sensed: carried by its velocity, and along its slope as the root
-    /// moves over it.
-    pub(super) fn height_at(&self, root: glam::Vec3, since: f32) -> f32 {
-        let moved = horizontal(root - self.at - self.velocity * since);
-        let n = self.normal;
-        let rise = if n.y > 0.1 {
-            -(n.x * moved.x + n.z * moved.z) / n.y
-        } else {
-            0.0
-        };
-        self.y + self.velocity.y * since + rise
-    }
 }
 
 impl Physics {
@@ -96,7 +78,6 @@ impl Physics {
             velocity: self.velocity_at(collider, point),
             part,
             collider,
-            at: root.position,
         })
     }
 
