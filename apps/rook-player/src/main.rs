@@ -10,7 +10,6 @@
 //! In Play mode the server runs on its own thread at 60 Hz, so the window
 //! waits only on its client and the renderer, at the player's
 //! `FramerateCap`; the title shows frame times (`--frame-times` prints them).
-//! A build with developer overrides says so in the title.
 //!
 //! With the `repl` feature (default) and an interactive terminal, the
 //! terminal shows a `> ` prompt that runs Luau in the open place.

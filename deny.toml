@@ -15,7 +15,11 @@ deny = [
     { crate = "rfd", wrappers = ["rook-player"], reason = "dialogs belong to the apps" },
     { crate = "cpal", wrappers = ["rook-audio"], reason = "the audio device, behind rook-audio's `output` feature" },
     { crate = "ureq", wrappers = ["rook-platform"], reason = "the network goes through rook-platform" },
-    { crate = "keyring-core", wrappers = ["rook-platform"], reason = "the OS credential store goes through rook-platform" },
+    # keyring's per-system stores build on its core.
+    { crate = "keyring-core", wrappers = ["rook-platform", "windows-native-keyring-store", "apple-native-keyring-store", "zbus-secret-service-keyring-store"], reason = "the OS credential store goes through rook-platform" },
+    { crate = "windows-native-keyring-store", wrappers = ["rook-platform"], reason = "the OS credential store goes through rook-platform" },
+    { crate = "apple-native-keyring-store", wrappers = ["rook-platform"], reason = "the OS credential store goes through rook-platform" },
+    { crate = "zbus-secret-service-keyring-store", wrappers = ["rook-platform"], reason = "the OS credential store goes through rook-platform" },
     # Rapier and Parry run their own parallel steps (rook-physics' known
     # exception); rook-cli is an app.
     { crate = "rayon", wrappers = ["rook-platform", "rook-cli", "rapier3d", "parry3d"], reason = "parallel work goes through rook-platform" },

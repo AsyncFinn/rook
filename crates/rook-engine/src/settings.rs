@@ -1,21 +1,12 @@
 //! Every setting Rook has, resolved once here and handed to the crates
 //! below as plain values; no other crate reads the environment
-//! (docs/design/data-and-logging.md#settings). There are three kinds:
-//!
-//! - The build's (`webBase`, `webDomains`), which whoever builds Rook
-//!   decides ([`crate::build_config`]).
-//! - The player's own choices, on `UserGameSettings`
-//!   ([`crate::user_settings`]).
-//! - Run-time settings, each declared once in [`table`] with its tier,
-//!   default, environment variable and flag. A flag beats the variable,
-//!   which beats the default. [`Tier::Developer`] settings count only in
-//!   builds with the `developer-overrides` feature; elsewhere each is
-//!   ignored, with one warning that names its tier.
-//!
-//! The Open Cloud key, the one secret, is saved in the OS credential store
-//! (`rook-tools key set`), with `ROOK_OPEN_CLOUD_API_KEY` over it; either
-//! is read only once Roblox's asset delivery refuses a request
-//! anonymously ([`api_key`]).
+//! (docs/design/data-and-logging.md#settings): the build's
+//! ([`crate::build_config`]), the player's ([`crate::user_settings`]), and
+//! run-time ones, each declared once in [`table`]. A flag beats the
+//! variable, which beats the default; [`Tier::Developer`] settings count
+//! only in builds with the `developer-overrides` feature. The Open Cloud
+//! key comes from the OS credential store, read only when it can be used
+//! ([`api_key`]).
 
 pub mod table;
 
