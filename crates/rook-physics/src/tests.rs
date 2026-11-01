@@ -7,6 +7,7 @@ use super::*;
 mod constraints;
 mod contacts;
 mod forces;
+mod humanoids;
 mod joints;
 mod make_joints;
 mod movers;

@@ -181,8 +181,6 @@ pub(crate) struct Controller {
     /// Seconds a grounded state has gone without a floor.
     unsupported: f32,
     floor: Option<Floor>,
-    /// Seconds since the floor was sensed, to follow a moving one.
-    since_sensed: f32,
     climb: Option<Climb>,
     /// The water's surface height, while the root is in water.
     water: Option<f32>,
@@ -203,7 +201,6 @@ impl Controller {
             time: 0.0,
             unsupported: 0.0,
             floor: None,
-            since_sensed: 0.0,
             climb: None,
             water: None,
             lift: 0.0,
@@ -345,8 +342,10 @@ impl Physics {
         self.controllers = controllers;
     }
 
-    /// After a frame's steps: sense the surroundings and move through the
-    /// states.
+    /// After each step: sense the surroundings and move through the
+    /// states, as Roblox's controller runs with its 240 Hz physics. Once a
+    /// frame, the steps between steered by a floor up to a frame old, so
+    /// over uneven ground the legs bobbed more the slower the frames.
     pub(crate) fn update_humanoids(&mut self, dt: f32) {
         if self.controllers.is_empty() {
             return;
@@ -369,7 +368,6 @@ impl Physics {
     fn sense(&self, c: &mut Controller, r: &Rooted) {
         let root = self.root_pose(r);
         c.floor = self.sense_floor(&c.drive, r.body, &root);
-        c.since_sensed = 0.0;
         c.climb = self.sense_climb(c, r.body, &root);
         c.water = self.water_surface(root.position);
     }

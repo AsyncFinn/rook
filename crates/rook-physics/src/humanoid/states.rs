@@ -42,6 +42,14 @@ impl Physics {
         if let Some(next) = self.next_state(c, r) {
             self.enter(c, r, next);
         }
+        // Jump and Sit come once a frame and are cleared after it; the
+        // frame's later steps see them used up, as they are.
+        if c.clear_jump {
+            c.drive.jump = false;
+        }
+        if c.clear_sit {
+            c.drive.sit = false;
+        }
     }
 
     /// Where the state machine goes from here, if anywhere.

@@ -44,7 +44,6 @@ impl Physics {
     pub(super) fn steer(&mut self, c: &mut Controller, r: &Rooted, h: f32) {
         let root = self.root_pose(r);
         let gravity = to_glam(self.world.gravity);
-        c.since_sensed += h;
         let rb = &mut self.world.bodies[r.body];
         let mut v = to_glam(rb.linvel());
         let walk = c.drive.walk;
@@ -55,8 +54,7 @@ impl Physics {
         match c.state {
             s if s.grounded() => {
                 let felt = c.floor.and_then(|f| {
-                    let floor_y = f.height_at(root.position, c.since_sensed);
-                    let e = root.position.y - (floor_y + c.drive.standing_height);
+                    let e = root.position.y - (f.y + c.drive.standing_height);
                     // A floor the root was moved away from holds nothing.
                     (e <= floor::REACH).then_some((f, e))
                 });
