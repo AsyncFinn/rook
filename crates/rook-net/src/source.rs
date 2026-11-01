@@ -113,6 +113,23 @@ impl Source {
                             property: *property,
                             value,
                         });
+                        // A moving part's velocities go with its pose, as
+                        // Roblox sends them with its physics (observed: a
+                        // client reads them); physics doesn't journal them.
+                        let pose = Pose::get();
+                        if *property == pose.cframe
+                            && server.property(*id, pose.anchored) == Some(Value::Bool(false))
+                        {
+                            for v in pose.velocities {
+                                if let Some(value) = server.property(*id, v) {
+                                    out.push(Update::Property {
+                                        id: *id,
+                                        property: v,
+                                        value,
+                                    });
+                                }
+                            }
+                        }
                     }
                 }
                 Change::Attribute { id, name } if visible(*id) => out.push(Update::Attribute {
@@ -191,6 +208,29 @@ fn withheld(server: &Dom, id: InstanceId, property: PropertyId) -> bool {
                 && server.enum_property(id, "RunContext")
                     != Some(rook_types::RunContext::Client.value())
         }
+    }
+}
+
+/// A part's pose properties, which replication sends together.
+struct Pose {
+    cframe: PropertyId,
+    anchored: PropertyId,
+    velocities: [PropertyId; 2],
+}
+
+impl Pose {
+    fn get() -> &'static Self {
+        static POSE: std::sync::LazyLock<Pose> = std::sync::LazyLock::new(|| {
+            let db = rook_reflection::database();
+            let part = db.class_by_name("BasePart").expect("BasePart class").id;
+            let id = |name| db.find_property(part, name).expect(name).id;
+            Pose {
+                cframe: id("CFrame"),
+                anchored: id("Anchored"),
+                velocities: [id("AssemblyLinearVelocity"), id("AssemblyAngularVelocity")],
+            }
+        });
+        &POSE
     }
 }
 

@@ -35,6 +35,7 @@ impl Physics {
             if !self.movers.is_empty() || !self.forced.is_empty() {
                 movers::apply(&mut self.world, self.movers.values(), h, &mut self.forced);
             }
+            self.play_remote(h);
             self.steer_humanoids(h);
             self.world.step_with_events(&contacts::Mixer, &events);
             self.update_humanoids(h);
@@ -65,7 +66,7 @@ impl Physics {
     fn remember_poses(&mut self) {
         self.before_last_step.clear();
         for h in self.world.islands.active_bodies() {
-            if self.bodies.get(&h).is_some_and(|b| !b.remote) {
+            if self.bodies.get(&h).is_some_and(|b| !b.remote) || self.playback.plays(h) {
                 self.before_last_step
                     .insert(h, *self.world.bodies[h].position());
             }
@@ -73,14 +74,14 @@ impl Physics {
     }
 
     /// Where to draw the parts of the moving assemblies this world
-    /// simulates: between their last two steps, by how far the carried
-    /// time is into the next (the standard interpolation, one step behind
-    /// at most). Every other part is drawn at its CFrame.
+    /// simulates or plays back: between their last two steps, by how far
+    /// the carried time is into the next (the standard interpolation, one
+    /// step behind at most). Every other part is drawn at its CFrame.
     pub fn drawn_poses(&self) -> impl Iterator<Item = (InstanceId, CFrame)> + '_ {
         let along = (self.pending * STEP_HZ).clamp(0.0, 1.0) as f32;
         self.before_last_step.iter().flat_map(move |(h, before)| {
             // One handed to another machine since is drawn where it is.
-            let body = self.bodies.get(h).filter(|b| !b.remote);
+            let body = (self.bodies.get(h)).filter(|b| !b.remote || self.playback.plays(*h));
             let root = self
                 .world
                 .bodies
@@ -113,36 +114,48 @@ impl Physics {
             let Some(body) = self.bodies.get(&handle) else {
                 continue;
             };
-            let rb = &self.world.bodies[handle];
-            let root = cframe_of(rb.position());
+            let root = cframe_of(self.world.bodies[handle].position());
             if body.remote {
                 // Its machine writes it; it falls out of the world here too.
                 if root.position.y < self.fallen_height {
                     fallen.extend(body.asm.members.iter().map(|m| m.part));
                 }
-                continue;
-            }
-            let linvel = Value::Vector3(Vector3(rb.linvel()));
-            let angvel = Value::Vector3(Vector3(rb.angvel()));
-            for m in &body.asm.members {
-                let cf = root * m.offset;
-                if cf.position.y < self.fallen_height {
-                    fallen.push(m.part);
+                if !self.playback.plays(handle) {
+                    continue;
                 }
-                rook_dom::ignore_stale(dom.set_property(m.part, props.cframe, Value::CFrame(cf)));
-                // No journal reader wants a moving part's velocities: no
-                // Changed fires for them, nothing draws them, and clients
-                // simulate from the pose. Journaled, they were two of
-                // every three entries each frame, which every reader
-                // looked at.
-                dom.load_property(m.part, props.linear_velocity, linvel.clone());
-                dom.load_property(m.part, props.angular_velocity, angvel.clone());
+            } else {
+                for m in &body.asm.members {
+                    if (root * m.offset).position.y < self.fallen_height {
+                        fallen.push(m.part);
+                    }
+                }
             }
+            self.write_body(dom, &props, handle);
         }
         // Our own writes aren't changes to apply next time.
         self.cursor = dom.journal().end();
         self.props = Some(props);
         fallen
+    }
+
+    /// Write where body `h` is and how fast it moves into its parts.
+    pub(crate) fn write_body(&self, dom: &mut Dom, props: &Props, h: RigidBodyHandle) {
+        let (Some(body), Some(rb)) = (self.bodies.get(&h), self.world.bodies.get(h)) else {
+            return;
+        };
+        let root = cframe_of(rb.position());
+        let linvel = Value::Vector3(Vector3(rb.linvel()));
+        let angvel = Value::Vector3(Vector3(rb.angvel()));
+        for m in &body.asm.members {
+            let cf = Value::CFrame(root * m.offset);
+            rook_dom::ignore_stale(dom.set_property(m.part, props.cframe, cf));
+            // No journal reader wants a moving part's velocities: no
+            // Changed fires for them, nothing draws them, and replication
+            // sends them with the pose. Journaled, they were two of every
+            // three entries each frame, which every reader looked at.
+            dom.load_property(m.part, props.linear_velocity, linvel.clone());
+            dom.load_property(m.part, props.angular_velocity, angvel.clone());
+        }
     }
 
     /// HingeConstraint.CurrentAngle, in degrees.

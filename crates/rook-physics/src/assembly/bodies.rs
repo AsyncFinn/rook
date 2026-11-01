@@ -122,6 +122,7 @@ impl Physics {
         if !body.asm.anchored {
             self.moving[usize::from(body.remote)] -= 1;
         }
+        self.playback.forget(h);
         // Removing the Rapier body removes its colliders and joints.
         self.world.remove_body(h);
         for (m, c) in body.asm.members.iter().zip(&body.colliders) {

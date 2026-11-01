@@ -260,8 +260,7 @@ fn frame(host: &mut ServerHost) -> Frame {
     let start = Instant::now();
     host.step();
     let mut messages: Vec<ToClient> = host.outgoing().into_iter().map(|(_, m)| m).collect();
-    let updates = host.updates().pop().unwrap_or_default();
-    messages.push(ToClient::Updates(updates));
+    messages.extend(host.updates().pop());
     print_logs(host.server());
     Frame {
         messages,

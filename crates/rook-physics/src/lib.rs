@@ -17,6 +17,7 @@ mod explosion;
 pub mod humanoid;
 pub mod joints;
 pub mod query;
+mod remote;
 mod shape;
 mod step;
 mod sync;
@@ -238,6 +239,8 @@ pub struct Physics {
     trusses: HashSet<InstanceId>,
     /// The Humanoids this world drives, in id order.
     controllers: BTreeMap<InstanceId, humanoid::Controller>,
+    /// The server's assemblies' updates, on a client.
+    playback: remote::Playback,
 }
 
 impl std::fmt::Debug for Physics {
@@ -311,6 +314,7 @@ impl Physics {
             humanoid_ids: HashSet::default(),
             trusses: HashSet::default(),
             controllers: BTreeMap::new(),
+            playback: remote::Playback::default(),
         }
     }
 
@@ -342,7 +346,7 @@ impl Physics {
     fn moves_anything(&self) -> bool {
         let touches_remote = matches!(self.authority, Authority::Except(_));
         let [local, remote] = self.moving;
-        local > 0 || (touches_remote && remote > 0)
+        local > 0 || (touches_remote && remote > 0) || self.playback.any()
     }
 
     /// Whether this world simulates `part`'s assembly (`false` for an

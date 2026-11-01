@@ -189,7 +189,7 @@ fn effects_groups_and_local_sounds() {
 /// replicated).
 #[test]
 fn slow_server_keeps_client_clock() {
-    use crate::session::host::{ClientHost, ServerHost, ToClient};
+    use crate::session::host::{ClientHost, ServerHost};
     let options = tone_options("sound-clock");
     let mut server = DataModel::new(&options).unwrap();
     add_script(
@@ -206,7 +206,7 @@ fn slow_server_keeps_client_clock() {
     let mut server_frames = |client: &mut ClientHost, n: usize| {
         for _ in 0..n {
             host.step();
-            client.deliver(&ToClient::Updates(host.updates().pop().unwrap()));
+            client.deliver(&host.updates().pop().unwrap());
             for _ in 0..9 {
                 client.step();
             }
