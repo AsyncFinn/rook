@@ -38,7 +38,7 @@ pub use query::{CastShape, Filter, Hit, Region};
 use assembly::bodies::{Body, Home, Static};
 use assembly::{Assembly, is_massless};
 use contacts::groups::CollisionGroups;
-use convert::{between, cframe_of, pose_of, to_glam, to_rapier};
+use convert::{between, cframe_of, pose_of};
 use joints::constraints::{Drive, Spec, apply_drive, hinge_constraint_drive, revolute_angle};
 use joints::drives::{BuiltConstraint, DriveSource, Driven};
 use joints::movers::Mover;
@@ -156,6 +156,10 @@ pub struct Physics {
     /// body (a place with 79k bodies spent milliseconds a frame finding its
     /// two).
     motored: HashSet<RigidBodyHandle>,
+    /// Unanchored bodies this world simulates, and those another machine
+    /// does, so a step knows whether anything can move without visiting
+    /// every body.
+    moving: [usize; 2],
     parts: HashMap<InstanceId, Home>,
     /// Anchored parts on their own, with no joints and no velocity: most
     /// of a large place. Their colliders have no body at all, Rapier's
@@ -268,6 +272,7 @@ impl Physics {
             props: None,
             bodies: HashMap::default(),
             motored: HashSet::default(),
+            moving: [0; 2],
             parts: HashMap::default(),
             statics: HashMap::default(),
             shared,
@@ -336,9 +341,8 @@ impl Physics {
     /// simulates, or (on a server) one a client moves, for its touches.
     fn moves_anything(&self) -> bool {
         let touches_remote = matches!(self.authority, Authority::Except(_));
-        self.bodies
-            .values()
-            .any(|b| !b.asm.anchored && (!b.remote || touches_remote))
+        let [local, remote] = self.moving;
+        local > 0 || (touches_remote && remote > 0)
     }
 
     /// Whether this world simulates `part`'s assembly (`false` for an
@@ -401,7 +405,7 @@ impl Physics {
 
     /// Simulated (unanchored) assemblies.
     pub fn body_count(&self) -> usize {
-        self.bodies.values().filter(|b| !b.asm.anchored).count()
+        self.moving.iter().sum()
     }
 
     /// The root part of the assembly `part` is simulated in.

@@ -43,9 +43,9 @@ const FLOAT_RATE: f32 = 6.0;
 impl Physics {
     pub(super) fn steer(&mut self, c: &mut Controller, r: &Rooted, h: f32) {
         let root = self.root_pose(r);
-        let gravity = to_glam(self.world.gravity);
+        let gravity = self.world.gravity;
         let rb = &mut self.world.bodies[r.body];
-        let mut v = to_glam(rb.linvel());
+        let mut v = rb.linvel();
         let walk = c.drive.walk;
         // The controller applies gravity itself, where the state falls
         // (the body's own gravity is off while it's driven).
@@ -114,7 +114,7 @@ impl Physics {
             }
             _ => return,
         }
-        rb.set_linvel(to_rapier(v), true);
+        rb.set_linvel(v, true);
         if turn {
             let look = horizontal(root.rotation * glam::Vec3::NEG_Z);
             let angle_to = |way: glam::Vec3| look.cross(way).y.atan2(look.dot(way));

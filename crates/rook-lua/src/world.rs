@@ -145,6 +145,10 @@ pub struct SoundControl {
 /// The audio API's script state (`api/methods/audio_api.rs`).
 #[derive(Debug, Default)]
 pub struct AudioState {
+    /// The graph's instances. Interior mutability, as `Dom`'s defaults
+    /// cache: property reads, which borrow the world to read, bring it
+    /// up to date.
+    pub graph: std::cell::RefCell<crate::audio_api::GraphNodes>,
     /// AudioAnalyzers' last spectra, written by the engine on clients.
     pub spectra: HashMap<InstanceId, Vec<f32>>,
     /// `AudioPlayer:Play(atTime)` and `Stop(atTime)` calls waiting for
@@ -413,6 +417,12 @@ impl World {
     /// it's trimmed.
     pub fn note_style_changes(&mut self) {
         self.styles.note_changes(&self.dom);
+    }
+
+    /// Bring the audio graph's instances up to date, before the journal
+    /// is trimmed.
+    pub fn note_audio_graph(&mut self) {
+        self.audio.graph.get_mut().note_changes(&self.dom);
     }
 
     pub(crate) fn count_unimplemented(&mut self, what: String) {

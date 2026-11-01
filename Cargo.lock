@@ -1195,12 +1195,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "glam"
-version = "0.34.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eece6af6447501f08d55ff4f6aed8a2753e4224e51899bccf3d5ae3d2de564b1"
-
-[[package]]
 name = "glamx"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3193,7 +3187,7 @@ name = "rook-audio"
 version = "0.3.0"
 dependencies = [
  "cpal",
- "glam 0.34.0",
+ "glam 0.33.12",
  "rook-content",
  "rook-types",
 ]
@@ -3255,7 +3249,7 @@ dependencies = [
 name = "rook-dom"
 version = "0.3.0"
 dependencies = [
- "glam 0.34.0",
+ "glam 0.33.12",
  "rbx_types",
  "rook-reflection",
  "rook-types",
@@ -3272,7 +3266,7 @@ dependencies = [
  "anstyle",
  "chrono",
  "directories",
- "glam 0.34.0",
+ "glam 0.33.12",
  "mlua",
  "profiling",
  "rbx_dom_weak",
@@ -3319,7 +3313,7 @@ dependencies = [
 name = "rook-gui"
 version = "0.3.0"
 dependencies = [
- "glam 0.34.0",
+ "glam 0.33.12",
  "harfrust",
  "profiling",
  "rook-content",
@@ -3338,7 +3332,7 @@ name = "rook-lua"
 version = "0.3.0"
 dependencies = [
  "chrono",
- "glam 0.34.0",
+ "glam 0.33.12",
  "mlua",
  "profiling",
  "rbx_types",
@@ -3373,7 +3367,7 @@ dependencies = [
 name = "rook-physics"
 version = "0.3.0"
 dependencies = [
- "glam 0.34.0",
+ "glam 0.33.12",
  "profiling",
  "rapier3d",
  "rook-dom",
@@ -3402,7 +3396,7 @@ dependencies = [
  "clap",
  "embed-resource",
  "fs-err",
- "glam 0.34.0",
+ "glam 0.33.12",
  "image",
  "mimalloc",
  "pollster 1.0.1",
@@ -3446,7 +3440,7 @@ name = "rook-render"
 version = "0.3.0"
 dependencies = [
  "bytemuck",
- "glam 0.34.0",
+ "glam 0.33.12",
  "naga",
  "pollster 1.0.1",
  "profiling",
@@ -3464,7 +3458,7 @@ dependencies = [
 name = "rook-terrain"
 version = "0.3.0"
 dependencies = [
- "glam 0.34.0",
+ "glam 0.33.12",
  "rook-types",
  "rustc-hash 2.1.3",
  "serde_json",
@@ -3475,7 +3469,7 @@ dependencies = [
 name = "rook-types"
 version = "0.3.0"
 dependencies = [
- "glam 0.34.0",
+ "glam 0.33.12",
  "rbx_types",
  "rook-reflection",
  "thiserror 2.0.21",
@@ -3486,7 +3480,7 @@ name = "rook-view"
 version = "0.3.0"
 dependencies = [
  "blake3",
- "glam 0.34.0",
+ "glam 0.33.12",
  "image",
  "profiling",
  "rook-content",

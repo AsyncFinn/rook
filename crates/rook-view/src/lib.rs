@@ -228,8 +228,10 @@ impl SceneCache {
         for &id in &changes.collected {
             self.place(dom, id, false, &mut changed);
             self.wire_lines.remove(&id);
+        }
+        if !changes.collected.is_empty() {
             for parts in self.waiting.values_mut() {
-                parts.remove(&id);
+                parts.retain(|p| !changes.collected.contains(p));
             }
         }
         if changes.full {

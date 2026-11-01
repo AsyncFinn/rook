@@ -89,7 +89,7 @@ pub(super) fn get_connected_wires(lua: &Lua, this: InstanceId, a: &Args) -> ApiR
     let wires = with_world(lua, |w| {
         let dom = &w.dom;
         let name = |wire, p| dom.string_property(wire, p).unwrap_or_default();
-        audio_api::connections(dom, &audio_api::all_wires(dom))
+        audio_api::connections(dom, &audio_api::all_wires(w))
             .into_iter()
             .filter(|c| {
                 (c.from == this && name(c.wire, "SourceName") == pin)
@@ -188,7 +188,7 @@ pub(super) fn get_interacting_listeners(
     _: &Args,
 ) -> ApiResult<Outcome> {
     let ids = with_world(lua, |w| {
-        audio_api::interacting_with(&w.dom, this, "AudioListener")
+        audio_api::interacting_with(w, this, "AudioListener")
     });
     ret_instances(lua, &ids)
 }
@@ -199,7 +199,7 @@ pub(super) fn get_interacting_emitters(
     _: &Args,
 ) -> ApiResult<Outcome> {
     let ids = with_world(lua, |w| {
-        audio_api::interacting_with(&w.dom, this, "AudioEmitter")
+        audio_api::interacting_with(w, this, "AudioEmitter")
     });
     ret_instances(lua, &ids)
 }

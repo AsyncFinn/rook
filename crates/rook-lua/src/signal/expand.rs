@@ -74,6 +74,10 @@ pub(crate) fn expand<H: Clone>(change: &Change, signals: &Signals<H>, dom: &Dom)
                 );
             }
         }
+        // Most changed instances have no connections at all: one lookup
+        // instead of one per signal.
+        Change::Property { id, .. } | Change::Attribute { id, .. }
+            if !signals.instance_has_connections(*id) => {}
         Change::Property { id, property } => {
             push(
                 *id,

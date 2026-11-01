@@ -46,7 +46,7 @@ fn collider_surface(dom: &Dom, part: InstanceId, is_root: bool) -> (f32, materia
 fn box_mass(size: glam::Vec3, mass: f32) -> MassProperties {
     let size = size.max(glam::Vec3::splat(shape::MIN_PART_SIZE));
     let density = mass / (size.x * size.y * size.z);
-    MassProperties::from_cuboid(density, to_rapier(size * 0.5))
+    MassProperties::from_cuboid(density, size * 0.5)
 }
 
 impl Physics {
@@ -119,6 +119,9 @@ impl Physics {
         profiling::scope!("Physics::remove_body");
         let body = self.bodies.remove(&h)?;
         self.motored.remove(&h);
+        if !body.asm.anchored {
+            self.moving[usize::from(body.remote)] -= 1;
+        }
         // Removing the Rapier body removes its colliders and joints.
         self.world.remove_body(h);
         for (m, c) in body.asm.members.iter().zip(&body.colliders) {
@@ -194,7 +197,7 @@ impl Physics {
             return None;
         }
         let vector = |p| match dom.property(root, p) {
-            Some(Value::Vector3(v)) => to_rapier(v.0),
+            Some(Value::Vector3(v)) => v.0,
             _ => Vector::ZERO,
         };
         let remote = !asm.anchored
@@ -240,6 +243,9 @@ impl Physics {
         {
             profiling::scope!("Assembly::place");
             rook_dom::ignore_stale(asm.place(dom, root_cf));
+        }
+        if !asm.anchored {
+            self.moving[usize::from(remote)] += 1;
         }
         self.bodies.insert(
             handle,
@@ -497,7 +503,7 @@ impl Physics {
         let offset = body.asm.offset_of(part).unwrap_or_default();
         let root = cf * offset.inverse();
         let vector = |p| match dom.property(part, p) {
-            Some(Value::Vector3(v)) => to_rapier(v.0),
+            Some(Value::Vector3(v)) => v.0,
             _ => Vector::ZERO,
         };
         self.stale.insert(h);

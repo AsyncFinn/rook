@@ -4,7 +4,6 @@
 use glam::{IVec3, Vec3};
 
 use super::*;
-use crate::convert::to_glam;
 
 /// How far a chunk's surface reaches outside its own box, rounded up: the
 /// quads of edges into the next chunk reach the next voxels' centers (6
@@ -117,16 +116,13 @@ impl Physics {
             if !rb.is_dynamic() {
                 continue;
             }
-            let reach = to_glam(rb.linvel()).length() * dt;
+            let reach = rb.linvel().length() * dt;
             for c in rb.colliders() {
                 let co = &self.world.colliders[*c];
                 let local = co.position_wrt_parent().copied().unwrap_or_default();
                 let aabb = co.shape().compute_aabb(&(rb.position() * local));
-                self.terrain.unbuilt_in(
-                    to_glam(aabb.mins) - reach,
-                    to_glam(aabb.maxs) + reach,
-                    &mut want,
-                );
+                self.terrain
+                    .unbuilt_in(aabb.mins - reach, aabb.maxs + reach, &mut want);
             }
         }
         self.build_wanted(want);

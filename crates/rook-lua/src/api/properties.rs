@@ -310,7 +310,7 @@ pub(crate) fn get(w: &World, id: InstanceId, name: &str) -> Option<Value> {
         }
         // Observed: whether the wire carries sound now (crate::audio_api).
         "Connected" if dom.is_a(id, "Wire") => {
-            let all = crate::audio_api::all_wires(dom);
+            let all = crate::audio_api::all_wires(w);
             let connected = crate::audio_api::connections(dom, &all);
             Some(Value::Bool(connected.iter().any(|c| c.wire == id)))
         }

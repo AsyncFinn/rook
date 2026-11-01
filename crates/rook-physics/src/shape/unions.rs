@@ -20,8 +20,6 @@ use glam::Vec3;
 use rook_dom::{Dom, InstanceId};
 use rook_types::{UnionCollision, mesh_part_scale};
 
-use crate::convert::to_rapier;
-
 /// Shapes kept for reuse, keyed by geometry and scale; cleared when it
 /// grows past this (scripts resizing unions every frame).
 const CACHE_LIMIT: usize = 4096;
@@ -84,7 +82,7 @@ fn build(geometry: &UnionCollision, scale: Vec3) -> Option<SharedShape> {
     let points = |positions: &[[f32; 3]]| -> Vec<Vector> {
         positions
             .iter()
-            .map(|p| to_rapier(Vec3::from_array(*p) * scale))
+            .map(|p| Vec3::from_array(*p) * scale)
             .collect()
     };
     match geometry {

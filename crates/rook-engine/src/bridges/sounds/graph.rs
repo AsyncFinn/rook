@@ -85,13 +85,12 @@ impl DataModel {
     /// and the connected wires. An AudioDeviceOutput is heard when its
     /// `Player` is nil or this client's player (creator-docs).
     pub fn audio_graph(&self) -> Graph<InstanceId> {
-        if self.sounds.graph_nodes.is_empty() {
-            return Graph::default();
-        }
         let w = self.runtime.world();
         let dom = &w.dom;
-        let mut ids: Vec<InstanceId> = self.sounds.graph_nodes.iter().copied().collect();
-        ids.sort();
+        let ids = w.audio.graph.borrow_mut().all(dom);
+        if ids.is_empty() {
+            return Graph::default();
+        }
         let local = dom
             .find_service("Players")
             .and_then(|p| dom.ref_property(p, "LocalPlayer"));
@@ -246,15 +245,7 @@ impl DataModel {
     fn measure_analyzers(&mut self, dt: f64) {
         let analyzers: Vec<InstanceId> = {
             let w = self.runtime.world();
-            let mut a: Vec<InstanceId> = self
-                .sounds
-                .graph_nodes
-                .iter()
-                .copied()
-                .filter(|&i| w.dom.class_name(i) == "AudioAnalyzer")
-                .collect();
-            a.sort();
-            a
+            w.audio.graph.borrow_mut().of_class(&w.dom, "AudioAnalyzer")
         };
         if analyzers.is_empty() {
             self.sounds.meter = None;

@@ -402,7 +402,7 @@ impl Physics {
         let Some(r) = self.rooted(c.drive.root) else {
             return 0.0;
         };
-        let v = to_glam(self.world.bodies[r.body].linvel());
+        let v = self.world.bodies[r.body].linvel();
         let floor = c.floor.as_ref().map_or(glam::Vec3::ZERO, |f| f.velocity);
         match c.state {
             State::Climbing => v.y,

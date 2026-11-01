@@ -55,7 +55,7 @@ impl Physics {
         let mut first = None;
         for offset in starts {
             let origin = bottom + offset;
-            let ray = Ray::new(to_rapier(origin), Vector::NEG_Y);
+            let ray = Ray::new(origin, Vector::NEG_Y);
             // A ray starting inside a part (a step too tall) feels nothing.
             let Some((h, hit)) = pipeline
                 .cast_ray_and_get_normal(&ray, length, true)
@@ -65,7 +65,7 @@ impl Physics {
             };
             hits += 1.0;
             height += origin.y - hit.time_of_impact;
-            normal += to_glam(hit.normal);
+            normal += hit.normal;
             if first.is_none() {
                 first = Some((h, origin - glam::Vec3::Y * hit.time_of_impact));
             }
@@ -107,9 +107,9 @@ impl Physics {
             return glam::Vec3::ZERO;
         };
         if rb.is_fixed() {
-            to_glam(contacts::unpack_velocity(rb.user_data))
+            contacts::unpack_velocity(rb.user_data)
         } else {
-            to_glam(rb.velocity_at_point(to_rapier(point)))
+            rb.velocity_at_point(point)
         }
     }
 }

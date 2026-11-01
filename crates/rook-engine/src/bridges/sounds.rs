@@ -69,8 +69,6 @@ pub(crate) struct Sounds {
     local: Vec<(InstanceId, ContentRef)>,
     /// AudioPlayers already seen, so `AutoPlay` plays each once.
     seen_players: HashSet<InstanceId>,
-    /// The audio API's instances and Wires in the DataModel.
-    graph_nodes: HashSet<InstanceId>,
     /// Whether this client has made its default AudioListener.
     default_listener: bool,
     /// On clients with AudioAnalyzers: the graph rendered to measure them.
@@ -87,7 +85,6 @@ impl Sounds {
         self.loudness.remove(&id);
         self.local.retain(|(l, _)| *l != id);
         self.seen_players.remove(&id);
-        self.graph_nodes.remove(&id);
     }
 }
 
@@ -186,11 +183,7 @@ impl DataModel {
             let all = dom.descendants(dom.root());
             sounds
                 .dirty
-                .extend(all.iter().copied().filter(|&i| is_sound(dom, i)));
-            sounds.graph_nodes.extend(
-                all.into_iter()
-                    .filter(|&i| rook_lua::audio_api::in_graph(dom.class_name(i))),
-            );
+                .extend(all.into_iter().filter(|&i| is_sound(dom, i)));
         }
         let ids = SoundProps::get();
         for c in changes {
@@ -211,15 +204,6 @@ impl DataModel {
                 Change::Reparented { subtree, .. } => {
                     let moved = subtree.iter().filter(|&&i| is_sound(dom, i));
                     sounds.dirty.extend(moved);
-                    for &i in subtree {
-                        if dom.is_ancestor_of(dom.root(), i)
-                            && rook_lua::audio_api::in_graph(dom.class_name(i))
-                        {
-                            sounds.graph_nodes.insert(i);
-                        } else {
-                            sounds.graph_nodes.remove(&i);
-                        }
-                    }
                 }
                 _ => {}
             }

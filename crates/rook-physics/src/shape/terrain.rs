@@ -21,7 +21,6 @@ mod near;
 
 use crate::Physics;
 use crate::contacts::materials;
-use crate::convert::to_rapier;
 
 /// The terrain in the world.
 #[derive(Default)]
@@ -229,7 +228,7 @@ impl Physics {
             let water = piece.material == TerrainMaterial::Water;
             let surface = materials::of_material(piece.material.material() as u32);
             let collider = ColliderBuilder::new(SharedShape::new(piece.mesh))
-                .position(Pose::from_translation(to_rapier(piece.origin)))
+                .position(Pose::from_translation(piece.origin))
                 .friction(surface.friction)
                 .restitution(surface.elasticity)
                 .user_data(crate::contacts::pack(&surface))
@@ -275,7 +274,7 @@ impl Physics {
     /// Whether `point` is inside solid terrain: the nearest surface above
     /// it faces up, so the point is under it.
     pub(crate) fn inside_terrain(&self, point: glam::Vec3) -> bool {
-        let ray = Ray::new(to_rapier(point), Vector::Y);
+        let ray = Ray::new(point, Vector::Y);
         let pipeline = self.world.query_pipeline();
         let nearest = pipeline
             .intersect_ray(ray, crate::query::MAX_RAY_LENGTH, false)

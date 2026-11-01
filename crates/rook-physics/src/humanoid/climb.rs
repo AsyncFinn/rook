@@ -48,7 +48,7 @@ impl Physics {
             .map(|i| {
                 let origin =
                     glam::Vec3::new(root.position.x, bottom + step * i as f32, root.position.z);
-                let ray = Ray::new(to_rapier(origin), to_rapier(ahead));
+                let ray = Ray::new(origin, ahead);
                 pipeline
                     .cast_ray_and_get_normal(&ray, REACH, true)
                     .map(|(h, hit)| (h, hit, origin + ahead * hit.time_of_impact))
@@ -68,7 +68,7 @@ impl Physics {
         };
         let (_, hit, point) =
             truss.or_else(|| ladder.then(|| hits.iter().flatten().next()).flatten())?;
-        let normal = horizontal(to_glam(hit.normal)).normalize_or_zero();
+        let normal = horizontal(hit.normal).normalize_or_zero();
         (normal != glam::Vec3::ZERO).then_some(Climb {
             normal,
             point: *point,

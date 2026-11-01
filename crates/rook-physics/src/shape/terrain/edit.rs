@@ -86,10 +86,7 @@ impl Physics {
             .filter(|(_, rb)| {
                 rb.colliders().iter().any(|c| {
                     let aabb = self.world.colliders[*c].compute_aabb();
-                    let (min, max) = (
-                        crate::convert::to_glam(aabb.mins),
-                        crate::convert::to_glam(aabb.maxs),
-                    );
+                    let (min, max) = (aabb.mins, aabb.maxs);
                     min.cmple(hi).all() && max.cmpge(lo).all()
                 })
             })

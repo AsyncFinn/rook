@@ -10,7 +10,7 @@ use rapier3d::prelude::*;
 use rook_dom::{Dom, InstanceId};
 use rook_types::CFrame;
 
-use crate::convert::{cframe_of, to_glam, to_rapier};
+use crate::convert::cframe_of;
 use crate::joints::constraints::{attachment, attachments};
 
 /// Classes that act through [`Mover`].
@@ -249,9 +249,9 @@ impl State {
     fn of(rb: &RigidBody) -> Self {
         Self {
             pose: cframe_of(rb.position()),
-            com: to_glam(rb.center_of_mass()),
-            v: to_glam(rb.linvel()),
-            w: to_glam(rb.angvel()),
+            com: rb.center_of_mass(),
+            v: rb.linvel(),
+            w: rb.angvel(),
             mass: rb.mass(),
             inertia: rb.mass_properties().effective_angular_inertia(),
             dynamic: rb.is_dynamic(),
@@ -265,7 +265,7 @@ impl State {
 
     /// The torque that gives angular acceleration `alpha`.
     fn torque_for(&self, alpha: Vec3) -> Vec3 {
-        to_glam(self.inertia * to_rapier(alpha))
+        self.inertia * alpha
     }
 }
 
@@ -347,7 +347,7 @@ pub(crate) fn apply<'a>(
             rb.reset_torques(false);
         }
     }
-    let gravity = to_glam(world.gravity);
+    let gravity = world.gravity;
     let mut states: HashMap<RigidBodyHandle, State> = HashMap::default();
     for b in movers.clone().flat_map(Mover::bodies) {
         if !states.contains_key(&b)
@@ -365,10 +365,10 @@ pub(crate) fn apply<'a>(
             continue;
         };
         let wake = push.wake;
-        rb.add_force(to_rapier(push.force), wake);
-        rb.add_torque(to_rapier(push.torque), wake);
+        rb.add_force(push.force, wake);
+        rb.add_torque(push.torque, wake);
         for (f, p) in push.at {
-            rb.add_force_at_point(to_rapier(f), to_rapier(p), wake);
+            rb.add_force_at_point(f, p, wake);
         }
         forced.push(b);
     }

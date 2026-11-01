@@ -16,7 +16,6 @@ use rook_terrain::TerrainMaterial;
 use rook_terrain::grid::edit::Shape as Fill;
 use rustc_hash::FxHashMap as HashMap;
 
-use crate::convert::{to_glam, to_rapier};
 use crate::joints::{JointKind, part_joints};
 use crate::query::Filter;
 use crate::{Physics, shape};
@@ -59,11 +58,11 @@ impl Physics {
         let mut blast = Blast::default();
         if radius > 0.0 {
             let ball = Ball::new(radius);
-            let pose = Pose::from_translation(to_rapier(center));
-            let point = to_rapier(center);
+            let pose = Pose::from_translation(center);
+            let point = center;
             let reach = |co: &Collider| {
                 let surface = co.shape().project_point(co.position(), point, false);
-                (to_glam(surface.point) - center).length()
+                (surface.point - center).length()
             };
             // Each part's nearest collider surface.
             let reached = RefCell::new(HashMap::default());
@@ -139,8 +138,8 @@ impl Physics {
                 continue;
             }
             let way = impulse.normalize_or_zero();
-            body.apply_impulse_at_point(to_rapier(impulse), to_rapier(at), true);
-            body.apply_torque_impulse(to_rapier(way * spin), true);
+            body.apply_impulse_at_point(impulse, at, true);
+            body.apply_torque_impulse(way * spin, true);
         }
     }
 }

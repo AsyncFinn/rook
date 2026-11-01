@@ -248,6 +248,7 @@ impl DataModel {
             }
             w.gui.note_changes(&w.dom);
             w.note_style_changes();
+            w.note_audio_graph();
         }
         self.note_new_scripts();
         self.check_render_changes();

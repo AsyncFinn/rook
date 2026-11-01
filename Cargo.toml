@@ -45,7 +45,7 @@ quick-xml = "0.42"
 base64 = "0.23"
 
 # General
-glam = "0.34"
+glam = "0.33"
 # Physics
 # `parallel`: the narrow phase and solver run on all cores; results are
 # identical to a serial build (Rapier colors constraints the same way).

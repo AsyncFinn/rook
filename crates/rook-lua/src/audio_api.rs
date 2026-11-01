@@ -14,9 +14,9 @@ mod ranges;
 pub use curves::{read_curve, write_curve};
 pub(crate) use ranges::clamp;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
-use rook_dom::{Dom, InstanceId};
+use rook_dom::{Change, Dom, InstanceId};
 use rook_types::{CFrame, RollOffMode, Value};
 
 use crate::world::World;
@@ -79,6 +79,59 @@ pub fn is_effect(class: &str) -> bool {
 /// Wire).
 pub fn in_graph(class: &str) -> bool {
     class == "Wire" || pins(class).is_some()
+}
+
+/// The audio API's instances and Wires in the DataModel, brought up to
+/// date from the journal whenever asked, so neither a script's
+/// `Wire.Connected` nor the mixer looks through the whole tree.
+#[derive(Debug, Default)]
+pub struct GraphNodes {
+    cursor: u64,
+    scanned: bool,
+    /// In id order, the order the graph is built in.
+    ids: BTreeSet<InstanceId>,
+}
+
+impl GraphNodes {
+    /// Catch up with the journal: called when asked, and before the
+    /// journal is trimmed at the end of a frame.
+    pub fn note_changes(&mut self, dom: &Dom) {
+        if !std::mem::replace(&mut self.scanned, true) {
+            let all = dom.descendants(dom.root());
+            self.ids
+                .extend(all.into_iter().filter(|&i| in_graph(dom.class_name(i))));
+        }
+        for change in dom.journal().since(self.cursor) {
+            match change {
+                Change::Reparented { subtree, .. } => {
+                    for &i in subtree.iter().filter(|&&i| in_graph(dom.class_name(i))) {
+                        if dom.is_ancestor_of(dom.root(), i) {
+                            self.ids.insert(i);
+                        } else {
+                            self.ids.remove(&i);
+                        }
+                    }
+                }
+                Change::Collected(id) => _ = self.ids.remove(id),
+                _ => {}
+            }
+        }
+        self.cursor = dom.journal().end();
+    }
+
+    /// Every node and Wire, in id order.
+    pub fn all(&mut self, dom: &Dom) -> Vec<InstanceId> {
+        self.note_changes(dom);
+        self.ids.iter().copied().collect()
+    }
+
+    /// Those of `class`, in id order.
+    pub fn of_class(&mut self, dom: &Dom, class: &str) -> Vec<InstanceId> {
+        self.note_changes(dom);
+        (self.ids.iter().copied())
+            .filter(|&i| dom.class_name(i) == class)
+            .collect()
+    }
 }
 
 /// Play or stop an AudioPlayer where its `TimePosition` is. Playing one
@@ -167,11 +220,8 @@ fn reaches(next: &HashMap<InstanceId, Vec<InstanceId>>, from: InstanceId, to: In
 }
 
 /// Every Wire in the DataModel.
-pub(crate) fn all_wires(dom: &Dom) -> Vec<InstanceId> {
-    dom.descendants(dom.root())
-        .into_iter()
-        .filter(|&i| dom.class_name(i) == "Wire")
-        .collect()
+pub(crate) fn all_wires(w: &World) -> Vec<InstanceId> {
+    w.audio.graph.borrow_mut().of_class(&w.dom, "Wire")
 }
 
 /// Where an emitter or listener is: its parent's world CFrame, for a
@@ -283,9 +333,9 @@ pub fn heard(w: &World, emitter: InstanceId, listener: InstanceId) -> Option<[f3
 
 /// The emitters (or listeners) in the DataModel that `id` can interact
 /// with: those of the other kind in its `AudioInteractionGroup`.
-pub(crate) fn interacting_with(dom: &Dom, id: InstanceId, class: &str) -> Vec<InstanceId> {
-    dom.descendants(dom.root())
-        .into_iter()
-        .filter(|&i| dom.class_name(i) == class && interacting(dom, i, id))
-        .collect()
+pub(crate) fn interacting_with(w: &World, id: InstanceId, class: &str) -> Vec<InstanceId> {
+    let dom = &w.dom;
+    let mut found = w.audio.graph.borrow_mut().of_class(dom, class);
+    found.retain(|&i| interacting(dom, i, id));
+    found
 }

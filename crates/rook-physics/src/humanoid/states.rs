@@ -98,7 +98,7 @@ impl Physics {
         }
         let landed = || {
             let root = self.root_pose(r).position.y;
-            let v = to_glam(self.world.bodies[r.body].linvel());
+            let v = self.world.bodies[r.body].linvel();
             c.floor.is_some_and(|f| {
                 root - (f.y + d.standing_height) <= LANDING && v.y - f.velocity.y <= 0.0
             })
@@ -154,9 +154,9 @@ impl Physics {
         if next == State::Jumping {
             let floor = c.floor.as_ref().map_or(glam::Vec3::ZERO, |f| f.velocity);
             let rb = &mut self.world.bodies[r.body];
-            let mut v = to_glam(rb.linvel());
+            let mut v = rb.linvel();
             v.y = floor.y + c.drive.jump_speed;
-            rb.set_linvel(to_rapier(v), true);
+            rb.set_linvel(v, true);
             c.lift = JUMP_LIFT;
         }
     }

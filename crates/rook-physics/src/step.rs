@@ -122,8 +122,8 @@ impl Physics {
                 }
                 continue;
             }
-            let linvel = Value::Vector3(Vector3(to_glam(rb.linvel())));
-            let angvel = Value::Vector3(Vector3(to_glam(rb.angvel())));
+            let linvel = Value::Vector3(Vector3(rb.linvel()));
+            let angvel = Value::Vector3(Vector3(rb.angvel()));
             for m in &body.asm.members {
                 let cf = root * m.offset;
                 if cf.position.y < self.fallen_height {

@@ -13,7 +13,7 @@ use rook_dom::{Dom, InstanceId};
 use rook_types::CFrame;
 
 use crate::contacts::groups;
-use crate::convert::{pose_of, to_glam, to_rapier};
+use crate::convert::pose_of;
 use crate::{Physics, shape};
 
 mod filter;
@@ -176,7 +176,7 @@ impl Physics {
         let dir = direction / length;
         let max = length.min(MAX_RAY_LENGTH);
         self.build_terrain_along(origin, dir, max);
-        let ray = Ray::new(to_rapier(origin), to_rapier(dir));
+        let ray = Ray::new(origin, dir);
         let accept = self.part_filter(dom, filter);
         // Parts: the nearest hit, found nearest first so the search stops
         // there instead of testing every part the ray passes. A part the
@@ -215,7 +215,7 @@ impl Physics {
         Some(Hit {
             part,
             position: origin + dir * distance,
-            normal: surface_normal(to_glam(hit.normal)),
+            normal: surface_normal(hit.normal),
             distance,
             material: self.material_of(dom, h, part),
         })
@@ -248,11 +248,8 @@ impl Physics {
         };
         let start = pose_of(&cframe);
         let from = cast.compute_aabb(&start);
-        let to = cast.compute_aabb(&(Pose::from_translation(to_rapier(direction)) * start));
-        self.build_terrain_in(
-            to_glam(from.mins.min(to.mins)),
-            to_glam(from.maxs.max(to.maxs)),
-        );
+        let to = cast.compute_aabb(&(Pose::from_translation(direction) * start));
+        self.build_terrain_in(from.mins.min(to.mins), from.maxs.max(to.maxs));
         let accept = self.part_filter(dom, filter);
         let predicate = |h: ColliderHandle, co: &Collider| {
             accept(h).is_some()
@@ -269,13 +266,13 @@ impl Physics {
             compute_impact_geometry_on_penetration: true,
         };
         let dir = direction / length;
-        let (h, hit) = pipeline.cast_shape(&start, to_rapier(dir), &*cast, options)?;
+        let (h, hit) = pipeline.cast_shape(&start, dir, &*cast, options)?;
         let part = *self.colliders.get(&h)?;
         // witness1 and normal1 are on the part hit, in world space.
         Some(Hit {
             part,
-            position: to_glam(hit.witness1),
-            normal: surface_normal(to_glam(hit.normal1)),
+            position: hit.witness1,
+            normal: surface_normal(hit.normal1),
             distance: hit.time_of_impact,
             material: self.material_of(dom, h, part),
         })
@@ -400,8 +397,8 @@ impl Physics {
             return Vec::new();
         };
         let aabb = shape.compute_aabb(&pose);
-        let center = to_glam(pose.translation);
-        self.build_terrain_in(to_glam(aabb.mins), to_glam(aabb.maxs));
+        let center = pose.translation;
+        self.build_terrain_in(aabb.mins, aabb.maxs);
         self.build_terrain_along(center, Vec3::Y, MAX_RAY_LENGTH);
         let mut found: Vec<InstanceId> = self
             .world

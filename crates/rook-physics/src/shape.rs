@@ -7,7 +7,7 @@ use rapier3d::prelude::*;
 use rook_dom::{Dom, InstanceId};
 use rook_types::{CFrame, PartShape};
 
-use crate::convert::{pose_of, to_rapier};
+use crate::convert::pose_of;
 use crate::shape::unions::Unions;
 
 /// Roblox parts are at least this many studs on each side.
@@ -48,11 +48,7 @@ pub(crate) fn collider_shape(shape: PartShape, size: glam::Vec3) -> Option<(Shar
             Pose::from_rotation(Rotation::from_rotation_z(-std::f32::consts::FRAC_PI_2)),
         ),
         PartShape::Wedge | PartShape::CornerWedge => {
-            let points: Vec<Vector> = shape
-                .vertices()?
-                .into_iter()
-                .map(|p| to_rapier(p * size))
-                .collect();
+            let points: Vec<Vector> = shape.vertices()?.into_iter().map(|p| p * size).collect();
             (SharedShape::convex_hull(&points)?, Pose::IDENTITY)
         }
     })
