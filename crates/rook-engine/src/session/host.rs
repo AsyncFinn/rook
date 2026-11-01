@@ -23,8 +23,9 @@ use crate::{DataModel, EngineError, InputEvent, Options};
 pub enum ToClient {
     /// A remote event, invoke or reply, with the server's instance ids.
     Remote(RemoteMessage),
-    /// Replicated changes.
-    Updates(Vec<Update>),
+    /// Replicated changes from the server frame that ended at server time
+    /// `time`.
+    Updates { time: f64, updates: Vec<Update> },
     /// Effect methods the server's scripts called (`ParticleEmitter:Emit`
     /// and the like), which show on every client.
     Effects(Vec<(InstanceId, EffectCall)>),
@@ -265,12 +266,16 @@ impl ServerHost {
 
     /// The replicated changes since the last call, for each client in turn.
     /// Afterwards the server's journal is trimmed.
-    pub fn updates(&mut self) -> Vec<Vec<Update>> {
+    pub fn updates(&mut self) -> Vec<ToClient> {
         let updates = {
             let w = self.server.runtime().world();
+            let time = w.scheduler.now();
             self.clients
                 .iter_mut()
-                .map(|c| c.source.updates(&w.dom))
+                .map(|c| ToClient::Updates {
+                    time,
+                    updates: c.source.updates(&w.dom),
+                })
                 .collect()
         };
         self.server.trim_journal();
@@ -577,7 +582,7 @@ impl ClientHost {
     pub fn deliver(&mut self, msg: &ToClient) {
         let rt = self.client.runtime();
         match msg {
-            ToClient::Updates(updates) => {
+            &ToClient::Updates { time, ref updates } => {
                 let (start, local, added) = {
                     let mut w = rt.world_mut();
                     let start = w.dom.journal().end();
@@ -586,6 +591,8 @@ impl ClientHost {
                         |dom: &rook_dom::Dom| local.and_then(|p| dom.ref_property(p, "Character"));
                     let before = character(&w.dom);
                     self.sink.apply(updates, &mut w.dom);
+                    let w = &mut *w;
+                    w.physics.receive_updates(&mut w.dom, time);
                     let after = character(&w.dom);
                     (start, local, (after != before).then_some(after).flatten())
                 };

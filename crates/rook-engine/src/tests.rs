@@ -239,6 +239,7 @@ mod explosions;
 mod gui;
 mod movement;
 mod preload;
+mod remote_parts;
 mod scripts;
 mod session;
 mod sounds;

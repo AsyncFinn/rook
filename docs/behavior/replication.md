@@ -45,12 +45,49 @@ property in the database (the rest are server- or Studio-only):
 Confirmed for Sound's three (the server's sounds are heard on clients,
 at their speed); Inference from the database for the rest.
 
-An anchored part's `AssemblyLinearVelocity` and `AssemblyAngularVelocity`
-reach clients too: Roblox sends parts' velocities with their physics, and
-a client-simulated character rides an anchored conveyor in Studio
-(measured 2026-10-26; [movement](characters/movement.md)). A moving
-part's velocities don't: its pose and velocity come with physics, which
-Rook doesn't replicate that way yet (M10).
+Parts' `AssemblyLinearVelocity` and `AssemblyAngularVelocity` reach
+clients too: Roblox sends them with parts' physics. A client-simulated
+character rides an anchored conveyor in Studio (measured 2026-10-26;
+[movement](characters/movement.md)), and a client reads 10 for a part the
+server moves at 10 studs/s (measured 2026-10-31).
+
+## Physics
+
+Measured 2026-10-31 in a Baseplate playtest over Studio's MCP: a
+server-owned part pushed at a steady 10 studs/s by a LinearVelocity, read
+by a client script every RenderStepped.
+
+- The client shows it moving every frame by its speed times the frame
+  (0.15 to 0.19 studs in frames of 16 to 18 ms), never in the steps of the
+  updates, which reach it about 30 times a second (a server attribute set
+  every Heartbeat changed 61 times in 120 client frames).
+- It's shown behind the newest update the client has: 0.127 to 0.164 s,
+  median 0.146 (the server stamped its position on the part every
+  Heartbeat; the client compared each stamp with the part's position).
+- It interpolates: turned around by the server at x 222.66, the part went
+  no further than 222.48 on the client, and its velocity there eased from
+  10 to -10 over about 5 frames, about 0.17 s after the server turned it.
+- Client scripts read it where it's shown (`CFrame`, the velocities).
+
+In Rook (`rook_physics`'s `remote.rs`): each server frame's updates carry
+its server time, and a client keeps the poses and velocities of the
+assemblies it doesn't simulate as they arrive, played back 0.146 s behind
+the newest by cubic Hermite interpolation between them (the standard
+snapshot interpolation), as each 240 Hz step's kinematic target. So what
+it draws, what its scripts read (by whole steps, as for its own parts),
+contacts and a floor's velocity under its character all follow the same
+smooth motion: a character rides a platform the server moves. An
+assembly a frame's updates don't move held still. Past the server's
+newest frame it goes on at its velocity for at most 0.146 s (Inference:
+the delay covers late updates). The playback clock closes on its target
+over about a second, so updates arriving unevenly (a server falling behind
+and catching up) don't jerk it, and jumps when more than half a second
+off. Another player's character is one of these assemblies.
+Before, a client moved such an assembly when updates arrived: a 144 Hz
+client saw a moving part stand still for frames and jump four 240 Hz steps
+at once, and a character on a server's platform rode 0 of its 6 studs.
+A local script moving one puts it there at once, until the next update
+(Inference).
 
 ## From clients
 

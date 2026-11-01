@@ -222,8 +222,9 @@ fn changes_after_a_step_reach_every_reader() {
 
 /// The client simulates its own character and the server takes what it
 /// sends: the server has the client's position after each session frame,
-/// other clients see it move, the server's Touched fires for it, and the
-/// server's own moves reach the client.
+/// other clients show it there once their playback delay has passed
+/// (docs/behavior/replication.md#physics), the server's Touched fires for
+/// it, and the server's own moves reach the client.
 #[test]
 fn clients_simulate_their_own_characters() {
     let setup = r#"local pad = Instance.new("Part")
@@ -266,9 +267,10 @@ fn clients_simulate_their_own_characters() {
     let fallen = position(session.client(0).unwrap(), mine);
     assert!((fallen.y - 53.5).abs() < 0.6, "{fallen}");
     assert_eq!(position(session.server(), root), fallen);
-    session.step();
-    assert_eq!(position(session.client(1).unwrap(), theirs), fallen);
-    session.run_for(1.0);
+    session.run_for(0.3);
+    let shown = position(session.client(1).unwrap(), theirs);
+    assert!((shown - fallen).length() < 0.01, "{shown} {fallen}");
+    session.run_for(0.72);
     assert_eq!(lines(session.server()), ["touched by A", "owner true"]);
     let moved = position(session.client(0).unwrap(), mine);
     assert!(moved.x == 100.0 && moved.y > 150.0, "{moved}");

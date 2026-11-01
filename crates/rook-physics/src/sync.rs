@@ -160,7 +160,10 @@ impl Physics {
         for part in posed {
             match self.parts.get(&part) {
                 Some(&Home::Body(h)) if posed_bodies.insert(h) => {
-                    self.teleport(dom, props, h, part);
+                    if !self.replicated_move(dom, props, h) {
+                        self.playback.forget(h);
+                        self.teleport(dom, props, h, part);
+                    }
                 }
                 Some(Home::Static) if posed_statics.insert(part) => {
                     self.teleport_static(dom, props, part);

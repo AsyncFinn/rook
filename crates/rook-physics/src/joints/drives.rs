@@ -49,7 +49,7 @@ impl Physics {
     fn joins_here(&self, b0: RigidBodyHandle, b1: RigidBodyHandle) -> bool {
         [b0, b1]
             .iter()
-            .any(|&b| self.world.bodies.get(b).is_some_and(|rb| rb.is_dynamic()))
+            .any(|&b| self.world.bodies.get(b).is_some_and(RigidBody::is_dynamic))
     }
 
     /// Join two bodies with a hinge (Rotate, RotateP, RotateV).

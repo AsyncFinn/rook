@@ -8,7 +8,7 @@ pub mod threads;
 
 use rook_dom::InstanceId;
 
-use crate::session::host::{ClientHost, ServerHost, ToClient};
+use crate::session::host::{ClientHost, ServerHost};
 use crate::{DataModel, EngineError, Options};
 
 #[derive(Debug)]
@@ -65,7 +65,7 @@ impl Session {
         self.server.step();
         self.route();
         for (client, updates) in self.clients.iter_mut().zip(self.server.updates()) {
-            client.deliver(&ToClient::Updates(updates));
+            client.deliver(&updates);
             client.step();
         }
         self.route();
@@ -78,7 +78,7 @@ impl Session {
         self.server.step();
         self.route();
         for (client, updates) in self.clients.iter_mut().zip(self.server.updates()) {
-            client.deliver(&ToClient::Updates(updates));
+            client.deliver(&updates);
         }
     }
 

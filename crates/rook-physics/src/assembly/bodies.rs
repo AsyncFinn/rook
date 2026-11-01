@@ -119,6 +119,7 @@ impl Physics {
         profiling::scope!("Physics::remove_body");
         let body = self.bodies.remove(&h)?;
         self.motored.remove(&h);
+        self.playback.forget(h);
         // Removing the Rapier body removes its colliders and joints.
         self.world.remove_body(h);
         for (m, c) in body.asm.members.iter().zip(&body.colliders) {
