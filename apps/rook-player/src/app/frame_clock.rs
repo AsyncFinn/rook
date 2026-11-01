@@ -99,7 +99,10 @@ mod tests {
         let refreshes: Vec<f64> = steps.iter().map(|s| s / refresh).collect();
         let want = [1.0, 2.0, 1.0, 1.0, 1.0];
         assert!(
-            refreshes.iter().zip(want).all(|(r, w)| (r - w).abs() < 1e-9),
+            refreshes
+                .iter()
+                .zip(want)
+                .all(|(r, w)| (r - w).abs() < 1e-9),
             "{refreshes:?}"
         );
         // Frames that never wait for the display step as measured once

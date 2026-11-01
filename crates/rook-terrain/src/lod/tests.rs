@@ -235,7 +235,10 @@ fn no_level_comes_nearer_than_nearest_says() {
             for k in 1..LEVELS {
                 let d = nearest(k) - 0.5;
                 let p = camera + Vec3::new(angle.cos(), 0.0, angle.sin()) * d;
-                assert!(!levels_at(&rings, p).contains(&k), "level {k} at {p} from {camera}");
+                assert!(
+                    !levels_at(&rings, p).contains(&k),
+                    "level {k} at {p} from {camera}"
+                );
             }
         }
     }
@@ -262,7 +265,10 @@ fn slivers_on_the_ground_stay_slivers_far_away() {
         let (top, _) = drawn_heights(&levels, level, IVec3::ZERO);
         // Within a step of the coarse occupancy byte (1/256 of the voxel).
         let step = Detail::at(level).voxel_studs() / 256.0;
-        assert!((top - 2.4).abs() < step + 0.05, "level {level}: top at {top}");
+        assert!(
+            (top - 2.4).abs() < step + 0.05,
+            "level {level}: top at {top}"
+        );
     }
 }
 
@@ -284,7 +290,10 @@ fn no_ring_is_ever_skipped() {
         let mut level = 0;
         for step in 0..2000 {
             let now = levels_at(&rings, camera + way * (step as f32 * 8.0))[0];
-            assert!(now == level || now == level + 1, "{level} to {now} from {camera}");
+            assert!(
+                now == level || now == level + 1,
+                "{level} to {now} from {camera}"
+            );
             level = now;
         }
     }

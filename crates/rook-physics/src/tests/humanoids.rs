@@ -21,7 +21,12 @@ fn climb_stairs(hz: u32) -> Vec<Vec3> {
     let ws = dom.get_service("Workspace").unwrap();
     let model = child(&mut dom, "Model", ws, &[]);
     let humanoid = child(&mut dom, "Humanoid", model, &[]);
-    let root = part(&mut dom, Vec3::new(0.0, 3.5, 2.0), Vec3::new(2.0, 2.0, 1.0), false);
+    let root = part(
+        &mut dom,
+        Vec3::new(0.0, 3.5, 2.0),
+        Vec3::new(2.0, 2.0, 1.0),
+        false,
+    );
     dom.set_parent(root, Some(model)).unwrap();
     let drive = Drive {
         humanoid,

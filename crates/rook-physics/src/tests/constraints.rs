@@ -252,7 +252,9 @@ fn joints_are_made_only_where_a_side_is_simulated() {
         physics.set_authority(&dom, Authority::Except(Vec::new()));
         run(&mut physics, &mut dom, 0.25);
         assert_eq!(physics.world.impulse_joints.len(), 1);
-        let w = dom.vector3_property(wheel, "AssemblyAngularVelocity").unwrap();
+        let w = dom
+            .vector3_property(wheel, "AssemblyAngularVelocity")
+            .unwrap();
         assert!(w.y.abs() > 1.0, "{w}");
     }
 }
