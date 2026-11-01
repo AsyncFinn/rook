@@ -57,7 +57,9 @@ impl Physics {
                     } else if self.joints.contains_key(id) || is_joint(dom, *id) {
                         match db.property(p).name {
                             "Part0" | "Part1" | "Enabled" => changed_joints.push(*id),
-                            "C0" | "C1" | "Transform" | "CurrentAngle" => moved_joints.push(*id),
+                            "C0" | "C1" | "CFrame0" | "Transform" | "CurrentAngle" => {
+                                moved_joints.push(*id);
+                            }
                             _ => {}
                         }
                     } else if self.constraint_ids.contains(id) || self.mover_ids.contains(id) {
@@ -160,7 +162,7 @@ impl Physics {
         for part in posed {
             match self.parts.get(&part) {
                 Some(&Home::Body(h)) if posed_bodies.insert(h) => {
-                    if !self.replicated_move(dom, props, h) {
+                    if !self.replicated_move(dom, props, h, part) {
                         self.playback.forget(h);
                         self.teleport(dom, props, h, part);
                     }

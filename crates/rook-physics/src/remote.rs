@@ -101,8 +101,8 @@ fn sample(track: &VecDeque<Snapshot>, t: f64) -> CFrame {
         + a.linear * span * (s3 - 2.0 * s2 + s)
         + b.pose.position * (-2.0 * s3 + 3.0 * s2)
         + b.linear * span * (s3 - s2);
-    let turn = glam::Quat::from_mat3(&a.pose.rotation)
-        .slerp(glam::Quat::from_mat3(&b.pose.rotation), s);
+    let turn =
+        glam::Quat::from_mat3(&a.pose.rotation).slerp(glam::Quat::from_mat3(&b.pose.rotation), s);
     CFrame {
         position,
         rotation: glam::Mat3::from_quat(turn.normalize()),
@@ -115,9 +115,8 @@ impl Physics {
     /// back rather than jump there, and the DOM keeps showing where they
     /// are now, so scripts never see the newest pose ahead of time.
     pub fn receive_updates(&mut self, dom: &mut Dom, time: f64) {
-        if !self.built {
-            return;
-        }
+        // Built now if no query has yet: an assembly's update carries only
+        // the part that moved, and playback places the rest.
         self.playback.newest = self.playback.newest.max(time);
         self.playback.receiving = Some(time);
         self.sync(dom);
@@ -150,7 +149,13 @@ impl Physics {
     /// A replicated move of the server's assembly `h`: keep it to play
     /// back. Anything else moving it (a local script) puts it there at
     /// once, as on Roblox, until the next update.
-    pub(crate) fn replicated_move(&mut self, dom: &Dom, props: &Props, h: RigidBodyHandle) -> bool {
+    pub(crate) fn replicated_move(
+        &mut self,
+        dom: &Dom,
+        props: &Props,
+        h: RigidBodyHandle,
+        part: InstanceId,
+    ) -> bool {
         let Some(time) = self.playback.receiving else {
             return false;
         };
@@ -160,9 +165,8 @@ impl Physics {
         if !body.remote {
             return false;
         }
-        // The root part: the others follow it by the server's joints,
-        // which needn't be this client's.
-        let part = body.asm.root();
+        // The part the server sent, usually its root: the others follow
+        // it by this client's copy of the joints.
         let Some(Value::CFrame(cf)) = dom.property(part, props.cframe) else {
             return false;
         };

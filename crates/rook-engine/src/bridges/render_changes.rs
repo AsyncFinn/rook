@@ -302,6 +302,11 @@ impl DataModel {
                         // Nothing draws them.
                     } else if *property == ids.cframe && !dom.is_a_class(*id, ids.terrain) {
                         part_moved(dom, changes, *id);
+                        // Physics journals only an assembly's root when it
+                        // all moves.
+                        for p in world.physics.moved_with(*id).filter(|p| p != id) {
+                            part_moved(dom, changes, p);
+                        }
                     } else if Some(*id) == lighting {
                         changes.lighting = true;
                     } else if dom.is_a_class(*id, ids.terrain) || *property == ids.global_wind {

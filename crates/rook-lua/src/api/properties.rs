@@ -395,6 +395,9 @@ pub(crate) fn set(
         return Some(set_named(w, id, target, Value::Color3(Color3::from(*b))));
     }
     match (name, value) {
+        ("Part0" | "Part1" | "Enabled", v) if w.dom.class_name(id) == "WeldConstraint" => Some(
+            set_named(w, id, name, v.clone()).and_then(|()| joints::capture_weld(&mut w.dom, id)),
+        ),
         // Measured: sets all four corners.
         ("CornerRadius", v) if w.dom.class_name(id) == "UICorner" => Some(
             [

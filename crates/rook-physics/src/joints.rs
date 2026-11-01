@@ -154,16 +154,13 @@ fn middle(dom: &Dom, j: &Joint) -> CFrame {
 /// Part1's pose relative to Part0 as the joint holds it.
 pub fn offset(dom: &Dom, j: &Joint) -> CFrame {
     if j.kind == JointKind::WeldConstraint {
-        // Inference: the captured offset is the parts' relative pose, which
-        // stays true while they move together; setting one part's Position
-        // re-captures it, which reading it live also does.
-        return dom
-            .cframe_property(j.part0, "CFrame")
-            .unwrap_or(CFrame::IDENTITY)
-            .inverse()
-            * dom
-                .cframe_property(j.part1, "CFrame")
-                .unwrap_or(CFrame::IDENTITY);
+        // What [`capture_weld`] kept, which files and replication carry.
+        // Files from before Roblox kept it hold the parts where it is.
+        return match dom.property_id(j.id, "CFrame0") {
+            Some(p) if dom.is_set(j.id, p) => dom.cframe_property(j.id, "CFrame0"),
+            _ => None,
+        }
+        .unwrap_or_else(|| relative_pose(dom, j.part0, j.part1));
     }
     dom.cframe_property(j.id, "C0").unwrap_or(CFrame::IDENTITY)
         * middle(dom, j)
@@ -171,6 +168,30 @@ pub fn offset(dom: &Dom, j: &Joint) -> CFrame {
             .cframe_property(j.id, "C1")
             .unwrap_or(CFrame::IDENTITY)
             .inverse()
+}
+
+/// `b`'s pose in `a`'s frame, from their CFrames now.
+fn relative_pose(dom: &Dom, a: InstanceId, b: InstanceId) -> CFrame {
+    let cf = |p| dom.cframe_property(p, "CFrame").unwrap_or(CFrame::IDENTITY);
+    cf(a).inverse() * cf(b)
+}
+
+/// Keep where WeldConstraint `weld` holds its parts now, in its hidden
+/// `CFrame0`: Part1's pose in Part0's frame (read from saved files, where
+/// it equals that). Roblox keeps it there rather than reading the parts
+/// again, so a client given only an assembly's root still holds the rest
+/// where the server does. Taken when a script sets Part0, Part1 or
+/// Enabled, or moves one of its parts on its own (Inference: the parts
+/// weld where they are then).
+pub fn capture_weld(dom: &mut Dom, weld: InstanceId) -> Result<(), DomError> {
+    let (Some(a), Some(b)) = (
+        dom.ref_property(weld, "Part0"),
+        dom.ref_property(weld, "Part1"),
+    ) else {
+        return Ok(());
+    };
+    let pose = relative_pose(dom, a, b);
+    dom.set_property_by_name(weld, "CFrame0", Value::CFrame(pose))
 }
 
 /// The hinge frames on Part0 and Part1 (their Z axes are the hinge axis).
@@ -187,6 +208,7 @@ pub fn hinge_frames(dom: &Dom, j: &Joint) -> (CFrame, CFrame) {
 pub fn reseat(dom: &mut Dom, part: InstanceId) -> Result<(), DomError> {
     for j in part_joints(dom, part) {
         if j.kind == JointKind::WeldConstraint {
+            capture_weld(dom, j.id)?;
             continue;
         }
         let here = dom

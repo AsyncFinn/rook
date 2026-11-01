@@ -146,9 +146,20 @@ impl Physics {
         let root = cframe_of(rb.position());
         let linvel = Value::Vector3(Vector3(rb.linvel()));
         let angvel = Value::Vector3(Vector3(rb.angvel()));
-        for m in &body.asm.members {
+        // When the root moves, its entry in the journal stands for the
+        // whole assembly (readers that need the others ask
+        // [`Physics::moved_with`]), so replication sends one pose per
+        // assembly, as Roblox does, and readers look at one entry, not one
+        // per part. A member a motor turns while the root holds still is
+        // journaled itself.
+        let root_moved = dom.property(body.asm.root(), props.cframe) != Some(Value::CFrame(root));
+        for (i, m) in body.asm.members.iter().enumerate() {
             let cf = Value::CFrame(root * m.offset);
-            rook_dom::ignore_stale(dom.set_property(m.part, props.cframe, cf));
+            if i == 0 || !root_moved {
+                rook_dom::ignore_stale(dom.set_property(m.part, props.cframe, cf));
+            } else {
+                dom.load_property(m.part, props.cframe, cf);
+            }
             // No journal reader wants a moving part's velocities: no
             // Changed fires for them, nothing draws them, and replication
             // sends them with the pose. Journaled, they were two of every

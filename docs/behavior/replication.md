@@ -89,6 +89,17 @@ at once, and a character on a server's platform rode 0 of its 6 studs.
 A local script moving one puts it there at once, until the next update
 (Inference).
 
+An assembly that moves whole sends one pose, its root part's CFrame and
+velocities, not one per part: the client places the rest by its own copy of
+the joints, as playback does anyway. For that, a WeldConstraint keeps where
+it holds its parts in its hidden `CFrame0` (Part1's pose in Part0's frame,
+as saved files show: it equals `Part0.CFrame:Inverse() * Part1.CFrame` in
+each one read), which replicates with it; Rook used to read the parts'
+poses again, which a client that hears only the root can't do. It's taken
+when a script sets Part0, Part1 or Enabled, or moves one of the parts on
+its own by Position (Inference). A part a motor turns while its root holds
+still is sent itself.
+
 ## From clients
 
 Changes made on a client stay there, except what Roblox takes from

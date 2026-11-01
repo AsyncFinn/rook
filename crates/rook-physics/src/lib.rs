@@ -412,6 +412,17 @@ impl Physics {
         self.moving.iter().sum()
     }
 
+    /// The parts that move with `part` (its assembly's, `part` included):
+    /// physics journals only the root's CFrame when a whole assembly moves
+    /// ([`Physics::write_back`]). Empty for a part on its own.
+    pub fn moved_with(&self, part: InstanceId) -> impl Iterator<Item = InstanceId> + '_ {
+        let members = match self.parts.get(&part) {
+            Some(Home::Body(h)) => self.bodies[h].asm.members.as_slice(),
+            _ => &[],
+        };
+        members.iter().map(|m| m.part)
+    }
+
     /// The root part of the assembly `part` is simulated in.
     pub fn root_of(&self, part: InstanceId) -> Option<InstanceId> {
         match self.parts.get(&part)? {
