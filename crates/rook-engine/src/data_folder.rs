@@ -5,11 +5,11 @@
 //! On Windows everything is under `%LOCALAPPDATA%\Rook`. macOS keeps data
 //! in `~/Library/Application Support/Rook` and logs in
 //! `~/Library/Logs/Rook`; elsewhere data is under `$XDG_DATA_HOME/rook`
-//! and logs and state under `$XDG_STATE_HOME/rook`. `ROOK_DATA_DIR` puts
-//! all of it under one folder instead, in builds with developer overrides.
+//! and logs and state under `$XDG_STATE_HOME/rook`. The `dataFolder`
+//! setting puts all of it under one folder instead, in builds with
+//! developer overrides.
 //! [`migrate`] brings a folder older Rooks laid out up to date.
 
-mod jsonc;
 pub mod migrate;
 
 use std::path::{Path, PathBuf};
@@ -26,11 +26,11 @@ pub struct DataDir {
 }
 
 impl DataDir {
-    /// `ROOK_DATA_DIR`, or the platform's folders. `None` only where the
-    /// system names no home folder.
+    /// The `dataFolder` setting, or the platform's folders. `None` only
+    /// where the system names no home folder.
     pub fn locate() -> Option<Self> {
-        if let Some(dir) = crate::settings::var_os(crate::settings::env::DATA_FOLDER) {
-            return Some(Self::under(PathBuf::from(dir)));
+        if let Some(dir) = crate::settings::data_folder() {
+            return Some(Self::under(dir));
         }
         if cfg!(windows) {
             return Some(Self::under(local_app_data()?.join("Rook")));

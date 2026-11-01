@@ -33,7 +33,7 @@ use delivery::Delivery;
 use install::Install;
 use packages::Packages;
 
-pub use config::{Config, ProviderKind, parse_switch};
+pub use config::{ApiKey, Config, ProviderKind, parse_switch};
 
 /// Resolves references to bytes. Shared by every DataModel and the
 /// [`Loader`](crate::Loader)'s workers.
@@ -120,11 +120,11 @@ impl Resolver {
         self.cache.as_ref()
     }
 
-    /// Whether asset delivery may use the network, and whether it has an
-    /// Open Cloud key.
+    /// Whether asset delivery may use the network, and whether it would
+    /// try an Open Cloud key for refused assets.
     pub fn network(&self) -> (bool, bool) {
         match &self.delivery {
-            Some(d) => (true, d.has_api_key()),
+            Some(d) => (true, d.may_use_key()),
             None => (false, false),
         }
     }
@@ -324,7 +324,7 @@ impl Resolver {
             // An anonymous refusal doesn't stand once there is a key to try.
             Some(Cached::Failed(f))
                 if f.kind == FailureKind::Forbidden
-                    && self.delivery.as_ref().is_some_and(Delivery::has_api_key) => {}
+                    && self.delivery.as_ref().is_some_and(|d| d.key().is_some()) => {}
             Some(Cached::Failed(f)) => return Err(f),
             Some(Cached::Miss) | None => {}
         }

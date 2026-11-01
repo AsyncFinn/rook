@@ -3,7 +3,7 @@
 mod commands;
 
 use commands::{
-    conformance, content, corpus, drift, dump, gen_api, logs, roundtrip, run, studio_defaults,
+    conformance, content, corpus, drift, dump, gen_api, key, logs, roundtrip, run, studio_defaults,
     terrain,
 };
 use std::path::PathBuf;
@@ -88,8 +88,9 @@ enum Command {
         #[arg(long)]
         join: bool,
         /// The joined client runs Roblox's CoreScripts from the Studio
-        /// install (the `coreScripts` setting).
-        #[arg(long, requires = "join")]
+        /// install (the `coreScripts` setting, in builds with developer
+        /// overrides).
+        #[arg(long = rook_engine::settings::CORE_SCRIPTS.long(), requires = "join")]
         core_scripts: bool,
         /// With `--join`: print the client's tree from this instance at the
         /// end (names by dots, as `CoreGui.RobloxGui`), with each GUI
@@ -150,8 +151,8 @@ enum Command {
     /// provider has it (Rook's defaults, the Roblox install, content
     /// folders, the cache or asset delivery), and why one fails.
     ///
-    /// Asset delivery is on here unless `--offline` or
-    /// ROOK_ASSET_DELIVERY=off; downloads go to the cache. Given a place
+    /// Asset delivery is on here unless `--offline` or the
+    /// `assetDelivery` setting is off; downloads go to the cache. Given a place
     /// or model file, reports every content reference in it and its
     /// outcome.
     Content {
@@ -179,10 +180,20 @@ enum Command {
         #[arg(long)]
         open: bool,
     },
+    /// Save or forget your Open Cloud key, which Rook tries for assets
+    /// Roblox's asset delivery refuses anonymously.
+    ///
+    /// It is kept in the system's credential store (Windows Credential
+    /// Manager, the macOS Keychain, the Secret Service on Linux), sent only
+    /// to Roblox and never printed; `ROOK_OPEN_CLOUD_API_KEY` wins over it.
+    Key {
+        #[command(subcommand)]
+        action: KeyAction,
+    },
     /// Show the download cache's folder and size, or clean it.
     ///
     /// The cache is `cache` in the data folder (`%LOCALAPPDATA%\Rook\cache`
-    /// on Windows). Rook keeps it under the build's `cacheMaxSize` (2GB by
+    /// on Windows). Rook keeps it under the `cacheMaxSize` setting (2GB by
     /// default) itself, dropping what was used least recently.
     Cache {
         #[command(subcommand)]
@@ -231,6 +242,14 @@ enum Command {
         )]
         out: PathBuf,
     },
+}
+
+#[derive(Debug, Subcommand)]
+enum KeyAction {
+    /// Save the key, typed at a prompt that doesn't show it, or piped in.
+    Set,
+    /// Forget the saved key.
+    Clear,
 }
 
 #[derive(Debug, Subcommand)]
@@ -347,6 +366,10 @@ fn command(command: Command) -> anyhow::Result<()> {
             }
         }
         Command::Logs { open } => logs::run(open),
+        Command::Key { action } => match action {
+            KeyAction::Set => key::set(),
+            KeyAction::Clear => key::clear(),
+        },
         Command::Drift => drift::run(),
         Command::Cache { action } => content::cache(match action {
             None => content::CacheCommand::Show,

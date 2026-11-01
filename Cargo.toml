@@ -79,6 +79,15 @@ ureq = "3"
 # The system clipboard (rook-platform's `native` clipboard, for TextBox
 # copy and paste): text only
 arboard = { version = "3", default-features = false }
+# The OS credential store (rook-platform's `native` credentials, for the
+# Open Cloud key): keyring's core and its store for each desktop system,
+# as keyring's own docs advise applications to link them
+keyring-core = "1"
+windows-native-keyring-store = "1"
+apple-native-keyring-store = { version = "1", features = ["keychain"] }
+zbus-secret-service-keyring-store = { version = "1", features = ["crypto-rust"] }
+# `rook-tools key set`: the key typed without echo
+rpassword = "7"
 # KTX2 images and CSGPHS 8 union hulls (rook-content): Zstandard, the
 # same zstd rbx_binary uses
 zstd = "0.13"
@@ -240,6 +249,3 @@ inherits = "release"
 lto = "fat"
 codegen-units = 1
 
-[profile.profiling]
-inherits = "release"
-debug = true

@@ -2,3 +2,9 @@
 # the Visual C++ Redistributable (VCRUNTIME140*.dll, MSVCP140.dll).
 [target.x86_64-pc-windows-msvc]
 rustflags = ["-C", "target-feature=+crt-static"]
+
+[alias]
+# Builds for other people, and the only way to make them: the dist
+# profile, without developer overrides or the terminal's Luau prompt
+# (CONTRIBUTING.md#build-profiles).
+dist = "build --profile dist --workspace --no-default-features --features rook-player/published,rook-cli/published"

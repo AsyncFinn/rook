@@ -53,13 +53,20 @@ pub enum Pacing {
     Uncapped,
 }
 
+impl Pacing {
+    /// A `FramerateCap` value's pacing.
+    pub fn from_cap(cap: i32) -> Self {
+        match u32::try_from(cap) {
+            Err(_) => Self::Display,
+            Ok(0) => Self::Uncapped,
+            Ok(n) => Self::Cap(n),
+        }
+    }
+}
+
 impl PlayerSettings {
     pub fn pacing(&self) -> Pacing {
-        match u32::try_from(self.framerate_cap) {
-            Err(_) => Pacing::Display,
-            Ok(0) => Pacing::Uncapped,
-            Ok(n) => Pacing::Cap(n),
-        }
+        Pacing::from_cap(self.framerate_cap)
     }
 
     fn read(dom: &Dom, game: InstanceId) -> Self {
@@ -135,56 +142,11 @@ fn saved(path: &Path) -> Option<WeakDom> {
 /// `UserSettings()` with the settings saved at `path`, outside the
 /// DataModel; returns it and its `GameSettings`.
 fn install(dom: &mut Dom, path: Option<&Path>) -> (InstanceId, InstanceId) {
-    install_saved(dom, path.and_then(saved).as_ref())
-}
-
-fn install_saved(dom: &mut Dom, saved: Option<&WeakDom>) -> (InstanceId, InstanceId) {
     let root = rook_lua::user_settings::root(dom);
-    if let Some(weak) = saved {
-        rook_formats::copy_into_dom(weak, dom, root);
+    if let Some(weak) = path.and_then(saved) {
+        rook_formats::copy_into_dom(&weak, dom, root);
     }
     (root, rook_lua::user_settings::complete(dom, root))
-}
-
-/// Set each of `values` the file at `path` doesn't hold yet and save it
-/// (made from Roblox's defaults if there is none), for settings an older
-/// Rook kept elsewhere ([`crate::data_folder::migrate`]). Names that
-/// aren't UserGameSettings properties are kept as Rook's own. Returns the
-/// names set.
-pub(crate) fn carry_over(
-    path: &Path,
-    values: Vec<(&'static str, Value)>,
-) -> Result<Vec<&'static str>, String> {
-    let saved = saved(path);
-    let holds = |name: &str| {
-        saved.as_ref().is_some_and(|weak| {
-            weak.descendants()
-                .any(|i| i.class == "UserGameSettings" && i.properties.keys().any(|k| k == name))
-        })
-    };
-    let mut dom = Dom::new();
-    let (_, game) = install_saved(&mut dom, saved.as_ref());
-    let mut set = Vec::new();
-    for (name, value) in values {
-        if holds(name) {
-            continue;
-        }
-        match dom.property_id(game, name) {
-            Some(p) => dom
-                .set_property(game, p, value)
-                .map_err(|e| e.to_string())?,
-            None => dom
-                .instance_mut(game)
-                .expect("exists")
-                .unknown_properties
-                .push((name.to_owned(), value)),
-        }
-        set.push(name);
-    }
-    if !set.is_empty() {
-        save(&dom, game, path)?;
-    }
-    Ok(set)
 }
 
 impl Kept {

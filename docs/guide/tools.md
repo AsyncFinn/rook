@@ -48,11 +48,10 @@ Rook downloads the Roblox client files it needs (fonts, textures, the CoreScript
 
 Rook's settings come in three kinds ([settings](../design/data-and-logging.md#settings) has every key, variable and flag):
 
-- **Build settings** are decided by whoever builds Rook, in `rook-build.toml` at the repository's root (or a file of your own over it, named by `ROOK_BUILD_CONFIG` when you build): where web requests go, whether clients run Roblox's CoreScripts, where content comes from, the cache's size. They are compiled in; editing the file means building again.
+- **Build settings** are decided by whoever builds Rook, in `rook-build.toml` at the repository's root (or a file of your own over it, named by `ROOK_BUILD_CONFIG` when you build): where web requests go. They are compiled in; editing the file means building again.
 - **Your own choices as a player** are where Roblox keeps them: volume, camera sensitivity, fullscreen, the frame rate cap and the rest of the in-game menu's Settings page are on `UserSettings().GameSettings`, saved as `GlobalBasicSettings.xml` in the data folder (see [user settings](../behavior/user-settings.md)). The file has the same format as the Roblox client's own `GlobalBasicSettings_13.xml`, though Rook never reads that one: it starts from Roblox's defaults. `rook-player --volume` sets the volume for one run, until you change it in the menu.
-- **Developer overrides** are flags and `ROOK_*` variables (`ROOK_CACHE_DIR`, `ROOK_ROBLOX_INSTALL`, `ROOK_ASSET_DELIVERY`, `--core-scripts`, `--uncapped`, ...), for `rook-tools`, `rook-player` and headless runs alike. They work in debug builds; a release build ignores them unless its build settings turn on `developerOverrides`. `--verbose`, `ROOK_LOG` and `ROOK_OPEN_CLOUD_API_KEY` work in every build.
-
-Rook used to keep its settings in `settings.json`; the first run of a newer Rook carries what still has a home over to your player settings, logs what it dropped, and removes the file ([older data folders](../design/data-and-logging.md#older-data-folders)).
+- **Run-time settings** are flags and `ROOK_*` variables, for `rook-tools`, `rook-player` and headless runs alike; a flag beats the variable. Some work in any build (`--frame-times`, `--uncapped`, `--verbose`, the cache's size and folder, the audio device, threads). The developer tier (where web requests and content come from, the Roblox install, the data folder, `--core-scripts`) works only in builds with developer overrides: `cargo build` and `cargo build --release` have them, `cargo dist` builds don't. Rook has no settings file. To have a setting on every run, make its variable a persistent user variable: `setx ROOK_CORE_SCRIPTS on` on Windows (in new terminals), or an `export` in your shell's profile elsewhere.
+- **Your Open Cloud key**, for assets Roblox refuses to give anonymously, goes in the system's credential store: `rook-tools key set` asks for it without showing it (or reads it piped in), and `rook-tools key clear` forgets it. `ROOK_OPEN_CLOUD_API_KEY` wins over it for one run. Rook reads it only when Roblox refuses an asset, sends it only to Roblox, and never prints it ([the Open Cloud key](../design/data-and-logging.md#the-open-cloud-key)).
 
 ## Logs and failures
 
@@ -60,7 +59,7 @@ After loading, `rook-player` prints one summary of what didn't load, grouped by 
 
 ## Web endpoints
 
-Every web request Rook makes, and every scripting API Roblox answers from its servers (user lookups, friends, groups, badges, text filtering, the CoreScripts' requests), goes through one build setting, `webBase` in `rook-build.toml` (and `ROOK_WEB_BASE` over it, in builds with developer overrides), so whoever builds Rook chooses where they go:
+Every web request Rook makes, and every scripting API Roblox answers from its servers (user lookups, friends, groups, badges, text filtering, the CoreScripts' requests), goes through one build setting, `webBase` in `rook-build.toml` (and the `webBase` setting over it, in builds with developer overrides), so whoever builds Rook chooses where they go:
 
 - **Left out** (the default): asset delivery uses Roblox, and everything else answers on your machine. Text passes through unfiltered, the session's players are the only users, and nobody is in a group or owns a badge.
 - **Offline**: `webBase = "off"` sends nothing anywhere; assets and Roblox's files come only from your install, content folders, cache and the packages already downloaded.

@@ -60,10 +60,11 @@ pub(crate) struct App {
     pub(crate) ime: bool,
     /// What the renderer takes from the user's install.
     pub(crate) install: Installed,
-    /// `--uncapped`, over the player's `FramerateCap`.
-    pub(crate) uncapped: bool,
+    /// The `FramerateCap` the settings give (`--uncapped`,
+    /// `--framerate-cap`), over the player's.
+    pub(crate) framerate_cap: Option<i32>,
     pub(crate) readout: Readout,
-    /// Where the game's sounds are heard; `None` with `ROOK_AUDIO=off`.
+    /// Where the game's sounds are heard; `None` with `audioDevice` off.
     pub(crate) audio: Option<rook_audio::Output<rook_dom::InstanceId>>,
     /// The player's settings the window last followed.
     pub(crate) player: PlayerSettings,
@@ -79,14 +80,10 @@ pub(crate) struct Drawn {
     camera: Camera,
 }
 
-/// How often the window draws: as the player's `FramerateCap` says, unless
-/// `--uncapped`.
-pub(crate) fn pacing(uncapped: bool, player: &PlayerSettings) -> Pacing {
-    if uncapped {
-        Pacing::Uncapped
-    } else {
-        player.pacing()
-    }
+/// How often the window draws: as the settings' `FramerateCap` says, else
+/// the player's.
+pub(crate) fn pacing(framerate_cap: Option<i32>, player: &PlayerSettings) -> Pacing {
+    framerate_cap.map_or_else(|| player.pacing(), Pacing::from_cap)
 }
 
 fn present_mode(vsync: bool) -> wgpu::PresentMode {
@@ -334,13 +331,13 @@ impl App {
 
 impl App {
     fn pacing(&self) -> Pacing {
-        pacing(self.uncapped, &self.player)
+        pacing(self.framerate_cap, &self.player)
     }
 
     /// Follow the settings the player changed: the volume, fullscreen,
     /// the frame rate cap. The camera reads its sensitivity as it turns.
     fn follow(&mut self, now: PlayerSettings) {
-        let vsync = pacing(self.uncapped, &now) == Pacing::Display;
+        let vsync = pacing(self.framerate_cap, &now) == Pacing::Display;
         if vsync != (self.pacing() == Pacing::Display)
             && let Some(gfx) = &mut self.gfx
         {

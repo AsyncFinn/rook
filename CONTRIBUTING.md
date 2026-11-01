@@ -34,7 +34,7 @@ Rook is a Cargo workspace of small crates whose dependencies only point downward
 | [`rook-reflection`](crates/rook-reflection) | Class, property and enum database, plus the member list, for the live Roblox version |
 | [`rook-formats`](crates/rook-formats) | Loading and saving `.rbxl`, `.rbxm`, `.rbxlx`, `.rbxmx`, including legacy XML |
 | [`rook-dom`](crates/rook-dom) | The runtime instance tree and its change journal |
-| [`rook-platform`](crates/rook-platform) | The host machine as the portable crates reach it: files, threads, parallel work, the network, the clipboard (desktop implementation behind `native`) |
+| [`rook-platform`](crates/rook-platform) | The host machine as the portable crates reach it: files, threads, parallel work, the network, the clipboard, the credential store (desktop implementation behind `native`) |
 | [`rook-lua`](crates/rook-lua) | The Luau bridge: Instance API, datatypes, globals, `require`, and the signals, timers and deferred queue under it |
 | [`rook-net`](crates/rook-net) | Server-to-client replication |
 | [`rook-content`](crates/rook-content) | Content URLs, the provider chain (Rook defaults, the Roblox install, asset delivery), the cache, and mesh, image and sound decoding |
@@ -166,6 +166,7 @@ Rook is a rolling release: work lands on main all the time, and a release is a s
 - **Minor** (`0.N.0`): the weekly release, when anything new landed since the last one.
 - **Patch** (`0.N.y`): fixes only. Either a week in which only fixes landed, or a hotfix to the latest release: branch from its tag, cherry-pick the fix (already on main), tag `v0.N.y` and delete the branch. Patches only ever go on top of the latest release; older releases aren't maintained.
 - Builds between releases are development builds of the next version.
+- Builds for other people are made with `cargo dist` and nothing else ([build profiles](#build-profiles)).
 - Commits go to GitHub as they land, so [Unreleased] on GitHub shows what the next release will hold.
 - Before 1.0, any release may break things. 1.0 comes when Rook commits to a stable public interface: its build settings, saved data and network protocol.
 
@@ -203,14 +204,19 @@ Format tests use [rojo-rbx/rbx-test-files](https://github.com/rojo-rbx/rbx-test-
 git clone --depth 1 https://github.com/rojo-rbx/rbx-test-files fixtures/rbx-test-files
 ```
 
-Build profiles:
+### Build profiles
 
-| Command | Use |
-|---|---|
-| `cargo build` | Development. Rook's code is lightly optimized; dependencies are fully optimized so Luau and wgpu run at speed |
-| `cargo build --release` | What players use, and what benches time. Fast to rebuild |
-| `cargo build --profile dist` | Published builds: release with the whole program optimized at once, about 15% smaller with the same frame times, but many times slower to build |
-| `cargo build --profile profiling` | Release speed with full debug info. Add `--features tracy` to `rook-player` for a live Tracy timeline |
+Each profile has one job:
+
+| Command | Profile | Use |
+|---|---|---|
+| `cargo build` | `dev` (`target/debug`) | Editing, tests and checks. Rook's code is lightly optimized; dependencies are fully optimized so Luau and wgpu run at speed |
+| `cargo build --release` | `release` | Fast builds to play and bench with, and building from source. Fast to rebuild |
+| `cargo dist` | `dist` | Builds for other people, and the only way to make them (an alias in `.cargo/config.toml`): the whole program optimized at once, about 15% smaller with the same frame times but many times slower to build, without developer overrides or the terminal's Luau prompt |
+
+`dev` and `release` builds have developer overrides (the `developer-overrides` feature, on by default), so they take every flag, variable and settings-file key, and say "Developer build" in the player's title and the log ([developer overrides](docs/design/data-and-logging.md#developer-overrides)). `cargo dist` leaves the feature out and turns on `published`, which refuses to compile with it.
+
+For a live Tracy timeline, build the player with `--release --features tracy` into its own folder, so it doesn't replace the everyday build: `CARGO_TARGET_DIR=target/tracy cargo build --release --workspace --features rook-player/tracy`.
 
 A new crate gets its own `[profile.dev.package]` entry in the root `Cargo.toml` (`rook-tools drift` checks): the dev profile optimizes dependencies fully and lists Rook's crates to keep them quick to rebuild.
 

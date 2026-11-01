@@ -162,23 +162,13 @@ pub fn log_path() -> Option<PathBuf> {
         .clone()
 }
 
-/// Start logging: the terminal filter from `--verbose` and `ROOK_LOG`,
+/// Start logging: the terminal filter from the `log` setting (`--verbose`),
 /// the log file (after cleaning old ones), and the crash hook; then bring
 /// an older data folder up to date ([`crate::data_folder::migrate`]),
 /// logging what changed. Call once, first thing in `main`.
 pub fn init(options: &Options) {
     let mut problems = Vec::new();
     let base = Level::INFO;
-    let env = std::env::var(crate::settings::env::LOG).ok().and_then(|v| {
-        let filter = Filter::parse(&v, base);
-        if filter.is_none() {
-            problems.push(format!(
-                "{}={v:?}: not a level or subsystem",
-                crate::settings::env::LOG
-            ));
-        }
-        filter
-    });
     let flag = options.verbose.as_deref().and_then(|v| {
         let filter = Filter::parse(v, base);
         if filter.is_none() {
@@ -189,7 +179,12 @@ pub fn init(options: &Options) {
         }
         filter
     });
-    let filter = flag.or(env).unwrap_or_default();
+    let filter = crate::settings::LOG
+        .get(flag, |s| {
+            Filter::parse(s, base)
+                .ok_or_else(|| format!("not a level or one of {}", SUBSYSTEMS.join(", ")))
+        })
+        .expect("has a default");
 
     let data = DataDir::locate();
     if options.file
@@ -207,6 +202,7 @@ pub fn init(options: &Options) {
     for problem in problems {
         tracing::warn!(target: "rook", "{problem}");
     }
+    crate::settings::warn_waiting();
     if let Some(data) = &data {
         let old_caches = crate::data_folder::migrate::old_cache_dirs();
         for change in crate::data_folder::migrate::run(data, &old_caches) {
@@ -225,7 +221,18 @@ fn open_file(logs: &Path, program: &str, problems: &mut Vec<String>) {
     cleanup(&logs.join("crashes"));
     let path = logs.join(format!("{program}-{}.log", files::stamp()));
     match files.create(&path) {
-        Ok(file) => {
+        Ok(mut file) => {
+            // First, so whoever reads the log knows what made it.
+            let build = if crate::settings::DEVELOPER_BUILD {
+                ", Developer build"
+            } else {
+                ""
+            };
+            let version = env!("CARGO_PKG_VERSION");
+            if let Err(e) = writeln!(file, "{program} {version}{build}") {
+                problems.push(format!("couldn't write {}: {e}", path.display()));
+                return;
+            }
             let mut sink = SINK
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);

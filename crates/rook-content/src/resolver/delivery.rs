@@ -1,6 +1,7 @@
 //! Asset delivery, on the `assetdelivery` domain's endpoint
 //! (`rook_platform::endpoints`). Requests are anonymous; for assets refused
-//! anonymously, an Open Cloud key the user set is sent to Roblox's own Open
+//! anonymously, an Open Cloud key the user saved is read (then, not
+//! before) and sent to Roblox's own Open
 //! Cloud host (in `x-api-key`) and nowhere else, and only while asset
 //! delivery goes to Roblox: a mirror's refusals stand, and nothing else
 //! ever sees the key.
@@ -8,11 +9,13 @@
 //! endpoints answer is in `docs/behavior/content/asset-fetching.md`. Requests go
 //! through the host's network (`rook_platform::network`).
 
+use std::sync::OnceLock;
 use std::time::Duration;
 
 use rook_platform::endpoints::Endpoints;
 use rook_platform::network::Request;
 
+use super::config::ApiKey;
 use crate::{Failure, FailureKind};
 
 const ANONYMOUS: &str = "/v2/assetId";
@@ -28,21 +31,33 @@ const TRIES: u32 = 4;
 pub struct Delivery {
     /// The anonymous endpoint's URL, up to the asset id.
     anonymous: String,
-    /// The Open Cloud key, when asset delivery goes to Roblox.
-    api_key: Option<String>,
+    /// Where the Open Cloud key comes from, when asset delivery goes to
+    /// Roblox.
+    api_key: Option<ApiKey>,
+    /// The key, once a refusal asked for it.
+    key: OnceLock<Option<String>>,
 }
 
 impl Delivery {
     /// `None` when the `assetdelivery` domain has no endpoint.
-    pub fn new(api_key: Option<String>, endpoints: &Endpoints) -> Option<Self> {
+    pub fn new(api_key: Option<ApiKey>, endpoints: &Endpoints) -> Option<Self> {
         Some(Self {
             anonymous: endpoints.url("assetdelivery", ANONYMOUS)?,
             api_key: api_key.filter(|_| endpoints.is_roblox("assetdelivery")),
+            key: OnceLock::new(),
         })
     }
 
-    pub fn has_api_key(&self) -> bool {
+    /// Whether an Open Cloud key would be tried for refused assets, without
+    /// reading it.
+    pub fn may_use_key(&self) -> bool {
         self.api_key.is_some()
+    }
+
+    /// The Open Cloud key, read the first time a refusal asks for it.
+    pub(crate) fn key(&self) -> Option<&str> {
+        let source = self.api_key.as_ref()?;
+        self.key.get_or_init(|| source.read()).as_deref()
     }
 
     /// Download an asset (its latest version, or `version`).
@@ -52,11 +67,12 @@ impl Delivery {
             None => id.to_string(),
         };
         let anonymous = self.locate(&format!("{}/{path}", self.anonymous), None);
-        let (location, version) = match (anonymous, &self.api_key) {
-            (Err(f), Some(key)) if f.kind == FailureKind::Forbidden => {
-                self.locate(&format!("{OPEN_CLOUD}/{path}"), Some(key))?
-            }
-            (result, _) => result?,
+        let (location, version) = match anonymous {
+            Err(f) if f.kind == FailureKind::Forbidden => match self.key() {
+                Some(key) => self.locate(&format!("{OPEN_CLOUD}/{path}"), Some(key))?,
+                None => return Err(f),
+            },
+            result => result?,
         };
         let bytes = self.download(&location)?;
         let url = location.split('?').next().unwrap_or("").to_owned();
@@ -188,19 +204,19 @@ mod tests {
 
     #[test]
     fn the_key_goes_only_with_roblox_asset_delivery() {
-        let key = || Some("k".to_owned());
+        let key = || Some(ApiKey::new(|| Some("k".to_owned())));
         let roblox = Delivery::new(key(), &Endpoints::default()).unwrap();
         assert_eq!(
             roblox.anonymous,
             "https://assetdelivery.roblox.com/v2/assetId"
         );
-        assert!(roblox.has_api_key());
+        assert!(roblox.may_use_key());
         let mirror = Delivery::new(key(), &Endpoints::new(Some("example.com"), [])).unwrap();
         assert_eq!(
             mirror.anonymous,
             "https://assetdelivery.example.com/v2/assetId"
         );
-        assert!(!mirror.has_api_key());
+        assert!(!mirror.may_use_key());
         assert!(Delivery::new(key(), &Endpoints::offline()).is_none());
     }
 }

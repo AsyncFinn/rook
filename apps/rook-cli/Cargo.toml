@@ -36,11 +36,16 @@ serde_json.workspace = true
 rayon.workspace = true
 walkdir.workspace = true
 blake3.workspace = true
+rpassword.workspace = true
 
 [features]
-default = ["repl"]
+default = ["repl", "developer-overrides"]
 # `run-headless --repl`: type Luau into the running place.
 repl = ["rook-engine/repl"]
+# Developer settings (rook-engine's feature of the same name).
+developer-overrides = ["rook-engine/developer-overrides"]
+# A build for other people: `cargo dist`.
+published = ["rook-engine/published"]
 
 [build-dependencies]
 resvg.workspace = true

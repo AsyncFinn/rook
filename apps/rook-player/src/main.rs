@@ -10,6 +10,7 @@
 //! In Play mode the server runs on its own thread at 60 Hz, so the window
 //! waits only on its client and the renderer, at the player's
 //! `FramerateCap`; the title shows frame times (`--frame-times` prints them).
+//! A build with developer overrides says so in the title.
 //!
 //! With the `repl` feature (default) and an interactive terminal, the
 //! terminal shows a `> ` prompt that runs Luau in the open place.
@@ -35,7 +36,7 @@ use game::Game;
 use glam::{EulerRot, Mat3, Vec3};
 use rook_content::Resolver;
 use rook_engine::user_settings::{Pacing, PlayerSettings};
-use rook_engine::{InputEvent, MouseLock, console};
+use rook_engine::{InputEvent, MouseLock, console, settings};
 use rook_lua::MessageType;
 use rook_render::{Camera, Renderer};
 use rook_types::{CFrame, Value};
@@ -115,17 +116,22 @@ struct Args {
     #[arg(long, default_value_t = 0.0)]
     fly: f32,
     /// Run Roblox's own CoreScripts (top bar, player list, chat...) from
-    /// Roblox's packages or the Studio install, whatever the build's
-    /// `coreScripts` says (a developer override).
-    #[arg(long)]
+    /// Roblox's packages or the Studio install (the `coreScripts` setting,
+    /// in builds with developer overrides).
+    #[arg(long = settings::CORE_SCRIPTS.long())]
     core_scripts: bool,
     /// Present frames as fast as they're drawn, whatever the player's
-    /// `FramerateCap` says (a developer override).
-    #[arg(long)]
+    /// `FramerateCap` says (the `uncapped` setting).
+    #[arg(long = settings::UNCAPPED.long())]
     uncapped: bool,
+    /// Pace frames by this `FramerateCap` instead of the player's: -1 at
+    /// the display's rate, 0 uncapped, else at most this many a second
+    /// (the `framerateCap` setting).
+    #[arg(long = settings::FRAMERATE_CAP.long(), allow_hyphen_values = true)]
+    framerate_cap: Option<i32>,
     /// Print frame times to the terminal every second, and a summary at
-    /// exit (a developer override).
-    #[arg(long)]
+    /// exit (the `frameTimes` setting).
+    #[arg(long = settings::FRAME_TIMES.long())]
     frame_times: bool,
     /// The master volume, 0 to 1, until the in-game menu changes it (the
     /// menu's volume is kept with the player's settings).
@@ -152,14 +158,14 @@ impl Args {
         self.record_audio.is_none() && self.bench.is_none() && self.screenshot.is_none()
     }
 
-    /// `--uncapped`, in builds with developer overrides.
-    fn uncapped(&self) -> bool {
-        rook_engine::settings::developer("--uncapped", self.uncapped.then_some(())).is_some()
+    /// The `FramerateCap` the settings give over the player's.
+    fn framerate_cap(&self) -> Option<i32> {
+        settings::framerate_cap(self.uncapped.then_some(true), self.framerate_cap)
     }
 
-    /// `--frame-times`, in builds with developer overrides.
+    /// The `frameTimes` setting.
     fn frame_times(&self) -> bool {
-        rook_engine::settings::developer("--frame-times", self.frame_times.then_some(())).is_some()
+        settings::FRAME_TIMES.switch(self.frame_times.then_some(true)) == Some(true)
     }
 }
 
@@ -288,14 +294,13 @@ fn main() -> ExitCode {
 fn play(args: Args) -> anyhow::Result<()> {
     // Asset delivery is on in the player, which exists to show places;
     // the setting turns it off.
-    let content = Arc::new(Resolver::new(rook_engine::settings::content_config(true)));
+    let content = Arc::new(Resolver::new(settings::content_config(true)));
     let install = Installed::find(&content);
     let script = match &args.script {
         Some(path) => Some(fs_err::read_to_string(path)?),
         None => None,
     };
-    let core_scripts =
-        rook_engine::settings::core_scripts(args.core_scripts.then_some(true), &content);
+    let core_scripts = settings::core_scripts(args.core_scripts.then_some(true), &content);
     let mut setup = game::Setup {
         play: !args.run,
         content: content.clone(),

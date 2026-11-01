@@ -27,7 +27,7 @@ pub(crate) struct Options {
 
 fn resolver(options: &Options) -> Arc<Resolver> {
     // Asset delivery is on by default here: this command exists to show
-    // where content comes from. ROOK_ASSET_DELIVERY=off also turns it off.
+    // where content comes from. assetDelivery off also turns it off.
     let mut config = rook_engine::settings::content_config(true);
     if options.offline {
         config.network = false;
@@ -101,7 +101,7 @@ fn print_setup(r: &Resolver) {
         Some(i) => println!("Roblox install: {} ({:?})", i.root.display(), i.kind),
         None => println!(
             "Roblox install: none found (set {} to a version or content folder)",
-            rook_engine::settings::env::ROBLOX_INSTALL
+            rook_engine::settings::ROBLOX_INSTALL.name
         ),
     }
     for folder in r.folders() {
@@ -112,7 +112,7 @@ fn print_setup(r: &Resolver) {
     let delivery = match r.network() {
         (false, _) => "off (cache only)",
         (true, false) => "on, anonymous",
-        (true, true) => "on, anonymous, then the Open Cloud API key",
+        (true, true) => "on, anonymous, then an Open Cloud key if one is saved",
     };
     println!("asset delivery: {delivery}");
     match r.cache() {

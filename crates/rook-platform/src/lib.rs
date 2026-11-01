@@ -1,6 +1,7 @@
 //! The host machine as the portable crates reach it: [`files`], parallel
 //! work ([`parallel`]), long-lived [`threads`], the [`network`], the
-//! [`clipboard`], and where web requests go ([`endpoints`]).
+//! [`clipboard`], the OS [`credentials`] store, and where web requests go
+//! ([`endpoints`]).
 //!
 //! Portable crates never call `std::fs`, `std::thread` or a thread pool
 //! themselves (clippy's `disallowed-methods` and cargo-deny keep it so);
@@ -10,6 +11,7 @@
 //! `docs/design/architecture.md#crate-layout`.
 
 pub mod clipboard;
+pub mod credentials;
 pub mod endpoints;
 pub mod files;
 pub mod network;
@@ -19,6 +21,7 @@ pub mod threads;
 use std::sync::OnceLock;
 
 use clipboard::Clipboard;
+use credentials::Credentials;
 use files::Files;
 use network::Network;
 use parallel::Workers;
@@ -32,12 +35,14 @@ pub struct Platform {
     pub threads: Box<dyn Threads>,
     pub network: Box<dyn Network>,
     pub clipboard: Box<dyn Clipboard>,
+    pub credentials: Box<dyn Credentials>,
 }
 
 #[cfg(feature = "native")]
 impl Platform {
     /// A desktop's: its file system and threads, Rayon's global pool
-    /// (which `rook-physics` sizes), ureq and the system clipboard.
+    /// (which `rook-physics` sizes), ureq, the system clipboard and the OS
+    /// credential store.
     pub fn native() -> Self {
         Self {
             files: Box::new(files::NativeFiles),
@@ -45,6 +50,7 @@ impl Platform {
             threads: Box::new(threads::OsThreads),
             network: Box::new(network::Ureq::new()),
             clipboard: Box::new(clipboard::System),
+            credentials: Box::new(credentials::System),
         }
     }
 }

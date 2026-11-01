@@ -1,7 +1,9 @@
-//! Reads Rook's build settings, `rook-build.toml` at the repository's root
-//! with the file `ROOK_BUILD_CONFIG` names read over it, into the
-//! constants `src/build_config.rs` includes. An unknown key or a bad value
-//! fails the build with what is wrong and where.
+//! Reads Rook's build settings (`webBase` and `webDomains`),
+//! `rook-build.toml` at the repository's root with the file
+//! `ROOK_BUILD_CONFIG` names read over it, into the constants
+//! `src/build_config.rs` includes, with whether they send asset delivery
+//! to Roblox. An unknown key or a bad value fails the
+//! build with what is wrong and where.
 //! See docs/design/data-and-logging.md#build-settings.
 #![expect(
     clippy::disallowed_methods,
@@ -14,16 +16,14 @@ use std::{env, fs};
 
 use toml::{Table, Value};
 
+/// Where web requests go, as Rook reads it at run time, so the build and
+/// the engine agree on what goes to Roblox.
+#[path = "../rook-platform/src/endpoints.rs"]
+#[expect(dead_code, unreachable_pub, reason = "the build asks only `is_roblox`")]
+mod endpoints;
+
 /// The variable naming a distributor's own file.
 const CONFIG_VAR: &str = "ROOK_BUILD_CONFIG";
-
-/// `contentOrder`'s names, and the `ProviderKind` each stands for.
-const PROVIDERS: &[(&str, &str)] = &[
-    ("defaults", "Defaults"),
-    ("install", "Install"),
-    ("folders", "Folders"),
-    ("delivery", "Delivery"),
-];
 
 fn main() {
     let manifest = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("set by cargo"));
@@ -60,7 +60,7 @@ fn settings(files: &[PathBuf]) -> Result<String, String> {
         }
         merged.extend(table);
     }
-    generate(&merged).map_err(|e| format!("{}: {e}", files[0].display()))
+    Ok(generate(&merged))
 }
 
 fn read(path: &Path) -> Result<Table, String> {
@@ -87,32 +87,11 @@ fn check(key: &str, value: &Value) -> Result<(), String> {
             }
             Ok(())
         }
-        "contentOrder" => {
-            let names = value.as_array().ok_or("must be a list of names")?;
-            if names.is_empty() {
-                return Err("lists no provider, so nothing would load".into());
-            }
-            let mut seen = Vec::new();
-            for name in names {
-                let name = string(name)?;
-                provider(name)?;
-                if seen.contains(&name) {
-                    return Err(format!("{name:?} is listed twice"));
-                }
-                seen.push(name);
-            }
-            Ok(())
-        }
-        "coreScripts" | "assetDelivery" | "developerOverrides" => value
-            .as_bool()
-            .map(drop)
-            .ok_or_else(|| "must be true or false".into()),
-        "cacheMaxSize" => size(string(value)?).map(drop),
-        "threads" => match value.as_integer() {
-            Some(n) if n > 0 => Ok(()),
-            _ => Err("must be a whole number above 0".into()),
-        },
-        _ => Err("not a build setting".into()),
+        _ => Err(
+            "not a build setting: rook-build.toml holds only webBase and webDomains, and the \
+             rest are run-time settings (docs/design/data-and-logging.md#settings)"
+                .into(),
+        ),
     }
 }
 
@@ -120,38 +99,7 @@ fn string(value: &Value) -> Result<&str, String> {
     value.as_str().ok_or_else(|| "must be a string".into())
 }
 
-fn provider(name: &str) -> Result<&'static str, String> {
-    PROVIDERS
-        .iter()
-        .find(|(n, _)| *n == name)
-        .map(|(_, variant)| *variant)
-        .ok_or_else(|| {
-            let names: Vec<&str> = PROVIDERS.iter().map(|(n, _)| *n).collect();
-            format!("{name:?} is not one of {}", names.join(", "))
-        })
-}
-
-/// `500MB`, `2GB`: a number and a unit, in bytes.
-fn size(text: &str) -> Result<u64, String> {
-    let t = text.trim().to_ascii_uppercase();
-    let split = t.find(|c: char| c.is_ascii_alphabetic()).unwrap_or(t.len());
-    let (digits, unit) = t.split_at(split);
-    let scale: u64 = match unit {
-        "KB" => 1 << 10,
-        "MB" => 1 << 20,
-        "GB" => 1 << 30,
-        "TB" => 1 << 40,
-        _ => return Err(format!("{text:?} needs a unit: KB, MB, GB or TB")),
-    };
-    let n: u64 = digits
-        .trim()
-        .parse()
-        .map_err(|_| format!("{text:?} is not a whole number and a unit"))?;
-    Ok(n * scale)
-}
-
-fn generate(t: &Table) -> Result<String, String> {
-    let required = |key: &str| t.get(key).ok_or_else(|| format!("{key} must be set"));
+fn generate(t: &Table) -> String {
     let mut code = String::new();
     let mut line = |doc: &str, item: String| {
         writeln!(code, "/// {doc}\n{item}").expect("writing to a String");
@@ -173,46 +121,11 @@ fn generate(t: &Table) -> Result<String, String> {
         "`webDomains`: a base URL or `off` per domain, winning over `WEB_BASE`.",
         format!("pub const WEB_DOMAINS: &[(&str, &str)] = &{domains:?};"),
     );
-    let core = required("coreScripts")?.as_bool().expect("checked");
+    let roblox =
+        endpoints::Endpoints::new(base, domains.iter().copied()).is_roblox("assetdelivery");
     line(
-        "`coreScripts`: clients run Roblox's CoreScripts.",
-        format!("pub const CORE_SCRIPTS: bool = {core};"),
+        "Whether asset delivery goes to Roblox, the one place an Open Cloud key may be sent.",
+        format!("pub const ASSET_DELIVERY_ROBLOX: bool = {roblox};"),
     );
-    let order = required("contentOrder")?
-        .as_array()
-        .expect("checked")
-        .iter()
-        .map(|n| provider(n.as_str().expect("checked")).map(|v| format!("ProviderKind::{v}")))
-        .collect::<Result<Vec<_>, _>>()?;
-    line(
-        "`contentOrder`: where content comes from, in order.",
-        format!(
-            "pub const CONTENT_ORDER: &[rook_content::ProviderKind] = {{ use rook_content::ProviderKind; &[{}] }};",
-            order.join(", ")
-        ),
-    );
-    let delivery = t.get("assetDelivery").and_then(Value::as_bool);
-    line(
-        "`assetDelivery`: whether content may be downloaded; `None` leaves it to each program.",
-        format!("pub const ASSET_DELIVERY: Option<bool> = {delivery:?};"),
-    );
-    let max = size(required("cacheMaxSize")?.as_str().expect("checked"))?;
-    line(
-        "`cacheMaxSize`: the download cache's size limit, in bytes.",
-        format!("pub const CACHE_MAX_SIZE: u64 = {max};"),
-    );
-    let threads = t.get("threads").and_then(Value::as_integer);
-    line(
-        "`threads`: logical cores to plan background threads for; `None` is the machine's.",
-        format!("pub const THREADS: Option<usize> = {threads:?};"),
-    );
-    let overrides = t
-        .get("developerOverrides")
-        .and_then(Value::as_bool)
-        .map_or_else(|| "cfg!(debug_assertions)".to_owned(), |b| b.to_string());
-    line(
-        "`developerOverrides`: flags and `ROOK_*` variables may override these settings.",
-        format!("pub const DEVELOPER_OVERRIDES: bool = {overrides};"),
-    );
-    Ok(code)
+    code
 }

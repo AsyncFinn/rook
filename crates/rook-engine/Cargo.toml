@@ -47,6 +47,14 @@ rook-terrain.workspace = true
 # in the game. Apps turn it on by default; leave it out of builds you hand
 # to others.
 repl = ["dep:rustyline"]
+# Flags, variables and settings-file keys of the developer tier
+# (`settings::Tier::Developer`), and Roblox's CoreScripts. The apps turn it
+# on by default, so `cargo build --release` takes them; `cargo dist` leaves
+# it out.
+developer-overrides = []
+# A build for other people (`cargo dist`), which must not have
+# `developer-overrides`.
+published = []
 
 [lints]
 workspace = true

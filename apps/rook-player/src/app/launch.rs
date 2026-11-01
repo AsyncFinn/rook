@@ -39,7 +39,12 @@ impl Launch {
     }
 
     fn title(&self) -> String {
-        format!("Rook - {}", self.args.place.display())
+        let build = if rook_engine::settings::DEVELOPER_BUILD {
+            " - Developer build"
+        } else {
+            ""
+        };
+        format!("Rook - {}{build}", self.args.place.display())
     }
 
     /// After the window closes: the load's error, or the run's summary.
@@ -101,7 +106,7 @@ impl Launch {
             refresh_read: None,
             loop_ran: false,
             install: self.install.take().expect("started once"),
-            uncapped: args.uncapped(),
+            framerate_cap: args.framerate_cap(),
             readout: Readout::new(args.frame_times()),
             // Only the window plays sound: headless runs, `--bench`,
             // `--screenshot` and `--record-audio` never open a device.
@@ -133,7 +138,7 @@ impl ApplicationHandler for Launch {
             return app.resumed(event_loop);
         }
         if self.gfx.is_none() {
-            let vsync = pacing(self.args.uncapped(), &self.player) == Pacing::Display;
+            let vsync = pacing(self.args.framerate_cap(), &self.player) == Pacing::Display;
             match Gfx::open(event_loop, &self.title(), vsync) {
                 Ok(gfx) => {
                     gfx.set_fullscreen(self.player.fullscreen);

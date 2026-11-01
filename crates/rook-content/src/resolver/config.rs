@@ -40,6 +40,28 @@ impl ProviderKind {
     }
 }
 
+/// Where the user's Open Cloud key comes from: called at most once per
+/// resolver, and only when the key can be used, so a run that never needs
+/// it never reads it.
+#[derive(Clone)]
+pub struct ApiKey(Arc<dyn Fn() -> Option<String> + Send + Sync>);
+
+impl ApiKey {
+    pub fn new(read: impl Fn() -> Option<String> + Send + Sync + 'static) -> Self {
+        Self(Arc::new(read))
+    }
+
+    pub(crate) fn read(&self) -> Option<String> {
+        (self.0)()
+    }
+}
+
+impl std::fmt::Debug for ApiKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("ApiKey")
+    }
+}
+
 /// Which providers to use and how.
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -52,9 +74,10 @@ pub struct Config {
     /// Roblox's packages a path needs. With it off, only the cache answers
     /// asset ids, and only packages already downloaded answer paths.
     pub network: bool,
-    /// Sent only to Roblox's own Open Cloud host
-    /// ([`Endpoints::is_roblox`]).
-    pub api_key: Option<String>,
+    /// Where the Open Cloud key comes from, asked only once Roblox's asset
+    /// delivery refuses a request anonymously; the key is sent only to
+    /// Roblox's own Open Cloud host ([`Endpoints::is_roblox`]).
+    pub api_key: Option<ApiKey>,
     /// Where asset delivery's requests go.
     pub endpoints: Endpoints,
     /// `None` keeps nothing on disk.

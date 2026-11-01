@@ -30,9 +30,9 @@ Everything Rook keeps for itself lives in one folder: `%LOCALAPPDATA%\Rook` on W
 
 On macOS the data is in `~/Library/Application Support/Rook` and the logs in `~/Library/Logs/Rook`. On Linux the data is in `$XDG_DATA_HOME/rook`, and logs and state in `$XDG_STATE_HOME/rook`. The `directories` crate finds those folders. `ROOK_DATA_DIR` moves all of it under one folder, in builds with [developer overrides](#developer-overrides).
 
-The cache (`rook_content::resolver::cache::Cache`) is the part Rook trims itself: under the build's `cacheMaxSize`, dropping what was used least recently. `rook-tools cache` shows it and prunes, trims or clears it, and anything dropped is fetched again. `content\` is never trimmed: `packages\` follows Roblox's live version ([client packages](../behavior/content/client-packages.md)), and `assets\` holds a fixed list ([kept content](#kept-content)).
+The cache (`rook_content::resolver::cache::Cache`) is the part Rook trims itself: under the `cacheMaxSize` setting, dropping what was used least recently. `rook-tools cache` shows it and prunes, trims or clears it, and anything dropped is fetched again. `content\` is never trimmed: `packages\` follows Roblox's live version ([client packages](../behavior/content/client-packages.md)), and `assets\` holds a fixed list ([kept content](#kept-content)).
 
-Two things are deliberately elsewhere. The Open Cloud API key belongs in the OS credential store ([content policy](policies.md#content-and-assets)); until Rook reads one, it comes from `ROOK_OPEN_CLOUD_API_KEY`. A Roblox install's files are read where they are, never copied in.
+Two things are deliberately elsewhere. The Open Cloud API key is kept in the OS credential store ([the Open Cloud key](#the-open-cloud-key)). A Roblox install's files are read where they are, never copied in.
 
 `state\recent.json` (recent places, the window's size and place) has its path reserved (`DataDir::recent`). Nothing writes it yet.
 
@@ -40,7 +40,6 @@ Two things are deliberately elsewhere. The Open Cloud API key belongs in the OS 
 
 `logging::init` brings a folder older Rooks laid out up to date (`data_folder::migrate`), logging each change. Each step finds nothing to do on later runs.
 
-- `settings.json` is removed. What still has a home moves to `GlobalBasicSettings.xml`, unless that file already holds it: `uncapped: true` becomes `FramerateCap` 0, `audioDevice` becomes `RookOutputDevice`, and `masterVolume` becomes `MasterVolume`. Every other key that was set is logged as dropped. A file that doesn't parse is dropped whole.
 - A download cache in `%TEMP%\Rook\cache` (`~/Library/Caches/Rook` on macOS, `$XDG_CACHE_HOME/rook` elsewhere) moves into `cache\`, and the old folder is removed.
 - What sat straight in `content\` is sorted: `blobs\` and `refs\` into `content\assets\`, the rest (Roblox's packages and their markers) into `content\packages\`.
 
@@ -48,48 +47,56 @@ Two things are deliberately elsewhere. The Open Cloud API key belongs in the OS 
 
 Every setting is one of three kinds. `rook-engine`'s `settings` module resolves them and hands plain values down (`rook_content::Config`, the audio device, the thread budget); no other crate reads the environment.
 
-- **Build settings**: whoever builds Rook decides them, and they are compiled in.
+- **Build settings**: what whoever builds Rook locks in, compiled in.
 - **The player's settings**: what a player chooses, on `UserSettings().GameSettings`, saved in `GlobalBasicSettings.xml` as Roblox's client saves its own ([user settings](../behavior/user-settings.md)).
-- **Developer overrides**: flags and `ROOK_*` variables, which win over the other two only in builds that allow them.
+- **Run-time settings**: flags and `ROOK_*` variables, each declared once in `settings::table`. Some work in any build; the developer tier only in builds with [developer overrides](#developer-overrides). Rook has no settings file: a setting wanted on every run is a user environment variable (`setx ROOK_CORE_SCRIPTS on` on Windows).
 
 ### Build settings
 
-`rook-build.toml` at the repository's root holds Rook's defaults. A build with `ROOK_BUILD_CONFIG=<file>` (relative to the repository, or absolute) reads that file over it: its keys win, and the keys it leaves out keep Rook's. `rook-engine`'s `build.rs` reads them into the constants of `build_config`; an unknown key or a bad value fails the build, naming the file, the key and what is wrong. TOML, like `Cargo.toml` and `clippy.toml`, because only the build reads it.
-
-They are constants so that nothing on a player's machine changes them, and so the compiler leaves out what a build turns off: with `coreScripts = false` and no developer overrides, the CoreScripts loader is not in the program.
+`rook-build.toml` at the repository's root holds what a distributor locks: where web requests go, and nothing else. A build with `ROOK_BUILD_CONFIG=<file>` (relative to the repository, or absolute) reads that file over it: its keys win, and the keys it leaves out keep Rook's. `rook-engine`'s `build.rs` reads them into the constants of `build_config`; an unknown key or a bad value fails the build, naming the file, the key and what is wrong. TOML, like `Cargo.toml` and `clippy.toml`, because only the build reads it. They are constants so that nothing on a player's machine changes them.
 
 | Key | Default | What it does |
 |---|---|---|
 | `webBase` | left out | Where web requests go ([web endpoints](web-endpoints.md)). Left out, asset delivery and Roblox's packages use Roblox and every other API answers locally; else `"off"`, a domain (`example.com`) or a URL (`http://127.0.0.1:8080`) |
 | `webDomains` | none | Per Roblox web domain (`users`, `assetdelivery`, ...), a base URL or `"off"`, winning over `webBase` |
-| `coreScripts` | `false` | Run Roblox's own CoreScripts on each client ([CoreScripts](../behavior/gui/core-scripts.md)) |
-| `contentOrder` | `defaults, install, folders, delivery` | Where content comes from, in order. `install` is Roblox's packages, downloaded as needed, then a Roblox install ([client packages](../behavior/content/client-packages.md)) |
-| `assetDelivery` | left out | Whether content may be downloaded. Left out, each program decides: on in `rook-player` and `rook-tools content`, off in headless runs |
-| `cacheMaxSize` | `"2GB"` | The cache's size limit, with a unit (`500MB`, `5GB`) |
-| `threads` | left out | Logical cores to plan background threads for; left out, the machine's |
-| `developerOverrides` | left out | Whether developer overrides work. Left out, on in debug builds and off in release builds |
+
+### Run-time settings
+
+Each is given by its flag, then its variable, then its default; the first that gives one wins. A value that doesn't parse is ignored with a warning. A developer setting given to a build without developer overrides is ignored, with one warning naming the setting and its tier. Warnings never print a setting's value.
+
+| Setting | Variable | Flag | Tier | Default | What it does |
+|---|---|---|---|---|---|
+| `frameTimes` | `ROOK_FRAME_TIMES` | `--frame-times` | any build | `off` | `rook-player` prints frame times every second, and a summary at exit |
+| `uncapped` | `ROOK_UNCAPPED` | `--uncapped` | any build | `off` | `rook-player` presents as fast as frames are drawn, winning over `framerateCap` |
+| `framerateCap` | `ROOK_FRAMERATE_CAP` | `--framerate-cap` | any build | the player's `FramerateCap` | Paces `rook-player` as `FramerateCap` would: -1 at the display's rate, 0 uncapped, else at most that many frames a second |
+| `audioDevice` | `ROOK_AUDIO` | | any build | the player's output device | `default`, `off` (`rook-player` opens no device), or a device's name |
+| `threads` | `ROOK_THREADS` | | any build | the machine's logical cores | Logical cores to plan background threads for |
+| `cacheMaxSize` | `ROOK_CACHE_MAX` | | any build | `2GB` | The cache's size limit, with a unit (`500MB`, `5GB`); a bare number is MB |
+| `cacheFolder` | `ROOK_CACHE_DIR` | | any build | `cache` in the data folder | Where downloads are cached |
+| `log` | `ROOK_LOG` | `--verbose` | any build | `info` | What the terminal shows ([logging](#logging)) |
+| `openCloudApiKey` | `ROOK_OPEN_CLOUD_API_KEY` | | any build | the key `rook-tools key set` saved | An Open Cloud key, over the saved one, for one-off runs and CI ([the Open Cloud key](#the-open-cloud-key)) |
+| `webBase` | `ROOK_WEB_BASE` | | developer | the build's `webBase` | Over the build's `webBase` |
+| `webDomains` | `ROOK_WEB_DOMAINS` | | developer | the build's `webDomains` | Per domain, over the build's: `users=https://users.example.com,badges=off` |
+| `contentOrder` | `ROOK_CONTENT_ORDER` | | developer | `defaults,install,folders,delivery` | Where content comes from, in order, comma-separated. `install` is Roblox's packages, downloaded as needed, then a Roblox install ([client packages](../behavior/content/client-packages.md)) |
+| `contentFolders` | `ROOK_CONTENT_DIRS` | | developer | none | Folders laid out like an install's `content` (content packages, local overrides), separated like `PATH` |
+| `robloxInstall` | `ROOK_ROBLOX_INSTALL` | | developer | the newest install found | A Roblox version or `content` folder, or `off` |
+| `assetDelivery` | `ROOK_ASSET_DELIVERY` | | developer | on in `rook-player` and `rook-tools content`, off in headless runs | Whether content may be downloaded (asset delivery, Roblox's packages) |
+| `dataFolder` | `ROOK_DATA_DIR` | | developer | the platform's folders | Everything under one folder |
+| `coreScripts` | `ROOK_CORE_SCRIPTS` | `--core-scripts` | developer | `off` | Run Roblox's own CoreScripts on each client ([CoreScripts](../behavior/gui/core-scripts.md)); the flag is `rook-player`'s and `rook-tools run-headless --join`'s |
+
+### The Open Cloud key
+
+An Open Cloud key (with the `legacy-asset:manage` scope) lets asset delivery fetch assets Roblox refuses anonymously. `rook-tools key set` saves it in the OS credential store (Windows Credential Manager, the macOS Keychain, the Secret Service on Linux, through `keyring-core` in `rook-platform`'s `credentials`), reading it from a prompt that doesn't echo it or from stdin; `rook-tools key clear` forgets it. `ROOK_OPEN_CLOUD_API_KEY` wins over the saved key, for one-off runs and CI.
+
+Rook reads the key only when it can be used: the first time an asset request to Roblox's asset delivery is refused anonymously (`rook_content::resolver::ApiKey`). When asset delivery goes elsewhere (`webBase`, or `assetdelivery` under `webDomains`), Rook never reads the variable or the store and never sends the key, and a build whose own asset delivery isn't Roblox (`build_config::ASSET_DELIVERY_ROBLOX`) leaves that code out. The key is only ever sent to Roblox's Open Cloud host, and never printed or logged.
+
+`ROOK_STUDIO`, which picks the Studio window `rook-tools conformance` drives, is a variable of `rook-cli` alone.
 
 ### Developer overrides
 
-In a build with `developerOverrides` (every debug build, unless its build settings say otherwise), these win. In other builds they are ignored, as if they weren't given.
+The developer tier could send a build's traffic elsewhere or run other code, so a build Rook publishes must not take it, whoever asks its player to. Builds have it through the `developer-overrides` Cargo feature, on by default in `rook-player` and `rook-tools`, so `cargo build --release` takes every setting. Builds for other people come from `cargo dist`, an alias in `.cargo/config.toml` that builds the `dist` profile with `--no-default-features` and the `published` feature; `published` with `developer-overrides` fails to compile. Roblox's CoreScripts, unfinished, are compiled in only with developer overrides.
 
-| Variable or flag | Over | What it does |
-|---|---|---|
-| `ROOK_DATA_DIR` | the data folder | Everything under one folder |
-| `ROOK_CACHE_DIR` | `cache\` | Where downloads are cached |
-| `ROOK_CACHE_MAX` | `cacheMaxSize` | The cache's size limit (`500MB`; a bare number is MB) |
-| `ROOK_CONTENT_ORDER` | `contentOrder` | Comma-separated |
-| `ROOK_CONTENT_DIRS` | | Folders laid out like an install's `content` (content packages, local overrides), separated like `PATH` |
-| `ROOK_ASSET_DELIVERY` | `assetDelivery` | `on` or `off` |
-| `ROOK_ROBLOX_INSTALL` | the newest install found | A Roblox version or `content` folder, or `off` |
-| `ROOK_THREADS` | `threads` | |
-| `--core-scripts`, `ROOK_CORE_SCRIPTS` | `coreScripts` | The flag (`rook-player`, `rook-tools run-headless --join`), then the variable (`on` or `off`) |
-| `ROOK_WEB_BASE` | `webBase` | |
-| `ROOK_AUDIO` | the player's output device | `default`, `off` (`rook-player` opens no device), or a device's name |
-| `rook-player --uncapped` | the player's `FramerateCap` | Present as fast as frames are drawn |
-| `rook-player --frame-times` | | Print frame times every second and a summary at exit |
-
-These work in every build: `--verbose` and `ROOK_LOG` ([logging](#logging)), and the Open Cloud key, `ROOK_OPEN_CLOUD_API_KEY`, tried for assets refused anonymously (it needs the `legacy-asset:manage` scope) and only ever sent to Roblox. `ROOK_STUDIO`, which picks the Studio window `rook-tools conformance` drives, is a variable of `rook-cli` alone.
+A build with developer overrides says so where it runs, as Unity's Development Build label does: `Developer build` in `rook-player`'s window title and in the first line of every log file.
 
 ## Logging
 
@@ -127,7 +134,7 @@ What a live client does can't be measured here; nothing public says it writes ou
 
 ### Log files
 
-Each run of the player writes one file, `logs\rook-player-<time>.log`. `rook-tools` writes one only for long commands (`corpus-scan`, `corpus-run`, `conformance`). The file gets Rook's `debug` and up whatever the terminal shows, plus every line the terminal printed, script output included. It is plain text without colors, in the terminal's line format. At startup, old logs are cleaned: a file is deleted once it is beyond the newest 30 runs and older than 14 days, and the oldest go first past 100 MB in total. Crash reports are cleaned by the same rules.
+Each run of the player writes one file, `logs\rook-player-<time>.log`. `rook-tools` writes one only for long commands (`corpus-scan`, `corpus-run`, `conformance`). The file gets Rook's `debug` and up whatever the terminal shows, plus every line the terminal printed, script output included. It is plain text without colors, in the terminal's line format, after a first line naming the program and version (`rook-player 0.3.0, Developer build`). At startup, old logs are cleaned: a file is deleted once it is beyond the newest 30 runs and older than 14 days, and the oldest go first past 100 MB in total. Crash reports are cleaned by the same rules.
 
 `rook-tools logs` prints the newest log's path. `rook-tools logs --open` opens the folder.
 

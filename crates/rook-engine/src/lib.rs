@@ -79,7 +79,7 @@ pub struct Options {
     /// Where content requests (`ContentProvider:PreloadAsync`) resolve.
     /// `None` uses `settings::content_config(false)`: the install,
     /// content folders and the cache, with asset delivery off unless the
-    /// build's `assetDelivery` or `ROOK_ASSET_DELIVERY=on` turns it on.
+    /// `assetDelivery` setting turns it on.
     /// Shared by a session's DataModels.
     pub content: Option<Arc<rook_content::Resolver>>,
     /// Finish loading sound files within the frame that asks for them, so

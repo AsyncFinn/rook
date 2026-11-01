@@ -212,7 +212,7 @@ found", 409 "User is not authorized to access Asset." (not public), or
 "Authentication required to access Asset." (public, but now behind an
 account), and lookups by asset version id are refused as deprecated. The
 Open Cloud endpoint refuses requests without a key. Rook asks anonymously
-and tries a user's key (`ROOK_OPEN_CLOUD_API_KEY`) only for refused assets;
+and tries a user's key (`rook-tools key set`) only for refused assets;
 that path is untested for lack of a key, and whether a key opens other
 creators' public assets is unknown. Roblox's own 2009 assets (the table
 above) come anonymously.

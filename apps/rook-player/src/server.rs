@@ -13,6 +13,7 @@ use std::time::{Duration, Instant};
 
 use rook_engine::session::host::{Joined, ServerHost, ToClient, ToServer};
 use rook_engine::{DataModel, Options, console};
+#[cfg(feature = "repl")]
 use rook_lua::MessageType;
 use rook_view::SavedCamera;
 
@@ -30,6 +31,7 @@ enum Command {
     /// Step at 60 Hz by itself, or stop doing so.
     Run(bool),
     Deliver(ToServer),
+    #[cfg(feature = "repl")]
     Repl(String),
 }
 
@@ -159,6 +161,7 @@ impl ServerThread {
     }
 
     /// Run a command-bar entry on the server.
+    #[cfg(feature = "repl")]
     pub(crate) fn repl(&self, line: &str) {
         self.send(Command::Repl(line.to_owned()));
     }
@@ -245,6 +248,7 @@ fn obey(
             *next = Instant::now();
         }
         Command::Deliver(msg) => host.deliver(0, msg),
+        #[cfg(feature = "repl")]
         Command::Repl(line) => {
             if let Err(e) = rook_engine::console::repl::run_line(host.server(), &line) {
                 console::print_message(MessageType::Error, &e);

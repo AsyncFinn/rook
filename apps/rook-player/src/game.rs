@@ -5,10 +5,12 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+#[cfg(feature = "repl")]
 use rook_engine::console::repl::Side;
 use rook_engine::session::host::{ClientHost, ServerHost};
 use rook_engine::user_settings::PlayerSettings;
 use rook_engine::{DataModel, InputEvent, Options, console};
+#[cfg(feature = "repl")]
 use rook_lua::MessageType;
 use rook_render::Camera;
 
@@ -339,6 +341,7 @@ impl Game {
     }
 
     /// Run a command-bar entry on the server or the client.
+    #[cfg(feature = "repl")]
     pub(crate) fn repl(&self, side: Side, line: &str) {
         let dm = match (&self.mode, side) {
             (Mode::Play { server, .. }, Side::Server) => {
