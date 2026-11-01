@@ -1,5 +1,7 @@
 //! Tracking what a renderer needs to redraw.
 
+use rook_reflection::{ClassId, PropertyId};
+
 use crate::*;
 
 /// Changes a renderer needs to apply. When `full` is set (a new
@@ -87,16 +89,7 @@ pub fn is_effect_class(class: &str) -> bool {
 /// Highlight, ...), SelectionPartLasso,
 /// and FloorWire, drawn with its `From` part.
 fn is_adornment(dom: &Dom, id: InstanceId) -> bool {
-    [
-        "InstanceAdornment",
-        "PVAdornment",
-        "PartAdornment",
-        "FloorWire",
-        "SelectionPartLasso",
-        "Highlight",
-    ]
-    .iter()
-    .any(|base| dom.is_a(id, base))
+    (RenderIds::get().adornments.iter()).any(|&base| dom.is_a_class(id, base))
 }
 
 /// What adornment `id` is drawn with: its `Adornee`; a FloorWire's `From`;
@@ -118,13 +111,14 @@ fn mark_part(dom: &Dom, changes: &mut RenderChanges, part: Option<InstanceId>) {
     let Some(part) = part.filter(|_| !changes.full) else {
         return;
     };
-    if dom.is_a(part, "BasePart") {
+    let c = RenderIds::get();
+    if dom.is_a_class(part, c.base_part) {
         changes.parts.insert(part);
-    } else if dom.is_a(part, "Model") && !dom.is_a(part, "WorldRoot") {
+    } else if dom.is_a_class(part, c.model) && !dom.is_a_class(part, c.world_root) {
         let parts = dom.descendants(part).into_iter();
         changes
             .parts
-            .extend(parts.filter(|&p| dom.is_a(p, "BasePart")));
+            .extend(parts.filter(|&p| dom.is_a_class(p, c.base_part)));
     }
 }
 
@@ -132,7 +126,10 @@ fn mark_part(dom: &Dom, changes: &mut RenderChanges, part: Option<InstanceId>) {
 /// lassos drawn with it (a FloorWire's path bends as either of its parts
 /// moves, and a lasso's as its Part or root part does).
 fn part_moved(dom: &Dom, changes: &mut RenderChanges, id: InstanceId) {
-    if !changes.full && !changes.parts.contains(&id) && dom.is_a(id, "BasePart") {
+    if !changes.full
+        && !changes.parts.contains(&id)
+        && dom.is_a_class(id, RenderIds::get().base_part)
+    {
         changes.moved.insert(id);
     }
     for &(r, _) in dom.referrers(id) {
@@ -185,31 +182,63 @@ impl DataModel {
     }
 }
 
-/// The part properties render-change tracking treats specially.
+/// The properties and classes render-change tracking checks every
+/// journal entry against, resolved once.
 #[derive(Debug)]
-pub(crate) struct RenderProps {
-    cframe: rook_reflection::PropertyId,
-    velocities: [rook_reflection::PropertyId; 2],
-    global_wind: rook_reflection::PropertyId,
+pub(crate) struct RenderIds {
+    cframe: PropertyId,
+    velocities: [PropertyId; 2],
+    global_wind: PropertyId,
+    base_part: ClassId,
+    model: ClassId,
+    world_root: ClassId,
+    terrain: ClassId,
+    light: ClassId,
+    attachment: ClassId,
+    material_service: ClassId,
+    material_variant: ClassId,
+    /// What draws on its parent part: meshes, decals and textures,
+    /// SurfaceAppearances.
+    decorations: [ClassId; 3],
+    /// See [`is_adornment`].
+    adornments: [ClassId; 6],
 }
 
-impl RenderProps {
+impl RenderIds {
     fn get() -> &'static Self {
-        static PROPS: std::sync::LazyLock<RenderProps> = std::sync::LazyLock::new(|| {
+        static IDS: std::sync::LazyLock<RenderIds> = std::sync::LazyLock::new(|| {
             let db = rook_reflection::database();
-            let part = db.class_by_name("BasePart").expect("BasePart class").id;
+            let class = |name| db.class_by_name(name).expect(name).id;
+            let part = class("BasePart");
             let id = |name| db.find_property(part, name).expect(name).id;
-            RenderProps {
+            RenderIds {
                 cframe: id("CFrame"),
                 velocities: [id("AssemblyLinearVelocity"), id("AssemblyAngularVelocity")],
                 global_wind: db
-                    .class_by_name("Workspace")
-                    .and_then(|ws| db.find_property(ws.id, "GlobalWind"))
+                    .find_property(class("Workspace"), "GlobalWind")
                     .expect("Workspace.GlobalWind")
                     .id,
+                base_part: part,
+                model: class("Model"),
+                world_root: class("WorldRoot"),
+                terrain: class("Terrain"),
+                light: class("Light"),
+                attachment: class("Attachment"),
+                material_service: class("MaterialService"),
+                material_variant: class("MaterialVariant"),
+                decorations: ["DataModelMesh", "FaceInstance", "SurfaceAppearance"].map(class),
+                adornments: [
+                    "InstanceAdornment",
+                    "PVAdornment",
+                    "PartAdornment",
+                    "FloorWire",
+                    "SelectionPartLasso",
+                    "Highlight",
+                ]
+                .map(class),
             }
         });
-        &PROPS
+        &IDS
     }
 }
 
@@ -228,7 +257,9 @@ impl DataModel {
         let world = self.runtime.world();
         let dom = &world.dom;
         let lighting = dom.find_service("Lighting");
-        let props = RenderProps::get();
+        let ids = RenderIds::get();
+        let any_of =
+            |id: InstanceId, classes: &[ClassId]| classes.iter().any(|&c| dom.is_a_class(id, c));
         let changes = &mut self.render_changes;
         let (first, journal) = self.render_watch.look(dom);
         let adorned = &mut self.adorned;
@@ -242,16 +273,11 @@ impl DataModel {
         }
         // A mesh decides how its parent part looks (SpecialMesh, BlockMesh,
         // CylinderMesh, FileMesh), and decals and textures draw on it.
-        let decorates = |id: InstanceId| {
-            dom.is_a(id, "DataModelMesh")
-                || dom.is_a(id, "FaceInstance")
-                || dom.is_a(id, "SurfaceAppearance")
-        };
-        let light = |id: InstanceId| dom.is_a(id, "Light");
+        let decorates = |id: InstanceId| any_of(id, &ids.decorations);
+        let light = |id: InstanceId| dom.is_a_class(id, ids.light);
         let effect = |id: InstanceId| is_effect_class(dom.class_name(id));
         let wire = |id: InstanceId| dom.class_name(id) == "FloorWire";
-        let materials =
-            |id: InstanceId| dom.is_a(id, "MaterialService") || dom.is_a(id, "MaterialVariant");
+        let materials = |id: InstanceId| any_of(id, &[ids.material_service, ids.material_variant]);
         let mark_part = |changes: &mut RenderChanges, part| mark_part(dom, changes, part);
         // An adornment draws on its Adornee: its old and new ones change.
         let adorn = |changes: &mut RenderChanges,
@@ -270,23 +296,24 @@ impl DataModel {
         for c in journal {
             match c {
                 Change::Property { id, property } => {
-                    if Some(*id) == lighting {
+                    // Part properties first: physics writes every moving
+                    // part's CFrame each frame. Terrain is a BasePart too.
+                    if ids.velocities.contains(property) {
+                        // Nothing draws them.
+                    } else if *property == ids.cframe && !dom.is_a_class(*id, ids.terrain) {
+                        part_moved(dom, changes, *id);
+                    } else if Some(*id) == lighting {
                         changes.lighting = true;
-                    } else if dom.is_a(*id, "Terrain") || *property == props.global_wind {
+                    } else if dom.is_a_class(*id, ids.terrain) || *property == ids.global_wind {
                         changes.terrain = true;
                     } else if materials(*id) {
                         changes.full = true;
                     } else if effect(*id) {
                         changes.effects.insert(*id);
-                    } else if light(*id) || dom.is_a(*id, "Attachment") {
+                    } else if light(*id) || dom.is_a_class(*id, ids.attachment) {
                         // Attachments carry effects as well as lights.
                         changes.lights.insert(*id);
                         changes.effects.insert(*id);
-                    } else if props.velocities.contains(property) {
-                        // Physics writes these for every moving part every
-                        // step; nothing draws them.
-                    } else if *property == props.cframe {
-                        part_moved(dom, changes, *id);
                     } else if decorates(*id) {
                         mark_part(changes, dom.parent(*id));
                     } else if adornment(*id) {
@@ -305,7 +332,10 @@ impl DataModel {
                     subtree,
                     ..
                 } => {
-                    if subtree.iter().any(|i| dom.is_a(*i, "MaterialVariant")) {
+                    if subtree
+                        .iter()
+                        .any(|&i| dom.is_a_class(i, ids.material_variant))
+                    {
                         changes.full = true;
                     }
                     if subtree.iter().any(|i| light(*i)) {
@@ -317,7 +347,9 @@ impl DataModel {
                     for &i in subtree.iter().filter(|i| adornment(**i)) {
                         adorn(changes, adorned, i, false);
                     }
-                    let parts = subtree.iter().filter(|i| dom.is_a(**i, "BasePart"));
+                    let parts = subtree
+                        .iter()
+                        .filter(|&&i| dom.is_a_class(i, ids.base_part));
                     let before = changes.placed.len();
                     changes.placed.extend(parts);
                     if changes.placed.len() == before && decorates(*id) {
@@ -329,7 +361,7 @@ impl DataModel {
                     changes.collect(*id);
                     adorned.remove(id);
                 }
-                Change::Destroying(id) if dom.is_a(*id, "BasePart") => {
+                Change::Destroying(id) if dom.is_a_class(*id, ids.base_part) => {
                     changes.placed.insert(*id);
                 }
                 Change::Destroying(id) if light(*id) => {

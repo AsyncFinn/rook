@@ -32,7 +32,10 @@ pub(crate) fn source(resolver: Arc<rook_content::Resolver>) -> RigSource {
             })
             .as_ref()?;
         let holder = dom.create_by_name("Folder").ok()?;
-        let model = rook_formats::into_dom(weak, dom, holder).into_iter().next();
+        let model = rook_formats::copy_into_dom(weak, dom, holder)
+            .top
+            .into_iter()
+            .next();
         if let Some(model) = model {
             rook_dom::ignore_stale(dom.set_parent(model, None));
         }

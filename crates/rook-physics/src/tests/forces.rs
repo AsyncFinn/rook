@@ -265,17 +265,3 @@ fn velocity_is_the_assembly_velocity_at_the_part() {
     let v = crate::assembly::part_velocity(&dom, arm);
     assert!((v - Vec3::new(0.0, 0.0, -7.111)).length() < 0.01, "{v}");
 }
-
-#[test]
-fn saved_velocities_are_adopted() {
-    let mut dom = Dom::new();
-    let p = cube(&mut dom, 0.0);
-    set(&mut dom, p, "Velocity", v3(50.0, 0.0, 0.0));
-    set(&mut dom, p, "RotVelocity", v3(0.0, 3.0, 0.0));
-    crate::adopt_saved_velocities(&mut dom);
-    assert_eq!(velocity(&dom, p), Vec3::new(50.0, 0.0, 0.0));
-    assert_eq!(spin(&dom, p), Vec3::new(0.0, 3.0, 0.0));
-    let mut physics = Physics::new();
-    run(&mut physics, &mut dom, 0.1);
-    assert!((position(&dom, p).x - 5.0).abs() < 0.1);
-}

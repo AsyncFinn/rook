@@ -92,7 +92,13 @@ impl Source {
                     destroyed.push(*id);
                     out.push(Update::Destroying(*id));
                 }
-                Change::Property { id, property } if visible(*id) => {
+                // The property first: most entries are ones no client
+                // gets, and seeing whether one may costs a walk up the tree.
+                Change::Property { id, property }
+                    if (*property == server.name_property()
+                        || rule(*property) != Rule::Withheld)
+                        && visible(*id) =>
+                {
                     if *property == server.name_property() {
                         out.push(Update::Name {
                             id: *id,
@@ -107,6 +113,23 @@ impl Source {
                             property: *property,
                             value,
                         });
+                        // A moving part's velocities go with its pose, as
+                        // Roblox sends them with its physics (observed: a
+                        // client reads them); physics doesn't journal them.
+                        let pose = Pose::get();
+                        if *property == pose.cframe
+                            && server.property(*id, pose.anchored) == Some(Value::Bool(false))
+                        {
+                            for v in pose.velocities {
+                                if let Some(value) = server.property(*id, v) {
+                                    out.push(Update::Property {
+                                        id: *id,
+                                        property: v,
+                                        value,
+                                    });
+                                }
+                            }
+                        }
                     }
                 }
                 Change::Attribute { id, name } if visible(*id) => out.push(Update::Attribute {
@@ -169,10 +192,73 @@ fn replicated_value(server: &Dom, id: InstanceId, property: PropertyId) -> Optio
     server.property(id, property)
 }
 
-/// Server `Script` source stays on the server.
 fn withheld(server: &Dom, id: InstanceId, property: PropertyId) -> bool {
-    let db = server.database();
-    let prop = db.property(property);
+    match rule(property) {
+        Rule::Sent => false,
+        Rule::Withheld => true,
+        // An anchored part's velocity carries what stands on it (a
+        // conveyor) on the clients that simulate their characters too
+        // (observed: a client-owned character rides one). A moving part's
+        // goes with its pose instead.
+        Rule::Anchored => server.bool_property(id, "Anchored") != Some(true),
+        // Server `Script` source stays on the server; RunContext Client
+        // scripts run on the client, so their source goes.
+        Rule::Source => {
+            server.class_name(id) == "Script"
+                && server.enum_property(id, "RunContext")
+                    != Some(rook_types::RunContext::Client.value())
+        }
+    }
+}
+
+/// A part's pose properties, which replication sends together.
+struct Pose {
+    cframe: PropertyId,
+    anchored: PropertyId,
+    velocities: [PropertyId; 2],
+}
+
+impl Pose {
+    fn get() -> &'static Self {
+        static POSE: std::sync::LazyLock<Pose> = std::sync::LazyLock::new(|| {
+            let db = rook_reflection::database();
+            let part = db.class_by_name("BasePart").expect("BasePart class").id;
+            let id = |name| db.find_property(part, name).expect(name).id;
+            Pose {
+                cframe: id("CFrame"),
+                anchored: id("Anchored"),
+                velocities: [id("AssemblyLinearVelocity"), id("AssemblyAngularVelocity")],
+            }
+        });
+        &POSE
+    }
+}
+
+/// Whether a property's changes reach clients, as far as the property
+/// alone says.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Rule {
+    Sent,
+    Withheld,
+    /// Sent for anchored parts only.
+    Anchored,
+    /// `Source`: withheld for server Scripts.
+    Source,
+}
+
+/// [`Rule`]s by property, worked out once: replication looks at every
+/// journal entry, for every client.
+fn rule(property: PropertyId) -> Rule {
+    static RULES: std::sync::LazyLock<Vec<Rule>> = std::sync::LazyLock::new(|| {
+        let db = rook_reflection::database();
+        (0..db.property_count())
+            .map(|i| rule_of(db, db.property(PropertyId(i as u32))))
+            .collect()
+    });
+    RULES[property.0 as usize]
+}
+
+fn rule_of(db: &rook_reflection::Database, prop: &rook_reflection::Property) -> Rule {
     // Properties that serialize under another name (`Size` as `size`,
     // `Color` as `Color3uint8`, `Shape` as `shape`) are marked NotReplicated
     // in the API dump because Roblox replicates them under that other name.
@@ -182,31 +268,21 @@ fn withheld(server: &Dom, id: InstanceId, property: PropertyId) -> bool {
         PropertyKind::Canonical(Serialization::SerializesAs(_))
     );
     if prop.flags.not_replicated && !replicated_as_other && !replicated_by_twin(db, prop) {
-        return !physics_velocity(prop);
+        return match prop.name {
+            "AssemblyLinearVelocity" | "AssemblyAngularVelocity" => Rule::Anchored,
+            _ => Rule::Withheld,
+        };
     }
-    if prop.name == "Source" && server.class_name(id) == "Script" {
-        // RunContext Client scripts run on the client, so their source goes.
-        let context = server.enum_property(id, "RunContext");
-        return context != Some(rook_types::RunContext::Client.value());
+    if prop.name == "Source" {
+        return Rule::Source;
     }
     // Properties that only exist to carry another one in files.
-    matches!(prop.kind, PropertyKind::Alias { .. })
+    let carrier = matches!(prop.kind, PropertyKind::Alias { .. })
         || matches!(
             prop.kind,
             PropertyKind::Canonical(Serialization::Migrate { .. })
-        )
-}
-
-/// A part's velocity, which Roblox sends with its physics: an anchored
-/// part's carries what stands on it (observed: a client-owned character
-/// rides a conveyor), and a moving part's is read on clients (observed: 10
-/// for a part the server moved at 10 studs/s) and plays its motion back
-/// between updates.
-fn physics_velocity(prop: &rook_reflection::Property) -> bool {
-    matches!(
-        prop.name,
-        "AssemblyLinearVelocity" | "AssemblyAngularVelocity"
-    )
+        );
+    if carrier { Rule::Withheld } else { Rule::Sent }
 }
 
 /// Whether Roblox sends a NotReplicated property to clients through a

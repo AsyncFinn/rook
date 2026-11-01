@@ -27,6 +27,11 @@ pub(crate) struct Props {
     pub(crate) surface_inputs: Vec<PropertyId>,
     /// Terrain's voxels.
     pub(crate) smooth_grid: Option<PropertyId>,
+    /// Motor's (and Motor6D's) CurrentAngle, DesiredAngle and MaxVelocity,
+    /// read for every motor each frame.
+    pub(crate) motor: [PropertyId; 3],
+    /// HingeConstraint.CurrentAngle, written for every hinge each frame.
+    pub(crate) hinge_angle: PropertyId,
 }
 
 impl Props {
@@ -64,6 +69,15 @@ impl Props {
             smooth_grid: db
                 .class_by_name("Terrain")
                 .and_then(|t| p(t.id, "SmoothGrid")),
+            motor: {
+                let motor = db.class_by_name("Motor")?.id;
+                [
+                    p(motor, "CurrentAngle")?,
+                    p(motor, "DesiredAngle")?,
+                    p(motor, "MaxVelocity")?,
+                ]
+            },
+            hinge_angle: p(db.class_by_name("HingeConstraint")?.id, "CurrentAngle")?,
         })
     }
 

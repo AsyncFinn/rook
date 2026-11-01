@@ -94,6 +94,10 @@ pub struct Class {
     pub name: &'static str,
     pub superclass: Option<ClassId>,
     pub flags: ClassFlags,
+    /// Where the class falls in a pre-order walk of the class tree, and
+    /// the end of its subclasses' run: `is_a` is one range check.
+    order: u16,
+    subclasses_end: u16,
     /// Properties declared on this class only.
     pub own_properties: Vec<PropertyId>,
     /// All properties, root ancestor's first, then this class's own.
@@ -201,6 +205,8 @@ impl Database {
                 name,
                 superclass: desc.superclass.map(|s| class_by_name[s]),
                 flags: class_flags(&desc.tags),
+                order: 0,
+                subclasses_end: 0,
                 own_properties,
                 all_properties: Vec::new(),
                 lookup: FxHashMap::default(),
@@ -240,6 +246,8 @@ impl Database {
             classes[i].lookup = lookup;
             classes[i].defaults = defaults;
         }
+
+        number_subclasses(&mut classes);
 
         Self {
             version: source.version,
@@ -307,14 +315,8 @@ impl Database {
 
     /// `Instance:IsA`: whether `class` is `ancestor` or inherits from it.
     pub fn is_a(&self, class: ClassId, ancestor: ClassId) -> bool {
-        let mut cur = Some(class);
-        while let Some(c) = cur {
-            if c == ancestor {
-                return true;
-            }
-            cur = self.class(c).superclass;
-        }
-        false
+        let a = self.class(ancestor);
+        (a.order..a.subclasses_end).contains(&self.class(class).order)
     }
 
     /// [`Database::is_a`] by class names; false for a name the database
@@ -335,6 +337,33 @@ impl Database {
             cur = class.superclass;
             Some(class)
         })
+    }
+}
+
+/// Number the classes in a pre-order walk of the class tree, so each
+/// class's subclasses take the run of numbers after its own.
+fn number_subclasses(classes: &mut [Class]) {
+    let mut children: Vec<Vec<ClassId>> = vec![Vec::new(); classes.len()];
+    let mut roots = Vec::new();
+    for c in classes.iter() {
+        match c.superclass {
+            Some(s) => children[usize::from(s.0)].push(c.id),
+            None => roots.push(c.id),
+        }
+    }
+    let mut next = 0u16;
+    // (class, whether its subclasses are numbered)
+    let mut stack: Vec<(ClassId, bool)> = roots.into_iter().rev().map(|c| (c, false)).collect();
+    while let Some((c, done)) = stack.pop() {
+        let class = &mut classes[usize::from(c.0)];
+        if done {
+            class.subclasses_end = next;
+            continue;
+        }
+        class.order = next;
+        next += 1;
+        stack.push((c, true));
+        stack.extend(children[usize::from(c.0)].iter().rev().map(|&s| (s, false)));
     }
 }
 
@@ -394,7 +423,7 @@ fn property_flags(tags: &std::collections::HashSet<PropertyTag>) -> PropertyFlag
 
 #[cfg(test)]
 mod tests {
-    use crate::database;
+    use crate::{ClassId, database};
 
     #[test]
     fn builds_with_expected_scale() {
@@ -420,6 +449,23 @@ mod tests {
         assert_eq!(chain.first(), Some(&"Part"));
         // Modern dumps place `Object` above `Instance`.
         assert_eq!(&chain[chain.len() - 2..], &["Instance", "Object"]);
+    }
+
+    #[test]
+    fn is_a_matches_the_superclass_chain() {
+        let db = database();
+        for class in db.classes() {
+            let chain: Vec<ClassId> = db.superclasses(class.id).map(|c| c.id).collect();
+            for other in db.classes() {
+                assert_eq!(
+                    db.is_a(class.id, other.id),
+                    chain.contains(&other.id),
+                    "{} is a {}",
+                    class.name,
+                    other.name
+                );
+            }
+        }
     }
 
     #[test]

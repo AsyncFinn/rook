@@ -22,7 +22,7 @@ mod retype;
 
 pub use compare::{CompareOptions, compare, compare_with};
 pub use compiled::{CompiledScript, compiled_scripts};
-pub use convert::{from_dom, into_dom};
+pub use convert::{Converted, copy_into_dom, from_dom, into_dom};
 
 use std::io::Cursor;
 use std::panic::{AssertUnwindSafe, catch_unwind};

@@ -14,14 +14,25 @@ mod selector;
 
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
+use std::sync::LazyLock;
 
 use mlua::{Lua, RegistryKey, Table, Value as LuaValue};
 use rook_dom::{Change, Dom, InstanceId};
+use rook_reflection::ClassId;
 
 use crate::ctx::with_world;
 use selector::Chain;
 
-const STYLE_CLASSES: [&str; 4] = ["StyleRule", "StyleSheet", "StyleLink", "StyleDerive"];
+/// The classes whose changes restyle every linked tree, resolved once:
+/// styling looks at every journal entry.
+fn style_classes() -> &'static [ClassId; 4] {
+    static CLASSES: LazyLock<[ClassId; 4]> = LazyLock::new(|| {
+        let db = rook_reflection::database();
+        ["StyleRule", "StyleSheet", "StyleLink", "StyleDerive"]
+            .map(|name| db.class_by_name(name).expect(name).id)
+    });
+    &CLASSES
+}
 
 /// Styling state, kept in the World.
 #[derive(Debug, Default)]
@@ -81,7 +92,7 @@ impl Styles {
     /// restyle, and before the journal is trimmed at the end of a frame
     /// (scripts change most things after the restyle).
     pub(crate) fn note_changes(&mut self, dom: &Dom) {
-        let is_style = |id: InstanceId| STYLE_CLASSES.iter().any(|c| dom.is_a(id, c));
+        let is_style = |id: InstanceId| style_classes().iter().any(|&c| dom.is_a_class(id, c));
         for change in dom.journal().since(self.cursor) {
             match change {
                 Change::Reparented { id, subtree, .. } => {

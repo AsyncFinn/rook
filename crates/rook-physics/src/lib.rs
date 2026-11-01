@@ -95,38 +95,6 @@ pub fn part_mass(dom: &Dom, part: InstanceId) -> f32 {
     part_volume(dom, part) * materials::of_part(dom, part).density
 }
 
-/// Move the velocities files save (the deprecated `Velocity` and
-/// `RotVelocity`) into `AssemblyLinearVelocity` and
-/// `AssemblyAngularVelocity`, which aren't saved and are the ones physics
-/// and scripts use. Scripts see `Velocity` and `RotVelocity` as views of
-/// them (observed: setting either sets the assembly's velocity at once).
-pub fn adopt_saved_velocities(dom: &mut Dom) {
-    let db = dom.database();
-    let Some(base) = db.class_by_name("BasePart").map(|c| c.id) else {
-        return;
-    };
-    let p = |name| db.find_canonical_property(base, name).map(|p| p.id);
-    let pairs = [
-        (p("Velocity"), p("AssemblyLinearVelocity")),
-        (p("RotVelocity"), p("AssemblyAngularVelocity")),
-    ];
-    for id in dom.descendants(dom.root()) {
-        if !dom.is_a(id, "BasePart") {
-            continue;
-        }
-        for (saved, used) in pairs {
-            let (Some(saved), Some(used)) = (saved, used) else {
-                continue;
-            };
-            if let Some(Value::Vector3(v)) = dom.property(id, saved)
-                && v.0 != glam::Vec3::ZERO
-            {
-                rook_dom::ignore_stale(dom.set_property(id, used, Value::Vector3(v)));
-            }
-        }
-    }
-}
-
 /// Script requests physics carries out at its next step.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Command {

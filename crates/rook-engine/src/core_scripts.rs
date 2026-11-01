@@ -121,7 +121,7 @@ impl CorePatch {
     ) -> Result<(InstanceId, InstanceId), String> {
         let missing = |what: &str| format!("the patch has no {what}");
         let holder = dom.create_by_name("Folder").map_err(|e| e.to_string())?;
-        let tops = rook_formats::into_dom(&self.dom, dom, holder);
+        let tops = rook_formats::copy_into_dom(&self.dom, dom, holder).top;
         for (path, code) in &self.compiled {
             let mut at = path.first().and_then(|&i| tops.get(i as usize).copied());
             for &i in path.iter().skip(1) {

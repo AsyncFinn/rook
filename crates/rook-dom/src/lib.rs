@@ -245,10 +245,15 @@ impl Dom {
     }
 
     pub fn is_a(&self, id: InstanceId, class: &str) -> bool {
-        let (Some(inst), Some(target)) = (self.slot(id), self.db.class_by_name(class)) else {
-            return false;
-        };
-        self.db.is_a(inst.class, target.id)
+        self.db
+            .class_by_name(class)
+            .is_some_and(|c| self.is_a_class(id, c.id))
+    }
+
+    /// [`Dom::is_a`] by class id, for code that checks every journal
+    /// entry and so resolves its classes once.
+    pub fn is_a_class(&self, id: InstanceId, class: ClassId) -> bool {
+        self.slot(id).is_some_and(|i| self.db.is_a(i.class, class))
     }
 
     pub fn name(&self, id: InstanceId) -> &str {

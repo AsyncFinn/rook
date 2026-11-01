@@ -445,7 +445,7 @@ pub(crate) fn set(
         }
         // Assembly velocities belong to the whole assembly; the deprecated
         // Velocity and RotVelocity set them too (observed). Files save
-        // those two; rook_physics::adopt_saved_velocities moves them.
+        // those two; loading moves them (rook_formats::into_dom).
         (
             "AssemblyLinearVelocity" | "AssemblyAngularVelocity" | "Velocity" | "RotVelocity",
             Value::Vector3(v),

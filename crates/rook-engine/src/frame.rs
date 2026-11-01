@@ -282,7 +282,7 @@ impl DataModel {
 }
 
 /// Read a fetched model asset, for scripts that load it: a function that
-/// copies its instances into the Model they get.
+/// moves its instances into the Model they get.
 fn read_asset(
     outcome: Result<rook_content::Fetched, rook_content::Failure>,
 ) -> rook_lua::AssetFill {
@@ -290,6 +290,6 @@ fn read_asset(
     let loaded =
         rook_formats::load(&fetched.bytes).map_err(|_| rook_content::FailureKind::Invalid)?;
     Ok(Box::new(move |dom, model| {
-        rook_formats::into_dom(&loaded.dom, dom, model);
+        rook_formats::into_dom(loaded.dom, dom, model);
     }))
 }

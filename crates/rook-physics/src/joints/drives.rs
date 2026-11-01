@@ -390,17 +390,23 @@ pub(crate) fn hinge_input(dom: &Dom, j: &Joint) -> Option<HingeInput> {
 /// Advance a Motor's CurrentAngle toward DesiredAngle over `dt` seconds.
 /// Returns whether it moved. MaxVelocity is radians per 60 Hz frame
 /// (observed: 0.1 per frame).
-pub(crate) fn step_motor(dom: &mut Dom, j: &Joint, dt: f64) -> bool {
+pub(crate) fn step_motor(dom: &mut Dom, props: &Props, j: &Joint, dt: f64) -> bool {
     if !matches!(j.kind, JointKind::Motor | JointKind::Motor6D) {
         return false;
     }
-    let current = dom.float_property(j.id, "CurrentAngle").unwrap_or(0.0);
-    let desired = dom.float_property(j.id, "DesiredAngle").unwrap_or(0.0);
+    let [current_angle, desired_angle, max_velocity] = props.motor;
+    let read = |p| {
+        dom.property(j.id, p)
+            .and_then(|v| v.as_number())
+            .unwrap_or(0.0) as f32
+    };
+    let current = read(current_angle);
+    let desired = read(desired_angle);
     if current == desired {
         return false;
     }
-    let max = dom.float_property(j.id, "MaxVelocity").unwrap_or(0.0).abs() * (dt * 60.0) as f32;
+    let max = read(max_velocity).abs() * (dt * 60.0) as f32;
     let next = current + (desired - current).clamp(-max, max);
-    rook_dom::ignore_stale(dom.set_property_by_name(j.id, "CurrentAngle", Value::Float32(next)));
+    rook_dom::ignore_stale(dom.set_property(j.id, current_angle, Value::Float32(next)));
     next != current
 }
