@@ -91,6 +91,7 @@ impl DataModel {
         self.sync_viewport_size();
         self.ease_scrolls();
         self.lay_out_gui();
+        self.runtime.sync_overheads();
         self.refresh_gui_hover();
     }
 

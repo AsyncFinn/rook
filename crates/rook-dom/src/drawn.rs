@@ -17,6 +17,11 @@ impl Dom {
         }
     }
 
+    /// Whether `id` is drawn away from its `CFrame` this frame.
+    pub fn is_drawn(&self, id: InstanceId) -> bool {
+        self.drawn.contains_key(&id)
+    }
+
     /// What is drawn away from its `CFrame` this frame.
     pub fn drawn_ids(&self) -> impl Iterator<Item = InstanceId> + '_ {
         self.drawn.keys().copied()

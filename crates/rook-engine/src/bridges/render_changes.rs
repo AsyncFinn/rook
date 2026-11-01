@@ -24,18 +24,18 @@ pub struct RenderChanges {
     pub full: bool,
     pub lighting: bool,
     pub terrain: bool,
-    pub lights: std::collections::HashSet<InstanceId>,
+    pub lights: rustc_hash::FxHashSet<InstanceId>,
     pub lights_placed: bool,
     /// Effects whose properties changed, and whether any entered or left
     /// the tree (`effects_placed`).
-    pub effects: std::collections::HashSet<InstanceId>,
+    pub effects: rustc_hash::FxHashSet<InstanceId>,
     pub effects_placed: bool,
     /// `ParticleEmitter:Emit` and the like, in the order called.
     pub effect_calls: Vec<(InstanceId, rook_lua::EffectCall)>,
-    pub placed: std::collections::HashSet<InstanceId>,
-    pub parts: std::collections::HashSet<InstanceId>,
-    pub moved: std::collections::HashSet<InstanceId>,
-    pub collected: std::collections::HashSet<InstanceId>,
+    pub placed: rustc_hash::FxHashSet<InstanceId>,
+    pub parts: rustc_hash::FxHashSet<InstanceId>,
+    pub moved: rustc_hash::FxHashSet<InstanceId>,
+    pub collected: rustc_hash::FxHashSet<InstanceId>,
 }
 
 impl RenderChanges {
@@ -176,7 +176,10 @@ impl DataModel {
         let before = w.dom.set_drawn(drawn);
         let dom = &w.dom;
         let changes = &mut self.render_changes;
-        for id in dom.drawn_ids().chain(before) {
+        // Those drawn last frame are drawn again or back at their CFrame:
+        // each moves once.
+        let back = before.into_iter().filter(|&id| !dom.is_drawn(id));
+        for id in dom.drawn_ids().chain(back) {
             part_moved(dom, changes, id);
         }
     }
@@ -281,7 +284,7 @@ impl DataModel {
         let mark_part = |changes: &mut RenderChanges, part| mark_part(dom, changes, part);
         // An adornment draws on its Adornee: its old and new ones change.
         let adorn = |changes: &mut RenderChanges,
-                     adorned: &mut HashMap<InstanceId, InstanceId>,
+                     adorned: &mut rustc_hash::FxHashMap<InstanceId, InstanceId>,
                      id: InstanceId,
                      gone: bool| {
             let new = if gone { None } else { adorned_part(dom, id) };

@@ -86,6 +86,8 @@ pub struct Renderer {
     images: GpuCache<ImageHash, Image>,
     opaque: Batches,
     layers: Batches,
+    /// Uploads the instances that changed to their slots.
+    scatter: crate::batch::scatter::Scatter,
     /// How each entry of the scene is drawn, by its index in the scene.
     placements: Vec<Placement>,
     /// Which level of detail each entry's mesh draws at.
@@ -276,6 +278,7 @@ impl Renderer {
             info.name, info.backend, info.driver, info.driver_info
         );
         let tonemap = Tonemap::new(&device, color_format);
+        let scatter = crate::batch::scatter::Scatter::new(&device);
         let gui = GuiPass::new(
             &device,
             &queue,
@@ -317,6 +320,7 @@ impl Renderer {
             images: GpuCache::new(),
             opaque: Batches::default(),
             layers: Batches::default(),
+            scatter,
             placements: Vec::new(),
             detail: detail::Detail::default(),
             waiting: waiting::Waiting::default(),

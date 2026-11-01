@@ -140,7 +140,7 @@ pub struct DataModel {
     render_changes: RenderChanges,
     /// Each adornment's Adornee as last seen, whose look changes when
     /// it moves to another.
-    adorned: HashMap<InstanceId, InstanceId>,
+    adorned: rustc_hash::FxHashMap<InstanceId, InstanceId>,
     /// Keyboard and mouse bookkeeping (clients).
     input: input::InputTracker,
     content: Content,
@@ -375,7 +375,7 @@ impl DataModel {
             new_scripts: scripts::NewScripts::starting_at(cursor),
             render_watch: JournalWatch::starting_at(cursor),
             render_changes: RenderChanges::everything(),
-            adorned: HashMap::new(),
+            adorned: Default::default(),
             input: Default::default(),
             content: Content {
                 resolver: options.content.clone(),

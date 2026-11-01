@@ -21,8 +21,8 @@ impl Renderer {
     ) -> Vec<TransparentRun> {
         {
             profiling::scope!("opaque and layers");
-            self.opaque.upload(&self.device, &self.queue);
-            self.layers.upload(&self.device, &self.queue);
+            self.opaque.upload(&self.device, &self.queue, &self.scatter);
+            self.layers.upload(&self.device, &self.queue, &self.scatter);
         }
         self.transparent
             .upload(&self.device, &self.queue, camera, view, margin)

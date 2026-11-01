@@ -2,11 +2,13 @@
 //! buffer.
 
 pub(crate) mod cull;
+pub(crate) mod scatter;
 
 use std::ops::Range;
 
 use super::*;
 use pool::RangeAlloc;
+use scatter::Scatter;
 
 /// What an instanced draw shares: its mesh and its images (a mesh
 /// texture or a layer's decal, and the material's maps).
@@ -56,9 +58,16 @@ struct InstancePool {
     ranges: RangeAlloc,
     /// The GPU copy, as big as `instances` once uploaded.
     buffer: Option<wgpu::Buffer>,
-    /// Chunks changed since they were uploaded.
+    /// Chunks changed since they were uploaded: runs of slots a batch
+    /// took or moved to.
     dirty: Vec<bool>,
     any_dirty: bool,
+    /// Single slots changed since they were uploaded (an instance placed
+    /// or moved), scattered into place ([`Scatter`]), and which are.
+    changed: Vec<u32>,
+    is_changed: Vec<bool>,
+    /// Where the changed slots go up.
+    staging: Option<wgpu::Buffer>,
 }
 
 impl InstancePool {
@@ -70,6 +79,7 @@ impl InstancePool {
                 let capacity =
                     (self.instances.len() * 2).max(self.ranges.top() as usize + len as usize);
                 self.instances.resize(capacity, Instance::zeroed());
+                self.is_changed.resize(capacity, false);
                 // A new buffer, written whole.
                 self.buffer = None;
                 self.ranges.alloc(len, capacity as u32).expect("grown")
@@ -80,7 +90,9 @@ impl InstancePool {
 
     fn set(&mut self, at: u32, instance: Instance) {
         self.instances[at as usize] = instance;
-        self.mark(at..at + 1);
+        if !std::mem::replace(&mut self.is_changed[at as usize], true) {
+            self.changed.push(at);
+        }
     }
 
     fn mark(&mut self, range: Range<u32>) {
@@ -95,24 +107,53 @@ impl InstancePool {
         self.any_dirty = true;
     }
 
-    /// Bring the GPU copy up to date: runs of changed chunks, or the whole
-    /// buffer when it's new.
-    fn upload(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {
+    /// Bring the GPU copy up to date: the whole buffer when it's new,
+    /// else runs of changed chunks, then the single slots changed.
+    fn upload(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, scatter: &Scatter) {
         let size = std::mem::size_of::<Instance>() as u64;
+        if self
+            .buffer
+            .as_ref()
+            .is_some_and(|b| !scatter.reaches(b.size()))
+        {
+            for at in std::mem::take(&mut self.changed) {
+                self.is_changed[at as usize] = false;
+                self.mark(at..at + 1);
+            }
+        }
         let Some(buffer) = &self.buffer else {
             if !self.instances.is_empty() {
                 self.buffer = Some(
                     device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                         label: Some("rook instances"),
                         contents: bytemuck::cast_slice(&self.instances),
-                        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                        usage: wgpu::BufferUsages::VERTEX
+                            | wgpu::BufferUsages::COPY_DST
+                            | wgpu::BufferUsages::STORAGE,
                     }),
                 );
             }
             self.dirty.fill(false);
             self.any_dirty = false;
+            for at in self.changed.drain(..) {
+                self.is_changed[at as usize] = false;
+            }
             return;
         };
+        if !self.changed.is_empty() {
+            scatter.run(
+                device,
+                queue,
+                &mut self.staging,
+                buffer,
+                &self.changed,
+                &self.instances,
+            );
+            for &at in &self.changed {
+                self.is_changed[at as usize] = false;
+            }
+            self.changed.clear();
+        }
         if !std::mem::take(&mut self.any_dirty) {
             return;
         }
@@ -260,7 +301,7 @@ impl Batches {
 
     /// Bring the GPU copy of the instances and the batches' bounds up to
     /// date.
-    pub(crate) fn upload(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {
+    pub(crate) fn upload(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, scatter: &Scatter) {
         let (list, bounds, pool) = (&mut self.list, &mut self.bounds, &self.pool);
         // Each batch changed as many times as it has instances gets its
         // boxes worked out afresh; the others wait for more changes.
@@ -281,7 +322,7 @@ impl Batches {
             b.changes = 0;
             false
         });
-        self.pool.upload(device, queue);
+        self.pool.upload(device, queue, scatter);
     }
 
     /// The buffer every batch's instances are in (none before the first

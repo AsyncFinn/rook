@@ -97,7 +97,7 @@ fn mesh_and_decal_changes_mark_their_part() {
         assert!(!changes.full, "{source}");
         changes.parts
     };
-    let only_part = std::collections::HashSet::from([part]);
+    let only_part = rustc_hash::FxHashSet::from_iter([part]);
     for source in [
         "workspace.Part.Mesh.MeshType = Enum.MeshType.Sphere",
         "workspace.Part.Mesh.Scale = Vector3.new(1, 2, 1)",
@@ -122,7 +122,7 @@ fn mesh_and_decal_changes_mark_their_part() {
         .unwrap();
     assert_eq!(
         s.take_render_changes().parts,
-        std::collections::HashSet::from([part, other])
+        rustc_hash::FxHashSet::from_iter([part, other])
     );
     assert!(changed(&mut s, "Instance.new('Folder', workspace.Part)").is_empty());
 }

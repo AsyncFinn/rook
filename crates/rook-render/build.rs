@@ -10,8 +10,9 @@ use wesl::sourcemap::{BasicSourceMap, SourceMap};
 use wesl::{CompileOptions, CompileResult, Compiler};
 
 /// The entry modules: one shader module each.
-const ENTRIES: [&str; 8] = [
+const ENTRIES: [&str; 9] = [
     "parts",
+    "scatter",
     "sky",
     "sky_cube",
     "light_volume",

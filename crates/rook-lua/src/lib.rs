@@ -294,14 +294,22 @@ impl Runtime {
             let w = &mut *w;
             let start = w.dom.journal().end();
             w.gui.sync(&mut w.dom);
-            let physics = &mut w.physics;
-            w.gui.sync_overheads(&mut w.dom, |dom, from, to, ignore| {
-                let filter = rook_physics::Filter::legacy_ray(ignore.to_vec(), false);
-                physics.raycast(dom, from, to - from, &filter).is_some()
-            });
             start
         };
         self.dispatch_since(start);
+    }
+
+    /// Work out the names and health bars over heads for this frame's
+    /// drawing, once a frame (they look through the world, so they cost
+    /// a ray each).
+    pub fn sync_overheads(&self) {
+        let mut w = self.world_mut();
+        let w = &mut *w;
+        let physics = &mut w.physics;
+        w.gui.sync_overheads(&mut w.dom, |dom, from, to, ignore| {
+            let filter = rook_physics::Filter::legacy_ray(ignore.to_vec(), false);
+            physics.raycast(dom, from, to - from, &filter).is_some()
+        });
     }
 
     /// Move players whose team left Teams or changed color, firing what

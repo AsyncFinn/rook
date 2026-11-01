@@ -70,8 +70,12 @@ pub struct Gui {
     /// draw again.
     restyled: FxHashSet<InstanceId>,
     layout: Layout,
-    /// Counts layouts, so the drawing knows when to rebuild.
-    generation: u64,
+    /// Counts layouts and looks, so input knows when what's under the
+    /// cursor may have changed.
+    laid_out: u64,
+    /// Counts changes to the names and health bars over heads, which
+    /// change as characters move but take no input.
+    tag_changes: u64,
     watch: Option<Watch>,
     /// SurfaceGuis and BillboardGuis that have been in the Workspace, so
     /// layout needn't search it; ones that left are dropped at layout.
@@ -112,7 +116,8 @@ impl Default for Gui {
             shifted: FxHashSet::default(),
             restyled: FxHashSet::default(),
             layout: Layout::default(),
-            generation: 0,
+            laid_out: 0,
+            tag_changes: 0,
             watch: None,
             in_world: FxHashSet::default(),
             messages: FxHashSet::default(),
@@ -296,7 +301,7 @@ impl Gui {
             self.changed.clear();
             self.shifted.clear();
             self.restyled.clear();
-            self.generation += 1;
+            self.laid_out += 1;
             self.screen.forget();
             self.canvases.clear();
             self.write(dom);
@@ -365,7 +370,7 @@ impl Gui {
         mut blocked: impl FnMut(&mut Dom, Vec3, Vec3, &[InstanceId]) -> bool,
     ) {
         if self.overheads.update(dom, &mut blocked) {
-            self.generation += 1;
+            self.tag_changes += 1;
         }
     }
 
@@ -428,7 +433,7 @@ impl Gui {
         if tops.is_empty() {
             return;
         }
-        self.generation += 1;
+        self.laid_out += 1;
         for top in tops {
             if world::is_world_gui(dom, *top) {
                 self.canvases.remove(top);
@@ -444,7 +449,7 @@ impl Gui {
         if ids.is_empty() {
             return;
         }
-        self.generation += 1;
+        self.laid_out += 1;
         for &id in ids {
             if draw::is_message(dom, id) {
                 self.screen.repaint_messages();
@@ -459,9 +464,16 @@ impl Gui {
         }
     }
 
-    /// Changes with every new layout or look.
+    /// Changes with every new layout or look, name tags included: what
+    /// a renderer draws again.
     pub fn generation(&self) -> u64 {
-        self.generation
+        self.laid_out + self.tag_changes
+    }
+
+    /// Changes with every new layout or look of what input can reach
+    /// (not name tags).
+    pub fn hit_generation(&self) -> u64 {
+        self.laid_out
     }
 
     /// What the local player's ScreenGuis draw, bottom first, as of the

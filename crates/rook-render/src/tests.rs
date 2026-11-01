@@ -117,6 +117,35 @@ fn updating_parts_draws_what_a_new_scene_draws() {
     );
 }
 
+/// Parts that move after they've been drawn are drawn where they moved
+/// to: their instances go up on their own, not with the rest of the
+/// buffer (`batch/scatter.rs`).
+#[test]
+fn moved_parts_draw_where_they_moved() {
+    let (Ok(mut moved), Ok(mut fresh)) = (Renderer::headless(), Renderer::headless()) else {
+        return;
+    };
+    let mut scene = Scene {
+        parts: (0..40)
+            .map(|i| part(PartShape::Block, i as f32 - 20.0, [1.0, 0.0, 0.0], 0.0))
+            .collect(),
+        ..Scene::default()
+    };
+    moved.set_scene(&scene);
+    let camera = Camera::look_at(Vec3::new(0.0, 3.0, 30.0), Vec3::ZERO);
+    moved.render_to_image(64, 32, &camera).unwrap();
+    for i in [3, 17, 30] {
+        scene.parts[i].position.y += 2.0;
+        scene.parts[i].rotation = Mat3::from_rotation_z(0.4);
+    }
+    moved.move_parts(&scene, &[3, 17, 30]);
+    fresh.set_scene(&scene);
+    assert_eq!(
+        moved.render_to_image(64, 32, &camera).unwrap(),
+        fresh.render_to_image(64, 32, &camera).unwrap()
+    );
+}
+
 /// A decal shows its image on its face, and a part waiting for its
 /// image draws nothing until the upload.
 #[test]

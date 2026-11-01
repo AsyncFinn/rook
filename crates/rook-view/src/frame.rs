@@ -62,23 +62,39 @@ impl SceneCache {
                 SceneChange::Parts {
                     changed: Vec::new(),
                     moved: Vec::new(),
+                    shared: true,
                 }
             }
             _ if loaded.is_empty() => change,
             SceneChange::None => SceneChange::Parts {
                 changed: loaded,
                 moved: Vec::new(),
+                shared: false,
             },
-            SceneChange::Parts { mut changed, moved } => {
+            SceneChange::Parts {
+                mut changed,
+                moved,
+                shared,
+            } => {
                 changed.extend(loaded);
-                SceneChange::Parts { changed, moved }
+                SceneChange::Parts {
+                    changed,
+                    moved,
+                    shared,
+                }
             }
             SceneChange::Full => SceneChange::Full,
         };
         match &change {
             SceneChange::None => return gui,
-            SceneChange::Parts { changed, moved } => {
-                renderer.update_parts(&self.scene, changed);
+            SceneChange::Parts {
+                changed,
+                moved,
+                shared,
+            } => {
+                if *shared || !changed.is_empty() {
+                    renderer.update_parts(&self.scene, changed);
+                }
                 renderer.move_parts(&self.scene, moved);
             }
             SceneChange::Full => renderer.set_scene(&self.scene),

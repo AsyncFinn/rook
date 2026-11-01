@@ -11,6 +11,8 @@ mod frame;
 mod gui;
 
 use std::collections::{HashMap, HashSet};
+
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Arc;
 
 use glam::{Mat3, Vec2, Vec3};
@@ -69,11 +71,16 @@ struct Drawn {
 pub(crate) enum SceneChange {
     None,
     /// These entries (indices into `scene.parts`, which may have grown),
-    /// and maybe the lighting.
+    /// and maybe what the whole scene shares.
     Parts {
         changed: Vec<usize>,
         /// Entries that only moved: same look, new place.
         moved: Vec<usize>,
+        /// The lighting, the terrain's look, the local lights or the
+        /// effects changed: the renderer takes the scene's again. Parts
+        /// moving alone don't, so a place full of machinery doesn't hand
+        /// it every light and emitter each frame.
+        shared: bool,
     },
     /// Everything was rebuilt.
     Full,
@@ -86,9 +93,9 @@ pub(crate) enum SceneChange {
 pub struct SceneCache {
     pub scene: Scene,
     /// Where each drawn part is in `scene.parts`.
-    index: HashMap<InstanceId, usize>,
+    index: FxHashMap<InstanceId, usize>,
     /// Where each drawn part's image layers and adornments are, in order.
-    layers: HashMap<InstanceId, Vec<usize>>,
+    layers: FxHashMap<InstanceId, Vec<usize>>,
     /// How each entry's part's CFrame places it, by index.
     poses: Vec<Pose>,
     /// Indices of entries no longer drawn (hidden), reused for new ones so
@@ -97,7 +104,7 @@ pub struct SceneCache {
     /// Mesh files and images, loaded as parts need them.
     files: Files,
     /// Parts waiting for each file, redrawn when it arrives.
-    waiting: HashMap<FileRef, HashSet<InstanceId>>,
+    waiting: HashMap<FileRef, FxHashSet<InstanceId>>,
     /// Where the camera is, for loading the files nearest it first.
     focus: Vec3,
     /// Where the camera was when the waiting files were last ranked.
@@ -150,8 +157,8 @@ impl SceneCache {
         let textures = EffectTextures::load(&content, &mut scene.images);
         let mut cache = Self {
             scene,
-            index: HashMap::new(),
-            layers: HashMap::new(),
+            index: FxHashMap::default(),
+            layers: FxHashMap::default(),
             files: Files::new(content),
             waiting: HashMap::new(),
             focus: camera,
@@ -285,18 +292,15 @@ impl SceneCache {
                 moved.push(i);
             }
         }
-        // The terrain's look (waves, wind) reaches the renderer with any
-        // update, even one that changed no entry.
-        if changed.is_empty()
-            && moved.is_empty()
-            && !changes.lighting
-            && !changes.terrain
-            && !lights
-            && !effects
-        {
+        let shared = changes.lighting || changes.terrain || lights || effects;
+        if changed.is_empty() && moved.is_empty() && !shared {
             SceneChange::None
         } else {
-            SceneChange::Parts { changed, moved }
+            SceneChange::Parts {
+                changed,
+                moved,
+                shared,
+            }
         }
     }
 

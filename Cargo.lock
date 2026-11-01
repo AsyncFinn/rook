@@ -3282,6 +3282,7 @@ dependencies = [
  "rook-reflection",
  "rook-terrain",
  "rook-types",
+ "rustc-hash 2.1.3",
  "rustyline",
  "serde_json",
  "thiserror 2.0.21",
@@ -3494,6 +3495,7 @@ dependencies = [
  "rook-render",
  "rook-terrain",
  "rook-types",
+ "rustc-hash 2.1.3",
  "tracing",
 ]
 

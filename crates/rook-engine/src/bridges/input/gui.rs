@@ -159,7 +159,7 @@ impl DataModel {
     /// stayed over. Returns what's under it.
     fn update_hover(&mut self, obj: Option<InstanceId>, moved: bool) -> Vec<InstanceId> {
         let hits = self.gui_hits();
-        self.input.gui.hover_generation = self.runtime.world().gui.generation();
+        self.input.gui.hover_generation = self.runtime.world().gui.hit_generation();
         let old = std::mem::replace(&mut self.input.gui.hovered, hits.clone());
         let at = self.window_point();
         for &id in old.iter().filter(|id| !hits.contains(id)) {
@@ -186,7 +186,7 @@ impl DataModel {
     /// GUI laid out again under a still cursor: what it's over changes as
     /// if it had moved there (Inference: Roblox checks each frame).
     pub(crate) fn refresh_gui_hover(&mut self) {
-        let generation = self.runtime.world().gui.generation();
+        let generation = self.runtime.world().gui.hit_generation();
         if generation == self.input.gui.hover_generation {
             return;
         }
