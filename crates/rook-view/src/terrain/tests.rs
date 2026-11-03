@@ -150,3 +150,61 @@ fn rings_follow_the_camera() {
     assert_eq!(level_at(&cache, camera.x), [0]);
     assert!(level_at(&cache, 10.0)[0] >= 3);
 }
+
+/// Workspace's Terrain replaced by another: the old one's chunks leave
+/// the scene and the new one's are drawn in place, the rest of the scene
+/// untouched.
+#[test]
+fn a_replaced_terrain_swaps_its_chunks() {
+    use rook_terrain::Voxel;
+    let mut dom = Dom::new();
+    let ws = dom.get_service("Workspace").unwrap();
+    let terrain_with = |dom: &mut Dom, material| {
+        let terrain = dom.create_by_name("Terrain").unwrap();
+        let mut grid = Grid::new();
+        grid.set(IVec3::new(5, 5, 5), Voxel::new(material, 255));
+        dom.set_property_by_name(
+            terrain,
+            "SmoothGrid",
+            Value::BinaryString(grid.encode().into()),
+        )
+        .unwrap();
+        terrain
+    };
+    let old = terrain_with(&mut dom, TerrainMaterial::Rock);
+    dom.set_parent(old, Some(ws)).unwrap();
+    let part = dom.create_by_name("Part").unwrap();
+    dom.set_parent(part, Some(ws)).unwrap();
+    let content = Arc::new(Resolver::new(rook_content::Config::empty()));
+    let mut cache = SceneCache::new(&dom, content, glam::Vec3::ZERO);
+    let drawn = |cache: &SceneCache, material| {
+        cache
+            .terrain
+            .surfaces()
+            .any(|s| s.layer.material == material)
+    };
+    assert!(drawn(&cache, TerrainMaterial::Rock));
+    let part_entry = cache.index[&part];
+    let rock: Vec<usize> = cache
+        .terrain
+        .chunks
+        .values()
+        .flat_map(|c| c.entries.clone())
+        .collect();
+    dom.set_parent(old, None).unwrap();
+    let new = terrain_with(&mut dom, TerrainMaterial::Sand);
+    dom.set_parent(new, Some(ws)).unwrap();
+    let changes = RenderChanges {
+        terrain: true,
+        ..RenderChanges::default()
+    };
+    let SceneChange::Parts { changed, .. } = cache.apply(&dom, &changes) else {
+        panic!("a replaced Terrain rebuilt the scene");
+    };
+    assert!(!drawn(&cache, TerrainMaterial::Rock) && drawn(&cache, TerrainMaterial::Sand));
+    assert!(rock.iter().all(|i| changed.contains(i)));
+    assert!(!changed.contains(&part_entry));
+    for chunk in cache.terrain.chunks.values() {
+        assert_eq!(chunk.entries.len(), chunk.surfaces.len());
+    }
+}

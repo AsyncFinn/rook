@@ -165,17 +165,44 @@ impl SceneCache {
         self.mesh_terrain(grid, place)
     }
 
-    /// Scripts changed the Terrain (its voxels or other properties) or
-    /// `Workspace.GlobalWind`: remesh what the voxel edits reached, read
-    /// the waves, wind, colors and grass again and redraw the terrain's
-    /// entries and blades. Returns the entries that changed, or `None`
-    /// when Workspace's Terrain is another instance and the scene must be
-    /// rebuilt.
-    pub(super) fn terrain_changed(&mut self, dom: &Dom) -> Option<Vec<usize>> {
-        if workspace_terrain(dom) != self.terrain.instance {
-            return None;
+    /// Workspace's Terrain is another instance: stop drawing the old one's
+    /// chunks and blades and mesh the new one's voxels, leaving the rest
+    /// of the scene as it is. Returns the entries that changed.
+    fn swap_terrain(&mut self, dom: &Dom) -> Vec<usize> {
+        self.terrain.background.wait();
+        let mut changed = Vec::new();
+        let chunks: Vec<LevelChunk> = self.terrain.chunks.keys().copied().collect();
+        for key in chunks {
+            changed.extend(self.drop_chunk(key));
         }
-        let mut changed = self.take_voxels(dom, true);
+        for i in self.terrain.grass.entries() {
+            self.release(i);
+            changed.push(i);
+        }
+        for mesh in self.terrain.grass.reset() {
+            self.scene.meshes.remove(&mesh);
+        }
+        let t = &mut self.terrain;
+        t.instance = workspace_terrain(dom);
+        t.source = None;
+        t.levels = Arc::default();
+        t.shown = None;
+        t.epoch += 1;
+        changed.extend(self.take_voxels(dom, true));
+        changed
+    }
+
+    /// Scripts changed the Terrain (its voxels or other properties),
+    /// `Workspace.GlobalWind`, or which Terrain Workspace holds: remesh
+    /// what the voxel edits reached, read the waves, wind, colors and
+    /// grass again and redraw the terrain's entries and blades. Returns
+    /// the entries that changed.
+    pub(super) fn terrain_changed(&mut self, dom: &Dom) -> Vec<usize> {
+        let mut changed = if workspace_terrain(dom) == self.terrain.instance {
+            self.take_voxels(dom, true)
+        } else {
+            self.swap_terrain(dom)
+        };
         self.read_terrain_look(dom);
         changed.extend(self.refresh_terrain(dom));
         let color = self.terrain.grass.color;
@@ -183,7 +210,7 @@ impl SceneCache {
             self.scene.parts[i].color = color;
             changed.push(i);
         }
-        Some(changed)
+        changed
     }
 
     /// The Terrain's waves and wind, and whether and in what color Grass
