@@ -434,6 +434,74 @@ fn camera_relative_rotation_faces_the_camera() {
     assert!(near(numbers(&out, "yaw")[0], 90.0, 1.0), "{out:?}");
 }
 
+/// With CameraRelative rotation (shift lock, first person), the character
+/// is drawn facing the camera it's drawn with, every frame, while the
+/// camera turns: turned only by the next frame's physics, it trailed the
+/// mouse by a frame, which players feel (docs/design/architecture.md#frame-order).
+#[test]
+fn a_camera_relative_character_is_drawn_facing_this_frames_camera() {
+    let mut server = Server::new(&Options::default()).unwrap();
+    use_r6(&server);
+    add_script(&server, "ServerScriptService", "Setup", FLOOR);
+    add_local_script(
+        &server,
+        "Turn",
+        r#"local p = game.Players.LocalPlayer
+        local c = p.Character or p.CharacterAdded:Wait()
+        local r = c:WaitForChild("HumanoidRootPart")
+        local camera = workspace.CurrentCamera
+        task.wait(0.5)
+        UserSettings():GetService("UserGameSettings").RotationType = Enum.RotationType.CameraRelative
+        camera.CameraType = Enum.CameraType.Scriptable
+        local yaw = 0
+        game:GetService("RunService"):BindToRenderStep("turn", 200, function(dt)
+            yaw += 360 * dt
+            camera.CFrame = CFrame.new(r.Position) * CFrame.Angles(0, math.rad(yaw), 0)
+        end)"#,
+    );
+    server.start();
+    let mut session = Session::new(server, Options::default());
+    session.join("A", 1).unwrap();
+    let hz = 144.0;
+    let (mut server_time, mut client_time) = (0.0, 0.0);
+    let heading = |cf: rook_types::CFrame| {
+        let f = cf.rotation * glam::Vec3::NEG_Z;
+        f.x.atan2(-f.z).to_degrees()
+    };
+    let mut frames = 0;
+    while client_time < 1.5 {
+        client_time += 1.0 / hz;
+        while server_time < client_time {
+            server_time += 1.0 / 60.0;
+            session.step_server();
+        }
+        session.step_clients_by(1.0 / hz);
+        if client_time < 1.0 {
+            continue;
+        }
+        let client = session.client(0).unwrap();
+        let w = client.runtime().world();
+        let root = rook_lua::character_root(&w.dom, w.dom.local_player().unwrap()).unwrap();
+        let camera = heading(
+            w.dom
+                .drawn_cframe(client.current_camera().unwrap())
+                .unwrap(),
+        );
+        for (what, cf) in [
+            ("drawn", w.dom.drawn_cframe(root).unwrap()),
+            ("CFrame", w.dom.cframe_property(root, "CFrame").unwrap()),
+        ] {
+            let gap = (camera - heading(cf) + 540.0) % 360.0 - 180.0;
+            assert!(
+                gap.abs() < 0.01,
+                "{what} root {gap} degrees from the camera"
+            );
+        }
+        frames += 1;
+    }
+    assert!(frames > 60);
+}
+
 /// A client drawn at 144 Hz draws its walking character the same
 /// distance every frame, between its 240 Hz steps, with the camera
 /// following what's drawn; scripts still see whole steps (measured in

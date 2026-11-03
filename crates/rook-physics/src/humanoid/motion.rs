@@ -22,8 +22,9 @@ const DAMPING: f32 = 80.0;
 /// most about 20 degrees a frame).
 const TURN_RATE: f32 = 9.0;
 const MAX_TURN: f32 = 20.0;
-/// Facing the camera closes the turn within a 60 Hz frame (Observed: 90
-/// degrees in one frame, with a 4-degree overshoot Rook leaves out).
+/// A client faces its character to the camera at once, as the frame is
+/// drawn ([`Physics::face_now`]); between frames the steps hold that
+/// heading, closing any turn within one 240 Hz step.
 const FACE_RATE: f32 = 240.0;
 
 /// Climbing goes at this share of WalkSpeed (measured: 11.2 at 16), with
@@ -50,7 +51,7 @@ impl Physics {
         // The controller applies gravity itself, where the state falls
         // (the body's own gravity is off while it's driven).
         let fall = gravity * h;
-        let mut turn = c.state.upright();
+        let turn = turns(c.state);
         match c.state {
             s if s.grounded() => {
                 let felt = c.floor.and_then(|f| {
@@ -93,7 +94,6 @@ impl Physics {
             }
             State::Flying => v = air(v, walk, h),
             State::Climbing => {
-                turn = false;
                 if let Some(climb) = c.climb {
                     let toward = -climb.normal;
                     let input = walk.dot(toward) / c.drive.walk_speed.max(f32::EPSILON);
@@ -128,6 +128,67 @@ impl Physics {
             rb.set_angvel(Vector::new(0.0, spin, 0.0), true);
         }
     }
+
+    /// Turn `humanoid`'s character to face the horizontal `way` at once,
+    /// where its steering would face it there (AutoRotate, a state that
+    /// turns). A client calls this once its frame's camera is final, so
+    /// the character it draws faces that camera: steered toward the
+    /// heading physics saw at the frame's start, it was drawn a frame
+    /// behind the mouse (docs/design/architecture.md#frame-order). The
+    /// steps until the next frame hold the heading.
+    pub fn face_now(&mut self, dom: &mut Dom, humanoid: InstanceId, way: glam::Vec3) {
+        let faces = |c: &Controller| c.drive.auto_rotate && turns(c.state);
+        if !self.controllers.get(&humanoid).is_some_and(faces) {
+            return;
+        }
+        // Script changes so far go in first (they may rebuild the body),
+        // so the journal entries this write leaves are the only ones
+        // skipped.
+        self.sync(dom);
+        let Some(c) = self.controllers.get_mut(&humanoid) else {
+            return;
+        };
+        c.drive.face = Some(way);
+        let root = c.drive.root;
+        let Some(r) = self.rooted(root) else {
+            return;
+        };
+        let root = self.root_pose(&r);
+        let look = horizontal(root.rotation * glam::Vec3::NEG_Z);
+        let angle = look.cross(way).y.atan2(look.dot(way));
+        if angle == 0.0 {
+            return;
+        }
+        let spin = glam::Quat::from_rotation_y(angle);
+        // Each pose turns about its own root part, which stays put.
+        let turned = |pose: &Pose| {
+            let about = (cframe_of(pose) * r.offset).position;
+            Pose::from_parts(
+                about + spin * (pose.translation - about),
+                (spin * pose.rotation).normalize(),
+            )
+        };
+        let rb = &mut self.world.bodies[r.body];
+        let pose = turned(rb.position());
+        rb.set_position(pose, true);
+        rb.set_angvel(Vector::ZERO, true);
+        // Drawn between its last two steps, both facing the new way.
+        if let Some(before) = self.before_last_step.get_mut(&r.body) {
+            *before = turned(before);
+        }
+        self.stale.insert(r.body);
+        if let Some(props) = self.props.take() {
+            self.write_body(dom, &props, r.body);
+            self.props = Some(props);
+        }
+        self.cursor = dom.journal().end();
+    }
+}
+
+/// States in which AutoRotate turns the character: those held upright,
+/// but not while climbing.
+fn turns(state: State) -> bool {
+    state.upright() && state != State::Climbing
 }
 
 /// The air's steering: the horizontal velocity turns toward `want` by at
