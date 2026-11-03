@@ -5,7 +5,7 @@ use glam::Vec3;
 use rook_dom::{Dom, InstanceId};
 use rook_types::{CFrame, Value};
 
-use super::{block, child, part, position, run, set, v3};
+use super::{block, child, make_joints, part, position, run, set, v3};
 use crate::{Authority, Physics};
 
 /// A wheel's turn about world Y relative to the base.
@@ -44,7 +44,7 @@ fn surface_hinge(
     set(dom, base, "TopSurfaceInput", Value::Enum(input));
     set(dom, base, "TopParamA", Value::Float32(a));
     set(dom, base, "TopParamB", Value::Float32(b));
-    crate::joints::surfaces::make_joints(dom, &[wheel]).unwrap();
+    make_joints(dom, &[wheel]).unwrap();
     (base, wheel)
 }
 
@@ -83,7 +83,7 @@ fn rotor_on_motor(dom: &mut Dom, motor: f32, b: f32) -> InstanceId {
     set(dom, base, "TopSurface", Value::Enum(MOTOR));
     set(dom, base, "TopSurfaceInput", Value::Enum(CONSTANT));
     set(dom, base, "TopParamB", Value::Float32(b));
-    crate::joints::surfaces::make_joints(dom, &[bar]).unwrap();
+    make_joints(dom, &[bar]).unwrap();
     bar
 }
 

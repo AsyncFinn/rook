@@ -16,6 +16,7 @@ use crate::contacts::groups;
 use crate::convert::pose_of;
 use crate::{Physics, shape};
 
+pub(crate) mod bounds;
 mod filter;
 
 pub use filter::Filter;
@@ -324,11 +325,10 @@ impl Physics {
     }
 
     /// Parts whose `Size` box meets `shape` at `pose`: Region3 (an
-    /// axis-aligned box), `GetPartBoundsInBox` and `GetPartBoundsInRadius`.
-    ///
-    /// Approximation: candidates come from the colliders' bounds, so a
-    /// cylinder whose box is much wider than its round shape can be missed
-    /// near its box's corners.
+    /// axis-aligned box), `GetPartBoundsInBox` and `GetPartBoundsInRadius`,
+    /// in id order, at most `max` of them (0: all). Candidates come from
+    /// the parts' boxes ([`bounds`]), so a turned cylinder or wedge is
+    /// found near its box's corners too.
     pub fn parts_in_bounds(
         &mut self,
         dom: &mut Dom,
@@ -340,11 +340,23 @@ impl Physics {
         self.prepare(dom);
         let dom = &*dom;
         let (shape, pose) = region.shape();
-        self.overlapping(dom, (&*shape, pose), filter, max, None, |part, _| {
-            shape::world_box(dom, part).is_some_and(|(b, at)| {
-                parry::intersection_test(&pose, &*shape, &at, &*b).is_ok_and(|t| t.intersecting)
+        let aabb = shape.compute_aabb(&pose);
+        let mut found: Vec<InstanceId> = self
+            .bounds
+            .near(dom, &aabb)
+            .filter(|&part| {
+                filter.accepts(dom, &self.groups, part)
+                    && shape::world_box(dom, part).is_some_and(|(b, at)| {
+                        parry::intersection_test(&pose, &*shape, &at, &*b)
+                            .is_ok_and(|t| t.intersecting)
+                    })
             })
-        })
+            .collect();
+        found.sort_unstable();
+        if max > 0 {
+            found.truncate(max);
+        }
+        found
     }
 
     /// `WorldRoot:GetPartsInPart`: parts whose shape overlaps `part`'s.

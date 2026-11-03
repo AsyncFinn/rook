@@ -22,7 +22,10 @@ Observed in Studio 0.742 unless noted:
 - Rays don't hit a part they start inside (or on the surface of), and
   reach at most 15,000 studs (`query::MAX_RAY_LENGTH`).
 - Region3 and the `GetPartBounds*` queries test each part's `Size` box
-  (`shape::world_box`); touching faces count. `GetPartsInPart` and
+  (`shape::world_box`); touching faces count. Rook finds the candidates
+  in an index of every part's `Size` box (`query/bounds.rs`), so a
+  turned cylinder or wedge is found near its box's corners, where its
+  shape's own bounds don't reach. `GetPartsInPart` and
   `GetTouchingParts` test real shapes and need the parts to overlap.
 - Terrain: rays and shape casts hit its surface, water's too unless they
   ignore water, and report Terrain with the material hit; a ray starting

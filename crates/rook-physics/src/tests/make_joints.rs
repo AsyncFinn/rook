@@ -6,8 +6,8 @@ use rook_dom::{Dom, InstanceId};
 use rook_types::{CFrame, Value};
 
 use super::joints::at;
-use super::{block, part, part_of, set};
-use crate::joints::{self, surfaces};
+use super::{block, make_joints, part, part_of, set};
+use crate::joints;
 
 fn surfaces(dom: &mut Dom, id: InstanceId, surface: &str) {
     let e = dom.database().enum_by_name("SurfaceType").unwrap();
@@ -26,7 +26,7 @@ fn stacked(lower: &str, upper: &str, gap: f32) -> Vec<(String, bool)> {
     let top = part(&mut dom, Vec3::new(0.0, 1.0 + gap, 0.0), size, true);
     surfaces(&mut dom, bottom, lower);
     surfaces(&mut dom, top, upper);
-    surfaces::make_joints(&mut dom, &[top]).unwrap();
+    make_joints(&mut dom, &[top]).unwrap();
     joints::part_joints(&dom, top)
         .iter()
         .map(|j| (dom.class_name(j.id).to_owned(), j.part0 == top))
@@ -65,7 +65,7 @@ fn faces_join_only_when_close_and_aligned() {
         let cf = at(0.0, 2.0, 0.0) * CFrame::angles(0.0, degrees.to_radians(), 0.0);
         set(&mut dom, b, "CFrame", Value::CFrame(cf));
         surfaces(&mut dom, a, "Weld");
-        surfaces::make_joints(&mut dom, &[a]).unwrap();
+        make_joints(&mut dom, &[a]).unwrap();
         joints::part_joints(&dom, a).len()
     };
     assert_eq!(yawed(0.5), 1);
@@ -79,7 +79,7 @@ fn faces_join_only_when_close_and_aligned() {
     let a = part(&mut dom, Vec3::ZERO, size, true);
     part(&mut dom, Vec3::new(4.0, 1.0, 0.0), size, true);
     surfaces(&mut dom, a, "Weld");
-    surfaces::make_joints(&mut dom, &[a]).unwrap();
+    make_joints(&mut dom, &[a]).unwrap();
     assert!(joints::part_joints(&dom, a).is_empty());
 }
 
@@ -90,7 +90,7 @@ fn make_joints_frames_match_studio() {
         let a = block(&mut dom, Vec3::ZERO, true);
         block(&mut dom, dir * 2.0, true);
         surfaces(&mut dom, a, "Weld");
-        surfaces::make_joints(&mut dom, &[a]).unwrap();
+        make_joints(&mut dom, &[a]).unwrap();
         let j = joints::part_joints(&dom, a)[0];
         assert_eq!(j.part0, a);
         assert_eq!(dom.parent(j.id), Some(a));
@@ -132,8 +132,8 @@ fn model_parts_join_parts_outside_and_only_once() {
     for p in [a, b, c] {
         surfaces(&mut dom, p, "Weld");
     }
-    surfaces::make_joints(&mut dom, &[a, b]).unwrap();
-    surfaces::make_joints(&mut dom, &[a, b]).unwrap();
+    make_joints(&mut dom, &[a, b]).unwrap();
+    make_joints(&mut dom, &[a, b]).unwrap();
     assert_eq!(joints::part_joints(&dom, a).len(), 2);
     assert_eq!(joints::part_joints(&dom, b).len(), 1);
     assert_eq!(joints::part_joints(&dom, c).len(), 1);
@@ -152,7 +152,7 @@ fn many_callers_sweep_the_world_with_the_same_result() {
     }
     let mut callers = column.clone();
     callers.reverse();
-    surfaces::make_joints(&mut dom, &callers).unwrap();
+    make_joints(&mut dom, &callers).unwrap();
     for pair in column.windows(2) {
         let js = joints::part_joints(&dom, pair[0]);
         let j = js.iter().find(|j| j.other(pair[0]) == pair[1]).unwrap();
@@ -198,7 +198,7 @@ fn wedge_slopes_join_like_studio() {
         }
         set(&mut dom, slab, "BottomSurface", bottom);
         let caller = if wedge_calls { wedge } else { slab };
-        surfaces::make_joints(&mut dom, &[caller]).unwrap();
+        make_joints(&mut dom, &[caller]).unwrap();
         let js = joints::part_joints(&dom, wedge);
         assert!(js.len() <= 1);
         let j = js.first()?;
@@ -272,7 +272,7 @@ fn wedge_slopes_join_like_studio() {
         true,
     );
     surfaces(&mut dom, wedge, "Weld");
-    surfaces::make_joints(&mut dom, &[wedge]).unwrap();
+    make_joints(&mut dom, &[wedge]).unwrap();
     assert!(joints::part_joints(&dom, wedge).is_empty());
 }
 
@@ -292,7 +292,7 @@ fn a_slope_joins_from_either_caller() {
         } else {
             [slab, wedge]
         };
-        surfaces::make_joints(&mut dom, &callers).unwrap();
+        make_joints(&mut dom, &callers).unwrap();
         let js = joints::part_joints(&dom, wedge);
         assert_eq!(js.len(), 1, "wedge first: {wedge_first}");
         assert_eq!(dom.class_name(js[0].id), "Weld");
@@ -323,7 +323,7 @@ fn balls_and_cylinders_join_as_boxes() {
         if let Some((face, s)) = base_face {
             set(&mut dom, base, &format!("{face}Surface"), n(s));
         }
-        surfaces::make_joints(&mut dom, &[round]).unwrap();
+        make_joints(&mut dom, &[round]).unwrap();
         let j = *joints::part_joints(&dom, round).first()?;
         let c0 = dom.cframe_property(j.id, "C0").expect("C0");
         Some((

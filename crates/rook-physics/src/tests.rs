@@ -172,3 +172,8 @@ fn shapes_have_the_right_extent() {
     let aabb = wedge.compute_aabb(&offset);
     assert_eq!((aabb.mins.y, aabb.maxs.y), (-1.0, 1.0));
 }
+
+/// `MakeJoints` for `parts`, through a physics world of the DOM as it is.
+fn make_joints(dom: &mut Dom, parts: &[InstanceId]) -> Result<(), rook_dom::DomError> {
+    Physics::new().make_joints(dom, parts)
+}

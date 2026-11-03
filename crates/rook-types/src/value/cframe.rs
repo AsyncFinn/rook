@@ -200,9 +200,7 @@ impl CFrame {
     /// Half the size of the world-axis-aligned box around a box of
     /// `size` placed at this CFrame.
     pub fn box_reach(&self, size: Vec3) -> Vec3 {
-        let half = size * 0.5;
-        let r = self.rotation;
-        r.x_axis.abs() * half.x + r.y_axis.abs() * half.y + r.z_axis.abs() * half.z
+        box_reach(self.rotation, size * 0.5)
     }
 
     pub fn fuzzy_eq(&self, other: &CFrame, epsilon: f32) -> bool {
@@ -254,6 +252,13 @@ impl From<CFrame> for rbx_types::CFrame {
             ),
         )
     }
+}
+
+/// Half the size of the world-axis-aligned box around a box `half` its
+/// size each way along the axes of `rotation` (which may scale them).
+pub fn box_reach(rotation: Mat3, half: Vec3) -> Vec3 {
+    let r = rotation;
+    r.x_axis.abs() * half.x + r.y_axis.abs() * half.y + r.z_axis.abs() * half.z
 }
 
 #[cfg(test)]

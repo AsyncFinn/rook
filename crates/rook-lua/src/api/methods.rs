@@ -20,7 +20,7 @@ use rook_types::{CFrame, Value, Vector3};
 
 use super::instance::push_instance;
 use rook_physics::assembly::{self, Assembly};
-use rook_physics::joints::{self, surfaces};
+use rook_physics::joints;
 
 use super::properties::{cframe, set_cframe};
 use super::signal::LSignal;

@@ -299,12 +299,7 @@ impl Instance {
         );
         let rotation = glam::Mat3::from_cols(self.right.into(), self.up.into(), self.back.into());
         let center = Vec3::from(self.position) + rotation * ((lo + hi) * 0.5);
-        let abs = glam::Mat3::from_cols(
-            rotation.x_axis.abs(),
-            rotation.y_axis.abs(),
-            rotation.z_axis.abs(),
-        );
-        let mut half = abs * ((hi - lo) * 0.5).abs();
+        let mut half = rook_types::box_reach(rotation, ((hi - lo) * 0.5).abs());
         if self.flags & FACES_CAMERA != 0 && self.flags & (3 << PATTERN_SHIFT) == 0 {
             // Turned to the camera in the shader: any way round.
             half = Vec3::splat(half.length());

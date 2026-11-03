@@ -130,6 +130,9 @@ impl Physics {
                     }
                 }
             }
+            for m in &body.asm.members {
+                self.bounds.mark(m.part);
+            }
             self.write_body(dom, &props, handle);
         }
         // Our own writes aren't changes to apply next time.

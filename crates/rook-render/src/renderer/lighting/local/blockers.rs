@@ -46,9 +46,8 @@ impl Blocker {
     /// A box centered at `center` along `axes`, `half` its size each way.
     fn of_box(center: Vec3, axes: Mat3, true_half: Vec3) -> Self {
         let half = true_half.max(Vec3::splat(VOXEL * 0.5));
-        let abs = Mat3::from_cols(axes.x_axis.abs(), axes.y_axis.abs(), axes.z_axis.abs());
-        let extent = abs * half;
-        let true_extent = abs * true_half;
+        let extent = rook_types::box_reach(axes, half);
+        let true_extent = rook_types::box_reach(axes, true_half);
         Self {
             center,
             axes,

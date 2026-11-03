@@ -53,7 +53,7 @@ fn parts_in(w: &World, ids: &[InstanceId]) -> Vec<InstanceId> {
 fn make_joints(lua: &Lua, parts: impl FnOnce(&World) -> Vec<InstanceId>) -> ApiResult<Outcome> {
     mutate(lua, |w| {
         let parts = parts(w);
-        surfaces::make_joints(&mut w.dom, &parts)
+        w.physics.make_joints(&mut w.dom, &parts)
     })?;
     Outcome::ret(lua, ())
 }
