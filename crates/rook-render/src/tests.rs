@@ -300,6 +300,68 @@ fn without_quality_the_voxels_shadow_the_sun() {
     assert_eq!(r.render_to_image(64, 64, &camera).unwrap(), lit);
 }
 
+/// Parts and a light that move refill only the light voxels they reach,
+/// and those draw what filling them all draws: the sun's shadow, a light
+/// with `Shadows` behind a wall, and the sky's light under a roof (the
+/// place lit by the sky, then not, as each reaches voxels the others do).
+#[test]
+fn moved_parts_and_lights_refill_what_a_whole_fill_draws() {
+    let (Ok(mut moved), Ok(mut fresh)) = (Renderer::headless(), Renderer::headless()) else {
+        return;
+    };
+    let mut ground = part(PartShape::Block, 0.0, [0.8; 3], 0.0);
+    ground.position.y = -0.5;
+    ground.size = Vec3::new(200.0, 1.0, 200.0);
+    let mut roof = part(PartShape::Block, 0.0, [0.8; 3], 0.0);
+    // Far enough from the light that their voxels' tiles differ.
+    roof.position = Vec3::new(-90.0, 12.0, 0.0);
+    roof.size = Vec3::new(24.0, 1.0, 24.0);
+    let mut wall = part(PartShape::Block, 0.0, [0.8; 3], 0.0);
+    wall.position = Vec3::new(14.0, 4.0, 0.0);
+    wall.size = Vec3::new(1.0, 8.0, 12.0);
+    let light = LocalLight {
+        position: Vec3::new(20.0, 3.0, 0.0),
+        shape: LightShape::Point,
+        color: [1.0, 0.6, 0.2],
+        brightness: 4.0,
+        range: 24.0,
+        shadows: true,
+        part: (Vec3::splat(f32::MAX), Vec3::splat(f32::MIN)),
+    };
+    let camera = Camera::look_at(Vec3::new(-25.0, 70.0, -90.0), Vec3::new(-25.0, 0.0, 0.0));
+    for diffuse in [1.0, 0.0] {
+        let mut scene = Scene {
+            parts: vec![ground, roof, wall],
+            lights: vec![light],
+            lighting: Lighting {
+                environment_diffuse: diffuse,
+                ..Lighting::default()
+            },
+            ..Scene::default()
+        };
+        moved.set_scene(&scene);
+        let mut before = moved.render_to_image(64, 64, &camera).unwrap();
+        // The parts first, then the light, as each reaches the other's
+        // voxels.
+        for step in 0..2 {
+            if step == 0 {
+                scene.parts[1].position.x += 9.0;
+                scene.parts[2].position.z += 5.0;
+                scene.parts[2].rotation = Mat3::from_rotation_y(0.3);
+                moved.move_parts(&scene, &[1, 2]);
+            } else {
+                scene.lights[0].position.x += 3.0;
+                moved.update_lights(&scene, &[0]);
+            }
+            let after = moved.render_to_image(64, 64, &camera).unwrap();
+            fresh.set_scene(&scene);
+            assert_ne!(before, after);
+            assert_eq!(after, fresh.render_to_image(64, 64, &camera).unwrap());
+            before = after;
+        }
+    }
+}
+
 /// A small mesh file: a square of two triangles facing +Z, `side` wide.
 fn square(side: f32) -> Arc<Mesh> {
     let h = side / 2.0;

@@ -7,15 +7,13 @@
 //! diffuse light"; docs/behavior/lighting/local-lights.md, "Shadows";
 //! docs/behavior/lighting/sun.md).
 
+use std::ops::Range;
 use std::time::{Duration, Instant};
 
 use glam::{IVec2, IVec3, Mat3};
 
 use super::*;
 
-/// How soon after marking the voxels parts that moved may mark them
-/// again (a moving part would otherwise mark them every frame).
-const REMARK: Duration = Duration::from_millis(500);
 /// How long a frame may spend marking the voxels a moving volume came
 /// onto; the rest wait for later frames, the volume staying where it was
 /// meanwhile (Studio's grid also moves in chunks, keeping the old one for
@@ -82,6 +80,24 @@ impl Blocker {
         let ((a, b), (c, d)) = (self.centers(), self.touched());
         (a.min(c), b.max(d))
     }
+
+    /// Whether its axes are the world's, in some order.
+    fn aligned(&self) -> bool {
+        [self.axes.x_axis, self.axes.y_axis, self.axes.z_axis]
+            .iter()
+            .all(|a| a.abs().max_element() > 0.9999)
+    }
+
+    /// The voxels it fills whole, if it is aligned with the world (their
+    /// centers are inside it too); `None` if none are.
+    fn whole(&self) -> Option<Span> {
+        if !self.aligned() {
+            return None;
+        }
+        let lo = (self.true_min / VOXEL).ceil().as_ivec3();
+        let hi = (self.true_max / VOXEL).floor().as_ivec3() - 1;
+        (!lo.cmpgt(hi).any()).then_some((lo, hi))
+    }
 }
 
 /// How full a voxel is, in 255ths.
@@ -98,7 +114,9 @@ pub(super) struct Blockers {
     bounds: FxHashMap<MeshHash, Option<(Vec3, Vec3)>>,
     /// A blocker changed since the voxels were marked.
     changed: bool,
-    marked_at: Option<Instant>,
+    /// The voxels marked again since the last [`Blockers::mark`] that
+    /// finished.
+    touched: Touched,
     /// The voxels as last marked, kept so parts that change only unmark
     /// their old box and mark their new one.
     grid: Option<Grid>,
@@ -133,12 +151,111 @@ struct Grid {
 }
 
 /// Voxels from the first corner to the second, both included.
-type Span = (IVec3, IVec3);
+pub(super) type Span = (IVec3, IVec3);
+
+/// Which voxels a mark changed.
+#[derive(Debug)]
+pub(super) enum Touched {
+    /// Those in these boxes, in the world's voxels (within the volume).
+    Spans(Vec<Span>),
+    /// All of the volume's.
+    All,
+}
+
+impl Default for Touched {
+    fn default() -> Self {
+        Self::Spans(Vec::new())
+    }
+}
+
+impl Touched {
+    fn add(&mut self, span: Span) {
+        if let Self::Spans(spans) = self {
+            spans.push(span);
+        }
+    }
+}
+
+/// The marked voxels, as the fill pass reads them.
+#[derive(Debug)]
+pub(super) struct Marked<'a> {
+    /// A bit per voxel: a blocker holds its center.
+    pub(super) bits: &'a [u32],
+    /// A byte per voxel, four to a word: how much of it blockers fill.
+    pub(super) fills: &'a [u32],
+    pub(super) touched: Touched,
+    dims: IVec3,
+}
+
+impl Marked<'_> {
+    /// The voxel slots (`Grid`'s) holding what changed, in runs of whole
+    /// rows along x, sorted and joined: what goes up to the GPU.
+    pub(super) fn slot_runs(&self) -> Vec<Range<usize>> {
+        let d = self.dims;
+        let Touched::Spans(spans) = &self.touched else {
+            let all = 0..(d.x * d.y * d.z) as usize;
+            return vec![all];
+        };
+        let mut runs = Vec::new();
+        for &(lo, hi) in spans {
+            // The rows, as at most two runs where z wraps around the slots.
+            let rows = if hi.z - lo.z + 1 >= d.z {
+                vec![(0, d.z - 1)]
+            } else {
+                let (z0, z1) = (lo.z.rem_euclid(d.z), hi.z.rem_euclid(d.z));
+                if z0 <= z1 {
+                    vec![(z0, z1)]
+                } else {
+                    vec![(z0, d.z - 1), (0, z1)]
+                }
+            };
+            for y in lo.y..=hi.y {
+                let layer = d.z * y.rem_euclid(d.y);
+                for &(z0, z1) in &rows {
+                    runs.push((d.x * (layer + z0)) as usize..(d.x * (layer + z1 + 1)) as usize);
+                }
+            }
+        }
+        runs.sort_by_key(|r| r.start);
+        let mut joined: Vec<Range<usize>> = Vec::with_capacity(runs.len());
+        for run in runs {
+            match joined.last_mut() {
+                Some(last) if run.start <= last.end => last.end = last.end.max(run.end),
+                _ => joined.push(run),
+            }
+        }
+        joined
+    }
+}
 
 /// The voxels of `span` from `lo` to `hi`, or `None` if they miss it.
 fn clip((lo, hi): Span, span: Span) -> Option<Span> {
     let (lo, hi) = (lo.max(span.0), hi.min(span.1));
     (!lo.cmpgt(hi).any()).then_some((lo, hi))
+}
+
+/// The voxels of `span` outside `cut`, as up to six boxes: those past it
+/// along x, then along y among the rest, then along z.
+fn minus(span: Span, cut: Option<Span>) -> Vec<Span> {
+    let Some(cut) = cut.and_then(|cut| clip(cut, span)) else {
+        return vec![span];
+    };
+    let mut pieces = Vec::new();
+    let mut rest = span;
+    for axis in 0..3 {
+        let (lo, hi) = (rest.0[axis], rest.1[axis]);
+        for (from, to) in [(lo, cut.0[axis] - 1), (cut.1[axis] + 1, hi)] {
+            if from <= to {
+                let mut piece = rest;
+                piece.0[axis] = from;
+                piece.1[axis] = to;
+                pieces.push(piece);
+            }
+        }
+        rest.0[axis] = cut.0[axis];
+        rest.1[axis] = cut.1[axis];
+    }
+    pieces
 }
 
 /// Each voxel of `span` with where a grid of `dims` keeps it (`Grid`'s
@@ -273,9 +390,7 @@ impl Grid {
             return;
         };
         let to_local = b.axes.transpose();
-        let aligned = [b.axes.x_axis, b.axes.y_axis, b.axes.z_axis]
-            .iter()
-            .all(|a| a.abs().max_element() > 0.9999);
+        let aligned = b.aligned();
         // A rotated box is sampled at 64 points a stud apart across each
         // voxel: the points' offsets from the voxel's center, in the box's
         // space, and how far the furthest one is.
@@ -502,12 +617,13 @@ impl Blockers {
         {
             grid.pending = pieces(grid.span()).collect();
             self.moved.clear();
+            self.touched = Touched::All;
         }
     }
 
     /// Whether the voxels should be marked again for parts that changed.
     pub(super) fn due(&self) -> bool {
-        self.changed && self.marked_at.is_none_or(|at| at.elapsed() >= REMARK)
+        self.changed
     }
 
     /// Which parts block: opaque ones that cast shadows (measured: a roof
@@ -544,30 +660,41 @@ impl Blockers {
 
     /// One bit per voxel of the volume starting at voxel `low`, set where
     /// a voxel's center is inside a blocker, and a byte per voxel, how much
-    /// of it the blockers fill (255 full), both kept at [`Grid`]'s slots;
-    /// `None` while the voxels a moved volume came onto (or all of them,
+    /// of it the blockers fill (255 full), both kept at [`Grid`]'s slots,
+    /// with the voxels marked again since the last mark; `None` while the voxels a moved volume came onto (or all of them,
     /// after more changes than parts) are still being marked, within
     /// [`BUDGET`] a frame, the last volume's staying as they were. A volume
     /// of the same size only takes the blockers that changed since and the
     /// voxels it moved onto; the first is marked whole at once.
-    pub(super) fn mark(&mut self, low: IVec3, dims: IVec3) -> Option<(&[u32], &[u32])> {
+    pub(super) fn mark(&mut self, low: IVec3, dims: IVec3) -> Option<Marked<'_>> {
         profiling::scope!("Blockers::mark");
         match &mut self.grid {
             Some(grid) if grid.dims == dims => {
                 if grid.low != low {
                     grid.move_to(low);
+                    self.touched = Touched::All;
                 }
                 // Taken everywhere at once, pieces still to mark included:
                 // those are cleared and take the blockers as they are then.
                 let span = grid.span();
                 for (before, after) in std::mem::take(&mut self.moved) {
-                    if let Some(b) = before {
-                        grid.apply(&b, false, span);
-                        grid.apply_fill(&b, false, span);
-                    }
-                    if let Some(b) = after {
-                        grid.apply(&b, true, span);
-                        grid.apply_fill(&b, true, span);
+                    // Voxels both boxes fill whole are the same after: a
+                    // big part that moves a little marks only its edges.
+                    let kept = before
+                        .zip(after)
+                        .and_then(|(a, b)| clip(a.whole()?, b.whole()?));
+                    for (b, add) in [(before, false), (after, true)] {
+                        let Some(b) = b else {
+                            continue;
+                        };
+                        let Some(within) = clip(b.voxels(), span) else {
+                            continue;
+                        };
+                        for piece in minus(within, kept) {
+                            grid.apply(&b, add, piece);
+                            grid.apply_fill(&b, add, piece);
+                            self.touched.add(piece);
+                        }
                     }
                 }
                 if !grid.work(BUDGET, &self.blockers, &self.columns) {
@@ -577,12 +704,17 @@ impl Blockers {
             grid => {
                 self.moved.clear();
                 *grid = Some(Grid::new(low, dims, &self.blockers, &self.columns));
+                self.touched = Touched::All;
             }
         }
         self.changed = false;
-        self.marked_at = Some(Instant::now());
         let grid = self.grid.as_ref().expect("just marked");
-        Some((&grid.bits, &grid.fill_bytes))
+        Some(Marked {
+            bits: &grid.bits,
+            fills: &grid.fill_bytes,
+            touched: std::mem::take(&mut self.touched),
+            dims,
+        })
     }
 }
 
@@ -698,5 +830,74 @@ mod tests {
         let fresh = Grid::new(low, dims, &list, &columns);
         assert!(grid.bits == fresh.bits);
         assert!(grid.fill_bytes == fresh.fill_bytes);
+    }
+
+    /// A big part that moves a little marks only the voxels at its edges,
+    /// which come out as marking afresh marks them, and are what's listed
+    /// as changed; a rotated one marks its whole box again.
+    #[test]
+    fn a_big_blocker_moving_a_little_marks_only_its_edges() {
+        let mut list = scattered();
+        let slab = |y| {
+            Blocker::of_box(
+                Vec3::new(0.0, y, 0.0),
+                Mat3::IDENTITY,
+                Vec3::new(2048.0, 20.0, 2048.0),
+            )
+        };
+        list[0] = Some(slab(-20.0));
+        let dims = IVec3::new(64, 32, 64);
+        let low = IVec3::new(-40, -10, -30);
+        let mut blockers = Blockers {
+            blockers: list.clone(),
+            columns: indexed(&list),
+            ..Blockers::default()
+        };
+        blockers.grid = Some(Grid::new(low, dims, &list, &blockers.columns));
+        let turned = Blocker::of_box(
+            Vec3::new(30.0, 4.0, 10.0),
+            Mat3::from_rotation_y(0.4),
+            Vec3::new(9.0, 3.0, 5.0),
+        );
+        for (i, after) in [(0, slab(-18.5)), (3, turned)] {
+            let before = list[i];
+            blockers
+                .columns
+                .remove(i, before.as_ref().expect("a blocker"));
+            blockers.columns.insert(i, &after);
+            list[i] = Some(after);
+            blockers.blockers[i] = Some(after);
+            blockers.moved.push((before, Some(after)));
+        }
+        let fresh = Grid::new(low, dims, &list, &indexed(&list));
+        let marked = blockers.mark(low, dims).expect("marked");
+        assert!(marked.bits == fresh.bits.as_slice());
+        assert!(marked.fills == fresh.fill_bytes.as_slice());
+        let Touched::Spans(spans) = &marked.touched else {
+            panic!("only what moved is touched");
+        };
+        let touched: i32 = spans
+            .iter()
+            .map(|(lo, hi)| (*hi - *lo + 1).element_product())
+            .sum();
+        // The slab's top and bottom layers, twice, and the turned box.
+        assert!(touched < 6 * dims.x * dims.z, "{touched} voxels touched");
+        let grid = blockers.grid.as_ref().expect("a grid");
+        assert!(grid.counts == fresh.counts);
+    }
+
+    #[test]
+    fn minus_leaves_what_is_outside_the_cut() {
+        let span = (IVec3::ZERO, IVec3::splat(9));
+        let cut = (IVec3::splat(2), IVec3::new(12, 7, 7));
+        let inside = clip(cut, span).expect("they overlap");
+        let pieces = minus(span, Some(cut));
+        let mut covered = 0;
+        for (lo, hi) in &pieces {
+            covered += (*hi - *lo + 1).element_product();
+            assert!(clip((*lo, *hi), inside).is_none());
+        }
+        assert_eq!(covered, 1000 - 8 * 6 * 6);
+        assert_eq!(minus(span, None), vec![span]);
     }
 }

@@ -148,8 +148,8 @@ spatial hash (16-stud cubes hashed into buckets, padded 8 studs so that
 lights that move a little don't rebuild it). A compute pass
 (`shaders/light_volume.wgsl`) fills a 256 × 64 × 256 volume of 4-stud
 voxels (Studio's grid, below) centered 236 studs ahead of `Camera.Focus`
-along the view direction with the height dropped, again only when lights
-change or that center drifts 64 studs, and parts, decals and terrain
+along the view direction with the height dropped, whole when that center
+drifts 64 studs, and parts, decals and terrain
 (water included) sample it as Studio does (`local_light` in
 `shaders/lighting.wgsl`). Surfaces outside it get no local light, as in
 Studio. When a light has `Shadows`, the parts are marked into a bit per
@@ -161,6 +161,23 @@ marks only the slabs it came onto, about 1 ms of them a frame, and is
 filled at its new place once they are all marked; until then the old
 volume stays drawn. The first volume is marked whole at once.
 
+Otherwise the volume is filled again each frame only where something
+changed, as voxel lighting engines update their grids in chunks: each
+layer is cut
+into 16-voxel (64-stud) tiles (`renderer/lighting/local/tiles.rs`), and
+the fill pass runs only over marked tiles. A light that changes marks
+what it lit before and lights now. A part that moves marks again only the
+voxels whose cover changed (for a part aligned with the world, those at
+its edges, so a big part moving a little costs its edges), sends only
+those rows of the marks to the GPU, and marks the tiles the change can
+reach: with the sky's light, every layer below it, two voxels wider each
+way per layer down; with the sun, the voxels whose way to the sun crosses
+it; and what each light with `Shadows` whose rays may cross it lights.
+Changes in one tile column are joined first, so a crowd of small parts
+costs a few boxes. The sky's light is kept per voxel, so a fill of some
+tiles takes the layers above from the last fill where they didn't change,
+and comes out as filling them all does.
+
 Cost, on an archive place with about 103k instances (dev build, 200
 frames, `--bench 200 --turn 3`, 2026-10-27): the light voxels' CPU time
 while the camera turns 3° a frame went from a mean of 17.7 ms (34 frames
@@ -171,6 +188,19 @@ Cost, on an archive place with 1,900 lights, about 55 of them on parts
 that move every frame (dev build, 300 frames, before → after): scene
 update 1.45 → 1.8–2.0 ms, GPU main pass 1.9–2.6 → 3.1–3.4 ms,
 render + readback 8.4–9.8 → 10.8–11.6 ms.
+
+Cost of filling only what changed, on a place with 449 parts and
+Roblox's CoreScripts, where a character and a few parts move every frame
+(release build, offscreen with the game stepped live at a 60 Hz pace,
+2,400 frames, three runs each,
+2026-11-03): before, the whole volume was filled again half a second
+after any part moved, 20 to 50 ms of GPU time that grew as the GPU's
+clocks dropped between fills, and up to 480 ms of CPU marking when a
+13,000-stud part moved; frames over 16.7 ms went from 62, 551 and 97 to
+9, 17 and 41, the slowest 1% from 44–71 to 21–47 ms, and in the lobby
+from 18 to none. A place with 29,904 parts and 1,897 lights, about 2,000
+of whose blocker boxes change each frame: light voxels' CPU time 1.50 →
+1.56 ms mean (2.0 → 1.5 median), whole frame 18.6 → 17.2 ms median.
 
 ## How far the grid reaches
 

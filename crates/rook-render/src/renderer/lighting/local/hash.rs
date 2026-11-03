@@ -88,12 +88,18 @@ impl GpuLight {
         Vec3::from_slice(&self.position[..3])
     }
 
-    /// The box every voxel it lights lies in, padded by [`SLACK`].
+    /// The box every voxel it lights lies in.
+    pub(super) fn lit_box(&self) -> (Vec3, Vec3) {
+        let extent = Vec3::splat(self.position[3].max(0.0));
+        (self.at() - extent, self.at() + extent)
+    }
+
+    /// [`GpuLight::lit_box`], padded by [`SLACK`].
     fn reach(&self) -> Aabb {
-        let extent = Vec3::splat(self.position[3].max(0.0) + SLACK);
+        let (min, max) = self.lit_box();
         Aabb {
-            min: self.at() - extent,
-            max: self.at() + extent,
+            min: min - SLACK,
+            max: max + SLACK,
         }
     }
 }

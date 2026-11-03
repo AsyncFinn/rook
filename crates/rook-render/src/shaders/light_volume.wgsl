@@ -1,5 +1,6 @@
 // Fills the light voxels ahead of the camera (`lighting.wgsl` samples them),
-// one layer per dispatch from the top: each voxel sums what every light
+// one layer per dispatch from the top, only the tiles of it marked
+// (`renderer/lighting/local/tiles.rs`): each voxel sums what every light
 // listed in its cube's bucket of the lights' spatial hash writes into it
 // (less what parts block, for lights with `Shadows`), and takes the sky's
 // diffuse light (in alpha) from the layer above; and, when the sun shadows
@@ -28,19 +29,34 @@ struct Params {
 @group(0) @binding(2) var<storage, read> buckets: array<vec2<u32>>;
 @group(0) @binding(3) var<storage, read> entries: array<u32>;
 @group(0) @binding(4) var voxels: texture_storage_3d<rgba16float, write>;
-// x: the layer this dispatch fills.
-@group(0) @binding(5) var<uniform> layer: vec4<u32>;
+// What one dispatch fills (`renderer/lighting/local.rs`, `LayerUniform`).
+struct Layer {
+    // x: the layer; y, z: the first tile along x and z the dispatch
+    // covers.
+    at: vec4<u32>,
+    // A bit per tile of the layer, x + (tiles along x) z: whether to fill
+    // it.
+    tiles: array<vec4<u32>, 2>,
+};
+
+// Tiles' width along x and z, in voxels (`tiles.rs`, `TILE`).
+const TILE: u32 = 16u;
+
+@group(0) @binding(5) var<uniform> layer: Layer;
 // One bit per voxel, at `slot`: a part blocks it.
 @group(0) @binding(6) var<storage, read> solid: array<u32>;
-// The sky's light in the last two layers (by the layer's parity).
-@group(0) @binding(7) var<storage, read_write> rows: array<f32>;
-// Whether each column is open to the sky down to the last layer.
-@group(0) @binding(8) var<storage, read_write> columns: array<u32>;
+// The sky's light in each voxel, x + nx * (z + nz * y), or `OPEN` where
+// nothing blocks the column above it: kept, so a fill of some tiles takes
+// the layer above from the last fill wherever it didn't change.
+@group(0) @binding(7) var<storage, read_write> skies: array<f32>;
 // How much of the sun reaches each voxel (red).
-@group(0) @binding(9) var sun_voxels: texture_storage_3d<rgba8unorm, write>;
+@group(0) @binding(8) var sun_voxels: texture_storage_3d<rgba8unorm, write>;
 // A byte per voxel, four to a word at `slot`: how much of it parts fill
 // (255 full).
-@group(0) @binding(10) var<storage, read> fills: array<u32>;
+@group(0) @binding(9) var<storage, read> fills: array<u32>;
+
+// In `skies`: open to the sky, so lit by all of it.
+const OPEN: f32 = 2.0;
 
 // The bucket a point's cube hashes to (`renderer/lighting/local.rs`, `bucket`).
 fn bucket(p: vec3<f32>) -> vec2<u32> {
@@ -173,16 +189,16 @@ fn sunlit(cell: vec3<u32>) -> f32 {
 fn sky_at(x: u32, y: u32, z: u32) -> f32 {
     let nx = params.size.y;
     let nz = params.size.w;
-    let column = x + nx * z;
+    let at = x + nx * (z + nz * y);
+    let above = nx * nz * (y + 1u);
     let top = y + 1u == params.size.z;
     let here = is_solid(x, y, z);
-    let open = !here && (top || columns[column] != 0u);
-    columns[column] = u32(open);
+    if !here && (top || skies[above + x + nx * z] == OPEN) {
+        skies[at] = OPEN;
+        return 1.0;
+    }
     var sky = 0.0;
-    if open {
-        sky = 1.0;
-    } else if !here {
-        let above = ((y + 1u) & 1u) * nx * nz;
+    if !here {
         var sum = 0.0;
         var weight = 0.0;
         for (var dz = -2; dz <= 2; dz++) {
@@ -194,7 +210,7 @@ fn sky_at(x: u32, y: u32, z: u32) -> f32 {
                     sum += w;
                     weight += w;
                 } else if !is_solid(u32(px), y + 1u, u32(pz)) {
-                    sum += w * rows[above + u32(px) + nx * u32(pz)];
+                    sum += w * min(skies[above + u32(px) + nx * u32(pz)], 1.0);
                     weight += w;
                 }
             }
@@ -203,16 +219,22 @@ fn sky_at(x: u32, y: u32, z: u32) -> f32 {
             sky = sum / weight;
         }
     }
-    rows[(y & 1u) * nx * nz + column] = sky;
+    skies[at] = sky;
     return sky;
 }
 
 @compute @workgroup_size(8, 8, 1)
 fn fill(@builtin(global_invocation_id) id: vec3<u32>) {
-    if id.x >= params.size.y || id.y >= params.size.w {
+    let x = layer.at.y * TILE + id.x;
+    let z = layer.at.z * TILE + id.y;
+    if x >= params.size.y || z >= params.size.w {
         return;
     }
-    let cell = vec3(id.x, layer.x, id.y);
+    let tile = x / TILE + params.size.y / TILE * (z / TILE);
+    if ((layer.tiles[tile >> 7u][(tile >> 5u) & 3u] >> (tile & 31u)) & 1u) == 0u {
+        return;
+    }
+    let cell = vec3(x, layer.at.x, z);
     let v = params.origin.xyz + vec3<f32>(cell) * VOXEL;
     var sum = vec3(0.0);
     if params.flags.x != 0u {
