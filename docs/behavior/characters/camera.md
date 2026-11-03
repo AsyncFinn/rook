@@ -158,8 +158,14 @@ Studio, which Rook's run matches.
   Roblox's cycle (RenderStepped, draw, physics) holds and the camera aims
   at the pose that's drawn; run first, it aimed at the last frame's, and
   trailed a walking character.
-- Facing the camera closes the turn within a 60 Hz frame, leaving out
-  Studio's overshoot (Approximation).
+- A CameraRelative character faces the camera as the frame is drawn,
+  once the render step has turned it, and the physics steps hold that
+  heading; Studio's overshoot is left out (Approximation). Roblox's
+  order puts it a frame or more behind (Studio's scripts read it two 60 Hz
+  frames behind a camera turning steadily, 2026-11-03), and players feel
+  even one: steered only by physics, Rook's trailed the mouse by a frame
+  ([frame order](../../design/architecture.md#frame-order), Rook
+  extension).
 - The client steps once per drawn frame, that frame's length, as Roblox
   runs a frame per drawn frame (Studio's playtest client ran at 60).
   Physics runs whole 240 Hz steps and carries the rest to the next frame.

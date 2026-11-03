@@ -354,6 +354,19 @@ pub fn drives(w: &mut World) -> Vec<Drive> {
     drives
 }
 
+/// Turn the local character to face the camera's heading now, once the
+/// frame's camera is final and before it's drawn, while `RotationType` is
+/// CameraRelative: what's drawn faces the camera drawn with it.
+pub fn face_camera(w: &mut World) {
+    let Some((character, way)) = camera_facing(w) else {
+        return;
+    };
+    let Some(humanoid) = w.dom.find_first_child_of_class(character, "Humanoid") else {
+        return;
+    };
+    w.physics.face_now(&mut w.dom, humanoid, way);
+}
+
 /// On a client whose `UserGameSettings.RotationType` is CameraRelative, its
 /// character and the camera's heading, which the character faces
 /// (Observed: the engine turns it, not the PlayerModule).

@@ -83,6 +83,9 @@ impl DataModel {
         // Inference: the engine's own camera moves come after the
         // scripts', just before drawing.
         self.runtime.step_cameras();
+        // The camera is final: a character that faces it turns now, so
+        // it's drawn facing this camera, not the last frame's.
+        rook_lua::face_camera(&mut self.runtime.world_mut());
         // Scripts set MouseBehavior in the render step; the mouse the
         // frame's Mouse.Hit looks through is held from now.
         self.hold_mouse();
