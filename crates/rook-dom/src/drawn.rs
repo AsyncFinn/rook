@@ -28,14 +28,27 @@ impl Dom {
     }
 
     /// This frame's drawn poses, where they differ from `CFrame`. Returns
-    /// what was drawn away from its `CFrame` last frame.
+    /// what is drawn somewhere new: those drawn at another pose than last
+    /// frame, then those drawn away from their `CFrame` last frame and back
+    /// at it now. A resting part an awake assembly keeps redrawing at the
+    /// same pose isn't among them, so nothing redraws it.
     pub fn set_drawn(
         &mut self,
         drawn: impl IntoIterator<Item = (InstanceId, CFrame)>,
     ) -> Vec<InstanceId> {
-        let before = self.drawn.keys().copied().collect();
-        self.drawn.clear();
-        self.drawn.extend(drawn);
-        before
+        let before = std::mem::take(&mut self.drawn);
+        let mut moved = Vec::new();
+        for (id, cf) in drawn {
+            if before.get(&id) != Some(&cf) {
+                moved.push(id);
+            }
+            self.drawn.insert(id, cf);
+        }
+        let mut back: Vec<InstanceId> = (before.into_keys())
+            .filter(|id| !self.drawn.contains_key(id))
+            .collect();
+        back.sort_unstable();
+        moved.extend(back);
+        moved
     }
 }

@@ -300,3 +300,28 @@ fn referrers_follow_reference_writes_clones_and_collection() {
     assert_eq!(collect(&mut dom), [weld]);
     assert!(dom.referrers(a).is_empty());
 }
+
+/// Only what is drawn somewhere new comes back: a part redrawn at the
+/// same pose (a resting part an awake assembly keeps drawing) doesn't, one
+/// drawn at a new pose does, and so does one back at its `CFrame`.
+#[test]
+fn set_drawn_returns_what_moves() {
+    let mut dom = Dom::new();
+    let (still, moving, landed) = (
+        part(&mut dom, "A"),
+        part(&mut dom, "B"),
+        part(&mut dom, "C"),
+    );
+    let at = |x: f32| rook_types::CFrame::from_position(glam::Vec3::new(x, 0.0, 0.0));
+    let mut first = dom.set_drawn([(still, at(1.0)), (moving, at(2.0)), (landed, at(3.0))]);
+    first.sort_unstable();
+    let mut all = vec![still, moving, landed];
+    all.sort_unstable();
+    assert_eq!(first, all);
+    let moved = dom.set_drawn([(still, at(1.0)), (moving, at(2.5))]);
+    assert_eq!(moved, vec![moving, landed]);
+    assert_eq!(
+        dom.set_drawn([(still, at(1.0)), (moving, at(2.5))]),
+        Vec::new()
+    );
+}

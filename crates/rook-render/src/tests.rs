@@ -362,6 +362,151 @@ fn moved_parts_and_lights_refill_what_a_whole_fill_draws() {
     }
 }
 
+/// A part moving high under open sky (a fan turning, say) refills the
+/// light voxels in its own columns, not the cone below it that the sky's
+/// light spreads through under roofs: with nothing blocked above them,
+/// those voxels are lit by all of the sky whatever moved. What it draws is
+/// still what filling them all draws.
+#[test]
+fn a_part_moving_under_open_sky_refills_only_its_columns() {
+    let (Ok(mut moved), Ok(mut fresh)) = (Renderer::headless(), Renderer::headless()) else {
+        return;
+    };
+    let mut roof = part(PartShape::Block, 0.0, [0.8; 3], 0.0);
+    roof.position = Vec3::new(-60.0, 10.0, 0.0);
+    roof.size = Vec3::new(24.0, 1.0, 24.0);
+    let mut blade = part(PartShape::Block, 0.0, [0.8; 3], 0.0);
+    blade.position = Vec3::new(40.0, 90.0, 0.0);
+    blade.size = Vec3::new(6.0, 1.0, 1.0);
+    let mut scene = Scene {
+        parts: vec![roof, blade],
+        lighting: Lighting {
+            environment_diffuse: 1.0,
+            prioritize_quality: true,
+            ..Lighting::default()
+        },
+        ..Scene::default()
+    };
+    let camera = Camera::look_at(Vec3::new(0.0, 60.0, 80.0), Vec3::new(0.0, 0.0, 0.0));
+    moved.set_scene(&scene);
+    moved.render_to_image(64, 64, &camera).unwrap();
+    scene.parts[1].rotation = Mat3::from_rotation_y(0.7);
+    moved.move_parts(&scene, &[1]);
+    let after = moved.render_to_image(64, 64, &camera).unwrap();
+    // Its tile column (two tiles at most each way) in every layer below it;
+    // the cone it widens into reaches tens of tiles a layer at the bottom.
+    let filled = moved.lights.filled_tiles();
+    assert!(filled > 0 && filled <= 4 * 64, "filled {filled} tiles");
+    fresh.set_scene(&scene);
+    assert_eq!(after, fresh.render_to_image(64, 64, &camera).unwrap());
+}
+
+/// A part moving under a low sun the voxels shadow refills the voxels
+/// along its shadow's way down, layer by layer, not the box around the
+/// whole slanted path; every voxel still comes out as filling them all.
+#[test]
+fn a_part_moving_under_a_low_sun_refills_its_shadows_path() {
+    let (Ok(mut moved), Ok(mut fresh)) = (Renderer::headless(), Renderer::headless()) else {
+        return;
+    };
+    let mut ground = part(PartShape::Block, 0.0, [0.8; 3], 0.0);
+    ground.position.y = -0.5;
+    ground.size = Vec3::new(400.0, 1.0, 400.0);
+    let mut blade = part(PartShape::Block, 0.0, [0.8; 3], 0.0);
+    blade.position = Vec3::new(0.0, 100.0, 0.0);
+    blade.size = Vec3::new(6.0, 1.0, 1.0);
+    let mut scene = Scene {
+        parts: vec![ground, blade],
+        lighting: Lighting {
+            sun_direction: Vec3::new(1.0, 0.6, 0.4).normalize(),
+            ..Lighting::default()
+        },
+        ..Scene::default()
+    };
+    let camera = Camera::look_at(Vec3::new(0.0, 60.0, 80.0), Vec3::ZERO);
+    moved.set_scene(&scene);
+    moved.render_to_image(16, 16, &camera).unwrap();
+    scene.parts[1].rotation = Mat3::from_rotation_y(0.7);
+    moved.move_parts(&scene, &[1]);
+    moved.render_to_image(16, 16, &camera).unwrap();
+    // A tile or two each way per layer below it; the box around the
+    // slanted path is several tiles wide along x and z in every layer.
+    let filled = moved.lights.filled_tiles();
+    assert!(filled > 0 && filled <= 9 * 64, "filled {filled} tiles");
+    fresh.set_scene(&scene);
+    fresh.render_to_image(16, 16, &camera).unwrap();
+    assert!(moved.light_voxels() == fresh.light_voxels());
+}
+
+/// A camera that moves and turns far enough for the light voxels to follow
+/// fills only what the volume came onto and what that reaches, and every
+/// voxel comes out as filling them all where it went: the sky's light and
+/// the sun under roofs that straddle the faces it crossed, and a light
+/// with `Shadows` (with the sky and the sun in the voxels, then neither).
+#[test]
+fn a_moved_light_volume_fills_what_it_came_onto() {
+    let (Ok(mut moved), Ok(mut fresh)) = (Renderer::headless(), Renderer::headless()) else {
+        return;
+    };
+    let mut parts = Vec::new();
+    let mut ground = part(PartShape::Block, 0.0, [0.8; 3], 0.0);
+    ground.position.y = -0.5;
+    ground.size = Vec3::new(1600.0, 1.0, 1600.0);
+    parts.push(ground);
+    // Roofs everywhere the volume's faces may fall.
+    for x in -10..=10 {
+        for z in -10..=10 {
+            let mut roof = part(PartShape::Block, 0.0, [0.8; 3], 0.0);
+            roof.position = Vec3::new(x as f32 * 76.0, 14.0, z as f32 * 76.0);
+            roof.size = Vec3::new(30.0, 1.0, 30.0);
+            parts.push(roof);
+        }
+    }
+    let light = LocalLight {
+        position: Vec3::new(120.0, 6.0, -30.0),
+        shape: LightShape::Point,
+        color: [1.0, 0.6, 0.2],
+        brightness: 4.0,
+        range: 30.0,
+        shadows: true,
+        part: (Vec3::splat(f32::MAX), Vec3::splat(f32::MIN)),
+    };
+    let here = Camera::look_at(Vec3::new(0.0, 40.0, 60.0), Vec3::ZERO);
+    let there = Camera::look_at(Vec3::new(150.0, 40.0, 20.0), Vec3::new(200.0, 0.0, -40.0));
+    for (diffuse, quality) in [(1.0, false), (0.0, true)] {
+        let scene = Scene {
+            parts: parts.clone(),
+            lights: vec![light],
+            lighting: Lighting {
+                environment_diffuse: diffuse,
+                prioritize_quality: quality,
+                sun_direction: Vec3::new(0.4, 1.0, 0.3).normalize(),
+                ..Lighting::default()
+            },
+            ..Scene::default()
+        };
+        moved.set_scene(&scene);
+        moved.render_to_image(16, 16, &here).unwrap();
+        // The parts where it went are marked a little each frame first.
+        let mut filled = Vec::new();
+        for _ in 0..30 {
+            moved.render_to_image(16, 16, &there).unwrap();
+            filled.push(moved.lights.filled_tiles());
+        }
+        let whole = 16 * 16 * 64;
+        assert!(
+            filled.iter().any(|&f| f > 0) && filled.iter().all(|&f| f < whole),
+            "filled {filled:?} tiles of {whole}"
+        );
+        fresh.set_scene(&scene);
+        fresh.render_to_image(16, 16, &there).unwrap();
+        let [light, sun] = moved.light_voxels();
+        let [fresh_light, fresh_sun] = fresh.light_voxels();
+        assert!(light == fresh_light, "light voxels (sky {diffuse})");
+        assert!(quality || sun == fresh_sun, "sun voxels");
+    }
+}
+
 /// A small mesh file: a square of two triangles facing +Z, `side` wide.
 fn square(side: f32) -> Arc<Mesh> {
     let h = side / 2.0;

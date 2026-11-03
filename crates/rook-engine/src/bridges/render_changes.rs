@@ -164,7 +164,8 @@ impl DataModel {
     /// moved with them when it follows one: a camera script places it
     /// from where scripts see its subject, so it's moved by as much as the
     /// subject's root part is drawn away from there, which keeps the
-    /// subject still on screen. Parts drawn somewhere new redraw.
+    /// subject still on screen. Parts drawn somewhere new redraw; those
+    /// drawn where they were last frame don't.
     pub(crate) fn place_drawn(&mut self) {
         let camera = self.current_camera();
         let mut w = self.runtime.world_mut();
@@ -187,13 +188,10 @@ impl DataModel {
             Some((c, cf))
         });
         drawn.extend(followed);
-        let before = w.dom.set_drawn(drawn);
+        let moved = w.dom.set_drawn(drawn);
         let dom = &w.dom;
         let changes = &mut self.render_changes;
-        // Those drawn last frame are drawn again or back at their CFrame:
-        // each moves once.
-        let back = before.into_iter().filter(|&id| !dom.is_drawn(id));
-        for id in dom.drawn_ids().chain(back) {
+        for id in moved {
             part_moved(dom, changes, id);
         }
     }

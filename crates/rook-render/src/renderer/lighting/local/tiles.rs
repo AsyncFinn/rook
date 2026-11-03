@@ -11,7 +11,7 @@ use super::VOLUME;
 /// A tile's width along x and z, in voxels.
 pub(super) const TILE: u32 = 16;
 /// Tiles along x and z.
-const ACROSS: [u32; 2] = [VOLUME[0] / TILE, VOLUME[2] / TILE];
+pub(super) const ACROSS: [u32; 2] = [VOLUME[0] / TILE, VOLUME[2] / TILE];
 /// Words of bits a layer's tiles take.
 pub(super) const WORDS: usize = (ACROSS[0] * ACROSS[1]).div_ceil(32) as usize;
 
@@ -36,7 +36,13 @@ impl Tiles {
 
     /// Mark the tiles holding any voxel from `lo` to `hi` (both included,
     /// the volume's own voxels); what falls outside the volume is dropped.
-    pub(super) fn mark(&mut self, (lo, hi): (IVec3, IVec3)) {
+    pub(super) fn mark(&mut self, span: (IVec3, IVec3)) {
+        self.mark_where(span, |_| true);
+    }
+
+    /// Mark the tiles [`Tiles::mark`] would that `keep` (given a tile's
+    /// index, `x + tiles along x * z`) keeps.
+    pub(super) fn mark_where(&mut self, (lo, hi): (IVec3, IVec3), keep: impl Fn(usize) -> bool) {
         let (lo, hi) = (lo.max(IVec3::ZERO), hi.min(volume_high()));
         if lo.cmpgt(hi).any() {
             return;
@@ -48,10 +54,17 @@ impl Tiles {
             for z in z0..=z1 {
                 for x in x0..=x1 {
                     let t = (x + ACROSS[0] as i32 * z) as usize;
-                    layer[t / 32] |= 1 << (t % 32);
+                    if keep(t) {
+                        layer[t / 32] |= 1 << (t % 32);
+                    }
                 }
             }
         }
+    }
+
+    /// How many tiles are marked, over every layer.
+    pub(super) fn count(&self) -> u32 {
+        self.layers.iter().flatten().map(|w| w.count_ones()).sum()
     }
 
     /// Layer `y`'s tiles, as the fill pass reads them, and the first and

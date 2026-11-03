@@ -24,6 +24,10 @@ struct LightVolume {
     size: vec4<f32>,
     // x: 1 when `sun_voxels` hold how much of the sun reaches them.
     sun: vec4<f32>,
+    // xyz: where voxel (0, 0, 0) is kept: the voxels are anchored to the
+    // world, voxel k at k modulo the size, so a volume that moves keeps
+    // those it still covers (`renderer/lighting/local.rs`).
+    ring: vec4<f32>,
 };
 
 @group(3) @binding(0) var<uniform> light_volume: LightVolume;
@@ -35,6 +39,20 @@ struct LightVolume {
 // shaders).
 const VOXEL_OFFSET: f32 = 6.0;
 
+// Where to sample the voxels at `p` (xyz, wrapping around: the sampler
+// repeats), and w 1 inside the volume, 0 outside. Clamped to the volume's
+// own voxels' centers, as an unwrapped volume clamps to its edges, so its
+// faces don't blend with the voxels across the wrap.
+fn volume_at(p: vec3<f32>) -> vec4<f32> {
+    let n = light_volume.size.xyz;
+    let c = (p - light_volume.origin.xyz) / VOXEL;
+    if any(c < vec3(-0.5)) || any(c > n - 0.5) {
+        return vec4(0.0);
+    }
+    let kept = clamp(c, vec3(0.0), n - 1.0) + light_volume.ring.xyz;
+    return vec4((kept + 0.5) / n, 1.0);
+}
+
 // The local lights' light on a surface at `world` with normal `n`, in
 // light units: the voxels around the point 6 studs out, blended
 // trilinearly.
@@ -42,12 +60,11 @@ fn local_light(world: vec3<f32>, n: vec3<f32>) -> vec3<f32> {
     if light_volume.origin.w == 0.0 {
         return vec3(0.0);
     }
-    let q = world + normalize(n) * VOXEL_OFFSET;
-    let uvw = ((q - light_volume.origin.xyz) / VOXEL + 0.5) / light_volume.size.xyz;
-    if any(uvw < vec3(0.0)) || any(uvw > vec3(1.0)) {
+    let at = volume_at(world + normalize(n) * VOXEL_OFFSET);
+    if at.w == 0.0 {
         return vec3(0.0);
     }
-    return textureSampleLevel(light_voxels, light_sampler, uvw, 0.0).rgb;
+    return textureSampleLevel(light_voxels, light_sampler, at.xyz, 0.0).rgb;
 }
 
 // How far across the surface `sky_visibility` spreads its samples, in
@@ -57,11 +74,11 @@ const SKY_SPREAD: f32 = 3.0;
 // The voxels' share of the sky's light at `p`, blended trilinearly; all of
 // it outside the volume.
 fn sky_voxel(p: vec3<f32>) -> f32 {
-    let uvw = ((p - light_volume.origin.xyz) / VOXEL + 0.5) / light_volume.size.xyz;
-    if any(uvw < vec3(0.0)) || any(uvw > vec3(1.0)) {
+    let at = volume_at(p);
+    if at.w == 0.0 {
         return 1.0;
     }
-    return textureSampleLevel(light_voxels, light_sampler, uvw, 0.0).a;
+    return textureSampleLevel(light_voxels, light_sampler, at.xyz, 0.0).a;
 }
 
 // How much of the sky's diffuse light reaches a surface at `world` facing
@@ -89,11 +106,11 @@ const SUN_SPREAD: f32 = 4.0;
 // The sun voxels' share of the sun at `p`, blended trilinearly; all of it
 // outside the volume.
 fn sun_voxel(p: vec3<f32>) -> f32 {
-    let uvw = ((p - light_volume.origin.xyz) / VOXEL + 0.5) / light_volume.size.xyz;
-    if any(uvw < vec3(0.0)) || any(uvw > vec3(1.0)) {
+    let at = volume_at(p);
+    if at.w == 0.0 {
         return 1.0;
     }
-    return textureSampleLevel(sun_voxels, light_sampler, uvw, 0.0).r;
+    return textureSampleLevel(sun_voxels, light_sampler, at.xyz, 0.0).r;
 }
 
 // How much of the sun reaches a surface at `world` facing `n` (unit)

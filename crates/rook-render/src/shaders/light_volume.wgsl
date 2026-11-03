@@ -13,8 +13,10 @@ struct Params {
     origin: vec4<f32>,
     // x: the hash's buckets - 1; yzw: voxels along each axis.
     size: vec4<u32>,
-    // xyz: where voxel (0, 0, 0) is kept in `solid` and `fills`, which are
-    // anchored to the world (`renderer/lighting/local/blockers.rs`).
+    // xyz: where voxel (0, 0, 0) is kept in `solid`, `fills`, `skies` and
+    // the voxels, which are all anchored to the world
+    // (`renderer/lighting/local/blockers.rs`), so a volume that moves
+    // keeps what it still covers.
     ring: vec4<u32>,
     // x: there are lights to fill; y: the sky's light to carry down; z:
     // `solid` holds the parts; w: the sun's light to take.
@@ -45,9 +47,9 @@ const TILE: u32 = 16u;
 @group(0) @binding(5) var<uniform> layer: Layer;
 // One bit per voxel, at `slot`: a part blocks it.
 @group(0) @binding(6) var<storage, read> solid: array<u32>;
-// The sky's light in each voxel, x + nx * (z + nz * y), or `OPEN` where
-// nothing blocks the column above it: kept, so a fill of some tiles takes
-// the layer above from the last fill wherever it didn't change.
+// The sky's light in each voxel (at `slot`), or `OPEN` where nothing blocks
+// the column above it: kept, so a fill of some tiles takes the layer above
+// from the last fill wherever it didn't change.
 @group(0) @binding(7) var<storage, read_write> skies: array<f32>;
 // How much of the sun reaches each voxel (red).
 @group(0) @binding(8) var sun_voxels: texture_storage_3d<rgba8unorm, write>;
@@ -65,11 +67,17 @@ fn bucket(p: vec3<f32>) -> vec2<u32> {
     return buckets[h & params.size.x];
 }
 
-// Where voxel `c` of the volume is kept in `solid` and `fills`: the world's
-// voxel index modulo the volume's size, x + nx * (z + nz * y).
+// Where voxel `c` of the volume is kept: the world's voxel index modulo
+// the volume's size.
+fn kept(c: vec3<u32>) -> vec3<u32> {
+    return (c + params.ring.xyz) % params.size.yzw;
+}
+
+// Where voxel `c` of the volume is kept in `solid`, `fills` and `skies`:
+// `kept`, x + nx * (z + nz * y).
 fn slot(c: vec3<u32>) -> u32 {
     let n = params.size.yzw;
-    let r = (c + params.ring.xyz) % n;
+    let r = kept(c);
     return r.x + n.x * (r.z + n.z * r.y);
 }
 
@@ -189,11 +197,10 @@ fn sunlit(cell: vec3<u32>) -> f32 {
 fn sky_at(x: u32, y: u32, z: u32) -> f32 {
     let nx = params.size.y;
     let nz = params.size.w;
-    let at = x + nx * (z + nz * y);
-    let above = nx * nz * (y + 1u);
+    let at = slot(vec3(x, y, z));
     let top = y + 1u == params.size.z;
     let here = is_solid(x, y, z);
-    if !here && (top || skies[above + x + nx * z] == OPEN) {
+    if !here && (top || skies[slot(vec3(x, y + 1u, z))] == OPEN) {
         skies[at] = OPEN;
         return 1.0;
     }
@@ -210,7 +217,7 @@ fn sky_at(x: u32, y: u32, z: u32) -> f32 {
                     sum += w;
                     weight += w;
                 } else if !is_solid(u32(px), y + 1u, u32(pz)) {
-                    sum += w * min(skies[above + u32(px) + nx * u32(pz)], 1.0);
+                    sum += w * min(skies[slot(vec3(u32(px), y + 1u, u32(pz)))], 1.0);
                     weight += w;
                 }
             }
@@ -252,8 +259,8 @@ fn fill(@builtin(global_invocation_id) id: vec3<u32>) {
     if params.flags.y != 0u {
         sky = sky_at(cell.x, cell.y, cell.z);
     }
-    textureStore(voxels, cell, vec4(sum, sky));
+    textureStore(voxels, kept(cell), vec4(sum, sky));
     if params.flags.w != 0u {
-        textureStore(sun_voxels, cell, vec4(sunlit(cell), 0.0, 0.0, 1.0));
+        textureStore(sun_voxels, kept(cell), vec4(sunlit(cell), 0.0, 0.0, 1.0));
     }
 }

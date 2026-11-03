@@ -572,6 +572,12 @@ impl Renderer {
         self.images.uploaded().map(|i| i.bytes).sum()
     }
 
+    /// The light voxels' and sun voxels' bytes, as kept.
+    #[cfg(test)]
+    pub(crate) fn light_voxels(&self) -> [Vec<u8>; 2] {
+        self.lights.read_voxels(&self.device, &self.queue)
+    }
+
     /// How many draw calls the last frame took.
     pub fn draw_counts(&self) -> DrawCounts {
         self.draw_counts

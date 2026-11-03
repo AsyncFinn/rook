@@ -148,8 +148,8 @@ spatial hash (16-stud cubes hashed into buckets, padded 8 studs so that
 lights that move a little don't rebuild it). A compute pass
 (`shaders/light_volume.wgsl`) fills a 256 × 64 × 256 volume of 4-stud
 voxels (Studio's grid, below) centered 236 studs ahead of `Camera.Focus`
-along the view direction with the height dropped, whole when that center
-drifts 64 studs, and parts, decals and terrain
+along the view direction with the height dropped, following when that
+center drifts 64 studs, and parts, decals and terrain
 (water included) sample it as Studio does (`local_light` in
 `shaders/lighting.wgsl`). Surfaces outside it get no local light, as in
 Studio. When a light has `Shadows`, the parts are marked into a bit per
@@ -157,9 +157,15 @@ voxel (`renderer/lighting/local/blockers.rs`, shared with the sky's light) and
 the fill pass casts that light's rays through them. Those marks are kept
 by world position (a voxel's slot is its world index modulo the volume's
 size), with the parts listed by 64-stud column, so a volume that moves
-marks only the slabs it came onto, about 1 ms of them a frame, and is
-filled at its new place once they are all marked; until then the old
-volume stays drawn. The first volume is marked whole at once.
+marks only the slabs it came onto, about 1 ms of them a frame; until
+they are all marked the old volume stays drawn. The voxels themselves,
+and the sky's light the fill keeps, are kept the same way, and surfaces
+sample them wrapping around (clamped to the volume's own voxels, so its
+faces don't blend across the wrap). So a volume that moves fills only
+what it came onto, and what that and what it left reach (below), as
+Studio's light map wraps: its shaders test a point against the grid's
+center in texture space (`LightConfig2`) rather than against 0 to 1. The
+first volume is marked and filled whole at once.
 
 Otherwise the volume is filled again each frame only where something
 changed, as voxel lighting engines update their grids in chunks: each
@@ -170,9 +176,13 @@ what it lit before and lights now. A part that moves marks again only the
 voxels whose cover changed (for a part aligned with the world, those at
 its edges, so a big part moving a little costs its edges), sends only
 those rows of the marks to the GPU, and marks the tiles the change can
-reach: with the sky's light, every layer below it, two voxels wider each
-way per layer down; with the sun, the voxels whose way to the sun crosses
-it; and what each light with `Shadows` whose rays may cross it lights.
+reach: with the sky's light, its columns down to the bottom, and in each
+layer below it, two voxels wider each way per layer down, only the tiles
+with a blocked voxel above that layer (a voxel with nothing above it in
+its column is lit by all of the sky whatever its neighbors do, so the
+sky's light spreads only under roofs); with the sun, the voxels whose way
+to the sun crosses it, layer by layer along the slanted path; and what
+each light with `Shadows` whose rays may cross it lights.
 Changes in one tile column are joined first, so a crowd of small parts
 costs a few boxes. The sky's light is kept per voxel, so a fill of some
 tiles takes the layers above from the last fill where they didn't change,

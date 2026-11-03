@@ -140,6 +140,10 @@ struct Grid {
     counts: Vec<u32>,
     /// A bit per voxel covered at all, as the fill pass reads it.
     bits: Vec<u32>,
+    /// The same bits by column (`x + nx * z` of the slots), a bit per
+    /// layer slot: which layers of each column are blocked, so the fill
+    /// can tell where the sky's light spreads sideways.
+    layers: Vec<u64>,
     /// How much of each voxel the blockers fill, summed, in 255ths.
     fills: Vec<u16>,
     /// The same, capped at full, a byte per voxel as the fill pass reads
@@ -182,6 +186,8 @@ pub(super) struct Marked<'a> {
     pub(super) bits: &'a [u32],
     /// A byte per voxel, four to a word: how much of it blockers fill.
     pub(super) fills: &'a [u32],
+    /// [`Grid`]'s blocked layers by column.
+    pub(super) layers: &'a [u64],
     pub(super) touched: Touched,
     dims: IVec3,
 }
@@ -235,7 +241,7 @@ fn clip((lo, hi): Span, span: Span) -> Option<Span> {
 
 /// The voxels of `span` outside `cut`, as up to six boxes: those past it
 /// along x, then along y among the rest, then along z.
-fn minus(span: Span, cut: Option<Span>) -> Vec<Span> {
+pub(super) fn minus(span: Span, cut: Option<Span>) -> Vec<Span> {
     let Some(cut) = cut.and_then(|cut| clip(cut, span)) else {
         return vec![span];
     };
@@ -257,17 +263,33 @@ fn minus(span: Span, cut: Option<Span>) -> Vec<Span> {
     pieces
 }
 
-/// Each voxel of `span` with where a grid of `dims` keeps it (`Grid`'s
-/// slots: the world's voxel index modulo `dims`, x + nx * (z + nz * y)),
-/// walked a row at a time so the modulo is taken per row, not per voxel.
-fn each(dims: IVec3, (lo, hi): Span, mut f: impl FnMut(IVec3, usize)) {
+/// Where a grid keeps a voxel: its slot (`Grid`'s: the world's voxel
+/// index modulo `dims`, x + nx * (z + nz * y)), and its column's slot
+/// (x + nx * z) and layer's, so the per-column layers need no division.
+#[derive(Debug, Clone, Copy)]
+struct Slot {
+    index: usize,
+    column: usize,
+    layer: u32,
+}
+
+/// Each voxel of `span` with where a grid of `dims` keeps it, walked a row
+/// at a time so the modulo is taken per row, not per voxel.
+fn each(dims: IVec3, (lo, hi): Span, mut f: impl FnMut(IVec3, Slot)) {
+    let area = dims.x * dims.z;
     for y in lo.y..=hi.y {
         let ry = y.rem_euclid(dims.y);
         for z in lo.z..=hi.z {
-            let row = dims.x * (z.rem_euclid(dims.z) + dims.z * ry);
+            let column = dims.x * z.rem_euclid(dims.z);
+            let row = column + area * ry;
             let mut rx = lo.x.rem_euclid(dims.x);
             for x in lo.x..=hi.x {
-                f(IVec3::new(x, y, z), (row + rx) as usize);
+                let slot = Slot {
+                    index: (row + rx) as usize,
+                    column: (column + rx) as usize,
+                    layer: ry as u32,
+                };
+                f(IVec3::new(x, y, z), slot);
                 rx += 1;
                 if rx == dims.x {
                     rx = 0;
@@ -298,16 +320,19 @@ fn center(k: IVec3) -> Vec3 {
 impl Grid {
     fn new(low: IVec3, dims: IVec3, blockers: &[Option<Blocker>], columns: &Columns) -> Self {
         let voxels = (dims.x * dims.y * dims.z) as usize;
+        assert!(dims.y <= 64, "a column's layers take a bit each of a u64");
         let mut grid = Self {
             low,
             dims,
             counts: vec![0; voxels],
             bits: vec![0; voxels.div_ceil(32)],
+            layers: vec![0; (dims.x * dims.z) as usize],
             fills: vec![0; voxels],
             fill_bytes: vec![0; voxels.div_ceil(4)],
             pending: Vec::new(),
         };
-        grid.mark(grid.span(), blockers, columns);
+        // Already empty: only the blockers to take.
+        grid.take(grid.span(), blockers, columns);
         grid
     }
 
@@ -316,8 +341,8 @@ impl Grid {
     }
 
     /// Move the volume to start at `low`, leaving the voxels that came in
-    /// to [`Grid::work`].
-    fn move_to(&mut self, low: IVec3) {
+    /// to [`Grid::work`]. Returns their pieces.
+    fn move_to(&mut self, low: IVec3) -> Vec<Span> {
         let old = self.span();
         self.low = low;
         let new = self.span();
@@ -333,24 +358,9 @@ impl Grid {
         });
         // The voxels that came in, as up to three boxes: those past the
         // old volume along x, then along y among the rest, then along z.
-        let mut kept = new;
-        for axis in 0..3 {
-            let (lo, hi) = (new.0[axis], new.1[axis]);
-            let (a, b) = (old.0[axis], old.1[axis]);
-            for (from, to) in [(lo, hi.min(a - 1)), (lo.max(b + 1), hi)] {
-                if from <= to {
-                    let mut span = kept;
-                    span.0[axis] = from;
-                    span.1[axis] = to;
-                    self.pending.extend(pieces(span));
-                }
-            }
-            kept.0[axis] = lo.max(a);
-            kept.1[axis] = hi.min(b);
-            if kept.0[axis] > kept.1[axis] {
-                break;
-            }
-        }
+        let came: Vec<Span> = minus(new, Some(old)).into_iter().flat_map(pieces).collect();
+        self.pending.extend_from_slice(&came);
+        came
     }
 
     /// Mark pending pieces for up to `budget`; whether none are left.
@@ -368,12 +378,20 @@ impl Grid {
     fn mark(&mut self, span: Span, blockers: &[Option<Blocker>], columns: &Columns) {
         let (counts, fills) = (&mut self.counts, &mut self.fills);
         let (bits, fill_bytes) = (&mut self.bits, &mut self.fill_bytes);
-        each(self.dims, span, |_, i| {
+        let layers = &mut self.layers;
+        each(self.dims, span, |_, slot| {
+            let i = slot.index;
             counts[i] = 0;
             fills[i] = 0;
             bits[i / 32] &= !(1 << (i % 32));
+            layers[slot.column] &= !(1 << slot.layer);
             fill_bytes[i / 4] &= !(0xff << ((i % 4) * 8));
         });
+        self.take(span, blockers, columns);
+    }
+
+    /// Add `blockers` (standing in `columns`) to the voxels of `span`.
+    fn take(&mut self, span: Span, blockers: &[Option<Blocker>], columns: &Columns) {
         for i in columns.near(span, blockers) {
             if let Some(b) = &blockers[i] {
                 self.apply(b, true, span);
@@ -405,7 +423,8 @@ impl Grid {
             fill_bytes,
             ..
         } = self;
-        each(*dims, within, |k, i| {
+        each(*dims, within, |k, slot| {
+            let i = slot.index;
             let at = center(k);
             let share = if aligned {
                 // The overlap of two boxes, axis by axis.
@@ -452,23 +471,31 @@ impl Grid {
         };
         let to_local = b.axes.transpose();
         let Self {
-            dims, counts, bits, ..
+            dims,
+            counts,
+            bits,
+            layers,
+            ..
         } = self;
-        each(*dims, within, |k, i| {
+        each(*dims, within, |k, slot| {
             let local = to_local * (center(k) - b.center);
             if !local.abs().cmple(b.half).all() {
                 return;
             }
+            let i = slot.index;
             let (word, bit) = (i / 32, 1 << (i % 32));
+            let layer = 1 << slot.layer;
             if add {
                 counts[i] += 1;
                 bits[word] |= bit;
+                layers[slot.column] |= layer;
             } else {
                 // Saturating: a voxel still to mark holds another place's
                 // counts until it is.
                 counts[i] = counts[i].saturating_sub(1);
                 if counts[i] == 0 {
                     bits[word] &= !bit;
+                    layers[slot.column] &= !layer;
                 }
             }
         });
@@ -669,9 +696,13 @@ impl Blockers {
         profiling::scope!("Blockers::mark");
         match &mut self.grid {
             Some(grid) if grid.dims == dims => {
+                // The voxels it came onto change; those it still covers
+                // keep their slots, so neither they nor what the fill made
+                // of them go up again.
                 if grid.low != low {
-                    grid.move_to(low);
-                    self.touched = Touched::All;
+                    for piece in grid.move_to(low) {
+                        self.touched.add(piece);
+                    }
                 }
                 // Taken everywhere at once, pieces still to mark included:
                 // those are cleared and take the blockers as they are then.
@@ -711,6 +742,7 @@ impl Blockers {
         Some(Marked {
             bits: &grid.bits,
             fills: &grid.fill_bytes,
+            layers: &grid.layers,
             touched: std::mem::take(&mut self.touched),
             dims,
         })
@@ -793,7 +825,24 @@ mod tests {
             assert!(grid.counts == fresh.counts, "counts at {low}");
             assert!(grid.bits == fresh.bits, "bits at {low}");
             assert!(grid.fill_bytes == fresh.fill_bytes, "fills at {low}");
+            assert!(grid.layers == fresh.layers, "layers at {low}");
+            assert!(
+                grid.layers == layers_of(&grid),
+                "layers match bits at {low}"
+            );
         }
+    }
+
+    /// The blocked layers of each column, read off the bits.
+    fn layers_of(grid: &Grid) -> Vec<u64> {
+        let area = (grid.dims.x * grid.dims.z) as usize;
+        let mut layers = vec![0; area];
+        for i in 0..grid.counts.len() {
+            if grid.bits[i / 32] & (1 << (i % 32)) != 0 {
+                layers[i % area] |= 1 << (i / area);
+            }
+        }
+        layers
     }
 
     #[test]
@@ -828,6 +877,7 @@ mod tests {
         assert!(grid.work(Duration::MAX, &list, &columns));
         let fresh = Grid::new(low, dims, &list, &columns);
         assert!(grid.bits == fresh.bits);
+        assert!(grid.layers == fresh.layers);
         assert!(grid.fill_bytes == fresh.fill_bytes);
     }
 
@@ -871,6 +921,7 @@ mod tests {
         let fresh = Grid::new(low, dims, &list, &indexed(&list));
         let marked = blockers.mark(low, dims).expect("marked");
         assert!(marked.bits == fresh.bits.as_slice());
+        assert!(marked.layers == fresh.layers.as_slice());
         assert!(marked.fills == fresh.fill_bytes.as_slice());
         let Touched::Spans(spans) = &marked.touched else {
             panic!("only what moved is touched");

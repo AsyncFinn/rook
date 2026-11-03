@@ -4,8 +4,10 @@
 //! rebuild it), and a volume of 4-stud voxels ahead of the camera that a
 //! compute pass fills (`shaders/light_volume.wgsl`) and surfaces sample
 //! (`shaders/lighting.wgsl`). The voxels are filled again only where a
-//! light or a part changed (`tiles.rs`), and whole when the camera leaves
-//! the volume's middle; parts marked into them (`blockers.rs`) carry the
+//! light or a part changed (`tiles.rs`), and, when the camera leaves the
+//! volume's middle and it follows, only what it came onto and what that
+//! reaches: they are kept anchored to the world, wrapping around as
+//! Studio's light map does. Parts marked into them (`blockers.rs`) carry the
 //! sky's light down, shadow lights and, without
 //! `PrioritizeLightingQuality`, shadow the sun. What Studio does is in
 //! `docs/behavior/lighting/local-lights.md` and `docs/behavior/lighting/sun.md`.
@@ -20,7 +22,7 @@ use super::*;
 use blockers::{Blockers, Span, Touched};
 use glam::{IVec2, IVec3};
 use hash::{GpuLight, LightHash};
-use tiles::{TILE, Tiles, WORDS};
+use tiles::{ACROSS, TILE, Tiles, WORDS};
 
 /// How far a light may move from where the hash placed it before the hash
 /// is built again, in studs.
@@ -67,8 +69,12 @@ const LAYER_SIZE: u64 = std::mem::size_of::<LayerUniform>() as u64;
 struct FillParams {
     origin: [f32; 4],
     size: [u32; 4],
-    /// Where voxel (0, 0, 0) is kept in the blockers' bits and fills: they
-    /// are anchored to the world (`Blockers::mark`).
+    /// Where voxel (0, 0, 0) is kept in the blockers' bits and fills, the
+    /// sky's light and the voxels: all anchored to the world (voxel `k`
+    /// at `k` modulo the volume's size, as `Blockers::mark` keeps them),
+    /// so a volume that moves keeps what it still covers and fills only
+    /// what it came onto, as Studio's light map wraps around
+    /// (docs/behavior/lighting/local-lights.md).
     ring: [u32; 4],
     /// x: there are lights to fill; y: the sky's light to carry down; z:
     /// the blockers are marked; w: the sun's light to take.
@@ -117,6 +123,8 @@ struct VolumeUniform {
     size: [f32; 4],
     /// x: 1 when the sun voxels hold how much of the sun reaches them.
     sun: [f32; 4],
+    /// xyz: where voxel (0, 0, 0) is kept ([`FillParams::ring`]).
+    ring: [f32; 4],
 }
 
 /// The lights' buffers and hash, the voxel volume and the pass that fills
@@ -158,6 +166,8 @@ pub(crate) struct GpuLights {
     sun: Option<Vec3>,
     /// The blockers are marked for the volume where it is now.
     marked: bool,
+    /// The tiles the last fill filled, over every layer.
+    filled: u32,
 }
 
 fn buffer_entry(
@@ -292,7 +302,9 @@ impl GpuLights {
                     dimension: wgpu::TextureDimension::D3,
                     format,
                     usage: wgpu::TextureUsages::STORAGE_BINDING
-                        | wgpu::TextureUsages::TEXTURE_BINDING,
+                        | wgpu::TextureUsages::TEXTURE_BINDING
+                        // Tests read them back.
+                        | wgpu::TextureUsages::COPY_SRC,
                     view_formats: &[],
                 })
                 .create_view(&Default::default())
@@ -301,6 +313,10 @@ impl GpuLights {
         let sun_voxels = volume_texture("rook sun voxels", wgpu::TextureFormat::Rgba8Unorm);
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("rook light voxels"),
+            // The voxels wrap around (`FillParams::ring`).
+            address_mode_u: wgpu::AddressMode::Repeat,
+            address_mode_v: wgpu::AddressMode::Repeat,
+            address_mode_w: wgpu::AddressMode::Repeat,
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
             ..Default::default()
@@ -359,6 +375,7 @@ impl GpuLights {
             shadows: false,
             sun: None,
             marked: false,
+            filled: 0,
         }
     }
 
@@ -486,6 +503,56 @@ impl GpuLights {
         );
     }
 
+    /// The tiles the last frame's fill filled, over every layer.
+    #[cfg(test)]
+    pub(crate) fn filled_tiles(&self) -> u32 {
+        self.filled
+    }
+
+    /// Every voxel's bytes, of the light voxels then the sun voxels, as
+    /// kept (at slots anchored to the world).
+    #[cfg(test)]
+    pub(crate) fn read_voxels(&self, device: &wgpu::Device, queue: &wgpu::Queue) -> [Vec<u8>; 2] {
+        [&self.voxels, &self.sun_voxels].map(|view| {
+            let texture = view.texture();
+            let texel = texture
+                .format()
+                .block_copy_size(None)
+                .expect("a plain format");
+            let row = VOLUME[0] * texel;
+            let size = u64::from(row * VOLUME[1] * VOLUME[2]);
+            let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("rook light voxels readback"),
+                size,
+                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+                mapped_at_creation: false,
+            });
+            let mut encoder = device.create_command_encoder(&Default::default());
+            encoder.copy_texture_to_buffer(
+                texture.as_image_copy(),
+                wgpu::TexelCopyBufferInfo {
+                    buffer: &buffer,
+                    layout: wgpu::TexelCopyBufferLayout {
+                        offset: 0,
+                        bytes_per_row: Some(row),
+                        rows_per_image: Some(VOLUME[1]),
+                    },
+                },
+                texture.size(),
+            );
+            queue.submit([encoder.finish()]);
+            let slice = buffer.slice(..);
+            slice.map_async(wgpu::MapMode::Read, |_| {});
+            device
+                .poll(wgpu::PollType::Wait {
+                    submission_index: None,
+                    timeout: None,
+                })
+                .expect("the copy finishes");
+            slice.get_mapped_range().expect("mapped").to_vec()
+        })
+    }
+
     /// Forget the parts blocking light (the scene is replaced).
     pub(crate) fn clear_blockers(&mut self) {
         self.blockers.clear();
@@ -531,6 +598,7 @@ impl GpuLights {
             (Some(a), Some(b)) => a.dot(b) >= SUN_TURN,
             (a, b) => a.is_none() && b.is_none(),
         };
+        self.filled = 0;
         if self.dirty.is_empty() && centered && !blocked && sky == self.sky && sun_kept {
             return;
         }
@@ -545,9 +613,13 @@ impl GpuLights {
         // just came takes them afresh.
         let sun_came = sun.is_some() && self.sun.is_none();
         let mut touched = Touched::default();
+        let mut roofs = Vec::new();
         if solid && (blocked || !centered || sun_came) {
             match self.blockers.mark(low, size) {
                 Some(marked) => {
+                    if sky {
+                        roofs = roofs_of(marked.layers, low);
+                    }
                     for run in marked.slot_runs() {
                         let words = run.start / 32..run.end.div_ceil(32);
                         let at = (words.start * 4) as u64;
@@ -578,8 +650,9 @@ impl GpuLights {
             }
         }
         let origin = low.as_vec3() * VOXEL + VOXEL * 0.5;
+        let ring = low.rem_euclid(size);
         let whole = self.dirty.all
-            || self.origin != Some(origin)
+            || kept.is_none()
             || sky != self.sky
             || !sun_kept
             || solid != self.marked
@@ -597,6 +670,7 @@ impl GpuLights {
                 origin: [origin.x, origin.y, origin.z, f32::from(u8::from(lit))],
                 size: [dims.x, dims.y, dims.z, f32::from(u8::from(sky))],
                 sun: [f32::from(u8::from(sun.is_some())), 0.0, 0.0, 0.0],
+                ring: ring.as_vec3().extend(0.0).to_array(),
             }),
         );
         if !lit && !sky && sun.is_none() {
@@ -609,14 +683,30 @@ impl GpuLights {
             for span in dirty.lights {
                 tiles.mark((span.0 - low, span.1 - low));
             }
+            let reach = Reach {
+                sky,
+                sun,
+                shadowed: self.shadowed_reach(low),
+                roofs,
+            };
             if let Touched::Spans(spans) = touched {
-                let reach = Reach {
-                    sky,
-                    sun,
-                    shadowed: self.shadowed_reach(low),
-                };
                 for span in by_column(&spans, low) {
                     reach.mark(&mut tiles, span);
+                }
+            }
+            // A volume that moved fills what it came onto, and, as for
+            // blockers that changed, what that and what it left reach:
+            // those it kept saw open sky and nothing in the way past its
+            // old faces.
+            if let Some(old) = kept.filter(|&old| old != low) {
+                let (came, left) = came_and_left(old, low, size);
+                for &span in &came {
+                    tiles.mark(span);
+                }
+                if solid {
+                    for span in came.into_iter().chain(left) {
+                        reach.mark(&mut tiles, span);
+                    }
                 }
             }
             tiles
@@ -633,6 +723,7 @@ impl GpuLights {
                 dispatches.push((y, across(0), across(1)));
             }
         }
+        self.filled = tiles.count();
         if dispatches.is_empty() {
             return;
         }
@@ -653,7 +744,7 @@ impl GpuLights {
                     VOLUME[1],
                     VOLUME[2],
                 ],
-                ring: low.rem_euclid(size).as_uvec3().extend(0).to_array(),
+                ring: ring.as_uvec3().extend(0).to_array(),
                 flags: [
                     u32::from(lit),
                     u32::from(sky),
@@ -735,21 +826,30 @@ struct Reach {
     sun: Option<Vec3>,
     /// [`GpuLights::shadowed_reach`].
     shadowed: Vec<(Span, Span)>,
+    /// With the sky's light, [`roofs_of`] the volume.
+    roofs: Vec<u64>,
 }
 
 impl Reach {
     /// Mark the tiles whose voxels a blocker change in `span` (the
     /// volume's voxels) may light differently: with the sky's light, the
-    /// span and every layer below it, two voxels wider each way per layer
-    /// down (`sky_at` in `shaders/light_volume.wgsl` takes the five by
-    /// five above); with the sun, every voxel whose way to the sun crosses
-    /// the span (`sunlit`); and the voxels each light with `Shadows` whose
-    /// rays may cross it lights (`unblocked`).
+    /// span's columns down to the bottom (whether a voxel there is open to
+    /// the sky may change), and in every layer below the span, two voxels
+    /// wider each way per layer down (`sky_at` in
+    /// `shaders/light_volume.wgsl` takes the five by five above), the
+    /// tiles with a blocked voxel above that layer: only a voxel with one
+    /// above it takes its neighbors' light, the rest are open to all of
+    /// the sky whatever changed; with the sun, every voxel whose way to
+    /// the sun crosses the span (`sunlit`); and the voxels each light
+    /// with `Shadows` whose rays may cross it lights (`unblocked`).
     fn mark(&self, tiles: &mut Tiles, (lo, hi): Span) {
         if self.sky {
-            for y in 0..=hi.y {
-                let wider = IVec3::new(2, 0, 2) * (hi.y - y).max(0);
-                tiles.mark((lo.with_y(y) - wider, hi.with_y(y) + wider));
+            tiles.mark((lo.with_y(0), hi));
+            for y in 0..hi.y {
+                let wider = IVec3::new(2, 0, 2) * (hi.y - y);
+                // Without the blockers' layers, every tile may be.
+                let roofed = |t: usize| self.roofs.get(t).is_none_or(|r| r >> (y + 1) != 0);
+                tiles.mark_where((lo.with_y(y) - wider, hi.with_y(y) + wider), roofed);
             }
         }
         if let Some(d) = self.sun {
@@ -767,7 +867,33 @@ impl Reach {
             }
             let away = -d * t;
             let (a, b) = (from.min(from + away), to.max(to + away));
-            tiles.mark((a.floor().as_ivec3() - 1, b.ceil().as_ivec3()));
+            let (a, b) = (a.floor().as_ivec3() - 1, b.ceil().as_ivec3());
+            // The sun is above (it lights the voxels only then), so the
+            // box sweeps down: each layer takes only the part of the
+            // sweep crossing it (a voxel of margin around, as the whole
+            // sweep's box has), not the box around all of it, which for a
+            // low sun is mostly voxels the sweep never reaches.
+            if d.y < 1e-3 {
+                tiles.mark((a, b));
+            } else {
+                for y in a.y..=b.y {
+                    // When the box overlaps the layer and the voxel either
+                    // side of it.
+                    let (y0, y1) = ((y - 1) as f32, (y + 2) as f32);
+                    let s0 = ((from.y - y1) / d.y).max(0.0);
+                    let s1 = ((to.y - y0) / d.y).min(t);
+                    if s0 > s1 {
+                        continue;
+                    }
+                    let (f0, f1) = (from - d * s0, from - d * s1);
+                    let (t0, t1) = (to - d * s0, to - d * s1);
+                    let (lo, hi) = (
+                        f0.min(f1).floor().as_ivec3() - 1,
+                        t0.max(t1).ceil().as_ivec3(),
+                    );
+                    tiles.mark((lo.with_y(y), hi.with_y(y)));
+                }
+            }
         }
         for &((a, b), lit) in &self.shadowed {
             if a.cmple(hi).all() && b.cmpge(lo).all() {
@@ -775,6 +901,41 @@ impl Reach {
             }
         }
     }
+}
+
+/// The voxels a volume moving from voxel `old` to `new` (its lowest)
+/// came onto and those it left, in the moved volume's own voxels.
+fn came_and_left(old: IVec3, new: IVec3, size: IVec3) -> (Vec<Span>, Vec<Span>) {
+    let (before, after) = ((old, old + size - 1), (new, new + size - 1));
+    let local = |(lo, hi): Span| (lo - new, hi - new);
+    let came = blockers::minus(after, Some(before)).into_iter().map(local);
+    let left = blockers::minus(before, Some(after)).into_iter().map(local);
+    (came.collect(), left.collect())
+}
+
+/// Each tile's blocked layers (bit `y`: some voxel of the tile's layer
+/// `y` is blocked), in the volume starting at voxel `low`, from the
+/// blockers' layers by column ([`blockers::Marked::layers`], kept at slots
+/// anchored to the world).
+fn roofs_of(layers: &[u64], low: IVec3) -> Vec<u64> {
+    let [nx, ny, nz] = VOLUME.map(|n| n as i32);
+    // A column's layers rotate into the volume's own like its voxels.
+    const _: () = assert!(VOLUME[1] == u64::BITS);
+    let ring = low.rem_euclid(IVec3::new(nx, ny, nz));
+    let tile = TILE as i32;
+    let mut roofs = vec![0u64; (ACROSS[0] * ACROSS[1]) as usize];
+    for z in 0..nz {
+        let row = nx * ((z + ring.z) % nz);
+        let tiles = ACROSS[0] as i32 * (z / tile);
+        for x in 0..nx {
+            let t = (tiles + x / tile) as usize;
+            roofs[t] |= layers[(row + (x + ring.x) % nx) as usize];
+        }
+    }
+    for roof in &mut roofs {
+        *roof = roof.rotate_right(ring.y as u32);
+    }
+    roofs
 }
 
 /// The voxels a light lights (the world's).
