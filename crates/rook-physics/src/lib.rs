@@ -24,7 +24,7 @@ mod sync;
 
 use std::collections::BTreeMap;
 
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use rapier3d::prelude::*;
 use rook_dom::{Change, Dom, InstanceId};
@@ -152,16 +152,16 @@ impl Authority {
 pub struct Physics {
     world: PhysicsWorld,
     props: Option<Props>,
-    pub(crate) bodies: HashMap<RigidBodyHandle, Body>,
+    pub(crate) bodies: FxHashMap<RigidBodyHandle, Body>,
     /// Bodies with motors inside, so stepping motors needn't visit every
     /// body (a place with 79k bodies spent milliseconds a frame finding its
     /// two).
-    motored: HashSet<RigidBodyHandle>,
+    motored: FxHashSet<RigidBodyHandle>,
     /// Unanchored bodies this world simulates, and those another machine
     /// does, so a step knows whether anything can move without visiting
     /// every body.
     moving: [usize; 2],
-    parts: HashMap<InstanceId, Home>,
+    parts: FxHashMap<InstanceId, Home>,
     /// Anchored parts on their own, with no joints and no velocity: most
     /// of a large place. Their colliders have no body at all, Rapier's
     /// (and PhysX's and Jolt's) static geometry: every body costs time each
@@ -169,14 +169,14 @@ pub struct Physics {
     /// and every collider on a body is read again whenever one on it moves
     /// (267k colliders on one shared body made a script turning one
     /// anchored part cost 88 ms a step).
-    statics: HashMap<InstanceId, Static>,
+    statics: FxHashMap<InstanceId, Static>,
     /// An empty fixed body at the origin, which constraints and movers
     /// holding a static part are attached to, at the part's place.
     shared: RigidBodyHandle,
     /// Joints in the world and the parts they joined, so a changed joint's
     /// former parts are rebuilt too.
-    joints: HashMap<InstanceId, [InstanceId; 2]>,
-    hinges: HashMap<InstanceId, ImpulseJointHandle>,
+    joints: FxHashMap<InstanceId, [InstanceId; 2]>,
+    hinges: FxHashMap<InstanceId, ImpulseJointHandle>,
     /// Journal position up to which changes have been applied.
     cursor: u64,
     built: bool,
@@ -187,41 +187,41 @@ pub struct Physics {
     pending: f64,
     /// The moving bodies' poses before the last step, which drawing
     /// interpolates from.
-    before_last_step: HashMap<RigidBodyHandle, Pose>,
+    before_last_step: FxHashMap<RigidBodyHandle, Pose>,
     /// Which part each collider belongs to.
-    pub(crate) colliders: HashMap<ColliderHandle, InstanceId>,
+    pub(crate) colliders: FxHashMap<ColliderHandle, InstanceId>,
     groups: CollisionGroups,
     /// Workspace.TouchesUseCollisionGroups: whether groups that don't
     /// collide also don't touch.
     pub(crate) touches_use_groups: bool,
     touch: contacts::Tracker,
     /// Mover instances seen in the world (some may have left it since).
-    mover_ids: HashSet<InstanceId>,
+    mover_ids: FxHashSet<InstanceId>,
     /// Movers acting now, in a stable order so forces add up the same
     /// way every run.
     movers: BTreeMap<InstanceId, Mover>,
     /// Bodies the movers pushed last step.
     forced: Vec<RigidBodyHandle>,
     /// Fired rockets, and whether each is within its target's radius.
-    rockets: HashMap<InstanceId, bool>,
+    rockets: FxHashMap<InstanceId, bool>,
     /// Rockets that reached their target since the last call.
     reached: Vec<InstanceId>,
     /// Attachment constraints seen in the world.
-    constraint_ids: HashSet<InstanceId>,
+    constraint_ids: FxHashSet<InstanceId>,
     /// Movers and constraints to re-read at the next sync.
-    dirty: HashSet<InstanceId>,
+    dirty: FxHashSet<InstanceId>,
     attached: joints::attached::Attached,
     /// The constraints the last syncs re-read, for tests.
     #[cfg(test)]
     reread: Vec<InstanceId>,
-    constraints: HashMap<InstanceId, BuiltConstraint>,
+    constraints: FxHashMap<InstanceId, BuiltConstraint>,
     /// Driven revolute joints: RotateV, RotateP and HingeConstraints.
-    drives: HashMap<InstanceId, Driven>,
+    drives: FxHashMap<InstanceId, Driven>,
     /// Bodies added or moved since the last step, whose colliders queries
     /// must put in place first (Rapier does that when it steps).
-    stale: HashSet<RigidBodyHandle>,
+    stale: FxHashSet<RigidBodyHandle>,
     /// The same for [`Static`]s added or moved.
-    stale_statics: HashSet<InstanceId>,
+    stale_statics: FxHashSet<InstanceId>,
     /// Which assemblies this world simulates.
     authority: Authority,
     /// Parts whose assemblies change hands at the next sync.
@@ -234,9 +234,9 @@ pub struct Physics {
     /// changed, bodies stepped, terrain built.
     generation: u64,
     /// Humanoids seen in Workspace (some may have left it since).
-    humanoid_ids: HashSet<InstanceId>,
+    humanoid_ids: FxHashSet<InstanceId>,
     /// TrussParts seen in Workspace, which Humanoids climb.
-    trusses: HashSet<InstanceId>,
+    trusses: FxHashSet<InstanceId>,
     /// The Humanoids this world drives, in id order.
     controllers: BTreeMap<InstanceId, humanoid::Controller>,
     /// The server's assemblies' updates, on a client.
@@ -273,46 +273,46 @@ impl Physics {
         Self {
             world,
             props: None,
-            bodies: HashMap::default(),
-            motored: HashSet::default(),
+            bodies: FxHashMap::default(),
+            motored: FxHashSet::default(),
             moving: [0; 2],
-            parts: HashMap::default(),
-            statics: HashMap::default(),
+            parts: FxHashMap::default(),
+            statics: FxHashMap::default(),
             shared,
-            joints: HashMap::default(),
-            hinges: HashMap::default(),
+            joints: FxHashMap::default(),
+            hinges: FxHashMap::default(),
             cursor: 0,
             built: false,
             fallen_height: DEFAULT_FALLEN_HEIGHT,
             last_dt: 0.0,
             pending: 0.0,
-            before_last_step: HashMap::default(),
-            colliders: HashMap::default(),
+            before_last_step: FxHashMap::default(),
+            colliders: FxHashMap::default(),
             groups: CollisionGroups::default(),
             touches_use_groups: false,
             touch: contacts::Tracker::default(),
-            mover_ids: HashSet::default(),
+            mover_ids: FxHashSet::default(),
             movers: BTreeMap::new(),
             forced: Vec::new(),
-            rockets: HashMap::default(),
+            rockets: FxHashMap::default(),
             reached: Vec::new(),
-            constraint_ids: HashSet::default(),
-            dirty: HashSet::default(),
+            constraint_ids: FxHashSet::default(),
+            dirty: FxHashSet::default(),
             attached: Default::default(),
             #[cfg(test)]
             reread: Vec::new(),
             generation: 0,
-            constraints: HashMap::default(),
-            drives: HashMap::default(),
-            stale: HashSet::default(),
-            stale_statics: HashSet::default(),
+            constraints: FxHashMap::default(),
+            drives: FxHashMap::default(),
+            stale: FxHashSet::default(),
+            stale_statics: FxHashSet::default(),
             authority: Authority::default(),
             handed_over: Vec::new(),
             unions: unions::Unions::default(),
             terrain: terrain::Terrain::default(),
             terrain_placed: false,
-            humanoid_ids: HashSet::default(),
-            trusses: HashSet::default(),
+            humanoid_ids: FxHashSet::default(),
+            trusses: FxHashSet::default(),
             controllers: BTreeMap::new(),
             playback: remote::Playback::default(),
         }

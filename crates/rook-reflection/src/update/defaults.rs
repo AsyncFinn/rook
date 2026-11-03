@@ -6,7 +6,7 @@
 //! dump's placeholders (`__api_dump_class_not_creatable__`) give no
 //! default: `rook-tools studio-defaults` measures those.
 
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 use rbx_reflection::DataType;
 use rbx_types::{
@@ -19,7 +19,7 @@ use super::dump;
 pub(super) fn parse(
     text: &str,
     ty: &DataType,
-    enums: &HashMap<&str, &dump::Enum>,
+    enums: &FxHashMap<&str, &dump::Enum>,
 ) -> Option<Variant> {
     if text.starts_with("__api_dump_") {
         return None;

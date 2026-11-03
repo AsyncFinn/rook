@@ -3,14 +3,14 @@
 //! joints listed on it.
 
 use rook_dom::InstanceId;
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::FxHashMap;
 
 #[derive(Debug, Default)]
 pub(crate) struct Attached {
     /// Each part's constraints and movers.
-    holders: HashMap<InstanceId, Vec<InstanceId>>,
+    holders: FxHashMap<InstanceId, Vec<InstanceId>>,
     /// Each constraint's or mover's parts, as last read.
-    parts: HashMap<InstanceId, Vec<InstanceId>>,
+    parts: FxHashMap<InstanceId, Vec<InstanceId>>,
 }
 
 impl Attached {

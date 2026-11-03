@@ -4,3 +4,7 @@
 disallowed-methods = [
     { path = "rook_dom::Dom::property_by_name", reason = "use a typed reader such as Dom::float_property" },
 ]
+disallowed-types = [
+    { path = "std::collections::HashMap", reason = "use rustc_hash::FxHashMap: std's SipHash is slow for Rook's own keys and iterates in a different order every run" },
+    { path = "std::collections::HashSet", reason = "use rustc_hash::FxHashSet: std's SipHash is slow for Rook's own keys and iterates in a different order every run" },
+]

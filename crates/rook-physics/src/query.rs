@@ -4,7 +4,7 @@
 //! DOM, as scripts query what they just made or moved. The rules are in
 //! `docs/behavior/physics/queries.md`.
 
-use rustc_hash::FxHashSet as HashSet;
+use rustc_hash::FxHashSet;
 
 use glam::Vec3;
 use rapier3d::parry::query::{self as parry, ShapeCastOptions};
@@ -313,7 +313,7 @@ impl Physics {
                 let part = accept(h).filter(|p| Some(*p) != skip)?;
                 test(part, co).then_some(part)
             })
-            .collect::<HashSet<_>>()
+            .collect::<FxHashSet<_>>()
             .into_iter()
             .collect();
         found.sort_unstable();

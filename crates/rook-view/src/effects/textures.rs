@@ -23,7 +23,7 @@ const OWN: u32 = 64;
 impl EffectTextures {
     /// Load the images from the install through `content` (or make
     /// Rook's own) and add them to `images`.
-    pub(crate) fn load(content: &Resolver, images: &mut HashMap<ImageHash, Arc<Image>>) -> Self {
+    pub(crate) fn load(content: &Resolver, images: &mut FxHashMap<ImageHash, Arc<Image>>) -> Self {
         let mut add = |file: &str, convert: fn(&mut [u8]), own: fn(f32, f32) -> f32| {
             let path = format!("textures/particles/{file}");
             let installed = content

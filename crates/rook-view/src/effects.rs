@@ -71,8 +71,8 @@ pub(super) struct EffectCache {
     slots: Vec<Slot>,
     /// Indices into `ids` of the effects each part or Attachment carries
     /// (or a Beam or Trail runs between), and of each effect itself.
-    holders: HashMap<InstanceId, Vec<usize>>,
-    calls: HashMap<InstanceId, Calls>,
+    holders: FxHashMap<InstanceId, Vec<usize>>,
+    calls: FxHashMap<InstanceId, Calls>,
     textures: Option<EffectTextures>,
 }
 
@@ -108,7 +108,7 @@ impl EffectCache {
         };
         let mut ids = dom.descendants(ws);
         ids.retain(|id| is_effect(dom, *id));
-        let ids_set: HashSet<InstanceId> = ids.iter().copied().collect();
+        let ids_set: FxHashSet<InstanceId> = ids.iter().copied().collect();
         self.calls.retain(|id, _| ids_set.contains(id));
         for (i, &id) in ids.iter().enumerate() {
             for holder in holders(dom, id) {
@@ -180,7 +180,7 @@ impl EffectCache {
             return true;
         }
         let holders = &self.holders;
-        let stale: HashSet<usize> = changes
+        let stale: FxHashSet<usize> = changes
             .effects
             .iter()
             .chain(&changes.parts)
@@ -189,7 +189,7 @@ impl EffectCache {
             .flatten()
             .copied()
             .collect();
-        let moved: HashSet<usize> = changes
+        let moved: FxHashSet<usize> = changes
             .moved
             .iter()
             .filter_map(|id| holders.get(id))
@@ -214,7 +214,7 @@ impl EffectCache {
         mut drawn: EffectLists<'_>,
         images: &mut Images<'_>,
     ) -> bool {
-        let stale: HashSet<usize> = ids
+        let stale: FxHashSet<usize> = ids
             .iter()
             .filter_map(|id| self.ids.iter().position(|e| e == id))
             .collect();
@@ -226,7 +226,7 @@ impl EffectCache {
     fn reread(
         &self,
         dom: &Dom,
-        stale: HashSet<usize>,
+        stale: FxHashSet<usize>,
         drawn: &mut EffectLists<'_>,
         images: &mut Images<'_>,
     ) {

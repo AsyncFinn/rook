@@ -3,7 +3,7 @@
 //! to; VectorForce, Torque and SpringConstraint act through attachments.
 //! What Studio showed of each is in `docs/behavior/physics/movers.md`.
 
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::FxHashMap;
 
 use glam::{Mat3, Vec3};
 use rapier3d::prelude::*;
@@ -348,7 +348,7 @@ pub(crate) fn apply<'a>(
         }
     }
     let gravity = world.gravity;
-    let mut states: HashMap<RigidBodyHandle, State> = HashMap::default();
+    let mut states: FxHashMap<RigidBodyHandle, State> = FxHashMap::default();
     for b in movers.clone().flat_map(Mover::bodies) {
         if !states.contains_key(&b)
             && let Some(rb) = world.bodies.get(b)
@@ -378,11 +378,11 @@ pub(crate) fn apply<'a>(
 /// before it.
 fn pushes<'a>(
     movers: impl Iterator<Item = &'a Mover>,
-    states: &HashMap<RigidBodyHandle, State>,
+    states: &FxHashMap<RigidBodyHandle, State>,
     h: f32,
     gravity: Vec3,
-) -> HashMap<RigidBodyHandle, Push> {
-    let mut pushes: HashMap<RigidBodyHandle, Push> = HashMap::default();
+) -> FxHashMap<RigidBodyHandle, Push> {
+    let mut pushes: FxHashMap<RigidBodyHandle, Push> = FxHashMap::default();
     let rotation_of = |rel: Option<Frame>| match rel {
         Some((b, f)) => states.get(&b).map(|s| (s.pose * f).rotation),
         None => Some(Mat3::IDENTITY),

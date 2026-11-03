@@ -9,7 +9,7 @@
 //! touches the network. Which member asks which domain for what is in
 //! `docs/design/web-endpoints.md`.
 
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::Arc;
 
 use mlua::{Function, Lua, MultiValue, Table, Thread, Value as LuaValue};
@@ -62,7 +62,7 @@ pub struct WebRequests {
     pub endpoints: Arc<Endpoints>,
     /// Requests to send, by request id, since the engine last took them.
     pub(crate) outbox: Vec<(u64, WebRequest)>,
-    waiting: HashMap<u64, (Option<Thread>, Decode)>,
+    waiting: FxHashMap<u64, (Option<Thread>, Decode)>,
     next: u64,
 }
 

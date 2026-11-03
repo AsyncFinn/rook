@@ -3,7 +3,7 @@
 //! locale. Rook has no automatic translation; text without an entry stays
 //! as it is.
 
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::rc::Rc;
 
 use mlua::{Lua, Table, Value as LuaValue};
@@ -46,7 +46,7 @@ pub(crate) struct Entry {
     context: String,
     #[serde(skip_serializing_if = "String::is_empty")]
     examples: String,
-    values: HashMap<String, String>,
+    values: FxHashMap<String, String>,
 }
 
 impl Entry {
@@ -157,7 +157,7 @@ fn set_entries(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     for item in list.clone().sequence_values::<Table>() {
         let item = item?;
         let text = |k: &str| item.get::<Option<String>>(k).map(Option::unwrap_or_default);
-        let mut values = HashMap::new();
+        let mut values = FxHashMap::default();
         if let Some(v) = item.get::<Option<Table>>("Values")? {
             for pair in v.pairs::<String, String>() {
                 let (locale, value) = pair?;

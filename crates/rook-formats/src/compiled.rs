@@ -8,6 +8,7 @@
 
 use crate::LoadError;
 use crate::chunks::{Reader, chunks};
+use rustc_hash::FxHashMap;
 
 /// One compiled script: the child indices from the file's top level down
 /// to it (`[2, 0]` is the first child of the third top-level instance),
@@ -72,8 +73,8 @@ pub fn compiled_scripts(bytes: &[u8]) -> Result<Vec<CompiledScript>, LoadError> 
     }
     // Each instance's index among its parent's children (top-level ones
     // count among each other), then the paths down to the scripts.
-    let mut place: std::collections::HashMap<i32, (i32, u32)> = Default::default();
-    let mut counts: std::collections::HashMap<i32, u32> = Default::default();
+    let mut place: FxHashMap<i32, (i32, u32)> = Default::default();
+    let mut counts: FxHashMap<i32, u32> = Default::default();
     for &(child, parent) in &parents {
         let n = counts.entry(parent).or_default();
         place.insert(child, (parent, *n));

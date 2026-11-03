@@ -27,7 +27,7 @@ pub(crate) struct App {
     pub(crate) clock: f64,
     pub(crate) camera: FlyCamera,
     pub(crate) gfx: Option<Gfx>,
-    pub(crate) keys: HashSet<KeyCode>,
+    pub(crate) keys: FxHashSet<KeyCode>,
     /// Flying the window's own camera: nothing in the game drives the
     /// current camera ([`rook_engine::DataModel::scripted_camera`]).
     pub(crate) flying: bool,

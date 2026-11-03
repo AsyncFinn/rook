@@ -18,7 +18,7 @@ pub(super) struct Job {
     pub(super) epoch: u64,
     pub(super) rings: Rings,
     /// The chunks to draw, by level.
-    pub(super) draw: HashSet<LevelChunk>,
+    pub(super) draw: FxHashSet<LevelChunk>,
 }
 
 #[derive(Debug)]

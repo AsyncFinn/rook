@@ -11,7 +11,7 @@
 //! ([`DataModel::check_explosions`], before the journal is trimmed) and go
 //! off in the next one's step ([`DataModel::set_off_explosions`]).
 
-use std::collections::HashSet;
+use rustc_hash::FxHashSet;
 
 use super::journal_watch::JournalWatch;
 use crate::*;
@@ -25,7 +25,7 @@ const LIFETIME: f64 = 2.75;
 pub(crate) struct Explosions {
     pub(crate) watch: JournalWatch,
     /// Every Explosion seen in Workspace, so each goes off once.
-    seen: HashSet<InstanceId>,
+    seen: FxHashSet<InstanceId>,
     /// Waiting for the next step.
     pending: Vec<InstanceId>,
     /// Gone off, and their age in their own time.

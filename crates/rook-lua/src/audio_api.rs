@@ -14,7 +14,8 @@ mod ranges;
 pub use curves::{read_curve, write_curve};
 pub(crate) use ranges::clamp;
 
-use std::collections::{BTreeSet, HashMap, HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
+use std::collections::BTreeSet;
 
 use rook_dom::{Change, Dom, InstanceId};
 use rook_types::{CFrame, RollOffMode, Value};
@@ -190,7 +191,7 @@ fn ends(dom: &Dom, wire: InstanceId) -> Option<Connection> {
 pub fn connections(dom: &Dom, wires: &[InstanceId]) -> Vec<Connection> {
     let mut sorted = wires.to_vec();
     sorted.sort();
-    let mut next: HashMap<InstanceId, Vec<InstanceId>> = HashMap::new();
+    let mut next: FxHashMap<InstanceId, Vec<InstanceId>> = FxHashMap::default();
     let mut out = Vec::new();
     for wire in sorted {
         let Some(c) = ends(dom, wire) else {
@@ -205,9 +206,13 @@ pub fn connections(dom: &Dom, wires: &[InstanceId]) -> Vec<Connection> {
     out
 }
 
-fn reaches(next: &HashMap<InstanceId, Vec<InstanceId>>, from: InstanceId, to: InstanceId) -> bool {
+fn reaches(
+    next: &FxHashMap<InstanceId, Vec<InstanceId>>,
+    from: InstanceId,
+    to: InstanceId,
+) -> bool {
     let mut stack = vec![from];
-    let mut seen = HashSet::new();
+    let mut seen = FxHashSet::default();
     while let Some(n) = stack.pop() {
         if n == to {
             return true;

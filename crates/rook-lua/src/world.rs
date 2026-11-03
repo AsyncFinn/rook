@@ -1,6 +1,7 @@
 //! Engine state shared by every Lua callback in one DataModel.
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
+use std::collections::BTreeMap;
 
 use crate::scheduler::{Clock, Scheduler};
 use crate::signal::{ConnectionId, Signals};
@@ -104,7 +105,7 @@ pub(crate) fn short_source(chunk: &str, line: usize) -> String {
 #[derive(Debug, Default, Clone)]
 pub struct InputState {
     /// Held keys, as `Enum.KeyCode` values.
-    pub keys: std::collections::HashSet<u32>,
+    pub keys: FxHashSet<u32>,
     /// Mouse buttons 1-3 held.
     pub buttons: [bool; 3],
     /// Cursor position in pixels from the viewport's top left.
@@ -150,7 +151,7 @@ pub struct AudioState {
     /// up to date.
     pub graph: std::cell::RefCell<crate::audio_api::GraphNodes>,
     /// AudioAnalyzers' last spectra, written by the engine on clients.
-    pub spectra: HashMap<InstanceId, Vec<f32>>,
+    pub spectra: FxHashMap<InstanceId, Vec<f32>>,
     /// `AudioPlayer:Play(atTime)` and `Stop(atTime)` calls waiting for
     /// their time.
     pub scheduled: Vec<Scheduled>,
@@ -184,12 +185,12 @@ pub enum Listener {
 #[derive(Debug, Default)]
 pub(crate) struct ModuleState {
     /// `require` results, by ModuleScript.
-    pub(crate) results: HashMap<InstanceId, mlua::RegistryKey>,
+    pub(crate) results: FxHashMap<InstanceId, mlua::RegistryKey>,
     /// Modules currently loading, with the thread running each body: a
     /// require from that thread is a cycle, one from another thread waits.
-    pub(crate) loading: HashMap<InstanceId, mlua::Thread>,
+    pub(crate) loading: FxHashMap<InstanceId, mlua::Thread>,
     /// Threads waiting for a module another thread is loading.
-    pub(crate) waiting: HashMap<InstanceId, Vec<mlua::Thread>>,
+    pub(crate) waiting: FxHashMap<InstanceId, Vec<mlua::Thread>>,
 }
 
 /// Everything a DataModel's scripts can reach.
@@ -214,7 +215,7 @@ pub struct World {
     /// Web requests waiting for the engine to send them.
     pub web: crate::api::methods::web::WebRequests,
     /// What each TextFilterResult holds.
-    pub(crate) filter_results: HashMap<InstanceId, crate::api::methods::filtering::Filtered>,
+    pub(crate) filter_results: FxHashMap<InstanceId, crate::api::methods::filtering::Filtered>,
     /// The physics world. Scripts query it (raycasts, regions), which
     /// brings it up to date with the DOM first, so it lives here with the
     /// DOM. Each side steps what it owns (`characters::ownership`).
@@ -223,7 +224,7 @@ pub struct World {
     /// lays out again first when GUI changed, so it lives here too.
     pub gui: rook_gui::Gui,
     /// Threads waiting for an invoke's reply, by call id.
-    pub(crate) pending_calls: HashMap<u64, Thread>,
+    pub(crate) pending_calls: FxHashMap<u64, Thread>,
     pub(crate) next_call: u64,
     pub log: Vec<LogEntry>,
     /// Calls to Roblox members Rook doesn't implement yet, by `Class.Member`.
@@ -235,7 +236,7 @@ pub struct World {
     pub(crate) modules: ModuleState,
     /// Luau bytecode for scripts that came without source (Roblox's own
     /// packages: see `rook_formats::compiled_scripts`), run in its place.
-    pub bytecode: HashMap<InstanceId, Compiled>,
+    pub bytecode: FxHashMap<InstanceId, Compiled>,
     /// The folder of CoreScripts `ScriptContext:AddCoreScriptLocal`
     /// starts from, outside the DataModel (clients running Roblox's
     /// CoreScripts).
@@ -245,31 +246,31 @@ pub struct World {
     pub user_settings: Option<InstanceId>,
     /// Fast flags by full name (`FFlagX`, `DFIntY`), as Studio last
     /// downloaded them, for CoreScripts' `DefineFastFlag` and the like.
-    pub fast_flags: std::sync::Arc<HashMap<String, String>>,
+    pub fast_flags: std::sync::Arc<FxHashMap<String, String>>,
     /// Flags scripts defined that Studio has no value for, with their
     /// defaults.
-    pub(crate) defined_flags: HashMap<String, String>,
+    pub(crate) defined_flags: FxHashMap<String, String>,
     /// LocalizationTables' entries, parsed from `Contents` when first used.
     pub(crate) localization:
-        HashMap<InstanceId, std::rc::Rc<Vec<crate::api::methods::localization::Entry>>>,
+        FxHashMap<InstanceId, std::rc::Rc<Vec<crate::api::methods::localization::Entry>>>,
     /// Each Translator's table (`None`: the game's tables, for one from
     /// LocalizationService).
-    pub(crate) translators: HashMap<InstanceId, Option<InstanceId>>,
+    pub(crate) translators: FxHashMap<InstanceId, Option<InstanceId>>,
     /// `Enum.CoreGuiType`s scripts turned off with `SetCoreGuiEnabled`.
-    pub(crate) core_gui_disabled: HashSet<&'static str>,
+    pub(crate) core_gui_disabled: FxHashSet<&'static str>,
     /// Movement modes registered with each PlayerScripts, by kind
     /// (`player_scripts::KINDS`), as enum values.
-    pub(crate) movement_modes: HashMap<(InstanceId, usize), Vec<u32>>,
+    pub(crate) movement_modes: FxHashMap<(InstanceId, usize), Vec<u32>>,
     pub(crate) styles: crate::styles::Styles,
     /// Running scripts and the environment each runs in, so they don't
     /// start twice and stopping one can find its threads.
-    pub(crate) started: HashMap<InstanceId, Table>,
+    pub(crate) started: FxHashMap<InstanceId, Table>,
     /// Whether any script has been stopped, so threads are only checked for
     /// a stopped owner once there can be one.
     pub(crate) any_stopped: bool,
     /// Sounds' and AudioPlayers' script state, for those a script has
     /// played or seeked.
-    pub sounds: HashMap<InstanceId, SoundControl>,
+    pub sounds: FxHashMap<InstanceId, SoundControl>,
     pub listener: Listener,
     /// Sounds given to `SoundService:PlayLocalSound`, for the engine to
     /// play once.
@@ -279,25 +280,25 @@ pub struct World {
     pub effect_calls: Vec<(InstanceId, EffectCall)>,
     /// Players that have had a character, whose next spawns reset their
     /// PlayerGui.
-    pub(crate) spawned: HashSet<InstanceId>,
+    pub(crate) spawned: FxHashSet<InstanceId>,
     /// Builds R15 bodies from Roblox's rig file; the engine sets it on
     /// servers. Without it, characters are R6, which Rook builds itself.
     pub rigs: Option<crate::api::methods::characters::RigSource>,
     /// Players' looks from the avatar API; the rest have the default look.
-    pub(crate) avatars: HashMap<InstanceId, crate::api::methods::characters::Avatar>,
+    pub(crate) avatars: FxHashMap<InstanceId, crate::api::methods::characters::Avatar>,
     /// Players whose look is still on its way, whose first spawn waits.
-    pub avatars_pending: HashSet<InstanceId>,
+    pub avatars_pending: FxHashSet<InstanceId>,
     /// Players whose clients simulate their characters (a server's).
-    pub client_players: HashSet<InstanceId>,
+    pub client_players: FxHashSet<InstanceId>,
     /// Picks spawns and spots on them.
     pub(crate) spawn_random: crate::types::misc::LRandom,
     /// PlayerGuis' `SetTopbarTransparency`, for those a script set.
-    pub(crate) topbar_transparency: HashMap<InstanceId, f32>,
+    pub(crate) topbar_transparency: FxHashMap<InstanceId, f32>,
     /// Humanoids' walks and disabled states.
     pub(crate) movement: crate::api::methods::characters::movement::Movement,
     /// Cameras moving by `Camera:Interpolate`.
     pub(crate) interpolations:
-        HashMap<InstanceId, crate::api::methods::camera_moves::Interpolation>,
+        FxHashMap<InstanceId, crate::api::methods::camera_moves::Interpolation>,
 }
 
 impl World {
@@ -314,43 +315,43 @@ impl World {
             content: Default::default(),
             assets: Default::default(),
             web: Default::default(),
-            filter_results: HashMap::new(),
+            filter_results: FxHashMap::default(),
             physics: rook_physics::Physics::new(),
             gui: rook_gui::Gui::default(),
-            pending_calls: HashMap::new(),
+            pending_calls: FxHashMap::default(),
             next_call: 0,
             log: Vec::new(),
             unimplemented: BTreeMap::new(),
             inert: BTreeMap::new(),
             errors: 0,
             modules: ModuleState::default(),
-            bytecode: HashMap::new(),
+            bytecode: FxHashMap::default(),
             core_scripts: None,
             user_settings: None,
             fast_flags: Default::default(),
-            defined_flags: HashMap::new(),
-            localization: HashMap::new(),
-            translators: HashMap::new(),
-            core_gui_disabled: HashSet::new(),
-            movement_modes: HashMap::new(),
+            defined_flags: FxHashMap::default(),
+            localization: FxHashMap::default(),
+            translators: FxHashMap::default(),
+            core_gui_disabled: FxHashSet::default(),
+            movement_modes: FxHashMap::default(),
             styles: Default::default(),
-            started: HashMap::new(),
+            started: FxHashMap::default(),
             any_stopped: false,
-            sounds: HashMap::new(),
+            sounds: FxHashMap::default(),
             listener: Listener::Camera,
             local_sounds: Vec::new(),
             audio: AudioState::default(),
             effect_calls: Vec::new(),
-            spawned: HashSet::new(),
+            spawned: FxHashSet::default(),
             rigs: None,
-            avatars: HashMap::new(),
-            avatars_pending: HashSet::new(),
-            client_players: HashSet::new(),
+            avatars: FxHashMap::default(),
+            avatars_pending: FxHashSet::default(),
+            client_players: FxHashSet::default(),
             // A fixed seed: runs repeat exactly.
             spawn_random: crate::types::misc::LRandom::new(1),
-            topbar_transparency: HashMap::new(),
+            topbar_transparency: FxHashMap::default(),
             movement: Default::default(),
-            interpolations: HashMap::new(),
+            interpolations: FxHashMap::default(),
         }
     }
 
@@ -371,7 +372,7 @@ impl World {
 
     /// The instances the runtime holds outside the tree, as a script's
     /// handle does: what it still uses later (see `collect.rs`).
-    pub(crate) fn held(&self) -> HashSet<InstanceId> {
+    pub(crate) fn held(&self) -> FxHashSet<InstanceId> {
         let listened = match self.listener {
             Listener::ObjectPosition(id) | Listener::ObjectCFrame(id) => Some(id),
             Listener::Camera | Listener::CFrame(_) => None,

@@ -108,7 +108,7 @@ impl HighlightParts {
         for (h, _, _) in self.entries.values() {
             by_key.entry(h.key).or_insert(*h);
         }
-        let mut numbers: HashMap<u64, u32> = HashMap::default();
+        let mut numbers: FxHashMap<u64, u32> = FxHashMap::default();
         let mut looks = [[0.0; 4]; 2 * HIGHLIGHT_LIMIT];
         for (n, h) in by_key.values().take(HIGHLIGHT_LIMIT).enumerate() {
             numbers.insert(h.key, n as u32 + 1);

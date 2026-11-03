@@ -8,7 +8,7 @@ mod spawn;
 
 use std::sync::Arc;
 
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::FxHashMap;
 
 use glam::{Mat3, Vec3};
 
@@ -127,7 +127,7 @@ impl Particles {
     /// their emitter's `key` wherever it moves in the list, so effects
     /// coming and going leave the others' particles alone.
     pub(crate) fn set_emitters(&mut self, emitters: &[Emitter]) {
-        let mut old: HashMap<u64, (Emitter, Pool)> = self
+        let mut old: FxHashMap<u64, (Emitter, Pool)> = self
             .emitters
             .drain(..)
             .zip(self.pools.drain(..))

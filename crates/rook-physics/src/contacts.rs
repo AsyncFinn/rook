@@ -7,7 +7,7 @@ pub mod materials;
 mod mixing;
 mod touches;
 
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Mutex;
 
 use rapier3d::prelude::*;

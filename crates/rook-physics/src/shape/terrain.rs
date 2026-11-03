@@ -14,7 +14,7 @@ use rook_terrain::{
     mesh_chunk,
 };
 use rook_types::Value;
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 mod edit;
 mod near;
@@ -29,14 +29,14 @@ pub(crate) struct Terrain {
     pub(crate) instance: Option<InstanceId>,
     body: Option<RigidBodyHandle>,
     /// Each collider's material.
-    pieces: HashMap<ColliderHandle, TerrainMaterial>,
+    pieces: FxHashMap<ColliderHandle, TerrainMaterial>,
     /// Each built chunk's colliders, so an edit can take them down.
-    chunk_pieces: HashMap<glam::IVec3, Vec<ColliderHandle>>,
+    chunk_pieces: FxHashMap<glam::IVec3, Vec<ColliderHandle>>,
     /// The voxels, for the queries that test voxels rather than the
     /// surface (`IsRegion3Empty`).
     grid: Grid,
     /// Chunks with a surface whose colliders aren't built yet.
-    unbuilt: HashSet<glam::IVec3>,
+    unbuilt: FxHashSet<glam::IVec3>,
     /// The first and last chunk with a surface on each axis.
     extent: Option<(glam::IVec3, glam::IVec3)>,
     /// The Terrain's solver and collision groups, for chunks built later.

@@ -31,10 +31,8 @@ pub use properties::zero_value;
 use instance::Instance;
 use journal::Journal;
 
-use std::cell::RefCell;
-use std::collections::HashMap;
-
 use rustc_hash::FxHashMap;
+use std::cell::RefCell;
 
 use rook_reflection::{ClassId, Database, PropertyId, PropertyType};
 use rook_types::{InstanceRef, Value};

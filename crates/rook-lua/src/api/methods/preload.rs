@@ -6,7 +6,7 @@
 //! the waiting thread resumes. What Studio does is in
 //! `docs/behavior/content/asset-fetching.md` (PreloadAsync).
 
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 use mlua::{Function, Lua, Thread, Value as LuaValue};
 use rbx_types::VariantType;
@@ -28,8 +28,8 @@ pub struct ContentRequests {
     /// Requests answered without fetching, delivered with the next results.
     pub(crate) answered: Vec<(u64, bool)>,
     /// Requests not delivered yet: their preload and content string.
-    pending: HashMap<u64, (u64, String)>,
-    preloads: HashMap<u64, Preload>,
+    pending: FxHashMap<u64, (u64, String)>,
+    preloads: FxHashMap<u64, Preload>,
     next: u64,
 }
 

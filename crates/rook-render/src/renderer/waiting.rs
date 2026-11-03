@@ -14,10 +14,10 @@ pub(crate) enum File {
 
 #[derive(Debug, Default)]
 pub(crate) struct Waiting {
-    entries: HashMap<usize, PartInstance>,
+    entries: FxHashMap<usize, PartInstance>,
     /// The entries waiting on each file. An entry that stopped waiting may
     /// still be listed; it's skipped.
-    on: HashMap<File, Vec<usize>>,
+    on: FxHashMap<File, Vec<usize>>,
 }
 
 impl Waiting {

@@ -9,7 +9,7 @@
 //! translates through its replication [`Sink`]. Each end numbers the
 //! invokes it delivers and translates replies back to the caller's number.
 
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 use rook_dom::InstanceId;
 use rook_lua::{EffectCall, NetValue, RemoteKind, RemoteMessage};
@@ -81,14 +81,14 @@ pub struct ServerHost {
     clients: Vec<Link>,
     /// Invokes from clients delivered here, by our number: the client and
     /// its own number for the call.
-    calls: HashMap<u64, (usize, u64)>,
+    calls: FxHashMap<u64, (usize, u64)>,
     next_call: u64,
     /// Players whose first character spawns at the start of a step, once
     /// their look has arrived.
     spawning: Vec<InstanceId>,
     /// Humanoids that died, and when their players respawn (`None`
     /// without `CharacterAutoLoads`).
-    dead: HashMap<InstanceId, (InstanceId, Option<f64>)>,
+    dead: FxHashMap<InstanceId, (InstanceId, Option<f64>)>,
 }
 
 impl ServerHost {
@@ -99,10 +99,10 @@ impl ServerHost {
         Self {
             server,
             clients: Vec::new(),
-            calls: HashMap::new(),
+            calls: FxHashMap::default(),
             next_call: 0,
             spawning: Vec::new(),
-            dead: HashMap::new(),
+            dead: FxHashMap::default(),
         }
     }
 
@@ -465,7 +465,7 @@ pub struct ClientHost {
     sink: Sink,
     /// Invokes from the server delivered here, by our number: the server's
     /// number for the call.
-    calls: HashMap<u64, u64>,
+    calls: FxHashMap<u64, u64>,
     next_call: u64,
     /// Effect calls on instances that hadn't replicated yet (created and
     /// called in the same server frame), tried again after the next
@@ -521,7 +521,7 @@ impl ClientHost {
         Ok(Self {
             client,
             sink,
-            calls: HashMap::new(),
+            calls: FxHashMap::default(),
             next_call: 0,
             early_effects: Vec::new(),
             last_pose: None,

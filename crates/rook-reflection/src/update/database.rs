@@ -9,7 +9,7 @@
 //! Studio saved carry over. New properties take the default the dump
 //! prints, where it parses.
 
-use std::collections::{HashMap, HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::fmt;
 
 use rbx_reflection::{
@@ -58,6 +58,10 @@ impl fmt::Display for Report {
     }
 }
 
+#[expect(
+    clippy::disallowed_types,
+    reason = "rbx_reflection's descriptors hold std maps and sets"
+)]
 pub(super) fn update<'a>(
     previous: &ReflectionDatabase<'a>,
     old: &'a dump::Root,
@@ -65,9 +69,9 @@ pub(super) fn update<'a>(
     version: [u32; 4],
     report: &mut Report,
 ) -> ReflectionDatabase<'a> {
-    let old_classes: HashSet<&str> = old.classes.iter().map(|c| c.name.as_str()).collect();
+    let old_classes: FxHashSet<&str> = old.classes.iter().map(|c| c.name.as_str()).collect();
     let old_properties = properties(old);
-    let enums: HashMap<&str, &dump::Enum> =
+    let enums: FxHashMap<&str, &dump::Enum> =
         new.enums.iter().map(|e| (e.name.as_str(), e)).collect();
 
     let mut db = ReflectionDatabase::new();
@@ -83,7 +87,7 @@ pub(super) fn update<'a>(
             .filter_map(|t| t.parse().ok())
             .collect();
 
-        let mut properties = HashMap::new();
+        let mut properties = std::collections::HashMap::new();
         for member in class.members.iter().filter(|m| m.member_type == "Property") {
             let key = format!("{name}.{}", member.name);
             let Some(stated) = derive(member) else {
@@ -138,7 +142,7 @@ pub(super) fn update<'a>(
     }
     drop_stale_defaults(&mut db);
 
-    let old_enums: HashSet<&str> = old.enums.iter().map(|e| e.name.as_str()).collect();
+    let old_enums: FxHashSet<&str> = old.enums.iter().map(|e| e.name.as_str()).collect();
     for e in &new.enums {
         let mut desc = EnumDescriptor::new(e.name.as_str());
         desc.items = e.items.iter().map(|i| (i.name.as_str(), i.value)).collect();
@@ -171,7 +175,7 @@ pub(super) fn update<'a>(
     db
 }
 
-fn properties(dump: &dump::Root) -> HashMap<(&str, &str), &dump::Member> {
+fn properties(dump: &dump::Root) -> FxHashMap<(&str, &str), &dump::Member> {
     dump.classes
         .iter()
         .flat_map(|c| {
@@ -213,6 +217,10 @@ fn same<T: Serialize>(a: &T, b: &T) -> bool {
 
 /// A property as the dump alone describes it (rbx-dom's rules), or `None`
 /// for a type rbx-dom has no value type for.
+#[expect(
+    clippy::disallowed_types,
+    reason = "rbx_reflection's descriptors hold std maps and sets"
+)]
 fn derive(member: &dump::Member) -> Option<PropertyDescriptor<'_>> {
     let ty = member.value_type.as_ref()?;
     let data_type = match ty.category.as_str() {
@@ -220,7 +228,7 @@ fn derive(member: &dump::Member) -> Option<PropertyDescriptor<'_>> {
         "Class" => DataType::Value(VariantType::Ref),
         _ => DataType::Value(variant_type(&ty.name)?),
     };
-    let tags: HashSet<PropertyTag> = dump::string_tags(&member.tags)
+    let tags: std::collections::HashSet<PropertyTag> = dump::string_tags(&member.tags)
         .filter_map(|t| t.parse().ok())
         .collect();
     let open = |s: Security| matches!(s, Security::None | Security::PluginSecurity);
@@ -254,7 +262,7 @@ fn derive(member: &dump::Member) -> Option<PropertyDescriptor<'_>> {
 fn drop_stale_defaults(db: &mut ReflectionDatabase) {
     let names: Vec<&str> = db.classes.keys().copied().collect();
     for name in names {
-        let mut known = HashSet::new();
+        let mut known = FxHashSet::default();
         let mut cur = Some(name);
         while let Some(c) = cur.and_then(|c| db.classes.get(c)) {
             known.extend(c.properties.keys().copied());

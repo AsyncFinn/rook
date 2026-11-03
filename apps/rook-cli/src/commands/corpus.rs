@@ -6,7 +6,8 @@ pub(crate) mod runner;
 mod scripts;
 mod unions;
 
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use rustc_hash::FxHashSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -161,7 +162,7 @@ pub(crate) struct Aggregate {
     /// (`content::looks`).
     pub looks: UsageMap,
     #[serde(skip)]
-    content_values: HashSet<String>,
+    content_values: FxHashSet<String>,
 }
 
 /// Files under `dir` with one of `extensions` (any case), sorted by path.
@@ -208,7 +209,7 @@ pub(crate) fn run(
     let default_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(|_| {}));
 
-    let seen = Mutex::new(HashSet::new());
+    let seen = Mutex::new(FxHashSet::default());
     let done = AtomicUsize::new(0);
     let total = candidates.len();
     let process = |(path, len): &(PathBuf, u64)| {
@@ -297,7 +298,7 @@ pub(crate) fn run(
 fn process_file(
     path: &Path,
     len: u64,
-    seen: &Mutex<HashSet<[u8; 32]>>,
+    seen: &Mutex<FxHashSet<[u8; 32]>>,
 ) -> (FileRecord, Option<FileSummary>) {
     let mut record = FileRecord {
         path: path.to_path_buf(),

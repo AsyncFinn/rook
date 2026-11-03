@@ -106,7 +106,7 @@ impl Physics {
     /// Re-read the movers that changed or whose parts did, and every
     /// fired rocket, whose target may have moved. A mover that changed
     /// wakes the bodies it acts on.
-    pub(crate) fn refresh_movers(&mut self, dom: &Dom, dirty: &HashSet<InstanceId>) {
+    pub(crate) fn refresh_movers(&mut self, dom: &Dom, dirty: &FxHashSet<InstanceId>) {
         profiling::scope!("Physics::refresh_movers");
         let changed = dirty.iter().filter(|i| self.mover_ids.contains(i));
         let ids: Vec<InstanceId> = changed.chain(self.rockets.keys()).copied().collect();
@@ -143,7 +143,7 @@ impl Physics {
 
     /// Build, rebuild or remove the joints of constraints that changed or
     /// whose parts did.
-    pub(crate) fn refresh_constraints(&mut self, dom: &Dom, dirty: &HashSet<InstanceId>) {
+    pub(crate) fn refresh_constraints(&mut self, dom: &Dom, dirty: &FxHashSet<InstanceId>) {
         profiling::scope!("Physics::refresh_constraints");
         let changed = dirty.iter().filter(|i| self.constraint_ids.contains(i));
         let ids: Vec<InstanceId> = changed.copied().collect();

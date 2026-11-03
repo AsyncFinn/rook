@@ -57,12 +57,12 @@ impl EventHandler for Collector {
 #[derive(Debug, Default)]
 pub(crate) struct Tracker {
     /// Touching pairs, lower id first.
-    touching: HashSet<(InstanceId, InstanceId)>,
+    touching: FxHashSet<(InstanceId, InstanceId)>,
     /// Colliders removed since the last step: Rapier reports their
     /// contacts ending after they're gone.
-    retired: HashMap<ColliderHandle, InstanceId>,
+    retired: FxHashMap<ColliderHandle, InstanceId>,
     /// Parts with CanTouch off.
-    pub(crate) untouchable: HashSet<InstanceId>,
+    pub(crate) untouchable: FxHashSet<InstanceId>,
     events: Vec<Touch>,
 }
 
@@ -88,7 +88,7 @@ impl Tracker {
     pub(crate) fn record(
         &mut self,
         events: Vec<CollisionEvent>,
-        colliders: &HashMap<ColliderHandle, InstanceId>,
+        colliders: &FxHashMap<ColliderHandle, InstanceId>,
         in_world: impl Fn(InstanceId) -> bool,
     ) {
         let mut removed: Vec<(InstanceId, InstanceId)> = Vec::new();

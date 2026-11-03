@@ -38,7 +38,7 @@ impl SceneCache {
             return Vec::new();
         }
         profiling::scope!("SceneCache::poll_files");
-        let mut parts = HashSet::new();
+        let mut parts = FxHashSet::default();
         for (key, loaded) in finished {
             let waiting = self.waiting.remove(&key).unwrap_or_default();
             let sky = self.sky_files.remove(&key);

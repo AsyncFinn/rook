@@ -1,19 +1,19 @@
-use std::collections::HashSet;
+use rustc_hash::FxHashSet;
 
 use super::*;
 
 /// The client half: which client instance copies which server one.
 #[derive(Debug, Default)]
 pub struct Sink {
-    to_client: HashMap<InstanceId, InstanceId>,
-    to_server: HashMap<InstanceId, InstanceId>,
+    to_client: FxHashMap<InstanceId, InstanceId>,
+    to_server: FxHashMap<InstanceId, InstanceId>,
     /// References to server instances the client doesn't have yet, by the
     /// client property holding them: nil until the target arrives, then
     /// set. A script may set a reference before parenting its target
     /// (`Player.Character` is set before the character enters Workspace).
-    waiting: HashMap<(InstanceId, PropertyId), InstanceId>,
+    waiting: FxHashMap<(InstanceId, PropertyId), InstanceId>,
     /// The same, by server target.
-    waiting_for: HashMap<InstanceId, HashSet<(InstanceId, PropertyId)>>,
+    waiting_for: FxHashMap<InstanceId, FxHashSet<(InstanceId, PropertyId)>>,
     /// Server instances mapped during the current call, whose waiting
     /// references resolve at its end.
     arrived: Vec<InstanceId>,
@@ -113,7 +113,7 @@ impl Sink {
         // A reference waiting on a removed holder would be written to an
         // instance that may be freed by the time its target arrives.
         if !self.waiting.is_empty() {
-            let gone: HashSet<InstanceId> = ids.into_iter().collect();
+            let gone: FxHashSet<InstanceId> = ids.into_iter().collect();
             let waiting_for = &mut self.waiting_for;
             self.waiting.retain(|key, target| {
                 if !gone.contains(&key.0) {

@@ -9,7 +9,7 @@
 //! and come again as they're needed. Without the network, what is there
 //! answers. See docs/behavior/content/client-packages.md.
 
-use std::collections::HashSet;
+use rustc_hash::FxHashSet;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
@@ -68,7 +68,7 @@ pub struct Packages {
     live: OnceLock<Option<Live>>,
     downloading: Mutex<()>,
     /// Packages that failed this run, so they aren't tried again.
-    failed: Mutex<HashSet<&'static str>>,
+    failed: Mutex<FxHashSet<&'static str>>,
 }
 
 /// The live version and its manifest.
@@ -96,7 +96,7 @@ impl Packages {
             setup: endpoints.base("setup"),
             live: OnceLock::new(),
             downloading: Mutex::new(()),
-            failed: Mutex::new(HashSet::new()),
+            failed: Mutex::new(FxHashSet::default()),
         }
     }
 

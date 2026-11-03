@@ -1,6 +1,6 @@
 //! Conversion between `rbx_dom_weak` trees (files) and Rook's runtime [`Dom`].
 
-use std::collections::{HashMap, HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::LazyLock;
 
 use rbx_dom_weak::{InstanceBuilder, UstrMap, WeakDom};
@@ -49,7 +49,7 @@ fn convert<W: std::ops::Deref<Target = WeakDom>>(
     let was_enabled = dom.journal().is_enabled();
     dom.journal_mut().set_enabled(false);
 
-    let mut map: HashMap<Ref, InstanceId> = HashMap::new();
+    let mut map: FxHashMap<Ref, InstanceId> = FxHashMap::default();
     let mut pending_refs: Vec<(InstanceId, Ref)> = Vec::new();
     let mut top = Vec::new();
     for &child in weak.root().children() {
@@ -65,7 +65,7 @@ fn convert<W: std::ops::Deref<Target = WeakDom>>(
 
     // Second pass: properties, now that every referent has a Rook ID.
     let velocities = SavedVelocities::get();
-    let mut unique_ids = HashSet::new();
+    let mut unique_ids = FxHashSet::default();
     let mut duplicate_unique_ids = false;
     for (id, source) in pending_refs {
         let props = properties(&mut weak, source);
@@ -189,7 +189,7 @@ fn create_rec(
     dom: &mut Dom,
     source: Ref,
     parent: InstanceId,
-    map: &mut HashMap<Ref, InstanceId>,
+    map: &mut FxHashMap<Ref, InstanceId>,
     pending: &mut Vec<(InstanceId, Ref)>,
 ) -> InstanceId {
     let inst = weak.get_by_ref(source).expect("referent exists");
@@ -226,7 +226,7 @@ fn create_rec(
 /// Build a `WeakDom` whose root's children are copies of `roots`.
 pub fn from_dom(dom: &Dom, roots: &[InstanceId]) -> WeakDom {
     let mut weak = WeakDom::new(InstanceBuilder::new("DataModel"));
-    let mut map: HashMap<InstanceId, Ref> = HashMap::new();
+    let mut map: FxHashMap<InstanceId, Ref> = FxHashMap::default();
     let mut order = Vec::new();
     let weak_root = weak.root_ref();
     for &root in roots {
@@ -296,7 +296,7 @@ fn build_rec(
     weak: &mut WeakDom,
     id: InstanceId,
     parent: Ref,
-    map: &mut HashMap<InstanceId, Ref>,
+    map: &mut FxHashMap<InstanceId, Ref>,
     order: &mut Vec<(InstanceId, Ref)>,
 ) {
     let builder = InstanceBuilder::new(dom.class_name(id)).with_name(dom.name(id));

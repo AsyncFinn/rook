@@ -282,7 +282,7 @@ mod tests {
     /// Every edge of a closed hull is shared by exactly two triangles,
     /// once each way.
     fn closed(tris: &[[u32; 3]], vertices: u32) -> bool {
-        let mut edges = std::collections::HashMap::new();
+        let mut edges = rustc_hash::FxHashMap::default();
         for t in tris {
             if t[0] == t[1] || t[1] == t[2] || t[0] == t[2] || t.iter().any(|&v| v >= vertices) {
                 return false;

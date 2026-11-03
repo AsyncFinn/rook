@@ -9,6 +9,7 @@
 //! screen's GUI instead, moved to where they are on the screen each frame.
 
 use glam::Vec2;
+use rustc_hash::FxHashMap;
 use std::sync::Arc;
 
 use rook_types::{Viewer, WorldCanvas, WorldPlace};
@@ -73,7 +74,7 @@ pub(crate) type WorldRuns = Vec<WorldDraw>;
 struct Frames {
     buffer: wgpu::Buffer,
     room: usize,
-    groups: HashMap<Option<ImageKey>, wgpu::BindGroup>,
+    groups: FxHashMap<Option<ImageKey>, wgpu::BindGroup>,
 }
 
 #[derive(Debug)]
@@ -171,7 +172,7 @@ impl WorldGui {
     /// For each of `canvases`, the canvas drawn now it was given as (the
     /// same `Arc`), if any.
     pub(crate) fn kept(&self, canvases: &[Arc<WorldCanvas>]) -> Vec<Option<usize>> {
-        let at: HashMap<*const WorldCanvas, usize> = (self.canvases.iter().enumerate())
+        let at: FxHashMap<*const WorldCanvas, usize> = (self.canvases.iter().enumerate())
             .map(|(i, c)| (Arc::as_ptr(&c.source), i))
             .collect();
         (canvases.iter())
@@ -400,7 +401,7 @@ impl WorldGui {
         Frames {
             buffer,
             room,
-            groups: HashMap::default(),
+            groups: FxHashMap::default(),
         }
     }
 

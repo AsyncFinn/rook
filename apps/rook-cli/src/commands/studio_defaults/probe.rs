@@ -1,7 +1,7 @@
 //! The Luau probe: create each class (or find each service), read the
 //! listed properties with `pcall`, and send back what each read as text.
 
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::fmt::Write as _;
 
 use anyhow::Context;
@@ -22,7 +22,7 @@ pub(super) type Raw = Vec<String>;
 pub(super) struct Reading {
     /// Studio's `version()`.
     pub(super) version: String,
-    pub(super) values: HashMap<(ClassId, PropertyId), Raw>,
+    pub(super) values: FxHashMap<(ClassId, PropertyId), Raw>,
 }
 
 /// Properties per `execute_luau` call, keeping each answer well under the
@@ -41,7 +41,7 @@ pub(super) fn read(
     };
     let mut reading = Reading {
         version: String::new(),
-        values: HashMap::new(),
+        values: FxHashMap::default(),
     };
     let mut start = 0;
     while start < gaps.len() {

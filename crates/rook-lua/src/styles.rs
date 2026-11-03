@@ -12,7 +12,7 @@
 
 mod selector;
 
-use std::collections::{HashMap, HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::rc::Rc;
 use std::sync::LazyLock;
 
@@ -40,21 +40,21 @@ pub(crate) struct Styles {
     /// Journal position read up to.
     cursor: u64,
     /// Each rule's properties (`SetProperties`), a Lua table.
-    pub(crate) properties: HashMap<InstanceId, RegistryKey>,
+    pub(crate) properties: FxHashMap<InstanceId, RegistryKey>,
     /// Parsed selectors, by rule, with the text they came from.
-    parsed: HashMap<InstanceId, (String, Rc<Vec<Chain>>)>,
+    parsed: FxHashMap<InstanceId, (String, Rc<Vec<Chain>>)>,
     /// StyleLinks seen, checked when used.
-    links: HashSet<InstanceId>,
+    links: FxHashSet<InstanceId>,
     /// Whether the DataModel has been searched for StyleLinks yet.
     scanned: bool,
     /// Every linked tree styles again.
     all: bool,
     /// Subtrees to style again.
-    pending: HashSet<InstanceId>,
+    pending: FxHashSet<InstanceId>,
     /// Properties styles set on each instance, by name.
-    styled: HashMap<InstanceId, HashSet<String>>,
+    styled: FxHashMap<InstanceId, FxHashSet<String>>,
     /// Pseudo-instances made, by what they're under and their class.
-    pseudo: HashMap<(InstanceId, String), InstanceId>,
+    pseudo: FxHashMap<(InstanceId, String), InstanceId>,
 }
 
 impl Styles {
@@ -168,7 +168,7 @@ pub(crate) fn restyle(lua: &Lua) -> mlua::Result<()> {
     // Confirmed: creator-docs "UI styling" (only one StyleSheet applies to
     // a given tree). Inference: where links nest, the nearest one does, so
     // CoreGui's own link doesn't undo the chat's.
-    let scopes: HashSet<InstanceId> = links.iter().map(|&(scope, _)| scope).collect();
+    let scopes: FxHashSet<InstanceId> = links.iter().map(|&(scope, _)| scope).collect();
     for (scope, sheet) in links {
         let tops: Vec<InstanceId> = if all {
             vec![scope]
@@ -207,7 +207,7 @@ pub(crate) fn restyle(lua: &Lua) -> mlua::Result<()> {
 }
 
 /// The nearest of `scopes` at or above `id`.
-fn nearest_scope(dom: &Dom, scopes: &HashSet<InstanceId>, id: InstanceId) -> Option<InstanceId> {
+fn nearest_scope(dom: &Dom, scopes: &FxHashSet<InstanceId>, id: InstanceId) -> Option<InstanceId> {
     let mut at = Some(id);
     while let Some(i) = at {
         if scopes.contains(&i) {
@@ -322,7 +322,7 @@ fn style_one(
     });
     let values = merged(lua, sheets, &own)?;
     apply(lua, id, values, false);
-    let mut wanted: HashMap<String, Vec<InstanceId>> = HashMap::new();
+    let mut wanted: FxHashMap<String, Vec<InstanceId>> = FxHashMap::default();
     for (class, rule) in pseudo {
         wanted.entry(class).or_default().push(rule);
     }
@@ -423,7 +423,7 @@ fn resolve(lua: &Lua, sheets: &[InstanceId], value: LuaValue) -> mlua::Result<Op
 /// Values a property can't take are skipped.
 fn apply(lua: &Lua, id: InstanceId, values: Vec<(String, LuaValue)>, own: bool) {
     let before = with_world(lua, |w| w.styles.styled.remove(&id).unwrap_or_default());
-    let mut now = HashSet::new();
+    let mut now = FxHashSet::default();
     for (name, value) in values {
         let free = with_world(lua, |w| {
             let Some(p) = w.dom.property_id(id, &name) else {

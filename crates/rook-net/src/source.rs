@@ -9,7 +9,7 @@ pub struct Source {
     pub(crate) player: Option<InstanceId>,
     /// Values this client sent the server itself (its character's pose),
     /// which it isn't sent back while the server's value is still that.
-    echoes: HashMap<(InstanceId, PropertyId), Value>,
+    echoes: FxHashMap<(InstanceId, PropertyId), Value>,
 }
 
 impl Source {
@@ -17,7 +17,7 @@ impl Source {
         Self {
             cursor: 0,
             player,
-            echoes: HashMap::new(),
+            echoes: FxHashMap::default(),
         }
     }
 

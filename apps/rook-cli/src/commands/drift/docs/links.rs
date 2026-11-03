@@ -1,7 +1,7 @@
 //! Links between docs, and repository paths in inline code, point at
 //! files that exist, and a link's `#anchor` at a heading its doc has.
 
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::path::Path;
 
 use super::{Doc, Report, code_spans};
@@ -16,7 +16,7 @@ const ROOTS: &[&str] = &[
     "scripts/",
 ];
 
-pub(super) fn check(docs: &[Doc], by_path: &HashMap<&str, &Doc>, report: &mut Report) {
+pub(super) fn check(docs: &[Doc], by_path: &FxHashMap<&str, &Doc>, report: &mut Report) {
     for doc in docs {
         for link in doc.links() {
             let Some(path) = &link.path else { continue };

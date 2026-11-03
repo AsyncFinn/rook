@@ -3,6 +3,7 @@
 //! repeating), groups' textures, and a white one for quads without an
 //! image. Quads are drawn in runs that share their image.
 
+use rustc_hash::FxHashMap;
 use std::ops::Range;
 
 use rook_types::ImagePaint;
@@ -61,9 +62,9 @@ pub(crate) struct GuiImages {
     white: wgpu::TextureView,
     /// Group 1 of the screen pass: an image and its sampler.
     pub(crate) layout: wgpu::BindGroupLayout,
-    groups: HashMap<Option<ImageKey>, wgpu::BindGroup>,
+    groups: FxHashMap<Option<ImageKey>, wgpu::BindGroup>,
     /// The groups' textures now drawn, by group key.
-    group_views: HashMap<u64, wgpu::TextureView>,
+    group_views: FxHashMap<u64, wgpu::TextureView>,
 }
 
 impl GuiImages {
@@ -127,14 +128,14 @@ impl GuiImages {
             samplers: std::array::from_fn(sampler),
             white: white.create_view(&Default::default()),
             layout,
-            groups: HashMap::default(),
-            group_views: HashMap::default(),
+            groups: FxHashMap::default(),
+            group_views: FxHashMap::default(),
         }
     }
 
     /// The groups' textures from now on, by group key; bind groups of
     /// earlier ones go.
-    pub(crate) fn set_groups(&mut self, views: HashMap<u64, wgpu::TextureView>) {
+    pub(crate) fn set_groups(&mut self, views: FxHashMap<u64, wgpu::TextureView>) {
         self.groups
             .retain(|key, _| !matches!(key, Some(ImageKey::Group(_))));
         self.group_views = views;

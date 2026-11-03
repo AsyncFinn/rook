@@ -333,7 +333,7 @@ impl Dom {
         if !self.archivable(id) {
             return None;
         }
-        let mut map = HashMap::new();
+        let mut map = FxHashMap::default();
         let new = self.clone_rec(id, None, &mut map);
         for &copy in map.values() {
             for value in self.instances[copy].properties.values_mut() {
@@ -362,7 +362,7 @@ impl Dom {
         &mut self,
         id: InstanceId,
         parent: Option<InstanceId>,
-        map: &mut HashMap<InstanceId, InstanceId>,
+        map: &mut FxHashMap<InstanceId, InstanceId>,
     ) -> InstanceId {
         let src = &self.instances[id];
         let mut copy = Instance::new(src.class, src.name.clone());

@@ -7,7 +7,7 @@
 //! formats of its own. The calling thread waits meanwhile. What Studio does
 //! is in `docs/behavior/content/asset-fetching.md` (Published models).
 
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 use mlua::{Function, Lua, MultiValue, Thread, Value as LuaValue};
 use rook_content::FailureKind;
@@ -29,13 +29,13 @@ pub type AssetFill = Result<Fill, FailureKind>;
 pub struct AssetRequests {
     /// Asset ids to fetch, by request id, since the engine last took them.
     pub(crate) outbox: Vec<(u64, i64)>,
-    waiting: HashMap<u64, Waiter>,
+    waiting: FxHashMap<u64, Waiter>,
     /// What `require` found for each asset id: its MainModule, or the
     /// error every later `require` of it raises.
-    required: HashMap<i64, Result<InstanceId, String>>,
+    required: FxHashMap<i64, Result<InstanceId, String>>,
     /// Threads waiting to require each asset id still downloading (one
     /// download serves them all).
-    requiring: HashMap<i64, Vec<Thread>>,
+    requiring: FxHashMap<i64, Vec<Thread>>,
     next: u64,
 }
 

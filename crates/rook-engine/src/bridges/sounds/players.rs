@@ -15,7 +15,7 @@ use super::*;
 /// it is.
 pub(super) fn advance(
     dom: &mut Dom,
-    controls: &mut HashMap<InstanceId, rook_lua::SoundControl>,
+    controls: &mut FxHashMap<InstanceId, rook_lua::SoundControl>,
     id: InstanceId,
     audio: &Audio,
     dt: f64,

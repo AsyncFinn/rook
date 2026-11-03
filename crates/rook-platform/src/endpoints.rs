@@ -4,7 +4,7 @@
 //! The engine builds one from the settings (`docs/guide/tools.md`); what
 //! each API asks of its domain is in `docs/design/web-endpoints.md`.
 
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 /// The domains Rook sends to Roblox's own hosts when nothing is set: asset
 /// delivery, which it called before endpoints were configurable, and the
@@ -25,7 +25,7 @@ const ROBLOX: &str = "roblox.com";
 pub struct Endpoints {
     base: Base,
     /// Per-domain choices, which win over `base`; `None` is off.
-    domains: HashMap<String, Option<String>>,
+    domains: FxHashMap<String, Option<String>>,
 }
 
 /// Where domains without a choice of their own go.
@@ -46,7 +46,7 @@ impl Default for Endpoints {
     fn default() -> Self {
         Self {
             base: Base::Default,
-            domains: HashMap::new(),
+            domains: FxHashMap::default(),
         }
     }
 }

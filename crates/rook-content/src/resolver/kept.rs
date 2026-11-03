@@ -14,7 +14,7 @@
 //! `rook-tools content pin` writes the list again from the materials' and
 //! terrain's tables, with each asset's version today.
 
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::OnceLock;
 
 /// `<asset id> <version>` per line; `#` starts a comment.
@@ -22,7 +22,7 @@ const PINNED: &str = include_str!("../../data/kept.txt");
 
 /// The pinned version of a kept asset.
 pub fn version(id: u64) -> Option<u32> {
-    static TABLE: OnceLock<HashMap<u64, u32>> = OnceLock::new();
+    static TABLE: OnceLock<FxHashMap<u64, u32>> = OnceLock::new();
     TABLE.get_or_init(|| parse(PINNED)).get(&id).copied()
 }
 
@@ -33,7 +33,7 @@ pub fn all() -> Vec<(u64, u32)> {
     all
 }
 
-fn parse(text: &str) -> HashMap<u64, u32> {
+fn parse(text: &str) -> FxHashMap<u64, u32> {
     text.lines()
         .filter_map(|line| {
             let line = line.split('#').next()?;

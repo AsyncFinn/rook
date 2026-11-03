@@ -2,7 +2,7 @@
 //! `AddLines`, `AddPath`, emptied by `Clear`), which reach the scene as
 //! effect calls.
 
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 use glam::Quat;
 use rook_lua::EffectCall;
@@ -12,7 +12,7 @@ use super::handle_adornment::{line_pixels, shaded, shift};
 use super::*;
 
 /// Each WireframeHandleAdornment's lines so far, in its CFrame's axes.
-pub(crate) type WireLines = HashMap<InstanceId, Vec<[Vec3; 2]>>;
+pub(crate) type WireLines = FxHashMap<InstanceId, Vec<[Vec3; 2]>>;
 
 /// Apply scripts' calls on WireframeHandleAdornments to `lines`. Returns
 /// the parts whose wireframes changed.

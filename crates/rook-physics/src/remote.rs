@@ -41,7 +41,7 @@ struct Snapshot {
 
 #[derive(Debug, Default)]
 pub(crate) struct Playback {
-    tracks: HashMap<RigidBodyHandle, VecDeque<Snapshot>>,
+    tracks: FxHashMap<RigidBodyHandle, VecDeque<Snapshot>>,
     /// The server time shown now.
     clock: Option<f64>,
     /// The newest update's server time.

@@ -14,7 +14,7 @@
 //! controls) and `RbxCharacterSounds`, which a client's PlayerScripts get
 //! as Roblox gives them (docs/behavior/characters/camera.md).
 
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -37,7 +37,7 @@ pub struct CorePatch {
     /// Fast flags as Studio last downloaded them (its
     /// `ClientSettings/StudioAppSettings.json`), so the scripts take the
     /// paths they take in Studio.
-    flags: Arc<HashMap<String, String>>,
+    flags: Arc<FxHashMap<String, String>>,
 }
 
 impl std::fmt::Debug for CorePatch {
@@ -67,7 +67,7 @@ impl CorePatch {
         let flags = flags
             .and_then(|path| files.read(path).ok())
             .and_then(|text| {
-                serde_json::from_slice::<HashMap<String, serde_json::Value>>(&text).ok()
+                serde_json::from_slice::<FxHashMap<String, serde_json::Value>>(&text).ok()
             })
             .unwrap_or_default()
             .into_iter()
@@ -117,7 +117,7 @@ impl CorePatch {
     fn build(
         &self,
         dom: &mut Dom,
-        bytecode: &mut HashMap<InstanceId, Compiled>,
+        bytecode: &mut FxHashMap<InstanceId, Compiled>,
     ) -> Result<(InstanceId, InstanceId), String> {
         let missing = |what: &str| format!("the patch has no {what}");
         let holder = dom.create_by_name("Folder").map_err(|e| e.to_string())?;
@@ -196,7 +196,7 @@ impl CorePatch {
     /// game scripts.
     fn player_scripts(
         dom: &mut Dom,
-        bytecode: &mut HashMap<InstanceId, Compiled>,
+        bytecode: &mut FxHashMap<InstanceId, Compiled>,
         patch: InstanceId,
     ) -> Result<(), String> {
         let Some(scripts) = dom

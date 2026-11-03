@@ -23,7 +23,7 @@ mod record;
 mod server;
 mod stats;
 
-use std::collections::HashSet;
+use rustc_hash::FxHashSet;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::Arc;

@@ -25,7 +25,7 @@ pub use scene::{
 };
 
 // Content hashes are 32 bytes: FxHash keeps lookups by them cheap.
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::FxHashMap;
 
 use bytemuck::{Pod, Zeroable};
 use glam::Vec3;

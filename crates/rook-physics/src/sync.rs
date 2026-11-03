@@ -123,7 +123,7 @@ impl Physics {
             }
         }
         let rebuilt = if structural.is_empty() {
-            HashSet::default()
+            FxHashSet::default()
         } else {
             self.rebuild(dom, props, structural)
         };
@@ -137,7 +137,7 @@ impl Physics {
                 }
             }
         }
-        let mut refreshed = HashSet::default();
+        let mut refreshed = FxHashSet::default();
         for part in materials {
             // A rebuilt body's colliders already read the new values.
             let fresh = self.body_of(part).is_some_and(|h| rebuilt.contains(&h));
@@ -158,7 +158,7 @@ impl Physics {
             }
         }
         let mut posed_bodies = rebuilt;
-        let mut posed_statics = HashSet::default();
+        let mut posed_statics = FxHashSet::default();
         for part in posed {
             match self.parts.get(&part) {
                 Some(&Home::Body(h)) if posed_bodies.insert(h) => {

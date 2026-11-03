@@ -4,7 +4,7 @@
 //! reordering shows up as a difference. Referent properties are compared by
 //! which instance they point to, not by their raw IDs.
 
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 use rbx_dom_weak::WeakDom;
 use rbx_types::{Ref, Variant};
@@ -70,7 +70,7 @@ pub fn compare_with(a: &WeakDom, b: &WeakDom, options: CompareOptions) -> Vec<Di
     let Pairing {
         pairs, mut diffs, ..
     } = pairing;
-    let ref_map: HashMap<Ref, Ref> = pairs.iter().map(|(ra, rb, _)| (*ra, *rb)).collect();
+    let ref_map: FxHashMap<Ref, Ref> = pairs.iter().map(|(ra, rb, _)| (*ra, *rb)).collect();
 
     // Second pass: compare properties of paired instances.
     for (ra, rb, path) in &pairs {
@@ -172,7 +172,7 @@ impl Pairing<'_> {
 fn values_match(
     a: &Variant,
     b: &Variant,
-    ref_map: &HashMap<Ref, Ref>,
+    ref_map: &FxHashMap<Ref, Ref>,
     options: CompareOptions,
 ) -> bool {
     if let Some(tolerance) = options.float_tolerance
@@ -279,7 +279,7 @@ mod tests {
         assert!(values_match(
             &nan,
             &nan,
-            &HashMap::new(),
+            &FxHashMap::default(),
             CompareOptions::default()
         ));
     }
@@ -292,12 +292,12 @@ mod tests {
         let loose = CompareOptions {
             float_tolerance: Some(1e-5),
         };
-        assert!(!values_match(&a, &b, &HashMap::new(), exact));
-        assert!(values_match(&a, &b, &HashMap::new(), loose));
+        assert!(!values_match(&a, &b, &FxHashMap::default(), exact));
+        assert!(values_match(&a, &b, &FxHashMap::default(), loose));
         assert!(!values_match(
             &a,
             &Variant::Float32(0.09),
-            &HashMap::new(),
+            &FxHashMap::default(),
             loose
         ));
     }

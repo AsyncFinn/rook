@@ -1,13 +1,13 @@
 //! The changelog opens with `[Unreleased]`, then each release as
 //! `## [x.y.z] - YYYY-MM-DD - ...`, newest first.
 
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 use super::{Doc, Report, days};
 
 const CHANGELOG: &str = "CHANGELOG.md";
 
-pub(super) fn check(by_path: &HashMap<&str, &Doc>, report: &mut Report) {
+pub(super) fn check(by_path: &FxHashMap<&str, &Doc>, report: &mut Report) {
     let Some(changelog) = by_path.get(CHANGELOG) else {
         return;
     };

@@ -10,8 +10,6 @@ mod cursor;
 mod frame;
 mod gui;
 
-use std::collections::{HashMap, HashSet};
-
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Arc;
 
@@ -104,7 +102,7 @@ pub struct SceneCache {
     /// Mesh files and images, loaded as parts need them.
     files: Files,
     /// Parts waiting for each file, redrawn when it arrives.
-    waiting: HashMap<FileRef, FxHashSet<InstanceId>>,
+    waiting: FxHashMap<FileRef, FxHashSet<InstanceId>>,
     /// Where the camera is, for loading the files nearest it first.
     focus: Vec3,
     /// Where the camera was when the waiting files were last ranked.
@@ -113,9 +111,9 @@ pub struct SceneCache {
     /// its distance from `focus`).
     near: Vec3,
     /// What each part's mesh file last drew.
-    shown: HashMap<InstanceId, Shown>,
+    shown: FxHashMap<InstanceId, Shown>,
     /// The skybox images the lighting waits for.
-    sky_files: HashSet<FileRef>,
+    sky_files: FxHashSet<FileRef>,
     /// The lighting changed outside [`SceneCache::apply`] (a skybox image
     /// arrived).
     lighting_changed: bool,
@@ -126,7 +124,7 @@ pub struct SceneCache {
     light_ids: Vec<InstanceId>,
     /// Indices into `light_ids` of the lights each part or Attachment
     /// carries, and of each light itself.
-    light_holders: HashMap<InstanceId, Vec<usize>>,
+    light_holders: FxHashMap<InstanceId, Vec<usize>>,
     /// The visual effects, as `scene.emitters`, `beams`, `trails` and
     /// `floor_wires`.
     effects: EffectCache,
@@ -142,7 +140,7 @@ pub struct SceneCache {
     /// The GUI layout the renderer was last given.
     gui_generation: Option<u64>,
     /// The GUI's images still loading, with the URLs it asked for each by.
-    gui_waiting: HashMap<FileRef, Vec<String>>,
+    gui_waiting: FxHashMap<FileRef, Vec<String>>,
     /// The GUI's images that finished, for it to take.
     gui_arrived: Vec<(String, Option<rook_gui::GuiImage>)>,
     /// Rook's ClickDetector hand and its hash, once it's been shown.
@@ -160,25 +158,25 @@ impl SceneCache {
             index: FxHashMap::default(),
             layers: FxHashMap::default(),
             files: Files::new(content),
-            waiting: HashMap::new(),
+            waiting: FxHashMap::default(),
             focus: camera,
             ranked_from: camera,
             near: camera,
-            shown: HashMap::new(),
+            shown: FxHashMap::default(),
             poses: Vec::new(),
             free: Vec::new(),
-            sky_files: HashSet::new(),
+            sky_files: FxHashSet::default(),
             lighting_changed: false,
             terrain: TerrainCache::default(),
             light_ids: Vec::new(),
-            light_holders: HashMap::new(),
+            light_holders: FxHashMap::default(),
             effects: EffectCache::new(textures),
             effects_loaded: false,
             wire_lines: Default::default(),
             model_highlights: Default::default(),
             report: Report::default(),
             gui_generation: None,
-            gui_waiting: HashMap::new(),
+            gui_waiting: FxHashMap::default(),
             gui_arrived: Vec::new(),
             hand: None,
         };

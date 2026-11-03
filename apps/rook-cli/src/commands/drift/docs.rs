@@ -11,7 +11,7 @@ mod links;
 mod roadmap;
 mod structure;
 
-use std::collections::{HashMap, HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::{Report, tracked};
 
@@ -21,7 +21,7 @@ pub(super) fn check(report: &mut Report) -> anyhow::Result<()> {
         let text = fs_err::read_to_string(&path)?;
         docs.push(Doc::new(path, &text));
     }
-    let by_path: HashMap<&str, &Doc> = docs.iter().map(|d| (d.path.as_str(), d)).collect();
+    let by_path: FxHashMap<&str, &Doc> = docs.iter().map(|d| (d.path.as_str(), d)).collect();
     links::check(&docs, &by_path, report);
     structure::check(&docs, &by_path, report);
     behavior::check(&docs, report);
@@ -95,9 +95,9 @@ impl Doc {
 
     /// The `#anchor`s GitHub gives the headings: the slug, then `-1`,
     /// `-2` for repeats.
-    pub(super) fn anchors(&self) -> HashSet<String> {
-        let mut seen: HashMap<String, usize> = HashMap::new();
-        let mut out = HashSet::new();
+    pub(super) fn anchors(&self) -> FxHashSet<String> {
+        let mut seen: FxHashMap<String, usize> = FxHashMap::default();
+        let mut out = FxHashSet::default();
         for heading in self.headings() {
             let slug = slug(heading.text);
             let count = seen.entry(slug.clone()).or_default();

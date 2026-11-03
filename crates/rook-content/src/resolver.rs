@@ -22,7 +22,7 @@ pub mod kept;
 )]
 pub mod packages;
 
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -52,7 +52,7 @@ pub struct Resolver {
     kept: Option<Cache>,
     /// Failures this run that the disk cache doesn't keep (network errors,
     /// asset delivery being off), so they aren't retried every request.
-    failed: Mutex<HashMap<ContentRef, Failure>>,
+    failed: Mutex<FxHashMap<ContentRef, Failure>>,
 }
 
 impl Resolver {
@@ -86,7 +86,7 @@ impl Resolver {
                 Some(cache)
             }),
             kept: config.kept_dir.as_deref().and_then(open_store),
-            failed: Mutex::new(HashMap::new()),
+            failed: Mutex::new(FxHashMap::default()),
         }
     }
 

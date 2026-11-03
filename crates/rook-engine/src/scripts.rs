@@ -1,6 +1,6 @@
 //! Which scripts run where, and starting them.
 
-use std::collections::HashSet;
+use rustc_hash::FxHashSet;
 
 use rook_types::RunContext;
 
@@ -111,7 +111,7 @@ impl DataModel {
         self.note_new_scripts();
         let candidates = std::mem::take(&mut self.new_scripts.candidates);
         let toggled = std::mem::take(&mut self.new_scripts.toggled);
-        let mut seen = HashSet::new();
+        let mut seen = FxHashSet::default();
         for id in candidates {
             if !seen.insert(id) {
                 continue;
@@ -135,7 +135,7 @@ pub(crate) struct NewScripts {
     candidates: Vec<InstanceId>,
     /// Scripts whose Disabled changed. The journal only records real
     /// changes, so a running one among them was disabled at some point.
-    toggled: HashSet<InstanceId>,
+    toggled: FxHashSet<InstanceId>,
 }
 
 impl NewScripts {

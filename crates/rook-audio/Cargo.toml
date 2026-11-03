@@ -19,6 +19,7 @@ cpal = { workspace = true, optional = true }
 glam.workspace = true
 rook-content.workspace = true
 rook-types.workspace = true
+rustc-hash.workspace = true
 
 [lints]
 workspace = true

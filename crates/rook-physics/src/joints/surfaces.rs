@@ -2,7 +2,7 @@
 //! surface types. The rules, observed in Studio 0.741, are in
 //! `docs/behavior/physics/joints.md`.
 
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::FxHashMap;
 
 use glam::{Mat3, Vec3};
 use rook_dom::{Dom, DomError, InstanceId};
@@ -186,10 +186,10 @@ pub fn make_joints(dom: &mut Dom, parts: &[InstanceId]) -> Result<(), DomError> 
         .into_iter()
         .filter_map(|id| Box::of(dom, id))
         .collect();
-    let index: HashMap<InstanceId, usize> =
+    let index: FxHashMap<InstanceId, usize> =
         world.iter().enumerate().map(|(i, b)| (b.id, i)).collect();
     // Each caller's place in `parts`; a part listed twice calls once.
-    let mut rank = HashMap::default();
+    let mut rank = FxHashMap::default();
     for (r, p) in parts.iter().enumerate() {
         if let Some(&i) = index.get(p) {
             rank.entry(i).or_insert(r);

@@ -11,7 +11,7 @@
 
 mod queue;
 
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -134,7 +134,7 @@ pub struct Loader {
     next: u64,
     /// Tickets waiting on each reference in flight (one resolution serves
     /// them all).
-    waiting: HashMap<Job, Vec<Ticket>>,
+    waiting: FxHashMap<Job, Vec<Ticket>>,
 }
 
 impl Loader {
@@ -143,7 +143,7 @@ impl Loader {
             resolver,
             workers: None,
             next: 0,
-            waiting: HashMap::new(),
+            waiting: FxHashMap::default(),
         }
     }
 

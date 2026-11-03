@@ -58,7 +58,7 @@ impl SceneCache {
     /// What should be drawn with the rings at `rings`.
     pub(super) fn plan(&self, rings: Rings) -> Job {
         let levels = &self.terrain.levels;
-        let mut draw = HashSet::new();
+        let mut draw = FxHashSet::default();
         for level in 0..LEVELS {
             for c in rings.chunks(level, &levels[usize::from(level)], self.terrain.rows) {
                 draw.insert((level, c));
@@ -91,7 +91,7 @@ impl SceneCache {
     pub(super) fn install(&mut self, job: &Job, meshes: Vec<ChunkMesh>, place: bool) -> Vec<usize> {
         let mut changed = Vec::new();
         let mut added = Vec::new();
-        let mut tiles = HashSet::new();
+        let mut tiles = FxHashSet::default();
         for m in meshes {
             let key = (m.level, m.chunk);
             if !job.draw.contains(&key) || self.terrain.chunks.contains_key(&key) {

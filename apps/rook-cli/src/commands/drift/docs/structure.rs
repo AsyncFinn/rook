@@ -3,7 +3,8 @@
 //! words of its title; every doc under `docs/` is in an index; and no
 //! folder there holds a lone doc.
 
-use std::collections::{BTreeMap, HashMap};
+use rustc_hash::FxHashMap;
+use std::collections::BTreeMap;
 
 use super::{Doc, Report, slug};
 
@@ -11,7 +12,7 @@ use super::{Doc, Report, slug};
 /// folder's README lists it.
 const INDEX: &str = "docs/README.md";
 
-pub(super) fn check(docs: &[Doc], by_path: &HashMap<&str, &Doc>, report: &mut Report) {
+pub(super) fn check(docs: &[Doc], by_path: &FxHashMap<&str, &Doc>, report: &mut Report) {
     for doc in docs {
         headings(doc, report);
         if doc.path.starts_with("docs/") && !doc.path.ends_with("/README.md") {
@@ -75,7 +76,7 @@ fn file_name(doc: &Doc, report: &mut Report) {
     }
 }
 
-fn indexed(doc: &Doc, by_path: &HashMap<&str, &Doc>, report: &mut Report) {
+fn indexed(doc: &Doc, by_path: &FxHashMap<&str, &Doc>, report: &mut Report) {
     let folder_index = format!("{}/README.md", doc.folder());
     let listed = [INDEX, folder_index.as_str()].into_iter().any(|index| {
         by_path.get(index).is_some_and(|index| {

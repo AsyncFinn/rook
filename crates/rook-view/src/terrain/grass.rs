@@ -21,7 +21,7 @@ pub(super) struct Grass {
     pub(super) on: bool,
     /// The blades' color (`rook_terrain::grass::blade_color`).
     pub(super) color: [f32; 3],
-    shown: HashMap<IVec2, (usize, MeshHash)>,
+    shown: FxHashMap<IVec2, (usize, MeshHash)>,
     /// Meshes of tiles no longer drawn, for the renderer to free.
     dropped: Vec<MeshHash>,
 }
@@ -136,7 +136,7 @@ impl SceneCache {
     /// again, and stop drawing those tiles' blades, which
     /// [`SceneCache::update_grass`] grows again from the new tops. Returns
     /// the entries that changed.
-    pub(super) fn grass_tops_changed(&mut self, tiles: &HashSet<IVec2>) -> Vec<usize> {
+    pub(super) fn grass_tops_changed(&mut self, tiles: &FxHashSet<IVec2>) -> Vec<usize> {
         let mut chunks: Vec<&LevelChunk> = self.terrain.tops.keys().collect();
         chunks.sort_unstable_by_key(|(l, c)| (*l, c.x, c.y, c.z));
         let mut tops = GrassTops::default();

@@ -192,7 +192,7 @@ impl InstancePool {
 #[derive(Debug, Default)]
 pub(crate) struct Batches {
     pub(crate) list: Vec<Batch>,
-    of: HashMap<(i32, BatchKey), usize>,
+    of: FxHashMap<(i32, BatchKey), usize>,
     /// Indices into `list` in drawing order.
     order: Vec<usize>,
     /// Each batch's z.

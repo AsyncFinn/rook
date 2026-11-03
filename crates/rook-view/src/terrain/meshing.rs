@@ -18,7 +18,7 @@ impl SceneCache {
         self.terrain.background.wait();
         let t = &mut self.terrain;
         t.epoch += 1;
-        let mut reached: Vec<HashSet<IVec3>> = Vec::new();
+        let mut reached: Vec<FxHashSet<IVec3>> = Vec::new();
         if t.levels.is_empty() {
             t.levels = Arc::new(pyramid(grid));
         } else {

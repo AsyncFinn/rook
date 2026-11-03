@@ -9,7 +9,7 @@
 //! without file meshes or images starts no loader and pays nothing. A file
 //! that fails keeps why ([`Files::failure`]), for the scene's load report.
 
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::Arc;
 
 use rook_content::decode::image::Image;
@@ -43,10 +43,10 @@ pub(crate) struct Files {
     resolver: Arc<Resolver>,
     /// Made on the first request.
     loader: Option<Loader>,
-    states: HashMap<FileRef, FileState>,
+    states: FxHashMap<FileRef, FileState>,
     /// Why each failed file failed.
-    failures: HashMap<FileRef, Failure>,
-    tickets: HashMap<Ticket, FileRef>,
+    failures: FxHashMap<FileRef, Failure>,
+    tickets: FxHashMap<Ticket, FileRef>,
 }
 
 impl Files {
@@ -54,9 +54,9 @@ impl Files {
         Self {
             resolver,
             loader: None,
-            states: HashMap::new(),
-            failures: HashMap::new(),
-            tickets: HashMap::new(),
+            states: FxHashMap::default(),
+            failures: FxHashMap::default(),
+            tickets: FxHashMap::default(),
         }
     }
 

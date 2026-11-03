@@ -18,8 +18,10 @@ mod playback;
 mod players;
 
 use playback::PlayingSound;
+use rustc_hash::FxHashMap;
 
-use std::collections::{BTreeSet, HashSet};
+use rustc_hash::FxHashSet;
+use std::collections::BTreeSet;
 
 use rook_content::decode::audio::Audio;
 use rook_content::{ContentRef, Failure, Fetched, Ticket};
@@ -44,31 +46,31 @@ pub(crate) type SoundEvent = (InstanceId, &'static str, Option<String>, Option<u
 pub(crate) struct Sounds {
     pub(crate) watch: JournalWatch,
     /// Sounds whose `SoundId` or place in the tree changed last frame.
-    dirty: HashSet<InstanceId>,
+    dirty: FxHashSet<InstanceId>,
     /// Sounds in the DataModel, with the file each refers to (`None` for
     /// an empty or malformed `SoundId`, which never loads).
-    tracked: HashMap<InstanceId, Option<ContentRef>>,
+    tracked: FxHashMap<InstanceId, Option<ContentRef>>,
     /// The tracked sounds each frame moves on: AudioPlayers, and Sounds
     /// that may be playing (`Playing` set since they were last looked at,
     /// or a file still loading). A place's thousands of idle sounds cost
     /// nothing a frame.
     active: BTreeSet<InstanceId>,
     /// Each file once, however many sounds share it.
-    files: HashMap<ContentRef, Load>,
-    pub(crate) tickets: HashMap<Ticket, ContentRef>,
+    files: FxHashMap<ContentRef, Load>,
+    pub(crate) tickets: FxHashMap<Ticket, ContentRef>,
     /// Per sound, how often scripts or replication set its `TimePosition`
     /// or started it: the mixer jumps to the engine's position only then
     /// (time passing isn't journaled).
-    seeks: HashMap<InstanceId, u32>,
+    seeks: FxHashMap<InstanceId, u32>,
     /// Sounds removed with `PlayOnRemove`, playing out once.
     one_shots: Vec<playback::OneShot>,
     /// On clients, the effects `PlaybackLoudness` is read through, per
     /// sound with effects.
-    loudness: HashMap<InstanceId, rook_audio::effects::Chain>,
+    loudness: FxHashMap<InstanceId, rook_audio::effects::Chain>,
     /// Sounds given to `PlayLocalSound` whose file is still loading.
     local: Vec<(InstanceId, ContentRef)>,
     /// AudioPlayers already seen, so `AutoPlay` plays each once.
-    seen_players: HashSet<InstanceId>,
+    seen_players: FxHashSet<InstanceId>,
     /// Whether this client has made its default AudioListener.
     default_listener: bool,
     /// On clients with AudioAnalyzers: the graph rendered to measure them.

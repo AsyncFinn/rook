@@ -4,7 +4,7 @@
 
 mod bus;
 
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::hash::Hash;
 use std::sync::Arc;
 
@@ -94,8 +94,8 @@ pub const SAMPLE_RATE: u32 = 48_000;
 #[derive(Debug)]
 pub struct Mixer<K> {
     rate: u32,
-    voices: HashMap<K, Voice<K>>,
-    buses: HashMap<K, Bus<K>>,
+    voices: FxHashMap<K, Voice<K>>,
+    buses: FxHashMap<K, Bus<K>>,
     ambient: Chain,
     ambient_idle: usize,
     graph: Runner<K>,
@@ -112,8 +112,8 @@ impl<K: Hash + Eq + Copy> Mixer<K> {
     pub fn new(rate: u32) -> Self {
         Self {
             rate: rate.max(1),
-            voices: HashMap::new(),
-            buses: HashMap::new(),
+            voices: FxHashMap::default(),
+            buses: FxHashMap::default(),
             ambient: Chain::new(rate),
             ambient_idle: 0,
             graph: Runner::new(rate),

@@ -1,7 +1,8 @@
 //! `rook-tools corpus-run`: run every place in a folder headless and report how
 //! many run their server Scripts without errors. This is M1's archive metric.
 
-use std::collections::{BTreeMap, HashSet};
+use rustc_hash::FxHashSet;
+use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::{Path, PathBuf};
@@ -62,7 +63,7 @@ pub(crate) fn run(
 
     let default_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(|_| {}));
-    let seen = Mutex::new(HashSet::new());
+    let seen = Mutex::new(FxHashSet::default());
     let done = AtomicUsize::new(0);
     let options = Options {
         script_timeout: Duration::from_secs_f64(timeout),

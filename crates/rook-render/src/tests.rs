@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::Arc;
 
 use glam::{Mat3, Vec2};
@@ -72,7 +72,7 @@ fn updating_parts_draws_what_a_new_scene_draws() {
             part(PartShape::Block, 6.0, green, 0.0),
             decal(-6.0),
         ],
-        images: HashMap::from([(hash, image())]),
+        images: FxHashMap::from_iter([(hash, image())]),
         // The shadow map: voxel shadows take moved parts only every half
         // second, so they'd still show where the parts were.
         lighting: Lighting {
@@ -168,7 +168,7 @@ fn decals_draw_on_their_face() {
     };
     let scene = Scene {
         parts: vec![base, decal],
-        images: HashMap::from([(hash, image())]),
+        images: FxHashMap::from_iter([(hash, image())]),
         lighting: Lighting {
             ambient: [1.0; 3],
             outdoor_ambient: [0.0; 3],
@@ -344,8 +344,8 @@ fn far_meshes_draw_their_lower_level() {
     };
     r.set_scene(&Scene {
         parts: vec![base, decal],
-        images: HashMap::from([(picture, image())]),
-        meshes: HashMap::from([(mesh, Arc::new(two))]),
+        images: FxHashMap::from_iter([(picture, image())]),
+        meshes: FxHashMap::from_iter([(mesh, Arc::new(two))]),
         ..Scene::default()
     });
     let mut triangles = |z: f32| {
@@ -401,8 +401,8 @@ fn busy_scene() -> Scene {
     });
     Scene {
         parts,
-        images: HashMap::from([(a, image()), (b, image())]),
-        meshes: HashMap::from([(m1, square(2.0)), (m2, square(1.5))]),
+        images: FxHashMap::from_iter([(a, image()), (b, image())]),
+        meshes: FxHashMap::from_iter([(m1, square(2.0)), (m2, square(1.5))]),
         lighting: Lighting {
             skybox: Some([a, b, a, b, a, b]),
             ..Lighting::default()
@@ -477,7 +477,7 @@ fn block_compressed_maps_draw_the_same_decoded() {
     };
     let scene = Scene {
         parts: vec![block],
-        images: HashMap::from([(hash, Arc::new(map))]),
+        images: FxHashMap::from_iter([(hash, Arc::new(map))]),
         ..Scene::default()
     };
     let camera = Camera::look_at(Vec3::new(0.0, 3.0, 6.0), Vec3::ZERO);

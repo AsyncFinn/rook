@@ -1,13 +1,13 @@
 //! The roadmap's milestone table agrees with each milestone's steps: ✅
 //! when every step is ✅, ⬜ when none is, and 🟨 in between.
 
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 use super::{Doc, Report};
 
 const INDEX: &str = "docs/roadmap/README.md";
 
-pub(super) fn check(by_path: &HashMap<&str, &Doc>, report: &mut Report) {
+pub(super) fn check(by_path: &FxHashMap<&str, &Doc>, report: &mut Report) {
     let Some(index) = by_path.get(INDEX) else {
         report.errors.push(format!("{INDEX} is missing"));
         return;

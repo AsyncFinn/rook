@@ -13,6 +13,7 @@ mod world;
 
 use rook_dom::InstanceId;
 use rook_types::{UserInputState, UserInputType, Value, Vector3};
+use rustc_hash::FxHashMap;
 
 use crate::DataModel;
 
@@ -166,7 +167,7 @@ pub struct ClickEvent {
 pub(crate) struct InputTracker {
     pub(crate) viewport: (u32, u32),
     /// InputObjects of held keys, reused for their end event.
-    held: std::collections::HashMap<u32, InstanceId>,
+    held: FxHashMap<u32, InstanceId>,
     /// The InputObjects mouse movement and the wheel pass to every
     /// InputChanged: Roblox reuses one per input and updates it (recorded:
     /// conformance input/mouse_move_object; the wheel's own object was

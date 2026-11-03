@@ -14,7 +14,7 @@ use rapier3d::prelude::*;
 use rook_dom::{Dom, InstanceId};
 use rook_terrain::TerrainMaterial;
 use rook_terrain::grid::edit::Shape as Fill;
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::FxHashMap;
 
 use crate::joints::{JointKind, part_joints};
 use crate::query::Filter;
@@ -65,7 +65,7 @@ impl Physics {
                 (surface.point - center).length()
             };
             // Each part's nearest collider surface.
-            let reached = RefCell::new(HashMap::default());
+            let reached = RefCell::new(FxHashMap::default());
             let near = self.overlapping(
                 dom,
                 (&ball, pose),

@@ -1,7 +1,7 @@
 //! What the renderer draws: a snapshot built by the engine side. The
 //! renderer never sees the DOM (docs/design/architecture.md#engine-systems).
 
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::Arc;
 
 use glam::{Mat3, Vec2, Vec3};
@@ -405,10 +405,10 @@ pub struct Scene {
     pub terrain: TerrainLook,
     /// The mesh files parts may draw ([`DrawShape::File`]). The renderer
     /// uploads each the first time a part draws it.
-    pub meshes: HashMap<MeshHash, Arc<Mesh>>,
+    pub meshes: FxHashMap<MeshHash, Arc<Mesh>>,
     /// The images parts and their layers may draw. The renderer uploads
     /// each the first time something draws it, a few per frame.
-    pub images: HashMap<ImageHash, Arc<Image>>,
+    pub images: FxHashMap<ImageHash, Arc<Image>>,
 }
 
 /// How far ahead of Studio's edit camera its Focus sits, in studs.

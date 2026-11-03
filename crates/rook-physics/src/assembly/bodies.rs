@@ -57,7 +57,7 @@ impl Physics {
         dom: &mut Dom,
         props: &Props,
         seeds: Vec<InstanceId>,
-    ) -> HashSet<RigidBodyHandle> {
+    ) -> FxHashSet<RigidBodyHandle> {
         profiling::scope!("Physics::rebuild", &format!("{} seeds", seeds.len()));
         // A part's neighbors may change assembly with it (anchoring a part
         // splits its assembly; unanchoring one joins a neighbor's).
@@ -82,7 +82,7 @@ impl Physics {
         }
         self.generation += 1;
         let mut touched = todo.clone();
-        let mut added = HashSet::default();
+        let mut added = FxHashSet::default();
         let mut hinges = Vec::new();
         let mut clusters = assembly::Clusters::default();
         for part in todo {

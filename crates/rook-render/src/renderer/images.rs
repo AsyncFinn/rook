@@ -46,14 +46,14 @@ impl Defaults {
 pub(crate) enum ImageBinding {
     Table(ImageTable),
     /// A bind group per image set.
-    Sets(HashMap<ImageSet, wgpu::BindGroup>),
+    Sets(FxHashMap<ImageSet, wgpu::BindGroup>),
 }
 
 /// Every image on the GPU in two binding arrays (sRGB and linear views)
 /// with the same slots.
 #[derive(Debug)]
 pub(crate) struct ImageTable {
-    slots: HashMap<ImageHash, u32>,
+    slots: FxHashMap<ImageHash, u32>,
     /// The images in slot order, after the two defaults.
     order: Vec<ImageHash>,
     /// The slots the layout has room for.
@@ -71,10 +71,10 @@ impl ImageBinding {
         let needs = wgpu::Features::TEXTURE_BINDING_ARRAY
             | wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING;
         if !device.features().contains(needs) || table_room(device) < FIRST_SLOTS {
-            return Self::Sets(HashMap::default());
+            return Self::Sets(FxHashMap::default());
         }
         Self::Table(ImageTable {
-            slots: HashMap::default(),
+            slots: FxHashMap::default(),
             order: Vec::new(),
             capacity: FIRST_SLOTS,
             partial: device

@@ -10,7 +10,7 @@ use std::collections::VecDeque;
 use std::hash::Hash;
 use std::sync::Arc;
 
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 /// Bytes uploaded per frame at most (the first upload of a frame always
 /// goes, however large).
@@ -45,17 +45,17 @@ pub(crate) trait Upload {
 /// GPU copies of files, by key.
 #[derive(Debug)]
 pub(crate) struct GpuCache<K, T: Upload> {
-    ready: HashMap<K, T::Gpu>,
+    ready: FxHashMap<K, T::Gpu>,
     queue: VecDeque<(K, Arc<T>)>,
-    queued: HashSet<K>,
+    queued: FxHashSet<K>,
 }
 
 impl<K: Copy + Eq + Hash, T: Upload> GpuCache<K, T> {
     pub(crate) fn new() -> Self {
         Self {
-            ready: HashMap::default(),
+            ready: FxHashMap::default(),
             queue: VecDeque::new(),
-            queued: HashSet::default(),
+            queued: FxHashSet::default(),
         }
     }
 

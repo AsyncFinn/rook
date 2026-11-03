@@ -396,6 +396,10 @@ fn convert_kind(kind: &'static RbxPropertyKind<'static>) -> PropertyKind {
     }
 }
 
+#[expect(
+    clippy::disallowed_types,
+    reason = "rbx_reflection's descriptors hold std maps and sets"
+)]
 fn class_flags(tags: &std::collections::HashSet<ClassTag>) -> ClassFlags {
     ClassFlags {
         deprecated: tags.contains(&ClassTag::Deprecated),
@@ -409,6 +413,10 @@ fn class_flags(tags: &std::collections::HashSet<ClassTag>) -> ClassFlags {
     }
 }
 
+#[expect(
+    clippy::disallowed_types,
+    reason = "rbx_reflection's descriptors hold std maps and sets"
+)]
 fn property_flags(tags: &std::collections::HashSet<PropertyTag>) -> PropertyFlags {
     PropertyFlags {
         deprecated: tags.contains(&PropertyTag::Deprecated),

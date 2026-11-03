@@ -2,3 +2,7 @@
 # `native` implementations are where std::fs and std::thread are called,
 # so the workspace clippy.toml's platform bans don't apply here (this
 # file replaces it).
+disallowed-types = [
+    { path = "std::collections::HashMap", reason = "use rustc_hash::FxHashMap: std's SipHash is slow for Rook's own keys and iterates in a different order every run" },
+    { path = "std::collections::HashSet", reason = "use rustc_hash::FxHashSet: std's SipHash is slow for Rook's own keys and iterates in a different order every run" },
+]

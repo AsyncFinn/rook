@@ -95,7 +95,7 @@ pub(super) struct Blockers {
     columns: Columns,
     /// Each mesh file's box in its own space (center, half size); `None`
     /// for terrain, which doesn't block yet.
-    bounds: HashMap<MeshHash, Option<(Vec3, Vec3)>>,
+    bounds: FxHashMap<MeshHash, Option<(Vec3, Vec3)>>,
     /// A blocker changed since the voxels were marked.
     changed: bool,
     marked_at: Option<Instant>,
@@ -374,7 +374,7 @@ const WIDE: i32 = 16;
 #[derive(Debug, Default)]
 struct Columns {
     /// Indices into the blockers, by column.
-    columns: HashMap<IVec2, Vec<u32>>,
+    columns: FxHashMap<IVec2, Vec<u32>>,
     wide: Vec<u32>,
 }
 

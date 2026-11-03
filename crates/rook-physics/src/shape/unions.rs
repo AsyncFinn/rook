@@ -14,7 +14,7 @@
 use std::sync::Arc;
 
 use rapier3d::prelude::*;
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::FxHashMap;
 
 use glam::Vec3;
 use rook_dom::{Dom, InstanceId};
@@ -29,10 +29,10 @@ type ShapeKey = (usize, [u32; 3]);
 
 #[derive(Default)]
 pub(crate) struct Unions {
-    geometry: HashMap<InstanceId, Arc<UnionCollision>>,
+    geometry: FxHashMap<InstanceId, Arc<UnionCollision>>,
     /// Copies of a union share their geometry, so their shapes are built
     /// once per size. The `Arc` keeps the key's address from being reused.
-    cache: HashMap<ShapeKey, (Arc<UnionCollision>, Option<SharedShape>)>,
+    cache: FxHashMap<ShapeKey, (Arc<UnionCollision>, Option<SharedShape>)>,
     /// Unions whose geometry changed since the last sync.
     pub(crate) reshaped: Vec<InstanceId>,
 }

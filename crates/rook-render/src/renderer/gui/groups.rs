@@ -65,7 +65,7 @@ impl Groups {
         shown: &[Arc<GuiGroup>],
         fresh: &[(Arc<GuiGroup>, Packed)],
         target: impl Fn(&wgpu::Device) -> Target,
-    ) -> Option<HashMap<u64, wgpu::TextureView>> {
+    ) -> Option<FxHashMap<u64, wgpu::TextureView>> {
         let mut old = std::mem::take(&mut self.drawn);
         let changed = !fresh.is_empty() || old.len() != shown.len();
         for group in shown {

@@ -24,7 +24,7 @@ pub use bridges::input::{CursorLook, InputEvent, ScreenPoint, SystemCursor};
 
 pub use bridges::render_changes::{RenderChanges, adorned_part, is_effect_class};
 
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -159,12 +159,12 @@ struct Content {
     /// Made on the first request, so places that never ask cost nothing.
     loader: Option<rook_content::Loader>,
     /// Loader tickets to the scripts' request ids.
-    tickets: HashMap<rook_content::Ticket, u64>,
+    tickets: FxHashMap<rook_content::Ticket, u64>,
     /// Loader tickets to the request ids of assets scripts load
     /// (`require(assetId)`, `InsertService:LoadAsset`).
-    assets: HashMap<rook_content::Ticket, u64>,
+    assets: FxHashMap<rook_content::Ticket, u64>,
     /// Loader tickets to the GUI's font files by asset id.
-    fonts: HashMap<rook_content::Ticket, String>,
+    fonts: FxHashMap<rook_content::Ticket, String>,
     wait_for_sounds: bool,
 }
 

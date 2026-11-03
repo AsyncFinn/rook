@@ -10,7 +10,8 @@
 //! changes are noticed at the end of a frame ([`DataModel::check_unions`],
 //! before the journal is trimmed) and acted on at the start of the next.
 
-use std::collections::HashSet;
+use rustc_hash::FxHashMap;
+use rustc_hash::FxHashSet;
 
 use rook_content::decode::mesh::union::physics;
 use rook_types::UnionCollision;
@@ -22,9 +23,9 @@ use crate::*;
 pub(crate) struct Unions {
     pub(crate) watch: JournalWatch,
     /// Unions to look at again.
-    dirty: HashSet<InstanceId>,
+    dirty: FxHashSet<InstanceId>,
     /// Geometry decoded so far, by its bytes: copies share it.
-    saved: HashMap<Vec<u8>, Option<Arc<UnionCollision>>>,
+    saved: FxHashMap<Vec<u8>, Option<Arc<UnionCollision>>>,
 }
 
 /// The properties whose change gives a union new geometry.

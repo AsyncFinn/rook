@@ -91,7 +91,7 @@ impl Launch {
             clock: 0.0,
             camera: FlyCamera::new(camera),
             gfx: None,
-            keys: HashSet::new(),
+            keys: FxHashSet::default(),
             flying: true,
             looking: false,
             held: MouseLock::Free,

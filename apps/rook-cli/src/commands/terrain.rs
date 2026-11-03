@@ -2,7 +2,8 @@
 //! folder hold smooth voxels (`SmoothGrid`) and how many legacy blocks
 //! (`ClusterGrid`, `ClusterGridV2`, `ClusterGridV3`).
 
-use std::collections::{BTreeMap, HashSet};
+use rustc_hash::FxHashSet;
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::Instant;
@@ -129,7 +130,7 @@ pub(crate) fn scan(dir: &Path, jobs: Option<usize>) -> anyhow::Result<()> {
     let started = Instant::now();
     let files = find_files(dir, &EXTENSIONS);
     eprintln!("found {} place/model files", files.len());
-    let seen = Mutex::new(HashSet::new());
+    let seen = Mutex::new(FxHashSet::default());
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(jobs.unwrap_or(8))
         .build()?;

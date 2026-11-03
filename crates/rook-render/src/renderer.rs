@@ -374,11 +374,11 @@ impl Renderer {
         &mut self,
         screen: &std::sync::Arc<[std::sync::Arc<[GuiQuad]>]>,
         world: &[std::sync::Arc<WorldCanvas>],
-        images: &std::collections::HashMap<ImageHash, std::sync::Arc<Image>>,
+        images: &FxHashMap<ImageHash, std::sync::Arc<Image>>,
     ) {
         fn request(
             quads: &[GuiQuad],
-            images: &std::collections::HashMap<ImageHash, std::sync::Arc<Image>>,
+            images: &FxHashMap<ImageHash, std::sync::Arc<Image>>,
             cache: &mut GpuCache<ImageHash, Image>,
         ) {
             for q in quads {

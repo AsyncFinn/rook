@@ -65,12 +65,12 @@ pub(super) struct TerrainCache {
     shown: Option<Rings>,
     target: Option<Rings>,
     /// The chunks drawn, by level.
-    chunks: HashMap<LevelChunk, MeshedChunk>,
+    chunks: FxHashMap<LevelChunk, MeshedChunk>,
     /// The Grass tops of the chunks drawn at levels blades can reach
     /// (`rings::grows_grass`): blades stand on the ground that's drawn.
-    tops: HashMap<LevelChunk, GrassTops>,
+    tops: FxHashMap<LevelChunk, GrassTops>,
     /// Tiles whose tops went with a dropped chunk, to grow again.
-    stale_tiles: HashSet<glam::IVec2>,
+    stale_tiles: FxHashSet<glam::IVec2>,
     /// Counts the chunk meshes made: part of each mesh's key, so a chunk
     /// meshed again gets new keys.
     serial: u64,
@@ -91,7 +91,7 @@ pub(super) struct TerrainCache {
 #[derive(Debug)]
 struct Looks {
     set: MaterialSet,
-    layers: HashMap<Layer, (MaterialMaps, [f32; 3])>,
+    layers: FxHashMap<Layer, (MaterialMaps, [f32; 3])>,
     water: [f32; 3],
     water_transparency: f32,
     water_reflectance: f32,
@@ -101,7 +101,7 @@ impl Default for Looks {
     fn default() -> Self {
         Looks {
             set: MaterialSet::Legacy,
-            layers: HashMap::new(),
+            layers: FxHashMap::default(),
             water: [0.0; 3],
             water_transparency: 0.0,
             water_reflectance: 0.0,
@@ -276,7 +276,7 @@ impl SceneCache {
             water_reflectance: dom
                 .float_property(terrain, "WaterReflectance")
                 .unwrap_or(1.0),
-            layers: HashMap::new(),
+            layers: FxHashMap::default(),
         };
         for material in self.terrain.materials.clone() {
             if material == TerrainMaterial::Water {

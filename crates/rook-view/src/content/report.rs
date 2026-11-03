@@ -9,7 +9,8 @@
 //! image warning, `Image "<url>" failed to load in "<path>": <reason>`
 //! (Inference: recalled, not checked against Studio this time).
 
-use std::collections::{BTreeMap, HashSet};
+use rustc_hash::FxHashSet;
+use std::collections::BTreeMap;
 
 use rook_content::{ContentRef, Failure, FailureKind, Want};
 use rook_dom::{Dom, InstanceId};
@@ -70,9 +71,9 @@ pub(crate) struct Failed {
 #[derive(Debug, Default)]
 pub(crate) struct Report {
     /// Each instance and file reported once.
-    seen: HashSet<(Option<InstanceId>, FileRef)>,
+    seen: FxHashSet<(Option<InstanceId>, FileRef)>,
     /// Files Studio-style warnings were printed for (once each).
-    warned: HashSet<FileRef>,
+    warned: FxHashSet<FileRef>,
     pending: Vec<(Option<InstanceId>, FileRef, Failure)>,
 }
 
@@ -145,7 +146,7 @@ struct Group<'a> {
     what: What,
     cause: String,
     count: usize,
-    files: HashSet<&'a ContentRef>,
+    files: FxHashSet<&'a ContentRef>,
     first: &'a str,
 }
 
@@ -170,7 +171,7 @@ pub(crate) fn summarize(failed: &[Failed]) -> Vec<String> {
                     what: f.what,
                     cause,
                     count: 0,
-                    files: HashSet::new(),
+                    files: FxHashSet::default(),
                     first: &f.path,
                 });
                 groups.last_mut().expect("pushed")

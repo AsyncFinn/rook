@@ -4,7 +4,8 @@
 //! the camera), which can change while the item waits; items of equal
 //! priority come out in the order they went in.
 
-use std::collections::{BTreeMap, HashMap};
+use rustc_hash::FxHashMap;
+use std::collections::BTreeMap;
 use std::fmt;
 use std::hash::Hash;
 use std::sync::{Condvar, Mutex};
@@ -23,7 +24,7 @@ fn bits(priority: f32) -> u32 {
 
 struct State<K, V> {
     order: BTreeMap<Rank, K>,
-    items: HashMap<K, (Rank, V)>,
+    items: FxHashMap<K, (Rank, V)>,
     next: u64,
     open: bool,
 }
@@ -45,7 +46,7 @@ impl<K: Hash + Eq + Clone, V> Queue<K, V> {
         Self {
             state: Mutex::new(State {
                 order: BTreeMap::new(),
-                items: HashMap::new(),
+                items: FxHashMap::default(),
                 next: 0,
                 open: true,
             }),

@@ -39,6 +39,7 @@ clap.workspace = true
 tracing.workspace = true
 profiling.workspace = true
 mimalloc.workspace = true
+rustc-hash.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { workspace = true, features = ["Win32_System_Console"] }

@@ -2,7 +2,7 @@
 //! (docs/behavior/rendering/highlight.md). The renderer outlines and fills the
 //! parts over the finished frame.
 
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 use rook_render::Highlight;
 
@@ -35,7 +35,7 @@ pub(crate) fn highlight(
 
 /// Each Model's own Highlight, looked up once per scene update (a big
 /// Model's parts would each look through its children).
-pub(crate) type ModelHighlights = HashMap<InstanceId, Option<Highlight>>;
+pub(crate) type ModelHighlights = FxHashMap<InstanceId, Option<Highlight>>;
 
 /// The Highlight on `target` itself: adorning it, or inside it without
 /// an `Adornee`.

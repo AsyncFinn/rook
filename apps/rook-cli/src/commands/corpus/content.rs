@@ -135,7 +135,7 @@ pub(super) fn urls_in_source(source: &str) -> impl Iterator<Item = &str> {
 pub(super) fn classify(url: &str) -> (&'static str, Option<String>) {
     use rook_content::ContentRef;
     use rook_content::resolver::defaults;
-    use std::collections::HashMap;
+    use rustc_hash::FxHashMap;
     use std::sync::{LazyLock, Mutex};
 
     static RESOLVER: LazyLock<rook_content::Resolver> = LazyLock::new(|| {
@@ -143,7 +143,7 @@ pub(super) fn classify(url: &str) -> (&'static str, Option<String>) {
         config.cache_dir = None;
         rook_content::Resolver::new(config)
     });
-    static FOUND: LazyLock<Mutex<HashMap<String, bool>>> = LazyLock::new(Default::default);
+    static FOUND: LazyLock<Mutex<FxHashMap<String, bool>>> = LazyLock::new(Default::default);
 
     let kind = match ContentRef::parse(url) {
         None => "no content",

@@ -17,7 +17,7 @@ mod replicator;
 mod sink;
 mod source;
 
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 use rook_dom::{Attributes, Change, Dom, InstanceId};
 use rook_reflection::{ClassId, PropertyId, PropertyKind, Serialization};

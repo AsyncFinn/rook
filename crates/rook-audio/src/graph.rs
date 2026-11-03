@@ -14,7 +14,7 @@
 
 pub mod meter;
 
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::hash::Hash;
 use std::sync::Arc;
 
@@ -111,7 +111,7 @@ struct State<K> {
     chain: Chain,
     voice: Option<Voice<K>>,
     /// A listener's gains per emitter last block, ramped from.
-    gains: HashMap<K, [f32; 2]>,
+    gains: FxHashMap<K, [f32; 2]>,
     meter: Option<Meter>,
 }
 
@@ -126,7 +126,7 @@ pub struct Runner<K> {
     /// Each node's inputs: the feeding node's index, and whether it goes to
     /// the sidechain.
     inputs: Vec<Vec<(usize, bool)>>,
-    states: HashMap<K, State<K>>,
+    states: FxHashMap<K, State<K>>,
     scratch: Vec<Frame>,
     key: Vec<Frame>,
 }
@@ -138,7 +138,7 @@ impl<K: Hash + Eq + Copy> Runner<K> {
             graph: Graph::default(),
             order: Vec::new(),
             inputs: Vec::new(),
-            states: HashMap::new(),
+            states: FxHashMap::default(),
             scratch: Vec::new(),
             key: Vec::new(),
         }
@@ -156,7 +156,7 @@ impl<K: Hash + Eq + Copy> Runner<K> {
     /// players keep their own position until played again or seeked
     /// (`generation`).
     pub fn sync(&mut self, graph: &Graph<K>) {
-        let index: HashMap<K, usize> = graph
+        let index: FxHashMap<K, usize> = graph
             .nodes
             .iter()
             .enumerate()
@@ -169,7 +169,7 @@ impl<K: Hash + Eq + Copy> Runner<K> {
                 buffer: Vec::new(),
                 chain: Chain::new(rate),
                 voice: None,
-                gains: HashMap::new(),
+                gains: FxHashMap::default(),
                 meter: None,
             });
             match &node.kind {

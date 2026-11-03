@@ -101,7 +101,8 @@ toml = "1"
 # scripts it skips (rook-formats' `compiled`); the version rbx_binary uses
 lz4_flex = "0.13"
 slotmap = "1.1"
-# Fast, deterministic hashing for engine-internal maps keyed by ids and names
+# Every hash map and set (clippy.toml bans std's): fast, and the same
+# iteration order every run
 rustc-hash = "2.1"
 profiling = "1"
 # Sound files (rook-content): pure-Rust WAV (PCM, ADPCM), Ogg Vorbis and MP3
