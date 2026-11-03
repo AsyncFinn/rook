@@ -106,9 +106,10 @@ impl Shape {
     /// The voxels the shape fills.
     pub(super) fn bounds(&self) -> Bounds {
         let (center, half) = match *self {
-            Shape::Block { pose, size } | Shape::Wedge { pose, size } => {
-                (pose.translation.into(), abs_extent(pose, size * 0.5))
-            }
+            Shape::Block { pose, size } | Shape::Wedge { pose, size } => (
+                pose.translation.into(),
+                rook_types::box_reach(pose.matrix3.into(), size * 0.5),
+            ),
             Shape::Ball { center, radius } => (center, Vec3::splat(radius)),
             Shape::Cylinder {
                 pose,
@@ -116,7 +117,7 @@ impl Shape {
                 radius,
             } => (
                 pose.translation.into(),
-                abs_extent(pose, Vec3::new(radius, height * 0.5, radius)),
+                rook_types::box_reach(pose.matrix3.into(), Vec3::new(radius, height * 0.5, radius)),
             ),
         };
         // Voxels reaching into its world box, no further (observed: a box
@@ -127,10 +128,4 @@ impl Shape {
             max: ((center + half) / VOXEL_STUDS).floor().as_ivec3(),
         }
     }
-}
-
-/// The world box half-extents of a box of half-extents `h` at `pose`.
-fn abs_extent(pose: Affine3A, h: Vec3) -> Vec3 {
-    let m = pose.matrix3;
-    (m.x_axis.abs() * h.x + m.y_axis.abs() * h.y + m.z_axis.abs() * h.z).into()
 }

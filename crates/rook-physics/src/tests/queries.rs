@@ -474,3 +474,111 @@ fn click_rays_pass_invisible_parts_that_dont_collide() {
     set(&mut dom, ghost, "Transparency", Value::Float32(0.0));
     assert_eq!(hit(&mut physics, &mut dom, &clicks), Some(ghost));
 }
+
+/// The parts' box index finds exactly the parts whose `Size` box meets a
+/// query box, however they got there: placed, fallen by stepping, moved
+/// and resized by scripts, removed, and a turned cylinder near its box's
+/// corner, which its round collider's bounds don't reach.
+#[test]
+fn box_queries_find_parts_by_their_box_through_every_change() {
+    let mut dom = Dom::new();
+    let floor = part(&mut dom, O, Vec3::new(40.0, 1.0, 40.0), true);
+    let falling = block(&mut dom, O + Vec3::new(5.0, 10.0, 0.0), false);
+    let moved = fixed(&mut dom, Vec3::new(-8.0, 3.0, 0.0));
+    let grown = fixed(&mut dom, Vec3::new(0.0, 3.0, 8.0));
+    let gone = fixed(&mut dom, Vec3::new(0.0, 3.0, -8.0));
+    let round = part(
+        &mut dom,
+        O + Vec3::new(10.0, 4.0, 10.0),
+        Vec3::splat(4.0),
+        true,
+    );
+    set(&mut dom, round, "Shape", Value::Enum(2));
+    let turned = CFrame::from_position(O + Vec3::new(10.0, 4.0, 10.0))
+        * CFrame::angles(std::f32::consts::FRAC_PI_4, 0.0, 0.0);
+    set(&mut dom, round, "CFrame", Value::CFrame(turned));
+    let mut physics = Physics::new();
+    let check = |physics: &mut Physics, dom: &mut Dom, when: &str| {
+        let parts = crate::shape::workspace_parts(dom);
+        for x in (-12..=12).step_by(3) {
+            for y in -1..=12 {
+                for z in (-12..=12).step_by(3) {
+                    let lo = O + Vec3::new(x as f32, y as f32, z as f32) - 0.6;
+                    let hi = lo + 1.2;
+                    let mut truth: Vec<InstanceId> = parts
+                        .iter()
+                        .copied()
+                        .filter(|&p| {
+                            let cf = dom.cframe_property(p, "CFrame").unwrap();
+                            let reach = cf.box_reach(dom.vector3_property(p, "Size").unwrap());
+                            let (a, b) = (cf.position - reach, cf.position + reach);
+                            a.cmple(hi).all() && b.cmpge(lo).all()
+                        })
+                        .collect();
+                    truth.sort_unstable();
+                    assert_eq!(
+                        physics.parts_by_box(dom, lo, hi),
+                        truth,
+                        "{when} at {x} {y} {z}"
+                    );
+                }
+            }
+        }
+    };
+    check(&mut physics, &mut dom, "placed");
+    // Near the turned cylinder's box corner, outside its round shape.
+    let corner = O + Vec3::new(10.0, 4.0 + 2.6, 10.0);
+    let near_corner = physics.parts_by_box(&mut dom, corner - 0.1, corner + 0.1);
+    assert_eq!(near_corner, vec![round]);
+    let region = Region::Box {
+        cframe: CFrame::from_position(corner),
+        size: Vec3::splat(0.2),
+    };
+    let filter = Filter::legacy_region(vec![], false);
+    assert_eq!(
+        physics.parts_in_bounds(&mut dom, region, &filter, 0),
+        vec![round]
+    );
+    run(&mut physics, &mut dom, 1.0);
+    assert!(position(&dom, falling).y < O.y + 5.0, "it fell");
+    check(&mut physics, &mut dom, "fallen");
+    set(
+        &mut dom,
+        moved,
+        "CFrame",
+        Value::CFrame(CFrame::from_position(O + Vec3::new(-2.0, 8.0, 2.0))),
+    );
+    set(
+        &mut dom,
+        grown,
+        "Size",
+        Value::Vector3(Vector3(Vec3::new(10.0, 2.0, 2.0))),
+    );
+    dom.set_parent(gone, None).unwrap();
+    check(&mut physics, &mut dom, "moved, grown and removed");
+    run(&mut physics, &mut dom, 0.5);
+    check(&mut physics, &mut dom, "stepped again");
+    // Enough parts that one more goes in on its own, not by a bulk build.
+    for i in 0..40 {
+        fixed(&mut dom, Vec3::new(30.0 + 3.0 * i as f32, 3.0, 30.0));
+    }
+    check(&mut physics, &mut dom, "many added");
+    fixed(&mut dom, Vec3::new(2.0, 3.0, -2.0));
+    check(&mut physics, &mut dom, "one added");
+    // A nudge inside the leaf's skin: the tree keeps the leaf, and the
+    // part is found by where its box is now, not where it was.
+    let cf = dom.cframe_property(moved, "CFrame").unwrap();
+    let left = cf.position.x - dom.vector3_property(moved, "Size").unwrap().x / 2.0;
+    set(
+        &mut dom,
+        moved,
+        "CFrame",
+        Value::CFrame(CFrame::from_position(cf.position + Vec3::X * 0.02)),
+    );
+    let at = |x: f32| Vec3::new(x, cf.position.y, cf.position.z);
+    let old_edge = physics.parts_by_box(&mut dom, at(left - 0.1), at(left + 0.01));
+    assert!(!old_edge.contains(&moved), "found where it was");
+    let new_edge = physics.parts_by_box(&mut dom, at(left + 0.015), at(left + 0.025));
+    assert!(new_edge.contains(&moved), "missed where it is");
+    let _ = floor;
+}

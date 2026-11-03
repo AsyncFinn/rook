@@ -176,7 +176,7 @@ impl Physics {
         if let Some(before) = self.before_last_step.get_mut(&r.body) {
             *before = turned(before);
         }
-        self.stale.insert(r.body);
+        self.body_moved(r.body);
         if let Some(props) = self.props.take() {
             self.write_body(dom, &props, r.body);
             self.props = Some(props);

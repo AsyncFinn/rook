@@ -98,12 +98,7 @@ impl Box {
                 BOX_FACES
             }
         };
-        let (Some(cf), Some(size)) = (
-            dom.cframe_property(id, "CFrame"),
-            dom.vector3_property(id, "Size"),
-        ) else {
-            return None;
-        };
+        let (cf, size) = crate::shape::size_box(dom, id)?;
         let reach = cf.box_reach(size) + Vec3::splat(DISTANCE);
         Some(Self {
             id,
@@ -180,17 +175,50 @@ fn face_frame(f: usize) -> Mat3 {
     Mat3::from_cols(Vec3::from(x), Vec3::from(y), Vec3::from(z))
 }
 
-/// `MakeJoints` for each of `parts`, in order.
-pub fn make_joints(dom: &mut Dom, parts: &[InstanceId]) -> Result<(), DomError> {
-    let world: Vec<Box> = workspace_parts(dom)
-        .into_iter()
-        .filter_map(|id| Box::of(dom, id))
+impl crate::Physics {
+    /// `MakeJoints` for each of `parts`, in order: each joins the
+    /// Workspace parts whose boxes come within reach of its own, found
+    /// through physics' part boxes, so a call costs what is near it.
+    pub fn make_joints(&mut self, dom: &mut Dom, parts: &[InstanceId]) -> Result<(), DomError> {
+        profiling::scope!("Physics::make_joints");
+        // Every query before any joint: a new joint changes the world.
+        let mut near = Vec::new();
+        for &p in parts {
+            // Both boxes are padded by DISTANCE when they're compared.
+            if let Some(b) = Box::of(dom, p) {
+                let pad = Vec3::splat(DISTANCE);
+                near.extend(self.parts_by_box(dom, b.min - pad, b.max + pad));
+            }
+        }
+        near.sort_unstable();
+        near.dedup();
+        join_callers(dom, &near, parts)
+    }
+}
+
+/// `MakeJoints` for every part in Workspace, as a place that joins on
+/// load does.
+pub fn make_joints_on_load(dom: &mut Dom) -> Result<(), DomError> {
+    let parts = workspace_parts(dom);
+    join_callers(dom, &parts, &parts)
+}
+
+/// `MakeJoints` for each of `callers`, in order, against `candidates`
+/// (the Workspace parts that may touch them; callers among them).
+fn join_callers(
+    dom: &mut Dom,
+    candidates: &[InstanceId],
+    callers: &[InstanceId],
+) -> Result<(), DomError> {
+    let world: Vec<Box> = candidates
+        .iter()
+        .filter_map(|&id| Box::of(dom, id))
         .collect();
     let index: FxHashMap<InstanceId, usize> =
         world.iter().enumerate().map(|(i, b)| (b.id, i)).collect();
-    // Each caller's place in `parts`; a part listed twice calls once.
+    // Each caller's place in `callers`; a part listed twice calls once.
     let mut rank = FxHashMap::default();
-    for (r, p) in parts.iter().enumerate() {
+    for (r, p) in callers.iter().enumerate() {
         if let Some(&i) = index.get(p) {
             rank.entry(i).or_insert(r);
         }
@@ -198,23 +226,7 @@ pub fn make_joints(dom: &mut Dom, parts: &[InstanceId]) -> Result<(), DomError> 
     // The neighbors each caller tries. When both parts of a pair call, the
     // earlier tries first and the later tries again if that made no joint,
     // as in Studio: a wedge's slope joins differently from each side.
-    // A few callers (the usual script call) check the world directly;
-    // many (a model, a whole place) sweep it once.
-    let pairs = if rank.len() <= 16 {
-        let mut pairs = Vec::new();
-        for &i in rank.keys() {
-            pairs.extend(
-                (0..world.len())
-                    .filter(|&j| j != i && world[i].near(&world[j]))
-                    .map(|j| (i.min(j), i.max(j))),
-            );
-        }
-        pairs.sort_unstable();
-        pairs.dedup();
-        pairs
-    } else {
-        near_pairs(&world)
-    };
+    let pairs = near_pairs(&world);
     let mut neighbors: Vec<Vec<usize>> = vec![Vec::new(); world.len()];
     for (a, b) in pairs {
         match (rank.get(&a), rank.get(&b)) {

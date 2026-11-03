@@ -80,10 +80,18 @@ pub(crate) fn world_shape(
 /// ball counts in its box's corners, and a rotated block doesn't count in
 /// its world bounding box's corners).
 pub(crate) fn world_box(dom: &Dom, part: InstanceId) -> Option<(SharedShape, Pose)> {
+    let (cf, size) = size_box(dom, part)?;
+    let h = size * 0.5;
+    Some((SharedShape::cuboid(h.x, h.y, h.z), pose_of(&cf)))
+}
+
+/// Where `part`'s `Size` box is and how big, at least [`MIN_PART_SIZE`]
+/// each way, as the DOM has it now: what every query and rule that goes
+/// by a part's box reads.
+pub(crate) fn size_box(dom: &Dom, part: InstanceId) -> Option<(CFrame, glam::Vec3)> {
     let size = dom.vector3_property(part, "Size")?;
-    let h = size.max(glam::Vec3::splat(MIN_PART_SIZE)) * 0.5;
     let cf = dom
         .cframe_property(part, "CFrame")
         .unwrap_or(CFrame::IDENTITY);
-    Some((SharedShape::cuboid(h.x, h.y, h.z), pose_of(&cf)))
+    Some((cf, size.max(glam::Vec3::splat(MIN_PART_SIZE))))
 }

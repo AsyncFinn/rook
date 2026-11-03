@@ -270,11 +270,10 @@ impl DataModel {
         let journaling = dom.journal().is_enabled();
         dom.journal_mut().set_enabled(false);
         ensure_terrain(&mut dom);
-        if rook_physics::joints::surfaces::joins_on_load(&dom) {
-            let parts = rook_physics::workspace_parts(&dom);
-            if let Err(e) = rook_physics::joints::surfaces::make_joints(&mut dom, &parts) {
-                tracing::warn!("joining the place's surfaces failed: {e}");
-            }
+        if rook_physics::joints::surfaces::joins_on_load(&dom)
+            && let Err(e) = rook_physics::joints::surfaces::make_joints_on_load(&mut dom)
+        {
+            tracing::warn!("joining the place's surfaces failed: {e}");
         }
         dom.journal_mut().set_enabled(journaling);
         let engine = Self::with_dom(dom, options, Role::Server)?;

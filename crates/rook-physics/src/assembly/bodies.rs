@@ -127,6 +127,7 @@ impl Physics {
         self.world.remove_body(h);
         for (m, c) in body.asm.members.iter().zip(&body.colliders) {
             self.parts.remove(&m.part);
+            self.bounds.remove(m.part);
             self.touch.forget(m.part);
             if let Some((collider, _)) = c {
                 self.colliders.remove(collider);
@@ -150,6 +151,7 @@ impl Physics {
         };
         self.stale_statics.remove(&part);
         self.parts.remove(&part);
+        self.bounds.remove(part);
         self.touch.forget(part);
         if let Some((collider, _)) = s.collider {
             self.world.remove_collider(collider);
@@ -188,6 +190,7 @@ impl Physics {
             let collider = self.add_collider(dom, props, None, root, root_cf, true);
             self.parts.insert(root, Home::Static);
             self.stale_statics.insert(root);
+            self.bounds.add(root);
             self.statics.insert(
                 root,
                 Static {
@@ -226,6 +229,7 @@ impl Physics {
         let mut colliders = Vec::with_capacity(asm.members.len());
         for (i, m) in asm.members.iter().enumerate() {
             self.parts.insert(m.part, Home::Body(handle));
+            self.bounds.add(m.part);
             colliders.push(self.add_collider(dom, props, Some(handle), m.part, m.offset, i == 0));
         }
         for j in asm.joints().chain(&asm.hinges) {
@@ -456,7 +460,7 @@ impl Physics {
         let root = cframe_of(self.world.bodies[h].position());
         rook_dom::ignore_stale(body.asm.place(dom, root));
         self.world.wake_up(h, true);
-        self.stale.insert(h);
+        self.body_moved(h);
     }
 
     /// A script moved a [`Static`] (or set its velocity): its collider goes
@@ -482,7 +486,7 @@ impl Physics {
             co.set_position(pose_of(&cf) * shape_pose);
         }
         // Queries put it in place first, as for a moved body.
-        self.stale_statics.insert(part);
+        self.static_moved(part);
         // Constraints and movers hold it by its place on the shared body.
         self.dirty.extend(self.attached.holders(part));
     }
@@ -507,7 +511,6 @@ impl Physics {
             Some(Value::Vector3(v)) => v.0,
             _ => Vector::ZERO,
         };
-        self.stale.insert(h);
         // Drawn where it was put, not on the way there.
         self.before_last_step.remove(&h);
         let rb = &mut self.world.bodies[h];
@@ -527,5 +530,6 @@ impl Physics {
                 self.set_hooks(c);
             }
         }
+        self.body_moved(h);
     }
 }

@@ -31,7 +31,7 @@ pub use part::mesh::{MeshHost, MeshKind, MeshLook, mesh_part_scale};
 pub use part::shape::PartShape;
 pub use part::surface::{NormalId, SURFACE_TILE_STUDS, SurfacePattern, SurfaceType, Tiling};
 pub use part::truss::{TrussLook, TrussShape, TrussStyle, truss_size};
-pub use value::cframe::CFrame;
+pub use value::cframe::{CFrame, box_reach};
 pub use value::color::{Color3, linear_to_srgb, srgb_to_linear};
 pub use value::udim::{UDim, UDim2};
 pub use value::vector::{Vector2, Vector3};

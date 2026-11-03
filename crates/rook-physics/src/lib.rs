@@ -222,6 +222,8 @@ pub struct Physics {
     stale: FxHashSet<RigidBodyHandle>,
     /// The same for [`Static`]s added or moved.
     stale_statics: FxHashSet<InstanceId>,
+    /// Every part's `Size` box, for the queries that find parts by it.
+    bounds: query::bounds::PartBounds,
     /// Which assemblies this world simulates.
     authority: Authority,
     /// Parts whose assemblies change hands at the next sync.
@@ -306,6 +308,7 @@ impl Physics {
             drives: FxHashMap::default(),
             stale: FxHashSet::default(),
             stale_statics: FxHashSet::default(),
+            bounds: query::bounds::PartBounds::default(),
             authority: Authority::default(),
             handed_over: Vec::new(),
             unions: unions::Unions::default(),
@@ -467,6 +470,7 @@ impl Physics {
         let dirty = std::mem::take(&mut self.dirty);
         self.refresh_constraints(dom, &dirty);
         self.refresh_movers(dom, &dirty);
+        self.bounds.place_added(dom);
         // Our own snapping writes aren't changes to apply next time.
         self.cursor = dom.journal().end();
         self.props = Some(props);

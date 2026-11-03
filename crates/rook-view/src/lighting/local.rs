@@ -33,9 +33,7 @@ fn light(dom: &Dom, id: InstanceId) -> Option<LocalLight> {
     } else {
         (part_cf * dom.cframe_property(parent, "CFrame")?, Vec3::ZERO)
     };
-    let r = part_cf.rotation;
-    let extent =
-        Mat3::from_cols(r.x_axis.abs(), r.y_axis.abs(), r.z_axis.abs()) * (part_size * 0.5);
+    let extent = part_cf.box_reach(part_size);
     // SpotLight and SurfaceLight face Front (-Z) by default.
     let face = dom
         .enum_property(id, "Face")
