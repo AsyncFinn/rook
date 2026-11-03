@@ -6,6 +6,8 @@ mod coarse;
 pub(crate) mod decode;
 pub mod edit;
 
+use std::sync::Arc;
+
 use glam::IVec3;
 use rustc_hash::FxHashMap;
 
@@ -93,13 +95,16 @@ impl Voxel {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 enum Chunk {
     /// Every voxel the same (most chunks of a large map are all air or
     /// all one material).
     Uniform(Voxel),
-    /// By `index`.
-    Dense(Box<[Voxel]>),
+    /// By `index`, shared by the grids copied from this one until one of
+    /// them writes to it (copy on write): the DataModel's voxels, physics'
+    /// and the renderer's are one copy, and an edit copies only the chunks
+    /// it writes.
+    Dense(Arc<[Voxel]>),
 }
 
 /// Where voxel `v` (inside its chunk) is in a dense chunk: Y, then Z, then
@@ -131,8 +136,9 @@ fn differing(base: IVec3, differs: impl Fn(usize) -> bool) -> Option<Bounds> {
     found
 }
 
-/// Every voxel of a Terrain. Voxels outside its chunks are air.
-#[derive(Debug, Clone, Default)]
+/// Every voxel of a Terrain. Voxels outside its chunks are air. Cloning
+/// shares the chunks' voxels, at the cost of the chunk count.
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct Grid {
     chunks: FxHashMap<IVec3, Chunk>,
 }
@@ -172,10 +178,10 @@ impl Grid {
             if fill == voxel {
                 return;
             }
-            *entry = Chunk::Dense(vec![fill; CHUNK_LEN].into_boxed_slice());
+            *entry = Chunk::Dense(vec![fill; CHUNK_LEN].into());
         }
         if let Chunk::Dense(voxels) = entry {
-            voxels[index(at)] = voxel;
+            Arc::make_mut(voxels)[index(at)] = voxel;
         }
     }
 
@@ -186,7 +192,7 @@ impl Grid {
         let stored = if voxels.iter().all(|v| *v == first) {
             Chunk::Uniform(first)
         } else {
-            Chunk::Dense(voxels.into_boxed_slice())
+            Chunk::Dense(voxels.into())
         };
         self.chunks.insert(chunk, stored);
     }
@@ -263,17 +269,49 @@ impl Grid {
     pub fn counts(&self) -> [u64; 23] {
         let mut counts = [0u64; 23];
         for chunk in self.chunks.values() {
-            match chunk {
-                Chunk::Uniform(v) => counts[v.material as usize] += CHUNK_LEN as u64,
-                Chunk::Dense(voxels) => {
-                    for v in voxels.iter() {
-                        counts[v.material as usize] += 1;
-                    }
-                }
-            }
+            add_counts(chunk, &mut counts);
         }
         counts[TerrainMaterial::Air as usize] = 0;
         counts
+    }
+
+    /// How many voxels of each material chunk `c` holds (Air excluded):
+    /// what a change to it adds to or takes from [`Grid::counts`].
+    pub fn chunk_counts(&self, c: IVec3) -> [u64; 23] {
+        let mut counts = [0u64; 23];
+        if let Some(chunk) = self.chunks.get(&c) {
+            add_counts(chunk, &mut counts);
+        }
+        counts[TerrainMaterial::Air as usize] = 0;
+        counts
+    }
+
+    /// Make chunks `chunks` hold what `from`'s do, sharing their voxels.
+    pub fn copy_chunks(&mut self, from: &Grid, chunks: impl IntoIterator<Item = IVec3>) {
+        for c in chunks {
+            match from.chunks.get(&c) {
+                Some(chunk) => {
+                    self.chunks.insert(c, chunk.clone());
+                }
+                None => {
+                    self.chunks.remove(&c);
+                }
+            }
+        }
+    }
+
+    /// The chunks holding the voxels in `bounds`, as a grid of their own
+    /// (sharing their voxels): what an edit there sends.
+    pub fn region(&self, bounds: Bounds) -> Grid {
+        let mut out = Grid::new();
+        out.copy_chunks(self, bounds.chunks(0));
+        out
+    }
+
+    /// Take the chunks holding the voxels in `bounds` from `region` (made
+    /// by [`Grid::region`]).
+    pub fn put_region(&mut self, region: &Grid, bounds: Bounds) {
+        self.copy_chunks(region, bounds.chunks(0));
     }
 
     /// Where the two grids' voxels differ: for each chunk that does, the
@@ -293,7 +331,8 @@ impl Grid {
                     differing(base, |i| d[i] != *u)
                 }
                 (Chunk::Dense(a), Chunk::Dense(b)) => {
-                    if a == b {
+                    // Shared voxels are equal without reading them.
+                    if Arc::ptr_eq(a, b) || a == b {
                         None
                     } else {
                         differing(base, |i| a[i] != b[i])
@@ -316,5 +355,16 @@ impl Grid {
     /// Whether every voxel is air.
     pub fn is_empty(&self) -> bool {
         self.counts().iter().all(|&n| n == 0)
+    }
+}
+
+fn add_counts(chunk: &Chunk, counts: &mut [u64; 23]) {
+    match chunk {
+        Chunk::Uniform(v) => counts[v.material as usize] += CHUNK_LEN as u64,
+        Chunk::Dense(voxels) => {
+            for v in voxels.iter() {
+                counts[v.material as usize] += 1;
+            }
+        }
     }
 }

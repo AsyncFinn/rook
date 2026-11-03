@@ -103,6 +103,7 @@ impl Dom {
         }
         self.referrers.remove(&id);
         self.drawn.remove(&id);
+        self.voxels.remove(&id);
         self.untag_all(id, &inst.tags);
         self.forget_class(id, inst.class);
         #[cfg(debug_assertions)]

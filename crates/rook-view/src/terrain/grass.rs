@@ -95,9 +95,8 @@ impl SceneCache {
                 let b = blades(tile, triangles);
                 let mut key = blake3::Hasher::new();
                 key.update(b"grass");
-                if let Some(source) = self.terrain.source {
-                    key.update(source.as_bytes());
-                }
+                // Blades of other voxels get other keys.
+                key.update(&self.terrain.epoch.to_le_bytes());
                 key.update(&tile.x.to_le_bytes());
                 key.update(&tile.y.to_le_bytes());
                 let mesh = MeshHash(*key.finalize().as_bytes());

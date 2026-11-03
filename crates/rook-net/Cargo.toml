@@ -13,6 +13,7 @@ tracing.workspace = true
 rook-types.workspace = true
 rook-reflection.workspace = true
 rook-dom.workspace = true
+rook-terrain.workspace = true
 profiling.workspace = true
 rustc-hash.workspace = true
 

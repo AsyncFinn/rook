@@ -374,6 +374,9 @@ impl Dom {
         copy.parent = parent;
         let children = src.children.as_slice().to_vec();
         let new = self.instances.insert(copy);
+        if let Some(voxels) = self.voxels.get(&id).cloned() {
+            self.voxels.insert(new, voxels);
+        }
         self.set_tags(new, tags).expect("just made");
         self.note_class(new);
         self.journal.push(Change::Created(new));

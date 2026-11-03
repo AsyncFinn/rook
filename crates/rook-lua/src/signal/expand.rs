@@ -61,7 +61,9 @@ pub(crate) fn expand<H: Clone>(change: &Change, signals: &Signals<H>, dom: &Dom)
         | Change::Destroyed(_)
         | Change::Collected(_)
         | Change::TagAdded { .. }
-        | Change::TagRemoved { .. } => {}
+        | Change::TagRemoved { .. }
+        // Voxel edits fire nothing: `SmoothGrid` isn't scriptable.
+        | Change::Voxels { .. } => {}
         Change::Removing {
             ancestors,
             descendant,

@@ -26,6 +26,11 @@ impl Dom {
         if let Some(v) = inst.properties.get(&property) {
             return Some(v.clone());
         }
+        if Some(property) == self.smooth_grid
+            && let Some(v) = self.encoded_voxels(id)
+        {
+            return Some(v);
+        }
         let class = inst.class;
         self.default_value(class, property)
     }
@@ -87,10 +92,12 @@ impl Dom {
         debug_assert!(property != self.name_prop && property != self.parent_prop);
         let value = coerce(self.db.property(property).ty, value);
         let inst = self.inst(id)?;
-        let unchanged = match inst.properties.get(&property) {
-            Some(current) => *current == value,
-            None => self.default_is(inst.class, property, &value),
-        };
+        // A whole `SmoothGrid` is taken without comparing it.
+        let unchanged = Some(property) != self.smooth_grid
+            && match inst.properties.get(&property) {
+                Some(current) => *current == value,
+                None => self.default_is(inst.class, property, &value),
+            };
         if unchanged {
             return Ok(());
         }
@@ -105,11 +112,15 @@ impl Dom {
         self.instances
             .get(id)
             .is_some_and(|i| i.properties.contains_key(&property))
+            || Some(property) == self.smooth_grid && self.voxels.contains_key(&id)
     }
 
     /// Return a property to its class default, recording a change if that
     /// changes its value.
     pub fn reset_property(&mut self, id: InstanceId, property: PropertyId) -> Result<(), DomError> {
+        if Some(property) == self.smooth_grid && self.voxels.remove(&id).is_some() {
+            self.journal.push(Change::Property { id, property });
+        }
         let inst = self.inst_mut(id)?;
         let Some(old) = inst.properties.remove(&property) else {
             return Ok(());
@@ -138,6 +149,9 @@ impl Dom {
         property: PropertyId,
         value: Value,
     ) -> Result<(), DomError> {
+        if Some(property) == self.smooth_grid && self.store_voxels(id, &value)? {
+            return Ok(());
+        }
         let target = ref_target(&value);
         if let Some(old) = self.inst_mut(id)?.properties.insert(property, value) {
             self.unlink(id, property, &old);

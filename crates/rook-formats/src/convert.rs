@@ -241,9 +241,11 @@ pub fn from_dom(dom: &Dom, roots: &[InstanceId]) -> WeakDom {
                 .unwrap_or_else(Ref::none)
         };
         let mut props: Vec<(String, Variant)> = Vec::new();
-        for (pid, value) in inst.properties() {
-            let value = file_encoding(db, inst.class, *pid, value);
-            props.push((db.property(*pid).name.to_owned(), value.to_variant(to_ref)));
+        let voxels = dom.voxel_property(id);
+        let stored = inst.properties().iter().map(|(p, v)| (*p, v));
+        for (pid, value) in stored.chain(voxels.as_ref().map(|(p, v)| (*p, v))) {
+            let value = file_encoding(db, inst.class, pid, value);
+            props.push((db.property(pid).name.to_owned(), value.to_variant(to_ref)));
         }
         for (name, value) in &inst.unknown_properties {
             props.push((name.clone(), value.to_variant(to_ref)));

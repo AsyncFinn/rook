@@ -1,9 +1,9 @@
 //! The Terrain API: fills, voxel reads and writes, region copies, legacy
 //! cells and material colors, on the voxels `rook_terrain` edits
 //! (`docs/behavior/terrain/api.md`). Workspace's Terrain is
-//! edited in the physics world's copy of its voxels, which goes back into
-//! `SmoothGrid` once a frame; any other Terrain is decoded and written
-//! back on each call.
+//! edited in the physics world's copy of its voxels, whose edited regions
+//! go back to the DOM's once a frame; any other Terrain is edited in the
+//! DOM's voxels at once.
 
 use glam::{Affine3A, IVec3, Vec3};
 use rbx_types::{Region3int16, Vector3int16};
@@ -88,7 +88,10 @@ fn read<R>(lua: &Lua, terrain: InstanceId, f: impl FnOnce(&Grid) -> R) -> R {
         if let Some(grid) = w.physics.terrain_grid(&mut w.dom, terrain) {
             return f(grid);
         }
-        f(&decoded(&w.dom, terrain))
+        match w.dom.voxels(terrain) {
+            Some(grid) => f(grid),
+            None => f(&Grid::new()),
+        }
     })
 }
 
@@ -102,18 +105,20 @@ fn edit<R>(lua: &Lua, terrain: InstanceId, f: impl FnOnce(&mut Grid) -> (R, Opti
                 .edit_terrain(&mut w.dom, terrain, f)
                 .expect("Workspace's Terrain");
         }
-        let mut grid = decoded(&w.dom, terrain);
-        let (out, changed) = f(&mut grid);
-        if changed.is_some() {
-            let bytes = Value::BinaryString(grid.encode().into());
-            rook_dom::ignore_stale(w.dom.set_property_by_name(terrain, "SmoothGrid", bytes));
+        let mut f = Some(f);
+        match w
+            .dom
+            .edit_voxels(terrain, |g| f.take().expect("called once")(g))
+        {
+            Ok(out) => out,
+            // An instance gone from the DOM edits nothing that stays.
+            Err(_) => f.expect("not called")(&mut Grid::new()).0,
         }
-        out
     })
 }
 
-/// An instance's `SmoothGrid` voxels; none when it has none or they don't
-/// decode.
+/// A TerrainRegion's `SmoothGrid` voxels; none when it has none or they
+/// don't decode.
 fn decoded(dom: &rook_dom::Dom, id: InstanceId) -> Grid {
     match dom.binary_property(id, "SmoothGrid") {
         Some(bytes) => Grid::decode(&bytes).unwrap_or_default(),

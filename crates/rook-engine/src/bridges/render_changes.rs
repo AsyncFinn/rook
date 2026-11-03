@@ -29,6 +29,10 @@ pub struct RenderChanges {
     pub full: bool,
     pub lighting: bool,
     pub terrain: bool,
+    /// The Terrain's voxels were written whole (its `SmoothGrid`).
+    pub terrain_voxels: bool,
+    /// Regions of a Terrain's voxels edited, in journal order.
+    pub terrain_edits: Vec<(InstanceId, rook_terrain::grid::edit::Bounds)>,
     pub lights: rustc_hash::FxHashSet<InstanceId>,
     pub lights_placed: rustc_hash::FxHashSet<InstanceId>,
     pub effects: rustc_hash::FxHashSet<InstanceId>,
@@ -56,6 +60,8 @@ impl RenderChanges {
         !self.full
             && !self.lighting
             && !self.terrain
+            && !self.terrain_voxels
+            && self.terrain_edits.is_empty()
             && self.lights.is_empty()
             && self.lights_placed.is_empty()
             && self.effects.is_empty()
@@ -74,6 +80,7 @@ impl RenderChanges {
         self.effects.remove(&id);
         self.effects_placed.remove(&id);
         self.effect_calls.retain(|(e, _)| *e != id);
+        self.terrain_edits.retain(|(t, _)| *t != id);
         self.placed.remove(&id);
         self.parts.remove(&id);
         self.moved.remove(&id);
@@ -205,6 +212,7 @@ pub(crate) struct RenderIds {
     model: ClassId,
     world_root: ClassId,
     terrain: ClassId,
+    smooth_grid: Option<PropertyId>,
     light: ClassId,
     attachment: ClassId,
     material_service: ClassId,
@@ -235,6 +243,9 @@ impl RenderIds {
                 model: class("Model"),
                 world_root: class("WorldRoot"),
                 terrain: class("Terrain"),
+                smooth_grid: db
+                    .find_canonical_property(class("Terrain"), "SmoothGrid")
+                    .map(|p| p.id),
                 light: class("Light"),
                 attachment: class("Attachment"),
                 material_service: class("MaterialService"),
@@ -309,6 +320,7 @@ impl DataModel {
         let adornment = |id: InstanceId| is_adornment(dom, id);
         for c in journal {
             match c {
+                Change::Voxels { id, bounds } => changes.terrain_edits.push((*id, *bounds)),
                 Change::Property { id, property } => {
                     // Part properties first: physics writes every moving
                     // part's CFrame each frame. Terrain is a BasePart too.
@@ -325,6 +337,7 @@ impl DataModel {
                         changes.lighting = true;
                     } else if dom.is_a_class(*id, ids.terrain) || *property == ids.global_wind {
                         changes.terrain = true;
+                        changes.terrain_voxels |= Some(*property) == ids.smooth_grid;
                     } else if dom.is_a_class(*id, ids.material_service) {
                         let name = rook_reflection::database().property(*property).name;
                         let overridden = name.strip_suffix("Name").and_then(Material::from_name);

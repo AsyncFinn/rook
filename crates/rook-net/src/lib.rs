@@ -21,6 +21,8 @@ use rustc_hash::FxHashMap;
 
 use rook_dom::{Attributes, Change, Dom, InstanceId};
 use rook_reflection::{ClassId, PropertyId, PropertyKind, Serialization};
+use rook_terrain::Grid;
+use rook_terrain::grid::edit::Bounds;
 use rook_types::Value;
 
 /// One server instance and its visible subtree, as the server has it now.
@@ -71,6 +73,15 @@ pub enum Update {
         id: InstanceId,
         name: String,
         value: Option<Value>,
+    },
+    /// A Terrain's voxels in `bounds` changed: `voxels` holds the chunks
+    /// holding them, as the server has them now. Roblox sends an edited
+    /// block of terrain too, never the whole grid
+    /// (`docs/behavior/replication.md#terrain`).
+    Voxels {
+        id: InstanceId,
+        bounds: Bounds,
+        voxels: Grid,
     },
     TagAdded {
         id: InstanceId,

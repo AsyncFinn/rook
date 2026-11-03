@@ -17,6 +17,7 @@ use rook_content::MaterialMap;
 use rook_content::decode::mesh::{Mesh, TerrainCorner, TerrainMapping};
 use rook_render::{Detile, TerrainColor, TerrainLook};
 use rook_terrain::grass::{GrassTops, add_grass_tops, blade_color};
+use rook_terrain::grid::edit::Bounds;
 use rook_terrain::lod::Rings;
 use rook_terrain::{ChunkMesh, Coloring, Facing, Grid, Layer, Seam, TerrainMaterial};
 use rook_types::MaterialColors;
@@ -46,13 +47,19 @@ struct MeshedChunk {
 /// A chunk of some level: the level and the chunk, in that level's chunks.
 type LevelChunk = (u8, IVec3);
 
-/// The terrain's surfaces near and far, kept until its `SmoothGrid`
-/// changes or the camera moves to other rings, and the scene entries
-/// drawing them.
+/// The terrain's surfaces near and far, kept until its voxels change or
+/// the camera moves to other rings, and the scene entries drawing them.
 #[derive(Debug, Default)]
 pub(super) struct TerrainCache {
-    /// The hash of the `SmoothGrid` the meshes were built from.
-    source: Option<blake3::Hash>,
+    /// The Terrain whose voxels `levels` hold.
+    meshed: Option<InstanceId>,
+    /// Its voxels were written whole since they were meshed.
+    whole: bool,
+    /// The regions of them edited since they were meshed.
+    edits: Vec<Bounds>,
+    /// How many voxels of each material level 0 holds, kept up to date by
+    /// each edit's chunks.
+    counts: [u64; 23],
     /// The voxels at every level of detail (`rook_terrain::lod::pyramid`),
     /// shared with the background mesher while it works.
     levels: Arc<Vec<Grid>>,
@@ -144,38 +151,59 @@ impl SceneCache {
         self.place_chunks(&keys);
     }
 
-    /// Mesh the Terrain's voxels again if they aren't the ones meshed
-    /// last: only the chunks an edit reached. With `place`, those chunks
-    /// are swapped in the scene and the entries that changed returned.
+    /// Note the frame's changes to the Terrain's voxels, which the next
+    /// [`SceneCache::take_voxels`] meshes (the scene may be rebuilt first).
+    pub(super) fn note_voxels(&mut self, changes: &RenderChanges) {
+        let t = &mut self.terrain;
+        t.whole |= changes.terrain_voxels;
+        let meshed = t.meshed;
+        t.edits.extend(
+            changes
+                .terrain_edits
+                .iter()
+                .filter(|(id, _)| Some(*id) == meshed)
+                .map(|(_, bounds)| *bounds),
+        );
+    }
+
+    /// Mesh what changed of the Terrain's voxels since they were meshed:
+    /// only the chunks the edits reached, or what differs from a whole
+    /// new grid. With `place`, those chunks are swapped in the scene and
+    /// the entries that changed returned.
     fn take_voxels(&mut self, dom: &Dom, place: bool) -> Vec<usize> {
-        let grid = self.terrain.instance.and_then(|t| smooth_grid(dom, t));
-        let source = grid.map(blake3::hash);
-        if source == self.terrain.source {
+        let t = &mut self.terrain;
+        let whole = std::mem::take(&mut t.whole) || t.meshed != t.instance;
+        let edits = std::mem::take(&mut t.edits);
+        if !whole && edits.is_empty() {
             return Vec::new();
         }
-        self.terrain.source = source;
-        let grid = match grid.map(Grid::decode) {
-            Some(Ok(grid)) => grid,
-            Some(Err(e)) => {
-                eprintln!("warning: Terrain.SmoothGrid doesn't decode: {e}");
-                Grid::new()
-            }
-            None => Grid::new(),
-        };
-        self.mesh_terrain(grid, place)
+        t.meshed = t.instance;
+        let empty = Grid::new();
+        let voxels = t.instance.and_then(|i| dom.voxels(i)).unwrap_or(&empty);
+        let materials = t.materials.clone();
+        let edits = (!whole).then_some(&edits[..]);
+        let mut changed = self.mesh_terrain(voxels, edits, place);
+        // A material new to the terrain needs its look read.
+        if place && self.terrain.materials != materials {
+            changed.extend(self.refresh_terrain(dom));
+        }
+        changed
     }
 
     /// Scripts changed the Terrain (its voxels or other properties) or
-    /// `Workspace.GlobalWind`: remesh what the voxel edits reached, read
-    /// the waves, wind, colors and grass again and redraw the terrain's
-    /// entries and blades. Returns the entries that changed, or `None`
-    /// when Workspace's Terrain is another instance and the scene must be
-    /// rebuilt.
-    pub(super) fn terrain_changed(&mut self, dom: &Dom) -> Option<Vec<usize>> {
+    /// `Workspace.GlobalWind`: remesh what the voxel edits reached and,
+    /// with `look`, read the waves, wind, colors and grass again and
+    /// redraw the terrain's entries and blades. Returns the entries that
+    /// changed, or `None` when Workspace's Terrain is another instance and
+    /// the scene must be rebuilt.
+    pub(super) fn terrain_changed(&mut self, dom: &Dom, look: bool) -> Option<Vec<usize>> {
         if workspace_terrain(dom) != self.terrain.instance {
             return None;
         }
         let mut changed = self.take_voxels(dom, true);
+        if !look {
+            return Some(changed);
+        }
         self.read_terrain_look(dom);
         changed.extend(self.refresh_terrain(dom));
         let color = self.terrain.grass.color;
@@ -360,21 +388,6 @@ fn terrain_look(dom: &Dom, terrain: Option<InstanceId>) -> TerrainLook {
 fn workspace_terrain(dom: &Dom) -> Option<InstanceId> {
     dom.find_service("Workspace")
         .and_then(|ws| dom.find_first_child_of_class(ws, "Terrain"))
-}
-
-/// A Terrain's `SmoothGrid`, borrowed, not cloned: a large map's grid is
-/// megabytes.
-fn smooth_grid(dom: &Dom, terrain: InstanceId) -> Option<&[u8]> {
-    let db = rook_reflection::database();
-    dom.get(terrain)?
-        .properties()
-        .iter()
-        .find_map(|(id, v)| match v {
-            Value::BinaryString(b) if db.property(*id).name == "SmoothGrid" => {
-                Some(AsRef::<[u8]>::as_ref(b))
-            }
-            _ => None,
-        })
 }
 
 #[cfg(test)]

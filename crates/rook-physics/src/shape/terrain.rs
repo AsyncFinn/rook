@@ -13,7 +13,6 @@ use rook_terrain::{
     CHUNK_VOXELS, ChunkMesh, Grid, TerrainMaterial, VOXEL_STUDS, chunk_of, chunks_to_mesh,
     mesh_chunk,
 };
-use rook_types::Value;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 mod edit;
@@ -117,21 +116,11 @@ fn pieces(chunk: ChunkMesh) -> Vec<Piece> {
         .collect()
 }
 
-/// Workspace's Terrain and its `SmoothGrid` bytes.
-fn smooth_grid(dom: &Dom) -> Option<(InstanceId, Option<&[u8]>)> {
+/// Workspace's Terrain and its voxels.
+fn workspace_terrain(dom: &Dom) -> Option<(InstanceId, Option<&Grid>)> {
     let ws = dom.find_service("Workspace")?;
     let terrain = dom.find_first_child_of_class(ws, "Terrain")?;
-    let bytes = dom
-        .get(terrain)?
-        .properties()
-        .iter()
-        .find_map(|(id, v)| match v {
-            Value::BinaryString(b) if dom.database().property(*id).name == "SmoothGrid" => {
-                Some(AsRef::<[u8]>::as_ref(b))
-            }
-            _ => None,
-        });
-    Some((terrain, bytes))
+    Some((terrain, dom.voxels(terrain)))
 }
 
 impl Physics {
@@ -159,7 +148,7 @@ impl Physics {
         self.terrain.unbuilt.clear();
         self.terrain.extent = None;
         self.terrain.edits.clear();
-        let Some((terrain, bytes)) = smooth_grid(dom) else {
+        let Some((terrain, voxels)) = workspace_terrain(dom) else {
             self.terrain.instance = None;
             return;
         };
@@ -167,21 +156,21 @@ impl Physics {
         // Even an empty Terrain gets its body: scripts may fill it.
         self.terrain.body = Some(self.world.insert_body(RigidBodyBuilder::fixed()));
         self.terrain.groups = self.interaction_groups(dom, terrain);
-        self.terrain.grid = match bytes.map(Grid::decode) {
-            Some(Ok(grid)) => grid,
-            // The renderer warns about one that doesn't decode.
-            None | Some(Err(_)) => return,
+        // Shares the DataModel's voxels until an edit writes to them.
+        let Some(voxels) = voxels else {
+            return;
         };
+        self.terrain.grid = voxels.clone();
         for c in chunks_to_mesh(&self.terrain.grid) {
             self.terrain.mark_unbuilt(c);
         }
     }
 
-    /// Only the voxels of the same Terrain changed (a script's edit
-    /// replicated, or written by hand): rebuild just the chunks that
-    /// differ. Returns false when the colliders must be built anew.
+    /// A whole `SmoothGrid` was written to the same Terrain: rebuild just
+    /// the chunks that differ (chunks it shares with the old voxels are
+    /// equal unread). Returns false when the colliders must be built anew.
     fn update_terrain(&mut self, dom: &Dom) -> bool {
-        let Some((terrain, bytes)) = smooth_grid(dom) else {
+        let Some((terrain, voxels)) = workspace_terrain(dom) else {
             return false;
         };
         if self.terrain.instance != Some(terrain)
@@ -190,10 +179,7 @@ impl Physics {
         {
             return false;
         }
-        let grid = match bytes.map(Grid::decode) {
-            Some(Ok(grid)) => grid,
-            None | Some(Err(_)) => Grid::new(),
-        };
+        let grid = voxels.cloned().unwrap_or_default();
         let changes = self.terrain.grid.changes(&grid);
         self.terrain.grid = grid;
         self.terrain.edits.clear();
@@ -201,6 +187,16 @@ impl Physics {
             self.voxels_changed(bounds);
         }
         true
+    }
+
+    /// Another's edit of the Terrain's voxels in `bounds` (one replicated
+    /// from the server): take that region and rebuild what it reaches.
+    pub(crate) fn take_voxels(&mut self, dom: &Dom, bounds: rook_terrain::grid::edit::Bounds) {
+        let Some(voxels) = self.terrain.instance.and_then(|t| dom.voxels(t)) else {
+            return;
+        };
+        self.terrain.grid.put_region(voxels, bounds);
+        self.voxels_changed(bounds);
     }
 
     /// Build the colliders of these chunks (unbuilt ones, each once).

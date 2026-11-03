@@ -9,12 +9,18 @@ use rook_terrain::lod::{pyramid, update_pyramid};
 use super::*;
 
 impl SceneCache {
-    /// Take `grid` as the terrain's voxels, and mesh what the rings around
-    /// the camera draw of it that changed (all of it the first time).
-    /// With `place`, the chunks are swapped in the scene as they are, and
-    /// the entries that changed are returned; without, the scene is being
-    /// rebuilt and places them itself.
-    pub(super) fn mesh_terrain(&mut self, grid: Grid, place: bool) -> Vec<usize> {
+    /// Take `voxels` as the terrain's voxels, and mesh what the rings
+    /// around the camera draw of what changed: the chunks `edits` reach,
+    /// or, with `None`, what differs from the voxels meshed before (all of
+    /// it the first time). With `place`, the chunks are swapped in the
+    /// scene as they are, and the entries that changed are returned;
+    /// without, the scene is being rebuilt and places them itself.
+    pub(super) fn mesh_terrain(
+        &mut self,
+        voxels: &Grid,
+        edits: Option<&[Bounds]>,
+        place: bool,
+    ) -> Vec<usize> {
         profiling::scope!("mesh_terrain");
         // The voxels change in place once the mesher has let go of them;
         // what it was meshing is of the old ones.
@@ -23,28 +29,49 @@ impl SceneCache {
         t.epoch += 1;
         let mut reached: Vec<FxHashSet<IVec3>> = Vec::new();
         if t.levels.is_empty() {
-            t.levels = Arc::new(pyramid(grid));
+            // Level 0 shares the DataModel's voxels until they change.
+            t.levels = Arc::new(pyramid(voxels.clone()));
+            t.counts = voxels.counts();
+            t.rows = rows(voxels);
         } else {
             let levels = Arc::get_mut(&mut t.levels).expect("the mesher let go of the voxels");
-            let changes = levels[0].changes(&grid);
-            levels[0] = grid;
+            let changes = match edits {
+                None => {
+                    let changes = levels[0].changes(voxels);
+                    levels[0] = voxels.clone();
+                    t.counts = voxels.counts();
+                    t.rows = rows(voxels);
+                    changes
+                }
+                Some(edits) => {
+                    let mut chunks: Vec<IVec3> = edits.iter().flat_map(|b| b.chunks(0)).collect();
+                    chunks.sort_unstable_by_key(|c| (c.x, c.y, c.z));
+                    chunks.dedup();
+                    for c in chunks {
+                        let old = levels[0].chunk_counts(c);
+                        levels[0].copy_chunks(voxels, [c]);
+                        let new = levels[0].chunk_counts(c);
+                        for ((count, o), n) in t.counts.iter_mut().zip(old).zip(new) {
+                            *count = *count - o + n;
+                        }
+                        // Rows only widen: a row left empty draws nothing.
+                        if new.iter().any(|&n| n > 0) {
+                            t.rows = (t.rows.0.min(c.y - 1), t.rows.1.max(c.y));
+                        }
+                    }
+                    edits.to_vec()
+                }
+            };
             reached = update_pyramid(levels, &changes)
                 .into_iter()
                 .map(|level| level.iter().flat_map(|b| b.chunks(MESH_REACH)).collect())
                 .collect();
         }
-        let fine = &t.levels[0];
-        let counts = fine.counts();
+        let counts = t.counts;
         t.materials = TerrainMaterial::ALL
             .into_iter()
             .filter(|m| counts[*m as usize] > 0)
             .collect();
-        let rows: Vec<i32> = fine.chunks().map(|c| c.y).collect();
-        // The chunks just below stored ones hold surfaces too.
-        t.rows = (
-            rows.iter().min().map_or(0, |y| y - 1),
-            rows.iter().max().copied().unwrap_or(0),
-        );
         let mut changed = Vec::new();
         for (level, chunks) in reached.iter().enumerate() {
             for c in chunks {
@@ -115,4 +142,14 @@ impl SceneCache {
             entries: Vec::new(),
         }
     }
+}
+
+/// The lowest and highest level-0 chunk row holding voxels, the lowest
+/// one row down: the chunks just below stored ones hold surfaces too.
+fn rows(voxels: &Grid) -> (i32, i32) {
+    let mut rows: Option<(i32, i32)> = None;
+    for c in voxels.chunks() {
+        rows = Some(rows.map_or((c.y, c.y), |(lo, hi)| (lo.min(c.y), hi.max(c.y))));
+    }
+    rows.map_or((0, 0), |(lo, hi)| (lo - 1, hi))
 }

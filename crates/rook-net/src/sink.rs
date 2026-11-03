@@ -207,6 +207,12 @@ impl Sink {
                         warn_failed(result, client, c, "setting an attribute");
                     }
                 }
+                Update::Voxels { id, bounds, voxels } => {
+                    if let Some(c) = self.client_id(*id) {
+                        let result = client.write_voxels(c, voxels, *bounds);
+                        warn_failed(result, client, c, "writing voxels");
+                    }
+                }
                 Update::TagAdded { id, tag } => {
                     if let Some(c) = self.client_id(*id) {
                         warn_failed(client.add_tag(c, tag), client, c, "adding a tag");

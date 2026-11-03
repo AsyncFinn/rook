@@ -12,6 +12,7 @@ rust-version.workspace = true
 glam.workspace = true
 rustc-hash.workspace = true
 rook-types.workspace = true
+rook-terrain.workspace = true
 rook-reflection.workspace = true
 rbx_types.workspace = true
 slotmap.workspace = true

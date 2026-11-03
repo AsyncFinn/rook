@@ -38,8 +38,8 @@ property in the database (the rest are server- or Studio-only):
 - pairs with nothing in their names to go by: Sound's `PlaybackSpeed`
   (replicated as `Pitch`), Player's `Team` (Roblox clients read their
   team), Workspace's `CollisionGroups` (clients know the registered
-  groups), Terrain's `SmoothGrid` (Roblox streams voxels to clients
-  its own way; clients see the terrain) and TextSource's `UserId`
+  groups), Terrain's `SmoothGrid` (Roblox sends voxels to clients
+  its own way, see [terrain](#terrain); clients see the terrain) and TextSource's `UserId`
   (Roblox's chat on clients finds the local player's TextSource by it).
 
 Confirmed for Sound's three (the server's sounds are heard on clients,
@@ -99,6 +99,31 @@ poses again, which a client that hears only the root can't do. It's taken
 when a script sets Part0, Part1 or Enabled, or moves one of the parts on
 its own by Position (Inference). A part a motor turns while its root holds
 still is sent itself.
+
+## Terrain
+
+Measured 2026-11-03 in a Baseplate playtest (Studio 0.743, streaming on):
+the server wrote 128 by 16 by 128 voxels of random materials and
+occupancies, then a server script toggled a `FillBall` between Grass and
+Air every 0.5 s; the client's `Stats.Network` replicator items were read
+while it ran (`DataReceiveKbps` reads 0 in a local playtest).
+
+- Each edit reaches the client as one "cluster" packet (Received Cluster
+  Packets about 2 a second, one per edit), and the client reads every
+  flip with `ReadVoxels`.
+- A packet holds the block of terrain around the edit, never the whole
+  grid: a radius-1.5 ball costs 441 bytes in empty air but 4.9 KB inside
+  the random voxels (its neighbors go with it), a radius-6 one 2.4 KB in
+  air and 6.3 KB inside; a radius-24 ball in air, all full voxels, 272
+  bytes. The random grid alone is hundreds of KB. From 4.9 KB of random
+  voxels, the block is about 16 voxels on a side (Inference).
+
+In Rook (`rook_net::source`): an edit's region (`Change::Voxels`) goes to
+each client that sees the Terrain as `Update::Voxels`, the chunks holding
+the region as the server has them, which the client takes in place of
+its own (`Dom::write_voxels`). Rook's chunks are its storage's 32 voxels
+on a side, larger than Roblox's block. A joining client gets the voxels
+whole, as `SmoothGrid`, and so does a script's whole write of it.
 
 ## From clients
 

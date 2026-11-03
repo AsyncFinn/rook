@@ -1,5 +1,7 @@
 use rook_reflection::PropertyId;
 
+use rook_terrain::grid::edit::Bounds;
+
 use crate::InstanceId;
 
 /// One recorded mutation.
@@ -45,6 +47,13 @@ pub enum Change {
     /// Nothing holds the destroyed instance any more: every reader drops
     /// what it keeps of it, as its slot is freed at the next trim.
     Collected(InstanceId),
+    /// Terrain `id`'s voxels in `bounds` changed (a script's edit, or one
+    /// replicated): the region alone, where a change of `SmoothGrid` is
+    /// all of them.
+    Voxels {
+        id: InstanceId,
+        bounds: Bounds,
+    },
     TagAdded {
         id: InstanceId,
         tag: String,

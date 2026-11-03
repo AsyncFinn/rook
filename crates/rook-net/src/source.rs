@@ -137,6 +137,15 @@ impl Source {
                     name: name.clone(),
                     value: server.attribute(*id, name).cloned(),
                 }),
+                Change::Voxels { id, bounds } if visible(*id) => {
+                    if let Some(grid) = server.voxels(*id) {
+                        out.push(Update::Voxels {
+                            id: *id,
+                            bounds: *bounds,
+                            voxels: grid.region(*bounds),
+                        });
+                    }
+                }
                 Change::TagAdded { id, tag } if visible(*id) => out.push(Update::TagAdded {
                     id: *id,
                     tag: tag.clone(),
@@ -162,6 +171,9 @@ impl Source {
             .properties()
             .keys()
             .filter_map(|&p| Some((p, replicated_value(server, id, p)?)))
+            // A Terrain's voxels, which it doesn't hold as a property:
+            // a new copy takes them whole.
+            .chain(server.voxel_property(id))
             .collect();
         properties.shrink_to_fit();
         Node {

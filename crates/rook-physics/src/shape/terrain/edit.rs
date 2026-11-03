@@ -5,8 +5,9 @@
 //! Studio, where rays find a fill 2 frames later and miss a carved hole's
 //! old surface 1 frame later: the colliders of the chunks the frame's
 //! edits touched come down, to be built again when something comes near,
-//! what rested there wakes, and the voxels go back into `SmoothGrid`,
-//! where the renderer and replication see them.
+//! what rested there wakes, and the edited regions go to the Terrain's
+//! voxels in the DOM (`Dom::write_voxels`), where the renderer and
+//! replication take just those regions.
 
 use rook_terrain::MESH_REACH;
 use rook_terrain::grid::edit::Bounds;
@@ -39,25 +40,23 @@ impl Physics {
     }
 
     /// The end of a frame: bring collision up to the voxels scripts edited
-    /// and write them to the Terrain's `SmoothGrid`.
+    /// and write the regions they changed to the Terrain's voxels.
     pub fn write_terrain(&mut self, dom: &mut Dom) {
         if self.terrain.edits.is_empty() {
             return;
         }
         profiling::scope!("Physics::write_terrain");
         self.sync(dom);
-        for bounds in std::mem::take(&mut self.terrain.edits) {
+        let edits = std::mem::take(&mut self.terrain.edits);
+        for &bounds in &edits {
             self.voxels_changed(bounds);
         }
         let Some(terrain) = self.terrain.instance else {
             return;
         };
-        let bytes = self.terrain.grid.encode();
-        rook_dom::ignore_stale(dom.set_property_by_name(
-            terrain,
-            "SmoothGrid",
-            Value::BinaryString(bytes.into()),
-        ));
+        for bounds in edits {
+            rook_dom::ignore_stale(dom.write_voxels(terrain, &self.terrain.grid, bounds));
+        }
         // The voxels written are the ones here already.
         self.cursor = dom.journal().end();
     }

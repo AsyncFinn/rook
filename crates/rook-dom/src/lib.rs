@@ -23,6 +23,7 @@ mod journal;
 mod observe;
 mod properties;
 mod tree;
+mod voxels;
 
 pub use instance::Attributes;
 pub use journal::Change;
@@ -116,6 +117,10 @@ pub struct Dom {
     /// The instances of each class callers look up often, by
     /// [`Dom::track_class`] (see `classes.rs`).
     of_class: FxHashMap<ClassId, FxHashSet<InstanceId>>,
+    /// Each Terrain's voxels, decoded from its `SmoothGrid` (see
+    /// `voxels.rs`), and that property's id.
+    voxels: FxHashMap<InstanceId, rook_terrain::Grid>,
+    smooth_grid: Option<PropertyId>,
     /// Debug builds remember freed ids, so reading one fails: a slot that
     /// is gone reads like a removed one, and the holder that read it kept
     /// it past its `Collected`.
@@ -149,6 +154,11 @@ impl Dom {
             collecting: Vec::new(),
             tagged: FxHashMap::default(),
             of_class: FxHashMap::default(),
+            voxels: FxHashMap::default(),
+            smooth_grid: db
+                .class_by_name("Terrain")
+                .and_then(|t| db.find_canonical_property(t.id, "SmoothGrid"))
+                .map(|p| p.id),
             #[cfg(debug_assertions)]
             freed: rustc_hash::FxHashSet::default(),
         }

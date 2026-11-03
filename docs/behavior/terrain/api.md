@@ -102,19 +102,29 @@ physics world's decoded copy of Workspace's Terrain
 (`rook_physics::terrain::edit`), so reads see edits at once. At the end
 of the frame the colliders of the chunks the frame's edits reach (2
 voxels around them, as far as the mesher reads) come down, sleeping
-bodies there wake, and the voxels are written to `SmoothGrid` once,
-where the renderer and replication see them. So rays see edits from the
-next frame. A changed `SmoothGrid` from anywhere else (a client
-receiving the server's edit) is compared with the voxels already held,
-and only the chunks that differ are rebuilt, in physics and in the
-renderer, which swaps just those chunks in its scene (the rest of the
-scene stays as it is). Workspace always has a Terrain now, as in Roblox.
+bodies there wake, and each edited region goes to the Terrain's voxels
+in the DOM (`Dom::write_voxels`), journaled as that region alone
+(`Change::Voxels`). So rays see edits from the next frame. A Terrain
+holds its voxels decoded, as Roblox's Terrain holds its voxel storage:
+`SmoothGrid` is their saved form, decoded when it's written whole (a
+file loading, a whole write) and encoded when it's read whole (saving, a
+joining client's first copy). Replication sends each region's chunks to
+clients ([replication](../replication.md#terrain)); a client's physics
+takes them and rebuilds what they reach, and the renderer takes the same
+chunks into its levels of detail, keeps its material counts by those
+chunks, and swaps just the chunks drawn there in its scene. Grids share
+their chunks' voxels until one writes to them (copy on write), so the
+DOM's, physics' and the renderer's voxels are one copy, and taking a
+region copies no voxels. Any other Terrain is edited in the DOM's voxels
+directly. A whole new `SmoothGrid` is compared with the voxels held
+(chunks still shared are equal unread), and only the chunks that differ
+are rebuilt. Workspace always has a Terrain now, as in Roblox.
 
 *Costs* (release build, an 86k-part place, the archive's largest terrain: 2.5 MB of
 `SmoothGrid`, 3,165 chunks): decoding takes 250 to 300 ms and encoding
-90 ms, so a frame with an edit there costs about that on the server and
-on each client (meshing a chunk again is about 2 ms). Small terrains
-cost next to nothing.
+90 ms, paid only when a place loads, a client joins or a script writes
+the whole grid. An edit costs the chunks it reaches (meshing a chunk
+again is about 2 ms), however large the terrain.
 
 *Approximations and gaps*:
 
@@ -129,11 +139,6 @@ cost next to nothing.
 - Water over a solid voxel fills its water channel (shorelines), which
   Rook doesn't draw yet; Rook keeping a replaced water voxel's water as
   the solid's is Inference.
-- Every edit frame encodes the whole `SmoothGrid` on the server, and
-  decodes and compares it whole in each client's physics and renderer
-  (see Costs), where Roblox replicates the edited region. In a place
-  with 103,878 parts and 453 KB of `SmoothGrid` that's about 13 ms on
-  the server and 20 ms each in the client's physics and renderer.
 - Not implemented: `ReadVoxelChannels` and `WriteVoxelChannels` (no
   archive use), the `*_beta` and Roblox-only methods, TerrainRegion's
   transforms.

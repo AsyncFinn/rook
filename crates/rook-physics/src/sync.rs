@@ -34,6 +34,7 @@ impl Physics {
         let mut materials: Vec<InstanceId> = Vec::new();
         let mut attachments: Vec<InstanceId> = Vec::new();
         let mut workspace_changed = false;
+        let mut voxels = Vec::new();
         let mut seen = false;
         let db = dom.database();
         for change in dom.journal().since(self.cursor) {
@@ -74,6 +75,10 @@ impl Physics {
                         attachments.push(*id);
                     }
                 }
+                Change::Voxels { id, bounds } if Some(*id) == self.terrain.instance => {
+                    seen = true;
+                    voxels.push(*bounds);
+                }
                 Change::Reparented { subtree, .. } => {
                     seen = true;
                     for &i in subtree {
@@ -96,6 +101,12 @@ impl Physics {
         }
         if workspace_changed {
             self.read_workspace(dom, props);
+        }
+        // A whole new grid (`stale`) is taken whole instead.
+        if !self.terrain.stale {
+            for bounds in voxels {
+                self.take_voxels(dom, bounds);
+            }
         }
         if seen || workspace_changed {
             self.generation += 1;

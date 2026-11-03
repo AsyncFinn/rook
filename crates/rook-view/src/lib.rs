@@ -24,7 +24,7 @@ use rook_render::{
 };
 use rook_types::{
     CFrame, Color3, Material, MaterialSet, MeshHost, MeshKind, MeshLook, MeshType, NormalId,
-    SurfaceType, TilePattern, Tiling, TrussLook, TrussStyle, Value, mesh_part_scale,
+    SurfaceType, TilePattern, Tiling, TrussLook, TrussStyle, mesh_part_scale,
 };
 
 use content::loader::{FileRef, FileState, Files, Loaded};
@@ -228,6 +228,7 @@ impl SceneCache {
                 parts.retain(|p| !changes.collected.contains(p));
             }
         }
+        self.note_voxels(changes);
         if changes.full {
             self.rebuild(dom);
             return SceneChange::Full;
@@ -238,8 +239,8 @@ impl SceneCache {
         self.lights.apply(dom, changes, &mut self.scene.lights);
         self.with_effects(|effects, drawn, images| effects.changed(dom, changes, drawn, images));
         let mut moved = Vec::new();
-        if changes.terrain {
-            match self.terrain_changed(dom) {
+        if changes.terrain || !changes.terrain_edits.is_empty() {
+            match self.terrain_changed(dom, changes.terrain) {
                 Some(entries) => changed.extend(entries),
                 None => {
                     self.rebuild(dom);
