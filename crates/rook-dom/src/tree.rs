@@ -370,10 +370,12 @@ impl Dom {
         copy.properties = src.properties.clone();
         copy.unknown_properties = src.unknown_properties.clone();
         copy.attributes = src.attributes.clone();
-        copy.tags = src.tags.clone();
+        let tags = src.tags.clone();
         copy.parent = parent;
         let children = src.children.as_slice().to_vec();
         let new = self.instances.insert(copy);
+        self.set_tags(new, tags).expect("just made");
+        self.note_class(new);
         self.journal.push(Change::Created(new));
         map.insert(id, new);
         for child in children {

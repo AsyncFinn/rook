@@ -148,7 +148,43 @@ fn attributes_and_tags() {
     dom.add_tag(a, "Lava").unwrap();
     dom.add_tag(a, "Lava").unwrap();
     assert!(dom.has_tag(a, "Lava"));
-    assert_eq!(dom.get(a).unwrap().tags.len(), 1);
+    assert_eq!(dom.get(a).unwrap().tags().len(), 1);
+}
+
+/// The tag and class indexes follow tagging, clones, files, leaving the
+/// tree and freeing; lookups list only what's in the DataModel (tags) and
+/// what's not yet freed (classes), in id order.
+#[test]
+fn tag_and_class_indexes() {
+    let mut dom = Dom::new();
+    let spawn = dom.database().class_by_name("SpawnLocation").unwrap().id;
+    let early = dom.create(spawn);
+    dom.track_class(spawn);
+    let a = part(&mut dom, "A");
+    let b = part(&mut dom, "B");
+    let root = dom.root();
+    dom.set_parent(a, Some(root)).unwrap();
+    dom.set_parent(b, Some(root)).unwrap();
+    dom.add_tag(b, "Lava").unwrap();
+    dom.add_tag(a, "Lava").unwrap();
+    assert_eq!(dom.tagged("Lava"), [a, b]);
+    let copy = dom.clone_instance(a).unwrap();
+    assert_eq!(dom.tagged("Lava"), [a, b], "a clone starts unparented");
+    dom.set_parent(copy, Some(root)).unwrap();
+    assert_eq!(dom.tagged("Lava").len(), 3);
+    dom.set_tags(copy, vec!["Ice".into()]).unwrap();
+    assert_eq!(dom.tagged("Lava"), [a, b]);
+    assert_eq!(dom.all_tags(), ["Ice", "Lava"]);
+    dom.remove_tag(b, "Lava").unwrap();
+    dom.set_parent(a, None).unwrap();
+    assert!(dom.tagged("Lava").is_empty());
+    let late = dom.create(spawn);
+    let cloned = dom.clone_instance(late).unwrap();
+    assert_eq!(dom.instances_of(spawn).unwrap(), [early, late, cloned]);
+    dom.destroy(late).unwrap();
+    collect(&mut dom);
+    collect(&mut dom);
+    assert_eq!(dom.instances_of(spawn).unwrap(), [early, cloned]);
 }
 
 /// What the engine does at two trims: announce, then free.

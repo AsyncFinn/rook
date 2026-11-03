@@ -28,9 +28,9 @@ fn spawns_for(dom: &Dom, player: InstanceId) -> Vec<InstanceId> {
     let team_color = (dom.bool_property(player, "Neutral") == Some(false))
         .then(|| dom.brick_color_property(player, "TeamColor"))
         .flatten();
-    dom.descendants(ws)
-        .into_iter()
-        .filter(|&s| dom.is_a(s, "SpawnLocation"))
+    let spawns = dom.instances_of(crate::world::spawn_class());
+    (spawns.expect("World::new tracks them").into_iter())
+        .filter(|&s| dom.is_ancestor_of(ws, s))
         .filter(|&s| dom.bool_property(s, "Enabled") != Some(false))
         .filter(|&s| {
             dom.bool_property(s, "Neutral") != Some(false)

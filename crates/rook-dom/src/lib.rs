@@ -15,6 +15,7 @@
 //! Roblox. Error texts are Inference until the conformance suite pins them.
 
 mod attributes;
+mod classes;
 mod collect;
 mod drawn;
 mod instance;
@@ -31,7 +32,7 @@ pub use properties::zero_value;
 use instance::Instance;
 use journal::Journal;
 
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::cell::RefCell;
 
 use rook_reflection::{ClassId, Database, PropertyId, PropertyType};
@@ -110,6 +111,11 @@ pub struct Dom {
     destroyed: Vec<InstanceId>,
     /// Instances announced as [`Change::Collected`], freed at the next trim.
     collecting: Vec<InstanceId>,
+    /// The instances with each tag, in the tree or not (see `attributes.rs`).
+    tagged: FxHashMap<String, FxHashSet<InstanceId>>,
+    /// The instances of each class callers look up often, by
+    /// [`Dom::track_class`] (see `classes.rs`).
+    of_class: FxHashMap<ClassId, FxHashSet<InstanceId>>,
     /// Debug builds remember freed ids, so reading one fails: a slot that
     /// is gone reads like a removed one, and the holder that read it kept
     /// it past its `Collected`.
@@ -141,6 +147,8 @@ impl Dom {
             observer: None,
             destroyed: Vec::new(),
             collecting: Vec::new(),
+            tagged: FxHashMap::default(),
+            of_class: FxHashMap::default(),
             #[cfg(debug_assertions)]
             freed: rustc_hash::FxHashSet::default(),
         }
@@ -200,6 +208,7 @@ impl Dom {
         let name = self.db.class(class).name.to_owned();
         let id = self.instances.insert(Instance::new(class, name));
         self.journal.push(Change::Created(id));
+        self.note_class(id);
         id
     }
 

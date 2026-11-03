@@ -293,3 +293,37 @@ fn changes_draw_again_only_their_pieces() {
     let bordered = step(&mut dom, "BorderSizePixel", border, other);
     assert_eq!(bordered, [true, true, false, true]);
 }
+
+/// A ScreenGui coming or going, or GUI moving between ScreenGuis, lays
+/// out and draws again only the trees it left and joined: the others'
+/// pieces stay the same `Arc`, and the screen ends as a fresh drawing
+/// draws it.
+#[test]
+fn trees_coming_and_going_leave_the_others() {
+    let (mut dom, player_gui) = client();
+    let kept = child(&mut dom, "ScreenGui", player_gui, &[]);
+    square(&mut dom, kept, 1, 0.1);
+    let other = child(&mut dom, "ScreenGui", player_gui, &[]);
+    let mover = square(&mut dom, other, 1, 0.2);
+    let mut gui = laid_out(&mut dom);
+    let mut before = gui.draw(&dom);
+    let mut step = |dom: &mut Dom, gui: &mut Gui| {
+        gui.sync(dom);
+        let now = gui.draw(dom);
+        let kept: Vec<bool> = (now.iter())
+            .map(|p| before.iter().any(|b| Arc::ptr_eq(b, p)))
+            .collect();
+        before = now;
+        assert_eq!(drawn(gui, dom), drawn(&mut laid_out(dom), dom));
+        kept
+    };
+    let added = dom.create_by_name("ScreenGui").unwrap();
+    square(&mut dom, added, 1, 0.3);
+    dom.set_parent(added, Some(player_gui)).unwrap();
+    assert_eq!(step(&mut dom, &mut gui), [true, true, false]);
+    dom.set_parent(mover, Some(added)).unwrap();
+    assert_eq!(step(&mut dom, &mut gui), [true, true, false]);
+    dom.set_parent(added, None).unwrap();
+    assert_eq!(step(&mut dom, &mut gui), [true]);
+    assert!(!gui.layout.contains(mover));
+}

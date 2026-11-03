@@ -173,7 +173,7 @@ impl Source {
             name: inst.name().to_owned(),
             properties,
             attributes: inst.attributes.clone(),
-            tags: inst.tags.clone(),
+            tags: inst.tags().to_vec(),
             children: server
                 .children(id)
                 .iter()

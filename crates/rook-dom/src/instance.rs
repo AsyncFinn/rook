@@ -65,7 +65,8 @@ pub struct Instance {
     /// saving doesn't lose them.
     pub unknown_properties: Vec<(String, Value)>,
     pub attributes: Attributes,
-    pub tags: Vec<String>,
+    /// Written only through [`crate::Dom`], which indexes them.
+    pub(crate) tags: Vec<String>,
     /// Counts up with every instance made, in any DataModel, so later
     /// ones compare greater (ids are reused and say nothing of age).
     pub(crate) created: u64,
@@ -105,6 +106,11 @@ impl Children {
 static CREATED: AtomicU64 = AtomicU64::new(0);
 
 impl Instance {
+    /// Its CollectionService tags, in the order they were added.
+    pub fn tags(&self) -> &[String] {
+        &self.tags
+    }
+
     pub(crate) fn new(class: ClassId, name: String) -> Self {
         Self {
             class,

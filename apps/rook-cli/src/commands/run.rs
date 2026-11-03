@@ -155,9 +155,9 @@ fn dump(dm: &DataModel, path: &str) {
             dom.class_name(id)
         );
         if let Some(inst) = dom.get(id)
-            && !inst.tags.is_empty()
+            && !inst.tags().is_empty()
         {
-            line.push_str(&format!(" .{}", inst.tags.join(" .")));
+            line.push_str(&format!(" .{}", inst.tags().join(" .")));
         }
         if let Some(selector) = dom.string_property(id, "Selector") {
             line.push_str(&format!(" {selector:?}"));

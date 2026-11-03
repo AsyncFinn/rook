@@ -87,8 +87,8 @@ fn convert<W: std::ops::Deref<Target = WeakDom>>(
                     }
                 }
                 ("Tags", Variant::Tags(tags)) => {
-                    dom.instance_mut(id).expect("exists").tags =
-                        tags.iter().map(str::to_owned).collect();
+                    let tags = tags.iter().map(str::to_owned).collect();
+                    dom.set_tags(id, tags).expect("exists");
                 }
                 (_, variant) => {
                     if let Variant::UniqueId(u) = &variant {
@@ -255,9 +255,9 @@ pub fn from_dom(dom: &Dom, roots: &[InstanceId]) -> WeakDom {
             }
             props.push(("Attributes".to_owned(), Variant::Attributes(attrs)));
         }
-        if !inst.tags.is_empty() {
+        if !inst.tags().is_empty() {
             let mut tags = rbx_types::Tags::new();
-            for t in &inst.tags {
+            for t in inst.tags() {
                 tags.push(t);
             }
             props.push(("Tags".to_owned(), Variant::Tags(tags)));

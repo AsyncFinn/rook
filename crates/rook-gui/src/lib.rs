@@ -57,9 +57,11 @@ pub fn is_layout_output(name: &str) -> bool {
 pub struct Gui {
     /// Where in the journal changes were last looked at.
     cursor: u64,
-    /// Everything lays out again: GUI trees came or went, the screen
-    /// resized, or a font arrived.
+    /// Everything lays out again: the screen resized, or a font arrived.
     stale: bool,
+    /// GUI that moved in the tree since the last layout: each subtree, and
+    /// the top of the tree it left.
+    moved: Vec<(Option<InstanceId>, Vec<InstanceId>)>,
     /// Objects changed since the last layout; their trees lay out again.
     changed: FxHashSet<InstanceId>,
     /// Objects whose own place changed since the last layout; each is
@@ -112,6 +114,7 @@ impl Default for Gui {
         Self {
             cursor: 0,
             stale: true,
+            moved: Vec::new(),
             changed: FxHashSet::default(),
             shifted: FxHashSet::default(),
             restyled: FxHashSet::default(),
@@ -208,6 +211,14 @@ impl Gui {
     }
     /// Drop what the GUI keeps about `id`, which is being freed.
     fn forget(&mut self, id: InstanceId) {
+        for (old_top, subtree) in &mut self.moved {
+            subtree.retain(|&i| i != id);
+            if *old_top == Some(id) {
+                *old_top = None;
+            }
+        }
+        self.layout.drop(&FxHashSet::from_iter([id]));
+        self.layout.texts.remove(&id);
         self.changed.remove(&id);
         self.shifted.remove(&id);
         self.restyled.remove(&id);
@@ -264,6 +275,17 @@ impl Gui {
                 let watch = self.watch.as_ref().expect("made above");
                 match (watch.touches(dom, change), change) {
                     (Touch::All, _) => self.stale = true,
+                    (
+                        Touch::Tree,
+                        Change::Reparented {
+                            old_ancestors,
+                            subtree,
+                            ..
+                        },
+                    ) => {
+                        let old_top = layout::top_along(dom, old_ancestors.iter().copied());
+                        self.moved.push((old_top, subtree.clone()));
+                    }
                     (Touch::Layout, Change::Property { id, .. }) => _ = self.changed.insert(*id),
                     (Touch::Place, Change::Property { id, .. }) => _ = self.shifted.insert(*id),
                     (Touch::Look, Change::Property { id, .. }) => _ = self.restyled.insert(*id),
@@ -298,6 +320,7 @@ impl Gui {
             let previous = (&self.layout, &self.turning);
             self.layout = Layout::screens(dom, previous, &mut self.fonts, &world);
             self.stale = false;
+            self.moved.clear();
             self.changed.clear();
             self.shifted.clear();
             self.restyled.clear();
@@ -307,14 +330,19 @@ impl Gui {
             self.write(dom);
             return;
         }
+        let joined = self.take_moved(dom);
         let (shifted, whole) = self.layout.alone(dom, std::mem::take(&mut self.shifted));
         self.changed.extend(whole);
         // Trees not laid out (in storage, or a server's world GUI) wait for
         // a script to read them.
         let touched: Vec<InstanceId> = std::mem::take(&mut self.changed).into_iter().collect();
-        let changed: Vec<InstanceId> = (tops(dom, touched.iter().copied().collect()).into_iter())
+        let mut changed: Vec<InstanceId> = (tops(dom, touched.iter().copied().collect()))
+            .into_iter()
             .filter(|top| self.layout.placed.contains_key(top))
+            .chain(joined)
             .collect();
+        changed.sort_unstable();
+        changed.dedup();
         if !changed.is_empty() {
             profiling::scope!("Gui::layout trees");
             (self.layout).redo(dom, &changed, (&mut self.fonts, &self.turning));
@@ -359,6 +387,45 @@ impl Gui {
         (self.layout).redo(dom, &resized, (&mut self.fonts, &self.turning));
         self.write_trees(dom, &resized);
         self.redraw(dom, &resized);
+    }
+
+    /// Take the GUI that moved in the tree out of where it was laid out,
+    /// and return the trees to lay out again: those it left, and those it
+    /// joined that are laid out (a screen's, or a client's world GUI).
+    fn take_moved(&mut self, dom: &Dom) -> Vec<InstanceId> {
+        let moved = std::mem::take(&mut self.moved);
+        if moved.is_empty() {
+            return Vec::new();
+        }
+        // What shows, and what input reaches, may have changed.
+        self.laid_out += 1;
+        let workspace = dom.find_service("Workspace");
+        let in_workspace = |id: InstanceId| workspace.is_some_and(|ws| dom.is_ancestor_of(ws, id));
+        let client = dom.local_player().is_some();
+        let mut trees = FxHashSet::default();
+        for (old_top, subtree) in moved {
+            let ids: FxHashSet<InstanceId> = subtree.iter().copied().collect();
+            self.layout.drop(&ids);
+            for &id in &subtree {
+                // A ScreenGui or world GUI that came or went.
+                self.screen.restack(id);
+                self.canvases.remove(&id);
+                if draw::is_message(dom, id) {
+                    self.screen.repaint_messages();
+                }
+            }
+            self.in_world
+                .retain(|&id| !ids.contains(&id) || in_workspace(id));
+            self.messages
+                .retain(|&id| !ids.contains(&id) || dom.parent(id).is_some());
+            // The tree it left, if that's still laid out.
+            trees.extend(old_top.filter(|top| self.layout.placed.contains_key(top)));
+            let joined = (subtree.iter()).filter_map(|&id| layout::top_of(dom, id));
+            trees.extend(joined.filter(|&top| {
+                layout::on_screen(dom, top) || client && self.in_world.contains(&top)
+            }));
+        }
+        trees.into_iter().collect()
     }
 
     /// Work out this frame's names and health bars over heads, on a

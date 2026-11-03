@@ -40,7 +40,9 @@ pub(crate) enum Touch {
     Place,
     /// Where things are in the changed object's tree.
     Layout,
-    /// Which trees there are, or the screen they're laid out on.
+    /// GUI moved in the tree: the trees it left and joined lay out again.
+    Tree,
+    /// The screen the trees are laid out on.
     All,
 }
 
@@ -110,7 +112,7 @@ impl Watch {
             Change::Reparented { subtree, .. }
                 if subtree.iter().any(|&id| self.is_gui(dom, id)) =>
             {
-                Touch::All
+                Touch::Tree
             }
             _ => Touch::Nothing,
         }

@@ -253,8 +253,8 @@ impl Sink {
             for (k, v) in node.attributes.iter() {
                 c.attributes.insert(k.to_owned(), v.clone());
             }
-            c.tags.clone_from(&node.tags);
         }
+        let _ = client.set_tags(cid, node.tags.clone());
     }
 
     /// References follow the instance to its client copy, or become nil if

@@ -301,8 +301,20 @@ pub struct World {
         FxHashMap<InstanceId, crate::api::methods::camera_moves::Interpolation>,
 }
 
+/// SpawnLocation, which the DOM indexes so a respawn needn't walk
+/// Workspace.
+pub(crate) fn spawn_class() -> rook_reflection::ClassId {
+    static CLASS: std::sync::LazyLock<rook_reflection::ClassId> = std::sync::LazyLock::new(|| {
+        (rook_reflection::database().class_by_name("SpawnLocation"))
+            .expect("SpawnLocation")
+            .id
+    });
+    *CLASS
+}
+
 impl World {
-    pub fn new(dom: Dom, clock: Clock) -> Self {
+    pub fn new(mut dom: Dom, clock: Clock) -> Self {
+        dom.track_class(spawn_class());
         Self {
             dom,
             signals: Signals::default(),

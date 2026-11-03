@@ -150,6 +150,18 @@ impl Layout {
         pass.out
     }
 
+    /// Forget where `ids` were laid out (they left their tree, or are
+    /// being freed). Their text stays, reused if it's laid out unchanged.
+    pub(crate) fn drop(&mut self, ids: &FxHashSet<InstanceId>) {
+        for id in ids {
+            self.placed.remove(id);
+            self.arranged.remove(id);
+            self.pages.remove(id);
+            self.scrolls.remove(id);
+        }
+        self.world.retain(|(h, _)| !ids.contains(&h.gui));
+    }
+
     pub(crate) fn contains(&self, id: InstanceId) -> bool {
         self.placed.contains_key(&id) || self.arranged.contains_key(&id)
     }
@@ -245,17 +257,52 @@ fn gui_parent(dom: &Dom, id: InstanceId) -> Option<InstanceId> {
 /// The top of the GUI tree holding `id` (a GUI object, or a UI component
 /// in one): its LayerCollector, or its topmost GUI ancestor.
 pub(crate) fn top_of(dom: &Dom, id: InstanceId) -> Option<InstanceId> {
+    top_along(dom, std::iter::successors(Some(id), |&i| dom.parent(i)))
+}
+
+/// The top of the GUI tree along `chain`, an instance then its ancestors
+/// (as [`top_of`] climbs them).
+pub(crate) fn top_along(
+    dom: &Dom,
+    chain: impl IntoIterator<Item = InstanceId>,
+) -> Option<InstanceId> {
     let mut top = None;
-    let mut at = Some(id);
-    while let Some(i) = at {
+    for i in chain {
         if dom.is_a(i, "GuiBase2d") {
             top = Some(i);
         } else if dom.class_name(i) != "Folder" && !dom.is_a(i, "UIComponent") {
             break;
         }
-        at = dom.parent(i);
     }
     top
+}
+
+/// Whether [`Layout::screens`] lays out the tree from `top` as a screen's:
+/// it's under a player's PlayerGui, StarterGui or CoreGui, through
+/// Folders.
+pub(crate) fn on_screen(dom: &Dom, top: InstanceId) -> bool {
+    if !dom.is_a(top, "GuiBase2d") {
+        return false;
+    }
+    let mut holder = dom.parent(top);
+    while let Some(h) = holder.filter(|&h| dom.class_name(h) == "Folder") {
+        holder = dom.parent(h);
+    }
+    let Some(holder) = holder else {
+        return false;
+    };
+    match dom.class_name(holder) {
+        "StarterGui" | "CoreGui" => dom.parent(holder) == Some(dom.root()),
+        "PlayerGui" => {
+            let player = dom.parent(holder);
+            let players = player.and_then(|p| dom.parent(p));
+            players.is_some()
+                && players == dom.find_service("Players")
+                && player.and_then(|p| dom.find_first_child_of_class(p, "PlayerGui"))
+                    == Some(holder)
+        }
+        _ => false,
+    }
 }
 
 /// The window's size: the current camera's `ViewportSize`.
