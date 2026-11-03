@@ -9,7 +9,8 @@
 use glam::IVec3;
 
 use crate::TerrainMaterial;
-use crate::grid::{CHUNK_LEN, CHUNK_VOXELS, Grid, Voxel, index};
+use crate::grid::edit::Bounds;
+use crate::grid::{CHUNK_LEN, CHUNK_VOXELS, Chunk, Grid, Voxel, chunk_of, index};
 
 /// Fine voxels along each edge of a coarse chunk.
 const SPAN: i32 = 2 * CHUNK_VOXELS;
@@ -63,6 +64,34 @@ impl Grid {
             Some(v) => self.insert_chunk(chunk, v),
             None => {
                 self.chunks.remove(&chunk);
+            }
+        }
+    }
+
+    /// Average again this grid's voxels in `bounds` from `fine`, the grid
+    /// one level finer: what an edit of `fine` changed, at the cost of
+    /// the edit rather than of the chunks it touches. Chunks it leaves
+    /// all one voxel are stored as [`Grid::coarse_chunk`] would.
+    pub fn coarsen(&mut self, fine: &Grid, bounds: Bounds) {
+        for v in bounds.voxels() {
+            let first = v * 2;
+            let eight = (0..8).map(|i| fine.voxel(first + IVec3::new(i & 1, i >> 1 & 1, i >> 2)));
+            self.set(v, average(eight));
+        }
+        let (min, _) = chunk_of(bounds.min);
+        let (max, _) = chunk_of(bounds.max);
+        for chunk in (Bounds { min, max }).voxels() {
+            let Some(Chunk::Dense(voxels)) = self.chunks.get(&chunk) else {
+                continue;
+            };
+            let first = voxels[0];
+            if voxels.iter().any(|v| *v != first) {
+                continue;
+            }
+            if first == Voxel::AIR {
+                self.chunks.remove(&chunk);
+            } else {
+                self.chunks.insert(chunk, Chunk::Uniform(first));
             }
         }
     }

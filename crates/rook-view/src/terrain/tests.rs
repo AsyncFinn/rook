@@ -36,8 +36,9 @@ fn script_changes_update_the_terrain_look() {
 }
 
 /// An edit meshes again only the chunks it changed (and their
-/// neighbors); the far chunk keeps its meshes, and the edited chunk's old
-/// ones leave the scene.
+/// neighbors) and swaps them in the scene without rebuilding it; the far
+/// chunk keeps its meshes, and the edited chunk's old ones leave the
+/// scene.
 #[test]
 fn edits_remesh_only_changed_chunks() {
     use rook_terrain::Voxel;
@@ -79,11 +80,21 @@ fn edits_remesh_only_changed_chunks() {
         terrain: true,
         ..RenderChanges::default()
     };
-    assert_eq!(cache.apply(&dom, &changes), SceneChange::Full);
+    let parts = cache.scene.parts.len();
+    // The rest of the scene stays: a crater costs what it reaches.
+    let SceneChange::Parts { changed, .. } = cache.apply(&dom, &changes) else {
+        panic!("a voxel edit rebuilt the scene");
+    };
     assert_eq!(meshes_of(&cache, TerrainMaterial::Rock), rock);
     let regrown = meshes_of(&cache, TerrainMaterial::Grass);
     assert!(!regrown.is_empty() && regrown.iter().all(|m| !grass.contains(m)));
     assert!(grass.iter().all(|m| !cache.scene.meshes.contains_key(m)));
+    // The new chunk is drawn, in the entries the old one freed.
+    for chunk in cache.terrain.chunks.values() {
+        assert_eq!(chunk.entries.len(), chunk.surfaces.len());
+        assert!(chunk.entries.iter().all(|i| changed.contains(i)));
+    }
+    assert_eq!(cache.scene.parts.len(), parts);
 }
 
 /// Flying along a long strip, the rings follow: chunks the camera leaves

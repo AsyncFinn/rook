@@ -136,39 +136,48 @@ impl SceneCache {
             chunk.entries.clear();
         }
         self.read_terrain_look(dom);
-        let grid = terrain.and_then(|t| smooth_grid(dom, t));
-        let source = grid.map(blake3::hash);
-        if source != self.terrain.source {
-            self.terrain.source = source;
-            let grid = match grid.map(Grid::decode) {
-                Some(Ok(grid)) => grid,
-                Some(Err(e)) => {
-                    eprintln!("warning: Terrain.SmoothGrid doesn't decode: {e}");
-                    Grid::new()
-                }
-                None => Grid::new(),
-            };
-            self.mesh_terrain(grid);
-        }
+        // The rebuilt scene places every chunk.
+        self.take_voxels(dom, false);
         self.read_looks(dom);
         let mut keys: Vec<LevelChunk> = self.terrain.chunks.keys().copied().collect();
         keys.sort_unstable_by_key(|(l, c)| (*l, c.x, c.y, c.z));
         self.place_chunks(&keys);
     }
 
-    /// Scripts changed the Terrain's properties or `Workspace.GlobalWind`:
-    /// read the waves, wind, colors and grass again and redraw the
-    /// terrain's entries and blades. Returns the entries that changed, or
-    /// `None` when the voxels themselves changed and the scene must be
+    /// Mesh the Terrain's voxels again if they aren't the ones meshed
+    /// last: only the chunks an edit reached. With `place`, those chunks
+    /// are swapped in the scene and the entries that changed returned.
+    fn take_voxels(&mut self, dom: &Dom, place: bool) -> Vec<usize> {
+        let grid = self.terrain.instance.and_then(|t| smooth_grid(dom, t));
+        let source = grid.map(blake3::hash);
+        if source == self.terrain.source {
+            return Vec::new();
+        }
+        self.terrain.source = source;
+        let grid = match grid.map(Grid::decode) {
+            Some(Ok(grid)) => grid,
+            Some(Err(e)) => {
+                eprintln!("warning: Terrain.SmoothGrid doesn't decode: {e}");
+                Grid::new()
+            }
+            None => Grid::new(),
+        };
+        self.mesh_terrain(grid, place)
+    }
+
+    /// Scripts changed the Terrain (its voxels or other properties) or
+    /// `Workspace.GlobalWind`: remesh what the voxel edits reached, read
+    /// the waves, wind, colors and grass again and redraw the terrain's
+    /// entries and blades. Returns the entries that changed, or `None`
+    /// when Workspace's Terrain is another instance and the scene must be
     /// rebuilt.
     pub(super) fn terrain_changed(&mut self, dom: &Dom) -> Option<Vec<usize>> {
-        let terrain = workspace_terrain(dom);
-        let source = terrain.and_then(|t| smooth_grid(dom, t)).map(blake3::hash);
-        if terrain != self.terrain.instance || source != self.terrain.source {
+        if workspace_terrain(dom) != self.terrain.instance {
             return None;
         }
+        let mut changed = self.take_voxels(dom, true);
         self.read_terrain_look(dom);
-        let mut changed = self.refresh_terrain(dom);
+        changed.extend(self.refresh_terrain(dom));
         let color = self.terrain.grass.color;
         for i in self.terrain.grass.entries() {
             self.scene.parts[i].color = color;

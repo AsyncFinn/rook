@@ -298,3 +298,69 @@ fn no_ring_is_ever_skipped() {
         }
     }
 }
+
+/// After edits, every level averaged again over what they reached matches
+/// the pyramid built from scratch, stored alike: a crater, grass added in
+/// open air, and ground cleared from under a whole coarse chunk.
+#[test]
+fn update_pyramid_matches_a_fresh_pyramid() {
+    let mut grid = Grid::new();
+    for x in -40..90 {
+        for z in -40..90 {
+            let mut random = Random::at(IVec3::new(x, 0, z));
+            let top = 10 + (random.next() * 6.0) as i32;
+            for y in -8..top {
+                let material = if y < 0 {
+                    TerrainMaterial::Rock
+                } else {
+                    TerrainMaterial::Grass
+                };
+                let occupancy = if y == top - 1 {
+                    60 + (random.next() * 195.0) as u8
+                } else {
+                    255
+                };
+                grid.set(IVec3::new(x, y, z), Voxel::new(material, occupancy));
+            }
+        }
+    }
+    let mut levels = pyramid(grid.clone());
+    let mut changed = Vec::new();
+    let mut edit = |at: IVec3, r: i32, voxel: Voxel| {
+        for v in (Bounds {
+            min: at - r,
+            max: at + r,
+        })
+        .voxels()
+        {
+            if (v - at).length_squared() <= r * r {
+                grid.set(v, voxel);
+            }
+        }
+        changed.push(Bounds {
+            min: at - r,
+            max: at + r,
+        });
+    };
+    edit(IVec3::new(31, 12, 33), 5, Voxel::AIR);
+    edit(
+        IVec3::new(60, 40, -10),
+        3,
+        Voxel::new(TerrainMaterial::Grass, 200),
+    );
+    // All the ground under the coarse chunk at -1, -1, -1.
+    let (min, max) = (IVec3::new(-40, -8, -40), IVec3::splat(-1));
+    for v in (Bounds { min, max }).voxels() {
+        grid.set(v, Voxel::AIR);
+    }
+    changed.push(Bounds { min, max });
+    levels[0] = grid.clone();
+    update_pyramid(&mut levels, &changed);
+    for (k, (updated, fresh)) in levels.iter().zip(pyramid(grid)).enumerate() {
+        assert!(updated.stored() == fresh.stored(), "level {k}");
+        // Stored alike, too: one voxel for a chunk all one.
+        for c in fresh.chunks() {
+            assert_eq!(updated.uniform(c), fresh.uniform(c), "level {k} chunk {c}");
+        }
+    }
+}

@@ -87,7 +87,7 @@ the strip to confirm it.
   material with the most occupancy. Materials that move their vertices
   move them by the coarse cell, so far Brick is boxes of the coarse cells,
   as in Studio. The levels are made once when the voxels load, and an
-  edit averages again only the coarse chunks over what it changed.
+  edit averages again only the coarse voxels over what it changed.
 - Level `k` draws a square of columns of its 32-voxel chunks, every
   chunk in them however high or low, less the square of the level inside
   it; the last level draws everything outside the square before it,

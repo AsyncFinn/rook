@@ -42,7 +42,7 @@ impl Bounds {
         Bounds { min: lo, max: hi }.voxels()
     }
 
-    fn voxels(self) -> impl Iterator<Item = IVec3> {
+    pub(crate) fn voxels(self) -> impl Iterator<Item = IVec3> {
         let Bounds { min, max } = self;
         (min.z..=max.z).flat_map(move |z| {
             (min.y..=max.y).flat_map(move |y| (min.x..=max.x).map(move |x| IVec3::new(x, y, z)))

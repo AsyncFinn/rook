@@ -77,12 +77,9 @@ pub fn update_pyramid(levels: &mut [Grid], changed: &[Bounds]) -> Vec<Vec<Bounds
                 max: b.max.div_euclid(IVec3::splat(2)),
             })
             .collect();
-        let mut chunks: Vec<IVec3> = coarse.iter().flat_map(|b| b.chunks(0)).collect();
-        chunks.sort_by_key(|c| (c.x, c.y, c.z));
-        chunks.dedup();
         let (finer, rest) = levels.split_at_mut(k);
-        for c in chunks {
-            rest[0].put_chunk(c, Grid::coarse_chunk(&finer[k - 1], c));
+        for b in &coarse {
+            rest[0].coarsen(&finer[k - 1], *b);
         }
         out.push(coarse);
     }

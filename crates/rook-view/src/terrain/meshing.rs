@@ -11,7 +11,10 @@ use super::*;
 impl SceneCache {
     /// Take `grid` as the terrain's voxels, and mesh what the rings around
     /// the camera draw of it that changed (all of it the first time).
-    pub(super) fn mesh_terrain(&mut self, grid: Grid) {
+    /// With `place`, the chunks are swapped in the scene as they are, and
+    /// the entries that changed are returned; without, the scene is being
+    /// rebuilt and places them itself.
+    pub(super) fn mesh_terrain(&mut self, grid: Grid, place: bool) -> Vec<usize> {
         profiling::scope!("mesh_terrain");
         // The voxels change in place once the mesher has let go of them;
         // what it was meshing is of the old ones.
@@ -42,9 +45,10 @@ impl SceneCache {
             rows.iter().min().map_or(0, |y| y - 1),
             rows.iter().max().copied().unwrap_or(0),
         );
+        let mut changed = Vec::new();
         for (level, chunks) in reached.iter().enumerate() {
             for c in chunks {
-                self.drop_chunk((level as u8, *c));
+                changed.extend(self.drop_chunk((level as u8, *c)));
             }
         }
         let focus = self.focus;
@@ -55,8 +59,8 @@ impl SceneCache {
         let job = self.plan(target);
         let todo = self.todo(&job);
         let meshes = super::rings::mesh_in_place(&self.terrain.levels, &todo);
-        // The rebuilt scene places every chunk.
-        self.install(&job, meshes, false);
+        changed.extend(self.install(&job, meshes, place));
+        changed
     }
 
     /// Put a chunk's surfaces in the scene's meshes.
