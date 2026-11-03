@@ -100,12 +100,10 @@ impl Grid {
     }
 
     /// Encode the grid as a `SmoothGrid`, in runs of up to 256 equal
-    /// voxels as Studio writes them. An empty grid is empty.
+    /// voxels as Studio writes them. An empty grid is the header alone,
+    /// as Studio saves an empty Terrain.
     pub fn encode(&self) -> Vec<u8> {
         let chunks = self.stored();
-        if chunks.is_empty() {
-            return Vec::new();
-        }
         let mut out = vec![VERSION, CHUNK_SIZE_LOG2];
         let mut last = IVec3::ZERO;
         for (at, voxels) in chunks {

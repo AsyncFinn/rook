@@ -44,6 +44,15 @@ fn decodes_chunks_runs_and_partial_voxels() {
     assert_eq!(grid.counts()[TerrainMaterial::Mud as usize], 32768);
 }
 
+/// An empty Terrain saves its `SmoothGrid` as the header alone, as in
+/// every Studio-saved baseplate (rbx-test-files), and reads back empty.
+#[test]
+fn an_empty_grid_saves_as_studio_saves_it() {
+    let bytes = Grid::new().encode();
+    assert_eq!(bytes, [1, 5]);
+    assert!(Grid::decode(&bytes).unwrap().stored().is_empty());
+}
+
 #[test]
 fn rejects_damaged_data() {
     assert!(Grid::decode(&[]).unwrap().is_empty());
