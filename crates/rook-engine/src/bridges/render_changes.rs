@@ -379,6 +379,8 @@ impl DataModel {
                     for &i in subtree {
                         material_parts.note(dom, i, changes);
                     }
+                    // Which Terrain Workspace holds may have changed.
+                    changes.terrain |= subtree.iter().any(|&i| dom.is_a_class(i, ids.terrain));
                     let attachment = |i: InstanceId| dom.is_a_class(i, ids.attachment);
                     changes
                         .lights_placed
@@ -403,6 +405,9 @@ impl DataModel {
                     changes.collect(*id);
                     adorned.remove(id);
                     material_parts.forget(*id);
+                }
+                Change::Destroying(id) if dom.is_a_class(*id, ids.terrain) => {
+                    changes.terrain = true;
                 }
                 Change::Destroying(id) if dom.is_a_class(*id, ids.base_part) => {
                     changes.placed.insert(*id);

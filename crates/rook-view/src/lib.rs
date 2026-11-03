@@ -240,13 +240,7 @@ impl SceneCache {
         self.with_effects(|effects, drawn, images| effects.changed(dom, changes, drawn, images));
         let mut moved = Vec::new();
         if changes.terrain || !changes.terrain_edits.is_empty() {
-            match self.terrain_changed(dom, changes.terrain) {
-                Some(entries) => changed.extend(entries),
-                None => {
-                    self.rebuild(dom);
-                    return SceneChange::Full;
-                }
-            }
+            changed.extend(self.terrain_changed(dom, changes.terrain));
         }
         let workspace = dom.find_service("Workspace");
         for id in &changes.placed {
