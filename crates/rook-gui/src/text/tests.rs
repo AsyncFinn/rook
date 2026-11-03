@@ -159,6 +159,19 @@ fn wrapping_and_scaling() {
     assert!(two == 80.0 || two == 82.0, "{two}");
 }
 
+/// TextScaled tries sizes until its text fits but shapes it once: each
+/// size only sets the shaped glyphs again and breaks the lines.
+#[test]
+fn scaled_text_shapes_once() {
+    let mut f = need_fonts!();
+    let mut hello = source("Hello, world!", "Legacy", 24.0);
+    hello.scaled = true;
+    let shapings = || shape::SHAPINGS.with(std::cell::Cell::get);
+    let before = shapings();
+    lay_out(&mut f, &hello, Vec2::new(100.0, 200.0), None);
+    assert_eq!(shapings() - before, 1);
+}
+
 #[test]
 fn rich_text() {
     let mut f = need_fonts!();

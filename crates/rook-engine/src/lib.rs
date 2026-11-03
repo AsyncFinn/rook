@@ -141,6 +141,8 @@ pub struct DataModel {
     /// Each adornment's Adornee as last seen, whose look changes when
     /// it moves to another.
     adorned: rustc_hash::FxHashMap<InstanceId, InstanceId>,
+    /// Which parts each material and MaterialVariant can change the look of.
+    material_parts: bridges::render_changes::MaterialParts,
     /// Keyboard and mouse bookkeeping (clients).
     input: input::InputTracker,
     content: Content,
@@ -376,6 +378,7 @@ impl DataModel {
             render_watch: JournalWatch::starting_at(cursor),
             render_changes: RenderChanges::everything(),
             adorned: Default::default(),
+            material_parts: Default::default(),
             input: Default::default(),
             content: Content {
                 resolver: options.content.clone(),

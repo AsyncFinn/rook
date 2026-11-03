@@ -15,6 +15,7 @@ use rook_dom::{Dom, InstanceId};
 use rook_types::Font;
 
 pub(crate) use distance::FIELD_PX;
+use fonts::Picked;
 pub(crate) use fonts::{FaceId, Fonts};
 pub(crate) use glyphs::Glyphs;
 pub(crate) use rich::{Case, Stroke, Style};
@@ -312,10 +313,11 @@ pub(crate) fn lay_out(
     };
     let content: String = spans.iter().map(|s| s.text.as_str()).collect();
     let wrap_at = wrap.unwrap_or((source.wrapped || source.scaled).then_some(size.x));
+    let shaped = Shaped::new(fonts, source, &spans);
     let mut set = if source.scaled {
-        scaled(fonts, source, &spans, size)
+        scaled(fonts, source, &spans, &shaped, size)
     } else {
-        set_lines(fonts, source, &spans, None, wrap_at)
+        set_lines(fonts, source, &spans, &shaped, None, wrap_at)
     };
     // Measured: unwrapped text taller than the object still fits (21-pixel
     // text in a 120 × 10 button).
@@ -341,82 +343,132 @@ pub(crate) fn lay_out(
 /// Legacy label is 50 pixels tall; "Hello, world!" in 100 × 200 wraps to
 /// two 41-pixel lines). Nothing fitting gives 1. A UITextSizeConstraint
 /// holds it between its sizes, the least even when that doesn't fit.
-fn scaled(fonts: &mut Fonts, source: &Source, spans: &[rich::Span], size: Vec2) -> Set {
-    let try_px =
-        |fonts: &mut Fonts, px: u32| set_lines(fonts, source, spans, Some(px as f32), Some(size.x));
+fn scaled(
+    fonts: &Fonts,
+    source: &Source,
+    spans: &[rich::Span],
+    shaped: &Shaped,
+    size: Vec2,
+) -> Set {
+    let try_px = |px: u32| set_lines(fonts, source, spans, shaped, Some(px as f32), Some(size.x));
     let fits = |s: &Set| !s.split && s.size.x <= size.x && s.size.y <= size.y;
     let (mut lo, mut hi) = (1, MAX_SCALED_PX);
     if let Some((min, max)) = source.size_limits {
         // The limits are `TextSize`s; lines are that times the font's scale.
-        let scale = fonts.pick(&source.style.font).map_or(1.0, |p| p.scale);
+        let scale = shaped.base.map_or(1.0, |p| p.scale);
         let px = |s: f32| ((s * scale).round() as u32).clamp(1, MAX_SCALED_PX);
         lo = px(min);
         hi = px(max).max(lo);
     }
     while lo < hi {
         let mid = (lo + hi).div_ceil(2);
-        if fits(&try_px(fonts, mid)) {
+        if fits(&try_px(mid)) {
             lo = mid;
         } else {
             hi = mid - 1;
         }
     }
-    try_px(fonts, lo)
+    try_px(lo)
 }
 
-/// Shape `spans` (at line height `px` each, if given) and break them into
+/// Text shaped, before it's set at a size. Shaping works in font units, so
+/// TextScaled shapes once and sets that at each size it tries. Line breaks
+/// can't be found once for every size: advances round up to whole pixels
+/// at each size, so widths don't grow in proportion and a word that fits
+/// at one size can wrap at a bigger one. So each size breaks lines again,
+/// which is cheap next to shaping.
+struct Shaped {
+    /// The text's own face and scale, which sets an empty line's height.
+    base: Option<Picked>,
+    /// Each span's, `None` when its font isn't loaded.
+    runs: Vec<Option<Picked>>,
+    /// Glyphs and newlines, each with the span it's in.
+    items: Vec<(usize, Shape)>,
+}
+
+enum Shape {
+    Glyph(shape::Shaped),
+    /// A newline, character `index` of the text.
+    Break(usize),
+}
+
+impl Shaped {
+    fn new(fonts: &mut Fonts, source: &Source, spans: &[rich::Span]) -> Self {
+        let base = fonts.pick(&source.style.font);
+        let mut runs = Vec::with_capacity(spans.len());
+        let mut items = Vec::new();
+        // The characters before each span, so glyphs know where they are in
+        // the whole text.
+        let mut at = 0;
+        for (run, span) in spans.iter().enumerate() {
+            let first = at;
+            at += span.text.chars().count();
+            let picked = fonts.pick(&span.style.font);
+            runs.push(picked);
+            let Some(picked) = picked else {
+                continue;
+            };
+            let text = match span.style.case {
+                Case::AsWritten => span.text.clone(),
+                // Approximation: small caps drawn as capitals.
+                Case::Upper | Case::SmallCaps => span.text.to_uppercase(),
+            };
+            let mut index = first;
+            for (n, piece) in text.split('\n').enumerate() {
+                if n > 0 {
+                    items.push((run, Shape::Break(index)));
+                    index += 1;
+                }
+                items.extend(
+                    shape::shape(fonts, picked.face, piece, index)
+                        .into_iter()
+                        .map(|g| (run, Shape::Glyph(g))),
+                );
+                index += piece.chars().count();
+            }
+        }
+        Self { base, runs, items }
+    }
+}
+
+/// Set `shaped` (at line height `px` each, if given) and break it into
 /// lines.
 fn set_lines(
-    fonts: &mut Fonts,
+    fonts: &Fonts,
     source: &Source,
     spans: &[rich::Span],
+    shaped: &Shaped,
     px: Option<f32>,
     wrap: Option<f32>,
 ) -> Set {
-    let metrics = |fonts: &mut Fonts, font: &Font, size: f32| -> Option<(FaceId, f32, f32, f32)> {
-        let picked = fonts.pick(font)?;
+    let metrics = |picked: Picked, size: f32| -> (shape::Scale, f32, f32) {
         let line_px = px.unwrap_or(size * picked.scale);
         let face = fonts.face(picked.face);
         let ascent = face.ascent / face.line * line_px;
-        Some((picked.face, line_px, ascent, line_px - ascent))
+        let scale = shape::Scale::new(face, picked.face, line_px);
+        (scale, ascent, line_px - ascent)
     };
-    let base = metrics(fonts, &source.style.font, source.style.size);
-    let empty = base.map_or((0.0, 0.0), |(_, _, a, d)| (a, d));
-    let mut items = Vec::new();
-    // The characters before each span, so glyphs know where they are in
-    // the whole text.
-    let mut at = 0;
-    for (run, span) in spans.iter().enumerate() {
-        let first = at;
-        at += span.text.chars().count();
-        let Some((face, line_px, ascent, descent)) =
-            metrics(fonts, &span.style.font, span.style.size)
-        else {
-            continue;
-        };
-        let text = match span.style.case {
-            Case::AsWritten => span.text.clone(),
-            // Approximation: small caps drawn as capitals.
-            Case::Upper | Case::SmallCaps => span.text.to_uppercase(),
-        };
-        let mut index = first;
-        for (n, piece) in text.split('\n').enumerate() {
-            if n > 0 {
-                items.push(Item::Break {
+    let empty = shaped.base.map_or((0.0, 0.0), |p| {
+        let (_, a, d) = metrics(p, source.style.size);
+        (a, d)
+    });
+    let runs: Vec<_> = (shaped.runs.iter().zip(spans))
+        .map(|(p, span)| p.map(|p| metrics(p, span.style.size)))
+        .collect();
+    let items: Vec<Item> = (shaped.items.iter())
+        .map(|(run, item)| {
+            let run = *run;
+            let (scale, ascent, descent) = runs[run].expect("only loaded runs are shaped");
+            match *item {
+                Shape::Glyph(g) => Item::Glyph(g.at(&scale, run)),
+                Shape::Break(index) => Item::Break {
                     ascent,
                     descent,
                     index,
-                });
-                index += 1;
+                },
             }
-            items.extend(
-                shape::shape(fonts, face, line_px, piece, run, index)
-                    .into_iter()
-                    .map(Item::Glyph),
-            );
-            index += piece.chars().count();
-        }
-    }
+        })
+        .collect();
     let (lines, split) = break_lines(&items, wrap, empty);
     // Measured: n lines of height h are h + (n - 1) × h × LineHeight tall.
     let mut tops = Vec::with_capacity(lines.len());

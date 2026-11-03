@@ -237,6 +237,7 @@ mod context_actions;
 mod effects;
 mod explosions;
 mod gui;
+mod material_variants;
 mod movement;
 mod preload;
 mod remote_parts;

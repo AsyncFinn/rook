@@ -20,6 +20,7 @@ rook-lua.workspace = true
 rook-gui.workspace = true
 rook-net.workspace = true
 rook-physics.workspace = true
+rook-terrain.workspace = true
 rook-content.workspace = true
 rook-audio.workspace = true
 mlua.workspace = true
@@ -41,7 +42,6 @@ toml.workspace = true
 
 [dev-dependencies]
 rook-platform = { workspace = true, features = ["native"] }
-rook-terrain.workspace = true
 
 [features]
 # The terminal command bar (`repl` module): Luau typed at the terminal runs

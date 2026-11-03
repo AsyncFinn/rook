@@ -1,6 +1,11 @@
 //! Tracking what a renderer needs to redraw.
 
+mod materials;
+
 use rook_reflection::{ClassId, PropertyId};
+use rook_types::Material;
+
+pub(crate) use materials::MaterialParts;
 
 use crate::*;
 
@@ -192,6 +197,8 @@ impl DataModel {
 #[derive(Debug)]
 pub(crate) struct RenderIds {
     cframe: PropertyId,
+    /// What a part's MaterialVariant is found by.
+    part_materials: [PropertyId; 2],
     velocities: [PropertyId; 2],
     global_wind: PropertyId,
     base_part: ClassId,
@@ -218,6 +225,7 @@ impl RenderIds {
             let id = |name| db.find_property(part, name).expect(name).id;
             RenderIds {
                 cframe: id("CFrame"),
+                part_materials: [id("Material"), id("MaterialVariant")],
                 velocities: [id("AssemblyLinearVelocity"), id("AssemblyAngularVelocity")],
                 global_wind: db
                     .find_property(class("Workspace"), "GlobalWind")
@@ -251,8 +259,8 @@ impl DataModel {
     /// Note whether the journal since the last check touched anything drawn:
     /// parts, their meshes, decals and SurfaceAppearances, their ancestry,
     /// Lighting, the Terrain and `Workspace.GlobalWind` (which bends grass),
-    /// or MaterialService and its MaterialVariants (which can change any
-    /// part: the whole scene is rebuilt, as they change rarely).
+    /// or MaterialService and its MaterialVariants (which redraw the parts
+    /// and terrain they can draw on, found in `material_parts`).
     /// Camera moves don't count; the renderer reads the camera every frame
     /// anyway.
     pub(crate) fn check_render_changes(&mut self) {
@@ -268,7 +276,9 @@ impl DataModel {
         let changes = &mut self.render_changes;
         let (first, journal) = self.render_watch.look(dom);
         let adorned = &mut self.adorned;
+        let material_parts = &mut self.material_parts;
         if first {
+            material_parts.build(dom);
             *adorned = dom
                 .descendants(dom.root())
                 .into_iter()
@@ -282,7 +292,6 @@ impl DataModel {
         let light = |id: InstanceId| dom.is_a_class(id, ids.light);
         let effect = |id: InstanceId| is_effect_class(dom.class_name(id));
         let wire = |id: InstanceId| dom.class_name(id) == "FloorWire";
-        let materials = |id: InstanceId| any_of(id, &[ids.material_service, ids.material_variant]);
         let mark_part = |changes: &mut RenderChanges, part| mark_part(dom, changes, part);
         // An adornment draws on its Adornee: its old and new ones change.
         let adorn = |changes: &mut RenderChanges,
@@ -316,8 +325,17 @@ impl DataModel {
                         changes.lighting = true;
                     } else if dom.is_a_class(*id, ids.terrain) || *property == ids.global_wind {
                         changes.terrain = true;
-                    } else if materials(*id) {
-                        changes.full = true;
+                    } else if dom.is_a_class(*id, ids.material_service) {
+                        let name = rook_reflection::database().property(*property).name;
+                        let overridden = name.strip_suffix("Name").and_then(Material::from_name);
+                        if let Some(material) = overridden {
+                            material_parts.override_changed(material, changes);
+                        } else if name.starts_with("Use2022Materials") {
+                            // It swaps every built-in material's textures.
+                            changes.full = true;
+                        }
+                    } else if dom.is_a_class(*id, ids.material_variant) {
+                        material_parts.note(dom, *id, changes);
                     } else if effect(*id) {
                         changes.effects.insert(*id);
                     } else if light(*id) || dom.is_a_class(*id, ids.attachment) {
@@ -332,6 +350,9 @@ impl DataModel {
                             changes.effects.insert(*id);
                         }
                     } else {
+                        if ids.part_materials.contains(property) {
+                            material_parts.note(dom, *id, changes);
+                        }
                         mark_part(changes, Some(*id));
                     }
                 }
@@ -342,11 +363,8 @@ impl DataModel {
                     subtree,
                     ..
                 } => {
-                    if subtree
-                        .iter()
-                        .any(|&i| dom.is_a_class(i, ids.material_variant))
-                    {
-                        changes.full = true;
+                    for &i in subtree {
+                        material_parts.note(dom, i, changes);
                     }
                     let attachment = |i: InstanceId| dom.is_a_class(i, ids.attachment);
                     changes
@@ -371,6 +389,7 @@ impl DataModel {
                 Change::Collected(id) => {
                     changes.collect(*id);
                     adorned.remove(id);
+                    material_parts.forget(*id);
                 }
                 Change::Destroying(id) if dom.is_a_class(*id, ids.base_part) => {
                     changes.placed.insert(*id);

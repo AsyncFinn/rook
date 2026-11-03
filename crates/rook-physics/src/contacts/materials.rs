@@ -167,6 +167,15 @@ pub fn find_variant(dom: &Dom, service: InstanceId, m: Material, name: &str) -> 
     })
 }
 
+/// The MaterialVariant name a part asks for itself (`MaterialVariant`, or
+/// `MaterialVariantSerialized` as files save it), unless it's empty.
+pub fn own_variant_name(dom: &Dom, part: InstanceId) -> Option<String> {
+    ["MaterialVariant", "MaterialVariantSerialized"]
+        .iter()
+        .find_map(|p| dom.string_property(part, p))
+        .filter(|n| !n.is_empty())
+}
+
 /// The MaterialVariant a part draws with (`docs/behavior/rendering/materials.md`):
 /// the one its `MaterialVariant` names, or else the one MaterialService's
 /// override names for its material, if a variant of that name exists for
@@ -176,11 +185,7 @@ pub fn find_variant(dom: &Dom, service: InstanceId, m: Material, name: &str) -> 
 pub fn part_variant(dom: &Dom, part: InstanceId) -> Option<InstanceId> {
     let service = dom.find_service("MaterialService")?;
     let material = Material::of_part(dom.enum_property(part, "Material"));
-    let own = ["MaterialVariant", "MaterialVariantSerialized"]
-        .iter()
-        .find_map(|p| dom.string_property(part, p))
-        .filter(|n| !n.is_empty());
-    let name = match own {
+    let name = match own_variant_name(dom, part) {
         Some(name) => name,
         None => base_material_override(dom, service, material)?,
     };
