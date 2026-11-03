@@ -211,7 +211,12 @@ Rook draws the wire with its `From` part and the images as the
 renderer's ribbons (`rook_render::FloorWire`), moved each frame. Moving
 either part redraws it. It finds faces and the floor from the Workspace
 parts' world boxes (Approximation: a turned part's box reaches past it),
-under where the wire drops (Inference). Not measured: turned parts, a
+under where the wire drops (Inference). The floor comes from physics'
+index of part boxes and is kept by change (`floor_wire::Floors`): a wire
+looks again when it or its parts change, or when a part that was in, or
+now reaches into, the column under its drop changes, so a floor that
+moves, grows, goes or slides in carries the wire with it, and a frame
+costs only what changed. Not measured: turned parts, a
 `To` straight above `From`, and where Studio's moving images start in
 time.
 

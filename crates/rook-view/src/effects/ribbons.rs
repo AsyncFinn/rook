@@ -71,7 +71,7 @@ impl Reader<'_, '_> {
     pub(super) fn floor_wire(&mut self, id: InstanceId) -> FloorWire {
         let dom = self.dom;
         let shown = dom.bool_property(id, "Visible") != Some(false);
-        let path = super::adornments::floor_wire::path(dom, id).filter(|_| shown);
+        let path = super::adornments::floor_wire::path(dom, id, self.floors).filter(|_| shown);
         let size = dom
             .vector2_property(id, "TextureSize")
             .map_or(Vec2::ONE, |v| Vec2::new(v.x(), v.y()));

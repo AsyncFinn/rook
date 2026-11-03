@@ -29,6 +29,7 @@ const DEFAULT_COLOR: [f32; 3] = [13.0 / 255.0, 105.0 / 255.0, 172.0 / 255.0];
 /// has loaded; failed ones load as `Some(None)`).
 pub(super) struct Context<'a> {
     pub(super) wires: &'a WireLines,
+    pub(super) floors: &'a floor_wire::Floors,
     pub(super) image: &'a mut dyn FnMut(&str) -> Option<Option<ImageHash>>,
 }
 
@@ -40,6 +41,7 @@ impl SceneCache {
     /// Workspace.
     pub(super) fn adornments(&mut self, dom: &Dom, id: InstanceId) -> Vec<(PartInstance, Pose)> {
         let wires = std::mem::take(&mut self.wire_lines);
+        let floors = std::mem::take(&mut self.floors);
         let mut image = |url: &str| match self.file_state(id, url, Want::Image) {
             FileState::Loaded(hash) => Some(Some(ImageHash(hash))),
             FileState::Failed => Some(None),
@@ -47,10 +49,12 @@ impl SceneCache {
         };
         let mut cx = Context {
             wires: &wires,
+            floors: &floors,
             image: &mut image,
         };
         let out = adornments(dom, id, &mut cx);
         self.wire_lines = wires;
+        self.floors = floors;
         out
     }
 }
@@ -79,7 +83,7 @@ fn adornments(dom: &Dom, id: InstanceId, cx: &mut Context<'_>) -> Vec<(PartInsta
             "SurfaceSelection" => surface_selection::surface_selection(dom, holder, size),
             "Handles" => handles::handles(dom, holder, size),
             "ArcHandles" => handles::arc_handles(dom, holder, size),
-            "FloorWire" => floor_wire::floor_wire(dom, holder, cf),
+            "FloorWire" => floor_wire::floor_wire(dom, holder, cf, cx.floors),
             "SelectionPartLasso" => lasso::lasso(dom, holder, cf),
             "WireframeHandleAdornment" => wireframe::wireframe(dom, holder, size, cx.wires),
             _ if dom.is_a(holder, "HandleAdornment") => {

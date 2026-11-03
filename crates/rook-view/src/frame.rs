@@ -8,7 +8,7 @@ use rook_content::Resolver;
 use rook_engine::DataModel;
 use rook_render::Renderer;
 
-use crate::{SceneCache, SceneChange};
+use crate::{Floors, SceneCache, SceneChange};
 
 impl SceneCache {
     /// The scene for a DataModel as it is now. Its pending render changes
@@ -18,8 +18,12 @@ impl SceneCache {
     /// in the tree. Files near `camera` load first.
     pub fn for_data_model(dm: &mut DataModel, content: &Arc<Resolver>, camera: Vec3) -> Self {
         let calls = dm.take_render_changes().effect_calls;
-        let dom = &dm.runtime().world().dom;
-        let mut scene = Self::new(dom, content.clone(), camera);
+        let mut world = dm.runtime().world_mut();
+        let world = &mut *world;
+        let mut floors = Floors::default();
+        floors.build(&mut world.dom, &mut world.physics);
+        let dom = &world.dom;
+        let mut scene = Self::new(dom, floors, content.clone(), camera);
         scene.take_effect_calls(dom, &calls);
         scene
     }
@@ -39,19 +43,36 @@ impl SceneCache {
         self.update_grass(camera);
     }
 
+    /// Apply a DataModel's changes since the last frame, the FloorWires'
+    /// floors first: a wire whose floor changed draws again with the
+    /// frame's other changes.
+    pub(crate) fn apply_data_model(&mut self, dm: &mut DataModel) -> SceneChange {
+        let mut changes = dm.take_render_changes();
+        if changes.is_empty() {
+            return SceneChange::None;
+        }
+        let mut world = dm.runtime().world_mut();
+        let world = &mut *world;
+        if changes.full {
+            self.floors.build(&mut world.dom, &mut world.physics);
+        } else {
+            let dom = &mut world.dom;
+            for wire in self.floors.update(dom, &mut world.physics, &changes) {
+                changes.effects.insert(wire);
+                changes.parts.extend(dom.ref_property(wire, "From"));
+            }
+        }
+        self.apply(&world.dom, &changes)
+    }
+
     /// Bring the scene up to date with a DataModel's changes and the mesh
     /// files and images that finished loading since the last frame, then
     /// the renderer with the scene and the GUI. Returns whether anything
     /// changed.
     pub fn refresh(&mut self, dm: &mut DataModel, renderer: &mut Renderer, camera: Vec3) -> bool {
         let gui = self.show_gui(dm, renderer);
-        let changes = dm.take_render_changes();
+        let change = self.apply_data_model(dm);
         let dom = &dm.runtime().world().dom;
-        let change = if changes.is_empty() {
-            SceneChange::None
-        } else {
-            self.apply(dom, &changes)
-        };
         self.follow_camera(dom, camera);
         let mut loaded = self.poll_files(dom, false);
         loaded.extend(self.update_terrain(camera, false));

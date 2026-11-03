@@ -31,7 +31,7 @@ use rook_dom::{Change, Dom, InstanceId};
 use rook_reflection::PropertyId;
 use rook_types::{CFrame, Value, Vector3};
 
-pub use shape::{is_part, part_shape, workspace_parts};
+pub use shape::{is_part, part_box, part_shape, workspace_parts};
 
 pub use explosion::Blast;
 pub use query::{CastShape, Filter, Hit, Region};

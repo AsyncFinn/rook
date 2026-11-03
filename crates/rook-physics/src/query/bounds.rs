@@ -1,21 +1,10 @@
-//! Every Workspace part's `Size` box in the world, in a BVH: what the
-//! queries that find parts by their box (Region3, `GetPartBounds*`,
-//! `MakeJoints`) look through, as Roblox finds parts by their
-//! extents. The colliders' bounds can't stand in: a turned cylinder's or
-//! wedge's box reaches past its shape's, so a box query near its corners
-//! would miss it.
-//!
-//! It's kept where the colliders are: a part goes in when physics adds it
-//! ([`PartBounds::place_added`]), is marked whenever its body or static
-//! moves ([`Physics::body_moved`], [`Physics::static_moved`], and the
-//! bodies a step moved), and is dropped when physics removes it. Marked
-//! boxes are read again from the DOM when a query reads the tree
-//! ([`PartBounds::near`]), not before every query: raycasts never pay for
-//! them. As in Rapier's broad phase, a leaf is its part's box grown by a
-//! skin ([`skin`]): a part moving inside its leaf leaves the tree alone,
-//! and one leaving it is placed again (an O(log n) re-insertion that
-//! keeps the tree tight). So a leaf holds its part's box but may reach
-//! past it: callers test the part's own box.
+//! Every Workspace part's `Size` box in a BVH, which the queries that
+//! find parts by their box search (Region3, `GetPartBounds*`,
+//! `MakeJoints`, FloorWire floors): the colliders' bounds miss a turned
+//! cylinder's or wedge's box corners. How it's kept fresh and cheap, as
+//! Rapier keeps its broad phase, is in `docs/design/architecture.md`
+//! (Part boxes). A leaf may reach past its part's box (its skin), so
+//! callers test the part's own box.
 
 use rapier3d::parry::bounding_volume::{Aabb, BoundingVolume};
 use rapier3d::parry::partitioning::{Bvh, BvhBuildStrategy};
@@ -153,9 +142,8 @@ fn skin(aabb: &Aabb) -> f32 {
 
 /// The world-axis-aligned box around `part`'s `Size` box.
 fn size_box(dom: &Dom, part: InstanceId) -> Option<Aabb> {
-    let (cf, size) = shape::size_box(dom, part)?;
-    let reach = cf.box_reach(size);
-    Some(Aabb::new(cf.position - reach, cf.position + reach))
+    let (min, max) = shape::part_box(dom, part)?;
+    Some(Aabb::new(min, max))
 }
 
 impl Physics {
@@ -177,13 +165,16 @@ impl Physics {
     }
 
     /// The Workspace parts whose `Size` box meets the box from `min` to
-    /// `max` (touching counts), in id order, with the world brought up to
-    /// date first as for any query. Unfiltered: every part, whatever its
-    /// `CanQuery` or collision group.
-    pub fn parts_by_box(&mut self, dom: &mut Dom, min: Vec3, max: Vec3) -> Vec<InstanceId> {
+    /// `max` (touching counts), in id order. Unfiltered: every part,
+    /// whatever its `CanQuery` or collision group. Physics must have taken
+    /// the DOM's changes ([`Physics::sync`]): the parts are found where
+    /// `dom` has them, never where they were.
+    pub fn parts_by_box(&mut self, dom: &Dom, min: Vec3, max: Vec3) -> Vec<InstanceId> {
         profiling::scope!("Physics::parts_by_box");
-        self.prepare(dom);
-        let dom = &*dom;
+        assert!(
+            self.cursor == dom.journal().end() || self.props.is_none(),
+            "physics hasn't taken the DOM's latest changes (Physics::sync)"
+        );
         let query = Aabb::new(min, max);
         let mut found: Vec<InstanceId> = self
             .bounds

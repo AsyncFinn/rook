@@ -39,6 +39,7 @@ mod terrain;
 pub use camera::{SavedCamera, initial_camera};
 pub use content::installed::Installed;
 
+use adornments::floor_wire::Floors;
 use content::pending::*;
 use content::report::Report;
 use effects::{EffectCache, EffectLists, EffectTextures, Images};
@@ -124,6 +125,8 @@ pub struct SceneCache {
     effects: EffectCache,
     /// The lines scripts gave WireframeHandleAdornments.
     wire_lines: adornments::wireframe::WireLines,
+    /// The FloorWires' floors.
+    floors: Floors,
     /// Models' Highlights, found again each update.
     model_highlights: adornments::highlight::ModelHighlights,
     /// Files that didn't load, reported once loading settles.
@@ -141,7 +144,8 @@ pub struct SceneCache {
 impl SceneCache {
     /// Mesh files and images resolve through `content`, those nearest
     /// `camera` first.
-    pub(crate) fn new(dom: &Dom, content: Arc<Resolver>, camera: Vec3) -> Self {
+    /// FloorWires' floors are `floors` ([`Floors::build`]).
+    pub(crate) fn new(dom: &Dom, floors: Floors, content: Arc<Resolver>, camera: Vec3) -> Self {
         let mut scene = Scene::default();
         let textures = EffectTextures::load(&content, &mut scene.images);
         let mut cache = Self {
@@ -162,6 +166,7 @@ impl SceneCache {
             lights: LightCache::default(),
             effects: EffectCache::new(textures),
             wire_lines: Default::default(),
+            floors,
             model_highlights: Default::default(),
             report: Report::default(),
             gui_generation: None,
@@ -403,11 +408,13 @@ impl SceneCache {
         let mut beams = std::mem::take(&mut self.scene.beams);
         let mut trails = std::mem::take(&mut self.scene.trails);
         let mut floor_wires = std::mem::take(&mut self.scene.floor_wires);
+        let floors = std::mem::take(&mut self.floors);
         let drawn = EffectLists {
             emitters: &mut emitters,
             beams: &mut beams,
             trails: &mut trails,
             floor_wires: &mut floor_wires,
+            floors: &floors,
         };
         let mut images = |id: InstanceId, url: &str| match self.file_state(id, url, Want::Image) {
             FileState::Loaded(hash) => Some(ImageHash(hash)),
@@ -419,6 +426,7 @@ impl SceneCache {
         self.scene.beams = beams;
         self.scene.trails = trails;
         self.scene.floor_wires = floor_wires;
+        self.floors = floors;
         out
     }
 }

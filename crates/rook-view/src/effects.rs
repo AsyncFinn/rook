@@ -43,12 +43,14 @@ struct Calls {
     texture_offset: f32,
 }
 
-/// The scene's effect lists, which the cache keeps.
+/// The scene's effect lists, which the cache keeps, and where the
+/// FloorWires' floors are.
 pub(super) struct EffectLists<'a> {
     pub(super) emitters: &'a mut Vec<Option<Emitter>>,
     pub(super) beams: &'a mut Vec<Option<Beam>>,
     pub(super) trails: &'a mut Vec<Option<Trail>>,
     pub(super) floor_wires: &'a mut Vec<Option<FloorWire>>,
+    pub(super) floors: &'a Floors,
 }
 
 /// An effect's image by URL: its hash once loaded (noting that the effect
@@ -59,6 +61,7 @@ pub(super) type Images<'a> = dyn FnMut(InstanceId, &str) -> Option<ImageHash> + 
 /// Smoke and Sparkles draw, and what scripts did to it.
 struct Reader<'a, 'b> {
     dom: &'a Dom,
+    floors: &'a Floors,
     images: &'a mut Images<'b>,
     textures: &'a EffectTextures,
     calls: Calls,
@@ -316,6 +319,7 @@ impl EffectCache {
     ) {
         let mut reader = Reader {
             dom,
+            floors: drawn.floors,
             images,
             textures: self.textures.as_ref().expect("made with textures"),
             calls: self.calls.get(&id).copied().unwrap_or_default(),
@@ -385,7 +389,8 @@ impl EffectCache {
             }
             &Slot::FloorWire(i) => {
                 if let Some(wire) = &mut drawn.floor_wires[i] {
-                    wire.path = super::adornments::floor_wire::path(dom, id).unwrap_or_default();
+                    wire.path = super::adornments::floor_wire::path(dom, id, drawn.floors)
+                        .unwrap_or_default();
                     changed.floor_wires.push(i);
                 }
             }

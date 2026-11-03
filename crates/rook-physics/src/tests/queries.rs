@@ -516,6 +516,7 @@ fn box_queries_find_parts_by_their_box_through_every_change() {
                         })
                         .collect();
                     truth.sort_unstable();
+                    physics.sync(dom);
                     assert_eq!(
                         physics.parts_by_box(dom, lo, hi),
                         truth,
@@ -528,7 +529,8 @@ fn box_queries_find_parts_by_their_box_through_every_change() {
     check(&mut physics, &mut dom, "placed");
     // Near the turned cylinder's box corner, outside its round shape.
     let corner = O + Vec3::new(10.0, 4.0 + 2.6, 10.0);
-    let near_corner = physics.parts_by_box(&mut dom, corner - 0.1, corner + 0.1);
+    physics.sync(&mut dom);
+    let near_corner = physics.parts_by_box(&dom, corner - 0.1, corner + 0.1);
     assert_eq!(near_corner, vec![round]);
     let region = Region::Box {
         cframe: CFrame::from_position(corner),
@@ -576,9 +578,24 @@ fn box_queries_find_parts_by_their_box_through_every_change() {
         Value::CFrame(CFrame::from_position(cf.position + Vec3::X * 0.02)),
     );
     let at = |x: f32| Vec3::new(x, cf.position.y, cf.position.z);
-    let old_edge = physics.parts_by_box(&mut dom, at(left - 0.1), at(left + 0.01));
+    physics.sync(&mut dom);
+    let old_edge = physics.parts_by_box(&dom, at(left - 0.1), at(left + 0.01));
     assert!(!old_edge.contains(&moved), "found where it was");
-    let new_edge = physics.parts_by_box(&mut dom, at(left + 0.015), at(left + 0.025));
+    let new_edge = physics.parts_by_box(&dom, at(left + 0.015), at(left + 0.025));
     assert!(new_edge.contains(&moved), "missed where it is");
     let _ = floor;
+}
+
+/// A box query can't read the part boxes behind the DOM: physics must
+/// have taken its changes first.
+#[test]
+#[should_panic(expected = "physics hasn't taken the DOM's latest changes")]
+fn box_queries_refuse_an_unsynced_dom() {
+    let mut dom = Dom::new();
+    let p = fixed(&mut dom, Vec3::ZERO);
+    let mut physics = Physics::new();
+    physics.sync(&mut dom);
+    let moved = CFrame::from_position(O + Vec3::new(5.0, 0.0, 0.0));
+    set(&mut dom, p, "CFrame", Value::CFrame(moved));
+    physics.parts_by_box(&dom, O - 1.0, O + 1.0);
 }

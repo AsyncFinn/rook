@@ -95,3 +95,11 @@ pub(crate) fn size_box(dom: &Dom, part: InstanceId) -> Option<(CFrame, glam::Vec
         .unwrap_or(CFrame::IDENTITY);
     Some((cf, size.max(glam::Vec3::splat(MIN_PART_SIZE))))
 }
+
+/// The world-axis-aligned box around `part`'s `Size` box, as its lowest
+/// and highest corners.
+pub fn part_box(dom: &Dom, part: InstanceId) -> Option<(glam::Vec3, glam::Vec3)> {
+    let (cf, size) = size_box(dom, part)?;
+    let reach = cf.box_reach(size);
+    Some((cf.position - reach, cf.position + reach))
+}

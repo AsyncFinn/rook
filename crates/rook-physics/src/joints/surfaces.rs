@@ -182,12 +182,13 @@ impl crate::Physics {
     pub fn make_joints(&mut self, dom: &mut Dom, parts: &[InstanceId]) -> Result<(), DomError> {
         profiling::scope!("Physics::make_joints");
         // Every query before any joint: a new joint changes the world.
+        self.sync(dom);
         let mut near = Vec::new();
         for &p in parts {
             // Both boxes are padded by DISTANCE when they're compared.
             if let Some(b) = Box::of(dom, p) {
                 let pad = Vec3::splat(DISTANCE);
-                near.extend(self.parts_by_box(dom, b.min - pad, b.max + pad));
+                near.extend(self.parts_by_box(&*dom, b.min - pad, b.max + pad));
             }
         }
         near.sort_unstable();

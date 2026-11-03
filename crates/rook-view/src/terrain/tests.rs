@@ -11,7 +11,7 @@ fn script_changes_update_the_terrain_look() {
     let terrain = dom.create_by_name("Terrain").unwrap();
     dom.set_parent(terrain, Some(ws)).unwrap();
     let content = Arc::new(Resolver::new(rook_content::Config::empty()));
-    let mut cache = SceneCache::new(&dom, content, glam::Vec3::ZERO);
+    let mut cache = SceneCache::new(&dom, Floors::default(), content, glam::Vec3::ZERO);
     assert_eq!(cache.scene.terrain.wave_size, 0.15);
     dom.set_property_by_name(terrain, "WaterWaveSize", Value::Float32(0.6))
         .unwrap();
@@ -62,7 +62,7 @@ fn edits_remesh_only_changed_chunks() {
     };
     write(&mut dom, &grid);
     let content = Arc::new(Resolver::new(rook_content::Config::empty()));
-    let mut cache = SceneCache::new(&dom, content, glam::Vec3::ZERO);
+    let mut cache = SceneCache::new(&dom, Floors::default(), content, glam::Vec3::ZERO);
     let meshes_of = |cache: &SceneCache, material| -> Vec<MeshHash> {
         cache
             .terrain
@@ -144,7 +144,7 @@ fn whole_writes_remesh() {
     let terrain = dom.create_by_name("Terrain").unwrap();
     dom.set_parent(terrain, Some(ws)).unwrap();
     let content = Arc::new(Resolver::new(rook_content::Config::empty()));
-    let mut cache = SceneCache::new(&dom, content, glam::Vec3::ZERO);
+    let mut cache = SceneCache::new(&dom, Floors::default(), content, glam::Vec3::ZERO);
     assert!(cache.terrain.surfaces().next().is_none());
     let mut grid = Grid::new();
     grid.set(IVec3::new(5, 5, 5), Voxel::new(TerrainMaterial::Sand, 255));
@@ -192,7 +192,7 @@ fn rings_follow_the_camera() {
     )
     .unwrap();
     let content = Arc::new(Resolver::new(rook_content::Config::empty()));
-    let mut cache = SceneCache::new(&dom, content, Vec3::new(8.0, 10.0, 8.0));
+    let mut cache = SceneCache::new(&dom, Floors::default(), content, Vec3::new(8.0, 10.0, 8.0));
     let level_at = |cache: &SceneCache, x: f32| -> Vec<u8> {
         let p = Vec3::new(x, 2.0, 8.0);
         cache
@@ -242,7 +242,12 @@ fn server_edits_reach_clients() {
     let content = Arc::new(Resolver::new(rook_content::Config::empty()));
     let client = session.client_mut(0).unwrap();
     client.take_render_changes();
-    let mut drawn = SceneCache::new(&client.runtime().world().dom, content.clone(), camera);
+    let mut drawn = SceneCache::new(
+        &client.runtime().world().dom,
+        Floors::default(),
+        content.clone(),
+        camera,
+    );
     // Craters and mounds, across chunk edges (a chunk is 128 studs), over
     // a few frames, one undoing another.
     let edits = [
@@ -305,7 +310,12 @@ fn server_edits_reach_clients() {
         out.sort_unstable();
         out
     };
-    let fresh = SceneCache::new(&session.server().runtime().world().dom, content, camera);
+    let fresh = SceneCache::new(
+        &session.server().runtime().world().dom,
+        Floors::default(),
+        content,
+        camera,
+    );
     assert!(surfaces(&fresh) == surfaces(&drawn), "drawn chunks differ");
     assert_eq!(drawn.terrain.counts, server_voxels.counts());
     session.join("B", 2).unwrap();
@@ -338,7 +348,7 @@ fn a_replaced_terrain_swaps_its_chunks() {
     let part = dom.create_by_name("Part").unwrap();
     dom.set_parent(part, Some(ws)).unwrap();
     let content = Arc::new(Resolver::new(rook_content::Config::empty()));
-    let mut cache = SceneCache::new(&dom, content, glam::Vec3::ZERO);
+    let mut cache = SceneCache::new(&dom, Floors::default(), content, glam::Vec3::ZERO);
     let drawn = |cache: &SceneCache, material| {
         cache
             .terrain
