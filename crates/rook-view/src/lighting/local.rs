@@ -10,17 +10,6 @@ fn is_light(dom: &Dom, id: InstanceId) -> bool {
     dom.is_a(id, "Light")
 }
 
-/// Every local light in Workspace, drawn or not (its look is read again
-/// whenever a light changes; see [`SceneCache::lights_changed`]).
-fn find_lights(dom: &Dom) -> Vec<InstanceId> {
-    let Some(ws) = dom.find_service("Workspace") else {
-        return Vec::new();
-    };
-    let mut lights = dom.descendants(ws);
-    lights.retain(|id| is_light(dom, *id));
-    lights
-}
-
 /// A light as it shines now: under a part, from the part (a surface
 /// light from the part's `Face`); under an Attachment, from the
 /// attachment, facing along its axes. `None` when it isn't under either
@@ -87,72 +76,204 @@ fn light(dom: &Dom, id: InstanceId) -> Option<LocalLight> {
     })
 }
 
-impl SceneCache {
-    /// Find every local light in Workspace again, and read them.
-    pub(crate) fn find_lights(&mut self, dom: &Dom) {
-        profiling::scope!("SceneCache::find_lights");
-        self.light_ids = find_lights(dom);
-        self.light_holders.clear();
-        for (i, &id) in self.light_ids.iter().enumerate() {
-            // A light changes with its own properties, and under an
-            // Attachment moves with the attachment and its part.
-            self.light_holders.entry(id).or_default().push(i);
-            let mut holder = dom.parent(id);
-            while let Some(h) = holder {
-                self.light_holders.entry(h).or_default().push(i);
-                if dom.class_name(h) != "Attachment" {
-                    break;
-                }
-                holder = dom.parent(h);
+/// The instances whose changes change light `id`: itself, and the part or
+/// Attachment it hangs from (and that Attachment's part).
+fn holders(dom: &Dom, id: InstanceId) -> Vec<InstanceId> {
+    let mut out = vec![id];
+    let mut holder = dom.parent(id);
+    while let Some(h) = holder {
+        out.push(h);
+        if dom.class_name(h) != "Attachment" {
+            break;
+        }
+        holder = dom.parent(h);
+    }
+    out
+}
+
+/// What [`light`] gives a light Studio wouldn't draw (not under a part or
+/// an Attachment): no light at all.
+const DARK: LocalLight = LocalLight {
+    position: Vec3::ZERO,
+    shape: LightShape::Point,
+    color: [0.0; 3],
+    brightness: 0.0,
+    range: 0.0,
+    shadows: false,
+    part: (Vec3::ZERO, Vec3::ZERO),
+};
+
+/// Every local light in Workspace, drawn or not, as `scene.lights`: found
+/// once, then kept up to date light by light from the journal.
+#[derive(Debug, Default)]
+pub(crate) struct LightCache {
+    /// The light in each entry of `scene.lights`.
+    ids: Vec<InstanceId>,
+    /// Each light's entry, and the instances it was read from.
+    lights: FxHashMap<InstanceId, (usize, Vec<InstanceId>)>,
+    /// The lights each instance changes (see [`holders`]).
+    held: FxHashMap<InstanceId, Vec<InstanceId>>,
+    /// Entries changed since the renderer took them (`scene.lights` may
+    /// also have grown or shrunk).
+    changed: Vec<usize>,
+}
+
+impl LightCache {
+    /// Find every local light in Workspace (a new scene).
+    pub(crate) fn build(&mut self, dom: &Dom, list: &mut Vec<LocalLight>) {
+        profiling::scope!("LightCache::build");
+        *self = Self::default();
+        list.clear();
+        let Some(ws) = dom.find_service("Workspace") else {
+            return;
+        };
+        for id in dom.descendants(ws) {
+            if is_light(dom, id) {
+                self.place(dom, id, list);
             }
         }
-        self.scene.lights = (0..self.light_ids.len())
-            .map(|i| self.read_light(dom, i))
-            .collect();
     }
 
-    /// The `i`th known light as it is now; a light Studio wouldn't draw
-    /// (not under a part or an Attachment) shines with brightness 0.
-    fn read_light(&self, dom: &Dom, i: usize) -> LocalLight {
-        light(dom, self.light_ids[i]).unwrap_or(LocalLight {
-            position: Vec3::ZERO,
-            shape: LightShape::Point,
-            color: [0.0; 3],
-            brightness: 0.0,
-            range: 0.0,
-            shadows: false,
-            part: (Vec3::ZERO, Vec3::ZERO),
-        })
+    /// The entries changed since the last call.
+    pub(crate) fn take_changes(&mut self) -> Vec<usize> {
+        std::mem::take(&mut self.changed)
     }
 
-    /// Bring the lights up to date with a frame's changes, reading again
-    /// only the lights that changed and those on parts and Attachments
-    /// that did; whether any may have changed.
-    pub(crate) fn lights_changed(&mut self, dom: &Dom, changes: &RenderChanges) -> bool {
-        let holders = &self.light_holders;
-        let placed = (changes.placed.iter())
-            .chain(&changes.collected)
-            .any(|id| holders.contains_key(id));
-        if changes.lights_placed || placed {
-            self.find_lights(dom);
-            return true;
+    /// Bring the lights up to date with a frame's changes: those that
+    /// entered or left Workspace come or go, and only the lights that
+    /// changed, and those on parts and Attachments that did, are read
+    /// again.
+    pub(crate) fn apply(&mut self, dom: &Dom, changes: &RenderChanges, list: &mut Vec<LocalLight>) {
+        // Freed: dropped unread.
+        for id in &changes.collected {
+            self.remove(*id, list);
         }
-        let stale: Vec<usize> = changes
-            .moved
-            .iter()
+        let held = |ids: &mut FxHashSet<InstanceId>, held: &FxHashMap<_, Vec<_>>, of| {
+            ids.extend(held.get(of).into_iter().flatten().copied());
+        };
+        let mut placed = FxHashSet::default();
+        for id in changes.collected.iter().chain(&changes.placed) {
+            held(&mut placed, &self.held, id);
+        }
+        placed.extend(&changes.lights_placed);
+        for &id in &placed {
+            self.place(dom, id, list);
+        }
+        let mut stale = FxHashSet::default();
+        for id in (changes.moved.iter())
             .chain(&changes.parts)
             .chain(&changes.lights)
-            .filter_map(|id| holders.get(id))
-            .flatten()
-            .copied()
-            .collect();
+        {
+            held(&mut stale, &self.held, id);
+        }
         if stale.is_empty() {
-            return false;
+            return;
         }
-        profiling::scope!("SceneCache::read_lights");
-        for i in stale {
-            self.scene.lights[i] = self.read_light(dom, i);
+        profiling::scope!("LightCache::read");
+        for id in stale.difference(&placed) {
+            let i = self.lights[id].0;
+            list[i] = light(dom, *id).unwrap_or(DARK);
+            self.changed.push(i);
         }
-        true
+    }
+
+    /// Read light `id` again, adding it if it's new to Workspace and
+    /// dropping it if it left.
+    fn place(&mut self, dom: &Dom, id: InstanceId, list: &mut Vec<LocalLight>) {
+        let ws = dom.find_service("Workspace");
+        let here = dom.get(id).is_some()
+            && is_light(dom, id)
+            && ws.is_some_and(|ws| dom.is_ancestor_of(ws, id));
+        if !here {
+            self.remove(id, list);
+            return;
+        }
+        let read = light(dom, id).unwrap_or(DARK);
+        let holders = holders(dom, id);
+        let i = match self.lights.get(&id) {
+            Some((i, old)) if *old == holders => {
+                list[*i] = read;
+                self.changed.push(*i);
+                return;
+            }
+            Some(&(i, _)) => {
+                self.unhold(id);
+                list[i] = read;
+                i
+            }
+            None => {
+                self.ids.push(id);
+                list.push(read);
+                list.len() - 1
+            }
+        };
+        self.changed.push(i);
+        for &h in &holders {
+            self.held.entry(h).or_default().push(id);
+        }
+        self.lights.insert(id, (i, holders));
+    }
+
+    /// Stop drawing light `id`; the last entry takes its place.
+    fn remove(&mut self, id: InstanceId, list: &mut Vec<LocalLight>) {
+        if !self.lights.contains_key(&id) {
+            return;
+        }
+        let i = self.unhold(id);
+        self.lights.remove(&id);
+        self.ids.swap_remove(i);
+        list.swap_remove(i);
+        if let Some(&moved) = self.ids.get(i) {
+            self.lights.get_mut(&moved).expect("known").0 = i;
+            self.changed.push(i);
+        }
+    }
+
+    /// Forget what light `id` hangs from; its entry.
+    fn unhold(&mut self, id: InstanceId) -> usize {
+        let (i, holders) = &self.lights[&id];
+        for h in holders {
+            if let Some(lights) = self.held.get_mut(h) {
+                lights.retain(|l| *l != id);
+                if lights.is_empty() {
+                    self.held.remove(h);
+                }
+            }
+        }
+        *i
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A light leaving Workspace touches only its own entry: the last
+    /// light takes its place and the rest keep theirs.
+    #[test]
+    fn lights_come_and_go_one_by_one() {
+        let mut dom = Dom::new();
+        let ws = dom.get_service("Workspace").unwrap();
+        let part = dom.create_by_name("Part").unwrap();
+        dom.set_parent(part, Some(ws)).unwrap();
+        let lights: Vec<InstanceId> = (0..3)
+            .map(|_| {
+                let l = dom.create_by_name("PointLight").unwrap();
+                dom.set_parent(l, Some(part)).unwrap();
+                l
+            })
+            .collect();
+        let mut cache = LightCache::default();
+        let mut list = Vec::new();
+        cache.build(&dom, &mut list);
+        cache.take_changes();
+        assert_eq!(list.len(), 3);
+        dom.set_parent(lights[0], None).unwrap();
+        let mut changes = RenderChanges::default();
+        changes.lights_placed.insert(lights[0]);
+        cache.apply(&dom, &changes, &mut list);
+        assert_eq!(cache.take_changes(), [0]);
+        assert_eq!(list.len(), 2);
+        assert_eq!(cache.ids, [lights[2], lights[1]]);
     }
 }

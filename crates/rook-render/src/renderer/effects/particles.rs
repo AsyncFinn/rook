@@ -146,12 +146,23 @@ impl Renderer {
         }
     }
 
-    /// Ask for the emitters' images.
-    pub(crate) fn request_particle_images(&mut self, scene: &Scene) {
-        for e in &scene.emitters {
-            if let Some(hash) = e.look.texture {
-                self.image_readiness(hash, Some(scene));
-            }
+    /// Ask for the images of the effects in the slots `changed`.
+    pub(crate) fn request_effect_images(&mut self, scene: &Scene, changed: &EffectSlots) {
+        let at = |list: &[usize], look: &dyn Fn(usize) -> Option<ImageHash>| {
+            list.iter().filter_map(|&i| look(i)).collect::<Vec<_>>()
+        };
+        let hashes = [
+            at(&changed.emitters, &|i| {
+                scene.emitters[i].as_ref()?.look.texture
+            }),
+            at(&changed.beams, &|i| scene.beams[i].as_ref()?.look.texture),
+            at(&changed.trails, &|i| scene.trails[i].as_ref()?.look.texture),
+            at(&changed.floor_wires, &|i| {
+                scene.floor_wires[i].as_ref()?.look.texture
+            }),
+        ];
+        for hash in hashes.into_iter().flatten() {
+            self.image_readiness(hash, Some(scene));
         }
     }
 

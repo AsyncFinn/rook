@@ -13,7 +13,7 @@ mod textures;
 
 use rook_engine::is_effect_class;
 use rook_lua::EffectCall;
-use rook_render::{Beam, Emitter, FloorWire, Trail};
+use rook_render::{Beam, EffectSlots, Emitter, FloorWire, Trail};
 
 pub(super) use textures::EffectTextures;
 
@@ -24,11 +24,12 @@ pub(super) fn is_effect(dom: &Dom, id: InstanceId) -> bool {
     is_effect_class(dom.class_name(id)) || dom.class_name(id) == "FloorWire"
 }
 
-/// Where an effect is drawn in the scene's lists. Each keeps its place
+/// Where an effect is drawn in the scene's lists. Each keeps its slots
 /// while it exists, so particles and Trail pieces stay with it.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 enum Slot {
-    Emitters { first: usize, count: usize },
+    /// One per emitter it's drawn as (Fire draws two).
+    Emitters(Vec<usize>),
     Beam(usize),
     Trail(usize),
     FloorWire(usize),
@@ -44,10 +45,10 @@ struct Calls {
 
 /// The scene's effect lists, which the cache keeps.
 pub(super) struct EffectLists<'a> {
-    pub(super) emitters: &'a mut Vec<Emitter>,
-    pub(super) beams: &'a mut Vec<Beam>,
-    pub(super) trails: &'a mut Vec<Trail>,
-    pub(super) floor_wires: &'a mut Vec<FloorWire>,
+    pub(super) emitters: &'a mut Vec<Option<Emitter>>,
+    pub(super) beams: &'a mut Vec<Option<Beam>>,
+    pub(super) trails: &'a mut Vec<Option<Trail>>,
+    pub(super) floor_wires: &'a mut Vec<Option<FloorWire>>,
 }
 
 /// An effect's image by URL: its hash once loaded (noting that the effect
@@ -63,15 +64,33 @@ struct Reader<'a, 'b> {
     calls: Calls,
 }
 
+/// A drawn effect: its slots, and the instances it was read from.
+#[derive(Debug)]
+struct Entry {
+    slot: Slot,
+    holders: Vec<InstanceId>,
+}
+
+/// The free slots in each of the scene's effect lists.
+#[derive(Debug, Default)]
+struct Free {
+    emitters: Vec<usize>,
+    beams: Vec<usize>,
+    trails: Vec<usize>,
+    floor_wires: Vec<usize>,
+}
+
 /// The effects in Workspace, where they're drawn, and the instances that
-/// move or change them.
+/// move or change them: found once, then kept up to date effect by effect
+/// from the journal.
 #[derive(Debug, Default)]
 pub(super) struct EffectCache {
-    ids: Vec<InstanceId>,
-    slots: Vec<Slot>,
-    /// Indices into `ids` of the effects each part or Attachment carries
-    /// (or a Beam or Trail runs between), and of each effect itself.
-    holders: FxHashMap<InstanceId, Vec<usize>>,
+    effects: FxHashMap<InstanceId, Entry>,
+    /// The effects each instance changes (see [`holders`]).
+    held: FxHashMap<InstanceId, Vec<InstanceId>>,
+    free: Free,
+    /// Slots changed since the renderer took them.
+    changed: EffectSlots,
     calls: FxHashMap<InstanceId, Calls>,
     textures: Option<EffectTextures>,
 }
@@ -86,60 +105,36 @@ impl EffectCache {
 
     /// Whether `id` is an effect drawn here.
     pub(super) fn has(&self, id: InstanceId) -> bool {
-        self.ids.contains(&id)
+        self.effects.contains_key(&id)
     }
 
-    /// Find every effect in Workspace again, and read them all.
-    #[expect(
-        clippy::needless_pass_by_value,
-        reason = "EffectLists is a set of &mut lists, reborrowed for the call"
-    )]
-    pub(super) fn find(&mut self, dom: &Dom, drawn: EffectLists<'_>, images: &mut Images<'_>) {
-        profiling::scope!("EffectCache::find");
+    /// The slots changed since the last call.
+    pub(super) fn take_changes(&mut self) -> EffectSlots {
+        std::mem::take(&mut self.changed)
+    }
+
+    /// Find every effect in Workspace (a new scene), and read them all.
+    pub(super) fn build(&mut self, dom: &Dom, mut drawn: EffectLists<'_>, images: &mut Images<'_>) {
+        profiling::scope!("EffectCache::build");
         drawn.emitters.clear();
         drawn.beams.clear();
         drawn.trails.clear();
         drawn.floor_wires.clear();
-        self.ids.clear();
-        self.slots.clear();
-        self.holders.clear();
+        self.effects.clear();
+        self.held.clear();
+        self.free = Free::default();
+        self.changed = EffectSlots::default();
         let Some(ws) = dom.find_service("Workspace") else {
+            self.calls.clear();
             return;
         };
         let mut ids = dom.descendants(ws);
-        ids.retain(|id| is_effect(dom, *id));
-        let ids_set: FxHashSet<InstanceId> = ids.iter().copied().collect();
-        self.calls.retain(|id, _| ids_set.contains(id));
-        for (i, &id) in ids.iter().enumerate() {
-            for holder in holders(dom, id) {
-                self.holders.entry(holder).or_default().push(i);
-            }
-            let slot = match dom.class_name(id) {
-                "Beam" => {
-                    drawn.beams.push(self.reader(dom, id, images).beam(id));
-                    Slot::Beam(drawn.beams.len() - 1)
-                }
-                "Trail" => {
-                    drawn.trails.push(self.reader(dom, id, images).trail(id));
-                    Slot::Trail(drawn.trails.len() - 1)
-                }
-                "FloorWire" => {
-                    drawn
-                        .floor_wires
-                        .push(self.reader(dom, id, images).floor_wire(id));
-                    Slot::FloorWire(drawn.floor_wires.len() - 1)
-                }
-                _ => {
-                    let read = self.reader(dom, id, images).emitters(id);
-                    let first = drawn.emitters.len();
-                    let count = read.len();
-                    drawn.emitters.extend(read);
-                    Slot::Emitters { first, count }
-                }
-            };
-            self.slots.push(slot);
+        ids.retain(|&id| is_effect(dom, id));
+        let known: FxHashSet<InstanceId> = ids.iter().copied().collect();
+        self.calls.retain(|id, _| known.contains(id));
+        for id in ids {
+            self.place(dom, id, &mut drawn, images);
         }
-        self.ids = ids;
     }
 
     /// Count scripts' effect calls, before the effects are read (again).
@@ -157,140 +152,262 @@ impl EffectCache {
     }
 
     /// Bring the effects up to date with a frame's changes (their calls
-    /// already noted): those whose properties or calls changed are read
-    /// again, and those on parts and Attachments that only moved only
-    /// move. Whether any changed.
+    /// already noted): effects entering or leaving Workspace come or go,
+    /// those whose properties or calls changed are read again, and those
+    /// on parts and Attachments that only moved only move.
     pub(super) fn changed(
         &mut self,
         dom: &Dom,
         changes: &RenderChanges,
         mut drawn: EffectLists<'_>,
         images: &mut Images<'_>,
-    ) -> bool {
-        let placed = (changes.placed.iter())
-            .chain(&changes.collected)
-            .any(|id| self.holders.contains_key(id));
-        // A FloorWire's change may give it other parts to hang from.
-        let rewired = changes
-            .effects
-            .iter()
-            .any(|&id| dom.class_name(id) == "FloorWire");
-        if changes.effects_placed || placed || rewired {
-            self.find(dom, drawn, images);
-            return true;
+    ) {
+        // Freed: dropped unread.
+        for id in &changes.collected {
+            self.remove(*id, &mut drawn);
         }
-        let holders = &self.holders;
-        let stale: FxHashSet<usize> = changes
-            .effects
-            .iter()
+        // Placed again: effects that came or went, those whose holders did,
+        // and those whose properties changed (a Beam's Attachment0 or a
+        // FloorWire's From may hang them from something else).
+        let mut placed: FxHashSet<InstanceId> = (changes.effects_placed.iter())
+            .chain(changes.effects.iter().filter(|&&id| is_effect(dom, id)))
+            .copied()
+            .collect();
+        let holders = (changes.collected.iter())
+            .chain(&changes.placed)
+            .chain(&changes.effects_placed);
+        for id in holders {
+            placed.extend(self.held.get(id).into_iter().flatten());
+        }
+        for &id in &placed {
+            self.place(dom, id, &mut drawn, images);
+        }
+        let mut stale = FxHashSet::default();
+        let read = (changes.effects.iter())
             .chain(&changes.parts)
-            .chain(changes.effect_calls.iter().map(|(id, _)| id))
-            .filter_map(|id| holders.get(id))
-            .flatten()
-            .copied()
-            .collect();
-        let moved: FxHashSet<usize> = changes
-            .moved
-            .iter()
-            .filter_map(|id| holders.get(id))
-            .flatten()
-            .copied()
-            .filter(|i| !stale.contains(i))
-            .collect();
-        let any = !stale.is_empty() || !moved.is_empty();
-        self.reread(dom, stale, &mut drawn, images);
-        for i in moved {
-            self.moved(dom, i, &mut drawn);
+            .chain(changes.effect_calls.iter().map(|(id, _)| id));
+        for id in read {
+            stale.extend(self.held.get(id).into_iter().flatten());
         }
-        any
+        stale.retain(|id| !placed.contains(id));
+        let mut moved = FxHashSet::default();
+        for id in &changes.moved {
+            moved.extend(self.held.get(id).into_iter().flatten());
+        }
+        moved.retain(|id| !placed.contains(id) && !stale.contains(id));
+        for id in stale {
+            self.reread(dom, id, &mut drawn, images);
+        }
+        for id in moved {
+            self.moved(dom, id, &mut drawn);
+        }
     }
 
     /// Read the effects `ids` again (their images loaded, or scripts
-    /// called them). Whether any is drawn here.
+    /// called them), those drawn here.
     pub(super) fn reread_ids(
-        &self,
+        &mut self,
         dom: &Dom,
         ids: &[InstanceId],
         mut drawn: EffectLists<'_>,
         images: &mut Images<'_>,
-    ) -> bool {
-        let stale: FxHashSet<usize> = ids
-            .iter()
-            .filter_map(|id| self.ids.iter().position(|e| e == id))
-            .collect();
-        let any = !stale.is_empty();
-        self.reread(dom, stale, &mut drawn, images);
-        any
+    ) {
+        for &id in ids {
+            if self.has(id) {
+                self.reread(dom, id, &mut drawn, images);
+            }
+        }
     }
 
-    fn reread(
-        &self,
+    /// Read effect `id` again, adding it if it's new to Workspace and
+    /// dropping it if it left.
+    fn place(
+        &mut self,
         dom: &Dom,
-        stale: FxHashSet<usize>,
+        id: InstanceId,
         drawn: &mut EffectLists<'_>,
         images: &mut Images<'_>,
     ) {
-        for i in stale {
-            let id = self.ids[i];
-            let mut reader = self.reader(dom, id, images);
-            match self.slots[i] {
-                Slot::Emitters { first, count } => {
-                    let read = reader.emitters(id);
-                    let slots = &mut drawn.emitters[first..first + count];
-                    for (slot, e) in slots.iter_mut().zip(read) {
-                        *slot = e;
+        let here = dom.get(id).is_some()
+            && is_effect(dom, id)
+            && (dom.find_service("Workspace")).is_some_and(|ws| dom.is_ancestor_of(ws, id));
+        if !here {
+            self.remove(id, drawn);
+            return;
+        }
+        let holders = holders(dom, id);
+        let slot = match self.effects.get(&id) {
+            Some(entry) if entry.holders == holders => None,
+            Some(entry) => {
+                let slot = entry.slot.clone();
+                self.unhold(id);
+                Some(slot)
+            }
+            None => {
+                let (free, changed) = (&mut self.free, &mut self.changed);
+                Some(match dom.class_name(id) {
+                    "Beam" => Slot::Beam(take(drawn.beams, &mut free.beams, &mut changed.beams)),
+                    "Trail" => {
+                        Slot::Trail(take(drawn.trails, &mut free.trails, &mut changed.trails))
                     }
+                    "FloorWire" => Slot::FloorWire(take(
+                        drawn.floor_wires,
+                        &mut free.floor_wires,
+                        &mut changed.floor_wires,
+                    )),
+                    _ => Slot::Emitters(Vec::new()),
+                })
+            }
+        };
+        if let Some(slot) = slot {
+            for &h in &holders {
+                self.held.entry(h).or_default().push(id);
+            }
+            self.effects.insert(id, Entry { slot, holders });
+        }
+        self.reread(dom, id, drawn, images);
+    }
+
+    /// Stop drawing effect `id`, freeing its slots.
+    fn remove(&mut self, id: InstanceId, drawn: &mut EffectLists<'_>) {
+        if !self.has(id) {
+            return;
+        }
+        self.unhold(id);
+        self.calls.remove(&id);
+        let entry = self.effects.remove(&id).expect("drawn");
+        let (free, changed) = (&mut self.free, &mut self.changed);
+        match entry.slot {
+            Slot::Emitters(slots) => {
+                for i in slots {
+                    release(drawn.emitters, i, &mut free.emitters, &mut changed.emitters);
                 }
-                Slot::Beam(b) => drawn.beams[b] = reader.beam(id),
-                Slot::Trail(t) => drawn.trails[t] = reader.trail(id),
-                Slot::FloorWire(w) => drawn.floor_wires[w] = reader.floor_wire(id),
+            }
+            Slot::Beam(i) => release(drawn.beams, i, &mut free.beams, &mut changed.beams),
+            Slot::Trail(i) => release(drawn.trails, i, &mut free.trails, &mut changed.trails),
+            Slot::FloorWire(i) => release(
+                drawn.floor_wires,
+                i,
+                &mut free.floor_wires,
+                &mut changed.floor_wires,
+            ),
+        }
+    }
+
+    /// Forget what effect `id` hangs from.
+    fn unhold(&mut self, id: InstanceId) {
+        for h in &self.effects[&id].holders {
+            if let Some(effects) = self.held.get_mut(h) {
+                effects.retain(|e| *e != id);
+                if effects.is_empty() {
+                    self.held.remove(h);
+                }
             }
         }
     }
 
-    /// Effect `i`'s holder moved: carry it along.
-    fn moved(&self, dom: &Dom, i: usize, drawn: &mut EffectLists<'_>) {
-        let id = self.ids[i];
-        match self.slots[i] {
-            Slot::Emitters { first, count } => {
-                let Some(frame) = holder_frame(dom, id) else {
-                    return;
-                };
-                for e in &mut drawn.emitters[first..first + count] {
-                    e.position = frame.position;
-                    e.rotation = frame.rotation;
-                }
-            }
-            Slot::Beam(b) => {
-                if let Some(ends) = ribbons::anchors(dom, id) {
-                    drawn.beams[b].ends = ends;
-                }
-            }
-            Slot::Trail(t) => {
-                if let Some([a, z]) = ribbons::anchors(dom, id) {
-                    drawn.trails[t].ends = [a.position, z.position];
-                }
-            }
-            Slot::FloorWire(w) => {
-                drawn.floor_wires[w].path =
-                    super::adornments::floor_wire::path(dom, id).unwrap_or_default();
-            }
-        }
-    }
-
-    fn reader<'a, 'b>(
-        &'a self,
-        dom: &'a Dom,
+    /// Read drawn effect `id` again into its slots.
+    fn reread(
+        &mut self,
+        dom: &Dom,
         id: InstanceId,
-        images: &'a mut Images<'b>,
-    ) -> Reader<'a, 'b> {
-        Reader {
+        drawn: &mut EffectLists<'_>,
+        images: &mut Images<'_>,
+    ) {
+        let mut reader = Reader {
             dom,
             images,
             textures: self.textures.as_ref().expect("made with textures"),
             calls: self.calls.get(&id).copied().unwrap_or_default(),
+        };
+        let entry = self.effects.get_mut(&id).expect("drawn");
+        let changed = &mut self.changed;
+        match &mut entry.slot {
+            Slot::Emitters(slots) => {
+                let free = &mut self.free.emitters;
+                let read = reader.emitters(id);
+                // Each emitter keeps its slot; extra slots are freed.
+                for i in slots.drain(read.len().min(slots.len())..) {
+                    release(drawn.emitters, i, free, &mut changed.emitters);
+                }
+                for (n, e) in read.into_iter().enumerate() {
+                    if n == slots.len() {
+                        slots.push(take(drawn.emitters, free, &mut changed.emitters));
+                    }
+                    drawn.emitters[slots[n]] = Some(e);
+                    changed.emitters.push(slots[n]);
+                }
+            }
+            &mut Slot::Beam(i) => {
+                drawn.beams[i] = Some(reader.beam(id));
+                changed.beams.push(i);
+            }
+            &mut Slot::Trail(i) => {
+                drawn.trails[i] = Some(reader.trail(id));
+                changed.trails.push(i);
+            }
+            &mut Slot::FloorWire(i) => {
+                drawn.floor_wires[i] = Some(reader.floor_wire(id));
+                changed.floor_wires.push(i);
+            }
         }
     }
+
+    /// Drawn effect `id`'s holder moved: carry it along.
+    fn moved(&mut self, dom: &Dom, id: InstanceId, drawn: &mut EffectLists<'_>) {
+        let changed = &mut self.changed;
+        match &self.effects[&id].slot {
+            Slot::Emitters(slots) => {
+                let Some(frame) = holder_frame(dom, id) else {
+                    return;
+                };
+                for &i in slots {
+                    if let Some(e) = &mut drawn.emitters[i] {
+                        e.position = frame.position;
+                        e.rotation = frame.rotation;
+                        changed.emitters.push(i);
+                    }
+                }
+            }
+            &Slot::Beam(i) => {
+                if let (Some(ends), Some(beam)) = (ribbons::anchors(dom, id), &mut drawn.beams[i]) {
+                    beam.ends = ends;
+                    changed.beams.push(i);
+                }
+            }
+            &Slot::Trail(i) => {
+                if let (Some([a, z]), Some(trail)) =
+                    (ribbons::anchors(dom, id), &mut drawn.trails[i])
+                {
+                    trail.ends = [a.position, z.position];
+                    changed.trails.push(i);
+                }
+            }
+            &Slot::FloorWire(i) => {
+                if let Some(wire) = &mut drawn.floor_wires[i] {
+                    wire.path = super::adornments::floor_wire::path(dom, id).unwrap_or_default();
+                    changed.floor_wires.push(i);
+                }
+            }
+        }
+    }
+}
+
+/// A slot in `list` for a new entry: a free one, or a new one at the end.
+fn take<T>(list: &mut Vec<Option<T>>, free: &mut Vec<usize>, changed: &mut Vec<usize>) -> usize {
+    let i = free.pop().unwrap_or_else(|| {
+        list.push(None);
+        list.len() - 1
+    });
+    changed.push(i);
+    i
+}
+
+/// Free slot `i` of `list`.
+fn release<T>(list: &mut [Option<T>], i: usize, free: &mut Vec<usize>, changed: &mut Vec<usize>) {
+    list[i] = None;
+    free.push(i);
+    changed.push(i);
 }
 
 impl Reader<'_, '_> {

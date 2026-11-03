@@ -75,6 +75,8 @@ pub struct Beam {
 /// as they move, and each piece fades over `lifetime` seconds.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Trail {
+    /// Which Trail it is: its pieces stay with it.
+    pub key: u64,
     pub ends: [Vec3; 2],
     pub enabled: bool,
     pub lifetime: f32,

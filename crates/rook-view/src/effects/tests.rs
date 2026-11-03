@@ -35,18 +35,21 @@ fn scripts_redraw_effects() {
     let content = Arc::new(Resolver::new(rook_engine::settings::content_config(false)));
     let mut cache = SceneCache::new(&dm.runtime().world().dom, content, Vec3::ZERO);
     // Fire's two emitters, then Smoke's, then the ParticleEmitter's.
-    let e = &cache.scene.emitters;
+    let e: Vec<&Emitter> = cache.scene.emitters.iter().flatten().collect();
     assert_eq!(e.len(), 4);
     assert!(e.iter().all(|e| e.enabled));
     assert_eq!(cache.scene.beams.len(), 1);
-    assert_eq!(cache.scene.beams[0].ends[1].position.z, -8.0);
+    assert_eq!(
+        cache.scene.beams[0].as_ref().unwrap().ends[1].position.z,
+        -8.0
+    );
     dm.run_for(1.0);
     let changes = dm.take_render_changes();
     assert_ne!(
         cache.apply(&dm.runtime().world().dom, &changes),
         SceneChange::None
     );
-    let e = &cache.scene.emitters;
+    let e: Vec<&Emitter> = cache.scene.emitters.iter().flatten().collect();
     assert!(!e[0].enabled && !e[1].enabled && e[2].enabled);
     assert_eq!(e[2].look.color.at(0.0), [1.0, 0.0, 0.0]);
     assert_eq!(e[3].emitted, 7);
@@ -55,5 +58,33 @@ fn scripts_redraw_effects() {
         "{:?}",
         e[0].position
     );
-    assert_eq!(cache.scene.beams[0].ends[0].position.x, 10.0);
+    assert_eq!(
+        cache.scene.beams[0].as_ref().unwrap().ends[0].position.x,
+        10.0
+    );
+}
+
+/// An effect coming and going touches only its own slots: the others keep
+/// theirs (and their particles), and a freed slot is taken again.
+#[test]
+fn effects_come_and_go_slot_by_slot() {
+    let place = PLACE.replace(
+        "task.wait(0.5)\nlocal holder = workspace.Holder\nholder.Fire.Enabled = false",
+        "task.wait(0.5)\nlocal holder = workspace.Holder\nholder.Fire:Destroy()\nInstance.new(\"Sparkles\", holder)\ndo return end",
+    );
+    let mut dm = DataModel::load_place(place.as_bytes(), &Options::default()).unwrap();
+    dm.start();
+    dm.take_render_changes();
+    let content = Arc::new(Resolver::new(rook_engine::settings::content_config(false)));
+    let mut cache = SceneCache::new(&dm.runtime().world().dom, content, Vec3::ZERO);
+    cache.effects.take_changes();
+    // Fire takes slots 0 and 1.
+    dm.run_for(1.0);
+    let changes = dm.take_render_changes();
+    cache.apply(&dm.runtime().world().dom, &changes);
+    let changed = cache.effects.take_changes();
+    assert!(changed.emitters.iter().all(|&i| i < 2), "{changed:?}");
+    assert!(changed.beams.is_empty(), "{changed:?}");
+    assert_eq!(cache.scene.emitters.len(), 4);
+    assert_eq!(cache.scene.emitters.iter().flatten().count(), 3);
 }

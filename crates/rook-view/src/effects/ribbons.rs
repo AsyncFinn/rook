@@ -49,6 +49,7 @@ impl Reader<'_, '_> {
         let dom = self.dom;
         let ends = anchors(dom, id);
         Trail {
+            key: key(id, 0),
             enabled: ends.is_some() && dom.bool_property(id, "Enabled") != Some(false),
             ends: ends.map_or([Vec3::ZERO; 2], |[a, z]| [a.position, z.position]),
             // Between 0.01 and 20 seconds (creator-docs).

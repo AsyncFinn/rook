@@ -18,6 +18,8 @@ pub(super) struct Piece {
 
 #[derive(Debug, Default)]
 pub(super) struct TrailState {
+    /// The Trail's `key`.
+    pub(super) key: u64,
     /// Oldest first.
     pub(super) pieces: Vec<Piece>,
     /// The trail's `cleared` acted on so far.

@@ -28,7 +28,7 @@ fn script_changes_update_the_terrain_look() {
         SceneChange::Parts {
             changed: Vec::new(),
             moved: Vec::new(),
-            shared: true,
+            lighting: true,
         }
     );
     assert_eq!(cache.scene.terrain.wave_size, 0.6);

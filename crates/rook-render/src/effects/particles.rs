@@ -114,53 +114,55 @@ struct Pool {
     cleared: u64,
 }
 
-/// Every emitter's particles, in the scene's order of its emitters.
+/// Every emitter's particles, by the scene's emitter slots.
 #[derive(Debug, Default)]
 pub(crate) struct Particles {
-    emitters: Vec<Emitter>,
+    emitters: Vec<Option<Emitter>>,
+    /// Empty for a free slot.
     pools: Vec<Pool>,
 }
 
 impl Particles {
-    /// Take the scene's emitters, acting on scripts' `Emit` and `Clear`
-    /// and moving locked particles with their emitter. Particles stay with
-    /// their emitter's `key` wherever it moves in the list, so effects
-    /// coming and going leave the others' particles alone.
-    pub(crate) fn set_emitters(&mut self, emitters: &[Emitter]) {
-        let mut old: FxHashMap<u64, (Emitter, Pool)> = self
-            .emitters
-            .drain(..)
+    /// Take a new scene's emitters. Particles stay with their emitter's
+    /// `key` wherever it is now, so a scene built again (a MaterialVariant
+    /// changed) leaves them alone.
+    pub(crate) fn replace(&mut self, emitters: &[Option<Emitter>]) {
+        let mut old: FxHashMap<u64, (Emitter, Pool)> = (self.emitters.drain(..))
             .zip(self.pools.drain(..))
-            .map(|(e, p)| (e.key, (e, p)))
+            .filter_map(|(e, p)| e.map(|e| (e.key, (e, p))))
             .collect();
-        // Emitters gone: their particles go with them.
         for new in emitters {
-            let pool = match old.remove(&new.key) {
-                Some((old, mut pool)) => {
-                    if new.look.locked {
-                        pool.follow(&old, new);
-                    }
-                    pool
-                }
-                // A new emitter: calls made before it was drawn count.
-                None => Pool {
-                    rng: Rng::new(new.key),
-                    ..Default::default()
+            let pool = match new {
+                Some(new) => match old.remove(&new.key) {
+                    Some((old, pool)) => adopt(Some(&old), pool, new),
+                    None => adopt(None, Pool::default(), new),
                 },
+                None => Pool::default(),
             };
             self.pools.push(pool);
-            let pool = self.pools.last_mut().expect("just pushed");
-            if new.cleared != pool.cleared {
-                pool.particles.clear();
-                pool.cleared = new.cleared;
-            }
-            let burst = new.emitted.saturating_sub(pool.emitted).min(MAX_BURST);
-            pool.emitted = new.emitted;
-            for _ in 0..burst {
-                pool.birth(new, 0.0);
-            }
         }
         self.emitters.extend_from_slice(emitters);
+    }
+
+    /// Take the emitter now in slot `i` (`None`: it's gone, and its
+    /// particles with it), acting on scripts' `Emit` and `Clear` and
+    /// moving locked particles with it. Another emitter taking the slot
+    /// starts with none.
+    pub(crate) fn set(&mut self, i: usize, new: Option<&Emitter>) {
+        if self.emitters.len() <= i {
+            self.emitters.resize(i + 1, None);
+            self.pools.resize_with(i + 1, Pool::default);
+        }
+        let pool = std::mem::take(&mut self.pools[i]);
+        let old = self.emitters[i].take();
+        self.pools[i] = match new {
+            Some(new) => match old.filter(|old| old.key == new.key) {
+                Some(old) => adopt(Some(&old), pool, new),
+                None => adopt(None, Pool::default(), new),
+            },
+            None => Pool::default(),
+        };
+        self.emitters[i] = new.cloned();
     }
 
     /// Move every particle on by `dt` seconds (each emitter's
@@ -172,7 +174,9 @@ impl Particles {
             let h = left.min(SUBSTEP);
             left -= h;
             for (emitter, pool) in self.emitters.iter().zip(&mut self.pools) {
-                pool.step(emitter, h * emitter.time_scale.max(0.0));
+                if let Some(emitter) = emitter {
+                    pool.step(emitter, h * emitter.time_scale.max(0.0));
+                }
             }
         }
         for pool in &mut self.pools {
@@ -190,8 +194,29 @@ impl Particles {
         self.emitters
             .iter()
             .zip(&self.pools)
-            .filter_map(|(e, p)| Some((&e.look, p.particles.as_slice(), p.bounds?)))
+            .filter_map(|(e, p)| Some((&e.as_ref()?.look, p.particles.as_slice(), p.bounds?)))
     }
+}
+
+/// Emitter `new`'s particles: `pool`, which `old` (the same emitter as it
+/// was) had, or a fresh one for a new emitter, whose calls made before it
+/// was drawn count.
+fn adopt(old: Option<&Emitter>, mut pool: Pool, new: &Emitter) -> Pool {
+    match old {
+        Some(old) if new.look.locked => pool.follow(old, new),
+        Some(_) => {}
+        None => pool.rng = Rng::new(new.key),
+    }
+    if new.cleared != pool.cleared {
+        pool.particles.clear();
+        pool.cleared = new.cleared;
+    }
+    let burst = new.emitted.saturating_sub(pool.emitted).min(MAX_BURST);
+    pool.emitted = new.emitted;
+    for _ in 0..burst {
+        pool.birth(new, 0.0);
+    }
+    pool
 }
 
 impl Pool {

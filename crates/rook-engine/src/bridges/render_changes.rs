@@ -12,8 +12,8 @@ use crate::*;
 /// Lighting if `lighting`, the terrain's look (a Terrain's properties,
 /// `Workspace.GlobalWind`) if `terrain`, the local lights (and
 /// Attachments, which may carry one) whose properties changed in `lights`,
-/// and lights entering or leaving the tree if `lights_placed`; the same
-/// for the visual effects ([`is_effect_class`]) in `effects` and
+/// and the lights entering or leaving the tree in `lights_placed`; the
+/// same for the visual effects ([`is_effect_class`]) in `effects` and
 /// `effects_placed`, plus the effect methods scripts called. A FloorWire
 /// is both an adornment of its `From` part (its wire) and an effect (its
 /// moving images); moving either of its parts redraws its wire. Instances
@@ -25,11 +25,11 @@ pub struct RenderChanges {
     pub lighting: bool,
     pub terrain: bool,
     pub lights: rustc_hash::FxHashSet<InstanceId>,
-    pub lights_placed: bool,
-    /// Effects whose properties changed, and whether any entered or left
-    /// the tree (`effects_placed`).
+    pub lights_placed: rustc_hash::FxHashSet<InstanceId>,
     pub effects: rustc_hash::FxHashSet<InstanceId>,
-    pub effects_placed: bool,
+    /// With the Attachments that moved in the tree, which Beams and Trails
+    /// run between.
+    pub effects_placed: rustc_hash::FxHashSet<InstanceId>,
     /// `ParticleEmitter:Emit` and the like, in the order called.
     pub effect_calls: Vec<(InstanceId, rook_lua::EffectCall)>,
     pub placed: rustc_hash::FxHashSet<InstanceId>,
@@ -52,9 +52,9 @@ impl RenderChanges {
             && !self.lighting
             && !self.terrain
             && self.lights.is_empty()
-            && !self.lights_placed
+            && self.lights_placed.is_empty()
             && self.effects.is_empty()
-            && !self.effects_placed
+            && self.effects_placed.is_empty()
             && self.effect_calls.is_empty()
             && self.placed.is_empty()
             && self.parts.is_empty()
@@ -65,7 +65,9 @@ impl RenderChanges {
     /// `id` is being freed: no other change may name it.
     fn collect(&mut self, id: InstanceId) {
         self.lights.remove(&id);
+        self.lights_placed.remove(&id);
         self.effects.remove(&id);
+        self.effects_placed.remove(&id);
         self.effect_calls.retain(|(e, _)| *e != id);
         self.placed.remove(&id);
         self.parts.remove(&id);
@@ -346,12 +348,13 @@ impl DataModel {
                     {
                         changes.full = true;
                     }
-                    if subtree.iter().any(|i| light(*i)) {
-                        changes.lights_placed = true;
-                    }
-                    if subtree.iter().any(|i| effect(*i) || wire(*i)) {
-                        changes.effects_placed = true;
-                    }
+                    let attachment = |i: InstanceId| dom.is_a_class(i, ids.attachment);
+                    changes
+                        .lights_placed
+                        .extend(subtree.iter().filter(|&&i| light(i)));
+                    changes.effects_placed.extend(
+                        (subtree.iter()).filter(|&&i| effect(i) || wire(i) || attachment(i)),
+                    );
                     for &i in subtree.iter().filter(|i| adornment(**i)) {
                         adorn(changes, adorned, i, false);
                     }
@@ -373,21 +376,25 @@ impl DataModel {
                     changes.placed.insert(*id);
                 }
                 Change::Destroying(id) if light(*id) => {
-                    changes.lights_placed = true;
+                    changes.lights_placed.insert(*id);
                 }
                 Change::Destroying(id) if effect(*id) => {
-                    changes.effects_placed = true;
+                    changes.effects_placed.insert(*id);
                 }
                 Change::Destroying(id) if adornment(*id) => {
                     adorn(changes, adorned, *id, true);
-                    changes.effects_placed |= wire(*id);
+                    if wire(*id) {
+                        changes.effects_placed.insert(*id);
+                    }
                 }
                 _ => {}
             }
         }
         if changes.full {
             changes.lights.clear();
+            changes.lights_placed.clear();
             changes.effects.clear();
+            changes.effects_placed.clear();
             changes.parts.clear();
             changes.moved.clear();
             changes.placed.clear();

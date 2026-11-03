@@ -38,17 +38,6 @@ pub(crate) struct GpuRibbons {
 pub(crate) type RibbonRun = (Option<ImageHash>, Range<u32>);
 
 impl Renderer {
-    /// Ask for the ribbons' images.
-    pub(crate) fn request_ribbon_images(&mut self, scene: &Scene) {
-        let beams = scene.beams.iter().map(|b| b.look.texture);
-        let trails = scene.trails.iter().map(|t| t.look.texture);
-        let wires = scene.floor_wires.iter().map(|w| w.look.texture);
-        let hashes: Vec<ImageHash> = beams.chain(trails).chain(wires).flatten().collect();
-        for hash in hashes {
-            self.image_readiness(hash, Some(scene));
-        }
-    }
-
     /// Upload the ribbons `view` reaches, farthest first, and return their
     /// runs by image.
     pub(crate) fn upload_ribbons(&mut self, camera: &Camera, view: &Frustum) -> Vec<RibbonRun> {

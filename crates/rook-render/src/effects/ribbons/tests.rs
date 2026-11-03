@@ -51,6 +51,7 @@ fn beam_width_runs_along_attachment_up() {
 #[test]
 fn trail_lays_and_ages_pieces() {
     let mut t = Trail {
+        key: 1,
         ends: [Vec3::ZERO, Vec3::Y],
         enabled: true,
         lifetime: 1.0,
@@ -63,20 +64,20 @@ fn trail_lays_and_ages_pieces() {
     let mut r = Ribbons::default();
     for i in 0..10 {
         t.ends = [Vec3::new(i as f32, 0.0, 0.0), Vec3::new(i as f32, 1.0, 0.0)];
-        r.set(&[], std::slice::from_ref(&t), &[]);
+        r.set_trail(0, Some(&t));
         r.step(0.1);
     }
     let strips = r.strips(Vec3::new(0.0, 0.0, 10.0), 0.0);
     assert_eq!(strips[0].edges.len(), 10);
     t.enabled = false;
-    r.set(&[], std::slice::from_ref(&t), &[]);
+    r.set_trail(0, Some(&t));
     r.step(1.0);
     assert!(!r.any());
     t.enabled = true;
-    r.set(&[], std::slice::from_ref(&t), &[]);
+    r.set_trail(0, Some(&t));
     r.step(0.1);
     t.cleared = 1;
-    r.set(&[], std::slice::from_ref(&t), &[]);
+    r.set_trail(0, Some(&t));
     assert!(!r.any());
 }
 

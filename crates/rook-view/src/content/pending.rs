@@ -76,9 +76,11 @@ impl SceneCache {
             .filter(|&id| self.effects.has(id))
             .collect();
         if !effects.is_empty() {
-            parts.retain(|id| !effects.contains(id));
-            self.effects_loaded |= self.with_effects(|cache, drawn, images| {
-                cache.reread_ids(dom, &effects, drawn, images)
+            for id in &effects {
+                parts.remove(id);
+            }
+            self.with_effects(|cache, drawn, images| {
+                cache.reread_ids(dom, &effects, drawn, images);
             });
         }
         if let Some(&terrain) = parts.iter().find(|&&id| self.is_terrain(id)) {

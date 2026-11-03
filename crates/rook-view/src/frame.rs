@@ -62,42 +62,60 @@ impl SceneCache {
                 SceneChange::Parts {
                     changed: Vec::new(),
                     moved: Vec::new(),
-                    shared: true,
+                    lighting: true,
                 }
             }
             _ if loaded.is_empty() => change,
             SceneChange::None => SceneChange::Parts {
                 changed: loaded,
                 moved: Vec::new(),
-                shared: false,
+                lighting: false,
             },
             SceneChange::Parts {
                 mut changed,
                 moved,
-                shared,
+                lighting,
             } => {
                 changed.extend(loaded);
                 SceneChange::Parts {
                     changed,
                     moved,
-                    shared,
+                    lighting,
                 }
             }
             SceneChange::Full => SceneChange::Full,
         };
+        let lights = self.lights.take_changes();
+        let effects = self.effects.take_changes();
         match &change {
-            SceneChange::None => return gui,
+            SceneChange::None => {
+                if lights.is_empty() && effects.is_empty() {
+                    return gui;
+                }
+            }
             SceneChange::Parts {
                 changed,
                 moved,
-                shared,
+                lighting,
             } => {
-                if *shared || !changed.is_empty() {
+                if *lighting {
+                    renderer.update_lighting(&self.scene);
+                }
+                if !changed.is_empty() {
                     renderer.update_parts(&self.scene, changed);
                 }
                 renderer.move_parts(&self.scene, moved);
             }
             SceneChange::Full => renderer.set_scene(&self.scene),
+        }
+        // A new scene takes every light and effect anyway.
+        if !matches!(change, SceneChange::Full) {
+            if !lights.is_empty() {
+                renderer.update_lights(&self.scene, &lights);
+            }
+            if !effects.is_empty() {
+                renderer.update_effects(&self.scene, &effects);
+            }
         }
         for mesh in self.take_dropped_meshes() {
             renderer.drop_mesh(mesh);

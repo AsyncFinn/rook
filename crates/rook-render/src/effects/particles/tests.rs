@@ -29,7 +29,7 @@ fn emitter(look: Arc<EmitterLook>) -> Emitter {
 fn rate_lifetime_and_enabled() {
     let mut e = emitter(look(20.0));
     let mut ps = Particles::default();
-    ps.set_emitters(std::slice::from_ref(&e));
+    ps.set(0, Some(&e));
     for _ in 0..3 {
         ps.step(1.0);
     }
@@ -42,12 +42,12 @@ fn rate_lifetime_and_enabled() {
         .fold(0.0, f32::max);
     assert!(top <= 1.0 && top > 0.9, "{top}");
     e.time_scale = 0.0;
-    ps.set_emitters(std::slice::from_ref(&e));
+    ps.set(0, Some(&e));
     ps.step(1.0);
     assert_eq!(ps.pools[0].particles.len(), alive);
     e.time_scale = 1.0;
     e.enabled = false;
-    ps.set_emitters(std::slice::from_ref(&e));
+    ps.set(0, Some(&e));
     ps.step(1.0);
     assert!(!ps.any());
 }
@@ -63,21 +63,22 @@ fn emit_clear_and_locked() {
     e.enabled = false;
     let mut ps = Particles::default();
     e.emitted = 5;
-    ps.set_emitters(std::slice::from_ref(&e));
+    ps.set(0, Some(&e));
     assert_eq!(ps.pools[0].particles.len(), 5);
     // The same count again births nothing more.
-    ps.set_emitters(std::slice::from_ref(&e));
+    ps.set(0, Some(&e));
     assert_eq!(ps.pools[0].particles.len(), 5);
     e.position = Vec3::new(10.0, 0.0, 0.0);
-    ps.set_emitters(std::slice::from_ref(&e));
+    ps.set(0, Some(&e));
     assert!(ps.pools[0].particles.iter().all(|p| p.position.x == 10.0));
     e.cleared = 1;
-    ps.set_emitters(std::slice::from_ref(&e));
+    ps.set(0, Some(&e));
     assert!(!ps.any());
 }
 
-/// Particles stay with their emitter's key when others come and go
-/// before it in the list.
+/// A scene built again keeps particles with their emitter's key, wherever
+/// its slot is now; another emitter taking a slot starts afresh, and a
+/// slot freed drops its particles.
 #[test]
 fn particles_follow_their_key() {
     let mut a = emitter(look(0.0));
@@ -86,16 +87,20 @@ fn particles_follow_their_key() {
     b.key = 2;
     b.emitted = 7;
     let mut ps = Particles::default();
-    ps.set_emitters(&[a.clone(), b.clone()]);
-    ps.set_emitters(std::slice::from_ref(&b));
+    ps.replace(&[Some(a.clone()), Some(b.clone())]);
+    ps.replace(&[Some(b.clone()), None]);
     assert_eq!(ps.pools[0].particles.len(), 7);
-    ps.set_emitters(&[a, b]);
+    assert!(ps.pools[1].particles.is_empty());
+    ps.set(0, Some(&a));
     assert_eq!(
         ps.pools[0].particles.len(),
         3,
         "a new emitter bursts afresh"
     );
+    ps.set(1, Some(&b));
     assert_eq!(ps.pools[1].particles.len(), 7);
+    ps.set(0, None);
+    assert_eq!(ps.pools[0].particles.len(), 0);
 }
 
 #[test]

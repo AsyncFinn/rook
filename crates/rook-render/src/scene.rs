@@ -393,14 +393,15 @@ pub struct Scene {
     /// The local lights in Workspace (disabled ones at brightness 0).
     pub lights: Vec<LocalLight>,
     /// Particle emitters (Fire, Smoke, Sparkles, ParticleEmitter). An
-    /// emitter keeps its index from one update to the next, as parts do,
-    /// so that its particles stay with it.
-    pub emitters: Vec<Emitter>,
-    pub beams: Vec<Beam>,
-    /// Trails, which keep their index as emitters do (for their pieces).
-    pub trails: Vec<Trail>,
+    /// emitter keeps its slot from one update to the next, as parts do,
+    /// so that its particles stay with it; `None` is a free slot. The
+    /// ribbons' lists are kept the same way.
+    pub emitters: Vec<Option<Emitter>>,
+    pub beams: Vec<Option<Beam>>,
+    /// Trails, whose pieces stay with their slot.
+    pub trails: Vec<Option<Trail>>,
     /// The FloorWires' moving images (their wires are `parts`).
-    pub floor_wires: Vec<FloorWire>,
+    pub floor_wires: Vec<Option<FloorWire>>,
     pub lighting: Lighting,
     pub terrain: TerrainLook,
     /// The mesh files parts may draw ([`DrawShape::File`]). The renderer
@@ -409,6 +410,26 @@ pub struct Scene {
     /// The images parts and their layers may draw. The renderer uploads
     /// each the first time something draws it, a few per frame.
     pub images: FxHashMap<ImageHash, Arc<Image>>,
+}
+
+/// The effect slots that changed since the renderer last took them
+/// ([`Renderer::update_effects`](crate::Renderer::update_effects)):
+/// indices into [`Scene::emitters`], `beams`, `trails` and `floor_wires`.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct EffectSlots {
+    pub emitters: Vec<usize>,
+    pub beams: Vec<usize>,
+    pub trails: Vec<usize>,
+    pub floor_wires: Vec<usize>,
+}
+
+impl EffectSlots {
+    pub fn is_empty(&self) -> bool {
+        self.emitters.is_empty()
+            && self.beams.is_empty()
+            && self.trails.is_empty()
+            && self.floor_wires.is_empty()
+    }
 }
 
 /// How far ahead of Studio's edit camera its Focus sits, in studs.

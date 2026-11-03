@@ -216,11 +216,11 @@ fn water_phase_follows_wave_speed() {
     r.set_time(1.0);
     assert!((r.water_phase - 10.0).abs() < 1e-4, "{}", r.water_phase);
     scene.terrain.wave_speed = 0.0;
-    r.update_parts(&scene, &[]);
+    r.update_lighting(&scene);
     r.set_time(3.0);
     assert!((r.water_phase - 10.0).abs() < 1e-4);
     scene.terrain.wave_speed = 4.0;
-    r.update_parts(&scene, &[]);
+    r.update_lighting(&scene);
     r.set_time(3.5);
     assert!((r.water_phase - 12.0).abs() < 1e-4);
     r.set_time(0.0);

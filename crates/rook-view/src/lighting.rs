@@ -5,6 +5,8 @@ mod local;
 mod sky;
 mod sun;
 
+pub(super) use local::LightCache;
+
 use super::*;
 use sun::{daylight, sun_and_moon, sun_direction};
 

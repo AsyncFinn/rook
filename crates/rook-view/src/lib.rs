@@ -42,6 +42,7 @@ pub use content::installed::Installed;
 use content::pending::*;
 use content::report::Report;
 use effects::{EffectCache, EffectLists, EffectTextures, Images};
+use lighting::LightCache;
 use look::*;
 use props::*;
 use terrain::TerrainCache;
@@ -74,11 +75,8 @@ pub(crate) enum SceneChange {
         changed: Vec<usize>,
         /// Entries that only moved: same look, new place.
         moved: Vec<usize>,
-        /// The lighting, the terrain's look, the local lights or the
-        /// effects changed: the renderer takes the scene's again. Parts
-        /// moving alone don't, so a place full of machinery doesn't hand
-        /// it every light and emitter each frame.
-        shared: bool,
+        /// The lighting or the terrain's look changed.
+        lighting: bool,
     },
     /// Everything was rebuilt.
     Full,
@@ -119,18 +117,11 @@ pub struct SceneCache {
     lighting_changed: bool,
     /// Workspace's Terrain, meshed.
     terrain: TerrainCache,
-    /// Every local light in Workspace, and the parts they hang from
-    /// (directly or through an Attachment), which move them.
-    light_ids: Vec<InstanceId>,
-    /// Indices into `light_ids` of the lights each part or Attachment
-    /// carries, and of each light itself.
-    light_holders: FxHashMap<InstanceId, Vec<usize>>,
+    /// The local lights, as `scene.lights`.
+    lights: LightCache,
     /// The visual effects, as `scene.emitters`, `beams`, `trails` and
     /// `floor_wires`.
     effects: EffectCache,
-    /// An effect changed outside [`SceneCache::apply`] (its image
-    /// arrived).
-    effects_loaded: bool,
     /// The lines scripts gave WireframeHandleAdornments.
     wire_lines: adornments::wireframe::WireLines,
     /// Models' Highlights, found again each update.
@@ -168,10 +159,8 @@ impl SceneCache {
             sky_files: FxHashSet::default(),
             lighting_changed: false,
             terrain: TerrainCache::default(),
-            light_ids: Vec::new(),
-            light_holders: FxHashMap::default(),
+            lights: LightCache::default(),
             effects: EffectCache::new(textures),
-            effects_loaded: false,
             wire_lines: Default::default(),
             model_highlights: Default::default(),
             report: Report::default(),
@@ -217,8 +206,8 @@ impl SceneCache {
         let index = &self.index;
         self.shown.retain(|id, _| index.contains_key(id));
         self.scene.lighting = self.lighting(dom);
-        self.find_lights(dom);
-        self.with_effects(|effects, drawn, images| effects.find(dom, drawn, images));
+        self.lights.build(dom, &mut self.scene.lights);
+        self.with_effects(|effects, drawn, images| effects.build(dom, drawn, images));
     }
 
     /// Apply a frame's changes.
@@ -246,9 +235,8 @@ impl SceneCache {
         if changes.lighting {
             self.scene.lighting = self.lighting(dom);
         }
-        let lights = self.lights_changed(dom, changes);
-        let effects = self
-            .with_effects(|effects, drawn, images| effects.changed(dom, changes, drawn, images));
+        self.lights.apply(dom, changes, &mut self.scene.lights);
+        self.with_effects(|effects, drawn, images| effects.changed(dom, changes, drawn, images));
         let mut moved = Vec::new();
         if changes.terrain {
             match self.terrain_changed(dom) {
@@ -290,14 +278,14 @@ impl SceneCache {
                 moved.push(i);
             }
         }
-        let shared = changes.lighting || changes.terrain || lights || effects;
-        if changed.is_empty() && moved.is_empty() && !shared {
+        let lighting = changes.lighting || changes.terrain;
+        if changed.is_empty() && moved.is_empty() && !lighting {
             SceneChange::None
         } else {
             SceneChange::Parts {
                 changed,
                 moved,
-                shared,
+                lighting,
             }
         }
     }
@@ -399,15 +387,14 @@ impl SceneCache {
             }
         }
         let ids: Vec<InstanceId> = calls.iter().map(|c| c.0).collect();
-        let effects =
-            self.with_effects(|cache, drawn, images| cache.reread_ids(dom, &ids, drawn, images));
-        effects || !changed.is_empty()
+        self.with_effects(|cache, drawn, images| cache.reread_ids(dom, &ids, drawn, images));
+        !changed.is_empty()
     }
 
-    /// Whether the lighting or an effect changed outside
-    /// [`SceneCache::apply`] (an image they wait for arrived).
+    /// Whether the lighting changed outside [`SceneCache::apply`] (a
+    /// skybox image arrived).
     pub(crate) fn take_lighting_change(&mut self) -> bool {
-        std::mem::take(&mut self.lighting_changed) | std::mem::take(&mut self.effects_loaded)
+        std::mem::take(&mut self.lighting_changed)
     }
 
     /// Run `f` on the effect cache with the scene's effect lists and a way

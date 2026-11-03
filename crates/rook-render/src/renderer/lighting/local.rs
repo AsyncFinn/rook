@@ -93,9 +93,8 @@ pub(crate) struct GpuLights {
     pub(crate) layout: wgpu::BindGroupLayout,
     pub(crate) bind_group: wgpu::BindGroup,
     lights: Vec<GpuLight>,
-    /// The scene's lights they were made from, so an unchanged list
-    /// skips making them again.
-    scene_lights: Vec<LocalLight>,
+    /// How many of `lights` have `Shadows`.
+    shadowed: usize,
     /// Where each light was when the hash was built.
     hashed_at: Vec<Vec3>,
     hash: LightHash,
@@ -308,7 +307,7 @@ impl GpuLights {
             layout,
             bind_group,
             lights: Vec::new(),
-            scene_lights: Vec::new(),
+            shadowed: 0,
             hashed_at: Vec::new(),
             hash,
             light_buffer,
@@ -378,42 +377,67 @@ impl GpuLights {
         )
     }
 
-    /// Bring the GPU's lights up to date with the scene's. The hash is
-    /// built again only when lights come or go, or one moves past
-    /// [`SLACK`] from where it was hashed or reaches further.
+    /// Take a new scene's lights.
+    pub(crate) fn replace(&mut self, device: &wgpu::Device, scene: &[LocalLight]) {
+        self.lights = scene.iter().map(GpuLight::of).collect();
+        self.shadowed = self.lights.iter().filter(|l| l.shadows()).count();
+        self.rehash(device);
+    }
+
+    /// Take the lights at `changed` (indices into `scene`, which may have
+    /// grown or shrunk) again. Only they are written; the hash is built
+    /// again only when lights come or go, or one moves past [`SLACK`] from
+    /// where it was hashed or reaches further.
     pub(crate) fn update(
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         scene: &[LocalLight],
+        changed: &[usize],
     ) {
-        if scene == self.scene_lights {
+        let mut rehash = scene.len() != self.lights.len();
+        for l in self.lights.drain(scene.len().min(self.lights.len())..) {
+            self.shadowed -= usize::from(l.shadows());
+        }
+        // New lights are among `changed`.
+        self.lights.resize(scene.len(), GpuLight::zeroed());
+        let mut written = Vec::new();
+        for &i in changed.iter().filter(|&&i| i < scene.len()) {
+            let new = GpuLight::of(&scene[i]);
+            let old = self.lights[i];
+            if old == new {
+                continue;
+            }
+            self.shadowed = self.shadowed - usize::from(old.shadows()) + usize::from(new.shadows());
+            self.lights[i] = new;
+            rehash |= new.position[3] > old.position[3]
+                || (self.hashed_at.get(i)).is_none_or(|at| new.at().distance(*at) > SLACK);
+            written.push(i);
+        }
+        if rehash {
+            self.rehash(device);
             return;
         }
-        self.scene_lights = scene.to_vec();
-        let mut lights: Vec<GpuLight> = scene.iter().map(GpuLight::of).collect();
-        if lights == self.lights {
+        if written.is_empty() {
             return;
         }
         profiling::scope!("GpuLights::update");
         self.dirty = true;
-        self.shadows = lights.iter().any(GpuLight::shadows);
-        let hashed = lights.len() == self.lights.len()
-            && lights
-                .iter()
-                .zip(&self.lights)
-                .zip(&self.hashed_at)
-                .all(|((a, b), at)| {
-                    a.position[3] <= b.position[3] && a.at().distance(*at) <= SLACK
-                });
-        if hashed {
-            queue.write_buffer(&self.light_buffer, 0, light_bytes(&lights));
-            self.lights = lights;
-            return;
+        self.shadows = self.shadowed > 0;
+        let size = std::mem::size_of::<GpuLight>();
+        for i in written {
+            let bytes = bytemuck::bytes_of(&self.lights[i]);
+            queue.write_buffer(&self.light_buffer, (i * size) as u64, bytes);
         }
-        self.hash = LightHash::build(&lights);
-        self.hashed_at = lights.iter().map(GpuLight::at).collect();
-        std::mem::swap(&mut self.lights, &mut lights);
+    }
+
+    /// Build the hash and the buffers again for the lights as they are.
+    fn rehash(&mut self, device: &wgpu::Device) {
+        profiling::scope!("GpuLights::rehash");
+        self.dirty = true;
+        self.shadows = self.shadowed > 0;
+        self.hash = LightHash::build(&self.lights);
+        self.hashed_at = self.lights.iter().map(GpuLight::at).collect();
         (self.light_buffer, self.bucket_buffer, self.entry_buffer) =
             buffers(device, &self.lights, &self.hash);
         self.fill_group = fill_group(

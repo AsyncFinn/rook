@@ -58,29 +58,68 @@ impl Renderer {
         self.transparent.clear();
         self.highlights.clear();
         self.lights.clear_blockers();
-        self.update_parts(scene, &(0..scene.parts.len()).collect::<Vec<_>>());
-    }
-
-    /// Update the entries at `changed` (indices into `scene.parts`) and the
-    /// lighting. Indices must stay with their entries from one call to the
-    /// next; the scene may grow, and an entry that's no longer drawn should
-    /// stay as a hidden one (fully transparent).
-    pub fn update_parts(&mut self, scene: &Scene, changed: &[usize]) {
-        profiling::scope!("Renderer::update_parts");
-        self.lighting = scene.lighting;
-        self.terrain = scene.terrain;
-        self.lights.update(&self.device, &self.queue, &scene.lights);
-        self.lights.update_blockers(scene, changed);
-        self.particles.sim.set_emitters(&scene.emitters);
-        self.request_particle_images(scene);
+        self.update_lighting(scene);
+        self.lights.replace(&self.device, &scene.lights);
+        self.particles.sim.replace(&scene.emitters);
         self.ribbons
             .sim
-            .set(&scene.beams, &scene.trails, &scene.floor_wires);
-        self.request_ribbon_images(scene);
+            .replace(&scene.beams, &scene.trails, &scene.floor_wires);
+        let every = |n: usize| (0..n).collect::<Vec<_>>();
+        self.request_effect_images(
+            scene,
+            &EffectSlots {
+                emitters: every(scene.emitters.len()),
+                beams: every(scene.beams.len()),
+                trails: every(scene.trails.len()),
+                floor_wires: every(scene.floor_wires.len()),
+            },
+        );
+        self.update_parts(scene, &every(scene.parts.len()));
+    }
+
+    /// Take the scene's lighting and terrain look again.
+    pub fn update_lighting(&mut self, scene: &Scene) {
+        self.lighting = scene.lighting;
+        self.terrain = scene.terrain;
         // The skybox's images go up like any other image.
         for hash in scene.lighting.skybox.into_iter().flatten() {
             self.image_readiness(hash, Some(scene));
         }
+    }
+
+    /// Take the local lights at `changed` (indices into `scene.lights`,
+    /// which may have grown or shrunk) again.
+    pub fn update_lights(&mut self, scene: &Scene, changed: &[usize]) {
+        self.lights
+            .update(&self.device, &self.queue, &scene.lights, changed);
+    }
+
+    /// Take the effects in the slots `changed` again.
+    pub fn update_effects(&mut self, scene: &Scene, changed: &EffectSlots) {
+        profiling::scope!("Renderer::update_effects");
+        for &i in &changed.emitters {
+            self.particles.sim.set(i, scene.emitters[i].as_ref());
+        }
+        let ribbons = &mut self.ribbons.sim;
+        for &i in &changed.beams {
+            ribbons.set_beam(i, scene.beams[i].as_ref());
+        }
+        for &i in &changed.trails {
+            ribbons.set_trail(i, scene.trails[i].as_ref());
+        }
+        for &i in &changed.floor_wires {
+            ribbons.set_floor_wire(i, scene.floor_wires[i].as_ref());
+        }
+        self.request_effect_images(scene, changed);
+    }
+
+    /// Update the entries at `changed` (indices into `scene.parts`).
+    /// Indices must stay with their entries from one call to the next; the
+    /// scene may grow, and an entry that's no longer drawn should stay as a
+    /// hidden one (fully transparent).
+    pub fn update_parts(&mut self, scene: &Scene, changed: &[usize]) {
+        profiling::scope!("Renderer::update_parts");
+        self.lights.update_blockers(scene, changed);
         if self.placements.len() < scene.parts.len() {
             self.placements.resize(scene.parts.len(), Placement::Hidden);
         }
