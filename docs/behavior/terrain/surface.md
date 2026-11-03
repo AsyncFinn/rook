@@ -105,4 +105,4 @@ a 25.2-million one 317 ms (1.73 million, mostly the flat water). `rook-tools ter
 Scripts changing a Terrain property or `Workspace.GlobalWind` redraw the
 terrain: the waves, wind and grass are read again, and the water and
 blade entries redrawn (`RenderChanges::terrain`); a changed `SmoothGrid`
-rebuilds the scene.
+meshes again only the chunks that changed and swaps them in the scene.
