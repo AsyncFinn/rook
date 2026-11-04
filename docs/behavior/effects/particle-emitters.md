@@ -1,6 +1,6 @@
 # Particle emitters
 
-Checked against Studio 0.743 on 2026-10-21.
+Checked against Studio 0.745 on 2026-11-04.
 
 [M7](../../roadmap/m7-lights-and-effects.md) step 4. ParticleEmitter is in 86 archive files. Sources: the
 creator-docs reference (ParticleEmitter, its enums, the "Particle
@@ -67,6 +67,29 @@ given), even while disabled; `Clear()` removes all of them. A server
 script's `Emit` shows on clients. Destroying the emitter or its part
 removes its particles at once, however long they had left (Studio
 2026-10-21: 60 s particles gone within 1 s; untouched control stayed).
+
+**Cost** (Studio 0.745, 2026-11-04, `Stats.RenderCPUFrameTime` averaged
+over 2 s in edit mode, 50 emitters 60 studs ahead with 5 s lifetimes):
+
+| Particles alive | Render CPU |
+|---|---|
+| none | 5.8 ms |
+| about 10k | 8.8 ms |
+| about 25k | 11.2 ms |
+| about 50k | 11.7 ms |
+| about 100k | 12.5 ms |
+
+- Particles cost the render thread's CPU, growing with their number and
+  leveling off past about 25k (whether from a cap on particles or on
+  emission isn't measured yet).
+- The same 100k behind the camera cost nothing (5.6 ms, the same as none).
+- They still exist there: emitting only while the camera looked away, then
+  turning back, showed the full cloud's cost at once (12.6 ms), as did
+  turning away for 1 s or 4 s and back. So emitters out of view keep their
+  particles' state without paying to move them each frame. That fits
+  particles whose motion is worked out from their age when drawn rather
+  than stepped (Inference: work on another thread wouldn't show in this
+  stat either).
 
 ## Rook's fit
 
