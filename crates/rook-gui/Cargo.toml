@@ -22,5 +22,8 @@ glam.workspace = true
 rustc-hash.workspace = true
 profiling.workspace = true
 
+[dev-dependencies]
+rook-types = { workspace = true, features = ["counters"] }
+
 [lints]
 workspace = true

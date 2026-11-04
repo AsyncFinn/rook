@@ -327,3 +327,50 @@ fn trees_coming_and_going_leave_the_others() {
     assert_eq!(step(&mut dom, &mut gui), [true]);
     assert!(!gui.layout.contains(mover));
 }
+
+/// A text object's color and transparency reach its glyphs, and change
+/// only how it's drawn: the rest of its tree isn't laid out again. Needs
+/// the install's fonts.
+#[test]
+fn text_colors_draw_again_without_laying_out() {
+    use rook_content::resolver::install::{Places, newest_from};
+    let Some(install) = newest_from(None, &Places::from_env(|n| std::env::var_os(n))) else {
+        return;
+    };
+    let mut config = rook_content::Config::empty();
+    config.install = Some(install);
+    config.network = false;
+    let (mut dom, player_gui) = client();
+    let screen = child(&mut dom, "ScreenGui", player_gui, &[]);
+    for _ in 0..20 {
+        square(&mut dom, screen, 1, 0.1);
+    }
+    let label = child(
+        &mut dom,
+        "TextLabel",
+        screen,
+        &[
+            ("Size", udim2(0.0, 400, 0.0, 100)),
+            ("Text", Value::String("Ab".into())),
+            ("TextSize", Value::Float32(20.0)),
+            ("BackgroundTransparency", Value::Float32(1.0)),
+        ],
+    );
+    let mut gui = Gui::default();
+    gui.set_content(std::sync::Arc::new(rook_content::Resolver::new(config)));
+    gui.sync(&mut dom);
+    let glyphs = |quads: &[GuiQuad]| -> Vec<[f32; 4]> {
+        (quads.iter())
+            .filter(|q| matches!(q.paint, Paint::Glyph(_)))
+            .map(|q| q.color)
+            .collect()
+    };
+    assert_eq!(glyphs(&drawn(&mut gui, &dom)).len(), 2);
+    rook_types::counters::take_local();
+    set(&mut dom, label, "TextColor3", Value::Color3(Color3::new(1.0, 0.0, 0.0)));
+    set(&mut dom, label, "TextTransparency", Value::Float32(0.5));
+    gui.sync(&mut dom);
+    assert_eq!(glyphs(&drawn(&mut gui, &dom)), [[1.0, 0.0, 0.0, 0.5]; 2]);
+    let counts = rook_types::counters::take_local();
+    assert_eq!(counts[rook_types::counters::Counter::GuiNodesLaidOut], 0);
+}

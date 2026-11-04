@@ -71,6 +71,9 @@ pub struct Gui {
     /// Objects whose look alone changed since they were drawn; their trees
     /// draw again.
     restyled: FxHashSet<InstanceId>,
+    /// Text objects whose glyphs' look alone changed: their text lays
+    /// out again on its own, then they draw again.
+    retexted: FxHashSet<InstanceId>,
     layout: Layout,
     /// Counts layouts and looks, so input knows when what's under the
     /// cursor may have changed.
@@ -118,6 +121,7 @@ impl Default for Gui {
             changed: FxHashSet::default(),
             shifted: FxHashSet::default(),
             restyled: FxHashSet::default(),
+            retexted: FxHashSet::default(),
             layout: Layout::default(),
             laid_out: 0,
             tag_changes: 0,
@@ -222,6 +226,7 @@ impl Gui {
         self.changed.remove(&id);
         self.shifted.remove(&id);
         self.restyled.remove(&id);
+        self.retexted.remove(&id);
         self.in_world.remove(&id);
         self.messages.remove(&id);
         if self.focus == Some(id) {
@@ -299,6 +304,7 @@ impl Gui {
                     (Touch::Layout, Change::Property { id, .. }) => _ = self.changed.insert(*id),
                     (Touch::Place, Change::Property { id, .. }) => _ = self.shifted.insert(*id),
                     (Touch::Look, Change::Property { id, .. }) => _ = self.restyled.insert(*id),
+                    (Touch::Text, Change::Property { id, .. }) => _ = self.retexted.insert(*id),
                     _ => {}
                 }
             }
@@ -337,6 +343,7 @@ impl Gui {
             self.changed.clear();
             self.shifted.clear();
             self.restyled.clear();
+            self.retexted.clear();
             self.laid_out += 1;
             self.screen.forget();
             self.canvases.clear();
@@ -380,6 +387,17 @@ impl Gui {
             (self.layout).place_again(dom, &shifted, (&mut self.fonts, &self.turning));
             self.write_trees(dom, &shifted);
             self.repaint(dom, &shifted, true);
+        }
+        // Text laid out above already has its new look.
+        let retexted: Vec<InstanceId> = (std::mem::take(&mut self.retexted).into_iter())
+            .filter(|&id| {
+                !shifted.contains(&id)
+                    && layout::top_of(dom, id).is_some_and(|top| !changed.contains(&top))
+            })
+            .collect();
+        if !retexted.is_empty() {
+            self.layout.restyle_texts(dom, &retexted, (&mut self.fonts, &self.turning));
+            self.restyled.extend(retexted);
         }
         let restyled: Vec<InstanceId> = std::mem::take(&mut self.restyled).into_iter().collect();
         self.repaint(dom, &restyled, false);

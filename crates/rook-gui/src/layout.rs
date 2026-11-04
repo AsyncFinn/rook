@@ -239,6 +239,24 @@ impl Layout {
         }
         *self = pass.out;
     }
+
+    /// Lay out the text of `ids` again where it is, for a change to how
+    /// its glyphs look alone: their objects keep their size and place.
+    pub(crate) fn restyle_texts(
+        &mut self,
+        dom: &Dom,
+        ids: &[InstanceId],
+        (fonts, turning): Fonted<'_>,
+    ) {
+        let previous = Layout::default();
+        let mut pass = Pass::new(dom, (&previous, turning), fonts, std::mem::take(self));
+        for &id in ids {
+            if let Some(size) = pass.out.placed.get(&id).map(|p| p.local) {
+                pass.lay_out_text(id, size);
+            }
+        }
+        *self = pass.out;
+    }
 }
 
 /// The GUI object or LayerCollector placing `id`: its parent, past

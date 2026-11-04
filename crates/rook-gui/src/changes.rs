@@ -23,6 +23,10 @@ pub(crate) struct Watch {
     /// AutoButtonColor's tints and a button's hover and pressed images; a
     /// TextBox's caret and selection).
     looks: Vec<PropertyId>,
+    /// Properties that change only how a text object's glyphs are drawn
+    /// (colors, transparencies), which the laid-out text carries: its text
+    /// is laid out again alone, its size and place kept.
+    text_looks: Vec<PropertyId>,
     /// Properties that place the changed object alone: where it goes and
     /// how big it is in its parent, turned or shown. Its siblings and
     /// parent don't depend on them unless the parent arranges, sizes or
@@ -36,6 +40,8 @@ pub(crate) enum Touch {
     Nothing,
     /// How the changed object's tree looks.
     Look,
+    /// How the changed text object's glyphs look.
+    Text,
     /// Where the changed object and what it holds are.
     Place,
     /// Where things are in the changed object's tree.
@@ -66,12 +72,6 @@ impl Watch {
                 ("GuiObject", "BackgroundTransparency"),
                 ("GuiObject", "BorderColor3"),
                 ("GuiObject", "GuiState"),
-                ("TextLabel", "TextColor3"),
-                ("TextButton", "TextColor3"),
-                ("TextBox", "TextColor3"),
-                ("TextLabel", "TextStrokeColor3"),
-                ("TextButton", "TextStrokeColor3"),
-                ("TextBox", "TextStrokeColor3"),
                 ("TextBox", "CursorPosition"),
                 ("TextBox", "SelectionStart"),
                 ("ImageLabel", "ImageColor3"),
@@ -90,6 +90,20 @@ impl Watch {
             .into_iter()
             .filter_map(|(owner, name)| property(owner, name))
             .collect(),
+            text_looks: ["TextLabel", "TextButton", "TextBox"]
+                .into_iter()
+                .flat_map(|owner| {
+                    [
+                        "TextColor3",
+                        "TextTransparency",
+                        "TextStrokeColor3",
+                        "TextStrokeTransparency",
+                    ]
+                    .map(|name| property(owner, name))
+                })
+                .chain([property("TextBox", "PlaceholderColor3")])
+                .flatten()
+                .collect(),
             places: ["AnchorPoint", "Position", "Rotation", "Size", "Visible"]
                 .into_iter()
                 .filter_map(|name| property("GuiObject", name))
@@ -100,6 +114,7 @@ impl Watch {
     pub(crate) fn touches(&self, dom: &Dom, change: &Change) -> Touch {
         match change {
             Change::Property { property, .. } if self.looks.contains(property) => Touch::Look,
+            Change::Property { property, .. } if self.text_looks.contains(property) => Touch::Text,
             Change::Property { property, .. }
                 if [self.viewport, self.current_camera].contains(&Some(*property)) =>
             {

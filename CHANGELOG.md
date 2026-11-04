@@ -5,6 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- A script changing a TextLabel's, TextButton's or TextBox's `TextColor3` or `TextStrokeColor3` now shows the new color: the glyphs kept the color they were laid out with until something else laid the text out again. Tweening `TextTransparency` or `TextStrokeTransparency`, as fades do, no longer lays out all the GUI again every frame, only that object's text: these four properties and a TextBox's `PlaceholderColor3` lay out the changed object's text alone, keeping its size and place.
 - Renaming a Model, or setting its `WorldPivot` or another of its own properties, no longer redraws every part in it. Any property change on a Model went to the renderer as a change to each part under it, though a Model's own properties draw nothing; a Highlight or adornment on a Model still redraws its parts.
 - Disconnecting a connection costs what is waiting on that signal, not every waiting thread. In Deferred mode a disconnect drops the connection's invocations still queued, and finding them looked through every thread waiting on `task.wait`, `wait` or `task.delay` as well, though those invocations are only ever on the frame's deferred queue; now it looks there alone.
 - A terrain edit gathers grass again only where it reached. Each edit near the camera built every grass tile's ground from every terrain chunk drawn near enough to grow blades, though only the edited chunks' tiles changed; the tiles it reached now gather their ground from the chunks under them alone, and the rest keep theirs.
