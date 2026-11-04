@@ -12,6 +12,7 @@ use std::time::{Duration, Instant};
 
 use glam::{IVec2, IVec3, Mat3};
 
+use super::slack::Slack;
 use super::*;
 
 /// How long a frame may spend marking the voxels a moving volume came
@@ -25,26 +26,26 @@ const PIECE: i32 = 16;
 
 /// A part as the voxels see it: a box.
 #[derive(Debug, Clone, Copy, PartialEq)]
-struct Blocker {
-    center: Vec3,
+pub(super) struct Blocker {
+    pub(super) center: Vec3,
     /// The box's axes (unit columns).
-    axes: Mat3,
+    pub(super) axes: Mat3,
     /// Half the box along each axis, at least half a voxel, so a thin roof
     /// or wall still fills a layer of voxels (a 1-stud roof blocks fully
     /// in Studio).
-    half: Vec3,
+    pub(super) half: Vec3,
     min: Vec3,
-    max: Vec3,
+    pub(super) max: Vec3,
     /// Half the box as it is, for how much of each voxel it fills.
-    true_half: Vec3,
+    pub(super) true_half: Vec3,
     /// The box as it is, axis-aligned (for a rotated part, around it).
-    true_min: Vec3,
-    true_max: Vec3,
+    pub(super) true_min: Vec3,
+    pub(super) true_max: Vec3,
 }
 
 impl Blocker {
     /// A box centered at `center` along `axes`, `half` its size each way.
-    fn of_box(center: Vec3, axes: Mat3, true_half: Vec3) -> Self {
+    pub(super) fn of_box(center: Vec3, axes: Mat3, true_half: Vec3) -> Self {
         let half = true_half.max(Vec3::splat(VOXEL * 0.5));
         let extent = rook_types::box_reach(axes, half);
         let true_extent = rook_types::box_reach(axes, true_half);
@@ -61,14 +62,14 @@ impl Blocker {
     }
 
     /// The voxels whose centers it may hold.
-    fn centers(&self) -> Span {
+    pub(super) fn centers(&self) -> Span {
         let lo = ((self.min - VOXEL * 0.5) / VOXEL).ceil().as_ivec3();
         let hi = ((self.max - VOXEL * 0.5) / VOXEL).floor().as_ivec3();
         (lo, hi)
     }
 
     /// The voxels it may fill some of.
-    fn touched(&self) -> Span {
+    pub(super) fn touched(&self) -> Span {
         let lo = (self.true_min / VOXEL).floor().as_ivec3();
         let hi = (self.true_max / VOXEL).ceil().as_ivec3() - 1;
         (lo, hi)
@@ -81,7 +82,7 @@ impl Blocker {
     }
 
     /// Whether its axes are the world's, in some order.
-    fn aligned(&self) -> bool {
+    pub(super) fn aligned(&self) -> bool {
         [self.axes.x_axis, self.axes.y_axis, self.axes.z_axis]
             .iter()
             .all(|a| a.abs().max_element() > 0.9999)
@@ -100,12 +101,16 @@ impl Blocker {
 }
 
 /// How full a voxel is, in 255ths.
-const FULL: u16 = 255;
+pub(super) const FULL: u16 = 255;
 
 #[derive(Debug, Default)]
 pub(super) struct Blockers {
-    /// By index into `Scene::parts`.
+    /// By index into `Scene::parts`, at the pose the voxels were marked
+    /// with, which a part moving within its slack keeps.
     blockers: Vec<Option<Blocker>>,
+    /// How far each may move without marking anything differently, worked
+    /// out once a part moves (nothing until then).
+    slack: Vec<Slack>,
     /// Where they stand.
     columns: Columns,
     /// Each mesh file's box in its own space (center, half size); `None`
@@ -312,8 +317,28 @@ fn pieces((lo, hi): Span) -> impl Iterator<Item = Span> {
     })
 }
 
+/// A rotated box is sampled at 64 points a stud apart across each voxel:
+/// the points' offsets from the voxel's center, in the box's space
+/// (`to_local`).
+pub(super) fn samples(to_local: Mat3) -> [Vec3; 64] {
+    std::array::from_fn(|n| {
+        let n = n as u32;
+        let cell = Vec3::new((n % 4) as f32, ((n / 4) % 4) as f32, (n / 16) as f32);
+        to_local * ((cell - 1.5) * (VOXEL / 4.0))
+    })
+}
+
+/// How far the furthest of [`samples`] is from the voxel's center.
+pub(super) const SAMPLE_REACH: f32 = 1.5 * (VOXEL / 4.0) * 1.732_050_8;
+
+/// How much an aligned box overlaps the voxel centered at `at`, axis by
+/// axis.
+pub(super) fn overlap(b: &Blocker, at: Vec3) -> Vec3 {
+    (b.true_max.min(at + VOXEL * 0.5) - b.true_min.max(at - VOXEL * 0.5)).max(Vec3::ZERO)
+}
+
 /// Voxel `k`'s center.
-fn center(k: IVec3) -> Vec3 {
+pub(super) fn center(k: IVec3) -> Vec3 {
     k.as_vec3() * VOXEL + VOXEL * 0.5
 }
 
@@ -408,15 +433,7 @@ impl Grid {
         };
         let to_local = b.axes.transpose();
         let aligned = b.aligned();
-        // A rotated box is sampled at 64 points a stud apart across each
-        // voxel: the points' offsets from the voxel's center, in the box's
-        // space, and how far the furthest one is.
-        let points: [Vec3; 64] = std::array::from_fn(|n| {
-            let n = n as u32;
-            let cell = Vec3::new((n % 4) as f32, ((n / 4) % 4) as f32, (n / 16) as f32);
-            to_local * ((cell - 1.5) * (VOXEL / 4.0))
-        });
-        let reach = 1.5 * (VOXEL / 4.0) * 3f32.sqrt();
+        let points = samples(to_local);
         let Self {
             dims,
             fills,
@@ -427,17 +444,15 @@ impl Grid {
             let i = slot.index;
             let at = center(k);
             let share = if aligned {
-                // The overlap of two boxes, axis by axis.
-                let over = (b.true_max.min(at + VOXEL * 0.5) - b.true_min.max(at - VOXEL * 0.5))
-                    .max(Vec3::ZERO);
+                let over = overlap(b, at);
                 over.x * over.y * over.z / (VOXEL * VOXEL * VOXEL)
             } else {
                 // A rotated box: how many of the points are inside it,
                 // all or none when the voxel is wholly in or out.
                 let local = to_local * (at - b.center);
-                if (local.abs() - reach).cmpgt(b.true_half).any() {
+                if (local.abs() - SAMPLE_REACH).cmpgt(b.true_half).any() {
                     0.0
-                } else if (local.abs() + reach).cmple(b.true_half).all() {
+                } else if (local.abs() + SAMPLE_REACH).cmple(b.true_half).all() {
                     1.0
                 } else {
                     let inside = points
@@ -595,6 +610,7 @@ fn cells((lo, hi): (IVec2, IVec2)) -> impl Iterator<Item = IVec2> {
 impl Blockers {
     pub(super) fn clear(&mut self) {
         self.blockers.clear();
+        self.slack.clear();
         self.columns.clear();
         self.changed = true;
         self.grid = None;
@@ -608,6 +624,7 @@ impl Blockers {
     pub(super) fn update(&mut self, scene: &Scene, changed: &[usize], used: bool) {
         if self.blockers.len() < scene.parts.len() {
             self.blockers.resize(scene.parts.len(), None);
+            self.slack.resize(scene.parts.len(), Slack::default());
             self.is_stale.resize(scene.parts.len(), false);
         }
         if !used {
@@ -622,7 +639,19 @@ impl Blockers {
         for &i in stale.iter().chain(changed) {
             self.is_stale[i] = false;
             let blocker = self.blocker(&scene.parts[i], scene);
+            // A part that moved less than its slack marks what it did.
+            if let (Some(from), Some(to)) = (&self.blockers[i], &blocker)
+                && self.slack[i].holds(from, to)
+            {
+                continue;
+            }
             if self.blockers[i] != blocker {
+                // A part that moves is likely to again: its slack is worth
+                // working out.
+                self.slack[i] = match (&self.blockers[i], &blocker) {
+                    (Some(_), Some(to)) => Slack::of(to),
+                    _ => Slack::default(),
+                };
                 if self.grid.is_some() {
                     self.moved.push((self.blockers[i], blocker));
                 }
@@ -956,5 +985,77 @@ mod tests {
         }
         assert_eq!(covered, 1000 - 8 * 6 * 6);
         assert_eq!(minus(span, None), vec![span]);
+    }
+
+    /// What `b` marks on its own: each voxel's count and fill.
+    fn marks(b: Blocker, low: IVec3, dims: IVec3) -> (Vec<u32>, Vec<u16>) {
+        let list = [Some(b)];
+        let grid = Grid::new(low, dims, &list, &indexed(&list));
+        (grid.counts, grid.fills)
+    }
+
+    /// A part moved within its slack marks exactly what it marked, and
+    /// the slack lets tiny moves through.
+    #[test]
+    fn a_part_moved_within_its_slack_marks_the_same() {
+        let mut seed = 12345u64;
+        let mut rand = move || {
+            seed = seed
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            (seed >> 40) as f32 / (1u64 << 24) as f32
+        };
+        let (low, dims) = (IVec3::new(-16, -8, -16), IVec3::new(32, 16, 32));
+        let (mut held, mut tiny) = (0, 0);
+        for i in 0..600 {
+            // Half on the half-stud grid, as built places are; half anywhere.
+            let snap = |v: f32| {
+                if i % 2 == 0 {
+                    (v * 2.0).round() * 0.5
+                } else {
+                    v
+                }
+            };
+            let center = Vec3::new(
+                rand() * 40.0 - 20.0,
+                rand() * 20.0 - 10.0,
+                rand() * 40.0 - 20.0,
+            );
+            let half = Vec3::new(rand() * 6.0, rand() * 3.0, rand() * 6.0);
+            let (center, half) = (center.map(snap), half.map(snap).max(Vec3::splat(0.1)));
+            let random_axis = |a: f32, b: f32, c: f32| Vec3::new(a, b + 0.1, c).normalize();
+            let axes = match i % 3 {
+                0 => Mat3::IDENTITY,
+                1 => Mat3::from_rotation_y(std::f32::consts::FRAC_PI_2),
+                _ => Mat3::from_axis_angle(random_axis(rand(), rand(), rand()), rand() * 3.0),
+            };
+            let from = Blocker::of_box(center, axes, half);
+            let slack = Slack::of(&from);
+            for scale in [1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 0.1] {
+                let shift = Vec3::new(rand() - 0.5, rand() - 0.5, rand() - 0.5) * scale;
+                let turn = if i % 4 == 0 || i % 3 == 2 {
+                    let angle = (rand() - 0.5) * scale * 0.1;
+                    Mat3::from_axis_angle(random_axis(rand(), rand(), rand()), angle)
+                } else {
+                    Mat3::IDENTITY
+                };
+                let to = Blocker::of_box(center + shift, turn * axes, half);
+                if slack.holds(&from, &to) {
+                    held += 1;
+                    tiny += usize::from(scale <= 1e-4);
+                    assert_eq!(
+                        marks(from, low, dims),
+                        marks(to, low, dims),
+                        "box {i} moved {scale}"
+                    );
+                }
+            }
+        }
+        // Some voxel center lies on a snapped box's face, or some fill is
+        // about to round differently: no slack there, but most have some.
+        assert!(
+            tiny > 1200 && held > tiny,
+            "{tiny} of 1800 tiny moves held, {held} in all"
+        );
     }
 }

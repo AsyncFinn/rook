@@ -14,6 +14,7 @@
 
 mod blockers;
 mod hash;
+mod slack;
 mod tiles;
 
 use wesl_core::include_wesl;

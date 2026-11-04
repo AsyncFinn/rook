@@ -172,7 +172,15 @@ changed, as voxel lighting engines update their grids in chunks: each
 layer is cut
 into 16-voxel (64-stud) tiles (`renderer/lighting/local/tiles.rs`), and
 the fill pass runs only over marked tiles. A light that changes marks
-what it lit before and lights now. A part that moves marks again only the
+what it lit before and lights now. A part that moves less than its slack
+changes nothing at all (`renderer/lighting/local/slack.rs`): once a part
+moves, how far it may go before any voxel center it holds or nearly holds
+crosses its faces, or any voxel's fill rounds to another byte, is worked
+out, and it stays marked at that pose until it goes further, as a physics
+broadphase's fattened bounds keep a body in its tree. The voxels are fixed
+in the world, so that is exact, not a lag: what it marks there is what it
+would mark where it is. Physics bodies settling or creeping by thousandths
+of a stud a frame cost nothing. Otherwise a part that moves marks again only the
 voxels whose cover changed (for a part aligned with the world, those at
 its edges, so a big part moving a little costs its edges), sends only
 those rows of the marks to the GPU, and marks the tiles the change can
