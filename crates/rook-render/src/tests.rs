@@ -362,6 +362,61 @@ fn moved_parts_and_lights_refill_what_a_whole_fill_draws() {
     }
 }
 
+/// A light that turns on, one that comes and one that moves past where the
+/// hash placed it each build the hash again, and refill only the tiles
+/// they light, not the whole volume; every voxel still comes out as
+/// filling them all.
+#[test]
+fn lights_that_change_the_hash_refill_only_what_they_light() {
+    let (Ok(mut moved), Ok(mut fresh)) = (Renderer::headless(), Renderer::headless()) else {
+        return;
+    };
+    let mut ground = part(PartShape::Block, 0.0, [0.8; 3], 0.0);
+    ground.position.y = -0.5;
+    ground.size = Vec3::new(200.0, 1.0, 200.0);
+    let lamp = LocalLight {
+        position: Vec3::new(20.0, 3.0, 0.0),
+        shape: LightShape::Point,
+        color: [1.0, 0.6, 0.2],
+        brightness: 0.0,
+        range: 16.0,
+        shadows: false,
+        part: (Vec3::splat(f32::MAX), Vec3::splat(f32::MIN)),
+    };
+    let mut scene = Scene {
+        parts: vec![ground],
+        lights: vec![lamp],
+        ..Scene::default()
+    };
+    let camera = Camera::look_at(Vec3::new(0.0, 40.0, 60.0), Vec3::ZERO);
+    moved.set_scene(&scene);
+    moved.render_to_image(16, 16, &camera).unwrap();
+    let whole = 16 * 16 * 64;
+    for step in 0..4 {
+        match step {
+            // Turned on: it reaches further than it did at brightness 0.
+            0 => scene.lights[0].brightness = 4.0,
+            1 => scene.lights.push(LocalLight {
+                position: Vec3::new(-30.0, 3.0, 10.0),
+                ..scene.lights[0]
+            }),
+            2 => scene.lights[0].position.x += 12.0,
+            _ => _ = scene.lights.pop(),
+        }
+        let changed: Vec<usize> = (0..scene.lights.len()).collect();
+        moved.update_lights(&scene, &changed);
+        moved.render_to_image(16, 16, &camera).unwrap();
+        let filled = moved.lights.filled_tiles();
+        assert!(
+            filled > 0 && filled < whole / 4,
+            "step {step}: filled {filled} tiles of {whole}"
+        );
+        fresh.set_scene(&scene);
+        fresh.render_to_image(16, 16, &camera).unwrap();
+        assert!(moved.light_voxels() == fresh.light_voxels(), "step {step}");
+    }
+}
+
 /// A part moving high under open sky (a fan turning, say) refills the
 /// light voxels in its own columns, not the cone below it that the sky's
 /// light spreads through under roofs: with nothing blocked above them,

@@ -428,6 +428,7 @@ impl GpuLights {
     pub(crate) fn replace(&mut self, device: &wgpu::Device, scene: &[LocalLight]) {
         self.lights = scene.iter().map(GpuLight::of).collect();
         self.shadowed = self.lights.iter().filter(|l| l.shadows()).count();
+        self.dirty.all = true;
         self.rehash(device);
     }
 
@@ -445,6 +446,7 @@ impl GpuLights {
         let mut rehash = scene.len() != self.lights.len();
         for l in self.lights.drain(scene.len().min(self.lights.len())..) {
             self.shadowed -= usize::from(l.shadows());
+            self.dirty.lights.push(lit_voxels(&l));
         }
         // New lights are among `changed`.
         self.lights.resize(scene.len(), GpuLight::zeroed());
@@ -481,9 +483,10 @@ impl GpuLights {
     }
 
     /// Build the hash and the buffers again for the lights as they are.
+    /// The voxels fill again only where lights changed (the caller marks
+    /// those): the hash finds the same lights for every other voxel.
     fn rehash(&mut self, device: &wgpu::Device) {
         profiling::scope!("GpuLights::rehash");
-        self.dirty.all = true;
         self.shadows = self.shadowed > 0;
         self.hash = LightHash::build(&self.lights);
         self.hashed_at = self.lights.iter().map(GpuLight::at).collect();
