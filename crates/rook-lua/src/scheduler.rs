@@ -218,6 +218,17 @@ impl<T> Scheduler<T> {
         self.deferred.pop_front()
     }
 
+    /// Remove deferred jobs matching `pred`, leaving the timers unlooked
+    /// at: for jobs only ever deferred (a Deferred signal's invocations,
+    /// dropped when its connection goes), whose cost is then the frame's
+    /// deferred queue, not every waiting thread. Returns how many were
+    /// removed.
+    pub fn cancel_deferred(&mut self, mut pred: impl FnMut(&T) -> bool) -> usize {
+        let before = self.deferred.len();
+        self.deferred.retain(|j| !pred(j));
+        before - self.deferred.len()
+    }
+
     /// Remove pending jobs matching `pred` (for `task.cancel`). Returns how
     /// many were removed.
     pub fn cancel(&mut self, mut pred: impl FnMut(&T) -> bool) -> usize {
@@ -269,5 +280,17 @@ mod tests {
         assert_eq!(s.cancel(|j| *j == 2 || *j == 3), 2);
         assert_eq!(s.pop_deferred(), Some(1));
         assert_eq!(s.pop_deferred(), None);
+    }
+
+    #[test]
+    fn cancel_deferred_leaves_the_timers() {
+        let mut s = Scheduler::fixed(60.0);
+        s.defer(1);
+        s.defer(2);
+        s.schedule(Queue::Task, 0.0, 1);
+        assert_eq!(s.cancel_deferred(|j| *j == 1), 1);
+        assert_eq!(s.pop_deferred(), Some(2));
+        s.begin_frame();
+        assert_eq!(s.take_due(Queue::Task), [1]);
     }
 }

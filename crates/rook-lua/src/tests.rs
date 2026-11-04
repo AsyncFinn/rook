@@ -227,6 +227,32 @@ fn signals_fire_immediately() {
     );
 }
 
+/// In Deferred mode, disconnecting drops the connection's invocations
+/// still waiting to run, and leaves the threads waiting on timers.
+#[test]
+fn deferred_disconnect_drops_pending_invocations() {
+    let rt = Runtime::new(Dom::new(), Clock::Fixed { step: 1.0 / 60.0 }).unwrap();
+    rt.world_mut().signal_behavior = SignalBehavior::Deferred;
+    rt.run_source(
+        "Workspace.Script",
+        r#"
+        local b = Instance.new("BindableEvent")
+        local conn = b.Event:Connect(function(n) print("fired", n) end)
+        b.Event:Connect(function(n) print("kept", n) end)
+        task.delay(0, function() print("waited") end)
+        b:Fire(1)
+        conn:Disconnect()
+        "#,
+        None,
+    )
+    .unwrap();
+    for _ in 0..2 {
+        step(&rt);
+    }
+    let out: Vec<String> = rt.take_log().into_iter().map(|e| e.message).collect();
+    assert_eq!(out, ["kept 1", "waited"]);
+}
+
 #[test]
 fn event_wait_resumes_with_arguments() {
     expect(

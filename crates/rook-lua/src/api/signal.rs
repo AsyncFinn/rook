@@ -106,9 +106,10 @@ fn disconnect(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
     with_world(lua, |w| {
         w.signals.disconnect(conn.0);
         // Deferred mode: disconnecting drops pending invocations
-        // (Confirmed: creator-docs "Deferred events").
+        // (Confirmed: creator-docs "Deferred events"), which are only
+        // ever deferred (`threads::fire`).
         w.scheduler
-            .cancel(|j| matches!(j, Job::Fire { connection, .. } if *connection == conn.0));
+            .cancel_deferred(|j| matches!(j, Job::Fire { connection, .. } if *connection == conn.0));
     });
     Outcome::ret(lua, ())
 }
