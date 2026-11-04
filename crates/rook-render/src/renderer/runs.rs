@@ -179,31 +179,32 @@ impl Renderer {
     /// draws.
     pub(crate) fn upload_args(&mut self, passes: &[&Runs]) -> Vec<usize> {
         let mut starts = Vec::with_capacity(passes.len());
-        let mut all: Vec<DrawArgs> = Vec::new();
+        let mut len = 0;
         for runs in passes {
-            starts.push(all.len());
-            all.extend_from_slice(&runs.args);
+            starts.push(len);
+            len += runs.args.len();
         }
-        if !self.multi_draw || all.is_empty() {
+        if !self.multi_draw || len == 0 {
             return starts;
         }
-        match &self.indirect {
-            Some((buffer, capacity)) if *capacity >= all.len() => {
+        if self.indirect.as_ref().is_none_or(|(_, capacity)| *capacity < len) {
+            let capacity = len * 2;
+            let buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("rook draws"),
+                size: (capacity * size_of::<DrawArgs>()) as u64,
+                usage: wgpu::BufferUsages::INDIRECT | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            self.indirect = Some((buffer, capacity));
+        }
+        let (buffer, _) = self.indirect.as_ref().expect("made above");
+        // Each pass's arguments straight from its runs, not gathered into
+        // one list first.
+        for (runs, &start) in passes.iter().zip(&starts) {
+            if !runs.args.is_empty() {
+                let at = (start * size_of::<DrawArgs>()) as u64;
                 self.queue
-                    .write_buffer(buffer, 0, bytemuck::cast_slice(&all));
-            }
-            _ => {
-                let capacity = all.len() * 2;
-                let mut padded = all;
-                padded.resize(capacity, DrawArgs::zeroed());
-                let buffer = self
-                    .device
-                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("rook draws"),
-                        contents: bytemuck::cast_slice(&padded),
-                        usage: wgpu::BufferUsages::INDIRECT | wgpu::BufferUsages::COPY_DST,
-                    });
-                self.indirect = Some((buffer, capacity));
+                    .write_buffer(buffer, at, bytemuck::cast_slice(&runs.args));
             }
         }
         starts
