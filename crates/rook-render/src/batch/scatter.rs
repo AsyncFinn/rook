@@ -1,6 +1,7 @@
 //! Scatter upload, as Unreal's GPU scene does it: the instances that
 //! changed this frame go up packed with their slots, in one write, and a
-//! compute pass (`shaders/scatter.wgsl`) copies each into its slot. A
+//! compute pass recorded in the frame's own commands
+//! (`shaders/scatter.wgsl`) copies each into its slot. A
 //! frame of parts moving all over the place then uploads what moved,
 //! not every chunk of the buffer holding something that moved.
 
@@ -70,12 +71,16 @@ impl Scatter {
         bytes <= self.max_binding
     }
 
-    /// Copy `instances` at `slots` into `target`, uploading them packed
-    /// into `staging` (grown as needed).
+    /// Copy `instances` at `slots` into `target` in `encoder`'s commands,
+    /// uploading them packed into `staging` (grown as needed). Writes
+    /// queued to `target` before those commands are submitted land before
+    /// this copy; they write the same instances.
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn run(
         &self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
         staging: &mut Option<wgpu::Buffer>,
         target: &wgpu::Buffer,
         slots: &[u32],
@@ -116,18 +121,12 @@ impl Scatter {
                 },
             ],
         });
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some("rook scatter"),
+            timestamp_writes: None,
         });
-        {
-            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("rook scatter"),
-                timestamp_writes: None,
-            });
-            pass.set_pipeline(&self.pipeline);
-            pass.set_bind_group(0, &group, &[]);
-            pass.dispatch_workgroups(count.div_ceil(GROUP), 1, 1);
-        }
-        queue.submit([encoder.finish()]);
+        pass.set_pipeline(&self.pipeline);
+        pass.set_bind_group(0, &group, &[]);
+        pass.dispatch_workgroups(count.div_ceil(GROUP), 1, 1);
     }
 }

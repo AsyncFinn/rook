@@ -10,19 +10,21 @@ use runs::{Pipe, Runs, Source};
 use transparent::TransparentRun;
 
 impl Renderer {
-    /// Upload the instances changed since the last frame, and the
-    /// transparent ones `view` reaches sorted back to front for `camera`.
-    /// Returns the transparent draws.
+    /// Upload the instances changed since the last frame (scattered into
+    /// place by `encoder`'s commands), and the transparent ones `view`
+    /// reaches sorted back to front for `camera`. Returns the transparent
+    /// draws.
     fn upload_instances(
         &mut self,
+        encoder: &mut wgpu::CommandEncoder,
         camera: &Camera,
         view: &Frustum,
         margin: f32,
     ) -> Vec<TransparentRun> {
         {
             profiling::scope!("opaque and layers");
-            self.opaque.upload(&self.device, &self.queue, &self.scatter);
-            self.layers.upload(&self.device, &self.queue, &self.scatter);
+            (self.opaque).upload(&self.device, &self.queue, encoder, &self.scatter);
+            (self.layers).upload(&self.device, &self.queue, encoder, &self.scatter);
             rook_types::gauge!(RenderSlots, self.opaque.slots() + self.layers.slots());
         }
         self.transparent
@@ -88,9 +90,15 @@ impl Renderer {
         self.detail.view(camera);
 
         stage(&mut times.setup);
+        // One command buffer for the whole frame, uploads' copies first.
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("rook frame"),
+            });
         let transparent_runs = {
             profiling::scope!("upload instances");
-            self.upload_instances(camera, &view, margin)
+            self.upload_instances(&mut encoder, camera, &view, margin)
         };
 
         stage(&mut times.instances);
@@ -119,11 +127,6 @@ impl Renderer {
         stage(&mut times.draws);
         let depth = self.depth_view(width, height);
         let (frame, mask, gui_layer) = self.tonemap.frame(&self.device, width, height);
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("rook frame"),
-            });
         self.lights.fill(
             &self.queue,
             &mut encoder,

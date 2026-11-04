@@ -116,7 +116,13 @@ impl InstancePool {
     /// Bring the GPU copy up to date: the whole buffer when it's the first,
     /// else (after copying what an outgrown one held) runs of changed
     /// chunks, then the single slots changed.
-    fn upload(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, scatter: &Scatter) {
+    fn upload(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        scatter: &Scatter,
+    ) {
         let size = std::mem::size_of::<Instance>() as u64;
         if self.buffer.is_none()
             && let Some(old) = self.outgrown.take()
@@ -176,6 +182,7 @@ impl InstancePool {
             scatter.run(
                 device,
                 queue,
+                encoder,
                 &mut self.staging,
                 buffer,
                 &self.changed,
@@ -335,7 +342,13 @@ impl Batches {
 
     /// Bring the GPU copy of the instances and the batches' bounds up to
     /// date.
-    pub(crate) fn upload(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, scatter: &Scatter) {
+    pub(crate) fn upload(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        scatter: &Scatter,
+    ) {
         let (list, bounds, pool) = (&mut self.list, &mut self.bounds, &self.pool);
         // Each batch changed as many times as it has instances gets its
         // boxes worked out afresh; the others wait for more changes.
@@ -356,7 +369,7 @@ impl Batches {
             b.changes = 0;
             false
         });
-        self.pool.upload(device, queue, scatter);
+        self.pool.upload(device, queue, encoder, scatter);
     }
 
     /// How many instance slots the pool holds.
