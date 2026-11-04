@@ -101,7 +101,7 @@ impl Renderer {
             &self.queue,
             &self.images,
             &self.lights,
-            camera,
+            (camera, &view),
             (width, height),
         );
         stage(&mut times.effects);
@@ -111,7 +111,7 @@ impl Renderer {
         let ([mut shadow_runs, mut main_runs, mut mask_runs], starts) = self.build_draws(
             shadow,
             &view,
-            margin,
+            (margin, view_proj),
             (transparent_runs, &world_gui_runs),
             highlight_runs,
         );
@@ -166,6 +166,7 @@ impl Renderer {
         rook_types::count!(ShadowRuns, shadow_runs.runs.len());
         rook_types::count!(MainDraws, main_runs.counts.draws);
         rook_types::count!(MainRuns, main_runs.runs.len());
+        rook_types::count!(MainCuts, main_runs.cuts.len());
         self.draw_counts = DrawCounts {
             shadow: shadow_runs.counts,
             main: main_runs.counts,
@@ -352,7 +353,7 @@ impl Renderer {
         &mut self,
         shadow: Option<ShadowView>,
         view: &Frustum,
-        margin: f32,
+        (margin, view_proj): (f32, glam::Mat4),
         (transparent_runs, world_gui): (Vec<TransparentRun>, &WorldRuns),
         highlight_runs: Vec<HighlightRun>,
     ) -> ([Runs; 3], Vec<usize>) {
@@ -419,10 +420,18 @@ impl Renderer {
                 self.push_draws(&mut main_runs, pipe, source, mesh, key, run, picked);
             }
         }
-        // A canvas farther than a transparent part is drawn before it, so
-        // the part covers it.
-        let tested = world_gui.iter().take_while(|d| !d.on_top).count();
+        // A canvas farther than a transparent part it overlaps on the
+        // screen is drawn before it, so the part covers it; those nearer
+        // than every part are drawn after the effects (`main_pass`).
         let distances = self.transparent.distances();
+        let nearest = distances.last().copied().unwrap_or(f32::INFINITY);
+        let among = (world_gui.iter())
+            .take_while(|d| !d.on_top && d.distance.powi(2) > nearest)
+            .map(|d| (cuts::Rect::of(view_proj, d.corners), d.distance.powi(2)))
+            .collect::<Vec<_>>();
+        let instances =
+            (self.transparent.picks().iter().zip(distances)).map(|(&(_, world), &d)| (world, d));
+        let places = (self.cuts).places(view_proj, margin, instances, &among);
         let picked = |at: u32| self.transparent.picks()[at as usize];
         let mut cut = 0;
         for (key, pass, instances) in transparent_runs {
@@ -431,22 +440,23 @@ impl Renderer {
             };
             let (pipe, source) = (pass.pipe(), Source::Transparent);
             let (mut start, end) = (instances.start, instances.end);
-            for i in instances {
-                if cut == tested {
-                    break;
-                }
-                let d = distances[i as usize];
-                let behind = (cut..tested)
-                    .find(|&c| world_gui[c].distance.powi(2) <= d)
-                    .unwrap_or(tested);
-                if behind > cut {
-                    let run = start..i;
+            // The canvases placed before each instance of this run, but
+            // its first (cut before the run).
+            while let Some(&at) = places.get(cut).filter(|&&at| at < end) {
+                let upto = cut + places[cut..].partition_point(|&p| p == at);
+                if at > start {
+                    let run = start..at;
                     self.push_draws(&mut main_runs, pipe, source, mesh, &key, run, picked);
-                    main_runs.cut(behind);
-                    (cut, start) = (behind, i);
+                    start = at;
                 }
+                main_runs.cut(upto);
+                cut = upto;
             }
             self.push_draws(&mut main_runs, pipe, source, mesh, &key, start..end, picked);
+        }
+        // Those placed after every part, still before the effects.
+        if cut < places.len() {
+            main_runs.cut(places.len());
         }
         let mut mask_runs = Runs::default();
         for (key, on_top, instances) in highlight_runs {

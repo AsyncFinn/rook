@@ -196,6 +196,88 @@ fn world_canvases_in_a_row_draw_in_one_call() {
     assert!(is(now[3], 2), "{now:?}");
 }
 
+/// A canvas between two transparent panes it overlaps on the screen is
+/// drawn after the far one and before the near one, whatever else it's
+/// drawn with: the near pane tints it and the far one is hidden behind
+/// it. A canvas beside them overlaps neither and shows its own color.
+#[test]
+fn world_canvases_sort_among_the_transparent_parts_they_overlap() {
+    let Ok(mut r) = Renderer::headless() else {
+        return;
+    };
+    let pane = |z: f32, color: [f32; 3]| {
+        let mut p = part(PartShape::Block, 0.0, color, 0.5);
+        p.position.z = z;
+        p.size = Vec3::new(1.0, 1.0, 0.2);
+        p
+    };
+    r.set_scene(&Scene {
+        parts: vec![pane(0.0, [1.0, 0.0, 0.0]), pane(-10.0, [0.0, 0.0, 1.0])],
+        lighting: Lighting {
+            ambient: [1.0; 3],
+            outdoor_ambient: [0.0; 3],
+            sun_color: [0.0; 3],
+            ..Lighting::default()
+        },
+        ..Scene::default()
+    });
+    let green = Arc::new(WorldCanvas {
+        quads: vec![GuiQuad {
+            center: Vec2::splat(5.0),
+            size: Vec2::splat(10.0),
+            rotation: 0.0,
+            color: [0.0, 1.0, 0.0, 1.0],
+            clip: GuiQuad::NO_CLIP,
+            paint: rook_types::Paint::Solid,
+            shape: None,
+            gradient: None,
+        }],
+        size: Vec2::splat(10.0),
+        light_influence: 0.0,
+        brightness: 1.0,
+        always_on_top: false,
+        max_distance: f32::INFINITY,
+        untoned: false,
+    });
+    let canvases = [green.clone(), Arc::new((*green).clone())];
+    r.set_gui(&Arc::from([]), &canvases, &Default::default());
+    // Between the panes, 25 studs out: 6 pixels across at the middle, and
+    // 2 studs to the side, around pixel 46.
+    let billboard = |x: f32| WorldPlace::Billboard {
+        anchor: Vec3::new(x, 0.0, -5.0),
+        studs: Vec3::ZERO,
+        size_studs: Vec2::ZERO,
+        size_pixels: Vec2::splat(6.0),
+        shift: Vec2::ZERO,
+    };
+    r.place_world_gui(
+        [0.0, 2.0]
+            .map(|x| Some(billboard(x)))
+            .into_iter()
+            .enumerate(),
+    );
+    let camera = Camera {
+        fov_y: 20.0,
+        ..Camera::look_at(Vec3::new(0.0, 0.0, 20.0), Vec3::ZERO)
+    };
+    let (w, h) = (64, 64);
+    let pixels = r.render_to_image(w, h, &camera).unwrap();
+    let at = |x: u32| {
+        let i = ((32 * w + x) * 4) as usize;
+        [pixels[i], pixels[i + 1], pixels[i + 2]]
+    };
+    let (between, beside) = (at(32), at(46));
+    assert!(
+        beside[1] > 200 && beside[0] < 30 && beside[2] < 30,
+        "{beside:?}"
+    );
+    // Tinted red by the near pane, nothing of the far one's blue.
+    assert!(
+        between[0] > 60 && between[1] > 60 && between[2] < 30,
+        "{between:?}"
+    );
+}
+
 /// Screen GUI images draw their part of the image, mirrored, tiled and
 /// tinted, with nearest texels when pixelated; one whose image isn't
 /// there draws nothing.

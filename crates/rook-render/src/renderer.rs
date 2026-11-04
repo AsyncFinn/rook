@@ -1,5 +1,6 @@
 //! The renderer: GPU objects, pipelines and what the scene needs on the GPU.
 
+mod cuts;
 mod detail;
 mod draw;
 mod effects;
@@ -82,6 +83,8 @@ pub struct Renderer {
     pub(crate) multi_draw: bool,
     /// The frame's draws' arguments, and how many it has room for.
     indirect: Option<(wgpu::Buffer, usize)>,
+    /// Where world canvases cut in among the transparent parts.
+    cuts: cuts::Cuts,
     /// Each image something has drawn, by content hash.
     images: GpuCache<ImageHash, Image>,
     opaque: Batches,
@@ -315,6 +318,7 @@ impl Renderer {
             pool,
             multi_draw,
             indirect: None,
+            cuts: cuts::Cuts::default(),
             images: GpuCache::new(),
             opaque: Batches::default(),
             layers: Batches::default(),

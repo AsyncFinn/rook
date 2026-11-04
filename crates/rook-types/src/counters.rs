@@ -75,6 +75,8 @@ counters! {
     RenderEntriesChanged: Changed, "render: entries changed";
     /// Draw calls the world GUI's canvases took.
     RenderGuiCalls: Info, "render: world gui draw calls";
+    /// World canvases drawn: placed, near enough and in view.
+    RenderGuiCanvases: Info, "render: world gui canvases drawn";
     RenderSlots: Size, "render: instance slots";
 
     /// Instances a tree walk visited (`Dom::descendants`).
@@ -136,6 +138,9 @@ counters! {
     ShadowRuns: Info, "draws: shadow pass runs";
     MainDraws: Info, "draws: main pass draws";
     MainRuns: Info, "draws: main pass runs";
+    /// Places the main pass breaks off its runs to draw world canvases
+    /// sorted among the transparent parts.
+    MainCuts: Info, "draws: main pass canvas cuts";
 }
 
 /// The (touched, changed, collection) triples the bench checks for a

@@ -95,7 +95,10 @@ inf.
   part in front covers a sign (Rook drew signs over a potted plant's
   Transparency 0.1 leaves until 2026-10-26); those nearer than every
   transparent part after the particles, then those `AlwaysOnTop`, under
-  the screen's GUI. Inference: SurfaceGui `ZOffset` isn't used yet.
+  the screen's GUI. That order is kept only against the parts a canvas
+  overlaps on the screen, where it shows, so canvases are drawn together
+  between fewer parts and the frame comes out the same
+  (`renderer/cuts.rs`); canvases wholly out of view aren't drawn. Inference: SurfaceGui `ZOffset` isn't used yet.
   Rook's canvases share the parts' bind groups 0 to 2 (the image table
   among them) and bind only their own group 3, which holds the light
   group's bindings and then theirs (`renderer/gui/world.rs`), so drawing

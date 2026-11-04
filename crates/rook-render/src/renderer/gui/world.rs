@@ -74,6 +74,9 @@ struct Canvas {
     id: u32,
     /// Its runs, counted from its first quad.
     runs: Vec<Run>,
+    /// The corners of a box around every quad, in canvas pixels: quads
+    /// can reach past the canvas.
+    extent: (Vec2, Vec2),
     size: Vec2,
     light_influence: f32,
     brightness: f32,
@@ -84,13 +87,15 @@ struct Canvas {
 }
 
 /// One canvas drawn this frame: its runs' draws in the frame's list,
-/// whether it's drawn over everything, and how far its middle is from
-/// the camera.
+/// whether it's drawn over everything, how far its middle is from the
+/// camera, and where its quads are.
 #[derive(Debug, Clone)]
 pub(crate) struct WorldDraw {
     draws: Range<u32>,
     pub(crate) on_top: bool,
     pub(crate) distance: f32,
+    /// The corners of a box in the world around its quads.
+    pub(crate) corners: [Vec3; 4],
 }
 
 /// The frame's canvases, back to front, those always on top last.
@@ -329,6 +334,7 @@ impl WorldGui {
                 quads: at,
                 id,
                 runs: runs(quads.iter().map(|(_, image)| *image)),
+                extent: extent(&gpu),
                 size: c.size,
                 light_influence: c.light_influence.clamp(0.0, 1.0),
                 brightness: c.brightness,
@@ -402,13 +408,13 @@ impl WorldGui {
         queue: &wgpu::Queue,
         images: (&GuiImages, &GpuCache<ImageHash, Image>),
         lights: &GpuLights,
-        camera: &Camera,
+        (camera, view): (&Camera, &Frustum),
         height: u32,
     ) -> WorldRuns {
         self.draws.clear();
         self.laid
             .resize(self.ids.top() as usize, CanvasFrame::zeroed());
-        let mut seen: Vec<(bool, f32, usize)> = Vec::new();
+        let mut seen: Vec<(bool, f32, usize, [Vec3; 4])> = Vec::new();
         for (i, (c, place)) in self.canvases.iter().zip(&self.places).enumerate() {
             let Some(place) = place.as_ref().filter(|_| !c.quads.is_empty()) else {
                 continue;
@@ -419,6 +425,24 @@ impl WorldGui {
             let middle = origin + (right * c.size.x + down * c.size.y) * 0.5;
             let distance = middle.distance(camera.position);
             if distance > c.max_distance {
+                continue;
+            }
+            // Wholly out of view: drawing it, and sorting it among the
+            // transparent parts, would change no pixel.
+            let (low, high) = c.extent;
+            let at = |p: Vec2| origin + right * p.x + down * p.y;
+            let corners = [
+                low,
+                Vec2::new(high.x, low.y),
+                Vec2::new(low.x, high.y),
+                high,
+            ]
+            .map(at);
+            let bounds = Aabb {
+                min: corners.into_iter().reduce(Vec3::min).expect("four corners"),
+                max: corners.into_iter().reduce(Vec3::max).expect("four corners"),
+            };
+            if !view.sees(bounds, 0.0) {
                 continue;
             }
             self.laid[c.id as usize] = CanvasFrame {
@@ -432,7 +456,7 @@ impl WorldGui {
                     0.0,
                 ],
             };
-            seen.push((c.on_top, distance, i));
+            seen.push((c.on_top, distance, i, corners));
         }
         seen.sort_by(|a, b| a.0.cmp(&b.0).then(b.1.total_cmp(&a.1)));
         if seen.is_empty() {
@@ -450,7 +474,7 @@ impl WorldGui {
         let frames = self.frames.as_ref().expect("made above");
         queue.write_buffer(&frames.buffer, 0, bytemuck::cast_slice(&self.laid));
         let mut out = Vec::with_capacity(seen.len());
-        for (on_top, distance, i) in seen {
+        for (on_top, distance, i, corners) in seen {
             let c = &self.canvases[i];
             let first = self.draws.len() as u32;
             // Runs whose image isn't up yet draw nothing.
@@ -468,8 +492,10 @@ impl WorldGui {
                 draws: first..self.draws.len() as u32,
                 on_top,
                 distance,
+                corners,
             });
         }
+        rook_types::count!(RenderGuiCanvases, out.len());
         if self.multi_draw {
             self.upload_draws(device, queue);
         }
@@ -674,6 +700,20 @@ fn pipelines(
             compare,
         )
     })
+}
+
+/// The corners of a box in canvas pixels around `quads`, turned as they
+/// may be.
+fn extent(quads: &[GpuQuad]) -> (Vec2, Vec2) {
+    let mut low = Vec2::splat(f32::INFINITY);
+    let mut high = Vec2::splat(f32::NEG_INFINITY);
+    for q in quads {
+        // A turned quad stays within its half diagonal of its center.
+        let reach = Vec2::splat(Vec2::from(q.half_size).length());
+        low = low.min(Vec2::from(q.center) - reach);
+        high = high.max(Vec2::from(q.center) + reach);
+    }
+    (low, high)
 }
 
 /// Where `point` is in a `size` window `camera` looks through, in pixels

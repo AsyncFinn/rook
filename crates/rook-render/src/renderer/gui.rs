@@ -541,7 +541,7 @@ impl GuiPass {
         queue: &wgpu::Queue,
         cache: &GpuCache<ImageHash, Image>,
         lights: &GpuLights,
-        camera: &Camera,
+        (camera, view): (&Camera, &Frustum),
         size: (u32, u32),
     ) -> WorldRuns {
         let overlay = self.world.overlay(camera, size);
@@ -554,7 +554,7 @@ impl GuiPass {
         }
         let images = (&self.images, cache);
         self.world
-            .upload(device, queue, images, lights, camera, size.1)
+            .upload(device, queue, images, lights, (camera, view), size.1)
     }
 
     /// Make the world GUI's pipelines again for the parts' new image
