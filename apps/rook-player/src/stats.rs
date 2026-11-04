@@ -45,21 +45,6 @@ impl Times {
         }
     }
 
-    /// Sample by sample, these times plus `other`'s (a lockstep step's
-    /// server and client parts); samples only one side has count alone.
-    pub(crate) fn sum_with(&self, other: &Times) -> Times {
-        let (long, short) = if self.samples.len() >= other.samples.len() {
-            (self, other)
-        } else {
-            (other, self)
-        };
-        let mut samples = long.samples.clone();
-        for (s, o) in samples.iter_mut().zip(&short.samples) {
-            *s += *o;
-        }
-        Times { samples }
-    }
-
     pub(crate) fn summary(&self) -> Summary {
         let mut sorted = self.samples.clone();
         sorted.sort_unstable();

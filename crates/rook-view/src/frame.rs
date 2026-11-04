@@ -6,8 +6,9 @@ use std::sync::Arc;
 use glam::Vec3;
 use rook_content::Resolver;
 use rook_engine::{DataModel, RenderChanges};
-use rook_render::Renderer;
+use rook_render::{EffectSlots, MeshHash, Renderer};
 
+use crate::gui::GuiUpdate;
 use crate::{Floors, SceneCache, SceneChange};
 
 impl SceneCache {
@@ -78,8 +79,20 @@ impl SceneCache {
     /// the renderer with the scene and the GUI. Returns whether anything
     /// changed.
     pub fn refresh(&mut self, dm: &mut DataModel, renderer: &mut Renderer, camera: Vec3) -> bool {
+        let update = self.update(dm, camera);
+        let changed = update.changed();
+        update.apply(self, renderer);
+        changed
+    }
+
+    /// Bring the scene up to date with a DataModel's changes and the mesh
+    /// files and images that finished loading since the last frame; what
+    /// the renderer must take for it. Needs no renderer, so it runs while
+    /// the render thread draws the frame before
+    /// (docs/design/architecture.md#frame-order).
+    pub fn update(&mut self, dm: &mut DataModel, camera: Vec3) -> ToRender {
         let changes = dm.take_render_changes();
-        let gui = self.show_gui(dm, renderer, Some(&changes));
+        let gui = self.update_gui(dm, Some(&changes));
         let change = self.apply_data_model(dm, changes);
         let dom = &dm.runtime().world().dom;
         self.follow_camera(dom, camera);
@@ -125,41 +138,73 @@ impl SceneCache {
             SceneChange::Full => rook_types::count!(ViewEntriesRewritten, self.scene.parts.len()),
             SceneChange::None => {}
         }
-        let lights = self.lights.take_changes();
-        let effects = self.effects.take_changes();
-        match &change {
-            SceneChange::None => {
-                if lights.is_empty() && effects.is_empty() {
-                    return gui;
-                }
-            }
+        ToRender {
+            gui,
+            change,
+            lights: self.lights.take_changes(),
+            effects: self.effects.take_changes(),
+            dropped: self.take_dropped_meshes(),
+        }
+    }
+}
+
+/// A frame's changes for the renderer: what [`SceneCache::update`] found,
+/// handed over by [`ToRender::apply`]. The hand-over is pipelined
+/// rendering's extract, the one moment both the main thread and the
+/// renderer hold the frame, so it only copies what changed.
+#[must_use = "the renderer draws the last frame's scene until it's applied"]
+#[derive(Debug)]
+pub struct ToRender {
+    gui: GuiUpdate,
+    change: SceneChange,
+    lights: Vec<usize>,
+    effects: EffectSlots,
+    dropped: Vec<MeshHash>,
+}
+
+impl ToRender {
+    /// Whether the scene or the GUI changed.
+    pub fn changed(&self) -> bool {
+        self.gui.laid_out()
+            || !matches!(self.change, SceneChange::None)
+            || !self.lights.is_empty()
+            || !self.effects.is_empty()
+    }
+
+    /// Give `renderer` the changes, reading them from `cache`, which
+    /// mustn't have changed since the update that made them.
+    pub fn apply(self, cache: &SceneCache, renderer: &mut Renderer) {
+        profiling::scope!("ToRender::apply");
+        let scene = &cache.scene;
+        self.gui.apply(scene, renderer);
+        match &self.change {
+            SceneChange::None => {}
             SceneChange::Parts {
                 changed,
                 moved,
                 lighting,
             } => {
                 if *lighting {
-                    renderer.update_lighting(&self.scene);
+                    renderer.update_lighting(scene);
                 }
                 if !changed.is_empty() {
-                    renderer.update_parts(&self.scene, changed);
+                    renderer.update_parts(scene, changed);
                 }
-                renderer.move_parts(&self.scene, moved);
+                renderer.move_parts(scene, moved);
             }
-            SceneChange::Full => renderer.set_scene(&self.scene),
+            SceneChange::Full => renderer.set_scene(scene),
         }
         // A new scene takes every light and effect anyway.
-        if !matches!(change, SceneChange::Full) {
-            if !lights.is_empty() {
-                renderer.update_lights(&self.scene, &lights);
+        if !matches!(self.change, SceneChange::Full) {
+            if !self.lights.is_empty() {
+                renderer.update_lights(scene, &self.lights);
             }
-            if !effects.is_empty() {
-                renderer.update_effects(&self.scene, &effects);
+            if !self.effects.is_empty() {
+                renderer.update_effects(scene, &self.effects);
             }
         }
-        for mesh in self.take_dropped_meshes() {
+        for mesh in self.dropped {
             renderer.drop_mesh(mesh);
         }
-        true
     }
 }

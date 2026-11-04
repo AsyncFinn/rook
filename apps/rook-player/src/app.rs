@@ -12,11 +12,21 @@ pub(crate) mod readout;
 
 use crate::*;
 
+/// The window and what draws into it.
 pub(crate) struct Gfx {
+    /// Dropped first: the thread hands the surface back to be dropped here.
+    pub(crate) frames: RenderThread<Drawing>,
     pub(crate) window: Arc<Window>,
+}
+
+/// What draws into the window, on the render thread while a frame is in
+/// flight ([`RenderThread`]).
+pub(crate) struct Drawing {
     pub(crate) surface: wgpu::Surface<'static>,
     pub(crate) config: wgpu::SurfaceConfiguration,
     pub(crate) renderer: Renderer,
+    /// The last frame was presented.
+    pub(crate) presented: bool,
 }
 
 pub(crate) struct App {
@@ -45,6 +55,9 @@ pub(crate) struct App {
     /// The cursor's last position in the window, as the game knows it.
     pub(crate) cursor: PhysicalPosition<f64>,
     pub(crate) last_frame: Instant,
+    /// How long the main thread's part of a frame takes, for starting
+    /// frames just in time ([`App::next_due`]).
+    pub(crate) main_time: render_thread::MainTime,
     /// How far each frame steps the game.
     pub(crate) frame_clock: frame_clock::FrameClock,
     /// The monitor the window was on when its refresh rate was read, and
@@ -73,11 +86,14 @@ pub(crate) struct App {
     pub(crate) repl: Option<rook_engine::console::repl::Repl>,
 }
 
-/// What a frame draws: the camera as the frame's step left it. Only
-/// [`App::update`] makes one, after stepping, and drawing reads the camera
-/// from it alone, so no frame can draw a camera from before its step.
+/// What a frame draws: the camera as the frame's step left it, and the
+/// scene's changes from that step. Only [`App::update`] makes one, after
+/// stepping, and drawing reads the camera and the changes from it alone,
+/// so no frame can draw a camera or a scene from before its step, and the
+/// two always come from the same step.
 pub(crate) struct Drawn {
     camera: Camera,
+    scene: Option<ToRender>,
 }
 
 /// How often the window draws: as the settings' `FramerateCap` says, else
@@ -140,10 +156,13 @@ impl Gfx {
         let renderer = Renderer::new(&adapter, device, queue, config.format);
         crate::note_gpu(&renderer);
         Ok(Self {
+            frames: RenderThread::new(Drawing {
+                surface,
+                config,
+                renderer,
+                presented: false,
+            }),
             window,
-            surface,
-            config,
-            renderer,
         })
     }
 
@@ -153,7 +172,9 @@ impl Gfx {
         let mode = on.then_some(winit::window::Fullscreen::Borderless(None));
         self.window.set_fullscreen(mode);
     }
+}
 
+impl Drawing {
     /// Present at the display's rate, or as soon as each frame is drawn.
     fn set_vsync(&mut self, vsync: bool) {
         self.config.present_mode = present_mode(vsync);
@@ -172,8 +193,8 @@ impl Gfx {
     }
 
     /// The next frame to draw on, or `None` when the surface had to be
-    /// set up again.
-    pub(crate) fn next_frame(&self) -> Option<wgpu::SurfaceTexture> {
+    /// set up again. Waits for the display at its rate.
+    fn next_frame(&self) -> Option<wgpu::SurfaceTexture> {
         match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(t)
             | wgpu::CurrentSurfaceTexture::Suboptimal(t) => Some(t),
@@ -183,14 +204,32 @@ impl Gfx {
             }
         }
     }
+
+    /// Draw a frame with `camera` and present it, on the render thread.
+    fn draw(&mut self, window: &Window, camera: &Camera, clock: f64) {
+        self.presented = false;
+        let Some(frame) = self.next_frame() else {
+            return;
+        };
+        let view = frame.texture.create_view(&Default::default());
+        // Wrapped so the shader's sines stay precise in long sessions.
+        self.renderer.set_time((clock % 3600.0) as f32);
+        let (width, height) = (self.config.width, self.config.height);
+        self.renderer.render(&view, width, height, camera);
+        window.pre_present_notify();
+        self.renderer.queue.present(frame);
+        self.presented = true;
+    }
 }
 
 impl App {
     /// Draw the game in `gfx`'s window from now on.
     pub(crate) fn attach(&mut self, mut gfx: Gfx) {
-        self.install.apply(&mut gfx.renderer);
-        gfx.renderer.set_scene(&self.scene.scene);
-        self.game.set_viewport(gfx.config.width, gfx.config.height);
+        let drawing = gfx.frames.get();
+        self.install.apply(&mut drawing.renderer);
+        drawing.renderer.set_scene(&self.scene.scene);
+        let (width, height) = (drawing.config.width, drawing.config.height);
+        self.game.set_viewport(width, height);
         self.gfx = Some(gfx);
         self.read_refresh();
     }
@@ -226,14 +265,19 @@ impl App {
         self.frame_clock.set_refresh(hz);
     }
 
-    /// When the next frame may be drawn, under a frame rate cap.
+    /// When the next frame may start: under a frame rate cap, and no
+    /// sooner than it needs to so that it's ready as the render thread
+    /// finishes the frame in flight ([`render_thread::start_at`]).
     fn next_due(&self) -> Option<Instant> {
-        match self.pacing() {
+        let capped = match self.pacing() {
             Pacing::Cap(fps) => {
                 Some(self.last_frame + Duration::from_secs_f64(1.0 / f64::from(fps)))
             }
             Pacing::Display | Pacing::Uncapped => None,
-        }
+        };
+        let render_due = self.gfx.as_ref().and_then(|gfx| gfx.frames.due());
+        let just_in_time = render_thread::start_at(render_due, self.main_time.get());
+        capped.max(just_in_time)
     }
 
     /// Step the game by `dt` seconds with the input the frame applied;
@@ -279,36 +323,41 @@ impl App {
         if let Some(audio) = &mut self.audio {
             audio.sync(&self.game.sounds());
         }
-        if let Some(gfx) = &mut self.gfx {
+        // The scene follows the step here, while the render thread may
+        // still be drawing the frame before.
+        let scene = self.gfx.is_some().then(|| {
             let camera = self.camera.camera.position;
-            self.scene
-                .refresh(self.game.view_mut(), &mut gfx.renderer, camera);
-        }
+            self.scene.update(self.game.view_mut(), camera)
+        });
         Drawn {
             camera: self.camera.camera,
+            scene,
         }
     }
 
-    /// Draw a frame; whether one was presented.
-    pub(crate) fn draw(&mut self, drawn: &Drawn) -> bool {
+    /// Hand a frame to the render thread, once it has finished the frame
+    /// before: the scene's changes go into the renderer, with the cursor,
+    /// then the thread records, submits and presents it while the next
+    /// frame steps.
+    pub(crate) fn draw(&mut self, drawn: Drawn) {
+        let (look, at) = self.cursor_wanted();
         let Some(gfx) = &mut self.gfx else {
-            return false;
+            return;
         };
-        let Some(frame) = gfx.next_frame() else {
-            return false;
-        };
-        let view = frame.texture.create_view(&Default::default());
-        // Wrapped so the shader's sines stay precise in long sessions.
-        gfx.renderer.set_time((self.clock % 3600.0) as f32);
-        gfx.renderer
-            .render(&view, gfx.config.width, gfx.config.height, &drawn.camera);
-        gfx.window.pre_present_notify();
-        gfx.renderer.queue.present(frame);
-        true
+        let drawing = gfx.frames.get();
+        if let Some(scene) = drawn.scene {
+            scene.apply(&self.scene, &mut drawing.renderer);
+        }
+        let cursor_drawn =
+            (self.scene).show_cursor(self.game.view(), &mut drawing.renderer, &look, at);
+        let (window, camera, clock) = (gfx.window.clone(), drawn.camera, self.clock);
+        gfx.frames
+            .send(move |drawing| drawing.draw(&window, &camera, clock));
+        self.show_system_cursor(&look, cursor_drawn);
     }
 
-    /// Step the game, then draw it; whether a frame was presented.
-    fn frame(&mut self, event_loop: &ActiveEventLoop) -> bool {
+    /// Step the game, then hand it to the render thread to draw.
+    fn frame(&mut self, event_loop: &ActiveEventLoop) {
         let now = Instant::now();
         let elapsed = now - self.last_frame;
         let dt = self.frame_clock.step(elapsed.as_secs_f64()).min(0.1) as f32;
@@ -317,15 +366,14 @@ impl App {
         let drawn = self.update(dt);
         self.return_cursor();
         self.follow_mouse_lock();
-        self.show_cursor();
-        let presented = self.draw(&drawn);
+        self.main_time.note(now.elapsed());
+        self.draw(drawn);
         if let Some(title) = self.readout.frame(elapsed, &self.game)
             && let Some(gfx) = &self.gfx
         {
             gfx.window.set_title(&format!("{}  |  {title}", self.title));
         }
         profiling::finish_frame!();
-        presented
     }
 }
 
@@ -341,7 +389,7 @@ impl App {
         if vsync != (self.pacing() == Pacing::Display)
             && let Some(gfx) = &mut self.gfx
         {
-            gfx.set_vsync(vsync);
+            gfx.frames.get().set_vsync(vsync);
         }
         if now.master_volume != self.player.master_volume
             && let Some(audio) = &mut self.audio
@@ -428,8 +476,9 @@ impl ApplicationHandler for App {
         // A hidden window is never asked to redraw: its first frame is
         // drawn here, and it shows once that frame is presented.
         if gfx.window.is_visible() == Some(false) {
-            if self.frame(event_loop)
-                && let Some(gfx) = &self.gfx
+            self.frame(event_loop);
+            if let Some(gfx) = &mut self.gfx
+                && gfx.frames.get().presented
             {
                 gfx.window.set_visible(true);
             }

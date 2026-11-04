@@ -21,6 +21,7 @@ mod console_window;
 mod counters;
 mod game;
 mod record;
+mod render_thread;
 mod server;
 mod stats;
 
@@ -40,13 +41,14 @@ use rook_engine::{InputEvent, MouseLock, console, settings};
 use rook_lua::MessageType;
 use rook_render::{Camera, Renderer};
 use rook_types::{CFrame, Value};
-use rook_view::SceneCache;
+use rook_view::{SceneCache, ToRender};
 
 use app::camera::*;
 use app::launch::*;
 use app::readout::*;
 use app::*;
 use bench::*;
+use render_thread::RenderThread;
 use rook_view::Installed;
 
 /// The system allocator on Windows is slow for blocks of tens of

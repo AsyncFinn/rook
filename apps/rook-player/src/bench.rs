@@ -1,4 +1,8 @@
-//! `--bench`: timing each stage of a frame, offscreen.
+//! `--bench`: timing each stage of a frame, offscreen, run as live play
+//! runs it: the server steps by itself on its thread, the client steps
+//! once a frame by the time it took, and the renderer draws each frame on
+//! the render thread while the next one steps
+//! (docs/design/architecture.md#frame-order).
 
 use crate::*;
 
@@ -15,30 +19,84 @@ pub(crate) fn thousands(n: usize) -> String {
     out
 }
 
-/// What the frames measured.
-#[derive(Default)]
-struct Measured {
-    /// The renderer's CPU recording, render with readback, and the GPU's
-    /// shadow and main passes: medians, as the GPU is shared with the
-    /// desktop and swings from run to run.
-    render_times: [stats::Times; 4],
-    /// Seconds in all, for the per-frame means.
-    sim: f64,
-    build: f64,
-    render: f64,
-    mouse: f64,
-    /// Frames the scene changed on.
-    updates: u32,
-    mouse_times: stats::Times,
-    update_times: stats::Times,
-    /// The renderer's CPU recording by stage (`StageTimes`, in order).
-    stage_times: [stats::Times; 7],
-    whole: stats::Times,
-    /// When the content loaders last ran out of work, and the frames
-    /// until then.
-    idle_at: Option<(Instant, usize)>,
+/// The CPU recording's stages, as `StageTimes` orders them.
+const STAGES: [&str; 7] = [
+    "uploads",
+    "setup",
+    "instances",
+    "effects",
+    "draws",
+    "lights",
+    "passes",
+];
+
+/// What the render thread holds for `--bench`: the renderer, and what
+/// each frame it drew measured.
+struct Offscreen {
+    renderer: Renderer,
+    width: u32,
+    height: u32,
+    drawn: Vec<Rendered>,
+    /// Reading a frame back failed.
+    failed: Option<rook_render::RenderError>,
+}
+
+/// A frame on the render thread.
+#[derive(Default, Clone, Copy)]
+struct Rendered {
+    /// The renderer's CPU recording, and the whole job with readback.
+    record: Duration,
+    with_readback: Duration,
+    stages: [Duration; 7],
+    /// The GPU's shadow and main passes, in ms.
+    gpu: Option<(f64, f64)>,
     /// Per pass (shadow, main): draw calls, instanced draws, triangles.
     drawn: [[u64; 3]; 2],
+}
+
+/// A frame on the main thread.
+#[derive(Default, Clone, Copy)]
+struct Stepped {
+    mouse: Duration,
+    /// The client's step, applying what the server sent included.
+    step: Duration,
+    /// The scene following the step (`SceneCache::update`).
+    scene: Duration,
+    /// Waiting for the render thread to finish the frame before.
+    wait: Duration,
+    /// Handing the scene's changes to the renderer (`ToRender::apply`).
+    hand_over: Duration,
+}
+
+impl Offscreen {
+    fn draw(&mut self, camera: &Camera, clock: f32) {
+        let start = Instant::now();
+        self.renderer.set_time(clock);
+        if let Err(e) = self
+            .renderer
+            .render_to_image(self.width, self.height, camera)
+        {
+            self.failed.get_or_insert(e);
+        }
+        let s = self.renderer.stage_times();
+        let counts = self.renderer.draw_counts();
+        self.drawn.push(Rendered {
+            record: self.renderer.record_time(),
+            with_readback: start.elapsed(),
+            stages: [
+                s.uploads,
+                s.setup,
+                s.instances,
+                s.effects,
+                s.draws,
+                s.lights,
+                s.passes,
+            ],
+            gpu: self.renderer.gpu_times().map(|g| (g.shadow, g.main)),
+            drawn: [counts.shadow, counts.main]
+                .map(|p| [u64::from(p.calls), u64::from(p.draws), p.triangles]),
+        });
+    }
 }
 
 /// Time each stage of a frame, offscreen.
@@ -57,14 +115,32 @@ pub(crate) fn bench(
     install.apply(&mut renderer);
     renderer.set_scene(&cache.scene);
     let timing_gpu = renderer.time_gpu();
-    let mut m = Measured::default();
-    let secs = |t: Instant| t.elapsed().as_secs_f64();
+    let mut thread = RenderThread::new(Offscreen {
+        renderer,
+        width,
+        height,
+        drawn: Vec::with_capacity(frames as usize),
+        failed: None,
+    });
     game.set_viewport(width, height);
     game.server_steps.clear();
     game.client_steps.clear();
+    // As in live play: the server keeps its own 60 Hz pace.
+    game.free_run();
+    let mut stepped = Vec::with_capacity(frames as usize);
+    let mut starts = Vec::with_capacity(frames as usize + 1);
+    let mut idle_at: Option<(Instant, usize)> = None;
+    let mut updates = 0;
+    let mut clock = 0.0;
+    let mut last = Instant::now();
     let mut counted = crate::counters::Frames::start();
     for frame in 0..frames {
         let frame_start = Instant::now();
+        starts.push(frame_start);
+        let dt = (frame_start - last).as_secs_f64().min(0.1);
+        last = frame_start;
+        clock += dt;
+        let mut s = Stepped::default();
         // A moving cursor, as when someone plays: each move casts the m.mouse ray.
         let t = Instant::now();
         let x = (frame % 100) as f32 / 100.0 * width as f32;
@@ -72,74 +148,95 @@ pub(crate) fn bench(
             x,
             y: height as f32 / 2.0,
         });
-        m.mouse += secs(t);
-        m.mouse_times.push(t.elapsed());
+        s.mouse = t.elapsed();
         let t = Instant::now();
-        game.step();
-        m.sim += secs(t);
+        game.advance(dt);
+        s.step = t.elapsed();
         camera.rotation = turn * camera.rotation;
         let ahead = (camera.rotation * -Vec3::Z) * Vec3::new(1.0, 0.0, 1.0);
         camera.position += ahead.normalize_or_zero() * args.fly;
         let t = Instant::now();
-        renderer.set_time(frame as f32 / 60.0);
-        if cache.refresh(game.view_mut(), &mut renderer, camera.position) {
-            m.updates += 1;
+        let update = cache.update(game.view_mut(), camera.position);
+        if update.changed() {
+            updates += 1;
         }
-        m.build += secs(t);
-        m.update_times.push(t.elapsed());
+        s.scene = t.elapsed();
         let t = Instant::now();
-        renderer.render_to_image(width, height, &camera)?;
-        m.render += secs(t);
-        m.render_times[0].push(renderer.record_time());
-        m.render_times[1].push(t.elapsed());
-        let s = renderer.stage_times();
-        let stages = [
-            s.uploads,
-            s.setup,
-            s.instances,
-            s.effects,
-            s.draws,
-            s.lights,
-            s.passes,
-        ];
-        for (times, stage) in m.stage_times.iter_mut().zip(stages) {
-            times.push(stage);
-        }
-        if let Some(gpu) = renderer.gpu_times() {
-            m.render_times[2].push(Duration::from_secs_f64(gpu.shadow / 1000.0));
-            m.render_times[3].push(Duration::from_secs_f64(gpu.main / 1000.0));
-        }
-        let counts = renderer.draw_counts();
-        for (sum, pass) in m.drawn.iter_mut().zip([counts.shadow, counts.main]) {
-            sum[0] += u64::from(pass.calls);
-            sum[1] += u64::from(pass.draws);
-            sum[2] += pass.triangles;
-        }
-        m.whole.push(frame_start.elapsed());
+        let offscreen = thread.get();
+        s.wait = t.elapsed();
+        let t = Instant::now();
+        update.apply(&cache, &mut offscreen.renderer);
+        s.hand_over = t.elapsed();
+        let drawn_clock = (clock % 3600.0) as f32;
+        thread.send(move |o| o.draw(&camera, drawn_clock));
+        stepped.push(s);
         let idle = rook_content::idle_since();
-        if idle != m.idle_at.map(|(t, _)| t) {
-            m.idle_at = idle.map(|t| (t, m.whole.len()));
+        if idle != idle_at.map(|(t, _)| t) {
+            idle_at = idle.map(|t| (t, stepped.len()));
         }
         counted.frame();
         profiling::finish_frame!();
     }
+    let offscreen = thread.get();
+    starts.push(Instant::now());
+    if let Some(e) = offscreen.failed.take() {
+        return Err(e.into());
+    }
     game.print_logs();
-    m.report(frames, game, &renderer, &cache, load_start, timing_gpu);
+    let m = Measured {
+        stepped,
+        rendered: std::mem::take(&mut offscreen.drawn),
+        starts,
+        idle_at,
+        updates,
+    };
+    m.report(game, &offscreen.renderer, &cache, load_start, timing_gpu);
     counted.report();
     Ok(())
 }
 
+/// What the frames measured.
+struct Measured {
+    stepped: Vec<Stepped>,
+    rendered: Vec<Rendered>,
+    /// When each frame started, and when the last one finished.
+    starts: Vec<Instant>,
+    /// When the content loaders last ran out of work, and the frames
+    /// until then.
+    idle_at: Option<(Instant, usize)>,
+    /// Frames the scene changed on.
+    updates: u32,
+}
+
 impl Measured {
+    fn times<T>(items: &[T], f: impl Fn(&T) -> Duration) -> stats::Times {
+        let mut t = stats::Times::default();
+        for item in items {
+            t.push(f(item));
+        }
+        t
+    }
+
+    /// Each frame's time, start to start: what a player waits per frame.
+    fn whole(&self) -> stats::Times {
+        let mut t = stats::Times::default();
+        for pair in self.starts.windows(2) {
+            t.push(pair[1] - pair[0]);
+        }
+        t
+    }
+
     fn report(
         &self,
-        frames: u32,
         game: &Game,
         renderer: &Renderer,
         cache: &SceneCache,
         load_start: Instant,
         timing_gpu: bool,
     ) {
-        let ms = |total: f64| total / f64::from(frames) * 1000.0;
+        let frames = self.stepped.len();
+        let mean = |t: &stats::Times| stats::ms(t.summary().total) / frames.max(1) as f64;
+        let median = |t: &stats::Times| stats::ms(t.summary().median);
         eprintln!(
             "images on the GPU: {:.1} MB",
             renderer.image_bytes() as f64 / f64::from(1 << 20)
@@ -151,89 +248,156 @@ impl Measured {
             cache.scene.images.len(),
             self.updates
         );
+        let mouse = Self::times(&self.stepped, |s| s.mouse);
+        let step = Self::times(&self.stepped, |s| s.step);
+        let scene = Self::times(&self.stepped, |s| s.scene);
+        let wait = Self::times(&self.stepped, |s| s.wait);
+        let hand_over = Self::times(&self.stepped, |s| s.hand_over);
+        let render = Self::times(&self.rendered, |r| r.with_readback);
+        let record = Self::times(&self.rendered, |r| r.record);
         eprintln!(
-            "per frame: mouse {:.2} ms, simulate {:.2} ms, scene update and upload {:.2} ms, render+readback {:.2} ms",
-            ms(self.mouse),
-            ms(self.sim),
-            ms(self.build),
-            ms(self.render)
+            "main thread per frame: mouse {:.2} ms, client step {:.2} ms, scene update {:.2} ms, \
+             waiting for the render thread {:.2} ms, hand-over {:.2} ms",
+            mean(&mouse),
+            mean(&step),
+            mean(&scene),
+            mean(&wait),
+            mean(&hand_over)
         );
-        let per_frame = |n: u64| thousands((n / u64::from(frames.max(1))) as usize);
+        eprintln!(
+            "render thread per frame: render+readback {:.2} ms",
+            mean(&render)
+        );
+        let per_frame = |n: u64| thousands((n / frames.max(1) as u64) as usize);
+        let drawn = self.rendered.iter().fold([[0u64; 3]; 2], |mut sum, r| {
+            for (s, d) in sum.iter_mut().zip(r.drawn) {
+                for (a, b) in s.iter_mut().zip(d) {
+                    *a += b;
+                }
+            }
+            sum
+        });
         eprintln!(
             "draw calls per frame: shadow pass {} ({} draws), main pass {} ({} draws)",
-            per_frame(self.drawn[0][0]),
-            per_frame(self.drawn[0][1]),
-            per_frame(self.drawn[1][0]),
-            per_frame(self.drawn[1][1])
+            per_frame(drawn[0][0]),
+            per_frame(drawn[0][1]),
+            per_frame(drawn[1][0]),
+            per_frame(drawn[1][1])
         );
         eprintln!(
             "triangles per frame: shadow pass {}, main pass {}",
-            per_frame(self.drawn[0][2]),
-            per_frame(self.drawn[1][2])
+            per_frame(drawn[0][2]),
+            per_frame(drawn[1][2])
         );
-        let [record, with_readback, gpu_shadow, gpu_main] = self
-            .render_times
-            .each_ref()
-            .map(|t| stats::ms(t.summary().median));
         eprintln!(
-            "render medians: CPU recording {record:.2} ms (mean {:.2} ms), render+readback {with_readback:.2} ms",
-            stats::ms(self.render_times[0].summary().total) / f64::from(frames.max(1))
+            "render medians: CPU recording {:.2} ms (mean {:.2} ms), render+readback {:.2} ms",
+            median(&record),
+            mean(&record),
+            median(&render)
         );
-        let [uploads, setup, instances, effects, draws, lights, passes] = self
-            .stage_times
-            .each_ref()
-            .map(|t| stats::ms(t.summary().median));
-        eprintln!(
-            "CPU recording medians by stage: uploads {uploads:.2} ms, setup {setup:.2} ms, instances {instances:.2} ms, effects {effects:.2} ms, draws {draws:.2} ms, lights {lights:.2} ms, passes {passes:.2} ms"
-        );
+        let stages: Vec<stats::Times> = (0..STAGES.len())
+            .map(|i| Self::times(&self.rendered, |r| r.stages[i]))
+            .collect();
+        let line: Vec<String> = STAGES
+            .iter()
+            .zip(&stages)
+            .map(|(name, t)| format!("{name} {:.2} ms", median(t)))
+            .collect();
+        eprintln!("CPU recording medians by stage: {}", line.join(", "));
         // The light voxels fill only when something moves on, so their
         // median hides what turning the camera costs.
-        let fills = self.stage_times[5].summary();
+        let fills = stages[5].summary();
         eprintln!(
             "light voxels: mean {:.2} ms, {fills}",
-            stats::ms(fills.total) / f64::from(frames.max(1))
+            stats::ms(fills.total) / frames.max(1) as f64
         );
         if timing_gpu {
+            let shadow = Self::times(&self.rendered, |r| {
+                Duration::from_secs_f64(r.gpu.map_or(0.0, |g| g.0) / 1000.0)
+            });
+            let main = Self::times(&self.rendered, |r| {
+                Duration::from_secs_f64(r.gpu.map_or(0.0, |g| g.1) / 1000.0)
+            });
             eprintln!(
-                "render medians: GPU shadow pass {gpu_shadow:.2} ms, main pass {gpu_main:.2} ms"
+                "render medians: GPU shadow pass {:.2} ms, main pass {:.2} ms",
+                median(&shadow),
+                median(&main)
             );
         }
-        let names = [
-            "uploads",
-            "setup",
-            "instances",
-            "effects",
-            "draws",
-            "lights",
-            "passes",
-        ];
-        for (name, times) in names.iter().zip(&self.stage_times) {
+        for (name, times) in STAGES.iter().zip(&stages) {
             eprintln!("CPU recording, {name}: {}", times.summary());
         }
-        eprintln!("mouse: {}", self.mouse_times.summary());
-        eprintln!("scene update and upload: {}", self.update_times.summary());
-        eprintln!("server step: {}", game.server_steps.summary());
-        if !game.client_steps.is_empty() {
-            eprintln!("client step: {}", game.client_steps.summary());
-        }
+        eprintln!("mouse: {}", mouse.summary());
+        eprintln!("client step: {}", step.summary());
+        eprintln!("scene update: {}", scene.summary());
+        eprintln!("waiting for the render thread: {}", wait.summary());
+        eprintln!("hand-over: {}", hand_over.summary());
+        eprintln!("render+readback (render thread): {}", render.summary());
         eprintln!(
-            "simulation step (server + client): {}",
-            game.total_steps().summary()
+            "server step (its own thread): {}",
+            game.server_steps.summary()
         );
+        let whole = self.whole();
         eprintln!(
-            "whole frame (offscreen, with readback): {}",
-            self.whole.summary()
+            "whole frame (pipelined, with readback): {}",
+            whole.summary()
         );
         match self.idle_at {
-            Some((at, frames)) => eprintln!(
-                "content loaded {:.2} s after the place started loading; frames until then: {}",
-                at.saturating_duration_since(load_start).as_secs_f64(),
-                self.whole.until(frames).summary()
-            ),
+            Some((at, idle)) => {
+                eprintln!(
+                    "content loaded {:.2} s after the place started loading; frames until then: {}",
+                    at.saturating_duration_since(load_start).as_secs_f64(),
+                    whole.until(idle).summary()
+                );
+                self.report_slowest(idle);
+            }
             None => eprintln!(
                 "content still loading after {frames} frames, {:.2} s after the place started loading",
                 load_start.elapsed().as_secs_f64()
             ),
+        }
+    }
+
+    /// The slowest frame from `from` on (once content has loaded), by
+    /// stage: the main thread's part, and the render thread's frame it
+    /// waited for, which drew while it stepped.
+    fn report_slowest(&self, from: usize) {
+        let whole = self.whole();
+        let Some((i, took)) = (from..self.stepped.len())
+            .map(|i| (i, self.starts[i + 1] - self.starts[i]))
+            .max_by_key(|(_, took)| *took)
+        else {
+            eprintln!("slowest frame after load: none (content loaded on the last frame)");
+            return;
+        };
+        let s = self.stepped[i];
+        let ms = stats::ms;
+        eprintln!(
+            "slowest frame after load: frame {i} of {}, {:.2} ms (median {:.2} ms): \
+             mouse {:.2}, client step {:.2}, scene update {:.2}, waiting for the render thread {:.2}, hand-over {:.2}",
+            self.stepped.len(),
+            ms(took),
+            ms(whole.since(from).summary().median),
+            ms(s.mouse),
+            ms(s.step),
+            ms(s.scene),
+            ms(s.wait),
+            ms(s.hand_over),
+        );
+        // The frame before drew on the render thread while this one stepped.
+        if let Some(r) = i.checked_sub(1).and_then(|p| self.rendered.get(p)) {
+            let line: Vec<String> = STAGES
+                .iter()
+                .zip(r.stages)
+                .map(|(name, t)| format!("{name} {:.2}", ms(t)))
+                .collect();
+            eprintln!(
+                "  the render thread meanwhile (frame {}): render+readback {:.2} ms, CPU recording {:.2} ms ({})",
+                i - 1,
+                ms(r.with_readback),
+                ms(r.record),
+                line.join(", ")
+            );
         }
     }
 }

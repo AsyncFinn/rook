@@ -405,9 +405,4 @@ impl Game {
             console::print_entry(side, &entry);
         }
     }
-
-    /// What lockstep steps took, server and client together.
-    pub(crate) fn total_steps(&self) -> Times {
-        self.server_steps.sum_with(&self.client_steps)
-    }
 }

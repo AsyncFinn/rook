@@ -26,13 +26,9 @@ pub(crate) enum Showing {
 }
 
 impl App {
-    /// Show the cursor the game asks for, hidden while looking around, once
-    /// a frame: the one place the cursor changes, so what it shows is
-    /// always what the game and the look say now.
-    pub(crate) fn show_cursor(&mut self) {
-        let Some(gfx) = &mut self.gfx else {
-            return;
-        };
+    /// The cursor the game asks for, hidden while looking around, and
+    /// where the mouse is when it's over the window.
+    pub(crate) fn cursor_wanted(&self) -> (CursorLook, Option<(f32, f32)>) {
         let look = match self.looking {
             true => CursorLook::Hidden,
             false => self.game.view().cursor_look(),
@@ -41,8 +37,17 @@ impl App {
             .cursor_shown
             .inside
             .then(|| self.game.view().mouse_position());
-        let drawn = (self.scene).show_cursor(self.game.view(), &mut gfx.renderer, &look, at);
-        let want = match &look {
+        (look, at)
+    }
+
+    /// Show `look` with the window's own cursor, once a frame, unless the
+    /// frame draws it (`drawn`): the one place the cursor changes, so what
+    /// it shows is always what the game and the look say now.
+    pub(crate) fn show_system_cursor(&mut self, look: &CursorLook, drawn: bool) {
+        let Some(gfx) = &self.gfx else {
+            return;
+        };
+        let want = match look {
             _ if drawn => Showing::Hidden,
             CursorLook::Hidden => Showing::Hidden,
             CursorLook::System(cursor) => Showing::System(system_icon(*cursor)),

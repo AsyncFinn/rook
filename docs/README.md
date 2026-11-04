@@ -69,6 +69,7 @@
     - [Highlight](behavior/rendering/highlight.md)
     - [Adornments](behavior/rendering/adornments.md): selection boxes, handles, FloorWire, lassos
     - [Antialiasing](behavior/rendering/antialiasing.md)
+    - [Frame threads](behavior/rendering/frame-threads.md): what runs on Roblox's render thread and what overlaps
   - Terrain
     - [Voxels](behavior/terrain/voxels.md): `SmoothGrid` and legacy terrain
     - [Surface](behavior/terrain/surface.md): the surface Roblox builds from the voxels

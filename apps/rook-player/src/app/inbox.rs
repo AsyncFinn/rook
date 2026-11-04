@@ -131,7 +131,7 @@ impl App {
         }
         if let Some(size) = inbox.resized
             && let Some(gfx) = &mut self.gfx
-            && gfx.resize(size)
+            && gfx.frames.get().resize(size)
         {
             self.game.set_viewport(size.width, size.height);
         }

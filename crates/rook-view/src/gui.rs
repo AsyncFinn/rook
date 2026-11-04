@@ -6,8 +6,36 @@ use rook_content::decode::image::{Encoding, Image};
 use rook_engine::{DataModel, RenderChanges};
 use rook_gui::{Gui, GuiImage};
 use rook_render::Renderer;
+use rook_types::{GuiQuad, WorldCanvas, WorldPlace};
 
 use crate::*;
+
+/// The GUI a frame hands the renderer (see [`crate::ToRender`]).
+#[derive(Debug)]
+pub(crate) struct GuiUpdate {
+    /// The screen's pieces and the world canvases, when the GUI was laid
+    /// out again.
+    drawn: Option<DrawnGui>,
+    /// Where world canvases are now, by index: all of them, or those
+    /// that moved.
+    places: Vec<(usize, Option<WorldPlace>)>,
+}
+
+/// The screen's pieces, bottom first, and the world GUI's canvases.
+type DrawnGui = (Arc<[Arc<[GuiQuad]>]>, Vec<Arc<WorldCanvas>>);
+
+impl GuiUpdate {
+    pub(crate) fn laid_out(&self) -> bool {
+        self.drawn.is_some()
+    }
+
+    pub(crate) fn apply(self, scene: &Scene, renderer: &mut Renderer) {
+        if let Some((screen, canvases)) = &self.drawn {
+            renderer.set_gui(screen, canvases, &scene.images);
+        }
+        renderer.place_world_gui(self.places);
+    }
+}
 
 impl SceneCache {
     /// Give the renderer the DataModel's GUI when it was laid out again
@@ -21,30 +49,40 @@ impl SceneCache {
         renderer: &mut Renderer,
         changes: Option<&RenderChanges>,
     ) -> bool {
+        let gui = self.update_gui(dm, changes);
+        let laid_out = gui.laid_out();
+        gui.apply(&self.scene, renderer);
+        laid_out
+    }
+
+    /// The DataModel's GUI as it is now, laid out first if it changed
+    /// (see [`SceneCache::show_gui`]).
+    pub(crate) fn update_gui(
+        &mut self,
+        dm: &DataModel,
+        changes: Option<&RenderChanges>,
+    ) -> GuiUpdate {
         dm.runtime().sync_gui();
         let mut world = dm.runtime().world_mut();
         let world = &mut *world;
         let generation = world.gui.generation();
-        let changed = self.gui_generation != Some(generation);
-        if changed {
+        let drawn = (self.gui_generation != Some(generation)).then(|| {
             self.gui_generation = Some(generation);
-            let screen = world.gui.draw(&world.dom);
-            let canvases = world.gui.draw_world(&world.dom);
-            renderer.set_gui(&screen, &canvases, &self.scene.images);
-        }
+            (world.gui.draw(&world.dom), world.gui.draw_world(&world.dom))
+        });
         self.feed_gui(&mut world.gui);
-        match changes {
-            Some(changes) if !changed && !changes.full => {
-                let moved = world
-                    .gui
-                    .world_places_moved(&world.dom, changes.maybe_moved());
-                renderer.place_world_gui(moved);
-            }
-            _ => {
-                renderer.place_world_gui(world.gui.world_places(&world.dom).into_iter().enumerate())
-            }
-        }
-        changed
+        let places = match changes {
+            Some(changes) if drawn.is_none() && !changes.full => world
+                .gui
+                .world_places_moved(&world.dom, changes.maybe_moved()),
+            _ => world
+                .gui
+                .world_places(&world.dom)
+                .into_iter()
+                .enumerate()
+                .collect(),
+        };
+        GuiUpdate { drawn, places }
     }
 
     /// Lay out and draw the GUI, so it asks for the images it shows, and

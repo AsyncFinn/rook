@@ -38,6 +38,7 @@ mod terrain;
 
 pub use camera::{SavedCamera, initial_camera};
 pub use content::installed::Installed;
+pub use frame::ToRender;
 
 use adornments::floor_wire::Floors;
 use content::pending::*;
