@@ -453,7 +453,7 @@ impl GuiPass {
             );
         }
         let world: Vec<(Packed, Held)> = (&mut packed).zip(&mut fresh_held).collect();
-        self.world.set(device, canvases, kept, world);
+        self.world.set(device, queue, canvases, kept, world);
         let binds = Binds {
             layout: &self.layout,
             glyphs: &self.glyphs,

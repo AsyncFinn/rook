@@ -166,11 +166,11 @@ pub(crate) fn pipeline(
         "rook ribbons",
         layout,
         (shader, "vs_ribbon", "fs_particle"),
-        wgpu::VertexBufferLayout {
+        &[wgpu::VertexBufferLayout {
             array_stride: std::mem::size_of::<RibbonVertex>() as u64,
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &attrs,
-        },
+        }],
         (color_format, depth_format),
         wgpu::CompareFunction::Greater,
     )

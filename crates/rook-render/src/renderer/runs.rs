@@ -19,6 +19,14 @@ pub(crate) struct DrawArgs {
     first_instance: u32,
 }
 
+/// Whether `device` draws many runs in one call (`multi_draw_*indirect`
+/// with each draw's own first instance).
+pub(crate) fn multi_draw(device: &wgpu::Device) -> bool {
+    device
+        .features()
+        .contains(wgpu::Features::INDIRECT_FIRST_INSTANCE)
+}
+
 /// Which pipeline a run draws with.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Pipe {
@@ -239,8 +247,12 @@ impl Renderer {
         for (i, run) in runs.runs.iter().enumerate() {
             while let Some(&(_, canvases)) = cuts.next_if(|c| c.0 == i) {
                 cut(pass, canvases);
-                // The GUI binds its own pipeline and buffers.
-                bound = (None, None, None, None);
+                // The GUI binds its own pipeline and vertex buffers 0 and
+                // 1 (the page's slots). The instances and the images
+                // stay: binding the image table again makes wgpu track
+                // every image in it again, and canvases cut in hundreds
+                // of times a frame.
+                bound = (None, bound.1, None, bound.3);
             }
             if matches!(run.pipe, Pipe::GlassFilter | Pipe::GlassSurface) {
                 stencil = stencil % 255 + 1;

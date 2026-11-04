@@ -73,6 +73,8 @@ counters! {
     RenderBytesUploaded: Info, "render: instance bytes uploaded";
     /// Scene entries the renderer was handed as changed or moved.
     RenderEntriesChanged: Changed, "render: entries changed";
+    /// Draw calls the world GUI's canvases took.
+    RenderGuiCalls: Info, "render: world gui draw calls";
     RenderSlots: Size, "render: instance slots";
 
     /// Instances a tree walk visited (`Dom::descendants`).

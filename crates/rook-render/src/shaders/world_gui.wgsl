@@ -27,7 +27,8 @@ struct Canvas {
 
 // Group 3 after the light group's bindings (`lighting.wgsl`), so the parts'
 // groups stay bound while canvases draw among them.
-@group(3) @binding(4) var<uniform> canvas: Canvas;
+// Every canvas's frame, by id.
+@group(3) @binding(4) var<storage, read> canvases: array<Canvas>;
 @group(3) @binding(5) var glyphs: texture_2d<f32>;
 // The run's image (white for fills and glyphs), raw sRGB.
 @group(3) @binding(6) var image: texture_2d<f32>;
@@ -57,6 +58,8 @@ struct Quad {
     @location(9) shape: vec4<f32>,
     // Where the gradient is 0.5, and its change per canvas pixel.
     @location(10) gradient: vec4<f32>,
+    // The canvas it's on.
+    @location(11) id: u32,
 };
 
 struct QuadOut {
@@ -75,6 +78,7 @@ struct QuadOut {
     @location(9) @interpolate(flat) shape: vec4<f32>,
     // Where along its gradient.
     @location(10) t: f32,
+    @location(11) @interpolate(flat) id: u32,
 };
 
 @vertex
@@ -83,6 +87,7 @@ fn vs_world_gui(@builtin(vertex_index) i: u32, q: Quad) -> QuadOut {
         vec2(-1.0, -1.0), vec2(1.0, -1.0), vec2(-1.0, 1.0),
         vec2(-1.0, 1.0), vec2(1.0, -1.0), vec2(1.0, 1.0),
     );
+    let canvas = canvases[q.id];
     let c = corners[i] * q.half_size;
     let p = q.center + vec2(c.x * q.turn.y - c.y * q.turn.x, c.x * q.turn.x + c.y * q.turn.y);
     let world = canvas.origin.xyz + canvas.right.xyz * p.x + canvas.down.xyz * p.y;
@@ -101,6 +106,7 @@ fn vs_world_gui(@builtin(vertex_index) i: u32, q: Quad) -> QuadOut {
     out.shape = q.shape;
     out.radii = q.radii;
     out.t = 0.5 + dot(p - q.gradient.xy, q.gradient.zw);
+    out.id = q.id;
     return out;
 }
 
@@ -112,6 +118,7 @@ fn fs_world_gui(in: QuadOut) -> @location(0) vec4<f32> {
     let ramp = textureSample(ramps, image_sampler, ramp_uv(in.t, in.shape.z, rows.y, rows.x));
     let painted = in.color * gui_paint(glyph, textureSample(image, paint_sampler, in.uv), in.mode)
         * gui_gradient(ramp, in.shape.z) * gui_shape(in.shape_at, in.shape_half, in.radii, in.shape);
+    let canvas = canvases[in.id];
     let p = in.canvas_at;
     let normal = normalize(cross(canvas.down.xyz, canvas.right.xyz));
     let toward = g.camera_pos.xyz - in.world;

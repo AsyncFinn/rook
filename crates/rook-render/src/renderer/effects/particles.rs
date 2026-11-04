@@ -328,11 +328,11 @@ pub(crate) fn pipeline(
         "rook particles",
         layout,
         (shader, "vs_particle", "fs_particle"),
-        wgpu::VertexBufferLayout {
+        &[wgpu::VertexBufferLayout {
             array_stride: std::mem::size_of::<ParticleInstance>() as u64,
             step_mode: wgpu::VertexStepMode::Instance,
             attributes: &attrs,
-        },
+        }],
         (color_format, depth_format),
         wgpu::CompareFunction::Greater,
     )
@@ -347,7 +347,7 @@ pub(crate) fn blended_pipeline(
     label: &str,
     layout: &wgpu::PipelineLayout,
     (shader, vertex, fragment): (&wgpu::ShaderModule, &str, &str),
-    buffer: wgpu::VertexBufferLayout<'_>,
+    buffers: &[wgpu::VertexBufferLayout<'_>],
     (color_format, depth_format): (wgpu::TextureFormat, wgpu::TextureFormat),
     depth_compare: wgpu::CompareFunction,
 ) -> wgpu::RenderPipeline {
@@ -358,7 +358,7 @@ pub(crate) fn blended_pipeline(
             module: shader,
             entry_point: Some(vertex),
             compilation_options: Default::default(),
-            buffers: &[Some(buffer)],
+            buffers: &buffers.iter().cloned().map(Some).collect::<Vec<_>>(),
         },
         primitive: Default::default(),
         depth_stencil: Some(wgpu::DepthStencilState {

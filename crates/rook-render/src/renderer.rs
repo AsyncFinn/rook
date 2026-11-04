@@ -268,9 +268,7 @@ impl Renderer {
         for shape in DrawShape::ALL {
             meshes.insert(shape, pool.add(&mesh::build(shape)));
         }
-        let multi_draw = device
-            .features()
-            .contains(wgpu::Features::INDIRECT_FIRST_INSTANCE);
+        let multi_draw = runs::multi_draw(&device);
 
         let info = adapter.get_info();
         let gpu = format!(

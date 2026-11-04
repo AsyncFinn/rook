@@ -2,14 +2,21 @@
 //! straight into the world on its canvas's plane, among the transparent
 //! parts by distance (those nearer than every one after the particles),
 //! depth tested unless it's AlwaysOnTop, so edges and text stay sharp
-//! however near they're seen (docs/behavior/gui/world.md). Each canvas's
-//! quads stay on the GPU until that canvas changes; each frame only where
-//! each canvas is goes up, in a uniform its draw reads, bound with each
-//! run's image. Untoned canvases (the names over heads) are drawn with the
-//! screen's GUI instead, moved to where they are on the screen each frame.
+//! however near they're seen (docs/behavior/gui/world.md). Untoned
+//! canvases (the names over heads) are drawn with the screen's GUI
+//! instead, moved to where they are on the screen each frame.
+//!
+//! Every canvas's quads share one buffer, each beside its canvas's id,
+//! and stay there until that canvas changes. Each frame only where each
+//! canvas is goes up, into a storage array the quads read by id, so the
+//! canvases drawn in a row with one image are one indirect multi-draw, as
+//! the parts' runs are: hundreds of canvases cut in among the transparent
+//! parts, and a draw with its own buffer and frame offset each cost more
+//! to encode than to draw.
 
 use glam::Vec2;
 use rustc_hash::FxHashMap;
+use std::ops::Range;
 use std::sync::Arc;
 
 use rook_types::{Viewer, WorldCanvas, WorldPlace};
@@ -18,11 +25,19 @@ use wesl_core::include_wesl;
 use super::super::*;
 use super::images::{GuiImages, ImageKey, Run, image_entries, runs};
 use super::{GpuQuad, Held, Packed};
+use crate::gpu::pool::RangeAlloc;
 use crate::renderer::effects::particles::blended_pipeline;
 use crate::renderer::pipelines::BindLayouts;
+use crate::renderer::runs::multi_draw;
 
 /// How far a SurfaceGui stands off its face, so the two don't fight.
 const LIFT: f32 = 0.01;
+
+/// The shared quad buffer's first room, in quads.
+const FIRST_QUADS: u32 = 1 << 12;
+/// The bytes of a quad, and of the canvas id beside it.
+const QUAD: u64 = std::mem::size_of::<GpuQuad>() as u64;
+const ID: u64 = 4;
 
 /// Where a canvas is this frame, as the shader reads it: its top left
 /// corner and the world step per canvas pixel right and down,
@@ -37,13 +52,27 @@ struct CanvasFrame {
     look: [f32; 4],
 }
 
+/// One draw of [`wgpu::RenderPass::multi_draw_indirect`]'s list.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable)]
+struct DrawArgs {
+    vertex_count: u32,
+    instance_count: u32,
+    first_vertex: u32,
+    first_instance: u32,
+}
+
 /// A canvas's quads and their runs, and what it's drawn with.
 #[derive(Debug)]
 struct Canvas {
     /// The canvas as last given, and the groups it holds.
     source: Arc<WorldCanvas>,
     held: Held,
-    quads: Option<wgpu::Buffer>,
+    /// Its quads' place in the shared buffer (empty: none drawn there),
+    /// and its id, where its frame is in the frames' array.
+    quads: Range<u32>,
+    id: u32,
+    /// Its runs, counted from its first quad.
     runs: Vec<Run>,
     size: Vec2,
     light_influence: f32,
@@ -54,13 +83,12 @@ struct Canvas {
     overlay: Option<Packed>,
 }
 
-/// One canvas drawn this frame: its frame's slot in the uniform buffer,
-/// which canvas it is, whether it's drawn over everything, and how far
-/// its middle is from the camera.
+/// One canvas drawn this frame: its runs' draws in the frame's list,
+/// whether it's drawn over everything, and how far its middle is from
+/// the camera.
 #[derive(Debug, Clone)]
 pub(crate) struct WorldDraw {
-    slot: u32,
-    canvas: usize,
+    draws: Range<u32>,
     pub(crate) on_top: bool,
     pub(crate) distance: f32,
 }
@@ -68,12 +96,67 @@ pub(crate) struct WorldDraw {
 /// The frame's canvases, back to front, those always on top last.
 pub(crate) type WorldRuns = Vec<WorldDraw>;
 
-/// The frames' uniform buffer, how many it holds, and its bind groups,
+/// One draw this frame: its arguments, the image it draws with and
+/// whether it's on top.
+type Draw = (DrawArgs, Option<ImageKey>, bool);
+
+/// Every canvas's quads, and beside each the id of the canvas it's on.
+#[derive(Debug)]
+struct Quads {
+    quads: wgpu::Buffer,
+    ids: wgpu::Buffer,
+    capacity: u32,
+    ranges: RangeAlloc,
+}
+
+impl Quads {
+    fn new(device: &wgpu::Device, capacity: u32) -> Self {
+        let buffer = |label, size| {
+            device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some(label),
+                size,
+                usage: wgpu::BufferUsages::VERTEX
+                    | wgpu::BufferUsages::COPY_DST
+                    | wgpu::BufferUsages::COPY_SRC,
+                mapped_at_creation: false,
+            })
+        };
+        Self {
+            quads: buffer("rook world gui quads", u64::from(capacity) * QUAD),
+            ids: buffer("rook world gui quad canvases", u64::from(capacity) * ID),
+            capacity,
+            ranges: RangeAlloc::default(),
+        }
+    }
+
+    /// Room for `len` quads, the buffers grown (keeping what they hold)
+    /// if they must be; none past the device's biggest buffer.
+    fn alloc(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, len: u32) -> Option<u32> {
+        if let Some(at) = self.ranges.alloc(len, self.capacity) {
+            return Some(at);
+        }
+        let max = (device.limits().max_buffer_size / QUAD).min(u64::from(u32::MAX)) as u32;
+        let need = (self.ranges.top().checked_add(len)).filter(|&n| n <= max)?;
+        let grown = Self::new(device, self.capacity.saturating_mul(2).clamp(need, max));
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("rook world gui quads growth"),
+        });
+        let used = u64::from(self.ranges.top());
+        encoder.copy_buffer_to_buffer(&self.quads, 0, &grown.quads, 0, used * QUAD);
+        encoder.copy_buffer_to_buffer(&self.ids, 0, &grown.ids, 0, used * ID);
+        // Writes queued to the old buffers land before this copy.
+        queue.submit([encoder.finish()]);
+        (self.quads, self.ids, self.capacity) = (grown.quads, grown.ids, grown.capacity);
+        self.ranges.alloc(len, self.capacity)
+    }
+}
+
+/// The frames' storage array, how many it holds, and its bind groups,
 /// one per image runs draw with.
 #[derive(Debug)]
 struct Frames {
     buffer: wgpu::Buffer,
-    room: usize,
+    room: u32,
     groups: FxHashMap<Option<ImageKey>, wgpu::BindGroup>,
 }
 
@@ -82,8 +165,8 @@ pub(crate) struct WorldGui {
     tested: wgpu::RenderPipeline,
     on_top: wgpu::RenderPipeline,
     shader: wgpu::ShaderModule,
-    /// Group 3: the light group's entries, then the canvas's frame and
-    /// what its runs draw with. Groups 0 to 2 are the parts', so drawing
+    /// Group 3: the light group's entries, then the canvases' frames and
+    /// what runs draw with. Groups 0 to 2 are the parts', so drawing
     /// canvases among the transparent parts leaves the parts' images
     /// bound; only this group changes.
     group_layout: wgpu::BindGroupLayout,
@@ -91,12 +174,20 @@ pub(crate) struct WorldGui {
     /// gradients' ramps.
     glyphs: wgpu::TextureView,
     ramps: wgpu::TextureView,
-    /// Bytes between frames in the uniform buffer.
-    stride: u64,
     canvases: Vec<Canvas>,
     /// Where each canvas is now (`None`: not drawn, or not placed yet).
     places: Vec<Option<WorldPlace>>,
+    quads: Option<Quads>,
+    /// The canvases' ids, and each id's frame as last laid out.
+    ids: RangeAlloc,
+    laid: Vec<CanvasFrame>,
     frames: Option<Frames>,
+    /// The frame's draws, in the order drawn, and the buffer they're
+    /// uploaded to and its room.
+    draws: Vec<Draw>,
+    indirect: Option<(wgpu::Buffer, usize)>,
+    /// Whether the device draws a list of draws in one call.
+    multi_draw: bool,
 }
 
 impl WorldGui {
@@ -106,7 +197,6 @@ impl WorldGui {
         table: bool,
         (glyphs, ramps): (&wgpu::TextureView, &wgpu::TextureView),
     ) -> Self {
-        let size = std::mem::size_of::<CanvasFrame>() as u64;
         let texture = |binding| wgpu::BindGroupLayoutEntry {
             binding,
             visibility: wgpu::ShaderStages::FRAGMENT,
@@ -123,9 +213,11 @@ impl WorldGui {
                 binding: 4,
                 visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: true,
-                    min_binding_size: wgpu::BufferSize::new(size),
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: wgpu::BufferSize::new(
+                        std::mem::size_of::<CanvasFrame>() as u64
+                    ),
                 },
                 count: None,
             },
@@ -148,7 +240,6 @@ impl WorldGui {
             source: wgpu::ShaderSource::Wgsl(source.into()),
         });
         let [tested, on_top] = pipelines(device, layouts, &group_layout, &shader);
-        let align = device.limits().min_uniform_buffer_offset_alignment as u64;
         Self {
             tested,
             on_top,
@@ -156,10 +247,15 @@ impl WorldGui {
             group_layout,
             glyphs: glyphs.clone(),
             ramps: ramps.clone(),
-            stride: size.div_ceil(align) * align,
             canvases: Vec::new(),
             places: Vec::new(),
+            quads: None,
+            ids: RangeAlloc::default(),
+            laid: Vec::new(),
             frames: None,
+            draws: Vec::new(),
+            indirect: None,
+            multi_draw: multi_draw(device),
         }
     }
 
@@ -188,6 +284,10 @@ impl WorldGui {
     /// Drop every canvas, so each is given again.
     pub(crate) fn forget(&mut self) {
         self.canvases.clear();
+        if let Some(quads) = &mut self.quads {
+            quads.ranges = RangeAlloc::default();
+        }
+        self.ids = RangeAlloc::default();
     }
 
     /// Draw `canvases` from now on: those [`WorldGui::kept`] found as they
@@ -196,16 +296,24 @@ impl WorldGui {
     pub(crate) fn set(
         &mut self,
         device: &wgpu::Device,
+        queue: &wgpu::Queue,
         canvases: &[Arc<WorldCanvas>],
         kept: Vec<Option<usize>>,
         fresh: Vec<(Packed, Held)>,
     ) {
         let mut old: Vec<Option<Canvas>> = self.canvases.drain(..).map(Some).collect();
+        let kept: Vec<Option<Canvas>> = (kept.into_iter())
+            .map(|k| k.and_then(|i| old[i].take()))
+            .collect();
+        // What's dropped gives its room back first, for what's new.
+        for canvas in old.into_iter().flatten() {
+            self.free(&canvas);
+        }
         // A new list: each canvas is placed afresh.
         self.places = vec![None; canvases.len()];
         let mut fresh = fresh.into_iter();
         for (c, kept) in canvases.iter().zip(kept) {
-            if let Some(canvas) = kept.and_then(|i| old[i].take()) {
+            if let Some(canvas) = kept {
                 self.canvases.push(canvas);
                 continue;
             }
@@ -214,16 +322,12 @@ impl WorldGui {
                 true => Vec::new(),
                 false => quads.iter().map(|(q, _)| *q).collect(),
             };
+            let (at, id) = self.put(device, queue, &gpu).unwrap_or((0..0, 0));
             self.canvases.push(Canvas {
                 source: c.clone(),
                 held,
-                quads: (!gpu.is_empty()).then(|| {
-                    device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("rook world gui quads"),
-                        contents: bytemuck::cast_slice(&gpu),
-                        usage: wgpu::BufferUsages::VERTEX,
-                    })
-                }),
+                quads: at,
+                id,
                 runs: runs(quads.iter().map(|(_, image)| *image)),
                 size: c.size,
                 light_influence: c.light_influence.clamp(0.0, 1.0),
@@ -233,6 +337,43 @@ impl WorldGui {
                 overlay: c.untoned.then_some(quads),
             });
         }
+    }
+
+    /// Put a canvas's quads in the shared buffer, each beside a new id
+    /// for the canvas: where they are, and the id; `None` when there are
+    /// none, or no room.
+    fn put(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        quads: &[GpuQuad],
+    ) -> Option<(Range<u32>, u32)> {
+        let len = u32::try_from(quads.len()).ok().filter(|&n| n > 0)?;
+        let shared = (self.quads).get_or_insert_with(|| Quads::new(device, FIRST_QUADS));
+        let at = shared.alloc(device, queue, len)?;
+        let id = self
+            .ids
+            .alloc(1, u32::MAX)
+            .expect("fewer canvases than ids");
+        let ids = vec![id; quads.len()];
+        queue.write_buffer(
+            &shared.quads,
+            u64::from(at) * QUAD,
+            bytemuck::cast_slice(quads),
+        );
+        queue.write_buffer(&shared.ids, u64::from(at) * ID, bytemuck::cast_slice(&ids));
+        Some((at..at + len, id))
+    }
+
+    /// Give a dropped canvas's quads and id back.
+    fn free(&mut self, canvas: &Canvas) {
+        if canvas.quads.is_empty() {
+            return;
+        }
+        if let Some(shared) = &mut self.quads {
+            shared.ranges.free(canvas.quads.clone());
+        }
+        self.ids.free(canvas.id..canvas.id + 1);
     }
 
     /// Drop the bind groups of groups' textures, which were drawn anew.
@@ -253,8 +394,8 @@ impl WorldGui {
     }
 
     /// Upload where each canvas `camera` sees in a `height`-pixel window
-    /// is, back to front, those always on top last, and bind the images
-    /// (in `images`' cache) their runs draw with.
+    /// is, and its runs' draws, back to front, those always on top last,
+    /// and bind the images (in `images`' cache) the runs draw with.
     pub(crate) fn upload(
         &mut self,
         device: &wgpu::Device,
@@ -264,63 +405,96 @@ impl WorldGui {
         camera: &Camera,
         height: u32,
     ) -> WorldRuns {
-        let mut seen: Vec<(bool, f32, CanvasFrame, usize)> = self
-            .canvases
-            .iter()
-            .enumerate()
-            .zip(&self.places)
-            .filter(|((_, c), _)| !c.runs.is_empty() && c.overlay.is_none())
-            .filter_map(|((i, c), place)| {
-                let (origin, right, down, one_sided) = lay(c, place.as_ref()?, camera, height)?;
-                let middle = origin + (right * c.size.x + down * c.size.y) * 0.5;
-                let distance = middle.distance(camera.position);
-                if distance > c.max_distance {
-                    return None;
-                }
-                let frame = CanvasFrame {
-                    origin: origin.extend(1.0).to_array(),
-                    right: right.extend(0.0).to_array(),
-                    down: down.extend(0.0).to_array(),
-                    look: [
-                        c.light_influence,
-                        c.brightness,
-                        if one_sided { 1.0 } else { 0.0 },
-                        0.0,
-                    ],
-                };
-                Some((c.on_top, distance, frame, i))
-            })
-            .collect();
+        self.draws.clear();
+        self.laid
+            .resize(self.ids.top() as usize, CanvasFrame::zeroed());
+        let mut seen: Vec<(bool, f32, usize)> = Vec::new();
+        for (i, (c, place)) in self.canvases.iter().zip(&self.places).enumerate() {
+            let Some(place) = place.as_ref().filter(|_| !c.quads.is_empty()) else {
+                continue;
+            };
+            let Some((origin, right, down, one_sided)) = lay(c, place, camera, height) else {
+                continue;
+            };
+            let middle = origin + (right * c.size.x + down * c.size.y) * 0.5;
+            let distance = middle.distance(camera.position);
+            if distance > c.max_distance {
+                continue;
+            }
+            self.laid[c.id as usize] = CanvasFrame {
+                origin: origin.extend(1.0).to_array(),
+                right: right.extend(0.0).to_array(),
+                down: down.extend(0.0).to_array(),
+                look: [
+                    c.light_influence,
+                    c.brightness,
+                    if one_sided { 1.0 } else { 0.0 },
+                    0.0,
+                ],
+            };
+            seen.push((c.on_top, distance, i));
+        }
         seen.sort_by(|a, b| a.0.cmp(&b.0).then(b.1.total_cmp(&a.1)));
         if seen.is_empty() {
             return Vec::new();
         }
-        if self.frames.as_ref().is_none_or(|f| f.room < seen.len()) {
-            self.frames = Some(self.new_frames(device, seen.len().next_power_of_two()));
+        if self.frames.as_ref().is_none_or(|f| f.room < self.ids.top()) {
+            self.frames = Some(new_frames(device, self.ids.top().next_power_of_two()));
         }
         let keys: Vec<Option<ImageKey>> = (seen.iter())
-            .flat_map(|s| self.canvases[s.3].runs.iter().map(|r| r.image))
+            .flat_map(|s| self.canvases[s.2].runs.iter().map(|r| r.image))
             .collect();
         for key in keys {
             self.bind(device, key, images, lights);
         }
         let frames = self.frames.as_ref().expect("made above");
-        let mut bytes = vec![0u8; seen.len() * self.stride as usize];
-        for (i, s) in seen.iter().enumerate() {
-            let at = i * self.stride as usize;
-            let frame = bytemuck::bytes_of(&s.2);
-            bytes[at..at + frame.len()].copy_from_slice(frame);
-        }
-        queue.write_buffer(&frames.buffer, 0, &bytes);
-        seen.into_iter()
-            .enumerate()
-            .map(|(i, (on_top, distance, _, canvas))| WorldDraw {
-                slot: i as u32,
-                canvas,
+        queue.write_buffer(&frames.buffer, 0, bytemuck::cast_slice(&self.laid));
+        let mut out = Vec::with_capacity(seen.len());
+        for (on_top, distance, i) in seen {
+            let c = &self.canvases[i];
+            let first = self.draws.len() as u32;
+            // Runs whose image isn't up yet draw nothing.
+            let ready = (c.runs.iter()).filter(|r| frames.groups.contains_key(&r.image));
+            self.draws.extend(ready.map(|r| {
+                let args = DrawArgs {
+                    vertex_count: 6,
+                    instance_count: r.quads.len() as u32,
+                    first_vertex: 0,
+                    first_instance: c.quads.start + r.quads.start,
+                };
+                (args, r.image, on_top)
+            }));
+            out.push(WorldDraw {
+                draws: first..self.draws.len() as u32,
                 on_top,
                 distance,
-            })
-            .collect()
+            });
+        }
+        if self.multi_draw {
+            self.upload_draws(device, queue);
+        }
+        out
+    }
+
+    /// Upload the frame's draws for the multi-draws to read.
+    fn upload_draws(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {
+        let len = self.draws.len();
+        if len == 0 {
+            return;
+        }
+        if self.indirect.as_ref().is_none_or(|(_, room)| *room < len) {
+            let room = len.next_power_of_two();
+            let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("rook world gui draws"),
+                size: (room * std::mem::size_of::<DrawArgs>()) as u64,
+                usage: wgpu::BufferUsages::INDIRECT | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            self.indirect = Some((buffer, room));
+        }
+        let (buffer, _) = self.indirect.as_ref().expect("made above");
+        let args: Vec<DrawArgs> = self.draws.iter().map(|d| d.0).collect();
+        queue.write_buffer(buffer, 0, bytemuck::cast_slice(&args));
     }
 
     /// The untoned canvases' quads where `camera` sees them in a `size`
@@ -367,11 +541,7 @@ impl WorldGui {
         entries.extend([
             wgpu::BindGroupEntry {
                 binding: 4,
-                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: &frames.buffer,
-                    offset: 0,
-                    size: wgpu::BufferSize::new(std::mem::size_of::<CanvasFrame>() as u64),
-                }),
+                resource: frames.buffer.as_entire_binding(),
             },
             wgpu::BindGroupEntry {
                 binding: 5,
@@ -398,50 +568,73 @@ impl WorldGui {
         frames.groups.insert(image, group);
     }
 
-    fn new_frames(&self, device: &wgpu::Device, room: usize) -> Frames {
-        let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("rook world gui frames"),
-            size: room as u64 * self.stride,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        Frames {
-            buffer,
-            room,
-            groups: FxHashMap::default(),
-        }
-    }
-
-    /// Draw some of the frame's canvases, in the order given.
+    /// Draw some of the frame's canvases, in the order given: the draws
+    /// in a row with one image and pipeline in one call where the device
+    /// can.
     pub(crate) fn record(&self, pass: &mut wgpu::RenderPass<'_>, runs: &[WorldDraw]) {
-        let Some(frames) = &self.frames else {
+        let (Some(frames), Some(quads)) = (&self.frames, &self.quads) else {
             return;
         };
+        let (Some(first), Some(last)) = (runs.first(), runs.last()) else {
+            return;
+        };
+        // The canvases' draws are in the frame's list in the order drawn.
+        let start = first.draws.start as usize;
+        let draws = &self.draws[start..last.draws.end as usize];
+        if draws.is_empty() {
+            return;
+        }
+        pass.set_vertex_buffer(0, quads.quads.slice(..));
+        pass.set_vertex_buffer(1, quads.ids.slice(..));
         let mut on_top = None;
-        for d in runs {
-            let canvas = &self.canvases[d.canvas];
-            let Some(quads) = &canvas.quads else {
-                continue;
-            };
-            pass.set_vertex_buffer(0, quads.slice(..));
-            if on_top != Some(d.on_top) {
-                on_top = Some(d.on_top);
-                pass.set_pipeline(if d.on_top { &self.on_top } else { &self.tested });
+        let mut at = start;
+        let mut calls = 0;
+        for batch in draws.chunk_by(|a, b| (a.1, a.2) == (b.1, b.2)) {
+            let (_, image, top) = batch[0];
+            if on_top != Some(top) {
+                on_top = Some(top);
+                pass.set_pipeline(if top { &self.on_top } else { &self.tested });
             }
-            let offset = (d.slot as u64 * self.stride) as u32;
-            // Runs whose image isn't up yet draw nothing.
-            for run in &canvas.runs {
-                if let Some(group) = frames.groups.get(&run.image) {
-                    pass.set_bind_group(3, group, &[offset]);
-                    pass.draw(0..6, run.quads.clone());
+            let group = (frames.groups.get(&image)).expect("only runs with a group draw");
+            pass.set_bind_group(3, group, &[]);
+            match &self.indirect {
+                Some((buffer, _)) if self.multi_draw => {
+                    let offset = (at * std::mem::size_of::<DrawArgs>()) as u64;
+                    pass.multi_draw_indirect(buffer, offset, batch.len() as u32);
+                    calls += 1;
+                }
+                _ => {
+                    for (a, _, _) in batch {
+                        let first = a.first_instance;
+                        pass.draw(0..a.vertex_count, first..first + a.instance_count);
+                        calls += 1;
+                    }
                 }
             }
+            at += batch.len();
         }
+        rook_types::count!(RenderGuiCalls, calls);
+    }
+}
+
+/// A storage array of `room` canvases' frames, with no bind groups yet.
+fn new_frames(device: &wgpu::Device, room: u32) -> Frames {
+    let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("rook world gui frames"),
+        size: u64::from(room.max(1)) * std::mem::size_of::<CanvasFrame>() as u64,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    Frames {
+        buffer,
+        room,
+        groups: FxHashMap::default(),
     }
 }
 
 /// The world GUI's pipelines, depth tested and always on top: the parts'
-/// groups 0 to 2 (`layouts`), then `group_layout`.
+/// groups 0 to 2 (`layouts`), then `group_layout`; the quads, then the
+/// canvas each is on.
 fn pipelines(
     device: &wgpu::Device,
     layouts: BindLayouts<'_>,
@@ -458,6 +651,7 @@ fn pipelines(
         ],
         immediate_size: 0,
     });
+    let ids = wgpu::vertex_attr_array![11 => Uint32];
     [
         wgpu::CompareFunction::Greater,
         wgpu::CompareFunction::Always,
@@ -468,7 +662,14 @@ fn pipelines(
             "rook world gui",
             &layout,
             (shader, "vs_world_gui", "fs_world_gui"),
-            GpuQuad::layout(),
+            &[
+                GpuQuad::layout(),
+                wgpu::VertexBufferLayout {
+                    array_stride: ID,
+                    step_mode: wgpu::VertexStepMode::Instance,
+                    attributes: &ids,
+                },
+            ],
             (FRAME_FORMAT, main_depth_format(device)),
             compare,
         )
