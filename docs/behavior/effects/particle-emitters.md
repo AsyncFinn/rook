@@ -80,16 +80,43 @@ over 2 s in edit mode, 50 emitters 60 studs ahead with 5 s lifetimes):
 | about 100k | 12.5 ms |
 
 - Particles cost the render thread's CPU, growing with their number and
-  leveling off past about 25k (whether from a cap on particles or on
-  emission isn't measured yet).
+  leveling off past about 25k (the 16,000 draw budget below).
 - The same 100k behind the camera cost nothing (5.6 ms, the same as none).
 - They still exist there: emitting only while the camera looked away, then
   turning back, showed the full cloud's cost at once (12.6 ms), as did
-  turning away for 1 s or 4 s and back. So emitters out of view keep their
-  particles' state without paying to move them each frame. That fits
-  particles whose motion is worked out from their age when drawn rather
-  than stepped (Inference: work on another thread wouldn't show in this
-  stat either).
+  turning away for 1 s or 4 s and back: emitters out of view are paused,
+  below.
+
+**What's drawn, what runs** (Studio 0.745, 2026-11-04, edit mode, camera
+pinned per frame; a grid of 100 emitters of `Emit`ted particles seen from
+above, single particles measured in nearly orthographic captures):
+
+- *Draw budget*: a frame draws at most 16,000 particles. Emitters in view
+  are taken nearest the camera first, each whole; one that would pass the
+  budget is left out and farther ones still fill it (100 × 161 drew 99
+  emitters; 100 × 300 drew 53; three 5,000s then ten 100s past a fourth
+  5,000). The same at edit quality level 1. Emitters left out by the
+  budget keep running (a Rate emitter behind it kept emitting).
+- *Out of view* is the frustum on where the particles are, not where the
+  emitter is (an off-screen emitter spraying into view draws), and not
+  occlusion (emitters behind a wall still take budget). An emitter out
+  of view takes no budget and is **paused**: its particles don't age,
+  move or die, and Rate emission stops. Emitted, looked away 1.5 s, then
+  back 1.0 s: the particles showed 0.79 s of motion.
+- *Distance*: nothing stops drawing (single `Emit` particles drew at
+  3,000 studs, no fade), but `Rate` thins with the emitter's distance
+  from the camera: 1.0 of it at 150 studs, 0.82 at 300, 0.59 at 500,
+  about 0.37 at 700, 0.12 at 900, none by 1,000; a straight fall from
+  150 to 1,000 fits all to 0.02.
+- *Motion is stepped per frame*, not worked out from age: each frame
+  moves the position by `v·dt + ½a·dt²`, then sets `v = (v + a·dt) ·
+  2^(−Drag·dt)`. At 15 fps (dt 0.068, age 1.357 s, Speed 10 / Acceleration
+  10 along X): Speed alone 13.571 studs; Acceleration alone 9.197 (½at²
+  9.209); Speed with Drag 1 9.009 (this step 9.004, the exact curve
+  8.795); Acceleration with Drag 1 6.898 (this step 6.896). A frame's
+  step is at most 1/15 s (frames of 0.1 to 0.18 s moved them 1/15 each).
+- A frozen emitter (`TimeScale` 0) set back to 1 didn't move again in
+  edit mode; fresh emitters were used for every run.
 
 ## Rook's fit
 
@@ -108,15 +135,27 @@ go to each client as a message, and calls on an emitter that hasn't
 replicated yet wait for the next updates. The player keeps a count of
 each per effect, and the renderer births (or clears) on the change.
 
+The renderer runs particles as Studio does (measured above): only emitters
+whose particles or birthplace are in the view frustum move on, once a
+frame at draw time by the frame's time (at most 1/15 s) with Studio's
+step; the rest keep their particles exactly as they were until the camera
+turns back. `Rate` thins with distance (all of it within 150 studs, none
+by 1,000), and a frame draws whole emitters nearest first up to 16,000
+particles. A locked emitter's particles are kept along its axes. Fire,
+Smoke, Sparkles and explosions go through the same particles (Inference:
+Studio's are particle emitters too; not measured separately).
+
 Not done yet: `VelocityInheritance` (no part velocity reaches the
 renderer), `WindAffectsDrag`, `FlipbookBlendFrames` (frames swap without a
 crossfade), `ShapePartial` for Cylinders, and `LocalTransparencyModifier`.
 While its texture loads, an emitter draws nothing.
 
-Cost: on an archive place with 200 ParticleEmitters, 12 Beams and 8
-Trails (none in view), two alternating `--bench 300` pairs against the
-build before: CPU recording 1.26 → 1.38 to 1.47 ms a frame (the
-particles simulating), whole frame and GPU passes within their noise.
+Cost, `--bench 600` against the build before, medians of the particles'
+stage: on a place with about 1,000 particles, all in view of the still
+bench camera, 0.41 → 0.46 ms (the same work); turning the camera, where
+most emitters spend most frames out of view, 0.93 → 0.48 ms; on a place
+with 115 emitters and no live particles, 0.03 → 0.07 ms (each emitter's
+box tested against the view).
 
 ## Method
 

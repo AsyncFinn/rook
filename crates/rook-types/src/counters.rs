@@ -105,6 +105,10 @@ counters! {
     /// GUI objects whose properties or place in the tree changed.
     GuiObjectsChanged: Changed, "gui: objects changed";
     GuiNodes: Size, "gui: nodes";
+    /// World canvases (SurfaceGuis, BillboardGuis) placed again: only
+    /// those whose adornee moved.
+    GuiCanvasesPlaced: Touched, "gui: world canvases placed";
+    GuiCanvases: Size, "gui: world canvases";
 
     /// Physics bodies written or read back.
     PhysicsBodiesTouched: Touched, "physics: bodies touched";
@@ -118,6 +122,12 @@ counters! {
     SoundsUpdated: Touched, "audio: sounds updated";
     SoundsChanged: Changed, "audio: sounds changed";
     Sounds: Size, "audio: sounds";
+
+    /// Particles moved on (`rook-render`): only emitters in view step.
+    ParticlesStepped: Touched, "particles: stepped";
+    /// Particles drawn, at most Studio's 16,000 a frame.
+    ParticlesDrawn: Info, "particles: drawn";
+    Particles: Size, "particles: alive";
 
     /// Draws and runs recorded, per pass.
     ShadowDraws: Info, "draws: shadow pass draws";

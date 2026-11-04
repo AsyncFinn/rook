@@ -48,6 +48,8 @@ pub(crate) struct Playback {
     newest: f64,
     /// The server time of the updates being applied.
     receiving: Option<f64>,
+    /// The assemblies those updates moved.
+    received: Vec<RigidBodyHandle>,
 }
 
 impl Playback {
@@ -137,12 +139,20 @@ impl Physics {
                 });
             }
         }
+        // Only what the updates moved shows anything else than where it
+        // is now; the rest already does.
+        let mut received = std::mem::take(&mut self.playback.received);
+        received.sort_unstable_by_key(|h| h.into_raw_parts());
+        received.dedup();
         if let Some(props) = self.props.take() {
-            for &h in self.playback.tracks.keys() {
+            rook_types::count!(PhysicsBodiesTouched, received.len());
+            for &h in &received {
                 self.write_body(dom, &props, h);
             }
             self.props = Some(props);
         }
+        received.clear();
+        self.playback.received = received;
         self.cursor = dom.journal().end();
     }
 
@@ -199,6 +209,7 @@ impl Physics {
             linear,
             angular,
         });
+        self.playback.received.push(h);
         true
     }
 

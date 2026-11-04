@@ -3,7 +3,7 @@
 //! other files (docs/behavior/gui/images.md).
 
 use rook_content::decode::image::{Encoding, Image};
-use rook_engine::DataModel;
+use rook_engine::{DataModel, RenderChanges};
 use rook_gui::{Gui, GuiImage};
 use rook_render::Renderer;
 
@@ -12,8 +12,15 @@ use crate::*;
 impl SceneCache {
     /// Give the renderer the DataModel's GUI when it was laid out again
     /// since last time (laying it out first if it changed), and where its
-    /// world GUI is now. Returns whether it was laid out again.
-    pub fn show_gui(&mut self, dm: &DataModel, renderer: &mut Renderer) -> bool {
+    /// world GUI is now: all of it when laid out again (or with no
+    /// `changes` to go by), else what moved with the parts and
+    /// Attachments `changes` name. Returns whether it was laid out again.
+    pub fn show_gui(
+        &mut self,
+        dm: &DataModel,
+        renderer: &mut Renderer,
+        changes: Option<&RenderChanges>,
+    ) -> bool {
         dm.runtime().sync_gui();
         let mut world = dm.runtime().world_mut();
         let world = &mut *world;
@@ -26,7 +33,17 @@ impl SceneCache {
             renderer.set_gui(&screen, &canvases, &self.scene.images);
         }
         self.feed_gui(&mut world.gui);
-        renderer.place_world_gui(world.gui.world_places(&world.dom));
+        match changes {
+            Some(changes) if !changed && !changes.full => {
+                let moved = world
+                    .gui
+                    .world_places_moved(&world.dom, changes.maybe_moved());
+                renderer.place_world_gui(moved);
+            }
+            _ => {
+                renderer.place_world_gui(world.gui.world_places(&world.dom).into_iter().enumerate())
+            }
+        }
         changed
     }
 

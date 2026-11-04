@@ -48,6 +48,12 @@ pub(crate) struct Frustum {
 }
 
 impl Frustum {
+    /// A view that sees everything (tests).
+    #[cfg(test)]
+    pub(crate) const ALL: Self = Self {
+        planes: [Vec4::W; 6],
+    };
+
     pub(crate) fn of(view_proj: Mat4) -> Self {
         let [x, y, z, w] = [0, 1, 2, 3].map(|i| view_proj.row(i));
         Self {

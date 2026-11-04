@@ -7,9 +7,11 @@
 
 use std::ops::Range;
 
+use glam::Mat3;
+
 use super::*;
 
-use crate::effects::particles::{Particle, Particles};
+use crate::effects::particles::{Particle, Particles, reach};
 use crate::scene::EmitterLook;
 use crate::scene::Orientation;
 
@@ -58,6 +60,9 @@ pub(crate) type ParticleRun = (ImageHash, Range<u32>);
 struct EmitterDraw<'a> {
     look: &'a EmitterLook,
     particles: &'a [Particle],
+    /// A locked emitter's place and axes: its particles are kept along
+    /// them.
+    place: Option<(Vec3, Mat3)>,
     texture: ImageHash,
     /// Its image's slot in the table.
     slot: u32,
@@ -79,11 +84,15 @@ impl EmitterDraw<'_> {
         };
         let mut out = Vec::new();
         for p in self.particles {
+            let (position, velocity) = match self.place {
+                Some((at, axes)) => (at + axes * p.position, axes * p.velocity),
+                None => (p.position, p.velocity),
+            };
             if let Some(reach) = self.reach
                 && !view.sees(
                     Aabb {
-                        min: p.position,
-                        max: p.position,
+                        min: position,
+                        max: position,
                     },
                     reach,
                 )
@@ -112,7 +121,7 @@ impl EmitterDraw<'_> {
                 None => [0.0, 0.0, 1.0, 1.0],
             };
             let instance = ParticleInstance {
-                position: p.position.to_array(),
+                position: position.to_array(),
                 size,
                 color: [color[0], color[1], color[2], alpha],
                 // Studio turns positive rotations clockwise.
@@ -122,11 +131,11 @@ impl EmitterDraw<'_> {
                 brightness: look.brightness.at(t),
                 keep,
                 frame,
-                velocity: p.velocity.to_array(),
+                velocity: velocity.to_array(),
                 orientation,
                 z_offset: look.z_offset,
             };
-            out.push((p.position.distance_squared(camera.position), instance));
+            out.push((position.distance_squared(camera.position), instance));
         }
         out
     }
@@ -135,12 +144,19 @@ impl EmitterDraw<'_> {
 impl Renderer {
     /// Run the particles and Trails on by `seconds` without drawing (a
     /// screenshot shows effects as they look once they've been going a
-    /// while).
-    pub fn settle_particles(&mut self, seconds: f32) {
+    /// while): particles frame by frame at 60 a second as `camera` sees
+    /// them in a `width` × `height` view, so only those in view run, as
+    /// when drawn.
+    pub fn settle_particles(&mut self, seconds: f32, camera: &Camera, width: u32, height: u32) {
+        let view = Frustum::of(camera.view_projection(width as f32 / height.max(1) as f32));
+        let frames = (seconds * 60.0).round() as u32;
+        for _ in 0..frames {
+            self.particles.sim.advance(1.0 / 60.0);
+            self.particles.sim.frame(&view, camera.position);
+        }
         let mut left = seconds;
         while left > 0.0 {
             let dt = left.min(1.0 / 30.0);
-            self.particles.sim.step(dt);
             self.ribbons.sim.step(dt);
             left -= dt;
         }
@@ -169,31 +185,44 @@ impl Renderer {
     /// Upload the particles `view` reaches, back to front from `camera`,
     /// and return their runs by image.
     pub(crate) fn upload_particles(&mut self, camera: &Camera, view: &Frustum) -> Vec<ParticleRun> {
-        if !self.particles.sim.any() {
+        if self.particles.sim.is_empty() {
             return Vec::new();
         }
         profiling::scope!("upload particles");
-        // The emitters the view may reach, with what their particles share.
+        // The emitters in view move on (only they do), then Studio's
+        // budget picks which of them draw.
+        let seen = self.particles.sim.frame(view, camera.position);
+        let sim = &self.particles.sim;
+        let mut drawn: Vec<usize> = seen
+            .into_iter()
+            .filter(|&i| {
+                sim.emitter(i).is_some_and(|(e, ps)| {
+                    !ps.is_empty() && e.look.texture.is_some_and(|h| self.images.contains(&h))
+                })
+            })
+            .collect();
+        sim.within_budget(&mut drawn, camera.position);
         let mut emitters: Vec<EmitterDraw<'_>> = Vec::new();
-        for (look, particles, bounds) in self.particles.sim.drawn() {
-            let Some(texture) = look.texture.filter(|h| self.images.contains(h)) else {
+        for i in drawn {
+            let Some((emitter, particles)) = sim.emitter(i) else {
                 continue;
             };
-            let squash = look.squash.0.iter().map(|p| p.1.abs()).fold(0.0, f32::max);
-            let biggest =
-                look.size.max() * look.size_spread[1].max(look.size_spread[0]) * squash.exp2();
-            if !view.sees(bounds, biggest * 0.5) {
+            let look = &*emitter.look;
+            let Some(texture) = look.texture else {
                 continue;
-            }
+            };
             emitters.push(EmitterDraw {
                 look,
                 particles,
+                place: look.locked.then_some((emitter.position, emitter.rotation)),
                 texture,
-                slot: self.image_slots(&[Some(texture), None, None, None, None])[0],
-                // A quad turned any way stays within 0.71 x its size of
-                // its center; one moved by ZOffset isn't culled on its own.
-                reach: (look.z_offset == 0.0).then_some(biggest * 0.75),
+                slot: 0,
+                // One moved by ZOffset isn't culled on its own.
+                reach: (look.z_offset == 0.0).then(|| reach(look)),
             });
+        }
+        for e in &mut emitters {
+            e.slot = self.image_slots(&[Some(e.texture), None, None, None, None])[0];
         }
         // Each emitter's particles are built on their own (in parallel),
         // then sorted by small keys pointing at them, not moved themselves.
@@ -230,6 +259,7 @@ impl Renderer {
         for (texture, _) in &runs {
             self.ensure_group([Some(*texture), None, None, None, None]);
         }
+        rook_types::count!(ParticlesDrawn, order.len());
         let instances: Vec<ParticleInstance> = order
             .iter()
             .map(|&(_, e, i)| built[e as usize][i as usize].1)

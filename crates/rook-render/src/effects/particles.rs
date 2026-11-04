@@ -1,31 +1,47 @@
-//! The particles of the scene's emitters, simulated on the CPU in world
-//! space: each emitter's are born at its rate (and when scripts call
-//! `Emit`) where it is, move by their velocity, acceleration and drag, and
-//! die at the end of their lifetime (docs/behavior/effects/fire-smoke-and-sparkles.md,
-//! docs/behavior/effects/particle-emitters.md).
+//! The particles of the scene's emitters, simulated on the CPU as Studio
+//! simulates them (docs/behavior/effects/fire-smoke-and-sparkles.md,
+//! docs/behavior/effects/particle-emitters.md): only emitters the camera
+//! can see move on. Each frame, at draw time, an emitter whose particles
+//! (or the place it births them) reach into the view steps once by the
+//! frame's time, births at its rate (thinned with its distance from the
+//! camera) and lets particles die at the end of their lifetimes. One out
+//! of view is left as it is, its time stopped, until the camera turns
+//! back to it. Scripts' `Emit` births at once, wherever the emitter is.
 
 mod spawn;
-
-use std::sync::Arc;
 
 use rustc_hash::FxHashMap;
 
 use glam::{Mat3, Vec3};
 
-use crate::batch::cull::Aabb;
+use crate::batch::cull::{Aabb, Frustum};
 use crate::scene::{Emitter, EmitterLook, FlipbookMode};
 
-/// The longest step simulated at once; longer ones are split, up to
-/// [`MAX_STEP`] in all.
-const SUBSTEP: f32 = 1.0 / 30.0;
-/// The most time one call simulates (a frame after a long stall).
-const MAX_STEP: f32 = 1.0;
+/// The most time one frame moves an emitter on (Studio: frames of 0.1 to
+/// 0.18 s each moved particles 1/15 s).
+const MAX_FRAME: f32 = 1.0 / 15.0;
+/// An emitter's `Rate` thins with its distance from the camera: all of
+/// it within this many studs...
+const RATE_FULL_STUDS: f32 = 150.0;
+/// ...falling evenly to none at this many (Studio: 0.82 of it at 300
+/// studs, 0.59 at 500, 0.12 at 900).
+const RATE_NONE_STUDS: f32 = 1000.0;
+/// The most particles a frame draws: Studio draws whole emitters, nearest
+/// the camera first, while their particles add up to at most this many.
+pub(crate) const DRAWN_MOST: usize = 16_000;
 /// The most particles one `Emit` call births (scripts asking for millions
 /// would stall the frame).
 const MAX_BURST: u64 = 10_000;
 
-#[derive(Debug, Clone, Copy)]
+/// Up to this many particles to step, a frame steps them on its own
+/// thread: waking the workers costs about as much as stepping this many
+/// (as `rook-platform`'s sort keeps small sorts on one thread).
+const STEP_ALONE: usize = 2048;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct Particle {
+    /// In the world, or for a locked emitter along its axes from it (its
+    /// particles move with it at no cost until they're drawn).
     pub(crate) position: Vec3,
     pub(crate) velocity: Vec3,
     age: f32,
@@ -85,6 +101,18 @@ impl Particle {
         }
     }
 
+    /// Move on by `dt` seconds under `acceleration`, its velocity then
+    /// multiplied by `damping`. Studio's step, fitted to its particles at
+    /// 15 frames a second: the position goes on by the velocity and
+    /// acceleration over the step, then the velocity takes the
+    /// acceleration and loses its drag.
+    fn advance(&mut self, dt: f32, acceleration: Vec3, damping: f32) {
+        self.age += dt;
+        self.position += self.velocity * dt + acceleration * (0.5 * dt * dt);
+        self.velocity = (self.velocity + acceleration * dt) * damping;
+        self.rotation += self.spin * dt;
+    }
+
     /// A number in [-1, 1] for keypoint `k`, the same every frame.
     fn pick(&self, k: usize) -> f32 {
         let h = hash(self.seed.wrapping_add((k as u32).wrapping_mul(0x85EB_CA6B)));
@@ -107,7 +135,8 @@ struct Pool {
     /// Particles owed but not yet born (a fraction of one).
     owed: f32,
     rng: Rng,
-    /// A box around its particles, as of the last step.
+    /// A box around its particles' centers, where they are (along the
+    /// emitter's axes when it's locked).
     bounds: Option<Aabb>,
     /// The emitter's `emitted` and `cleared` acted on so far.
     emitted: u64,
@@ -120,6 +149,20 @@ pub(crate) struct Particles {
     emitters: Vec<Option<Emitter>>,
     /// Empty for a free slot.
     pools: Vec<Pool>,
+    /// The time passed since the last frame, which the next one moves
+    /// what it sees on by.
+    pending: f32,
+}
+
+/// An emitter in view, moved on this frame by `dt`.
+struct Step<'a> {
+    emitter: &'a Emitter,
+    pool: &'a mut Pool,
+    dt: f32,
+    /// The share of its rate it births at, by its distance.
+    rate: f32,
+    /// Particles moved on.
+    stepped: usize,
 }
 
 impl Particles {
@@ -145,9 +188,10 @@ impl Particles {
     }
 
     /// Take the emitter now in slot `i` (`None`: it's gone, and its
-    /// particles with it), acting on scripts' `Emit` and `Clear` and
-    /// moving locked particles with it. Another emitter taking the slot
-    /// starts with none.
+    /// particles with it), acting on scripts' `Emit` and `Clear`. Another
+    /// emitter taking the slot starts with none. Moving costs nothing
+    /// here: born particles stay put, and a locked emitter's are kept
+    /// along its axes.
     pub(crate) fn set(&mut self, i: usize, new: Option<&Emitter>) {
         if self.emitters.len() <= i {
             self.emitters.resize(i + 1, None);
@@ -165,36 +209,131 @@ impl Particles {
         self.emitters[i] = new.cloned();
     }
 
-    /// Move every particle on by `dt` seconds (each emitter's
-    /// `time_scale` of it), birthing and killing as they go.
-    pub(crate) fn step(&mut self, dt: f32) {
-        profiling::scope!("Particles::step");
-        let mut left = dt.clamp(0.0, MAX_STEP);
-        while left > 0.0 {
-            let h = left.min(SUBSTEP);
-            left -= h;
-            for (emitter, pool) in self.emitters.iter().zip(&mut self.pools) {
-                if let Some(emitter) = emitter {
-                    pool.step(emitter, h * emitter.time_scale.max(0.0));
-                }
+    /// Let `dt` seconds pass: the next [`frame`](Self::frame) moves what
+    /// it sees on by the time passed since the one before.
+    pub(crate) fn advance(&mut self, dt: f32) {
+        self.pending += dt.max(0.0);
+    }
+
+    /// A frame seen from `camera` through `view`: every emitter whose
+    /// particles, or the place it births them, reach into the view moves
+    /// on by the time passed (each its `time_scale` of it, at most
+    /// [`MAX_FRAME`]); the rest stay exactly as they are. Returns the
+    /// slots in view.
+    pub(crate) fn frame(&mut self, view: &Frustum, camera: Vec3) -> Vec<usize> {
+        profiling::scope!("Particles::frame");
+        let dt = std::mem::take(&mut self.pending).min(MAX_FRAME);
+        let mut seen = Vec::new();
+        let mut steps: Vec<Step<'_>> = Vec::new();
+        let mut alive = 0;
+        for (i, (emitter, pool)) in self.emitters.iter().zip(&mut self.pools).enumerate() {
+            alive += pool.particles.len();
+            let Some(emitter) = emitter else {
+                continue;
+            };
+            let look = &*emitter.look;
+            if !view.sees(pool.region(emitter), reach(look) + look.z_offset.abs()) {
+                continue;
+            }
+            seen.push(i);
+            let dt = dt * emitter.time_scale.max(0.0);
+            if dt > 0.0 {
+                steps.push(Step {
+                    emitter,
+                    pool,
+                    dt,
+                    rate: rate_share(camera.distance(emitter.position)),
+                    stepped: 0,
+                });
             }
         }
-        for pool in &mut self.pools {
-            pool.bounds = pool.bounds();
+        // Each emitter steps on its own, so in parallel when there's
+        // enough to step.
+        let step = |_, chunk: &mut [Step<'_>]| {
+            for s in chunk {
+                s.stepped = s.pool.step(s.emitter, s.dt, s.rate);
+            }
+        };
+        let work: usize = steps.iter().map(|s| s.pool.particles.len()).sum();
+        if work <= STEP_ALONE {
+            step(0, &mut steps);
+        } else {
+            rook_platform::get()
+                .workers
+                .for_each_chunk(&mut steps, 1, step);
         }
+        rook_types::count!(
+            ParticlesStepped,
+            steps.iter().map(|s| s.stepped).sum::<usize>()
+        );
+        rook_types::gauge!(Particles, alive);
+        seen
     }
 
-    /// Whether any particle is alive.
-    pub(crate) fn any(&self) -> bool {
-        self.pools.iter().any(|p| !p.particles.is_empty())
+    /// Of the emitters at `slots`, those Studio would draw: nearest
+    /// `camera` first, each whole while their particles add up to at most
+    /// [`DRAWN_MOST`]; one that doesn't fit is left out, and farther ones
+    /// still may (Studio: three 5,000-particle emitters, then ten
+    /// 100-particle ones past a fourth). Kept in that order.
+    pub(crate) fn within_budget(&self, slots: &mut Vec<usize>, camera: Vec3) {
+        let distance = |i: usize| {
+            self.emitters[i]
+                .as_ref()
+                .map_or(0.0, |e| e.position.distance_squared(camera))
+        };
+        slots.sort_by(|&a, &b| distance(a).total_cmp(&distance(b)).then(a.cmp(&b)));
+        let mut room = DRAWN_MOST;
+        slots.retain(|&i| {
+            let n = self.pools[i].particles.len();
+            let fits = n <= room;
+            if fits {
+                room -= n;
+            }
+            fits
+        });
     }
 
-    /// Each emitter's look, its particles and the box around them.
-    pub(crate) fn drawn(&self) -> impl Iterator<Item = (&Arc<EmitterLook>, &[Particle], Aabb)> {
-        self.emitters
-            .iter()
-            .zip(&self.pools)
-            .filter_map(|(e, p)| Some((&e.as_ref()?.look, p.particles.as_slice(), p.bounds?)))
+    /// The emitter in slot `i` and its particles.
+    pub(crate) fn emitter(&self, i: usize) -> Option<(&Emitter, &[Particle])> {
+        Some((self.emitters.get(i)?.as_ref()?, &self.pools[i].particles))
+    }
+
+    /// Whether any emitter is in the scene.
+    pub(crate) fn is_empty(&self) -> bool {
+        self.emitters.iter().all(Option::is_none)
+    }
+}
+
+/// The share of its `Rate` an emitter `distance` studs from the camera
+/// births at.
+fn rate_share(distance: f32) -> f32 {
+    ((RATE_NONE_STUDS - distance) / (RATE_NONE_STUDS - RATE_FULL_STUDS)).clamp(0.0, 1.0)
+}
+
+/// How far from its center a particle of `look` may draw: its biggest
+/// quad turned any way stays within 0.71 × its size.
+pub(crate) fn reach(look: &EmitterLook) -> f32 {
+    let squash = look.squash.0.iter().map(|p| p.1.abs()).fold(0.0, f32::max);
+    let biggest = look.size.max() * look.size_spread[1].max(look.size_spread[0]) * squash.exp2();
+    biggest * 0.75
+}
+
+/// `b` moved from along an emitter's axes into the world.
+fn placed(b: Aabb, position: Vec3, rotation: Mat3) -> Aabb {
+    if b.is_empty() {
+        return b;
+    }
+    let center = position + rotation * ((b.min + b.max) * 0.5);
+    let half = (b.max - b.min) * 0.5;
+    let abs = Mat3::from_cols(
+        rotation.x_axis.abs(),
+        rotation.y_axis.abs(),
+        rotation.z_axis.abs(),
+    );
+    let half = abs * half;
+    Aabb {
+        min: center - half,
+        max: center + half,
     }
 }
 
@@ -203,12 +342,13 @@ impl Particles {
 /// was drawn count.
 fn adopt(old: Option<&Emitter>, mut pool: Pool, new: &Emitter) -> Pool {
     match old {
-        Some(old) if new.look.locked => pool.follow(old, new),
+        Some(old) if old.look.locked != new.look.locked => pool.respace(old, new),
         Some(_) => {}
         None => pool.rng = Rng::new(new.key),
     }
     if new.cleared != pool.cleared {
         pool.particles.clear();
+        pool.bounds = None;
         pool.cleared = new.cleared;
     }
     let burst = new.emitted.saturating_sub(pool.emitted).min(MAX_BURST);
@@ -220,25 +360,29 @@ fn adopt(old: Option<&Emitter>, mut pool: Pool, new: &Emitter) -> Pool {
 }
 
 impl Pool {
-    fn step(&mut self, emitter: &Emitter, dt: f32) {
-        if dt <= 0.0 {
-            return;
-        }
+    /// Move every particle on by `dt` seconds, kill those past their
+    /// lifetime and birth at the emitter's rate, `rate` of it. Returns the
+    /// particles moved.
+    fn step(&mut self, emitter: &Emitter, dt: f32, rate: f32) -> usize {
         let look = &*emitter.look;
         let damping = (-look.drag * dt).exp();
-        let acceleration = acceleration(emitter);
-        for p in &mut self.particles {
-            p.age += dt;
-            p.velocity = (p.velocity + acceleration * dt) * damping;
-            p.position += p.velocity * dt;
-            p.rotation += p.spin * dt;
-        }
-        self.particles.retain(|p| p.age < p.lifetime);
+        let acceleration = self.acceleration(emitter);
+        let stepped = self.particles.len();
+        let mut bounds = Aabb::EMPTY;
+        self.particles.retain_mut(|p| {
+            p.advance(dt, acceleration, damping);
+            let alive = p.age < p.lifetime;
+            if alive {
+                bounds = bounds.union(point(p.position));
+            }
+            alive
+        });
+        self.bounds = (!bounds.is_empty()).then_some(bounds);
         if !emitter.enabled || look.rate <= 0.0 {
             self.owed = 0.0;
-            return;
+            return stepped;
         }
-        self.owed += look.rate * dt;
+        self.owed += look.rate * rate * dt;
         while self.owed >= 1.0 {
             self.owed -= 1.0;
             // Born some way into the step, so a steady rate doesn't
@@ -246,6 +390,7 @@ impl Pool {
             let age = self.rng.next() * dt;
             self.birth(emitter, age);
         }
+        stepped
     }
 
     /// A new particle, `age` seconds old.
@@ -275,10 +420,18 @@ impl Pool {
             None => (0.0, 0.0),
         };
         let seed = (r.next() * 16_777_216.0) as u32;
+        let (position, velocity) = if look.locked {
+            (offset, velocity)
+        } else {
+            (
+                emitter.position + emitter.rotation * offset,
+                emitter.rotation * velocity,
+            )
+        };
         let mut p = Particle {
-            position: emitter.position + emitter.rotation * offset,
-            velocity: emitter.rotation * velocity,
-            age,
+            position,
+            velocity,
+            age: 0.0,
             lifetime,
             scale: r.between(look.size_spread),
             rotation,
@@ -287,41 +440,66 @@ impl Pool {
             frame_rate,
             first_frame,
         };
-        let acceleration = acceleration(emitter);
-        p.velocity += acceleration * age;
-        p.position += p.velocity * age;
+        if age > 0.0 {
+            p.advance(age, self.acceleration(emitter), (-look.drag * age).exp());
+        }
+        self.bounds = Some(self.bounds.unwrap_or(Aabb::EMPTY).union(point(p.position)));
         self.particles.push(p);
     }
 
-    /// Carry the particles of a locked emitter from where it was to where
-    /// it is.
-    fn follow(&mut self, old: &Emitter, new: &Emitter) {
-        if old.position == new.position && old.rotation == new.rotation {
-            return;
+    /// Where its particles are, and where `emitter` births them, in the
+    /// world.
+    fn region(&self, emitter: &Emitter) -> Aabb {
+        let half = emitter.look.spawn.half();
+        let mut local = Aabb {
+            min: -half,
+            max: half,
+        };
+        if emitter.look.locked {
+            local = local.union(self.bounds.unwrap_or(Aabb::EMPTY));
         }
-        let turn: Mat3 = new.rotation * old.rotation.transpose();
-        for p in &mut self.particles {
-            p.position = new.position + turn * (p.position - old.position);
-            p.velocity = turn * p.velocity;
+        let world = placed(local, emitter.position, emitter.rotation);
+        match self.bounds {
+            Some(b) if !emitter.look.locked => world.union(b),
+            _ => world,
         }
     }
 
-    /// A box around its particles (their centers).
-    fn bounds(&self) -> Option<Aabb> {
-        let mut b = Aabb::EMPTY;
-        for p in &self.particles {
-            b = b.union(Aabb {
-                min: p.position,
-                max: p.position,
-            });
+    /// The emitter's acceleration where its particles are kept.
+    fn acceleration(&self, emitter: &Emitter) -> Vec3 {
+        let look = &*emitter.look;
+        let world = emitter.rotation * look.acceleration + look.world_acceleration;
+        if look.locked {
+            emitter.rotation.transpose() * world
+        } else {
+            world
         }
-        (!b.is_empty()).then_some(b)
+    }
+
+    /// The emitter turned locked or unlocked: keep its particles where
+    /// they are, along `new`'s axes or in the world.
+    fn respace(&mut self, old: &Emitter, new: &Emitter) {
+        let to_local = new.rotation.transpose();
+        for p in &mut self.particles {
+            if old.look.locked {
+                p.position = old.position + old.rotation * p.position;
+                p.velocity = old.rotation * p.velocity;
+            }
+            if new.look.locked {
+                p.position = to_local * (p.position - new.position);
+                p.velocity = to_local * p.velocity;
+            }
+        }
+        let bounds = self
+            .particles
+            .iter()
+            .fold(Aabb::EMPTY, |b, p| b.union(point(p.position)));
+        self.bounds = (!bounds.is_empty()).then_some(bounds);
     }
 }
 
-/// An emitter's acceleration in the world.
-fn acceleration(emitter: &Emitter) -> Vec3 {
-    emitter.rotation * emitter.look.acceleration + emitter.look.world_acceleration
+fn point(p: Vec3) -> Aabb {
+    Aabb { min: p, max: p }
 }
 
 /// A small, fast random number generator (SplitMix64), seeded per

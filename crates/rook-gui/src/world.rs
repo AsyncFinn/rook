@@ -126,6 +126,12 @@ impl Hung {
         }
     }
 
+    /// What it moves with: its adornee, and an Attachment's part.
+    pub(crate) fn hosts(&self, dom: &Dom) -> impl Iterator<Item = InstanceId> {
+        let part = self.on.filter(|&on| dom.class_name(on) == "Attachment");
+        self.on.into_iter().chain(part.and_then(|a| dom.parent(a)))
+    }
+
     /// Where it is now, if it's on something it can be drawn on.
     pub(crate) fn place(&self, dom: &Dom) -> Option<WorldPlace> {
         let spot = self.spot(dom)?;

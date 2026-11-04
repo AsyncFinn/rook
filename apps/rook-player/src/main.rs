@@ -359,14 +359,14 @@ fn play(args: Args) -> anyhow::Result<()> {
         note_gpu(&renderer);
         install.apply(&mut renderer);
         renderer.set_scene(&scene.scene);
-        scene.show_gui(game.view(), &mut renderer);
+        scene.show_gui(game.view(), &mut renderer, None);
         if !args.click.is_empty() {
             let (dm, look) = (game.view(), game.view().cursor_look());
             scene.show_cursor(dm, &mut renderer, &look, Some(dm.mouse_position()));
         }
         renderer.finish_uploads();
         // Effects as they look once going: Smoke's puffs live 5 seconds.
-        renderer.settle_particles(6.0);
+        renderer.settle_particles(6.0, &camera, args.width, args.height);
         let pixels = renderer.render_to_image(args.width, args.height, &camera)?;
         image::save_buffer(
             out,

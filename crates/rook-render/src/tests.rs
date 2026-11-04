@@ -957,15 +957,19 @@ fn world_gui_draws_in_the_world() {
         shift: Vec2::ZERO,
     };
     // The Back face (+Z), its top left at −X +Y.
-    r.place_world_gui(vec![
-        Some(WorldPlace::Surface {
-            origin: Vec3::new(-2.0, 2.0, 0.5),
-            right: Vec3::X,
-            down: Vec3::NEG_Y,
-        }),
-        Some(billboard(1.0)),
-        Some(billboard(-1.0)),
-    ]);
+    r.place_world_gui(
+        [
+            Some(WorldPlace::Surface {
+                origin: Vec3::new(-2.0, 2.0, 0.5),
+                right: Vec3::X,
+                down: Vec3::NEG_Y,
+            }),
+            Some(billboard(1.0)),
+            Some(billboard(-1.0)),
+        ]
+        .into_iter()
+        .enumerate(),
+    );
     let camera = Camera {
         fov_y: 20.0,
         ..Camera::look_at(Vec3::new(0.0, 0.0, 20.0), Vec3::ZERO)

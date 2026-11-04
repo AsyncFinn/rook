@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use glam::Vec3;
 use rook_content::Resolver;
-use rook_engine::DataModel;
+use rook_engine::{DataModel, RenderChanges};
 use rook_render::Renderer;
 
 use crate::{Floors, SceneCache, SceneChange};
@@ -46,8 +46,11 @@ impl SceneCache {
     /// Apply a DataModel's changes since the last frame, the FloorWires'
     /// floors first: a wire whose floor changed draws again with the
     /// frame's other changes.
-    pub(crate) fn apply_data_model(&mut self, dm: &mut DataModel) -> SceneChange {
-        let mut changes = dm.take_render_changes();
+    pub(crate) fn apply_data_model(
+        &mut self,
+        dm: &DataModel,
+        mut changes: RenderChanges,
+    ) -> SceneChange {
         if changes.is_empty() {
             return SceneChange::None;
         }
@@ -75,8 +78,9 @@ impl SceneCache {
     /// the renderer with the scene and the GUI. Returns whether anything
     /// changed.
     pub fn refresh(&mut self, dm: &mut DataModel, renderer: &mut Renderer, camera: Vec3) -> bool {
-        let gui = self.show_gui(dm, renderer);
-        let change = self.apply_data_model(dm);
+        let changes = dm.take_render_changes();
+        let gui = self.show_gui(dm, renderer, Some(&changes));
+        let change = self.apply_data_model(dm, changes);
         let dom = &dm.runtime().world().dom;
         self.follow_camera(dom, camera);
         let mut loaded = self.poll_files(dom, false);

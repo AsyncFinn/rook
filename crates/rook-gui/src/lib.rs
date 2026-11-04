@@ -91,6 +91,10 @@ pub struct Gui {
     messages: FxHashSet<InstanceId>,
     /// The world GUIs the last [`Gui::draw_world`] drew, in its order.
     world_drawn: Vec<world::Hung>,
+    /// What each of those moves with (its adornee, an Attachment's part),
+    /// to the indices of those on it: a frame places again only the
+    /// canvases whose adornee moved.
+    world_hosts: FxHashMap<InstanceId, Vec<usize>>,
     /// What the screen draws, in pieces kept until they change.
     screen: draw::Screen,
     /// The focused TextBox, which draws its caret.
@@ -129,6 +133,7 @@ impl Default for Gui {
             in_world: FxHashSet::default(),
             messages: FxHashSet::default(),
             world_drawn: Vec::new(),
+            world_hosts: FxHashMap::default(),
             screen: draw::Screen::default(),
             focus: None,
             modals: modal::Modals::default(),
@@ -601,6 +606,13 @@ impl Gui {
     pub fn draw_world(&mut self, dom: &Dom) -> Vec<Arc<WorldCanvas>> {
         let laid = self.layout.world.iter().map(|(h, _)| h);
         self.world_drawn = world::drawn(dom, laid);
+        self.world_hosts.clear();
+        rook_types::gauge!(GuiCanvases, self.world_drawn.len());
+        for (i, hung) in self.world_drawn.iter().enumerate() {
+            for host in hung.hosts(dom) {
+                self.world_hosts.entry(host).or_default().push(i);
+            }
+        }
         let missing: Vec<InstanceId> = (self.world_drawn.iter())
             .map(|h| h.gui)
             .filter(|id| !self.canvases.contains_key(id))
@@ -646,11 +658,55 @@ impl Gui {
     /// Where each canvas the last [`Gui::draw_world`] gave is now (`None`:
     /// it can't be drawn, its part gone).
     pub fn world_places(&self, dom: &Dom) -> Vec<Option<WorldPlace>> {
-        let tags = (self.overheads.shown.iter())
-            .map(|tag| Some(tag.place(draw::overhead::size(&tag.look))));
+        rook_types::count!(GuiCanvasesPlaced, self.world_drawn.len());
         (self.world_drawn.iter().map(|h| h.place(dom)))
-            .chain(tags)
+            .chain(self.tag_places())
             .collect()
+    }
+
+    /// Where the canvases the last [`Gui::draw_world`] gave whose adornee
+    /// is among `moved` are now, by index in its list, then every tag over
+    /// a head (each follows its Humanoid every frame). `moved` names what
+    /// may be somewhere new: parts drawn somewhere new, resized or gone,
+    /// and Attachments changed or moved in the tree.
+    pub fn world_places_moved(
+        &mut self,
+        dom: &Dom,
+        moved: impl IntoIterator<Item = InstanceId>,
+    ) -> Vec<(usize, Option<WorldPlace>)> {
+        let mut hit: Vec<usize> = Vec::new();
+        for id in moved {
+            let Some(on) = self.world_hosts.get(&id) else {
+                continue;
+            };
+            hit.extend(on);
+            // An Attachment put in another part: its GUIs move with that
+            // one from now on (the old part's entry only places them
+            // again for nothing until the next draw).
+            if dom.class_name(id) == "Attachment"
+                && let Some(part) = dom.parent(id)
+            {
+                let on = on.clone();
+                let list = self.world_hosts.entry(part).or_default();
+                for i in on {
+                    if !list.contains(&i) {
+                        list.push(i);
+                    }
+                }
+            }
+        }
+        hit.sort_unstable();
+        hit.dedup();
+        rook_types::count!(GuiCanvasesPlaced, hit.len());
+        let tags = self.world_drawn.len();
+        let world = hit.into_iter().map(|i| (i, self.world_drawn[i].place(dom)));
+        world
+            .chain((self.tag_places()).enumerate().map(|(i, p)| (tags + i, p)))
+            .collect()
+    }
+
+    fn tag_places(&self) -> impl Iterator<Item = Option<WorldPlace>> + '_ {
+        (self.overheads.shown.iter()).map(|tag| Some(tag.place(draw::overhead::size(&tag.look))))
     }
 
     /// Write every laid-out object's outputs.

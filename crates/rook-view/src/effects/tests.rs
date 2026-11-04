@@ -175,7 +175,8 @@ fn floor_wires_follow_their_floor() {
     ];
     for (y, when) in steps {
         dm.run_for(0.5);
-        cache.apply_data_model(&mut dm);
+        let changes = dm.take_render_changes();
+        cache.apply_data_model(&dm, changes);
         close(runs(&cache), y, when);
     }
 }

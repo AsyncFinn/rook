@@ -205,3 +205,54 @@ fn changes_stay_in_their_tree() {
     );
     assert!(Arc::ptr_eq(&screen_now, &gui.draw(&dom)));
 }
+
+/// A frame places again only the canvases on what moved, each where
+/// placing them all puts it; an Attachment put in another part takes its
+/// BillboardGui along from then on.
+#[test]
+fn only_what_moved_is_placed_again() {
+    let (mut dom, still) = world_part(Vec3::new(8.0, 6.0, 1.0), Vec3::ZERO);
+    let ws = dom.find_service("Workspace").unwrap();
+    let size = Value::Vector3(rook_types::Vector3(Vec3::splat(4.0)));
+    let moving = child(&mut dom, "Part", ws, &[("Size", size.clone())]);
+    let other = child(&mut dom, "Part", ws, &[("Size", size)]);
+    surface(&mut dom, still, "Front");
+    let on_moving = surface(&mut dom, moving, "Front");
+    let attachment = child(&mut dom, "Attachment", moving, &[]);
+    let billboard = child(
+        &mut dom,
+        "BillboardGui",
+        attachment,
+        &[("Size", udim2(0.0, 100, 0.0, 50))],
+    );
+    let mut gui = laid_out(&mut dom);
+    gui.draw_world(&dom);
+    let index = |gui: &Gui, id| gui.world_drawn.iter().position(|h| h.gui == id).unwrap();
+    let (on_moving, billboard) = (index(&gui, on_moving), index(&gui, billboard));
+    assert_eq!(gui.world_drawn.len(), 3);
+    let to = |dom: &mut Dom, id, x: f32| {
+        let at = CFrame {
+            position: Vec3::new(x, 0.0, 0.0),
+            ..CFrame::default()
+        };
+        set(dom, id, "CFrame", Value::CFrame(at));
+    };
+    to(&mut dom, moving, 10.0);
+    let moved = gui.world_places_moved(&dom, [moving]);
+    let mut placed: Vec<usize> = moved.iter().map(|(i, _)| *i).collect();
+    placed.sort_unstable();
+    let mut want = vec![on_moving, billboard];
+    want.sort_unstable();
+    assert_eq!(placed, want);
+    let all = gui.world_places(&dom);
+    for (i, place) in &moved {
+        assert_eq!(*place, all[*i]);
+    }
+
+    dom.set_parent(attachment, Some(other)).unwrap();
+    gui.world_places_moved(&dom, [attachment]);
+    to(&mut dom, other, -10.0);
+    let moved = gui.world_places_moved(&dom, [other]);
+    assert_eq!(moved.len(), 1);
+    assert_eq!(moved[0], (billboard, gui.world_places(&dom)[billboard]));
+}

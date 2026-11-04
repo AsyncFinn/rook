@@ -73,6 +73,20 @@ impl RenderChanges {
             && self.collected.is_empty()
     }
 
+    /// What may be somewhere new (unless `full`, which moves everything):
+    /// parts moved, changed, entering or leaving the tree, or freed, and
+    /// Attachments changed or moved in the tree (with the lights and
+    /// effects they're among), for what follows them (world GUI).
+    pub fn maybe_moved(&self) -> impl Iterator<Item = InstanceId> + '_ {
+        (self.moved.iter())
+            .chain(&self.parts)
+            .chain(&self.placed)
+            .chain(&self.collected)
+            .chain(&self.lights)
+            .chain(&self.effects_placed)
+            .copied()
+    }
+
     /// `id` is being freed: no other change may name it.
     fn collect(&mut self, id: InstanceId) {
         self.lights.remove(&id);

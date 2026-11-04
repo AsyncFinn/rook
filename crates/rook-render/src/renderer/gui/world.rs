@@ -94,7 +94,7 @@ pub(crate) struct WorldGui {
     /// Bytes between frames in the uniform buffer.
     stride: u64,
     canvases: Vec<Canvas>,
-    /// Where each canvas is now.
+    /// Where each canvas is now (`None`: not drawn, or not placed yet).
     places: Vec<Option<WorldPlace>>,
     frames: Option<Frames>,
 }
@@ -201,6 +201,8 @@ impl WorldGui {
         fresh: Vec<(Packed, Held)>,
     ) {
         let mut old: Vec<Option<Canvas>> = self.canvases.drain(..).map(Some).collect();
+        // A new list: each canvas is placed afresh.
+        self.places = vec![None; canvases.len()];
         let mut fresh = fresh.into_iter();
         for (c, kept) in canvases.iter().zip(kept) {
             if let Some(canvas) = kept.and_then(|i| old[i].take()) {
@@ -240,9 +242,14 @@ impl WorldGui {
         }
     }
 
-    /// Where each canvas is from now on.
-    pub(crate) fn place(&mut self, places: Vec<Option<WorldPlace>>) {
-        self.places = places;
+    /// Where the canvases at these indices (in the last list given) are
+    /// from now on; the others stay where they were.
+    pub(crate) fn place(&mut self, places: impl IntoIterator<Item = (usize, Option<WorldPlace>)>) {
+        for (i, place) in places {
+            if let Some(slot) = self.places.get_mut(i) {
+                *slot = place;
+            }
+        }
     }
 
     /// Upload where each canvas `camera` sees in a `height`-pixel window

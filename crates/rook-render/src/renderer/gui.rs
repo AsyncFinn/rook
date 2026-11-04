@@ -490,7 +490,7 @@ impl GuiPass {
     }
 
     /// Where each world GUI canvas is from now on.
-    pub(crate) fn place(&mut self, places: Vec<Option<WorldPlace>>) {
+    pub(crate) fn place(&mut self, places: impl IntoIterator<Item = (usize, Option<WorldPlace>)>) {
         self.world.place(places);
     }
 

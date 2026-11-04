@@ -124,6 +124,16 @@ pub enum Spawn {
     },
 }
 
+impl Spawn {
+    /// Half the box particles are born in, along the emitter's axes.
+    pub fn half(&self) -> Vec3 {
+        match *self {
+            Spawn::Ball(radius) => Vec3::splat(radius.abs()),
+            Spawn::Shape { half, .. } => half.abs(),
+        }
+    }
+}
+
 /// `Enum.ParticleEmitterShape`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EmitterShape {
@@ -218,8 +228,9 @@ pub struct EmitterLook {
     /// in the world.
     pub acceleration: Vec3,
     pub world_acceleration: Vec3,
-    /// The share of its velocity a particle loses every second
-    /// (exponentially).
+    /// How fast its speed falls away: it's multiplied by e^-drag every
+    /// second (a ParticleEmitter's `Drag` times ln 2, as Studio halves
+    /// it every 1 / Drag seconds).
     pub drag: f32,
     /// Particles move with the emitter (`LockedToPart`).
     pub locked: bool,

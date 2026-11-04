@@ -67,3 +67,27 @@ fn a_client_simulates_only_what_it_owns() {
     assert!(position(&dom, p).y < 10.0);
     assert_eq!(position(&dom, other).y, 20.0);
 }
+
+/// A server frame's updates write back only the assemblies they moved:
+/// the others' parts already show where they are.
+#[test]
+fn an_update_writes_back_only_what_it_moved() {
+    use rook_types::counters::{Counter, take_local};
+    let mut dom = Dom::new();
+    let a = block(&mut dom, Vec3::new(0.0, 20.0, 0.0), false);
+    let b = block(&mut dom, Vec3::new(10.0, 20.0, 0.0), false);
+    let mut physics = Physics::with_authority(Authority::Only(Vec::new()));
+    physics.sync(&mut dom);
+    let put = |dom: &mut Dom, id, y: f32| {
+        let at = CFrame::from_position(Vec3::new(position(dom, id).x, y, 0.0));
+        set(dom, id, "CFrame", Value::CFrame(at));
+    };
+    put(&mut dom, a, 19.0);
+    put(&mut dom, b, 19.0);
+    physics.receive_updates(&mut dom, 1.0);
+    put(&mut dom, a, 18.0);
+    take_local();
+    physics.receive_updates(&mut dom, 1.1);
+    let touched = take_local()[Counter::PhysicsBodiesTouched];
+    assert_eq!(touched, 1, "a alone");
+}

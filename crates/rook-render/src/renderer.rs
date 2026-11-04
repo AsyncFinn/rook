@@ -411,19 +411,24 @@ impl Renderer {
         (self.gui).set_cursor(&self.device, &self.queue, cursor.map(|(quad, _)| quad));
     }
 
-    /// Where each canvas of the last [`Renderer::set_gui`]'s `world` is
-    /// now (`None`: not drawn).
-    pub fn place_world_gui(&mut self, places: Vec<Option<WorldPlace>>) {
+    /// Where the canvases at these indices into the last
+    /// [`Renderer::set_gui`]'s `world` are now (`None`: not drawn). The
+    /// others stay where they were; a new `world` starts with none placed.
+    pub fn place_world_gui(
+        &mut self,
+        places: impl IntoIterator<Item = (usize, Option<WorldPlace>)>,
+    ) {
         self.gui.place(places);
     }
 
     /// Set the clock grass sways by and Beams' images scroll by, in
-    /// seconds; water, particles and Trails move on by the time since the
-    /// last call (none when the clock goes back, at most a second), water
-    /// at the scene's `WaterWaveSpeed`.
+    /// seconds; water and Trails move on by the time since the last call
+    /// (none when the clock goes back, at most a second), water at the
+    /// scene's `WaterWaveSpeed`. Particles move on when the next frame is
+    /// drawn, only those it sees.
     pub fn set_time(&mut self, seconds: f32) {
         let dt = (seconds - self.time).clamp(0.0, 1.0);
-        self.particles.sim.step(dt);
+        self.particles.sim.advance(dt);
         self.ribbons.sim.step(dt);
         self.water_phase =
             (self.water_phase + f64::from(dt * self.terrain.wave_speed)) % WATER_PHASE_PERIOD;
