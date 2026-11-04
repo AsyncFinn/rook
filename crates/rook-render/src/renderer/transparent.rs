@@ -111,6 +111,11 @@ pub(crate) struct TransparentParts {
     picks: Vec<(u32, Aabb)>,
     /// The sorted instances, and how many it holds.
     buffer: Option<(wgpu::Buffer, usize)>,
+    /// The last upload's slots in drawing order, with their squared
+    /// distances, and its instances: kept to fill again without
+    /// allocating each frame.
+    order: Vec<(f32, usize)>,
+    instances: Vec<Instance>,
 }
 
 impl TransparentParts {
@@ -190,24 +195,30 @@ impl TransparentParts {
         self.changed = false;
         self.drawn_for = Some(drawn_for);
         // What the view reaches, back to front for blending.
-        let mut order: Vec<(f32, &Entry)> = self
-            .slots
-            .iter()
-            .flatten()
-            .filter(|e| view.sees(e.world, margin))
-            .map(|e| (e.position.distance_squared(camera.position), e))
-            .collect();
-        order.sort_by(|(da, a), (db, b)| {
+        let mut order = std::mem::take(&mut self.order);
+        order.clear();
+        order.extend(
+            (self.slots.iter().enumerate())
+                .filter_map(|(t, e)| Some((t, e.as_ref()?)))
+                .filter(|(_, e)| view.sees(e.world, margin))
+                .map(|(t, e)| (e.position.distance_squared(camera.position), t)),
+        );
+        let slots = &self.slots;
+        let entry = |t: usize| slots[t].as_ref().expect("filled above");
+        order.sort_by(|&(da, a), &(db, b)| {
+            let (a, b) = (entry(a), entry(b));
             a.on_top
                 .cmp(&b.on_top)
-                .then(db.total_cmp(da))
+                .then(db.total_cmp(&da))
                 .then(a.image.cmp(&b.image))
         });
-        let mut instances: Vec<Instance> = Vec::with_capacity(order.len());
+        let mut instances = std::mem::take(&mut self.instances);
+        instances.clear();
         let mut runs: Vec<TransparentRun> = Vec::new();
         self.distances.clear();
         self.picks.clear();
-        for &(d, e) in &order {
+        for &(d, t) in &order {
+            let e = entry(t);
             let d = if e.on_top { f32::NEG_INFINITY } else { d };
             for &pass in e.passes {
                 let i = instances.len() as u32;
@@ -220,27 +231,24 @@ impl TransparentParts {
                 }
             }
         }
+        self.order = order;
         self.runs.clone_from(&runs);
-        if instances.is_empty() {
-            return runs;
-        }
-        match &self.buffer {
-            Some((buffer, capacity)) if *capacity >= instances.len() => {
-                queue.write_buffer(buffer, 0, bytemuck::cast_slice(&instances));
-            }
-            _ => {
+        if !instances.is_empty() {
+            if self.buffer.as_ref().is_none_or(|(_, capacity)| *capacity < instances.len()) {
                 // Room to grow, so a few more parts don't make a new buffer.
                 let capacity = instances.len() * 2;
-                let mut padded = instances;
-                padded.resize(capacity, Instance::zeroed());
-                let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                let buffer = device.create_buffer(&wgpu::BufferDescriptor {
                     label: Some("rook transparent instances"),
-                    contents: bytemuck::cast_slice(&padded),
+                    size: (capacity * size_of::<Instance>()) as u64,
                     usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                    mapped_at_creation: false,
                 });
                 self.buffer = Some((buffer, capacity));
             }
+            let (buffer, _) = self.buffer.as_ref().expect("made above");
+            queue.write_buffer(buffer, 0, bytemuck::cast_slice(&instances));
         }
+        self.instances = instances;
         runs
     }
 }

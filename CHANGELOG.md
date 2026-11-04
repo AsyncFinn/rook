@@ -5,6 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- Two smaller per-frame savings in drawing: each pass's indirect draw arguments go to the GPU straight from its runs instead of being gathered into a new list every frame, and transparent parts, sorted back to front whenever the camera moves, reuse their sort and instance lists instead of allocating them again each time.
 - Each physics step writes HingeConstraints' `CurrentAngle` from a list of the hinges alone, in a fixed order, instead of looking through every constraint in the place in whatever order a hash map gave.
 - A font arriving lays out again only the text that was waiting for it, with its GUI tree, instead of all the GUI on the screen and in the world: text remembers whether a font it wanted was still on its way, and text drawn with fonts already there keeps its layout.
 - A script changing a TextLabel's, TextButton's or TextBox's `TextColor3` or `TextStrokeColor3` now shows the new color: the glyphs kept the color they were laid out with until something else laid the text out again. Tweening `TextTransparency` or `TextStrokeTransparency`, as fades do, no longer lays out all the GUI again every frame, only that object's text: these four properties and a TextBox's `PlaceholderColor3` lay out the changed object's text alone, keeping its size and place.
