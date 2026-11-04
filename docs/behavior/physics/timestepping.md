@@ -50,6 +50,6 @@ thresholds (hysteresis), the contact promotion rule, and which of the four
 
 ## Rook today
 
-Every assembly steps at 240 Hz (`rook-physics/src/lib.rs`, `STEP_HZ`). The
-design is in [architecture](../../design/architecture.md) (Physics,
-*Adaptive timestepping*).
+Every assembly steps at 240 Hz (`rook-physics/src/lib.rs`, `STEP_HZ`), as
+`Fixed` does. Adaptive is deferred: see [architecture](../../design/architecture.md)
+(Physics, *Adaptive timestepping*).
