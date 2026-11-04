@@ -189,3 +189,36 @@ fn lasso_redraws_its_root_part_as_either_end_moves() {
     s.run_for(0.5);
     assert!(s.take_render_changes().parts.contains(&root));
 }
+
+/// A Model's own properties draw nothing, so changing them redraws none of
+/// its parts; a Highlight on the Model still redraws them all.
+#[test]
+fn model_property_changes_redraw_no_parts() {
+    let mut s = Server::new(&Options::default()).unwrap();
+    add_script(
+        &s,
+        "ServerScriptService",
+        "Models",
+        r#"
+        local m = Instance.new("Model") m.Name = "M"
+        for i = 1, 3 do
+            local p = Instance.new("Part") p.Anchored = true p.Parent = m
+        end
+        m.Parent = workspace
+        task.wait(0.5)
+        m.Name = "Renamed"
+        m.WorldPivot = CFrame.new(0, 10, 0)
+        task.wait(0.5)
+        Instance.new("Highlight").Parent = m
+        "#,
+    );
+    s.start();
+    s.run_for(0.2);
+    s.take_render_changes();
+    s.run_for(0.5);
+    let changes = s.take_render_changes();
+    assert!(changes.parts.is_empty() && !changes.full, "{:?}", changes.parts);
+    s.run_for(0.5);
+    let changes = s.take_render_changes();
+    assert_eq!(changes.parts.len(), 3);
+}

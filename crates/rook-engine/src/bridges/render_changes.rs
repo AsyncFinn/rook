@@ -361,12 +361,15 @@ impl DataModel {
                         if wire(*id) {
                             changes.effects.insert(*id);
                         }
-                    } else {
+                    } else if dom.is_a_class(*id, ids.base_part) {
                         if ids.part_materials.contains(property) {
                             material_parts.note(dom, *id, changes);
                         }
                         mark_part(changes, Some(*id));
                     }
+                    // Anything else's own properties (a Model's Name or
+                    // WorldPivot, a value) draw nothing: what decorates or
+                    // adorns a Model is handled above.
                 }
                 Change::Reparented {
                     id,

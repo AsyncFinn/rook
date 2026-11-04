@@ -5,6 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- Renaming a Model, or setting its `WorldPivot` or another of its own properties, no longer redraws every part in it. Any property change on a Model went to the renderer as a change to each part under it, though a Model's own properties draw nothing; a Highlight or adornment on a Model still redraws its parts.
 - Disconnecting a connection costs what is waiting on that signal, not every waiting thread. In Deferred mode a disconnect drops the connection's invocations still queued, and finding them looked through every thread waiting on `task.wait`, `wait` or `task.delay` as well, though those invocations are only ever on the frame's deferred queue; now it looks there alone.
 - A terrain edit gathers grass again only where it reached. Each edit near the camera built every grass tile's ground from every terrain chunk drawn near enough to grow blades, though only the edited chunks' tiles changed; the tiles it reached now gather their ground from the chunks under them alone, and the rest keep theirs.
 - Parts appearing in a big place no longer re-send every part to the GPU when the renderer's instance buffer has to grow. Growing made a new buffer and wrote all of it from the CPU: on a place with 93,513 entries, a frame where loaded meshes added parts sent 272,384 instance slots (40 MB) for 858 changed. The new buffer now takes the old one's contents with a copy on the GPU, as a growing array moves its items, and only the slots that changed go up.
