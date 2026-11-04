@@ -110,7 +110,9 @@ pub(crate) fn bench(
 ) -> anyhow::Result<()> {
     let (width, height) = (args.width, args.height);
     let turn = Mat3::from_rotation_y(args.turn.to_radians());
-    let load_start = game.load_start;
+    // The scene was just built, asking for its files: loading is timed
+    // from here, not from the place's start, which `--seconds` delays it by.
+    let scene_built = Instant::now();
     let mut renderer = Renderer::headless()?;
     install.apply(&mut renderer);
     renderer.set_scene(&cache.scene);
@@ -193,7 +195,7 @@ pub(crate) fn bench(
         idle_at,
         updates,
     };
-    m.report(game, &offscreen.renderer, &cache, load_start, timing_gpu);
+    m.report(game, &offscreen.renderer, &cache, scene_built, timing_gpu);
     counted.report();
     Ok(())
 }
@@ -234,7 +236,7 @@ impl Measured {
         game: &Game,
         renderer: &Renderer,
         cache: &SceneCache,
-        load_start: Instant,
+        scene_built: Instant,
         timing_gpu: bool,
     ) {
         let frames = self.stepped.len();
@@ -348,15 +350,15 @@ impl Measured {
         match self.idle_at {
             Some((at, idle)) => {
                 eprintln!(
-                    "content loaded {:.2} s after the place started loading; frames until then: {}",
-                    at.saturating_duration_since(load_start).as_secs_f64(),
+                    "content loaded {:.2} s after the scene was built; frames until then: {}",
+                    at.saturating_duration_since(scene_built).as_secs_f64(),
                     whole.until(idle).summary()
                 );
                 self.report_slowest(idle);
             }
             None => eprintln!(
-                "content still loading after {frames} frames, {:.2} s after the place started loading",
-                load_start.elapsed().as_secs_f64()
+                "content still loading after {frames} frames, {:.2} s after the scene was built",
+                scene_built.elapsed().as_secs_f64()
             ),
         }
     }
