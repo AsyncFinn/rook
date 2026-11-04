@@ -203,7 +203,10 @@ fn new_block() -> &'static Block {
     // sums it after the thread is gone too. Threads are few and long-lived
     // (the engine's, the server's, the worker pool's).
     let block: &'static Block = Box::leak(Box::new(std::array::from_fn(|_| AtomicU64::new(0))));
-    BLOCKS.lock().unwrap_or_else(|e| e.into_inner()).push(block);
+    BLOCKS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .push(block);
     block
 }
 
@@ -240,7 +243,11 @@ fn drain(block: &Block, into: &mut Counts) {
 /// The frame's counts from every thread, which start again from zero.
 pub fn take() -> Counts {
     let mut out = Counts::default();
-    for block in BLOCKS.lock().unwrap_or_else(|e| e.into_inner()).iter() {
+    for block in BLOCKS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .iter()
+    {
         drain(block, &mut out);
     }
     out

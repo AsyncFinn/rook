@@ -367,7 +367,12 @@ fn text_colors_draw_again_without_laying_out() {
     };
     assert_eq!(glyphs(&drawn(&mut gui, &dom)).len(), 2);
     rook_types::counters::take_local();
-    set(&mut dom, label, "TextColor3", Value::Color3(Color3::new(1.0, 0.0, 0.0)));
+    set(
+        &mut dom,
+        label,
+        "TextColor3",
+        Value::Color3(Color3::new(1.0, 0.0, 0.0)),
+    );
     set(&mut dom, label, "TextTransparency", Value::Float32(0.5));
     gui.sync(&mut dom);
     assert_eq!(glyphs(&drawn(&mut gui, &dom)), [[1.0, 0.0, 0.0, 0.5]; 2]);

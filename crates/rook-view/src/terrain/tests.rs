@@ -398,7 +398,10 @@ fn edits_gather_grass_tops_only_for_their_tiles() {
     for at in [near, far] {
         for x in 0..3 {
             for z in 0..3 {
-                grid.set(at + IVec3::new(x, 0, z), Voxel::new(TerrainMaterial::Grass, 255));
+                grid.set(
+                    at + IVec3::new(x, 0, z),
+                    Voxel::new(TerrainMaterial::Grass, 255),
+                );
             }
         }
     }
@@ -417,11 +420,17 @@ fn edits_gather_grass_tops_only_for_their_tiles() {
     assert!(cache.terrain.grass.tops.contains_key(&near_tile));
     // Raise the near lawn a voxel.
     let at = near + IVec3::Y;
-    let bounds = Bounds { min: at, max: at + IVec3::new(2, 0, 2) };
+    let bounds = Bounds {
+        min: at,
+        max: at + IVec3::new(2, 0, 2),
+    };
     dom.edit_voxels(terrain, |g| {
         for x in 0..3 {
             for z in 0..3 {
-                g.set(at + IVec3::new(x, 0, z), Voxel::new(TerrainMaterial::Grass, 255));
+                g.set(
+                    at + IVec3::new(x, 0, z),
+                    Voxel::new(TerrainMaterial::Grass, 255),
+                );
             }
         }
         ((), Some(bounds))

@@ -397,7 +397,8 @@ impl Gui {
             })
             .collect();
         if !retexted.is_empty() {
-            self.layout.restyle_texts(dom, &retexted, (&mut self.fonts, &self.turning));
+            self.layout
+                .restyle_texts(dom, &retexted, (&mut self.fonts, &self.turning));
             self.restyled.extend(retexted);
         }
         let restyled: Vec<InstanceId> = std::mem::take(&mut self.restyled).into_iter().collect();

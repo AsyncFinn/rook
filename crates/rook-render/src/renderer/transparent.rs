@@ -234,7 +234,11 @@ impl TransparentParts {
         self.order = order;
         self.runs.clone_from(&runs);
         if !instances.is_empty() {
-            if self.buffer.as_ref().is_none_or(|(_, capacity)| *capacity < instances.len()) {
+            if self
+                .buffer
+                .as_ref()
+                .is_none_or(|(_, capacity)| *capacity < instances.len())
+            {
                 // Room to grow, so a few more parts don't make a new buffer.
                 let capacity = instances.len() * 2;
                 let buffer = device.create_buffer(&wgpu::BufferDescriptor {

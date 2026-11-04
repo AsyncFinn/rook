@@ -187,7 +187,11 @@ impl Renderer {
         if !self.multi_draw || len == 0 {
             return starts;
         }
-        if self.indirect.as_ref().is_none_or(|(_, capacity)| *capacity < len) {
+        if self
+            .indirect
+            .as_ref()
+            .is_none_or(|(_, capacity)| *capacity < len)
+        {
             let capacity = len * 2;
             let buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("rook draws"),

@@ -217,7 +217,11 @@ fn model_property_changes_redraw_no_parts() {
     s.take_render_changes();
     s.run_for(0.5);
     let changes = s.take_render_changes();
-    assert!(changes.parts.is_empty() && !changes.full, "{:?}", changes.parts);
+    assert!(
+        changes.parts.is_empty() && !changes.full,
+        "{:?}",
+        changes.parts
+    );
     s.run_for(0.5);
     let changes = s.take_render_changes();
     assert_eq!(changes.parts.len(), 3);
