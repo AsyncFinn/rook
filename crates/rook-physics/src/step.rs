@@ -175,10 +175,8 @@ impl Physics {
 
     /// HingeConstraint.CurrentAngle, in degrees.
     fn write_hinge_angles(&self, dom: &mut Dom, props: &Props) {
-        for (&id, c) in &self.constraints {
-            if !matches!(c.spec.kind, constraints::Kind::Hinge { .. }) {
-                continue;
-            }
+        for &id in &self.hinge_constraints {
+            let c = &self.constraints[&id];
             let (Some(j), Some(rb1), Some(rb2)) = (
                 self.world.impulse_joints.get(c.joint),
                 self.world.bodies.get(c.bodies[0]),

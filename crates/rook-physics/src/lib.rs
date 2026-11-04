@@ -215,6 +215,9 @@ pub struct Physics {
     #[cfg(test)]
     reread: Vec<InstanceId>,
     constraints: FxHashMap<InstanceId, BuiltConstraint>,
+    /// The HingeConstraints among `constraints`, sorted: each step writes
+    /// their `CurrentAngle`, in this order.
+    hinge_constraints: Vec<InstanceId>,
     /// Driven revolute joints: RotateV, RotateP and HingeConstraints.
     drives: FxHashMap<InstanceId, Driven>,
     /// Bodies added or moved since the last step, whose colliders queries
@@ -305,6 +308,7 @@ impl Physics {
             reread: Vec::new(),
             generation: 0,
             constraints: FxHashMap::default(),
+            hinge_constraints: Vec::new(),
             drives: FxHashMap::default(),
             stale: FxHashSet::default(),
             stale_statics: FxHashSet::default(),

@@ -5,6 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- Each physics step writes HingeConstraints' `CurrentAngle` from a list of the hinges alone, in a fixed order, instead of looking through every constraint in the place in whatever order a hash map gave.
 - A font arriving lays out again only the text that was waiting for it, with its GUI tree, instead of all the GUI on the screen and in the world: text remembers whether a font it wanted was still on its way, and text drawn with fonts already there keeps its layout.
 - A script changing a TextLabel's, TextButton's or TextBox's `TextColor3` or `TextStrokeColor3` now shows the new color: the glyphs kept the color they were laid out with until something else laid the text out again. Tweening `TextTransparency` or `TextStrokeTransparency`, as fades do, no longer lays out all the GUI again every frame, only that object's text: these four properties and a TextBox's `PlaceholderColor3` lay out the changed object's text alone, keeping its size and place.
 - Renaming a Model, or setting its `WorldPivot` or another of its own properties, no longer redraws every part in it. Any property change on a Model went to the renderer as a change to each part under it, though a Model's own properties draw nothing; a Highlight or adornment on a Model still redraws its parts.

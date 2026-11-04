@@ -175,6 +175,9 @@ impl Physics {
                 (None, wanted) => {
                     if let Some(old) = self.constraints.remove(&id) {
                         self.world.remove_impulse_joint(old.joint);
+                        if let Ok(at) = self.hinge_constraints.binary_search(&id) {
+                            self.hinge_constraints.remove(at);
+                        }
                     }
                     wanted.map(|(spec, bodies, offsets)| {
                         let joint = self.world.insert_impulse_joint(
@@ -182,6 +185,11 @@ impl Physics {
                             bodies[1],
                             spec.joint(offsets),
                         );
+                        if matches!(spec.kind, constraints::Kind::Hinge { .. })
+                            && let Err(at) = self.hinge_constraints.binary_search(&id)
+                        {
+                            self.hinge_constraints.insert(at, id);
+                        }
                         self.constraints.insert(
                             id,
                             BuiltConstraint {
