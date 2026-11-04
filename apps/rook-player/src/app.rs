@@ -55,9 +55,6 @@ pub(crate) struct App {
     /// The cursor's last position in the window, as the game knows it.
     pub(crate) cursor: PhysicalPosition<f64>,
     pub(crate) last_frame: Instant,
-    /// How long the main thread's part of a frame takes, for starting
-    /// frames just in time ([`App::next_due`]).
-    pub(crate) main_time: render_thread::MainTime,
     /// How far each frame steps the game.
     pub(crate) frame_clock: frame_clock::FrameClock,
     /// The monitor the window was on when its refresh rate was read, and
@@ -205,12 +202,15 @@ impl Drawing {
         }
     }
 
-    /// Draw a frame with `camera` and present it, on the render thread.
-    fn draw(&mut self, window: &Window, camera: &Camera, clock: f64) {
+    /// Draw a frame with `camera` and present it, on the render thread;
+    /// how long it waited for the display to free an image to draw into.
+    fn draw(&mut self, window: &Window, camera: &Camera, clock: f64) -> Duration {
         self.presented = false;
+        let asked = Instant::now();
         let Some(frame) = self.next_frame() else {
-            return;
+            return asked.elapsed();
         };
+        let display = asked.elapsed();
         let view = frame.texture.create_view(&Default::default());
         // Wrapped so the shader's sines stay precise in long sessions.
         self.renderer.set_time((clock % 3600.0) as f32);
@@ -219,6 +219,7 @@ impl Drawing {
         window.pre_present_notify();
         self.renderer.queue.present(frame);
         self.presented = true;
+        display
     }
 }
 
@@ -267,17 +268,24 @@ impl App {
 
     /// When the next frame may start: under a frame rate cap, and no
     /// sooner than it needs to so that it's ready as the render thread
-    /// finishes the frame in flight ([`render_thread::start_at`]).
+    /// finishes the frame in flight ([`render_thread::Pacer`]).
     fn next_due(&self) -> Option<Instant> {
         let capped = match self.pacing() {
-            Pacing::Cap(fps) => {
-                Some(self.last_frame + Duration::from_secs_f64(1.0 / f64::from(fps)))
-            }
+            Pacing::Cap(_) => self.frame_period().map(|period| self.last_frame + period),
             Pacing::Display | Pacing::Uncapped => None,
         };
-        let render_due = self.gfx.as_ref().and_then(|gfx| gfx.frames.due());
-        let just_in_time = render_thread::start_at(render_due, self.main_time.get());
+        let just_in_time = self.gfx.as_ref().and_then(|gfx| gfx.frames.start_next_at());
         capped.max(just_in_time)
+    }
+
+    /// The time between frames they keep to: the frame rate cap's, or the
+    /// display's refresh when shown at its rate; `None` uncapped.
+    fn frame_period(&self) -> Option<Duration> {
+        match self.pacing() {
+            Pacing::Cap(fps) => Some(Duration::from_secs_f64(1.0 / f64::from(fps))),
+            Pacing::Display => self.frame_clock.refresh().map(Duration::from_secs_f64),
+            Pacing::Uncapped => None,
+        }
     }
 
     /// Step the game by `dt` seconds with the input the frame applied;
@@ -341,10 +349,11 @@ impl App {
     /// frame steps.
     pub(crate) fn draw(&mut self, drawn: Drawn) {
         let (look, at) = self.cursor_wanted();
+        let period = self.frame_period();
         let Some(gfx) = &mut self.gfx else {
             return;
         };
-        let drawing = gfx.frames.get();
+        let drawing = gfx.frames.hand_over(self.last_frame, period);
         if let Some(scene) = drawn.scene {
             scene.apply(&self.scene, &mut drawing.renderer);
         }
@@ -366,7 +375,6 @@ impl App {
         let drawn = self.update(dt);
         self.return_cursor();
         self.follow_mouse_lock();
-        self.main_time.note(now.elapsed());
         self.draw(drawn);
         if let Some(title) = self.readout.frame(elapsed, &self.game)
             && let Some(gfx) = &self.gfx

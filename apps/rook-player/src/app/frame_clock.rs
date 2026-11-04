@@ -36,6 +36,12 @@ impl FrameClock {
         }
     }
 
+    /// The display's refresh period in seconds, while frames are shown at
+    /// its rate.
+    pub(crate) fn refresh(&self) -> Option<f64> {
+        self.refresh
+    }
+
     /// The step for a frame `measured` seconds after the last.
     pub(crate) fn step(&mut self, measured: f64) -> f64 {
         let Some(refresh) = self.refresh else {

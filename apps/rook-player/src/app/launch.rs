@@ -102,7 +102,6 @@ impl Launch {
             cursor_shown: cursor::Shown::default(),
             ime: false,
             last_frame: Instant::now(),
-            main_time: Default::default(),
             frame_clock: Default::default(),
             refresh_read: None,
             loop_ran: false,

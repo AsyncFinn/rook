@@ -162,13 +162,16 @@ pub(crate) fn bench(
         }
         s.scene = t.elapsed();
         let t = Instant::now();
-        let offscreen = thread.get();
+        let offscreen = thread.hand_over(frame_start, None);
         s.wait = t.elapsed();
         let t = Instant::now();
         update.apply(&cache, &mut offscreen.renderer);
         s.hand_over = t.elapsed();
         let drawn_clock = (clock % 3600.0) as f32;
-        thread.send(move |o| o.draw(&camera, drawn_clock));
+        thread.send(move |o| {
+            o.draw(&camera, drawn_clock);
+            Duration::ZERO
+        });
         stepped.push(s);
         let idle = rook_content::idle_since();
         if idle != idle_at.map(|(t, _)| t) {

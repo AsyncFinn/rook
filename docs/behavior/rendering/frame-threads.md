@@ -69,3 +69,33 @@ Not measured:
   thread (the guide lists it under the render thread).
 - How many frames the render thread may run behind the main thread.
 - The live client (RobloxPlayerBeta), which may differ from Studio.
+
+## Rook's frames, measured
+
+Rook's player on a 6-core (12-thread) machine, in its window at
+1280x720 on a 2018-era place with moving machinery, the build that ran
+every frame one stage after another against the pipelined one, back to
+back:
+
+| | serial | pipelined, always overlapped |
+|---|---|---|
+| Render thread's job per frame | 5-8 ms | 13-17 ms |
+| Input to present at a 60 fps cap | 16 ms | 24-25 ms |
+| Uncapped frame rate | 64 fps | 46-59 fps |
+
+Overlapped, the render ran twice as long: the step beside it took the
+cores and memory bandwidth it needed (the effects stage alone went from
+3.5 to 7 ms). So overlap is not free. Under a cap that serial frames keep
+to, it buys nothing and adds latency, and on a loaded machine it can lose
+outright. Choosing per frame from measured costs (`render_thread::Pacer`),
+the same place ran:
+
+| | serial | chosen per frame |
+|---|---|---|
+| Input to present at a 60 fps cap, serial keeping to it | 16 ms | 16 ms |
+| Frame rate at a 60 fps cap, machine loaded | 49-56 fps | 58-60 fps |
+| Uncapped frame rate | 59-64 fps | 92-124 fps |
+
+Offscreen (`--bench`), the median frame: that place 26.6 to 13.7 ms, a
+mountain place of about 300,000 parts 14.3 to 8.6 ms, the Baseplate 1.86
+to 1.60 ms.

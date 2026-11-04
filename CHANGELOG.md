@@ -5,6 +5,8 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- Frames can draw on their own thread while the next one steps, as Roblox's render thread does, and Rook picks per frame whether that pays. The renderer goes to a render thread with each frame and comes back at the next frame's hand-over, where the scene's changes go in, so nothing is shared behind a lock. Overlapping isn't free: on a 6-core machine a heavy place's render took twice as long beside the step, so frames run one after the other while that keeps to the frame rate cap or the display's refresh (your input is shown no later than before), and otherwise whichever way gives shorter frames, overlapped frames starting just in time as NVIDIA Reflex does. On a 2018-era place with moving machinery, uncapped frames went from 59-64 to 92-124 a second, and offscreen from 26.6 to 13.7 ms; a 300,000-part place went from 14.3 to 8.6 ms. `rook-player --bench` now runs as live play, the server on its own thread, and reports the slowest frame after loading by stage. See [frame order](docs/design/architecture.md#frame-order) and [frame threads](docs/behavior/rendering/frame-threads.md).
+
 ## [0.4.0] - 2026-11-04 - Frames that cost what changed; physics, GUI and terrain closer to Studio
 
 - Two smaller per-frame savings in drawing: each pass's indirect draw arguments go to the GPU straight from its runs instead of being gathered into a new list every frame, and transparent parts, sorted back to front whenever the camera moves, reuse their sort and instance lists instead of allocating them again each time.

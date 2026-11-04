@@ -626,11 +626,17 @@ impl Blockers {
                 if self.grid.is_some() {
                     self.moved.push((self.blockers[i], blocker));
                 }
-                if let Some(b) = &self.blockers[i] {
-                    self.columns.remove(i, b);
-                }
-                if let Some(b) = &blocker {
-                    self.columns.insert(i, b);
+                // A part moving within the columns it stood in (most moving
+                // parts, frame to frame) keeps its place in them: removing
+                // it walks each column's list.
+                let columns = |b: &Option<Blocker>| b.as_ref().map(|b| columns_of(b.voxels()));
+                if columns(&self.blockers[i]) != columns(&blocker) {
+                    if let Some(b) = &self.blockers[i] {
+                        self.columns.remove(i, b);
+                    }
+                    if let Some(b) = &blocker {
+                        self.columns.insert(i, b);
+                    }
                 }
                 self.blockers[i] = blocker;
                 self.changed = true;
