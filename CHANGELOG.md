@@ -5,6 +5,8 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-04 - Frames that cost what changed; physics, GUI and terrain closer to Studio
+
 - Two smaller per-frame savings in drawing: each pass's indirect draw arguments go to the GPU straight from its runs instead of being gathered into a new list every frame, and transparent parts, sorted back to front whenever the camera moves, reuse their sort and instance lists instead of allocating them again each time.
 - Each physics step writes HingeConstraints' `CurrentAngle` from a list of the hinges alone, in a fixed order, instead of looking through every constraint in the place in whatever order a hash map gave.
 - A font arriving lays out again only the text that was waiting for it, with its GUI tree, instead of all the GUI on the screen and in the world: text remembers whether a font it wanted was still on its way, and text drawn with fonts already there keeps its layout.
@@ -612,6 +614,8 @@ Pinned Roblox version: 0.741.19.
 - M1: `rook-dom`, `rook-signal`, `rook-scheduler`, the Luau bridge (`rook-lua`), the core Instance API and the members list for 0.741.19; headless server Scripts (`run-headless`, `corpus-run`); conformance through Studio's MCP server.
 - Renamed from Raven to Rook.
 
-[Unreleased]: https://github.com/AsyncFinn/rook/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/AsyncFinn/rook/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/AsyncFinn/rook/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/AsyncFinn/rook/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/AsyncFinn/rook/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/AsyncFinn/rook/releases/tag/v0.1.0
