@@ -29,4 +29,5 @@ naga.workspace = true
 workspace = true
 
 [dev-dependencies]
+rook-types = { workspace = true, features = ["counters"] }
 rook-platform = { workspace = true, features = ["native"] }

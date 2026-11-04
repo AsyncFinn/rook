@@ -58,6 +58,9 @@ struct InstancePool {
     ranges: RangeAlloc,
     /// The GPU copy, as big as `instances` once uploaded.
     buffer: Option<wgpu::Buffer>,
+    /// The GPU copy from before the pool last grew, copied into the new
+    /// one at the next upload, so growing writes only what changed.
+    outgrown: Option<wgpu::Buffer>,
     /// Chunks changed since they were uploaded: runs of slots a batch
     /// took or moved to.
     dirty: Vec<bool>,
@@ -80,8 +83,11 @@ impl InstancePool {
                     (self.instances.len() * 2).max(self.ranges.top() as usize + len as usize);
                 self.instances.resize(capacity, Instance::zeroed());
                 self.is_changed.resize(capacity, false);
-                // A new buffer, written whole.
-                self.buffer = None;
+                // A new buffer, which takes the old one's contents on the
+                // GPU (Vec's doubling, with a buffer copy for the move).
+                if let Some(old) = self.buffer.take() {
+                    self.outgrown.get_or_insert(old);
+                }
                 self.ranges.alloc(len, capacity as u32).expect("grown")
             }
         };
@@ -107,10 +113,31 @@ impl InstancePool {
         self.any_dirty = true;
     }
 
-    /// Bring the GPU copy up to date: the whole buffer when it's new,
-    /// else runs of changed chunks, then the single slots changed.
+    /// Bring the GPU copy up to date: the whole buffer when it's the first,
+    /// else (after copying what an outgrown one held) runs of changed
+    /// chunks, then the single slots changed.
     fn upload(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, scatter: &Scatter) {
         let size = std::mem::size_of::<Instance>() as u64;
+        if self.buffer.is_none()
+            && let Some(old) = self.outgrown.take()
+        {
+            let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("rook instances"),
+                size: self.instances.len() as u64 * size,
+                usage: wgpu::BufferUsages::VERTEX
+                    | wgpu::BufferUsages::COPY_DST
+                    | wgpu::BufferUsages::COPY_SRC
+                    | wgpu::BufferUsages::STORAGE,
+                mapped_at_creation: false,
+            });
+            let mut encoder = device.create_command_encoder(&Default::default());
+            encoder.copy_buffer_to_buffer(&old, 0, &buffer, 0, old.size());
+            // Submitted now: writes queued after it land after the copy.
+            queue.submit([encoder.finish()]);
+            // Slots past the old size not written since are zero, as a new
+            // buffer is.
+            self.buffer = Some(buffer);
+        }
         if self
             .buffer
             .as_ref()
@@ -131,6 +158,7 @@ impl InstancePool {
                         contents: bytemuck::cast_slice(&self.instances),
                         usage: wgpu::BufferUsages::VERTEX
                             | wgpu::BufferUsages::COPY_DST
+                            | wgpu::BufferUsages::COPY_SRC
                             | wgpu::BufferUsages::STORAGE,
                     }),
                 );

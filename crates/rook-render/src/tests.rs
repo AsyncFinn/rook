@@ -362,6 +362,57 @@ fn moved_parts_and_lights_refill_what_a_whole_fill_draws() {
     }
 }
 
+/// Parts added past what the instance pool holds grow it, and the new
+/// buffer takes the old one's contents on the GPU: only the batch that grew
+/// goes up, not every instance, and it draws what a fresh scene draws.
+#[test]
+fn a_growing_instance_pool_uploads_only_what_changed() {
+    use rook_types::counters::{Counter, take_local};
+    let (Ok(mut grown), Ok(mut fresh)) = (Renderer::headless(), Renderer::headless()) else {
+        return;
+    };
+    let mut scene = Scene::default();
+    for i in 0..20_000 {
+        let mut p = part(PartShape::Block, (i % 200) as f32 * 3.0, [0.8; 3], 0.0);
+        p.position.z = -((i / 200) as f32) * 3.0;
+        scene.parts.push(p);
+    }
+    let camera = Camera::look_at(Vec3::new(300.0, 80.0, 60.0), Vec3::new(300.0, 0.0, -150.0));
+    grown.set_scene(&scene);
+    grown.render_to_image(32, 32, &camera).unwrap();
+    let mut slots = take_local()[Counter::RenderSlots];
+    // Balls, a few at a time, until the pool grows.
+    let mut image = None;
+    for round in 0..200 {
+        let start = scene.parts.len();
+        for i in 0..500 {
+            let mut p = part(
+                PartShape::Ball,
+                (round * 500 + i) as f32 * 0.01,
+                [0.2, 0.4, 0.9],
+                0.0,
+            );
+            p.position.y = 4.0;
+            scene.parts.push(p);
+        }
+        let added: Vec<usize> = (start..scene.parts.len()).collect();
+        grown.update_parts(&scene, &added);
+        let drawn = grown.render_to_image(32, 32, &camera).unwrap();
+        let counts = take_local();
+        let now = counts[Counter::RenderSlots];
+        if now > slots {
+            let uploaded = counts[Counter::RenderSlotsUploaded];
+            assert!(uploaded < now / 4, "uploaded {uploaded} of {now} slots");
+            image = Some(drawn);
+            break;
+        }
+        slots = now;
+    }
+    let image = image.expect("the pool grew");
+    fresh.set_scene(&scene);
+    assert_eq!(image, fresh.render_to_image(32, 32, &camera).unwrap());
+}
+
 /// A light that turns on, one that comes and one that moves past where the
 /// hash placed it each build the hash again, and refill only the tiles
 /// they light, not the whole volume; every voxel still comes out as
