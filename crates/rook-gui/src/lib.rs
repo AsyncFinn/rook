@@ -57,7 +57,7 @@ pub fn is_layout_output(name: &str) -> bool {
 pub struct Gui {
     /// Where in the journal changes were last looked at.
     cursor: u64,
-    /// Everything lays out again: the screen resized, or a font arrived.
+    /// Everything lays out again: the screen resized.
     stale: bool,
     /// GUI that moved in the tree since the last layout: each subtree, and
     /// the top of the tree it left.
@@ -172,11 +172,12 @@ impl Gui {
         self.fonts.take_requests()
     }
 
-    /// A requested font file's bytes (`None`: it can't be had). Text using
-    /// it lays out again.
+    /// A requested font file's bytes (`None`: it can't be had). Text that
+    /// was waiting for a font lays out again, with its tree (its
+    /// `TextBounds` and what sizes itself by them may change).
     pub fn font_arrived(&mut self, url: &str, bytes: Option<Arc<[u8]>>) {
         if self.fonts.arrived(url, bytes) {
-            self.stale = true;
+            self.changed.extend(self.layout.waiting_texts());
         }
     }
 

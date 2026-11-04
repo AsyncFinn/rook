@@ -9,7 +9,7 @@ use std::sync::Arc;
 use harfrust::{FontRef, ShaperData};
 use rook_content::{ContentRef, Resolver};
 use rook_types::{FAMILY_FOLDER, Font, FontStyle};
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use serde::Deserialize;
 use skrifa::raw::TableProvider;
 
@@ -111,7 +111,11 @@ pub(crate) struct Fonts {
     files: FxHashMap<String, Slot>,
     /// Families and face files by asset id, waiting to be fetched.
     requests: Vec<String>,
-    generation: u64,
+    /// Families asked for and not yet arrived.
+    pending: FxHashSet<String>,
+    /// Whether a pick since [`Fonts::take_waited`] wanted a font still
+    /// on its way.
+    waited: bool,
 }
 
 impl Fonts {
@@ -119,9 +123,10 @@ impl Fonts {
         self.resolver = Some(resolver);
     }
 
-    /// Changes whenever a fetched font arrives.
-    pub(crate) fn generation(&self) -> u64 {
-        self.generation
+    /// Whether a pick since the last call wanted a font still on its way,
+    /// so what it laid out changes when that font arrives.
+    pub(crate) fn take_waited(&mut self) -> bool {
+        std::mem::take(&mut self.waited)
     }
 
     pub(crate) fn face(&self, id: FaceId) -> &Face {
@@ -139,7 +144,7 @@ impl Fonts {
         let mut used = false;
         if let Some(entry @ None) = self.families.get_mut(url) {
             *entry = bytes.as_deref().and_then(parse_family);
-            used = true;
+            used = self.pending.remove(url);
         }
         if self.files.get(url) == Some(&Slot::Waiting) {
             let slot = match bytes.and_then(Face::load) {
@@ -152,7 +157,6 @@ impl Fonts {
             self.files.insert(url.to_owned(), slot);
             used = true;
         }
-        self.generation += u64::from(used);
         used
     }
 
@@ -178,12 +182,17 @@ impl Fonts {
             .clone();
         match self.file(&file) {
             Slot::Loaded(id) => Some(id),
-            Slot::Waiting | Slot::Missing => None,
+            Slot::Waiting => {
+                self.waited = true;
+                None
+            }
+            Slot::Missing => None,
         }
     }
 
     fn family(&mut self, url: &str) -> Option<Vec<Listed>> {
         if let Some(known) = self.families.get(url) {
+            self.waited |= self.pending.contains(url);
             return known.clone();
         }
         let local = is_local(url);
@@ -191,6 +200,8 @@ impl Fonts {
             self.read_local(url).as_deref().and_then(parse_family)
         } else {
             self.requests.push(url.to_owned());
+            self.pending.insert(url.to_owned());
+            self.waited = true;
             None
         };
         self.families.insert(url.to_owned(), parsed.clone());

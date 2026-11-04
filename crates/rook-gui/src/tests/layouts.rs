@@ -512,3 +512,35 @@ fn objects_placed_again_alone_match_a_whole_layout() {
     assert_eq!(alone, read(&dom));
     assert_eq!(alone[4].1, Some(30.0));
 }
+
+/// A font arriving lays out again only the text that waited for it, with
+/// its tree: other GUI keeps its layout.
+#[test]
+fn a_font_arriving_lays_out_only_the_text_waiting_for_it() {
+    use rook_types::counters::{Counter, take_local};
+    let (mut dom, player_gui) = client();
+    let others = child(&mut dom, "ScreenGui", player_gui, &[]);
+    for _ in 0..20 {
+        frame(&mut dom, others, udim2(0.0, 10, 0.0, 10));
+    }
+    let screen = child(&mut dom, "ScreenGui", player_gui, &[]);
+    let label = child(
+        &mut dom,
+        "TextLabel",
+        screen,
+        &[("Text", Value::String("Ab".into()))],
+    );
+    let font = rook_types::Font {
+        family: "rbxassetid://1".into(),
+        ..Default::default()
+    };
+    set(&mut dom, label, "FontFace", Value::Font(font));
+    let mut gui = laid_out(&mut dom);
+    let requests = gui.take_font_requests();
+    assert_eq!(requests, ["rbxassetid://1"]);
+    take_local();
+    gui.font_arrived(&requests[0], None);
+    gui.sync(&mut dom);
+    let laid = take_local()[Counter::GuiNodesLaidOut];
+    assert!((1..=2).contains(&laid), "laid out {laid} nodes");
+}

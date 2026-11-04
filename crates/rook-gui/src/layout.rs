@@ -114,8 +114,9 @@ pub(crate) struct Laid {
     source: Source,
     /// The area inside the padding: its top left and size.
     area: (Vec2, Vec2),
-    /// [`Fonts::generation`] then: a font arriving lays text out again.
-    fonts: u64,
+    /// Whether a font it wanted was still on its way: its text lays out
+    /// again when one arrives.
+    waited: bool,
     pub(crate) block: TextBlock,
 }
 
@@ -238,6 +239,13 @@ impl Layout {
             pass.place_alone(id);
         }
         *self = pass.out;
+    }
+
+    /// The text objects laid out while a font they wanted was on its way.
+    pub(crate) fn waiting_texts(&self) -> impl Iterator<Item = InstanceId> + '_ {
+        (self.texts.iter())
+            .filter(|(_, laid)| laid.waited)
+            .map(|(&id, _)| id)
     }
 
     /// Lay out the text of `ids` again where it is, for a change to how
@@ -618,22 +626,22 @@ impl<'a> Pass<'a> {
         };
         let inner = padding::inner(self.dom, id, size);
         let area = (inner.origin, inner.size);
-        let fonts = self.fonts.generation();
         let earlier = self.previous.texts.get(&id);
-        let block = match earlier.or_else(|| self.out.texts.get(&id)) {
-            Some(old) if old.source == source && old.area == area && old.fonts == fonts => {
-                old.block.clone()
+        let (block, waited) = match earlier.or_else(|| self.out.texts.get(&id)) {
+            Some(old) if old.source == source && old.area == area && !old.waited => {
+                (old.block.clone(), false)
             }
             _ => {
+                self.fonts.take_waited();
                 let mut block = text::lay_out(self.fonts, &source, inner.size, None);
                 block.shift(inner.origin);
-                block
+                (block, self.fonts.take_waited())
             }
         };
         let laid = Laid {
             source,
             area,
-            fonts,
+            waited,
             block,
         };
         self.out.texts.insert(id, laid);
