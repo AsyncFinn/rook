@@ -51,6 +51,7 @@ impl DataModel {
         let x = &mut self.explosions;
         let mut found = Vec::new();
         let (first, changes) = x.watch.look(dom);
+        rook_types::count!(JournalReadBridges, changes.len());
         if first && let Some(ws) = dom.find_service("Workspace") {
             found.extend(dom.descendants(ws));
         }

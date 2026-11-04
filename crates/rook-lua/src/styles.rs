@@ -93,7 +93,9 @@ impl Styles {
     /// (scripts change most things after the restyle).
     pub(crate) fn note_changes(&mut self, dom: &Dom) {
         let is_style = |id: InstanceId| style_classes().iter().any(|&c| dom.is_a_class(id, c));
-        for change in dom.journal().since(self.cursor) {
+        let changes = dom.journal().since(self.cursor);
+        rook_types::count!(JournalReadStyles, changes.len());
+        for change in changes {
             match change {
                 Change::Reparented { id, subtree, .. } => {
                     for &d in subtree {

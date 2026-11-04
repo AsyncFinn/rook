@@ -51,6 +51,14 @@ The window title shows, for the last second: frames per second, the median frame
 
 `--bench N` runs N frames offscreen with the server and client in lockstep (the same every run) and prints the time per stage, then the median, slowest 1% and longest server step, client step and both together.
 
+It then prints the work counters: for each per-frame system, how much it touched and how much changed, per frame (median and largest). Scene entries rewritten and moved against the parts that changed and moved, GPU instance slots and bytes uploaded against the entries handed over, instances visited by tree walks, journal entries written and read by each reader, light tiles filled again against the blockers and lights that changed, GUI objects laid out against those that changed, physics bodies and colliders touched, sounds updated, and the draws and runs of each pass. A line starting `FLAG` names a system that, on some frames, touched a quarter or more of a collection of 1,000 or more while fewer than a tenth as many things changed: a small change paying for the whole collection. The counters follow Unreal's stat counters (each thread counts on its own, summed once a frame) and are built only with rook-player's `counters` feature, on by default and left out of `cargo dist`, so players' builds pay nothing for them.
+
+`scripts/event-soak.luau` fires small events on staggered timers, for benching how the engine pays for them rather than for a still place: a part moving every frame, a property change nothing listens to, a PointLight turning on and off, a part added and another destroyed, a FillBall of Grass then Air, a GUI tween and a looped Sound at Volume 0. Each should cost the size of what it changes:
+
+```
+rook-player place.rbxl --seconds 60 --bench 600 --script scripts/event-soak.luau
+```
+
 With Roblox's CoreScripts on (`--core-scripts`, or `ROOK_CORE_SCRIPTS=on`, in builds with developer overrides), you play your own character with Roblox's own controls ([camera and controls](../behavior/characters/camera.md)):
 
 | Control | Action |

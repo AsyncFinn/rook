@@ -123,6 +123,8 @@ impl InstancePool {
         }
         let Some(buffer) = &self.buffer else {
             if !self.instances.is_empty() {
+                rook_types::count!(RenderSlotsUploaded, self.instances.len());
+                rook_types::count!(RenderBytesUploaded, self.instances.len() as u64 * size);
                 self.buffer = Some(
                     device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                         label: Some("rook instances"),
@@ -141,6 +143,8 @@ impl InstancePool {
             return;
         };
         if !self.changed.is_empty() {
+            rook_types::count!(RenderSlotsUploaded, self.changed.len());
+            rook_types::count!(RenderBytesUploaded, self.changed.len() as u64 * size);
             scatter.run(
                 device,
                 queue,
@@ -177,6 +181,8 @@ impl InstancePool {
             c = end;
             let start = first * CHUNK as usize;
             let end = (c * CHUNK as usize).min(self.instances.len());
+            rook_types::count!(RenderSlotsUploaded, end - start);
+            rook_types::count!(RenderBytesUploaded, (end - start) as u64 * size);
             queue.write_buffer(
                 buffer,
                 start as u64 * size,
@@ -323,6 +329,11 @@ impl Batches {
             false
         });
         self.pool.upload(device, queue, scatter);
+    }
+
+    /// How many instance slots the pool holds.
+    pub(crate) fn slots(&self) -> usize {
+        self.pool.instances.len()
     }
 
     /// The buffer every batch's instances are in (none before the first

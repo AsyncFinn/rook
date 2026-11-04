@@ -24,6 +24,8 @@ impl Dom {
     pub fn descendants(&self, id: InstanceId) -> Vec<InstanceId> {
         let mut out = Vec::new();
         self.collect_descendants(id, &mut out);
+        rook_types::count!(DomWalked, out.len());
+        rook_types::gauge!(DomInstances, self.instances.len());
         out
     }
 
@@ -179,6 +181,7 @@ impl Dom {
         }
         let mut subtree = vec![id];
         self.collect_descendants(id, &mut subtree);
+        rook_types::count!(DomWalked, subtree.len());
         for d in subtree {
             self.note_removing(leaving.clone(), d);
         }
@@ -250,6 +253,7 @@ impl Dom {
             self.collect_descendants(id, &mut subtree);
             let mut subtree_post_order = Vec::with_capacity(subtree.len());
             self.collect_post_order(id, &mut subtree_post_order);
+            rook_types::count!(DomWalked, 2 * subtree.len());
             self.journal.push(Change::Reparented {
                 id,
                 old_parent,

@@ -284,6 +284,7 @@ impl DataModel {
             |id: InstanceId, classes: &[ClassId]| classes.iter().any(|&c| dom.is_a_class(id, c));
         let changes = &mut self.render_changes;
         let (first, journal) = self.render_watch.look(dom);
+        rook_types::count!(JournalReadRender, journal.len());
         let adorned = &mut self.adorned;
         let material_parts = &mut self.material_parts;
         if first {

@@ -254,7 +254,9 @@ impl Gui {
             self.messages
                 .extend(held.into_iter().filter(|&id| draw::is_message(dom, id)));
         }
-        for change in dom.journal().since(self.cursor) {
+        let changes = dom.journal().since(self.cursor);
+        rook_types::count!(JournalReadGui, changes.len());
+        for change in changes {
             if let Change::Collected(id) = change {
                 self.forget(*id);
                 continue;
@@ -273,7 +275,15 @@ impl Gui {
             }
             if !self.stale {
                 let watch = self.watch.as_ref().expect("made above");
-                match (watch.touches(dom, change), change) {
+                let touch = watch.touches(dom, change);
+                match (touch, change) {
+                    (Touch::Nothing, _) => {}
+                    (Touch::Tree, Change::Reparented { subtree, .. }) => {
+                        rook_types::count!(GuiObjectsChanged, subtree.len());
+                    }
+                    _ => rook_types::count!(GuiObjectsChanged, 1),
+                }
+                match (touch, change) {
                     (Touch::All, _) => self.stale = true,
                     (
                         Touch::Tree,
@@ -304,6 +314,7 @@ impl Gui {
     /// SurfaceGui sized by its part) lay out again on their own.
     pub fn sync(&mut self, dom: &mut Dom) {
         self.note_changes(dom);
+        rook_types::gauge!(GuiNodes, self.layout.placed.len());
         if self.stale {
             profiling::scope!("Gui::layout");
             let workspace = dom.find_service("Workspace");
@@ -319,6 +330,8 @@ impl Gui {
             world.sort_unstable();
             let previous = (&self.layout, &self.turning);
             self.layout = Layout::screens(dom, previous, &mut self.fonts, &world);
+            // The screen they're laid out on changed: everything did.
+            rook_types::count!(GuiObjectsChanged, self.layout.placed.len());
             self.stale = false;
             self.moved.clear();
             self.changed.clear();

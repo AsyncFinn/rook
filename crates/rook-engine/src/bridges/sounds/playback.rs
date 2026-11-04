@@ -162,6 +162,8 @@ impl DataModel {
             let w = &mut *w;
             let dom = &mut w.dom;
             let ids: Vec<_> = self.sounds.active.iter().copied().collect();
+            rook_types::count!(SoundsUpdated, ids.len());
+            rook_types::gauge!(Sounds, self.sounds.tracked.len());
             for id in ids {
                 let Some(audio) = self.sounds.audio(id).cloned() else {
                     // A file that failed never plays; one loading may.

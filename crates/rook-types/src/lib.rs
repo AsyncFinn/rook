@@ -9,6 +9,7 @@
 //! one-to-one so conversion in either direction is lossless.
 
 mod clock;
+pub mod counters;
 mod enums;
 mod font;
 mod gui;

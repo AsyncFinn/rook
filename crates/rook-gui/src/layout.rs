@@ -461,6 +461,7 @@ impl<'a> Pass<'a> {
             rotation: 0.0,
         };
         self.out.placed.insert(top, placed);
+        rook_types::count!(GuiNodesLaidOut, 1);
         self.lay_out_inside(top, placed, local);
     }
 
@@ -527,6 +528,7 @@ impl<'a> Pass<'a> {
         layout: Option<InstanceId>,
     ) {
         let dom = self.dom;
+        rook_types::count!(GuiNodesLaidOut, kids.len());
         let mut sizes: Vec<Vec2> = kids.iter().map(|&k| self.size_of(k, inner.size)).collect();
         // Hidden children take no part in a UI layout (measured: they keep
         // the place it last gave them).

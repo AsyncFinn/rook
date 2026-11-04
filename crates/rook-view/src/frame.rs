@@ -51,6 +51,11 @@ impl SceneCache {
         if changes.is_empty() {
             return SceneChange::None;
         }
+        rook_types::count!(
+            ViewPartsChanged,
+            changes.placed.len() + changes.parts.len() + changes.collected.len()
+        );
+        rook_types::count!(ViewPartsMoved, changes.moved.len());
         let mut world = dm.runtime().world_mut();
         let world = &mut *world;
         if changes.full {
@@ -77,6 +82,7 @@ impl SceneCache {
         let mut loaded = self.poll_files(dom, false);
         loaded.extend(self.update_terrain(camera, false));
         loaded.extend(self.update_grass(camera));
+        rook_types::count!(ViewPartsChanged, loaded.len());
         let change = match change {
             // A skybox image arrived: the lighting alone changed.
             SceneChange::None if loaded.is_empty() && self.take_lighting_change() => {
@@ -106,6 +112,15 @@ impl SceneCache {
             }
             SceneChange::Full => SceneChange::Full,
         };
+        rook_types::gauge!(ViewEntries, self.scene.parts.len());
+        match &change {
+            SceneChange::Parts { changed, moved, .. } => {
+                rook_types::count!(ViewEntriesRewritten, changed.len());
+                rook_types::count!(ViewEntriesMoved, moved.len());
+            }
+            SceneChange::Full => rook_types::count!(ViewEntriesRewritten, self.scene.parts.len()),
+            SceneChange::None => {}
+        }
         let lights = self.lights.take_changes();
         let effects = self.effects.take_changes();
         match &change {

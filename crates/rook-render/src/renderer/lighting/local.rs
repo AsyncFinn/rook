@@ -700,9 +700,16 @@ impl GpuLights {
             // old faces.
             if let Some(old) = kept.filter(|&old| old != low) {
                 let (came, left) = came_and_left(old, low, size);
+                let before = if rook_types::counters::ENABLED {
+                    tiles.count()
+                } else {
+                    0
+                };
                 for &span in &came {
                     tiles.mark(span);
                 }
+                // What the volume moved onto is new to it, as a change is.
+                rook_types::count!(LightSourcesChanged, tiles.count() - before);
                 if solid {
                     for span in came.into_iter().chain(left) {
                         reach.mark(&mut tiles, span);
@@ -724,6 +731,8 @@ impl GpuLights {
             }
         }
         self.filled = tiles.count();
+        rook_types::count!(LightTilesRefilled, self.filled);
+        rook_types::gauge!(LightTiles, Tiles::all().count());
         if dispatches.is_empty() {
             return;
         }

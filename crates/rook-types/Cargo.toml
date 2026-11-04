@@ -16,5 +16,10 @@ thiserror.workspace = true
 [dev-dependencies]
 rook-reflection.workspace = true
 
+[features]
+# Per-frame work counters (`counters`): the apps turn it on, `cargo dist`
+# leaves it out.
+counters = []
+
 [lints]
 workspace = true

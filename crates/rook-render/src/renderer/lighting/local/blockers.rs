@@ -634,6 +634,7 @@ impl Blockers {
                 }
                 self.blockers[i] = blocker;
                 self.changed = true;
+                rook_types::count!(LightSourcesChanged, 1);
             }
         }
         // More changes than parts (or nothing marking the voxels for a

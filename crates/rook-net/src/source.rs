@@ -79,7 +79,9 @@ impl Source {
         let mut out = Vec::new();
         let mut destroyed = Vec::new();
         let visible = |id| self.visible(server, id);
-        for change in server.journal().since(self.cursor) {
+        let changes = server.journal().since(self.cursor);
+        rook_types::count!(JournalReadReplication, changes.len());
+        for change in changes {
             match change {
                 Change::Reparented { id, .. } => out.push(match server.parent(*id) {
                     Some(parent) if visible(*id) => Update::Place {

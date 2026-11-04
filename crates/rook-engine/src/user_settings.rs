@@ -170,6 +170,7 @@ impl Kept {
     /// Look at the frame's changes; save once they have settled.
     pub(crate) fn check(&mut self, dom: &Dom, now: f64) {
         let (first, changes) = self.watch.look(dom);
+        rook_types::count!(JournalReadBridges, changes.len());
         let game = self.game;
         let changed = changes
             .iter()

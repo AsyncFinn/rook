@@ -109,6 +109,8 @@ impl Physics {
         for h in &added {
             touched.extend(self.bodies[h].asm.members.iter().map(|m| m.part));
         }
+        rook_types::count!(PhysicsBodiesTouched, added.len());
+        rook_types::count!(PhysicsCollidersTouched, touched.len());
         for part in touched {
             self.dirty.extend(self.attached.holders(part));
         }
@@ -480,6 +482,7 @@ impl Physics {
             return;
         };
         s.cframe = cf;
+        rook_types::count!(PhysicsCollidersTouched, 1);
         if let Some((collider, shape_pose)) = s.collider
             && let Some(co) = self.world.colliders.get_mut(collider)
         {
@@ -511,6 +514,7 @@ impl Physics {
             Some(Value::Vector3(v)) => v.0,
             _ => Vector::ZERO,
         };
+        rook_types::count!(PhysicsBodiesTouched, 1);
         // Drawn where it was put, not on the way there.
         self.before_last_step.remove(&h);
         let rb = &mut self.world.bodies[h];

@@ -23,6 +23,7 @@ impl Renderer {
             profiling::scope!("opaque and layers");
             self.opaque.upload(&self.device, &self.queue, &self.scatter);
             self.layers.upload(&self.device, &self.queue, &self.scatter);
+            rook_types::gauge!(RenderSlots, self.opaque.slots() + self.layers.slots());
         }
         self.transparent
             .upload(&self.device, &self.queue, camera, view, margin)
@@ -161,6 +162,10 @@ impl Renderer {
         if let Some(timer) = &mut self.timer {
             timer.resolve(&mut encoder, shadow.is_some());
         }
+        rook_types::count!(ShadowDraws, shadow_runs.counts.draws);
+        rook_types::count!(ShadowRuns, shadow_runs.runs.len());
+        rook_types::count!(MainDraws, main_runs.counts.draws);
+        rook_types::count!(MainRuns, main_runs.runs.len());
         self.draw_counts = DrawCounts {
             shadow: shadow_runs.counts,
             main: main_runs.counts,

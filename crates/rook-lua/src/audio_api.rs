@@ -102,7 +102,9 @@ impl GraphNodes {
             self.ids
                 .extend(all.into_iter().filter(|&i| in_graph(dom.class_name(i))));
         }
-        for change in dom.journal().since(self.cursor) {
+        let changes = dom.journal().since(self.cursor);
+        rook_types::count!(JournalReadAudio, changes.len());
+        for change in changes {
             match change {
                 Change::Reparented { subtree, .. } => {
                     for &i in subtree.iter().filter(|&&i| in_graph(dom.class_name(i))) {

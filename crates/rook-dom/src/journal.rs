@@ -86,6 +86,7 @@ impl Default for Journal {
 impl Journal {
     pub(crate) fn push(&mut self, change: Change) {
         if self.enabled {
+            rook_types::count!(JournalWritten, 1);
             self.entries.push(change);
         }
     }

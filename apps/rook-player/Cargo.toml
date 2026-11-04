@@ -45,12 +45,14 @@ rustc-hash.workspace = true
 windows-sys = { workspace = true, features = ["Win32_System_Console"] }
 
 [features]
-default = ["repl", "developer-overrides"]
+default = ["repl", "developer-overrides", "counters"]
 # A `>` prompt in the terminal that runs Luau in the open place (on when
 # the terminal is interactive; `--no-repl` turns it off).
 repl = ["rook-engine/repl"]
 # Developer settings (rook-engine's feature of the same name).
 developer-overrides = ["rook-engine/developer-overrides"]
+# Per-frame work counters, which `--bench` prints (rook-types' `counters`).
+counters = ["rook-types/counters"]
 # A build for other people: `cargo dist`.
 published = ["rook-engine/published"]
 # Live per-frame timeline in the Tracy profiler (https://github.com/wolfpld/tracy).

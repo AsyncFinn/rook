@@ -62,6 +62,7 @@ pub(crate) fn bench(
     game.set_viewport(width, height);
     game.server_steps.clear();
     game.client_steps.clear();
+    let mut counted = crate::counters::Frames::start();
     for frame in 0..frames {
         let frame_start = Instant::now();
         // A moving cursor, as when someone plays: each move casts the m.mouse ray.
@@ -119,10 +120,12 @@ pub(crate) fn bench(
         if idle != m.idle_at.map(|(t, _)| t) {
             m.idle_at = idle.map(|t| (t, m.whole.len()));
         }
+        counted.frame();
         profiling::finish_frame!();
     }
     game.print_logs();
     m.report(frames, game, &renderer, &cache, load_start, timing_gpu);
+    counted.report();
     Ok(())
 }
 
@@ -194,6 +197,18 @@ impl Measured {
             eprintln!(
                 "render medians: GPU shadow pass {gpu_shadow:.2} ms, main pass {gpu_main:.2} ms"
             );
+        }
+        let names = [
+            "uploads",
+            "setup",
+            "instances",
+            "effects",
+            "draws",
+            "lights",
+            "passes",
+        ];
+        for (name, times) in names.iter().zip(&self.stage_times) {
+            eprintln!("CPU recording, {name}: {}", times.summary());
         }
         eprintln!("mouse: {}", self.mouse_times.summary());
         eprintln!("scene update and upload: {}", self.update_times.summary());

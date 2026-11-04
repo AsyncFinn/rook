@@ -455,6 +455,7 @@ impl Physics {
         let Some(props) = self.props.take() else {
             return;
         };
+        rook_types::gauge!(PhysicsParts, self.parts.len());
         if !self.built {
             self.handed_over.clear();
             self.build(dom, &props);

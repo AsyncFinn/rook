@@ -90,7 +90,9 @@ impl DataModel {
                 && world.dom.property_id(id, "Disabled") == Some(property)
         };
         let scripts = &mut self.new_scripts;
-        for change in world.dom.journal().since(scripts.cursor) {
+        let changes = world.dom.journal().since(scripts.cursor);
+        rook_types::count!(JournalReadScripts, changes.len());
+        for change in changes {
             match change {
                 Change::Reparented { subtree, .. } => scripts.candidates.extend(subtree),
                 Change::Property { id, property } if disabled(*id, *property) => {

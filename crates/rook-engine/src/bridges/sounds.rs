@@ -181,6 +181,7 @@ impl DataModel {
         let dom = &w.dom;
         let sounds = &mut self.sounds;
         let (first, changes) = sounds.watch.look(dom);
+        rook_types::count!(JournalReadBridges, changes.len());
         if first {
             let all = dom.descendants(dom.root());
             sounds
@@ -191,6 +192,12 @@ impl DataModel {
         for c in changes {
             match c {
                 Change::Property { id, property } => {
+                    if [&ids.content, &ids.clock, &ids.playing]
+                        .iter()
+                        .any(|p| p.contains(property))
+                    {
+                        rook_types::count!(SoundsChanged, 1);
+                    }
                     if ids.content.contains(property) {
                         sounds.dirty.insert(*id);
                     }

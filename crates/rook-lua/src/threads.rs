@@ -369,6 +369,7 @@ pub(crate) fn fire(lua: &Lua, key: &SignalKey, args: &[LuaValue]) {
 /// it stays (measured; docs/behavior/gui/input.md#textbox).
 pub(crate) fn dispatch(lua: &Lua, start: u64) {
     let end = with_world(lua, |w| w.dom.journal().end());
+    rook_types::count!(JournalReadSignals, end.saturating_sub(start));
     let mut destroyed: Vec<InstanceId> = Vec::new();
     for pos in start..end {
         let mut moved_focus = None;

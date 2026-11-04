@@ -18,6 +18,7 @@ mod alert;
 mod app;
 mod bench;
 mod console_window;
+mod counters;
 mod game;
 mod record;
 mod server;

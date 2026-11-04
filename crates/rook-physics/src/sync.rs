@@ -37,11 +37,17 @@ impl Physics {
         let mut voxels = Vec::new();
         let mut seen = false;
         let db = dom.database();
-        for change in dom.journal().since(self.cursor) {
+        let changes = dom.journal().since(self.cursor);
+        rook_types::count!(JournalReadPhysics, changes.len());
+        for change in changes {
             match change {
                 Change::Property { id, property } => {
                     let p = *property;
-                    seen |= self.parts.contains_key(id) || Some(*id) == self.terrain.instance;
+                    let part = self.parts.contains_key(id);
+                    if part {
+                        rook_types::count!(PhysicsPartsChanged, 1);
+                    }
+                    seen |= part || Some(*id) == self.terrain.instance;
                     if Some(*id) == self.terrain.instance {
                         // Its voxels, or its collision group.
                         if Some(p) == props.smooth_grid || props.is_structural(p) {
@@ -81,6 +87,7 @@ impl Physics {
                 }
                 Change::Reparented { subtree, .. } => {
                     seen = true;
+                    rook_types::count!(PhysicsPartsChanged, subtree.len());
                     for &i in subtree {
                         self.notice_humanoid(dom, i);
                         if Some(i) == self.terrain.instance || dom.class_name(i) == "Terrain" {

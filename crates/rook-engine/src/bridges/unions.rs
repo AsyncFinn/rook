@@ -59,6 +59,7 @@ impl DataModel {
             return;
         };
         let (first, changes) = unions.watch.look(dom);
+        rook_types::count!(JournalReadBridges, changes.len());
         if first {
             let all = dom.descendants(ws);
             unions

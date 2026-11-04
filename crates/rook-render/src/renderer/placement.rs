@@ -119,6 +119,7 @@ impl Renderer {
     /// hidden one (fully transparent).
     pub fn update_parts(&mut self, scene: &Scene, changed: &[usize]) {
         profiling::scope!("Renderer::update_parts");
+        rook_types::count!(RenderEntriesChanged, changed.len());
         self.lights.update_blockers(scene, changed);
         if self.placements.len() < scene.parts.len() {
             self.placements.resize(scene.parts.len(), Placement::Hidden);
@@ -142,6 +143,7 @@ impl Renderer {
             return;
         }
         profiling::scope!("Renderer::move_parts");
+        rook_types::count!(RenderEntriesChanged, moved.len());
         self.lights.update_blockers(scene, moved);
         for &i in moved {
             let part = &scene.parts[i];
