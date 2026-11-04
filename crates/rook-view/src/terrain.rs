@@ -47,6 +47,12 @@ struct MeshedChunk {
 /// A chunk of some level: the level and the chunk, in that level's chunks.
 type LevelChunk = (u8, IVec3);
 
+/// The order chunks are drawn and their Grass tops gathered in, so a
+/// scene comes out the same however its chunks arrived.
+fn chunk_order(&(level, c): &LevelChunk) -> (u8, i32, i32, i32) {
+    (level, c.x, c.y, c.z)
+}
+
 /// The terrain's surfaces near and far, kept until its voxels change or
 /// the camera moves to other rings, and the scene entries drawing them.
 #[derive(Debug, Default)]
@@ -76,6 +82,10 @@ pub(super) struct TerrainCache {
     /// The Grass tops of the chunks drawn at levels blades can reach
     /// (`rings::grows_grass`): blades stand on the ground that's drawn.
     tops: FxHashMap<LevelChunk, GrassTops>,
+    /// The chunks in `tops` holding each tile's tops, in drawing order
+    /// (`chunk_order`), so a tile's tops are gathered from its chunks
+    /// alone.
+    tile_chunks: FxHashMap<glam::IVec2, Vec<LevelChunk>>,
     /// Tiles whose tops went with a dropped chunk, to grow again.
     stale_tiles: FxHashSet<glam::IVec2>,
     /// Counts the chunk meshes made: part of each mesh's key, so a chunk
@@ -147,7 +157,7 @@ impl SceneCache {
         self.take_voxels(dom, false);
         self.read_looks(dom);
         let mut keys: Vec<LevelChunk> = self.terrain.chunks.keys().copied().collect();
-        keys.sort_unstable_by_key(|(l, c)| (*l, c.x, c.y, c.z));
+        keys.sort_unstable_by_key(chunk_order);
         self.place_chunks(&keys);
     }
 
@@ -314,6 +324,14 @@ impl SceneCache {
             self.release(i);
         }
         if let Some(tops) = self.terrain.tops.remove(&key) {
+            for tile in tops.keys() {
+                if let Some(chunks) = self.terrain.tile_chunks.get_mut(tile) {
+                    chunks.retain(|c| *c != key);
+                    if chunks.is_empty() {
+                        self.terrain.tile_chunks.remove(tile);
+                    }
+                }
+            }
             self.terrain.stale_tiles.extend(tops.keys());
         }
         chunk.entries

@@ -79,7 +79,7 @@ impl SceneCache {
             .filter(|k| !self.terrain.chunks.contains_key(k))
             .copied()
             .collect();
-        todo.sort_unstable_by_key(|(l, c)| (*l, c.x, c.y, c.z));
+        todo.sort_unstable_by_key(chunk_order);
         todo
     }
 
@@ -102,6 +102,13 @@ impl SceneCache {
                 add_grass_tops(&m, &mut tops);
                 if !tops.is_empty() {
                     tiles.extend(tops.keys());
+                    for tile in tops.keys() {
+                        let chunks = self.terrain.tile_chunks.entry(*tile).or_default();
+                        let at = chunks
+                            .binary_search_by_key(&chunk_order(&key), chunk_order)
+                            .unwrap_or_else(|at| at);
+                        chunks.insert(at, key);
+                    }
                     self.terrain.tops.insert(key, tops);
                 }
             }
@@ -121,7 +128,7 @@ impl SceneCache {
         }
         tiles.extend(self.terrain.stale_tiles.drain());
         if place {
-            added.sort_unstable_by_key(|(l, c)| (*l, c.x, c.y, c.z));
+            added.sort_unstable_by_key(chunk_order);
             changed.extend(self.place_chunks(&added));
         }
         if !tiles.is_empty() {

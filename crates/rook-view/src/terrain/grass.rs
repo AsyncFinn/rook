@@ -136,15 +136,21 @@ impl SceneCache {
     /// [`SceneCache::update_grass`] grows again from the new tops. Returns
     /// the entries that changed.
     pub(super) fn grass_tops_changed(&mut self, tiles: &FxHashSet<IVec2>) -> Vec<usize> {
-        let mut chunks: Vec<&LevelChunk> = self.terrain.tops.keys().collect();
-        chunks.sort_unstable_by_key(|(l, c)| (*l, c.x, c.y, c.z));
-        let mut tops = GrassTops::default();
-        for c in chunks {
-            for (tile, tris) in &self.terrain.tops[c] {
-                tops.entry(*tile).or_default().extend(tris);
+        let t = &mut self.terrain;
+        for tile in tiles {
+            match t.tile_chunks.get(tile) {
+                Some(chunks) => {
+                    let tris = (chunks.iter())
+                        .flat_map(|c| t.tops[c].get(tile).into_iter().flatten())
+                        .copied()
+                        .collect();
+                    t.grass.tops.insert(*tile, tris);
+                }
+                None => {
+                    t.grass.tops.remove(tile);
+                }
             }
         }
-        self.terrain.grass.tops = tops;
         let mut changed = Vec::new();
         for tile in tiles {
             if let Some((i, mesh)) = self.terrain.grass.shown.remove(tile) {

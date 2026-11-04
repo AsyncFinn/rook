@@ -380,3 +380,70 @@ fn a_replaced_terrain_swaps_its_chunks() {
         assert_eq!(chunk.entries.len(), chunk.surfaces.len());
     }
 }
+
+/// An edit gathers the Grass tops of the tiles it reached again, from
+/// those tiles' chunks alone: the other tiles' tops are kept as they
+/// were, not gathered again from every chunk drawn.
+#[test]
+fn edits_gather_grass_tops_only_for_their_tiles() {
+    use rook_terrain::Voxel;
+    use rook_terrain::grass::GrassTops;
+    let mut dom = Dom::new();
+    let ws = dom.get_service("Workspace").unwrap();
+    let terrain = dom.create_by_name("Terrain").unwrap();
+    dom.set_parent(terrain, Some(ws)).unwrap();
+    let mut grid = Grid::new();
+    // Two lawns in chunks and tiles of their own, both near the camera.
+    let (near, far) = (IVec3::new(4, 4, 4), IVec3::new(44, 4, 4));
+    for at in [near, far] {
+        for x in 0..3 {
+            for z in 0..3 {
+                grid.set(at + IVec3::new(x, 0, z), Voxel::new(TerrainMaterial::Grass, 255));
+            }
+        }
+    }
+    dom.set_property_by_name(
+        terrain,
+        "SmoothGrid",
+        Value::BinaryString(grid.encode().into()),
+    )
+    .unwrap();
+    let content = Arc::new(Resolver::new(rook_content::Config::empty()));
+    let mut cache = SceneCache::new(&dom, Floors::default(), content, glam::Vec3::ZERO);
+    let tile = |v: IVec3| rook_terrain::grass::tile_of(v.as_vec3() * 4.0);
+    let (near_tile, far_tile) = (tile(near), tile(far));
+    assert_ne!(near_tile, far_tile);
+    let far_tops = cache.terrain.grass.tops[&far_tile].as_ptr();
+    assert!(cache.terrain.grass.tops.contains_key(&near_tile));
+    // Raise the near lawn a voxel.
+    let at = near + IVec3::Y;
+    let bounds = Bounds { min: at, max: at + IVec3::new(2, 0, 2) };
+    dom.edit_voxels(terrain, |g| {
+        for x in 0..3 {
+            for z in 0..3 {
+                g.set(at + IVec3::new(x, 0, z), Voxel::new(TerrainMaterial::Grass, 255));
+            }
+        }
+        ((), Some(bounds))
+    })
+    .unwrap();
+    let changes = RenderChanges {
+        terrain_edits: vec![(terrain, bounds)],
+        ..RenderChanges::default()
+    };
+    let SceneChange::Parts { .. } = cache.apply(&dom, &changes) else {
+        panic!("a voxel edit rebuilt the scene");
+    };
+    // The far tile's tops weren't gathered again...
+    assert_eq!(cache.terrain.grass.tops[&far_tile].as_ptr(), far_tops);
+    // ...and every tile's tops are what gathering them all gives.
+    let mut chunks: Vec<&LevelChunk> = cache.terrain.tops.keys().collect();
+    chunks.sort_unstable_by_key(|c| chunk_order(c));
+    let mut whole = GrassTops::default();
+    for c in chunks {
+        for (tile, tris) in &cache.terrain.tops[c] {
+            whole.entry(*tile).or_default().extend(tris);
+        }
+    }
+    assert_eq!(cache.terrain.grass.tops, whole);
+}
