@@ -63,7 +63,7 @@
     - [Collision shapes](behavior/physics/collision-shapes.md): what unions collide and are queried as
     - [Sleeping](behavior/physics/sleeping.md): when assemblies sleep, how deep resting parts sit
     - [Timestepping](behavior/physics/timestepping.md): which assemblies Roblox steps at 240, 120 or 60 Hz
-    - [NaN and infinite values](behavior/physics/non-finite-values.md): what parts make of them
+    - [NaN and infinite values](behavior/physics/nan-and-infinite-values.md): what parts make of them
   - Rendering
     - [Materials](behavior/rendering/materials.md): PBR shading, the built-in materials, MaterialVariant and SurfaceAppearance
     - [Textures and decals](behavior/rendering/textures-and-decals.md)
