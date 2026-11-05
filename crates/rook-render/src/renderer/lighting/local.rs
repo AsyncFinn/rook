@@ -21,7 +21,7 @@ use wesl_core::include_wesl;
 
 use super::*;
 use blockers::{Blockers, Span, Touched};
-use glam::{IVec2, IVec3};
+use glam::{IVec2, IVec3, Vec2};
 use hash::{GpuLight, LightHash};
 use tiles::{ACROSS, TILE, Tiles, WORDS};
 
@@ -434,9 +434,10 @@ impl GpuLights {
     }
 
     /// Take the lights at `changed` (indices into `scene`, which may have
-    /// grown or shrunk) again. Only they are written; the hash is built
-    /// again only when lights come or go, or one moves past [`SLACK`] from
-    /// where it was hashed or reaches further.
+    /// grown or shrunk) again. Only they are written, and voxels fill again
+    /// only where a lit one was or is ([`GpuLight::dark`]); the hash is
+    /// built again only when lights come or go, or one lights up, moves past
+    /// [`SLACK`] from where it was hashed or reaches further.
     pub(crate) fn update(
         &mut self,
         device: &wgpu::Device,
@@ -447,7 +448,9 @@ impl GpuLights {
         let mut rehash = scene.len() != self.lights.len();
         for l in self.lights.drain(scene.len().min(self.lights.len())..) {
             self.shadowed -= usize::from(l.shadows());
-            self.dirty.lights.push(lit_voxels(&l));
+            self.dirty
+                .lights
+                .extend((!l.dark()).then(|| lit_voxels(&l)));
         }
         // New lights are among `changed`.
         self.lights.resize(scene.len(), GpuLight::zeroed());
@@ -462,9 +465,13 @@ impl GpuLights {
             self.lights[i] = new;
             self.dirty
                 .lights
-                .extend([lit_voxels(&old), lit_voxels(&new)]);
-            rehash |= new.position[3] > old.position[3]
-                || (self.hashed_at.get(i)).is_none_or(|at| new.at().distance(*at) > SLACK);
+                .extend([old, new].iter().filter(|l| !l.dark()).map(lit_voxels));
+            // The hash lists no dark light, and one that goes dark lights
+            // nothing where it's still listed.
+            rehash |= !new.dark()
+                && (old.dark()
+                    || new.position[3] > old.position[3]
+                    || (self.hashed_at.get(i)).is_none_or(|at| new.at().distance(*at) > SLACK));
             written.push(i);
         }
         if rehash {
@@ -785,7 +792,7 @@ impl GpuLights {
     /// cast its shadows (a ray runs from a voxel the light lights to the
     /// light, its eight neighbours up to a voxel and a half aside), and
     /// those it lights, in the volume starting at voxel `low`.
-    fn shadowed_reach(&self, low: IVec3) -> Vec<(Span, Span)> {
+    fn shadowed_reach(&self, low: IVec3) -> Vec<Shadowed> {
         if !self.shadows {
             return Vec::new();
         }
@@ -796,10 +803,11 @@ impl GpuLights {
             .filter(|l| l.shadows())
             .map(|light| {
                 let (near, far) = light.lit_box();
-                (
-                    local(voxels_of(near - margin, far + margin)),
-                    local(lit_voxels(light)),
-                )
+                Shadowed {
+                    at: light.at() / VOXEL - low.as_vec3(),
+                    near: local(voxels_of(near - margin, far + margin)),
+                    lit: local(lit_voxels(light)),
+                }
             })
             .collect()
     }
@@ -838,7 +846,7 @@ struct Reach {
     /// The sun the voxels shadow (towards it).
     sun: Option<Vec3>,
     /// [`GpuLights::shadowed_reach`].
-    shadowed: Vec<(Span, Span)>,
+    shadowed: Vec<Shadowed>,
     /// With the sky's light, [`roofs_of`] the volume.
     roofs: Vec<u64>,
 }
@@ -854,7 +862,8 @@ impl Reach {
     /// above it takes its neighbors' light, the rest are open to all of
     /// the sky whatever changed; with the sun, every voxel whose way to
     /// the sun crosses the span (`sunlit`); and the voxels each light
-    /// with `Shadows` whose rays may cross it lights (`unblocked`).
+    /// with `Shadows` whose rays may cross it lights (`unblocked`,
+    /// [`Shadowed::mark_behind`]).
     fn mark(&self, tiles: &mut Tiles, (lo, hi): Span) {
         if self.sky {
             tiles.mark((lo.with_y(0), hi));
@@ -908,9 +917,84 @@ impl Reach {
                 }
             }
         }
-        for &((a, b), lit) in &self.shadowed {
+        for light in &self.shadowed {
+            let (a, b) = light.near;
             if a.cmple(hi).all() && b.cmpge(lo).all() {
-                tiles.mark(lit);
+                light.mark_behind(tiles, (lo, hi));
+            }
+        }
+    }
+}
+
+/// A light with `Shadows`, in the volume's voxels.
+struct Shadowed {
+    /// Where it is, in voxels (voxel k's center at k + 0.5).
+    at: Vec3,
+    /// The voxels near enough to block it.
+    near: Span,
+    /// The voxels it lights.
+    lit: Span,
+}
+
+impl Shadowed {
+    /// How far aside of the line to the light `unblocked` in
+    /// `shaders/light_volume.wgsl` casts its rays, in voxels (up to one
+    /// voxel along two axes across it: sqrt 2), rounded up.
+    const SPREAD: f32 = 2.0;
+
+    /// Mark the voxels it lights whose rays may cross `span`: those behind
+    /// the span (padded by [`Shadowed::SPREAD`]) seen from the light, layer
+    /// by layer, as the sun's shadow is swept in [`Reach::mark`]; all it
+    /// lights when the span reaches the light's height, where its rays run
+    /// level and the shadow has no bound across.
+    fn mark_behind(&self, tiles: &mut Tiles, (lo, hi): Span) {
+        let (lit_lo, lit_hi) = self.lit;
+        let from = lo.as_vec3() - Self::SPREAD;
+        let to = (hi + 1).as_vec3() + Self::SPREAD;
+        let l = self.at;
+        if from.y <= l.y && l.y <= to.y {
+            tiles.mark(self.lit);
+            return;
+        }
+        for y in lit_lo.y..=lit_hi.y {
+            let c = y as f32 + 0.5;
+            // A voxel lies behind the points of the span between it and
+            // the light: the span's slice from this layer's height away
+            // from the light, whose corners bound its shadow here.
+            let (y0, y1) = if from.y > l.y {
+                (from.y, to.y.min(c))
+            } else {
+                (from.y.max(c), to.y)
+            };
+            if y0 > y1 {
+                continue;
+            }
+            let mut min = Vec2::INFINITY;
+            let mut max = Vec2::NEG_INFINITY;
+            for p in [y0, y1].into_iter().flat_map(|y| {
+                [
+                    (from.x, from.z),
+                    (from.x, to.z),
+                    (to.x, from.z),
+                    (to.x, to.z),
+                ]
+                .map(|(x, z)| Vec3::new(x, y, z))
+            }) {
+                let q = l + (p - l) * ((c - l.y) / (p.y - l.y));
+                min = min.min(Vec2::new(q.x, q.z));
+                max = max.max(Vec2::new(q.x, q.z));
+            }
+            // The voxels whose centers lie in it.
+            let a = (min - 0.5)
+                .ceil()
+                .as_ivec2()
+                .max(IVec2::new(lit_lo.x, lit_lo.z));
+            let b = (max - 0.5)
+                .floor()
+                .as_ivec2()
+                .min(IVec2::new(lit_hi.x, lit_hi.z));
+            if a.cmple(b).all() {
+                tiles.mark((IVec3::new(a.x, y, a.y), IVec3::new(b.x, y, b.y)));
             }
         }
     }

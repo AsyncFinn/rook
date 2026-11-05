@@ -178,7 +178,12 @@ changed, as voxel lighting engines update their grids in chunks: each
 layer is cut
 into 16-voxel (64-stud) tiles (`renderer/lighting/local/tiles.rs`), and
 the fill pass runs only over marked tiles. A light that changes marks
-what it lit before and lights now. A part that moves less than its slack
+what it lit before and lights now. A dark light (black, Brightness 0 or
+disabled) lights nothing, so it marks nothing and isn't in the hash: off
+lamps on parts that creep cost nothing. Studio shows nothing of them
+either: 40 off lights with `Shadows` (half black, half Brightness 0)
+packed around a lit PointLight leave its capture identical to the byte
+(2026-11-05). A part that moves less than its slack
 changes nothing at all (`renderer/lighting/local/slack.rs`): once a part
 moves, how far it may go before any voxel center it holds or nearly holds
 crosses its faces, or any voxel's fill rounds to another byte, is worked
@@ -202,8 +207,11 @@ layer below it, two voxels wider each way per layer down, only the tiles
 with a blocked voxel above that layer (a voxel with nothing above it in
 its column is lit by all of the sky whatever its neighbors do, so the
 sky's light spreads only under roofs); with the sun, the voxels whose way
-to the sun crosses it, layer by layer along the slanted path; and what
-each light with `Shadows` whose rays may cross it lights.
+to the sun crosses it, layer by layer along the slanted path; and, for
+each light with `Shadows` whose rays may cross it, the voxels behind it
+seen from that light, layer by layer, padded by how far aside the rays
+are cast (all the light reaches when the change reaches the light's
+height, where its rays run level).
 Changes in one tile column are joined first, so a crowd of small parts
 costs a few boxes. The sky's light is kept per voxel, so a fill of some
 tiles takes the layers above from the last fill where they didn't change,
@@ -232,6 +240,13 @@ clocks dropped between fills, and up to 480 ms of CPU marking when a
 from 18 to none. A place with 29,904 parts and 1,897 lights, about 2,000
 of whose blocker boxes change each frame: light voxels' CPU time 1.50 →
 1.56 ms mean (2.0 → 1.5 median), whole frame 18.6 → 17.2 ms median.
+
+Cost of leaving dark lights out and refilling only a moved part's shadow
+behind lights with `Shadows`, on a 58k-part terrain place with about 30
+off lamps on parts that settle after loading and a few assemblies that
+creep (release build, 300 frames after 10 seconds, alternating runs,
+2026-11-05): render + readback 21.1–21.4 → 13.2–14.1 ms median, frames
+over 16.7 ms 241–266 → 62–90 of 300.
 
 ## How far the grid reaches
 

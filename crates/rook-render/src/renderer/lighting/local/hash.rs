@@ -80,8 +80,18 @@ impl GpuLight {
         }
     }
 
+    /// Black: it lights nothing, wherever it is. Like Unreal, which leaves
+    /// lights whose color is black out of its light grid
+    /// (`ShouldRenderLightViewIndependent`), the hash and the voxels leave
+    /// it out, so moving one (an off lamp on a part that creeps) costs
+    /// nothing.
+    pub(super) fn dark(&self) -> bool {
+        self.color[..3] == [0.0; 3]
+    }
+
+    /// Parts block it, and it lights something to block.
     pub(super) fn shadows(&self) -> bool {
-        self.kind[2] > 0.5
+        self.kind[2] > 0.5 && !self.dark()
     }
 
     pub(super) fn at(&self) -> Vec3 {
@@ -134,11 +144,14 @@ pub(crate) struct LightHash {
 impl LightHash {
     pub(crate) fn build(lights: &[GpuLight]) -> Self {
         profiling::scope!("LightHash::build");
-        let reaches: Vec<Aabb> = lights.iter().map(GpuLight::reach).collect();
+        let reaches: Vec<(u32, Aabb)> = (lights.iter().enumerate())
+            .filter(|(_, l)| !l.dark())
+            .map(|(i, l)| (i as u32, l.reach()))
+            .collect();
         let count = |cell: f32| -> usize {
             reaches
                 .iter()
-                .map(|r| {
+                .map(|(_, r)| {
                     let (lo, hi) = cubes(r, cell);
                     (0..3)
                         .map(|i| (hi[i] - lo[i] + 1).max(0) as usize)
@@ -157,12 +170,12 @@ impl LightHash {
         let mut last = vec![u32::MAX; buckets];
         let mut counts = vec![0u32; buckets];
         let each = |f: &mut dyn FnMut(usize, u32)| {
-            for (i, r) in reaches.iter().enumerate() {
+            for &(i, ref r) in &reaches {
                 let (lo, hi) = cubes(r, cell);
                 for x in lo[0]..=hi[0] {
                     for y in lo[1]..=hi[1] {
                         for z in lo[2]..=hi[2] {
-                            f(bucket([x, y, z], mask), i as u32);
+                            f(bucket([x, y, z], mask), i);
                         }
                     }
                 }

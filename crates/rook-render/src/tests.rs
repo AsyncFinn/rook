@@ -470,6 +470,96 @@ fn lights_that_change_the_hash_refill_only_what_they_light() {
     }
 }
 
+/// An off light (black: Brightness 0) on a part that creeps by float noise
+/// every frame refills no voxels, however far it goes; when it lights up,
+/// every voxel comes out as filling them all.
+#[test]
+fn an_off_light_that_moves_refills_nothing() {
+    let (Ok(mut moved), Ok(mut fresh)) = (Renderer::headless(), Renderer::headless()) else {
+        return;
+    };
+    let mut ground = part(PartShape::Block, 0.0, [0.8; 3], 0.0);
+    ground.position.y = -0.5;
+    ground.size = Vec3::new(200.0, 1.0, 200.0);
+    let mut scene = Scene {
+        parts: vec![ground],
+        lights: vec![LocalLight {
+            position: Vec3::new(20.0, 3.0, 0.0),
+            shape: LightShape::Point,
+            color: [1.0, 0.6, 0.2],
+            brightness: 0.0,
+            range: 16.0,
+            shadows: true,
+            part: (Vec3::splat(f32::MAX), Vec3::splat(f32::MIN)),
+        }],
+        ..Scene::default()
+    };
+    let camera = Camera::look_at(Vec3::new(0.0, 40.0, 60.0), Vec3::ZERO);
+    moved.set_scene(&scene);
+    moved.render_to_image(16, 16, &camera).unwrap();
+    for step in [3e-5, 3e-5, 20.0] {
+        scene.lights[0].position.x += step;
+        moved.update_lights(&scene, &[0]);
+        moved.render_to_image(16, 16, &camera).unwrap();
+        assert_eq!(moved.lights.filled_tiles(), 0, "moved {step}");
+    }
+    scene.lights[0].brightness = 4.0;
+    moved.update_lights(&scene, &[0]);
+    moved.render_to_image(16, 16, &camera).unwrap();
+    assert!(moved.lights.filled_tiles() > 0);
+    fresh.set_scene(&scene);
+    fresh.render_to_image(16, 16, &camera).unwrap();
+    assert!(moved.light_voxels() == fresh.light_voxels());
+}
+
+/// A part moving under a light with `Shadows` refills the voxels behind
+/// it seen from the light, layer by layer below it, not all the light
+/// reaches; every voxel still comes out as filling them all.
+#[test]
+fn a_part_moving_under_a_shadowed_light_refills_its_shadow() {
+    let (Ok(mut moved), Ok(mut fresh)) = (Renderer::headless(), Renderer::headless()) else {
+        return;
+    };
+    let mut ground = part(PartShape::Block, 0.0, [0.8; 3], 0.0);
+    ground.position.y = -0.5;
+    ground.size = Vec3::new(200.0, 1.0, 200.0);
+    let mut crate_ = part(PartShape::Block, 0.0, [0.8; 3], 0.0);
+    crate_.position = Vec3::new(20.0, 24.0, 6.0);
+    crate_.size = Vec3::splat(2.0);
+    let mut scene = Scene {
+        parts: vec![ground, crate_],
+        lights: vec![LocalLight {
+            position: Vec3::new(0.0, 40.0, 0.0),
+            shape: LightShape::Point,
+            color: [1.0; 3],
+            brightness: 2.0,
+            range: 60.0,
+            shadows: true,
+            part: (Vec3::splat(f32::MAX), Vec3::splat(f32::MIN)),
+        }],
+        lighting: Lighting {
+            environment_diffuse: 0.0,
+            prioritize_quality: true,
+            ..Lighting::default()
+        },
+        ..Scene::default()
+    };
+    let camera = Camera::look_at(Vec3::new(0.0, 60.0, 80.0), Vec3::ZERO);
+    moved.set_scene(&scene);
+    moved.render_to_image(16, 16, &camera).unwrap();
+    scene.parts[1].rotation = Mat3::from_rotation_y(0.7);
+    moved.move_parts(&scene, &[1]);
+    moved.render_to_image(16, 16, &camera).unwrap();
+    // All the light reaches is 112 tiles here; the crate's shadow is two
+    // by two tiles in each of the 13 layers from below it to the light's
+    // lowest.
+    let filled = moved.lights.filled_tiles();
+    assert!(filled > 0 && filled <= 2 * 2 * 13, "filled {filled} tiles");
+    fresh.set_scene(&scene);
+    fresh.render_to_image(16, 16, &camera).unwrap();
+    assert!(moved.light_voxels() == fresh.light_voxels());
+}
+
 /// A part moving high under open sky (a fan turning, say) refills the
 /// light voxels in its own columns, not the cone below it that the sky's
 /// light spreads through under roofs: with nothing blocked above them,
