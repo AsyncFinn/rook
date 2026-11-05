@@ -300,6 +300,29 @@ ClockTime 14.5, the default skybox, waves frozen):
   by the sun's angle, its shadow on the floor seen through the water; both
   go with `GlobalShadows` off.
 
+## See-through parts
+
+Measured in Studio (version-fee454b8e2094ba9) on 2026-11-05, on a
+96 × 8 × 96 Water block raised over a white floor (`WaterTransparency` 1,
+waves off), seen from above at about 40 degrees:
+
+- A half-transparent (0.5) part 2 studs under the surface is hidden, where
+  an opaque one beside it shows through the water.
+- A half-transparent part 3 studs above the surface, and a Texture on a
+  Transparency 1 part 7 studs above it (a dotted grate), draw over the
+  water.
+- A Decal on an opaque part under the water shows through it; the same
+  Decal on a Transparency 1 part under the water is hidden. So images on
+  an invisible part are see-through ones, as on a half-transparent part.
+
+So water is drawn after opaque parts and their images, before the other
+see-through surfaces, and hides those under it. Rook draws its water
+first among the transparent parts, writing depth, and sorts images on
+parts of Transparency 1 with the transparent parts
+(`renderer/transparent.rs`). Before, water chunks were sorted with the
+parts by their corners (one point for 128 studs of water), so water drew
+over a grate above it wherever only water lay behind the grate.
+
 ## Reflections at high quality
 
 For when Rook gets a quality setting (see

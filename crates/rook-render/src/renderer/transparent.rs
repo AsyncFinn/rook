@@ -1,6 +1,6 @@
-//! Transparent parts: kept with their instances, and drawn back to front.
-//! The sort and its upload are only done again when a part or the view
-//! changed.
+//! Transparent parts: kept with their instances, and drawn back to front,
+//! terrain water first. The sort and its upload are only done again when a
+//! part or the view changed.
 
 use std::ops::Range;
 
@@ -67,6 +67,9 @@ struct Entry {
     /// An image layer (drawn just after its part at the same distance).
     image: bool,
     on_top: bool,
+    /// Terrain water: drawn before the rest, which its depth then hides
+    /// beneath it.
+    water: bool,
     key: BatchKey,
     passes: &'static [Pass],
     instance: Instance,
@@ -80,6 +83,7 @@ impl Entry {
             position: part.position,
             image: part.layer != Layer::Base,
             on_top: part.on_top,
+            water: Pass::of(part) == [Pass::Water],
             key: BatchKey {
                 shape: part.shape,
                 images: image_set(part),
@@ -175,8 +179,8 @@ impl TransparentParts {
     }
 
     /// Upload the parts `view` reaches, sorted back to front for `camera`
-    /// (an image on a transparent part just after its part, and those on
-    /// top after the rest), unless
+    /// (terrain water before the rest, an image on a transparent part just
+    /// after its part, and those on top after the rest), unless
     /// neither they nor the view changed since the last upload. Returns
     /// the draws: (key, pass, instance range) runs in that order.
     pub(crate) fn upload(
@@ -194,7 +198,11 @@ impl TransparentParts {
         profiling::scope!("transparent");
         self.changed = false;
         self.drawn_for = Some(drawn_for);
-        // What the view reaches, back to front for blending.
+        // What the view reaches, back to front for blending. Water first,
+        // writing depth: Studio draws see-through parts above water over it
+        // and hides those under it (measured; docs/behavior/terrain/
+        // water.md#see-through-parts). A water chunk is too big to sort
+        // against parts by one point anyway.
         let mut order = std::mem::take(&mut self.order);
         order.clear();
         order.extend(
@@ -209,6 +217,7 @@ impl TransparentParts {
             let (a, b) = (entry(a), entry(b));
             a.on_top
                 .cmp(&b.on_top)
+                .then(b.water.cmp(&a.water))
                 .then(db.total_cmp(&da))
                 .then(a.image.cmp(&b.image))
         });
@@ -219,7 +228,14 @@ impl TransparentParts {
         self.picks.clear();
         for &(d, t) in &order {
             let e = entry(t);
-            let d = if e.on_top { f32::NEG_INFINITY } else { d };
+            // Drawn first and last: as if farthest and nearest.
+            let d = if e.on_top {
+                f32::NEG_INFINITY
+            } else if e.water {
+                f32::INFINITY
+            } else {
+                d
+            };
             for &pass in e.passes {
                 let i = instances.len() as u32;
                 instances.push(e.instance);
@@ -254,5 +270,49 @@ impl TransparentParts {
         }
         self.instances = instances;
         runs
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use glam::Mat3;
+
+    use super::*;
+
+    /// Water draws before every other transparent part, even one farther
+    /// than its chunk's point, and counts as farthest for the world GUI.
+    #[test]
+    fn water_draws_before_the_other_transparent_parts() {
+        let Ok(r) = Renderer::headless() else {
+            return;
+        };
+        let at = |z: f32, material| PartInstance {
+            transparency: 0.5,
+            material,
+            ..PartInstance::plain(
+                DrawShape::Part(PartShape::Block),
+                Vec3::new(0.0, 0.0, z),
+                Mat3::IDENTITY,
+                Vec3::splat(2.0),
+            )
+        };
+        let mut t = TransparentParts::default();
+        for (i, p) in [
+            at(-10.0, Material::SmoothPlastic),
+            at(15.0, Material::Water),
+            at(10.0, Material::SmoothPlastic),
+        ]
+        .iter()
+        .enumerate()
+        {
+            t.occupy(i as u32, p, r.instance(p));
+        }
+        let camera = Camera::look_at(Vec3::new(0.0, 10.0, 20.0), Vec3::ZERO);
+        let view = Frustum::of(camera.view_projection(1.0));
+        let runs = t.upload(&r.device, &r.queue, &camera, &view, 0.0);
+        let passes: Vec<Pass> = runs.iter().map(|run| run.1).collect();
+        assert_eq!(passes, [Pass::Water, Pass::Part]);
+        assert_eq!(t.picks().iter().map(|p| p.0).collect::<Vec<_>>(), [1, 0, 2]);
+        assert_eq!(t.distances()[0], f32::INFINITY);
     }
 }

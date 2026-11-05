@@ -48,8 +48,9 @@ pub enum Layer {
         image: ImageHash,
         placement: ImagePlacement,
         z: i32,
-        /// Its part is partly transparent: the image is sorted with the
-        /// transparent parts and drawn just after its own.
+        /// Its part is see-through (Transparency above 0, 1 included): the
+        /// image is sorted with the transparent parts and drawn just after
+        /// its own.
         on_transparent: bool,
     },
 }

@@ -235,13 +235,15 @@ impl Pipelines {
             Default::default(),
         );
         // Terrain water, seen from either side: Studio draws its underside
-        // (`docs/behavior/terrain/water.md#seen-from-below`).
+        // (`docs/behavior/terrain/water.md#seen-from-below`). It writes
+        // depth, drawn before the other transparent parts, so those under
+        // it are hidden as Studio hides them.
         let water_pipeline = make_faces(
             None,
             "rook water",
             "fs_main",
             Some(wgpu::BlendState::ALPHA_BLENDING),
-            false,
+            true,
             wgpu::CompareFunction::Greater,
             Default::default(),
             Default::default(),

@@ -62,7 +62,10 @@ impl SceneCache {
                     image: ImageHash(hash),
                     placement,
                     z: dom.float_property(child, "ZIndex").unwrap_or(1.0) as i32,
-                    on_transparent: part.transparency > 0.0 && part.transparency < 1.0,
+                    // On an invisible part too (measured: Studio hides a
+                    // decal on a Transparency 1 part under water, where one
+                    // on an opaque part shows through it).
+                    on_transparent: part.transparency > 0.0,
                 },
                 ..*part
             });
