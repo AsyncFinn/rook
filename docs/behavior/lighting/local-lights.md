@@ -185,7 +185,10 @@ crosses its faces, or any voxel's fill rounds to another byte, is worked
 out, and it stays marked at that pose until it goes further, as a physics
 broadphase's fattened bounds keep a body in its tree. The voxels are fixed
 in the world, so that is exact, not a lag: what it marks there is what it
-would mark where it is. Physics bodies settling or creeping by thousandths
+would mark where it is. Only the voxels the volume holds are looked at,
+so a part far bigger than the volume costs what it covers of it, and a
+slack holds only while the volume stays put: when it moves, parts held
+this way take where they are now. Physics bodies settling or creeping by thousandths
 of a stud a frame cost nothing. Otherwise a part that moves marks again only the
 voxels whose cover changed (for a part aligned with the world, those at
 its edges, so a big part moving a little costs its edges), sends only

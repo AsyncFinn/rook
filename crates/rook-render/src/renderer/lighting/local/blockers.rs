@@ -111,6 +111,9 @@ pub(super) struct Blockers {
     /// How far each may move without marking anything differently, worked
     /// out once a part moves (nothing until then).
     slack: Vec<Slack>,
+    /// Where those held at the pose they were marked at while moving
+    /// within their slack are now, taken when the volume moves.
+    held: FxHashMap<usize, Blocker>,
     /// Where they stand.
     columns: Columns,
     /// Each mesh file's box in its own space (center, half size); `None`
@@ -241,7 +244,7 @@ impl Marked<'_> {
 }
 
 /// The voxels of `span` from `lo` to `hi`, or `None` if they miss it.
-fn clip((lo, hi): Span, span: Span) -> Option<Span> {
+pub(super) fn clip((lo, hi): Span, span: Span) -> Option<Span> {
     let (lo, hi) = (lo.max(span.0), hi.min(span.1));
     (!lo.cmpgt(hi).any()).then_some((lo, hi))
 }
@@ -745,6 +748,7 @@ impl Blockers {
     pub(super) fn clear(&mut self) {
         self.blockers.clear();
         self.slack.clear();
+        self.held.clear();
         self.columns.clear();
         self.changed = true;
         self.grid = None;
@@ -773,38 +777,7 @@ impl Blockers {
         for &i in stale.iter().chain(changed) {
             self.is_stale[i] = false;
             let blocker = self.blocker(&scene.parts[i], scene);
-            // A part that moved less than its slack marks what it did.
-            if let (Some(from), Some(to)) = (&self.blockers[i], &blocker)
-                && self.slack[i].holds(from, to)
-            {
-                continue;
-            }
-            if self.blockers[i] != blocker {
-                // A part that moves is likely to again: its slack is worth
-                // working out.
-                self.slack[i] = match (&self.blockers[i], &blocker) {
-                    (Some(_), Some(to)) => Slack::of(to),
-                    _ => Slack::default(),
-                };
-                if self.grid.is_some() {
-                    self.moved.push((self.blockers[i], blocker));
-                }
-                // A part moving within the columns it stood in (most moving
-                // parts, frame to frame) keeps its place in them: removing
-                // it walks each column's list.
-                let columns = |b: &Option<Blocker>| b.as_ref().map(|b| columns_of(b.voxels()));
-                if columns(&self.blockers[i]) != columns(&blocker) {
-                    if let Some(b) = &self.blockers[i] {
-                        self.columns.remove(i, b);
-                    }
-                    if let Some(b) = &blocker {
-                        self.columns.insert(i, b);
-                    }
-                }
-                self.blockers[i] = blocker;
-                self.changed = true;
-                rook_types::count!(LightSourcesChanged, 1);
-            }
+            self.take(i, blocker);
         }
         // More changes than parts (or nothing marking the voxels for a
         // while): marking afresh is cheaper.
@@ -814,6 +787,65 @@ impl Blockers {
             grid.pending = pieces(grid.span()).collect();
             self.moved.clear();
             self.touched = Touched::All;
+        }
+    }
+
+    /// Take part `i` as `blocker`, or keep it where it was marked while it
+    /// moves within its slack.
+    fn take(&mut self, i: usize, blocker: Option<Blocker>) {
+        let span = self.grid.as_ref().map(Grid::span);
+        if let (Some(from), Some(to), Some(span)) = (&self.blockers[i], &blocker, span)
+            && self.slack[i].holds(from, to, span)
+        {
+            if from == to {
+                self.held.remove(&i);
+            } else {
+                self.held.insert(i, *to);
+            }
+            return;
+        }
+        self.held.remove(&i);
+        if self.blockers[i] != blocker {
+            // A part that moves is likely to again: its slack is worth
+            // working out.
+            self.slack[i] = match (&self.blockers[i], &blocker, span) {
+                (Some(_), Some(to), Some(span)) => Slack::of(to, span),
+                _ => Slack::default(),
+            };
+            self.set(i, blocker);
+        }
+    }
+
+    /// Mark part `i` as `blocker` from now on.
+    fn set(&mut self, i: usize, blocker: Option<Blocker>) {
+        if self.grid.is_some() {
+            self.moved.push((self.blockers[i], blocker));
+        }
+        // A part moving within the columns it stood in (most moving parts,
+        // frame to frame) keeps its place in them: removing it walks each
+        // column's list.
+        let columns = |b: &Option<Blocker>| b.as_ref().map(|b| columns_of(b.voxels()));
+        if columns(&self.blockers[i]) != columns(&blocker) {
+            if let Some(b) = &self.blockers[i] {
+                self.columns.remove(i, b);
+            }
+            if let Some(b) = &blocker {
+                self.columns.insert(i, b);
+            }
+        }
+        self.blockers[i] = blocker;
+        self.changed = true;
+        rook_types::count!(LightSourcesChanged, 1);
+    }
+
+    /// Before the volume moves: its slacks covered only the voxels it
+    /// held, so parts held within theirs take where they are now.
+    fn release_held(&mut self) {
+        let mut held: Vec<(usize, Blocker)> = self.held.drain().collect();
+        held.sort_unstable_by_key(|&(i, _)| i);
+        for (i, now) in held {
+            self.slack[i] = Slack::default();
+            self.set(i, Some(now));
         }
     }
 
@@ -864,6 +896,9 @@ impl Blockers {
     /// voxels it moved onto; the first is marked whole at once.
     pub(super) fn mark(&mut self, low: IVec3, dims: IVec3) -> Option<Marked<'_>> {
         profiling::scope!("Blockers::mark");
+        if (self.grid.as_ref()).is_none_or(|grid| grid.low != low || grid.dims != dims) {
+            self.release_held();
+        }
         match &mut self.grid {
             Some(grid) if grid.dims == dims => {
                 // The voxels it came onto change; those it still covers
@@ -1185,6 +1220,7 @@ mod tests {
             (seed >> 40) as f32 / (1u64 << 24) as f32
         };
         let (low, dims) = (IVec3::new(-16, -8, -16), IVec3::new(32, 16, 32));
+        let span = (low, low + dims - 1);
         let (mut held, mut tiny) = (0, 0);
         for i in 0..600 {
             // Half on the half-stud grid, as built places are; half anywhere.
@@ -1200,7 +1236,9 @@ mod tests {
                 rand() * 20.0 - 10.0,
                 rand() * 40.0 - 20.0,
             );
-            let half = Vec3::new(rand() * 6.0, rand() * 3.0, rand() * 6.0);
+            // Some reach well past the volume, whose slack is only its.
+            let reach = if i % 7 == 0 { 400.0 } else { 6.0 };
+            let half = Vec3::new(rand() * reach, rand() * 3.0, rand() * 6.0);
             let (center, half) = (center.map(snap), half.map(snap).max(Vec3::splat(0.1)));
             let random_axis = |a: f32, b: f32, c: f32| Vec3::new(a, b + 0.1, c).normalize();
             let axes = match i % 3 {
@@ -1209,7 +1247,7 @@ mod tests {
                 _ => Mat3::from_axis_angle(random_axis(rand(), rand(), rand()), rand() * 3.0),
             };
             let from = Blocker::of_box(center, axes, half);
-            let slack = Slack::of(&from);
+            let slack = Slack::of(&from, span);
             for scale in [1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 0.1] {
                 let shift = Vec3::new(rand() - 0.5, rand() - 0.5, rand() - 0.5) * scale;
                 let turn = if i % 4 == 0 || i % 3 == 2 {
@@ -1219,7 +1257,7 @@ mod tests {
                     Mat3::IDENTITY
                 };
                 let to = Blocker::of_box(center + shift, turn * axes, half);
-                if slack.holds(&from, &to) {
+                if slack.holds(&from, &to, span) {
                     held += 1;
                     tiny += usize::from(scale <= 1e-4);
                     assert_eq!(
@@ -1236,5 +1274,50 @@ mod tests {
             tiny > 1200 && held > tiny,
             "{tiny} of 1800 tiny moves held, {held} in all"
         );
+    }
+    /// A slack covers only the voxels the volume held: a part held within
+    /// it is marked where it is now once the volume moves, and one that
+    /// moves after the volume did is marked again. Here a voxel center
+    /// just past the volume's edge lies outside the pose it was marked at
+    /// and inside where it goes.
+    #[test]
+    fn a_part_held_in_its_slack_is_marked_where_it_is_once_the_volume_moves() {
+        // From 91 to just short of 98 along x, the center of the first
+        // voxel past the volume.
+        let at = |x: f32, z: f32| {
+            let (lo, hi) = (91.0 + x, 98.0 - 0.000_05 + x);
+            Blocker::of_box(
+                Vec3::new((lo + hi) * 0.5, 2.0, z),
+                Mat3::IDENTITY,
+                Vec3::new((hi - lo) * 0.5, 1.0, 1.0),
+            )
+        };
+        let mut list = scattered();
+        list[1] = Some(at(-0.001, 10.0));
+        list[2] = Some(at(-0.001, 30.0));
+        let (low, dims) = (IVec3::new(-40, -10, -30), IVec3::new(64, 32, 64));
+        let mut blockers = Blockers {
+            blockers: list.clone(),
+            slack: vec![Slack::default(); list.len()],
+            columns: indexed(&list),
+            ..Blockers::default()
+        };
+        blockers.grid = Some(Grid::new(low, dims, &list, &blockers.columns));
+        blockers.take(1, Some(at(0.0, 10.0)));
+        blockers.take(2, Some(at(0.0, 30.0)));
+        assert!(blockers.mark(low, dims).is_some());
+        blockers.take(1, Some(at(0.0001, 10.0)));
+        assert!(blockers.held.contains_key(&1), "held within its slack");
+        let moved = low + IVec3::new(PIECE, 0, 0);
+        assert!((0..10_000).any(|_| blockers.mark(moved, dims).is_some()));
+        blockers.take(2, Some(at(0.0001, 30.0)));
+        assert!(blockers.mark(moved, dims).is_some());
+        list[1] = Some(at(0.0001, 10.0));
+        list[2] = Some(at(0.0001, 30.0));
+        let fresh = Grid::new(moved, dims, &list, &indexed(&list));
+        let grid = blockers.grid.as_ref().expect("a grid");
+        assert!(grid.bits == fresh.bits, "marked where it is");
+        assert!(grid.counts == fresh.counts);
+        assert!(grid.fill_bytes == fresh.fill_bytes);
     }
 }

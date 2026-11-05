@@ -6,12 +6,14 @@
 //! The voxels are a lattice fixed in the world, so what a blocker marks
 //! depends on its pose alone, and a blocker kept at the pose it was marked
 //! at while it moves within its slack marks exactly what it would where it
-//! is now.
+//! is now. Only the voxels the volume holds are looked at, so a part far
+//! bigger than the volume costs what it covers of it; a slack holds only
+//! while the volume stays put.
 
 use glam::{IVec3, Vec3};
 
 use super::VOXEL;
-use super::blockers::{Blocker, FULL, SAMPLE_REACH, center, overlap, samples};
+use super::blockers::{Blocker, FULL, SAMPLE_REACH, Span, center, clip, overlap, samples};
 
 /// How far a blocker may move from the pose it was marked at, in studs,
 /// two ways; nothing at all by default.
@@ -25,6 +27,8 @@ pub(super) struct Slack {
     /// For a box aligned with the world, the most its faces may move: its
     /// fills are worked out from them.
     faces: f32,
+    /// The voxels it was worked out over: the volume's then.
+    within: Span,
 }
 
 /// Around a box's faces, how far an aligned box's slack looks for faces
@@ -32,8 +36,9 @@ pub(super) struct Slack {
 const WINDOW: f32 = 0.25;
 
 impl Slack {
-    /// The slack of `b`, at the pose it is marked at.
-    pub(super) fn of(b: &Blocker) -> Self {
+    /// The slack of `b`, at the pose it is marked at, over the voxels
+    /// `within`.
+    pub(super) fn of(b: &Blocker, within: Span) -> Self {
         let reach =
             (b.max - b.center).max(b.true_max - b.center).length() + 2.0 * VOXEL * 3f32.sqrt();
         // Both poses' sums in f32 may each be off by about this much.
@@ -43,19 +48,18 @@ impl Slack {
         // voxel outside it, too far to come in.
         let (lo, hi) = b.centers();
         let mut rigid = VOXEL;
-        each(lo - 1, hi + 1, |k| {
+        each((lo - 1, hi + 1), within, |k| {
             rigid = rigid.min(margin(to_local * (center(k) - b.center), b.half));
         });
         let mut faces = f32::INFINITY;
         if b.aligned() {
-            faces = faces_slack(b, error);
+            faces = faces_slack(b, error, within);
         } else {
             // The sampled points of voxels past those it touches are at
             // least half a stud outside it.
             rigid = rigid.min(0.5);
             let points = samples(to_local);
-            let (lo, hi) = b.touched();
-            each(lo, hi, |k| {
+            each(b.touched(), within, |k| {
                 let local = to_local * (center(k) - b.center);
                 let wholly = local.abs();
                 let m = if (wholly - SAMPLE_REACH).cmpgt(b.true_half).any() {
@@ -73,13 +77,17 @@ impl Slack {
             rigid: (rigid - 2.0 * error).max(0.0),
             reach,
             faces: faces.max(0.0),
+            within,
         }
     }
 
     /// Whether `to` marks exactly what `from`, the pose this slack is
-    /// `from`'s, marks.
-    pub(super) fn holds(&self, from: &Blocker, to: &Blocker) -> bool {
-        if from.half != to.half || from.true_half != to.true_half || from.aligned() != to.aligned()
+    /// `from`'s, marks in the voxels `within`.
+    pub(super) fn holds(&self, from: &Blocker, to: &Blocker, within: Span) -> bool {
+        if self.within != within
+            || from.half != to.half
+            || from.true_half != to.true_half
+            || from.aligned() != to.aligned()
         {
             return false;
         }
@@ -116,12 +124,12 @@ fn margin(local: Vec3, half: Vec3) -> f32 {
 
 /// An aligned box's fills are each voxel's overlap with it, a byte in
 /// 255ths: how far its faces may move before one rounds differently.
-fn faces_slack(b: &Blocker, error: f32) -> f32 {
+fn faces_slack(b: &Blocker, error: f32, within: Span) -> f32 {
     let mut slack = WINDOW;
     // Voxels a voxel or more past its faces stay empty while it moves
     // less than the window.
     let (lo, hi) = b.touched();
-    each(lo - 1, hi + 1, |k| {
+    each((lo - 1, hi + 1), within, |k| {
         let at = center(k);
         let over = overlap(b, at);
         let filled = over.x * over.y * over.z / (VOXEL * VOXEL * VOXEL) * f32::from(FULL);
@@ -147,8 +155,11 @@ fn faces_slack(b: &Blocker, error: f32) -> f32 {
     slack
 }
 
-/// Each voxel from `lo` to `hi`, both included.
-fn each(lo: IVec3, hi: IVec3, mut f: impl FnMut(IVec3)) {
+/// Each voxel of `span` (both ends included) among those `within`.
+fn each(span: Span, within: Span, mut f: impl FnMut(IVec3)) {
+    let Some((lo, hi)) = clip(span, within) else {
+        return;
+    };
     for y in lo.y..=hi.y {
         for z in lo.z..=hi.z {
             for x in lo.x..=hi.x {
