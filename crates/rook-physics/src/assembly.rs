@@ -240,6 +240,31 @@ impl Assembly {
         Ok(())
     }
 
+    /// Put `part` at `cf` (orthonormal already) and the other members
+    /// where that puts them. Placing the assembly again around the same
+    /// part's CFrame writes the same values, so it changes nothing: a
+    /// move physics takes up after a script or a client made it isn't
+    /// journaled a second time, rounded differently. Such a second entry
+    /// was sent back to the client that owned the assembly as a move of
+    /// the server's, a frame stale, snapping its character back.
+    pub fn place_around(
+        &self,
+        dom: &mut Dom,
+        part: InstanceId,
+        cf: CFrame,
+    ) -> Result<(), DomError> {
+        let root = cf * self.offset_of(part).unwrap_or(CFrame::IDENTITY).inverse();
+        for m in &self.members {
+            let at = if m.part == part {
+                cf
+            } else {
+                (root * m.offset).orthonormalize()
+            };
+            dom.set_property_by_name(m.part, "CFrame", Value::CFrame(at))?;
+        }
+        Ok(())
+    }
+
     /// `AssemblyMass`: the members' masses, except Massless ones that
     /// aren't the root; infinite when anchored.
     pub fn mass(&self, dom: &Dom) -> f32 {
@@ -345,8 +370,7 @@ pub fn move_parts(
         }
         match Assembly::of(dom, part) {
             Some(asm) if asm.members.len() > 1 => {
-                let offset = asm.offset_of(part).unwrap_or(CFrame::IDENTITY);
-                asm.place(dom, cf * offset.inverse())?;
+                asm.place_around(dom, part, cf.orthonormalize())?;
                 moved.extend(asm.members.iter().map(|m| m.part));
             }
             _ => dom.set_property_by_name(part, "CFrame", Value::CFrame(cf.orthonormalize()))?,

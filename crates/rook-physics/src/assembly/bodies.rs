@@ -545,7 +545,7 @@ impl Physics {
             rb.user_data = contacts::pack_velocity(vector(props.linear_velocity));
         }
         // Keep the rest of the assembly with it.
-        rook_dom::ignore_stale(body.asm.place(dom, root));
+        rook_dom::ignore_stale(body.asm.place_around(dom, part, cf));
         if !self.world.bodies[h].is_dynamic() {
             let colliders: Vec<ColliderHandle> =
                 body.colliders.iter().flatten().map(|&(c, _)| c).collect();

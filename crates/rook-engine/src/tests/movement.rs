@@ -106,6 +106,26 @@ fn walking_reaches_walk_speed() {
     assert!(numbers(&out, "stop")[0] < 0.01, "{out:?}");
 }
 
+/// The server takes the pose of a character its client simulates without
+/// sending it back: a client walking in circles gets no CFrame of its own
+/// root from the server. The server's physics took each move up again,
+/// rounded a little differently while the character turned, and that
+/// second write went back a frame stale, snapping the walk back.
+#[test]
+fn a_walking_character_isnt_sent_back_its_own_pose() {
+    let local = r#"local changed = 0
+        r:GetPropertyChangedSignal("CFrame"):Connect(function() changed += 1 end)
+        local a = 0
+        game:GetService("RunService"):BindToRenderStep("walk", 100, function(dt)
+            a += dt * 2
+            h:Move(Vector3.new(math.sin(a), 0, -math.cos(a)))
+        end)
+        frames(90)
+        print("changed", changed)"#;
+    let out = drive("", "CFrame.new(0, 3, 0)", local, 2.0);
+    assert_eq!(numbers(&out, "changed"), [0.0], "{out:?}");
+}
+
 /// Measured: a jump of JumpHeight 7.2 rises 7.52 (Studio's stepping),
 /// through Jumping, Freefall and Landed, and clears Jump.
 #[test]

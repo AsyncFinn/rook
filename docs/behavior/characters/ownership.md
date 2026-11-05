@@ -47,7 +47,13 @@ process, so no real network delay):
   assembly there before its next frame and replicates it to the other
   clients (Approximation: Roblox sends at a lower rate and the server
   sees it later). The sender isn't sent its own move back, but the
-  server scripts' moves of its character do reach it.
+  server scripts' moves of its character do reach it. The server's
+  physics takes a move up by placing the assembly again around the part
+  that was moved, which writes the same CFrames and so changes nothing;
+  placing it from its root again rounded the CFrames a little
+  differently while the character turned, and that second write went
+  back to the client a frame stale, snapping its walk back about every
+  other frame.
 - Only the player's own character is taken from its client: a pose for
   any other part is ignored.
 - The Humanoid controller runs where the character is simulated: on its
