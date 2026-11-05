@@ -7,7 +7,7 @@
 // (a mesh texture, a decal or a skybox face), and its material's color,
 // normal, roughness (green) and metalness (red) maps.
 
-import package::common::{g, image_sampler, Taps, turned};
+import package::common::{g, image_sampler, sky_sampler, Taps, turned};
 import package::tone::srgb_to_linear;
 
 @if(image_table) enable wgpu_binding_array;
@@ -118,32 +118,20 @@ fn sky_slot(face: u32) -> u32 {
 
 @if(image_table)
 fn sample_sky(face: u32, uv: vec2<f32>) -> vec4<f32> {
-    return textureSample(images_srgb[sky_slot(face)], image_sampler, uv);
+    return textureSample(images_srgb[sky_slot(face)], sky_sampler, uv);
 }
 @else
 fn sample_sky(face: u32, uv: vec2<f32>) -> vec4<f32> {
-    return textureSample(image, image_sampler, uv);
+    return textureSample(image, sky_sampler, uv);
 }
 
-@if(image_table)
-fn sky_size(face: u32) -> vec2<u32> {
-    return textureDimensions(images_srgb[sky_slot(face)]);
-}
-@else
-fn sky_size(face: u32) -> vec2<u32> {
-    return textureDimensions(image);
-}
-
-// Where direction `d` falls on skybox image `face` (`Globals::sky_faces`),
-// half a texel off its edges, as the images don't repeat.
+// Where direction `d` falls on skybox image `face` (`Globals::sky_faces`).
 fn sky_uv(face: u32, d: vec3<f32>) -> vec2<f32> {
     let dir = g.sky_faces[face * 3u].xyz;
     let right = g.sky_faces[face * 3u + 1u].xyz;
     let up = g.sky_faces[face * 3u + 2u].xyz;
     let on_face = d / max(dot(d, dir), 1e-6);
-    let uv = vec2(0.5 + 0.5 * dot(on_face, right), 0.5 - 0.5 * dot(on_face, up));
-    let half_texel = 0.5 / vec2<f32>(sky_size(face));
-    return clamp(uv, half_texel, vec2(1.0) - half_texel);
+    return vec2(0.5 + 0.5 * dot(on_face, right), 0.5 - 0.5 * dot(on_face, up));
 }
 
 // The sky's linear light towards `d`: the skybox image facing nearest it,
@@ -165,7 +153,7 @@ fn sky_toward(d: vec3<f32>) -> vec3<f32> {
     if sky_slot(face) == 0u {
         return plain_sky_toward(d);
     }
-    return textureSampleLevel(images_srgb[sky_slot(face)], image_sampler, sky_uv(face, d), 0.0).rgb;
+    return textureSampleLevel(images_srgb[sky_slot(face)], sky_sampler, sky_uv(face, d), 0.0).rgb;
 }
 @else
 fn sky_toward(d: vec3<f32>) -> vec3<f32> {

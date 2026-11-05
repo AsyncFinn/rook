@@ -52,6 +52,9 @@ pub(crate) struct SkyCube {
     cube: wgpu::Texture,
     /// The reflection cube, as the main pass samples it.
     pub(crate) view: wgpu::TextureView,
+    /// How the main pass samples the skybox's images: clamped at their
+    /// edges, as they don't repeat.
+    pub(crate) image_sampler: wgpu::Sampler,
     built: Option<Built>,
 }
 
@@ -194,6 +197,16 @@ impl SkyCube {
             wgpu::TextureUsages::COPY_DST,
         );
         let view = cube_view(&cube, 0, CUBE_LEVELS);
+        // As the images' own sampler is, but clamped (`sky_sampler` in
+        // `shaders/common.wgsl`).
+        let image_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("rook skybox"),
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::MipmapFilterMode::Linear,
+            anisotropy_clamp: 8,
+            ..Default::default()
+        });
         Self {
             capture_layout,
             filter_layout,
@@ -206,6 +219,7 @@ impl SkyCube {
             sky,
             cube,
             view,
+            image_sampler,
             built: None,
         }
     }

@@ -55,6 +55,10 @@ struct Globals {
 // `brdfLUT.dds`, or Rook's fit of it): A and B by remapped roughness
 // across and the cosine to the camera down.
 @group(1) @binding(6) var brdf_table: texture_2d<f32>;
+// Linear, mipmapped, clamped at the edges: the skybox's images, which
+// don't repeat (a repeating sampler's coarser mips blend each face's edge
+// with its opposite one, a bright line along the seams).
+@group(1) @binding(7) var sky_sampler: sampler;
 // Instance flags.
 const CAST: u32 = 1u;
 const NEON: u32 = 2u;

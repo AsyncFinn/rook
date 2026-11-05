@@ -262,9 +262,14 @@ impl Renderer {
         let main_bind_group = main_bind_group(
             &cx,
             &main_layout,
-            &shadow_view,
-            &shadow_sampler,
-            [&surfaces_view, &water_view, &sky_cube.view, &brdf_view],
+            [&shadow_sampler, &sky_cube.image_sampler],
+            [
+                &shadow_view,
+                &surfaces_view,
+                &water_view,
+                &sky_cube.view,
+                &brdf_view,
+            ],
         );
         let mut pool = MeshPool::new(&device, &queue);
         let mut meshes = GpuCache::new();
@@ -500,9 +505,9 @@ impl Renderer {
         self.main_bind_group = main_bind_group(
             &self.upload_context(),
             &self.main_layout,
-            &self.shadow_view,
-            &self.shadow_sampler,
+            [&self.shadow_sampler, &self.sky_cube.image_sampler],
             [
+                &self.shadow_view,
                 &self.surfaces_view,
                 &self.water_view,
                 &self.sky_cube.view,

@@ -573,7 +573,8 @@ pub(crate) fn shadow_map(device: &wgpu::Device) -> (wgpu::TextureView, wgpu::Sam
 }
 
 /// The layout of group 1: the shadow map, the surface pattern and water
-/// arrays, the sky's reflection cube and the table its reflection goes by.
+/// arrays, the sky's reflection cube, the table its reflection goes by and
+/// the skybox's sampler.
 pub(crate) fn main_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
     let texture_entry = |binding, dimension| wgpu::BindGroupLayoutEntry {
         binding,
@@ -614,19 +615,24 @@ pub(crate) fn main_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
             texture_entry(4, wgpu::TextureViewDimension::D2Array),
             texture_entry(5, wgpu::TextureViewDimension::Cube),
             texture_entry(6, wgpu::TextureViewDimension::D2),
+            wgpu::BindGroupLayoutEntry {
+                binding: 7,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            },
         ],
     })
 }
 
 /// The main pass's group 1: the shadow map, the surface patterns (linear:
 /// gray 0.5 is a factor of 1 after doubling), water's normal frames, the
-/// sky's reflection cube and the BRDF table.
+/// sky's reflection cube, the BRDF table and the skybox's sampler.
 pub(crate) fn main_bind_group(
     cx: &UploadContext<'_>,
     layout: &wgpu::BindGroupLayout,
-    shadow_view: &wgpu::TextureView,
-    shadow_sampler: &wgpu::Sampler,
-    [surfaces, water, sky_cube, brdf]: [&wgpu::TextureView; 4],
+    [shadow_sampler, sky_sampler]: [&wgpu::Sampler; 2],
+    [shadow_view, surfaces, water, sky_cube, brdf]: [&wgpu::TextureView; 5],
 ) -> wgpu::BindGroup {
     let view = wgpu::BindingResource::TextureView;
     cx.device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -660,6 +666,10 @@ pub(crate) fn main_bind_group(
             wgpu::BindGroupEntry {
                 binding: 6,
                 resource: view(brdf),
+            },
+            wgpu::BindGroupEntry {
+                binding: 7,
+                resource: wgpu::BindingResource::Sampler(sky_sampler),
             },
         ],
     })
