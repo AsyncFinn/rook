@@ -2,19 +2,67 @@
 //! scheme for mesh files and images. Each is uploaded once, by content
 //! hash, the first time something draws it, and kept for the renderer's
 //! life. Uploads wait in a queue and go up at the start of a frame within
-//! a byte budget ([`FRAME_UPLOAD_BYTES`]), so a place that needs hundreds
-//! of images at once spreads them over frames instead of stalling one.
-//! What waits for an upload draws nothing until it's done.
+//! a budget of bytes and of time ([`UploadBudget`]), so a place that needs
+//! hundreds of images at once spreads them over frames instead of stalling
+//! one. What waits for an upload draws nothing until it's done.
 
 use std::collections::VecDeque;
 use std::hash::Hash;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
 /// Bytes uploaded per frame at most (the first upload of a frame always
 /// goes, however large).
 pub(crate) const FRAME_UPLOAD_BYTES: usize = 24 << 20;
+/// Time a frame spends uploading at most. Bytes alone don't bound it:
+/// making a texture and staging its levels costs far more than copying
+/// them, and 24 MB of images took 47-70 ms in one frame on a 2018-era
+/// place. A time slice beside a byte budget is Unity's pair
+/// (`asyncUploadTimeSlice`, 2 ms by default, and `asyncUploadBufferSize`).
+pub(crate) const FRAME_UPLOAD_TIME: Duration = Duration::from_millis(2);
+
+/// What a frame may still upload: bytes, and time until a deadline (none
+/// for a screenshot, which uploads everything). The first upload always
+/// goes, so the queue moves whatever its sizes.
+#[derive(Debug)]
+pub(crate) struct UploadBudget {
+    bytes: usize,
+    until: Option<Instant>,
+    first: bool,
+}
+
+impl UploadBudget {
+    /// A frame's budget, starting now.
+    pub(crate) fn frame() -> Self {
+        Self {
+            bytes: FRAME_UPLOAD_BYTES,
+            until: Some(Instant::now() + FRAME_UPLOAD_TIME),
+            first: true,
+        }
+    }
+
+    /// Everything.
+    pub(crate) fn unlimited() -> Self {
+        Self {
+            bytes: usize::MAX,
+            until: None,
+            first: true,
+        }
+    }
+
+    /// Take `size` bytes if they fit, or if nothing went up yet.
+    fn take(&mut self, size: usize) -> bool {
+        let fits = size <= self.bytes && self.until.is_none_or(|t| Instant::now() < t);
+        if !fits && !self.first {
+            return false;
+        }
+        self.first = false;
+        self.bytes = self.bytes.saturating_sub(size);
+        true
+    }
+}
 
 /// What uploads need from the renderer.
 #[derive(Debug, Clone, Copy)]
@@ -101,23 +149,14 @@ impl<K: Copy + Eq + Hash, T: Upload> GpuCache<K, T> {
         self.queued.contains(key)
     }
 
-    /// Upload queued files while `budget` (bytes) lasts; with
-    /// `first_free`, the first one goes whatever its size. Returns the keys
+    /// Upload queued files while `budget` lasts. Returns the keys
     /// uploaded.
-    pub(crate) fn upload(
-        &mut self,
-        cx: &mut T::Context<'_>,
-        budget: &mut usize,
-        first_free: &mut bool,
-    ) -> Vec<K> {
+    pub(crate) fn upload(&mut self, cx: &mut T::Context<'_>, budget: &mut UploadBudget) -> Vec<K> {
         let mut uploaded = Vec::new();
         while let Some((_, file)) = self.queue.front() {
-            let size = file.upload_size();
-            if size > *budget && !*first_free {
+            if !budget.take(file.upload_size()) {
                 break;
             }
-            *first_free = false;
-            *budget = budget.saturating_sub(size);
             let (key, file) = self.queue.pop_front().expect("front");
             self.queued.remove(&key);
             let gpu = file.upload(cx);
@@ -156,14 +195,32 @@ mod tests {
         }
         cache.request(0, &big);
         let frame = |cache: &mut GpuCache<u32, Blob>| {
-            let mut budget = FRAME_UPLOAD_BYTES / 2;
-            let mut first = true;
-            !cache.upload(&mut (), &mut budget, &mut first).is_empty()
+            let mut budget = UploadBudget::frame();
+            budget.bytes = FRAME_UPLOAD_BYTES / 2;
+            !cache.upload(&mut (), &mut budget).is_empty()
         };
         assert!(frame(&mut cache));
         assert!(cache.contains(&0) && !cache.contains(&1));
         assert!(frame(&mut cache) && frame(&mut cache));
         assert!(!cache.has_queued() && cache.contains(&2));
         assert!(!frame(&mut cache));
+    }
+
+    /// A frame whose time is spent uploads only its first file, however
+    /// small the rest.
+    #[test]
+    fn uploads_stop_when_the_frames_time_is_spent() {
+        let mut cache: GpuCache<u32, Blob> = GpuCache::new();
+        let small = Arc::new(Blob(1));
+        for key in 0..3 {
+            cache.request(key, &small);
+        }
+        let mut spent = UploadBudget::frame();
+        spent.until = Some(Instant::now());
+        assert_eq!(cache.upload(&mut (), &mut spent), [0]);
+        assert_eq!(
+            cache.upload(&mut (), &mut UploadBudget::unlimited()),
+            [1, 2]
+        );
     }
 }

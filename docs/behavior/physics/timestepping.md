@@ -48,8 +48,30 @@ counts as a complex mechanism, whether a bucket drops back with the same
 thresholds (hysteresis), the contact promotion rule, and which of the four
 240 Hz ticks in a frame a 60 Hz assembly steps on.
 
+## Long frames
+
+Checked against Studio on 2026-11-04. A frame that takes longer than
+usual doesn't make the next frame simulate all the time it lost: Roblox
+simulates a frame's time only up to a cap and drops the rest.
+
+| Side | Frame length | Simulated in the next step | Cap |
+|---|---|---|---|
+| Server | 0.30 s, 1.00 s | 1/15 s each (16 steps of 240 Hz) | 1/15 s |
+| Client | 0.35 s, 1.05 s | 0.117 s, 0.121 s (28 and 29 steps) | about 0.12 s |
+
+**Method.** A busy loop in a `Heartbeat` (server) or `RenderStepped`
+(client) handler held one frame for the length shown, while a block
+(server, network owner nil) or the local character (client, teleported
+3,000 studs up) fell freely. The speed gained across the long frame,
+divided by gravity (196.2), is the time simulated. Ordinary frames gained
+their own length's worth, so the cap only clips long ones. The client test
+ran at about 15 fps (an unfocused Studio), and its later frames of 0.118 s
+were simulated whole, so its cap lies between 0.118 and 0.121 s.
+
 ## Rook today
 
 Every assembly steps at 240 Hz (`rook-physics/src/lib.rs`, `STEP_HZ`), as
-`Fixed` does. Adaptive is deferred: see [architecture](../../design/architecture.md)
+`Fixed` does. A frame's time is capped at 0.1 s (24 steps; the player's
+`App::update` and the bench), near the client's measured 0.12 s, so a long
+frame costs the next one at most 24 steps. Adaptive is deferred: see [architecture](../../design/architecture.md)
 (Physics, *Adaptive timestepping*).

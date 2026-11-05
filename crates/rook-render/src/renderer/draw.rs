@@ -64,7 +64,7 @@ impl Renderer {
     pub fn render(&mut self, target: &wgpu::TextureView, width: u32, height: u32, camera: &Camera) {
         profiling::scope!("Renderer::render");
         let start = std::time::Instant::now();
-        self.upload_files(FRAME_UPLOAD_BYTES);
+        self.upload_files(UploadBudget::frame());
         let mut times = StageTimes::default();
         let mut lap = start;
         let mut stage = |time: &mut std::time::Duration| {

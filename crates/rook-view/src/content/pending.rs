@@ -2,6 +2,8 @@
 //! meanwhile.
 
 use crate::*;
+use content::arrivals::ARRIVALS_BUDGET;
+use rook_content::Failure;
 
 /// How far the camera moves before the files still loading are ranked
 /// again by their distance from it, in studs.
@@ -27,16 +29,40 @@ pub(crate) enum FileDraw {
 
 impl SceneCache {
     /// Take the files that finished loading and redraw the parts waiting
-    /// for them; with `wait`, first wait until none is loading. Returns the
-    /// entries that changed.
+    /// for them, within the frame's budget for arrivals; with `wait`, first
+    /// wait until none is loading, and redraw them all. Returns the entries
+    /// that changed.
     pub(crate) fn poll_files(&mut self, dom: &Dom, wait: bool) -> Vec<usize> {
         let finished = self.files.poll(wait);
-        if finished.is_empty() {
-            if self.files.idle() {
-                self.report.flush(dom);
-            }
-            return Vec::new();
+        let mut changed = Vec::new();
+        if !finished.is_empty() {
+            self.take_finished(dom, finished, &mut changed);
         }
+        if !self.arrivals.is_empty() {
+            profiling::scope!("SceneCache::arrivals");
+            let budget = (!wait).then_some(ARRIVALS_BUDGET);
+            let mut arrivals = std::mem::take(&mut self.arrivals);
+            arrivals.drain(budget, |id| {
+                if self.index.contains_key(&id) {
+                    self.place(dom, id, true, &mut changed);
+                }
+            });
+            self.arrivals = arrivals;
+        }
+        if self.files.idle() && self.arrivals.is_empty() {
+            self.report.flush(dom);
+        }
+        changed
+    }
+
+    /// Store finished files, and queue the parts waiting for them nearest
+    /// the camera first (effects and terrain, one each, redraw now).
+    fn take_finished(
+        &mut self,
+        dom: &Dom,
+        finished: Vec<(FileRef, Result<Loaded, Failure>)>,
+        changed: &mut Vec<usize>,
+    ) {
         profiling::scope!("SceneCache::poll_files");
         let mut parts = FxHashSet::default();
         for (key, loaded) in finished {
@@ -69,7 +95,6 @@ impl SceneCache {
         if self.lighting_changed {
             self.scene.lighting = self.lighting(dom);
         }
-        let mut changed = Vec::new();
         let effects: Vec<InstanceId> = parts
             .iter()
             .copied()
@@ -87,15 +112,17 @@ impl SceneCache {
             parts.remove(&terrain);
             changed.extend(self.refresh_terrain(dom));
         }
-        for id in parts {
-            if self.index.contains_key(&id) {
-                self.place(dom, id, true, &mut changed);
-            }
+        let mut queued: Vec<(f32, InstanceId)> = parts
+            .into_iter()
+            .filter_map(|id| {
+                let i = *self.index.get(&id)?;
+                Some((self.scene.parts[i].position.distance(self.focus), id))
+            })
+            .collect();
+        queued.sort_unstable_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
+        for (_, id) in queued {
+            self.arrivals.push(id);
         }
-        if self.files.idle() {
-            self.report.flush(dom);
-        }
-        changed
     }
 
     /// A file's state, noting that `part` waits for it while it loads.

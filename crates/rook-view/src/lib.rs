@@ -103,6 +103,8 @@ pub struct SceneCache {
     files: Files,
     /// Parts waiting for each file, redrawn when it arrives.
     waiting: FxHashMap<FileRef, FxHashSet<InstanceId>>,
+    /// Parts whose files arrived, drawn again a frame's budget at a time.
+    arrivals: content::arrivals::Arrivals,
     /// Where the camera is, for loading the files nearest it first.
     focus: Vec3,
     /// Where the camera was when the waiting files were last ranked.
@@ -155,6 +157,7 @@ impl SceneCache {
             layers: FxHashMap::default(),
             files: Files::new(content),
             waiting: FxHashMap::default(),
+            arrivals: Default::default(),
             focus: camera,
             ranked_from: camera,
             near: camera,

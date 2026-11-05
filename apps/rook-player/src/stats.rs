@@ -27,6 +27,10 @@ impl Times {
         self.samples.is_empty()
     }
 
+    pub(crate) fn samples(&self) -> &[Duration] {
+        &self.samples
+    }
+
     pub(crate) fn len(&self) -> usize {
         self.samples.len()
     }

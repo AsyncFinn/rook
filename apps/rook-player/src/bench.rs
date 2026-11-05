@@ -6,6 +6,8 @@
 
 use crate::*;
 
+mod budgets;
+
 /// `29436` → `29,436`.
 pub(crate) fn thousands(n: usize) -> String {
     let digits = n.to_string();
@@ -355,6 +357,13 @@ impl Measured {
                     whole.until(idle).summary()
                 );
                 self.report_slowest(idle);
+                for (budget, times) in [
+                    (budgets::SCENE_UPDATE, &scene),
+                    (budgets::HAND_OVER, &hand_over),
+                    (budgets::UPLOADS, &stages[0]),
+                ] {
+                    eprintln!("{}", budget.check(&times.since(idle)));
+                }
             }
             None => eprintln!(
                 "content still loading after {frames} frames, {:.2} s after the scene was built",

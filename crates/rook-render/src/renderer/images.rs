@@ -20,8 +20,12 @@ const FLAT_NORMAL: u32 = 1;
 /// Each image of a set without its own: a flat normal for the normal map,
 /// white for the rest.
 const DEFAULT_SLOTS: [u32; 5] = [WHITE, WHITE, FLAT_NORMAL, WHITE, WHITE];
-/// The table's first size, in slots (doubled as places need more).
+/// The table's first size, in slots, on devices that must bind every slot
+/// (doubled as places need more).
 const FIRST_SLOTS: u32 = 1024;
+/// The most slots an instance can name: each is 16 bits
+/// (`images.wgsl`'s `image_slot`).
+const MOST_SLOTS: u32 = 1 << 16;
 
 /// What stands in for a missing image: white for the image and color
 /// (sRGB) and for roughness and metalness (linear, so the part's own
@@ -73,13 +77,24 @@ impl ImageBinding {
         if !device.features().contains(needs) || table_room(device) < FIRST_SLOTS {
             return Self::Sets(FxHashMap::default());
         }
+        let partial = device
+            .features()
+            .contains(wgpu::Features::PARTIALLY_BOUND_BINDING_ARRAY);
+        // A table that may be bound part full is made its full size once,
+        // as engines size a bindless descriptor heap at startup: growing it
+        // means a new layout and every pipeline made again, a stall of a
+        // frame or more while images arrive. One that must bind every slot
+        // pays per slot each time images arrive, so it starts small.
+        let capacity = if partial {
+            table_room(device).min(MOST_SLOTS)
+        } else {
+            FIRST_SLOTS
+        };
         Self::Table(ImageTable {
             slots: FxHashMap::default(),
             order: Vec::new(),
-            capacity: FIRST_SLOTS,
-            partial: device
-                .features()
-                .contains(wgpu::Features::PARTIALLY_BOUND_BINDING_ARRAY),
+            capacity,
+            partial,
             group: None,
         })
     }
@@ -159,8 +174,9 @@ impl Renderer {
         slots
     }
 
-    /// Give newly uploaded images their slots, making the table bigger
-    /// (and the pipelines again) when it's full.
+    /// Give newly uploaded images their slots. A table that must bind every
+    /// slot grows when it's full, making the pipelines again; one bound
+    /// part full was made its full size at startup and never does.
     pub(crate) fn add_images(&mut self, hashes: &[ImageHash]) {
         let ImageBinding::Table(table) = &mut self.image_binding else {
             return;

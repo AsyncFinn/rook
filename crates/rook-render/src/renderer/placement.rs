@@ -171,12 +171,12 @@ impl Renderer {
     /// (screenshots, which shouldn't miss what a few more frames would
     /// show).
     pub fn finish_uploads(&mut self) {
-        self.upload_files(usize::MAX);
+        self.upload_files(UploadBudget::unlimited());
     }
 
-    /// Upload queued files within `budget` bytes, then place the entries
-    /// whose files are all there.
-    pub(crate) fn upload_files(&mut self, mut budget: usize) {
+    /// Upload queued files within `budget`, then place the entries whose
+    /// files are all there.
+    pub(crate) fn upload_files(&mut self, mut budget: UploadBudget) {
         if !self.is_uploading() {
             return;
         }
@@ -189,9 +189,8 @@ impl Renderer {
             view_formats: self.view_formats,
             block_compression: self.block_compression,
         };
-        let mut first = true;
-        let meshes = self.meshes.upload(&mut self.pool, &mut budget, &mut first);
-        let images = self.images.upload(&mut cx, &mut budget, &mut first);
+        let meshes = self.meshes.upload(&mut self.pool, &mut budget);
+        let images = self.images.upload(&mut cx, &mut budget);
         if meshes.is_empty() && images.is_empty() {
             return;
         }

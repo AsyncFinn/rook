@@ -35,7 +35,7 @@ use rook_types::{GuiQuad, Material, NormalId, PartShape, WorldCanvas, WorldPlace
 use wgpu::util::DeviceExt;
 
 use batch::cull::{Aabb, Frustum, MOTION_STUDS};
-use gpu::cache::{FRAME_UPLOAD_BYTES, GpuCache, Upload, UploadContext};
+use gpu::cache::{GpuCache, Upload, UploadBudget, UploadContext};
 use renderer::lighting::shadow::{SHADOW_DISTANCE, SHADOW_SIZE, ShadowView};
 
 use batch::*;
