@@ -293,6 +293,10 @@ impl DataModel {
         let world = self.runtime.world();
         let dom = &world.dom;
         let lighting = dom.find_service("Lighting");
+        // Lighting's look is its own properties and its children's (the
+        // Sky, a ColorGradingEffect).
+        let lights_scene =
+            |id: InstanceId| lighting.is_some_and(|l| id == l || dom.parent(id) == Some(l));
         let ids = RenderIds::get();
         let any_of =
             |id: InstanceId, classes: &[ClassId]| classes.iter().any(|&c| dom.is_a_class(id, c));
@@ -346,7 +350,7 @@ impl DataModel {
                         for p in world.physics.moved_with(*id).filter(|p| p != id) {
                             part_moved(dom, changes, p);
                         }
-                    } else if Some(*id) == lighting {
+                    } else if lights_scene(*id) {
                         changes.lighting = true;
                     } else if dom.is_a_class(*id, ids.terrain) || *property == ids.global_wind {
                         changes.terrain = true;
@@ -397,6 +401,9 @@ impl DataModel {
                     }
                     // Which Terrain Workspace holds may have changed.
                     changes.terrain |= subtree.iter().any(|&i| dom.is_a_class(i, ids.terrain));
+                    // A Sky (or tone curve) arriving in or leaving Lighting.
+                    changes.lighting |=
+                        lighting.is_some_and(|l| *old_parent == Some(l) || *new_parent == Some(l));
                     let attachment = |i: InstanceId| dom.is_a_class(i, ids.attachment);
                     changes
                         .lights_placed

@@ -237,6 +237,7 @@ mod context_actions;
 mod effects;
 mod explosions;
 mod gui;
+mod lighting_look;
 mod material_variants;
 mod movement;
 mod preload;
