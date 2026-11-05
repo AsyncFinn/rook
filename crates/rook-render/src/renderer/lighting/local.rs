@@ -937,12 +937,13 @@ fn roofs_of(layers: &[u64], low: IVec3) -> Vec<u64> {
     let ring = low.rem_euclid(IVec3::new(nx, ny, nz));
     let tile = TILE as i32;
     let mut roofs = vec![0u64; (ACROSS[0] * ACROSS[1]) as usize];
+    let dims = IVec3::new(nx, ny, nz);
     for z in 0..nz {
-        let row = nx * ((z + ring.z) % nz);
+        let rz = (z + ring.z) % nz;
         let tiles = ACROSS[0] as i32 * (z / tile);
         for x in 0..nx {
             let t = (tiles + x / tile) as usize;
-            roofs[t] |= layers[(row + (x + ring.x) % nx) as usize];
+            roofs[t] |= layers[blockers::column_of(dims, (x + ring.x) % nx, rz)];
         }
     }
     for roof in &mut roofs {

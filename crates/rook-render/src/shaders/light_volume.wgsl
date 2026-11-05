@@ -73,12 +73,19 @@ fn kept(c: vec3<u32>) -> vec3<u32> {
     return (c + params.ring.xyz) % params.size.yzw;
 }
 
+// Voxels across a brick (`PIECE` in `renderer/lighting/local/blockers.rs`).
+const BRICK: u32 = 16u;
+
 // Where voxel `c` of the volume is kept in `solid`, `fills` and `skies`:
-// `kept`, x + nx * (z + nz * y).
+// `kept`, in its brick (16 x 16 voxels across, the volume's height, laid
+// out together), x + 16 * (z + 16 * y) within; as `slot_of` in
+// `renderer/lighting/local/blockers.rs`.
 fn slot(c: vec3<u32>) -> u32 {
     let n = params.size.yzw;
     let r = kept(c);
-    return r.x + n.x * (r.z + n.z * r.y);
+    let brick = r.x / BRICK + n.x / BRICK * (r.z / BRICK);
+    let within = r.x % BRICK + BRICK * (r.z % BRICK + BRICK * r.y);
+    return brick * BRICK * BRICK * n.y + within;
 }
 
 fn is_solid(x: u32, y: u32, z: u32) -> bool {

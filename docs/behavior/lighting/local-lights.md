@@ -157,8 +157,14 @@ voxel (`renderer/lighting/local/blockers.rs`, shared with the sky's light) and
 the fill pass casts that light's rays through them. Those marks are kept
 by world position (a voxel's slot is its world index modulo the volume's
 size), with the parts listed by 64-stud column, so a volume that moves
-marks only the slabs it came onto, about 1 ms of them a frame; until
-they are all marked the old volume stays drawn. The voxels themselves,
+marks only the slabs it came onto. The marks are laid out in bricks of
+16 by 16 voxels across and the volume's full height, each brick's whole
+(a clipmap's bricks, as voxel engines keep them), and the bricks a move
+uncovered are marked at once on the host's worker threads, each worker
+writing only its own brick, for about 1 ms a frame; until they are all
+marked the old volume stays drawn. On a 2018-era place turning 3 degrees
+a frame the new volume lands within 4 frames (median); marked one piece
+after another it never caught up while turning. The voxels themselves,
 and the sky's light the fill keeps, are kept the same way, and surfaces
 sample them wrapping around (clamped to the volume's own voxels, so its
 faces don't blend across the wrap). So a volume that moves fills only
