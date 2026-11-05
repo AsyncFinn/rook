@@ -31,9 +31,12 @@ impl Physics {
         self.build_terrain_near_bodies(dt as f32);
         self.drive_joints(dt, steps);
         let events = contacts::Collector::default();
+        self.find_played_near(dt);
         for i in 0..steps {
-            if i + 1 == steps {
+            let last = i + 1 == steps;
+            if last {
                 self.remember_poses();
+                self.remember_far_played();
             }
             if !self.movers.is_empty() || !self.forced.is_empty() {
                 movers::apply(&mut self.world, self.movers.values(), h, &mut self.forced);
@@ -49,12 +52,15 @@ impl Physics {
             self.keep_accelerating_awake(h);
             self.update_humanoids(h);
         }
-        if self.world.islands.active_bodies().next().is_some() {
+        let far = self.playback.far_ones().next().is_some();
+        if far || self.world.islands.active_bodies().next().is_some() {
             self.generation += 1;
         }
-        // Stepping put every collider in place.
+        // Stepping put every collider in place, but for the far played
+        // assemblies', placed after it.
         self.stale.clear();
         self.stale_statics.clear();
+        self.place_far_played(h);
         for m in self.movers.values() {
             if let Some(inside) = movers::rocket_arrived(&self.world, m)
                 && let Some(was) = self.rockets.get_mut(&m.id)
@@ -136,7 +142,9 @@ impl Physics {
         self.step_motors(dom, &props);
         self.write_hinge_angles(dom, &props);
         let mut fallen = Vec::new();
-        for handle in self.world.islands.active_bodies() {
+        let active = self.world.islands.active_bodies();
+        let far = self.playback.far_ones();
+        for handle in active.filter(|h| !self.playback.far(*h)).chain(far) {
             let Some(body) = self.bodies.get(&handle) else {
                 continue;
             };
@@ -186,8 +194,9 @@ impl Physics {
             return;
         };
         let root = cframe_of(rb.position());
-        let linvel = Value::Vector3(Vector3(rb.linvel()));
-        let angvel = Value::Vector3(Vector3(rb.angvel()));
+        let (linear, angular) = self.velocity_of(h);
+        let linvel = Value::Vector3(Vector3(linear));
+        let angvel = Value::Vector3(Vector3(angular));
         // When the root moves, its entry in the journal stands for the
         // whole assembly (readers that need the others ask
         // [`Physics::moved_with`]), so replication sends one pose per

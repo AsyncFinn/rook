@@ -121,6 +121,10 @@ counters! {
     /// Parts whose physical state changed in the journal.
     PhysicsPartsChanged: Changed, "physics: parts changed";
     PhysicsParts: Size, "physics: parts";
+    /// Moves of assemblies another machine simulates, played back on
+    /// this one, into the physics world: each step's for those near
+    /// something simulated here, one after the frame for the rest.
+    PhysicsPlayedMoves: Info, "physics: played assembly moves";
 
     /// Sounds whose playback state was worked out again.
     SoundsUpdated: Touched, "audio: sounds updated";

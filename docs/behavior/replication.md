@@ -88,6 +88,17 @@ client saw a moving part stand still for frames and jump four 240 Hz steps
 at once, and a character on a server's platform rode 0 of its 6 studs.
 A local script moving one puts it there at once, until the next update
 (Inference).
+Only the played assemblies near something the client simulates (its
+character, its own loose parts) take every step's target: those whose
+broad-phase box is within how far the two can close in the frame, plus
+4 studs for a Humanoid's floor and climbing rays, of a simulated body's.
+The rest sleep in Rapier and are put where playback has them once, after
+the frame's steps, moving at what they covered over its last step, so
+their velocity, where they're drawn between the last two steps and where
+scripts and queries find them after the frame are what moving them at
+every step gives, without the steps nothing feels: on a 2018-era place
+with 227 moving server-owned assemblies, each step of the client's had
+been about half a millisecond spent moving them and finding no contact.
 
 An assembly that moves whole sends one pose, its root part's CFrame and
 velocities, not one per part: the client places the rest by its own copy of

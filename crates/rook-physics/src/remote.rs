@@ -28,6 +28,12 @@ const EXTRAPOLATE: f64 = DELAY;
 const CATCH_UP: f64 = 1.0;
 const JUMP: f64 = 0.5;
 
+/// How far past a simulated body's box something must be for that body
+/// not to feel it within a frame, beyond how far the two move: a
+/// Humanoid's floor and climbing rays reach 2 studs past its body
+/// (`humanoid/floor.rs`, `humanoid/climb.rs`), doubled for slack.
+const REACH: f32 = 4.0;
+
 /// One update of an assembly: where its body was and how fast it moved.
 #[derive(Debug, Clone, Copy)]
 struct Snapshot {
@@ -50,11 +56,36 @@ pub(crate) struct Playback {
     receiving: Option<f64>,
     /// The assemblies those updates moved.
     received: Vec<RigidBodyHandle>,
+    /// The played assemblies a body this world simulates could touch or
+    /// sense this frame, which move at every step.
+    near: FxHashSet<RigidBodyHandle>,
+    /// The others, with how fast they moved over the frame's last step.
+    /// They sleep in Rapier, so steps cost nothing for them (it works out
+    /// every awake body's colliders and boxes at each step, moved or not),
+    /// and are put where the updates have them once, after the frame:
+    /// nothing feels them in between, and what reads them (drawing,
+    /// scripts, queries, the DOM) reads them after the frame or between
+    /// its last two steps. A kinematic body's velocity is how it moved
+    /// over a step, so theirs are kept here, as Rapier keeps none for one
+    /// asleep.
+    far: FxHashMap<RigidBodyHandle, (glam::Vec3, glam::Vec3)>,
 }
 
 impl Playback {
     pub(crate) fn forget(&mut self, h: RigidBodyHandle) {
         self.tracks.remove(&h);
+        self.near.remove(&h);
+        self.far.remove(&h);
+    }
+
+    /// Whether `h` is played and asleep in Rapier this frame (see `far`).
+    pub(crate) fn far(&self, h: RigidBodyHandle) -> bool {
+        self.far.contains_key(&h)
+    }
+
+    /// The far played assemblies.
+    pub(crate) fn far_ones(&self) -> impl Iterator<Item = RigidBodyHandle> + '_ {
+        self.far.keys().copied()
     }
 
     pub(crate) fn plays(&self, h: RigidBodyHandle) -> bool {
@@ -189,11 +220,13 @@ impl Physics {
         let com = pose.rotation * rb.local_center_of_mass();
         let linear = vector(props.linear_velocity) - angular.cross(com);
         let now = self.playback.clock.unwrap_or(time - DELAY);
+        let pose_now = cframe_of(rb.position());
+        let (linear_now, angular_now) = self.velocity_of(h);
         let current = Snapshot {
             time: now,
-            pose: cframe_of(rb.position()),
-            linear: rb.linvel(),
-            angular: rb.angvel(),
+            pose: pose_now,
+            linear: linear_now,
+            angular: angular_now,
         };
         let track = self.playback.tracks.entry(h).or_insert_with(|| {
             // Played on from where it's shown.
@@ -213,19 +246,140 @@ impl Physics {
         true
     }
 
-    /// Before a step of `h` seconds: move each played assembly to where
-    /// its updates have it at the step's end.
+    /// How fast body `h` moves: a far played one's kept velocity, else
+    /// Rapier's.
+    pub(crate) fn velocity_of(&self, h: RigidBodyHandle) -> (glam::Vec3, glam::Vec3) {
+        if let Some(&v) = self.playback.far.get(&h) {
+            return v;
+        }
+        (self.world.bodies.get(h)).map_or((glam::Vec3::ZERO, glam::Vec3::ZERO), |rb| {
+            (rb.linvel(), rb.angvel())
+        })
+    }
+
+    /// Before a frame of `dt` seconds of steps: find the played
+    /// assemblies near a body this world simulates (see `near`), by the
+    /// broad phase's boxes, each simulated body's grown by how far it and
+    /// the fastest played assembly can close in the frame, plus [`REACH`].
+    /// Those wake; the rest (`far`) sleep.
+    pub(crate) fn find_played_near(&mut self, dt: f64) {
+        self.playback.near.clear();
+        if !self.playback.any() {
+            self.playback.far.clear();
+            return;
+        }
+        let dt = dt as f32;
+        let speed = |rb: &RigidBody, linear: glam::Vec3, angular: glam::Vec3| {
+            linear.length() + angular.length() * rb.mass_properties().max_extent()
+        };
+        let mut fastest = 0.0f32;
+        for (handle, track) in &self.playback.tracks {
+            if let Some(rb) = self.world.bodies.get(*handle) {
+                for s in track {
+                    fastest = fastest.max(speed(rb, s.linear, s.angular));
+                }
+            }
+        }
+        let pipeline = self.world.query_pipeline();
+        for handle in self.world.islands.active_bodies() {
+            let rb = &self.world.bodies[handle];
+            let simulated = rb.is_dynamic() && self.bodies.get(&handle).is_some_and(|b| !b.remote);
+            if !simulated {
+                continue;
+            }
+            let mut colliders = rb.colliders().iter();
+            let Some(first) = colliders.next().and_then(|c| self.world.colliders.get(*c)) else {
+                continue;
+            };
+            let mut aabb = first.compute_aabb();
+            for co in colliders.filter_map(|c| self.world.colliders.get(*c)) {
+                aabb.merge(&co.compute_aabb());
+            }
+            let grow = (speed(rb, rb.linvel(), rb.angvel()) + fastest) * dt + REACH;
+            let aabb = aabb.loosened(grow);
+            for (_, co) in pipeline.intersect_aabb_conservative(aabb) {
+                if let Some(parent) = co.parent()
+                    && self.playback.tracks.contains_key(&parent)
+                {
+                    self.playback.near.insert(parent);
+                }
+            }
+        }
+        let Playback {
+            tracks, near, far, ..
+        } = &mut self.playback;
+        for handle in tracks.keys() {
+            let Some(rb) = self.world.bodies.get_mut(*handle) else {
+                continue;
+            };
+            if near.contains(handle) {
+                far.remove(handle);
+                rb.wake_up(true);
+            } else if !far.contains_key(handle) {
+                far.insert(*handle, (rb.linvel(), rb.angvel()));
+                rb.sleep();
+            }
+        }
+    }
+
+    /// Before the frame's last step: where each far played assembly is
+    /// then, for drawing between the last two steps.
+    pub(crate) fn remember_far_played(&mut self) {
+        let Some(clock) = self.playback.clock else {
+            return;
+        };
+        for (handle, track) in &self.playback.tracks {
+            if self.playback.far.contains_key(handle) {
+                (self.before_last_step).insert(*handle, pose_of(&sample(track, clock)));
+            }
+        }
+    }
+
+    /// After a frame whose last step was `h` seconds: put each far played
+    /// assembly where its updates have it now, its colliders too, moving
+    /// at what it covered over that step, as Rapier works out a moved
+    /// kinematic body's velocity.
+    pub(crate) fn place_far_played(&mut self, h: f32) {
+        let Some(clock) = self.playback.clock else {
+            return;
+        };
+        let Playback { tracks, far, .. } = &mut self.playback;
+        for (handle, v) in far.iter_mut() {
+            let (Some(track), Some(rb)) = (tracks.get(handle), self.world.bodies.get_mut(*handle))
+            else {
+                continue;
+            };
+            let now = pose_of(&sample(track, clock));
+            let before = self.before_last_step.get(handle).copied().unwrap_or(now);
+            let moved = RigidBodyPosition {
+                position: before,
+                next_position: now,
+            };
+            let vels = moved.interpolate_velocity(1.0 / h, rb.local_center_of_mass());
+            *v = (vels.linvel, vels.angvel);
+            rook_types::count!(PhysicsPlayedMoves, 1);
+            rb.set_position(now, false);
+            self.stale.insert(*handle);
+        }
+    }
+
+    /// Before a step of `h` seconds: move each played assembly near
+    /// something simulated to where its updates have it at the step's end.
     pub(crate) fn play_remote(&mut self, h: f32) {
         if !self.playback.any() {
             return;
         }
         let clock = self.playback.advance(f64::from(h));
-        for (handle, track) in &mut self.playback.tracks {
+        let Playback { tracks, near, .. } = &mut self.playback;
+        for (handle, track) in tracks {
             // Keep the update before the clock, for the span it's in.
             while track.len() > 1 && track[1].time <= clock {
                 track.pop_front();
             }
-            if let Some(rb) = self.world.bodies.get_mut(*handle) {
+            if near.contains(handle)
+                && let Some(rb) = self.world.bodies.get_mut(*handle)
+            {
+                rook_types::count!(PhysicsPlayedMoves, 1);
                 rb.set_next_kinematic_position(pose_of(&sample(track, clock)));
             }
         }
