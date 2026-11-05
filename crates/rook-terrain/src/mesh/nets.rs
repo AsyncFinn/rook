@@ -194,7 +194,7 @@ impl Mesher<'_> {
                 material
             }
             Pass::Water => {
-                position.y -= WATER_DROP;
+                position.y = position.y.min(self.water_level(c)) - WATER_DROP;
                 TerrainMaterial::Water
             }
         };
@@ -262,6 +262,36 @@ impl Mesher<'_> {
             .flat_map(|&a| [a, -a])
             .map(|d| p + d)
             .any(|q| inside(q) && self.block.at(q).is_wet())
+    }
+
+    /// Water only: the highest that the water around cell `c` reaches
+    /// (its corners' and theirs, one voxel out, as the surface runs a cell
+    /// on into the land), which the cell's vertex never rises above.
+    /// Solids count as full of water beside it, so without this the
+    /// surface climbs land rising out of water that isn't full: dry
+    /// slivers sitting on its top row, and dry voxels beside a partly full
+    /// one (observed in Studio: the water stays flat at its level until it
+    /// meets the land). Unbounded with no water around.
+    fn water_level(&self, c: IVec3) -> f32 {
+        let inside = |q: IVec3| q.cmpge(IVec3::ZERO).all() && q.cmplt(IVec3::splat(SPAN)).all();
+        let mut level = f32::NEG_INFINITY;
+        for i in 0..64 {
+            let p = c + IVec3::new(i & 3, i >> 2 & 3, i >> 4) - IVec3::ONE;
+            if !inside(p) || !self.block.at(p).is_wet() {
+                continue;
+            }
+            // Water under more water reaches the next voxel up, past the
+            // cell; the top one reaches its surface.
+            let down = p - IVec3::Y;
+            let resting = !inside(down) || self.inside(down);
+            let t = crossing(self.block.at(p).water_surface_fill(), self.scale, resting);
+            level = level.max(self.center(p).y + t * self.scale);
+        }
+        if level == f32::NEG_INFINITY {
+            f32::INFINITY
+        } else {
+            level
+        }
     }
 
     /// Whether cell `c` has water at a corner (none out of the block).

@@ -433,6 +433,34 @@ fn water_covers_thin_dry_land_it_surrounds() {
     assert!(at(42.0) < open - 1.0, "3 wide: {} against {open}", at(42.0));
 }
 
+#[test]
+fn partly_full_water_stays_flat_against_rising_land() {
+    use TerrainMaterial::{Rock, Water};
+    // Observed in Studio (a lake's top row 0.67 full, Rock slivers of
+    // 0.01 to 0.29 on it and dry Rock beside it): the water stays flat at
+    // its level up to the land instead of climbing it.
+    let mut grid = Grid::new();
+    for z in 0..16 {
+        for x in 0..20 {
+            grid.set(IVec3::new(x, 0, z), Voxel::new(Rock, 255));
+            let v = if x < 12 {
+                Voxel::new(Water, 171)
+            } else {
+                Voxel::new(Rock, 171)
+            };
+            grid.set(IVec3::new(x, 1, z), v);
+            if (4..8).contains(&x) {
+                grid.set(IVec3::new(x, 2, z), Voxel::new(Rock, 40));
+            }
+        }
+    }
+    let open = water_below(&grid, Vec3::new(4.0, 40.0, 30.0)).expect("water drawn");
+    for x in [18.0, 22.0, 26.0, 30.0, 34.0, 42.0, 45.0, 47.0, 49.0, 52.0] {
+        let y = water_below(&grid, Vec3::new(x, 40.0, 30.0)).unwrap_or(f32::MIN);
+        assert!(y < open + 1e-3, "at x = {x}: {y} above the water's {open}");
+    }
+}
+
 /// Where a Grass slab meets a Rock one, the triangles whose corners take
 /// different layers are drawn once per layer they hold, the first corner's
 /// opaque: every triangle is drawn opaque once, the materials' seams lie

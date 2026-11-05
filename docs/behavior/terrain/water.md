@@ -157,6 +157,17 @@ within noise (median frame 1.90 and 2.12 ms before, 2.03 and 2.19
 after); on a 1,024-stud lake with 64 islands, 2% more triangles (the
 shores) and frames unchanged.
 
+*Partly full water against rising land* (Studio,
+version-fee454b8e2094ba9, 2026-11-05, a lake whose top row is 0.67 full,
+Rock slivers of 0.01 to 0.29 on that row and dry Rock beside it): the
+water stays flat at its level until it meets the land. Rook counts dry
+solids touching water as full of it, which put the surface a whole voxel
+up the slivers and a third of a voxel up the dry voxels beside it; each
+water vertex is now kept at or below the highest level the water around
+its cell reaches (`Mesher::water_level`). Where the water layer is full,
+as in every measurement above, that level is the layer's top and nothing
+changes. Far rings (`grid/coarse.rs`) still average dry solids as full.
+
 ## Seen from below
 
 With the camera under the island lake's surface (Studio 0.744), Studio
