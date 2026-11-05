@@ -1,8 +1,10 @@
 # The sky over the day
 
+Checked against Studio 0.745 on 2026-11-05.
+
 How Studio darkens and tints the sky at dawn and dusk, and how that
-reaches what the sky lights and what reflects it. Measured in Studio 0.745
-(`version-fee454b8e2094ba9`) on 2026-11-05.
+reaches what the sky lights and what reflects it. Measured in
+`version-fee454b8e2094ba9`.
 
 ## The tint
 
@@ -82,16 +84,15 @@ image's sRGB color squared), not through the curve's inverse.
 
 Against Studio at 6.29, exposure 0.5, Brightness 0 (a pool beside a
 wall): the sky lands within 9 levels at the horizon, and overhead within
-4 in red and green but 22 too blue. The water is still brighter than Studio's
-(11, 26, 35 against 7, 12, 16): see below.
+4 in red and green but 22 too blue. The water was brighter than Studio's
+(11, 26, 35 against 7, 12, 16) until see-through water let through what
+Studio's does and only its nearest surface drew ([water](../terrain/water.md),
+2026-11-05): black see-through water seen low over black ground now
+lands within 2 levels far off and 10 to 30% above Studio's light near the
+camera.
 
 ## Not done
 
 - The night sky: the dark gradient, its purple horizon glow and the stars
   (M13 step 1). Rook draws black there.
 - 18.0 to 18.3 wasn't sampled between its ends.
-- Studio switches the water's reflection off per vertex: its water vertex
-  shader passes `(POSITION.w & 8) ? 0 : 1` into the reflection's weight.
-  In a fresh pool Studio reflects the sky only in straight-edged patches,
-  darker elsewhere; which vertices carry the flag isn't known yet. Rook
-  reflects everywhere, so its water at dawn is brighter than Studio's.

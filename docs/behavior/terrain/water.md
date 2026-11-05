@@ -204,13 +204,26 @@ install's `shaders/shaders_glsl3.pack`, version-5a21b87bbc2641cf, read
   already holds once ([the sky over the day](../lighting/sky.md); read
   in 0.745, 2026-11-05).
 - **Per vertex**, the water vertex shader can switch the reflection off
-  (`(POSITION.w & 8) ? 0 : 1` times WaterReflectance); which vertices
-  carry the flag isn't known (Rook reflects everywhere).
+  (`(POSITION.w & 8) ? 0 : 1` times WaterReflectance). No freshly filled
+  pool shows it, seen from above or along the surface: black opaque
+  water reflects the sky evenly everywhere (2026-11-05). Straight-edged
+  dark patches seen once were left over from earlier edits in that Studio
+  and went with a fresh fill. Rook reflects everywhere.
 - **See-through water** is drawn opaque in the high quality variant: the
   scene behind (offset by the ripples) is mixed towards the lit body by
   the depth of water it shows through, then the reflection over that, so
-  the reflection isn't dimmed by WaterTransparency. Rook blends the whole
-  surface over what's behind (`WATER_PASSES`).
+  the reflection isn't dimmed by WaterTransparency. The blended variants
+  instead give the surface an alpha of `1 - (1 - w)(1 - clamp(0.004 ×
+  depth))`, `w` from WaterTransparency: over black ground, 0.28 of what's
+  behind passes at WaterTransparency 0.5 and 0.55 at 1, the same in every
+  channel (measured in the frame's colors, 2026-11-05). Rook blends its
+  surface over what's behind by that (`WATER_PASSES`).
+- **Only the nearest water surface** shows: through see-through water,
+  water farther back (a pool's far side, a chunk behind) never adds to it.
+  Rook draws all its water's depth first, then its color only where it is
+  nearest (`Pass::WaterDepth` in `renderer/transparent.rs`); before, water
+  seen through water stacked into a bright band at a pool's far end and
+  jagged edges where chunks overlapped.
 - **The glint** is a GGX highlight off the full ripples, the frames' red
   channel giving the roughness (0.089 to 1), with a Fresnel of 0.02.
 - **Distance**: the blended variant's opacity rises with the view depth
@@ -268,9 +281,9 @@ number in tenths per point of the 4-stud lattice, as Rook's terrain
 textures are, since its vertices don't carry one). The surface is
 `WaterColor` lit as a part's top is (on every face, 1.2 times brighter),
 mixed towards the skybox at full detail, sampled where the reflection
-points, by Studio's weight, with Studio's GGX glint; a fifth of
-`WaterTransparency` of what's behind shows through, falling to none at
-250 studs. Until 2026-10-28 `WaterReflectance` never reached the shader
+points, by Studio's weight, with Studio's GGX glint; 0.55 of
+`WaterTransparency` of what's behind shows through (a fifth until
+2026-11-05), falling to none at 250 studs. Until 2026-10-28 `WaterReflectance` never reached the shader
 (only Plastic's reflectance was passed on), so Rook's water reflected no
 sky at all: from 320 studs above the island lake its middle drew 12,
 120, 141 where Studio's draws 35, 128, 160; it now draws 40, 127, 159,
@@ -296,9 +309,12 @@ ClockTime 14.5, the default skybox, waves frozen):
 | ... and white | | 241, 245, 248 | 237, 242, 248 |
 | Transparency 0, black | | 28, 58, 94 | 33, 54, 91 |
 
-- Water is drawn at transparency 1, still teal: only a fifth of what's
-  behind it shows through (half that in red), and depth from 3 to 10
-  studs barely changes it.
+- Water is drawn at transparency 1, still teal, and depth from 3 to 10
+  studs barely changes it. The Rook column was rendered when Rook let a
+  fifth of what's behind through; at 0.55 (2026-11-05), the default
+  water at transparency 1 over sand 8 down and the baseplate 12 down
+  (Studio 0.745, the same light) reads 106, 155, 164 and 56, 119, 145
+  where Studio's reads 104, 152, 157 and 57, 119, 145.
 - Its sides away from the sun are as light as its top, ripple as it does
   and show what's behind them as the top does.
 - Its reflection rises steeply at low angles: against the sky it mirrors,

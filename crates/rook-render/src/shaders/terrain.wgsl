@@ -46,10 +46,10 @@ const WATER_NORMAL_SHIFT: f32 = 0.1;
 // every 20 units, 2 seconds at WaterWaveSpeed 10).
 const WATER_FRAMES_PER_PHASE: f32 = 1.25;
 // What water lets through of what's behind it, per unit of
-// WaterTransparency (measured from above over gray and sand at 0, 0.3
-// and 1: about a fifth at 1 in green and blue, half that in red; the
-// depth, 3 to 10 studs, barely matters).
-const WATER_PASSES: f32 = 0.2;
+// WaterTransparency, as its alpha in the frame (Studio's blended water
+// shader: alpha 1 - (1 - w)(1 - 0.004 depth); measured over black ground
+// at 0.5 and 1: 0.28 and 0.55 in every channel, 2026-11-05).
+const WATER_PASSES: f32 = 0.55;
 // Water lets less through farther off, none from this many studs (Studio's
 // blended water shader: opacity rises with the view depth times 0.004).
 const WATER_OPAQUE_STUDS: f32 = 250.0;
@@ -166,7 +166,7 @@ fn water_ripple(p: vec3<f32>, dp_x: vec3<f32>, dp_y: vec3<f32>, n: vec3<f32>, f0
 // normal there rippled a quarter of the way to the frames' (this fits the
 // reflection measured at 3 to 30 degrees down: 0.91 to 0.3), with the
 // sun's GGX glint off the frames' full ripples, their red channel the
-// roughness, and a little of what's behind showing through (WATER_PASSES),
+// roughness, and some of what's behind showing through (WATER_PASSES),
 // less with distance. The shaders have no side: seen from below, the same
 // terms reflect the sky's lower half, so the underside draws pale and
 // rippled. The frames play at WATER_FRAMES_PER_PHASE, each fading into the

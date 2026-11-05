@@ -34,6 +34,8 @@ pub(crate) enum Pipe {
     Opaque,
     Layer,
     Transparent,
+    /// Terrain water's depth, then its color where it is nearest.
+    WaterDepth,
     /// Terrain water, both sides.
     Water,
     GlassDepth,
@@ -311,6 +313,7 @@ impl Renderer {
             Pipe::Opaque => &p.opaque,
             Pipe::Layer => &p.layer,
             Pipe::Transparent => &p.transparent,
+            Pipe::WaterDepth => &p.water_depth,
             Pipe::Water => &p.water,
             Pipe::GlassDepth => &p.glass_depth,
             Pipe::GlassFilter => &p.glass_filter,

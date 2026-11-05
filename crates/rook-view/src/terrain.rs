@@ -393,7 +393,7 @@ impl Looks {
         if material == TerrainMaterial::Water {
             part.color = self.water;
             // Studio still draws water at WaterTransparency 1, letting
-            // through only a fifth of what's behind it (the shader's
+            // through about half of what's behind it (the shader's
             // `WATER_PASSES`), where a part would be gone.
             part.transparency = self.water_transparency.clamp(0.0, 0.999);
             part.reflectance = self.water_reflectance.clamp(0.0, 1.0);

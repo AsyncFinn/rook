@@ -36,7 +36,10 @@ pub(crate) struct BindLayouts<'a> {
 pub(crate) struct Pipelines {
     pub(crate) opaque: wgpu::RenderPipeline,
     pub(crate) transparent: wgpu::RenderPipeline,
-    /// Terrain water: transparent, not culled.
+    /// Terrain water's depth alone, before its color (`water`).
+    pub(crate) water_depth: wgpu::RenderPipeline,
+    /// Terrain water: transparent, not culled, drawn only where its depth
+    /// pass left it nearest.
     pub(crate) water: wgpu::RenderPipeline,
     /// Decals and Textures over what's drawn.
     pub(crate) layer: wgpu::RenderPipeline,
@@ -234,26 +237,41 @@ impl Pipelines {
             Default::default(),
             Default::default(),
         );
-        // Terrain water, seen from either side: Studio draws its underside
-        // (`docs/behavior/terrain/water.md#seen-from-below`). It writes
-        // depth, drawn before the other transparent parts, so those under
-        // it are hidden as Studio hides them.
-        let water_pipeline = make_faces(
-            None,
-            "rook water",
-            "fs_main",
-            Some(wgpu::BlendState::ALPHA_BLENDING),
-            true,
-            wgpu::CompareFunction::Greater,
-            Default::default(),
-            Default::default(),
-        );
         // Depth only: the color stays as it is.
         let keep = wgpu::BlendComponent {
             src_factor: wgpu::BlendFactor::Zero,
             dst_factor: wgpu::BlendFactor::One,
             operation: wgpu::BlendOperation::Add,
         };
+        // Terrain water, seen from either side: Studio draws its underside
+        // (`docs/behavior/terrain/water.md#seen-from-below`). Its depth
+        // goes first, before the other transparent parts, so those under it
+        // are hidden as Studio hides them, and its color then lands only on
+        // the nearest water surface: Studio's see-through water never shows
+        // the water behind it (its far banks and sides).
+        let water_depth = make_faces(
+            None,
+            "rook water depth",
+            "fs_depth",
+            Some(wgpu::BlendState {
+                color: keep,
+                alpha: keep,
+            }),
+            true,
+            wgpu::CompareFunction::Greater,
+            Default::default(),
+            Default::default(),
+        );
+        let water_pipeline = make_faces(
+            None,
+            "rook water",
+            "fs_main",
+            Some(wgpu::BlendState::ALPHA_BLENDING),
+            false,
+            wgpu::CompareFunction::GreaterEqual,
+            Default::default(),
+            Default::default(),
+        );
         let glass_depth = make(
             "rook glass depth",
             "fs_glass_filter",
@@ -414,6 +432,7 @@ impl Pipelines {
             ribbons,
             opaque: opaque_pipeline,
             transparent: transparent_pipeline,
+            water_depth,
             water: water_pipeline,
             layer: layer_pipeline,
             glass_depth,

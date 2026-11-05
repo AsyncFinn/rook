@@ -413,6 +413,12 @@ fn fs_glass_filter(in: VertexOut) -> @location(0) vec4<f32> {
     return vec4(sqrt(min(pow(1.2 * in.color.rgb + 0.01, vec3(power)), vec3(1.0))), 1.0);
 }
 
+// Depth alone (terrain water's first pass): the blend keeps the color.
+@fragment
+fn fs_depth() -> @location(0) vec4<f32> {
+    return vec4(0.0);
+}
+
 // ForceField: its color added over what's behind, faint where it faces
 // the camera and strong towards its outline, less as Transparency rises
 // (observed on blocks and balls: face-on a red one added about 0.014 to

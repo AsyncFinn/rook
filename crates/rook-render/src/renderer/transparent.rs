@@ -11,7 +11,11 @@ use runs::Pipe;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Pass {
     Part,
-    /// Terrain water, seen from either side.
+    /// Terrain water's depth, all of it before any of its color, so each
+    /// pixel shows only the nearest water surface, as Studio draws it,
+    /// whatever order its chunks come in.
+    WaterDepth,
+    /// Terrain water, seen from either side, where it is nearest.
     Water,
     Image,
     /// See-through Glass: its nearest depth, then its filter on what's
@@ -28,6 +32,7 @@ impl Pass {
     pub(crate) fn pipe(self) -> Pipe {
         match self {
             Pass::Part => Pipe::Transparent,
+            Pass::WaterDepth => Pipe::WaterDepth,
             Pass::Water => Pipe::Water,
             Pass::Image => Pipe::Layer,
             Pass::GlassDepth => Pipe::GlassDepth,
@@ -226,6 +231,19 @@ impl TransparentParts {
         let mut runs: Vec<TransparentRun> = Vec::new();
         self.distances.clear();
         self.picks.clear();
+        let mut push = |e: &Entry, d: f32, pass: Pass| {
+            let i = instances.len() as u32;
+            instances.push(e.instance);
+            self.distances.push(d);
+            self.picks.push((e.entry, e.world));
+            match runs.last_mut() {
+                Some((k, q, r)) if *k == e.key && *q == pass => r.end = i + 1,
+                _ => runs.push((e.key, pass, i..i + 1)),
+            }
+        };
+        for &(_, t) in order.iter().filter(|&&(_, t)| entry(t).water) {
+            push(entry(t), f32::INFINITY, Pass::WaterDepth);
+        }
         for &(d, t) in &order {
             let e = entry(t);
             // Drawn first and last: as if farthest and nearest.
@@ -237,14 +255,7 @@ impl TransparentParts {
                 d
             };
             for &pass in e.passes {
-                let i = instances.len() as u32;
-                instances.push(e.instance);
-                self.distances.push(d);
-                self.picks.push((e.entry, e.world));
-                match runs.last_mut() {
-                    Some((k, q, r)) if *k == e.key && *q == pass => r.end = i + 1,
-                    _ => runs.push((e.key, pass, i..i + 1)),
-                }
+                push(e, d, pass);
             }
         }
         self.order = order;
@@ -280,7 +291,8 @@ mod tests {
     use super::*;
 
     /// Water draws before every other transparent part, even one farther
-    /// than its chunk's point, and counts as farthest for the world GUI.
+    /// than its chunk's point, its depth first, and counts as farthest for
+    /// the world GUI.
     #[test]
     fn water_draws_before_the_other_transparent_parts() {
         let Ok(r) = Renderer::headless() else {
@@ -311,8 +323,11 @@ mod tests {
         let view = Frustum::of(camera.view_projection(1.0));
         let runs = t.upload(&r.device, &r.queue, &camera, &view, 0.0);
         let passes: Vec<Pass> = runs.iter().map(|run| run.1).collect();
-        assert_eq!(passes, [Pass::Water, Pass::Part]);
-        assert_eq!(t.picks().iter().map(|p| p.0).collect::<Vec<_>>(), [1, 0, 2]);
-        assert_eq!(t.distances()[0], f32::INFINITY);
+        assert_eq!(passes, [Pass::WaterDepth, Pass::Water, Pass::Part]);
+        assert_eq!(
+            t.picks().iter().map(|p| p.0).collect::<Vec<_>>(),
+            [1, 1, 0, 2]
+        );
+        assert_eq!(t.distances()[..2], [f32::INFINITY; 2]);
     }
 }
