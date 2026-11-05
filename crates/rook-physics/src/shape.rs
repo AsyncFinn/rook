@@ -88,12 +88,17 @@ pub(crate) fn world_box(dom: &Dom, part: InstanceId) -> Option<(SharedShape, Pos
 /// Where `part`'s `Size` box is and how big, at least [`MIN_PART_SIZE`]
 /// each way, as the DOM has it now: what every query and rule that goes
 /// by a part's box reads.
+///
+/// `None` for a box with a NaN or infinite number in it, whatever wrote
+/// it: scripts can't (`CFrame::written`), but a file or a body thrown far
+/// enough could, and nothing physical can be made of it.
 pub(crate) fn size_box(dom: &Dom, part: InstanceId) -> Option<(CFrame, glam::Vec3)> {
     let size = dom.vector3_property(part, "Size")?;
     let cf = dom
         .cframe_property(part, "CFrame")
         .unwrap_or(CFrame::IDENTITY);
-    Some((cf, size.max(glam::Vec3::splat(MIN_PART_SIZE))))
+    let finite = size.is_finite() && cf.position.is_finite() && cf.rotation.is_finite();
+    finite.then(|| (cf, size.max(glam::Vec3::splat(MIN_PART_SIZE))))
 }
 
 /// The world-axis-aligned box around `part`'s `Size` box, as its lowest

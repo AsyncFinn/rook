@@ -305,6 +305,12 @@ pub fn set_velocity(
         Some(asm) => asm.members.iter().map(|m| m.part).collect(),
         None => vec![part],
     };
+    // Observed: a NaN or infinite number anywhere writes zero.
+    let value = if value.is_finite() {
+        value
+    } else {
+        glam::Vec3::ZERO
+    };
     let value = Value::Vector3(rook_types::Vector3(value));
     for m in members {
         dom.set_property_by_name(m, name, value.clone())?;
@@ -322,7 +328,8 @@ pub fn move_part(dom: &mut Dom, part: InstanceId, cf: CFrame) -> Result<(), DomE
 /// given relative to the same starting poses: a part whose assembly an
 /// earlier one already moved is skipped.
 ///
-/// Parts' CFrames are orthonormalized as they're written, as Roblox's are
+/// A CFrame with a NaN or infinite number in it is [`CFrame::written`]
+/// instead. Parts' CFrames are orthonormalized as they're written, as Roblox's are
 /// (creator-docs CFrame:Orthonormalize). Without that, rounding error in a
 /// rotation grows threefold with each `SetPrimaryPartCFrame(Get.. * r)`,
 /// whose inverse assumes an orthonormal rotation, until parts balloon.
@@ -332,6 +339,7 @@ pub fn move_parts(
 ) -> Result<(), DomError> {
     let mut moved = FxHashSet::default();
     for (part, cf) in moves {
+        let cf = cf.written();
         if moved.contains(&part) {
             continue;
         }

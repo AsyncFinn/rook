@@ -34,12 +34,16 @@ pub(crate) fn set_cframe(w: &mut World, id: InstanceId, c: CFrame) -> Result<(),
 fn set_cframe_alone(w: &mut World, id: InstanceId, c: CFrame) -> Result<(), DomError> {
     let pid = w.dom.property_id(id, "CFrame").ok_or(DomError::Stale)?;
     w.dom
-        .set_property(id, pid, Value::CFrame(c.orthonormalize()))?;
+        .set_property(id, pid, Value::CFrame(c.written().orthonormalize()))?;
     joints::reseat(&mut w.dom, id)
 }
 
+/// In degrees, with no negative zeros: a new part's `Orientation` and
+/// `Rotation` read `0, 0, 0` where `CFrame:ToOrientation()` gives `-0`
+/// (observed, Studio 0.744).
 fn degrees(v: (f32, f32, f32)) -> Vector3 {
-    Vector3::new(v.0.to_degrees(), v.1.to_degrees(), v.2.to_degrees())
+    let d = |a: f32| a.to_degrees() + 0.0;
+    Vector3::new(d(v.0), d(v.1), d(v.2))
 }
 
 /// `Orientation`: degrees, applied in Y, X, Z order (Confirmed: creator-docs
@@ -441,6 +445,10 @@ pub(crate) fn set(
         }
         // A truss keeps at most one axis other than 2 (observed; conformance
         // case `content/truss`).
+        // Observed: a Size with a NaN or infinite number in it is ignored.
+        ("Size", Value::Vector3(v)) if w.dom.is_a(id, "BasePart") && !v.0.is_finite() => {
+            Some(Ok(()))
+        }
         ("Size", Value::Vector3(v)) if w.dom.class_name(id) == "TrussPart" => {
             let pid = w.dom.property_id(id, "Size")?;
             let size = rook_types::truss_size(v.0);

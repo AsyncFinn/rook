@@ -181,6 +181,19 @@ impl CFrame {
         }
     }
 
+    /// What a part's CFrame becomes when written: itself, or, with a NaN
+    /// or infinite number anywhere in it, upright a million studs down,
+    /// below any `FallenPartsDestroyHeight`, which removes it if it's
+    /// loose (observed in Studio 0.744 for CFrame, Position and Orientation
+    /// writes; huge finite values are kept).
+    pub fn written(self) -> CFrame {
+        if self.position.is_finite() && self.rotation.is_finite() {
+            self
+        } else {
+            CFrame::from_position(glam::Vec3::new(0.0, -1_000_000.0, 0.0))
+        }
+    }
+
     /// `CFrame:Orthonormalize()` via Gram-Schmidt on the right and up
     /// vectors. Roblox's exact algorithm is unverified. A rotation too
     /// degenerate to fix (a zero or parallel axis) is kept as it is.

@@ -759,6 +759,7 @@ fn get_children_is_never_stale() {
 mod core_gui;
 mod gui;
 mod models;
+mod parts;
 mod tweens;
 
 /// Every level of a script's stack has the script's environment, as in

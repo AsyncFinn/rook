@@ -185,6 +185,49 @@ fn queries_see_this_frames_changes() {
     let _ = floor;
 }
 
+/// A box with a NaN or infinite number in it, from wherever it came
+/// (scripts can't write one), is no part of the world, and the rest still
+/// is: such a box made the bounds tree panic.
+#[test]
+fn parts_with_nan_boxes_are_left_out() {
+    let mut dom = Dom::new();
+    let floor = part(
+        &mut dom,
+        O + Vec3::new(0.0, -5.0, 0.0),
+        Vec3::new(20.0, 1.0, 20.0),
+        true,
+    );
+    let loose = part(&mut dom, O, Vec3::splat(2.0), false);
+    let still = fixed(&mut dom, Vec3::new(5.0, 0.0, 0.0));
+    let mut physics = Physics::new();
+    run(&mut physics, &mut dom, 0.1);
+    let near = Vec3::splat(30.0);
+    assert!(region(&mut physics, &mut dom, -near, near).contains(&still));
+    let nan = Vec3::new(f32::NAN, 0.0, 0.0);
+    set(
+        &mut dom,
+        still,
+        "CFrame",
+        Value::CFrame(CFrame::from_position(nan)),
+    );
+    let wide = Vec3::new(f32::INFINITY, 1.0, 1.0);
+    set(
+        &mut dom,
+        loose,
+        "Size",
+        Value::Vector3(rook_types::Vector3(wide)),
+    );
+    run(&mut physics, &mut dom, 0.1);
+    let found = region(&mut physics, &mut dom, -near, near);
+    assert!(
+        found.contains(&floor) && !found.contains(&still),
+        "{found:?}"
+    );
+    let down = Vec3::new(0.0, -100.0, 0.0);
+    let hit = ray(&mut physics, &mut dom, Vec3::new(8.0, 10.0, 0.0), down);
+    assert_eq!(hit.map(|h| h.part), Some(floor));
+}
+
 #[test]
 fn ignore_lists_cover_descendants() {
     let mut dom = Dom::new();

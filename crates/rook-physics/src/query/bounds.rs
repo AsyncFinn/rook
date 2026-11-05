@@ -114,6 +114,7 @@ impl PartBounds {
     /// has none.
     fn place(&mut self, dom: &Dom, part: InstanceId) {
         let Some(aabb) = size_box(dom, part) else {
+            self.remove(part);
             return;
         };
         let leaf = match self.leaves.get(&part) {
