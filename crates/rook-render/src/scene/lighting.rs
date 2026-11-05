@@ -38,6 +38,10 @@ pub struct Lighting {
     pub sky_horizon: [f32; 3],
     /// The sky below the horizon (the skybox's Down image).
     pub sky_bottom: [f32; 3],
+    /// How the time of day tints the sky, per channel of light units: the
+    /// sky is drawn and lights surfaces at this, and its reflections take
+    /// it twice (docs/behavior/lighting/sky.md). 1 by day, 0 at night.
+    pub sky_tint: [f32; 3],
     /// The skybox's six images, in [`SKYBOX_FACES`] order (Up, Back,
     /// Front, Left, Right, Down), drawn behind everything once all six
     /// are in [`Scene::images`]; `None` draws the plain sky color.
@@ -52,7 +56,7 @@ pub struct Lighting {
     /// the sky, and how far metals trade their diffuse light for it.
     pub environment_specular: f32,
     /// `Lighting.EnvironmentDiffuseScale`, 0 to 1: how much the sky lights
-    /// surfaces (on top of Ambient), dimmed as the sky darkens at night.
+    /// surfaces (on top of Ambient), before [`sky_tint`](Self::sky_tint).
     pub environment_diffuse: f32,
     /// `Lighting.ExposureCompensation` as a multiplier on linear light
     /// (2 to the power of it), for everything drawn, the sky included.
@@ -95,6 +99,7 @@ impl Default for Lighting {
             sky_top: [0.36, 0.56, 0.86],
             sky_horizon: [0.75, 0.84, 0.95],
             sky_bottom: [0.75, 0.84, 0.95],
+            sky_tint: [1.0; 3],
             skybox: None,
             global_shadows: true,
             prioritize_quality: false,

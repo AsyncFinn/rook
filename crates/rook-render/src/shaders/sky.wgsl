@@ -2,7 +2,7 @@
 // at the far plane.
 
 import package::common::g;
-import package::tone::{frame_of, srgb_to_linear};
+import package::tone::{frame, light_units3, srgb_to_linear};
 import package::images::{sample_sky, sky_uv};
 
 struct SkyOut {
@@ -22,7 +22,9 @@ fn vs_sky(@builtin(vertex_index) i: u32, @builtin(instance_index) face: u32) -> 
 }
 
 // One skybox image: the pixels whose direction is closest to its face's,
-// mapped straight onto the cube face (unlit and unfogged).
+// mapped straight onto the cube face (unlit and unfogged), tinted for the
+// time of day (`g.sky_tint`) and scaled by the exposure in light units, as
+// Studio's shaders scale everything.
 @fragment
 fn fs_sky(in: SkyOut) -> @location(0) vec4<f32> {
     let p = g.sky_from_clip * vec4(in.ndc, 1.0, 1.0);
@@ -33,12 +35,12 @@ fn fs_sky(in: SkyOut) -> @location(0) vec4<f32> {
     if along < max(a.x, max(a.y, a.z)) - 1e-6 {
         discard;
     }
-    return vec4(frame_of(texel.rgb * g.fog_range.z), 1.0);
+    return vec4(frame(light_units3(texel.rgb) * g.fog_range.z * g.sky_tint.rgb), 1.0);
 }
 
 // The plain sky, before the skybox's images are up (or without any): its
 // color at the horizon over the whole screen.
 @fragment
 fn fs_plain_sky(in: SkyOut) -> @location(0) vec4<f32> {
-    return vec4(frame_of(srgb_to_linear(g.sky_horizon.rgb) * g.fog_range.z), 1.0);
+    return vec4(frame(light_units3(srgb_to_linear(g.sky_horizon.rgb)) * g.fog_range.z * g.sky_tint.rgb), 1.0);
 }

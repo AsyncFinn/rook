@@ -9,8 +9,10 @@ import package::common::{
     TERRAIN_DRAWN_SHIFT, terrain_taps,
 };
 import package::images::sky_toward;
-import package::lighting::{diffuse_light, sun_light, sun_visibility, fog_units};
-import package::tone::{albedo_units, frame, light_units3};
+import package::lighting::{
+    diffuse_light, sun_light, sun_visibility, fog_units, local_light, sky_reflection_tint, sky_visibility,
+};
+import package::tone::{albedo_units, frame};
 
 // A texel of a terrain color map (sRGB) recolored by its material's color,
 // as Studio builds its YCoCg texture array (`rook_terrain::Recolor`; `r`:
@@ -188,7 +190,13 @@ fn water_surface(in: VertexOut, dp_x: vec3<f32>, dp_y: vec3<f32>) -> vec4<f32> {
     let body = WATER_BODY_LIGHT * diffuse_light(albedo_units(in.color.rgb), in.world, up, sun_light(in.world, up));
     let mirror = mix(n, rippled, 0.25);
     let reflected = clamp(in.material.x, 0.0, 1.0) * (clamp(0.78 - 2.5 * abs(dot(mirror, v)), 0.0, 1.0) + 0.3);
-    let sky = light_units3(sky_toward(normalize(reflect(-v, mirror))) * g.fog_range.z);
+    // Studio's water shader: the sky in light units as its reflection cube
+    // holds it (the image's sRGB color squared, as `sky_cube.wgsl` takes
+    // it), as the time of day leaves it, only as far as the sky reaches
+    // here, and a tenth of the local lights. The exposure comes with the
+    // rest in `fog_units`.
+    let sky = albedo_units(sky_toward(normalize(reflect(-v, mirror)))) * sky_reflection_tint()
+        * sky_visibility(in.world, up) + 0.1 * local_light(in.world, up);
     var c = mix(body, sky, reflected);
     if g.sun_dir.y > 0.0 {
         let l = g.sun_dir.xyz;

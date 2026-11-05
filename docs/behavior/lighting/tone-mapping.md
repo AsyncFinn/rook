@@ -114,8 +114,10 @@ Baseplate with that Lighting, −0.6 against 0 took white SmoothPlastic
 from 179 to 148, 163-gray SmoothPlastic from 112 to 84 and 163-gray Metal
 from 92 to 67; the sky went from (85, 163, 202) to (61, 129, 174).
 
-Rook multiplies linear light by 2^ExposureCompensation (`Lighting::exposure`,
-applied in `fog` and to the sky), which lands within about 8 of those.
+Rook multiplies light units by 2^ExposureCompensation (`Lighting::exposure`,
+applied in `fog` and to the sky), which lands parts within about 8 of
+those and the sky within 2 (62 and 176 for Studio's 61 and 174 in red and
+blue; scaling the sky's linear light instead drew 169 in blue).
 Local lights take it before their tone curve, as Studio does, so lit walls
 don't dim as much as unlit ones. In the room, unlit consoles now draw
 95 to Studio's 91. Its carpet floor is still 59 to Studio's 24: a black
@@ -161,7 +163,8 @@ exposure before the curve; surface colors are their sRGB values squared.
 Unlit particles are their image times color, squared, times Brightness,
 as Studio's particle shaders draw them. The looks still fitted on
 Studio's pixels reach the frame through the curve's inverse (`frame_of` in
-`tone.wgsl`): skyboxes and the plain sky, and ForceField's rim; water's
+`tone.wgsl`): skyboxes and the plain sky (the exposure and the time of
+day's tint then scale their light units), and ForceField's rim; water's
 glint is in light units but unmeasured (as bright as the sun's light on a
 face square to it). Glass's filter is a scale on the light, before the
 curve.

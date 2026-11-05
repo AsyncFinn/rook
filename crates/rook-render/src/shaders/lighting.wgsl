@@ -186,8 +186,8 @@ fn ambient_color() -> vec3<f32> {
 const SKY_COVERED: f32 = 0.04;
 
 // The sky's diffuse light on a surface facing `n`, in light units (color
-// squared), as Studio lights with EnvironmentDiffuseScale (`g.sky_top.w`,
-// dimmed at night with the sky): the skybox's average colors overhead,
+// squared), as Studio lights with EnvironmentDiffuseScale (`g.sky_top.w`)
+// and the time of day's tint (`g.sky_tint`): the skybox's average colors overhead,
 // around the horizon and below, weighted by how far the surface faces up
 // or down. A side face takes 3/4 of the horizon and 1/8 each of the top
 // and bottom, an upward face 0.58 of the top and 0.42 of the horizon
@@ -202,7 +202,21 @@ fn sky_light(n: vec3<f32>) -> vec3<f32> {
     let h = g.sky_horizon.rgb;
     let b = g.sky_bottom.rgb;
     let light = top * t * t + (1.0 - top - bottom) * h * h + bottom * b * b;
-    return light * g.sky_top.w;
+    return light * g.sky_top.w * g.sky_tint.rgb;
+}
+
+// The sky's light left where none of it reaches (`SKY_COVERED`).
+fn sky_covered() -> vec3<f32> {
+    return SKY_COVERED * g.sky_top.w * g.sky_tint.rgb;
+}
+
+// What the time of day leaves of the sky's reflections: its tint twice,
+// as Studio's reflection cube holds the sky as drawn and its shaders tint
+// that by the sky's gradient again (measured at ClockTime 6.29 and 6.38:
+// water and a Reflectance 1 part keep the square of the drawn sky's share;
+// docs/behavior/lighting/sky.md).
+fn sky_reflection_tint() -> vec3<f32> {
+    return g.sky_tint.rgb * g.sky_tint.rgb;
 }
 
 // The diffuse light off a surface of color `albedo` at `world` facing
@@ -213,7 +227,7 @@ fn sky_light(n: vec3<f32>) -> vec3<f32> {
 // block the sky, a dim gray light stays (`SKY_COVERED`).
 fn diffuse_light(albedo: vec3<f32>, world: vec3<f32>, n: vec3<f32>, sun: vec3<f32>) -> vec3<f32> {
     let a = ambient_color();
-    let covered = vec3(SKY_COVERED * g.sky_top.w);
+    let covered = sky_covered();
     let sky = mix(covered, sky_light(n), sky_visibility(world, normalize(n)));
     return albedo * (a * a + sky + local_light(world, n) + sun);
 }
@@ -247,9 +261,10 @@ fn remapped(roughness: f32) -> f32 {
 }
 
 // The sky towards `d` in light units, from the reflection cube's `level`
-// (0 sharp to 5, Studio's 5 x remapped roughness).
+// (0 sharp to 5, Studio's 5 x remapped roughness), as the time of day
+// leaves it (`sky_reflection_tint`).
 fn sky_reflected(d: vec3<f32>, level: f32) -> vec3<f32> {
-    return textureSampleLevel(sky_cube, image_sampler, d, level).rgb;
+    return textureSampleLevel(sky_cube, image_sampler, d, level).rgb * sky_reflection_tint();
 }
 
 // How much of the sky a surface of reflectance `f0` reflects at remapped
@@ -310,7 +325,7 @@ fn shade_pbr(
         highlight = sun_highlight(f0, roughness, max(dot(n, h), 1e-3), l_h) * sun;
     }
     let open = sky_visibility(world, n);
-    let covered = vec3(SKY_COVERED * g.sky_top.w);
+    let covered = sky_covered();
     let sky_diffuse = mix(covered, sky_light(n), open) * not_metal * (1.0 - sky_f * environment);
     let a = ambient_color();
     let surface = mix(albedo, sky, reflectance);

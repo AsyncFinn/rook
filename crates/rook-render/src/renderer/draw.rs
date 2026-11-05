@@ -258,6 +258,7 @@ impl Renderer {
             sky_top: rgb(l.sky_top, l.environment_diffuse),
             sky_horizon: rgb(l.sky_horizon, l.environment_specular),
             sky_bottom: rgb(l.sky_bottom, 0.0),
+            sky_tint: rgb(l.sky_tint, 0.0),
             sky_images,
         };
         self.queue

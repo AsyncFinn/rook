@@ -50,6 +50,7 @@
     - [Local lights](behavior/lighting/local-lights.md): PointLight, SpotLight and SurfaceLight
     - [Ambient and OutdoorAmbient](behavior/lighting/ambient.md)
     - [The sun](behavior/lighting/sun.md)
+    - [The sky over the day](behavior/lighting/sky.md): its tint at dawn and dusk, and what it reaches
     - [Tone mapping](behavior/lighting/tone-mapping.md): Studio's HDR blending, Neon's glow, ColorGrading's curves and fog
   - Meshes
     - [Built-in shapes](behavior/meshes/built-in-shapes.md): SpecialMesh types, BlockMesh, CylinderMesh

@@ -44,6 +44,8 @@ pub(crate) struct Globals {
     pub(crate) sky_top: [f32; 4],
     pub(crate) sky_horizon: [f32; 4],
     pub(crate) sky_bottom: [f32; 4],
+    /// `Lighting::sky_tint`.
+    pub(crate) sky_tint: [f32; 4],
     /// Each skybox image's slot in the image table, when there is one.
     pub(crate) sky_images: [[u32; 4]; 2],
 }

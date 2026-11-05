@@ -33,11 +33,15 @@ struct Globals {
     wind: vec4<f32>,
     // The sky overhead, at the horizon and below (sRGB): water reflects the
     // first two, and all three light surfaces. sky_top.w =
-    // EnvironmentDiffuseScale, dimmed at night; sky_horizon.w =
+    // EnvironmentDiffuseScale; sky_horizon.w =
     // EnvironmentSpecularScale.
     sky_top: vec4<f32>,
     sky_horizon: vec4<f32>,
     sky_bottom: vec4<f32>,
+    // The time of day's tint on the sky, per channel of light units
+    // (`Lighting::sky_tint`): the sky is drawn at it, reflected at its
+    // square.
+    sky_tint: vec4<f32>,
     // Each skybox image's slot in the image table, when there is one.
     sky_images: array<vec4<u32>, 2>,
 };

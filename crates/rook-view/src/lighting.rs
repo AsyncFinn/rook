@@ -8,14 +8,14 @@ mod sun;
 pub(super) use local::LightCache;
 
 use super::*;
-use sun::{daylight, sun_and_moon, sun_direction};
+use sky::sky_tint;
+use sun::{sun_and_moon, sun_direction};
 
-/// The Lighting service's look, and how bright the sky is
-/// ([`daylight`]).
-pub(super) fn lighting(dom: &Dom) -> (Lighting, f32) {
+/// The Lighting service's look.
+pub(super) fn lighting(dom: &Dom) -> Lighting {
     let mut l = Lighting::default();
     let Some(id) = dom.find_service("Lighting") else {
-        return (l, 1.0);
+        return l;
     };
     let hours = dom.clock_time(id) as f32;
     let latitude = dom
@@ -77,11 +77,9 @@ pub(super) fn lighting(dom: &Dom) -> (Lighting, f32) {
         .unwrap_or(0.0)
         .exp2();
     l.tonemapper = tonemapper(dom, id);
-    let day = daylight(sun);
-    l.sky_top = l.sky_top.map(|c| c * day);
-    l.sky_horizon = l.sky_horizon.map(|c| c * day);
+    l.sky_tint = sky_tint(hours);
     l.sky_bottom = l.sky_horizon;
-    (l, day)
+    l
 }
 
 /// The tone curve of the first enabled ColorGradingEffect in Lighting
@@ -101,8 +99,8 @@ fn tonemapper(dom: &Dom, lighting: InstanceId) -> rook_render::Tonemapper {
 impl SceneCache {
     /// The Lighting service's look, with the place's skybox.
     pub(super) fn lighting(&mut self, dom: &Dom) -> Lighting {
-        let (mut l, day) = lighting(dom);
-        self.sky(dom, &mut l, day);
+        let mut l = lighting(dom);
+        self.sky(dom, &mut l);
         l
     }
 }

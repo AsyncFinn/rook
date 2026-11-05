@@ -198,7 +198,19 @@ install's `shaders/shaders_glsl3.pack`, version-5a21b87bbc2641cf, read
   |n·v|, 0, 1) + 0.3)`: 0.3 looking down, 0.65 at 10 degrees, 0.86 at 5,
   0.95 at 3 (measured: 0.27 to 0.3, 0.69, 0.80, 0.91).
 - **The sky** is the skybox along the reflection at full detail (mip 0),
-  times the sky's gradient, below the horizon as well as above.
+  times the sky's gradient, below the horizon as well as above, times the
+  light grid's sky visibility, plus a tenth of the local lights' light.
+  The gradient is the time of day's tint, which the reflection cube
+  already holds once ([the sky over the day](../lighting/sky.md); read
+  in 0.745, 2026-11-05).
+- **Per vertex**, the water vertex shader can switch the reflection off
+  (`(POSITION.w & 8) ? 0 : 1` times WaterReflectance); which vertices
+  carry the flag isn't known (Rook reflects everywhere).
+- **See-through water** is drawn opaque in the high quality variant: the
+  scene behind (offset by the ripples) is mixed towards the lit body by
+  the depth of water it shows through, then the reflection over that, so
+  the reflection isn't dimmed by WaterTransparency. Rook blends the whole
+  surface over what's behind (`WATER_PASSES`).
 - **The glint** is a GGX highlight off the full ripples, the frames' red
   channel giving the roughness (0.089 to 1), with a Fresnel of 0.02.
 - **Distance**: the blended variant's opacity rises with the view depth

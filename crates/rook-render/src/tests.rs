@@ -231,6 +231,48 @@ fn water_phase_follows_wave_speed() {
 
 /// A part behind the camera, culled from the main pass, still shadows the
 /// ground in view: the shadow pass draws what the sun sees.
+/// The sky's tint for the time of day reaches all the sky does: at night
+/// (tint 0) the sky draws black, and a part lit only by it and reflecting
+/// it whole draws black too; by day both show.
+#[test]
+fn a_night_sky_draws_lights_and_reflects_nothing() {
+    let Ok(mut r) = Renderer::headless() else {
+        return;
+    };
+    let mut mirror = part(PartShape::Block, 0.0, [0.0; 3], 0.0);
+    mirror.size = Vec3::new(20.0, 1.0, 20.0);
+    mirror.reflectance = 1.0;
+    let camera = Camera::look_at(Vec3::new(0.0, 6.0, 20.0), Vec3::new(0.0, 0.0, 0.0));
+    for (tint, lit) in [([1.0; 3], true), ([0.0; 3], false)] {
+        r.set_scene(&Scene {
+            parts: vec![mirror],
+            lighting: Lighting {
+                ambient: [0.0; 3],
+                outdoor_ambient: [0.0; 3],
+                sun_color: [0.0; 3],
+                environment_diffuse: 1.0,
+                environment_specular: 1.0,
+                sky_tint: tint,
+                ..Lighting::default()
+            },
+            ..Scene::default()
+        });
+        let image = r.render_to_image(32, 32, &camera).unwrap();
+        let at = |x: usize, y: usize| &image[(y * 32 + x) * 4..][..3];
+        let (sky, part) = (at(16, 1), at(16, 20));
+        assert_eq!(
+            sky.iter().any(|&c| c > 0),
+            lit,
+            "sky {sky:?} at tint {tint:?}"
+        );
+        assert_eq!(
+            part.iter().any(|&c| c > 0),
+            lit,
+            "part {part:?} at tint {tint:?}"
+        );
+    }
+}
+
 #[test]
 fn parts_out_of_view_still_cast_shadows() {
     let Ok(mut r) = Renderer::headless() else {

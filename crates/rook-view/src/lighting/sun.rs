@@ -1,5 +1,5 @@
 //! The sun and the moon: where they are for the clock time and latitude,
-//! their light, and how bright the sky is for the sun's height.
+//! and their light.
 
 use super::*;
 
@@ -43,13 +43,6 @@ pub(super) fn sun_and_moon(sun: Vec3, brightness: f32) -> (Vec3, [f32; 3]) {
     let moon = Vec3::new(-sun.x, -sun.y, sun.z);
     let fade = 1.0 - (-moon.y / 0.04).exp();
     (moon, [MOON_LIGHT * fade * brightness; 3])
-}
-
-/// How bright the sky is for the sun's height: a night sky darkens towards
-/// black as the sun sets (Approximation; Studio's sky draws black at
-/// midnight and then lights nothing).
-pub(super) fn daylight(sun_direction: Vec3) -> f32 {
-    (sun_direction.y * 4.0 + 0.5).clamp(0.05, 1.0)
 }
 
 #[cfg(test)]
