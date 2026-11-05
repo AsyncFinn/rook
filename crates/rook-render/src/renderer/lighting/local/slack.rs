@@ -39,8 +39,7 @@ impl Slack {
     /// The slack of `b`, at the pose it is marked at, over the voxels
     /// `within`.
     pub(super) fn of(b: &Blocker, within: Span) -> Self {
-        let reach =
-            (b.max - b.center).max(b.true_max - b.center).length() + 2.0 * VOXEL * 3f32.sqrt();
+        let reach = reach(b);
         // Both poses' sums in f32 may each be off by about this much.
         let error = 4.0 * f32::EPSILON * (b.center.length() + 2.0 * reach) + 1e-5;
         let to_local = b.axes.transpose();
@@ -81,13 +80,33 @@ impl Slack {
         }
     }
 
+    /// Whether a part that just moved `from` to `to` may be held next
+    /// time: whether that move fits in the most slack any part has (a
+    /// voxel, half a stud for a rotated box's samples, the window for an
+    /// aligned one's faces). One moving faster, whirled by a tornado or
+    /// thrown, is marked again at each move anyway, and working its slack
+    /// out would cost about what marking it does.
+    pub(super) fn worth(from: &Blocker, to: &Blocker) -> bool {
+        let aligned = to.aligned();
+        let most = Slack {
+            rigid: if aligned { VOXEL } else { 0.5 },
+            reach: reach(to),
+            faces: if aligned { WINDOW } else { f32::INFINITY },
+            within: (IVec3::ZERO, IVec3::ZERO),
+        };
+        most.fits(from, to)
+    }
+
     /// Whether `to` marks exactly what `from`, the pose this slack is
     /// `from`'s, marks in the voxels `within`.
     pub(super) fn holds(&self, from: &Blocker, to: &Blocker, within: Span) -> bool {
-        if self.within != within
-            || from.half != to.half
-            || from.true_half != to.true_half
-            || from.aligned() != to.aligned()
+        self.within == within && self.fits(from, to)
+    }
+
+    /// Whether `from` to `to` is within this slack, whatever voxels it
+    /// was worked out over.
+    fn fits(&self, from: &Blocker, to: &Blocker) -> bool {
+        if from.half != to.half || from.true_half != to.true_half || from.aligned() != to.aligned()
         {
             return false;
         }
@@ -108,6 +127,11 @@ impl Slack {
             low.max(high).max_element() < self.faces
         }
     }
+}
+
+/// How far from `b`'s center the points a slack watches can be.
+fn reach(b: &Blocker) -> f32 {
+    (b.max - b.center).max(b.true_max - b.center).length() + 2.0 * VOXEL * 3f32.sqrt()
 }
 
 /// How far a point at `local` (in a box's space) is from crossing the

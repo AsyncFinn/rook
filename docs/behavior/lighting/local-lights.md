@@ -188,10 +188,14 @@ in the world, so that is exact, not a lag: what it marks there is what it
 would mark where it is. Only the voxels the volume holds are looked at,
 so a part far bigger than the volume costs what it covers of it, and a
 slack holds only while the volume stays put: when it moves, parts held
-this way take where they are now. Physics bodies settling or creeping by thousandths
+this way take where they are now. A slack is worked out only for a part
+whose last move would have fit in the most slack any part has (a voxel;
+half a stud for a rotated box): one whirled or thrown further each frame
+is marked again at each move anyway. Physics bodies settling or creeping by thousandths
 of a stud a frame cost nothing. Otherwise a part that moves marks again only the
 voxels whose cover changed (for a part aligned with the world, those at
-its edges, so a big part moving a little costs its edges), sends only
+its edges, so a big part moving a little costs its edges), all the moved
+parts' at once on the host's workers, a brick each, sends only
 those rows of the marks to the GPU, and marks the tiles the change can
 reach: with the sky's light, its columns down to the bottom, and in each
 layer below it, two voxels wider each way per layer down, only the tiles

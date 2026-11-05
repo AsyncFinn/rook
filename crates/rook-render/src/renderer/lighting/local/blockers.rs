@@ -397,7 +397,8 @@ impl Grid {
         }
     }
 
-    /// All of its marks.
+    /// All of its marks, to mark one brick after another.
+    #[cfg(test)]
     fn voxels(&mut self) -> Voxels<'_> {
         Voxels {
             dims: self.dims,
@@ -408,18 +409,6 @@ impl Grid {
             fills: &mut self.fills,
             fill_bytes: &mut self.fill_bytes,
         }
-    }
-
-    /// Add `b`'s share of each voxel of `span` it overlaps (`add`), or take
-    /// it away.
-    fn apply_fill(&mut self, b: &Blocker, add: bool, span: Span) {
-        self.voxels().apply_fill(b, add, span);
-    }
-
-    /// Count `b` in (`add`) or out of the voxels of `span` whose centers
-    /// it holds.
-    fn apply(&mut self, b: &Blocker, add: bool, span: Span) {
-        self.voxels().apply(b, add, span);
     }
 
     fn span(&self) -> Span {
@@ -459,38 +448,11 @@ impl Grid {
             return true;
         }
         let deadline = Instant::now().checked_add(budget);
-        let dims = self.dims;
-        let across = dims / PIECE;
-        let mut by_brick = vec![Vec::new(); (across.x * across.z) as usize];
-        for span in self.pending.drain(..) {
-            let r = span.0.rem_euclid(dims) / PIECE;
-            by_brick[(r.x + across.x * r.z) as usize].push(span);
+        let mut by_brick = vec![Vec::new(); self.bricks()];
+        for span in std::mem::take(&mut self.pending) {
+            by_brick[self.brick_of(span)].push(span);
         }
-        let size = (PIECE * PIECE * dims.y) as usize;
-        let area = (PIECE * PIECE) as usize;
-        let bricks = (self.counts.chunks_mut(size))
-            .zip(self.bits.chunks_mut(size / 32))
-            .zip(self.layers.chunks_mut(area))
-            .zip(self.fills.chunks_mut(size))
-            .zip(self.fill_bytes.chunks_mut(size / 4));
-        let mut jobs: Vec<(Voxels<'_>, Vec<Span>, bool)> = (bricks.enumerate())
-            .zip(by_brick)
-            .filter(|(_, spans)| !spans.is_empty())
-            .map(
-                |((k, ((((counts, bits), layers), fills), fill_bytes)), spans)| {
-                    let voxels = Voxels {
-                        dims,
-                        base: (k * size, k * area),
-                        counts,
-                        bits,
-                        layers,
-                        fills,
-                        fill_bytes,
-                    };
-                    (voxels, spans, false)
-                },
-            )
-            .collect();
+        let mut jobs = self.jobs(by_brick);
         let workers = &rook_platform::get().workers;
         workers.for_each_chunk(&mut jobs, 1, |_, job| {
             for (voxels, spans, done) in job {
@@ -509,6 +471,75 @@ impl Grid {
             .collect();
         self.pending = left;
         self.pending.is_empty()
+    }
+
+    /// Count each of `moves` (a blocker, in or out, and the voxels of it
+    /// to count) in or out, the bricks at once on the host's workers, each
+    /// brick's in the order given: the boxes parts moved from and to, as
+    /// voxel engines revoxelize what moved in parallel jobs by brick.
+    fn apply_moves(&mut self, moves: &[(Blocker, bool, Span)]) {
+        let mut by_brick = vec![Vec::new(); self.bricks()];
+        for (n, &(_, add, span)) in moves.iter().enumerate() {
+            for piece in pieces(span) {
+                by_brick[self.brick_of(piece)].push((n, add, piece));
+            }
+        }
+        let mut jobs = self.jobs(by_brick);
+        let workers = &rook_platform::get().workers;
+        workers.for_each_chunk(&mut jobs, 1, |_, job| {
+            for (voxels, list, _) in job {
+                for &(n, add, piece) in list.iter() {
+                    let b = &moves[n].0;
+                    voxels.apply(b, add, piece);
+                    voxels.apply_fill(b, add, piece);
+                }
+            }
+        });
+    }
+
+    /// How many bricks it has.
+    fn bricks(&self) -> usize {
+        let across = self.dims / PIECE;
+        (across.x * across.z) as usize
+    }
+
+    /// The brick a span within one (a piece) lies in.
+    fn brick_of(&self, span: Span) -> usize {
+        let across = self.dims / PIECE;
+        let r = span.0.rem_euclid(self.dims) / PIECE;
+        (r.x + across.x * r.z) as usize
+    }
+
+    /// A job for each brick with work in `by_brick`: its marks, for a
+    /// worker to mark apart from the others, the work, and whether it
+    /// was done.
+    fn jobs<T>(&mut self, by_brick: Vec<Vec<T>>) -> Vec<(Voxels<'_>, Vec<T>, bool)> {
+        let dims = self.dims;
+        let size = (PIECE * PIECE * dims.y) as usize;
+        let area = (PIECE * PIECE) as usize;
+        let bricks = (self.counts.chunks_mut(size))
+            .zip(self.bits.chunks_mut(size / 32))
+            .zip(self.layers.chunks_mut(area))
+            .zip(self.fills.chunks_mut(size))
+            .zip(self.fill_bytes.chunks_mut(size / 4));
+        (bricks.enumerate())
+            .zip(by_brick)
+            .filter(|(_, work)| !work.is_empty())
+            .map(
+                |((k, ((((counts, bits), layers), fills), fill_bytes)), work)| {
+                    let voxels = Voxels {
+                        dims,
+                        base: (k * size, k * area),
+                        counts,
+                        bits,
+                        layers,
+                        fills,
+                        fill_bytes,
+                    };
+                    (voxels, work, false)
+                },
+            )
+            .collect()
     }
 }
 
@@ -809,7 +840,7 @@ impl Blockers {
             // A part that moves is likely to again: its slack is worth
             // working out.
             self.slack[i] = match (&self.blockers[i], &blocker, span) {
-                (Some(_), Some(to), Some(span)) => Slack::of(to, span),
+                (Some(from), Some(to), Some(span)) if Slack::worth(from, to) => Slack::of(to, span),
                 _ => Slack::default(),
             };
             self.set(i, blocker);
@@ -912,6 +943,7 @@ impl Blockers {
                 // Taken everywhere at once, pieces still to mark included:
                 // those are cleared and take the blockers as they are then.
                 let span = grid.span();
+                let mut moves = Vec::new();
                 for (before, after) in std::mem::take(&mut self.moved) {
                     // Voxels both boxes fill whole are the same after: a
                     // big part that moves a little marks only its edges.
@@ -926,12 +958,12 @@ impl Blockers {
                             continue;
                         };
                         for piece in minus(within, kept) {
-                            grid.apply(&b, add, piece);
-                            grid.apply_fill(&b, add, piece);
+                            moves.push((b, add, piece));
                             self.touched.add(piece);
                         }
                     }
                 }
+                grid.apply_moves(&moves);
                 if !grid.work(BUDGET, &self.blockers, &self.columns) {
                     return None;
                 }
@@ -1119,11 +1151,9 @@ mod tests {
         columns.insert(5, after.as_ref().expect("a blocker"));
         list[5] = after;
         let span = grid.span();
-        for (b, add) in [(before, false), (after, true)] {
-            let b = b.expect("a blocker");
-            grid.apply(&b, add, span);
-            grid.apply_fill(&b, add, span);
-        }
+        let moves =
+            [(before, false), (after, true)].map(|(b, add)| (b.expect("a blocker"), add, span));
+        grid.apply_moves(&moves);
         assert!(grid.work(Duration::MAX, &list, &columns));
         let fresh = Grid::new(low, dims, &list, &columns);
         assert!(grid.bits == fresh.bits);
@@ -1275,6 +1305,23 @@ mod tests {
             "{tiny} of 1800 tiny moves held, {held} in all"
         );
     }
+    /// Working a slack out pays only for parts that move little: one
+    /// that just moved further than any slack reaches gets none.
+    #[test]
+    fn only_parts_moving_little_work_a_slack_out() {
+        let at = |x: f32, turn: f32| {
+            Blocker::of_box(
+                Vec3::new(x, 2.0, 2.0),
+                Mat3::from_rotation_y(turn),
+                Vec3::splat(1.5),
+            )
+        };
+        assert!(Slack::worth(&at(0.0, 0.0), &at(0.001, 0.0)));
+        assert!(!Slack::worth(&at(0.0, 0.0), &at(5.0, 0.0)));
+        assert!(Slack::worth(&at(0.0, 0.3), &at(0.001, 0.3)));
+        assert!(!Slack::worth(&at(0.0, 0.3), &at(0.0, 0.9)));
+    }
+
     /// A slack covers only the voxels the volume held: a part held within
     /// it is marked where it is now once the volume moves, and one that
     /// moves after the volume did is marked again. Here a voxel center
