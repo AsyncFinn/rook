@@ -13,6 +13,7 @@ mod make_joints;
 mod movers;
 mod ownership;
 mod queries;
+mod sleeping;
 mod unions;
 
 fn set(dom: &mut Dom, id: InstanceId, name: &str, value: Value) {

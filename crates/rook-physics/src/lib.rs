@@ -188,6 +188,13 @@ pub struct Physics {
     /// The moving bodies' poses before the last step, which drawing
     /// interpolates from.
     before_last_step: FxHashMap<RigidBodyHandle, Pose>,
+    /// The bodies awake when the last frame's steps began: those asleep
+    /// after them are written once more, sleep having zeroed their
+    /// velocities.
+    awake: Vec<RigidBodyHandle>,
+    /// The awake bodies' velocities before the step under way (linear,
+    /// angular), to tell how fast each accelerates.
+    before_step: Vec<(RigidBodyHandle, glam::Vec3, glam::Vec3)>,
     /// Which part each collider belongs to.
     pub(crate) colliders: FxHashMap<ColliderHandle, InstanceId>,
     groups: CollisionGroups,
@@ -292,6 +299,8 @@ impl Physics {
             last_dt: 0.0,
             pending: 0.0,
             before_last_step: FxHashMap::default(),
+            awake: Vec::new(),
+            before_step: Vec::new(),
             colliders: FxHashMap::default(),
             groups: CollisionGroups::default(),
             touches_use_groups: false,

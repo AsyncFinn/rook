@@ -49,6 +49,22 @@ fn box_mass(size: glam::Vec3, mass: f32) -> MassProperties {
     MassProperties::from_cuboid(density, size * 0.5)
 }
 
+/// Roblox puts an assembly to sleep, zeroing its velocity, once it has
+/// stayed under about 0.33 studs/s for half a second (observed; a block
+/// sliding at 0.32 stops, at 0.34 slides on). Rapier's rule is that its
+/// farthest point (spin included, out to its bounding sphere) moves under
+/// twice its threshold for that long, so the threshold is half that speed.
+/// Spin is judged a little more strictly than Studio's, whose radius isn't
+/// pinned down (docs/behavior/physics/sleeping.md).
+const SLEEP_SPEED: f32 = 0.33;
+const SLEEP_AFTER: f32 = 0.5;
+/// Nor does an assembly sleep while it speeds up or slows down at this
+/// many studs/s² or more, however slow it is (observed: a block pushed at
+/// 0.24 sleeps, at 0.25 never does). Rapier has no such rule, so stepping
+/// restarts the timer of a body accelerating this fast, its farthest
+/// point's acceleration judged as its speed is.
+pub(crate) const SLEEP_ACCELERATION: f32 = 0.25;
+
 impl Physics {
     /// Rebuild the assemblies of `seeds` and of every part that shared an
     /// assembly with one. Returns the new bodies.
@@ -227,6 +243,9 @@ impl Physics {
                 .allow_fast_rotation(true)
         };
         let handle = self.world.insert_body(builder.pose(pose_of(&root_cf)));
+        let activation = self.world.bodies[handle].activation_mut();
+        activation.normalized_linear_threshold = SLEEP_SPEED / 2.0;
+        activation.time_until_sleep = SLEEP_AFTER;
         self.stale.insert(handle);
         let mut colliders = Vec::with_capacity(asm.members.len());
         for (i, m) in asm.members.iter().enumerate() {

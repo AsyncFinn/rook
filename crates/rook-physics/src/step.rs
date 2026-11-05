@@ -1,6 +1,7 @@
 //! Stepping the simulation and writing the results back.
 
 use super::*;
+use crate::assembly::bodies::SLEEP_ACCELERATION;
 
 impl Physics {
     /// Advance the simulation by `dt` seconds in whole 240 Hz steps, the
@@ -25,6 +26,8 @@ impl Physics {
         }
         let dt = f64::from(steps) / STEP_HZ;
         let h = self.world.integration_parameters.dt;
+        self.awake.clear();
+        self.awake.extend(self.world.islands.active_bodies());
         self.build_terrain_near_bodies(dt as f32);
         self.drive_joints(dt, steps);
         let events = contacts::Collector::default();
@@ -37,7 +40,13 @@ impl Physics {
             }
             self.play_remote(h);
             self.steer_humanoids(h);
+            self.before_step.clear();
+            for handle in self.world.islands.active_bodies() {
+                let rb = &self.world.bodies[handle];
+                self.before_step.push((handle, rb.linvel(), rb.angvel()));
+            }
             self.world.step_with_events(&contacts::Mixer, &events);
+            self.keep_accelerating_awake(h);
             self.update_humanoids(h);
         }
         if self.world.islands.active_bodies().next().is_some() {
@@ -59,6 +68,23 @@ impl Physics {
         let parts = &self.parts;
         self.touch
             .record(events.take(), &self.colliders, |p| parts.contains_key(&p));
+    }
+
+    /// Restart the sleep timer of each body that sped up or slowed down
+    /// at [`SLEEP_ACCELERATION`] or more over the step just taken, as
+    /// Roblox keeps such an assembly awake however slow it moves.
+    fn keep_accelerating_awake(&mut self, h: f32) {
+        let most = SLEEP_ACCELERATION * h;
+        for &(handle, v, w) in &self.before_step {
+            let Some(rb) = self.world.bodies.get_mut(handle) else {
+                continue;
+            };
+            let reach = rb.mass_properties().max_extent();
+            let change = (rb.linvel() - v).length() + (rb.angvel() - w).length() * reach;
+            if change >= most {
+                rb.activation_mut().time_since_can_sleep = 0.0;
+            }
+        }
     }
 
     /// Where the moving bodies this world simulates were before the last
@@ -135,6 +161,18 @@ impl Physics {
             }
             rook_types::count!(PhysicsBodiesTouched, 1);
             self.write_body(dom, &props, handle);
+        }
+        // Gone to sleep in these steps: at rest, as Roblox reads them
+        // (observed: a sleeping block's velocity reads zero).
+        for handle in std::mem::take(&mut self.awake) {
+            let asleep = self
+                .world
+                .bodies
+                .get(handle)
+                .is_some_and(RigidBody::is_sleeping);
+            if asleep && self.bodies.get(&handle).is_some_and(|b| !b.remote) {
+                self.write_body(dom, &props, handle);
+            }
         }
         // Our own writes aren't changes to apply next time.
         self.cursor = dom.journal().end();
