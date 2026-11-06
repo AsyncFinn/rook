@@ -2,14 +2,13 @@
 //! journal ([`Physics::sync`]).
 
 pub(crate) mod props;
+pub(crate) mod settle;
 
 use super::*;
 
 impl Physics {
     pub(crate) fn build(&mut self, dom: &mut Dom, props: &Props) {
         profiling::scope!("Physics::build");
-        // Built with whatever geometry unions have now.
-        self.unions.reshaped.clear();
         self.terrain.stale = true;
         self.read_workspace(dom, props);
         let parts = workspace_parts(dom);
@@ -190,15 +189,6 @@ impl Physics {
                 }
                 _ => {}
             }
-        }
-    }
-
-    /// Rebuild the unions whose geometry arrived or changed.
-    pub(crate) fn reshape_unions(&mut self, dom: &mut Dom, props: &Props) {
-        let mut parts = std::mem::take(&mut self.unions.reshaped);
-        parts.retain(|p| self.parts.contains_key(p));
-        if !parts.is_empty() {
-            self.rebuild(dom, props, parts);
         }
     }
 

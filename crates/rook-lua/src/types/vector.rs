@@ -117,6 +117,12 @@ fn install_vector3(lua: &Lua) -> mlua::Result<()> {
 
     let mt = lua.create_table()?;
     mt.set("__index", lua.create_function(vector3_index)?)?;
+    mt.set(
+        "__newindex",
+        lua.create_function(|_, (_, key): (LuaValue, String)| -> mlua::Result<()> {
+            Err(err(format!("{key} cannot be assigned to")))
+        })?,
+    )?;
     mt.set("__type", "Vector3")?;
     lua.set_type_metatable::<Vector>(Some(mt));
 

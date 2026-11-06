@@ -11,6 +11,7 @@ rust-version.workspace = true
 [dependencies]
 rook-platform.workspace = true
 rook-types.workspace = true
+rook-content.workspace = true
 rook-dom.workspace = true
 rook-reflection.workspace = true
 rook-terrain.workspace = true
@@ -18,6 +19,7 @@ rapier3d.workspace = true
 rustc-hash.workspace = true
 glam.workspace = true
 profiling.workspace = true
+tracing.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]

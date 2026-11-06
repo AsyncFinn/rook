@@ -330,6 +330,11 @@ pub(crate) fn drain_deferred(lua: &Lua) {
 
 /// Fire a signal with already-converted arguments.
 pub(crate) fn fire(lua: &Lua, key: &SignalKey, args: &[LuaValue]) {
+    fire_with(lua, key, || args.to_vec());
+}
+
+/// Fire a signal, asking `args` for each handler's arguments.
+pub(crate) fn fire_with(lua: &Lua, key: &SignalKey, args: impl Fn() -> Vec<LuaValue>) {
     let (handlers, behavior) =
         with_world(lua, |w| (w.signals.take_handlers(key), w.signal_behavior));
     for (connection, handler) in handlers {
@@ -345,7 +350,7 @@ pub(crate) fn fire(lua: &Lua, key: &SignalKey, args: &[LuaValue]) {
                 w.scheduler.defer(Job::Fire {
                     connection,
                     handler,
-                    args: args.to_vec(),
+                    args: args(),
                 });
             }),
             SignalBehavior::Immediate => {
@@ -354,7 +359,7 @@ pub(crate) fn fire(lua: &Lua, key: &SignalKey, args: &[LuaValue]) {
                     with_world(lua, |w| w.push_log(MessageType::Error, e.to_string()));
                     continue;
                 }
-                run_handler(lua, handler, args.to_vec());
+                run_handler(lua, handler, args());
                 with_world(lua, |w| w.signals.leave());
             }
         }

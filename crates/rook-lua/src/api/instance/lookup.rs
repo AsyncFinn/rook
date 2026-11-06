@@ -345,6 +345,11 @@ pub(crate) fn get_member(
             if p.flags.write_only {
                 return Err(ScriptError(format!("{key} is a write-only member")));
             }
+            if PLACE_READS.contains(&p.name) {
+                let attachment = with_world(lua, |w| w.dom.is_a(id, "Attachment"));
+                let part = with_world(lua, |w| w.dom.parent(id));
+                settle_joints(lua, if attachment { part.unwrap_or(id) } else { id });
+            }
             let (value, plain) = read(lua, &c, id, p.name, Some((p.id, p.enum_id)))?;
             if plain
                 && identity == Identity::Game
@@ -401,6 +406,40 @@ pub(crate) fn get_member(
     Ok((value, method, fast))
 }
 
+/// Properties saying where a part is: reading one brings it to where its
+/// joints hold it (`rook_physics::Physics::settle_joints`).
+const PLACE_READS: [&str; 9] = [
+    "CFrame",
+    "Position",
+    "Orientation",
+    "Rotation",
+    "ExtentsCFrame",
+    "WorldCFrame",
+    "WorldPosition",
+    "WorldOrientation",
+    "WorldAxis",
+];
+
+/// Bring `part` to where its joints hold it.
+pub(crate) fn settle_joints(lua: &Lua, part: InstanceId) {
+    with_world(lua, |w| {
+        if w.physics.joints_unsettled(&w.dom) {
+            let w = &mut *w;
+            w.physics.settle_joints(&mut w.dom, part);
+        }
+    });
+}
+
+/// Bring the parts of a model to where their joints hold them.
+pub(crate) fn settle_joints_within(lua: &Lua, model: InstanceId) {
+    with_world(lua, |w| {
+        if w.physics.joints_unsettled(&w.dom) {
+            let w = &mut *w;
+            w.physics.settle_joints_within(&mut w.dom, model);
+        }
+    });
+}
+
 /// Remember that reading `key` on `id`'s class is a plain read of `p`,
 /// and give `key` its member id. Derived properties (`properties::get`)
 /// depend only on the class, so what holds for one instance holds for
@@ -442,6 +481,12 @@ pub(super) fn fast_read(
             return Ok(SLOW);
         };
         if c.runtime_prop_ids.borrow().contains(&id) {
+            return Ok(SLOW);
+        }
+        // The general path settles joints first.
+        if w.physics.joints_unsettled(&w.dom)
+            && PLACE_READS.contains(&w.dom.database().property(pid).name)
+        {
             return Ok(SLOW);
         }
         // The most read property: made from the instance's own name, as

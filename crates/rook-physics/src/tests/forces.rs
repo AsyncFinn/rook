@@ -262,6 +262,6 @@ fn velocity_is_the_assembly_velocity_at_the_part() {
     for p in [root, arm] {
         set(&mut dom, p, "AssemblyAngularVelocity", v3(0.0, 2.0, 0.0));
     }
-    let v = crate::assembly::part_velocity(&dom, arm);
+    let v = crate::assembly::part_velocity(&dom, &Physics::new(), arm);
     assert!((v - Vec3::new(0.0, 0.0, -7.111)).length() < 0.01, "{v}");
 }

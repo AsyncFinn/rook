@@ -1,14 +1,15 @@
-//! Random, TweenInfo, Faces, Axes, PhysicalProperties, and the opaque
+//! TweenInfo, Faces, Axes, PhysicalProperties, and the opaque
 //! wrapper for value types without a dedicated Lua representation yet.
 
 use super::err;
 use mlua::{
     Lua, MetaMethod, MultiValue, UserData, UserDataFields, UserDataMethods, UserDataRef,
-    Value as LuaValue, Vector,
+    Value as LuaValue,
 };
 use rook_types::{NormalId, Value};
 
 use super::enums::{item_name, item_value};
+use super::random::random_new;
 use crate::ctx::args::number_of;
 
 /// A property value Rook can't yet show as a proper datatype. It still
@@ -77,85 +78,6 @@ impl UserData for Opaque {
     }
 }
 
-// Random
-
-/// `Random`, a PCG32 generator. Roblox documents `Random` as PCG-based but
-/// not its seeding, so sequences for a given seed differ (Approximation).
-#[derive(Debug, Clone)]
-pub(crate) struct LRandom {
-    state: u64,
-    inc: u64,
-}
-
-impl LRandom {
-    pub(crate) fn new(seed: u64) -> Self {
-        let mut r = Self {
-            state: 0,
-            inc: (0xda3e_39cb_94b9_5bdb << 1) | 1,
-        };
-        r.next_u32();
-        r.state = r.state.wrapping_add(seed);
-        r.next_u32();
-        r
-    }
-
-    fn next_u32(&mut self) -> u32 {
-        let old = self.state;
-        self.state = old
-            .wrapping_mul(6_364_136_223_846_793_005)
-            .wrapping_add(self.inc);
-        let xorshifted = (((old >> 18) ^ old) >> 27) as u32;
-        let rot = (old >> 59) as u32;
-        xorshifted.rotate_right(rot)
-    }
-
-    /// Uniform in [0, 1).
-    pub(crate) fn next_f64(&mut self) -> f64 {
-        let hi = u64::from(self.next_u32()) << 21;
-        let lo = u64::from(self.next_u32()) >> 11;
-        ((hi | lo) as f64) / ((1u64 << 53) as f64)
-    }
-}
-
-impl UserData for LRandom {
-    fn add_fields<F: UserDataFields<Self>>(f: &mut F) {
-        f.add_meta_field("__type", "Random");
-    }
-
-    fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
-        m.add_method_mut("NextNumber", |_, t, (a, b): (Option<f64>, Option<f64>)| {
-            let (a, b) = (a.unwrap_or(0.0), b.unwrap_or(1.0));
-            Ok(a + (b - a) * t.next_f64())
-        });
-        m.add_method_mut("NextInteger", |_, t, (a, b): (f64, f64)| {
-            let (lo, hi) = (a.min(b) as i64, a.max(b) as i64);
-            let span = (hi - lo + 1) as f64;
-            Ok(lo + (t.next_f64() * span) as i64)
-        });
-        m.add_method_mut("NextUnitVector", |_, t, ()| {
-            let z = 2.0 * t.next_f64() - 1.0;
-            let a = std::f64::consts::TAU * t.next_f64();
-            let r = (1.0 - z * z).sqrt();
-            Ok(Vector::new(
-                (r * a.cos()) as f32,
-                (r * a.sin()) as f32,
-                z as f32,
-            ))
-        });
-        m.add_method_mut("Shuffle", |_, t, tb: mlua::Table| {
-            let n = tb.raw_len();
-            for i in (2..=n).rev() {
-                let j = 1 + (t.next_f64() * i as f64) as usize;
-                let (a, b): (LuaValue, LuaValue) = (tb.raw_get(i)?, tb.raw_get(j)?);
-                tb.raw_set(i, b)?;
-                tb.raw_set(j, a)?;
-            }
-            Ok(())
-        });
-        m.add_method("Clone", |_, t, ()| Ok(t.clone()));
-    }
-}
-
 // TweenInfo
 
 #[derive(Debug, Clone, PartialEq)]
@@ -209,13 +131,14 @@ fn default_item(enum_name: &str, item: &str) -> u32 {
         .expect("enum item")
 }
 
-#[expect(
-    clippy::unnecessary_wraps,
-    reason = "Luau calls it through mlua, which wants a Result"
-)]
 fn tween_info_new(lua: &Lua, args: MultiValue) -> mlua::Result<LTweenInfo> {
     let a = args.into_vec();
     let get = |i: usize| a.get(i).cloned().unwrap_or(LuaValue::Nil);
+    if !get(0).is_nil() && number_of(&get(0)).is_none() {
+        return Err(err(
+            "TweenInfo.new first argument expects a number for time.",
+        ));
+    }
     Ok(LTweenInfo {
         time: number_of(&get(0)).unwrap_or(1.0),
         // EasingStyle.Quad and EasingDirection.Out are the documented defaults.
@@ -325,20 +248,7 @@ fn physical_properties_new(lua: &Lua, args: MultiValue) -> mlua::Result<Opaque> 
 pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     let g = lua.globals();
     let random = lua.create_table()?;
-    random.set(
-        "new",
-        lua.create_function(|_, seed: Option<f64>| {
-            let seed = seed.map_or_else(
-                || {
-                    std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .map_or(0, |d| d.as_nanos() as u64)
-                },
-                |s| s as i64 as u64,
-            );
-            Ok(LRandom::new(seed))
-        })?,
-    )?;
+    random.set("new", lua.create_function(random_new)?)?;
     g.set("Random", random)?;
 
     let ti = lua.create_table()?;

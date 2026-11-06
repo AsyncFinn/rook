@@ -1,0 +1,28 @@
+-- studio 0.746.0.7461269
+-- signals: deferred
+array #3 number:1=1 | number:2=2 | number:3=3
+array with a key #2 number:1=1 | number:2=2
+a hole inside #3 number:1=a | number:3=c
+after a hole #1 number:1=1
+mixed without 1 #0 string:2=a | string:x=1
+number keys #0 string:-2=b | string:-9223372036854775808=d | string:0=e | string:1=a
+Vector3 key #0 string:<Vector3> (1, 1, 1)=1
+table key #0 string:<Table> (table: 0x)=1
+function key #0 string:<Function> (function: 0x)=1
+CFrame key #0 string:<CoordinateFrame> (0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1)=1
+Instance key #0 string:<Instance> (Workspace)=1
+BrickColor key #0 string:<int> (Medium stone grey)=1
+EnumItem key #0 string:<token> (Enum.Material.Wood)=1
+bool key error: Invalid table key type used
+nested bool key error: Invalid table key type used
+cycle error: tables cannot be cyclic
+shared false
+shared across arguments false 2
+metatable nil nil
+frozen false
+function true true
+thread nil
+values true 1, 2, 3 4
+listeners 1 1
+invoke false nil false nil nil
+invoke result false Invalid table key type used

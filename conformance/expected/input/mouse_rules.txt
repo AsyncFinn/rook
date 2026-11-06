@@ -1,0 +1,19 @@
+-- studio 0.746.0.7461269
+-- signals: deferred
+plain front 29.5
+CanCollide off front 29.5
+CanCollide and CanQuery off back 59.5
+CanTouch off front 29.5
+see-through front 29.5
+nearly see-through front 29.5
+see-through, not colliding front 29.5
+filtering the part back 59.5
+filtering its folder back 59.5
+only the wall back 59.5
+along the ray 900 target
+along the ray 2000 target
+along the ray 2057 target
+along the ray 2060 nothing
+along the ray 3000 nothing
+nothing there 10000
+origin true

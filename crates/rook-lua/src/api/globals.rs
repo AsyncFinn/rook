@@ -169,7 +169,7 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     ] {
         debug.set(name, noop.clone())?;
     }
-    g.set("ypcall", g.get::<Function>("pcall")?)?;
+    protected_calls(lua)?;
     g.set("shared", lua.create_table()?)?;
     g.set("Instance", instance_table(lua)?)?;
 
@@ -187,6 +187,59 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     }
     install_engine_helpers(lua)?;
     Ok(())
+}
+
+/// A failed datatype method raises an mlua error object. Scripts see every
+/// error of an engine function as a string (observed in Studio 0.746), so
+/// what hands an error to a script hands it over as its message.
+fn protected_calls(lua: &Lua) -> mlua::Result<()> {
+    let text = lua.create_function(|lua, e: LuaValue| match e {
+        LuaValue::Error(e) => lua
+            .create_string(crate::ctx::lua_error_message(&e))
+            .map(LuaValue::String),
+        other => Ok(other),
+    })?;
+    let g = lua.globals();
+    let coroutine: Table = g.get("coroutine")?;
+    let wrapped: Table = lua
+        .load(
+            r#"
+            local text, type, select, pcall, xpcall, resume = ...
+            local function settled(ok, ...)
+                if ok or type((...)) ~= "userdata" then
+                    return ok, ...
+                end
+                return ok, text((...)), select(2, ...)
+            end
+            return {
+                pcall = function(...)
+                    return settled(pcall(...))
+                end,
+                xpcall = function(f, handler, ...)
+                    return xpcall(f, function(e)
+                        return handler(text(e))
+                    end, ...)
+                end,
+                resume = function(...)
+                    return settled(resume(...))
+                end,
+            }
+            "#,
+        )
+        .set_name("=[rook] protected calls")
+        .call((
+            text,
+            g.get::<Function>("type")?,
+            g.get::<Function>("select")?,
+            g.get::<Function>("pcall")?,
+            g.get::<Function>("xpcall")?,
+            coroutine.get::<Function>("resume")?,
+        ))?;
+    let pcall = wrapped.get::<Function>("pcall")?;
+    g.set("pcall", pcall.clone())?;
+    g.set("ypcall", pcall)?;
+    g.set("xpcall", wrapped.get::<Function>("xpcall")?)?;
+    coroutine.set("resume", wrapped.get::<Function>("resume")?)
 }
 
 /// Helpers for engine features written in Luau (tweens, UIPageLayout).

@@ -1,0 +1,32 @@
+-- studio 0.746.0.7461269
+-- signals: deferred
+Weld anchored to free 0.00,0.00,0.00 0.00,5.00,0.00
+Snap anchored to free 0.00,0.00,0.00 0.00,5.00,0.00
+Glue anchored to free 0.00,0.00,0.00 0.00,5.00,0.00
+ManualWeld anchored to free 0.00,0.00,0.00 0.00,5.00,0.00
+Motor anchored to free 0.00,0.00,0.00 0.00,5.00,0.00
+Motor6D anchored to free 0.00,0.00,0.00 0.00,5.00,0.00
+Rotate anchored to free 0.00,0.00,0.00 20.00,0.00,0.00
+RotateV anchored to free 0.00,0.00,0.00 20.00,0.00,0.00
+RotateP anchored to free 0.00,0.00,0.00 20.00,0.00,0.00
+WeldConstraint anchored to free 0.00,0.00,0.00 20.00,0.00,0.00
+the root stays: the larger part 0.00,0.00,0.00 0.00,5.00,0.00
+the root stays: the larger part as Part1 20.00,-5.00,0.00 20.00,0.00,0.00
+the root stays: equal parts 20.00,-5.00,0.00 20.00,0.00,0.00
+both anchored 0.00,0.00,0.00 20.00,0.00,0.00
+both anchored, then one let go 20.00,0.00,0.00 0.00,0.00,0.00 0.00,5.00,0.00
+anchoring before the first read decides what moves 0.00,0.00,0.00 0.00,5.00,0.00
+a later C0 0.00,5.00,0.00 0.00,7.00,0.00
+C1 and rotation 3.00,-2.00,0.00 -1.00
+disabled, then enabled with a new C0 20.00,0.00,0.00 20.00,0.00,0.00 0.00,9.00,0.00
+a joint outside Workspace 20.00,0.00,0.00
+a joint in a folder entering Workspace 20.00,0.00,0.00 0.00,5.00,0.00
+a part out of Workspace is left until it's back 20.00,0.00,0.00 0.00,5.00,0.00
+destroyed before any read 20.00,0.00,0.00
+the whole side moves together 30.00,0.00,0.00 0.00,5.00,0.00 10.00,5.00,0.00
+a method looking is a read too 0.00,5.00,0.00
+reading the root moves nothing 20 0.00,0.00,0.00 0.00,5.00,0.00
+reading the part that moves: Position 20.00,-5.00,0.00 20.00,0.00,0.00
+reading the part that moves: CFrame 20.00,-5.00,0.00 20.00,0.00,0.00
+a query moves everything 20.00,-5.00,0.00 20.00,0.00,0.00
+the assembly's center of mass looks ahead -2.50 0.00,0.00,0.00 0.00,5.00,0.00

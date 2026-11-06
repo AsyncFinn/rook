@@ -1,6 +1,6 @@
 # Scene queries
 
-Checked against Studio 0.742 on 2026-10-12.
+Checked against Studio 0.746 on 2026-11-06.
 
 Rays, shape casts, regions, overlaps and touching parts
 (`rook_physics::query`).
@@ -33,3 +33,39 @@ Observed in Studio 0.742 unless noted:
   queries and `GetPartsInPart` never return it; `GetTouchingParts` does
   where a part overlaps its solid surface, whatever the part's
   `CanCollide`.
+
+## Model:MoveTo
+
+`conformance/cases/physics/move_to.luau`; `Physics::rise_out_of_parts`.
+
+- The model moves so its PrimaryPart, or its bounding box's center without
+  one, is at the target, then up until nothing is in its way. All of it moves
+  together, by the highest lift any of its parts needs.
+- Each overlap lifts it to where it would rest on that part dropped from
+  above, by real shapes: a ball over a block's edge sinks past the corner, a
+  turned cube rests on its edge.
+- *What's in the way.* Parts with `CanCollide`, anchored or not, in a group
+  the model's part collides with. `CanTouch` and `CanQuery` make no
+  difference. Terrain and water never are. Of the model's own parts, those
+  with `CanCollide` off aren't tested.
+- *How much counts.* A face merely meeting another doesn't lift it, from
+  above or the side; sinking 0.0001 does.
+- *Rising.* The check repeats from where it stopped, so a gap too small is
+  passed. A gap counts as too small unless it's about 0.015 taller than the
+  model: 0.01 is passed, 0.02 stops it.
+- Outside Workspace, or empty, the model stays where it is and nothing is
+  raised.
+
+## The mouse
+
+`conformance/cases/input/mouse_rules.luau`, on a Studio client.
+
+- `Mouse.Target` and `Mouse.Hit` come from a ray 2,048 studs long from the
+  camera: a face at 2,048 is hit, one at 2,049 isn't.
+- On a miss `Target` is nil and `Hit` sits 10,000 studs along the ray.
+- It sees what legacy rays see. Parts with `CanCollide` off count, and so do
+  see-through ones, whatever else is set; a part with `CanCollide` and
+  `CanQuery` both off doesn't. `CanTouch` makes no difference.
+- `TargetFilter` leaves out an instance and everything in it.
+- Acting as the `Default` group, as legacy rays do, is Inference: a client
+  case can't register a group.

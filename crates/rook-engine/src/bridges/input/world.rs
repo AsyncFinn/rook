@@ -8,8 +8,12 @@ use rook_types::{CFrame, Value, Vector3};
 use super::{ClickEvent, ClickKind, gui_point};
 use crate::DataModel;
 
-/// How far the mouse looks for a target (Inference).
-pub(super) const MOUSE_RANGE: f32 = 1000.0;
+/// How far the mouse looks for a target.
+pub(super) const MOUSE_RANGE: f32 = 2048.0;
+
+/// How far along its ray `Mouse.Hit` sits when the ray hits nothing (measured
+/// in Studio 0.746, as [`MOUSE_RANGE`] is).
+const MOUSE_MISS: f32 = 10_000.0;
 
 /// Where the mouse looked from: everything its properties follow.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -92,8 +96,10 @@ impl DataModel {
                         self.input.looks += 1;
                     }
                     // TargetFilter and what it contains are ignored;
-                    // otherwise the mouse sees what legacy rays see
-                    // (Inference).
+                    // otherwise the mouse sees what legacy rays see:
+                    // parts without CanCollide and see-through ones, not
+                    // those without CanQuery either (measured). Their
+                    // collision group's rule is Inference.
                     let filter = rook_physics::Filter::legacy_ray(
                         target_filter.into_iter().collect(),
                         false,
@@ -153,7 +159,7 @@ impl DataModel {
         (origin, dir, camera): (Vec3, Vec3, CFrame),
         hit: Option<(InstanceId, Vec3)>,
     ) {
-        let point = hit.map_or(origin + dir * MOUSE_RANGE, |(_, at)| at);
+        let point = hit.map_or(origin + dir * MOUSE_MISS, |(_, at)| at);
         let mut w = self.runtime.world_mut();
         let (mx, my) = gui_point(w.input.mouse);
         let (vw, vh) = self.input.viewport;

@@ -1,0 +1,24 @@
+-- studio 0.746.0.7461269
+-- signals: deferred
+free space 0.000,0.000,0.000
+onto a block 0.000,2.000,0.000
+a ball over a block 0.000,2.000,0.000
+a ball off the edge 2.500,1.866,0.000
+a turned cube 0.000,2.414,0.000
+a wedge 0.000,2.000,0.000
+CanCollide false in the way 0.000,0.000,0.000
+CanTouch false in the way 0.000,2.000,0.000
+a gap too small is passed 0.000,6.000,0.000
+a gap barely too small is passed 0.000,6.010,0.000
+a gap barely large enough stops it 0.000,2.000,0.000
+a gap large enough stops it 0.000,2.000,0.000
+touching doesn't lift 0.000,2.000,0.000
+sinking a little lifts 0.000,2.000,0.000
+touching at the side doesn't lift 3.000,0.000,0.000
+its own CanCollide false parts don't count 0.000,0.000,0.000
+any part obstructed lifts them all 0.000,2.000,0.000
+no PrimaryPart: the bounding box center 0.000,8.000
+a turned model 0.000,3.828,0.000
+a model outside Workspace stays 0.000,50.000,0.000
+a model with no parent stays 0.000,50.000,0.000
+an empty model true

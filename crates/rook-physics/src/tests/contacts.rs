@@ -6,10 +6,14 @@ use rook_dom::{Dom, InstanceId};
 use rook_types::{CFrame, CustomPhysicalProperties, PhysicalProperties, Value};
 
 use super::{block, floor, part, part_of, position, set};
+use crate::Physics;
 use crate::contacts::Touch;
 use crate::contacts::groups::{CollisionGroups, GroupError};
 use crate::contacts::materials;
-use crate::{Physics, part_mass};
+
+fn part_mass(dom: &Dom, part: InstanceId) -> f32 {
+    Physics::new().part_mass(dom, part)
+}
 
 fn material(dom: &mut Dom, id: InstanceId, name: &str) {
     let e = dom.database().enum_by_name("Material").unwrap();

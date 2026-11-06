@@ -31,22 +31,19 @@ pub(crate) struct Static {
     pub(crate) cframe: CFrame,
 }
 
-/// A part's collider mass and material. Massless parts add no mass unless
-/// they're the root (creator-docs BasePart.Massless).
-fn collider_surface(dom: &Dom, part: InstanceId, is_root: bool) -> (f32, materials::Properties) {
-    let mass = if !is_root && is_massless(dom, part) {
-        0.0
-    } else {
-        part_mass(dom, part)
-    };
-    (mass, materials::of_part(dom, part))
-}
-
 /// A box's mass properties, of this size and mass.
 fn box_mass(size: glam::Vec3, mass: f32) -> MassProperties {
     let size = size.max(glam::Vec3::splat(shape::MIN_PART_SIZE));
     let density = mass / (size.x * size.y * size.z);
     MassProperties::from_cuboid(density, size * 0.5)
+}
+
+/// A saved shape's mass properties at this mass.
+fn saved_mass(saved: &rook_types::SavedMass, mass: f32) -> MassProperties {
+    let density = mass / saved.volume.max(f32::EPSILON);
+    let [xx, xy, xz, yy, yz, zz] = saved.inertia.map(|i| i * density);
+    let inertia = glam::Mat3::from_cols_array(&[xx, xy, xz, xy, yy, yz, xz, yz, zz]);
+    MassProperties::with_inertia_matrix(saved.center, mass, inertia)
 }
 
 /// Roblox puts an assembly to sleep, zeroing its velocity, once it has
@@ -285,6 +282,28 @@ impl Physics {
         Some(handle)
     }
 
+    /// What a part's collider weighs. Massless parts add no mass unless
+    /// they're the root (creator-docs BasePart.Massless). A part with saved
+    /// hulls has what was saved with them, or, saved without `InitialSize`,
+    /// its box's (observed), whichever shape it's built with.
+    fn collider_mass(&self, dom: &Dom, part: InstanceId, is_root: bool) -> ColliderMassProps {
+        let mass = if !is_root && is_massless(dom, part) {
+            0.0
+        } else {
+            self.part_mass(dom, part)
+        };
+        let size = dom
+            .vector3_property(part, "Size")
+            .unwrap_or(glam::Vec3::ONE);
+        match self.saved.mass(dom, part, size) {
+            Some(saved) => ColliderMassProps::MassProperties(Box::new(saved_mass(&saved, mass))),
+            None if self.saved.has_hulls(dom, part) => {
+                ColliderMassProps::MassProperties(Box::new(box_mass(size, mass)))
+            }
+            None => ColliderMassProps::Mass(mass),
+        }
+    }
+
     fn add_collider(
         &mut self,
         dom: &Dom,
@@ -301,28 +320,28 @@ impl Physics {
             return None;
         };
         let can_collide = dom.property(part, props.can_collide) != Some(Value::Bool(false));
-        // A moving union that doesn't collide keeps its box: its hulls would
-        // be tested against everything near it every step only for Touched
-        // and queries (Approximation, for speed: a large modern place's spinning
-        // rings and fans made a 5-second run 20% slower).
-        let union = if can_collide || fixed {
-            self.unions.shape(dom, part, size.0)
+        // A moving part with saved geometry that doesn't collide keeps its
+        // box: its hulls would be tested against everything near it every
+        // step only for Touched and queries (Approximation, for speed: a
+        // large modern place's spinning rings and fans made a 5-second run
+        // 20% slower).
+        let hulls = if can_collide || fixed {
+            self.saved.shape(dom, part, size.0)
         } else {
             None
         };
-        let (shape, shape_pose) = match &union {
+        let (shape, shape_pose) = match &hulls {
             Some(s) => (s.clone(), Pose::IDENTITY),
             None => shape::collider_shape(part_shape(dom, part), size.0)?,
         };
         self.read_can_touch(dom, props, part);
-        let (mass, material) = collider_surface(dom, part, is_root);
+        let material = materials::of_part(dom, part);
         let (solver, collision) = self.interaction_groups(dom, part);
         let collider = ColliderBuilder::new(shape);
-        // A union keeps its box's mass and inertia (Approximation: Studio
-        // saves the real ones with its hulls).
-        let collider = match union {
-            Some(_) => collider.mass_properties(box_mass(size.0, mass)),
-            None => collider.mass(mass),
+        let collider = match self.collider_mass(dom, part, is_root) {
+            ColliderMassProps::MassProperties(m) => collider.mass_properties(*m),
+            ColliderMassProps::Mass(m) => collider.mass(m),
+            ColliderMassProps::Density(d) => collider.density(d),
         };
         let collider = collider
             .friction(material.friction)
@@ -398,11 +417,16 @@ impl Physics {
             return;
         };
         self.read_can_touch(dom, props, part);
-        let (mass, material) = collider_surface(dom, part, i == 0);
+        let material = materials::of_part(dom, part);
+        let mass = self.collider_mass(dom, part, i == 0);
         let Some(c) = self.world.colliders.get_mut(collider) else {
             return;
         };
-        c.set_mass(mass);
+        match mass {
+            ColliderMassProps::MassProperties(m) => c.set_mass_properties(*m),
+            ColliderMassProps::Mass(m) => c.set_mass(m),
+            ColliderMassProps::Density(d) => c.set_density(d),
+        }
         c.set_friction(material.friction);
         c.set_restitution(material.elasticity);
         c.user_data = contacts::pack(&material);

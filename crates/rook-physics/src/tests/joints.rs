@@ -219,11 +219,11 @@ fn root_part_rules() {
     set(&mut dom, b, "Massless", Value::Bool(true));
     assert_eq!(root(&dom), a, "non-Massless");
     let asm = assembly::Assembly::of(&dom, a).unwrap();
-    assert!((asm.mass(&dom) - 8.0 * 0.7).abs() < 1e-4);
+    assert!((asm.mass(&dom, &Physics::new()) - 8.0 * 0.7).abs() < 1e-4);
     set(&mut dom, b, "Anchored", Value::Bool(true));
     let asm = assembly::Assembly::of(&dom, a).unwrap();
     assert_eq!(asm.root(), b, "anchored");
-    assert_eq!(asm.mass(&dom), f32::INFINITY);
+    assert_eq!(asm.mass(&dom, &Physics::new()), f32::INFINITY);
 }
 
 #[test]

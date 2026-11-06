@@ -1,14 +1,14 @@
 //! Part shapes and their Rapier collider shapes.
 
+pub(crate) mod saved;
 pub(crate) mod terrain;
-pub(crate) mod unions;
 
 use rapier3d::prelude::*;
 use rook_dom::{Dom, InstanceId};
 use rook_types::{CFrame, PartShape};
 
 use crate::convert::pose_of;
-use crate::shape::unions::Unions;
+use crate::shape::saved::SavedShapes;
 
 /// Roblox parts are at least this many studs on each side.
 pub(crate) const MIN_PART_SIZE: f32 = 0.001;
@@ -55,17 +55,13 @@ pub(crate) fn collider_shape(shape: PartShape, size: glam::Vec3) -> Option<(Shar
 }
 
 /// A part's collider shape placed in the world, read from the DOM (a
-/// union's from its geometry, if it has some).
+/// union's or MeshPart's from its saved geometry, if it has some).
 pub(crate) fn world_shape(
     dom: &Dom,
-    unions: &mut Unions,
+    saved: &mut SavedShapes,
     part: InstanceId,
 ) -> Option<(SharedShape, Pose)> {
-    let size = dom.vector3_property(part, "Size")?;
-    let (shape, local) = match unions.shape(dom, part, size) {
-        Some(s) => (s, Pose::IDENTITY),
-        None => collider_shape(part_shape(dom, part), size)?,
-    };
+    let (shape, local) = local_shape(dom, saved, part)?;
     Some((
         shape,
         pose_of(
@@ -73,6 +69,19 @@ pub(crate) fn world_shape(
                 .unwrap_or(CFrame::IDENTITY),
         ) * local,
     ))
+}
+
+/// A part's shape, and its pose relative to the part.
+pub(crate) fn local_shape(
+    dom: &Dom,
+    saved: &mut SavedShapes,
+    part: InstanceId,
+) -> Option<(SharedShape, Pose)> {
+    let size = dom.vector3_property(part, "Size")?;
+    match saved.shape(dom, part, size) {
+        Some(s) => Some((s, Pose::IDENTITY)),
+        None => collider_shape(part_shape(dom, part), size),
+    }
 }
 
 /// A part's `Size` box placed in the world, whatever its shape: what

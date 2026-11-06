@@ -3687,6 +3687,7 @@ version = "0.4.0"
 dependencies = [
  "bcdec_rs",
  "blake3",
+ "glam 0.33.12",
  "image",
  "intel_tex_2",
  "md5",
@@ -3836,6 +3837,7 @@ dependencies = [
  "glam 0.33.12",
  "profiling",
  "rapier3d",
+ "rook-content",
  "rook-dom",
  "rook-platform",
  "rook-reflection",
@@ -3843,6 +3845,7 @@ dependencies = [
  "rook-types",
  "rustc-hash 2.1.3",
  "thiserror 2.0.21",
+ "tracing",
 ]
 
 [[package]]

@@ -267,7 +267,7 @@ impl Assembly {
 
     /// `AssemblyMass`: the members' masses, except Massless ones that
     /// aren't the root; infinite when anchored.
-    pub fn mass(&self, dom: &Dom) -> f32 {
+    pub fn mass(&self, dom: &Dom, physics: &crate::Physics) -> f32 {
         if self.anchored {
             return f32::INFINITY;
         }
@@ -275,8 +275,29 @@ impl Assembly {
             .iter()
             .enumerate()
             .filter(|(i, m)| *i == 0 || !is_massless(dom, m.part))
-            .map(|(_, m)| crate::part_mass(dom, m.part))
+            .map(|(_, m)| physics.part_mass(dom, m.part))
             .sum()
+    }
+
+    /// `AssemblyCenterOfMass`, in the world: each member's own center by its
+    /// mass.
+    pub fn center_of_mass(&self, dom: &Dom, physics: &crate::Physics) -> glam::Vec3 {
+        let root = dom
+            .cframe_property(self.root(), "CFrame")
+            .unwrap_or(CFrame::IDENTITY);
+        let (mut sum, mut mass) = (glam::Vec3::ZERO, 0.0);
+        for (i, m) in self.members.iter().enumerate() {
+            if i == 0 || !is_massless(dom, m.part) {
+                let w = physics.part_mass(dom, m.part);
+                sum += physics.part_center(dom, m.part, root * m.offset) * w;
+                mass += w;
+            }
+        }
+        if mass > 0.0 {
+            sum / mass
+        } else {
+            physics.part_center(dom, self.root(), root)
+        }
     }
 }
 
@@ -285,7 +306,7 @@ impl Assembly {
 /// (position − center of mass)` (observed: a part 3.56 studs from the
 /// center of mass of an assembly spinning at 2 rad/s reads 7.11). An
 /// anchored part reads its own AssemblyLinearVelocity, which it keeps.
-pub fn part_velocity(dom: &Dom, part: InstanceId) -> glam::Vec3 {
+pub fn part_velocity(dom: &Dom, physics: &crate::Physics, part: InstanceId) -> glam::Vec3 {
     let vector = |id, name| dom.vector3_property(id, name).unwrap_or(glam::Vec3::ZERO);
     let linear = vector(part, "AssemblyLinearVelocity");
     let angular = vector(part, "AssemblyAngularVelocity");
@@ -297,21 +318,7 @@ pub fn part_velocity(dom: &Dom, part: InstanceId) -> glam::Vec3 {
             .map_or(glam::Vec3::ZERO, |c| c.position)
     };
     let com = match Assembly::of(dom, part) {
-        Some(asm) if !asm.anchored && asm.members.len() > 1 => {
-            let (mut sum, mut mass) = (glam::Vec3::ZERO, 0.0);
-            for (i, m) in asm.members.iter().enumerate() {
-                if i == 0 || !is_massless(dom, m.part) {
-                    let w = crate::part_mass(dom, m.part);
-                    sum += position(m.part) * w;
-                    mass += w;
-                }
-            }
-            if mass > 0.0 {
-                sum / mass
-            } else {
-                position(part)
-            }
-        }
+        Some(asm) if !asm.anchored => asm.center_of_mass(dom, physics),
         _ => position(part),
     };
     linear + angular.cross(position(part) - com)

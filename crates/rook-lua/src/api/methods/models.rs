@@ -66,6 +66,8 @@ fn rigid(delta: CFrame) -> CFrame {
 }
 
 pub(super) fn get_pivot(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
+    settle_joints(lua, this);
+    settle_joints_within(lua, this);
     Outcome::ret(lua, LCFrame(with_world(lua, |w| pivot_of(w, this))))
 }
 
@@ -91,6 +93,7 @@ fn no_primary_part(method: &str) -> ScriptError {
 }
 
 pub(super) fn get_primary_part_cframe(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
+    settle_joints_within(lua, this);
     let c = with_world(lua, |w| primary_part(w, this).map(|p| cframe(w, p)))
         .ok_or_else(|| no_primary_part("GetPrimaryPartCFrame"))?;
     Outcome::ret(lua, LCFrame(c))
@@ -124,16 +127,30 @@ pub(super) fn translate_by(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<O
 }
 
 /// Moves the model so its primary part (or bounding box center) is at the
-/// target. Roblox also moves the model up out of obstructions; that needs
-/// collision queries (Approximation until M3).
+/// target, then up until nothing it collides with overlaps it. A model
+/// outside Workspace, or an empty one, stays where it is (measured:
+/// docs/behavior/physics/queries.md#modelmoveto).
 pub(super) fn model_move_to(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let target = a.vector3(0)?;
     mutate(lua, |w| {
+        let in_workspace =
+            (w.dom.find_service("Workspace")).is_some_and(|ws| w.dom.is_ancestor_of(ws, this));
+        let parts = parts_of(w, this);
+        if !in_workspace || parts.is_empty() {
+            return Ok(());
+        }
         let from = match primary_part(w, this) {
             Some(p) => cframe(w, p).position,
             None => bounding_box(w, this).0.position,
         };
-        transform_model(w, this, CFrame::from_position(target.0 - from))
+        let shift = target.0 - from;
+        let moved: Vec<_> = parts
+            .into_iter()
+            .map(|p| (p, CFrame::from_position(shift) * cframe(w, p)))
+            .collect();
+        let w = &mut *w;
+        let rise = w.physics.rise_out_of_parts(&mut w.dom, &moved);
+        transform_model(w, this, CFrame::from_position(shift + glam::Vec3::Y * rise))
     })?;
     Outcome::ret(lua, ())
 }
@@ -175,16 +192,18 @@ fn bounding_box(w: &World, model: InstanceId) -> (CFrame, Vector3) {
 }
 
 pub(super) fn get_extents_size(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
+    settle_joints_within(lua, this);
     let size = with_world(lua, |w| bounding_box(w, this).1);
     Outcome::ret(lua, vector3_to_lua(size))
 }
 
 pub(super) fn get_bounding_box(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
+    settle_joints_within(lua, this);
     let (c, s) = with_world(lua, |w| bounding_box(w, this));
     Outcome::ret(lua, (LCFrame(c), vector3_to_lua(s)))
 }
 
 pub(super) fn get_mass(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
-    let mass = with_world(lua, |w| rook_physics::part_mass(&w.dom, this));
+    let mass = with_world(lua, |w| w.physics.part_mass(&w.dom, this));
     Outcome::ret(lua, f64::from(mass))
 }

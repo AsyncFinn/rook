@@ -135,6 +135,7 @@ fn invoke(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
 
 pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     let std: mlua::Table = lua.named_registry_value("rook.std")?;
+    super::bindables::install(lua, &std)?;
     std.set("invoke", api_fn(lua, invoke)?)?;
     std.set(
         "reply",

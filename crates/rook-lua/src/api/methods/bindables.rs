@@ -2,19 +2,28 @@
 
 use super::*;
 
+mod copy;
+
+use copy::copy_values;
+
+/// Each listener gets its own copy, made now, not when it runs.
 pub(super) fn bindable_fire(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    let args = a.rest(0);
-    fire(lua, &SignalKey::event(this, "Event"), &args);
+    let args = copy_values(lua, &a.rest(0))?;
+    fire_with(lua, &SignalKey::event(this, "Event"), || {
+        copy_values(lua, &args).unwrap_or_default()
+    });
     Outcome::ret(lua, ())
 }
 
-pub(super) fn bindable_invoke(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    let callback = get_callback(lua, this, "OnInvoke")?.ok_or_else(|| {
-        // Roblox waits for a callback to be set; Rook reports it instead
-        // until callback queues exist.
-        ScriptError("BindableFunction:Invoke has no OnInvoke callback".into())
-    })?;
-    Ok(Outcome::Call(callback, MultiValue::from_vec(a.rest(0))))
+/// `std.copy_bindable(...)`: what `Invoke`'s arguments and results become.
+pub(crate) fn install(lua: &Lua, std: &mlua::Table) -> mlua::Result<()> {
+    std.set(
+        "copy_bindable",
+        crate::ctx::api_fn(lua, |lua, args| {
+            let copied = copy_values(lua, &args.into_vec())?;
+            Ok(Outcome::Return(MultiValue::from_vec(copied)))
+        })?,
+    )
 }
 
 fn callbacks_table(lua: &Lua) -> mlua::Result<mlua::Table> {
@@ -75,9 +84,13 @@ pub(super) fn luau_source(owner: &str, name: &str) -> Option<&'static str> {
     Some(match (owner, name) {
         ("BindableFunction", "Invoke") => {
             r#"
-            local wait_for_callback = (...).wait_for_callback
-            return function(self, ...)
+            local std = ...
+            local wait_for_callback, copy = std.wait_for_callback, std.copy_bindable
+            local function call(self, ...)
                 return wait_for_callback(self, "OnInvoke")(...)
+            end
+            return function(self, ...)
+                return copy(call(self, copy(...)))
             end
             "#
         }

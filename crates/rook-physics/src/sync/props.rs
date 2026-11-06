@@ -16,6 +16,8 @@ pub(crate) struct Props {
     collision_group: PropertyId,
     pub(crate) can_touch: PropertyId,
     shape: Option<PropertyId>,
+    /// Where unions and MeshParts save their collision geometry.
+    saved_geometry: [Option<PropertyId>; 2],
     pub(crate) linear_velocity: PropertyId,
     pub(crate) angular_velocity: PropertyId,
     pub(crate) gravity: PropertyId,
@@ -53,6 +55,10 @@ impl Props {
             collision_group: p(base, "CollisionGroup")?,
             can_touch: p(base, "CanTouch")?,
             shape: p(part, "Shape"),
+            saved_geometry: ["PhysicalConfigData", "PhysicsData"].map(|name| {
+                let class = db.class_by_name("TriangleMeshPart")?.id;
+                p(class, name)
+            }),
             linear_velocity: p(base, "AssemblyLinearVelocity")?,
             angular_velocity: p(base, "AssemblyAngularVelocity")?,
             gravity: p(ws, "Gravity")?,
@@ -92,6 +98,7 @@ impl Props {
             || p == self.root_priority
             || p == self.collision_group
             || Some(p) == self.shape
+            || self.saved_geometry.contains(&Some(p))
     }
 
     /// Changes to a collider's mass, friction, elasticity or touchability

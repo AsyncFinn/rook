@@ -58,13 +58,17 @@
     - [Trusses](behavior/meshes/trusses.md)
     - [Unions](behavior/meshes/unions.md): how they draw
   - Physics
-    - [Surface joints](behavior/physics/joints.md): `MakeJoints`
+    - [Joints](behavior/physics/joints.md): when they take effect, `MakeJoints`
     - [Movers](behavior/physics/movers.md): BodyMovers and force constraints
     - [Scene queries](behavior/physics/queries.md)
-    - [Collision shapes](behavior/physics/collision-shapes.md): what unions collide and are queried as
+    - [Collision shapes](behavior/physics/collision-shapes.md): what MeshParts and unions collide, are queried and weigh as
     - [Sleeping](behavior/physics/sleeping.md): when assemblies sleep, how deep resting parts sit
     - [Timestepping](behavior/physics/timestepping.md): which assemblies Roblox steps at 240, 120 or 60 Hz
     - [NaN and infinite values](behavior/physics/nan-and-infinite-values.md): what parts make of them
+  - Scripting
+    - [Bindables](behavior/scripting/bindables.md): the copies arguments arrive as
+    - [Datatype errors](behavior/scripting/datatype-errors.md): their messages in `pcall`
+    - [Random](behavior/scripting/random.md): Luau's generator and each method's draws
   - Rendering
     - [Materials](behavior/rendering/materials.md): PBR shading, the built-in materials, MaterialVariant and SurfaceAppearance
     - [Textures and decals](behavior/rendering/textures-and-decals.md)

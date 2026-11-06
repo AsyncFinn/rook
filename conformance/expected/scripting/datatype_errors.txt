@@ -1,0 +1,16 @@
+-- studio 0.746.0.7461269
+-- signals: deferred
+unknown Vector3 member string Foo is not a valid member of Vector3
+Vector3:Dot string invalid argument #2 (Vector3 expected, got number)
+Vector3 assignment string X cannot be assigned to
+CFrame:ToWorldSpace string invalid argument #2 (CFrame expected, got number)
+CFrame * number string invalid argument #2 (Vector3 expected, got number)
+CFrame.new string invalid argument #1 to 'new' (Vector3 expected, got string)
+UDim2:Lerp string Unable to cast double to UDim2
+Color3:Lerp string Unable to cast double to Color3
+Ray:ClosestPoint string invalid argument #2 (Vector3 expected, got number)
+TweenInfo.new string TweenInfo.new first argument expects a number for time.
+xpcall handler false string
+coroutine.resume false string
+error values pass as they are true userdata
+ypcall string

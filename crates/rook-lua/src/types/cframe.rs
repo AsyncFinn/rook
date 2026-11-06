@@ -9,12 +9,40 @@ use mlua::{
 use rook_types::{CFrame, Vector3};
 
 use super::fmt_f32;
-use crate::ctx::args::number_of;
+use crate::ctx::args::{number_of, type_name};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct LCFrame(pub CFrame);
 
 use crate::ctx::convert::{from_lua_vector as v3, lua_vector as lv3};
+
+/// `CFrame.new`'s error for an argument that isn't a Vector3.
+fn new_argument(pos: usize, value: &LuaValue) -> mlua::Error {
+    err(format!(
+        "invalid argument #{pos} to 'new' (Vector3 expected, got {})",
+        type_name(value)
+    ))
+}
+
+/// `f` of each CFrame in `others`, the arguments after `self`.
+fn others_of(others: &[LuaValue], f: impl Fn(CFrame) -> CFrame) -> mlua::Result<Variadic<LCFrame>> {
+    let mut out = Variadic::new();
+    for (i, other) in others.iter().enumerate() {
+        let frame = match other {
+            LuaValue::UserData(u) => u.borrow::<LCFrame>().ok().map(|c| c.0),
+            _ => None,
+        };
+        let Some(frame) = frame else {
+            return Err(err(format!(
+                "invalid argument #{} (CFrame expected, got {})",
+                i + 2,
+                type_name(other)
+            )));
+        };
+        out.push(LCFrame(f(frame)));
+    }
+    Ok(out)
+}
 
 fn g(v: Vector) -> Vec3 {
     v3(v).0
@@ -43,10 +71,11 @@ fn new(_: &Lua, args: MultiValue) -> mlua::Result<LCFrame> {
         0 => Ok(LCFrame(CFrame::IDENTITY)),
         1 => vec_at(0)
             .map(|p| cf(p, Mat3::IDENTITY))
-            .ok_or_else(|| err("invalid argument #1 to 'new' (Vector3 expected)")),
+            .ok_or_else(|| new_argument(1, &args[0])),
         2 => match (vec_at(0), vec_at(1)) {
             (Some(at), Some(target)) => Ok(LCFrame(CFrame::look_at(at, target, Vec3::Y))),
-            _ => Err(err("invalid argument #2 to 'new' (Vector3 expected)")),
+            (Some(_), None) => Err(new_argument(2, &args[1])),
+            (None, _) => Err(new_argument(1, &args[0])),
         },
         3 | 7 | 12 => {
             let n = nums.ok_or_else(|| err("invalid argument to 'new' (number expected)"))?;
@@ -158,17 +187,13 @@ impl UserData for LCFrame {
             Ok(LCFrame(t.0.orthonormalize()))
         });
         for name in ["ToWorldSpace", "toWorldSpace"] {
-            m.add_method(name, |_, t, others: Variadic<UserDataRef<LCFrame>>| {
-                Ok(Variadic::from_iter(
-                    others.iter().map(|o| LCFrame(t.0.to_world_space(o.0))),
-                ))
+            m.add_method(name, |_, t, others: Variadic<LuaValue>| {
+                others_of(&others, |o| t.0.to_world_space(o))
             });
         }
         for name in ["ToObjectSpace", "toObjectSpace"] {
-            m.add_method(name, |_, t, others: Variadic<UserDataRef<LCFrame>>| {
-                Ok(Variadic::from_iter(
-                    others.iter().map(|o| LCFrame(t.0.to_object_space(o.0))),
-                ))
+            m.add_method(name, |_, t, others: Variadic<LuaValue>| {
+                others_of(&others, |o| t.0.to_object_space(o))
             });
         }
         for name in ["PointToWorldSpace", "pointToWorldSpace"] {
@@ -226,7 +251,10 @@ impl UserData for LCFrame {
                     let o = u.borrow::<LCFrame>()?;
                     mlua::IntoLua::into_lua(LCFrame(a.0 * o.0), lua)
                 }
-                _ => Err(err("invalid argument #2 (CFrame or Vector3 expected)")),
+                other => Err(err(format!(
+                    "invalid argument #2 (Vector3 expected, got {})",
+                    type_name(&other)
+                ))),
             },
         );
         m.add_meta_method(MetaMethod::Add, |_, t, v: Vector| {

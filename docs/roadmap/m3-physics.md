@@ -18,17 +18,15 @@ Rapier underneath, Roblox's rules on top, every rule checked in Studio.
      - Hinge servo easing and `MotorMaxAcceleration`.
      - Movers solved with the constraints, as Roblox does, and their
        `GetLastForce`.
-     - Joints snapping parts as soon as they activate; which assembly
-       and root Roblox picks (several anchored parts, equal
-       candidates); legacy automatic joints as parts move; a saved
+     - Which assembly and root Roblox picks (several anchored parts,
+       equal candidates); legacy automatic joints as parts move; a saved
        disabled WeldConstraint.
      - When touches end and which part fires first; the old
        `CollisionGroups` string; `TouchEventsUseCollisionGroups`.
      - Query result order; regions finding parts made this frame;
        `OverlapParams.Tolerance` and the overlap threshold; TouchInterest
        for `GetTouchingParts`; `Shapecast` and `ArePartsTouchingOthers`.
-     - `Model:MoveTo` stepping up out of obstructions; `Mouse.Hit`'s own
-       ray rules.
+     - Whether `Mouse.Hit`'s ray acts as the `Default` group.
      - Out: the remaining constraints, buoyancy and adaptive timesteps
        (M15).
    - *Evidence*: the [stubs](../guide/stubs.md) rows taken over by this

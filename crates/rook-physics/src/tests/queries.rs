@@ -642,3 +642,21 @@ fn box_queries_refuse_an_unsynced_dom() {
     set(&mut dom, p, "CFrame", Value::CFrame(moved));
     physics.parts_by_box(&dom, O - 1.0, O + 1.0);
 }
+
+/// A wedge wholly inside a block rises onto it (Studio 0.746), though no
+/// contact comes back for a hull inside a shape.
+#[test]
+fn a_wedge_rises_out_of_a_block() {
+    let mut dom = Dom::new();
+    part(&mut dom, Vec3::ZERO, Vec3::new(4.0, 2.0, 4.0), true);
+    let wedge = part_of(
+        &mut dom,
+        "WedgePart",
+        Vec3::new(0.0, 50.0, 0.0),
+        Vec3::splat(2.0),
+        true,
+    );
+    let mut physics = Physics::new();
+    let rise = physics.rise_out_of_parts(&mut dom, &[(wedge, CFrame::IDENTITY)]);
+    assert!((rise - 2.0).abs() < 1e-3, "{rise}");
+}

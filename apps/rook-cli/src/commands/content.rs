@@ -178,11 +178,11 @@ fn describe(bytes: &[u8]) -> String {
 /// points and bounds.
 fn physics_detail(bytes: &[u8]) -> String {
     use rook_content::decode::mesh::union::physics;
-    use rook_types::UnionCollision;
+    use rook_types::SavedCollision;
     let hulls = match physics::decode_asset(bytes) {
         Ok(None) => return "none".into(),
-        Ok(Some(UnionCollision::Block)) => return "BLOCK".into(),
-        Ok(Some(UnionCollision::Hulls(hulls))) => hulls,
+        Ok(Some(SavedCollision::Block)) => return "BLOCK".into(),
+        Ok(Some(SavedCollision::Hulls { hulls, .. })) => hulls,
         Err(e) => return e.to_string(),
     };
     let (mut lo, mut hi) = ([f32::MAX; 3], [f32::MIN; 3]);

@@ -4,7 +4,7 @@
 use std::sync::LazyLock;
 
 use rbx_types::VariantType;
-use rook_dom::{DomError, InstanceId};
+use rook_dom::{Dom, DomError, InstanceId};
 use rook_physics::assembly::{self, Assembly};
 use rook_physics::joints;
 use rook_reflection::{PropertyId, PropertyKind, PropertyType, Serialization};
@@ -22,6 +22,15 @@ pub(crate) fn cframe(w: &World, id: InstanceId) -> CFrame {
     w.dom
         .cframe_property(id, "CFrame")
         .unwrap_or(CFrame::IDENTITY)
+}
+
+/// `CollisionFidelity`: Studio works it out from the saved geometry, and a
+/// value in the file means nothing (observed in Studio 0.746).
+fn saved_fidelity(dom: &Dom, id: InstanceId) -> u32 {
+    const BOX: u32 = 1;
+    rook_physics::saved_blob(dom, id)
+        .and_then(|bytes| rook_content::decode::mesh::union::physics::fidelity(&bytes).ok())
+        .unwrap_or(BOX)
 }
 
 /// Set a part's CFrame as a script does: its assembly moves with it.
@@ -286,10 +295,20 @@ pub(crate) fn get(w: &World, id: InstanceId, name: &str) -> Option<Value> {
             Some(Value::Ref(Assembly::of(dom, id).map(|a| a.root().to_ref())))
         }
         "AssemblyMass" if dom.is_a(id, "BasePart") => Some(Value::Float32(
-            Assembly::of(dom, id).map_or_else(|| rook_physics::part_mass(dom, id), |a| a.mass(dom)),
+            Assembly::of(dom, id)
+                .map_or_else(|| w.physics.part_mass(dom, id), |a| a.mass(dom, &w.physics)),
         )),
+        "AssemblyCenterOfMass" if dom.is_a(id, "BasePart") => {
+            Some(Value::Vector3(Vector3(Assembly::of(dom, id).map_or_else(
+                || cframe(w, id).position,
+                |a| a.center_of_mass(dom, &w.physics),
+            ))))
+        }
+        "CollisionFidelity" if dom.is_a(id, "TriangleMeshPart") => {
+            Some(Value::Enum(saved_fidelity(dom, id)))
+        }
         "Velocity" if dom.is_a(id, "BasePart") => Some(Value::Vector3(Vector3(
-            rook_physics::assembly::part_velocity(dom, id),
+            rook_physics::assembly::part_velocity(dom, &w.physics, id),
         ))),
         "RotVelocity" if dom.is_a(id, "BasePart") => {
             dom.property_by_name(id, "AssemblyAngularVelocity")

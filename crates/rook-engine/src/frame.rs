@@ -105,12 +105,10 @@ impl DataModel {
         self.runtime.sync_gui();
     }
 
-    /// Content, sounds and unions, just before `wait()` resumption: sounds
-    /// and unions that changed last frame are looked at, files go to the
-    /// loader, and what finished is delivered (PreloadAsync callbacks,
-    /// sounds' `Loaded`).
+    /// Content and sounds, just before `wait()` resumption: sounds that
+    /// changed last frame are looked at, files go to the loader, and what
+    /// finished is delivered (PreloadAsync callbacks, sounds' `Loaded`).
     fn update_content(&mut self) {
-        self.update_unions();
         let start = self.runtime.world().dom.journal().end();
         let mut events = Vec::new();
         let sound_files = self.apply_sound_changes(&mut events);

@@ -1,14 +1,51 @@
 # Collision shapes
 
-Checked against Studio 0.742 on 2026-10-14.
+Checked against Studio 0.746 on 2026-11-06.
 
-What parts collide and are queried as, beyond their primitive shapes
-([M15](../../roadmap/m15-physics-completeness.md) step 1). Unions first; MeshParts follow.
+What parts collide and are queried as, and weigh, beyond their primitive
+shapes ([M15](../../roadmap/m15-physics-completeness.md) step 1).
+
+## MeshParts
+
+A MeshPart works as a union does, from a `CSGPHS` blob saved in its
+`PhysicalConfigData` or `PhysicsData`, and Studio never looks at the mesh
+for it. Of 2,851 MeshParts in a sample of 34 files, 1,686 save one (versions
+3, 6 and 7: 288, 551 and 847), 25 a block, 182 an empty value and 958 none.
+
+*Measured in Studio 0.746 (2026-11-06), loading hand-made files:*
+
+- The saved hulls are used as they are, whatever `CollisionFidelity` the file
+  says and whether the mesh loads. Rays and collisions follow them.
+- No blob, an empty one, a block or a `CSGK` pointer: the part is its box,
+  weighs as its box, and `CollisionFidelity` reads Box. The saved token is
+  ignored.
+- `PhysicsData` alone works.
+- `CollisionFidelity` reads what the blob says. Version 7's first byte: 0 Box,
+  1 Hull, 2 Default, 3 PreciseConvexDecomposition; 4 fails to load. Earlier
+  versions: one hull reads Hull, more read Default.
+- *Mass.* Versions 6 and 7 save a volume, a center of mass and an inertia at
+  unit density about that center (xx, xy, xz, yy, yz, zz). `GetMass` is the
+  saved volume times the scale along each axis (`Size / InitialSize`) times
+  the density; the center scales, and the inertia follows through second
+  moments: a part saved at (3, 5, 7) reads (6, 37, 41) stretched twice along
+  X. Versions 3 and 5 save none, and weigh what their hulls hold.
+- *No `InitialSize`.* The hulls stretch from their own bounds to `Size`, and
+  mass, center and inertia are the box's.
+
+Unions follow the same mass rules, measured on hand-made files.
+
+The hulls' bounds are `InitialSize` in every file sampled. The geometry,
+scale and mass are `rook_physics::shape::saved`.
+
+*Rook reads blobs itself.* Physics reads a part's blob from the DOM when it
+needs the part's shape or mass, rather than being handed decoded shapes by
+the engine, so a blob written at run time works and nothing rescans a place
+for them.
 
 ## Unions
 
 **Built 2026-10-14** (`rook_content::decode::mesh::union::physics`,
-`rook_physics::unions`, `rook_engine::unions`). Before this a union
+`rook_physics::shape::saved`). Before this a union
 collided and was hit by rays, mouse clicks and ClickDetectors as its box,
 so in two large places, buttons inside unions couldn't be clicked: they
 sit in a doorway cut through a wall union, and the mouse ray hit the
@@ -63,8 +100,8 @@ Studio, by script):
   and Box they hit the face, as they do through the plate's solid part
   under every fidelity. (The mouse and ClickDetectors use the same rays
   in Rook; Inference that Studio's do too.)
-- *Files don't save `CollisionFidelity`*: neither large place has it, and
-  Studio derives it from the saved geometry.
+- *Studio derives `CollisionFidelity` from the saved geometry*, whatever
+  the file says ([MeshParts](#meshparts)).
 - *No hulls saved: a box.* The 2016 wall union without its
   `PhysicalConfigData` (as a file that doesn't save it) and a large modern place
   union with it saved empty both read `CollisionFidelity` Box in Studio,
@@ -84,17 +121,17 @@ Studio, by script):
 - Rays, shape casts, `GetPartsInPart`, `GetTouchingParts` and collisions
   all use the shape; Region3 and the `GetPartBounds*` queries keep
   testing the `Size` box, as for every part.
-- A union that moves (in an unanchored assembly) with `CanCollide` off
-  keeps its box (Approximation, for speed: it collides with nothing, but
+- A union or MeshPart that moves (in an unanchored assembly) with
+  `CanCollide` off keeps its box (Approximation, for speed: it collides with nothing, but
   its hulls would still be tested against everything near it every step
   for Touched; a large modern place's 9 spinning rings and other spinning parts made
   a 5-second headless run 20% slower).
-- Mass and inertia stay those of the box (Approximation: Studio saves the
-  real volume, center of mass and inertia with the hulls).
+- Mass, center of mass and inertia are those saved with the hulls, as for
+  [MeshParts](#meshparts).
 - The client builds the same shapes (the mouse and ClickDetectors query
   the client's world); `PhysicalConfigData` replicates.
-- Scripts reading `CollisionFidelity` still get Default in Rook, where
-  Studio derives Box for a union without hulls (left for later).
+- `CollisionFidelity` reads what the blob says, as for
+  [MeshParts](#meshparts).
 
 *Checked on a large place* (`rook-tools run-headless` with a probe script: for every
 ClickDetector part, rays from 5 studs out along each axis toward it):

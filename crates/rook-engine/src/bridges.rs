@@ -7,5 +7,4 @@ pub(crate) mod input;
 pub(crate) mod journal_watch;
 pub(crate) mod render_changes;
 pub(crate) mod sounds;
-pub(crate) mod unions;
 pub(crate) mod web;

@@ -1,9 +1,9 @@
 # M15 Physics completeness
 
 1. MeshPart and union collision with their real shapes (collision
-   fidelity, `PhysicsData`), replacing boxes. Unions done: they collide
-   and are queried as the hulls Studio saved (see
-   [collision](../behavior/physics/collision-shapes.md#unions)); MeshParts remain.
+   fidelity, `PhysicsData`), replacing boxes. Done: both collide, are
+   queried and weigh as the hulls and mass Studio saved (see
+   [collision](../behavior/physics/collision-shapes.md)).
 2. The remaining constraints and movers, by files using them:
    RopeConstraint 17, RodConstraint 12, SpringConstraint 11, Prismatic 5,
    AlignPosition and AlignOrientation 4, BallSocket 2, LinearVelocity,

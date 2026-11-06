@@ -213,14 +213,39 @@ stack traceback:",
         mlua::Error::CallbackError { cause, .. } | mlua::Error::WithContext { cause, .. } => {
             lua_error_message(cause)
         }
-        mlua::Error::FromLuaConversionError { from, to, .. } => {
-            format!("Unable to cast {from} to {to}")
-        }
-        mlua::Error::BadArgument { pos, cause, .. } => {
-            format!("invalid argument #{pos} ({})", lua_error_message(cause))
-        }
+        mlua::Error::FromLuaConversionError { from, to, .. } => cast_message(from, to, 2, None),
+        mlua::Error::BadArgument { to, pos, cause, .. } => match &**cause {
+            mlua::Error::FromLuaConversionError {
+                from, to: target, ..
+            } => cast_message(from, target, *pos, to.as_deref()),
+            other => format!("invalid argument #{pos} ({})", lua_error_message(other)),
+        },
         other => other.to_string(),
     }
+}
+
+/// A value of Lua type `from` where a method wanted a `target`, as Studio
+/// words it: Vector3 and CFrame arguments are checked by their own bindings,
+/// other types' by the reflection layer's casts (docs/behavior/scripting/
+/// datatype-errors.md). `method` is mlua's `LType.Name`: a userdata argument
+/// doesn't say what it wanted, and those measured wanted their own type.
+fn cast_message(from: &str, target: &str, pos: usize, method: Option<&str>) -> String {
+    let own = method
+        .and_then(|m| m.split('.').next())
+        .map(|t| t.strip_prefix('L').unwrap_or(t));
+    let target = match target {
+        "vector" => "Vector3",
+        "userdata" => own.unwrap_or(target),
+        "f32" => "float",
+        "f64" => "double",
+        other => other,
+    };
+    let from = if from == "integer" { "number" } else { from };
+    if matches!(target, "Vector3" | "CFrame") {
+        return format!("invalid argument #{pos} ({target} expected, got {from})");
+    }
+    let from = if from == "number" { "double" } else { from };
+    format!("Unable to cast {from} to {target}")
 }
 
 pub(crate) type ApiResult<T = MultiValue> = Result<T, ScriptError>;

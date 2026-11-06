@@ -26,7 +26,7 @@ pub use gui::{
     GlyphMask, GuiGradient, GuiGroup, GuiQuad, GuiRamp, GuiShape, ImagePaint, Paint, Viewer,
     WorldCanvas, WorldFrame, WorldPlace,
 };
-pub use part::collision::{Hull, UnionCollision};
+pub use part::collision::{Hull, SavedCollision, SavedMass};
 pub use part::material::{Material, MaterialSet, TilePattern};
 pub use part::mesh::{MeshHost, MeshKind, MeshLook, mesh_part_scale};
 pub use part::shape::PartShape;

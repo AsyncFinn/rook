@@ -22,7 +22,7 @@ mod shape;
 mod step;
 mod sync;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -48,7 +48,8 @@ use sync::props::Props;
 
 use contacts::{groups, materials};
 use joints::{constraints, movers};
-use shape::{terrain, unions};
+pub use shape::saved::saved_blob;
+use shape::{saved, terrain};
 
 /// Roblox simulates at 240 Hz (creator-docs "Adaptive timestepping": 240,
 /// 120 or 60 Hz per assembly; Rook always uses 240, an Approximation).
@@ -81,18 +82,13 @@ const DEFAULT_GRAVITY: f32 = 196.2;
 /// Workspace.FallenPartsDestroyHeight's default (creator-docs).
 const DEFAULT_FALLEN_HEIGHT: f32 = -500.0;
 
-/// A part's volume, from its shape and Size. MeshParts, unions and
-/// trusses count as blocks until meshes exist.
+/// A part's volume, from its shape and Size: a truss, or a union or
+/// MeshPart without saved geometry, is its box.
 pub fn part_volume(dom: &Dom, part: InstanceId) -> f32 {
     match dom.vector3_property(part, "Size") {
         Some(s) => part_shape(dom, part).volume(s.max(glam::Vec3::splat(shape::MIN_PART_SIZE))),
         None => 0.0,
     }
-}
-
-/// `BasePart:GetMass()`: volume × density (observed in Studio).
-pub fn part_mass(dom: &Dom, part: InstanceId) -> f32 {
-    part_volume(dom, part) * materials::of_part(dom, part).density
 }
 
 /// Script requests physics carries out at its next step.
@@ -179,6 +175,7 @@ pub struct Physics {
     hinges: FxHashMap<InstanceId, ImpulseJointHandle>,
     /// Journal position up to which changes have been applied.
     cursor: u64,
+    unsettled: sync::settle::Unsettled,
     built: bool,
     pub(crate) fallen_height: f32,
     /// The last step's length, for advancing motors.
@@ -238,7 +235,7 @@ pub struct Physics {
     authority: Authority,
     /// Parts whose assemblies change hands at the next sync.
     handed_over: Vec<InstanceId>,
-    unions: unions::Unions,
+    saved: saved::SavedShapes,
     terrain: terrain::Terrain,
     /// Terrain colliders were added since the last query.
     terrain_placed: bool,
@@ -294,6 +291,7 @@ impl Physics {
             joints: FxHashMap::default(),
             hinges: FxHashMap::default(),
             cursor: 0,
+            unsettled: sync::settle::Unsettled::default(),
             built: false,
             fallen_height: DEFAULT_FALLEN_HEIGHT,
             last_dt: 0.0,
@@ -324,7 +322,7 @@ impl Physics {
             bounds: query::bounds::PartBounds::default(),
             authority: Authority::default(),
             handed_over: Vec::new(),
-            unions: unions::Unions::default(),
+            saved: saved::SavedShapes::default(),
             terrain: terrain::Terrain::default(),
             terrain_placed: false,
             humanoid_ids: FxHashSet::default(),
@@ -447,14 +445,23 @@ impl Physics {
         }
     }
 
-    /// A union's collision geometry, loaded (or `None`: it collides as its
-    /// box again). It takes effect at the next sync.
-    pub fn set_union_collision(
-        &mut self,
-        part: InstanceId,
-        collision: Option<std::sync::Arc<rook_types::UnionCollision>>,
-    ) {
-        self.unions.set(part, collision);
+    /// `BasePart:GetMass()`: volume × density (observed in Studio), a union's
+    /// or MeshPart's volume being the one saved with its hulls.
+    pub fn part_mass(&self, dom: &Dom, part: InstanceId) -> f32 {
+        let volume = dom
+            .vector3_property(part, "Size")
+            .and_then(|size| self.saved.mass(dom, part, size))
+            .map_or_else(|| part_volume(dom, part), |m| m.volume);
+        volume * materials::of_part(dom, part).density
+    }
+
+    /// Where `part`'s own center of mass is, in the world.
+    pub(crate) fn part_center(&self, dom: &Dom, part: InstanceId, cf: CFrame) -> glam::Vec3 {
+        let center = dom
+            .vector3_property(part, "Size")
+            .and_then(|size| self.saved.mass(dom, part, size))
+            .map_or(glam::Vec3::ZERO, |m| m.center);
+        cf.point_to_world_space(rook_types::Vector3(center)).0
     }
 
     /// Bring the world up to date with the DOM: on the first call, add
@@ -479,12 +486,12 @@ impl Physics {
         if !handed_over.is_empty() {
             self.rebuild(dom, &props, handed_over);
         }
-        self.reshape_unions(dom, &props);
         self.refresh_terrain(dom);
         let dirty = std::mem::take(&mut self.dirty);
         self.refresh_constraints(dom, &dirty);
         self.refresh_movers(dom, &dirty);
         self.bounds.place_added(dom);
+        self.unsettled.clear();
         // Our own snapping writes aren't changes to apply next time.
         self.cursor = dom.journal().end();
         self.props = Some(props);

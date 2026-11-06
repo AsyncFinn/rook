@@ -9,8 +9,6 @@ use super::*;
 impl DataModel {
     /// Start every server Script that should run, in tree order.
     pub fn start(&mut self) {
-        // So scripts' first queries see unions' shapes.
-        self.update_unions();
         let root = self.runtime.world().dom.root();
         self.start_scripts_under(root);
         self.new_scripts = NewScripts::starting_at(self.runtime.world().dom.journal().end());

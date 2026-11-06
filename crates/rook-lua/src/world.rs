@@ -291,7 +291,7 @@ pub struct World {
     /// Players whose clients simulate their characters (a server's).
     pub client_players: FxHashSet<InstanceId>,
     /// Picks spawns and spots on them.
-    pub(crate) spawn_random: crate::types::misc::LRandom,
+    pub(crate) spawn_random: crate::types::random::LRandom,
     /// PlayerGuis' `SetTopbarTransparency`, for those a script set.
     pub(crate) topbar_transparency: FxHashMap<InstanceId, f32>,
     /// Humanoids' walks and disabled states.
@@ -360,7 +360,7 @@ impl World {
             avatars_pending: FxHashSet::default(),
             client_players: FxHashSet::default(),
             // A fixed seed: runs repeat exactly.
-            spawn_random: crate::types::misc::LRandom::new(1),
+            spawn_random: crate::types::random::LRandom::new(1),
             topbar_transparency: FxHashMap::default(),
             movement: Default::default(),
             interpolations: FxHashMap::default(),

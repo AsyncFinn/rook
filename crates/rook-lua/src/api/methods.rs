@@ -18,7 +18,7 @@ use rook_dom::{DomError, InstanceId};
 use rook_reflection::database;
 use rook_types::{CFrame, Value, Vector3};
 
-use super::instance::push_instance;
+use super::instance::{push_instance, settle_joints, settle_joints_within};
 use rook_physics::assembly::{self, Assembly};
 use rook_physics::joints;
 
@@ -27,7 +27,7 @@ use super::signal::LSignal;
 use crate::ctx::args::Args;
 use crate::ctx::convert::{to_lua, vector3_to_lua};
 use crate::ctx::{ApiResult, Outcome, ScriptError, with_world};
-use crate::threads::{dispatch, fire};
+use crate::threads::{dispatch, fire, fire_with};
 use crate::types::LCFrame;
 use crate::world::{Job, World};
 
@@ -161,7 +161,6 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("RunService", "IsServer") => is_server,
         ("RunService", "IsClient") => is_client,
         ("BindableEvent", "Fire") => bindable_fire,
-        ("BindableFunction", "Invoke") => bindable_invoke,
         ("Players", "GetPlayers" | "getPlayers" | "players") => get_players,
         ("Players", "GetPlayerFromCharacter" | "playerFromCharacter") => player_from_character,
         ("Players", "GetPlayerByUserId") => player_by_user_id,

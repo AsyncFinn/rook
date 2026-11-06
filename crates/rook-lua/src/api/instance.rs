@@ -35,7 +35,9 @@ use calls::*;
 use lookup::*;
 
 pub(crate) use access::{read_property, write_property};
-pub(crate) use lookup::{Identity, MemberTable, get_member, runtime_properties};
+pub(crate) use lookup::{
+    Identity, MemberTable, get_member, runtime_properties, settle_joints, settle_joints_within,
+};
 
 /// A script's handle to an instance. There is one userdata per instance,
 /// so `==`, `rawequal` and table keys behave as on Roblox.

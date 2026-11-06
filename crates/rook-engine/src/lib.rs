@@ -34,7 +34,7 @@ use rook_lua::{LogEntry, MessageType, Runtime};
 use rook_types::Value;
 
 use bridges::journal_watch::JournalWatch;
-use bridges::{explosions, input, sounds, unions, web};
+use bridges::{explosions, input, sounds, web};
 use session::threads;
 
 #[derive(Debug, thiserror::Error)]
@@ -147,7 +147,6 @@ pub struct DataModel {
     input: input::InputTracker,
     content: Content,
     sounds: sounds::Sounds,
-    unions: unions::Unions,
     explosions: explosions::Explosions,
     web: web::Web,
     /// The player's settings, on a client given a file for them.
@@ -214,7 +213,6 @@ impl DataModel {
         self.render_watch.rescan(end);
         self.render_changes = RenderChanges::everything();
         self.sounds.watch.rescan(end);
-        self.unions.watch.rescan(end);
         self.explosions.watch.rescan(end);
         if let Some(kept) = &mut self.user_settings {
             kept.rescan(end);
@@ -255,7 +253,6 @@ impl DataModel {
         self.note_new_scripts();
         self.check_render_changes();
         self.check_sounds();
-        self.check_unions();
         self.check_explosions();
         self.check_user_settings();
     }
@@ -385,7 +382,6 @@ impl DataModel {
                 ..Content::default()
             },
             sounds: Default::default(),
-            unions: Default::default(),
             explosions: Default::default(),
             web: Default::default(),
             user_settings: None,

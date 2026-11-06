@@ -18,6 +18,7 @@ pub(crate) mod font;
 pub(crate) mod geometry;
 pub(crate) mod misc;
 pub(crate) mod query;
+pub(crate) mod random;
 pub(crate) mod sequences;
 pub(crate) mod udim;
 pub(crate) mod vector;
