@@ -1,17 +1,23 @@
-//! `rook-tools`: command-line tools for the Rook engine.
+//! `rook`: open a place, and look inside places and Rook's own files.
+//!
+//! `rook place.rbxl` opens it in the player, as dragging it onto `rook.exe`
+//! does, and with nothing to open it asks for a place. What works on the
+//! repository itself is `cargo xtask` (apps/xtask).
 
 mod commands;
 
-use commands::{
-    conformance, content, corpus, drift, dump, gen_api, key, logs, roundtrip, run, studio_defaults,
-    terrain,
-};
+use commands::{content, dump, key, logs, play, roundtrip, run};
+use std::ffi::OsString;
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 
 #[derive(Debug, Parser)]
-#[command(name = "rook-tools", version, about = "Rook engine tools")]
+#[command(
+    name = "rook",
+    version,
+    about = "Open and inspect Roblox places with Rook"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -23,6 +29,14 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    /// Open a place in the player; `rook <place>` is the same.
+    ///
+    /// Everything after `play` goes to `rook-player`, `--help` too.
+    #[command(disable_help_flag = true)]
+    Play {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<OsString>,
+    },
     /// Print a place or model file's instance tree.
     Dump {
         file: PathBuf,
@@ -41,32 +55,6 @@ enum Command {
         /// Save in this format instead of the file's own.
         #[arg(long, value_enum)]
         to: Option<FormatArg>,
-    },
-    /// Scan a folder of places and models and report what they use.
-    CorpusScan {
-        /// Folder to scan recursively.
-        dir: PathBuf,
-        /// Output folder for corpus.json and summary.md.
-        #[arg(long, default_value = "reports/corpus")]
-        out: PathBuf,
-        /// Worker threads for small files (default: up to 8).
-        #[arg(long)]
-        jobs: Option<usize>,
-        /// Files larger than this many megabytes are processed one at a time.
-        #[arg(long, default_value_t = 64)]
-        large_mb: u64,
-    },
-    /// Show what a file's Terrain holds (smooth voxels or legacy blocks),
-    /// or with `--scan`, count both across a folder's unique files.
-    Terrain {
-        /// Files to inspect, or one folder with `--scan`.
-        #[arg(required = true)]
-        paths: Vec<PathBuf>,
-        #[arg(long)]
-        scan: bool,
-        /// Worker threads for `--scan` (default: 8).
-        #[arg(long)]
-        jobs: Option<usize>,
     },
     /// Run a place's server Scripts headless and print their output.
     RunHeadless {
@@ -121,32 +109,6 @@ enum Command {
         #[arg(long)]
         repl: bool,
     },
-    /// Run every place in a folder headless and report how many run cleanly.
-    CorpusRun {
-        dir: PathBuf,
-        #[arg(long, default_value = "reports/run")]
-        out: PathBuf,
-        /// Seconds of game time to simulate per place.
-        #[arg(long, default_value_t = 10.0)]
-        seconds: f64,
-        /// Script timeout in seconds.
-        #[arg(long, default_value_t = 1.0)]
-        timeout: f64,
-        #[arg(long)]
-        jobs: Option<usize>,
-    },
-    /// Record conformance cases in Roblox Studio (through Studio's MCP
-    /// server), or run them in Rook and compare.
-    Conformance {
-        #[command(subcommand)]
-        action: ConformanceAction,
-        /// The conformance folder.
-        #[arg(long, default_value = "conformance", global = true)]
-        dir: PathBuf,
-        /// Only cases whose `group/name` contains this text.
-        #[arg(long, global = true)]
-        filter: Option<String>,
-    },
     /// Show how content references resolve: what each means, which
     /// provider has it (Rook's defaults, the Roblox install, content
     /// folders, the cache or asset delivery), and why one fails.
@@ -158,15 +120,11 @@ enum Command {
     Content {
         /// References to resolve (`rbxassetid://5`, `rbxasset://textures/face.png`, ...),
         /// or one place or model file.
-        #[arg(required_unless_present_any = ["place", "pin"])]
+        #[arg(required_unless_present = "place")]
         references: Vec<String>,
         /// Resolve every content reference in this place or model instead.
         #[arg(long, conflicts_with = "references")]
         place: Option<PathBuf>,
-        /// Write the list of content Rook keeps for good again, with each
-        /// asset's version today (crates/rook-content/data/kept.txt).
-        #[arg(long, conflicts_with_all = ["references", "place"])]
-        pin: bool,
         /// Don't use the network: only the install, folders and the cache.
         #[arg(long)]
         offline: bool,
@@ -199,49 +157,6 @@ enum Command {
         #[command(subcommand)]
         action: Option<CacheAction>,
     },
-    /// Check the repository for drift (copied functions, long comment
-    /// blocks, environment reads below rook-engine, broken doc links and
-    /// indexes); `scripts/check` runs it.
-    #[command(hide = true)]
-    Drift,
-    /// Update the API data (crates/rook-reflection/data/database.msgpack and
-    /// members.json) to a new Roblox version from its Full API dump.
-    ///
-    /// Also takes the dump the current data was built from (members.json
-    /// names it), to tell what Roblox changed. Roblox-Client-Tracker keeps
-    /// one dump per version.
-    GenApi {
-        /// Path to the new version's Full-API-Dump.json.
-        dump: PathBuf,
-        /// Path to the Full-API-Dump.json the current data was built from.
-        #[arg(long)]
-        previous: PathBuf,
-        /// The new Roblox version, as `major.minor.patch.build`.
-        #[arg(long)]
-        version: String,
-        /// Where the dump came from, recorded in members.json.
-        #[arg(long)]
-        source: String,
-        #[arg(long, default_value = "crates/rook-reflection/data/database.msgpack")]
-        database: PathBuf,
-        #[arg(long, default_value = "crates/rook-reflection/data/members.json")]
-        members: PathBuf,
-    },
-    /// Measure in Studio (through its MCP server) the property defaults
-    /// the reflection database leaves out, and regenerate Rook's table.
-    ///
-    /// Reads Edit mode, then a playtest client; Studio must be in Edit.
-    /// ROOK_STUDIO picks the window, as for `conformance`.
-    StudioDefaults {
-        /// Only list the properties without a database default.
-        #[arg(long)]
-        list: bool,
-        #[arg(
-            long,
-            default_value = "crates/rook-dom/src/properties/studio_defaults.rs"
-        )]
-        out: PathBuf,
-    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -266,14 +181,6 @@ enum CacheAction {
     Clear,
 }
 
-#[derive(Debug, Subcommand)]
-enum ConformanceAction {
-    /// Run every case in a Studio playtest and save the results as expectations.
-    Record,
-    /// Run every case in Rook and compare with the expectations.
-    Run,
-}
-
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
 enum FormatArg {
     Binary,
@@ -290,22 +197,24 @@ impl From<FormatArg> for rook_formats::Format {
 }
 
 fn main() -> anyhow::Result<()> {
-    let cli = Cli::parse_from(rook_engine::logging::fix_verbose_args(std::env::args()));
-    // Long commands keep a log file; quick ones print and are done.
-    let long = matches!(
-        cli.command,
-        Command::CorpusScan { .. } | Command::CorpusRun { .. } | Command::Conformance { .. }
-    );
+    rook_platform::console::close_unshared();
+    let args: Vec<OsString> = std::env::args_os().collect();
+    if let Some(play) = play::shortcut(&args) {
+        return play;
+    }
+    let args = args.into_iter().map(|a| a.to_string_lossy().into_owned());
+    let cli = Cli::parse_from(rook_engine::logging::fix_verbose_args(args));
     rook_engine::logging::init(&rook_engine::logging::Options {
-        program: "rook-tools",
+        program: "rook",
         verbose: cli.verbose.clone(),
-        file: long,
+        file: false,
     });
     rook_engine::logging::run(|| command(cli.command), |_| {})
 }
 
 fn command(command: Command) -> anyhow::Result<()> {
     match command {
+        Command::Play { args } => play::run(&args),
         Command::Dump {
             file,
             properties,
@@ -313,47 +222,12 @@ fn command(command: Command) -> anyhow::Result<()> {
         } => dump::run(&file, properties, depth),
         Command::Source { file, name } => dump::print_source(&file, &name),
         Command::Roundtrip { file, to } => roundtrip::run(&file, to.map(Into::into)),
-        Command::CorpusScan {
-            dir,
-            out,
-            jobs,
-            large_mb,
-        } => corpus::run(&dir, &out, jobs, large_mb),
-        Command::GenApi {
-            dump,
-            previous,
-            version,
-            source,
-            database,
-            members,
-        } => gen_api::run(
-            &gen_api::Paths {
-                dump: &dump,
-                previous_dump: &previous,
-                database: &database,
-                members: &members,
-            },
-            &version,
-            &source,
-        ),
-        Command::StudioDefaults { list, out } => studio_defaults::run(list, &out),
-        Command::Terrain { paths, scan, jobs } => {
-            if scan {
-                terrain::scan(&paths[0], jobs)
-            } else {
-                terrain::inspect(&paths)
-            }
-        }
         Command::Content {
             references,
             place,
-            pin,
             offline,
             refresh,
         } => {
-            if pin {
-                return content::pin(std::path::Path::new("crates/rook-content/data/kept.txt"));
-            }
             let options = content::Options { offline, refresh };
             // A lone file argument is a place or model.
             let place = place.or_else(|| match references.as_slice() {
@@ -370,28 +244,12 @@ fn command(command: Command) -> anyhow::Result<()> {
             KeyAction::Set => key::set(),
             KeyAction::Clear => key::clear(),
         },
-        Command::Drift => drift::run(),
         Command::Cache { action } => content::cache(match action {
             None => content::CacheCommand::Show,
             Some(CacheAction::Prune { older_than }) => content::CacheCommand::Prune(older_than),
             Some(CacheAction::Trim) => content::CacheCommand::Trim,
             Some(CacheAction::Clear) => content::CacheCommand::Clear,
         }),
-        Command::Conformance {
-            action,
-            dir,
-            filter,
-        } => match action {
-            ConformanceAction::Record => conformance::record(&dir, filter.as_deref()),
-            ConformanceAction::Run => conformance::run(&dir, filter.as_deref()),
-        },
-        Command::CorpusRun {
-            dir,
-            out,
-            seconds,
-            timeout,
-            jobs,
-        } => corpus::runner::run(&dir, &out, seconds, timeout, jobs),
         Command::RunHeadless {
             file,
             seconds,

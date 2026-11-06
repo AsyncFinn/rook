@@ -8,7 +8,7 @@ Luau CoreScripts, which Rook runs from Studio's packages (downloaded from
 Roblox's CDN, see [client packages](../content/client-packages.md)) or the
 user's Studio install, and never ships ([content policy](../../design/policies.md#content-and-assets)). Read
 from Studio 0.744's install on 2026-10-23 and run headless with
-`rook-tools run-headless --join --core-scripts` on an empty baseplate;
+`rook run-headless --join --core-scripts` on an empty baseplate;
 looks from `rook-player --core-scripts --screenshot`.
 
 Code: loading in `rook-engine`'s `core_scripts.rs` (and the

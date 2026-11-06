@@ -4,7 +4,7 @@
 //! own compact list of the rest, generated from the same Full API dump as
 //! the database and committed as `data/members.json`.
 //!
-//! Regenerate with `rook-tools gen-api` ([`crate::update`]). The file has
+//! Regenerate with `cargo xtask gen-api` ([`crate::update`]). The file has
 //! one class per line so updates diff cleanly.
 //!
 //! Types are written `<kind>:<name>`, where the kind is `p` (primitive),

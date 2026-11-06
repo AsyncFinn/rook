@@ -32,7 +32,7 @@ unchanged. Scripts call `SoundService:PlayLocalSound` in 38 files (327
 calls), so it is done too.
 
 The corpus doesn't count SoundService's property values, so five places
-were looked at with `rook-tools dump`:
+were looked at with `rook dump`:
 
 - A 2021 place, both large places and a 2008 place save `AmbientReverb`
   NoReverb.

@@ -1,4 +1,4 @@
-//! Updating the API data to a new Roblox version (`rook-tools gen-api`):
+//! Updating the API data to a new Roblox version (`cargo xtask gen-api`):
 //! the reflection database (`data/database.msgpack`) and the member list
 //! (`data/members.json`), both from Roblox's Full API dump.
 //!

@@ -17,7 +17,6 @@
 mod alert;
 mod app;
 mod bench;
-mod console_window;
 mod counters;
 mod game;
 mod record;
@@ -259,7 +258,7 @@ fn note_gpu(renderer: &Renderer) {
 }
 
 fn main() -> ExitCode {
-    console_window::close_unshared();
+    rook_platform::console::close_unshared();
     #[cfg(feature = "tracy")]
     profiling::tracy_client::Client::start();
     let argv = rook_engine::logging::fix_verbose_args(std::env::args());

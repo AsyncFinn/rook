@@ -17,7 +17,7 @@ by the thousands, most of them the 2009 client's (`sounds/collide.wav` in
 install has (`sounds/uuhhh.mp3` 345 files, `action_falling.mp3` 337,
 `paintball.wav` 256).
 
-*What loads, and in which format* (`rook-tools content --place`, which now
+*What loads, and in which format* (`rook content --place`, which now
 decodes each Sound's file, run once on five places, asset delivery on,
 anonymous):
 

@@ -4,7 +4,7 @@
 //!
 //! Types the dump prints ambiguously (Content, Rect, Instance) and the
 //! dump's placeholders (`__api_dump_class_not_creatable__`) give no
-//! default: `rook-tools studio-defaults` measures those.
+//! default: `cargo xtask studio-defaults` measures those.
 
 use rustc_hash::FxHashMap;
 

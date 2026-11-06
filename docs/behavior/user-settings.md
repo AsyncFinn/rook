@@ -5,7 +5,7 @@ Checked against Studio 0.744 on 2026-10-23.
 The player's own settings: `UserSettings().GameSettings`, the
 UserGameSettings the in-game menu's Settings page edits. Read from the
 Roblox client's saved file (by hand) and Studio 0.744's CoreScripts on 2026-10-23,
-and run headless with `rook-tools run-headless --join --core-scripts
+and run headless with `rook run-headless --join --core-scripts
 --user-settings <file>` on an empty baseplate.
 
 Code: the instance and its defaults in `rook-lua`'s `user_settings.rs`,

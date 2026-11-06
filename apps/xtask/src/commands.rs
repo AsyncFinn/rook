@@ -1,0 +1,11 @@
+//! The `cargo xtask` subcommands, one module each.
+
+pub(crate) mod conformance;
+pub(crate) mod corpus;
+pub(crate) mod drift;
+pub(crate) mod gen_api;
+pub(crate) mod package;
+pub(crate) mod pin_content;
+pub(crate) mod studio;
+pub(crate) mod studio_defaults;
+pub(crate) mod terrain;

@@ -1,4 +1,4 @@
-//! `rook-tools key`: save the Open Cloud key in the OS credential store,
+//! `rook key`: save the Open Cloud key in the OS credential store,
 //! or forget it. The key is read without echo and never printed.
 
 use std::io::{IsTerminal, Read};

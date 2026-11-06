@@ -132,7 +132,7 @@ Studio, which Rook's run matches.
 ## In Rook
 
 - What the PlayerModule calls that Rook lacked, from running it in a
-  client (`rook-tools run-headless --join --core-scripts`): two members
+  client (`rook run-headless --join --core-scripts`): two members
   (`Player:Move`, `UserGameSettings:SetGamepadCameraSensitivityVisible`)
   and behavior behind members Rook had: the StarterPlayer copies,
   CameraSubject and CameraType after spawning, `RootPart`, `NearPlaneZ`,

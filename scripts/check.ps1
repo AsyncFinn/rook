@@ -13,14 +13,8 @@ cargo deny check bans
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 # Code drift (copied functions, long comment blocks, environment reads
 # below rook-engine), docs drift (links, indexes, Studio check dates, the
-# roadmap's marks) (apps/rook-cli/src/commands/drift.rs).
-# Built with `--workspace`, not run with `-p rook-cli`: one package alone
-# resolves its dependencies' features differently, which compiled about a
-# hundred of them again.
-cargo build -q --workspace --bin rook-tools
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-$target = (cargo metadata -q --format-version 1 --no-deps | ConvertFrom-Json).target_directory
-& (Join-Path $target "debug/rook-tools") drift
+# roadmap's marks) (apps/xtask/src/commands/drift.rs).
+cargo xtask drift
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 # A file's topics decide when it's split, not its length (see CONTRIBUTING);
 # very long ones are pointed out as worth a look. Comments and blank lines

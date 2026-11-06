@@ -7,4 +7,8 @@ rustflags = ["-C", "target-feature=+crt-static"]
 # Builds for other people, and the only way to make them: the dist
 # profile, without developer overrides or the terminal's Luau prompt
 # (CONTRIBUTING.md#build-profiles).
-dist = "build --profile dist --workspace --no-default-features --features rook-player/published,rook-cli/published"
+dist = "build --profile dist --workspace --exclude xtask --no-default-features --features rook-player/published,rook-cli/published"
+# What works on the repository itself (apps/xtask). `--bin`, not `-p`: one
+# package alone resolves its dependencies' features differently, which
+# compiles about a hundred of them again.
+xtask = "run --quiet --bin xtask --"

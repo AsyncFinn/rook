@@ -1,4 +1,4 @@
-//! `rook-tools gen-api`: update the committed API data (reflection database
+//! `cargo xtask gen-api`: update the committed API data (reflection database
 //! and member list) to a new Roblox version.
 
 use std::path::Path;

@@ -12,7 +12,7 @@ The most valuable reports are:
 
 Please include:
 
-- The `rook-tools run-headless place.rbxl` output (see [docs/guide/tools.md](docs/guide/tools.md)).
+- The `rook run-headless place.rbxl` output (see [docs/guide/tools.md](docs/guide/tools.md)).
 - If you can, a minimal place that reproduces it. Only share places you have the rights to share.
 - For a behavior difference, what Roblox does and what Rook does.
 
@@ -45,7 +45,8 @@ Rook is a Cargo workspace of small crates whose dependencies only point downward
 | [`rook-engine`](crates/rook-engine) | DataModels, services, script start rules, play sessions and the frame loop |
 | [`rook-view`](crates/rook-view) | What a DataModel draws: the render scene built from the DOM, mesh files and images loading for it |
 | [`rook-render`](crates/rook-render) | The wgpu renderer |
-| [`rook-cli`](apps/rook-cli) | The `rook-tools` command-line tool |
+| [`rook-cli`](apps/rook-cli) | The `rook` command-line tool, which opens places in the player and looks inside them |
+| [`xtask`](apps/xtask) | `cargo xtask`: what works on the repository itself; never shipped |
 | [`rook-player`](apps/rook-player) | The windowed player |
 
 ### Where things live
@@ -68,7 +69,7 @@ Most features span several crates: the rules in `rook-types` or the feature's ow
 - **Settings, logs and the data folder:** `rook-engine/src/settings.rs`, `logging.rs` and `data_folder.rs`; the files themselves through `rook-platform`.
 - **Findings from Studio and the archive:** `docs/behavior/<area>/<topic>.md`, listed in [docs/README.md](docs/README.md). The [roadmap](docs/roadmap/README.md) keeps only the plan and links there.
 
-Each crate's `lib.rs` holds its module list, re-exports and core type; everything else is one topic per file. What a file covers decides when it's split, not its length: split it when it holds more than one topic (a second type with its own rules, a separate stage of a pipeline), or when someone looking for one thing has to wade through another. A long file that is all one topic, doc comments included, stays whole; a short one mixing two topics is split. Split by topic as `foo.rs` plus a `foo/` folder, never `mod.rs`. A `foo/` folder holds the code for each part of foo, and `foo.rs` says what those parts are, like `lib.rs` does for a crate: its module list and re-exports, plus only what the parts share (the module's core types and its entry point; `rook-render`'s `mesh.rs` keeps `Vertex`, `MeshData` and the `build` that picks a builder, while the ball, truss, head and mesh files are built in `mesh/`). Each part's implementation lives in its own file in the folder, never in `foo.rs`. A module that is one topic is a plain `foo.rs` with its tests inline at the end (`#[cfg(test)] mod tests { ... }`); once foo has parts, `foo/tests.rs` sits beside them. No folder holds only tests. Keep files at most three folders below a crate's `src/` (`src/a/b/c/file.rs`), and aim for two: deeper usually means a topic deserves its own top-level folder in the crate (`rook-tools drift` enforces three). `scripts/check` points out files over 1,000 lines of code (comments and blank lines not counted) as worth a look, not as a rule. Group files that share a topic in a folder too, before any of them gets big: a `src/` with many top-level files is hard to find your way around, and a crate is not one topic (`rook-engine` and `rook-player` are glue between many). Don't make a folder for a lone file, unless the topic is known to hold several kinds (the roadmap lists them, as with adornments): then the folder comes with the first.
+Each crate's `lib.rs` holds its module list, re-exports and core type; everything else is one topic per file. What a file covers decides when it's split, not its length: split it when it holds more than one topic (a second type with its own rules, a separate stage of a pipeline), or when someone looking for one thing has to wade through another. A long file that is all one topic, doc comments included, stays whole; a short one mixing two topics is split. Split by topic as `foo.rs` plus a `foo/` folder, never `mod.rs`. A `foo/` folder holds the code for each part of foo, and `foo.rs` says what those parts are, like `lib.rs` does for a crate: its module list and re-exports, plus only what the parts share (the module's core types and its entry point; `rook-render`'s `mesh.rs` keeps `Vertex`, `MeshData` and the `build` that picks a builder, while the ball, truss, head and mesh files are built in `mesh/`). Each part's implementation lives in its own file in the folder, never in `foo.rs`. A module that is one topic is a plain `foo.rs` with its tests inline at the end (`#[cfg(test)] mod tests { ... }`); once foo has parts, `foo/tests.rs` sits beside them. No folder holds only tests. Keep files at most three folders below a crate's `src/` (`src/a/b/c/file.rs`), and aim for two: deeper usually means a topic deserves its own top-level folder in the crate (`cargo xtask drift` enforces three). `scripts/check` points out files over 1,000 lines of code (comments and blank lines not counted) as worth a look, not as a rule. Group files that share a topic in a folder too, before any of them gets big: a `src/` with many top-level files is hard to find your way around, and a crate is not one topic (`rook-engine` and `rook-player` are glue between many). Don't make a folder for a lone file, unless the topic is known to hold several kinds (the roadmap lists them, as with adornments): then the folder comes with the first.
 
 ### Errors
 
@@ -181,10 +182,10 @@ Rook's API data is the reflection database (`crates/rook-reflection/data/databas
 ```sh
 curl -o new.json https://raw.githubusercontent.com/MaximumADHD/Roblox-Client-Tracker/<commit>/Full-API-Dump.json
 curl -o old.json https://raw.githubusercontent.com/MaximumADHD/Roblox-Client-Tracker/<previous commit>/Full-API-Dump.json
-cargo run --bin rook-tools -- gen-api new.json --previous old.json --version <version.txt at that commit> --source "MaximumADHD/Roblox-Client-Tracker@<commit> Full-API-Dump.json"
+cargo xtask gen-api new.json --previous old.json --version <version.txt at that commit> --source "MaximumADHD/Roblox-Client-Tracker@<commit> Full-API-Dump.json"
 ```
 
-It prints what changed: classes, properties and enums added and removed, and properties whose type, tags, scriptability or saving changed. Fields the dump states follow it; what rbx-dom's patches added (aliases, legacy serialized names, migrations) carries over, and new properties take the default the dump prints where it parses. Then run `rook-tools studio-defaults` for the new properties' remaining defaults ([property defaults](docs/behavior/property-defaults.md)), fix what the check turns up (removed members Rook implements, tests naming them), and add the version to the next release's notes.
+It prints what changed: classes, properties and enums added and removed, and properties whose type, tags, scriptability or saving changed. Fields the dump states follow it; what rbx-dom's patches added (aliases, legacy serialized names, migrations) carries over, and new properties take the default the dump prints where it parses. Then run `cargo xtask studio-defaults` for the new properties' remaining defaults ([property defaults](docs/behavior/property-defaults.md)), fix what the check turns up (removed members Rook implements, tests naming them), and add the version to the next release's notes.
 
 Behavior pages keep their own `Checked against Studio <version> on <date>.` line: it says when their findings were last measured, not which version Rook targets, and changes only when the page is measured again.
 
@@ -212,13 +213,15 @@ Each profile has one job:
 |---|---|---|
 | `cargo build` | `dev` (`target/debug`) | Editing, tests and checks. Rook's code is lightly optimized; dependencies are fully optimized so Luau and wgpu run at speed |
 | `cargo build --release` | `release` | Fast builds to play and bench with, and building from source. Fast to rebuild |
-| `cargo dist` | `dist` | Builds for other people, and the only way to make them (an alias in `.cargo/config.toml`): the whole program optimized at once, about 15% smaller with the same frame times but many times slower to build, without developer overrides or the terminal's Luau prompt |
+| `cargo dist` | `dist` | Builds for other people, and the only way to make them (an alias in `.cargo/config.toml`; `cargo xtask package` runs it and makes the folder to hand over): the whole program optimized at once, about 15% smaller with the same frame times but many times slower to build, without developer overrides or the terminal's Luau prompt |
 
 `dev` and `release` builds have developer overrides (the `developer-overrides` feature, on by default), so they take every flag, variable and settings-file key, and say "Developer build" in the player's title and the log ([developer overrides](docs/design/data-and-logging.md#developer-overrides)). `cargo dist` leaves the feature out and turns on `published`, which refuses to compile with it.
 
+`cargo xtask package` puts `rook` and `bin/rook-player` in `target/package/Rook-<version>-<os>-<arch>`, with the license, notice and a readme, and nothing else. `xtask` itself is left out of `cargo dist`, so development commands never reach a build for other people.
+
 For a live Tracy timeline, build the player with `--release --features tracy` into its own folder, so it doesn't replace the everyday build: `CARGO_TARGET_DIR=target/tracy cargo build --release --workspace --features rook-player/tracy`.
 
-A new crate gets its own `[profile.dev.package]` entry in the root `Cargo.toml` (`rook-tools drift` checks): the dev profile optimizes dependencies fully and lists Rook's crates to keep them quick to rebuild.
+A new crate gets its own `[profile.dev.package]` entry in the root `Cargo.toml` (`cargo xtask drift` checks): the dev profile optimizes dependencies fully and lists Rook's crates to keep them quick to rebuild.
 
 Commands with `--workspace` share one build of the dependencies. `-p <crate>` alone resolves their features for that crate only, so it compiles many of them again (`cargo build --workspace --bin rook-player` builds just the player from the shared build).
 

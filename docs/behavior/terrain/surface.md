@@ -97,7 +97,7 @@ same camera in both, shows the same landmass.
 
 *Costs* (release build, meshing only): a 75,000-voxel place 20 ms (56,000
 triangles), a 1.18-million one 63 ms (426,000), a 751,000 one 92 ms (553,000),
-a 25.2-million one 317 ms (1.73 million, mostly the flat water). `rook-tools terrain
+a 25.2-million one 317 ms (1.73 million, mostly the flat water). `cargo xtask terrain
 <file>` prints what a file's Terrain holds and how long it takes to mesh.
 
 ## Scripts

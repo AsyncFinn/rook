@@ -19,7 +19,7 @@ That is by design upstream, so Rook measures them itself.
 
 ## The sweep
 
-`rook-tools studio-defaults` lists every scriptable property of every
+`cargo xtask studio-defaults` lists every scriptable property of every
 creatable class and service that the database has no default for
 (`--list` prints them: 3,984 on 699 classes for the 0.741 database).
 Through Studio's MCP server it creates each class with `Instance.new`, or

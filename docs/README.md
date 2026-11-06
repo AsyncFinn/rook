@@ -4,7 +4,7 @@
   - [Getting started](guide/getting-started.md): build Rook, open a place, controls and the command bar
   - [Features](guide/features.md): everything Rook supports today
   - [Stubs](guide/stubs.md): what's partly done, or accepted but ignored, member by member
-  - [Tools](guide/tools.md): the `rook-tools` command-line tool
+  - [Tools](guide/tools.md): the `rook` command-line tool and `cargo xtask`
 - **[roadmap/](roadmap/README.md)**: the plan, one page per milestone.
 - **[design/](design/)**: how Rook is built.
   - [Architecture](design/architecture.md): crates, data flow and the rules every behavior follows

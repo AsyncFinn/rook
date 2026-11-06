@@ -8,7 +8,7 @@ meshes into the [surface](surface.md). Both were measured with `WriteVoxels`,
 collision surface's exact positions and normals. The recordings are in
 `crates/rook-terrain/data/` and replayed by its tests.
 
-*What the archive has* (`rook-tools terrain --scan`, run once over the archive's
+*What the archive has* (`cargo xtask terrain --scan`, run once over the archive's
 10,939 files, 6,378 unique, 231 s):
 
 | Terrain | Files |

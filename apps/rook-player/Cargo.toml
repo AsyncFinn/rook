@@ -41,9 +41,6 @@ profiling.workspace = true
 mimalloc.workspace = true
 rustc-hash.workspace = true
 
-[target.'cfg(windows)'.dependencies]
-windows-sys = { workspace = true, features = ["Win32_System_Console"] }
-
 [features]
 default = ["repl", "developer-overrides", "counters"]
 # A `>` prompt in the terminal that runs Luau in the open place (on when

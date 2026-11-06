@@ -31,6 +31,7 @@ keyring-core = { workspace = true, optional = true }
 rustc-hash.workspace = true
 
 [target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = ["Win32_System_Console"] }
 windows-native-keyring-store = { workspace = true, optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]

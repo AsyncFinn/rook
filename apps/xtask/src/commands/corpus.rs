@@ -1,4 +1,4 @@
-//! `rook-tools corpus-scan`: measure what a folder of places and models uses.
+//! `cargo xtask corpus-scan`: measure what a folder of places and models uses.
 
 mod content;
 mod report;
@@ -264,7 +264,7 @@ pub(crate) fn run(
     std::fs::create_dir_all(out).with_context(|| format!("creating {}", out.display()))?;
     let db = rook_reflection::database();
     let json = serde_json::json!({
-        "generated_by": format!("rook-tools corpus-scan {}", env!("CARGO_PKG_VERSION")),
+        "generated_by": format!("cargo xtask corpus-scan {}", env!("CARGO_PKG_VERSION")),
         "reflection_database_version": db.version,
         "scanned_folder": dir,
         "elapsed_seconds": started.elapsed().as_secs_f64(),

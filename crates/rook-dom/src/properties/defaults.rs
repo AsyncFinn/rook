@@ -59,7 +59,7 @@ fn convert_default(db: &Database, class: ClassId, property: PropertyId) -> Optio
 }
 
 /// What a property reads when nothing gives it a default: false, 0, empty,
-/// or the enum's first item. `rook-tools studio-defaults` keeps only the
+/// or the enum's first item. `cargo xtask studio-defaults` keeps only the
 /// Studio values that differ from it.
 pub fn zero_value(db: &Database, ty: PropertyType) -> Option<Value> {
     use rbx_types::VariantType as T;

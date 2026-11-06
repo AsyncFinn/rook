@@ -1,4 +1,4 @@
-//! `rook-tools conformance`: record Roblox's behavior in Studio, then check Rook
+//! `cargo xtask conformance`: record Roblox's behavior in Studio, then check Rook
 //! against it.
 //!
 //! Cases are Luau files under `conformance/cases/<group>/<name>.luau`. A case
@@ -213,7 +213,7 @@ pub(crate) fn run(root: &Path, filter: Option<&str>) -> anyhow::Result<()> {
         let Ok(expected) = std::fs::read_to_string(expected_path(root, &case.id)) else {
             missing += 1;
             eprintln!(
-                "  ?  {} (no expectation; run `rook-tools conformance record`)",
+                "  ?  {} (no expectation; run `cargo xtask conformance record`)",
                 case.id
             );
             continue;

@@ -13,7 +13,7 @@ Rook keeps them all ([levels of detail](#levels-of-detail)). Checked
 against the user's `head.mesh` (version 2.00, 517 vertices, 846
 triangles) when an install is found.
 
-*What the archive uses* (`rook-tools corpus-scan`, 3,058 files that load; the
+*What the archive uses* (`cargo xtask corpus-scan`, 3,058 files that load; the
 scan now counts mesh instances by kind):
 
 | Kind | Files | Uses |

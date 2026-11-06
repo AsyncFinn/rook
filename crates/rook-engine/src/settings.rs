@@ -326,7 +326,7 @@ fn api_key(endpoints: &Endpoints) -> Option<ApiKey> {
 }
 
 /// Save the Open Cloud key in the OS credential store
-/// (`rook-tools key set`).
+/// (`rook key set`).
 pub fn save_key(key: &str) -> std::io::Result<()> {
     key_store()?.set(KEY_NAME, key)
 }

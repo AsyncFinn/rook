@@ -1,7 +1,7 @@
-//! `rook-tools content`: how content references resolve.
+//! `rook content`: how content references resolve.
 //!
-//! `rook-tools content <reference>...` shows what each reference means and where
-//! its bytes come from; `rook-tools content --place <file>` does the same for
+//! `rook content <reference>...` shows what each reference means and where
+//! its bytes come from; `rook content --place <file>` does the same for
 //! every content property in a place and sums it up.
 
 use std::collections::BTreeMap;
@@ -12,10 +12,8 @@ use rbx_dom_weak::WeakDom;
 use rbx_types::{Ref, Variant};
 use rook_content::{ContentRef, Failure, FailureKind, Fetched, Loader, Resolver, SourceKind, Want};
 
-mod pin;
 mod place;
 
-pub(crate) use pin::pin;
 pub(crate) use place::place;
 
 pub(crate) struct Options {
@@ -37,7 +35,7 @@ fn resolver(options: &Options) -> Arc<Resolver> {
     Arc::new(resolver)
 }
 
-/// What `rook-tools cache` does.
+/// What `rook cache` does.
 #[derive(Clone, Copy)]
 pub(crate) enum CacheCommand {
     Show,
@@ -47,7 +45,7 @@ pub(crate) enum CacheCommand {
     Clear,
 }
 
-/// `rook-tools cache`: the download cache's folder and size, or a clean-up.
+/// `rook cache`: the download cache's folder and size, or a clean-up.
 pub(crate) fn cache(command: CacheCommand) -> anyhow::Result<()> {
     let config = rook_engine::settings::content_config(false);
     let dir = config

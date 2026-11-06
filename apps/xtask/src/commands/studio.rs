@@ -63,7 +63,7 @@ impl Studio {
             &json!({
                 "protocolVersion": "2025-06-18",
                 "capabilities": {},
-                "clientInfo": { "name": "rook-tools", "version": env!("CARGO_PKG_VERSION") },
+                "clientInfo": { "name": "xtask", "version": env!("CARGO_PKG_VERSION") },
             }),
             Duration::from_secs(30),
         )?;

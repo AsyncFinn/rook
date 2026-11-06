@@ -8,7 +8,7 @@ Files about Rook itself rather than any one crate: its icon, used by the apps an
 
 ### How it reaches the apps
 
-`apps/build.rs` is the build script of both apps (`rook-player` and `rook-tools`, through `build = "../build.rs"` in their `Cargo.toml`). For Windows targets it:
+`apps/build.rs` is the build script of both apps (`rook-player` and `rook`, through `build = "../build.rs"` in their `Cargo.toml`). For Windows targets it:
 
 1. draws `rook.svg` with [resvg](https://github.com/linebender/resvg) at every size Windows shows an icon at: the title bar's and the taskbar's at 100-300% display scaling, plus 256 pixels for large views;
 2. packs those images into an `.ico` in the build's output folder;

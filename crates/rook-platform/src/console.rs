@@ -1,15 +1,14 @@
-//! No console window when the player isn't run from a terminal.
+//! No console window when a program isn't run from a terminal.
 //!
-//! The player is a console program, so a terminal waits for it and it can
-//! print, read the REPL and answer `--help` there. Its manifest
-//! (`rook-player.manifest`) tells Windows 11 24H2 and later not to give it
-//! a console when opened from Explorer. Older Windows ignores that and
-//! opens one, which this closes again at startup.
+//! `rook` and `rook-player` are console programs, so a terminal waits for
+//! them and they can print there. Their manifests tell Windows 11 24H2 and
+//! later not to give them a console when opened from Explorer. Older
+//! Windows ignores that and opens one, which this closes again at startup.
 
 /// Close the console window if no other program shares it: Windows made
-/// it for the player alone, not a terminal it was run from.
+/// it for this program alone, not a terminal it was run from.
 #[allow(unsafe_code)]
-pub(crate) fn close_unshared() {
+pub fn close_unshared() {
     #[cfg(windows)]
     {
         use windows_sys::Win32::System::Console::{FreeConsole, GetConsoleProcessList};

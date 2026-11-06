@@ -1,4 +1,4 @@
-//! `rook-tools logs`: where the log files are.
+//! `rook logs`: where the log files are.
 
 use rook_engine::data_folder::DataDir;
 

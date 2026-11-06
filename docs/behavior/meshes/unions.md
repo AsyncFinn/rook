@@ -9,7 +9,7 @@ loaded, uploaded and drawn through the same path (`Want::Mesh`, the GPU
 mesh cache). What unions collide as (their saved hulls, since M15) is in
 [collision](../physics/collision-shapes.md#unions).
 
-*What the archive uses* (`rook-tools corpus-scan`, which now counts unions by
+*What the archive uses* (`cargo xtask corpus-scan`, which now counts unions by
 form; 6,245 files loaded from a larger archive than step 3's, so the
 counts aren't comparable with the tables above):
 
@@ -38,7 +38,7 @@ counts it was stopped, so how often it holds geometry isn't known. Rook
 draws only geometry behind an `AssetId`: in-file geometry without one is a
 single union in the archive.
 
-*Which assets load* (`rook-tools content --place`, which now decodes union
+*Which assets load* (`rook content --place`, which now decodes union
 assets; a sample of 3 named places and about 20 random ones, stopped
 partway): every union asset that loaded anonymously holds `CSGMDL2`
 geometry, from 2015-2016 places (a small place 4 of 4
@@ -62,7 +62,7 @@ the indices as differences from the one before (a byte for -64 to 63,
 else three bytes) and range markers, of which the first two bound the
 drawn triangles (Inference: the rest are levels of detail).
 
-*The geometry* (`rook-tools content` on a small place's assets): its bounds equal the
+*The geometry* (`rook content` on a small place's assets): its bounds equal the
 union's `InitialSize`, centered on its origin. Each vertex carries a
 color (that of the part it came from), the `NormalId` of the box face it
 was cut from, and UVs that are planar and in studs from the union's

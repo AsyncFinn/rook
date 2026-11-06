@@ -1,7 +1,7 @@
 //! The host machine as the portable crates reach it: [`files`], parallel
 //! work ([`parallel`]), long-lived [`threads`], the [`network`], the
-//! [`clipboard`], the OS [`credentials`] store, and where web requests go
-//! ([`endpoints`]).
+//! [`clipboard`], the OS [`credentials`] store, where web requests go
+//! ([`endpoints`]), and a program's [`console`] window.
 //!
 //! Portable crates never call `std::fs`, `std::thread` or a thread pool
 //! themselves (clippy's `disallowed-methods` and cargo-deny keep it so);
@@ -11,6 +11,7 @@
 //! `docs/design/architecture.md#crate-layout`.
 
 pub mod clipboard;
+pub mod console;
 pub mod credentials;
 pub mod endpoints;
 pub mod files;

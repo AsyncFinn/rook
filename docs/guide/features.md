@@ -7,7 +7,7 @@ Everything Rook supports today. What's coming next is in the [roadmap](../roadma
 - Loads and saves **`.rbxl`, `.rbxm`, `.rbxlx` and `.rbxmx`**, binary and XML.
 - **Legacy XML upgrade** for roughly 2006 to 2010 files that standard parsers reject: dropped `<External>` entries, `<hash>` content, control characters, MSVC float values like `1.#QNAN`. Files that already load normally are never rewritten.
 - Legacy property names (`size` → `Size`) and the database's migrations are applied on load, the way Studio upgrades old files.
-- Unknown properties are kept, so saving never silently drops data, and `rook-tools roundtrip` proves it.
+- Unknown properties are kept, so saving never silently drops data, and `rook roundtrip` proves it.
 - A corrupt file produces an error, never a crash.
 
 ## Data model
@@ -67,9 +67,9 @@ The sun and moon in the sky and other lighting (point and spot lights, Future li
 ## Content
 
 - Content references in every form places use, parsed by Studio's rules: `rbxasset://` paths, `rbxassetid://` ids and the legacy `http://www.roblox.com/asset/?id=` URLs with their case, slash and spacing variants.
-- They resolve through a chain of providers: **your own Roblox install** (found automatically, newest version first), folders you point Rook at, and Roblox's **asset delivery** for asset ids, anonymous and easy to turn off, with an Open Cloud API key of your own (saved with `rook-tools key set`) for assets that need an account. Old 2009 client paths such as `rbxasset://fonts/sword.mesh` resolve to the assets Roblox uploaded for them.
+- They resolve through a chain of providers: **your own Roblox install** (found automatically, newest version first), folders you point Rook at, and Roblox's **asset delivery** for asset ids, anonymous and easy to turn off, with an Open Cloud API key of your own (saved with `rook key set`) for assets that need an account. Old 2009 client paths such as `rbxasset://fonts/sword.mesh` resolve to the assets Roblox uploaded for them.
 - **Your own files for asset ids**: put `1234567.ogg` in Rook's `overrides` folder (`%LOCALAPPDATA%\Rook\overrides` on Windows) and it answers that id in every place, which brings back music that has gone private ([overrides](../design/data-and-logging.md#overrides)).
-- Downloads go to a hash-checked disk cache in Rook's data folder (`%LOCALAPPDATA%\Rook\cache` on Windows), so a second run needs no network, and missing or forbidden assets are remembered for a day. Rook keeps it under 2 GB by dropping what was used least recently, and `rook-tools cache` shows or cleans it.
+- Downloads go to a hash-checked disk cache in Rook's data folder (`%LOCALAPPDATA%\Rook\cache` on Windows), so a second run needs no network, and missing or forbidden assets are remembered for a day. Rook keeps it under 2 GB by dropping what was used least recently, and `rook cache` shows or cleans it.
 - `ContentProvider:PreloadAsync` and `RequestQueueSize`, resolved off the engine thread; a mesh's `MeshId` must hold a mesh and an image property an image to succeed, as in Studio.
 
 ## Audio
@@ -82,11 +82,11 @@ The sun and moon in the sky and other lighting (point and spot lights, Future li
 
 ## Tooling
 
-- `rook-tools dump`: print a place's instance tree and properties.
-- `rook-tools roundtrip`: load, save and reload a file and report every difference.
-- `rook-tools corpus-scan`: scan a folder of places for what loads and which classes, properties and script APIs they use.
-- `rook-tools run-headless` and `rook-tools corpus-run`: run server scripts without a window and report what works.
-- `rook-tools content`: show where a content reference, or every reference in a place, comes from and why any fail.
-- `rook-tools conformance record` / `run`: record behavior in Roblox Studio and check Rook against it.
+- `rook dump`: print a place's instance tree and properties.
+- `rook roundtrip`: load, save and reload a file and report every difference.
+- `cargo xtask corpus-scan`: scan a folder of places for what loads and which classes, properties and script APIs they use.
+- `rook run-headless` and `cargo xtask corpus-run`: run server scripts without a window and report what works.
+- `rook content`: show where a content reference, or every reference in a place, comes from and why any fail.
+- `cargo xtask conformance record` / `run`: record behavior in Roblox Studio and check Rook against it.
 
 Usage for each is in [tools.md](tools.md).

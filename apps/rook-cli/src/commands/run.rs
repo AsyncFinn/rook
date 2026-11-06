@@ -1,4 +1,4 @@
-//! `rook-tools run-headless`: run a place's server Scripts without a window,
+//! `rook run-headless`: run a place's server Scripts without a window,
 //! and with `--join` a player's client too.
 
 use std::path::Path;

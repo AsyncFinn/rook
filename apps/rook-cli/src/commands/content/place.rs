@@ -1,4 +1,4 @@
-//! `rook-tools content <place>`: every content reference in a place or model,
+//! `rook content <place>`: every content reference in a place or model,
 //! how many resolve and decode, and a load report of each one's outcome.
 
 use super::*;

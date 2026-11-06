@@ -1,4 +1,4 @@
-//! `rook-tools studio-defaults`: measure in Studio the property defaults
+//! `cargo xtask studio-defaults`: measure in Studio the property defaults
 //! the reflection database leaves out, and regenerate Rook's table of them.
 //!
 //! The database only lists defaults for properties that save to files, so

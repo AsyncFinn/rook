@@ -86,7 +86,7 @@ New here? Start with [Getting started](docs/guide/getting-started.md): build Roo
 |---|---|
 | [Getting started](docs/guide/getting-started.md) | Build Rook, open a place, controls and the command bar |
 | [Features](docs/guide/features.md) | Everything Rook supports today |
-| [Tools](docs/guide/tools.md) | The `rook-tools` command-line tool: inspect, run headless, scan archives, conformance |
+| [Tools](docs/guide/tools.md) | The `rook` command-line tool, and `cargo xtask` for working on the repository |
 | [Roadmap](docs/roadmap/README.md) | What's next, in what order, and why |
 | [Architecture](docs/design/architecture.md) | How Rook is built, and the rules every behavior follows |
 | [Behavior notes](docs/behavior/) | What Rook found in Studio and the archive, topic by topic |

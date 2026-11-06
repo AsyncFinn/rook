@@ -86,7 +86,7 @@ keyring-core = "1"
 windows-native-keyring-store = "1"
 apple-native-keyring-store = { version = "1", features = ["keychain"] }
 zbus-secret-service-keyring-store = { version = "1", features = ["crypto-rust"] }
-# `rook-tools key set`: the key typed without echo
+# `rook key set`: the key typed without echo
 rpassword = "7"
 # KTX2 images and CSGPHS 8 union hulls (rook-content): Zstandard, the
 # same zstd rbx_binary uses
@@ -196,7 +196,7 @@ redundant_closure_for_method_calls = "warn"
 # `build-override`, so it would also optimize proc macros and build-script
 # dependencies (syn, serde_derive, wesl, the build script's naga), which
 # only cost compile time. A crate missing from the list still builds, just
-# slower to rebuild; `rook-tools drift` checks every member is listed.
+# slower to rebuild; `cargo xtask drift` checks every member is listed.
 [profile.dev]
 opt-level = 3
 
@@ -240,6 +240,8 @@ opt-level = 1
 [profile.dev.package.rook-types]
 opt-level = 1
 [profile.dev.package.rook-view]
+opt-level = 1
+[profile.dev.package.xtask]
 opt-level = 1
 
 [profile.release]

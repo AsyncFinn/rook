@@ -1,7 +1,7 @@
 //! Class, property and enum database for Rook.
 //!
 //! Built from Rook's copy of the reflection database (`data/database.msgpack`,
-//! rbx-dom's format), which tracks the live Roblox version: `rook-tools
+//! rbx-dom's format), which tracks the live Roblox version: `rook
 //! gen-api` updates it from each new API dump ([`update`]). It's compiled
 //! in, so behavior doesn't depend on the machine Rook runs on.
 //!
@@ -42,7 +42,7 @@ static UPSTREAM: LazyLock<rbx_reflection::ReflectionDatabase<'static>> = LazyLoc
         "/database.msgpack.zst"
     )));
     rmp_serde::from_slice(bytes)
-        .expect("data/database.msgpack is valid; regenerate with `rook-tools gen-api`")
+        .expect("data/database.msgpack is valid; regenerate with `cargo xtask gen-api`")
 });
 
 static DATABASE: LazyLock<Database> = LazyLock::new(|| Database::build(&UPSTREAM));
@@ -64,7 +64,7 @@ static MEMBERS: LazyLock<Members> = LazyLock::new(|| {
         "/members.json.zst"
     )));
     serde_json::from_slice(bytes)
-        .expect("data/members.json is valid; regenerate with `rook-tools gen-api`")
+        .expect("data/members.json is valid; regenerate with `cargo xtask gen-api`")
 });
 
 /// Functions, events and callbacks for the same Roblox version as the database.

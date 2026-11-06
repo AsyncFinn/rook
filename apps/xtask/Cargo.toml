@@ -1,0 +1,37 @@
+[package]
+name = "xtask"
+description = "Work on the Rook repository; never shipped"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+fs-err.workspace = true
+rook-types.workspace = true
+rook-reflection.workspace = true
+rook-formats.workspace = true
+rook-engine = { workspace = true, features = ["developer-overrides"] }
+rook-gui.workspace = true
+rook-dom.workspace = true
+rook-platform = { workspace = true, features = ["native"] }
+rook-lua.workspace = true
+rook-content.workspace = true
+rook-terrain.workspace = true
+rbx_dom_weak.workspace = true
+rbx_types.workspace = true
+full_moon.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+rayon.workspace = true
+walkdir.workspace = true
+blake3.workspace = true
+rustc-hash.workspace = true
+
+[lints]
+workspace = true
