@@ -98,6 +98,13 @@ impl DataDir {
         self.content().join("assets")
     }
 
+    /// The user's files for asset ids (`rook_content::resolver`'s
+    /// `overrides`). Beside `content`, not in it: that folder is Rook's,
+    /// and [`migrate`] sorts what it doesn't know there.
+    pub fn overrides(&self) -> PathBuf {
+        self.root.join("overrides")
+    }
+
     pub fn repl_history(&self) -> PathBuf {
         self.state.join("repl-history.txt")
     }

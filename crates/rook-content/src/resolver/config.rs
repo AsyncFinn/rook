@@ -7,6 +7,8 @@ use rook_platform::endpoints::Endpoints;
 /// The providers, in the order a [`Config`] lists them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ProviderKind {
+    /// The user's files for asset ids ([`overrides`]).
+    Overrides,
     /// What Rook knows itself ([`defaults`]): the legacy `rbxasset://`
     /// paths that now stand for public assets.
     Defaults,
@@ -22,10 +24,17 @@ pub enum ProviderKind {
 }
 
 impl ProviderKind {
-    pub const ALL: [Self; 4] = [Self::Defaults, Self::Install, Self::Folders, Self::Delivery];
+    pub const ALL: [Self; 5] = [
+        Self::Overrides,
+        Self::Defaults,
+        Self::Install,
+        Self::Folders,
+        Self::Delivery,
+    ];
 
     pub fn name(self) -> &'static str {
         match self {
+            Self::Overrides => "overrides",
             Self::Defaults => "defaults",
             Self::Install => "install",
             Self::Folders => "folders",
@@ -70,6 +79,9 @@ pub struct Config {
     /// Roblox's packages, shared by a run's resolvers.
     pub packages: Option<Arc<Packages>>,
     pub folders: Vec<PathBuf>,
+    /// Where the user's files for asset ids are ([`overrides`]); `None`
+    /// has none.
+    pub overrides_dir: Option<PathBuf>,
     /// Whether content may come over the network: asset delivery, and
     /// Roblox's packages a path needs. With it off, only the cache answers
     /// asset ids, and only packages already downloaded answer paths.
@@ -99,6 +111,7 @@ impl Config {
             install: None,
             packages: None,
             folders: Vec::new(),
+            overrides_dir: None,
             network: false,
             api_key: None,
             endpoints: Endpoints::default(),

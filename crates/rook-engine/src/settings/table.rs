@@ -95,7 +95,7 @@ pub const WEB_DOMAINS: Setting = Setting {
 pub const CONTENT_ORDER: Setting = Setting {
     name: "contentOrder",
     tier: Tier::Developer,
-    unset: Unset::Is("defaults,install,folders,delivery"),
+    unset: Unset::Is("overrides,defaults,install,folders,delivery"),
     var: "ROOK_CONTENT_ORDER",
     flag: None,
 };

@@ -292,6 +292,7 @@ pub fn content_config(network: bool) -> Config {
         install: install::newest_from(chosen_install().as_deref(), &install_places()),
         packages: packages(),
         folders: folders.into_iter().filter(|p| p.is_dir()).collect(),
+        overrides_dir: DataDir::locate().map(|d| d.overrides()),
         network: ASSET_DELIVERY.switch(None).unwrap_or(network),
         api_key: api_key(&endpoints),
         endpoints: (*endpoints).clone(),
@@ -358,6 +359,7 @@ pub fn local_content() -> std::sync::Arc<rook_content::Resolver> {
             config.cache_dir = None;
             config.cache_max = None;
             config.kept_dir = None;
+            config.overrides_dir = None;
             std::sync::Arc::new(rook_content::Resolver::new(config))
         })
         .clone()

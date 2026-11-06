@@ -15,6 +15,7 @@ Everything Rook keeps for itself lives in one folder: `%LOCALAPPDATA%\Rook` on W
 ├─ cache\                         downloads, kept under cacheMaxSize
 │  ├─ blobs\<first 2 hex>\<blake3>
 │  └─ refs\
+├─ overrides\                     your own files for asset ids: <id>.ogg
 ├─ content\
 │  ├─ packages\                   Roblox's client packages, laid out like an install
 │  │  ├─ version.txt, manifest.txt
@@ -77,7 +78,7 @@ Each is given by its flag, then its variable, then its default; the first that g
 | `openCloudApiKey` | `ROOK_OPEN_CLOUD_API_KEY` | | any build | the key `rook-tools key set` saved | An Open Cloud key, over the saved one, for one-off runs and CI ([the Open Cloud key](#the-open-cloud-key)) |
 | `webBase` | `ROOK_WEB_BASE` | | developer | the build's `webBase` | Over the build's `webBase` |
 | `webDomains` | `ROOK_WEB_DOMAINS` | | developer | the build's `webDomains` | Per domain, over the build's: `users=https://users.example.com,badges=off` |
-| `contentOrder` | `ROOK_CONTENT_ORDER` | | developer | `defaults,install,folders,delivery` | Where content comes from, in order, comma-separated. `install` is Roblox's packages, downloaded as needed, then a Roblox install ([client packages](../behavior/content/client-packages.md)) |
+| `contentOrder` | `ROOK_CONTENT_ORDER` | | developer | `overrides,defaults,install,folders,delivery` | Where content comes from, in order, comma-separated. `install` is Roblox's packages, downloaded as needed, then a Roblox install ([client packages](../behavior/content/client-packages.md)) |
 | `contentFolders` | `ROOK_CONTENT_DIRS` | | developer | none | Folders laid out like an install's `content` (content packages, local overrides), separated like `PATH` |
 | `robloxInstall` | `ROOK_ROBLOX_INSTALL` | | developer | the newest install found | A Roblox version or `content` folder, or `off` |
 | `assetDelivery` | `ROOK_ASSET_DELIVERY` | | developer | on in `rook-player` and `rook-tools content`, off in headless runs | Whether content may be downloaded (asset delivery, Roblox's packages) |
@@ -149,6 +150,14 @@ Each run of the player writes one file, `logs\rook-player-<time>.log`. `rook-too
 Content failures are `rook_content::Failure`: a `FailureKind` (`not-found`, `forbidden`, `unsupported`, `offline`, `network`, `invalid`, `unknown-version`) and a message. The decoders return typed errors (`MeshError`, `ImageError`, `AudioError`). The loader turns them into failures, keeping "a version Rook can't read yet" (`unknown-version`) apart from "damaged or not that kind of file" (`invalid`). `rook-view`'s scene keeps each failed file's failure and logs it where the instance path is known (`rook_view::content::report`). See the error rule in [CONTRIBUTING](../../CONTRIBUTING.md#errors).
 
 `rook-tools content <place>` lists every content reference in a place and what became of it: where it came from, or why it didn't load or decode.
+
+## Overrides
+
+The data folder's `overrides` folder replaces assets by id, for assets that have gone private or been deleted, or that you'd rather swap. Rook makes the folder. Name a file after the asset id it answers, with any extension (`1234567.ogg`), and start the place again; the folder is read once at startup. No command or setting is involved, and it works in every build.
+
+A file stands for its asset id at any version and comes before the cache and asset delivery, so it works offline and wins over a refusal the cache remembers. Its bytes go through the usual decoders, so sounds, images and meshes all work, with the formats those read: sounds are MP3, Ogg Vorbis or WAV. Places and the assets they name are left as they are.
+
+A sound that won't load prints `Failed to load sound rbxassetid://<id>: <reason>`, in the terminal and the log file, which is the id to name a file after. A file whose name isn't a number is ignored with a warning, as is a second file for one id; the first by name wins.
 
 ## Kept content
 

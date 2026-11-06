@@ -20,6 +20,11 @@ pub mod kept;
     clippy::disallowed_methods,
     reason = "the content cache, install lookup and decode workers are rook-platform's known exception (docs/design/architecture.md#crate-layout)"
 )]
+mod overrides;
+#[expect(
+    clippy::disallowed_methods,
+    reason = "the content cache, install lookup and decode workers are rook-platform's known exception (docs/design/architecture.md#crate-layout)"
+)]
 pub mod packages;
 
 use rustc_hash::FxHashMap;
@@ -46,6 +51,8 @@ pub struct Resolver {
     /// Whether a package a path needs may be downloaded.
     download_packages: bool,
     folders: Vec<PathBuf>,
+    /// The user's file for each asset id they replace ([`overrides`]).
+    overrides: FxHashMap<u64, PathBuf>,
     delivery: Option<Delivery>,
     cache: Option<Cache>,
     /// Content kept for good ([`kept`]).
@@ -57,12 +64,18 @@ pub struct Resolver {
 
 impl Resolver {
     pub fn new(config: Config) -> Self {
+        let overrides = config
+            .overrides_dir
+            .filter(|_| config.order.contains(&ProviderKind::Overrides))
+            .map(|dir| overrides::read(&dir))
+            .unwrap_or_default();
         Self {
             order: config.order,
             install: config.install,
             packages: config.packages,
             download_packages: config.network,
             folders: config.folders,
+            overrides,
             delivery: config
                 .network
                 .then(|| Delivery::new(config.api_key, &config.endpoints))
@@ -182,7 +195,7 @@ impl Resolver {
                     )
                 }
                 ProviderKind::Folders => (&self.folders, SourceKind::Folder),
-                ProviderKind::Defaults | ProviderKind::Delivery => {
+                ProviderKind::Overrides | ProviderKind::Defaults | ProviderKind::Delivery => {
                     return None;
                 }
             };
@@ -234,6 +247,9 @@ impl Resolver {
             }
             other => other.clone(),
         };
+        if let Some(found) = self.overridden(&asset) {
+            return Ok(found);
+        }
         if !self.order.contains(&ProviderKind::Delivery) {
             return Err(Failure::new(
                 FailureKind::Offline,
@@ -241,6 +257,27 @@ impl Resolver {
             ));
         }
         self.download(&asset)
+    }
+
+    /// The user's file for an asset id, whatever version is asked for: the
+    /// file stands for the asset. One that can't be read is passed over.
+    fn overridden(&self, r: &ContentRef) -> Option<Fetched> {
+        let ContentRef::Asset { id, .. } = r else {
+            return None;
+        };
+        let file = self.overrides.get(id)?;
+        #[expect(
+            clippy::disallowed_methods,
+            reason = "the content cache, install lookup and decode workers are rook-platform's known exception (docs/design/architecture.md#crate-layout)"
+        )]
+        let bytes = std::fs::read(file)
+            .map_err(|e| tracing::warn!(target: "content", "{}: {e}", file.display()))
+            .ok()?;
+        Some(Fetched::new(
+            bytes,
+            SourceKind::Override,
+            file.display().to_string(),
+        ))
     }
 
     /// One map of a TexturePack asset (a material's, [`materials`], or

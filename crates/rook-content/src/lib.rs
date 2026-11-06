@@ -30,6 +30,8 @@ use std::sync::Arc;
 /// Where a resolved reference's bytes came from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum SourceKind {
+    /// The user's file for an asset id ([`resolver`]'s `overrides`).
+    Override,
     /// Content Rook ships itself.
     Defaults,
     /// The user's Roblox install.
@@ -51,6 +53,7 @@ pub enum SourceKind {
 impl SourceKind {
     pub fn name(self) -> &'static str {
         match self {
+            Self::Override => "local override",
             Self::Defaults => "rook defaults",
             Self::Install => "roblox install",
             Self::Package => "roblox package",
