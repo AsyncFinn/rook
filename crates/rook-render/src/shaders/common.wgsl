@@ -143,7 +143,7 @@ struct VertexIn {
     // UPRIGHT (bit 7), and the surface patterns (SURFACES_SHIFT); yzw:
     // the images' slots in the image table.
     @location(14) i_flags: vec4<u32>,
-    // Reflectance, roughness, metalness.
+    // Reflectance, roughness, metalness; w as `Instance::material`.
     @location(15) i_material: vec4<f32>,
 };
 
@@ -162,7 +162,7 @@ struct VertexOut {
     @location(8) @interpolate(flat) tile: vec4<f32>,
     @location(9) @interpolate(flat) flags: u32,
     @location(10) @interpolate(flat) surfaces: u32,
-    // Reflectance, roughness, metalness.
+    // Reflectance, roughness, metalness; w as `Instance::material`.
     @location(11) @interpolate(flat) material: vec4<f32>,
     // The box face the point belongs to (255: from the normal).
     @location(12) @interpolate(flat) face: u32,
@@ -172,6 +172,8 @@ struct VertexOut {
     // for its change from one pixel to the next, so derivatives (normals,
     // texture footprints) are taken of this instead.
     @location(14) view: vec3<f32>,
+    // Glass's rim and sun glint (`glass_vertex`).
+    @location(15) glass: vec2<f32>,
 };
 
 // What the shadow pass reads: positions, what terrain moves its vertices

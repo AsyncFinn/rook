@@ -68,7 +68,7 @@ impl Renderer {
         let mut vertices: Vec<RibbonVertex> = Vec::new();
         for (_, strip, texture) in drawn {
             let slot = match texture {
-                Some(t) => self.image_slots(&[Some(t), None, None, None, None])[0],
+                Some(t) => self.image_slots(&lone_image(Some(t)))[0],
                 None => 0,
             };
             let start = vertices.len() as u32;
@@ -80,7 +80,7 @@ impl Renderer {
             }
         }
         for (texture, _) in &runs {
-            self.ensure_group([*texture, None, None, None, None]);
+            self.ensure_group(lone_image(*texture));
         }
         if vertices.is_empty() {
             return Vec::new();
@@ -118,7 +118,7 @@ impl Renderer {
         pass.set_vertex_buffer(0, buffer.slice(..));
         for (texture, range) in runs {
             if let ImageBinding::Sets(_) = &self.image_binding {
-                pass.set_bind_group(2, self.group(&[*texture, None, None, None, None]), &[]);
+                pass.set_bind_group(2, self.group(&lone_image(*texture)), &[]);
             }
             pass.draw(range.clone(), 0..1);
         }

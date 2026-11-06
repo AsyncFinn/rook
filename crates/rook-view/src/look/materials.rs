@@ -2,6 +2,7 @@
 //! the material's own textures (`docs/behavior/rendering/materials.md`).
 
 use super::*;
+use rook_types::NormalDetail;
 
 /// A SurfaceAppearance's or MaterialVariant's map properties: files store
 /// the `Content` ones; older files saved the legacy names.
@@ -123,14 +124,29 @@ impl SceneCache {
             FileState::Loading | FileState::Failed => None,
         };
         let roughness_metalness = map(MaterialMap::RoughnessMetalness);
+        let detail = material.normal_detail(set);
         MaterialMaps {
             color: map(MaterialMap::Color),
             normal: map(MaterialMap::Normal),
             roughness: roughness_metalness,
             metalness: roughness_metalness,
+            detail_normal: (detail != NormalDetail::NONE)
+                .then(|| map(MaterialMap::DetailNormal))
+                .flatten(),
+            detail,
             studs_per_tile: Vec2::splat(material.studs_per_tile(set)),
             pattern: material.tile_pattern(set),
             seed: texture_seed(part),
+            // Studio's part shaders tint the color map where its alpha
+            // says; packs without a mask come opaque
+            // (`TexturePack::tint_mask`). Glass's pack names one too, but
+            // Studio tints it whole (observed: red over the map's clear
+            // alpha).
+            alpha: if material == Material::Glass {
+                MapAlpha::Ignore
+            } else {
+                MapAlpha::TintMask
+            },
             ..MaterialMaps::NONE
         }
     }

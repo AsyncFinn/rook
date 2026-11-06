@@ -4,7 +4,7 @@
 
 mod looks;
 
-pub use looks::{MaterialSet, TilePattern};
+pub use looks::{MaterialSet, NormalDetail, TilePattern};
 
 /// `Enum.Material`, by value (read from Studio 0.742's
 /// `Enum.Material:GetEnumItems()`).

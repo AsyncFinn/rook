@@ -45,6 +45,24 @@ pub enum TilePattern {
     Wang,
 }
 
+/// How a material's detail normal map lies over its normal map.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct NormalDetail {
+    /// Its repeats per repeat of the material's textures: a whole number,
+    /// at least 1.
+    pub repeats: f32,
+    /// What its slopes are multiplied by before adding to the normal
+    /// map's, under 2 (0: there is no detail map).
+    pub strength: f32,
+}
+
+impl NormalDetail {
+    pub const NONE: Self = Self {
+        repeats: 1.0,
+        strength: 0.0,
+    };
+}
+
 /// How a material shades without textures: its roughness and metalness,
 /// 0 to 1.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -92,6 +110,24 @@ impl Material {
             Marble | Pebble | Sand | Ice | Slate | Granite | Foil | CorrodedMetal => 10.0,
             Cobblestone => 40.0 / 2.7,
             _ => 8.0,
+        }
+    }
+
+    /// Where and how strongly Studio lays the material's detail normal map
+    /// (`rook_content`'s `materials.rs` has which) over its normal map:
+    /// its part shaders add them, and these constants are measured
+    /// (`docs/behavior/rendering/materials.md#detail-normal-maps`).
+    pub fn normal_detail(self, set: MaterialSet) -> NormalDetail {
+        match (set, self) {
+            (MaterialSet::Legacy, Self::Wood) => NormalDetail {
+                repeats: 7.0,
+                strength: 0.75,
+            },
+            (MaterialSet::Legacy, Self::Slate) => NormalDetail {
+                repeats: 5.0,
+                strength: 1.1,
+            },
+            _ => NormalDetail::NONE,
         }
     }
 

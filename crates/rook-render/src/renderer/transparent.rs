@@ -18,8 +18,10 @@ pub(crate) enum Pass {
     /// Terrain water, seen from either side, where it is nearest.
     Water,
     Image,
-    /// See-through Glass: its nearest depth, then its filter on what's
-    /// behind, then its surface.
+    /// See-through Glass: every part's nearest depth first, then each
+    /// one's filter on what's behind, then its surface, so a pixel shows
+    /// only the nearest and hides the see-through parts behind it, as
+    /// Studio draws it.
     GlassDepth,
     GlassFilter,
     GlassSurface,
@@ -75,6 +77,8 @@ struct Entry {
     /// Terrain water: drawn before the rest, which its depth then hides
     /// beneath it.
     water: bool,
+    /// See-through Glass: drawn next, for the same reason.
+    glass: bool,
     key: BatchKey,
     passes: &'static [Pass],
     instance: Instance,
@@ -89,6 +93,7 @@ impl Entry {
             image: part.layer != Layer::Base,
             on_top: part.on_top,
             water: Pass::of(part) == [Pass::Water],
+            glass: Pass::of(part).contains(&Pass::GlassDepth),
             key: BatchKey {
                 shape: part.shape,
                 images: image_set(part),
@@ -223,6 +228,7 @@ impl TransparentParts {
             a.on_top
                 .cmp(&b.on_top)
                 .then(b.water.cmp(&a.water))
+                .then(b.glass.cmp(&a.glass))
                 .then(db.total_cmp(&da))
                 .then(a.image.cmp(&b.image))
         });
@@ -244,17 +250,20 @@ impl TransparentParts {
         for &(_, t) in order.iter().filter(|&&(_, t)| entry(t).water) {
             push(entry(t), f32::INFINITY, Pass::WaterDepth);
         }
+        for &(_, t) in order.iter().filter(|&&(_, t)| entry(t).glass) {
+            push(entry(t), f32::INFINITY, Pass::GlassDepth);
+        }
         for &(d, t) in &order {
             let e = entry(t);
             // Drawn first and last: as if farthest and nearest.
             let d = if e.on_top {
                 f32::NEG_INFINITY
-            } else if e.water {
+            } else if e.water || e.glass {
                 f32::INFINITY
             } else {
                 d
             };
-            for &pass in e.passes {
+            for &pass in e.passes.iter().filter(|&&p| p != Pass::GlassDepth) {
                 push(e, d, pass);
             }
         }

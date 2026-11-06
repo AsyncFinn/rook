@@ -27,7 +27,7 @@ pub use gui::{
     WorldCanvas, WorldFrame, WorldPlace,
 };
 pub use part::collision::{Hull, UnionCollision};
-pub use part::material::{Material, MaterialSet, TilePattern};
+pub use part::material::{Material, MaterialSet, NormalDetail, TilePattern};
 pub use part::mesh::{MeshHost, MeshKind, MeshLook, mesh_part_scale};
 pub use part::shape::PartShape;
 pub use part::surface::{NormalId, SURFACE_TILE_STUDS, SurfacePattern, SurfaceType, Tiling};

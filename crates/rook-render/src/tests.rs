@@ -2,7 +2,7 @@ use rustc_hash::FxHashMap;
 use std::sync::Arc;
 
 use glam::Mat3;
-use rook_types::SurfacePattern;
+use rook_types::{NormalDetail, SurfacePattern};
 
 use super::*;
 
@@ -942,6 +942,133 @@ fn block_compressed_maps_draw_the_same_decoded() {
     );
 }
 
+/// A flat normal map of one `tilt`, and the hash that keeps it apart from
+/// other maps.
+fn tilted_map(tilt: [f32; 2]) -> (ImageHash, Arc<Image>) {
+    use rook_content::decode::image::{Encoding, ImageFormat, mips};
+    let t = Vec3::new(tilt[0], tilt[1], 1.0).normalize();
+    let texel = (t * 0.5 + 0.5) * 255.0;
+    let texel = [texel.x as u8, texel.y as u8, texel.z as u8, 255];
+    let mut hash = ImageHash([6; 32]);
+    hash.0[..3].copy_from_slice(&texel[..3]);
+    let map = Image {
+        width: 8,
+        height: 8,
+        format: ImageFormat::Png,
+        encoding: Encoding::Rgba8,
+        mips: mips(texel.repeat(64), 8, 8),
+        translucent: false,
+    };
+    (hash, Arc::new(map))
+}
+
+/// The sum of the middle pixel's channels: `block` drawn with `maps`
+/// under a sun from `sun`, seen by `camera`.
+fn lit_middle(
+    r: &mut Renderer,
+    block: PartInstance,
+    maps: Vec<(ImageHash, Arc<Image>)>,
+    sun: Vec3,
+    camera: &Camera,
+) -> u32 {
+    r.set_scene(&Scene {
+        parts: vec![block],
+        images: maps.into_iter().collect(),
+        lighting: Lighting {
+            sun_direction: sun.normalize(),
+            ..Lighting::default()
+        },
+        ..Scene::default()
+    });
+    r.finish_uploads();
+    let pixels = r.render_to_image(16, 16, camera).unwrap();
+    let at = (8 * 16 + 8) * 4;
+    pixels[at..at + 3].iter().map(|&c| u32::from(c)).sum()
+}
+
+/// A normal map tilted towards the sun lights its face more than one
+/// tilted away, across the image (X right) and up it (Y up): the frame
+/// follows the image whichever way the screen's derivatives run (WGSL's
+/// `dpdy` runs down, which once sank every bump).
+#[test]
+fn normal_maps_tilt_towards_the_image_right_and_up() {
+    let Ok(mut r) = Renderer::headless() else {
+        return;
+    };
+    // The Back face (+Z) faces the camera: its image's right is +X, its up +Y.
+    let camera = Camera::look_at(Vec3::new(0.0, 0.0, 6.0), Vec3::ZERO);
+    let mut lit = |tilt: [f32; 2], sun: Vec3| {
+        let map = tilted_map(tilt);
+        let mut block = part(PartShape::Block, 0.0, [0.3; 3], 0.0);
+        block.maps = MaterialMaps {
+            normal: Some(map.0),
+            ..MaterialMaps::NONE
+        };
+        lit_middle(&mut r, block, vec![map], sun, &camera)
+    };
+    let from_right = Vec3::new(0.8, 0.0, 0.6);
+    assert!(lit([0.7, 0.0], from_right) > lit([-0.7, 0.0], from_right) + 20);
+    let from_above = Vec3::new(0.0, 0.8, 0.6);
+    assert!(lit([0.0, 0.7], from_above) > lit([0.0, -0.7], from_above) + 20);
+}
+
+/// Normal maps count in full up close and not at all past their fade.
+#[test]
+fn normal_maps_fade_out_with_depth() {
+    let Ok(mut r) = Renderer::headless() else {
+        return;
+    };
+    let from_right = Vec3::new(0.8, 0.0, 0.6);
+    let mut relief = |distance: f32| {
+        let camera = Camera::look_at(Vec3::new(0.0, 0.0, 200.0 + distance), Vec3::ZERO);
+        let mut lit = |tilt: [f32; 2]| {
+            let map = tilted_map(tilt);
+            let mut block = part(PartShape::Block, 0.0, [0.3; 3], 0.0);
+            block.size = Vec3::splat(400.0);
+            block.maps = MaterialMaps {
+                normal: Some(map.0),
+                ..MaterialMaps::NONE
+            };
+            lit_middle(&mut r, block, vec![map], from_right, &camera)
+        };
+        lit([0.7, 0.0]).abs_diff(lit([-0.7, 0.0]))
+    };
+    assert!(relief(6.0) > 20);
+    assert!(relief(2000.0) <= 3);
+}
+
+/// A detail normal map adds its slopes to the normal map's, as far as its
+/// strength says, and takes its strength from `NormalDetail`.
+#[test]
+fn detail_normal_maps_add_to_the_normal_map() {
+    let Ok(mut r) = Renderer::headless() else {
+        return;
+    };
+    let camera = Camera::look_at(Vec3::new(0.0, 0.0, 6.0), Vec3::ZERO);
+    let from_right = Vec3::new(0.8, 0.0, 0.6);
+    let mut lit = |tilt: f32, strength: f32| {
+        let flat = tilted_map([0.0, 0.0]);
+        let detail = tilted_map([tilt, 0.0]);
+        let mut block = part(PartShape::Block, 0.0, [0.3; 3], 0.0);
+        block.maps = MaterialMaps {
+            normal: Some(flat.0),
+            detail_normal: Some(detail.0),
+            detail: NormalDetail {
+                repeats: 7.0,
+                strength,
+            },
+            alpha: MapAlpha::TintMask,
+            ..MaterialMaps::NONE
+        };
+        lit_middle(&mut r, block, vec![flat, detail], from_right, &camera)
+    };
+    assert!(lit(0.7, 1.0) > lit(-0.7, 1.0) + 20);
+    // Stronger, the slopes differ more.
+    let weak = lit(0.7, 0.25).abs_diff(lit(-0.7, 0.25));
+    let strong = lit(0.7, 1.5).abs_diff(lit(-0.7, 1.5));
+    assert!(strong > weak + 10, "{strong} against {weak}");
+}
+
 /// A mesh dropped from the pool leaves room that a later mesh takes, and
 /// both draw as they would in a fresh renderer.
 #[test]
@@ -1027,4 +1154,120 @@ fn highlights_fill_and_outline_through_walls_when_on_top() {
     let pixels = r.render_to_image(w, h, &camera).unwrap();
     assert_eq!(at(&pixels, 32, 32), at(&pixels, 4, 4));
     assert!(!(0..w).any(|x| at(&pixels, x, 32) == [0, 0, 255]));
+}
+
+/// The middle pixel's channels added up, of a Glass block before a wall of
+/// `wall` gray, seen straight on.
+fn glass_middle(r: &mut Renderer, glass: Option<PartInstance>, wall: f32) -> u32 {
+    let mut back = part(PartShape::Block, 0.0, [wall; 3], 0.0);
+    back.material = Material::SmoothPlastic;
+    back.position.z = -3.0;
+    back.size = Vec3::new(20.0, 20.0, 1.0);
+    let mut parts = vec![back];
+    parts.extend(glass);
+    r.set_scene(&Scene {
+        parts,
+        ..Scene::default()
+    });
+    r.finish_uploads();
+    let camera = Camera::look_at(Vec3::new(0.0, 0.0, 6.0), Vec3::ZERO);
+    let pixels = r.render_to_image(16, 16, &camera).unwrap();
+    let at = (8 * 16 + 8) * 4;
+    pixels[at..at + 3].iter().map(|&c| u32::from(c)).sum()
+}
+
+/// `glass_middle` over a white wall with `behind` between.
+fn glass_middle_behind(r: &mut Renderer, glass: PartInstance, behind: PartInstance) -> u32 {
+    let mut back = part(PartShape::Block, 0.0, [1.0; 3], 0.0);
+    back.material = Material::SmoothPlastic;
+    back.position.z = -3.0;
+    back.size = Vec3::new(20.0, 20.0, 1.0);
+    r.set_scene(&Scene {
+        parts: vec![back, behind, glass],
+        ..Scene::default()
+    });
+    r.finish_uploads();
+    let camera = Camera::look_at(Vec3::new(0.0, 0.0, 6.0), Vec3::ZERO);
+    let pixels = r.render_to_image(16, 16, &camera).unwrap();
+    let at = (8 * 16 + 8) * 4;
+    pixels[at..at + 3].iter().map(|&c| u32::from(c)).sum()
+}
+
+fn glass(color: [f32; 3], transparency: f32, reflectance: f32) -> PartInstance {
+    let mut block = part(PartShape::Block, 0.0, color, transparency);
+    block.material = Material::Glass;
+    block.reflectance = reflectance;
+    block
+}
+
+/// Reflectance 1 makes Glass a mirror whatever its Color; at 0 black Glass
+/// is black face-on, sky and all.
+#[test]
+fn glass_mirrors_by_reflectance_alone() {
+    let Ok(mut r) = Renderer::headless() else {
+        return;
+    };
+    let black = glass_middle(&mut r, Some(glass([0.0; 3], 0.0, 1.0)), 0.0);
+    let white = glass_middle(&mut r, Some(glass([1.0; 3], 0.0, 1.0)), 0.0);
+    assert!(black.abs_diff(white) < 30, "{black} against {white}");
+    assert!(black > 100, "{black}");
+    let plain = glass_middle(&mut r, Some(glass([0.0; 3], 0.0, 0.0)), 0.0);
+    assert!(plain < 40, "{plain}");
+}
+
+/// Past the rim's angle only the outline turns to sky: black Glass tilted
+/// away draws what it mirrors, facing the camera nothing.
+#[test]
+fn glass_rim_grows_towards_the_outline() {
+    let Ok(mut r) = Renderer::headless() else {
+        return;
+    };
+    let mut tilted = glass([0.0; 3], 0.0, 0.0);
+    tilted.rotation = Mat3::from_rotation_y(1.2);
+    tilted.size = Vec3::new(4.0, 4.0, 0.5);
+    let rim = glass_middle(&mut r, Some(tilted), 0.0);
+    let face = glass_middle(&mut r, Some(glass([0.0; 3], 0.0, 0.0)), 0.0);
+    assert!(rim > face + 60, "{rim} against {face}");
+}
+
+/// A see-through part behind see-through Glass doesn't show, nor does
+/// Glass behind Glass: only what's opaque or water is behind it.
+#[test]
+fn glass_hides_see_through_parts_behind_it() {
+    let Ok(mut r) = Renderer::headless() else {
+        return;
+    };
+    let front = glass([1.0; 3], 0.7, 0.0);
+    let bare = glass_middle(&mut r, Some(front), 1.0);
+    for material in [Material::SmoothPlastic, Material::Glass] {
+        let mut behind = part(PartShape::Block, 0.0, [1.0, 0.0, 0.0], 0.5);
+        behind.material = material;
+        behind.position.z = -1.5;
+        behind.size = Vec3::new(2.0, 2.0, 0.2);
+        let hidden = glass_middle_behind(&mut r, front, behind);
+        assert!(
+            bare.abs_diff(hidden) < 6,
+            "{material:?}: {hidden} against {bare}"
+        );
+    }
+}
+
+/// See-through Glass filters what's behind it by its Color, fully from
+/// Transparency 0.5 down, and its surface goes by Transparency 0.5.
+#[test]
+fn glass_filters_what_is_behind_it() {
+    let Ok(mut r) = Renderer::headless() else {
+        return;
+    };
+    let wall = glass_middle(&mut r, None, 0.5);
+    let black_half = glass_middle(&mut r, Some(glass([0.0; 3], 0.5, 0.0)), 0.5);
+    assert!(black_half < 10, "{black_half}");
+    let black_most = glass_middle(&mut r, Some(glass([0.0; 3], 0.9, 0.0)), 0.5);
+    assert!(black_most * 2 > wall, "{black_most} of {wall}");
+    // White filters nothing: at 0.25, half of what's behind still shows
+    // through its surface, beside the surface's own light.
+    let over_gray = glass_middle(&mut r, Some(glass([1.0; 3], 0.25, 0.0)), 0.5);
+    let over_black = glass_middle(&mut r, Some(glass([1.0; 3], 0.25, 0.0)), 0.0);
+    let shown = over_gray - over_black;
+    assert!(shown * 3 > wall, "{shown} of {wall}");
 }
