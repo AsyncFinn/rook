@@ -287,6 +287,10 @@ pub struct PartInstance {
     /// union with `UsePartColor` off, whose vertices keep the colors of
     /// the parts it was made from.
     pub vertex_colors: bool,
+    /// Its triangles' backs are drawn too, lit as if they faced the viewer,
+    /// and cast shadows (`MeshPart.DoubleSided`). Never on images, which
+    /// stay on the front.
+    pub double_sided: bool,
     /// A texture drawn through the mesh's UVs (a mesh's `TextureId`),
     /// multiplied by `color`.
     pub texture: Option<ImageHash>,
@@ -369,6 +373,7 @@ impl PartInstance {
             upright: false,
             cast_shadow: true,
             vertex_colors: false,
+            double_sided: false,
             texture: None,
             material: Material::SmoothPlastic,
             material_set: MaterialSet::Legacy,

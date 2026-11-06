@@ -58,6 +58,7 @@ impl SceneCache {
                 surfaces: [None; 6],
                 material: Material::SmoothPlastic,
                 maps: MaterialMaps::NONE,
+                double_sided: false,
                 layer: Layer::Image {
                     image: ImageHash(hash),
                     placement,

@@ -55,6 +55,7 @@
   - Meshes
     - [Built-in shapes](behavior/meshes/built-in-shapes.md): SpecialMesh types, BlockMesh, CylinderMesh
     - [File meshes](behavior/meshes/file-meshes.md)
+    - [DoubleSided](behavior/meshes/double-sided.md): which classes have it, what it draws
     - [Trusses](behavior/meshes/trusses.md)
     - [Unions](behavior/meshes/unions.md): how they draw
   - Physics

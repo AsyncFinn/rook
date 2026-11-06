@@ -31,11 +31,41 @@ pub(crate) struct BindLayouts<'a> {
     pub(crate) lights: &'a wgpu::BindGroupLayout,
 }
 
+/// The pipelines that draw a part's own surface, in one culling. A
+/// `DoubleSided` MeshPart takes them without culling; images stay on the
+/// front (`docs/behavior/meshes/double-sided.md`).
+#[derive(Debug)]
+pub(crate) struct Surfaces {
+    pub(crate) opaque: wgpu::RenderPipeline,
+    pub(crate) transparent: wgpu::RenderPipeline,
+    /// See-through Glass's nearest depth, before its filter, so a union's
+    /// overlapping shells filter once (Inference: Studio shows an
+    /// extinguisher clearly through a Glass union with three layers, which
+    /// Rook darkened to 3% when each filtered).
+    pub(crate) glass_depth: wgpu::RenderPipeline,
+    /// See-through Glass's own surface, where it's nearest.
+    pub(crate) glass_surface: wgpu::RenderPipeline,
+    /// ForceField: its glow added to what's behind.
+    pub(crate) additive: wgpu::RenderPipeline,
+    /// Highlighted parts into the Highlight mask (`highlights.rs`): over
+    /// everything, or only where seen.
+    pub(crate) highlight_on_top: wgpu::RenderPipeline,
+    pub(crate) highlight_occluded: wgpu::RenderPipeline,
+    /// Depth only, from the sun, over the opaque batches.
+    pub(crate) shadow: wgpu::RenderPipeline,
+}
+
 /// The render pipelines, built once.
 #[derive(Debug)]
 pub(crate) struct Pipelines {
-    pub(crate) opaque: wgpu::RenderPipeline,
-    pub(crate) transparent: wgpu::RenderPipeline,
+    /// Parts' surfaces, back faces culled.
+    pub(crate) front: Surfaces,
+    /// `DoubleSided` meshes' surfaces, nothing culled.
+    pub(crate) both: Surfaces,
+    /// See-through Glass: what's behind times its filter, where the Glass
+    /// is nearest. Front faces only, even on a `DoubleSided` mesh, whose
+    /// back shows just the surface (`docs/behavior/meshes/double-sided.md`).
+    pub(crate) glass_filter: wgpu::RenderPipeline,
     /// Terrain water's depth alone, before its color (`water`).
     pub(crate) water_depth: wgpu::RenderPipeline,
     /// Terrain water: transparent, not culled, drawn only where its depth
@@ -43,33 +73,15 @@ pub(crate) struct Pipelines {
     pub(crate) water: wgpu::RenderPipeline,
     /// Decals and Textures over what's drawn.
     pub(crate) layer: wgpu::RenderPipeline,
-    /// See-through Glass's nearest depth, before its filter, so a union's
-    /// overlapping shells filter once (Inference: Studio shows an
-    /// extinguisher clearly through a Glass union with three layers, which
-    /// Rook darkened to 3% when each filtered).
-    pub(crate) glass_depth: wgpu::RenderPipeline,
-    /// See-through Glass: what's behind times its filter, where the Glass
-    /// is nearest.
-    pub(crate) glass_filter: wgpu::RenderPipeline,
-    /// See-through Glass's own surface, where it's nearest.
-    pub(crate) glass_surface: wgpu::RenderPipeline,
-    /// ForceField: its glow added to what's behind.
-    pub(crate) additive: wgpu::RenderPipeline,
     /// Terrain seams' later layers: their share added to the first's, on
     /// the same surface (the same vertices, so the same depth).
     pub(crate) over: wgpu::RenderPipeline,
     /// Adornments always on top: blended over everything, untested.
     pub(crate) on_top: wgpu::RenderPipeline,
-    /// Highlighted parts into the Highlight mask (`highlights.rs`): over
-    /// everything, or only where seen.
-    pub(crate) highlight_on_top: wgpu::RenderPipeline,
-    pub(crate) highlight_occluded: wgpu::RenderPipeline,
     /// The skybox, behind everything.
     pub(crate) sky: wgpu::RenderPipeline,
     /// The plain sky color, before (or without) the skybox.
     pub(crate) plain_sky: wgpu::RenderPipeline,
-    /// Depth only, from the sun, over the opaque batches.
-    pub(crate) shadow: wgpu::RenderPipeline,
     /// Emitters' particles, over everything.
     pub(crate) particles: wgpu::RenderPipeline,
     /// Beams and Trails, before the particles.
@@ -201,6 +213,9 @@ impl Pipelines {
                 cache: None,
             })
         };
+        let highlight = |on_top, cull| {
+            super::highlights::pipeline(device, layouts.globals, &shader, &buffers, on_top, cull)
+        };
         let make = |label, fragment, blend, depth_write, compare, bias, stencil| {
             make_faces(
                 Some(wgpu::Face::Back),
@@ -213,30 +228,6 @@ impl Pipelines {
                 stencil,
             )
         };
-        let shadow_pipeline = shadow(device, layouts.globals, &shader, &shadow_buffers);
-        let highlight = |on_top| {
-            super::highlights::pipeline(device, layouts.globals, &shader, &buffers, on_top)
-        };
-        let (highlight_on_top, highlight_occluded) = (highlight(true), highlight(false));
-        // Reverse Z: nearer is greater.
-        let opaque_pipeline = make(
-            "rook opaque",
-            "fs_main",
-            None,
-            true,
-            wgpu::CompareFunction::Greater,
-            Default::default(),
-            Default::default(),
-        );
-        let transparent_pipeline = make(
-            "rook transparent",
-            "fs_main",
-            Some(wgpu::BlendState::ALPHA_BLENDING),
-            false,
-            wgpu::CompareFunction::Greater,
-            Default::default(),
-            Default::default(),
-        );
         // Depth only: the color stays as it is.
         let keep = wgpu::BlendComponent {
             src_factor: wgpu::BlendFactor::Zero,
@@ -272,18 +263,6 @@ impl Pipelines {
             Default::default(),
             Default::default(),
         );
-        let glass_depth = make(
-            "rook glass depth",
-            "fs_glass_filter",
-            Some(wgpu::BlendState {
-                color: keep,
-                alpha: keep,
-            }),
-            true,
-            wgpu::CompareFunction::Greater,
-            Default::default(),
-            Default::default(),
-        );
         let glass_filter = make(
             "rook glass filter",
             "fs_glass_filter",
@@ -300,31 +279,72 @@ impl Pipelines {
             Default::default(),
             once.clone(),
         );
-        let glass_surface = make(
-            "rook glass surface",
-            "fs_main",
-            Some(wgpu::BlendState::ALPHA_BLENDING),
-            false,
-            wgpu::CompareFunction::GreaterEqual,
-            Default::default(),
-            once,
-        );
-        let additive = make(
-            "rook additive",
-            "fs_force_field",
-            Some(wgpu::BlendState {
-                color: wgpu::BlendComponent {
-                    src_factor: wgpu::BlendFactor::One,
-                    dst_factor: wgpu::BlendFactor::One,
-                    operation: wgpu::BlendOperation::Add,
-                },
-                alpha: wgpu::BlendComponent::OVER,
-            }),
-            false,
-            wgpu::CompareFunction::Greater,
-            Default::default(),
-            Default::default(),
-        );
+        let surfaces = |cull| Surfaces {
+            // Reverse Z: nearer is greater.
+            opaque: make_faces(
+                cull,
+                "rook opaque",
+                "fs_main",
+                None,
+                true,
+                wgpu::CompareFunction::Greater,
+                Default::default(),
+                Default::default(),
+            ),
+            transparent: make_faces(
+                cull,
+                "rook transparent",
+                "fs_main",
+                Some(wgpu::BlendState::ALPHA_BLENDING),
+                false,
+                wgpu::CompareFunction::Greater,
+                Default::default(),
+                Default::default(),
+            ),
+            glass_depth: make_faces(
+                cull,
+                "rook glass depth",
+                "fs_glass_filter",
+                Some(wgpu::BlendState {
+                    color: keep,
+                    alpha: keep,
+                }),
+                true,
+                wgpu::CompareFunction::Greater,
+                Default::default(),
+                Default::default(),
+            ),
+            glass_surface: make_faces(
+                cull,
+                "rook glass surface",
+                "fs_main",
+                Some(wgpu::BlendState::ALPHA_BLENDING),
+                false,
+                wgpu::CompareFunction::GreaterEqual,
+                Default::default(),
+                once.clone(),
+            ),
+            additive: make_faces(
+                cull,
+                "rook additive",
+                "fs_force_field",
+                Some(wgpu::BlendState {
+                    color: wgpu::BlendComponent {
+                        src_factor: wgpu::BlendFactor::One,
+                        dst_factor: wgpu::BlendFactor::One,
+                        operation: wgpu::BlendOperation::Add,
+                    },
+                    alpha: wgpu::BlendComponent::OVER,
+                }),
+                false,
+                wgpu::CompareFunction::Greater,
+                Default::default(),
+                Default::default(),
+            ),
+            highlight_on_top: highlight(true, cull),
+            highlight_occluded: highlight(false, cull),
+            shadow: shadow(device, layouts.globals, &shader, &shadow_buffers, cull),
+        };
         let over = make(
             "rook terrain seams",
             "fs_main",
@@ -430,22 +450,16 @@ impl Pipelines {
         Self {
             particles,
             ribbons,
-            opaque: opaque_pipeline,
-            transparent: transparent_pipeline,
+            front: surfaces(Some(wgpu::Face::Back)),
+            both: surfaces(None),
+            glass_filter,
             water_depth,
             water: water_pipeline,
             layer: layer_pipeline,
-            glass_depth,
-            glass_filter,
-            glass_surface,
-            additive,
             over,
             on_top,
-            highlight_on_top,
-            highlight_occluded,
             sky: sky_pipeline("fs_sky"),
             plain_sky: sky_pipeline("fs_plain_sky"),
-            shadow: shadow_pipeline,
         }
     }
 }
@@ -456,6 +470,7 @@ fn shadow(
     globals: &wgpu::BindGroupLayout,
     shader: &wgpu::ShaderModule,
     buffers: &[Option<wgpu::VertexBufferLayout<'_>>],
+    cull: Option<wgpu::Face>,
 ) -> wgpu::RenderPipeline {
     // The shadow pass writes the map, so it can't bind it.
     let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -473,7 +488,7 @@ fn shadow(
             buffers,
         },
         primitive: wgpu::PrimitiveState {
-            cull_mode: Some(wgpu::Face::Back),
+            cull_mode: cull,
             ..Default::default()
         },
         depth_stencil: Some(wgpu::DepthStencilState {

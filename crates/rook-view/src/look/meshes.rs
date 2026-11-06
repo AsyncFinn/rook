@@ -26,6 +26,7 @@ impl SceneCache {
             FileDraw::Mesh(hash) => {
                 out.shape = DrawShape::File(hash);
                 out.size = scale;
+                out.double_sided = dom.bool_property(id, "DoubleSided").unwrap_or(false);
                 out.fidelity = match dom.enum_property(id, "RenderFidelity") {
                     Some(1) => Fidelity::Precise,
                     Some(2) => Fidelity::Performance,

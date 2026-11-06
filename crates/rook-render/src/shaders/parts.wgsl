@@ -255,7 +255,7 @@ fn neon(albedo: vec3<f32>) -> vec3<f32> {
 // Transparency 0, 0.02, 0.1 and 0.5), and on adornments drawn without
 // light (an ImageHandleAdornment's image; Inference).
 @fragment
-fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
+fn fs_main(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) vec4<f32> {
     let image = sample_image(in.images, in.uv);
     var albedo = in.color.rgb * image.rgb;
     let face = face_at(in);
@@ -302,7 +302,10 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
     } else if !on_uv {
         taps = tile_taps(uv, (in.flags >> PATTERN_SHIFT) & 3u);
     }
-    var normal = in.normal;
+    // Only a DoubleSided mesh shows its back faces, lit as if they faced
+    // the viewer (`gl_FrontFacing` in `shaders_glsl3.pack`).
+    let facing = select(-in.normal, in.normal, front);
+    var normal = facing;
     var roughness = in.material.y;
     var metalness = in.material.z;
     var alpha = surface_alpha(in);
@@ -332,7 +335,7 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
         roughness *= sample_taps(in.images, ROUGHNESS_MAP, taps, duv_x, duv_y).g;
         metalness *= sample_taps(in.images, METALNESS_MAP, taps, duv_x, duv_y).r;
         let t = normal_taps(in.images, taps, duv_x, duv_y);
-        normal = perturb(in.normal, t, dp_x, dp_y, duv_x, duv_y);
+        normal = perturb(facing, t, dp_x, dp_y, duv_x, duv_y);
     }
     if in.surfaces != 0u && (in.flags & MAPS_UV) == 0u && !terrain {
         let pattern = (in.surfaces >> (face * 3u)) & 7u;

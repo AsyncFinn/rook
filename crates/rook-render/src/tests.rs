@@ -1028,3 +1028,95 @@ fn highlights_fill_and_outline_through_walls_when_on_top() {
     assert_eq!(at(&pixels, 32, 32), at(&pixels, 4, 4));
     assert!(!(0..w).any(|x| at(&pixels, x, 32) == [0, 0, 255]));
 }
+
+/// A red square 4 studs wide facing +Z, double-sided or not, in a scene of
+/// a sun at `sun` alone.
+fn square_scene(double_sided: bool, sun: Vec3) -> Scene {
+    let mesh = MeshHash([9; 32]);
+    Scene {
+        parts: vec![PartInstance {
+            color: [0.8, 0.1, 0.1],
+            double_sided,
+            ..PartInstance::plain(DrawShape::File(mesh), Vec3::ZERO, Mat3::IDENTITY, Vec3::ONE)
+        }],
+        meshes: FxHashMap::from_iter([(mesh, square(4.0))]),
+        lighting: Lighting {
+            sun_direction: sun.normalize(),
+            ..Lighting::default()
+        },
+        ..Scene::default()
+    }
+}
+
+/// The pixel at the middle of a 32 x 32 render.
+fn middle(r: &mut Renderer, scene: &Scene, camera: &Camera) -> [u8; 3] {
+    r.set_scene(scene);
+    r.render_to_image(32, 32, camera).unwrap();
+    let pixels = r.render_to_image(32, 32, camera).unwrap();
+    let i = (16 * 32 + 16) * 4;
+    [pixels[i], pixels[i + 1], pixels[i + 2]]
+}
+
+/// A mesh seen from behind draws only if `DoubleSided`, and then lit as if
+/// it faced the viewer: a sun on the viewer's side lights it, one behind it
+/// doesn't.
+#[test]
+fn double_sided_backs_draw_lit_towards_the_viewer() {
+    let Ok(mut r) = Renderer::headless() else {
+        return;
+    };
+    let behind = Camera::look_at(Vec3::new(0.0, 0.0, -8.0), Vec3::ZERO);
+    let toward_viewer = Vec3::new(0.0, 0.3, -1.0);
+    let away = Vec3::new(0.0, 0.3, 1.0);
+    let single = middle(&mut r, &square_scene(false, toward_viewer), &behind);
+    assert!(single[2] > single[0], "the sky shows through: {single:?}");
+    let lit = middle(&mut r, &square_scene(true, toward_viewer), &behind);
+    let unlit = middle(&mut r, &square_scene(true, away), &behind);
+    assert!(lit[0] > lit[2], "{lit:?}");
+    assert!(lit[0] > unlit[0] + 40, "{lit:?} {unlit:?}");
+}
+
+/// A square facing down casts no shadow from an overhead sun, as its only
+/// faces point away from it; `DoubleSided` gives it faces towards the sun.
+#[test]
+fn double_sided_meshes_shadow_from_their_back() {
+    let Ok(mut r) = Renderer::headless() else {
+        return;
+    };
+    let ground_at = |r: &mut Renderer, double_sided: bool| {
+        let mut scene = square_scene(double_sided, Vec3::Y);
+        // Turned to face down, over a ground.
+        scene.parts[0].rotation = Mat3::from_rotation_x(std::f32::consts::FRAC_PI_2);
+        scene.parts[0].position.y = 4.0;
+        scene.lighting.prioritize_quality = true;
+        let mut ground = part(PartShape::Block, 0.0, [0.8; 3], 0.0);
+        ground.position.y = -0.5;
+        ground.size = Vec3::new(100.0, 1.0, 100.0);
+        scene.parts.push(ground);
+        let camera = Camera {
+            fov_y: 20.0,
+            ..Camera::look_at(Vec3::new(9.0, 1.0, 0.0), Vec3::ZERO)
+        };
+        middle(r, &scene, &camera)
+    };
+    let single = ground_at(&mut r, false);
+    let double = ground_at(&mut r, true);
+    assert!(single[0] > double[0] + 30, "{single:?} {double:?}");
+}
+
+/// See-through Glass filters what's behind it from the front; the back of a
+/// `DoubleSided` mesh shows only the surface.
+#[test]
+fn double_sided_glass_filters_from_the_front_only() {
+    let Ok(mut r) = Renderer::headless() else {
+        return;
+    };
+    let mut scene = square_scene(true, Vec3::Y);
+    scene.parts[0].material = Material::Glass;
+    scene.parts[0].transparency = 0.5;
+    scene.parts[0].color = [0.1, 0.2, 0.8];
+    let camera = |z: f32| Camera::look_at(Vec3::new(0.0, 0.0, z), Vec3::ZERO);
+    let front = middle(&mut r, &scene, &camera(8.0));
+    let back = middle(&mut r, &scene, &camera(-8.0));
+    assert!(back[1] > front[1] + 40, "{back:?} {front:?}");
+}

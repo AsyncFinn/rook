@@ -10,12 +10,14 @@ use super::*;
 use pool::RangeAlloc;
 use scatter::Scatter;
 
-/// What an instanced draw shares: its mesh and its images (a mesh
-/// texture or a layer's decal, and the material's maps).
+/// What an instanced draw shares: its mesh, its images (a mesh texture or
+/// a layer's decal, and the material's maps) and whether it draws both
+/// sides of its triangles.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct BatchKey {
     pub(crate) shape: DrawShape,
     pub(crate) images: renderer::ImageSet,
+    pub(crate) double_sided: bool,
 }
 
 /// Instances of one key, drawn instanced from a run of slots in the

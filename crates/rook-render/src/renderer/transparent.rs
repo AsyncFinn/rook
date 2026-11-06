@@ -92,6 +92,7 @@ impl Entry {
             key: BatchKey {
                 shape: part.shape,
                 images: image_set(part),
+                double_sided: part.double_sided,
             },
             passes: Pass::of(part),
             instance,

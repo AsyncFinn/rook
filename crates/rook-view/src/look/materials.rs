@@ -20,14 +20,20 @@ impl SceneCache {
     /// the material's textures with its own; otherwise the material's
     /// textures (Studio's, from the user's content cache, or Rook's own).
     /// While a texture loads, or if there is none, the part draws without
-    /// it and is redrawn when it arrives.
+    /// it and is redrawn when it arrives. A mesh child that draws no
+    /// material ([`MeshKind::draws_material`]) leaves SmoothPlastic.
     pub(super) fn material_maps(&mut self, dom: &Dom, id: InstanceId, part: &mut PartInstance) {
         part.maps = MaterialMaps::NONE;
         part.material_set = material_set(dom);
+        let mesh_part = dom.class_name(id) == "MeshPart";
+        if !mesh_part && part_mesh(dom, id).is_some_and(|(kind, ..)| !kind.draws_material()) {
+            part.material = Material::SmoothPlastic;
+            return;
+        }
         if part.material == Material::Neon {
             return;
         }
-        let appearance = (dom.class_name(id) == "MeshPart")
+        let appearance = mesh_part
             .then(|| {
                 dom.children(id)
                     .iter()
