@@ -99,6 +99,25 @@ fn sky_visibility(world: vec3<f32>, n: vec3<f32>) -> f32 {
         + sky_voxel(q - (t + b) * s) + sky_voxel(q - (t - b) * s));
 }
 
+// The sky's share where Studio's mirrors read it, the voxel 6 studs out,
+// or the most open around it: that point can land in a neighbor's solid
+// voxel, and Studio's stays open there (black Glass in a 1-stud gap beside
+// SmoothPlastic mirrors the sky).
+fn sky_nearby(world: vec3<f32>, n: vec3<f32>) -> f32 {
+    if light_volume.size.w == 0.0 {
+        return 1.0;
+    }
+    let q = world + n * VOXEL_OFFSET;
+    let t = normalize(cross(n, select(vec3(0.0, 1.0, 0.0), vec3(1.0, 0.0, 0.0), abs(n.y) > 0.9)));
+    let b = cross(n, t);
+    let s = SKY_SPREAD;
+    let around = max(
+        max(sky_voxel(q + (t + b) * s), sky_voxel(q + (t - b) * s)),
+        max(sky_voxel(q - (t + b) * s), sky_voxel(q - (t - b) * s)),
+    );
+    return max(sky_voxel(q), around);
+}
+
 // How far across the surface `voxel_sun_visibility` spreads its samples,
 // in studs (fitted).
 const SUN_SPREAD: f32 = 4.0;
@@ -332,6 +351,57 @@ fn shade_pbr(
     let diffuse = surface * (a * a + sky_diffuse + local_light(world, n) + sun * sun_kept);
     let reflected = mix(covered, sky, open) * sky_f * environment;
     return fog_units(diffuse + highlight + reflected, world);
+}
+
+// What Glass works out at each vertex of `normal` at `world`, as Studio's
+// Glass shaders do at its default quality: its rim, how far it goes all
+// sky and solid towards its outline, and its sun's glint. The rim takes
+// the cosine's size: a `DoubleSided` mesh's back has none from behind
+// (measured: the back of a square of Transparency 0.5 stays within 4 levels
+// of what's behind it).
+fn glass_vertex(world: vec3<f32>, normal: vec3<f32>, opacity: f32) -> vec2<f32> {
+    let v = normalize(g.camera_pos.xyz - world);
+    let l = g.sun_dir.xyz;
+    let rim = clamp(2.0 - 3.0 * abs(dot(normal, v)), 0.0, 1.0) * 0.3 * clamp(2.0 * opacity, 0.0, 1.0);
+    let cosine = max(dot(normal, l), 0.0);
+    let power = GLASS_SPECULAR_POWER;
+    let spread = exp2(0.5036 * power * (dot(normal, normalize(l + v)) - 1.0));
+    return vec2(rim, cosine * power * 0.055556 * spread);
+}
+
+// The material's specular power in those shaders (fitted: they take it
+// from Studio's vertices).
+const GLASS_SPECULAR_POWER: f32 = 380.0;
+
+// Glass in light units, premultiplied by how much of it shows, the alpha,
+// as Studio's Glass shaders add it up at its default quality: no Fresnel
+// and no normal map. Its surface shows by clamp(2 x opacity - 1), and
+// what it mirrors stands in for the albedo by Reflectance of that, both
+// going to 1 by `rim` (`glass_vertex`). The mirror is lit like any albedo,
+// and where the sky is blocked it holds white, not the covered sky.
+fn shade_glass(
+    albedo: vec3<f32>,
+    world: vec3<f32>,
+    normal: vec3<f32>,
+    roughness: f32,
+    reflectance: f32,
+    opacity: f32,
+    vertex: vec2<f32>,
+) -> vec4<f32> {
+    let n = normalize(normal);
+    let shown = clamp(2.0 * opacity - 1.0, 0.0, 1.0);
+    let alpha = mix(shown, 1.0, vertex.x);
+    let mirror = mix(reflectance * shown, 1.0, vertex.x);
+    let level = select(5.0 * remapped(roughness), 0.0, mirror > 0.0);
+    let v = normalize(g.camera_pos.xyz - world);
+    let sky = sky_reflected(reflect(-v, n), level);
+    let seen = mix(vec3(1.0), sky, sky_nearby(world, n));
+    let surface = seen * mirror + albedo * (alpha - mirror);
+    var lit = diffuse_light(surface, world, n, sun_light(world, n));
+    if vertex.y > 0.0 {
+        lit += g.sun_color.rgb * 0.1 * vertex.y * sun_visibility(world, n);
+    }
+    return vec4(fog_units(lit, world), 1.0 - (1.0 - alpha) * (1.0 - fog_amount(world)));
 }
 
 // How far fog has taken over at `world`, 0 to 1: Studio's surface shaders

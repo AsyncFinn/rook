@@ -318,7 +318,7 @@ impl Pipelines {
                 cull,
                 "rook glass surface",
                 "fs_main",
-                Some(wgpu::BlendState::ALPHA_BLENDING),
+                Some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING),
                 false,
                 wgpu::CompareFunction::GreaterEqual,
                 Default::default(),

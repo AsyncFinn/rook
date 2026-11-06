@@ -5,7 +5,7 @@
 // Without them, the draw's images are bound per draw (white, or a flat
 // normal, when it has none) and the instance's slots go unused: its image
 // (a mesh texture, a decal or a skybox face), and its material's color,
-// normal, roughness (green) and metalness (red) maps.
+// normal, roughness (green), metalness (red) and detail normal maps.
 
 import package::common::{g, image_sampler, sky_sampler, Taps, turned};
 import package::tone::srgb_to_linear;
@@ -18,6 +18,7 @@ const COLOR_MAP: u32 = 1u;
 const NORMAL_MAP: u32 = 2u;
 const ROUGHNESS_MAP: u32 = 3u;
 const METALNESS_MAP: u32 = 4u;
+const DETAIL_NORMAL_MAP: u32 = 5u;
 
 @if(image_table) @group(2) @binding(0) var images_srgb: binding_array<texture_2d<f32>>;
 @if(image_table) @group(2) @binding(1) var images_linear: binding_array<texture_2d<f32>>;
@@ -27,6 +28,7 @@ const METALNESS_MAP: u32 = 4u;
 @if(!image_table) @group(2) @binding(2) var normal_map: texture_2d<f32>;
 @if(!image_table) @group(2) @binding(3) var roughness_map: texture_2d<f32>;
 @if(!image_table) @group(2) @binding(4) var metalness_map: texture_2d<f32>;
+@if(!image_table) @group(2) @binding(5) var detail_normal_map: texture_2d<f32>;
 
 @if(image_table)
 fn image_slot(images: vec3<u32>, which: u32) -> u32 {
@@ -77,8 +79,11 @@ fn sample_map(images: vec3<u32>, which: u32, uv: vec2<f32>, dx: vec2<f32>, dy: v
         case 3u: {
             return textureSampleGrad(roughness_map, image_sampler, uv, dx, dy);
         }
-        default: {
+        case 4u: {
             return textureSampleGrad(metalness_map, image_sampler, uv, dx, dy);
+        }
+        default: {
+            return textureSampleGrad(detail_normal_map, image_sampler, uv, dx, dy);
         }
     }
 }
@@ -94,17 +99,18 @@ fn sample_taps(images: vec3<u32>, which: u32, taps: Taps, dx: vec2<f32>, dy: vec
     return sum;
 }
 
-// The normal map read at `taps` (X right and Y up the image, Z out), each
-// copy's normal turned back by its turn so its slopes face the way the
-// copy's features do on the surface, then blended.
+// The normal map read at `taps` (X right and Y up the image, Z out, which
+// comes from X and Y as Studio's shaders take it, and which BC5 doesn't
+// store), each copy's normal turned back by its turn so its slopes face
+// the way the copy's features do on the surface, then blended.
 fn normal_taps(images: vec3<u32>, taps: Taps, dx: vec2<f32>, dy: vec2<f32>) -> vec3<f32> {
     var sum = vec3(0.0);
     for (var k = 0u; k < taps.count; k++) {
         let turn = taps.turn[k];
-        let t = sample_map(images, NORMAL_MAP, taps.uv[k], turned(dx, turn), turned(dy, turn)).xyz * 2.0 - 1.0;
+        let t = sample_map(images, NORMAL_MAP, taps.uv[k], turned(dx, turn), turned(dy, turn)).xy * 2.0 - 1.0;
         // The image's Y runs up, its coordinates down.
         let back = vec2(t.x * turn.x + t.y * turn.y, t.y * turn.x - t.x * turn.y);
-        sum += taps.weight[k] * vec3(back, t.z);
+        sum += taps.weight[k] * vec3(back, sqrt(clamp(1.0 - dot(t, t), 0.0, 1.0)));
     }
     return sum;
 }

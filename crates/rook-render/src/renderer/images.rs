@@ -1,6 +1,6 @@
 //! The images each draw samples (group 2): its image (a mesh texture, a
-//! decal or a skybox face) and its material's color, normal, roughness
-//! and metalness maps.
+//! decal or a skybox face) and its material's color, normal, roughness,
+//! metalness and detail normal maps.
 //!
 //! Where the adapter has binding arrays, every image sits in one table
 //! that all draws share, and each instance names its images' slots, so
@@ -11,15 +11,20 @@
 use super::*;
 
 /// A draw's images, in binding order: image, color, normal, roughness,
-/// metalness.
-pub(crate) type ImageSet = [Option<ImageHash>; 5];
+/// metalness, detail normal.
+pub(crate) type ImageSet = [Option<ImageHash>; 6];
+
+/// A draw with only its `image`, no material maps.
+pub(crate) fn lone_image(image: Option<ImageHash>) -> ImageSet {
+    [image, None, None, None, None, None]
+}
 
 /// The table's first slots: what stands in for missing images.
 const WHITE: u32 = 0;
 const FLAT_NORMAL: u32 = 1;
-/// Each image of a set without its own: a flat normal for the normal map,
+/// Each image of a set without its own: a flat normal for the normal maps,
 /// white for the rest.
-const DEFAULT_SLOTS: [u32; 5] = [WHITE, WHITE, FLAT_NORMAL, WHITE, WHITE];
+const DEFAULT_SLOTS: [u32; 6] = [WHITE, WHITE, FLAT_NORMAL, WHITE, WHITE, FLAT_NORMAL];
 /// The table's first size, in slots, on devices that must bind every slot
 /// (doubled as places need more).
 const FIRST_SLOTS: u32 = 1024;
@@ -132,7 +137,7 @@ pub(crate) fn image_layout(device: &wgpu::Device, table: Option<u32>) -> wgpu::B
         Some(slots) => (0..2)
             .map(|i| entry(i, std::num::NonZeroU32::new(slots)))
             .collect(),
-        None => (0..5).map(|i| entry(i, None)).collect(),
+        None => (0..6).map(|i| entry(i, None)).collect(),
     };
     device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("rook images"),
@@ -147,20 +152,27 @@ pub(crate) fn image_set(part: &PartInstance) -> ImageSet {
         Layer::Image { image, .. } => Some(image),
     };
     let m = part.maps;
-    [image, m.color, m.normal, m.roughness, m.metalness]
+    [
+        image,
+        m.color,
+        m.normal,
+        m.roughness,
+        m.metalness,
+        m.detail_normal,
+    ]
 }
 
 impl Renderer {
     /// An entry's instance, naming its images' slots in the table.
     pub(crate) fn instance(&self, part: &PartInstance) -> Instance {
         let s = self.image_slots(&image_set(part));
-        let images = [s[0] | s[1] << 16, s[2] | s[3] << 16, s[4]];
+        let images = [s[0] | s[1] << 16, s[2] | s[3] << 16, s[4] | s[5] << 16];
         Instance::new(part, self.bounds(part.shape), images)
     }
 
     /// The table slot of each image of `set`: the default's for one the
     /// table doesn't hold (none without a table).
-    pub(crate) fn image_slots(&self, set: &ImageSet) -> [u32; 5] {
+    pub(crate) fn image_slots(&self, set: &ImageSet) -> [u32; 6] {
         let mut slots = DEFAULT_SLOTS;
         if let ImageBinding::Table(table) = &self.image_binding {
             for (slot, hash) in slots.iter_mut().zip(set) {
@@ -220,7 +232,14 @@ impl Renderer {
             return;
         }
         let d = &self.defaults;
-        let fallback = [&d.white, &d.white, &d.flat_normal, &d.white, &d.white];
+        let fallback = [
+            &d.white,
+            &d.white,
+            &d.flat_normal,
+            &d.white,
+            &d.white,
+            &d.flat_normal,
+        ];
         let mut images = fallback;
         for (slot, hash) in set.iter().enumerate() {
             if let Some(gpu) = hash.and_then(|h| self.images.get(&h)) {
@@ -238,7 +257,9 @@ impl Renderer {
     pub(crate) fn group(&self, set: &ImageSet) -> &wgpu::BindGroup {
         match &self.image_binding {
             ImageBinding::Table(table) => table.group.as_ref().expect("made before drawing"),
-            ImageBinding::Sets(groups) => groups.get(set).unwrap_or_else(|| &groups[&[None; 5]]),
+            ImageBinding::Sets(groups) => groups
+                .get(set)
+                .unwrap_or_else(|| &groups[&lone_image(None)]),
         }
     }
 

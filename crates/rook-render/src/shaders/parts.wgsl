@@ -21,9 +21,9 @@ import package::common::{
 };
 import package::images::{
     sample_image, image_size, sample_map, sample_taps, normal_taps, IMAGE, COLOR_MAP, ROUGHNESS_MAP,
-    METALNESS_MAP,
+    METALNESS_MAP, DETAIL_NORMAL_MAP,
 };
-import package::lighting::{shade, shade_pbr, fog_units};
+import package::lighting::{shade, shade_pbr, shade_glass, glass_vertex, fog_units};
 import package::tone::{albedo_units, frame, frame_of, linear_to_srgb, srgb_to_linear};
 import package::terrain::{
     terrain_motion, terrain_position, terrain_share, water_surface, recolor, blade_surface,
@@ -99,9 +99,11 @@ fn vs_main(v: VertexIn) -> VertexOut {
     out.box_size = size;
     out.tile = v.i_tile;
     out.flags = v.i_flags.x;
-    out.surfaces = v.i_flags.x >> SURFACES_SHIFT;
     out.material = v.i_material;
     out.images = v.i_flags.yzw;
+    if (out.flags & GLASS) != 0u {
+        out.glass = glass_vertex(world, out.normal, v.i_color.a);
+    }
     return out;
 }
 
@@ -187,18 +189,50 @@ fn face_position(face: u32, local: vec3<f32>, center: vec3<f32>, size: vec3<f32>
     return vec4(dot(p, right) + extent.x * 0.5, extent.y * 0.5 - dot(p, up), extent);
 }
 
+// The slopes of a built-in material's detail normal map, added to its
+// normal map's as Studio's part shaders do. Its repeats follow the plain
+// coordinates `uv`, never the taps that break up the other maps' repeats.
+fn detail_slopes(in: VertexOut, uv: vec2<f32>, dx: vec2<f32>, dy: vec2<f32>) -> vec2<f32> {
+    let strength = fract(in.material.w) * 2.0;
+    if strength == 0.0 {
+        return vec2(0.0);
+    }
+    let repeats = floor(in.material.w);
+    let d = sample_map(in.images, DETAIL_NORMAL_MAP, uv * repeats, dx * repeats, dy * repeats);
+    return (d.xy * 2.0 - 1.0) * strength;
+}
+
+// Normal maps fade out with depth into the view, gone from
+// `NORMAL_FADE_STUDS`: Studio's part shaders scale the slopes, measured
+// at docs/behavior/rendering/materials.md#normal-maps. `view` is the
+// point from the camera; the view projection's last row reads its depth.
+const NORMAL_FADE_STUDS: f32 = 1350.0;
+
+fn faded_normal(t: vec3<f32>, view: vec3<f32>) -> vec3<f32> {
+    let m = g.view_proj;
+    let depth = dot(view, vec3(m[0].w, m[1].w, m[2].w));
+    return vec3(t.xy * clamp(1.0 - depth / NORMAL_FADE_STUDS, 0.0, 1.0), t.z);
+}
+
 // A normal map's normal `t` (X right and Y up the image, Z out) turned
 // into the world from the surface's normal `n`, using how the world
 // position `p` and the map's coordinates change across the pixel (a
 // cotangent frame, so no tangents need storing). The map's coordinates
 // grow down the image.
+//
+// The frame's axes are the coordinates' gradients scaled by the pixel's
+// area on the surface, whose sign says which way the screen's axes turn
+// around `n`: negative under WGSL's `dpdy`, which runs down the screen, so
+// without it every map drew inverted, bricks sunk where Studio raises
+// them (measured, docs/behavior/rendering/materials.md#normal-maps).
 fn perturb(n: vec3<f32>, t: vec3<f32>, dp_x: vec3<f32>, dp_y: vec3<f32>, duv_x: vec2<f32>, duv_y: vec2<f32>) -> vec3<f32> {
     let n0 = normalize(n);
     let y_perp = cross(dp_y, n0);
     let x_perp = cross(n0, dp_x);
     let tangent = y_perp * duv_x.x + x_perp * duv_y.x;
     let bitangent = y_perp * duv_x.y + x_perp * duv_y.y;
-    let scale = inverseSqrt(max(max(dot(tangent, tangent), dot(bitangent, bitangent)), 1e-20));
+    let turn = select(1.0, -1.0, dot(cross(dp_x, dp_y), n0) < 0.0);
+    let scale = turn * inverseSqrt(max(max(dot(tangent, tangent), dot(bitangent, bitangent)), 1e-20));
     return normalize(tangent * scale * t.x - bitangent * scale * t.y + n0 * t.z);
 }
 
@@ -247,6 +281,13 @@ fn slope_scale(t: vec3<f32>, size: vec3<f32>, length: f32) -> f32 {
 fn neon(albedo: vec3<f32>) -> vec3<f32> {
     let c = linear_to_srgb(albedo);
     return 13.6 * c * c * c * c;
+}
+
+// The flags past `SURFACES_SHIFT`: surface patterns, or what the maps mean.
+// Not a varying of its own, as `VertexOut` is at the limit of 16 with
+// `front_facing`.
+fn surface_bits(in: VertexOut) -> u32 {
+    return in.flags >> SURFACES_SHIFT;
 }
 
 // Parts and their mesh textures. A texture's alpha is ignored on an opaque
@@ -308,7 +349,7 @@ fn fs_main(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) ve
     var normal = facing;
     var roughness = in.material.y;
     var metalness = in.material.z;
-    var alpha = surface_alpha(in);
+    var alpha = in.color.a;
     if in.color.a < 1.0 {
         alpha *= image.a;
     }
@@ -317,28 +358,42 @@ fn fs_main(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) ve
         let a = surface_appearance(in, c);
         albedo = a.rgb;
         alpha *= a.a;
-    } else if terrain && (in.flags & MAPS) != 0u && (in.surfaces & 3u) == TERRAIN_RECOLOR {
+    } else if terrain && (in.flags & MAPS) != 0u && (surface_bits(in) & 3u) == TERRAIN_RECOLOR {
         // Terrain's color maps are recolored by the material's color in
         // sRGB, before Studio's shader squares them (`recolor`).
         let c = sample_taps(in.images, COLOR_MAP, taps, duv_x, duv_y);
         albedo = srgb_to_linear(recolor(linear_to_srgb(c.rgb), in.color.rgb));
-    } else if terrain && (in.flags & MAPS) != 0u && (in.surfaces & 3u) == TERRAIN_TINT {
+    } else if terrain && (in.flags & MAPS) != 0u && (surface_bits(in) & 3u) == TERRAIN_TINT {
         // The 2022 set's: tinted by the material's color where the map's
         // alpha says, in sRGB, as Studio's terrain shader does
         // (`rook_terrain::Coloring::Tint`).
         let c = sample_taps(in.images, COLOR_MAP, taps, duv_x, duv_y);
         albedo = srgb_to_linear(mix(vec3(1.0), in.color.rgb, c.a) * linear_to_srgb(c.rgb));
+    } else if (in.flags & MAPS) != 0u && in.material.w > 0.0 {
+        // The built-in materials': tinted by the part's color where the
+        // map's alpha says, in sRGB (Studio's part shaders: mix(1, color,
+        // alpha) x map), so a brick's mortar keeps its own pale color.
+        let c = sample_taps(in.images, COLOR_MAP, taps, duv_x, duv_y);
+        albedo = image.rgb * srgb_to_linear(mix(vec3(1.0), linear_to_srgb(in.color.rgb), c.a) * linear_to_srgb(c.rgb));
     } else if (in.flags & MAPS) != 0u {
         albedo *= sample_taps(in.images, COLOR_MAP, taps, duv_x, duv_y).rgb;
     }
     if (in.flags & MAPS) != 0u {
         roughness *= sample_taps(in.images, ROUGHNESS_MAP, taps, duv_x, duv_y).g;
         metalness *= sample_taps(in.images, METALNESS_MAP, taps, duv_x, duv_y).r;
-        let t = normal_taps(in.images, taps, duv_x, duv_y);
-        normal = perturb(facing, t, dp_x, dp_y, duv_x, duv_y);
+        var t = normal_taps(in.images, taps, duv_x, duv_y);
+        if !terrain && !on_uv {
+            t = vec3(t.xy + detail_slopes(in, uv, duv_x, duv_y), t.z);
+        }
+        if !terrain {
+            t = faded_normal(t, in.view);
+        }
+        if (in.flags & GLASS) == 0u {
+            normal = perturb(facing, t, dp_x, dp_y, duv_x, duv_y);
+        }
     }
-    if in.surfaces != 0u && (in.flags & MAPS_UV) == 0u && !terrain {
-        let pattern = (in.surfaces >> (face * 3u)) & 7u;
+    if surface_bits(in) != 0u && (in.flags & MAPS_UV) == 0u && !terrain {
+        let pattern = (surface_bits(in) >> (face * 3u)) & 7u;
         if pattern != 0u {
             // The patterns are gray around 0.5: twice them leaves the
             // color as it is between the studs.
@@ -354,6 +409,12 @@ fn fs_main(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) ve
     }
     if (in.flags & NEON) != 0u {
         return vec4(frame(fog_units(neon(albedo), in.world)), in.color.a);
+    }
+    if (in.flags & GLASS) != 0u {
+        let lit = shade_glass(
+            albedo_units(albedo), in.world, normal, roughness, in.material.x, in.color.a, in.glass,
+        );
+        return vec4(frame(lit.rgb), lit.a);
     }
     let lit = shade_pbr(albedo_units(albedo), in.world, normal, roughness, metalness, in.material.x);
     var out = frame(lit);
@@ -371,7 +432,7 @@ fn fs_main(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) ve
 // and Opaque ignores the alpha. The part's Color counts only for Overlay.
 fn surface_appearance(in: VertexOut, c: vec4<f32>) -> vec4<f32> {
     let tint = srgb_to_linear(vec3(in.tile.z, in.tile.w, in.material.w));
-    let mode = in.surfaces & 3u;
+    let mode = surface_bits(in) & 3u;
     if mode == ALPHA_OVERLAY {
         return vec4(mix(in.color.rgb, c.rgb * tint, c.a), 1.0);
     }
@@ -384,36 +445,15 @@ fn surface_appearance(in: VertexOut, c: vec4<f32>) -> vec4<f32> {
     return vec4(c.rgb * tint, 1.0);
 }
 
-// How much of a part's own surface shows. See-through Glass mostly
-// filters what's behind it (`fs_glass_filter`): its surface fades out by
-// Transparency 0.5 (observed: red Glass at 0.5 over blue drew (16, 4, 6),
-// all but the blue filtered; Approximation between).
-fn surface_alpha(in: VertexOut) -> f32 {
-    if (in.flags & GLASS) != 0u {
-        let transparency = 1.0 - in.color.a;
-        return clamp(1.0 - 2.0 * transparency, 0.0, 1.0);
-    }
-    return in.color.a;
-}
-
-// See-through Glass: what's behind times a filter per channel, 1.2 x the
-// Glass's color (in linear light) plus 0.01, raised to
-// 1.25 x min(2 x (1 - Transparency), 1)^1.7, at most 1. So the color
-// filters most strongly from 0.5 down (where the surface shows instead, in
-// `surface_alpha`), and by 0.95 nearly everything passes; white Glass
-// passes all of it, black Glass at 0.6 2%, gray 99 at 0.6 about 21%
-// (observed from 45 studs on gray Glass from 0 to 255 at 0.5 to 0.95 over
-// a wall of grays, per channel: red Glass's green and blue match black
-// Glass's; fitted within about 5 levels. Approximation: Studio seems to
-// filter before its tone curve (Inference), so its bright blues pass a
-// little more, and seen from hundreds of studs away its Glass passes up to
-// 12 levels more).
+// See-through Glass: Studio's Glass shaders multiply the light behind by
+// mix(1, Color, 2 x (1 - Transparency)), Color as sRGB, and its tint pass
+// does the same again, so the frame, which holds the light's square root,
+// takes that once (read from the shaders; red, gray and black Glass over a
+// wall of grays agree). Before the tone curve, as there.
 @fragment
 fn fs_glass_filter(in: VertexOut) -> @location(0) vec4<f32> {
-    let power = 1.25 * pow(min(2.0 * in.color.a, 1.0), 1.7);
-    // The frame holds the light's square root: this scales the light by
-    // the filter, before the curve.
-    return vec4(sqrt(min(pow(1.2 * in.color.rgb + 0.01, vec3(power)), vec3(1.0))), 1.0);
+    let tint = clamp(2.0 * in.color.a, 0.0, 1.0);
+    return vec4(mix(vec3(1.0), linear_to_srgb(in.color.rgb), tint), 1.0);
 }
 
 // Depth alone (terrain water's first pass): the blend keeps the color.

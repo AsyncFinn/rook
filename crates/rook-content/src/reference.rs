@@ -46,16 +46,24 @@ pub enum MaterialMap {
     Normal = 1,
     /// Roughness in green and metalness in red, as Studio packs them.
     RoughnessMetalness = 2,
+    /// A finer normal map laid over `Normal`, in the same layout.
+    DetailNormal = 3,
 }
 
 impl MaterialMap {
-    pub const ALL: [Self; 3] = [Self::Color, Self::Normal, Self::RoughnessMetalness];
+    pub const ALL: [Self; 4] = [
+        Self::Color,
+        Self::Normal,
+        Self::RoughnessMetalness,
+        Self::DetailNormal,
+    ];
 
     pub fn name(self) -> &'static str {
         match self {
             Self::Color => "color",
             Self::Normal => "normal",
             Self::RoughnessMetalness => "roughness-metalness",
+            Self::DetailNormal => "detail-normal",
         }
     }
 }

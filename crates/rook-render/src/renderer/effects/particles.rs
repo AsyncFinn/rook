@@ -222,7 +222,7 @@ impl Renderer {
             });
         }
         for e in &mut emitters {
-            e.slot = self.image_slots(&[Some(e.texture), None, None, None, None])[0];
+            e.slot = self.image_slots(&lone_image(Some(e.texture)))[0];
         }
         // Each emitter's particles are built on their own (in parallel),
         // then sorted by small keys pointing at them, not moved themselves.
@@ -257,7 +257,7 @@ impl Renderer {
             }
         }
         for (texture, _) in &runs {
-            self.ensure_group([Some(*texture), None, None, None, None]);
+            self.ensure_group(lone_image(Some(*texture)));
         }
         rook_types::count!(ParticlesDrawn, order.len());
         let instances: Vec<ParticleInstance> = order
@@ -299,11 +299,7 @@ impl Renderer {
         pass.set_vertex_buffer(0, buffer.slice(..));
         for (texture, range) in runs {
             if let ImageBinding::Sets(_) = &self.image_binding {
-                pass.set_bind_group(
-                    2,
-                    self.group(&[Some(*texture), None, None, None, None]),
-                    &[],
-                );
+                pass.set_bind_group(2, self.group(&lone_image(Some(*texture))), &[]);
             }
             pass.draw(0..6, range.clone());
         }

@@ -1,4 +1,4 @@
-# DoubleSided
+# Double-sided meshes
 
 Checked against Studio 0.746 on 2026-11-06, with test meshes (a square of
 two triangles and a sphere) in a blank place, ClockTime 14,
@@ -29,7 +29,7 @@ Rook reads it only on a MeshPart.
 | `PrioritizeLightingQuality` off | A thin square casts nothing through the 4-stud voxels | The same |
 | `Transparency` | | Both sides draw in one pass, in the mesh's index order, with no back-then-front: a half see-through sphere looks different turned 180°, and Rook's matches each way |
 | Glass, front | | The dark filter over what's behind, and the surface |
-| Glass, back | | The faint surface alone: the filter stays on front faces |
+| Glass, back | | Next to nothing at Transparency 0.5: within 4 levels of what's behind, with neither the filter nor the rim |
 | Wood, Neon, `Reflectance`, Highlight fill, SurfaceAppearance | | Draw on the back too |
 | Decals and Textures | | Stay on the front: a `Front` Decal on a square whose front is its +Z side doesn't show from behind |
 

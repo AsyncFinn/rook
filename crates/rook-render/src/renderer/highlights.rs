@@ -65,7 +65,7 @@ impl HighlightParts {
         let entry = part.highlight.zip(instance).map(|(h, instance)| {
             let key = BatchKey {
                 shape: part.shape,
-                images: [None; 5],
+                images: lone_image(None),
                 double_sided: part.double_sided,
             };
             (h, key, instance)

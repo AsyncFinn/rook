@@ -9,7 +9,8 @@ use glam::{Mat3, Vec2, Vec3};
 use rook_content::decode::image::Image;
 use rook_content::decode::mesh::Mesh;
 use rook_types::{
-    Material, MaterialSet, NormalId, PartShape, SurfacePattern, TilePattern, Tiling, TrussShape,
+    Material, MaterialSet, NormalDetail, NormalId, PartShape, SurfacePattern, TilePattern, Tiling,
+    TrussShape,
 };
 
 mod emitters;
@@ -68,18 +69,20 @@ pub enum ImagePlacement {
     MeshUv,
 }
 
-/// How a SurfaceAppearance uses its color map's alpha (`Enum.AlphaMode`;
-/// observed in Studio 0.742 and the creator docs).
+/// How a part's color map's alpha is used: a SurfaceAppearance's by its
+/// `Enum.AlphaMode` (observed in Studio 0.742 and the creator docs), the
+/// built-in materials' always as a tint mask (Studio's part shaders).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MapAlpha {
-    /// Ignored: material textures, MaterialVariants, terrain's textures,
-    /// and `Opaque`.
+    /// Ignored: MaterialVariants, terrain's textures (which say their own
+    /// way, [`TerrainColor`]), and `Opaque`.
     Ignore = 0,
     /// The map over the part's Color, by its alpha.
     Overlay = 1,
     /// The alpha is the surface's opacity.
     Transparency = 2,
-    /// The alpha says where the tint applies.
+    /// The alpha says where the tint applies: also the built-in
+    /// materials', whose packs without a mask come opaque.
     TintMask = 3,
 }
 
@@ -99,6 +102,10 @@ pub struct MaterialMaps {
     pub roughness: Option<ImageHash>,
     /// Metalness, in red.
     pub metalness: Option<ImageHash>,
+    /// A second normal map laid over `normal`, as [`Self::detail`] says.
+    pub detail_normal: Option<ImageHash>,
+    /// How `detail_normal` lies on the surface.
+    pub detail: NormalDetail,
     /// Studs per repeat across and down a face.
     pub studs_per_tile: Vec2,
     /// How the repeats are laid (not for terrain, which [`Detile`]s).
@@ -139,6 +146,8 @@ impl MaterialMaps {
         normal: None,
         roughness: None,
         metalness: None,
+        detail_normal: None,
+        detail: NormalDetail::NONE,
         studs_per_tile: Vec2::ONE,
         pattern: TilePattern::Regular,
         detile: Detile::NONE,

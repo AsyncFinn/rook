@@ -255,7 +255,7 @@ impl Resolver {
             .ok_or_else(|| Failure::new(FailureKind::Invalid, "not a TexturePack"))?;
         let main = match map {
             MaterialMap::Color => pack.color,
-            MaterialMap::Normal => pack.normal,
+            MaterialMap::Normal | MaterialMap::DetailNormal => pack.normal,
             MaterialMap::RoughnessMetalness => pack.roughness,
         }
         .ok_or_else(|| not_found("the material's texture pack has no such map"))?;
@@ -265,8 +265,13 @@ impl Resolver {
             _ => Ok(None),
         };
         let metalness = extra(pack.metalness)?;
-        let decoded = materials::build(map, &image.bytes, metalness.as_ref().map(|m| &*m.bytes))
-            .map_err(|e| Failure::new(FailureKind::Invalid, e.to_string()))?;
+        let decoded = materials::build(
+            map,
+            &image.bytes,
+            metalness.as_ref().map(|m| &*m.bytes),
+            pack.tint_mask,
+        )
+        .map_err(|e| Failure::new(FailureKind::Invalid, e.to_string()))?;
         let name = format!(
             "{} rbxassetid://{pack_id} {} {}x{}",
             image.source.location,
