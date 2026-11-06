@@ -23,6 +23,10 @@ const ENTRIES: [&str; 9] = [
 ];
 
 fn main() {
+    // Not `CompileResult::emit_rerun_if_changed`: it names each module's
+    // `.wesl` as well as its `.wgsl`, and a file cargo can't find reruns
+    // this script, so every build recompiled this crate and all above it.
+    println!("cargo::rerun-if-changed=src/shaders");
     for entry in ENTRIES {
         for table in [false, true] {
             let mut options = CompileOptions::default();
@@ -30,7 +34,6 @@ fn main() {
             let result = Compiler::new(options)
                 .compile(format!("src/shaders/{entry}.wgsl"))
                 .unwrap_or_else(|e| panic!("{e}"));
-            result.emit_rerun_if_changed();
             check(&result, entry);
             let artifact = if table {
                 format!("{entry}_table")
