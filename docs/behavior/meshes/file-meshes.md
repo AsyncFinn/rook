@@ -110,6 +110,26 @@ s against 20.75 s, a small place 0.36 against 0.37, a 2008 place 0.27 against 0.
 render 1.49 against 1.47 ms); a large modern place draws 86 mesh files and its frame
 grew by about 2.8 ms (upload 3.6 to 4.9 ms, render 11.8 to 12.9 ms).
 
+## Materials
+
+Checked in Studio 0.746 on 2026-11-06 on parts of every material, side by
+side with Rook at ClockTime 14: a SpecialMesh FileMesh with and without a
+`TextureId`, the FileMesh class, an empty `MeshId` and the Head draw as
+SmoothPlastic, whatever the part's `Material` and `MaterialVariant`:
+
+- no material textures: Marble and Wood draw smooth, and Plastic has
+  SmoothPlastic's highlight;
+- no Neon glow, no Glass filter (`Transparency` still shows), ForceField
+  draws plain and opaque, and Metal, Foil and DiamondPlate aren't metallic;
+- `Reflectance` shows, even on Metal, where a Sphere mesh shows none.
+
+The primitive shapes (Sphere, Brick, Cylinder, Wedge, BlockMesh,
+CylinderMesh) draw the part's material. A MeshPart draws its material
+through its own rules ([materials](../rendering/materials.md)).
+
+The rule is `MeshKind::draws_material`. A place's file mesh sandwich, Granite
+with a `TextureId`, drew as stone in Rook before it.
+
 ## File layouts
 
 Every file starts with a `version x.yy` line. Layouts for 1.00 to 5.00

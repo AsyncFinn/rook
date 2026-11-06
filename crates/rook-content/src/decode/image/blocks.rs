@@ -1,9 +1,10 @@
 //! Block-compressed images: 4 × 4 pixel blocks the GPU samples as they
-//! are, at an eighth (BC1) or a quarter (BC3, BC7) of RGBA8's memory.
+//! are, at an eighth (BC1) or a quarter (BC3, BC5, BC7) of RGBA8's memory.
 //! Material textures are kept this way at their full 1024 × 1024, as
 //! Roblox serves them in BC1 and BC3 ([`super::ktx2`]); the
 //! roughness-metalness map Rook packs from two images is BC7,
-//! whose blocks keep the three channels apart. Encoding goes through
+//! whose blocks keep the three channels apart, and normal maps are BC5,
+//! their X and Y blocks independent. Encoding goes through
 //! Intel's ISPC texture compressor (`intel_tex_2`), decoding (for devices
 //! that can't sample blocks) through `bcdec_rs`.
 
@@ -22,6 +23,8 @@ pub enum Encoding {
     Bc3,
     /// 16 bytes a block, each channel kept apart.
     Bc7,
+    /// 16 bytes a block: two independent channels, red and green.
+    Bc5,
 }
 
 impl Encoding {
@@ -30,7 +33,7 @@ impl Encoding {
         match self {
             Self::Rgba8 => None,
             Self::Bc1 => Some(8),
-            Self::Bc3 | Self::Bc7 => Some(16),
+            Self::Bc3 | Self::Bc5 | Self::Bc7 => Some(16),
         }
     }
 }
@@ -70,6 +73,20 @@ impl Image {
                         &intel_tex_2::bc7::opaque_ultra_fast_settings(),
                         &surface,
                     ),
+                    Encoding::Bc5 => {
+                        let rg: Vec<u8> = pixels
+                            .as_chunks::<4>()
+                            .0
+                            .iter()
+                            .flat_map(|p| [p[0], p[1]])
+                            .collect();
+                        intel_tex_2::bc5::compress_blocks(&intel_tex_2::RgSurface {
+                            data: &rg,
+                            width: w,
+                            height: h,
+                            stride: w * 2,
+                        })
+                    }
                     Encoding::Rgba8 => unreachable!("returned above"),
                 }
             })
@@ -110,11 +127,12 @@ impl Image {
     /// Level `i` (`w` × `h`) as RGBA8.
     fn level_rgba(&self, i: usize, w: u32, h: u32) -> Vec<u8> {
         let level = &self.mips[i];
-        let decode = match self.encoding {
+        let decode: fn(&[u8], &mut [u8], usize) = match self.encoding {
             Encoding::Rgba8 => return level.clone(),
             Encoding::Bc1 => bcdec_rs::bc1,
             Encoding::Bc3 => bcdec_rs::bc3,
             Encoding::Bc7 => bcdec_rs::bc7,
+            Encoding::Bc5 => bc5_rgba,
         };
         let block_bytes = self.encoding.block_bytes().expect("in blocks");
         let (bw, bh) = (w.div_ceil(4) as usize, h.div_ceil(4) as usize);
@@ -130,6 +148,16 @@ impl Image {
             .flat_map(|y| &whole[y * pitch..y * pitch + row])
             .copied()
             .collect()
+    }
+}
+
+/// A BC5 block's pixels as RGBA8, `pitch` bytes a row: red, green, no blue.
+fn bc5_rgba(block: &[u8], out: &mut [u8], pitch: usize) {
+    let mut rg = [0; 32];
+    bcdec_rs::bc5(block, &mut rg, 8, false);
+    for (i, p) in rg.as_chunks::<2>().0.iter().enumerate() {
+        let at = (i / 4) * pitch + (i % 4) * 4;
+        out[at..at + 4].copy_from_slice(&[p[0], p[1], 0, 255]);
     }
 }
 
@@ -159,6 +187,17 @@ fn padded(level: &[u8], w: u32, h: u32) -> (Cow<'_, [u8]>, u32, u32) {
 mod tests {
     use super::super::ImageFormat;
     use super::*;
+
+    /// BC5 keeps red and green apart, and decodes without blue.
+    #[test]
+    fn bc5_keeps_two_channels() {
+        let rg = quarters().compressed(Encoding::Bc5);
+        assert_eq!(rg.encoding, Encoding::Bc5);
+        assert_eq!(rg.mips[0].len(), 4 * 16);
+        let rgba = rg.decompressed(1024);
+        assert_eq!(rgba.mips[0][..4], [200, 30, 0, 255]);
+        assert_eq!(rgba.mips[0][4 * 7..][..4], [10, 120, 0, 255]);
+    }
 
     /// An 8 × 8 image: four flat quarters.
     fn quarters() -> Image {

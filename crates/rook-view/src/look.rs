@@ -5,6 +5,8 @@
 mod decals;
 pub(super) mod materials;
 mod meshes;
+#[cfg(test)]
+mod tests;
 mod truss;
 mod union;
 
@@ -185,11 +187,6 @@ impl SceneCache {
             MeshLook::PartShape => return Some(own(out, pose)),
         }
         if kind.takes_texture() {
-            // The empty-MeshId box drew without the part's Neon glow
-            // (observed); its material is otherwise unchecked.
-            if out.material == Material::Neon {
-                out.material = Material::SmoothPlastic;
-            }
             let tint = dom
                 .vector3_property(mesh, "VertexColor")
                 .unwrap_or(Vec3::ONE);

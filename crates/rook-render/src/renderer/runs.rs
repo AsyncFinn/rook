@@ -63,6 +63,8 @@ pub(crate) enum Source {
 #[derive(Debug)]
 pub(crate) struct Run {
     pipe: Pipe,
+    /// Both sides of its triangles, not just their fronts.
+    double_sided: bool,
     source: Source,
     page: usize,
     /// The images to bind, without an image table.
@@ -168,7 +170,8 @@ impl Renderer {
         let cut = runs.cuts.last().is_some_and(|c| c.0 == runs.runs.len());
         match runs.runs.last_mut() {
             Some(r)
-                if (r.pipe, r.source, r.page, r.images) == (pipe, source, mesh.page, images)
+                if (r.pipe, r.double_sided, r.source, r.page, r.images)
+                    == (pipe, key.double_sided, source, mesh.page, images)
                     && r.args.end == at
                     && !cut =>
             {
@@ -176,6 +179,7 @@ impl Renderer {
             }
             _ => runs.runs.push(Run {
                 pipe,
+                double_sided: key.double_sided,
                 source,
                 page: mesh.page,
                 images,
@@ -234,12 +238,12 @@ impl Renderer {
         base: usize,
         mut cut: impl FnMut(&mut wgpu::RenderPass<'_>, usize),
     ) {
-        let mut bound: (
-            Option<Pipe>,
-            Option<Source>,
-            Option<usize>,
-            Option<ImageSet>,
-        ) = (None, None, None, None);
+        let mut bound = (
+            None::<(Pipe, bool)>,
+            None::<Source>,
+            None::<usize>,
+            None::<ImageSet>,
+        );
         // Each Glass filter or surface run is one part (its passes
         // alternate, so they never join): its own stencil reference, so it
         // draws each pixel once (`Pipelines::new`). After 255 runs the
@@ -263,9 +267,10 @@ impl Renderer {
             let Some(instances) = self.instance_buffer(run.source) else {
                 continue;
             };
-            if bound.0 != Some(run.pipe) {
-                pass.set_pipeline(self.pipeline(run.pipe));
-                bound.0 = Some(run.pipe);
+            let pipe = (run.pipe, run.double_sided);
+            if bound.0 != Some(pipe) {
+                pass.set_pipeline(self.pipeline(pipe));
+                bound.0 = Some(pipe);
             }
             if bound.1 != Some(run.source) {
                 pass.set_vertex_buffer(2, instances.slice(..));
@@ -306,23 +311,24 @@ impl Renderer {
         }
     }
 
-    fn pipeline(&self, pipe: Pipe) -> &wgpu::RenderPipeline {
+    fn pipeline(&self, (pipe, double_sided): (Pipe, bool)) -> &wgpu::RenderPipeline {
         let p = &self.pipelines;
+        let surfaces = if double_sided { &p.both } else { &p.front };
         match pipe {
-            Pipe::Shadow => &p.shadow,
-            Pipe::Opaque => &p.opaque,
+            Pipe::Shadow => &surfaces.shadow,
+            Pipe::Opaque => &surfaces.opaque,
             Pipe::Layer => &p.layer,
-            Pipe::Transparent => &p.transparent,
+            Pipe::Transparent => &surfaces.transparent,
             Pipe::WaterDepth => &p.water_depth,
             Pipe::Water => &p.water,
-            Pipe::GlassDepth => &p.glass_depth,
+            Pipe::GlassDepth => &surfaces.glass_depth,
             Pipe::GlassFilter => &p.glass_filter,
-            Pipe::GlassSurface => &p.glass_surface,
-            Pipe::Additive => &p.additive,
+            Pipe::GlassSurface => &surfaces.glass_surface,
+            Pipe::Additive => &surfaces.additive,
             Pipe::Over => &p.over,
             Pipe::OnTop => &p.on_top,
-            Pipe::HighlightOnTop => &p.highlight_on_top,
-            Pipe::HighlightOccluded => &p.highlight_occluded,
+            Pipe::HighlightOnTop => &surfaces.highlight_on_top,
+            Pipe::HighlightOccluded => &surfaces.highlight_occluded,
         }
     }
 

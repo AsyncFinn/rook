@@ -24,8 +24,8 @@ use gui::GuiPass;
 use gui::world::WorldRuns;
 use highlights::HighlightParts;
 pub(crate) use images::ImageBinding;
-pub(crate) use images::ImageSet;
 use images::{Defaults, image_layout, image_set};
+pub(crate) use images::{ImageSet, lone_image};
 use lighting::local::GpuLights;
 use lighting::sky::SkyCube;
 use pipelines::{BindLayouts, Pipelines};
@@ -348,7 +348,7 @@ impl Renderer {
             record_time: Default::default(),
             stage_times: StageTimes::default(),
         };
-        renderer.ensure_group([None; 5]);
+        renderer.ensure_group(lone_image(None));
         renderer
     }
 

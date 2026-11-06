@@ -115,8 +115,10 @@ pub(crate) struct Instance {
     /// [`renderer::ImageSet`] order (unused without a table).
     images: [u32; 3],
     /// A part's `Reflectance` (where it shows), roughness and metalness;
-    /// w is the blue of
-    /// a SurfaceAppearance's tint, whose red and green are in `tile.zw`.
+    /// w is the blue of a SurfaceAppearance's tint, whose red and green
+    /// are in `tile.zw`; where a built-in material's color map's alpha
+    /// masks its tint, its `NormalDetail` as `repeats + strength / 2`
+    /// (at least 1, `detail_slopes` tells the parts apart); 0 otherwise.
     material: [f32; 4],
 }
 
@@ -166,15 +168,17 @@ impl Instance {
                 // A map gives the value itself; without one, the material's.
                 let shading = p.material.shading(p.material_set);
                 let maps = p.maps;
-                // Only Studio's Plastic shader takes Reflectance: Plastic
-                // and SmoothPlastic parts and meshes without a texture
-                // (observed: Metal, Wood, Neon and a textured mesh at 1
-                // show none of the sky; `shaders_glsl3.pack` has it in no
-                // other shader). Terrain water reflects by its own
+                // Only Studio's Plastic and Glass shaders take Reflectance:
+                // Plastic, SmoothPlastic and Glass parts and meshes without
+                // a texture (observed: Metal, Wood, Neon and a textured
+                // mesh at 1 show none of the sky; `shaders_glsl3.pack` has
+                // it in no other shader). Terrain water reflects by its own
                 // `WaterReflectance`, in the water shaders.
                 let reflects = p.material == Material::Water
-                    || matches!(p.material, Material::Plastic | Material::SmoothPlastic)
-                        && p.texture.is_none()
+                    || matches!(
+                        p.material,
+                        Material::Plastic | Material::SmoothPlastic | Material::Glass
+                    ) && p.texture.is_none()
                         && !maps.on_mesh_uv;
                 material = [
                     // In 255ths, as Studio's vertices carry it.
@@ -201,14 +205,19 @@ impl Instance {
                     tile = [1.0, 1.0, t[0], t[1]];
                     material[3] = t[2];
                 } else if maps.any() {
-                    // Only terrain's maps say how their color is used, in
-                    // the bits Plastic's surfaces use otherwise.
+                    // Terrain's maps say how their color is used in the
+                    // bits Plastic's surfaces use otherwise; a part's say
+                    // whether the color map's alpha masks its tint, as
+                    // Studio's part shaders take it, in `material.w`.
                     let mode = match maps.terrain_color {
                         TerrainColor::Recolor => TERRAIN_RECOLOR,
                         TerrainColor::Tint => TERRAIN_TINT,
-                        TerrainColor::Plain => maps.alpha as u32,
+                        TerrainColor::Plain => 0,
                     };
                     flags |= MAPS | mode << SURFACES_SHIFT;
+                    if maps.alpha == MapAlpha::TintMask {
+                        material[3] = maps.detail.repeats + maps.detail.strength * 0.5;
+                    }
                     if matches!(
                         p.shape,
                         DrawShape::Part(PartShape::Wedge | PartShape::CornerWedge)
@@ -370,6 +379,7 @@ impl GpuImage {
             Encoding::Rgba8 => wgpu::TextureFormat::Rgba8Unorm,
             Encoding::Bc1 => wgpu::TextureFormat::Bc1RgbaUnorm,
             Encoding::Bc3 => wgpu::TextureFormat::Bc3RgbaUnorm,
+            Encoding::Bc5 => wgpu::TextureFormat::Bc5RgUnorm,
             Encoding::Bc7 => wgpu::TextureFormat::Bc7RgbaUnorm,
         };
         let srgb_format = format.add_srgb_suffix();
@@ -503,11 +513,11 @@ fn texture_in(
 }
 
 /// A draw's images (group 2): its image (a mesh texture, decal or skybox
-/// face) and color map as sRGB, its normal, roughness and metalness maps
-/// as linear data.
+/// face) and color map as sRGB, its normal, roughness, metalness and
+/// detail normal maps as linear data.
 pub(crate) fn images_bind_group(
     cx: &UploadContext<'_>,
-    [image, color, normal, roughness, metalness]: [&GpuImage; 5],
+    [image, color, normal, roughness, metalness, detail_normal]: [&GpuImage; 6],
 ) -> wgpu::BindGroup {
     let views = [
         &image.srgb,
@@ -515,6 +525,7 @@ pub(crate) fn images_bind_group(
         &normal.linear,
         &roughness.linear,
         &metalness.linear,
+        &detail_normal.linear,
     ];
     let entries: Vec<wgpu::BindGroupEntry> = views
         .iter()

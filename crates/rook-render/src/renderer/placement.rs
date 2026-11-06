@@ -283,6 +283,7 @@ impl Renderer {
         let key = BatchKey {
             shape: part.shape,
             images,
+            double_sided: part.double_sided,
         };
         match z {
             None if part.over => Target::Layer(OVER_Z, key),

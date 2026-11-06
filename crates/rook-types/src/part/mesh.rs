@@ -90,6 +90,16 @@ impl MeshKind {
         matches!(self, Self::File | Self::EmptyFile)
     }
 
+    /// Whether the part's material shows on the mesh. File meshes, the
+    /// empty-`MeshId` box and the Head draw as SmoothPlastic whatever the
+    /// `Material` and `MaterialVariant`: no textures, Neon's glow, Glass or
+    /// ForceField, and `Reflectance` shows on Metal too (observed in Studio
+    /// 0.746, 2026-11-06, docs/behavior/meshes/file-meshes.md#materials).
+    /// The primitive shapes draw it.
+    pub fn draws_material(self) -> bool {
+        !matches!(self, Self::File | Self::EmptyFile | Self::Head)
+    }
+
     /// Whether Decals on the part are drawn through the mesh's own UVs,
     /// whatever their `Face`, instead of projected onto a face (observed: a
     /// Decal on the Head, or on a FileMesh of the head or of a cube, covered
@@ -385,6 +395,34 @@ mod tests {
             MeshKind::File.look(SIZE, flipped),
             MeshLook::File { scale: flipped }
         );
+    }
+
+    /// Only the primitive shapes draw the part's material.
+    #[test]
+    fn file_meshes_and_the_head_draw_no_material() {
+        for mesh_type in [MeshType::Head, MeshType::FileMesh] {
+            for id in ["", "rbxasset://fonts/head.mesh"] {
+                let kind = MeshKind::of("SpecialMesh", Some(mesh_type), id).unwrap();
+                assert!(!kind.draws_material(), "{kind:?}");
+            }
+        }
+        for id in ["", "rbxasset://fonts/head.mesh"] {
+            assert!(!MeshKind::of("FileMesh", None, id).unwrap().draws_material());
+        }
+        for mesh_type in [
+            MeshType::Brick,
+            MeshType::Torso,
+            MeshType::Wedge,
+            MeshType::Sphere,
+            MeshType::Cylinder,
+            MeshType::CornerWedge,
+        ] {
+            let kind = MeshKind::of("SpecialMesh", Some(mesh_type), "").unwrap();
+            assert!(kind.draws_material(), "{kind:?}");
+        }
+        for class in ["BlockMesh", "CylinderMesh"] {
+            assert!(MeshKind::of(class, None, "").unwrap().draws_material());
+        }
     }
 
     /// A BlockMesh draws the Brick type's block, without surfaces.

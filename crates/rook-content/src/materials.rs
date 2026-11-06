@@ -15,10 +15,10 @@ use crate::decode::image::{Encoding, Image, ImageError, ImageFormat, MAX_SIZE};
 const LEGACY: &[(Material, u64, Option<u64>)] = &[
     (Material::Snow, 9439632387, None),
     (Material::Sandstone, 9873521380, None),
-    (Material::Wood, 7547303225, Some(7547298786)),
+    (Material::Wood, 7547303225, None),
     (Material::WoodPlanks, 7547332968, None),
     (Material::Marble, 7547177270, None),
-    (Material::Slate, 7547298114, Some(7547298323)),
+    (Material::Slate, 7547298114, None),
     (Material::Concrete, 7546653951, None),
     (Material::Granite, 7547164710, None),
     (Material::Brick, 7546650097, None),
@@ -100,9 +100,19 @@ const MATERIALS_2022: &[(Material, u64, Option<u64>)] = &[
     (Material::Rubber, 14108675388, None),
 ];
 
+/// The packs holding the legacy set's detail normal maps: normal-only, 512
+/// × 512, fetched by Studio beside each material's own pack. How they lie
+/// is `Material::normal_detail`.
+const LEGACY_DETAIL: &[(Material, u64)] =
+    &[(Material::Wood, 7547298786), (Material::Slate, 7547298323)];
+
 /// The TexturePack asset holding `material`'s `map` in `set`, if it has
-/// textures.
+/// that map.
 pub fn pack(material: Material, set: MaterialSet, map: MaterialMap) -> Option<u64> {
+    if map == MaterialMap::DetailNormal {
+        let detail = LEGACY_DETAIL.iter().find(|(m, _)| *m == material);
+        return detail.filter(|_| set == MaterialSet::Legacy).map(|d| d.1);
+    }
     let table = match set {
         MaterialSet::Legacy => LEGACY,
         MaterialSet::Materials2022 => MATERIALS_2022,
@@ -121,13 +131,18 @@ pub struct TexturePack {
     pub normal: Option<u64>,
     pub metalness: Option<u64>,
     pub roughness: Option<u64>,
+    /// `<alphamode>` 2: the color map's alpha marks where the surface's
+    /// color tints it (a brick's mortar keeps its own). Other packs' alpha
+    /// means nothing to Studio's shaders.
+    pub tint_mask: bool,
 }
 
 impl TexturePack {
     /// Read a TexturePack asset: `<roblox>` holding `<color>`, `<normal>`,
-    /// `<metalness>` and `<roughness>` image ids (and what Rook doesn't
-    /// use: `<height>`, which terrain's packs name but Studio's terrain
-    /// doesn't draw, `<usage>`, `<alphamode>`, `<tiling>`, `<emissive...>`).
+    /// `<metalness>` and `<roughness>` image ids and `<alphamode>` (and
+    /// what Rook doesn't use: `<height>`, which terrain's packs name but
+    /// Studio's terrain doesn't draw, `<usage>`, `<tiling>`,
+    /// `<emissive...>`).
     pub fn parse(bytes: &[u8]) -> Option<Self> {
         let text = std::str::from_utf8(bytes).ok()?;
         if !text.trim_start().starts_with("<roblox") {
@@ -144,22 +159,38 @@ impl TexturePack {
             normal: id("normal"),
             metalness: id("metalness"),
             roughness: id("roughness"),
+            tint_mask: id("alphamode") == Some(2),
         })
     }
 }
 
 /// A material map from its image files, block-compressed at its full size
-/// (Roblox's are 1024 × 1024): the color or normal map as BC1 (BC3 where
-/// it has alpha), the roughness-metalness map as BC7. A material's
-/// three maps hold 2.7 MB with their mips, where RGBA8 would hold 16 MB
-/// (40 materials: 107 MB against 640).
-pub fn build(map: MaterialMap, main: &[u8], metalness: Option<&[u8]>) -> Result<Image, ImageError> {
-    let (rgba, format) = packed(map, main, metalness)?;
+/// (Roblox's are 1024 × 1024): the color map as BC1 (BC3 where it has
+/// alpha), the normal maps as BC5 (BC1 and quick BC7 flatten their finest
+/// relief, measured at `docs/behavior/rendering/materials.md#normal-maps`),
+/// the roughness-metalness map as BC7.
+/// A material's three maps hold 3.3 MB with their mips, where RGBA8 would
+/// hold 16 MB (40 materials: 133 MB against 640). A color map keeps its alpha only
+/// as a `tint_mask` ([`TexturePack::tint_mask`]); otherwise it's opaque,
+/// so drawing tints it whole.
+pub fn build(
+    map: MaterialMap,
+    main: &[u8],
+    metalness: Option<&[u8]>,
+    tint_mask: bool,
+) -> Result<Image, ImageError> {
+    let (mut rgba, format) = packed(map, main, metalness)?;
+    if map == MaterialMap::Color && !tint_mask {
+        for p in rgba.pixels_mut() {
+            p[3] = 255;
+        }
+    }
     let image = Image::from_rgba(rgba, format, MAX_SIZE)?;
     let encoding = match map {
+        MaterialMap::Color if image.translucent => Encoding::Bc3,
+        MaterialMap::Color => Encoding::Bc1,
+        MaterialMap::Normal | MaterialMap::DetailNormal => Encoding::Bc5,
         MaterialMap::RoughnessMetalness => Encoding::Bc7,
-        _ if image.translucent => Encoding::Bc3,
-        _ => Encoding::Bc1,
     };
     Ok(image.compressed(encoding))
 }
@@ -198,6 +229,7 @@ pub fn all_packs() -> impl Iterator<Item = u64> {
         .iter()
         .chain(MATERIALS_2022)
         .flat_map(|&(_, main, normal)| std::iter::once(main).chain(normal))
+        .chain(LEGACY_DETAIL.iter().map(|d| d.1))
 }
 
 #[cfg(test)]
@@ -214,10 +246,16 @@ mod tests {
                 normal: Some(11498586912),
                 metalness: Some(11498586281),
                 roughness: Some(11498587586),
+                tint_mask: false,
             })
         );
         let normal_only = b"<roblox><usage>3</usage><normal>9438453869</normal></roblox>";
         assert_eq!(TexturePack::parse(normal_only).unwrap().color, None);
+        // Legacy Brick's pack: its color map's alpha is a tint mask.
+        let brick = b"<roblox><alphamode>2</alphamode><color>7546648254</color></roblox>";
+        assert!(TexturePack::parse(brick).unwrap().tint_mask);
+        let wood = b"<roblox><alphamode>1</alphamode><color>7547190453</color></roblox>";
+        assert!(!TexturePack::parse(wood).unwrap().tint_mask);
         assert_eq!(TexturePack::parse(b"\x89PNG"), None);
     }
 
@@ -230,7 +268,19 @@ mod tests {
         );
         assert_eq!(
             pack(Wood, MaterialSet::Legacy, MaterialMap::Normal),
+            Some(7547303225)
+        );
+        assert_eq!(
+            pack(Wood, MaterialSet::Legacy, MaterialMap::DetailNormal),
             Some(7547298786)
+        );
+        assert_eq!(
+            pack(Wood, MaterialSet::Materials2022, MaterialMap::DetailNormal),
+            None
+        );
+        assert_eq!(
+            pack(Brick, MaterialSet::Legacy, MaterialMap::DetailNormal),
+            None
         );
         assert_eq!(
             pack(Plastic, MaterialSet::Materials2022, MaterialMap::Color),
@@ -264,7 +314,25 @@ mod tests {
         let (r, _) = packed(MaterialMap::RoughnessMetalness, &png(90), None).unwrap();
         assert_eq!(r.get_pixel(0, 0).0, [0, 90, 0, 255]);
         // Built, it's BC7.
-        let built = build(MaterialMap::RoughnessMetalness, &png(90), None).unwrap();
+        let built = build(MaterialMap::RoughnessMetalness, &png(90), None, false).unwrap();
         assert_eq!(built.encoding, Encoding::Bc7);
+    }
+
+    /// A color map keeps its alpha only as a tint mask.
+    #[test]
+    fn color_maps_keep_alpha_only_as_a_tint_mask() {
+        let img = ::image::RgbaImage::from_pixel(4, 4, ::image::Rgba([200, 100, 50, 30]));
+        let mut png = Vec::new();
+        img.write_to(
+            &mut std::io::Cursor::new(&mut png),
+            ::image::ImageFormat::Png,
+        )
+        .unwrap();
+        let masked = build(MaterialMap::Color, &png, None, true).unwrap();
+        assert!(masked.translucent);
+        assert_eq!(masked.encoding, Encoding::Bc3);
+        let opaque = build(MaterialMap::Color, &png, None, false).unwrap();
+        assert!(!opaque.translucent);
+        assert_eq!(opaque.encoding, Encoding::Bc1);
     }
 }

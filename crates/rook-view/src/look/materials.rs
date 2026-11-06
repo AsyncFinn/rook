@@ -2,6 +2,7 @@
 //! the material's own textures (`docs/behavior/rendering/materials.md`).
 
 use super::*;
+use rook_types::NormalDetail;
 
 /// A SurfaceAppearance's or MaterialVariant's map properties: files store
 /// the `Content` ones; older files saved the legacy names.
@@ -20,14 +21,20 @@ impl SceneCache {
     /// the material's textures with its own; otherwise the material's
     /// textures (Studio's, from the user's content cache, or Rook's own).
     /// While a texture loads, or if there is none, the part draws without
-    /// it and is redrawn when it arrives.
+    /// it and is redrawn when it arrives. A mesh child that draws no
+    /// material ([`MeshKind::draws_material`]) leaves SmoothPlastic.
     pub(super) fn material_maps(&mut self, dom: &Dom, id: InstanceId, part: &mut PartInstance) {
         part.maps = MaterialMaps::NONE;
         part.material_set = material_set(dom);
+        let mesh_part = dom.class_name(id) == "MeshPart";
+        if !mesh_part && part_mesh(dom, id).is_some_and(|(kind, ..)| !kind.draws_material()) {
+            part.material = Material::SmoothPlastic;
+            return;
+        }
         if part.material == Material::Neon {
             return;
         }
-        let appearance = (dom.class_name(id) == "MeshPart")
+        let appearance = mesh_part
             .then(|| {
                 dom.children(id)
                     .iter()
@@ -123,14 +130,29 @@ impl SceneCache {
             FileState::Loading | FileState::Failed => None,
         };
         let roughness_metalness = map(MaterialMap::RoughnessMetalness);
+        let detail = material.normal_detail(set);
         MaterialMaps {
             color: map(MaterialMap::Color),
             normal: map(MaterialMap::Normal),
             roughness: roughness_metalness,
             metalness: roughness_metalness,
+            detail_normal: (detail != NormalDetail::NONE)
+                .then(|| map(MaterialMap::DetailNormal))
+                .flatten(),
+            detail,
             studs_per_tile: Vec2::splat(material.studs_per_tile(set)),
             pattern: material.tile_pattern(set),
             seed: texture_seed(part),
+            // Studio's part shaders tint the color map where its alpha
+            // says; packs without a mask come opaque
+            // (`TexturePack::tint_mask`). Glass's pack names one too, but
+            // Studio tints it whole (observed: red over the map's clear
+            // alpha).
+            alpha: if material == Material::Glass {
+                MapAlpha::Ignore
+            } else {
+                MapAlpha::TintMask
+            },
             ..MaterialMaps::NONE
         }
     }

@@ -195,13 +195,13 @@ impl Renderer {
         let l = self.lighting;
         for hash in l.skybox.into_iter().flatten() {
             if self.images.contains(&hash) {
-                self.ensure_group([Some(hash), None, None, None, None]);
+                self.ensure_group(lone_image(Some(hash)));
             }
         }
         self.update_table();
         let mut sky_images = [[0; 4]; 2];
         for (i, hash) in l.skybox.iter().flatten().enumerate() {
-            sky_images[i / 4][i % 4] = self.image_slots(&[Some(*hash), None, None, None, None])[0];
+            sky_images[i / 4][i % 4] = self.image_slots(&lone_image(Some(*hash)))[0];
         }
         let rgb = |c: [f32; 3], w: f32| [c[0], c[1], c[2], w];
         let mut faces = [[0.0; 4]; 12];
@@ -332,7 +332,7 @@ impl Renderer {
         // The table, or the defaults' set until a run binds its own: the
         // world GUI's canvases share this group, so one is bound before
         // any of them draws.
-        pass.set_bind_group(2, self.group(&[None; 5]), &[]);
+        pass.set_bind_group(2, self.group(&lone_image(None)), &[]);
         self.record_sky(&mut pass);
         let mut drawn = 0;
         self.record(&mut pass, runs, start, |pass, canvases| {
@@ -513,7 +513,7 @@ impl Renderer {
             pass.set_pipeline(&self.pipelines.plain_sky);
             // It reads no image, but its layout has the image group.
             if let ImageBinding::Sets(_) = &self.image_binding {
-                pass.set_bind_group(2, self.group(&[None; 5]), &[]);
+                pass.set_bind_group(2, self.group(&lone_image(None)), &[]);
             }
             pass.draw(0..3, 0..1);
             return;
@@ -523,7 +523,7 @@ impl Renderer {
             ImageBinding::Table(_) => pass.draw(0..3, 0..6),
             ImageBinding::Sets(groups) => {
                 for (face, hash) in faces.iter().enumerate() {
-                    let Some(group) = groups.get(&[Some(*hash), None, None, None, None]) else {
+                    let Some(group) = groups.get(&lone_image(Some(*hash))) else {
                         continue;
                     };
                     pass.set_bind_group(2, group, &[]);

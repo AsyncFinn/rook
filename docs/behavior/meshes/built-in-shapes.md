@@ -110,7 +110,8 @@ the part's Size (2 × 3 × 4, Cylinder 3 across, CylinderMesh 2 across, Head
   Cylinder part draws a box.
 - *A file mesh with an empty `MeshId`* (the FileMesh class, or SpecialMesh
   `MeshType` FileMesh) draws a 1 × 1 × 1 box times `Scale`, whatever the
-  part's Size, without the part's Neon glow.
+  part's Size, without the part's material
+  ([file meshes](file-meshes.md#materials)).
 - *`Offset`* moves the mesh in the part's own axes (a part turned 90
   degrees about Z with Offset (0, 2, 0) drew 2 studs along world -X), as
   documented. `VertexColor` wasn't measured; it waits for textures.

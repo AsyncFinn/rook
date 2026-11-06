@@ -65,7 +65,8 @@ impl HighlightParts {
         let entry = part.highlight.zip(instance).map(|(h, instance)| {
             let key = BatchKey {
                 shape: part.shape,
-                images: [None; 5],
+                images: lone_image(None),
+                double_sided: part.double_sided,
             };
             (h, key, instance)
         });
@@ -171,6 +172,7 @@ pub(crate) fn pipeline(
     shader: &wgpu::ShaderModule,
     buffers: &[Option<wgpu::VertexBufferLayout<'_>>],
     on_top: bool,
+    cull: Option<wgpu::Face>,
 ) -> wgpu::RenderPipeline {
     let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("rook highlights"),
@@ -187,7 +189,7 @@ pub(crate) fn pipeline(
             buffers,
         },
         primitive: wgpu::PrimitiveState {
-            cull_mode: Some(wgpu::Face::Back),
+            cull_mode: cull,
             ..Default::default()
         },
         depth_stencil: Some(wgpu::DepthStencilState {
