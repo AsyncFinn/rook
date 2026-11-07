@@ -106,7 +106,7 @@ fn date_time_and_settings() {
         &[
             "1583067900 2020-03-01T13:05:00.000Z March 1, 2020",
             "true Enum.ComputerMovementMode.Default",
-            "false The current thread cannot access 'ReducedMotion' (lacking capability RobloxScript)",
+            "false The current thread cannot read 'ReducedMotion' (lacking capability RobloxScript)",
         ],
     );
 }

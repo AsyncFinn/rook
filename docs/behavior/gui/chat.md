@@ -17,9 +17,12 @@ Code: setting up in `rook-engine`'s `chat.rs`, messages in `rook-lua`'s
   `ChatInputBarConfiguration`, `BubbleChatConfiguration` and
   `ChannelTabsConfiguration` (Inference: new places save them, and
   Roblox's chat window reads them in places saved before they existed).
-- `ChatVersion` is TextChatService (Inference: Roblox moved every
-  experience to it in 2025; the chat CoreScripts check
-  `Chat.IsAutoMigrated`, which reads true for them).
+- `ChatVersion` stays what the place saves. Unset in a file it reads
+  LegacyChatService (Studio 0.746), so every old place is on the
+  [legacy chat](#the-legacy-chat). `Chat.IsAutoMigrated` reads false
+  (Inference: Roblox's servers migrate a live experience, which nothing
+  does to a local one; its value at the identities Studio's tools run at
+  couldn't be read).
 - With `CreateDefaultTextChannels` (Confirmed: creator-docs
   TextChatService), a `TextChannels` folder holds `RBXGeneral` and
   `RBXSystem`, and each joining player gets a TextSource in both, named
@@ -29,6 +32,38 @@ Code: setting up in `rook-engine`'s `chat.rs`, messages in `rook-lua`'s
   counts as seen.
 - `CanUserChatAsync` (on TextChatService and the legacy Chat) is true:
   everyone may chat in a local server.
+
+## The legacy chat
+
+What a server does for a place on `ChatVersion` LegacyChatService with
+`Chat.LoadDefaultChat` on, from Roblox's `ServerStarterScript`,
+`ChatWindowInstaller` and `ChatServiceInstaller`, checked in Studio 0.746
+on a legacy copy of a Baseplate. Code: `rook-engine`'s `chat/legacy.rs`.
+
+- It happens after the place's first scripts start: they find no
+  `ChatServiceRunner` in ServerScriptService, and one that waits for it
+  gets it.
+- What the Chat service saves is kept, a fork of Roblox's chat among them.
+  What's missing comes from Roblox's `models/ServerCoreScripts.rbxm`, the
+  same way as the [CoreScripts](core-scripts.md): only builds with
+  developer overrides, with `coreScripts` on, load it.
+- `ChatServiceRunner` is copied to ServerScriptService, `ChatScript` and
+  `BubbleChat` to StarterPlayerScripts, each unless one of that name is
+  there. A script waits for those copies, so a place's saved forks are
+  copied with no Roblox file at all.
+- A place with no fork needs that file: without it nothing makes a runner,
+  and a script waiting for one waits forever, until Rook has its own
+  ([M18 step 4](../../roadmap/m18-offline-content.md)).
+- What Roblox's file made isn't saved with the place (`Archivable` off),
+  which doesn't stop a player getting StarterPlayerScripts' copies.
+- Clients see what the Chat service holds, though the API dump marks the
+  service NotReplicated: the window waits for `ClientChatModules` there.
+- `Players.ClassicChat` is true and `Players.BubbleChat` false, as Studio
+  reads them for a place. The window starts only if one is on.
+- The window tells the server what's said with `Players:Chat`, which fires
+  `Player.Chatted`. Its messages travel by the runner's own remotes.
+
+`Chat:Chat` (bubbles a script makes) isn't implemented yet.
 
 ## Messages
 

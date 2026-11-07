@@ -101,6 +101,14 @@ pub(crate) fn expand<H: Clone>(change: &Change, signals: &Signals<H>, dom: &Dom)
             );
             push(*id, SignalKind::Attribute(name.clone()), FireArgs::None);
         }
+        Change::TagPresence { id, tag, present } => push(
+            dom.root(),
+            SignalKind::Tag {
+                tag: tag.clone(),
+                added: *present,
+            },
+            FireArgs::Instance(*id),
+        ),
         Change::Destroying(id) => {
             push(*id, SignalKind::Event("Destroying"), FireArgs::None);
         }

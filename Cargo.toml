@@ -155,6 +155,7 @@ embed-resource = "3"
 
 # Luau
 mlua = { version = "0.12", features = ["luau", "vendored"] }
+unicode-normalization = "0.1"
 
 [workspace.lints.rust]
 unsafe_code = "deny"

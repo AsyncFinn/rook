@@ -62,6 +62,14 @@ pub enum Change {
         id: InstanceId,
         tag: String,
     },
+    /// `tag` on `id` came into the DataModel or left it (`present` says
+    /// which): tagged or untagged there, or moved across its edge with the
+    /// tag. What CollectionService's added and removed signals follow.
+    TagPresence {
+        id: InstanceId,
+        tag: String,
+        present: bool,
+    },
 }
 
 /// The change log. Readers keep a cursor (an absolute position) and read

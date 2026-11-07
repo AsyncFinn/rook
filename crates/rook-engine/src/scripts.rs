@@ -12,6 +12,27 @@ impl DataModel {
         let root = self.runtime.world().dom.root();
         self.start_scripts_under(root);
         self.new_scripts = NewScripts::starting_at(self.runtime.world().dom.journal().end());
+        if self.role == Role::Server {
+            self.install_legacy_chat();
+        }
+    }
+
+    /// After the place's scripts started, which find no ChatServiceRunner
+    /// yet (Observed in Studio 0.746). The next frame starts its copy.
+    fn install_legacy_chat(&self) {
+        let (start, left) = {
+            let mut world = self.runtime.world_mut();
+            let start = world.dom.journal().end();
+            let patch = self.core_scripts.as_deref();
+            (start, crate::chat::legacy::install(&mut world.dom, patch))
+        };
+        if let Some(source) = left
+            && let Err(e) = self.runtime.run_source("ChatLocalization", &source, None)
+        {
+            tracing::warn!("installing the chat: {e}");
+        }
+        // Whatever waits on the runner's copy wakes here.
+        self.runtime.dispatch_since(start);
     }
 
     fn start_scripts_under(&self, id: InstanceId) {

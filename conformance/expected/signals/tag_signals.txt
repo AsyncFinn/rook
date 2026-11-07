@@ -1,0 +1,45 @@
+-- studio 0.746.0.7461269
+-- signals: deferred
+signal RBXScriptSignal Signal RookTagSignalCaseInstanceAdded
+same object true
+nil false Argument 1 missing or nil
+number true Signal 5InstanceAdded
+empty false Empty tag string provided to GetInstanceAddedSignal
+-- tagged outside the game
+GetTagged 0
+added a in game true parent Workspace
+-- parented in
+GetTagged 1
+-- tagged twice
+-- moved inside the game
+removed a in game false parent nil tagged true
+-- taken out
+GetTagged 0
+added a in game true parent Workspace
+-- put back
+removed a in game true parent Workspace tagged false
+-- tag removed in the game
+-- removed twice
+added a in game true parent Workspace
+-- tagged in the game
+clone keeps tag true
+added inner in game true parent holder
+added second in game true parent holder
+-- subtree parented in
+removed inner in game false parent holder tagged true
+removed second in game false parent holder tagged true
+-- subtree taken out
+added inner in game true parent holder
+added second in game true parent holder
+-- subtree back
+removed inner in game false parent nil tagged true
+removed second in game false parent nil tagged true
+-- subtree destroyed
+removed a in game false parent nil tagged true
+-- destroyed
+added twice in game true parent Workspace
+removed twice in game true parent Workspace tagged true
+added twice in game true parent Workspace
+-- added, removed, added in one step
+removed twice in game false parent nil tagged true
+-- end

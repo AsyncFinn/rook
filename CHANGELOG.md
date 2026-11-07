@@ -5,6 +5,11 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- Places on the legacy chat get it, as they do in Studio. Rook moved every place to TextChatService, so nothing made `ChatServiceRunner`, and a game waiting for it stopped starting up: in one large place, that left doors snapping open with no swing. A place's own chat scripts are used as saved; the rest comes from Roblox's files with `coreScripts` on. See [the legacy chat](docs/behavior/gui/chat.md#the-legacy-chat).
+- `CollectionService:GetInstanceAddedSignal` and `GetInstanceRemovedSignal` work, firing as Studio's do. See [tag signals](docs/behavior/scripting/tags.md).
+- A child named like a property only Roblox's engine reaches, such as `Tags` or `Attributes`, is found by `script.Tags`, as in Studio. Those properties were errors.
+- Two reads of one signal compare equal, as in Studio.
+- `utf8.nfcnormalize` and `utf8.nfdnormalize`.
 - Skies show up in busy places again. A skybox image only reached the renderer on a frame when nothing else changed, so a place that moves something every frame, such as a reactor game, kept a plain color for good.
 - A Sky with an image that won't load draws Roblox's default sky, as Studio does, not a plain color. See [a sky that won't load](docs/behavior/lighting/sky.md#a-sky-that-wont-load).
 - A GUI image that fails to load is reported as an image, not a "sky image" on Lighting.

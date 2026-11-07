@@ -20,6 +20,9 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
 
 pub(crate) fn luau_source(owner: &str, name: &str) -> Option<&'static str> {
     Some(match (owner, name) {
+        ("Players", "Chat") => {
+            "local c = (...).text_chat return function(self, text) return c.playersChat(text) end"
+        }
         ("TextChannel", "SendAsync") => {
             "local c = (...).text_chat return function(self, text, metadata) return c.sendAsync(self, text, metadata) end"
         }

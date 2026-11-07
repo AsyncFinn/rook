@@ -841,3 +841,18 @@ fn weld_constraints_keep_their_offset() {
     let printed: Vec<String> = rt.take_log().into_iter().map(|e| e.message).collect();
     assert_eq!(printed, ["10, 0, 3"]);
 }
+
+/// Luau's own library lacks these; Roblox adds them (creator-docs utf8).
+#[test]
+fn utf8_normalizes() {
+    assert_eq!(
+        run(
+            r#"
+            print(#utf8.nfcnormalize("e\u{301}"), #utf8.nfdnormalize("\u{e9}"))
+            print(utf8.nfcnormalize("e\u{301}") == "\u{e9}")
+            "#,
+            1
+        ),
+        ["2 3", "true"]
+    );
+}

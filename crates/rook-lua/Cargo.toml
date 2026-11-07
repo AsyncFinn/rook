@@ -23,6 +23,7 @@ rook-audio.workspace = true
 rook-platform.workspace = true
 rbx_types.workspace = true
 mlua.workspace = true
+unicode-normalization.workspace = true
 glam.workspace = true
 serde.workspace = true
 chrono.workspace = true

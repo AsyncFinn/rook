@@ -170,3 +170,23 @@ fn references_wait_for_their_target() {
         Some(Value::Ref(Some(ct.to_ref())))
     );
 }
+
+#[test]
+fn chat_service_children_reach_clients() {
+    let (mut server, mut client, mut r) = setup();
+    let chat = server.get_service("Chat").unwrap();
+    let modules = server.create_by_name("Folder").unwrap();
+    server
+        .set_name(modules, "ClientChatModules".into())
+        .unwrap();
+    server.set_parent(modules, Some(chat)).unwrap();
+    r.initial(&server, &mut client);
+    let chat = client
+        .find_service("Chat")
+        .expect("clients have the service");
+    assert!(
+        client
+            .find_first_child(chat, "ClientChatModules", false)
+            .is_some()
+    );
+}

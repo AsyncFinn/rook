@@ -386,15 +386,16 @@ pub fn core_scripts(
     PATCH
         .get_or_init(|| {
             let packages = content.packages();
-            let downloaded = packages
-                .and_then(|p| p.find(crate::core_scripts::PATCH, content.downloads_packages()));
-            let patch = downloaded.or_else(|| {
-                install::find_from(chosen_install().as_deref(), &install_places())
-                    .into_iter()
-                    .map(|i| i.root.join("ExtraContent").join(crate::core_scripts::PATCH))
-                    .find(|p| p.is_file())
-            });
-            let Some(patch) = patch else {
+            let find = |file: &str| {
+                let downloaded = packages.and_then(|p| p.find(file, content.downloads_packages()));
+                downloaded.or_else(|| {
+                    install::find_from(chosen_install().as_deref(), &install_places())
+                        .into_iter()
+                        .map(|i| i.root.join("ExtraContent").join(file))
+                        .find(|p| p.is_file())
+                })
+            };
+            let Some(patch) = find(crate::core_scripts::PATCH) else {
                 let packages = match packages {
                     None => "there is no data folder to download Roblox's packages into",
                     Some(p) if !p.downloads() => {
@@ -413,7 +414,12 @@ pub fn core_scripts(
             };
             let flags = data_folder::local_app_data()
                 .map(|d| d.join("Roblox/ClientSettings/StudioAppSettings.json"));
-            match crate::core_scripts::CorePatch::load(&patch, flags.as_deref()) {
+            let server_scripts = find(crate::core_scripts::SERVER_SCRIPTS);
+            match crate::core_scripts::CorePatch::load(
+                &patch,
+                server_scripts.as_deref(),
+                flags.as_deref(),
+            ) {
                 Ok(p) => Some(std::sync::Arc::new(p)),
                 Err(e) => {
                     tracing::warn!("coreScripts: {e}");

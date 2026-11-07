@@ -111,6 +111,15 @@ pub(super) fn member_table(class: ClassId, known: bool, identity: Identity) -> M
                 continue;
             };
             let security = property_security(db.class(p.owner).name, p.name);
+            // What only the engine reaches isn't a member at all, so a child
+            // of that name is found (conformance case
+            // `instance/locked_member_children`).
+            if matches!(
+                security[0],
+                Security::RobloxSecurity | Security::NotAccessibleSecurity
+            ) {
+                continue;
+            }
             // rbx-dom's database calls the properties only Roblox's own
             // code reaches (`UserGameSettings.MasterVolume`) not
             // scriptable; the API dump's security says who reaches them.
@@ -338,7 +347,7 @@ pub(crate) fn get_member(
         Some(Member::Property(p)) => {
             if !allowed(p.security[0], identity) {
                 return Err(ScriptError(format!(
-                    "The current thread cannot access '{key}' (lacking capability {})",
+                    "The current thread cannot read '{key}' (lacking capability {})",
                     p.security[0].capability()
                 )));
             }

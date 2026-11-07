@@ -104,8 +104,20 @@ function api.addUserAsync(channel, userId)
 	return source, true
 end
 
+-- Client: `Players:Chat`, how the legacy window tells the server what the
+-- local player said, for Player.Chatted; its own messages go by remotes.
+function api.playersChat(text)
+	send("server", "chatted", text)
+end
+
 -- Server: a player's message arriving.
 function api.onServer(player, channel, text, metadata, id)
+	if channel == "chatted" then
+		if typeof(text) == "string" then
+			fire(player, "Chatted", text)
+		end
+		return
+	end
 	if typeof(channel) ~= "Instance" or not channel:IsA("TextChannel") or typeof(text) ~= "string" then
 		return
 	end

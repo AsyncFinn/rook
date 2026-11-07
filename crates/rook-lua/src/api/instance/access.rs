@@ -93,10 +93,12 @@ pub(crate) fn set_member(lua: &Lua, id: InstanceId, key: &str, value: LuaValue) 
         }
         _ => return Err(not_a_member(lua, id, key)),
     };
-    if !allowed(p.security[1], identity) {
+    // What can't be read names the read's capability, whatever writing takes
+    // (conformance case `instance/locked_member_children`).
+    if let Some(denied) = p.security.into_iter().find(|&s| !allowed(s, identity)) {
         return Err(ScriptError(format!(
             "The current thread cannot write '{key}' (lacking capability {})",
-            p.security[1].capability()
+            denied.capability()
         )));
     }
     if p.flags.read_only || p.scriptability == Scriptability::Read {

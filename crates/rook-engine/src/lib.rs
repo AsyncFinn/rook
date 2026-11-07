@@ -134,6 +134,8 @@ pub struct DataModel {
     run_service: InstanceId,
     /// Scripts the journal says to start or stop.
     new_scripts: scripts::NewScripts,
+    /// What a server fills the legacy chat in from.
+    core_scripts: Option<Arc<core_scripts::CorePatch>>,
     /// Where render-relevant changes have been checked up to.
     render_watch: JournalWatch,
     /// What a renderer draws that changed since it last asked.
@@ -371,6 +373,7 @@ impl DataModel {
             auto_trim: true,
             run_service,
             new_scripts: scripts::NewScripts::starting_at(cursor),
+            core_scripts: options.core_scripts.clone(),
             render_watch: JournalWatch::starting_at(cursor),
             render_changes: RenderChanges::everything(),
             adorned: Default::default(),

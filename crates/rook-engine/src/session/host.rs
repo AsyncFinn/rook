@@ -503,9 +503,8 @@ impl ClientHost {
                         .and_then(|sp| dom.find_first_child(sp, "StarterPlayerScripts", false));
                     if let Some(starter) = starter {
                         for child in dom.children(starter).to_vec() {
-                            if let Some(copy) = dom.clone_instance(child) {
-                                dom.attach_unchecked(copy, ps);
-                            }
+                            let copy = dom.copy_instance(child);
+                            dom.attach_unchecked(copy, ps);
                         }
                     }
                 }

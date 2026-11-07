@@ -29,6 +29,10 @@ use crate::DataModel;
 /// install's version folder.
 pub const PATCH: &str = "models/DataModelPatch/DataModelPatch.rbxm";
 
+/// The server's scripts, which hold the legacy chat: plain source, unlike
+/// the patch.
+pub const SERVER_SCRIPTS: &str = "models/ServerCoreScripts.rbxm";
+
 /// A loaded patch, shared by every client of a run.
 pub struct CorePatch {
     dom: WeakDom,
@@ -38,6 +42,8 @@ pub struct CorePatch {
     /// `ClientSettings/StudioAppSettings.json`), so the scripts take the
     /// paths they take in Studio.
     flags: Arc<FxHashMap<String, String>>,
+    /// [`SERVER_SCRIPTS`], if found.
+    server_scripts: Option<WeakDom>,
 }
 
 impl std::fmt::Debug for CorePatch {
@@ -52,8 +58,13 @@ impl std::fmt::Debug for CorePatch {
 }
 
 impl CorePatch {
-    /// Read the patch, and Studio's flags if `flags` names a file.
-    pub fn load(patch: &Path, flags: Option<&Path>) -> Result<Self, String> {
+    /// Read the patch, the server's scripts if `server_scripts` names a
+    /// file, and Studio's flags if `flags` does.
+    pub fn load(
+        patch: &Path,
+        server_scripts: Option<&Path>,
+        flags: Option<&Path>,
+    ) -> Result<Self, String> {
         let files = &rook_platform::get().files;
         let bytes = files
             .read(patch)
@@ -76,11 +87,20 @@ impl CorePatch {
                 other => (k, other.to_string()),
             })
             .collect();
+        let server_scripts = server_scripts
+            .and_then(|path| files.read(path).ok())
+            .and_then(|bytes| rook_formats::load(&bytes).ok())
+            .map(|place| place.dom);
         Ok(Self {
             dom,
             compiled,
             flags: Arc::new(flags),
+            server_scripts,
         })
+    }
+
+    pub(crate) fn server_scripts(&self) -> Option<&WeakDom> {
+        self.server_scripts.as_ref()
     }
 
     /// Give a client DataModel the CoreGui and CorePackages, and start

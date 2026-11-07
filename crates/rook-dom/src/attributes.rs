@@ -42,6 +42,7 @@ impl Dom {
                 id,
                 tag: tag.to_owned(),
             });
+            self.note_tag_presence(id, tag, true);
         }
         Ok(())
     }
@@ -55,6 +56,7 @@ impl Dom {
                 id,
                 tag: tag.to_owned(),
             });
+            self.note_tag_presence(id, tag, false);
         }
         Ok(())
     }
@@ -93,6 +95,16 @@ impl Dom {
             .collect();
         out.sort_unstable();
         out
+    }
+
+    fn note_tag_presence(&mut self, id: InstanceId, tag: &str, present: bool) {
+        if self.in_data_model(id) {
+            self.journal.push(Change::TagPresence {
+                id,
+                tag: tag.to_owned(),
+                present,
+            });
+        }
     }
 
     fn in_data_model(&self, id: InstanceId) -> bool {

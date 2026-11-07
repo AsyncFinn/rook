@@ -46,7 +46,9 @@ impl Source {
                 return false;
             }
             let flags = server.database().class(inst.class).flags;
-            if flags.not_replicated {
+            // The API dump marks Chat NotReplicated, but Roblox's chat
+            // window waits for what it holds on clients.
+            if flags.not_replicated && server.class_name(c) != "Chat" {
                 return false;
             }
             if flags.player_replicated && server.parent(c) != self.player {

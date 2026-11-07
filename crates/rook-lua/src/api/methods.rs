@@ -146,6 +146,8 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("CollectionService", "GetTags") => |l, t, a| collection_tag(l, t, a, get_tags),
         ("CollectionService", "GetTagged") => get_tagged,
         ("CollectionService", "GetAllTags") => get_all_tags,
+        ("CollectionService", "GetInstanceAddedSignal") => |l, _, a| tag_signal(l, a, true),
+        ("CollectionService", "GetInstanceRemovedSignal") => |l, _, a| tag_signal(l, a, false),
         ("ServiceProvider", "GetService" | "service") => get_service,
         ("ServiceProvider", "FindService") => find_service,
         ("DataModel", "IsLoaded") => true_,

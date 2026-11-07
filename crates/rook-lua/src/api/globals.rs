@@ -6,6 +6,7 @@
 
 use crate::scheduler::{LEGACY_MIN_WAIT, Queue};
 use mlua::{Function, Lua, MultiValue, Table, Thread, Value as LuaValue};
+use unicode_normalization::UnicodeNormalization;
 
 mod getfenv;
 mod instance_new;
@@ -24,8 +25,24 @@ use crate::ctx::{ApiResult, Outcome, ScriptError, api_fn, api_ret, with_world};
 use crate::threads::resume;
 use crate::world::{Job, MessageType, WaitKind};
 
+/// `utf8.nfcnormalize` and `utf8.nfdnormalize` (creator-docs utf8).
+fn normalized(args: MultiValue, form: fn(&str) -> String) -> ApiResult<String> {
+    let text = Args::new(args, "utf8.nfcnormalize").string(0)?;
+    Ok(form(&text))
+}
+
 pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     let g = lua.globals();
+
+    let utf8: Table = g.get("utf8")?;
+    utf8.set(
+        "nfcnormalize",
+        api_ret(lua, |_, args| normalized(args, |s| s.nfc().collect()))?,
+    )?;
+    utf8.set(
+        "nfdnormalize",
+        api_ret(lua, |_, args| normalized(args, |s| s.nfd().collect()))?,
+    )?;
 
     // Originals of library functions engine-side Luau code relies on.
     let std = lua.create_table()?;

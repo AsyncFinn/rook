@@ -30,11 +30,22 @@ impl LSignal {
             SignalKind::Event(n) => (*n).to_owned(),
             SignalKind::Property(_) => "PropertyChangedSignal".to_owned(),
             SignalKind::Attribute(_) => "AttributeChangedSignal".to_owned(),
+            SignalKind::Tag { tag, added: true } => format!("{tag}InstanceAdded"),
+            SignalKind::Tag { tag, added: false } => format!("{tag}InstanceRemoved"),
         }
     }
 }
 
 impl UserData for LSignal {
+    fn add_methods<M: mlua::UserDataMethods<Self>>(m: &mut M) {
+        // Two reads of one signal are equal (conformance case
+        // `signals/tag_signals`).
+        m.add_meta_method(
+            mlua::MetaMethod::Eq,
+            |_, a, b: mlua::UserDataRef<LSignal>| Ok(a.key() == b.key()),
+        );
+    }
+
     fn add_fields<F: UserDataFields<Self>>(f: &mut F) {
         f.add_meta_field("__type", "RBXScriptSignal");
         f.add_meta_field_with("__index", |lua| {

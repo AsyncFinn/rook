@@ -162,6 +162,21 @@ pub(super) fn get_tagged(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcom
     ret_instances(lua, &found)
 }
 
+/// `GetInstanceAddedSignal` (`added`) or `GetInstanceRemovedSignal`
+/// (conformance case `signals/tag_signals`).
+pub(super) fn tag_signal(lua: &Lua, a: &Args, added: bool) -> ApiResult<Outcome> {
+    let tag = a.string(0)?;
+    if tag.is_empty() {
+        let method = if added { "Added" } else { "Removed" };
+        return Err(ScriptError(format!(
+            "Empty tag string provided to GetInstance{method}Signal"
+        )));
+    }
+    let instance = with_world(lua, |w| w.dom.root());
+    let kind = SignalKind::Tag { tag, added };
+    Outcome::ret(lua, LSignal { instance, kind })
+}
+
 /// Every tag some instance in the DataModel has.
 pub(super) fn get_all_tags(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
     let tags = with_world(lua, |w| w.dom.all_tags());

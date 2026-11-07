@@ -100,11 +100,11 @@ health bars and leaderboards are GUI.
      BubbleChatConfiguration, ChatInputBarConfiguration in about 1,200
      files each), `Player.Chatted`, and chat commands (`/e`, `/w`).
      Messages are passed through unfiltered on a local server.
-   - *Studio questions*: what a place set to `ChatVersion`
-     LegacyChatService gets today, since Roblox announced legacy chat's
-     retirement in 2025. If it gets TextChatService, Rook does the same
-     and keeps only the legacy calls scripts make (`Chat:Chat`,
-     `Chatted`, `Chat:FilterStringAsync`).
+   - *Evidence* (Studio 0.746, 2026-11-06): a place set to `ChatVersion`
+     LegacyChatService, or with it unset, still gets the legacy chat, so
+     Rook installs it as Studio does
+     ([the legacy chat](../behavior/gui/chat.md#the-legacy-chat)). Left of
+     the legacy calls scripts make: `Chat:Chat`.
    - *Done when*: a player chats in an archive place, with bubbles over
      their character, and the place's `Chatted` commands run. Chat
      between machines comes with M10's remotes.

@@ -254,6 +254,12 @@ impl Dom {
             let mut subtree_post_order = Vec::with_capacity(subtree.len());
             self.collect_post_order(id, &mut subtree_post_order);
             rook_types::count!(DomWalked, 2 * subtree.len());
+            let entered = new_ancestors.contains(&self.root);
+            let crossed = entered != old_ancestors.contains(&self.root);
+            let tagged: Vec<_> = (subtree.iter())
+                .filter(|_| crossed)
+                .flat_map(|&i| self.instances[i].tags.iter().map(move |t| (i, t.clone())))
+                .collect();
             self.journal.push(Change::Reparented {
                 id,
                 old_parent,
@@ -265,6 +271,13 @@ impl Dom {
             });
             let property = self.parent_prop;
             self.journal.push(Change::Property { id, property });
+            for (id, tag) in tagged {
+                self.journal.push(Change::TagPresence {
+                    id,
+                    tag,
+                    present: entered,
+                });
+            }
         }
     }
 
@@ -334,9 +347,12 @@ impl Dom {
     /// non-archivable descendants are skipped. References to instances
     /// inside the cloned tree point at the copies.
     pub fn clone_instance(&mut self, id: InstanceId) -> Option<InstanceId> {
-        if !self.archivable(id) {
-            return None;
-        }
+        self.archivable(id).then(|| self.copy_instance(id))
+    }
+
+    /// [`Dom::clone_instance`] whether or not `id` is archivable: what the
+    /// engine copies, as StarterPlayerScripts to a player, ignores that.
+    pub fn copy_instance(&mut self, id: InstanceId) -> InstanceId {
         let mut map = FxHashMap::default();
         let new = self.clone_rec(id, None, &mut map);
         for &copy in map.values() {
@@ -359,7 +375,7 @@ impl Dom {
                     .push((copy, property));
             }
         }
-        Some(new)
+        new
     }
 
     fn clone_rec(

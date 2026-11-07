@@ -117,9 +117,9 @@ pub(crate) fn hidden_property(lua: &Lua, class: &str, key: &str) -> mlua::Result
         // Observed: chat's stores test it for an "Enabled" prefix; a local
         // player is never region-locked or age-gated.
         ("Player", "ChatAvailabilityStatus") => "Enabled",
-        // Every experience runs TextChatService since the 2025 migration
-        // (see `rook-engine`'s `chat.rs`).
-        ("Chat", "IsAutoMigrated") => return Ok(LuaValue::Boolean(true)),
+        // Inference: Roblox's servers migrate a live experience; nothing
+        // does here, as in Studio, where a legacy place stays legacy.
+        ("Chat", "IsAutoMigrated") => return Ok(LuaValue::Boolean(false)),
         _ => return Ok(LuaValue::Nil),
     };
     Ok(LuaValue::String(lua.create_string(text)?))

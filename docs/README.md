@@ -70,6 +70,7 @@
     - [Bindables](behavior/scripting/bindables.md): the copies arguments arrive as
     - [Datatype errors](behavior/scripting/datatype-errors.md): their messages in `pcall`
     - [Random](behavior/scripting/random.md): Luau's generator and each method's draws
+    - [Tags and locked members](behavior/scripting/tags.md): tag signals, and which members a child of the same name beats.
   - Rendering
     - [Materials](behavior/rendering/materials.md): PBR shading, the built-in materials, MaterialVariant and SurfaceAppearance
     - [Textures and decals](behavior/rendering/textures-and-decals.md)

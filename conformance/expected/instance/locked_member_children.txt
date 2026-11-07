@@ -1,0 +1,38 @@
+-- studio 0.746.0.7461269
+-- signals: deferred
+Tags alone false Tags is not a valid member of Folder "Holder"
+Tags child true Instance
+Tags write false Tags is not a valid member of Folder "Holder"
+Attributes alone false Attributes is not a valid member of Folder "Holder"
+Attributes child true Instance
+Attributes write false Attributes is not a valid member of Folder "Holder"
+AttributesSerialize alone false AttributesSerialize is not a valid member of Folder "Holder"
+AttributesSerialize child true Instance
+AttributesSerialize write false AttributesSerialize is not a valid member of Folder "Holder"
+HistoryId alone false HistoryId is not a valid member of Folder "Holder"
+HistoryId child true Instance
+HistoryId write false HistoryId is not a valid member of Folder "Holder"
+DefinesCapabilities alone false DefinesCapabilities is not a valid member of Folder "Holder"
+DefinesCapabilities child true Instance
+DefinesCapabilities write false DefinesCapabilities is not a valid member of Folder "Holder"
+PropertyStatusStudio alone false PropertyStatusStudio is not a valid member of Folder "Holder"
+PropertyStatusStudio child true Instance
+PropertyStatusStudio write false PropertyStatusStudio is not a valid member of Folder "Holder"
+SerializedOverrides alone false SerializedOverrides is not a valid member of Folder "Holder"
+SerializedOverrides child true Instance
+SerializedOverrides write false SerializedOverrides is not a valid member of Folder "Holder"
+UniqueId alone false The current thread cannot read 'UniqueId' (lacking capability RobloxScript)
+UniqueId child false The current thread cannot read 'UniqueId' (lacking capability RobloxScript)
+UniqueId write false The current thread cannot write 'UniqueId' (lacking capability RobloxScript)
+SourceAssetId alone false The current thread cannot read 'SourceAssetId' (lacking capability RobloxScript)
+SourceAssetId child false The current thread cannot read 'SourceAssetId' (lacking capability RobloxScript)
+SourceAssetId write false The current thread cannot write 'SourceAssetId' (lacking capability RobloxScript)
+Sandboxed alone true boolean
+Sandboxed child true boolean
+Sandboxed write true
+CollisionGroupReplicate alone false CollisionGroupReplicate is not a valid member of Part "Part"
+CollisionGroupReplicate child true Instance
+PhysicsRepRootPart alone false PhysicsRepRootPart is not a valid member of Part "Part"
+PhysicsRepRootPart child true Instance
+ReplicationPV alone false ReplicationPV is not a valid member of Part "Part"
+ReplicationPV child true Instance

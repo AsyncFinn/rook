@@ -23,6 +23,9 @@ pub enum SignalKind {
     Property(PropertyId),
     /// `GetAttributeChangedSignal(name)`.
     Attribute(String),
+    /// CollectionService's `GetInstanceAddedSignal(tag)` (`added`) and
+    /// `GetInstanceRemovedSignal(tag)`, kept on the DataModel's root.
+    Tag { tag: String, added: bool },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
