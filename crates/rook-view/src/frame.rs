@@ -100,35 +100,7 @@ impl SceneCache {
         loaded.extend(self.update_terrain(camera, false));
         loaded.extend(self.update_grass(camera));
         rook_types::count!(ViewPartsChanged, loaded.len());
-        let change = match change {
-            // A skybox image arrived: the lighting alone changed.
-            SceneChange::None if loaded.is_empty() && self.take_lighting_change() => {
-                SceneChange::Parts {
-                    changed: Vec::new(),
-                    moved: Vec::new(),
-                    lighting: true,
-                }
-            }
-            _ if loaded.is_empty() => change,
-            SceneChange::None => SceneChange::Parts {
-                changed: loaded,
-                moved: Vec::new(),
-                lighting: false,
-            },
-            SceneChange::Parts {
-                mut changed,
-                moved,
-                lighting,
-            } => {
-                changed.extend(loaded);
-                SceneChange::Parts {
-                    changed,
-                    moved,
-                    lighting,
-                }
-            }
-            SceneChange::Full => SceneChange::Full,
-        };
+        let change = with_arrivals(change, loaded, self.take_lighting_change());
         rook_types::gauge!(ViewEntries, self.scene.parts.len());
         match &change {
             SceneChange::Parts { changed, moved, .. } => {
@@ -145,6 +117,33 @@ impl SceneCache {
             effects: self.effects.take_changes(),
             dropped: self.take_dropped_meshes(),
         }
+    }
+}
+
+/// `change` with what arrived during the frame: the parts that files
+/// reached, and whether a skybox image changed the lighting. Either comes
+/// on top of whatever else changed, which in a busy place is every frame.
+fn with_arrivals(change: SceneChange, loaded: Vec<usize>, lighting: bool) -> SceneChange {
+    match change {
+        SceneChange::None if loaded.is_empty() && !lighting => SceneChange::None,
+        SceneChange::None => SceneChange::Parts {
+            changed: loaded,
+            moved: Vec::new(),
+            lighting,
+        },
+        SceneChange::Parts {
+            mut changed,
+            moved,
+            lighting: changed_lighting,
+        } => {
+            changed.extend(loaded);
+            SceneChange::Parts {
+                changed,
+                moved,
+                lighting: changed_lighting || lighting,
+            }
+        }
+        SceneChange::Full => SceneChange::Full,
     }
 }
 
@@ -206,5 +205,49 @@ impl ToRender {
         for mesh in self.dropped {
             renderer.drop_mesh(mesh);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn moved() -> SceneChange {
+        SceneChange::Parts {
+            changed: Vec::new(),
+            moved: vec![7],
+            lighting: false,
+        }
+    }
+
+    /// A skybox image reached the renderer only on a frame nothing else
+    /// changed, so a place that moves something every frame kept its plain
+    /// sky.
+    #[test]
+    fn an_arrived_skybox_comes_with_parts_that_moved() {
+        assert_eq!(
+            with_arrivals(moved(), vec![3], true),
+            SceneChange::Parts {
+                changed: vec![3],
+                moved: vec![7],
+                lighting: true,
+            }
+        );
+    }
+
+    #[test]
+    fn a_quiet_frame_stays_quiet() {
+        assert_eq!(
+            with_arrivals(SceneChange::None, Vec::new(), false),
+            SceneChange::None
+        );
+        assert_eq!(
+            with_arrivals(SceneChange::None, Vec::new(), true),
+            SceneChange::Parts {
+                changed: Vec::new(),
+                moved: Vec::new(),
+                lighting: true,
+            }
+        );
     }
 }

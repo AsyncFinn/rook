@@ -3,6 +3,7 @@
 
 use crate::*;
 use content::arrivals::ARRIVALS_BUDGET;
+use content::report::Wanter;
 use rook_content::Failure;
 
 /// How far the camera moves before the files still loading are ranked
@@ -79,10 +80,13 @@ impl SceneCache {
                 }
                 Err(failure) => {
                     for &part in &waiting {
-                        self.report.add(Some(part), &key, &failure);
+                        self.report.add(Wanter::Part(part), &key, &failure);
                     }
-                    if sky || gui {
-                        self.report.add(None, &key, &failure);
+                    if sky {
+                        self.report.add(Wanter::Sky, &key, &failure);
+                    }
+                    if gui {
+                        self.report.add(Wanter::Gui, &key, &failure);
                     }
                     self.gui_file_done(&key, None);
                 }
@@ -155,7 +159,7 @@ impl SceneCache {
             // A file that failed before: this part didn't load either.
             FileState::Failed => {
                 if let Some(failure) = self.files.failure(&key) {
-                    self.report.add(Some(part), &key, failure);
+                    self.report.add(Wanter::Part(part), &key, failure);
                 }
             }
             FileState::Loaded(_) => {}

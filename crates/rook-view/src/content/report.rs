@@ -17,6 +17,14 @@ use rook_dom::{Dom, InstanceId};
 
 use super::loader::FileRef;
 
+/// Who wanted a file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) enum Wanter {
+    Part(InstanceId),
+    Sky,
+    Gui,
+}
+
 /// What failed to load, by what wanted it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub(crate) enum What {
@@ -29,9 +37,11 @@ pub(crate) enum What {
 }
 
 impl What {
-    fn of(dom: &Dom, part: Option<InstanceId>, key: &FileRef) -> Self {
-        let Some(part) = part else {
-            return Self::Sky;
+    fn of(dom: &Dom, wanter: Wanter, key: &FileRef) -> Self {
+        let part = match wanter {
+            Wanter::Part(part) => part,
+            Wanter::Sky => return Self::Sky,
+            Wanter::Gui => return Self::Image,
         };
         if matches!(
             key.0,
@@ -71,17 +81,17 @@ pub(crate) struct Failed {
 #[derive(Debug, Default)]
 pub(crate) struct Report {
     /// Each instance and file reported once.
-    seen: FxHashSet<(Option<InstanceId>, FileRef)>,
+    seen: FxHashSet<(Wanter, FileRef)>,
     /// Files Studio-style warnings were printed for (once each).
     warned: FxHashSet<FileRef>,
-    pending: Vec<(Option<InstanceId>, FileRef, Failure)>,
+    pending: Vec<(Wanter, FileRef, Failure)>,
 }
 
 impl Report {
-    /// Note that `part`'s file `key` failed (`None` for the sky).
-    pub(crate) fn add(&mut self, part: Option<InstanceId>, key: &FileRef, failure: &Failure) {
-        if self.seen.insert((part, key.clone())) {
-            self.pending.push((part, key.clone(), failure.clone()));
+    /// Note that `wanter`'s file `key` failed.
+    pub(crate) fn add(&mut self, wanter: Wanter, key: &FileRef, failure: &Failure) {
+        if self.seen.insert((wanter, key.clone())) {
+            self.pending.push((wanter, key.clone(), failure.clone()));
         }
     }
 
@@ -91,10 +101,14 @@ impl Report {
             return;
         }
         let mut failed = Vec::new();
-        for (part, key, failure) in std::mem::take(&mut self.pending) {
+        for (wanter, key, failure) in std::mem::take(&mut self.pending) {
             let f = Failed {
-                what: What::of(dom, part, &key),
-                path: part.map_or_else(|| "Lighting".to_owned(), |p| dom.full_name(p)),
+                what: What::of(dom, wanter, &key),
+                path: match wanter {
+                    Wanter::Part(part) => dom.full_name(part),
+                    Wanter::Sky => "Lighting".to_owned(),
+                    Wanter::Gui => "the GUI".to_owned(),
+                },
                 reference: key.0.clone(),
                 failure,
             };

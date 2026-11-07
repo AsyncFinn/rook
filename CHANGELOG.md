@@ -5,6 +5,9 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- Skies show up in busy places again. A skybox image only reached the renderer on a frame when nothing else changed, so a place that moves something every frame, such as a reactor game, kept a plain color for good.
+- A Sky with an image that won't load draws Roblox's default sky, as Studio does, not a plain color. See [a sky that won't load](docs/behavior/lighting/sky.md#a-sky-that-wont-load).
+- A GUI image that fails to load is reported as an image, not a "sky image" on Lighting.
 - A clean folder to hand to someone: `cargo xtask package` builds `rook.exe`, `bin/rook-player.exe`, a readme and the license, and nothing else. Drag a place onto `rook.exe` or open it to pick one.
 - The command-line tool is `rook` now, and `rook place.rbxl` or `rook play` opens the player. What works on the repository itself moved to `cargo xtask`, which never ships: `conformance`, `corpus-scan`, `corpus-run`, `terrain`, `gen-api`, `studio-defaults`, `drift`, and `pin-content` (was `content --pin`).
 - Bring back sounds that went private, or replace any asset, with your own files: put `1234567.ogg` in `%LOCALAPPDATA%\Rook\overrides`, named after the asset id, and start the place again. It wins over the cache and asset delivery, and the place itself is untouched. See [overrides](docs/design/data-and-logging.md#overrides).

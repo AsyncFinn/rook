@@ -165,4 +165,4 @@ Some content Rook loads itself in nearly every place: the built-in materials' te
 
 A request for a kept asset by its bare id is answered at the pinned version: from `content\assets\` first, then the cache (copying it there), then asset delivery, which writes it there. It is never trimmed. It has the cache's layout, blobs by hash and one ref file per key (`asset-<id>-v<version>`), so one reader handles both. `cargo xtask pin-content` writes the list again from the materials' and terrain's tables with each asset's version today. A test checks that every pack in those tables is listed.
 
-The default sky is not kept. It comes from Roblox's packages or install, and without one Rook draws its own plain sky.
+The default sky is not kept. It comes from Roblox's packages or install, and without one Rook draws its own plain sky ([a sky that won't load](../behavior/lighting/sky.md#a-sky-that-wont-load)).

@@ -91,6 +91,22 @@ Studio's does and only its nearest surface drew ([water](../terrain/water.md),
 lands within 2 levels far off and 10 to 30% above Studio's light near the
 camera.
 
+## A sky that won't load
+
+Measured in Studio 0.745 on 2026-11-06, Baseplate, ClockTime 14. A Sky with
+five good night images and `SkyboxFt` set to an id that isn't an image
+(`rbxassetid://1`) drew the default sky on every side, including the sides
+with good images. Setting that one image to a good id drew the Sky's night
+images on every side, so a Sky is all or nothing. Rook draws the default
+sky without a Sky, until all six of a Sky's images are there, and when one
+won't load. Its own plain sky is left for having no default sky at all: no
+Roblox packages or install.
+
+A Sky with an empty image is not settled: one captured after the images had
+loaded before showed no hole, which may be Studio's cache. Rook treats it as
+an image that won't load (Inference). Studio's sky while images load isn't
+measured; that it's the default sky follows from the failed case (Inference).
+
 ## Not done
 
 - The night sky: the dark gradient, its purple horizon glow and the stars
