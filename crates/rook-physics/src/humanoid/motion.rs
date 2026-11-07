@@ -27,6 +27,15 @@ const MAX_TURN: f32 = 20.0;
 /// heading, closing any turn within one 240 Hz step.
 const FACE_RATE: f32 = 240.0;
 
+/// A body held upright rights itself: the lean closes at this rate per
+/// second, up to `MAX_RISE` radians per second (measured: 20 degrees to 5
+/// and 40 to 12 in a 60 Hz frame, and about 2,000 degrees a second rising
+/// from upside down, in the air or on a floor alike).
+const RISE_RATE: f32 = 85.0;
+const MAX_RISE: f32 = 35.0;
+/// Radians of lean too small to right.
+const STOOD: f32 = 1e-4;
+
 /// Climbing goes at this share of WalkSpeed (measured: 11.2 at 16), with
 /// the root drawn in to this far from the face (measured: 1.5) but never
 /// pushed out: climbing a 2-stud truss from beside it, Studio climbed on
@@ -129,6 +138,24 @@ impl Physics {
         }
     }
 
+    /// One step of a held body righting itself, about its root part,
+    /// which stays put. It keeps its heading.
+    pub(super) fn right(&mut self, r: &Rooted, h: f32) {
+        let up = self.root_pose(r).rotation * glam::Vec3::Y;
+        let lean = up.angle_between(glam::Vec3::Y);
+        if lean < STOOD {
+            return;
+        }
+        let by = (lean * (1.0 - (-RISE_RATE * h).exp())).min(MAX_RISE * h);
+        // Straight upside down, any way over will do.
+        let axis = up.cross(glam::Vec3::Y).try_normalize();
+        let spin = glam::Quat::from_axis_angle(axis.unwrap_or(glam::Vec3::X), by);
+        let rb = &mut self.world.bodies[r.body];
+        let pose = turned_about(rb.position(), r.offset, spin);
+        rb.set_position(pose, true);
+        self.body_moved(r.body);
+    }
+
     /// Turn `humanoid`'s character to face the horizontal `way` at once,
     /// where its steering would face it there (AutoRotate, a state that
     /// turns). A client calls this once its frame's camera is final, so
@@ -160,21 +187,13 @@ impl Physics {
             return;
         }
         let spin = glam::Quat::from_rotation_y(angle);
-        // Each pose turns about its own root part, which stays put.
-        let turned = |pose: &Pose| {
-            let about = (cframe_of(pose) * r.offset).position;
-            Pose::from_parts(
-                about + spin * (pose.translation - about),
-                (spin * pose.rotation).normalize(),
-            )
-        };
         let rb = &mut self.world.bodies[r.body];
-        let pose = turned(rb.position());
+        let pose = turned_about(rb.position(), r.offset, spin);
         rb.set_position(pose, true);
         rb.set_angvel(Vector::ZERO, true);
         // Drawn between its last two steps, both facing the new way.
         if let Some(before) = self.before_last_step.get_mut(&r.body) {
-            *before = turned(before);
+            *before = turned_about(before, r.offset, spin);
         }
         self.body_moved(r.body);
         if let Some(props) = self.props.take() {
@@ -189,6 +208,22 @@ impl Physics {
 /// but not while climbing.
 fn turns(state: State) -> bool {
     state.upright() && state != State::Climbing
+}
+
+/// States in which a held body rights itself: all of them but Seated, which
+/// leans as its seat does (measured: 60 degrees on a 60-degree seat).
+pub(super) fn rights_itself(state: State) -> bool {
+    state.upright() && state != State::Seated
+}
+
+/// `pose` turned by `spin` about its root part, `offset` into it, which
+/// stays put.
+fn turned_about(pose: &Pose, offset: CFrame, spin: glam::Quat) -> Pose {
+    let about = (cframe_of(pose) * offset).position;
+    Pose::from_parts(
+        about + spin * (pose.translation - about),
+        (spin * pose.rotation).normalize(),
+    )
 }
 
 /// The air's steering: the horizontal velocity turns toward `want` by at
