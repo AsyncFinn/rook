@@ -95,8 +95,10 @@ Workspace gravity 196.2. R6 steps were measured on a body from
 - `PlatformStand` goes to PlatformStanding and back to Running; `Sit`
   goes to Seated, and a jump from it goes straight to Running with `Sit`
   false.
-- `ChangeState(FallingDown)` goes on to GettingUp, and `Ragdoll` to
-  GettingUp and Running, each within a few seconds; `Physics` stays until
+- `ChangeState(FallingDown)` goes on to GettingUp after 3.0 s, and `Ragdoll`
+  after 0.02 s; GettingUp goes on to Running after 0.05 s, or once it has
+  risen from upside down (Approximation: Rook also waits for the root to
+  reach standing height, a few frames); `Physics` stays until
   another `ChangeState`.
 
 ## In Rook
@@ -123,7 +125,14 @@ Workspace gravity 196.2. R6 steps were measured on a body from
 - While the controller holds a body upright it locks its tilt and applies
   gravity itself; FallingDown, Ragdoll, PlatformStanding, Physics and Dead
   leave the body to physics. A body that becomes upright again is stood
-  up at once (Approximation: Roblox rises over GettingUp).
+  up the same way as any other that leans: it closes on upright at about
+  85 per second, at most about 2,000 degrees a second (measured: 20 degrees
+  to 5 and 40 to 12 in a 60 Hz frame), about its root part. Seated leans as
+  its seat does (measured on 30 and 60 degrees).
+- Lean past 45 degrees while Running falls down (measured: it rights itself
+  from 45, falls from 46, about X or Z alike). In the air it rights itself
+  from 60. Approximation: what leans a body here is a script or a seat, as
+  its lock keeps collisions from tipping it.
 - Climbing draws the root in to 1.5 studs from the face and never
   pushes it out, so a low truss is climbed in hops as in Studio.
 - Climbing: six rays ahead at heights from the feet to above the root,
@@ -132,8 +141,7 @@ Workspace gravity 196.2. R6 steps were measured on a body from
 - Swimming starts when the root's center is in a voxel of water (or a
   solid voxel's water), and floats toward 0.45 under the surface.
 - Approximations: Landed is taken within 0.5 studs of standing height
-  (Studio landed at 0.23, not at 0.88); FallingDown and Ragdoll last 1 s
-  and GettingUp 0.5 s; Seated stands in place until seats exist (M9's
+  (Studio landed at 0.23, not at 0.88); Seated stands in place until seats exist (M9's
   seats step); Flying holds height and steers as in the air;
   RunningNoPhysics and StrafingNoPhysics act as Running.
 - Events: `StateChanged(old, new)`; `Jumping`, `FreeFalling`,

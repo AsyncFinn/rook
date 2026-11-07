@@ -273,7 +273,7 @@ impl Physics {
                 None => Controller::new(drive),
             };
             if let Some(r) = self.rooted(c.drive.root) {
-                self.hold(r.body, Some(c.state), false);
+                self.hold(r.body, Some(c.state));
                 if c.floor.is_none() {
                     self.sense(&mut c, &r);
                 }
@@ -282,7 +282,7 @@ impl Physics {
         }
         for c in old.values() {
             if let Some(r) = self.rooted(c.drive.root) {
-                self.hold(r.body, None, false);
+                self.hold(r.body, None);
             }
         }
     }
@@ -300,26 +300,25 @@ impl Physics {
 
     /// Hold the body as `state` does: upright states lock its tilt (it may
     /// still turn about Y) and take over its gravity; the rest leave it to
-    /// physics. `snap` stands a tilted body up at once (Approximation:
-    /// Roblox rises over GettingUp).
-    fn hold(&mut self, body: RigidBodyHandle, state: Option<State>, snap: bool) {
+    /// physics. Rapier's locks only stop forces: velocity already about X
+    /// or Z still turns the body, and its gyroscopic pass makes more out of
+    /// a spin about Y whenever the mass sits off to one side, as a tool or
+    /// a hat puts it. So a locked body has neither.
+    fn hold(&mut self, body: RigidBodyHandle, state: Option<State>) {
         let upright = state.is_some_and(State::upright);
         let rb = &mut self.world.bodies[body];
         let tilt = LockedAxes::ROTATION_LOCKED_X | LockedAxes::ROTATION_LOCKED_Z;
         if upright != rb.locked_axes().contains(tilt) {
             rb.set_enabled_rotations(!upright, true, !upright, true);
+            rb.enable_gyroscopic_forces(!upright);
         }
         let gravity = if upright { 0.0 } else { 1.0 };
         if rb.gravity_scale() != gravity {
             rb.set_gravity_scale(gravity, true);
         }
-        if upright && snap {
-            let mut pose = *rb.position();
-            let look = pose.rotation * Vector::NEG_Z;
-            let yaw = (-look.x).atan2(-look.z);
-            pose.rotation = Rotation::from_rotation_y(yaw);
-            rb.set_position(pose, true);
-            rb.set_angvel(Vector::ZERO, true);
+        let spin = rb.angvel();
+        if upright && (spin.x != 0.0 || spin.z != 0.0) {
+            rb.set_angvel(Vector::new(0.0, spin.y, 0.0), true);
         }
     }
 
@@ -357,7 +356,12 @@ impl Physics {
                 let before = c.state;
                 self.transition(c, &r, dt);
                 if c.state.upright() != before.upright() {
-                    self.hold(r.body, Some(c.state), true);
+                    self.hold(r.body, Some(c.state));
+                }
+                // After the states, which see how far it leaned before
+                // righting takes any of that back.
+                if motion::rights_itself(c.state) {
+                    self.right(&r, dt);
                 }
             }
         }
@@ -367,7 +371,7 @@ impl Physics {
     /// Sense the floor, a truss or ladder ahead and water.
     fn sense(&self, c: &mut Controller, r: &Rooted) {
         let root = self.root_pose(r);
-        c.floor = self.sense_floor(&c.drive, r.body, &root);
+        c.floor = self.sense_floor(c, r.body, &root);
         c.climb = self.sense_climb(c, r.body, &root);
         c.water = self.water_surface(root.position);
     }

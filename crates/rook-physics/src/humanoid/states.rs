@@ -16,9 +16,15 @@ const LANDING: f32 = 0.5;
 const LANDED_TIME: f32 = 0.03;
 
 /// How long FallingDown and Ragdoll last before GettingUp, and GettingUp
-/// before Running (Approximation: both ended within these in Studio).
-const DOWN_TIME: f32 = 1.0;
-const GETTING_UP_TIME: f32 = 0.5;
+/// before Running (measured: 3.0 s, 0.02 s and 0.05 s).
+const FALLING_DOWN_TIME: f32 = 3.0;
+const RAGDOLL_TIME: f32 = 0.02;
+const GETTING_UP_TIME: f32 = 0.05;
+
+/// A Running Humanoid whose root's up vector has less Y than this falls
+/// down (measured: it rights itself from 45 degrees, falls from 46, either
+/// way over; in the air it rights itself from 60).
+const STANDS_UP_Y: f32 = 0.7;
 
 /// Gravity stays off this long after a jump (measured: the launch frame
 /// rose as if the first half of it were weightless).
@@ -103,18 +109,27 @@ impl Physics {
                 root - (f.y + d.standing_height) <= LANDING && v.y - f.velocity.y <= 0.0
             })
         };
+        let fallen = || (self.root_pose(r).rotation * glam::Vec3::Y).y < STANDS_UP_Y;
         match state {
-            State::FallingDown | State::Ragdoll => {
-                (c.time >= DOWN_TIME).then_some(State::GettingUp)
+            State::FallingDown => (c.time >= FALLING_DOWN_TIME).then_some(State::GettingUp),
+            State::Ragdoll => (c.time >= RAGDOLL_TIME).then_some(State::GettingUp),
+            // Measured: it stays GettingUp while rising from upside down.
+            State::GettingUp => {
+                let root = self.root_pose(r).position.y;
+                let stood = c
+                    .floor
+                    .is_none_or(|f| f.y + d.standing_height - root <= LANDING);
+                (c.time >= GETTING_UP_TIME && !fallen() && stood).then_some(State::Running)
             }
-            State::GettingUp => (c.time >= GETTING_UP_TIME).then_some(State::Running),
             State::Jumping => Some(State::Freefall),
             State::Freefall if in_water => Some(State::Swimming),
             State::Freefall if climbable && d.walk != glam::Vec3::ZERO => Some(State::Climbing),
             State::Freefall if landed() => Some(State::Landed),
             State::Landed => (c.time >= LANDED_TIME).then_some(State::Running),
             State::Running | State::RunningNoPhysics | State::StrafingNoPhysics => {
-                if in_water {
+                if fallen() {
+                    Some(State::FallingDown)
+                } else if in_water {
                     Some(State::Swimming)
                 } else if climbable && d.walk != glam::Vec3::ZERO {
                     Some(State::Climbing)

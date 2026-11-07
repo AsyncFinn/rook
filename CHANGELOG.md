@@ -10,6 +10,8 @@ Every release, newest first. How versions are numbered is in
 - A child named like a property only Roblox's engine reaches, such as `Tags` or `Attributes`, is found by `script.Tags`, as in Studio. Those properties were errors.
 - Two reads of one signal compare equal, as in Studio.
 - `utf8.nfcnormalize` and `utf8.nfdnormalize`.
+- Characters stay upright. Turning with a tool or a hat used to lean them a little more each time, for good, and anything else that tilted one, like a teleport or a sloped seat, stuck too. They now right themselves as in Roblox, and fall over past 45 degrees.
+- FallingDown lasts 3 seconds and GettingUp and Ragdoll are over almost at once, as in Roblox.
 - Skies show up in busy places again. A skybox image only reached the renderer on a frame when nothing else changed, so a place that moves something every frame, such as a reactor game, kept a plain color for good.
 - A Sky with an image that won't load draws Roblox's default sky, as Studio does, not a plain color. See [a sky that won't load](docs/behavior/lighting/sky.md#a-sky-that-wont-load).
 - A GUI image that fails to load is reported as an image, not a "sky image" on Lighting.

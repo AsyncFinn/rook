@@ -29,10 +29,11 @@ pub(super) struct Floor {
 impl Physics {
     pub(super) fn sense_floor(
         &self,
-        drive: &Drive,
+        c: &Controller,
         body: RigidBodyHandle,
         root: &CFrame,
     ) -> Option<Floor> {
+        let drive = &c.drive;
         let half = drive.root_size * 0.5;
         let right = root.rotation * glam::Vec3::X;
         let back = root.rotation * glam::Vec3::Z;
@@ -45,8 +46,15 @@ impl Physics {
             -right + back,
             -right - back,
         ];
-        let bottom = root.position - glam::Vec3::Y * half.y;
-        let length = drive.standing_height - half.y + REACH;
+        // Getting up, the root stands up where it lay, its bottom at or
+        // under the floor, and has to feel that floor to rise off it.
+        let start = if c.state == State::GettingUp {
+            0.0
+        } else {
+            half.y
+        };
+        let bottom = root.position - glam::Vec3::Y * start;
+        let length = drive.standing_height - start + REACH;
         let filter = self.humanoid_filter(body);
         let pipeline = self.world.query_pipeline_with_filter(filter);
         let mut hits = 0.0;
