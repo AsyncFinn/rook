@@ -46,9 +46,10 @@ impl Physics {
             -right + back,
             -right - back,
         ];
-        // Getting up, the root stands up where it lay, its bottom at or
-        // under the floor, and has to feel that floor to rise off it.
-        let start = if c.state == State::GettingUp {
+        // Getting up or leaving a sit, the root stands up where it lay, its
+        // bottom at or under the floor, and has to feel that floor to rise
+        // off it.
+        let start = if c.state == State::GettingUp || c.rising {
             0.0
         } else {
             half.y

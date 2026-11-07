@@ -2,6 +2,7 @@
 //! parts with a velocity carrying what touches them.
 
 use super::*;
+use rapier3d::geometry::NEW_CONTACT_BIT;
 
 /// A collider's friction, elasticity and their weights, packed into its
 /// `user_data` for [`Mixer`].
@@ -55,6 +56,29 @@ fn surface_velocity(context: &ContactModificationContext, body: Option<RigidBody
         .map_or(Vector::ZERO, |rb| unpack_velocity(rb.user_data))
 }
 
+/// Merge the points of a contact that has only just begun into one at their
+/// middle, for its first step. Rapier bounces each point in turn, once, so
+/// the first ones turn the body and the last ones can't undo it: a box
+/// landing flat from 2 studs ended on its side, where Studio's stays within
+/// 2 degrees (docs/behavior/physics/landing.md).
+fn land_as_one(contacts: &mut Vec<SolverContact>) {
+    let count = contacts.len();
+    if count < 2
+        || contacts
+            .iter()
+            .any(|c| c.contact_id[0] & NEW_CONTACT_BIT == 0)
+    {
+        return;
+    }
+    let mut one = contacts[0];
+    let share = 1.0 / count as f32;
+    one.anchor1 = contacts.iter().map(|c| c.anchor1).sum::<Vector>() * share;
+    one.anchor2 = contacts.iter().map(|c| c.anchor2).sum::<Vector>() * share;
+    one.dist = contacts.iter().map(|c| c.dist).fold(f32::MAX, f32::min);
+    contacts.clear();
+    contacts.push(one);
+}
+
 /// Sets each contact's friction and elasticity to the two parts' values
 /// averaged by their weights (measured in Studio), and makes anchored parts
 /// with a velocity carry what touches them along.
@@ -69,6 +93,9 @@ impl PhysicsHooks for Mixer {
         if let Some(m) = context.rigid_mut() {
             *m.friction = mix(f1, fw1, f2, fw2);
             *m.restitution = mix(e1, ew1, e2, ew2);
+            if *m.restitution > 0.0 {
+                land_as_one(m.solver_contacts);
+            }
             if belt != Vector::ZERO {
                 let n = *m.normal;
                 let tangent = belt - n * belt.dot(n);

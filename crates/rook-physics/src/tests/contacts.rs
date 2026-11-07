@@ -388,3 +388,30 @@ fn static_parts_have_no_body() {
     assert!(physics.world.colliders[collider].parent().is_none());
     assert!(physics.world.bodies[physics.shared].colliders().is_empty());
 }
+
+/// Measured: boxes dropped flat from 0.5 to 30 studs lean at most 1.6
+/// degrees. Bounced one point at a time, one from 2 studs ended on its side.
+#[test]
+fn a_box_dropped_flat_lands_flat() {
+    for (size, height) in [
+        (Vec3::new(2.0, 2.0, 1.0), 2.0),
+        (Vec3::new(2.0, 2.0, 1.0), 6.0),
+        (Vec3::new(4.0, 1.0, 4.0), 2.0),
+        (Vec3::splat(2.0), 2.0),
+    ] {
+        let mut dom = Dom::new();
+        floor(&mut dom);
+        let start = Vec3::new(0.0, 0.5 + size.y / 2.0 + height, 0.0);
+        let b = part(&mut dom, start, size, false);
+        let mut physics = Physics::new();
+        let mut most = 0f32;
+        for _ in 0..240 {
+            physics.sync(&mut dom);
+            physics.step(1.0 / 60.0);
+            physics.write_back(&mut dom);
+            let up = dom.cframe_property(b, "CFrame").unwrap().up_vector().0;
+            most = most.max(up.angle_between(Vec3::Y).to_degrees());
+        }
+        assert!(most < 2.0, "{size} from {height} leaned {most} degrees");
+    }
+}

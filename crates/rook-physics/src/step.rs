@@ -50,6 +50,7 @@ impl Physics {
             }
             self.world.step_with_events(&contacts::Mixer, &events);
             self.keep_accelerating_awake(h);
+            self.notice_flight(h);
             self.update_humanoids(h);
         }
         let far = self.playback.far_ones().next().is_some();
@@ -74,6 +75,37 @@ impl Physics {
         let parts = &self.parts;
         self.touch
             .record(events.take(), &self.colliders, |p| parts.contains_key(&p));
+    }
+
+    /// Keep [`Physics::flying`]: the bodies only gravity moved over the step
+    /// just taken. A body on anything feels its push too, so one at rest or
+    /// driving along costs nothing here, and keeps Rapier's contact reuse.
+    fn notice_flight(&mut self, h: f32) {
+        let bodies = &self.world.bodies;
+        self.flying.retain(|&b| bodies.get(b).is_some());
+        let fall = self.world.gravity * h;
+        for i in 0..self.before_step.len() {
+            let (handle, v, _) = self.before_step[i];
+            let Some(rb) = self.world.bodies.get(handle) else {
+                continue;
+            };
+            let felt = rb.linvel() - v - fall * rb.gravity_scale();
+            // Humanoids' controllers take over the gravity of those they hold.
+            let falls = rb.is_dynamic() && rb.gravity_scale() > 0.0;
+            let flying = falls && felt.length() < fall.length() * 0.1;
+            if flying == self.flying.contains(&handle) {
+                continue;
+            }
+            let colliders = rb.colliders().to_vec();
+            if flying {
+                self.flying.insert(handle);
+            } else {
+                self.flying.remove(&handle);
+            }
+            for c in colliders {
+                self.set_hooks(c);
+            }
+        }
     }
 
     /// Restart the sleep timer of each body that sped up or slowed down

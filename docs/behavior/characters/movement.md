@@ -1,6 +1,6 @@
 # Humanoid movement and states
 
-Checked against Studio 0.744 on 2026-10-26.
+Checked against Studio 0.745 on 2026-11-06.
 
 How a Humanoid stands, walks, jumps, climbs and swims, and its state
 machine: `rook_physics::humanoid` (the controller) and `rook_lua`'s
@@ -95,6 +95,22 @@ Workspace gravity 196.2. R6 steps were measured on a body from
 - `PlatformStand` goes to PlatformStanding and back to Running; `Sit`
   goes to Seated, and a jump from it goes straight to Running with `Sit`
   false.
+- Seated leaves the body to physics, with or without a seat, and senses
+  nothing: `FloorMaterial` reads Air. `Sit = true` on the floor drops an
+  R6 or R15 character from root height 3 to 1 in about 0.25 s, onto what
+  collides (R6's Torso, R15's root); it doesn't walk to a `MoveTo` or turn
+  to the camera. Left alone it stays up only because that box sits flat:
+  leaned 20 degrees it rocks back, and from 40 to 100 degrees R6 ends on
+  its side at 90, staying Seated. Set 80 degrees in the air, R15 landed
+  upside down and stayed there. Measured 2026-11-06.
+- An unanchored 4 x 1 x 4 Seat tilted 20 degrees about X with an R6 or
+  R15 sitter falls from y 12 at gravity, lands flat at y 0.5 within about
+  0.8 s and stays Seated. About Z with R6 it tips over and rests on its
+  edge at y 2.05, tilt 105.9; with R15 it lands flat. A default
+  4 x 1.2 x 2 Seat tips over on landing, its sitter's weight off to one
+  side. Jumping off one lying over goes to FallingDown
+  (Seated, Running, FallingDown, as a body leaning past 45 degrees does);
+  from the floor, the root rises to standing height in about 0.1 s.
 - `ChangeState(FallingDown)` goes on to GettingUp after 3.0 s, and `Ragdoll`
   after 0.02 s; GettingUp goes on to Running after 0.05 s, or once it has
   risen from upside down (Approximation: Rook also waits for the root to
@@ -123,12 +139,17 @@ Workspace gravity 196.2. R6 steps were measured on a body from
   (stiffness 2450, damping 80); it pulls down as well as up, so a
   character walking off a step lower than 2.5 studs follows it down.
 - While the controller holds a body upright it locks its tilt and applies
-  gravity itself; FallingDown, Ragdoll, PlatformStanding, Physics and Dead
-  leave the body to physics. A body that becomes upright again is stood
+  gravity itself; FallingDown, Ragdoll, PlatformStanding, Seated, Physics
+  and Dead leave the body to physics, so a vehicle pitches and falls with
+  its driver. A body that becomes upright again is stood
   up the same way as any other that leans: it closes on upright at about
   85 per second, at most about 2,000 degrees a second (measured: 20 degrees
-  to 5 and 40 to 12 in a 60 Hz frame), about its root part. Seated leans as
-  its seat does (measured on 30 and 60 degrees).
+  to 5 and 40 to 12 in a 60 Hz frame), about its root part. Seated isn't stood
+  up: it leans as its seat does (measured on 30 and 60 degrees).
+- Approximation: the same Seat tilted about Z with R6 matches (y 2.06,
+  tilt 105.9), but about X it tips over at y 2.03, tilt 113.2, where
+  Studio lands flat. Mass and center of mass match Studio's; how much
+  spin the edge's bounce gives differs.
 - Lean past 45 degrees while Running falls down (measured: it rights itself
   from 45, falls from 46, about X or Z alike). In the air it rights itself
   from 60. Approximation: what leans a body here is a script or a seat, as
@@ -141,8 +162,7 @@ Workspace gravity 196.2. R6 steps were measured on a body from
 - Swimming starts when the root's center is in a voxel of water (or a
   solid voxel's water), and floats toward 0.45 under the surface.
 - Approximations: Landed is taken within 0.5 studs of standing height
-  (Studio landed at 0.23, not at 0.88); Seated stands in place until seats exist (M9's
-  seats step); Flying holds height and steers as in the air;
+  (Studio landed at 0.23, not at 0.88); Flying holds height and steers as in the air;
   RunningNoPhysics and StrafingNoPhysics act as Running.
 - Events: `StateChanged(old, new)`; `Jumping`, `FreeFalling`,
   `FallingDown`, `GettingUp`, `Ragdoll`, `PlatformStanding` and `Seated`

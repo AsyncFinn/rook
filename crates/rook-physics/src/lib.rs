@@ -192,6 +192,9 @@ pub struct Physics {
     /// The awake bodies' velocities before the step under way (linear,
     /// angular), to tell how fast each accelerates.
     before_step: Vec<(RigidBodyHandle, glam::Vec3, glam::Vec3)>,
+    /// Bodies gravity alone moved over the last step, about to land if
+    /// they land at all: only these pay for [`contacts::Mixer`].
+    flying: FxHashSet<RigidBodyHandle>,
     /// Which part each collider belongs to.
     pub(crate) colliders: FxHashMap<ColliderHandle, InstanceId>,
     groups: CollisionGroups,
@@ -299,6 +302,7 @@ impl Physics {
             before_last_step: FxHashMap::default(),
             awake: Vec::new(),
             before_step: Vec::new(),
+            flying: FxHashSet::default(),
             colliders: FxHashMap::default(),
             groups: CollisionGroups::default(),
             touches_use_groups: false,

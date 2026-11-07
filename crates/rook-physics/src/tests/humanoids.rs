@@ -201,3 +201,115 @@ fn leaning_past_45_degrees_falls_down_and_gets_up() {
     let lean = lean(&dom, drive.root);
     assert!(lean < 0.1, "still leaning {lean} degrees");
 }
+
+/// An unanchored 4 × 1 × 4 Seat at height `at`, tilted `degrees` about X,
+/// with a sitter welded on as a SeatWeld holds one.
+fn loose_seat(dom: &mut Dom, physics: &mut Physics, at: f32, degrees: f32) -> (InstanceId, Drive) {
+    let mut drive = standing(dom, physics);
+    let at = Vec3::new(0.0, at, 0.0);
+    let seat = part_of(dom, "Seat", at, Vec3::new(4.0, 1.0, 4.0), false);
+    let tilted = glam::Mat3::from_rotation_x(degrees.to_radians());
+    let mut cf = CFrame::from_position(at);
+    cf.rotation = tilted;
+    set(dom, seat, "CFrame", Value::CFrame(cf));
+    let above = CFrame::from_position(Vec3::new(0.0, 2.0, 0.0));
+    set(dom, drive.root, "CanCollide", Value::Bool(false));
+    set(dom, drive.root, "CFrame", Value::CFrame(cf * above));
+    child(
+        dom,
+        "Weld",
+        seat,
+        &[
+            ("Part0", Value::Ref(Some(seat.to_ref()))),
+            ("Part1", Value::Ref(Some(drive.root.to_ref()))),
+            ("C0", Value::CFrame(above)),
+        ],
+    );
+    drive.sit = true;
+    (seat, drive)
+}
+
+/// Measured: a sitter leaves its loose seat to physics: it falls from 12
+/// at gravity and the ground, not the Humanoid, decides how it lies, still
+/// Seated. Held upright it kept its 20 degrees and stood on its legs.
+#[test]
+fn a_loose_seat_falls_and_pitches_with_its_sitter() {
+    let mut dom = Dom::new();
+    let mut physics = Physics::new();
+    let (seat, drive) = loose_seat(&mut dom, &mut physics, 12.0, 20.0);
+    frames(&mut dom, &mut physics, &drive, 12);
+    let tilted = lean(&dom, seat);
+    assert!((tilted - 20.0).abs() < 0.5, "tilted {tilted} degrees");
+    let fallen = 12.0 - position(&dom, seat).y;
+    let gravity = 196.2 * 0.2f32.powi(2) / 2.0;
+    assert!((fallen - gravity).abs() < 0.5, "fell {fallen} studs");
+    frames(&mut dom, &mut physics, &drive, 120);
+    let tilt = lean(&dom, seat);
+    assert!((tilt - 20.0).abs() > 5.0, "still tilted {tilt} degrees");
+    assert!(position(&dom, seat).y < 5.0, "never landed");
+    assert_eq!(physics.humanoid_state(drive.humanoid), Some(State::Seated));
+}
+
+/// Measured: FloorMaterial reads Air on a seat, with a floor within the
+/// legs' reach under it.
+#[test]
+fn a_sitter_feels_no_floor() {
+    let mut dom = Dom::new();
+    let mut physics = Physics::new();
+    let (_, drive) = loose_seat(&mut dom, &mut physics, 1.0, 0.0);
+    frames(&mut dom, &mut physics, &drive, 30);
+    assert_eq!(physics.humanoid_state(drive.humanoid), Some(State::Seated));
+    let report = physics.humanoid_reports(&dom).remove(0);
+    assert_eq!(report.floor_material, None);
+}
+
+/// Measured with no seat at all: the legs let go, it drops onto its root
+/// and stays up only because that box sits flat, feeling no floor.
+#[test]
+fn sitting_on_the_floor_drops_onto_the_root() {
+    let mut dom = Dom::new();
+    let mut physics = Physics::new();
+    let mut drive = standing(&mut dom, &mut physics);
+    drive.sit = true;
+    frames(&mut dom, &mut physics, &drive, 60);
+    assert_eq!(physics.humanoid_state(drive.humanoid), Some(State::Seated));
+    let height = position(&dom, drive.root).y;
+    assert!((height - 1.5).abs() < 0.05, "root at {height}");
+    let lean = lean(&dom, drive.root);
+    assert!(lean < 0.1, "leaning {lean} degrees");
+    let report = physics.humanoid_reports(&dom).remove(0);
+    assert_eq!(report.floor_material, None);
+}
+
+/// Measured: leaned past where its box tips, a sitter lies where it falls,
+/// still Seated.
+#[test]
+fn a_sitter_leaned_too_far_lies_down() {
+    let mut dom = Dom::new();
+    let mut physics = Physics::new();
+    let mut drive = standing(&mut dom, &mut physics);
+    drive.sit = true;
+    frames(&mut dom, &mut physics, &drive, 60);
+    lean_over(&mut dom, drive.root, 60.0);
+    frames(&mut dom, &mut physics, &drive, 90);
+    let lean = lean(&dom, drive.root);
+    assert!((lean - 90.0).abs() < 1.0, "leaning {lean} degrees");
+    assert_eq!(physics.humanoid_state(drive.humanoid), Some(State::Seated));
+}
+
+/// Measured: leaving a sit, the root rises from the floor to standing
+/// height in about 0.1 s. Its bottom lies on the floor, where a ray from
+/// there feels nothing.
+#[test]
+fn leaving_a_sit_stands_back_up() {
+    let mut dom = Dom::new();
+    let mut physics = Physics::new();
+    let mut drive = standing(&mut dom, &mut physics);
+    drive.sit = true;
+    frames(&mut dom, &mut physics, &drive, 60);
+    drive.sit = false;
+    frames(&mut dom, &mut physics, &drive, 12);
+    assert_eq!(physics.humanoid_state(drive.humanoid), Some(State::Running));
+    let height = position(&dom, drive.root).y;
+    assert!((height - 3.5).abs() < 0.05, "root at {height}");
+}

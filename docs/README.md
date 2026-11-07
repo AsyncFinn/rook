@@ -63,6 +63,7 @@
     - [Movers](behavior/physics/movers.md): BodyMovers and force constraints
     - [Scene queries](behavior/physics/queries.md)
     - [Collision shapes](behavior/physics/collision-shapes.md): what MeshParts and unions collide, are queried and weigh as
+    - [Landing](behavior/physics/landing.md): parts dropped flat stay flat
     - [Sleeping](behavior/physics/sleeping.md): when assemblies sleep, how deep resting parts sit
     - [Timestepping](behavior/physics/timestepping.md): which assemblies Roblox steps at 240, 120 or 60 Hz
     - [NaN and infinite values](behavior/physics/nan-and-infinite-values.md): what parts make of them

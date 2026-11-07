@@ -210,12 +210,6 @@ fn turns(state: State) -> bool {
     state.upright() && state != State::Climbing
 }
 
-/// States in which a held body rights itself: all of them but Seated, which
-/// leans as its seat does (measured: 60 degrees on a 60-degree seat).
-pub(super) fn rights_itself(state: State) -> bool {
-    state.upright() && state != State::Seated
-}
-
 /// `pose` turned by `spin` about its root part, `offset` into it, which
 /// stays put.
 fn turned_about(pose: &Pose, offset: CFrame, spin: glam::Quat) -> Pose {

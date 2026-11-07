@@ -10,7 +10,7 @@ const COYOTE: f32 = 0.1;
 
 /// Freefall lands once the root is within this of standing height
 /// (Inference: Studio landed at 0.23 studs above and not at 0.88).
-const LANDING: f32 = 0.5;
+pub(super) const LANDING: f32 = 0.5;
 
 /// Landed lasts two frames (measured).
 const LANDED_TIME: f32 = 0.03;
@@ -163,6 +163,7 @@ impl Physics {
             return;
         }
         c.changes.push((c.state, next));
+        c.rising = c.state == State::Seated;
         c.state = next;
         c.time = 0.0;
         c.unsupported = 0.0;

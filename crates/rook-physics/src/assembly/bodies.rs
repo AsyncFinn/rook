@@ -372,7 +372,7 @@ impl Physics {
 
     /// Turn [`contacts::Mixer`] on for a collider only where it changes
     /// the result.
-    fn set_hooks(&mut self, collider: ColliderHandle) {
+    pub(crate) fn set_hooks(&mut self, collider: ColliderHandle) {
         let Some(c) = self.world.colliders.get(collider) else {
             return;
         };
@@ -380,7 +380,12 @@ impl Physics {
             .parent()
             .and_then(|b| self.world.bodies.get(b))
             .map_or(0, |rb| rb.user_data);
-        let hooks = contacts::hooks_for(c.user_data, body);
+        let flying = c.parent().is_some_and(|b| self.flying.contains(&b));
+        let hooks = if flying {
+            ActiveHooks::MODIFY_SOLVER_CONTACTS
+        } else {
+            contacts::hooks_for(c.user_data, body)
+        };
         if let Some(c) = self.world.colliders.get_mut(collider) {
             c.set_active_hooks(hooks);
         }

@@ -582,3 +582,60 @@ fn a_144_hz_client_draws_its_character_moving_evenly() {
         assert!((steps - steps.round()).abs() < 0.01, "{steps} steps");
     }
 }
+
+/// Measured on an R6 rig: Sit drops it onto its Torso, where it stays up,
+/// and it stands back up from there.
+#[test]
+fn a_sitting_rig_stays_up_and_stands_again() {
+    let local = r#"h.Sit = true
+        frames(60)
+        print(string.format("sat %.1f %.2f %s %s", r.Position.Y, r.CFrame.UpVector.Y,
+            h:GetState().Name, h.FloorMaterial.Name))
+        h.Sit = false
+        frames(12)
+        print(string.format("stood %.1f %s", r.Position.Y, h:GetState().Name))"#;
+    let out = drive("", "CFrame.new(0, 3, 0)", local, 2.0);
+    assert!(
+        out.iter().any(|l| l == "sat 1.0 1.00 Seated Air"),
+        "{out:?}"
+    );
+    assert!(out.iter().any(|l| l == "stood 3.0 Running"), "{out:?}");
+}
+
+/// Measured on an R6 rig with a SeatWeld: a 4 x 1 x 4 Seat tilted 20 degrees
+/// about Z falls from 12 and rests on its edge at y 2.05, tilt 105.9, Seated.
+#[test]
+fn a_loose_seat_tips_over_as_in_studio() {
+    let local = r#"workspace:FindFirstChildOfClass("Part").Material = Enum.Material.Concrete
+        local s = Instance.new("Seat")
+        s.Size = Vector3.new(4, 1, 4)
+        s.CFrame = CFrame.new(0, 12, 0) * CFrame.Angles(0, 0, math.rad(20))
+        s.Anchored = true
+        s.Parent = workspace
+        c:PivotTo(s.CFrame * CFrame.new(0, 2, 0))
+        local w = Instance.new("Weld")
+        w.Part0 = s
+        w.Part1 = r
+        w.C0 = CFrame.new(0, 0.5, 0)
+        w.C1 = CFrame.new(0, -1.5, 0)
+        w.Parent = s
+        h.Sit = true
+        frames(2)
+        s.Anchored = false
+        frames(120)
+        print(string.format("rest %.2f %.1f %s", s.Position.Y,
+            math.deg(math.acos(s.CFrame.UpVector.Y)), h:GetState().Name))"#;
+    let out = drive("", "CFrame.new(0, 3, 0)", local, 3.0);
+    let line = out
+        .iter()
+        .find(|l| l.starts_with("rest "))
+        .expect("printed");
+    let mut words = line.split(' ').skip(1);
+    let y: f32 = words.next().unwrap().parse().unwrap();
+    let tilt: f32 = words.next().unwrap().parse().unwrap();
+    assert!(
+        (y - 2.05).abs() < 0.1 && (tilt - 105.9).abs() < 3.0,
+        "{line}"
+    );
+    assert_eq!(words.next(), Some("Seated"), "{line}");
+}

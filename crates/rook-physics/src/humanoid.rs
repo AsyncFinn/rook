@@ -94,13 +94,16 @@ impl State {
     }
 
     /// States the controller keeps upright; the rest leave the body to
-    /// physics.
+    /// physics. Seated is one of those (measured: gravity takes it, with or
+    /// without a seat; it leans as its seat does, 60 degrees on a 60-degree
+    /// seat, and a loose seat falls and lands with its sitter).
     fn upright(self) -> bool {
         !matches!(
             self,
             State::FallingDown
                 | State::Ragdoll
                 | State::PlatformStanding
+                | State::Seated
                 | State::Physics
                 | State::Dead
                 | State::None
@@ -116,7 +119,6 @@ impl State {
                 | State::StrafingNoPhysics
                 | State::Landed
                 | State::GettingUp
-                | State::Seated
         )
     }
 }
@@ -186,6 +188,8 @@ pub(crate) struct Controller {
     water: Option<f32>,
     /// Seconds a jump's lift still holds gravity off.
     lift: f32,
+    /// It left Seated and its root hasn't reached standing height yet.
+    rising: bool,
     /// A script's ChangeState, applied at the next step.
     requested: Option<State>,
     changes: Vec<(State, State)>,
@@ -204,6 +208,7 @@ impl Controller {
             climb: None,
             water: None,
             lift: 0.0,
+            rising: false,
             requested: None,
             changes: Vec::new(),
             clear_jump: false,
@@ -360,7 +365,7 @@ impl Physics {
                 }
                 // After the states, which see how far it leaned before
                 // righting takes any of that back.
-                if motion::rights_itself(c.state) {
+                if c.state.upright() {
                     self.right(&r, dt);
                 }
             }
@@ -368,10 +373,20 @@ impl Physics {
         self.controllers = controllers;
     }
 
-    /// Sense the floor, a truss or ladder ahead and water.
+    /// Sense the floor, a truss or ladder ahead and water. Seated feels
+    /// none of them (measured: FloorMaterial is Air, on a seat or the
+    /// floor).
     fn sense(&self, c: &mut Controller, r: &Rooted) {
+        if c.state == State::Seated {
+            (c.floor, c.climb, c.water) = (None, None, None);
+            return;
+        }
         let root = self.root_pose(r);
         c.floor = self.sense_floor(c, r.body, &root);
+        let height = c.drive.standing_height;
+        c.rising &= c
+            .floor
+            .is_some_and(|f| f.y + height - root.position.y > states::LANDING);
         c.climb = self.sense_climb(c, r.body, &root);
         c.water = self.water_surface(root.position);
     }
