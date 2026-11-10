@@ -186,7 +186,6 @@ impl Target {
         }
     }
 
-    /// Draw `packed` from now on.
     fn set(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, packed: &Packed) {
         self.runs = runs(packed.iter().map(|(_, image)| *image));
         if packed.is_empty() {

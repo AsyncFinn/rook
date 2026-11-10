@@ -20,7 +20,6 @@ mod text;
 use crate::world::World;
 pub(crate) use mouse::copy_icon;
 
-/// A part's CFrame.
 pub(crate) fn cframe(w: &World, id: InstanceId) -> CFrame {
     w.dom
         .cframe_property(id, "CFrame")
@@ -157,7 +156,6 @@ pub(crate) fn content_value(url: &str) -> Value {
     Value::Content(rook_types::Content::from_uri(url))
 }
 
-/// A TextLabel, TextButton or TextBox.
 fn is_text_object(w: &World, id: InstanceId) -> bool {
     matches!(w.dom.class_name(id), "TextLabel" | "TextButton" | "TextBox")
 }

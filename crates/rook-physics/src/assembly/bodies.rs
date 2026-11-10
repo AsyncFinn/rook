@@ -1,8 +1,5 @@
-//! Assemblies as Rapier bodies and their colliders.
-
 use crate::*;
 
-/// One assembly in the Rapier world.
 #[derive(Debug)]
 pub(crate) struct Body {
     pub(crate) asm: Assembly,
@@ -15,7 +12,6 @@ pub(crate) struct Body {
     pub(crate) remote: bool,
 }
 
-/// Where a part's assembly lives.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Home {
     Body(RigidBodyHandle),
@@ -31,14 +27,12 @@ pub(crate) struct Static {
     pub(crate) cframe: CFrame,
 }
 
-/// A box's mass properties, of this size and mass.
 fn box_mass(size: glam::Vec3, mass: f32) -> MassProperties {
     let size = size.max(glam::Vec3::splat(shape::MIN_PART_SIZE));
     let density = mass / (size.x * size.y * size.z);
     MassProperties::from_cuboid(density, size * 0.5)
 }
 
-/// A saved shape's mass properties at this mass.
 fn saved_mass(saved: &rook_types::SavedMass, mass: f32) -> MassProperties {
     let density = mass / saved.volume.max(f32::EPSILON);
     let [xx, xy, xz, yy, yz, zz] = saved.inertia.map(|i| i * density);
@@ -484,7 +478,6 @@ impl Physics {
         (solver, collision)
     }
 
-    /// A part's body and its pose in it.
     pub(crate) fn frame_of(&self, part: InstanceId) -> Option<(RigidBodyHandle, CFrame)> {
         match *self.parts.get(&part)? {
             Home::Body(h) => Some((h, self.bodies.get(&h)?.asm.offset_of(part)?)),

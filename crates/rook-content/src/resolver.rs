@@ -48,14 +48,12 @@ pub struct Resolver {
     install: Option<Install>,
     /// Roblox's packages, asked before the install.
     packages: Option<Arc<Packages>>,
-    /// Whether a package a path needs may be downloaded.
     download_packages: bool,
     folders: Vec<PathBuf>,
     /// The user's file for each asset id they replace ([`overrides`]).
     overrides: FxHashMap<u64, PathBuf>,
     delivery: Option<Delivery>,
     cache: Option<Cache>,
-    /// Content kept for good ([`kept`]).
     kept: Option<Cache>,
     /// Failures this run that the disk cache doesn't keep (network errors,
     /// asset delivery being off), so they aren't retried every request.
@@ -103,7 +101,6 @@ impl Resolver {
         }
     }
 
-    /// The kept content folder ([`kept`]).
     pub fn kept(&self) -> Option<&Cache> {
         self.kept.as_ref()
     }
@@ -116,7 +113,6 @@ impl Resolver {
         self.packages.as_deref()
     }
 
-    /// Whether a package a path needs may be downloaded.
     pub fn downloads_packages(&self) -> bool {
         self.download_packages && self.packages.as_ref().is_some_and(|p| p.downloads())
     }

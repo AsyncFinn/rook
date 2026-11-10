@@ -5,7 +5,6 @@ use harfrust::{ShapeOptions, UnicodeBuffer};
 
 use super::fonts::{Face, FaceId, Fonts};
 
-/// A shaped glyph, before it's put on a line.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct Glyph {
     pub(crate) face: FaceId,
@@ -22,9 +21,7 @@ pub(crate) struct Glyph {
     pub(crate) descent: f32,
     /// Whitespace, where lines may wrap.
     pub(crate) space: bool,
-    /// Which run it came from.
     pub(crate) run: usize,
-    /// The character it starts at in the whole text.
     pub(crate) index: usize,
 }
 

@@ -11,7 +11,6 @@ use serde::Deserialize;
 
 use crate::Database;
 
-/// How much of a class or member Rook implements.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Status {
@@ -66,7 +65,6 @@ pub enum OverlayError {
 }
 
 impl Overlay {
-    /// Rook's built-in overlay.
     pub fn builtin() -> Result<Self, OverlayError> {
         Self::parse(include_str!("../data/overlay.json"))
     }

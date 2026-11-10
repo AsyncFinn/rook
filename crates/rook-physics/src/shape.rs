@@ -1,5 +1,3 @@
-//! Part shapes and their Rapier collider shapes.
-
 pub(crate) mod saved;
 pub(crate) mod terrain;
 
@@ -29,7 +27,6 @@ pub fn workspace_parts(dom: &Dom) -> Vec<InstanceId> {
     parts
 }
 
-/// A part's shape, from its class and `Shape` property.
 pub fn part_shape(dom: &Dom, id: InstanceId) -> PartShape {
     PartShape::of(dom.class_name(id), dom.enum_property(id, "Shape"))
 }

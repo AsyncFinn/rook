@@ -64,7 +64,6 @@ fn changes_follow_the_server() {
     let cm = client.find_first_child(cws, "Model", false).unwrap();
     assert!(client.find_first_child(cm, "Inner", false).is_some());
 
-    // Property changes and renames.
     let inner = server.find_first_child(model, "Inner", false).unwrap();
     server
         .set_property_by_name(inner, "Anchored", Value::Bool(true))

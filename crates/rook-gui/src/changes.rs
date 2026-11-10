@@ -34,7 +34,6 @@ pub(crate) struct Watch {
     places: Vec<PropertyId>,
 }
 
-/// What a change does to GUI.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Touch {
     Nothing,

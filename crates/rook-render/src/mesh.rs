@@ -1,9 +1,5 @@
-//! The draw meshes: each vertex's layout ([`Vertex`]) and the meshes
-//! built for each [`DrawShape`]: unit primitives (extents -0.5..0.5) in
-//! [`shapes`], Rook's own head in [`head`], trusses in [`truss`] and
-//! adornments' shapes in [`adorn`],
-//! scaled by the instance's size in the vertex shader; mesh files,
-//! unions and terrain in [`files`].
+//! The draw meshes. Primitives are unit-sized (extents -0.5..0.5), scaled by
+//! the instance's size in the vertex shader.
 
 mod adorn;
 pub(crate) mod files;

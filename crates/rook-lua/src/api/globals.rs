@@ -80,7 +80,7 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     task.set("defer", api_fn(lua, task_defer)?)?;
     task.set("delay", api_fn(lua, task_delay)?)?;
     task.set("cancel", api_fn(lua, task_cancel)?)?;
-    // One engine thread: parallel phases are no-ops until Actors exist.
+    // One engine thread: the parallel phases have nothing to switch to.
     let noop = lua.create_function(|_, ()| Ok(()))?;
     task.set("synchronize", noop.clone())?;
     task.set("desynchronize", noop)?;

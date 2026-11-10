@@ -1,5 +1,3 @@
-//! Values stored in the property's declared type.
-
 use super::*;
 
 /// Store values in the property's declared type. Files and the database

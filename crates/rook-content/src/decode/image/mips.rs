@@ -1,5 +1,3 @@
-//! Mip chains: each level half the one before, down to 1 × 1.
-
 /// The mip chain of an RGBA8 image of `width` × `height`, starting with
 /// `level0` itself.
 pub fn mips(level0: Vec<u8>, width: u32, height: u32) -> Vec<Vec<u8>> {

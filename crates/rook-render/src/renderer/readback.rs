@@ -1,5 +1,3 @@
-//! Rendering offscreen and reading the pixels back.
-
 use super::*;
 
 impl Renderer {

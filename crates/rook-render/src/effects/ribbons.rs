@@ -132,7 +132,6 @@ impl Ribbons {
     }
 }
 
-/// Put `value` in slot `i` of `list`, growing it as needed.
 fn put<T: Clone>(list: &mut Vec<Option<T>>, i: usize, value: Option<&T>) {
     if list.len() <= i {
         list.resize(i + 1, None);

@@ -1,5 +1,3 @@
-//! One frame: scripts, content, physics.
-
 use super::*;
 
 impl DataModel {

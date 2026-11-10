@@ -1,18 +1,10 @@
-//! Level of detail: far terrain drawn from coarser voxels, in rings
-//! around the camera, as Studio does (`docs/behavior/terrain/detail.md`)
-//! and as clipmaps do (Losasso and Hoppe, "Geometry clipmaps", 2004).
-//!
-//! Each level averages the one before's 2×2×2 blocks ([`pyramid`]).
-//! Level `k` draws a square of columns of its chunks, every chunk in them
-//! however high or low, less the square of level `k - 1`; the last level
-//! draws everything outside. Level 0's square is 4×4 around the camera and
-//! moves only once the camera is more than a chunk (and a little) from its
-//! center; each square after is 6×6 and holds the one inside with at least
-//! one of its own chunks on every side, so no level is ever skipped (as
-//! clipmaps keep a border of each level around the next finer), and moves
-//! only when that one would leave it. Every square sits on the next
-//! level's chunk grid, so crossing a ring re-meshes only the chunks whose
-//! level changed ([`Rings::follow`]).
+//! Level of detail: far terrain drawn from coarser voxels, in rings around
+//! the camera, as Studio does and as clipmaps do (Losasso and Hoppe,
+//! "Geometry clipmaps", 2004). Each level averages the one before's 2×2×2
+//! blocks ([`pyramid`]). The rings' sizes and when they move are in
+//! `docs/behavior/terrain/detail.md#how-rook-does-it`; every square sits on
+//! the next level's chunk grid, so crossing a ring re-meshes only the
+//! chunks whose level changed ([`Rings::follow`]).
 
 use glam::{IVec2, IVec3, Vec3};
 
@@ -37,7 +29,6 @@ const fn width(level: usize) -> i32 {
     if level == 0 { 4 } else { 6 }
 }
 
-/// A chunk's edge in studs at `level`.
 pub fn chunk_studs(level: u8) -> f32 {
     CHUNK_VOXELS as f32 * Detail::at(level).voxel_studs()
 }
@@ -95,7 +86,6 @@ pub struct Rings {
 }
 
 impl Rings {
-    /// The rings around `camera`.
     pub fn around(camera: Vec3) -> Self {
         let mut rings = Rings {
             starts: [IVec2::ZERO; LAST as usize],
@@ -137,7 +127,6 @@ impl Rings {
         }
     }
 
-    /// Whether chunk `chunk` of `level` is drawn at that level.
     pub fn draws(&self, level: u8, chunk: IVec3) -> bool {
         let column = IVec2::new(chunk.x, chunk.z);
         let within = |lo: IVec2, hi: IVec2| column.cmpge(lo).all() && column.cmplt(hi).all();

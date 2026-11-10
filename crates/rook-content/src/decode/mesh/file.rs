@@ -33,8 +33,8 @@ pub(super) fn decode(bytes: &[u8]) -> Result<Mesh, MeshError> {
             let (lods, bones) = (head.u16()?, head.u16()?);
             head.skip(6)?; // Bone names' length, subset count.
             let high_quality = head.u8()?;
-            // Each vertex's bone weights follow the vertices when the
-            // file has bones; they aren't drawn yet.
+            // Each vertex's bone weights follow the vertices when the file has
+            // bones.
             let skin = if bones > 0 { 8 } else { 0 };
             let mut out = Mesh::default();
             read_vertices(&mut r, vertices, 40, &mut out)?;

@@ -8,7 +8,6 @@ use rook_types::{GuiQuad, GuiShape, Paint};
 use super::gradient;
 use crate::layout::Placed;
 
-/// `id`'s first enabled UIStroke.
 fn find(dom: &Dom, id: InstanceId) -> Option<InstanceId> {
     (dom.children(id).iter().copied()).find(|&c| {
         dom.class_name(c) == "UIStroke" && dom.bool_property(c, "Enabled") != Some(false)

@@ -1,6 +1,3 @@
-//! UISizeConstraint and UIAspectRatioConstraint, on a GUI object or on a
-//! UIGridLayout (whose cells they hold).
-
 use glam::Vec2;
 use rook_dom::{Dom, InstanceId};
 
@@ -61,7 +58,6 @@ fn aspect(dom: &Dom, c: InstanceId, size: Vec2, parent: Vec2) -> Vec2 {
     fit(ratio, size)
 }
 
-/// The largest width / height = `ratio` inside `bounds`.
 fn fit(ratio: f32, bounds: Vec2) -> Vec2 {
     if bounds.y > 0.0 && bounds.x / bounds.y > ratio {
         Vec2::new(bounds.y * ratio, bounds.y)

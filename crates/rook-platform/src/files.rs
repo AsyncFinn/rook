@@ -1,11 +1,8 @@
-//! Files: settings, logs, crash reports and the console's history.
-
 use std::fmt::Debug;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-/// One thing in a folder.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Entry {
     pub path: PathBuf,
@@ -34,14 +31,12 @@ pub trait Files: Send + Sync + Debug {
 }
 
 impl dyn Files {
-    /// A UTF-8 file, as `std::fs::read_to_string` reads it.
     pub fn read_to_string(&self, path: &Path) -> io::Result<String> {
         String::from_utf8(self.read(path)?)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
     }
 }
 
-/// The machine's own file system.
 #[cfg(feature = "native")]
 #[derive(Debug)]
 pub struct NativeFiles;

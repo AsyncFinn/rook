@@ -196,7 +196,7 @@ hover images in `draw/frame.rs` and `draw/image.rs`, the caret in
   bigger with its pixels blended (bilinear): rebuilt that way it
   differs from the capture by 9 levels of 255 on average, mostly where
   the capture's background shows through. Rook keeps those cells
-  (`crates/rook-view/src/cursor/hand.rs`) and draws them the same way.
+  (`crates/rook-scene/src/cursor/hand.rs`) and draws them the same way.
   That it points from the fingertip's top is Inference. How it looks on
   macOS isn't known: no capture of a Mac player over a ClickDetector
   was found.

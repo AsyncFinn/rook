@@ -1,5 +1,3 @@
-//! Property values ↔ Lua values.
-
 use mlua::{Lua, Value as LuaValue};
 use rbx_types::VariantType;
 use rook_dom::InstanceId;
@@ -14,12 +12,10 @@ use crate::types::{
     Opaque, enums,
 };
 
-/// Luau's native `vector` → `Vector3`.
 pub(crate) fn from_lua_vector(v: mlua::Vector) -> rook_types::Vector3 {
     rook_types::Vector3::new(v.x(), v.y(), v.z())
 }
 
-/// `Vector3` → Luau's native `vector`.
 pub(crate) fn lua_vector(v: rook_types::Vector3) -> mlua::Vector {
     mlua::Vector::new(v.x(), v.y(), v.z())
 }

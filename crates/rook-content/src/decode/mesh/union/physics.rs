@@ -22,7 +22,6 @@ pub fn has_geometry(bytes: &[u8]) -> bool {
     bytes.starts_with(b"CSGPHS")
 }
 
-/// Whether `bytes` are a block.
 pub fn is_block(bytes: &[u8]) -> bool {
     bytes == BLOCK
 }
@@ -78,7 +77,6 @@ pub fn decode_asset(bytes: &[u8]) -> Result<Option<SavedCollision>, MeshError> {
         .transpose()
 }
 
-/// Decode a physics blob.
 pub fn decode(bytes: &[u8]) -> Result<SavedCollision, MeshError> {
     let damaged = |what: &str| MeshError::Damaged(format!("the union's PhysicsData {what}"));
     if !has_geometry(bytes) {

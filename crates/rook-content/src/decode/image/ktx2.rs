@@ -22,7 +22,6 @@ const VK_BC3_SRGB: u32 = 138;
 const SUPERCOMPRESSION_NONE: u32 = 0;
 const SUPERCOMPRESSION_ZSTD: u32 = 2;
 
-/// The fixed part of a KTX2 file's header.
 #[derive(Debug, Clone, Copy)]
 struct Header {
     vk_format: u32,

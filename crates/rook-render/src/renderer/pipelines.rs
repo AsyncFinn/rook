@@ -1,5 +1,3 @@
-//! The render pipelines and the shader they share.
-
 use wesl_core::include_wesl;
 
 use super::*;
@@ -387,9 +385,8 @@ impl Pipelines {
             // Roblox, instead of fighting it. Two faces in one plane differ
             // by rounding: a few depth steps, and on a slope at most the
             // depth across 1/128 pixel (each face's corners snap to 1/256
-            // pixel). A slope term of a whole pixel lifted a floor's
-            // Texture through a grating 0.05 studs above it once the floor
-            // was seen at a low angle.
+            // pixel); more lifts an image through a part just above it
+            // where its face is seen at a low angle.
             wgpu::DepthBiasState {
                 constant: 4,
                 slope_scale: 1.0 / 32.0,

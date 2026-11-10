@@ -8,7 +8,6 @@
 
 use rook_types::Value;
 
-/// Studio's default for `class.property` in a running game.
 pub(super) fn measured(class: &str, property: &str) -> Option<Value> {
     Some(match class {
         "AdGui" => match property {

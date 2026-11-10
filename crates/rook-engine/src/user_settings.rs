@@ -54,7 +54,6 @@ pub enum Pacing {
 }
 
 impl Pacing {
-    /// A `FramerateCap` value's pacing.
     pub fn from_cap(cap: i32) -> Self {
         match u32::try_from(cap) {
             Err(_) => Self::Display,
@@ -106,7 +105,6 @@ impl PlayerSettings {
     }
 }
 
-/// A client's settings and where they are saved.
 #[derive(Debug)]
 pub(crate) struct Kept {
     path: PathBuf,

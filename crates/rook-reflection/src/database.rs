@@ -15,7 +15,6 @@ pub struct PropertyId(pub u32);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct EnumId(pub u16);
 
-/// Class tags from the API dump.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ClassFlags {
     pub deprecated: bool,
@@ -28,7 +27,6 @@ pub struct ClassFlags {
     pub user_settings: bool,
 }
 
-/// Property tags from the API dump.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct PropertyFlags {
     pub deprecated: bool,
@@ -214,7 +212,6 @@ impl Database {
             });
         }
 
-        // Inherited property lists and lookups.
         for i in 0..classes.len() {
             let mut chain = Vec::new();
             let mut cur = Some(classes[i].id);
@@ -308,7 +305,6 @@ impl Database {
         }
     }
 
-    /// The default value of a property for a concrete class, if the database has one.
     pub fn default_value(&self, class: ClassId, property: PropertyId) -> Option<&'static Variant> {
         self.class(class).defaults.get(&property).copied()
     }

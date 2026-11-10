@@ -16,7 +16,6 @@ const NOTCH: f32 = 100.0;
 /// frame. Inference: it lands once less than a pixel is left.
 const EASE_LEFT: f32 = 0.659;
 
-/// A wheel scroll on its way to `target`.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Eased {
     target: Vec2,

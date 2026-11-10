@@ -15,55 +15,25 @@
 //! terminal shows a `> ` prompt that runs Luau in the open place.
 
 mod alert;
-mod app;
-mod bench;
-mod counters;
-mod game;
-mod record;
-mod render_thread;
-mod server;
-mod stats;
 
-use rustc_hash::FxHashSet;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
 
-use anyhow::Context;
 use clap::Parser;
-use game::Game;
-use glam::{EulerRot, Mat3, Vec3};
+use glam::Vec3;
+use rook_client::window::winit::event_loop::EventLoop;
+use rook_client::{Bench, Game, Setup, Start, place_name};
 use rook_content::Resolver;
-use rook_engine::user_settings::{Pacing, PlayerSettings};
-use rook_engine::{InputEvent, MouseLock, console, settings};
+use rook_engine::{console, settings};
 use rook_lua::MessageType;
-use rook_render::{Camera, Renderer};
-use rook_types::{CFrame, Value};
-use rook_view::{SceneCache, ToRender};
-
-use app::camera::*;
-use app::launch::*;
-use app::readout::*;
-use app::*;
-use bench::*;
-use render_thread::RenderThread;
-use rook_view::Installed;
+use rook_scene::Installed;
 
 /// The system allocator on Windows is slow for blocks of tens of
 /// kilobytes once a big place has made its heap large (a fraction of a
 /// millisecond each): mimalloc keeps the frame's allocations cheap.
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
-
-/// Simulation step: 60 Hz, like Roblox's frame-based scheduler.
-const STEP: f64 = 1.0 / 60.0;
-use winit::application::ApplicationHandler;
-use winit::dpi::{PhysicalPosition, PhysicalSize};
-use winit::event::{DeviceEvent, DeviceId, WindowEvent};
-use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
-use winit::keyboard::KeyCode;
-use winit::window::{CursorGrabMode, CursorIcon, Window, WindowId};
 
 #[derive(Debug, Parser)]
 #[command(name = "rook-player", version, about = "Open a Roblox place in Rook")]
@@ -168,6 +138,30 @@ impl Args {
     fn frame_times(&self) -> bool {
         settings::FRAME_TIMES.switch(self.frame_times.then_some(true)) == Some(true)
     }
+
+    fn start(&self) -> Start {
+        Start {
+            width: self.width,
+            height: self.height,
+            camera: self.camera,
+            look_at: self.look_at,
+            fov: self.fov,
+            seconds: self.seconds,
+            clicks: self.click.clone(),
+        }
+    }
+
+    fn window(&self) -> rook_client::window::Options {
+        rook_client::window::Options {
+            place: self.place.clone(),
+            start: self.start(),
+            framerate_cap: self.framerate_cap(),
+            frame_times: self.frame_times(),
+            volume: self.volume,
+            #[cfg(feature = "repl")]
+            repl: !self.no_repl,
+        }
+    }
 }
 
 fn parse_vec3(s: &str) -> Result<Vec3, String> {
@@ -179,82 +173,6 @@ fn parse_vec3(s: &str) -> Result<Vec3, String> {
         [x, y, z] => Ok(Vec3::new(*x, *y, *z)),
         _ => Err("expected x,y,z".into()),
     }
-}
-
-/// Get a loaded game ready to show: run `--seconds`, pick the camera,
-/// build the scene (files near the camera load first) and say what
-/// loaded.
-fn prepare(game: &mut Game, args: &Args, content: &Arc<Resolver>) -> (SceneCache, Camera) {
-    let load_time = game.load_start.elapsed().as_secs_f64();
-    // GUI lays out in the window it's drawn in.
-    game.set_viewport(args.width, args.height);
-    if args.seconds > 0.0 {
-        game.run_for(args.seconds);
-    }
-    for point in &args.click {
-        for event in point.click() {
-            game.input(event);
-            game.run_for(0.15);
-        }
-    }
-    if !args.click.is_empty() {
-        game.run_for(1.0);
-    }
-    // The camera the place was saved with (clients start with a fresh one).
-    let mut camera = game.saved_camera;
-    if let Some(pos) = args.camera {
-        let target = args.look_at.unwrap_or(pos + camera.forward());
-        camera = Camera {
-            fov_y: camera.fov_y,
-            ..Camera::look_at(pos, target)
-        };
-    } else if let Some(target) = args.look_at {
-        camera = Camera {
-            fov_y: camera.fov_y,
-            ..Camera::look_at(camera.position, target)
-        };
-    } else if let Some(view) = game.view().scripted_camera() {
-        // What the window would show: the game's camera.
-        camera = Camera {
-            position: view.cframe.position,
-            rotation: view.cframe.rotation,
-            fov_y: view.fov,
-            focus: Some(view.focus),
-        };
-    }
-    if let Some(fov) = args.fov {
-        camera.fov_y = fov;
-    }
-    let scene = SceneCache::for_data_model(game.view_mut(), content, camera.position);
-    let name = place_name(&args.place);
-    let terrain = scene.terrain_meshes();
-    let terrain = if terrain > 0 {
-        format!(", terrain in {} meshes", thousands(terrain))
-    } else {
-        String::new()
-    };
-    console::print_message(
-        MessageType::Info,
-        &format!(
-            "Loaded {name} in {load_time:.2} s ({} parts{terrain})",
-            thousands(scene.scene.parts.len() - scene.terrain_meshes())
-        ),
-    );
-    (scene, camera)
-}
-
-/// A place's file name, as the window and messages call it.
-fn place_name(path: &Path) -> String {
-    path.file_name().map_or_else(
-        || path.display().to_string(),
-        |name| name.to_string_lossy().into_owned(),
-    )
-}
-
-/// Put the GPU in the log and in any crash report.
-fn note_gpu(renderer: &Renderer) {
-    rook_engine::logging::set_context("GPU", renderer.gpu().to_owned());
-    tracing::debug!(target: "render", "GPU: {}", renderer.gpu());
 }
 
 fn main() -> ExitCode {
@@ -276,7 +194,7 @@ fn main() -> ExitCode {
     };
     // The error prints inside `run`, which writes out everything printed
     // before it returns.
-    let main = || match play(args) {
+    let main = || match play(&args) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             // Runs that make a file or a measurement come from a terminal
@@ -292,7 +210,7 @@ fn main() -> ExitCode {
     rook_engine::logging::run(main, crashed)
 }
 
-fn play(args: Args) -> anyhow::Result<()> {
+fn play(args: &Args) -> anyhow::Result<()> {
     // Asset delivery is on in the player, which exists to show places;
     // the setting turns it off.
     let content = Arc::new(Resolver::new(settings::content_config(true)));
@@ -302,7 +220,7 @@ fn play(args: Args) -> anyhow::Result<()> {
         None => None,
     };
     let core_scripts = settings::core_scripts(args.core_scripts.then_some(true), &content);
-    let mut setup = game::Setup {
+    let mut setup = Setup {
         play: !args.run,
         content: content.clone(),
         script,
@@ -316,71 +234,36 @@ fn play(args: Args) -> anyhow::Result<()> {
         // The player's settings, which only a window's player changes.
         setup.user_settings =
             rook_engine::data_folder::DataDir::locate().map(|d| d.user_settings());
-        // The place loads while the window opens, hidden until the game
-        // has drawn into it.
-        let loading = game::Loading::begin(&args.place, &setup)
-            .with_context(|| format!("Couldn't open {}", place_name(&args.place)))?;
-        let player = PlayerSettings::load(setup.user_settings.as_deref());
-        let mut launch = Launch::new(args, setup, install, loading, player);
-        let event_loop = EventLoop::new()?;
-        event_loop.set_control_flow(ControlFlow::Poll);
-        event_loop.run_app(&mut launch)?;
-        return launch.finish();
+        return rook_client::window::run(EventLoop::new()?, args.window(), setup, install);
     }
-    let mut game = Game::load(&args.place, &setup)
-        .with_context(|| format!("Couldn't open {}", place_name(&args.place)))?;
+    let name = place_name(&args.place);
+    let mut game =
+        Game::load(&args.place, &setup).map_err(|e| e.context(format!("Couldn't open {name}")))?;
     if let Some(out) = &args.record_audio {
         let seconds = if args.seconds > 0.0 {
             args.seconds
         } else {
             10.0
         };
-        return record::record(&mut game, seconds, out);
+        return rook_client::record(&mut game, seconds, out);
     }
-    let (mut scene, camera) = prepare(&mut game, &args, &content);
+    let start = args.start();
+    let (scene, camera) = rook_client::prepare(&mut game, &start, &content);
 
     if args.crash_test {
         panic!("--crash-test");
     }
 
     if let Some(frames) = args.bench {
-        return bench(&mut game, scene, frames, camera, &args, &install);
+        let how = Bench {
+            turn: args.turn,
+            fly: args.fly,
+        };
+        return rook_client::bench(&mut game, scene, frames, camera, &start, how, &install);
     }
 
     if let Some(out) = &args.screenshot {
-        // A screenshot isn't a frame: it waits for the place's mesh files
-        // and images, and their uploads.
-        scene.load_all(game.view(), camera.position);
-        // GUI laid out again around the images that arrived fires Changed,
-        // and scripts answer it (Roblox's React GUI re-renders): a few
-        // frames let that settle, as it would in a window, before the shot.
-        game.run_for(0.25);
-        scene.load_all(game.view(), camera.position);
-        let mut renderer = Renderer::headless()?;
-        note_gpu(&renderer);
-        install.apply(&mut renderer);
-        renderer.set_scene(&scene.scene);
-        scene.show_gui(game.view(), &mut renderer, None);
-        if !args.click.is_empty() {
-            let (dm, look) = (game.view(), game.view().cursor_look());
-            scene.show_cursor(dm, &mut renderer, &look, Some(dm.mouse_position()));
-        }
-        renderer.finish_uploads();
-        // Effects as they look once going: Smoke's puffs live 5 seconds.
-        renderer.settle_particles(6.0, &camera, args.width, args.height);
-        let pixels = renderer.render_to_image(args.width, args.height, &camera)?;
-        image::save_buffer(
-            out,
-            &pixels,
-            args.width,
-            args.height,
-            image::ColorType::Rgba8,
-        )?;
-        console::print_message(
-            MessageType::Info,
-            &format!("Saved screenshot to {}", out.display()),
-        );
-        return Ok(());
+        return rook_client::screenshot(&mut game, scene, camera, &start, &install, out);
     }
 
     unreachable!("the window opens above")

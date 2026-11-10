@@ -9,9 +9,8 @@ repository.workspace = true
 rust-version.workspace = true
 
 [features]
-# The desktop implementation: std files and threads, Rayon's workers,
-# ureq, the system clipboard and the OS credential store. Only apps turn it on (and crates' own tests, as dev-dependencies);
-# a portable crate never does, so a host without threads or a file system
+# Only apps turn this on (and crates' own tests, as dev-dependencies): a
+# portable crate never does, so a host without threads or a file system
 # can install its own (docs/design/architecture.md#crate-layout).
 native = [
     "dep:rayon",

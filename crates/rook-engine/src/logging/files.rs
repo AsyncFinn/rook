@@ -1,6 +1,3 @@
-//! Log and crash report files: their names, and keeping only the recent
-//! ones.
-
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
@@ -46,7 +43,6 @@ fn to_delete(mut files: Vec<(PathBuf, SystemTime, u64)>, now: SystemTime) -> Vec
     delete
 }
 
-/// Delete old files from a folder of logs or crash reports.
 pub fn cleanup(dir: &Path) {
     for path in to_delete(files_in(dir), SystemTime::now()) {
         if let Err(e) = rook_platform::get().files.remove_file(&path) {
@@ -56,7 +52,6 @@ pub fn cleanup(dir: &Path) {
     }
 }
 
-/// The newest log file in a folder.
 pub fn newest_log(dir: &Path) -> Option<PathBuf> {
     files_in(dir)
         .into_iter()

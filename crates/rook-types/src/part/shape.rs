@@ -25,8 +25,7 @@ impl PartShape {
 
     /// The shape of a part of class `class` whose `Shape` property (Part
     /// only) is `part_type`: `Enum.PartType` Ball 0, Block 1, Cylinder 2,
-    /// Wedge 3, CornerWedge 4. MeshParts, unions and trusses count as blocks
-    /// until meshes exist.
+    /// Wedge 3, CornerWedge 4. MeshParts, unions and trusses count as blocks.
     pub fn of(class: &str, part_type: Option<u32>) -> Self {
         match class {
             "WedgePart" => Self::Wedge,

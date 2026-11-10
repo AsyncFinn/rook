@@ -42,7 +42,6 @@ pub enum Difference {
     },
 }
 
-/// Options for [`compare_with`].
 #[derive(Debug, Clone, Copy, Default)]
 pub struct CompareOptions {
     /// Relative tolerance for float components. `None` means exact.
@@ -57,9 +56,7 @@ pub fn compare(a: &WeakDom, b: &WeakDom) -> Vec<Difference> {
     compare_with(a, b, CompareOptions::default())
 }
 
-/// Compare the trees under each DOM's root with the given options.
 pub fn compare_with(a: &WeakDom, b: &WeakDom, options: CompareOptions) -> Vec<Difference> {
-    // First pass: pair instances by position.
     let mut pairing = Pairing {
         a,
         b,
@@ -72,7 +69,6 @@ pub fn compare_with(a: &WeakDom, b: &WeakDom, options: CompareOptions) -> Vec<Di
     } = pairing;
     let ref_map: FxHashMap<Ref, Ref> = pairs.iter().map(|(ra, rb, _)| (*ra, *rb)).collect();
 
-    // Second pass: compare properties of paired instances.
     for (ra, rb, path) in &pairs {
         let ia = a.get_by_ref(*ra).expect("paired ref exists");
         let ib = b.get_by_ref(*rb).expect("paired ref exists");
@@ -120,7 +116,6 @@ fn is_empty_collection(v: &Variant) -> bool {
 struct Pairing<'a> {
     a: &'a WeakDom,
     b: &'a WeakDom,
-    /// Each pair with its path.
     pairs: Vec<(Ref, Ref, String)>,
     diffs: Vec<Difference>,
 }

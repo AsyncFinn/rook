@@ -1,5 +1,3 @@
-//! Journal entries → signal firings.
-
 use rook_dom::{Change, Dom, InstanceId};
 use rook_reflection::PropertyId;
 
@@ -18,7 +16,6 @@ pub(crate) enum FireArgs {
     /// `Changed(property)`. ValueBase objects pass the new value instead;
     /// the Lua layer handles that.
     Property(PropertyId),
-    /// `AttributeChanged(name)`.
     Attribute(String),
     /// `Humanoid.HealthChanged(health)`, for a change of this property,
     /// which only applies when it's the health.

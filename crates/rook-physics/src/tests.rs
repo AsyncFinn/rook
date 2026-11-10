@@ -34,7 +34,6 @@ fn v3(x: f32, y: f32, z: f32) -> Value {
     Value::Vector3(Vector3(Vec3::new(x, y, z)))
 }
 
-/// A `Part` in Workspace.
 fn part(dom: &mut Dom, position: Vec3, size: Vec3, anchored: bool) -> InstanceId {
     part_of(dom, "Part", position, size, anchored)
 }
@@ -49,7 +48,6 @@ fn floor(dom: &mut Dom) -> InstanceId {
     part(dom, Vec3::ZERO, Vec3::new(20.0, 1.0, 20.0), true)
 }
 
-/// A part of `class` in Workspace.
 fn part_of(dom: &mut Dom, class: &str, position: Vec3, size: Vec3, anchored: bool) -> InstanceId {
     let ws = dom.get_service("Workspace").unwrap();
     let id = dom.create_by_name(class).unwrap();

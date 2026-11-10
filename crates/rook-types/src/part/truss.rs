@@ -21,16 +21,9 @@ pub(crate) const TRUSS_MAX_LENGTH: f32 = 512.0;
 /// read back 0.001).
 const MIN_SIZE: f32 = 0.001;
 
-/// What a truss's Size becomes when a script sets it (observed in Studio
-/// 0.742, 2026-10-13, from what `Size` read back; conformance case
-/// `content/truss`). Each axis is first kept between 0.001 and 512. A truss
-/// is 2 studs across, with at most one axis of another length: when two
-/// axes are already exactly 2 the third keeps its length, shorter than 2
-/// or not ((2, 1, 2) and (2, 0.5, 2) stay as they are). Otherwise the
-/// longest axis is the truss's length, X before Y before Z on a tie, at
-/// least 2, and the other two become 2: (3, 3, 3) becomes (3, 2, 2),
-/// (6, 2, 10) becomes (2, 2, 10), (1, 1, 1) and (1, 0.5, 2) become
-/// (2, 2, 2). The Size set before doesn't matter.
+/// What a truss's Size becomes when a script sets it: 2 studs across, the
+/// longest axis its length (docs/behavior/meshes/trusses.md; conformance
+/// case `content/truss`).
 pub fn truss_size(size: Vec3) -> Vec3 {
     let s = size.clamp(Vec3::splat(MIN_SIZE), Vec3::splat(TRUSS_MAX_LENGTH));
     let twos = s.to_array().iter().filter(|&&v| v == 2.0).count();
@@ -43,7 +36,6 @@ pub fn truss_size(size: Vec3) -> Vec3 {
     out
 }
 
-/// The longest axis, X before Y before Z on a tie.
 fn long_axis_of(s: Vec3) -> usize {
     let mut long = 0;
     for axis in 1..3 {
@@ -117,15 +109,8 @@ impl Lean {
     }
 }
 
-/// Measured from the export (Confirmed): bars are 0.25 studs square. The
-/// four rails run the truss's whole length at its corners. Each segment has
-/// a rung across each of the four sides at both ends, between the rails;
-/// where two segments meet their rungs are one bar 0.5 studs thick. A
-/// brace is 0.25 studs wide and 0.125 deep, centered in the plane of the
-/// rails' centers (0.875 from the axis), running between the rails' center
-/// lines from one corner of the segment 0.875 below its middle to the
-/// opposite corner 0.875 above it, its ends cut square and buried in the
-/// rails.
+/// The bars' sizes and placement, measured from Studio's OBJ export
+/// (Confirmed), are in docs/behavior/meshes/trusses.md.
 impl TrussShape {
     /// The truss's width, and the length of a segment.
     pub const SEGMENT: f32 = 2.0;
@@ -135,7 +120,6 @@ impl TrussShape {
     pub const BRACE_WIDTH: f32 = 0.25;
     pub const BRACE_DEPTH: f32 = 0.125;
 
-    /// The four sides of the truss, which carry its rungs and braces.
     pub const SIDES: [NormalId; 4] = [
         NormalId::Front,
         NormalId::Right,
@@ -169,18 +153,8 @@ impl TrussShape {
     }
 
     /// The brace on `side` of segment `segment` (0 is the bottom, at the
-    /// frame's -Y end), if there is one, and which way it leans. Observed in
-    /// Studio 0.742 with a dark block inside each truss so only its near
-    /// side showed, and measured from the 2 × 4 × 2 export:
-    ///
-    /// - AlternatingSupports: segment 0 leans Up on the Front and Right
-    ///   sides and Down on the Back and Left (so the braces turn the same
-    ///   way round the truss), the next segment the other way, and so on up
-    ///   from the bottom (checked on 2, 3, 4 and 5 segments).
-    /// - BridgeStyleSupports: only the Right and Left sides, both leaning
-    ///   Down in the lower floor(n / 2) segments and Up in the rest, so the
-    ///   two sides look the same seen through the truss (checked on 2, 3, 4
-    ///   and 5 segments, from both sides).
+    /// frame's -Y end), if there is one, and which way it leans, per Style
+    /// (docs/behavior/meshes/trusses.md).
     pub fn brace(self, segment: u16, side: NormalId) -> Option<Lean> {
         match self.style {
             TrussStyle::NoSupports => None,

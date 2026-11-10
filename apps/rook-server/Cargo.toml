@@ -1,0 +1,39 @@
+[package]
+name = "rook-server"
+description = "Dedicated server for the Rook engine: runs a place's server without a window"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+# Embeds the app icon and manifest (resources/README.md)
+build = "../build.rs"
+
+[[bin]]
+name = "rook-server"
+path = "src/main.rs"
+
+[dependencies]
+fs-err.workspace = true
+rook-engine.workspace = true
+rook-platform = { workspace = true, features = ["native"] }
+rook-content.workspace = true
+rook-lua.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+
+[features]
+default = ["repl", "developer-overrides"]
+# A `>` prompt in the terminal that runs Luau on the server (on when the
+# terminal is interactive; `--no-repl` turns it off).
+repl = ["rook-engine/repl"]
+# Developer settings (rook-engine's feature of the same name).
+developer-overrides = ["rook-engine/developer-overrides"]
+
+[build-dependencies]
+resvg.workspace = true
+embed-resource.workspace = true
+
+[lints]
+workspace = true

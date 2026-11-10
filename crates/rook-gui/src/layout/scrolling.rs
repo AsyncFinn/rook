@@ -25,7 +25,6 @@ pub(crate) struct Scroll {
     /// `BorderSizePixel`: a line this thick parts each bar from the
     /// window.
     pub(crate) border: f32,
-    /// The vertical bar is on the left.
     pub(crate) left: bool,
     /// Where the canvas's top left is in the frame before it scrolls.
     shift: Vec2,
@@ -38,7 +37,6 @@ impl Scroll {
         self.shift - self.position.round()
     }
 
-    /// How far the canvas can scroll.
     pub(crate) fn reach(&self) -> Vec2 {
         (self.canvas - self.window).max(Vec2::ZERO)
     }
@@ -114,7 +112,6 @@ pub(super) fn lay_out(pass: &mut Pass<'_>, id: InstanceId, at: Placed, area: Vec
     pass.out.scrolls.insert(id, scroll);
 }
 
-/// Place `kids` on `scroll`'s canvas.
 fn place(pass: &mut Pass<'_>, id: InstanceId, at: Placed, kids: &[InstanceId], scroll: &Scroll) {
     if kids.is_empty() {
         return;
@@ -150,16 +147,13 @@ fn reached(pass: &Pass<'_>, id: InstanceId, at: Placed, scroll: &Scroll) -> Vec2
     far + padding::inner(dom, id, scroll.canvas).far
 }
 
-/// What decides a ScrollingFrame's window and bars.
 struct Settings {
     thickness: f32,
     border: f32,
     /// Which bars `ScrollingDirection` allows: vertical, horizontal.
     allowed: [bool; 2],
-    /// `VerticalScrollBarInset` and `HorizontalScrollBarInset`.
     insets: [Option<&'static str>; 2],
     left: bool,
-    /// The `AutomaticCanvasSize` axes.
     automatic: Vec2,
     /// The `CanvasPosition` asked for.
     requested: Vec2,

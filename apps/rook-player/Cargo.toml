@@ -17,35 +17,24 @@ path = "src/main.rs"
 [dependencies]
 fs-err.workspace = true
 rook-types.workspace = true
-rook-reflection.workspace = true
-rook-dom.workspace = true
-rook-render.workspace = true
-rook-view.workspace = true
+rook-client = { workspace = true, features = ["window"] }
+rook-scene.workspace = true
 rook-platform = { workspace = true, features = ["native"] }
 rook-content.workspace = true
-rook-audio = { workspace = true, features = ["output"] }
 rook-engine.workspace = true
 rook-lua.workspace = true
-rook-physics.workspace = true
-rook-terrain.workspace = true
-wgpu.workspace = true
-winit.workspace = true
 rfd.workspace = true
-pollster.workspace = true
 glam.workspace = true
-image.workspace = true
 anyhow.workspace = true
 clap.workspace = true
-tracing.workspace = true
 profiling.workspace = true
 mimalloc.workspace = true
-rustc-hash.workspace = true
 
 [features]
 default = ["repl", "developer-overrides", "counters"]
 # A `>` prompt in the terminal that runs Luau in the open place (on when
 # the terminal is interactive; `--no-repl` turns it off).
-repl = ["rook-engine/repl"]
+repl = ["rook-engine/repl", "rook-client/repl"]
 # Developer settings (rook-engine's feature of the same name).
 developer-overrides = ["rook-engine/developer-overrides"]
 # Per-frame work counters, which `--bench` prints (rook-types' `counters`).

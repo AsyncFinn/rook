@@ -61,7 +61,6 @@ struct LayerUniform {
     tiles: [u32; WORDS],
 }
 
-/// A [`LayerUniform`]'s bytes.
 const LAYER_SIZE: u64 = std::mem::size_of::<LayerUniform>() as u64;
 
 /// What the fill pass reads (`Params` in `shaders/light_volume.wgsl`).

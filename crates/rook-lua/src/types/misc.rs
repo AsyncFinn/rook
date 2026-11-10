@@ -1,5 +1,5 @@
-//! TweenInfo, Faces, Axes, PhysicalProperties, and the opaque
-//! wrapper for value types without a dedicated Lua representation yet.
+//! TweenInfo, Faces, Axes, PhysicalProperties, and the opaque wrapper for
+//! value types without a Lua representation of their own.
 
 use super::err;
 use mlua::{
@@ -12,7 +12,7 @@ use super::enums::{item_name, item_value};
 use super::random::random_new;
 use crate::ctx::args::number_of;
 
-/// A property value Rook can't yet show as a proper datatype. It still
+/// A property value with no Lua datatype of its own. It still
 /// round-trips: reading a property and assigning it back works.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Opaque(pub Value);

@@ -1,12 +1,6 @@
-//! wgpu renderer for Rook.
-//!
-//! The renderer draws a [`Scene`] snapshot: it never touches the DOM
-//! (docs/design/architecture.md#engine-systems). It draws primitive parts, the built-in mesh shapes
-//! and mesh files, and TrussParts' bars, with their color, transparency, mesh textures, Plastic's
-//! surface patterns and Neon, Decals and Textures over them, a sky color,
-//! a sun, ambient light, fog and the sun's shadows, and particles (Fire,
-//! Smoke and Sparkles). Terrain arrives as mesh files too: the player
-//! meshes its chunks with `rook-terrain`.
+//! wgpu renderer for Rook. It draws a [`Scene`] snapshot and never touches
+//! the DOM (docs/design/architecture.md#engine-systems). Terrain arrives as
+//! mesh files too: the player meshes its chunks with `rook-terrain`.
 
 mod batch;
 mod effects;
@@ -15,6 +9,7 @@ mod mesh;
 mod renderer;
 mod scene;
 mod surfaces;
+mod window_surface;
 
 pub use scene::{
     AdornShape, Anchor, Beam, Camera, Curve, Detile, DrawShape, EffectSlots, Emitter, EmitterLook,
@@ -43,6 +38,7 @@ use gpu::pool::{GpuMesh, MeshPool};
 use gpu::*;
 
 pub use renderer::Renderer;
+pub use window_surface::WindowSurface;
 
 /// The shadow map's depth, and the main pass's where the device has no
 /// stencil to go with it (`main_depth_format`).
@@ -67,6 +63,8 @@ pub enum RenderError {
     Adapter(String),
     #[error("GPU device request failed: {0}")]
     Device(String),
+    #[error("the window's surface: {0}")]
+    Surface(String),
     #[error("reading back the frame failed: {0}")]
     Readback(String),
 }

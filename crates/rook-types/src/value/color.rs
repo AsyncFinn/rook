@@ -17,7 +17,6 @@ impl Color3 {
         [self.r, self.g, self.b]
     }
 
-    /// `Color3.fromRGB`.
     pub fn from_rgb(r: u8, g: u8, b: u8) -> Self {
         Self::new(
             f32::from(r) / 255.0,
@@ -34,7 +33,6 @@ impl Color3 {
         (ch(self.r), ch(self.g), ch(self.b))
     }
 
-    /// `Color3.fromHSV`.
     pub fn from_hsv(h: f32, s: f32, v: f32) -> Self {
         let h = h.rem_euclid(1.0) * 6.0;
         let i = h.floor();
@@ -52,7 +50,6 @@ impl Color3 {
         }
     }
 
-    /// `Color3:ToHSV()`.
     pub fn to_hsv(self) -> (f32, f32, f32) {
         let max = self.r.max(self.g).max(self.b);
         let min = self.r.min(self.g).min(self.b);

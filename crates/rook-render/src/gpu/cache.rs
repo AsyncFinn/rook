@@ -34,7 +34,6 @@ pub(crate) struct UploadBudget {
 }
 
 impl UploadBudget {
-    /// A frame's budget, starting now.
     pub(crate) fn frame() -> Self {
         Self {
             bytes: FRAME_UPLOAD_BYTES,
@@ -43,7 +42,6 @@ impl UploadBudget {
         }
     }
 
-    /// Everything.
     pub(crate) fn unlimited() -> Self {
         Self {
             bytes: usize::MAX,
@@ -64,33 +62,27 @@ impl UploadBudget {
     }
 }
 
-/// What uploads need from the renderer.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct UploadContext<'a> {
     pub device: &'a wgpu::Device,
     pub queue: &'a wgpu::Queue,
-    /// The layout of an image's bind group.
     pub image_layout: &'a wgpu::BindGroupLayout,
     pub sampler: &'a wgpu::Sampler,
     /// Whether a texture can be viewed in a second format (sRGB and
     /// linear); OpenGL can't.
     pub view_formats: bool,
-    /// Whether the device samples BC blocks (most desktop GPUs; not
-    /// phones or browsers).
+    /// Whether the device samples BC blocks (most desktop GPUs).
     pub block_compression: bool,
 }
 
-/// A file that can live on the GPU.
 pub(crate) trait Upload {
     type Gpu;
-    /// What uploading it needs.
     type Context<'a>;
     /// About how many bytes uploading it moves.
     fn upload_size(&self) -> usize;
     fn upload(&self, cx: &mut Self::Context<'_>) -> Self::Gpu;
 }
 
-/// GPU copies of files, by key.
 #[derive(Debug)]
 pub(crate) struct GpuCache<K, T: Upload> {
     ready: FxHashMap<K, T::Gpu>,
@@ -111,7 +103,6 @@ impl<K: Copy + Eq + Hash, T: Upload> GpuCache<K, T> {
         self.ready.get(key)
     }
 
-    /// Every uploaded object.
     pub(crate) fn uploaded(&self) -> impl Iterator<Item = &T::Gpu> {
         self.ready.values()
     }

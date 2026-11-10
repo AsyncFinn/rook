@@ -23,7 +23,6 @@ use rook_types::{CFrame, Value};
 use crate::joints::{Joint, part_joints};
 use crate::shape::is_part;
 
-/// One part of an assembly.
 #[derive(Debug, Clone, Copy)]
 pub struct Member {
     pub part: InstanceId,
@@ -34,7 +33,6 @@ pub struct Member {
     link: Option<(Joint, usize)>,
 }
 
-/// Parts joined by rigid joints.
 #[derive(Debug, Clone)]
 pub struct Assembly {
     /// Root first, then the others in breadth-first order from it.
@@ -207,7 +205,6 @@ impl Assembly {
             .map(|m| m.offset)
     }
 
-    /// The rigid joints holding the assembly together.
     pub fn joints(&self) -> impl Iterator<Item = &Joint> {
         self.members
             .iter()

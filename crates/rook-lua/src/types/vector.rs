@@ -1,5 +1,3 @@
-//! Vector3 (native `vector`), Vector2, Vector3int16, Vector2int16.
-
 use super::err;
 use mlua::{
     Lua, MetaMethod, UserData, UserDataFields, UserDataMethods, UserDataRef, Value as LuaValue,

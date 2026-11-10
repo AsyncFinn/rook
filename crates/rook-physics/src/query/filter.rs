@@ -1,8 +1,5 @@
-//! Which parts a query considers.
-
 use super::*;
 
-/// Which parts a query considers.
 #[derive(Debug, Clone, Default)]
 pub struct Filter {
     /// Parts in or under these instances are skipped (or, with

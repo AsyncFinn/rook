@@ -1,14 +1,6 @@
-//! Roblox physics semantics over Rapier.
-//!
-//! [`Physics`] mirrors Workspace's parts into a Rapier world, keeps up with
-//! scripts through the DOM's change journal, steps it and writes simulated
-//! parts' CFrames and velocities back. Rigidly joined parts form one body
-//! ([`assembly`]); [`joints`] covers joints, constraints and movers;
-//! [`contacts`] materials, collision groups and Touched; [`query`] scripts'
-//! scene queries. Each world simulates the assemblies its machine owns
-//! ([`Authority`]); the rest follow where replication puts them. Findings
-//! are in `docs/behavior/physics/` and
-//! `docs/behavior/physics/collision-shapes.md`.
+//! Roblox physics semantics over Rapier. Each world simulates the
+//! assemblies its machine owns ([`Authority`]); the rest follow where
+//! replication puts them. Findings are in `docs/behavior/physics/`.
 
 pub mod assembly;
 pub mod contacts;
@@ -94,16 +86,12 @@ pub fn part_volume(dom: &Dom, part: InstanceId) -> f32 {
 /// Script requests physics carries out at its next step.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Command {
-    /// `RocketPropulsion:Fire()`.
     FireRocket(InstanceId),
-    /// `RocketPropulsion:Abort()`.
     AbortRocket(InstanceId),
 }
 
 /// Which unanchored assemblies a world simulates (network ownership). An
-/// assembly belongs to a model when one of its parts is inside it; the
-/// models are players' characters, the one thing whose ownership moves
-/// for now (`SetNetworkOwner` and automatic ownership are M10's).
+/// assembly belongs to a model when one of its parts is inside it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Authority {
     /// Every one but those of these models, which clients simulate and
@@ -144,7 +132,6 @@ impl Authority {
     }
 }
 
-/// A DataModel's physics world.
 pub struct Physics {
     world: PhysicsWorld,
     props: Option<Props>,
@@ -213,7 +200,6 @@ pub struct Physics {
     rockets: FxHashMap<InstanceId, bool>,
     /// Rockets that reached their target since the last call.
     reached: Vec<InstanceId>,
-    /// Attachment constraints seen in the world.
     constraint_ids: FxHashSet<InstanceId>,
     /// Movers and constraints to re-read at the next sync.
     dirty: FxHashSet<InstanceId>,
@@ -234,7 +220,6 @@ pub struct Physics {
     stale_statics: FxHashSet<InstanceId>,
     /// Every part's `Size` box, for the queries that find parts by it.
     bounds: query::bounds::PartBounds,
-    /// Which assemblies this world simulates.
     authority: Authority,
     /// Parts whose assemblies change hands at the next sync.
     handed_over: Vec<InstanceId>,
@@ -387,7 +372,6 @@ impl Physics {
         self.built
     }
 
-    /// Carry out a script's request.
     pub fn command(&mut self, command: Command) {
         match command {
             Command::FireRocket(id) => {
@@ -420,7 +404,6 @@ impl Physics {
         self.generation
     }
 
-    /// Parts in the world.
     pub fn part_count(&self) -> usize {
         self.parts.len()
     }

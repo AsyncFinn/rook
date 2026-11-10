@@ -57,7 +57,6 @@ pub fn blade_color(grass: Color3uint8, set: MaterialSet) -> [f32; 3] {
 /// Grass's upward triangles in world studs, by the tile their center is in.
 pub type GrassTops = FxHashMap<IVec2, Vec<[Vec3; 3]>>;
 
-/// The tile a point is in.
 pub fn tile_of(p: Vec3) -> IVec2 {
     IVec2::new(
         (p.x / TILE_STUDS).floor() as i32,
@@ -70,7 +69,6 @@ pub fn tile_origin(tile: IVec2) -> Vec3 {
     Vec3::new(tile.x as f32, 0.0, tile.y as f32) * TILE_STUDS
 }
 
-/// Add a chunk's Grass top triangles to `tops`.
 pub fn add_grass_tops(chunk: &ChunkMesh, tops: &mut GrassTops) {
     let origin = chunk.origin();
     for s in &chunk.surfaces {

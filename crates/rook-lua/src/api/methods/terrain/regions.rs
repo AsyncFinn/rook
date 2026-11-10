@@ -1,6 +1,3 @@
-//! Region copies: `CopyRegion` into a TerrainRegion and `PasteRegion`
-//! back.
-
 use super::*;
 
 /// A TerrainRegion holding the region's voxels, in its `SmoothGrid` from

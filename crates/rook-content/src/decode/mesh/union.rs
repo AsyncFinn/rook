@@ -78,7 +78,6 @@ fn mesh_data(properties: &rbx_dom_weak::UstrMap<Variant>) -> Option<Vec<u8>> {
     })
 }
 
-/// Decode a union asset or a `MeshData` blob.
 pub(super) fn decode(bytes: &[u8]) -> Result<Mesh, MeshError> {
     if bytes.starts_with(b"<roblox") {
         return decode(&asset_mesh_data(bytes)?);

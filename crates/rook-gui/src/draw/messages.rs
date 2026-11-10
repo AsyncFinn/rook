@@ -19,7 +19,6 @@ const HINT_HEIGHT: f32 = 20.0;
 const HINT_TEXT: f32 = 12.0;
 const MESSAGE_TEXT: f32 = 18.0;
 
-/// Whether `id` is a Hint or a Message (a Hint is a Message).
 pub(crate) fn is_message(dom: &Dom, id: InstanceId) -> bool {
     dom.is_a(id, "Message")
 }

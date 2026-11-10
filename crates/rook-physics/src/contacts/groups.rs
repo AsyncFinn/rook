@@ -125,7 +125,6 @@ impl CollisionGroups {
         self.get(name).map_or(0, |g| g.id)
     }
 
-    /// The mask of the group with this id.
     pub fn mask_of(&self, id: u8) -> i32 {
         self.0.iter().find(|g| g.id == id).map_or(-1, |g| g.mask)
     }
@@ -224,7 +223,6 @@ fn check_name(name: &str) -> Result<(), GroupError> {
     }
 }
 
-/// A part's `CollisionGroup` name.
 pub fn part_group(dom: &Dom, part: InstanceId) -> String {
     dom.string_property(part, "CollisionGroup")
         .filter(|s| !s.is_empty())

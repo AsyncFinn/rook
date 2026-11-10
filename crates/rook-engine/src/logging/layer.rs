@@ -1,5 +1,3 @@
-//! The `tracing` layer that prints events as console lines.
-
 use std::fmt::Write;
 
 use rook_lua::MessageType;

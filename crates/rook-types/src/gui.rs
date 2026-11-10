@@ -1,7 +1,4 @@
-//! What GUI drawing hands the renderer: rectangles in screen pixels, in
-//! the order they're drawn, filled, text glyphs, images or groups drawn
-//! apart, cut to rounded or stroked shapes and colored by gradients, and
-//! the world GUI's canvases with where each is in the world. `rook-gui` makes them and
+//! What GUI drawing hands the renderer: `rook-gui` makes these and
 //! `rook-render` draws them, so the shapes live here, below both.
 
 use std::sync::Arc;
@@ -79,7 +76,6 @@ impl GuiRamp {
 /// What a [`GuiQuad`] is filled with, in its color.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Paint {
-    /// The color alone.
     Solid,
     /// The color drawn through a glyph's coverage, stretched over the
     /// rectangle.
@@ -101,7 +97,6 @@ pub struct GuiGroup {
     /// Names this group's drawing among all others, so a renderer can keep
     /// its texture while it's unchanged.
     pub key: u64,
-    /// The texture's size in pixels.
     pub size: [u32; 2],
     /// Bottom first, in pixels from the texture's top left.
     pub quads: Vec<GuiQuad>,

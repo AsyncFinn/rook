@@ -12,7 +12,6 @@ use super::*;
 /// Instances per workgroup (`shaders/scatter.wgsl`).
 const GROUP: u32 = 64;
 
-/// The scatter pass, shared by every instance pool.
 #[derive(Debug)]
 pub(crate) struct Scatter {
     pipeline: wgpu::ComputePipeline,

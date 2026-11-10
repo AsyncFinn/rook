@@ -17,7 +17,6 @@ use rook_types::{CFrame, Value};
 
 use crate::shape::is_part;
 
-/// How a joint relates its two parts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum JointKind {
     /// `Part0 * C0 = Part1 * C1`: Weld, ManualWeld, Snap, Glue, ManualGlue.
@@ -53,7 +52,6 @@ impl JointKind {
     }
 }
 
-/// An active joint.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Joint {
     pub id: InstanceId,
@@ -63,7 +61,6 @@ pub struct Joint {
 }
 
 impl Joint {
-    /// The part on the other side from `part`.
     pub fn other(&self, part: InstanceId) -> InstanceId {
         if part == self.part0 {
             self.part1

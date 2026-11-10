@@ -106,7 +106,6 @@ fn security(v: &str) -> Result<Security, UpdateError> {
         .map_err(|_| UpdateError::Shape(format!("security level {v}")))
 }
 
-/// The plain string tags of a class or member.
 pub(super) fn string_tags(tags: &[serde_json::Value]) -> impl Iterator<Item = &str> {
     tags.iter().filter_map(|t| t.as_str())
 }
@@ -141,7 +140,6 @@ impl Member {
         }
     }
 
-    /// A property's `[read, write]` security.
     pub(super) fn property_security_pair(&self) -> Result<[Security; 2], UpdateError> {
         let get = |key: &str| match self.security.get(key) {
             Some(serde_json::Value::String(s)) => security(s),

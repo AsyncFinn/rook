@@ -1,5 +1,3 @@
-//! Tracking what a renderer needs to redraw.
-
 mod materials;
 
 use rook_reflection::{ClassId, PropertyId};

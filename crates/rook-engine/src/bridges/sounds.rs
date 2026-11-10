@@ -1,11 +1,7 @@
-//! Sounds and AudioPlayers: loading their files through the content
-//! loader (one cache for both), `IsLoaded` (`IsReady`), `TimeLength` and
-//! `Loaded`; playback (time, ends, loops) is in [`playback`] and
-//! [`players`], and the audio API's graph in [`graph`].
-//!
-//! Every DataModel does this, server and client alike, as Studio does on
-//! both (`docs/behavior/audio/playback.md`). Hearing them is the player's job: it
-//! asks for [`DataModel::playing_sounds`] each frame and mixes them.
+//! Every DataModel loads and plays sounds, server and client alike, as Studio
+//! does on both (`docs/behavior/audio/playback.md`). Hearing them is the
+//! player's job: it asks for [`DataModel::playing_sounds`] each frame and
+//! mixes them.
 //!
 //! Changes are noticed at the end of a frame ([`DataModel::check_sounds`],
 //! before the journal is trimmed) and acted on at the start of the next
@@ -29,7 +25,6 @@ use rook_content::{ContentRef, Failure, Fetched, Ticket};
 use super::journal_watch::JournalWatch;
 use crate::*;
 
-/// What one sound file came to.
 #[derive(Debug, Clone)]
 enum Load {
     Loading,
@@ -78,7 +73,6 @@ pub(crate) struct Sounds {
 }
 
 impl Sounds {
-    /// Drop what is kept about `id`, which is being freed.
     fn forget(&mut self, id: InstanceId) {
         self.dirty.remove(&id);
         self.tracked.remove(&id);
@@ -123,7 +117,6 @@ impl Sounds {
         }
     }
 
-    /// Whether a sound's file is still loading.
     fn loading(&self, id: InstanceId) -> bool {
         let file = self.tracked.get(&id).and_then(Option::as_ref);
         matches!(file.and_then(|f| self.files.get(f)), Some(Load::Loading))
@@ -137,7 +130,6 @@ impl Sounds {
 #[derive(Debug)]
 struct SoundProps {
     content: Vec<rook_reflection::PropertyId>,
-    /// Sound's `Playing`.
     playing: Vec<rook_reflection::PropertyId>,
     /// Where a sound is in its file, and whether it plays.
     clock: Vec<rook_reflection::PropertyId>,

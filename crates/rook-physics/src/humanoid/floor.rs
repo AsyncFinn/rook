@@ -12,7 +12,6 @@ use super::*;
 /// FloorMaterial kept the floor's until about 2.5 studs into a jump).
 pub(super) const REACH: f32 = 2.5;
 
-/// The floor under a Humanoid.
 #[derive(Debug, Clone, Copy)]
 pub(super) struct Floor {
     /// Its height under the root's center.

@@ -1,5 +1,3 @@
-//! Mesh files, unions and terrain as draw meshes.
-
 use super::*;
 
 /// A mesh file's or a union's vertices as they are. A vertex whose normal

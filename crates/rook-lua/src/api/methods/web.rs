@@ -19,7 +19,6 @@ use rook_platform::network::Response;
 use crate::ctx::args::Args;
 use crate::ctx::{ApiResult, Outcome, api_fn, with_world};
 
-/// A request for the engine to send.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WebRequest {
     pub method: String,

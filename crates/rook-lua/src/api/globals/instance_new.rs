@@ -1,5 +1,3 @@
-//! `Instance.new`.
-
 use super::*;
 
 /// `Instance.new(className, parent)`. Parent is set last, after the

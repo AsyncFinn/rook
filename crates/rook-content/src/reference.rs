@@ -27,7 +27,7 @@ pub enum ContentRef {
     /// Asset delivery no longer looks these up.
     AssetVersion(u64),
     /// `rbxthumb://type=<type>&id=<id>&w=<w>&h=<h>`: a thumbnail Roblox
-    /// renders. Parsed, not resolved yet.
+    /// renders.
     Thumbnail(Thumbnail),
     /// One of a built-in material's textures in one of the two sets: no
     /// string names it, but every part of that material draws it. It comes
@@ -37,7 +37,6 @@ pub enum ContentRef {
     TexturePack(u64, MaterialMap),
 }
 
-/// Which of a material's textures.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum MaterialMap {
     /// The color, which the part's Color multiplies (sRGB).

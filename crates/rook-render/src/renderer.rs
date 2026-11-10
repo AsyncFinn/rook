@@ -1,5 +1,3 @@
-//! The renderer: GPU objects, pipelines and what the scene needs on the GPU.
-
 mod cuts;
 mod detail;
 mod draw;
@@ -562,13 +560,7 @@ impl Renderer {
     ) -> Result<Self, RenderError> {
         let instance =
             wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            compatible_surface: None,
-            force_fallback_adapter: false,
-            apply_limit_buckets: false,
-        }))
-        .map_err(|e| RenderError::Adapter(e.to_string()))?;
+        let adapter = adapter(&instance, None)?;
         let (device, queue) = pollster::block_on(adapter.request_device(&descriptor(&adapter)))
             .map_err(|e| RenderError::Device(e.to_string()))?;
         Ok(Self::new(
@@ -614,4 +606,17 @@ impl Renderer {
     pub fn color_format(&self) -> wgpu::TextureFormat {
         self.color_format
     }
+}
+
+pub(crate) fn adapter(
+    instance: &wgpu::Instance,
+    surface: Option<&wgpu::Surface<'_>>,
+) -> Result<wgpu::Adapter, RenderError> {
+    pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+        power_preference: wgpu::PowerPreference::HighPerformance,
+        compatible_surface: surface,
+        force_fallback_adapter: false,
+        apply_limit_buckets: false,
+    }))
+    .map_err(|e| RenderError::Adapter(e.to_string()))
 }

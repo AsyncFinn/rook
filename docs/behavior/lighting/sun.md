@@ -48,7 +48,7 @@ plus a highlight that takes no albedo:
   blue. Not modeled.
 
 Rook (`sun_light` and `shade_pbr` in `shaders/lighting.wgsl`;
-`sun_color` in `crates/rook-view/src/lighting.rs`) adds the sun and
+`sun_color` in `crates/rook-scene/src/lighting.rs`) adds the sun and
 its highlight in light units as above: `Lighting::sun_color` is
 0.5 × Brightness, yellowed near the horizon (1 − e^(−y/0.04) on red and
 green, a smoothstep from y = 0.045 to 0.15 on blue; fitted), or the

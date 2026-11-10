@@ -37,7 +37,6 @@ pub const MAX_CAST_DISTANCE: f32 = 1024.0;
 /// Inference: Studio counts 0.01 studs of overlap and not faces that meet.
 const OVERLAP: f32 = 1e-3;
 
-/// What a ray or shape cast hit.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Hit {
     pub part: InstanceId,
@@ -83,7 +82,6 @@ impl Region {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum CastShape {
     Sphere(f32),
-    /// A box of this size.
     Block(Vec3),
 }
 

@@ -26,7 +26,6 @@ const MAX_BYTES: u64 = 256 << 20;
 /// Tries per request when Roblox says to slow down (HTTP 429).
 const TRIES: u32 = 4;
 
-/// Asset delivery's requests, with the user's Open Cloud key if any.
 #[derive(Debug)]
 pub struct Delivery {
     /// The anonymous endpoint's URL, up to the asset id.
@@ -60,7 +59,6 @@ impl Delivery {
         self.key.get_or_init(|| source.read()).as_deref()
     }
 
-    /// Download an asset (its latest version, or `version`).
     pub fn fetch(&self, id: u64, version: Option<u32>) -> Result<Asset, Failure> {
         let path = match version {
             Some(v) => format!("{id}/version/{v}"),
@@ -176,7 +174,6 @@ impl Delivery {
     }
 }
 
-/// A downloaded asset.
 #[derive(Debug)]
 pub struct Asset {
     pub bytes: Vec<u8>,
@@ -186,7 +183,6 @@ pub struct Asset {
     pub version: Option<u32>,
 }
 
-/// An asset delivery error code (or HTTP status) as a failure kind.
 fn failure_kind(code: u64, status: u16) -> FailureKind {
     match code {
         404 | 410 => FailureKind::NotFound,

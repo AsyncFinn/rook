@@ -89,7 +89,6 @@ pub fn input_object(
 /// without yielding is stopped with an error.
 pub const DEFAULT_SCRIPT_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// One DataModel's scripting state.
 #[derive(Debug)]
 pub struct Runtime {
     lua: Lua,
@@ -163,7 +162,6 @@ impl Runtime {
         api::scripts::stop_script(&self.lua, script)
     }
 
-    /// Whether a script has been started.
     pub fn is_started(&self, script: InstanceId) -> bool {
         self.world().started.contains_key(&script)
     }
@@ -352,7 +350,6 @@ impl Runtime {
         }
     }
 
-    /// The TextBox with focus, if it's still there.
     pub fn focused_text_box(&self) -> Option<InstanceId> {
         api::methods::textbox::focused(&self.lua)
     }
@@ -633,7 +630,6 @@ impl Runtime {
         });
     }
 
-    /// Take everything logged so far.
     pub fn take_log(&self) -> Vec<LogEntry> {
         std::mem::take(&mut self.world_mut().log)
     }
