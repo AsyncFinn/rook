@@ -12,6 +12,7 @@
 
 pub(crate) mod cframe;
 pub(crate) mod color;
+pub(crate) mod content;
 pub(crate) mod datetime;
 pub(crate) mod enums;
 pub(crate) mod font;
@@ -25,6 +26,7 @@ pub(crate) mod vector;
 
 pub(crate) use cframe::LCFrame;
 pub(crate) use color::{LBrickColor, LColor3};
+pub(crate) use content::LContent;
 pub(crate) use font::LFont;
 pub(crate) use geometry::{LRay, LRect, LRegion3, LRegion3int16};
 pub(crate) use misc::Opaque;
@@ -48,6 +50,7 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     geometry::install(lua)?;
     enums::install(lua)?;
     font::install(lua)?;
+    content::install(lua)?;
     misc::install(lua)?;
     query::install(lua)?;
     datetime::install(lua)?;

@@ -5,6 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- `Content` works in scripts: `Content.fromUri`, `Content.fromAssetId` and `Content.none`, and a value's `SourceType` and `Uri`, as in Studio. Scripts setting `ImageContent`, `AudioContent`, `MouseIconContent` and the like failed at the first `Content.fromUri`. See [Content](docs/behavior/scripting/content.md).
 - Places on the legacy chat get it, as they do in Studio. Rook moved every place to TextChatService, so nothing made `ChatServiceRunner`, and a game waiting for it stopped starting up: in one large place, that left doors snapping open with no swing. A place's own chat scripts are used as saved; the rest comes from Roblox's files with `coreScripts` on. See [the legacy chat](docs/behavior/gui/chat.md#the-legacy-chat).
 - `CollectionService:GetInstanceAddedSignal` and `GetInstanceRemovedSignal` work, firing as Studio's do. See [tag signals](docs/behavior/scripting/tags.md).
 - A child named like a property only Roblox's engine reaches, such as `Tags` or `Attributes`, is found by `script.Tags`, as in Studio. Those properties were errors.

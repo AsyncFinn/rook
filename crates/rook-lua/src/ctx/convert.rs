@@ -9,9 +9,9 @@ use rook_types::{Color3, Value};
 use crate::api::instance::{LuaInstance, push_instance};
 use crate::ctx::args::{borrow_clone, number_of, type_name};
 use crate::types::{
-    LBrickColor, LCFrame, LColor3, LColorSequence, LFont, LNumberRange, LNumberSequence, LRay,
-    LRect, LRegion3, LRegion3int16, LUDim, LUDim2, LVector2, LVector2int16, LVector3int16, Opaque,
-    enums,
+    LBrickColor, LCFrame, LColor3, LColorSequence, LContent, LFont, LNumberRange, LNumberSequence,
+    LRay, LRect, LRegion3, LRegion3int16, LUDim, LUDim2, LVector2, LVector2int16, LVector3int16,
+    Opaque, enums,
 };
 
 /// Luau's native `vector` → `Vector3`.
@@ -40,6 +40,7 @@ pub(crate) fn to_lua(lua: &Lua, value: &Value, enum_id: Option<EnumId>) -> mlua:
         Value::String(s) => LuaValue::String(lua.create_string(s)?),
         Value::BinaryString(b) => LuaValue::String(lua.create_string(AsRef::<[u8]>::as_ref(b))?),
         Value::ContentId(c) => LuaValue::String(lua.create_string(c.as_str())?),
+        Value::Content(c) => LContent::new(c.clone()).into_lua(lua)?,
         Value::Vector3(v) => vector3_to_lua(*v),
         Value::Vector2(v) => LVector2(*v).into_lua(lua)?,
         Value::CFrame(c) | Value::OptionalCFrame(Some(c)) => LCFrame(*c).into_lua(lua)?,
@@ -187,6 +188,7 @@ pub(crate) fn datatype_value(u: &mlua::AnyUserData) -> Option<Value> {
         LUDim2 => |x: LUDim2| Value::UDim2(x.0),
         LNumberRange => |x: LNumberRange| Value::NumberRange(x.0),
         LFont => |x: LFont| Value::Font(x.0),
+        LContent => |x: LContent| Value::Content(x.0),
         LNumberSequence => |x: LNumberSequence| Value::NumberSequence(x.0),
         LColorSequence => |x: LColorSequence| Value::ColorSequence(x.0),
         LRay => |x: LRay| Value::Ray(x.0),
