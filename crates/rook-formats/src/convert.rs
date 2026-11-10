@@ -1,5 +1,3 @@
-//! Conversion between `rbx_dom_weak` trees (files) and Rook's runtime [`Dom`].
-
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::LazyLock;
 
@@ -12,7 +10,6 @@ use rook_types::Value;
 /// What [`into_dom`] and [`copy_into_dom`] made.
 #[derive(Debug)]
 pub struct Converted {
-    /// The new top-level instances.
     pub top: Vec<InstanceId>,
     /// Two instances were saved under one `UniqueId` (nil ones, which old
     /// files and new instances have, don't count).
@@ -223,7 +220,6 @@ fn create_rec(
     id
 }
 
-/// Build a `WeakDom` whose root's children are copies of `roots`.
 pub fn from_dom(dom: &Dom, roots: &[InstanceId]) -> WeakDom {
     let mut weak = WeakDom::new(InstanceBuilder::new("DataModel"));
     let mut map: FxHashMap<InstanceId, Ref> = FxHashMap::default();

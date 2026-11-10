@@ -5,10 +5,8 @@
 
 use crate::LoadError;
 
-/// The file header's length.
 pub(crate) const HEADER: usize = 32;
 
-/// One chunk as stored.
 pub(crate) struct Chunk<'a> {
     pub(crate) name: &'a [u8],
     /// The whole chunk, its header included, as stored.
@@ -79,7 +77,6 @@ fn bad(what: &str) -> LoadError {
     LoadError::Binary(format!("binary chunks: {what}"))
 }
 
-/// Reads a chunk's bytes from the start.
 pub(crate) struct Reader<'a> {
     pub(crate) bytes: &'a [u8],
     pub(crate) at: usize,
@@ -112,7 +109,6 @@ impl<'a> Reader<'a> {
         self.take(n)
     }
 
-    /// The rest of the chunk.
     pub(crate) fn rest(&mut self) -> &'a [u8] {
         let out = &self.bytes[self.at.min(self.bytes.len())..];
         self.at = self.bytes.len();
