@@ -117,7 +117,8 @@ pub(super) struct Blockers {
     /// Where they stand.
     columns: Columns,
     /// Each mesh file's box in its own space (center, half size); `None`
-    /// for terrain, which doesn't block yet.
+    /// for terrain.
+    // TODO: let terrain block light.
     bounds: FxHashMap<MeshHash, Option<(Vec3, Vec3)>>,
     /// A blocker changed since the voxels were marked.
     changed: bool,
@@ -380,7 +381,6 @@ impl Grid {
         grid
     }
 
-    /// Nothing marked.
     fn empty(low: IVec3, dims: IVec3) -> Self {
         let voxels = (dims.x * dims.y * dims.z) as usize;
         assert!(dims.y <= 64, "a column's layers take a bit each of a u64");
@@ -497,7 +497,6 @@ impl Grid {
         });
     }
 
-    /// How many bricks it has.
     fn bricks(&self) -> usize {
         let across = self.dims / PIECE;
         (across.x * across.z) as usize

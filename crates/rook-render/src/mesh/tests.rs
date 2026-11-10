@@ -2,7 +2,6 @@ use super::*;
 use files::from_file;
 use head::HEAD_RADIUS;
 
-/// Every face's normal points away from the center.
 #[test]
 fn normals_point_outward() {
     for shape in DrawShape::ALL {

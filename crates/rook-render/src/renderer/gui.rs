@@ -140,7 +140,6 @@ impl GpuQuad {
 /// group's texture.
 #[derive(Debug)]
 struct Target {
-    /// The target's size.
     size: wgpu::Buffer,
     group: wgpu::BindGroup,
     /// The quads, and how many there are.
