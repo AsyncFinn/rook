@@ -24,7 +24,6 @@ impl Opaque {
             Value::Axes(_) => "Axes",
             Value::PhysicalProperties(_) => "PhysicalProperties",
             Value::Font(_) => "Font",
-            Value::Content(_) => "Content",
             _ => "userdata",
         }
     }

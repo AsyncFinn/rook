@@ -1,0 +1,65 @@
+-- studio 0.747.0.7471481
+-- signals: deferred
+table table true
+keys fromAssetId:function fromObject:function fromUri:function none:Content
+uri Content{SourceType=Uri, Uri=rbxasset://d.png} Content userdata Enum.ContentSourceType.Uri rbxasset://d.png nil
+none Content{SourceType=None} Content Enum.ContentSourceType.None nil nil
+same none true
+equal true false true
+not raw equal false
+other types false false
+unknown member error Foo is not a valid member of Content
+number key error invalid argument #2 (string expected, got number)
+assign member error Uri member of Content is read-only and cannot be assigned to
+table lookup ok nil
+table assign error attempt to modify a readonly table
+Content.new error attempt to call a nil value
+compare error attempt to compare Content < Content
+concat error attempt to concatenate string with Content
+length error attempt to get length of a Content value
+call error attempt to call a Content value
+fromUri no args error Invalid number of arguments.
+fromUri nil error invalid argument #1 to 'fromUri' (string expected, got nil)
+fromUri empty ok Content{SourceType=None}
+fromUri spaces ok Content{SourceType=Uri, Uri=  a  }
+fromUri number ok Content{SourceType=Uri, Uri=5}
+fromUri fraction ok Content{SourceType=Uri, Uri=1.5}
+fromUri boolean error invalid argument #1 to 'fromUri' (string expected, got boolean)
+fromUri table error invalid argument #1 to 'fromUri' (string expected, got table)
+fromUri two error Invalid number of arguments.
+fromAssetId no args error Invalid number of arguments.
+fromAssetId 5 ok Content{SourceType=Uri, Uri=rbxassetid://5}
+fromAssetId 5.5 ok Content{SourceType=Uri, Uri=rbxassetid://6}
+fromAssetId 4.5 ok Content{SourceType=Uri, Uri=rbxassetid://5}
+fromAssetId -1 ok Content{SourceType=Uri, Uri=rbxassetid://-1}
+fromAssetId 0 ok Content{SourceType=Uri, Uri=rbxassetid://0}
+fromAssetId 2^53 ok Content{SourceType=Uri, Uri=rbxassetid://9007199254740992}
+fromAssetId 2.5 ok Content{SourceType=Uri, Uri=rbxassetid://3}
+fromAssetId -0.5 ok Content{SourceType=Uri, Uri=rbxassetid://-1}
+fromAssetId -1.5 ok Content{SourceType=Uri, Uri=rbxassetid://-2}
+fromAssetId 2^62 ok Content{SourceType=Uri, Uri=rbxassetid://4611686018427387904}
+fromAssetId 2^63 ok Content{SourceType=Uri, Uri=rbxassetid://-9223372036854775808}
+fromAssetId 1e19 ok Content{SourceType=Uri, Uri=rbxassetid://0}
+fromAssetId 1e20 ok Content{SourceType=Uri, Uri=rbxassetid://0}
+fromAssetId -2^63 ok Content{SourceType=Uri, Uri=rbxassetid://-9223372036854775808}
+fromAssetId -1e20 ok Content{SourceType=Uri, Uri=rbxassetid://0}
+fromAssetId nan error Invalid id. Expected a finite value.
+fromAssetId inf error Invalid id. Expected a finite value.
+fromAssetId string ok Content{SourceType=Uri, Uri=rbxassetid://7}
+fromAssetId bad string error invalid argument #1 to 'fromAssetId' (number expected, got string)
+fromAssetId table error invalid argument #1 to 'fromAssetId' (number expected, got table)
+fromObject no args error Invalid number of arguments.
+fromObject nil error Expected Object, got nil.
+fromObject string error invalid argument #1 to 'fromObject' (Object expected, got string)
+fromObject Part error invalid argument #1 to 'fromObject' (Object expected, got Instance)
+fromObject Content error invalid argument #1 to 'fromObject' (Object expected, got Content)
+method call error Invalid number of arguments.
+property default Content{SourceType=None} true ""
+property set Content{SourceType=Uri, Uri=rbxasset://d.png} rbxasset://d.png false
+legacy set Content{SourceType=Uri, Uri=rbxassetid://5}
+legacy empty Content{SourceType=None}
+empty uri Content{SourceType=None} ""
+assign string error Unable to assign property ImageContent. Content expected, got string
+assign nil error Unable to assign property ImageContent. Content expected, got nil
+assign Vector3 error Unable to assign property ImageContent. Content expected, got Vector3
+legacy takes Content error Unable to assign property Image. ContentId expected, got Content

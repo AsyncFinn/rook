@@ -9,7 +9,9 @@ mouse a again "rbxasset://a.png" "rbxasset://b.png"
   changed 
 mouse c "rbxasset://c.png" "rbxasset://c.png"
   changed uis,mouse
-uis empty "rbxasset://c.png" ""
+mouse content d "rbxasset://d.png" "rbxasset://d.png"
+  changed uis,mouse
+uis empty "rbxasset://d.png" ""
   changed uis
 mouse empty "" ""
   changed mouse

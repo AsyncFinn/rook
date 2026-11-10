@@ -2,6 +2,7 @@
 -- changes is copied to MouseIcon (whose Changed fires first), the same
 -- icon again isn't, and MouseIcon never sets the Mouse's. Both read ""
 -- before anything sets them (the shift lock cursor is set this way).
+-- Setting IconContent counts as setting Icon.
 --! client
 local uis = game:GetService("UserInputService")
 local mouse = game:GetService("Players").LocalPlayer:GetMouse()
@@ -30,6 +31,7 @@ step("mouse a", function() mouse.Icon = "rbxasset://a.png" end)
 step("uis b", function() uis.MouseIcon = "rbxasset://b.png" end)
 step("mouse a again", function() mouse.Icon = "rbxasset://a.png" end)
 step("mouse c", function() mouse.Icon = "rbxasset://c.png" end)
+step("mouse content d", function() mouse.IconContent = Content.fromUri("rbxasset://d.png") end)
 step("uis empty", function() uis.MouseIcon = "" end)
 step("mouse empty", function() mouse.Icon = "" end)
 a:Disconnect()
