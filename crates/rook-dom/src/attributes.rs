@@ -1,5 +1,3 @@
-//! Attributes and CollectionService tags.
-
 use super::*;
 
 impl Dom {

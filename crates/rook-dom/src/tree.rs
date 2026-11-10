@@ -1,5 +1,3 @@
-//! Hierarchy: parents, children, destroy, clone and services.
-
 use super::*;
 use crate::properties::ref_target;
 
@@ -89,7 +87,6 @@ impl Dom {
         })
     }
 
-    /// `Instance:FindFirstChildOfClass()`.
     pub fn find_first_child_of_class(&self, id: InstanceId, class: &str) -> Option<InstanceId> {
         // Compare class ids, not names: engine code finds services this way
         // in its inner loops (every joint checks it's in Workspace).
@@ -161,7 +158,6 @@ impl Dom {
             .collect()
     }
 
-    /// Record that `descendant` is about to leave `ancestors`.
     pub fn note_removing(&mut self, ancestors: Vec<InstanceId>, descendant: InstanceId) {
         self.journal.push(Change::Removing {
             ancestors,
@@ -418,7 +414,6 @@ impl Dom {
         )
     }
 
-    /// `DataModel:FindService()`.
     pub fn find_service(&self, class: &str) -> Option<InstanceId> {
         self.find_first_child_of_class(self.root, class)
     }

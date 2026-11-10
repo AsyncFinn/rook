@@ -47,7 +47,7 @@ impl Attributes {
     }
 }
 
-/// One instance's data. Hierarchy changes go through [`crate::Dom`].
+/// Hierarchy changes go through [`crate::Dom`].
 #[derive(Debug, Clone)]
 pub struct Instance {
     pub class: ClassId,
@@ -144,7 +144,6 @@ impl Instance {
         self.destroyed
     }
 
-    /// Explicitly set properties.
     pub fn properties(&self) -> &FxHashMap<PropertyId, Value> {
         &self.properties
     }
