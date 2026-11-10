@@ -46,6 +46,9 @@
     - [GUI modern UI objects](behavior/gui/modern.md): UICorner, UIStroke, UIGradient, flex, UITableLayout, UIPageLayout, CanvasGroup
     - [Roblox's core scripts](behavior/gui/core-scripts.md): where Studio keeps them, running them as Roblox's own code, StyleSheets, what Rook lacks
     - [Chat](behavior/gui/chat.md): TextChatService's setup, sending and delivering messages
+  - Input
+    - [Gamepads](behavior/input/gamepads.md): pads' numbers, their InputObjects, sticks and triggers, which input is in use
+    - [ContextActionService](behavior/input/context-actions.md): bindings before UserInputService, processed input, Cancel
   - Lighting
     - [Local lights](behavior/lighting/local-lights.md): PointLight, SpotLight and SurfaceLight
     - [Ambient and OutdoorAmbient](behavior/lighting/ambient.md)

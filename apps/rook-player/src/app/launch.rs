@@ -98,6 +98,9 @@ impl Launch {
             anchor: None,
             strayed: false,
             inbox: Default::default(),
+            // A window opens with focus; winit says when it loses it.
+            focused: true,
+            gamepads: super::gamepads::Gamepads::new(),
             cursor: PhysicalPosition::new(0.0, 0.0),
             cursor_shown: cursor::Shown::default(),
             ime: false,

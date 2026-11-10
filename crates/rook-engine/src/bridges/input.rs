@@ -7,34 +7,81 @@
 //! InputObject, Mouse, ClickDetector); GUI's rules are measured
 //! (docs/behavior/gui/input.md).
 
+mod gamepad;
 mod gui;
+mod input_type;
 mod textbox;
 mod world;
 
+pub use gamepad::GamepadAxis;
+pub use rook_lua::gamepads::GamepadKind;
+
 use rook_dom::InstanceId;
-use rook_types::{UserInputState, UserInputType, Value, Vector3};
+use rook_types::{GamepadKey, UserInputState, UserInputType, Value, Vector3};
 use rustc_hash::FxHashMap;
 
 use crate::DataModel;
+use input_type::Preferred;
 
 /// A window input event, in Roblox terms.
 #[derive(Debug, Clone, PartialEq)]
 pub enum InputEvent {
     /// `code` is an `Enum.KeyCode` item name ("A", "Space", "LeftShift").
-    Key { code: String, down: bool },
+    Key {
+        code: String,
+        down: bool,
+    },
     /// Text the platform typed (a key, an input method's composition, a
     /// paste), which goes to the focused TextBox.
-    Text { text: String },
+    Text {
+        text: String,
+    },
     /// Button 1 (left), 2 (right) or 3 (middle).
-    MouseButton { button: u8, down: bool },
+    MouseButton {
+        button: u8,
+        down: bool,
+    },
     /// Cursor position in pixels from the viewport's top left.
-    MouseMove { x: f32, y: f32 },
+    MouseMove {
+        x: f32,
+        y: f32,
+    },
     /// The mouse moved by this many pixels while the window holds it
     /// ([`crate::MouseLock`]): the cursor stays put, but scripts see the
     /// movement's `Delta`.
-    MouseMotion { dx: f32, dy: f32 },
+    MouseMotion {
+        dx: f32,
+        dy: f32,
+    },
     /// Wheel steps; positive is forward.
-    Wheel { delta: f32 },
+    Wheel {
+        delta: f32,
+    },
+    /// The window gained (true) or lost focus.
+    Focus {
+        focused: bool,
+    },
+    /// A pad took slot `pad` (0 is Gamepad1), with the keys it has.
+    GamepadConnected {
+        pad: usize,
+        kind: GamepadKind,
+        supported: Vec<GamepadKey>,
+    },
+    GamepadDisconnected {
+        pad: usize,
+    },
+    /// A pad's button went down or up. Triggers are axes.
+    GamepadButton {
+        pad: usize,
+        key: GamepadKey,
+        down: bool,
+    },
+    /// One of a pad's thumbstick axes or triggers moved to `value`.
+    GamepadAxis {
+        pad: usize,
+        axis: GamepadAxis,
+        value: f32,
+    },
 }
 
 /// A point in window pixels, written `x,y` (command lines' `--click`).
@@ -174,6 +221,8 @@ pub(crate) struct InputTracker {
     /// observed the same way).
     mouse_movement: Option<InstanceId>,
     mouse_wheel: Option<InstanceId>,
+    /// The Focus InputObject, reused for every focus change (measured).
+    focus: Option<InstanceId>,
     hover: Option<InstanceId>,
     /// The detector under the cursor when buttons 1 and 2 went down.
     pressed: [Option<InstanceId>; 2],
@@ -197,6 +246,7 @@ impl InputTracker {
         for slot in [
             &mut self.mouse_movement,
             &mut self.mouse_wheel,
+            &mut self.focus,
             &mut self.hover,
         ]
         .into_iter()
@@ -336,8 +386,13 @@ impl DataModel {
         }
     }
 
-    /// Fire one of UserInputService's input events.
-    fn fire_input(&self, event: &'static str, object: InstanceId, processed: bool) {
+    /// Give `object` to ContextActionService's bindings, then fire
+    /// UserInputService's `event` with it; whether it was processed.
+    /// Bindings hear input first, and one that sinks it makes the event
+    /// processed (measured, docs/behavior/input/context-actions.md).
+    /// Input GUI took isn't offered (Inference).
+    fn deliver(&self, event: &'static str, object: InstanceId, gui_took: bool) -> bool {
+        let processed = gui_took || self.runtime.context_action(object);
         let uis = self
             .runtime
             .world_mut()
@@ -347,15 +402,7 @@ impl DataModel {
         if let (Some(uis), Ok(obj)) = (uis, self.runtime.push_instance(object)) {
             self.fire(uis, event, (obj, processed));
         }
-    }
-
-    /// Give ContextActionService's bindings what GUI didn't take, after
-    /// UserInputService has heard of it (Inference: the order isn't
-    /// measured).
-    fn offer_action(&self, object: InstanceId, processed: bool) {
-        if !processed {
-            self.runtime.context_action(object);
-        }
+        processed
     }
 
     /// Look under the mouse again after a frame; the ClickDetector hovers
@@ -377,6 +424,15 @@ impl DataModel {
         self.ensure_mouse();
         let mut clicks = Vec::new();
         self.input.processed = match event {
+            InputEvent::Focus { focused } => self.focus(focused),
+            InputEvent::GamepadConnected {
+                pad,
+                kind,
+                supported,
+            } => self.gamepad_connected(pad, kind, supported),
+            InputEvent::GamepadDisconnected { pad } => self.gamepad_disconnected(pad),
+            InputEvent::GamepadButton { pad, key, down } => self.gamepad_button(pad, key, down),
+            InputEvent::GamepadAxis { pad, axis, value } => self.gamepad_axis(pad, axis, value),
             InputEvent::Key { code, down } => self.key(&code, down),
             InputEvent::Text { text } => self.type_text(&text),
             InputEvent::MouseButton { button, down } => {
@@ -394,6 +450,7 @@ impl DataModel {
     /// mouse ([`InputEvent::MouseMotion`]) moves by deltas, which the
     /// default camera turns by.
     fn mouse_move(&mut self, x: f32, y: f32, clicks: &mut Vec<ClickEvent>) -> bool {
+        self.note_input_type(UserInputType::MouseMovement, None);
         {
             let mut w = self.runtime.world_mut();
             w.input.mouse = (x, y);
@@ -402,9 +459,9 @@ impl DataModel {
         let (gx, gy) = gui_point((x, y));
         let obj =
             self.changed_input_object(UserInputType::MouseMovement, (gx, gy, 0.0), (0.0, 0.0));
-        let processed = self.gui_move(obj);
+        let mut processed = self.gui_move(obj);
         if let Some(obj) = obj {
-            self.fire_input("InputChanged", obj, processed);
+            processed = self.deliver("InputChanged", obj, processed);
         }
         self.refresh_mouse(clicks);
         if let Some(m) = self.mouse_object() {
@@ -418,6 +475,7 @@ impl DataModel {
     /// [`MouseLock::Center`](crate::MouseLock) (Inference: where Roblox
     /// draws it in first person), else where it was.
     fn mouse_motion(&mut self, dx: f32, dy: f32) -> bool {
+        self.note_input_type(UserInputType::MouseMovement, None);
         self.hold_mouse();
         let pos = {
             let mut w = self.runtime.world_mut();
@@ -426,10 +484,7 @@ impl DataModel {
         };
         let (gx, gy) = gui_point(pos);
         let obj = self.changed_input_object(UserInputType::MouseMovement, (gx, gy, 0.0), (dx, dy));
-        if let Some(obj) = obj {
-            self.fire_input("InputChanged", obj, false);
-        }
-        false
+        obj.is_some_and(|obj| self.deliver("InputChanged", obj, false))
     }
 
     /// Put the mouse where [`DataModel::mouse_lock`] holds it: at the
@@ -447,13 +502,14 @@ impl DataModel {
     }
 
     fn wheel(&mut self, delta: f32) -> bool {
+        self.note_input_type(UserInputType::MouseWheel, None);
         let pos = gui_point(self.runtime.world().input.mouse);
         // The wheel amount is in Position.Z (creator-docs InputObject).
         let obj =
             self.changed_input_object(UserInputType::MouseWheel, (pos.0, pos.1, delta), (0.0, 0.0));
-        let processed = self.gui_wheel(delta, obj);
+        let mut processed = self.gui_wheel(delta, obj);
         if let Some(obj) = obj {
-            self.fire_input("InputChanged", obj, processed);
+            processed = self.deliver("InputChanged", obj, processed);
         }
         // Inference: after InputChanged, as Roblox's camera reads both.
         self.runtime
@@ -534,7 +590,8 @@ impl DataModel {
             return false;
         };
         let pos = gui_point(self.runtime.world().input.mouse);
-        let mut processed = self.focused_text_box().is_some();
+        let typing = self.focused_text_box().is_some();
+        let mut processed = typing;
         if !down && code == "Escape" {
             processed |= std::mem::take(&mut self.input.escape_ended_box);
         }
@@ -560,8 +617,8 @@ impl DataModel {
             if processed {
                 self.edit_key(code, obj);
             }
-            self.fire_input("InputBegan", obj, processed);
-            self.offer_action(obj, processed);
+            self.note_input_type(UserInputType::Keyboard, Some(Preferred::KeyboardAndMouse));
+            processed = self.deliver("InputBegan", obj, processed);
         } else {
             if !self.runtime.world_mut().input.keys.remove(&value) {
                 return processed;
@@ -579,10 +636,12 @@ impl DataModel {
                 return processed;
             };
             self.set_property(obj, "UserInputState", UserInputState::End.into());
-            self.fire_input("InputEnded", obj, processed);
-            self.offer_action(obj, processed);
+            self.note_input_type(UserInputType::Keyboard, Some(Preferred::KeyboardAndMouse));
+            processed = self.deliver("InputEnded", obj, processed);
         }
-        if !processed && let (Some(m), Some(s)) = (self.mouse_object(), legacy_key_string(code)) {
+        // Inference: a binding sinking a key doesn't hide it from the
+        // legacy Mouse, which hears what GUI and TextBoxes don't take.
+        if !typing && let (Some(m), Some(s)) = (self.mouse_object(), legacy_key_string(code)) {
             self.fire(m, if down { "KeyDown" } else { "KeyUp" }, s);
         }
         processed
@@ -593,6 +652,10 @@ impl DataModel {
             return false;
         }
         let index = usize::from(button - 1);
+        self.note_input_type(
+            UserInputType::MOUSE_BUTTONS[index],
+            Some(Preferred::KeyboardAndMouse),
+        );
         let pos = {
             let mut w = self.runtime.world_mut();
             w.input.buttons[index] = down;
@@ -611,19 +674,13 @@ impl DataModel {
             (0.0, 0.0),
         );
         // GUI hears of it first (measured).
-        let processed = match (button, down) {
+        let gui_took = match (button, down) {
             (3, _) => self.gui_covers_active(),
             (_, true) => self.gui_press(button, obj),
             (_, false) => self.gui_release(button, obj),
         };
-        if let Some(obj) = obj {
-            self.fire_input(
-                if down { "InputBegan" } else { "InputEnded" },
-                obj,
-                processed,
-            );
-            self.offer_action(obj, processed);
-        }
+        let event = if down { "InputBegan" } else { "InputEnded" };
+        let processed = obj.map_or(gui_took, |obj| self.deliver(event, obj, gui_took));
         let detector = self.refresh_mouse(clicks);
         if let Some(m) = self.mouse_object()
             && button <= 2
@@ -642,10 +699,10 @@ impl DataModel {
         if button <= 2 {
             let slot = &mut self.input.pressed[index];
             if down {
-                *slot = detector.filter(|_| !processed);
+                *slot = detector.filter(|_| !gui_took);
             } else if let (Some(pressed), Some(now)) = (slot.take(), detector)
                 && pressed == now
-                && !processed
+                && !gui_took
             {
                 clicks.push(ClickEvent {
                     detector: now,

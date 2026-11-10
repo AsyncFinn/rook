@@ -24,6 +24,12 @@ pub(super) fn luau_source(owner: &str, name: &str) -> Option<&'static str> {
         "UnbindCoreAction" => {
             "local c = (...).context_action return function(_, name) c.unbind('core', name) end"
         }
+        "BindActivate" => {
+            "local c = (...).context_action return function(_, inputType, ...) c.bind_activate(inputType, ...) end"
+        }
+        "UnbindActivate" => {
+            "local c = (...).context_action return function(_, inputType, key) c.unbind_activate(inputType, key) end"
+        }
         "UnbindAllActions" => {
             "local c = (...).context_action return function() c.unbind_all('game') end"
         }

@@ -3,6 +3,7 @@
 pub(crate) mod camera;
 pub(crate) mod cursor;
 pub(crate) mod frame_clock;
+pub(crate) mod gamepads;
 pub(crate) mod icon;
 pub(crate) mod inbox;
 pub(crate) mod keys;
@@ -52,6 +53,9 @@ pub(crate) struct App {
     pub(crate) strayed: bool,
     /// What the window was told since the last frame.
     pub(crate) inbox: inbox::Inbox,
+    /// The window has focus: pads are heard only then (measured).
+    pub(crate) focused: bool,
+    pub(crate) gamepads: gamepads::Gamepads,
     /// The cursor's last position in the window, as the game knows it.
     pub(crate) cursor: PhysicalPosition<f64>,
     pub(crate) last_frame: Instant,

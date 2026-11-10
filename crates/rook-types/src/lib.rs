@@ -17,7 +17,7 @@ mod part;
 mod value;
 
 pub use clock::{clock_hours, time_of_day};
-pub use enums::{MeshType, RollOffMode, RunContext, UserInputState, UserInputType};
+pub use enums::{GamepadKey, MeshType, RollOffMode, RunContext, UserInputState, UserInputType};
 pub use font::{
     FAMILY_FOLDER, FONT_SIZES, LEGACY_FONTS, enum_of_font, font_from_enum, font_size_of,
     text_size_of,

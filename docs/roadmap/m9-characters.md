@@ -148,8 +148,10 @@ the packages, as it does the CoreScripts, and never ships them (decided
    the handle held by `RightGripAttachment` or the legacy `Grip`,
    `RequiresHandle`, `CanBeDropped`, `ManualActivationOnly`, `Enabled`,
    `Equipped` with its Mouse, `Activated`, `Deactivated`, `EquipTool`
-   (283 files) and `UnequipTools` (619), picking tools up by touch, and
-   the number keys. HopperBin as [decided](unscheduled.md#undecided)
+   (283 files) and `UnequipTools` (619), picking tools up by touch, the
+   number keys, and activating from the keys ContextActionService's
+   `BindActivate` names (a pad's ButtonR2 through the PlayerModule;
+   M19 step 1 keeps them). HopperBin as [decided](unscheduled.md#undecided)
    before this step.
    - *Studio questions*: the grip weld's name and parts, what equipping
      does to the Humanoid's arm, the order of `Equipped` and the tool's

@@ -28,16 +28,16 @@ crates/
   rook-gui          GUI layout, text measurement, hit testing (engine-side; produces draw lists)
   rook-audio        Mixer, SoundGroups, sound effects; the output device (cpal) behind its `output` feature
   rook-terrain      Terrain voxels (SmoothGrid decoding) and Roblox's surface-nets mesher
-  rook-input        (planned) Keyboard/mouse/gamepad/touch -> UserInputService / ContextActionService
   rook-net          Replication (in-process loopback first, network transport later)
-  rook-engine       Assembles a DataModel: services, systems, run modes, headless host
+  rook-engine       Assembles a DataModel: services, systems, run modes, headless host; input events ->
+                    UserInputService / ContextActionService (bridges/input)
   rook-view         What a DataModel draws: the render scene built from the DOM, kept up to date, and the
                     mesh files and images it loads (DOM → rook-render's input)
   rook-render       wgpu renderer: render world, parts/meshes/materials/lighting/sky/particles/GUI pass
 apps/
   rook-cli          rook: opens places in rook-player, dump, roundtrip, run-headless, content
   xtask             cargo xtask: conformance, corpus-scan, drift, package; never shipped
-  rook-player       windowed client (winit): window, input, camera, UI, server thread, bench, recording
+  rook-player       windowed client (winit, gilrs): window, input and gamepads, camera, UI, server thread, bench, recording
   rook-server       (planned) headless server
   rook-studio       (unscheduled) editor
 conformance/         Studio-recorded expectations + the Luau cases that produced them

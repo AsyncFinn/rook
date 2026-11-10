@@ -236,6 +236,7 @@ mod collect;
 mod context_actions;
 mod effects;
 mod explosions;
+mod gamepads;
 mod gui;
 mod legacy_chat;
 mod lighting_look;

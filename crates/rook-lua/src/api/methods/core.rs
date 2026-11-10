@@ -25,13 +25,9 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("GlobalSettings", "GetFVariable") => global_variable,
         ("GuiService", "GetResolutionScale") => one,
         ("GuiService", "IsTenFootInterface") => no,
-        ("UserInputService", "GetPlatform") => platform,
         ("Player", "GetUnder13") => no,
         ("RenderSettings", "GetMaxQualityLevel") => max_quality_level,
         ("UserSettings", "IsUserFeatureEnabled") => no,
-        ("UserInputService", "GetGamepadConnected") => no,
-        ("UserInputService", "GetImageForKeyCode") => empty_string,
-        ("UserInputService", "GetStringForKeyCode") => key_string,
         ("RunService", "GetRobloxVersion" | "GetCoreScriptVersion") => roblox_version,
         ("RunService", "GetRobloxClientChannel") => channel,
         ("VRService", "IsVRAppBuild") => no,
@@ -65,14 +61,6 @@ fn channel(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
     Outcome::ret(lua, "LIVE")
 }
 
-/// What a key is labelled on a US keyboard: its `Enum.KeyCode` name, which
-/// is the label for letters and most keys (Approximation: Roblox gives the
-/// symbol for punctuation keys).
-fn key_string(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    let name = crate::types::enums::item_name(lua, a.get(0), "KeyCode").unwrap_or_default();
-    Outcome::ret(lua, name)
-}
-
 /// The graphics quality slider's top: Roblox's 21 levels
 /// (`Enum.QualityLevel` Level21).
 fn max_quality_level(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
@@ -94,17 +82,6 @@ fn no(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
 /// The display's scale for high-DPI images; Rook draws GUI at 1:1.
 fn one(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
     Outcome::ret(lua, 1.0)
-}
-
-/// Rook runs on desktops; scripts tell them apart only for platform
-/// features Rook doesn't have.
-fn platform(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
-    let name = if cfg!(target_os = "macos") {
-        "OSX"
-    } else {
-        "Windows"
-    };
-    Outcome::ret(lua, crate::types::enums::named_item(lua, "Platform", name)?)
 }
 
 /// Properties missing from Rook's API snapshot that CoreScripts read and

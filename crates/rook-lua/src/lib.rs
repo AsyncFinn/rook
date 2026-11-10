@@ -9,6 +9,7 @@ mod api;
 pub mod audio_api;
 mod collect;
 mod ctx;
+pub mod gamepads;
 mod net;
 mod removal;
 pub mod scheduler;
@@ -444,6 +445,11 @@ impl Runtime {
     /// The script-side handle for an instance.
     pub fn push_instance(&self, id: InstanceId) -> mlua::Result<mlua::AnyUserData> {
         api::instance::push_instance(&self.lua, id)
+    }
+
+    /// The script-side `Enum.<enum_name>` item with this value.
+    pub fn push_enum_item(&self, enum_name: &str, value: u32) -> mlua::Result<mlua::Value> {
+        types::enums::enum_item(&self.lua, enum_name, value)
     }
 
     /// Remote calls made since the last call, for the session to deliver.

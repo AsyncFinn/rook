@@ -32,8 +32,8 @@ pub(crate) enum Noted {
     },
     /// The wheel turned this many notches (up positive).
     Wheel(f32),
-    /// The window lost focus.
-    Unfocused,
+    /// The window gained (true) or lost focus.
+    Focus(bool),
 }
 
 #[derive(Debug, Default)]
@@ -75,8 +75,10 @@ impl Inbox {
             }
             WindowEvent::CursorEntered { .. } => self.inside = Some(true),
             WindowEvent::CursorLeft { .. } => self.inside = Some(false),
-            WindowEvent::Focused(false) => self.events.push(Noted::Unfocused),
-            WindowEvent::Focused(true) => self.refocused = true,
+            WindowEvent::Focused(focused) => {
+                self.refocused |= focused;
+                self.events.push(Noted::Focus(focused));
+            }
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => self.scale = Some(scale_factor),
             WindowEvent::KeyboardInput { event, .. } => {
                 if let PhysicalKey::Code(code) = event.physical_key {
@@ -166,10 +168,19 @@ impl App {
                         self.camera.speed = speed.clamp(1.0, 2000.0);
                     }
                 }
-                Noted::Unfocused if self.looking => self.look(false),
-                Noted::Unfocused => {}
+                Noted::Focus(focused) => {
+                    self.focused = focused;
+                    self.game.input(InputEvent::Focus { focused });
+                    if !focused && self.looking {
+                        self.look(false);
+                    }
+                }
             }
         }
+        // After the window's events: gilrs keeps its own queue, so the
+        // two can't be interleaved as they came.
+        let game = &mut self.game;
+        self.gamepads.read(self.focused, |event| game.input(event));
         if let Some(at) = inbox.cursor {
             self.cursor_to(at);
         }

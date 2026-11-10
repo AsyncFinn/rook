@@ -114,6 +114,28 @@ pub struct InputState {
     pub mouse_delta: (f32, f32),
     /// The local player's Mouse (`Player:GetMouse()`).
     pub mouse_object: Option<InstanceId>,
+    /// Gamepad1 to Gamepad8.
+    pub gamepads: [crate::gamepads::Gamepad; crate::gamepads::GAMEPAD_SLOTS],
+    /// What `GetLastInputType` answers; None until the first input, when
+    /// it's Focus, as Studio's client starts.
+    pub last_input_type: Option<rook_types::UserInputType>,
+    /// The kind of pad `GetStringForKeyCode` and `GetImageForKeyCode`
+    /// name keys after: the last one connected, kept after it goes.
+    pub key_names: crate::gamepads::GamepadKind,
+}
+
+impl InputState {
+    /// Drop what is kept about `id`, which is being freed.
+    pub fn forget(&mut self, id: InstanceId) {
+        for pad in &mut self.gamepads {
+            pad.forget(id);
+        }
+    }
+
+    /// Whether any gamepad is connected (`GamepadEnabled`).
+    pub fn any_gamepad(&self) -> bool {
+        self.gamepads.iter().any(|p| p.connected)
+    }
 }
 
 /// A visual effect's or adornment's method a script called: what the
@@ -424,6 +446,7 @@ impl World {
         self.interpolations.remove(&id);
         self.movement.forget(id);
         self.styles.forget(id);
+        self.input.forget(id);
     }
 
     /// Look at the journal for what StyleSheets must style again, before

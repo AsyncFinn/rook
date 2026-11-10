@@ -40,6 +40,7 @@ tracing.workspace = true
 profiling.workspace = true
 mimalloc.workspace = true
 rustc-hash.workspace = true
+gilrs.workspace = true
 
 [features]
 default = ["repl", "developer-overrides", "counters"]

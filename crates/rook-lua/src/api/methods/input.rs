@@ -1,18 +1,21 @@
-//! UserInputService queries and Player:GetMouse. Input events themselves
+//! UserInputService's queries and Player:GetMouse. Input events themselves
 //! are fired by the engine, which owns the window.
 
-use mlua::{Lua, Value as LuaValue};
+mod gamepads;
+mod key_names;
+mod keyboard_mouse;
+
+use mlua::Lua;
 use rook_dom::InstanceId;
-use rook_types::{UserInputState, UserInputType};
 
 use super::RawMethod;
 use crate::api::instance::push_instance;
-use crate::ctx::args::Args;
-use crate::ctx::{ApiResult, Outcome, with_world};
-use crate::types::LVector2;
-use crate::types::enums::item_value;
+use crate::ctx::{ApiResult, Outcome};
 
 pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
+    use gamepads::*;
+    use key_names::*;
+    use keyboard_mouse::*;
     Some(match (owner, name) {
         ("UserInputService", "IsKeyDown") => is_key_down,
         ("UserInputService", "IsMouseButtonPressed") => is_mouse_button_pressed,
@@ -21,74 +24,24 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("UserInputService", "GetKeysPressed") => get_keys_pressed,
         ("UserInputService", "GetMouseButtonsPressed") => get_mouse_buttons_pressed,
         ("UserInputService", "GetLastInputType") => last_input_type,
+        ("UserInputService", "GetPlatform") => platform,
+        ("UserInputService", "GetConnectedGamepads") => connected_gamepads,
+        ("UserInputService", "GetGamepadConnected") => gamepad_connected,
+        ("UserInputService", "GetGamepadState") => gamepad_state,
+        ("UserInputService", "GetSupportedGamepadKeyCodes") => supported_keys,
+        ("UserInputService", "GamepadSupports") => gamepad_supports,
+        ("UserInputService", "IsGamepadButtonDown") => is_gamepad_button_down,
+        ("UserInputService", "GetNavigationGamepads") => navigation_gamepads,
+        ("UserInputService", "IsNavigationGamepad") => is_navigation_gamepad,
+        ("UserInputService", "SetNavigationGamepad") => set_navigation_gamepad,
+        ("UserInputService", "GetStringForKeyCode") => string_for_key,
+        ("UserInputService", "GetImageForKeyCode") => image_for_key,
         ("Player", "GetMouse") => get_mouse,
         _ => return None,
     })
 }
 
-fn is_key_down(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    let code = item_value(lua, a.get(0), "KeyCode").ok_or_else(|| a.wrong(0, "KeyCode"))?;
-    Outcome::ret(lua, with_world(lua, |w| w.input.keys.contains(&code)))
-}
-
-/// `Enum.UserInputType` MouseButton1-3 are values 0-2.
-fn is_mouse_button_pressed(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    let t =
-        item_value(lua, a.get(0), "UserInputType").ok_or_else(|| a.wrong(0, "UserInputType"))?;
-    let pressed = with_world(lua, |w| {
-        w.input.buttons.get(t as usize).copied().unwrap_or(false)
-    });
-    Outcome::ret(lua, pressed)
-}
-
-fn get_mouse_location(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
-    let (x, y) = with_world(lua, |w| w.input.mouse);
-    Outcome::ret(lua, LVector2(rook_types::Vector2::new(x, y)))
-}
-
-fn get_mouse_delta(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
-    let (x, y) = with_world(lua, |w| w.input.mouse_delta);
-    Outcome::ret(lua, LVector2(rook_types::Vector2::new(x, y)))
-}
-
-/// Fresh InputObjects describing what is held (creator-docs
-/// UserInputService:GetKeysPressed).
-fn get_keys_pressed(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
-    let objects = with_world(lua, |w| {
-        let mut keys: Vec<u32> = w.input.keys.iter().copied().collect();
-        keys.sort_unstable();
-        keys.into_iter()
-            .filter_map(|k| {
-                crate::input_object(
-                    &mut w.dom,
-                    k,
-                    UserInputType::Keyboard,
-                    UserInputState::Begin,
-                    (0.0, 0.0),
-                    (0.0, 0.0),
-                )
-            })
-            .collect::<Vec<_>>()
-    });
-    sequence(lua, objects)
-}
-
-fn get_mouse_buttons_pressed(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
-    let objects = with_world(lua, |w| {
-        let buttons = w.input.buttons;
-        let pos = w.input.mouse;
-        UserInputType::MOUSE_BUTTONS
-            .into_iter()
-            .zip(buttons)
-            .filter(|&(_, down)| down)
-            .filter_map(|(b, _)| {
-                crate::input_object(&mut w.dom, 0, b, UserInputState::Begin, pos, (0.0, 0.0))
-            })
-            .collect::<Vec<_>>()
-    });
-    sequence(lua, objects)
-}
-
+/// A Luau array of these instances.
 fn sequence(lua: &Lua, ids: Vec<InstanceId>) -> ApiResult<Outcome> {
     let t = lua.create_table()?;
     for (i, id) in ids.into_iter().enumerate() {
@@ -97,23 +50,13 @@ fn sequence(lua: &Lua, ids: Vec<InstanceId>) -> ApiResult<Outcome> {
     Outcome::ret(lua, t)
 }
 
-/// Keyboard and mouse is the only input Rook has so far.
-fn last_input_type(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
-    // MouseMovement.
-    Outcome::ret(
-        lua,
-        crate::types::enums::enum_item(lua, "UserInputType", UserInputType::Keyboard.value())?,
-    )
-}
-
-/// The local player's Mouse on a client; nil on the server.
-fn get_mouse(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
-    let mouse = with_world(lua, |w| {
-        let local = w.dom.local_player()?;
-        (local == this).then_some(w.input.mouse_object).flatten()
-    });
-    match mouse {
-        Some(m) => Outcome::ret(lua, push_instance(lua, m)?),
-        None => Outcome::ret(lua, LuaValue::Nil),
-    }
+/// Rook runs on desktops; scripts tell them apart only for platform
+/// features Rook doesn't have.
+fn platform(lua: &Lua, _: InstanceId, _: &crate::ctx::args::Args) -> ApiResult<Outcome> {
+    let name = if cfg!(target_os = "macos") {
+        "OSX"
+    } else {
+        "Windows"
+    };
+    Outcome::ret(lua, crate::types::enums::named_item(lua, "Platform", name)?)
 }

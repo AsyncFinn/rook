@@ -20,7 +20,9 @@ pub mod settings;
 pub mod user_settings;
 
 pub use bridges::camera::{CameraView, MouseLock};
-pub use bridges::input::{CursorLook, InputEvent, ScreenPoint, SystemCursor};
+pub use bridges::input::{
+    CursorLook, GamepadAxis, GamepadKind, InputEvent, ScreenPoint, SystemCursor,
+};
 
 pub use bridges::render_changes::{RenderChanges, adorned_part, is_effect_class};
 

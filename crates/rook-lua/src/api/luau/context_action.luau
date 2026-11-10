@@ -58,6 +58,44 @@ function api.bind(kind, name, fn, touch, priority, ...)
 	end)
 end
 
+-- The keys that activate an equipped Tool, by the input type they come
+-- from (BindActivate). They aren't bindings: input still reaches
+-- UserInputService unprocessed (measured, ButtonR2 from the
+-- PlayerModule). Tools activate from them (M9 step 7).
+local activators = {}
+
+function api.bind_activate(inputType, ...)
+	local keys = activators[inputType] or {}
+	for _, key in { ... } do
+		if not table.find(keys, key) then
+			table.insert(keys, key)
+		end
+	end
+	activators[inputType] = keys
+end
+
+-- Without a key (or with KeyCode.Unknown), every key of the type.
+function api.unbind_activate(inputType, key)
+	local keys = activators[inputType]
+	if keys == nil then
+		return
+	end
+	if key == nil or key == Enum.KeyCode.Unknown then
+		activators[inputType] = nil
+		return
+	end
+	local i = table.find(keys, key)
+	if i then
+		table.remove(keys, i)
+	end
+end
+
+-- Whether a key of an input type activates tools.
+function api.activates(inputType, key)
+	local keys = activators[inputType]
+	return keys ~= nil and table.find(keys, key) ~= nil
+end
+
 -- What GetAllBoundActionInfo returns: each binding's info by name.
 function api.info(kind)
 	local all = {}

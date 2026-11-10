@@ -140,7 +140,7 @@ to start. M0 to M2 are done, so they aren't listed.
 | ⬜ | [**M16** Every class the archive uses](m16-every-class.md) | No class in 5 or more archive files is still inert | Nothing |
 | ⬜ | [**M17** Modern places](m17-modern-places.md) | A conformance set of places built in today's Studio plays as it does in Studio | Nothing; what it turns up goes to the milestone owning that area |
 | ⬜ | [**M18** Offline content](m18-offline-content.md) | An archived place plays on a machine with no network, from a content pack | Step 4 (own PlayerModule and CoreGui): M8 step 9, M9 step 4 |
-| ⬜ | [**M19** Input and platforms](m19-input-and-platforms.md) | Play with a gamepad and on a touchscreen; Rook builds and runs on Windows, Linux and macOS | Step 3: steps 1 and 2 |
+| ⬜ | [**M19** Input and platforms](m19-input-and-platforms.md) | Play with a gamepad and on a touchscreen; Rook builds and runs on Windows, Linux and macOS | Step 3: step 1; step 4: steps 1 to 3 |
 | ⬜ | [**M20** Hosting safety](m20-hosting-safety.md) | A public server survives runaway scripts and a hostile client test suite | Step 2 (hostile clients): M10 step 1 |
 | ⬜ | [**M21** Performance and scale](m21-performance-and-scale.md) | The archive's largest places hold 60 FPS on a mid-range PC | Step 3 (streaming): M10 step 1 |
 | ⬜ | [**M22** Release](m22-release.md) | Download Rook, pick a place from a library and play, without a terminal | Joining servers: M10, M12 step 2; packages for Linux and macOS: M19's builds |

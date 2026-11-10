@@ -7,6 +7,13 @@ use crate::Value;
 
 macro_rules! roblox_enum {
     ($(#[$meta:meta])* $name:ident { $($item:ident = $value:literal,)* }) => {
+        roblox_enum!(@ $(#[$meta])* $name, stringify!($name), { $($item = $value,)* });
+    };
+    // Some of a Roblox enum's items, under a name of their own.
+    ($(#[$meta:meta])* $name:ident as $roblox:literal { $($item:ident = $value:literal,)* }) => {
+        roblox_enum!(@ $(#[$meta])* $name, $roblox, { $($item = $value,)* });
+    };
+    (@ $(#[$meta:meta])* $name:ident, $roblox:expr, { $($item:ident = $value:literal,)* }) => {
         $(#[$meta])*
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
         pub enum $name {
@@ -15,7 +22,7 @@ macro_rules! roblox_enum {
 
         impl $name {
             /// The Roblox enum's name.
-            pub const NAME: &str = stringify!($name);
+            pub const NAME: &str = $roblox;
             /// The items Rook names, by their Roblox names.
             pub const ITEMS: &[(&str, $name)] = &[$((stringify!($item), Self::$item),)*];
 
@@ -59,6 +66,16 @@ roblox_enum! {
         MouseWheel = 3,
         MouseMovement = 4,
         Keyboard = 8,
+        Focus = 9,
+        Gamepad1 = 12,
+        Gamepad2 = 13,
+        Gamepad3 = 14,
+        Gamepad4 = 15,
+        Gamepad5 = 16,
+        Gamepad6 = 17,
+        Gamepad7 = 18,
+        Gamepad8 = 19,
+        None = 22,
     }
 }
 
@@ -66,6 +83,81 @@ impl UserInputType {
     /// Mouse buttons 1 to 3, in order.
     pub const MOUSE_BUTTONS: [Self; 3] =
         [Self::MouseButton1, Self::MouseButton2, Self::MouseButton3];
+
+    /// Gamepad1 to Gamepad8, in order.
+    pub const GAMEPADS: [Self; 8] = [
+        Self::Gamepad1,
+        Self::Gamepad2,
+        Self::Gamepad3,
+        Self::Gamepad4,
+        Self::Gamepad5,
+        Self::Gamepad6,
+        Self::Gamepad7,
+        Self::Gamepad8,
+    ];
+
+    /// Which gamepad this is, 0 for Gamepad1, if it's one.
+    pub fn gamepad_index(self) -> Option<usize> {
+        Self::GAMEPADS.iter().position(|&g| g == self)
+    }
+}
+
+roblox_enum! {
+    /// The `Enum.KeyCode`s a gamepad has, in the order Studio's
+    /// `GetGamepadState` lists them (docs/behavior/input/gamepads.md).
+    GamepadKey as "KeyCode" {
+        ButtonStart = 1010,
+        ButtonA = 1002,
+        ButtonSelect = 1011,
+        ButtonB = 1003,
+        ButtonX = 1000,
+        ButtonY = 1001,
+        ButtonL1 = 1005,
+        ButtonR1 = 1004,
+        ButtonL2 = 1007,
+        ButtonR2 = 1006,
+        ButtonL3 = 1009,
+        ButtonUp = 1053,
+        ButtonR3 = 1008,
+        ButtonLeft = 1055,
+        DPadUp = 1014,
+        DPadDown = 1015,
+        DPadLeft = 1012,
+        DPadRight = 1013,
+        Thumbstick1 = 1016,
+        Thumbstick2 = 1017,
+        ButtonCenter = 1051,
+        ButtonBack = 1052,
+        ButtonDown = 1054,
+        ButtonRight = 1056,
+    }
+}
+
+impl GamepadKey {
+    /// How many keys a gamepad has.
+    pub const COUNT: usize = Self::ITEMS.len();
+
+    /// Where this key is in [`GamepadKey::ITEMS`].
+    pub fn index(self) -> usize {
+        Self::ITEMS
+            .iter()
+            .position(|&(_, k)| k == self)
+            .expect("every key is an item")
+    }
+
+    /// The item's name.
+    pub fn name(self) -> &'static str {
+        Self::ITEMS[self.index()].0
+    }
+
+    /// A trigger: an axis with an analog pull, not a button.
+    pub fn is_trigger(self) -> bool {
+        matches!(self, Self::ButtonL2 | Self::ButtonR2)
+    }
+
+    pub fn is_thumbstick(self) -> bool {
+        matches!(self, Self::Thumbstick1 | Self::Thumbstick2)
+    }
 }
 
 roblox_enum! {
@@ -132,6 +224,7 @@ mod tests {
         check(RunContext::NAME, RunContext::ITEMS);
         check(UserInputType::NAME, UserInputType::ITEMS);
         check(UserInputState::NAME, UserInputState::ITEMS);
+        check(GamepadKey::NAME, GamepadKey::ITEMS);
         check(MeshType::NAME, MeshType::ITEMS);
         check(RollOffMode::NAME, RollOffMode::ITEMS);
     }
