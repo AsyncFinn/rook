@@ -75,7 +75,6 @@ impl Source {
         Snapshot { root, services }
     }
 
-    /// The server's changes since the last call.
     pub fn updates(&mut self, server: &Dom) -> Vec<Update> {
         profiling::scope!("Source::updates");
         let mut out = Vec::new();
