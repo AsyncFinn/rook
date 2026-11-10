@@ -120,3 +120,12 @@ fn halves_images_past_the_limit() {
     let img = Image::decode(&bytes).unwrap();
     assert_eq!((img.width, img.height), (1024, 2));
 }
+
+#[test]
+fn rejects_zero_max_size() {
+    let rgba = ::image::RgbaImage::from_pixel(1, 1, ::image::Rgba([1, 2, 3, 255]));
+    assert!(matches!(
+        Image::from_rgba(rgba, ImageFormat::Png, 0),
+        Err(ImageError::Damaged("PNG", _))
+    ));
+}

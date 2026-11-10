@@ -109,6 +109,12 @@ impl Image {
         format: ImageFormat,
         max_size: u32,
     ) -> Result<Self, ImageError> {
+        if max_size == 0 {
+            return Err(ImageError::Damaged(
+                format.name(),
+                "maximum size must be greater than zero".into(),
+            ));
+        }
         while rgba.width() > max_size || rgba.height() > max_size {
             let (w, h) = (rgba.width(), rgba.height());
             let half = mips::downsample(&rgba, w, h);
