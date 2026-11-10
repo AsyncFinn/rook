@@ -6,9 +6,8 @@ use rook_audio::effects::{Chain, Effect, Reverb, ordered};
 
 use super::*;
 
-/// The effect a SoundEffect instance is, if Rook plays its class (Chorus,
-/// Compressor, Echo, Flange and Tremolo are left out, see the docs).
-/// Defaults are Studio's.
+/// The effect a SoundEffect instance is, if Rook plays its class. Defaults
+/// are Studio's.
 fn effect(dom: &Dom, id: InstanceId) -> Option<Effect> {
     Some(match dom.class_name(id) {
         "EqualizerSoundEffect" => Effect::Equalizer {
@@ -39,6 +38,9 @@ fn effect(dom: &Dom, id: InstanceId) -> Option<Effect> {
         "PitchShiftSoundEffect" => Effect::PitchShift {
             octave: dom.float_property(id, "Octave").unwrap_or(1.25),
         },
+        // TODO: play ChorusSoundEffect, CompressorSoundEffect,
+        // EchoSoundEffect, FlangeSoundEffect and TremoloSoundEffect
+        // (docs/behavior/audio/soundgroups-and-effects.md).
         _ => return None,
     })
 }

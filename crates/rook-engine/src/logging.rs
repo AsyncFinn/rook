@@ -75,7 +75,6 @@ impl Filter {
         Some(filter)
     }
 
-    /// Whether the terminal shows an event.
     pub fn shows(&self, target: &str, level: Level) -> bool {
         if !ours(target) {
             return level <= Level::WARN;

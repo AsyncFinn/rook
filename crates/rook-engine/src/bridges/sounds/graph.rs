@@ -20,9 +20,8 @@ pub(crate) struct Metering {
 }
 
 /// The effect an effect instance plays, with Studio's defaults; `None`
-/// passes sound through as it is: a bypassed effect (creator-docs), and
-/// AudioFilter, AudioFlanger, AudioTremolo, AudioLimiter, AudioGate and
-/// AudioChannelSplitter, which Rook doesn't play yet (Approximation).
+/// passes sound through as it is: a bypassed effect (creator-docs), and the
+/// classes below without an arm (Approximation).
 fn effect(dom: &Dom, id: InstanceId) -> Option<Effect> {
     if dom.bool_property(id, "Bypass").unwrap_or(false) {
         return None;
@@ -75,6 +74,8 @@ fn effect(dom: &Dom, id: InstanceId) -> Option<Effect> {
             release: f("Release", 0.1),
             makeup: f("MakeupGain", 0.0),
         },
+        // TODO: play AudioFilter, AudioFlanger, AudioTremolo, AudioLimiter,
+        // AudioGate and AudioChannelSplitter.
         _ => return None,
     })
 }
