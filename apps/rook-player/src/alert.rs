@@ -1,7 +1,6 @@
 //! Native message boxes for what ends a windowed run: a place that can't
-//! be opened, a GPU Rook can't draw with, a crash. Rook has no CoreGui of
-//! its own yet to say these in its window, and opened from Explorer it
-//! has no console (console_window.rs).
+//! be opened, a GPU Rook can't draw with, a crash. Opened from Explorer,
+//! the player has no console to say these in (console_window.rs).
 
 use rook_engine::console;
 use rook_lua::MessageType;
