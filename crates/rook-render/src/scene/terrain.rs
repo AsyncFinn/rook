@@ -1,5 +1,3 @@
-//! How terrain's water and grass move.
-
 use super::*;
 
 /// How the terrain's water and grass move (`docs/behavior/terrain/water.md`).

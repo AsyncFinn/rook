@@ -1,5 +1,3 @@
-//! A TrussPart's bars.
-
 use super::*;
 
 /// One face of a box centered at `center` whose edges run along `axes` (a

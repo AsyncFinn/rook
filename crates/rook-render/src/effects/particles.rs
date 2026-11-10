@@ -128,7 +128,6 @@ fn hash(mut x: u32) -> u32 {
     x ^ (x >> 16)
 }
 
-/// One emitter's living particles.
 #[derive(Debug, Default)]
 struct Pool {
     particles: Vec<Particle>,
@@ -293,12 +292,10 @@ impl Particles {
         });
     }
 
-    /// The emitter in slot `i` and its particles.
     pub(crate) fn emitter(&self, i: usize) -> Option<(&Emitter, &[Particle])> {
         Some((self.emitters.get(i)?.as_ref()?, &self.pools[i].particles))
     }
 
-    /// Whether any emitter is in the scene.
     pub(crate) fn is_empty(&self) -> bool {
         self.emitters.iter().all(Option::is_none)
     }

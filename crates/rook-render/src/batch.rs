@@ -238,7 +238,6 @@ pub(crate) struct Batches {
     of: FxHashMap<(i32, BatchKey), usize>,
     /// Indices into `list` in drawing order.
     order: Vec<usize>,
-    /// Each batch's z.
     pub(crate) z: Vec<i32>,
     /// A box around each batch's instances in the world. A changed
     /// instance widens it; it's worked out afresh (tight again) once as
@@ -374,7 +373,6 @@ impl Batches {
         self.pool.upload(device, queue, encoder, scatter);
     }
 
-    /// How many instance slots the pool holds.
     pub(crate) fn slots(&self) -> usize {
         self.pool.instances.len()
     }

@@ -1,5 +1,3 @@
-//! A Beam's strip: its Bézier curve between its Attachments.
-
 use super::*;
 
 /// The most pieces a Beam is drawn in (`Segments`).

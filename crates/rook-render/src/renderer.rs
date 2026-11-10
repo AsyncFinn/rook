@@ -1,5 +1,3 @@
-//! The renderer: GPU objects, pipelines and what the scene needs on the GPU.
-
 mod cuts;
 mod detail;
 mod draw;
