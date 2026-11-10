@@ -2,10 +2,6 @@
 //! `MouseIconContent`...) hold, a URI or an object, and the global
 //! `Content` table that makes one. Measured in Studio 0.747: conformance
 //! scripting/content.
-//!
-//! Rook has no `Object` types (EditableImage, EditableMesh), so
-//! `Content.fromObject` refuses everything it is given, as Studio does
-//! for Instances and other values.
 
 use mlua::{
     Lua, MetaMethod, MultiValue, UserData, UserDataFields, UserDataMethods, UserDataRef,
@@ -40,7 +36,7 @@ impl LContent {
     }
 
     /// The object this content holds: a file's object referents don't name
-    /// Rook instances, and Rook makes none (see the module note).
+    /// Rook instances, and Rook makes none.
     fn object(&self) -> LuaValue {
         LuaValue::Nil
     }
@@ -169,6 +165,7 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
         "fromObject",
         lua.create_function(|_, args: MultiValue| -> mlua::Result<LContent> {
             let v = one_arg(args)?;
+            // TODO: take EditableImage and EditableMesh once Rook has them.
             Err(match v {
                 LuaValue::Nil => err("Expected Object, got nil."),
                 v => wrong("fromObject", "Object", &v),

@@ -4,7 +4,6 @@
 //! ` > ` (child) or ` >> ` (descendant); a compound names a class, `#Name`,
 //! `.tag`s and `:State`s; a chain may end in `::Class`, a pseudo-instance
 //! the rule creates under what it matches (creator-docs "Styling").
-//! `@` queries aren't supported: a chain using one matches nothing.
 
 use rook_dom::{Dom, InstanceId};
 
@@ -97,6 +96,7 @@ fn compound(word: &str) -> Option<Compound> {
             '.' => c.tags.push(value),
             '#' => c.name = Some(value),
             ':' => c.states.push(value),
+            // TODO: `@` queries; a chain using one matches nothing.
             _ => return None,
         }
         rest = after;

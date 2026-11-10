@@ -497,7 +497,7 @@ fn active_event(state: State) -> Option<&'static str> {
 fn active_args(state: State, active: bool) -> Vec<LuaValue> {
     let mut args = vec![LuaValue::Boolean(active)];
     if state == State::Seated {
-        // Seated passes the seat, which the controller's report doesn't carry.
+        // TODO: pass the seat once the controller's report carries it.
         args.push(LuaValue::Nil);
     }
     args

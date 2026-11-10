@@ -105,7 +105,8 @@ pub(crate) fn datastore_helpers(lua: &Lua) -> mlua::Result<Table> {
 
 /// One store object per (kind, name, scope), as Roblox returns the same
 /// object for repeated requests. Contents live in memory for this run
-/// (Approximation: Rook has no persistent data stores yet).
+/// (Approximation).
+// TODO: keep data stores between runs.
 fn store(lua: &Lua, class: &str, name: &str, scope: &str) -> ApiResult<Outcome> {
     let cache: Table = match lua.named_registry_value::<Option<Table>>("rook.datastores")? {
         Some(t) => t,

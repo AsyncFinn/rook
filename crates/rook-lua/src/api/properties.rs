@@ -241,8 +241,9 @@ pub(crate) fn get(w: &World, id: InstanceId, name: &str) -> Option<Value> {
     match name {
         "ClockTime" if dom.is_a(id, "Lighting") => Some(Value::Float32(dom.clock_time(id) as f32)),
         // The top bar's free space, between Roblox's buttons (creator-docs
-        // GuiService.TopbarInset). Approximation: all of it, until Rook
-        // measures where the CoreScripts' buttons end; a server has none.
+        // GuiService.TopbarInset). Approximation: all of it; a server has
+        // none.
+        // TODO: measure where the CoreScripts' buttons end.
         "TopbarInset" if dom.class_name(id) == "GuiService" => {
             let height = if w.is_client {
                 rook_gui::GUI_INSET
