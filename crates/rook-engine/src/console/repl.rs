@@ -23,7 +23,6 @@ use crate::console::{print_message, set_output};
 mod editor;
 mod highlight;
 
-/// Where commands run.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Side {
     Server,
@@ -65,7 +64,6 @@ impl Repl {
         self.side
     }
 
-    /// Whether input has ended.
     pub fn closed(&self) -> bool {
         self.closed
     }

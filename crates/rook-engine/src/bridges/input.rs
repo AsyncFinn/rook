@@ -17,7 +17,6 @@ use rustc_hash::FxHashMap;
 
 use crate::DataModel;
 
-/// A window input event, in Roblox terms.
 #[derive(Debug, Clone, PartialEq)]
 pub enum InputEvent {
     /// `code` is an `Enum.KeyCode` item name ("A", "Space", "LeftShift").
@@ -121,7 +120,6 @@ impl CursorLook {
         })
     }
 
-    /// The look a script's icon names.
     fn icon(url: String) -> CursorLook {
         let system = match url.strip_prefix("rbxasset://SystemCursors/") {
             Some("Arrow") => SystemCursor::Arrow,
@@ -135,7 +133,6 @@ impl CursorLook {
     }
 }
 
-/// A ClickDetector interaction the client detected.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClickKind {
     Click,
@@ -292,7 +289,6 @@ impl DataModel {
         self.runtime.world().input.mouse
     }
 
-    /// The TextBox keys are typing into, if any.
     pub fn focused_text_box(&self) -> Option<InstanceId> {
         self.runtime.focused_text_box()
     }
@@ -326,7 +322,6 @@ impl DataModel {
         }
     }
 
-    /// Create the local player's Mouse if it doesn't exist yet.
     pub(crate) fn ensure_mouse(&self) {
         let mut w = self.runtime.world_mut();
         if w.input.mouse_object.is_none()
@@ -336,7 +331,6 @@ impl DataModel {
         }
     }
 
-    /// Fire one of UserInputService's input events.
     fn fire_input(&self, event: &'static str, object: InstanceId, processed: bool) {
         let uis = self
             .runtime

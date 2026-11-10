@@ -10,7 +10,6 @@ use std::sync::{Arc, OnceLock};
 use rbx_dom_weak::WeakDom;
 use rook_lua::{RigSource, RigType};
 
-/// The rig file's `rbxasset://` path.
 const R15: &str = "rbxasset://avatar/characterR15DynamicHeadV2.rbxm";
 
 /// Bodies for a server, read through `resolver`.

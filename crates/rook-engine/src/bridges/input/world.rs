@@ -1,6 +1,3 @@
-//! The mouse in the 3D world: the ray through the cursor, the Mouse's
-//! `Hit`, `Target` and the rest, and the ClickDetector under it.
-
 use glam::Vec3;
 use rook_dom::InstanceId;
 use rook_types::{CFrame, Value, Vector3};
@@ -27,7 +24,6 @@ struct Look {
     world: u64,
 }
 
-/// What the mouse last saw, and from where.
 #[derive(Debug, Clone, Copy)]
 pub(super) struct Under {
     look: Look,

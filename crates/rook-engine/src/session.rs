@@ -114,7 +114,6 @@ impl Session {
         }
     }
 
-    /// Feed a window input event to a client.
     pub fn input(&mut self, index: usize, event: crate::InputEvent) {
         let Some(client) = self.clients.get_mut(index) else {
             return;
@@ -124,7 +123,6 @@ impl Session {
         }
     }
 
-    /// The server-side Player of a client.
     pub fn player(&self, index: usize) -> Option<InstanceId> {
         self.server.player(index)
     }

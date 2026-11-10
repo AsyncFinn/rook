@@ -46,7 +46,6 @@ fn wanted(dom: &Dom, chat: InstanceId) -> bool {
         && version == Some("LegacyChatService")
 }
 
-/// A new `class` named `name` under `parent`.
 fn create(
     dom: &mut Dom,
     class: &str,

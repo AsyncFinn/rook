@@ -8,7 +8,6 @@ use rook_types::Value;
 
 use crate::DataModel;
 
-/// A TextBox's text with its caret and selection, by character.
 struct Edit {
     text: Vec<char>,
     caret: usize,
@@ -22,7 +21,6 @@ impl Edit {
         Some((anchor.min(self.caret), anchor.max(self.caret)))
     }
 
-    /// Delete the selection, if there is one.
     fn cut(&mut self) -> bool {
         let Some((lo, hi)) = self.selected() else {
             return false;
@@ -78,7 +76,6 @@ impl Edit {
         i
     }
 
-    /// Where the caret's line starts and ends.
     fn line(&self) -> (usize, usize) {
         let start = self.text[..self.caret]
             .iter()

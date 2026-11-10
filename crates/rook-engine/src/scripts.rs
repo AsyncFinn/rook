@@ -1,5 +1,3 @@
-//! Which scripts run where, and starting them.
-
 use rustc_hash::FxHashSet;
 
 use rook_types::RunContext;

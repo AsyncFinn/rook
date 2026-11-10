@@ -8,13 +8,11 @@
 //! and logs and state under `$XDG_STATE_HOME/rook`. The `dataFolder`
 //! setting puts all of it under one folder instead, in builds with
 //! developer overrides.
-//! [`migrate`] brings a folder older Rooks laid out up to date.
 
 pub mod migrate;
 
 use std::path::{Path, PathBuf};
 
-/// Where each part of Rook's data lives.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DataDir {
     /// The player's settings, `cache\` and `content\`.

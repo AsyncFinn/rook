@@ -5,7 +5,7 @@
 //! Only servers set them off: a client draws every Explosion it sees,
 //! but doesn't hit, break or push anything, nor remove them
 //! (Approximation: Studio does both on the client for Explosions a
-//! LocalScript makes; Rook can't yet tell those from the server's).
+//! LocalScript makes).
 //!
 //! New Explosions are noticed at the end of a frame
 //! ([`DataModel::check_explosions`], before the journal is trimmed) and go

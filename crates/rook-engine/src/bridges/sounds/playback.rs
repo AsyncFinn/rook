@@ -1,11 +1,7 @@
-//! Playing sounds: `TimePosition` moving on, ends and loops,
-//! `PlaybackLoudness`, and what the player should hear.
-
 use rook_types::{CFrame, RollOffMode};
 
 use super::*;
 
-/// A sound the player should be hearing.
 #[derive(Debug, Clone)]
 pub struct PlayingSound {
     pub id: InstanceId,
@@ -15,7 +11,6 @@ pub struct PlayingSound {
     /// `Volume`, as a linear gain (Approximation: scripts can't see the
     /// curve, `docs/behavior/audio/sound-api.md`).
     pub volume: f32,
-    /// `PlaybackSpeed`.
     pub speed: f32,
     pub looped: bool,
     /// Changes with every `Play`, so the mixer restarts the sound even
@@ -46,13 +41,11 @@ pub struct Emitter {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Listener {
     pub cframe: CFrame,
-    /// `SoundService.RolloffScale`.
     pub rolloff_scale: f32,
     /// `SoundService.AmbientReverb`, added to every sound heard.
     pub ambient_reverb: Option<rook_audio::effects::Reverb>,
 }
 
-/// A sound's emitter, if it is a 3D sound.
 pub(super) fn emitter(dom: &Dom, id: InstanceId) -> Option<Emitter> {
     let parent = dom.parent(id)?;
     let position = if dom.is_a(parent, "BasePart") {

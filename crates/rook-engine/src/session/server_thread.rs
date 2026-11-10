@@ -18,7 +18,6 @@ use rook_lua::MessageType;
 use crate::session::host::{Joined, ServerHost, ToClient, ToServer};
 use crate::{DataModel, EngineError, Options, SavedCamera, console};
 
-/// One server frame's output for the client.
 #[derive(Debug)]
 pub struct Frame {
     pub messages: Vec<ToClient>,
@@ -170,7 +169,6 @@ impl ServerThread {
         self.send(Command::Deliver(msg));
     }
 
-    /// Run a command-bar entry on the server.
     #[cfg(feature = "repl")]
     pub fn repl(&self, line: &str) {
         self.send(Command::Repl(line.to_owned()));

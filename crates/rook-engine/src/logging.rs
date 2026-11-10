@@ -118,18 +118,15 @@ pub fn fix_verbose_args(args: impl IntoIterator<Item = String>) -> Vec<String> {
     out
 }
 
-/// How a program logs.
 #[derive(Debug, Clone)]
 pub struct Options {
     /// The program's name, for the log file's name (`rook-player`).
     pub program: &'static str,
     /// `--verbose`'s value: `Some("")` for a bare `--verbose`.
     pub verbose: Option<String>,
-    /// Write a log file for this run.
     pub file: bool,
 }
 
-/// The run's log file.
 struct Sink {
     file: Option<LineWriter<Box<dyn Write + Send>>>,
     path: Option<PathBuf>,

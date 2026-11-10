@@ -19,7 +19,6 @@ fn set_chat_types(dom: &mut Dom) {
     }
 }
 
-/// Set TextChatService up on a server's DataModel.
 pub(crate) fn set_up(dom: &mut Dom) {
     set_chat_types(dom);
     let Ok(chat) = dom.get_service("TextChatService") else {

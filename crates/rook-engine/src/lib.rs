@@ -73,7 +73,6 @@ const DEFAULT_SERVICES: &[&str] = &[
     "Debris",
 ];
 
-/// Options for a DataModel host.
 #[derive(Debug, Clone)]
 pub struct Options {
     /// Frames per second of the fixed clock.
@@ -119,7 +118,6 @@ impl Default for Options {
     }
 }
 
-/// Which side of a game a DataModel is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Role {
     Server,
@@ -129,7 +127,6 @@ pub enum Role {
 /// A server DataModel (the usual case, and what headless runs use).
 pub type Server = DataModel;
 
-/// One DataModel with its scripts: a server or a client.
 #[derive(Debug)]
 pub struct DataModel {
     runtime: Runtime,
@@ -178,7 +175,6 @@ struct Content {
 }
 
 impl DataModel {
-    /// An empty place.
     pub fn new(options: &Options) -> Result<Self, EngineError> {
         let mut dom = Dom::new();
         dom.journal_mut().set_enabled(false);
@@ -265,7 +261,6 @@ impl DataModel {
         self.check_user_settings();
     }
 
-    /// Load a place file.
     pub fn load_place(bytes: &[u8], options: &Options) -> Result<Self, EngineError> {
         let loaded = rook_formats::load(bytes)?;
         let mut dom = Dom::new();
@@ -408,7 +403,6 @@ impl DataModel {
         std::mem::take(&mut self.render_changes)
     }
 
-    /// `Workspace.CurrentCamera`.
     pub fn current_camera(&self) -> Option<InstanceId> {
         let world = self.runtime.world();
         world
@@ -459,7 +453,6 @@ impl DataModel {
         self.runtime.take_log()
     }
 
-    /// Scripts that have been started.
     pub fn started_scripts(&self) -> usize {
         self.runtime.world().started_count()
     }

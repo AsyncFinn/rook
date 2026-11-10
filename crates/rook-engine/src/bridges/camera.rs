@@ -8,7 +8,6 @@ use rook_types::CFrame;
 
 use crate::*;
 
-/// How the window holds the mouse.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MouseLock {
     Free,

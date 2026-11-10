@@ -42,7 +42,6 @@ const KEY_NAME: &str = "Open Cloud API key";
 /// Who may change a setting at run time.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tier {
-    /// Any build.
     Any,
     /// Only builds with developer overrides ([`DEVELOPER_BUILD`]): what
     /// could redirect a published build's traffic or run other code.
@@ -58,7 +57,6 @@ pub enum Unset {
     Means(&'static str),
 }
 
-/// A run-time setting, declared once.
 #[derive(Debug)]
 pub struct Setting {
     /// Its name in docs and warnings.
@@ -79,7 +77,6 @@ impl Setting {
         }
     }
 
-    /// Whether this build takes the setting.
     pub fn allowed(&self) -> bool {
         self.tier == Tier::Any || DEVELOPER_BUILD
     }
@@ -182,7 +179,6 @@ pub(crate) fn warn_waiting() {
     }
 }
 
-/// The download cache's size limit.
 pub fn cache_max() -> u64 {
     CACHE_MAX_SIZE
         .get(None, |s| {
