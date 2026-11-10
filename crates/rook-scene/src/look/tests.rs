@@ -60,7 +60,6 @@ fn only_primitive_meshes_draw_their_parts_material() {
     assert_eq!(drawn_material(|_, _| ()), Material::Marble);
 }
 
-/// `DoubleSided` reaches the drawn mesh of a MeshPart.
 #[test]
 fn a_mesh_parts_double_sided_reaches_its_mesh() {
     let drawn = |double_sided: bool| {
