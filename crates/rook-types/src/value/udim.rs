@@ -33,12 +33,10 @@ impl UDim2 {
         }
     }
 
-    /// `UDim2.fromScale`.
     pub const fn from_scale(x: f32, y: f32) -> Self {
         Self::new(x, 0, y, 0)
     }
 
-    /// `UDim2.fromOffset`.
     pub const fn from_offset(x: i32, y: i32) -> Self {
         Self::new(0.0, x, 0.0, y)
     }

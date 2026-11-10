@@ -13,7 +13,6 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
-/// Whether this build keeps counters.
 pub const ENABLED: bool = cfg!(feature = "counters");
 
 /// What a counter means in its frame.
@@ -199,7 +198,6 @@ pub const CHECKS: &[(Counter, Counter, Counter)] = &[
 
 const COUNT: usize = Counter::ALL.len();
 
-/// One frame's counts, indexed by [`Counter`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Counts(pub [u64; COUNT]);
 

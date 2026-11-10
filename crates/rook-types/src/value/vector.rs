@@ -1,10 +1,8 @@
 use std::ops::{Add, Div, Mul, Neg, Sub};
 
-/// Roblox `Vector2`.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Vector2(pub glam::Vec2);
 
-/// Roblox `Vector3`.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Vector3(pub glam::Vec3);
 
@@ -24,7 +22,6 @@ impl Vector2 {
         self.0.y
     }
 
-    /// `Vector2.Magnitude`.
     pub fn magnitude(self) -> f32 {
         self.0.length()
     }
@@ -71,7 +68,6 @@ impl Vector3 {
         self.0.z
     }
 
-    /// `Vector3.Magnitude`.
     pub fn magnitude(self) -> f32 {
         self.0.length()
     }
