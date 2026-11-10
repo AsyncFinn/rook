@@ -15,12 +15,9 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-/// The committed member list.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Members {
-    /// Roblox version the list was generated from.
     pub version: String,
-    /// Where the API dump came from.
     pub source: String,
     pub classes: BTreeMap<String, ClassMembers>,
     /// Old enum item names that still resolve, as enum → old name → item
@@ -44,7 +41,6 @@ pub struct ClassMembers {
     pub property_security: BTreeMap<String, [Security; 2]>,
 }
 
-/// A function or callback.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Function {
     pub name: String,
@@ -234,7 +230,6 @@ pub enum Tag {
     Deprecated,
     Hidden,
     NotBrowsable,
-    /// The function may yield the calling thread.
     Yields,
     CanYield,
     NoYield,
