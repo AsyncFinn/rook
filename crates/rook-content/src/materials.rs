@@ -318,7 +318,6 @@ mod tests {
         assert_eq!(built.encoding, Encoding::Bc7);
     }
 
-    /// A color map keeps its alpha only as a tint mask.
     #[test]
     fn color_maps_keep_alpha_only_as_a_tint_mask() {
         let img = ::image::RgbaImage::from_pixel(4, 4, ::image::Rgba([200, 100, 50, 30]));
