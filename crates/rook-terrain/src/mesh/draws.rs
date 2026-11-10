@@ -25,7 +25,6 @@ pub struct Layer {
     pub facing: Facing,
 }
 
-/// How a draw of seam triangles is drawn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Seam {
     /// Its layer is the triangles' first corner's: drawn opaque, its share
@@ -60,7 +59,6 @@ pub struct Draw {
 }
 
 impl Mesher<'_> {
-    /// The layer of vertex `i`.
     fn layer(&self, i: u32) -> Layer {
         let material = self.materials[i as usize];
         let facing = if material.faces_differ() {
@@ -71,7 +69,6 @@ impl Mesher<'_> {
         Layer { material, facing }
     }
 
-    /// Add the chunk's triangles to `draws`, by layer.
     pub(super) fn draws(&self, draws: &mut Vec<Draw>) {
         // Each triangle's draws, sorted so each draw's are together.
         let mut keyed: Vec<((Layer, Option<Seam>), usize)> = Vec::new();

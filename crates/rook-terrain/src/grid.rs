@@ -220,7 +220,6 @@ impl Grid {
         out
     }
 
-    /// Whether chunk `chunk` is all one voxel, and which.
     pub fn uniform(&self, chunk: IVec3) -> Option<Voxel> {
         match self.chunks.get(&chunk) {
             None => Some(Voxel::AIR),
@@ -352,7 +351,6 @@ impl Grid {
         out
     }
 
-    /// Whether every voxel is air.
     pub fn is_empty(&self) -> bool {
         self.counts().iter().all(|&n| n == 0)
     }

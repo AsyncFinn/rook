@@ -119,7 +119,6 @@ fn wet_cells(block: &Block) -> Vec<bool> {
     wet
 }
 
-/// The twelve edges of a cell, as pairs of corner offsets.
 const CELL_EDGES: [(IVec3, IVec3); 12] = {
     const fn v(x: i32, y: i32, z: i32) -> IVec3 {
         IVec3::new(x, y, z)
@@ -158,7 +157,6 @@ pub(super) struct Mesher<'a> {
     pub(super) normals: Vec<Vec3>,
     /// Each vertex's material: its cell's ([`Mesher::dominant`]), or Water.
     pub(super) materials: Vec<TerrainMaterial>,
-    /// The chunk's own triangles and their material.
     pub(super) triangles: Vec<([u32; 3], TerrainMaterial)>,
 }
 
@@ -173,7 +171,6 @@ impl Mesher<'_> {
         self.pass.inside(self.block.at(p))
     }
 
-    /// The vertex of the cell whose first corner is voxel `c`.
     fn vertex(&mut self, c: IVec3) -> u32 {
         let slot = cell(c);
         if self.cells[slot] != NONE {
@@ -245,16 +242,10 @@ impl Mesher<'_> {
         sum / n.max(1) as f32
     }
 
-    /// Water only: whether voxel `p` touches a voxel holding water across
-    /// a face. Water's surface lies flat at its level over
-    /// such a dry solid and crosses any other at the solid's own surface,
-    /// so across a cell it slopes from one to the other: down under land
-    /// that lies further from the water, along the land's own line
-    /// (observed in Studio: dry strips just under a water layer, 1 and 2
-    /// voxels wide, lie under flat water; 3, 4 and 6 wide, and a wide
-    /// patch, show land about a voxel narrower; a dry shelf whose edge
-    /// runs diagonally across the voxels meets the water in a straight
-    /// line, under the water's level or above it).
+    /// Water only: whether voxel `p` touches a voxel holding water across a
+    /// face. Water lies flat at its level over such a dry solid and crosses any
+    /// other at the solid's own surface, so across a cell it slopes from one to
+    /// the other (observed, `docs/behavior/terrain/water.md#shorelines`).
     fn touches_water(&self, p: IVec3) -> bool {
         let inside = |q: IVec3| q.cmpge(IVec3::ZERO).all() && q.cmplt(IVec3::splat(SPAN)).all();
         IVec3::AXES
@@ -387,7 +378,6 @@ impl Mesher<'_> {
         }
     }
 
-    /// Add the triangles to `surfaces`, one per material.
     fn split(&self, surfaces: &mut Vec<Surface>) {
         let positions = &self.positions;
         // Split by facing only where the material's textures differ by it,

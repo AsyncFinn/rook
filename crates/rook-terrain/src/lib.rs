@@ -1,9 +1,3 @@
-//! Smooth terrain: `Terrain.SmoothGrid`'s voxels ([`Grid`], decoded in
-//! [`grid::decode`]), the surface Roblox builds from them ([`mesh`]), drawn
-//! coarser far away ([`lod`]), and the grass blades on it ([`grass`]),
-//! shared by the renderer, physics and the Terrain API's edits
-//! ([`grid::edit`], [`grid::cells`]).
-
 pub mod grass;
 pub mod grid;
 pub mod lod;
