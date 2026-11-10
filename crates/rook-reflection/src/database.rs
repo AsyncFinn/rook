@@ -121,7 +121,6 @@ impl EnumInfo {
             .map(|(n, _)| *n)
     }
 
-    /// The value of the item named `name`.
     pub fn item_value(&self, name: &str) -> Option<u32> {
         self.items.iter().find(|(n, _)| *n == name).map(|(_, v)| *v)
     }
