@@ -224,12 +224,16 @@ pub enum MeshLook {
         upright: bool,
     },
     /// The head mesh, at its own size times `scale`.
-    Head { scale: Vec3 },
+    Head {
+        scale: Vec3,
+    },
     /// A mesh file, its vertices times `scale`, with the mesh's own origin
     /// at the part's position (observed: a mesh whose bounds are centered 11
     /// studs off its origin drew 11 studs off the part, for a FileMesh and a
     /// MeshPart alike).
-    File { scale: Vec3 },
+    File {
+        scale: Vec3,
+    },
     Nothing,
     /// The part's own shape, as if it had no mesh.
     PartShape,

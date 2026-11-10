@@ -36,8 +36,12 @@ const EPSILON: f64 = 1e-9;
 pub enum Clock {
     /// Each frame advances by exactly `step` seconds (headless runs, tests,
     /// conformance), so results are reproducible.
-    Fixed { step: f64 },
-    Real { start: Instant },
+    Fixed {
+        step: f64,
+    },
+    Real {
+        start: Instant,
+    },
 }
 
 #[derive(Debug)]

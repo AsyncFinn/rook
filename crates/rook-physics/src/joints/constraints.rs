@@ -149,7 +149,10 @@ const JOINT_SOFTNESS: SpringCoefficients<Real> = SpringCoefficients {
 pub(crate) enum Drive {
     Free,
     /// Turns at `speed` rad/s (RotateV; HingeConstraint's Motor).
-    Speed { speed: f32, max_torque: f32 },
+    Speed {
+        speed: f32,
+        max_torque: f32,
+    },
     /// Turns toward `target` at up to `speed` rad/s, slowing near it
     /// (HingeConstraint's Servo).
     Servo {
@@ -158,7 +161,9 @@ pub(crate) enum Drive {
         max_torque: f32,
     },
     /// Holds `angle` (RotateP, which moves its angle in steps).
-    Angle { angle: f32 },
+    Angle {
+        angle: f32,
+    },
 }
 
 /// A servo slows down this close to its target: speed = gain × error

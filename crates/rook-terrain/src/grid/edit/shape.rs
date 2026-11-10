@@ -10,8 +10,14 @@ const HALF: f32 = VOXEL_STUDS / 2.0;
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Shape {
     /// `FillBlock`: a box of `size` at `pose`.
-    Block { pose: Affine3A, size: Vec3 },
-    Ball { center: Vec3, radius: f32 },
+    Block {
+        pose: Affine3A,
+        size: Vec3,
+    },
+    Ball {
+        center: Vec3,
+        radius: f32,
+    },
     /// `FillCylinder`: round in the pose's XZ plane, `height` along its Y.
     Cylinder {
         pose: Affine3A,
@@ -20,7 +26,10 @@ pub enum Shape {
     },
     /// `FillWedge`: a WedgePart's shape, full height at +Z and sloping to
     /// nothing at -Z.
-    Wedge { pose: Affine3A, size: Vec3 },
+    Wedge {
+        pose: Affine3A,
+        size: Vec3,
+    },
 }
 
 /// How much of a voxel's span `[p - 2, p + 2]` the span `[-h, h]` covers,
