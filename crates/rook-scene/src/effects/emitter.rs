@@ -164,7 +164,6 @@ impl Reader<'_, '_> {
     }
 }
 
-/// A ParticleEmitter's flipbook, when its texture is laid out as one.
 fn flipbook(dom: &Dom, id: InstanceId) -> Option<Flipbook> {
     let (columns, rows) = match dom.enum_item_property(id, "FlipbookLayout")? {
         "Grid2x2" => (2, 2),

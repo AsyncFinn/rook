@@ -259,7 +259,6 @@ fn find(dom: &Dom, physics: &mut Physics, wire: InstanceId) -> Option<Floor> {
     })
 }
 
-/// Whether the box from `lo` to `hi` meets the column under `drop`.
 fn under((lo, hi): (Vec3, Vec3), drop: Vec3) -> bool {
     lo.x <= drop.x && drop.x <= hi.x && lo.z <= drop.z && drop.z <= hi.z && lo.y <= drop.y
 }

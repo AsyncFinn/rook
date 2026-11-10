@@ -1,6 +1,3 @@
-//! Mesh files and images loading in the background, and what parts draw
-//! meanwhile.
-
 use crate::*;
 use content::arrivals::ARRIVALS_BUDGET;
 use content::report::Wanter;
@@ -13,7 +10,6 @@ const RERANK: f32 = 16.0;
 /// What a part's mesh file last settled on.
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum Settled {
-    /// A loaded mesh.
     File(MeshHash),
     /// The look of an empty `MeshId`.
     Empty,
@@ -137,7 +133,6 @@ impl SceneCache {
         self.file_state_of(part, r, want)
     }
 
-    /// [`SceneCache::file_state`] for a parsed reference.
     pub(crate) fn file_state_of(
         &mut self,
         part: InstanceId,

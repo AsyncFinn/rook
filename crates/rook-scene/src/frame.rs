@@ -1,6 +1,3 @@
-//! Each frame: the scene brought up to date with its DataModel, and the
-//! renderer with the scene.
-
 use std::sync::Arc;
 
 use glam::Vec3;
@@ -162,7 +159,6 @@ pub struct ToRender {
 }
 
 impl ToRender {
-    /// Whether the scene or the GUI changed.
     pub fn changed(&self) -> bool {
         self.gui.laid_out()
             || !matches!(self.change, SceneChange::None)

@@ -45,7 +45,6 @@ pub(crate) const SCALE: f32 = 1.82;
 /// the center of the mouse's pixel (Inference: the fingertip points).
 pub(crate) const POINT: Vec2 = Vec2::new(7.0, 1.0);
 
-/// The hand's cells as an image, a pixel each.
 pub(crate) fn image() -> Arc<Image> {
     let (w, h) = (CELLS[0].len() as u32, CELLS.len() as u32);
     let rgba = CELLS

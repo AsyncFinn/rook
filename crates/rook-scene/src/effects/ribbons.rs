@@ -98,7 +98,6 @@ impl Reader<'_, '_> {
         }
     }
 
-    /// What Beam and Trail share.
     fn ribbon_look(&mut self, id: InstanceId) -> RibbonLook {
         let dom = self.dom;
         let transparency =

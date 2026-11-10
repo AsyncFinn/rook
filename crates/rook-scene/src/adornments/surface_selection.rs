@@ -1,5 +1,3 @@
-//! SurfaceSelection: an outline around one face of its Adornee.
-
 use rook_types::PartShape;
 
 use super::*;

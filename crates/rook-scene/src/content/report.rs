@@ -5,9 +5,9 @@
 //!
 //! Studio warns, once per file, when an asset can't be fetched (missing,
 //! or not allowed), not about Rook's own gaps; those (a version Rook can't
-//! read yet) are in the summary and the detail only. The warning's wording follows Studio's
-//! image warning, `Image "<url>" failed to load in "<path>": <reason>`
-//! (Inference: recalled, not checked against Studio this time).
+//! read) are in the summary and the detail only. The warning's wording
+//! follows Studio's image warning, `Image "<url>" failed to load in
+//! "<path>": <reason>` (Inference: recalled, not checked against Studio).
 
 use rustc_hash::FxHashSet;
 use std::collections::BTreeMap;
@@ -17,7 +17,6 @@ use rook_dom::{Dom, InstanceId};
 
 use super::loader::FileRef;
 
-/// Who wanted a file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum Wanter {
     Part(InstanceId),
@@ -25,7 +24,6 @@ pub(crate) enum Wanter {
     Gui,
 }
 
-/// What failed to load, by what wanted it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub(crate) enum What {
     Union,
@@ -68,7 +66,6 @@ impl What {
     }
 }
 
-/// One instance whose file didn't load.
 #[derive(Debug, Clone)]
 pub(crate) struct Failed {
     pub what: What,
@@ -77,7 +74,6 @@ pub(crate) struct Failed {
     pub failure: Failure,
 }
 
-/// Failures waiting to be reported.
 #[derive(Debug, Default)]
 pub(crate) struct Report {
     /// Each instance and file reported once.
@@ -88,14 +84,12 @@ pub(crate) struct Report {
 }
 
 impl Report {
-    /// Note that `wanter`'s file `key` failed.
     pub(crate) fn add(&mut self, wanter: Wanter, key: &FileRef, failure: &Failure) {
         if self.seen.insert((wanter, key.clone())) {
             self.pending.push((wanter, key.clone(), failure.clone()));
         }
     }
 
-    /// Report what failed since the last flush.
     pub(crate) fn flush(&mut self, dom: &Dom) {
         if self.pending.is_empty() {
             return;
@@ -155,7 +149,6 @@ fn studio_word(what: What) -> &'static str {
     }
 }
 
-/// One cause's failures.
 struct Group<'a> {
     what: What,
     cause: String,

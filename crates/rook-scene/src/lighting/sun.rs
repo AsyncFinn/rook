@@ -1,6 +1,3 @@
-//! The sun and the moon: where they are for the clock time and latitude,
-//! and their light.
-
 use super::*;
 
 /// Direction to the sun for a clock time and latitude. Roblox turns the sun

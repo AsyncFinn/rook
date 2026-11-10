@@ -17,7 +17,6 @@ use super::*;
 pub(super) struct Job {
     pub(super) epoch: u64,
     pub(super) rings: Rings,
-    /// The chunks to draw, by level.
     pub(super) draw: FxHashSet<LevelChunk>,
 }
 
@@ -80,7 +79,6 @@ impl Background {
         Ok(())
     }
 
-    /// The job, with its meshes, if it's done.
     pub(super) fn poll(&mut self) -> Option<(Job, Vec<ChunkMesh>)> {
         let worker = self.worker.as_ref()?;
         self.job.as_ref()?;

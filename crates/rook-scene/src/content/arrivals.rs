@@ -20,7 +20,6 @@ use rustc_hash::FxHashSet;
 /// part, so the queue always moves).
 pub(crate) const ARRIVALS_BUDGET: Duration = Duration::from_millis(2);
 
-/// Parts waiting to be drawn again, in order.
 #[derive(Debug, Default)]
 pub(crate) struct Arrivals {
     queue: VecDeque<InstanceId>,
@@ -28,7 +27,6 @@ pub(crate) struct Arrivals {
 }
 
 impl Arrivals {
-    /// Queue `part`, unless it's queued already.
     pub(crate) fn push(&mut self, part: InstanceId) {
         if self.queued.insert(part) {
             self.queue.push_back(part);

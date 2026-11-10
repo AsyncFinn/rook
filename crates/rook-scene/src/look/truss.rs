@@ -1,5 +1,3 @@
-//! A TrussPart's bars.
-
 use super::*;
 
 /// A TrussPart without a mesh: its bars, along its long axis from its low

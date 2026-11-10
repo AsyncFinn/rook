@@ -71,7 +71,6 @@ fn image_size(image: &Image) -> Vec2 {
     Vec2::new(image.width as f32, image.height as f32)
 }
 
-/// The image hashed `hash` stretched over `size` pixels from `corner`.
 fn cursor_quad(hash: ImageHash, corner: Vec2, size: Vec2) -> GuiQuad {
     GuiQuad {
         center: corner + size * 0.5,

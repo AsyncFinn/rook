@@ -1,5 +1,3 @@
-//! SelectionSphere: a ring facing the camera around its Adornee.
-
 use super::*;
 
 /// One SelectionSphere on a part of `size`: its ring, and its fill inside.

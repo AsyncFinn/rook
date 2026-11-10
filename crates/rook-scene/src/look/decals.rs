@@ -1,5 +1,3 @@
-//! A part's Decals and Textures, drawn over it as image layers.
-
 use super::*;
 
 impl SceneCache {

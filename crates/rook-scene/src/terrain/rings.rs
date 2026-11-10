@@ -55,7 +55,6 @@ impl SceneCache {
         changed
     }
 
-    /// What should be drawn with the rings at `rings`.
     pub(super) fn plan(&self, rings: Rings) -> Job {
         let levels = &self.terrain.levels;
         let mut draw = FxHashSet::default();
@@ -71,7 +70,6 @@ impl SceneCache {
         }
     }
 
-    /// The chunks `job` draws that aren't meshed.
     pub(super) fn todo(&self, job: &Job) -> Vec<LevelChunk> {
         let mut todo: Vec<LevelChunk> = job
             .draw

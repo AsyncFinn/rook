@@ -104,7 +104,6 @@ impl SceneCache {
         Some((found.width, found.height, rgba.clone()))
     }
 
-    /// Hand `gui` the images that arrived, and ask for those it wants.
     fn feed_gui(&mut self, gui: &mut Gui) {
         for (url, image) in self.gui_arrived.drain(..) {
             gui.image_arrived(&url, image);
@@ -131,7 +130,6 @@ impl SceneCache {
         }
     }
 
-    /// Note that a file the GUI waits for finished.
     pub(crate) fn gui_file_done(&mut self, key: &FileRef, image: Option<GuiImage>) {
         for url in self.gui_waiting.remove(key).unwrap_or_default() {
             self.gui_arrived.push((url, image));
@@ -139,7 +137,6 @@ impl SceneCache {
     }
 }
 
-/// What the GUI needs to know of a loaded image.
 pub(crate) fn gui_image(hash: ImageHash, image: &Image) -> GuiImage {
     GuiImage {
         hash: hash.0,

@@ -1,5 +1,3 @@
-//! What the renderer takes from the user's Roblox install.
-
 use rook_content::decode::image::Image;
 use rook_content::decode::mesh::Mesh;
 use rook_content::{ContentRef, Resolver};

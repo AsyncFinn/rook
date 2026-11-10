@@ -1,5 +1,3 @@
-//! What each terrain layer's surfaces are drawn with: textures and color.
-
 use super::*;
 
 impl SceneCache {

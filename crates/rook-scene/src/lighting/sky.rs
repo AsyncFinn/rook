@@ -1,5 +1,3 @@
-//! The sky: a Sky's six images, or the install's default sky.
-
 use super::*;
 
 /// The skybox images of a Sky, in the order Up, Back, Front, Left, Right,
@@ -63,7 +61,6 @@ pub(super) fn sky_tint(hours: f32) -> [f32; 3] {
     [0, 1, 2].map(|c| a[c] + (b[c] - a[c]) * t)
 }
 
-/// Where a skybox's six images stand.
 enum Faces {
     /// All loaded: their images and average colors.
     Ready(Vec<ImageHash>, Vec<[f32; 3]>),
@@ -106,7 +103,6 @@ impl SceneCache {
         l.skybox = hashes.try_into().ok();
     }
 
-    /// Ask for a skybox's images, and say where they stand.
     fn sky_faces(&mut self, urls: &[String; 6]) -> Faces {
         let mut averages = Vec::new();
         let mut hashes = Vec::new();

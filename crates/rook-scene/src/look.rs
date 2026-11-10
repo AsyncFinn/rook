@@ -1,7 +1,3 @@
-//! What a part draws: its shape, mesh ([`meshes`]), truss bars
-//! ([`truss`]) or union geometry ([`union`]), color, material
-//! ([`materials`]) and Decals and Textures ([`decals`]).
-
 mod decals;
 pub(super) mod materials;
 mod meshes;
@@ -72,7 +68,6 @@ impl SceneCache {
         Some(Drawn { part, pose, layers })
     }
 
-    /// [`SceneCache::part`]'s look, filling in `pose` as it goes.
     pub(super) fn look(
         &mut self,
         dom: &Dom,

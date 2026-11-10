@@ -12,12 +12,9 @@ use super::*;
 /// still draws some 200 studs away).
 pub(super) const GRASS_REACH: f32 = 200.0;
 
-/// The blades drawn: each tile's entry and mesh.
 #[derive(Debug, Default)]
 pub(super) struct Grass {
-    /// Grass's top triangles, by tile.
     pub(super) tops: GrassTops,
-    /// `Terrain.Decoration`.
     pub(super) on: bool,
     /// The blades' color (`rook_terrain::grass::blade_color`).
     pub(super) color: [f32; 3],
@@ -27,7 +24,6 @@ pub(super) struct Grass {
 }
 
 impl Grass {
-    /// The entries drawing blades.
     pub(super) fn entries(&self) -> Vec<usize> {
         self.shown.values().map(|(i, _)| *i).collect()
     }

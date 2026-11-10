@@ -1,6 +1,3 @@
-//! The Lighting service's look: the sun and moon ([`sun`]), the sky
-//! ([`sky`]), the tone curve, and local lights ([`local`]).
-
 mod local;
 mod sky;
 mod sun;
@@ -11,7 +8,6 @@ use super::*;
 use sky::sky_tint;
 use sun::{sun_and_moon, sun_direction};
 
-/// The Lighting service's look.
 pub(super) fn lighting(dom: &Dom) -> Lighting {
     let mut l = Lighting::default();
     let Some(id) = dom.find_service("Lighting") else {
@@ -97,7 +93,6 @@ fn tonemapper(dom: &Dom, lighting: InstanceId) -> rook_render::Tonemapper {
 }
 
 impl SceneCache {
-    /// The Lighting service's look, with the place's skybox.
     pub(super) fn lighting(&mut self, dom: &Dom) -> Lighting {
         let mut l = lighting(dom);
         self.sky(dom, &mut l);

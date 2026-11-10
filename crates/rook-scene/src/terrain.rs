@@ -77,7 +77,6 @@ pub(super) struct TerrainCache {
     /// taken them since.
     shown: Option<Rings>,
     target: Option<Rings>,
-    /// The chunks drawn, by level.
     chunks: FxHashMap<LevelChunk, MeshedChunk>,
     /// The Grass tops of the chunks drawn at levels blades can reach
     /// (`rings::grows_grass`): blades stand on the ground that's drawn.
@@ -94,7 +93,6 @@ pub(super) struct TerrainCache {
     /// Counts the voxels' changes, so a background job begun on older
     /// voxels is thrown away.
     epoch: u64,
-    /// What each layer is drawn with.
     looks: Looks,
     /// The Terrain instance, which waits for the textures.
     instance: Option<InstanceId>,
@@ -104,7 +102,6 @@ pub(super) struct TerrainCache {
     background: Background,
 }
 
-/// What the terrain's layers are drawn with, read from the Terrain.
 #[derive(Debug)]
 struct Looks {
     set: MaterialSet,
@@ -134,7 +131,6 @@ impl TerrainCache {
 }
 
 impl SceneCache {
-    /// How many scene entries draw the terrain.
     pub fn terrain_meshes(&self) -> usize {
         self.terrain.chunks.values().map(|c| c.entries.len()).sum()
     }
@@ -283,7 +279,6 @@ impl SceneCache {
         changed
     }
 
-    /// Whether `id` is the Terrain whose entries the scene draws.
     pub(super) fn is_terrain(&self, id: InstanceId) -> bool {
         self.terrain.instance == Some(id)
     }
@@ -383,7 +378,6 @@ impl SceneCache {
 }
 
 impl Looks {
-    /// The entry drawing surface `s`.
     fn entry(&self, s: &TerrainSurface) -> PartInstance {
         let material = s.layer.material;
         let mut part =
@@ -432,7 +426,6 @@ fn terrain_look(dom: &Dom, terrain: Option<InstanceId>) -> TerrainLook {
     look
 }
 
-/// Workspace's Terrain.
 fn workspace_terrain(dom: &Dom) -> Option<InstanceId> {
     dom.find_service("Workspace")
         .and_then(|ws| dom.find_first_child_of_class(ws, "Terrain"))

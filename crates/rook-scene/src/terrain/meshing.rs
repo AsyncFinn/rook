@@ -90,7 +90,6 @@ impl SceneCache {
         changed
     }
 
-    /// Put a chunk's surfaces in the scene's meshes.
     pub(super) fn add_chunk_meshes(&mut self, chunk: ChunkMesh) -> MeshedChunk {
         let origin = chunk.origin();
         let mut surfaces = Vec::new();

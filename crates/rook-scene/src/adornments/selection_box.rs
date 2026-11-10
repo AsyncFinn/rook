@@ -1,5 +1,3 @@
-//! SelectionBox: the edges and fill of its Adornee's box.
-
 use rook_types::PartShape;
 
 use super::*;

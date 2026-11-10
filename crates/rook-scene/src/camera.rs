@@ -1,5 +1,3 @@
-//! The camera a place opens with.
-
 use glam::{Mat3, Vec3};
 use rook_engine::SavedCamera;
 use rook_render::Camera;

@@ -1,9 +1,6 @@
-//! A MeshPart's mesh file, and a mesh's texture.
-
 use super::*;
 
 impl SceneCache {
-    /// What a MeshPart draws.
     pub(super) fn mesh_part(
         &mut self,
         dom: &Dom,

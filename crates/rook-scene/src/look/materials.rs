@@ -91,7 +91,6 @@ impl SceneCache {
         part.maps = self.builtin_maps(id, part.material, part.material_set);
     }
 
-    /// The four maps of a SurfaceAppearance or MaterialVariant, as loaded.
     pub(crate) fn map_images(
         &mut self,
         dom: &Dom,

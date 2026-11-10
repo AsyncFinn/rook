@@ -1,5 +1,3 @@
-//! Reading the properties a scene is built from.
-
 use super::*;
 
 /// A NumberSequence as a curve with its keypoints' envelopes.
@@ -58,7 +56,6 @@ pub(super) fn mesh_id(dom: &Dom, id: InstanceId) -> String {
     content_url(dom, id, &["MeshContent", "MeshID"])
 }
 
-/// A mesh's `TextureId` or a MeshPart's `TextureID`.
 pub(super) fn texture_id(dom: &Dom, id: InstanceId) -> String {
     content_url(dom, id, &["TextureContent", "TextureID"])
 }

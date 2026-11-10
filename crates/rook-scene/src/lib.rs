@@ -67,7 +67,6 @@ struct Drawn {
     layers: Vec<(PartInstance, Pose)>,
 }
 
-/// What [`SceneCache::apply`] changed in the scene.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum SceneChange {
     None,
@@ -80,7 +79,6 @@ pub(crate) enum SceneChange {
         /// The lighting or the terrain's look changed.
         lighting: bool,
     },
-    /// Everything was rebuilt.
     Full,
 }
 
@@ -99,7 +97,6 @@ pub struct SceneCache {
     /// Indices of entries no longer drawn (hidden), reused for new ones so
     /// indices stay put and the renderer can update entries one by one.
     free: Vec<usize>,
-    /// Mesh files and images, loaded as parts need them.
     files: Files,
     /// Parts waiting for each file, redrawn when it arrives.
     waiting: FxHashMap<FileRef, FxHashSet<InstanceId>>,
@@ -119,20 +116,13 @@ pub struct SceneCache {
     /// The lighting changed outside [`SceneCache::apply`] (a skybox image
     /// arrived).
     lighting_changed: bool,
-    /// Workspace's Terrain, meshed.
     terrain: TerrainCache,
-    /// The local lights, as `scene.lights`.
     lights: LightCache,
-    /// The visual effects, as `scene.emitters`, `beams`, `trails` and
-    /// `floor_wires`.
     effects: EffectCache,
-    /// The lines scripts gave WireframeHandleAdornments.
     wire_lines: adornments::wireframe::WireLines,
-    /// The FloorWires' floors.
     floors: Floors,
     /// Models' Highlights, found again each update.
     model_highlights: adornments::highlight::ModelHighlights,
-    /// Files that didn't load, reported once loading settles.
     report: Report,
     /// The GUI layout the renderer was last given.
     gui_generation: Option<u64>,
@@ -140,7 +130,6 @@ pub struct SceneCache {
     gui_waiting: FxHashMap<FileRef, Vec<String>>,
     /// The GUI's images that finished, for it to take.
     gui_arrived: Vec<(String, Option<rook_gui::GuiImage>)>,
-    /// Rook's ClickDetector hand and its hash, once it's been shown.
     hand: Option<(Arc<rook_content::decode::image::Image>, ImageHash)>,
 }
 
@@ -219,7 +208,6 @@ impl SceneCache {
         self.with_effects(|effects, drawn, images| effects.build(dom, drawn, images));
     }
 
-    /// Apply a frame's changes.
     pub(crate) fn apply(&mut self, dom: &Dom, changes: &RenderChanges) -> SceneChange {
         profiling::scope!("SceneCache::apply");
         self.model_highlights.clear();
@@ -259,7 +247,6 @@ impl SceneCache {
             self.place(dom, *id, drawn, &mut changed);
         }
         for id in changes.parts.iter().chain(&wired) {
-            // Parts outside Workspace aren't drawn.
             if self.index.contains_key(id) {
                 self.place(dom, *id, true, &mut changed);
             }
@@ -294,7 +281,6 @@ impl SceneCache {
         }
     }
 
-    /// An index for a new entry.
     fn take_index(&mut self, entry: PartInstance, pose: Pose) -> usize {
         match self.free.pop() {
             Some(i) => {
@@ -395,8 +381,6 @@ impl SceneCache {
         !changed.is_empty()
     }
 
-    /// Whether the lighting changed outside [`SceneCache::apply`] (a
-    /// skybox image arrived).
     pub(crate) fn take_lighting_change(&mut self) -> bool {
         std::mem::take(&mut self.lighting_changed)
     }

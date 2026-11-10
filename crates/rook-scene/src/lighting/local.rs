@@ -5,7 +5,6 @@ use rook_render::{LightShape, LocalLight};
 
 use super::*;
 
-/// Whether `id` is a local light.
 fn is_light(dom: &Dom, id: InstanceId) -> bool {
     dom.is_a(id, "Light")
 }
@@ -105,7 +104,6 @@ const DARK: LocalLight = LocalLight {
 /// once, then kept up to date light by light from the journal.
 #[derive(Debug, Default)]
 pub(crate) struct LightCache {
-    /// The light in each entry of `scene.lights`.
     ids: Vec<InstanceId>,
     /// Each light's entry, and the instances it was read from.
     lights: FxHashMap<InstanceId, (usize, Vec<InstanceId>)>,
@@ -117,7 +115,6 @@ pub(crate) struct LightCache {
 }
 
 impl LightCache {
-    /// Find every local light in Workspace (a new scene).
     pub(crate) fn build(&mut self, dom: &Dom, list: &mut Vec<LocalLight>) {
         profiling::scope!("LightCache::build");
         *self = Self::default();
@@ -132,7 +129,6 @@ impl LightCache {
         }
     }
 
-    /// The entries changed since the last call.
     pub(crate) fn take_changes(&mut self) -> Vec<usize> {
         std::mem::take(&mut self.changed)
     }

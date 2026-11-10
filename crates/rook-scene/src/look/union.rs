@@ -3,7 +3,6 @@
 
 use super::*;
 
-/// Whether `id` is a union (a `PartOperation` or one of its subclasses).
 pub(super) fn is_union(dom: &Dom, id: InstanceId) -> bool {
     dom.is_a(id, "PartOperation")
 }

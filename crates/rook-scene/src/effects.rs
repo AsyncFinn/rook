@@ -19,7 +19,6 @@ pub(super) use textures::EffectTextures;
 
 use super::*;
 
-/// Whether `id` is an effect this module draws.
 pub(super) fn is_effect(dom: &Dom, id: InstanceId) -> bool {
     is_effect_class(dom.class_name(id)) || dom.class_name(id) == "FloorWire"
 }
@@ -67,14 +66,12 @@ struct Reader<'a, 'b> {
     calls: Calls,
 }
 
-/// A drawn effect: its slots, and the instances it was read from.
 #[derive(Debug)]
 struct Entry {
     slot: Slot,
     holders: Vec<InstanceId>,
 }
 
-/// The free slots in each of the scene's effect lists.
 #[derive(Debug, Default)]
 struct Free {
     emitters: Vec<usize>,
@@ -106,12 +103,10 @@ impl EffectCache {
         }
     }
 
-    /// Whether `id` is an effect drawn here.
     pub(super) fn has(&self, id: InstanceId) -> bool {
         self.effects.contains_key(&id)
     }
 
-    /// The slots changed since the last call.
     pub(super) fn take_changes(&mut self) -> EffectSlots {
         std::mem::take(&mut self.changed)
     }
@@ -271,7 +266,6 @@ impl EffectCache {
         self.reread(dom, id, drawn, images);
     }
 
-    /// Stop drawing effect `id`, freeing its slots.
     fn remove(&mut self, id: InstanceId, drawn: &mut EffectLists<'_>) {
         if !self.has(id) {
             return;
@@ -297,7 +291,6 @@ impl EffectCache {
         }
     }
 
-    /// Forget what effect `id` hangs from.
     fn unhold(&mut self, id: InstanceId) {
         for h in &self.effects[&id].holders {
             if let Some(effects) = self.held.get_mut(h) {
@@ -309,7 +302,6 @@ impl EffectCache {
         }
     }
 
-    /// Read drawn effect `id` again into its slots.
     fn reread(
         &mut self,
         dom: &Dom,
@@ -408,7 +400,6 @@ fn take<T>(list: &mut Vec<Option<T>>, free: &mut Vec<usize>, changed: &mut Vec<u
     i
 }
 
-/// Free slot `i` of `list`.
 fn release<T>(list: &mut [Option<T>], i: usize, free: &mut Vec<usize>, changed: &mut Vec<usize>) {
     list[i] = None;
     free.push(i);
@@ -416,7 +407,6 @@ fn release<T>(list: &mut [Option<T>], i: usize, free: &mut Vec<usize>, changed: 
 }
 
 impl Reader<'_, '_> {
-    /// Effect `id`'s image (`Texture`), once loaded.
     fn texture(&mut self, id: InstanceId) -> Option<ImageHash> {
         let url = content_url(self.dom, id, &["TextureContent", "Texture"]);
         if url.is_empty() {

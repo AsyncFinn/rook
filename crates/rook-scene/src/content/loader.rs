@@ -17,17 +17,14 @@ use rook_content::decode::mesh::Mesh;
 use rook_content::{ContentRef, Failure, FailureKind, Loader, Resolver, Ticket, Want};
 use rook_render::{ImageHash, MeshHash};
 
-/// A file the scene asked for, and what it wants of it.
 pub(crate) type FileRef = (ContentRef, Want);
 
-/// What a finished file holds.
 #[derive(Debug, Clone)]
 pub(crate) enum Loaded {
     Mesh(MeshHash, Arc<Mesh>),
     Image(ImageHash, Arc<Image>),
 }
 
-/// Where a file is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum FileState {
     Loading,
@@ -44,7 +41,6 @@ pub(crate) struct Files {
     /// Made on the first request.
     loader: Option<Loader>,
     states: FxHashMap<FileRef, FileState>,
-    /// Why each failed file failed.
     failures: FxHashMap<FileRef, Failure>,
     tickets: FxHashMap<Ticket, FileRef>,
 }
@@ -77,17 +73,14 @@ impl Files {
         FileState::Loading
     }
 
-    /// Why a file failed, if it did.
     pub(crate) fn failure(&self, key: &FileRef) -> Option<&Failure> {
         self.failures.get(key)
     }
 
-    /// Whether nothing asked for is still loading.
     pub(crate) fn idle(&self) -> bool {
         self.tickets.is_empty()
     }
 
-    /// Change the priority of a file still waiting to load.
     pub(crate) fn set_priority(&self, key: &FileRef, priority: f32) {
         if let Some(loader) = &self.loader {
             loader.set_priority(key.0.clone(), key.1, priority);

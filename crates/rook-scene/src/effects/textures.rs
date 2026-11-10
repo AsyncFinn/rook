@@ -17,7 +17,6 @@ pub(crate) struct EffectTextures {
     pub(crate) explosion_ring: ImageHash,
 }
 
-/// Rook's own textures' size.
 const OWN: u32 = 64;
 
 impl EffectTextures {
@@ -108,13 +107,11 @@ fn own_image(alpha: fn(f32, f32) -> f32) -> Image {
     Image::from_rgba(pixels, ImageFormat::Png, OWN).expect("non-empty image")
 }
 
-/// A soft round puff.
 fn puff(u: f32, v: f32) -> f32 {
     let r = (u * u + v * v).sqrt();
     (1.0 - r).max(0.0).powi(2) * 0.5
 }
 
-/// A soft glow, brightest in the middle.
 fn glow(u: f32, v: f32) -> f32 {
     (1.0 - (u * u + v * v).sqrt()).max(0.0).powi(2)
 }
