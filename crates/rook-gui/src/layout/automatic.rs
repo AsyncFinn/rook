@@ -1,5 +1,3 @@
-//! `AutomaticSize`: an object grows to hold its children.
-
 use glam::Vec2;
 use rook_dom::InstanceId;
 
@@ -35,7 +33,6 @@ fn automatic_axes(dom: &rook_dom::Dom, id: InstanceId) -> Vec2 {
     }
 }
 
-/// [`grow`] on `axes` (1 for each axis that grows).
 fn grow_on(pass: &mut Pass<'_>, id: InstanceId, base: Vec2, room: Vec2, axes: Vec2) -> Vec2 {
     let dom = pass.dom;
     let kids: Vec<InstanceId> = gui_children(dom, id)

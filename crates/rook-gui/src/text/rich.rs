@@ -4,7 +4,6 @@
 
 use rook_types::{Font, FontStyle, FontWeight, font_from_enum};
 
-/// How a run of text looks.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Style {
     pub(crate) font: Font,
@@ -33,7 +32,6 @@ pub(crate) enum Case {
     SmallCaps,
 }
 
-/// Text in one style.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Span {
     pub(crate) text: String,
@@ -85,7 +83,6 @@ pub(crate) fn parse(text: &str, base: &Style) -> Option<Vec<Span>> {
     stack.is_empty().then_some(spans)
 }
 
-/// `text` as it is, in one style.
 pub(crate) fn plain(text: &str, base: &Style) -> Vec<Span> {
     vec![Span {
         text: text.to_owned(),

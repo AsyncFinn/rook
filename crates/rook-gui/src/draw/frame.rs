@@ -1,5 +1,3 @@
-//! A GUI object's background and the border around it.
-
 use glam::Vec2;
 use rook_dom::{Dom, InstanceId};
 use rook_types::{GuiQuad, Paint};

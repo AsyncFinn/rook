@@ -134,7 +134,6 @@ fn sliced(w: i32, h: i32, props: &[(&str, Value)]) -> Vec<([f32; 2], [f32; 2], [
     scale_type("Slice", w, h, &all)
 }
 
-/// A `SliceCenter` from `min` to `max`.
 fn center(min: [f32; 2], max: [f32; 2]) -> Value {
     let corner = |c: [f32; 2]| Vector2::new(c[0], c[1]).into();
     Value::Rect(rook_types::Rect::new(corner(min), corner(max)))

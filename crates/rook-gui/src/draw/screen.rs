@@ -13,12 +13,10 @@ use crate::images::Images;
 use crate::layout::{GUI_INSET, Layout, top_of};
 use crate::order::{self, Clip, Stacked};
 
-/// One ScreenGui's stack, bottom first.
 #[derive(Debug)]
 struct Collector {
     root: InstanceId,
     stack: Vec<Stacked>,
-    /// Where each object is in `stack`.
     at: FxHashMap<InstanceId, usize>,
     /// The CanvasGroup drawing each object a group holds.
     group_of: FxHashMap<InstanceId, InstanceId>,
@@ -60,7 +58,6 @@ impl Collector {
     }
 }
 
-/// The screen as last drawn, and what changed since.
 #[derive(Debug, Default)]
 pub(crate) struct Screen {
     /// The shown ScreenGuis' stacks in drawing order, once stacked.
@@ -80,30 +77,25 @@ pub(crate) struct Screen {
 }
 
 impl Screen {
-    /// Draw everything again.
     pub(crate) fn forget(&mut self) {
         *self = Self::default();
     }
 
-    /// The tree from `top` was laid out again.
     pub(crate) fn restack(&mut self, top: InstanceId) {
         self.restack.insert(top);
         self.drawn = None;
     }
 
-    /// `id` was placed again on its own, with what it holds.
     pub(crate) fn placed(&mut self, id: InstanceId) {
         self.placed.insert(id);
         self.drawn = None;
     }
 
-    /// `id`'s look changed.
     pub(crate) fn repaint(&mut self, id: InstanceId) {
         self.repaint.insert(id);
         self.drawn = None;
     }
 
-    /// A Hint or Message changed, came or went.
     pub(crate) fn repaint_messages(&mut self) {
         self.messages = None;
         self.drawn = None;
@@ -174,7 +166,6 @@ impl Screen {
         drawn
     }
 
-    /// Bring the stacks and pieces up to date with what changed.
     fn apply(&mut self, dom: &Dom, layout: &Layout) {
         let mut restack = std::mem::take(&mut self.restack);
         let placed = std::mem::take(&mut self.placed);
@@ -289,7 +280,6 @@ fn place(
     true
 }
 
-/// Whether a GUI object above `id`, up to its LayerCollector, is hidden.
 fn hidden_above(dom: &Dom, id: InstanceId) -> bool {
     let mut at = dom.parent(id);
     while let Some(a) = at.filter(|&a| dom.is_a(a, "GuiObject") || dom.class_name(a) == "Folder") {

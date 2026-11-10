@@ -10,7 +10,6 @@ use rook_dom::{Dom, InstanceId};
 /// children and text in.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct Style {
-    /// The texture shown at rest.
     pub(crate) idle: &'static str,
     /// The texture shown while a button is hovered, pressed or not
     /// interactable (a frame has one look)...

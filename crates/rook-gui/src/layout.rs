@@ -30,7 +30,6 @@ pub(crate) use scrolling::Scroll;
 /// current top bar; `GuiService:GetGuiInset()` says the same).
 pub const GUI_INSET: f32 = 58.0;
 
-/// Where a GUI object ended up.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct Placed {
     /// Its center on the screen.
@@ -85,7 +84,6 @@ pub(crate) fn turn(degrees: f32, v: Vec2) -> Vec2 {
     Vec2::new(v.x * cos - v.y * sin, v.x * sin + v.y * cos)
 }
 
-/// What a UIListLayout or UIGridLayout reports.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct Arranged {
     /// `AbsoluteContentSize`.
@@ -241,7 +239,6 @@ impl Layout {
         *self = pass.out;
     }
 
-    /// The text objects laid out while a font they wanted was on its way.
     pub(crate) fn waiting_texts(&self) -> impl Iterator<Item = InstanceId> + '_ {
         (self.texts.iter())
             .filter(|(_, laid)| laid.waited)
@@ -357,7 +354,6 @@ pub(crate) fn through_folders(
     out
 }
 
-/// The GUI objects `parent` places.
 pub(crate) fn gui_children(dom: &Dom, parent: InstanceId) -> Vec<InstanceId> {
     through_folders(dom, parent, |id| dom.is_a(id, "GuiObject"))
 }
@@ -365,10 +361,8 @@ pub(crate) fn gui_children(dom: &Dom, parent: InstanceId) -> Vec<InstanceId> {
 /// Where each turning UIPageLayout's view is, as a page index.
 pub(crate) type Turning = FxHashMap<InstanceId, f32>;
 
-/// The fonts text is laid out with, and where turning UIPageLayouts are.
 pub(crate) type Fonted<'a> = (&'a mut Fonts, &'a Turning);
 
-/// A child placed by a UI layout, with its size.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Kid {
     pub(crate) id: InstanceId,
@@ -619,7 +613,6 @@ impl<'a> Pass<'a> {
         }
     }
 
-    /// A text object's text, in the area inside its padding.
     fn lay_out_text(&mut self, id: InstanceId, size: Vec2) {
         let Some(source) = Source::of(self.dom, id) else {
             return;
