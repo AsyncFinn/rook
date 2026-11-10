@@ -45,8 +45,6 @@ pub enum EngineError {
     Lua(String),
     #[error(transparent)]
     Dom(#[from] rook_dom::DomError),
-    /// A script run on a started place (`DataModel::run_extra_script`)
-    /// failed.
     #[error("{0}")]
     Script(String),
     #[error("couldn't start the server thread: {0}")]

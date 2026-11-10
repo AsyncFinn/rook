@@ -1,11 +1,5 @@
-//! `rook-server`: run a place's server by itself at 60 Hz of real time, as
-//! a dedicated server does, with no window, renderer or audio device
-//! (docs/design/architecture.md#crate-layout). Its scripts run and print
-//! to the terminal, and with the `repl` feature the terminal's `> ` prompt
-//! runs Luau on the server.
-//!
-//! Players can't join it yet: replication runs within one process until
-//! `rook-net` has a network transport (docs/roadmap/README.md).
+//! `rook-server`: a place's server at 60 Hz of real time, linking no
+//! window, renderer or audio device (docs/design/architecture.md#crate-layout).
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -41,8 +35,8 @@ struct Args {
     verbose: Option<String>,
 }
 
-/// How often the server's finished frames are let go of: no client takes
-/// them yet.
+/// Frames for clients pile up unless they're taken, so they're dropped
+/// this often when nothing takes them.
 const DRAIN: Duration = Duration::from_millis(50);
 
 fn main() -> anyhow::Result<()> {

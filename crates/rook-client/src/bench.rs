@@ -108,7 +108,6 @@ impl Offscreen {
     }
 }
 
-/// Time each stage of `frames` frames, offscreen, `start`'s size.
 pub fn bench(
     game: &mut Game,
     mut cache: SceneCache,

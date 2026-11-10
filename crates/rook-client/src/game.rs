@@ -49,7 +49,6 @@ pub struct Game {
     pub(crate) load_start: std::time::Instant,
     /// The client runs Roblox's CoreScripts, whose menu Escape opens.
     core_menu: bool,
-    /// The place's file name, as messages call it.
     pub(crate) name: String,
 }
 
@@ -137,7 +136,6 @@ impl Loading {
         })
     }
 
-    /// The place's file name.
     pub fn name(&self) -> &str {
         &self.finish.name
     }

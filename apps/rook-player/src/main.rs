@@ -139,7 +139,6 @@ impl Args {
         settings::FRAME_TIMES.switch(self.frame_times.then_some(true)) == Some(true)
     }
 
-    /// How the place is first shown.
     fn start(&self) -> Start {
         Start {
             width: self.width,

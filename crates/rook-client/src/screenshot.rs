@@ -1,5 +1,3 @@
-//! A screenshot: one frame rendered offscreen into a PNG.
-
 use std::path::Path;
 
 use anyhow::Context;
@@ -11,7 +9,6 @@ use rook_scene::{Installed, SceneCache};
 use crate::game::Game;
 use crate::start::Start;
 
-/// Render what `game` shows from `camera` into `out`, `start`'s size.
 pub fn screenshot(
     game: &mut Game,
     mut scene: SceneCache,

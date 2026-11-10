@@ -1,6 +1,5 @@
-//! The window, through winit: input, the frame loop and drawing. Every
-//! app that opens a window runs a place with [`run`]; winit is reached
-//! through this module's re-export, so an app needs no winit of its own.
+//! winit is re-exported so an app reaches it through here and the deny
+//! rule keeping it in this crate holds.
 
 mod camera;
 mod cursor;
@@ -36,10 +35,8 @@ use camera::FlyCamera;
 use launch::Launch;
 use readout::Readout;
 
-/// How a window shows a place, beyond how every app starts one ([`Start`]).
 #[derive(Debug, Clone)]
 pub struct Options {
-    /// The place file, which the title shows.
     pub place: PathBuf,
     pub start: Start,
     /// The `FramerateCap` the settings give, over the player's.
@@ -49,15 +46,12 @@ pub struct Options {
     pub frame_times: bool,
     /// The master volume, 0 to 1, until the in-game menu changes it.
     pub volume: Option<f32>,
-    /// Show the `>` command prompt in the terminal.
     #[cfg(feature = "repl")]
     pub repl: bool,
 }
 
-/// Open `options.place` in a window on `event_loop` and play it until the
-/// window closes: the place loads while the window opens, hidden until the
-/// game has drawn into it. The error of a place that couldn't load or a
-/// GPU Rook can't draw with.
+/// The place loads while the window opens, hidden until the game has
+/// drawn into it, so no blank window waits on the load.
 pub fn run(
     event_loop: EventLoop<()>,
     options: Options,
@@ -377,7 +371,6 @@ impl App {
     }
 }
 
-/// The error for a window Rook couldn't draw into.
 pub(crate) fn no_renderer(e: anyhow::Error) -> anyhow::Error {
     e.context(
         "Rook needs a graphics card that supports DirectX 12, Vulkan or Metal, \
@@ -415,7 +408,6 @@ impl App {
     }
 }
 
-/// What [`Launch`] passes on once the game has started.
 impl App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) -> anyhow::Result<()> {
         if self.gfx.is_none() {
