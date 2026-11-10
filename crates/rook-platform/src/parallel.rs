@@ -1,6 +1,5 @@
-//! Spreading short work over the host's cores: culling, particles,
-//! terrain meshing. A host without threads runs it all on the calling
-//! thread ([`Serial`]); the results are the same either way.
+//! Spreading short work over the host's cores. A host without threads runs
+//! it all on the calling thread ([`Serial`]) with the same results.
 
 use std::cmp::Ordering;
 use std::fmt::Debug;

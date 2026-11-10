@@ -5,14 +5,12 @@ use std::fmt::Debug;
 use std::io;
 
 pub trait Credentials: Send + Sync + Debug {
-    /// The secret saved as `name`, if one is.
     fn get(&self, name: &str) -> io::Result<Option<String>>;
     fn set(&self, name: &str, secret: &str) -> io::Result<()>;
     /// Forget `name`'s secret; whether there was one.
     fn clear(&self, name: &str) -> io::Result<bool>;
 }
 
-/// Rook's service name in the store, which entries are filed under.
 #[cfg(feature = "native")]
 const SERVICE: &str = "Rook";
 

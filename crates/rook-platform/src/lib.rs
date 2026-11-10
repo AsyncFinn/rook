@@ -1,8 +1,3 @@
-//! The host machine as the portable crates reach it: [`files`], parallel
-//! work ([`parallel`]), long-lived [`threads`], the [`network`], the
-//! [`clipboard`], the OS [`credentials`] store, where web requests go
-//! ([`endpoints`]), and a program's [`console`] window.
-//!
 //! Portable crates never call `std::fs`, `std::thread` or a thread pool
 //! themselves (clippy's `disallowed-methods` and cargo-deny keep it so);
 //! they ask [`get`]. The app picks the platform once per process: it
@@ -28,7 +23,6 @@ use network::Network;
 use parallel::Workers;
 use threads::Threads;
 
-/// The services of one host.
 #[derive(Debug)]
 pub struct Platform {
     pub files: Box<dyn Files>,
