@@ -30,9 +30,10 @@ pub struct PlayingSound {
 }
 
 /// A 3D sound's place and roll-off: a Sound whose parent is a BasePart (at
-/// its position) or an Attachment (at its world position) in Workspace
-/// (creator-docs Sound; Confirmed by ear-free measurement, see
-/// `docs/behavior/audio/3d-sound.md`). Anywhere else a sound is global.
+/// its position) or an Attachment (at its world position), wherever that
+/// is in the DataModel: a tool's Handle in a Backpack or a part in
+/// ReplicatedStorage is heard from where the part is (Confirmed, see
+/// `docs/behavior/audio/3d-sound.md`). Any other sound is global.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Emitter {
     pub position: glam::Vec3,
@@ -54,10 +55,6 @@ pub struct Listener {
 /// A sound's emitter, if it is a 3D sound.
 pub(super) fn emitter(dom: &Dom, id: InstanceId) -> Option<Emitter> {
     let parent = dom.parent(id)?;
-    let workspace = dom.find_service("Workspace")?;
-    if !dom.is_ancestor_of(workspace, parent) {
-        return None;
-    }
     let position = if dom.is_a(parent, "BasePart") {
         dom.cframe_property(parent, "CFrame")?.position
     } else if dom.is_a(parent, "Attachment") {
@@ -313,8 +310,8 @@ mod tests {
     use super::*;
     use glam::Vec3;
 
-    /// A sound under a part or an attachment in Workspace is a 3D sound at
-    /// its position; under anything else, or outside Workspace, global.
+    /// A sound under a part or an attachment is a 3D sound at its position,
+    /// in Workspace or not; under anything else, global.
     #[test]
     fn emitters() {
         let mut dom = Dom::new();
@@ -341,6 +338,9 @@ mod tests {
         let stored = new(&mut dom, "Part", storage);
         let in_storage = new(&mut dom, "Sound", stored);
 
+        let folder_in_storage = new(&mut dom, "Folder", storage);
+        let global_in_storage = new(&mut dom, "Sound", folder_in_storage);
+
         let e = emitter(&dom, on_part).unwrap();
         assert_eq!(e.position, Vec3::new(1.0, 2.0, 3.0));
         assert_eq!(
@@ -353,6 +353,10 @@ mod tests {
             (Vec3::new(1.0, 2.0, -2.0), RollOffMode::Linear)
         );
         assert_eq!(emitter(&dom, in_folder), None);
-        assert_eq!(emitter(&dom, in_storage), None);
+        assert_eq!(
+            emitter(&dom, in_storage).map(|e| e.position),
+            Some(Vec3::ZERO)
+        );
+        assert_eq!(emitter(&dom, global_in_storage), None);
     }
 }

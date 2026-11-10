@@ -1,9 +1,9 @@
 # 3D sound
 
-Checked against Studio 0.743 on 2026-10-14.
+Checked against Studio 0.747 on 2026-11-10.
 
-A Sound under a part or an
-Attachment in Workspace is heard from there: quieter with distance by its
+A Sound under a part or an Attachment, in Workspace or not, is heard from
+there: quieter with distance by its
 `RollOffMode`, and to the side it is on.
 
 *How it was measured.* Scripts can't hear: `PlaybackLoudness` is taken
@@ -66,11 +66,27 @@ mixes the same stereo pair to them).
 
 *What is 3D* (Confirmed): a Sound whose parent is a BasePart (heard at
 its position) or an Attachment (at its world position, measured at 40
-studs: 0.25 with Inverse), in Workspace. A sound under a Model or Folder
-in Workspace, under a Folder inside a far part, in ReplicatedStorage,
-SoundService or Lighting, or under a part in ReplicatedStorage 5,000 studs
-away, is global: full volume on both sides. Every one of those was heard,
-so a global sound plays wherever it is in the DataModel.
+studs: 0.25 with Inverse), wherever the part is in the DataModel. A part
+in ReplicatedStorage or a tool's Handle in StarterPack or a Backpack, 20
+studs to the camera's right, was heard on the right only at 0.70 (0.5
+from Inverse times the side's 1.41), on the left when moved left, and not
+at all 5,000 studs away; an Attachment in a part in ReplicatedStorage did
+the same (Studio 0.747, Play mode client, 2026-11-10, recorded from
+Studio's process alone). So an unequipped tool's sounds are heard from
+wherever its Handle was left, which is usually far away or silent. An
+earlier note here had a part 5,000 studs away in ReplicatedStorage heard
+at full volume; the 2026-11-10 runs contradict it.
+
+A sound under anything else is global: full volume on both sides. Heard
+that way (2026-10-14 and 2026-11-10): under a Model or Folder in
+Workspace, a Folder inside a far part, ReplicatedStorage, SoundService,
+Lighting, StarterPlayer and its StarterPlayerScripts and
+StarterCharacterScripts, the player's PlayerScripts, a Tool itself (with
+or without a Handle) in StarterPack or a Backpack, and a ScreenGui in
+StarterGui or PlayerGui, whether it is `Enabled` or not and under a
+Frame that isn't `Visible`. A global sound plays wherever it is in the
+DataModel, and a Sound saved with `Playing` true starts playing at once,
+the Starter templates and the copies made from them alike.
 
 *The listener* (Confirmed): the camera by default, facing as it faces. A
 camera turned 90 degrees left heard a sound ahead of the world on its
