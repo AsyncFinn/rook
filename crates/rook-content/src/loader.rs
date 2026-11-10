@@ -33,7 +33,6 @@ const FETCHERS: usize = 4;
 /// Jobs queued or running on every loader in the process.
 static IN_FLIGHT: AtomicUsize = AtomicUsize::new(0);
 
-/// When the last job in flight finished.
 static IDLE_SINCE: Mutex<Option<Instant>> = Mutex::new(None);
 
 /// Jobs queued or running on every loader in the process: 0 once
@@ -49,27 +48,24 @@ pub fn idle_since() -> Option<Instant> {
     since.filter(|_| jobs_in_flight() == 0)
 }
 
-/// Count a job as finished.
 fn job_done() {
     if IN_FLIGHT.fetch_sub(1, Ordering::Relaxed) == 1 {
         *IDLE_SINCE.lock().expect("idle time") = Some(Instant::now());
     }
 }
 
-/// Identifies one request.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Ticket(pub u64);
 
 type Outcome = Result<Fetched, Failure>;
 
-/// What a request wants from the bytes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Want {
     /// The bytes as they are.
     Bytes,
     /// A mesh: the worker decodes it into [`Fetched::mesh`]; bytes that
     /// don't decode fail with [`FailureKind::Invalid`], or
-    /// [`FailureKind::UnknownVersion`] for a version Rook doesn't read yet.
+    /// [`FailureKind::UnknownVersion`] for a version Rook doesn't read.
     Mesh,
     /// An image: the worker decodes it to RGBA8 with mips into
     /// [`Fetched::image`]; bytes that aren't an image fail with
@@ -120,13 +116,11 @@ struct Workers {
 }
 
 impl Drop for Workers {
-    /// The fetch threads end with their loader.
     fn drop(&mut self) {
         self.jobs.close();
     }
 }
 
-/// Queues references for the worker threads and hands back results.
 #[derive(Debug)]
 pub struct Loader {
     resolver: Arc<Resolver>,
@@ -227,7 +221,6 @@ impl Loader {
     }
 }
 
-/// Whether a job's bytes still need decoding once fetched.
 fn needs_decoding(want: Want, fetched: &Fetched) -> bool {
     match want {
         Want::Bytes => false,
@@ -237,7 +230,6 @@ fn needs_decoding(want: Want, fetched: &Fetched) -> bool {
     }
 }
 
-/// Decode a fetched mesh, image or sound.
 fn decode(want: Want, mut fetched: Fetched) -> Outcome {
     let invalid = |e: &dyn std::fmt::Display| Failure::new(FailureKind::Invalid, e.to_string());
     match want {
@@ -274,7 +266,6 @@ fn decode(want: Want, mut fetched: Fetched) -> Outcome {
 
 type Done = Sender<(Job, Outcome)>;
 
-/// Hand a finished job back to its loader.
 fn finish(done: &Done, job: Job, outcome: Outcome) -> bool {
     job_done();
     done.send((job, outcome)).is_ok()
@@ -326,8 +317,8 @@ pub fn set_decode_threads(threads: usize) {
 }
 
 /// Run the calling thread at below-normal priority, so background work
-/// yields to the frame and to audio when cores are short. Only Windows for
-/// now; elsewhere the thread keeps its priority.
+/// yields to the frame and to audio when cores are short. Elsewhere than
+/// Windows the thread keeps its priority.
 #[allow(unsafe_code)]
 fn lower_priority() {
     #[cfg(windows)]
@@ -344,7 +335,6 @@ fn lower_priority() {
     }
 }
 
-/// Decoding for a job, run on the decode pool.
 type DecodeJob = Box<dyn FnOnce() + Send>;
 
 /// Queue decoding on the process's decode pool, starting it the first

@@ -22,7 +22,6 @@ use symphonia::core::io::{MediaSourceStream, MediaSourceStreamOptions};
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 
-/// The sound file formats Rook reads.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum AudioFormat {
     Wav,
@@ -90,7 +89,6 @@ impl Audio {
         self.frames() as f64 / f64::from(self.sample_rate)
     }
 
-    /// Decode a WAV, Ogg Vorbis or MP3 file.
     pub fn decode(bytes: &[u8]) -> Result<Self, AudioError> {
         let format = AudioFormat::sniff(bytes).ok_or(AudioError::NotAudio)?;
         let owned = bytes.to_vec();
@@ -276,7 +274,6 @@ pub(crate) mod tests {
         assert_eq!(AudioFormat::sniff(b"\x89PNG"), None);
     }
 
-    /// Damaged files fail with an error, never a panic.
     #[test]
     fn rejects_damaged_files() {
         assert_eq!(Audio::decode(b"\x89PNG\r\n"), Err(AudioError::NotAudio));

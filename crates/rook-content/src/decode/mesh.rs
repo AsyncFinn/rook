@@ -88,14 +88,13 @@ pub enum MeshError {
 }
 
 impl MeshError {
-    /// Whether the file is fine but Rook can't read its version yet.
+    /// Whether the file is fine but of a version Rook doesn't read.
     pub fn is_unsupported(&self) -> bool {
         matches!(self, Self::Unsupported(_) | Self::UnsupportedUnion(_))
     }
 }
 
 impl Mesh {
-    /// Decode a mesh file, a union's asset or its `MeshData`.
     pub fn decode(bytes: &[u8]) -> Result<Self, MeshError> {
         let out = if union::is_union(bytes) {
             union::decode(bytes)?

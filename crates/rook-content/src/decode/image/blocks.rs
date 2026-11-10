@@ -12,7 +12,6 @@ use std::borrow::Cow;
 
 use super::Image;
 
-/// How an image's levels are stored.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Encoding {
     /// Four bytes a pixel, rows packed.
@@ -124,7 +123,6 @@ impl Image {
         }
     }
 
-    /// Level `i` (`w` × `h`) as RGBA8.
     fn level_rgba(&self, i: usize, w: u32, h: u32) -> Vec<u8> {
         let level = &self.mips[i];
         let decode: fn(&[u8], &mut [u8], usize) = match self.encoding {
@@ -161,7 +159,6 @@ fn bc5_rgba(block: &[u8], out: &mut [u8], pitch: usize) {
     }
 }
 
-/// Level `level`'s size in an image of `width` × `height`.
 fn level_size(width: u32, height: u32, level: usize) -> (u32, u32) {
     ((width >> level).max(1), (height >> level).max(1))
 }

@@ -19,8 +19,7 @@ use rook_platform::network::Request;
 
 /// Studio's live version (`clientVersionUpload`). Studio's packages hold
 /// the CoreScripts model Rook runs, `DataModelPatch.rbxm`; the player's
-/// `InExperience.rbxm` doesn't load in Rook yet. Their content packages
-/// are the same files.
+/// content packages are the same files.
 const CLIENT_VERSION: &str = "/v2/client-version/WindowsStudio64";
 
 /// The folders `rbxasset://` paths are looked up in, in the order an
@@ -71,14 +70,12 @@ pub struct Packages {
     failed: Mutex<FxHashSet<&'static str>>,
 }
 
-/// The live version and its manifest.
 #[derive(Debug)]
 struct Live {
     version: String,
     manifest: Vec<Package>,
 }
 
-/// One manifest entry.
 #[derive(Debug, PartialEq, Eq)]
 struct Package {
     name: String,
@@ -104,12 +101,10 @@ impl Packages {
         &self.dir
     }
 
-    /// Whether packages may be downloaded at all.
     pub fn downloads(&self) -> bool {
         self.client_version.is_some() && self.setup.is_some()
     }
 
-    /// The version the folder holds, if any.
     pub fn version(&self) -> Option<String> {
         let text = std::fs::read_to_string(self.dir.join(VERSION)).ok()?;
         Some(text.trim().to_owned()).filter(|v| is_version(v))
@@ -210,7 +205,6 @@ impl Packages {
         Ok(Live { version, manifest })
     }
 
-    /// Download `package`, check it and extract it to `target`.
     fn fetch(&self, live: &Live, package: &'static str, target: &Path) -> Result<(), String> {
         let _one_at_a_time = self.downloading.lock().expect("package downloads");
         if target.is_dir() {
