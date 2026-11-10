@@ -5,7 +5,7 @@
 
 use rook_types::counters::{self, CHECKS, Counter, Counts, Kind};
 
-use crate::bench::thousands;
+use crate::stats::thousands;
 
 /// A collection smaller than this is never flagged: rebuilding it whole
 /// costs little.

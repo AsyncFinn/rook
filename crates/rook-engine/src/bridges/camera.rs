@@ -18,6 +18,27 @@ pub enum MouseLock {
     InPlace,
 }
 
+/// `Workspace.CurrentCamera` as the place was saved with it. Plain values,
+/// so a server thread can hand it to the window's.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SavedCamera {
+    pub cframe: CFrame,
+    /// Vertical, in degrees.
+    pub fov_y: f32,
+}
+
+impl SavedCamera {
+    pub fn read(dm: &DataModel) -> Option<Self> {
+        let world = dm.runtime().world();
+        let dom = &world.dom;
+        let camera = dm.current_camera()?;
+        Some(Self {
+            cframe: dom.cframe_property(camera, "CFrame")?,
+            fov_y: dom.float_property(camera, "FieldOfView").unwrap_or(70.0),
+        })
+    }
+}
+
 /// The view a script set on the current camera.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CameraView {

@@ -57,7 +57,7 @@ macro_rules! counters {
 }
 
 counters! {
-    /// Scene entries whose look was built again (`rook-view`).
+    /// Scene entries whose look was built again (`rook-scene`).
     ViewEntriesRewritten: Touched, "view: entries rewritten";
     /// Scene entries placed at a new CFrame, their look kept.
     ViewEntriesMoved: Touched, "view: entries moved";

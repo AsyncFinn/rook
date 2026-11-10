@@ -121,7 +121,7 @@ above, single particles measured in nearly orthographic captures):
 ## Rook's fit
 
 The player reads each ParticleEmitter into the renderer's `EmitterLook`
-(`crates/rook-view/src/effects/emitter.rs`), the same model Fire,
+(`crates/rook-scene/src/effects/emitter.rs`), the same model Fire,
 Smoke and Sparkles use (docs/behavior/effects/fire-smoke-and-sparkles.md); the renderer simulates
 it on the CPU (`crates/rook-render/src/effects/particles.rs`, shapes in
 `effects/particles/spawn.rs`) and draws each particle as a rectangle of its image

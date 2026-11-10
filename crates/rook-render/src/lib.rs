@@ -15,6 +15,7 @@ mod mesh;
 mod renderer;
 mod scene;
 mod surfaces;
+mod window_surface;
 
 pub use scene::{
     AdornShape, Anchor, Beam, Camera, Curve, Detile, DrawShape, EffectSlots, Emitter, EmitterLook,
@@ -43,6 +44,7 @@ use gpu::pool::{GpuMesh, MeshPool};
 use gpu::*;
 
 pub use renderer::Renderer;
+pub use window_surface::WindowSurface;
 
 /// The shadow map's depth, and the main pass's where the device has no
 /// stencil to go with it (`main_depth_format`).
@@ -67,6 +69,8 @@ pub enum RenderError {
     Adapter(String),
     #[error("GPU device request failed: {0}")]
     Device(String),
+    #[error("the window's surface: {0}")]
+    Surface(String),
     #[error("reading back the frame failed: {0}")]
     Readback(String),
 }

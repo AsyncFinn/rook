@@ -43,29 +43,32 @@ Rook is a Cargo workspace of small crates whose dependencies only point downward
 | [`rook-physics`](crates/rook-physics) | Assemblies, joints, constraints, contacts and scene queries over Rapier |
 | [`rook-gui`](crates/rook-gui) | GUI layout (the `Absolute*` properties), text (fonts, shaping, `TextBounds`) and what ScreenGuis draw |
 | [`rook-engine`](crates/rook-engine) | DataModels, services, script start rules, play sessions and the frame loop |
-| [`rook-view`](crates/rook-view) | What a DataModel draws: the render scene built from the DOM, mesh files and images loading for it |
-| [`rook-render`](crates/rook-render) | The wgpu renderer |
+| [`rook-scene`](crates/rook-scene) | What a DataModel draws: the render scene built from the DOM, mesh files and images loading for it |
+| [`rook-render`](crates/rook-render) | The wgpu renderer, and drawing into a window (`WindowSurface`) |
+| [`rook-client`](crates/rook-client) | A client without an OS of its own: the game a player sees, the frame loop and render thread, screenshots, `--bench` and recordings, and the winit window (its `window` feature) that every app with a window runs |
 | [`rook-cli`](apps/rook-cli) | The `rook` command-line tool, which opens places in the player and looks inside them |
 | [`xtask`](apps/xtask) | `cargo xtask`: what works on the repository itself; never shipped |
-| [`rook-player`](apps/rook-player) | The windowed player |
+| [`rook-player`](apps/rook-player) | The desktop player: its command line, around `rook-client` |
+| [`rook-server`](apps/rook-server) | The dedicated server: a place's server at 60 Hz, no window |
 
 ### Where things live
 
-Most features span several crates: the rules in `rook-types` or the feature's own crate, the script side in `rook-lua`, the engine glue in `rook-engine`, and drawing in `rook-view` (DOM to draw list) and `rook-render`.
+Most features span several crates: the rules in `rook-types` or the feature's own crate, the script side in `rook-lua`, the engine glue in `rook-engine`, and drawing in `rook-scene` (DOM to draw list) and `rook-render`.
 
 - **The Luau API:** `rook-lua/src/api/`. A member function (`Instance:FindFirstChild`, `Workspace:Raycast`) is in `api/methods/<topic>.rs` (registered in `methods.rs`); Luau sources such methods load are in `api/luau/`. A property's script-side behavior is in `api/properties.rs`, member lookup in `api/instance/`, globals in `api/globals.rs`, datatypes (`CFrame`, `Ray`, ...) in `rook-lua/src/types/`.
-- **Part shapes:** the shapes and their rules in `rook-types/src/part/` (`shape.rs`, `truss.rs`, `mesh.rs`, `surface.rs`); the draw meshes in `rook-render/src/mesh/` (`shapes.rs`, `head.rs`, `truss.rs`, `files.rs`); collision shapes in `rook-physics/src/shape.rs` and `shape/`; what a part draws in `rook-view/src/look.rs`.
-- **Materials:** `rook-types/src/part/material.rs` (the enum, and how each looks in `material/looks.rs`); their textures in `rook-content/src/materials.rs`; MaterialVariants and SurfaceAppearances in `rook-view/src/look/materials.rs`; density and friction in `rook-physics/src/contacts/materials.rs`; terrain's in `rook-terrain/src/material.rs`.
-- **Lighting:** the sun and sky in `rook-view/src/lighting.rs`, local lights in `rook-view/src/lighting/local.rs`; what the renderer takes in `rook-render/src/scene/lighting.rs`; drawing in `rook-render/src/renderer/lighting/` (local lights, shadow map), `renderer/tonemap.rs` and `shaders/lighting.wgsl`.
-- **Effects** (Fire, Smoke, Sparkles, ParticleEmitter, Beam, Trail, Explosion): reading them in `rook-view/src/effects/`; the simulation in `rook-render/src/effects/`, drawing in `renderer/effects/`; their methods in `rook-lua/src/api/methods/effects.rs`.
+- **Part shapes:** the shapes and their rules in `rook-types/src/part/` (`shape.rs`, `truss.rs`, `mesh.rs`, `surface.rs`); the draw meshes in `rook-render/src/mesh/` (`shapes.rs`, `head.rs`, `truss.rs`, `files.rs`); collision shapes in `rook-physics/src/shape.rs` and `shape/`; what a part draws in `rook-scene/src/look.rs`.
+- **Materials:** `rook-types/src/part/material.rs` (the enum, and how each looks in `material/looks.rs`); their textures in `rook-content/src/materials.rs`; MaterialVariants and SurfaceAppearances in `rook-scene/src/look/materials.rs`; density and friction in `rook-physics/src/contacts/materials.rs`; terrain's in `rook-terrain/src/material.rs`.
+- **Lighting:** the sun and sky in `rook-scene/src/lighting.rs`, local lights in `rook-scene/src/lighting/local.rs`; what the renderer takes in `rook-render/src/scene/lighting.rs`; drawing in `rook-render/src/renderer/lighting/` (local lights, shadow map), `renderer/tonemap.rs` and `shaders/lighting.wgsl`.
+- **Effects** (Fire, Smoke, Sparkles, ParticleEmitter, Beam, Trail, Explosion): reading them in `rook-scene/src/effects/`; the simulation in `rook-render/src/effects/`, drawing in `renderer/effects/`; their methods in `rook-lua/src/api/methods/effects.rs`.
 - **Sounds:** decoding in `rook-content/src/decode/audio.rs`; the mixer, effects and 3D falloff in `rook-audio`; playback in `rook-engine/src/bridges/sounds/`; Sound's methods in `rook-lua/src/api/methods/sound.rs`, the Audio API's in `api/methods/audio_api.rs` with its shared rules in `rook-lua/src/audio_api.rs`.
-- **Terrain:** voxels, meshing, materials and grass in `rook-terrain`; drawing in `rook-view/src/terrain.rs`; collision in `rook-physics/src/shape/terrain.rs`; the Terrain API in `rook-lua/src/api/methods/terrain.rs`.
-- **Content** (meshes, images, sounds by URL): parsing references in `rook-content/src/reference.rs`, finding the bytes in `resolver/` (cache, the install, asset delivery, kept content), background loading in `loader.rs`, decoding in `decode/`; the drawing side in `rook-view/src/content/`.
+- **Terrain:** voxels, meshing, materials and grass in `rook-terrain`; drawing in `rook-scene/src/terrain.rs`; collision in `rook-physics/src/shape/terrain.rs`; the Terrain API in `rook-lua/src/api/methods/terrain.rs`.
+- **Content** (meshes, images, sounds by URL): parsing references in `rook-content/src/reference.rs`, finding the bytes in `resolver/` (cache, the install, asset delivery, kept content), background loading in `loader.rs`, decoding in `decode/`; the drawing side in `rook-scene/src/content/`.
 - **GUI:** layout in `rook-gui/src/layout.rs` and `layout/` (UI layouts, constraints, `AutomaticSize`, padding), drawing order, clipping and borders in `rook-gui/src/draw.rs`, what the renderer takes in `rook-types/src/gui.rs`; script reads in `rook-lua/src/api/instance/access.rs`, GUI methods in `rook-lua/src/api/methods/gui.rs`; the GUI pass in `rook-render/src/renderer/gui.rs`.
-- **Input:** the window's keys and camera in `rook-player/src/app/` (`keys.rs`, `camera.rs`); clicks and the mouse in `rook-engine/src/bridges/input.rs`; UserInputService in `rook-lua/src/api/methods/input.rs`.
+- **The window and the frame loop:** `rook-client/src/window.rs` (the frame's order) and `window/`, the render thread in `render_thread.rs`, Play and Run modes in `game.rs`; the server's thread in `rook-engine/src/session/server_thread.rs`; a window's surface in `rook-render/src/window_surface.rs`.
+- **Input:** the window's keys and camera in `rook-client/src/window/` (`keys.rs`, `camera.rs`); clicks and the mouse in `rook-engine/src/bridges/input.rs`; UserInputService in `rook-lua/src/api/methods/input.rs`.
 - **Replication:** `rook-net` (`source.rs` on the server, `sink.rs` on the client, `replicator.rs`); the play session in `rook-engine/src/session/host.rs`; remotes in `rook-lua/src/api/methods/remotes.rs` and `rook-lua/src/net.rs`.
 - **Physics:** `rook-physics/src/`: `assembly/bodies.rs` (assemblies as Rapier bodies), `sync.rs` (building the world from the DOM and applying the journal), `joints/` (joints, constraints, movers and the drives that power them), `contacts/` (materials, collision groups), `shape/` (collider shapes, unions, terrain), `query.rs` (raycasts and overlaps), `step.rs`.
-- **The icon:** `resources/rook.svg`, the only copy; `apps/build.rs` embeds it in both apps and `rook-player/src/app/icon.rs` puts it on the window (see `resources/README.md`).
+- **The icon:** `resources/rook.svg`, the only copy; `apps/build.rs` embeds it in the apps and `rook-client/src/window/icon.rs` puts it on the window (see `resources/README.md`).
 - **Settings, logs and the data folder:** `rook-engine/src/settings.rs`, `logging.rs` and `data_folder.rs`; the files themselves through `rook-platform`.
 - **Findings from Studio and the archive:** `docs/behavior/<area>/<topic>.md`, listed in [docs/README.md](docs/README.md). The [roadmap](docs/roadmap/README.md) keeps only the plan and links there.
 

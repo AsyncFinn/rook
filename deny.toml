@@ -11,7 +11,8 @@ all-features = true
 multiple-versions = "allow"
 wildcards = "allow"
 deny = [
-    { crate = "winit", wrappers = ["rook-player"], reason = "windows belong to the apps" },
+    { crate = "winit", wrappers = ["rook-client"], reason = "windows go through rook-client's `window` module, which every app that opens one shares" },
+    { crate = "wgpu", wrappers = ["rook-render"], reason = "the GPU is rook-render's: an app hands it a window (rook_render::WindowSurface)" },
     { crate = "rfd", wrappers = ["rook-player", "rook-cli"], reason = "dialogs belong to the apps" },
     { crate = "cpal", wrappers = ["rook-audio"], reason = "the audio device, behind rook-audio's `output` feature" },
     { crate = "ureq", wrappers = ["rook-platform"], reason = "the network goes through rook-platform" },

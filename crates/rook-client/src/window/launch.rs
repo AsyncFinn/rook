@@ -3,13 +3,16 @@
 //! waits on the load. A place that fails to load ends the run with
 //! [`Launch::finish`]'s error.
 
-use crate::*;
+use winit::application::ApplicationHandler;
+
+use super::*;
+use crate::start::prepare;
 
 pub(crate) struct Launch {
-    args: Args,
-    setup: game::Setup,
+    options: Options,
+    setup: Setup,
     install: Option<Installed>,
-    loading: Option<game::Loading>,
+    loading: Option<Loading>,
     /// The window, until the game is ready to draw in it.
     gfx: Option<Gfx>,
     app: Option<App>,
@@ -20,14 +23,14 @@ pub(crate) struct Launch {
 
 impl Launch {
     pub(crate) fn new(
-        args: Args,
-        setup: game::Setup,
+        options: Options,
+        setup: Setup,
         install: Installed,
-        loading: game::Loading,
+        loading: Loading,
         player: PlayerSettings,
     ) -> Self {
         Self {
-            args,
+            options,
             setup,
             install: Some(install),
             loading: Some(loading),
@@ -44,7 +47,7 @@ impl Launch {
         } else {
             ""
         };
-        format!("Rook - {}{build}", self.args.place.display())
+        format!("Rook - {}{build}", self.options.place.display())
     }
 
     /// After the window closes: the load's error, or the run's summary.
@@ -56,7 +59,7 @@ impl Launch {
             app.game.save_user_settings();
         }
         if let Some(app) = &self.app
-            && self.args.frame_times()
+            && self.options.frame_times
         {
             app.readout.print_run(&app.game);
         }
@@ -65,25 +68,31 @@ impl Launch {
 
     /// See whether the game is ready, and start it once it is.
     fn poll(&mut self, event_loop: &ActiveEventLoop) {
-        let Some(loaded) = self.loading.as_mut().and_then(game::Loading::poll) else {
+        let Some(loading) = &mut self.loading else {
             return;
         };
+        let Some(loaded) = loading.poll() else {
+            return;
+        };
+        let name = loading.name().to_owned();
         self.loading = None;
         match loaded {
             Ok(game) => self.start(game),
-            Err(e) => {
-                let name = place_name(&self.args.place);
-                self.failed = Some(e.context(format!("Couldn't open {name}")));
-                event_loop.exit();
-            }
+            Err(e) => self.fail(event_loop, e.context(format!("Couldn't open {name}"))),
         }
+    }
+
+    /// End the run with `e`, which [`Launch::finish`] returns.
+    fn fail(&mut self, event_loop: &ActiveEventLoop, e: anyhow::Error) {
+        self.failed.get_or_insert(e);
+        event_loop.exit();
     }
 
     /// The game is ready: make the [`App`] and give it the window.
     fn start(&mut self, mut game: Game) {
-        let (scene, camera) = prepare(&mut game, &self.args, &self.setup.content);
+        let (scene, camera) = prepare(&mut game, &self.options.start, &self.setup.content);
         game.free_run();
-        let args = &self.args;
+        let options = &self.options;
         let mut app = App {
             title: self.title(),
             scene,
@@ -106,23 +115,23 @@ impl Launch {
             refresh_read: None,
             loop_ran: false,
             install: self.install.take().expect("started once"),
-            framerate_cap: args.framerate_cap(),
-            readout: Readout::new(args.frame_times()),
+            framerate_cap: options.framerate_cap,
+            readout: Readout::new(options.frame_times),
             // Only the window plays sound: headless runs, `--bench`,
             // `--screenshot` and `--record-audio` never open a device.
             // `--volume` holds until the player changes the volume.
             audio: rook_engine::settings::audio_device(self.player.output_device.as_deref()).map(
                 |device| {
-                    let volume = args.volume.unwrap_or(self.player.master_volume);
+                    let volume = options.volume.unwrap_or(self.player.master_volume);
                     rook_audio::Output::new(device, volume.clamp(0.0, 1.0))
                 },
             ),
             player: self.player.clone(),
             #[cfg(feature = "repl")]
-            repl: if args.no_repl {
-                None
-            } else {
+            repl: if options.repl {
                 rook_engine::console::repl::Repl::start()
+            } else {
+                None
             },
         };
         if let Some(gfx) = self.gfx.take() {
@@ -135,16 +144,19 @@ impl Launch {
 impl ApplicationHandler for Launch {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if let Some(app) = &mut self.app {
-            return app.resumed(event_loop);
+            if let Err(e) = app.resumed(event_loop) {
+                self.fail(event_loop, e);
+            }
+            return;
         }
         if self.gfx.is_none() {
-            let vsync = pacing(self.args.framerate_cap(), &self.player) == Pacing::Display;
+            let vsync = pacing(self.options.framerate_cap, &self.player) == Pacing::Display;
             match Gfx::open(event_loop, &self.title(), vsync) {
                 Ok(gfx) => {
                     gfx.set_fullscreen(self.player.fullscreen);
                     self.gfx = Some(gfx);
                 }
-                Err(e) => no_renderer(event_loop, e),
+                Err(e) => self.fail(event_loop, no_renderer(e)),
             }
         }
     }
@@ -157,7 +169,7 @@ impl ApplicationHandler for Launch {
 
     fn device_event(&mut self, event_loop: &ActiveEventLoop, id: DeviceId, event: DeviceEvent) {
         if let Some(app) = &mut self.app {
-            app.device_event(event_loop, id, event);
+            app.device_event(event_loop, id, &event);
         }
     }
 

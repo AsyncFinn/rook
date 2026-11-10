@@ -1,6 +1,8 @@
 //! The server on its own thread, so a window waits only on its client and
-//! the renderer (docs/design/architecture.md#engine-systems). The server's DataModel is made on the
-//! thread and never leaves it; the window talks to it in messages.
+//! the renderer, and a dedicated server keeps its 60 Hz pace
+//! (docs/design/architecture.md#engine-systems). The server's DataModel is
+//! made on the thread and never leaves it; the rest of the app talks to it
+//! in messages.
 //!
 //! The thread steps when told to ([`ServerThread::step`], which keeps a
 //! client in lockstep with it, so `--seconds`, `--bench` and screenshots
@@ -8,18 +10,17 @@
 //! ([`ServerThread::run`]), as a server does for players.
 
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, TryRecvError, channel};
-use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use rook_engine::session::host::{Joined, ServerHost, ToClient, ToServer};
-use rook_engine::{DataModel, Options, console};
 #[cfg(feature = "repl")]
 use rook_lua::MessageType;
-use rook_view::SavedCamera;
+
+use crate::session::host::{Joined, ServerHost, ToClient, ToServer};
+use crate::{DataModel, EngineError, Options, SavedCamera, console};
 
 /// One server frame's output for the client.
 #[derive(Debug)]
-pub(crate) struct Frame {
+pub struct Frame {
     pub messages: Vec<ToClient>,
     /// How long the server took to step.
     pub took: Duration,
@@ -37,17 +38,19 @@ enum Command {
 
 /// What the server sends back once it's running.
 #[derive(Debug)]
-pub(crate) struct Started {
-    pub joined: Joined,
+pub struct Started {
+    /// The player who joined, if one was asked for.
+    pub joined: Option<Joined>,
     /// The camera the place was saved with.
     pub camera: Option<SavedCamera>,
 }
 
 #[derive(Debug)]
-pub(crate) struct ServerThread {
+pub struct ServerThread {
     commands: Sender<Command>,
     frames: Receiver<Frame>,
-    thread: Option<JoinHandle<()>>,
+    /// Closed once the thread has ended, its DataModel dropped.
+    ended: Receiver<()>,
 }
 
 /// How far behind real time a running server may fall before it stops
@@ -56,76 +59,84 @@ const MAX_LAG: Duration = Duration::from_millis(250);
 
 /// A server thread still loading its place: [`Starting::poll`] it each
 /// frame, or [`Starting::wait`].
-pub(crate) struct Starting {
+#[derive(Debug)]
+pub struct Starting {
     server: Option<ServerThread>,
-    started: Receiver<anyhow::Result<Started>>,
+    started: Receiver<Result<Started, EngineError>>,
 }
 
 impl Starting {
     /// The server, once it has loaded and its player has joined.
-    pub(crate) fn poll(&mut self) -> Option<anyhow::Result<(ServerThread, Started)>> {
+    pub fn poll(&mut self) -> Option<Result<(ServerThread, Started), EngineError>> {
         let started = match self.started.try_recv() {
             Ok(started) => started,
             Err(TryRecvError::Empty) => return None,
-            Err(TryRecvError::Disconnected) => Err(anyhow::anyhow!("the server thread stopped")),
+            Err(TryRecvError::Disconnected) => Err(EngineError::ServerStopped),
         };
         Some(started.map(|s| (self.server.take().expect("polled after it started"), s)))
     }
 
-    pub(crate) fn wait(mut self) -> anyhow::Result<(ServerThread, Started)> {
+    pub fn wait(mut self) -> Result<(ServerThread, Started), EngineError> {
         let started = self
             .started
             .recv()
-            .map_err(|_| anyhow::anyhow!("the server thread stopped"))??;
+            .map_err(|_| EngineError::ServerStopped)??;
         Ok((self.server.take().expect("waited once"), started))
     }
 }
 
 impl ServerThread {
     /// Load `place` on a new thread, start its scripts, run `script` (the
-    /// `--script` file) and let one player join.
-    pub(crate) fn spawn(
+    /// `--script` file) and let `player` (name, user id) join, if given.
+    pub fn spawn(
         place: Vec<u8>,
         options: Options,
         script: Option<String>,
-        player: (&str, i64),
-    ) -> anyhow::Result<Starting> {
+        player: Option<(&str, i64)>,
+    ) -> Result<Starting, EngineError> {
         let (commands, command_rx) = channel();
         let (frame_tx, frames) = channel();
         let (started_tx, started_rx) = channel();
-        let (name, user_id) = (player.0.to_owned(), player.1);
-        let thread = std::thread::Builder::new()
-            .name("server".into())
-            .spawn(move || {
-                let host = (|| -> anyhow::Result<ServerHost> {
-                    let mut server = DataModel::load_place(&place, &options)?;
-                    server.start();
-                    let mut host = ServerHost::new(server);
-                    let camera = SavedCamera::read(host.server());
-                    let (_, joined) = host.join(&name, user_id)?;
-                    if let Some(source) = &script {
-                        host.server()
-                            .run_extra_script(source)
-                            .map_err(anyhow::Error::msg)?;
-                    }
-                    print_logs(host.server());
-                    // The receiver is gone only if the game closed while
-                    // starting.
-                    let _ = started_tx.send(Ok(Started { joined, camera }));
-                    Ok(host)
-                })();
-                match host {
-                    Ok(host) => serve(host, &command_rx, &frame_tx),
-                    Err(e) => {
-                        let _ = started_tx.send(Err(e));
-                    }
+        let (ended_tx, ended) = channel::<()>();
+        let player = player.map(|(name, user_id)| (name.to_owned(), user_id));
+        let body = move || {
+            // Dropped as the thread ends, however it ends.
+            let _ended = ended_tx;
+            let host = (|| -> Result<ServerHost, EngineError> {
+                let mut server = DataModel::load_place(&place, &options)?;
+                server.start();
+                let mut host = ServerHost::new(server);
+                let camera = SavedCamera::read(host.server());
+                let joined = match &player {
+                    Some((name, user_id)) => Some(host.join(name, *user_id)?.1),
+                    None => None,
+                };
+                if let Some(source) = &script {
+                    host.server()
+                        .run_extra_script(source)
+                        .map_err(EngineError::Script)?;
                 }
-            })?;
+                print_logs(host.server());
+                // The receiver is gone only if the game closed while
+                // starting.
+                let _ = started_tx.send(Ok(Started { joined, camera }));
+                Ok(host)
+            })();
+            match host {
+                Ok(host) => serve(host, &command_rx, &frame_tx),
+                Err(e) => {
+                    let _ = started_tx.send(Err(e));
+                }
+            }
+        };
+        rook_platform::get()
+            .threads
+            .spawn("server", Box::new(body))?;
         Ok(Starting {
             server: Some(Self {
                 commands,
                 frames,
-                thread: Some(thread),
+                ended,
             }),
             started: started_rx,
         })
@@ -138,7 +149,7 @@ impl ServerThread {
     }
 
     /// Step the server once and wait for its frame.
-    pub(crate) fn step(&self) -> Frame {
+    pub fn step(&self) -> Frame {
         self.send(Command::Step);
         self.frames.recv().unwrap_or(Frame {
             messages: Vec::new(),
@@ -147,35 +158,34 @@ impl ServerThread {
     }
 
     /// Let the server step by itself at 60 Hz (`true`), or only when told.
-    pub(crate) fn run(&self, on: bool) {
+    pub fn run(&self, on: bool) {
         self.send(Command::Run(on));
     }
 
     /// Frames the running server has finished since the last call.
-    pub(crate) fn frames(&self) -> impl Iterator<Item = Frame> + '_ {
+    pub fn frames(&self) -> impl Iterator<Item = Frame> + '_ {
         self.frames.try_iter()
     }
 
-    pub(crate) fn deliver(&self, msg: ToServer) {
+    pub fn deliver(&self, msg: ToServer) {
         self.send(Command::Deliver(msg));
     }
 
     /// Run a command-bar entry on the server.
     #[cfg(feature = "repl")]
-    pub(crate) fn repl(&self, line: &str) {
+    pub fn repl(&self, line: &str) {
         self.send(Command::Repl(line.to_owned()));
     }
 }
 
 impl Drop for ServerThread {
     fn drop(&mut self) {
-        // Closing the command channel ends the thread.
+        // Closing the command channel ends the thread; wait until it has,
+        // so its DataModel is gone (and its last output printed) when this
+        // returns. A panic was reported where it happened.
         let (dead, _) = channel();
         self.commands = dead;
-        if let Some(thread) = self.thread.take() {
-            // A panic was reported where it happened.
-            let _ = thread.join();
-        }
+        let _ = self.ended.recv();
     }
 }
 
@@ -185,7 +195,7 @@ fn print_logs(server: &DataModel) {
     }
 }
 
-/// The server thread's loop, until the window goes away.
+/// The server thread's loop, until the app lets it go.
 fn serve(mut host: ServerHost, commands: &Receiver<Command>, frames: &Sender<Frame>) {
     let step = Duration::from_secs_f64(1.0 / 60.0);
     let mut running = false;
@@ -233,7 +243,7 @@ fn serve(mut host: ServerHost, commands: &Receiver<Command>, frames: &Sender<Fra
     }
 }
 
-/// Carry out one command. Returns false once the window is gone.
+/// Carry out one command. Returns false once the app is gone.
 fn obey(
     host: &mut ServerHost,
     command: Command,
@@ -250,7 +260,7 @@ fn obey(
         Command::Deliver(msg) => host.deliver(0, msg),
         #[cfg(feature = "repl")]
         Command::Repl(line) => {
-            if let Err(e) = rook_engine::console::repl::run_line(host.server(), &line) {
+            if let Err(e) = crate::console::repl::run_line(host.server(), &line) {
                 console::print_message(MessageType::Error, &e);
             }
             print_logs(host.server());

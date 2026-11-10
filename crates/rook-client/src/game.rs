@@ -5,19 +5,24 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use anyhow::Context;
+
 #[cfg(feature = "repl")]
 use rook_engine::console::repl::Side;
 use rook_engine::session::host::{ClientHost, ServerHost};
+use rook_engine::session::server_thread::{ServerThread, Started, Starting};
 use rook_engine::user_settings::PlayerSettings;
 use rook_engine::{DataModel, InputEvent, Options, console};
 #[cfg(feature = "repl")]
 use rook_lua::MessageType;
 use rook_render::Camera;
 
-use crate::STEP;
-use crate::server::{ServerThread, Started};
 use crate::stats::Times;
 
+/// Simulation step: 60 Hz, like Roblox's frame-based scheduler.
+pub(crate) const STEP: f64 = 1.0 / 60.0;
+
+#[derive(Debug)]
 enum Mode {
     /// Play: the server on its thread, the local player's client here.
     Play {
@@ -28,47 +33,62 @@ enum Mode {
     Run(Box<ServerHost>),
 }
 
-pub(crate) struct Game {
+#[derive(Debug)]
+pub struct Game {
     mode: Mode,
     /// The camera the place was saved with.
-    pub saved_camera: Camera,
+    pub(crate) saved_camera: Camera,
     /// Server and client step times, for `--bench` and the readout.
-    pub server_steps: Times,
-    pub client_steps: Times,
+    pub(crate) server_steps: Times,
+    pub(crate) client_steps: Times,
     /// Time spent applying server frames since the last client step.
     delivering: std::time::Duration,
     /// Run mode: real time the server hasn't stepped yet, in seconds.
     behind: f64,
     /// When loading the place started (`--bench` times content from it).
-    pub load_start: std::time::Instant,
+    pub(crate) load_start: std::time::Instant,
     /// The client runs Roblox's CoreScripts, whose menu Escape opens.
-    pub core_menu: bool,
+    core_menu: bool,
+    /// The place's file name, as messages call it.
+    pub(crate) name: String,
 }
 
 /// A place on its way to being a [`Game`], for a window that keeps
 /// drawing while it loads: [`Loading::poll`] it once a frame.
-pub(crate) struct Loading {
+#[derive(Debug)]
+pub struct Loading {
     stage: Stage,
     finish: Finish,
 }
 
+/// A place's file name, as the window and messages call it.
+pub fn place_name(path: &Path) -> String {
+    path.file_name().map_or_else(
+        || path.display().to_string(),
+        |name| name.to_string_lossy().into_owned(),
+    )
+}
+
+#[derive(Debug)]
 enum Stage {
     /// Play: the server is loading the place on its thread.
-    Server(crate::server::Starting),
+    Server(Starting),
     /// Run: the place loads here on the next poll.
     Run(Vec<u8>),
 }
 
 /// What's needed once the server is there.
+#[derive(Debug)]
 struct Finish {
     options: Options,
     script: Option<String>,
     load_start: std::time::Instant,
+    name: String,
 }
 
 /// How every place the player opens is run, whichever place it is.
-#[derive(Clone)]
-pub(crate) struct Setup {
+#[derive(Debug, Clone)]
+pub struct Setup {
     /// A local player joins and the window shows that player's client, as
     /// in Studio's Play mode; otherwise the server alone (Run mode).
     pub play: bool,
@@ -88,9 +108,9 @@ pub(crate) struct Setup {
 
 impl Loading {
     /// Start loading a place (see [`Game::load`]).
-    pub(crate) fn begin(path: &Path, setup: &Setup) -> anyhow::Result<Self> {
+    pub fn begin(path: &Path, setup: &Setup) -> anyhow::Result<Self> {
         let load_start = std::time::Instant::now();
-        let bytes = fs_err::read(path)?;
+        let bytes = rook_platform::get().files.read(path)?;
         let options = Options {
             content: Some(setup.content.clone()),
             wait_for_sounds: setup.wait_for_sounds,
@@ -100,7 +120,8 @@ impl Loading {
         };
         let script = setup.script.clone();
         let (stage, script) = if setup.play {
-            let starting = ServerThread::spawn(bytes, options.clone(), script, ("Player1", 1))?;
+            let starting =
+                ServerThread::spawn(bytes, options.clone(), script, Some(("Player1", 1)))?;
             (Stage::Server(starting), None)
         } else {
             (Stage::Run(bytes), script)
@@ -111,17 +132,27 @@ impl Loading {
                 options,
                 script,
                 load_start,
+                name: place_name(path),
             },
         })
     }
 
+    /// The place's file name.
+    pub fn name(&self) -> &str {
+        &self.finish.name
+    }
+
     /// The game, once the place has loaded. Joining the client (Play) or
     /// loading the place (Run) happens in the poll that returns it.
-    pub(crate) fn poll(&mut self) -> Option<anyhow::Result<Game>> {
+    pub fn poll(&mut self) -> Option<anyhow::Result<Game>> {
         match &mut self.stage {
             Stage::Server(starting) => {
                 let started = starting.poll()?;
-                Some(started.and_then(|s| self.finish.joined(s)))
+                Some(
+                    started
+                        .map_err(Into::into)
+                        .and_then(|s| self.finish.joined(s)),
+                )
             }
             Stage::Run(bytes) => Some(self.finish.run(bytes)),
         }
@@ -130,13 +161,14 @@ impl Loading {
 
 impl Finish {
     fn joined(&self, (server, started): (ServerThread, Started)) -> anyhow::Result<Game> {
-        let client = ClientHost::new(&started.joined, &self.options)?;
+        let joined = started.joined.context("the player didn't join")?;
+        let client = ClientHost::new(&joined, &self.options)?;
         Ok(self.game(
             Mode::Play {
                 server,
                 client: Box::new(client),
             },
-            rook_view::initial_camera(started.camera),
+            rook_scene::initial_camera(started.camera),
         ))
     }
 
@@ -149,7 +181,7 @@ impl Finish {
                 .run_extra_script(source)
                 .map_err(anyhow::Error::msg)?;
         }
-        let camera = rook_view::initial_camera(rook_view::SavedCamera::read(host.server()));
+        let camera = rook_scene::initial_camera(rook_engine::SavedCamera::read(host.server()));
         Ok(self.game(Mode::Run(Box::new(host)), camera))
     }
 
@@ -164,6 +196,7 @@ impl Finish {
             delivering: std::time::Duration::ZERO,
             behind: 0.0,
             load_start: self.load_start,
+            name: self.name.clone(),
         };
         game.print_logs();
         game
@@ -172,7 +205,7 @@ impl Finish {
 
 impl Game {
     /// Load a place and start it, waiting until it has.
-    pub(crate) fn load(path: &Path, setup: &Setup) -> anyhow::Result<Self> {
+    pub fn load(path: &Path, setup: &Setup) -> anyhow::Result<Self> {
         let loading = Loading::begin(path, setup)?;
         match loading.stage {
             Stage::Server(starting) => loading.finish.joined(starting.wait()?),
@@ -358,15 +391,21 @@ impl Game {
 
     /// Whether GUI took the last input event, so the window shouldn't use
     /// it too.
-    pub(crate) fn input_processed(&self) -> bool {
+    pub fn input_processed(&self) -> bool {
         match &self.mode {
             Mode::Play { client, .. } => client.client().input_processed(),
             Mode::Run(_) => false,
         }
     }
 
+    /// Whether the client runs Roblox's CoreScripts, whose menu Escape
+    /// opens.
+    pub fn core_menu(&self) -> bool {
+        self.core_menu
+    }
+
     /// Whether keys are typing into a TextBox.
-    pub(crate) fn typing(&self) -> bool {
+    pub fn typing(&self) -> bool {
         match &self.mode {
             Mode::Play { client, .. } => client.client().focused_text_box().is_some(),
             Mode::Run(_) => false,
@@ -375,7 +414,7 @@ impl Game {
 
     /// The player's settings as the local player's client has them (Run
     /// mode has no player to change them).
-    pub(crate) fn player_settings(&self) -> Option<PlayerSettings> {
+    pub fn player_settings(&self) -> Option<PlayerSettings> {
         match &self.mode {
             Mode::Play { client, .. } => client.client().player_settings(),
             Mode::Run(_) => None,
@@ -383,7 +422,7 @@ impl Game {
     }
 
     /// Save the player's settings if they changed, before exiting.
-    pub(crate) fn save_user_settings(&mut self) {
+    pub fn save_user_settings(&mut self) {
         if let Mode::Play { client, .. } = &mut self.mode {
             client.client_mut().save_user_settings();
         }

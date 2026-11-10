@@ -3,9 +3,9 @@
 //! [`rook_engine::DataModel::mouse_lock`]), where its movement reaches
 //! scripts as `Delta`s while the cursor stays put.
 
-use rook_engine::MouseLock;
+use winit::window::CursorGrabMode;
 
-use crate::*;
+use super::*;
 
 impl App {
     /// Start or stop looking around with the right mouse button: the

@@ -16,7 +16,7 @@ Files about Rook itself rather than any one crate: its icon, used by the apps an
 
 The same resource script embeds an app's manifest, `apps/<app>/<app>.manifest`, where it has one. Only the player does, so it opens no console window from Explorer ([data and logging](../docs/design/data-and-logging.md#log-files)).
 
-The player's window loads the same resource (`apps/rook-player/src/app/icon.rs`). Windows keeps two icons per window, a small one for the title bar and Alt+Tab and a big one for the taskbar, and the player loads each at its exact size for the display's scale. Windows then shows an image drawn for that size, rather than shrinking a larger one into a soft one. It reloads them when the window gains focus, because the taskbar button only exists by then, and when the window moves to a display with another scale.
+The player's window loads the same resource (`crates/rook-client/src/window/icon.rs`). Windows keeps two icons per window, a small one for the title bar and Alt+Tab and a big one for the taskbar, and the player loads each at its exact size for the display's scale. Windows then shows an image drawn for that size, rather than shrinking a larger one into a soft one. It reloads them when the window gains focus, because the taskbar button only exists by then, and when the window moves to a display with another scale.
 
 On other platforms the build does nothing and windows get the system's default icon for now.
 

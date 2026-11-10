@@ -1,5 +1,5 @@
 [package]
-name = "rook-view"
+name = "rook-scene"
 description = "What a DataModel draws: the render scene built from the DOM for rook-render"
 version.workspace = true
 edition.workspace = true

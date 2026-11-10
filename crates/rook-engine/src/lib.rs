@@ -19,7 +19,7 @@ pub mod session;
 pub mod settings;
 pub mod user_settings;
 
-pub use bridges::camera::{CameraView, MouseLock};
+pub use bridges::camera::{CameraView, MouseLock, SavedCamera};
 pub use bridges::input::{CursorLook, InputEvent, ScreenPoint, SystemCursor};
 
 pub use bridges::render_changes::{RenderChanges, adorned_part, is_effect_class};
@@ -45,6 +45,14 @@ pub enum EngineError {
     Lua(String),
     #[error(transparent)]
     Dom(#[from] rook_dom::DomError),
+    /// A script run on a started place (`DataModel::run_extra_script`)
+    /// failed.
+    #[error("{0}")]
+    Script(String),
+    #[error("couldn't start the server thread: {0}")]
+    Thread(#[from] std::io::Error),
+    #[error("the server thread stopped")]
+    ServerStopped,
 }
 
 /// Services every place gets, created up front so scripts find them in

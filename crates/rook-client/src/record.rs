@@ -4,16 +4,16 @@
 //! how loud the mix got and where it would clip, so loudness can be
 //! checked silently.
 
-use std::io::Write;
 use std::path::Path;
+
+use anyhow::Context;
 
 use rook_audio::effects::Frame;
 use rook_audio::{Mixer, SAMPLE_RATE};
 use rook_engine::console;
 use rook_lua::MessageType;
 
-use crate::STEP;
-use crate::game::Game;
+use crate::game::{Game, STEP};
 
 /// The loudest moment: when it was, and the sounds playing then, each
 /// with its left and right gain.
@@ -23,7 +23,8 @@ struct Loudest {
     sounds: Vec<(String, [f32; 2])>,
 }
 
-pub(crate) fn record(game: &mut Game, seconds: f64, out: &Path) -> anyhow::Result<()> {
+/// Mix `seconds` of `game`'s sounds into `out`.
+pub fn record(game: &mut Game, seconds: f64, out: &Path) -> anyhow::Result<()> {
     let mut mixer = Mixer::new(SAMPLE_RATE);
     let frames = (seconds / STEP).ceil() as usize;
     let mut samples: Vec<Frame> = Vec::with_capacity((seconds * f64::from(SAMPLE_RATE)) as usize);
@@ -126,6 +127,8 @@ fn write_wav(out: &Path, samples: &[Frame]) -> anyhow::Result<()> {
     for s in samples.iter().flat_map(|f| f.iter()) {
         bytes.extend_from_slice(&s.to_le_bytes());
     }
-    fs_err::File::create(out)?.write_all(&bytes)?;
-    Ok(())
+    rook_platform::get()
+        .files
+        .write(out, &bytes)
+        .with_context(|| format!("Couldn't write {}", out.display()))
 }

@@ -23,6 +23,7 @@ impl Times {
         self.samples.clear();
     }
 
+    #[cfg(feature = "window")]
     pub(crate) fn is_empty(&self) -> bool {
         self.samples.is_empty()
     }
@@ -85,6 +86,7 @@ pub(crate) struct Summary {
 
 impl Summary {
     /// Frames per second, if the samples are back-to-back frames.
+    #[cfg(feature = "window")]
     pub(crate) fn fps(&self) -> f64 {
         if self.total.is_zero() {
             return 0.0;
@@ -109,6 +111,19 @@ impl fmt::Display for Summary {
             self.count
         )
     }
+}
+
+/// `29436` → `29,436`.
+pub(crate) fn thousands(n: usize) -> String {
+    let digits = n.to_string();
+    let mut out = String::new();
+    for (i, c) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(c);
+    }
+    out
 }
 
 #[cfg(test)]

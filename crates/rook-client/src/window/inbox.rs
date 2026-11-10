@@ -10,8 +10,8 @@ use winit::event::{DeviceEvent, ElementState, Ime, MouseButton, MouseScrollDelta
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::{KeyCode, PhysicalKey};
 
-use super::{App, icon, keys};
-use crate::*;
+use super::*;
+use super::{icon, keys};
 
 /// An event whose order matters, as it came.
 #[derive(Debug, Clone, PartialEq)]
@@ -131,7 +131,7 @@ impl App {
         }
         if let Some(size) = inbox.resized
             && let Some(gfx) = &mut self.gfx
-            && gfx.frames.get().resize(size)
+            && gfx.frames.get().resize(size.width, size.height)
         {
             self.game.set_viewport(size.width, size.height);
         }
@@ -202,7 +202,7 @@ impl App {
             self.game.input(InputEvent::Key { code, down });
         }
         if down {
-            if code == KeyCode::Escape && !typing && !self.game.core_menu {
+            if code == KeyCode::Escape && !typing && !self.game.core_menu() {
                 event_loop.exit();
             }
             self.keys.insert(code);

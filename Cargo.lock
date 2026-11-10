@@ -3674,6 +3674,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "rook-client"
+version = "0.4.0"
+dependencies = [
+ "anyhow",
+ "glam 0.33.12",
+ "image",
+ "profiling",
+ "rook-audio",
+ "rook-content",
+ "rook-dom",
+ "rook-engine",
+ "rook-lua",
+ "rook-platform",
+ "rook-reflection",
+ "rook-render",
+ "rook-scene",
+ "rook-types",
+ "rustc-hash 2.1.3",
+ "tracing",
+ "winit",
+]
+
+[[package]]
 name = "rook-content"
 version = "0.4.0"
 dependencies = [
@@ -3865,28 +3888,17 @@ dependencies = [
  "embed-resource",
  "fs-err",
  "glam 0.33.12",
- "image",
  "mimalloc",
- "pollster 1.0.1",
  "profiling",
  "resvg",
  "rfd",
- "rook-audio",
+ "rook-client",
  "rook-content",
- "rook-dom",
  "rook-engine",
  "rook-lua",
- "rook-physics",
  "rook-platform",
- "rook-reflection",
- "rook-render",
- "rook-terrain",
+ "rook-scene",
  "rook-types",
- "rook-view",
- "rustc-hash 2.1.3",
- "tracing",
- "wgpu",
- "winit",
 ]
 
 [[package]]
@@ -3923,28 +3935,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rook-terrain"
-version = "0.4.0"
-dependencies = [
- "glam 0.33.12",
- "rook-types",
- "rustc-hash 2.1.3",
- "serde_json",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "rook-types"
-version = "0.4.0"
-dependencies = [
- "glam 0.33.12",
- "rbx_types",
- "rook-reflection",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "rook-view"
+name = "rook-scene"
 version = "0.4.0"
 dependencies = [
  "blake3",
@@ -3964,6 +3955,42 @@ dependencies = [
  "rook-types",
  "rustc-hash 2.1.3",
  "tracing",
+]
+
+[[package]]
+name = "rook-server"
+version = "0.4.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "embed-resource",
+ "fs-err",
+ "resvg",
+ "rook-content",
+ "rook-engine",
+ "rook-lua",
+ "rook-platform",
+]
+
+[[package]]
+name = "rook-terrain"
+version = "0.4.0"
+dependencies = [
+ "glam 0.33.12",
+ "rook-types",
+ "rustc-hash 2.1.3",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "rook-types"
+version = "0.4.0"
+dependencies = [
+ "glam 0.33.12",
+ "rbx_types",
+ "rook-reflection",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

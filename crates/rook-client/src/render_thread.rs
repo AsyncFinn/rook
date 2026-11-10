@@ -9,11 +9,10 @@
 //! Bevy sends its render app across. So nothing is shared behind a lock:
 //! the main thread can only touch the renderer between frames, at the
 //! hand-over ([`RenderThread::get`]), where the scene's changes go in
-//! (rook-view's `ToRender`, pipelined rendering's extract).
+//! (rook-scene's `ToRender`, pipelined rendering's extract).
 //! docs/design/architecture.md#frame-order has the frame's order.
 
 use std::sync::mpsc::{Receiver, Sender, channel};
-use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 /// A frame's work on the render thread; returns how long of it was spent
@@ -23,12 +22,17 @@ type Job<T> = Box<dyn FnOnce(&mut T) -> Duration + Send>;
 /// A job done: when, and how long it waited for the display.
 type Done<T> = (T, Instant, Duration);
 
+/// How the thread ended: a panic's payload, raised again on the main
+/// thread as `JoinHandle::join` would give it.
+type Ended = std::thread::Result<()>;
+
 pub(crate) struct RenderThread<T: Send + 'static> {
     /// The renderer's side, while no frame is in flight.
     home: Option<T>,
     jobs: Option<Sender<(T, Job<T>)>>,
     done: Receiver<Done<T>>,
-    thread: Option<JoinHandle<()>>,
+    /// Sent once as the thread ends, and closed after.
+    ended: Receiver<Ended>,
     /// When the frame in flight was handed over.
     sent: Option<Instant>,
     /// When the last frame was handed over, and whether it overlapped
@@ -60,22 +64,27 @@ impl<T: Send + 'static> RenderThread<T> {
     pub(crate) fn new(target: T) -> Self {
         let (jobs, inbox) = channel::<(T, Job<T>)>();
         let (finished, done) = channel();
-        let thread = std::thread::Builder::new()
-            .name("rook render".into())
-            .spawn(move || {
+        let (ended_tx, ended) = channel::<Ended>();
+        let body = move || {
+            let run = std::panic::AssertUnwindSafe(|| {
                 for (mut target, job) in inbox {
                     let display = job(&mut target);
                     if finished.send((target, Instant::now(), display)).is_err() {
                         return;
                     }
                 }
-            })
+            });
+            let _ = ended_tx.send(std::panic::catch_unwind(run));
+        };
+        rook_platform::get()
+            .threads
+            .spawn("rook render", Box::new(body))
             .expect("couldn't start the render thread");
         Self {
             home: Some(target),
             jobs: Some(jobs),
             done,
-            thread: Some(thread),
+            ended,
             sent: None,
             last_sent: None,
             overlapped: false,
@@ -130,8 +139,8 @@ impl<T: Send + 'static> RenderThread<T> {
                 Some(Finished { at, render })
             }
             // The thread panicked: panic here with its message.
-            Err(_) => match self.thread.take().map(JoinHandle::join) {
-                Some(Err(panic)) => std::panic::resume_unwind(panic),
+            Err(_) => match self.ended.recv() {
+                Ok(Err(panic)) => std::panic::resume_unwind(panic),
                 _ => panic!("the render thread stopped"),
             },
         }
@@ -179,6 +188,7 @@ impl<T: Send + 'static> RenderThread<T> {
 
     /// When the main thread should start its next frame ([`Pacer`]);
     /// `None` with no frame in flight: start now.
+    #[cfg(feature = "window")]
     pub(crate) fn start_next_at(&self) -> Option<Instant> {
         self.pacer.start_at(self.sent)
     }
@@ -189,15 +199,12 @@ impl<T: Send + 'static> Drop for RenderThread<T> {
     /// surface with its window), then stop the thread.
     fn drop(&mut self) {
         if self.home.is_none()
-            && self.thread.is_some()
             && let Ok((target, ..)) = self.done.recv()
         {
             self.home = Some(target);
         }
         self.jobs = None;
-        if let Some(thread) = self.thread.take() {
-            let _ = thread.join();
-        }
+        let _ = self.ended.recv();
     }
 }
 

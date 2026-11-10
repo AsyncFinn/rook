@@ -1,7 +1,10 @@
 //! Frame-time readouts for the window title and the terminal.
 
-use crate::stats::ms;
-use crate::*;
+use rook_engine::console;
+use rook_lua::MessageType;
+
+use super::*;
+use crate::stats::{self, ms};
 
 /// Frame times as players feel them, over each second of play: in the
 /// window title, and with `--frame-times` in the terminal too.

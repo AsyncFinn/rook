@@ -4,6 +4,7 @@
 //! runs apart.
 
 pub mod host;
+pub mod server_thread;
 pub mod threads;
 
 use rook_dom::InstanceId;

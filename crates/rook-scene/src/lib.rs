@@ -36,7 +36,7 @@ mod look;
 mod props;
 mod terrain;
 
-pub use camera::{SavedCamera, initial_camera};
+pub use camera::initial_camera;
 pub use content::installed::Installed;
 pub use frame::ToRender;
 

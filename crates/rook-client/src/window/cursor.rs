@@ -5,8 +5,9 @@
 //! while an image loads or without an install.
 
 use rook_engine::{CursorLook, SystemCursor};
+use winit::window::CursorIcon;
 
-use crate::*;
+use super::*;
 
 /// What the window's own cursor shows over the window, and whether the
 /// mouse is in it.

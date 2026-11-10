@@ -1,32 +1,84 @@
-//! The window: input, the frame loop and drawing.
+//! The window, through winit: input, the frame loop and drawing. Every
+//! app that opens a window runs a place with [`run`]; winit is reached
+//! through this module's re-export, so an app needs no winit of its own.
 
-pub(crate) mod camera;
-pub(crate) mod cursor;
-pub(crate) mod frame_clock;
-pub(crate) mod icon;
-pub(crate) mod inbox;
-pub(crate) mod keys;
-pub(crate) mod launch;
-pub(crate) mod mouse;
-pub(crate) mod readout;
+mod camera;
+mod cursor;
+mod frame_clock;
+mod icon;
+mod inbox;
+mod keys;
+mod launch;
+mod mouse;
+mod readout;
 
-use crate::*;
+pub use winit;
+
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+
+use rook_engine::user_settings::{Pacing, PlayerSettings};
+use rook_engine::{InputEvent, MouseLock};
+use rook_render::{Camera, WindowSurface};
+use rook_scene::{Installed, SceneCache, ToRender};
+use rustc_hash::FxHashSet;
+use winit::dpi::PhysicalPosition;
+use winit::event::{DeviceEvent, DeviceId, WindowEvent};
+use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
+use winit::keyboard::KeyCode;
+use winit::window::{Window, WindowId};
+
+use crate::game::{Game, Loading, Setup};
+use crate::render_thread::RenderThread;
+use crate::start::Start;
+use camera::FlyCamera;
+use launch::Launch;
+use readout::Readout;
+
+/// How a window shows a place, beyond how every app starts one ([`Start`]).
+#[derive(Debug, Clone)]
+pub struct Options {
+    /// The place file, which the title shows.
+    pub place: PathBuf,
+    pub start: Start,
+    /// The `FramerateCap` the settings give, over the player's.
+    pub framerate_cap: Option<i32>,
+    /// Print frame times to the terminal every second, and a summary at
+    /// exit.
+    pub frame_times: bool,
+    /// The master volume, 0 to 1, until the in-game menu changes it.
+    pub volume: Option<f32>,
+    /// Show the `>` command prompt in the terminal.
+    #[cfg(feature = "repl")]
+    pub repl: bool,
+}
+
+/// Open `options.place` in a window on `event_loop` and play it until the
+/// window closes: the place loads while the window opens, hidden until the
+/// game has drawn into it. The error of a place that couldn't load or a
+/// GPU Rook can't draw with.
+pub fn run(
+    event_loop: EventLoop<()>,
+    options: Options,
+    setup: Setup,
+    install: Installed,
+) -> anyhow::Result<()> {
+    let name = crate::place_name(&options.place);
+    let loading = Loading::begin(&options.place, &setup)
+        .map_err(|e| e.context(format!("Couldn't open {name}")))?;
+    let player = PlayerSettings::load(setup.user_settings.as_deref());
+    let mut launch = Launch::new(options, setup, install, loading, player);
+    event_loop.set_control_flow(ControlFlow::Poll);
+    event_loop.run_app(&mut launch)?;
+    launch.finish()
+}
 
 /// The window and what draws into it.
 pub(crate) struct Gfx {
     /// Dropped first: the thread hands the surface back to be dropped here.
-    pub(crate) frames: RenderThread<Drawing>,
+    pub(crate) frames: RenderThread<WindowSurface>,
     pub(crate) window: Arc<Window>,
-}
-
-/// What draws into the window, on the render thread while a frame is in
-/// flight ([`RenderThread`]).
-pub(crate) struct Drawing {
-    pub(crate) surface: wgpu::Surface<'static>,
-    pub(crate) config: wgpu::SurfaceConfiguration,
-    pub(crate) renderer: Renderer,
-    /// The last frame was presented.
-    pub(crate) presented: bool,
 }
 
 pub(crate) struct App {
@@ -99,14 +151,6 @@ pub(crate) fn pacing(framerate_cap: Option<i32>, player: &PlayerSettings) -> Pac
     framerate_cap.map_or_else(|| player.pacing(), Pacing::from_cap)
 }
 
-fn present_mode(vsync: bool) -> wgpu::PresentMode {
-    if vsync {
-        wgpu::PresentMode::AutoVsync
-    } else {
-        wgpu::PresentMode::AutoNoVsync
-    }
-}
-
 impl Gfx {
     /// Open the window and its GPU device, presenting at the display's
     /// rate with `vsync`.
@@ -125,40 +169,11 @@ impl Gfx {
             )?,
         );
         icon::set(&window, window.scale_factor());
-        let instance =
-            wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
-        let surface = instance.create_surface(window.clone())?;
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            compatible_surface: Some(&surface),
-            force_fallback_adapter: false,
-            apply_limit_buckets: false,
-        }))?;
-        let (device, queue) =
-            pollster::block_on(adapter.request_device(&Renderer::device_descriptor(&adapter)))?;
         let size = window.inner_size();
-        let mut config = surface
-            .get_default_config(&adapter, size.width.max(1), size.height.max(1))
-            .context("surface is not supported by the adapter")?;
-        let caps = surface.get_capabilities(&adapter);
-        if let Some(srgb) = caps.formats.iter().find(|f| f.is_srgb()) {
-            config.format = *srgb;
-        }
-        config.present_mode = present_mode(vsync);
-        // One frame queued, not wgpu's default two: at the display's rate
-        // each frame waits for the screen before it starts, so it shows the
-        // mouse as it is then, rather than two or three refreshes late.
-        config.desired_maximum_frame_latency = 1;
-        surface.configure(&device, &config);
-        let renderer = Renderer::new(&adapter, device, queue, config.format);
-        crate::note_gpu(&renderer);
+        let surface = WindowSurface::new(window.clone(), size.width, size.height, vsync)?;
+        crate::note_gpu(surface.renderer());
         Ok(Self {
-            frames: RenderThread::new(Drawing {
-                surface,
-                config,
-                renderer,
-                presented: false,
-            }),
+            frames: RenderThread::new(surface),
             window,
         })
     }
@@ -171,65 +186,13 @@ impl Gfx {
     }
 }
 
-impl Drawing {
-    /// Present at the display's rate, or as soon as each frame is drawn.
-    fn set_vsync(&mut self, vsync: bool) {
-        self.config.present_mode = present_mode(vsync);
-        self.surface.configure(&self.renderer.device, &self.config);
-    }
-
-    /// Take a new window size.
-    pub(crate) fn resize(&mut self, size: PhysicalSize<u32>) -> bool {
-        if size.width == 0 || size.height == 0 {
-            return false;
-        }
-        self.config.width = size.width;
-        self.config.height = size.height;
-        self.surface.configure(&self.renderer.device, &self.config);
-        true
-    }
-
-    /// The next frame to draw on, or `None` when the surface had to be
-    /// set up again. Waits for the display at its rate.
-    fn next_frame(&self) -> Option<wgpu::SurfaceTexture> {
-        match self.surface.get_current_texture() {
-            wgpu::CurrentSurfaceTexture::Success(t)
-            | wgpu::CurrentSurfaceTexture::Suboptimal(t) => Some(t),
-            _ => {
-                self.surface.configure(&self.renderer.device, &self.config);
-                None
-            }
-        }
-    }
-
-    /// Draw a frame with `camera` and present it, on the render thread;
-    /// how long it waited for the display to free an image to draw into.
-    fn draw(&mut self, window: &Window, camera: &Camera, clock: f64) -> Duration {
-        self.presented = false;
-        let asked = Instant::now();
-        let Some(frame) = self.next_frame() else {
-            return asked.elapsed();
-        };
-        let display = asked.elapsed();
-        let view = frame.texture.create_view(&Default::default());
-        // Wrapped so the shader's sines stay precise in long sessions.
-        self.renderer.set_time((clock % 3600.0) as f32);
-        let (width, height) = (self.config.width, self.config.height);
-        self.renderer.render(&view, width, height, camera);
-        window.pre_present_notify();
-        self.renderer.queue.present(frame);
-        self.presented = true;
-        display
-    }
-}
-
 impl App {
     /// Draw the game in `gfx`'s window from now on.
     pub(crate) fn attach(&mut self, mut gfx: Gfx) {
-        let drawing = gfx.frames.get();
-        self.install.apply(&mut drawing.renderer);
-        drawing.renderer.set_scene(&self.scene.scene);
-        let (width, height) = (drawing.config.width, drawing.config.height);
+        let surface = gfx.frames.get();
+        self.install.apply(surface.renderer_mut());
+        surface.renderer_mut().set_scene(&self.scene.scene);
+        let (width, height) = surface.size();
         self.game.set_viewport(width, height);
         self.gfx = Some(gfx);
         self.read_refresh();
@@ -353,15 +316,15 @@ impl App {
         let Some(gfx) = &mut self.gfx else {
             return;
         };
-        let drawing = gfx.frames.hand_over(self.last_frame, period);
+        let surface = gfx.frames.hand_over(self.last_frame, period);
         if let Some(scene) = drawn.scene {
-            scene.apply(&self.scene, &mut drawing.renderer);
+            scene.apply(&self.scene, surface.renderer_mut());
         }
         let cursor_drawn =
-            (self.scene).show_cursor(self.game.view(), &mut drawing.renderer, &look, at);
+            (self.scene).show_cursor(self.game.view(), surface.renderer_mut(), &look, at);
         let (window, camera, clock) = (gfx.window.clone(), drawn.camera, self.clock);
         gfx.frames
-            .send(move |drawing| drawing.draw(&window, &camera, clock));
+            .send(move |surface| surface.draw(&camera, clock, || window.pre_present_notify()));
         self.show_system_cursor(&look, cursor_drawn);
     }
 
@@ -414,15 +377,13 @@ impl App {
     }
 }
 
-pub(crate) fn no_renderer(event_loop: &ActiveEventLoop, e: anyhow::Error) {
-    let e = e
-        .context(
-            "Rook needs a graphics card that supports DirectX 12, Vulkan or Metal, \
-             with up-to-date drivers.",
-        )
-        .context("Couldn't start drawing");
-    crate::alert::error(&e);
-    event_loop.exit();
+/// The error for a window Rook couldn't draw into.
+pub(crate) fn no_renderer(e: anyhow::Error) -> anyhow::Error {
+    e.context(
+        "Rook needs a graphics card that supports DirectX 12, Vulkan or Metal, \
+         with up-to-date drivers.",
+    )
+    .context("Couldn't start drawing")
 }
 
 impl App {
@@ -454,15 +415,14 @@ impl App {
     }
 }
 
-impl ApplicationHandler for App {
-    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        if self.gfx.is_some() {
-            return;
+/// What [`Launch`] passes on once the game has started.
+impl App {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) -> anyhow::Result<()> {
+        if self.gfx.is_none() {
+            let gfx = Gfx::open(event_loop, &self.title, self.pacing() == Pacing::Display);
+            self.attach(gfx.map_err(no_renderer)?);
         }
-        match Gfx::open(event_loop, &self.title, self.pacing() == Pacing::Display) {
-            Ok(gfx) => self.attach(gfx),
-            Err(e) => no_renderer(event_loop, e),
-        }
+        Ok(())
     }
 
     /// Events are only noted ([`inbox`]); the frame acts on them.
@@ -472,8 +432,8 @@ impl ApplicationHandler for App {
         }
     }
 
-    fn device_event(&mut self, _: &ActiveEventLoop, _: DeviceId, event: DeviceEvent) {
-        self.inbox.note_device(&event);
+    fn device_event(&mut self, _: &ActiveEventLoop, _: DeviceId, event: &DeviceEvent) {
+        self.inbox.note_device(event);
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
@@ -486,7 +446,7 @@ impl ApplicationHandler for App {
         if gfx.window.is_visible() == Some(false) {
             self.frame(event_loop);
             if let Some(gfx) = &mut self.gfx
-                && gfx.frames.get().presented
+                && gfx.frames.get().presented()
             {
                 gfx.window.set_visible(true);
             }

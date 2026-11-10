@@ -1,7 +1,10 @@
 //! The free-flying camera, and following the game's when a script drives
 //! it.
 
-use crate::*;
+use glam::{EulerRot, Mat3, Vec3};
+use rook_types::{CFrame, Value};
+
+use super::*;
 
 /// Yaw/pitch camera driven by the mouse and keyboard.
 #[derive(Debug)]

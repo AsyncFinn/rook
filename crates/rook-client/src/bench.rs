@@ -4,21 +4,28 @@
 //! the render thread while the next one steps
 //! (docs/design/architecture.md#frame-order).
 
-use crate::*;
+use std::time::{Duration, Instant};
+
+use glam::{Mat3, Vec3};
+use rook_engine::InputEvent;
+use rook_render::{Camera, Renderer};
+use rook_scene::{Installed, SceneCache};
+
+use crate::game::Game;
+use crate::render_thread::RenderThread;
+use crate::start::Start;
+use crate::stats::{self, thousands};
 
 mod budgets;
+mod counters;
 
-/// `29436` → `29,436`.
-pub(crate) fn thousands(n: usize) -> String {
-    let digits = n.to_string();
-    let mut out = String::new();
-    for (i, c) in digits.chars().enumerate() {
-        if i > 0 && (digits.len() - i).is_multiple_of(3) {
-            out.push(',');
-        }
-        out.push(c);
-    }
-    out
+/// How `--bench` moves the camera, as someone playing does.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Bench {
+    /// Degrees the camera turns each frame.
+    pub turn: f32,
+    /// Studs the camera flies each frame the way it looks, level.
+    pub fly: f32,
 }
 
 /// The CPU recording's stages, as `StageTimes` orders them.
@@ -101,17 +108,18 @@ impl Offscreen {
     }
 }
 
-/// Time each stage of a frame, offscreen.
-pub(crate) fn bench(
+/// Time each stage of `frames` frames, offscreen, `start`'s size.
+pub fn bench(
     game: &mut Game,
     mut cache: SceneCache,
     frames: u32,
     mut camera: Camera,
-    args: &Args,
+    start: &Start,
+    how: Bench,
     install: &Installed,
 ) -> anyhow::Result<()> {
-    let (width, height) = (args.width, args.height);
-    let turn = Mat3::from_rotation_y(args.turn.to_radians());
+    let (width, height) = (start.width, start.height);
+    let turn = Mat3::from_rotation_y(how.turn.to_radians());
     // The scene was just built, asking for its files: loading is timed
     // from here, not from the place's start, which `--seconds` delays it by.
     let scene_built = Instant::now();
@@ -137,7 +145,7 @@ pub(crate) fn bench(
     let mut updates = 0;
     let mut clock = 0.0;
     let mut last = Instant::now();
-    let mut counted = crate::counters::Frames::start();
+    let mut counted = counters::Frames::start();
     for frame in 0..frames {
         let frame_start = Instant::now();
         starts.push(frame_start);
@@ -158,7 +166,7 @@ pub(crate) fn bench(
         s.step = t.elapsed();
         camera.rotation = turn * camera.rotation;
         let ahead = (camera.rotation * -Vec3::Z) * Vec3::new(1.0, 0.0, 1.0);
-        camera.position += ahead.normalize_or_zero() * args.fly;
+        camera.position += ahead.normalize_or_zero() * how.fly;
         let t = Instant::now();
         let update = cache.update(game.view_mut(), camera.position);
         if update.changed() {

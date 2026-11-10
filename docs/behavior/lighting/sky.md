@@ -67,7 +67,7 @@ different shares; that was the tone curve's toe, not the tint.
 
 ## How Rook does it
 
-`sky_tint` in `crates/rook-view/src/lighting/sky.rs` holds the table and
+`sky_tint` in `crates/rook-scene/src/lighting/sky.rs` holds the table and
 interpolates linearly between the measured times (`Lighting::sky_tint`).
 The renderer multiplies the drawn sky by it (`sky.wgsl`), the sky's diffuse
 light and the covered gray by it (`sky_light`, `sky_covered` in

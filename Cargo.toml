@@ -20,7 +20,8 @@ rook-dom = { path = "crates/rook-dom" }
 rook-lua = { path = "crates/rook-lua" }
 rook-engine = { path = "crates/rook-engine" }
 rook-render = { path = "crates/rook-render" }
-rook-view = { path = "crates/rook-view" }
+rook-scene = { path = "crates/rook-scene" }
+rook-client = { path = "crates/rook-client" }
 rook-net = { path = "crates/rook-net" }
 rook-physics = { path = "crates/rook-physics" }
 rook-content = { path = "crates/rook-content" }
@@ -212,6 +213,8 @@ debug = false
 opt-level = 1
 [profile.dev.package.rook-cli]
 opt-level = 1
+[profile.dev.package.rook-client]
+opt-level = 1
 [profile.dev.package.rook-content]
 opt-level = 1
 [profile.dev.package.rook-dom]
@@ -236,11 +239,13 @@ opt-level = 1
 opt-level = 1
 [profile.dev.package.rook-render]
 opt-level = 1
+[profile.dev.package.rook-scene]
+opt-level = 1
+[profile.dev.package.rook-server]
+opt-level = 1
 [profile.dev.package.rook-terrain]
 opt-level = 1
 [profile.dev.package.rook-types]
-opt-level = 1
-[profile.dev.package.rook-view]
 opt-level = 1
 [profile.dev.package.xtask]
 opt-level = 1
