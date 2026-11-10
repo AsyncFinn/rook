@@ -157,6 +157,7 @@ impl SurfaceType {
             Self::Weld | Self::Glue => SurfacePattern::Lattice,
             Self::Inlet => SurfacePattern::Inlet,
             Self::Universal => SurfacePattern::Universal,
+            // TODO: draw Hinge's and Motor's yellow pin.
             _ => return None,
         })
     }
