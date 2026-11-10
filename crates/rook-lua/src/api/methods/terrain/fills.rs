@@ -1,6 +1,3 @@
-//! The fills: `FillBlock`, `FillBall`, `FillCylinder`, `FillWedge`,
-//! `FillRegion` and `ReplaceMaterial`.
-
 use super::*;
 
 fn empty_extents() -> ScriptError {

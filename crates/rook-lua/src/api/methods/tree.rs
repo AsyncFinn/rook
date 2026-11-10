@@ -1,9 +1,6 @@
-//! Object and Instance: the tree, finding, destroying, cloning.
-
 use super::*;
 use crate::removal;
 
-/// What a method with a fast form found.
 #[derive(Clone, Copy)]
 pub(crate) enum Found {
     Bool(bool),

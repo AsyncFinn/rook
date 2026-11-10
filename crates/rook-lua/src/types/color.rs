@@ -1,5 +1,3 @@
-//! Color3 and BrickColor.
-
 use super::err;
 use std::sync::LazyLock;
 

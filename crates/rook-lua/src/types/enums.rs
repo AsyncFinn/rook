@@ -1,5 +1,3 @@
-//! `Enum`, `Enum.X` and `Enum.X.Y`.
-
 use super::err;
 use mlua::{
     AnyUserData, Lua, MetaMethod, UserData, UserDataFields, UserDataMethods, UserDataRef,
@@ -9,7 +7,6 @@ use rook_reflection::{EnumId, database};
 
 use crate::ctx::ctx;
 
-/// The `Enum` global.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct LEnums;
 

@@ -97,7 +97,6 @@ fn sequence(lua: &Lua, ids: Vec<InstanceId>) -> ApiResult<Outcome> {
     Outcome::ret(lua, t)
 }
 
-/// Keyboard and mouse is the only input Rook has so far.
 fn last_input_type(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
     // MouseMovement.
     Outcome::ret(

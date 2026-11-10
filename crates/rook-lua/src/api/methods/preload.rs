@@ -20,7 +20,6 @@ use crate::ctx::args::{Args, type_name};
 use crate::ctx::{ApiResult, Outcome, ScriptError, with_world};
 use crate::world::World;
 
-/// ContentProvider requests scripts are waiting on.
 #[derive(Debug, Default)]
 pub struct ContentRequests {
     /// References to fetch, by request id, since the engine last took them.

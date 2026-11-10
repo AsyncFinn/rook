@@ -33,7 +33,6 @@ use crate::world::World;
 /// A plain stored property read: the property and its enum, if any.
 pub(crate) type FastRead = (PropertyId, Option<EnumId>);
 
-/// Shared state reachable from every callback.
 #[derive(Debug)]
 pub(crate) struct Ctx {
     pub(crate) world: Rc<RefCell<World>>,
@@ -262,7 +261,6 @@ enum Code {
     Error,
 }
 
-/// What a raw engine function produced.
 #[derive(Debug)]
 pub(crate) enum Outcome {
     Return(MultiValue),

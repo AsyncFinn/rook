@@ -1,5 +1,3 @@
-//! Running Lua threads, reporting their errors, and dispatching signals.
-
 pub(crate) mod watchdog;
 
 use crate::signal::{FireArgs, Firing, SignalKey};

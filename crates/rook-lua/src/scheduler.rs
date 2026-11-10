@@ -37,7 +37,6 @@ pub enum Clock {
     /// Each frame advances by exactly `step` seconds (headless runs, tests,
     /// conformance), so results are reproducible.
     Fixed { step: f64 },
-    /// Wall-clock time.
     Real { start: Instant },
 }
 
@@ -96,7 +95,6 @@ impl<T> Scheduler<T> {
         }
     }
 
-    /// A fixed-step clock at `hz` frames per second.
     pub fn fixed(hz: f64) -> Self {
         Self::new(Clock::Fixed { step: 1.0 / hz })
     }
@@ -112,7 +110,6 @@ impl<T> Scheduler<T> {
         self.now
     }
 
-    /// Length of the current frame in seconds.
     pub fn delta(&self) -> f64 {
         self.delta
     }

@@ -164,7 +164,6 @@ fn user_infos(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     )
 }
 
-/// A Player's user id.
 fn player_id(lua: &Lua, player: InstanceId) -> i64 {
     with_world(lua, |w| w.dom.number_property(player, "UserId")).unwrap_or(0.0) as i64
 }
