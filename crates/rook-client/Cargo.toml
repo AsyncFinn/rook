@@ -10,11 +10,8 @@ rust-version.workspace = true
 
 [features]
 # The window, through winit: input, the mouse, the cursor and the frame
-# loop, for every app that opens one (desktop or Android), and sound
-# through the audio device.
+# loop, and sound through the audio device.
 window = ["dep:winit", "rook-audio/output"]
-# winit on Android, for an app that runs as a NativeActivity.
-android = ["window", "winit/android-native-activity"]
 # The `>` prompt in the terminal that runs Luau in the open place.
 repl = ["rook-engine/repl"]
 

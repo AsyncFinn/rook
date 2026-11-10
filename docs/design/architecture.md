@@ -37,7 +37,7 @@ crates/
                     and drawing into a window (WindowSurface)
   rook-client       A client without an OS of its own: the game a player sees (Play and Run), the frame
                     loop and render thread, screenshot/bench/record; its `window` feature is the winit
-                    window every app that opens one runs (desktop or Android)
+                    window every app that opens one runs
 apps/
   rook-cli          rook: opens places in rook-player, dump, roundtrip, run-headless, content
   xtask             cargo xtask: conformance, corpus-scan, drift, package; never shipped
@@ -66,7 +66,7 @@ rook-types ← rook-reflection ← rook-dom ← rook-formats
 rook-platform sits below all of them: every crate that touches the host reaches it through rook-platform.
 ```
 
-`rook-render` never touches the DOM (see [Engine systems](#engine-systems)): `rook-scene` reads the DOM and builds what the renderer takes. Only `rook-client`, and the apps that draw through it, link `rook-scene` and `rook-render`; `rook-engine` and `rook-server` depend on neither. An app that opens a window (the desktop player, a mobile one) is its command line or entry point, the platform it installs and a call to `rook_client::window::run`: the frame loop, input and drawing are shared, and the GPU stays inside `rook-render`.
+`rook-render` never touches the DOM (see [Engine systems](#engine-systems)): `rook-scene` reads the DOM and builds what the renderer takes. Only `rook-client`, and the apps that draw through it, link `rook-scene` and `rook-render`; `rook-engine` and `rook-server` depend on neither. An app that opens a window is its command line or entry point, the platform it installs and a call to `rook_client::window::run`: the frame loop, input and drawing are shared, and the GPU stays inside `rook-render`.
 
 ### The seam: portable crates and the host
 

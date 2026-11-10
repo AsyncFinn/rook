@@ -1,7 +1,7 @@
 //! Drawing into a window: its surface, how frames are paced on it, and
 //! presenting. The renderer owns this, as it owns its device, so an app
-//! hands over a window (anything with a raw window handle: winit's on the
-//! desktop or Android) and never touches the GPU API itself.
+//! hands over a window (anything with a raw window handle) and never
+//! touches the GPU API itself.
 
 use std::time::{Duration, Instant};
 
