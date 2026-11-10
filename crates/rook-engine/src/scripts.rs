@@ -6,10 +6,15 @@ use super::*;
 
 impl DataModel {
     /// Start every server Script that should run, in tree order.
+    ///
+    /// A script enabled by one that ran before it in this pass (a game's
+    /// loader setting its tagged scripts' `Disabled` to false) starts
+    /// after the pass, as one enabled at any other time does.
     pub fn start(&mut self) {
         let root = self.runtime.world().dom.root();
-        self.start_scripts_under(root);
         self.new_scripts = NewScripts::starting_at(self.runtime.world().dom.journal().end());
+        self.start_scripts_under(root);
+        self.start_new_scripts();
         if self.role == Role::Server {
             self.install_legacy_chat();
         }
@@ -33,12 +38,15 @@ impl DataModel {
         self.runtime.dispatch_since(start);
     }
 
-    fn start_scripts_under(&self, id: InstanceId) {
+    fn start_scripts_under(&mut self, id: InstanceId) {
         let mut candidates = vec![id];
         candidates.extend(self.runtime.world().dom.descendants(id));
         for script in candidates {
             if self.should_run(script) {
                 self.runtime.run_script(script);
+                // What it changed is noted now, while whether each script
+                // is running still says whether an enable restarts it.
+                self.note_new_scripts();
             }
         }
     }
@@ -114,7 +122,11 @@ impl DataModel {
                 Change::Reparented { subtree, .. } => scripts.candidates.extend(subtree),
                 Change::Property { id, property } if disabled(*id, *property) => {
                     scripts.candidates.push(*id);
-                    scripts.toggled.insert(*id);
+                    // Only a running script is restarted by the change;
+                    // one that never ran just starts.
+                    if self.runtime.is_started(*id) {
+                        scripts.toggled.insert(*id);
+                    }
                 }
                 _ => {}
             }

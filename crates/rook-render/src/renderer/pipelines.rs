@@ -382,10 +382,14 @@ impl Pipelines {
             wgpu::CompareFunction::GreaterEqual,
             // Towards the camera (greater in reverse Z), so an image also
             // wins over another part's face lying in the same plane, as in
-            // Roblox, instead of fighting it.
+            // Roblox, instead of fighting it. Two faces in one plane differ
+            // by rounding: a few depth steps, and on a slope at most the
+            // depth across 1/128 pixel (each face's corners snap to 1/256
+            // pixel); more lifts an image through a part just above it
+            // where its face is seen at a low angle.
             wgpu::DepthBiasState {
                 constant: 4,
-                slope_scale: 1.0,
+                slope_scale: 1.0 / 32.0,
                 clamp: 0.0,
             },
             Default::default(),

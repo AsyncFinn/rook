@@ -96,3 +96,38 @@ fn disabled_scripts_stop_and_rerun_when_enabled() {
         ]
     );
 }
+
+/// A loader that enables its game's disabled scripts as the place starts
+/// (setting `Disabled` to false before anything yields) starts each of
+/// them once, whether it comes before or after the loader in the tree.
+#[test]
+fn scripts_enabled_while_the_place_starts_run_once() {
+    let mut s = Server::new(&Options::default()).unwrap();
+    let sss = service(&s, "ServerScriptService");
+    let early = add_under(&s, sss, "Script", "Early", "print('early')");
+    add_script(
+        &s,
+        "ServerScriptService",
+        "Loader",
+        r#"
+        local sss = game:GetService("ServerScriptService")
+        sss.Early.Disabled = false
+        sss.Late.Disabled = false
+        print("loaded")
+        "#,
+    );
+    let late = add_under(&s, sss, "Script", "Late", "print('late')");
+    for id in [early, late] {
+        s.runtime
+            .world_mut()
+            .dom
+            .set_property_by_name(id, "Disabled", Value::Bool(true))
+            .unwrap();
+    }
+    s.start();
+    s.run_for(0.2);
+    let mut out = lines(&s);
+    out.sort();
+    assert_eq!(out, ["early", "late", "loaded"]);
+    assert_eq!(s.started_scripts(), 3);
+}
