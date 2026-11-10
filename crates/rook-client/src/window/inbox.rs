@@ -32,7 +32,6 @@ pub(crate) enum Noted {
     },
     /// The wheel turned this many notches (up positive).
     Wheel(f32),
-    /// The window lost focus.
     Unfocused,
 }
 

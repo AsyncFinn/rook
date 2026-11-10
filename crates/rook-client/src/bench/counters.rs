@@ -11,7 +11,6 @@ use crate::stats::thousands;
 /// costs little.
 const SMALL: u64 = 1_000;
 
-/// Each frame's counts.
 #[derive(Debug, Default)]
 pub(crate) struct Frames(Vec<Counts>);
 
@@ -22,7 +21,6 @@ impl Frames {
         Self::default()
     }
 
-    /// End a frame.
     pub(crate) fn frame(&mut self) {
         self.0.push(counters::take());
     }

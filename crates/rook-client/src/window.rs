@@ -110,7 +110,6 @@ pub(crate) struct App {
     /// redraw without it comes from a loop that isn't winit's: Windows'
     /// own, while the window is dragged or resized.
     pub(crate) loop_ran: bool,
-    /// What the cursor shows.
     pub(crate) cursor_shown: cursor::Shown,
     /// The platform's input method is on, while a TextBox has focus.
     pub(crate) ime: bool,

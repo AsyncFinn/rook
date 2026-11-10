@@ -36,7 +36,6 @@ enum Mode {
 #[derive(Debug)]
 pub struct Game {
     mode: Mode,
-    /// The camera the place was saved with.
     pub(crate) saved_camera: Camera,
     /// Server and client step times, for `--bench` and the readout.
     pub(crate) server_steps: Times,
