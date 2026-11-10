@@ -82,7 +82,13 @@ Failures keep their reason until something reports it. Return typed errors (`thi
 
 ### Comments
 
-Comments say why: a Roblox behavior, a measurement, a non-obvious reason, or an Observed/Measured/Inference tag, never what the next line already says. Findings have one home, `docs/behavior/<area>/<topic>.md`: a module's header says what it does and links there, and only one-line tagged rules stay beside the code that implements them.
+Comments say why: a Roblox behavior with its Observed/Measured/Inference tag, a measurement, a unit or range, an invariant a change must keep, or the reason the obvious alternative is wrong. Never what the next line already says. Put them at the point of use, beside the code they constrain: a reader, a person or a coding agent, often sees one function rather than the whole module.
+
+- **Module headers** say in a line or two what the module is for and link its page. Findings have one home, `docs/behavior/<area>/<topic>.md`, and designs theirs, `docs/design/`; only one-line tagged rules stay beside the code. No tables of contents (the module list is one) and no essays.
+- **Item docs** on public API add to the signature; inside a crate they're for units, ranges, what a return value means, an invariant or a reason. A doc that restates the name in prose goes; if the code can't be read without one, rename it.
+- **Tests** are specified by their names. A doc says only what the name can't: why the case matters, the bug it guards against, the Studio measurement it pins.
+- **No project status:** no lists of what exists, no "not yet", "nothing uses this yet" or milestone numbers. They go stale; missing work gets a marker.
+- **Markers**, so `rg "TODO:"` finds every one: `TODO:` where missing work will land, saying what's missing and what unblocks it (`// TODO: pass the seat once the controller reports it.`); `FIXME:` where Rook knowingly differs from Roblox; `SAFETY:` on every `unsafe`. A marker goes in the change that does its work.
 
 ### Docs
 
