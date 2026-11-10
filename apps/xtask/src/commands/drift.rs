@@ -1,7 +1,6 @@
 //! `cargo xtask drift`: what `scripts/check` runs against the repository
-//! drifting from CONTRIBUTING's rules ("Keeping it clean"): the code
-//! checks in [`code`] and the documentation checks in [`docs`]. Errors
-//! fail the check; warnings point at something worth a look.
+//! drifting from CONTRIBUTING's rules ("Keeping it clean"). Errors fail the
+//! check; warnings point at something worth a look.
 
 mod code;
 mod docs;

@@ -1,9 +1,4 @@
-//! The documentation checks, over every Markdown file git tracks: links
-//! and code paths resolve ([`links`]); titles, headings, file names and
-//! the indexes agree ([`structure`]); every behavior page says when it was
-//! last checked against Studio ([`behavior`]); the roadmap's marks agree
-//! with its steps ([`roadmap`]); and the changelog's releases run newest
-//! first ([`changelog`]).
+//! The documentation checks, over every Markdown file git tracks.
 
 mod behavior;
 mod changelog;

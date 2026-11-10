@@ -1,5 +1,5 @@
 //! `cargo xtask corpus-run`: run every place in a folder headless and report how
-//! many run their server Scripts without errors. This is M1's archive metric.
+//! many run their server Scripts without errors.
 
 use rustc_hash::FxHashSet;
 use std::collections::BTreeMap;

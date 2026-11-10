@@ -1,4 +1,4 @@
-//! Unions in places, for the scan's counts (M4 step 6): where each keeps
+//! Unions in places, for the scan's counts: where each keeps
 //! its geometry (`MeshData` in the file, or behind its `AssetId`), which
 //! `MeshData` and `PhysicsData` forms appear, and what decides how it
 //! looks (`UsePartColor`, a Size other than `InitialSize`).
@@ -85,8 +85,7 @@ pub(super) fn union_kinds(
     out
 }
 
-/// `PhysicsData`'s form by its first bytes (not decoded: collision hulls
-/// are M15's).
+/// `PhysicsData`'s form by its first bytes, without decoding it.
 fn physics_kind(bytes: &[u8]) -> String {
     if bytes.is_empty() {
         "empty".into()

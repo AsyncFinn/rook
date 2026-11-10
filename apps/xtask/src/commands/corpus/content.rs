@@ -243,7 +243,7 @@ pub(super) fn mesh_kinds(
 }
 
 /// What decides how an instance looks beyond its shape, for the scan's
-/// appearance counts (M4 step 4): a part's `Material` and each face's
+/// appearance counts: a part's `Material` and each face's
 /// surface type (counted per face); a Decal's or Texture's face, tint,
 /// transparency and `ZIndex`, a Texture's tiling, and whether its part is
 /// invisible; a mesh's `VertexColor` and `TextureId`, and MeshPart
