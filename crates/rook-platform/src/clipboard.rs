@@ -1,9 +1,6 @@
-//! The clipboard: text a TextBox copies and pastes.
-
 use std::fmt::Debug;
 
 pub trait Clipboard: Send + Sync + Debug {
-    /// The text on it, if it holds text.
     fn text(&self) -> Option<String>;
     fn set_text(&self, text: &str);
 }

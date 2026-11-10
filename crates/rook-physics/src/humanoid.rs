@@ -18,7 +18,6 @@ use super::*;
 use climb::Climb;
 use floor::Floor;
 
-/// `Enum.HumanoidStateType`, by item name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum State {
     FallingDown,
@@ -61,7 +60,6 @@ impl State {
         State::None,
     ];
 
-    /// The `Enum.HumanoidStateType` item's name.
     pub fn name(self) -> &'static str {
         match self {
             State::FallingDown => "FallingDown",
@@ -173,7 +171,6 @@ pub struct Report {
     pub clear_sit: bool,
 }
 
-/// A Humanoid the controller drives.
 #[derive(Debug)]
 pub(crate) struct Controller {
     drive: Drive,
@@ -327,7 +324,6 @@ impl Physics {
         }
     }
 
-    /// The root part's pose.
     fn root_pose(&self, r: &Rooted) -> CFrame {
         cframe_of(self.world.bodies[r.body].position()) * r.offset
     }
@@ -416,7 +412,6 @@ impl Physics {
         reports
     }
 
-    /// The speed the state's event reports.
     fn state_speed(&self, c: &Controller) -> f32 {
         let Some(r) = self.rooted(c.drive.root) else {
             return 0.0;
@@ -431,7 +426,6 @@ impl Physics {
     }
 }
 
-/// `v` without its Y.
 fn horizontal(v: glam::Vec3) -> glam::Vec3 {
     glam::Vec3::new(v.x, 0.0, v.z)
 }

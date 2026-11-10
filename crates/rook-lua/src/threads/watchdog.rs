@@ -33,7 +33,6 @@ thread_local! {
     static TICKS: Cell<u32> = const { Cell::new(0) };
 }
 
-/// Install the interrupt on a VM.
 pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     // SAFETY: the callbacks belong to the VM's global state, which the
     // function only writes one field of.

@@ -3,8 +3,8 @@
 //! `Content` table that makes one. Measured in Studio 0.747: conformance
 //! scripting/content.
 //!
-//! Known gap: Rook has no `Object` types yet (EditableImage, EditableMesh),
-//! so `Content.fromObject` refuses everything it is given, as Studio does
+//! Rook has no `Object` types (EditableImage, EditableMesh), so
+//! `Content.fromObject` refuses everything it is given, as Studio does
 //! for Instances and other values.
 
 use mlua::{
@@ -39,8 +39,8 @@ impl LContent {
         }
     }
 
-    /// The object this content holds. None can be made yet (see the module
-    /// note), and a file's object referents don't name Rook instances.
+    /// The object this content holds: a file's object referents don't name
+    /// Rook instances, and Rook makes none (see the module note).
     fn object(&self) -> LuaValue {
         LuaValue::Nil
     }

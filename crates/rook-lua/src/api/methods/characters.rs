@@ -1,6 +1,3 @@
-//! Players and their characters: spawning (`spawning`), bodies (`rigs`),
-//! looks (`appearance`) and who simulates them (`ownership`).
-
 mod appearance;
 mod emotes;
 pub(crate) mod movement;
@@ -30,12 +27,10 @@ pub fn root_part(dom: &rook_dom::Dom, model: InstanceId) -> Option<InstanceId> {
         .find(|&p| dom.is_a(p, "BasePart"))
 }
 
-/// `player`'s character's root part.
 pub fn character_root(dom: &rook_dom::Dom, player: InstanceId) -> Option<InstanceId> {
     root_part(dom, dom.ref_property(player, "Character")?)
 }
 
-/// The root part of `humanoid`'s character.
 pub fn humanoid_root(dom: &rook_dom::Dom, humanoid: InstanceId) -> Option<InstanceId> {
     root_part(dom, dom.parent(humanoid)?)
 }

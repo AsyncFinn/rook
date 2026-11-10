@@ -13,7 +13,6 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
-/// Whether this build keeps counters.
 pub const ENABLED: bool = cfg!(feature = "counters");
 
 /// What a counter means in its frame.
@@ -57,7 +56,7 @@ macro_rules! counters {
 }
 
 counters! {
-    /// Scene entries whose look was built again (`rook-view`).
+    /// Scene entries whose look was built again (`rook-scene`).
     ViewEntriesRewritten: Touched, "view: entries rewritten";
     /// Scene entries placed at a new CFrame, their look kept.
     ViewEntriesMoved: Touched, "view: entries moved";
@@ -199,7 +198,6 @@ pub const CHECKS: &[(Counter, Counter, Counter)] = &[
 
 const COUNT: usize = Counter::ALL.len();
 
-/// One frame's counts, indexed by [`Counter`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Counts(pub [u64; COUNT]);
 

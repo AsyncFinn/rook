@@ -8,7 +8,6 @@ use rook_types::{GamepadKey, UserInputState, UserInputType, Value, Vector3};
 use super::input_type::Preferred;
 use crate::DataModel;
 
-/// One axis a pad reports.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GamepadAxis {
     /// Thumbstick 1's or 2's (0 or 1) X or Y, right and up positive.

@@ -105,7 +105,6 @@ fn connectivity(r: &mut Reader, faces: usize, points: usize) -> Result<Vec<[u32;
     Ok(out)
 }
 
-// Draco's attribute types.
 const POSITION: u8 = 0;
 const NORMAL: u8 = 1;
 const TEX_COORD: u8 = 3;
@@ -113,7 +112,6 @@ const GENERIC: u8 = 4;
 
 const FLOAT32: u8 = 9;
 
-/// How an attribute's values are stored.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Coding {
     Raw,

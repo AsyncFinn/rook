@@ -21,7 +21,6 @@ pub struct EmbeddedAsset {
     pub item_referent: Option<String>,
     /// The Content property it was stored in, as named in the file.
     pub property: Option<String>,
-    /// MIME type from the file, if it gave one.
     pub mime_type: Option<String>,
     pub data: Vec<u8>,
 }
@@ -34,7 +33,6 @@ pub struct HashReference {
     pub hash: String,
 }
 
-/// What the upgrade pass changed.
 #[derive(Debug, Clone, Default)]
 pub struct LegacyUpgrade {
     pub externals_dropped: u32,
@@ -68,7 +66,6 @@ pub enum UpgradeError {
     Xml(String),
 }
 
-/// Rewrite legacy XML into a form `rbx_xml` accepts.
 pub fn upgrade(xml: &[u8]) -> Result<(Vec<u8>, LegacyUpgrade), UpgradeError> {
     let text = std::str::from_utf8(xml).map_err(|_| UpgradeError::NotUtf8)?;
     let mut report = LegacyUpgrade {
@@ -311,7 +308,6 @@ fn attribute(start: &BytesStart<'_>, local: &str) -> Option<String> {
         .find_map(|a| (a.key.local_name().as_ref() == local).then(|| a.value.to_string()))
 }
 
-/// Collect the text of the current element up to its end tag.
 fn read_until_end(reader: &mut Reader<&[u8]>) -> Result<String, UpgradeError> {
     let mut out = String::new();
     let mut depth = 1usize;

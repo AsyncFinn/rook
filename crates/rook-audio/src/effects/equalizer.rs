@@ -27,7 +27,6 @@ struct Biquad {
     z: [[f32; 2]; 2],
 }
 
-/// Which way a [`Biquad`] passes.
 #[derive(Clone, Copy)]
 enum Pass {
     Low,

@@ -9,9 +9,6 @@
 //! ([`ClassId`], [`PropertyId`], [`EnumId`]). Each class gets a full property
 //! list including inherited properties, and per-class defaults resolved
 //! through the superclass chain.
-//!
-//! Functions, events and callbacks come from [`members()`], a compact list
-//! generated from the API dump of the same Roblox version.
 
 mod database;
 pub mod members;
@@ -47,7 +44,6 @@ static UPSTREAM: LazyLock<rbx_reflection::ReflectionDatabase<'static>> = LazyLoc
 
 static DATABASE: LazyLock<Database> = LazyLock::new(|| Database::build(&UPSTREAM));
 
-/// The process-wide Rook database, built on first use.
 pub fn database() -> &'static Database {
     &DATABASE
 }
@@ -67,7 +63,6 @@ static MEMBERS: LazyLock<Members> = LazyLock::new(|| {
         .expect("data/members.json is valid; regenerate with `cargo xtask gen-api`")
 });
 
-/// Functions, events and callbacks for the same Roblox version as the database.
 pub fn members() -> &'static Members {
     &MEMBERS
 }

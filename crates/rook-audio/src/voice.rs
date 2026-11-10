@@ -1,6 +1,3 @@
-//! One playing sound: reading its samples at the output's
-//! rate, then its own effects.
-
 use std::sync::Arc;
 
 use rook_content::decode::audio::Audio;
@@ -27,7 +24,6 @@ pub(crate) struct Voice<K> {
 }
 
 impl<K> Voice<K> {
-    /// A voice starting `position` seconds into `audio`, mixed at `rate`.
     pub(crate) fn new(audio: &Arc<Audio>, position: f64, gains: [f32; 2], rate: u32) -> Self {
         Self {
             audio: audio.clone(),

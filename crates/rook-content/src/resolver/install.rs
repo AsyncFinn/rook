@@ -20,7 +20,6 @@ pub enum InstallKind {
     Custom,
 }
 
-/// One Roblox install.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Install {
     pub kind: InstallKind,
@@ -146,7 +145,6 @@ pub fn find_from(chosen: Option<&std::ffi::OsStr>, places: &Places) -> Vec<Insta
     found
 }
 
-/// The newest install, or the one `chosen` names ([`find_from`]).
 pub fn newest_from(chosen: Option<&std::ffi::OsStr>, places: &Places) -> Option<Install> {
     find_from(chosen, places).into_iter().next()
 }

@@ -1,7 +1,7 @@
 //! How characters look: a player's avatar from the `avatar` web domain
 //! ([`super::super::web`]) when it has an endpoint, else Roblox's classic
 //! default look, and HumanoidDescriptions as far as body colors and
-//! scales. Body part meshes, clothes and accessories are M11's.
+//! scales.
 
 use mlua::{Lua, MultiValue};
 use rook_dom::{Dom, DomError, InstanceId};
@@ -15,7 +15,6 @@ use crate::api::methods::{mutate, ret_instance};
 use crate::ctx::args::Args;
 use crate::ctx::{ApiResult, Outcome, with_world};
 
-/// A player's look.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Avatar {
     /// The rig the player picked, used when the game lets players choose.
@@ -25,7 +24,6 @@ pub struct Avatar {
     pub scales: Scales,
 }
 
-/// HumanoidDescription's body scales.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Scales {
     pub height: f32,
@@ -51,7 +49,6 @@ impl Scales {
 }
 
 impl Default for Scales {
-    /// A new HumanoidDescription's.
     fn default() -> Self {
         Self {
             body_type: 0.3,
@@ -308,8 +305,7 @@ fn part_factor(name: &str, scales: Scales) -> glam::Vec3 {
 /// Resize an R15 body from scales `from` to `to`, when its Humanoid
 /// scales automatically: each part, its attachments and its ends of
 /// joints by [`part_factor`], then its HipHeight to the legs' new
-/// length. Matches Studio for bodies of Classic parts (the rig file's);
-/// other `AvatarPartScaleType`s are M11's.
+/// length. Matches Studio for bodies of Classic parts (the rig file's).
 fn scale(dom: &mut Dom, model: InstanceId, from: Scales, to: Scales) -> Result<(), DomError> {
     let Some(humanoid) = dom.find_first_child_of_class(model, "Humanoid") else {
         return Ok(());

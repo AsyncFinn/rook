@@ -1,5 +1,3 @@
-//! Material colors: `GetMaterialColor` and `SetMaterialColor`.
-
 use super::*;
 
 /// The `MaterialColors` key of a material argument, with Studio's errors.

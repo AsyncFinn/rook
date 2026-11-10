@@ -1,6 +1,3 @@
-//! Voxel reads and writes: `ReadVoxels`, `WriteVoxels`, `Clear` and
-//! `CountCells`.
-
 use super::*;
 
 /// `ReadVoxels`: materials and occupancies as `[x][y][z]` arrays with a

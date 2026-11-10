@@ -4,7 +4,6 @@
 
 use super::*;
 
-/// The door's x position on a DataModel.
 fn door_x(dm: &DataModel) -> f32 {
     let world = dm.runtime().world();
     let dom = &world.dom;

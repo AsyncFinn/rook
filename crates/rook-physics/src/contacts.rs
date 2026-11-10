@@ -1,7 +1,3 @@
-//! What happens where parts meet: friction and elasticity mixed the way
-//! Roblox mixes them ([`mixing`]), and Touched and TouchEnded
-//! ([`touches`]).
-
 pub mod groups;
 pub mod materials;
 mod mixing;

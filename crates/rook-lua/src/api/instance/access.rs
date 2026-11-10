@@ -1,5 +1,3 @@
-//! Reading and writing properties.
-
 use super::*;
 
 /// Read a property by canonical name, including derived ones.
@@ -63,7 +61,6 @@ pub(super) fn read(
     Ok((value, plain))
 }
 
-/// `inst[key] = value` for scripts.
 pub(crate) fn set_member(lua: &Lua, id: InstanceId, key: &str, value: LuaValue) -> ApiResult<()> {
     let (member, identity) = find_member(lua, id, key, true);
     let p = match member {

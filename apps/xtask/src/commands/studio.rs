@@ -2,9 +2,7 @@
 //!
 //! Studio ships a launcher at `%LOCALAPPDATA%\Roblox\mcp.bat` that speaks
 //! MCP (JSON-RPC over stdio) once "Studio as MCP server" is enabled in the
-//! Assistant settings. Rook only uses its documented tools: `execute_luau`,
-//! `start_stop_play`, `get_studio_state`, `list_roblox_studios` and
-//! `user_mouse_input`.
+//! Assistant settings. Rook uses only its documented tools.
 
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStdin, Command, Stdio};

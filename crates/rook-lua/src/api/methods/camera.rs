@@ -31,7 +31,6 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
     })
 }
 
-/// What projecting through a camera needs.
 #[derive(Debug, Clone, Copy)]
 pub struct Lens {
     pub cframe: CFrame,
@@ -42,7 +41,6 @@ pub struct Lens {
 }
 
 impl Lens {
-    /// A camera's lens, from its properties.
     pub fn of(dom: &Dom, camera: InstanceId) -> Self {
         let cframe = dom
             .cframe_property(camera, "CFrame")

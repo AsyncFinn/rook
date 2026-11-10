@@ -14,7 +14,6 @@
 
 use glam::{Vec2, Vec3};
 
-/// `Enum.NormalId`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum NormalId {
     Right,
@@ -151,7 +150,7 @@ impl SurfaceType {
     /// The pattern drawn on the face, if any. Studio draws studs, inlets,
     /// alternating studs and inlets (Universal), and one diagonal lattice
     /// for both Weld and Glue; Hinge and Motor draw a small yellow pin
-    /// instead, which Rook doesn't draw yet (observed).
+    /// instead (observed).
     pub fn pattern(self) -> Option<SurfacePattern> {
         Some(match self {
             Self::Studs => SurfacePattern::Studs,

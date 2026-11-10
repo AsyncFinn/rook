@@ -34,7 +34,6 @@ const DISTANCE: f32 = 0.01;
 /// Edges line up when the sine of the angle between them is below this.
 const ALIGNMENT: f32 = 0.01;
 
-/// A face's `Enum.SurfaceType`, from its `<Face>Surface` property.
 fn surface(dom: &Dom, part: InstanceId, property: &str) -> SurfaceType {
     SurfaceType::from_u32(dom.enum_property(part, property).unwrap_or(0))
 }
@@ -80,7 +79,6 @@ fn joint_class(mine: SurfaceType, theirs: SurfaceType) -> Option<(&'static str, 
     }
 }
 
-/// A part as a box, for face tests.
 struct Box {
     id: InstanceId,
     cf: CFrame,
@@ -146,7 +144,6 @@ impl Box {
     }
 }
 
-/// Whether face `fa` of `a` and face `fb` of `b` touch.
 fn faces_touch(a: &Box, fa: usize, b: &Box, fb: usize) -> bool {
     let (na, ca, ta) = a.face(fa);
     let (nb, cb, tb) = b.face(fb);

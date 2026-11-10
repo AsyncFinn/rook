@@ -11,7 +11,7 @@ and run headless with `rook run-headless --join --core-scripts
 Code: the instance and its defaults in `rook-lua`'s `user_settings.rs`,
 its members in `api/methods/user_settings.rs`; loading and saving in
 `rook-engine`'s `user_settings.rs`; the window following it in
-`rook-player`'s `app.rs`.
+`rook-client`'s `window.rs`.
 
 ## Where Roblox keeps them
 

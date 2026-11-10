@@ -12,7 +12,6 @@ use super::image::{Look, Piece, quad};
 use crate::images::Images;
 use crate::layout::{Placed, Scroll};
 
-/// The thumb's top, middle and bottom images.
 const PARTS: [&str; 3] = ["TopImageContent", "MidImageContent", "BottomImageContent"];
 
 pub(super) fn emit(
@@ -120,7 +119,6 @@ fn part(p: Placed, to: [Vec2; 2], look: Look, clip: [f32; 4], turned: bool) -> O
     Some(q)
 }
 
-/// A filled rectangle, `to` in the frame.
 fn line(p: Placed, to: [Vec2; 2], color: [f32; 4], clip: [f32; 4]) -> GuiQuad {
     GuiQuad {
         center: p.screen_point((to[0] + to[1]) * 0.5),

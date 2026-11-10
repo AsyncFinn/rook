@@ -1,5 +1,5 @@
-//! Long-lived threads of Rook's own (the console's reader). Short work
-//! spread over cores goes to [`crate::parallel`] instead.
+//! Long-lived threads of Rook's own. Short work spread over cores goes to
+//! [`crate::parallel`] instead.
 
 use std::fmt::Debug;
 use std::io;
@@ -10,7 +10,6 @@ pub trait Threads: Send + Sync + Debug {
     fn spawn(&self, name: &str, body: Box<dyn FnOnce() + Send>) -> io::Result<()>;
 }
 
-/// The operating system's threads.
 #[cfg(feature = "native")]
 #[derive(Debug)]
 pub struct OsThreads;

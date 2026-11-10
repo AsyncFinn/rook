@@ -45,7 +45,6 @@ pub enum MeshHost {
     MeshPart,
     /// A `PartOperation` or one of its subclasses.
     Union,
-    /// Any other part.
     Part,
 }
 
@@ -130,17 +129,9 @@ impl MeshKind {
     }
 
     /// What a mesh child draws on a part of class `class` and `size`, or
-    /// `None` when the part ignores it (observed in Studio 0.742,
-    /// 2026-10-13):
-    ///
-    /// - A MeshPart ignores mesh children: a Sphere SpecialMesh under one
-    ///   left its own mesh drawn.
-    /// - On a union the mesh is drawn as if Size and `Scale` were 1: a
-    ///   Sphere mesh on a 4 × 4 × 4 union, and a Brick mesh at Scale
-    ///   (2, 3, 1), each drew a 1-stud shape (Studio also left it untinted,
-    ///   which Rook doesn't copy).
-    /// - Every other part, trusses included, follows [`look`](Self::look)
-    ///   (a Sphere mesh filled a 2 × 10 × 2 truss).
+    /// `None` when the part ignores it (a MeshPart): on a union as if Size and
+    /// `Scale` were 1, on any other part as [`look`](Self::look)
+    /// (docs/behavior/meshes/file-meshes.md, "Meshes under other parts").
     pub fn look_on(self, host: MeshHost, size: Vec3, scale: Vec3) -> Option<MeshLook> {
         match host {
             MeshHost::MeshPart => None,
@@ -149,10 +140,9 @@ impl MeshKind {
         }
     }
 
-    /// What a part of `size` draws with this mesh at `scale`. `Scale`
-    /// multiplies the part's Size per axis first, and the type's own rule
-    /// then works on that scaled size (observed: a CylinderMesh on a
-    /// 2 × 3 × 4 part at Scale (0.5, 1.5, 0.75) was 1 stud across, not 1.5).
+    /// What a part of `size` draws with this mesh at `scale`: `Scale`
+    /// multiplies Size per axis before the type's own rule
+    /// (docs/behavior/meshes/built-in-shapes.md, "How `Scale` combines").
     ///
     /// A negative `Scale` doesn't mirror the primitive shapes (observed in
     /// Studio 0.742, 2026-10-13: a Wedge at Scale (1, 1, -1) drew the same
@@ -213,20 +203,9 @@ pub(crate) fn head_scale(size: Vec3) -> Vec3 {
     Vec3::new(across, size.y, across) / 1.25
 }
 
-/// How a MeshPart's mesh file is scaled: by Size / `InitialSize` per axis
-/// (`InitialSize` is what scripts read as `MeshSize`: the mesh's size when
-/// it was imported). Observed in Studio 0.742: a MeshPart made from a mesh
-/// had Size and MeshSize equal to the mesh's bounds; setting Size to
-/// (0.5, 0.5, 0.25) of it shrank the drawing by exactly that, about the
-/// mesh's own origin. A MeshPart saved without `InitialSize` (it reads
-/// (0, 0, 0)) draws the mesh at Size times its own size, as if `InitialSize`
-/// were 1: a 1.2-stud mesh on a 2 × 4 × 8 part drew 2.4 × 4.8 × 9.6.
-///
-/// A union's geometry is sized the same way: its bounds equal the union's
-/// `InitialSize` (centered on its origin), and a union resized from
-/// (4, 5, 5) to (8, 5, 2.5) drew its geometry stretched by exactly that
-/// (observed in Studio 0.742, 2026-10-14, on a small place's
-/// unions).
+/// How a MeshPart's mesh file, or a union's geometry, is scaled: by
+/// Size / `InitialSize` per axis, as if `InitialSize` were 1 when it's
+/// unsaved (docs/behavior/meshes/file-meshes.md).
 pub fn mesh_part_scale(size: Vec3, initial_size: Vec3) -> Vec3 {
     if initial_size.cmpgt(Vec3::ZERO).all() {
         size / initial_size
@@ -235,7 +214,6 @@ pub fn mesh_part_scale(size: Vec3, initial_size: Vec3) -> Vec3 {
     }
 }
 
-/// What a part with a mesh draws.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum MeshLook {
     /// A primitive shape of `size` (in the shape's own axes). `upright`
@@ -246,13 +224,16 @@ pub enum MeshLook {
         upright: bool,
     },
     /// The head mesh, at its own size times `scale`.
-    Head { scale: Vec3 },
+    Head {
+        scale: Vec3,
+    },
     /// A mesh file, its vertices times `scale`, with the mesh's own origin
     /// at the part's position (observed: a mesh whose bounds are centered 11
     /// studs off its origin drew 11 studs off the part, for a FileMesh and a
     /// MeshPart alike).
-    File { scale: Vec3 },
-    /// Nothing at all.
+    File {
+        scale: Vec3,
+    },
     Nothing,
     /// The part's own shape, as if it had no mesh.
     PartShape,
@@ -265,7 +246,6 @@ mod tests {
     const SIZE: Vec3 = Vec3::new(2.0, 3.0, 4.0);
     const SCALE: Vec3 = Vec3::new(0.5, 1.5, 0.75);
 
-    /// The look of a mesh of `class` with `Enum.MeshType` value `mesh_type`.
     fn look(class: &str, mesh_type: Option<u32>, scale: Vec3) -> MeshLook {
         MeshKind::of(class, mesh_type.and_then(MeshType::from_u32), "")
             .unwrap()

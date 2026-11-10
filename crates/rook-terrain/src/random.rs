@@ -8,7 +8,6 @@ use glam::IVec3;
 pub(crate) struct Random(u32);
 
 impl Random {
-    /// The stream for a grid position.
     pub(crate) fn at(p: IVec3) -> Self {
         Self(
             (p.x as u32).wrapping_mul(0x9e37_79b1)

@@ -7,8 +7,7 @@
 //! apply only to properties the instance hasn't set itself, so what a
 //! script sets wins; `$Name` values are the sheet's attribute `Name`
 //! (tokens), looked for in the sheets it derives from too. Rules of
-//! higher `Priority` win, then later rules. Rook doesn't support
-//! `@` queries, nor nested rules.
+//! higher `Priority` win, then later rules.
 
 mod selector;
 
@@ -34,10 +33,8 @@ fn style_classes() -> &'static [ClassId; 4] {
     &CLASSES
 }
 
-/// Styling state, kept in the World.
 #[derive(Debug, Default)]
 pub(crate) struct Styles {
-    /// Journal position read up to.
     cursor: u64,
     /// Each rule's properties (`SetProperties`), a Lua table.
     pub(crate) properties: FxHashMap<InstanceId, RegistryKey>,
@@ -127,7 +124,6 @@ impl Styles {
     }
 }
 
-/// One rule, ready to match.
 struct Rule {
     id: InstanceId,
     priority: i64,

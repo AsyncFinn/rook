@@ -1,5 +1,3 @@
-//! Method functions, and the fast forms of the lookups scripts call most.
-
 use super::*;
 
 /// Each `(owner, name)` method gets one function, created on first use,

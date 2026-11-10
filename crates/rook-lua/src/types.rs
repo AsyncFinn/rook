@@ -1,14 +1,7 @@
-//! Roblox datatypes as Lua values.
-//!
 //! `Vector3` is Luau's native `vector` (as on Roblox, where
 //! `type(Vector3.new())` is `"vector"`), with a metatable for its members.
-//! The rest are userdata. Each module installs its constructor table into
-//! the globals.
-//!
-//! Member lists and constructors follow the creator-docs datatype pages.
-//! Known gap: errors raised by datatype methods reach `pcall` as mlua
-//! error objects rather than plain strings; Instance members don't have
-//! this problem (see `ctx.rs`).
+//! The rest are userdata. Member lists and constructors follow the
+//! creator-docs datatype pages.
 
 pub(crate) mod cframe;
 pub(crate) mod color;

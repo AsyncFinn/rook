@@ -13,12 +13,10 @@ const REACH: f32 = 2.0;
 const RAYS: usize = 6;
 const TOP: f32 = 1.5;
 
-/// What a Humanoid climbs.
 #[derive(Debug, Clone, Copy)]
 pub(super) struct Climb {
     /// The face's normal, horizontal, pointing at the Humanoid.
     pub(super) normal: glam::Vec3,
-    /// A point on the face.
     pub(super) point: glam::Vec3,
 }
 

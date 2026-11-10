@@ -39,7 +39,6 @@ pub(super) fn symbols(r: &mut Reader, n: usize, components: usize) -> Result<Vec
     Ok(out)
 }
 
-/// A rANS decoder over its symbols' probability table.
 struct Decoder<'a> {
     precision: u32,
     /// Each symbol's probability and where its range starts.

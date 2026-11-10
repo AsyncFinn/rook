@@ -1,16 +1,7 @@
-//! Content for Rook: what the strings in `MeshId`, `TextureId`, `SoundId`
-//! and the other content properties refer to, and their bytes.
-//!
-//! - [`ContentRef`] parses a content string once.
-//! - A [`Resolver`] turns a reference into bytes through a chain of
-//!   providers in a configurable order (Rook's defaults, the Roblox install,
-//!   the user's folders, asset delivery with a disk [`Cache`]), saying where
-//!   the bytes came from.
-//! - A [`Loader`] runs resolutions on worker threads, so the engine thread
-//!   never waits for disk or network.
-//!
-//! Decoders live here too: [`mesh`], [`image`] and [`audio`]. See
-//! `docs/design/architecture.md#content-rook-content`.
+//! What the strings in `MeshId`, `TextureId`, `SoundId` and the other
+//! content properties refer to, and their bytes. A [`Loader`] runs
+//! resolutions on worker threads so the engine thread never waits for disk
+//! or network. See `docs/design/architecture.md#content-rook-content`.
 
 pub mod decode;
 mod loader;
@@ -27,7 +18,6 @@ pub use resolver::{Config, ProviderKind, Resolver};
 use std::fmt;
 use std::sync::Arc;
 
-/// Where a resolved reference's bytes came from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum SourceKind {
     /// The user's file for an asset id ([`resolver`]'s `overrides`).
@@ -65,7 +55,6 @@ impl SourceKind {
     }
 }
 
-/// Where bytes came from: the provider and the file or URL.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Source {
     pub kind: SourceKind,
@@ -74,7 +63,6 @@ pub struct Source {
     pub location: String,
 }
 
-/// A resolved reference.
 #[derive(Debug, Clone)]
 pub struct Fetched {
     /// The file; empty when a [`Loader`] decoded it as a sound
@@ -108,7 +96,6 @@ impl Fetched {
     }
 }
 
-/// Why a reference didn't resolve.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum FailureKind {
     /// Nowhere has it: no such file in the install, or asset delivery says
@@ -125,8 +112,8 @@ pub enum FailureKind {
     /// The bytes aren't what was asked for (not a mesh or an image), or
     /// are damaged.
     Invalid,
-    /// A file of a version or form Rook doesn't read yet (a mesh version,
-    /// a union's geometry).
+    /// A file of a version or form Rook doesn't read (a mesh version, a
+    /// union's geometry).
     UnknownVersion,
 }
 
@@ -201,7 +188,6 @@ impl std::error::Error for Failure {}
 pub(crate) mod tests {
     use std::path::PathBuf;
 
-    /// A fresh, empty folder for one test.
     pub(crate) fn temp_dir(name: &str) -> PathBuf {
         let dir = std::env::temp_dir()
             .join("rook-content-tests")

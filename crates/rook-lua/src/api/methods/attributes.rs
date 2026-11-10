@@ -1,5 +1,3 @@
-//! Attributes and tags.
-
 use super::*;
 
 pub(super) fn get_attribute(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {

@@ -1,5 +1,3 @@
-//! GUI methods.
-
 use mlua::Lua;
 use rook_dom::InstanceId;
 use rook_types::Vector2;

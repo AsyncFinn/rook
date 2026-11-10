@@ -42,7 +42,6 @@ fn enum_id(name: &str) -> rook_reflection::EnumId {
         .id
 }
 
-/// An enum argument's item name.
 fn enum_name(lua: &Lua, a: &Args, i: usize, enum_name: &str) -> ApiResult<&'static str> {
     let id = enum_id(enum_name);
     let value = enums::coerce(lua, a.get(i), id).map_err(ScriptError)?;
@@ -61,7 +60,6 @@ fn push_named(lua: &Lua, enum_name: &str, name: &str) -> ApiResult<LuaValue> {
     Ok(enums::push_item(lua, id, value)?)
 }
 
-/// A `Material` argument.
 fn material_arg(lua: &Lua, a: &Args, i: usize) -> ApiResult<Material> {
     let value = enums::coerce(lua, a.get(i), enum_id("Material")).map_err(ScriptError)?;
     Ok(Material::of_part(Some(value)))
@@ -82,7 +80,6 @@ fn glam_vec(v: rook_types::Vector3) -> Vec3 {
     Vec3::new(v.x(), v.y(), v.z())
 }
 
-/// Read the voxels of `terrain`.
 fn read<R>(lua: &Lua, terrain: InstanceId, f: impl FnOnce(&Grid) -> R) -> R {
     with_world(lua, |w| {
         if let Some(grid) = w.physics.terrain_grid(&mut w.dom, terrain) {

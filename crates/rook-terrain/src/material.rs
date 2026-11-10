@@ -11,7 +11,6 @@ use rook_types::{Color3uint8, Material, MaterialColors, MaterialSet, TerrainMate
 
 macro_rules! terrain_materials {
     ($($name:ident = $index:literal),* $(,)?) => {
-        /// A voxel's material, by its `SmoothGrid` index.
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
         #[repr(u8)]
         pub enum TerrainMaterial {
@@ -20,22 +19,18 @@ macro_rules! terrain_materials {
         }
 
         impl TerrainMaterial {
-            /// Every material, by index.
             pub const ALL: [TerrainMaterial; 23] = [$(TerrainMaterial::$name,)*];
 
-            /// The material with this `SmoothGrid` index.
             pub fn from_index(index: u8) -> Option<Self> {
                 Self::ALL.get(usize::from(index)).copied()
             }
 
-            /// The same material in `Enum.Material`.
             pub fn material(self) -> Material {
                 match self {
                     $(Self::$name => Material::$name,)*
                 }
             }
 
-            /// The terrain material of an `Enum.Material`, if it is one.
             pub fn from_material(material: Material) -> Option<Self> {
                 match material {
                     $(Material::$name => Some(Self::$name),)*
@@ -83,7 +78,6 @@ terrain_materials! {
 pub enum Edges {
     /// Smooth normals, averaged around each vertex.
     Soft,
-    /// Each triangle flat.
     Hard,
     /// Studio's `hardsoft` (Rock, Basalt, Cobblestone, Pavement): drawn
     /// faceted, as observed for Pavement.
@@ -91,7 +85,6 @@ pub enum Edges {
 }
 
 impl Edges {
-    /// Whether triangles are shaded flat.
     pub fn flat(self) -> bool {
         self != Edges::Soft
     }
@@ -113,7 +106,6 @@ pub struct Texture {
 }
 
 impl Texture {
-    /// Studs one repeat of the texture covers.
     pub fn studs(&self) -> f32 {
         crate::VOXEL_STUDS / self.tiling
     }

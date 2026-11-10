@@ -1,5 +1,3 @@
-//! UIGridLayout: equal cells in rows or columns.
-
 use glam::Vec2;
 use rook_dom::{Dom, InstanceId};
 

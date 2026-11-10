@@ -1,5 +1,3 @@
-//! Pivots and models.
-
 use super::*;
 
 pub(super) fn parts_of(w: &World, model: InstanceId) -> Vec<InstanceId> {

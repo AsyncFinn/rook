@@ -19,8 +19,8 @@ the camera in `bridges/camera.rs` and the input it gives in
 `bridges/input.rs`; `Camera:Interpolate` and a Scriptable camera's Focus
 in `rook-lua`'s `api/methods/camera_moves.rs`, `Player:Move` in
 `characters/movement.rs`, `Enum.PlayerActions` bindings in
-`luau/context_action.luau`; `rook-player`'s `app/camera.rs` and
-`app/mouse.rs`.
+`luau/context_action.luau`; `rook-client`'s `window/camera.rs` and
+`window/mouse.rs`.
 
 ## Where the scripts come from
 
@@ -192,9 +192,9 @@ Studio, which Rook's run matches.
   client drawn at the stepped state moved one step, then two, frame to
   frame. `Dom::drawn_cframe` is where anything draws a part or looks
   through the camera.
-- At the display's rate `rook-player` steps each frame by a whole number
+- At the display's rate the window steps each frame by a whole number
   of refreshes, never less than one, and carries what the measured time
-  leaves over or under (`app/frame_clock.rs`). After a late frame the
+  leaves over or under (`rook-client`'s `window/frame_clock.rs`). After a late frame the
   next is usually measured early by as much, yet is shown a refresh
   later: at 60 Hz a 25 ms frame stepped two refreshes and the 8 ms one
   after it only its 8 ms, so for one shown frame the character and the

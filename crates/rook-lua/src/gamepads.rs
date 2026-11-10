@@ -5,7 +5,6 @@
 use rook_dom::{Dom, InstanceId};
 use rook_types::{GamepadKey, UserInputState, UserInputType};
 
-/// How many gamepads Roblox numbers (Gamepad1 to Gamepad8).
 pub const GAMEPAD_SLOTS: usize = 8;
 
 /// Which buttons' names and pictures a pad has: UserInputService names
@@ -20,7 +19,6 @@ pub enum GamepadKind {
     PlayStation5,
 }
 
-/// One `GamepadN` slot.
 #[derive(Debug, Clone, Default)]
 pub struct Gamepad {
     pub connected: bool,

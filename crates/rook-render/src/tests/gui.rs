@@ -1,5 +1,3 @@
-//! The GUI drawn into the world and on the screen.
-
 use std::sync::Arc;
 
 use glam::Vec2;

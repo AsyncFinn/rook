@@ -7,10 +7,9 @@
 use rustc_hash::FxHashMap;
 
 /// The domains Rook sends to Roblox's own hosts when nothing is set: asset
-/// delivery, which it called before endpoints were configurable, and the
-/// two Roblox's client packages come from (the live version, then the
-/// packages). Every other domain has no endpoint by default, and its APIs
-/// answer locally.
+/// delivery and the two Roblox's client packages come from (the live
+/// version, then the packages). Every other domain has no endpoint by
+/// default, and its APIs answer locally.
 const ROBLOX_BY_DEFAULT: &[&str] = &["assetdelivery", "clientsettings", "setup"];
 
 /// Roblox's deployment CDN, the `setup` domain: the one Roblox host Rook
@@ -33,7 +32,6 @@ pub struct Endpoints {
 enum Base {
     /// Roblox's own hosts for [`ROBLOX_BY_DEFAULT`], nowhere for the rest.
     Default,
-    /// Nowhere.
     Off,
     /// `example.com`: `users.roblox.com` becomes `https://users.example.com`.
     Domain(String),

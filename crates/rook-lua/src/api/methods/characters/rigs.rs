@@ -11,7 +11,6 @@ use super::appearance::{self, Avatar};
 use crate::api::properties::content_value;
 use crate::world::World;
 
-/// `Enum.HumanoidRigType`'s two rigs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RigType {
     R6,
@@ -21,7 +20,6 @@ pub enum RigType {
 /// Builds the default body of a rig type, detached in `dom` (the engine's,
 /// from Roblox's `avatar/characterR15DynamicHeadV2.rbxm`), or `None` when its file
 /// can't be had.
-/// The builder itself.
 pub type BuildRig = dyn Fn(&mut Dom, RigType) -> Option<InstanceId> + Send + Sync;
 
 #[derive(Clone)]
@@ -218,7 +216,6 @@ fn vector(v: [f32; 3]) -> Value {
     Value::Vector3(Vector3(glam::Vec3::from(v)))
 }
 
-/// A new instance of `class` named `name` under `parent`, with `props`.
 fn add(
     dom: &mut Dom,
     class: &str,

@@ -25,7 +25,6 @@ use std::io::Cursor;
 /// (Inference: Roblox stores uploaded images at 1024 at most).
 pub const MAX_SIZE: u32 = 1024;
 
-/// A file format Rook reads images from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum ImageFormat {
     Png,
@@ -36,7 +35,6 @@ pub enum ImageFormat {
 }
 
 impl ImageFormat {
-    /// The format a file's first bytes announce, if it's one Rook reads.
     pub fn sniff(bytes: &[u8]) -> Option<Self> {
         let starts = |magic: &[u8]| bytes.starts_with(magic);
         Some(if starts(b"\x89PNG\r\n\x1a\n") {
@@ -81,7 +79,6 @@ pub struct Image {
     pub width: u32,
     pub height: u32,
     pub format: ImageFormat,
-    /// How [`Image::mips`] are stored.
     pub encoding: Encoding,
     /// Level 0 first; level `i` is `max(1, width >> i)` by
     /// `max(1, height >> i)` pixels, rows packed (in blocks, rows of
@@ -100,7 +97,6 @@ pub enum ImageError {
 }
 
 impl Image {
-    /// Decode an image file and build its mips.
     pub fn decode(bytes: &[u8]) -> Result<Self, ImageError> {
         let (rgba, format) = decode_rgba(bytes)?;
         Self::from_rgba(rgba, format, MAX_SIZE)
@@ -141,7 +137,6 @@ impl Image {
     }
 }
 
-/// An image file's pixels, as RGBA8, and its format.
 pub(crate) fn decode_rgba(bytes: &[u8]) -> Result<(::image::RgbaImage, ImageFormat), ImageError> {
     let format = ImageFormat::sniff(bytes).ok_or(ImageError::NotAnImage)?;
     let rgba = match format {

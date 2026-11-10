@@ -34,7 +34,6 @@ const SPEED_STEP: f32 = 0.1;
 /// `Enum.Material.Air`, the FloorMaterial with no floor.
 const AIR: u32 = 1792;
 
-/// A Humanoid's MoveTo.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct Walk {
     point: glam::Vec3,
@@ -498,7 +497,7 @@ fn active_event(state: State) -> Option<&'static str> {
 fn active_args(state: State, active: bool) -> Vec<LuaValue> {
     let mut args = vec![LuaValue::Boolean(active)];
     if state == State::Seated {
-        // The seat comes with seats (M9's seats step).
+        // Seated passes the seat, which the controller's report doesn't carry.
         args.push(LuaValue::Nil);
     }
     args

@@ -28,7 +28,6 @@ const MAX_DEPTH: usize = 32;
 /// stream mono, so its AudioPlayers don't take it.
 const MONO_LEVEL: f32 = std::f32::consts::FRAC_1_SQRT_2;
 
-/// One sound to hear, as the engine sees it this frame.
 #[derive(Debug, Clone)]
 pub struct Play<K> {
     pub key: K,
@@ -48,7 +47,6 @@ pub struct Play<K> {
     /// The sound's own effects, in the order they run
     /// ([`crate::effects::ordered`]).
     pub effects: Vec<Effect>,
-    /// The SoundGroup it plays through.
     pub group: Option<K>,
 }
 
@@ -63,7 +61,6 @@ pub struct Group<K> {
     pub effects: Vec<Effect>,
 }
 
-/// Everything to hear this frame.
 #[derive(Debug, Clone)]
 pub struct Mix<K> {
     pub sounds: Vec<Play<K>>,
@@ -71,7 +68,6 @@ pub struct Mix<K> {
     pub groups: Vec<Group<K>>,
     /// `SoundService.AmbientReverb`, added to every Sound.
     pub ambient: Option<Reverb>,
-    /// The audio API's instances and wires.
     pub graph: Graph<K>,
 }
 

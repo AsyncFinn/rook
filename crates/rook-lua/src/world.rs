@@ -1,5 +1,3 @@
-//! Engine state shared by every Lua callback in one DataModel.
-
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::BTreeMap;
 
@@ -8,7 +6,6 @@ use crate::signal::{ConnectionId, Signals};
 use mlua::{Function, Table, Thread, Value as LuaValue};
 use rook_dom::{Dom, InstanceId};
 
-/// `workspace.SignalBehavior`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SignalBehavior {
     /// Handlers run when the signal fires (what `Default` means today).
@@ -37,10 +34,8 @@ pub enum WaitKind {
     None,
 }
 
-/// Work queued in the scheduler.
 #[derive(Debug, Clone)]
 pub enum Job {
-    /// Resume a yielded thread.
     Resume {
         thread: Thread,
         args: Vec<LuaValue>,
@@ -63,7 +58,6 @@ pub enum Job {
     },
 }
 
-/// Output message type, as in `Enum.MessageType`.
 /// A script's code as it came compiled from Roblox's packages.
 #[derive(Debug, Clone)]
 pub struct Compiled {
@@ -142,12 +136,10 @@ impl InputState {
 /// renderer applies besides properties.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum EffectCall {
-    /// `ParticleEmitter:Emit(count)`.
     Emit(u32),
     /// `ParticleEmitter:Clear()`, `Trail:Clear()`,
     /// `WireframeHandleAdornment:Clear()`.
     Clear,
-    /// `Beam:SetTextureOffset(offset)`.
     TextureOffset(f32),
     /// A line a WireframeHandleAdornment's `AddLine`, `AddLines` or
     /// `AddPath` added, in its CFrame's axes.
@@ -181,7 +173,6 @@ pub struct AudioState {
     pub next_action: i64,
 }
 
-/// A scheduled `Play` or `Stop`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Scheduled {
     pub id: i64,
@@ -203,7 +194,7 @@ pub enum Listener {
     ObjectCFrame(InstanceId),
 }
 
-/// A script's run state.
+/// ModuleScripts' `require` state.
 #[derive(Debug, Default)]
 pub(crate) struct ModuleState {
     /// `require` results, by ModuleScript.
@@ -249,9 +240,9 @@ pub struct World {
     pub(crate) pending_calls: FxHashMap<u64, Thread>,
     pub(crate) next_call: u64,
     pub log: Vec<LogEntry>,
-    /// Calls to Roblox members Rook doesn't implement yet, by `Class.Member`.
+    /// Calls to Roblox members Rook has no implementation of, by `Class.Member`.
     pub unimplemented: BTreeMap<String, u64>,
-    /// Calls to members Rook accepts but ignores for now, by `Class.Member`.
+    /// Calls to inert members (accepted and ignored), by `Class.Member`.
     pub inert: BTreeMap<String, u64>,
     /// Threads that ended with an error.
     pub errors: u64,
@@ -465,7 +456,6 @@ impl World {
         *self.unimplemented.entry(what).or_default() += 1;
     }
 
-    /// Number of scripts started so far.
     pub fn started_count(&self) -> usize {
         self.started.len()
     }

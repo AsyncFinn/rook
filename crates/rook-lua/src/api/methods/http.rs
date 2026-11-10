@@ -327,8 +327,8 @@ fn url_encode(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
     Outcome::ret(lua, out)
 }
 
-/// HTTP requests are off unless the place enables them; Rook doesn't
-/// make network requests on behalf of archived places yet.
+/// Scripts' HTTP requests are refused, as in a place that hasn't enabled
+/// them.
 fn http_disabled(_: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
     Err(ScriptError(
         "Http requests are not enabled. Enable via game settings".into(),

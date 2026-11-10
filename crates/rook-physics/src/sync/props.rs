@@ -1,5 +1,3 @@
-//! The part and Workspace properties physics watches.
-
 use crate::*;
 
 /// The physics properties [`Physics`] watches, resolved once.
@@ -27,7 +25,6 @@ pub(crate) struct Props {
     /// Each face's ParamA, ParamB and SurfaceInput, which drive RotateV
     /// and RotateP.
     pub(crate) surface_inputs: Vec<PropertyId>,
-    /// Terrain's voxels.
     pub(crate) smooth_grid: Option<PropertyId>,
     /// Motor's (and Motor6D's) CurrentAngle, DesiredAngle and MaxVelocity,
     /// read for every motor each frame.

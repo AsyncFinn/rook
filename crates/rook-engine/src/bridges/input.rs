@@ -23,7 +23,6 @@ use rustc_hash::FxHashMap;
 use crate::DataModel;
 use input_type::Preferred;
 
-/// A window input event, in Roblox terms.
 #[derive(Debug, Clone, PartialEq)]
 pub enum InputEvent {
     /// `code` is an `Enum.KeyCode` item name ("A", "Space", "LeftShift").
@@ -168,7 +167,6 @@ impl CursorLook {
         })
     }
 
-    /// The look a script's icon names.
     fn icon(url: String) -> CursorLook {
         let system = match url.strip_prefix("rbxasset://SystemCursors/") {
             Some("Arrow") => SystemCursor::Arrow,
@@ -182,7 +180,6 @@ impl CursorLook {
     }
 }
 
-/// A ClickDetector interaction the client detected.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClickKind {
     Click,
@@ -342,7 +339,6 @@ impl DataModel {
         self.runtime.world().input.mouse
     }
 
-    /// The TextBox keys are typing into, if any.
     pub fn focused_text_box(&self) -> Option<InstanceId> {
         self.runtime.focused_text_box()
     }
@@ -376,7 +372,6 @@ impl DataModel {
         }
     }
 
-    /// Create the local player's Mouse if it doesn't exist yet.
     pub(crate) fn ensure_mouse(&self) {
         let mut w = self.runtime.world_mut();
         if w.input.mouse_object.is_none()
@@ -386,11 +381,10 @@ impl DataModel {
         }
     }
 
-    /// Give `object` to ContextActionService's bindings, then fire
-    /// UserInputService's `event` with it; whether it was processed.
-    /// Bindings hear input first, and one that sinks it makes the event
-    /// processed (measured, docs/behavior/input/context-actions.md).
-    /// Input GUI took isn't offered (Inference).
+    /// Bindings hear input before UserInputService, and one that sinks it
+    /// makes the event processed (measured,
+    /// docs/behavior/input/context-actions.md). Input GUI took isn't
+    /// offered (Inference).
     fn deliver(&self, event: &'static str, object: InstanceId, gui_took: bool) -> bool {
         let processed = gui_took || self.runtime.context_action(object);
         let uis = self

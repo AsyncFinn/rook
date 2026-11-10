@@ -14,7 +14,6 @@ use glam::{Mat4, Vec3, Vec4};
 /// (`shaders/terrain.wgsl`), so boxes reach this much further.
 pub(crate) const MOTION_STUDS: f32 = 4.0;
 
-/// A box in the world, along its axes.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct Aabb {
     pub min: Vec3,

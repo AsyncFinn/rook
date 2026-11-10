@@ -39,7 +39,6 @@ fn lines(lua: &Lua, this: InstanceId, lines: Vec<(glam::Vec3, glam::Vec3)>) -> A
     Outcome::ret(lua, ())
 }
 
-/// The Vector3s in array argument `i`.
 fn points(a: &Args, i: usize) -> ApiResult<Vec<glam::Vec3>> {
     let LuaValue::Table(list) = a.get(i) else {
         return Err(a.wrong(i, "Array"));

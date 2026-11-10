@@ -1,5 +1,3 @@
-//! NumberRange, NumberSequence, ColorSequence and their keypoints.
-
 use super::err;
 use mlua::{
     Lua, MetaMethod, MultiValue, UserData, UserDataFields, UserDataMethods, UserDataRef,

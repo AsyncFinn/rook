@@ -15,7 +15,6 @@ pub enum MaterialSet {
     /// The materials before 2022: grayscale textures the part's Color
     /// tints. What places without `Use2022Materials` get.
     Legacy,
-    /// The 2022 materials.
     Materials2022,
 }
 

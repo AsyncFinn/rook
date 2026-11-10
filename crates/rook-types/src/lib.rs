@@ -38,7 +38,6 @@ pub use value::udim::{UDim, UDim2};
 pub use value::vector::{Vector2, Vector3};
 pub use value::{InstanceRef, Value};
 
-/// Plain-data Roblox types reused from `rbx_types`.
 pub use rbx_types::{
     Attributes, Axes, BinaryString, BrickColor, Color3uint8, ColorSequence, ColorSequenceKeypoint,
     Content, ContentId, CustomPhysicalProperties, Faces, Font, FontStyle, FontWeight,

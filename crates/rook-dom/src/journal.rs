@@ -4,7 +4,6 @@ use rook_terrain::grid::edit::Bounds;
 
 use crate::InstanceId;
 
-/// One recorded mutation.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Change {
     Created(InstanceId),
@@ -133,7 +132,6 @@ impl Journal {
         self.entries.get(usize::try_from(i).ok()?)
     }
 
-    /// Drop entries before `cursor`.
     pub fn trim(&mut self, cursor: u64) {
         let n = usize::try_from(cursor.saturating_sub(self.base))
             .unwrap_or(usize::MAX)

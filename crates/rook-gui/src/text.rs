@@ -159,7 +159,6 @@ impl Source {
     }
 }
 
-/// Whether `id` shows text of its own.
 pub(crate) fn is_text(dom: &Dom, id: InstanceId) -> bool {
     matches!(dom.class_name(id), "TextLabel" | "TextButton" | "TextBox")
 }
@@ -189,7 +188,6 @@ pub(crate) struct TextRect {
     pub(crate) behind: bool,
 }
 
-/// Text laid out in an object.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub(crate) struct TextBlock {
     /// `TextBounds`.
@@ -215,7 +213,6 @@ pub(crate) struct CaretLine {
 }
 
 impl TextBlock {
-    /// Move everything drawn by `by`.
     pub(crate) fn shift(&mut self, by: Vec2) {
         self.glyphs.iter_mut().for_each(|g| g.pen += by);
         for r in &mut self.rects {
@@ -489,7 +486,6 @@ fn set_lines(
     }
 }
 
-/// Put `set`'s glyphs in a `size` area, aligned.
 fn place(block: &mut TextBlock, source: &Source, spans: &[rich::Span], set: &Set, size: Vec2) {
     let top = ((size.y - set.size.y) * source.align.y).round();
     let mut shown = 0;

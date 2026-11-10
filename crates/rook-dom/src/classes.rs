@@ -38,7 +38,6 @@ impl Dom {
         }
     }
 
-    /// Drop `id`, being freed, from the index.
     pub(crate) fn forget_class(&mut self, id: InstanceId, class: ClassId) {
         let db = self.db;
         for (tracked, ids) in &mut self.of_class {

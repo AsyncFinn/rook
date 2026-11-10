@@ -14,7 +14,6 @@ use rook_types::{CFrame, WorldPlace};
 use billboard::Billboard;
 use surface::Surface;
 
-/// Whether `id` is a LayerCollector drawn in the world.
 pub(crate) fn is_world_gui(dom: &Dom, id: InstanceId) -> bool {
     matches!(dom.class_name(id), "SurfaceGui" | "BillboardGui")
 }
@@ -43,7 +42,6 @@ impl Eye {
         })
     }
 
-    /// How far in front of the camera `point` is.
     fn depth(&self, point: Vec3) -> f32 {
         (point - self.position).dot(-self.rotation.z_axis)
     }
@@ -132,7 +130,6 @@ impl Hung {
         self.on.into_iter().chain(part.and_then(|a| dom.parent(a)))
     }
 
-    /// Where it is now, if it's on something it can be drawn on.
     pub(crate) fn place(&self, dom: &Dom) -> Option<WorldPlace> {
         let spot = self.spot(dom)?;
         match &self.how {

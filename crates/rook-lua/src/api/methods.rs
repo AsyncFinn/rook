@@ -6,10 +6,9 @@
 //!
 //! Each table maps a member (by the class that declares it in
 //! the API dump) to its implementation. Members without one raise
-//! "not implemented in Rook yet" and are counted. A short list of members
-//! whose effect only matters to systems Rook doesn't have yet (network
-//! ownership, preloading) are *inert*: they do nothing, return nil
-//! and are counted separately, so scripts keep running.
+//! "not implemented in Rook yet" and are counted. *Inert* members, whose
+//! effect only matters to systems Rook doesn't have, do nothing, return
+//! nil and are counted separately, so scripts keep running.
 
 use crate::scheduler::Queue;
 use crate::signal::{SignalKey, SignalKind};

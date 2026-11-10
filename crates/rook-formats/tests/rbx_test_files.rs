@@ -50,7 +50,6 @@ fn fixture_files(dir: &Path) -> Vec<PathBuf> {
     files
 }
 
-/// Every fixture loads, saves in its own format, and reloads unchanged.
 #[test]
 fn every_fixture_round_trips() {
     let Some(dir) = fixtures_dir() else { return };
@@ -181,7 +180,6 @@ fn binary_and_xml_agree() {
     );
 }
 
-/// Every fixture converts into Rook's runtime DOM and back unchanged.
 #[test]
 fn every_fixture_survives_the_runtime_dom() {
     let Some(dir) = fixtures_dir() else { return };

@@ -31,7 +31,6 @@ pub(crate) struct Bar {
     pub(crate) health: f32,
 }
 
-/// A tag shown this frame.
 #[derive(Debug, Clone)]
 pub(crate) struct Shown {
     pub(crate) humanoid: InstanceId,

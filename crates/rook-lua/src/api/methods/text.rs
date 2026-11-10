@@ -1,5 +1,3 @@
-//! TextService: measuring text as GUI objects lay it out.
-
 use mlua::Lua;
 use rook_dom::InstanceId;
 use rook_types::Vector2;

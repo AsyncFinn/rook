@@ -79,7 +79,7 @@ the strip to confirm it.
 
 ## How Rook does it
 
-`rook_terrain::lod`, drawn by `rook-view`'s terrain cache:
+`rook_terrain::lod`, drawn by `rook-scene`'s terrain cache:
 
 - Six levels, cells of 4 to 128 studs. Each level's voxels average the
   2×2×2 blocks of the level below: a coarse voxel holds the eight's mean

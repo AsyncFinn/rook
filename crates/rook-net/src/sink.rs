@@ -80,7 +80,6 @@ impl Sink {
         }
     }
 
-    /// Set the references that were waiting for instances that arrived.
     fn resolve_arrived(&mut self, client: &mut Dom, journaled: bool) {
         for server in std::mem::take(&mut self.arrived) {
             let Some(keys) = self.waiting_for.remove(&server) else {
@@ -250,7 +249,6 @@ impl Sink {
         cid
     }
 
-    /// Store a node's properties, attributes and tags on its copy.
     fn copy_data(&mut self, node: &Node, client: &mut Dom, cid: InstanceId, journaled: bool) {
         for (property, value) in &node.properties {
             self.store(client, cid, *property, value, journaled);

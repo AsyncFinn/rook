@@ -1,5 +1,3 @@
-//! Services and Lighting.
-
 use super::*;
 
 /// The DataModel's services, or those of `settings()` and

@@ -37,7 +37,6 @@ struct Frame {
 pub(crate) struct Tonemap {
     pipeline: wgpu::RenderPipeline,
     layout: wgpu::BindGroupLayout,
-    /// A [`ToneUniform`].
     uniform: wgpu::Buffer,
     /// The frame's and the Highlight mask's views, their size, and the
     /// bind group reading them.

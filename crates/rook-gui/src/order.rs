@@ -31,7 +31,6 @@ pub(crate) fn screens(dom: &Dom) -> Vec<InstanceId> {
     screens
 }
 
-/// What clips an object's descendants.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Clip {
     pub(crate) rect: [f32; 4],

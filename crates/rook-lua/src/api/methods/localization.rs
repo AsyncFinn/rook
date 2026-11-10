@@ -37,7 +37,6 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
     })
 }
 
-/// One entry, as `Contents` saves it.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub(crate) struct Entry {

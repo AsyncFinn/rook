@@ -13,7 +13,6 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use serde::Deserialize;
 use skrifa::raw::TableProvider;
 
-/// A loaded face's index in [`Fonts`].
 pub(crate) type FaceId = u32;
 
 /// Families whose file the install doesn't have, and the one Studio draws
@@ -32,7 +31,6 @@ const FALLBACK_FAMILY: &str = "rbxasset://fonts/families/SourceSansPro.json";
 const LEGACY_FAMILY: &str = "LegacyArial.json";
 const LEGACY_SCALE: f32 = 1.5;
 
-/// One font file, ready to shape and draw.
 pub(crate) struct Face {
     data: Arc<[u8]>,
     pub(crate) shaper: ShaperData,
@@ -74,7 +72,6 @@ impl Face {
     }
 }
 
-/// A face listed in a family file.
 #[derive(Debug, Clone, Deserialize)]
 struct Listed {
     weight: u16,
@@ -111,7 +108,6 @@ pub(crate) struct Fonts {
     files: FxHashMap<String, Slot>,
     /// Families and face files by asset id, waiting to be fetched.
     requests: Vec<String>,
-    /// Families asked for and not yet arrived.
     pending: FxHashSet<String>,
     /// Whether a pick since [`Fonts::take_waited`] wanted a font still
     /// on its way.
@@ -133,7 +129,6 @@ impl Fonts {
         &self.faces[id as usize]
     }
 
-    /// Asset ids to fetch, each asked for once.
     pub(crate) fn take_requests(&mut self) -> Vec<String> {
         std::mem::take(&mut self.requests)
     }

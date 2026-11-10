@@ -1,5 +1,3 @@
-//! The `cargo xtask` subcommands, one module each.
-
 pub(crate) mod conformance;
 pub(crate) mod corpus;
 pub(crate) mod drift;

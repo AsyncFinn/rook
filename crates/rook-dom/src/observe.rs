@@ -7,9 +7,7 @@ use crate::{Dom, InstanceId};
 /// A change an observer hears of as it happens, with the journal on or off.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Observed {
-    /// The instance's name changed.
     Renamed(InstanceId),
-    /// A child was added to the instance or removed from it.
     ChildrenChanged(InstanceId),
 }
 
@@ -22,7 +20,6 @@ impl std::fmt::Debug for Observer {
 }
 
 impl Dom {
-    /// Call `observer` inside every rename and children change.
     pub fn set_observer(&mut self, observer: impl FnMut(Observed) + 'static) {
         self.observer = Some(Observer(Box::new(observer)));
     }

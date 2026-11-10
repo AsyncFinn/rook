@@ -1,5 +1,3 @@
-//! A bridge's place in the change journal.
-
 use rook_dom::{Change, Dom};
 
 /// The first look sees the whole tree (a loaded place's instances are there

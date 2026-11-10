@@ -1,7 +1,3 @@
-//! Property values and the reference index; defaults in [`defaults`]
-//! (Studio's measured ones in [`studio_defaults`]),
-//! storing in the declared type in [`coerce`], typed reads in [`typed`].
-
 use super::*;
 
 mod coerce;
@@ -60,7 +56,6 @@ impl Dom {
             .map_or(14.0, |s| rook_types::clock_hours(&s))
     }
 
-    /// The id of the property `name` (aliases resolved) on `id`'s class.
     pub fn property_id(&self, id: InstanceId, name: &str) -> Option<PropertyId> {
         let inst = self.slot(id)?;
         Some(self.db.find_canonical_property(inst.class, name)?.id)

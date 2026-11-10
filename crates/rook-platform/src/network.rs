@@ -1,9 +1,5 @@
-//! HTTP requests (asset delivery, scripts' web APIs) to the URLs
-//! [`crate::endpoints`] gives.
-
 use std::fmt::Debug;
 
-/// An HTTP request.
 #[derive(Debug, Clone, Copy)]
 pub struct Request<'a> {
     /// `GET`, `POST`, ...

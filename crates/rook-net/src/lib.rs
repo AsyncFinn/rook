@@ -1,17 +1,11 @@
-//! Replication from a server DataModel to a client DataModel.
+//! Replication from a server DataModel to a client DataModel
+//! (docs/design/architecture.md#engine-systems). What replicates is in
+//! `docs/behavior/replication.md`.
 //!
-//! Rook runs Play mode as separate server and client DataModels, the way
-//! modern Roblox does, connected by this in-process replicator (docs/design/architecture.md#engine-systems); a network transport can later carry the same changes. What
-//! replicates is in `docs/behavior/replication.md`.
-//!
-//! Replication has two halves, so the server and a client can run on
-//! different threads (or, later, machines). A [`Source`] reads the server's
-//! journal and describes the server's *current* state of each instance a
-//! change touched as self-contained [`Update`]s, one per journal entry; a
-//! [`Sink`] applies them to the client,
-//! which alone knows which of its instances copy which server ones. New
-//! subtrees are built detached and parented last, so the client sees them
-//! arrive at once. [`Replicator`] is the two halves joined directly.
+//! A [`Source`] describes the server's current state of each instance a
+//! change touched and a [`Sink`] applies it to a client, so the two halves
+//! can run on different threads. New subtrees are built detached and
+//! parented last, so the client sees them arrive at once.
 
 mod replicator;
 mod sink;
@@ -25,9 +19,7 @@ use rook_terrain::Grid;
 use rook_terrain::grid::edit::Bounds;
 use rook_types::Value;
 
-/// One server instance and its visible subtree, as the server has it now.
-/// Ids are the server's; references in property values point at server
-/// instances too.
+/// Ids are the server's, and so are references in property values.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Node {
     pub id: InstanceId,
@@ -43,7 +35,6 @@ pub struct Node {
 #[derive(Debug, Clone, PartialEq)]
 pub enum NodeClass {
     Known(ClassId),
-    /// A class Rook's database doesn't have, by name.
     Unknown(String),
 }
 

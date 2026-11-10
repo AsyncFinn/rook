@@ -25,7 +25,6 @@ pub(super) fn sorted(dom: &Dom, layout: InstanceId, kids: &[Kid]) -> Vec<usize> 
     order
 }
 
-/// A `UIFlexAlignment`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Flex {
     None,

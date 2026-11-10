@@ -14,7 +14,6 @@ use rook_reflection::PropertyId;
 use rustc_hash::FxHashMap;
 use slotmap::SlotMap;
 
-/// Which signal of an instance.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum SignalKind {
     /// A named event from the class's member list (`Touched`, `ChildAdded`, ...).
@@ -59,7 +58,6 @@ struct Connection<H> {
 /// "Event behavior").
 pub(crate) const MAX_REENTRANCY: u32 = 10;
 
-/// Every connection in one DataModel.
 #[derive(Debug)]
 pub struct Signals<H> {
     connections: SlotMap<ConnectionId, Connection<H>>,

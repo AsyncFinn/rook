@@ -20,13 +20,11 @@ use std::sync::OnceLock;
 /// `<asset id> <version>` per line; `#` starts a comment.
 const PINNED: &str = include_str!("../../data/kept.txt");
 
-/// The pinned version of a kept asset.
 pub fn version(id: u64) -> Option<u32> {
     static TABLE: OnceLock<FxHashMap<u64, u32>> = OnceLock::new();
     TABLE.get_or_init(|| parse(PINNED)).get(&id).copied()
 }
 
-/// Every kept asset and its version.
 pub fn all() -> Vec<(u64, u32)> {
     let mut all: Vec<_> = parse(PINNED).into_iter().collect();
     all.sort_unstable();

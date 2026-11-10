@@ -8,7 +8,6 @@ use super::{UpdateError, dump};
 use crate::members::{ClassMembers, Event, Function, Members};
 
 impl Members {
-    /// Build the list from a Full API dump.
     pub(super) fn from_api_dump(
         dump: &dump::Root,
         version: &str,

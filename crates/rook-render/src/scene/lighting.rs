@@ -1,6 +1,3 @@
-//! The scene's light: the sun, sky, ambient and tone curve, and local
-//! lights.
-
 use super::*;
 
 /// Where each skybox image goes, in [`Lighting::skybox`] order: (the

@@ -1,6 +1,3 @@
-//! Terrain water: whether a root part's center is in it, and how high its
-//! surface is above it.
-
 use super::*;
 
 /// Water deeper than this many voxels above the root counts as the

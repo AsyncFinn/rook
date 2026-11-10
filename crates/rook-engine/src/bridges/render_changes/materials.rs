@@ -71,7 +71,6 @@ impl MaterialParts {
         Vec::new()
     }
 
-    /// `id` is freed.
     pub(crate) fn forget(&mut self, id: InstanceId) {
         self.variants.remove(&id);
         if let Some(filed) = self.parts.remove(&id) {

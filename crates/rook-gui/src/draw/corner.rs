@@ -29,7 +29,6 @@ pub(super) fn radii(dom: &Dom, id: InstanceId, p: Placed) -> Option<[f32; 4]> {
     }))
 }
 
-/// `p`'s rectangle with corners of `radii`.
 pub(super) fn shape(p: Placed, radii: [f32; 4]) -> GuiShape {
     GuiShape {
         center: p.center,

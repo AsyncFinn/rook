@@ -1,5 +1,3 @@
-//! Ray, Rect, Region3 and Region3int16.
-
 use mlua::{
     Lua, MetaMethod, MultiValue, UserData, UserDataFields, UserDataMethods, UserDataRef,
     Value as LuaValue, Vector,

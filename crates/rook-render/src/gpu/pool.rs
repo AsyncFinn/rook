@@ -107,7 +107,6 @@ impl GpuMesh {
     }
 }
 
-/// One page's buffers.
 #[derive(Debug)]
 pub(crate) struct Page {
     pub(crate) positions: wgpu::Buffer,
@@ -349,7 +348,6 @@ impl MeshPool {
         }
     }
 
-    /// Give a mesh's room back.
     pub(crate) fn remove(&mut self, mesh: &GpuMesh) {
         if let Some(page) = self.pages.get_mut(mesh.page) {
             page.vertex_ranges.free(mesh.vertices.clone());

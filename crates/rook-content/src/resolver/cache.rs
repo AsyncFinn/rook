@@ -18,7 +18,6 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::{Failure, FailureKind};
 
-/// The size limit when none is set.
 pub const DEFAULT_MAX: u64 = 2 << 30;
 
 /// A blob read again within this long isn't marked used again (saves a
@@ -28,15 +27,12 @@ const TOUCH_INTERVAL: Duration = Duration::from_secs(60 * 60);
 /// How long a "not found" or "forbidden" answer is trusted.
 pub const NEGATIVE_TTL: Duration = Duration::from_secs(24 * 60 * 60);
 
-/// What the cache knows about a reference.
 #[derive(Debug, Clone)]
 pub enum Cached {
     Hit {
         bytes: Arc<[u8]>,
         hash: blake3::Hash,
-        /// The blob's file.
         path: PathBuf,
-        /// Where it was downloaded from.
         url: String,
     },
     /// A remembered failure, still within [`NEGATIVE_TTL`].
@@ -50,7 +46,6 @@ pub struct Cache {
 }
 
 impl Cache {
-    /// The cache in `dir`, created if needed.
     pub fn open(dir: impl Into<PathBuf>) -> std::io::Result<Self> {
         let dir = dir.into();
         std::fs::create_dir_all(dir.join("blobs"))?;
@@ -166,7 +161,6 @@ impl Cache {
         freed
     }
 
-    /// Empty the cache.
     pub fn clear(&self) -> std::io::Result<()> {
         for sub in ["blobs", "refs"] {
             let dir = self.dir.join(sub);
@@ -228,7 +222,6 @@ impl Cache {
         self.dir.join("refs").join(key)
     }
 
-    /// Look up a reference by its cache key.
     pub fn get(&self, key: &str) -> Cached {
         self.get_at(key, SystemTime::now())
     }
@@ -339,7 +332,6 @@ fn touch(path: &Path, now: SystemTime) {
     }
 }
 
-/// Every file under `dir`, at any depth.
 fn files_under(dir: &Path) -> Vec<PathBuf> {
     let mut out = Vec::new();
     let mut stack = vec![dir.to_path_buf()];

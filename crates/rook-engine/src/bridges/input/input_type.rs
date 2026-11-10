@@ -7,7 +7,6 @@ use rook_types::{UserInputState, UserInputType, Value};
 
 use crate::DataModel;
 
-/// The `Enum.PreferredInput` items an input can turn it to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Preferred {
     KeyboardAndMouse,
@@ -106,7 +105,6 @@ impl DataModel {
     }
 }
 
-/// The value of `Enum.<enum_name>.<item>`.
 pub(super) fn enum_value(enum_name: &str, item: &str) -> Option<u32> {
     let e = rook_reflection::database().enum_by_name(enum_name)?;
     rook_reflection::enum_item_value(e.id, item)

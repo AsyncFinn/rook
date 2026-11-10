@@ -32,7 +32,6 @@ pub enum UpdateError {
     Version(String),
 }
 
-/// The new files, and what changed.
 #[derive(Debug)]
 pub struct ApiData {
     pub database: Vec<u8>,

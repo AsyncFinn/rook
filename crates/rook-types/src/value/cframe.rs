@@ -142,7 +142,6 @@ impl CFrame {
         Vector3(self.position + self.rotation * point.0)
     }
 
-    /// `CFrame:PointToObjectSpace`.
     pub fn point_to_object_space(&self, point: Vector3) -> Vector3 {
         self.inverse().point_to_world_space(point)
     }
@@ -167,11 +166,10 @@ impl CFrame {
         *self * other
     }
 
-    /// `CFrame:Lerp`. Interpolates position linearly and rotation spherically.
-    /// Matches Roblox in intent; exact numeric agreement is to be verified
-    /// against Studio recordings. The rotation comes out orthonormal even
-    /// from the slightly skewed ones places save: a scaled one would grow
-    /// each time a tween's value is pivoted to.
+    /// `CFrame:Lerp`: position linearly, rotation spherically (Inference:
+    /// not compared with Studio numerically). The rotation comes out
+    /// orthonormal even from the slightly skewed ones places save: a scaled
+    /// one would grow each time a tween's value is pivoted to.
     pub fn lerp(&self, goal: CFrame, alpha: f32) -> CFrame {
         let a = Quat::from_mat3(&self.rotation).normalize();
         let b = Quat::from_mat3(&goal.rotation).normalize();

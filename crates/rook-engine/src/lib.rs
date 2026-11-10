@@ -19,7 +19,7 @@ pub mod session;
 pub mod settings;
 pub mod user_settings;
 
-pub use bridges::camera::{CameraView, MouseLock};
+pub use bridges::camera::{CameraView, MouseLock, SavedCamera};
 pub use bridges::input::{
     CursorLook, GamepadAxis, GamepadKind, InputEvent, ScreenPoint, SystemCursor,
 };
@@ -47,6 +47,12 @@ pub enum EngineError {
     Lua(String),
     #[error(transparent)]
     Dom(#[from] rook_dom::DomError),
+    #[error("{0}")]
+    Script(String),
+    #[error("couldn't start the server thread: {0}")]
+    Thread(#[from] std::io::Error),
+    #[error("the server thread stopped")]
+    ServerStopped,
 }
 
 /// Services every place gets, created up front so scripts find them in
@@ -69,7 +75,6 @@ const DEFAULT_SERVICES: &[&str] = &[
     "Debris",
 ];
 
-/// Options for a DataModel host.
 #[derive(Debug, Clone)]
 pub struct Options {
     /// Frames per second of the fixed clock.
@@ -115,7 +120,6 @@ impl Default for Options {
     }
 }
 
-/// Which side of a game a DataModel is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Role {
     Server,
@@ -125,7 +129,6 @@ pub enum Role {
 /// A server DataModel (the usual case, and what headless runs use).
 pub type Server = DataModel;
 
-/// One DataModel with its scripts: a server or a client.
 #[derive(Debug)]
 pub struct DataModel {
     runtime: Runtime,
@@ -174,7 +177,6 @@ struct Content {
 }
 
 impl DataModel {
-    /// An empty place.
     pub fn new(options: &Options) -> Result<Self, EngineError> {
         let mut dom = Dom::new();
         dom.journal_mut().set_enabled(false);
@@ -261,7 +263,6 @@ impl DataModel {
         self.check_user_settings();
     }
 
-    /// Load a place file.
     pub fn load_place(bytes: &[u8], options: &Options) -> Result<Self, EngineError> {
         let loaded = rook_formats::load(bytes)?;
         let mut dom = Dom::new();
@@ -404,7 +405,6 @@ impl DataModel {
         std::mem::take(&mut self.render_changes)
     }
 
-    /// `Workspace.CurrentCamera`.
     pub fn current_camera(&self) -> Option<InstanceId> {
         let world = self.runtime.world();
         world
@@ -455,7 +455,6 @@ impl DataModel {
         self.runtime.take_log()
     }
 
-    /// Scripts that have been started.
     pub fn started_scripts(&self) -> usize {
         self.runtime.world().started_count()
     }

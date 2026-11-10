@@ -18,7 +18,6 @@ use rook_types::Value;
 
 use crate::{DataModel, EngineError, InputEvent, Options};
 
-/// From the server to one client.
 #[derive(Debug, Clone)]
 pub enum ToClient {
     /// A remote event, invoke or reply, with the server's instance ids.
@@ -62,7 +61,6 @@ pub enum ToServer {
 #[derive(Debug, Clone)]
 pub struct Joined {
     pub snapshot: Snapshot,
-    /// The server's Player for this client.
     pub player: InstanceId,
     /// The client handles signals the way the server does.
     pub signal_behavior: rook_lua::SignalBehavior,
@@ -114,7 +112,6 @@ impl ServerHost {
         &mut self.server
     }
 
-    /// The server's Player of each client, by index.
     pub fn player(&self, client: usize) -> Option<InstanceId> {
         self.clients.get(client).map(|c| c.player)
     }
@@ -391,7 +388,6 @@ impl ServerHost {
         }
     }
 
-    /// Deliver a message from client `index`.
     pub fn deliver(&mut self, index: usize, msg: ToServer) {
         let Some(player) = self.player(index) else {
             return;
@@ -577,7 +573,6 @@ impl ClientHost {
         self.hover_out.extend(out);
     }
 
-    /// Deliver a message from the server.
     pub fn deliver(&mut self, msg: &ToClient) {
         let rt = self.client.runtime();
         match msg {

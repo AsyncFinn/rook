@@ -148,7 +148,6 @@ pub fn set_playing(w: &mut World, id: InstanceId, play: bool) -> Result<(), rook
         .set_property_by_name(id, "IsPlaying", Value::Bool(play))
 }
 
-/// A connected Wire.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Connection {
     pub wire: InstanceId,
@@ -226,7 +225,6 @@ fn reaches(
     false
 }
 
-/// Every Wire in the DataModel.
 pub(crate) fn all_wires(w: &World) -> Vec<InstanceId> {
     w.audio.graph.borrow_mut().of_class(&w.dom, "Wire")
 }

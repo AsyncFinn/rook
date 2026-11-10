@@ -43,7 +43,6 @@ fn set_enum(dom: &mut Dom, id: InstanceId, property: &str, item: &str) {
     set(dom, id, property, Value::Enum(value));
 }
 
-/// A new `class` under `parent`, with `props` set first.
 fn child(dom: &mut Dom, class: &str, parent: InstanceId, props: &[(&str, Value)]) -> InstanceId {
     let id = dom.create_by_name(class).unwrap();
     for (name, value) in props {
@@ -102,7 +101,6 @@ fn laid_out(dom: &mut Dom) -> Gui {
     gui
 }
 
-/// What the screen draws, its pieces one after another.
 fn drawn(gui: &mut Gui, dom: &Dom) -> Vec<rook_types::GuiQuad> {
     gui.draw(dom)
         .iter()

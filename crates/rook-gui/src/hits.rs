@@ -9,10 +9,8 @@ use rook_types::Viewer;
 use crate::Gui;
 use crate::order::{self, Clip, Stacked};
 
-/// The objects on a world GUI the mouse's ray meets.
 #[derive(Debug, Clone, PartialEq)]
 pub struct WorldHit {
-    /// The SurfaceGui or BillboardGui.
     pub gui: InstanceId,
     /// Along the ray, in studs.
     pub distance: f32,
@@ -35,7 +33,6 @@ fn covers(s: &Stacked, at: Vec2) -> bool {
     local.cmpge(lo).all() && local.cmple(hi).all()
 }
 
-/// The objects in `stack` at `at`, top first.
 fn top_first(stack: &[Stacked], at: Vec2) -> impl Iterator<Item = InstanceId> + '_ {
     stack
         .iter()

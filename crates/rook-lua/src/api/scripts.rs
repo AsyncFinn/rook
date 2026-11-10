@@ -1,5 +1,3 @@
-//! Running Scripts and ModuleScripts: environments, chunk names, `require`.
-
 use mlua::chunk::Compiler;
 use mlua::{Function, Lua, MultiValue, Table, Value as LuaValue};
 use rook_dom::InstanceId;

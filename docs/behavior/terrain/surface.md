@@ -76,7 +76,7 @@ Cobblestone, Pavement) get flat normals per triangle, the rest smooth
 normals averaged over the faces around each vertex across chunk and
 material seams.
 
-*Drawing it* (Rook): `rook-player` meshes Workspace's Terrain when the
+*Drawing it* (Rook): `rook-scene` meshes Workspace's Terrain when the
 place loads (and again when its `SmoothGrid` changes), a chunk per thread,
 and draws one mesh per chunk and material through the mesh-file path, in
 the material's `Terrain.MaterialColors` color (the default table when the

@@ -1,6 +1,3 @@
-//! Member tables: which properties, methods and events a class has, and
-//! looking them up.
-
 use super::*;
 
 /// Read and write security of a property, from the member list.
@@ -59,7 +56,6 @@ pub(crate) struct PropInfo {
 /// What a key names on a class.
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum Member {
-    /// A property scripts can see.
     Property(PropInfo),
     Method {
         owner: &'static str,

@@ -15,7 +15,6 @@ impl Dom {
         self.property_by_name(id, name)?.as_number()
     }
 
-    /// A numeric property as an `f32`, the precision most consumers use.
     pub fn float_property(&self, id: InstanceId, name: &str) -> Option<f32> {
         self.number_property(id, name).map(|n| n as f32)
     }
@@ -31,7 +30,6 @@ impl Dom {
         }
     }
 
-    /// An enum property's value.
     pub fn enum_property(&self, id: InstanceId, name: &str) -> Option<u32> {
         self.property_by_name(id, name)?.as_enum()
     }
@@ -149,7 +147,6 @@ impl Dom {
             .map(str::to_owned)
     }
 
-    /// The bytes of a `BinaryString` or `SharedString` property.
     pub fn binary_property(&self, id: InstanceId, name: &str) -> Option<Vec<u8>> {
         match self.property_by_name(id, name)? {
             Value::BinaryString(b) => Some(b.into_vec()),

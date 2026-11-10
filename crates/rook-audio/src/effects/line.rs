@@ -10,7 +10,6 @@ pub(super) struct Line {
 }
 
 impl Line {
-    /// Room for `frames` frames of delay.
     pub(super) fn new(frames: usize) -> Self {
         Self {
             buffer: vec![[0.0; 2]; frames.max(1) + 2],
@@ -22,7 +21,6 @@ impl Line {
         self.buffer.len()
     }
 
-    /// Store the newest frame.
     pub(super) fn push(&mut self, frame: Frame) {
         self.buffer[self.write] = frame;
         self.write = (self.write + 1) % self.buffer.len();

@@ -1,15 +1,6 @@
-//! The runtime instance tree.
-//!
-//! A [`Dom`] holds one DataModel: an arena of instances keyed by
-//! generational [`InstanceId`]s, their hierarchy, property values,
-//! attributes and tags, and a [`Journal`] of every change.
-//!
-//! The DOM itself never calls out while mutating. Signal dispatch and
-//! engine systems read the journal afterwards, each with its own cursor.
+//! The DOM never calls out while mutating. Signal dispatch and engine
+//! systems read the [`Journal`] afterwards, each with its own cursor.
 //! See `docs/design/architecture.md#runtime-dom-rook-dom`.
-//!
-//! Reference properties are indexed both ways: [`Dom::referrers`] lists
-//! what points at an instance (the joints holding a part, for example).
 //!
 //! Hierarchy rules (locked parents, cycles, `Destroy`, `Clone`) follow
 //! Roblox. Error texts are Inference until the conformance suite pins them.
@@ -47,7 +38,6 @@ slotmap::new_key_type! {
 }
 
 impl InstanceId {
-    /// Encode as an [`InstanceRef`] for storage in a [`Value::Ref`].
     pub fn to_ref(self) -> InstanceRef {
         InstanceRef(self.data().as_ffi())
     }
@@ -91,7 +81,6 @@ pub fn ignore_stale(result: Result<(), DomError>) {
     );
 }
 
-/// One DataModel's instance tree.
 #[derive(Debug)]
 pub struct Dom {
     db: &'static Database,
@@ -100,7 +89,6 @@ pub struct Dom {
     journal: Journal,
     /// Default values converted from the reflection database, cached per class.
     defaults: RefCell<FxHashMap<(ClassId, PropertyId), Value>>,
-    /// For each instance, the reference properties pointing at it.
     referrers: FxHashMap<InstanceId, Vec<(InstanceId, PropertyId)>>,
     name_prop: PropertyId,
     parent_prop: PropertyId,

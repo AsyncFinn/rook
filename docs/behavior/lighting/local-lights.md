@@ -136,7 +136,7 @@ The same scenes as `rook-player --screenshot` rbxlx copies, same camera
 ## How Rook does it
 
 `rook-player`'s scene keeps every PointLight, SpotLight and SurfaceLight
-under a part or an Attachment in Workspace (`crates/rook-view/src/lighting/local.rs`); disabled
+under a part or an Attachment in Workspace (`crates/rook-scene/src/lighting/local.rs`); disabled
 lights stay in the list at Brightness 0 so that scripts switching lights
 on and off rewrite only colors. Each light keeps the box of the part it
 hangs from, which doesn't shadow it. Scripts changing a light, its

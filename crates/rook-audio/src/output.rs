@@ -1,5 +1,3 @@
-//! The output device.
-
 use std::hash::Hash;
 use std::sync::{Arc, Mutex};
 
@@ -7,7 +5,6 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
 use crate::{Device, Mix, Mixer};
 
-/// An output device, fed by a [`Mixer`].
 pub struct Output<K> {
     device: Device,
     master_volume: f32,
@@ -51,7 +48,6 @@ impl<K: Hash + Eq + Copy + Send + 'static> Output<K> {
         }
     }
 
-    /// Play exactly `wanted` from now on.
     pub fn sync(&mut self, wanted: &Mix<K>) {
         if self.mixer.is_none() {
             if (wanted.sounds.is_empty() && !wanted.graph.has_output()) || self.failed {

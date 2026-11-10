@@ -13,7 +13,7 @@ edge half transparent) and a 100 × 40 one striped every 5 pixels. Rook's
 screenshots of the same scene differ only along edges (JPEG and rounding).
 
 Code: `rook-gui`'s `draw/image.rs` (the pieces each `ScaleType` makes) and
-`images.rs` (which images are loaded); `rook-view`'s `gui.rs` loads them
+`images.rs` (which images are loaded); `rook-scene`'s `gui.rs` loads them
 with the scene's other files; the renderer draws them through
 `renderer/gui/images.rs` and `shaders/gui_paint.wgsl`.
 

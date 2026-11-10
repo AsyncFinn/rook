@@ -31,7 +31,6 @@ fn canvas(x: i32, y: i32) -> (&'static str, Value) {
     ("CanvasSize", udim2(0.0, x, 0.0, y))
 }
 
-/// `AbsoluteWindowSize` and `AbsoluteCanvasSize`.
 fn sizes(dom: &Dom, f: InstanceId) -> (Vec2, Vec2) {
     (
         vec2_of(dom, f, "AbsoluteWindowSize"),

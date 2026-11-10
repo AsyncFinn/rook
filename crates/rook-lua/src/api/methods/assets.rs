@@ -24,7 +24,6 @@ pub(crate) type Fill = Box<dyn FnOnce(&mut Dom, InstanceId)>;
 /// A [`Fill`] for the asset, or why it didn't load.
 pub type AssetFill = Result<Fill, FailureKind>;
 
-/// Asset loads scripts are waiting on.
 #[derive(Debug, Default)]
 pub struct AssetRequests {
     /// Asset ids to fetch, by request id, since the engine last took them.

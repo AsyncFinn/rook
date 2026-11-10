@@ -52,10 +52,8 @@ pub fn is_layout_output(name: &str) -> bool {
     )
 }
 
-/// A DataModel's GUI layout, kept up to date with its journal.
 #[derive(Debug)]
 pub struct Gui {
-    /// Where in the journal changes were last looked at.
     cursor: u64,
     /// Everything lays out again: the screen resized.
     stale: bool,
@@ -97,18 +95,14 @@ pub struct Gui {
     world_hosts: FxHashMap<InstanceId, Vec<usize>>,
     /// What the screen draws, in pieces kept until they change.
     screen: draw::Screen,
-    /// The focused TextBox, which draws its caret.
     focus: Option<InstanceId>,
-    /// The GuiButtons with `Modal` set.
     modals: modal::Modals,
     /// ScrollingFrames the wheel is moving.
     scrolling: FxHashMap<InstanceId, scroll_input::Eased>,
-    /// Where each turning UIPageLayout's view is.
     turning: Turning,
     /// Each world GUI's canvas as of the last layout, once drawn; one
     /// still drawn is the same `Arc`, so a renderer can keep its copy.
     canvases: FxHashMap<InstanceId, Arc<WorldCanvas>>,
-    /// The tags over heads, and each one's canvas as last drawn.
     overheads: world::overhead::Overheads,
     tags: FxHashMap<InstanceId, (world::overhead::Look, Arc<WorldCanvas>)>,
     fonts: text::Fonts,
@@ -219,7 +213,6 @@ impl Gui {
         };
         dom.set_property_by_name(id, "CanvasPosition", Value::Vector2(Vector2(at)))
     }
-    /// Drop what the GUI keeps about `id`, which is being freed.
     fn forget(&mut self, id: InstanceId) {
         for (old_top, subtree) in &mut self.moved {
             subtree.retain(|&i| i != id);
@@ -516,7 +509,6 @@ impl Gui {
         self.focus
     }
 
-    /// Give `focus` the keys (`None`: no TextBox has them).
     pub fn set_focus(&mut self, focus: Option<InstanceId>) {
         if self.focus != focus {
             self.restyled.extend(self.focus.into_iter().chain(focus));
@@ -533,7 +525,6 @@ impl Gui {
         block.index_at(placed.local_point(at))
     }
 
-    /// Draw the trees from `tops` again, as of the current layout.
     fn redraw(&mut self, dom: &Dom, tops: &[InstanceId]) {
         if tops.is_empty() {
             return;
@@ -709,7 +700,6 @@ impl Gui {
         (self.overheads.shown.iter()).map(|tag| Some(tag.place(draw::overhead::size(&tag.look))))
     }
 
-    /// Write every laid-out object's outputs.
     fn write(&mut self, dom: &mut Dom) {
         let ids: Vec<InstanceId> = (self.layout.placed.keys())
             .chain(self.layout.arranged.keys())
@@ -718,7 +708,6 @@ impl Gui {
         self.write_ids(dom, &ids);
     }
 
-    /// Write the outputs of the trees from `tops`.
     fn write_trees(&mut self, dom: &mut Dom, tops: &[InstanceId]) {
         let ids: Vec<InstanceId> = (tops.iter())
             .flat_map(|&id| std::iter::once(id).chain(dom.descendants(id)))
@@ -726,7 +715,6 @@ impl Gui {
         self.write_ids(dom, &ids);
     }
 
-    /// Write the outputs of the objects among `ids` that were laid out.
     fn write_ids(&mut self, dom: &mut Dom, ids: &[InstanceId]) {
         let v2 = |v: glam::Vec2| Value::Vector2(Vector2(v));
         let client = dom.local_player().is_some();

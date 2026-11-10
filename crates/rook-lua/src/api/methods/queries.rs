@@ -153,7 +153,6 @@ fn find_part_on_ray_whitelist(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<O
 
 // Regions
 
-/// Parts whose `Size` box meets `region`.
 fn in_bounds(lua: &Lua, region: Region, filter: &Filter, max: usize) -> Vec<InstanceId> {
     with_world(lua, |w| {
         w.physics.parts_in_bounds(&mut w.dom, region, filter, max)

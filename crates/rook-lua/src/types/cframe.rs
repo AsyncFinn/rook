@@ -1,5 +1,3 @@
-//! CFrame.
-
 use super::err;
 use glam::{EulerRot, Mat3, Quat, Vec3};
 use mlua::{

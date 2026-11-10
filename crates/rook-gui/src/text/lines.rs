@@ -4,7 +4,6 @@
 
 use super::shape::Glyph;
 
-/// Shaped text, with its forced breaks.
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum Item {
     Glyph(Glyph),
@@ -50,7 +49,6 @@ impl Line {
         self.glyphs.push(g);
     }
 
-    /// The character it starts at in the whole text.
     pub(crate) fn start(&self) -> usize {
         self.glyphs.first().map_or(self.empty_start, |g| g.index)
     }

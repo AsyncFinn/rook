@@ -21,13 +21,11 @@ mod near;
 use crate::Physics;
 use crate::contacts::materials;
 
-/// The terrain in the world.
 #[derive(Default)]
 pub(crate) struct Terrain {
     /// Workspace's Terrain, which the colliders stand for.
     pub(crate) instance: Option<InstanceId>,
     body: Option<RigidBodyHandle>,
-    /// Each collider's material.
     pieces: FxHashMap<ColliderHandle, TerrainMaterial>,
     /// Each built chunk's colliders, so an edit can take them down.
     chunk_pieces: FxHashMap<glam::IVec3, Vec<ColliderHandle>>,
@@ -64,7 +62,6 @@ impl Terrain {
         self.material(collider) == Some(TerrainMaterial::Water)
     }
 
-    /// The voxels.
     pub(crate) fn grid(&self) -> &Grid {
         &self.grid
     }
@@ -116,7 +113,6 @@ fn pieces(chunk: ChunkMesh) -> Vec<Piece> {
         .collect()
 }
 
-/// Workspace's Terrain and its voxels.
 fn workspace_terrain(dom: &Dom) -> Option<(InstanceId, Option<&Grid>)> {
     let ws = dom.find_service("Workspace")?;
     let terrain = dom.find_first_child_of_class(ws, "Terrain")?;

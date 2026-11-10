@@ -21,7 +21,6 @@ macro_rules! roblox_enum {
         }
 
         impl $name {
-            /// The Roblox enum's name.
             pub const NAME: &str = $roblox;
             /// The items Rook names, by their Roblox names.
             pub const ITEMS: &[(&str, $name)] = &[$((stringify!($item), Self::$item),)*];
@@ -161,7 +160,6 @@ impl GamepadKey {
 }
 
 roblox_enum! {
-    /// `Enum.UserInputState`.
     UserInputState {
         Begin = 0,
         Change = 1,

@@ -1,0 +1,40 @@
+# rook-client's own rules, as clippy reads only the nearest clippy.toml:
+# the workspace clippy.toml's, copied, and bans on calls that are slow or
+# that the window must make once a frame at most. Window and device events
+# arrive hundreds a second (a 1000 Hz mouse, a dragged window), so these
+# belong in the frame, never in an event handler; each site that needs one
+# says why with an `#[expect]`.
+disallowed-methods = [
+    # Outside rook-dom, properties are read through Dom's typed readers
+    # (`float_property`, `enum_item_property`, ...); a raw Value read needs
+    # an allow with its reason.
+    { path = "rook_dom::Dom::property_by_name", reason = "use a typed reader such as Dom::float_property" },
+    { path = "std::thread::spawn", reason = "use rook_platform::get().threads, or .workers for short work" },
+    { path = "std::thread::scope", reason = "use rook_platform::get().workers" },
+    { path = "std::fs::read", reason = "use rook_platform::get().files" },
+    { path = "std::fs::read_to_string", reason = "use rook_platform::get().files" },
+    { path = "std::fs::read_dir", reason = "use rook_platform::get().files" },
+    { path = "std::fs::write", reason = "use rook_platform::get().files" },
+    { path = "std::fs::copy", reason = "use rook_platform::get().files" },
+    { path = "std::fs::rename", reason = "use rook_platform::get().files" },
+    { path = "std::fs::create_dir", reason = "use rook_platform::get().files" },
+    { path = "std::fs::create_dir_all", reason = "use rook_platform::get().files" },
+    { path = "std::fs::remove_file", reason = "use rook_platform::get().files" },
+    { path = "std::fs::remove_dir", reason = "use rook_platform::get().files" },
+    { path = "std::fs::remove_dir_all", reason = "use rook_platform::get().files" },
+    { path = "std::fs::metadata", reason = "use rook_platform::get().files" },
+    { path = "std::fs::canonicalize", reason = "use rook_platform::get().files" },
+    { path = "winit::window::Window::current_monitor", reason = "a system query: read it when the window moves, at most once a frame (App::read_refresh)" },
+    { path = "winit::monitor::MonitorHandle::refresh_rate_millihertz", reason = "a slow driver query: only when the monitor changed (App::read_refresh)" },
+    { path = "winit::window::Window::set_cursor_position", reason = "only App::warp moves the cursor, so the game always hears where it is" },
+    { path = "winit::window::Window::set_cursor_visible", reason = "only App::show_system_cursor changes the cursor, so it shows what the game and the look say now" },
+    { path = "winit::window::Window::set_cursor", reason = "only App::show_system_cursor changes the cursor, so it shows what the game and the look say now" },
+    { path = "std::thread::sleep", reason = "blocks the frame loop; only the frame pacer waits (App::redraw)" },
+]
+disallowed-types = [
+    { path = "std::collections::HashMap", reason = "use rustc_hash::FxHashMap: std's SipHash is slow for Rook's own keys and iterates in a different order every run" },
+    { path = "std::collections::HashSet", reason = "use rustc_hash::FxHashSet: std's SipHash is slow for Rook's own keys and iterates in a different order every run" },
+    { path = "std::thread::Builder", reason = "use rook_platform::get().threads" },
+    { path = "std::fs::File", reason = "use rook_platform::get().files" },
+    { path = "std::fs::OpenOptions", reason = "use rook_platform::get().files" },
+]

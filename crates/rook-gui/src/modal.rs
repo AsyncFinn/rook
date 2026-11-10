@@ -10,9 +10,7 @@ use crate::layout::{Layout, visible};
 
 #[derive(Debug, Default)]
 pub(crate) struct Modals {
-    /// `GuiButton.Modal`, once resolved.
     modal: Option<PropertyId>,
-    /// GuiButtons with Modal set, wherever they are.
     buttons: FxHashSet<InstanceId>,
 }
 
@@ -29,7 +27,6 @@ impl Modals {
         }
     }
 
-    /// Keep up with one journal change.
     pub(crate) fn note(&mut self, dom: &Dom, change: &Change) {
         match change {
             Change::Property { id, property } if Some(*property) == self.modal => {

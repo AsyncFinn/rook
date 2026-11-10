@@ -1,5 +1,3 @@
-//! The Roblox API surface: Instance, signals, globals, scripts.
-
 pub(crate) mod globals;
 pub(crate) mod instance;
 pub(crate) mod methods;

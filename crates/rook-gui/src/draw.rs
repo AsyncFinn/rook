@@ -28,7 +28,6 @@ use crate::images::Images;
 use crate::layout::{Layout, Placed, turn};
 use crate::order::{self, Clip, Stacked};
 
-/// The fonts and glyph masks text is drawn with.
 pub(crate) struct Text<'a> {
     pub(crate) fonts: &'a mut crate::text::Fonts,
     pub(crate) glyphs: &'a mut crate::text::Glyphs,
@@ -38,7 +37,6 @@ pub(crate) use image::all_images;
 pub(crate) use messages::is_message;
 pub(crate) use screen::Screen;
 
-/// Whether `id` draws an image.
 pub(crate) fn is_image(dom: &Dom, id: InstanceId) -> bool {
     matches!(dom.class_name(id), "ImageLabel" | "ImageButton")
 }
@@ -186,7 +184,6 @@ impl Draw<'_, '_> {
     }
 }
 
-/// Whether `p`'s rectangle, turned, reaches into `area`.
 fn touches(p: Placed, area: [f32; 4]) -> bool {
     let half = p.size().abs() * 0.5;
     let corners = [half, Vec2::new(half.x, -half.y)].map(|c| turn(p.rotation, c).abs());

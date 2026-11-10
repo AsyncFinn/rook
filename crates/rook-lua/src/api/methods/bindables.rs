@@ -1,5 +1,3 @@
-//! BindableEvent and BindableFunction.
-
 use super::*;
 
 mod copy;

@@ -82,7 +82,7 @@ opacity curves over the life, color times a brightness curve, how much it
 adds light, how far it's lit). ParticleEmitter uses the same model
 (docs/behavior/effects/particle-emitters.md). The player maps the three effects
 onto it
-(`crates/rook-view/src/effects/classic.rs`, Approximations fitted on the
+(`crates/rook-scene/src/effects/classic.rs`, Approximations fitted on the
 comparison below):
 
 | | Fire flames | Fire core | Smoke | Sparkles |

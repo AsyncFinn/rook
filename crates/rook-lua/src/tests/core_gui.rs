@@ -1,5 +1,3 @@
-//! What Roblox's CoreScripts need that game scripts use too.
-
 use super::*;
 
 #[test]

@@ -13,7 +13,6 @@ use rook_types::CFrame;
 use crate::convert::cframe_of;
 use crate::joints::constraints::{attachment, attachments};
 
-/// Classes that act through [`Mover`].
 pub(crate) fn is_mover(class: &str) -> bool {
     matches!(
         class,
@@ -33,7 +32,6 @@ pub(crate) fn is_mover(class: &str) -> bool {
 /// A frame fixed in a body: the body and the frame's pose in it.
 pub(crate) type Frame = (RigidBodyHandle, CFrame);
 
-/// A mover acting on a body this frame.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Mover {
     pub id: InstanceId,
@@ -233,7 +231,6 @@ impl Mover {
     }
 }
 
-/// A body's state at the start of a step.
 struct State {
     pose: CFrame,
     com: Vec3,
@@ -307,7 +304,6 @@ struct Push {
 }
 
 impl Mover {
-    /// The bodies this mover reads.
     pub(crate) fn bodies(&self) -> impl Iterator<Item = RigidBodyHandle> {
         let other = match &self.kind {
             Kind::Force { relative, .. } | Kind::Torque { relative, .. } => relative.map(|f| f.0),

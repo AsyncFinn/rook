@@ -66,7 +66,6 @@ impl<'a> Reader<'a> {
         self.array().map(f32::from_le_bytes)
     }
 
-    /// A count, checked against [`MAX_ELEMENTS`].
     pub(super) fn count(&mut self) -> Result<usize, MeshError> {
         checked_count(self.u32()? as u64)
     }
@@ -84,7 +83,6 @@ impl<'a> Reader<'a> {
         Err(MeshError::Damaged("a varint runs past 64 bits".into()))
     }
 
-    /// `n` records of `stride` bytes each.
     pub(super) fn records(
         &mut self,
         n: usize,
@@ -104,12 +102,10 @@ pub(super) fn checked_count(n: u64) -> Result<usize, MeshError> {
         .ok_or_else(|| MeshError::Damaged(format!("a count of {n} is out of range")))
 }
 
-/// Little-endian floats at the start of a record.
 pub(super) fn floats<const N: usize>(record: &[u8]) -> [f32; N] {
     std::array::from_fn(|i| f32::from_le_bytes(record[i * 4..][..4].try_into().expect("4 bytes")))
 }
 
-/// Little-endian u32s at the start of a record.
 pub(super) fn u32s<const N: usize>(record: &[u8]) -> [u32; N] {
     std::array::from_fn(|i| u32::from_le_bytes(record[i * 4..][..4].try_into().expect("4 bytes")))
 }

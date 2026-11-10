@@ -71,7 +71,6 @@ impl std::fmt::Debug for ApiKey {
     }
 }
 
-/// Which providers to use and how.
 #[derive(Debug, Clone)]
 pub struct Config {
     pub order: Vec<ProviderKind>,
@@ -90,7 +89,6 @@ pub struct Config {
     /// delivery refuses a request anonymously; the key is sent only to
     /// Roblox's own Open Cloud host ([`Endpoints::is_roblox`]).
     pub api_key: Option<ApiKey>,
-    /// Where asset delivery's requests go.
     pub endpoints: Endpoints,
     /// `None` keeps nothing on disk.
     pub cache_dir: Option<PathBuf>,

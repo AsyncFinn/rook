@@ -1,5 +1,3 @@
-//! The render pipelines and the shader they share.
-
 use wesl_core::include_wesl;
 
 use super::*;

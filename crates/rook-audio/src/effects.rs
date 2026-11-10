@@ -242,7 +242,6 @@ impl Stage {
     }
 }
 
-/// Effects run one after another over stereo frames at one rate.
 #[derive(Debug, Clone)]
 pub struct Chain {
     rate: f32,
@@ -305,7 +304,6 @@ impl Chain {
     }
 }
 
-/// From decibels to a linear gain.
 pub(crate) fn db(gain: f32) -> f32 {
     10f32.powf(gain / 20.0)
 }

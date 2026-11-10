@@ -29,7 +29,6 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use rbx_dom_weak::WeakDom;
 
-/// On-disk encoding.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Format {
     /// `.rbxl` / `.rbxm`
@@ -39,7 +38,6 @@ pub enum Format {
 }
 
 impl Format {
-    /// Detect the encoding from the file's first bytes.
     pub fn detect(bytes: &[u8]) -> Option<Self> {
         let start = trim_start(bytes);
         if start.starts_with(b"<roblox!") {
@@ -84,7 +82,6 @@ pub enum SaveError {
     Panicked(String),
 }
 
-/// A loaded file.
 #[derive(Debug)]
 pub struct Loaded {
     pub format: Format,
@@ -95,7 +92,6 @@ pub struct Loaded {
     pub legacy: Option<legacy::LegacyUpgrade>,
 }
 
-/// Load a place or model file from memory.
 pub fn load(bytes: &[u8]) -> Result<Loaded, LoadError> {
     let format = Format::detect(bytes).ok_or(LoadError::UnknownFormat)?;
     match decode(bytes, format) {

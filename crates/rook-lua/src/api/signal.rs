@@ -1,5 +1,3 @@
-//! RBXScriptSignal and RBXScriptConnection.
-
 use crate::signal::{ConnectionId, SignalKey, SignalKind};
 use mlua::{Function, Lua, MultiValue, Table, UserData, UserDataFields, Value as LuaValue};
 use rook_dom::InstanceId;
@@ -134,8 +132,7 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
             api_fn(lua, move |lua, a| connect(lua, a, name, once))?,
         )?;
     }
-    // Rook runs everything on one thread, so ConnectParallel behaves like
-    // Connect until Actors exist.
+    // Rook runs everything on one thread, so ConnectParallel is Connect.
     methods.set(
         "ConnectParallel",
         api_fn(lua, |lua, a| connect(lua, a, "ConnectParallel", false))?,

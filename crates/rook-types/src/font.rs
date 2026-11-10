@@ -1,10 +1,8 @@
 //! The legacy text enums in terms of today's: each `Enum.Font` item as the
-//! `FontFace` it stands for, and each `Enum.FontSize` item as a
-//! `TextSize`. Files, scripts and layout all read them from here.
+//! `FontFace` it stands for, and each `Enum.FontSize` item as a `TextSize`.
 
 use rbx_types::{Font, FontStyle, FontWeight};
 
-/// Where Roblox's font families live in its install.
 pub const FAMILY_FOLDER: &str = "rbxasset://fonts/families/";
 
 /// Each `Enum.Font` item's family file, weight and style, as
@@ -69,7 +67,6 @@ pub const LEGACY_FONTS: &[(&str, &str, FontWeight, FontStyle)] = {
     ]
 };
 
-/// The `FontFace` an `Enum.Font` item stands for.
 pub fn font_from_enum(item: &str) -> Option<Font> {
     LEGACY_FONTS
         .iter()
@@ -92,7 +89,6 @@ pub fn enum_of_font(font: &Font) -> &'static str {
         .map_or("Unknown", |(name, ..)| name)
 }
 
-/// Each `Enum.FontSize` item's `TextSize`.
 pub const FONT_SIZES: &[(&str, f32)] = &[
     ("Size8", 8.0),
     ("Size9", 9.0),
@@ -111,7 +107,6 @@ pub const FONT_SIZES: &[(&str, f32)] = &[
     ("Size96", 96.0),
 ];
 
-/// The `TextSize` of an `Enum.FontSize` item.
 pub fn text_size_of(item: &str) -> Option<f32> {
     FONT_SIZES.iter().find(|(n, _)| *n == item).map(|&(_, s)| s)
 }
