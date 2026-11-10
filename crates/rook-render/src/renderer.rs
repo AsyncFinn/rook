@@ -610,8 +610,6 @@ impl Renderer {
     }
 }
 
-/// The GPU to draw with: the fast one, able to present to `surface` when
-/// drawing into a window.
 pub(crate) fn adapter(
     instance: &wgpu::Instance,
     surface: Option<&wgpu::Surface<'_>>,

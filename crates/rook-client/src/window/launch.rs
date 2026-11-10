@@ -82,7 +82,6 @@ impl Launch {
         }
     }
 
-    /// End the run with `e`, which [`Launch::finish`] returns.
     fn fail(&mut self, event_loop: &ActiveEventLoop, e: anyhow::Error) {
         self.failed.get_or_insert(e);
         event_loop.exit();

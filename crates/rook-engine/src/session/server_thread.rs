@@ -39,7 +39,6 @@ enum Command {
 /// What the server sends back once it's running.
 #[derive(Debug)]
 pub struct Started {
-    /// The player who joined, if one was asked for.
     pub joined: Option<Joined>,
     /// The camera the place was saved with.
     pub camera: Option<SavedCamera>,

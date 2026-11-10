@@ -1,19 +1,15 @@
-//! Drawing into a window: its surface, how frames are paced on it, and
-//! presenting. The renderer owns this, as it owns its device, so an app
-//! hands over a window (anything with a raw window handle) and never
-//! touches the GPU API itself.
+//! The renderer owns a window's surface as it owns its device, so apps
+//! never touch the GPU API.
 
 use std::time::{Duration, Instant};
 
 use crate::{Camera, RenderError, Renderer};
 
-/// A window's surface and the renderer that draws into it.
 #[derive(Debug)]
 pub struct WindowSurface {
     surface: wgpu::Surface<'static>,
     config: wgpu::SurfaceConfiguration,
     renderer: Renderer,
-    /// The last frame was presented.
     presented: bool,
 }
 
@@ -26,8 +22,6 @@ fn present_mode(vsync: bool) -> wgpu::PresentMode {
 }
 
 impl WindowSurface {
-    /// Open a GPU device for `window`, `width` by `height` pixels,
-    /// presenting at the display's rate with `vsync`.
     pub fn new(
         window: impl Into<wgpu::SurfaceTarget<'static>>,
         width: u32,
@@ -73,24 +67,20 @@ impl WindowSurface {
         &mut self.renderer
     }
 
-    /// The surface's size in pixels.
     pub fn size(&self) -> (u32, u32) {
         (self.config.width, self.config.height)
     }
 
-    /// Whether the last frame was presented.
     pub fn presented(&self) -> bool {
         self.presented
     }
 
-    /// Present at the display's rate, or as soon as each frame is drawn.
     pub fn set_vsync(&mut self, vsync: bool) {
         self.config.present_mode = present_mode(vsync);
         self.surface.configure(&self.renderer.device, &self.config);
     }
 
-    /// Take the window's new size; false for a size there's nothing to
-    /// draw into (a minimized window).
+    /// False for a size there's nothing to draw into (a minimized window).
     pub fn resize(&mut self, width: u32, height: u32) -> bool {
         if width == 0 || height == 0 {
             return false;
@@ -101,8 +91,7 @@ impl WindowSurface {
         true
     }
 
-    /// The next frame to draw on, or `None` when the surface had to be
-    /// set up again. Waits for the display at its rate.
+    /// `None` when the surface had to be set up again.
     fn next_frame(&self) -> Option<wgpu::SurfaceTexture> {
         match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(t)
@@ -114,9 +103,8 @@ impl WindowSurface {
         }
     }
 
-    /// Draw a frame with `camera` at `clock` seconds and present it,
-    /// calling `pre_present` just before (winit's `pre_present_notify`);
-    /// how long it waited for the display to free an image to draw into.
+    /// How long it waited for the display to free an image, which isn't
+    /// the frame's cost.
     pub fn draw(&mut self, camera: &Camera, clock: f64, pre_present: impl FnOnce()) -> Duration {
         self.presented = false;
         let asked = Instant::now();

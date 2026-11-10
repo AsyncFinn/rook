@@ -1,6 +1,3 @@
-//! Getting a loaded game ready to show: how long it runs first, where the
-//! camera starts, and the scene built around it.
-
 use std::sync::Arc;
 
 use glam::Vec3;
@@ -13,15 +10,12 @@ use rook_scene::SceneCache;
 use crate::game::Game;
 use crate::stats::thousands;
 
-/// How a place is first shown, whichever app shows it.
 #[derive(Debug, Clone)]
 pub struct Start {
-    /// The window's (or image's) size in pixels.
     pub width: u32,
     pub height: u32,
     /// Where the camera starts, instead of the place's saved camera.
     pub camera: Option<Vec3>,
-    /// The point the camera looks at.
     pub look_at: Option<Vec3>,
     /// Vertical field of view in degrees, instead of the saved camera's.
     pub fov: Option<f32>,

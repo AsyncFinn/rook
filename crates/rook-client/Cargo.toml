@@ -9,8 +9,6 @@ repository.workspace = true
 rust-version.workspace = true
 
 [features]
-# The window, through winit: input, the mouse, the cursor and the frame
-# loop, and sound through the audio device.
 window = ["dep:winit", "rook-audio/output"]
 # The `>` prompt in the terminal that runs Luau in the open place.
 repl = ["rook-engine/repl"]
