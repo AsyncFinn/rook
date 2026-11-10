@@ -1,6 +1,3 @@
-//! Friction and elasticity mixed the way Roblox mixes them, and anchored
-//! parts with a velocity carrying what touches them.
-
 use super::*;
 use rapier3d::geometry::NEW_CONTACT_BIT;
 

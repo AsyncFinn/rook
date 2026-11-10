@@ -47,10 +47,8 @@ const fn props(d: f32, f: f32, e: f32, fw: f32, ew: f32, a: f32) -> Properties {
     }
 }
 
-/// Plastic, the default material.
 pub const PLASTIC: Properties = props(0.7, 0.3, 0.5, 1.0, 1.0, 0.3);
 
-/// Each material's properties.
 #[rustfmt::skip]
 const TABLE: &[(Material, Properties)] = &[
     (Material::Plastic, PLASTIC),

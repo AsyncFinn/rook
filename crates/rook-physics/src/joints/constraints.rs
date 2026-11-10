@@ -1,8 +1,3 @@
-//! Attachment-based constraints that become Rapier joints (HingeConstraint,
-//! BallSocketConstraint, RopeConstraint, RodConstraint), and the motors
-//! that drive revolute joints: HingeConstraint's Motor and Servo actuators
-//! and the legacy RotateV and RotateP.
-//!
 //! Observed in Studio 0.742 unless marked otherwise. Constrained parts keep
 //! colliding with each other (Inference: that's what
 //! NoCollisionConstraint exists for).
@@ -26,7 +21,6 @@ pub(crate) fn is_constraint(class: &str) -> bool {
     )
 }
 
-/// An attachment's part and its CFrame in that part.
 pub(crate) fn attachment(dom: &Dom, att: InstanceId) -> Option<(InstanceId, CFrame)> {
     if dom.class_name(att) != "Attachment" {
         return None;
@@ -151,10 +145,8 @@ const JOINT_SOFTNESS: SpringCoefficients<Real> = SpringCoefficients {
     damping_ratio: 10.0,
 };
 
-/// What turns a revolute joint about its axis.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum Drive {
-    /// Turns freely.
     Free,
     /// Turns at `speed` rad/s (RotateV; HingeConstraint's Motor).
     Speed { speed: f32, max_torque: f32 },

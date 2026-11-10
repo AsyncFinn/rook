@@ -41,7 +41,6 @@ impl Attached {
         }
     }
 
-    /// The constraints and movers holding `part`.
     pub(crate) fn holders(&self, part: InstanceId) -> impl Iterator<Item = InstanceId> + '_ {
         self.holders.get(&part).into_iter().flatten().copied()
     }

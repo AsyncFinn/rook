@@ -83,7 +83,6 @@ impl Playback {
         self.far.contains_key(&h)
     }
 
-    /// The far played assemblies.
     pub(crate) fn far_ones(&self) -> impl Iterator<Item = RigidBodyHandle> + '_ {
         self.far.keys().copied()
     }

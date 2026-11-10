@@ -1,8 +1,5 @@
-//! Hinges, movers, attachment constraints and the motors that drive them.
-
 use crate::*;
 
-/// What sets a driven revolute joint's motor.
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum DriveSource {
     /// RotateV or RotateP.
@@ -11,7 +8,6 @@ pub(crate) enum DriveSource {
     Actuator(Drive),
 }
 
-/// A revolute joint with a motor.
 #[derive(Debug)]
 pub(crate) struct Driven {
     pub(crate) joint: ImpulseJointHandle,
@@ -23,7 +19,6 @@ pub(crate) struct Driven {
     angle: Option<f32>,
 }
 
-/// An attachment constraint in the world.
 #[derive(Debug)]
 pub(crate) struct BuiltConstraint {
     pub(crate) spec: Spec,

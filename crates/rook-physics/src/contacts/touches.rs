@@ -19,7 +19,6 @@ pub struct Touch {
     pub began: bool,
 }
 
-/// Collects Rapier's collision events during a step.
 #[derive(Default)]
 pub(crate) struct Collector(Mutex<Vec<CollisionEvent>>);
 
@@ -61,7 +60,6 @@ pub(crate) struct Tracker {
     /// Colliders removed since the last step: Rapier reports their
     /// contacts ending after they're gone.
     retired: FxHashMap<ColliderHandle, InstanceId>,
-    /// Parts with CanTouch off.
     pub(crate) untouchable: FxHashSet<InstanceId>,
     events: Vec<Touch>,
 }

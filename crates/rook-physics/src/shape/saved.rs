@@ -121,7 +121,6 @@ impl SavedShapes {
         shape.clone()
     }
 
-    /// Whether `part` has saved hulls.
     pub(crate) fn has_hulls(&self, dom: &Dom, part: InstanceId) -> bool {
         self.geometry(dom, part)
             .is_some_and(|g| matches!(*g, SavedCollision::Hulls { .. }))

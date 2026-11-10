@@ -1,5 +1,3 @@
-//! Assemblies another machine simulates ([`Authority`]).
-
 use super::*;
 
 /// A Model in Workspace holding one unanchored block at `at`.

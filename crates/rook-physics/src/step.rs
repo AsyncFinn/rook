@@ -1,5 +1,3 @@
-//! Stepping the simulation and writing the results back.
-
 use super::*;
 use crate::assembly::bodies::SLEEP_ACCELERATION;
 
