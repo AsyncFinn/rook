@@ -205,9 +205,48 @@ fn decode_with(format: AudioFormat, bytes: Vec<u8>) -> Result<Audio, AudioError>
 
 /// An Ogg stream's length in frames: the granule position of its last page.
 fn ogg_end(bytes: &[u8]) -> Option<usize> {
-    let at = bytes.windows(4).rposition(|w| w == b"OggS")?;
-    let granule = i64::from_le_bytes(bytes.get(at + 6..at + 14)?.try_into().ok()?);
-    usize::try_from(granule).ok().filter(|&n| n > 0)
+    let mut at = 0usize;
+    let mut end = None;
+    loop {
+        let Some(header_end) = at.checked_add(27) else {
+            break;
+        };
+        let Some(header) = bytes.get(at..header_end) else {
+            break;
+        };
+        if &header[..4] != b"OggS" || header[4] != 0 {
+            break;
+        }
+
+        let granule = i64::from_le_bytes(header[6..14].try_into().ok()?);
+        let segments = usize::from(header[26]);
+        let table = header_end;
+        let Some(body) = table.checked_add(segments) else {
+            break;
+        };
+        let Some(lacing) = bytes.get(table..body) else {
+            break;
+        };
+        let Some(body_len) = lacing
+            .iter()
+            .try_fold(0usize, |sum, &size| sum.checked_add(usize::from(size)))
+        else {
+            break;
+        };
+        let Some(page_end) = body.checked_add(body_len) else {
+            break;
+        };
+        if page_end > bytes.len() {
+            break;
+        }
+        if let Ok(granule) = usize::try_from(granule)
+            && granule > 0
+        {
+            end = Some(granule);
+        }
+        at = page_end;
+    }
+    end
 }
 
 /// Append interleaved frames of `channels`, folding more than two channels
@@ -272,6 +311,29 @@ pub(crate) mod tests {
             Some(AudioFormat::Mp3)
         );
         assert_eq!(AudioFormat::sniff(b"\x89PNG"), None);
+    }
+
+    #[test]
+    fn ogg_duration_ignores_capture_pattern_in_payload() {
+        let mut payload = b"compressed packet OggS".to_vec();
+        payload.extend_from_slice(&[0, 0]);
+        payload.extend_from_slice(&1i64.to_le_bytes());
+
+        let page = |granule: i64, payload: &[u8]| {
+            let mut page = b"OggS".to_vec();
+            page.extend_from_slice(&[0, 0]); // version and header type
+            page.extend_from_slice(&granule.to_le_bytes()); // granule position
+            page.extend_from_slice(&[0; 12]); // serial, sequence, checksum
+            page.push(1); // one segment
+            page.push(payload.len() as u8);
+            page.extend_from_slice(payload);
+            page
+        };
+        let mut stream = page(100, &payload);
+
+        assert_eq!(ogg_end(&stream), Some(100));
+        stream.extend_from_slice(&page(200, &[]));
+        assert_eq!(ogg_end(&stream), Some(200));
     }
 
     #[test]
