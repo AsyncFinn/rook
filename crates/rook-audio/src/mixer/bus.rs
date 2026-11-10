@@ -11,9 +11,7 @@ pub(super) struct Bus<K> {
     pub(super) target: f32,
     pub(super) effects: Chain,
     pub(super) buffer: Vec<Frame>,
-    /// Whether the engine still lists the group.
     pub(super) listed: bool,
-    /// Whether anything was mixed into it this buffer.
     pub(super) fed: bool,
     /// Frames since anything was mixed into the bus: once past its
     /// effects' tail it is silent, and skipped (or dropped if unlisted).
@@ -34,12 +32,10 @@ impl<K> Bus<K> {
         }
     }
 
-    /// Whether there is anything left to hear from it.
     pub(super) fn sounding(&self) -> bool {
         self.idle <= self.effects.tail()
     }
 
-    /// Run the bus's effects and volume over what was mixed into it.
     pub(super) fn process(&mut self) {
         if !self.effects.is_empty() {
             self.effects.process(&mut self.buffer);

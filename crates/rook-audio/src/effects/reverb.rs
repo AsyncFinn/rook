@@ -199,7 +199,6 @@ impl State {
         self.cut = 1.0 - (-std::f32::consts::TAU * cut / self.rate).exp();
     }
 
-    /// Frames the tail lasts once the input stops.
     pub(crate) fn tail(&self) -> usize {
         (self.settings.decay.clamp(0.1, 20.0) * self.rate) as usize
     }

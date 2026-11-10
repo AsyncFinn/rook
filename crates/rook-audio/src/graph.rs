@@ -1,13 +1,7 @@
-//! The audio API's graph: AudioPlayers, effects, AudioEmitters,
-//! AudioListeners, AudioDeviceOutputs and AudioAnalyzers joined by Wires
-//! (`docs/behavior/audio/audio-api.md`).
-//!
-//! The engine describes the graph each frame as a [`Graph`]: its nodes,
-//! with what each player is playing and what each listener hears, and its
-//! connected wires. A [`Runner`] renders it block by block. The mixer runs
-//! one for the output device; the engine runs another on clients to
-//! measure what reaches AudioAnalyzers. Players play through the same
-//! [`Voice`] as Sounds, and effects through the same [`Chain`].
+//! The audio API's graph (`docs/behavior/audio/audio-api.md`). The engine
+//! describes it each frame as a [`Graph`] and a [`Runner`] renders it block
+//! by block. Players play through the same [`Voice`] as Sounds, and effects
+//! through the same [`Chain`], so the two APIs sound alike.
 //!
 //! Every stream is stereo (Approximation: Studio's streams have their own
 //! channel layouts, see [`meter`]).
@@ -24,7 +18,6 @@ use crate::effects::{Chain, Effect, Frame};
 use crate::voice::{self, Voice};
 pub use meter::Meter;
 
-/// What an AudioPlayer is playing.
 #[derive(Debug, Clone)]
 pub struct Source {
     pub audio: Arc<Audio>,
@@ -33,20 +26,18 @@ pub struct Source {
     /// `Volume`, a linear gain (Confirmed: 0.5 halved a recording's peak
     /// exactly).
     pub volume: f32,
-    /// `PlaybackSpeed`.
     pub speed: f32,
     pub looped: bool,
     /// Changes with every `Play`, so a restart is heard as one.
     pub generation: u32,
 }
 
-/// One instance in the graph.
 #[derive(Debug, Clone)]
 pub enum NodeKind<K> {
     /// An AudioPlayer, with what it plays if it is playing a loaded file.
     Player(Option<Source>),
-    /// An effect, or `None` for one that passes its input through as it
-    /// is (bypassed, or one Rook doesn't play yet).
+    /// An effect, or `None` for one that passes its input through as it is
+    /// (bypassed, or of a kind Rook doesn't play).
     Effect(Option<Effect>),
     /// An AudioEmitter: what is wired into it is heard by listeners.
     Emitter,
@@ -65,7 +56,6 @@ pub struct Node<K> {
     pub kind: NodeKind<K>,
 }
 
-/// A connected Wire.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Wire<K> {
     pub from: K,
@@ -102,7 +92,6 @@ impl<K> Graph<K> {
     }
 }
 
-/// A node's running state.
 #[derive(Debug)]
 struct State<K> {
     /// What the node puts out this block (an output's or analyzer's
@@ -293,7 +282,6 @@ impl<K: Hash + Eq + Copy> Runner<K> {
         }
     }
 
-    /// An analyzer's meter.
     pub fn meter(&self, key: K) -> Option<&Meter> {
         self.states.get(&key)?.meter.as_ref()
     }

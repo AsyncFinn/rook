@@ -20,7 +20,6 @@ const HISTORY: usize = 4096;
 #[derive(Debug, Clone)]
 pub struct Meter {
     history: Vec<Frame>,
-    /// Where the next frame goes.
     at: usize,
 }
 
