@@ -5,8 +5,8 @@ scripts call `FireServer` in 1,866 files, `FireClient` in 1,442,
 `InvokeServer` in 1,328, `FireAllClients` in 1,002, `InvokeClient` in 821,
 `SetNetworkOwner` in 764 and `Kick` in 1,237.
 
-Straight after characters: once there's a character, the next thing is
-playing together. Replication already runs in two halves, `rook-net`'s
+A character is what makes playing together worth it. Replication
+already runs in two halves, `rook-net`'s
 Source (server changes as self-contained updates) and Sink (applying them
 to a client), joined in-process, and remotes copy their arguments as
 `NetValue`s (`rook-lua/src/net.rs`). M9 adds the client's half for the

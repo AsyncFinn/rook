@@ -1,6 +1,6 @@
 # M17 Modern places
 
-Modern features belong to the milestones before it (materials and
+Modern features belong to the other milestones (materials and
 SurfaceAppearance in M4, the audio API in M5, modern UI in M8, R15 in M9,
 layered clothing in M11, ...). This milestone is the sweep that proves
 it, and covers what doesn't fit anywhere else.

@@ -1,7 +1,7 @@
 # Unscheduled
 
-Good ideas without a place in the order yet, and decisions still open.
-Each can only come after the milestones it needs.
+Good ideas without a milestone yet, and decisions still open.
+Each needs the milestones it builds on before it can start.
 
 ## Ideas
 

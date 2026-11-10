@@ -1,6 +1,6 @@
 # M22 Release
 
-Rook for people who just want to play, once every milestone before it is in.
+Rook for people who just want to play.
 
 1. A launcher: a library of places from a folder, with thumbnails, and
    joining servers.
