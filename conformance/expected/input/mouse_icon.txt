@@ -1,0 +1,15 @@
+-- studio 0.747.0.7471481
+-- signals: deferred
+start "" ""
+mouse a "rbxasset://a.png" "rbxasset://a.png"
+  changed uis,mouse
+uis b "rbxasset://a.png" "rbxasset://b.png"
+  changed uis
+mouse a again "rbxasset://a.png" "rbxasset://b.png"
+  changed 
+mouse c "rbxasset://c.png" "rbxasset://c.png"
+  changed uis,mouse
+uis empty "rbxasset://c.png" ""
+  changed uis
+mouse empty "" ""
+  changed mouse

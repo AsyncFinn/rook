@@ -106,8 +106,8 @@ the packages, as it does the CoreScripts, and never ships them (decided
    walks, jumps and climbs with WASD and Space, turns the camera with
    the right button, zooms with the wheel into first person, and the
    camera follows, zooms and collides as in Studio (measured);
-   `Camera:Interpolate` matches Studio's. Left: shift lock compared with
-   Studio, and an archive cutscene played.
+   `Camera:Interpolate` matches Studio's. Shift lock reads as Studio's
+   frame for frame (2026-11-10). Left: an archive cutscene played.
    - *Scope*: `CameraType` (Custom, Scriptable for the archive's
      cutscenes, Follow, Track, Attach, Watch, Fixed, Orbital),
      `CameraSubject`, zoom limits, first person (`CameraMode`), shift

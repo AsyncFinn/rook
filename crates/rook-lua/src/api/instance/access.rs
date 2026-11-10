@@ -152,6 +152,7 @@ pub(crate) fn write_property(
         return Ok(result.map_err(ScriptError::from));
     }
     let result = with_world(lua, |w| {
+        properties::copy_icon(w, id, name, &converted)?;
         if let (Some(target), Some(url)) =
             (properties::content_view(prop.id), converted.content_url())
         {

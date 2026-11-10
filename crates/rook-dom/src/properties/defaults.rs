@@ -74,6 +74,7 @@ pub fn zero_value(db: &Database, ty: PropertyType) -> Option<Value> {
             T::Int64 => Value::Int64(0),
             T::String => Value::String(String::new()),
             T::ContentId => Value::ContentId(String::new().into()),
+            T::Content => Value::Content(rook_types::Content::none()),
             T::Vector3 => Value::Vector3(Vector3::ZERO),
             T::Vector2 => Value::Vector2(Vector2::ZERO),
             T::CFrame => Value::CFrame(CFrame::IDENTITY),

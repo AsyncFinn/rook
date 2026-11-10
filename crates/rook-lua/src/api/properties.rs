@@ -14,8 +14,11 @@ use crate::api::methods::characters::spawning;
 use crate::types::color::closest_brick_color;
 
 mod attachment;
+mod mouse;
 mod text;
+
 use crate::world::World;
+pub(crate) use mouse::copy_icon;
 
 /// A part's CFrame.
 pub(crate) fn cframe(w: &World, id: InstanceId) -> CFrame {
@@ -171,10 +174,14 @@ fn view<'a>(
         .map(|(_, _, target)| *target)
 }
 
-/// The stored property whose changes a property's changed signal hears: a
-/// view's own name for the ones that read another property.
-pub(crate) fn stored_name<'a>(w: &World, id: InstanceId, name: &'a str) -> &'a str {
-    view(w, id, name, SAME_AS).unwrap_or(name)
+/// The stored property whose changes a property's changed signal hears:
+/// the one a view reads (`Health_XML` for `Health`, `AudioContent` for
+/// `SoundId`), else the property itself.
+pub(crate) fn stored_property(w: &World, id: InstanceId, name: &str) -> Option<PropertyId> {
+    let pid = w
+        .dom
+        .property_id(id, view(w, id, name, SAME_AS).unwrap_or(name))?;
+    Some(content_view(pid).unwrap_or(pid))
 }
 
 /// The name `Changed` gives a stored property scripts can't see

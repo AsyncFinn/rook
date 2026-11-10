@@ -1,6 +1,6 @@
 # The default camera and controls
 
-Checked against Studio 0.744 on 2026-10-27.
+Checked against Studio 0.747 on 2026-11-10.
 
 [M9](../../roadmap/m9-characters.md) step 4: a player's camera and
 controls are Roblox's own PlayerModule, run from Roblox's packages as the
@@ -92,9 +92,21 @@ Studio, which Rook's run matches.
   `Transparency` 0.3, doesn't (Observed both).
 - Shift lock needs the player's own setting (`UserGameSettings.ControlMode`
   MouseLockSwitch, in Roblox's menu), which only Roblox's code may set
-  (game code: "lacking capability RobloxScript"), so it wasn't measured.
-  The PlayerModule then locks the mouse to the center
-  (`MouseBehavior` LockCenter) with LeftShift.
+  (game code: "lacking capability RobloxScript"). With it on (set from
+  the menu, Studio 0.747 on 2026-11-10), LeftShift or RightShift toggles
+  shift lock through ContextActionService (`MouseLockSwitchAction`). On,
+  in the frame of the press: `MouseBehavior` LockCenter, `MouseIcon`
+  `rbxasset://textures/MouseLockedCursor.png` (set through the Mouse,
+  [input](../gui/input.md#the-cursor)), `RotationType` CameraRelative,
+  and the camera and its Focus 1.75 studs to the camera's right of where
+  they were, with no easing (the head read 1.75 studs left of center at
+  12.5 studs). Off undoes each in the frame of the press. Rook runs the
+  same PlayerModule and reads the same values frame for frame, the
+  setting loaded from the player's saved settings.
+- A playtest whose shift lock was switched on from the menu while the
+  game ran once kept LockCenter and CameraRelative with no camera offset,
+  toggling as usual; a fresh playtest offset it. Not reproduced, so not
+  modeled (Observed once).
 
 - With `UserGameSettings.RotationType` CameraRelative, which the
   PlayerModule sets in first person and shift lock, the engine turns the
@@ -207,8 +219,6 @@ Studio, which Rook's run matches.
 - Gamepad, touch (thumbsticks, the jump button, pinching) and VR input.
 - Roblox's 2017 `CameraScript` and `ControlScript` for places with only
   one of them.
-- Shift lock's look in Rook (the menu's switch sets it) isn't compared
-  with Studio.
 - `Camera.DiagonalFieldOfView` and `MaxAxisFieldOfView` read 0: Studio's
   values (120.4 and 96.6 at 70° in a 1270 × 793 viewport) weren't
   consistent from one FOV to the next, and the PlayerModule doesn't read

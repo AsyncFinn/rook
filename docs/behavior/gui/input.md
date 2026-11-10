@@ -172,7 +172,18 @@ hover images in `draw/frame.rs` and `draw/image.rs`, the caret in
   part (creator-docs), or of the camera without a character. An I-beam
   over a TextBox is Inference (the install has one). `Mouse.Icon` or
   `UserInputService.MouseIcon` replaces them all, and `MouseIconEnabled`
-  off hides the cursor. The client also names DragDetector cursors
+  off hides the cursor.
+- **`Mouse.Icon` sets `MouseIcon`** (Confirmed in Studio 0.747,
+  conformance case `input/mouse_icon`): a script changing the Mouse's
+  `Icon` or `IconContent` gives `UserInputService.MouseIcon` the same
+  image, whose Changed fires before the Mouse's. Setting the icon the
+  Mouse already has copies nothing, and setting `MouseIcon` leaves the
+  Mouse's `Icon` as it was. Both read `""` until something sets them.
+  The default camera's shift lock cursor is set through the Mouse, so
+  `MouseIcon` reads `rbxasset://textures/MouseLockedCursor.png` while
+  it's on. Which one the cursor shows after `MouseIcon` is cleared while
+  the Mouse keeps one isn't known (captures leave the cursor out); Rook
+  shows the Mouse's (Inference). The client also names DragDetector cursors
   (`Cursors/DragDetector/HoverCursor.png` and `ActivatedCursor.png`),
   which come with DragDetectors.
 - **The ClickDetector hand** is in no data file of the install (Observed:
