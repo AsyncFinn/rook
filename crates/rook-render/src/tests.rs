@@ -205,6 +205,66 @@ fn decals_draw_on_their_face() {
     assert!(bottom_right.iter().all(|&c| c > 150), "{bottom_right:?}");
 }
 
+/// An image wins over another part's face lying in its plane (Studio:
+/// a plate flush against a decal's face), but a part just above it hides
+/// it, even seen at a low angle: a floor's Texture 0.05 studs under a
+/// grating at the top of a lift showed through it.
+#[test]
+fn images_win_their_plane_but_not_a_part_above() {
+    let Ok(mut r) = Renderer::headless() else {
+        return;
+    };
+    let hash = ImageHash([2; 32]);
+    let red = Arc::new(Image {
+        mips: rook_content::decode::image::mips([[255, 0, 0, 255]; 4].concat(), 2, 2),
+        ..(*image()).clone()
+    });
+    let mut floor = part(PartShape::Block, 0.0, [0.5; 3], 0.0);
+    floor.size = Vec3::new(200.0, 0.1, 200.0);
+    floor.position.y = -0.05;
+    let texture = PartInstance {
+        layer: Layer::Image {
+            image: hash,
+            placement: ImagePlacement::Face(NormalId::Top),
+            z: 1,
+            on_transparent: false,
+        },
+        color: [1.0; 3],
+        ..floor
+    };
+    let colors = |plate_top: f32, r: &mut Renderer| {
+        let mut plate = part(PartShape::Block, 0.0, [0.0, 0.0, 1.0], 0.0);
+        plate.size = Vec3::new(200.0, 0.05, 200.0);
+        plate.position.y = plate_top - 0.025;
+        let scene = Scene {
+            parts: vec![floor, texture, plate],
+            images: FxHashMap::from_iter([(hash, red.clone())]),
+            lighting: Lighting {
+                ambient: [1.0; 3],
+                outdoor_ambient: [0.0; 3],
+                sun_color: [0.0; 3],
+                ..Lighting::default()
+            },
+            ..Scene::default()
+        };
+        r.set_scene(&scene);
+        // 19 studs up, looking 15 degrees down, as at the lift.
+        let camera = Camera {
+            fov_y: 30.0,
+            ..Camera::look_at(Vec3::new(0.0, 19.0, 70.9), Vec3::ZERO)
+        };
+        let (w, h) = (256, 256);
+        r.render_to_image(w, h, &camera).unwrap();
+        let pixels = r.render_to_image(w, h, &camera).unwrap();
+        let i = ((h / 2 * w + w / 2) * 4) as usize;
+        [pixels[i], pixels[i + 1], pixels[i + 2]].map(i32::from)
+    };
+    let flush = colors(0.0, &mut r);
+    assert!(flush[0] > flush[2] + 100, "flush: {flush:?}");
+    let above = colors(0.05, &mut r);
+    assert!(above[2] > above[0] + 100, "0.05 above: {above:?}");
+}
+
 /// Water's phase sums `WaterWaveSpeed` over time: it stops where it is at
 /// speed 0 and goes on from there (as Studio's water does), and a clock
 /// going back moves nothing.
