@@ -2,6 +2,7 @@
 //! looks (`appearance`) and who simulates them (`ownership`).
 
 mod appearance;
+mod emotes;
 pub(crate) mod movement;
 pub(crate) mod ownership;
 mod rigs;
@@ -60,6 +61,12 @@ pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("Players", "GetHumanoidDescriptionFromUserId") => appearance::description_from_user_id,
         ("Humanoid", "ApplyDescription" | "ApplyDescriptionReset") => appearance::apply_description,
         ("Humanoid", "GetAppliedDescription") => appearance::get_applied_description,
+        ("HumanoidDescription", "GetEmotes") => emotes::get_emotes,
+        ("HumanoidDescription", "SetEmotes") => emotes::set_emotes,
+        ("HumanoidDescription", "AddEmote") => emotes::add_emote,
+        ("HumanoidDescription", "RemoveEmote") => emotes::remove_emote,
+        ("HumanoidDescription", "GetEquippedEmotes") => emotes::get_equipped_emotes,
+        ("HumanoidDescription", "SetEquippedEmotes") => emotes::set_equipped_emotes,
         ("BasePart", "GetNetworkOwner") => ownership::get_network_owner,
         ("BasePart", "GetNetworkOwnershipAuto") => ownership::get_network_ownership_auto,
         ("Team", "GetPlayers") => team_players,

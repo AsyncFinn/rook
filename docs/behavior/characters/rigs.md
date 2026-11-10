@@ -143,3 +143,32 @@ applied description's scales to the new ones, and keeps a copy;
 `Players:GetHumanoidDescriptionFromUserId` reads the same avatar answer
 into a new HumanoidDescription. Body part meshes, clothes, accessories,
 faces and animations from descriptions are M11's.
+
+### Emotes
+
+A HumanoidDescription keeps the emotes a player owns (`GetEmotes`: name
+to animation asset ids) and the ones on the emote wheel
+(`GetEquippedEmotes`: `{Slot, Name}` tables by slot) in two string
+properties, as Roblox does, so copies and saved files carry them:
+`EmotesDataInternal` is `name^id^id^\` per emote by name, and
+`EquippedEmotesDataInternal` `slot^name\` per slot. Studio writes a name
+holding `^` as it is; Rook reads the ids as the whole numbers ending an
+entry. Measured in Studio:
+
+- A new description has none: both return empty tables.
+- `SetEmotes` turns number keys into names (`5` is `"5"`) and drops ids
+  that aren't whole numbers (`1.5`, `"7"`) and names left with none.
+  `AddEmote` adds an id once; `RemoveEmote` of a name it doesn't have
+  does nothing.
+- `SetEquippedEmotes` reads the list up to its first nil. A name alone
+  takes the next slot counting names alone from 1; a `{Slot, Name}`
+  table takes its slot, rounded (2.5 is 3), any number, 0 and below too;
+  anything else is skipped, and a later entry for a slot replaces an
+  earlier one. A table with no first item but other keys is a
+  Dictionary: `Unable to cast Dictionary to Array`.
+- `EmotesChanged` and `EquippedEmotesChanged` fire with the new tables
+  after every set and add, even one that changes nothing, and after a
+  remove that removed.
+
+A player's own emotes (Studio's character came with the account's) are
+M11's local avatar; until then characters have none.

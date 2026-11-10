@@ -544,3 +544,51 @@ fn a_font_arriving_lays_out_only_the_text_waiting_for_it() {
     let laid = take_local()[Counter::GuiNodesLaidOut];
     assert!((1..=2).contains(&laid), "laid out {laid} nodes");
 }
+
+/// Measured in Studio: a NaN size reads (0, 0) at the screen's top left,
+/// and so does everything placed from it, while a NaN-sized scroller keeps
+/// its `CanvasPosition`. Laying it out again changes none of them: a NaN
+/// written back would fire Changed every layout (NaN never equals itself),
+/// and the legacy chat, which sets its window's size from `AbsoluteSize`,
+/// looped until the re-entrancy limit on a client with no screen yet.
+#[test]
+fn nan_sizes_read_as_nothing_and_settle() {
+    let (mut dom, boxed) = boxed();
+    let nan = frame(&mut dom, boxed, udim2(f32::NAN, 0, f32::NAN, 0));
+    let scroller = child(
+        &mut dom,
+        "ScrollingFrame",
+        nan,
+        &[
+            ("Size", udim2(1.0, -4, 1.0, -6)),
+            ("CanvasSize", udim2(0.0, 0, 0.0, 500)),
+            ("CanvasPosition", v2(0.0, 100.0)),
+        ],
+    );
+    child(&mut dom, "UIListLayout", scroller, &[]);
+    let item = frame(&mut dom, scroller, udim2(1.0, 0, 0.0, 14));
+    let mut gui = laid_out(&mut dom);
+    for id in [nan, scroller, item] {
+        assert_eq!(vec2_of(&dom, id, "AbsoluteSize"), Vec2::ZERO);
+        assert_eq!(vec2_of(&dom, id, "AbsolutePosition"), Vec2::new(0.0, -58.0));
+    }
+    assert_eq!(
+        vec2_of(&dom, scroller, "CanvasPosition"),
+        Vec2::new(0.0, 100.0)
+    );
+    assert!(!vec2_of(&dom, scroller, "AbsoluteCanvasSize").is_nan());
+    assert!(!vec2_of(&dom, scroller, "AbsoluteWindowSize").is_nan());
+
+    set(&mut dom, nan, "Size", udim2(f32::NAN, 1, f32::NAN, 0));
+    let start = dom.journal().end();
+    gui.sync(&mut dom);
+    let db = rook_reflection::database();
+    let moved: Vec<&str> = (start..dom.journal().end())
+        .filter_map(|pos| match dom.journal().get(pos)? {
+            rook_dom::Change::Property { property, .. } => Some(db.property(*property).name),
+            _ => None,
+        })
+        .filter(|&name| name != "AbsoluteContentSize")
+        .collect();
+    assert_eq!(moved, Vec::<&str>::new());
+}

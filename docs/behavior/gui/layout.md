@@ -45,7 +45,17 @@ GUI pass in `rook-render/src/renderer/gui.rs`.
   inside a UIPadding, of what's left inside it), plus its offset.
   `AnchorPoint` moves the object back by that share of its own size.
   Nothing is rounded: a third of 200 is 66.67. `UDim` offsets are
-  integers, so `0.5` offsets read 0. Negative sizes stay negative.
+  integers, so `0.5` offsets read 0; NaN, infinities and offsets past
+  an `i32` read -2147483648. Negative sizes stay negative.
+- **NaN** (a script's `0/0` scale, a NaN UIScale) spreads to everything
+  placed from it, children too, since 0 × NaN is NaN. An `AbsoluteSize`
+  with a NaN in it reads (0, 0), an `AbsolutePosition` (0, -58), the
+  screen's top left, inset or not; `AbsoluteRotation` and
+  `AbsoluteContentSize` read NaN. A NaN-sized ScrollingFrame keeps its
+  `CanvasPosition`, and its canvas reads 0 where it is NaN (Studio read
+  a 13 × 13 `AbsoluteWindowSize` with a canvas 500 tall, which Rook
+  doesn't follow). Setting a property to NaN again fires Changed, as does
+  every layout of a NaN `AbsoluteContentSize`.
 - **SizeConstraint** RelativeXX or RelativeYY scales both axes of `Size`
   by the parent's width or height; `Position` still uses both.
 - **Folders** pass through: a Frame in a Folder is placed in the Folder's

@@ -333,6 +333,25 @@ fn datatypes() {
     );
 }
 
+/// Measured: offsets are cut toward zero, and NaN, infinities and
+/// anything past an `i32` read -2147483648 whichever side they're on.
+#[test]
+fn udim_offsets() {
+    expect(
+        r#"
+        local t = {}
+        for _, v in {3.7, -3.7, 2147483647.9, 2147483648, -2147483649, 1e20, -math.huge, 0/0} do
+            table.insert(t, UDim.new(0, v).Offset)
+        end
+        print(table.concat(t, " "), UDim2.new(0, 0, 0, 0/0).Y.Offset, UDim2.fromOffset(0/0, 0).X.Offset)
+        "#,
+        0,
+        &[
+            "3 -3 2147483647 -2147483648 -2147483648 -2147483648 -2147483648 -2147483648 -2147483648 -2147483648",
+        ],
+    );
+}
+
 #[test]
 fn require_modules() {
     let rt = Runtime::new(Dom::new(), Clock::Fixed { step: 1.0 / 60.0 }).unwrap();
@@ -757,6 +776,7 @@ fn get_children_is_never_stale() {
 }
 
 mod core_gui;
+mod descriptions;
 mod gui;
 mod models;
 mod parts;

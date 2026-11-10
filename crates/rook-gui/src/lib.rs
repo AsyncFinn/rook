@@ -740,6 +740,23 @@ impl Gui {
                     placed.size()
                 };
                 let (at, turn) = (placed.top_left(), placed.rotation);
+                // Measured: a size or place with a NaN in it (a script's
+                // 0/0 scale, a NaN UIScale) reads as nothing at the
+                // screen's top left, inset or not, so laying it out again
+                // changes nothing. NaN never equals itself, so writing it
+                // would fire Changed on every layout, and scripts that
+                // answer by setting the size again loop until the
+                // re-entrancy limit.
+                let (at, size) = if at.is_nan() || size.is_nan() {
+                    let at = if at.is_nan() {
+                        Vec2::new(0.0, -GUI_INSET)
+                    } else {
+                        at
+                    };
+                    (at, if size.is_nan() { Vec2::ZERO } else { size })
+                } else {
+                    (at, size)
+                };
                 let _ = dom.set_property_by_name(id, "AbsolutePosition", v2(at));
                 let _ = dom.set_property_by_name(id, "AbsoluteSize", v2(size));
                 let _ = dom.set_property_by_name(id, "AbsoluteRotation", Value::Float32(turn));
@@ -758,13 +775,17 @@ impl Gui {
                 }
                 if let Some(scroll) = self.layout.scrolls.get(&id) {
                     let k = placed.scale;
-                    let _ =
-                        dom.set_property_by_name(id, "AbsoluteCanvasSize", v2(scroll.canvas * k));
-                    let _ =
-                        dom.set_property_by_name(id, "AbsoluteWindowSize", v2(scroll.window * k));
+                    // Measured: a NaN-sized scroller's canvas reads 0
+                    // where it is NaN. A NaN position (one a script asked
+                    // for) is left as asked, not written back every layout.
+                    let real = |v: Vec2| Vec2::select(v.is_nan_mask(), Vec2::ZERO, v);
+                    let canvas = v2(real(scroll.canvas * k));
+                    let _ = dom.set_property_by_name(id, "AbsoluteCanvasSize", canvas);
+                    let window = v2(real(scroll.window * k));
+                    let _ = dom.set_property_by_name(id, "AbsoluteWindowSize", window);
                     // Measured: a canvas that shrank pulls the position back.
                     let asked = dom.vector2_property(id, "CanvasPosition").map(|v| v.0);
-                    if asked != Some(scroll.position) {
+                    if !scroll.position.is_nan() && asked != Some(scroll.position) {
                         let _ = dom.set_property_by_name(id, "CanvasPosition", v2(scroll.position));
                     }
                 }

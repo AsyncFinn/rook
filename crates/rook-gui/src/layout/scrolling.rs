@@ -239,7 +239,10 @@ impl Settings {
             left,
             shift,
         };
-        scroll.position = self.requested.clamp(Vec2::ZERO, scroll.reach());
+        // Measured: a NaN-sized frame has no reach to keep the position
+        // within, and keeps the one asked for.
+        let kept = self.requested.clamp(Vec2::ZERO, scroll.reach());
+        scroll.position = Vec2::select(window.is_nan_mask(), self.requested, kept);
         scroll
     }
 }
