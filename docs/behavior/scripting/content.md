@@ -1,7 +1,7 @@
 # Content
 
-Checked against Studio 0.747 on 2026-11-10
-(`conformance/cases/scripting/content.luau`).
+Checked against Studio 0.747 on 2026-11-10, with
+`conformance/cases/scripting/content.luau`.
 
 `Content` is what the modern asset properties hold: `ImageContent`,
 `AudioContent`, `MouseIconContent`, `IconContent` and the rest. Each has a

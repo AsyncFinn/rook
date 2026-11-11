@@ -69,6 +69,7 @@
     - [NaN and infinite values](behavior/physics/nan-and-infinite-values.md): what parts make of them
   - Scripting
     - [Bindables](behavior/scripting/bindables.md): the copies arguments arrive as
+    - [Content](behavior/scripting/content.md): the `Content` datatype and its constructors
     - [Datatype errors](behavior/scripting/datatype-errors.md): their messages in `pcall`
     - [Random](behavior/scripting/random.md): Luau's generator and each method's draws
     - [Tags and locked members](behavior/scripting/tags.md): tag signals, and which members a child of the same name beats.

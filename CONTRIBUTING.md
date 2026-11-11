@@ -180,6 +180,8 @@ Rook is a rolling release: work lands on main all the time, and a release is a s
 - Commits go to GitHub as they land, so [Unreleased] on GitHub shows what the next release will hold.
 - Before 1.0, any release may break things. 1.0 comes when Rook commits to a stable public interface: its build settings, saved data and network protocol.
 
+A changelog entry says what Rook did before and what it does now, in one or two plain sentences, with no specifics: no places or games (not even hinted at), no example values or inputs, no story of the cause, and no measurements or numbers. The details belong in the behavior doc, which the entry may link with a "See ..." pointer.
+
 Releases before 2026-10-25 were renumbered to one per week then (the old tags' commits are kept as `refs/backup/tags-2026-10-25/*`); each week's release lists its old releases as dated sections.
 
 Every crate and app shares the workspace version. Each release is tagged `vX.Y.Z` in git. Rook tracks the live Roblox version rather than pinning one, so each release's notes open with the Roblox version its API data was checked against: `Checked against Roblox 0.744.0.` Older entries still read "Pinned Roblox version", from before Rook tracked the live one.
