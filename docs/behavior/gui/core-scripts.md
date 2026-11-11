@@ -70,10 +70,11 @@ Code: loading in `rook-engine`'s `core_scripts.rs` (and the
   `TextChatServiceSettingsSaved`, without which the chat window shows its
   translation tip every time). Saying yes to every feature stops the top
   bar.
-- Roblox still answers a few spellings its API dump no longer lists, and
-  the CoreScripts use them: `RunService.renderStepped`, `Instance.name`,
+- The CoreScripts read members with a lowercase first letter
+  ([member lookup](../scripting/member-lookup.md)):
+  `RunService.renderStepped`, `Instance.name`,
   `RbxAnalyticsService:setRBXEventStream` (without it the settings menu
-  stops halfway, its bottom buttons unsized) and `UDim2:lerp`.
+  stops halfway, its bottom buttons unsized). They also call `UDim2:lerp`.
 
 ## What runs
 

@@ -61,3 +61,11 @@ table has no entry for it. `BubbleChatMessageProperties.FontFace` and
 The database is wrong, not silent, about `SoundService.RespectFilteringEnabled`
 (it says false; creator-docs and Studio 0.742 say true), so that one stays
 in Rook's own list.
+
+## Service names
+
+A service `GetService` creates is named after its class, except
+`RunService` ("Run Service"), `ScriptContext` ("Script Context") and
+`TeleportService` ("Teleport Service"), so `game.RunService` is an error
+(Observed: a new place's services in Studio 0.747 on 2026-11-11). Code:
+`SERVICE_NAMES` in `crates/rook-dom/src/tree.rs`.

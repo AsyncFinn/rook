@@ -78,20 +78,6 @@ pub(crate) enum Member {
 /// superclasses, then callbacks.
 pub(crate) type MemberTable = FxHashMap<&'static str, Member>;
 
-/// Deprecated spellings Roblox still answers that the API dump no longer
-/// lists: `(class, alias, member)`. Observed: Roblox's own CoreScripts
-/// connect to `RunService.renderStepped`, read `.name` and call
-/// `RbxAnalyticsService:setRBXEventStream`.
-const HIDDEN_ALIASES: &[(&str, &str, &str)] = &[
-    ("RunService", "renderStepped", "RenderStepped"),
-    ("Instance", "name", "Name"),
-    (
-        "RbxAnalyticsService",
-        "setRBXEventStream",
-        "SetRBXEventStream",
-    ),
-];
-
 /// Build a class's member table as `identity` sees it. `known` is false
 /// for instances of classes the database doesn't have, which get no
 /// properties.
@@ -190,13 +176,6 @@ pub(super) fn member_table(class: ClassId, known: bool, identity: Identity) -> M
                 }
             };
             table.entry(e.name.as_str()).or_insert(member);
-        }
-    }
-    for &(owner, alias, member) in HIDDEN_ALIASES {
-        if db.superclasses(class).any(|c| c.name == owner)
-            && let Some(&found) = table.get(member)
-        {
-            table.entry(alias).or_insert(found);
         }
     }
     for (_, m) in chain() {
@@ -392,6 +371,11 @@ pub(crate) fn get_member(
             let child = with_world(lua, |w| w.dom.find_first_child(id, key, false));
             match child {
                 Some(child) => Ok(LuaValue::UserData(push_instance(lua, child)?)),
+                // Not cached as a member: a child of this spelling on
+                // another instance comes first.
+                None if let Some(capitalized) = capitalized_member(lua, id, key) => {
+                    get_member(lua, id, &capitalized).map(|(value, ..)| value)
+                }
                 // Members newer than Rook's API snapshot that Roblox's
                 // CoreScripts read: nil, counted (see `calls::method_function`).
                 None if crate::api::scripts::caller_is_core(lua) => {
@@ -409,6 +393,21 @@ pub(crate) fn get_member(
         }
     }?;
     Ok((value, method, fast))
+}
+
+/// The member a read of `key` reaches when `key` names neither a member
+/// nor a child: the same name with its first letter capitalized
+/// (`mouse.x`, `label.textSize`, `run.renderStepped`). Only the first
+/// letter changes, and writes never fall back. Observed in Studio 0.747,
+/// `docs/behavior/scripting/member-lookup.md`.
+fn capitalized_member(lua: &Lua, id: InstanceId, key: &str) -> Option<String> {
+    let mut chars = key.chars();
+    let first = chars.next().filter(char::is_ascii_lowercase)?;
+    let capitalized = first.to_ascii_uppercase().to_string() + chars.as_str();
+    find_member(lua, id, &capitalized, false)
+        .0
+        .is_some()
+        .then_some(capitalized)
 }
 
 /// Properties saying where a part is: reading one brings it to where its

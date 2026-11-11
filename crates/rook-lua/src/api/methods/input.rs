@@ -1,15 +1,16 @@
-//! UserInputService queries and Player:GetMouse. Input events themselves
+//! UserInputService and VRService queries, and Player:GetMouse. Input events themselves
 //! are fired by the engine, which owns the window.
 
 use mlua::{Lua, Value as LuaValue};
 use rook_dom::InstanceId;
-use rook_types::{UserInputState, UserInputType};
+use rook_types::{CFrame, UserInputState, UserInputType};
 
 use super::RawMethod;
 use crate::api::instance::push_instance;
 use crate::ctx::args::Args;
 use crate::ctx::{ApiResult, Outcome, with_world};
 use crate::types::LVector2;
+use crate::types::cframe::LCFrame;
 use crate::types::enums::item_value;
 
 pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
@@ -22,6 +23,8 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("UserInputService", "GetMouseButtonsPressed") => get_mouse_buttons_pressed,
         ("UserInputService", "GetLastInputType") => last_input_type,
         ("Player", "GetMouse") => get_mouse,
+        ("VRService", "GetUserCFrame") => user_cframe,
+        ("VRService", "GetUserCFrameEnabled") => user_cframe_enabled,
         _ => return None,
     })
 }
@@ -114,5 +117,25 @@ fn get_mouse(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
     match mouse {
         Some(m) => Outcome::ret(lua, push_instance(lua, m)?),
         None => Outcome::ret(lua, LuaValue::Nil),
+    }
+}
+
+/// Rook has no VR headset, so every tracked point sits at the origin and
+/// none is tracked (Observed: Studio 0.747 without a headset gives the
+/// identity CFrame and false for every `Enum.UserCFrame`).
+fn user_cframe(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
+    user_cframe_arg(lua, a)?;
+    Outcome::ret(lua, LCFrame(CFrame::IDENTITY))
+}
+
+fn user_cframe_enabled(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
+    user_cframe_arg(lua, a)?;
+    Outcome::ret(lua, false)
+}
+
+fn user_cframe_arg(lua: &Lua, a: &Args) -> ApiResult<u32> {
+    match a.get(0) {
+        LuaValue::Nil => Err(a.missing(0)),
+        v => item_value(lua, v, "UserCFrame").ok_or_else(|| a.wrong(0, "UserCFrame")),
     }
 }

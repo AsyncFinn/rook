@@ -5,6 +5,10 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- Reading a member with a lowercase first letter, such as `mouse.x` or `label.textSize`, finds the member, as in Roblox, after any child of that name; writes still need the real name. Rook raised an error, and let `.name` be written. See [member lookup](docs/behavior/scripting/member-lookup.md).
+- `BasePart:GetRenderCFrame`, `VRService:GetUserCFrame` and `GetUserCFrameEnabled` work, and `ContextActionService:BindActionToInputTypes` binds as `BindAction` does. Rook raised errors.
+- `ReplicatedFirst:RemoveDefaultLoadingScreen` does nothing, as Rook shows no default loading screen. It raised an error.
+- `RunService`, `ScriptContext` and `TeleportService` are named "Run Service", "Script Context" and "Teleport Service", as in Roblox. Rook named them after their class. See [service names](docs/behavior/property-defaults.md#service-names).
 - Releases are built on GitHub's machines instead of a developer's, so the programs carry no one's local paths, and every pull request and push to main runs `scripts/check` there.
 - `wait(math.huge)` and other waits too long for a float last one step, as in Roblox; Rook waited forever. See [waiting](docs/behavior/scripting/waiting.md).
 - Your own character no longer blocks the mouse; clicks reach what's behind it, as in Roblox. See [the mouse](docs/behavior/physics/queries.md#the-mouse).

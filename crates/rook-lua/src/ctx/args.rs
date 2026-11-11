@@ -106,7 +106,7 @@ impl Args {
         self.vals.get(from..).map(<[_]>::to_vec).unwrap_or_default()
     }
 
-    fn missing(&self, i: usize) -> ScriptError {
+    pub(crate) fn missing(&self, i: usize) -> ScriptError {
         ScriptError(format!("Argument {} missing or nil", i + 1))
     }
 

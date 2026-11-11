@@ -21,6 +21,7 @@ made inert without an entry in the first table.
 | `ContentProvider:Preload` | Queues an asset for download (deprecated; not checked in Studio) | M4 step 7 |
 | `InsertService:ApproveAssetId` | Allowed a place to `LoadAsset` a specific asset (legacy) | Stays inert: Rook's `LoadAsset` doesn't check approvals or ownership |
 | `InsertService:ApproveAssetVersionId` | Same, for one asset version | Stays inert, as above |
+| `ReplicatedFirst:RemoveDefaultLoadingScreen` | Hides Roblox's default loading screen early | Stays inert: Rook shows no default loading screen |
 | `FunctionalTest:Passed`, `Failed`, `Error`, `Warn` | Report results to Roblox's internal test harness | Possibly the conformance tooling; otherwise stays inert |
 
 ## Partial implementations

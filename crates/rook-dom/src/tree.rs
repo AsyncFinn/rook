@@ -429,8 +429,19 @@ impl Dom {
             .filter(|c| c.flags.service)
             .ok_or_else(|| DomError::NotAService(class.to_owned()))?;
         let id = self.create(info.id);
+        if let Some(&(_, name)) = SERVICE_NAMES.iter().find(|(c, _)| *c == class) {
+            self.set_name(id, name.to_owned())?;
+        }
         self.move_unchecked(id, Some(self.root));
         self.instances[id].parent_locked = true;
         Ok(id)
     }
 }
+
+/// Services Roblox names apart from their class; the rest take the class
+/// name (Observed: a new place's services in Studio 0.747).
+const SERVICE_NAMES: &[(&str, &str)] = &[
+    ("RunService", "Run Service"),
+    ("ScriptContext", "Script Context"),
+    ("TeleportService", "Teleport Service"),
+];

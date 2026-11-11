@@ -69,6 +69,14 @@ pub(super) fn get_pivot(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outc
     Outcome::ret(lua, LCFrame(with_world(lua, |w| pivot_of(w, this))))
 }
 
+/// Deprecated; where the part is drawn, which is its `CFrame` (Observed:
+/// Studio 0.747 gives the same CFrame for still, falling and character
+/// parts, every frame). Rook draws parts where they are, without lag.
+pub(super) fn get_render_cframe(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
+    settle_joints(lua, this);
+    Outcome::ret(lua, LCFrame(with_world(lua, |w| cframe(w, this))))
+}
+
 pub(super) fn pivot_to(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let target: LCFrame = a.userdata(0, "CFrame")?;
     mutate(lua, |w| {

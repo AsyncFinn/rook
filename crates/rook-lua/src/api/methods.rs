@@ -101,6 +101,8 @@ const INERT: &[(&str, &str)] = &[
     ("FunctionalTest", "Failed"),
     ("FunctionalTest", "Error"),
     ("FunctionalTest", "Warn"),
+    // Rook draws no default loading screen, so there is none to remove.
+    ("ReplicatedFirst", "RemoveDefaultLoadingScreen"),
 ];
 
 #[expect(
@@ -178,6 +180,7 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("Model", "GetExtentsSize" | "GetModelSize") => get_extents_size,
         ("Model", "GetBoundingBox") => get_bounding_box,
         ("BasePart", "GetMass" | "getMass") => get_mass,
+        ("BasePart", "GetRenderCFrame") => get_render_cframe,
         ("BasePart", "GetJoints") => get_joints,
         ("BasePart", "GetConnectedParts") => get_connected_parts,
         ("BasePart", "GetRootPart") => get_root_part,
