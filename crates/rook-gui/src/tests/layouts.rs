@@ -598,7 +598,10 @@ fn changes_lay_out_again_from_the_nearest_free_object() {
     ];
     for (id, name, value) in changes {
         take_local();
-        set(&mut dom, id, name, value);
+        match value {
+            Value::String(new) if name == "Name" => dom.set_name(id, new).unwrap(),
+            value => set(&mut dom, id, name, value),
+        }
         gui.sync(&mut dom);
         let laid = take_local()[Counter::GuiNodesLaidOut];
         assert!(laid <= 6, "{name}: laid out {laid} nodes");
