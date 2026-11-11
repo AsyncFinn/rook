@@ -256,3 +256,30 @@ fn only_what_moved_is_placed_again() {
     assert_eq!(moved.len(), 1);
     assert_eq!(moved[0], (billboard, gui.world_places(&dom)[billboard]));
 }
+
+/// A frame moving inside one world GUI lists none of them again: only the
+/// canvas drawn anew is placed, the others keeping the places they have.
+/// The GUI itself changing (hidden, here) lists and places them all.
+#[test]
+fn a_redrawn_canvas_is_the_only_one_placed() {
+    let (mut dom, part) = world_part(Vec3::new(8.0, 6.0, 1.0), Vec3::ZERO);
+    let front = surface(&mut dom, part, "Front");
+    let back = surface(&mut dom, part, "Back");
+    let meter = frame(&mut dom, front, udim2(0.0, 100, 0.0, 100));
+    frame(&mut dom, back, udim2(0.0, 100, 0.0, 100));
+    let mut gui = laid_out(&mut dom);
+    gui.draw_world(&dom);
+    assert_eq!(gui.world_places_drawn(&dom, [], false).len(), 2);
+    let index = gui.world_drawn.iter().position(|h| h.gui == front).unwrap();
+
+    set(&mut dom, meter, "Position", udim2(0.0, 20, 0.0, 0));
+    gui.sync(&mut dom);
+    gui.draw_world(&dom);
+    let placed = gui.world_places_drawn(&dom, [], false);
+    assert_eq!(placed, vec![(index, gui.world_places(&dom)[index])]);
+
+    set(&mut dom, back, "Enabled", Value::Bool(false));
+    gui.sync(&mut dom);
+    assert_eq!(gui.draw_world(&dom).len(), 1);
+    assert_eq!(gui.world_places_drawn(&dom, [], false).len(), 1);
+}

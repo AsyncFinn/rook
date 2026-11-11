@@ -232,7 +232,7 @@ impl Assembly {
     pub fn place(&self, dom: &mut Dom, root: CFrame) -> Result<(), DomError> {
         for m in &self.members {
             let cf = (root * m.offset).orthonormalize();
-            dom.set_property_by_name(m.part, "CFrame", Value::CFrame(cf))?;
+            write_cframe(dom, m.part, cf)?;
         }
         Ok(())
     }
@@ -257,7 +257,7 @@ impl Assembly {
             } else {
                 (root * m.offset).orthonormalize()
             };
-            dom.set_property_by_name(m.part, "CFrame", Value::CFrame(at))?;
+            write_cframe(dom, m.part, at)?;
         }
         Ok(())
     }
@@ -367,20 +367,46 @@ pub fn move_parts(
     moves: impl IntoIterator<Item = (InstanceId, CFrame)>,
 ) -> Result<(), DomError> {
     let mut moved = FxHashSet::default();
+    // Moving parts changes no joint, so the joints found for one part
+    // serve the rest: a model moved every frame walks each cluster once
+    // a call, not once a part.
+    let mut clusters = Clusters::default();
     for (part, cf) in moves {
-        let cf = cf.written();
+        let cf = cf.written().orthonormalize();
         if moved.contains(&part) {
             continue;
         }
-        match Assembly::of(dom, part) {
+        // A joint holds its parts by reference: a part nothing refers to
+        // is alone in its assembly, which needn't be built to say so.
+        if dom.referrers(part).is_empty() {
+            write_cframe(dom, part, cf)?;
+            continue;
+        }
+        match Assembly::of_with(dom, part, &mut clusters) {
             Some(asm) if asm.members.len() > 1 => {
-                asm.place_around(dom, part, cf.orthonormalize())?;
+                asm.place_around(dom, part, cf)?;
                 moved.extend(asm.members.iter().map(|m| m.part));
             }
-            _ => dom.set_property_by_name(part, "CFrame", Value::CFrame(cf.orthonormalize()))?,
+            _ => write_cframe(dom, part, cf)?,
         }
     }
     Ok(())
+}
+
+/// Set a part's `CFrame`, found by its id: moves write one per part.
+fn write_cframe(dom: &mut Dom, part: InstanceId, cf: CFrame) -> Result<(), DomError> {
+    static CFRAME: std::sync::OnceLock<Option<rook_reflection::PropertyId>> =
+        std::sync::OnceLock::new();
+    let cframe = *CFRAME.get_or_init(|| {
+        let db = dom.database();
+        let part = db.class_by_name("BasePart")?;
+        Some(db.find_canonical_property(part.id, "CFrame")?.id)
+    });
+    match cframe.filter(|_| is_part(dom, part)) {
+        Some(p) => dom.set_property(part, p, Value::CFrame(cf)),
+        // Not a part: whatever a `CFrame` by name does there.
+        None => dom.set_property_by_name(part, "CFrame", Value::CFrame(cf)),
+    }
 }
 
 /// An anchored part and the clusters that join its assembly.

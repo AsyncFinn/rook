@@ -93,6 +93,16 @@ pub struct Gui {
     /// to the indices of those on it: a frame places again only the
     /// canvases whose adornee moved.
     world_hosts: FxHashMap<InstanceId, Vec<usize>>,
+    /// Counts what can change which world GUIs draw or what they hang on
+    /// (a layout, a GUI's own properties, anything moving in the tree),
+    /// and the count [`Gui::draw_world`] last listed them at: a label
+    /// changing inside one GUI lists none of them again.
+    world_listed: u64,
+    world_list_drawn: Option<u64>,
+    /// The canvases drawn anew, by index, since they were last placed
+    /// and with the list as it was then: only those, and what moved,
+    /// need placing. `None`: the list changed, so all do.
+    world_fresh: Option<Vec<usize>>,
     /// What the screen draws, in pieces kept until they change.
     screen: draw::Screen,
     focus: Option<InstanceId>,
@@ -128,6 +138,9 @@ impl Default for Gui {
             messages: FxHashSet::default(),
             world_drawn: Vec::new(),
             world_hosts: FxHashMap::default(),
+            world_listed: 0,
+            world_list_drawn: None,
+            world_fresh: None,
             screen: draw::Screen::default(),
             focus: None,
             modals: modal::Modals::default(),
@@ -263,11 +276,14 @@ impl Gui {
         rook_types::count!(JournalReadGui, changes.len());
         for change in changes {
             if let Change::Collected(id) = change {
+                self.world_listed += 1;
                 self.forget(*id);
                 continue;
             }
             self.modals.note(dom, change);
             if let Change::Reparented { subtree, .. } = change {
+                // A GUI, or the part one hangs on, may have come or gone.
+                self.world_listed += 1;
                 self.overheads.note(dom, subtree.iter().copied());
                 let messages = subtree
                     .iter()
@@ -345,6 +361,7 @@ impl Gui {
             self.restyled.clear();
             self.retexted.clear();
             self.laid_out += 1;
+            self.world_listed += 1;
             self.screen.forget();
             self.canvases.clear();
             self.write(dom);
@@ -431,6 +448,7 @@ impl Gui {
         }
         // What shows, and what input reaches, may have changed.
         self.laid_out += 1;
+        self.world_listed += 1;
         let workspace = dom.find_service("Workspace");
         let in_workspace = |id: InstanceId| workspace.is_some_and(|ws| dom.is_ancestor_of(ws, id));
         let client = dom.local_player().is_some();
@@ -532,6 +550,7 @@ impl Gui {
             return;
         }
         self.laid_out += 1;
+        self.world_listed += 1;
         for top in tops {
             if world::is_world_gui(dom, *top) {
                 self.canvases.remove(top);
@@ -554,7 +573,14 @@ impl Gui {
                 continue;
             }
             match layout::top_of(dom, id) {
-                Some(top) if world::is_world_gui(dom, top) => _ = self.canvases.remove(&top),
+                Some(top) if world::is_world_gui(dom, top) => {
+                    self.canvases.remove(&top);
+                    // Its own properties say whether and where it draws;
+                    // what it holds only what its canvas shows.
+                    if id == top {
+                        self.world_listed += 1;
+                    }
+                }
                 Some(_) if placed => self.screen.placed(id),
                 Some(_) => self.screen.repaint(id),
                 None => {}
@@ -595,21 +621,31 @@ impl Gui {
     /// What the shown SurfaceGuis and BillboardGuis draw, as of the last
     /// layout, then the tags over heads; [`Gui::world_places`] says where
     /// each is. Only canvases laid out or restyled since they were last
-    /// drawn, and tags whose look changed, are drawn again.
+    /// drawn, and tags whose look changed, are drawn again, and which
+    /// GUIs draw is worked out again only when that can have changed.
     pub fn draw_world(&mut self, dom: &Dom) -> Vec<Arc<WorldCanvas>> {
-        let laid = self.layout.world.iter().map(|(h, _)| h);
-        self.world_drawn = world::drawn(dom, laid);
-        self.world_hosts.clear();
-        rook_types::gauge!(GuiCanvases, self.world_drawn.len());
-        for (i, hung) in self.world_drawn.iter().enumerate() {
-            for host in hung.hosts(dom) {
-                self.world_hosts.entry(host).or_default().push(i);
+        let relisted = self.world_list_drawn != Some(self.world_listed);
+        if relisted {
+            self.world_list_drawn = Some(self.world_listed);
+            let laid = self.layout.world.iter().map(|(h, _)| h);
+            self.world_drawn = world::drawn(dom, laid);
+            self.world_hosts.clear();
+            for (i, hung) in self.world_drawn.iter().enumerate() {
+                for host in hung.hosts(dom) {
+                    self.world_hosts.entry(host).or_default().push(i);
+                }
             }
         }
-        let missing: Vec<InstanceId> = (self.world_drawn.iter())
-            .map(|h| h.gui)
-            .filter(|id| !self.canvases.contains_key(id))
-            .collect();
+        rook_types::gauge!(GuiCanvases, self.world_drawn.len());
+        let (fresh, missing): (Vec<usize>, Vec<InstanceId>) = (self.world_drawn.iter().enumerate())
+            .filter(|(_, h)| !self.canvases.contains_key(&h.gui))
+            .map(|(i, h)| (i, h.gui))
+            .unzip();
+        match &mut self.world_fresh {
+            _ if relisted => self.world_fresh = None,
+            Some(waiting) => waiting.extend(fresh),
+            None => {}
+        }
         let mut text = draw::Text {
             fonts: &mut self.fonts,
             glyphs: &mut self.glyphs,
@@ -667,7 +703,33 @@ impl Gui {
         dom: &Dom,
         moved: impl IntoIterator<Item = InstanceId>,
     ) -> Vec<(usize, Option<WorldPlace>)> {
-        let mut hit: Vec<usize> = Vec::new();
+        self.places_at(dom, moved, Vec::new())
+    }
+
+    /// The places a renderer needs after [`Gui::draw_world`], by index in
+    /// its list: every canvas when the list changed since they were last
+    /// asked for (or with `all`, for a renderer that has none of them),
+    /// else those drawn anew since and those [`Gui::world_places_moved`]
+    /// gives. A canvas kept from the list before keeps its place.
+    pub fn world_places_drawn(
+        &mut self,
+        dom: &Dom,
+        moved: impl IntoIterator<Item = InstanceId>,
+        all: bool,
+    ) -> Vec<(usize, Option<WorldPlace>)> {
+        match self.world_fresh.replace(Vec::new()).filter(|_| !all) {
+            Some(fresh) => self.places_at(dom, moved, fresh),
+            None => self.world_places(dom).into_iter().enumerate().collect(),
+        }
+    }
+
+    /// [`Gui::world_places_moved`], and the canvases at `hit` too.
+    fn places_at(
+        &mut self,
+        dom: &Dom,
+        moved: impl IntoIterator<Item = InstanceId>,
+        mut hit: Vec<usize>,
+    ) -> Vec<(usize, Option<WorldPlace>)> {
         for id in moved {
             let Some(on) = self.world_hosts.get(&id) else {
                 continue;

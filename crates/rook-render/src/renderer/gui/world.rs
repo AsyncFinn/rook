@@ -182,6 +182,9 @@ pub(crate) struct WorldGui {
     canvases: Vec<Canvas>,
     /// Where each canvas is now (`None`: not drawn, or not placed yet).
     places: Vec<Option<WorldPlace>>,
+    /// The canvas each place is for, as last given, so a canvas given
+    /// again keeps its place: only new and moved ones are placed.
+    placed: Vec<Arc<WorldCanvas>>,
     quads: Option<Quads>,
     /// The canvases' ids, and each id's frame as last laid out.
     ids: RangeAlloc,
@@ -254,6 +257,7 @@ impl WorldGui {
             ramps: ramps.clone(),
             canvases: Vec::new(),
             places: Vec::new(),
+            placed: Vec::new(),
             quads: None,
             ids: RangeAlloc::default(),
             laid: Vec::new(),
@@ -314,8 +318,16 @@ impl WorldGui {
         for canvas in old.into_iter().flatten() {
             self.free(&canvas);
         }
-        // A new list: each canvas is placed afresh.
-        self.places = vec![None; canvases.len()];
+        // A canvas given before stays where it was; a new one has no
+        // place until it's given one.
+        let was: FxHashMap<*const WorldCanvas, usize> = (self.placed.iter().enumerate())
+            .map(|(i, c)| (Arc::as_ptr(c), i))
+            .collect();
+        let mut places = std::mem::take(&mut self.places);
+        self.places = (canvases.iter())
+            .map(|c| places.get_mut(*was.get(&Arc::as_ptr(c))?)?.take())
+            .collect();
+        self.placed = canvases.to_vec();
         let mut fresh = fresh.into_iter();
         for (c, kept) in canvases.iter().zip(kept) {
             if let Some(canvas) = kept {

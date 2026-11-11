@@ -40,9 +40,10 @@ impl GuiUpdate {
 impl SceneCache {
     /// Give the renderer the DataModel's GUI when it was laid out again
     /// since last time (laying it out first if it changed), and where its
-    /// world GUI is now: all of it when laid out again (or with no
-    /// `changes` to go by), else what moved with the parts and
-    /// Attachments `changes` name. Returns whether it was laid out again.
+    /// world GUI is now: all of it when which GUIs draw may have changed
+    /// (or with no `changes` to go by), else the canvases drawn again and
+    /// what moved with the parts and Attachments `changes` name. Returns
+    /// whether it was laid out again.
     pub fn show_gui(
         &mut self,
         dm: &DataModel,
@@ -66,6 +67,8 @@ impl SceneCache {
         let mut world = dm.runtime().world_mut();
         let world = &mut *world;
         let generation = world.gui.generation();
+        // A scene that has drawn none of it yet has no place for any.
+        let first = self.gui_generation.is_none();
         let drawn = (self.gui_generation != Some(generation)).then(|| {
             self.gui_generation = Some(generation);
             (world.gui.draw(&world.dom), world.gui.draw_world(&world.dom))
@@ -75,12 +78,11 @@ impl SceneCache {
             Some(changes) if drawn.is_none() && !changes.full => world
                 .gui
                 .world_places_moved(&world.dom, changes.maybe_moved()),
-            _ => world
-                .gui
-                .world_places(&world.dom)
-                .into_iter()
-                .enumerate()
-                .collect(),
+            Some(changes) => {
+                let all = first || changes.full;
+                (world.gui).world_places_drawn(&world.dom, changes.maybe_moved(), all)
+            }
+            None => world.gui.world_places_drawn(&world.dom, [], true),
         };
         GuiUpdate { drawn, places }
     }
