@@ -5,6 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- Objects no longer vanish when the camera turns to certain angles. Rook could stop drawing parts across a place after loading some meshes. See [file meshes](docs/behavior/meshes/file-meshes.md#file-layouts).
 - Reading a member with a lowercase first letter, such as `mouse.x` or `label.textSize`, finds the member, as in Roblox, after any child of that name; writes still need the real name. Rook raised an error, and let `.name` be written. See [member lookup](docs/behavior/scripting/member-lookup.md).
 - `BasePart:GetRenderCFrame`, `VRService:GetUserCFrame` and `GetUserCFrameEnabled` work, and `ContextActionService:BindActionToInputTypes` binds as `BindAction` does. Rook raised errors.
 - `ReplicatedFirst:RemoveDefaultLoadingScreen` does nothing, as Rook shows no default loading screen. It raised an error.

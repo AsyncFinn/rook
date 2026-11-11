@@ -295,7 +295,10 @@ impl Instance {
     }
 
     /// The box around what this instance draws in the world, before the
-    /// shader moves any vertex. A free slot (all zeroes) draws nothing.
+    /// shader moves any vertex. A free slot (all zeroes) draws nothing,
+    /// nor does one placed where a value isn't a number: its box is empty,
+    /// since NaN in a box would spread to every box joined with it and
+    /// hide what they hold.
     pub(crate) fn world_box(&self) -> Aabb {
         let size = Vec3::from(self.size);
         if size == Vec3::ZERO {
@@ -319,9 +322,14 @@ impl Instance {
                 max: Vec3::splat(1e7),
             };
         }
-        Aabb {
+        let b = Aabb {
             min: center - half,
             max: center + half,
+        };
+        if b.min.is_finite() && b.max.is_finite() {
+            b
+        } else {
+            Aabb::EMPTY
         }
     }
 }

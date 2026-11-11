@@ -98,18 +98,17 @@ impl MeshData {
 }
 
 impl MeshData {
-    /// The smallest box holding every vertex: (min, max).
+    /// The smallest box holding every vertex: (min, max). Mesh files can
+    /// hold vertices that aren't numbers; the GPU drops their triangles,
+    /// so they're left out here too.
     pub(crate) fn bounds(&self) -> (Vec3, Vec3) {
-        if self.vertices.is_empty() {
-            return (Vec3::ZERO, Vec3::ZERO);
-        }
-        let mut lo = Vec3::splat(f32::MAX);
-        let mut hi = Vec3::splat(f32::MIN);
-        for v in &self.vertices {
-            lo = lo.min(Vec3::from(v.position));
-            hi = hi.max(Vec3::from(v.position));
-        }
-        (lo, hi)
+        let finite = self.vertices.iter().map(|v| Vec3::from(v.position));
+        let finite = finite.filter(|p| p.is_finite());
+        finite
+            .fold(None, |b: Option<(Vec3, Vec3)>, p| {
+                Some(b.map_or((p, p), |(lo, hi)| (lo.min(p), hi.max(p))))
+            })
+            .unwrap_or((Vec3::ZERO, Vec3::ZERO))
     }
 }
 

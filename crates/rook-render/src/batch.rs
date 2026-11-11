@@ -3,6 +3,8 @@
 
 pub(crate) mod cull;
 pub(crate) mod scatter;
+#[cfg(test)]
+mod tests;
 
 use std::ops::Range;
 
