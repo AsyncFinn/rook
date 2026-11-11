@@ -42,11 +42,12 @@ impl DataModel {
         self.advance_sounds(dt);
         self.update_audio(dt);
         self.runtime.resume_due(Queue::Legacy);
-        self.fire(rs, "Stepped", (now, dt));
-        self.fire(rs, "PreSimulation", dt);
+        self.fire_phase(rs, "Stepped", (now, dt));
+        self.fire_phase(rs, "PreSimulation", dt);
         self.simulate(dt);
-        self.fire(rs, "PostSimulation", dt);
-        self.fire(rs, "Heartbeat", dt);
+        self.fire_phase(rs, "PostSimulation", dt);
+        self.fire_phase(rs, "Heartbeat", dt);
+        self.stop_scripts_out_of_place();
         self.runtime.resume_due(Queue::Task);
         if self.role == Role::Client {
             // A client's frame ends as Roblox's begins, with what's drawn:
@@ -75,9 +76,10 @@ impl DataModel {
     /// render step; then GUI.
     fn render_phase(&mut self, dt: f64) {
         let rs = self.run_service;
+        self.stop_scripts_out_of_place();
         self.runtime.render_step(dt);
-        self.fire(rs, "RenderStepped", dt);
-        self.fire(rs, "PreRender", dt);
+        self.fire_phase(rs, "RenderStepped", dt);
+        self.fire_phase(rs, "PreRender", dt);
         // Inference: the engine's own camera moves come after the
         // scripts', just before drawing.
         self.runtime.step_cameras();
@@ -94,6 +96,13 @@ impl DataModel {
         self.lay_out_gui();
         self.runtime.sync_overheads();
         self.refresh_gui_hover();
+    }
+
+    /// Fire one of the frame's RunService events, once scripts that left
+    /// where scripts run are stopped.
+    fn fire_phase(&mut self, rs: InstanceId, event: &'static str, args: impl mlua::IntoLuaMulti) {
+        self.stop_scripts_out_of_place();
+        self.fire(rs, event, args);
     }
 
     /// Measured: GUI is laid out after RenderStepped. Styles apply first,

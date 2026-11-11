@@ -73,6 +73,7 @@
     - [Datatype errors](behavior/scripting/datatype-errors.md): their messages in `pcall`
     - [Member lookup](behavior/scripting/member-lookup.md): lowercase first letters, and what a child of that name beats
     - [Random](behavior/scripting/random.md): Luau's generator and each method's draws
+    - [Running scripts](behavior/scripting/running-scripts.md): scripts stop when removed from where they run
     - [Tags and locked members](behavior/scripting/tags.md): tag signals, and which members a child of the same name beats.
     - [Waiting](behavior/scripting/waiting.md): durations too long for a float last one step
   - Rendering

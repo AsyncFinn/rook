@@ -42,8 +42,7 @@ impl DataModel {
         let mut candidates = vec![id];
         candidates.extend(self.runtime.world().dom.descendants(id));
         for script in candidates {
-            if self.should_run(script) {
-                self.runtime.run_script(script);
+            if self.runs_here(script) && self.runtime.run_script(script) {
                 // What it changed is noted now, while whether each script
                 // is running still says whether an enable restarts it.
                 self.note_new_scripts();
@@ -51,7 +50,7 @@ impl DataModel {
         }
     }
 
-    /// Whether a script runs here.
+    /// Whether a script runs where it is, running already or not.
     ///
     /// Server: legacy-context Scripts under Workspace or
     /// ServerScriptService (Confirmed: creator-docs Script); Server-context
@@ -62,12 +61,9 @@ impl DataModel {
     /// PlayerGui or PlayerScripts, or under ReplicatedFirst (Confirmed:
     /// creator-docs LocalScript); Client-context Scripts anywhere the client
     /// sees except the Starter containers (Inference).
-    fn should_run(&self, id: InstanceId) -> bool {
+    fn runs_here(&self, id: InstanceId) -> bool {
         let world = self.runtime.world();
         let dom = &world.dom;
-        if self.runtime.is_started(id) {
-            return false;
-        }
         let class = dom.class_name(id);
         if !matches!(class, "Script" | "LocalScript") {
             return false;
@@ -76,7 +72,7 @@ impl DataModel {
             return false;
         }
         if self.role == Role::Client {
-            return client_should_run(dom, id, class);
+            return client_runs_here(dom, id, class);
         }
         if class != "Script" {
             return false;
@@ -135,13 +131,17 @@ impl DataModel {
     }
 
     /// Start scripts that became runnable since the last check and stop
-    /// running ones that were disabled. A script disabled and enabled again
-    /// runs afresh, as on Roblox (Confirmed, Studio recording 2026-10-17).
+    /// running ones that were disabled or moved, or had an ancestor moved,
+    /// out of where scripts run (destroyed included). A script disabled and
+    /// enabled again runs afresh, as on Roblox (Confirmed, Studio recording
+    /// 2026-10-17), and so does one moved back (Confirmed, Studio 0.747
+    /// 2026-11-11).
     pub(crate) fn start_new_scripts(&mut self) {
         profiling::scope!("start_new_scripts");
-        self.note_new_scripts();
+        self.stop_scripts_out_of_place();
         let candidates = std::mem::take(&mut self.new_scripts.candidates);
         let toggled = std::mem::take(&mut self.new_scripts.toggled);
+        self.new_scripts.checked = 0;
         let mut seen = FxHashSet::default();
         for id in candidates {
             if !seen.insert(id) {
@@ -150,8 +150,25 @@ impl DataModel {
             if toggled.contains(&id) {
                 self.runtime.stop_script(id);
             }
-            if self.should_run(id) {
+            if self.runs_here(id) {
                 self.runtime.run_script(id);
+            }
+        }
+    }
+
+    /// Stop running scripts that left where scripts run since the last
+    /// look. Roblox stops them as they leave, so this runs between the
+    /// frame's phases too: a destroyed script's connections don't fire
+    /// later in the frame (Confirmed, Studio 0.747 2026-11-11: a
+    /// LocalScript's RenderStepped connection stopped with its ScreenGui's
+    /// `Destroy`). Starting scripts waits for the frame's end.
+    pub(crate) fn stop_scripts_out_of_place(&mut self) {
+        self.note_new_scripts();
+        let end = self.new_scripts.candidates.len();
+        for i in std::mem::replace(&mut self.new_scripts.checked, end)..end {
+            let id = self.new_scripts.candidates[i];
+            if self.runtime.is_started(id) && !self.runs_here(id) {
+                self.runtime.stop_script(id);
             }
         }
     }
@@ -164,6 +181,9 @@ pub(crate) struct NewScripts {
     cursor: u64,
     /// Scripts that may have become runnable, in the order they changed.
     candidates: Vec<InstanceId>,
+    /// How many of `candidates` were checked for having left where
+    /// scripts run.
+    checked: usize,
     /// Scripts whose Disabled changed. The journal only records real
     /// changes, so a running one among them was disabled at some point.
     toggled: FxHashSet<InstanceId>,
@@ -179,7 +199,7 @@ impl NewScripts {
     }
 }
 
-fn client_should_run(dom: &Dom, id: InstanceId, class: &str) -> bool {
+fn client_runs_here(dom: &Dom, id: InstanceId, class: &str) -> bool {
     let local_player = dom.local_player();
     let character = local_player.and_then(|p| dom.ref_property(p, "Character"));
     let Some(top) = top_level(dom, id) else {
