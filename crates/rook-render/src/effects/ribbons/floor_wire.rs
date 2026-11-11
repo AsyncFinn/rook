@@ -64,5 +64,6 @@ fn quad<'a>(w: &'a FloorWire, center: Vec3, way: Vec3, across: Vec3, alpha: f32)
     Strip {
         look: &w.look,
         edges: vec![edge(0.0), edge(1.0)],
+        along: ImageAxis::X,
     }
 }

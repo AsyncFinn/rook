@@ -6,7 +6,7 @@
 use std::ops::Range;
 
 use super::*;
-use crate::effects::ribbons::{Edge, Ribbons, Strip};
+use crate::effects::ribbons::{Edge, ImageAxis, Ribbons, Strip};
 
 /// The ribbon pipeline's vertex.
 #[repr(C)]
@@ -130,7 +130,10 @@ fn quads(strip: &Strip<'_>, image: u32, out: &mut Vec<RibbonVertex>) {
     let look = strip.look;
     let vertex = |e: &Edge, side: usize| RibbonVertex {
         position: e.sides[side].to_array(),
-        uv: [e.u, side as f32],
+        uv: match strip.along {
+            ImageAxis::X => [e.u, side as f32],
+            ImageAxis::Y => [side as f32, e.u],
+        },
         color: [e.color[0], e.color[1], e.color[2], e.alpha],
         lit: look.light_influence.clamp(0.0, 1.0),
         image,

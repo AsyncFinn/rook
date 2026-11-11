@@ -46,6 +46,75 @@ fn beam_width_runs_along_attachment_up() {
     assert!((s.edges[10].sides[1].y - 0.5).abs() < 1e-5);
 }
 
+/// Measured in Studio with an asymmetric image on a 20-stud Beam facing
+/// the camera: its rows run along the beam from Attachment1 (row 0) to
+/// Attachment0 (row 1), its columns across it, rising towards the
+/// screen's top.
+#[test]
+fn beam_rows_run_back_from_attachment1() {
+    let anchor = |x| Anchor {
+        position: Vec3::new(x, 0.0, 0.0),
+        rotation: Mat3::IDENTITY,
+    };
+    let b = Beam {
+        enabled: true,
+        ends: [anchor(0.0), anchor(20.0)],
+        curve: [0.0, 0.0],
+        width: [6.0, 6.0],
+        segments: 4,
+        texture_speed: 0.0,
+        texture_offset: 0.0,
+        z_offset: 0.0,
+        look: RibbonLook {
+            face_camera: true,
+            ..look()
+        },
+    };
+    let s = beam(&b, Vec3::new(10.0, 0.0, -18.0), 0.0).unwrap();
+    assert_eq!(s.along, ImageAxis::Y);
+    let (a0, a1) = (s.edges[0], s.edges[4]);
+    // Rows repeat each 1: Attachment0's is Attachment1's plus one.
+    assert!((a0.u - a1.u - 1.0).abs() < 1e-5, "{} {}", a0.u, a1.u);
+    assert!((s.edges[1].u - a1.u - 0.75).abs() < 1e-5);
+    assert!(a0.sides[1].y > a0.sides[0].y);
+}
+
+/// Measured likewise on a Trail laid left to right: its rows run from the
+/// tail (row 0) to the newest end, its columns from Attachment0 to
+/// Attachment1.
+#[test]
+fn trail_rows_run_from_the_tail() {
+    let mut t = Trail {
+        key: 1,
+        ends: [Vec3::ZERO, Vec3::Y],
+        enabled: true,
+        lifetime: 10.0,
+        min_length: 0.1,
+        max_length: 0.0,
+        width_scale: Sequence::constant(1.0),
+        cleared: 0,
+        look: look(),
+    };
+    let mut r = Ribbons::default();
+    for i in 0..=4 {
+        t.ends = [Vec3::new(i as f32, 0.0, 0.0), Vec3::new(i as f32, 6.0, 0.0)];
+        r.set_trail(0, Some(&t));
+        r.step(0.1);
+    }
+    let strips = r.strips(Vec3::new(2.0, 3.0, -18.0), 0.0);
+    let s = &strips[0];
+    assert_eq!(s.along, ImageAxis::Y);
+    let (newest, tail) = (s.edges[0], s.edges[s.edges.len() - 1]);
+    assert_eq!(newest.sides[0].x, 4.0);
+    assert!(
+        (newest.u - tail.u - 1.0).abs() < 1e-5,
+        "{} {}",
+        newest.u,
+        tail.u
+    );
+    assert_eq!(newest.sides[0].y, 0.0);
+}
+
 /// A Trail lays pieces as its Attachments move, and they die after its
 /// Lifetime; `Clear` drops them at once.
 #[test]

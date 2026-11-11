@@ -27,6 +27,10 @@ measurements in Studio 0.743 on 2026-10-19.
   scrolls `TextureSpeed` times a second from Attachment0 towards
   Attachment1; `SetTextureOffset` moves it the other way. Without an
   image, or while it loads, the beam is its color alone.
+- The image's rows run along the beam, from Attachment1 (its top row)
+  back to Attachment0, and its columns across it (measured below), so a
+  laser image drawn as a horizontal band shows as a line across the beam
+  that `TextureSpeed` moves along it.
 - **Light**: as a ParticleEmitter's (docs/behavior/effects/particle-emitters.md),
   `Brightness` scaling its own color when `LightInfluence` is below 1.
 
@@ -45,6 +49,8 @@ measurements in Studio 0.743 on 2026-10-19.
   `TextureLength` studs from the Attachments (Wrap), or stays where it was
   laid (Static). `Clear()` drops every piece; disabling stops new ones and
   lets the rest fade.
+- The image's rows run along the trail from its oldest end (the top row)
+  to the Attachments, and its columns from Attachment0 to Attachment1.
 
 ## Rook's fit
 
@@ -69,3 +75,12 @@ CurveSize0 6, widths 1 and 3, green to blue, no image) in Studio and
 along its Axis, its width along the Attachments' up at both ends, green
 to blue. A Size 1.5, Squash 1 particle in the same script drew 41 × 166
 px in both.
+
+Image axes (2026-11-10, Studio, `rbxasset://textures/ArrowCursor.png`,
+whose arrow fills columns 32-48 and rows 32-55 of 64): a 20-stud Stretch
+Beam facing the camera, 6 wide, drew the arrow's tip at its middle and its
+widest row a quarter of the way from Attachment0, in the half towards
+cross(Attachment0 to Attachment1, the camera); a Trail laid 20 studs left
+to right between Attachments 6 apart drew it in the newest half, columns
+rising towards Attachment1. FloorWires run the image's width (its X) along each
+leg instead ([FloorWire](../rendering/adornments.md#floorwire)).

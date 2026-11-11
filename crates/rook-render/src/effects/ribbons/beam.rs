@@ -38,6 +38,9 @@ pub(super) fn beam<'a>(b: &'a Beam, camera: Vec3, time: f32) -> Option<Strip<'a>
     let length = look.texture_length.max(1e-3);
     // One cycle a second at TextureSpeed 1, from Attachment0 towards
     // Attachment1; SetTextureOffset goes the other way (creator-docs).
+    // The image's rows run along the beam from Attachment1 (row 0) back
+    // to Attachment0, its columns across it towards the side `across`
+    // points to (measured in Studio with an asymmetric image).
     let scroll = time * b.texture_speed - b.texture_offset;
     let edges = points
         .iter()
@@ -56,10 +59,11 @@ pub(super) fn beam<'a>(b: &'a Beam, camera: Vec3, time: f32) -> Option<Strip<'a>
                     .normalize_or(Vec3::Y)
             };
             let at = at + to_camera * b.z_offset;
-            let u = match look.texture_mode {
-                TextureMode::Stretch => s * look.texture_length,
-                TextureMode::Wrap | TextureMode::Static => d / length,
-            } - scroll;
+            let u = scroll
+                - match look.texture_mode {
+                    TextureMode::Stretch => s * look.texture_length,
+                    TextureMode::Wrap | TextureMode::Static => d / length,
+                };
             Edge {
                 sides: [at - across * width * 0.5, at + across * width * 0.5],
                 u,
@@ -68,5 +72,9 @@ pub(super) fn beam<'a>(b: &'a Beam, camera: Vec3, time: f32) -> Option<Strip<'a>
             }
         })
         .collect();
-    Some(Strip { look, edges })
+    Some(Strip {
+        look,
+        edges,
+        along: ImageAxis::Y,
+    })
 }

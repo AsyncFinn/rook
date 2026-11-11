@@ -111,7 +111,10 @@ impl TrailState {
                 } else {
                     half
                 };
-                let u = match look.texture_mode {
+                // The image's rows run from the tail (row 0) to the
+                // newest end, its columns from Attachment0 to Attachment1
+                // (measured in Studio with an asymmetric image).
+                let u = -match look.texture_mode {
                     TextureMode::Stretch => along[i] / total * look.texture_length,
                     TextureMode::Wrap => along[i] / length,
                     TextureMode::Static => -p.laid / length,
@@ -124,7 +127,11 @@ impl TrailState {
                 }
             })
             .collect();
-        Some(Strip { look, edges })
+        Some(Strip {
+            look,
+            edges,
+            along: ImageAxis::Y,
+        })
     }
 }
 
