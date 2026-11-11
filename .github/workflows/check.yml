@@ -1,0 +1,43 @@
+# Runs scripts/check (the gate every change must pass) on every push to
+# main and every pull request, on GitHub's machines.
+name: Check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: windows-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      # Shared with the release job, which needs xtask built.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: dev
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
+
+      # The format tests' files (CONTRIBUTING.md#development).
+      - run: git clone --depth 1 https://github.com/rojo-rbx/rbx-test-files fixtures/rbx-test-files
+
+      - run: ./scripts/check.sh
+        shell: bash

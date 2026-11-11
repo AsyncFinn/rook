@@ -1,0 +1,50 @@
+# Builds a release from its tag on GitHub's machines, so no developer's
+# machine paths end up in the programs, and leaves it as a draft release
+# with the packaged folder and its changelog notes, to publish by hand.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # Main's check saves xtask's build; without it xtask alone takes about
+      # 11 minutes before cargo dist starts.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: dev
+          save-if: false
+
+      - name: Package
+        shell: bash
+        run: |
+          folder=$(cargo xtask package | tail -n 1 | tr '\\' /)
+          name=$(basename "$folder")
+          (cd "$(dirname "$folder")" && 7z a -tzip "$name.zip" "$name" > /dev/null)
+          echo "ZIP=$folder.zip" >> "$GITHUB_ENV"
+
+      # The notes are the tag's changelog section, without its heading.
+      - name: Draft the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          version=${TAG#v}
+          heading=$(grep -m 1 "^## \[$version\]" CHANGELOG.md)
+          test -n "$heading" || { echo "CHANGELOG.md has no section for $version"; exit 1; }
+          title=${heading#*] - }
+          title="$TAG: ${title#*- }"
+          awk -v h="$heading" '$0 == h { on = 1; next } on && /^## \[/ { exit } on' CHANGELOG.md > notes.md
+          gh release create "$TAG" "$ZIP" --draft --verify-tag --title "$title" --notes-file notes.md

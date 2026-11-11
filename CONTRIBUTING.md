@@ -176,7 +176,7 @@ Rook is a rolling release: work lands on main all the time, and a release is a s
 - **Minor** (`0.N.0`): the weekly release, when anything new landed since the last one.
 - **Patch** (`0.N.y`): fixes only. Either a week in which only fixes landed, or a hotfix to the latest release: branch from its tag, cherry-pick the fix (already on main), tag `v0.N.y` and delete the branch. Patches only ever go on top of the latest release; older releases aren't maintained.
 - Builds between releases are development builds of the next version.
-- Builds for other people are made with `cargo dist` and nothing else ([build profiles](#build-profiles)).
+- Builds for other people are made with `cargo dist` and nothing else ([build profiles](#build-profiles)). Releases are built by CI: pushing a `vX.Y.Z` tag runs `cargo xtask package` on GitHub's machines, so no one's local paths end up in the programs, and leaves a draft GitHub release with the zipped folder and that version's changelog section, published by hand.
 - Commits go to GitHub as they land, so [Unreleased] on GitHub shows what the next release will hold.
 - Before 1.0, any release may break things. 1.0 comes when Rook commits to a stable public interface: its build settings, saved data and network protocol.
 
@@ -208,7 +208,7 @@ Run the full check (format, lints, tests and dependency bans; it needs [cargo-de
 ./scripts/check.sh
 ```
 
-On Windows, use `scripts\check.ps1`.
+On Windows, use `scripts\check.ps1`. CI runs the same script on every pull request and every push to main ([.github/workflows/check.yml](.github/workflows/check.yml)).
 
 Format tests use [rojo-rbx/rbx-test-files](https://github.com/rojo-rbx/rbx-test-files), which isn't committed:
 
