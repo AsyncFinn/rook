@@ -208,6 +208,7 @@ impl UserData for LVector2 {
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
+        super::members::add_unknown(m, "Vector2", super::members::Wording::Plain);
         m.add_method("Dot", |_, t, o: UserDataRef<LVector2>| Ok(t.0.dot(o.0)));
         m.add_method("Cross", |_, t, o: UserDataRef<LVector2>| Ok(t.0.cross(o.0)));
         for name in ["Lerp", "lerp"] {
@@ -304,6 +305,7 @@ impl UserData for LVector3int16 {
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
+        super::members::add_unknown(m, "Vector3int16", super::members::Wording::Quoted);
         let op = |f: fn(i16, i16) -> i16| {
             move |_: &Lua, t: &LVector3int16, o: UserDataRef<LVector3int16>| {
                 Ok(LVector3int16(rbx_types::Vector3int16::new(
@@ -340,6 +342,7 @@ impl UserData for LVector2int16 {
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
+        super::members::add_unknown(m, "Vector2int16", super::members::Wording::Quoted);
         let op = |f: fn(i16, i16) -> i16| {
             move |_: &Lua, t: &LVector2int16, o: UserDataRef<LVector2int16>| {
                 Ok(LVector2int16(rbx_types::Vector2int16::new(

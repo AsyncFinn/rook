@@ -937,3 +937,38 @@ fn utf8_normalizes() {
         ["2 3", "true"]
     );
 }
+
+/// Reading a member a datatype doesn't have raises Studio's error, worded
+/// its way for the type; real members still read (Studio 0.747,
+/// 2026-11-11, every datatype scripts can make).
+#[test]
+fn datatypes_refuse_members_they_dont_have() {
+    expect(
+        r#"
+        local cf = CFrame.new(1, 2, 3)
+        print(cf.X, cf.p.Y, cf.Position.Z, typeof(cf.Inverse))
+        print(select(2, pcall(function() return cf.ClassName end)))
+        print(select(2, pcall(function() return cf[1] end)))
+        print(select(2, pcall(function() return Color3.new().ClassName end)))
+        print(select(2, pcall(function() return UDim.new().ClassName end)))
+        print(select(2, pcall(function() return UDim.new()[1] end)))
+        print(select(2, pcall(function() return Enum.Material.Plastic.ClassName end)))
+        print(select(2, pcall(function() return Enum.Material.ClassName end)))
+        print(select(2, pcall(function() return Faces.new().ClassName end)))
+        print(UDim.new(0.5).Scale, Enum.Material.Plastic.Name)
+        "#,
+        0,
+        &[
+            "1 2 3 function",
+            "ClassName is not a valid member of CFrame",
+            "invalid argument #2 (string expected, got number)",
+            "ClassName is not a valid member of Color3",
+            "'ClassName' is not a valid member of UDim",
+            "'1' is not a valid member of UDim",
+            "ClassName is not a valid member of \"Enum.Material.Plastic\"",
+            "ClassName is not a valid member of \"Enum.Material\"",
+            "'ClassName' is not a valid member of Faces",
+            "0.5 Plastic",
+        ],
+    );
+}

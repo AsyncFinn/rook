@@ -5,6 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- Reading a member a datatype doesn't have raises Roblox's error for that type. Rook returned nil for some and worded others differently. See [datatype errors](docs/behavior/scripting/datatype-errors.md#members-a-datatype-doesnt-have).
 - A script stops when it, or an ancestor, is destroyed or moved out of where scripts run, as in Roblox. Rook kept running it. See [running scripts](docs/behavior/scripting/running-scripts.md).
 - Objects no longer vanish when the camera turns to certain angles. Rook could stop drawing parts across a place after loading some meshes. See [file meshes](docs/behavior/meshes/file-meshes.md#file-layouts).
 - Reading a member with a lowercase first letter, such as `mouse.x` or `label.textSize`, finds the member, as in Roblox, after any child of that name; writes still need the real name. Rook raised an error, and let `.name` be written. See [member lookup](docs/behavior/scripting/member-lookup.md).

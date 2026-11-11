@@ -32,6 +32,7 @@ impl UserData for LColor3 {
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
+        super::members::add_unknown(m, "Color3", super::members::Wording::Plain);
         for name in ["Lerp", "lerp"] {
             m.add_method(name, |_, t, (o, a): (UserDataRef<LColor3>, f32)| {
                 Ok(LColor3(t.0.lerp(o.0, a)))
@@ -118,6 +119,7 @@ impl UserData for LBrickColor {
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
+        super::members::add_unknown(m, "BrickColor", super::members::Wording::Quoted);
         m.add_meta_method(MetaMethod::Eq, |_, t, o: UserDataRef<LBrickColor>| {
             Ok(t.0 == o.0)
         });

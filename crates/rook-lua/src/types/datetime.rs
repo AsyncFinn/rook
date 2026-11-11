@@ -180,6 +180,7 @@ impl UserData for LDateTime {
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
+        super::members::add_unknown(m, "DateTime", super::members::Wording::Plain);
         m.add_method("ToUniversalTime", |lua, t, ()| parts(lua, &t.utc()));
         m.add_method("ToLocalTime", |lua, t, ()| parts(lua, &t.local()));
         m.add_method("ToIsoDate", |_, t, ()| {

@@ -2,6 +2,7 @@
 //! value types without a Lua representation of their own.
 
 use super::err;
+use super::members::{Wording, not_a_member};
 use mlua::{
     Lua, MetaMethod, MultiValue, UserData, UserDataFields, UserDataMethods, UserDataRef,
     Value as LuaValue,
@@ -52,27 +53,24 @@ impl UserData for Opaque {
             })
         });
         m.add_meta_method(MetaMethod::Type, |_, t, ()| Ok(t.type_name()));
-        m.add_meta_method(MetaMethod::Index, |_, t, key: String| {
+        m.add_meta_method(MetaMethod::Index, |_, t, key: LuaValue| {
+            let unknown = || not_a_member(&key, t.type_name(), Wording::Quoted);
+            let LuaValue::String(name) = &key else {
+                return Err(unknown());
+            };
             if let Value::PhysicalProperties(rbx_types::PhysicalProperties::Custom(p)) = &t.0 {
-                let v = match key.as_str() {
+                let v = match &*name.to_string_lossy() {
                     "Density" => p.density(),
                     "Friction" => p.friction(),
                     "Elasticity" => p.elasticity(),
                     "FrictionWeight" => p.friction_weight(),
                     "ElasticityWeight" => p.elasticity_weight(),
                     "AcousticAbsorption" => p.acoustic_absorption(),
-                    _ => {
-                        return Err(err(format!(
-                            "{key} is not a valid member of PhysicalProperties"
-                        )));
-                    }
+                    _ => return Err(unknown()),
                 };
                 return Ok(LuaValue::Number(f64::from(v)));
             }
-            Err(err(format!(
-                "{key} is not a valid member of {}",
-                t.type_name()
-            )))
+            Err(unknown())
         });
     }
 }
@@ -105,6 +103,7 @@ impl UserData for LTweenInfo {
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
+        super::members::add_unknown(m, "TweenInfo", super::members::Wording::Quoted);
         m.add_meta_method(MetaMethod::Eq, |_, t, o: UserDataRef<LTweenInfo>| {
             Ok(*t == *o)
         });

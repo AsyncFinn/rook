@@ -34,6 +34,7 @@ impl UserData for LNumberRange {
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
+        super::members::add_unknown(m, "NumberRange", super::members::Wording::Quoted);
         m.add_meta_method(MetaMethod::Eq, |_, t, o: UserDataRef<LNumberRange>| {
             Ok(t.0 == o.0)
         });
@@ -52,6 +53,7 @@ impl UserData for LNumberSequenceKeypoint {
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
+        super::members::add_unknown(m, "NumberSequenceKeypoint", super::members::Wording::Quoted);
         m.add_meta_method(MetaMethod::Eq, |_, t, o: UserDataRef<Self>| Ok(t.0 == o.0));
         m.add_meta_method(MetaMethod::ToString, |_, t, ()| {
             Ok(number_keypoint_string(&t.0))
@@ -79,6 +81,7 @@ impl UserData for LNumberSequence {
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
+        super::members::add_unknown(m, "NumberSequence", super::members::Wording::Quoted);
         m.add_meta_method(MetaMethod::Eq, |_, t, o: UserDataRef<Self>| Ok(t.0 == o.0));
         m.add_meta_method(MetaMethod::ToString, |_, t, ()| {
             Ok(t.0
@@ -98,6 +101,7 @@ impl UserData for LColorSequenceKeypoint {
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
+        super::members::add_unknown(m, "ColorSequenceKeypoint", super::members::Wording::Quoted);
         m.add_meta_method(MetaMethod::Eq, |_, t, o: UserDataRef<Self>| Ok(t.0 == o.0));
     }
 }
@@ -111,6 +115,7 @@ impl UserData for LColorSequence {
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
+        super::members::add_unknown(m, "ColorSequence", super::members::Wording::Quoted);
         m.add_meta_method(MetaMethod::Eq, |_, t, o: UserDataRef<Self>| Ok(t.0 == o.0));
         m.add_meta_method(MetaMethod::ToString, |_, t, ()| {
             Ok(t.0
