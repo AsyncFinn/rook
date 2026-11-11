@@ -8,7 +8,7 @@ use mlua::{
 use rook_types::{UDim, UDim2};
 
 use super::fmt_f32;
-use crate::ctx::args::{borrow_clone, number_of};
+use crate::ctx::args::{Num, borrow_clone, number_of};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct LUDim(pub UDim);
@@ -42,8 +42,8 @@ impl UserData for LPath2DControlPoint {
 /// Offsets are integers. Measured: fractions are cut toward zero (3.7 is
 /// 3, -3.7 is -3), and NaN, infinities and anything past an `i32` read
 /// -2147483648 whichever side they're on.
-fn offset(v: Option<f64>) -> i32 {
-    let cut = v.unwrap_or(0.0).trunc();
+fn offset(v: Num) -> i32 {
+    let cut = v.0.trunc();
     if (i32::MIN as f64..=i32::MAX as f64).contains(&cut) {
         cut as i32
     } else {
@@ -128,11 +128,11 @@ fn udim2_new(_: &Lua, args: MultiValue) -> mlua::Result<LUDim2> {
     {
         return Ok(LUDim2(UDim2 { x: x.0, y: y.0 }));
     }
-    let n = |i: usize| args.get(i).and_then(number_of);
+    let n = |i: usize| Num(args.get(i).and_then(number_of).unwrap_or(0.0));
     Ok(LUDim2(UDim2::new(
-        n(0).unwrap_or(0.0) as f32,
+        n(0).f32(),
         offset(n(1)),
-        n(2).unwrap_or(0.0) as f32,
+        n(2).f32(),
         offset(n(3)),
     )))
 }
@@ -141,9 +141,7 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     let u = lua.create_table()?;
     u.set(
         "new",
-        lua.create_function(|_, (s, o): (Option<f32>, Option<f64>)| {
-            Ok(LUDim(UDim::new(s.unwrap_or(0.0), offset(o))))
-        })?,
+        lua.create_function(|_, (s, o): (Num, Num)| Ok(LUDim(UDim::new(s.f32(), offset(o)))))?,
     )?;
     lua.globals().set("UDim", u)?;
 
@@ -151,16 +149,13 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     u2.set("new", lua.create_function(udim2_new)?)?;
     u2.set(
         "fromScale",
-        lua.create_function(|_, (x, y): (Option<f32>, Option<f32>)| {
-            Ok(LUDim2(UDim2::from_scale(
-                x.unwrap_or(0.0),
-                y.unwrap_or(0.0),
-            )))
+        lua.create_function(|_, (x, y): (Num, Num)| {
+            Ok(LUDim2(UDim2::from_scale(x.f32(), y.f32())))
         })?,
     )?;
     u2.set(
         "fromOffset",
-        lua.create_function(|_, (x, y): (Option<f64>, Option<f64>)| {
+        lua.create_function(|_, (x, y): (Num, Num)| {
             Ok(LUDim2(UDim2::from_offset(offset(x), offset(y))))
         })?,
     )?;

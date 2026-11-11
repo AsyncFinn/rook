@@ -294,6 +294,38 @@ fn wait_for_child_warns() {
     );
 }
 
+/// Measured in Studio 0.747: datatype constructors read a number argument
+/// that isn't a number, or a string that reads as one, as 0; methods
+/// still error.
+#[test]
+fn constructors_read_non_numbers_as_zero() {
+    expect(
+        r#"
+        print(Color3.new('New Yeller'), Color3.new('0.5', '0.25', ' 1 '))
+        print(Color3.new('0x10', '1e-1', 'inf'), Color3.new(true, 1, 1), Color3.new(1, nil, 1))
+        print(Color3.fromRGB('abc', 2, 3), Color3.fromHSV(nil, 1, 1))
+        print(Vector3.new('abc', 2, 3), Vector3.new(Vector3.one, 2, 3), Vector2.new({}, 2))
+        print(Vector3int16.new('a', 2, 3), Vector2int16.new('a', 2))
+        print(UDim.new('abc', 2), UDim2.new('abc', 2, 3, 4))
+        print(UDim2.fromScale('a', 2), UDim2.fromOffset('a', 2))
+        print(CFrame.new('abc', 2, 3), CFrame.new(1, 2, 3, 'a', 0, 0, 1))
+        print(pcall(CFrame.Angles, 'a', 0, 0))
+        "#,
+        0,
+        &[
+            "0, 0, 0 0.5, 0.25, 1",
+            "16, 0.100000001, inf 0, 1, 1 1, 0, 1",
+            "0, 0.00784313772, 0.0117647061 1, 0, 0",
+            "0, 2, 3 0, 2, 3 0, 2",
+            "0, 2, 3 0, 2",
+            "0, 2 {0, 2}, {3, 4}",
+            "{0, 0}, {2, 0} {0, 0}, {0, 2}",
+            "0, 2, 3, 1, 0, 0, 0, 1, 0, 0, 0, 1 1, 2, 3, 1, 0, 0, 0, 1, 0, 0, 0, 1",
+            "false Unable to cast string to float",
+        ],
+    );
+}
+
 #[test]
 fn datatypes() {
     expect(

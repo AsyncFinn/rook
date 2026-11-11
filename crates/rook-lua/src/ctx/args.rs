@@ -41,9 +41,36 @@ pub(crate) fn number_of(v: &LuaValue) -> Option<f64> {
     match v {
         LuaValue::Integer(i) => Some(*i as f64),
         LuaValue::Number(n) => Some(*n),
-        // Lua's string-to-number coercion.
-        LuaValue::String(s) => s.to_str().ok().and_then(|s| s.trim().parse().ok()),
+        // Lua's string-to-number coercion, hex included.
+        LuaValue::String(s) => {
+            let s = s.to_str().ok()?;
+            let s = s.trim();
+            match s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")) {
+                Some(hex) => u64::from_str_radix(hex, 16).ok().map(|n| n as f64),
+                None => s.parse().ok(),
+            }
+        }
         _ => None,
+    }
+}
+
+/// A number argument of a datatype constructor, read as Roblox reads
+/// them: a number, or a string that reads as one; anything else, nil or
+/// missing included, is 0. Measured: `Color3.new('New Yeller')` is black
+/// and `Vector3.new(true, 2, 3)` is (0, 2, 3), where methods such as
+/// `CFrame.Angles` or `Color3:Lerp` error.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Num(pub f64);
+
+impl Num {
+    pub(crate) fn f32(self) -> f32 {
+        self.0 as f32
+    }
+}
+
+impl mlua::FromLua for Num {
+    fn from_lua(value: LuaValue, _: &Lua) -> mlua::Result<Self> {
+        Ok(Self(number_of(&value).unwrap_or(0.0)))
     }
 }
 

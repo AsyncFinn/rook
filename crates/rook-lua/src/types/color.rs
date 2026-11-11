@@ -9,7 +9,7 @@ use rbx_types::BrickColor;
 use rook_types::Color3;
 
 use super::fmt_f32;
-use crate::ctx::args::{borrow_clone, number_of};
+use crate::ctx::args::{Num, borrow_clone, number_of};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct LColor3(pub Color3);
@@ -129,25 +129,21 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     let c3 = lua.create_table()?;
     c3.set(
         "new",
-        lua.create_function(|_, (r, g, b): (Option<f32>, Option<f32>, Option<f32>)| {
-            Ok(LColor3(Color3::new(
-                r.unwrap_or(0.0),
-                g.unwrap_or(0.0),
-                b.unwrap_or(0.0),
-            )))
+        lua.create_function(|_, (r, g, b): (Num, Num, Num)| {
+            Ok(LColor3(Color3::new(r.f32(), g.f32(), b.f32())))
         })?,
     )?;
     c3.set(
         "fromRGB",
-        lua.create_function(|_, (r, g, b): (Option<f64>, Option<f64>, Option<f64>)| {
-            let c = |x: Option<f64>| (x.unwrap_or(0.0) / 255.0) as f32;
+        lua.create_function(|_, (r, g, b): (Num, Num, Num)| {
+            let c = |x: Num| (x.0 / 255.0) as f32;
             Ok(LColor3(Color3::new(c(r), c(g), c(b))))
         })?,
     )?;
     c3.set(
         "fromHSV",
-        lua.create_function(|_, (h, s, v): (f32, f32, f32)| {
-            Ok(LColor3(Color3::from_hsv(h, s, v)))
+        lua.create_function(|_, (h, s, v): (Num, Num, Num)| {
+            Ok(LColor3(Color3::from_hsv(h.f32(), s.f32(), v.f32())))
         })?,
     )?;
     c3.set(
