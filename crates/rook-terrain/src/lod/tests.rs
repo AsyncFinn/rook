@@ -108,8 +108,8 @@ fn drawn_heights(levels: &[Grid], level: u8, chunk: IVec3) -> (f32, f32) {
 /// voxels thick.
 fn slab(depth: i32) -> Vec<Grid> {
     let mut grid = Grid::new();
-    for x in 0..192 {
-        for z in 64..400 {
+    for x in -384..384 {
+        for z in -384..384 {
             for y in -depth..0 {
                 grid.set(IVec3::new(x, y, z), Voxel::new(TerrainMaterial::Grass, 255));
             }
@@ -189,8 +189,8 @@ fn far_lakes_lie_at_their_level() {
     // sank into the bed from 16-stud voxels on, and far lakes drew as bare
     // ground.
     let mut grid = Grid::new();
-    for x in 0..192 {
-        for z in 64..400 {
+    for x in -384..384 {
+        for z in -384..384 {
             for y in -40..-1 {
                 grid.set(IVec3::new(x, y, z), Voxel::new(TerrainMaterial::Rock, 255));
             }
@@ -228,8 +228,8 @@ fn thin_slabs_keep_their_thickness_far_away() {
     // to 17 in 32. Collapsed to the center, each ring drew it a stud lower
     // and the rings stepped against each other.
     let mut grid = Grid::new();
-    for x in 0..192 {
-        for z in 64..400 {
+    for x in -384..384 {
+        for z in -384..384 {
             grid.set(IVec3::new(x, 5, z), Voxel::new(TerrainMaterial::Snow, 63));
         }
     }
@@ -241,8 +241,8 @@ fn thin_slabs_keep_their_thickness_far_away() {
     // A full slab from 8 to 32 studs, in a 32-stud voxel with air on both
     // sides: Studio's top was at 30.9 (near, 34).
     let mut grid = Grid::new();
-    for x in 0..192 {
-        for z in 64..400 {
+    for x in -384..384 {
+        for z in -384..384 {
             for y in 2..8 {
                 grid.set(IVec3::new(x, y, z), Voxel::new(TerrainMaterial::Snow, 255));
             }
@@ -285,8 +285,8 @@ fn slivers_on_the_ground_stay_slivers_far_away() {
     // cells, 8 in 16, ...), so far rings raised the ground and slivers in
     // a tunnel closed it.
     let mut grid = Grid::new();
-    for x in 0..192 {
-        for z in 64..400 {
+    for x in -384..384 {
+        for z in -384..384 {
             for y in -40..0 {
                 grid.set(IVec3::new(x, y, z), Voxel::new(TerrainMaterial::Snow, 255));
             }
