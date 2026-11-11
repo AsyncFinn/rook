@@ -269,6 +269,75 @@ fn input_mouse_and_click_detectors() {
     assert_eq!(server_log, ["server click Clicker"]);
 }
 
+/// Measured: the mouse looks through the local player's whole Character
+/// model, a part put in it included, so a click reaches the button behind
+/// it; an NPC's body would block it.
+#[test]
+fn clicks_pass_through_ones_own_character() {
+    let mut server = Server::new(&Options::default()).unwrap();
+    {
+        let mut w = server.runtime.world_mut();
+        let players = w.dom.get_service("Players").unwrap();
+        w.dom
+            .set_property_by_name(players, "CharacterAutoLoads", Value::Bool(false))
+            .unwrap();
+    }
+    add_script(
+        &server,
+        "ServerScriptService",
+        "Main",
+        r#"
+        local function part(name, z, parent)
+            local p = Instance.new("Part")
+            p.Name = name
+            p.Anchored = true
+            p.Size = Vector3.new(4, 4, 1)
+            p.Position = Vector3.new(0, 0, z)
+            p.Parent = parent
+            return p
+        end
+        local button = part("Button", -10, workspace)
+        Instance.new("ClickDetector", button).MouseClick:Connect(function(p) print("server click", p.Name) end)
+        game.Players.PlayerAdded:Connect(function(player)
+            local body = Instance.new("Model")
+            body.Name = player.Name
+            part("Shield", -5, body)
+            body.Parent = workspace
+            player.Character = body
+        end)
+        "#,
+    );
+    add_local_script(
+        &server,
+        "Input",
+        r#"
+        local mouse = game.Players.LocalPlayer:GetMouse()
+        mouse.Button1Down:Connect(function() print("button1", mouse.Target and mouse.Target.Name) end)
+        "#,
+    );
+    server.start();
+    let mut session = Session::new(server, Options::default());
+    let index = session.join("Clicker", 7).unwrap();
+    {
+        let client = session.client_mut(index).unwrap();
+        client.set_viewport(800, 600);
+        let camera = client.current_camera().unwrap();
+        client.set_property(
+            camera,
+            "CFrame",
+            Value::CFrame(rook_types::CFrame::IDENTITY),
+        );
+    }
+    session.run_for(0.3);
+    session.input(index, InputEvent::MouseMove { x: 400.0, y: 300.0 });
+    for down in [true, false] {
+        session.input(index, InputEvent::MouseButton { button: 1, down });
+    }
+    session.run_for(0.1);
+    assert_eq!(lines(session.client(index).unwrap()), ["button1 Button"]);
+    assert_eq!(lines(session.server()), ["server click Clicker"]);
+}
+
 #[test]
 fn player_gui_from_the_server_reaches_only_its_player() {
     let mut server = Server::new(&Options::default()).unwrap();

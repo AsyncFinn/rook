@@ -67,5 +67,9 @@ Observed in Studio 0.742 unless noted:
   see-through ones, whatever else is set; a part with `CanCollide` and
   `CanQuery` both off doesn't. `CanTouch` makes no difference.
 - `TargetFilter` leaves out an instance and everything in it.
+- So does the local player's `Character`: the mouse looks through the
+  whole model, accessories and any part put in it included, from any
+  camera, so a click reaches what's behind it (measured in Studio 0.747,
+  2026-11-11). Another character, such as an NPC, blocks it.
 - Acting as the `Default` group, as legacy rays do, is Inference: a client
   case can't register a group.

@@ -5,6 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- Your own character no longer blocks the mouse; clicks reach what's behind it, as in Roblox. See [the mouse](docs/behavior/physics/queries.md#the-mouse).
 - Scripts a game enables while the place starts now run. Rook only started the ones after the enabling script in the tree.
 - Ladders built from rungs on a solid board can be climbed, as in Roblox. Rook missed the gaps between thin rungs.
 - Datatype constructors read an argument that isn't a number as 0, as Roblox does; Rook raised an error. See [datatype errors](docs/behavior/scripting/datatype-errors.md#constructors-dont-check-numbers).
