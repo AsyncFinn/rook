@@ -78,7 +78,7 @@ impl Source {
     pub fn updates(&mut self, server: &Dom) -> Vec<Update> {
         profiling::scope!("Source::updates");
         let mut out = Vec::new();
-        let mut destroyed = Vec::new();
+        let mut destroyed = rustc_hash::FxHashSet::default();
         let visible = |id| self.visible(server, id);
         let changes = server.journal().since(self.cursor);
         rook_types::count!(JournalReadReplication, changes.len());
@@ -92,7 +92,7 @@ impl Source {
                     _ => Update::Hide(*id),
                 }),
                 Change::Destroying(id) => {
-                    destroyed.push(*id);
+                    destroyed.insert(*id);
                     out.push(Update::Destroying(*id));
                 }
                 // The property first: most entries are ones no client
