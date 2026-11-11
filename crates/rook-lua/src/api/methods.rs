@@ -21,7 +21,7 @@ use super::instance::{push_instance, settle_joints, settle_joints_within};
 use rook_physics::assembly::{self, Assembly};
 use rook_physics::joints;
 
-use super::properties::{cframe, set_cframe};
+use super::properties::{cframe, part_cframe, part_ids, set_cframe};
 use super::signal::LSignal;
 use crate::ctx::args::Args;
 use crate::ctx::convert::{to_lua, vector3_to_lua};

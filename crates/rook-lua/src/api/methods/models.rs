@@ -4,7 +4,7 @@ pub(super) fn parts_of(w: &World, model: InstanceId) -> Vec<InstanceId> {
     w.dom
         .descendants(model)
         .into_iter()
-        .filter(|d| w.dom.is_a(*d, "BasePart"))
+        .filter(|d| w.dom.is_a_class(*d, part_ids().class))
         .collect()
 }
 
@@ -41,7 +41,7 @@ fn transform_model(w: &mut World, model: InstanceId, delta: CFrame) -> Result<()
     let delta = rigid(delta);
     let moves: Vec<_> = parts_of(w, model)
         .into_iter()
-        .map(|part| (part, delta * cframe(w, part)))
+        .map(|part| (part, delta * part_cframe(w, part)))
         .collect();
     assembly::move_parts(&mut w.dom, moves)?;
     if let Some(p) = w.dom.optional_cframe_property(model, "WorldPivotData") {
@@ -181,10 +181,9 @@ fn bounding_box(w: &World, model: InstanceId) -> (CFrame, Vector3) {
     let mut min = glam::Vec3::splat(f32::INFINITY);
     let mut max = glam::Vec3::splat(f32::NEG_INFINITY);
     for part in parts_of(w, model) {
-        let c = basis.to_object_space(cframe(w, part));
-        let size = w
-            .dom
-            .vector3_property(part, "Size")
+        let c = basis.to_object_space(part_cframe(w, part));
+        let size = (w.dom)
+            .read_property(part, part_ids().size, Value::as_vector3)
             .unwrap_or(glam::Vec3::ONE);
         let extent = c.box_reach(size);
         min = min.min(c.position - extent);

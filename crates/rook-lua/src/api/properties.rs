@@ -26,6 +26,35 @@ pub(crate) fn cframe(w: &World, id: InstanceId) -> CFrame {
         .unwrap_or(CFrame::IDENTITY)
 }
 
+/// [`cframe`] of a BasePart, by id.
+pub(crate) fn part_cframe(w: &World, part: InstanceId) -> CFrame {
+    (w.dom)
+        .read_property(part, part_ids().cframe, Value::as_cframe)
+        .unwrap_or(CFrame::IDENTITY)
+}
+
+/// BasePart's class and the properties model moves read of every part,
+/// resolved once: those walk every part of a model, often every frame.
+pub(crate) struct PartIds {
+    pub(crate) class: rook_reflection::ClassId,
+    pub(crate) cframe: PropertyId,
+    pub(crate) size: PropertyId,
+}
+
+pub(crate) fn part_ids() -> &'static PartIds {
+    static IDS: LazyLock<PartIds> = LazyLock::new(|| {
+        let db = rook_reflection::database();
+        let class = db.class_by_name("BasePart").expect("BasePart").id;
+        let id = |name| db.find_canonical_property(class, name).expect(name).id;
+        PartIds {
+            class,
+            cframe: id("CFrame"),
+            size: id("Size"),
+        }
+    });
+    &IDS
+}
+
 /// `CollisionFidelity`: Studio works it out from the saved geometry, and a
 /// value in the file means nothing (observed in Studio 0.746).
 fn saved_fidelity(dom: &Dom, id: InstanceId) -> u32 {
