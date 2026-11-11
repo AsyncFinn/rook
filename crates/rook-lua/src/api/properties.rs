@@ -15,6 +15,7 @@ use crate::types::color::closest_brick_color;
 
 mod attachment;
 mod mouse;
+pub(crate) mod selection;
 mod text;
 
 use crate::world::World;

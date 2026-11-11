@@ -15,6 +15,7 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("GuiService", "GetGuiInset") => get_gui_inset,
         ("GuiService", "GetInsetArea") => get_inset_area,
         ("GuiService", "GetHardwareSafeViewport") => get_hardware_safe_viewport,
+        ("GuiService", "Select") => select,
         ("BasePlayerGui", "GetGuiObjectsAtPosition") => get_gui_objects_at_position,
         ("PlayerGui", "GetTopbarTransparency") => get_topbar_transparency,
         ("PlayerGui", "SetTopbarTransparency") => set_topbar_transparency,
@@ -86,6 +87,30 @@ fn get_inset_area(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
         rbx_types::Vector2::new(size.0.x, size.0.y),
     );
     Outcome::ret(lua, crate::types::LRect(area))
+}
+
+/// Select the object [`rook_gui::Gui::first_selectable`] picks under the
+/// given parent: `SelectedCoreObject` for Roblox's own code (Inference:
+/// the top bar selects its own buttons this way and reads them back
+/// there), `SelectedObject` for a game's. With nothing to pick the
+/// selection stays (Inference).
+fn select(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
+    let parent = a.instance(0)?;
+    let picked = with_world(lua, |w| {
+        w.gui.sync_for(&mut w.dom, parent);
+        w.gui.first_selectable(&w.dom, parent)
+    });
+    if let Some(picked) = picked {
+        let name = if crate::api::scripts::caller_is_core(lua) {
+            "SelectedCoreObject"
+        } else {
+            "SelectedObject"
+        };
+        let object = mlua::Value::UserData(crate::api::instance::push_instance(lua, picked)?);
+        crate::api::instance::write_property(lua, this, name, &object)
+            .map_err(crate::ctx::ScriptError)??;
+    }
+    Outcome::ret(lua, ())
 }
 
 /// Measured: 0.5 until a script sets it.

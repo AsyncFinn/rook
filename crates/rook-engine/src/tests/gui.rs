@@ -279,3 +279,103 @@ fn destroyed_text_box_loses_focus() {
     assert_eq!(client.focused_text_box(), None);
     assert_eq!(client.runtime.world().gui.focus(), None);
 }
+
+/// `GuiService:Select(parent)` picks the shown, selectable, interactable,
+/// on-screen descendant highest up, then leftmost, then drawn on top
+/// (Studio's answers for each case).
+#[test]
+fn select_picks_what_studio_picks() {
+    let mut server = Server::new(&Options::default()).unwrap();
+    let starter = service(&server, "StarterGui");
+    let screen = add_under(&server, starter, "ScreenGui", "Hud", "");
+    add_under(
+        &server,
+        screen,
+        "LocalScript",
+        "Probe",
+        r#"
+        local GS = game:GetService("GuiService")
+        local pg = script.Parent.Parent
+        local function btn(name, parent, x, y, extra)
+            local b = Instance.new("TextButton")
+            b.Name = name
+            b.Size = UDim2.fromOffset(50, 50)
+            b.Position = UDim2.fromOffset(x, y)
+            b.Parent = parent
+            if extra then extra(b) end
+            return b
+        end
+        local function case(label, build)
+            GS.SelectedObject = nil
+            local sg = Instance.new("ScreenGui")
+            sg.Parent = pg
+            local root = Instance.new("Frame")
+            root.Name = "Root"
+            root.Size = UDim2.fromOffset(600, 600)
+            root.Parent = sg
+            build(root)
+            GS:Select(root)
+            print(label, if GS.SelectedObject then GS.SelectedObject.Name else "nil")
+            sg:Destroy()
+        end
+        case("order by child", function(r) btn("Second", r, 300, 300) btn("First", r, 10, 10) end)
+        case("top vs near", function(r) btn("TopFar", r, 400, 0) btn("LeftNear", r, 0, 20) end)
+        case("left only", function(r) btn("X300", r, 300, 100) btn("X0", r, 0, 100) end)
+        case("hidden first", function(r)
+            btn("Hidden", r, 0, 0, function(b) b.Visible = false end) btn("Shown", r, 300, 300)
+        end)
+        case("parent hidden", function(r)
+            local f = Instance.new("Frame") f.Visible = false f.Parent = r
+            btn("In", f, 0, 0) btn("Out", r, 300, 300)
+        end)
+        case("not selectable", function(r)
+            btn("NoSel", r, 0, 0, function(b) b.Selectable = false end) btn("Sel", r, 300, 300)
+        end)
+        case("disabled", function(r)
+            btn("NoInteract", r, 0, 0, function(b) b.Interactable = false end) btn("Out", r, 300, 300)
+        end)
+        case("inactive", function(r)
+            btn("Inactive", r, 0, 0, function(b) b.Active = false end) btn("Out", r, 300, 300)
+        end)
+        case("frame selectable", function(r)
+            local f = Instance.new("Frame") f.Name = "SelFrame" f.Selectable = true
+            f.Size = UDim2.fromOffset(50, 50) f.Parent = r
+            btn("Btn", r, 300, 300)
+        end)
+        case("nested", function(r)
+            local f = Instance.new("Frame") f.Size = UDim2.fromOffset(100, 100) f.Parent = r
+            btn("Deep", f, 0, 0) btn("Top", r, 300, 300)
+        end)
+        case("offscreen", function(r) btn("Off", r, -5000, 0) btn("On", r, 300, 300) end)
+        case("same spot", function(r) btn("P", r, 100, 100) btn("Q", r, 100, 100) end)
+        case("same spot z first", function(r)
+            btn("HighZ", r, 100, 100, function(b) b.ZIndex = 5 end) btn("LowZ", r, 100, 100)
+        end)
+        case("none", function(r) end)
+        "#,
+    );
+    server.start();
+    let mut session = Session::new(server, Options::default());
+    let index = session.join("Selector", 1).unwrap();
+    session.client_mut(index).unwrap().set_viewport(800, 600);
+    session.run_for(0.2);
+    assert_eq!(
+        lines(session.client(index).unwrap()),
+        [
+            "order by child First",
+            "top vs near TopFar",
+            "left only X0",
+            "hidden first Shown",
+            "parent hidden Out",
+            "not selectable Sel",
+            "disabled Out",
+            "inactive Inactive",
+            "frame selectable SelFrame",
+            "nested Deep",
+            "offscreen On",
+            "same spot Q",
+            "same spot z first HighZ",
+            "none nil",
+        ]
+    );
+}

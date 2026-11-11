@@ -148,6 +148,7 @@ pub(crate) fn write_property(
         }
         return Ok(result.map_err(ScriptError::from));
     }
+    let selection = properties::selection::before(lua, id, name, &converted);
     let result = with_world(lua, |w| {
         properties::copy_icon(w, id, name, &converted)?;
         if let (Some(target), Some(url)) =
@@ -189,5 +190,8 @@ pub(crate) fn write_property(
         }
     });
     dispatch(lua, start);
+    if let (Some(selection), Ok(())) = (selection, &result) {
+        selection.after(lua);
+    }
     Ok(result.map_err(ScriptError::from))
 }

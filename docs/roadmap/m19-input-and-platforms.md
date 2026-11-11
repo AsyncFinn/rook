@@ -106,7 +106,10 @@ plumbing, which whichever lands first builds.
 3. GUI selection: `GuiService.SelectedObject` moved with a pad's D-pad
    and stick or the keyboard, the selection image, `Selectable`,
    `NextSelection*`, `GuiNavigationEnabled`, `AutoSelectGuiEnabled`,
-   and a pad's A pressing the selected button.
+   a pad's A pressing the selected button, and GamepadService's virtual
+   cursor (`GamepadCursorEnabled`). Already in: the selection events and
+   `GuiService:Select` (docs/behavior/gui/selection.md); left for this
+   step there, which objects Studio refuses to select.
 4. ContextActionService and UserInputService in full: the members left
    after steps 1 to 3, ContextActionService's touch buttons, and
    `HapticService`.

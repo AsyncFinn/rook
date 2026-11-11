@@ -13,6 +13,7 @@ mod layout;
 mod modal;
 mod order;
 mod scroll_input;
+mod selection;
 mod style;
 mod text;
 mod world;
