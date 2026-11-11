@@ -1,7 +1,6 @@
 //! Every DataModel loads and plays sounds, server and client alike, as Studio
 //! does on both (`docs/behavior/audio/playback.md`). Hearing them is the
-//! player's job: it asks for [`DataModel::playing_sounds`] each frame and
-//! mixes them.
+//! player's job: it asks for [`DataModel::mix`] each frame and mixes it.
 //!
 //! Changes are noticed at the end of a frame ([`DataModel::check_sounds`],
 //! before the journal is trimmed) and acted on at the start of the next
@@ -10,6 +9,7 @@
 
 mod effects;
 mod graph;
+mod hearing;
 mod playback;
 mod players;
 
@@ -70,6 +70,8 @@ pub(crate) struct Sounds {
     default_listener: bool,
     /// On clients with AudioAnalyzers: the graph rendered to measure them.
     meter: Option<graph::Metering>,
+    /// What the mixer is given, kept from frame to frame.
+    pub(crate) hearing: std::cell::RefCell<hearing::Hearing>,
 }
 
 impl Sounds {
@@ -172,6 +174,7 @@ impl DataModel {
         let w = self.runtime.world();
         let dom = &w.dom;
         let sounds = &mut self.sounds;
+        sounds.hearing.get_mut().note(dom);
         let (first, changes) = sounds.watch.look(dom);
         rook_types::count!(JournalReadBridges, changes.len());
         if first {
@@ -196,6 +199,7 @@ impl DataModel {
                     if ids.clock.contains(property) {
                         let n = sounds.seeks.entry(*id).or_default();
                         *n = n.wrapping_add(1);
+                        sounds.hearing.get_mut().touch(*id);
                     }
                     if ids.playing.contains(property) && sounds.tracked.contains_key(id) {
                         sounds.active.insert(*id);
@@ -287,6 +291,7 @@ impl DataModel {
                     .clone(),
             };
             sounds.tracked.insert(id, r);
+            sounds.hearing.get_mut().touch(id);
             sounds.active.insert(id);
             apply(dom, id, &load, events);
         }
@@ -336,10 +341,11 @@ impl DataModel {
             .map(|(&id, _)| id)
             .collect();
         users.sort();
+        self.sounds.files.insert(r, load.clone());
         for id in users {
             apply(&mut w.dom, id, &load, events);
+            self.sounds.hearing.get_mut().touch(id);
         }
-        self.sounds.files.insert(r, load);
     }
 
     /// Start the sounds scripts gave to `SoundService:PlayLocalSound`: at

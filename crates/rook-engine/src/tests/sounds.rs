@@ -223,3 +223,92 @@ fn slow_server_keeps_client_clock() {
     assert!(seeked < 0.2, "server seek: {seeked}");
     assert_ne!(generation, started, "the seek restarts the voice");
 }
+
+/// The mix a client hears changes only with its sounds: a sound that
+/// plays to its end leaves it (without the journal hearing of the end),
+/// moving a 3D sound's part changes only how loud it is, and a script
+/// changing a sound's `Volume` gives the mix a new version.
+#[test]
+fn the_mix_changes_only_with_its_sounds() {
+    let options = tone_options("mix-versions");
+    let mut server = DataModel::new(&options).unwrap();
+    add_script(
+        &server,
+        "ServerScriptService",
+        "Play",
+        "local SS = game:GetService('SoundService') \
+         local part = Instance.new('Part') part.Name = 'Spot' part.Anchored = true \
+         part.Position = Vector3.new(0, 0, 20) part.Parent = workspace \
+         local function new(name, parent) local s = Instance.new('Sound') s.Name = name \
+         s.SoundId = 'rbxasset://sounds/tone.wav' s.Parent = parent return s end \
+         local near = new('Near', part) near.Looped = true near:Play() \
+         local global = new('Global', SS) global.Looped = true global:Play() \
+         local short = new('Short', SS) short.PlaybackSpeed = 4 short:Play()",
+    );
+    server.start();
+    let mut session = Session::new(server, options);
+    let index = session.join("Player1", 1).unwrap();
+    session.run_for(0.8);
+    let client = session.client(index).unwrap();
+    let find = |name: &str| {
+        let dom = &client.runtime.world().dom;
+        dom.find_descendant(dom.root(), &|i| dom.name(i) == name)
+            .unwrap()
+    };
+    let (near, global, short, spot) = (find("Near"), find("Global"), find("Short"), find("Spot"));
+    let gains = |key| {
+        client
+            .mix()
+            .sounds
+            .iter()
+            .find(|p| p.key == key)
+            .map(|p| p.gains)
+    };
+    assert!(gains(near).is_some() && gains(global).is_some());
+    assert_eq!(gains(short), None, "a sound that ended is no longer heard");
+
+    let version = client.mix().version;
+    let before = gains(near).unwrap();
+    {
+        let mut w = client.runtime.world_mut();
+        let at = rook_types::CFrame::from_position(glam::Vec3::new(30.0, 0.0, 0.0));
+        w.dom
+            .set_property_by_name(spot, "CFrame", Value::CFrame(at))
+            .unwrap();
+    }
+    session.run_for(0.05);
+    let client = session.client(index).unwrap();
+    let gains = |key| {
+        client
+            .mix()
+            .sounds
+            .iter()
+            .find(|p| p.key == key)
+            .map(|p| p.gains)
+    };
+    assert_ne!(
+        gains(near).unwrap(),
+        before,
+        "the moved sound is heard from its part"
+    );
+    assert_eq!(client.mix().version, version, "nothing else changed");
+
+    {
+        let mut w = client.runtime.world_mut();
+        w.dom
+            .set_property_by_name(global, "Volume", Value::Float32(0.2))
+            .unwrap();
+    }
+    session.run_for(0.05);
+    let client = session.client(index).unwrap();
+    let gains = |key| {
+        client
+            .mix()
+            .sounds
+            .iter()
+            .find(|p| p.key == key)
+            .map(|p| p.gains)
+    };
+    assert_eq!(gains(global), Some([0.2; 2]));
+    assert_ne!(client.mix().version, version);
+}

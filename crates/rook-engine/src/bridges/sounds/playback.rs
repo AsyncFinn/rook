@@ -76,7 +76,7 @@ pub(super) fn emitter(dom: &Dom, id: InstanceId) -> Option<Emitter> {
 /// `PlayOnRemove`, or given to `SoundService:PlayLocalSound`.
 #[derive(Debug, Clone)]
 pub(crate) struct OneShot {
-    sound: PlayingSound,
+    pub(super) sound: PlayingSound,
 }
 
 impl OneShot {
@@ -144,7 +144,13 @@ impl DataModel {
         }
         profiling::scope!("advance_sounds");
         let client = self.role == Role::Client;
+        if client {
+            // The effects PlaybackLoudness is read through, as heard.
+            self.catch_up_hearing();
+        }
         let mut events = Vec::new();
+        // Sounds that ended or looped without the journal hearing of it.
+        let mut ended = Vec::new();
         // An AudioPlayer that ends changes `IsPlaying` for scripts to see.
         let start = self.runtime.world().dom.journal().end();
         {
@@ -192,7 +198,15 @@ impl DataModel {
                     .max(0.0);
                 let mut t = before + dt * speed;
                 if client {
-                    let list = effects::effects(dom, id);
+                    let hearing = self.sounds.hearing.borrow();
+                    let read;
+                    let list = match hearing.effects_of(id) {
+                        Some(list) => list,
+                        None => {
+                            read = effects::effects(dom, id);
+                            &read[..]
+                        }
+                    };
                     let level = if list.is_empty() {
                         self.sounds.loudness.remove(&id);
                         loudness(&audio, before, t.min(length))
@@ -201,7 +215,7 @@ impl DataModel {
                             self.sounds.loudness.entry(id).or_insert_with(|| {
                                 rook_audio::effects::Chain::new(audio.sample_rate)
                             });
-                        chain.sync(&list);
+                        chain.sync(list);
                         effects::loudness_through(&audio, before, t.min(length), chain)
                     };
                     set(dom, "PlaybackLoudness", Value::Float64(level));
@@ -214,12 +228,17 @@ impl DataModel {
                         events.push((id, "DidLoop", Some(sound_id(dom, id)), Some(control.loops)));
                     } else {
                         set(dom, "Playing", Value::Bool(false));
+                        ended.push(id);
                         t = 0.0;
                         events.push((id, "Ended", Some(sound_id(dom, id)), None));
                     }
                 }
                 set(dom, "TimePosition", Value::Float64(t));
             }
+        }
+        let hearing = self.sounds.hearing.get_mut();
+        for id in ended {
+            hearing.touch(id);
         }
         self.fire_sound_events(start, events);
     }
@@ -238,42 +257,11 @@ impl DataModel {
     }
 
     /// The Sounds to hear now: in the DataModel, loaded and `Playing`,
-    /// plus removed `PlayOnRemove` sounds playing out. (AudioPlayers are
-    /// heard through [`DataModel::audio_graph`].)
+    /// plus removed `PlayOnRemove` sounds playing out, each where it is
+    /// now. (AudioPlayers are heard through [`DataModel::audio_graph`].)
     pub fn playing_sounds(&self) -> Vec<PlayingSound> {
-        let w = self.runtime.world();
-        let dom = &w.dom;
-        let mut out: Vec<PlayingSound> = self
-            .sounds
-            .one_shots
-            .iter()
-            .map(|o| o.sound.clone())
-            .collect();
-        for &id in &self.sounds.active {
-            let Some(audio) = self.sounds.audio(id) else {
-                continue;
-            };
-            if !dom.bool_property(id, "Playing").unwrap_or(false) {
-                continue;
-            }
-            out.push(PlayingSound {
-                id,
-                audio: audio.clone(),
-                position: dom
-                    .number_property(id, "TimePosition")
-                    .unwrap_or(0.0)
-                    .max(0.0),
-                volume: dom.float_property(id, "Volume").unwrap_or(0.5),
-                speed: dom.float_property(id, "PlaybackSpeed").unwrap_or(1.0),
-                looped: dom.bool_property(id, "Looped").unwrap_or(false),
-                generation: self.sounds.generation(id),
-                emitter: emitter(dom, id),
-                effects: effects::effects(dom, id),
-                group: effects::group(dom, id),
-            });
-        }
-        out.sort_by_key(|s| s.id);
-        out
+        self.hear();
+        self.sounds.hearing.borrow().playing(&self.sounds.one_shots)
     }
 
     /// Where 3D sounds are heard from: the camera unless a script chose

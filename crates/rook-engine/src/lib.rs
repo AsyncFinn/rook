@@ -217,6 +217,7 @@ impl DataModel {
         self.render_watch.rescan(end);
         self.render_changes = RenderChanges::everything();
         self.sounds.watch.rescan(end);
+        self.sounds.hearing.get_mut().rescan(end);
         self.explosions.watch.rescan(end);
         if let Some(kept) = &mut self.user_settings {
             kept.rescan(end);

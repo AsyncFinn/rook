@@ -63,6 +63,10 @@ pub struct Group<K> {
 
 #[derive(Debug, Clone)]
 pub struct Mix<K> {
+    /// Changes whenever anything but the sounds' `gains` and the graph's
+    /// listener gains does: a mixer given the same version again only
+    /// follows those, which move with the listener every frame.
+    pub version: u64,
     pub sounds: Vec<Play<K>>,
     /// The groups the sounds play through, and the groups those are in.
     pub groups: Vec<Group<K>>,
@@ -74,6 +78,7 @@ pub struct Mix<K> {
 impl<K> Default for Mix<K> {
     fn default() -> Self {
         Self {
+            version: 0,
             sounds: Vec::new(),
             groups: Vec::new(),
             ambient: None,
@@ -102,6 +107,8 @@ pub struct Mixer<K> {
     /// The player's master volume, 0 to 1, on everything heard
     /// (`UserGameSettings.MasterVolume`).
     master_volume: f32,
+    /// The [`Mix::version`] last synced.
+    synced: Option<u64>,
 }
 
 impl<K: Hash + Eq + Copy> Mixer<K> {
@@ -116,6 +123,7 @@ impl<K: Hash + Eq + Copy> Mixer<K> {
             scratch: Vec::new(),
             master: Vec::new(),
             master_volume: 1.0,
+            synced: None,
         }
     }
 
@@ -144,11 +152,24 @@ impl<K: Hash + Eq + Copy> Mixer<K> {
     /// position, ones no longer wanted stop, and ones still playing keep
     /// their own position until they are played again or seeked
     /// (`generation`).
-    /// Groups no longer listed play out their effects' tails.
+    /// Groups no longer listed play out their effects' tails. A mix of the
+    /// version last synced moves only the gains.
     pub fn sync(&mut self, mix: &Mix<K>) {
         let wanted = &mix.sounds;
-        self.voices
-            .retain(|k, _| wanted.iter().any(|p| p.key == *k));
+        if self.synced == Some(mix.version) {
+            for p in wanted {
+                if let Some(voice) = self.voices.get_mut(&p.key) {
+                    voice.target = p.gains;
+                }
+            }
+            self.graph.follow(&mix.graph);
+            // Groups no longer listed go once their tails have passed.
+            self.buses.retain(|_, b| b.listed || b.sounding());
+            return;
+        }
+        self.synced = Some(mix.version);
+        let keys: rustc_hash::FxHashSet<K> = wanted.iter().map(|p| p.key).collect();
+        self.voices.retain(|k, _| keys.contains(k));
         for p in wanted {
             let voice = self
                 .voices

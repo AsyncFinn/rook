@@ -7,7 +7,7 @@
 
 use rook_audio::SAMPLE_RATE;
 use rook_audio::effects::{Effect, Reverb};
-use rook_audio::graph::{Graph, Node, NodeKind, Runner, Source, Wire};
+use rook_audio::graph::{Graph, Runner};
 
 use super::*;
 
@@ -22,7 +22,7 @@ pub(crate) struct Metering {
 /// The effect an effect instance plays, with Studio's defaults; `None`
 /// passes sound through as it is: a bypassed effect (creator-docs), and the
 /// classes below without an arm (Approximation).
-fn effect(dom: &Dom, id: InstanceId) -> Option<Effect> {
+pub(super) fn effect(dom: &Dom, id: InstanceId) -> Option<Effect> {
     if dom.bool_property(id, "Bypass").unwrap_or(false) {
         return None;
     }
@@ -81,76 +81,10 @@ fn effect(dom: &Dom, id: InstanceId) -> Option<Effect> {
 }
 
 impl DataModel {
-    /// The audio API's graph as it is now, for the mixer: every player,
-    /// effect, emitter, listener, output and analyzer in the DataModel,
-    /// and the connected wires. An AudioDeviceOutput is heard when its
-    /// `Player` is nil or this client's player (creator-docs).
+    /// The audio API's graph as it is now, for the mixer
+    /// ([`DataModel::mix`]).
     pub fn audio_graph(&self) -> Graph<InstanceId> {
-        let w = self.runtime.world();
-        let dom = &w.dom;
-        let ids = w.audio.graph.borrow_mut().all(dom);
-        if ids.is_empty() {
-            return Graph::default();
-        }
-        let local = dom
-            .find_service("Players")
-            .and_then(|p| dom.ref_property(p, "LocalPlayer"));
-        let of = |class: &'static str| {
-            ids.iter()
-                .copied()
-                .filter(move |&i| dom.class_name(i) == class)
-        };
-        let emitters: Vec<InstanceId> = of("AudioEmitter").collect();
-        let wires: Vec<InstanceId> = of("Wire").collect();
-        let mut nodes = Vec::new();
-        for &id in &ids {
-            let kind = match dom.class_name(id) {
-                "Wire" => continue,
-                "AudioPlayer" => NodeKind::Player(
-                    self.sounds
-                        .audio(id)
-                        .filter(|_| dom.bool_property(id, "IsPlaying").unwrap_or(false))
-                        .map(|audio| Source {
-                            audio: audio.clone(),
-                            position: dom
-                                .number_property(id, "TimePosition")
-                                .unwrap_or(0.0)
-                                .max(0.0),
-                            volume: dom.float_property(id, "Volume").unwrap_or(1.0),
-                            speed: dom.float_property(id, "PlaybackSpeed").unwrap_or(1.0),
-                            looped: dom.bool_property(id, "Looping").unwrap_or(false),
-                            generation: self.sounds.generation(id),
-                        }),
-                ),
-                "AudioEmitter" => NodeKind::Emitter,
-                "AudioListener" => NodeKind::Listener(
-                    emitters
-                        .iter()
-                        .filter_map(|&e| Some((e, rook_lua::audio_api::heard(&w, e, id)?)))
-                        .collect(),
-                ),
-                "AudioDeviceOutput" => {
-                    let player = dom.ref_property(id, "Player");
-                    if player.is_none() || player == local {
-                        NodeKind::Output
-                    } else {
-                        NodeKind::Effect(None)
-                    }
-                }
-                "AudioAnalyzer" => NodeKind::Analyzer,
-                _ => NodeKind::Effect(effect(dom, id)),
-            };
-            nodes.push(Node { key: id, kind });
-        }
-        let wires = rook_lua::audio_api::connections(dom, &wires)
-            .into_iter()
-            .map(|c| Wire {
-                from: c.from,
-                to: c.to,
-                sidechain: c.sidechain,
-            })
-            .collect();
-        Graph { nodes, wires }
+        self.mix().graph.clone()
     }
 
     /// Once a frame, after sounds move on: a client's scheduled `Play` and
@@ -252,13 +186,15 @@ impl DataModel {
             self.sounds.meter = None;
             return;
         }
-        let graph = self.audio_graph();
+        self.hear();
+        let hearing = self.sounds.hearing.borrow();
+        let graph = &hearing.mix().graph;
         let m = self.sounds.meter.get_or_insert_with(|| Metering {
             // Studio's analyzer spectra reach 24 kHz.
             runner: Runner::new(SAMPLE_RATE),
             carry: 0.0,
         });
-        m.runner.sync(&graph);
+        m.runner.sync(graph);
         let owed = dt * f64::from(SAMPLE_RATE) + m.carry;
         let mut frames = owed.floor() as usize;
         m.carry = owed - frames as f64;

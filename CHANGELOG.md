@@ -5,6 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- While sounds play, a frame rereads only the sounds, SoundGroups and audio API objects that changed, and works out only how loud each is where it is now. Rook rebuilt everything it heard every frame, and twice with an AudioAnalyzer.
 - Changing a Highlight or other adornment redraws only it, a change inside one world GUI redraws only that GUI, and name tags are worked out again only for characters that changed. Rook redrew every part of the adorned Model, every world GUI, and every name tag each frame.
 - A client with no character of its own no longer runs physics steps for parts the server moves, and those standing still cost nothing. Rook stepped and wrote back all of them every frame.
 - `typeof` names Faces, Axes and PhysicalProperties, and printing Faces or Axes lists their members, as in Roblox. Rook gave all three the same internal name. See [Faces, Axes and PhysicalProperties](docs/behavior/scripting/faces-and-axes.md).

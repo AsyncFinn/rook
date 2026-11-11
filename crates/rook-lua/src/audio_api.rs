@@ -262,21 +262,106 @@ pub fn place(w: &World, id: InstanceId) -> Option<CFrame> {
     None
 }
 
-fn group(dom: &Dom, id: InstanceId) -> String {
-    dom.string_property(id, "AudioInteractionGroup")
-        .unwrap_or_default()
+/// What of an emitter or listener decides how it hears or is heard, read
+/// once: the engine keeps these between frames, and only where the two
+/// are changes each frame.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Hearer {
+    /// `AudioInteractionGroup`.
+    group: String,
+    /// An emitter's `DistanceAttenuationMode` (`None` for Custom).
+    mode: Option<RollOffMode>,
+    /// An emitter's `DistanceAttenuationBounds`.
+    bounds: [f32; 2],
+    distance: Vec<(f32, f32)>,
+    angle: Vec<(f32, f32)>,
 }
 
-/// Whether `listener` can hear `emitter` at all: the same
-/// `AudioInteractionGroup` (an emitter in group "x" was silent to a
-/// listener in "").
+impl Hearer {
+    pub fn read(dom: &Dom, id: InstanceId) -> Self {
+        let mode = match dom.enum_item_property(id, "DistanceAttenuationMode") {
+            Some("InverseTapered") => Some(RollOffMode::InverseTapered),
+            Some("Linear") => Some(RollOffMode::Linear),
+            Some("LinearSquared") => Some(RollOffMode::LinearSquare),
+            Some("Inverse") => Some(RollOffMode::Inverse),
+            _ => None,
+        };
+        Self {
+            group: (dom.str_property(id, "AudioInteractionGroup"))
+                .map_or_else(String::new, std::borrow::Cow::into_owned),
+            mode,
+            bounds: dom
+                .number_range_property(id, "DistanceAttenuationBounds")
+                .map_or([4.0, 10_000.0], |r| [r.min, r.max]),
+            distance: read_curve(dom, id, "DistanceAttenuation"),
+            angle: read_curve(dom, id, "AngleAttenuation"),
+        }
+    }
+
+    /// Whether this listener can hear `emitter` at all: the same
+    /// `AudioInteractionGroup` (an emitter in group "x" was silent to a
+    /// listener in "").
+    pub fn interacts(&self, emitter: &Hearer) -> bool {
+        self.group == emitter.group
+    }
+
+    /// How loud this listener, at `l`, hears `emitter`, at `e`, 0 to 1:
+    /// the emitter's distance attenuation times the listener's curve,
+    /// times both angle curves (`GetAudibilityFor`, Confirmed for
+    /// distance; angles by creator-docs).
+    pub fn audibility(&self, l: CFrame, emitter: &Hearer, e: CFrame) -> f32 {
+        if !self.interacts(emitter) {
+            return 0.0;
+        }
+        let offset = l.position - e.position;
+        let distance = offset.length();
+        let by_distance = rook_audio::spatial::emitter_attenuation(
+            emitter.mode,
+            emitter.bounds,
+            &emitter.distance,
+            distance,
+        ) * rook_audio::spatial::curve(&self.distance, distance);
+        // The angle between each one's look vector and the other (Inference
+        // for the listener's: the docs give only the emitter's).
+        let angle = |c: CFrame, to: glam::Vec3| {
+            let look = c.rotation * glam::Vec3::NEG_Z;
+            if to.length() < 1e-6 {
+                0.0
+            } else {
+                look.angle_between(to).to_degrees()
+            }
+        };
+        let by_angle = rook_audio::spatial::curve(&emitter.angle, angle(e, offset))
+            * rook_audio::spatial::curve(&self.angle, angle(l, -offset));
+        by_distance * by_angle
+    }
+
+    /// The left and right gains this listener, at `l`, hears `emitter`, at
+    /// `e`, at: its audibility, panned by direction from the listener as a
+    /// Sound is (Inference: Studio's listener output, split to stereo, gave
+    /// the same levels as a Sound's at 30 and 60 degrees; nearer than about
+    /// 8 studs Studio also spreads a sound over more speakers, which Rook
+    /// doesn't, Approximation).
+    pub fn heard(&self, l: CFrame, emitter: &Hearer, e: CFrame) -> Option<[f32; 2]> {
+        let level = self.audibility(l, emitter, e);
+        if level <= 0.0 {
+            return None;
+        }
+        let local = l.rotation.transpose() * (e.position - l.position);
+        Some(rook_audio::spatial::pan(local).map(|g| g * level))
+    }
+}
+
+/// Whether `listener` can hear `emitter` at all ([`Hearer::interacts`]).
 pub fn interacting(dom: &Dom, emitter: InstanceId, listener: InstanceId) -> bool {
-    group(dom, emitter) == group(dom, listener)
+    let group = |id| {
+        dom.str_property(id, "AudioInteractionGroup")
+            .unwrap_or_default()
+    };
+    group(emitter) == group(listener)
 }
 
-/// How loud `listener` hears `emitter`, 0 to 1: the emitter's distance
-/// attenuation times the listener's curve, times both angle curves
-/// (`GetAudibilityFor`, Confirmed for distance; angles by creator-docs).
+/// How loud `listener` hears `emitter`, 0 to 1 ([`Hearer::audibility`]).
 /// Studio updates the answer at its audio rate, so a read straight after
 /// a move gives the old one; Rook's is always current (Approximation).
 pub fn audibility(w: &World, emitter: InstanceId, listener: InstanceId) -> f32 {
@@ -287,59 +372,7 @@ pub fn audibility(w: &World, emitter: InstanceId, listener: InstanceId) -> f32 {
     let (Some(e), Some(l)) = (place(w, emitter), place(w, listener)) else {
         return 0.0;
     };
-    let offset = l.position - e.position;
-    let distance = offset.length();
-    let mode = match dom.enum_item_property(emitter, "DistanceAttenuationMode") {
-        Some("InverseTapered") => Some(RollOffMode::InverseTapered),
-        Some("Linear") => Some(RollOffMode::Linear),
-        Some("LinearSquared") => Some(RollOffMode::LinearSquare),
-        Some("Inverse") => Some(RollOffMode::Inverse),
-        _ => None,
-    };
-    let bounds = dom
-        .number_range_property(emitter, "DistanceAttenuationBounds")
-        .map_or([4.0, 10_000.0], |r| [r.min, r.max]);
-    let by_distance =
-        rook_audio::spatial::emitter_attenuation(
-            mode,
-            bounds,
-            &read_curve(dom, emitter, "DistanceAttenuation"),
-            distance,
-        ) * rook_audio::spatial::curve(&read_curve(dom, listener, "DistanceAttenuation"), distance);
-    // The angle between each one's look vector and the other (Inference
-    // for the listener's: the docs give only the emitter's).
-    let angle = |c: CFrame, to: glam::Vec3| {
-        let look = c.rotation * glam::Vec3::NEG_Z;
-        if to.length() < 1e-6 {
-            0.0
-        } else {
-            look.angle_between(to).to_degrees()
-        }
-    };
-    let by_angle = rook_audio::spatial::curve(
-        &read_curve(dom, emitter, "AngleAttenuation"),
-        angle(e, offset),
-    ) * rook_audio::spatial::curve(
-        &read_curve(dom, listener, "AngleAttenuation"),
-        angle(l, -offset),
-    );
-    by_distance * by_angle
-}
-
-/// The left and right gains `listener` hears `emitter` at: its
-/// audibility, panned by direction from the listener as a Sound is
-/// (Inference: Studio's listener output, split to stereo, gave the
-/// same levels as a Sound's at 30 and 60 degrees; nearer than about 8
-/// studs Studio also spreads a sound over more speakers, which Rook
-/// doesn't, Approximation).
-pub fn heard(w: &World, emitter: InstanceId, listener: InstanceId) -> Option<[f32; 2]> {
-    let level = audibility(w, emitter, listener);
-    if level <= 0.0 {
-        return None;
-    }
-    let (e, l) = (place(w, emitter)?, place(w, listener)?);
-    let local = l.rotation.transpose() * (e.position - l.position);
-    Some(rook_audio::spatial::pan(local).map(|g| g * level))
+    Hearer::read(dom, listener).audibility(l, &Hearer::read(dom, emitter), e)
 }
 
 /// The emitters (or listeners) in the DataModel that `id` can interact

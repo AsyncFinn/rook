@@ -44,6 +44,7 @@ fn render(runner: &mut Runner<u32>, frames: usize) -> Vec<Frame> {
 fn player_effect_output_and_analyzer() {
     let mut r = Runner::new(100);
     r.sync(&Graph {
+        topology: 0,
         nodes: vec![
             node(1, NodeKind::Player(Some(source(0.5)))),
             node(2, NodeKind::Effect(Some(Effect::Fader { volume: 2.0 }))),
@@ -67,6 +68,7 @@ fn player_effect_output_and_analyzer() {
 fn inputs_add_up() {
     let mut r = Runner::new(100);
     r.sync(&Graph {
+        topology: 0,
         nodes: vec![
             node(1, NodeKind::Player(Some(source(0.25)))),
             node(2, NodeKind::Effect(None)),
@@ -86,6 +88,7 @@ fn inputs_add_up() {
 fn listeners_hear_emitters() {
     let mut r = Runner::new(100);
     r.sync(&Graph {
+        topology: 0,
         nodes: vec![
             node(5, NodeKind::Listener(vec![(2, [0.0, 0.4])])),
             node(1, NodeKind::Player(Some(source(1.0)))),
@@ -96,6 +99,30 @@ fn listeners_hear_emitters() {
     });
     let out = render(&mut r, 4);
     assert!(out.iter().all(|f| f[0] == 0.0 && (f[1] - 0.2).abs() < 1e-6));
+}
+
+/// A graph of the topology last synced changes only what listeners hear:
+/// the runner takes the new gains and keeps everything else as it was.
+#[test]
+fn the_same_topology_moves_only_listeners() {
+    let graph = |gains: f32, player: Option<Source>| Graph {
+        topology: 7,
+        nodes: vec![
+            node(5, NodeKind::Listener(vec![(2, [0.0, gains])])),
+            node(1, NodeKind::Player(player)),
+            node(2, NodeKind::Emitter),
+            node(3, NodeKind::Output),
+        ],
+        wires: vec![wire(1, 2), wire(5, 3)],
+    };
+    let mut r = Runner::new(100);
+    r.sync(&graph(0.4, Some(source(1.0))));
+    render(&mut r, 4);
+    // Stopping the player is a new topology's change, not this one's.
+    r.sync(&graph(0.8, None));
+    render(&mut r, 4);
+    let out = render(&mut r, 4);
+    assert!(out.iter().all(|f| (f[1] - 0.4).abs() < 1e-6), "{out:?}");
 }
 
 /// A compressor's sidechain decides how much it turns its input down.
@@ -119,6 +146,7 @@ fn sidechain_keys_the_compressor() {
             });
         }
         r.sync(&Graph {
+            topology: 0,
             nodes: vec![
                 node(1, NodeKind::Player(Some(source(0.001)))),
                 node(2, NodeKind::Player(Some(source(1.0)))),

@@ -233,51 +233,8 @@ impl Game {
     /// What the window's DataModel is playing, for the mixer: its sounds,
     /// their SoundGroups, `SoundService.AmbientReverb` and the audio API's
     /// graph.
-    pub(crate) fn sounds(&self) -> rook_audio::Mix<rook_dom::InstanceId> {
-        use rook_audio::spatial::{attenuation, pan};
-        let view = self.view();
-        let listener = view.sound_listener();
-        let (at, facing) = (listener.cframe.position, listener.cframe.rotation);
-        let playing = view.playing_sounds();
-        let groups = view.sound_groups(&playing);
-        let sounds = playing
-            .into_iter()
-            .map(|s| {
-                // A global sound is heard at its Volume on both sides; a 3D
-                // one by distance and direction from the listener.
-                let gains = match s.emitter {
-                    None => [s.volume; 2],
-                    Some(e) => {
-                        let offset = e.position - at;
-                        let fade = attenuation(
-                            e.roll_off,
-                            offset.length(),
-                            e.min,
-                            e.max,
-                            listener.rolloff_scale,
-                        );
-                        pan(facing.transpose() * offset).map(|g| g * fade * s.volume)
-                    }
-                };
-                rook_audio::Play {
-                    key: s.id,
-                    audio: s.audio,
-                    position: s.position,
-                    gains,
-                    speed: s.speed,
-                    looped: s.looped,
-                    generation: s.generation,
-                    effects: s.effects,
-                    group: s.group,
-                }
-            })
-            .collect();
-        rook_audio::Mix {
-            sounds,
-            groups,
-            ambient: listener.ambient_reverb,
-            graph: view.audio_graph(),
-        }
+    pub(crate) fn sounds(&self) -> std::cell::Ref<'_, rook_audio::Mix<rook_dom::InstanceId>> {
+        self.view().mix()
     }
 
     /// Send window input to the local player's client (Run mode has no player).

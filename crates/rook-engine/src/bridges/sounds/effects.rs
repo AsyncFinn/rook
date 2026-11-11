@@ -48,7 +48,7 @@ fn effect(dom: &Dom, id: InstanceId) -> Option<Effect> {
 /// The enabled effects directly under a Sound or SoundGroup, in the order
 /// they run (Confirmed: an effect inside a Folder under the sound does
 /// nothing; one added while it plays applies at once).
-pub(crate) fn effects(dom: &Dom, id: InstanceId) -> Vec<Effect> {
+pub(super) fn effects(dom: &Dom, id: InstanceId) -> Vec<Effect> {
     let children = dom.children(id);
     if children.is_empty() {
         return Vec::new();
@@ -65,14 +65,14 @@ pub(crate) fn effects(dom: &Dom, id: InstanceId) -> Vec<Effect> {
 /// The SoundGroup a Sound plays through: its `SoundGroup` property, when
 /// that is a SoundGroup still in the tree. Parenting a Sound to a group
 /// doesn't put it in the group (creator-docs).
-pub(crate) fn group(dom: &Dom, sound: InstanceId) -> Option<InstanceId> {
+pub(super) fn group(dom: &Dom, sound: InstanceId) -> Option<InstanceId> {
     let g = dom.ref_property(sound, "SoundGroup")?;
     (dom.get(g).is_some() && dom.is_a(g, "SoundGroup")).then_some(g)
 }
 
 /// A group's parent group: groups nest by parenting (creator-docs "mix
 /// tree"; that the volumes multiply down the tree is Inference).
-fn parent_group(dom: &Dom, group: InstanceId) -> Option<InstanceId> {
+pub(super) fn parent_group(dom: &Dom, group: InstanceId) -> Option<InstanceId> {
     dom.parent(group).filter(|&p| dom.is_a(p, "SoundGroup"))
 }
 
@@ -110,25 +110,7 @@ impl DataModel {
     /// in, for the mixer.
     pub fn sound_groups(&self, sounds: &[PlayingSound]) -> Vec<rook_audio::Group<InstanceId>> {
         let w = self.runtime.world();
-        let dom = &w.dom;
-        let mut out: Vec<rook_audio::Group<InstanceId>> = Vec::new();
-        for s in sounds {
-            let mut next = s.group;
-            while let Some(g) = next {
-                if out.iter().any(|o| o.key == g) {
-                    break;
-                }
-                let parent = parent_group(dom, g);
-                out.push(rook_audio::Group {
-                    key: g,
-                    parent,
-                    volume: dom.float_property(g, "Volume").unwrap_or(0.5),
-                    effects: effects(dom, g),
-                });
-                next = parent;
-            }
-        }
-        out
+        super::hearing::groups(&w.dom, sounds.iter().map(|s| s.group))
     }
 }
 
