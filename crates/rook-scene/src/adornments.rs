@@ -13,6 +13,8 @@ mod lasso;
 mod selection_box;
 mod selection_sphere;
 mod surface_selection;
+#[cfg(test)]
+mod tests;
 pub(super) mod wireframe;
 
 use rook_render::{AdornShape, Grow, ImageHash, Light};

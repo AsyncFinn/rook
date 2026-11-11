@@ -22,7 +22,7 @@ pub(crate) fn highlight(
     dom: &Dom,
     id: InstanceId,
     models: &mut ModelHighlights,
-) -> Option<Highlight> {
+) -> Option<InstanceId> {
     if let Some(h) = covering(dom, id) {
         return Some(h);
     }
@@ -35,24 +35,38 @@ pub(crate) fn highlight(
 
 /// Each Model's own Highlight, looked up once per scene update (a big
 /// Model's parts would each look through its children).
-pub(crate) type ModelHighlights = FxHashMap<InstanceId, Option<Highlight>>;
+pub(crate) type ModelHighlights = FxHashMap<InstanceId, Option<InstanceId>>;
+
+impl SceneCache {
+    /// The key of the Highlight covering part `id` ([`highlight`]), its
+    /// look kept in `scene.highlights`, where a change to the look alone
+    /// is made once for every part it covers.
+    pub(crate) fn highlight(&mut self, dom: &Dom, id: InstanceId) -> Option<u64> {
+        let h = highlight(dom, id, &mut self.model_highlights)?;
+        let key = h.to_ref().0;
+        if let std::collections::hash_map::Entry::Vacant(e) = self.scene.highlights.entry(key) {
+            e.insert(look(dom, h));
+            self.highlights_changed = true;
+        }
+        Some(key)
+    }
+}
 
 /// The Highlight on `target` itself: adorning it, or inside it without
 /// an `Adornee`.
-fn covering(dom: &Dom, target: InstanceId) -> Option<Highlight> {
+fn covering(dom: &Dom, target: InstanceId) -> Option<InstanceId> {
     let adorning = dom.referrers(target).iter().map(|&(h, _)| h).find(|&h| {
         dom.class_name(h) == "Highlight"
             && dom.ref_property(h, "Adornee") == Some(target)
             && enabled(dom, h)
     });
-    let inside = || {
+    adorning.or_else(|| {
         dom.children(target).iter().copied().find(|&h| {
             dom.class_name(h) == "Highlight"
                 && dom.ref_property(h, "Adornee").is_none()
                 && enabled(dom, h)
         })
-    };
-    adorning.or_else(inside).map(|h| look(dom, h))
+    })
 }
 
 fn enabled(dom: &Dom, id: InstanceId) -> bool {
@@ -61,7 +75,7 @@ fn enabled(dom: &Dom, id: InstanceId) -> bool {
 
 /// Highlight `id`'s look; the defaults are the API reference's (fill red
 /// at 0.5, outline white, AlwaysOnTop).
-fn look(dom: &Dom, id: InstanceId) -> Highlight {
+pub(crate) fn look(dom: &Dom, id: InstanceId) -> Highlight {
     let color = |name, default: [f32; 3], transparency, at: f32| {
         let [r, g, b] = dom
             .color3_property(id, name)
@@ -70,7 +84,6 @@ fn look(dom: &Dom, id: InstanceId) -> Highlight {
         [r, g, b, opacity.clamp(0.0, 1.0)]
     };
     Highlight {
-        key: id.to_ref().0,
         fill: color("FillColor", [1.0, 0.0, 0.0], "FillTransparency", 0.5),
         outline: color("OutlineColor", [1.0; 3], "OutlineTransparency", 0.0),
         on_top: dom.enum_item_property(id, "DepthMode") != Some("Occluded"),

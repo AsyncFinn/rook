@@ -55,7 +55,7 @@ impl SceneCache {
         let mut pose = Pose::default();
         let (mut part, decals) = self.look(dom, id, &mut pose)?;
         self.material_maps(dom, id, &mut part);
-        let mut layers: Vec<(PartInstance, Pose)> = match decals {
+        let images: Vec<(PartInstance, Pose)> = match decals {
             Decals::None => Vec::new(),
             Decals::Faces | Decals::Stretched | Decals::MeshUv => self
                 .images(dom, id, &part, decals)
@@ -63,9 +63,14 @@ impl SceneCache {
                 .map(|layer| (layer, pose))
                 .collect(),
         };
-        layers.extend(self.adornments(dom, id));
-        part.highlight = adornments::highlight::highlight(dom, id, &mut self.model_highlights);
-        Some(Drawn { part, pose, layers })
+        let adornments = self.adornments(dom, id);
+        part.highlight = self.highlight(dom, id);
+        Some(Drawn {
+            part,
+            pose,
+            images,
+            adornments,
+        })
     }
 
     pub(super) fn look(

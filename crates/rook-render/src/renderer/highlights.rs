@@ -30,9 +30,17 @@ type Group = ((BatchKey, bool), Vec<(u32, Instance)>);
 
 #[derive(Debug)]
 pub(crate) struct HighlightParts {
-    /// The highlighted entries, by their index in the scene.
-    entries: BTreeMap<usize, (Highlight, BatchKey, Instance)>,
+    /// The highlighted entries, by their index in the scene, with the key
+    /// of the Highlight covering each.
+    entries: BTreeMap<usize, (u64, BatchKey, Instance)>,
+    /// The scene's Highlights' looks, by key.
+    looks_by_key: FxHashMap<u64, Highlight>,
+    /// Each drawn Highlight's number in the mask, by key.
+    numbers: FxHashMap<u64, u32>,
+    /// The mask's draws must be made again.
     changed: bool,
+    /// Only the colors changed: the draws stay.
+    recolored: bool,
     runs: Vec<HighlightRun>,
     /// Each uploaded instance's scene entry and box in the world.
     picks: Vec<(u32, Aabb)>,
@@ -45,7 +53,10 @@ impl Default for HighlightParts {
     fn default() -> Self {
         Self {
             entries: BTreeMap::new(),
+            looks_by_key: FxHashMap::default(),
+            numbers: FxHashMap::default(),
             changed: false,
+            recolored: false,
             runs: Vec::new(),
             picks: Vec::new(),
             looks: [[0.0; 4]; 2 * HIGHLIGHT_LIMIT],
@@ -58,6 +69,17 @@ impl HighlightParts {
     pub(crate) fn clear(&mut self) {
         self.entries.clear();
         self.changed = true;
+    }
+
+    /// Take the scene's Highlight looks: a change of colors alone keeps
+    /// the draws, one of `on_top` (which draws them differently) doesn't.
+    pub(crate) fn set_looks(&mut self, looks: &FxHashMap<u64, Highlight>) {
+        let regrouped = looks.len() != self.looks_by_key.len()
+            || (looks.iter())
+                .any(|(k, h)| self.looks_by_key.get(k).map(|o| o.on_top) != Some(h.on_top));
+        self.changed |= regrouped;
+        self.recolored = true;
+        self.looks_by_key.clone_from(looks);
     }
 
     /// Entry `i` is drawn as `instance` (or not at all) with its look.
@@ -101,28 +123,32 @@ impl HighlightParts {
         queue: &wgpu::Queue,
     ) -> (Vec<HighlightRun>, Looks) {
         if !self.changed {
+            if std::mem::take(&mut self.recolored) {
+                self.recolor();
+            }
             return (self.runs.clone(), self.looks);
         }
         self.changed = false;
+        self.recolored = false;
         // Numbered in key order; past the limit, a Highlight draws nothing.
-        let mut by_key: BTreeMap<u64, Highlight> = BTreeMap::new();
-        for (h, _, _) in self.entries.values() {
-            by_key.entry(h.key).or_insert(*h);
+        let mut keys: Vec<u64> = (self.entries.values().map(|(k, _, _)| *k))
+            .filter(|k| self.looks_by_key.contains_key(k))
+            .collect();
+        keys.sort_unstable();
+        keys.dedup();
+        self.numbers.clear();
+        for (n, &k) in keys.iter().take(HIGHLIGHT_LIMIT).enumerate() {
+            self.numbers.insert(k, n as u32 + 1);
         }
-        let mut numbers: FxHashMap<u64, u32> = FxHashMap::default();
-        let mut looks = [[0.0; 4]; 2 * HIGHLIGHT_LIMIT];
-        for (n, h) in by_key.values().take(HIGHLIGHT_LIMIT).enumerate() {
-            numbers.insert(h.key, n as u32 + 1);
-            looks[n * 2] = h.fill;
-            looks[n * 2 + 1] = h.outline;
-        }
+        self.recolor();
+        let numbers = &self.numbers;
         // Grouped by what they draw, so each group is one run.
         let mut groups: Vec<Group> = Vec::new();
         for (&i, (h, key, instance)) in &self.entries {
-            let Some(&number) = numbers.get(&h.key) else {
+            let Some(&number) = numbers.get(h) else {
                 continue;
             };
-            let group = (*key, h.on_top);
+            let group = (*key, self.looks_by_key[h].on_top);
             let at = match groups.iter().position(|(g, _)| *g == group) {
                 Some(at) => at,
                 None => {
@@ -159,8 +185,18 @@ impl HighlightParts {
             }
         }
         self.runs.clone_from(&runs);
-        self.looks = looks;
-        (runs, looks)
+        (runs, self.looks)
+    }
+
+    /// Each numbered Highlight's colors, from its look.
+    fn recolor(&mut self) {
+        self.looks = [[0.0; 4]; 2 * HIGHLIGHT_LIMIT];
+        for (k, &n) in &self.numbers {
+            let h = &self.looks_by_key[k];
+            let n = n as usize - 1;
+            self.looks[n * 2] = h.fill;
+            self.looks[n * 2 + 1] = h.outline;
+        }
     }
 }
 

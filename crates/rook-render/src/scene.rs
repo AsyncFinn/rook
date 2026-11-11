@@ -332,8 +332,9 @@ pub struct PartInstance {
     /// slot material textures use).
     pub grows: Option<Grow>,
     /// Outlined and filled over the finished frame, as a Highlight on it
-    /// draws.
-    pub highlight: Option<Highlight>,
+    /// draws: the key of its look in [`Scene::highlights`]. Parts with the
+    /// same key share one outline, around all of them.
+    pub highlight: Option<u64>,
     /// Which of its mesh file's levels of detail it may draw.
     pub fidelity: Fidelity,
     /// An image layer's or adornment's part: the scene entry it's drawn
@@ -355,12 +356,9 @@ pub enum Fidelity {
     Performance,
 }
 
-/// A Highlight's look on the parts it covers. Parts with the same `key`
-/// share one outline, around all of them.
+/// A Highlight's look on the parts it covers ([`PartInstance::highlight`]).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Highlight {
-    /// Which Highlight it is (any number the scene keeps for it).
-    pub key: u64,
     /// sRGB colors and their opacity (1 - transparency).
     pub fill: [f32; 4],
     pub outline: [f32; 4],
@@ -419,6 +417,9 @@ pub struct Scene {
     pub floor_wires: Vec<Option<FloorWire>>,
     pub lighting: Lighting,
     pub terrain: TerrainLook,
+    /// The Highlights' looks, by the key parts name them by: changing one
+    /// changes no part.
+    pub highlights: FxHashMap<u64, Highlight>,
     /// The mesh files parts may draw ([`DrawShape::File`]). The renderer
     /// uploads each the first time a part draws it.
     pub meshes: FxHashMap<MeshHash, Arc<Mesh>>,

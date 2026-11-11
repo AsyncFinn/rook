@@ -58,6 +58,7 @@ impl Renderer {
         self.waiting.clear();
         self.transparent.clear();
         self.highlights.clear();
+        self.update_highlights(scene);
         self.lights.clear_blockers();
         self.update_lighting(scene);
         self.lights.replace(&self.device, &scene.lights);
@@ -86,6 +87,11 @@ impl Renderer {
         for hash in scene.lighting.skybox.into_iter().flatten() {
             self.image_readiness(hash, Some(scene));
         }
+    }
+
+    /// Take the scene's Highlight looks again.
+    pub fn update_highlights(&mut self, scene: &Scene) {
+        self.highlights.set_looks(&scene.highlights);
     }
 
     /// Take the local lights at `changed` (indices into `scene.lights`,

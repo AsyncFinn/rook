@@ -59,12 +59,13 @@ struct Pose {
     turn: Mat3,
 }
 
-/// What a part draws: itself, its image layers and adornments, and how
-/// its CFrame places each.
+/// What a part draws: itself, its image layers and its adornments, and
+/// how its CFrame places each.
 struct Drawn {
     part: PartInstance,
     pose: Pose,
-    layers: Vec<(PartInstance, Pose)>,
+    images: Vec<(PartInstance, Pose)>,
+    adornments: Vec<(PartInstance, Pose)>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -78,6 +79,8 @@ pub(crate) enum SceneChange {
         moved: Vec<usize>,
         /// The lighting or the terrain's look changed.
         lighting: bool,
+        /// A Highlight's look changed ([`Scene::highlights`]).
+        highlights: bool,
     },
     Full,
 }
@@ -90,8 +93,11 @@ pub struct SceneCache {
     pub scene: Scene,
     /// Where each drawn part is in `scene.parts`.
     index: FxHashMap<InstanceId, usize>,
-    /// Where each drawn part's image layers and adornments are, in order.
+    /// Where each drawn part's image layers are, in order.
     layers: FxHashMap<InstanceId, Vec<usize>>,
+    /// Where each drawn part's adornments are, in order: redrawn on their
+    /// own when only they change.
+    adornment_layers: FxHashMap<InstanceId, Vec<usize>>,
     /// How each entry's part's CFrame places it, by index.
     poses: Vec<Pose>,
     /// Indices of entries no longer drawn (hidden), reused for new ones so
@@ -123,6 +129,8 @@ pub struct SceneCache {
     floors: Floors,
     /// Models' Highlights, found again each update.
     model_highlights: adornments::highlight::ModelHighlights,
+    /// `scene.highlights` changed since the renderer last took it.
+    highlights_changed: bool,
     report: Report,
     /// The GUI layout the renderer was last given.
     gui_generation: Option<u64>,
@@ -144,6 +152,7 @@ impl SceneCache {
             scene,
             index: FxHashMap::default(),
             layers: FxHashMap::default(),
+            adornment_layers: FxHashMap::default(),
             files: Files::new(content),
             waiting: FxHashMap::default(),
             arrivals: Default::default(),
@@ -161,6 +170,7 @@ impl SceneCache {
             wire_lines: Default::default(),
             floors,
             model_highlights: Default::default(),
+            highlights_changed: false,
             report: Report::default(),
             gui_generation: None,
             gui_waiting: FxHashMap::default(),
@@ -175,28 +185,24 @@ impl SceneCache {
     pub(crate) fn rebuild(&mut self, dom: &Dom) {
         profiling::scope!("SceneCache::rebuild");
         self.model_highlights.clear();
+        self.scene.highlights.clear();
         self.scene.parts.clear();
         self.poses.clear();
         self.free.clear();
         self.index.clear();
         self.layers.clear();
+        self.adornment_layers.clear();
         for id in workspace_parts(dom) {
             if let Some(drawn) = self.part(dom, id) {
-                let base = self.scene.parts.len();
+                let base = self.take_index(drawn.part, drawn.pose);
                 self.index.insert(id, base);
-                self.scene.parts.push(drawn.part);
-                self.poses.push(drawn.pose);
-                let mut layers = Vec::new();
-                for (layer, pose) in drawn.layers {
-                    layers.push(self.scene.parts.len());
-                    self.scene.parts.push(PartInstance {
-                        drawn_over: Some(base),
-                        ..layer
-                    });
-                    self.poses.push(pose);
+                let images = self.set_layers(base, Vec::new(), drawn.images, None);
+                let adornments = self.set_layers(base, Vec::new(), drawn.adornments, None);
+                if !images.is_empty() {
+                    self.layers.insert(id, images);
                 }
-                if !layers.is_empty() {
-                    self.layers.insert(id, layers);
+                if !adornments.is_empty() {
+                    self.adornment_layers.insert(id, adornments);
                 }
             }
         }
@@ -219,6 +225,7 @@ impl SceneCache {
         for &id in &changes.collected {
             self.place(dom, id, false, &mut changed);
             self.wire_lines.remove(&id);
+            self.highlights_changed |= self.scene.highlights.remove(&id.to_ref().0).is_some();
         }
         if !changes.collected.is_empty() {
             for parts in self.waiting.values_mut() {
@@ -251,6 +258,34 @@ impl SceneCache {
                 self.place(dom, *id, true, &mut changed);
             }
         }
+        // Adornments and Highlights alone: the parts' own looks stay.
+        for id in &changes.adorned {
+            if let Some(&base) = self.index.get(id) {
+                let old = self.adornment_layers.remove(id).unwrap_or_default();
+                let new = self.adornments(dom, *id);
+                let kept = self.set_layers(base, old, new, Some(&mut changed));
+                if !kept.is_empty() {
+                    self.adornment_layers.insert(*id, kept);
+                }
+            }
+        }
+        for id in &changes.highlighted {
+            if let Some(&i) = self.index.get(id) {
+                let covering = self.highlight(dom, *id);
+                if self.scene.parts[i].highlight != covering {
+                    self.scene.parts[i].highlight = covering;
+                    changed.push(i);
+                }
+            }
+        }
+        for &id in &changes.highlights {
+            let key = id.to_ref().0;
+            if self.scene.highlights.contains_key(&key) {
+                let look = adornments::highlight::look(dom, id);
+                self.scene.highlights.insert(key, look);
+                self.highlights_changed = true;
+            }
+        }
         // Parts that only moved keep their look: place it at the new CFrame.
         for id in &changes.moved {
             let Some(&i) = self.index.get(id) else {
@@ -259,8 +294,8 @@ impl SceneCache {
             let Some(cf) = dom.drawn_cframe(*id) else {
                 continue;
             };
-            let entries =
-                std::iter::once(i).chain(self.layers.get(id).into_iter().flatten().copied());
+            let layers = [&self.layers, &self.adornment_layers].map(|l| l.get(id));
+            let entries = std::iter::once(i).chain(layers.into_iter().flatten().flatten().copied());
             for i in entries {
                 let pose = self.poses[i];
                 let part = &mut self.scene.parts[i];
@@ -270,13 +305,15 @@ impl SceneCache {
             }
         }
         let lighting = changes.lighting || changes.terrain;
-        if changed.is_empty() && moved.is_empty() && !lighting {
+        let highlights = std::mem::take(&mut self.highlights_changed);
+        if changed.is_empty() && moved.is_empty() && !lighting && !highlights {
             SceneChange::None
         } else {
             SceneChange::Parts {
                 changed,
                 moved,
                 lighting,
+                highlights,
             }
         }
     }
@@ -306,14 +343,21 @@ impl SceneCache {
     /// changed to `changed`.
     fn place(&mut self, dom: &Dom, id: InstanceId, drawn: bool, changed: &mut Vec<usize>) {
         let look = if drawn { self.part(dom, id) } else { None };
-        let old_layers = self.layers.remove(&id).unwrap_or_default();
-        let Some(Drawn { part, pose, layers }) = look else {
+        let old_images = self.layers.remove(&id).unwrap_or_default();
+        let old_adornments = self.adornment_layers.remove(&id).unwrap_or_default();
+        let Some(Drawn {
+            part,
+            pose,
+            images,
+            adornments,
+        }) = look
+        else {
             if let Some(i) = self.index.remove(&id) {
                 self.shown.remove(&id);
                 self.release(i);
                 changed.push(i);
             }
-            for i in old_layers {
+            for i in old_images.into_iter().chain(old_adornments) {
                 self.release(i);
                 changed.push(i);
             }
@@ -332,9 +376,28 @@ impl SceneCache {
             }
         };
         changed.push(base);
-        // Layers keep their indices in order; extra ones are released.
+        let images = self.set_layers(base, old_images, images, Some(changed));
+        let adornments = self.set_layers(base, old_adornments, adornments, Some(changed));
+        if !images.is_empty() {
+            self.layers.insert(id, images);
+        }
+        if !adornments.is_empty() {
+            self.adornment_layers.insert(id, adornments);
+        }
+    }
+
+    /// Draw `layers` over entry `base` at `old`'s indices, in order (extra
+    /// ones take free indices, leftover ones are released), adding the
+    /// entries that changed to `changed`; the indices they're at now.
+    fn set_layers(
+        &mut self,
+        base: usize,
+        old: Vec<usize>,
+        layers: Vec<(PartInstance, Pose)>,
+        mut changed: Option<&mut Vec<usize>>,
+    ) -> Vec<usize> {
         let mut kept = Vec::with_capacity(layers.len());
-        let mut old = old_layers.into_iter();
+        let mut old = old.into_iter();
         for (layer, pose) in layers {
             let layer = PartInstance {
                 drawn_over: Some(base),
@@ -349,15 +412,17 @@ impl SceneCache {
                 None => self.take_index(layer, pose),
             };
             kept.push(i);
-            changed.push(i);
+            if let Some(c) = changed.as_deref_mut() {
+                c.push(i);
+            }
         }
         for i in old {
             self.release(i);
-            changed.push(i);
+            if let Some(c) = changed.as_deref_mut() {
+                c.push(i);
+            }
         }
-        if !kept.is_empty() {
-            self.layers.insert(id, kept);
-        }
+        kept
     }
 
     /// Apply scripts' effect calls (`Emit` and the like) made before this

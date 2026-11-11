@@ -1202,14 +1202,13 @@ fn dropped_meshes_make_room_for_others() {
 
 /// A Highlight fills its part in exactly its color over the finished
 /// frame and outlines it, through a wall when on top; occluded, the wall
-/// hides both.
+/// hides both. Its look changes without the part changing.
 #[test]
 fn highlights_fill_and_outline_through_walls_when_on_top() {
     let Ok(mut r) = Renderer::headless() else {
         return;
     };
     let highlight = |on_top| Highlight {
-        key: 1,
         fill: [0.0, 1.0, 0.0, 1.0],
         outline: [0.0, 0.0, 1.0, 1.0],
         on_top,
@@ -1220,11 +1219,12 @@ fn highlights_fill_and_outline_through_walls_when_on_top() {
     let mut scene = Scene {
         parts: vec![
             PartInstance {
-                highlight: Some(highlight(true)),
+                highlight: Some(1),
                 ..part(PartShape::Block, 0.0, [1.0, 0.0, 0.0], 0.0)
             },
             wall,
         ],
+        highlights: [(1, highlight(true))].into_iter().collect(),
         ..Scene::default()
     };
     r.set_scene(&scene);
@@ -1244,8 +1244,8 @@ fn highlights_fill_and_outline_through_walls_when_on_top() {
     // Two pixels at either side.
     assert_eq!(outline, 4, "{row:?}");
 
-    scene.parts[0].highlight = Some(highlight(false));
-    r.update_parts(&scene, &[0]);
+    scene.highlights.insert(1, highlight(false));
+    r.update_highlights(&scene);
     let pixels = r.render_to_image(w, h, &camera).unwrap();
     assert_eq!(at(&pixels, 32, 32), at(&pixels, 4, 4));
     assert!(!(0..w).any(|x| at(&pixels, x, 32) == [0, 0, 255]));

@@ -127,17 +127,20 @@ fn with_arrivals(change: SceneChange, loaded: Vec<usize>, lighting: bool) -> Sce
             changed: loaded,
             moved: Vec::new(),
             lighting,
+            highlights: false,
         },
         SceneChange::Parts {
             mut changed,
             moved,
             lighting: changed_lighting,
+            highlights,
         } => {
             changed.extend(loaded);
             SceneChange::Parts {
                 changed,
                 moved,
                 lighting: changed_lighting || lighting,
+                highlights,
             }
         }
         SceneChange::Full => SceneChange::Full,
@@ -178,9 +181,13 @@ impl ToRender {
                 changed,
                 moved,
                 lighting,
+                highlights,
             } => {
                 if *lighting {
                     renderer.update_lighting(scene);
+                }
+                if *highlights {
+                    renderer.update_highlights(scene);
                 }
                 if !changed.is_empty() {
                     renderer.update_parts(scene, changed);
@@ -213,6 +220,7 @@ mod tests {
             changed: Vec::new(),
             moved: vec![7],
             lighting: false,
+            highlights: false,
         }
     }
 
@@ -227,6 +235,7 @@ mod tests {
                 changed: vec![3],
                 moved: vec![7],
                 lighting: true,
+                highlights: false,
             }
         );
     }
@@ -243,6 +252,7 @@ mod tests {
                 changed: Vec::new(),
                 moved: Vec::new(),
                 lighting: true,
+                highlights: false,
             }
         );
     }

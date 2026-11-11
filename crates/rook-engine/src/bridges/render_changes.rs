@@ -17,7 +17,10 @@ use crate::*;
 /// Attachments, which may carry one) whose properties changed in `lights`,
 /// and the lights entering or leaving the tree in `lights_placed`; the
 /// same for the visual effects ([`is_effect_class`]) in `effects` and
-/// `effects_placed`, plus the effect methods scripts called. A FloorWire
+/// `effects_placed`, plus the effect methods scripts called. Parts whose
+/// adornments alone changed are in `adorned`, those a different Highlight
+/// may cover now in `highlighted`, and the Highlights whose look changed
+/// in `highlights`: none of them redraws a part's own look. A FloorWire
 /// is both an adornment of its `From` part (its wire) and an effect (its
 /// moving images); moving either of its parts redraws its wire. Instances
 /// freed since are in `collected` alone: a renderer drops what it keeps of
@@ -42,6 +45,9 @@ pub struct RenderChanges {
     pub placed: rustc_hash::FxHashSet<InstanceId>,
     pub parts: rustc_hash::FxHashSet<InstanceId>,
     pub moved: rustc_hash::FxHashSet<InstanceId>,
+    pub adorned: rustc_hash::FxHashSet<InstanceId>,
+    pub highlighted: rustc_hash::FxHashSet<InstanceId>,
+    pub highlights: rustc_hash::FxHashSet<InstanceId>,
     pub collected: rustc_hash::FxHashSet<InstanceId>,
 }
 
@@ -68,6 +74,9 @@ impl RenderChanges {
             && self.placed.is_empty()
             && self.parts.is_empty()
             && self.moved.is_empty()
+            && self.adorned.is_empty()
+            && self.highlighted.is_empty()
+            && self.highlights.is_empty()
             && self.collected.is_empty()
     }
 
@@ -96,6 +105,9 @@ impl RenderChanges {
         self.placed.remove(&id);
         self.parts.remove(&id);
         self.moved.remove(&id);
+        self.adorned.remove(&id);
+        self.highlighted.remove(&id);
+        self.highlights.remove(&id);
         self.collected.insert(id);
     }
 }
@@ -132,18 +144,38 @@ pub fn adorned_part(dom: &Dom, id: InstanceId) -> Option<InstanceId> {
     }
 }
 
-/// A Model's parts all redraw (a Highlight covers them).
+/// `part` redraws in full.
 fn mark_part(dom: &Dom, changes: &mut RenderChanges, part: Option<InstanceId>) {
-    let Some(part) = part.filter(|_| !changes.full) else {
+    if let Some(part) =
+        part.filter(|&p| !changes.full && dom.is_a_class(p, RenderIds::get().base_part))
+    {
+        changes.parts.insert(part);
+    }
+}
+
+/// The adornments drawn on `part` changed: they alone redraw. Only a
+/// Highlight draws on a Model.
+fn mark_adorned(dom: &Dom, changes: &mut RenderChanges, part: Option<InstanceId>) {
+    if let Some(part) =
+        part.filter(|&p| !changes.full && dom.is_a_class(p, RenderIds::get().base_part))
+    {
+        changes.adorned.insert(part);
+    }
+}
+
+/// Which Highlight covers `target` (a part, or each part of a Model) may
+/// have changed: their covering alone is looked up again.
+fn mark_highlighted(dom: &Dom, changes: &mut RenderChanges, target: Option<InstanceId>) {
+    let Some(target) = target.filter(|_| !changes.full) else {
         return;
     };
     let c = RenderIds::get();
-    if dom.is_a_class(part, c.base_part) {
-        changes.parts.insert(part);
-    } else if dom.is_a_class(part, c.model) && !dom.is_a_class(part, c.world_root) {
-        let parts = dom.descendants(part).into_iter();
+    if dom.is_a_class(target, c.base_part) {
+        changes.highlighted.insert(target);
+    } else if dom.is_a_class(target, c.model) && !dom.is_a_class(target, c.world_root) {
+        let parts = dom.descendants(target).into_iter();
         changes
-            .parts
+            .highlighted
             .extend(parts.filter(|&p| dom.is_a_class(p, c.base_part)));
     }
 }
@@ -160,13 +192,13 @@ fn part_moved(dom: &Dom, changes: &mut RenderChanges, id: InstanceId) {
     }
     for &(r, _) in dom.referrers(id) {
         if dom.class_name(r) == "FloorWire" || dom.class_name(r) == "SelectionPartLasso" {
-            mark_part(dom, changes, adorned_part(dom, r));
+            mark_adorned(dom, changes, adorned_part(dom, r));
         }
     }
     if let Some(h) = rook_lua::humanoid_of_root(dom, id)
         && (dom.referrers(h).iter()).any(|&(r, _)| adorned_part(dom, r) == Some(id))
     {
-        mark_part(dom, changes, Some(id));
+        mark_adorned(dom, changes, Some(id));
     }
 }
 
@@ -232,6 +264,11 @@ pub(crate) struct RenderIds {
     decorations: [ClassId; 3],
     /// See [`is_adornment`].
     adornments: [ClassId; 6],
+    highlight: ClassId,
+    /// What a Highlight covers by (besides where it is).
+    highlight_cover: [PropertyId; 2],
+    /// What a Highlight looks like.
+    highlight_look: [PropertyId; 5],
 }
 
 impl RenderIds {
@@ -270,6 +307,17 @@ impl RenderIds {
                     "Highlight",
                 ]
                 .map(class),
+                highlight: class("Highlight"),
+                highlight_cover: ["Adornee", "Enabled"]
+                    .map(|name| db.find_property(class("Highlight"), name).expect(name).id),
+                highlight_look: [
+                    "FillColor",
+                    "FillTransparency",
+                    "OutlineColor",
+                    "OutlineTransparency",
+                    "DepthMode",
+                ]
+                .map(|name| db.find_property(class("Highlight"), name).expect(name).id),
             }
         });
         &IDS
@@ -319,21 +367,36 @@ impl DataModel {
         let effect = |id: InstanceId| is_effect_class(dom.class_name(id));
         let wire = |id: InstanceId| dom.class_name(id) == "FloorWire";
         let mark_part = |changes: &mut RenderChanges, part| mark_part(dom, changes, part);
-        // An adornment draws on its Adornee: its old and new ones change.
+        // An adornment draws on its Adornee: its old and new ones change,
+        // and only in what it draws there. A Highlight's covering changes
+        // with its Adornee, its parent and `Enabled`; its look alone
+        // changes no part.
         let adorn = |changes: &mut RenderChanges,
                      adorned: &mut rustc_hash::FxHashMap<InstanceId, InstanceId>,
                      id: InstanceId,
-                     gone: bool| {
+                     gone: bool,
+                     property: Option<PropertyId>| {
+            let highlight = dom.is_a_class(id, ids.highlight);
+            if highlight && property.is_some_and(|p| ids.highlight_look.contains(&p)) {
+                changes.highlights.insert(id);
+                return;
+            }
+            if highlight && property.is_some_and(|p| !ids.highlight_cover.contains(&p)) {
+                return;
+            }
             let new = if gone { None } else { adorned_part(dom, id) };
             let old = match new {
                 Some(part) => adorned.insert(id, part),
                 None => adorned.remove(&id),
             };
-            mark_part(changes, old);
-            // One whose look changed on the same adornee: a Model's parts
-            // are walked once, not twice.
+            let mark = if highlight {
+                mark_highlighted
+            } else {
+                mark_adorned
+            };
+            mark(dom, changes, old);
             if new != old {
-                mark_part(changes, new);
+                mark(dom, changes, new);
             }
         };
         let adornment = |id: InstanceId| is_adornment(dom, id);
@@ -377,7 +440,7 @@ impl DataModel {
                     } else if decorates(*id) {
                         mark_part(changes, dom.parent(*id));
                     } else if adornment(*id) {
-                        adorn(changes, adorned, *id, false);
+                        adorn(changes, adorned, *id, false, Some(*property));
                         if wire(*id) {
                             changes.effects.insert(*id);
                         }
@@ -414,7 +477,7 @@ impl DataModel {
                         (subtree.iter()).filter(|&&i| effect(i) || wire(i) || attachment(i)),
                     );
                     for &i in subtree.iter().filter(|i| adornment(**i)) {
-                        adorn(changes, adorned, i, false);
+                        adorn(changes, adorned, i, false, None);
                     }
                     let parts = subtree
                         .iter()
@@ -444,7 +507,7 @@ impl DataModel {
                     changes.effects_placed.insert(*id);
                 }
                 Change::Destroying(id) if adornment(*id) => {
-                    adorn(changes, adorned, *id, true);
+                    adorn(changes, adorned, *id, true, None);
                     if wire(*id) {
                         changes.effects_placed.insert(*id);
                     }
@@ -460,12 +523,17 @@ impl DataModel {
             changes.parts.clear();
             changes.moved.clear();
             changes.placed.clear();
+            changes.adorned.clear();
+            changes.highlighted.clear();
+            changes.highlights.clear();
         } else {
-            // A part redrawn in full is drawn where it is now anyway.
+            // A part redrawn in full is drawn where it is now anyway, with
+            // its adornments and covering.
             let (parts, placed) = (&changes.parts, &changes.placed);
-            changes
-                .moved
-                .retain(|id| !parts.contains(id) && !placed.contains(id));
+            let redrawn = |id: &InstanceId| parts.contains(id) || placed.contains(id);
+            changes.moved.retain(|id| !redrawn(id));
+            changes.adorned.retain(|id| !redrawn(id));
+            changes.highlighted.retain(|id| !redrawn(id));
             changes.parts.retain(|id| !placed.contains(id));
         }
     }
