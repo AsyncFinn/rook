@@ -224,6 +224,12 @@ impl Game {
         }
     }
 
+    /// Whether the window's DataModel has anything a mixer could play
+    /// ([`DataModel::hears_anything`]).
+    pub(crate) fn hears_anything(&self) -> bool {
+        self.view().hears_anything()
+    }
+
     /// What the window's DataModel is playing, for the mixer: its sounds,
     /// their SoundGroups, `SoundService.AmbientReverb` and the audio API's
     /// graph.

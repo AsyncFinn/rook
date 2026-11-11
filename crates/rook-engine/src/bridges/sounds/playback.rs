@@ -224,6 +224,19 @@ impl DataModel {
         self.fire_sound_events(start, events);
     }
 
+    /// Whether anything could be heard now: a Sound that plays or may
+    /// (every one [`DataModel::playing_sounds`] looks at), one playing
+    /// out, or anything of the audio API's graph. While this stays false
+    /// there is nothing to gather for a mixer, and nothing new to tell it.
+    pub fn hears_anything(&self) -> bool {
+        let sounds = &self.sounds;
+        if !sounds.active.is_empty() || !sounds.one_shots.is_empty() {
+            return true;
+        }
+        let w = self.runtime.world();
+        !w.audio.graph.borrow_mut().is_empty(&w.dom)
+    }
+
     /// The Sounds to hear now: in the DataModel, loaded and `Playing`,
     /// plus removed `PlayOnRemove` sounds playing out. (AudioPlayers are
     /// heard through [`DataModel::audio_graph`].)

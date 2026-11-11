@@ -125,6 +125,7 @@ impl Launch {
                     rook_audio::Output::new(device, volume.clamp(0.0, 1.0))
                 },
             ),
+            heard: false,
             player: self.player.clone(),
             #[cfg(feature = "repl")]
             repl: if options.repl {

@@ -122,6 +122,12 @@ impl GraphNodes {
         self.cursor = dom.journal().end();
     }
 
+    /// Whether the DataModel holds no node or Wire at all.
+    pub fn is_empty(&mut self, dom: &Dom) -> bool {
+        self.note_changes(dom);
+        self.ids.is_empty()
+    }
+
     /// Every node and Wire, in id order.
     pub fn all(&mut self, dom: &Dom) -> Vec<InstanceId> {
         self.note_changes(dom);

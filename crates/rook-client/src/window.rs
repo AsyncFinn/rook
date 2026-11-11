@@ -121,6 +121,9 @@ pub(crate) struct App {
     pub(crate) readout: Readout,
     /// Where the game's sounds are heard; `None` with `audioDevice` off.
     pub(crate) audio: Option<rook_audio::Output<rook_dom::InstanceId>>,
+    /// The game had something to hear when the mixer was last told what
+    /// plays: silence is told once, not every frame.
+    pub(crate) heard: bool,
     /// The player's settings the window last followed.
     pub(crate) player: PlayerSettings,
     /// The terminal command prompt, when the terminal is interactive.
@@ -285,7 +288,14 @@ impl App {
             self.follow(now);
         }
         if let Some(audio) = &mut self.audio {
-            audio.sync(&self.game.sounds());
+            // In silence that the mixer has been told of there is nothing
+            // to gather, and no reason to take its lock from the audio
+            // thread.
+            let heard = self.game.hears_anything();
+            if heard || self.heard {
+                audio.sync(&self.game.sounds());
+            }
+            self.heard = heard;
         }
         // The scene follows the step here, while the render thread may
         // still be drawing the frame before.
