@@ -220,6 +220,11 @@ impl Physics {
             let water = piece.material == TerrainMaterial::Water;
             let surface = materials::of_material(piece.material.material() as u32);
             let collider = ColliderBuilder::new(SharedShape::new(piece.mesh))
+                // Weightless: Rapier sums the mass of every collider on
+                // the terrain's fixed body each time one is added or
+                // removed, and a mesh with a density is weighed triangle
+                // by triangle, so each chunk built would weigh them all.
+                .density(0.0)
                 .position(Pose::from_translation(piece.origin))
                 .friction(surface.friction)
                 .restitution(surface.elasticity)

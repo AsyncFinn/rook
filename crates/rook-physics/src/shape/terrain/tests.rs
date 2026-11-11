@@ -269,3 +269,26 @@ fn smooth_grid_changes_rebuild_only_changed_chunks() {
     );
     assert!(physics.raycast(&mut dom, slab, down, &all).is_some());
 }
+
+/// Rapier sums the mass of every collider on a body each time one is
+/// added or removed, and a mesh with a density is weighed triangle by
+/// triangle: terrain colliders weighing anything made each chunk built
+/// near a moving part cost as much as weighing every chunk built before.
+#[test]
+fn terrain_colliders_are_weightless() {
+    let (mut dom, _) = world();
+    part(
+        &mut dom,
+        "Part",
+        Vec3::new(102.0, 52.0, 2.0),
+        Vec3::new(2.0, 1.0, 2.0),
+        false,
+    );
+    let mut physics = Physics::new();
+    physics.sync(&mut dom);
+    physics.step(1.0 / 60.0);
+    assert!(!physics.terrain.pieces.is_empty());
+    for collider in physics.terrain.pieces.keys() {
+        assert_eq!(physics.world.colliders[*collider].mass(), 0.0);
+    }
+}
