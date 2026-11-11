@@ -141,15 +141,19 @@ impl Loading {
     }
 
     /// The game, once the place has loaded. Joining the client (Play) or
-    /// loading the place (Run) happens in the poll that returns it.
-    pub fn poll(&mut self) -> Option<anyhow::Result<Game>> {
+    /// loading the place (Run) happens in the poll that returns it, and
+    /// `present` gives the input devices there as the client starts.
+    pub fn poll(
+        &mut self,
+        present: impl FnOnce() -> Vec<InputEvent>,
+    ) -> Option<anyhow::Result<Game>> {
         match &mut self.stage {
             Stage::Server(starting) => {
                 let started = starting.poll()?;
                 Some(
                     started
                         .map_err(Into::into)
-                        .and_then(|s| self.finish.joined(s)),
+                        .and_then(|s| self.finish.joined(s, &present())),
                 )
             }
             Stage::Run(bytes) => Some(self.finish.run(bytes)),
@@ -158,9 +162,13 @@ impl Loading {
 }
 
 impl Finish {
-    fn joined(&self, (server, started): (ServerThread, Started)) -> anyhow::Result<Game> {
+    fn joined(
+        &self,
+        (server, started): (ServerThread, Started),
+        present: &[InputEvent],
+    ) -> anyhow::Result<Game> {
         let joined = started.joined.context("the player didn't join")?;
-        let client = ClientHost::new(&joined, &self.options)?;
+        let client = ClientHost::new(&joined, &self.options, present)?;
         Ok(self.game(
             Mode::Play {
                 server,
@@ -206,7 +214,7 @@ impl Game {
     pub fn load(path: &Path, setup: &Setup) -> anyhow::Result<Self> {
         let loading = Loading::begin(path, setup)?;
         match loading.stage {
-            Stage::Server(starting) => loading.finish.joined(starting.wait()?),
+            Stage::Server(starting) => loading.finish.joined(starting.wait()?, &[]),
             Stage::Run(bytes) => loading.finish.run(&bytes),
         }
     }

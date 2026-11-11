@@ -9,7 +9,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [features]
-window = ["dep:winit", "dep:gilrs", "rook-audio/output"]
+window = ["dep:winit", "dep:gilrs", "dep:windows-sys", "rook-audio/output"]
 # The `>` prompt in the terminal that runs Luau in the open place.
 repl = ["rook-engine/repl"]
 
@@ -31,6 +31,17 @@ anyhow.workspace = true
 tracing.workspace = true
 profiling.workspace = true
 rustc-hash.workspace = true
+
+# Sony's pads over HID, which Windows' gamepad API doesn't list.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, optional = true, features = [
+    "Win32_Devices_DeviceAndDriverInstallation",
+    "Win32_Devices_HumanInterfaceDevice",
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+    "Win32_System_IO",
+] }
 
 [dev-dependencies]
 rook-platform = { workspace = true, features = ["native"] }

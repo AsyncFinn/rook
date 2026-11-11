@@ -19,6 +19,9 @@ pub(crate) struct Launch {
     failed: Option<anyhow::Error>,
     /// The player's settings as saved, until the game is there.
     player: PlayerSettings,
+    /// Read from launch, so the game hears the pads already plugged in
+    /// as it starts; the [`App`] takes them then.
+    gamepads: Option<super::gamepads::Gamepads>,
 }
 
 impl Launch {
@@ -38,6 +41,7 @@ impl Launch {
             app: None,
             failed: None,
             player,
+            gamepads: Some(super::gamepads::Gamepads::new()),
         }
     }
 
@@ -71,7 +75,13 @@ impl Launch {
         let Some(loading) = &mut self.loading else {
             return;
         };
-        let Some(loaded) = loading.poll() else {
+        let gamepads = self.gamepads.as_mut().expect("until the game starts");
+        let present = || {
+            let mut present = Vec::new();
+            gamepads.read(true, |e| present.push(e));
+            present
+        };
+        let Some(loaded) = loading.poll(present) else {
             return;
         };
         let name = loading.name().to_owned();
@@ -108,7 +118,7 @@ impl Launch {
             inbox: Default::default(),
             // A window opens with focus; winit says when it loses it.
             focused: true,
-            gamepads: super::gamepads::Gamepads::new(),
+            gamepads: self.gamepads.take().expect("started once"),
             cursor: PhysicalPosition::new(0.0, 0.0),
             cursor_shown: cursor::Shown::default(),
             ime: false,

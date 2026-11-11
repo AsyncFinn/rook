@@ -77,6 +77,37 @@ fn pads_connect_and_disconnect_in_studio_order() {
     );
 }
 
+/// A pad plugged in before the client starts is there for its scripts'
+/// first line, with Gamepad preferred and its own key names (measured).
+#[test]
+fn pads_present_at_start_count_from_the_first_line() {
+    let mut server = Server::new(&Options::default()).unwrap();
+    let starter = service(&server, "StarterGui");
+    let screen = add_under(&server, starter, "ScreenGui", "Hud", "");
+    let source = r#"
+        local uis = game:GetService("UserInputService")
+        print(#uis:GetConnectedGamepads(), uis.GamepadEnabled, uis.PreferredInput.Name)
+        print(uis:GetImageForKeyCode(Enum.KeyCode.ButtonB))
+    "#;
+    add_under(&server, screen, "LocalScript", "Log", source);
+    server.start();
+    let mut session = Session::new(server, Options::default());
+    let present = [InputEvent::GamepadConnected {
+        pad: 0,
+        kind: GamepadKind::PlayStation5,
+        supported: GamepadKey::ITEMS.iter().map(|&(_, k)| k).collect(),
+    }];
+    let index = session.join_with("Player", 1, &present).unwrap();
+    session.run_for(0.1);
+    assert_eq!(
+        lines(session.client(index).unwrap()),
+        [
+            "1 true Gamepad",
+            "rbxasset://textures/ui/Controls/PlayStationController/ButtonCircle@2x.png",
+        ]
+    );
+}
+
 /// Buttons begin and end with Position.Z 1 and 0; a stick counts as the
 /// pad in use from 0.2 out; a trigger changes with its pull, begins at a
 /// full pull and ends at rest. Every event passes the slot's own object,

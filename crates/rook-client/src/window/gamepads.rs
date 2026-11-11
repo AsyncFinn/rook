@@ -1,250 +1,323 @@
-//! Gamepads, read through gilrs and given to the game as `InputEvent`s
-//! (docs/behavior/input/gamepads.md). gilrs' own filters are off: Studio
-//! passes a stick's raw values, jitter included, with no deadzone.
+//! Gamepads, given to the game as `InputEvent`s
+//! (docs/behavior/input/gamepads.md). Each source reports a pad's whole
+//! state; this module gives pads their slots and turns each new state
+//! into the events for what changed. gilrs reads most pads; on Windows,
+//! where its only backend doesn't list Sony's, `sony` reads those over HID.
 
-use gilrs::{Axis, Button, EventType, GamepadId, Gilrs, GilrsBuilder};
+#[cfg(windows)]
+mod sony;
+mod sony_reports;
+mod system;
+
 use rook_engine::{GamepadAxis, GamepadKind, InputEvent};
 use rook_types::GamepadKey;
 
-/// The pads the game knows, by slot (0 is Gamepad1).
+/// The keys Studio lists for a pad, in its order: the same for a
+/// DualShock and an Xbox pad, a stick once per axis (measured).
+const STUDIO_KEYS: [GamepadKey; 20] = {
+    use GamepadKey::*;
+    [
+        ButtonA,
+        ButtonB,
+        ButtonSelect,
+        DPadDown,
+        DPadLeft,
+        DPadRight,
+        DPadUp,
+        ButtonL1,
+        ButtonL3,
+        ButtonL2,
+        Thumbstick1,
+        Thumbstick1,
+        ButtonR1,
+        ButtonR3,
+        ButtonR2,
+        Thumbstick2,
+        Thumbstick2,
+        ButtonStart,
+        ButtonX,
+        ButtonY,
+    ]
+};
+
+/// What a pad is pressing and pointing at. Stick Y is up positive.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+struct PadState {
+    /// Buttons down, by [`GamepadKey::index`]; triggers are `triggers`.
+    buttons: u32,
+    sticks: [(f32, f32); 2],
+    triggers: [f32; 2],
+}
+
+impl PadState {
+    fn set(&mut self, key: GamepadKey, down: bool) {
+        let bit = 1 << key.index();
+        if down {
+            self.buttons |= bit;
+        } else {
+            self.buttons &= !bit;
+        }
+    }
+
+    fn is_down(&self, key: GamepadKey) -> bool {
+        self.buttons & (1 << key.index()) != 0
+    }
+}
+
+/// Which source a pad came from, and its id there.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum PadId {
+    System(gilrs::GamepadId),
+    #[cfg_attr(not(windows), allow(dead_code))]
+    Sony(u64),
+}
+
+#[derive(Debug)]
+enum PadChange {
+    Connected {
+        id: PadId,
+        kind: GamepadKind,
+        supported: Vec<GamepadKey>,
+    },
+    State(PadId, PadState),
+    Disconnected(PadId),
+}
+
+/// A pad in a slot, and the state the game was last told.
+#[derive(Debug)]
+struct Slot {
+    id: PadId,
+    sent: PadState,
+}
+
+#[derive(Debug)]
 pub(crate) struct Gamepads {
-    /// None where the platform has no gamepad API.
-    gilrs: Option<Gilrs>,
-    slots: [Option<GamepadId>; 8],
-    /// Pads gilrs found when it started, given to the game on the first
-    /// read: gilrs announces only pads that come later.
-    found: Vec<GamepadId>,
+    system: system::System,
+    #[cfg(windows)]
+    sony: Option<sony::Sony>,
+    slots: [Option<Slot>; 8],
+    changes: Vec<PadChange>,
 }
 
 impl Gamepads {
     pub(crate) fn new() -> Self {
-        let gilrs = GilrsBuilder::new()
-            .with_default_filters(false)
-            .build()
-            .inspect_err(|e| tracing::warn!("gamepads won't be read: {e}"))
-            .ok();
-        let found = gilrs
-            .as_ref()
-            .map(|g| g.gamepads().map(|(id, _)| id).collect::<Vec<_>>())
-            .unwrap_or_default();
-        tracing::info!("gamepads: {} connected at start", found.len());
         Self {
-            gilrs,
-            slots: [None; 8],
-            found,
+            system: system::System::new(),
+            #[cfg(windows)]
+            sony: sony::Sony::new()
+                .inspect_err(|e| tracing::warn!("PlayStation pads won't be read: {e}"))
+                .ok(),
+            slots: Default::default(),
+            changes: Vec::new(),
         }
     }
 
     /// What the pads did since the last read, in order. An unfocused
-    /// window hears nothing from them (measured), but a release still
-    /// comes so no key stays held (Inference).
+    /// window hears nothing from them (measured); a button let go still
+    /// comes, so none stays held, and the rest comes with the pad's first
+    /// report after focus returns (Inference).
     pub(crate) fn read(&mut self, focused: bool, mut send: impl FnMut(InputEvent)) {
-        let Some(gilrs) = &mut self.gilrs else {
+        let mut changes = std::mem::take(&mut self.changes);
+        self.system.poll(&mut changes);
+        #[cfg(windows)]
+        if let Some(sony) = &mut self.sony {
+            sony.poll(&mut changes);
+        }
+        for change in changes.drain(..) {
+            match change {
+                PadChange::Connected {
+                    id,
+                    kind,
+                    supported,
+                } => {
+                    self.connect(id, kind, supported, &mut send);
+                }
+                PadChange::Disconnected(id) => {
+                    if let Some(pad) = self.slot_of(id) {
+                        tracing::info!("gamepad {} disconnected", pad + 1);
+                        self.slots[pad] = None;
+                        send(InputEvent::GamepadDisconnected { pad });
+                    }
+                }
+                PadChange::State(id, state) => {
+                    if let Some(pad) = self.slot_of(id)
+                        && let Some(slot) = &mut self.slots[pad]
+                    {
+                        diff(pad, &mut slot.sent, state, focused, &mut send);
+                    }
+                }
+            }
+        }
+        self.changes = changes;
+    }
+
+    fn slot_of(&self, id: PadId) -> Option<usize> {
+        self.slots
+            .iter()
+            .position(|s| s.as_ref().is_some_and(|s| s.id == id))
+    }
+
+    /// The lowest free slot; Studio doesn't renumber the others when one
+    /// leaves (measured).
+    fn connect(
+        &mut self,
+        id: PadId,
+        kind: GamepadKind,
+        supported: Vec<GamepadKey>,
+        send: &mut impl FnMut(InputEvent),
+    ) {
+        if self.slot_of(id).is_some() {
+            return;
+        }
+        let Some(pad) = self.slots.iter().position(Option::is_none) else {
             return;
         };
-        for id in std::mem::take(&mut self.found) {
-            connect(gilrs, &mut self.slots, id, &mut send);
-        }
-        while let Some(event) = gilrs.next_event() {
-            let Some(pad) = self.slots.iter().position(|s| *s == Some(event.id)) else {
-                if event.event == EventType::Connected {
-                    connect(gilrs, &mut self.slots, event.id, &mut send);
-                }
-                continue;
-            };
-            let input = match event.event {
-                EventType::Disconnected => {
-                    tracing::info!("gamepad {} disconnected", pad + 1);
-                    self.slots[pad] = None;
-                    Some(InputEvent::GamepadDisconnected { pad })
-                }
-                EventType::ButtonPressed(b, _) if focused => {
-                    button(b).map(|key| InputEvent::GamepadButton {
-                        pad,
-                        key,
-                        down: true,
-                    })
-                }
-                EventType::ButtonReleased(b, _) => button(b).map(|key| InputEvent::GamepadButton {
-                    pad,
-                    key,
-                    down: false,
-                }),
-                EventType::ButtonChanged(b, value, _) if focused => {
-                    trigger(b).map(|axis| InputEvent::GamepadAxis { pad, axis, value })
-                }
-                EventType::AxisChanged(a, value, _) => match stick(a) {
-                    Some(axis) => focused.then_some(InputEvent::GamepadAxis { pad, axis, value }),
-                    None => {
-                        dpad(a, value, pad, focused, &mut send);
-                        None
-                    }
-                },
-                _ => None,
-            };
-            if let Some(input) = input {
-                send(input);
-            }
-        }
+        tracing::info!("gamepad {} connected: {kind:?}", pad + 1);
+        self.slots[pad] = Some(Slot {
+            id,
+            sent: PadState::default(),
+        });
+        send(InputEvent::GamepadConnected {
+            pad,
+            kind,
+            supported,
+        });
     }
 }
 
-/// Give a pad the lowest free slot; Studio doesn't renumber the others
-/// when one leaves (measured).
-fn connect(
-    gilrs: &Gilrs,
-    slots: &mut [Option<GamepadId>; 8],
-    id: GamepadId,
+/// Send what changed from `sent` to `now`: buttons in `GetGamepadState`'s
+/// order, then each stick's X and Y, then the triggers.
+fn diff(
+    pad: usize,
+    sent: &mut PadState,
+    now: PadState,
+    focused: bool,
     send: &mut impl FnMut(InputEvent),
 ) {
-    if slots.contains(&Some(id)) {
-        return;
-    }
-    let Some(pad) = slots.iter().position(Option::is_none) else {
-        return;
-    };
-    let Some(g) = gilrs.connected_gamepad(id) else {
-        return;
-    };
-    slots[pad] = Some(id);
-    let kind = kind(g.vendor_id(), g.product_id());
-    tracing::info!(
-        "gamepad {} connected: {} ({:04x}:{:04x}, {kind:?}, mapped: {})",
-        pad + 1,
-        g.name(),
-        g.vendor_id().unwrap_or(0),
-        g.product_id().unwrap_or(0),
-        g.mapping_source() != gilrs::MappingSource::None,
-    );
-    // A stick is listed once per axis, as Studio lists it (measured).
-    let mut supported = Vec::new();
     for &(_, key) in GamepadKey::ITEMS {
-        let has = match key {
-            GamepadKey::Thumbstick1 => {
-                [Axis::LeftStickX, Axis::LeftStickY].map(|a| g.axis_code(a).is_some())
-            }
-            GamepadKey::Thumbstick2 => {
-                [Axis::RightStickX, Axis::RightStickY].map(|a| g.axis_code(a).is_some())
-            }
-            _ => {
-                let mapped = gilrs_button(key).is_some_and(|b| g.button_code(b).is_some())
-                    || dpad_axis(key).is_some_and(|a| g.axis_code(a).is_some());
-                [mapped, false]
-            }
-        };
-        supported.extend(has.into_iter().filter(|&h| h).map(|_| key));
+        let down = now.is_down(key);
+        if sent.is_down(key) != down && (focused || !down) {
+            sent.set(key, down);
+            send(InputEvent::GamepadButton { pad, key, down });
+        }
     }
-    send(InputEvent::GamepadConnected {
-        pad,
-        kind,
-        supported,
-    });
+    if !focused {
+        return;
+    }
+    for i in 0..2 {
+        let (x, y) = now.sticks[i];
+        if sent.sticks[i].0 != x {
+            sent.sticks[i].0 = x;
+            let axis = GamepadAxis::StickX(i);
+            send(InputEvent::GamepadAxis {
+                pad,
+                axis,
+                value: x,
+            });
+        }
+        if sent.sticks[i].1 != y {
+            sent.sticks[i].1 = y;
+            let axis = GamepadAxis::StickY(i);
+            send(InputEvent::GamepadAxis {
+                pad,
+                axis,
+                value: y,
+            });
+        }
+    }
+    for i in 0..2 {
+        let value = now.triggers[i];
+        if sent.triggers[i] != value {
+            sent.triggers[i] = value;
+            let axis = GamepadAxis::Trigger(i);
+            send(InputEvent::GamepadAxis { pad, axis, value });
+        }
+    }
 }
 
-/// Which pad it is, which names its keys (docs: key names). By USB ids:
-/// Sony's DualShock 4 (two revisions) and DualSense (and its Edge).
-fn kind(vendor: Option<u16>, product: Option<u16>) -> GamepadKind {
+/// Which pad it is, which names its keys, by USB ids: Sony's DualShock 4
+/// (both revisions and the wireless adapter) and DualSense (and Edge).
+fn kind(vendor: u16, product: u16) -> GamepadKind {
     match (vendor, product) {
-        (Some(0x054c), Some(0x05c4 | 0x09cc)) => GamepadKind::PlayStation4,
-        (Some(0x054c), Some(0x0ce6 | 0x0df2)) => GamepadKind::PlayStation5,
-        (Some(0x045e), _) => GamepadKind::Xbox,
+        (SONY, 0x05c4 | 0x09cc | 0x0ba0) => GamepadKind::PlayStation4,
+        (SONY, 0x0ce6 | 0x0df2) => GamepadKind::PlayStation5,
+        (0x045e, _) => GamepadKind::Xbox,
         _ => GamepadKind::Default,
     }
 }
 
-/// The gilrs button for a Roblox key; triggers are axes here and the
-/// D-pad may be either.
-fn gilrs_button(key: GamepadKey) -> Option<Button> {
-    Some(match key {
-        GamepadKey::ButtonA => Button::South,
-        GamepadKey::ButtonB => Button::East,
-        GamepadKey::ButtonX => Button::West,
-        GamepadKey::ButtonY => Button::North,
-        GamepadKey::ButtonL1 => Button::LeftTrigger,
-        GamepadKey::ButtonR1 => Button::RightTrigger,
-        GamepadKey::ButtonL2 => Button::LeftTrigger2,
-        GamepadKey::ButtonR2 => Button::RightTrigger2,
-        GamepadKey::ButtonL3 => Button::LeftThumb,
-        GamepadKey::ButtonR3 => Button::RightThumb,
-        GamepadKey::ButtonStart => Button::Start,
-        GamepadKey::ButtonSelect => Button::Select,
-        GamepadKey::DPadUp => Button::DPadUp,
-        GamepadKey::DPadDown => Button::DPadDown,
-        GamepadKey::DPadLeft => Button::DPadLeft,
-        GamepadKey::DPadRight => Button::DPadRight,
-        _ => return None,
-    })
-}
-
-/// The Roblox key for a gilrs button, triggers aside. The pad's own
-/// center button (Button::Mode) fires nothing (measured).
-fn button(b: Button) -> Option<GamepadKey> {
-    GamepadKey::ITEMS
-        .iter()
-        .map(|&(_, k)| k)
-        .find(|&k| !k.is_trigger() && gilrs_button(k) == Some(b))
-}
-
-fn trigger(b: Button) -> Option<GamepadAxis> {
-    match b {
-        Button::LeftTrigger2 => Some(GamepadAxis::Trigger(0)),
-        Button::RightTrigger2 => Some(GamepadAxis::Trigger(1)),
-        _ => None,
-    }
-}
-
-/// gilrs' sticks are right and up positive, as Roblox's are.
-fn stick(a: Axis) -> Option<GamepadAxis> {
-    match a {
-        Axis::LeftStickX => Some(GamepadAxis::StickX(0)),
-        Axis::LeftStickY => Some(GamepadAxis::StickY(0)),
-        Axis::RightStickX => Some(GamepadAxis::StickX(1)),
-        Axis::RightStickY => Some(GamepadAxis::StickY(1)),
-        _ => None,
-    }
-}
-
-fn dpad_axis(key: GamepadKey) -> Option<Axis> {
-    match key {
-        GamepadKey::DPadLeft | GamepadKey::DPadRight => Some(Axis::DPadX),
-        GamepadKey::DPadUp | GamepadKey::DPadDown => Some(Axis::DPadY),
-        _ => None,
-    }
-}
-
-/// A pad whose D-pad gilrs maps as two axes: each axis is two buttons.
-fn dpad(a: Axis, value: f32, pad: usize, focused: bool, send: &mut impl FnMut(InputEvent)) {
-    let (less, more) = match a {
-        Axis::DPadX => (GamepadKey::DPadLeft, GamepadKey::DPadRight),
-        Axis::DPadY => (GamepadKey::DPadDown, GamepadKey::DPadUp),
-        _ => return,
-    };
-    for (key, down) in [(less, value < -0.5), (more, value > 0.5)] {
-        if focused || !down {
-            send(InputEvent::GamepadButton { pad, key, down });
-        }
-    }
-}
+const SONY: u16 = 0x054c;
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// Every button and trigger Studio names maps both ways, and the
-    /// center button maps to nothing.
+    fn events(sent: &mut PadState, now: PadState, focused: bool) -> Vec<InputEvent> {
+        let mut out = Vec::new();
+        diff(0, sent, now, focused, &mut |e| out.push(e));
+        out
+    }
+
+    /// A new state sends only what changed, in order; unfocused, only a
+    /// button let go comes, and the rest waits for focus.
     #[test]
-    fn keys_map_both_ways() {
-        for &(_, key) in GamepadKey::ITEMS {
-            let Some(b) = gilrs_button(key) else {
-                continue;
-            };
-            if key.is_trigger() {
-                assert!(trigger(b).is_some(), "{key:?}");
-            } else {
-                assert_eq!(button(b), Some(key));
+    fn states_become_events_for_what_changed() {
+        let mut sent = PadState::default();
+        let mut now = PadState::default();
+        now.set(GamepadKey::ButtonA, true);
+        now.sticks[0].1 = 0.5;
+        let e = events(&mut sent, now, true);
+        assert_eq!(e.len(), 2);
+        assert!(matches!(
+            e[0],
+            InputEvent::GamepadButton {
+                key: GamepadKey::ButtonA,
+                down: true,
+                ..
             }
+        ));
+        assert!(matches!(
+            e[1],
+            InputEvent::GamepadAxis {
+                axis: GamepadAxis::StickY(0),
+                ..
+            }
+        ));
+        assert!(events(&mut sent, now, true).is_empty());
+
+        let mut later = now;
+        later.set(GamepadKey::ButtonA, false);
+        later.set(GamepadKey::ButtonB, true);
+        later.sticks[0].1 = 0.0;
+        let e = events(&mut sent, later, false);
+        assert_eq!(e.len(), 1);
+        assert!(matches!(
+            e[0],
+            InputEvent::GamepadButton {
+                key: GamepadKey::ButtonA,
+                down: false,
+                ..
+            }
+        ));
+        assert_eq!(events(&mut sent, later, true).len(), 2);
+    }
+
+    #[test]
+    fn studio_lists_each_key_a_pad_has() {
+        for &(_, key) in GamepadKey::ITEMS {
+            let listed = STUDIO_KEYS.iter().filter(|&&k| k == key).count();
+            let expected = match key {
+                k if k.is_thumbstick() => 2,
+                GamepadKey::ButtonCenter
+                | GamepadKey::ButtonBack
+                | GamepadKey::ButtonUp
+                | GamepadKey::ButtonDown
+                | GamepadKey::ButtonLeft
+                | GamepadKey::ButtonRight => 0,
+                _ => 1,
+            };
+            assert_eq!(listed, expected, "{key:?}");
         }
-        assert_eq!(button(Button::Mode), None);
-        assert_eq!(kind(Some(0x054c), Some(0x0ce6)), GamepadKind::PlayStation5);
+        assert_eq!(kind(SONY, 0x0ce6), GamepadKind::PlayStation5);
     }
 }

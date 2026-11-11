@@ -201,7 +201,7 @@ fn slow_server_keeps_client_clock() {
     server.start();
     let mut host = ServerHost::new(server);
     let (_, joined) = host.join("Player1", 1).unwrap();
-    let mut client = ClientHost::new(&joined, &options).unwrap();
+    let mut client = ClientHost::new(&joined, &options, &[]).unwrap();
     // The server takes as long as nine client frames.
     let mut server_frames = |client: &mut ClientHost, n: usize| {
         for _ in 0..n {

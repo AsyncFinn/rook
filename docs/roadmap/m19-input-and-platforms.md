@@ -45,21 +45,41 @@ plumbing, which whichever lands first builds.
      `CameraInput` bind `Thumbstick1`, `Thumbstick2`, `ButtonA`, `ButtonR2`
      (`BindActivate`), `ButtonL3` and `ButtonR3` through
      ContextActionService and read `GetGamepadState(Gamepad1)`.
-   - *Design*: as engines read pads, from one library over each
-     platform's API, polled once a frame on the main thread, in event
-     order (SDL's gamepad API in Godot, gilrs in Bevy, Unity's Input
-     System over XInput and HID). Rook reads them with gilrs, built with
-     its default filters off: Studio passes raw values with no deadzone
-     or jitter filter, and the PlayerModule applies its own deadzone.
-     gilrs, like winit, belongs to `rook-player` alone (`deny.toml`).
-     - *Host*: the app drains gilrs's events at the frame's start beside
-       the window's (`app/inbox.rs`), in order, into new
-       [`InputEvent`] variants: a pad connecting or disconnecting, a
-       button going down or up, and one axis changing (a thumbstick's X
-       or Y, or a trigger). The app gives each pad the lowest free
-       `GamepadN` slot and keeps the slot until it disconnects, and
-       drops a pad's input while the window is unfocused, as Studio
-       does.
+   - *Design*: as engines read pads: the platform's own API for most
+     pads, and HID drivers of their own for the pads the platform reads
+     badly (SDL's HIDAPI drivers for PlayStation and Switch pads, under
+     Godot and most engines). Rook reads them with gilrs, built with its
+     default filters off: Studio passes raw values with no deadzone or
+     jitter filter, and the PlayerModule applies its own deadzone. On
+     Windows gilrs only has Windows.Gaming.Input, which doesn't list a
+     DualSense at all (measured: none in its controller list with a
+     DualSense on USB), so Rook reads Sony pads there over HID itself.
+     Pads, like winit, belong to `rook-client`'s `window` module
+     (`deny.toml`).
+     - *Host*: `window/gamepads.rs` gives each pad the lowest free
+       `GamepadN` slot until it disconnects, drains its sources at the
+       frame's start after the window's events, and turns each pad's
+       new state into [`InputEvent`]s: a pad connecting or
+       disconnecting, a button going down or up, one axis changing (a
+       thumbstick's X or Y, or a trigger). A pad's input is dropped
+       while the window is unfocused, as Studio does, except a key
+       coming back to rest. Sources, each in `window/gamepads/`:
+       - `system.rs`: gilrs, for every pad it lists; on Windows it skips
+         Sony's vendor id, which `sony.rs` owns.
+       - `sony.rs` (Windows): DualShock 4 and DualSense over HID through
+         `windows-sys`, as the published report layouts give them (USB,
+         and Bluetooth after reading the calibration feature report,
+         which turns on full reports). A device-interface notification
+         (`CM_Register_Notification` on the HID class) marks the list
+         stale, and the next read enumerates again, so hotplug costs
+         nothing between changes. Each pad has a thread blocking in
+         `ReadFile` that parses reports into a state and sends it; the
+         frame diffs states in order. Sticks map a byte as Studio does,
+         `(b - 127.5) / 127.5` with up positive, and triggers as
+         `b / 255`, so values match Studio's exactly.
+       - Every pad lists the keys Studio lists for a DualShock and an
+         Xbox pad, in its order (measured, same for both), less what
+         gilrs doesn't map on a pad it reads.
      - *Engine*: each slot keeps the 24 InputObjects Studio keeps per
        pad, made on the slot's first use and reused by every event and
        `GetGamepadState` call, so an event costs one property update and
@@ -73,7 +93,8 @@ plumbing, which whichever lands first builds.
      - *Cost*: per event, as keys are now. A pad at rest still sends
        jitter events (Studio passes them on too), a few hundred a second
        at worst, each one update and one fire.
-   - *Done when*: in `rook-player` with each pad, the character walks
+   - *Done when*: in `rook-player` with each pad (a DualSense on USB and
+     Bluetooth), the character walks
      with the left stick, jumps with A (Cross), the camera turns with the
      right stick and zooms with R3 as in Studio; a conformance case
      recorded from the logs above passes, event for event, and the

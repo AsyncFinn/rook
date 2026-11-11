@@ -26,6 +26,11 @@ pad connected came from the edit DataModel.
   for each.
 - While the window is unfocused, a pad sends nothing: presses made then
   fired no event.
+- A pad plugged in before Play is there from a LocalScript's first line:
+  `GetConnectedGamepads` lists it, `GamepadEnabled` is true and
+  `PreferredInput` is Gamepad. Roblox's own scripts rely on it: the
+  shortcut bar reads each button's picture once, as it starts, so a pad
+  reported later leaves it with the DefaultController pictures.
 
 ## The InputObjects
 
@@ -115,16 +120,26 @@ pad connected came from the edit DataModel.
 
 ## How Rook does it
 
-Code: pads are read in `rook-player`'s `app/gamepads.rs` (gilrs, default
-filters off) and reach the engine as `InputEvent`s; the engine side is
+Code: pads are read in `rook-client`'s `window/gamepads.rs` and reach the
+engine as `InputEvent`s; the engine side is
 `rook-engine/src/bridges/input/gamepad.rs`, the input type in
 `bridges/input/input_type.rs`, and the queries in
 `rook-lua/src/api/methods/input.rs`.
 
-- Rook asks the platform's gamepad API for the pad's values through
-  gilrs, so the steps match the device's, not Studio's scaling of them
-  (Approximation: Studio's DualShock values are in 1/127.5 around 127.5;
-  gilrs maps the same byte in 1/128 around 127.5).
-- `GetSupportedGamepadKeyCodes` lists what gilrs maps on the pad, each
-  stick once per axis as Studio does, in `GetGamepadState`'s order
-  (Approximation: Studio's order for the DualShock is its own).
+- Most pads come through gilrs (default filters off), so their values
+  step as the platform's API gives them (Approximation: Studio's
+  DualShock values are in 1/127.5 around 127.5; gilrs maps the same byte
+  in 1/128 around 127.5).
+- On Windows, gilrs only has Windows.Gaming.Input, which lists no
+  DualSense (measured: an empty controller list with one on USB), so
+  Rook reads DualShock 4 and DualSense pads over HID itself
+  (`window/gamepads/sony.rs`), scaling each byte as Studio does.
+- The window reads pads from launch and gives the client those present
+  as it joins (`ClientHost::new`'s `present`), before the CoreScripts
+  and LocalScripts start.
+- `GetSupportedGamepadKeyCodes` lists the keys in Studio's order, less
+  any gilrs doesn't map on a pad it reads.
+- The CoreScripts bind `MemStorageService`'s `ActiveGamepadConnected`
+  key, which none of them set: Roblox's engine does, with a value only
+  Roblox's own scripts can read (a plugin's `GetItem` fails, "lacking
+  capability RobloxScript"). Rook doesn't set it yet.

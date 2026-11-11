@@ -49,6 +49,7 @@ pub(crate) mod http;
 mod input;
 pub(crate) mod localization;
 mod materials;
+mod mem_storage;
 mod models;
 mod physics;
 mod player_scripts;
@@ -308,6 +309,7 @@ pub(crate) fn luau_source(owner: &str, name: &str) -> Option<&'static str> {
         _ => [
             tweens::luau_source,
             context_actions::luau_source,
+            mem_storage::luau_source,
             gui::luau_source,
             bindables::luau_source,
             data_stores::luau_source,

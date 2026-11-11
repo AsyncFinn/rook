@@ -180,7 +180,7 @@ above, by calls:
 |---|---|
 | Analytics and telemetry | `RbxAnalyticsService` (`SetRBXEventStream` 43, `GetPlaySessionId`, `GetSessionId`, `ReportCounter`), `EventIngestService:SendEventDeferred` |
 | Roblox's app and website | `MessageBusService` (`Call`, `Publish`, `Subscribe`), `LinkingService:RegisterLuaUrl`, `SessionService:SessionExists`, `ThirdPartyUserService:IsSingleSignOnSupported`, `AchievementService:IsAvailable`, `CaptureService:RetrieveCaptures`, `InsertService:LoadLocalAsset` |
-| Stored settings | `MemStorageService` (`GetItem` 21, `BindAndFire`), `LocalStorageService` (`GetItem`, `WhenLoaded`) |
+| Stored settings | `LocalStorageService` (`GetItem`, `WhenLoaded`) |
 | Experiments | `IXPService` (`InitializeUserLayers`, `RegisterUserLayers`, `GetUserLayerLoadingStatus`) |
 | Gamepad and keyboard navigation | `GuiService` (`AddKey` 22, `AddSpecialKey`, `AddSelectionParent`, `SelectedCoreObject`) |
 | The top bar's space | `GuiService:SetGlobalGuiInset`, `GuiService:SetTopbarInset`, `GuiService.CoreGuiFolder`, `CoreEffectFolder`, `SendCoreUiNotification` |

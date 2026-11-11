@@ -3769,6 +3769,7 @@ dependencies = [
  "rook-types",
  "rustc-hash 2.1.3",
  "tracing",
+ "windows-sys 0.61.2",
  "winit",
 ]
 

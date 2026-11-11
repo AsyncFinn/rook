@@ -475,8 +475,16 @@ pub struct ClientHost {
 
 impl ClientHost {
     /// A client DataModel built from what the server sent on joining, with
-    /// its LocalScripts started.
-    pub fn new(joined: &Joined, options: &Options) -> Result<Self, EngineError> {
+    /// its LocalScripts started. `present` is the input devices already
+    /// there, such as pads plugged in before launch: the client hears them
+    /// before its scripts start, as Studio lists a pad plugged in before
+    /// launch from the start (measured). Roblox's own scripts need it: the
+    /// shortcut bar reads each button's picture once, when it starts.
+    pub fn new(
+        joined: &Joined,
+        options: &Options,
+        present: &[InputEvent],
+    ) -> Result<Self, EngineError> {
         let mut client = DataModel::new_client(options)?;
         let mut sink = Sink::new();
         {
@@ -509,6 +517,9 @@ impl ClientHost {
         }
         client.reset_cursors();
         client.ensure_mouse();
+        for event in present {
+            client.input(event.clone());
+        }
         if let Some(patch) = &options.core_scripts {
             patch.install(&client);
         }

@@ -393,5 +393,10 @@ fn install_engine_helpers(lua: &Lua) -> mlua::Result<()> {
         .call(std.clone())?;
     lua.set_named_registry_value("rook.context_action", actions.get::<Function>("input")?)?;
     std.set("context_action", actions)?;
+    let mem_storage: Table = lua
+        .load(include_str!("luau/mem_storage.luau"))
+        .set_name("=[rook] MemStorageService")
+        .call(std.clone())?;
+    std.set("mem_storage", mem_storage)?;
     Ok(())
 }

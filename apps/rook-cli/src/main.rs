@@ -98,6 +98,11 @@ enum Command {
         /// `Enum.KeyCode` name: `One`, `Backquote`); repeat for more keys.
         #[arg(long, requires = "join")]
         key: Vec<String>,
+        /// With `--join`: a pad of this kind (`xbox`, `ps4`, `ps5`,
+        /// `default`) is plugged in as Gamepad1 when the client starts, and `--key`s
+        /// naming its buttons (`ButtonA`, `DPadUp`) press them on it.
+        #[arg(long, requires = "join", value_parser = parse_gamepad)]
+        gamepad: Option<rook_engine::GamepadKind>,
         /// With `--join`: after the keys, the mouse wheel turns this many
         /// steps (positive is forward); repeat for more turns.
         #[arg(long, requires = "join", allow_hyphen_values = true)]
@@ -262,6 +267,7 @@ fn command(command: Command) -> anyhow::Result<()> {
             click,
             user_settings,
             key,
+            gamepad,
             wheel,
             #[cfg(feature = "repl")]
             repl,
@@ -278,10 +284,22 @@ fn command(command: Command) -> anyhow::Result<()> {
                 clicks: &click,
                 user_settings: user_settings.as_deref(),
                 keys: &key,
+                gamepad,
                 wheel: &wheel,
                 #[cfg(feature = "repl")]
                 repl,
             },
         ),
     }
+}
+
+fn parse_gamepad(kind: &str) -> Result<rook_engine::GamepadKind, String> {
+    use rook_engine::GamepadKind;
+    Ok(match kind {
+        "xbox" => GamepadKind::Xbox,
+        "ps4" => GamepadKind::PlayStation4,
+        "ps5" => GamepadKind::PlayStation5,
+        "default" => GamepadKind::Default,
+        _ => return Err("one of xbox, ps4, ps5, default".into()),
+    })
 }

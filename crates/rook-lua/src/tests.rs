@@ -5,8 +5,26 @@ use super::*;
 fn run(source: &str, frames: u32) -> Vec<String> {
     let rt = Runtime::new(Dom::new(), Clock::Fixed { step: 1.0 / 60.0 }).unwrap();
     rt.run_source("Workspace.Script", source, None).unwrap();
+    finish(&rt, frames)
+}
+
+/// [`run`], as Roblox's own code: a script that came compiled.
+fn run_core(source: &str, frames: u32) -> Vec<String> {
+    let rt = Runtime::new(Dom::new(), Clock::Fixed { step: 1.0 / 60.0 }).unwrap();
+    let script = rt.world_mut().dom.create_by_name("Script").unwrap();
+    let code = mlua::chunk::Compiler::new().compile(source).unwrap();
+    let core = Compiled {
+        code: code.into(),
+        core: true,
+    };
+    rt.world_mut().bytecode.insert(script, core);
+    assert!(rt.run_script(script));
+    finish(&rt, frames)
+}
+
+fn finish(rt: &Runtime, frames: u32) -> Vec<String> {
     for _ in 0..frames {
-        step(&rt);
+        step(rt);
     }
     rt.take_log()
         .into_iter()
@@ -874,5 +892,38 @@ fn utf8_normalizes() {
             1
         ),
         ["2 3", "true"]
+    );
+}
+
+/// MemStorageService keeps strings by key and calls the callbacks bound
+/// to one when it's set or fired; BindAndFire calls the new callback at
+/// once if the key holds something, and a connection unbinds.
+#[test]
+fn mem_storage_keeps_items_and_calls_bindings() {
+    let lines = run_core(
+        r#"
+        local m = game:GetService("MemStorageService")
+        print(m:GetItem("k", "none"), m:HasItem("k"))
+        local c = m:Bind("k", function(v) print("bound", v) end)
+        m:SetItem("k", "a")
+        m:BindAndFire("k", function(v) print("fired", v) end)
+        m:Fire("k", "b")
+        c:Disconnect()
+        m:SetItem("k", "c")
+        print(m:GetItem("k"), m:RemoveItem("k"), m:HasItem("k"))
+        "#,
+        1,
+    );
+    assert_eq!(
+        lines,
+        [
+            "none false",
+            "bound a",
+            "fired a",
+            "bound b",
+            "fired b",
+            "fired c",
+            "c true false",
+        ]
     );
 }

@@ -59,8 +59,15 @@ impl DataModel {
         }
     }
 
+    /// The UserInputService, made if no script has asked for it yet: the
+    /// input it keeps (a pad plugged in before the client starts) counts
+    /// from the start (measured: `PreferredInput` is Gamepad then).
     pub(super) fn uis(&self) -> Option<InstanceId> {
-        self.runtime.world().dom.find_service("UserInputService")
+        let mut w = self.runtime.world_mut();
+        w.dom
+            .get_service("UserInputService")
+            .inspect_err(|e| tracing::warn!("no UserInputService: {e}"))
+            .ok()
     }
 
     /// The window gained or lost focus: an input of type Focus, through

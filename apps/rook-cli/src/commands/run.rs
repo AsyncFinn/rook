@@ -31,6 +31,8 @@ pub(crate) struct Run<'a> {
     /// Keys (`Enum.KeyCode` names) the player presses after the clicks,
     /// half a second apart.
     pub keys: &'a [String],
+    /// A pad of this kind is plugged in as Gamepad1 when the client starts.
+    pub gamepad: Option<rook_engine::GamepadKind>,
     /// Wheel turns after the keys, in steps, a second apart.
     pub wheel: &'a [f32],
     #[cfg(feature = "repl")]
@@ -65,7 +67,19 @@ pub(crate) fn run(file: &Path, how: &Run<'_>) -> anyhow::Result<()> {
     }
     if how.join {
         let mut session = Session::new(server, options);
-        let index = session.join("Player1", 1)?;
+        let present: Vec<InputEvent> = how
+            .gamepad
+            .map(|kind| InputEvent::GamepadConnected {
+                pad: 0,
+                kind,
+                supported: rook_types::GamepadKey::ITEMS
+                    .iter()
+                    .map(|&(_, k)| k)
+                    .collect(),
+            })
+            .into_iter()
+            .collect();
+        let index = session.join_with("Player1", 1, &present)?;
         // GUI lays out on a screen the size of rook-player's window.
         if let Some(client) = session.client_mut(index) {
             client.set_viewport(1280, 720);
@@ -78,9 +92,21 @@ pub(crate) fn run(file: &Path, how: &Run<'_>) -> anyhow::Result<()> {
             }
         }
         for code in how.keys {
+            let pad_key = how.gamepad.and_then(|_| {
+                rook_types::GamepadKey::ITEMS
+                    .iter()
+                    .find(|(name, _)| name == code)
+                    .map(|&(_, k)| k)
+            });
             for down in [true, false] {
-                let code = code.clone();
-                session.input(index, InputEvent::Key { code, down });
+                let event = match pad_key {
+                    Some(key) => InputEvent::GamepadButton { pad: 0, key, down },
+                    None => InputEvent::Key {
+                        code: code.clone(),
+                        down,
+                    },
+                };
+                session.input(index, event);
                 session.run_for(0.25);
             }
         }
@@ -187,7 +213,7 @@ fn dump(dm: &DataModel, path: &str) {
             {
                 line.push_str(&format!(" text {text:?}"));
             }
-            if let Some(image) = dom.string_property(id, "Image")
+            if let Some(image) = dom.content_property(id, "ImageContent")
                 && !image.is_empty()
             {
                 line.push_str(&format!(" image {image}"));

@@ -54,8 +54,20 @@ impl Session {
     /// StarterPlayerScripts), and starts its LocalScripts. Returns the
     /// client's index.
     pub fn join(&mut self, name: &str, user_id: i64) -> Result<usize, EngineError> {
+        self.join_with(name, user_id, &[])
+    }
+
+    /// [`Session::join`], with the input devices `present` when the client
+    /// starts (see [`ClientHost::new`]).
+    pub fn join_with(
+        &mut self,
+        name: &str,
+        user_id: i64,
+        present: &[crate::InputEvent],
+    ) -> Result<usize, EngineError> {
         let (index, joined) = self.server.join(name, user_id)?;
-        self.clients.push(ClientHost::new(&joined, &self.options)?);
+        self.clients
+            .push(ClientHost::new(&joined, &self.options, present)?);
         Ok(index)
     }
 
