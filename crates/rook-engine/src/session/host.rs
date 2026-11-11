@@ -291,23 +291,18 @@ impl ServerHost {
             let mut calls = std::mem::take(&mut self.server.render_changes.effect_calls);
             calls.append(&mut self.server.runtime().world_mut().effect_calls);
             if !calls.is_empty() {
-                for i in 0..self.clients.len() {
+                // Copied for each client but the last, which takes them.
+                let last = self.clients.len() - 1;
+                for i in 0..last {
                     out.push((i, ToClient::Effects(calls.clone())));
                 }
+                out.push((last, ToClient::Effects(calls)));
             }
         }
+        let mut sends: Vec<(usize, RemoteKind)> = Vec::new();
         for msg in self.server.runtime().take_outbox() {
             let RemoteMessage { remote, kind, args } = msg;
-            let mut send = |index: usize, kind: RemoteKind| {
-                out.push((
-                    index,
-                    ToClient::Remote(RemoteMessage {
-                        remote,
-                        kind,
-                        args: args.clone(),
-                    }),
-                ));
-            };
+            let mut send = |index: usize, kind: RemoteKind| sends.push((index, kind));
             match kind {
                 RemoteKind::FireClient { player } => {
                     for (i, _) in self
@@ -340,6 +335,21 @@ impl ServerHost {
                     }
                 }
                 RemoteKind::FireServer | RemoteKind::InvokeServer { .. } => {}
+            }
+            // The arguments are copied for each client but the last, which
+            // takes them.
+            let last = sends.pop();
+            for (index, kind) in sends.drain(..) {
+                let message = RemoteMessage {
+                    remote,
+                    kind,
+                    args: args.clone(),
+                };
+                out.push((index, ToClient::Remote(message)));
+            }
+            if let Some((index, kind)) = last {
+                let message = RemoteMessage { remote, kind, args };
+                out.push((index, ToClient::Remote(message)));
             }
         }
         out
