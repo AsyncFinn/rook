@@ -5,6 +5,8 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- Changing a Highlight or other adornment redraws only it, a change inside one world GUI redraws only that GUI, and name tags are worked out again only for characters that changed. Rook redrew every part of the adorned Model, every world GUI, and every name tag each frame.
+- A client with no character of its own no longer runs physics steps for parts the server moves, and those standing still cost nothing. Rook stepped and wrote back all of them every frame.
 - `typeof` names Faces, Axes and PhysicalProperties, and printing Faces or Axes lists their members, as in Roblox. Rook gave all three the same internal name. See [Faces, Axes and PhysicalProperties](docs/behavior/scripting/faces-and-axes.md).
 - Reading a member a datatype doesn't have raises Roblox's error for that type. Rook returned nil for some and worded others differently. See [datatype errors](docs/behavior/scripting/datatype-errors.md#members-a-datatype-doesnt-have).
 - A script stops the moment it, or an ancestor, is destroyed or moved out of where scripts run, or it's disabled, as in Roblox. Rook kept moved and destroyed scripts running, and stopped disabled ones only at the end of the frame. See [running scripts](docs/behavior/scripting/running-scripts.md).
