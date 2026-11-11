@@ -3,7 +3,7 @@
 -- it to the server through TextChatService; the server checks the
 -- sender's TextSource may send, fires Player.Chatted, and delivers it to
 -- every client (or those ShouldDeliverCallback lets through), where
--- OnIncomingMessage (the channel's, then the service's) may restyle it
+-- OnIncomingMessage (the service's, then the channel's) may restyle it
 -- and MessageReceived fires on the channel and the service. Messages
 -- aren't filtered: a local server has no one to filter for.
 local std = ...
@@ -48,11 +48,12 @@ local function message(channel, source, text, metadata, id, status, millis)
 	return m
 end
 
--- The channel's OnIncomingMessage, then the service's, may give
+-- The service's OnIncomingMessage, then the channel's, may give
 -- TextChatMessageProperties whose PrefixText and Text replace the
--- message's (creator-docs TextChannel.OnIncomingMessage).
-local function receive(channel, m)
-	for _, owner in ipairs({ channel, chat }) do
+-- message's (creator-docs TextChannel.OnIncomingMessage). Observed in
+-- Studio 0.747: the channel's sees what the service's returned.
+local function restyle(channel, m)
+	for _, owner in ipairs({ chat, channel }) do
 		local callback = get_callback(owner, "OnIncomingMessage")
 		if callback then
 			local ok, props = pcall(callback, m)
@@ -66,6 +67,10 @@ local function receive(channel, m)
 			end
 		end
 	end
+end
+
+local function receive(channel, m)
+	restyle(channel, m)
 	fire(channel, "MessageReceived", m)
 	fire(chat, "MessageReceived", m)
 end
@@ -75,6 +80,10 @@ function api.sendAsync(channel, text, metadata)
 	local source = player and sourceFor(channel, player.UserId)
 	local id = newId()
 	local m = message(channel, source, text, metadata, id, Enum.TextChatMessageStatus.Sending)
+	-- Observed in Studio 0.747: the sender's own copy is restyled before
+	-- SendAsync returns, so the chat window never shows it unstyled (a
+	-- game's colored name) while the server's copy is on its way.
+	restyle(channel, m)
 	fire(chat, "SendingMessage", m)
 	if source and source.CanSend then
 		send("server", channel, text, metadata or "", id)
