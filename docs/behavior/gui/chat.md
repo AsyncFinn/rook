@@ -70,13 +70,19 @@ on a legacy copy of a Baseplate. Code: `rook-engine`'s `chat/legacy.rs`.
 - `TextChannel:SendAsync(text, metadata)` on a client fires
   `TextChatService.SendingMessage` with a TextChatMessage whose `Status`
   is Sending and returns it; the message goes to the server only when the
-  local player's TextSource in that channel `CanSend`.
+  local player's TextSource in that channel `CanSend`. Before it returns,
+  the message passes `OnIncomingMessage` as a delivered one does, so a
+  game's styling (a colored name) is on it before the chat window shows
+  it (Studio 0.747). The server's copy arrives later as a new
+  TextChatMessage with the same `MessageId`; the returned one stays
+  Sending.
 - The server fires `Player.Chatted`, then delivers it to every client, or
   to those the channel's `ShouldDeliverCallback` doesn't refuse.
 - On each client the message (Status Success, the server's `Timestamp`,
   `PrefixText` the speaker's display name and a colon) passes the
-  channel's `OnIncomingMessage`, then the service's, whose returned
-  TextChatMessageProperties replace its `PrefixText` and `Text`, and fires
+  service's `OnIncomingMessage`, then the channel's, whose returned
+  TextChatMessageProperties replace its `PrefixText` and `Text` (the
+  channel's sees what the service's returned, Studio 0.747), and fires
   `MessageReceived` on the channel and the service.
 - `DisplaySystemMessage` makes a message on that client alone, without a
   TextSource.

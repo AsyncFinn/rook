@@ -248,6 +248,7 @@ mod session;
 mod sounds;
 mod terrain_api;
 mod terrain_look;
+mod text_chat;
 mod tools;
 mod unions;
 mod web;
