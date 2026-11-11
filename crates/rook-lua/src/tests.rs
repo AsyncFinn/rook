@@ -972,3 +972,32 @@ fn datatypes_refuse_members_they_dont_have() {
         ],
     );
 }
+
+/// Faces, Axes and PhysicalProperties name themselves to `typeof`, print
+/// their members in Studio's order and compare as in Studio 0.747
+/// (2026-11-11), and a part's physical properties read back as the same
+/// kind.
+#[test]
+fn faces_axes_and_physical_properties_are_their_own_types() {
+    expect(
+        r#"
+        local part = Instance.new("Part")
+        part.CustomPhysicalProperties = PhysicalProperties.new(1, 0.5, 0.25)
+        for _, v in {Faces.new(Enum.NormalId.Top), Axes.new(Enum.Axis.X), part.CustomPhysicalProperties} do
+            print(typeof(v), tostring(v))
+        end
+        print(Faces.new(Enum.NormalId.Top) == Faces.new(Enum.NormalId.Top))
+        print(tostring(Faces.new(Enum.NormalId.Front, Enum.NormalId.Right, Enum.NormalId.Top)))
+        print(tostring(Axes.new(Enum.Axis.Z, Enum.NormalId.Left)), "[" .. tostring(Faces.new()) .. "]")
+        "#,
+        0,
+        &[
+            "Faces Top",
+            "Axes X",
+            "PhysicalProperties 1, 0.5, 0.25, 1, 1, 1",
+            "true",
+            "Right, Top, Front",
+            "X, Z []",
+        ],
+    );
+}

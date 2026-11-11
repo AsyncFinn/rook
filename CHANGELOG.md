@@ -5,6 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- `typeof` names Faces, Axes and PhysicalProperties, and printing Faces or Axes lists their members, as in Roblox. Rook gave all three the same internal name. See [Faces, Axes and PhysicalProperties](docs/behavior/scripting/faces-and-axes.md).
 - Reading a member a datatype doesn't have raises Roblox's error for that type. Rook returned nil for some and worded others differently. See [datatype errors](docs/behavior/scripting/datatype-errors.md#members-a-datatype-doesnt-have).
 - A script stops when it, or an ancestor, is destroyed or moved out of where scripts run, as in Roblox. Rook kept running it. See [running scripts](docs/behavior/scripting/running-scripts.md).
 - Objects no longer vanish when the camera turns to certain angles. Rook could stop drawing parts across a place after loading some meshes. See [file meshes](docs/behavior/meshes/file-meshes.md#file-layouts).
