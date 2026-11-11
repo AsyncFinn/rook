@@ -40,7 +40,7 @@ and 1 is 3.01; none is 5.00, 6.00 or 7.00. Modern avatar meshes are 7.00,
 though: the default R15 body's head (asset 123480233606534, refused
 anonymously) is, so every R15 character needs it ([layouts](#file-layouts)).
 2,833 distinct meshes (34,329 uses, mostly MeshParts) are refused
-without an account, so their versions are unknown. A mid-size place: 40 mesh
+without an account, so their versions are unknown. A 2017 place: 40 mesh
 uses, 39 decode (1.00 and 2.00), 1 refused. A large modern place: 827 uses, 788
 decode (1.00, 1.01, 2.00), 39 refused, including all 7 of its MeshParts'
 meshes.

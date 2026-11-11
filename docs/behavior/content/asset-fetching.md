@@ -221,7 +221,7 @@ above) come anonymously.
 
 | Place | References (distinct targets) | Install | Asset delivery or cache | Refused anonymously | Not found or no content |
 |---|---|---:|---:|---:|---:|
-| A mid-size place | 198 (102) | 5 (3) | 141 (73) | 51 (26) | 1 (1) |
+| A 2017 place | 198 (102) | 5 (3) | 141 (73) | 51 (26) | 1 (1) |
 | A large modern place | 9,284 (1,655) | 229 (18) | 1,440 (418) | 7,610 (1,215) | 5 (5) |
 
 Most refusals are "Authentication required" (a large place: 7,471 uses, 1,141

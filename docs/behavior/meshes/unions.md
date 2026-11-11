@@ -42,7 +42,7 @@ single union in the archive.
 assets; a sample of 3 named places and about 20 random ones, stopped
 partway): every union asset that loaded anonymously holds `CSGMDL2`
 geometry, from 2015-2016 places (a small place 4 of 4
-distinct, a large older place 49, a third large place 50). Union assets of newer
+distinct, a large 2016 place 49, a third large place 50). Union assets of newer
 places are refused without an account (most of them
 of the random sample), so their `MeshData` versions are unknown. No Open
 Cloud key was available to count what a key unlocks. A union asset is a
