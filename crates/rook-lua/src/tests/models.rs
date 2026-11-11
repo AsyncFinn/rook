@@ -28,9 +28,9 @@ fn repeated_model_moves_keep_parts_rigid() {
     );
 }
 
-/// QSML3's doors turn every part about `GetModelCFrame()`, which Roblox puts
-/// at the bounding box center (turned to the primary part), not the primary
-/// part itself: an invisible part beside the hinge pulls it there.
+/// Doors that turn every part about `GetModelCFrame()` swing about the
+/// bounding box center (turned to the primary part), not the primary part
+/// itself: an invisible part beside the hinge pulls it there.
 #[test]
 fn model_cframe_is_the_bounding_box() {
     expect(
