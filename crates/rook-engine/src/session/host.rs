@@ -347,7 +347,8 @@ impl ServerHost {
 
     /// Take client `index`'s simulation of its character: the assembly of
     /// `part` moves there, as a script's move would, if its player's client
-    /// owns it. Other clients see the move; the sender isn't sent its own
+    /// owns it. One the server anchored is the server's: a pose the client
+    /// sent before it heard so would undo the server's moves. Other clients see the move; the sender isn't sent its own
     /// move back (its later changes by the server's scripts do reach it).
     /// Physics writes fire no Changed signals, and neither does this.
     fn apply_pose(
@@ -359,11 +360,7 @@ impl ServerHost {
         [linear, angular]: [glam::Vec3; 2],
     ) {
         let mut w = self.server.runtime().world_mut();
-        let owned = w
-            .dom
-            .ref_property(player, "Character")
-            .is_some_and(|c| w.dom.is_ancestor_of(c, part));
-        if !owned {
+        if rook_lua::network_owner(&w, part) != Some(player) {
             return;
         }
         let start = w.dom.journal().end();

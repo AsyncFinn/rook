@@ -25,7 +25,7 @@ pub use api::methods::assets::AssetFill;
 pub use api::methods::camera::{Lens, viewport_ray};
 pub use api::methods::characters::movement::drives as humanoid_drives;
 pub use api::methods::characters::movement::face_camera;
-pub use api::methods::characters::ownership::authority;
+pub use api::methods::characters::ownership::{authority, network_owner};
 pub use api::methods::characters::{
     Avatar, BuildRig, RigSource, RigType, Scales, character_root, humanoid_of_root, humanoid_root,
     root_part,
