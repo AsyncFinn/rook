@@ -102,7 +102,7 @@ pub(crate) struct Layout {
     pub(crate) pages: FxHashMap<InstanceId, Vec<InstanceId>>,
     pub(crate) texts: FxHashMap<InstanceId, Laid>,
     pub(crate) scrolls: FxHashMap<InstanceId, Scroll>,
-    pub(crate) world: Vec<(Hung, Vec2)>,
+    pub(crate) world: std::collections::BTreeMap<InstanceId, (Hung, Vec2)>,
 }
 
 /// A text object's text, with what it was laid out from, so an unchanged
@@ -157,8 +157,8 @@ impl Layout {
             self.arranged.remove(id);
             self.pages.remove(id);
             self.scrolls.remove(id);
+            self.world.remove(id);
         }
-        self.world.retain(|(h, _)| !ids.contains(&h.gui));
     }
 
     pub(crate) fn contains(&self, id: InstanceId) -> bool {
@@ -169,8 +169,9 @@ impl Layout {
     /// resized, a tree whose properties changed), leaving the rest as it
     /// is. What `tops` hold must be what they held when last laid out.
     pub(crate) fn redo(&mut self, dom: &Dom, tops: &[InstanceId], (fonts, turning): Fonted<'_>) {
-        let redone: FxHashSet<InstanceId> = tops.iter().copied().collect();
-        self.world.retain(|(h, _)| !redone.contains(&h.gui));
+        for top in tops {
+            self.world.remove(top);
+        }
         let previous = Layout::default();
         let mut pass = Pass::new(dom, (&previous, turning), fonts, std::mem::take(self));
         for &top in tops {
@@ -468,7 +469,7 @@ impl<'a> Pass<'a> {
         let (origin, local) = if world::is_world_gui(dom, top) {
             let hung = Hung::of(dom, top);
             let size = hung.canvas_size(dom, self.eye.as_ref());
-            self.out.world.push((hung, size));
+            self.out.world.insert(top, (hung, size));
             (Vec2::ZERO, size)
         } else {
             self.collector_area(top)

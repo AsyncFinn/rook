@@ -1,5 +1,5 @@
 use glam::Vec3;
-use rook_types::{CFrame, Color3, WorldPlace};
+use rook_types::{CFrame, Color3, WorldCanvases, WorldPlace};
 
 use super::*;
 
@@ -282,4 +282,69 @@ fn a_redrawn_canvas_is_the_only_one_placed() {
     gui.sync(&mut dom);
     assert_eq!(gui.draw_world(&dom).len(), 1);
     assert_eq!(gui.world_places_drawn(&dom, [], false).len(), 1);
+}
+
+/// A screen GUI changing hands over no world canvas, and a world GUI
+/// changing hands over its own canvas alone, by index.
+#[test]
+fn world_updates_name_only_what_changed() {
+    let (mut dom, part) = world_part(Vec3::new(8.0, 6.0, 1.0), Vec3::ZERO);
+    let front = surface(&mut dom, part, "Front");
+    let back = surface(&mut dom, part, "Back");
+    let label = frame(&mut dom, front, udim2(0.0, 100, 0.0, 100));
+    frame(&mut dom, back, udim2(0.0, 100, 0.0, 100));
+    let player_gui = dom.find_first_child_of_class(dom.local_player().unwrap(), "PlayerGui");
+    let screen = child(&mut dom, "ScreenGui", player_gui.unwrap(), &[]);
+    let spinner = frame(&mut dom, screen, udim2(0.0, 50, 0.0, 50));
+    let mut gui = laid_out(&mut dom);
+    assert!(matches!(
+        gui.update_world(&dom, false),
+        Some(WorldCanvases::List(l)) if l.len() == 2
+    ));
+    assert!(gui.update_world(&dom, false).is_none());
+
+    set(&mut dom, spinner, "Rotation", Value::Float32(45.0));
+    gui.sync(&mut dom);
+    assert!(gui.update_world(&dom, false).is_none());
+
+    set(&mut dom, label, "Size", udim2(0.0, 200, 0.0, 100));
+    gui.sync(&mut dom);
+    let index = gui.world_drawn.iter().position(|h| h.gui == front).unwrap();
+    match gui.update_world(&dom, false) {
+        Some(WorldCanvases::Changed { len, canvases }) => {
+            assert_eq!(len, 2);
+            assert_eq!(canvases.len(), 1);
+            assert_eq!(canvases[0].0, index);
+        }
+        other => panic!("{other:?}"),
+    }
+}
+
+/// A Humanoid's tag shows while it's in the Workspace and goes when its
+/// model leaves, with no walk of each Humanoid's ancestors per frame; an
+/// unchanged tag keeps its text (the same `Arc`).
+#[test]
+fn tags_follow_humanoids_in_and_out_of_the_workspace() {
+    let (mut dom, _) = client();
+    let ws = dom.find_service("Workspace").unwrap();
+    let model = child(&mut dom, "Model", ws, &[]);
+    let at = CFrame {
+        position: Vec3::new(0.0, 0.0, -10.0),
+        ..CFrame::default()
+    };
+    let head = child(&mut dom, "Part", model, &[("CFrame", Value::CFrame(at))]);
+    dom.set_name(head, "Head".to_owned()).unwrap();
+    child(&mut dom, "Humanoid", model, &[]);
+    let mut gui = laid_out(&mut dom);
+    let clear = |_: &mut Dom, lines: &[(Vec3, Vec3)], _: &[InstanceId]| vec![false; lines.len()];
+    gui.sync_overheads(&mut dom, clear);
+    assert_eq!(gui.overheads.shown.len(), 1);
+    let text = gui.overheads.shown[0].look.text.clone();
+    gui.sync_overheads(&mut dom, clear);
+    assert!(Arc::ptr_eq(&text, &gui.overheads.shown[0].look.text));
+
+    dom.set_parent(model, None).unwrap();
+    gui.sync(&mut dom);
+    gui.sync_overheads(&mut dom, clear);
+    assert!(gui.overheads.shown.is_empty());
 }

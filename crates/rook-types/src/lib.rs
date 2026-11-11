@@ -24,7 +24,7 @@ pub use font::{
 };
 pub use gui::{
     GlyphMask, GuiGradient, GuiGroup, GuiQuad, GuiRamp, GuiShape, ImagePaint, Paint, Viewer,
-    WorldCanvas, WorldFrame, WorldPlace,
+    WorldCanvas, WorldCanvases, WorldFrame, WorldPlace,
 };
 pub use part::collision::{Hull, SavedCollision, SavedMass};
 pub use part::material::{Material, MaterialSet, NormalDetail, TilePattern};

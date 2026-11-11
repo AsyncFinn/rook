@@ -3,9 +3,13 @@
 //! no instances; the rules were read from Studio 0.744 screenshots
 //! (docs/behavior/characters/overhead.md).
 
+use std::collections::BTreeSet;
+use std::sync::{Arc, LazyLock};
+
 use glam::{Vec2, Vec3};
 use rook_dom::{Dom, InstanceId};
-use rook_types::WorldPlace;
+use rook_reflection::PropertyId;
+use rook_types::{Value, WorldPlace};
 use rustc_hash::FxHashSet;
 
 use super::Eye;
@@ -19,7 +23,8 @@ pub(crate) type Blocked<'a> = dyn FnMut(&mut Dom, &[(Vec3, Vec3)], &[InstanceId]
 /// What a tag shows; a tag draws again only when this changes.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Look {
-    pub(crate) text: String,
+    /// Shared with last frame's look while it's the same.
+    pub(crate) text: Arc<str>,
     /// Its size step: 1, 0.75 or 0.5.
     pub(crate) scale: f32,
     pub(crate) name_alpha: f32,
@@ -76,29 +81,71 @@ fn fade(limit: f32, distance: f32) -> f32 {
     (((limit - distance) / 10.0).clamp(0.0, 1.0) * 32.0).round() / 32.0
 }
 
-/// Every Humanoid that has been in the Workspace; ones that left are
-/// dropped each update.
+/// The Humanoid properties tags read, resolved once.
+struct Ids {
+    display_name: PropertyId,
+    display_distance_type: PropertyId,
+    name_display_distance: PropertyId,
+    health_display_distance: PropertyId,
+    max_health: PropertyId,
+    health: PropertyId,
+    health_display_type: PropertyId,
+    name_occlusion: PropertyId,
+}
+
+static IDS: LazyLock<Ids> = LazyLock::new(|| {
+    let db = rook_reflection::database();
+    let humanoid = db.class_by_name("Humanoid").expect("Humanoid").id;
+    let id = |name| db.find_canonical_property(humanoid, name).expect(name).id;
+    Ids {
+        display_name: id("DisplayName"),
+        display_distance_type: id("DisplayDistanceType"),
+        name_display_distance: id("NameDisplayDistance"),
+        health_display_distance: id("HealthDisplayDistance"),
+        max_health: id("MaxHealth"),
+        health: id("Health_XML"),
+        health_display_type: id("HealthDisplayType"),
+        name_occlusion: id("NameOcclusion"),
+    }
+});
+
+fn number(dom: &Dom, id: InstanceId, property: PropertyId) -> Option<f64> {
+    dom.read_property(id, property, Value::as_number)
+}
+
+/// The Humanoids in the Workspace, in id order, kept as they come and go.
 #[derive(Debug, Default)]
 pub(crate) struct Overheads {
-    humanoids: FxHashSet<InstanceId>,
+    humanoids: BTreeSet<InstanceId>,
     pub(crate) shown: Vec<Shown>,
+    /// Last frame's tags, kept for their room.
+    spare: Vec<Shown>,
 }
 
 impl Overheads {
+    /// `ids` moved in the tree (or were found in it): the Humanoids among
+    /// them are kept while they're in the Workspace.
     pub(crate) fn note(&mut self, dom: &Dom, ids: impl Iterator<Item = InstanceId>) {
-        self.humanoids
-            .extend(ids.filter(|&id| dom.class_name(id) == "Humanoid"));
+        let workspace = dom.find_service("Workspace");
+        for id in ids.filter(|&id| dom.class_name(id) == "Humanoid") {
+            if workspace.is_some_and(|ws| dom.is_ancestor_of(ws, id)) {
+                self.humanoids.insert(id);
+            } else {
+                self.humanoids.remove(&id);
+            }
+        }
     }
 
     /// Work out this frame's tags ([`Blocked`] says which heads a part
     /// hides). Returns whether any tag's look changed, or tags came or
     /// went.
     pub(crate) fn update(&mut self, dom: &mut Dom, blocked: &mut Blocked<'_>) -> bool {
-        let shown = self.tags(dom, blocked);
+        let mut shown = std::mem::take(&mut self.spare);
+        self.tags(dom, blocked, &mut shown);
         let changed = shown.len() != self.shown.len()
             || (shown.iter().zip(&self.shown))
                 .any(|(a, b)| a.humanoid != b.humanoid || a.look != b.look);
-        self.shown = shown;
+        self.spare = std::mem::replace(&mut self.shown, shown);
         changed
     }
 
@@ -107,26 +154,23 @@ impl Overheads {
         self.shown.retain(|s| s.humanoid != id);
     }
 
-    fn tags(&mut self, dom: &mut Dom, blocked: &mut Blocked<'_>) -> Vec<Shown> {
-        let (Some(workspace), Some(player), Some(eye)) = (
-            dom.find_service("Workspace"),
-            dom.local_player(),
-            Eye::of(dom),
-        ) else {
-            return Vec::new();
+    /// This frame's tags, into `shown`.
+    fn tags(&self, dom: &mut Dom, blocked: &mut Blocked<'_>, shown: &mut Vec<Shown>) {
+        shown.clear();
+        let (Some(player), Some(eye)) = (dom.local_player(), Eye::of(dom)) else {
+            return;
         };
-        self.humanoids.retain(|&h| dom.is_ancestor_of(workspace, h));
         let viewer = Viewer::of(dom, player, eye.position);
-        let mut humanoids: Vec<InstanceId> = self.humanoids.iter().copied().collect();
-        humanoids.sort_unstable();
-        // Measured: other characters don't hide a head.
-        let characters: Vec<InstanceId> = humanoids.iter().filter_map(|&h| dom.parent(h)).collect();
-        let mut shown = Vec::new();
         // The lines to the heads a part may hide, and whose each is.
         let mut lines = Vec::new();
         let mut hideable = Vec::new();
-        for humanoid in humanoids {
-            let Some((look, head)) = look(dom, humanoid, &viewer, &eye) else {
+        // Last frame's tags are in the same order: a look the same as one
+        // keeps its text.
+        let mut last = self.shown.iter().peekable();
+        for &humanoid in &self.humanoids {
+            while last.next_if(|s| s.humanoid < humanoid).is_some() {}
+            let before = last.next_if(|s| s.humanoid == humanoid);
+            let Some((look, head)) = look(dom, humanoid, &viewer, &eye, before) else {
                 continue;
             };
             if occluded(dom, humanoid, &viewer) {
@@ -140,14 +184,17 @@ impl Overheads {
             });
         }
         if lines.is_empty() {
-            return shown;
+            return;
         }
+        // Measured: other characters don't hide a head.
+        let characters: Vec<InstanceId> = (self.humanoids.iter())
+            .filter_map(|&h| dom.parent(h))
+            .collect();
         let hidden: FxHashSet<InstanceId> = (hideable.into_iter())
             .zip(blocked(dom, &lines, &characters))
             .filter_map(|(humanoid, blocked)| blocked.then_some(humanoid))
             .collect();
         shown.retain(|s| !hidden.contains(&s.humanoid));
-        shown
     }
 }
 
@@ -179,8 +226,15 @@ impl Viewer {
 }
 
 /// What `humanoid`'s tag shows to `viewer`, and where its head is; `None`
-/// when it shows nothing.
-fn look(dom: &Dom, humanoid: InstanceId, viewer: &Viewer, eye: &Eye) -> Option<(Look, Vec3)> {
+/// when it shows nothing. Its text is `before`'s while that's the same.
+fn look(
+    dom: &Dom,
+    humanoid: InstanceId,
+    viewer: &Viewer,
+    eye: &Eye,
+    before: Option<&Shown>,
+) -> Option<(Look, Vec3)> {
+    let ids = &*IDS;
     let model = dom.parent(humanoid)?;
     // Inference: the local player never sees its own.
     if Some(model) == viewer.character || !dom.is_a(model, "Model") {
@@ -193,27 +247,29 @@ fn look(dom: &Dom, humanoid: InstanceId, viewer: &Viewer, eye: &Eye) -> Option<(
     // creator-docs HumanoidDisplayDistanceType: None hides it; Subject
     // uses its own distances, Viewer the viewer's (measured: raising the
     // viewer's showed tags 300 studs off).
-    let distances_from = match dom.enum_item_property(humanoid, "DisplayDistanceType") {
+    let distances_from = match dom.enum_item(humanoid, ids.display_distance_type) {
         Some("None") => return None,
         Some("Subject") => Some(humanoid),
         _ => viewer.humanoid,
     };
-    let limit = |name| {
+    let limit = |property| {
         distances_from
-            .and_then(|h| dom.float_property(h, name))
-            .unwrap_or(100.0)
+            .and_then(|h| number(dom, h, property))
+            .unwrap_or(100.0) as f32
     };
     let distance = (head - viewer.from).length();
-    let name_alpha = fade(limit("NameDisplayDistance"), distance);
-    let bar_alpha = fade(limit("HealthDisplayDistance"), distance);
+    let name_alpha = fade(limit(ids.name_display_distance), distance);
+    let bar_alpha = fade(limit(ids.health_display_distance), distance);
     let bar = health_bar(dom, humanoid).filter(|_| bar_alpha > 0.0);
     if name_alpha <= 0.0 && bar.is_none() {
         return None;
     }
-    let text = dom
-        .string_property(humanoid, "DisplayName")
-        .filter(|n| !n.is_empty())
-        .unwrap_or_else(|| dom.name(model).to_owned());
+    let display = (dom.str_of(humanoid, ids.display_name)).filter(|n| !n.is_empty());
+    let text = display.as_deref().unwrap_or_else(|| dom.name(model));
+    let text = match before {
+        Some(b) if *b.look.text == *text => b.look.text.clone(),
+        _ => Arc::from(text),
+    };
     let look = Look {
         text,
         scale: scale((head - eye.position).length()),
@@ -227,9 +283,10 @@ fn look(dom: &Dom, humanoid: InstanceId, viewer: &Viewer, eye: &Eye) -> Option<(
 /// creator-docs HumanoidHealthDisplayType; measured: a dead Humanoid keeps
 /// its name and an empty bar.
 fn health_bar(dom: &Dom, humanoid: InstanceId) -> Option<Bar> {
-    let max = dom.number_property(humanoid, "MaxHealth").unwrap_or(100.0);
-    let health = dom.number_property(humanoid, "Health_XML").unwrap_or(max);
-    let shown = match dom.enum_item_property(humanoid, "HealthDisplayType") {
+    let ids = &*IDS;
+    let max = number(dom, humanoid, ids.max_health).unwrap_or(100.0);
+    let health = number(dom, humanoid, ids.health).unwrap_or(max);
+    let shown = match dom.enum_item(humanoid, ids.health_display_type) {
         Some("AlwaysOff") => false,
         Some("AlwaysOn") => true,
         _ => health < max,
@@ -243,7 +300,7 @@ fn health_bar(dom: &Dom, humanoid: InstanceId) -> Option<Bar> {
 /// its head (measured: OccludeAll, the default, hides it; NoOcclusion
 /// doesn't). Inference: EnemyOcclusion hides only other teams' players.
 fn occluded(dom: &Dom, humanoid: InstanceId, viewer: &Viewer) -> bool {
-    match dom.enum_item_property(humanoid, "NameOcclusion") {
+    match dom.enum_item(humanoid, IDS.name_occlusion) {
         Some("NoOcclusion") => false,
         Some("EnemyOcclusion") => {
             let Some(other) = dom.parent(humanoid).and_then(|m| player_of(dom, m)) else {

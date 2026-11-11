@@ -77,7 +77,7 @@ fn name_quads(
     out: &mut Vec<GuiQuad>,
 ) {
     let source = Source {
-        text: look.text.clone(),
+        text: look.text.to_string(),
         rich: false,
         style: Style {
             font: font_from_enum("SourceSans").unwrap_or_default(),

@@ -124,6 +124,11 @@ impl Hung {
         }
     }
 
+    /// Whether it hangs on what `other` does.
+    pub(crate) fn same_hosts(&self, other: &Hung) -> bool {
+        self.on == other.on
+    }
+
     /// What it moves with: its adornee, and an Attachment's part.
     pub(crate) fn hosts(&self, dom: &Dom) -> impl Iterator<Item = InstanceId> {
         let part = self.on.filter(|&on| dom.class_name(on) == "Attachment");

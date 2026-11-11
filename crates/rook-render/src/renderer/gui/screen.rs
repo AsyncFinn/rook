@@ -40,6 +40,16 @@ impl ScreenPieces {
         list.iter().map(|p| at.get(&p.as_ptr()).copied()).collect()
     }
 
+    /// The list last given (an empty one before any).
+    pub(super) fn list(&self) -> Arc<[Arc<[GuiQuad]>]> {
+        self.list.clone().unwrap_or_else(|| Arc::from([]))
+    }
+
+    /// The groups every piece holds.
+    pub(super) fn all_held(&self) -> impl Iterator<Item = &Held> {
+        self.pieces.iter().map(|p| &p.held)
+    }
+
     /// The groups the kept pieces hold.
     pub(super) fn held<'a>(&'a self, kept: &'a [Option<usize>]) -> impl Iterator<Item = &'a Held> {
         kept.iter().flatten().map(|&i| &self.pieces[i].held)

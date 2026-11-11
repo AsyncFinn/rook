@@ -290,6 +290,23 @@ impl WorldGui {
         kept.iter().flatten().map(|&i| &self.canvases[i].held)
     }
 
+    /// The groups the canvases hold, but for those `replaced` and those at
+    /// `len` or past it.
+    pub(crate) fn held_but<'a>(
+        &'a self,
+        replaced: &'a rustc_hash::FxHashSet<usize>,
+        len: usize,
+    ) -> impl Iterator<Item = &'a Held> {
+        (self.canvases.iter().enumerate().take(len))
+            .filter(|(i, _)| !replaced.contains(i))
+            .map(|(_, c)| &c.held)
+    }
+
+    /// The canvases as last given.
+    pub(crate) fn sources(&self) -> Vec<Arc<WorldCanvas>> {
+        self.placed.clone()
+    }
+
     /// Drop every canvas, so each is given again.
     pub(crate) fn forget(&mut self) {
         self.canvases.clear();
@@ -335,25 +352,75 @@ impl WorldGui {
                 continue;
             }
             let (quads, held) = fresh.next().expect("one per canvas not kept");
-            let gpu: Vec<GpuQuad> = match c.untoned {
-                true => Vec::new(),
-                false => quads.iter().map(|(q, _)| *q).collect(),
-            };
-            let (at, id) = self.put(device, queue, &gpu).unwrap_or((0..0, 0));
-            self.canvases.push(Canvas {
-                source: c.clone(),
-                held,
-                quads: at,
-                id,
-                runs: runs(quads.iter().map(|(_, image)| *image)),
-                extent: extent(&gpu),
-                size: c.size,
-                light_influence: c.light_influence.clamp(0.0, 1.0),
-                brightness: c.brightness,
-                on_top: c.always_on_top,
-                max_distance: c.max_distance,
-                overlay: c.untoned.then_some(quads),
-            });
+            let canvas = self.make(device, queue, c, quads, held);
+            self.canvases.push(canvas);
+        }
+    }
+
+    /// Draw the canvases at `changed`'s indices (in order) from `fresh`
+    /// from now on, with the list `len` long: those past it are dropped,
+    /// and the rest stay as they are, where they are. A canvas at a new
+    /// index has no place until it's given one.
+    pub(crate) fn replace(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        len: usize,
+        changed: &[(usize, Arc<WorldCanvas>)],
+        fresh: Vec<(Packed, Held)>,
+    ) {
+        for canvas in self.canvases.split_off(len.min(self.canvases.len())) {
+            self.free(&canvas);
+        }
+        self.places.truncate(len);
+        self.placed.truncate(len);
+        for ((i, c), (quads, held)) in changed.iter().zip(fresh) {
+            // What's replaced gives its room back first, for what's new.
+            if let Some(old) = self.canvases.get(*i) {
+                let (quads, id) = (old.quads.clone(), old.id);
+                self.give_back(quads, id);
+            }
+            let canvas = self.make(device, queue, c, quads, held);
+            if *i < self.canvases.len() {
+                self.canvases[*i] = canvas;
+                self.placed[*i] = c.clone();
+            } else {
+                assert_eq!(*i, self.canvases.len(), "new canvases come in order");
+                self.canvases.push(canvas);
+                self.placed.push(c.clone());
+                self.places.push(None);
+            }
+        }
+    }
+
+    /// Canvas `c` with its quads, as the shader reads them, put in the
+    /// shared buffer.
+    fn make(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        c: &Arc<WorldCanvas>,
+        quads: Packed,
+        held: Held,
+    ) -> Canvas {
+        let gpu: Vec<GpuQuad> = match c.untoned {
+            true => Vec::new(),
+            false => quads.iter().map(|(q, _)| *q).collect(),
+        };
+        let (at, id) = self.put(device, queue, &gpu).unwrap_or((0..0, 0));
+        Canvas {
+            source: c.clone(),
+            held,
+            quads: at,
+            id,
+            runs: runs(quads.iter().map(|(_, image)| *image)),
+            extent: extent(&gpu),
+            size: c.size,
+            light_influence: c.light_influence.clamp(0.0, 1.0),
+            brightness: c.brightness,
+            on_top: c.always_on_top,
+            max_distance: c.max_distance,
+            overlay: c.untoned.then_some(quads),
         }
     }
 
@@ -385,13 +452,18 @@ impl WorldGui {
 
     /// Give a dropped canvas's quads and id back.
     fn free(&mut self, canvas: &Canvas) {
-        if canvas.quads.is_empty() {
+        self.give_back(canvas.quads.clone(), canvas.id);
+    }
+
+    /// Give a canvas's `quads` and `id` back.
+    fn give_back(&mut self, quads: Range<u32>, id: u32) {
+        if quads.is_empty() {
             return;
         }
         if let Some(shared) = &mut self.quads {
-            shared.ranges.free(canvas.quads.clone());
+            shared.ranges.free(quads);
         }
-        self.ids.free(canvas.id..canvas.id + 1);
+        self.ids.free(id..id + 1);
     }
 
     /// Drop the bind groups of groups' textures, which were drawn anew.

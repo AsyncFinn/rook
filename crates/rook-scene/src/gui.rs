@@ -6,32 +6,30 @@ use rook_content::decode::image::{Encoding, Image};
 use rook_engine::{DataModel, RenderChanges};
 use rook_gui::{Gui, GuiImage};
 use rook_render::Renderer;
-use rook_types::{GuiQuad, WorldCanvas, WorldPlace};
+use rook_types::{GuiQuad, WorldCanvases, WorldPlace};
 
 use crate::*;
 
 /// The GUI a frame hands the renderer (see [`crate::ToRender`]).
 #[derive(Debug)]
 pub(crate) struct GuiUpdate {
-    /// The screen's pieces and the world canvases, when the GUI was laid
-    /// out again.
-    drawn: Option<DrawnGui>,
+    /// The screen's pieces, when they were laid out or drawn again.
+    screen: Option<Arc<[Arc<[GuiQuad]>]>>,
+    /// The world canvases that changed, or all of them.
+    world: Option<WorldCanvases>,
     /// Where world canvases are now, by index: all of them, or those
     /// that moved.
     places: Vec<(usize, Option<WorldPlace>)>,
 }
 
-/// The screen's pieces, bottom first, and the world GUI's canvases.
-type DrawnGui = (Arc<[Arc<[GuiQuad]>]>, Vec<Arc<WorldCanvas>>);
-
 impl GuiUpdate {
     pub(crate) fn laid_out(&self) -> bool {
-        self.drawn.is_some()
+        self.screen.is_some() || self.world.is_some()
     }
 
     pub(crate) fn apply(self, scene: &Scene, renderer: &mut Renderer) {
-        if let Some((screen, canvases)) = &self.drawn {
-            renderer.set_gui(screen, canvases, &scene.images);
+        if self.laid_out() {
+            renderer.set_gui(self.screen.as_ref(), self.world.as_ref(), &scene.images);
         }
         renderer.place_world_gui(self.places);
     }
@@ -69,13 +67,14 @@ impl SceneCache {
         let generation = world.gui.generation();
         // A scene that has drawn none of it yet has no place for any.
         let first = self.gui_generation.is_none();
-        let drawn = (self.gui_generation != Some(generation)).then(|| {
+        let screen = (self.gui_generation != Some(generation)).then(|| {
             self.gui_generation = Some(generation);
-            (world.gui.draw(&world.dom), world.gui.draw_world(&world.dom))
+            world.gui.draw(&world.dom)
         });
+        let canvases = world.gui.update_world(&world.dom, first);
         self.feed_gui(&mut world.gui);
         let places = match changes {
-            Some(changes) if drawn.is_none() && !changes.full => world
+            Some(changes) if canvases.is_none() && !changes.full => world
                 .gui
                 .world_places_moved(&world.dom, changes.maybe_moved()),
             Some(changes) => {
@@ -84,7 +83,11 @@ impl SceneCache {
             }
             None => world.gui.world_places_drawn(&world.dom, [], true),
         };
-        GuiUpdate { drawn, places }
+        GuiUpdate {
+            screen,
+            world: canvases,
+            places,
+        }
     }
 
     /// Lay out and draw the GUI, so it asks for the images it shows, and

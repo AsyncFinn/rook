@@ -3,6 +3,7 @@ use std::sync::Arc;
 use glam::Vec2;
 
 use super::*;
+use rook_types::{WorldCanvas, WorldCanvases};
 
 /// A SurfaceGui's canvas shows on its face, sharp and unlit at its own
 /// color through the curve; a BillboardGui behind the part is hidden
@@ -57,7 +58,11 @@ fn world_gui_draws_in_the_world() {
     let hidden = canvas(square([0.0, 1.0, 0.0]), 10.0, false);
     let on_top = canvas(square([0.0, 0.0, 1.0]), 10.0, true);
     let canvases = [surface, hidden, on_top].map(Arc::new);
-    r.set_gui(&Arc::from([]), &canvases, &Default::default());
+    r.set_gui(
+        Some(&Arc::from([])),
+        Some(&WorldCanvases::List(canvases.to_vec())),
+        &Default::default(),
+    );
     let billboard = |y: f32| WorldPlace::Billboard {
         anchor: Vec3::new(1.0, y, -5.0),
         studs: Vec3::ZERO,
@@ -164,7 +169,11 @@ fn world_canvases_in_a_row_draw_in_one_call() {
         };
         ([21, 28, 35, 42].map(at), calls)
     };
-    r.set_gui(&Arc::from([]), &row, &Default::default());
+    r.set_gui(
+        Some(&Arc::from([])),
+        Some(&WorldCanvases::List(row.to_vec())),
+        &Default::default(),
+    );
     r.place_world_gui(
         [-1.5, -0.5, 0.5, 1.5]
             .map(|x| Some(billboard(x)))
@@ -181,7 +190,11 @@ fn world_canvases_in_a_row_draw_in_one_call() {
     // The greens go, and a blue canvas of 5,000 quads comes.
     let blue = canvas(vec![fill([0.0, 0.0, 1.0]); 5_000]);
     let next = [row[0].clone(), row[2].clone(), blue];
-    r.set_gui(&Arc::from([]), &next, &Default::default());
+    r.set_gui(
+        Some(&Arc::from([])),
+        Some(&WorldCanvases::List(next.to_vec())),
+        &Default::default(),
+    );
     r.place_world_gui(
         [-1.5, 0.5, 1.5]
             .map(|x| Some(billboard(x)))
@@ -192,6 +205,17 @@ fn world_canvases_in_a_row_draw_in_one_call() {
     assert_eq!((now[0], now[2]), (seen[0], seen[2]));
     assert_ne!(now[1], seen[1]);
     assert!(is(now[3], 2), "{now:?}");
+    // One canvas given anew by index: the others stay as they are, where
+    // they are; the list shrinks by one.
+    let changed = WorldCanvases::Changed {
+        len: 2,
+        canvases: vec![(0, row[1].clone())],
+    };
+    r.set_gui(None, Some(&changed), &Default::default());
+    let (last, _) = draw(&mut r);
+    assert!(is(last[0], 1), "{last:?}");
+    assert_eq!(last[2], now[2]);
+    assert_eq!(last[3], now[1]);
 }
 
 /// A canvas between two transparent panes it overlaps on the screen is
@@ -238,7 +262,11 @@ fn world_canvases_sort_among_the_transparent_parts_they_overlap() {
         untoned: false,
     });
     let canvases = [green.clone(), Arc::new((*green).clone())];
-    r.set_gui(&Arc::from([]), &canvases, &Default::default());
+    r.set_gui(
+        Some(&Arc::from([])),
+        Some(&WorldCanvases::List(canvases.to_vec())),
+        &Default::default(),
+    );
     // Between the panes, 25 studs out: 6 pixels across at the middle, and
     // 2 studs to the side, around pixel 46.
     let billboard = |x: f32| WorldPlace::Billboard {
@@ -316,7 +344,11 @@ fn gui_images_draw_their_texels() {
         missing,
     ];
     let images = [(ImageHash(hash), image())].into_iter().collect();
-    r.set_gui(&Arc::from([Arc::<[GuiQuad]>::from(screen)]), &[], &images);
+    r.set_gui(
+        Some(&Arc::from([Arc::<[GuiQuad]>::from(screen)])),
+        None,
+        &images,
+    );
     r.finish_uploads();
     let camera = Camera::look_at(Vec3::new(0.0, 0.0, 10.0), Vec3::ZERO);
     let (w, h) = (80, 16);
@@ -405,7 +437,7 @@ fn gui_shapes_gradients_and_groups_draw() {
         )
     };
     let screen = Arc::from([Arc::<[GuiQuad]>::from([rounded, band, graded, grouped])]);
-    r.set_gui(&screen, &[], &Default::default());
+    r.set_gui(Some(&screen), None, &Default::default());
     let camera = Camera::look_at(Vec3::new(0.0, 0.0, 10.0), Vec3::ZERO);
     let (w, h) = (64, 16);
     let pixels = r.render_to_image(w, h, &camera).unwrap();
@@ -454,7 +486,7 @@ fn gui_pieces_redraw_as_given() {
     let camera = Camera::look_at(Vec3::new(0.0, 0.0, 10.0), Vec3::ZERO);
     let draw = |r: &mut Renderer, list: &[Arc<[GuiQuad]>]| {
         r.set_scene(&Scene::default());
-        r.set_gui(&Arc::from(list), &[], &Default::default());
+        r.set_gui(Some(&Arc::from(list)), None, &Default::default());
         r.render_to_image(48, 16, &camera).unwrap()
     };
     draw(&mut kept, &[a.clone(), b, c.clone()]);

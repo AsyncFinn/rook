@@ -49,6 +49,11 @@ impl Groups {
         self.drawn.iter().any(|d| Arc::ptr_eq(&d.source, group))
     }
 
+    /// Whether no group is drawn.
+    pub(super) fn is_empty(&self) -> bool {
+        self.drawn.is_empty()
+    }
+
     /// Drop every group's quads, so each is given again.
     pub(super) fn forget(&mut self) {
         self.drawn.clear();

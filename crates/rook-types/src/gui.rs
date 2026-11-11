@@ -141,6 +141,20 @@ pub struct WorldCanvas {
     pub untoned: bool,
 }
 
+/// The world GUI's canvases as a frame hands them to a renderer: the
+/// whole list (which GUIs draw changed), or only the canvases drawn anew,
+/// by index, with the list's length now (the list ends with the tags over
+/// heads, so it can grow or shrink; indices past its old end are among
+/// those given).
+#[derive(Debug, Clone)]
+pub enum WorldCanvases {
+    List(Vec<Arc<WorldCanvas>>),
+    Changed {
+        len: usize,
+        canvases: Vec<(usize, Arc<WorldCanvas>)>,
+    },
+}
+
 /// Where a [`WorldCanvas`] is this frame.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum WorldPlace {

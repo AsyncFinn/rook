@@ -371,14 +371,14 @@ impl Renderer {
     }
 
     /// Draw `screen`'s pieces over the scene from now on, bottom first, and
-    /// the world GUI's canvases; the images they draw are in `images`, and
-    /// go up as others do (quads draw nothing until theirs is up). Pieces
-    /// and canvases given last time (the same `Arc`) stay on the GPU as
-    /// they are.
+    /// the world GUI's canvases as `world` says (`None` keeps what's
+    /// drawn); the images they draw are in `images`, and go up as others
+    /// do (quads draw nothing until theirs is up). Pieces and canvases
+    /// given last time (the same `Arc`) stay on the GPU as they are.
     pub fn set_gui(
         &mut self,
-        screen: &std::sync::Arc<[std::sync::Arc<[GuiQuad]>]>,
-        world: &[std::sync::Arc<WorldCanvas>],
+        screen: Option<&std::sync::Arc<[std::sync::Arc<[GuiQuad]>]>>,
+        world: Option<&WorldCanvases>,
         images: &FxHashMap<ImageHash, std::sync::Arc<Image>>,
     ) {
         fn request(
@@ -399,8 +399,8 @@ impl Renderer {
                 }
             }
         }
-        for quads in self.gui.set(&self.device, &self.queue, screen, world) {
-            request(quads, images, &mut self.images);
+        for fresh in self.gui.set(&self.device, &self.queue, screen, world) {
+            request(fresh.quads(), images, &mut self.images);
         }
     }
 

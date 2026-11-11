@@ -280,9 +280,8 @@ impl SceneCache {
         }
         for &id in &changes.highlights {
             let key = id.to_ref().0;
-            if self.scene.highlights.contains_key(&key) {
-                let look = adornments::highlight::look(dom, id);
-                self.scene.highlights.insert(key, look);
+            if let Some(look) = self.scene.highlights.get_mut(&key) {
+                *look = adornments::highlight::look(dom, id);
                 self.highlights_changed = true;
             }
         }

@@ -73,7 +73,7 @@ impl Gui {
         viewer: &Viewer,
     ) -> Option<WorldHit> {
         let mut best: Option<WorldHit> = None;
-        for (hung, size) in &self.layout.world {
+        for (hung, size) in self.layout.world.values() {
             let gui = hung.gui;
             if dom.bool_property(gui, "Active") != Some(true) || !hung.shown(dom) {
                 continue;
