@@ -51,6 +51,16 @@ impl Filter {
     }
 }
 
+/// Whether `part` is fully transparent with `CanCollide` off: what
+/// [`Filter::skip_invisible_ghosts`] skips.
+pub(super) fn is_invisible_ghost(dom: &Dom, props: &Props, part: InstanceId) -> bool {
+    dom.property(part, props.can_collide) == Some(Value::Bool(false))
+        && (dom.property(part, props.transparency))
+            .and_then(|t| t.as_number())
+            .unwrap_or(0.0)
+            >= 1.0
+}
+
 /// A [`Filter`] for one query. A query asks it of every part it passes, so
 /// what doesn't depend on the part (the properties' ids, the group the
 /// query acts as) is found once here.
@@ -86,13 +96,7 @@ impl<'a> Accepting<'a> {
         if !collides && (filter.respect_can_collide || off(props.can_query)) {
             return false;
         }
-        if !collides
-            && filter.skip_invisible_ghosts
-            && (dom.property(part, props.transparency))
-                .and_then(|t| t.as_number())
-                .unwrap_or(0.0)
-                >= 1.0
-        {
+        if filter.skip_invisible_ghosts && is_invisible_ghost(dom, props, part) {
             return false;
         }
         if let Some(group) = self.group {

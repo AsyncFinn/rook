@@ -532,13 +532,7 @@ impl Physics {
         // Queries put it in place first, as for a moved body.
         self.static_moved(part);
         // Constraints and movers hold it by its place on the shared body.
-        // A constraint no joint was made for (neither side is simulated
-        // here) holds nothing, and a move can't change that: only a body
-        // starting to be simulated does, and its rebuild reads them again.
-        let (ids, built) = (&self.constraint_ids, &self.constraints);
-        let acting =
-            (self.attached.holders(part)).filter(|h| !ids.contains(h) || built.contains_key(h));
-        self.dirty.extend(acting);
+        self.place_held(part);
     }
 
     /// A script moved `part` (or set its velocity): move its body to match.

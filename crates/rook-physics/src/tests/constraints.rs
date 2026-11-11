@@ -452,10 +452,11 @@ fn hinge_held_part_overlapping_an_anchored_one_rests() {
     assert!(most < 0.005, "moves {most} a frame");
 }
 
-/// Moving an anchored part re-reads only the constraints holding it, and
-/// what hangs from it follows.
+/// Moving an anchored part reads no constraint again and makes no joint
+/// again: the joint holding it takes its new place, and what hangs from it
+/// follows.
 #[test]
-fn moving_a_part_rereads_only_its_constraints() {
+fn moving_a_part_moves_its_joints_in_place() {
     let mut dom = Dom::new();
     let rope = [("Length", Value::Float32(6.0))];
     hanging(&mut dom, "RopeConstraint", &rope);
@@ -471,8 +472,10 @@ fn moving_a_part_rereads_only_its_constraints() {
     let at = CFrame::from_position(Vec3::new(4.0, 1000.0, 0.0));
     set(&mut dom, base, "CFrame", Value::CFrame(at));
     physics.reread.clear();
+    let joint = physics.constraints[&ropes[1]].joint;
     run(&mut physics, &mut dom, 1.0 / 60.0);
-    assert_eq!(physics.reread, [ropes[1]]);
+    assert_eq!(physics.reread, []);
+    assert_eq!(physics.constraints[&ropes[1]].joint, joint);
     run(&mut physics, &mut dom, 3.0);
     // Pulled along, it hangs within the rope (6) and its attachment (1)
     // of the base.

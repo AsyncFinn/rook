@@ -166,8 +166,13 @@ impl LightCache {
         profiling::scope!("LightCache::read");
         for id in stale.difference(&placed) {
             let i = self.lights[id].0;
-            list[i] = light(dom, *id).unwrap_or(DARK);
-            self.changed.push(i);
+            let read = light(dom, *id).unwrap_or(DARK);
+            // A part changed in a way its light doesn't show (its color,
+            // flashing): the light is as it was, with nothing to fill again.
+            if list[i] != read {
+                list[i] = read;
+                self.changed.push(i);
+            }
         }
     }
 

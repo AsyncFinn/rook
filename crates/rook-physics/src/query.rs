@@ -158,6 +158,13 @@ impl Physics {
         }
     }
 
+    /// Whether a query with [`Filter::skip_invisible_ghosts`] passes
+    /// through `part`: asked of a ray's hit, it says whether that query
+    /// would find anything else.
+    pub fn is_invisible_ghost(&self, dom: &Dom, part: InstanceId) -> bool {
+        (self.props.as_ref()).is_some_and(|props| filter::is_invisible_ghost(dom, props, part))
+    }
+
     /// `filter` for one query; `None` before the world was first brought
     /// up to the DOM, when it holds no part to accept.
     fn accepting<'a>(&'a self, dom: &'a Dom, filter: &'a Filter) -> Option<Accepting<'a>> {

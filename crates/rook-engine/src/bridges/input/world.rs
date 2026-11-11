@@ -112,13 +112,18 @@ impl DataModel {
                         .raycast(&mut w.dom, origin, dir * MOUSE_RANGE, &filter);
                     // Clicks pass through invisible parts that don't
                     // collide; the same TargetFilter applying is Inference.
-                    let clicks = rook_physics::Filter {
-                        skip_invisible_ghosts: true,
-                        ..filter
+                    // The same ray, unless what it hit is such a part: only
+                    // then is there something else to find.
+                    let through = hit.is_some_and(|h| w.physics.is_invisible_ghost(&w.dom, h.part));
+                    let click_hit = if through {
+                        let clicks = rook_physics::Filter {
+                            skip_invisible_ghosts: true,
+                            ..filter
+                        };
+                        (w.physics).raycast(&mut w.dom, origin, dir * MOUSE_RANGE, &clicks)
+                    } else {
+                        hit
                     };
-                    let click_hit =
-                        w.physics
-                            .raycast(&mut w.dom, origin, dir * MOUSE_RANGE, &clicks);
                     self.input.under = Some(Under {
                         look,
                         hit,

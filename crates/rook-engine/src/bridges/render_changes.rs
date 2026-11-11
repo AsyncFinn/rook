@@ -330,7 +330,11 @@ impl DataModel {
                 None => adorned.remove(&id),
             };
             mark_part(changes, old);
-            mark_part(changes, new);
+            // One whose look changed on the same adornee: a Model's parts
+            // are walked once, not twice.
+            if new != old {
+                mark_part(changes, new);
+            }
         };
         let adornment = |id: InstanceId| is_adornment(dom, id);
         for c in journal {

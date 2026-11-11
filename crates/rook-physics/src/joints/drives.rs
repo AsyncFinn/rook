@@ -47,6 +47,43 @@ impl Physics {
             .any(|&b| self.world.bodies.get(b).is_some_and(RigidBody::is_dynamic))
     }
 
+    /// `part`, on the shared body, moved there: the joints of the
+    /// constraints holding it take its new place. Nothing about a
+    /// constraint changed but where one end sits in its body, so it isn't
+    /// read again and its joint isn't made again; one with no joint
+    /// (neither side is simulated here) holds nothing to place, and a move
+    /// can't give it one: only a body starting to be simulated does, whose
+    /// rebuild reads its constraints again. Movers are read again.
+    pub(crate) fn place_held(&mut self, part: InstanceId) {
+        let holders: Vec<InstanceId> = self.attached.holders(part).collect();
+        for id in holders {
+            if !self.constraint_ids.contains(&id) {
+                self.dirty.insert(id);
+                continue;
+            }
+            let Some(c) = self.constraints.get(&id) else {
+                continue;
+            };
+            let [p0, p1] = c.spec.parts;
+            let placed = match (self.frame_of(p0), self.frame_of(p1)) {
+                (Some((_, o0)), Some((_, o1))) if [o0, o1] == c.offsets => continue,
+                (Some((_, o0)), Some((_, o1))) => Some(([o0, o1], c.spec.joint([o0, o1]))),
+                _ => None,
+            };
+            let joint = c.joint;
+            match placed.zip(self.world.impulse_joints.get_mut(joint, true)) {
+                Some(((offsets, data), j)) => {
+                    j.data = data;
+                    if let Some(c) = self.constraints.get_mut(&id) {
+                        c.offsets = offsets;
+                    }
+                }
+                // Something else changed under it: read it again.
+                None => _ = self.dirty.insert(id),
+            }
+        }
+    }
+
     /// Join two bodies with a hinge (Rotate, RotateP, RotateV).
     pub(crate) fn add_hinge(&mut self, dom: &Dom, id: InstanceId) {
         let Some(j) = active_joint(dom, id).filter(|j| j.kind == JointKind::Hinge) else {
