@@ -11,8 +11,10 @@ use rustc_hash::FxHashSet;
 use super::Eye;
 use crate::draw::overhead::BAR_HEIGHT;
 
-/// Whether a part outside the ignored instances is between two points.
-pub(crate) type Blocked<'a> = dyn FnMut(&mut Dom, Vec3, Vec3, &[InstanceId]) -> bool + 'a;
+/// For each line between two points, whether a part outside the ignored
+/// instances is on it. Asked once for all of a frame's lines, which ignore
+/// the same instances, so whoever answers reads that list once.
+pub(crate) type Blocked<'a> = dyn FnMut(&mut Dom, &[(Vec3, Vec3)], &[InstanceId]) -> Vec<bool> + 'a;
 
 /// What a tag shows; a tag draws again only when this changes.
 #[derive(Debug, Clone, PartialEq)]
@@ -88,9 +90,9 @@ impl Overheads {
             .extend(ids.filter(|&id| dom.class_name(id) == "Humanoid"));
     }
 
-    /// Work out this frame's tags. `blocked(dom, from, to, ignore)` says
-    /// whether a part (outside `ignore`) is between two points. Returns
-    /// whether any tag's look changed, or tags came or went.
+    /// Work out this frame's tags ([`Blocked`] says which heads a part
+    /// hides). Returns whether any tag's look changed, or tags came or
+    /// went.
     pub(crate) fn update(&mut self, dom: &mut Dom, blocked: &mut Blocked<'_>) -> bool {
         let shown = self.tags(dom, blocked);
         let changed = shown.len() != self.shown.len()
@@ -120,12 +122,16 @@ impl Overheads {
         // Measured: other characters don't hide a head.
         let characters: Vec<InstanceId> = humanoids.iter().filter_map(|&h| dom.parent(h)).collect();
         let mut shown = Vec::new();
+        // The lines to the heads a part may hide, and whose each is.
+        let mut lines = Vec::new();
+        let mut hideable = Vec::new();
         for humanoid in humanoids {
             let Some((look, head)) = look(dom, humanoid, &viewer, &eye) else {
                 continue;
             };
-            if occluded(dom, humanoid, &viewer) && blocked(dom, eye.position, head, &characters) {
-                continue;
+            if occluded(dom, humanoid, &viewer) {
+                lines.push((eye.position, head));
+                hideable.push(humanoid);
             }
             shown.push(Shown {
                 humanoid,
@@ -133,6 +139,14 @@ impl Overheads {
                 anchor: head + Vec3::Y * 1.5,
             });
         }
+        if lines.is_empty() {
+            return shown;
+        }
+        let hidden: FxHashSet<InstanceId> = (hideable.into_iter())
+            .zip(blocked(dom, &lines, &characters))
+            .filter_map(|(humanoid, blocked)| blocked.then_some(humanoid))
+            .collect();
+        shown.retain(|s| !hidden.contains(&s.humanoid));
         shown
     }
 }

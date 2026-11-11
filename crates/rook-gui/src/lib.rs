@@ -461,12 +461,13 @@ impl Gui {
     }
 
     /// Work out this frame's names and health bars over heads, on a
-    /// client. `blocked(dom, from, to, ignore)` says whether a part outside
-    /// `ignore` is between two points. They draw again when one changed.
+    /// client. `blocked(dom, lines, ignore)` says, for each line between
+    /// two points, whether a part outside `ignore` is on it. They draw
+    /// again when one changed.
     pub fn sync_overheads(
         &mut self,
         dom: &mut Dom,
-        mut blocked: impl FnMut(&mut Dom, Vec3, Vec3, &[InstanceId]) -> bool,
+        mut blocked: impl FnMut(&mut Dom, &[(Vec3, Vec3)], &[InstanceId]) -> Vec<bool>,
     ) {
         if self.overheads.update(dom, &mut blocked) {
             self.tag_changes += 1;

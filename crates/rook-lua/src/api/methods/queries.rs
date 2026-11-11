@@ -180,7 +180,7 @@ fn ret_parts(lua: &Lua, parts: &[InstanceId]) -> ApiResult<Outcome> {
 }
 
 fn find_parts_in_region(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    let ignore = a.opt_instance(1)?.into_iter().collect();
+    let ignore = a.opt_instance(1)?;
     let max = a.number_or(2, REGION_MAX_PARTS)?;
     ret_parts(
         lua,

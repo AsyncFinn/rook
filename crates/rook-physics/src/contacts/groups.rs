@@ -12,6 +12,7 @@
 //! unregistering a group lets every other group collide with its id again.
 
 use rook_dom::{Dom, DomError, InstanceId};
+use rook_reflection::PropertyId;
 use rook_types::{BinaryString, Value};
 
 /// At most this many groups, `Default` included (and Rapier's group bits).
@@ -200,8 +201,26 @@ impl CollisionGroups {
     /// Whether parts in groups `a` and `b` collide. Unknown names act as
     /// `Default`, as for parts (observed for `RaycastParams.CollisionGroup`).
     pub fn groups_collide(&self, a: &str, b: &str) -> bool {
-        let (ia, ib) = (self.id_of(a), self.id_of(b));
-        self.mask_of(ia) & (1 << ib) != 0 && self.mask_of(ib) & (1 << ia) != 0
+        self.ids_collide(self.id_of(a), self.id_of(b))
+    }
+
+    /// [`CollisionGroups::groups_collide`] by group ids.
+    pub fn ids_collide(&self, a: u8, b: u8) -> bool {
+        self.mask_of(a) & (1 << b) != 0 && self.mask_of(b) & (1 << a) != 0
+    }
+
+    /// The id of the group `part` is in ([`part_group`]'s), read through
+    /// its `CollisionGroup` property's id without copying the name, for
+    /// queries, which ask it of every part they pass.
+    pub(crate) fn part_id(&self, dom: &Dom, collision_group: PropertyId, part: InstanceId) -> u8 {
+        // An unset one reads the class default, `Default`.
+        let stored = dom
+            .get(part)
+            .and_then(|i| i.properties().get(&collision_group));
+        match stored {
+            Some(Value::String(name)) => self.id_of(name),
+            _ => 0,
+        }
     }
 
     /// `CollisionGroupsAreCollidable`; unknown groups collide.

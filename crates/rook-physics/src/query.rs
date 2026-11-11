@@ -19,6 +19,7 @@ use crate::{Physics, shape};
 pub(crate) mod bounds;
 mod filter;
 
+use filter::Accepting;
 pub use filter::Filter;
 
 /// Rays find nothing further than this many studs from their origin
@@ -147,13 +148,21 @@ impl Physics {
         dom: &'a Dom,
         filter: &'a Filter,
     ) -> impl Fn(ColliderHandle) -> Option<InstanceId> + 'a {
+        let accepting = self.accepting(dom, filter);
         move |h| {
             let part = *self.colliders.get(&h)?;
             if filter.ignore_water && self.terrain.is_water(h) {
                 return None;
             }
-            filter.accepts(dom, &self.groups, part).then_some(part)
+            accepting.as_ref()?.accepts(part).then_some(part)
         }
+    }
+
+    /// `filter` for one query; `None` before the world was first brought
+    /// up to the DOM, when it holds no part to accept.
+    fn accepting<'a>(&'a self, dom: &'a Dom, filter: &'a Filter) -> Option<Accepting<'a>> {
+        let props = self.props.as_ref()?;
+        Some(Accepting::new(filter, dom, props, &self.groups))
     }
 
     /// The first part along a ray from `origin` covering `direction` (its
@@ -386,11 +395,16 @@ impl Physics {
         let dom = &*dom;
         let (shape, pose) = region.shape();
         let aabb = shape.compute_aabb(&pose);
+        // Built from the fields it reads: the boxes below are borrowed too.
+        let Some(props) = self.props.as_ref() else {
+            return Vec::new();
+        };
+        let accepting = Accepting::new(filter, dom, props, &self.groups);
         let mut found: Vec<InstanceId> = self
             .bounds
             .near(dom, &aabb)
             .filter(|&part| {
-                filter.accepts(dom, &self.groups, part)
+                accepting.accepts(part)
                     && shape::world_box(dom, part).is_some_and(|(b, at)| {
                         parry::intersection_test(&pose, &*shape, &at, &*b)
                             .is_ok_and(|t| t.intersecting)

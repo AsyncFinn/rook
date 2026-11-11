@@ -307,14 +307,16 @@ impl Runtime {
 
     /// Work out the names and health bars over heads for this frame's
     /// drawing, once a frame (they look through the world, so they cost
-    /// a ray each).
+    /// a ray each, all through one filter).
     pub fn sync_overheads(&self) {
         let mut w = self.world_mut();
         let w = &mut *w;
         let physics = &mut w.physics;
-        w.gui.sync_overheads(&mut w.dom, |dom, from, to, ignore| {
-            let filter = rook_physics::Filter::legacy_ray(ignore.to_vec(), false);
-            physics.raycast(dom, from, to - from, &filter).is_some()
+        w.gui.sync_overheads(&mut w.dom, |dom, lines, ignore| {
+            let filter = rook_physics::Filter::legacy_ray(ignore.iter().copied(), false);
+            (lines.iter())
+                .map(|&(from, to)| physics.raycast(dom, from, to - from, &filter).is_some())
+                .collect()
         });
     }
 

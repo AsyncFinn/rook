@@ -104,7 +104,7 @@ impl DataModel {
                     // those without CanQuery either (measured). Their
                     // collision group's rule is Inference.
                     let filter = rook_physics::Filter::legacy_ray(
-                        target_filter.into_iter().chain(character).collect(),
+                        target_filter.into_iter().chain(character),
                         false,
                     );
                     let hit = w
