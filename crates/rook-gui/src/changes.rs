@@ -32,6 +32,14 @@ pub(crate) struct Watch {
     /// parent don't depend on them unless the parent arranges, sizes or
     /// scrolls by its children.
     places: Vec<PropertyId>,
+    /// Properties that change what an object holds in its own box (its
+    /// text and image) or how a parent's UI layout orders it: they lay
+    /// out again from the nearest object whose place doesn't depend on
+    /// them, and draw again.
+    contents: Vec<PropertyId>,
+    /// `Instance.Parent`: a move journals [`Change::Reparented`] as well,
+    /// which says what it left and joined.
+    parent: Option<PropertyId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -43,6 +51,10 @@ pub(crate) enum Touch {
     Text,
     /// Where the changed object and what it holds are.
     Place,
+    /// What the changed object holds or shows, or a UI component's
+    /// property: where things are from the nearest object whose place
+    /// doesn't depend on it, and how it looks.
+    Content,
     /// Where things are in the changed object's tree.
     Layout,
     /// GUI moved in the tree: the trees it left and joined lay out again.
@@ -107,6 +119,42 @@ impl Watch {
                 .into_iter()
                 .filter_map(|name| property("GuiObject", name))
                 .collect(),
+            contents: [
+                ("Instance", "Name"),
+                ("GuiObject", "LayoutOrder"),
+                ("GuiObject", "AutomaticSize"),
+                ("GuiObject", "SizeConstraint"),
+                ("ImageLabel", "ImageContent"),
+                ("ImageButton", "ImageContent"),
+                ("TextBox", "PlaceholderText"),
+                ("ScrollingFrame", "CanvasSize"),
+                ("ScrollingFrame", "CanvasPosition"),
+                ("ScrollingFrame", "AutomaticCanvasSize"),
+            ]
+            .into_iter()
+            .chain(
+                ["TextLabel", "TextButton", "TextBox"]
+                    .into_iter()
+                    .flat_map(|owner| {
+                        [
+                            "Text",
+                            "RichText",
+                            "TextScaled",
+                            "TextSize",
+                            "TextWrapped",
+                            "FontFace",
+                            "TextXAlignment",
+                            "TextYAlignment",
+                            "LineHeight",
+                            "MaxVisibleGraphemes",
+                            "TextTruncate",
+                        ]
+                        .map(|name| (owner, name))
+                    }),
+            )
+            .filter_map(|(owner, name)| property(owner, name))
+            .collect(),
+            parent: property("Instance", "Parent"),
         }
     }
 
@@ -120,7 +168,11 @@ impl Watch {
                 Touch::All
             }
             Change::Property { property, .. } if self.places.contains(property) => Touch::Place,
-            Change::Property { id, .. } if self.is_gui(dom, *id) => Touch::Layout,
+            Change::Property { property, .. } if Some(*property) == self.parent => Touch::Nothing,
+            Change::Property { id, .. } if !self.is_gui(dom, *id) => Touch::Nothing,
+            Change::Property { property, .. } if self.contents.contains(property) => Touch::Content,
+            Change::Property { id, .. } if self.is_component(dom, *id) => Touch::Content,
+            Change::Property { .. } => Touch::Layout,
             // A Folder or a Player carrying GUI counts, so the whole
             // subtree is looked at.
             Change::Reparented { subtree, .. }
@@ -130,6 +182,15 @@ impl Watch {
             }
             _ => Touch::Nothing,
         }
+    }
+
+    /// A UI component (a layout, padding, UIScale, a size constraint):
+    /// what it changes is its parent GUI object's.
+    fn is_component(&self, dom: &Dom, id: InstanceId) -> bool {
+        let (Some(inst), Some(ui)) = (dom.get(id), self.ui) else {
+            return false;
+        };
+        dom.database().is_a(inst.class, ui)
     }
 
     fn is_gui(&self, dom: &Dom, id: InstanceId) -> bool {

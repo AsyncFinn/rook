@@ -86,6 +86,12 @@ impl Screen {
         self.drawn = None;
     }
 
+    pub(crate) fn restack_all(&mut self, tops: impl IntoIterator<Item = InstanceId>) {
+        for top in tops {
+            self.restack(top);
+        }
+    }
+
     pub(crate) fn placed(&mut self, id: InstanceId) {
         self.placed.insert(id);
         self.drawn = None;

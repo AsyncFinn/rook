@@ -545,6 +545,69 @@ fn a_font_arriving_lays_out_only_the_text_waiting_for_it() {
     assert!((1..=2).contains(&laid), "laid out {laid} nodes");
 }
 
+/// A change inside a big ScreenGui lays out again from the nearest
+/// object whose place doesn't depend on it, as browsers do from a
+/// relayout boundary: an image or a name changing, a UI component's
+/// property, or a list item growing lay out the item or its list, never
+/// the whole ScreenGui, and everything ends where a fresh layout puts it.
+#[test]
+fn changes_lay_out_again_from_the_nearest_free_object() {
+    use rook_types::counters::{Counter, take_local};
+    let (mut dom, player_gui) = client();
+    let screen = child(&mut dom, "ScreenGui", player_gui, &[]);
+    for _ in 0..40 {
+        frame(&mut dom, screen, udim2(0.0, 10, 0.0, 10));
+    }
+    let image = child(
+        &mut dom,
+        "ImageLabel",
+        screen,
+        &[("Size", udim2(0.0, 30, 0.0, 30))],
+    );
+    let panel = frame(&mut dom, screen, udim2(0.0, 200, 0.0, 300));
+    let list = child(&mut dom, "UIListLayout", panel, &[]);
+    let items: Vec<InstanceId> = (0..5)
+        .map(|_| frame(&mut dom, panel, udim2(1.0, 0, 0.0, 20)))
+        .collect();
+    let scroller = child(
+        &mut dom,
+        "ScrollingFrame",
+        screen,
+        &[
+            ("Size", udim2(0.0, 100, 0.0, 100)),
+            ("CanvasSize", udim2(0.0, 0, 0.0, 400)),
+        ],
+    );
+    let scrolled = frame(&mut dom, scroller, udim2(1.0, 0, 0.0, 20));
+    let mut gui = laid_out(&mut dom);
+    let read = |dom: &Dom| {
+        (items.iter().chain([&scrolled]))
+            .map(|&id| rect(dom, id, screen))
+            .collect::<Vec<_>>()
+    };
+    let changes: [(InstanceId, &str, Value); 5] = [
+        (
+            image,
+            "ImageContent",
+            Value::Content(rook_types::Content::from_uri("rbxassetid://1")),
+        ),
+        (items[0], "Name", Value::String("Renamed".into())),
+        (list, "Padding", Value::UDim(rook_types::UDim::new(0.0, 4))),
+        (items[1], "Size", udim2(1.0, 0, 0.0, 35)),
+        (scroller, "CanvasPosition", v2(0.0, 50.0)),
+    ];
+    for (id, name, value) in changes {
+        take_local();
+        set(&mut dom, id, name, value);
+        gui.sync(&mut dom);
+        let laid = take_local()[Counter::GuiNodesLaidOut];
+        assert!(laid <= 6, "{name}: laid out {laid} nodes");
+        let alone = read(&dom);
+        laid_out(&mut dom);
+        assert_eq!(alone, read(&dom), "{name}");
+    }
+}
+
 /// Measured in Studio: a NaN size reads (0, 0) at the screen's top left,
 /// and so does everything placed from it, while a NaN-sized scroller keeps
 /// its `CanvasPosition`. Laying it out again changes none of them: a NaN

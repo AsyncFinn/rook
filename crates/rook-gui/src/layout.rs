@@ -180,15 +180,44 @@ impl Layout {
         *self = pass.out;
     }
 
-    /// `ids` split into the objects that can be placed again on their own
-    /// (laid out, their parent placing them by `Position` and `Size`
-    /// alone, nothing growing to hold them), and the rest, whose trees
-    /// must lay out again.
+    /// What to place again for changes to `ids`: for each, the nearest
+    /// object, itself or a GUI object holding it, that can be placed
+    /// again on its own (laid out, its parent placing it by `Position`
+    /// and `Size` alone, nothing growing to hold it), as browsers lay out
+    /// again from a relayout boundary; and the ids with none, whose trees
+    /// must lay out again. None of the first is inside another.
     pub(crate) fn alone(
         &self,
         dom: &Dom,
         ids: impl IntoIterator<Item = InstanceId>,
     ) -> (Vec<InstanceId>, Vec<InstanceId>) {
+        let mut placed = Vec::new();
+        let mut whole = Vec::new();
+        for id in ids {
+            let mut at = id;
+            loop {
+                if self.free(dom, at) {
+                    placed.push(at);
+                    break;
+                }
+                match gui_parent(dom, at).filter(|&p| dom.is_a(p, "GuiObject")) {
+                    Some(p) => at = p,
+                    None => {
+                        whole.push(id);
+                        break;
+                    }
+                }
+            }
+        }
+        placed.sort_unstable();
+        placed.dedup();
+        let set: FxHashSet<InstanceId> = placed.iter().copied().collect();
+        placed.retain(|&b| !dom.ancestors(b).any(|a| set.contains(&a)));
+        (placed, whole)
+    }
+
+    /// Whether `id` can be placed again on its own (see [`Layout::alone`]).
+    fn free(&self, dom: &Dom, id: InstanceId) -> bool {
         let free = |id: InstanceId| {
             let Some(parent) = gui_parent(dom, id) else {
                 return false;
@@ -221,7 +250,7 @@ impl Layout {
             }
             true
         };
-        ids.into_iter().partition(|&id| free(id))
+        free(id)
     }
 
     /// Place `ids` again, with what they hold, where their parents put

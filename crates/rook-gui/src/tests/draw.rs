@@ -321,11 +321,70 @@ fn trees_coming_and_going_leave_the_others() {
     square(&mut dom, added, 1, 0.3);
     dom.set_parent(added, Some(player_gui)).unwrap();
     assert_eq!(step(&mut dom, &mut gui), [true, true, false]);
+    // The square moved draws the same in its new ScreenGui: its piece too
+    // is kept.
     dom.set_parent(mover, Some(added)).unwrap();
-    assert_eq!(step(&mut dom, &mut gui), [true, true, false]);
+    assert_eq!(step(&mut dom, &mut gui), [true, true, true]);
     dom.set_parent(added, None).unwrap();
     assert_eq!(step(&mut dom, &mut gui), [true]);
     assert!(!gui.layout.contains(mover));
+}
+
+/// GUI added to, moved in or taken out of a list deep in a big ScreenGui
+/// lays out only the list's panel again, not the ScreenGui, and the
+/// screen ends as a fresh layout draws it: what left is gone, what came
+/// shows, and a UICorner added rounds its parent.
+#[test]
+fn moves_inside_a_tree_lay_out_only_where_they_happen() {
+    use rook_types::counters::{Counter, take_local};
+    let (mut dom, player_gui) = client();
+    let screen = child(&mut dom, "ScreenGui", player_gui, &[]);
+    for i in 0..40 {
+        square(&mut dom, screen, 1, i as f32 / 100.0);
+    }
+    let panel = child(
+        &mut dom,
+        "Frame",
+        screen,
+        &[("Size", udim2(0.0, 200, 0.0, 300))],
+    );
+    child(&mut dom, "UIListLayout", panel, &[]);
+    let item = |dom: &mut Dom, tag: f32| {
+        let color = Value::Color3(Color3::new(tag, 0.5, 0.0));
+        child(
+            dom,
+            "Frame",
+            panel,
+            &[
+                ("Size", udim2(1.0, 0, 0.0, 20)),
+                ("BackgroundColor3", color),
+            ],
+        )
+    };
+    let first = item(&mut dom, 0.9);
+    let second = item(&mut dom, 0.8);
+    let mut gui = laid_out(&mut dom);
+    gui.draw(&dom);
+    let mut step = |dom: &mut Dom, what: &str| {
+        take_local();
+        gui.sync(dom);
+        let laid = take_local()[Counter::GuiNodesLaidOut];
+        assert!(laid <= 6, "{what}: laid out {laid} nodes");
+        assert_eq!(
+            drawn(&mut gui, dom),
+            drawn(&mut laid_out(dom), dom),
+            "{what}"
+        );
+    };
+    let added = dom.create_by_name("Frame").unwrap();
+    set(&mut dom, added, "Size", udim2(1.0, 0, 0.0, 30));
+    dom.set_parent(added, Some(panel)).unwrap();
+    step(&mut dom, "added");
+    dom.set_parent(first, None).unwrap();
+    step(&mut dom, "taken out");
+    let corner = dom.create_by_name("UICorner").unwrap();
+    dom.set_parent(corner, Some(second)).unwrap();
+    step(&mut dom, "corner");
 }
 
 /// A text object's color and transparency reach its glyphs, and change

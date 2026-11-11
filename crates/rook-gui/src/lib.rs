@@ -52,14 +52,24 @@ pub fn is_layout_output(name: &str) -> bool {
     )
 }
 
+/// A subtree that moved in the tree holding GUI.
+#[derive(Debug)]
+struct Moved {
+    /// The parent it left.
+    left: Option<InstanceId>,
+    /// The top of the tree it left.
+    old_top: Option<InstanceId>,
+    /// It and its descendants.
+    subtree: Vec<InstanceId>,
+}
+
 #[derive(Debug)]
 pub struct Gui {
     cursor: u64,
     /// Everything lays out again: the screen resized.
     stale: bool,
-    /// GUI that moved in the tree since the last layout: each subtree, and
-    /// the top of the tree it left.
-    moved: Vec<(Option<InstanceId>, Vec<InstanceId>)>,
+    /// GUI that moved in the tree since the last layout.
+    moved: Vec<Moved>,
     /// Objects changed since the last layout; their trees lay out again.
     changed: FxHashSet<InstanceId>,
     /// Objects whose own place changed since the last layout; each is
@@ -245,10 +255,13 @@ impl Gui {
         dom.set_property_by_name(id, "CanvasPosition", Value::Vector2(Vector2(at)))
     }
     fn forget(&mut self, id: InstanceId) {
-        for (old_top, subtree) in &mut self.moved {
-            subtree.retain(|&i| i != id);
-            if *old_top == Some(id) {
-                *old_top = None;
+        for moved in &mut self.moved {
+            moved.subtree.retain(|&i| i != id);
+            if moved.old_top == Some(id) {
+                moved.old_top = None;
+            }
+            if moved.left == Some(id) {
+                moved.left = None;
             }
         }
         self.layout.drop(&FxHashSet::from_iter([id]));
@@ -329,16 +342,22 @@ impl Gui {
                     (
                         Touch::Tree,
                         Change::Reparented {
+                            old_parent,
                             old_ancestors,
                             subtree,
                             ..
                         },
-                    ) => {
-                        let old_top = layout::top_along(dom, old_ancestors.iter().copied());
-                        self.moved.push((old_top, subtree.clone()));
-                    }
+                    ) => self.moved.push(Moved {
+                        left: *old_parent,
+                        old_top: layout::top_along(dom, old_ancestors.iter().copied()),
+                        subtree: subtree.clone(),
+                    }),
                     (Touch::Layout, Change::Property { id, .. }) => _ = self.changed.insert(*id),
                     (Touch::Place, Change::Property { id, .. }) => _ = self.shifted.insert(*id),
+                    (Touch::Content, Change::Property { id, .. }) => {
+                        self.shifted.insert(*id);
+                        self.restyled.insert(*id);
+                    }
                     (Touch::Look, Change::Property { id, .. }) => _ = self.restyled.insert(*id),
                     (Touch::Text, Change::Property { id, .. }) => _ = self.retexted.insert(*id),
                     _ => {}
@@ -464,9 +483,12 @@ impl Gui {
         self.redraw(dom, &resized);
     }
 
-    /// Take the GUI that moved in the tree out of where it was laid out,
-    /// and return the trees to lay out again: those it left, and those it
-    /// joined that are laid out (a screen's, or a client's world GUI).
+    /// Take the GUI that moved in the tree out of where it was laid out.
+    /// The objects it left and joined, when laid out, are placed again
+    /// (from the nearest one whose place doesn't depend on what they
+    /// hold, see [`layout::Layout::alone`]) and drawn again; returns the
+    /// trees to lay out again whole: those it left or joined at the top
+    /// that are laid out (a screen's, or a client's world GUI).
     fn take_moved(&mut self, dom: &Dom) -> Vec<InstanceId> {
         let moved = std::mem::take(&mut self.moved);
         if moved.is_empty() {
@@ -479,7 +501,12 @@ impl Gui {
         let in_workspace = |id: InstanceId| workspace.is_some_and(|ws| dom.is_ancestor_of(ws, id));
         let client = dom.local_player().is_some();
         let mut trees = FxHashSet::default();
-        for (old_top, subtree) in moved {
+        for Moved {
+            left,
+            old_top,
+            subtree,
+        } in moved
+        {
             let ids: FxHashSet<InstanceId> = subtree.iter().copied().collect();
             self.layout.drop(&ids);
             for &id in &subtree {
@@ -494,12 +521,28 @@ impl Gui {
                 .retain(|&id| !ids.contains(&id) || in_workspace(id));
             self.messages
                 .retain(|&id| !ids.contains(&id) || dom.parent(id).is_some());
-            // The tree it left, if that's still laid out.
-            trees.extend(old_top.filter(|top| self.layout.placed.contains_key(top)));
-            let joined = (subtree.iter()).filter_map(|&id| layout::top_of(dom, id));
-            trees.extend(joined.filter(|&top| {
-                layout::on_screen(dom, top) || client && self.in_world.contains(&top)
-            }));
+            let placed =
+                |id: InstanceId| self.layout.placed.contains_key(&id) && dom.is_a(id, "GuiObject");
+            // The object it left, or the tree, if that's still laid out.
+            match left.filter(|&p| placed(p)) {
+                Some(p) => _ = self.shifted.insert(p),
+                None => trees.extend(old_top.filter(|top| self.layout.placed.contains_key(top))),
+            }
+            let Some(&root) = subtree.first() else {
+                continue;
+            };
+            match dom.parent(root).filter(|&p| placed(p)) {
+                Some(p) => _ = self.shifted.insert(p),
+                None => trees.extend(layout::top_of(dom, root).filter(|&top| {
+                    layout::on_screen(dom, top) || client && self.in_world.contains(&top)
+                })),
+            }
+            // What draws changed in the ScreenGuis it left and joined; and
+            // what it held drew with it (a UICorner, a UIStroke).
+            self.screen
+                .restack_all(old_top.into_iter().chain(layout::top_of(dom, root)));
+            self.restyled
+                .extend(left.into_iter().chain(dom.parent(root)));
         }
         trees.into_iter().collect()
     }
