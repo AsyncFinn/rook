@@ -23,7 +23,7 @@ pub(crate) use color::{LBrickColor, LColor3};
 pub(crate) use content::LContent;
 pub(crate) use font::LFont;
 pub(crate) use geometry::{LRay, LRect, LRegion3, LRegion3int16};
-pub(crate) use misc::Opaque;
+pub(crate) use misc::{LAxes, LFaces, LOther, LPhysicalProperties};
 pub(crate) use sequences::{LColorSequence, LNumberRange, LNumberSequence};
 pub(crate) use udim::{LUDim, LUDim2};
 pub(crate) use vector::{LVector2, LVector2int16, LVector3int16};

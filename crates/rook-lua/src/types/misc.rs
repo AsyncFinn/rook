@@ -4,7 +4,7 @@
 use super::err;
 use super::members::{Wording, not_a_member};
 use mlua::{
-    Lua, MetaMethod, MultiValue, UserData, UserDataFields, UserDataMethods, UserDataRef,
+    IntoLua, Lua, MetaMethod, MultiValue, UserData, UserDataFields, UserDataMethods, UserDataRef,
     Value as LuaValue,
 };
 use rook_types::{NormalId, Value};
@@ -13,29 +13,50 @@ use super::enums::{item_name, item_value};
 use super::random::random_new;
 use crate::ctx::args::number_of;
 
-/// A property value with no Lua datatype of its own. It still
-/// round-trips: reading a property and assigning it back works.
+/// A property value with no Lua datatype of its own, as one of the kinds
+/// below. Each kind is its own userdata type, so `typeof` names it as
+/// Roblox does. It still round-trips: reading a property and assigning it
+/// back works.
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct Opaque(pub Value);
+pub(crate) struct Opaque<const KIND: u8>(pub Value);
 
-impl Opaque {
-    fn type_name(&self) -> &'static str {
-        match &self.0 {
-            Value::Faces(_) => "Faces",
-            Value::Axes(_) => "Axes",
-            Value::PhysicalProperties(_) => "PhysicalProperties",
-            Value::Font(_) => "Font",
-            _ => "userdata",
-        }
+const FACES: u8 = 0;
+const AXES: u8 = 1;
+const PHYSICAL_PROPERTIES: u8 = 2;
+/// A value scripts have no datatype for.
+const OTHER: u8 = 3;
+
+pub(crate) type LFaces = Opaque<FACES>;
+pub(crate) type LAxes = Opaque<AXES>;
+pub(crate) type LPhysicalProperties = Opaque<PHYSICAL_PROPERTIES>;
+pub(crate) type LOther = Opaque<OTHER>;
+
+impl<const KIND: u8> Opaque<KIND> {
+    const NAME: &'static str = match KIND {
+        FACES => "Faces",
+        AXES => "Axes",
+        PHYSICAL_PROPERTIES => "PhysicalProperties",
+        _ => "userdata",
+    };
+}
+
+/// `v` as the userdata for its kind.
+pub(crate) fn opaque(lua: &Lua, v: Value) -> mlua::Result<LuaValue> {
+    match v {
+        Value::Faces(_) => Opaque::<FACES>(v).into_lua(lua),
+        Value::Axes(_) => Opaque::<AXES>(v).into_lua(lua),
+        Value::PhysicalProperties(_) => Opaque::<PHYSICAL_PROPERTIES>(v).into_lua(lua),
+        _ => Opaque::<OTHER>(v).into_lua(lua),
     }
 }
 
-impl UserData for Opaque {
+impl<const KIND: u8> UserData for Opaque<KIND> {
+    fn add_fields<F: UserDataFields<Self>>(f: &mut F) {
+        f.add_meta_field("__type", Self::NAME);
+    }
+
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
-        m.add_meta_method(
-            MetaMethod::Eq,
-            |_, t, o: UserDataRef<Opaque>| Ok(t.0 == o.0),
-        );
+        m.add_meta_method(MetaMethod::Eq, |_, t, o: UserDataRef<Self>| Ok(t.0 == o.0));
         m.add_meta_method(MetaMethod::ToString, |_, t, ()| {
             Ok(match &t.0 {
                 // Observed: the six values as `%.9g`, comma-separated.
@@ -49,12 +70,31 @@ impl UserData for Opaque {
                 ]
                 .map(super::fmt_f32)
                 .join(", "),
-                _ => t.type_name().to_owned(),
+                // Observed: the members set, in this order.
+                Value::Faces(f) => {
+                    use rbx_types::Faces as F;
+                    let all = [
+                        (F::RIGHT, "Right"),
+                        (F::TOP, "Top"),
+                        (F::BACK, "Back"),
+                        (F::LEFT, "Left"),
+                        (F::BOTTOM, "Bottom"),
+                        (F::FRONT, "Front"),
+                    ];
+                    let set = all.iter().filter(|(flag, _)| f.contains(*flag));
+                    set.map(|(_, name)| *name).collect::<Vec<_>>().join(", ")
+                }
+                Value::Axes(a) => {
+                    use rbx_types::Axes as A;
+                    let all = [(A::X, "X"), (A::Y, "Y"), (A::Z, "Z")];
+                    let set = all.iter().filter(|(flag, _)| a.contains(*flag));
+                    set.map(|(_, name)| *name).collect::<Vec<_>>().join(", ")
+                }
+                _ => Self::NAME.to_owned(),
             })
         });
-        m.add_meta_method(MetaMethod::Type, |_, t, ()| Ok(t.type_name()));
         m.add_meta_method(MetaMethod::Index, |_, t, key: LuaValue| {
-            let unknown = || not_a_member(&key, t.type_name(), Wording::Quoted);
+            let unknown = || not_a_member(&key, Self::NAME, Wording::Quoted);
             let LuaValue::String(name) = &key else {
                 return Err(unknown());
             };
@@ -156,7 +196,7 @@ fn tween_info_new(lua: &Lua, args: MultiValue) -> mlua::Result<LTweenInfo> {
     clippy::unnecessary_wraps,
     reason = "Luau calls it through mlua, which wants a Result"
 )]
-fn faces_new(lua: &Lua, args: MultiValue) -> mlua::Result<Opaque> {
+fn faces_new(lua: &Lua, args: MultiValue) -> mlua::Result<LFaces> {
     use rbx_types::Faces;
     let mut faces = Faces::empty();
     for v in args {
@@ -171,14 +211,14 @@ fn faces_new(lua: &Lua, args: MultiValue) -> mlua::Result<Opaque> {
         };
         faces = Faces::from_bits(faces.bits() | flag.bits()).unwrap_or(faces);
     }
-    Ok(Opaque(Value::Faces(faces)))
+    Ok(Opaque::<FACES>(Value::Faces(faces)))
 }
 
 #[expect(
     clippy::unnecessary_wraps,
     reason = "Luau calls it through mlua, which wants a Result"
 )]
-fn axes_new(lua: &Lua, args: MultiValue) -> mlua::Result<Opaque> {
+fn axes_new(lua: &Lua, args: MultiValue) -> mlua::Result<LAxes> {
     use rbx_types::Axes;
     let mut axes = Axes::empty();
     for v in args {
@@ -195,13 +235,13 @@ fn axes_new(lua: &Lua, args: MultiValue) -> mlua::Result<Opaque> {
         };
         axes = Axes::from_bits(axes.bits() | flag.bits()).unwrap_or(axes);
     }
-    Ok(Opaque(Value::Axes(axes)))
+    Ok(Opaque::<AXES>(Value::Axes(axes)))
 }
 
 /// `PhysicalProperties.new(material)` or `(density, friction, elasticity
 /// [, frictionWeight, elasticityWeight [, acousticAbsorption]])`, with the
 /// values clamped (observed).
-fn physical_properties_new(lua: &Lua, args: MultiValue) -> mlua::Result<Opaque> {
+fn physical_properties_new(lua: &Lua, args: MultiValue) -> mlua::Result<LPhysicalProperties> {
     use rook_physics::contacts::materials::{self, Properties};
     let a = args.into_vec();
     let p = if a.len() == 1
@@ -238,7 +278,7 @@ fn physical_properties_new(lua: &Lua, args: MultiValue) -> mlua::Result<Opaque> 
         p.elasticity_weight,
         p.acoustic_absorption,
     );
-    Ok(Opaque(Value::PhysicalProperties(
+    Ok(Opaque::<PHYSICAL_PROPERTIES>(Value::PhysicalProperties(
         rbx_types::PhysicalProperties::Custom(custom),
     )))
 }
