@@ -138,7 +138,7 @@ impl Ribbons {
         let beams = (self.beams.iter().flatten()).filter_map(|b| beam(b, camera, time));
         let trails = (self.trails.iter().zip(&self.states))
             .filter_map(|(t, s)| s.strip(t.as_ref()?, camera));
-        let wires = (self.floor_wires.iter().flatten()).flat_map(|w| floor_wire(w, time));
+        let wires = (self.floor_wires.iter().flatten()).flat_map(|w| floor_wire(w, camera, time));
         beams.chain(trails).chain(wires).collect()
     }
 }

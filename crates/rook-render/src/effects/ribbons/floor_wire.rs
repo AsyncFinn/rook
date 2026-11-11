@@ -1,14 +1,10 @@
-//! A FloorWire's images as strips: each two crossed quads on its wire
-//! (docs/behavior/rendering/adornments.md).
-
-use std::f32::consts::PI;
-
-use glam::Quat;
+//! A FloorWire's images as strips: each one quad on its wire, turned
+//! about it to the camera (docs/behavior/rendering/adornments.md).
 
 use super::*;
 
-/// Every image of `w` at `time` seconds, two strips each.
-pub(super) fn floor_wire(w: &FloorWire, time: f32) -> Vec<Strip<'_>> {
+/// Every image of `w` seen from `camera` at `time` seconds, a strip each.
+pub(super) fn floor_wire(w: &FloorWire, camera: Vec3, time: f32) -> Vec<Strip<'_>> {
     let lengths: Vec<f32> = w.path.windows(2).map(|l| l[0].distance(l[1])).collect();
     let total: f32 = lengths.iter().sum();
     if w.spacing <= 0.0 || total <= 0.0 || w.look.texture.is_none() {
@@ -27,25 +23,31 @@ pub(super) fn floor_wire(w: &FloorWire, time: f32) -> Vec<Strip<'_>> {
         let way = (w.path[leg + 1] - w.path[leg]).normalize_or_zero();
         if way != Vec3::ZERO {
             let center = w.path[leg] + way * (at - start);
-            let turn = turn(way);
-            for across in [turn * Vec3::NEG_X, turn * Vec3::Z] {
-                out.push(quad(w, center, way, across, alpha));
-            }
+            let across = across(way, center, camera);
+            out.push(quad(w, center, way, across, alpha));
         }
         at += w.spacing;
     }
     out
 }
 
-/// The turn taking -Y onto `way` by the shortest arc, and about X when
-/// `way` is straight up: the image's across axes are then -X and +Z turned
-/// (measured on every leg direction of a wire).
-fn turn(way: Vec3) -> Quat {
-    if way.y > 0.9999 {
-        Quat::from_rotation_x(PI)
+/// The image's height axis at `center`: across `way`, facing `camera`,
+/// on the side of its rest axis (down, or -X on an upright leg), so the
+/// image flips over as the camera crosses the plane of the wire and that
+/// axis (measured).
+fn across(way: Vec3, center: Vec3, camera: Vec3) -> Vec3 {
+    let down = Vec3::NEG_Y + way * way.y;
+    let rest = if down.length_squared() < 1e-6 {
+        Vec3::NEG_X
     } else {
-        Quat::from_rotation_arc(Vec3::NEG_Y, way)
+        down.normalize()
+    };
+    let side = way.cross(camera - center);
+    if side.length_squared() < 1e-10 {
+        return rest;
     }
+    let side = side.normalize();
+    if side.dot(rest) < 0.0 { -side } else { side }
 }
 
 /// One quad of the image at `center`: its width along `way` from u 0 to 1,

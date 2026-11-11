@@ -175,44 +175,26 @@ fn center(s: &Strip<'_>) -> Vec3 {
 }
 
 /// A FloorWire's images sit every StudsBetweenTextures back from its end
-/// at To, as two quads, their width along the wire from From to To and
-/// their height across it as measured: -X and -Z going up, -Y and +Z
-/// along +X; CycleOffset and Velocity move them towards To.
+/// at To, one quad each, its width along the wire from From to To;
+/// CycleOffset and Velocity move them towards To.
 #[test]
 fn floor_wire_images_count_back_from_to() {
     let (still, offset, moving) = (wire(0.0, 0.0), wire(0.0, 0.25), wire(1.0, 0.0));
-    let still = floor_wire(&still, 0.0);
-    let centers: Vec<Vec3> = still.chunks(2).map(|pair| center(&pair[0])).collect();
+    let camera = Vec3::new(5.0, 4.0, 30.0);
+    let still = floor_wire(&still, camera, 0.0);
+    let centers: Vec<Vec3> = still.iter().map(center).collect();
     let near = |a: Vec3, b: Vec3| a.distance(b) < 1e-4;
     assert_eq!(centers.len(), 6);
     assert!(near(centers[5], Vec3::new(10.0, 8.0, 0.0)));
     assert!(near(centers[4], Vec3::new(10.0, 4.0, 0.0)));
     assert!(near(centers[3], Vec3::new(9.8, 0.2, 0.0)));
     assert!(near(centers[0], Vec3::new(0.0, 2.4, 0.0)));
-    let up = &still[10..12];
     assert!(near(
-        up[0].edges[1].sides[0] - up[0].edges[0].sides[0],
+        still[5].edges[1].sides[0] - still[5].edges[0].sides[0],
         Vec3::Y * 2.0
     ));
-    assert!(near(
-        up[0].edges[0].sides[1] - up[0].edges[0].sides[0],
-        Vec3::NEG_X
-    ));
-    assert!(near(
-        up[1].edges[0].sides[1] - up[1].edges[0].sides[0],
-        Vec3::NEG_Z
-    ));
-    let along = &still[4..6];
-    assert!(near(
-        along[0].edges[0].sides[1] - along[0].edges[0].sides[0],
-        Vec3::NEG_Y
-    ));
-    assert!(near(
-        along[1].edges[0].sides[1] - along[1].edges[0].sides[0],
-        Vec3::Z
-    ));
-    let offset = floor_wire(&offset, 0.0);
-    let moving = floor_wire(&moving, 1.0);
+    let offset = floor_wire(&offset, camera, 0.0);
+    let moving = floor_wire(&moving, camera, 1.0);
     // One stud on: the last image passes the end and the one before is next.
     assert!(near(
         center(offset.last().unwrap()),
@@ -221,5 +203,30 @@ fn floor_wire_images_count_back_from_to() {
     assert!(near(
         center(moving.last().unwrap()),
         Vec3::new(10.0, 5.0, 0.0)
+    ));
+}
+
+/// Measured: a FloorWire image turns about its wire to face the camera,
+/// keeping to the side of its rest axis (-X on an upright leg, down on a
+/// level one), so it flips over as the camera crosses that plane.
+#[test]
+fn floor_wire_images_face_the_camera() {
+    let w = wire(0.0, 0.0);
+    let across = |camera: Vec3, i: usize| {
+        let s = &floor_wire(&w, camera, 0.0)[i];
+        (s.edges[0].sides[1] - s.edges[0].sides[0]).normalize()
+    };
+    let near = |a: Vec3, b: Vec3| a.distance(b) < 1e-3;
+    // The upright leg's top image, at (10, 8, 0).
+    assert!(near(across(Vec3::new(10.0, 8.0, 20.0), 5), Vec3::NEG_X));
+    assert!(across(Vec3::new(30.0, 8.0, 1.0), 5).z > 0.99);
+    assert!(across(Vec3::new(30.0, 8.0, -1.0), 5).z < -0.99);
+    // A level leg's image, at (5.8, 0.2, 0), seen from 45 degrees above.
+    let slope = std::f32::consts::FRAC_1_SQRT_2;
+    let front = Vec3::new(0.0, -slope, slope);
+    assert!(near(across(Vec3::new(5.8, 10.2, 10.0), 2), front));
+    assert!(near(
+        across(Vec3::new(5.8, 10.2, -10.0), 2),
+        front * Vec3::new(1.0, 1.0, -1.0)
     ));
 }
