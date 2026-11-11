@@ -4,7 +4,7 @@ Checked against Studio 0.744 on 2026-11-05, in a Baseplate playtest
 (server), by script.
 
 Scripts write NaN and infinity into parts more than you'd think: a
-disaster game's script dividing by a zero distance, say. Roblox never
+script dividing by a zero distance, say. Roblox never
 lets either reach a part.
 
 - **CFrame.** A CFrame with a NaN or infinite number anywhere in it,
@@ -27,4 +27,4 @@ lets either reach a part.
 Physics also leaves out any part whose box has a NaN or infinite number
 in it, whatever wrote it (a file, or a body thrown far enough), so one
 can't stop the world: `rook_physics::shape::size_box` returns `None` for
-it. A 2017-era disaster place's server crashed on one before.
+it. A place's server crashed on one before.

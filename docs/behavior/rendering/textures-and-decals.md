@@ -34,7 +34,7 @@ scan now counts looks too):
 
 *Image formats* (`rook content --place`, which now decodes every image
 reference and totals the results by format, over 60 random archive places
-and a large 2016 place, anonymous): of the images that load, 648 distinct are
+and a large older place, anonymous): of the images that load, 648 distinct are
 PNG (1,926 uses), 16 JPEG, 1 BMP (10 uses) and 2 DDS; none is a GIF or
 TGA, and none failed to decode. 996 distinct images (12,235 uses) are
 refused without an account. The install's own textures are DDS (DXT1 and
@@ -160,28 +160,28 @@ textures in 2.00 and 1.00, `VertexColor`, the empty-`MeshId` box; ZIndex,
 tint, decals on invisible and half-transparent parts; Textures with
 non-integer tiling and offsets; surfaces on Plastic and SmoothPlastic, and
 Neon. Placement, orientation and tiling match to the pixel by eye, apart from
-lighting. A 2017 place, one of its maps loaded into
+lighting. A mid-size place, one of its maps loaded into
 Workspace in both: weld lattices and studs, the studded Plastic
-and the decals match; Wood and Concrete are plain in Rook. A large 2016 place
+and the decals match; Wood and Concrete are plain in Rook. A large older place
 from its saved camera: its decals and a tiled Texture match, once fetched with an Open Cloud key (see
 below), and a Reflectance 0.3 part gives Studio's pink.
 
 *Asset delivery with an Open Cloud key*, first tried here: with
-`ROOK_OPEN_CLOUD_API_KEY` set, a large 2016 place resolved 544 of its 704
+`ROOK_OPEN_CLOUD_API_KEY` set, a large older place resolved 544 of its 704
 distinct references (4,742 of 5,304 uses); the other 89 are refused to
 anyone ("User is not authorized", "Asset is not approved for the
 requester") or don't exist. A cached anonymous refusal no longer stops the
 key being tried.
 
 *Performance* (release builds, base = the previous commit, one run each):
-`rook run-headless --seconds 10` gave identical output on a large 2016 place,
-a small place and a 2008 place (15.05 against 14.98 s, 0.50 against 0.46 s, 0.45
-against 0.48 s). `rook-player --bench 300`: a small place (3 images) and a 2008 place
+`rook run-headless --seconds 10` gave identical output on a large older place,
+a small place and an early place (15.05 against 14.98 s, 0.50 against 0.46 s, 0.45
+against 0.48 s). `rook-player --bench 300`: a small place (3 images) and an early place
 (5 images) unchanged (render 1.49 against 1.53 ms, 1.71 against 1.71 ms);
-a large 2016 place now draws 3,473 more entries (its decals and Textures) and
+a large older place now draws 3,473 more entries (its decals and Textures) and
 310 images, and its render grew from 3.2 to 5.6 ms. The windowed player
 (`--uncapped --frame-times`, from the saved camera): a small place 0.32 ms median
-both, a 2008 place 0.39 ms both, a large 2016 place 0.75 to 1.22 ms (1,050 to 655
+both, an early place 0.39 ms both, a large older place 0.75 to 1.22 ms (1,050 to 655
 FPS), no frame over 16.7 ms in any.
 
 *Not done yet:* Plastic's own material texture and normal maps; surface

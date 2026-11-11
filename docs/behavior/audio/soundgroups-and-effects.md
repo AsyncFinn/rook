@@ -34,9 +34,9 @@ calls), so it is done too.
 The corpus doesn't count SoundService's property values, so five places
 were looked at with `rook dump`:
 
-- A 2021 place, both large places and a 2008 place save `AmbientReverb`
+- A mid-size modern place, both large places and an early place save `AmbientReverb`
   NoReverb.
-- A small place and the large 2016 place save `RespectFilteringEnabled` false.
+- A small place and the large older place save `RespectFilteringEnabled` false.
 - A large modern place has four PitchShift effects (`Octave` 0.5) under sounds.
 
 Scripts that set `AmbientReverb` are rare: helpers like `CheckReverb` in

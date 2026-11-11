@@ -221,14 +221,14 @@ above) come anonymously.
 
 | Place | References (distinct targets) | Install | Asset delivery or cache | Refused anonymously | Not found or no content |
 |---|---|---:|---:|---:|---:|
-| A 2017 place | 198 (102) | 5 (3) | 141 (73) | 51 (26) | 1 (1) |
+| A mid-size place | 198 (102) | 5 (3) | 141 (73) | 51 (26) | 1 (1) |
 | A large modern place | 9,284 (1,655) | 229 (18) | 1,440 (418) | 7,610 (1,215) | 5 (5) |
 
 Most refusals are "Authentication required" (a large place: 7,471 uses, 1,141
 assets). A second run needs no network: a large place resolved all 1,655 targets
 from the install and cache in 0.2 s. The player draws the Head MeshType
 with the install's `head.mesh`, and `rook run-headless --seconds 10` on a large modern place, a small place
-and a 2008 place gave identical output in the same time as before (a large place
+and an early place gave identical output in the same time as before (a large place
 22.3 s against 22.5 s, four alternating runs each).
 
 *Mesh files* are read by Rook's own decoder, versions 1.00 to 7.00

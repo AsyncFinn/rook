@@ -23,10 +23,10 @@ anonymous):
 
 | Place | Sound uses (distinct) | Decoded: Ogg | Decoded: MP3 | Decoded: WAV | Refused anonymously | Not found |
 |---|---:|---:|---:|---:|---:|---:|
-| A 2021 place | 51 (31) | 42 (24) | 1 (1) | 0 | 8 (6) | 0 |
-| A 2021 place | 51 (31) | 42 (24) | 1 (1) | 0 | 8 (6) | 0 |
-| A large 2016 place | 503 (154) | 187 (39) | 31 (1) | 0 | 285 (114) | 0 |
-| A 2008 place | 23 (23) | 21 (21) | 0 | 0 | 0 | 2 (2) |
+| A mid-size modern place | 51 (31) | 42 (24) | 1 (1) | 0 | 8 (6) | 0 |
+| A mid-size modern place | 51 (31) | 42 (24) | 1 (1) | 0 | 8 (6) | 0 |
+| A large older place | 503 (154) | 187 (39) | 31 (1) | 0 | 285 (114) | 0 |
+| An early place | 23 (23) | 21 (21) | 0 | 0 | 0 | 2 (2) |
 | A large modern place | 956 (349) | 218 (75) | 43 (8) | 0 | 693 (264) | 2 (2) |
 
 So: every sound that loads is Ogg Vorbis or MP3, at 8,000 to 48,000 Hz.
@@ -36,7 +36,7 @@ install's own `content/sounds` holds 7 MP3s and 4 Oggs and no WAV. WAV
 only arrives from a content folder or a local file, and is decoded anyway
 since Studio plays it (below). Refusals are the account-only assets of the
 newer places ("Authentication required", "not authorized", "archived");
-the two not found in a 2008 place are `sounds/Rubber band sling shot.mp3` and
+the two not found in an early place are `sounds/Rubber band sling shot.mp3` and
 `sounds/paintball.wav`, which no install or upload has.
 
 *Decoders* (Rook's choice): Symphonia 0.5 (pure Rust, MPL-2.0), with only

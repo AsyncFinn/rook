@@ -94,7 +94,7 @@ const SAME_AS: &[(&str, &str, &str)] = &[
     // Unions too (observed: a small place's unions read their InitialSize).
     ("PartOperation", "MeshSize", "InitialSize"),
     // Files save a truss's Style as `style`, a property of its own in the
-    // database (a large 2016 place's NoSupports trusses read back the default).
+    // database (a large older place's NoSupports trusses read back the default).
     ("TrussPart", "Style", "style"),
 ];
 

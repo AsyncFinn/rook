@@ -107,7 +107,7 @@ Format edge cases to be aware of (from rbx-native's findings, **Inference** unti
 | Roblox setup CDN (`setup.rbxcdn.com`) | `{version}-API-Dump.json`, `Full-API-Dump.json`, per-version `rbxPkgManifest.txt` | **Confirmed** current manifests are public and list `content-*.zip` packages with MD5 sizes and hashes. Old versions disappear (2016 → 403). |
 | `RobloxAPI/build-archive` | API dumps + ReflectionMetadata from 2011 onward (65 builds in 2016) | Deprecated by its maintainer but still readable. Useful for "when did X appear" questions. |
 | `Roblox/creator-docs` | Official engine documentation (CC-BY-4.0) | Main behavioral reference. Citing and quoting with attribution is allowed. |
-| Asset delivery (`assetdelivery.roblox.com`) | Asset bytes | **Confirmed**: a classic public mesh (id 1028713) downloads anonymously (302 to CDN). A place (id 1818) is refused anonymously ("User is not authorized"). Public meshes, images and sounds don't need a login; places and restricted assets do. |
+| Asset delivery (`assetdelivery.roblox.com`) | Asset bytes | **Confirmed**: a classic public mesh (id 1028713) downloads anonymously (302 to CDN). A place is refused anonymously ("User is not authorized"). Public meshes, images and sounds don't need a login; places and restricted assets do. |
 | `rojo-rbx/rbx-test-files` | Format test fixtures | Already used by OpenRBLX. |
 | Live Roblox Studio | Ground truth | Recorded via conformance scripts (see [architecture](architecture.md#testing-and-measurement)). |
 
@@ -181,7 +181,7 @@ The first full `cargo xtask corpus-scan` of the maintainer's archive of places a
 
 - **4,605 files, 3,077 unique** (12.7 GB). **3,056 load (99.3%).** Before the legacy XML upgrade the figure was 55.6%.
 - **1,346 files needed the legacy XML upgrade**: 27,096 `<External>` entries dropped, 1,456 embedded assets and 5,906 `<hash>` references (both load empty, as modern Studio does; the data is kept in the upgrade report), 19.1 million control characters restored (almost all legacy `Terrain.ClusterGrid`/`ClusterGridV2` data), 6 MSVC float values, 3 `null` numbers.
-- **Embedded assets in Studio (Confirmed, 2026-10-05):** a December 2008 place opens in modern Studio, and the SpecialMesh whose texture was embedded in the file has an empty `TextureId`/`TextureContent`. `<hash>` references are assumed to behave the same (Inference).
+- **Embedded assets in Studio (Confirmed, 2026-10-05):** an early place with an embedded texture opens in modern Studio, and the SpecialMesh whose texture was embedded in the file has an empty `TextureId`/`TextureContent`. `<hash>` references are assumed to behave the same (Inference).
 - The 21 remaining failures: 3 non-Roblox or empty files, 2 binary files with bad headers, 2 binary files where rbx_binary rejects a `Color3uint8` stored as `Part.Color3uint8Internal` (an upstream issue), 3 XML files that aren't valid UTF-8, and a handful of malformed XML files.
 - **11.5 million instances and 287,000 scripts.** About 1.0% of scripts have syntax errors. Nearly all of the rest of the raw total comes from one place holding 44,000 broken copies of a 2008 "anti-lag" script, which real Lua rejects too.
 - **Legacy API use is pervasive:** `:connect` (861 files), `:findFirstChild` (611), `:clone` (558), `:remove` (506), `:disconnect` (491), `game:service` (465); global `wait()` in 997 files.

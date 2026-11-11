@@ -40,7 +40,7 @@ and 1 is 3.01; none is 5.00, 6.00 or 7.00. Modern avatar meshes are 7.00,
 though: the default R15 body's head (asset 123480233606534, refused
 anonymously) is, so every R15 character needs it ([layouts](#file-layouts)).
 2,833 distinct meshes (34,329 uses, mostly MeshParts) are refused
-without an account, so their versions are unknown. A 2017 place: 40 mesh
+without an account, so their versions are unknown. A mid-size place: 40 mesh
 uses, 39 decode (1.00 and 2.00), 1 refused. A large modern place: 827 uses, 788
 decode (1.00, 1.01, 2.00), 39 refused, including all 7 of its MeshParts'
 meshes.
@@ -94,7 +94,7 @@ against `rook-player --screenshot --fov 20` from the same cameras, 1270 ×
 549): a test scene (the off-center mesh front and top, the sword, the head
 with Offset, a MeshPart at Size ≠ `MeshSize` and one without
 `InitialSize`): every outline within 2 px, 4 px on the sword's tip at 3.9
-px per stud. A 2017 place, laid out by the same script
+px per stud. A mid-size place, laid out by the same script
 in both: 8 scaled meshes (top within 1 px), 8 rotated
 meshes (top within 2 px) and an offset mesh
 (within 1 px); in a large modern place, 54 rotated
@@ -105,8 +105,8 @@ their meshes need an account.
 
 *Performance* (release builds, base = the previous commit): `rook
 run-headless --seconds 10` gave identical output and time (a large modern place 20.73
-s against 20.75 s, a small place 0.36 against 0.37, a 2008 place 0.27 against 0.28).
-`rook-player --bench 300`: a small place and a 2008 place unchanged (0 and 1 mesh files;
+s against 20.75 s, a small place 0.36 against 0.37, an early place 0.27 against 0.28).
+`rook-player --bench 300`: a small place and an early place unchanged (0 and 1 mesh files;
 render 1.49 against 1.47 ms); a large modern place draws 86 mesh files and its frame
 grew by about 2.8 ms (upload 3.6 to 4.9 ms, render 11.8 to 12.9 ms).
 

@@ -285,7 +285,7 @@ fn near_pairs(boxes: &[Box]) -> Vec<(usize, usize)> {
 /// `Workspace.ExplicitAutoJoints` (hidden; true in new places) turned this
 /// off; places saved before it existed don't store it, and their parts
 /// were joined at load, which is why they save almost no joints
-/// (Inference: a 2008 place stores one Snap in 1,678 parts).
+/// (Inference: a place of 1,678 parts stores one Snap).
 pub fn joins_on_load(dom: &Dom) -> bool {
     let Some(ws) = dom.find_service("Workspace") else {
         return false;

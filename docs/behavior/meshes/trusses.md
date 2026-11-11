@@ -66,7 +66,7 @@ only its near side showed, front and side views):
 - *Files:* `Style` is saved as `style`, which the reflection database holds
   as a separate property, so Rook read every saved truss as
   AlternatingSupports until scripts' `Style` became a view of it (found on
-  a large 2016 place, whose 596 trusses save 517 AlternatingSupports, 77
+  a large older place, whose 596 trusses save 517 AlternatingSupports, 77
   NoSupports and 2 BridgeStyleSupports).
 
 *Compared with Studio* (`rook-player --screenshot --fov 20` against
@@ -76,5 +76,5 @@ in two Styles, 2 × 5 × 2, 2 × 1 × 2, a red BridgeStyleSupports 2 × 7 × 2, 
 Neon truss tilted 30 degrees and a truss with a Sphere mesh, from the
 front, from above and at an angle: every bar's placement and every brace's
 direction match by eye, apart from lighting and the Sphere's holes.
-A large 2016 place draws its 596 trusses, its NoSupports ladders without
+A large older place draws its 596 trusses, its NoSupports ladders without
 braces.

@@ -162,7 +162,7 @@ marks only the slabs it came onto. The marks are laid out in bricks of
 (a clipmap's bricks, as voxel engines keep them), and the bricks a move
 uncovered are marked at once on the host's worker threads, each worker
 writing only its own brick, for about 1 ms a frame; until they are all
-marked the old volume stays drawn. On a 2018-era place turning 3 degrees
+marked the old volume stays drawn. On a large place turning 3 degrees
 a frame the new volume lands within 4 frames (median); marked one piece
 after another it never caught up while turning. The voxels themselves,
 and the sky's light the fill keeps, are kept the same way, and surfaces

@@ -19,7 +19,7 @@ const fn ms(n: u64) -> Duration {
 }
 
 /// Each budget is its queue's slice plus the stage's steady work on the
-/// heaviest place benched (a 2018-era place with 85k parts): arrivals 2 ms
+/// heaviest place benched (a place with 85k parts): arrivals 2 ms
 /// beside the scene's own following of moved parts, uploads 2 ms plus the
 /// one upload that always goes.
 pub(super) const SCENE_UPDATE: Budget = Budget {
