@@ -54,8 +54,15 @@ pub(crate) struct Playback {
     newest: f64,
     /// The server time of the updates being applied.
     receiving: Option<f64>,
-    /// The assemblies those updates moved.
-    received: Vec<RigidBodyHandle>,
+    /// The assemblies those updates moved, with the part each update
+    /// wrote.
+    received: Vec<(RigidBodyHandle, InstanceId)>,
+    /// The far ones put somewhere new after the last frame, in handle
+    /// order: the only ones to write.
+    moved: Vec<RigidBodyHandle>,
+    /// The last frame played assemblies back without stepping: nothing
+    /// here is simulated (see [`Physics::step`]).
+    pub(crate) only: bool,
     /// The played assemblies a body this world simulates could touch or
     /// sense this frame, which move at every step.
     near: FxHashSet<RigidBodyHandle>,
@@ -76,15 +83,17 @@ impl Playback {
         self.tracks.remove(&h);
         self.near.remove(&h);
         self.far.remove(&h);
+        self.moved.retain(|&m| m != h);
+    }
+
+    /// The far played assemblies the last frame put somewhere new.
+    pub(crate) fn moved(&self) -> &[RigidBodyHandle] {
+        &self.moved
     }
 
     /// Whether `h` is played and asleep in Rapier this frame (see `far`).
     pub(crate) fn far(&self, h: RigidBodyHandle) -> bool {
         self.far.contains_key(&h)
-    }
-
-    pub(crate) fn far_ones(&self) -> impl Iterator<Item = RigidBodyHandle> + '_ {
-        self.far.keys().copied()
     }
 
     pub(crate) fn plays(&self, h: RigidBodyHandle) -> bool {
@@ -169,15 +178,15 @@ impl Physics {
                 });
             }
         }
-        // Only what the updates moved shows anything else than where it
-        // is now; the rest already does.
+        // Only the parts the updates wrote show anything else than where
+        // they are now; the rest of each assembly already does.
         let mut received = std::mem::take(&mut self.playback.received);
-        received.sort_unstable_by_key(|h| h.into_raw_parts());
+        received.sort_unstable_by_key(|(h, part)| (h.into_raw_parts(), *part));
         received.dedup();
         if let Some(props) = self.props.take() {
             rook_types::count!(PhysicsBodiesTouched, received.len());
-            for &h in &received {
-                self.write_body(dom, &props, h);
+            for &(h, part) in &received {
+                self.restore_part(dom, &props, h, part);
             }
             self.props = Some(props);
         }
@@ -241,8 +250,28 @@ impl Physics {
             linear,
             angular,
         });
-        self.playback.received.push(h);
+        self.playback.received.push((h, part));
         true
+    }
+
+    /// Put back what an update wrote into `part` (of the played body
+    /// `h`): where it's shown now, and how fast it moves.
+    fn restore_part(&self, dom: &mut Dom, props: &Props, h: RigidBodyHandle, part: InstanceId) {
+        let (Some(body), Some(rb)) = (self.bodies.get(&h), self.world.bodies.get(h)) else {
+            return;
+        };
+        let Some(offset) = body.asm.offset_of(part) else {
+            return;
+        };
+        let (linear, angular) = self.velocity_of(h);
+        let cf = Value::CFrame(cframe_of(rb.position()) * offset);
+        rook_dom::ignore_stale(dom.set_property(part, props.cframe, cf));
+        dom.load_property(part, props.linear_velocity, Value::Vector3(Vector3(linear)));
+        dom.load_property(
+            part,
+            props.angular_velocity,
+            Value::Vector3(Vector3(angular)),
+        );
     }
 
     /// How fast body `h` moves: a far played one's kept velocity, else
@@ -337,12 +366,15 @@ impl Physics {
     /// After a frame whose last step was `h` seconds: put each far played
     /// assembly where its updates have it now, its colliders too, moving
     /// at what it covered over that step, as Rapier works out a moved
-    /// kinematic body's velocity.
+    /// kinematic body's velocity. One holding still is left as it is.
     pub(crate) fn place_far_played(&mut self, h: f32) {
+        self.playback.moved.clear();
         let Some(clock) = self.playback.clock else {
             return;
         };
-        let Playback { tracks, far, .. } = &mut self.playback;
+        let Playback {
+            tracks, far, moved, ..
+        } = &mut self.playback;
         for (handle, v) in far.iter_mut() {
             let (Some(track), Some(rb)) = (tracks.get(handle), self.world.bodies.get_mut(*handle))
             else {
@@ -350,16 +382,22 @@ impl Physics {
             };
             let now = pose_of(&sample(track, clock));
             let before = self.before_last_step.get(handle).copied().unwrap_or(now);
-            let moved = RigidBodyPosition {
+            let step = RigidBodyPosition {
                 position: before,
                 next_position: now,
             };
-            let vels = moved.interpolate_velocity(1.0 / h, rb.local_center_of_mass());
-            *v = (vels.linvel, vels.angvel);
+            let vels = step.interpolate_velocity(1.0 / h, rb.local_center_of_mass());
+            let velocity = (vels.linvel, vels.angvel);
+            if *rb.position() == now && *v == velocity {
+                continue;
+            }
+            *v = velocity;
             rook_types::count!(PhysicsPlayedMoves, 1);
             rb.set_position(now, false);
             self.stale.insert(*handle);
+            moved.push(*handle);
         }
+        moved.sort_unstable_by_key(|h| h.into_raw_parts());
     }
 
     /// Before a step of `h` seconds: move each played assembly near

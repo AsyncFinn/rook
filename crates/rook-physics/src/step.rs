@@ -24,6 +24,11 @@ impl Physics {
         }
         let dt = f64::from(steps) / STEP_HZ;
         let h = self.world.integration_parameters.dt;
+        if !self.simulates_anything() {
+            self.play_only(steps, h);
+            return;
+        }
+        self.playback.only = false;
         self.awake.clear();
         self.awake.extend(self.world.islands.active_bodies());
         self.build_terrain_near_bodies(dt as f32);
@@ -51,15 +56,15 @@ impl Physics {
             self.notice_flight(h);
             self.update_humanoids(h);
         }
-        let far = self.playback.far_ones().next().is_some();
-        if far || self.world.islands.active_bodies().next().is_some() {
-            self.generation += 1;
-        }
         // Stepping put every collider in place, but for the far played
         // assemblies', placed after it.
         self.stale.clear();
         self.stale_statics.clear();
         self.place_far_played(h);
+        let far = !self.playback.moved().is_empty();
+        if far || self.world.islands.active_bodies().next().is_some() {
+            self.generation += 1;
+        }
         for m in self.movers.values() {
             if let Some(inside) = movers::rocket_arrived(&self.world, m)
                 && let Some(was) = self.rockets.get_mut(&m.id)
@@ -73,6 +78,43 @@ impl Physics {
         let parts = &self.parts;
         self.touch
             .record(events.take(), &self.colliders, |p| parts.contains_key(&p));
+    }
+
+    /// Whether a step has anything to simulate: an unanchored assembly of
+    /// this world's, a server's assembly a client simulates, or a mover
+    /// or push to apply. Played assemblies alone aren't: they go where
+    /// their updates have them.
+    fn simulates_anything(&self) -> bool {
+        let touches_remote = matches!(self.authority, Authority::Except(_));
+        let [local, remote] = self.moving;
+        local > 0
+            || (touches_remote && remote > 0)
+            || !self.movers.is_empty()
+            || !self.forced.is_empty()
+    }
+
+    /// A frame of `steps` steps of `h` seconds with nothing to simulate
+    /// (a client without a character): no Rapier step runs, which would
+    /// cost its fixed share each time for bodies that only play back. The
+    /// playback clock moves on and each played assembly is put where its
+    /// updates have it, as far ones always are. The colliders stay stale
+    /// for queries to place.
+    fn play_only(&mut self, steps: u32, h: f32) {
+        self.playback.only = true;
+        self.awake.clear();
+        // Nothing simulated is near one: every played assembly sleeps.
+        self.find_played_near(f64::from(steps) / STEP_HZ);
+        for i in 0..steps {
+            if i + 1 == steps {
+                self.before_last_step.clear();
+                self.remember_far_played();
+            }
+            self.play_remote(h);
+        }
+        self.place_far_played(h);
+        if !self.playback.moved().is_empty() {
+            self.generation += 1;
+        }
     }
 
     /// Keep [`Physics::flying`]: the bodies only gravity moved over the step
@@ -173,7 +215,7 @@ impl Physics {
         self.write_hinge_angles(dom, &props);
         let mut fallen = Vec::new();
         let active = self.world.islands.active_bodies();
-        let far = self.playback.far_ones();
+        let far = self.playback.moved().iter().copied();
         for handle in active.filter(|h| !self.playback.far(*h)).chain(far) {
             let Some(body) = self.bodies.get(&handle) else {
                 continue;

@@ -164,3 +164,65 @@ fn far_played_assemblies_end_each_frame_where_near_ones_do() {
     assert!(position(&dom, near).x > 3.0, "played");
     assert!(position(&dom, mine).x > 1.5, "simulated");
 }
+
+/// A client simulating nothing plays the server's assemblies back
+/// without stepping: each moving one is put where its updates have it,
+/// once a frame, one holding still costs nothing, and queries find them
+/// where they're shown.
+#[test]
+fn a_client_simulating_nothing_plays_back_without_stepping() {
+    use rook_types::counters::{Counter, take_local};
+    let mut dom = Dom::new();
+    let ws = dom.get_service("Workspace").unwrap();
+    set(&mut dom, ws, "Gravity", Value::Float32(0.0));
+    let moving = block(&mut dom, Vec3::new(0.0, 20.0, 0.0), false);
+    let still = block(&mut dom, Vec3::new(40.0, 20.0, 0.0), false);
+    let mut physics = Physics::with_authority(Authority::Only(Vec::new()));
+    physics.sync(&mut dom);
+    let (mut client, mut server) = (0.0, 0.0);
+    for i in 0..60 {
+        client += 1.0 / 60.0;
+        while server < client {
+            server += 1.0 / 30.0;
+            let at = Vec3::new(3.0 * server as f32, 20.0, 0.0);
+            set(
+                &mut dom,
+                moving,
+                "CFrame",
+                Value::CFrame(CFrame::from_position(at)),
+            );
+            // It comes to rest at the start, and is played standing.
+            if server < 0.15 {
+                let here = Vec3::new(40.0 - (0.1 - server as f32).max(0.0), 20.0, 0.0);
+                set(
+                    &mut dom,
+                    still,
+                    "CFrame",
+                    Value::CFrame(CFrame::from_position(here)),
+                );
+            }
+            physics.receive_updates(&mut dom, server);
+        }
+        physics.sync(&mut dom);
+        take_local();
+        physics.step(1.0 / 60.0);
+        let moves = take_local()[Counter::PhysicsPlayedMoves];
+        assert!(physics.playback.only, "frame {i}: stepped");
+        if i > 20 {
+            assert_eq!(moves, 1, "frame {i}: the moving one alone");
+        }
+        physics.write_back(&mut dom);
+    }
+    let x = position(&dom, moving).x;
+    assert!(x > 2.0, "played: {x}");
+    assert_eq!(position(&dom, still), Vec3::new(40.0, 20.0, 0.0));
+    let hit = |physics: &mut Physics, dom: &mut Dom, x: f32| {
+        let from = Vec3::new(x, 30.0, 0.0);
+        let filter = Filter::legacy_ray(Vec::new(), false);
+        physics
+            .raycast(dom, from, Vec3::NEG_Y * 20.0, &filter)
+            .map(|h| h.part)
+    };
+    assert_eq!(hit(&mut physics, &mut dom, x), Some(moving));
+    assert_eq!(hit(&mut physics, &mut dom, 40.0), Some(still));
+}

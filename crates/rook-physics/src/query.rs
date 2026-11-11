@@ -129,7 +129,7 @@ impl Physics {
         // so the list doesn't grow. The pairs it reports are dropped:
         // fixed bodies don't touch each other, and parts that start
         // simulating get new colliders, whose pairs are reported then.
-        if !self.moves_anything() {
+        if !self.moves_anything() || self.playback.only {
             let mut pairs = Vec::new();
             self.world.broad_phase.update(
                 &params,
