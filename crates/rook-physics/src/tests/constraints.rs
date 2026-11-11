@@ -479,3 +479,40 @@ fn moving_a_part_rereads_only_its_constraints() {
     let rope_end = position(&dom, moved) - Vec3::new(4.0, 999.5, 0.0);
     assert!(rope_end.length() < 7.05, "{rope_end}");
 }
+
+/// A rope between two anchored parts moves nothing, so no joint is made
+/// for it, and moving either part reads nothing again; once an end can
+/// move, the rope is read and holds it.
+#[test]
+fn a_constraint_that_holds_nothing_is_not_reread() {
+    let mut dom = Dom::new();
+    let weight = hanging(
+        &mut dom,
+        "RopeConstraint",
+        &[("Length", Value::Float32(6.0))],
+    );
+    set(&mut dom, weight, "Anchored", Value::Bool(true));
+    let ws = dom.find_service("Workspace").unwrap();
+    let mut ropes = dom.descendants(ws).into_iter();
+    let rope = ropes.find(|&i| dom.class_name(i) == "RopeConstraint");
+    let base = dom.parent(rope.unwrap()).unwrap();
+    let mut physics = Physics::new();
+    run(&mut physics, &mut dom, 0.1);
+    let to = |dom: &mut Dom, x: f32| {
+        let at = CFrame::from_position(Vec3::new(x, 1000.0, 0.0));
+        set(dom, base, "CFrame", Value::CFrame(at));
+    };
+    physics.reread.clear();
+    for x in 1..4 {
+        to(&mut dom, x as f32);
+        run(&mut physics, &mut dom, 1.0 / 60.0);
+    }
+    assert_eq!(physics.reread, []);
+
+    set(&mut dom, weight, "Anchored", Value::Bool(false));
+    to(&mut dom, 4.0);
+    run(&mut physics, &mut dom, 3.0);
+    assert!(physics.reread.contains(&rope.unwrap()));
+    let rope_end = position(&dom, weight) - Vec3::new(4.0, 999.5, 0.0);
+    assert!(rope_end.length() < 7.05, "{rope_end}");
+}
