@@ -17,10 +17,7 @@ use crate::*;
 /// Attachments, which may carry one) whose properties changed in `lights`,
 /// and the lights entering or leaving the tree in `lights_placed`; the
 /// same for the visual effects ([`is_effect_class`]) in `effects` and
-/// `effects_placed`, plus the effect methods scripts called. Parts whose
-/// adornments alone changed are in `adorned`, those a different Highlight
-/// may cover now in `highlighted`, and the Highlights whose look changed
-/// in `highlights`: none of them redraws a part's own look. A FloorWire
+/// `effects_placed`, plus the effect methods scripts called. A FloorWire
 /// is both an adornment of its `From` part (its wire) and an effect (its
 /// moving images); moving either of its parts redraws its wire. Instances
 /// freed since are in `collected` alone: a renderer drops what it keeps of
@@ -45,8 +42,11 @@ pub struct RenderChanges {
     pub placed: rustc_hash::FxHashSet<InstanceId>,
     pub parts: rustc_hash::FxHashSet<InstanceId>,
     pub moved: rustc_hash::FxHashSet<InstanceId>,
+    /// Parts whose adornments alone changed: their own look doesn't.
     pub adorned: rustc_hash::FxHashSet<InstanceId>,
+    /// Parts a different Highlight may cover now.
     pub highlighted: rustc_hash::FxHashSet<InstanceId>,
+    /// Highlights whose look changed.
     pub highlights: rustc_hash::FxHashSet<InstanceId>,
     pub collected: rustc_hash::FxHashSet<InstanceId>,
 }
