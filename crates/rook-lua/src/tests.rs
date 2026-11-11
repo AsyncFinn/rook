@@ -253,6 +253,35 @@ fn deferred_disconnect_drops_pending_invocations() {
     assert_eq!(out, ["kept 1", "waited"]);
 }
 
+/// Measured: a wait too long for a 32-bit float (`math.huge`, past about
+/// 3.4e38, NaN) lasts one step; 1e20 really waits.
+#[test]
+fn waits_too_long_for_a_float_last_one_step() {
+    let mut out = run(
+        r#"
+        task.spawn(function() wait(math.huge) print("wait huge") end)
+        task.spawn(function() wait(0/0) print("wait nan") end)
+        task.spawn(function() task.wait(math.huge) print("task.wait huge") end)
+        task.spawn(function() task.wait(1e20) print("task.wait 1e20") end)
+        delay(math.huge, function() print("delay huge") end)
+        task.delay(3.5e38, function() print("task.delay 3.5e38") end)
+        task.delay(3.4e38, function() print("task.delay 3.4e38") end)
+        "#,
+        10,
+    );
+    out.sort();
+    assert_eq!(
+        out,
+        [
+            "delay huge",
+            "task.delay 3.5e38",
+            "task.wait huge",
+            "wait huge",
+            "wait nan",
+        ]
+    );
+}
+
 #[test]
 fn event_wait_resumes_with_arguments() {
     expect(

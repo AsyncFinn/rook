@@ -6,6 +6,7 @@ Every release, newest first. How versions are numbered is in
 ## [Unreleased]
 
 - Releases are built on GitHub's machines instead of a developer's, so the programs carry no one's local paths, and every pull request and push to main runs `scripts/check` there.
+- `wait(math.huge)` and other waits too long for a float last one step, as in Roblox; Rook waited forever. See [waiting](docs/behavior/scripting/waiting.md).
 - Your own character no longer blocks the mouse; clicks reach what's behind it, as in Roblox. See [the mouse](docs/behavior/physics/queries.md#the-mouse).
 - Scripts a game enables while the place starts now run. Rook only started the ones after the enabling script in the tree.
 - Ladders built from rungs on a solid board can be climbed, as in Roblox. Rook missed the gaps between thin rungs.

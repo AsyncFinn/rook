@@ -8,10 +8,20 @@ pub(super) fn now(lua: &Lua) -> f64 {
     with_world(lua, |w| w.scheduler.now())
 }
 
+/// A wait's duration argument `i` (`default` when missing). Roblox keeps
+/// it as a 32-bit float, and one that doesn't fit there (`math.huge`,
+/// anything past about 3.4e38, NaN) waits as 0, one step (measured on
+/// `wait`, `delay`, `task.wait` and `task.delay`, Studio 0.747); 1e20
+/// really waits. Games park loops on `wait(math.huge)` and rely on it.
+fn seconds(a: &Args, i: usize, default: f64) -> ApiResult<f64> {
+    let t = a.number_or(i, default)?;
+    Ok(if (t as f32).is_finite() { t } else { 0.0 })
+}
+
 /// `wait(t)`: legacy scheduler, at least [`LEGACY_MIN_WAIT`].
 pub(super) fn wait(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
     let a = Args::new(args, "wait");
-    let t = a.number_or(0, LEGACY_MIN_WAIT)?.max(LEGACY_MIN_WAIT);
+    let t = seconds(&a, 0, LEGACY_MIN_WAIT)?.max(LEGACY_MIN_WAIT);
     let thread = lua.current_thread();
     with_world(lua, |w| {
         let since = w.scheduler.now();
@@ -31,7 +41,7 @@ pub(super) fn wait(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
 /// `delay(t, f)`: call `f(elapsed, time())` after `t` seconds.
 pub(super) fn delay(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
     let a = Args::new(args, "delay");
-    let t = a.number_or(0, 0.0)?.max(LEGACY_MIN_WAIT);
+    let t = seconds(&a, 0, 0.0)?.max(LEGACY_MIN_WAIT);
     let func = a.function(1)?;
     with_world(lua, |w| {
         let since = w.scheduler.now();
@@ -79,7 +89,7 @@ pub(super) fn thread_arg(lua: &Lua, a: &Args, i: usize) -> ApiResult<Thread> {
 pub(super) fn task_wait(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
     let a = Args::new(args, "wait");
     // Without a duration, resume on the next Heartbeat (creator-docs task.wait).
-    let t = a.number_or(0, 0.0)?.max(0.0);
+    let t = seconds(&a, 0, 0.0)?.max(0.0);
     let thread = lua.current_thread();
     with_world(lua, |w| {
         let since = w.scheduler.now();
@@ -117,7 +127,7 @@ pub(super) fn task_defer(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
 
 pub(super) fn task_delay(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
     let a = Args::new(args, "delay");
-    let t = a.number_or(0, 0.0)?.max(0.0);
+    let t = seconds(&a, 0, 0.0)?.max(0.0);
     let thread = thread_arg(lua, &a, 1)?;
     let job = Job::Resume {
         thread: thread.clone(),

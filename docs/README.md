@@ -73,6 +73,7 @@
     - [Datatype errors](behavior/scripting/datatype-errors.md): their messages in `pcall`
     - [Random](behavior/scripting/random.md): Luau's generator and each method's draws
     - [Tags and locked members](behavior/scripting/tags.md): tag signals, and which members a child of the same name beats.
+    - [Waiting](behavior/scripting/waiting.md): durations too long for a float last one step
   - Rendering
     - [Materials](behavior/rendering/materials.md): PBR shading, the built-in materials, MaterialVariant and SurfaceAppearance
     - [Textures and decals](behavior/rendering/textures-and-decals.md)
