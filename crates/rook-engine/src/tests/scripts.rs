@@ -213,3 +213,91 @@ fn scripts_enabled_while_the_place_starts_run_once() {
     assert_eq!(out, ["early", "late", "loaded"]);
     assert_eq!(s.started_scripts(), 3);
 }
+
+/// A running script stops once it, or an ancestor, leaves where scripts
+/// run: destroyed, parented to nil or moved to ServerStorage. Put back, it
+/// runs afresh. Matches Studio 0.747 (2026-11-11), where each such
+/// script's Heartbeat connection and loop stopped at once.
+#[test]
+fn scripts_moved_out_of_where_they_run_stop() {
+    let mut s = Server::new(&Options::default()).unwrap();
+    let workspace = service(&s, "Workspace");
+    add_under(&s, workspace, "BindableEvent", "Event", "");
+    let listen = |name: &str| {
+        format!(
+            "print('{name} run') workspace.Event.Event:Connect(function() print('{name} heard') end)"
+        )
+    };
+    for name in ["Destroyed", "Orphaned", "Stored", "Back"] {
+        add_under(&s, workspace, "Script", name, &listen(name));
+    }
+    let folder = add_under(&s, workspace, "Folder", "Folder", "");
+    add_under(&s, folder, "Script", "Inside", &listen("Inside"));
+    add_script(
+        &s,
+        "ServerScriptService",
+        "Driver",
+        r#"
+        task.wait(0.1)
+        local back = workspace.Back
+        workspace.Destroyed:Destroy()
+        workspace.Orphaned.Parent = nil
+        workspace.Stored.Parent = game:GetService("ServerStorage")
+        back.Parent = nil
+        workspace.Folder:Destroy()
+        task.wait(0.1)
+        workspace.Event:Fire()
+        print("fired")
+        back.Parent = workspace
+        task.wait(0.1)
+        workspace.Event:Fire()
+        "#,
+    );
+    s.start();
+    s.run_for(0.5);
+    let out = lines(&s);
+    let (start, rest) = out.split_at(5);
+    let mut start = start.to_vec();
+    start.sort();
+    assert_eq!(
+        start,
+        [
+            "Back run",
+            "Destroyed run",
+            "Inside run",
+            "Orphaned run",
+            "Stored run"
+        ]
+    );
+    assert_eq!(rest, ["fired", "Back run", "Back heard"]);
+}
+
+/// A script destroyed during a frame misses that frame's later events,
+/// as in Studio, where it stops as it's destroyed.
+#[test]
+fn a_destroyed_script_misses_the_rest_of_the_frame() {
+    let mut s = Server::new(&Options::default()).unwrap();
+    add_under(
+        &s,
+        service(&s, "Workspace"),
+        "Script",
+        "Target",
+        "game:GetService('RunService').Heartbeat:Connect(function() print('beat') end)",
+    );
+    add_script(
+        &s,
+        "ServerScriptService",
+        "Driver",
+        r#"
+        wait(0.1)
+        workspace.Target:Destroy()
+        print("destroyed")
+        "#,
+    );
+    s.start();
+    s.run_for(0.3);
+    let out = lines(&s);
+    let at = out.iter().position(|l| l == "destroyed").unwrap();
+    assert!(at > 0 && out[..at].iter().all(|l| l == "beat"), "{out:?}");
+    assert_eq!(at + 1, out.len(), "{out:?}");
+}

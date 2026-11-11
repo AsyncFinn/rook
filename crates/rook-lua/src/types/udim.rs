@@ -35,6 +35,7 @@ impl UserData for LPath2DControlPoint {
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
+        super::members::add_unknown(m, "Path2DControlPoint", super::members::Wording::Quoted);
         m.add_meta_method(MetaMethod::Eq, |_, t, o: UserDataRef<Self>| Ok(*t == *o));
     }
 }
@@ -63,6 +64,7 @@ impl UserData for LUDim {
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
+        super::members::add_unknown(m, "UDim", super::members::Wording::Quoted);
         m.add_meta_method(MetaMethod::Add, |_, t, o: UserDataRef<LUDim>| {
             Ok(LUDim(t.0 + o.0))
         });
@@ -89,6 +91,7 @@ impl UserData for LUDim2 {
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
+        super::members::add_unknown(m, "UDim2", super::members::Wording::Plain);
         // Observed: Roblox's own CoreScripts call the lowercase spelling.
         for name in ["Lerp", "lerp"] {
             m.add_method(name, |_, t, (o, a): (UserDataRef<LUDim2>, f32)| {

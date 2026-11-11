@@ -10,6 +10,7 @@ pub(crate) mod datetime;
 pub(crate) mod enums;
 pub(crate) mod font;
 pub(crate) mod geometry;
+pub(crate) mod members;
 pub(crate) mod misc;
 pub(crate) mod query;
 pub(crate) mod random;

@@ -174,6 +174,7 @@ impl UserData for LCFrame {
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
+        super::members::add_unknown(m, "CFrame", super::members::Wording::Plain);
         for name in ["Inverse", "inverse"] {
             m.add_method(name, |_, t, ()| Ok(LCFrame(t.0.inverse())));
         }
