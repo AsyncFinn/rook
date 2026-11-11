@@ -97,6 +97,88 @@ fn disabled_scripts_stop_and_rerun_when_enabled() {
     );
 }
 
+/// A script destroyed, orphaned or moved where it doesn't run stops at
+/// once: a handler queued for it just before never runs (a loading screen
+/// destroying its spinner, whose RenderStepped handler would index a
+/// missing parent). One moved between places it runs keeps running; one
+/// that leaves and comes back in the same frame starts afresh. Matches
+/// Studio probes of the same moves (2026-11-11), in a place with deferred
+/// signals, so the handlers queue.
+#[test]
+fn scripts_stop_when_they_leave_where_they_run() {
+    let mut s = Server::new(&Options::default()).unwrap();
+    s.runtime.world_mut().signal_behavior = rook_lua::SignalBehavior::Deferred;
+    let sss = service(&s, "ServerScriptService");
+    let rs = service(&s, "ReplicatedStorage");
+    let names = ["destroyed", "orphaned", "stored", "moved", "returned"];
+    for name in names {
+        add_under(&s, rs, "BindableEvent", name, "");
+        let holder = add_under(&s, sss, "Folder", name, "");
+        add_under(
+            &s,
+            holder,
+            "Script",
+            "S",
+            &format!(
+                r#"
+                print("run {name}")
+                game.ReplicatedStorage.{name}.Event:Connect(function() print("{name} heard") end)
+                "#
+            ),
+        );
+    }
+    add_script(
+        &s,
+        "Workspace",
+        "Driver",
+        r#"
+        local rs, sss = game.ReplicatedStorage, game.ServerScriptService
+        local names = {"destroyed", "orphaned", "stored", "moved", "returned"}
+        task.wait(0.1)
+        for _, n in names do rs[n]:Fire() end
+        sss.destroyed:Destroy()
+        sss.orphaned.S.Parent = nil
+        sss.stored.S.Parent = game.ServerStorage
+        sss.moved.S.Parent = workspace
+        local returned = sss.returned.S
+        returned.Parent = nil
+        returned.Parent = sss.returned
+        task.wait(0.1)
+        print("again")
+        for _, n in names do rs[n]:Fire() end
+        task.wait(0.1)
+        print("end")
+        "#,
+    );
+    s.start();
+    s.run_for(0.5);
+    let out = lines(&s);
+    let (start, rest) = out.split_at(names.len());
+    let mut start = start.to_vec();
+    start.sort();
+    assert_eq!(
+        start,
+        [
+            "run destroyed",
+            "run moved",
+            "run orphaned",
+            "run returned",
+            "run stored"
+        ]
+    );
+    assert_eq!(
+        rest,
+        [
+            "moved heard",
+            "run returned",
+            "again",
+            "moved heard",
+            "returned heard",
+            "end"
+        ]
+    );
+}
+
 /// A loader that enables its game's disabled scripts as the place starts
 /// (setting `Disabled` to false before anything yields) starts each of
 /// them once, whether it comes before or after the loader in the tree.

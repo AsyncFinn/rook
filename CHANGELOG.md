@@ -5,6 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- A script stops the moment it's destroyed, removed or moved somewhere scripts don't run, as in Roblox, and a disabled one stops at once too. Rook kept moved and destroyed scripts running, and stopped disabled ones only at the end of the frame. See [script lifetime](docs/behavior/scripting/script-lifetime.md).
 - Objects no longer vanish when the camera turns to certain angles. Rook could stop drawing parts across a place after loading some meshes. See [file meshes](docs/behavior/meshes/file-meshes.md#file-layouts).
 - Reading a member with a lowercase first letter, such as `mouse.x` or `label.textSize`, finds the member, as in Roblox, after any child of that name; writes still need the real name. Rook raised an error, and let `.name` be written. See [member lookup](docs/behavior/scripting/member-lookup.md).
 - `BasePart:GetRenderCFrame`, `VRService:GetUserCFrame` and `GetUserCFrameEnabled` work, and `ContextActionService:BindActionToInputTypes` binds as `BindAction` does. Rook raised errors.

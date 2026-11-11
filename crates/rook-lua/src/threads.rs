@@ -367,6 +367,7 @@ pub(crate) fn fire_with(lua: &Lua, key: &SignalKey, args: impl Fn() -> Vec<LuaVa
 /// Fire the signals for every journal entry from `start` to the journal's
 /// end as of this call. Entries added by handlers are dispatched by the
 /// mutation that added them, so Immediate handlers nest the way Roblox's do.
+/// Scripts an entry disables or moves out of where they run stop first.
 /// A focused TextBox that moves, or whose ancestor does, loses focus here:
 /// before the move's signals when it leaves the DataModel, after them when
 /// it stays (measured; docs/behavior/gui/input.md#textbox).
@@ -376,8 +377,10 @@ pub(crate) fn dispatch(lua: &Lua, start: u64) {
     let mut destroyed: Vec<InstanceId> = Vec::new();
     for pos in start..end {
         let mut moved_focus = None;
+        let mut stopped = Vec::new();
         let firings = with_world(lua, |w| {
             let change = w.dom.journal().get(pos)?;
+            stopped = crate::api::scripts::stopped_by(w, change);
             match change {
                 Change::Destroyed(id) => destroyed.push(*id),
                 Change::Reparented {
@@ -397,6 +400,9 @@ pub(crate) fn dispatch(lua: &Lua, start: u64) {
             }
             Some(crate::signal::expand(change, &w.signals, &w.dom))
         });
+        for script in stopped {
+            crate::api::scripts::stop_script(lua, script);
+        }
         if let Some((id, true)) = moved_focus {
             release_moved(lua, id);
         }

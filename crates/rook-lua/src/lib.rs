@@ -166,6 +166,13 @@ impl Runtime {
         self.world().started.contains_key(&script)
     }
 
+    /// Whether a script runs where it is now, enabled. One that's
+    /// disabled or leaves stops as the change is dispatched.
+    pub fn runs_here(&self, script: InstanceId) -> bool {
+        let w = self.world();
+        api::scripts::runs_here(&w.dom, script, w.is_client)
+    }
+
     /// Run Luau source on a new thread, as a script at `script` if given.
     pub fn run_source(
         &self,
