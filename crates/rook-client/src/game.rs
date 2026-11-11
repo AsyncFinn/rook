@@ -417,7 +417,7 @@ impl Game {
 
     /// The player's settings as the local player's client has them (Run
     /// mode has no player to change them).
-    pub fn player_settings(&self) -> Option<PlayerSettings> {
+    pub fn player_settings(&self) -> Option<&PlayerSettings> {
         match &self.mode {
             Mode::Play { client, .. } => client.client().player_settings(),
             Mode::Run(_) => None,

@@ -238,8 +238,8 @@ impl crate::DataModel {
     }
 
     /// The player's settings as they are now, on a client that keeps them.
-    pub fn player_settings(&self) -> Option<PlayerSettings> {
-        self.user_settings.as_ref().map(|k| k.current.clone())
+    pub fn player_settings(&self) -> Option<&PlayerSettings> {
+        self.user_settings.as_ref().map(|k| &k.current)
     }
 
     /// Save the player's settings now if they changed (before exiting).

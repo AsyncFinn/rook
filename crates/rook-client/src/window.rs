@@ -257,7 +257,8 @@ impl App {
             gfx.window.set_ime_allowed(typing);
             self.ime = typing;
         }
-        self.flying = self.game.view().scripted_camera().is_none();
+        // Whether a script drives the camera is as the last step left it
+        // (below): nothing between steps changes it.
         if self.flying {
             self.fly(dt, typing);
         }
@@ -278,13 +279,16 @@ impl App {
         // Drawn as this step left it: the camera script has just turned it
         // by this frame's mouse movement, and the character it follows
         // stands where this step put it.
-        if let Some(view) = self.game.view().scripted_camera() {
-            self.flying = false;
+        let view = self.game.view().scripted_camera();
+        self.flying = view.is_none();
+        if let Some(view) = view {
             self.camera.follow(view);
         }
-        if let Some(now) = self.game.player_settings()
-            && now != self.player
-        {
+        let changed = self
+            .game
+            .player_settings()
+            .filter(|now| **now != self.player);
+        if let Some(now) = changed.cloned() {
             self.follow(now);
         }
         if let Some(audio) = &mut self.audio {

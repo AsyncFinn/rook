@@ -92,6 +92,7 @@ impl Launch {
         let (scene, camera) = prepare(&mut game, &self.options.start, &self.setup.content);
         game.free_run();
         let options = &self.options;
+        let flying = game.view().scripted_camera().is_none();
         let mut app = App {
             title: self.title(),
             scene,
@@ -100,7 +101,7 @@ impl Launch {
             camera: FlyCamera::new(camera),
             gfx: None,
             keys: FxHashSet::default(),
-            flying: true,
+            flying,
             looking: false,
             held: MouseLock::Free,
             anchor: None,
