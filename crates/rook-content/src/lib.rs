@@ -80,6 +80,9 @@ pub struct Fetched {
     /// The decoded sound, when a [`Loader`] was asked for one
     /// ([`Want::Audio`]).
     pub audio: Option<Arc<audio::Audio>>,
+    /// The decoded model file, when a [`Loader`] was asked for one
+    /// ([`Want::Model`]).
+    pub model: Option<Arc<rook_formats::Loaded>>,
 }
 
 impl Fetched {
@@ -92,6 +95,7 @@ impl Fetched {
             mesh: None,
             image: None,
             audio: None,
+            model: None,
         }
     }
 }

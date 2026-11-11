@@ -77,3 +77,29 @@ fn decodes_sounds_and_frees_the_file() {
     assert!(fetched.bytes.is_empty());
     assert_eq!(fetched.hash, blake3::hash(&wav));
 }
+
+/// Asked for a model, the worker reads the file into its tree, so a
+/// script loading a large one doesn't stall the frame that gets it;
+/// bytes that aren't a model fail as invalid.
+#[test]
+fn reads_models_on_the_workers() {
+    let dir = crate::tests::temp_dir("loader-model");
+    std::fs::create_dir_all(dir.join("content/models")).unwrap();
+    let xml = r#"<roblox version="4"><Item class="Folder" referent="RBX0"><Properties><string name="Name">MainModule</string></Properties></Item></roblox>"#;
+    std::fs::write(dir.join("content/models/kit.rbxmx"), xml).unwrap();
+    std::fs::write(dir.join("content/models/face.png"), b"\x89PNG").unwrap();
+    let mut config = Config::empty();
+    config.install = Install::at(&dir, InstallKind::Custom);
+    let mut loader = Loader::new(Arc::new(Resolver::new(config)));
+    loader.request_as(ContentRef::File("models/kit.rbxmx".into()), Want::Model);
+    loader.request_as(ContentRef::File("models/face.png".into()), Want::Model);
+    let results = loader.wait_all();
+    let model = results[0].1.as_ref().unwrap().model.as_ref().unwrap();
+    let top = model.dom.root().children();
+    assert_eq!(top.len(), 1);
+    assert_eq!(model.dom.get_by_ref(top[0]).unwrap().name, "MainModule");
+    assert_eq!(
+        results[1].1.as_ref().unwrap_err().kind,
+        FailureKind::Invalid
+    );
+}

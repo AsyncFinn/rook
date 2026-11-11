@@ -76,6 +76,10 @@ pub enum Want {
     /// empty; bytes that aren't a WAV, Ogg or MP3 sound fail with
     /// [`FailureKind::Invalid`].
     Audio,
+    /// A model file (what `require(assetId)` and `InsertService:LoadAsset`
+    /// put in): the worker reads it into [`Fetched::model`]; bytes that
+    /// aren't a place or model file fail with [`FailureKind::Invalid`].
+    Model,
 }
 
 impl Want {
@@ -226,7 +230,7 @@ fn needs_decoding(want: Want, fetched: &Fetched) -> bool {
         Want::Bytes => false,
         // Material textures come decoded.
         Want::Image => fetched.image.is_none(),
-        Want::Mesh | Want::Audio => true,
+        Want::Mesh | Want::Audio | Want::Model => true,
     }
 }
 
@@ -259,6 +263,11 @@ fn decode(want: Want, mut fetched: Fetched) -> Outcome {
             // here rather than on the engine thread, where a place's sounds
             // finishing together would add up to a stalled frame.
             fetched.bytes = Arc::from([]);
+        }
+        Want::Model => {
+            profiling::scope!("decode model");
+            let model = rook_formats::load(&fetched.bytes).map_err(|e| invalid(&e))?;
+            fetched.model = Some(Arc::new(model));
         }
     }
     Ok(fetched)

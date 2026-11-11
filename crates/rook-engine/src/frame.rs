@@ -175,7 +175,8 @@ impl DataModel {
             match u64::try_from(id).ok().filter(|&id| id > 0) {
                 Some(id) => {
                     let r = rook_content::ContentRef::Asset { id, version: None };
-                    content.assets.insert(loader.request(r), request);
+                    let ticket = loader.request_as(r, rook_content::Want::Model);
+                    content.assets.insert(ticket, request);
                 }
                 None => assets_done.push((request, Err(rook_content::FailureKind::NotFound))),
             }
@@ -281,15 +282,18 @@ impl DataModel {
     }
 }
 
-/// Read a fetched model asset, for scripts that load it: a function that
-/// moves its instances into the Model they get.
+/// A fetched model asset, read on the loader's threads, for scripts that
+/// load it: a function that moves its instances into the Model they get
+/// (copies them, when the same file answered another request too).
 fn read_asset(
     outcome: Result<rook_content::Fetched, rook_content::Failure>,
 ) -> rook_lua::AssetFill {
     let fetched = outcome.map_err(|f| f.kind)?;
-    let loaded =
-        rook_formats::load(&fetched.bytes).map_err(|_| rook_content::FailureKind::Invalid)?;
+    let loaded = fetched.model.ok_or(rook_content::FailureKind::Invalid)?;
     Ok(Box::new(move |dom, model| {
-        rook_formats::into_dom(loaded.dom, dom, model);
+        match Arc::try_unwrap(loaded) {
+            Ok(loaded) => rook_formats::into_dom(loaded.dom, dom, model),
+            Err(shared) => rook_formats::copy_into_dom(&shared.dom, dom, model),
+        };
     }))
 }
