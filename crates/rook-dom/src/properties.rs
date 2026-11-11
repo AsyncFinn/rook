@@ -31,6 +31,39 @@ impl Dom {
         self.default_value(class, property)
     }
 
+    /// Read a property where it's kept, without copying it: `f` gets the
+    /// value set, or the class default. The typed reads go through here.
+    pub fn read_property<R>(
+        &self,
+        id: InstanceId,
+        property: PropertyId,
+        f: impl FnOnce(&Value) -> Option<R>,
+    ) -> Option<R> {
+        let inst = self.slot(id)?;
+        if property == self.name_prop || property == self.parent_prop {
+            return f(&self.property(id, property)?);
+        }
+        if let Some(v) = inst.properties.get(&property) {
+            return f(v);
+        }
+        if Some(property) == self.smooth_grid {
+            return f(&self.property(id, property)?);
+        }
+        self.with_default(inst.class, property, f)
+    }
+
+    /// [`Dom::read_property`], looked up by name (aliases resolved).
+    pub fn read_by_name<R>(
+        &self,
+        id: InstanceId,
+        name: &str,
+        f: impl FnOnce(&Value) -> Option<R>,
+    ) -> Option<R> {
+        let inst = self.slot(id)?;
+        let prop = self.db.find_canonical_property(inst.class, name)?;
+        self.read_property(id, prop.id, f)
+    }
+
     /// Like [`Dom::property`], looked up by name (aliases resolved).
     pub fn property_by_name(&self, id: InstanceId, name: &str) -> Option<Value> {
         let inst = self.slot(id)?;

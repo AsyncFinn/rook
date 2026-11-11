@@ -23,6 +23,43 @@ fn services_and_full_names() {
     ));
 }
 
+/// `find_service` finds the root's first child of a class as children
+/// come and go, without looking through them.
+#[test]
+fn find_service_follows_the_roots_children() {
+    let mut dom = Dom::new();
+    let root = dom.root();
+    let [a, b] = ["A", "B"].map(|n| {
+        let f = dom.create_by_name("Folder").unwrap();
+        dom.set_name(f, n.to_owned()).unwrap();
+        dom.set_parent(f, Some(root)).unwrap();
+        f
+    });
+    assert_eq!(dom.find_service("Folder"), Some(a));
+    dom.set_parent(a, None).unwrap();
+    assert_eq!(dom.find_service("Folder"), Some(b));
+    dom.set_parent(a, Some(root)).unwrap();
+    assert_eq!(dom.find_service("Folder"), Some(b));
+    dom.set_parent(b, None).unwrap();
+    assert_eq!(dom.find_service("Folder"), Some(a));
+    dom.set_parent(a, None).unwrap();
+    assert_eq!(dom.find_service("Folder"), None);
+}
+
+/// Typed reads give what's set, else the default, as `property` does.
+#[test]
+fn typed_reads_match_property() {
+    let mut dom = Dom::new();
+    let p = part(&mut dom, "P");
+    assert_eq!(dom.str_property(p, "Name").as_deref(), Some("P"));
+    assert_eq!(dom.float_property(p, "Transparency"), Some(0.0));
+    dom.set_property_by_name(p, "Transparency", Value::Float32(0.5))
+        .unwrap();
+    assert_eq!(dom.float_property(p, "Transparency"), Some(0.5));
+    let size = dom.property_by_name(p, "Size").unwrap().as_vector3();
+    assert_eq!(dom.vector3_property(p, "Size"), size);
+}
+
 #[test]
 fn defaults_come_from_the_database() {
     let mut dom = Dom::new();

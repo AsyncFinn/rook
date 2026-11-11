@@ -15,6 +15,19 @@ impl Dom {
         Some(v)
     }
 
+    /// `f` of the class default, without copying it.
+    pub(crate) fn with_default<R>(
+        &self,
+        class: ClassId,
+        property: PropertyId,
+        f: impl FnOnce(&Value) -> Option<R>,
+    ) -> Option<R> {
+        if let Some(v) = self.defaults.borrow().get(&(class, property)) {
+            return f(v);
+        }
+        f(&self.default_value(class, property)?)
+    }
+
     /// Whether `value` is the class default, without copying the default.
     pub(super) fn default_is(&self, class: ClassId, property: PropertyId, value: &Value) -> bool {
         if let Some(v) = self.defaults.borrow().get(&(class, property)) {

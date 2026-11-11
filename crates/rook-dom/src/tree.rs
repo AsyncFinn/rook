@@ -239,6 +239,9 @@ impl Dom {
             self.instances[np].children.push(id);
             self.notify(Observed::ChildrenChanged(np));
         }
+        if old_parent == Some(self.root) || parent == Some(self.root) {
+            self.note_service(id);
+        }
 
         if journal {
             let new_ancestors: Vec<_> = parent
@@ -414,8 +417,41 @@ impl Dom {
         )
     }
 
+    /// The root's first child of `class`, found without looking through
+    /// the root's children (engine code finds services every frame).
     pub fn find_service(&self, class: &str) -> Option<InstanceId> {
-        self.find_first_child_of_class(self.root, class)
+        match self.db.class_by_name(class) {
+            Some(known) => self.services.get(&known.id).copied(),
+            None => self.find_first_child_of_class(self.root, class),
+        }
+    }
+
+    /// `id` came to or left the root: which child is first of its class
+    /// may have changed.
+    fn note_service(&mut self, id: InstanceId) {
+        let inst = &self.instances[id];
+        if inst.unknown_class.is_some() {
+            return;
+        }
+        let class = inst.class;
+        if inst.parent == Some(self.root) {
+            // Joined last: first only if it's the one of its class.
+            self.services.entry(class).or_insert(id);
+            return;
+        }
+        if self.services.get(&class) != Some(&id) {
+            return;
+        }
+        let first = (self.instances[self.root]
+            .children
+            .as_slice()
+            .iter()
+            .copied())
+        .find(|&c| self.instances[c].class == class && self.instances[c].unknown_class.is_none());
+        match first {
+            Some(first) => _ = self.services.insert(class, first),
+            None => _ = self.services.remove(&class),
+        }
     }
 
     /// `DataModel:GetService()`: find the service, creating it if needed.
