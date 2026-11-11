@@ -5,6 +5,9 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- Parts moving over terrain no longer stall the server and client as terrain collision builds around them. Rook stalled longer with each piece of terrain it had built.
+- Changing a GUI object's text, image, name or order, or adding and removing items in a list, lays out only the part of the screen that can move with it. Rook laid out the whole ScreenGui again.
+- A model a script loads with `require` or `InsertService:LoadAsset` is read off the frame, so loading a large one no longer freezes the game. Rook read the file during the frame that got it.
 - See-through parts are sorted again only when a part or the camera moves, and only the parts that moved are sent to the GPU while their order holds; a part moved away and back no longer leaves its group drawn as if it were still far away. Rook sorted and resent every see-through part each time anything moved, and a group's bounds only ever grew.
 - While sounds play, a frame rereads only the sounds, SoundGroups and audio API objects that changed, and works out only how loud each is where it is now. Rook rebuilt everything it heard every frame, and twice with an AudioAnalyzer.
 - Changing a Highlight or other adornment redraws only it, a change inside one world GUI redraws only that GUI, and name tags are worked out again only for characters that changed. Rook redrew every part of the adorned Model, every world GUI, and every name tag each frame.
