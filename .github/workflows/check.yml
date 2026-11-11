@@ -11,9 +11,12 @@ on:
 permissions:
   contents: read
 
+# A pull request's newer push replaces its older run. Main's runs finish,
+# one at a time, so the cache is saved; pushes landing meanwhile wait as
+# one run of the newest commit.
 concurrency:
   group: check-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   check:
