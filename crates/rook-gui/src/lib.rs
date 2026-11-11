@@ -222,6 +222,7 @@ impl Gui {
         }
         self.layout.drop(&FxHashSet::from_iter([id]));
         self.layout.texts.remove(&id);
+        self.images.forget(id);
         self.changed.remove(&id);
         self.shifted.remove(&id);
         self.restyled.remove(&id);

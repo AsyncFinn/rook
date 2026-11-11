@@ -65,6 +65,13 @@ impl Images {
         std::mem::take(&mut self.requests)
     }
 
+    /// `id` was collected: it waits for nothing.
+    pub(crate) fn forget(&mut self, id: InstanceId) {
+        for objects in self.waiting.values_mut() {
+            objects.remove(&id);
+        }
+    }
+
     /// A requested image arrived (`None`: it can't be had). The objects
     /// that were waiting for it.
     pub(crate) fn arrived(&mut self, url: &str, image: Option<GuiImage>) -> FxHashSet<InstanceId> {
