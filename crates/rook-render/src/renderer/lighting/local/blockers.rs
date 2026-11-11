@@ -848,8 +848,20 @@ impl Blockers {
 
     /// Mark part `i` as `blocker` from now on.
     fn set(&mut self, i: usize, blocker: Option<Blocker>) {
-        if self.grid.is_some() {
-            self.moved.push((self.blockers[i], blocker));
+        // Only a part in the volume, before or after, changes a voxel: one
+        // moving where the volume doesn't reach asks for no marking, and
+        // is taken where it is if the volume comes onto it.
+        match self.grid.as_ref().map(Grid::span) {
+            Some(span) => {
+                let within = |b: &Option<Blocker>| {
+                    (b.as_ref()).is_some_and(|b| clip(b.voxels(), span).is_some())
+                };
+                if within(&self.blockers[i]) || within(&blocker) {
+                    self.moved.push((self.blockers[i], blocker));
+                    self.changed = true;
+                }
+            }
+            None => self.changed = true,
         }
         // A part moving within the columns it stood in (most moving parts,
         // frame to frame) keeps its place in them: removing it walks each
@@ -864,7 +876,6 @@ impl Blockers {
             }
         }
         self.blockers[i] = blocker;
-        self.changed = true;
         rook_types::count!(LightSourcesChanged, 1);
     }
 
@@ -1361,6 +1372,42 @@ mod tests {
         list[1] = Some(at(0.0001, 10.0));
         list[2] = Some(at(0.0001, 30.0));
         let fresh = Grid::new(moved, dims, &list, &indexed(&list));
+        let grid = blockers.grid.as_ref().expect("a grid");
+        assert!(grid.bits == fresh.bits, "marked where it is");
+        assert!(grid.counts == fresh.counts);
+        assert!(grid.fill_bytes == fresh.fill_bytes);
+    }
+
+    /// A part moving where the volume doesn't reach changes no voxel, so
+    /// it asks for no marking; when the volume comes onto it, it's marked
+    /// where it is then.
+    #[test]
+    fn a_part_moving_outside_the_volume_marks_nothing() {
+        let far = |x: f32| {
+            let center = Vec3::new(2000.0 + x, 2.0, 0.0);
+            Blocker::of_box(center, Mat3::IDENTITY, Vec3::splat(2.0))
+        };
+        let mut list = scattered();
+        list[1] = Some(far(0.0));
+        let (low, dims) = (IVec3::new(-40, -10, -30), IVec3::new(64, 32, 64));
+        let mut blockers = Blockers {
+            blockers: list.clone(),
+            slack: vec![Slack::default(); list.len()],
+            columns: indexed(&list),
+            ..Blockers::default()
+        };
+        blockers.grid = Some(Grid::new(low, dims, &list, &blockers.columns));
+        assert!(blockers.mark(low, dims).is_some());
+        for step in 1..4 {
+            blockers.take(1, Some(far(step as f32 * 8.0)));
+        }
+        assert!(!blockers.due());
+        assert!(blockers.moved.is_empty());
+
+        let there = IVec3::new(500 - 32, -10, -30);
+        assert!((0..10_000).any(|_| blockers.mark(there, dims).is_some()));
+        list[1] = Some(far(24.0));
+        let fresh = Grid::new(there, dims, &list, &indexed(&list));
         let grid = blockers.grid.as_ref().expect("a grid");
         assert!(grid.bits == fresh.bits, "marked where it is");
         assert!(grid.counts == fresh.counts);
