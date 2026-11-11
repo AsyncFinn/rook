@@ -39,7 +39,8 @@ pub(crate) struct Batch {
     /// skip the runs out of its view. Widened and worked out afresh with
     /// `bounds`.
     chunks: Vec<Aabb>,
-    changes: u32,
+    /// The chunks changed since their boxes were last worked out.
+    dirty: Vec<u32>,
 }
 
 /// How many slots share a box for culling within a batch.
@@ -242,9 +243,10 @@ pub(crate) struct Batches {
     order: Vec<usize>,
     pub(crate) z: Vec<i32>,
     /// A box around each batch's instances in the world. A changed
-    /// instance widens it; it's worked out afresh (tight again) once as
-    /// many instances have changed as the batch has, so a few parts moving
-    /// in a batch of thousands cost little. Kept apart from `list` so
+    /// instance widens it at once; at the upload its chunk's box is worked
+    /// out afresh from its `CULL_SLOTS` instances and the batch's from its
+    /// chunks', so boxes stay tight however a part moves, and a part moving
+    /// in a batch of thousands costs one chunk. Kept apart from `list` so
     /// culling reads only the boxes.
     bounds: Vec<Aabb>,
     /// Batches with changes since their boxes were last worked out.
@@ -267,10 +269,12 @@ impl Batches {
             b.chunks.resize(c + 1, Aabb::EMPTY);
         }
         b.chunks[c] = b.chunks[c].union(world);
-        if b.changes == 0 {
+        if b.dirty.is_empty() {
             self.changed.push(batch);
         }
-        b.changes += 1;
+        if b.dirty.last() != Some(&(c as u32)) {
+            b.dirty.push(c as u32);
+        }
         self.pool.set(b.region.start + slot, instance);
     }
 
@@ -302,7 +306,7 @@ impl Batches {
                     free: Vec::new(),
                     entries: Vec::new(),
                     chunks: Vec::new(),
-                    changes: 0,
+                    dirty: Vec::new(),
                 });
                 self.z.push(z);
                 self.bounds.push(Aabb::EMPTY);
@@ -352,27 +356,31 @@ impl Batches {
         encoder: &mut wgpu::CommandEncoder,
         scatter: &Scatter,
     ) {
-        let (list, bounds, pool) = (&mut self.list, &mut self.bounds, &self.pool);
-        // Each batch changed as many times as it has instances gets its
-        // boxes worked out afresh; the others wait for more changes.
-        self.changed.retain(|&i| {
-            let b = &mut list[i];
-            if b.changes < b.len.max(1) {
-                return true;
-            }
-            let start = b.region.start as usize;
-            b.chunks = pool.instances[start..start + b.len as usize]
-                .chunks(CULL_SLOTS as usize)
-                .map(|run| {
-                    run.iter()
-                        .fold(Aabb::EMPTY, |all, i| all.union(i.world_box()))
-                })
-                .collect();
-            bounds[i] = b.chunks.iter().fold(Aabb::EMPTY, |all, c| all.union(*c));
-            b.changes = 0;
-            false
-        });
+        self.refit();
         self.pool.upload(device, queue, encoder, scatter);
+    }
+
+    /// Work out the changed chunks' boxes afresh from their instances, and
+    /// their batches' from the chunks, tight again.
+    fn refit(&mut self) {
+        let (list, bounds, pool) = (&mut self.list, &mut self.bounds, &self.pool);
+        for i in self.changed.drain(..) {
+            let b = &mut list[i];
+            let start = b.region.start as usize;
+            let used = &pool.instances[start..start + b.len as usize];
+            b.chunks.truncate(used.len().div_ceil(CULL_SLOTS as usize));
+            b.dirty.sort_unstable();
+            b.dirty.dedup();
+            for c in b.dirty.drain(..) {
+                let Some(chunk) = b.chunks.get_mut(c as usize) else {
+                    continue;
+                };
+                let from = c as usize * CULL_SLOTS as usize;
+                let run = &used[from..(from + CULL_SLOTS as usize).min(used.len())];
+                *chunk = (run.iter()).fold(Aabb::EMPTY, |all, i| all.union(i.world_box()));
+            }
+            bounds[i] = b.chunks.iter().fold(Aabb::EMPTY, |all, c| all.union(*c));
+        }
     }
 
     pub(crate) fn slots(&self) -> usize {

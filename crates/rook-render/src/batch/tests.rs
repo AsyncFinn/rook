@@ -30,3 +30,36 @@ fn an_instance_that_isnt_a_number_hides_no_other_batch() {
         assert!(batches.seen(&view, 0.0)[0], "turned {degrees} degrees");
     }
 }
+
+/// A part that moves away and back leaves its batch's box tight at the
+/// next upload, however many parts the batch holds: culling isn't left
+/// drawing a batch for where one part once was.
+#[test]
+fn a_part_moved_back_leaves_its_batch_tight() {
+    let block = DrawShape::Part(PartShape::Block);
+    let key = BatchKey {
+        shape: block,
+        images: Default::default(),
+        double_sided: false,
+    };
+    let unit = (Vec3::splat(-0.5), Vec3::splat(0.5));
+    let at = |x: f32| {
+        let part = PartInstance::plain(block, Vec3::new(x, 0.0, 0.0), Mat3::IDENTITY, Vec3::ONE);
+        Instance::new(&part, unit, [0; 3])
+    };
+    let mut batches = Batches::default();
+    let (batch, slot) = batches.occupy(0, key, 0, at(0.0));
+    for i in 1..100 {
+        batches.occupy(0, key, i, at(0.0));
+    }
+    batches.refit();
+    // Looking at x = 1000 from beside it: nothing of the batch is there.
+    let camera = Camera::look_at(Vec3::new(990.0, 0.0, 0.0), Vec3::new(1000.0, 0.0, 0.0));
+    let view = Frustum::of(camera.view_projection(1.0));
+    batches.set(batch, slot, at(1000.0));
+    batches.refit();
+    assert!(batches.seen(&view, 0.0)[0], "there while it is");
+    batches.set(batch, slot, at(0.0));
+    batches.refit();
+    assert!(!batches.seen(&view, 0.0)[0], "gone once it moved back");
+}

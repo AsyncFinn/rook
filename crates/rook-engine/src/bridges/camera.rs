@@ -48,6 +48,29 @@ pub struct CameraView {
     pub focus: Vec3,
 }
 
+/// The Camera properties read each frame, resolved once.
+struct CameraIds {
+    camera_type: rook_reflection::PropertyId,
+    cframe: rook_reflection::PropertyId,
+    focus: rook_reflection::PropertyId,
+    fov: rook_reflection::PropertyId,
+}
+
+fn camera_ids() -> &'static CameraIds {
+    static IDS: std::sync::LazyLock<CameraIds> = std::sync::LazyLock::new(|| {
+        let db = rook_reflection::database();
+        let camera = db.class_by_name("Camera").expect("Camera").id;
+        let id = |name| db.find_canonical_property(camera, name).expect(name).id;
+        CameraIds {
+            camera_type: id("CameraType"),
+            cframe: id("CFrame"),
+            focus: id("Focus"),
+            fov: id("FieldOfView"),
+        }
+    });
+    &IDS
+}
+
 impl DataModel {
     /// The current camera's view when a script drives it: a Scriptable
     /// camera, or the local player's character with a camera script in
@@ -57,7 +80,9 @@ impl DataModel {
         let camera = self.current_camera()?;
         let w = self.runtime.world();
         let dom = &w.dom;
-        let scriptable = dom.enum_item_property(camera, "CameraType") == Some("Scriptable");
+        let ids = camera_ids();
+        let cframe_of = |property| dom.read_property(camera, property, Value::as_cframe);
+        let scriptable = dom.enum_item(camera, ids.camera_type) == Some("Scriptable");
         let followed = dom.local_player().is_some_and(|p| {
             let scripts = dom.find_first_child(p, "PlayerScripts", false);
             let has =
@@ -68,15 +93,13 @@ impl DataModel {
         (scriptable || followed).then(|| {
             let cframe = dom.drawn_cframe(camera).unwrap_or(CFrame::IDENTITY);
             // Drawn moved with its subject, Focus with it.
-            let shift = dom
-                .cframe_property(camera, "CFrame")
-                .map_or(Vec3::ZERO, |cf| cframe.position - cf.position);
+            let shift =
+                cframe_of(ids.cframe).map_or(Vec3::ZERO, |cf| cframe.position - cf.position);
             CameraView {
                 cframe,
-                fov: dom.float_property(camera, "FieldOfView").unwrap_or(70.0),
-                focus: dom
-                    .cframe_property(camera, "Focus")
-                    .map_or(cframe.position, |f| f.position + shift),
+                fov: (dom.read_property(camera, ids.fov, Value::as_number))
+                    .map_or(70.0, |f| f as f32),
+                focus: cframe_of(ids.focus).map_or(cframe.position, |f| f.position + shift),
             }
         })
     }

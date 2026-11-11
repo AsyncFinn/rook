@@ -1,6 +1,7 @@
 //! Transparent parts: kept with their instances, and drawn back to front,
-//! terrain water first. The sort and its upload are only done again when a
-//! part or the view changed.
+//! terrain water first. Nothing is done again until a part or the view
+//! changes, and then the last order is sorted again (nearly sorted, so
+//! about one pass) and only what changed is uploaded.
 
 use std::ops::Range;
 
@@ -106,6 +107,43 @@ impl Entry {
     }
 }
 
+impl Entry {
+    /// Where it sorts among the rest before distance: water, then Glass,
+    /// then the others, and those on top last.
+    fn rank(&self) -> u8 {
+        if self.on_top {
+            3
+        } else if self.water {
+            0
+        } else if self.glass {
+            1
+        } else {
+            2
+        }
+    }
+
+    /// Its squared distance `d` as drawn: those on top as if nearest,
+    /// water and Glass as if farthest.
+    fn shown(&self, d: f32) -> f32 {
+        if self.on_top {
+            f32::NEG_INFINITY
+        } else if self.water || self.glass {
+            f32::INFINITY
+        } else {
+            d
+        }
+    }
+}
+
+/// A slot in drawing order, with what it sorts by.
+#[derive(Debug, Clone, Copy)]
+struct Ordered {
+    rank: u8,
+    distance: f32,
+    image: bool,
+    slot: usize,
+}
+
 /// What the last upload was sorted and culled for: the view, where the
 /// camera was, and how far boxes reach out.
 type DrawnFor = (Frustum, Vec3, f32);
@@ -115,10 +153,20 @@ pub(crate) struct TransparentParts {
     /// By slot; `None` when free.
     slots: Vec<Option<Entry>>,
     free: Vec<usize>,
-    /// A slot changed since the last upload.
-    changed: bool,
+    /// A slot was filled, emptied or drawn differently since the last
+    /// upload: the runs are made again.
+    relook: bool,
+    /// Slots whose part only moved since the last upload.
+    moved: Vec<usize>,
+    is_moved: Vec<bool>,
     drawn_for: Option<DrawnFor>,
     runs: Vec<TransparentRun>,
+    /// Per slot: whether the last view reached it, and whether it's in
+    /// `order`.
+    seen: Vec<bool>,
+    in_order: Vec<bool>,
+    /// Per slot in `order`: its squared distance from the camera.
+    distance: Vec<f32>,
     /// Each sorted instance's squared distance from the camera (those on
     /// top nearer than anything).
     distances: Vec<f32>,
@@ -126,18 +174,22 @@ pub(crate) struct TransparentParts {
     picks: Vec<(u32, Aabb)>,
     /// The sorted instances, and how many it holds.
     buffer: Option<(wgpu::Buffer, usize)>,
-    /// The last upload's slots in drawing order, with their squared
-    /// distances, and its instances: kept to fill again without
-    /// allocating each frame.
-    order: Vec<(f32, usize)>,
+    /// The last upload's slots in drawing order, and the one before's,
+    /// kept to compare.
+    order: Vec<Ordered>,
+    previous: Vec<Ordered>,
+    /// The last upload's instances, with the slot each draws.
     instances: Vec<Instance>,
+    instance_slots: Vec<u32>,
 }
 
 impl TransparentParts {
     pub(crate) fn clear(&mut self) {
-        self.slots.clear();
-        self.free.clear();
-        self.changed = true;
+        *self = Self {
+            buffer: self.buffer.take(),
+            relook: true,
+            ..Self::default()
+        };
     }
 
     /// Take a slot for scene entry `entry`, drawn as `part`.
@@ -146,6 +198,10 @@ impl TransparentParts {
             Some(t) => t,
             None => {
                 self.slots.push(None);
+                self.is_moved.push(false);
+                self.seen.push(false);
+                self.in_order.push(false);
+                self.distance.push(0.0);
                 self.slots.len() - 1
             }
         };
@@ -155,7 +211,7 @@ impl TransparentParts {
 
     pub(crate) fn set(&mut self, t: usize, entry: u32, part: &PartInstance, instance: Instance) {
         self.slots[t] = Some(Entry::new(entry, part, instance));
-        self.changed = true;
+        self.relook = true;
     }
 
     /// The part in slot `t` moved to where `part` is, its look the same.
@@ -164,14 +220,16 @@ impl TransparentParts {
             e.position = part.position;
             e.instance = e.instance.placed(part);
             e.world = e.instance.world_box();
-            self.changed = true;
+            if !std::mem::replace(&mut self.is_moved[t], true) {
+                self.moved.push(t);
+            }
         }
     }
 
     pub(crate) fn vacate(&mut self, t: usize) {
         self.slots[t] = None;
         self.free.push(t);
-        self.changed = true;
+        self.relook = true;
     }
 
     pub(crate) fn buffer(&self) -> Option<&wgpu::Buffer> {
@@ -194,6 +252,11 @@ impl TransparentParts {
     /// after its part, and those on top after the rest), unless
     /// neither they nor the view changed since the last upload. Returns
     /// the draws: (key, pass, instance range) runs in that order.
+    ///
+    /// The last order is sorted again rather than made anew: a camera or
+    /// a few parts moving leave it nearly sorted, which the stable sort
+    /// takes in about one pass. When the order comes out the same, only
+    /// the moved parts' instances are written.
     pub(crate) fn upload(
         &mut self,
         device: &wgpu::Device,
@@ -203,73 +266,174 @@ impl TransparentParts {
         margin: f32,
     ) -> Vec<TransparentRun> {
         let drawn_for = (*view, camera.position, margin);
-        if !self.changed && self.drawn_for == Some(drawn_for) {
+        let view_changed = self.drawn_for != Some(drawn_for);
+        if !view_changed && !self.relook && self.moved.is_empty() {
             return self.runs.clone();
         }
         profiling::scope!("transparent");
-        self.changed = false;
         self.drawn_for = Some(drawn_for);
-        // What the view reaches, back to front for blending. Water first,
-        // writing depth: Studio draws see-through parts above water over it
-        // and hides those under it (measured; docs/behavior/terrain/
-        // water.md#see-through-parts). A water chunk is too big to sort
-        // against parts by one point anyway.
-        let mut order = std::mem::take(&mut self.order);
-        order.clear();
-        order.extend(
-            (self.slots.iter().enumerate())
-                .filter_map(|(t, e)| Some((t, e.as_ref()?)))
-                .filter(|(_, e)| view.sees(e.world, margin))
-                .map(|(t, e)| (e.position.distance_squared(camera.position), t)),
-        );
+        let relook = std::mem::take(&mut self.relook);
+        let moved = std::mem::take(&mut self.moved);
+        self.reorder(camera, view, margin, view_changed || relook, &moved);
+        let same = !relook
+            && self.order.len() == self.previous.len()
+            && (self.order.iter().zip(&self.previous)).all(|(a, b)| a.slot == b.slot);
+        if same {
+            self.follow(queue, !moved.is_empty());
+        } else {
+            self.rebuild(device, queue);
+        }
+        for t in moved {
+            self.is_moved[t] = false;
+        }
+        self.runs.clone()
+    }
+
+    /// Put the slots `view` reaches in drawing order for `camera`, from
+    /// the last order (kept in `previous`): what went out of view leaves
+    /// it, what came in joins it, and it's sorted again. Every slot is
+    /// looked at for a new view (`all`), else only the `moved` ones.
+    fn reorder(
+        &mut self,
+        camera: &Camera,
+        view: &Frustum,
+        margin: f32,
+        all: bool,
+        moved: &[usize],
+    ) {
         let slots = &self.slots;
-        let entry = |t: usize| slots[t].as_ref().expect("filled above");
-        order.sort_by(|&(da, a), &(db, b)| {
-            let (a, b) = (entry(a), entry(b));
-            a.on_top
-                .cmp(&b.on_top)
-                .then(b.water.cmp(&a.water))
-                .then(b.glass.cmp(&a.glass))
-                .then(db.total_cmp(&da))
+        let sees = |t: usize| {
+            slots[t]
+                .as_ref()
+                .is_some_and(|e| view.sees(e.world, margin))
+        };
+        if all {
+            for (t, seen) in self.seen.iter_mut().enumerate() {
+                *seen = sees(t);
+            }
+        } else {
+            for &t in moved {
+                self.seen[t] = sees(t);
+            }
+        }
+        let ordered = |t: usize| {
+            let e = slots[t].as_ref().expect("seen slots are filled");
+            Ordered {
+                rank: e.rank(),
+                distance: e.position.distance_squared(camera.position),
+                image: e.image,
+                slot: t,
+            }
+        };
+        std::mem::swap(&mut self.order, &mut self.previous);
+        self.order.clear();
+        for o in &self.previous {
+            self.in_order[o.slot] = false;
+        }
+        for o in &self.previous {
+            if self.seen[o.slot] && !self.in_order[o.slot] {
+                self.in_order[o.slot] = true;
+                self.order.push(ordered(o.slot));
+            }
+        }
+        let mut join = |t: usize| {
+            if self.seen[t] && !self.in_order[t] {
+                self.in_order[t] = true;
+                self.order.push(ordered(t));
+            }
+        };
+        if all {
+            (0..slots.len()).for_each(&mut join);
+        } else {
+            moved.iter().copied().for_each(&mut join);
+        }
+        // Water first, writing depth: Studio draws see-through parts
+        // above water over it and hides those under it (measured;
+        // docs/behavior/terrain/water.md#see-through-parts). A water chunk
+        // is too big to sort against parts by one point anyway.
+        for o in &self.order {
+            self.distance[o.slot] = o.distance;
+        }
+        self.order.sort_by(|a, b| {
+            (a.rank.cmp(&b.rank))
+                .then(b.distance.total_cmp(&a.distance))
                 .then(a.image.cmp(&b.image))
         });
+    }
+
+    /// The same order as last time: the distances move with the camera,
+    /// and the moved slots' instances (if `any_moved`) are written where
+    /// they are.
+    fn follow(&mut self, queue: &wgpu::Queue, any_moved: bool) {
+        let slots = &self.slots;
+        let entry = |t: usize| slots[t].as_ref().expect("ordered slots are filled");
+        for (d, &t) in self.distances.iter_mut().zip(&self.instance_slots) {
+            *d = entry(t as usize).shown(self.distance[t as usize]);
+        }
+        let (true, Some((buffer, _))) = (any_moved, &self.buffer) else {
+            return;
+        };
+        let size = size_of::<Instance>() as u64;
+        let mut i = 0;
+        while i < self.instance_slots.len() {
+            let t = self.instance_slots[i] as usize;
+            if !self.is_moved[t] {
+                i += 1;
+                continue;
+            }
+            let start = i;
+            while i < self.instance_slots.len() && self.is_moved[self.instance_slots[i] as usize] {
+                let e = entry(self.instance_slots[i] as usize);
+                self.instances[i] = e.instance;
+                self.picks[i].1 = e.world;
+                i += 1;
+            }
+            rook_types::count!(RenderSlotsUploaded, i - start);
+            let written = bytemuck::cast_slice(&self.instances[start..i]);
+            queue.write_buffer(buffer, start as u64 * size, written);
+        }
+    }
+
+    /// A new order: every instance and run made again and uploaded.
+    fn rebuild(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {
+        let slots = &self.slots;
+        let entry = |t: usize| slots[t].as_ref().expect("ordered slots are filled");
         let mut instances = std::mem::take(&mut self.instances);
         instances.clear();
-        let mut runs: Vec<TransparentRun> = Vec::new();
+        self.instance_slots.clear();
+        self.runs.clear();
         self.distances.clear();
         self.picks.clear();
-        let mut push = |e: &Entry, d: f32, pass: Pass| {
+        let (runs, instance_slots) = (&mut self.runs, &mut self.instance_slots);
+        let (distances, picks) = (&mut self.distances, &mut self.picks);
+        let mut push = |t: usize, d: f32, pass: Pass| {
+            let e = entry(t);
             let i = instances.len() as u32;
             instances.push(e.instance);
-            self.distances.push(d);
-            self.picks.push((e.entry, e.world));
+            instance_slots.push(t as u32);
+            distances.push(e.shown(d));
+            picks.push((e.entry, e.world));
             match runs.last_mut() {
                 Some((k, q, r)) if *k == e.key && *q == pass => r.end = i + 1,
                 _ => runs.push((e.key, pass, i..i + 1)),
             }
         };
-        for &(_, t) in order.iter().filter(|&&(_, t)| entry(t).water) {
-            push(entry(t), f32::INFINITY, Pass::WaterDepth);
+        // Depth first: all the water's, then all the Glass's.
+        for o in self.order.iter().filter(|o| entry(o.slot).water) {
+            push(o.slot, o.distance, Pass::WaterDepth);
         }
-        for &(_, t) in order.iter().filter(|&&(_, t)| entry(t).glass) {
-            push(entry(t), f32::INFINITY, Pass::GlassDepth);
+        for o in self.order.iter().filter(|o| entry(o.slot).glass) {
+            push(o.slot, o.distance, Pass::GlassDepth);
         }
-        for &(d, t) in &order {
-            let e = entry(t);
-            // Drawn first and last: as if farthest and nearest.
-            let d = if e.on_top {
-                f32::NEG_INFINITY
-            } else if e.water || e.glass {
-                f32::INFINITY
-            } else {
-                d
-            };
-            for &pass in e.passes.iter().filter(|&&p| p != Pass::GlassDepth) {
-                push(e, d, pass);
+        for o in &self.order {
+            for &pass in entry(o.slot)
+                .passes
+                .iter()
+                .filter(|&&p| p != Pass::GlassDepth)
+            {
+                push(o.slot, o.distance, pass);
             }
         }
-        self.order = order;
-        self.runs.clone_from(&runs);
         if !instances.is_empty() {
             if self
                 .buffer
@@ -287,10 +451,10 @@ impl TransparentParts {
                 self.buffer = Some((buffer, capacity));
             }
             let (buffer, _) = self.buffer.as_ref().expect("made above");
+            rook_types::count!(RenderSlotsUploaded, instances.len());
             queue.write_buffer(buffer, 0, bytemuck::cast_slice(&instances));
         }
         self.instances = instances;
-        runs
     }
 }
 
@@ -339,5 +503,50 @@ mod tests {
             [1, 1, 0, 2]
         );
         assert_eq!(t.distances()[..2], [f32::INFINITY; 2]);
+    }
+
+    /// A camera moving without changing the order uploads nothing but
+    /// keeps the distances current; a part moving in place uploads only
+    /// its instance; a move that changes the order draws in the new one.
+    #[test]
+    fn the_last_order_is_kept_while_it_holds() {
+        use rook_types::counters::{Counter, take_local};
+        let Ok(r) = Renderer::headless() else {
+            return;
+        };
+        let at = |z: f32| PartInstance {
+            transparency: 0.5,
+            ..PartInstance::plain(
+                DrawShape::Part(PartShape::Block),
+                Vec3::new(0.0, 0.0, z),
+                Mat3::IDENTITY,
+                Vec3::splat(2.0),
+            )
+        };
+        let mut t = TransparentParts::default();
+        let slots: Vec<usize> = [-10.0, 0.0, 10.0]
+            .iter()
+            .enumerate()
+            .map(|(i, &z)| t.occupy(i as u32, &at(z), r.instance(&at(z))))
+            .collect();
+        let upload = |t: &mut TransparentParts, from: Vec3| {
+            let camera = Camera::look_at(from, Vec3::ZERO);
+            let view = Frustum::of(camera.view_projection(1.0));
+            take_local();
+            t.upload(&r.device, &r.queue, &camera, &view, 0.0);
+            take_local()[Counter::RenderSlotsUploaded]
+        };
+        let entries = |t: &TransparentParts| t.picks().iter().map(|p| p.0).collect::<Vec<_>>();
+        assert_eq!(upload(&mut t, Vec3::new(0.0, 10.0, 40.0)), 3);
+        assert_eq!(entries(&t), [0, 1, 2], "back to front");
+        let far = t.distances()[0];
+        assert_eq!(upload(&mut t, Vec3::new(0.0, 10.0, 41.0)), 0);
+        assert!(t.distances()[0] > far, "the distances follow the camera");
+        t.moved(slots[1], &at(1.0));
+        assert_eq!(upload(&mut t, Vec3::new(0.0, 10.0, 41.0)), 1);
+        assert_eq!(t.picks()[1].1, r.instance(&at(1.0)).world_box());
+        t.moved(slots[0], &at(20.0));
+        assert_eq!(upload(&mut t, Vec3::new(0.0, 10.0, 41.0)), 3);
+        assert_eq!(entries(&t), [1, 2, 0], "the moved part is nearest now");
     }
 }
