@@ -1,5 +1,5 @@
-//! UserGameSettings' members, and the GuiService ones that change the
-//! player's settings (docs/behavior/user-settings.md).
+//! UserGameSettings' members, and the GuiService and SoundService ones
+//! that change the player's settings (docs/behavior/user-settings.md).
 
 use mlua::{Lua, Value as LuaValue};
 use rook_dom::InstanceId;
@@ -18,6 +18,8 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("UserGameSettings", "SetCameraYInvertVisible") => camera_y_invert_visible,
         ("UserGameSettings", "SetGamepadCameraSensitivityVisible") => gamepad_sensitivity_visible,
         ("GuiService", "ToggleFullscreen") => toggle_fullscreen,
+        ("SoundService", "GetOutputDevices") => get_output_devices,
+        ("SoundService", "SetOutputDevice") => set_output_device,
         _ => return None,
     })
 }
@@ -79,5 +81,49 @@ fn toggle_fullscreen(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
         &SignalKey::event(game, "FullscreenChanged"),
         &[LuaValue::Boolean(on)],
     );
+    Outcome::ret(lua, ())
+}
+
+/// The settings menu's Output Device list: names, ids and the chosen
+/// one's index, 1-based. Measured in Studio: first the system's default,
+/// named as that device, then every device by the system's name for it.
+/// The default's id is "" (Roblox's own script names it "Default (...)"
+/// for that); Rook gives the others their name as id (Inference: Roblox's
+/// ids are the system's, which only come back to `SetOutputDevice`).
+fn get_output_devices(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
+    let (devices, chosen) = with_world(lua, |w| {
+        let chosen = w
+            .user_settings
+            .and_then(|root| crate::user_settings::game_settings(&w.dom, root))
+            .and_then(|game| crate::user_settings::output_device(&w.dom, game));
+        (w.output_devices.clone(), chosen)
+    });
+    let Some(default) = devices.default else {
+        // No device: an empty list, which the menu shows as no choices.
+        return Outcome::ret(lua, (lua.create_table()?, lua.create_table()?, 0));
+    };
+    let mut names = vec![default];
+    let mut ids = vec![String::new()];
+    names.extend(devices.names.iter().cloned());
+    ids.extend(devices.names);
+    let index = chosen
+        .and_then(|c| ids.iter().position(|id| *id == c))
+        .unwrap_or(0);
+    Outcome::ret(
+        lua,
+        (
+            lua.create_sequence_from(names)?,
+            lua.create_sequence_from(ids)?,
+            index + 1,
+        ),
+    )
+}
+
+/// Play through the device with this id from now on, and keep the choice
+/// (`RookOutputDevice`); "" is the system's default.
+fn set_output_device(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
+    let id = a.string(1)?;
+    let device = (!id.is_empty()).then_some(id);
+    with_world(lua, |w| crate::user_settings::set_output_device(w, device));
     Outcome::ret(lua, ())
 }

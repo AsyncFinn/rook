@@ -127,3 +127,40 @@ pub(crate) fn ensure(w: &mut crate::world::World) -> (InstanceId, InstanceId) {
     let root = *w.user_settings.get_or_insert_with(|| root(&mut w.dom));
     (root, complete(&mut w.dom, root))
 }
+
+/// Rook's own setting for the output device, which Roblox's
+/// UserGameSettings has none for; kept in the file beside Roblox's
+/// (docs/behavior/user-settings.md).
+pub const OUTPUT_DEVICE: &str = "RookOutputDevice";
+
+/// The output device the player chose on `game` (UserGameSettings) by
+/// name; `None` is the system's default.
+pub fn output_device(dom: &Dom, game: InstanceId) -> Option<String> {
+    let instance = dom.get(game)?;
+    instance
+        .unknown_properties
+        .iter()
+        .find_map(|(name, value)| match value {
+            Value::String(s) if name == OUTPUT_DEVICE && !s.is_empty() => Some(s.clone()),
+            _ => None,
+        })
+}
+
+/// Choose the output device by name (`None` for the system's default),
+/// for the engine to save and the window to play through.
+pub(crate) fn set_output_device(w: &mut crate::world::World, device: Option<String>) {
+    let (_, game) = ensure(w);
+    if output_device(&w.dom, game) == device {
+        return;
+    }
+    let Some(instance) = w.dom.instance_mut(game) else {
+        return;
+    };
+    let value = Value::String(device.unwrap_or_default());
+    let kept = &mut instance.unknown_properties;
+    match kept.iter_mut().find(|(name, _)| name == OUTPUT_DEVICE) {
+        Some((_, v)) => *v = value,
+        None => kept.push((OUTPUT_DEVICE.to_owned(), value)),
+    }
+    w.output_device_chosen = true;
+}

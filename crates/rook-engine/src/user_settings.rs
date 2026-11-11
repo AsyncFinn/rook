@@ -7,17 +7,11 @@ use std::path::{Path, PathBuf};
 use rbx_dom_weak::WeakDom;
 use rook_dom::{Change, Dom, InstanceId};
 use rook_reflection::{PropertyKind, Serialization};
-use rook_types::Value;
 
 use crate::bridges::journal_watch::JournalWatch;
 
 /// Rook's file, in the data folder.
 pub const FILE: &str = "GlobalBasicSettings.xml";
-
-/// Rook's own property for the output device, which Roblox's
-/// UserGameSettings has none for; kept in the file beside Roblox's
-/// (docs/behavior/user-settings.md).
-pub const OUTPUT_DEVICE: &str = "RookOutputDevice";
 
 /// Seconds a change waits before it is saved, so a dragged slider writes
 /// the file once.
@@ -36,7 +30,7 @@ pub struct PlayerSettings {
     pub fullscreen: bool,
     /// `FramerateCap`, read as [`Pacing`].
     pub framerate_cap: i32,
-    /// The output device's name ([`OUTPUT_DEVICE`]); `None` is the
+    /// The output device's name (`RookOutputDevice`); `None` is the
     /// system's default.
     pub output_device: Option<String>,
 }
@@ -83,16 +77,7 @@ impl PlayerSettings {
             framerate_cap: dom
                 .number_property(game, "FramerateCap")
                 .map_or(-1, |n| n as i32),
-            output_device: dom.get(game).and_then(|i| {
-                i.unknown_properties
-                    .iter()
-                    .find_map(|(name, value)| match value {
-                        Value::String(s) if name == OUTPUT_DEVICE && !s.is_empty() => {
-                            Some(s.clone())
-                        }
-                        _ => None,
-                    })
-            }),
+            output_device: rook_lua::user_settings::output_device(dom, game),
         }
     }
 
@@ -165,14 +150,17 @@ impl Kept {
         self.watch.rescan(cursor);
     }
 
-    /// Look at the frame's changes; save once they have settled.
-    pub(crate) fn check(&mut self, dom: &Dom, now: f64) {
+    /// Look at the frame's changes, and `chose_device` (the output
+    /// device changed, which the journal can't note); save once they have
+    /// settled.
+    pub(crate) fn check(&mut self, dom: &Dom, now: f64, chose_device: bool) {
         let (first, changes) = self.watch.look(dom);
         rook_types::count!(JournalReadBridges, changes.len());
         let game = self.game;
-        let changed = changes
-            .iter()
-            .any(|c| matches!(c, Change::Property { id, .. } if *id == game));
+        let changed = chose_device
+            || changes
+                .iter()
+                .any(|c| matches!(c, Change::Property { id, .. } if *id == game));
         // A first look reads them whole, as any watch's does.
         if first || changed {
             self.current = PlayerSettings::read(dom, game);
@@ -232,9 +220,15 @@ fn save(dom: &Dom, game: InstanceId, path: &Path) -> Result<(), String> {
 impl crate::DataModel {
     pub(crate) fn check_user_settings(&mut self) {
         if let Some(kept) = &mut self.user_settings {
-            let w = self.runtime.world();
-            kept.check(&w.dom, w.scheduler.now());
+            let mut w = self.runtime.world_mut();
+            let chose_device = std::mem::take(&mut w.output_device_chosen);
+            kept.check(&w.dom, w.scheduler.now(), chose_device);
         }
+    }
+
+    /// The machine's output devices, for the settings menu to offer.
+    pub fn set_output_devices(&mut self, devices: rook_audio::OutputDevices) {
+        self.runtime.world_mut().output_devices = devices;
     }
 
     /// The player's settings as they are now, on a client that keeps them.

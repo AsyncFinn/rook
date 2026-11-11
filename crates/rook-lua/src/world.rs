@@ -257,6 +257,12 @@ pub struct World {
     /// `UserSettings()`, outside the DataModel: the engine fills it from
     /// the player's saved settings (`crate::user_settings`).
     pub user_settings: Option<InstanceId>,
+    /// Rook's own `RookOutputDevice` setting changed: it has no property
+    /// for the journal to note (`crate::user_settings::set_output_device`).
+    pub output_device_chosen: bool,
+    /// The machine's output devices, as the window listed them when the
+    /// game started; empty where nothing plays sound.
+    pub output_devices: rook_audio::OutputDevices,
     /// Fast flags by full name (`FFlagX`, `DFIntY`), as Studio last
     /// downloaded them, for CoreScripts' `DefineFastFlag` and the like.
     pub fast_flags: std::sync::Arc<FxHashMap<String, String>>,
@@ -353,6 +359,8 @@ impl World {
             bytecode: FxHashMap::default(),
             core_scripts: None,
             user_settings: None,
+            output_device_chosen: false,
+            output_devices: rook_audio::OutputDevices::default(),
             fast_flags: Default::default(),
             defined_flags: FxHashMap::default(),
             localization: FxHashMap::default(),

@@ -69,8 +69,18 @@ its members in `api/methods/user_settings.rs`; loading and saving in
   or empty. Roblox's UserGameSettings has no such property (its client
   picks a device with `SoundService:SetOutputDevice`), so Rook keeps
   one beside Roblox's in the same file, where a launcher can set it.
-  Nothing in the menu sets it yet; the `audioDevice` setting
-  (`ROOK_AUDIO`) overrides it.
+  The menu's Output Device row sets it, and the window switches device
+  at once; the `audioDevice` setting (`ROOK_AUDIO`) overrides it.
+- The Output Device row lists what `SoundService:GetOutputDevices`
+  returns: names, ids and the chosen index. Measured in Studio's menu:
+  first "Default (*the system default's name*)", then every output
+  device by the system's name for it ("Headphones (2- HyperX Cloud III S
+  Wireless)"). Roblox's own script adds the "Default (...)" around the
+  first name when its id is "". Rook gives each other device its name as
+  id (Inference). The window lists the devices when the game starts;
+  where nothing plays sound the list is empty. Without the list, the
+  menu's own script failed each time the menu opened again (`pairs` on
+  nil).
 - `MouseSensitivityThirdPerson` (the menu's Camera Sensitivity slider
   sets it and the first-person one) and `CameraYInverted`: how fast and
   which way `rook-player`'s camera turns with the mouse.

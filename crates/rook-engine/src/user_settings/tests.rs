@@ -73,3 +73,71 @@ fn settings_rook_doesnt_know_are_written_back() {
     assert!(text.contains(r#"<bool name="Fullscreen">true</bool>"#));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// The menu's Output Device list (Roblox's own code asks): the system's
+/// default first, then each device; choosing one keeps it as
+/// `RookOutputDevice`, saved and read back, which the window follows.
+#[test]
+fn the_menu_lists_output_devices_and_keeps_the_choice() {
+    let dir = std::env::temp_dir()
+        .join("rook-engine-tests")
+        .join(format!("user-settings-device-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let path = dir.join(FILE);
+    let mut dm = client(&path);
+    dm.set_output_devices(rook_audio::OutputDevices {
+        default: Some("Speakers (A)".into()),
+        names: vec!["Speakers (A)".into(), "Headphones (B)".into()],
+    });
+    let source = r#"
+        local S = game:GetService("SoundService")
+        local function show()
+            local names, ids, index = S:GetOutputDevices()
+            print(table.concat(names, "|"), table.concat(ids, "|"), index)
+        end
+        show()
+        S:SetOutputDevice("Headphones (B)", "Headphones (B)")
+        show()
+    "#;
+    let script = dm
+        .runtime()
+        .world_mut()
+        .dom
+        .create_by_name("Script")
+        .unwrap();
+    let code = mlua::chunk::Compiler::new().compile(source).unwrap();
+    let core = rook_lua::Compiled {
+        code: code.into(),
+        core: true,
+    };
+    dm.runtime().world_mut().bytecode.insert(script, core);
+    assert!(dm.runtime().run_script(script));
+    dm.step();
+    let lines: Vec<String> = dm
+        .runtime()
+        .take_log()
+        .into_iter()
+        .map(|e| e.message)
+        .collect();
+    assert_eq!(
+        lines,
+        [
+            "Speakers (A)|Speakers (A)|Headphones (B) |Speakers (A)|Headphones (B) 1",
+            "Speakers (A)|Speakers (A)|Headphones (B) |Speakers (A)|Headphones (B) 3",
+        ]
+    );
+    assert_eq!(
+        dm.player_settings().unwrap().output_device.as_deref(),
+        Some("Headphones (B)")
+    );
+    dm.save_user_settings();
+    assert_eq!(
+        client(&path)
+            .player_settings()
+            .unwrap()
+            .output_device
+            .as_deref(),
+        Some("Headphones (B)")
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

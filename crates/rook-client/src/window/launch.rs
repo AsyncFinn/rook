@@ -146,6 +146,13 @@ impl Launch {
                 None
             },
         };
+        // TODO: list them again when the system's devices change, and fire
+        // SoundService.DeviceListChanged, which the open menu refreshes on.
+        if app.audio.is_some() {
+            app.game
+                .view_mut()
+                .set_output_devices(rook_audio::output_devices());
+        }
         if let Some(gfx) = self.gfx.take() {
             app.attach(gfx);
         }

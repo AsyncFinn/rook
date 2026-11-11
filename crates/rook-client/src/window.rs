@@ -351,8 +351,9 @@ impl App {
         pacing(self.framerate_cap, &self.player)
     }
 
-    /// Follow the settings the player changed: the volume, fullscreen,
-    /// the frame rate cap. The camera reads its sensitivity as it turns.
+    /// Follow the settings the player changed: the volume, the output
+    /// device, fullscreen, the frame rate cap. The camera reads its
+    /// sensitivity as it turns.
     fn follow(&mut self, now: PlayerSettings) {
         let vsync = pacing(self.framerate_cap, &now) == Pacing::Display;
         if vsync != (self.pacing() == Pacing::Display)
@@ -364,6 +365,12 @@ impl App {
             && let Some(audio) = &mut self.audio
         {
             audio.set_master_volume(now.master_volume);
+        }
+        if now.output_device != self.player.output_device
+            && let Some(audio) = &mut self.audio
+            && let Some(device) = rook_engine::settings::audio_device(now.output_device.as_deref())
+        {
+            audio.set_device(device);
         }
         if now.fullscreen != self.player.fullscreen
             && let Some(gfx) = &self.gfx

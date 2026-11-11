@@ -3,7 +3,24 @@ use std::sync::{Arc, Mutex};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
-use crate::{Device, Mix, Mixer};
+use crate::{Device, Mix, Mixer, OutputDevices};
+
+/// The machine's output devices now. Listing them asks the system, so
+/// it is done when the game starts, not every frame.
+pub fn output_devices() -> OutputDevices {
+    let host = cpal::default_host();
+    let names = match host.output_devices() {
+        Ok(devices) => devices.filter_map(|d| d.name().ok()).collect(),
+        Err(e) => {
+            eprintln!("Couldn't list the output devices: {e}");
+            Vec::new()
+        }
+    };
+    OutputDevices {
+        default: host.default_output_device().and_then(|d| d.name().ok()),
+        names,
+    }
+}
 
 pub struct Output<K> {
     device: Device,
@@ -36,6 +53,18 @@ impl<K: Hash + Eq + Copy + Send + 'static> Output<K> {
             stream: None,
             failed: false,
         }
+    }
+
+    /// Play through `device` from now on: the one open closes, and
+    /// `device` opens with the next thing to hear.
+    pub fn set_device(&mut self, device: Device) {
+        if device == self.device {
+            return;
+        }
+        self.device = device;
+        self.stream = None;
+        self.mixer = None;
+        self.failed = false;
     }
 
     /// Hear everything at `volume` (0 to 1) from now on.
