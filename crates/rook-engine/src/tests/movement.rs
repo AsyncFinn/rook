@@ -274,6 +274,40 @@ fn trusses_are_climbed() {
     assert!(near(numbers(&out, "hold")[0], 0.0, 0.01), "{out:?}");
 }
 
+/// Measured: rungs on a board are climbed when their faces stand 0.30
+/// studs in front of it (a large place's ladder: 0.3 tall, 1.44 apart,
+/// 0.295 in front), and not at 0.25, where Studio sees a wall.
+#[test]
+fn rungs_on_a_board_are_a_ladder() {
+    let ladder = |depth: f32| {
+        format!(
+            r#"for i = 0, 12 do
+                local r = Instance.new("Part")
+                r.Anchored = true
+                r.Size = Vector3.new(4.05, 0.3, 0.1)
+                r.Position = Vector3.new(0, 0.7 + i * 1.4355, -6)
+                r.Parent = workspace
+            end
+            local b = Instance.new("Part")
+            b.Anchored = true
+            b.Size = Vector3.new(2.45, 20, 0.45)
+            b.Position = Vector3.new(0, 10, -5.95 - {depth} - 0.225)
+            b.Parent = workspace"#
+        )
+    };
+    let local = r#"h:Move(Vector3.new(0, 0, -1))
+        frames(60)
+        print(("climb %.3f %s"):format(r.Position.Y, h:GetState().Name))"#;
+    let climbed = drive(&ladder(0.3), "CFrame.new(0, 3, 0)", local, 1.5);
+    assert!(
+        climbed.iter().any(|l| l.ends_with("Climbing")),
+        "{climbed:?}"
+    );
+    assert!(numbers(&climbed, "climb")[0] > 6.0, "{climbed:?}");
+    let wall = drive(&ladder(0.25), "CFrame.new(0, 3, 0)", local, 1.5);
+    assert!(wall.iter().any(|l| l.ends_with("Running")), "{wall:?}");
+}
+
 /// Measured: in terrain water a character swims, floating with its root
 /// about half a stud under the surface.
 #[test]

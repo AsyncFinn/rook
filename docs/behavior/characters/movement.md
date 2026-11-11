@@ -66,6 +66,13 @@ Workspace gravity 196.2. R6 steps were measured on a body from
 
 ## Climbing and swimming
 
+- Rungs in front of a solid board climb as a ladder when their faces
+  stand 0.30 studs or more in front of it, never at 0.28, and sometimes
+  at 0.29 (2026-11-10; 0.3-stud rungs 1.44 apart, as in a large place's
+  ladder). Climbing began 0.9 to 1.15 studs from the rungs with or
+  without the board, so the board isn't simply out of reach. On the same
+  ladder, rungs 0.2 studs tall always climbed; 0.1 and 0.05 caught for a
+  moment and let go.
 - Walking into a TrussPart climbs it: Climbing, at 0.7 × `WalkSpeed`
   (11.2), with the root's center held 1.5 studs from the face. With no
   input it holds still, still Climbing.
@@ -156,9 +163,11 @@ Workspace gravity 196.2. R6 steps were measured on a body from
   its lock keeps collisions from tipping it.
 - Climbing draws the root in to 1.5 studs from the face and never
   pushes it out, so a low truss is climbed in hops as in Studio.
-- Climbing: six rays ahead at heights from the feet to above the root,
-  2 studs long, find a TrussPart, or a ladder (parts hit with a gap
-  between them). Approximation: Roblox's sensor isn't documented.
+- Climbing: rays ahead at most 0.2 studs apart from the feet to above
+  the root, 2 studs long, find a TrussPart, or a ladder (parts hit with a gap
+  between them). A gap is a ray that hits nothing or hits 0.29 studs or
+  more behind the nearest hit, so rungs on a board climb. Approximation:
+  Roblox's sensor isn't documented.
 - Swimming starts when the root's center is in a voxel of water (or a
   solid voxel's water), and floats toward 0.45 under the surface.
 - Approximations: Landed is taken within 0.5 studs of standing height
