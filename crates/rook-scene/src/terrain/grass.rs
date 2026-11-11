@@ -89,13 +89,7 @@ impl SceneCache {
                     continue;
                 };
                 let b = blades(tile, triangles);
-                let mut key = blake3::Hasher::new();
-                key.update(b"grass");
-                // Blades of other voxels get other keys.
-                key.update(&self.terrain.epoch.to_le_bytes());
-                key.update(&tile.x.to_le_bytes());
-                key.update(&tile.y.to_le_bytes());
-                let mesh = MeshHash(*key.finalize().as_bytes());
+                let mesh = self.terrain.new_mesh(b"grass");
                 self.scene.meshes.insert(
                     mesh,
                     Arc::new(Mesh {
@@ -114,7 +108,7 @@ impl SceneCache {
                     Vec3::ONE,
                 );
                 part.material = Material::Grass;
-                part.color = grass.color;
+                part.color = self.terrain.grass.color;
                 // Blades shade the ground and each other (Studio's grass
                 // has shadow shaders; observed: the ground under a clump
                 // is darker than open ground in the sun).
@@ -164,6 +158,12 @@ impl SceneCache {
     pub(crate) fn take_dropped_meshes(&mut self) -> Vec<MeshHash> {
         let mut out = std::mem::take(&mut self.terrain.grass.dropped);
         out.append(&mut self.terrain.dropped);
+        // The renderer frees these after placing the frame's entries: one
+        // still drawn would lose its mesh.
+        debug_assert!(
+            out.iter().all(|m| !self.scene.meshes.contains_key(m)),
+            "a mesh freed while drawn"
+        );
         out
     }
 }

@@ -94,11 +94,7 @@ impl SceneCache {
         let origin = chunk.origin();
         let mut surfaces = Vec::new();
         for draw in chunk.draws {
-            self.terrain.serial += 1;
-            let mut key = blake3::Hasher::new();
-            key.update(b"terrain");
-            key.update(&self.terrain.serial.to_le_bytes());
-            let mesh = MeshHash(*key.finalize().as_bytes());
+            let mesh = self.terrain.new_mesh(b"terrain");
             let count = draw.positions.len();
             let material = draw.layer.material;
             let terrain_corners = draw

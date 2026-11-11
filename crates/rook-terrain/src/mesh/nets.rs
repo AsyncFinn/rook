@@ -27,6 +27,7 @@ pub(crate) fn mesh_chunk_with(
             continue;
         }
         let mut mesher = Mesher {
+            grid,
             block: &block,
             pass,
             scale,
@@ -140,6 +141,9 @@ const CELL_EDGES: [(IVec3, IVec3); 12] = {
 };
 
 pub(super) struct Mesher<'a> {
+    /// The voxels the block was read from, for what lies past it (how far
+    /// solid runs under a skirt).
+    pub(super) grid: &'a Grid,
     pub(super) block: &'a Block,
     pub(super) pass: Pass,
     /// A voxel's edge in studs, at the level meshed.

@@ -108,8 +108,8 @@ fn drawn_heights(levels: &[Grid], level: u8, chunk: IVec3) -> (f32, f32) {
 /// voxels thick.
 fn slab(depth: i32) -> Vec<Grid> {
     let mut grid = Grid::new();
-    for x in -384..384 {
-        for z in -384..384 {
+    for x in 0..192 {
+        for z in 64..400 {
             for y in -depth..0 {
                 grid.set(IVec3::new(x, y, z), Voxel::new(TerrainMaterial::Grass, 255));
             }
@@ -142,6 +142,39 @@ fn skirts_never_rise_above_the_ground() {
 }
 
 #[test]
+fn skirts_never_hang_below_thin_ground() {
+    // Hung their full depth, skirts under ground one voxel thick stood out
+    // below it as curtains at every chunk's side.
+    let levels = slab(1);
+    for level in 0..LEVELS {
+        let grid = &levels[usize::from(level)];
+        let chunk = IVec3::new(0, -1, 0);
+        let bare = mesh_chunk_at(
+            grid,
+            chunk,
+            Detail {
+                level,
+                skirts: false,
+            },
+        );
+        let lowest = |m: &crate::ChunkMesh| {
+            let ys = m
+                .draws
+                .iter()
+                .flat_map(|d| d.positions.iter())
+                .map(|p| p[1]);
+            ys.fold(f32::MAX, f32::min)
+        };
+        let hung = lowest(&mesh_chunk_at(grid, chunk, Detail::at(level)));
+        assert!(
+            hung >= lowest(&bare) - 1e-3,
+            "level {level}: to {hung}, under {}",
+            lowest(&bare)
+        );
+    }
+}
+
+#[test]
 fn rings_are_squares_on_the_ground() {
     // Studio draws the terrain under a camera 4,000 studs up in 4-stud
     // cells.
@@ -156,8 +189,8 @@ fn far_lakes_lie_at_their_level() {
     // sank into the bed from 16-stud voxels on, and far lakes drew as bare
     // ground.
     let mut grid = Grid::new();
-    for x in -384..384 {
-        for z in -384..384 {
+    for x in 0..192 {
+        for z in 64..400 {
             for y in -40..-1 {
                 grid.set(IVec3::new(x, y, z), Voxel::new(TerrainMaterial::Rock, 255));
             }
@@ -195,8 +228,8 @@ fn thin_slabs_keep_their_thickness_far_away() {
     // to 17 in 32. Collapsed to the center, each ring drew it a stud lower
     // and the rings stepped against each other.
     let mut grid = Grid::new();
-    for x in -384..384 {
-        for z in -384..384 {
+    for x in 0..192 {
+        for z in 64..400 {
             grid.set(IVec3::new(x, 5, z), Voxel::new(TerrainMaterial::Snow, 63));
         }
     }
@@ -208,8 +241,8 @@ fn thin_slabs_keep_their_thickness_far_away() {
     // A full slab from 8 to 32 studs, in a 32-stud voxel with air on both
     // sides: Studio's top was at 30.9 (near, 34).
     let mut grid = Grid::new();
-    for x in -384..384 {
-        for z in -384..384 {
+    for x in 0..192 {
+        for z in 64..400 {
             for y in 2..8 {
                 grid.set(IVec3::new(x, y, z), Voxel::new(TerrainMaterial::Snow, 255));
             }
@@ -252,8 +285,8 @@ fn slivers_on_the_ground_stay_slivers_far_away() {
     // cells, 8 in 16, ...), so far rings raised the ground and slivers in
     // a tunnel closed it.
     let mut grid = Grid::new();
-    for x in -384..384 {
-        for z in -384..384 {
+    for x in 0..192 {
+        for z in 64..400 {
             for y in -40..0 {
                 grid.set(IVec3::new(x, y, z), Voxel::new(TerrainMaterial::Snow, 255));
             }
@@ -363,4 +396,111 @@ fn update_pyramid_matches_a_fresh_pyramid() {
             assert_eq!(updated.uniform(c), fresh.uniform(c), "level {k} chunk {c}");
         }
     }
+}
+
+/// Steep hills crossing the seam of the 16- and 32-stud rings, seen
+/// from a hilltop 1,400 studs away: every ray that reaches the ground
+/// meets its front, none the back of the far side through a crack. With
+/// skirts one voxel deep, rays went through where the slope turned the
+/// two rings' edges, apart across the seam, into a gap taller than that.
+#[test]
+fn steep_hills_show_no_sky_through_ring_seams() {
+    let height = |x: i32, z: i32| {
+        let (x, z) = (x as f32, z as f32);
+        let cliff = if (x / 60.0).sin() > 0.6 { 9.0 } else { 0.0 };
+        12.0 + 7.0 * (x / 23.0).sin() * (z / 31.0).cos()
+            + 3.0 * (z / 9.0 + x / 13.0).sin()
+            + cliff
+            + 10.0 * (x / 97.0 + 1.0).sin() * (z / 83.0).sin()
+    };
+    use TerrainMaterial as M;
+    let materials = [
+        M::Grass,
+        M::Rock,
+        M::Slate,
+        M::Sand,
+        M::Ground,
+        M::Mud,
+        M::Snow,
+        M::Basalt,
+    ];
+    let mut grid = Grid::new();
+    for x in 0..192 {
+        for z in 64..400 {
+            let h = height(x, z);
+            let material =
+                materials[(x.div_euclid(48) + 3 * z.div_euclid(48)).rem_euclid(8) as usize];
+            for y in -4..36 {
+                let fill = (h - y as f32).clamp(0.0, 1.0);
+                if fill > 0.0 {
+                    let occupancy = ((fill * 255.0).round() as u8).max(1);
+                    grid.set(IVec3::new(x, y, z), Voxel::new(material, occupancy));
+                }
+            }
+        }
+    }
+    let levels = pyramid(grid);
+    let camera = Vec3::new(0.0, 190.0, 0.0);
+    let rings = Rings::around(camera);
+    let mut triangles = Vec::new();
+    for level in 0..LEVELS {
+        let grid = &levels[usize::from(level)];
+        for c in rings.chunks(level, grid, (-1, 1)) {
+            let mesh = mesh_chunk_at(grid, c, Detail::at(level));
+            let origin = mesh.origin();
+            for d in &mesh.draws {
+                for t in d.indices.chunks(3) {
+                    triangles.push(
+                        t.iter()
+                            .map(|&i| Vec3::from(d.positions[i as usize]) + origin)
+                            .collect::<Vec<_>>(),
+                    );
+                }
+            }
+        }
+    }
+    // The nearest triangle along the ray, and whether it faces it.
+    let cast = |d: Vec3| -> Option<(f32, bool)> {
+        let mut best: Option<(f32, bool)> = None;
+        for p in &triangles {
+            let (e1, e2) = (p[1] - p[0], p[2] - p[0]);
+            let pv = d.cross(e2);
+            let det = e1.dot(pv);
+            if det.abs() < 1e-9 {
+                continue;
+            }
+            let tv = camera - p[0];
+            let u = tv.dot(pv) / det;
+            let q = tv.cross(e1);
+            let v = d.dot(q) / det;
+            let t = e2.dot(q) / det;
+            if u >= 0.0 && v >= 0.0 && u + v <= 1.0 && t > 0.0 && best.is_none_or(|b| t < b.0) {
+                best = Some((t, e1.cross(e2).dot(d) < 0.0));
+            }
+        }
+        best
+    };
+    // The view the cracks showed in: 70 degrees high, 16:9, towards
+    // (500, 60, 500), the part of it over the hills.
+    let forward = (Vec3::new(500.0, 60.0, 500.0) - camera).normalize();
+    let right = forward.cross(Vec3::Y).normalize();
+    let up = right.cross(forward);
+    let tan = 35f32.to_radians().tan();
+    let mut through = Vec::new();
+    for y in (290..400).step_by(2) {
+        for x in (780..900).step_by(2) {
+            let sx = ((x as f32 + 0.5) / 640.0 - 1.0) * tan * 16.0 / 9.0;
+            let sy = (1.0 - (y as f32 + 0.5) / 360.0) * tan;
+            let d = (forward + right * sx + up * sy).normalize();
+            if let Some((t, false)) = cast(d) {
+                through.push(camera + d * t);
+            }
+        }
+    }
+    assert!(
+        through.is_empty(),
+        "{} rays saw the back of the ground, first at {}",
+        through.len(),
+        through[0]
+    );
 }

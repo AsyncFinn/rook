@@ -87,8 +87,7 @@ pub(super) struct TerrainCache {
     tile_chunks: FxHashMap<glam::IVec2, Vec<LevelChunk>>,
     /// Tiles whose tops went with a dropped chunk, to grow again.
     stale_tiles: FxHashSet<glam::IVec2>,
-    /// Counts the chunk meshes made: part of each mesh's key, so a chunk
-    /// meshed again gets new keys.
+    /// Counts the meshes made for chunks and blades ([`TerrainCache::new_mesh`]).
     serial: u64,
     /// Counts the voxels' changes, so a background job begun on older
     /// voxels is thrown away.
@@ -124,6 +123,17 @@ impl Default for Looks {
 }
 
 impl TerrainCache {
+    /// A key for a new mesh of `kind`, never one used before: a chunk or
+    /// tile built again gets a new key, so the renderer can't place it on
+    /// the old mesh just before freeing that one.
+    fn new_mesh(&mut self, kind: &[u8]) -> MeshHash {
+        self.serial += 1;
+        let mut key = blake3::Hasher::new();
+        key.update(kind);
+        key.update(&self.serial.to_le_bytes());
+        MeshHash(*key.finalize().as_bytes())
+    }
+
     #[cfg(test)]
     fn surfaces(&self) -> impl Iterator<Item = &TerrainSurface> {
         self.chunks.values().flat_map(|c| &c.surfaces)

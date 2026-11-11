@@ -148,6 +148,41 @@ fn moved_parts_draw_where_they_moved() {
     );
 }
 
+/// Terrain's meshes are drawn the frame they're placed, never waiting on
+/// the upload budget behind other files: they replace chunks the scene
+/// stopped drawing that same frame, so a wait left a hole.
+#[test]
+fn terrain_meshes_draw_at_once() {
+    use rook_content::decode::mesh::{Mesh, TerrainMapping};
+    let Ok(mut r) = Renderer::headless() else {
+        return;
+    };
+    let mesh = |terrain| Mesh {
+        positions: vec![[0.0; 3], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]],
+        normals: vec![[0.0, 1.0, 0.0]; 3],
+        uvs: vec![[0.0; 2]; 3],
+        indices: vec![0, 2, 1],
+        terrain,
+        ..Mesh::default()
+    };
+    let (ground, file) = (MeshHash([1; 32]), MeshHash([2; 32]));
+    let at =
+        |hash| PartInstance::plain(DrawShape::File(hash), Vec3::ZERO, Mat3::IDENTITY, Vec3::ONE);
+    let mut scene = Scene {
+        parts: vec![at(ground)],
+        meshes: FxHashMap::from_iter([
+            (ground, Arc::new(mesh(Some(TerrainMapping::Planes)))),
+            (file, Arc::new(mesh(None))),
+        ]),
+        ..Scene::default()
+    };
+    r.set_scene(&scene);
+    assert!(!r.is_uploading());
+    scene.parts.push(at(file));
+    r.update_parts(&scene, &[1]);
+    assert!(r.is_uploading());
+}
+
 /// A decal shows its image on its face, and a part waiting for its
 /// image draws nothing until the upload.
 #[test]

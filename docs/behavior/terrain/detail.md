@@ -124,14 +124,23 @@ the strip to confirm it.
   camera): Studio's except the 8-stud ring, which ends at 512 on that
   side instead of about 768 (Approximation).
 - Chunks are hung with skirts: from every edge where a chunk's
-  upward-facing surface ends at the chunk's side, a strip one of its
-  voxels deep, straight down, in the surface's own layers (Ulrich's
-  chunked level of detail hangs them so). Where rings meet, the higher
-  side's strip covers the crack; inside a ring the strips lie in the
-  solid. Strips hung from undersides, along the normals and two voxels
-  deep, stood up through any slab thinner than that as walls and shards
-  (the stray triangles seen from 300 studs up). Skirts are drawn only:
-  collisions use the bare 4-stud surface.
+  upward-facing surface ends at the chunk's side, a strip straight down,
+  in the surface's own layers (Ulrich's chunked level of detail hangs
+  them so), three of the chunk's voxels deep or to the center of the
+  solid's lowest voxel under it, whichever comes first. Where rings
+  meet, the higher side's strip covers the crack; inside a ring the
+  strips lie in the solid. On a slope the two rings' edges lie apart
+  across the seam too, and the slope turns that into height: strips one
+  voxel deep let the sky through on steep hills at the seam of the 16-
+  and 32-stud rings (`steep_hills_show_no_sky_through_ring_seams`), and
+  four deep stood out of the coarser side's ground at some seams.
+  Stopped in the solid, a strip never hangs out under thin ground; at
+  their full depth they did, under one voxel of ground from the 16-stud
+  ring on (`skirts_never_hang_below_thin_ground`). Strips hung from
+  undersides, along the normals and two voxels deep, stood up through
+  any slab thinner than that as walls and shards (the stray triangles
+  seen from 300 studs up). Skirts are drawn only: collisions use the
+  bare 4-stud surface.
 - Water has no skirts (they'd show through it); its surface crosses as a
   solid's does, so open water lies at the same height in every ring. A
   coarse voxel near water holds the eight's mean reach of water's surface
@@ -161,7 +170,15 @@ the strip to confirm it.
   on a thread of their own, one after another, while the old ones stay
   drawn, then swapped in all at once: no hole, nothing drawn twice, and
   the frame never waits (Studio, too, catches up over a few frames). A
-  screenshot meshes in place and waits.
+  screenshot meshes in place and waits. The renderer puts terrain's
+  meshes on the GPU the frame they're drawn, outside the budget other
+  files share: left to wait on it, the new chunks drew nothing for a
+  frame or more after the old ones were gone, a flash at every move
+  (`terrain_meshes_draw_at_once`). Every mesh the scene builds for a
+  chunk or a tile of blades gets a key never used before: blades grown
+  again under their old key were placed on the old mesh just before the
+  renderer freed it, and those tiles drew nothing until the camera left
+  them (`moving_rings_never_free_a_drawn_mesh`).
 - Grass blades grow on the drawn chunks of the levels that can come
   within their 200 studs (`lod::nearest`: the 8-stud ring can start 112
   studs out, the 16-stud one no nearer than 224), so they stand on the

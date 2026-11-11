@@ -3,6 +3,7 @@
 
 use super::waiting::File;
 use super::*;
+use crate::gpu::cache::Upload;
 
 /// How a scene entry should be drawn now.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -328,6 +329,15 @@ impl Renderer {
             _ => return Readiness::Missing,
         };
         match scene.and_then(|s| s.meshes.get(&hash)) {
+            // Terrain's chunks and blades go up at once: they replace
+            // others the scene stopped drawing in the same frame, so one
+            // left waiting on the budget showed a hole for a frame or more
+            // each time the rings moved.
+            Some(file) if !file.indices.is_empty() && file.terrain.is_some() => {
+                let gpu = file.upload(&mut self.pool);
+                self.meshes.insert(shape, gpu);
+                Readiness::Ready
+            }
             Some(file) if !file.indices.is_empty() => {
                 self.meshes.request(shape, file);
                 Readiness::Waiting

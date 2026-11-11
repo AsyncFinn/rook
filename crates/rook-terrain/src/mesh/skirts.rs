@@ -9,16 +9,21 @@
 //! (Ulrich, "Rendering massive terrains using chunked level of detail
 //! control", 2002); only from surfaces facing up, as one hung from an
 //! underside would rise through a slab thinner than it and stand above
-//! the ground. Studio's rings showed no cracks at their steps
-//! (`docs/behavior/terrain/detail.md`).
+//! the ground. A strip stops at the solid's lowest voxel under it, so a
+//! deep one never hangs out under thin ground. Studio's rings showed no
+//! cracks at their steps (`docs/behavior/terrain/detail.md`).
 
+use glam::{IVec3, Vec3};
 use rustc_hash::FxHashSet;
 
 use super::nets::Mesher;
 
-/// How far a skirt hangs, in the chunk's voxels: to where the next
-/// coarser level's surface can lie (half its voxel, one of these).
-const DEPTH: f32 = 1.0;
+/// How far a skirt hangs at most, in the chunk's voxels. On a slope the
+/// two sides' edges lie apart across the seam as well as up or down,
+/// which the slope turns into height. One voxel let the sky through on
+/// steep hills at the seam of the 16- and 32-stud rings; three close it,
+/// and four stood out of the coarser side's ground at some seams.
+const DEPTH: i32 = 3;
 
 impl Mesher<'_> {
     /// Hang a skirt from each edge of the chunk's upward-facing triangles
@@ -43,13 +48,12 @@ impl Mesher<'_> {
             .flat_map(|(t, m)| [((t[0], t[1]), *m), ((t[1], t[2]), *m), ((t[2], t[0]), *m)])
             .filter(|((a, b), _)| !edges.contains(&(*b, *a)))
             .collect();
-        let depth = DEPTH * self.scale;
         let mut hung = rustc_hash::FxHashMap::default();
         let mut below = |m: &mut Self, i: u32| -> u32 {
             *hung.entry(i).or_insert_with(|| {
+                let p = m.positions[i as usize];
                 let n = m.normals[i as usize];
-                m.positions
-                    .push(m.positions[i as usize] - glam::Vec3::Y * depth);
+                m.positions.push(p - Vec3::Y * m.hang(p));
                 m.normals.push(n);
                 m.materials.push(m.materials[i as usize]);
                 (m.positions.len() - 1) as u32
@@ -61,5 +65,28 @@ impl Mesher<'_> {
             self.triangles.push(([b, a, a2], material));
             self.triangles.push(([b, a2, b2], material));
         }
+    }
+
+    /// How far below `p`, a vertex of the surface on top of the solid, a
+    /// skirt hangs: [`DEPTH`] voxels, or to the center of the solid's
+    /// lowest voxel under it if that comes first.
+    fn hang(&self, p: Vec3) -> f32 {
+        let corner = self.origin + IVec3::splat(super::PAD);
+        // Skirts hang from solids only.
+        let solid = |v: IVec3| self.grid.voxel(v).is_solid();
+        let mut v = corner + (p / self.scale).floor().as_ivec3();
+        // The vertex lies in the voxel it tops or the one above it.
+        if !solid(v) {
+            v.y -= 1;
+            if !solid(v) {
+                return 0.0;
+            }
+        }
+        let mut lowest = v;
+        while v.y - lowest.y < DEPTH && solid(lowest - IVec3::Y) {
+            lowest.y -= 1;
+        }
+        let bottom = ((lowest.y - corner.y) as f32 + 0.5) * self.scale;
+        (p.y - bottom).clamp(0.0, DEPTH as f32 * self.scale)
     }
 }

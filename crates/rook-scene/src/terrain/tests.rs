@@ -222,6 +222,53 @@ fn rings_follow_the_camera() {
     assert!(level_at(&cache, 10.0)[0] >= 3);
 }
 
+/// As the rings move over Grass, the blades of the tiles whose ground
+/// changed level grow again in new meshes: a mesh handed to the renderer
+/// to free is never one the scene still draws. Blades grown again under
+/// their old key were placed on the old mesh and then lost it, so those
+/// tiles drew nothing until the camera left them.
+#[test]
+fn moving_rings_never_free_a_drawn_mesh() {
+    use rook_terrain::Voxel;
+    let mut dom = Dom::new();
+    let ws = dom.get_service("Workspace").unwrap();
+    let terrain = dom.create_by_name("Terrain").unwrap();
+    dom.set_parent(terrain, Some(ws)).unwrap();
+    dom.set_property_by_name(terrain, "Decoration", Value::Bool(true))
+        .unwrap();
+    let mut grid = Grid::new();
+    for x in 0..512 {
+        for z in -32..32 {
+            grid.set(IVec3::new(x, 0, z), Voxel::new(TerrainMaterial::Grass, 255));
+        }
+    }
+    dom.set_property_by_name(
+        terrain,
+        "SmoothGrid",
+        Value::BinaryString(grid.encode().into()),
+    )
+    .unwrap();
+    let content = Arc::new(Resolver::new(rook_content::Config::empty()));
+    let mut camera = Vec3::new(8.0, 10.0, 8.0);
+    let mut cache = SceneCache::new(&dom, Floors::default(), content, camera);
+    cache.update_grass(camera);
+    let mut regrown = 0;
+    for _ in 0..200 {
+        camera.x += 8.0;
+        cache.update_terrain(camera, true);
+        let blades = cache.terrain.grass.entries().len();
+        cache.update_grass(camera);
+        regrown += cache.terrain.grass.entries().len().saturating_sub(blades);
+        for mesh in cache.take_dropped_meshes() {
+            assert!(
+                !cache.scene.meshes.contains_key(&mesh),
+                "a drawn mesh is freed, the camera at {camera}"
+            );
+        }
+    }
+    assert!(regrown > 0, "no blades grew again");
+}
+
 /// A server script's edits reach a client region by region, and the
 /// client's voxels, collision and drawn chunks end up as the server's;
 /// a client joining afterwards, taking the voxels whole, has them too.
