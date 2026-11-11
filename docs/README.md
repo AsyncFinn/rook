@@ -76,7 +76,8 @@
     - [Random](behavior/scripting/random.md): Luau's generator and each method's draws
     - [Running scripts](behavior/scripting/running-scripts.md): scripts stop the moment they're removed from where they run or disabled
     - [Tags and locked members](behavior/scripting/tags.md): tag signals, and which members a child of the same name beats.
-    - [Waiting](behavior/scripting/waiting.md): durations too long for a float last one step  - Rendering
+    - [Waiting](behavior/scripting/waiting.md): durations too long for a float last one step
+  - Rendering
     - [Materials](behavior/rendering/materials.md): PBR shading, the built-in materials, MaterialVariant and SurfaceAppearance
     - [Textures and decals](behavior/rendering/textures-and-decals.md)
     - [Highlight](behavior/rendering/highlight.md)
