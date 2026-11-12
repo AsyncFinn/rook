@@ -1,5 +1,7 @@
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock};
+
+use crate::Loaded;
 
 use rbx_dom_weak::{InstanceBuilder, UstrMap, WeakDom};
 use rbx_types::{Ref, Variant};
@@ -24,55 +26,186 @@ pub struct Converted {
 /// DataModel get their `Parent` locked, as Roblox's services do. If the
 /// DataModel already has a service of that class, the loaded children are
 /// merged into it.
-pub fn into_dom(mut weak: WeakDom, dom: &mut Dom, parent: InstanceId) -> Converted {
-    convert(&mut weak, dom, parent, |w, r| {
-        std::mem::take(&mut w.get_by_ref_mut(r).expect("referent exists").properties)
-    })
+pub fn into_dom(weak: WeakDom, dom: &mut Dom, parent: InstanceId) -> Converted {
+    Placing::new(weak, parent).place_all(dom)
 }
 
 /// [`into_dom`], copying: for a tree put in many times (a rig, a patch).
 pub fn copy_into_dom(weak: &WeakDom, dom: &mut Dom, parent: InstanceId) -> Converted {
-    convert(weak, dom, parent, |w, r| {
-        w.get_by_ref(r).expect("referent exists").properties.clone()
-    })
+    Placing::new(weak, parent).place_all(dom)
 }
 
-fn convert<W: std::ops::Deref<Target = WeakDom>>(
-    mut weak: W,
-    dom: &mut Dom,
-    parent: InstanceId,
-    mut properties: impl FnMut(&mut W, Ref) -> UstrMap<Variant>,
-) -> Converted {
-    let was_enabled = dom.journal().is_enabled();
-    dom.journal_mut().set_enabled(false);
+/// A tree [`Placing`] puts in: one loaded once, whose values it takes, or
+/// one put in many times, whose values it copies.
+pub trait Tree {
+    fn weak(&self) -> &WeakDom;
+    /// The properties of the instance `r`, taken or copied.
+    fn properties(&mut self, r: Ref) -> UstrMap<Variant>;
+}
 
-    let mut map: FxHashMap<Ref, InstanceId> = FxHashMap::default();
-    let mut pending_refs: Vec<(InstanceId, Ref)> = Vec::new();
-    let mut top = Vec::new();
-    for &child in weak.root().children() {
-        top.push(create_rec(
-            &weak,
-            dom,
-            child,
-            parent,
-            &mut map,
-            &mut pending_refs,
-        ));
+impl Tree for WeakDom {
+    fn weak(&self) -> &WeakDom {
+        self
+    }
+    fn properties(&mut self, r: Ref) -> UstrMap<Variant> {
+        std::mem::take(&mut self.get_by_ref_mut(r).expect("referent exists").properties)
+    }
+}
+
+impl Tree for &WeakDom {
+    fn weak(&self) -> &WeakDom {
+        self
+    }
+    fn properties(&mut self, r: Ref) -> UstrMap<Variant> {
+        self.get_by_ref(r)
+            .expect("referent exists")
+            .properties
+            .clone()
+    }
+}
+
+/// A file read on a loader's thread: its values are taken unless another
+/// holder shares it.
+impl Tree for Arc<Loaded> {
+    fn weak(&self) -> &WeakDom {
+        &self.dom
+    }
+    fn properties(&mut self, r: Ref) -> UstrMap<Variant> {
+        match Arc::get_mut(self) {
+            Some(loaded) => loaded.dom.properties(r),
+            None => self
+                .dom
+                .get_by_ref(r)
+                .expect("referent exists")
+                .properties
+                .clone(),
+        }
+    }
+}
+
+/// A file's top-level instances going under `parent` in a Dom a slice at a
+/// time, as Unity's `InstantiateAsync` spreads a large instantiation over
+/// frames: each [`Placing::place`] does a bounded amount of work, so a
+/// large model a script loads doesn't stall one frame. Instances go under
+/// `parent` as they're made, so until it's done `parent` must be out of
+/// every script's reach (no parent, no handle). [`into_dom`] and
+/// [`copy_into_dom`] place everything at once.
+#[derive(Debug)]
+pub struct Placing<T> {
+    tree: T,
+    /// Instances still to make, next last, each with where it goes.
+    making: Vec<(Ref, InstanceId)>,
+    /// Each instance made, by referent.
+    map: FxHashMap<Ref, InstanceId>,
+    /// The instances made, in order; those before `filled` have their
+    /// properties (set once every instance is made, so references find
+    /// theirs).
+    made: Vec<(InstanceId, Ref)>,
+    filled: usize,
+    unique_ids: FxHashSet<rbx_types::UniqueId>,
+    duplicate_unique_ids: bool,
+}
+
+impl<T: Tree> Placing<T> {
+    pub fn new(tree: T, parent: InstanceId) -> Self {
+        let making = (tree.weak().root().children().iter().rev())
+            .map(|&child| (child, parent))
+            .collect();
+        Self {
+            tree,
+            making,
+            map: FxHashMap::default(),
+            made: Vec::new(),
+            filled: 0,
+            unique_ids: FxHashSet::default(),
+            duplicate_unique_ids: false,
+        }
     }
 
-    // Second pass: properties, now that every referent has a Rook ID.
-    let velocities = SavedVelocities::get();
-    let mut unique_ids = FxHashSet::default();
-    let mut duplicate_unique_ids = false;
-    for (id, source) in pending_refs {
-        let props = properties(&mut weak, source);
+    /// Make instances, then set their properties, taking one from
+    /// `budget` for each instance and property done, until it runs out;
+    /// what was made, once everything is.
+    pub fn place(&mut self, dom: &mut Dom, budget: &mut usize) -> Option<Converted> {
+        let was_enabled = dom.journal().is_enabled();
+        dom.journal_mut().set_enabled(false);
+        while *budget > 0
+            && let Some((source, parent)) = self.making.pop()
+        {
+            self.make(dom, source, parent);
+            *budget -= 1;
+        }
+        let velocities = SavedVelocities::get();
+        while *budget > 0 && self.making.is_empty() && self.filled < self.made.len() {
+            let (id, source) = self.made[self.filled];
+            self.filled += 1;
+            let done = 1 + self.fill(dom, id, source);
+            *budget = budget.saturating_sub(done);
+            velocities.adopt(dom, id);
+        }
+        dom.journal_mut().set_enabled(was_enabled);
+        if !self.making.is_empty() || self.filled < self.made.len() {
+            return None;
+        }
+        let top = (self.tree.weak().root().children().iter())
+            .map(|r| self.map[r])
+            .collect();
+        Some(Converted {
+            top,
+            duplicate_unique_ids: self.duplicate_unique_ids,
+        })
+    }
+
+    /// Place everything now.
+    fn place_all(mut self, dom: &mut Dom) -> Converted {
+        let mut unlimited = usize::MAX;
+        self.place(dom, &mut unlimited)
+            .expect("placed without a limit")
+    }
+
+    fn make(&mut self, dom: &mut Dom, source: Ref, parent: InstanceId) {
+        let inst = self
+            .tree
+            .weak()
+            .get_by_ref(source)
+            .expect("referent exists");
+        let class = inst.class.as_str();
+        let db = dom.database();
+        let is_service = db.class_by_name(class).is_some_and(|c| c.flags.service);
+        let id = if is_service && parent == dom.root() {
+            match dom.find_service(class) {
+                Some(existing) => existing,
+                None => {
+                    let id = dom.get_service(class).expect("service class");
+                    dom.set_name(id, inst.name.clone()).expect("exists");
+                    id
+                }
+            }
+        } else {
+            let id = match db.class_by_name(class) {
+                Some(c) => dom.create(c.id),
+                None => dom.create_unknown(class),
+            };
+            dom.set_name(id, inst.name.clone()).expect("exists");
+            dom.attach_unchecked(id, parent);
+            id
+        };
+        self.map.insert(source, id);
+        self.made.push((id, source));
+        (self.making).extend(inst.children().iter().rev().map(|&child| (child, id)));
+    }
+
+    /// Set `id`'s properties from `source`; how many there were.
+    fn fill(&mut self, dom: &mut Dom, id: InstanceId, source: Ref) -> usize {
+        let props = self.tree.properties(source);
+        let count = props.len();
         let class = dom.get(id).expect("just created").class;
         let unknown_class = dom.get(id).expect("just created").unknown_class.is_some();
         let db = dom.database();
+        let map = &self.map;
+        let map_ref = |r| map.get(&r).map(|id: &InstanceId| id.to_ref());
         text_size_from_font_size(dom, id, &props);
         for (name, variant) in props {
             let name = name.as_str();
-            let map_ref = |r| map.get(&r).map(|id: &InstanceId| id.to_ref());
             match (name, variant) {
                 ("Name", _) => {}
                 ("Attributes", Variant::Attributes(attrs)) => {
@@ -89,7 +222,7 @@ fn convert<W: std::ops::Deref<Target = WeakDom>>(
                 }
                 (_, variant) => {
                     if let Variant::UniqueId(u) = &variant {
-                        duplicate_unique_ids |= !u.is_nil() && !unique_ids.insert(*u);
+                        self.duplicate_unique_ids |= !u.is_nil() && !self.unique_ids.insert(*u);
                     }
                     let Ok(value) = Value::from_variant(variant, map_ref) else {
                         continue;
@@ -108,13 +241,7 @@ fn convert<W: std::ops::Deref<Target = WeakDom>>(
                 }
             }
         }
-        velocities.adopt(dom, id);
-    }
-
-    dom.journal_mut().set_enabled(was_enabled);
-    Converted {
-        top,
-        duplicate_unique_ids,
+        count
     }
 }
 
@@ -179,45 +306,6 @@ fn text_size_from_font_size(dom: &mut Dom, id: InstanceId, properties: &UstrMap<
     if let (Some(size), Some(p)) = (size, db.find_canonical_property(class, "TextSize")) {
         dom.load_property(id, p.id, Value::Float32(size));
     }
-}
-
-fn create_rec(
-    weak: &WeakDom,
-    dom: &mut Dom,
-    source: Ref,
-    parent: InstanceId,
-    map: &mut FxHashMap<Ref, InstanceId>,
-    pending: &mut Vec<(InstanceId, Ref)>,
-) -> InstanceId {
-    let inst = weak.get_by_ref(source).expect("referent exists");
-    let class = inst.class.as_str();
-    let db = dom.database();
-    let is_service = db.class_by_name(class).is_some_and(|c| c.flags.service);
-
-    let id = if is_service && parent == dom.root() {
-        match dom.find_service(class) {
-            Some(existing) => existing,
-            None => {
-                let id = dom.get_service(class).expect("service class");
-                dom.set_name(id, inst.name.clone()).expect("exists");
-                id
-            }
-        }
-    } else {
-        let id = match db.class_by_name(class) {
-            Some(c) => dom.create(c.id),
-            None => dom.create_unknown(class),
-        };
-        dom.set_name(id, inst.name.clone()).expect("exists");
-        dom.attach_unchecked(id, parent);
-        id
-    };
-    map.insert(source, id);
-    pending.push((id, source));
-    for &child in inst.children() {
-        create_rec(weak, dom, child, id, map, pending);
-    }
-    id
 }
 
 pub fn from_dom(dom: &Dom, roots: &[InstanceId]) -> WeakDom {
@@ -310,6 +398,53 @@ fn build_rec(
 mod tests {
     use super::*;
     use crate::{Format, compare, load, save};
+
+    /// Placed a slice at a time, a tree comes out as placed at once, its
+    /// references found across slices, each slice doing no more than its
+    /// budget.
+    #[test]
+    fn placing_in_slices_matches_placing_at_once() {
+        let first = InstanceBuilder::new("Part").with_name("First");
+        let first_ref = first.referent();
+        let mut kit = InstanceBuilder::new("Model")
+            .with_name("Kit")
+            .with_child(first);
+        for i in 0..30 {
+            let part = InstanceBuilder::new("Part")
+                .with_name(format!("Part{i}"))
+                .with_property("Anchored", true);
+            kit = kit.with_child(part);
+        }
+        let link = InstanceBuilder::new("ObjectValue")
+            .with_name("Link")
+            .with_property("Value", first_ref);
+        let weak = WeakDom::new(InstanceBuilder::new("DataModel").with_child(kit.with_child(link)));
+
+        let mut at_once = Dom::new();
+        let whole = at_once.create_by_name("Model").unwrap();
+        copy_into_dom(&weak, &mut at_once, whole);
+
+        let mut sliced = Dom::new();
+        let model = sliced.create_by_name("Model").unwrap();
+        let mut placing = Placing::new(&weak, model);
+        let mut slices = 1;
+        let placed = loop {
+            let mut budget = 10;
+            if let Some(placed) = placing.place(&mut sliced, &mut budget) {
+                break placed;
+            }
+            assert_eq!(budget, 0);
+            slices += 1;
+        };
+        assert!(slices > 3, "{slices} slices");
+        assert_eq!(placed.top.len(), 1);
+        let kit = sliced.find_first_child(model, "Kit", false).unwrap();
+        let link = sliced.find_first_child(kit, "Link", false).unwrap();
+        let first = sliced.find_first_child(kit, "First", false).unwrap();
+        assert_eq!(sliced.ref_property(link, "Value"), Some(first));
+        let diffs = compare(&from_dom(&at_once, &[whole]), &from_dom(&sliced, &[model]));
+        assert!(diffs.is_empty(), "{diffs:#?}");
+    }
 
     #[test]
     fn file_to_dom_and_back() {

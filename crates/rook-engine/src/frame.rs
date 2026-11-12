@@ -1,5 +1,11 @@
 use super::*;
 
+/// How many instances and properties of the models scripts load go in each
+/// frame: about 4 ms at the ~185 ns each measured on a 5,000-instance
+/// model, Unity's per-frame integration budget at below-normal background
+/// loading priority. Counted rather than timed, so runs repeat exactly.
+pub(crate) const PLACED_PER_FRAME: usize = 20_000;
+
 impl DataModel {
     /// Run one frame.
     ///
@@ -152,6 +158,7 @@ impl DataModel {
             && content.tickets.is_empty()
             && content.assets.is_empty()
             && content.fonts.is_empty()
+            && content.placing.is_empty()
             && self.sounds.tickets.is_empty()
         {
             return sounds_done;
@@ -213,10 +220,39 @@ impl DataModel {
             }
         }
         self.runtime.deliver_content(&results);
-        for (request, fill) in assets_done {
-            self.runtime.deliver_asset(request, fill);
+        for (request, loaded) in assets_done {
+            match loaded {
+                Ok(loaded) => {
+                    let model = (self.runtime.world_mut().dom)
+                        .create_by_name("Model")
+                        .expect("Model is a class");
+                    let placing = rook_formats::Placing::new(loaded, model);
+                    self.content.placing.push((request, model, placing));
+                }
+                Err(kind) => self.runtime.deliver_asset(request, Err(kind)),
+            }
         }
+        self.place_assets();
         sounds_done
+    }
+
+    /// Put in the models scripts loaded, [`PLACED_PER_FRAME`] instances
+    /// and properties a frame in the order they came, and hand each to its
+    /// script once it's whole.
+    fn place_assets(&mut self) {
+        let mut budget = PLACED_PER_FRAME;
+        while budget > 0
+            && let Some((request, model, placing)) = self.content.placing.first_mut()
+        {
+            let mut world = self.runtime.world_mut();
+            if placing.place(&mut world.dom, &mut budget).is_none() {
+                break;
+            }
+            drop(world);
+            let (request, model) = (*request, *model);
+            self.content.placing.remove(0);
+            self.runtime.deliver_asset(request, Ok(model));
+        }
     }
 
     /// Step physics and write the results into the DOM. Each side
@@ -287,13 +323,7 @@ impl DataModel {
 /// (copies them, when the same file answered another request too).
 fn read_asset(
     outcome: Result<rook_content::Fetched, rook_content::Failure>,
-) -> rook_lua::AssetFill {
+) -> Result<Arc<rook_formats::Loaded>, rook_content::FailureKind> {
     let fetched = outcome.map_err(|f| f.kind)?;
-    let loaded = fetched.model.ok_or(rook_content::FailureKind::Invalid)?;
-    Ok(Box::new(move |dom, model| {
-        match Arc::try_unwrap(loaded) {
-            Ok(loaded) => rook_formats::into_dom(loaded.dom, dom, model),
-            Err(shared) => rook_formats::copy_into_dom(&shared.dom, dom, model),
-        };
-    }))
+    fetched.model.ok_or(rook_content::FailureKind::Invalid)
 }

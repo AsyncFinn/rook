@@ -7,6 +7,7 @@
 
 mod api;
 pub mod audio_api;
+mod bytecode;
 mod collect;
 mod ctx;
 mod net;
@@ -21,7 +22,7 @@ mod world;
 
 use threads::watchdog;
 
-pub use api::methods::assets::AssetFill;
+pub use api::methods::assets::AssetModel;
 pub use api::methods::camera::{Lens, viewport_ray};
 pub use api::methods::characters::movement::drives as humanoid_drives;
 pub use api::methods::characters::movement::face_camera;
@@ -102,6 +103,7 @@ pub struct Runtime {
 impl Runtime {
     pub fn new(dom: Dom, clock: Clock) -> mlua::Result<Self> {
         let lua = Lua::new();
+        rook_content::set_script_compiler(bytecode::precompile);
         let world = Rc::new(RefCell::new(World::new(dom, clock)));
         ctx::Ctx::install(&lua, world.clone())?;
 
@@ -610,11 +612,11 @@ impl Runtime {
         std::mem::take(&mut self.world_mut().assets.outbox)
     }
 
-    /// Deliver a fetched asset: `fill` puts its instances in the Model the
-    /// waiting call gets, and the threads waiting for it resume.
-    pub fn deliver_asset(&self, request: u64, fill: AssetFill) {
+    /// Deliver a fetched asset: the waiting call gets `model`, a Model
+    /// holding its instances, and the threads waiting for it resume.
+    pub fn deliver_asset(&self, request: u64, model: AssetModel) {
         self.guarded(|| {
-            api::methods::assets::deliver(&self.lua, request, fill);
+            api::methods::assets::deliver(&self.lua, request, model);
             threads::drain_deferred(&self.lua);
         });
     }

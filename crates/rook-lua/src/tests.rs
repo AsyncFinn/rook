@@ -465,6 +465,46 @@ fn require_modules() {
     );
 }
 
+/// A script runs the bytecode kept for its source rather than compiling
+/// it again, and one that doesn't compile still reports why under its
+/// name.
+#[test]
+fn scripts_run_the_bytecode_kept_for_their_source() {
+    let kept = "return 'compiled when it ran'";
+    let other = crate::bytecode::compiler()
+        .compile("return 'kept for it'")
+        .unwrap();
+    crate::bytecode::keep(kept, other);
+    let rt = Runtime::new(Dom::new(), Clock::Fixed { step: 1.0 / 60.0 }).unwrap();
+    {
+        let mut w = rt.world_mut();
+        let ws = w.dom.get_service("Workspace").unwrap();
+        for (name, code) in [("Kept", kept), ("Broken", "return (")] {
+            let module = w.dom.create_by_name("ModuleScript").unwrap();
+            w.dom.set_name(module, name.into()).unwrap();
+            let source = w.dom.property_id(module, "Source").unwrap();
+            w.dom
+                .set_property(module, source, rook_types::Value::String(code.into()))
+                .unwrap();
+            w.dom.set_parent(module, Some(ws)).unwrap();
+        }
+    }
+    rt.run_source(
+        "Workspace.Script",
+        "print(require(workspace.Kept)) print(pcall(require, workspace.Broken))",
+        None,
+    )
+    .unwrap();
+    step(&rt);
+    let out: Vec<String> = rt.take_log().into_iter().map(|e| e.message).collect();
+    assert_eq!(out[0], "kept for it");
+    assert!(out[1].starts_with("Workspace.Broken:1:"), "{out:?}");
+    assert_eq!(
+        out[2],
+        "false Requested module experienced an error while loading"
+    );
+}
+
 #[test]
 fn runaway_scripts_time_out() {
     let rt = Runtime::new(Dom::new(), Clock::Fixed { step: 1.0 / 60.0 }).unwrap();

@@ -29,6 +29,7 @@ serde.workspace = true
 chrono.workspace = true
 serde_json.workspace = true
 profiling.workspace = true
+blake3.workspace = true
 
 [lints]
 workspace = true

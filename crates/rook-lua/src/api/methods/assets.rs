@@ -1,28 +1,25 @@
 //! Published models: `require(assetId)` and `InsertService:LoadAsset`.
 //!
 //! Scripts queue asset ids in the World ([`AssetRequests`]); the engine
-//! fetches each through its content loader, reads the file and hands back
-//! a function that fills a Model with the file's instances
-//! (`Runtime::deliver_asset`), so this crate needs no network or file
-//! formats of its own. The calling thread waits meanwhile. What Studio does
+//! fetches each through its content loader, reads the file, puts its
+//! instances in a Model and hands that back (`Runtime::deliver_asset`), so
+//! this crate needs no network or file formats of its own. The calling thread waits meanwhile. What Studio does
 //! is in `docs/behavior/content/asset-fetching.md` (Published models).
 
 use rustc_hash::FxHashMap;
 
 use mlua::{Function, Lua, MultiValue, Thread, Value as LuaValue};
 use rook_content::FailureKind;
-use rook_dom::{Dom, InstanceId};
+use rook_dom::InstanceId;
 
 use super::RawMethod;
 use crate::api::instance::push_instance;
 use crate::ctx::args::{Args, number_of, type_name};
 use crate::ctx::{ApiResult, Outcome, ScriptError, api_fn, with_world};
 
-/// Copies a fetched asset's instances into a Model.
-pub(crate) type Fill = Box<dyn FnOnce(&mut Dom, InstanceId)>;
-
-/// A [`Fill`] for the asset, or why it didn't load.
-pub type AssetFill = Result<Fill, FailureKind>;
+/// A Model holding the asset's instances, with no parent and nothing
+/// holding it yet, or why the asset didn't load.
+pub type AssetModel = Result<InstanceId, FailureKind>;
 
 #[derive(Debug, Default)]
 pub struct AssetRequests {
@@ -136,26 +133,24 @@ fn download_failed(id: i64) -> String {
 }
 
 /// A Model with no parent holding the asset's instances.
-fn fill_model(lua: &Lua, name: String, fill: Fill) -> InstanceId {
-    with_world(lua, |w| {
-        let model = w.dom.create_by_name("Model").expect("Model is a class");
-        // A new instance has no parent, so renaming it can't fail.
-        let _ = w.dom.set_name(model, name);
-        fill(&mut w.dom, model);
-        model
-    })
+fn name_model(lua: &Lua, model: InstanceId, name: String) {
+    // It has no parent, so renaming it can't fail.
+    with_world(lua, |w| _ = w.dom.set_name(model, name));
 }
 
 /// Deliver a finished asset: resume the LoadAsset or the requires waiting
 /// for it.
-pub(crate) fn deliver(lua: &Lua, request: u64, result: AssetFill) {
+pub(crate) fn deliver(lua: &Lua, request: u64, result: AssetModel) {
     let Some(waiter) = with_world(lua, |w| w.assets.waiting.remove(&request)) else {
+        if let Ok(model) = result {
+            with_world(lua, |w| _ = w.dom.destroy(model));
+        }
         return;
     };
     match waiter {
         Waiter::LoadAsset(thread) => match result {
-            Ok(fill) => {
-                let model = fill_model(lua, "Model".into(), fill);
+            Ok(model) => {
+                name_model(lua, model, "Model".into());
                 if let Ok(m) = push_instance(lua, model) {
                     crate::threads::resume(lua, &thread, m);
                 }
@@ -170,8 +165,8 @@ pub(crate) fn deliver(lua: &Lua, request: u64, result: AssetFill) {
         },
         Waiter::Require(id) => {
             let found = match result {
-                Ok(fill) => {
-                    let model = fill_model(lua, format!("required_asset_{id}"), fill);
+                Ok(model) => {
+                    name_model(lua, model, format!("required_asset_{id}"));
                     with_world(lua, |w| {
                         w.dom
                             .children(model)

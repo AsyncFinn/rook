@@ -1,9 +1,9 @@
-use mlua::chunk::Compiler;
 use mlua::{Function, Lua, MultiValue, Table, Value as LuaValue};
 use rook_dom::{Change, Dom, InstanceId};
 use rook_types::RunContext;
 
 use super::instance::{LuaInstance, push_instance};
+use crate::bytecode;
 use crate::ctx::args::Args;
 use crate::ctx::{ApiResult, Outcome, ScriptError, api_fn, api_ret, with_world};
 use crate::threads::spawn;
@@ -23,27 +23,28 @@ fn environment(lua: &Lua, script: InstanceId) -> mlua::Result<Table> {
     Ok(env)
 }
 
-/// How game code is compiled: optimization level 2, the default in live
-/// games (level 1 is Studio testing's; creator-docs Luau comments). A
-/// script's `--!optimize` comment still sets its own.
-fn compiler() -> Compiler {
-    Compiler::new().set_optimization_level(2)
-}
-
-/// Compile a script's source to run in `env`, or load its bytecode if it
-/// came compiled. Chunk names are full names, so errors read
+/// Compile a script's source to run in `env` (once per source, see
+/// [`bytecode`](crate::bytecode)), or load its bytecode if it came
+/// compiled. Chunk names are full names, so errors read
 /// `Workspace.Script:3: ...` as on Roblox.
 fn compile(lua: &Lua, id: InstanceId, env: Table) -> mlua::Result<Function> {
-    let (name, bytecode) = with_world(lua, |w| (w.dom.full_name(id), w.bytecode.get(&id).cloned()));
-    let chunk = match &bytecode {
-        Some(compiled) => {
-            if compiled.core {
-                core_envs(lua)?.raw_set(env.clone(), true)?;
-            }
-            lua.load(&compiled.code[..])
-                .set_mode(mlua::chunk::ChunkMode::Binary)
-        }
-        None => lua.load(source_of(lua, id)).set_compiler(compiler()),
+    let (name, came_compiled) =
+        with_world(lua, |w| (w.dom.full_name(id), w.bytecode.get(&id).cloned()));
+    if came_compiled.as_ref().is_some_and(|c| c.core) {
+        core_envs(lua)?.raw_set(env.clone(), true)?;
+    }
+    let source = came_compiled.is_none().then(|| source_of(lua, id));
+    let code = match (&came_compiled, &source) {
+        (Some(compiled), _) => Some(compiled.code.clone()),
+        (None, Some(source)) => bytecode::of(source),
+        (None, None) => None,
+    };
+    let chunk = match &code {
+        Some(code) => lua.load(&code[..]).set_mode(mlua::chunk::ChunkMode::Binary),
+        // It doesn't compile: the text reports why.
+        None => lua
+            .load(source.unwrap_or_default())
+            .set_compiler(bytecode::compiler()),
     };
     chunk
         .set_name(format!("={name}"))
@@ -304,7 +305,7 @@ fn run_in(lua: &Lua, chunk_name: &str, source: &str, env: Table) -> mlua::Result
     let f = lua
         .load(source)
         .set_name(format!("={chunk_name}"))
-        .set_compiler(compiler())
+        .set_compiler(bytecode::compiler())
         .set_environment(env)
         .into_function()?;
     spawn(lua, f, ())?;

@@ -103,3 +103,25 @@ fn reads_models_on_the_workers() {
         FailureKind::Invalid
     );
 }
+
+/// A model's scripts are handed to the script compiler on the worker that
+/// reads it, so requiring them later compiles nothing on the engine thread.
+#[test]
+fn compiles_models_scripts_on_the_workers() {
+    static SEEN: Mutex<Vec<String>> = Mutex::new(Vec::new());
+    set_script_compiler(|source| SEEN.lock().unwrap().push(source.to_owned()));
+    let dir = crate::tests::temp_dir("loader-model-scripts");
+    std::fs::create_dir_all(dir.join("content/models")).unwrap();
+    let xml = r#"<roblox version="4"><Item class="ModuleScript" referent="RBX0"><Properties><string name="Name">MainModule</string><ProtectedString name="Source">return "kit module"</ProtectedString></Properties><Item class="Part" referent="RBX1"><Properties><string name="Name">Handle</string></Properties></Item></Item></roblox>"#;
+    std::fs::write(dir.join("content/models/kit.rbxmx"), xml).unwrap();
+    let mut config = Config::empty();
+    config.install = Install::at(&dir, InstallKind::Custom);
+    let mut loader = Loader::new(Arc::new(Resolver::new(config)));
+    loader.request_as(ContentRef::File("models/kit.rbxmx".into()), Want::Model);
+    assert!(loader.wait_all()[0].1.is_ok());
+    let seen = SEEN.lock().unwrap();
+    assert!(
+        seen.iter().any(|s| s == r#"return "kit module""#),
+        "{seen:?}"
+    );
+}

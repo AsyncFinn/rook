@@ -267,6 +267,10 @@ fn decode(want: Want, mut fetched: Fetched) -> Outcome {
         Want::Model => {
             profiling::scope!("decode model");
             let model = rook_formats::load(&fetched.bytes).map_err(|e| invalid(&e))?;
+            if let Some(compile) = SCRIPT_COMPILER.get() {
+                profiling::scope!("compile model scripts");
+                model.script_sources().for_each(compile);
+            }
             fetched.model = Some(Arc::new(model));
         }
     }
@@ -323,6 +327,17 @@ static DECODE_THREADS: AtomicUsize = AtomicUsize::new(1);
 /// (it starts with the first decode).
 pub fn set_decode_threads(threads: usize) {
     DECODE_THREADS.store(threads.max(1), Ordering::Relaxed);
+}
+
+/// What compiles the scripts in the models workers read; nothing until
+/// the engine sets it.
+static SCRIPT_COMPILER: OnceLock<fn(&str)> = OnceLock::new();
+
+/// Have the decode workers hand each script source in the models they
+/// read ([`Want::Model`]) to `compile`, so running those scripts later
+/// compiles nothing on the engine thread. The first call sets it.
+pub fn set_script_compiler(compile: fn(&str)) {
+    _ = SCRIPT_COMPILER.set(compile);
 }
 
 /// Run the calling thread at below-normal priority, so background work

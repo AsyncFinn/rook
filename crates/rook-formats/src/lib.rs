@@ -22,7 +22,7 @@ mod retype;
 
 pub use compare::{CompareOptions, compare, compare_with};
 pub use compiled::{CompiledScript, compiled_scripts};
-pub use convert::{Converted, copy_into_dom, from_dom, into_dom};
+pub use convert::{Converted, Placing, Tree, copy_into_dom, from_dom, into_dom};
 
 use std::io::Cursor;
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -90,6 +90,23 @@ pub struct Loaded {
     pub dom: WeakDom,
     /// Set when the file needed the legacy XML upgrade pass to load.
     pub legacy: Option<legacy::LegacyUpgrade>,
+}
+
+impl Loaded {
+    /// The source of each script in the file (Scripts, LocalScripts and
+    /// ModuleScripts), for compiling ahead of running them.
+    pub fn script_sources(&self) -> impl Iterator<Item = &str> {
+        let source = "Source".into();
+        self.dom.descendants().filter_map(move |i| {
+            if !matches!(i.class.as_str(), "Script" | "LocalScript" | "ModuleScript") {
+                return None;
+            }
+            match i.properties.get(&source)? {
+                rbx_types::Variant::String(s) => Some(s.as_str()),
+                _ => None,
+            }
+        })
+    }
 }
 
 pub fn load(bytes: &[u8]) -> Result<Loaded, LoadError> {

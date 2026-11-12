@@ -171,6 +171,14 @@ struct Content {
     assets: FxHashMap<rook_content::Ticket, u64>,
     /// Loader tickets to the GUI's font files by asset id.
     fonts: FxHashMap<rook_content::Ticket, String>,
+    /// Models scripts loaded, going in a slice a frame in the order they
+    /// came (`frame::PLACED_PER_FRAME`): each request id, the Model its
+    /// script gets, and what's left to put in it.
+    placing: Vec<(
+        u64,
+        InstanceId,
+        rook_formats::Placing<Arc<rook_formats::Loaded>>,
+    )>,
     wait_for_sounds: bool,
 }
 
