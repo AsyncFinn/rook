@@ -382,7 +382,7 @@ impl Physics {
         let height = c.drive.standing_height;
         c.rising &= c
             .floor
-            .is_some_and(|f| f.y + height - root.position.y > states::LANDING);
+            .is_some_and(|f| f.y + height - root.position.y > states::STOOD_UP);
         c.climb = self.sense_climb(c, r.body, &root);
         c.water = self.water_surface(root.position);
     }

@@ -5,6 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- A character stepping down or landing falls with gravity until it reaches standing height, dips as deep as in Roblox and rises back without bouncing, and lands from as high above the floor as Roblox's does for its size. Rook's legs snapped it down faster and braked it before it touched, and it landed at one fixed height whatever the body. See [movement](docs/behavior/characters/movement.md#standing).
 - The first frame after a place loads no longer stalls: collision for the whole place and the window's draw targets are made while it loads. Rook made them in the first frame that used them, the mouse's first look or the first draw.
 - Parts moving over terrain no longer stall the server and client as terrain collision builds around them. Rook stalled longer with each piece of terrain it had built.
 - Changing a GUI object's text, image, name or order, or adding and removing items in a list, lays out only the part of the screen that can move with it. Rook laid out the whole ScreenGui again.

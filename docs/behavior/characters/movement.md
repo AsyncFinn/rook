@@ -1,6 +1,7 @@
 # Humanoid movement and states
 
-Checked against Studio 0.745 on 2026-11-06.
+Checked against Studio 0.745 on 2026-11-06; the legs and landing on
+2026-11-12.
 
 How a Humanoid stands, walks, jumps, climbs and swims, and its state
 machine: `rook_physics::humanoid` (the controller) and `rook_lua`'s
@@ -29,8 +30,25 @@ Workspace gravity 196.2. R6 steps were measured on a body from
 - Steps up to the root part's bottom (2 studs, on R15 and R6 alike) are
   walked up while Running, rising over about 0.25 s as the footprint
   moves onto them; a 2.5-stud step stops the torso.
-- Landing from a jump dips the root 0.38 below standing height, and it
-  springs back over about 0.2 s without overshooting much.
+- Above standing height the legs don't hold the root up. Gravity takes
+  it, and the legs pull it down at least as fast as 24 per second per
+  stud above, up to 2.727 times standing height per second: with
+  gravity off it comes down at a steady 8.20 for standing height 3.0075
+  (HipHeight 2), 13.64 for 5 and 9.55 for 3.5 (a 3-stud root), and from
+  0.4 above it reached only 7.8. With gravity, whichever is faster wins:
+  off a step the first frame came down as fast at gravity 20 as at 100,
+  and after that it gained gravity's pace, unbraked until it reached
+  standing height.
+- Landing dips the root about 0.0064 s times the landing speed below
+  standing height (0.09 at 14 studs/s, 0.14 at 24, 0.38 at 53 from a
+  jump, 0.69 at 108), and it comes back up without overshooting, what's
+  left of the dip shrinking about 43% a frame.
+- Freefall lands within 0.4 per stud of legs (HipHeight on R15), 0.13
+  per stud of root height and 0.05 above standing height: 1.11 for the
+  default R15 body (measured falling at 1 to 8 studs/s, HipHeight 0.5 to
+  4, root heights 1.4 to 3). Faster falls landed a frame either side of
+  that. Inference: R6's legs count as HipHeight (2 studs, so 1.11 too),
+  and its root as the root.
 - A floor that moves carries the character at once, whether it's a moving
   part or an anchored part with a velocity (a conveyor).
 
@@ -142,9 +160,16 @@ Workspace gravity 196.2. R6 steps were measured on a body from
   and its footprint's corners, to 2.5 studs below standing height; its
   height is the average of the hits. Inference: this matches the ledge,
   the steps and the slope.
-- The legs are a spring holding standing height, fitted to the landing
-  (stiffness 2450, damping 80); it pulls down as well as up, so a
-  character walking off a step lower than 2.5 studs follows it down.
+- Below standing height the legs are an overdamped spring with no
+  gravity (stiffness 2890, damping 119), fitted to the dips, the
+  recovery and the 0.3 lag up a slope at once. Above it, each step the
+  vertical speed over the floor takes whichever is faster of gravity's
+  step and closing on the legs' pull at the ground's rate.
+- Approximation: the legs act on a floor up to 2.5 studs below standing
+  height. Studio's let go nearer: with gravity off, a root of the default
+  body stood 1.9 above standing height was pulled down and 1.95 wasn't
+  (HipHeight 1: 1.0 and 1.2; HipHeight 4: 2.9 and 3.8; a 3-stud root:
+  1.95 and 2.05), and went to Freefall after 0.1 s.
 - While the controller holds a body upright it locks its tilt and applies
   gravity itself; FallingDown, Ragdoll, PlatformStanding, Seated, Physics
   and Dead leave the body to physics, so a vehicle pitches and falls with
@@ -170,8 +195,7 @@ Workspace gravity 196.2. R6 steps were measured on a body from
   Roblox's sensor isn't documented.
 - Swimming starts when the root's center is in a voxel of water (or a
   solid voxel's water), and floats toward 0.45 under the surface.
-- Approximations: Landed is taken within 0.5 studs of standing height
-  (Studio landed at 0.23, not at 0.88); Flying holds height and steers as in the air;
+- Approximations: Flying holds height and steers as in the air;
   RunningNoPhysics and StrafingNoPhysics act as Running.
 - Events: `StateChanged(old, new)`; `Jumping`, `FreeFalling`,
   `FallingDown`, `GettingUp`, `Ragdoll`, `PlatformStanding` and `Seated`

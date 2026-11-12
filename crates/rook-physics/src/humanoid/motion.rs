@@ -12,10 +12,21 @@ const GROUND_RATE: f32 = 235.0;
 /// (measured: 2.38 studs/s per frame turning a jump around).
 const AIR_ACCEL: f32 = 143.0;
 
-/// The legs: a spring holding the root at standing height (fitted to a
-/// landing's dip and recovery, and the lag up a slope).
-const STIFFNESS: f32 = 2450.0;
-const DAMPING: f32 = 80.0;
+/// The legs below standing height: an overdamped spring pushing the root
+/// up to it, with no gravity (measured: landing at 14 to 108 studs/s dips
+/// about 0.0064 s times that speed, what's left of the dip shrinks about
+/// 43% a frame, and the root lags 0.3 below walking up a 30° slope).
+const STIFFNESS: f32 = 2890.0;
+const DAMPING: f32 = 119.0;
+
+/// The legs above standing height don't hold the root up: gravity takes
+/// it, and they pull it down at least at this rate per stud above, up to
+/// `DESCENT_SPEED` times standing height per second (measured with gravity
+/// off: a constant 8.20 for standing height 3.0075, 13.64 for 5 and 9.55
+/// for 3.5, slower from within about a third of a stud; with gravity it
+/// falls faster than that, unbraked, until it reaches standing height).
+const DESCENT_RATE: f32 = 24.0;
+const DESCENT_SPEED: f32 = 2.727;
 
 /// AutoRotate: the turn closes at this rate per second, up to `MAX_TURN`
 /// radians per second (measured: the angle left shrinks 14% a frame, at
@@ -87,8 +98,13 @@ impl Physics {
                             let hv = want + (horizontal(v) - want) * keep;
                             v = glam::Vec3::new(hv.x, v.y, hv.z);
                         }
-                        let a = -DAMPING * (v.y - floor.velocity.y) - STIFFNESS * e;
-                        v.y += a * h;
+                        let rel = v.y - floor.velocity.y;
+                        let rel = if e > 0.0 {
+                            descend(rel, fall.y, e, c.drive.standing_height, h)
+                        } else {
+                            rel + (-DAMPING * rel - STIFFNESS * e) * h
+                        };
+                        v.y = floor.velocity.y + rel;
                     }
                     None => v = air(v, walk, h) + fall,
                 }
@@ -225,6 +241,22 @@ fn turned_about(pose: &Pose, offset: CFrame, spin: glam::Quat) -> Pose {
 fn air(v: glam::Vec3, want: glam::Vec3, h: f32) -> glam::Vec3 {
     let dv = (horizontal(want) - horizontal(v)).clamp_length_max(AIR_ACCEL * h);
     v + dv
+}
+
+/// One step of the legs `above` standing height: the vertical velocity
+/// over the floor, `rel`, goes down by whichever is faster, `fall`
+/// (gravity's step) or closing on the legs' pull at the ground's rate. So
+/// nothing brakes it before it lands (measured: off a step its first frame
+/// was as fast at gravity 20 as at 100, and after that it gains gravity's
+/// pace).
+fn descend(rel: f32, fall: f32, above: f32, standing_height: f32, h: f32) -> f32 {
+    let pull = -(DESCENT_RATE * above).min(DESCENT_SPEED * standing_height);
+    let pulled = if rel > pull {
+        pull + (rel - pull) * (-GROUND_RATE * h).exp()
+    } else {
+        rel
+    };
+    pulled.min(rel + fall)
 }
 
 /// Walking along the floor: the horizontal part of `walk` laid along the
