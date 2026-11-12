@@ -5,6 +5,8 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- An explosion leaves parts much larger than its blast alone, and its `Hit` handlers run before it breaks joints or pushes anything, as in Roblox. Rook hit, broke loose and pushed floors and platforms of any size, so a bomb on a building cut the whole building free instead of knocking out the bricks around it. See [explosions](docs/behavior/effects/explosions.md#the-blast).
+- An assembly's root part is its part with the biggest face, with a character's root part and torso counting extra, as in Roblox. Rook picked the part with the most volume, so equipping some Tools moved the character to the Tool. See [joints](docs/behavior/physics/joints.md#the-root-part).
 - Characters hold Tools in their right hand by a `RightGrip` weld, a left click fires `Activated` and `Deactivated`, Backspace drops the held Tool, touching a lying Tool picks it up, and `Equipped` passes its own Mouse, as in Roblox. Rook left equipped Tools loose in the character, and nothing but scripts could use, drop or pick them up. See [tools](docs/behavior/characters/tools.md).
 - Sound keeps playing smoothly while Rook's window is in the background. Rook's audio ran at normal priority, so it stuttered once another window was in front.
 - A character stepping down or landing falls with gravity until it reaches standing height, dips as deep as in Roblox and rises back without bouncing, and lands from as high above the floor as Roblox's does for its size. Rook's legs snapped it down faster and braked it before it touched, and it landed at one fixed height whatever the body. See [movement](docs/behavior/characters/movement.md#standing).

@@ -11,7 +11,9 @@ bombs, landmines), not saved in places.
 
 An Explosion goes off once, when it enters Workspace (Observed: `Hit`
 fired about one frame, 0.016 s, after the script parented it; not
-during the assignment). The server removes it 2.7 to 2.9 s later
+during the assignment). `Hit`'s handlers run before the blast breaks or
+pushes anything (Observed 2026-11-12: a handler sees a hit part's joints
+still there and its velocity 0). The server removes it 2.7 to 2.9 s later
 (Observed at 0.1 s resolution, `Visible` on or off); Rook removes it after
 2.75 s of its own time, so `TimeScale` 0 keeps it.
 
@@ -25,6 +27,14 @@ of a 2-stud cube fire nothing, 0.95 does (the nearest face is 0.9 away);
 a 0.5-stud cube around the same center is hit. Parts with `CanQuery` off
 aren't hit; `CanTouch` off doesn't matter; anchored parts are hit; Terrain
 fires nothing. `Hit` passes the part and its center's distance.
+
+**Large parts** (Observed 2026-11-12, radius 2, 4, 8 and 16): a part whose
+`Size` is 4 × `BlastRadius` long or more is left alone wherever it is: not
+hit, not pushed, and its joints stay. At radius 4 a 15.95-stud rod right by
+the explosion is hit and a 16.0 one isn't, a 9-stud cube is and a 10-stud
+one isn't, and a 16 × 0.4 × 16 plate 1.6 studs under it isn't. So a bomb on
+a brick wall knocks out the bricks around it and leaves the baseplate or
+platform they're joined to, and whatever else is joined to that, in place.
 
 **Joints** (Observed, `DestroyJointRadiusPercent` 0.5, radius 10): Weld,
 ManualWeld, Snap, Glue, Motor and Motor6D break (their `Parent` becomes
@@ -93,8 +103,8 @@ middle and reaching the middle of each edge) and a ring
 The server's blast is `rook_physics::Physics::blast` and `push`
 (`crates/rook-physics/src/explosion.rs`); the engine notices new
 Explosions at the end of a frame and sets them off in the next step
-(`crates/rook-engine/src/bridges/explosions.rs`), firing `Hit` after the
-step. The look is five bursts on the particle emitters
+(`crates/rook-engine/src/bridges/explosions.rs`), firing `Hit` before
+breaking the joints and pushing. The look is five bursts on the particle emitters
 (`crates/rook-scene/src/effects/explosion.rs`, Approximations fitted
 to the stages above):
 

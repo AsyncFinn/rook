@@ -9,7 +9,7 @@
 //!
 //! New Explosions are noticed at the end of a frame
 //! ([`DataModel::check_explosions`], before the journal is trimmed) and go
-//! off in the next one's step ([`DataModel::set_off_explosions`]).
+//! off before the next one's step ([`DataModel::set_off_explosions`]).
 
 use rustc_hash::FxHashSet;
 
@@ -73,12 +73,12 @@ impl DataModel {
         }
     }
 
-    /// Set off the Explosions waiting to go off, before the step:
-    /// break their joints and push what they hit. Returns their hits, to
-    /// fire `Hit` after the step.
-    pub(crate) fn set_off_explosions(&mut self) -> Vec<(InstanceId, rook_physics::Blast)> {
+    /// Set off the Explosions waiting to go off, before the step: fire
+    /// `Hit` for every part each one hits, with the part's distance, then
+    /// break their joints and push them (measured: `Hit`'s handlers still
+    /// see the joints and no push).
+    pub(crate) fn set_off_explosions(&mut self) {
         let pending = std::mem::take(&mut self.explosions.pending);
-        let mut blasts = Vec::new();
         for id in pending {
             let blast = {
                 let mut w = self.runtime.world_mut();
@@ -88,6 +88,12 @@ impl DataModel {
                 }
                 w.physics.blast(&mut w.dom, id)
             };
+            for &(part, distance) in &blast.hits {
+                if let Ok(part) = self.runtime.push_instance(part) {
+                    self.runtime
+                        .fire_event(id, "Hit", (part, f64::from(distance)));
+                }
+            }
             for &joint in &blast.joints {
                 self.runtime.destroy(joint);
             }
@@ -97,21 +103,6 @@ impl DataModel {
                 w.physics.push(&mut w.dom, &blast);
             }
             self.explosions.live.push((id, 0.0));
-            blasts.push((id, blast));
-        }
-        blasts
-    }
-
-    /// Fire each blast's `Hit` for every part it hit, with the part's
-    /// distance.
-    pub(crate) fn fire_explosion_hits(&self, blasts: Vec<(InstanceId, rook_physics::Blast)>) {
-        for (id, blast) in blasts {
-            for (part, distance) in blast.hits {
-                if let Ok(part) = self.runtime.push_instance(part) {
-                    self.runtime
-                        .fire_event(id, "Hit", (part, f64::from(distance)));
-                }
-            }
         }
     }
 

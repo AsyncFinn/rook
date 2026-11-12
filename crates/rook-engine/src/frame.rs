@@ -267,12 +267,10 @@ impl DataModel {
             // A client with no character: its world only answers queries.
             return;
         }
-        let blasts = if server {
+        if server {
             self.age_explosions(dt);
-            self.set_off_explosions()
-        } else {
-            Vec::new()
-        };
+            self.set_off_explosions();
+        }
         let (fallen, touches, reached, humanoids) = {
             let mut w = self.runtime.world_mut();
             let w = &mut *w;
@@ -291,7 +289,6 @@ impl DataModel {
             )
         };
         self.runtime.humanoids_stepped(humanoids);
-        self.fire_explosion_hits(blasts);
         // Both parts fire, the lower id first (observed: the part made
         // first fired first in Studio; the real order is unknown).
         for t in touches {

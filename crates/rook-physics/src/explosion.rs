@@ -3,8 +3,8 @@
 //! and the crater it leaves in Terrain.
 //!
 //! The engine carries a blast out in two halves: [`Physics::blast`] finds
-//! what the explosion does, the engine destroys the joints and fires
-//! `Hit`, and [`Physics::push`] then pushes the parts, now free of their
+//! what the explosion does, the engine fires `Hit` and destroys the
+//! joints, and [`Physics::push`] then pushes the parts, now free of their
 //! broken joints.
 
 use std::cell::RefCell;
@@ -19,6 +19,14 @@ use rustc_hash::FxHashMap;
 use crate::joints::{JointKind, part_joints};
 use crate::query::Filter;
 use crate::{Physics, shape};
+
+/// A part this many times `BlastRadius` across (the length of its `Size`)
+/// or more is left alone, however near: not hit, not pushed, its joints
+/// kept (measured at radius 2, 4, 8 and 16: a rod of length 15.95 is hit
+/// by radius 4 and one of 16.0 isn't, as are a 16 × 0.4 × 16 plate and a
+/// 10-stud cube right by the explosion). So a blast against a wall or a
+/// floor breaks off the bricks around it, not the slab they stand on.
+const TOO_LARGE: f32 = 4.0;
 
 /// A part's push per unit of `BlastPressure` and square stud of its size:
 /// the impulse is `BlastPressure × |Size|² × PUSH`, whatever its distance,
@@ -83,6 +91,9 @@ impl Physics {
                 let Some((size, at)) = size_and_position(dom, part) else {
                     continue;
                 };
+                if size.length() >= TOO_LARGE * radius {
+                    continue;
+                }
                 blast.hits.push((part, (at - center).length()));
                 if shielded(dom, part) {
                     continue;

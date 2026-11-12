@@ -455,18 +455,14 @@ pub(crate) fn is_massless(dom: &Dom, part: InstanceId) -> bool {
 }
 
 /// The root of an unanchored cluster (creator-docs "Assemblies"; order
-/// observed in Studio): non-Massless parts, then the highest RootPriority,
-/// then the largest part. Equal parts go to the newer one in Studio; Rook
-/// takes the highest id, which is usually the newer part (Approximation).
+/// measured in Studio, docs/behavior/physics/joints.md#the-root-part):
+/// non-Massless parts, then the highest RootPriority, then the largest
+/// [`root_size`]. Equal parts go to the newer one in Studio; Rook takes
+/// the highest id, which is usually the newer part (Approximation).
 fn root_of(dom: &Dom, parts: &[InstanceId]) -> InstanceId {
     let key = |p: InstanceId| {
         let priority = dom.number_property(p, "RootPriority").unwrap_or(0.0) as i32;
-        (
-            !is_massless(dom, p),
-            priority,
-            crate::part_volume(dom, p),
-            p,
-        )
+        (!is_massless(dom, p), priority, root_size(dom, p), p)
     };
     parts
         .iter()
@@ -477,4 +473,21 @@ fn root_of(dom: &Dom, parts: &[InstanceId]) -> InstanceId {
                 .unwrap_or(std::cmp::Ordering::Equal)
         })
         .expect("an assembly has a part")
+}
+
+/// How large `part` counts as when choosing a root (measured): the area of
+/// its largest face, ten times over for a part named `HumanoidRootPart`
+/// and five for `Torso`, so a character stays the root of what it holds.
+fn root_size(dom: &Dom, part: InstanceId) -> f32 {
+    let Some(size) = dom.vector3_property(part, "Size") else {
+        return 0.0;
+    };
+    // The two longest sides.
+    let face = (size.x * size.y).max(size.y * size.z).max(size.z * size.x);
+    let weight = match dom.name(part) {
+        "HumanoidRootPart" => 10.0,
+        "Torso" => 5.0,
+        _ => 1.0,
+    };
+    face * weight
 }
