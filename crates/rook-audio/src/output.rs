@@ -87,11 +87,15 @@ impl<K: Hash + Eq + Copy + Send + 'static> Output<K> {
         let stream = match format {
             cpal::SampleFormat::F32 => {
                 let mixer = mixer.clone();
+                let mut realtime = Realtime::default();
                 device.build_output_stream(
                     &config,
-                    move |data: &mut [f32], _: &cpal::OutputCallbackInfo| match mixer.lock() {
-                        Ok(mut m) => m.mix(data, channels),
-                        Err(_) => data.fill(0.0),
+                    move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+                        realtime.ensure();
+                        match mixer.lock() {
+                            Ok(mut m) => m.mix(data, channels),
+                            Err(_) => data.fill(0.0),
+                        }
                     },
                     error,
                     None,
@@ -100,9 +104,11 @@ impl<K: Hash + Eq + Copy + Send + 'static> Output<K> {
             cpal::SampleFormat::I16 => {
                 let mixer = mixer.clone();
                 let mut buffer = Vec::new();
+                let mut realtime = Realtime::default();
                 device.build_output_stream(
                     &config,
                     move |data: &mut [i16], _: &cpal::OutputCallbackInfo| {
+                        realtime.ensure();
                         buffer.resize(data.len(), 0.0);
                         match mixer.lock() {
                             Ok(mut m) => m.mix(&mut buffer, channels),
@@ -123,5 +129,40 @@ impl<K: Hash + Eq + Copy + Send + 'static> Output<K> {
         self.mixer = Some(mixer);
         self.stream = Some(stream);
         Ok(())
+    }
+}
+
+/// The device's callback thread, raised to real-time audio priority on its
+/// first callback. cpal leaves it at normal priority, where it competes
+/// with the game's own threads and anything else running: with the window
+/// in front Windows favors the process, but once it is tabbed out
+/// the callback misses its deadlines and the sound stutters. On Windows
+/// the thread joins MMCSS's "Pro Audio" task, as SDL's and PortAudio's
+/// WASAPI threads do; the registration ends with the thread, when the
+/// stream closes. Elsewhere the thread keeps its priority.
+#[derive(Default)]
+struct Realtime {
+    tried: bool,
+}
+
+impl Realtime {
+    #[allow(unsafe_code)]
+    fn ensure(&mut self) {
+        if std::mem::replace(&mut self.tried, true) {
+            return;
+        }
+        #[cfg(windows)]
+        {
+            use windows_sys::Win32::System::Threading::AvSetMmThreadCharacteristicsW;
+            let task: Vec<u16> = "Pro Audio".encode_utf16().chain([0]).collect();
+            let mut index = 0u32;
+            // SAFETY: `task` is a NUL-terminated UTF-16 string that outlives
+            // the call, and `index` is a valid u32 to write to. A failure
+            // (MMCSS service stopped) returns a null handle and leaves the
+            // thread at its priority.
+            unsafe {
+                AvSetMmThreadCharacteristicsW(task.as_ptr(), &mut index);
+            }
+        }
     }
 }

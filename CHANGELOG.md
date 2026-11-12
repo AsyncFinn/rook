@@ -5,6 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- Sound keeps playing smoothly while Rook's window is in the background. Rook's audio ran at normal priority, so it stuttered once another window was in front.
 - A character stepping down or landing falls with gravity until it reaches standing height, dips as deep as in Roblox and rises back without bouncing, and lands from as high above the floor as Roblox's does for its size. Rook's legs snapped it down faster and braked it before it touched, and it landed at one fixed height whatever the body. See [movement](docs/behavior/characters/movement.md#standing).
 - The first frame after a place loads no longer stalls: collision for the whole place, the terrain under its loose parts included, and the window's draw targets are made while it loads. Rook made them in the first frame that used them, the mouse's first look, the first physics step or the first draw.
 - Parts moving over terrain no longer stall the server and client as terrain collision builds around them. Rook stalled longer with each piece of terrain it had built.

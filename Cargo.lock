@@ -3648,6 +3648,7 @@ dependencies = [
  "rook-content",
  "rook-types",
  "rustc-hash 2.1.3",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
