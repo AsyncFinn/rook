@@ -5,6 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- Characters hold Tools in their right hand by a `RightGrip` weld, a left click fires `Activated` and `Deactivated`, Backspace drops the held Tool, touching a lying Tool picks it up, and `Equipped` passes its own Mouse, as in Roblox. Rook left equipped Tools loose in the character, and nothing but scripts could use, drop or pick them up. See [tools](docs/behavior/characters/tools.md).
 - Sound keeps playing smoothly while Rook's window is in the background. Rook's audio ran at normal priority, so it stuttered once another window was in front.
 - A character stepping down or landing falls with gravity until it reaches standing height, dips as deep as in Roblox and rises back without bouncing, and lands from as high above the floor as Roblox's does for its size. Rook's legs snapped it down faster and braked it before it touched, and it landed at one fixed height whatever the body. See [movement](docs/behavior/characters/movement.md#standing).
 - The first frame after a place loads no longer stalls: collision for the whole place, the terrain under its loose parts included, and the window's draw targets are made while it loads. Rook made them in the first frame that used them, the mouse's first look, the first physics step or the first draw.

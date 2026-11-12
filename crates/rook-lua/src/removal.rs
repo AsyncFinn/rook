@@ -6,6 +6,7 @@
 use mlua::Lua;
 use rook_dom::{DomError, InstanceId};
 
+use crate::api::methods::tools;
 use crate::ctx::with_world;
 use crate::signal::SignalKey;
 use crate::threads::dispatch;
@@ -19,6 +20,8 @@ fn step<R>(lua: &Lua, f: impl FnOnce(&mut rook_dom::Dom) -> R) -> R {
 }
 
 /// Set `id`'s Parent: `DescendantRemoving` before the move, the rest after.
+/// A Tool lets go of its grip before and takes one after
+/// (`methods::tools`).
 pub(crate) fn set_parent(
     lua: &Lua,
     id: InstanceId,
@@ -27,8 +30,13 @@ pub(crate) fn set_parent(
     if !with_world(lua, |w| w.dom.check_parent(id, parent))? {
         return Ok(());
     }
+    let tool = tools::before(lua, id, parent);
     announce(lua, id, parent);
-    step(lua, |dom| dom.move_announced(id, parent))
+    step(lua, |dom| dom.move_announced(id, parent))?;
+    if let Some(leaving) = tool {
+        tools::after(lua, id, leaving);
+    }
+    Ok(())
 }
 
 /// `Instance:Destroy()`: the Parent locks and `Destroying` fires, the

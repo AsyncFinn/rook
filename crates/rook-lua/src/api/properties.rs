@@ -14,6 +14,7 @@ use crate::api::methods::characters::spawning;
 use crate::types::color::closest_brick_color;
 
 mod attachment;
+mod grip;
 mod mouse;
 mod text;
 
@@ -253,6 +254,11 @@ pub(crate) fn get(w: &World, id: InstanceId, name: &str) -> Option<Value> {
     {
         return Some(v);
     }
+    if dom.is_a(id, "Tool")
+        && let Some(v) = grip::get(w, id, name)
+    {
+        return Some(v);
+    }
     if let Some(target) = view(w, id, name, SAME_AS) {
         return dom.property_by_name(id, target);
     }
@@ -435,6 +441,11 @@ pub(crate) fn set(
     }
     if w.dom.is_a(id, "Attachment")
         && let Some(done) = attachment::set(w, id, name, value)
+    {
+        return Some(done);
+    }
+    if w.dom.is_a(id, "Tool")
+        && let Some(done) = grip::set(w, id, name, value)
     {
         return Some(done);
     }

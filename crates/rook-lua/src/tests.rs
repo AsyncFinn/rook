@@ -881,6 +881,7 @@ mod descriptions;
 mod gui;
 mod models;
 mod parts;
+mod tools;
 mod tweens;
 
 /// Every level of a script's stack has the script's environment, as in

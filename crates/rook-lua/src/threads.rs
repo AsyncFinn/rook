@@ -377,6 +377,7 @@ pub(crate) fn dispatch(lua: &Lua, start: u64) {
     let mut destroyed: Vec<InstanceId> = Vec::new();
     for pos in start..end {
         let mut moved_focus = None;
+        let mut moved = None;
         let mut stopped = Vec::new();
         let firings = with_world(lua, |w| {
             let change = w.dom.journal().get(pos)?;
@@ -384,10 +385,12 @@ pub(crate) fn dispatch(lua: &Lua, start: u64) {
             match change {
                 Change::Destroyed(id) => destroyed.push(*id),
                 Change::Reparented {
+                    id,
                     subtree,
                     new_ancestors,
                     ..
                 } => {
+                    moved = Some(*id);
                     let left = new_ancestors.last() != Some(&w.dom.root());
                     moved_focus = (w.gui.focus())
                         .filter(|f| subtree.contains(f))
@@ -400,6 +403,9 @@ pub(crate) fn dispatch(lua: &Lua, start: u64) {
             }
             Some(crate::signal::expand(change, &w.signals, &w.dom))
         });
+        if let Some(id) = moved {
+            with_world(lua, |w| crate::api::methods::tools::retire_mice(w, id));
+        }
         for script in stopped {
             crate::api::scripts::stop_script(lua, script);
         }
@@ -455,7 +461,7 @@ fn firing_args(lua: &Lua, firing: &Firing) -> Option<Vec<LuaValue>> {
             vec![crate::api::instance::read_property(lua, firing.key.instance, "Health").ok()?]
         }
         FireArgs::Mouse => vec![
-            with_world(lua, |w| w.input.mouse_object)
+            crate::api::methods::tools::equipped_mouse(lua, firing.key.instance)
                 .and_then(inst)
                 .unwrap_or(LuaValue::Nil),
         ],

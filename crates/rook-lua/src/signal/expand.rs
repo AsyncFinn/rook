@@ -20,7 +20,7 @@ pub(crate) enum FireArgs {
     /// `Humanoid.HealthChanged(health)`, for a change of this property,
     /// which only applies when it's the health.
     Health(PropertyId),
-    /// `Tool.Equipped(mouse)`: the local player's Mouse on a client.
+    /// `Tool.Equipped(mouse)`: a new Mouse for the Tool.
     Mouse,
 }
 
@@ -43,8 +43,8 @@ pub(crate) struct Firing {
 /// fire only on ancestors the instance actually leaves or joins; an
 /// ancestor of both the old and new parent sees neither.
 ///
-/// A Tool moved into a model holding a Humanoid (a character) fires
-/// `Equipped`, and one moved out of it `Unequipped` (creator-docs Tool).
+/// A Tool a character comes to hold fires `Equipped` after its
+/// `AncestryChanged`, and one it stops holding `Unequipped` before.
 pub(crate) fn expand<H: Clone>(change: &Change, signals: &Signals<H>, dom: &Dom) -> Vec<Firing> {
     let mut out = Vec::new();
     let mut push = |instance: InstanceId, kind: SignalKind, args: FireArgs| {
@@ -128,15 +128,12 @@ pub(crate) fn expand<H: Clone>(change: &Change, signals: &Signals<H>, dom: &Dom)
             if let Some(p) = new_parent {
                 push(*p, SignalKind::Event("ChildAdded"), FireArgs::Instance(*id));
             }
-            if dom.is_a(*id, "Tool") {
-                let held = |parent: &Option<InstanceId>| {
-                    parent.is_some_and(|p| dom.children(p).iter().any(|c| dom.is_a(*c, "Humanoid")))
-                };
-                match (held(old_parent), held(new_parent)) {
-                    (false, true) => push(*id, SignalKind::Event("Equipped"), FireArgs::Mouse),
-                    (true, false) => push(*id, SignalKind::Event("Unequipped"), FireArgs::None),
-                    _ => {}
-                }
+            let held = |parent: &Option<InstanceId>| {
+                parent.is_some_and(|p| crate::api::methods::tools::holder_at(dom, *id, p).is_some())
+            };
+            let (was_held, now_held) = (held(old_parent), held(new_parent));
+            if was_held && !now_held {
+                push(*id, SignalKind::Event("Unequipped"), FireArgs::None);
             }
             for &ancestor in new_ancestors.iter().filter(|a| !old_ancestors.contains(a)) {
                 // One look per ancestor, not one per instance moved.
@@ -160,6 +157,9 @@ pub(crate) fn expand<H: Clone>(change: &Change, signals: &Signals<H>, dom: &Dom)
                         parent: *new_parent,
                     },
                 );
+            }
+            if now_held && !was_held {
+                push(*id, SignalKind::Event("Equipped"), FireArgs::Mouse);
             }
         }
     }

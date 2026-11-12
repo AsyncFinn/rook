@@ -12,7 +12,7 @@
 use rustc_hash::FxHashMap;
 
 use rook_dom::InstanceId;
-use rook_lua::{EffectCall, NetValue, RemoteKind, RemoteMessage};
+use rook_lua::{EffectCall, NetValue, RemoteKind, RemoteMessage, ToolActivation, ToolMove};
 use rook_net::{Sink, Snapshot, Source, Update};
 use rook_types::Value;
 
@@ -28,6 +28,9 @@ pub enum ToClient {
     /// Effect methods the server's scripts called (`ParticleEmitter:Emit`
     /// and the like), which show on every client.
     Effects(Vec<(InstanceId, EffectCall)>),
+    /// A server script activated a Tool this client's character holds:
+    /// it fires here too.
+    ActivateTool(ToolActivation),
 }
 
 /// From a client to the server, with the server's instance ids.
@@ -41,12 +44,18 @@ pub enum ToServer {
         event: &'static str,
     },
     /// The client's scripts moved one of its player's Tools between their
-    /// Backpack and character (equipping or unequipping it), which the
-    /// server repeats.
+    /// Backpack and character (equipping or unequipping it), or dropped
+    /// it, which the server repeats.
     MoveTool {
         tool: InstanceId,
         parent: InstanceId,
+        /// The grip the client made, by the client's own id: the server's
+        /// grip replicates as this one.
+        grip: Option<InstanceId>,
     },
+    /// A Tool the player's character holds was activated or deactivated
+    /// here: it fires on the server too.
+    ActivateTool(ToolActivation),
     /// Where the client's simulation put its character: the root part of
     /// the assembly, which the rest of it follows (network ownership).
     Pose {
@@ -299,6 +308,18 @@ impl ServerHost {
                 out.push((last, ToClient::Effects(calls)));
             }
         }
+        // A server script's activation reaches the client whose character
+        // holds the Tool.
+        for activation in self.server.runtime().take_tool_activations() {
+            let w = self.server.runtime().world();
+            let holder = w.dom.parent(activation.tool);
+            let client = self.clients.iter().position(|c| {
+                holder.is_some() && w.dom.ref_property(c.player, "Character") == holder
+            });
+            if let Some(i) = client {
+                out.push((i, ToClient::ActivateTool(activation)));
+            }
+        }
         let mut sends: Vec<(usize, RemoteKind)> = Vec::new();
         for msg in self.server.runtime().take_outbox() {
             let RemoteMessage { remote, kind, args } = msg;
@@ -407,9 +428,15 @@ impl ServerHost {
                     rt.drain_deferred();
                 }
             }
-            ToServer::MoveTool { tool, parent } => {
-                rt.repeat_tool_move(player, tool, parent);
+            ToServer::MoveTool { tool, parent, grip } => {
+                let made = rt.repeat_tool_move(player, tool, parent);
                 rt.drain_deferred();
+                if let (Some(server), Some(client)) = (made, grip) {
+                    self.clients[index].source.adopt(server, client);
+                }
+            }
+            ToServer::ActivateTool(activation) => {
+                rt.deliver_tool_activation(Some(player), activation);
             }
             ToServer::Pose {
                 part,
@@ -562,13 +589,23 @@ impl ClientHost {
     /// One frame of the client.
     pub fn step(&mut self) {
         self.client.step();
+        self.forget_freed();
         self.hover();
     }
 
     /// One frame of the client, `dt` seconds long.
     pub fn step_by(&mut self, dt: f64) {
         self.client.step_by(dt);
+        self.forget_freed();
         self.hover();
+    }
+
+    /// Copies the client's scripts destroyed and its trim freed are no
+    /// longer the server's instances' (their slots may be reused).
+    fn forget_freed(&mut self) {
+        for id in self.client.take_freed() {
+            self.sink.forget(id);
+        }
     }
 
     /// The mouse sees what's under it after the frame moved the camera and
@@ -614,6 +651,11 @@ impl ClientHost {
                     rt.fire_event(local, "CharacterAdded", ud);
                     rt.drain_deferred();
                     self.follow_character(character);
+                }
+            }
+            &ToClient::ActivateTool(activation) => {
+                if let Some(tool) = self.sink.client_id(activation.tool) {
+                    rt.deliver_tool_activation(None, ToolActivation { tool, ..activation });
                 }
             }
             ToClient::Effects(calls) => {
@@ -709,11 +751,19 @@ impl ClientHost {
             self.last_pose = Some(pose.clone());
             out.push(pose);
         }
-        for (tool, parent) in self.client.runtime().take_tool_moves() {
+        for ToolMove { tool, parent, grip } in self.client.runtime().take_tool_moves() {
             if let (Some(tool), Some(parent)) =
                 (self.sink.server_id(tool), self.sink.server_id(parent))
             {
-                out.push(ToServer::MoveTool { tool, parent });
+                out.push(ToServer::MoveTool { tool, parent, grip });
+            }
+        }
+        for activation in self.client.runtime().take_tool_activations() {
+            if let Some(tool) = self.sink.server_id(activation.tool) {
+                out.push(ToServer::ActivateTool(ToolActivation {
+                    tool,
+                    ..activation
+                }));
             }
         }
         for msg in self.client.runtime().take_outbox() {

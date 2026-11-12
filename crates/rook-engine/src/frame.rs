@@ -304,6 +304,9 @@ impl DataModel {
                 if server && t.began && is_spawn {
                     self.runtime.spawn_touched(part, other);
                 }
+                if server && t.began {
+                    self.runtime.tool_touched(part, other);
+                }
             }
         }
         for rocket in reached {

@@ -47,6 +47,14 @@ pub enum Update {
         parent: InstanceId,
         tree: Node,
     },
+    /// The client already made its own copy of server instance `server`,
+    /// which stands for it from now on: the `Place` that follows finds
+    /// it there. A client predicts what its own actions make (a Tool's
+    /// grip), so it has it without waiting a round trip.
+    Adopt {
+        server: InstanceId,
+        client: InstanceId,
+    },
     /// The instance left what this client sees (parented to nil or to a
     /// server-only container): it disappears on the client.
     Hide(InstanceId),

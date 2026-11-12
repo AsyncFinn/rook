@@ -31,6 +31,7 @@ pub use api::methods::characters::{
     Avatar, BuildRig, RigSource, RigType, Scales, character_root, humanoid_of_root, humanoid_root,
     root_part,
 };
+pub use api::methods::tools::{Activation as ToolActivation, ToolMove};
 pub use api::methods::web::{WebAnswer, WebRequest};
 pub use net::{NetValue, RemoteKind, RemoteMessage};
 pub use world::{
@@ -459,16 +460,59 @@ impl Runtime {
         std::mem::take(&mut self.world_mut().outbox)
     }
 
-    /// Tools the client's scripts moved between its player's Backpack and
-    /// character since the last call, with where each went.
-    pub fn take_tool_moves(&self) -> Vec<(InstanceId, InstanceId)> {
+    /// Tools the client's scripts moved or dropped since the last call.
+    pub fn take_tool_moves(&self) -> Vec<ToolMove> {
         std::mem::take(&mut self.world_mut().tool_moves)
     }
 
     /// On the server, repeat a Tool move `player`'s client made, if the
-    /// Tool is that player's.
-    pub fn repeat_tool_move(&self, player: InstanceId, tool: InstanceId, parent: InstanceId) {
-        self.guarded(|| api::methods::tools::repeat_move(&self.lua, player, tool, parent));
+    /// Tool is that player's. Returns the grip weld the server made for
+    /// it.
+    pub fn repeat_tool_move(
+        &self,
+        player: InstanceId,
+        tool: InstanceId,
+        parent: InstanceId,
+    ) -> Option<InstanceId> {
+        self.guarded(|| api::methods::tools::repeat_move(&self.lua, player, tool, parent))
+    }
+
+    /// Tool activations that fired here since the last call, for the other
+    /// side.
+    pub fn take_tool_activations(&self) -> Vec<ToolActivation> {
+        std::mem::take(&mut self.world_mut().tool_activations)
+    }
+
+    /// Fire an activation from the other side: on the server, from
+    /// `player`'s client, only of a Tool its character holds.
+    pub fn deliver_tool_activation(&self, player: Option<InstanceId>, activation: ToolActivation) {
+        self.guarded(|| {
+            api::methods::tools::deliver_activation(&self.lua, player, activation);
+            threads::drain_deferred(&self.lua);
+        });
+    }
+
+    /// The left button went down or up over the world, on a client: the
+    /// Tools the local character holds activate.
+    pub fn activate_tools(&self, down: bool) {
+        self.guarded(|| {
+            api::methods::tools::activate_held(&self.lua, down);
+            threads::drain_deferred(&self.lua);
+        });
+    }
+
+    /// Backspace on a client: the local character drops what it holds.
+    pub fn drop_tools(&self) {
+        self.guarded(|| {
+            api::methods::tools::drop_held(&self.lua);
+            threads::drain_deferred(&self.lua);
+        });
+    }
+
+    /// On the server, `part` began touching `other`: a Tool lying in the
+    /// world may be picked up.
+    pub fn tool_touched(&self, part: InstanceId, other: InstanceId) {
+        self.guarded(|| api::methods::tools::touched(&self.lua, part, other));
     }
 
     /// Deliver a RemoteEvent firing: `OnServerEvent(player, ...)` on a

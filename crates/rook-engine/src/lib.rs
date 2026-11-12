@@ -156,6 +156,9 @@ pub struct DataModel {
     web: web::Web,
     /// The player's settings, on a client given a file for them.
     user_settings: Option<user_settings::Kept>,
+    /// Instances a client's trims freed since [`DataModel::take_freed`]:
+    /// copies its scripts destroyed, which replication must forget.
+    freed: Vec<InstanceId>,
 }
 
 /// Content requests from scripts, resolved off the engine thread.
@@ -245,7 +248,15 @@ impl DataModel {
         let end = self.runtime.world().dom.journal().end();
         for id in self.runtime.trim_journal(end) {
             self.input.forget(id);
+            if self.role == Role::Client {
+                self.freed.push(id);
+            }
         }
+    }
+
+    /// The instances freed since the last call (clients only).
+    pub fn take_freed(&mut self) -> Vec<InstanceId> {
+        std::mem::take(&mut self.freed)
     }
 
     /// Every reader of the journal takes what it hasn't seen yet, noting
@@ -398,6 +409,7 @@ impl DataModel {
             explosions: Default::default(),
             web: Default::default(),
             user_settings: None,
+            freed: Vec::new(),
         })
     }
 

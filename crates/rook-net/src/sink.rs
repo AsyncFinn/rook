@@ -101,6 +101,31 @@ impl Sink {
         }
     }
 
+    /// The client freed `client`, a copy it destroyed itself: what the
+    /// server later says of the original no longer reaches its slot,
+    /// which a new instance may take.
+    pub fn forget(&mut self, client: InstanceId) {
+        if let Some(s) = self.to_server.remove(&client) {
+            self.to_client.remove(&s);
+        }
+        if self.waiting.is_empty() {
+            return;
+        }
+        let waiting_for = &mut self.waiting_for;
+        self.waiting.retain(|key, target| {
+            if key.0 != client {
+                return true;
+            }
+            if let Some(set) = waiting_for.get_mut(target) {
+                set.remove(key);
+                if set.is_empty() {
+                    waiting_for.remove(target);
+                }
+            }
+            false
+        });
+    }
+
     fn unmap_subtree(&mut self, client: &Dom, root: InstanceId) {
         let mut ids = vec![root];
         ids.extend(client.descendants(root));
@@ -180,10 +205,21 @@ impl Sink {
                     };
                     warn_failed(client.set_parent(c, Some(parent)), client, c, "parenting");
                 }
+                Update::Adopt { server, client: c } => {
+                    let free = client.get(*c).is_some_and(|i| !i.is_destroyed())
+                        && self.server_id(*c).is_none()
+                        && self.client_id(*server).is_none();
+                    if free {
+                        self.map(*server, *c);
+                    }
+                }
                 Update::Hide(id) | Update::Destroying(id) => {
                     if let Some(c) = self.client_id(*id) {
                         self.unmap_subtree(client, c);
-                        warn_failed(client.destroy(c), client, c, "destroying");
+                        // The client may have destroyed its copy itself.
+                        if !client.is_destroyed(c) {
+                            warn_failed(client.destroy(c), client, c, "destroying");
+                        }
                     }
                 }
                 Update::Name { id, name } => {

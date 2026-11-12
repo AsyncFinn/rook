@@ -108,6 +108,9 @@ pub struct InputState {
     pub mouse_delta: (f32, f32),
     /// The local player's Mouse (`Player:GetMouse()`).
     pub mouse_object: Option<InstanceId>,
+    /// The Mice `Equipped` passed for Tools the local character holds, by
+    /// Tool: they act as the PlayerMouse does, and fire before it.
+    pub tool_mice: Vec<(InstanceId, InstanceId)>,
 }
 
 /// A visual effect's or adornment's method a script called: what the
@@ -198,8 +201,10 @@ pub struct World {
     /// Remote calls waiting for the session to deliver them.
     pub outbox: Vec<crate::net::RemoteMessage>,
     /// Tools a client's scripts moved between its player's Backpack and
-    /// character, and where to, for the server to repeat.
-    pub(crate) tool_moves: Vec<(InstanceId, InstanceId)>,
+    /// character, or dropped, for the server to repeat.
+    pub(crate) tool_moves: Vec<crate::api::methods::tools::ToolMove>,
+    /// Tool activations that fired here, for the other side to fire.
+    pub(crate) tool_activations: Vec<crate::api::methods::tools::Activation>,
     /// ContentProvider requests waiting for the engine to resolve them.
     pub content: crate::api::methods::preload::ContentRequests,
     pub assets: crate::api::methods::assets::AssetRequests,
@@ -315,6 +320,7 @@ impl World {
             input: InputState::default(),
             outbox: Vec::new(),
             tool_moves: Vec::new(),
+            tool_activations: Vec::new(),
             content: Default::default(),
             assets: Default::default(),
             web: Default::default(),
@@ -389,7 +395,12 @@ impl World {
             .chain(self.audio.scheduled.iter().map(|s| s.player))
             .chain(self.local_sounds.iter().copied())
             .chain(self.effect_calls.iter().map(|(id, _)| *id))
-            .chain(self.tool_moves.iter().flat_map(|&(a, b)| [a, b]))
+            .chain(self.input.tool_mice.iter().map(|&(_, mouse)| mouse))
+            .chain(
+                (self.tool_moves.iter())
+                    .flat_map(|m| [Some(m.tool), Some(m.parent), m.grip].into_iter().flatten()),
+            )
+            .chain(self.tool_activations.iter().map(|a| a.tool))
             .chain(self.movement.held())
             .collect()
     }

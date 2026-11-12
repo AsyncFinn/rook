@@ -134,12 +134,8 @@ script calling `TakeDamage` every half second:
   gear relies on; Rook repeats only those moves, nothing else a client
   changes). Legacy server Scripts run in a player's Backpack, so gear
   connects `Equipped` before its first equip (Inference, as above).
-- `Tool.Equipped` gives the player's Mouse on the client and nil on the
-  server (Inference; the server's argument isn't measured), and fires
-  after the move, as does `Unequipped` (order not measured).
-- The tools are held nowhere: characters have no arms or grip yet
-  ([M9](../../roadmap/m9-characters.md) steps 1 and 7), so an equipped
-  tool sits in the character without moving.
+- How an equipped tool is held, used, dropped and picked up, and the
+  Mouse `Equipped` passes, are on [tools](../characters/tools.md).
 
 The positions above are from `--dump` and Rook's screenshot; they follow
 the script's constants, but haven't been compared with a Roblox
@@ -192,7 +188,7 @@ Behavior the health bar and backpack still miss, from characters
 ([M9](../../roadmap/m9-characters.md)): `Humanoid.Died` and death (the
 bar's dead state, the backpack clearing on respawn), regeneration,
 `Player:RequestTool` (behind a flag and engine feature Studio has off),
-dropping tools with Backspace, holding a tool by its grip, and gamepad
+and gamepad
 and touch selection (`GuiService.SelectedCoreObject` is read on every
 input and answers nil).
 

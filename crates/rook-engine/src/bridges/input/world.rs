@@ -135,7 +135,11 @@ impl DataModel {
         };
         if looked {
             let hit = hit.map(|h| (h.part, h.position));
-            self.write_mouse(mouse, (origin, dir, camera), hit);
+            // A held Tool's Mouse sees what the PlayerMouse does (Inference:
+            // its own TargetFilter isn't applied).
+            for m in self.mice() {
+                self.write_mouse(m, (origin, dir, camera), hit);
+            }
         }
 
         // Measured: a detector's hover goes on under an Active GUI object.

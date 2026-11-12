@@ -24,6 +24,7 @@
     - [Spawning and teams](behavior/characters/spawning.md): which spawn, where on it, team assignment, respawning
     - [Character ownership](behavior/characters/ownership.md): the client owns it, what the server sees
     - [Overhead names and health](behavior/characters/overhead.md): which show, how far, and how they look
+    - [Tools](behavior/characters/tools.md): the grip, equipping, activating, dropping and picking up, HopperBin
     - [Humanoid movement and states](behavior/characters/movement.md): standing, walking, jumping, climbing, swimming, MoveTo, the state machine
     - [The default camera and controls](behavior/characters/camera.md): Roblox's PlayerModule, the camera's subject, zoom and occlusion, the mouse, `Camera:Interpolate`
   - Content

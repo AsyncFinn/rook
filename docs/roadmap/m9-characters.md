@@ -144,13 +144,13 @@ the packages, as it does the CoreScripts, and never ships them (decided
      run, jump, fall, climb, swim, sit and hold tools with the Animate
      script. IK, layered animation and replication to other players are
      M11's.
-7. **Tools and the backpack**: Tool (scripts create one in 462 files),
+7. ✅ [**Tools and the backpack**](../behavior/characters/tools.md): Tool (scripts create one in 462 files),
    the handle held by `RightGripAttachment` or the legacy `Grip`,
    `RequiresHandle`, `CanBeDropped`, `ManualActivationOnly`, `Enabled`,
    `Equipped` with its Mouse, `Activated`, `Deactivated`, `EquipTool`
    (283 files) and `UnequipTools` (619), picking tools up by touch, and
-   the number keys. HopperBin as [decided](unscheduled.md#undecided)
-   before this step.
+   the number keys. HopperBin follows modern Roblox
+   ([tools](../behavior/characters/tools.md#hopperbin)).
    - *Studio questions*: the grip weld's name and parts, what equipping
      does to the Humanoid's arm, the order of `Equipped` and the tool's
      reparenting, and dropping with Backspace.

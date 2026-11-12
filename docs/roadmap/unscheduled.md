@@ -17,6 +17,3 @@ Each needs the milestones it builds on before it can start.
 
 ## Undecided
 
-- **HopperBin** (1,813 files): modern Roblox no longer runs it. Decide
-  before [M9 Characters](m9-characters.md)' tools step whether to follow
-  modern behavior or offer an extension.
