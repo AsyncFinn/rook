@@ -326,3 +326,35 @@ fn the_first_sync_builds_the_terrain_under_loose_parts() {
         "the first step built more"
     );
 }
+
+/// A ray builds the terrain it passes only up to where it hits: the
+/// chunks beyond wait for a query that reaches them.
+#[test]
+fn a_ray_builds_terrain_only_up_to_its_hit() {
+    let (mut dom, terrain) = world();
+    let mut physics = Physics::new();
+    let all = Filter::legacy_ray(Vec::new(), false);
+    // Along the voxels' row, through the lone voxel, both slabs and the
+    // water, from outside the lone voxel.
+    let hit = physics
+        .raycast(
+            &mut dom,
+            Vec3::new(-20.0, 42.0, 2.0),
+            Vec3::new(400.0, 0.0, 0.0),
+            &all,
+        )
+        .expect("hits the lone voxel");
+    assert_eq!(hit.part, terrain);
+    assert!(hit.position.x < 4.0, "{}", hit.position);
+    // The slabs' and the water's chunks on the ray's row.
+    for c in [IVec3::new(1, 0, 0), IVec3::new(2, 0, 0)] {
+        assert!(
+            physics.terrain.unbuilt.contains(&c),
+            "built {c} past the hit"
+        );
+    }
+    // A ray reaching them builds them.
+    let slab = Vec3::new(202.0, 60.0, 2.0);
+    let down = Vec3::new(0.0, -40.0, 0.0);
+    assert!(physics.raycast(&mut dom, slab, down, &all).is_some());
+}

@@ -77,23 +77,37 @@ impl Physics {
         self.build_wanted(want);
     }
 
-    /// Build the chunks a ray from `origin` along unit `dir` may hit in
-    /// `length` studs.
-    pub(crate) fn build_terrain_along(&mut self, origin: Vec3, dir: Vec3, length: f32) {
-        if self.terrain.unbuilt.is_empty() {
-            return;
+    /// The first terrain hit of a ray from `origin` along unit `dir` for
+    /// `length` studs, which `look(physics, upto)` finds among the built
+    /// chunks up to `upto` studs along. The chunks the ray passes are
+    /// built nearest first, and only until a hit: before each piece of
+    /// the ray with chunks to build, every chunk that can reach the ray
+    /// nearer than that piece is built, so a hit there is the first and
+    /// nothing further is built. A ray that meets the ground builds a
+    /// chunk or two, not every chunk along it.
+    pub(crate) fn first_terrain_along<T>(
+        &mut self,
+        (origin, dir, length): (Vec3, Vec3, f32),
+        mut look: impl FnMut(&Self, f32) -> Option<T>,
+    ) -> Option<T> {
+        if !self.terrain.unbuilt.is_empty()
+            && let Some((mut t, end)) = self.terrain.clip(origin, dir, length)
+        {
+            let mut want = Vec::new();
+            while t < end {
+                let next = (t + STEP).min(end);
+                let (a, b) = (origin + dir * t, origin + dir * next);
+                self.terrain.unbuilt_in(a.min(b), a.max(b), &mut want);
+                if !want.is_empty() {
+                    if let Some(hit) = look(self, t) {
+                        return Some(hit);
+                    }
+                    self.build_wanted(std::mem::take(&mut want));
+                }
+                t = next;
+            }
         }
-        let Some((mut t, end)) = self.terrain.clip(origin, dir, length) else {
-            return;
-        };
-        let mut want = Vec::new();
-        while t < end {
-            let next = (t + STEP).min(end);
-            let (a, b) = (origin + dir * t, origin + dir * next);
-            self.terrain.unbuilt_in(a.min(b), a.max(b), &mut want);
-            t = next;
-        }
-        self.build_wanted(want);
+        look(self, length)
     }
 
     /// Before a step of `dt` seconds: build the chunks every moving body

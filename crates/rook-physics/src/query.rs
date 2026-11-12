@@ -191,7 +191,6 @@ impl Physics {
         }
         let dir = direction / length;
         let max = length.min(MAX_RAY_LENGTH);
-        self.build_terrain_along(origin, dir, max);
         let ray = Ray::new(origin, dir);
         let accept = self.part_filter(dom, filter);
         // Parts: the nearest hit, found nearest first so the search stops
@@ -212,20 +211,17 @@ impl Physics {
             .query_pipeline_with_filter(QueryFilter::new().predicate(&part_ok))
             .cast_ray_and_get_normal(&ray, max, true)
             .and_then(|(h, hit)| Some((h, *self.colliders.get(&h)?, hit)));
+        drop(accept);
         // Terrain is a surface, hit only from outside, and only nearer
-        // than the part hit.
+        // than the part hit: its chunks are built only that far.
         let reach = parts.map_or(max, |(.., hit)| hit.time_of_impact);
-        let is_terrain = |h: ColliderHandle, _: &Collider| self.terrain.material(h).is_some();
-        let terrain = self
-            .world
-            .query_pipeline_with_filter(QueryFilter::new().predicate(&is_terrain))
-            .intersect_ray(ray, reach, true)
-            .filter_map(|(h, ..)| {
-                let hit = self.terrain_ray(h, &ray, reach)?;
-                Some((h, accept(h)?, hit))
+        let terrain = if self.accepts_terrain(dom, filter) {
+            self.first_terrain_along((origin, dir, reach), |physics, upto| {
+                physics.terrain_hit(dom, filter, &ray, upto)
             })
-            .filter(|(.., hit)| hit.time_of_impact > 0.0)
-            .min_by(|a, b| a.2.time_of_impact.total_cmp(&b.2.time_of_impact));
+        } else {
+            None
+        };
         let (h, part, hit) = terrain.or(parts)?;
         let distance = hit.time_of_impact;
         Some(Hit {
@@ -235,6 +231,34 @@ impl Physics {
             distance,
             material: self.material_of(dom, h, part),
         })
+    }
+
+    /// Whether `filter` lets a query see the Terrain at all.
+    fn accepts_terrain(&self, dom: &Dom, filter: &Filter) -> bool {
+        (self.terrain.instance)
+            .is_some_and(|t| self.accepting(dom, filter).is_some_and(|a| a.accepts(t)))
+    }
+
+    /// The nearest built terrain surface `ray` hits from outside within
+    /// `max` studs that `filter` accepts.
+    fn terrain_hit(
+        &self,
+        dom: &Dom,
+        filter: &Filter,
+        ray: &Ray,
+        max: f32,
+    ) -> Option<(ColliderHandle, InstanceId, RayIntersection)> {
+        let accept = self.part_filter(dom, filter);
+        let is_terrain = |h: ColliderHandle, _: &Collider| self.terrain.material(h).is_some();
+        self.world
+            .query_pipeline_with_filter(QueryFilter::new().predicate(&is_terrain))
+            .intersect_ray(*ray, max, true)
+            .filter_map(|(h, ..)| {
+                let hit = self.terrain_ray(h, ray, max)?;
+                Some((h, accept(h)?, hit))
+            })
+            .filter(|(.., hit)| hit.time_of_impact > 0.0)
+            .min_by(|a, b| a.2.time_of_impact.total_cmp(&b.2.time_of_impact))
     }
 
     /// The first part a shape at `cframe` hits moving along `direction`
@@ -478,25 +502,43 @@ impl Physics {
         let aabb = shape.compute_aabb(&pose);
         let center = pose.translation;
         self.build_terrain_in(aabb.mins, aabb.maxs);
-        self.build_terrain_along(center, Vec3::Y, MAX_RAY_LENGTH);
-        let mut found: Vec<InstanceId> = self
+        // Solid terrain counts whatever the part's CanCollide, and so does
+        // a part inside it (observed); water doesn't.
+        let mut buried_in = None;
+        let mut found: Vec<InstanceId> = Vec::new();
+        for (h, co) in self
             .world
             .query_pipeline()
             .intersect_aabb_conservative(aabb)
-            .filter_map(|(h, co)| {
-                let other = *self.colliders.get(&h)?;
-                match self.terrain.material(h) {
-                    // Solid terrain counts whatever the part's CanCollide,
-                    // and so does a part inside it (observed); water doesn't.
-                    Some(_) => (!self.terrain.is_water(h)
-                        && (overlaps(&*shape, &pose, co) || self.inside_terrain(center)))
-                    .then_some(other),
-                    None => (others.is_some_and(|all| other != part && (all || collides(other)))
-                        && overlaps(&*shape, &pose, co))
-                    .then_some(other),
+        {
+            let Some(&other) = self.colliders.get(&h) else {
+                continue;
+            };
+            let touching = match self.terrain.material(h) {
+                Some(_) if self.terrain.is_water(h) => false,
+                Some(_) => {
+                    let touching = overlaps(&*shape, &pose, co);
+                    if !touching {
+                        buried_in = Some(other);
+                    }
+                    touching
                 }
-            })
-            .collect();
+                None => {
+                    others.is_some_and(|all| other != part && (all || collides(other)))
+                        && overlaps(&*shape, &pose, co)
+                }
+            };
+            if touching {
+                found.push(other);
+            }
+        }
+        // Only a piece of terrain around it that it doesn't touch asks
+        // whether it's inside, which looks up from it.
+        if let Some(terrain) = buried_in
+            && self.inside_terrain(center)
+        {
+            found.push(terrain);
+        }
         found.sort_unstable();
         found.dedup();
         found

@@ -1,6 +1,6 @@
 # Humanoid movement and states
 
-Checked against Studio 0.745 on 2026-11-06, the legs and landing on
+Checked against Studio 0.745 on 2026-11-06; the legs and landing on
 2026-11-12.
 
 How a Humanoid stands, walks, jumps, climbs and swims, and its state
