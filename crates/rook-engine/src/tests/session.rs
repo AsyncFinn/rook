@@ -517,3 +517,26 @@ fn the_mouse_looks_again_only_when_something_changed() {
     assert_eq!(target_z(&session), -20.0);
     assert!(lines(session.client(index).unwrap()).is_empty());
 }
+
+/// Server and client build their physics world as they start, so the
+/// first query (a script's first ray, the client's first mouse ray)
+/// doesn't build it in a frame.
+#[test]
+fn the_physics_world_is_built_while_loading() {
+    let mut server = Server::new(&Options::default()).unwrap();
+    add_script(
+        &server,
+        "ServerScriptService",
+        "Main",
+        "game.Players.CharacterAutoLoads = false",
+    );
+    server.start();
+    let built = |dm: &DataModel| dm.runtime().world().physics.is_built();
+    assert!(built(&server), "the server's world isn't built");
+    let mut session = Session::new(server, Options::default());
+    let index = session.join("Loader", 8).unwrap();
+    assert!(
+        built(session.client(index).unwrap()),
+        "the client's world isn't built"
+    );
+}

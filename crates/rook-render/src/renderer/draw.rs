@@ -31,6 +31,14 @@ impl Renderer {
             .upload(&self.device, &self.queue, camera, view, margin)
     }
 
+    /// Make the targets a `width` × `height` frame draws into, as a
+    /// surface is configured: a frame at a new size otherwise makes them
+    /// itself, and a driver can take a long time over the first ones.
+    pub fn size_targets(&mut self, width: u32, height: u32) {
+        self.depth_view(width, height);
+        self.tonemap.frame(&self.device, width, height);
+    }
+
     fn depth_view(&mut self, width: u32, height: u32) -> wgpu::TextureView {
         if let Some((_, view, w, h)) = &self.depth
             && *w == width

@@ -5,6 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- The first frame after a place loads no longer stalls: collision for the whole place and the window's draw targets are made while it loads. Rook made them in the first frame that used them, the mouse's first look or the first draw.
 - Parts moving over terrain no longer stall the server and client as terrain collision builds around them. Rook stalled longer with each piece of terrain it had built.
 - Changing a GUI object's text, image, name or order, or adding and removing items in a list, lays out only the part of the screen that can move with it. Rook laid out the whole ScreenGui again.
 - A model a script loads with `require` or `InsertService:LoadAsset` is read and its scripts compiled off the frame, and its instances go in over several frames, so loading a large one no longer freezes the game. Rook did all of it in the frame that got the file. Each script source is compiled once however many copies of it run; Rook compiled it again for every script that started.

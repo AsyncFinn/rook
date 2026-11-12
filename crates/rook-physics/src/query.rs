@@ -88,8 +88,9 @@ pub enum CastShape {
 
 impl Physics {
     /// Bring the world up to the current DOM for a query (see the module
-    /// docs).
-    pub(crate) fn prepare(&mut self, dom: &mut Dom) {
+    /// docs). The first call builds the whole world and its query tree, so
+    /// a DataModel makes it while loading rather than at its first query.
+    pub fn prepare(&mut self, dom: &mut Dom) {
         profiling::scope!("Physics::prepare_query");
         self.sync(dom);
         let terrain_placed = std::mem::take(&mut self.terrain_placed);

@@ -8,7 +8,17 @@ impl DataModel {
     /// A script enabled by one that ran before it in this pass (a game's
     /// loader setting its tagged scripts' `Disabled` to false) starts
     /// after the pass, as one enabled at any other time does.
+    ///
+    /// The physics world is built first, as part of loading, as engines
+    /// build a level's collision when it loads: otherwise the first query
+    /// (a client's first mouse ray, a script's first raycast) builds it in
+    /// a frame.
     pub fn start(&mut self) {
+        {
+            let mut w = self.runtime.world_mut();
+            let w = &mut *w;
+            w.physics.prepare(&mut w.dom);
+        }
         let root = self.runtime.world().dom.root();
         self.new_scripts = NewScripts::starting_at(self.runtime.world().dom.journal().end());
         self.start_scripts_under(root);
