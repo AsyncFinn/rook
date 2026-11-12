@@ -452,7 +452,8 @@ impl Physics {
     }
 
     /// Bring the world up to date with the DOM: on the first call, add
-    /// every Workspace part; after that, apply the journal since last time.
+    /// every Workspace part and build the terrain each loose one may
+    /// touch; after that, apply the journal since last time.
     /// Parts are snapped to where their joints hold them.
     pub fn sync(&mut self, dom: &mut Dom) {
         profiling::scope!("Physics::sync");
@@ -463,7 +464,8 @@ impl Physics {
             return;
         };
         rook_types::gauge!(PhysicsParts, self.parts.len());
-        if !self.built {
+        let first = !self.built;
+        if first {
             self.handed_over.clear();
             self.build(dom, &props);
         } else {
@@ -474,6 +476,11 @@ impl Physics {
             self.rebuild(dom, &props, handed_over);
         }
         self.refresh_terrain(dom);
+        if first {
+            // The terrain under the place's loose parts, which their first
+            // step would otherwise build all at once.
+            self.build_terrain_near_bodies(0.0);
+        }
         let dirty = std::mem::take(&mut self.dirty);
         self.refresh_constraints(dom, &dirty);
         self.refresh_movers(dom, &dirty);

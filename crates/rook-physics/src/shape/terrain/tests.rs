@@ -292,3 +292,37 @@ fn terrain_colliders_are_weightless() {
         assert_eq!(physics.world.colliders[*collider].mass(), 0.0);
     }
 }
+
+/// The first sync builds the terrain under the place's loose parts, so
+/// their first step doesn't build it all in one frame; terrain no loose
+/// part reaches still waits.
+#[test]
+fn the_first_sync_builds_the_terrain_under_loose_parts() {
+    let (mut dom, _) = world();
+    part(
+        &mut dom,
+        "Part",
+        Vec3::new(102.0, 46.5, 2.0),
+        Vec3::new(2.0, 1.0, 2.0),
+        false,
+    );
+    part(
+        &mut dom,
+        "Part",
+        Vec3::new(202.0, 44.5, 2.0),
+        Vec3::new(2.0, 1.0, 2.0),
+        true,
+    );
+    let mut physics = Physics::new();
+    physics.sync(&mut dom);
+    let built = physics.terrain.pieces.len();
+    assert!(built > 0, "nothing built under the loose part");
+    assert!(!physics.terrain.unbuilt.is_empty(), "built everything");
+    physics.sync(&mut dom);
+    physics.step(1.0 / 60.0);
+    assert_eq!(
+        physics.terrain.pieces.len(),
+        built,
+        "the first step built more"
+    );
+}

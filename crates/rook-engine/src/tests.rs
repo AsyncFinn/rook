@@ -162,10 +162,12 @@ fn install_options(dir: &std::path::Path) -> Options {
     }
 }
 
-/// Step until `done` holds (content resolves on other threads).
+/// Step until `done` holds (content resolves on other threads, which a
+/// busy machine can hold up for seconds), or give up after a while.
 fn step_until(dm: &mut DataModel, mut done: impl FnMut(&[String]) -> bool) -> Vec<String> {
     let mut out = Vec::new();
-    for _ in 0..500 {
+    let give_up = std::time::Instant::now() + Duration::from_secs(30);
+    while std::time::Instant::now() < give_up {
         dm.step();
         out.extend(lines(dm));
         if done(&out) {
