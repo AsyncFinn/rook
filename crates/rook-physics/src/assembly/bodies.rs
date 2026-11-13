@@ -374,7 +374,9 @@ impl Physics {
             .parent()
             .and_then(|b| self.world.bodies.get(b))
             .map_or(0, |rb| rb.user_data);
-        let flying = c.parent().is_some_and(|b| self.flying.contains(&b));
+        let flying = c
+            .parent()
+            .is_some_and(|b| self.flying.contains(&b) || self.landed.contains(&b));
         let hooks = if flying {
             ActiveHooks::MODIFY_SOLVER_CONTACTS
         } else {

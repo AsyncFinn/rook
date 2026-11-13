@@ -76,13 +76,35 @@ fn land_as_one(contacts: &mut Vec<SolverContact>) {
     contacts.push(one);
 }
 
-/// Sets each contact's friction and elasticity to the two parts' values
-/// averaged by their weights (measured in Studio), and makes anchored parts
-/// with a velocity carry what touches them along.
-pub(crate) struct Mixer;
+/// How deep a falling body's contact may sink before it pushes back, in
+/// studs (docs/behavior/physics/landing.md#grazing-an-edge). In Studio a
+/// ball falling past a brick that overlaps its edge by a few thousandths
+/// drops straight past it, and by 0.06 or more catches it and spins away.
+/// Rapier stops any overlap, and within a step it extends a contact along
+/// a straight line, so a ball passing an edge looks deeper in than it ever
+/// gets: 0.05 lets every graze Studio ignores through.
+const SKIN: f32 = 0.05;
 
-impl PhysicsHooks for Mixer {
+/// Sets each contact's friction and elasticity to the two parts' values
+/// averaged by their weights (measured in Studio), makes anchored parts
+/// with a velocity carry what touches them along, and lets a falling
+/// body's contacts sink [`SKIN`] deep before they push back. A body that
+/// has just landed keeps the hook one step more without the skin
+/// (`Physics::landed`), so the contacts Rapier goes on reusing are plain.
+pub(crate) struct Mixer<'a> {
+    /// [`crate::Physics::flying`]: the bodies only gravity moved.
+    pub(crate) flying: &'a FxHashSet<RigidBodyHandle>,
+}
+
+impl Mixer<'_> {
+    fn is_flying(&self, body: Option<RigidBodyHandle>) -> bool {
+        body.is_some_and(|b| self.flying.contains(&b))
+    }
+}
+
+impl PhysicsHooks for Mixer<'_> {
     fn modify_solver_contacts(&self, context: &mut ContactModificationContext) {
+        let falling = self.is_flying(context.rigid_body1) || self.is_flying(context.rigid_body2);
         let [f1, fw1, e1, ew1] = unpack(context.colliders[context.collider1].user_data);
         let [f2, fw2, e2, ew2] = unpack(context.colliders[context.collider2].user_data);
         let belt = surface_velocity(context, context.rigid_body1)
@@ -92,6 +114,11 @@ impl PhysicsHooks for Mixer {
             *m.restitution = mix(e1, ew1, e2, ew2);
             if *m.restitution > 0.0 {
                 land_as_one(m.solver_contacts);
+            }
+            if falling {
+                for c in m.solver_contacts.iter_mut() {
+                    c.dist += SKIN;
+                }
             }
             if belt != Vector::ZERO {
                 let n = *m.normal;

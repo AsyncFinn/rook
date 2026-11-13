@@ -415,3 +415,49 @@ fn a_box_dropped_flat_lands_flat() {
         assert!(most < 2.0, "{size} from {height} leaned {most} degrees");
     }
 }
+
+/// Measured: a 2-stud ball dropped past a brick's edge drops straight when
+/// it misses the brick or overlaps its edge by a few thousandths, and
+/// catches the edge and rolls away when it overlaps by 0.06 or more (in
+/// between it depends on where the steps fall, in Studio too).
+#[test]
+fn a_ball_falling_past_an_edge_only_feels_a_real_hit() {
+    let drift = |overlap: f32| {
+        let mut dom = Dom::new();
+        floor(&mut dom);
+        // The brick's +X face at x = -1, its top at y = 2.
+        part(
+            &mut dom,
+            Vec3::new(-2.0, 1.25, 0.0),
+            Vec3::new(2.0, 1.5, 4.0),
+            true,
+        );
+        let start = Vec3::new(-overlap, 7.0, 0.0);
+        let ball = part(&mut dom, start, Vec3::splat(2.0), false);
+        set(&mut dom, ball, "Shape", Value::Enum(0));
+        let mut physics = Physics::new();
+        super::run(&mut physics, &mut dom, 1.5);
+        position(&dom, ball).x - start.x
+    };
+    for overlap in [-0.01, 0.0036] {
+        let d = drift(overlap);
+        assert!(d.abs() < 0.1, "overlap {overlap}: rolled {d}");
+    }
+    let d = drift(0.2);
+    assert!(d > 5.0, "overlap 0.2: rolled only {d}");
+}
+
+/// A landing part comes to rest on the floor's surface as before, not
+/// [`SKIN`](crate::contacts) deep: Rapier reuses the contacts the falling
+/// part's hook made once the hook is off, unless one step without the
+/// skin made them again.
+#[test]
+fn landed_parts_rest_on_the_surface() {
+    let mut dom = Dom::new();
+    floor(&mut dom);
+    let b = block(&mut dom, Vec3::new(0.0, 6.0, 0.0), false);
+    let mut physics = Physics::new();
+    super::run(&mut physics, &mut dom, 3.0);
+    let depth = 1.5 - position(&dom, b).y;
+    assert!(depth < 0.01, "rests {depth} deep");
+}

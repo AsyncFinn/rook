@@ -51,7 +51,10 @@ impl Physics {
                 let rb = &self.world.bodies[handle];
                 self.before_step.push((handle, rb.linvel(), rb.angvel()));
             }
-            self.world.step_with_events(&contacts::Mixer, &events);
+            let mixer = contacts::Mixer {
+                flying: &self.flying,
+            };
+            self.world.step_with_events(&mixer, &events);
             self.keep_accelerating_awake(h);
             self.notice_flight(h);
             self.update_humanoids(h);
@@ -120,9 +123,11 @@ impl Physics {
     /// Keep [`Physics::flying`]: the bodies only gravity moved over the step
     /// just taken. A body on anything feels its push too, so one at rest or
     /// driving along costs nothing here, and keeps Rapier's contact reuse.
+    /// A body that stops flying keeps its hooks one step more
+    /// ([`Physics::landed`]).
     fn notice_flight(&mut self, h: f32) {
-        let bodies = &self.world.bodies;
-        self.flying.retain(|&b| bodies.get(b).is_some());
+        self.flying.retain(|&b| self.world.bodies.get(b).is_some());
+        let mut changed = std::mem::take(&mut self.landed);
         let fall = self.world.gravity * h;
         for i in 0..self.before_step.len() {
             let (handle, v, _) = self.before_step[i];
@@ -136,13 +141,19 @@ impl Physics {
             if flying == self.flying.contains(&handle) {
                 continue;
             }
-            let colliders = rb.colliders().to_vec();
             if flying {
                 self.flying.insert(handle);
+                changed.push(handle);
             } else {
                 self.flying.remove(&handle);
+                self.landed.push(handle);
             }
-            for c in colliders {
+        }
+        for handle in changed.into_iter().chain(self.landed.clone()) {
+            let Some(rb) = self.world.bodies.get(handle) else {
+                continue;
+            };
+            for c in rb.colliders().to_vec() {
                 self.set_hooks(c);
             }
         }

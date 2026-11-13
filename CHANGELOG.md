@@ -5,6 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- A falling part that brushes past an edge it barely overlaps or just misses drops straight past it, as in Roblox. Rook gave it a sideways shove and spin, so a ball dropped beside a wall rolled away from it. See [landing](docs/behavior/physics/landing.md#grazing-an-edge).
 - An explosion leaves parts much larger than its blast alone, and its `Hit` handlers run before it breaks joints or pushes anything, as in Roblox. Rook hit, broke loose and pushed floors and platforms of any size, so a bomb on a building cut the whole building free instead of knocking out the bricks around it. See [explosions](docs/behavior/effects/explosions.md#the-blast).
 - An assembly's root part is its part with the biggest face, with a character's root part and torso counting extra, as in Roblox. Rook picked the part with the most volume, so equipping some Tools moved the character to the Tool. See [joints](docs/behavior/physics/joints.md#the-root-part).
 - Characters hold Tools in their right hand by a `RightGrip` weld, a left click fires `Activated` and `Deactivated`, Backspace drops the held Tool, touching a lying Tool picks it up, and `Equipped` passes its own Mouse, as in Roblox. Rook left equipped Tools loose in the character, and nothing but scripts could use, drop or pick them up. See [tools](docs/behavior/characters/tools.md).

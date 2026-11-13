@@ -182,6 +182,11 @@ pub struct Physics {
     /// Bodies gravity alone moved over the last step, about to land if
     /// they land at all: only these pay for [`contacts::Mixer`].
     flying: FxHashSet<RigidBodyHandle>,
+    /// Bodies that stopped flying over the last step. They keep
+    /// [`contacts::Mixer`] one step more, so the contacts Rapier goes on
+    /// reusing once it's off are ones it made without the falling body's
+    /// changes.
+    landed: Vec<RigidBodyHandle>,
     /// Which part each collider belongs to.
     pub(crate) colliders: FxHashMap<ColliderHandle, InstanceId>,
     groups: CollisionGroups,
@@ -288,6 +293,7 @@ impl Physics {
             awake: Vec::new(),
             before_step: Vec::new(),
             flying: FxHashSet::default(),
+            landed: Vec::new(),
             colliders: FxHashMap::default(),
             groups: CollisionGroups::default(),
             touches_use_groups: false,
