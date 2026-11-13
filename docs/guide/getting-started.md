@@ -37,6 +37,7 @@ rook-player place.rbxl --camera 0,500,0.01 --look-at 0,0,0 --fov 20 --screenshot
 rook-player place.rbxl --seconds 5 --screenshot out.png   # run scripts for 5 s first
 rook-player place.rbxl --seconds 20 --record-audio out.wav  # mix 20 s of sound to a file, silently
 rook-player place.rbxl --script extra.luau                # also run a Luau file as a server script
+rook-player place.rbxl --client-script extra.luau         # also run a Luau file as a LocalScript of the player
 rook-player place.rbxl --uncapped                         # draw as fast as possible
 rook-player place.rbxl --framerate-cap 30                 # at most 30 frames a second, whatever the player's FramerateCap
 rook-player place.rbxl --frame-times                      # print frame and step times every second, and a summary at exit

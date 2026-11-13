@@ -80,6 +80,7 @@ enum Stage {
 struct Finish {
     options: Options,
     script: Option<String>,
+    client_script: Option<String>,
     load_start: std::time::Instant,
     name: String,
 }
@@ -95,6 +96,9 @@ pub struct Setup {
     /// The `--script` file's source, run as a server script once the
     /// place starts.
     pub script: Option<String>,
+    /// The `--client-script` file's source, run as a LocalScript once the
+    /// player has joined (Play mode only).
+    pub client_script: Option<String>,
     /// Sounds load in the background while the game runs, as in Roblox,
     /// unless this holds each frame until they have.
     pub wait_for_sounds: bool,
@@ -129,6 +133,7 @@ impl Loading {
             finish: Finish {
                 options,
                 script,
+                client_script: setup.client_script.clone(),
                 load_start,
                 name: place_name(path),
             },
@@ -160,6 +165,12 @@ impl Finish {
     fn joined(&self, (server, started): (ServerThread, Started)) -> anyhow::Result<Game> {
         let joined = started.joined.context("the player didn't join")?;
         let client = ClientHost::new(&joined, &self.options)?;
+        if let Some(source) = &self.client_script {
+            client
+                .client()
+                .run_extra_script(source)
+                .map_err(anyhow::Error::msg)?;
+        }
         Ok(self.game(
             Mode::Play {
                 server,

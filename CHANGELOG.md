@@ -5,6 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- `rook-player --client-script` runs a Luau file as a LocalScript of the player, as `--script` does on the server. A file could only reach the client by pasting it at the prompt.
 - A player starts out neutral with a white `TeamColor`, as in Roblox. Rook's players started on a grey team that didn't exist, so scripts that color things by team painted them grey in places without teams. See [teams](docs/behavior/characters/spawning.md#teams).
 - A falling part that brushes past an edge it barely overlaps or just misses drops straight past it, as in Roblox. Rook gave it a sideways shove and spin, so a ball dropped beside a wall rolled away from it. See [landing](docs/behavior/physics/landing.md#grazing-an-edge).
 - An explosion leaves parts much larger than its blast alone, and its `Hit` handlers run before it breaks joints or pushes anything, as in Roblox. Rook hit, broke loose and pushed floors and platforms of any size, so a bomb on a building cut the whole building free instead of knocking out the bricks around it. See [explosions](docs/behavior/effects/explosions.md#the-blast).

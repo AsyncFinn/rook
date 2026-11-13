@@ -450,11 +450,17 @@ impl DataModel {
         self.runtime.drain_deferred();
     }
 
-    /// Run a Luau file given on the command line (`--script`) as if it were
-    /// a Script in ServerScriptService. Its output names it `RookScript`.
+    /// Run a Luau file given on the command line as if it were a Script in
+    /// ServerScriptService (`--script`) or, on a client, a LocalScript in
+    /// PlayerScripts (`--client-script`). Its output names it `RookScript`.
     pub fn run_extra_script(&self, source: &str) -> Result<(), String> {
+        let name = if self.runtime.world().is_client {
+            "PlayerScripts.RookScript"
+        } else {
+            "ServerScriptService.RookScript"
+        };
         self.runtime
-            .run_source("ServerScriptService.RookScript", source, None)
+            .run_source(name, source, None)
             .map_err(|e| e.to_string())
     }
 
