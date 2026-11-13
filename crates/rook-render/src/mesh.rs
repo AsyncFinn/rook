@@ -98,18 +98,25 @@ impl MeshData {
 }
 
 impl MeshData {
-    /// The smallest box holding every vertex: (min, max). Mesh files can
-    /// hold vertices that aren't numbers; the GPU drops their triangles,
-    /// so they're left out here too.
+    /// The smallest box holding every vertex: (min, max), all zero for
+    /// none ([`bounds_of`]).
     pub(crate) fn bounds(&self) -> (Vec3, Vec3) {
-        let finite = self.vertices.iter().map(|v| Vec3::from(v.position));
-        let finite = finite.filter(|p| p.is_finite());
-        finite
-            .fold(None, |b: Option<(Vec3, Vec3)>, p| {
-                Some(b.map_or((p, p), |(lo, hi)| (lo.min(p), hi.max(p))))
-            })
-            .unwrap_or((Vec3::ZERO, Vec3::ZERO))
+        bounds_of(self.vertices.iter().map(|v| v.position)).unwrap_or((Vec3::ZERO, Vec3::ZERO))
     }
+}
+
+/// The smallest box holding `positions`: (min, max), `None` for none.
+/// Mesh files can hold vertices that aren't numbers; the GPU drops their
+/// triangles, so they're left out here too. Every box taken around a
+/// mesh's vertices comes from here, so none lets NaN in.
+pub(crate) fn bounds_of(positions: impl IntoIterator<Item = [f32; 3]>) -> Option<(Vec3, Vec3)> {
+    let finite = positions
+        .into_iter()
+        .map(Vec3::from)
+        .filter(|p| p.is_finite());
+    finite.fold(None, |b, p| {
+        Some(b.map_or((p, p), |(lo, hi): (Vec3, Vec3)| (lo.min(p), hi.max(p))))
+    })
 }
 
 pub(crate) fn build(shape: DrawShape) -> MeshData {

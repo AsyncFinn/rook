@@ -63,30 +63,41 @@ impl Frustum {
     /// Whether any of `b`, grown by `margin` studs, is inside. A box in
     /// front of all six planes may still miss the view near a corner;
     /// that only costs a draw.
+    ///
+    /// Each plane is tested at the box's corner farthest along its normal
+    /// (the "p-vertex"), not as center and half size: a box joined with a
+    /// part parked a float's range away has both near 1e38, and their sum
+    /// loses everything nearby to rounding, so what it holds came and went
+    /// as the camera turned. A plane the corner's sum isn't a number for
+    /// keeps the box, so doubt costs a draw, never a part.
     pub(crate) fn sees(&self, b: Aabb, margin: f32) -> bool {
         if b.is_empty() {
             return false;
         }
-        let center = (b.min + b.max) * 0.5;
-        let half = (b.max - b.min) * 0.5 + Vec3::splat(margin);
+        let (min, max) = (b.min - margin, b.max + margin);
         self.planes.iter().all(|p| {
             let n = p.truncate();
-            n.dot(center) + n.abs().dot(half) + p.w >= 0.0
+            let far = Vec3::select(n.cmpge(Vec3::ZERO), max, min);
+            let d = n.dot(far) + p.w;
+            d >= 0.0 || d.is_nan()
         })
     }
 }
 
 impl Frustum {
-    /// Whether all of `b`, grown by `margin` studs, is inside.
+    /// Whether all of `b`, grown by `margin` studs, is inside: each plane
+    /// is in front of the box's corner nearest along its normal (the
+    /// "n-vertex"; see [`Frustum::sees`]). In doubt it isn't, and its
+    /// batches are tested one by one.
     pub(crate) fn holds(&self, b: Aabb, margin: f32) -> bool {
         if b.is_empty() {
             return false;
         }
-        let center = (b.min + b.max) * 0.5;
-        let half = (b.max - b.min) * 0.5 + Vec3::splat(margin);
+        let (min, max) = (b.min - margin, b.max + margin);
         self.planes.iter().all(|p| {
             let n = p.truncate();
-            n.dot(center) - n.abs().dot(half) + p.w >= 0.0
+            let near = Vec3::select(n.cmpge(Vec3::ZERO), min, max);
+            n.dot(near) + p.w >= 0.0
         })
     }
 }

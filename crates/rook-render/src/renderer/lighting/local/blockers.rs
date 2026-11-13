@@ -20,6 +20,9 @@ use super::*;
 /// meanwhile (Studio's grid also moves in chunks, keeping the old one for
 /// a while: docs/behavior/lighting/local-lights.md).
 const BUDGET: Duration = Duration::from_millis(1);
+/// How far from the origin a blocker may reach, in studs: voxel indices
+/// stay far inside an i32 (and the box isn't NaN).
+const REACH: f32 = (1u32 << 30) as f32 * VOXEL;
 /// The pieces those voxels are marked in, across x and z (the volume's
 /// full height each), in voxels.
 const PIECE: i32 = 16;
@@ -924,7 +927,11 @@ impl Blockers {
             DrawShape::Head | DrawShape::Truss(_) | DrawShape::Adorn(_) => return None,
         };
         let axes = part.rotation;
-        Some(Blocker::of_box(part.position + axes * center, axes, half))
+        let b = Blocker::of_box(part.position + axes * center, axes, half);
+        // Voxel spans are i32s, grown and shrunk by one; a part parked
+        // past `REACH` (a float's range away, say) is in no grid's voxels.
+        let within = |v: Vec3| v.abs().cmplt(Vec3::splat(REACH)).all();
+        (within(b.min) && within(b.max)).then_some(b)
     }
 
     /// One bit per voxel of the volume starting at voxel `low`, set where
@@ -996,18 +1003,13 @@ impl Blockers {
     }
 }
 
-/// A mesh's box in its own space (center, half size); `None` for terrain.
+/// A mesh's box in its own space (center, half size); `None` for terrain
+/// or a mesh with no vertex that is a number.
 fn mesh_bounds(mesh: &Mesh) -> Option<(Vec3, Vec3)> {
     if mesh.terrain.is_some() {
         return None;
     }
-    let (min, max) = mesh.positions.iter().fold(
-        (Vec3::splat(f32::MAX), Vec3::splat(f32::MIN)),
-        |(lo, hi), &p| (lo.min(Vec3::from(p)), hi.max(Vec3::from(p))),
-    );
-    if min.cmpgt(max).any() {
-        return None;
-    }
+    let (min, max) = crate::mesh::bounds_of(mesh.positions.iter().copied())?;
     Some(((min + max) * 0.5, (max - min) * 0.5))
 }
 
@@ -1376,6 +1378,21 @@ mod tests {
         assert!(grid.bits == fresh.bits, "marked where it is");
         assert!(grid.counts == fresh.counts);
         assert!(grid.fill_bytes == fresh.fill_bytes);
+    }
+
+    /// A part parked as far as a float goes blocks no voxel (its voxel
+    /// span is past an i32's), while one nearby still does.
+    #[test]
+    fn a_part_parked_a_float_away_blocks_nothing() {
+        let block = DrawShape::Part(PartShape::Block);
+        let part = |y: f32| {
+            let at = Vec3::new(0.0, y, 0.0);
+            PartInstance::plain(block, at, Mat3::IDENTITY, Vec3::ONE)
+        };
+        let (mut blockers, scene) = (Blockers::default(), Scene::default());
+        assert!(blockers.blocker(&part(10.0), &scene).is_some());
+        assert_eq!(blockers.blocker(&part(f32::MIN), &scene), None);
+        assert_eq!(blockers.blocker(&part(f32::NAN), &scene), None);
     }
 
     /// A part moving where the volume doesn't reach changes no voxel, so

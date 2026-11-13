@@ -1,0 +1,29 @@
+-- studio 0.747.0.7471481
+-- signals: deferred
+passive InputBegan
+worldButton InputBegan
+press 1 processed true
+worldButton click
+active InputBegan
+press 2 processed true
+clear InputBegan
+press 3 processed true
+label InputBegan
+worldButton InputBegan
+press 4 processed true
+worldButton click
+worldButton InputBegan
+press 5 processed true
+worldButton click
+inactiveButton InputBegan
+press 6 processed true
+inactiveButton click
+activeLabel InputBegan
+press 7 processed true
+worldButton InputBegan
+press 8 processed true
+press 9 processed false
+detector click
+passive InputBegan
+press 10 processed false
+detector click
