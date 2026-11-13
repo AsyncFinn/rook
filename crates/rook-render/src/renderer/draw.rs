@@ -192,6 +192,16 @@ impl Renderer {
         self.record_time = start.elapsed();
     }
 
+    /// End a frame that draws nothing (the window has no image to draw
+    /// into, as when it's minimized): the scene's changes taken since the
+    /// last frame still go to the GPU. wgpu holds every write, and every
+    /// buffer it was written to, until something is submitted, so frames
+    /// that never submit would hold more GPU memory every frame.
+    pub fn submit_undrawn(&mut self) {
+        profiling::scope!("Renderer::submit_undrawn");
+        self.queue.submit([]);
+    }
+
     /// The lighting, camera and sky the shaders read this frame.
     fn write_globals(
         &mut self,

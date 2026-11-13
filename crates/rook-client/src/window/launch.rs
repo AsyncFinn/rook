@@ -114,6 +114,7 @@ impl Launch {
             frame_clock: Default::default(),
             refresh_read: None,
             loop_ran: false,
+            undrawable: false,
             install: self.install.take().expect("started once"),
             framerate_cap: options.framerate_cap,
             readout: Readout::new(options.frame_times),

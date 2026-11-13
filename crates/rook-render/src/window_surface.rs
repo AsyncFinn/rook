@@ -111,6 +111,7 @@ impl WindowSurface {
         self.presented = false;
         let asked = Instant::now();
         let Some(frame) = self.next_frame() else {
+            self.renderer.submit_undrawn();
             return asked.elapsed();
         };
         let display = asked.elapsed();
