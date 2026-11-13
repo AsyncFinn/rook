@@ -379,14 +379,11 @@ pub(crate) fn get_member(
                 // Members newer than Rook's API snapshot that Roblox's
                 // CoreScripts read: nil, counted (see `calls::method_function`).
                 None if crate::api::scripts::caller_is_core(lua) => {
-                    let class = with_world(lua, |w| w.dom.class_name(id).to_owned());
-                    let value = methods::core::hidden_property(lua, &class, key)?;
-                    if value.is_nil() {
-                        with_world(lua, |w| {
-                            w.count_unimplemented(format!("{class}.{key} (unknown)"));
-                        });
-                    }
-                    Ok(value)
+                    with_world(lua, |w| {
+                        let class = w.dom.class_name(id).to_owned();
+                        w.count_unimplemented(format!("{class}.{key} (unknown)"));
+                    });
+                    Ok(LuaValue::Nil)
                 }
                 None => Err(not_a_member(lua, id, key)),
             }

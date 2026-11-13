@@ -79,7 +79,7 @@ pub fn viewport_ray(lens: &Lens, x: f32, y: f32) -> (Vec3, Vec3) {
 
 /// Where a world point lands in the viewport: pixel x and y, its depth in
 /// front of the camera, and whether it's on screen.
-fn project(lens: &Lens, point: Vec3) -> (Vec3, bool) {
+pub(crate) fn project(lens: &Lens, point: Vec3) -> (Vec3, bool) {
     let local = lens.cframe.rotation.transpose() * (point - lens.cframe.position);
     let depth = -local.z;
     let t = lens.tan();

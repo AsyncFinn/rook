@@ -96,6 +96,9 @@ impl DataModel {
         self.place_drawn();
         // A script may have replaced the current camera.
         self.sync_viewport_size();
+        // Prompts follow the settled camera, before GUI is laid out, so
+        // the GUI their handlers make is drawn this frame.
+        self.runtime.update_prompts();
         self.ease_scrolls();
         self.lay_out_gui();
         self.runtime.sync_overheads();

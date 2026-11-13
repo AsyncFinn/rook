@@ -566,6 +566,10 @@ impl DataModel {
             self.input.held.insert(value, obj);
             if processed {
                 self.edit_key(code, obj);
+            } else {
+                // Measured: shown prompts on the key trigger before
+                // UserInputService hears it, as processed.
+                processed = self.runtime.prompt_key(value, true);
             }
             self.fire_input("InputBegan", obj, processed);
             self.offer_action(obj, processed);
@@ -585,6 +589,9 @@ impl DataModel {
             let Some(obj) = obj else {
                 return processed;
             };
+            // A release whose press a prompt took lets go of it, processed
+            // (measured).
+            processed |= self.runtime.prompt_key(value, false);
             self.set_property(obj, "UserInputState", UserInputState::End.into());
             self.fire_input("InputEnded", obj, processed);
             self.offer_action(obj, processed);

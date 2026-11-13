@@ -244,6 +244,7 @@ mod lighting_look;
 mod material_variants;
 mod movement;
 mod preload;
+mod prompts;
 mod remote_parts;
 mod scripts;
 mod session;

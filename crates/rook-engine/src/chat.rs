@@ -66,6 +66,18 @@ pub(crate) fn set_up_client(dom: &mut Dom) {
     }
 }
 
+/// What the local player may do in chat, which each client knows of its
+/// own player alone (the property isn't replicated). Roblox's chat window
+/// shows its input bar only for `Enabled`; anything else, the empty
+/// default included, leaves the player viewing system messages. A local
+/// player is never region-locked, age-gated or kept from chat by settings.
+pub(crate) fn set_up_local_player(dom: &mut Dom, player: InstanceId) {
+    let status = Value::String("Enabled".into());
+    if let Err(e) = dom.set_property_by_name(player, "ChatAvailabilityStatus", status) {
+        tracing::warn!("setting ChatAvailabilityStatus failed: {e}");
+    }
+}
+
 fn child(dom: &mut Dom, class: &str, name: &str, parent: InstanceId) -> Option<InstanceId> {
     let id = dom.create_by_name(class).ok()?;
     if let Err(e) = dom.set_name(id, name.to_owned()) {

@@ -53,6 +53,7 @@ mod models;
 mod physics;
 mod player_scripts;
 pub(crate) mod preload;
+pub(crate) mod prompts;
 mod queries;
 pub(crate) mod remotes;
 mod services;
@@ -281,6 +282,7 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
                 styles::native,
                 text_chat::native,
                 tools::native,
+                prompts::native,
                 users::native,
                 filtering::native,
                 user_settings::native,

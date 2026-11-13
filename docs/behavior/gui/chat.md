@@ -32,6 +32,17 @@ Code: setting up in `rook-engine`'s `chat.rs`, messages in `rook-lua`'s
   counts as seen.
 - `CanUserChatAsync` (on TextChatService and the legacy Chat) is true:
   everyone may chat in a local server.
+- Each client's own Player has `ChatAvailabilityStatus` `Enabled`: a
+  local player is never region-locked, age-gated or kept from chat by
+  settings. The property is hidden and not replicated, so the client sets
+  it, and only on its own player. Roblox's chat window shows its input bar
+  and no notice for `Enabled`; with `Ineligible` or the empty default it
+  hides the bar and says "You can only view system messages here.",
+  though `/` still focuses a box that sends (Rook, with Studio
+  0.747's CoreScripts, 2026-11-13). Studio's play mode shows the bar and
+  sends to RBXGeneral on a Baseplate (Studio 0.744); the property itself is
+  RobloxScriptSecurity, which Studio's tools can't read, so `Enabled` is
+  the value that gives the same window (Inference).
 
 ## The legacy chat
 

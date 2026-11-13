@@ -54,3 +54,25 @@ fn the_senders_own_message_is_restyled_before_it_shows() {
         ]
     );
 }
+
+/// Roblox's chat window shows its input bar only when the local player's
+/// `ChatAvailabilityStatus` reads `Enabled`; the property isn't
+/// replicated, so the client gives its own player that.
+#[test]
+fn the_local_player_may_chat() {
+    let mut server = Server::new(&Options::default()).unwrap();
+    server.start();
+    let mut session = Session::new(server, Options::default());
+    let index = session.join("Player1", 1).unwrap();
+    session.run_for(0.1);
+    let client = session.client(index).unwrap();
+    let w = client.runtime().world();
+    let players = w.dom.find_service("Players").unwrap();
+    let local = w.dom.ref_property(players, "LocalPlayer").unwrap();
+    assert_eq!(
+        w.dom
+            .string_property(local, "ChatAvailabilityStatus")
+            .as_deref(),
+        Some("Enabled")
+    );
+}
