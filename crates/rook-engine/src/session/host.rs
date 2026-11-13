@@ -473,7 +473,7 @@ impl ServerHost {
 
 /// StarterPlayer's properties a joining Player copies, as (StarterPlayer
 /// name, Player name).
-const STARTER_PLAYER_COPIES: [(&str, &str); 12] = [
+pub const STARTER_PLAYER_COPIES: [(&str, &str); 12] = [
     ("CameraMaxZoomDistance", "CameraMaxZoomDistance"),
     ("CameraMinZoomDistance", "CameraMinZoomDistance"),
     ("CameraMode", "CameraMode"),

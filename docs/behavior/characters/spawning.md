@@ -41,6 +41,8 @@ Measured in a Baseplate playtest by respawning one player with
 
 ## Teams
 
+- A player joins with `Neutral` true and `TeamColor` White (measured in
+  Studio 0.747, in a place with no teams).
 - A joining player goes on the `AutoAssignable` team with the fewest
   players, the first such team in Teams on a tie (creator-docs for the
   fewest; the tie rule is Inference, as balancing needs several players

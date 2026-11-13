@@ -160,6 +160,21 @@ fn teams_assign_players_and_their_spawns() {
     );
 }
 
+/// A player in a place without teams is neutral, with White as its
+/// `TeamColor` (measured in Studio 0.747).
+#[test]
+fn players_start_neutral() {
+    let session = session_with("", &["A"], 1.0 / 60.0, &Options::default());
+    let w = session.server().runtime.world();
+    let players = w.dom.find_service("Players").unwrap();
+    let a = w.dom.find_first_child(players, "A", false).unwrap();
+    assert_eq!(w.dom.bool_property(a, "Neutral"), Some(true));
+    assert_eq!(
+        w.dom.brick_color_property(a, "TeamColor"),
+        rook_types::BrickColor::from_number(1)
+    );
+}
+
 /// A dead character's player respawns `Players.RespawnTime` after Died.
 #[test]
 fn players_respawn_after_dying() {

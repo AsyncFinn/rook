@@ -1,5 +1,5 @@
-//! The Luau probe: create each class (or find each service), read the
-//! listed properties with `pcall`, and send back what each read as text.
+//! The Luau probe: create each class (or find each service, or the
+//! playtest's player), read the listed properties with `pcall`, and send back what each read as text.
 
 use rustc_hash::FxHashMap;
 use std::fmt::Write as _;
@@ -7,7 +7,7 @@ use std::fmt::Write as _;
 use anyhow::Context;
 use rook_reflection::{ClassId, Database, PropertyId};
 
-use super::Gap;
+use super::{From, Gap};
 use crate::commands::studio::Studio;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -88,8 +88,8 @@ pub(super) fn read(
 
 /// The probe for `gaps`. Services are only found, never created: the place
 /// gains none, and `GetService("NetworkServer")` on a client tears down
-/// its replicator and crashes Studio (0.743). Created instances are
-/// destroyed after reading.
+/// its replicator and crashes Studio (0.743). The player is the client's
+/// own; Edit has none. Created instances are destroyed after reading.
 fn script(db: &Database, gaps: &[Gap]) -> String {
     let mut list = String::new();
     for gap in gaps {
@@ -100,9 +100,13 @@ fn script(db: &Database, gaps: &[Gap]) -> String {
             .collect();
         let _ = writeln!(
             list,
-            "    {{{:?}, {}, {{{}}}}},",
+            "    {{{:?}, {:?}, {{{}}}}},",
             db.class(gap.class).name,
-            gap.service,
+            match gap.from {
+                From::New => "new",
+                From::Service => "service",
+                From::LocalPlayer => "player",
+            },
             names.join(", ")
         );
     }
@@ -139,10 +143,12 @@ local function encode(v)
 end
 local out = {{{{"version", version(), ""}}}}
 for i, probe in probes do
-    local class, service, props = probe[1], probe[2], probe[3]
+    local class, from, props = probe[1], probe[2], probe[3]
     local ok, inst = pcall(function()
-        if service then
+        if from == "service" then
             return game:FindService(class)
+        elseif from == "player" then
+            return game:GetService("Players").LocalPlayer
         end
         return Instance.new(class)
     end)
@@ -159,7 +165,7 @@ for i, probe in probes do
                 table.insert(out, row)
             end
         end
-        if not service then
+        if from == "new" then
             inst:Destroy()
         end
     end

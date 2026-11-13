@@ -1,6 +1,6 @@
 # Property defaults
 
-Checked against Studio 0.744 on 2026-10-22.
+Checked against Studio 0.747 on 2026-11-13.
 
 What a property reads before anything sets it. Rook takes, in order: its
 own short list of corrections (`DEFAULTS` in
@@ -25,7 +25,8 @@ creatable class and service that the database has no default for
 Through Studio's MCP server it creates each class with `Instance.new`, or
 finds each service with `FindService`, reads every listed property with
 `pcall` and destroys what it made. It reads once in Edit mode and twice in
-a playtest's client, two seconds apart.
+a playtest's client, two seconds apart. Scripts can't create a Player, so
+the client reads its own.
 
 - **Services are only found.** `GetService("NetworkServer")` on a playtest
   client tears down its replicator and crashes Studio 0.744 (an unhandled
@@ -35,27 +36,32 @@ a playtest's client, two seconds apart.
   client differ, the client's wins, since that is what a running game
   sees; services only Edit has keep Edit's value.
 - **Left out:** values that depend on the window, session, place or
-  machine (`ViewportSize`, `Absolute*`, ids, locales, `RunState`, Camera,
-  Workspace, Players, Stats and the Studio-only services); values that
+  machine (`ViewportSize`, `Absolute*`, ids, locales, `RunState`, the
+  account behind a Player and what it copies from StarterPlayer, whether
+  a gamepad is plugged in, Camera, Workspace, Players, Stats and the
+  Studio-only services); values that
   changed between the two client reads (Stats' frame times); and views
   that Studio computes from other properties, which need views rather
   than defaults (mass and extents, axes and orientations, unsaved
-  BrickColor twins of Color3 properties, `ContentText`, Sound's `Pitch`
+  BrickColor twins of Color3 properties (`Player.TeamColor` is no twin
+  and is kept), `ContentText`, Sound's `Pitch`
   and distances, and every legacy property the database migrates to a
   newer one, such as `Sky.SkyboxBk` to `SkyboxBackContent` and
   `UICorner.CornerRadius` to its four corner radii).
 
 ## Results
 
-45 defaults, among them `Humanoid.Health` 100 and `FloorMaterial` Air,
+50 defaults, among them `Humanoid.Health` 100 and `FloorMaterial` Air,
+`Player.Neutral` true and `TeamColor` White,
 `UserInputService`'s `MouseEnabled`, `KeyboardEnabled` and
 `MouseIconEnabled` true, `InputSink` Activate on buttons and TextBoxes,
 `TextBox.CursorPosition` 1 and `SelectionStart` -1, `WeldConstraint.Enabled` true and `Lighting.ShadowColor` (0.7, 0.7,
 0.72).
 
-Edit and the client differ only in `StarterGui.ProcessUserInput` (true in
-Edit, false on the client); the client's false is the zero value, so the
-table has no entry for it. `BubbleChatMessageProperties.FontFace` and
+Edit and the client differ in `StarterGui.ProcessUserInput` (true in
+Edit, false on the client; the client's false is the zero value, so the
+table has no entry for it) and `TestService.Enabled` (false in Edit, true
+on the client). `BubbleChatMessageProperties.FontFace` and
 `GetTextBoundsParams.Font` are skipped: the sweep doesn't store Fonts yet.
 
 The database is wrong, not silent, about `SoundService.RespectFilteringEnabled`
