@@ -58,8 +58,8 @@ fn hits_follow_the_drawing() {
         &[("Enabled", Value::Bool(false))],
     );
     button(&mut dom, off, (700, 200), &[]);
-    let gui = laid_out(&mut dom);
-    let at = |x, y| gui.objects_at(&dom, Vec2::new(x, y));
+    let mut gui = laid_out(&mut dom);
+    let mut at = |x, y| gui.objects_at(&dom, Vec2::new(x, y));
     assert_eq!(at(100.0, 225.0), [top, low]);
     assert_eq!(at(395.0, 405.0), []);
     assert_eq!(at(380.0, 455.0), [turned]);

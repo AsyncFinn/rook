@@ -23,12 +23,16 @@ pub(crate) struct Watch {
     /// AutoButtonColor's tints and a button's hover and pressed images; a
     /// TextBox's caret and selection).
     looks: Vec<PropertyId>,
+    /// Properties neither layout nor drawing reads (what input and
+    /// gamepad selection go by, which they read as they are).
+    inert: Vec<PropertyId>,
     /// Properties that change only how a text object's glyphs are drawn
     /// (colors, transparencies), which the laid-out text carries: its text
     /// is laid out again alone, its size and place kept.
     text_looks: Vec<PropertyId>,
     /// Properties that place the changed object alone: where it goes and
-    /// how big it is in its parent, turned or shown. Its siblings and
+    /// how big it is in its parent, turned, shown or clipping what it
+    /// holds. Its siblings and
     /// parent don't depend on them unless the parent arranges, sizes or
     /// scrolls by its children.
     places: Vec<PropertyId>,
@@ -85,10 +89,18 @@ impl Watch {
                 ("GuiObject", "GuiState"),
                 ("TextBox", "CursorPosition"),
                 ("TextBox", "SelectionStart"),
-                ("ImageLabel", "ImageColor3"),
-                ("ImageButton", "ImageColor3"),
-                ("ImageLabel", "ImageTransparency"),
-                ("ImageButton", "ImageTransparency"),
+                ("GuiObject", "Interactable"),
+                ("GuiButton", "AutoButtonColor"),
+                ("GuiButton", "Selected"),
+                ("ImageButton", "HoverImageContent"),
+                ("ImageButton", "PressedImageContent"),
+                ("ScrollingFrame", "ScrollBarImageColor3"),
+                ("ScrollingFrame", "ScrollBarImageTransparency"),
+                ("ScrollingFrame", "TopImageContent"),
+                ("ScrollingFrame", "MidImageContent"),
+                ("ScrollingFrame", "BottomImageContent"),
+                ("CanvasGroup", "GroupColor3"),
+                ("CanvasGroup", "GroupTransparency"),
                 ("UICorner", "CornerRadius"),
                 ("UIGradient", "Color"),
                 ("UIGradient", "Offset"),
@@ -97,6 +109,37 @@ impl Watch {
                 ("UIStroke", "Color"),
                 ("UIStroke", "Transparency"),
                 ("UIStroke", "Thickness"),
+            ]
+            .into_iter()
+            .chain(["ImageLabel", "ImageButton"].into_iter().flat_map(|owner| {
+                [
+                    "ImageColor3",
+                    "ImageTransparency",
+                    "ImageRectOffset",
+                    "ImageRectSize",
+                    "ResampleMode",
+                    "ScaleType",
+                    "SliceCenter",
+                    "SliceScale",
+                    "TileSize",
+                ]
+                .map(|name| (owner, name))
+            }))
+            .filter_map(|(owner, name)| property(owner, name))
+            .collect(),
+            inert: [
+                ("Instance", "Archivable"),
+                ("GuiObject", "Active"),
+                ("GuiObject", "Draggable"),
+                ("GuiObject", "Selectable"),
+                ("GuiObject", "SelectionImageObject"),
+                ("GuiObject", "SelectionOrder"),
+                ("GuiObject", "NextSelectionUp"),
+                ("GuiObject", "NextSelectionDown"),
+                ("GuiObject", "NextSelectionLeft"),
+                ("GuiObject", "NextSelectionRight"),
+                ("GuiObject", "SelectionGroup"),
+                ("GuiButton", "Modal"),
             ]
             .into_iter()
             .filter_map(|(owner, name)| property(owner, name))
@@ -115,15 +158,26 @@ impl Watch {
                 .chain([property("TextBox", "PlaceholderColor3")])
                 .flatten()
                 .collect(),
-            places: ["AnchorPoint", "Position", "Rotation", "Size", "Visible"]
-                .into_iter()
-                .filter_map(|name| property("GuiObject", name))
-                .collect(),
+            places: [
+                "AnchorPoint",
+                "ClipsDescendants",
+                "Position",
+                "Rotation",
+                "Size",
+                "Visible",
+            ]
+            .into_iter()
+            .filter_map(|name| property("GuiObject", name))
+            .collect(),
             contents: [
                 ("Instance", "Name"),
                 ("GuiObject", "LayoutOrder"),
                 ("GuiObject", "AutomaticSize"),
                 ("GuiObject", "SizeConstraint"),
+                ("GuiObject", "BorderSizePixel"),
+                ("GuiObject", "BorderMode"),
+                ("Frame", "Style"),
+                ("GuiButton", "Style"),
                 ("ImageLabel", "ImageContent"),
                 ("ImageButton", "ImageContent"),
                 ("TextBox", "PlaceholderText"),
@@ -160,6 +214,7 @@ impl Watch {
 
     pub(crate) fn touches(&self, dom: &Dom, change: &Change) -> Touch {
         match change {
+            Change::Property { property, .. } if self.inert.contains(property) => Touch::Nothing,
             Change::Property { property, .. } if self.looks.contains(property) => Touch::Look,
             Change::Property { property, .. } if self.text_looks.contains(property) => Touch::Text,
             Change::Property { property, .. }

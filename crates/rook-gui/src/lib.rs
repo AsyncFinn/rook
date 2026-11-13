@@ -511,7 +511,9 @@ impl Gui {
             self.layout.drop(&ids);
             for &id in &subtree {
                 // A ScreenGui or world GUI that came or went.
-                self.screen.restack(id);
+                if dom.is_a(id, "LayerCollector") {
+                    self.screen.restack(id);
+                }
                 self.canvases.remove(&id);
                 if draw::is_message(dom, id) {
                     self.screen.repaint_messages();
@@ -537,10 +539,16 @@ impl Gui {
                     layout::on_screen(dom, top) || client && self.in_world.contains(&top)
                 })),
             }
-            // What draws changed in the ScreenGuis it left and joined; and
-            // what it held drew with it (a UICorner, a UIStroke).
-            self.screen
-                .restack_all(old_top.into_iter().chain(layout::top_of(dom, root)));
+            // The objects it left and joined stack again with what they
+            // hold now, placed again above or with their trees, but a
+            // ScreenGui stacking by ZIndex alone spreads what an object
+            // holds through its stack, so it stacks again whole. What it
+            // held drew with it (a UICorner, a UIStroke).
+            for top in old_top.into_iter().chain(layout::top_of(dom, root)) {
+                if !order::by_sibling(dom, top) {
+                    self.screen.restack(top);
+                }
+            }
             self.restyled
                 .extend(left.into_iter().chain(dom.parent(root)));
         }

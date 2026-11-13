@@ -607,6 +607,51 @@ fn lights_that_change_the_hash_refill_only_what_they_light() {
     }
 }
 
+/// Frames that can't be drawn (a minimized window) still take the scene's
+/// changes; what they write and the light buffers they replace are let go,
+/// so GPU memory stays as it was however long the window stays down.
+#[test]
+fn undrawn_frames_hold_no_more_gpu_memory() {
+    let Ok(mut r) = Renderer::headless() else {
+        return;
+    };
+    let lamp = LocalLight {
+        position: Vec3::new(0.0, 3.0, 0.0),
+        shape: LightShape::Point,
+        color: [1.0, 0.6, 0.2],
+        brightness: 1.0,
+        range: 16.0,
+        shadows: false,
+        part: (Vec3::splat(f32::MAX), Vec3::splat(f32::MIN)),
+    };
+    let mut scene = Scene {
+        parts: vec![part(PartShape::Block, 0.0, [0.8; 3], 0.0)],
+        lights: vec![lamp; 2000],
+        ..Scene::default()
+    };
+    r.set_scene(&scene);
+    let camera = Camera::look_at(Vec3::new(0.0, 40.0, 60.0), Vec3::ZERO);
+    r.render_to_image(16, 16, &camera).unwrap();
+    let all: Vec<usize> = (0..scene.lights.len()).collect();
+    let mut held = |frames: usize, scene: &mut Scene| {
+        for _ in 0..frames {
+            // Blinking on: the light buffers are built again.
+            scene.lights[0].brightness = 1.0 - scene.lights[0].brightness;
+            r.update_lights(scene, &all);
+            r.submit_undrawn();
+        }
+        r.device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
+        r.device
+            .generate_allocator_report()
+            .map(|m| m.total_allocated_bytes)
+    };
+    let Some(settled) = held(20, &mut scene) else {
+        return;
+    };
+    let later = held(200, &mut scene).expect("reported before");
+    assert!(later <= settled, "{settled} bytes, then {later}");
+}
+
 /// An off light (black: Brightness 0) on a part that creeps by float noise
 /// every frame refills no voxels, however far it goes; when it lights up,
 /// every voxel comes out as filling them all.

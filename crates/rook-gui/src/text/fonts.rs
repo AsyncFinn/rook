@@ -112,6 +112,10 @@ pub(crate) struct Fonts {
     /// Whether a pick since [`Fonts::take_waited`] wanted a font still
     /// on its way.
     waited: bool,
+    /// The face each font picked once it had loaded, which never changes
+    /// after: picking reads its family's list of faces.
+    picked: FxHashMap<Font, Picked>,
+    runs: super::shape::Runs,
 }
 
 impl Fonts {
@@ -127,6 +131,18 @@ impl Fonts {
 
     pub(crate) fn face(&self, id: FaceId) -> &Face {
         &self.faces[id as usize]
+    }
+
+    /// `text` (no line breaks) shaped in `face`, its first character
+    /// character `first` of the whole text: shaped once, then kept.
+    pub(crate) fn shape(
+        &mut self,
+        face: FaceId,
+        text: &str,
+        first: usize,
+    ) -> Vec<super::shape::Shaped> {
+        self.runs
+            .shape(&self.faces[face as usize], face, text, first)
     }
 
     pub(crate) fn take_requests(&mut self) -> Vec<String> {
@@ -158,14 +174,24 @@ impl Fonts {
     /// The face to draw `font` with: its own when loaded, otherwise the
     /// default family's, otherwise none.
     pub(crate) fn pick(&mut self, font: &Font) -> Option<Picked> {
+        if let Some(&picked) = self.picked.get(font) {
+            return Some(picked);
+        }
+        let waited = std::mem::take(&mut self.waited);
         let scale = if font.family.ends_with(LEGACY_FAMILY) {
             LEGACY_SCALE
         } else {
             1.0
         };
         let own = self.pick_in(&font.family, font);
-        let face = own.or_else(|| self.pick_in(FALLBACK_FAMILY, font))?;
-        Some(Picked { face, scale })
+        let face = own.or_else(|| self.pick_in(FALLBACK_FAMILY, font));
+        let picked = face.map(|face| Picked { face, scale });
+        // A pick that waited for a font may change when it arrives.
+        if let Some(picked) = picked.filter(|_| !self.waited) {
+            self.picked.insert(font.clone(), picked);
+        }
+        self.waited |= waited;
+        picked
     }
 
     fn pick_in(&mut self, family: &str, font: &Font) -> Option<FaceId> {

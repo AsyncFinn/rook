@@ -1,9 +1,15 @@
 //! Shaping runs of text into glyphs with Roblox's pixel advances
 //! (docs/behavior/gui/text.md#widths).
 
-use harfrust::{ShapeOptions, UnicodeBuffer};
+use std::sync::Arc;
 
-use super::fonts::{Face, FaceId, Fonts};
+use harfrust::{ShapeOptions, UnicodeBuffer};
+use rustc_hash::FxHashMap;
+
+use super::fonts::{Face, FaceId};
+
+/// How many runs each generation of [`Runs`] keeps.
+const RUNS_KEPT: usize = 4096;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct Glyph {
@@ -92,15 +98,61 @@ thread_local! {
     pub(crate) static SHAPINGS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-/// Shape `text` (no line breaks) in `face`; its first character is
-/// character `first` of the whole text.
-pub(crate) fn shape(fonts: &Fonts, face: FaceId, text: &str, first: usize) -> Vec<Shaped> {
-    if text.is_empty() {
-        return Vec::new();
+/// Runs of text shaped before, by face: shaping is the costly part of
+/// laying text out, and doesn't depend on the size text is set at, so a
+/// label set to text it showed before (a list's rows as it scrolls, a
+/// counter's digits) isn't shaped again, as browsers keep a word cache.
+/// Runs used since the last generation turned stay; the generation turns
+/// when it holds [`RUNS_KEPT`], dropping what it didn't use.
+#[derive(Debug, Default)]
+pub(crate) struct Runs {
+    fresh: FxHashMap<FaceId, FxHashMap<Box<str>, Arc<[Shaped]>>>,
+    old: FxHashMap<FaceId, FxHashMap<Box<str>, Arc<[Shaped]>>>,
+    kept: usize,
+}
+
+impl Runs {
+    /// `text` (no line breaks) shaped in `face`, its first character
+    /// character `first` of the whole text.
+    pub(crate) fn shape(
+        &mut self,
+        f: &Face,
+        face: FaceId,
+        text: &str,
+        first: usize,
+    ) -> Vec<Shaped> {
+        if text.is_empty() {
+            return Vec::new();
+        }
+        let shaped = match self.fresh.get(&face).and_then(|runs| runs.get(text)) {
+            Some(shaped) => shaped.clone(),
+            None => {
+                let kept = self.old.get_mut(&face).and_then(|runs| runs.remove(text));
+                let shaped = kept.unwrap_or_else(|| shape(f, text).into());
+                if self.kept >= RUNS_KEPT {
+                    self.old = std::mem::take(&mut self.fresh);
+                    self.kept = 0;
+                }
+                let runs = self.fresh.entry(face).or_default();
+                runs.insert(text.into(), shaped.clone());
+                self.kept += 1;
+                shaped
+            }
+        };
+        (shaped.iter())
+            .map(|g| Shaped {
+                index: g.index + first,
+                ..*g
+            })
+            .collect()
     }
+}
+
+/// Shape `text` (no line breaks) in face `f`, its characters counted from
+/// its start.
+fn shape(f: &Face, text: &str) -> Vec<Shaped> {
     #[cfg(test)]
     SHAPINGS.with(|n| n.set(n.get() + 1));
-    let f = fonts.face(face);
     let font = f.font();
     let shaper = f.shaper.shaper(&font).build();
     let mut buffer = UnicodeBuffer::new();
@@ -119,7 +171,7 @@ pub(crate) fn shape(fonts: &Fonts, face: FaceId, text: &str, first: usize) -> Ve
                 advance: pos.x_advance,
                 offset: [pos.x_offset, pos.y_offset],
                 space: ch.is_whitespace(),
-                index: first + text[..cluster].chars().count(),
+                index: text[..cluster].chars().count(),
             }
         })
         .collect()

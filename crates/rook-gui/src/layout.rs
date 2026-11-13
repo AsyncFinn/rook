@@ -649,12 +649,22 @@ impl<'a> Pass<'a> {
         };
         let inner = padding::inner(self.dom, id, size);
         let area = (inner.origin, inner.size);
-        let earlier = self.previous.texts.get(&id);
-        let (block, waited) = match earlier.or_else(|| self.out.texts.get(&id)) {
-            Some(old) if old.source == source && old.area == area && !old.waited => {
-                (old.block.clone(), false)
+        let same = |old: &Laid| old.source == source && old.area == area && !old.waited;
+        let recolors = |old: &Laid| old.area == area && !old.waited && old.source.recolors(&source);
+        // Unchanged since it was last laid out, or only its colors: kept.
+        let kept = match self.out.texts.remove(&id) {
+            Some(old) if same(&old) => Some(old.block),
+            Some(mut old) if recolors(&old) => {
+                old.block.recolor(&source.style);
+                Some(old.block)
             }
-            _ => {
+            _ => (self.previous.texts.get(&id))
+                .filter(|old| same(old))
+                .map(|old| old.block.clone()),
+        };
+        let (block, waited) = match kept {
+            Some(block) => (block, false),
+            None => {
                 self.fonts.take_waited();
                 let mut block = text::lay_out(self.fonts, &source, inner.size, None);
                 block.shift(inner.origin);
