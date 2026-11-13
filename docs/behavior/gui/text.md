@@ -140,16 +140,19 @@ small caps are drawn as capitals (Approximation).
 
 ## Hint and Message
 
-Studio's captures leave GUI out, and the engine draws these itself
-(nothing in CoreGui holds their text), so they can't be measured by
-script. Observed by eye: a Hint is an opaque black bar across the top of
-the window, ignoring the GUI inset (it covers the top bar's strip), with
-white text; an empty Hint still shows its bar, while a Message with no
-text shows nothing, not even its gray. Hints and Messages overlap by
-when they were made, the newest on top. Inference: the bar is 20 pixels tall with Legacy 12 text; a
-Message in Workspace or the local player covers the screen in gray at
-half transparency with its text in white Legacy 18, wrapped and
-centered. Both draw over all GUI.
+`screen_capture` and `CaptureService` both leave these out, and the
+engine draws them itself (nothing in CoreGui holds their text); they are
+measured from captures of the Studio window in Play mode
+(`PrintWindow`). A Hint is an opaque black bar 20 pixels tall across the
+top of the window, ignoring the GUI inset; an empty Hint still shows its
+bar. A Message in Workspace or the local player covers the window in
+gray 128 at half transparency; one with no text shows nothing, not even
+its gray. Both write their text in white Arial 18 on one line centered
+on the bar or window, never wrapped: a long line runs off both sides,
+and a Hint's descenders reach below its bar uncut. A Message's text has
+a 1-pixel black outline; a Hint's has none. They overlap by when they
+were made, the newest on top, and every ScreenGui draws over them, the
+top bar's buttons and a ScreenGui at DisplayOrder -1000 alike.
 
 ## Not yet
 

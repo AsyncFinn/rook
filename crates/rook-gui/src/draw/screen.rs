@@ -70,7 +70,7 @@ pub(crate) struct Screen {
     /// changed (or a UI component's, drawn by its parent).
     placed: FxHashSet<InstanceId>,
     repaint: FxHashSet<InstanceId>,
-    /// The Hints and Messages over it all, once drawn.
+    /// The Hints and Messages under it all, once drawn.
     messages: Option<Arc<[GuiQuad]>>,
     /// The pieces last given, which a renderer tells apart by pointer.
     drawn: Option<Arc<[Arc<[GuiQuad]>]>>,
@@ -107,8 +107,10 @@ impl Screen {
         self.drawn = None;
     }
 
-    /// The pieces the local player's ScreenGuis draw, bottom first, then
-    /// the Hints and Messages among `messages` that show, over them.
+    /// The Hints and Messages among `messages` that show, then the pieces
+    /// the local player's ScreenGuis draw over them (measured: every
+    /// ScreenGui, the top bar's too, whatever its DisplayOrder), bottom
+    /// first.
     pub(crate) fn draw(
         &mut self,
         dom: &Dom,
@@ -122,6 +124,15 @@ impl Screen {
         }
         self.apply(dom, layout);
         let collectors = self.collectors.as_ref().expect("stacked above");
+        let mut list: Vec<Arc<[GuiQuad]>> = Vec::new();
+        let bars = self.messages.get_or_insert_with(|| {
+            let mut quads = Vec::new();
+            messages::emit(dom, messages, text, &mut quads);
+            quads.into()
+        });
+        if !bars.is_empty() {
+            list.push(bars.clone());
+        }
         let mut draw = Draw {
             dom,
             layout,
@@ -132,7 +143,6 @@ impl Screen {
             focus,
             canvas: GuiQuad::NO_CLIP,
         };
-        let mut list: Vec<Arc<[GuiQuad]>> = Vec::new();
         for c in collectors {
             for (i, s) in c.stack.iter().enumerate() {
                 if c.group_of.contains_key(&s.id) {
@@ -158,14 +168,6 @@ impl Screen {
                     list.push(piece.clone());
                 }
             }
-        }
-        let bars = self.messages.get_or_insert_with(|| {
-            let mut quads = Vec::new();
-            messages::emit(dom, messages, draw.text, &mut quads);
-            quads.into()
-        });
-        if !bars.is_empty() {
-            list.push(bars.clone());
         }
         let drawn: Arc<[Arc<[GuiQuad]>]> = list.into();
         self.drawn = Some(drawn.clone());
@@ -253,8 +255,9 @@ fn stack_all(
 }
 
 /// Place `id`'s stack entries again where `layout` puts them now, and drop
-/// the pieces that changed. False when what shows changed, so its
-/// ScreenGui must be stacked again.
+/// the pieces that changed. False when what shows changed (`id` or
+/// something it holds shown or hidden), so its ScreenGui must be stacked
+/// again.
 fn place(
     dom: &Dom,
     layout: &Layout,
@@ -267,21 +270,27 @@ fn place(
         // (a spinner on a hidden loading screen), or in no ScreenGui at all.
         return hidden_above(dom, id);
     };
-    let Some(now) = order::restacked(dom, layout, &c.stack[c.at[&id]]) else {
+    // Something it holds that showed and is hidden now (an arrow hidden
+    // in a row while the list it's in moved) leaves the stack too.
+    let mut hid = false;
+    let mut hidden = |h: InstanceId| hid |= c.at.contains_key(&h);
+    let Some(now) = order::restacked(dom, layout, &c.stack[c.at[&id]], &mut hidden) else {
         return false;
     };
-    let mut changed = Vec::new();
-    for s in now {
-        let Some(&i) = c.at.get(&s.id) else {
-            return false;
-        };
+    if hid {
+        return false;
+    }
+    // All found before any is written: restacking tells the pieces to
+    // drop by comparing the entries as they were.
+    let Some(at) = (now.iter().map(|s| c.at.get(&s.id).copied())).collect::<Option<Vec<usize>>>()
+    else {
+        return false;
+    };
+    for (s, i) in now.into_iter().zip(at) {
         if c.stack[i] != s {
             c.stack[i] = s;
-            changed.push(s.id);
+            pieces.remove(&c.drawer(s.id));
         }
-    }
-    for id in changed {
-        pieces.remove(&c.drawer(id));
     }
     true
 }

@@ -5,6 +5,8 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- Hints and Messages look as they do in Roblox: their text is Arial at Roblox's size on one centered line, a Message's outlined in black, and every ScreenGui draws over them. Rook drew them over all GUI in a small legacy font, wrapped a Message's text, and left its outline off. See [Hint and Message](docs/behavior/gui/text.md#hint-and-message).
+- GUI hidden or moved while the list holding it scrolls or changes draws where it belongs. Rook could keep drawing an icon or arrow in a tree view at an old place, or after it was hidden, until a selection redrew the list.
 - Pasting code at the prompt on Windows puts it in at once, and a burst of output redraws the prompt once. Rook redrew the prompt after every pasted key and every printed line, so long pastes and busy output crawled.
 - `rook-player --client-script` runs a Luau file as a LocalScript of the player, as `--script` does on the server. A file could only reach the client by pasting it at the prompt.
 - A player starts out neutral with a white `TeamColor`, as in Roblox. Rook's players started on a grey team that didn't exist, so scripts that color things by team painted them grey in places without teams. See [teams](docs/behavior/characters/spawning.md#teams).

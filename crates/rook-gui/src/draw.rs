@@ -1,9 +1,10 @@
-//! What the local player's ScreenGuis draw, in order: each visible GUI
-//! object's background and border (or legacy style), a ScrollingFrame's
-//! bars, then its image or text, cut by its UICorner and colored by its
-//! UIGradient, then its UIStroke; CanvasGroups drawn apart and laid over
-//! as one; and any Hint or Message over it all; what each world GUI's
-//! canvas draws, the same way; and the names and health bars over heads. Order and clipping rules:
+//! What the local player's ScreenGuis draw, in order, over any Hint or
+//! Message: each visible GUI object's background and border (or legacy
+//! style), a ScrollingFrame's bars, then its image or text, cut by its
+//! UICorner and colored by its UIGradient, then its UIStroke; CanvasGroups
+//! drawn apart and laid over as one; what each world GUI's canvas draws,
+//! the same way; and the names and health bars over heads. Order and
+//! clipping rules:
 //! docs/behavior/gui/layout.md#drawing, docs/behavior/gui/modern.md.
 
 mod caret;

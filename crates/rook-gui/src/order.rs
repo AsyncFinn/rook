@@ -84,7 +84,7 @@ pub(crate) struct Stacked {
 /// order.
 pub(crate) fn stack(dom: &Dom, layout: &Layout, root: InstanceId, clip: Clip) -> Vec<Stacked> {
     let mut tree = Vec::new();
-    collect(dom, layout, root, clip, &mut tree);
+    collect(dom, layout, root, clip, &mut tree, &mut |_| {});
     let mut out = Vec::new();
     if dom.enum_item_property(root, "ZIndexBehavior") == Some("Global") {
         // Measured: every object by ZIndex alone, later in the tree on
@@ -105,12 +105,22 @@ struct Node {
     kids: Vec<Node>,
 }
 
-fn collect(dom: &Dom, layout: &Layout, parent: InstanceId, clip: Clip, out: &mut Vec<Node>) {
+/// What `parent` holds that shows, as stack nodes; `hidden` hears of each
+/// laid-out object skipped as hidden (not what it holds).
+fn collect(
+    dom: &Dom,
+    layout: &Layout,
+    parent: InstanceId,
+    clip: Clip,
+    out: &mut Vec<Node>,
+    hidden: &mut impl FnMut(InstanceId),
+) {
     for kid in gui_children(dom, parent) {
         let Some(&placed) = layout.placed.get(&kid) else {
             continue;
         };
         if !visible(dom, kid) {
+            hidden(kid);
             continue;
         }
         let stacked = Stacked {
@@ -120,7 +130,14 @@ fn collect(dom: &Dom, layout: &Layout, parent: InstanceId, clip: Clip, out: &mut
             turned: clip.turned,
         };
         let mut kids = Vec::new();
-        collect(dom, layout, kid, inside(dom, layout, &stacked), &mut kids);
+        collect(
+            dom,
+            layout,
+            kid,
+            inside(dom, layout, &stacked),
+            &mut kids,
+            hidden,
+        );
         out.push(Node {
             stacked,
             z: dom.number_property(kid, "ZIndex").unwrap_or(1.0) as i64,
@@ -160,9 +177,15 @@ fn inside(dom: &Dom, layout: &Layout, s: &Stacked) -> Clip {
 
 /// `s` as placed now, with what it holds, in no particular order: the
 /// stack entries an object placed again on its own changes. `None` when
-/// what shows changed (`s` or something it holds was hidden or shown),
-/// which only restacking its LayerCollector covers.
-pub(crate) fn restacked(dom: &Dom, layout: &Layout, s: &Stacked) -> Option<Vec<Stacked>> {
+/// `s` was hidden, which only restacking its LayerCollector covers; what
+/// it holds that's hidden goes to `hidden`, so the caller can tell whether
+/// any of it was shown before.
+pub(crate) fn restacked(
+    dom: &Dom,
+    layout: &Layout,
+    s: &Stacked,
+    hidden: &mut impl FnMut(InstanceId),
+) -> Option<Vec<Stacked>> {
     if !visible(dom, s.id) {
         return None;
     }
@@ -171,7 +194,14 @@ pub(crate) fn restacked(dom: &Dom, layout: &Layout, s: &Stacked) -> Option<Vec<S
         ..*s
     };
     let mut tree = Vec::new();
-    collect(dom, layout, s.id, inside(dom, layout, &top), &mut tree);
+    collect(
+        dom,
+        layout,
+        s.id,
+        inside(dom, layout, &top),
+        &mut tree,
+        hidden,
+    );
     let mut out = vec![top];
     let mut flat = Vec::new();
     flatten(tree, &mut flat);

@@ -11,7 +11,7 @@ pub(crate) struct Watch {
     gui: Option<ClassId>,
     /// UIComponent: layouts, padding, UIScale and the size constraints.
     ui: Option<ClassId>,
-    /// Message, and Hint, its subclass: drawn over the GUI.
+    /// Message, and Hint, its subclass: drawn under the ScreenGuis.
     message: Option<ClassId>,
     /// `Camera.ViewportSize`, the screen's size, and
     /// `Workspace.CurrentCamera`, which camera's it is.

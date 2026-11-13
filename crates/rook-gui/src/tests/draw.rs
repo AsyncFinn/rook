@@ -99,7 +99,7 @@ fn borders_go_around_the_background() {
 
 #[test]
 fn hints_and_messages() {
-    let (mut dom, _) = client();
+    let (mut dom, player_gui) = client();
     let ws = dom.find_service("Workspace").unwrap();
     let mut gui = laid_out(&mut dom);
     let empty_message = child(&mut dom, "Message", ws, &[]);
@@ -114,6 +114,19 @@ fn hints_and_messages() {
     assert_eq!(quads.len(), 1, "an empty Hint shows its bar");
     assert_eq!(quads[0].color, [0.0, 0.0, 0.0, 1.0]);
     assert_eq!(quads[0].center.y, 10.0);
+    // Every ScreenGui draws over it, whatever its DisplayOrder.
+    let screen = child(
+        &mut dom,
+        "ScreenGui",
+        player_gui,
+        &[("DisplayOrder", Value::Int32(-1000))],
+    );
+    square(&mut dom, screen, 1, 0.7);
+    gui.sync(&mut dom);
+    let quads = drawn(&mut gui, &dom);
+    assert_eq!(quads.len(), 2);
+    assert_eq!(quads[0].color, [0.0, 0.0, 0.0, 1.0]);
+    dom.set_parent(screen, None).unwrap();
     // Made later, so drawn over the Hint.
     set(
         &mut dom,
@@ -437,4 +450,115 @@ fn text_colors_draw_again_without_laying_out() {
     assert_eq!(glyphs(&drawn(&mut gui, &dom)), [[1.0, 0.0, 0.0, 0.5]; 2]);
     let counts = rook_types::counters::take_local();
     assert_eq!(counts[rook_types::counters::Counter::GuiNodesLaidOut], 0);
+}
+
+/// Incremental drawing equals drawing from scratch, through a seeded run of
+/// the changes a tree-view script (Dark Dex's explorer) makes to recycled
+/// rows in a ScrollingFrame: icons moved by scale inside clipping frames,
+/// rows and arrows shown and hidden, rows and indents moved, rows
+/// restyled, restacked and taken out and put back, the list scrolled.
+#[test]
+fn incremental_draws_match_fresh_ones() {
+    let (mut dom, player_gui) = client();
+    let screen = child(&mut dom, "ScreenGui", player_gui, &[]);
+    let list = child(
+        &mut dom,
+        "ScrollingFrame",
+        screen,
+        &[
+            ("Size", udim2(0.0, 300, 0.0, 200)),
+            ("CanvasSize", udim2(0.0, 0, 0.0, 400)),
+        ],
+    );
+    let mut rows = Vec::new();
+    let mut icons = Vec::new();
+    let mut arrows = Vec::new();
+    let mut indents = Vec::new();
+    for i in 0..6 {
+        let row = frame(&mut dom, list, udim2(1.0, 0, 0.0, 20));
+        set(&mut dom, row, "Position", udim2(0.0, 0, 0.0, i * 20));
+        let indent = frame(&mut dom, row, udim2(1.0, 0, 1.0, 0));
+        set(
+            &mut dom,
+            indent,
+            "BackgroundTransparency",
+            Value::Float32(1.0),
+        );
+        for (x, out) in [(0, &mut arrows), (18, &mut icons)] {
+            let clip = frame(&mut dom, indent, udim2(0.0, 16, 0.0, 16));
+            set(&mut dom, clip, "Position", udim2(0.0, x, 0.0, 2));
+            set(&mut dom, clip, "ClipsDescendants", Value::Bool(true));
+            let map = frame(&mut dom, clip, udim2(16.0, 0, 16.0, 0));
+            out.push((clip, map));
+        }
+        rows.push(row);
+        indents.push(indent);
+    }
+    let mut gui = laid_out(&mut dom);
+    let mut seed = 0x2545_f491_u32;
+    let mut next = |n: u32| {
+        seed ^= seed << 13;
+        seed ^= seed >> 17;
+        seed ^= seed << 5;
+        seed % n
+    };
+    for step in 0..400 {
+        for _ in 0..1 + next(4) {
+            let r = next(6) as usize;
+            match next(9) {
+                0 => {
+                    let (col, row) = (next(14) as f32, next(14) as f32);
+                    let map = [icons[r].1, arrows[r].1][next(2) as usize];
+                    set(
+                        &mut dom,
+                        map,
+                        "Position",
+                        udim2(-col - 0.2, 0, -row - 0.2, 0),
+                    );
+                }
+                1 => {
+                    let shown = next(2) == 0;
+                    set(&mut dom, rows[r], "Visible", Value::Bool(shown));
+                }
+                2 => {
+                    let shown = next(2) == 0;
+                    set(&mut dom, arrows[r].0, "Visible", Value::Bool(shown));
+                }
+                3 => {
+                    let x = next(4) as i32 * 18;
+                    set(&mut dom, indents[r], "Position", udim2(0.0, x, 0.0, 0));
+                }
+                4 => {
+                    let t = next(2) as f32;
+                    set(
+                        &mut dom,
+                        rows[r],
+                        "BackgroundTransparency",
+                        Value::Float32(t),
+                    );
+                }
+                5 => {
+                    let y = next(8) as i32 * 20;
+                    set(&mut dom, rows[r], "Position", udim2(0.0, 0, 0.0, y));
+                }
+                6 => {
+                    let z = Value::Int32(1 + next(3) as i32);
+                    set(&mut dom, icons[r].0, "ZIndex", z);
+                }
+                7 => {
+                    let y = next(10) as f32 * 20.0;
+                    set(&mut dom, list, "CanvasPosition", v2(0.0, y));
+                }
+                _ => {
+                    // A row out of the list and back, or in again.
+                    let parent = [None, Some(list)][next(2) as usize];
+                    dom.set_parent(rows[r], parent).unwrap();
+                }
+            }
+        }
+        gui.sync(&mut dom);
+        let incremental = drawn(&mut gui, &dom);
+        let mut fresh = laid_out(&mut dom);
+        assert_eq!(incremental, drawn(&mut fresh, &dom), "step {step}");
+    }
 }
