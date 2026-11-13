@@ -542,8 +542,15 @@ fn text_colors_draw_again_without_laying_out() {
 /// restyled, restacked and taken out and put back, the list scrolled.
 #[test]
 fn incremental_draws_match_fresh_ones() {
+    for behavior in ["Global", "Sibling"] {
+        incremental_draws(behavior, 0x2545_f491, 400);
+    }
+}
+
+fn incremental_draws(behavior: &str, mut seed: u32, steps: u32) {
     let (mut dom, player_gui) = client();
     let screen = child(&mut dom, "ScreenGui", player_gui, &[]);
+    set_enum(&mut dom, screen, "ZIndexBehavior", behavior);
     let list = child(
         &mut dom,
         "ScrollingFrame",
@@ -578,14 +585,13 @@ fn incremental_draws_match_fresh_ones() {
         indents.push(indent);
     }
     let mut gui = laid_out(&mut dom);
-    let mut seed = 0x2545_f491_u32;
     let mut next = |n: u32| {
         seed ^= seed << 13;
         seed ^= seed >> 17;
         seed ^= seed << 5;
         seed % n
     };
-    for step in 0..400 {
+    for step in 0..steps {
         for _ in 0..1 + next(4) {
             let r = next(6) as usize;
             match next(9) {
@@ -642,6 +648,10 @@ fn incremental_draws_match_fresh_ones() {
         gui.sync(&mut dom);
         let incremental = drawn(&mut gui, &dom);
         let mut fresh = laid_out(&mut dom);
-        assert_eq!(incremental, drawn(&mut fresh, &dom), "step {step}");
+        assert_eq!(
+            incremental,
+            drawn(&mut fresh, &dom),
+            "{behavior} step {step}"
+        );
     }
 }
