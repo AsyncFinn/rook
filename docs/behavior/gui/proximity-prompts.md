@@ -1,4 +1,4 @@
-# ProximityPrompts
+# Proximity prompts
 
 Checked against Studio 0.744 on 2026-11-13.
 
