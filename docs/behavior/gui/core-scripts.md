@@ -100,10 +100,9 @@ the script's default, false, applies. In the legacy page an experience's
 "Reason for Abuse?" is text by design (only Inappropriate Content), and
 "Experience or Person?" switches only with other players to report.
 The chat window shows messages sent and received
-through [TextChatService](chat.md), with each speaker's name. Chat's
-stores need `Player.ChatAvailabilityStatus` (a string starting `Enabled`
-when the player may chat), which Rook's API snapshot doesn't have; Rook
-gives `Enabled`.
+through [TextChatService](chat.md), with each speaker's name, and its
+chat bar only when the local player's `ChatAvailabilityStatus` is
+`Enabled` ([setting up](chat.md#setting-up)).
 
 ### Health bar and backpack
 

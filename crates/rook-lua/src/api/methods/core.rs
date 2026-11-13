@@ -107,24 +107,6 @@ fn platform(lua: &Lua, _: InstanceId, _: &Args) -> ApiResult<Outcome> {
     Outcome::ret(lua, crate::types::enums::named_item(lua, "Platform", name)?)
 }
 
-/// Properties missing from Rook's API snapshot that CoreScripts read and
-/// need a value of the right type from (the rest read as nil): the
-/// version strings the settings menu shows, the player's console name and
-/// whether they may chat.
-pub(crate) fn hidden_property(lua: &Lua, class: &str, key: &str) -> mlua::Result<LuaValue> {
-    let text = match (class, key) {
-        ("Player", "PlatformName") => "",
-        // Observed: chat's stores test it for an "Enabled" prefix; a local
-        // player is never region-locked or age-gated.
-        ("Player", "ChatAvailabilityStatus") => "Enabled",
-        // Inference: Roblox's servers migrate a live experience; nothing
-        // does here, as in Studio, where a legacy place stays legacy.
-        ("Chat", "IsAutoMigrated") => return Ok(LuaValue::Boolean(false)),
-        _ => return Ok(LuaValue::Nil),
-    };
-    Ok(LuaValue::String(lua.create_string(text)?))
-}
-
 /// Start the CoreScript `name` (`"CoreScripts/PlayerList"`) under
 /// `parent`, as a new CoreScript instance running its bytecode.
 fn add_core_script_local(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {

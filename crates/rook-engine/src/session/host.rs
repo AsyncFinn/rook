@@ -525,6 +525,7 @@ impl ClientHost {
                 if let Some(pid) = dom.property_id(players, "LocalPlayer") {
                     dom.load_property(players, pid, Value::Ref(Some(local.to_ref())));
                 }
+                crate::chat::set_up_local_player(dom, local);
                 // PlayerScripts exists only on the client.
                 if let Ok(ps) = dom.create_by_name("PlayerScripts") {
                     dom.attach_unchecked(ps, local);
