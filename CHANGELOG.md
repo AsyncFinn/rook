@@ -5,6 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- Scrolling or updating a busy GUI costs only what changed: text shown before isn't shaped again, a text color change recolors it in place, hiding, showing or moving an object stacks again only what holds it, image and input-only properties no longer lay out the whole ScreenGui, and the mouse reads the stack already drawn. Rook redid each of these for the whole ScreenGui and stacked every ScreenGui again on each mouse move, and an object hidden inside a list could keep drawing.
 - `rook-player --client-script` runs a Luau file as a LocalScript of the player, as `--script` does on the server. A file could only reach the client by pasting it at the prompt.
 - A player starts out neutral with a white `TeamColor`, as in Roblox. Rook's players started on a grey team that didn't exist, so scripts that color things by team painted them grey in places without teams. See [teams](docs/behavior/characters/spawning.md#teams).
 - A falling part that brushes past an edge it barely overlaps or just misses drops straight past it, as in Roblox. Rook gave it a sideways shove and spin, so a ball dropped beside a wall rolled away from it. See [landing](docs/behavior/physics/landing.md#grazing-an-edge).

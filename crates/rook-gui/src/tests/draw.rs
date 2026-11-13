@@ -294,6 +294,62 @@ fn changes_draw_again_only_their_pieces() {
     assert_eq!(bordered, [true, true, false, true]);
 }
 
+/// Hiding, showing or taking out an object a UIListLayout places: what's
+/// hidden or gone stops drawing, the rows it moves draw again, and the
+/// rest of the screen keeps its pieces, stacked by sibling (only the
+/// list's run stacks again) or by ZIndex alone.
+#[test]
+fn hiding_in_a_list_restacks_only_the_list() {
+    hiding_in_a_list("Sibling");
+    hiding_in_a_list("Global");
+}
+
+fn hiding_in_a_list(behavior: &str) {
+    let (mut dom, player_gui) = client();
+    let screen = child(&mut dom, "ScreenGui", player_gui, &[]);
+    set_enum(&mut dom, screen, "ZIndexBehavior", behavior);
+    square(&mut dom, screen, 1, 0.1);
+    let panel = child(
+        &mut dom,
+        "Frame",
+        screen,
+        &[("Size", udim2(0.0, 200, 0.0, 300))],
+    );
+    child(&mut dom, "UIListLayout", panel, &[]);
+    let rows: Vec<InstanceId> = (0..3)
+        .map(|i| {
+            let color = Value::Color3(Color3::new(0.5 + i as f32 / 10.0, 0.5, 0.0));
+            let size = udim2(1.0, 0, 0.0, 20);
+            child(
+                &mut dom,
+                "Frame",
+                panel,
+                &[("Size", size), ("BackgroundColor3", color)],
+            )
+        })
+        .collect();
+    let mut gui = laid_out(&mut dom);
+    let mut before = gui.draw(&dom);
+    let mut step = |dom: &mut Dom, what: &str| {
+        gui.sync(dom);
+        let now = gui.draw(dom);
+        let kept: Vec<bool> = (now.iter())
+            .map(|p| before.iter().any(|b| Arc::ptr_eq(b, p)))
+            .collect();
+        before = now;
+        let fresh = drawn(&mut laid_out(dom), dom);
+        assert_eq!(drawn(&mut gui, dom), fresh, "{behavior}: {what}");
+        kept
+    };
+    set(&mut dom, rows[1], "Visible", Value::Bool(false));
+    assert_eq!(step(&mut dom, "hidden"), [true, true, true, false]);
+    set(&mut dom, rows[1], "Visible", Value::Bool(true));
+    assert_eq!(step(&mut dom, "shown"), [true, true, true, false, false]);
+    // The panel it left draws again too (what leaves may be its UICorner).
+    dom.set_parent(rows[0], None).unwrap();
+    assert_eq!(step(&mut dom, "taken out"), [true, false, false, false]);
+}
+
 /// A ScreenGui coming or going, or GUI moving between ScreenGuis, lays
 /// out and draws again only the trees it left and joined: the others'
 /// pieces stay the same `Arc`, and the screen ends as a fresh drawing
@@ -416,7 +472,9 @@ fn text_colors_draw_again_without_laying_out() {
         ],
     );
     let mut gui = Gui::default();
-    gui.set_content(std::sync::Arc::new(rook_content::Resolver::new(config)));
+    gui.set_content(std::sync::Arc::new(rook_content::Resolver::new(
+        config.clone(),
+    )));
     gui.sync(&mut dom);
     let glyphs = |quads: &[GuiQuad]| -> Vec<[f32; 4]> {
         (quads.iter())
@@ -433,8 +491,33 @@ fn text_colors_draw_again_without_laying_out() {
         Value::Color3(Color3::new(1.0, 0.0, 0.0)),
     );
     set(&mut dom, label, "TextTransparency", Value::Float32(0.5));
+    set(
+        &mut dom,
+        label,
+        "TextStrokeTransparency",
+        Value::Float32(0.0),
+    );
     gui.sync(&mut dom);
     assert_eq!(glyphs(&drawn(&mut gui, &dom)), [[1.0, 0.0, 0.0, 0.5]; 2]);
     let counts = rook_types::counters::take_local();
     assert_eq!(counts[rook_types::counters::Counter::GuiNodesLaidOut], 0);
+    // Recolored where it was laid out, outline and all, as a fresh
+    // layout draws it (its own glyph masks apart).
+    let mut fresh = Gui::default();
+    fresh.set_content(std::sync::Arc::new(rook_content::Resolver::new(config)));
+    fresh.sync(&mut dom);
+    let looks = |quads: Vec<GuiQuad>| -> Vec<_> {
+        (quads.into_iter())
+            .map(|q| {
+                (
+                    q.center,
+                    q.size,
+                    q.color,
+                    q.clip,
+                    std::mem::discriminant(&q.paint),
+                )
+            })
+            .collect()
+    };
+    assert_eq!(looks(drawn(&mut gui, &dom)), looks(drawn(&mut fresh, &dom)));
 }

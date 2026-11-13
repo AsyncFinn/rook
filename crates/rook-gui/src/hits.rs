@@ -7,7 +7,7 @@ use rook_dom::{Dom, InstanceId};
 use rook_types::Viewer;
 
 use crate::Gui;
-use crate::order::{self, Clip, Stacked};
+use crate::order::{self, Stacked};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct WorldHit {
@@ -45,14 +45,14 @@ impl Gui {
     /// The local player's on-screen GUI objects at `at` (GUI
     /// coordinates, below the top bar), top first: what
     /// `GetGuiObjectsAtPosition` lists. Measured: as of the last frame's
-    /// layout (a Frame parented just before isn't listed).
-    pub fn objects_at(&self, dom: &Dom, at: Vec2) -> Vec<InstanceId> {
-        let mut out = Vec::new();
-        for screen in order::screens(dom).into_iter().rev() {
-            let stack = order::stack(dom, &self.layout, screen, Clip::NONE);
-            out.extend(top_first(&stack, at));
-        }
-        out
+    /// layout (a Frame parented just before isn't listed). Read from the
+    /// stacks the screen draws, so what takes the mouse is what shows.
+    pub fn objects_at(&mut self, dom: &Dom, at: Vec2) -> Vec<InstanceId> {
+        let stacks = self.screen.stacks(dom, &self.layout);
+        stacks
+            .rev()
+            .flat_map(|stack| top_first(stack, at))
+            .collect()
     }
 
     /// Whether a shown on-screen GuiButton has `Modal` on, which frees

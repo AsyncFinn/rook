@@ -78,15 +78,18 @@ pub(crate) struct Stacked {
     pub(crate) clip: [f32; 4],
     /// An ancestor is turned (which turns clipping off below it).
     pub(crate) turned: bool,
+    /// How many stacked objects hold it: in a `Sibling` stack, what an
+    /// object holds is the run after it that is deeper.
+    pub(crate) depth: u32,
 }
 
 /// What a LayerCollector holds, bottom first, in its `ZIndexBehavior`'s
 /// order.
 pub(crate) fn stack(dom: &Dom, layout: &Layout, root: InstanceId, clip: Clip) -> Vec<Stacked> {
     let mut tree = Vec::new();
-    collect(dom, layout, root, clip, &mut tree);
+    collect(dom, layout, root, (clip, 0), &mut tree, &mut |_| {});
     let mut out = Vec::new();
-    if dom.enum_item_property(root, "ZIndexBehavior") == Some("Global") {
+    if !by_sibling(dom, root) {
         // Measured: every object by ZIndex alone, later in the tree on
         // top on a tie.
         let mut flat = Vec::new();
@@ -105,12 +108,23 @@ struct Node {
     kids: Vec<Node>,
 }
 
-fn collect(dom: &Dom, layout: &Layout, parent: InstanceId, clip: Clip, out: &mut Vec<Node>) {
+/// The visible objects `parent` holds, as a tree, each `depth` deep or
+/// deeper; `hidden` is given each laid-out one that isn't (what it holds
+/// is passed over).
+fn collect(
+    dom: &Dom,
+    layout: &Layout,
+    parent: InstanceId,
+    (clip, depth): (Clip, u32),
+    out: &mut Vec<Node>,
+    hidden: &mut impl FnMut(InstanceId),
+) {
     for kid in gui_children(dom, parent) {
         let Some(&placed) = layout.placed.get(&kid) else {
             continue;
         };
         if !visible(dom, kid) {
+            hidden(kid);
             continue;
         }
         let stacked = Stacked {
@@ -118,9 +132,11 @@ fn collect(dom: &Dom, layout: &Layout, parent: InstanceId, clip: Clip, out: &mut
             placed,
             clip: clip.rect,
             turned: clip.turned,
+            depth,
         };
         let mut kids = Vec::new();
-        collect(dom, layout, kid, inside(dom, layout, &stacked), &mut kids);
+        let inner = (inside(dom, layout, &stacked), depth + 1);
+        collect(dom, layout, kid, inner, &mut kids, hidden);
         out.push(Node {
             stacked,
             z: dom.number_property(kid, "ZIndex").unwrap_or(1.0) as i64,
@@ -158,11 +174,14 @@ fn inside(dom: &Dom, layout: &Layout, s: &Stacked) -> Clip {
     inside
 }
 
-/// `s` as placed now, with what it holds, in no particular order: the
-/// stack entries an object placed again on its own changes. `None` when
-/// what shows changed (`s` or something it holds was hidden or shown),
-/// which only restacking its LayerCollector covers.
-pub(crate) fn restacked(dom: &Dom, layout: &Layout, s: &Stacked) -> Option<Vec<Stacked>> {
+/// `s` as placed now, then what it holds in sibling order (the run it
+/// takes in a `Sibling` stack), and the laid-out objects in it that are
+/// hidden. `None` when `s` itself is hidden.
+pub(crate) fn restacked(
+    dom: &Dom,
+    layout: &Layout,
+    s: &Stacked,
+) -> Option<(Vec<Stacked>, Vec<InstanceId>)> {
     if !visible(dom, s.id) {
         return None;
     }
@@ -171,12 +190,20 @@ pub(crate) fn restacked(dom: &Dom, layout: &Layout, s: &Stacked) -> Option<Vec<S
         ..*s
     };
     let mut tree = Vec::new();
-    collect(dom, layout, s.id, inside(dom, layout, &top), &mut tree);
+    let mut hidden = Vec::new();
+    let inner = (inside(dom, layout, &top), s.depth + 1);
+    collect(dom, layout, s.id, inner, &mut tree, &mut |id| {
+        hidden.push(id)
+    });
     let mut out = vec![top];
-    let mut flat = Vec::new();
-    flatten(tree, &mut flat);
-    out.extend(flat.into_iter().map(|n| n.stacked));
-    Some(out)
+    sibling_order(tree, &mut out);
+    Some((out, hidden))
+}
+
+/// Whether `root`'s stack puts each object with all it holds over it,
+/// so what an object holds is one run right after it.
+pub(crate) fn by_sibling(dom: &Dom, root: InstanceId) -> bool {
+    dom.enum_item_property(root, "ZIndexBehavior") != Some("Global")
 }
 
 fn flatten(nodes: Vec<Node>, out: &mut Vec<Node>) {

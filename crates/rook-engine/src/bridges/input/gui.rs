@@ -49,7 +49,8 @@ impl DataModel {
     fn gui_hits(&self) -> Vec<InstanceId> {
         let (x, y) = gui_point(self.runtime.world().input.mouse);
         let mut hits = {
-            let w = self.runtime.world();
+            let mut w = self.runtime.world_mut();
+            let w = &mut *w;
             w.gui.objects_at(&w.dom, Vec2::new(x, y))
         };
         if hits.is_empty() {
