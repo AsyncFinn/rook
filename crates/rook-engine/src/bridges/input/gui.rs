@@ -43,9 +43,11 @@ impl GuiInput {
 }
 
 impl DataModel {
-    /// The GUI objects under the cursor that take the mouse, top first:
-    /// on the screen, or else on the world GUI the mouse's ray meets
-    /// first, unless a part is in front of it.
+    /// The GUI objects under the cursor, top first: on the screen, then,
+    /// unless one of those takes the mouse, on the world GUI the mouse's
+    /// ray meets first, unless a part is in front of it. Measured: an
+    /// inactive Frame or TextLabel over a SurfaceGui button lets it take
+    /// the click, an `Active` object or a button doesn't.
     fn gui_hits(&self) -> Vec<InstanceId> {
         let (x, y) = gui_point(self.runtime.world().input.mouse);
         let mut hits = {
@@ -53,13 +55,19 @@ impl DataModel {
             let w = &mut *w;
             w.gui.objects_at(&w.dom, Vec2::new(x, y))
         };
-        if hits.is_empty() {
-            hits = self.world_gui_hits();
+        self.retain_interactable(&mut hits);
+        if !self.any_active(&hits) {
+            let mut world = self.world_gui_hits();
+            self.retain_interactable(&mut world);
+            hits.extend(world);
         }
-        let w = self.runtime.world();
-        // Measured: non-interactable objects take nothing.
-        hits.retain(|&id| w.dom.bool_property(id, "Interactable") != Some(false));
         hits
+    }
+
+    /// Measured: non-interactable objects take nothing.
+    fn retain_interactable(&self, hits: &mut Vec<InstanceId>) {
+        let w = self.runtime.world();
+        hits.retain(|&id| w.dom.bool_property(id, "Interactable") != Some(false));
     }
 
     fn world_gui_hits(&self) -> Vec<InstanceId> {
