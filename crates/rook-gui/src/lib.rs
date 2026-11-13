@@ -92,8 +92,9 @@ pub struct Gui {
     tag_changes: u64,
     tags_drawn_at: Option<u64>,
     watch: Option<Watch>,
-    /// SurfaceGuis and BillboardGuis that have been in the Workspace, so
-    /// layout needn't search it; ones that left are dropped at layout.
+    /// SurfaceGuis and BillboardGuis that have been in the Workspace or
+    /// the local PlayerGui, so layout needn't search them; ones that left
+    /// are dropped at layout.
     in_world: FxHashSet<InstanceId>,
     /// Hints and Messages that have been in the Workspace or a player, so
     /// drawing needn't search for them; ones that left are dropped at
@@ -297,6 +298,13 @@ impl Gui {
                 self.in_world
                     .extend(found.into_iter().filter(|&id| world::is_world_gui(dom, id)));
             }
+            let player_gui =
+                (dom.local_player()).and_then(|p| dom.find_first_child_of_class(p, "PlayerGui"));
+            if let Some(pg) = player_gui {
+                let found = dom.descendants(pg).into_iter();
+                self.in_world
+                    .extend(found.filter(|&id| world::is_world_gui(dom, id)));
+            }
             let holders = (dom.find_service("Workspace").into_iter()).chain(
                 dom.find_service("Players")
                     .map_or(Vec::new(), |p| dom.children(p).to_vec()),
@@ -378,9 +386,7 @@ impl Gui {
         rook_types::gauge!(GuiNodes, self.layout.placed.len());
         if self.stale {
             profiling::scope!("Gui::layout");
-            let workspace = dom.find_service("Workspace");
-            self.in_world
-                .retain(|&id| workspace.is_some_and(|ws| dom.is_ancestor_of(ws, id)));
+            self.in_world.retain(|&id| world::held_where_drawn(dom, id));
             self.messages.retain(|&id| dom.parent(id).is_some());
             // A server draws no world GUI: it lays one out only when a
             // script reads it, as it does GUI in storage.
@@ -497,8 +503,6 @@ impl Gui {
         // What shows, and what input reaches, may have changed.
         self.laid_out += 1;
         self.world_listed += 1;
-        let workspace = dom.find_service("Workspace");
-        let in_workspace = |id: InstanceId| workspace.is_some_and(|ws| dom.is_ancestor_of(ws, id));
         let client = dom.local_player().is_some();
         let mut trees = FxHashSet::default();
         for Moved {
@@ -520,7 +524,7 @@ impl Gui {
                 }
             }
             self.in_world
-                .retain(|&id| !ids.contains(&id) || in_workspace(id));
+                .retain(|&id| !ids.contains(&id) || world::held_where_drawn(dom, id));
             self.messages
                 .retain(|&id| !ids.contains(&id) || dom.parent(id).is_some());
             let placed =

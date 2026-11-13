@@ -47,6 +47,7 @@
     - [GUI modern UI objects](behavior/gui/modern.md): UICorner, UIStroke, UIGradient, flex, UITableLayout, UIPageLayout, CanvasGroup
     - [Roblox's core scripts](behavior/gui/core-scripts.md): where Studio keeps them, running them as Roblox's own code, StyleSheets, what Rook lacks
     - [Chat](behavior/gui/chat.md): TextChatService's setup, sending and delivering messages
+    - [Proximity prompts](behavior/gui/proximity-prompts.md): which show, keys and holds, the events on both sides, Roblox's prompt GUI
   - Lighting
     - [Local lights](behavior/lighting/local-lights.md): PointLight, SpotLight and SurfaceLight
     - [Ambient and OutdoorAmbient](behavior/lighting/ambient.md)

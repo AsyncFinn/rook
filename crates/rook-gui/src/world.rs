@@ -18,6 +18,19 @@ pub(crate) fn is_world_gui(dom: &Dom, id: InstanceId) -> bool {
     matches!(dom.class_name(id), "SurfaceGui" | "BillboardGui")
 }
 
+/// Whether `gui` is somewhere a client draws world GUI from: Workspace or
+/// the local player's PlayerGui, however deep (measured: one inside a
+/// ScreenGui there draws).
+pub(crate) fn held_where_drawn(dom: &Dom, gui: InstanceId) -> bool {
+    let in_workspace = dom
+        .find_service("Workspace")
+        .is_some_and(|ws| dom.is_ancestor_of(ws, gui));
+    in_workspace
+        || (dom.local_player())
+            .and_then(|p| dom.find_first_child_of_class(p, "PlayerGui"))
+            .is_some_and(|pg| dom.is_ancestor_of(pg, gui))
+}
+
 /// The camera world GUI is seen from: `Workspace.CurrentCamera`.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Eye {
@@ -158,9 +171,7 @@ impl Hung {
         }
         let workspace = dom.find_service("Workspace");
         let in_workspace = |id| workspace.is_some_and(|ws| dom.is_ancestor_of(ws, id));
-        let player_gui = player.and_then(|p| dom.find_first_child_of_class(p, "PlayerGui"));
-        let held = in_workspace(gui) || player_gui.is_some_and(|pg| dom.is_ancestor_of(pg, gui));
-        held && self.on.is_some_and(in_workspace) && self.place(dom).is_some()
+        held_where_drawn(dom, gui) && self.on.is_some_and(in_workspace) && self.place(dom).is_some()
     }
 }
 
