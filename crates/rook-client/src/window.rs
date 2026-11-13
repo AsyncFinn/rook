@@ -190,7 +190,7 @@ impl App {
     pub(crate) fn attach(&mut self, mut gfx: Gfx) {
         let surface = gfx.frames.get();
         self.install.apply(surface.renderer_mut());
-        surface.renderer_mut().set_scene(&self.scene.scene);
+        self.scene.show_all(surface.renderer_mut());
         let (width, height) = surface.size();
         self.game.set_viewport(width, height);
         self.gfx = Some(gfx);

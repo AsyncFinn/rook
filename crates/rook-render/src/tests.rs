@@ -74,7 +74,6 @@ fn updating_parts_draws_what_a_new_scene_draws() {
             part(PartShape::Block, 6.0, green, 0.0),
             decal(-6.0),
         ],
-        images: FxHashMap::from_iter([(hash, image())]),
         // The shadow map: voxel shadows take moved parts only every half
         // second, so they'd still show where the parts were.
         lighting: Lighting {
@@ -85,6 +84,7 @@ fn updating_parts_draws_what_a_new_scene_draws() {
     };
     scene.parts[3].material = Material::Plastic;
     scene.parts[3].surfaces = [Some(SurfacePattern::Studs); 6];
+    incremental.take_images([(hash, image())]);
     incremental.set_scene(&scene);
     let camera = Camera::look_at(Vec3::new(0.0, 3.0, 16.0), Vec3::ZERO);
     incremental.render_to_image(64, 32, &camera).unwrap();
@@ -111,6 +111,7 @@ fn updating_parts_draws_what_a_new_scene_draws() {
     incremental.move_parts(&scene, &[0, 1, 3, 5]);
     incremental.finish_uploads();
 
+    fresh.take_images([(hash, image())]);
     fresh.set_scene(&scene);
     fresh.finish_uploads();
     assert_eq!(
@@ -205,7 +206,6 @@ fn decals_draw_on_their_face() {
     };
     let scene = Scene {
         parts: vec![base, decal],
-        images: FxHashMap::from_iter([(hash, image())]),
         lighting: Lighting {
             ambient: [1.0; 3],
             outdoor_ambient: [0.0; 3],
@@ -214,6 +214,7 @@ fn decals_draw_on_their_face() {
         },
         ..Scene::default()
     };
+    r.take_images([(hash, image())]);
     r.set_scene(&scene);
     assert!(r.is_uploading());
     // From +Z the Back face's image is upright: red top left, white
@@ -273,7 +274,6 @@ fn images_win_their_plane_but_not_a_part_above() {
         plate.position.y = plate_top - 0.025;
         let scene = Scene {
             parts: vec![floor, texture, plate],
-            images: FxHashMap::from_iter([(hash, red.clone())]),
             lighting: Lighting {
                 ambient: [1.0; 3],
                 outdoor_ambient: [0.0; 3],
@@ -282,6 +282,7 @@ fn images_win_their_plane_but_not_a_part_above() {
             },
             ..Scene::default()
         };
+        r.take_images([(hash, red.clone())]);
         r.set_scene(&scene);
         // 19 studs up, looking 15 degrees down, as at the lift.
         let camera = Camera {
@@ -929,9 +930,9 @@ fn far_meshes_draw_their_lower_level() {
         drawn_over: Some(0),
         ..base
     };
+    r.take_images([(picture, image())]);
     r.set_scene(&Scene {
         parts: vec![base, decal],
-        images: FxHashMap::from_iter([(picture, image())]),
         meshes: FxHashMap::from_iter([(mesh, Arc::new(two))]),
         ..Scene::default()
     });
@@ -948,7 +949,7 @@ fn far_meshes_draw_their_lower_level() {
 /// A scene drawing with everything that binds images or meshes: mesh
 /// files, a mesh texture, material maps, a decal, transparent parts,
 /// Glass, a ForceField and a skybox.
-fn busy_scene() -> Scene {
+fn busy_scene() -> (Scene, Vec<(ImageHash, Arc<Image>)>) {
     let (a, b) = (ImageHash([1; 32]), ImageHash([2; 32]));
     let (m1, m2) = (MeshHash([3; 32]), MeshHash([4; 32]));
     let mut parts = vec![
@@ -986,16 +987,16 @@ fn busy_scene() -> Scene {
         },
         ..part(PartShape::Block, -6.0, [1.0; 3], 0.0)
     });
-    Scene {
+    let scene = Scene {
         parts,
-        images: FxHashMap::from_iter([(a, image()), (b, image())]),
         meshes: FxHashMap::from_iter([(m1, square(2.0)), (m2, square(1.5))]),
         lighting: Lighting {
             skybox: Some([a, b, a, b, a, b]),
             ..Lighting::default()
         },
         ..Scene::default()
-    }
+    };
+    (scene, vec![(a, image()), (b, image())])
 }
 
 /// Every image in one table and each pipeline's draws in a few
@@ -1015,10 +1016,11 @@ fn table_and_multi_draws_draw_what_bound_sets_draw() {
         renderer::ImageBinding::Sets(_)
     ));
     assert!(!plain.multi_draw);
-    let scene = busy_scene();
+    let (scene, images) = busy_scene();
     let camera = Camera::look_at(Vec3::new(0.0, 4.0, 14.0), Vec3::ZERO);
     let mut frames = Vec::new();
     for r in [&mut fast, &mut plain] {
+        r.take_images(images.clone());
         r.set_scene(&scene);
         r.finish_uploads();
         frames.push(r.render_to_image(96, 64, &camera).unwrap());
@@ -1064,12 +1066,13 @@ fn block_compressed_maps_draw_the_same_decoded() {
     };
     let scene = Scene {
         parts: vec![block],
-        images: FxHashMap::from_iter([(hash, Arc::new(map))]),
         ..Scene::default()
     };
+    let map = Arc::new(map);
     let camera = Camera::look_at(Vec3::new(0.0, 3.0, 6.0), Vec3::ZERO);
     let mut frames = Vec::new();
     for r in [&mut fast, &mut plain] {
+        r.take_images([(hash, map.clone())]);
         r.set_scene(&scene);
         r.finish_uploads();
         frames.push(r.render_to_image(48, 32, &camera).unwrap());
@@ -1111,9 +1114,9 @@ fn lit_middle(
     sun: Vec3,
     camera: &Camera,
 ) -> u32 {
+    r.take_images(maps);
     r.set_scene(&Scene {
         parts: vec![block],
-        images: maps.into_iter().collect(),
         lighting: Lighting {
             sun_direction: sun.normalize(),
             ..Lighting::default()
@@ -1216,8 +1219,9 @@ fn dropped_meshes_make_room_for_others() {
     let Ok(mut r) = Renderer::headless() else {
         return;
     };
-    let mut scene = busy_scene();
+    let (mut scene, images) = busy_scene();
     let camera = Camera::look_at(Vec3::new(0.0, 4.0, 14.0), Vec3::ZERO);
+    r.take_images(images.clone());
     r.set_scene(&scene);
     r.finish_uploads();
     r.render_to_image(96, 64, &camera).unwrap();
@@ -1237,6 +1241,7 @@ fn dropped_meshes_make_room_for_others() {
     let Ok(mut fresh) = Renderer::headless() else {
         return;
     };
+    fresh.take_images(images);
     fresh.set_scene(&scene);
     fresh.finish_uploads();
     assert_eq!(

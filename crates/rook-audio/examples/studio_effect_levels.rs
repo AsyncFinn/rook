@@ -144,14 +144,11 @@ fn main() {
     let path = std::env::args()
         .nth(1)
         .expect("the path of impact_explosion_03.mp3");
-    let audio = Audio::decode(&std::fs::read(path).expect("read")).expect("decode");
-    let channels = usize::from(audio.channels.max(1));
+    let audio =
+        std::sync::Arc::new(Audio::decode(&std::fs::read(path).expect("read")).expect("decode"));
+    let mut reader = audio.reader();
     let source: Vec<Frame> = (0..audio.frames())
-        .map(|i| {
-            let s =
-                |c: usize| f32::from(audio.samples[i * channels + c.min(channels - 1)]) / 32768.0;
-            [s(0), s(1)]
-        })
+        .map(|i| reader.frame(i).map(|s| f32::from(s) / 32768.0))
         .collect();
     println!("{} Hz, {:.3} s", audio.sample_rate, audio.seconds());
     println!(

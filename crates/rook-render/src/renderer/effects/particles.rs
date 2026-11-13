@@ -178,7 +178,7 @@ impl Renderer {
             }),
         ];
         for hash in hashes.into_iter().flatten() {
-            self.image_readiness(hash, Some(scene));
+            self.image_readiness(hash);
         }
     }
 

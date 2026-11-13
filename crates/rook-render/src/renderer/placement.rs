@@ -85,7 +85,7 @@ impl Renderer {
         self.terrain = scene.terrain;
         // The skybox's images go up like any other image.
         for hash in scene.lighting.skybox.into_iter().flatten() {
-            self.image_readiness(hash, Some(scene));
+            self.image_readiness(hash);
         }
     }
 
@@ -273,7 +273,7 @@ impl Renderer {
             let Some(hash) = *image else {
                 continue;
             };
-            match self.image_readiness(hash, scene) {
+            match self.image_readiness(hash) {
                 // A missing map leaves the material's plain value; a
                 // missing image hides what draws it.
                 Readiness::Missing if slot > 0 => *image = None,
@@ -352,19 +352,15 @@ impl Renderer {
         }
     }
 
-    pub(super) fn image_readiness(&mut self, hash: ImageHash, scene: Option<&Scene>) -> Readiness {
+    /// Whether `hash`'s image is up, or going up (queued now if it was
+    /// handed over and parked); missing if it never was.
+    pub(super) fn image_readiness(&mut self, hash: ImageHash) -> Readiness {
         if self.images.contains(&hash) {
-            return Readiness::Ready;
-        }
-        if self.images.is_queued(&hash) {
-            return Readiness::Waiting;
-        }
-        match scene.and_then(|s| s.images.get(&hash)) {
-            Some(file) => {
-                self.images.request(hash, file);
-                Readiness::Waiting
-            }
-            None => Readiness::Missing,
+            Readiness::Ready
+        } else if self.images.claim(hash) {
+            Readiness::Waiting
+        } else {
+            Readiness::Missing
         }
     }
 

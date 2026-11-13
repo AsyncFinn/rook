@@ -47,7 +47,14 @@ that is either C, `minimp3`, or unmaintained). The format is picked by the
 first bytes, never the name: `sounds/swordslash.wav` holds Ogg.
 Everything decodes to one layout, 16-bit interleaved PCM in one or two
 channels at the file's rate (half the memory of floats; more channels
-fold to two). Damaged files fail as `Invalid` with an error, and a
+fold to two). A sound whose samples would take over 256 KB that isn't a
+WAV keeps its file's bytes instead, about a tenth of the size, and each
+voice decodes it as it plays, as Unity's "Compressed In Memory" and FMOD's
+compressed samples do (`decode/audio/reader.rs`); the load still decodes
+it once, for its length and to check it. Played on, it gives the same
+samples as decoded whole; a seek can land up to a block (some 10 ms)
+off in a few Ogg files whose packets the decoder stamps differently
+after a seek. Damaged files fail as `Invalid` with an error, and a
 decoder panic is caught and reported the same way; a file cut off part way
 keeps what decoded before the cut, and a single bad frame is skipped
 (Approximation: what players do).

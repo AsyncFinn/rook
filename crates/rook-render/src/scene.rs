@@ -6,7 +6,6 @@ use std::sync::Arc;
 
 use glam::{Mat3, Vec2, Vec3};
 
-use rook_content::decode::image::Image;
 use rook_content::decode::mesh::Mesh;
 use rook_types::{
     Material, MaterialSet, NormalDetail, NormalId, PartShape, SurfacePattern, TilePattern, Tiling,
@@ -423,9 +422,6 @@ pub struct Scene {
     /// The mesh files parts may draw ([`DrawShape::File`]). The renderer
     /// uploads each the first time a part draws it.
     pub meshes: FxHashMap<MeshHash, Arc<Mesh>>,
-    /// The images parts and their layers may draw. The renderer uploads
-    /// each the first time something draws it, a few per frame.
-    pub images: FxHashMap<ImageHash, Arc<Image>>,
 }
 
 /// The effect slots that changed since the renderer last took them

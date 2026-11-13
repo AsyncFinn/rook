@@ -1,12 +1,7 @@
 use super::*;
 
 fn audio(samples: Vec<i16>) -> Arc<Audio> {
-    Arc::new(Audio {
-        format: None,
-        sample_rate: 100,
-        channels: 1,
-        samples,
-    })
+    Arc::new(Audio::from_pcm(100, 1, samples))
 }
 
 fn node(key: u32, kind: NodeKind<u32>) -> Node<u32> {

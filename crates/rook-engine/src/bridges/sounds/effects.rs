@@ -81,21 +81,12 @@ pub(super) fn parent_group(dom: &Dom, group: InstanceId) -> Option<InstanceId> {
 /// -80 dB read 0, a full distortion 971, a group at Volume 0 or with
 /// effects changed nothing). `chain` keeps the effects' state from frame
 /// to frame.
-pub(super) fn loudness_through(audio: &Audio, from: f64, to: f64, chain: &mut Chain) -> f64 {
-    let rate = f64::from(audio.sample_rate);
-    let channels = usize::from(audio.channels.max(1));
-    let frames = audio.frames();
-    let a = ((from.max(0.0) * rate) as usize).min(frames);
-    let b = ((to.max(0.0) * rate) as usize).clamp(a, frames);
-    if b == a {
+pub(super) fn loudness_through(reader: &mut Reader, from: f64, to: f64, chain: &mut Chain) -> f64 {
+    let Some((a, b)) = frames_between(reader.audio(), from, to) else {
         return 0.0;
-    }
+    };
     let mut block: Vec<rook_audio::effects::Frame> = (a..b)
-        .map(|i| {
-            let s =
-                |c: usize| f32::from(audio.samples[i * channels + c.min(channels - 1)]) / 32768.0;
-            [s(0), s(1)]
-        })
+        .map(|i| reader.frame(i).map(|s| f32::from(s) / 32768.0))
         .collect();
     chain.process(&mut block);
     let sum: f64 = block
@@ -103,6 +94,15 @@ pub(super) fn loudness_through(audio: &Audio, from: f64, to: f64, chain: &mut Ch
         .map(|f| f64::from(f[0]).powi(2) + f64::from(f[1]).powi(2))
         .sum();
     (sum / (2 * block.len()) as f64).sqrt() * 1000.0
+}
+
+/// The frames from `from` to `to` seconds into `audio`, if any.
+pub(super) fn frames_between(audio: &Audio, from: f64, to: f64) -> Option<(usize, usize)> {
+    let rate = f64::from(audio.sample_rate);
+    let frames = audio.frames();
+    let a = ((from.max(0.0) * rate) as usize).min(frames);
+    let b = ((to.max(0.0) * rate) as usize).clamp(a, frames);
+    (b > a).then_some((a, b))
 }
 
 impl DataModel {

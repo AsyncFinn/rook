@@ -138,7 +138,10 @@ pub struct SceneCache {
     gui_waiting: FxHashMap<FileRef, Vec<String>>,
     /// The GUI's images that finished, for it to take.
     gui_arrived: Vec<(String, Option<rook_gui::GuiImage>)>,
-    hand: Option<(Arc<rook_content::decode::image::Image>, ImageHash)>,
+    /// The images loaded, and those the renderer is still to take.
+    images: content::images::LoadedImages,
+    /// The ClickDetector hand's image once made, and its size in pixels.
+    hand: Option<(ImageHash, Vec2)>,
 }
 
 impl SceneCache {
@@ -146,10 +149,10 @@ impl SceneCache {
     /// `camera` first.
     /// FloorWires' floors are `floors` ([`Floors::build`]).
     pub(crate) fn new(dom: &Dom, floors: Floors, content: Arc<Resolver>, camera: Vec3) -> Self {
-        let mut scene = Scene::default();
-        let textures = EffectTextures::load(&content, &mut scene.images);
+        let mut images = content::images::LoadedImages::default();
+        let textures = EffectTextures::load(&content, &mut images);
         let mut cache = Self {
-            scene,
+            scene: Scene::default(),
             index: FxHashMap::default(),
             layers: FxHashMap::default(),
             adornment_layers: FxHashMap::default(),
@@ -175,6 +178,7 @@ impl SceneCache {
             gui_generation: None,
             gui_waiting: FxHashMap::default(),
             gui_arrived: Vec::new(),
+            images,
             hand: None,
         };
         cache.rebuild(dom);

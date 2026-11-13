@@ -124,7 +124,7 @@ pub fn bench(
     let scene_built = Instant::now();
     let mut renderer = Renderer::headless()?;
     install.apply(&mut renderer);
-    renderer.set_scene(&cache.scene);
+    cache.show_all(&mut renderer);
     let timing_gpu = renderer.time_gpu();
     let mut thread = RenderThread::new(Offscreen {
         renderer,
@@ -259,7 +259,7 @@ impl Measured {
             "{frames} frames, {} entries, {} mesh files, {} images, scene updated on {} frames",
             cache.scene.parts.len(),
             cache.scene.meshes.len(),
-            cache.scene.images.len(),
+            cache.images_loaded(),
             self.updates
         );
         let mouse = Self::times(&self.stepped, |s| s.mouse);

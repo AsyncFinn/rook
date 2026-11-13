@@ -231,7 +231,7 @@ impl<K: Hash + Eq + Copy> Mixer<K> {
             scratch.clear();
             scratch.resize(frames, [0.0; 2]);
             v.render(scratch, rate);
-            if v.audio.channels <= 1 {
+            if v.reader.audio().channels <= 1 {
                 for s in scratch.iter_mut().flatten() {
                     *s *= MONO_LEVEL;
                 }

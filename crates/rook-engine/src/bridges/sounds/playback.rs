@@ -109,21 +109,17 @@ impl OneShot {
 /// square of the samples just played, before `Volume`, times 1000
 /// (Confirmed for a steady tone: amplitude 0.25 read 176.8, at every
 /// `Volume` and `PlaybackSpeed`; the window is Inference).
-fn loudness(audio: &Audio, from: f64, to: f64) -> f64 {
-    let rate = f64::from(audio.sample_rate);
-    let channels = usize::from(audio.channels.max(1));
-    let frames = audio.frames();
-    let a = ((from.max(0.0) * rate) as usize).min(frames);
-    let b = ((to.max(0.0) * rate) as usize).clamp(a, frames);
-    if b == a {
+fn loudness(reader: &mut Reader, from: f64, to: f64) -> f64 {
+    let Some((a, b)) = effects::frames_between(reader.audio(), from, to) else {
         return 0.0;
-    }
-    let samples = &audio.samples[a * channels..b * channels];
-    let sum: f64 = samples
-        .iter()
-        .map(|&s| (f64::from(s) / 32768.0).powi(2))
+    };
+    // A mono frame reads its one sample on both sides, which leaves the
+    // mean square as it is.
+    let sum: f64 = (a..b)
+        .flat_map(|i| reader.frame(i))
+        .map(|s| (f64::from(s) / 32768.0).powi(2))
         .sum();
-    (sum / samples.len() as f64).sqrt() * 1000.0
+    (sum / (2 * (b - a)) as f64).sqrt() * 1000.0
 }
 
 impl DataModel {
@@ -185,6 +181,7 @@ impl DataModel {
                     }
                     // Back when a script plays it.
                     self.sounds.active.remove(&id);
+                    self.sounds.levels.remove(&id);
                     continue;
                 }
                 let length = audio.seconds();
@@ -207,16 +204,24 @@ impl DataModel {
                             &read[..]
                         }
                     };
+                    let reader = self
+                        .sounds
+                        .levels
+                        .entry(id)
+                        .or_insert_with(|| audio.reader());
+                    if !Arc::ptr_eq(reader.audio(), &audio) {
+                        *reader = audio.reader();
+                    }
                     let level = if list.is_empty() {
                         self.sounds.loudness.remove(&id);
-                        loudness(&audio, before, t.min(length))
+                        loudness(reader, before, t.min(length))
                     } else {
                         let chain =
                             self.sounds.loudness.entry(id).or_insert_with(|| {
                                 rook_audio::effects::Chain::new(audio.sample_rate)
                             });
                         chain.sync(list);
-                        effects::loudness_through(&audio, before, t.min(length), chain)
+                        effects::loudness_through(reader, before, t.min(length), chain)
                     };
                     set(dom, "PlaybackLoudness", Value::Float64(level));
                 }

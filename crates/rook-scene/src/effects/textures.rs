@@ -4,6 +4,7 @@
 use rook_content::decode::image::{Image, ImageFormat};
 
 use super::*;
+use crate::content::images::LoadedImages;
 
 /// The image each effect draws, in [`Scene::images`].
 #[derive(Debug, Clone, Copy)]
@@ -22,7 +23,7 @@ const OWN: u32 = 64;
 impl EffectTextures {
     /// Load the images from the install through `content` (or make
     /// Rook's own) and add them to `images`.
-    pub(crate) fn load(content: &Resolver, images: &mut FxHashMap<ImageHash, Arc<Image>>) -> Self {
+    pub(crate) fn load(content: &Resolver, images: &mut LoadedImages) -> Self {
         let mut add = |file: &str, convert: fn(&mut [u8]), own: fn(f32, f32) -> f32| {
             let path = format!("textures/particles/{file}");
             let installed = content
@@ -43,7 +44,7 @@ impl EffectTextures {
                 (blake3::hash(path.as_bytes()), image)
             });
             let hash = ImageHash(*hash.as_bytes());
-            images.insert(hash, Arc::new(image));
+            images.add(hash, Arc::new(image));
             hash
         };
         Self {

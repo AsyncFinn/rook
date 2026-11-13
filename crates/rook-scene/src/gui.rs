@@ -2,12 +2,12 @@
 //! canvases draw, and the images they ask for, loaded with the scene's
 //! other files (docs/behavior/gui/images.md).
 
-use rook_content::decode::image::{Encoding, Image};
 use rook_engine::{DataModel, RenderChanges};
 use rook_gui::{Gui, GuiImage};
 use rook_render::Renderer;
 use rook_types::{GuiQuad, WorldCanvases, WorldPlace};
 
+use crate::content::images::ImageInfo;
 use crate::*;
 
 /// The GUI a frame hands the renderer (see [`crate::ToRender`]).
@@ -27,9 +27,9 @@ impl GuiUpdate {
         self.screen.is_some() || self.world.is_some()
     }
 
-    pub(crate) fn apply(self, scene: &Scene, renderer: &mut Renderer) {
+    pub(crate) fn apply(self, renderer: &mut Renderer) {
         if self.laid_out() {
-            renderer.set_gui(self.screen.as_ref(), self.world.as_ref(), &scene.images);
+            renderer.set_gui(self.screen.as_ref(), self.world.as_ref());
         }
         renderer.place_world_gui(self.places);
     }
@@ -50,7 +50,7 @@ impl SceneCache {
     ) -> bool {
         let gui = self.update_gui(dm, changes);
         let laid_out = gui.laid_out();
-        gui.apply(&self.scene, renderer);
+        gui.apply(renderer);
         laid_out
     }
 
@@ -101,14 +101,6 @@ impl SceneCache {
         self.feed_gui(&mut world.gui);
     }
 
-    /// A loaded GUI image's pixels, four bytes each, rows top first (for
-    /// the cursor), when it's stored uncompressed.
-    pub fn image_pixels(&self, image: GuiImage) -> Option<(u32, u32, Vec<u8>)> {
-        let found = self.scene.images.get(&ImageHash(image.hash))?;
-        let rgba = matches!(found.encoding, Encoding::Rgba8).then(|| found.mips.first())??;
-        Some((found.width, found.height, rgba.clone()))
-    }
-
     fn feed_gui(&mut self, gui: &mut Gui) {
         for (url, image) in self.gui_arrived.drain(..) {
             gui.image_arrived(&url, image);
@@ -127,7 +119,7 @@ impl SceneCache {
                     .or_default()
                     .push(url),
                 FileState::Loaded(hash) => {
-                    let image = self.scene.images.get(&ImageHash(hash));
+                    let image = self.images.info(ImageHash(hash));
                     gui.image_arrived(&url, image.map(|i| gui_image(ImageHash(hash), i)));
                 }
                 FileState::Failed => gui.image_arrived(&url, None),
@@ -142,7 +134,7 @@ impl SceneCache {
     }
 }
 
-pub(crate) fn gui_image(hash: ImageHash, image: &Image) -> GuiImage {
+pub(crate) fn gui_image(hash: ImageHash, image: ImageInfo) -> GuiImage {
     GuiImage {
         hash: hash.0,
         width: image.width,

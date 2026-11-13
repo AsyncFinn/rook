@@ -5,10 +5,7 @@
 
 mod hand;
 
-use std::sync::Arc;
-
 use glam::Vec2;
-use rook_content::decode::image::Image;
 use rook_engine::{CursorLook, DataModel};
 use rook_render::Renderer;
 use rook_types::{GuiQuad, ImagePaint, Paint};
@@ -27,48 +24,41 @@ impl SceneCache {
         look: &CursorLook,
         at: Option<(f32, f32)>,
     ) -> bool {
+        if matches!(look, CursorLook::DetectorHand) && self.hand.is_none() {
+            let image = hand::image();
+            let hash = ImageHash(*blake3::hash(&image.mips[0]).as_bytes());
+            let size = Vec2::new(image.width as f32, image.height as f32);
+            self.hand = Some((hash, size));
+            renderer.take_images([(hash, image)]);
+        }
         let drawn = at.and_then(|at| {
-            let (image, hash, offset, size) = self.cursor_image(dm, look)?;
+            let (hash, offset, size) = self.cursor_image(dm, look)?;
             let corner = Vec2::from(at).floor() + offset;
-            Some((cursor_quad(hash, corner, size), image))
+            Some(cursor_quad(hash, corner, size))
         });
-        let shown = drawn.is_some();
-        renderer.set_cursor(drawn.as_ref().map(|(quad, image)| (quad, image)));
-        shown
+        renderer.set_cursor(drawn.as_ref());
+        drawn.is_some()
     }
 
     /// The image `look` draws, its hash, where its top left is from the
     /// top left of the mouse's pixel, and its size on screen.
-    fn cursor_image(
-        &mut self,
-        dm: &DataModel,
-        look: &CursorLook,
-    ) -> Option<(Arc<Image>, ImageHash, Vec2, Vec2)> {
+    fn cursor_image(&self, dm: &DataModel, look: &CursorLook) -> Option<(ImageHash, Vec2, Vec2)> {
         match look {
             CursorLook::DetectorHand => {
-                let (hand, hash) = self.hand.get_or_insert_with(|| {
-                    let hand = hand::image();
-                    let hash = ImageHash(*blake3::hash(&hand.mips[0]).as_bytes());
-                    (hand, hash)
-                });
+                let (hash, size) = self.hand?;
                 let offset = Vec2::splat(0.5) - hand::POINT * hand::SCALE;
-                let size = image_size(hand) * hand::SCALE;
-                Some((hand.clone(), *hash, offset, size))
+                Some((hash, offset, size * hand::SCALE))
             }
             CursorLook::Image(url) => {
                 let hash = ImageHash(dm.gui_image(url)?.hash);
-                let image = self.scene.images.get(&hash)?;
+                let image = self.images.info(hash)?;
                 // Inference: Roblox centers an icon on the cursor.
-                let size = image_size(image);
-                Some((image.clone(), hash, -(size * 0.5).floor(), size))
+                let size = Vec2::new(image.width as f32, image.height as f32);
+                Some((hash, -(size * 0.5).floor(), size))
             }
             CursorLook::Hidden | CursorLook::System(_) => None,
         }
     }
-}
-
-fn image_size(image: &Image) -> Vec2 {
-    Vec2::new(image.width as f32, image.height as f32)
 }
 
 fn cursor_quad(hash: ImageHash, corner: Vec2, size: Vec2) -> GuiQuad {

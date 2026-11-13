@@ -3,12 +3,11 @@ use super::*;
 /// A stereo file with `samples` on both sides (a mono one plays 3 dB
 /// down; see `mono_is_centered`).
 fn audio(rate: u32, samples: &[i16]) -> Arc<Audio> {
-    Arc::new(Audio {
-        format: None,
-        sample_rate: rate,
-        channels: 2,
-        samples: samples.iter().flat_map(|&s| [s, s]).collect(),
-    })
+    Arc::new(Audio::from_pcm(
+        rate,
+        2,
+        samples.iter().flat_map(|&s| [s, s]).collect(),
+    ))
 }
 
 fn play(audio: &Arc<Audio>, position: f64) -> Play<u32> {
@@ -70,12 +69,7 @@ fn resamples_and_ends() {
 /// its level.
 #[test]
 fn mono_is_centered() {
-    let mono = Arc::new(Audio {
-        format: None,
-        sample_rate: 4,
-        channels: 1,
-        samples: vec![16384; 4],
-    });
+    let mono = Arc::new(Audio::from_pcm(4, 1, vec![16384; 4]));
     let mut m = Mixer::new(4);
     m.sync(&only(vec![play(&mono, 0.0)]));
     let mut out = [0.0; 4];

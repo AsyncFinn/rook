@@ -5,6 +5,11 @@
 //! a budget of bytes and of time ([`UploadBudget`]), so a place that needs
 //! hundreds of images at once spreads them over frames instead of stalling
 //! one. What waits for an upload draws nothing until it's done.
+//!
+//! A file handed over before anything draws it waits parked
+//! ([`GpuCache::park`]), and its CPU copy is dropped once it's uploaded:
+//! the GPU's is the one kept, as engines free a texture's CPU copy after
+//! upload (Unity unless a texture is marked readable, Unreal's bulk data).
 
 use std::collections::VecDeque;
 use std::hash::Hash;
@@ -88,6 +93,8 @@ pub(crate) struct GpuCache<K, T: Upload> {
     ready: FxHashMap<K, T::Gpu>,
     queue: VecDeque<(K, Arc<T>)>,
     queued: FxHashSet<K>,
+    /// Files handed over that nothing has drawn yet.
+    parked: FxHashMap<K, Arc<T>>,
 }
 
 impl<K: Copy + Eq + Hash, T: Upload> GpuCache<K, T> {
@@ -96,6 +103,7 @@ impl<K: Copy + Eq + Hash, T: Upload> GpuCache<K, T> {
             ready: FxHashMap::default(),
             queue: VecDeque::new(),
             queued: FxHashSet::default(),
+            parked: FxHashMap::default(),
         }
     }
 
@@ -124,8 +132,32 @@ impl<K: Copy + Eq + Hash, T: Upload> GpuCache<K, T> {
         }
     }
 
-    /// Forget `key`'s queued upload, or take its GPU copy out.
+    /// Keep `file` under `key` until something draws it ([`Self::claim`]),
+    /// unless it's there or queued already.
+    pub(crate) fn park(&mut self, key: K, file: Arc<T>) {
+        if !self.ready.contains_key(&key) && !self.queued.contains(&key) {
+            self.parked.insert(key, file);
+        }
+    }
+
+    /// Queue `key`'s parked file for upload. Returns whether it's uploaded,
+    /// queued or now queued: false when no file was handed over for it.
+    pub(crate) fn claim(&mut self, key: K) -> bool {
+        if self.ready.contains_key(&key) || self.queued.contains(&key) {
+            return true;
+        }
+        let Some(file) = self.parked.remove(&key) else {
+            return false;
+        };
+        self.queued.insert(key);
+        self.queue.push_back((key, file));
+        true
+    }
+
+    /// Forget `key`'s parked file or queued upload, or take its GPU copy
+    /// out.
     pub(crate) fn remove(&mut self, key: &K) -> Option<T::Gpu> {
+        self.parked.remove(key);
         if self.queued.remove(key) {
             self.queue.retain(|(k, _)| k != key);
         }
@@ -212,6 +244,27 @@ mod tests {
         assert_eq!(
             cache.upload(&mut (), &mut UploadBudget::unlimited()),
             [1, 2]
+        );
+    }
+
+    /// A parked file waits for something to draw it, and once uploaded
+    /// the cache keeps only its GPU copy: a place's images used to stay
+    /// in memory twice for good.
+    #[test]
+    fn a_parked_file_is_let_go_once_uploaded() {
+        let mut cache: GpuCache<u32, Blob> = GpuCache::new();
+        let file = Arc::new(Blob(1));
+        cache.park(0, file.clone());
+        assert!(!cache.has_queued() && !cache.claim(1));
+        assert!(cache.claim(0) && cache.is_queued(&0));
+        cache.upload(&mut (), &mut UploadBudget::unlimited());
+        assert!(cache.contains(&0) && cache.claim(0));
+        assert_eq!(Arc::strong_count(&file), 1);
+        cache.park(0, file.clone());
+        assert_eq!(
+            Arc::strong_count(&file),
+            1,
+            "an uploaded file isn't parked again"
         );
     }
 }

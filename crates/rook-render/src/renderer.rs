@@ -15,6 +15,8 @@ mod tonemap;
 mod transparent;
 mod waiting;
 
+use std::sync::Arc;
+
 use super::*;
 use effects::particles::GpuParticles;
 use effects::ribbons::GpuRibbons;
@@ -370,50 +372,51 @@ impl Renderer {
         }
     }
 
+    /// Take images the scene loaded. Each waits until something draws it,
+    /// goes up as others do, and is let go once it's up: the GPU's copy is
+    /// the one kept.
+    pub fn take_images(&mut self, images: impl IntoIterator<Item = (ImageHash, Arc<Image>)>) {
+        for (hash, image) in images {
+            self.images.park(hash, image);
+        }
+    }
+
     /// Draw `screen`'s pieces over the scene from now on, bottom first, and
     /// the world GUI's canvases as `world` says (`None` keeps what's
-    /// drawn); the images they draw are in `images`, and go up as others
-    /// do (quads draw nothing until theirs is up). Pieces and canvases
-    /// given last time (the same `Arc`) stay on the GPU as they are.
+    /// drawn); their images go up as others do (quads draw nothing until
+    /// theirs is up). Pieces and canvases given last time (the same `Arc`)
+    /// stay on the GPU as they are.
     pub fn set_gui(
         &mut self,
-        screen: Option<&std::sync::Arc<[std::sync::Arc<[GuiQuad]>]>>,
+        screen: Option<&Arc<[Arc<[GuiQuad]>]>>,
         world: Option<&WorldCanvases>,
-        images: &FxHashMap<ImageHash, std::sync::Arc<Image>>,
     ) {
-        fn request(
-            quads: &[GuiQuad],
-            images: &FxHashMap<ImageHash, std::sync::Arc<Image>>,
-            cache: &mut GpuCache<ImageHash, Image>,
-        ) {
+        fn claim(quads: &[GuiQuad], cache: &mut GpuCache<ImageHash, Image>) {
             for q in quads {
                 match &q.paint {
                     rook_types::Paint::Image(paint) => {
-                        let hash = ImageHash(paint.hash);
-                        if let Some(file) = images.get(&hash) {
-                            cache.request(hash, file);
-                        }
+                        cache.claim(ImageHash(paint.hash));
                     }
-                    rook_types::Paint::Group(group) => request(&group.quads, images, cache),
+                    rook_types::Paint::Group(group) => claim(&group.quads, cache),
                     _ => {}
                 }
             }
         }
         for fresh in self.gui.set(&self.device, &self.queue, screen, world) {
-            request(fresh.quads(), images, &mut self.images);
+            claim(fresh.quads(), &mut self.images);
         }
     }
 
     /// Draw `cursor` over everything from now on, its image going up as
     /// others do, or none (`None`): Roblox draws its cursors into the
     /// frame (docs/behavior/gui/input.md#the-cursor).
-    pub fn set_cursor(&mut self, cursor: Option<(&GuiQuad, &std::sync::Arc<Image>)>) {
-        if let Some((quad, image)) = cursor
+    pub fn set_cursor(&mut self, cursor: Option<&GuiQuad>) {
+        if let Some(quad) = cursor
             && let rook_types::Paint::Image(paint) = &quad.paint
         {
-            self.images.request(ImageHash(paint.hash), image);
+            self.images.claim(ImageHash(paint.hash));
         }
-        (self.gui).set_cursor(&self.device, &self.queue, cursor.map(|(quad, _)| quad));
+        (self.gui).set_cursor(&self.device, &self.queue, cursor);
     }
 
     /// Where the canvases at these indices into the last

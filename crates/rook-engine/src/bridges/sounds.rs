@@ -19,7 +19,7 @@ use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
 use std::collections::BTreeSet;
 
-use rook_content::decode::audio::Audio;
+use rook_content::decode::audio::{Audio, Reader};
 use rook_content::{ContentRef, Failure, Fetched, Ticket};
 
 use super::journal_watch::JournalWatch;
@@ -62,6 +62,9 @@ pub(crate) struct Sounds {
     /// On clients, the effects `PlaybackLoudness` is read through, per
     /// sound with effects.
     loudness: FxHashMap<InstanceId, rook_audio::effects::Chain>,
+    /// On clients, what `PlaybackLoudness` reads each playing sound's
+    /// samples through (decoding a sound kept as its file).
+    levels: FxHashMap<InstanceId, Reader>,
     /// Sounds given to `PlayLocalSound` whose file is still loading.
     local: Vec<(InstanceId, ContentRef)>,
     /// AudioPlayers already seen, so `AutoPlay` plays each once.
@@ -81,6 +84,7 @@ impl Sounds {
         self.active.remove(&id);
         self.seeks.remove(&id);
         self.loudness.remove(&id);
+        self.levels.remove(&id);
         self.local.retain(|(l, _)| *l != id);
         self.seen_players.remove(&id);
     }

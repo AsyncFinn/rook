@@ -2,8 +2,9 @@ use std::sync::Arc;
 
 use glam::Vec3;
 use rook_content::Resolver;
+use rook_content::decode::image::Image;
 use rook_engine::{DataModel, RenderChanges};
-use rook_render::{EffectSlots, MeshHash, Renderer};
+use rook_render::{EffectSlots, ImageHash, MeshHash, Renderer};
 
 use crate::gui::GuiUpdate;
 use crate::{Floors, SceneCache, SceneChange};
@@ -71,6 +72,18 @@ impl SceneCache {
         self.apply(&world.dom, &changes)
     }
 
+    /// Give `renderer`, new or drawing something else, the whole scene
+    /// and the images it hasn't had.
+    pub fn show_all(&mut self, renderer: &mut Renderer) {
+        renderer.take_images(self.images.take_fresh());
+        renderer.set_scene(&self.scene);
+    }
+
+    /// How many distinct images have loaded.
+    pub fn images_loaded(&self) -> usize {
+        self.images.len()
+    }
+
     /// Bring the scene up to date with a DataModel's changes and the mesh
     /// files and images that finished loading since the last frame, then
     /// the renderer with the scene and the GUI. Returns whether anything
@@ -113,6 +126,7 @@ impl SceneCache {
             lights: self.lights.take_changes(),
             effects: self.effects.take_changes(),
             dropped: self.take_dropped_meshes(),
+            images: self.images.take_fresh(),
         }
     }
 }
@@ -159,6 +173,9 @@ pub struct ToRender {
     lights: Vec<usize>,
     effects: EffectSlots,
     dropped: Vec<MeshHash>,
+    /// Images loaded since the last hand-over: the renderer takes their
+    /// pixels, and the scene keeps none.
+    images: Vec<(ImageHash, Arc<Image>)>,
 }
 
 impl ToRender {
@@ -174,7 +191,9 @@ impl ToRender {
     pub fn apply(self, cache: &SceneCache, renderer: &mut Renderer) {
         profiling::scope!("ToRender::apply");
         let scene = &cache.scene;
-        self.gui.apply(scene, renderer);
+        // First: what follows may draw them.
+        renderer.take_images(self.images);
+        self.gui.apply(renderer);
         match &self.change {
             SceneChange::None => {}
             SceneChange::Parts {
