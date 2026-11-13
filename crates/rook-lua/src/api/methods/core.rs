@@ -241,8 +241,13 @@ fn engine_flag(name: &str) -> Option<&'static str> {
 /// CoreScripts take a newer path for (the settings menu reads voice
 /// settings through AvatarChatService only with its feature; the chat
 /// window shows its translation tip every time without
-/// `TextChatServiceSettingsSaved`).
-const ENGINE_FEATURES: &[&str] = &["AvatarChatServiceEnabled", "TextChatServiceSettingsSaved"];
+/// `TextChatServiceSettingsSaved`; the prompt GUI starts only with
+/// `ProximityPrompts`).
+const ENGINE_FEATURES: &[&str] = &[
+    "AvatarChatServiceEnabled",
+    "ProximityPrompts",
+    "TextChatServiceSettingsSaved",
+];
 
 /// Engine features name what the engine can do: Rook says yes only to
 /// [`ENGINE_FEATURES`], so scripts otherwise keep to the older ways

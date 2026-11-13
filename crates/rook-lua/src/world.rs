@@ -205,6 +205,8 @@ pub struct World {
     pub(crate) tool_moves: Vec<crate::api::methods::tools::ToolMove>,
     /// Tool activations that fired here, for the other side to fire.
     pub(crate) tool_activations: Vec<crate::api::methods::tools::Activation>,
+    /// ProximityPrompts shown and held here (clients only).
+    pub(crate) prompts: crate::api::methods::prompts::Prompts,
     /// ContentProvider requests waiting for the engine to resolve them.
     pub content: crate::api::methods::preload::ContentRequests,
     pub assets: crate::api::methods::assets::AssetRequests,
@@ -321,6 +323,7 @@ impl World {
             outbox: Vec::new(),
             tool_moves: Vec::new(),
             tool_activations: Vec::new(),
+            prompts: Default::default(),
             content: Default::default(),
             assets: Default::default(),
             web: Default::default(),
@@ -401,6 +404,7 @@ impl World {
                     .flat_map(|m| [Some(m.tool), Some(m.parent), m.grip].into_iter().flatten()),
             )
             .chain(self.tool_activations.iter().map(|a| a.tool))
+            .chain(self.prompts.held())
             .chain(self.movement.held())
             .collect()
     }
@@ -408,6 +412,7 @@ impl World {
     /// Drop what the runtime keeps about `id`, which is being freed.
     pub(crate) fn forget(&mut self, id: InstanceId) {
         self.filter_results.remove(&id);
+        self.prompts.forget(id);
         self.modules.results.remove(&id);
         self.modules.loading.remove(&id);
         self.modules.waiting.remove(&id);

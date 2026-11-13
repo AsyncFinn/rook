@@ -31,6 +31,7 @@ pub use api::methods::characters::{
     Avatar, BuildRig, RigSource, RigType, Scales, character_root, humanoid_of_root, humanoid_root,
     root_part,
 };
+pub use api::methods::prompts::{Action as PromptAction, ActionKind as PromptActionKind};
 pub use api::methods::tools::{Activation as ToolActivation, ToolMove};
 pub use api::methods::web::{WebAnswer, WebRequest};
 pub use net::{NetValue, RemoteKind, RemoteMessage};
@@ -497,6 +498,39 @@ impl Runtime {
     pub fn activate_tools(&self, down: bool) {
         self.guarded(|| {
             api::methods::tools::activate_held(&self.lua, down);
+            threads::drain_deferred(&self.lua);
+        });
+    }
+
+    /// A client's frame for ProximityPrompts: which show, and which holds
+    /// trigger.
+    pub fn update_prompts(&self) {
+        self.guarded(|| {
+            api::methods::prompts::update(&self.lua);
+            threads::drain_deferred(&self.lua);
+        });
+    }
+
+    /// A key (`Enum.KeyCode` value) went down or up on a client, past a
+    /// focused TextBox: the shown prompts on it trigger or are let go.
+    /// Returns whether prompts took it.
+    pub fn prompt_key(&self, key: u32, down: bool) -> bool {
+        self.guarded(|| {
+            let taken = api::methods::prompts::key(&self.lua, key, down);
+            threads::drain_deferred(&self.lua);
+            taken
+        })
+    }
+
+    /// Prompt events that fired here since the last call, for the server.
+    pub fn take_prompt_actions(&self) -> Vec<PromptAction> {
+        self.guarded(|| api::methods::prompts::take_actions(&self.lua))
+    }
+
+    /// Fire a prompt event `player`'s client sent, on the server.
+    pub fn deliver_prompt_action(&self, player: InstanceId, action: PromptAction) {
+        self.guarded(|| {
+            api::methods::prompts::deliver(&self.lua, player, action);
             threads::drain_deferred(&self.lua);
         });
     }

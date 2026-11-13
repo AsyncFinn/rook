@@ -68,9 +68,10 @@ health bars and leaderboards are GUI.
      - The engine side they and games share: StyleSheets (started,
        without `@` queries), GuiService's core members, input reaching
        CoreGui, ContextActionService, health, the Backpack and Tools,
-       ProximityPromptService (which prompts show by distance,
-       `RequiresLineOfSight` and `Exclusivity`; the key and
-       `HoldDuration`; `Triggered`; `Style` Custom). Services that ask
+       ProximityPromptService ([done](../behavior/gui/proximity-prompts.md):
+       which prompts show by distance, `RequiresLineOfSight` and
+       `Exclusivity`; the key and `HoldDuration`; `Triggered`; `Style`
+       Custom). Services that ask
        Roblox's website (friends, purchases, analytics, voice) do
        nothing locally.
      - Rook's own CoreGui, in Luau and shipped: each piece laid out,

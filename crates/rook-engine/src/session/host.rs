@@ -56,6 +56,9 @@ pub enum ToServer {
     /// A Tool the player's character holds was activated or deactivated
     /// here: it fires on the server too.
     ActivateTool(ToolActivation),
+    /// A ProximityPrompt's hold or trigger event fired here: it fires on
+    /// the server too, with the server's Player.
+    Prompt(rook_lua::PromptAction),
     /// Where the client's simulation put its character: the root part of
     /// the assembly, which the rest of it follows (network ownership).
     Pose {
@@ -438,6 +441,7 @@ impl ServerHost {
             ToServer::ActivateTool(activation) => {
                 rt.deliver_tool_activation(Some(player), activation);
             }
+            ToServer::Prompt(action) => rt.deliver_prompt_action(player, action),
             ToServer::Pose {
                 part,
                 cframe,
@@ -763,6 +767,14 @@ impl ClientHost {
                 out.push(ToServer::ActivateTool(ToolActivation {
                     tool,
                     ..activation
+                }));
+            }
+        }
+        for action in self.client.runtime().take_prompt_actions() {
+            if let Some(prompt) = self.sink.server_id(action.prompt) {
+                out.push(ToServer::Prompt(rook_lua::PromptAction {
+                    prompt,
+                    ..action
                 }));
             }
         }

@@ -54,16 +54,29 @@ fn grow_on(pass: &mut Pass<'_>, id: InstanceId, base: Vec2, room: Vec2, axes: Ve
                 .parent(id)
                 .map_or(Vec2::ZERO, |p| automatic_axes(dom, p));
             let held = parent * across_list(dom, layout);
-            let inner = padding::inner(dom, id, room.max(base) * (Vec2::ONE - held) + base * held);
-            let laid: Vec<Kid> = kids
-                .iter()
-                .map(|&k| Kid {
-                    id: k,
-                    size: pass.size_of(k, inner.size),
-                })
-                .collect();
-            let content = pass.arrange(layout, &laid, inner.size).arranged.content;
-            inner.origin + content + inner.far
+            // Only on the axes it grows on: on the others it's as big as
+            // it is (measured: a child 1 tall by scale was as tall).
+            let grows = axes * (Vec2::ONE - held);
+            let inner =
+                padding::inner(dom, id, room.max(base) * grows + base * (Vec2::ONE - grows));
+            let laid = sized(pass, &kids, inner.size);
+            let laid = measured_across(pass, &laid, inner.size, axes).unwrap_or(laid);
+            // Measured: a list's `Padding` by scale is of the object's
+            // `Size` while it's measured; then it's laid out at the size
+            // measured, and grows again to what that layout holds, its
+            // far padding aside (a frame 40 wide by `Size` holding two 50
+            // wide children -0.25 apart was 90 wide; 0.1 apart, 110.4),
+            // never less than nothing (0 wide, padded 20: 120).
+            let spaced = padding::inner(dom, id, base).size.max(Vec2::ZERO);
+            let content = (pass.arrange_spaced(layout, &laid, (inner.size, spaced)))
+                .arranged
+                .content;
+            let measured = (inner.origin + content + inner.far).max(base);
+            let measured = base + (measured - base) * axes;
+            let at = padding::inner(dom, id, measured);
+            let there = sized(pass, &kids, at.size);
+            let content = pass.arrange(layout, &there, at.size).arranged.content;
+            measured.max(at.origin + content)
         }
         None => {
             let inner = padding::inner(dom, id, base);
@@ -86,6 +99,71 @@ fn grow_on(pass: &mut Pass<'_>, id: InstanceId, base: Vec2, room: Vec2, axes: Ve
     };
     let extent = extent.max(text);
     base + (extent - base).max(Vec2::ZERO) * axes
+}
+
+fn sized(pass: &mut Pass<'_>, kids: &[InstanceId], parent: Vec2) -> Vec<Kid> {
+    (kids.iter())
+        .map(|&k| Kid {
+            id: k,
+            size: pass.size_of(k, parent),
+        })
+        .collect()
+}
+
+/// The kids as Studio measures them when one's size on a growing axis
+/// comes from the other axis (`SizeConstraint` RelativeYY growing on X,
+/// RelativeXX on Y): those are sized against how far the others reach
+/// that other way, rather than the object's own size (measured: a
+/// RelativeYY child 1 wide by scale beside a frame whose label sat 9
+/// pixels low in it grew its parent 9 pixels wider than the child was
+/// drawn). `None` when no kid's size depends so.
+fn measured_across(pass: &mut Pass<'_>, laid: &[Kid], inner: Vec2, axes: Vec2) -> Option<Vec<Kid>> {
+    let dom = pass.dom;
+    let depends = |k: InstanceId| {
+        let scaled = scale_axes(dom, k);
+        match dom.enum_item_property(k, "SizeConstraint") {
+            Some("RelativeYY") if axes.x > 0.0 && scaled.x > 0.0 => Some(Vec2::Y),
+            Some("RelativeXX") if axes.y > 0.0 && scaled.y > 0.0 => Some(Vec2::X),
+            _ => None,
+        }
+    };
+    let across = laid.iter().find_map(|k| depends(k.id))?;
+    let reach = (laid.iter())
+        .filter(|k| depends(k.id).is_none())
+        .map(|k| reach_of(pass, k))
+        .fold(Vec2::ZERO, Vec2::max);
+    let measuring = inner * (Vec2::ONE - across) + reach * across;
+    let kids = laid.iter().map(|k| match depends(k.id) {
+        Some(_) => Kid {
+            id: k.id,
+            size: pass.size_of(k.id, measuring),
+        },
+        None => *k,
+    });
+    Some(kids.collect())
+}
+
+/// How far `kid` reaches when its parent measures it: as far as its own
+/// visible children do, within it, even short of its size; its size when
+/// it has none (measured: a label 50 tall sitting 9 low in a 72 tall
+/// frame reached 62, with another 10 high).
+fn reach_of(pass: &mut Pass<'_>, kid: &Kid) -> Vec2 {
+    let dom = pass.dom;
+    let children: Vec<InstanceId> = (gui_children(dom, kid.id).into_iter())
+        .filter(|&c| visible(dom, c))
+        .collect();
+    if children.is_empty() {
+        return kid.size;
+    }
+    let inner = padding::inner(dom, kid.id, kid.size);
+    let mut reach = Vec2::ZERO;
+    for c in children {
+        let size = pass.size_of(c, inner.size);
+        let anchor = super::vec2_or(dom, c, "AnchorPoint", Vec2::ZERO);
+        let far = resolve(position_of(dom, c), inner.size) - size * anchor + size;
+        reach = reach.max(far);
+    }
+    inner.origin + reach + inner.far
 }
 
 /// What a child sized by scale needs for its content, on the growing

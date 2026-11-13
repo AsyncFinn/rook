@@ -22,7 +22,9 @@ ScreenGui's do ([GUI](layout.md)), text from distance fields
   a BasePart; a BillboardGui hangs on its `Adornee` or parent, a BasePart
   or an Attachment. Inference: Models as adornees aren't drawn yet.
 - They draw from the Workspace and from the local player's PlayerGui
-  (with an `Adornee` in the Workspace), when `Enabled`. Inference: never
+  (with an `Adornee` in the Workspace), when `Enabled`, however deep: one
+  inside a ScreenGui there is its own tree, not part of the ScreenGui
+  (measured: Roblox's prompt GUI hangs in one). Inference: never
   from StarterGui or storage, and a BillboardGui hides from its
   `PlayerToHideFrom`.
 - Every world GUI is laid out wherever it is, so scripts read its

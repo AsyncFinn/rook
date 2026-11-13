@@ -119,12 +119,23 @@ padding; a child anchored at (1, 0) at x = 10 reaches only to 10.
 Nested automatic sizes add up from the inside.
 
 - **With a UI layout**, children sized by scale are sized against the room
-  left in the parent past the object's `Position`, and the object grows to
-  the layout's content (a child 1 wide in a list, 45 pixels into a 400
-  box: 355). Measured with a parent that doesn't grow; inside one that
-  does, Rook sizes them across a list against the object's `Size`
+  left in the parent past the object's `Position` on the axes it grows on,
+  and against its own size on the others; the object grows to the
+  layout's content (a child 1 wide in a list, 45 pixels into a 400 box:
+  355). A list's `Padding` by scale is of the object's `Size` while it's
+  measured (none below zero). Then it's laid out again at the size
+  measured, children sized by scale sized there, and grows again to what
+  that holds, its far padding aside: a 40 wide frame with two 50 wide
+  children -0.25 apart is 90 wide, 0.1 apart 110.4. Measured with a
+  parent that doesn't grow; inside one that does, Rook sizes them across a list against the object's `Size`
   instead (Approximation: Roblox's report menu rows, a label beside a part
   1 tall by scale, in frames that grow, are as tall as the label).
+- A child whose size on a growing axis comes from the other axis
+  (`SizeConstraint` RelativeYY growing on X, RelativeXX on Y) is measured
+  against how far the other children reach that other way, each as far as
+  its own children reach (even short of its size) or else its size.
+  Studio's prompt GUI is 9 pixels wider than its parts because its label
+  sits 9 pixels low.
 - **Without one**, Studio's results for children sized by scale depend on
   earlier layouts (a 0.5-wide child with offset 30 gave a 50-wide parent).
   Rook sizes them against the object's `Size` (Approximation); children

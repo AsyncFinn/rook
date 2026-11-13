@@ -6,7 +6,7 @@
 use mlua::Lua;
 use rook_dom::{DomError, InstanceId};
 
-use crate::api::methods::tools;
+use crate::api::methods::{prompts, tools};
 use crate::ctx::with_world;
 use crate::signal::SignalKey;
 use crate::threads::dispatch;
@@ -36,6 +36,7 @@ pub(crate) fn set_parent(
     if let Some(leaving) = tool {
         tools::after(lua, id, leaving);
     }
+    prompts::leaving(lua, id, false);
     Ok(())
 }
 
@@ -43,6 +44,7 @@ pub(crate) fn set_parent(
 /// instance leaves its parent, then the children it had at the start are
 /// destroyed, even one a handler moved elsewhere meanwhile.
 pub(crate) fn destroy(lua: &Lua, id: InstanceId) -> Result<(), DomError> {
+    prompts::leaving(lua, id, true);
     let Some(children) = step(lua, |dom| dom.begin_destroy(id))? else {
         return Ok(());
     };

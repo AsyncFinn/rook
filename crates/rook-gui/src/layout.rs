@@ -140,7 +140,9 @@ impl Layout {
             .chain(dom.find_service("CoreGui"));
         for holder in holders {
             for root in through_folders(dom, holder, |id| dom.is_a(id, "GuiBase2d")) {
-                pass.root(root);
+                if world.binary_search(&root).is_err() {
+                    pass.root(root);
+                }
             }
         }
         for &root in world {
@@ -321,7 +323,11 @@ pub(crate) fn top_along(
 ) -> Option<InstanceId> {
     let mut top = None;
     for i in chain {
-        if dom.is_a(i, "GuiBase2d") {
+        if world::is_world_gui(dom, i) {
+            // Its own tree, even inside a ScreenGui (measured: the prompt
+            // GUI Roblox makes hangs in one).
+            return Some(i);
+        } else if dom.is_a(i, "GuiBase2d") {
             top = Some(i);
         } else if dom.class_name(i) != "Folder" && !dom.is_a(i, "UIComponent") {
             break;
@@ -451,6 +457,17 @@ impl<'a> Pass<'a> {
 
     /// Arrange `kids` (visible, in child order) with `layout` in `inner`.
     fn arrange(&mut self, layout: InstanceId, kids: &[Kid], inner: Vec2) -> Arrangement {
+        self.arrange_spaced(layout, kids, (inner, inner))
+    }
+
+    /// [`Pass::arrange`] with a list's `Padding` scale of `spaced` (an
+    /// automatic size measuring, see [`list::arrange`]).
+    fn arrange_spaced(
+        &mut self,
+        layout: InstanceId,
+        kids: &[Kid],
+        (inner, spaced): (Vec2, Vec2),
+    ) -> Arrangement {
         let dom = self.dom;
         let order = list::sorted(dom, layout, kids);
         let kids: Vec<Kid> = order.iter().map(|&i| kids[i]).collect();
@@ -472,7 +489,7 @@ impl<'a> Pass<'a> {
                 self.out.pages.insert(layout, pages);
                 page::arrange(dom, layout, &kids, inner, at)
             }
-            _ => list::arrange(dom, layout, &kids, inner),
+            _ => list::arrange(dom, layout, &kids, (inner, spaced)),
         };
         // Back to child order.
         let mut slots = vec![Vec2::ZERO; order.len()];
