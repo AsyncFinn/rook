@@ -130,9 +130,11 @@ impl App {
         }
         if let Some(size) = inbox.resized
             && let Some(gfx) = &mut self.gfx
-            && gfx.frames.get().resize(size.width, size.height)
         {
-            self.game.set_viewport(size.width, size.height);
+            self.undrawable = !gfx.frames.get().resize(size.width, size.height);
+            if !self.undrawable {
+                self.game.set_viewport(size.width, size.height);
+            }
         }
         if let Some(gfx) = &self.gfx
             && (inbox.refocused || inbox.scale.is_some())

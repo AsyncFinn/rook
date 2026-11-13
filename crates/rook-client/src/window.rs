@@ -110,6 +110,9 @@ pub(crate) struct App {
     /// redraw without it comes from a loop that isn't winit's: Windows'
     /// own, while the window is dragged or resized.
     pub(crate) loop_ran: bool,
+    /// The window has nothing to draw into (it's minimized). Presenting
+    /// paces frames shown at the display's rate, so then nothing would.
+    pub(crate) undrawable: bool,
     pub(crate) cursor_shown: cursor::Shown,
     /// The platform's input method is on, while a TextBox has focus.
     pub(crate) ime: bool,
@@ -233,8 +236,15 @@ impl App {
             Pacing::Cap(_) => self.frame_period().map(|period| self.last_frame + period),
             Pacing::Display | Pacing::Uncapped => None,
         };
+        // Nothing is shown, so nothing is gained by more frames than the
+        // display shows.
+        let undrawn = self.undrawable.then(|| {
+            let refresh = self.frame_clock.refresh().unwrap_or(1.0 / 60.0);
+            let period = Duration::from_secs_f64(refresh);
+            self.last_frame + self.frame_period().map_or(period, |p| p.max(period))
+        });
         let just_in_time = self.gfx.as_ref().and_then(|gfx| gfx.frames.start_next_at());
-        capped.max(just_in_time)
+        capped.max(just_in_time).max(undrawn)
     }
 
     /// The time between frames they keep to: the frame rate cap's, or the
