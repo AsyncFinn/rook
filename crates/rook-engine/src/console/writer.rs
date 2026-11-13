@@ -3,7 +3,9 @@
 //! A terminal write is slow on Windows consoles and the log file flushes
 //! every line, so a game that prints or errors every frame would pay both
 //! in frame time if the printing thread wrote them itself. Lines go
-//! through a channel instead, in the order they were printed.
+//! through a channel instead, in the order they were printed. Lines
+//! already waiting go to the terminal in one write: a prompt redraws
+//! itself after each write, so a burst of output costs it one redraw.
 
 use std::sync::mpsc::{self, Receiver, Sender, SyncSender};
 use std::sync::{Mutex, OnceLock};
@@ -55,17 +57,32 @@ pub fn flush() {
 fn write(rx: &Receiver<Job>) {
     // Read once: an environment lookup per line costs more than the line.
     let no_color = std::env::var_os("NO_COLOR").is_some();
-    for job in rx {
-        match job {
-            Job::Line { text, terminal } => {
-                crate::logging::record(&text);
-                if terminal {
-                    super::show(text, no_color);
+    let mut next = rx.recv().ok();
+    while next.is_some() {
+        let mut shown = String::new();
+        let mut flush = None;
+        // Up to a flush, which answers once what came before it is written.
+        while let Some(job) = next.take() {
+            match job {
+                Job::Line { text, terminal } => {
+                    crate::logging::record(&text);
+                    if terminal {
+                        if !shown.is_empty() {
+                            shown.push('\n');
+                        }
+                        shown.push_str(&text);
+                    }
+                    next = rx.try_recv().ok();
                 }
-            }
-            Job::Flush(done) => {
-                let _ = done.send(());
+                Job::Flush(done) => flush = Some(done),
             }
         }
+        if !shown.is_empty() {
+            super::show(shown, no_color);
+        }
+        if let Some(done) = flush {
+            let _ = done.send(());
+        }
+        next = rx.recv().ok();
     }
 }
