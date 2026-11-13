@@ -5,6 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- A place with parts parked as far away as a position can go draws everything else at every camera angle. Rook could hide nearby parts as the camera turned, and a debug build crashed loading such a place.
 - SurfaceGui and BillboardGui buttons take clicks and hover through on-screen GUI that doesn't take the mouse itself, as in Roblox. Rook let any on-screen GUI object under the cursor hide them, even an invisible one. See [GUI input](docs/behavior/gui/input.md#the-world-behind).
 - Hints and Messages look as they do in Roblox: their text is Arial at Roblox's size on one centered line, a Message's outlined in black, and every ScreenGui draws over them. Rook drew them over all GUI in a small legacy font, wrapped a Message's text, and left its outline off. See [Hint and Message](docs/behavior/gui/text.md#hint-and-message).
 - GUI hidden or moved while the list holding it scrolls or changes draws where it belongs. Rook could keep drawing an icon or arrow in a tree view at an old place, or after it was hidden, until a selection redrew the list.
