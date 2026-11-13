@@ -4,9 +4,13 @@
 //!
 //! Pasting: terminals that support bracketed paste (most on Linux and
 //! macOS) hand rustyline the whole text at once. Windows terminals type it
-//! in key by key, so each pasted newline would arrive as Enter and run the
-//! code so far on its own, losing its `local`s. An Enter that arrives right
-//! after the key before it was pasted, not typed, and adds a line instead.
+//! in key by key, and rustyline redraws the whole buffer after each key.
+//! So a key takes with it the text already waiting behind it
+//! (`rook_platform::console::take_typed_text`) and all of it goes in as one
+//! edit, drawn once. A pasted newline would also arrive as Enter and run
+//! the code so far on its own, losing its `local`s: an Enter with text
+//! waiting behind it, or one that arrives right after the key before it,
+//! was pasted, not typed, and adds a line instead.
 
 use std::borrow::Cow;
 use std::sync::{Arc, Mutex};
@@ -51,8 +55,15 @@ pub(super) fn new() -> rustyline::Result<Editor<Luau, FileHistory>> {
         );
     }
     editor.bind_sequence(
+        KeyEvent(KeyCode::Tab, Modifiers::NONE),
+        EventHandler::Conditional(Box::new(Typed {
+            keys: keys.clone(),
+            first: Some('\t'),
+        })),
+    );
+    editor.bind_sequence(
         Event::Any,
-        EventHandler::Conditional(Box::new(AnyKey(keys))),
+        EventHandler::Conditional(Box::new(Typed { keys, first: None })),
     );
     editor.bind_sequence(
         KeyEvent::ctrl('C'),
@@ -117,13 +128,30 @@ impl KeyClock {
     }
 }
 
-#[derive(Debug)]
-struct AnyKey(Arc<KeyClock>);
+/// `first` and the text waiting behind it as one insertion, if any waits.
+fn with_waiting(first: char) -> Option<Cmd> {
+    let rest = rook_platform::console::take_typed_text();
+    (!rest.is_empty()).then(|| Cmd::Insert(1, format!("{first}{rest}")))
+}
 
-impl ConditionalEventHandler for AnyKey {
-    fn handle(&self, _: &Event, _: RepeatCount, _: bool, _: &EventContext) -> Option<Cmd> {
-        self.0.press(Instant::now());
-        None
+/// Any key but Enter. `first` is the character the bound key types;
+/// `None` takes it from the key.
+#[derive(Debug)]
+struct Typed {
+    keys: Arc<KeyClock>,
+    first: Option<char>,
+}
+
+impl ConditionalEventHandler for Typed {
+    /// A character with text waiting behind it goes in with that text;
+    /// one alone, or any other key, does what it always does.
+    fn handle(&self, evt: &Event, _: RepeatCount, _: bool, _: &EventContext) -> Option<Cmd> {
+        self.keys.press(Instant::now());
+        let first = self.first.or_else(|| match evt.get(0)? {
+            KeyEvent(KeyCode::Char(c), Modifiers::NONE | Modifiers::SHIFT) => Some(*c),
+            _ => None,
+        })?;
+        with_waiting(first)
     }
 }
 
@@ -131,9 +159,11 @@ impl ConditionalEventHandler for AnyKey {
 struct Enter(Arc<KeyClock>);
 
 impl ConditionalEventHandler for Enter {
-    /// A pasted Enter adds a line; a typed one does what Enter does.
+    /// A pasted Enter adds a line, with the text waiting behind it; a
+    /// typed one does what Enter does.
     fn handle(&self, _: &Event, _: RepeatCount, _: bool, _: &EventContext) -> Option<Cmd> {
-        self.0.press(Instant::now()).then_some(Cmd::Newline)
+        let pasted = self.0.press(Instant::now());
+        with_waiting('\n').or(pasted.then_some(Cmd::Newline))
     }
 }
 
