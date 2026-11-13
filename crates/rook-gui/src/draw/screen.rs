@@ -316,7 +316,7 @@ fn place(
     }
     // By ZIndex alone, what an object holds is spread through the stack:
     // its entries are placed again where they are, while what shows in it
-    // is the same.
+    // is the same; anything else stacks the ScreenGui again.
     let now = order::restacked(dom, layout, &c.stack[c.at[&id]]);
     let same_shown = |(now, hidden): &(Vec<Stacked>, Vec<InstanceId>)| {
         now.iter().all(|s| c.at.contains_key(&s.id)) && !hidden.iter().any(|h| c.at.contains_key(h))
@@ -336,7 +336,8 @@ fn place(
 
 /// In a `Sibling` stack, where each object is followed by all it holds:
 /// stack again the run of the nearest object from `from` up that still
-/// shows, in its place. False when that is the whole ScreenGui.
+/// shows, in its place. False when that is the whole ScreenGui, or the
+/// stack is by ZIndex alone, where what an object holds is no run.
 fn restack_run(
     dom: &Dom,
     layout: &Layout,
@@ -344,6 +345,9 @@ fn restack_run(
     pieces: &mut FxHashMap<InstanceId, Arc<[GuiQuad]>>,
     from: InstanceId,
 ) -> bool {
+    if !order::by_sibling(dom, c.root) {
+        return false;
+    }
     let mut at = Some(from);
     let (start, now) = loop {
         let Some(a) = at.filter(|&a| a != c.root) else {
