@@ -142,10 +142,16 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("Instance", "HasTag") => has_tag,
         ("Instance", "GetTags") => get_tags,
         ("Instance", "GetActor") => nil,
-        ("CollectionService", "AddTag") => |l, t, a| collection_tag(l, t, a, add_tag),
-        ("CollectionService", "RemoveTag") => |l, t, a| collection_tag(l, t, a, remove_tag),
-        ("CollectionService", "HasTag") => |l, t, a| collection_tag(l, t, a, has_tag),
-        ("CollectionService", "GetTags") => |l, t, a| collection_tag(l, t, a, get_tags),
+        ("CollectionService", "AddTag") => {
+            |l, _, a| collection_tag(l, a, add_tag, NullTags::Nothing)
+        }
+        ("CollectionService", "RemoveTag") => {
+            |l, _, a| collection_tag(l, a, remove_tag, NullTags::Nothing)
+        }
+        ("CollectionService", "HasTag") => |l, _, a| collection_tag(l, a, has_tag, NullTags::False),
+        ("CollectionService", "GetTags") => {
+            |l, _, a| collection_tag(l, a, get_tags, NullTags::Empty)
+        }
         ("CollectionService", "GetTagged") => get_tagged,
         ("CollectionService", "GetAllTags") => get_all_tags,
         ("CollectionService", "GetInstanceAddedSignal") => |l, _, a| tag_signal(l, a, true),

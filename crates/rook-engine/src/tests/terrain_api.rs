@@ -88,6 +88,7 @@ fn regions_and_colors() {
         print(m[1][1][1], o[1][1][1], m[2][1][1], m[3][1][1])
         print(pcall(T.WriteVoxels, T, Region3.new(Vector3.zero, Vector3.new(8, 4, 4)), 4, {{{Enum.Material.Rock}}}, {{{1}}}))
         print(pcall(T.CopyRegion, T, Region3int16.new(Vector3int16.new(1, 0, 0), Vector3int16.new(0, 0, 0))))
+        print(pcall(T.PasteRegion, T, nil, Vector3int16.new(0, 0, 0), false))
         T:SetMaterialColor(Enum.Material.Rock, Color3.new(1, 0, 0))
         print(T:GetMaterialColor(Enum.Material.Rock))
         print(pcall(T.GetMaterialColor, T, Enum.Material.Water))
@@ -103,6 +104,7 @@ fn regions_and_colors() {
             "Enum.Material.Rock 0.5 Enum.Material.Sand Enum.Material.Air",
             "false Bad argument materials to 'WriteVoxels' (2x1x1 array expected)",
             "false The region can not be empty or inverted.",
+            "false region has to be a TerrainRegion",
             "1, 0, 0",
             "false Unsupported terrain material",
             "false Invalid terrain material",

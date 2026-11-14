@@ -145,7 +145,11 @@ fn group_name(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
 }
 
 fn set_part_group(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    let (part, name) = (a.instance(0)?, a.string(1)?);
+    let part = a.object_of(lua, 0, "BasePart")?;
+    let name = a.string(1)?;
+    let part = part.ok_or_else(|| {
+        ScriptError("Parameter 1 must be BasePart in SetPartCollisionGroup.".into())
+    })?;
     mutate(lua, |w| {
         w.dom
             .set_property_by_name(part, "CollisionGroup", Value::String(name))
@@ -154,7 +158,10 @@ fn set_part_group(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
 }
 
 fn contains_part(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    let (name, part) = (a.string(0)?, a.instance(1)?);
+    let name = a.string(0)?;
+    let part = a.object_of(lua, 1, "BasePart")?.ok_or_else(|| {
+        ScriptError("Parameter 2 must be BasePart in CollisionGroupContainsPart.".into())
+    })?;
     Outcome::ret(
         lua,
         with_world(lua, |w| groups::part_group(&w.dom, part) == name),
@@ -164,7 +171,9 @@ fn contains_part(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
 /// Both parts collide and their groups collide (creator-docs
 /// BasePart:CanCollideWith). Both must be in Workspace (observed).
 fn can_collide_with(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    let other = a.instance(0)?;
+    let other = a
+        .object_of(lua, 0, "BasePart")?
+        .ok_or_else(|| ScriptError("CanCollideWith expects a BasePart argument.".into()))?;
     let in_world = with_world(lua, |w| {
         w.dom
             .find_service("Workspace")

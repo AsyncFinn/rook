@@ -880,6 +880,7 @@ mod core_gui;
 mod descriptions;
 mod gui;
 mod models;
+mod object_arguments;
 mod parts;
 mod tools;
 mod tweens;

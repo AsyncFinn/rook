@@ -194,12 +194,12 @@ pub(super) fn unequip_tools(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<
     Outcome::ret(lua, ())
 }
 
-/// `Humanoid:EquipTool(tool)` (creator-docs Humanoid).
+/// `Humanoid:EquipTool(tool)` (creator-docs Humanoid); nil or anything
+/// but a Tool does nothing (measured).
 pub(super) fn equip_tool(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    let tool = a.instance(0)?;
-    if !with_world(lua, |w| w.dom.is_a(tool, "Tool")) {
+    let Some(tool) = a.object_of(lua, 0, "Tool")? else {
         return Outcome::ret(lua, ());
-    }
+    };
     let (character, backpack) = with_world(lua, |w| owner(&w.dom, this));
     if let Some(character) = character {
         equip(lua, character, backpack, tool)?;

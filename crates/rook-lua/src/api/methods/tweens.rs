@@ -5,7 +5,7 @@
 pub(super) fn luau_source(owner: &str, name: &str) -> Option<&'static str> {
     Some(match (owner, name) {
         ("TweenService", "Create") => {
-            "local t = (...).tween return function(self, ...) return t.create(...) end"
+            "local t, select = (...).tween, (...).select return function(self, ...) return t.create(select('#', ...), ...) end"
         }
         ("TweenService", "GetValue") => {
             "local t = (...).tween return function(self, alpha, style, direction) return t.getValue(alpha, style, direction) end"
