@@ -1,7 +1,7 @@
 //! The disk cache for downloaded content, outside the repository, where the
 //! system keeps caches so it may clear them; Rook keeps it under a size
 //! itself, least recently used first ([`Cache::trim`]). How it is laid out
-//! and kept sound is in `docs/design/architecture.md` (Cache).
+//! and kept sound is in `docs/design/architecture/content.md` (Cache).
 //!
 //! Layout under the cache folder:
 //!

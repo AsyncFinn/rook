@@ -63,7 +63,7 @@ pub(crate) struct Sounds {
     /// sound with effects.
     loudness: FxHashMap<InstanceId, rook_audio::effects::Chain>,
     /// On clients, what `PlaybackLoudness` reads each playing sound's
-    /// samples through (decoding a sound kept as its file).
+    /// samples through.
     levels: FxHashMap<InstanceId, Reader>,
     /// Sounds given to `PlayLocalSound` whose file is still loading.
     local: Vec<(InstanceId, ContentRef)>,

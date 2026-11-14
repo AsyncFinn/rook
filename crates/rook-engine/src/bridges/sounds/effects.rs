@@ -81,7 +81,7 @@ pub(super) fn parent_group(dom: &Dom, group: InstanceId) -> Option<InstanceId> {
 /// -80 dB read 0, a full distortion 971, a group at Volume 0 or with
 /// effects changed nothing). `chain` keeps the effects' state from frame
 /// to frame.
-pub(super) fn loudness_through(reader: &mut Reader, from: f64, to: f64, chain: &mut Chain) -> f64 {
+pub(super) fn loudness_through(reader: &Reader, from: f64, to: f64, chain: &mut Chain) -> f64 {
     let Some((a, b)) = frames_between(reader.audio(), from, to) else {
         return 0.0;
     };

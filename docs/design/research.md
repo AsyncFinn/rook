@@ -149,7 +149,7 @@ Not established from public sources: anything beyond the above. Studio's About d
 - **Terrain:** sparse voxel storage (2013), smooth terrain as a voxel distance field with geometric LOD (2014), cascaded LOD and a new in-memory format (2016). [zeux]
 - **Binary format:** chunk-based, per-chunk LZ4, binary filters before compression. [zeux]
 - **Remote events:** fire-and-forget events and coroutine-based remote functions (Sep 2013). [zeux]
-- **Accurate Play Solo** (2018): server and client in one process with full replication. This **confirms** Rook's planned Play-mode design ([architecture](architecture.md#engine-systems)). [zeux]
+- **Accurate Play Solo** (2018): server and client in one process with full replication. This **confirms** Rook's planned Play-mode design ([architecture](architecture/threads-and-frames.md#threading-and-data-flow)). [zeux]
 - **Physics threading** (2019–2020): simulation split into jobs per connected island; multi-core narrowphase. [zeux; Roblox newsroom]
 - **PGS stabilization:** warm starting, post-stabilization, compliance regularisation, LDL preconditioning. [Roblox newsroom, Aug 2020]
 

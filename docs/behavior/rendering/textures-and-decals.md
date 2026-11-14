@@ -5,7 +5,7 @@ Checked against Studio 0.742 on 2026-10-19.
 What Rook found while building [M4](../../roadmap/m4-content.md) step 4: images, Decals, Textures, mesh textures, surfaces and materials, observed in Studio.
 
 How images load and
-draw is in [architecture](../../design/architecture.md#rendering-rook-render); what's
+draw is in [architecture](../../design/architecture/rendering.md); what's
 still partial is in `docs/guide/stubs.md`.
 
 *What the archive uses* (`cargo xtask corpus-scan`, 3,058 files that load; the

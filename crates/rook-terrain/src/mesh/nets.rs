@@ -1,6 +1,8 @@
 //! Surface nets over one chunk's voxels: a vertex in each dual cell where
 //! solid meets air, a quad across each crossing edge (see [`super`]).
 
+use super::clip::box_planes;
+use super::seams::Sides;
 use super::*;
 
 /// Voxels read along each axis.
@@ -15,46 +17,65 @@ pub(crate) fn mesh_chunk_with(
     detail: Detail,
     diagonals: [[bool; 2]; 3],
 ) -> ChunkMesh {
+    mesh_with(grid, None, chunk, detail, diagonals)
+}
+
+/// Mesh chunk `chunk` of `grid`, closing the sides `seams` give against
+/// the next level's voxels (`coarser`) when it's drawn.
+pub(super) fn mesh_with(
+    grid: &Grid,
+    seams: Option<(&Grid, Sides)>,
+    chunk: IVec3,
+    detail: Detail,
+    diagonals: [[bool; 2]; 3],
+) -> ChunkMesh {
     let first = chunk * CHUNK_VOXELS - IVec3::splat(PAD);
     let scale = detail.voxel_studs();
-    let mut voxels = Vec::new();
-    grid.read_block(first, IVec3::splat(SPAN), &mut voxels);
-    let block = Block { voxels };
+    let block = Block::read(grid, first);
     let mut surfaces = Vec::new();
     let mut draws = Vec::new();
     for pass in [Pass::Solid, Pass::Water] {
         if pass == Pass::Water && !block.voxels.iter().any(|v| v.is_wet()) {
             continue;
         }
-        let mut mesher = Mesher {
-            grid,
-            block: &block,
-            pass,
-            scale,
-            origin: chunk * CHUNK_VOXELS - IVec3::splat(PAD),
-            cells: vec![NONE; (CELLS * CELLS * CELLS) as usize],
-            wet: match pass {
-                Pass::Solid => Vec::new(),
-                Pass::Water => wet_cells(&block),
-            },
-            positions: Vec::new(),
-            normals: Vec::new(),
-            materials: Vec::new(),
-            triangles: Vec::new(),
-        };
-        mesher.run(diagonals);
+        let mut mesher = Mesher::new(grid, &block, pass, scale, first);
+        // Drawn solids are cut to the chunk's box; water and collisions
+        // keep the quads of the edges starting in it.
+        let clipped = detail.drawn && pass == Pass::Solid;
+        mesher.run(diagonals, if clipped { Keep::All } else { Keep::Mine });
+        if clipped {
+            let side = CHUNK_VOXELS as f32 * scale;
+            mesher.clip(&box_planes(
+                Vec3::ZERO,
+                Vec3::splat(side),
+                glam::BVec3::TRUE,
+            ));
+        }
         mesher.split(&mut surfaces);
-        if detail.skirts && pass == Pass::Solid {
-            mesher.add_skirts();
+        if clipped && let Some((coarser, sides)) = seams {
+            mesher.add_seams(coarser, chunk, detail.level, sides);
         }
         mesher.draws(&mut draws);
     }
     ChunkMesh {
         chunk,
         level: detail.level,
+        seams: seams.map_or(Sides::NONE, |(_, s)| s),
         surfaces,
         draws,
     }
+}
+
+/// Which crossing edges' quads a mesher makes, by the voxel each starts
+/// from.
+#[derive(Debug, Clone, Copy)]
+pub(super) enum Keep {
+    /// Those starting in the chunk: each quad in one chunk only.
+    Mine,
+    /// Every one that can reach into the chunk, to be clipped to it.
+    All,
+    /// Those starting from `lo` to `hi` (block voxels, inclusive).
+    Within(IVec3, IVec3),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -68,7 +89,7 @@ pub(super) enum Pass {
 }
 
 impl Pass {
-    fn inside(self, v: Voxel) -> bool {
+    pub(super) fn inside(self, v: Voxel) -> bool {
         match self {
             Pass::Solid => v.is_solid(),
             Pass::Water => v.material != TerrainMaterial::Air,
@@ -94,6 +115,13 @@ pub(super) struct Block {
 }
 
 impl Block {
+    /// The block of `grid`'s voxels from `first`, [`SPAN`] on each side.
+    pub(super) fn read(grid: &Grid, first: IVec3) -> Self {
+        let mut voxels = Vec::new();
+        grid.read_block(first, IVec3::splat(SPAN), &mut voxels);
+        Block { voxels }
+    }
+
     /// Voxel `p` of the block (0 to `SPAN - 1` on each axis).
     fn at(&self, p: IVec3) -> Voxel {
         self.voxels[(p.x + SPAN * (p.y + SPAN * p.z)) as usize]
@@ -141,8 +169,8 @@ const CELL_EDGES: [(IVec3, IVec3); 12] = {
 };
 
 pub(super) struct Mesher<'a> {
-    /// The voxels the block was read from, for what lies past it (how far
-    /// solid runs under a skirt).
+    /// The voxels the block was read from, for what lies past it (what a
+    /// seam's side holds).
     pub(super) grid: &'a Grid,
     pub(super) block: &'a Block,
     pub(super) pass: Pass,
@@ -162,6 +190,35 @@ pub(super) struct Mesher<'a> {
     /// Each vertex's material: its cell's ([`Mesher::dominant`]), or Water.
     pub(super) materials: Vec<TerrainMaterial>,
     pub(super) triangles: Vec<([u32; 3], TerrainMaterial)>,
+}
+
+impl<'a> Mesher<'a> {
+    /// A mesher of `pass` over `block`, read from `grid` at `origin`, its
+    /// voxels `scale` studs on a side.
+    pub(super) fn new(
+        grid: &'a Grid,
+        block: &'a Block,
+        pass: Pass,
+        scale: f32,
+        origin: IVec3,
+    ) -> Self {
+        Mesher {
+            grid,
+            block,
+            pass,
+            scale,
+            origin,
+            cells: vec![NONE; (CELLS * CELLS * CELLS) as usize],
+            wet: match pass {
+                Pass::Solid => Vec::new(),
+                Pass::Water => wet_cells(block),
+            },
+            positions: Vec::new(),
+            normals: Vec::new(),
+            materials: Vec::new(),
+            triangles: Vec::new(),
+        }
+    }
 }
 
 impl Mesher<'_> {
@@ -320,16 +377,25 @@ impl Mesher<'_> {
         TerrainMaterial::ALL[best]
     }
 
-    fn run(&mut self, diagonals: [[bool; 2]; 3]) {
+    pub(super) fn run(&mut self, diagonals: [[bool; 2]; 3], keep: Keep) {
         let own = PAD..PAD + CHUNK_VOXELS;
-        let edges = PAD - 1..PAD + CHUNK_VOXELS + 1;
-        for z in edges.clone() {
-            for y in edges.clone() {
-                for x in edges.clone() {
+        let (mut lo, mut hi) = (IVec3::splat(PAD - 1), IVec3::splat(PAD + CHUNK_VOXELS));
+        if let Keep::Within(from, to) = keep {
+            // And the edges around them, for their vertices' normals.
+            lo = lo.max(from - 1);
+            hi = hi.min(to + 1);
+        }
+        for z in lo.z..=hi.z {
+            for y in lo.y..=hi.y {
+                for x in lo.x..=hi.x {
                     let a = IVec3::new(x, y, z);
-                    let mine = own.contains(&x) && own.contains(&y) && own.contains(&z);
+                    let kept = match keep {
+                        Keep::Mine => own.contains(&x) && own.contains(&y) && own.contains(&z),
+                        Keep::All => true,
+                        Keep::Within(lo, hi) => a.cmpge(lo).all() && a.cmple(hi).all(),
+                    };
                     for (axis, diagonal) in diagonals.into_iter().enumerate() {
-                        self.edge(a, axis, diagonal, mine);
+                        self.edge(a, axis, diagonal, kept);
                     }
                 }
             }
@@ -337,8 +403,8 @@ impl Mesher<'_> {
     }
 
     /// The quad of the edge from voxel `a` along `axis`, if it crosses;
-    /// its triangles are kept when `mine`, and only shade otherwise.
-    fn edge(&mut self, a: IVec3, axis: usize, diagonal: [bool; 2], mine: bool) {
+    /// its triangles are kept when `kept`, and only shade otherwise.
+    fn edge(&mut self, a: IVec3, axis: usize, diagonal: [bool; 2], kept: bool) {
         let d = IVec3::AXES[axis];
         let b = a + d;
         let (ia, ib) = (self.inside(a), self.inside(b));
@@ -376,13 +442,13 @@ impl Mesher<'_> {
             for i in t {
                 self.normals[i as usize] += face;
             }
-            if mine {
+            if kept {
                 self.triangles.push((t, material));
             }
         }
     }
 
-    fn split(&self, surfaces: &mut Vec<Surface>) {
+    pub(super) fn split(&self, surfaces: &mut Vec<Surface>) {
         let positions = &self.positions;
         // Split by facing only where the material's textures differ by it,
         // so each draw covers as much as it can.

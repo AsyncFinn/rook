@@ -1,5 +1,5 @@
 //! wgpu renderer for Rook. It draws a [`Scene`] snapshot and never touches
-//! the DOM (docs/design/architecture.md#engine-systems). Terrain arrives as
+//! the DOM (docs/design/architecture/threads-and-frames.md#threading-and-data-flow). Terrain arrives as
 //! mesh files too: the player meshes its chunks with `rook-terrain`; its
 //! voxels come only for the light voxels ([`TerrainVoxels`]).
 
