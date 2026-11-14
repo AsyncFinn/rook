@@ -104,6 +104,12 @@ the hidden property).
   slabs 12 studs apart, one over the other, drew 163, darker than either
   alone; side by side across the cone (each covering half of it from the
   point) 130: blockers apart each take their share.
+- **A full voxel shadow keeps a little of the sun** (same setup). With
+  the sun off (`Brightness` 0) the floor drew 55 everywhere, under the
+  slabs and in the open; with the shadow map (`PrioritizeLightingQuality`
+  on) the floor under a 64-stud slab drew 55 too. Through the voxels it
+  drew 74 under slabs 64, 96, 128 and 160 studs wide alike, and 65 at
+  `Brightness` 1.5 (open floor 198): the voxels never block all of it.
 - **Terrain shadows the sun too** (measured in Studio 0.747 on
   2026-11-14, `PrioritizeLightingQuality` off, ClockTime 14.5, latitude
   0, looking down from 140 studs: 16 × 4 × 16 slabs of Rock one voxel
@@ -131,7 +137,10 @@ widening by 0.2 voxels in radius per voxel it runs, and reads at each
 layer the share of its footprint the cover stops, from the mip as wide
 as the footprint. A run of layers that stop some counts as one blocker,
 the layer stopping most, and runs apart each take their share. Surfaces
-read the result 6 studs out along their normal, like the local lights.
+read the result 6 studs out along their normal, like the local lights,
+and even a full shadow keeps 0.03 of the sun (`SUN_SHADOWED`, fitted:
+under the 64-stud slab Rook draws 10 and 19 levels above its sunless
+floor at `Brightness` 1.5 and 3, as Studio does).
 The voxels take the sun again when it turns more than about half a
 degree. The volume moves by whole 64-stud tiles, so the mips' texels
 stay put in the world.
@@ -143,7 +152,7 @@ sun by it, fitted to the terrain slabs above (`SOIL_SUN`: all of it from
 its shadows fade with occupancy as Studio's do.
 
 Against Studio, on the slabs above, as a share of each one's full
-shadow (Rook's floor draws 228 and its full shadow 57): within 0.05 of
+shadow (Rook's floor draws 228 and its full shadow 57, before the full shadow kept some of the sun): within 0.05 of
 Studio's everywhere, 0.03 on average. The 32-wide slab 20 up: 0.91
 against 0.95; 16 wide: 0.31 against 0.34, 1 against 1 at 10 up, 0.08
 against 0.1 at 40 up; 32 wide 40 and 80 up: 0.49 and 0.16 against 0.47
@@ -153,7 +162,7 @@ thicknesses don't change Rook's shadows either.
 The deck 286 studs up casts nothing in either.
 
 Left: with `PrioritizeLightingQuality` on, Rook's shadow map still
-reaches 300 studs where Studio's reaches about 580. Rook's full voxel
-shadow is darker than Studio's (57 against 74 over floors of 228 and
-231), the light left under a wide blocker. Blockers stacked apart are
-not yet compared against Studio's.
+reaches 300 studs where Studio's reaches about 580. Rook's sunless
+floor is 2 levels brighter than Studio's (57 against 55), so its full
+voxel shadow is too (76 against 74). Blockers stacked apart are not yet
+compared against Studio's.

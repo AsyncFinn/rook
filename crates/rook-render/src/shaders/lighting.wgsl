@@ -133,10 +133,15 @@ fn sun_voxel(p: vec3<f32>) -> f32 {
 // its light voxels: soft, blocky, and only within the voxels' reach
 // (docs/behavior/lighting/sun.md). The voxels at the point 6 studs out
 // along the normal, as for the sky; their cones already soften the shadow
-// (`sunlit` in `light_volume.wgsl`).
+// (`sunlit` in `light_volume.wgsl`). Even a full shadow keeps
+// `SUN_SHADOWED` of the sun, as Studio's does.
 fn voxel_sun_visibility(world: vec3<f32>, n: vec3<f32>) -> f32 {
-    return sun_voxel(world + n * VOXEL_OFFSET);
+    return mix(SUN_SHADOWED, 1.0, sun_voxel(world + n * VOXEL_OFFSET));
 }
+
+// How much of the sun the voxels let through where they block it all
+// (fitted to Studio 0.747, docs/behavior/lighting/sun.md).
+const SUN_SHADOWED: f32 = 0.03;
 
 // How much of the sun reaches a point: through the shadow map, 3x3
 // comparison samples (each one filtered 2x2 by the sampler), fading out

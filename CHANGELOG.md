@@ -5,6 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- In places that shadow the sun through the light voxels, a full shadow keeps a little of the sun, as in Roblox. Rook's shadows under wide parts went as dark as the unlit ambient. See [sun](docs/behavior/lighting/sun.md#shadows).
 - In places that shadow the sun through the light voxels, a part's shadow is as deep as Roblox's and softens and pales the further it falls, the same however thin the part. Rook made shadows under thick parts far too dark and tight, and thin parts barely dimmed the sun. See [sun](docs/behavior/lighting/sun.md#shadows).
 - Far terrain meets near terrain without cracks where a cave's ceiling, wall or overhang crosses from one ring of detail to the next, as in Studio. Rook let the sky show through there in bands and slivers. See [level of detail](docs/behavior/terrain/detail.md#how-rook-does-it).
 - Terrain darkens what it covers, as in Roblox: in places that shadow the sun through the light voxels it casts soft sun shadows, and it keeps the sky's light out of caves and from under overhangs, partly through thin terrain. Rook let the sun and the sky's light straight through terrain. See [sun](docs/behavior/lighting/sun.md#shadows).
