@@ -116,6 +116,51 @@ fn can_query_only_matters_without_can_collide() {
 }
 
 #[test]
+fn transparency_limits_skip_see_through_parts() {
+    let mut dom = Dom::new();
+    let a = fixed(&mut dom, Vec3::new(0.0, 0.0, -10.0));
+    let mut physics = Physics::new();
+    let clear = Filter {
+        max_transparency: Some(0.95),
+        ..all()
+    };
+    let hits = |physics: &mut Physics, dom: &mut Dom| {
+        let dir = Vec3::new(0.0, 0.0, -100.0);
+        physics.raycast(dom, O, dir, &clear).is_some()
+    };
+    set(&mut dom, a, "Transparency", Value::Float32(0.95));
+    assert!(hits(&mut physics, &mut dom));
+    set(&mut dom, a, "Transparency", Value::Float32(0.96));
+    assert!(!hits(&mut physics, &mut dom));
+}
+
+#[test]
+fn parts_along_a_ray_come_nearest_first() {
+    let mut dom = Dom::new();
+    let far = fixed(&mut dom, Vec3::new(0.0, 0.0, -20.0));
+    let near = fixed(&mut dom, Vec3::new(0.0, 0.0, -10.0));
+    fixed(&mut dom, Vec3::ZERO);
+    fixed(&mut dom, Vec3::new(5.0, 0.0, -10.0));
+    let mut physics = Physics::new();
+    let along = |physics: &mut Physics, dom: &mut Dom, to: f32| {
+        physics.parts_along(dom, O, Vec3::new(0.0, 0.0, -to), &all())
+    };
+    // The part the ray starts in and the one beside it are left out.
+    assert_eq!(along(&mut physics, &mut dom, 100.0), vec![near, far]);
+    // Ending inside a part counts it; ending on its face doesn't.
+    assert_eq!(along(&mut physics, &mut dom, 20.0), vec![near, far]);
+    assert_eq!(along(&mut physics, &mut dom, 19.0), vec![near]);
+    // No length limit.
+    set(
+        &mut dom,
+        far,
+        "CFrame",
+        Value::CFrame(CFrame::from_position(O + Vec3::new(0.0, 0.0, -20_000.0))),
+    );
+    assert_eq!(along(&mut physics, &mut dom, 30_000.0), vec![near, far]);
+}
+
+#[test]
 fn rays_reach_15000_studs() {
     let mut dom = Dom::new();
     let p = fixed(&mut dom, Vec3::new(0.0, 0.0, -14_999.0));

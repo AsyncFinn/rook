@@ -233,6 +233,43 @@ impl Physics {
         })
     }
 
+    /// Every part a ray from `origin` passes before its end at `origin +
+    /// direction`, nearest first, however long it is: a part the ray
+    /// starts in or only reaches at its end is left out, one holding its
+    /// end is in, and Terrain never is (all observed, for
+    /// `Camera:GetPartsObscuringTarget`).
+    pub fn parts_along(
+        &mut self,
+        dom: &mut Dom,
+        origin: Vec3,
+        direction: Vec3,
+        filter: &Filter,
+    ) -> Vec<InstanceId> {
+        profiling::scope!("Physics::parts_along");
+        self.prepare(dom);
+        let dom = &*dom;
+        let length = direction.length();
+        if !length.is_finite() || length <= 0.0 || !origin.is_finite() {
+            return Vec::new();
+        }
+        let ray = Ray::new(origin, direction / length);
+        let accept = self.part_filter(dom, filter);
+        let is_part = |h: ColliderHandle, _: &Collider| self.terrain.material(h).is_none();
+        let mut hits: Vec<(f32, InstanceId)> = self
+            .world
+            .query_pipeline_with_filter(QueryFilter::new().predicate(&is_part))
+            .intersect_ray(ray, length, true)
+            .filter(|(.., hit)| hit.time_of_impact > 0.0 && hit.time_of_impact < length)
+            .filter_map(|(h, _, hit)| Some((hit.time_of_impact, accept(h)?)))
+            .collect();
+        hits.sort_by(|a, b| a.0.total_cmp(&b.0));
+        // A part of several colliders comes once, where the ray meets it.
+        let mut seen = FxHashSet::default();
+        hits.into_iter()
+            .filter_map(|(_, part)| seen.insert(part).then_some(part))
+            .collect()
+    }
+
     /// Whether `filter` lets a query see the Terrain at all.
     fn accepts_terrain(&self, dom: &Dom, filter: &Filter) -> bool {
         (self.terrain.instance)

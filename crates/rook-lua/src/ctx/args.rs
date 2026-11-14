@@ -102,6 +102,11 @@ impl Args {
         self.vals.get(i).unwrap_or(&LuaValue::Nil)
     }
 
+    /// How many arguments were passed, explicit nils included.
+    pub(crate) fn len(&self) -> usize {
+        self.vals.len()
+    }
+
     pub(crate) fn rest(&self, from: usize) -> Vec<LuaValue> {
         self.vals.get(from..).map(<[_]>::to_vec).unwrap_or_default()
     }
