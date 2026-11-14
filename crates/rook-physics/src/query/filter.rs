@@ -22,6 +22,8 @@ pub struct Filter {
     /// detector's part lets the click through, though `Mouse.Target`
     /// reports it).
     pub skip_invisible_ghosts: bool,
+    /// Skip parts more transparent than this.
+    pub max_transparency: Option<f32>,
 }
 
 impl Filter {
@@ -35,6 +37,7 @@ impl Filter {
             respect_can_collide: false,
             ignore_water: false,
             skip_invisible_ghosts: false,
+            max_transparency: None,
         }
     }
 
@@ -47,6 +50,7 @@ impl Filter {
             respect_can_collide: false,
             ignore_water: false,
             skip_invisible_ghosts: false,
+            max_transparency: None,
         }
     }
 }
@@ -55,10 +59,13 @@ impl Filter {
 /// [`Filter::skip_invisible_ghosts`] skips.
 pub(super) fn is_invisible_ghost(dom: &Dom, props: &Props, part: InstanceId) -> bool {
     dom.property(part, props.can_collide) == Some(Value::Bool(false))
-        && (dom.property(part, props.transparency))
-            .and_then(|t| t.as_number())
-            .unwrap_or(0.0)
-            >= 1.0
+        && transparency(dom, props, part) >= 1.0
+}
+
+fn transparency(dom: &Dom, props: &Props, part: InstanceId) -> f32 {
+    (dom.property(part, props.transparency))
+        .and_then(|t| t.as_number())
+        .unwrap_or(0.0) as f32
 }
 
 /// A [`Filter`] for one query. A query asks it of every part it passes, so
@@ -97,6 +104,11 @@ impl<'a> Accepting<'a> {
             return false;
         }
         if filter.skip_invisible_ghosts && is_invisible_ghost(dom, props, part) {
+            return false;
+        }
+        if let Some(max) = filter.max_transparency
+            && transparency(dom, props, part) > max
+        {
             return false;
         }
         if let Some(group) = self.group {

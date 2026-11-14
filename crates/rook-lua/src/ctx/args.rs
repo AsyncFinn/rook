@@ -120,14 +120,13 @@ impl Args {
         ))
     }
 
-    /// Whether the call passed argument `i`, `nil` included: Roblox tells
-    /// a missing argument from an explicit `nil`.
-    pub(crate) fn present(&self, i: usize) -> bool {
-        i < self.vals.len()
-    }
-
     pub(crate) fn get(&self, i: usize) -> &LuaValue {
         self.vals.get(i).unwrap_or(&LuaValue::Nil)
+    }
+
+    /// How many arguments were passed, explicit nils included.
+    pub(crate) fn len(&self) -> usize {
+        self.vals.len()
     }
 
     pub(crate) fn rest(&self, from: usize) -> Vec<LuaValue> {
@@ -192,7 +191,7 @@ impl Args {
     /// `workspace:IsDescendantOf(nil)` run, `Debris:AddItem()` is
     /// `Argument 1 missing or nil`. What null means is each method's own.
     pub(crate) fn object(&self, i: usize) -> ApiResult<Option<InstanceId>> {
-        if !self.present(i) {
+        if i >= self.len() {
             return Err(self.missing(i));
         }
         self.opt_instance(i)

@@ -162,7 +162,7 @@ pub(super) fn collection_tag(
     let Some(instance) = a.object(0)? else {
         return match null {
             NullTags::Empty => Outcome::ret(lua, lua.create_table()?),
-            _ if !rest.present(0) => Err(rest.missing(0)),
+            _ if rest.len() == 0 => Err(rest.missing(0)),
             NullTags::False => Outcome::ret(lua, false),
             NullTags::Nothing => Outcome::ret(lua, ()),
         };

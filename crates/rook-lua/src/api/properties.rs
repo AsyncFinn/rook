@@ -324,9 +324,11 @@ pub(crate) fn get(w: &World, id: InstanceId, name: &str) -> Option<Value> {
         )),
         // Observed: a part outside Workspace has no root, and an anchored
         // assembly's mass is infinite.
-        // Observed in Studio 0.744: fixed, and not where rays start (see
-        // `methods::camera`). The default camera's occlusion reads it.
-        "NearPlaneZ" if dom.class_name(id) == "Camera" => Some(Value::Float32(-0.1)),
+        // Read-only, and not where rays start. The default camera's
+        // occlusion reads it.
+        "NearPlaneZ" if dom.class_name(id) == "Camera" => {
+            Some(Value::Float32(-super::methods::camera::near_plane(w, id)))
+        }
         "RootPart" | "Torso" if dom.class_name(id) == "Humanoid" => Some(Value::Ref(
             dom.parent(id)
                 .and_then(|model| super::methods::characters::root_part(dom, model))
@@ -502,6 +504,15 @@ pub(crate) fn set(
             let e = rook_reflection::database().enum_by_name("ScreenInsets")?;
             let value = rook_reflection::enum_item_value(e.id, item)?;
             Some(set_named(w, id, "ScreenInsets", Value::Enum(value)))
+        }
+        // A camera's roll lasts until its CameraType changes (observed).
+        ("CameraType", v) if w.dom.class_name(id) == "Camera" => {
+            let before = w.dom.enum_item_property(id, "CameraType");
+            let done = set_named(w, id, "CameraType", v.clone());
+            if w.dom.enum_item_property(id, "CameraType") != before {
+                w.camera_rolls.remove(&id);
+            }
+            Some(done)
         }
         ("CFrame", Value::CFrame(c)) if w.dom.is_a(id, "BasePart") => Some(set_cframe(w, id, *c)),
         // Measured: kept within the canvas as laid out now.

@@ -106,7 +106,7 @@ pub(super) fn set_listener(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outc
     // The listener is a Tuple, not an Object: missing, nil and other values
     // each have their own message (measured).
     let object = || -> ApiResult<InstanceId> {
-        if !a.present(1) {
+        if a.len() < 2 {
             return Err(ScriptError(
                 "SoundService:SetListener called with an incorrect argument.".into(),
             ));

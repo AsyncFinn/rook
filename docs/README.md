@@ -82,8 +82,8 @@
     - [Content](behavior/scripting/content.md): the `Content` datatype and its constructors
     - [Datatype errors](behavior/scripting/datatype-errors.md): their messages in `pcall`
     - [Faces, Axes and PhysicalProperties](behavior/scripting/faces-and-axes.md): their `typeof` and printing
-    - [Instance arguments given nil](behavior/scripting/object-arguments.md): what each method does with the null object
     - [Member lookup](behavior/scripting/member-lookup.md): lowercase first letters, and what a child of that name beats
+    - [Nil Instance arguments](behavior/scripting/nil-arguments.md): what each method does with the null object
     - [Random](behavior/scripting/random.md): Luau's generator and each method's draws
     - [Running scripts](behavior/scripting/running-scripts.md): scripts stop the moment they're removed from where they run or disabled
     - [Tags and locked members](behavior/scripting/tags.md): tag signals, and which members a child of the same name beats.

@@ -23,7 +23,7 @@ mod world;
 use threads::watchdog;
 
 pub use api::methods::assets::AssetModel;
-pub use api::methods::camera::{Lens, viewport_ray};
+pub use api::methods::camera::{Lens, rolled, viewport_ray};
 pub use api::methods::characters::movement::drives as humanoid_drives;
 pub use api::methods::characters::movement::face_camera;
 pub use api::methods::characters::ownership::{authority, network_owner};
