@@ -1,6 +1,6 @@
 //! The screen drawn in pieces, one per stacked object (a CanvasGroup's
 //! holding its group), each kept until what it draws changes
-//! (docs/design/architecture.md#redrawing-what-changed).
+//! (docs/design/architecture/gui.md#redrawing-what-changed).
 
 use std::sync::Arc;
 

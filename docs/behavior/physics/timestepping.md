@@ -119,5 +119,5 @@ were simulated whole, so its cap lies between 0.118 and 0.121 s.
 Every assembly steps at 240 Hz (`rook-physics/src/lib.rs`, `STEP_HZ`), as
 `Fixed` does. A frame's time is capped at 0.1 s (24 steps; the player's
 `App::update` and the bench), near the client's measured 0.12 s, so a long
-frame costs the next one at most 24 steps. Adaptive is deferred: see [architecture](../../design/architecture.md)
-(Physics, *Adaptive timestepping*).
+frame costs the next one at most 24 steps. Adaptive is deferred: see [physics design](../../design/architecture/physics.md)
+(*Adaptive timestepping*).

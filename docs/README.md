@@ -7,7 +7,15 @@
   - [Tools](guide/tools.md): the `rook` command-line tool and `cargo xtask`
 - **[roadmap/](roadmap/README.md)**: the plan, one page per milestone.
 - **[design/](design/)**: how Rook is built.
-  - [Architecture](design/architecture.md): crates, data flow and the rules every behavior follows
+  - [Architecture](design/architecture.md): goals, crates, testing and the rules every behavior follows; each subsystem's design is a page of its own:
+    - [The data model](design/architecture/data-model.md): datatypes, reflection and the runtime DOM
+    - [Scripting](design/architecture/scripting.md): signals, the scheduler and the Luau bridge
+    - [Threads and frames](design/architecture/threads-and-frames.md): threading, copies of state, frame order, per-frame budgets
+    - [Physics](design/architecture/physics.md)
+    - [GUI](design/architecture/gui.md)
+    - [Rendering](design/architecture/rendering.md)
+    - [Content](design/architecture/content.md)
+    - [Services and replication](design/architecture/replication.md)
   - [Policies](design/policies.md): what Rook targets, where its knowledge of Roblox may come from, and what content it ships
   - [Research](design/research.md): background, prior work, libraries and sources
   - [Data and logging](design/data-and-logging.md): the data folder, build settings, developer overrides, logs, crash reports and kept content

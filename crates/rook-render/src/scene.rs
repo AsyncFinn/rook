@@ -1,5 +1,5 @@
 //! What the renderer draws: a snapshot built by the engine side. The
-//! renderer never sees the DOM (docs/design/architecture.md#engine-systems).
+//! renderer never sees the DOM (docs/design/architecture/threads-and-frames.md#threading-and-data-flow).
 
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
@@ -22,7 +22,7 @@ pub use emitters::{
 };
 pub use lighting::{LightShape, Lighting, LocalLight, SKYBOX_FACES, Tonemapper};
 pub use ribbons::{Anchor, Beam, FloorWire, RibbonLook, TextureMode, Trail};
-pub use terrain::TerrainLook;
+pub use terrain::{TerrainLook, TerrainVoxels};
 
 /// A mesh file, by the BLAKE3 hash of its bytes: parts that use the same
 /// file share one GPU mesh, however they refer to it.

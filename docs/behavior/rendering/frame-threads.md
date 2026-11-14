@@ -3,7 +3,7 @@
 Checked against Studio 0.745 on 2026-11-04.
 
 Which thread does what in a client frame, and what overlaps. Rook's frame
-follows from this (docs/design/architecture.md#frame-order).
+follows from this (docs/design/architecture/threads-and-frames.md#frame-order).
 
 ## What Roblox documents
 

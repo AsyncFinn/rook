@@ -10,7 +10,7 @@
 //! the main thread can only touch the renderer between frames, at the
 //! hand-over ([`RenderThread::get`]), where the scene's changes go in
 //! (rook-scene's `ToRender`, pipelined rendering's extract).
-//! docs/design/architecture.md#frame-order has the frame's order.
+//! docs/design/architecture/threads-and-frames.md#frame-order has the frame's order.
 
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::time::{Duration, Instant};

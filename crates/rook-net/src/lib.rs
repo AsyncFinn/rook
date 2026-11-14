@@ -1,5 +1,5 @@
 //! Replication from a server DataModel to a client DataModel
-//! (docs/design/architecture.md#engine-systems). What replicates is in
+//! (docs/design/architecture/threads-and-frames.md#threading-and-data-flow). What replicates is in
 //! `docs/behavior/replication.md`.
 //!
 //! A [`Source`] describes the server's current state of each instance a

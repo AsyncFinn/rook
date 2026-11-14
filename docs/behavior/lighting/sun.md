@@ -91,6 +91,14 @@ the hidden property).
   the camera's focus up, off the floor). A 1-stud slab dims the sun
   rather than blocking it, and a 6-stud cube on the ground leaves only
   a faint shadow.
+- **Terrain shadows the sun too** (measured in Studio 0.747 on
+  2026-11-14, `PrioritizeLightingQuality` off, ClockTime 14.5, latitude
+  0, looking down from 140 studs: 16 × 4 × 16 slabs of Rock one voxel
+  thick, 20 studs over a white floor, each at one occupancy). A full
+  slab's shadow is as deep as a part slab's (the floor drew 231, the
+  shadows 180 to 186), and stays that deep down to 0.35 occupancy; below
+  that it fades: 205 at 0.25, 220 at 0.15, 224 at 0.1, 228 at 0.05, and
+  nothing at the least occupancy. A slab of water casts nothing.
 - **Unsaved, it's off** (Observed by the user: an archive place showed
   no ring and no shadow from the deck until they turned it on). Studio's
   Baseplate template saves it on.
@@ -107,6 +115,14 @@ e^(−2 × fill × voxels crossed) through every voxel it crosses, until it
 leaves the volume. Surfaces read that 6 studs out along their normal,
 like the local lights, averaged over a 3 × 3 pattern 4 studs apart. The
 voxels take the sun again when it turns more than about half a degree.
+Terrain is marked into the same voxels
+(`renderer/lighting/local/terrain.rs`), each voxel by how full of solid
+terrain it is (air and water count as empty), and the sun dims through
+it as through a part's fill, at a density fitted to the slabs above
+(`SOIL_SUN`: as dense as a full voxel from 0.35 up, about half of one at
+0.25). Rook's shadows then fade with occupancy as Studio's do, as a share
+of the full shadow: 0.53, 0.23, 0.16 and 0.07 of it at 0.25, 0.15, 0.1
+and 0.05 (Studio 0.54, 0.23, 0.15 and 0.06).
 
 Against Studio, a 16 × 1 × 16 slab 30 studs up, a 40 × 20 × 2 wall and a
 6-stud cube, from 85 studs up looking down: the shadows fall in the same
@@ -116,4 +132,7 @@ dips 22 levels where Studio's dips 28; the cube's is a little darker
 than Studio's faint one. The deck 286 studs up casts nothing in either.
 
 Left: with `PrioritizeLightingQuality` on, Rook's shadow map still
-reaches 300 studs where Studio's reaches about 580.
+reaches 300 studs where Studio's reaches about 580. Under thick blockers
+Rook's voxel shadow is much deeper and tighter than Studio's: a 4-stud
+part or terrain slab 20 studs up darkens the floor by about 133 levels
+where Studio's darkens it by about 50, over a patch about half as wide.

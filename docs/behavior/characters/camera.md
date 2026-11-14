@@ -176,7 +176,7 @@ Studio, which Rook's run matches.
   order puts it a frame or more behind (Studio's scripts read it two 60 Hz
   frames behind a camera turning steadily, 2026-11-03), and players feel
   even one: steered only by physics, Rook's trailed the mouse by a frame
-  ([frame order](../../design/architecture.md#frame-order), Rook
+  ([frame order](../../design/architecture/threads-and-frames.md#frame-order), Rook
   extension).
 - The client steps once per drawn frame, that frame's length, as Roblox
   runs a frame per drawn frame (Studio's playtest client ran at 60).

@@ -3,7 +3,7 @@
 Checked against Studio 0.745 on 2026-10-30.
 
 SpecialMesh `MeshId`, FileMesh and MeshPart. How loading and drawing work
-is in [architecture](../../design/architecture.md#rendering-rook-render); what's left is in
+is in [architecture](../../design/architecture/rendering.md); what's left is in
 `docs/guide/stubs.md`.
 
 From version 3.00 on, a file holds every level of detail in one face list,
@@ -238,7 +238,7 @@ and a 2016 MeshPart whose file Rook gets as version 2.00.
 
 *How Rook does it:* every level goes into the mesh pool, and each frame
 the instances in runs a pass sees pick their level by the rule above; see
-[architecture](../../design/architecture.md#rendering-rook-render). Where
+[architecture](../../design/architecture/rendering.md). Where
 Rook differs: a coarser level holds until the camera comes 5% nearer than
 its threshold, so a camera hovering there doesn't flip it each frame, and
 image layers draw at their part's level.

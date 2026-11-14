@@ -1,5 +1,5 @@
 //! A sound file decoded packet by packet: the one decoding loop that both
-//! the load ([`super::Audio::decode`]) and playback ([`super::Reader`])
+//! the load ([`super::Audio::decode`]) and playback ([`super::decoded`])
 //! run, so a sound decoded as it plays gives exactly the samples it gave
 //! when it loaded.
 
@@ -9,7 +9,7 @@ use std::sync::Arc;
 use symphonia::core::audio::SampleBuffer;
 use symphonia::core::codecs::{CODEC_TYPE_NULL, Decoder, DecoderOptions};
 use symphonia::core::errors::Error as SymphoniaError;
-use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo};
+use symphonia::core::formats::{FormatOptions, FormatReader};
 use symphonia::core::io::{MediaSourceStream, MediaSourceStreamOptions};
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
@@ -97,12 +97,10 @@ impl Stream {
     }
 
     /// Replace `out` with the next packet's frames, interleaved in the
-    /// kept layout, returning the packet's timestamp (in frames). `None` at
-    /// the end: the file's end, or damage after something decoded (a
-    /// cut-off file keeps what came before, as players do). A packet that
-    /// decodes to nothing (the first after a seek only primes a Vorbis
-    /// decoder) is passed over.
-    pub(super) fn next(&mut self, out: &mut Vec<i16>) -> Result<Option<u64>, AudioError> {
+    /// kept layout; false at the end: the file's end, or damage after
+    /// something decoded (a cut-off file keeps what came before, as players
+    /// do). A packet that decodes to nothing is passed over.
+    pub(super) fn next(&mut self, out: &mut Vec<i16>) -> Result<bool, AudioError> {
         let damaged =
             |e: &dyn std::fmt::Display| AudioError::Damaged(self.format.name(), e.to_string());
         out.clear();
@@ -112,9 +110,9 @@ impl Stream {
                 Err(SymphoniaError::IoError(e))
                     if e.kind() == std::io::ErrorKind::UnexpectedEof =>
                 {
-                    return Ok(None);
+                    return Ok(false);
                 }
-                Err(_) if self.decoded_any => return Ok(None),
+                Err(_) if self.decoded_any => return Ok(false),
                 Err(e) => return Err(damaged(&e)),
             };
             if packet.track_id() != self.track {
@@ -149,21 +147,9 @@ impl Stream {
             fold(out, buf.samples(), channels, usize::from(layout.channels));
             self.decoded_any = true;
             if !out.is_empty() {
-                return Ok(Some(packet.ts()));
+                return Ok(true);
             }
         }
-    }
-
-    /// Move to the packet stamped `ts` or one before it.
-    pub(super) fn seek(&mut self, ts: u64) -> Result<(), AudioError> {
-        let to = SeekTo::TimeStamp {
-            ts,
-            track_id: self.track,
-        };
-        (self.reader.seek(SeekMode::Accurate, to))
-            .map_err(|e| AudioError::Damaged(self.format.name(), e.to_string()))?;
-        self.decoder.reset();
-        Ok(())
     }
 }
 

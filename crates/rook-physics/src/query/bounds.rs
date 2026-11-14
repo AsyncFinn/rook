@@ -2,7 +2,7 @@
 //! find parts by their box search (Region3, `GetPartBounds*`,
 //! `MakeJoints`, FloorWire floors): the colliders' bounds miss a turned
 //! cylinder's or wedge's box corners. How it's kept fresh and cheap, as
-//! Rapier keeps its broad phase, is in `docs/design/architecture.md`
+//! Rapier keeps its broad phase, is in `docs/design/architecture/physics.md`
 //! (Part boxes). A leaf may reach past its part's box (its skin), so
 //! callers test the part's own box.
 

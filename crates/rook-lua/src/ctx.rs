@@ -1,19 +1,6 @@
-//! Per-VM context and the calling convention for engine functions.
-//!
-//! mlua turns errors from Rust callbacks into userdata, and can only yield
-//! from Rust through async functions. Roblox scripts expect error values to
-//! be plain strings, and engine functions like `wait` to yield the calling
-//! coroutine. So every engine function is a raw Rust function wrapped in a
-//! small Luau shim. The Rust side returns a value and a code: no code for a
-//! single result (the shim returns it after one nil test), or a [`Code`]:
-//! no results, several results pending, yield (the shim calls
-//! `coroutine.yield()`; the Rust side has already registered the current
-//! thread with whatever resumes it), call (the value is a function whose
-//! arguments are pending; the shim calls it from Lua, so it may yield; used
-//! by `require` and `Invoke`), or error (the value is the message; the shim
-//! calls `error(msg, 0)`). Pending values are fetched with a second call;
-//! the shim takes two results, never varargs, which cost more than most
-//! engine functions.
+//! Per-VM context and the calling convention for engine functions: a raw
+//! Rust function behind a small Luau shim, returning a value and a [`Code`]
+//! the shim acts on (docs/design/architecture/scripting.md#luau-bridge-rook-lua).
 
 pub(crate) mod args;
 pub(crate) mod convert;

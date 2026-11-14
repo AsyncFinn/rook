@@ -56,6 +56,9 @@ const TILE: u32 = 16u;
 // A byte per voxel, four to a word at `slot`: how much of it parts fill
 // (255 full).
 @group(0) @binding(9) var<storage, read> fills: array<u32>;
+// A byte per voxel, four to a word at `slot`: how full of solid terrain it
+// is (255 full; `renderer/lighting/local/terrain.rs`).
+@group(0) @binding(10) var<storage, read> soils: array<u32>;
 
 // In `skies`: open to the sky, so lit by all of it.
 const OPEN: f32 = 2.0;
@@ -153,6 +156,35 @@ fn fill_at(c: vec3<i32>) -> f32 {
     return f32((fills[i >> 2u] >> ((i & 3u) * 8u)) & 255u) / 255.0;
 }
 
+// How full of solid terrain voxel `c` is, 0 to 1.
+fn soil_at(c: vec3<i32>) -> f32 {
+    let i = slot(vec3<u32>(c));
+    return f32((soils[i >> 2u] >> ((i & 3u) * 8u)) & 255u) / 255.0;
+}
+
+// How terrain stops light, by how full of it a voxel is (fitted to Studio,
+// docs/behavior/lighting/sun.md and docs/behavior/rendering/materials.md):
+// between these occupancies, linearly in between.
+const SOIL_AT = array<f32, 11>(0.0, 0.05, 0.1, 0.15, 0.25, 0.35, 0.5, 0.75, 0.9, 0.95, 1.0);
+// How full of a part a voxel would dim the sun as much: the sun's shadow
+// deepens fast, to a full voxel's by 0.35.
+const SOIL_SUN = array<f32, 11>(0.0, 0.09, 0.18, 0.27, 0.53, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0);
+// How much of the sky's light it lets through: little is stopped until the
+// voxel is nearly full, and all of it at full.
+const SOIL_SKY = array<f32, 11>(1.0, 1.0, 1.0, 1.0, 1.0, 0.98, 0.94, 0.7, 0.38, 0.22, 0.0);
+
+// `table` at occupancy `soil`, between the knots at `SOIL_AT`.
+fn by_soil(table: array<f32, 11>, soil: f32) -> f32 {
+    var at = SOIL_AT;
+    var values = table;
+    var i = 1u;
+    while i < 10u && soil > at[i] {
+        i += 1u;
+    }
+    let t = clamp((soil - at[i - 1u]) / (at[i] - at[i - 1u]), 0.0, 1.0);
+    return mix(values[i - 1u], values[i], t);
+}
+
 // How much one voxel's length of a full voxel dims the sun: through a voxel
 // a fraction `f` full, over `d` voxels' length, `exp(-SUN_DENSITY f d)`
 // gets through (fitted to Studio's shadows of a 1-stud slab and a 2-stud
@@ -177,7 +209,7 @@ fn sunlit(cell: vec3<u32>) -> f32 {
     var depth = 0.0;
     while all(c >= vec3(0)) && all(c < n) && depth < 5.5 {
         let exit = min(next.x, min(next.y, next.z));
-        depth += fill_at(c) * (exit - t);
+        depth += (fill_at(c) + by_soil(SOIL_SUN, soil_at(c))) * (exit - t);
         t = exit;
         if next.x == exit {
             c.x += step.x;
@@ -199,20 +231,25 @@ fn sunlit(cell: vec3<u32>) -> f32 {
 // nothing blocks the column above, none in a blocked voxel, and elsewhere
 // the open voxels of the layer above within two voxels each way,
 // averaged (the outer ring at 0.15). So light spreads in under a roof
-// from its edges, further the deeper it goes. Above and around the
-// volume is open sky.
+// from its edges, further the deeper it goes. A voxel holding terrain
+// lets its share through (`SOIL_SKY`) of what comes from above. Above and
+// around the volume is open sky.
 fn sky_at(x: u32, y: u32, z: u32) -> f32 {
     let nx = params.size.y;
     let nz = params.size.w;
     let at = slot(vec3(x, y, z));
     let top = y + 1u == params.size.z;
     let here = is_solid(x, y, z);
-    if !here && (top || skies[slot(vec3(x, y + 1u, z))] == OPEN) {
+    let through = by_soil(SOIL_SKY, soil_at(vec3<i32>(vec3(x, y, z))));
+    let open = top || skies[slot(vec3(x, y + 1u, z))] == OPEN;
+    if !here && open && through == 1.0 {
         skies[at] = OPEN;
         return 1.0;
     }
     var sky = 0.0;
-    if !here {
+    if !here && open {
+        sky = through;
+    } else if !here {
         var sum = 0.0;
         var weight = 0.0;
         for (var dz = -2; dz <= 2; dz++) {
@@ -230,7 +267,7 @@ fn sky_at(x: u32, y: u32, z: u32) -> f32 {
             }
         }
         if weight > 0.0 {
-            sky = sum / weight;
+            sky = through * sum / weight;
         }
     }
     skies[at] = sky;

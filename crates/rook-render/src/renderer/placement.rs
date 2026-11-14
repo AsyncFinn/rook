@@ -101,6 +101,12 @@ impl Renderer {
             .update(&self.device, &self.queue, &scene.lights, changed);
     }
 
+    /// Take the terrain's voxels again, for the light voxels: they dim the
+    /// sun and the sky's light (its surfaces come as scene entries).
+    pub fn update_terrain_voxels(&mut self, voxels: TerrainVoxels) {
+        self.lights.update_terrain(voxels);
+    }
+
     /// Take the effects in the slots `changed` again.
     pub fn update_effects(&mut self, scene: &Scene, changed: &EffectSlots) {
         profiling::scope!("Renderer::update_effects");

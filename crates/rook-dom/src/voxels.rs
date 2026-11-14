@@ -72,7 +72,7 @@ impl Dom {
         match Grid::decode(bytes) {
             Ok(grid) => {
                 let property = self.smooth_grid.expect("a Terrain's SmoothGrid");
-                self.inst_mut(id)?.properties.remove(&property);
+                self.inst_mut(id)?.properties.remove(property);
                 self.voxels.insert(id, grid);
                 Ok(true)
             }

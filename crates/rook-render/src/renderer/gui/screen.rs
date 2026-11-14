@@ -1,4 +1,4 @@
-//! The screen's GUI kept per piece (docs/design/architecture.md#redrawing-what-changed):
+//! The screen's GUI kept per piece (docs/design/architecture/gui.md#redrawing-what-changed):
 //! each piece packed once, written to the quad buffer alone when the
 //! pieces around it keep their sizes, and the draw runs joined across
 //! pieces.

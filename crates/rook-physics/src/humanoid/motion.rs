@@ -177,7 +177,7 @@ impl Physics {
     /// turns). A client calls this once its frame's camera is final, so
     /// the character it draws faces that camera: steered toward the
     /// heading physics saw at the frame's start, it was drawn a frame
-    /// behind the mouse (docs/design/architecture.md#frame-order). The
+    /// behind the mouse (docs/design/architecture/threads-and-frames.md#frame-order). The
     /// steps until the next frame hold the heading.
     pub fn face_now(&mut self, dom: &mut Dom, humanoid: InstanceId, way: glam::Vec3) {
         let faces = |c: &Controller| c.drive.auto_rotate && turns(c.state);
