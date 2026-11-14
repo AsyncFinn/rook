@@ -365,7 +365,7 @@ impl Dom {
             let refs: Vec<_> = self.instances[copy]
                 .properties
                 .iter()
-                .filter_map(|(p, v)| ref_target(v).map(|t| (*p, t)))
+                .filter_map(|(p, v)| ref_target(v).map(|t| (p, t)))
                 .collect();
             for (property, target) in refs {
                 self.referrers

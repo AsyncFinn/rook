@@ -1,11 +1,13 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use rustc_hash::FxHashMap;
-
-use rook_reflection::{ClassId, PropertyId};
+use rook_reflection::ClassId;
 use rook_types::Value;
 
 use crate::InstanceId;
+
+mod properties;
+
+pub use properties::Properties;
 
 /// Attributes in insertion order, as `GetAttributes` reports them.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -60,7 +62,7 @@ pub struct Instance {
     pub(crate) destroyed: bool,
     /// Explicitly set properties. Missing ones read the class default.
     /// Written only through [`crate::Dom`], which indexes references.
-    pub(crate) properties: FxHashMap<PropertyId, Value>,
+    pub(crate) properties: Properties,
     /// Properties from files that the database doesn't describe, kept so
     /// saving doesn't lose them.
     pub unknown_properties: Vec<(String, Value)>,
@@ -120,7 +122,7 @@ impl Instance {
             children: Children::default(),
             parent_locked: false,
             destroyed: false,
-            properties: FxHashMap::default(),
+            properties: Properties::default(),
             unknown_properties: Vec::new(),
             attributes: Attributes::default(),
             tags: Vec::new(),
@@ -144,7 +146,7 @@ impl Instance {
         self.destroyed
     }
 
-    pub fn properties(&self) -> &FxHashMap<PropertyId, Value> {
+    pub fn properties(&self) -> &Properties {
         &self.properties
     }
 }

@@ -213,10 +213,10 @@ impl CollisionGroups {
     /// its `CollisionGroup` property's id without copying the name, for
     /// queries, which ask it of every part they pass.
     pub(crate) fn part_id(&self, dom: &Dom, collision_group: PropertyId, part: InstanceId) -> u8 {
-        // An unset one reads the class default, `Default`.
+        // Otherwise it reads the class default, `Default`.
         let stored = dom
             .get(part)
-            .and_then(|i| i.properties().get(&collision_group));
+            .and_then(|i| i.properties().get(collision_group));
         match stored {
             Some(Value::String(name)) => self.id_of(name),
             _ => 0,

@@ -289,6 +289,7 @@ impl Sink {
         for (property, value) in &node.properties {
             self.store(client, cid, *property, value, journaled);
         }
+        client.settle_properties(cid);
         if let Some(c) = client.instance_mut(cid) {
             for (k, v) in node.attributes.iter() {
                 c.attributes.insert(k.to_owned(), v.clone());

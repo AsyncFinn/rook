@@ -38,7 +38,7 @@ impl Dom {
         if prop == self.name_prop {
             return Some(Cow::Borrowed(&inst.name));
         }
-        match inst.properties.get(&prop) {
+        match inst.properties.get(prop) {
             Some(Value::String(s)) => Some(Cow::Borrowed(s)),
             Some(_) => None,
             None => self

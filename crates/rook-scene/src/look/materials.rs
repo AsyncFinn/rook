@@ -170,18 +170,16 @@ fn texture_seed(part: InstanceId) -> u64 {
 /// save `Use2022MaterialsXml`): the class default would hide it.
 pub(crate) fn material_set(dom: &Dom) -> MaterialSet {
     let db = rook_reflection::database();
-    let saved = dom
-        .find_service("MaterialService")
-        .and_then(|ms| dom.get(ms))
-        .and_then(|inst| {
-            inst.properties().iter().find_map(|(id, v)| {
-                matches!(
-                    db.property(*id).name,
-                    "Use2022Materials" | "Use2022MaterialsXml"
-                )
-                .then(|| v.as_bool())
-                .flatten()
-            })
-        });
+    let saved = dom.find_service("MaterialService").and_then(|ms| {
+        let inst = dom.get(ms)?;
+        inst.properties().ids().find_map(|id| {
+            matches!(
+                db.property(id).name,
+                "Use2022Materials" | "Use2022MaterialsXml"
+            )
+            .then(|| dom.property(ms, id)?.as_bool())
+            .flatten()
+        })
+    });
     MaterialSet::of_place(saved)
 }

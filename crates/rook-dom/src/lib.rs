@@ -16,7 +16,7 @@ mod properties;
 mod tree;
 mod voxels;
 
-pub use instance::Attributes;
+pub use instance::{Attributes, Properties};
 pub use journal::Change;
 pub use observe::Observed;
 pub use properties::zero_value;

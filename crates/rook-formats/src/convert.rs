@@ -141,6 +141,7 @@ impl<T: Tree> Placing<T> {
             let done = 1 + self.fill(dom, id, source);
             *budget = budget.saturating_sub(done);
             velocities.adopt(dom, id);
+            dom.settle_properties(id);
         }
         dom.journal_mut().set_enabled(was_enabled);
         if !self.making.is_empty() || self.filled < self.made.len() {
@@ -326,8 +327,12 @@ pub fn from_dom(dom: &Dom, roots: &[InstanceId]) -> WeakDom {
         };
         let mut props: Vec<(String, Variant)> = Vec::new();
         let voxels = dom.voxel_property(id);
-        let stored = inst.properties().iter().map(|(p, v)| (*p, v));
-        for (pid, value) in stored.chain(voxels.as_ref().map(|(p, v)| (*p, v))) {
+        let defaulted: Vec<_> = (inst.properties().defaulted().iter())
+            .filter_map(|&p| Some((p, dom.property(id, p)?)))
+            .collect();
+        let stored = inst.properties().iter();
+        let others = defaulted.iter().chain(&voxels).map(|(p, v)| (*p, v));
+        for (pid, value) in stored.chain(others) {
             let value = file_encoding(db, inst.class, pid, value);
             props.push((db.property(pid).name.to_owned(), value.to_variant(to_ref)));
         }

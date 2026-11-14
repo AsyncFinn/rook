@@ -79,7 +79,7 @@ impl Dom {
         inst.parent
             .into_iter()
             .chain(inst.children.as_slice().iter().copied())
-            .chain(inst.properties.values().filter_map(ref_target))
+            .chain(inst.properties.iter().filter_map(|(_, v)| ref_target(v)))
     }
 
     /// What holds `id`: its parent and children, and the instances whose
@@ -98,8 +98,8 @@ impl Dom {
     fn free(&mut self, id: InstanceId) {
         let inst = self.instances.remove(id).expect("collected instance");
         debug_assert!(inst.parent.is_none() && inst.children.as_slice().is_empty());
-        for (property, value) in &inst.properties {
-            self.unlink(id, *property, value);
+        for (property, value) in inst.properties.iter() {
+            self.unlink(id, property, value);
         }
         self.referrers.remove(&id);
         self.drawn.remove(&id);

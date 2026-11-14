@@ -197,8 +197,8 @@ impl Source {
         let inst = server.get(id).expect("visible instance exists");
         let mut properties: Vec<(PropertyId, Value)> = inst
             .properties()
-            .keys()
-            .filter_map(|&p| Some((p, replicated_value(server, id, p)?)))
+            .ids()
+            .filter_map(|p| Some((p, replicated_value(server, id, p)?)))
             // A Terrain's voxels, which it doesn't hold as a property:
             // a new copy takes them whole.
             .chain(server.voxel_property(id))
