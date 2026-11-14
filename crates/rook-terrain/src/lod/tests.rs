@@ -552,9 +552,9 @@ fn caves_show_no_sky_through_ring_seams() {
     let triangles = Triangles::new(drawn_triangles(&levels, &rings, (-2, 1)));
     let mut through = Vec::new();
     let mut aimed = 0;
-    for k in 0..2 {
+    for (k, start) in rings.starts.iter().enumerate().take(2) {
         let side = chunk_studs(k as u8);
-        let lo = rings.starts[k].as_vec2() * side;
+        let lo = start.as_vec2() * side;
         let hi = lo + width(k) as f32 * side;
         for edge in 0..4 {
             for n in 0..16 {
