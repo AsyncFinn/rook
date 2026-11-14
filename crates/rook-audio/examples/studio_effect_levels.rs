@@ -146,7 +146,7 @@ fn main() {
         .expect("the path of impact_explosion_03.mp3");
     let audio =
         std::sync::Arc::new(Audio::decode(&std::fs::read(path).expect("read")).expect("decode"));
-    let mut reader = audio.reader();
+    let reader = audio.reader();
     let source: Vec<Frame> = (0..audio.frames())
         .map(|i| reader.frame(i).map(|s| f32::from(s) / 32768.0))
         .collect();

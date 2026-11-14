@@ -109,7 +109,7 @@ impl OneShot {
 /// square of the samples just played, before `Volume`, times 1000
 /// (Confirmed for a steady tone: amplitude 0.25 read 176.8, at every
 /// `Volume` and `PlaybackSpeed`; the window is Inference).
-fn loudness(reader: &mut Reader, from: f64, to: f64) -> f64 {
+fn loudness(reader: &Reader, from: f64, to: f64) -> f64 {
     let Some((a, b)) = effects::frames_between(reader.audio(), from, to) else {
         return 0.0;
     };
