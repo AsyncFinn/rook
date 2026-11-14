@@ -2,7 +2,8 @@
 //! marked into the light volume's voxels so the fill pass can carry the
 //! sky's diffuse light (`EnvironmentDiffuseScale`) down around them and
 //! keep lights with `Shadows` out from behind them, and, by how much of
-//! each voxel they fill, dim the sun
+//! each voxel they fill, dim the sun; and beside them the terrain, how
+//! full of it each voxel is (`terrain.rs`)
 //! (`shaders/light_volume.wgsl`; docs/behavior/rendering/materials.md, "The sky's
 //! diffuse light"; docs/behavior/lighting/local-lights.md, "Shadows";
 //! docs/behavior/lighting/sun.md).
@@ -13,6 +14,7 @@ use std::time::{Duration, Instant};
 use glam::{IVec2, IVec3, Mat3};
 
 use super::slack::Slack;
+use super::terrain::{Taken, Terrain};
 use super::*;
 
 /// How long a frame may spend marking the voxels a moving volume came
@@ -120,9 +122,10 @@ pub(super) struct Blockers {
     /// Where they stand.
     columns: Columns,
     /// Each mesh file's box in its own space (center, half size); `None`
-    /// for terrain.
-    // TODO: let terrain block light.
+    /// for terrain, which is marked from its voxels instead.
     bounds: FxHashMap<MeshHash, Option<(Vec3, Vec3)>>,
+    /// The terrain's voxels.
+    terrain: Terrain,
     /// A blocker changed since the voxels were marked.
     changed: bool,
     /// The voxels marked again since the last [`Blockers::mark`] that
@@ -161,6 +164,12 @@ struct Grid {
     /// The same, capped at full, a byte per voxel as the fill pass reads
     /// it.
     fill_bytes: Vec<u32>,
+    /// How full of solid terrain each voxel is (`terrain::soil`), a byte
+    /// per voxel, four to a word.
+    soils: Vec<u32>,
+    /// Which layers of each column hold some terrain, as `layers` for the
+    /// parts.
+    soil_layers: Vec<u64>,
     /// Pieces of the volume still to mark since it moved.
     pending: Vec<Span>,
 }
@@ -200,6 +209,10 @@ pub(super) struct Marked<'a> {
     pub(super) fills: &'a [u32],
     /// [`Grid`]'s blocked layers by column.
     pub(super) layers: &'a [u64],
+    /// A byte per voxel, four to a word: how full of terrain it is.
+    pub(super) soils: &'a [u32],
+    /// [`Grid`]'s layers holding terrain, by column.
+    pub(super) soil_layers: &'a [u64],
     pub(super) touched: Touched,
     dims: IVec3,
 }
@@ -375,12 +388,20 @@ pub(super) fn center(k: IVec3) -> Vec3 {
     k.as_vec3() * VOXEL + VOXEL * 0.5
 }
 
+/// What a grid's voxels are marked from.
+#[derive(Debug, Clone, Copy)]
+struct Sources<'a> {
+    blockers: &'a [Option<Blocker>],
+    columns: &'a Columns,
+    terrain: &'a Terrain,
+}
+
 impl Grid {
     /// Marked whole, its bricks at once on the host's workers.
-    fn new(low: IVec3, dims: IVec3, blockers: &[Option<Blocker>], columns: &Columns) -> Self {
+    fn new(low: IVec3, dims: IVec3, from: Sources<'_>) -> Self {
         let mut grid = Self::empty(low, dims);
         grid.pending = pieces(grid.span()).collect();
-        grid.work(Duration::MAX, blockers, columns);
+        grid.work(Duration::MAX, from);
         grid
     }
 
@@ -396,6 +417,8 @@ impl Grid {
             layers: vec![0; (dims.x * dims.z) as usize],
             fills: vec![0; voxels],
             fill_bytes: vec![0; voxels.div_ceil(4)],
+            soils: vec![0; voxels.div_ceil(4)],
+            soil_layers: vec![0; (dims.x * dims.z) as usize],
             pending: Vec::new(),
         }
     }
@@ -411,6 +434,8 @@ impl Grid {
             layers: &mut self.layers,
             fills: &mut self.fills,
             fill_bytes: &mut self.fill_bytes,
+            soils: &mut self.soils,
+            soil_layers: &mut self.soil_layers,
         }
     }
 
@@ -446,7 +471,7 @@ impl Grid {
     /// it at once on the host's workers, as engines voxelize their
     /// clipmaps' new bricks as parallel jobs; those not started by then
     /// wait.
-    fn work(&mut self, budget: Duration, blockers: &[Option<Blocker>], columns: &Columns) -> bool {
+    fn work(&mut self, budget: Duration, from: Sources<'_>) -> bool {
         if self.pending.is_empty() {
             return true;
         }
@@ -458,11 +483,12 @@ impl Grid {
         let mut jobs = self.jobs(by_brick);
         let workers = &rook_platform::get().workers;
         workers.for_each_chunk(&mut jobs, 1, |_, job| {
+            let mut scratch = Scratch::default();
             for (voxels, spans, done) in job {
                 if deadline.is_none_or(|d| Instant::now() < d) {
                     for &span in spans.iter() {
                         voxels.clear(span);
-                        voxels.take(span, blockers, columns);
+                        voxels.take(span, from, &mut scratch);
                     }
                     *done = true;
                 }
@@ -500,6 +526,28 @@ impl Grid {
         });
     }
 
+    /// Mark the terrain in `spans` again from `terrain` as it is now, the
+    /// bricks at once on the host's workers.
+    fn apply_soils(&mut self, spans: &[Span], terrain: &Terrain) {
+        let mut by_brick = vec![Vec::new(); self.bricks()];
+        for &span in spans {
+            for piece in pieces(span) {
+                by_brick[self.brick_of(piece)].push(piece);
+            }
+        }
+        let mut jobs = self.jobs(by_brick);
+        let workers = &rook_platform::get().workers;
+        workers.for_each_chunk(&mut jobs, 1, |_, job| {
+            let mut scratch = Scratch::default();
+            for (voxels, spans, _) in job {
+                for &span in spans.iter() {
+                    voxels.clear_soil(span);
+                    voxels.add_soil(span, terrain, &mut scratch);
+                }
+            }
+        });
+    }
+
     fn bricks(&self) -> usize {
         let across = self.dims / PIECE;
         (across.x * across.z) as usize
@@ -523,12 +571,17 @@ impl Grid {
             .zip(self.bits.chunks_mut(size / 32))
             .zip(self.layers.chunks_mut(area))
             .zip(self.fills.chunks_mut(size))
-            .zip(self.fill_bytes.chunks_mut(size / 4));
+            .zip(self.fill_bytes.chunks_mut(size / 4))
+            .zip(self.soils.chunks_mut(size / 4))
+            .zip(self.soil_layers.chunks_mut(area));
         (bricks.enumerate())
             .zip(by_brick)
             .filter(|(_, work)| !work.is_empty())
             .map(
-                |((k, ((((counts, bits), layers), fills), fill_bytes)), work)| {
+                |(
+                    (k, ((((((counts, bits), layers), fills), fill_bytes), soils), soil_layers)),
+                    work,
+                )| {
                     let voxels = Voxels {
                         dims,
                         base: (k * size, k * area),
@@ -537,6 +590,8 @@ impl Grid {
                         layers,
                         fills,
                         fill_bytes,
+                        soils,
+                        soil_layers,
                     };
                     (voxels, work, false)
                 },
@@ -557,6 +612,16 @@ struct Voxels<'a> {
     layers: &'a mut [u64],
     fills: &'a mut [u16],
     fill_bytes: &'a mut [u32],
+    soils: &'a mut [u32],
+    soil_layers: &'a mut [u64],
+}
+
+/// A worker's buffers for reading the terrain's voxels, kept from one span
+/// to the next.
+#[derive(Debug, Default)]
+struct Scratch {
+    voxels: Vec<rook_terrain::Voxel>,
+    soils: Vec<u8>,
 }
 
 impl Voxels<'_> {
@@ -570,6 +635,8 @@ impl Voxels<'_> {
             layers,
             fills,
             fill_bytes,
+            soils,
+            soil_layers,
             ..
         } = self;
         each(*dims, span, |_, slot| {
@@ -579,17 +646,66 @@ impl Voxels<'_> {
             bits[i / 32] &= !(1 << (i % 32));
             layers[slot.column - base.1] &= !(1 << slot.layer);
             fill_bytes[i / 4] &= !(0xff << ((i % 4) * 8));
+            soils[i / 4] &= !(0xff << ((i % 4) * 8));
+            soil_layers[slot.column - base.1] &= !(1 << slot.layer);
         });
     }
 
-    /// Add `blockers` (standing in `columns`) to the voxels of `span`.
-    fn take(&mut self, span: Span, blockers: &[Option<Blocker>], columns: &Columns) {
-        for i in columns.near(span, blockers) {
-            if let Some(b) = &blockers[i] {
+    /// Add the blockers (standing in their columns) and the terrain to the
+    /// voxels of `span`.
+    fn take(&mut self, span: Span, from: Sources<'_>, scratch: &mut Scratch) {
+        for i in from.columns.near(span, from.blockers) {
+            if let Some(b) = &from.blockers[i] {
                 self.apply(b, true, span);
                 self.apply_fill(b, true, span);
             }
         }
+        self.add_soil(span, from.terrain, scratch);
+    }
+
+    /// Forget the terrain in the voxels of `span`.
+    fn clear_soil(&mut self, span: Span) {
+        let base = self.base;
+        let Self {
+            dims,
+            soils,
+            soil_layers,
+            ..
+        } = self;
+        each(*dims, span, |_, slot| {
+            let i = slot.index - base.0;
+            soils[i / 4] &= !(0xff << ((i % 4) * 8));
+            soil_layers[slot.column - base.1] &= !(1 << slot.layer);
+        });
+    }
+
+    /// Mark how full of terrain each voxel of `span` is, as `terrain`
+    /// says now, into voxels cleared of it. Most of the world holds none,
+    /// and costs only a look at its chunks.
+    fn add_soil(&mut self, (lo, hi): Span, terrain: &Terrain, scratch: &mut Scratch) {
+        terrain.soils((lo, hi), &mut scratch.voxels, &mut scratch.soils);
+        let read = &scratch.soils;
+        if read.is_empty() {
+            return;
+        }
+        let size = hi - lo + 1;
+        let base = self.base;
+        let Self {
+            dims,
+            soils,
+            soil_layers,
+            ..
+        } = self;
+        each(*dims, (lo, hi), |k, slot| {
+            // As `Terrain::soils` reads them: X fastest, then Y, then Z.
+            let r = k - lo;
+            let soil = read[((r.z * size.y + r.y) * size.x + r.x) as usize];
+            if soil != 0 {
+                let i = slot.index - base.0;
+                soils[i / 4] |= u32::from(soil) << ((i % 4) * 8);
+                soil_layers[slot.column - base.1] |= 1 << slot.layer;
+            }
+        });
     }
 
     /// Add `b`'s share of each voxel of `span` it overlaps (`add`), or take
@@ -778,6 +894,8 @@ fn cells((lo, hi): (IVec2, IVec2)) -> impl Iterator<Item = IVec2> {
 }
 
 impl Blockers {
+    /// Forget the parts (the scene is replaced); the terrain stays, and is
+    /// marked afresh with the parts that come.
     pub(super) fn clear(&mut self) {
         self.blockers.clear();
         self.slack.clear();
@@ -893,7 +1011,31 @@ impl Blockers {
         }
     }
 
-    /// Whether the voxels should be marked again for parts that changed.
+    /// Take the terrain's voxels the scene sends: all of them, which marks
+    /// every voxel afresh (as a place loads, or Workspace's Terrain is
+    /// another), or the boxes of them an edit changed, which mark only
+    /// those again.
+    pub(super) fn update_terrain(&mut self, voxels: TerrainVoxels) {
+        match self.terrain.take(voxels) {
+            Taken::Whole => {
+                if let Some(grid) = &mut self.grid {
+                    grid.pending = pieces(grid.span()).collect();
+                    self.moved.clear();
+                    self.touched = Touched::All;
+                }
+                self.changed = true;
+            }
+            // An edit where the volume doesn't reach changes no voxel: it's
+            // read where it is if the volume comes onto it.
+            Taken::Edits => {
+                let span = self.grid.as_ref().map(Grid::span);
+                self.changed |= span.is_none_or(|span| self.terrain.reaches(span));
+            }
+        }
+    }
+
+    /// Whether the voxels should be marked again for parts or terrain that
+    /// changed.
     pub(super) fn due(&self) -> bool {
         self.changed
     }
@@ -936,8 +1078,9 @@ impl Blockers {
 
     /// One bit per voxel of the volume starting at voxel `low`, set where
     /// a voxel's center is inside a blocker, and a byte per voxel, how much
-    /// of it the blockers fill (255 full), both kept at [`Grid`]'s slots,
-    /// with the voxels marked again since the last mark; `None` while the voxels a moved volume came onto (or all of them,
+    /// of it the blockers fill (255 full), and another, how full of
+    /// terrain it is, all kept at [`Grid`]'s slots, with the voxels marked
+    /// again since the last mark; `None` while the voxels a moved volume came onto (or all of them,
     /// after more changes than parts) are still being marked, within
     /// [`BUDGET`] a frame, the last volume's staying as they were. A volume
     /// of the same size only takes the blockers that changed since and the
@@ -981,13 +1124,32 @@ impl Blockers {
                     }
                 }
                 grid.apply_moves(&moves);
-                if !grid.work(BUDGET, &self.blockers, &self.columns) {
+                let soils: Vec<Span> = (self.terrain.take_edits().into_iter())
+                    .filter_map(|edit| clip(edit, span))
+                    .collect();
+                grid.apply_soils(&soils, &self.terrain);
+                for edit in soils {
+                    self.touched.add(edit);
+                }
+                let from = Sources {
+                    blockers: &self.blockers,
+                    columns: &self.columns,
+                    terrain: &self.terrain,
+                };
+                if !grid.work(BUDGET, from) {
                     return None;
                 }
             }
             grid => {
                 self.moved.clear();
-                *grid = Some(Grid::new(low, dims, &self.blockers, &self.columns));
+                // A new grid reads all of the terrain as it is.
+                self.terrain.take_edits();
+                let from = Sources {
+                    blockers: &self.blockers,
+                    columns: &self.columns,
+                    terrain: &self.terrain,
+                };
+                *grid = Some(Grid::new(low, dims, from));
                 self.touched = Touched::All;
             }
         }
@@ -997,6 +1159,8 @@ impl Blockers {
             bits: &grid.bits,
             fills: &grid.fill_bytes,
             layers: &grid.layers,
+            soils: &grid.soils,
+            soil_layers: &grid.soil_layers,
             touched: std::mem::take(&mut self.touched),
             dims,
         })
@@ -1044,6 +1208,19 @@ mod tests {
         list
     }
 
+    /// No terrain.
+    static NO_TERRAIN: std::sync::LazyLock<Terrain> = std::sync::LazyLock::new(Terrain::default);
+
+    /// What a grid of `list` (standing in `columns`) is marked from,
+    /// without terrain.
+    fn of<'a>(list: &'a [Option<Blocker>], columns: &'a Columns) -> Sources<'a> {
+        Sources {
+            blockers: list,
+            columns,
+            terrain: &NO_TERRAIN,
+        }
+    }
+
     fn indexed(list: &[Option<Blocker>]) -> Columns {
         let mut columns = Columns::default();
         for (i, b) in list.iter().enumerate() {
@@ -1059,7 +1236,7 @@ mod tests {
         let list = scattered();
         let columns = indexed(&list);
         let dims = IVec3::new(64, 32, 64);
-        let mut grid = Grid::new(IVec3::new(-40, -10, -30), dims, &list, &columns);
+        let mut grid = Grid::new(IVec3::new(-40, -10, -30), dims, of(&list, &columns));
         // Small and large steps, every direction, and one past the whole volume.
         for low in [
             IVec3::new(-24, -10, -30),
@@ -1069,8 +1246,8 @@ mod tests {
             IVec3::new(90, 0, 101),
         ] {
             grid.move_to(low);
-            assert!(grid.work(Duration::MAX, &list, &columns));
-            let fresh = Grid::new(low, dims, &list, &columns);
+            assert!(grid.work(Duration::MAX, of(&list, &columns)));
+            let fresh = Grid::new(low, dims, of(&list, &columns));
             assert!(grid.counts == fresh.counts, "counts at {low}");
             assert!(grid.bits == fresh.bits, "bits at {low}");
             assert!(grid.fill_bytes == fresh.fill_bytes, "fills at {low}");
@@ -1108,6 +1285,8 @@ mod tests {
             bits: &empty,
             fills: &empty,
             layers: &[],
+            soils: &empty,
+            soil_layers: &[],
             touched: Touched::Spans(spans.clone()),
             dims,
         };
@@ -1128,10 +1307,12 @@ mod tests {
         let columns = indexed(&list);
         let dims = IVec3::new(64, 32, 64);
         for low in [IVec3::new(-40, -10, -30), IVec3::new(-37, -3, 21)] {
-            let pieced = Grid::new(low, dims, &list, &columns);
+            let pieced = Grid::new(low, dims, of(&list, &columns));
             let mut whole = Grid::empty(low, dims);
             let span = whole.span();
-            whole.voxels().take(span, &list, &columns);
+            whole
+                .voxels()
+                .take(span, of(&list, &columns), &mut Scratch::default());
             assert!(pieced.counts == whole.counts);
             assert!(pieced.bits == whole.bits);
             assert!(pieced.layers == whole.layers);
@@ -1145,13 +1326,13 @@ mod tests {
         let mut list = scattered();
         let mut columns = indexed(&list);
         let dims = IVec3::new(64, 32, 64);
-        let mut grid = Grid::new(IVec3::new(-40, -10, -30), dims, &list, &columns);
+        let mut grid = Grid::new(IVec3::new(-40, -10, -30), dims, of(&list, &columns));
         let low = IVec3::new(-20, -10, -30);
         grid.move_to(low);
         // Half the pieces marked before a blocker moves into what came in.
         let half = grid.pending.len() / 2;
         let later = grid.pending.split_off(half);
-        assert!(grid.work(Duration::MAX, &list, &columns));
+        assert!(grid.work(Duration::MAX, of(&list, &columns)));
         grid.pending = later;
         let before = list[5];
         let after = Some(Blocker::of_box(
@@ -1166,8 +1347,8 @@ mod tests {
         let moves =
             [(before, false), (after, true)].map(|(b, add)| (b.expect("a blocker"), add, span));
         grid.apply_moves(&moves);
-        assert!(grid.work(Duration::MAX, &list, &columns));
-        let fresh = Grid::new(low, dims, &list, &columns);
+        assert!(grid.work(Duration::MAX, of(&list, &columns)));
+        let fresh = Grid::new(low, dims, of(&list, &columns));
         assert!(grid.bits == fresh.bits);
         assert!(grid.layers == fresh.layers);
         assert!(grid.fill_bytes == fresh.fill_bytes);
@@ -1194,7 +1375,7 @@ mod tests {
             columns: indexed(&list),
             ..Blockers::default()
         };
-        blockers.grid = Some(Grid::new(low, dims, &list, &blockers.columns));
+        blockers.grid = Some(Grid::new(low, dims, of(&list, &blockers.columns)));
         let turned = Blocker::of_box(
             Vec3::new(30.0, 4.0, 10.0),
             Mat3::from_rotation_y(0.4),
@@ -1210,7 +1391,7 @@ mod tests {
             blockers.blockers[i] = Some(after);
             blockers.moved.push((before, Some(after)));
         }
-        let fresh = Grid::new(low, dims, &list, &indexed(&list));
+        let fresh = Grid::new(low, dims, of(&list, &indexed(&list)));
         let marked = blockers.mark(low, dims).expect("marked");
         assert!(marked.bits == fresh.bits.as_slice());
         assert!(marked.layers == fresh.layers.as_slice());
@@ -1246,7 +1427,7 @@ mod tests {
     /// What `b` marks on its own: each voxel's count and fill.
     fn marks(b: Blocker, low: IVec3, dims: IVec3) -> (Vec<u32>, Vec<u16>) {
         let list = [Some(b)];
-        let grid = Grid::new(low, dims, &list, &indexed(&list));
+        let grid = Grid::new(low, dims, of(&list, &indexed(&list)));
         (grid.counts, grid.fills)
     }
 
@@ -1361,7 +1542,7 @@ mod tests {
             columns: indexed(&list),
             ..Blockers::default()
         };
-        blockers.grid = Some(Grid::new(low, dims, &list, &blockers.columns));
+        blockers.grid = Some(Grid::new(low, dims, of(&list, &blockers.columns)));
         blockers.take(1, Some(at(0.0, 10.0)));
         blockers.take(2, Some(at(0.0, 30.0)));
         assert!(blockers.mark(low, dims).is_some());
@@ -1373,7 +1554,7 @@ mod tests {
         assert!(blockers.mark(moved, dims).is_some());
         list[1] = Some(at(0.0001, 10.0));
         list[2] = Some(at(0.0001, 30.0));
-        let fresh = Grid::new(moved, dims, &list, &indexed(&list));
+        let fresh = Grid::new(moved, dims, of(&list, &indexed(&list)));
         let grid = blockers.grid.as_ref().expect("a grid");
         assert!(grid.bits == fresh.bits, "marked where it is");
         assert!(grid.counts == fresh.counts);
@@ -1413,7 +1594,7 @@ mod tests {
             columns: indexed(&list),
             ..Blockers::default()
         };
-        blockers.grid = Some(Grid::new(low, dims, &list, &blockers.columns));
+        blockers.grid = Some(Grid::new(low, dims, of(&list, &blockers.columns)));
         assert!(blockers.mark(low, dims).is_some());
         for step in 1..4 {
             blockers.take(1, Some(far(step as f32 * 8.0)));
@@ -1424,10 +1605,89 @@ mod tests {
         let there = IVec3::new(500 - 32, -10, -30);
         assert!((0..10_000).any(|_| blockers.mark(there, dims).is_some()));
         list[1] = Some(far(24.0));
-        let fresh = Grid::new(there, dims, &list, &indexed(&list));
+        let fresh = Grid::new(there, dims, of(&list, &indexed(&list)));
         let grid = blockers.grid.as_ref().expect("a grid");
         assert!(grid.bits == fresh.bits, "marked where it is");
         assert!(grid.counts == fresh.counts);
         assert!(grid.fill_bytes == fresh.fill_bytes);
+    }
+
+    /// Terrain edited after the voxels were marked marks only the edit's
+    /// voxels again, as marking afresh marks them; air and water hold no
+    /// terrain, and the parts' marks stay as they were.
+    #[test]
+    fn a_terrain_edit_marks_its_voxels_as_marking_afresh_does() {
+        use rook_terrain::grid::edit::Bounds;
+        use rook_terrain::{TerrainMaterial, Voxel};
+        let mut voxels = rook_terrain::Grid::new();
+        for x in -30i32..30 {
+            for z in -30..30 {
+                let y = (x + z).rem_euclid(5) - 2;
+                let occupancy = (x * 7 + z * 3).rem_euclid(256) as u8;
+                voxels.set(
+                    IVec3::new(x, y, z),
+                    Voxel::new(TerrainMaterial::Rock, occupancy),
+                );
+            }
+        }
+        let water = IVec3::new(3, 9, 3);
+        voxels.set(water, Voxel::new(TerrainMaterial::Water, 255));
+        let list = scattered();
+        let mut blockers = Blockers {
+            blockers: list.clone(),
+            columns: indexed(&list),
+            ..Blockers::default()
+        };
+        blockers.update_terrain(TerrainVoxels::Whole(voxels.clone()));
+        let (low, dims) = (IVec3::new(-40, -10, -30), IVec3::new(64, 32, 64));
+        assert!(blockers.mark(low, dims).is_some());
+
+        // Dig some out and fill some in, across a chunk's edge.
+        let edit = Bounds {
+            min: IVec3::new(-6, -3, -6),
+            max: IVec3::new(5, 3, 5),
+        };
+        for x in edit.min.x..=edit.max.x {
+            for y in edit.min.y..=edit.max.y {
+                for z in edit.min.z..=edit.max.z {
+                    let v = match (x + y) % 2 == 0 {
+                        true => Voxel::AIR,
+                        false => Voxel::new(TerrainMaterial::Grass, 200),
+                    };
+                    voxels.set(IVec3::new(x, y, z), v);
+                }
+            }
+        }
+        blockers.update_terrain(TerrainVoxels::Edits {
+            chunks: voxels.region(edit),
+            bounds: vec![edit],
+        });
+        assert!(blockers.due());
+        let mut fresh_terrain = Terrain::default();
+        fresh_terrain.take(TerrainVoxels::Whole(voxels));
+        let fresh = Grid::new(
+            low,
+            dims,
+            Sources {
+                blockers: &list,
+                columns: &indexed(&list),
+                terrain: &fresh_terrain,
+            },
+        );
+        let marked = blockers.mark(low, dims).expect("marked");
+        assert!(marked.soils == fresh.soils.as_slice());
+        assert!(marked.soil_layers == fresh.soil_layers.as_slice());
+        assert!(marked.bits == fresh.bits.as_slice());
+        assert!(marked.fills == fresh.fill_bytes.as_slice());
+        let Touched::Spans(spans) = &marked.touched else {
+            panic!("only the edit is touched");
+        };
+        assert_eq!(spans, &vec![(edit.min, edit.max)]);
+        // Some terrain is marked, none where the water is.
+        assert!(fresh.soils.iter().any(|&w| w != 0));
+        each(dims, (water, water), |_, slot| {
+            let byte = (fresh.soils[slot.index / 4] >> ((slot.index % 4) * 8)) & 0xff;
+            assert_eq!(byte, 0, "water holds no terrain");
+        });
     }
 }

@@ -5,6 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- Terrain darkens what it covers, as in Roblox: in places that shadow the sun through the light voxels it casts soft sun shadows, and it keeps the sky's light out of caves and from under overhangs, partly through thin terrain. Rook let the sun and the sky's light straight through terrain. See [sun](docs/behavior/lighting/sun.md#shadows).
 - A place with many parts takes much less memory. Rook kept a full copy of every property a file saves on each instance, though most hold their class default; now those keep only a note that they were set.
 - A place with many images and long sounds takes much less memory. Rook kept a second, decoded copy of every image after it went to the GPU, and every sound fully decoded however long; now an image's pixels are let go once uploaded, and a long Ogg or MP3 keeps its file and is decoded only while something plays it.
 - With Roblox's CoreScripts, the TextChatService chat window shows its chat bar and lets the player send to the general channel, as in Roblox. Rook's window said the player could only view system messages and hid the bar. See [chat](docs/behavior/gui/chat.md#setting-up).

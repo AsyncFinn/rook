@@ -4,7 +4,9 @@
 //! look, and Grass's blades near the camera ([`grass`]). Far terrain is
 //! drawn coarser in rings around the camera, kept up as it moves
 //! ([`rings`], [`background`]); edits re-mesh only what they reached
-//! ([`meshing`]). See `docs/behavior/terrain/`.
+//! ([`meshing`]). The voxels also go to the renderer's light voxels, as the
+//! chunks that changed ([`SceneCache::take_light_voxels`]). See
+//! `docs/behavior/terrain/`.
 
 mod background;
 mod grass;
@@ -15,7 +17,7 @@ mod rings;
 use glam::IVec3;
 use rook_content::MaterialMap;
 use rook_content::decode::mesh::{Mesh, TerrainCorner, TerrainMapping};
-use rook_render::{Detile, TerrainColor, TerrainLook};
+use rook_render::{Detile, TerrainColor, TerrainLook, TerrainVoxels};
 use rook_terrain::grass::{GrassTops, add_grass_tops, blade_color};
 use rook_terrain::grid::edit::Bounds;
 use rook_terrain::lod::Rings;
@@ -99,6 +101,29 @@ pub(super) struct TerrainCache {
     /// Meshes of chunks no longer drawn, for the renderer to free.
     dropped: Vec<MeshHash>,
     background: Background,
+    /// What the renderer's light voxels haven't taken of the voxels.
+    light: LightChange,
+}
+
+/// How the voxels changed since the renderer's light voxels took them.
+#[derive(Debug, Default)]
+enum LightChange {
+    #[default]
+    None,
+    /// All of them may have.
+    Whole,
+    /// Those in these boxes.
+    Edits(Vec<Bounds>),
+}
+
+impl LightChange {
+    fn add(&mut self, edits: &[Bounds]) {
+        match self {
+            LightChange::Whole => {}
+            LightChange::Edits(list) => list.extend_from_slice(edits),
+            LightChange::None => *self = LightChange::Edits(edits.to_vec()),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -143,6 +168,30 @@ impl TerrainCache {
 impl SceneCache {
     pub fn terrain_meshes(&self) -> usize {
         self.terrain.chunks.values().map(|c| c.entries.len()).sum()
+    }
+
+    /// All of the terrain's voxels, for a renderer to take whole.
+    pub(crate) fn light_voxels(&mut self) -> TerrainVoxels {
+        self.terrain.light = LightChange::None;
+        TerrainVoxels::Whole(self.terrain.levels.first().cloned().unwrap_or_default())
+    }
+
+    /// What changed of the terrain's voxels since the renderer took them:
+    /// the chunks holding the edits (sharing their voxels), or all of them.
+    pub(crate) fn take_light_voxels(&mut self) -> Option<TerrainVoxels> {
+        let empty = Grid::new();
+        let voxels = self.terrain.levels.first().unwrap_or(&empty);
+        match std::mem::take(&mut self.terrain.light) {
+            LightChange::None => None,
+            LightChange::Whole => Some(TerrainVoxels::Whole(voxels.clone())),
+            LightChange::Edits(bounds) => {
+                let mut chunks = Grid::new();
+                for b in &bounds {
+                    chunks.copy_chunks(voxels, b.chunks(0));
+                }
+                Some(TerrainVoxels::Edits { chunks, bounds })
+            }
+        }
     }
 
     /// Add the terrain's entries to the (rebuilt) scene, meshing it first

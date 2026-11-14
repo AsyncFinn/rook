@@ -11,6 +11,7 @@ rust-version.workspace = true
 [dependencies]
 rook-types.workspace = true
 rook-content.workspace = true
+rook-terrain.workspace = true
 wgpu.workspace = true
 glam.workspace = true
 bytemuck.workspace = true

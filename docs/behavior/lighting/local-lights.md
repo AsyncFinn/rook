@@ -95,6 +95,12 @@ Studio, no `Technology`), with a Range 60, Brightness 0.25 PointLight at
   and the fourth (−X, −Z) at about half.
 - **A light inside its own part still shines** (Observed): in a 3-stud
   opaque part, all of its pool; in a 12 × 4 × 12 one, as above.
+- **Terrain doesn't block them** (measured in Studio 0.747 on
+  2026-11-14): behind a one-voxel Rock wall 16 studs tall, full, half or
+  0.3 full, a Range 20 light with `Shadows` 4 studs from it lights the
+  floor 12 studs past the wall as it lights the same spot on its own
+  side (223 to 225 against 226 to 227); a part wall in its place leaves
+  5.
 
 Roblox's patent on its voxel lighting (US9245376) carries light from
 cell to cell away from the light, each cell
@@ -108,8 +114,9 @@ it reaches casts nine parallel rays toward it, from the voxel and from
 the voxels around it across the ray, weighted 1-2-1 each way, and keeps
 the share that no blocked voxel stops. Blocked voxels are those the sky's
 light uses ([materials](../rendering/materials.md#the-skys-diffuse-light)): opaque
-parts casting shadows, as boxes, at least a voxel thick. The part the
-light hangs from doesn't block it. A wall blocks all of it, a one-voxel
+parts casting shadows, as boxes, at least a voxel thick; terrain isn't
+among them, as in Studio. The part the light hangs from doesn't block
+it. A wall blocks all of it, a one-voxel
 post half, as in Studio; the lean isn't reproduced. Against Studio on
 the same scenes, behind the post the darkest strip draws 84 where Studio
 draws 79 to 90; Rook's soft edge reaches a voxel further on the side

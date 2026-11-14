@@ -1,3 +1,6 @@
+use rook_terrain::Grid;
+use rook_terrain::grid::edit::Bounds;
+
 use super::*;
 
 /// How the terrain's water and grass move (`docs/behavior/terrain/water.md`).
@@ -23,4 +26,16 @@ impl Default for TerrainLook {
             grass_reach: 0.0,
         }
     }
+}
+
+/// The terrain's voxels as the light voxels take them (they dim the sun
+/// and the sky's light: docs/behavior/lighting/sun.md), sharing the
+/// DataModel's chunks (copy on write).
+#[derive(Debug, Clone, PartialEq)]
+pub enum TerrainVoxels {
+    /// All of them, in place of what the renderer had.
+    Whole(Grid),
+    /// The voxels in `bounds` changed: `chunks` holds the chunks holding
+    /// them, as they are now (`Grid::region`).
+    Edits { chunks: Grid, bounds: Vec<Bounds> },
 }

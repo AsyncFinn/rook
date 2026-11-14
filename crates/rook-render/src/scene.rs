@@ -22,7 +22,7 @@ pub use emitters::{
 };
 pub use lighting::{LightShape, Lighting, LocalLight, SKYBOX_FACES, Tonemapper};
 pub use ribbons::{Anchor, Beam, FloorWire, RibbonLook, TextureMode, Trail};
-pub use terrain::TerrainLook;
+pub use terrain::{TerrainLook, TerrainVoxels};
 
 /// A mesh file, by the BLAKE3 hash of its bytes: parts that use the same
 /// file share one GPU mesh, however they refer to it.
