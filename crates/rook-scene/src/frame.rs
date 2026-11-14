@@ -4,7 +4,7 @@ use glam::Vec3;
 use rook_content::Resolver;
 use rook_content::decode::image::Image;
 use rook_engine::{DataModel, RenderChanges};
-use rook_render::{EffectSlots, ImageHash, MeshHash, Renderer};
+use rook_render::{EffectSlots, ImageHash, MeshHash, Renderer, TerrainVoxels};
 
 use crate::gui::GuiUpdate;
 use crate::{Floors, SceneCache, SceneChange};
@@ -77,6 +77,7 @@ impl SceneCache {
     pub fn show_all(&mut self, renderer: &mut Renderer) {
         renderer.take_images(self.images.take_fresh());
         renderer.set_scene(&self.scene);
+        renderer.update_terrain_voxels(self.light_voxels());
     }
 
     /// How many distinct images have loaded.
@@ -124,6 +125,7 @@ impl SceneCache {
             gui,
             change,
             lights: self.lights.take_changes(),
+            terrain: self.take_light_voxels(),
             effects: self.effects.take_changes(),
             dropped: self.take_dropped_meshes(),
             images: self.images.take_fresh(),
@@ -171,6 +173,8 @@ pub struct ToRender {
     gui: GuiUpdate,
     change: SceneChange,
     lights: Vec<usize>,
+    /// What changed of the terrain's voxels, for the light voxels.
+    terrain: Option<TerrainVoxels>,
     effects: EffectSlots,
     dropped: Vec<MeshHash>,
     /// Images loaded since the last hand-over: the renderer takes their
@@ -183,6 +187,7 @@ impl ToRender {
         self.gui.laid_out()
             || !matches!(self.change, SceneChange::None)
             || !self.lights.is_empty()
+            || self.terrain.is_some()
             || !self.effects.is_empty()
     }
 
@@ -223,6 +228,10 @@ impl ToRender {
             if !self.effects.is_empty() {
                 renderer.update_effects(scene, &self.effects);
             }
+        }
+        // A new scene keeps the terrain's voxels the renderer has.
+        if let Some(voxels) = self.terrain {
+            renderer.update_terrain_voxels(voxels);
         }
         for mesh in self.dropped {
             renderer.drop_mesh(mesh);

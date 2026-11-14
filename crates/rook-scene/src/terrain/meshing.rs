@@ -31,6 +31,7 @@ impl SceneCache {
         if t.levels.is_empty() {
             // Level 0 shares the DataModel's voxels until they change.
             t.levels = Arc::new(pyramid(voxels.clone()));
+            t.light = LightChange::Whole;
             t.counts = voxels.counts();
             t.rows = rows(voxels);
         } else {
@@ -39,6 +40,7 @@ impl SceneCache {
                 None => {
                     let changes = levels[0].changes(voxels);
                     levels[0] = voxels.clone();
+                    t.light = LightChange::Whole;
                     t.counts = voxels.counts();
                     t.rows = rows(voxels);
                     changes
@@ -59,6 +61,7 @@ impl SceneCache {
                             t.rows = (t.rows.0.min(c.y - 1), t.rows.1.max(c.y));
                         }
                     }
+                    t.light.add(edits);
                     edits.to_vec()
                 }
             };

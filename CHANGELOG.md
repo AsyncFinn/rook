@@ -5,6 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- Terrain darkens what it covers, as in Roblox: in places that shadow the sun through the light voxels it casts soft sun shadows, and it keeps the sky's light out of caves and from under overhangs, partly through thin terrain. Rook let the sun and the sky's light straight through terrain. See [sun](docs/behavior/lighting/sun.md#shadows).
 - A place with many images and long sounds takes much less memory. Rook kept a second, decoded copy of every image after it went to the GPU, and every sound fully decoded however long; now an image's pixels are let go once uploaded, and a long Ogg or MP3 keeps its file and is decoded as it plays.
 - With Roblox's CoreScripts, the TextChatService chat window shows its chat bar and lets the player send to the general channel, as in Roblox. Rook's window said the player could only view system messages and hid the bar. See [chat](docs/behavior/gui/chat.md#setting-up).
 - ProximityPrompts work as in Roblox: the prompt nearest the middle of the screen shows for each key with Roblox's own prompt GUI, its key or a click triggers it or holds it for its `HoldDuration`, and both the client and the server get its events. Rook never showed or triggered a prompt. See [ProximityPrompts](docs/behavior/gui/proximity-prompts.md).

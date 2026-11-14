@@ -1,6 +1,7 @@
 //! wgpu renderer for Rook. It draws a [`Scene`] snapshot and never touches
 //! the DOM (docs/design/architecture.md#engine-systems). Terrain arrives as
-//! mesh files too: the player meshes its chunks with `rook-terrain`.
+//! mesh files too: the player meshes its chunks with `rook-terrain`; its
+//! voxels come only for the light voxels ([`TerrainVoxels`]).
 
 mod batch;
 mod effects;
@@ -16,7 +17,7 @@ pub use scene::{
     EmitterShape, Fidelity, Flipbook, FlipbookMode, FloorWire, Grow, Highlight, ImageHash,
     ImagePlacement, InOut, Layer, Light, LightShape, Lighting, LocalLight, MapAlpha, MaterialMaps,
     MeshHash, Orientation, PartInstance, RibbonLook, SKYBOX_FACES, Scene, Sequence, Spawn,
-    TerrainColor, TerrainLook, TextureMode, Tonemapper, Trail,
+    TerrainColor, TerrainLook, TerrainVoxels, TextureMode, Tonemapper, Trail,
 };
 
 // Content hashes are 32 bytes: FxHash keeps lookups by them cheap.

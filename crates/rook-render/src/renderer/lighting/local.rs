@@ -9,13 +9,17 @@
 //! reaches: they are kept anchored to the world, wrapping around as
 //! Studio's light map does. Parts marked into them (`blockers.rs`) carry the
 //! sky's light down, shadow lights and, without
-//! `PrioritizeLightingQuality`, shadow the sun. What Studio does is in
+//! `PrioritizeLightingQuality`, shadow the sun; terrain marked into them
+//! (`terrain.rs`) dims the sky's light and the sun. What Studio does is in
 //! `docs/behavior/lighting/local-lights.md` and `docs/behavior/lighting/sun.md`.
 
 mod blockers;
 mod hash;
 mod slack;
+mod terrain;
 mod tiles;
+
+use std::ops::Range;
 
 use wesl_core::include_wesl;
 
@@ -93,6 +97,8 @@ struct SkyBuffers {
     solid: wgpu::Buffer,
     /// A byte per voxel: how much of it parts fill.
     fills: wgpu::Buffer,
+    /// A byte per voxel: how full of solid terrain it is.
+    soils: wgpu::Buffer,
     /// The sky's light in each voxel, kept for the next fill of some
     /// tiles to take the layers above from.
     skies: wgpu::Buffer,
@@ -215,6 +221,11 @@ impl SkyBuffers {
                 (nx * ny * nz).div_ceil(4),
                 wgpu::BufferUsages::COPY_DST,
             ),
+            soils: storage(
+                "rook light terrain",
+                (nx * ny * nz).div_ceil(4),
+                wgpu::BufferUsages::COPY_DST,
+            ),
             skies: storage("rook sky voxels", nx * ny * nz, wgpu::BufferUsages::empty()),
         }
     }
@@ -269,6 +280,7 @@ impl GpuLights {
                     count: None,
                 },
                 buffer_entry(9, storage, compute),
+                buffer_entry(10, storage, compute),
             ],
         });
         let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -568,6 +580,11 @@ impl GpuLights {
         self.blockers.clear();
     }
 
+    /// Take the terrain's voxels the scene sends ([`TerrainVoxels`]).
+    pub(crate) fn update_terrain(&mut self, voxels: TerrainVoxels) {
+        self.blockers.update_terrain(voxels);
+    }
+
     /// Take the parts at `changed` (indices into `scene.parts`) as they
     /// block light now. Only noted while nothing reads the blockers (the
     /// sky lights nothing, the sun shadows through the shadow map and no
@@ -619,32 +636,44 @@ impl GpuLights {
             Some(low) if centered => low,
             _ => ((center - half) / VOXEL).floor().as_ivec3(),
         };
-        // The fills go up only while the sun reads them, so a sun that
-        // just came takes them afresh.
+        // The fills go up only while the sun reads them, and the terrain
+        // while the sun or the sky does, so a reader that just came takes
+        // them whole.
         let sun_came = sun.is_some() && self.sun.is_none();
+        let soil_read = sky || sun.is_some();
+        let soil_came = soil_read && !self.sky && self.sun.is_none();
         let mut touched = Touched::default();
         let mut roofs = Vec::new();
-        if solid && (blocked || !centered || sun_came) {
+        if solid && (blocked || !centered || sun_came || soil_came) {
             match self.blockers.mark(low, size) {
                 Some(marked) => {
                     if sky {
-                        roofs = roofs_of(marked.layers, low);
+                        roofs = roofs_of(marked.layers, marked.soil_layers, low);
                     }
-                    for run in marked.slot_runs() {
+                    let bytes = |buffer: &wgpu::Buffer, of: &[u32], run: &Range<usize>| {
+                        let words = run.start / 4..run.end.div_ceil(4);
+                        let at = (words.start * 4) as u64;
+                        queue.write_buffer(buffer, at, bytemuck::cast_slice(&of[words]));
+                    };
+                    let every = 0..size.element_product() as usize;
+                    let runs = marked.slot_runs();
+                    for run in &runs {
                         let words = run.start / 32..run.end.div_ceil(32);
                         let at = (words.start * 4) as u64;
                         let bits = &marked.bits[words];
                         queue.write_buffer(&self.sky_buffers.solid, at, bytemuck::cast_slice(bits));
-                        if sun.is_some() {
-                            let words = run.start / 4..run.end.div_ceil(4);
-                            let at = (words.start * 4) as u64;
-                            let fills = &marked.fills[words];
-                            queue.write_buffer(
-                                &self.sky_buffers.fills,
-                                at,
-                                bytemuck::cast_slice(fills),
-                            );
+                        if sun.is_some() && !sun_came {
+                            bytes(&self.sky_buffers.fills, marked.fills, run);
                         }
+                        if soil_read && !soil_came {
+                            bytes(&self.sky_buffers.soils, marked.soils, run);
+                        }
+                    }
+                    if sun_came {
+                        bytes(&self.sky_buffers.fills, marked.fills, &every);
+                    }
+                    if soil_came {
+                        bytes(&self.sky_buffers.soils, marked.soils, &every);
                     }
                     touched = marked.touched;
                 }
@@ -1009,11 +1038,12 @@ fn came_and_left(old: IVec3, new: IVec3, size: IVec3) -> (Vec<Span>, Vec<Span>) 
     (came.collect(), left.collect())
 }
 
-/// Each tile's blocked layers (bit `y`: some voxel of the tile's layer
-/// `y` is blocked), in the volume starting at voxel `low`, from the
-/// blockers' layers by column ([`blockers::Marked::layers`], kept at slots
-/// anchored to the world).
-fn roofs_of(layers: &[u64], low: IVec3) -> Vec<u64> {
+/// Each tile's roofed layers (bit `y`: some voxel of the tile's layer `y`
+/// is blocked or holds terrain), in the volume starting at voxel `low`,
+/// from the blockers' and the terrain's layers by column
+/// ([`blockers::Marked::layers`] and `soil_layers`, kept at slots anchored
+/// to the world).
+fn roofs_of(layers: &[u64], soil_layers: &[u64], low: IVec3) -> Vec<u64> {
     let [nx, ny, nz] = VOLUME.map(|n| n as i32);
     // A column's layers rotate into the volume's own like its voxels.
     const _: () = assert!(VOLUME[1] == u64::BITS);
@@ -1026,7 +1056,8 @@ fn roofs_of(layers: &[u64], low: IVec3) -> Vec<u64> {
         let tiles = ACROSS[0] as i32 * (z / tile);
         for x in 0..nx {
             let t = (tiles + x / tile) as usize;
-            roofs[t] |= layers[blockers::column_of(dims, (x + ring.x) % nx, rz)];
+            let column = blockers::column_of(dims, (x + ring.x) % nx, rz);
+            roofs[t] |= layers[column] | soil_layers[column];
         }
     }
     for roof in &mut roofs {
@@ -1147,7 +1178,12 @@ fn fill_group(
             size: wgpu::BufferSize::new(LAYER_SIZE),
         }),
     });
-    for (binding, buffer) in [(6, &sky.solid), (7, &sky.skies), (9, &sky.fills)] {
+    for (binding, buffer) in [
+        (6, &sky.solid),
+        (7, &sky.skies),
+        (9, &sky.fills),
+        (10, &sky.soils),
+    ] {
         entries.push(wgpu::BindGroupEntry {
             binding,
             resource: buffer.as_entire_binding(),
