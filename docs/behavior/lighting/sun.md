@@ -88,9 +88,22 @@ the hidden property).
   nothing (it's above the grid); moved down to 60 it cast a soft shadow
   that leaked light at the seams between its plates. From 200 studs up,
   looking down, nothing on the ground cast anything (the grid followed
-  the camera's focus up, off the floor). A 1-stud slab dims the sun
-  rather than blocking it, and a 6-stud cube on the ground leaves only
-  a faint shadow.
+  the camera's focus up, off the floor). A 6-stud cube on the ground
+  leaves only a faint shadow.
+- **A part blocks the whole voxel, and the shadow softens with distance**
+  (measured in Studio 0.747 on 2026-11-14, `PrioritizeLightingQuality`
+  off, ClockTime 14.5, latitude 0, looking straight down at the darkest
+  point of each shadow on a white floor that drew 231). Square slabs 32
+  studs wide, 20 studs up, 0.2, 1, 2, 4 and 16 studs thick all drew 82:
+  a voxel a part touches stops the sun as a full one does, and a run of
+  them counts once. Wider and lower is darker, and the shadow spreads
+  and pales the further it falls, as through a cone that widens with
+  distance: 4-stud slabs 20 up drew 224, 177, 82 and 74 at 8, 16, 32 and
+  64 wide; 16 wide, 74, 177 and 216 at 10, 20 and 40 up; 32 wide, 82, 157
+  and 202 at 20, 40 and 80 up. 74 is the full shadow. Two 1-stud, 16-wide
+  slabs 12 studs apart, one over the other, drew 163, darker than either
+  alone; side by side across the cone (each covering half of it from the
+  point) 130: blockers apart each take their share.
 - **Terrain shadows the sun too** (measured in Studio 0.747 on
   2026-11-14, `PrioritizeLightingQuality` off, ClockTime 14.5, latitude
   0, looking down from 140 studs: 16 × 4 × 16 slabs of Rock one voxel
@@ -108,31 +121,39 @@ in `shaders/lighting.wgsl`; Approximation, fitted): with
 `PrioritizeLightingQuality` on, the shadow map as before, one 2048²
 cascade out to 300 studs, fading over the last 60. With it off, no
 shadow pass: the light volume also holds how much of the sun reaches
-each voxel. The blockers record how much of each voxel opaque
-`CastShadow` parts fill (exactly for parts square to the axes, by 64
-points for turned ones), and each voxel's ray to the sun dims by
-e^(−2 × fill × voxels crossed) through every voxel it crosses, until it
-leaves the volume. Surfaces read that 6 studs out along their normal,
-like the local lights, averaged over a 3 × 3 pattern 4 studs apart. The
-voxels take the sun again when it turns more than about half a degree.
+each voxel, through a cone towards the sun (voxel cone tracing, as in
+Crassin's 2011 global illumination). The sun cover
+(`renderer/lighting/local/cover.rs`, built by `shaders/sun_cover.wgsl`)
+holds how much of the sun each voxel stops, all of it in a voxel any
+opaque `CastShadow` part touches, with mips that average each layer over
+2 to 16 voxels across. Each voxel's cone runs up a layer at a time,
+widening by 0.2 voxels in radius per voxel it runs, and reads at each
+layer the share of its footprint the cover stops, from the mip as wide
+as the footprint. A run of layers that stop some counts as one blocker,
+the layer stopping most, and runs apart each take their share. Surfaces
+read the result 6 studs out along their normal, like the local lights.
+The voxels take the sun again when it turns more than about half a
+degree. The volume moves by whole 64-stud tiles, so the mips' texels
+stay put in the world.
 Terrain is marked into the same voxels
 (`renderer/lighting/local/terrain.rs`), each voxel by how full of solid
-terrain it is (air and water count as empty), and the sun dims through
-it as through a part's fill, at a density fitted to the slabs above
-(`SOIL_SUN`: as dense as a full voxel from 0.35 up, about half of one at
-0.25). Rook's shadows then fade with occupancy as Studio's do, as a share
-of the full shadow: 0.53, 0.23, 0.16 and 0.07 of it at 0.25, 0.15, 0.1
-and 0.05 (Studio 0.54, 0.23, 0.15 and 0.06).
+terrain it is (air and water count as empty), and stops a share of the
+sun by it, fitted to the terrain slabs above (`SOIL_SUN`: all of it from
+0.35 up, 0.54, 0.23, 0.15 and 0.06 of it at 0.25, 0.15, 0.1 and 0.05), so
+its shadows fade with occupancy as Studio's do.
 
-Against Studio, a 16 × 1 × 16 slab 30 studs up, a 40 × 20 × 2 wall and a
-6-stud cube, from 85 studs up looking down: the shadows fall in the same
-places with the same shapes. The wall's shadow is within 5 levels of
-Studio's out to its foot, where they differ by up to 11; the slab's
-dips 22 levels where Studio's dips 28; the cube's is a little darker
-than Studio's faint one. The deck 286 studs up casts nothing in either.
+Against Studio, on the slabs above, as a share of each one's full
+shadow (Rook's floor draws 228 and its full shadow 57): within 0.05 of
+Studio's everywhere, 0.03 on average. The 32-wide slab 20 up: 0.91
+against 0.95; 16 wide: 0.31 against 0.34, 1 against 1 at 10 up, 0.08
+against 0.1 at 40 up; 32 wide 40 and 80 up: 0.49 and 0.16 against 0.47
+and 0.18; 8 wide: 0.08 against 0.04; 64 wide: full in both. The slabs'
+thicknesses don't change Rook's shadows either.
+
+The deck 286 studs up casts nothing in either.
 
 Left: with `PrioritizeLightingQuality` on, Rook's shadow map still
-reaches 300 studs where Studio's reaches about 580. Under thick blockers
-Rook's voxel shadow is much deeper and tighter than Studio's: a 4-stud
-part or terrain slab 20 studs up darkens the floor by about 133 levels
-where Studio's darkens it by about 50, over a patch about half as wide.
+reaches 300 studs where Studio's reaches about 580. Rook's full voxel
+shadow is darker than Studio's (57 against 74 over floors of 228 and
+231), the light left under a wide blocker. Blockers stacked apart are
+not yet compared against Studio's.

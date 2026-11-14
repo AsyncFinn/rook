@@ -155,8 +155,8 @@ spatial hash (16-stud cubes hashed into buckets, padded 8 studs so that
 lights that move a little don't rebuild it). A compute pass
 (`shaders/light_volume.wgsl`) fills a 256 × 64 × 256 volume of 4-stud
 voxels (Studio's grid, below) centered 236 studs ahead of `Camera.Focus`
-along the view direction with the height dropped, following when that
-center drifts 64 studs, and parts, decals and terrain
+along the view direction with the height dropped, following by whole
+64-stud tiles when that center drifts 64 studs, and parts, decals and terrain
 (water included) sample it as Studio does (`local_light` in
 `shaders/lighting.wgsl`). Surfaces outside it get no local light, as in
 Studio. When a light has `Shadows`, the parts are marked into a bit per

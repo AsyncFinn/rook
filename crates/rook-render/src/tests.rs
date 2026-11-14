@@ -810,10 +810,12 @@ fn a_part_moving_under_a_low_sun_refills_its_shadows_path() {
     scene.parts[1].rotation = Mat3::from_rotation_y(0.7);
     moved.move_parts(&scene, &[1]);
     moved.render_to_image(16, 16, &camera).unwrap();
-    // A tile or two each way per layer below it; the box around the
-    // slanted path is several tiles wide along x and z in every layer.
+    // Per layer below it, the span its cones cross there and their widest
+    // footprint each way (the cover's coarsest texel and a half, so six
+    // tiles across at most); the box around the slanted path is wider
+    // still in every layer.
     let filled = moved.lights.filled_tiles();
-    assert!(filled > 0 && filled <= 9 * 64, "filled {filled} tiles");
+    assert!(filled > 0 && filled <= 36 * 64, "filled {filled} tiles");
     fresh.set_scene(&scene);
     fresh.render_to_image(16, 16, &camera).unwrap();
     assert!(moved.light_voxels() == fresh.light_voxels());
@@ -1297,8 +1299,12 @@ fn highlights_fill_and_outline_through_walls_when_on_top() {
     scene.highlights.insert(1, highlight(false));
     r.update_highlights(&scene);
     let pixels = r.render_to_image(w, h, &camera).unwrap();
-    assert_eq!(at(&pixels, 32, 32), at(&pixels, 4, 4));
     assert!(!(0..w).any(|x| at(&pixels, x, 32) == [0, 0, 255]));
+    // The wall, as with no highlight at all.
+    scene.highlights.clear();
+    r.update_highlights(&scene);
+    let plain = r.render_to_image(w, h, &camera).unwrap();
+    assert_eq!(at(&pixels, 32, 32), at(&plain, 32, 32));
 }
 
 /// The middle pixel's channels added up, of a Glass block before a wall of

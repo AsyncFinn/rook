@@ -9,11 +9,13 @@
 //! reaches: they are kept anchored to the world, wrapping around as
 //! Studio's light map does. Parts marked into them (`blockers.rs`) carry the
 //! sky's light down, shadow lights and, without
-//! `PrioritizeLightingQuality`, shadow the sun; terrain marked into them
-//! (`terrain.rs`) dims the sky's light and the sun. What Studio does is in
+//! `PrioritizeLightingQuality`, shadow the sun through cones that soften
+//! with distance (`cover.rs`); terrain marked into them (`terrain.rs`) dims
+//! the sky's light and the sun. What Studio does is in
 //! `docs/behavior/lighting/local-lights.md` and `docs/behavior/lighting/sun.md`.
 
 mod blockers;
+mod cover;
 mod hash;
 mod slack;
 mod terrain;
@@ -25,6 +27,7 @@ use wesl_core::include_wesl;
 
 use super::*;
 use blockers::{Blockers, Span, Touched};
+use cover::{CONE_START, CONE_WIDENS, Changed, Cover, LEVELS, cone_radius, footprint_reach};
 use glam::{IVec2, IVec3, Vec2};
 use hash::{GpuLight, LightHash};
 use tiles::{ACROSS, TILE, Tiles, WORDS};
@@ -43,7 +46,8 @@ const VOLUME: [u32; 3] = [256, 64, 256];
 /// looking straight down, it's centered).
 const AHEAD: f32 = 236.0;
 /// How far the volume's center may drift from where it should be before
-/// the volume follows, in studs.
+/// the volume follows, in studs. It moves by whole tiles (`snapped`), as
+/// Studio's grid moves in chunks.
 const RECENTER: f32 = 64.0;
 /// How far the sun may turn (the cosine of the angle) before the voxels
 /// take its light again; a script turning `ClockTime` would otherwise
@@ -85,6 +89,9 @@ struct FillParams {
     flags: [u32; 4],
     /// Towards the sun (unit).
     sun: [f32; 4],
+    /// The sun's cone: x: [`CONE_START`]; y: [`CONE_WIDENS`]; z: the sun
+    /// cover's last level.
+    cone: [f32; 4],
 }
 
 /// The buffers the fill pass carries the sky's light down with.
@@ -95,8 +102,6 @@ struct SkyBuffers {
     layers: wgpu::Buffer,
     /// One bit per voxel: a part blocks it ([`Blockers::mark`]).
     solid: wgpu::Buffer,
-    /// A byte per voxel: how much of it parts fill.
-    fills: wgpu::Buffer,
     /// A byte per voxel: how full of solid terrain it is.
     soils: wgpu::Buffer,
     /// The sky's light in each voxel, kept for the next fill of some
@@ -158,6 +163,8 @@ pub(crate) struct GpuLights {
     fill_layout: wgpu::BindGroupLayout,
     fill_group: wgpu::BindGroup,
     sky_buffers: SkyBuffers,
+    /// How much of the sun each voxel stops, which the sun's cones read.
+    cover: Cover,
     blockers: Blockers,
     /// The center of voxel (0, 0, 0), once filled.
     origin: Option<Vec3>,
@@ -214,11 +221,6 @@ impl SkyBuffers {
             solid: storage(
                 "rook light blockers",
                 (nx * ny * nz).div_ceil(32),
-                wgpu::BufferUsages::COPY_DST,
-            ),
-            fills: storage(
-                "rook light blocker fills",
-                (nx * ny * nz).div_ceil(4),
                 wgpu::BufferUsages::COPY_DST,
             ),
             soils: storage(
@@ -279,8 +281,23 @@ impl GpuLights {
                     },
                     count: None,
                 },
-                buffer_entry(9, storage, compute),
+                wgpu::BindGroupLayoutEntry {
+                    binding: 9,
+                    visibility: compute,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2Array,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
                 buffer_entry(10, storage, compute),
+                wgpu::BindGroupLayoutEntry {
+                    binding: 11,
+                    visibility: compute,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
             ],
         });
         let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -351,11 +368,12 @@ impl GpuLights {
         let hash = LightHash::build(&[]);
         let (light_buffer, bucket_buffer, entry_buffer) = buffers(device, &[], &hash);
         let sky_buffers = SkyBuffers::new(device);
+        let cover = Cover::new(device, &sky_buffers.solid, &sky_buffers.soils);
         let fill_group = fill_group(
             device,
             &fill_layout,
             [&params, &light_buffer, &bucket_buffer, &entry_buffer],
-            &sky_buffers,
+            (&sky_buffers, &cover),
             [&voxels, &sun_voxels],
         );
         Self {
@@ -377,6 +395,7 @@ impl GpuLights {
             fill_layout,
             fill_group,
             sky_buffers,
+            cover,
             blockers: Blockers::default(),
             origin: None,
             dirty: Dirty {
@@ -520,7 +539,7 @@ impl GpuLights {
                 &self.bucket_buffer,
                 &self.entry_buffer,
             ],
-            &self.sky_buffers,
+            (&self.sky_buffers, &self.cover),
             [&self.voxels, &self.sun_voxels],
         );
     }
@@ -634,17 +653,17 @@ impl GpuLights {
         let kept = self.origin.map(|o| (o / VOXEL).floor().as_ivec3());
         let mut low = match kept {
             Some(low) if centered => low,
-            _ => ((center - half) / VOXEL).floor().as_ivec3(),
+            _ => snapped((center - half) / VOXEL),
         };
-        // The fills go up only while the sun reads them, and the terrain
-        // while the sun or the sky does, so a reader that just came takes
-        // them whole.
+        // The terrain goes up only while the sun or the sky reads it, so a
+        // reader that just came takes it whole; the sun cover is built
+        // only while the sun reads it, so whole when it comes.
         let sun_came = sun.is_some() && self.sun.is_none();
         let soil_read = sky || sun.is_some();
         let soil_came = soil_read && !self.sky && self.sun.is_none();
         let mut touched = Touched::default();
         let mut roofs = Vec::new();
-        if solid && (blocked || !centered || sun_came || soil_came) {
+        if solid && (blocked || !centered || soil_came) {
             match self.blockers.mark(low, size) {
                 Some(marked) => {
                     if sky {
@@ -662,15 +681,9 @@ impl GpuLights {
                         let at = (words.start * 4) as u64;
                         let bits = &marked.bits[words];
                         queue.write_buffer(&self.sky_buffers.solid, at, bytemuck::cast_slice(bits));
-                        if sun.is_some() && !sun_came {
-                            bytes(&self.sky_buffers.fills, marked.fills, run);
-                        }
                         if soil_read && !soil_came {
                             bytes(&self.sky_buffers.soils, marked.soils, run);
                         }
-                    }
-                    if sun_came {
-                        bytes(&self.sky_buffers.fills, marked.fills, &every);
                     }
                     if soil_came {
                         bytes(&self.sky_buffers.soils, marked.soils, &every);
@@ -687,6 +700,15 @@ impl GpuLights {
                     _ => return,
                 },
             }
+        }
+        if sun.is_some() {
+            let mut changed = Changed::none();
+            match &touched {
+                _ if sun_came => changed = Changed::all(),
+                Touched::All => changed = Changed::all(),
+                Touched::Spans(spans) => spans.iter().for_each(|&span| changed.mark(span)),
+            }
+            self.cover.build(queue, encoder, &changed);
         }
         let origin = low.as_vec3() * VOXEL + VOXEL * 0.5;
         let ring = low.rem_euclid(size);
@@ -800,6 +822,7 @@ impl GpuLights {
                     u32::from(sun.is_some()),
                 ],
                 sun: sun.unwrap_or(Vec3::Y).extend(0.0).to_array(),
+                cone: [CONE_START, CONE_WIDENS, (LEVELS - 1) as f32, 0.0],
             }),
         );
         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
@@ -839,6 +862,18 @@ impl GpuLights {
             })
             .collect()
     }
+}
+
+/// The lowest voxel of a volume whose lowest corner is at `at` (in voxels):
+/// along x and z the nearest whole tile, so each texel of the sun cover's
+/// levels holds one tile of the world (`cover.rs`).
+fn snapped(at: Vec3) -> IVec3 {
+    let tile = TILE as f32;
+    IVec3::new(
+        ((at.x / tile).round() * tile) as i32,
+        at.y.floor() as i32,
+        ((at.z / tile).round() * tile) as i32,
+    )
 }
 
 /// The blocker changes in `spans` (the world's voxels) as boxes of the
@@ -903,46 +938,33 @@ impl Reach {
             }
         }
         if let Some(d) = self.sun {
-            // The span's voxels as a box (voxel k from k to k + 1), swept
-            // away from the sun until all of it leaves the volume.
-            let (from, to) = (lo.as_vec3(), (hi + 1).as_vec3());
-            let n = Vec3::new(VOLUME[0] as f32, VOLUME[1] as f32, VOLUME[2] as f32);
-            let mut t = f32::INFINITY;
-            for axis in 0..3 {
-                if d[axis] < -1e-6 {
-                    t = t.min((n[axis] - from[axis]) / -d[axis]);
-                } else if d[axis] > 1e-6 {
-                    t = t.min(to[axis] / d[axis]);
+            // Every voxel whose cone reaches the span (`sunlit`): a cone
+            // runs a layer at a time, `along` across x and z per layer,
+            // reading the cover `footprint_reach` around it; so each layer
+            // past the span takes the span swept back along the cones that
+            // cross it, widened by the furthest their footprints read.
+            let up = d.y.abs().max(1e-3);
+            let along = Vec2::new(d.x, d.z) / up;
+            let least = 0.5 * along.length();
+            for y in 0..VOLUME[1] as i32 {
+                // The layers on from `y` its cones cross the span at.
+                let (k0, k1) = if d.y >= 0.0 {
+                    ((lo.y - y).max(1), hi.y - y)
+                } else {
+                    ((y - hi.y).max(1), y - lo.y)
+                };
+                if k1 < k0 {
+                    continue;
                 }
-            }
-            let away = -d * t;
-            let (a, b) = (from.min(from + away), to.max(to + away));
-            let (a, b) = (a.floor().as_ivec3() - 1, b.ceil().as_ivec3());
-            // The sun is above (it lights the voxels only then), so the
-            // box sweeps down: each layer takes only the part of the
-            // sweep crossing it (a voxel of margin around, as the whole
-            // sweep's box has), not the box around all of it, which for a
-            // low sun is mostly voxels the sweep never reaches.
-            if d.y < 1e-3 {
-                tiles.mark((a, b));
-            } else {
-                for y in a.y..=b.y {
-                    // When the box overlaps the layer and the voxel either
-                    // side of it.
-                    let (y0, y1) = ((y - 1) as f32, (y + 2) as f32);
-                    let s0 = ((from.y - y1) / d.y).max(0.0);
-                    let s1 = ((to.y - y0) / d.y).min(t);
-                    if s0 > s1 {
-                        continue;
-                    }
-                    let (f0, f1) = (from - d * s0, from - d * s1);
-                    let (t0, t1) = (to - d * s0, to - d * s1);
-                    let (lo, hi) = (
-                        f0.min(f1).floor().as_ivec3() - 1,
-                        t0.max(t1).ceil().as_ivec3(),
-                    );
-                    tiles.mark((lo.with_y(y), hi.with_y(y)));
-                }
+                let reach = footprint_reach(cone_radius(k1 as f32 / up, least));
+                let (a, b) = (along * k0 as f32, along * k1 as f32);
+                let (near, far) = (a.min(b), a.max(b));
+                let from = Vec2::new(lo.x as f32, lo.z as f32) - far - reach;
+                let to = Vec2::new((hi.x + 1) as f32, (hi.z + 1) as f32) - near + reach;
+                tiles.mark((
+                    IVec3::new(from.x.floor() as i32, y, from.y.floor() as i32),
+                    IVec3::new(to.x.ceil() as i32, y, to.y.ceil() as i32),
+                ));
             }
         }
         for light in &self.shadowed {
@@ -1155,7 +1177,7 @@ fn fill_group(
     device: &wgpu::Device,
     layout: &wgpu::BindGroupLayout,
     buffers: [&wgpu::Buffer; 4],
-    sky: &SkyBuffers,
+    (sky, cover): (&SkyBuffers, &Cover),
     [voxels, sun_voxels]: [&wgpu::TextureView; 2],
 ) -> wgpu::BindGroup {
     let mut entries: Vec<_> = buffers
@@ -1178,17 +1200,20 @@ fn fill_group(
             size: wgpu::BufferSize::new(LAYER_SIZE),
         }),
     });
-    for (binding, buffer) in [
-        (6, &sky.solid),
-        (7, &sky.skies),
-        (9, &sky.fills),
-        (10, &sky.soils),
-    ] {
+    for (binding, buffer) in [(6, &sky.solid), (7, &sky.skies), (10, &sky.soils)] {
         entries.push(wgpu::BindGroupEntry {
             binding,
             resource: buffer.as_entire_binding(),
         });
     }
+    entries.push(wgpu::BindGroupEntry {
+        binding: 9,
+        resource: wgpu::BindingResource::TextureView(&cover.view),
+    });
+    entries.push(wgpu::BindGroupEntry {
+        binding: 11,
+        resource: wgpu::BindingResource::Sampler(&cover.sampler),
+    });
     entries.push(wgpu::BindGroupEntry {
         binding: 8,
         resource: wgpu::BindingResource::TextureView(sun_voxels),
