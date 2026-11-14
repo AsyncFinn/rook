@@ -5,7 +5,7 @@ Checked against Studio 0.742 on 2026-10-18.
 What Rook found while building [M4](../../roadmap/m4-content.md) step 2: where archived places' content comes from, and how Rook fetches it.
 
 How it works is in
-[architecture](../../design/architecture.md#content-rook-content); what's still partial is in
+[architecture](../../design/architecture/content.md); what's still partial is in
 `docs/guide/stubs.md`.
 
 *What the archive uses* (`cargo xtask corpus-scan`, 3,058 files that load): 1.10

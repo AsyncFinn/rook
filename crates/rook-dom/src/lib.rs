@@ -1,6 +1,6 @@
 //! The DOM never calls out while mutating. Signal dispatch and engine
 //! systems read the [`Journal`] afterwards, each with its own cursor.
-//! See `docs/design/architecture.md#runtime-dom-rook-dom`.
+//! See `docs/design/architecture/data-model.md#runtime-dom-rook-dom`.
 //!
 //! Hierarchy rules (locked parents, cycles, `Destroy`, `Clone`) follow
 //! Roblox. Error texts are Inference until the conformance suite pins them.

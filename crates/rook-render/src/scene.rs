@@ -1,5 +1,5 @@
 //! What the renderer draws: a snapshot built by the engine side. The
-//! renderer never sees the DOM (docs/design/architecture.md#engine-systems).
+//! renderer never sees the DOM (docs/design/architecture/threads-and-frames.md#threading-and-data-flow).
 
 use rustc_hash::FxHashMap;
 use std::sync::Arc;

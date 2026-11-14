@@ -3,7 +3,7 @@
 //! The engine asks a [`Loader`] for references and collects the results at
 //! a fixed point in its frame ([`Loader::poll`]), so disk, network and
 //! decoding never hold up a frame and completions reach scripts on the
-//! engine thread (docs/design/architecture.md#content-rook-content). Each loader's fetch threads
+//! engine thread (docs/design/architecture/content.md). Each loader's fetch threads
 //! hand decoding to one process-wide pool ([`set_decode_threads`]), both at
 //! below-normal priority and started by the first request. Requests carry a
 //! priority that can change while they wait (the player ranks files by

@@ -100,7 +100,7 @@ impl SceneCache {
     /// files and images that finished loading since the last frame; what
     /// the renderer must take for it. Needs no renderer, so it runs while
     /// the render thread draws the frame before
-    /// (docs/design/architecture.md#frame-order).
+    /// (docs/design/architecture/threads-and-frames.md#frame-order).
     pub fn update(&mut self, dm: &mut DataModel, camera: Vec3) -> ToRender {
         let changes = dm.take_render_changes();
         let gui = self.update_gui(dm, Some(&changes));

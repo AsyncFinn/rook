@@ -491,7 +491,7 @@ fn camera_relative_rotation_faces_the_camera() {
 /// With CameraRelative rotation (shift lock, first person), the character
 /// is drawn facing the camera it's drawn with, every frame, while the
 /// camera turns: turned only by the next frame's physics, it trailed the
-/// mouse by a frame, which players feel (docs/design/architecture.md#frame-order).
+/// mouse by a frame, which players feel (docs/design/architecture/threads-and-frames.md#frame-order).
 #[test]
 fn a_camera_relative_character_is_drawn_facing_this_frames_camera() {
     let mut server = Server::new(&Options::default()).unwrap();

@@ -2,7 +2,7 @@
 //! runs it: the server steps by itself on its thread, the client steps
 //! once a frame by the time it took, and the renderer draws each frame on
 //! the render thread while the next one steps
-//! (docs/design/architecture.md#frame-order).
+//! (docs/design/architecture/threads-and-frames.md#frame-order).
 
 use std::time::{Duration, Instant};
 

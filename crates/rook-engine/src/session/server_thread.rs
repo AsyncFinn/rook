@@ -1,6 +1,6 @@
 //! The server on its own thread, so a window waits only on its client and
 //! the renderer, and a dedicated server keeps its 60 Hz pace
-//! (docs/design/architecture.md#engine-systems). The server's DataModel is
+//! (docs/design/architecture/threads-and-frames.md#threading-and-data-flow). The server's DataModel is
 //! made on the thread and never leaves it; the rest of the app talks to it
 //! in messages.
 //!

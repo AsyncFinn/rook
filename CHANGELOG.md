@@ -85,14 +85,14 @@ Every release, newest first. How versions are numbered is in
 - Assemblies go to sleep when Roblox's do and read zero velocity asleep. Rook used its physics library's own rule. See [sleeping](docs/behavior/physics/sleeping.md).
 - NaN or infinite values in parts are handled as in Studio. Rook's server could crash on them. See [NaN and infinite values](docs/behavior/physics/nan-and-infinite-values.md).
 - Many parts flying around at once no longer slow the light voxels. Rook did extra work for every moved part on one thread. See [local lights](docs/behavior/lighting/local-lights.md).
-- Content arriving is spread over frames within a per-frame budget. Rook handled it all in the frame it landed, freezing that frame. See [per-frame budgets](docs/design/architecture.md#per-frame-budgets).
+- Content arriving is spread over frames within a per-frame budget. Rook handled it all in the frame it landed, freezing that frame. See [per-frame budgets](docs/design/architecture/threads-and-frames.md#per-frame-budgets).
 - The light around the camera catches up within a few frames of a big turn. It lagged seconds behind.
 - `rook-player --bench` times content loading from when the scene is built. It timed from when the place started loading.
 - Parts that barely move no longer mark the light voxels again every frame. Rook re-marked every moved part. See [local lights](docs/behavior/lighting/local-lights.md).
 - Each frame goes to the GPU as one batch of commands. Moved parts went in batches of their own.
 - SurfaceGuis and BillboardGuis out of view aren't drawn, and those among see-through parts break up the drawing only where they overlap. Rook drew them all and split more.
 - SurfaceGuis and BillboardGuis share one buffer and are drawn in as few commands as possible. Each had its own.
-- Frames can draw on a render thread while the next one steps, when that's faster. Rook drew and stepped one after the other. See [frame order](docs/design/architecture.md#frame-order) and [frame threads](docs/behavior/rendering/frame-threads.md).
+- Frames can draw on a render thread while the next one steps, when that's faster. Rook drew and stepped one after the other. See [frame order](docs/design/architecture/threads-and-frames.md#frame-order) and [frame threads](docs/behavior/rendering/frame-threads.md).
 - Particle emitters out of view don't step, as in Studio, and SurfaceGuis and server-moved parts are updated only when they move. Rook updated all of them every frame.
 
 ## [0.4.0] - 2026-11-04 - Frames that cost what changed; physics, GUI and terrain closer to Studio
@@ -113,7 +113,7 @@ Every release, newest first. How versions are numbered is in
 - `MakeJoints` and box and radius queries find parts through one index kept by physics, and now find turned cylinders and wedges near their box's corners. Rook built a box for every part on each call and could miss those. See [scene queries](docs/behavior/physics/queries.md).
 - A terrain edit swaps in only the chunks it reached and averages far terrain again only under it. Rook rebuilt the renderer's whole scene. See [the Terrain API](docs/behavior/terrain/api.md).
 - A moving part refills only the light voxel tiles its change can reach, every frame. Rook refilled all the light voxels after any move, causing hitches. See [local lights](docs/behavior/lighting/local-lights.md#how-rook-does-it).
-- In shift lock and first person your character turns with the camera in the same frame. It trailed by a frame. See [frame order](docs/design/architecture.md#frame-order).
+- In shift lock and first person your character turns with the camera in the same frame. It trailed by a frame. See [frame order](docs/design/architecture/threads-and-frames.md#frame-order).
 - Settings come in tiers: developer overrides are a Cargo feature on by default, `cargo dist` builds leave them out, and run-time settings come from a flag, a `ROOK_*` variable or the default. Release builds took only some settings, and there was a settings file. See [settings](docs/design/data-and-logging.md#settings) and [build profiles](CONTRIBUTING.md#build-profiles).
 - Your Open Cloud key lives in the system's credential store, set with `rook-tools key set`, and is read only when Roblox's asset delivery refuses an asset. Rook read it from a variable only. See [the Open Cloud key](docs/design/data-and-logging.md#the-open-cloud-key).
 - Parts whose instances changed go to the GPU on their own, and lights, emitters and sky go to the renderer only when they change. Rook sent whole chunks and sent those on any move.
@@ -130,14 +130,14 @@ Every release, newest first. How versions are numbered is in
 - Grass and textured surfaces far from the world's center shade from positions relative to the camera. They crawled with static up close.
 - Meshes of versions 6.00 and 7.00 load, and every mesh and union format is read by Rook's own decoder. Those meshes drew nothing. See [file layouts](docs/behavior/meshes/file-meshes.md#file-layouts).
 - Scripts compile at Luau optimization level 2, as in live games. Rook used a lower level.
-- Destroyed instances are freed once nothing holds them, as in Roblox. They stayed in memory for the whole session. See [collection](docs/design/architecture.md#structure).
+- Destroyed instances are freed once nothing holds them, as in Roblox. They stayed in memory for the whole session. See [collection](docs/design/architecture/data-model.md#structure).
 - A focused TextBox that is destroyed, unparented or moved loses focus at once, as in Roblox. Rook kept typing into it. See [TextBox](docs/behavior/gui/input.md#textbox).
 - The change log is cleared only once every reader has read it, so what scripts do after the server's step is kept. It could be lost.
 - `typeof` is Luau's own builtin again, as in Roblox, and engine functions return through a cheaper path. Rook's own version was slower and differed at the edges.
 - Zooming into first person while holding right-click centers the cursor at once, and dragging the window no longer stalls the game. The cursor stayed put and the game froze while dragging.
 - The camera is drawn as the camera script leaves it in the same frame, so turning keeps up with the mouse. It trailed by a frame.
 - Invoke callbacks and engine-side values belong to their instance. They vanished when no script held the object.
-- Name reads, `GetChildren` and `ClassName` are cached for scripts. Each crossed into Rust every time. See [what a member read costs](docs/design/architecture.md#luau-bridge-rook-lua).
+- Name reads, `GetChildren` and `ClassName` are cached for scripts. Each crossed into Rust every time. See [what a member read costs](docs/design/architecture/scripting.md#luau-bridge-rook-lua).
 - Anchored parts are static colliders with no physics body, so moving one costs only itself. Moving one reread every anchored part.
 - `--release` builds no longer use whole-program optimization; it moved to a new `dist` profile. Release rebuilds took minutes longer.
 - Screen GUI hands each object to the renderer on its own, so only what changed is redrawn, and Hints and Messages are tracked as they're added. Rook redrew the whole screen and searched Workspace.

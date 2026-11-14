@@ -1,7 +1,7 @@
 //! What the strings in `MeshId`, `TextureId`, `SoundId` and the other
 //! content properties refer to, and their bytes. A [`Loader`] runs
 //! resolutions on worker threads so the engine thread never waits for disk
-//! or network. See `docs/design/architecture.md#content-rook-content`.
+//! or network. See `docs/design/architecture/content.md`.
 
 pub mod decode;
 mod loader;

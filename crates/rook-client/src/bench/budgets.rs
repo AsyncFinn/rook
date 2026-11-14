@@ -1,5 +1,5 @@
 //! The per-frame budgets of the stages whose work comes in bursts
-//! (docs/design/architecture.md#per-frame-budgets), checked once content
+//! (docs/design/architecture/threads-and-frames.md#per-frame-budgets), checked once content
 //! has loaded: a stage over its budget is flagged with how often and by
 //! how much, as engines' frame-budget checks flag a stage in CI (Unreal's
 //! `stat unit` budgets, Unity's Frame Timing checks).

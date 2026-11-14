@@ -3,7 +3,7 @@
 Checked against Studio 0.742 on 2026-10-13.
 
 TrussPart is in 371 archive files (31,487 uses). How Rook builds and
-batches them is in [architecture](../../design/architecture.md#rendering-rook-render); what's left is in
+batches them is in [architecture](../../design/architecture/rendering.md); what's left is in
 `docs/guide/stubs.md`.
 
 *Measured from Studio's OBJ export* of a 2 × 2 × 2 and a 2 × 4 × 2 truss

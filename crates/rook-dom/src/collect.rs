@@ -1,20 +1,9 @@
 //! Freeing destroyed instances once nothing holds them, as Roblox frees a
-//! destroyed instance once nothing, Lua included, references it.
-//!
-//! An instance holds its parent, its children and what its reference
-//! properties point at (each can be read from it). A destroyed instance is
-//! held when one that isn't destroyed holds it, when the caller says
-//! something outside the tree does (a script's handle), or through other
-//! destroyed instances held so. Live instances are never collected:
-//! everything outside the DataModel that the engine keeps is live.
-//!
-//! The owner of the journal collects at each trim, in two steps a trim
-//! apart, so every reader drops what it keeps of an instance before its
-//! slot goes: [`Dom::announce_collectable`] records [`Change::Collected`]
-//! for the destroyed instances nothing holds, and the next trim's
-//! [`Dom::free_collected`] frees them, unless something took hold of one
-//! meanwhile. Each check costs what is destroyed and not yet freed, not
-//! the size of the place.
+//! destroyed instance once nothing, Lua included, references it. Two steps a
+//! trim apart, so every reader drops an instance before its slot goes:
+//! [`Dom::announce_collectable`] records [`Change::Collected`], the next
+//! trim's [`Dom::free_collected`] frees what is still unheld. What holds an
+//! instance is in docs/design/architecture/data-model.md#structure.
 
 use super::*;
 use crate::properties::ref_target;
