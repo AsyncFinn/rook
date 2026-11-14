@@ -5,6 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- Far terrain meets near terrain without cracks where a cave's ceiling, wall or overhang crosses from one ring of detail to the next, as in Studio. Rook let the sky show through there in bands and slivers. See [level of detail](docs/behavior/terrain/detail.md#how-rook-does-it).
 - A place with many images and long sounds takes much less memory. Rook kept a second, decoded copy of every image after it went to the GPU, and every sound fully decoded however long; now an image's pixels are let go once uploaded, and a long Ogg or MP3 keeps its file and is decoded as it plays.
 - With Roblox's CoreScripts, the TextChatService chat window shows its chat bar and lets the player send to the general channel, as in Roblox. Rook's window said the player could only view system messages and hid the bar. See [chat](docs/behavior/gui/chat.md#setting-up).
 - ProximityPrompts work as in Roblox: the prompt nearest the middle of the screen shows for each key with Roblox's own prompt GUI, its key or a click triggers it or holds it for its `HoldDuration`, and both the client and the server get its events. Rook never showed or triggered a prompt. See [ProximityPrompts](docs/behavior/gui/proximity-prompts.md).

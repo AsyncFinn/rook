@@ -62,9 +62,21 @@ impl SceneCache {
                     edits.to_vec()
                 }
             };
-            reached = update_pyramid(levels, &changes)
-                .into_iter()
-                .map(|level| level.iter().flat_map(|b| b.chunks(MESH_REACH)).collect())
+            let changed = update_pyramid(levels, &changes);
+            // A chunk closes its sides against the next level's surface
+            // within its mesh reach, so a change there reaches it too.
+            reached = (0..changed.len())
+                .map(|k| {
+                    let own = changed[k].iter().flat_map(|b| b.chunks(MESH_REACH));
+                    let next = changed.get(k + 1).into_iter().flatten().flat_map(|b| {
+                        let fine = Bounds {
+                            min: b.min * 2,
+                            max: b.max * 2 + IVec3::ONE,
+                        };
+                        fine.chunks(2 * MESH_REACH)
+                    });
+                    own.chain(next).collect()
+                })
                 .collect();
         }
         let counts = t.counts;
@@ -133,6 +145,7 @@ impl SceneCache {
             });
         }
         MeshedChunk {
+            seams: chunk.seams,
             surfaces,
             entries: Vec::new(),
         }

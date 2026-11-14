@@ -9,7 +9,7 @@
 use glam::{IVec2, IVec3, Vec3};
 
 use crate::grid::edit::Bounds;
-use crate::mesh::{Detail, can_have_surface, chunks_to_mesh};
+use crate::mesh::{Detail, Sides, can_have_surface, chunks_to_mesh};
 use crate::{CHUNK_VOXELS, Grid};
 
 /// Levels of detail: cells of 4 to 128 studs. Studio's measured rings go
@@ -137,6 +137,28 @@ impl Rings {
             within(lo, lo + width(k - 1) / 2)
         };
         outer && !inner
+    }
+
+    /// The sides of chunk `chunk`, drawn at `level`, that face the next
+    /// level's ring: those the chunk closes against it
+    /// (`crate::mesh::mesh_drawn_chunk`). Each square holds the one inside
+    /// with a chunk of its own on every side, so a chunk's neighbor across
+    /// X or Z is drawn at its level, the next, or the one before, whose
+    /// chunk closes that side.
+    pub fn seams(&self, level: u8, chunk: IVec3) -> Sides {
+        if level == LAST {
+            return Sides::NONE;
+        }
+        let k = usize::from(level);
+        let (lo, hi) = (self.starts[k], self.starts[k] + width(k));
+        let mut sides = Sides::NONE;
+        for (i, dir) in Sides::DIRECTIONS.iter().enumerate() {
+            let column = IVec2::new(chunk.x + dir.x, chunk.z + dir.z);
+            if !(column.cmpge(lo).all() && column.cmplt(hi).all()) {
+                sides = sides.with(i);
+            }
+        }
+        sides
     }
 
     /// The chunks of `level` drawn at it that can have a surface, `grid`

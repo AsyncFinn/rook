@@ -40,6 +40,8 @@ struct TerrainSurface {
 /// them (none until the scene places them).
 #[derive(Debug, Default)]
 struct MeshedChunk {
+    /// The sides closed against the next ring.
+    seams: rook_terrain::Sides,
     surfaces: Vec<TerrainSurface>,
     entries: Vec<usize>,
 }

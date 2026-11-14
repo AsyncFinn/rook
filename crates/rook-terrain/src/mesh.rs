@@ -7,22 +7,25 @@
 //! [`WATER_DROP`]. [`ChunkMesh::surfaces`] split the triangles by material
 //! for collisions; [`ChunkMesh::draws`] by the layers drawn ([`draws`]).
 //! Far terrain is meshed the same way from coarser voxels ([`Detail`],
-//! `crate::lod`), its chunks hung with [`skirts`] that hide the cracks
-//! where rings of different detail meet.
+//! `crate::lod`). Drawn chunks are cut to their boxes ([`clip`]), and
+//! where a ring meets a coarser one the gap between the two surfaces is
+//! closed in the plane between them ([`seams`]).
 
 use glam::{IVec3, Vec3};
 
 use crate::TerrainMaterial;
 use crate::grid::{CHUNK_VOXELS, Grid, VOXEL_STUDS, Voxel};
 
+mod clip;
 mod deform;
 pub mod draws;
 mod nets;
-mod skirts;
+mod seams;
 
 use deform::deform;
 pub use draws::{Corner, Draw, Layer, Seam};
 pub(crate) use nets::mesh_chunk_with;
+pub use seams::Sides;
 
 /// One material's part of a chunk's surface, relative to the chunk's
 /// corner ([`ChunkMesh::origin`]).
@@ -75,6 +78,8 @@ pub struct ChunkMesh {
     /// Its level of detail: 0 for the 4-stud voxels, each level after
     /// twice as coarse ([`Detail`]).
     pub level: u8,
+    /// The sides closed against the next level's surface ([`seams`]).
+    pub seams: Sides,
     /// By material, solids first and water last.
     pub surfaces: Vec<Surface>,
     /// What's drawn, by layer, solids first and water last.
@@ -99,28 +104,26 @@ pub fn chunk_origin_at(chunk: IVec3, level: u8) -> Vec3 {
     (chunk * CHUNK_VOXELS).as_vec3() * Detail::at(level).voxel_studs()
 }
 
-/// How a chunk is meshed: at which level of detail, and whether it's hung
-/// with skirts (drawn chunks are, since a neighbor may be coarser or
-/// finer; collisions use the bare 4-stud surface).
+/// How a chunk is meshed: at which level of detail, and whether it's
+/// drawn, its surface cut to its box so it meets its neighbors' on the
+/// planes between them ([`clip`]); collisions use the bare 4-stud surface,
+/// each quad in the chunk its edge starts in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Detail {
     pub level: u8,
-    pub skirts: bool,
+    pub drawn: bool,
 }
 
 impl Detail {
     /// The 4-stud surface, bare.
     pub const FULL: Detail = Detail {
         level: 0,
-        skirts: false,
+        drawn: false,
     };
 
-    /// `level`, as drawn: with skirts.
+    /// `level`, as drawn.
     pub fn at(level: u8) -> Self {
-        Detail {
-            level,
-            skirts: true,
-        }
+        Detail { level, drawn: true }
     }
 
     pub fn voxel_studs(self) -> f32 {
@@ -219,4 +222,19 @@ pub fn mesh_chunk(grid: &Grid, chunk: IVec3) -> ChunkMesh {
 /// Mesh chunk `chunk` of `grid`, whose voxels are `detail`'s level's.
 pub fn mesh_chunk_at(grid: &Grid, chunk: IVec3, detail: Detail) -> ChunkMesh {
     mesh_chunk_with(grid, chunk, detail, DIAGONALS)
+}
+
+/// Mesh chunk `chunk` of level `level` as drawn, `levels` holding the
+/// voxels of every level, its sides `seams` closed against the next
+/// level's surface (`crate::lod::Rings::seams`).
+pub fn mesh_drawn_chunk(levels: &[Grid], level: u8, chunk: IVec3, seams: Sides) -> ChunkMesh {
+    let k = usize::from(level);
+    let coarser = levels.get(k + 1).filter(|_| !seams.is_empty());
+    nets::mesh_with(
+        &levels[k],
+        coarser.map(|g| (g, seams)),
+        chunk,
+        Detail::at(level),
+        DIAGONALS,
+    )
 }
