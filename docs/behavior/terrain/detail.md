@@ -64,6 +64,11 @@ Two traps:
   draw in 4-stud cells, as close up. A box 256 studs across each way
   around the camera would draw them in 32-stud cells or coarser from
   1,200 up.
+- Cave walls and ceilings stay closed across rings (Observed,
+  2026-11-14, Studio 0.744): inside a cavern of Rock shells, from two
+  cameras with the shells 150 to 300 studs out, Studio draws them whole,
+  with and without the place's Atmosphere, where Rook's skirts (hung only
+  from upward faces) left the sky showing through in bands and slivers.
 - Small shapes fade into far rings rather than standing out: the slab's
   14-stud rock and the hills' rock faces stay smooth at 1,500 studs.
 - Nothing is cut off far away: from 20,000 studs off, the strip still
@@ -123,25 +128,37 @@ the strip to confirm it.
   (a 6-wide square on the next level's grid can't be centered on the
   camera): Studio's except the 8-stud ring, which ends at 512 on that
   side instead of about 768 (Approximation).
-- Chunks are hung with skirts: from every edge where a chunk's
-  upward-facing surface ends at the chunk's side, a strip straight down,
-  in the surface's own layers (Ulrich's chunked level of detail hangs
-  them so), three of the chunk's voxels deep or to the center of the
-  solid's lowest voxel under it, whichever comes first. Where rings
-  meet, the higher side's strip covers the crack; inside a ring the
-  strips lie in the solid. On a slope the two rings' edges lie apart
-  across the seam too, and the slope turns that into height: strips one
-  voxel deep let the sky through on steep hills at the seam of the 16-
-  and 32-stud rings (`steep_hills_show_no_sky_through_ring_seams`), and
-  four deep stood out of the coarser side's ground at some seams.
-  Stopped in the solid, a strip never hangs out under thin ground; at
-  their full depth they did, under one voxel of ground from the 16-stud
-  ring on (`skirts_never_hang_below_thin_ground`). Strips hung from
-  undersides, along the normals and two voxels deep, stood up through
-  any slab thinner than that as walls and shards (the stray triangles
-  seen from 300 studs up). Skirts are drawn only: collisions use the
-  bare 4-stud surface.
-- Water has no skirts (they'd show through it); its surface crosses as a
+- Drawn chunks are cut to their boxes: the mesher makes every quad that
+  reaches into a chunk and cuts it flat at the chunk's sides
+  (Sutherland-Hodgman, the box half open so a face on a shared plane is
+  one chunk's), so neighbors meet edge to edge on the planes between
+  them. Collisions use the bare 4-stud surface, each quad in the chunk
+  its edge starts in.
+- Where a ring meets a coarser one, both surfaces end on the plane
+  between them, each in an outline of the solid there as its voxels see
+  it. The finer chunk closes each side facing the coarser ring
+  (`lod::Rings::seams`) in that plane: across what only the finer ring
+  holds solid, a face toward the coarser side, and across what only the
+  coarser does, a face toward the finer side, the difference triangulated
+  with both outlines as constraints (a constrained Delaunay triangulation,
+  `spade`). Which side of an outline is solid comes from its edges'
+  direction; a side neither outline crosses takes what the voxels on both
+  sides of the plane agree on. A crossing of the two outlines splits the
+  finer chunk's edge there, so the closure meets it vertex to vertex; on
+  the coarser chunk's edges, those crossings and the ends of the finer
+  chunk's side are vertices lying on the edge, a crack far under a pixel. The coarser ring's outline is cut in its own chunk's frame, as
+  that chunk cuts it. This is the general form of the skirts Rook hung
+  before, strips straight down from upward-facing edges (Ulrich's chunked
+  level of detail): they closed only ground under air, and a cave's
+  ceiling or wall crossing a seam let the sky through
+  (`caves_show_no_sky_through_ring_seams`); deeper ones stood out of the
+  coarser side's ground or through thin slabs, and the closure stays
+  between the two rings' surfaces (`seams_stay_between_the_two_rings`).
+  Transvoxel's transition cells (Lengyel) need the coarse level's samples
+  to be fine ones, which voxels sampled at their centers never are. An
+  edit that changes the next level's voxels within a chunk's reach meshes
+  that chunk again.
+- Water is neither cut nor closed (a closure would show through it); its surface crosses as a
   solid's does, so open water lies at the same height in every ring. A
   coarse voxel near water holds the eight's mean reach of water's surface
   (`Voxel::water_surface_fill`: a Water voxel's occupancy, a solid's water,

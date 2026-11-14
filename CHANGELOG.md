@@ -5,6 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- Far terrain meets near terrain without cracks where a cave's ceiling, wall or overhang crosses from one ring of detail to the next, as in Studio. Rook let the sky show through there in bands and slivers. See [level of detail](docs/behavior/terrain/detail.md#how-rook-does-it).
 - Terrain darkens what it covers, as in Roblox: in places that shadow the sun through the light voxels it casts soft sun shadows, and it keeps the sky's light out of caves and from under overhangs, partly through thin terrain. Rook let the sun and the sky's light straight through terrain. See [sun](docs/behavior/lighting/sun.md#shadows).
 - A place with many parts takes much less memory. Rook kept a full copy of every property a file saves on each instance, though most hold their class default; now those keep only a note that they were set.
 - A place with many images and long sounds takes much less memory. Rook kept a second, decoded copy of every image after it went to the GPU, and every sound fully decoded however long; now an image's pixels are let go once uploaded, and a long Ogg or MP3 keeps its file and is decoded only while something plays it.

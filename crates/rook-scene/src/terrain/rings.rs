@@ -6,6 +6,7 @@
 //! chunks of the levels within their reach, so they stand on the ground
 //! that's drawn, as Studio plants them on the triangles it draws.
 
+use rook_terrain::Sides;
 use rook_terrain::lod::{LEVELS, nearest};
 
 use super::background::{Job, mesh};
@@ -57,10 +58,10 @@ impl SceneCache {
 
     pub(super) fn plan(&self, rings: Rings) -> Job {
         let levels = &self.terrain.levels;
-        let mut draw = FxHashSet::default();
+        let mut draw = FxHashMap::default();
         for level in 0..LEVELS {
             for c in rings.chunks(level, &levels[usize::from(level)], self.terrain.rows) {
-                draw.insert((level, c));
+                draw.insert((level, c), rings.seams(level, c));
             }
         }
         Job {
@@ -70,14 +71,16 @@ impl SceneCache {
         }
     }
 
-    pub(super) fn todo(&self, job: &Job) -> Vec<LevelChunk> {
-        let mut todo: Vec<LevelChunk> = job
+    /// The chunks `job` draws that aren't drawn as it asks: new ones, and
+    /// those whose sides facing the next ring changed.
+    pub(super) fn todo(&self, job: &Job) -> Vec<(LevelChunk, Sides)> {
+        let mut todo: Vec<(LevelChunk, Sides)> = job
             .draw
             .iter()
-            .filter(|k| !self.terrain.chunks.contains_key(k))
-            .copied()
+            .filter(|(k, s)| self.terrain.chunks.get(k).is_none_or(|c| c.seams != **s))
+            .map(|(k, s)| (*k, *s))
             .collect();
-        todo.sort_unstable_by_key(chunk_order);
+        todo.sort_unstable_by_key(|(k, _)| chunk_order(k));
         todo
     }
 
@@ -92,8 +95,14 @@ impl SceneCache {
         let mut tiles = FxHashSet::default();
         for m in meshes {
             let key = (m.level, m.chunk);
-            if !job.draw.contains(&key) || self.terrain.chunks.contains_key(&key) {
+            if job.draw.get(&key) != Some(&m.seams) {
                 continue;
+            }
+            match self.terrain.chunks.get(&key) {
+                Some(c) if c.seams == m.seams => continue,
+                // Its sides facing the next ring changed.
+                Some(_) => changed.extend(self.drop_chunk(key)),
+                None => {}
             }
             if grows_grass(m.level) {
                 let mut tops = GrassTops::default();
@@ -118,7 +127,7 @@ impl SceneCache {
             .terrain
             .chunks
             .keys()
-            .filter(|k| !job.draw.contains(k))
+            .filter(|k| !job.draw.contains_key(k))
             .copied()
             .collect();
         for key in gone {
@@ -146,7 +155,7 @@ fn grows_grass(level: u8) -> bool {
 }
 
 /// Mesh `chunks` on the frame's own workers, for a frame that waits.
-pub(super) fn mesh_in_place(levels: &[Grid], chunks: &[LevelChunk]) -> Vec<ChunkMesh> {
+pub(super) fn mesh_in_place(levels: &[Grid], chunks: &[(LevelChunk, Sides)]) -> Vec<ChunkMesh> {
     let meshed = rook_platform::get()
         .workers
         .map(chunks, |c| mesh(levels, std::slice::from_ref(c)));
