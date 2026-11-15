@@ -405,6 +405,34 @@ fn water_crosses_solids_it_touches_only() {
 }
 
 #[test]
+fn water_runs_on_under_dry_land_resting_on_it() {
+    use TerrainMaterial::{Rock, Water};
+    // Measured in Studio: a 3 x 3 layer of full water on full Rock, a dry
+    // Rock voxel of any occupancy (0.02 to 1) on the water's middle voxel
+    // and air around it. The water's surface stays flat under and beside
+    // it, sloping only at the layer's edge; Rook once left a hole the
+    // size of the voxel, down to the Rock floor.
+    let expected = [(0.0, 8.0), (1.0, 8.0), (1.9, 8.0), (3.0, 7.5), (4.0, 7.0)];
+    for occupancy in [4u8, 25, 63, 127, 191, 255] {
+        let mut grid = Grid::new();
+        for z in 0..3 {
+            for x in 0..3 {
+                grid.set(IVec3::new(x, 0, z), Voxel::new(Rock, 255));
+                grid.set(IVec3::new(x, 1, z), Voxel::new(Water, 255));
+            }
+        }
+        grid.set(IVec3::new(1, 2, 1), Voxel::new(Rock, occupancy));
+        for (offset, height) in expected {
+            let y = water_below(&grid, Vec3::new(6.0 + offset, 40.0, 6.3));
+            assert!(
+                y.is_some_and(|y| (y - height).abs() < 0.05),
+                "occupancy {occupancy}, {offset} from its middle: water at {y:?}, Studio's at {height}"
+            );
+        }
+    }
+}
+
+#[test]
 fn water_covers_thin_dry_land_it_surrounds() {
     use TerrainMaterial::{Grass, Rock, Water};
     // Measured: dry Grass strips at 0.35 in a water layer's voxels, just
