@@ -171,7 +171,7 @@ mesh's bounds leave them out. Counted in, one such vertex made the
 bounds NaN, and culling then hid whatever was drawn near the mesh in
 draw order at some turns of the camera. A part's box that still isn't a
 number, wherever it comes from, is culled as empty
-(`crates/rook-render/src/gpu.rs`, `Instance::world_box`).
+(`crates/rook-render/src/gpu/instance.rs`, `Instance::world_box`).
 
 *Checked against Studio 0.745* (2026-10-30): `AssetService:
 CreateEditableMeshAsync` hands scripts Studio's own decode of a file in
