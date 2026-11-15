@@ -271,6 +271,8 @@ impl DataModel {
             let w = &mut *w;
             if w.physics.is_built() {
                 w.physics.sync(&mut w.dom);
+            } else {
+                w.physics.note_ownership(&w.dom);
             }
             w.gui.note_changes(&w.dom);
             w.note_style_changes();

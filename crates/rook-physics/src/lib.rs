@@ -8,6 +8,7 @@ mod convert;
 mod explosion;
 pub mod humanoid;
 pub mod joints;
+pub mod ownership;
 pub mod query;
 mod remote;
 mod shape;
@@ -93,14 +94,17 @@ pub enum Command {
 }
 
 /// Which unanchored assemblies a world simulates (network ownership). An
-/// assembly belongs to a model when one of its parts is inside it.
+/// assembly belongs to an instance when one of its parts is that instance
+/// or inside it: a character's model, or a part a script set the owner of.
+/// The instances are sorted.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Authority {
-    /// Every one but those of these models, which clients simulate and
+    /// Every one but those of these instances, which clients simulate and
     /// send (a server).
     Except(Vec<InstanceId>),
-    /// Only those of these models (a client: its own character). With
-    /// none, the world never steps and only answers queries.
+    /// Only those of these instances (a client: its own character, and
+    /// what it was made the owner of). With none, the world never steps
+    /// and only answers queries.
     Only(Vec<InstanceId>),
 }
 
@@ -121,9 +125,9 @@ impl Authority {
             return !inside;
         }
         let owned = parts.into_iter().any(|part| {
-            let mut cur = dom.parent(part);
+            let mut cur = Some(part);
             while let Some(c) = cur {
-                if models.contains(&c) {
+                if models.binary_search(&c).is_ok() {
                     return true;
                 }
                 cur = dom.parent(c);
@@ -230,6 +234,7 @@ pub struct Physics {
     /// The WorldModels queried, each a world of its own.
     world_models: query::world_models::WorldModels,
     authority: Authority,
+    ownership: ownership::Ownership,
     /// Parts whose assemblies change hands at the next sync.
     handed_over: Vec<InstanceId>,
     saved: saved::SavedShapes,
@@ -321,6 +326,7 @@ impl Physics {
             bounds: query::bounds::PartBounds::default(),
             world_models: Default::default(),
             authority: Authority::default(),
+            ownership: ownership::Ownership::default(),
             handed_over: Vec::new(),
             saved: saved::SavedShapes::default(),
             terrain: terrain::Terrain::default(),
@@ -468,6 +474,7 @@ impl Physics {
     /// Parts are snapped to where their joints hold them.
     pub fn sync(&mut self, dom: &mut Dom) {
         profiling::scope!("Physics::sync");
+        self.note_ownership(dom);
         if self.props.is_none() {
             self.props = Props::resolve(dom);
         }

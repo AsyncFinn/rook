@@ -141,5 +141,5 @@ whole, as `SmoothGrid`, and so does a script's whole write of it.
 Changes made on a client stay there, except what Roblox takes from
 clients: the moves of a player's own character, which its client
 simulates (network ownership; see
-[who simulates a character](characters/ownership.md)), and the Tools it
+[who simulates a character](physics/ownership.md)), and the Tools it
 equips. Remote events and ClickDetector clicks also reach the server.

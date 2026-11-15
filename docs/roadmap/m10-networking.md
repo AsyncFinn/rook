@@ -55,6 +55,10 @@ character it owns. This milestone puts all of them on the wire.
    `CanSetNetworkOwnership` (123), automatic ownership by distance to
    characters, and hand-offs between owners. Anchored parts always stay
    with the server.
+   - *So far*: the API and owners scripts set, with the owner's client
+     simulating the assembly and the server taking its poses
+     ([network ownership](../behavior/physics/ownership.md)). Left:
+     automatic ownership of parts near players, and two clients.
    - *Studio questions*: the automatic ownership radius and its
      hysteresis, what happens to an assembly mid-hand-off, and what
      `Workspace.AuthorityMode` (in the current API) does, with whether

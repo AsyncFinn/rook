@@ -316,6 +316,8 @@ pub struct World {
     pub avatars_pending: FxHashSet<InstanceId>,
     /// Players whose clients simulate their characters (a server's).
     pub client_players: FxHashSet<InstanceId>,
+    /// What this client's server made it the owner of (a client's).
+    pub owned_here: crate::OwnedHere,
     /// Picks spawns and spots on them.
     pub(crate) spawn_random: crate::types::random::LRandom,
     /// PlayerGuis' `SetTopbarTransparency`, for those a script set.
@@ -391,6 +393,7 @@ impl World {
             avatars: FxHashMap::default(),
             avatars_pending: FxHashSet::default(),
             client_players: FxHashSet::default(),
+            owned_here: crate::OwnedHere::default(),
             // A fixed seed: runs repeat exactly.
             spawn_random: crate::types::random::LRandom::new(1),
             topbar_transparency: FxHashMap::default(),
@@ -460,6 +463,7 @@ impl World {
         self.avatars.remove(&id);
         self.avatars_pending.remove(&id);
         self.client_players.remove(&id);
+        self.physics.forget_network_owner(id);
         self.topbar_transparency.remove(&id);
         self.interpolations.remove(&id);
         self.camera_rolls.remove(&id);

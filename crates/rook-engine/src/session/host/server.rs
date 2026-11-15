@@ -7,6 +7,8 @@ use super::*;
 pub(super) struct Link {
     pub(super) source: Source,
     pub(super) player: InstanceId,
+    /// What the client was last told it owns.
+    pub(super) owned: rook_lua::OwnedHere,
 }
 
 /// The server end: its DataModel and what each client should see.
@@ -118,7 +120,11 @@ impl ServerHost {
             let w = self.server.runtime().world();
             (source.snapshot(&w.dom), w.signal_behavior)
         };
-        self.clients.push(Link { source, player });
+        self.clients.push(Link {
+            source,
+            player,
+            owned: rook_lua::OwnedHere::default(),
+        });
         Ok((
             self.clients.len() - 1,
             Joined {
@@ -221,6 +227,14 @@ impl ServerHost {
     /// once.
     pub fn outgoing(&mut self) -> Vec<(usize, ToClient)> {
         let mut out = Vec::new();
+        // Each client hears what it owns when that changes.
+        for (i, link) in self.clients.iter_mut().enumerate() {
+            let owned = rook_lua::owned_by(&mut self.server.runtime().world_mut(), link.player);
+            if owned != link.owned {
+                link.owned = owned.clone();
+                out.push((i, ToClient::Owned(owned)));
+            }
+        }
         // Effect calls go to the clients' renderers: those each step moved
         // into the server's render changes, then any made since. Without
         // clients (Run mode) the server's own renderer takes them.
@@ -319,7 +333,7 @@ impl ServerHost {
         [linear, angular]: [glam::Vec3; 2],
     ) {
         let mut w = self.server.runtime().world_mut();
-        if rook_lua::network_owner(&w, part) != Some(player) {
+        if rook_lua::network_owner(&mut w, part) != Some(player) {
             return;
         }
         let start = w.dom.journal().end();

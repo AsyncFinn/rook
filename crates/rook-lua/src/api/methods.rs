@@ -45,8 +45,6 @@ pub(crate) type RawMethod = fn(&Lua, InstanceId, &Args) -> ApiResult<Outcome>;
 /// one is documented in `docs/guide/stubs.md` with what will take it over;
 /// a test enforces that.
 const INERT: &[(&str, &str)] = &[
-    ("BasePart", "SetNetworkOwner"),
-    ("BasePart", "SetNetworkOwnershipAuto"),
     ("ContentProvider", "Preload"),
     // Pre-approves an asset for LoadAsset, which doesn't check approvals.
     ("InsertService", "ApproveAssetId"),

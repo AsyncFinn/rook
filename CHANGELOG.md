@@ -5,6 +5,7 @@ Every release, newest first. How versions are numbered is in
 
 ## [Unreleased]
 
+- `SetNetworkOwner` works as in Roblox: the player a server script names simulates the part's assembly on their own client, so dragging, carrying and throwing things a game hands to the player move them. Rook ignored it, and the server went on simulating every part but characters. See [network ownership](docs/behavior/physics/ownership.md).
 - ViewportFrames draw their parts as in Roblox: from their own `CurrentCamera`, lit only by their own `Ambient`, `LightColor` and `LightDirection` with their own fog, over their background and tinted by `ImageColor3`. A WorldModel's `Raycast`, shape casts and overlaps find only its own parts, and Workspace's queries and physics leave them alone. Rook drew only a ViewportFrame's background, and a WorldModel was a plain Model in Workspace's world. See [ViewportFrame](docs/behavior/gui/viewport-frames.md) and [WorldModels](docs/behavior/physics/queries.md#worldmodels).
 - An engine method given `nil` for an Instance argument does what it does in Roblox, most often nothing or a plain answer. Rook stopped the script with `Argument 1 missing or nil` for every one. See [Nil Instance arguments](docs/behavior/scripting/nil-arguments.md).
 - Camera's `GetLargestCutoffDistance`, `GetPartsObscuringTarget`, `GetRenderCFrame`, `SetRoll`, `GetRoll`, `PanUnits`, `TiltUnits`, `ZoomToExtents`, `GetPanSpeed` and `GetTiltSpeed` work as in Roblox, and `NearPlaneZ` and `CFrame.lookAt` straight up or down give what Roblox's do. Rook raised an error for these methods, gave every camera a client's near plane, and turned a vertical `lookAt` into NaN. See [camera methods](docs/behavior/characters/camera.md#camera-methods).
@@ -87,7 +88,7 @@ Every release, newest first. How versions are numbered is in
 - Glass looks like Studio's at its default quality. Rook's Glass differed.
 - Normal maps draw the right way out, color maps tint only where their alpha says, and detail maps and distance fading match Studio. Rook drew bumps sunk and covered mortar.
 - Server-simulated parts far from anything your client simulates no longer cost physics work every step. Rook moved and checked all of them. See [replication](docs/behavior/replication.md#physics).
-- Your character no longer jitters while you turn. The server sent its own slightly different copy of your pose back to you. See [who simulates a character](docs/behavior/characters/ownership.md).
+- Your character no longer jitters while you turn. The server sent its own slightly different copy of your pose back to you. See [who simulates a character](docs/behavior/physics/ownership.md).
 - Assemblies go to sleep when Roblox's do and read zero velocity asleep. Rook used its physics library's own rule. See [sleeping](docs/behavior/physics/sleeping.md).
 - NaN or infinite values in parts are handled as in Studio. Rook's server could crash on them. See [NaN and infinite values](docs/behavior/physics/nan-and-infinite-values.md).
 - Many parts flying around at once no longer slow the light voxels. Rook did extra work for every moved part on one thread. See [local lights](docs/behavior/lighting/local-lights.md).
@@ -129,7 +130,7 @@ Every release, newest first. How versions are numbered is in
 - Loading a place moves values out of the decoded file instead of copying them, taking about a third less memory at its peak. Rook held the data twice.
 - Your character feels the floor after every physics step, as Roblox's controller does, so it walks the same at any frame rate. It felt the floor once a frame.
 - Moving parts' velocities no longer go to the change log, and its readers check classes and properties more cheaply. Every reader looked at and dropped those entries.
-- Your client no longer solves joints between parts the server moves. It solved them every step for nothing. See [character ownership](docs/behavior/characters/ownership.md#in-rook).
+- Your client no longer solves joints between parts the server moves. It solved them every step for nothing. See [character ownership](docs/behavior/physics/ownership.md#in-rook).
 - The cursor over a ClickDetector is Roblox's hand, drawn into the frame as Roblox draws its cursor. Rook showed the system's pointing hand. See [the cursor](docs/behavior/gui/input.md#the-cursor).
 - Every frame shown at the display's rate steps the game at least one refresh. A frame after a slow one could step less, so walking stuttered. See [camera and controls](docs/behavior/characters/camera.md#in-rook).
 - Thin far terrain lies where Studio draws it, grass grows on the ring that draws the ground, and far rings never skip a level. Far ground sat at the wrong height, grass floated or sank, and rings could close up passages. See [terrain level of detail](docs/behavior/terrain/detail.md).
@@ -195,7 +196,7 @@ Every release, newest first. How versions are numbered is in
 
 Checked against Roblox 0.744.0.
 
-- Players spawn as characters, with Roblox's rigs, spawn locations, teams and respawning, and each client simulates its own character (M9 steps 1 and 2). There were no characters. See [rigs and looks](docs/behavior/characters/rigs.md), [spawning and teams](docs/behavior/characters/spawning.md) and [who simulates a character](docs/behavior/characters/ownership.md).
+- Players spawn as characters, with Roblox's rigs, spawn locations, teams and respawning, and each client simulates its own character (M9 steps 1 and 2). There were no characters. See [rigs and looks](docs/behavior/characters/rigs.md), [spawning and teams](docs/behavior/characters/spawning.md) and [who simulates a character](docs/behavior/physics/ownership.md).
 - Rook tracks the live Roblox version and keeps its own API database, updated by `rook-tools gen-api`. It pinned one version and used rbx-dom's database. See [CONTRIBUTING](CONTRIBUTING.md#keeping-up-with-roblox).
 - Rook downloads the client packages `rbxasset://` files come in from Roblox's CDN, as Roblox's bootstrapper does. It needed a Roblox or Studio install. See [client packages](docs/behavior/content/client-packages.md).
 - The player's settings live on `UserSettings().GameSettings`, change from the in-game menu and are saved. They weren't. See [user settings](docs/behavior/user-settings.md).

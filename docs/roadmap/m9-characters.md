@@ -51,7 +51,7 @@ the packages, as it does the CoreScripts, and never ships them (decided
    - *Done when*: joining an archive place spawns the right rig on the
      right team's SpawnLocation, and conformance cases for spawn order
      and team assignment pass.
-2. ✅ [**The client simulates its character**](../behavior/characters/ownership.md). On Roblox a player's client
+2. ✅ [**The client simulates its character**](../behavior/physics/ownership.md). On Roblox a player's client
    owns its character's assembly: it steps the physics and sends the
    result to the server. Today Rook's server simulates everything and
    a client's physics world only answers queries, so this comes before

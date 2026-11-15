@@ -9,7 +9,7 @@ machine: `rook_physics::humanoid` (the controller) and `rook_lua`'s
 reports change and fire).
 
 Measured in a Baseplate playtest on the client, which simulates its
-character ([ownership](ownership.md)), with the PlayerModule's controls
+character ([ownership](../physics/ownership.md)), with the PlayerModule's controls
 turned off and `Humanoid:Move` and `Jump` set from a render-step binding
 after them (with the controls off, they still clear `MoveDirection` and
 `Jump` every frame). Positions and velocities were logged every

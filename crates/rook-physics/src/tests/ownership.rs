@@ -226,3 +226,60 @@ fn a_client_simulating_nothing_plays_back_without_stepping() {
     assert_eq!(hit(&mut physics, &mut dom, x), Some(moving));
     assert_eq!(hit(&mut physics, &mut dom, 40.0), Some(still));
 }
+
+/// A script's owner holds the whole assembly as it was set: welding on
+/// another part, breaking a weld or anchoring a part puts it back to
+/// automatic at once; leaving Workspace and coming back keeps it
+/// (measured in Studio 0.747).
+#[test]
+fn a_set_owner_lasts_until_the_assembly_changes() {
+    let mut dom = Dom::new();
+    let player = dom.create_by_name("Player").unwrap();
+    let a = block(&mut dom, Vec3::new(0.0, 20.0, 0.0), false);
+    let b = block(&mut dom, Vec3::new(0.0, 21.0, 0.0), false);
+    let c = block(&mut dom, Vec3::new(0.0, 22.0, 0.0), false);
+    let ws = dom.get_service("Workspace").unwrap();
+    let weld = |dom: &mut Dom, x, y| {
+        let refs = |p: InstanceId| Value::Ref(Some(p.to_ref()));
+        child(
+            dom,
+            "WeldConstraint",
+            x,
+            &[("Part0", refs(x)), ("Part1", refs(y))],
+        )
+    };
+    let ab = weld(&mut dom, a, b);
+    let mut physics = Physics::new();
+    physics.set_network_owner(&dom, b, Some(Some(player)));
+    assert_eq!(
+        physics.network_setting(&dom, a),
+        Some(Some(player)),
+        "the whole assembly"
+    );
+
+    weld(&mut dom, b, c);
+    assert_eq!(physics.network_setting(&dom, a), None, "joined");
+
+    physics.set_network_owner(&dom, a, Some(None));
+    assert_eq!(
+        physics.network_setting(&dom, c),
+        Some(None),
+        "set to the server"
+    );
+    dom.destroy(ab).unwrap();
+    assert_eq!(physics.network_setting(&dom, c), None, "split");
+
+    physics.set_network_owner(&dom, a, Some(Some(player)));
+    set(&mut dom, a, "Anchored", Value::Bool(true));
+    set(&mut dom, a, "Anchored", Value::Bool(false));
+    assert_eq!(physics.network_setting(&dom, a), None, "anchored");
+
+    physics.set_network_owner(&dom, a, Some(Some(player)));
+    let storage = dom.get_service("ReplicatedStorage").unwrap();
+    dom.set_parent(a, Some(storage)).unwrap();
+    dom.set_parent(a, Some(ws)).unwrap();
+    assert_eq!(physics.network_setting(&dom, a), Some(Some(player)), "kept");
+
+    physics.forget_network_owner(player);
+    assert_eq!(physics.network_setting(&dom, a), None, "its player left");
+}

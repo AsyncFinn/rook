@@ -16,8 +16,11 @@ pub struct ClientHost {
     /// called in the same server frame), tried again after the next
     /// updates.
     pub(super) early_effects: Vec<(InstanceId, EffectCall)>,
-    /// The character pose last sent, so a still character sends nothing.
-    pub(super) last_pose: Option<ToServer>,
+    /// The pose last sent for each assembly the client owns, by the
+    /// server's id of its root, so a still one sends nothing.
+    pub(super) last_poses: FxHashMap<InstanceId, ToServer>,
+    /// What the server last said this client owns, by the server's ids.
+    pub(super) owned: rook_lua::OwnedHere,
     /// ClickDetector hovers the frame's own mouse refresh found, to send.
     pub(super) hover_out: Vec<ToServer>,
 }
@@ -80,7 +83,8 @@ impl ClientHost {
             calls: FxHashMap::default(),
             next_call: 0,
             early_effects: Vec::new(),
-            last_pose: None,
+            last_poses: FxHashMap::default(),
+            owned: rook_lua::OwnedHere::default(),
             hover_out: Vec::new(),
         })
     }
@@ -162,6 +166,9 @@ impl ClientHost {
                     (start, local, (after != before).then_some(after).flatten())
                 };
                 rt.dispatch_since(start);
+                // Parts the client was told it owns before they arrived
+                // are its own now.
+                self.apply_owned();
                 let early = std::mem::take(&mut self.early_effects);
                 Self::effect_calls(
                     &self.client,
@@ -179,6 +186,10 @@ impl ClientHost {
                     rt.drain_deferred();
                     self.follow_character(character);
                 }
+            }
+            ToClient::Owned(owned) => {
+                self.owned = owned.clone();
+                self.apply_owned();
             }
             &ToClient::ActivateTool(activation) => {
                 if let Some(tool) = self.sink.client_id(activation.tool) {
@@ -250,21 +261,51 @@ impl ClientHost {
             .set_property(camera, "CameraSubject", Value::Ref(Some(humanoid.to_ref())));
     }
 
-    /// Where the client's simulation has its character, by the server's
-    /// ids: the root part's CFrame and its assembly's velocities.
-    pub(super) fn character_pose(&self) -> Option<ToServer> {
-        let w = self.client.runtime().world();
-        let root = rook_lua::character_root(&w.dom, w.dom.local_player()?)?;
-        if !w.physics.simulates(root) {
-            return None;
+    /// Give the client's world what it owns, by its own ids: those it
+    /// has yet to hear of are taken when they arrive.
+    fn apply_owned(&self) {
+        let mut parts: Vec<InstanceId> = (self.owned.parts.iter())
+            .filter_map(|&p| self.sink.client_id(p))
+            .collect();
+        parts.sort_unstable();
+        let owned = rook_lua::OwnedHere {
+            parts,
+            character: self.owned.character,
+        };
+        let mut w = self.client.runtime().world_mut();
+        if w.owned_here != owned {
+            w.owned_here = owned;
         }
-        let velocity = |name| w.dom.vector3_property(root, name).unwrap_or_default();
-        Some(ToServer::Pose {
-            part: self.sink.server_id(root)?,
-            cframe: w.dom.cframe_property(root, "CFrame")?,
-            linear: velocity("AssemblyLinearVelocity"),
-            angular: velocity("AssemblyAngularVelocity"),
-        })
+    }
+
+    /// Where the client's simulation has each assembly it owns, by the
+    /// server's ids: its root part's CFrame and its velocities.
+    pub(super) fn owned_poses(&self) -> Vec<ToServer> {
+        let w = self.client.runtime().world();
+        let character = (w.dom.local_player()).and_then(|p| rook_lua::character_root(&w.dom, p));
+        let mut roots: Vec<InstanceId> = (character.into_iter())
+            .chain(
+                w.owned_here
+                    .parts
+                    .iter()
+                    .filter_map(|&p| w.physics.root_of(p)),
+            )
+            .filter(|&root| w.physics.simulates(root))
+            .collect();
+        roots.sort_unstable();
+        roots.dedup();
+        roots
+            .into_iter()
+            .filter_map(|root| {
+                let velocity = |name| w.dom.vector3_property(root, name).unwrap_or_default();
+                Some(ToServer::Pose {
+                    part: self.sink.server_id(root)?,
+                    cframe: w.dom.cframe_property(root, "CFrame")?,
+                    linear: velocity("AssemblyLinearVelocity"),
+                    angular: velocity("AssemblyAngularVelocity"),
+                })
+            })
+            .collect()
     }
 
     /// Remote calls, Tool moves and the character's pose since the last
@@ -272,11 +313,20 @@ impl ClientHost {
     /// the server doesn't share fails at once.
     pub fn outgoing(&mut self) -> Vec<ToServer> {
         let mut out = std::mem::take(&mut self.hover_out);
-        if let Some(pose) = self.character_pose()
-            && self.last_pose.as_ref() != Some(&pose)
-        {
-            self.last_pose = Some(pose.clone());
-            out.push(pose);
+        let poses = self.owned_poses();
+        self.last_poses.retain(|root, _| {
+            poses
+                .iter()
+                .any(|p| matches!(p, ToServer::Pose { part, .. } if part == root))
+        });
+        for pose in poses {
+            let ToServer::Pose { part, .. } = pose else {
+                continue;
+            };
+            if self.last_poses.get(&part) != Some(&pose) {
+                self.last_poses.insert(part, pose.clone());
+                out.push(pose);
+            }
         }
         for ToolMove { tool, parent, grip } in self.client.runtime().take_tool_moves() {
             if let (Some(tool), Some(parent)) =

@@ -16,8 +16,6 @@ made inert without an entry in the first table.
 
 | Member | What it does on Roblox | Taken over by |
 |---|---|---|
-| `BasePart:SetNetworkOwner` | Chooses which machine simulates the part's assembly (Rook gives each player's client its character and the server the rest; see [ownership](../behavior/characters/ownership.md)) | M10 Networking |
-| `BasePart:SetNetworkOwnershipAuto` | Returns network ownership to the engine | M10 Networking |
 | `ContentProvider:Preload` | Queues an asset for download (deprecated; not checked in Studio) | M4 step 7 |
 | `InsertService:ApproveAssetId` | Allowed a place to `LoadAsset` a specific asset (legacy) | Stays inert: Rook's `LoadAsset` doesn't check approvals or ownership |
 | `InsertService:ApproveAssetVersionId` | Same, for one asset version | Stays inert, as above |
@@ -86,7 +84,7 @@ made inert without an entry in the first table.
 | `Workspace.TouchEventsUseCollisionGroups` | Not read; `TouchesUseCollisionGroups` decides whether groups that don't collide also don't touch | The newer enum's meaning | M3 step 6 |
 | Physics: timestep | Always 240 Hz | Adaptive 240/120/60 Hz per assembly | M15 step 4 |
 | Characters | Players spawn as R15 (Roblox's rig file) or R6 rigs, or StarterCharacter, on a random SpawnLocation they may use, with teams, ForceFields and respawning after death, and names and health bars over heads ([rigs](../behavior/characters/rigs.md), [spawning](../behavior/characters/spawning.md), [names over heads](../behavior/characters/overhead.md)). Humanoids walk, jump, climb trusses and ladders, swim and follow `MoveTo` through Roblox's states ([movement](../behavior/characters/movement.md)) | Animation; health, regeneration and the body falling apart; body parts, clothes and accessories from HumanoidDescriptions; Studio's AnimationConstraint joints | M9; M11 |
-| Physics: who simulates | Each client simulates its own character; the server simulates everything else and moves clients' characters where they say, one session frame later ([ownership](../behavior/characters/ownership.md)) | `SetNetworkOwner`, automatic ownership of parts near players, and Roblox's lower send rate and delay | M10 |
+| Physics: who simulates | Each client simulates its own character and what server scripts made it the owner of; the server simulates everything else and moves what clients own where they say, one session frame later ([ownership](../behavior/physics/ownership.md)) | Automatic ownership of parts near players, and Roblox's lower send rate and delay | M10 |
 | Physics: trusses | Box colliders, in queries too | Their real shapes, if Roblox gives them any | M15 (step 1) |
 | Physics queries: result order | Regions and overlaps list parts in internal id order (usually creation order), so `maxParts`/`MaxParts` keeps the oldest | Roblox's own order (parts made in a row came back in that order, but three parts once came back as 1st, 3rd, 2nd) | M3 step 6 |
 | `FindPartsInRegion3` and parts made this frame | Found at once, like every other query | Studio sometimes missed parts made in the same frame until the next step (other times found them); rays and `GetPartBoundsInBox` found them at once | M3 step 6 |

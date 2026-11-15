@@ -265,7 +265,7 @@ impl DataModel {
     /// destroyed on the server.
     fn simulate(&mut self, dt: f64) {
         let server = self.role == Role::Server;
-        let authority = rook_lua::authority(&self.runtime.world());
+        let authority = rook_lua::authority(&mut self.runtime.world_mut());
         if authority == rook_physics::Authority::Only(Vec::new()) {
             // A client with no character: its world only answers queries.
             return;

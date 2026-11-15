@@ -2,5 +2,6 @@
 //! simulates and tweens clients play.
 
 mod client_tweens;
+mod ownership;
 mod remote_parts;
 mod session;

@@ -30,7 +30,6 @@
   - Characters
     - [Rigs and looks](behavior/characters/rigs.md): R15 and R6 bodies, StarterCharacter, avatars and HumanoidDescriptions
     - [Spawning and teams](behavior/characters/spawning.md): which spawn, where on it, team assignment, respawning
-    - [Character ownership](behavior/characters/ownership.md): the client owns it, what the server sees
     - [Overhead names and health](behavior/characters/overhead.md): which show, how far, and how they look
     - [Tools](behavior/characters/tools.md): the grip, equipping, activating, dropping and picking up, HopperBin
     - [Humanoid movement and states](behavior/characters/movement.md): standing, walking, jumping, climbing, swimming, MoveTo, the state machine
@@ -76,6 +75,7 @@
   - Physics
     - [Joints](behavior/physics/joints.md): when they take effect, `MakeJoints`
     - [Movers](behavior/physics/movers.md): BodyMovers and force constraints
+    - [Network ownership](behavior/physics/ownership.md): who simulates each assembly, and `SetNetworkOwner`
     - [Scene queries](behavior/physics/queries.md)
     - [Collision shapes](behavior/physics/collision-shapes.md): what MeshParts and unions collide, are queried and weigh as
     - [Landing](behavior/physics/landing.md): parts dropped flat stay flat

@@ -37,6 +37,9 @@ pub enum ToClient {
     /// A server script activated a Tool this client's character holds:
     /// it fires here too.
     ActivateTool(ToolActivation),
+    /// What scripts made this client the owner of now (network
+    /// ownership), sent when it changes.
+    Owned(rook_lua::OwnedHere),
 }
 
 /// From a client to the server, with the server's instance ids.
@@ -65,8 +68,9 @@ pub enum ToServer {
     /// A ProximityPrompt's hold or trigger event fired here: it fires on
     /// the server too, with the server's Player.
     Prompt(rook_lua::PromptAction),
-    /// Where the client's simulation put its character: the root part of
-    /// the assembly, which the rest of it follows (network ownership).
+    /// Where the client's simulation put an assembly it owns (its
+    /// character, or what a script made it the owner of): the root part,
+    /// which the rest of the assembly follows.
     Pose {
         part: InstanceId,
         cframe: rook_types::CFrame,
