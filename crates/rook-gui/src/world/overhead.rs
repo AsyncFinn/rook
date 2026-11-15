@@ -13,7 +13,7 @@ use rook_types::{Value, WorldPlace};
 use rustc_hash::FxHashSet;
 
 use super::Eye;
-use crate::draw::overhead::BAR_HEIGHT;
+use crate::draw::overlays::overhead::BAR_HEIGHT;
 
 /// For each line between two points, whether a part outside the ignored
 /// instances is on it. Asked once for all of a frame's lines, which ignore

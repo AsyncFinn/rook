@@ -18,7 +18,7 @@ const CORNERS: [&str; 4] = [
 /// radius goes past half the shorter side (a scale of 0.5 and an offset of
 /// 60 both make a 160 × 80 frame a pill). Inference: scale is against the
 /// shorter side, and UIScales grow the offset.
-pub(super) fn radii(dom: &Dom, id: InstanceId, p: Placed) -> Option<[f32; 4]> {
+pub(in crate::draw) fn radii(dom: &Dom, id: InstanceId, p: Placed) -> Option<[f32; 4]> {
     let corner = dom.find_first_child_of_class(id, "UICorner")?;
     let short = p.local.x.abs().min(p.local.y.abs());
     Some(CORNERS.map(|name| {
@@ -29,7 +29,7 @@ pub(super) fn radii(dom: &Dom, id: InstanceId, p: Placed) -> Option<[f32; 4]> {
     }))
 }
 
-pub(super) fn shape(p: Placed, radii: [f32; 4]) -> GuiShape {
+pub(in crate::draw) fn shape(p: Placed, radii: [f32; 4]) -> GuiShape {
     GuiShape {
         center: p.center,
         size: p.size().abs(),

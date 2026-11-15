@@ -8,7 +8,7 @@ use crate::layout::{Placed, turn};
 /// border takes the background's transparency and doesn't overlap it, and
 /// UIScales thicken it. Measured: an object with a UICorner draws no
 /// border (`rounded`).
-pub(super) fn emit(
+pub(in crate::draw) fn emit(
     dom: &Dom,
     id: InstanceId,
     (p, clip): (Placed, [f32; 4]),

@@ -13,7 +13,7 @@ use crate::style::Style;
 /// Measured: the texture alone, untinted and opaque whatever the
 /// object's `BackgroundColor3`, `BackgroundTransparency`, border and
 /// `AutoButtonColor`, within the object's box.
-pub(super) fn emit(
+pub(in crate::draw) fn emit(
     dom: &Dom,
     id: InstanceId,
     style: Style,

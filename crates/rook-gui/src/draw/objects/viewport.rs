@@ -7,14 +7,20 @@ use rook_types::{GuiQuad, GuiViewport, Paint};
 
 use crate::layout::{Placed, turn};
 
-pub(super) fn is_viewport(dom: &Dom, id: InstanceId) -> bool {
+pub(in crate::draw) fn is_viewport(dom: &Dom, id: InstanceId) -> bool {
     dom.class_name(id) == "ViewportFrame"
 }
 
 /// The picture over `p`, a pixel of it for each pixel the frame covers
 /// (observed: edges a pixel sharp), tinted by `ImageColor3` and faded by
 /// `ImageTransparency`, background and all (measured).
-pub(super) fn emit(dom: &Dom, id: InstanceId, p: Placed, clip: [f32; 4], out: &mut Vec<GuiQuad>) {
+pub(in crate::draw) fn emit(
+    dom: &Dom,
+    id: InstanceId,
+    p: Placed,
+    clip: [f32; 4],
+    out: &mut Vec<GuiQuad>,
+) {
     let alpha = 1.0 - dom.float_property(id, "ImageTransparency").unwrap_or(0.0);
     let size = p.size().abs();
     let pixels = size.ceil();

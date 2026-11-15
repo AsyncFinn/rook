@@ -3,7 +3,7 @@
 Checked against Studio 0.744 on 2026-10-26.
 
 The name and health bar over a Humanoid's head: `rook_gui`'s
-`world::overhead` (which tags show, and where) and `draw::overhead` (how
+`world::overhead` (which tags show, and where) and `draw::overlays::overhead` (how
 they look). Studio's engine draws them, not the CoreScripts (they only
 set `DisplayDistanceType` None on copies of characters, for screenshots
 and the selfie view), and makes no instances for them. Studio's

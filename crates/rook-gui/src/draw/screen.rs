@@ -8,7 +8,9 @@ use rook_dom::{Dom, InstanceId};
 use rook_types::GuiQuad;
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use super::{Draw, Text, group, messages};
+use super::objects::group;
+use super::overlays::messages;
+use super::{Draw, Text};
 use crate::images::Images;
 use crate::layout::{GUI_INSET, Layout, top_of};
 use crate::order::{self, Clip, Stacked};

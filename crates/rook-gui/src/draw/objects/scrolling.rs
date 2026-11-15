@@ -14,7 +14,7 @@ use crate::layout::{Placed, Scroll};
 
 const PARTS: [&str; 3] = ["TopImageContent", "MidImageContent", "BottomImageContent"];
 
-pub(super) fn emit(
+pub(in crate::draw) fn emit(
     dom: &Dom,
     id: InstanceId,
     p: Placed,

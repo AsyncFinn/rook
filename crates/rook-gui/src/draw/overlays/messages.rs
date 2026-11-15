@@ -8,7 +8,7 @@ use rook_dom::{Dom, InstanceId};
 use rook_types::{GuiQuad, Paint, font_from_enum};
 use rustc_hash::FxHashSet;
 
-use super::Text;
+use crate::draw::Text;
 use crate::layout::{Placed, screen_size};
 use crate::text::{self, Carets, Case, Source, Stroke, Style};
 
@@ -24,7 +24,7 @@ pub(crate) fn is_message(dom: &Dom, id: InstanceId) -> bool {
 
 /// Draw those of `candidates` (Hints and Messages that have been in the
 /// Workspace or a player) that show.
-pub(super) fn emit(
+pub(in crate::draw) fn emit(
     dom: &Dom,
     candidates: &FxHashSet<InstanceId>,
     text: &mut Text<'_>,
@@ -99,6 +99,13 @@ pub(super) fn emit(
         };
         let block = text::lay_out(text.fonts, &source, size, None);
         // Nor is the text cut to the bar.
-        super::text::emit(&block, (placed, GuiQuad::NO_CLIP), false, None, text, out);
+        crate::draw::objects::text::emit(
+            &block,
+            (placed, GuiQuad::NO_CLIP),
+            false,
+            None,
+            text,
+            out,
+        );
     }
 }

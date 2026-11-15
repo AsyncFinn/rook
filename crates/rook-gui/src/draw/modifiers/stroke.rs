@@ -48,7 +48,11 @@ fn thickness(dom: &Dom, stroke: InstanceId, p: Placed) -> f32 {
 /// The outline a UIStroke draws round `id`'s text instead of its text
 /// stroke (measured: `TextStrokeTransparency` 0 shows only the UIStroke):
 /// its color and width in pixels as drawn.
-pub(super) fn text_outline(dom: &Dom, id: InstanceId, p: Placed) -> Option<([f32; 4], f32)> {
+pub(in crate::draw) fn text_outline(
+    dom: &Dom,
+    id: InstanceId,
+    p: Placed,
+) -> Option<([f32; 4], f32)> {
     let stroke = find(dom, id).filter(|&s| on_text(dom, id, s))?;
     Some((color(dom, stroke), thickness(dom, stroke, p)))
 }
@@ -60,7 +64,7 @@ pub(super) fn text_outline(dom: &Dom, id: InstanceId, p: Placed) -> Option<([f32
 /// (`LineJoinMode` Round), cut (Bevel) or square (Miter); with one, they
 /// follow it, the outside edge's radius its radius plus the band's width
 /// outside the edge.
-pub(super) fn emit(
+pub(in crate::draw) fn emit(
     dom: &Dom,
     id: InstanceId,
     p: Placed,

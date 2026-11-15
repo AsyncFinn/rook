@@ -17,7 +17,12 @@ use crate::layout::{Placed, turn};
 /// right) through the box's center, over the length of that line inside
 /// the box, held past its ends; `Offset` moves it by that share of the
 /// box's size.
-pub(super) fn of(dom: &Dom, holder: InstanceId, p: Placed, size: Vec2) -> Option<GuiGradient> {
+pub(in crate::draw) fn of(
+    dom: &Dom,
+    holder: InstanceId,
+    p: Placed,
+    size: Vec2,
+) -> Option<GuiGradient> {
     let g = (dom.children(holder).iter().copied()).find(|&c| {
         dom.class_name(c) == "UIGradient" && dom.bool_property(c, "Enabled") != Some(false)
     })?;

@@ -4,7 +4,7 @@
 use glam::Vec2;
 use rook_types::{GuiQuad, Paint};
 
-use super::Text;
+use crate::draw::Text;
 use crate::layout::Placed;
 use crate::text::{FIELD_PX, PlacedGlyph, TextBlock};
 
@@ -18,7 +18,7 @@ const FIELDS_FROM: f32 = 34.0;
 /// when `world` or [`FIELDS_FROM`] says so; otherwise from masks at the
 /// size they're drawn. A UIStroke's `outline` (color, width) takes the
 /// place of the text's own stroke.
-pub(super) fn emit(
+pub(in crate::draw) fn emit(
     block: &TextBlock,
     (p, clip): (Placed, [f32; 4]),
     world: bool,

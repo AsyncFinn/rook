@@ -7,23 +7,15 @@
 //! clipping rules:
 //! docs/behavior/gui/layout.md#drawing, docs/behavior/gui/modern.md.
 
-mod caret;
-mod corner;
-mod frame;
-mod gradient;
-mod group;
-mod image;
-mod messages;
-pub(crate) mod overhead;
+mod modifiers;
+mod objects;
+pub(crate) mod overlays;
 mod screen;
-mod scrolling;
-mod stroke;
-mod style;
-mod text;
-mod viewport;
 
 use crate::*;
 use glam::Vec2;
+use modifiers::{corner, gradient, stroke};
+use objects::{caret, frame, group, image, scrolling, style, text, viewport};
 use rook_dom::{Dom, InstanceId};
 use rook_types::{GuiQuad, WorldCanvas};
 
@@ -36,8 +28,8 @@ pub(crate) struct Text<'a> {
     pub(crate) glyphs: &'a mut crate::text::Glyphs,
 }
 
-pub(crate) use image::all_images;
-pub(crate) use messages::is_message;
+pub(crate) use objects::image::all_images;
+pub(crate) use overlays::messages::is_message;
 pub(crate) use screen::Screen;
 
 pub(crate) fn is_image(dom: &Dom, id: InstanceId) -> bool {

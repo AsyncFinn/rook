@@ -13,21 +13,21 @@ use crate::layout::{Placed, resolve, vec2_or};
 /// object's own pixels, and from where, in the image's (or, tiled, in
 /// tiles' worth of them past its edges).
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(super) struct Piece {
-    pub(super) to: [Vec2; 2],
-    pub(super) from: [Vec2; 2],
+pub(in crate::draw) struct Piece {
+    pub(in crate::draw) to: [Vec2; 2],
+    pub(in crate::draw) from: [Vec2; 2],
 }
 
 /// How an image is drawn: its file, its color, and how it's sampled.
 #[derive(Debug, Clone, Copy)]
-pub(super) struct Look {
-    pub(super) image: GuiImage,
-    pub(super) color: [f32; 4],
-    pub(super) pixelated: bool,
-    pub(super) tiled: bool,
+pub(in crate::draw) struct Look {
+    pub(in crate::draw) image: GuiImage,
+    pub(in crate::draw) color: [f32; 4],
+    pub(in crate::draw) pixelated: bool,
+    pub(in crate::draw) tiled: bool,
 }
 
-pub(super) fn emit(
+pub(in crate::draw) fn emit(
     dom: &Dom,
     id: InstanceId,
     p: Placed,
@@ -88,7 +88,12 @@ pub(crate) fn all_images(dom: &Dom, id: InstanceId) -> impl Iterator<Item = Stri
 }
 
 /// `piece` on the screen, or nothing when it covers no area.
-pub(super) fn quad(p: Placed, piece: Piece, look: Look, clip: [f32; 4]) -> Option<GuiQuad> {
+pub(in crate::draw) fn quad(
+    p: Placed,
+    piece: Piece,
+    look: Look,
+    clip: [f32; 4],
+) -> Option<GuiQuad> {
     let [lo, hi] = piece.to;
     let size = (hi - lo) * p.scale;
     if size.x <= 0.0 || size.y <= 0.0 {

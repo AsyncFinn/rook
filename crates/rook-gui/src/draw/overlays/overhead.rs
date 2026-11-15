@@ -8,7 +8,7 @@ use std::sync::Arc;
 use glam::Vec2;
 use rook_types::{GuiQuad, Paint, WorldCanvas, font_from_enum};
 
-use super::Text;
+use crate::draw::Text;
 use crate::layout::Placed;
 use crate::text::{self, Carets, Case, Source, Stroke, Style};
 use crate::world::overhead::Look;
@@ -109,7 +109,7 @@ fn name_quads(
         scale: 1.0,
         rotation: 0.0,
     };
-    super::text::emit(&block, (placed, GuiQuad::NO_CLIP), true, None, text, out);
+    crate::draw::objects::text::emit(&block, (placed, GuiQuad::NO_CLIP), true, None, text, out);
 }
 
 /// The bar with its top at `top`, `width` wide: a translucent grey track

@@ -31,7 +31,7 @@ fn rect(p: Placed, min: Vec2, max: Vec2, color: [f32; 4], clip: [f32; 4]) -> Gui
 }
 
 /// The selection, drawn before the text.
-pub(super) fn selection(
+pub(in crate::draw) fn selection(
     dom: &Dom,
     id: InstanceId,
     block: &TextBlock,
@@ -63,7 +63,7 @@ pub(super) fn selection(
 
 /// The caret, drawn over the text in its color. Inference: a pixel wide,
 /// as tall as the line, not blinking.
-pub(super) fn caret(
+pub(in crate::draw) fn caret(
     dom: &Dom,
     id: InstanceId,
     block: &TextBlock,

@@ -8,14 +8,15 @@ use std::sync::Arc;
 use glam::Vec2;
 use rook_types::{GuiGroup, GuiQuad, Paint};
 
-use super::{Draw, corner, gradient, stroke, touches};
+use crate::draw::modifiers::{corner, gradient, stroke};
+use crate::draw::{Draw, touches};
 use crate::layout::turn;
 use crate::order::Stacked;
 
 /// Draw group `d` holding `held` (in stack order). Inference: the texture
 /// has a pixel for each pixel the group covers as drawn, and what the
 /// group holds is clipped to it.
-pub(super) fn emit(draw: &mut Draw<'_, '_>, d: &Stacked, held: &[Stacked]) {
+pub(in crate::draw) fn emit(draw: &mut Draw<'_, '_>, d: &Stacked, held: &[Stacked]) {
     let p = d.placed;
     if !touches(p, draw.canvas) {
         return;
