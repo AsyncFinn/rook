@@ -41,7 +41,9 @@ impl Runtime {
             {
                 tracing::warn!("dropping a freed instance's values failed: {e}");
             }
-            if let Err(e) = crate::api::methods::forget_callbacks(&self.lua, id) {
+            if let Err(e) =
+                crate::api::methods::instances::bindables::forget_callbacks(&self.lua, id)
+            {
                 tracing::warn!("dropping a freed instance's callbacks failed: {e}");
             }
         }

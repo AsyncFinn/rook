@@ -1,5 +1,7 @@
 # GUI selection
 
+Checked against Studio 0.747 on 2026-11-11.
+
 What moving `GuiService.SelectedObject` or `SelectedCoreObject` fires, and
 what `GuiService:Select` picks. Measured in Studio with a LocalScript on a
 client, the place's signals deferred. Pads moving the selection, the

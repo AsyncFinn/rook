@@ -47,7 +47,9 @@ pub(in crate::api::methods) fn paste_region(
     this: InstanceId,
     a: &Args,
 ) -> ApiResult<Outcome> {
-    let region = a.instance(0)?;
+    let region = a
+        .object_of(lua, 0, "TerrainRegion")?
+        .ok_or_else(|| ScriptError("region has to be a TerrainRegion".into()))?;
     let corner = v16(a.userdata::<LVector3int16>(1, "Vector3int16")?.0);
     let paste_empty = a.truthy(2);
     let (copy, size) = with_world(lua, |w| region_voxels_of(&w.dom, region));

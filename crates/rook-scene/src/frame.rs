@@ -2,8 +2,9 @@ use std::sync::Arc;
 
 use glam::Vec3;
 use rook_content::Resolver;
+use rook_content::decode::image::Image;
 use rook_engine::{DataModel, RenderChanges};
-use rook_render::{EffectSlots, MeshHash, Renderer};
+use rook_render::{EffectSlots, ImageHash, MeshHash, Renderer, TerrainVoxels};
 
 use crate::gui::GuiUpdate;
 use crate::{Floors, SceneCache, SceneChange};
@@ -71,6 +72,19 @@ impl SceneCache {
         self.apply(&world.dom, &changes)
     }
 
+    /// Give `renderer`, new or drawing something else, the whole scene
+    /// and the images it hasn't had.
+    pub fn show_all(&mut self, renderer: &mut Renderer) {
+        renderer.take_images(self.images.take_fresh());
+        renderer.set_scene(&self.scene);
+        renderer.update_terrain_voxels(self.light_voxels());
+    }
+
+    /// How many distinct images have loaded.
+    pub fn images_loaded(&self) -> usize {
+        self.images.len()
+    }
+
     /// Bring the scene up to date with a DataModel's changes and the mesh
     /// files and images that finished loading since the last frame, then
     /// the renderer with the scene and the GUI. Returns whether anything
@@ -86,7 +100,7 @@ impl SceneCache {
     /// files and images that finished loading since the last frame; what
     /// the renderer must take for it. Needs no renderer, so it runs while
     /// the render thread draws the frame before
-    /// (docs/design/architecture.md#frame-order).
+    /// (docs/design/architecture/threads-and-frames.md#frame-order).
     pub fn update(&mut self, dm: &mut DataModel, camera: Vec3) -> ToRender {
         let changes = dm.take_render_changes();
         let gui = self.update_gui(dm, Some(&changes));
@@ -111,8 +125,11 @@ impl SceneCache {
             gui,
             change,
             lights: self.lights.take_changes(),
+            viewports: self.take_viewport_changes(),
+            terrain: self.take_light_voxels(),
             effects: self.effects.take_changes(),
             dropped: self.take_dropped_meshes(),
+            images: self.images.take_fresh(),
         }
     }
 }
@@ -127,17 +144,20 @@ fn with_arrivals(change: SceneChange, loaded: Vec<usize>, lighting: bool) -> Sce
             changed: loaded,
             moved: Vec::new(),
             lighting,
+            highlights: false,
         },
         SceneChange::Parts {
             mut changed,
             moved,
             lighting: changed_lighting,
+            highlights,
         } => {
             changed.extend(loaded);
             SceneChange::Parts {
                 changed,
                 moved,
                 lighting: changed_lighting || lighting,
+                highlights,
             }
         }
         SceneChange::Full => SceneChange::Full,
@@ -154,8 +174,15 @@ pub struct ToRender {
     gui: GuiUpdate,
     change: SceneChange,
     lights: Vec<usize>,
+    /// The ViewportFrames whose looks changed (`Scene::viewports`' keys).
+    viewports: Vec<u64>,
+    /// What changed of the terrain's voxels, for the light voxels.
+    terrain: Option<TerrainVoxels>,
     effects: EffectSlots,
     dropped: Vec<MeshHash>,
+    /// Images loaded since the last hand-over: the renderer takes their
+    /// pixels, and the scene keeps none.
+    images: Vec<(ImageHash, Arc<Image>)>,
 }
 
 impl ToRender {
@@ -163,6 +190,8 @@ impl ToRender {
         self.gui.laid_out()
             || !matches!(self.change, SceneChange::None)
             || !self.lights.is_empty()
+            || !self.viewports.is_empty()
+            || self.terrain.is_some()
             || !self.effects.is_empty()
     }
 
@@ -171,16 +200,22 @@ impl ToRender {
     pub fn apply(self, cache: &SceneCache, renderer: &mut Renderer) {
         profiling::scope!("ToRender::apply");
         let scene = &cache.scene;
-        self.gui.apply(scene, renderer);
+        // First: what follows may draw them.
+        renderer.take_images(self.images);
+        self.gui.apply(renderer);
         match &self.change {
             SceneChange::None => {}
             SceneChange::Parts {
                 changed,
                 moved,
                 lighting,
+                highlights,
             } => {
                 if *lighting {
                     renderer.update_lighting(scene);
+                }
+                if *highlights {
+                    renderer.update_highlights(scene);
                 }
                 if !changed.is_empty() {
                     renderer.update_parts(scene, changed);
@@ -197,6 +232,15 @@ impl ToRender {
             if !self.effects.is_empty() {
                 renderer.update_effects(scene, &self.effects);
             }
+            // After the parts: a frame gone keeps its world while any
+            // entry is drawn in it.
+            if !self.viewports.is_empty() {
+                renderer.update_viewports(scene, &self.viewports);
+            }
+        }
+        // A new scene keeps the terrain's voxels the renderer has.
+        if let Some(voxels) = self.terrain {
+            renderer.update_terrain_voxels(voxels);
         }
         for mesh in self.dropped {
             renderer.drop_mesh(mesh);
@@ -213,6 +257,7 @@ mod tests {
             changed: Vec::new(),
             moved: vec![7],
             lighting: false,
+            highlights: false,
         }
     }
 
@@ -227,6 +272,7 @@ mod tests {
                 changed: vec![3],
                 moved: vec![7],
                 lighting: true,
+                highlights: false,
             }
         );
     }
@@ -243,6 +289,7 @@ mod tests {
                 changed: Vec::new(),
                 moved: Vec::new(),
                 lighting: true,
+                highlights: false,
             }
         );
     }

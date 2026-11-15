@@ -24,8 +24,8 @@ So what a script does before that still counts. With a weld between two
 unanchored parts, anchoring Part0 straight after it makes Part1 move, unless
 Part0 has already been read.
 
-- *Which side moves.* The root stays and the rest of the assembly comes to it.
-  An anchored part is the root, then the larger, then with equal parts Part1.
+- *Which side moves.* The root stays and the rest of the assembly comes to it
+  ([the root part](#the-root-part)).
 - *Which joints.* Weld, Snap, Glue, ManualWeld, Motor and Motor6D. Rotate,
   RotateV, RotateP and WeldConstraint leave their parts where they are.
 - *What counts as a change.* `Part0`, `Part1`, `Enabled`, `C0` and `C1`, the
@@ -33,6 +33,25 @@ Part0 has already been read.
   move, until one is let go. A joint outside Workspace or disabled does
   nothing, and one destroyed before the read never did. `Transform` waits for
   the step.
+
+## The root part
+
+Measured in Studio 0.747 on 2026-11-12 with welded pairs of loose parts;
+`rook_physics::assembly::root_of`.
+
+An anchored part is the root. Otherwise a non-Massless part wins, then the
+higher `RootPriority`, then the larger, and of equal parts the newer.
+
+- *Larger* means the larger biggest face (the product of the two longest
+  sides), not the volume: 1 × 1 × 6 beats a 2-stud cube, 1 × 1 × 3 doesn't,
+  and 2 × 2 × 1 ties 2 × 2 × 0.5.
+- A part named `HumanoidRootPart` counts ten times its face, one named
+  `Torso` five times; other body part names (`UpperTorso`, `LowerTorso`,
+  `Head`, `Right Arm`) and `Handle` count once. So a 2 × 2 × 1 root part
+  keeps a 6.2-stud cube welded to it and loses to a 6.4-stud one, and a
+  character holding a Tool stays the root unless the Handle's biggest face
+  is over 40 square studs; then equipping it moves the character to the
+  Handle, in Studio too.
 
 ## Surface joints (`MakeJoints`)
 

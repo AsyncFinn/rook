@@ -1,5 +1,5 @@
 //! The per-frame budgets of the stages whose work comes in bursts
-//! (docs/design/architecture.md#per-frame-budgets), checked once content
+//! (docs/design/architecture/threads-and-frames.md#per-frame-budgets), checked once content
 //! has loaded: a stage over its budget is flagged with how often and by
 //! how much, as engines' frame-budget checks flag a stage in CI (Unreal's
 //! `stat unit` budgets, Unity's Frame Timing checks).
@@ -19,7 +19,7 @@ const fn ms(n: u64) -> Duration {
 }
 
 /// Each budget is its queue's slice plus the stage's steady work on the
-/// heaviest place benched (a 2018-era place with 85k parts): arrivals 2 ms
+/// heaviest place benched (a place with 85k parts): arrivals 2 ms
 /// beside the scene's own following of moved parts, uploads 2 ms plus the
 /// one upload that always goes.
 pub(super) const SCENE_UPDATE: Budget = Budget {

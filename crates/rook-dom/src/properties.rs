@@ -19,7 +19,7 @@ impl Dom {
         if property == self.parent_prop {
             return Some(Value::Ref(inst.parent.map(InstanceId::to_ref)));
         }
-        if let Some(v) = inst.properties.get(&property) {
+        if let Some(v) = inst.properties.get(property) {
             return Some(v.clone());
         }
         if Some(property) == self.smooth_grid
@@ -29,6 +29,39 @@ impl Dom {
         }
         let class = inst.class;
         self.default_value(class, property)
+    }
+
+    /// Read a property where it's kept, without copying it: `f` gets the
+    /// value set, or the class default. The typed reads go through here.
+    pub fn read_property<R>(
+        &self,
+        id: InstanceId,
+        property: PropertyId,
+        f: impl FnOnce(&Value) -> Option<R>,
+    ) -> Option<R> {
+        let inst = self.slot(id)?;
+        if property == self.name_prop || property == self.parent_prop {
+            return f(&self.property(id, property)?);
+        }
+        if let Some(v) = inst.properties.get(property) {
+            return f(v);
+        }
+        if Some(property) == self.smooth_grid {
+            return f(&self.property(id, property)?);
+        }
+        self.with_default(inst.class, property, f)
+    }
+
+    /// [`Dom::read_property`], looked up by name (aliases resolved).
+    pub fn read_by_name<R>(
+        &self,
+        id: InstanceId,
+        name: &str,
+        f: impl FnOnce(&Value) -> Option<R>,
+    ) -> Option<R> {
+        let inst = self.slot(id)?;
+        let prop = self.db.find_canonical_property(inst.class, name)?;
+        self.read_property(id, prop.id, f)
     }
 
     /// Like [`Dom::property`], looked up by name (aliases resolved).
@@ -89,7 +122,7 @@ impl Dom {
         let inst = self.inst(id)?;
         // A whole `SmoothGrid` is taken without comparing it.
         let unchanged = Some(property) != self.smooth_grid
-            && match inst.properties.get(&property) {
+            && match inst.properties.get(property) {
                 Some(current) => *current == value,
                 None => self.default_is(inst.class, property, &value),
             };
@@ -106,7 +139,7 @@ impl Dom {
     pub fn is_set(&self, id: InstanceId, property: PropertyId) -> bool {
         self.instances
             .get(id)
-            .is_some_and(|i| i.properties.contains_key(&property))
+            .is_some_and(|i| i.properties.contains(property))
             || Some(property) == self.smooth_grid && self.voxels.contains_key(&id)
     }
 
@@ -116,15 +149,12 @@ impl Dom {
         if Some(property) == self.smooth_grid && self.voxels.remove(&id).is_some() {
             self.journal.push(Change::Property { id, property });
         }
-        let inst = self.inst_mut(id)?;
-        let Some(old) = inst.properties.remove(&property) else {
+        // One set to the class default reads the same once unset.
+        let Some(old) = self.inst_mut(id)?.properties.remove(property) else {
             return Ok(());
         };
         self.unlink(id, property, &old);
-        let class = self.inst(id)?.class;
-        if !self.default_is(class, property, &old) {
-            self.journal.push(Change::Property { id, property });
-        }
+        self.journal.push(Change::Property { id, property });
         Ok(())
     }
 
@@ -135,6 +165,14 @@ impl Dom {
         let value = coerce(self.db.property(property).ty, value);
         // A load into a missing instance has nowhere to go.
         let _ = self.store(id, property, value);
+    }
+
+    /// Release the room `id`'s properties grew into while a batch of them
+    /// loaded, as from a file or the server.
+    pub fn settle_properties(&mut self, id: InstanceId) {
+        if let Ok(inst) = self.inst_mut(id) {
+            inst.properties.shrink_to_fit();
+        }
     }
 
     /// Store a value, keeping the reference index up to date.
@@ -148,7 +186,15 @@ impl Dom {
             return Ok(());
         }
         let target = ref_target(&value);
-        if let Some(old) = self.inst_mut(id)?.properties.insert(property, value) {
+        let class = self.inst(id)?.class;
+        let at_default = self.default_is(class, property, &value);
+        let properties = &mut self.inst_mut(id)?.properties;
+        let old = if at_default {
+            properties.insert_default(property)
+        } else {
+            properties.insert(property, value)
+        };
+        if let Some(old) = old {
             self.unlink(id, property, &old);
         }
         if let Some(target) = target {

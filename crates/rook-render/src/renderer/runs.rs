@@ -7,6 +7,7 @@
 use std::ops::Range;
 
 use super::*;
+use detail::DetailView;
 
 /// One instanced draw's arguments, laid out as indirect draws read them.
 #[repr(C)]
@@ -73,7 +74,7 @@ pub(crate) struct Run {
 }
 
 /// A pass's draws: their arguments, in runs.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub(crate) struct Runs {
     pub(crate) args: Vec<DrawArgs>,
     pub(crate) runs: Vec<Run>,
@@ -81,9 +82,23 @@ pub(crate) struct Runs {
     /// world GUI's canvases up to `.1` (`Runs::cut`).
     pub(crate) cuts: Vec<(usize, usize)>,
     pub(crate) counts: PassCounts,
+    /// The camera mesh files' levels of detail are picked for: its
+    /// world's (the shadow pass draws the camera's levels too).
+    detail: DetailView,
 }
 
 impl Runs {
+    /// No draws yet, picking levels of detail for `detail`.
+    pub(crate) fn seen_from(detail: DetailView) -> Self {
+        Self {
+            args: Vec::new(),
+            runs: Vec::new(),
+            cuts: Vec::new(),
+            counts: PassCounts::default(),
+            detail,
+        }
+    }
+
     /// Draw the world GUI's canvases up to `canvases` before the next run.
     pub(crate) fn cut(&mut self, canvases: usize) {
         self.cuts.push((self.runs.len(), canvases));
@@ -118,7 +133,7 @@ impl Renderer {
         let (mut start, mut level) = (instances.start, None);
         for n in instances.clone() {
             let (entry, world) = picked(n);
-            let Some(now) = self.detail.pick(entry, mesh, world) else {
+            let Some(now) = self.detail.pick(&runs.detail, entry, mesh, world) else {
                 continue;
             };
             if let Some(was) = level
@@ -228,11 +243,13 @@ impl Renderer {
         starts
     }
 
-    /// Record a pass's runs, whose arguments start at draw `base` of the
-    /// indirect buffer, calling `cut` at each of its cuts with how many
-    /// canvases to have drawn. Group 2 is bound here only without a table.
+    /// Record a pass's runs of `world`'s instances, whose arguments start
+    /// at draw `base` of the indirect buffer, calling `cut` at each of its
+    /// cuts with how many canvases to have drawn. Group 2 is bound here
+    /// only without a table.
     pub(crate) fn record(
         &self,
+        world: &World,
         pass: &mut wgpu::RenderPass<'_>,
         runs: &mut Runs,
         base: usize,
@@ -264,7 +281,7 @@ impl Renderer {
                 stencil = stencil % 255 + 1;
                 pass.set_stencil_reference(stencil);
             }
-            let Some(instances) = self.instance_buffer(run.source) else {
+            let Some(instances) = self.instance_buffer(world, run.source) else {
                 continue;
             };
             let pipe = (run.pipe, run.double_sided);
@@ -332,11 +349,11 @@ impl Renderer {
         }
     }
 
-    fn instance_buffer(&self, source: Source) -> Option<&wgpu::Buffer> {
+    fn instance_buffer<'a>(&'a self, world: &'a World, source: Source) -> Option<&'a wgpu::Buffer> {
         match source {
-            Source::Opaque => self.opaque.buffer(),
-            Source::Layers => self.layers.buffer(),
-            Source::Transparent => self.transparent.buffer(),
+            Source::Opaque => world.opaque.buffer(),
+            Source::Layers => world.layers.buffer(),
+            Source::Transparent => world.transparent.buffer(),
             Source::Highlights => self.highlights.buffer(),
         }
     }

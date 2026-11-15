@@ -55,15 +55,15 @@ Rook is a Cargo workspace of small crates whose dependencies only point downward
 
 Most features span several crates: the rules in `rook-types` or the feature's own crate, the script side in `rook-lua`, the engine glue in `rook-engine`, and drawing in `rook-scene` (DOM to draw list) and `rook-render`.
 
-- **The Luau API:** `rook-lua/src/api/`. A member function (`Instance:FindFirstChild`, `Workspace:Raycast`) is in `api/methods/<topic>.rs` (registered in `methods.rs`); Luau sources such methods load are in `api/luau/`. A property's script-side behavior is in `api/properties.rs`, member lookup in `api/instance/`, globals in `api/globals.rs`, datatypes (`CFrame`, `Ray`, ...) in `rook-lua/src/types/`.
+- **The Luau API:** `rook-lua/src/api/`. A member function (`Instance:FindFirstChild`, `Workspace:Raycast`) is in its topic's file under `api/methods/` (`instances/tree.rs`, `physics/queries.rs`), listed in that topic's `native` table, which `methods.rs` chains with the others; Luau sources such methods load are in `api/luau/`. A property's script-side behavior is in `api/properties.rs`, member lookup in `api/instance/`, globals in `api/globals.rs`, datatypes (`CFrame`, `Ray`, ...) in `rook-lua/src/types/`.
 - **Part shapes:** the shapes and their rules in `rook-types/src/part/` (`shape.rs`, `truss.rs`, `mesh.rs`, `surface.rs`); the draw meshes in `rook-render/src/mesh/` (`shapes.rs`, `head.rs`, `truss.rs`, `files.rs`); collision shapes in `rook-physics/src/shape.rs` and `shape/`; what a part draws in `rook-scene/src/look.rs`.
 - **Materials:** `rook-types/src/part/material.rs` (the enum, and how each looks in `material/looks.rs`); their textures in `rook-content/src/materials.rs`; MaterialVariants and SurfaceAppearances in `rook-scene/src/look/materials.rs`; density and friction in `rook-physics/src/contacts/materials.rs`; terrain's in `rook-terrain/src/material.rs`.
 - **Lighting:** the sun and sky in `rook-scene/src/lighting.rs`, local lights in `rook-scene/src/lighting/local.rs`; what the renderer takes in `rook-render/src/scene/lighting.rs`; drawing in `rook-render/src/renderer/lighting/` (local lights, shadow map), `renderer/tonemap.rs` and `shaders/lighting.wgsl`.
 - **Effects** (Fire, Smoke, Sparkles, ParticleEmitter, Beam, Trail, Explosion): reading them in `rook-scene/src/effects/`; the simulation in `rook-render/src/effects/`, drawing in `renderer/effects/`; their methods in `rook-lua/src/api/methods/effects.rs`.
-- **Sounds:** decoding in `rook-content/src/decode/audio.rs`; the mixer, effects and 3D falloff in `rook-audio`; playback in `rook-engine/src/bridges/sounds/`; Sound's methods in `rook-lua/src/api/methods/sound.rs`, the Audio API's in `api/methods/audio_api.rs` with its shared rules in `rook-lua/src/audio_api.rs`.
+- **Sounds:** decoding in `rook-content/src/decode/audio.rs`; the mixer, effects and 3D falloff in `rook-audio`; playback in `rook-engine/src/bridges/sounds/`; Sound's methods in `rook-lua/src/api/methods/audio/sound.rs`, the Audio API's in `api/methods/audio/audio_api.rs` with its shared rules in `rook-lua/src/audio_api.rs`.
 - **Terrain:** voxels, meshing, materials and grass in `rook-terrain`; drawing in `rook-scene/src/terrain.rs`; collision in `rook-physics/src/shape/terrain.rs`; the Terrain API in `rook-lua/src/api/methods/terrain.rs`.
 - **Content** (meshes, images, sounds by URL): parsing references in `rook-content/src/reference.rs`, finding the bytes in `resolver/` (cache, the install, asset delivery, kept content), background loading in `loader.rs`, decoding in `decode/`; the drawing side in `rook-scene/src/content/`.
-- **GUI:** layout in `rook-gui/src/layout.rs` and `layout/` (UI layouts, constraints, `AutomaticSize`, padding), drawing order, clipping and borders in `rook-gui/src/draw.rs`, what the renderer takes in `rook-types/src/gui.rs`; script reads in `rook-lua/src/api/instance/access.rs`, GUI methods in `rook-lua/src/api/methods/gui.rs`; the GUI pass in `rook-render/src/renderer/gui.rs`.
+- **GUI:** layout in `rook-gui/src/layout.rs` and `layout/` (UI layouts, constraints, `AutomaticSize`, padding), drawing order, clipping and borders in `rook-gui/src/draw.rs`, what the renderer takes in `rook-types/src/gui.rs`; script reads in `rook-lua/src/api/instance/access.rs`, GUI methods in `rook-lua/src/api/methods/gui/`; the GUI pass in `rook-render/src/renderer/gui.rs`.
 - **The window and the frame loop:** `rook-client/src/window.rs` (the frame's order) and `window/`, the render thread in `render_thread.rs`, Play and Run modes in `game.rs`; the server's thread in `rook-engine/src/session/server_thread.rs`; a window's surface in `rook-render/src/window_surface.rs`.
 - **Input:** the window's keys and camera in `rook-client/src/window/` (`keys.rs`, `camera.rs`); clicks and the mouse in `rook-engine/src/bridges/input.rs`; UserInputService in `rook-lua/src/api/methods/input.rs`.
 - **Replication:** `rook-net` (`source.rs` on the server, `sink.rs` on the client, `replicator.rs`); the play session in `rook-engine/src/session/host.rs`; remotes in `rook-lua/src/api/methods/remotes.rs` and `rook-lua/src/net.rs`.
@@ -82,7 +82,13 @@ Failures keep their reason until something reports it. Return typed errors (`thi
 
 ### Comments
 
-Comments say why: a Roblox behavior, a measurement, a non-obvious reason, or an Observed/Measured/Inference tag, never what the next line already says. Findings have one home, `docs/behavior/<area>/<topic>.md`: a module's header says what it does and links there, and only one-line tagged rules stay beside the code that implements them.
+Comments say why: a Roblox behavior with its Observed/Measured/Inference tag, a measurement, a unit or range, an invariant a change must keep, or the reason the obvious alternative is wrong. Never what the next line already says. Put them at the point of use, beside the code they constrain: a reader, a person or a coding agent, often sees one function rather than the whole module.
+
+- **Module headers** say what the module is for and the design reasons a change to it must respect, and link its page: a reader opening one file gets its bearings there. Findings have one home, `docs/behavior/<area>/<topic>.md`; only one-line tagged rules stay beside the code. No tables of contents (the module list is one).
+- **Item docs** on public API add to the signature; inside a crate they're for units, ranges, what a return value means, an invariant or a reason. A doc that restates the name in prose goes; if the code can't be read without one, rename it.
+- **Tests** are specified by their names. A doc says only what the name can't: why the case matters, the bug it guards against, the Studio measurement it pins.
+- **No project status:** no lists of what exists, no "not yet", "nothing uses this yet" or milestone numbers. They go stale; missing work gets a marker.
+- **Markers**, so `rg "TODO:"` finds every one: `TODO:` where missing work will land, saying what's missing and what unblocks it (`// TODO: pass the seat once the controller reports it.`); `FIXME:` on a known bug left in place, saying what goes wrong; `SAFETY:` on every `unsafe`. A deliberate difference from Roblox is an Approximation, tagged as one, not a marker. A marker goes in the change that does its work.
 
 ### Docs
 
@@ -170,9 +176,11 @@ Rook is a rolling release: work lands on main all the time, and a release is a s
 - **Minor** (`0.N.0`): the weekly release, when anything new landed since the last one.
 - **Patch** (`0.N.y`): fixes only. Either a week in which only fixes landed, or a hotfix to the latest release: branch from its tag, cherry-pick the fix (already on main), tag `v0.N.y` and delete the branch. Patches only ever go on top of the latest release; older releases aren't maintained.
 - Builds between releases are development builds of the next version.
-- Builds for other people are made with `cargo dist` and nothing else ([build profiles](#build-profiles)).
+- Builds for other people are made with `cargo dist` and nothing else ([build profiles](#build-profiles)). Releases are built by CI: pushing a `vX.Y.Z` tag runs `cargo xtask package` on GitHub's machines, so no one's local paths end up in the programs, and leaves a draft GitHub release with the zipped folder and that version's changelog section, published by hand.
 - Commits go to GitHub as they land, so [Unreleased] on GitHub shows what the next release will hold.
 - Before 1.0, any release may break things. 1.0 comes when Rook commits to a stable public interface: its build settings, saved data and network protocol.
+
+A changelog entry says what Rook did before and what it does now, in one or two plain sentences, with no specifics: no places or games (not even hinted at), no example values or inputs, no story of the cause, and no measurements or numbers. The details belong in the behavior doc, which the entry may link with a "See ..." pointer.
 
 Releases before 2026-10-25 were renumbered to one per week then (the old tags' commits are kept as `refs/backup/tags-2026-10-25/*`); each week's release lists its old releases as dated sections.
 
@@ -200,7 +208,7 @@ Run the full check (format, lints, tests and dependency bans; it needs [cargo-de
 ./scripts/check.sh
 ```
 
-On Windows, use `scripts\check.ps1`.
+On Windows, use `scripts\check.ps1`. CI runs the same script on every pull request and every push to main ([.github/workflows/check.yml](.github/workflows/check.yml)).
 
 Format tests use [rojo-rbx/rbx-test-files](https://github.com/rojo-rbx/rbx-test-files), which isn't committed:
 

@@ -10,6 +10,9 @@ pub struct Source {
     /// Values this client sent the server itself (its character's pose),
     /// which it isn't sent back while the server's value is still that.
     echoes: FxHashMap<(InstanceId, PropertyId), Value>,
+    /// Server instances this client made its own copy of first (by the
+    /// client's id), adopted when they're first sent.
+    adopted: FxHashMap<InstanceId, InstanceId>,
 }
 
 impl Source {
@@ -18,7 +21,15 @@ impl Source {
             cursor: 0,
             player,
             echoes: FxHashMap::default(),
+            adopted: FxHashMap::default(),
         }
+    }
+
+    /// The client made `client`, its own copy of server instance `server`
+    /// (in the client's ids): it keeps that one instead of receiving a
+    /// second.
+    pub fn adopt(&mut self, server: InstanceId, client: InstanceId) {
+        self.adopted.insert(server, client);
     }
 
     /// The server took `value` for `property` from this client: a change
@@ -78,21 +89,31 @@ impl Source {
     pub fn updates(&mut self, server: &Dom) -> Vec<Update> {
         profiling::scope!("Source::updates");
         let mut out = Vec::new();
-        let mut destroyed = Vec::new();
+        let mut destroyed = rustc_hash::FxHashSet::default();
+        let mut adopted = Vec::new();
         let visible = |id| self.visible(server, id);
         let changes = server.journal().since(self.cursor);
         rook_types::count!(JournalReadReplication, changes.len());
         for change in changes {
             match change {
-                Change::Reparented { id, .. } => out.push(match server.parent(*id) {
-                    Some(parent) if visible(*id) => Update::Place {
-                        parent,
-                        tree: self.node(server, *id),
-                    },
-                    _ => Update::Hide(*id),
-                }),
+                Change::Reparented { id, .. } => {
+                    if let Some(&client) = self.adopted.get(id) {
+                        adopted.push(*id);
+                        out.push(Update::Adopt {
+                            server: *id,
+                            client,
+                        });
+                    }
+                    out.push(match server.parent(*id) {
+                        Some(parent) if visible(*id) => Update::Place {
+                            parent,
+                            tree: self.node(server, *id),
+                        },
+                        _ => Update::Hide(*id),
+                    });
+                }
                 Change::Destroying(id) => {
-                    destroyed.push(*id);
+                    destroyed.insert(*id);
                     out.push(Update::Destroying(*id));
                 }
                 // The property first: most entries are ones no client
@@ -160,8 +181,12 @@ impl Source {
                 _ => {}
             }
         }
+        for id in adopted {
+            self.adopted.remove(&id);
+        }
         if !destroyed.is_empty() {
             self.echoes.retain(|(id, _), _| !destroyed.contains(id));
+            self.adopted.retain(|id, _| !destroyed.contains(id));
         }
         self.cursor = server.journal().end();
         out
@@ -172,8 +197,8 @@ impl Source {
         let inst = server.get(id).expect("visible instance exists");
         let mut properties: Vec<(PropertyId, Value)> = inst
             .properties()
-            .keys()
-            .filter_map(|&p| Some((p, replicated_value(server, id, p)?)))
+            .ids()
+            .filter_map(|p| Some((p, replicated_value(server, id, p)?)))
             // A Terrain's voxels, which it doesn't hold as a property:
             // a new copy takes them whole.
             .chain(server.voxel_property(id))

@@ -3,7 +3,7 @@
 Checked against Studio 0.744 on 2026-10-26.
 
 Where `GetPivot` and `PivotTo` measure from: `rook_lua`'s
-`api::methods::models`.
+`api::methods::physics::models`.
 
 - A part's pivot is its `CFrame` times its `PivotOffset`.
 - A Model with a `PrimaryPart` pivots on that part's pivot, whatever its

@@ -20,6 +20,8 @@ struct Look {
     cursor: (f32, f32),
     viewport: (u32, u32),
     target_filter: Option<InstanceId>,
+    /// The local player's Character, which the mouse looks through.
+    character: Option<InstanceId>,
     /// [`rook_physics::Physics::generation`].
     world: u64,
 }
@@ -75,6 +77,7 @@ impl DataModel {
             let mut w = self.runtime.world_mut();
             let w = &mut *w;
             let target_filter = w.dom.ref_property(mouse, "TargetFilter");
+            let character = (w.dom.local_player()).and_then(|p| w.dom.ref_property(p, "Character"));
             w.physics.sync(&mut w.dom);
             let look = Look {
                 camera,
@@ -82,6 +85,7 @@ impl DataModel {
                 cursor: w.input.mouse,
                 viewport: self.input.viewport,
                 target_filter,
+                character,
                 world: w.physics.generation(),
             };
             match self.input.under {
@@ -91,13 +95,16 @@ impl DataModel {
                     {
                         self.input.looks += 1;
                     }
-                    // TargetFilter and what it contains are ignored;
-                    // otherwise the mouse sees what legacy rays see:
+                    // TargetFilter and the local player's whole Character
+                    // model are ignored (measured: a click passes through
+                    // one's own body, accessories and any part put in the
+                    // model, from any camera, but not an NPC's); otherwise
+                    // the mouse sees what legacy rays see:
                     // parts without CanCollide and see-through ones, not
                     // those without CanQuery either (measured). Their
                     // collision group's rule is Inference.
                     let filter = rook_physics::Filter::legacy_ray(
-                        target_filter.into_iter().collect(),
+                        target_filter.into_iter().chain(character),
                         false,
                     );
                     let hit = w
@@ -105,13 +112,18 @@ impl DataModel {
                         .raycast(&mut w.dom, origin, dir * MOUSE_RANGE, &filter);
                     // Clicks pass through invisible parts that don't
                     // collide; the same TargetFilter applying is Inference.
-                    let clicks = rook_physics::Filter {
-                        skip_invisible_ghosts: true,
-                        ..filter
+                    // The same ray, unless what it hit is such a part: only
+                    // then is there something else to find.
+                    let through = hit.is_some_and(|h| w.physics.is_invisible_ghost(&w.dom, h.part));
+                    let click_hit = if through {
+                        let clicks = rook_physics::Filter {
+                            skip_invisible_ghosts: true,
+                            ..filter
+                        };
+                        (w.physics).raycast(&mut w.dom, origin, dir * MOUSE_RANGE, &clicks)
+                    } else {
+                        hit
                     };
-                    let click_hit =
-                        w.physics
-                            .raycast(&mut w.dom, origin, dir * MOUSE_RANGE, &clicks);
                     self.input.under = Some(Under {
                         look,
                         hit,
@@ -123,7 +135,11 @@ impl DataModel {
         };
         if looked {
             let hit = hit.map(|h| (h.part, h.position));
-            self.write_mouse(mouse, (origin, dir, camera), hit);
+            // A held Tool's Mouse sees what the PlayerMouse does (Inference:
+            // its own TargetFilter isn't applied).
+            for m in self.mice() {
+                self.write_mouse(m, (origin, dir, camera), hit);
+            }
         }
 
         // Measured: a detector's hover goes on under an Active GUI object.

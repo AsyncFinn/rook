@@ -11,7 +11,7 @@ use anyhow::Context;
 use rook_engine::console::repl::Side;
 use rook_engine::session::host::{ClientHost, ServerHost};
 use rook_engine::session::server_thread::{ServerThread, Started, Starting};
-use rook_engine::user_settings::PlayerSettings;
+use rook_engine::settings::user_settings::PlayerSettings;
 use rook_engine::{DataModel, InputEvent, Options, console};
 #[cfg(feature = "repl")]
 use rook_lua::MessageType;
@@ -36,7 +36,6 @@ enum Mode {
 #[derive(Debug)]
 pub struct Game {
     mode: Mode,
-    /// The camera the place was saved with.
     pub(crate) saved_camera: Camera,
     /// Server and client step times, for `--bench` and the readout.
     pub(crate) server_steps: Times,
@@ -81,6 +80,7 @@ enum Stage {
 struct Finish {
     options: Options,
     script: Option<String>,
+    client_script: Option<String>,
     load_start: std::time::Instant,
     name: String,
 }
@@ -96,6 +96,9 @@ pub struct Setup {
     /// The `--script` file's source, run as a server script once the
     /// place starts.
     pub script: Option<String>,
+    /// The `--client-script` file's source, run as a LocalScript once the
+    /// player has joined (Play mode only).
+    pub client_script: Option<String>,
     /// Sounds load in the background while the game runs, as in Roblox,
     /// unless this holds each frame until they have.
     pub wait_for_sounds: bool,
@@ -130,6 +133,7 @@ impl Loading {
             finish: Finish {
                 options,
                 script,
+                client_script: setup.client_script.clone(),
                 load_start,
                 name: place_name(path),
             },
@@ -169,6 +173,12 @@ impl Finish {
     ) -> anyhow::Result<Game> {
         let joined = started.joined.context("the player didn't join")?;
         let client = ClientHost::new(&joined, &self.options, present)?;
+        if let Some(source) = &self.client_script {
+            client
+                .client()
+                .run_extra_script(source)
+                .map_err(anyhow::Error::msg)?;
+        }
         Ok(self.game(
             Mode::Play {
                 server,
@@ -233,54 +243,17 @@ impl Game {
         }
     }
 
+    /// Whether the window's DataModel has anything a mixer could play
+    /// ([`DataModel::hears_anything`]).
+    pub(crate) fn hears_anything(&self) -> bool {
+        self.view().hears_anything()
+    }
+
     /// What the window's DataModel is playing, for the mixer: its sounds,
     /// their SoundGroups, `SoundService.AmbientReverb` and the audio API's
     /// graph.
-    pub(crate) fn sounds(&self) -> rook_audio::Mix<rook_dom::InstanceId> {
-        use rook_audio::spatial::{attenuation, pan};
-        let view = self.view();
-        let listener = view.sound_listener();
-        let (at, facing) = (listener.cframe.position, listener.cframe.rotation);
-        let playing = view.playing_sounds();
-        let groups = view.sound_groups(&playing);
-        let sounds = playing
-            .into_iter()
-            .map(|s| {
-                // A global sound is heard at its Volume on both sides; a 3D
-                // one by distance and direction from the listener.
-                let gains = match s.emitter {
-                    None => [s.volume; 2],
-                    Some(e) => {
-                        let offset = e.position - at;
-                        let fade = attenuation(
-                            e.roll_off,
-                            offset.length(),
-                            e.min,
-                            e.max,
-                            listener.rolloff_scale,
-                        );
-                        pan(facing.transpose() * offset).map(|g| g * fade * s.volume)
-                    }
-                };
-                rook_audio::Play {
-                    key: s.id,
-                    audio: s.audio,
-                    position: s.position,
-                    gains,
-                    speed: s.speed,
-                    looped: s.looped,
-                    generation: s.generation,
-                    effects: s.effects,
-                    group: s.group,
-                }
-            })
-            .collect();
-        rook_audio::Mix {
-            sounds,
-            groups,
-            ambient: listener.ambient_reverb,
-            graph: view.audio_graph(),
-        }
+    pub(crate) fn sounds(&self) -> std::cell::Ref<'_, rook_audio::Mix<rook_dom::InstanceId>> {
+        self.view().mix()
     }
 
     /// Send window input to the local player's client (Run mode has no player).
@@ -420,7 +393,7 @@ impl Game {
 
     /// The player's settings as the local player's client has them (Run
     /// mode has no player to change them).
-    pub fn player_settings(&self) -> Option<PlayerSettings> {
+    pub fn player_settings(&self) -> Option<&PlayerSettings> {
         match &self.mode {
             Mode::Play { client, .. } => client.client().player_settings(),
             Mode::Run(_) => None,

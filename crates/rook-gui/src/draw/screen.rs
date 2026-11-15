@@ -1,6 +1,6 @@
 //! The screen drawn in pieces, one per stacked object (a CanvasGroup's
 //! holding its group), each kept until what it draws changes
-//! (docs/design/architecture.md#redrawing-what-changed).
+//! (docs/design/architecture/gui.md#redrawing-what-changed).
 
 use std::sync::Arc;
 
@@ -70,7 +70,7 @@ pub(crate) struct Screen {
     /// changed (or a UI component's, drawn by its parent).
     placed: FxHashSet<InstanceId>,
     repaint: FxHashSet<InstanceId>,
-    /// The Hints and Messages over it all, once drawn.
+    /// The Hints and Messages under it all, once drawn.
     messages: Option<Arc<[GuiQuad]>>,
     /// The pieces last given, which a renderer tells apart by pointer.
     drawn: Option<Arc<[Arc<[GuiQuad]>]>>,
@@ -101,8 +101,23 @@ impl Screen {
         self.drawn = None;
     }
 
-    /// The pieces the local player's ScreenGuis draw, bottom first, then
-    /// the Hints and Messages among `messages` that show, over them.
+    /// The shown ScreenGuis' stacks, bottom first, brought up to date with
+    /// what was laid out since: what the screen draws, which hit-testing
+    /// reads as it is rather than stacking every screen again.
+    pub(crate) fn stacks(
+        &mut self,
+        dom: &Dom,
+        layout: &Layout,
+    ) -> impl DoubleEndedIterator<Item = &[Stacked]> {
+        self.apply(dom, layout);
+        let collectors = self.collectors.as_deref().unwrap_or_default();
+        collectors.iter().map(|c| &c.stack[..])
+    }
+
+    /// The Hints and Messages among `messages` that show, then the pieces
+    /// the local player's ScreenGuis draw over them (measured: every
+    /// ScreenGui, the top bar's too, whatever its DisplayOrder), bottom
+    /// first.
     pub(crate) fn draw(
         &mut self,
         dom: &Dom,
@@ -116,17 +131,25 @@ impl Screen {
         }
         self.apply(dom, layout);
         let collectors = self.collectors.as_ref().expect("stacked above");
+        let mut list: Vec<Arc<[GuiQuad]>> = Vec::new();
+        let bars = self.messages.get_or_insert_with(|| {
+            let mut quads = Vec::new();
+            messages::emit(dom, messages, text, &mut quads);
+            quads.into()
+        });
+        if !bars.is_empty() {
+            list.push(bars.clone());
+        }
         let mut draw = Draw {
             dom,
             layout,
             text,
             images,
             out: &mut Vec::new(),
-            fields: false,
+            world: false,
             focus,
             canvas: GuiQuad::NO_CLIP,
         };
-        let mut list: Vec<Arc<[GuiQuad]>> = Vec::new();
         for c in collectors {
             for (i, s) in c.stack.iter().enumerate() {
                 if c.group_of.contains_key(&s.id) {
@@ -152,14 +175,6 @@ impl Screen {
                     list.push(piece.clone());
                 }
             }
-        }
-        let bars = self.messages.get_or_insert_with(|| {
-            let mut quads = Vec::new();
-            messages::emit(dom, messages, draw.text, &mut quads);
-            quads.into()
-        });
-        if !bars.is_empty() {
-            list.push(bars.clone());
         }
         let drawn: Arc<[Arc<[GuiQuad]>]> = list.into();
         self.drawn = Some(drawn.clone());
@@ -207,23 +222,50 @@ fn restack_kept(
     pieces: &mut FxHashMap<InstanceId, Arc<[GuiQuad]>>,
     restack: &FxHashSet<InstanceId>,
 ) {
-    let mut before: FxHashMap<InstanceId, (Stacked, InstanceId)> = FxHashMap::default();
+    let mut before = Before::default();
     for c in collectors.iter().filter(|c| restack.contains(&c.root)) {
-        before.extend(c.stack.iter().map(|s| (s.id, (*s, c.drawer(s.id)))));
+        before.note(c, 0..c.stack.len());
     }
     *collectors = stack_all(dom, layout, restack, std::mem::take(collectors));
     for c in collectors.iter().filter(|c| restack.contains(&c.root)) {
-        for s in &c.stack {
+        before.compare(c, 0..c.stack.len(), pieces);
+    }
+    before.drop_gone(pieces);
+}
+
+/// Stack entries as they were, with the piece drawing each, so only the
+/// pieces of entries that changed are drawn again.
+#[derive(Default)]
+struct Before(FxHashMap<InstanceId, (Stacked, InstanceId)>);
+
+impl Before {
+    fn note(&mut self, c: &Collector, run: std::ops::Range<usize>) {
+        let entries = c.stack[run].iter();
+        (self.0).extend(entries.map(|s| (s.id, (*s, c.drawer(s.id)))));
+    }
+
+    /// Drop the pieces of `c`'s entries in `run` that changed, or moved to
+    /// another group.
+    fn compare(
+        &mut self,
+        c: &Collector,
+        run: std::ops::Range<usize>,
+        pieces: &mut FxHashMap<InstanceId, Arc<[GuiQuad]>>,
+    ) {
+        for s in &c.stack[run] {
             let drawer = c.drawer(s.id);
-            if before.remove(&s.id) != Some((*s, drawer)) {
+            if self.0.remove(&s.id) != Some((*s, drawer)) {
                 pieces.remove(&drawer);
             }
         }
     }
-    // No longer shown: their pieces, and the groups that drew them.
-    for (id, (_, drawer)) in before {
-        pieces.remove(&id);
-        pieces.remove(&drawer);
+
+    /// No longer shown: their pieces, and the groups that drew them.
+    fn drop_gone(self, pieces: &mut FxHashMap<InstanceId, Arc<[GuiQuad]>>) {
+        for (id, (_, drawer)) in self.0 {
+            pieces.remove(&id);
+            pieces.remove(&drawer);
+        }
     }
 }
 
@@ -246,9 +288,9 @@ fn stack_all(
         .collect()
 }
 
-/// Place `id`'s stack entries again where `layout` puts them now, and drop
-/// the pieces that changed. False when what shows changed, so its
-/// ScreenGui must be stacked again.
+/// Stack `id` and what it holds again where `layout` puts them now, and
+/// drop the pieces that changed. False when only stacking its ScreenGui
+/// again covers it.
 fn place(
     dom: &Dom,
     layout: &Layout,
@@ -259,24 +301,91 @@ fn place(
     let Some(c) = collectors.iter_mut().find(|c| c.at.contains_key(&id)) else {
         // Not drawn before: shown now, unless something above it hides it
         // (a spinner on a hidden loading screen), or in no ScreenGui at all.
-        return hidden_above(dom, id);
-    };
-    let Some(now) = order::restacked(dom, layout, &c.stack[c.at[&id]]) else {
+        if hidden_above(dom, id) {
+            return true;
+        }
+        let mut above = dom.parent(id);
+        while let Some(a) = above {
+            if let Some(c) = collectors.iter_mut().find(|c| c.at.contains_key(&a)) {
+                return restack_run(dom, layout, c, pieces, a);
+            }
+            above = dom.parent(a);
+        }
         return false;
     };
-    let mut changed = Vec::new();
+    if order::by_sibling(dom, c.root) {
+        return restack_run(dom, layout, c, pieces, id);
+    }
+    // By ZIndex alone, what an object holds is spread through the stack:
+    // its entries are placed again where they are, while what shows in it
+    // is the same; anything else stacks the ScreenGui again.
+    let now = order::restacked(dom, layout, &c.stack[c.at[&id]]);
+    let same_shown = |(now, hidden): &(Vec<Stacked>, Vec<InstanceId>)| {
+        now.iter().all(|s| c.at.contains_key(&s.id)) && !hidden.iter().any(|h| c.at.contains_key(h))
+    };
+    let Some((now, _)) = now.filter(same_shown) else {
+        return false;
+    };
     for s in now {
-        let Some(&i) = c.at.get(&s.id) else {
-            return false;
-        };
+        let i = c.at[&s.id];
         if c.stack[i] != s {
             c.stack[i] = s;
-            changed.push(s.id);
+            pieces.remove(&c.drawer(s.id));
         }
     }
-    for id in changed {
-        pieces.remove(&c.drawer(id));
+    true
+}
+
+/// In a `Sibling` stack, where each object is followed by all it holds:
+/// stack again the run of the nearest object from `from` up that still
+/// shows, in its place. False when that is the whole ScreenGui, or the
+/// stack is by ZIndex alone, where what an object holds is no run.
+fn restack_run(
+    dom: &Dom,
+    layout: &Layout,
+    c: &mut Collector,
+    pieces: &mut FxHashMap<InstanceId, Arc<[GuiQuad]>>,
+    from: InstanceId,
+) -> bool {
+    if !order::by_sibling(dom, c.root) {
+        return false;
     }
+    let mut at = Some(from);
+    let (start, now) = loop {
+        let Some(a) = at.filter(|&a| a != c.root) else {
+            return false;
+        };
+        if let Some(&i) = c.at.get(&a)
+            && let Some((now, _)) = order::restacked(dom, layout, &c.stack[i])
+        {
+            break (i, now);
+        }
+        at = dom.parent(a);
+    };
+    // What it held when stacked (some may have left since).
+    let depth = c.stack[start].depth;
+    let end = (start + 1..c.stack.len())
+        .find(|&i| c.stack[i].depth <= depth)
+        .unwrap_or(c.stack.len());
+    let run = start..end;
+    if now.len() == run.len() && (c.stack[run.clone()].iter().zip(&now)).all(|(a, b)| a.id == b.id)
+    {
+        // The same objects show, in the same order: placed again.
+        for (i, s) in run.zip(now) {
+            if c.stack[i] != s {
+                c.stack[i] = s;
+                pieces.remove(&c.drawer(s.id));
+            }
+        }
+        return true;
+    }
+    let mut before = Before::default();
+    before.note(c, run.clone());
+    let len = now.len();
+    c.stack.splice(run, now);
+    c.index(dom);
+    before.compare(c, start..start + len, pieces);
+    before.drop_gone(pieces);
     true
 }
 

@@ -39,6 +39,7 @@ impl UserData for LFont {
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
+        super::members::add_unknown(m, "Font", super::members::Wording::Quoted);
         m.add_meta_method(MetaMethod::Eq, |_, t, o: UserDataRef<LFont>| {
             let key = |f: &Font| (f.family.clone(), f.weight, f.style);
             Ok(key(&t.0) == key(&o.0))

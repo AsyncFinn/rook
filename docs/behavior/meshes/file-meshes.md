@@ -3,7 +3,7 @@
 Checked against Studio 0.745 on 2026-10-30.
 
 SpecialMesh `MeshId`, FileMesh and MeshPart. How loading and drawing work
-is in [architecture](../../design/architecture.md#rendering-rook-render); what's left is in
+is in [architecture](../../design/architecture/rendering.md); what's left is in
 `docs/guide/stubs.md`.
 
 From version 3.00 on, a file holds every level of detail in one face list,
@@ -94,7 +94,7 @@ against `rook-player --screenshot --fov 20` from the same cameras, 1270 ×
 549): a test scene (the off-center mesh front and top, the sword, the head
 with Offset, a MeshPart at Size ≠ `MeshSize` and one without
 `InitialSize`): every outline within 2 px, 4 px on the sword's tip at 3.9
-px per stud. A 2017 place, laid out by the same script
+px per stud. A mid-size place, laid out by the same script
 in both: 8 scaled meshes (top within 1 px), 8 rotated
 meshes (top within 2 px) and an offset mesh
 (within 1 px); in a large modern place, 54 rotated
@@ -105,8 +105,8 @@ their meshes need an account.
 
 *Performance* (release builds, base = the previous commit): `rook
 run-headless --seconds 10` gave identical output and time (a large modern place 20.73
-s against 20.75 s, a small place 0.36 against 0.37, a 2008 place 0.27 against 0.28).
-`rook-player --bench 300`: a small place and a 2008 place unchanged (0 and 1 mesh files;
+s against 20.75 s, a small place 0.36 against 0.37, an early place 0.27 against 0.28).
+`rook-player --bench 300`: a small place and an early place unchanged (0 and 1 mesh files;
 render 1.49 against 1.47 ms); a large modern place draws 86 mesh files and its frame
 grew by about 2.8 ms (upload 3.6 to 4.9 ms, render 11.8 to 12.9 ms).
 
@@ -164,6 +164,14 @@ files themselves. Little-endian throughout.
 Rook refuses anything else as unsupported, Draco's other modes included,
 and a file that runs short, counts that run past it or faces that point
 past the vertices as damaged.
+
+Some files hold vertices whose position isn't a number. Rook keeps them
+as stored; their triangles draw nothing (the GPU drops them), and the
+mesh's bounds leave them out. Counted in, one such vertex made the
+bounds NaN, and culling then hid whatever was drawn near the mesh in
+draw order at some turns of the camera. A part's box that still isn't a
+number, wherever it comes from, is culled as empty
+(`crates/rook-render/src/gpu/instance.rs`, `Instance::world_box`).
 
 *Checked against Studio 0.745* (2026-10-30): `AssetService:
 CreateEditableMeshAsync` hands scripts Studio's own decode of a file in
@@ -230,7 +238,7 @@ and a 2016 MeshPart whose file Rook gets as version 2.00.
 
 *How Rook does it:* every level goes into the mesh pool, and each frame
 the instances in runs a pass sees pick their level by the rule above; see
-[architecture](../../design/architecture.md#rendering-rook-render). Where
+[architecture](../../design/architecture/rendering.md). Where
 Rook differs: a coarser level holds until the camera comes 5% nearer than
 its threshold, so a camera hovering there doesn't flip it each frame, and
 image layers draw at their part's level.

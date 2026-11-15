@@ -14,6 +14,7 @@ use crate::api::methods::characters::spawning;
 use crate::types::color::closest_brick_color;
 
 mod attachment;
+mod grip;
 mod mouse;
 pub(crate) mod selection;
 mod text;
@@ -25,6 +26,35 @@ pub(crate) fn cframe(w: &World, id: InstanceId) -> CFrame {
     w.dom
         .cframe_property(id, "CFrame")
         .unwrap_or(CFrame::IDENTITY)
+}
+
+/// [`cframe`] of a BasePart, by id.
+pub(crate) fn part_cframe(w: &World, part: InstanceId) -> CFrame {
+    (w.dom)
+        .read_property(part, part_ids().cframe, Value::as_cframe)
+        .unwrap_or(CFrame::IDENTITY)
+}
+
+/// BasePart's class and the properties model moves read of every part,
+/// resolved once: those walk every part of a model, often every frame.
+pub(crate) struct PartIds {
+    pub(crate) class: rook_reflection::ClassId,
+    pub(crate) cframe: PropertyId,
+    pub(crate) size: PropertyId,
+}
+
+pub(crate) fn part_ids() -> &'static PartIds {
+    static IDS: LazyLock<PartIds> = LazyLock::new(|| {
+        let db = rook_reflection::database();
+        let class = db.class_by_name("BasePart").expect("BasePart").id;
+        let id = |name| db.find_canonical_property(class, name).expect(name).id;
+        PartIds {
+            class,
+            cframe: id("CFrame"),
+            size: id("Size"),
+        }
+    });
+    &IDS
 }
 
 /// `CollisionFidelity`: Studio works it out from the saved geometry, and a
@@ -95,7 +125,7 @@ const SAME_AS: &[(&str, &str, &str)] = &[
     // Unions too (observed: a small place's unions read their InitialSize).
     ("PartOperation", "MeshSize", "InitialSize"),
     // Files save a truss's Style as `style`, a property of its own in the
-    // database (a large 2016 place's NoSupports trusses read back the default).
+    // database (a large older place's NoSupports trusses read back the default).
     ("TrussPart", "Style", "style"),
 ];
 
@@ -225,6 +255,11 @@ pub(crate) fn get(w: &World, id: InstanceId, name: &str) -> Option<Value> {
     {
         return Some(v);
     }
+    if dom.is_a(id, "Tool")
+        && let Some(v) = grip::get(w, id, name)
+    {
+        return Some(v);
+    }
     if let Some(target) = view(w, id, name, SAME_AS) {
         return dom.property_by_name(id, target);
     }
@@ -242,8 +277,9 @@ pub(crate) fn get(w: &World, id: InstanceId, name: &str) -> Option<Value> {
     match name {
         "ClockTime" if dom.is_a(id, "Lighting") => Some(Value::Float32(dom.clock_time(id) as f32)),
         // The top bar's free space, between Roblox's buttons (creator-docs
-        // GuiService.TopbarInset). Approximation: all of it, until Rook
-        // measures where the CoreScripts' buttons end; a server has none.
+        // GuiService.TopbarInset). Approximation: all of it; a server has
+        // none.
+        // TODO: measure where the CoreScripts' buttons end.
         "TopbarInset" if dom.class_name(id) == "GuiService" => {
             let height = if w.is_client {
                 rook_gui::GUI_INSET
@@ -275,7 +311,7 @@ pub(crate) fn get(w: &World, id: InstanceId, name: &str) -> Option<Value> {
         )),
         // Observed: a copy's size, and smooth whatever was copied.
         "SizeInCells" if dom.is_a(id, "TerrainRegion") => {
-            let (_, size) = super::methods::terrain_region_voxels(dom, id);
+            let (_, size) = super::methods::terrain::region_voxels_of(dom, id);
             Some(Value::Vector3(rook_types::Vector3::new(
                 size.x as f32,
                 size.y as f32,
@@ -289,9 +325,11 @@ pub(crate) fn get(w: &World, id: InstanceId, name: &str) -> Option<Value> {
         )),
         // Observed: a part outside Workspace has no root, and an anchored
         // assembly's mass is infinite.
-        // Observed in Studio 0.744: fixed, and not where rays start (see
-        // `methods::camera`). The default camera's occlusion reads it.
-        "NearPlaneZ" if dom.class_name(id) == "Camera" => Some(Value::Float32(-0.1)),
+        // Read-only, and not where rays start. The default camera's
+        // occlusion reads it.
+        "NearPlaneZ" if dom.class_name(id) == "Camera" => Some(Value::Float32(
+            -super::methods::camera::rays::near_plane(w, id),
+        )),
         "RootPart" | "Torso" if dom.class_name(id) == "Humanoid" => Some(Value::Ref(
             dom.parent(id)
                 .and_then(|model| super::methods::characters::root_part(dom, model))
@@ -409,6 +447,11 @@ pub(crate) fn set(
     {
         return Some(done);
     }
+    if w.dom.is_a(id, "Tool")
+        && let Some(done) = grip::set(w, id, name, value)
+    {
+        return Some(done);
+    }
     if let Some(done) = crate::audio_api::clamp(w, id, name, value) {
         return Some(done);
     }
@@ -463,7 +506,23 @@ pub(crate) fn set(
             let value = rook_reflection::enum_item_value(e.id, item)?;
             Some(set_named(w, id, "ScreenInsets", Value::Enum(value)))
         }
+        // A camera's roll lasts until its CameraType changes (observed).
+        ("CameraType", v) if w.dom.class_name(id) == "Camera" => {
+            let before = w.dom.enum_item_property(id, "CameraType");
+            let done = set_named(w, id, "CameraType", v.clone());
+            if w.dom.enum_item_property(id, "CameraType") != before {
+                w.camera_rolls.remove(&id);
+            }
+            Some(done)
+        }
         ("CFrame", Value::CFrame(c)) if w.dom.is_a(id, "BasePart") => Some(set_cframe(w, id, *c)),
+        // Observed in Studio 0.747: a zero direction isn't taken, the old
+        // one stays.
+        ("LightDirection", Value::Vector3(v))
+            if w.dom.class_name(id) == "ViewportFrame" && v.0 == glam::Vec3::ZERO =>
+        {
+            Some(Ok(()))
+        }
         // Measured: kept within the canvas as laid out now.
         ("CanvasPosition", Value::Vector2(v)) if w.dom.class_name(id) == "ScrollingFrame" => {
             Some(w.gui.set_canvas_position(&mut w.dom, id, v.0))

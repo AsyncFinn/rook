@@ -7,22 +7,24 @@ use std::sync::Arc;
 use rook_types::{GuiGroup, GuiQuad, Paint};
 
 use super::super::*;
-use super::{GUI_FORMAT, Packed, Target};
+use super::{GUI_FORMAT, Held, Packed, Target};
 
 /// The groups `lists` hold, nested ones before the groups holding them,
-/// each once.
-pub(super) fn held(lists: &[&[GuiQuad]]) -> Vec<Arc<GuiGroup>> {
-    fn walk(quads: &[GuiQuad], out: &mut Vec<Arc<GuiGroup>>) {
+/// each once, and the ViewportFrames in them.
+pub(super) fn held(lists: &[&[GuiQuad]]) -> Held {
+    fn walk(quads: &[GuiQuad], out: &mut Held) {
         for q in quads {
-            if let Paint::Group(group) = &q.paint
-                && !out.iter().any(|g| g.key == group.key)
-            {
-                walk(&group.quads, out);
-                out.push(group.clone());
+            match &q.paint {
+                Paint::Group(group) if !out.groups.iter().any(|g| g.key == group.key) => {
+                    walk(&group.quads, out);
+                    out.groups.push(group.clone());
+                }
+                Paint::Viewport(viewport) => out.viewports.push(*viewport),
+                _ => {}
             }
         }
     }
-    let mut out = Vec::new();
+    let mut out = Held::default();
     for quads in lists {
         walk(quads, &mut out);
     }
@@ -47,6 +49,11 @@ impl Groups {
     /// Whether `group` is drawn as given (the same `Arc`).
     pub(super) fn has(&self, group: &Arc<GuiGroup>) -> bool {
         self.drawn.iter().any(|d| Arc::ptr_eq(&d.source, group))
+    }
+
+    /// Whether no group is drawn.
+    pub(super) fn is_empty(&self) -> bool {
+        self.drawn.is_empty()
     }
 
     /// Drop every group's quads, so each is given again.

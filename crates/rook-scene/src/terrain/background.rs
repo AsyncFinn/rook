@@ -7,7 +7,7 @@
 
 use std::sync::mpsc::{Receiver, Sender, TryRecvError, channel};
 
-use rook_terrain::{Detail, mesh_chunk_at};
+use rook_terrain::{Sides, mesh_drawn_chunk};
 
 use super::*;
 
@@ -17,13 +17,14 @@ use super::*;
 pub(super) struct Job {
     pub(super) epoch: u64,
     pub(super) rings: Rings,
-    pub(super) draw: FxHashSet<LevelChunk>,
+    /// Each chunk drawn, with the sides it closes against the next ring.
+    pub(super) draw: FxHashMap<LevelChunk, Sides>,
 }
 
 #[derive(Debug)]
 struct Request {
     levels: Arc<Vec<Grid>>,
-    chunks: Vec<LevelChunk>,
+    chunks: Vec<(LevelChunk, Sides)>,
 }
 
 #[derive(Debug)]
@@ -41,11 +42,12 @@ pub(super) struct Background {
     job: Option<Job>,
 }
 
-/// Mesh `chunks` of `levels`, each at its level, with skirts.
-pub(super) fn mesh(levels: &[Grid], chunks: &[LevelChunk]) -> Vec<ChunkMesh> {
+/// Mesh `chunks` of `levels`, each at its level, closing its sides
+/// against the next ring.
+pub(super) fn mesh(levels: &[Grid], chunks: &[(LevelChunk, Sides)]) -> Vec<ChunkMesh> {
     chunks
         .iter()
-        .map(|&(l, c)| mesh_chunk_at(&levels[usize::from(l)], c, Detail::at(l)))
+        .map(|&((l, c), seams)| mesh_drawn_chunk(levels, l, c, seams))
         .collect()
 }
 
@@ -59,7 +61,7 @@ impl Background {
     pub(super) fn start(
         &mut self,
         levels: &Arc<Vec<Grid>>,
-        chunks: Vec<LevelChunk>,
+        chunks: Vec<(LevelChunk, Sides)>,
         job: Job,
     ) -> Result<(), Box<Job>> {
         debug_assert!(self.job.is_none());

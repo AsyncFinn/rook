@@ -47,7 +47,18 @@ that is either C, `minimp3`, or unmaintained). The format is picked by the
 first bytes, never the name: `sounds/swordslash.wav` holds Ogg.
 Everything decodes to one layout, 16-bit interleaved PCM in one or two
 channels at the file's rate (half the memory of floats; more channels
-fold to two). Damaged files fail as `Invalid` with an error, and a
+fold to two). A sound whose samples would take over 256 KB that isn't a
+WAV keeps its file's bytes instead, about a tenth of the size, plus its
+first third of a second or so of samples. While something plays it, a
+decode thread decodes the rest once, a chunk at a time and in order, for
+all its voices, and lets it go when the last stops
+(`decode/audio/decoded.rs`); the audio callback only copies samples, as
+Unreal's mixer leaves decoding to tasks ahead of it. The load still
+decodes it once, for its length and to check it, and playing gives exactly
+the samples it decoded to. A sound starts and loops from its kept head at
+once; the decode thread runs at a hundred times real time or more, so only
+a seek far into a sound that just started can reach a chunk not decoded
+yet, which plays silent (Approximation). Damaged files fail as `Invalid` with an error, and a
 decoder panic is caught and reported the same way; a file cut off part way
 keeps what decoded before the cut, and a single bad frame is skipped
 (Approximation: what players do).

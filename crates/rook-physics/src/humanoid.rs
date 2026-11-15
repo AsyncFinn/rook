@@ -226,11 +226,13 @@ struct Rooted {
 }
 
 impl Physics {
-    /// Humanoids in Workspace, in id order.
+    /// Humanoids in Workspace's world, in id order.
     pub fn humanoids(&mut self, dom: &Dom) -> Vec<InstanceId> {
         let ws = dom.find_service("Workspace");
-        self.humanoid_ids
-            .retain(|&h| !dom.is_destroyed(h) && ws.is_some_and(|ws| dom.is_ancestor_of(ws, h)));
+        self.humanoid_ids.retain(|&h| {
+            !dom.is_destroyed(h)
+                && ws.is_some_and(|ws| crate::shape::in_workspace_world(dom, ws, h))
+        });
         let mut ids: Vec<InstanceId> = self.humanoid_ids.iter().copied().collect();
         ids.sort_unstable();
         ids
@@ -382,7 +384,7 @@ impl Physics {
         let height = c.drive.standing_height;
         c.rising &= c
             .floor
-            .is_some_and(|f| f.y + height - root.position.y > states::LANDING);
+            .is_some_and(|f| f.y + height - root.position.y > states::STOOD_UP);
         c.climb = self.sense_climb(c, r.body, &root);
         c.water = self.water_surface(root.position);
     }

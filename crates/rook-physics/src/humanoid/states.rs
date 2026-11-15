@@ -8,9 +8,18 @@ use super::*;
 /// (measured: 0.1 s off a ledge, at any gravity).
 const COYOTE: f32 = 0.1;
 
-/// Freefall lands once the root is within this of standing height
-/// (Inference: Studio landed at 0.23 studs above and not at 0.88).
-pub(super) const LANDING: f32 = 0.5;
+/// How far above standing height a falling root lands: 0.4 per stud of
+/// legs (standing height less half the root), 0.13 per stud of the root's
+/// height, and 0.05 (measured landing slowly with HipHeight 0.5 to 4 and
+/// root heights 1.4 to 3: 1.11 for the default R15 body, within 0.02).
+fn landing(d: &Drive) -> f32 {
+    let legs = d.standing_height - d.root_size.y / 2.0;
+    0.4 * legs + 0.13 * d.root_size.y + 0.05
+}
+
+/// A root getting up has stood once it's within this of standing height
+/// (Approximation: Studio's getting up wasn't timed this finely).
+pub(super) const STOOD_UP: f32 = 0.5;
 
 /// Landed lasts two frames (measured).
 const LANDED_TIME: f32 = 0.03;
@@ -106,7 +115,7 @@ impl Physics {
             let root = self.root_pose(r).position.y;
             let v = self.world.bodies[r.body].linvel();
             c.floor.is_some_and(|f| {
-                root - (f.y + d.standing_height) <= LANDING && v.y - f.velocity.y <= 0.0
+                root - (f.y + d.standing_height) <= landing(d) && v.y - f.velocity.y <= 0.0
             })
         };
         let fallen = || (self.root_pose(r).rotation * glam::Vec3::Y).y < STANDS_UP_Y;
@@ -118,7 +127,7 @@ impl Physics {
                 let root = self.root_pose(r).position.y;
                 let stood = c
                     .floor
-                    .is_none_or(|f| f.y + d.standing_height - root <= LANDING);
+                    .is_none_or(|f| f.y + d.standing_height - root <= STOOD_UP);
                 (c.time >= GETTING_UP_TIME && !fallen() && stood).then_some(State::Running)
             }
             State::Jumping => Some(State::Freefall),

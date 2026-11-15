@@ -1,9 +1,10 @@
-//! UserInputService's queries and Player:GetMouse. Input events themselves
+//! UserInputService and VRService queries, and Player:GetMouse. Input events themselves
 //! are fired by the engine, which owns the window.
 
 mod gamepads;
 mod key_names;
 mod keyboard_mouse;
+mod vr;
 
 use mlua::Lua;
 use rook_dom::InstanceId;
@@ -16,6 +17,7 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
     use gamepads::*;
     use key_names::*;
     use keyboard_mouse::*;
+    use vr::*;
     Some(match (owner, name) {
         ("UserInputService", "IsKeyDown") => is_key_down,
         ("UserInputService", "IsMouseButtonPressed") => is_mouse_button_pressed,
@@ -37,6 +39,8 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("UserInputService", "GetStringForKeyCode") => string_for_key,
         ("UserInputService", "GetImageForKeyCode") => image_for_key,
         ("Player", "GetMouse") => get_mouse,
+        ("VRService", "GetUserCFrame") => user_cframe,
+        ("VRService", "GetUserCFrameEnabled") => user_cframe_enabled,
         _ => return None,
     })
 }

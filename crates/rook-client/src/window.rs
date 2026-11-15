@@ -18,7 +18,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use rook_engine::user_settings::{Pacing, PlayerSettings};
+use rook_engine::settings::user_settings::{Pacing, PlayerSettings};
 use rook_engine::{InputEvent, MouseLock};
 use rook_render::{Camera, WindowSurface};
 use rook_scene::{Installed, SceneCache, ToRender};
@@ -114,7 +114,9 @@ pub(crate) struct App {
     /// redraw without it comes from a loop that isn't winit's: Windows'
     /// own, while the window is dragged or resized.
     pub(crate) loop_ran: bool,
-    /// What the cursor shows.
+    /// The window has nothing to draw into (it's minimized). Presenting
+    /// paces frames shown at the display's rate, so then nothing would.
+    pub(crate) undrawable: bool,
     pub(crate) cursor_shown: cursor::Shown,
     /// The platform's input method is on, while a TextBox has focus.
     pub(crate) ime: bool,
@@ -126,6 +128,9 @@ pub(crate) struct App {
     pub(crate) readout: Readout,
     /// Where the game's sounds are heard; `None` with `audioDevice` off.
     pub(crate) audio: Option<rook_audio::Output<rook_dom::InstanceId>>,
+    /// The game had something to hear when the mixer was last told what
+    /// plays: silence is told once, not every frame.
+    pub(crate) heard: bool,
     /// The player's settings the window last followed.
     pub(crate) player: PlayerSettings,
     /// The terminal command prompt, when the terminal is interactive.
@@ -189,7 +194,7 @@ impl App {
     pub(crate) fn attach(&mut self, mut gfx: Gfx) {
         let surface = gfx.frames.get();
         self.install.apply(surface.renderer_mut());
-        surface.renderer_mut().set_scene(&self.scene.scene);
+        self.scene.show_all(surface.renderer_mut());
         let (width, height) = surface.size();
         self.game.set_viewport(width, height);
         self.gfx = Some(gfx);
@@ -235,8 +240,15 @@ impl App {
             Pacing::Cap(_) => self.frame_period().map(|period| self.last_frame + period),
             Pacing::Display | Pacing::Uncapped => None,
         };
+        // Nothing is shown, so nothing is gained by more frames than the
+        // display shows.
+        let undrawn = self.undrawable.then(|| {
+            let refresh = self.frame_clock.refresh().unwrap_or(1.0 / 60.0);
+            let period = Duration::from_secs_f64(refresh);
+            self.last_frame + self.frame_period().map_or(period, |p| p.max(period))
+        });
         let just_in_time = self.gfx.as_ref().and_then(|gfx| gfx.frames.start_next_at());
-        capped.max(just_in_time)
+        capped.max(just_in_time).max(undrawn)
     }
 
     /// The time between frames they keep to: the frame rate cap's, or the
@@ -259,7 +271,8 @@ impl App {
             gfx.window.set_ime_allowed(typing);
             self.ime = typing;
         }
-        self.flying = self.game.view().scripted_camera().is_none();
+        // Whether a script drives the camera is as the last step left it
+        // (below): nothing between steps changes it.
         if self.flying {
             self.fly(dt, typing);
         }
@@ -280,17 +293,27 @@ impl App {
         // Drawn as this step left it: the camera script has just turned it
         // by this frame's mouse movement, and the character it follows
         // stands where this step put it.
-        if let Some(view) = self.game.view().scripted_camera() {
-            self.flying = false;
+        let view = self.game.view().scripted_camera();
+        self.flying = view.is_none();
+        if let Some(view) = view {
             self.camera.follow(view);
         }
-        if let Some(now) = self.game.player_settings()
-            && now != self.player
-        {
+        let changed = self
+            .game
+            .player_settings()
+            .filter(|now| **now != self.player);
+        if let Some(now) = changed.cloned() {
             self.follow(now);
         }
         if let Some(audio) = &mut self.audio {
-            audio.sync(&self.game.sounds());
+            // In silence that the mixer has been told of there is nothing
+            // to gather, and no reason to take its lock from the audio
+            // thread.
+            let heard = self.game.hears_anything();
+            if heard || self.heard {
+                audio.sync(&self.game.sounds());
+            }
+            self.heard = heard;
         }
         // The scene follows the step here, while the render thread may
         // still be drawing the frame before.

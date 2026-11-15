@@ -22,7 +22,7 @@ character it owns. This milestone puts all of them on the wire.
      machine hosting while playing. Clients fetch content themselves, as
      they do now.
    - *Evidence first*: pick the transport. The
-     [architecture](../design/architecture.md#run-modes-and-replication-rook-net)
+     [architecture](../design/architecture/replication.md#run-modes-and-replication-rook-net)
      names BrikNet (the earlier experiment), quinn and renet. Compare
      them on channels, encryption, NAT traversal later (M12), pure Rust,
      and Windows, Linux and macOS. Measure the encoded snapshot of the

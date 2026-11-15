@@ -1,6 +1,6 @@
 //! The DOM never calls out while mutating. Signal dispatch and engine
 //! systems read the [`Journal`] afterwards, each with its own cursor.
-//! See `docs/design/architecture.md#runtime-dom-rook-dom`.
+//! See `docs/design/architecture/data-model.md#runtime-dom-rook-dom`.
 //!
 //! Hierarchy rules (locked parents, cycles, `Destroy`, `Clone`) follow
 //! Roblox. Error texts are Inference until the conformance suite pins them.
@@ -16,7 +16,7 @@ mod properties;
 mod tree;
 mod voxels;
 
-pub use instance::Attributes;
+pub use instance::{Attributes, Properties};
 pub use journal::Change;
 pub use observe::Observed;
 pub use properties::zero_value;
@@ -105,6 +105,9 @@ pub struct Dom {
     /// The instances of each class callers look up often, by
     /// [`Dom::track_class`] (see `classes.rs`).
     of_class: FxHashMap<ClassId, FxHashSet<InstanceId>>,
+    /// The root's first child of each class: [`Dom::find_service`],
+    /// kept as children come and go.
+    services: FxHashMap<ClassId, InstanceId>,
     /// Each Terrain's voxels, decoded from its `SmoothGrid` (see
     /// `voxels.rs`), and that property's id.
     voxels: FxHashMap<InstanceId, rook_terrain::Grid>,
@@ -142,6 +145,7 @@ impl Dom {
             collecting: Vec::new(),
             tagged: FxHashMap::default(),
             of_class: FxHashMap::default(),
+            services: FxHashMap::default(),
             voxels: FxHashMap::default(),
             smooth_grid: db
                 .class_by_name("Terrain")

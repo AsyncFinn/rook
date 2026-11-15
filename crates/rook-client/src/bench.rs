@@ -2,7 +2,7 @@
 //! runs it: the server steps by itself on its thread, the client steps
 //! once a frame by the time it took, and the renderer draws each frame on
 //! the render thread while the next one steps
-//! (docs/design/architecture.md#frame-order).
+//! (docs/design/architecture/threads-and-frames.md#frame-order).
 
 use std::time::{Duration, Instant};
 
@@ -124,7 +124,7 @@ pub fn bench(
     let scene_built = Instant::now();
     let mut renderer = Renderer::headless()?;
     install.apply(&mut renderer);
-    renderer.set_scene(&cache.scene);
+    cache.show_all(&mut renderer);
     let timing_gpu = renderer.time_gpu();
     let mut thread = RenderThread::new(Offscreen {
         renderer,
@@ -259,7 +259,7 @@ impl Measured {
             "{frames} frames, {} entries, {} mesh files, {} images, scene updated on {} frames",
             cache.scene.parts.len(),
             cache.scene.meshes.len(),
-            cache.scene.images.len(),
+            cache.images_loaded(),
             self.updates
         );
         let mouse = Self::times(&self.stepped, |s| s.mouse);

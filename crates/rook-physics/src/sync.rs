@@ -36,6 +36,7 @@ impl Physics {
         let changes = dom.journal().since(self.cursor);
         rook_types::count!(JournalReadPhysics, changes.len());
         for change in changes {
+            self.world_models.note(dom, change);
             match change {
                 Change::Property { id, property } => {
                     let p = *property;

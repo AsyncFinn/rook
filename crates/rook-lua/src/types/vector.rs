@@ -6,7 +6,7 @@ use mlua::{
 use rook_types::{Vector2, Vector3};
 
 use super::fmt_f32;
-use crate::ctx::args::number_of;
+use crate::ctx::args::{Num, number_of};
 
 use crate::ctx::convert::{from_lua_vector as v3, lua_vector as lua_v3};
 
@@ -127,12 +127,8 @@ fn install_vector3(lua: &Lua) -> mlua::Result<()> {
     let ctor = lua.create_table()?;
     ctor.set(
         "new",
-        lua.create_function(|_, (x, y, z): (Option<f32>, Option<f32>, Option<f32>)| {
-            Ok(Vector::new(
-                x.unwrap_or(0.0),
-                y.unwrap_or(0.0),
-                z.unwrap_or(0.0),
-            ))
+        lua.create_function(|_, (x, y, z): (Num, Num, Num)| {
+            Ok(Vector::new(x.f32(), y.f32(), z.f32()))
         })?,
     )?;
     ctor.set("zero", Vector::new(0.0, 0.0, 0.0))?;
@@ -212,6 +208,7 @@ impl UserData for LVector2 {
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
+        super::members::add_unknown(m, "Vector2", super::members::Wording::Plain);
         m.add_method("Dot", |_, t, o: UserDataRef<LVector2>| Ok(t.0.dot(o.0)));
         m.add_method("Cross", |_, t, o: UserDataRef<LVector2>| Ok(t.0.cross(o.0)));
         for name in ["Lerp", "lerp"] {
@@ -308,6 +305,7 @@ impl UserData for LVector3int16 {
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
+        super::members::add_unknown(m, "Vector3int16", super::members::Wording::Quoted);
         let op = |f: fn(i16, i16) -> i16| {
             move |_: &Lua, t: &LVector3int16, o: UserDataRef<LVector3int16>| {
                 Ok(LVector3int16(rbx_types::Vector3int16::new(
@@ -344,6 +342,7 @@ impl UserData for LVector2int16 {
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
+        super::members::add_unknown(m, "Vector2int16", super::members::Wording::Quoted);
         let op = |f: fn(i16, i16) -> i16| {
             move |_: &Lua, t: &LVector2int16, o: UserDataRef<LVector2int16>| {
                 Ok(LVector2int16(rbx_types::Vector2int16::new(
@@ -371,9 +370,7 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     let v2 = lua.create_table()?;
     v2.set(
         "new",
-        lua.create_function(|_, (x, y): (Option<f32>, Option<f32>)| {
-            Ok(LVector2(Vector2::new(x.unwrap_or(0.0), y.unwrap_or(0.0))))
-        })?,
+        lua.create_function(|_, (x, y): (Num, Num)| Ok(LVector2(Vector2::new(x.f32(), y.f32()))))?,
     )?;
     v2.set("zero", LVector2(Vector2::ZERO))?;
     v2.set("one", LVector2(Vector2::ONE))?;
@@ -384,11 +381,11 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     let v3i = lua.create_table()?;
     v3i.set(
         "new",
-        lua.create_function(|_, (x, y, z): (Option<f64>, Option<f64>, Option<f64>)| {
+        lua.create_function(|_, (x, y, z): (Num, Num, Num)| {
             Ok(LVector3int16(rbx_types::Vector3int16::new(
-                wrap16(x.unwrap_or(0.0)),
-                wrap16(y.unwrap_or(0.0)),
-                wrap16(z.unwrap_or(0.0)),
+                wrap16(x.0),
+                wrap16(y.0),
+                wrap16(z.0),
             )))
         })?,
     )?;
@@ -397,10 +394,10 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     let v2i = lua.create_table()?;
     v2i.set(
         "new",
-        lua.create_function(|_, (x, y): (Option<f64>, Option<f64>)| {
+        lua.create_function(|_, (x, y): (Num, Num)| {
             Ok(LVector2int16(rbx_types::Vector2int16::new(
-                wrap16(x.unwrap_or(0.0)),
-                wrap16(y.unwrap_or(0.0)),
+                wrap16(x.0),
+                wrap16(y.0),
             )))
         })?,
     )?;

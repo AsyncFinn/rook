@@ -4,20 +4,27 @@
 // level over about a pixel and a third on screen, as Roblox's GUI shader
 // draws text (its UI pixel shader, 0.743: smoothstep about 0.5 by 0.65 ×
 // fwidth), so text stays sharp at any size; the image's texel,
-// premultiplied (3); a group's texel, drawn premultiplied (4); or a
-// distance field with its edge moved out `mode - 5` screen pixels, a text
-// outline (5 and up). Multiply the quad's premultiplied color by it. Call
+// premultiplied (3); a group's texel, drawn premultiplied (4); a
+// ViewportFrame's picture, which holds half the light it shows, as
+// Studio's frame does, with straight alpha (5;
+// docs/behavior/gui/viewport-frames.md); or a distance field with its edge
+// moved out `mode - 6` screen pixels, a text outline (6 and up). Multiply the quad's premultiplied color by it. Call
 // it in uniform control flow.
 fn gui_paint(glyph: f32, texel: vec4<f32>, mode: f32) -> vec4<f32> {
     let per_pixel = fwidth(glyph);
     let w = max(0.65 * per_pixel, 1e-4);
     let field = smoothstep(0.5 - w, 0.5 + w, glyph);
-    if mode > 4.5 {
+    if mode > 5.5 {
         // Measured on the names over heads: Studio's outline fades over
         // about a pixel each side of its edge, softer than the glyph's.
-        let edge = 0.5 - (mode - 5.0) * per_pixel;
+        let edge = 0.5 - (mode - 6.0) * per_pixel;
         let soft = max(per_pixel, 1e-4);
         return vec4(smoothstep(edge - soft, edge + soft, glyph));
+    }
+    if mode > 4.5 {
+        // Held in 8 bits as Studio's is (observed: every pixel even).
+        let held = round(texel * 255.0) / 255.0;
+        return vec4(min(2.0 * held.rgb, vec3(1.0)) * held.a, held.a);
     }
     if mode > 3.5 {
         return texel;

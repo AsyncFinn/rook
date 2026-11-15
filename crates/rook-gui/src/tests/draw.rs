@@ -99,7 +99,7 @@ fn borders_go_around_the_background() {
 
 #[test]
 fn hints_and_messages() {
-    let (mut dom, _) = client();
+    let (mut dom, player_gui) = client();
     let ws = dom.find_service("Workspace").unwrap();
     let mut gui = laid_out(&mut dom);
     let empty_message = child(&mut dom, "Message", ws, &[]);
@@ -114,6 +114,19 @@ fn hints_and_messages() {
     assert_eq!(quads.len(), 1, "an empty Hint shows its bar");
     assert_eq!(quads[0].color, [0.0, 0.0, 0.0, 1.0]);
     assert_eq!(quads[0].center.y, 10.0);
+    // Every ScreenGui draws over it, whatever its DisplayOrder.
+    let screen = child(
+        &mut dom,
+        "ScreenGui",
+        player_gui,
+        &[("DisplayOrder", Value::Int32(-1000))],
+    );
+    square(&mut dom, screen, 1, 0.7);
+    gui.sync(&mut dom);
+    let quads = drawn(&mut gui, &dom);
+    assert_eq!(quads.len(), 2);
+    assert_eq!(quads[0].color, [0.0, 0.0, 0.0, 1.0]);
+    dom.set_parent(screen, None).unwrap();
     // Made later, so drawn over the Hint.
     set(
         &mut dom,
@@ -294,6 +307,62 @@ fn changes_draw_again_only_their_pieces() {
     assert_eq!(bordered, [true, true, false, true]);
 }
 
+/// Hiding, showing or taking out an object a UIListLayout places: what's
+/// hidden or gone stops drawing, the rows it moves draw again, and the
+/// rest of the screen keeps its pieces, stacked by sibling (only the
+/// list's run stacks again) or by ZIndex alone.
+#[test]
+fn hiding_in_a_list_restacks_only_the_list() {
+    hiding_in_a_list("Sibling");
+    hiding_in_a_list("Global");
+}
+
+fn hiding_in_a_list(behavior: &str) {
+    let (mut dom, player_gui) = client();
+    let screen = child(&mut dom, "ScreenGui", player_gui, &[]);
+    set_enum(&mut dom, screen, "ZIndexBehavior", behavior);
+    square(&mut dom, screen, 1, 0.1);
+    let panel = child(
+        &mut dom,
+        "Frame",
+        screen,
+        &[("Size", udim2(0.0, 200, 0.0, 300))],
+    );
+    child(&mut dom, "UIListLayout", panel, &[]);
+    let rows: Vec<InstanceId> = (0..3)
+        .map(|i| {
+            let color = Value::Color3(Color3::new(0.5 + i as f32 / 10.0, 0.5, 0.0));
+            let size = udim2(1.0, 0, 0.0, 20);
+            child(
+                &mut dom,
+                "Frame",
+                panel,
+                &[("Size", size), ("BackgroundColor3", color)],
+            )
+        })
+        .collect();
+    let mut gui = laid_out(&mut dom);
+    let mut before = gui.draw(&dom);
+    let mut step = |dom: &mut Dom, what: &str| {
+        gui.sync(dom);
+        let now = gui.draw(dom);
+        let kept: Vec<bool> = (now.iter())
+            .map(|p| before.iter().any(|b| Arc::ptr_eq(b, p)))
+            .collect();
+        before = now;
+        let fresh = drawn(&mut laid_out(dom), dom);
+        assert_eq!(drawn(&mut gui, dom), fresh, "{behavior}: {what}");
+        kept
+    };
+    set(&mut dom, rows[1], "Visible", Value::Bool(false));
+    assert_eq!(step(&mut dom, "hidden"), [true, true, true, false]);
+    set(&mut dom, rows[1], "Visible", Value::Bool(true));
+    assert_eq!(step(&mut dom, "shown"), [true, true, true, false, false]);
+    // The panel it left draws again too (what leaves may be its UICorner).
+    dom.set_parent(rows[0], None).unwrap();
+    assert_eq!(step(&mut dom, "taken out"), [true, false, false, false]);
+}
+
 /// A ScreenGui coming or going, or GUI moving between ScreenGuis, lays
 /// out and draws again only the trees it left and joined: the others'
 /// pieces stay the same `Arc`, and the screen ends as a fresh drawing
@@ -321,11 +390,70 @@ fn trees_coming_and_going_leave_the_others() {
     square(&mut dom, added, 1, 0.3);
     dom.set_parent(added, Some(player_gui)).unwrap();
     assert_eq!(step(&mut dom, &mut gui), [true, true, false]);
+    // The square moved draws the same in its new ScreenGui: its piece too
+    // is kept.
     dom.set_parent(mover, Some(added)).unwrap();
-    assert_eq!(step(&mut dom, &mut gui), [true, true, false]);
+    assert_eq!(step(&mut dom, &mut gui), [true, true, true]);
     dom.set_parent(added, None).unwrap();
     assert_eq!(step(&mut dom, &mut gui), [true]);
     assert!(!gui.layout.contains(mover));
+}
+
+/// GUI added to, moved in or taken out of a list deep in a big ScreenGui
+/// lays out only the list's panel again, not the ScreenGui, and the
+/// screen ends as a fresh layout draws it: what left is gone, what came
+/// shows, and a UICorner added rounds its parent.
+#[test]
+fn moves_inside_a_tree_lay_out_only_where_they_happen() {
+    use rook_types::counters::{Counter, take_local};
+    let (mut dom, player_gui) = client();
+    let screen = child(&mut dom, "ScreenGui", player_gui, &[]);
+    for i in 0..40 {
+        square(&mut dom, screen, 1, i as f32 / 100.0);
+    }
+    let panel = child(
+        &mut dom,
+        "Frame",
+        screen,
+        &[("Size", udim2(0.0, 200, 0.0, 300))],
+    );
+    child(&mut dom, "UIListLayout", panel, &[]);
+    let item = |dom: &mut Dom, tag: f32| {
+        let color = Value::Color3(Color3::new(tag, 0.5, 0.0));
+        child(
+            dom,
+            "Frame",
+            panel,
+            &[
+                ("Size", udim2(1.0, 0, 0.0, 20)),
+                ("BackgroundColor3", color),
+            ],
+        )
+    };
+    let first = item(&mut dom, 0.9);
+    let second = item(&mut dom, 0.8);
+    let mut gui = laid_out(&mut dom);
+    gui.draw(&dom);
+    let mut step = |dom: &mut Dom, what: &str| {
+        take_local();
+        gui.sync(dom);
+        let laid = take_local()[Counter::GuiNodesLaidOut];
+        assert!(laid <= 6, "{what}: laid out {laid} nodes");
+        assert_eq!(
+            drawn(&mut gui, dom),
+            drawn(&mut laid_out(dom), dom),
+            "{what}"
+        );
+    };
+    let added = dom.create_by_name("Frame").unwrap();
+    set(&mut dom, added, "Size", udim2(1.0, 0, 0.0, 30));
+    dom.set_parent(added, Some(panel)).unwrap();
+    step(&mut dom, "added");
+    dom.set_parent(first, None).unwrap();
+    step(&mut dom, "taken out");
+    let corner = dom.create_by_name("UICorner").unwrap();
+    dom.set_parent(corner, Some(second)).unwrap();
+    step(&mut dom, "corner");
 }
 
 /// A text object's color and transparency reach its glyphs, and change
@@ -357,7 +485,9 @@ fn text_colors_draw_again_without_laying_out() {
         ],
     );
     let mut gui = Gui::default();
-    gui.set_content(std::sync::Arc::new(rook_content::Resolver::new(config)));
+    gui.set_content(std::sync::Arc::new(rook_content::Resolver::new(
+        config.clone(),
+    )));
     gui.sync(&mut dom);
     let glyphs = |quads: &[GuiQuad]| -> Vec<[f32; 4]> {
         (quads.iter())
@@ -374,8 +504,154 @@ fn text_colors_draw_again_without_laying_out() {
         Value::Color3(Color3::new(1.0, 0.0, 0.0)),
     );
     set(&mut dom, label, "TextTransparency", Value::Float32(0.5));
+    set(
+        &mut dom,
+        label,
+        "TextStrokeTransparency",
+        Value::Float32(0.0),
+    );
     gui.sync(&mut dom);
     assert_eq!(glyphs(&drawn(&mut gui, &dom)), [[1.0, 0.0, 0.0, 0.5]; 2]);
     let counts = rook_types::counters::take_local();
     assert_eq!(counts[rook_types::counters::Counter::GuiNodesLaidOut], 0);
+    // Recolored where it was laid out, outline and all, as a fresh
+    // layout draws it (its own glyph masks apart).
+    let mut fresh = Gui::default();
+    fresh.set_content(std::sync::Arc::new(rook_content::Resolver::new(config)));
+    fresh.sync(&mut dom);
+    let looks = |quads: Vec<GuiQuad>| -> Vec<_> {
+        (quads.into_iter())
+            .map(|q| {
+                (
+                    q.center,
+                    q.size,
+                    q.color,
+                    q.clip,
+                    std::mem::discriminant(&q.paint),
+                )
+            })
+            .collect()
+    };
+    assert_eq!(looks(drawn(&mut gui, &dom)), looks(drawn(&mut fresh, &dom)));
+}
+
+/// Incremental drawing equals drawing from scratch, through a seeded run of
+/// the changes a tree-view script (Dark Dex's explorer) makes to recycled
+/// rows in a ScrollingFrame: icons moved by scale inside clipping frames,
+/// rows and arrows shown and hidden, rows and indents moved, rows
+/// restyled, restacked and taken out and put back, the list scrolled.
+#[test]
+fn incremental_draws_match_fresh_ones() {
+    for behavior in ["Global", "Sibling"] {
+        incremental_draws(behavior, 0x2545_f491, 400);
+    }
+}
+
+fn incremental_draws(behavior: &str, mut seed: u32, steps: u32) {
+    let (mut dom, player_gui) = client();
+    let screen = child(&mut dom, "ScreenGui", player_gui, &[]);
+    set_enum(&mut dom, screen, "ZIndexBehavior", behavior);
+    let list = child(
+        &mut dom,
+        "ScrollingFrame",
+        screen,
+        &[
+            ("Size", udim2(0.0, 300, 0.0, 200)),
+            ("CanvasSize", udim2(0.0, 0, 0.0, 400)),
+        ],
+    );
+    let mut rows = Vec::new();
+    let mut icons = Vec::new();
+    let mut arrows = Vec::new();
+    let mut indents = Vec::new();
+    for i in 0..6 {
+        let row = frame(&mut dom, list, udim2(1.0, 0, 0.0, 20));
+        set(&mut dom, row, "Position", udim2(0.0, 0, 0.0, i * 20));
+        let indent = frame(&mut dom, row, udim2(1.0, 0, 1.0, 0));
+        set(
+            &mut dom,
+            indent,
+            "BackgroundTransparency",
+            Value::Float32(1.0),
+        );
+        for (x, out) in [(0, &mut arrows), (18, &mut icons)] {
+            let clip = frame(&mut dom, indent, udim2(0.0, 16, 0.0, 16));
+            set(&mut dom, clip, "Position", udim2(0.0, x, 0.0, 2));
+            set(&mut dom, clip, "ClipsDescendants", Value::Bool(true));
+            let map = frame(&mut dom, clip, udim2(16.0, 0, 16.0, 0));
+            out.push((clip, map));
+        }
+        rows.push(row);
+        indents.push(indent);
+    }
+    let mut gui = laid_out(&mut dom);
+    let mut next = |n: u32| {
+        seed ^= seed << 13;
+        seed ^= seed >> 17;
+        seed ^= seed << 5;
+        seed % n
+    };
+    for step in 0..steps {
+        for _ in 0..1 + next(4) {
+            let r = next(6) as usize;
+            match next(9) {
+                0 => {
+                    let (col, row) = (next(14) as f32, next(14) as f32);
+                    let map = [icons[r].1, arrows[r].1][next(2) as usize];
+                    set(
+                        &mut dom,
+                        map,
+                        "Position",
+                        udim2(-col - 0.2, 0, -row - 0.2, 0),
+                    );
+                }
+                1 => {
+                    let shown = next(2) == 0;
+                    set(&mut dom, rows[r], "Visible", Value::Bool(shown));
+                }
+                2 => {
+                    let shown = next(2) == 0;
+                    set(&mut dom, arrows[r].0, "Visible", Value::Bool(shown));
+                }
+                3 => {
+                    let x = next(4) as i32 * 18;
+                    set(&mut dom, indents[r], "Position", udim2(0.0, x, 0.0, 0));
+                }
+                4 => {
+                    let t = next(2) as f32;
+                    set(
+                        &mut dom,
+                        rows[r],
+                        "BackgroundTransparency",
+                        Value::Float32(t),
+                    );
+                }
+                5 => {
+                    let y = next(8) as i32 * 20;
+                    set(&mut dom, rows[r], "Position", udim2(0.0, 0, 0.0, y));
+                }
+                6 => {
+                    let z = Value::Int32(1 + next(3) as i32);
+                    set(&mut dom, icons[r].0, "ZIndex", z);
+                }
+                7 => {
+                    let y = next(10) as f32 * 20.0;
+                    set(&mut dom, list, "CanvasPosition", v2(0.0, y));
+                }
+                _ => {
+                    // A row out of the list and back, or in again.
+                    let parent = [None, Some(list)][next(2) as usize];
+                    dom.set_parent(rows[r], parent).unwrap();
+                }
+            }
+        }
+        gui.sync(&mut dom);
+        let incremental = drawn(&mut gui, &dom);
+        let mut fresh = laid_out(&mut dom);
+        assert_eq!(
+            incremental,
+            drawn(&mut fresh, &dom),
+            "{behavior} step {step}"
+        );
+    }
 }

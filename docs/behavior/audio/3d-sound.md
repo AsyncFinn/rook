@@ -111,11 +111,11 @@ together with:
 - `SoundService`'s `RolloffScale` 1, `DistanceFactor` 3.33 and
   `DopplerScale` 1.
 
-*Rook's side*: the engine says where each playing 3D sound is and where
-the listener is (`DataModel::playing_sounds`, `sound_listener`). The
-player turns that into a left and right gain per sound each frame. The
-mixer ramps to new gains over one buffer, so a moving sound doesn't
-click.
+*Rook's side*: the engine keeps what the mixer plays between frames and
+reads a sound again only when it changes (`DataModel::mix`). Each frame
+it works out a left and right gain per 3D sound from where the sound and
+the listener are now. The mixer ramps to new gains over one buffer, so a
+moving sound doesn't click.
 
 *Not done* (Approximation): the Doppler effect (`DopplerScale`,
 `DistanceFactor`); a `PlayOnRemove` sound plays out as a global sound,

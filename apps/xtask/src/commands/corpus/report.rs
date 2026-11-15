@@ -27,7 +27,6 @@ fn pct(n: u64, of: u64) -> f64 {
     }
 }
 
-/// The scan's totals.
 fn overview(md: &mut String, agg: &Aggregate, elapsed: Duration) {
     let db = rook_reflection::database();
     let _ = writeln!(md, "# Corpus scan\n");

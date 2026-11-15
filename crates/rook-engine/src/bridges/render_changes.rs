@@ -1,3 +1,4 @@
+mod journal;
 mod materials;
 
 use rook_reflection::{ClassId, PropertyId};
@@ -42,6 +43,16 @@ pub struct RenderChanges {
     pub placed: rustc_hash::FxHashSet<InstanceId>,
     pub parts: rustc_hash::FxHashSet<InstanceId>,
     pub moved: rustc_hash::FxHashSet<InstanceId>,
+    /// Parts whose adornments alone changed: their own look doesn't.
+    pub adorned: rustc_hash::FxHashSet<InstanceId>,
+    /// Parts a different Highlight may cover now.
+    pub highlighted: rustc_hash::FxHashSet<InstanceId>,
+    /// Highlights whose look changed.
+    pub highlights: rustc_hash::FxHashSet<InstanceId>,
+    /// ViewportFrames whose look may have changed: one of their own
+    /// properties it's read from, a property of the Camera they show
+    /// (`CurrentCamera`), or the frame entering or leaving the tree.
+    pub viewports: rustc_hash::FxHashSet<InstanceId>,
     pub collected: rustc_hash::FxHashSet<InstanceId>,
 }
 
@@ -68,6 +79,10 @@ impl RenderChanges {
             && self.placed.is_empty()
             && self.parts.is_empty()
             && self.moved.is_empty()
+            && self.adorned.is_empty()
+            && self.highlighted.is_empty()
+            && self.highlights.is_empty()
+            && self.viewports.is_empty()
             && self.collected.is_empty()
     }
 
@@ -96,6 +111,10 @@ impl RenderChanges {
         self.placed.remove(&id);
         self.parts.remove(&id);
         self.moved.remove(&id);
+        self.adorned.remove(&id);
+        self.highlighted.remove(&id);
+        self.highlights.remove(&id);
+        self.viewports.remove(&id);
         self.collected.insert(id);
     }
 }
@@ -132,18 +151,38 @@ pub fn adorned_part(dom: &Dom, id: InstanceId) -> Option<InstanceId> {
     }
 }
 
-/// A Model's parts all redraw (a Highlight covers them).
+/// `part` redraws in full.
 fn mark_part(dom: &Dom, changes: &mut RenderChanges, part: Option<InstanceId>) {
-    let Some(part) = part.filter(|_| !changes.full) else {
+    if let Some(part) =
+        part.filter(|&p| !changes.full && dom.is_a_class(p, RenderIds::get().base_part))
+    {
+        changes.parts.insert(part);
+    }
+}
+
+/// The adornments drawn on `part` changed: they alone redraw. Only a
+/// Highlight draws on a Model.
+fn mark_adorned(dom: &Dom, changes: &mut RenderChanges, part: Option<InstanceId>) {
+    if let Some(part) =
+        part.filter(|&p| !changes.full && dom.is_a_class(p, RenderIds::get().base_part))
+    {
+        changes.adorned.insert(part);
+    }
+}
+
+/// Which Highlight covers `target` (a part, or each part of a Model) may
+/// have changed: their covering alone is looked up again.
+fn mark_highlighted(dom: &Dom, changes: &mut RenderChanges, target: Option<InstanceId>) {
+    let Some(target) = target.filter(|_| !changes.full) else {
         return;
     };
     let c = RenderIds::get();
-    if dom.is_a_class(part, c.base_part) {
-        changes.parts.insert(part);
-    } else if dom.is_a_class(part, c.model) && !dom.is_a_class(part, c.world_root) {
-        let parts = dom.descendants(part).into_iter();
+    if dom.is_a_class(target, c.base_part) {
+        changes.highlighted.insert(target);
+    } else if dom.is_a_class(target, c.model) && !dom.is_a_class(target, c.world_root) {
+        let parts = dom.descendants(target).into_iter();
         changes
-            .parts
+            .highlighted
             .extend(parts.filter(|&p| dom.is_a_class(p, c.base_part)));
     }
 }
@@ -160,13 +199,13 @@ fn part_moved(dom: &Dom, changes: &mut RenderChanges, id: InstanceId) {
     }
     for &(r, _) in dom.referrers(id) {
         if dom.class_name(r) == "FloorWire" || dom.class_name(r) == "SelectionPartLasso" {
-            mark_part(dom, changes, adorned_part(dom, r));
+            mark_adorned(dom, changes, adorned_part(dom, r));
         }
     }
     if let Some(h) = rook_lua::humanoid_of_root(dom, id)
         && (dom.referrers(h).iter()).any(|&(r, _)| adorned_part(dom, r) == Some(id))
     {
-        mark_part(dom, changes, Some(id));
+        mark_adorned(dom, changes, Some(id));
     }
 }
 
@@ -232,6 +271,15 @@ pub(crate) struct RenderIds {
     decorations: [ClassId; 3],
     /// See [`is_adornment`].
     adornments: [ClassId; 6],
+    highlight: ClassId,
+    /// What a Highlight covers by (besides where it is).
+    highlight_cover: [PropertyId; 2],
+    /// What a Highlight looks like.
+    highlight_look: [PropertyId; 5],
+    viewport_frame: ClassId,
+    /// What a ViewportFrame's look is read from (`rook-scene`).
+    viewport_look: [PropertyId; 6],
+    camera: ClassId,
 }
 
 impl RenderIds {
@@ -270,199 +318,34 @@ impl RenderIds {
                     "Highlight",
                 ]
                 .map(class),
+                highlight: class("Highlight"),
+                highlight_cover: ["Adornee", "Enabled"]
+                    .map(|name| db.find_property(class("Highlight"), name).expect(name).id),
+                highlight_look: [
+                    "FillColor",
+                    "FillTransparency",
+                    "OutlineColor",
+                    "OutlineTransparency",
+                    "DepthMode",
+                ]
+                .map(|name| db.find_property(class("Highlight"), name).expect(name).id),
+                viewport_frame: class("ViewportFrame"),
+                viewport_look: [
+                    "CurrentCamera",
+                    "Ambient",
+                    "LightColor",
+                    "LightDirection",
+                    "BackgroundColor3",
+                    "BackgroundTransparency",
+                ]
+                .map(|name| {
+                    (db.find_property(class("ViewportFrame"), name))
+                        .expect(name)
+                        .id
+                }),
+                camera: class("Camera"),
             }
         });
         &IDS
-    }
-}
-
-impl DataModel {
-    /// Note whether the journal since the last check touched anything drawn:
-    /// parts, their meshes, decals and SurfaceAppearances, their ancestry,
-    /// Lighting, the Terrain and `Workspace.GlobalWind` (which bends grass),
-    /// or MaterialService and its MaterialVariants (which redraw the parts
-    /// and terrain they can draw on, found in `material_parts`).
-    /// Camera moves don't count; the renderer reads the camera every frame
-    /// anyway.
-    pub(crate) fn check_render_changes(&mut self) {
-        profiling::scope!("check_render_changes");
-        let calls = std::mem::take(&mut self.runtime.world_mut().effect_calls);
-        self.render_changes.effect_calls.extend(calls);
-        let world = self.runtime.world();
-        let dom = &world.dom;
-        let lighting = dom.find_service("Lighting");
-        // Lighting's look is its own properties and its children's (the
-        // Sky, a ColorGradingEffect).
-        let lights_scene =
-            |id: InstanceId| lighting.is_some_and(|l| id == l || dom.parent(id) == Some(l));
-        let ids = RenderIds::get();
-        let any_of =
-            |id: InstanceId, classes: &[ClassId]| classes.iter().any(|&c| dom.is_a_class(id, c));
-        let changes = &mut self.render_changes;
-        let (first, journal) = self.render_watch.look(dom);
-        rook_types::count!(JournalReadRender, journal.len());
-        let adorned = &mut self.adorned;
-        let material_parts = &mut self.material_parts;
-        if first {
-            material_parts.build(dom);
-            *adorned = dom
-                .descendants(dom.root())
-                .into_iter()
-                .filter(|&i| is_adornment(dom, i))
-                .filter_map(|i| Some((i, adorned_part(dom, i)?)))
-                .collect();
-        }
-        // A mesh decides how its parent part looks (SpecialMesh, BlockMesh,
-        // CylinderMesh, FileMesh), and decals and textures draw on it.
-        let decorates = |id: InstanceId| any_of(id, &ids.decorations);
-        let light = |id: InstanceId| dom.is_a_class(id, ids.light);
-        let effect = |id: InstanceId| is_effect_class(dom.class_name(id));
-        let wire = |id: InstanceId| dom.class_name(id) == "FloorWire";
-        let mark_part = |changes: &mut RenderChanges, part| mark_part(dom, changes, part);
-        // An adornment draws on its Adornee: its old and new ones change.
-        let adorn = |changes: &mut RenderChanges,
-                     adorned: &mut rustc_hash::FxHashMap<InstanceId, InstanceId>,
-                     id: InstanceId,
-                     gone: bool| {
-            let new = if gone { None } else { adorned_part(dom, id) };
-            let old = match new {
-                Some(part) => adorned.insert(id, part),
-                None => adorned.remove(&id),
-            };
-            mark_part(changes, old);
-            mark_part(changes, new);
-        };
-        let adornment = |id: InstanceId| is_adornment(dom, id);
-        for c in journal {
-            match c {
-                Change::Voxels { id, bounds } => changes.terrain_edits.push((*id, *bounds)),
-                Change::Property { id, property } => {
-                    // Part properties first: physics writes every moving
-                    // part's CFrame each frame. Terrain is a BasePart too.
-                    if ids.velocities.contains(property) {
-                        // Nothing draws them.
-                    } else if *property == ids.cframe && !dom.is_a_class(*id, ids.terrain) {
-                        part_moved(dom, changes, *id);
-                        // Physics journals only an assembly's root when it
-                        // all moves.
-                        for p in world.physics.moved_with(*id).filter(|p| p != id) {
-                            part_moved(dom, changes, p);
-                        }
-                    } else if lights_scene(*id) {
-                        changes.lighting = true;
-                    } else if dom.is_a_class(*id, ids.terrain) || *property == ids.global_wind {
-                        changes.terrain = true;
-                        changes.terrain_voxels |= Some(*property) == ids.smooth_grid;
-                    } else if dom.is_a_class(*id, ids.material_service) {
-                        let name = rook_reflection::database().property(*property).name;
-                        let overridden = name.strip_suffix("Name").and_then(Material::from_name);
-                        if let Some(material) = overridden {
-                            material_parts.override_changed(material, changes);
-                        } else if name.starts_with("Use2022Materials") {
-                            // It swaps every built-in material's textures.
-                            changes.full = true;
-                        }
-                    } else if dom.is_a_class(*id, ids.material_variant) {
-                        material_parts.note(dom, *id, changes);
-                    } else if effect(*id) {
-                        changes.effects.insert(*id);
-                    } else if light(*id) || dom.is_a_class(*id, ids.attachment) {
-                        // Attachments carry effects as well as lights.
-                        changes.lights.insert(*id);
-                        changes.effects.insert(*id);
-                    } else if decorates(*id) {
-                        mark_part(changes, dom.parent(*id));
-                    } else if adornment(*id) {
-                        adorn(changes, adorned, *id, false);
-                        if wire(*id) {
-                            changes.effects.insert(*id);
-                        }
-                    } else if dom.is_a_class(*id, ids.base_part) {
-                        if ids.part_materials.contains(property) {
-                            material_parts.note(dom, *id, changes);
-                        }
-                        mark_part(changes, Some(*id));
-                    }
-                    // Anything else's own properties (a Model's Name or
-                    // WorldPivot, a value) draw nothing: what decorates or
-                    // adorns a Model is handled above.
-                }
-                Change::Reparented {
-                    id,
-                    old_parent,
-                    new_parent,
-                    subtree,
-                    ..
-                } => {
-                    for &i in subtree {
-                        material_parts.note(dom, i, changes);
-                    }
-                    // Which Terrain Workspace holds may have changed.
-                    changes.terrain |= subtree.iter().any(|&i| dom.is_a_class(i, ids.terrain));
-                    // A Sky (or tone curve) arriving in or leaving Lighting.
-                    changes.lighting |=
-                        lighting.is_some_and(|l| *old_parent == Some(l) || *new_parent == Some(l));
-                    let attachment = |i: InstanceId| dom.is_a_class(i, ids.attachment);
-                    changes
-                        .lights_placed
-                        .extend(subtree.iter().filter(|&&i| light(i)));
-                    changes.effects_placed.extend(
-                        (subtree.iter()).filter(|&&i| effect(i) || wire(i) || attachment(i)),
-                    );
-                    for &i in subtree.iter().filter(|i| adornment(**i)) {
-                        adorn(changes, adorned, i, false);
-                    }
-                    let parts = subtree
-                        .iter()
-                        .filter(|&&i| dom.is_a_class(i, ids.base_part));
-                    let before = changes.placed.len();
-                    changes.placed.extend(parts);
-                    if changes.placed.len() == before && decorates(*id) {
-                        mark_part(changes, *old_parent);
-                        mark_part(changes, *new_parent);
-                    }
-                }
-                Change::Collected(id) => {
-                    changes.collect(*id);
-                    adorned.remove(id);
-                    material_parts.forget(*id);
-                }
-                Change::Destroying(id) if dom.is_a_class(*id, ids.terrain) => {
-                    changes.terrain = true;
-                }
-                Change::Destroying(id) if dom.is_a_class(*id, ids.base_part) => {
-                    changes.placed.insert(*id);
-                }
-                Change::Destroying(id) if light(*id) => {
-                    changes.lights_placed.insert(*id);
-                }
-                Change::Destroying(id) if effect(*id) => {
-                    changes.effects_placed.insert(*id);
-                }
-                Change::Destroying(id) if adornment(*id) => {
-                    adorn(changes, adorned, *id, true);
-                    if wire(*id) {
-                        changes.effects_placed.insert(*id);
-                    }
-                }
-                _ => {}
-            }
-        }
-        if changes.full {
-            changes.lights.clear();
-            changes.lights_placed.clear();
-            changes.effects.clear();
-            changes.effects_placed.clear();
-            changes.parts.clear();
-            changes.moved.clear();
-            changes.placed.clear();
-        } else {
-            // A part redrawn in full is drawn where it is now anyway.
-            let (parts, placed) = (&changes.parts, &changes.placed);
-            changes
-                .moved
-                .retain(|id| !parts.contains(id) && !placed.contains(id));
-            changes.parts.retain(|id| !placed.contains(id));
-        }
     }
 }

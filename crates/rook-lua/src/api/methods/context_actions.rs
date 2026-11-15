@@ -6,7 +6,9 @@ pub(super) fn luau_source(owner: &str, name: &str) -> Option<&'static str> {
         return None;
     }
     Some(match name {
-        "BindAction" => {
+        // The deprecated name for the same method (Observed: Studio 0.747
+        // lists its binding as BindAction does).
+        "BindAction" | "BindActionToInputTypes" => {
             "local c = (...).context_action return function(_, name, fn, touch, ...) c.bind('game', name, fn, touch, nil, ...) end"
         }
         "BindActionAtPriority" => {

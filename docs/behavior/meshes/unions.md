@@ -109,7 +109,7 @@ same cameras). Observed unless marked:
   observed in step 3.
 
 *Performance* (release builds, base = the build before this step, one `rook-player --bench
-300` run each): whole-frame medians a small place 1.86 against 1.93 ms, a large 2016 place
+300` run each): whole-frame medians a small place 1.86 against 1.93 ms, a large older place
 19.0 against 18.7 ms, a third large place (182 union uses) 17.7
 against 19.8 ms, where the server step, which unions don't touch, moved
 by as much (8.6 to 9.6 ms): within run-to-run noise.

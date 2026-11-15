@@ -27,6 +27,12 @@ impl Dom {
         Some(out)
     }
 
+    /// The instances of tracked `class`, in no set order, without the copy
+    /// [`Dom::instances_of`] makes: for callers that order what they keep.
+    pub fn each_of(&self, class: ClassId) -> impl Iterator<Item = InstanceId> + '_ {
+        self.of_class.get(&class).into_iter().flatten().copied()
+    }
+
     /// Index `id`, just made, under the tracked classes it is.
     pub(crate) fn note_class(&mut self, id: InstanceId) {
         let class = self.instances[id].class;

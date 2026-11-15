@@ -23,7 +23,9 @@ use rook_dom::{Change, Dom, InstanceId};
 use rook_reflection::PropertyId;
 use rook_types::{CFrame, Value, Vector3};
 
-pub use shape::{is_part, part_box, part_shape, workspace_parts};
+pub use shape::{
+    in_workspace_world, is_part, is_world_model, part_box, part_shape, workspace_parts,
+};
 
 pub use explosion::Blast;
 pub use query::{CastShape, Filter, Hit, Region};
@@ -182,6 +184,11 @@ pub struct Physics {
     /// Bodies gravity alone moved over the last step, about to land if
     /// they land at all: only these pay for [`contacts::Mixer`].
     flying: FxHashSet<RigidBodyHandle>,
+    /// Bodies that stopped flying over the last step. They keep
+    /// [`contacts::Mixer`] one step more, so the contacts Rapier goes on
+    /// reusing once it's off are ones it made without the falling body's
+    /// changes.
+    landed: Vec<RigidBodyHandle>,
     /// Which part each collider belongs to.
     pub(crate) colliders: FxHashMap<ColliderHandle, InstanceId>,
     groups: CollisionGroups,
@@ -220,6 +227,8 @@ pub struct Physics {
     stale_statics: FxHashSet<InstanceId>,
     /// Every part's `Size` box, for the queries that find parts by it.
     bounds: query::bounds::PartBounds,
+    /// The WorldModels queried, each a world of its own.
+    world_models: query::world_models::WorldModels,
     authority: Authority,
     /// Parts whose assemblies change hands at the next sync.
     handed_over: Vec<InstanceId>,
@@ -288,6 +297,7 @@ impl Physics {
             awake: Vec::new(),
             before_step: Vec::new(),
             flying: FxHashSet::default(),
+            landed: Vec::new(),
             colliders: FxHashMap::default(),
             groups: CollisionGroups::default(),
             touches_use_groups: false,
@@ -309,6 +319,7 @@ impl Physics {
             stale: FxHashSet::default(),
             stale_statics: FxHashSet::default(),
             bounds: query::bounds::PartBounds::default(),
+            world_models: Default::default(),
             authority: Authority::default(),
             handed_over: Vec::new(),
             saved: saved::SavedShapes::default(),
@@ -452,7 +463,8 @@ impl Physics {
     }
 
     /// Bring the world up to date with the DOM: on the first call, add
-    /// every Workspace part; after that, apply the journal since last time.
+    /// every Workspace part and build the terrain each loose one may
+    /// touch; after that, apply the journal since last time.
     /// Parts are snapped to where their joints hold them.
     pub fn sync(&mut self, dom: &mut Dom) {
         profiling::scope!("Physics::sync");
@@ -463,7 +475,8 @@ impl Physics {
             return;
         };
         rook_types::gauge!(PhysicsParts, self.parts.len());
-        if !self.built {
+        let first = !self.built;
+        if first {
             self.handed_over.clear();
             self.build(dom, &props);
         } else {
@@ -474,6 +487,11 @@ impl Physics {
             self.rebuild(dom, &props, handed_over);
         }
         self.refresh_terrain(dom);
+        if first {
+            // The terrain under the place's loose parts, which their first
+            // step would otherwise build all at once.
+            self.build_terrain_near_bodies(0.0);
+        }
         let dirty = std::mem::take(&mut self.dirty);
         self.refresh_constraints(dom, &dirty);
         self.refresh_movers(dom, &dirty);

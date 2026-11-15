@@ -1,5 +1,11 @@
 use super::*;
 
+/// How many instances and properties of the models scripts load go in each
+/// frame: about 4 ms at the ~185 ns each measured on a 5,000-instance
+/// model, Unity's per-frame integration budget at below-normal background
+/// loading priority. Counted rather than timed, so runs repeat exactly.
+pub(crate) const PLACED_PER_FRAME: usize = 20_000;
+
 impl DataModel {
     /// Run one frame.
     ///
@@ -90,6 +96,9 @@ impl DataModel {
         self.place_drawn();
         // A script may have replaced the current camera.
         self.sync_viewport_size();
+        // Prompts follow the settled camera, before GUI is laid out, so
+        // the GUI their handlers make is drawn this frame.
+        self.runtime.update_prompts();
         self.ease_scrolls();
         self.lay_out_gui();
         self.runtime.sync_overheads();
@@ -128,7 +137,7 @@ impl DataModel {
     }
 
     /// Hand scripts' new content requests and sounds' files to the loader
-    /// and deliver what finished on the engine thread (docs/design/architecture.md#engine-systems
+    /// and deliver what finished on the engine thread (docs/design/architecture/threads-and-frames.md#threading-and-data-flow
     /// "Content"); finished sound files are returned. Nothing happens
     /// unless scripts or sounds asked for content.
     fn run_loader(
@@ -152,6 +161,7 @@ impl DataModel {
             && content.tickets.is_empty()
             && content.assets.is_empty()
             && content.fonts.is_empty()
+            && content.placing.is_empty()
             && self.sounds.tickets.is_empty()
         {
             return sounds_done;
@@ -175,7 +185,8 @@ impl DataModel {
             match u64::try_from(id).ok().filter(|&id| id > 0) {
                 Some(id) => {
                     let r = rook_content::ContentRef::Asset { id, version: None };
-                    content.assets.insert(loader.request(r), request);
+                    let ticket = loader.request_as(r, rook_content::Want::Model);
+                    content.assets.insert(ticket, request);
                 }
                 None => assets_done.push((request, Err(rook_content::FailureKind::NotFound))),
             }
@@ -212,10 +223,39 @@ impl DataModel {
             }
         }
         self.runtime.deliver_content(&results);
-        for (request, fill) in assets_done {
-            self.runtime.deliver_asset(request, fill);
+        for (request, loaded) in assets_done {
+            match loaded {
+                Ok(loaded) => {
+                    let model = (self.runtime.world_mut().dom)
+                        .create_by_name("Model")
+                        .expect("Model is a class");
+                    let placing = rook_formats::Placing::new(loaded, model);
+                    self.content.placing.push((request, model, placing));
+                }
+                Err(kind) => self.runtime.deliver_asset(request, Err(kind)),
+            }
         }
+        self.place_assets();
         sounds_done
+    }
+
+    /// Put in the models scripts loaded, [`PLACED_PER_FRAME`] instances
+    /// and properties a frame in the order they came, and hand each to its
+    /// script once it's whole.
+    fn place_assets(&mut self) {
+        let mut budget = PLACED_PER_FRAME;
+        while budget > 0
+            && let Some((request, model, placing)) = self.content.placing.first_mut()
+        {
+            let mut world = self.runtime.world_mut();
+            if placing.place(&mut world.dom, &mut budget).is_none() {
+                break;
+            }
+            drop(world);
+            let (request, model) = (*request, *model);
+            self.content.placing.remove(0);
+            self.runtime.deliver_asset(request, Ok(model));
+        }
     }
 
     /// Step physics and write the results into the DOM. Each side
@@ -230,12 +270,10 @@ impl DataModel {
             // A client with no character: its world only answers queries.
             return;
         }
-        let blasts = if server {
+        if server {
             self.age_explosions(dt);
-            self.set_off_explosions()
-        } else {
-            Vec::new()
-        };
+            self.set_off_explosions();
+        }
         let (fallen, touches, reached, humanoids) = {
             let mut w = self.runtime.world_mut();
             let w = &mut *w;
@@ -254,7 +292,6 @@ impl DataModel {
             )
         };
         self.runtime.humanoids_stepped(humanoids);
-        self.fire_explosion_hits(blasts);
         // Both parts fire, the lower id first (observed: the part made
         // first fired first in Studio; the real order is unknown).
         for t in touches {
@@ -266,6 +303,9 @@ impl DataModel {
                 let is_spawn = self.runtime.world().dom.is_a(part, "SpawnLocation");
                 if server && t.began && is_spawn {
                     self.runtime.spawn_touched(part, other);
+                }
+                if server && t.began {
+                    self.runtime.tool_touched(part, other);
                 }
             }
         }
@@ -281,15 +321,12 @@ impl DataModel {
     }
 }
 
-/// Read a fetched model asset, for scripts that load it: a function that
-/// moves its instances into the Model they get.
+/// A fetched model asset, read on the loader's threads, for scripts that
+/// load it: a function that moves its instances into the Model they get
+/// (copies them, when the same file answered another request too).
 fn read_asset(
     outcome: Result<rook_content::Fetched, rook_content::Failure>,
-) -> rook_lua::AssetFill {
+) -> Result<Arc<rook_formats::Loaded>, rook_content::FailureKind> {
     let fetched = outcome.map_err(|f| f.kind)?;
-    let loaded =
-        rook_formats::load(&fetched.bytes).map_err(|_| rook_content::FailureKind::Invalid)?;
-    Ok(Box::new(move |dom, model| {
-        rook_formats::into_dom(loaded.dom, dom, model);
-    }))
+    fetched.model.ok_or(rook_content::FailureKind::Invalid)
 }

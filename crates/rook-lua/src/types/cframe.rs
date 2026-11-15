@@ -61,9 +61,10 @@ fn new(_: &Lua, args: MultiValue) -> mlua::Result<LCFrame> {
         Some(LuaValue::Vector(v)) => Some(g(*v)),
         _ => None,
     };
-    let nums: Option<Vec<f32>> = args
+    // Measured: the component forms read anything not a number as 0.
+    let nums: Vec<f32> = args
         .iter()
-        .map(|v| number_of(v).map(|n| n as f32))
+        .map(|v| number_of(v).unwrap_or(0.0) as f32)
         .collect();
     match args.len() {
         0 => Ok(LCFrame(CFrame::IDENTITY)),
@@ -76,7 +77,7 @@ fn new(_: &Lua, args: MultiValue) -> mlua::Result<LCFrame> {
             (None, _) => Err(new_argument(1, &args[0])),
         },
         3 | 7 | 12 => {
-            let n = nums.ok_or_else(|| err("invalid argument to 'new' (number expected)"))?;
+            let n = nums;
             let pos = Vec3::new(n[0], n[1], n[2]);
             Ok(match n.len() {
                 3 => cf(pos, Mat3::IDENTITY),
@@ -173,6 +174,7 @@ impl UserData for LCFrame {
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
+        super::members::add_unknown(m, "CFrame", super::members::Wording::Plain);
         for name in ["Inverse", "inverse"] {
             m.add_method(name, |_, t, ()| Ok(LCFrame(t.0.inverse())));
         }

@@ -156,3 +156,35 @@ fn region16_bounds(r: Region3int16) -> Option<Bounds> {
     let (min, max) = (v16(r.min), v16(r.max));
     min.cmple(max).all().then_some(Bounds { min, max })
 }
+
+pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
+    Some(match (owner, name) {
+        ("Terrain", "FillBlock") => fill_block,
+        ("Terrain", "FillBall") => fill_ball,
+        ("Terrain", "FillCylinder") => fill_cylinder,
+        ("Terrain", "FillWedge") => fill_wedge,
+        ("Terrain", "FillRegion") => fill_region,
+        ("Terrain", "ReplaceMaterial") => replace_material,
+        ("Terrain", "ReadVoxels") => read_voxels,
+        ("Terrain", "WriteVoxels") => write_voxels,
+        ("Terrain", "Clear") => terrain_clear,
+        ("Terrain", "CountCells") => count_cells,
+        ("Terrain", "WorldToCell") => world_to_cell,
+        ("Terrain", "WorldToCellPreferSolid") => world_to_cell_prefer_solid,
+        ("Terrain", "WorldToCellPreferEmpty") => world_to_cell_prefer_empty,
+        ("Terrain", "CellCenterToWorld") => cell_center_to_world,
+        ("Terrain", "CellCornerToWorld") => cell_corner_to_world,
+        ("Terrain", "GetCell") => get_cell,
+        ("Terrain", "SetCell") => set_cell,
+        ("Terrain", "SetCells") => set_cells_region,
+        ("Terrain", "AutowedgeCell") => autowedge_cell,
+        ("Terrain", "AutowedgeCells") => autowedge_cells,
+        ("Terrain", "SetWaterCell") => set_water_cell,
+        ("Terrain", "GetWaterCell") => get_water_cell,
+        ("Terrain", "CopyRegion") => copy_region,
+        ("Terrain", "PasteRegion") => paste_region,
+        ("Terrain", "GetMaterialColor") => get_material_color,
+        ("Terrain", "SetMaterialColor") => set_material_color,
+        _ => return None,
+    })
+}

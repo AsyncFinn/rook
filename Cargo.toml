@@ -105,6 +105,8 @@ slotmap = "1.1"
 # Every hash map and set (clippy.toml bans std's): fast, and the same
 # iteration order every run
 rustc-hash = "2.1"
+# Constrained Delaunay triangulation: closing terrain ring seams (rook-terrain)
+spade = { version = "2.15", default-features = false, features = ["std"] }
 profiling = "1"
 # Sound files (rook-content): pure-Rust WAV (PCM, ADPCM), Ogg Vorbis and MP3
 # decoders, nothing else (docs/behavior/audio/playback.md)

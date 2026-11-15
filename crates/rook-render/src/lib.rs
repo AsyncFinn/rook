@@ -1,6 +1,7 @@
 //! wgpu renderer for Rook. It draws a [`Scene`] snapshot and never touches
-//! the DOM (docs/design/architecture.md#engine-systems). Terrain arrives as
-//! mesh files too: the player meshes its chunks with `rook-terrain`.
+//! the DOM (docs/design/architecture/threads-and-frames.md#threading-and-data-flow). Terrain arrives as
+//! mesh files too: the player meshes its chunks with `rook-terrain`; its
+//! voxels come only for the light voxels ([`TerrainVoxels`]).
 
 mod batch;
 mod effects;
@@ -15,8 +16,8 @@ pub use scene::{
     AdornShape, Anchor, Beam, Camera, Curve, Detile, DrawShape, EffectSlots, Emitter, EmitterLook,
     EmitterShape, Fidelity, Flipbook, FlipbookMode, FloorWire, Grow, Highlight, ImageHash,
     ImagePlacement, InOut, Layer, Light, LightShape, Lighting, LocalLight, MapAlpha, MaterialMaps,
-    MeshHash, Orientation, PartInstance, RibbonLook, SKYBOX_FACES, Scene, Sequence, Spawn,
-    TerrainColor, TerrainLook, TextureMode, Tonemapper, Trail,
+    MeshHash, Orientation, PartInstance, RibbonLook, SKYBOX_FACES, Scene, Sequence, Space, Spawn,
+    TerrainColor, TerrainLook, TerrainVoxels, TextureMode, Tonemapper, Trail, Viewport,
 };
 
 // Content hashes are 32 bytes: FxHash keeps lookups by them cheap.
@@ -26,7 +27,7 @@ use bytemuck::{Pod, Zeroable};
 use glam::Vec3;
 use rook_content::decode::image::Image;
 use rook_content::decode::mesh::Mesh;
-use rook_types::{GuiQuad, Material, NormalId, PartShape, WorldCanvas, WorldPlace};
+use rook_types::{GuiQuad, Material, NormalId, PartShape, WorldCanvases, WorldPlace};
 use wgpu::util::DeviceExt;
 
 use batch::cull::{Aabb, Frustum, MOTION_STUDS};

@@ -374,7 +374,9 @@ impl Physics {
             .parent()
             .and_then(|b| self.world.bodies.get(b))
             .map_or(0, |rb| rb.user_data);
-        let flying = c.parent().is_some_and(|b| self.flying.contains(&b));
+        let flying = c
+            .parent()
+            .is_some_and(|b| self.flying.contains(&b) || self.landed.contains(&b));
         let hooks = if flying {
             ActiveHooks::MODIFY_SOLVER_CONTACTS
         } else {
@@ -532,7 +534,7 @@ impl Physics {
         // Queries put it in place first, as for a moved body.
         self.static_moved(part);
         // Constraints and movers hold it by its place on the shared body.
-        self.dirty.extend(self.attached.holders(part));
+        self.place_held(part);
     }
 
     /// A script moved `part` (or set its velocity): move its body to match.

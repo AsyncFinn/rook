@@ -7,9 +7,9 @@ use rook_types::{Color3, Value};
 use crate::api::instance::{LuaInstance, push_instance};
 use crate::ctx::args::{borrow_clone, number_of, type_name};
 use crate::types::{
-    LBrickColor, LCFrame, LColor3, LColorSequence, LContent, LFont, LNumberRange, LNumberSequence,
-    LRay, LRect, LRegion3, LRegion3int16, LUDim, LUDim2, LVector2, LVector2int16, LVector3int16,
-    Opaque, enums,
+    LAxes, LBrickColor, LCFrame, LColor3, LColorSequence, LContent, LFaces, LFont, LNumberRange,
+    LNumberSequence, LOther, LPhysicalProperties, LRay, LRect, LRegion3, LRegion3int16, LUDim,
+    LUDim2, LVector2, LVector2int16, LVector3int16, enums,
 };
 
 pub(crate) fn from_lua_vector(v: mlua::Vector) -> rook_types::Vector3 {
@@ -67,7 +67,7 @@ pub(crate) fn to_lua(lua: &Lua, value: &Value, enum_id: Option<EnumId>) -> mlua:
             }
         }
         Value::Ref(Some(r)) => LuaValue::UserData(push_instance(lua, InstanceId::from_ref(*r))?),
-        other => Opaque(other.clone()).into_lua(lua)?,
+        other => crate::types::misc::opaque(lua, other.clone())?,
     })
 }
 
@@ -193,7 +193,10 @@ pub(crate) fn datatype_value(u: &mlua::AnyUserData) -> Option<Value> {
         LRegion3int16 => |x: LRegion3int16| Value::Region3int16(x.0),
         LVector3int16 => |x: LVector3int16| Value::Vector3int16(x.0),
         LVector2int16 => |x: LVector2int16| Value::Vector2int16(x.0),
-        Opaque => |x: Opaque| x.0,
+        LFaces => |x: LFaces| x.0,
+        LAxes => |x: LAxes| x.0,
+        LPhysicalProperties => |x: LPhysicalProperties| x.0,
+        LOther => |x: LOther| x.0,
     );
     None
 }

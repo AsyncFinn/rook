@@ -28,7 +28,7 @@ pub fn screenshot(
     let mut renderer = Renderer::headless()?;
     crate::note_gpu(&renderer);
     install.apply(&mut renderer);
-    renderer.set_scene(&scene.scene);
+    scene.show_all(&mut renderer);
     scene.show_gui(game.view(), &mut renderer, None);
     if !start.clicks.is_empty() {
         let (dm, look) = (game.view(), game.view().cursor_look());

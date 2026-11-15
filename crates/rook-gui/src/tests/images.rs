@@ -197,3 +197,27 @@ fn odd_slice_centers() {
     );
     assert_eq!(within[0].2, [0.25, 0.333, 0.375, 0.5]);
 }
+
+#[test]
+fn an_object_collected_while_its_image_loads_is_not_drawn_again() {
+    let (mut dom, frame) = boxed();
+    let content = Value::Content(Content::from_uri(URL));
+    let id = child(&mut dom, "ImageLabel", frame, &[("ImageContent", content)]);
+    let mut gui = laid_out(&mut dom);
+    drawn(&mut gui, &dom);
+    assert_eq!(gui.take_image_requests(), [URL]);
+    dom.destroy(id).unwrap();
+    gui.sync(&mut dom);
+    // Announced, heard by the GUI, then freed (as `Runtime::trim_journal`).
+    dom.announce_collectable(|_| false);
+    gui.note_changes(&dom);
+    assert_eq!(dom.free_collected(|_| false), [id]);
+    let image = GuiImage {
+        hash: [1; 32],
+        width: 64,
+        height: 48,
+    };
+    gui.image_arrived(URL, Some(image));
+    // Debug builds fail reading a freed instance.
+    gui.sync(&mut dom);
+}

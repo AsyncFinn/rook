@@ -6,6 +6,7 @@ use super::highlights::HighlightRun;
 use super::*;
 use crate::batch::CULL_SLOTS;
 use crate::batch::cull::seen_runs;
+use detail::DetailView;
 use runs::{Pipe, Runs, Source};
 use transparent::TransparentRun;
 
@@ -23,12 +24,20 @@ impl Renderer {
     ) -> Vec<TransparentRun> {
         {
             profiling::scope!("opaque and layers");
-            (self.opaque).upload(&self.device, &self.queue, encoder, &self.scatter);
-            (self.layers).upload(&self.device, &self.queue, encoder, &self.scatter);
-            rook_types::gauge!(RenderSlots, self.opaque.slots() + self.layers.slots());
+            let world = &mut self.world;
+            (world.opaque).upload(&self.device, &self.queue, encoder, &self.scatter);
+            (world.layers).upload(&self.device, &self.queue, encoder, &self.scatter);
+            rook_types::gauge!(RenderSlots, world.opaque.slots() + world.layers.slots());
         }
-        self.transparent
-            .upload(&self.device, &self.queue, camera, view, margin)
+        (self.world.transparent).upload(&self.device, &self.queue, camera, view, margin)
+    }
+
+    /// Make the targets a `width` × `height` frame draws into, as a
+    /// surface is configured: a frame at a new size otherwise makes them
+    /// itself, and a driver can take a long time over the first ones.
+    pub fn size_targets(&mut self, width: u32, height: u32) {
+        self.depth_view(width, height);
+        self.tonemap.frame(&self.device, width, height);
     }
 
     fn depth_view(&mut self, width: u32, height: u32) -> wgpu::TextureView {
@@ -87,7 +96,6 @@ impl Renderer {
         let view = Frustum::of(view_proj);
         let margin = MOTION_STUDS.max(self.terrain.wave_size.abs());
         self.write_globals(camera, (aspect, height), sun, shadow);
-        self.detail.view(camera);
 
         stage(&mut times.setup);
         // One command buffer for the whole frame, uploads' copies first.
@@ -100,6 +108,12 @@ impl Renderer {
             profiling::scope!("upload instances");
             self.upload_instances(&mut encoder, camera, &view, margin)
         };
+        // The ViewportFrames' pictures out of date, before the GUI binds
+        // the images it draws.
+        let mut viewport_runs = self.viewport_draws(&mut encoder);
+        if let Some(views) = self.take_viewport_views() {
+            self.gui.set_viewports(views);
+        }
 
         stage(&mut times.instances);
         let ribbon_runs = self.upload_ribbons(camera, &view);
@@ -117,11 +131,12 @@ impl Renderer {
         let (highlight_runs, looks) = self.highlights.upload(&self.device, &self.queue);
         // Each pass's draws, joined into runs that share what's bound.
         let ([mut shadow_runs, mut main_runs, mut mask_runs], starts) = self.build_draws(
-            shadow,
+            (shadow, camera),
             &view,
             (margin, view_proj),
             (transparent_runs, &world_gui_runs),
             highlight_runs,
+            &viewport_runs,
         );
 
         stage(&mut times.draws);
@@ -136,6 +151,8 @@ impl Renderer {
         );
         stage(&mut times.lights);
         self.update_sky_cube(&mut encoder);
+        // A ViewportFrame can sit in a CanvasGroup: its picture first.
+        self.record_viewports(&mut encoder, &mut viewport_runs, &starts[3..]);
         self.gui.record_groups(&self.queue, &mut encoder);
         if shadow.is_some() {
             self.shadow_pass(&mut encoder, &mut shadow_runs, starts[0]);
@@ -184,6 +201,16 @@ impl Renderer {
         self.record_time = start.elapsed();
     }
 
+    /// End a frame that draws nothing (the window has no image to draw
+    /// into, as when it's minimized): the scene's changes taken since the
+    /// last frame still go to the GPU. wgpu holds every write, and every
+    /// buffer it was written to, until something is submitted, so frames
+    /// that never submit would hold more GPU memory every frame.
+    pub fn submit_undrawn(&mut self) {
+        profiling::scope!("Renderer::submit_undrawn");
+        self.queue.submit([]);
+    }
+
     /// The lighting, camera and sky the shaders read this frame.
     fn write_globals(
         &mut self,
@@ -204,16 +231,7 @@ impl Renderer {
             sky_images[i / 4][i % 4] = self.image_slots(&lone_image(Some(*hash)))[0];
         }
         let rgb = |c: [f32; 3], w: f32| [c[0], c[1], c[2], w];
-        let mut faces = [[0.0; 4]; 12];
-        for face in NormalId::ALL {
-            let (right, up) = face.image_axes();
-            faces[face.index() * 2] = rgb(right.to_array(), rook_types::SURFACE_TILE_STUDS);
-            faces[face.index() * 2 + 1] = rgb(up.to_array(), 0.0);
-        }
-        let view_proj = camera.view_projection(aspect);
         let globals = Globals {
-            view_proj: view_proj.to_cols_array_2d(),
-            camera_pos: rgb(camera.position.to_array(), 1.0),
             sun_dir: rgb(sun.to_array(), 0.0),
             sun_color: rgb(l.sun_color, 0.0),
             ambient: rgb(l.ambient, 0.0),
@@ -223,7 +241,7 @@ impl Renderer {
                 l.fog_start,
                 l.fog_end,
                 l.exposure,
-                2.0 * (camera.fov_y.to_radians() * 0.5).tan() / height.max(1) as f32,
+                viewports::pixel_studs(camera, height),
             ],
             shadow_view_proj: shadow
                 .map_or(glam::Mat4::IDENTITY, |s| s.view_proj)
@@ -237,17 +255,41 @@ impl Renderer {
                 ],
                 None => [0.0; 4],
             },
+            sky_top: rgb(l.sky_top, l.environment_diffuse),
+            sky_horizon: rgb(l.sky_horizon, l.environment_specular),
+            sky_bottom: rgb(l.sky_bottom, 0.0),
+            sky_tint: rgb(l.sky_tint, 0.0),
+            sky_images,
+            ..self.view_globals(camera, aspect)
+        };
+        self.queue
+            .write_buffer(&self.globals, 0, bytemuck::bytes_of(&globals));
+    }
+
+    /// What every world's globals share: `camera`'s view, the faces' image
+    /// axes, the clock and wind. Unlit: no sun, ambient, sky or fog, no
+    /// shadows, exposure 0; each world sets its own.
+    pub(crate) fn view_globals(&self, camera: &Camera, aspect: f32) -> Globals {
+        let rgb = |c: [f32; 3], w: f32| [c[0], c[1], c[2], w];
+        let mut faces = [[0.0; 4]; 12];
+        for face in NormalId::ALL {
+            let (right, up) = face.image_axes();
+            faces[face.index() * 2] = rgb(right.to_array(), rook_types::SURFACE_TILE_STUDS);
+            faces[face.index() * 2 + 1] = rgb(up.to_array(), 0.0);
+        }
+        let mut sky_faces = [[0.0; 4]; 18];
+        for (i, (dir, right, up)) in SKYBOX_FACES.iter().enumerate() {
+            sky_faces[i * 3] = rgb(dir.to_array(), 0.0);
+            sky_faces[i * 3 + 1] = rgb(right.to_array(), 0.0);
+            sky_faces[i * 3 + 2] = rgb(up.to_array(), 0.0);
+        }
+        Globals {
+            view_proj: camera.view_projection(aspect).to_cols_array_2d(),
+            camera_pos: rgb(camera.position.to_array(), 1.0),
+            shadow_view_proj: glam::Mat4::IDENTITY.to_cols_array_2d(),
             faces,
             sky_from_clip: camera.sky_from_clip(aspect).to_cols_array_2d(),
-            sky_faces: {
-                let mut out = [[0.0; 4]; 18];
-                for (i, (dir, right, up)) in SKYBOX_FACES.iter().enumerate() {
-                    out[i * 3] = rgb(dir.to_array(), 0.0);
-                    out[i * 3 + 1] = rgb(right.to_array(), 0.0);
-                    out[i * 3 + 2] = rgb(up.to_array(), 0.0);
-                }
-                out
-            },
+            sky_faces,
             terrain: [
                 self.time,
                 self.terrain.wave_size,
@@ -255,14 +297,8 @@ impl Renderer {
                 self.terrain.grass_reach,
             ],
             wind: rgb(self.terrain.wind.to_array(), self.water_phase as f32),
-            sky_top: rgb(l.sky_top, l.environment_diffuse),
-            sky_horizon: rgb(l.sky_horizon, l.environment_specular),
-            sky_bottom: rgb(l.sky_bottom, 0.0),
-            sky_tint: rgb(l.sky_tint, 0.0),
-            sky_images,
-        };
-        self.queue
-            .write_buffer(&self.globals, 0, bytemuck::bytes_of(&globals));
+            ..bytemuck::Zeroable::zeroed()
+        }
     }
 
     /// Depth from the sun into the shadow map.
@@ -284,7 +320,7 @@ impl Renderer {
             multiview_mask: None,
         });
         pass.set_bind_group(0, &self.bind_group, &[]);
-        self.record(&mut pass, runs, start, |_, _| {});
+        self.record(&self.world, &mut pass, runs, start, |_, _| {});
     }
 
     /// The sky, the parts, the effects and the world GUI into the frame.
@@ -335,7 +371,7 @@ impl Renderer {
         pass.set_bind_group(2, self.group(&lone_image(None)), &[]);
         self.record_sky(&mut pass);
         let mut drawn = 0;
-        self.record(&mut pass, runs, start, |pass, canvases| {
+        self.record(&self.world, &mut pass, runs, start, |pass, canvases| {
             self.gui.record_world(pass, &world_gui[drawn..canvases]);
             // The canvases bind their own group 3; the parts' groups 0 to
             // 2 stay (`WorldGui::group_layout`).
@@ -351,19 +387,23 @@ impl Renderer {
 
     /// Each pass's draws, joined into runs that share what's bound, with
     /// their arguments uploaded: (the shadow, main and Highlight mask
-    /// passes, where each pass's arguments start). The world GUI's
-    /// canvases cut into the transparent draws where they sort among them.
+    /// passes, where each pass's arguments start, then each of
+    /// `viewports`' after them). The world GUI's canvases cut into the
+    /// transparent draws where they sort among them.
     fn build_draws(
         &mut self,
-        shadow: Option<ShadowView>,
+        (shadow, camera): (Option<ShadowView>, &Camera),
         view: &Frustum,
         (margin, view_proj): (f32, glam::Mat4),
         (transparent_runs, world_gui): (Vec<TransparentRun>, &WorldRuns),
         highlight_runs: Vec<HighlightRun>,
+        viewports: &[(u64, Runs)],
     ) -> ([Runs; 3], Vec<usize>) {
         profiling::scope!("build draws");
-        let mut shadow_runs = Runs::default();
-        let mut main_runs = Runs::default();
+        let detail = DetailView::of(camera);
+        let mut shadow_runs = Runs::seen_from(detail);
+        let mut main_runs = Runs::seen_from(detail);
+        let world = &self.world;
         // The sun's whole view, not just the camera's: a part off screen
         // still shadows what's on it.
         let sun_view = shadow.map(|s| Frustum::of(s.view_proj));
@@ -372,97 +412,43 @@ impl Renderer {
         let ((seen, shadowed), layers_seen) = workers.join(
             || {
                 workers.join(
-                    || self.opaque.seen(view, margin),
+                    || world.opaque.seen(view, margin),
                     || {
                         sun_view
                             .as_ref()
-                            .map(|sun| (sun, self.opaque.seen(sun, margin)))
+                            .map(|sun| (sun, world.opaque.seen(sun, margin)))
                     },
                 )
             },
-            || self.layers.seen(view, margin),
+            || world.layers.seen(view, margin),
         );
-        for (k, &seen) in seen.iter().enumerate() {
-            let sun = shadowed.as_ref().filter(|(_, s)| s[k]).map(|(sun, _)| *sun);
-            if sun.is_none() && !seen {
-                continue;
-            }
-            let (key, instances, chunks, _) = self.opaque.draw(k);
-            let Some(mesh) = self.meshes.get(&key.shape) else {
-                continue;
-            };
-            let picked = |at| self.opaque.picked(k, at);
-            if let Some(sun) = sun {
-                let (pipe, source) = (Pipe::Shadow, Source::Opaque);
-                for run in seen_runs(sun, chunks, CULL_SLOTS, margin, instances.clone()) {
-                    self.push_draws(&mut shadow_runs, pipe, source, mesh, key, run, picked);
-                }
-            }
-            if seen {
-                let (pipe, source) = (Pipe::Opaque, Source::Opaque);
-                for run in seen_runs(view, chunks, CULL_SLOTS, margin, instances) {
-                    self.push_draws(&mut main_runs, pipe, source, mesh, key, run, picked);
-                }
-            }
-        }
-        // Then images on opaque parts (before transparent parts, so a
-        // window in front of a decal covers it), then transparent parts
-        // back to front.
-        for k in (0..layers_seen.len()).filter(|&k| layers_seen[k]) {
-            let (key, instances, chunks, z) = self.layers.draw(k);
-            let Some(mesh) = self.meshes.get(&key.shape) else {
-                continue;
-            };
-            let pipe = if z == placement::OVER_Z {
-                Pipe::Over
-            } else {
-                Pipe::Layer
-            };
-            let source = Source::Layers;
-            let picked = |at| self.layers.picked(k, at);
-            for run in seen_runs(view, chunks, CULL_SLOTS, margin, instances) {
-                self.push_draws(&mut main_runs, pipe, source, mesh, key, run, picked);
+        if let Some((sun, shadowed)) = &shadowed {
+            for k in (0..shadowed.len()).filter(|&k| shadowed[k]) {
+                self.push_opaque(world, &mut shadow_runs, Pipe::Shadow, (sun, margin), k);
             }
         }
         // A canvas farther than a transparent part it overlaps on the
         // screen is drawn before it, so the part covers it; those nearer
         // than every part are drawn after the effects (`main_pass`).
-        let distances = self.transparent.distances();
+        let distances = world.transparent.distances();
         let nearest = distances.last().copied().unwrap_or(f32::INFINITY);
         let among = (world_gui.iter())
             .take_while(|d| !d.on_top && d.distance.powi(2) > nearest)
             .map(|d| (cuts::Rect::of(view_proj, d.corners), d.distance.powi(2)))
             .collect::<Vec<_>>();
         let instances =
-            (self.transparent.picks().iter().zip(distances)).map(|(&(_, world), &d)| (world, d));
+            (world.transparent.picks().iter().zip(distances)).map(|(&(_, w), &d)| (w, d));
         let places = (self.cuts).places(view_proj, margin, instances, &among);
-        let picked = |at: u32| self.transparent.picks()[at as usize];
-        let mut cut = 0;
-        for (key, pass, instances) in transparent_runs {
-            let Some(mesh) = self.meshes.get(&key.shape) else {
-                continue;
-            };
-            let (pipe, source) = (pass.pipe(), Source::Transparent);
-            let (mut start, end) = (instances.start, instances.end);
-            // The canvases placed before each instance of this run, but
-            // its first (cut before the run).
-            while let Some(&at) = places.get(cut).filter(|&&at| at < end) {
-                let upto = cut + places[cut..].partition_point(|&p| p == at);
-                if at > start {
-                    let run = start..at;
-                    self.push_draws(&mut main_runs, pipe, source, mesh, &key, run, picked);
-                    start = at;
-                }
-                main_runs.cut(upto);
-                cut = upto;
-            }
-            self.push_draws(&mut main_runs, pipe, source, mesh, &key, start..end, picked);
-        }
-        // Those placed after every part, still before the effects.
-        if cut < places.len() {
-            main_runs.cut(places.len());
-        }
-        let mut mask_runs = Runs::default();
+        let seen = (seen, layers_seen);
+        self.push_world(
+            world,
+            &mut main_runs,
+            (view, margin),
+            seen,
+            transparent_runs,
+            &places,
+        );
+        let mut mask_runs = Runs::seen_from(detail);
         for (key, on_top, instances) in highlight_runs {
             let Some(mesh) = self.meshes.get(&key.shape) else {
                 continue;
@@ -476,8 +462,91 @@ impl Renderer {
             let picked = |at: u32| self.highlights.picks()[at as usize];
             self.push_draws(&mut mask_runs, pipe, source, mesh, &key, instances, picked);
         }
-        let starts = self.upload_args(&[&shadow_runs, &main_runs, &mask_runs]);
+        let mut passes = vec![&shadow_runs, &main_runs, &mask_runs];
+        passes.extend(viewports.iter().map(|(_, runs)| runs));
+        let starts = self.upload_args(&passes);
         ([shadow_runs, main_runs, mask_runs], starts)
+    }
+
+    /// Add `world`'s draws seen by `view` to `runs`: its opaque batches
+    /// `seen.0` says are in view, then images on opaque parts (before
+    /// transparent parts, so a window in front of a decal covers it),
+    /// then transparent parts back to front (`transparent_runs`), cut
+    /// before each instance `places` names for the world GUI's canvases.
+    pub(crate) fn push_world(
+        &self,
+        world: &World,
+        runs: &mut Runs,
+        (view, margin): (&Frustum, f32),
+        (opaque_seen, layers_seen): (Vec<bool>, Vec<bool>),
+        transparent_runs: Vec<TransparentRun>,
+        places: &[u32],
+    ) {
+        for k in (0..opaque_seen.len()).filter(|&k| opaque_seen[k]) {
+            self.push_opaque(world, runs, Pipe::Opaque, (view, margin), k);
+        }
+        for k in (0..layers_seen.len()).filter(|&k| layers_seen[k]) {
+            let (key, instances, chunks, z) = world.layers.draw(k);
+            let Some(mesh) = self.meshes.get(&key.shape) else {
+                continue;
+            };
+            let pipe = if z == placement::OVER_Z {
+                Pipe::Over
+            } else {
+                Pipe::Layer
+            };
+            let source = Source::Layers;
+            let picked = |at| world.layers.picked(k, at);
+            for run in seen_runs(view, chunks, CULL_SLOTS, margin, instances) {
+                self.push_draws(runs, pipe, source, mesh, key, run, picked);
+            }
+        }
+        let picked = |at: u32| world.transparent.picks()[at as usize];
+        let mut cut = 0;
+        for (key, pass, instances) in transparent_runs {
+            let Some(mesh) = self.meshes.get(&key.shape) else {
+                continue;
+            };
+            let (pipe, source) = (pass.pipe(), Source::Transparent);
+            let (mut start, end) = (instances.start, instances.end);
+            // The canvases placed before each instance of this run, but
+            // its first (cut before the run).
+            while let Some(&at) = places.get(cut).filter(|&&at| at < end) {
+                let upto = cut + places[cut..].partition_point(|&p| p == at);
+                if at > start {
+                    let run = start..at;
+                    self.push_draws(runs, pipe, source, mesh, &key, run, picked);
+                    start = at;
+                }
+                runs.cut(upto);
+                cut = upto;
+            }
+            self.push_draws(runs, pipe, source, mesh, &key, start..end, picked);
+        }
+        // Those placed after every part, still before the effects.
+        if cut < places.len() {
+            runs.cut(places.len());
+        }
+    }
+
+    /// Add opaque batch `k` of `world`'s draws to `runs` for `pipe`, its
+    /// chunks `view` reaches.
+    fn push_opaque(
+        &self,
+        world: &World,
+        runs: &mut Runs,
+        pipe: Pipe,
+        (view, margin): (&Frustum, f32),
+        k: usize,
+    ) {
+        let (key, instances, chunks, _) = world.opaque.draw(k);
+        let Some(mesh) = self.meshes.get(&key.shape) else {
+            return;
+        };
+        let picked = |at| world.opaque.picked(k, at);
+        for run in seen_runs(view, chunks, CULL_SLOTS, margin, instances) {
+            self.push_draws(runs, pipe, Source::Opaque, mesh, key, run, picked);
+        }
     }
 
     /// Build the sky's reflection cube again if the sky changed: from the

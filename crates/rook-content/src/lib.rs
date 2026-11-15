@@ -1,7 +1,7 @@
 //! What the strings in `MeshId`, `TextureId`, `SoundId` and the other
 //! content properties refer to, and their bytes. A [`Loader`] runs
 //! resolutions on worker threads so the engine thread never waits for disk
-//! or network. See `docs/design/architecture.md#content-rook-content`.
+//! or network. See `docs/design/architecture/content.md`.
 
 pub mod decode;
 mod loader;
@@ -11,7 +11,7 @@ pub mod resolver;
 
 use decode::{audio, image, mesh};
 
-pub use loader::{Loader, Ticket, Want, idle_since, set_decode_threads};
+pub use loader::{Loader, Ticket, Want, idle_since, set_decode_threads, set_script_compiler};
 pub use reference::{ContentRef, MaterialMap, image_url_rewrite};
 pub use resolver::{Config, ProviderKind, Resolver};
 
@@ -80,6 +80,9 @@ pub struct Fetched {
     /// The decoded sound, when a [`Loader`] was asked for one
     /// ([`Want::Audio`]).
     pub audio: Option<Arc<audio::Audio>>,
+    /// The decoded model file, when a [`Loader`] was asked for one
+    /// ([`Want::Model`]).
+    pub model: Option<Arc<rook_formats::Loaded>>,
 }
 
 impl Fetched {
@@ -92,6 +95,7 @@ impl Fetched {
             mesh: None,
             image: None,
             audio: None,
+            model: None,
         }
     }
 }

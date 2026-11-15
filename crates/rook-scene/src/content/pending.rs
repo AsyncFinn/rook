@@ -71,8 +71,9 @@ impl SceneCache {
                     self.scene.meshes.insert(hash, mesh);
                 }
                 Ok(Loaded::Image(hash, image)) => {
-                    self.gui_file_done(&key, Some(crate::gui::gui_image(hash, &image)));
-                    self.scene.images.insert(hash, image);
+                    self.images.add(hash, image);
+                    let info = self.images.info(hash).expect("just added");
+                    self.gui_file_done(&key, Some(crate::gui::gui_image(hash, info)));
                 }
                 Err(failure) => {
                     for &part in &waiting {

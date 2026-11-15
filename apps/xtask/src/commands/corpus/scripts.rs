@@ -26,7 +26,6 @@ pub(super) struct ScriptUsage {
     pub game_index: BTreeMap<String, u64>,
 }
 
-/// Result of analyzing one script.
 #[derive(Debug)]
 pub(super) struct ScriptAnalysis {
     pub usage: ScriptUsage,

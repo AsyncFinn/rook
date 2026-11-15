@@ -1,7 +1,7 @@
 //! Reads Rook's build settings (`webBase` and `webDomains`),
 //! `rook-build.toml` at the repository's root with the file
 //! `ROOK_BUILD_CONFIG` names read over it, into the constants
-//! `src/build_config.rs` includes, with whether they send asset delivery
+//! `src/settings/build_config.rs` includes, with whether they send asset delivery
 //! to Roblox. An unknown key or a bad value fails the
 //! build with what is wrong and where.
 //! See docs/design/data-and-logging.md#build-settings.

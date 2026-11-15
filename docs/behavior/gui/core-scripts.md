@@ -14,8 +14,8 @@ looks from `rook-player --core-scripts --screenshot`.
 Code: loading in `rook-engine`'s `core_scripts.rs` (and the
 `coreScripts` setting in `settings.rs`), the compiled scripts in
 `rook-formats`' `compiled.rs`, running them in `rook-lua`'s
-`api/scripts.rs`, their members in `api/methods/core.rs`,
-`core_gui.rs` and `localization.rs`, styling in `styles.rs`.
+`api/scripts.rs`, their members in `api/methods/core/` (`flags.rs`,
+`core_gui.rs`) and `api/methods/localization.rs`, styling in `styles.rs`.
 
 ## Where they are
 
@@ -70,10 +70,11 @@ Code: loading in `rook-engine`'s `core_scripts.rs` (and the
   `TextChatServiceSettingsSaved`, without which the chat window shows its
   translation tip every time). Saying yes to every feature stops the top
   bar.
-- Roblox still answers a few spellings its API dump no longer lists, and
-  the CoreScripts use them: `RunService.renderStepped`, `Instance.name`,
+- The CoreScripts read members with a lowercase first letter
+  ([member lookup](../scripting/member-lookup.md)):
+  `RunService.renderStepped`, `Instance.name`,
   `RbxAnalyticsService:setRBXEventStream` (without it the settings menu
-  stops halfway, its bottom buttons unsized) and `UDim2:lerp`.
+  stops halfway, its bottom buttons unsized). They also call `UDim2:lerp`.
 
 ## What runs
 
@@ -99,10 +100,9 @@ the script's default, false, applies. In the legacy page an experience's
 "Reason for Abuse?" is text by design (only Inappropriate Content), and
 "Experience or Person?" switches only with other players to report.
 The chat window shows messages sent and received
-through [TextChatService](chat.md), with each speaker's name. Chat's
-stores need `Player.ChatAvailabilityStatus` (a string starting `Enabled`
-when the player may chat), which Rook's API snapshot doesn't have; Rook
-gives `Enabled`.
+through [TextChatService](chat.md), with each speaker's name, and its
+chat bar only when the local player's `ChatAvailabilityStatus` is
+`Enabled` ([setting up](chat.md#setting-up)).
 
 ### Health bar and backpack
 
@@ -133,12 +133,8 @@ script calling `TakeDamage` every half second:
   gear relies on; Rook repeats only those moves, nothing else a client
   changes). Legacy server Scripts run in a player's Backpack, so gear
   connects `Equipped` before its first equip (Inference, as above).
-- `Tool.Equipped` gives the player's Mouse on the client and nil on the
-  server (Inference; the server's argument isn't measured), and fires
-  after the move, as does `Unequipped` (order not measured).
-- The tools are held nowhere: characters have no arms or grip yet
-  ([M9](../../roadmap/m9-characters.md) steps 1 and 7), so an equipped
-  tool sits in the character without moving.
+- How an equipped tool is held, used, dropped and picked up, and the
+  Mouse `Equipped` passes, are on [tools](../characters/tools.md).
 
 The positions above are from `--dump` and Rook's screenshot; they follow
 the script's constants, but haven't been compared with a Roblox
@@ -191,7 +187,7 @@ Behavior the health bar and backpack still miss, from characters
 ([M9](../../roadmap/m9-characters.md)): `Humanoid.Died` and death (the
 bar's dead state, the backpack clearing on respawn), regeneration,
 `Player:RequestTool` (behind a flag and engine feature Studio has off),
-dropping tools with Backspace, holding a tool by its grip, and gamepad
+and gamepad
 and touch selection (`GuiService.SelectedCoreObject` is read on every
 input and answers nil).
 

@@ -7,7 +7,15 @@
   - [Tools](guide/tools.md): the `rook` command-line tool and `cargo xtask`
 - **[roadmap/](roadmap/README.md)**: the plan, one page per milestone.
 - **[design/](design/)**: how Rook is built.
-  - [Architecture](design/architecture.md): crates, data flow and the rules every behavior follows
+  - [Architecture](design/architecture.md): goals, crates, testing and the rules every behavior follows; each subsystem's design is a page of its own:
+    - [The data model](design/architecture/data-model.md): datatypes, reflection and the runtime DOM
+    - [Scripting](design/architecture/scripting.md): signals, the scheduler and the Luau bridge
+    - [Threads and frames](design/architecture/threads-and-frames.md): threading, copies of state, frame order, per-frame budgets
+    - [Physics](design/architecture/physics.md)
+    - [GUI](design/architecture/gui.md)
+    - [Rendering](design/architecture/rendering.md)
+    - [Content](design/architecture/content.md)
+    - [Services and replication](design/architecture/replication.md)
   - [Policies](design/policies.md): what Rook targets, where its knowledge of Roblox may come from, and what content it ships
   - [Research](design/research.md): background, prior work, libraries and sources
   - [Data and logging](design/data-and-logging.md): the data folder, build settings, developer overrides, logs, crash reports and kept content
@@ -24,6 +32,7 @@
     - [Spawning and teams](behavior/characters/spawning.md): which spawn, where on it, team assignment, respawning
     - [Character ownership](behavior/characters/ownership.md): the client owns it, what the server sees
     - [Overhead names and health](behavior/characters/overhead.md): which show, how far, and how they look
+    - [Tools](behavior/characters/tools.md): the grip, equipping, activating, dropping and picking up, HopperBin
     - [Humanoid movement and states](behavior/characters/movement.md): standing, walking, jumping, climbing, swimming, MoveTo, the state machine
     - [The default camera and controls](behavior/characters/camera.md): Roblox's PlayerModule, the camera's subject, zoom and occlusion, the mouse, `Camera:Interpolate`
   - Content
@@ -44,8 +53,11 @@
     - [GUI input](behavior/gui/input.md): what takes a click, buttons, the wheel, TextBox focus and typing
     - [GUI legacy styles](behavior/gui/styles.md): Frame and GuiButton `Style`, their textures, states and insets
     - [GUI modern UI objects](behavior/gui/modern.md): UICorner, UIStroke, UIGradient, flex, UITableLayout, UIPageLayout, CanvasGroup
+    - [Viewport frames](behavior/gui/viewport-frames.md): its picture, its own light and fog, what draws in it
     - [Roblox's core scripts](behavior/gui/core-scripts.md): where Studio keeps them, running them as Roblox's own code, StyleSheets, what Rook lacks
     - [Chat](behavior/gui/chat.md): TextChatService's setup, sending and delivering messages
+    - [GUI selection](behavior/gui/selection.md): what moving SelectedObject fires, what GuiService:Select picks
+    - [Proximity prompts](behavior/gui/proximity-prompts.md): which show, keys and holds, the events on both sides, Roblox's prompt GUI
   - Input
     - [Gamepads](behavior/input/gamepads.md): pads' numbers, their InputObjects, sticks and triggers, which input is in use
     - [ContextActionService](behavior/input/context-actions.md): bindings before UserInputService, processed input, Cancel
@@ -72,9 +84,15 @@
     - [NaN and infinite values](behavior/physics/nan-and-infinite-values.md): what parts make of them
   - Scripting
     - [Bindables](behavior/scripting/bindables.md): the copies arguments arrive as
+    - [Content](behavior/scripting/content.md): the `Content` datatype and its constructors
     - [Datatype errors](behavior/scripting/datatype-errors.md): their messages in `pcall`
+    - [Faces, Axes and PhysicalProperties](behavior/scripting/faces-and-axes.md): their `typeof` and printing
+    - [Member lookup](behavior/scripting/member-lookup.md): lowercase first letters, and what a child of that name beats
+    - [Nil Instance arguments](behavior/scripting/nil-arguments.md): what each method does with the null object
     - [Random](behavior/scripting/random.md): Luau's generator and each method's draws
+    - [Running scripts](behavior/scripting/running-scripts.md): scripts stop the moment they're removed from where they run or disabled
     - [Tags and locked members](behavior/scripting/tags.md): tag signals, and which members a child of the same name beats.
+    - [Waiting](behavior/scripting/waiting.md): durations too long for a float last one step
   - Rendering
     - [Materials](behavior/rendering/materials.md): PBR shading, the built-in materials, MaterialVariant and SurfaceAppearance
     - [Textures and decals](behavior/rendering/textures-and-decals.md)

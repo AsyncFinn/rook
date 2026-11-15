@@ -1,6 +1,7 @@
 //! The audio API's graph (`docs/behavior/audio/audio-api.md`). The engine
-//! describes it each frame as a [`Graph`] and a [`Runner`] renders it block
-//! by block. Players play through the same [`Voice`] as Sounds, and effects
+//! describes it as a [`Graph`], anew when its nodes or wires change and
+//! otherwise with only listeners' gains moved, and a [`Runner`] renders it
+//! block by block. Players play through the same [`Voice`] as Sounds, and effects
 //! through the same [`Chain`], so the two APIs sound alike.
 //!
 //! Every stream is stereo (Approximation: Studio's streams have their own
@@ -66,6 +67,10 @@ pub struct Wire<K> {
 
 #[derive(Debug, Clone)]
 pub struct Graph<K> {
+    /// Changes whenever the nodes or wires do, but for listeners' gains:
+    /// a runner given the same one again only follows those
+    /// ([`Runner::follow`]).
+    pub topology: u64,
     pub nodes: Vec<Node<K>>,
     pub wires: Vec<Wire<K>>,
 }
@@ -73,6 +78,7 @@ pub struct Graph<K> {
 impl<K> Default for Graph<K> {
     fn default() -> Self {
         Self {
+            topology: 0,
             nodes: Vec::new(),
             wires: Vec::new(),
         }
@@ -118,6 +124,8 @@ pub struct Runner<K> {
     states: FxHashMap<K, State<K>>,
     scratch: Vec<Frame>,
     key: Vec<Frame>,
+    /// The [`Graph::topology`] last synced.
+    synced: Option<u64>,
 }
 
 impl<K: Hash + Eq + Copy> Runner<K> {
@@ -130,6 +138,22 @@ impl<K: Hash + Eq + Copy> Runner<K> {
             states: FxHashMap::default(),
             scratch: Vec::new(),
             key: Vec::new(),
+            synced: None,
+        }
+    }
+
+    /// Take the listeners' gains of `graph`, of the topology last synced
+    /// (another is left for [`Runner::sync`]).
+    pub fn follow(&mut self, graph: &Graph<K>) {
+        if self.synced != Some(graph.topology) {
+            return self.sync(graph);
+        }
+        for (mine, theirs) in self.graph.nodes.iter_mut().zip(&graph.nodes) {
+            if let (NodeKind::Listener(mine), NodeKind::Listener(theirs)) =
+                (&mut mine.kind, &theirs.kind)
+            {
+                mine.clone_from(theirs);
+            }
         }
     }
 
@@ -141,10 +165,16 @@ impl<K: Hash + Eq + Copy> Runner<K> {
         self.graph.is_empty()
     }
 
-    /// Render `graph` from now on: new nodes start, removed ones go, and
-    /// players keep their own position until played again or seeked
-    /// (`generation`).
+    /// Render `graph` from now on. One of the topology last synced only
+    /// changes listeners' gains ([`Runner::follow`]); any other starts new
+    /// nodes, drops removed ones and orders them again, and players keep
+    /// their own position until played again or seeked (`generation`).
     pub fn sync(&mut self, graph: &Graph<K>) {
+        if self.synced == Some(graph.topology) {
+            self.follow(graph);
+            return;
+        }
+        self.synced = Some(graph.topology);
         let index: FxHashMap<K, usize> = graph
             .nodes
             .iter()
@@ -263,7 +293,8 @@ impl<K: Hash + Eq + Copy> Runner<K> {
                     .chain
                     .process_keyed(&mut buffer, keyed.then_some(&self.key[..])),
                 NodeKind::Listener(heard) => {
-                    state.gains = heard.iter().copied().collect();
+                    state.gains.clear();
+                    state.gains.extend(heard.iter().copied());
                 }
                 NodeKind::Output => {
                     for (a, b) in buffer.iter().zip(out.iter_mut()) {

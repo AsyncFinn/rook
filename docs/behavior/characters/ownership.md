@@ -55,7 +55,12 @@ process, so no real network delay):
   back to the client a frame stale, snapping its walk back about every
   other frame.
 - Only the player's own character is taken from its client: a pose for
-  any other part is ignored.
+  any other part is ignored, and so is one for the character while the
+  server has it anchored (an anchored assembly has no network owner, as
+  `GetNetworkOwner` says). A pose sent just before the client heard of
+  the anchoring would otherwise land after the server's moves and undo
+  them: a lift that anchors its riders and carries them down kept them,
+  on the server, where they boarded.
 - The Humanoid controller runs where the character is simulated: on its
   client ([movement](movement.md)).
 - `GetNetworkOwner` answers the player for its character's assemblies

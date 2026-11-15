@@ -21,5 +21,8 @@ rook-content.workspace = true
 rook-types.workspace = true
 rustc-hash.workspace = true
 
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = ["Win32_System_Threading"] }
+
 [lints]
 workspace = true

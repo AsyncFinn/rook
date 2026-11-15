@@ -2,7 +2,6 @@ use super::*;
 use files::from_file;
 use head::HEAD_RADIUS;
 
-/// Every face's normal points away from the center.
 #[test]
 fn normals_point_outward() {
     for shape in DrawShape::ALL {
@@ -228,4 +227,24 @@ fn adornment_shapes_face_their_normals() {
             );
         }
     }
+}
+
+/// Vertices that aren't numbers (some mesh files hold them) are left out
+/// of a mesh's bounds.
+#[test]
+fn bounds_leave_out_vertices_that_arent_numbers() {
+    let at = |position| Vertex::plain(position, [0.0, 1.0, 0.0], [0.0; 2]);
+    let mesh = MeshData {
+        vertices: vec![
+            at([f32::NAN; 3]),
+            at([-1.0, 0.0, 2.0]),
+            at([1.0, 3.0, f32::NAN]),
+        ],
+        indices: Vec::new(),
+        levels: Levels::default(),
+    };
+    assert_eq!(
+        mesh.bounds(),
+        (Vec3::new(-1.0, 0.0, 2.0), Vec3::new(-1.0, 0.0, 2.0))
+    );
 }

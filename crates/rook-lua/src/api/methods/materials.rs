@@ -65,3 +65,12 @@ pub(super) fn get_material_variant(lua: &Lua, this: InstanceId, a: &Args) -> Api
     });
     ret_instance(lua, found)
 }
+
+pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
+    Some(match (owner, name) {
+        ("MaterialService", "GetBaseMaterialOverride") => get_base_material_override,
+        ("MaterialService", "SetBaseMaterialOverride") => set_base_material_override,
+        ("MaterialService", "GetMaterialVariant") => get_material_variant,
+        _ => return None,
+    })
+}

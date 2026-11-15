@@ -50,7 +50,8 @@ impl WindowSurface {
         // mouse as it is then, rather than two or three refreshes late.
         config.desired_maximum_frame_latency = 1;
         surface.configure(&device, &config);
-        let renderer = Renderer::new(&adapter, device, queue, config.format);
+        let mut renderer = Renderer::new(&adapter, device, queue, config.format);
+        renderer.size_targets(config.width, config.height);
         Ok(Self {
             surface,
             config,
@@ -88,6 +89,7 @@ impl WindowSurface {
         self.config.width = width;
         self.config.height = height;
         self.surface.configure(&self.renderer.device, &self.config);
+        self.renderer.size_targets(width, height);
         true
     }
 
@@ -109,6 +111,7 @@ impl WindowSurface {
         self.presented = false;
         let asked = Instant::now();
         let Some(frame) = self.next_frame() else {
+            self.renderer.submit_undrawn();
             return asked.elapsed();
         };
         let display = asked.elapsed();

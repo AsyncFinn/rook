@@ -23,8 +23,8 @@ pub use font::{
     text_size_of,
 };
 pub use gui::{
-    GlyphMask, GuiGradient, GuiGroup, GuiQuad, GuiRamp, GuiShape, ImagePaint, Paint, Viewer,
-    WorldCanvas, WorldFrame, WorldPlace,
+    GlyphMask, GuiGradient, GuiGroup, GuiQuad, GuiRamp, GuiShape, GuiViewport, ImagePaint, Paint,
+    Viewer, WorldCanvas, WorldCanvases, WorldFrame, WorldPlace,
 };
 pub use part::collision::{Hull, SavedCollision, SavedMass};
 pub use part::material::{Material, MaterialSet, NormalDetail, TilePattern};

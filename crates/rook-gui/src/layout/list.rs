@@ -179,7 +179,14 @@ fn flexed(
 /// the cross flex or the alignment that way. Children's `Position` and
 /// `AnchorPoint` don't count. `AbsoluteContentSize` is the longest line
 /// and the lines across, without the room spreading adds.
-pub(super) fn arrange(dom: &Dom, layout: InstanceId, kids: &[Kid], inner: Vec2) -> Arrangement {
+/// `Padding`'s scale is of `spaced`, the inner area but while an automatic
+/// size is measured.
+pub(super) fn arrange(
+    dom: &Dom,
+    layout: InstanceId,
+    kids: &[Kid],
+    (inner, spaced): (Vec2, Vec2),
+) -> Arrangement {
     let vertical = dom.enum_item_property(layout, "FillDirection") != Some("Horizontal");
     let pick = |v: Vec2| if vertical { (v.y, v.x) } else { (v.x, v.y) };
     let unpick = |along: f32, across: f32| {
@@ -204,7 +211,7 @@ pub(super) fn arrange(dom: &Dom, layout: InstanceId, kids: &[Kid], inner: Vec2) 
     };
     let padding = dom
         .udim_property(layout, "Padding")
-        .map_or(0.0, |u| u.resolve(length));
+        .map_or(0.0, |u| u.resolve(pick(spaced).0));
     let items: Vec<Option<InstanceId>> = (kids.iter())
         .map(|k| dom.find_first_child_of_class(k.id, "UIFlexItem"))
         .collect();

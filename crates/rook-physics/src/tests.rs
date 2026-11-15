@@ -15,6 +15,7 @@ mod ownership;
 mod queries;
 mod saved_collision;
 mod sleeping;
+mod world_models;
 
 fn set(dom: &mut Dom, id: InstanceId, name: &str, value: Value) {
     dom.set_property_by_name(id, name, value).unwrap();

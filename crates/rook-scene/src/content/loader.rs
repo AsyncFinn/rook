@@ -111,7 +111,7 @@ impl Files {
                 let loaded = match key.1 {
                     Want::Mesh => f.mesh.map(|m| Loaded::Mesh(MeshHash(hash), m)),
                     Want::Image => f.image.map(|i| Loaded::Image(ImageHash(hash), i)),
-                    Want::Bytes | Want::Audio => None,
+                    Want::Bytes | Want::Audio | Want::Model => None,
                 };
                 loaded.ok_or_else(|| Failure::new(FailureKind::Invalid, "not a mesh or an image"))
             });

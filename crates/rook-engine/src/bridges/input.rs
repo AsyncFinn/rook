@@ -294,8 +294,9 @@ fn key_code_value(code: &str) -> Option<u32> {
 
 impl DataModel {
     /// What the cursor shows: none with `UserInputService.MouseIconEnabled`
-    /// off, else `UserInputService.MouseIcon`, else the Mouse's `Icon`
-    /// (Inference: UserInputService's wins when both are set). Else
+    /// off, else `UserInputService.MouseIcon`, else a held Tool's Mouse's
+    /// `Icon`, else the PlayerMouse's (Inference: UserInputService's wins
+    /// when both are set). Else
     /// Roblox's hand over a GUI button, the ClickDetector hand over a
     /// ClickDetector (Observed live), an I-beam over a TextBox
     /// (Inference), or Roblox's arrow (docs/behavior/gui/input.md#the-cursor).
@@ -305,11 +306,12 @@ impl DataModel {
         if uis.is_some_and(|u| w.dom.bool_property(u, "MouseIconEnabled") == Some(false)) {
             return CursorLook::Hidden;
         }
-        let icons = [
-            uis.and_then(|u| w.dom.content_property(u, "MouseIconContent")),
-            (w.input.mouse_object).and_then(|m| w.dom.content_property(m, "IconContent")),
-        ];
-        if let Some(url) = icons.into_iter().flatten().find(|url| !url.is_empty()) {
+        let mice = (w.input.tool_mice.iter().map(|&(_, m)| m)).chain(w.input.mouse_object);
+        let icons = (uis
+            .and_then(|u| w.dom.content_property(u, "MouseIconContent"))
+            .into_iter())
+        .chain(mice.filter_map(|m| w.dom.content_property(m, "IconContent")));
+        if let Some(url) = icons.into_iter().find(|url| !url.is_empty()) {
             return CursorLook::icon(url);
         }
         let image = match self.hovered_press_target() {
@@ -411,6 +413,22 @@ impl DataModel {
         self.runtime.world().input.mouse_object
     }
 
+    /// The Mice that hear the mouse: those `Equipped` passed for the
+    /// Tools the local character holds, then the PlayerMouse (measured:
+    /// a tool Mouse's `Button1Down` fires first).
+    fn mice(&self) -> Vec<InstanceId> {
+        let w = self.runtime.world();
+        let tools = w.input.tool_mice.iter().map(|&(_, m)| m);
+        tools.chain(w.input.mouse_object).collect()
+    }
+
+    /// Fire `event` on every Mouse.
+    fn fire_mice(&self, event: &'static str) {
+        for m in self.mice() {
+            self.fire(m, event, ());
+        }
+    }
+
     /// Handle one input event. Returns the ClickDetector interactions it
     /// caused, for the session to fire on both sides.
     pub fn input(&mut self, event: InputEvent) -> Vec<ClickEvent> {
@@ -458,9 +476,7 @@ impl DataModel {
             processed = self.deliver("InputChanged", obj, processed);
         }
         self.refresh_mouse(clicks);
-        if let Some(m) = self.mouse_object() {
-            self.fire(m, "Move", ());
-        }
+        self.fire_mice("Move");
         processed
     }
 
@@ -508,14 +524,11 @@ impl DataModel {
         // Inference: after InputChanged, as Roblox's camera reads both.
         self.runtime
             .pointer_action(delta, (0.0, 0.0), 0.0, processed);
-        if let Some(m) = self.mouse_object() {
-            let event = if delta > 0.0 {
-                "WheelForward"
-            } else {
-                "WheelBackward"
-            };
-            self.fire(m, event, ());
-        }
+        self.fire_mice(if delta > 0.0 {
+            "WheelForward"
+        } else {
+            "WheelBackward"
+        });
         processed
     }
 
@@ -584,8 +597,11 @@ impl DataModel {
             return false;
         };
         let pos = gui_point(self.runtime.world().input.mouse);
-        let typing = self.focused_text_box().is_some();
-        let mut processed = typing;
+        let mut processed = self.focused_text_box().is_some();
+        // Inference: a binding sinking a key doesn't hide it from the
+        // legacy Mice, which hear what GUI, TextBoxes and prompts don't
+        // take.
+        let mouse_hears;
         if !down && code == "Escape" {
             processed |= std::mem::take(&mut self.input.escape_ended_box);
         }
@@ -610,8 +626,13 @@ impl DataModel {
             self.input.held.insert(value, obj);
             if processed {
                 self.edit_key(code, obj);
+            } else {
+                // Measured: shown prompts on the key trigger before
+                // UserInputService hears it, as processed.
+                processed = self.runtime.prompt_key(value, true);
             }
             self.note_input_type(UserInputType::Keyboard, Some(Preferred::KeyboardAndMouse));
+            mouse_hears = !processed;
             processed = self.deliver("InputBegan", obj, processed);
         } else {
             if !self.runtime.world_mut().input.keys.remove(&value) {
@@ -629,14 +650,23 @@ impl DataModel {
             let Some(obj) = obj else {
                 return processed;
             };
+            // A release whose press a prompt took lets go of it, processed
+            // (measured).
+            processed |= self.runtime.prompt_key(value, false);
             self.set_property(obj, "UserInputState", UserInputState::End.into());
             self.note_input_type(UserInputType::Keyboard, Some(Preferred::KeyboardAndMouse));
+            mouse_hears = !processed;
             processed = self.deliver("InputEnded", obj, processed);
         }
-        // Inference: a binding sinking a key doesn't hide it from the
-        // legacy Mouse, which hears what GUI and TextBoxes don't take.
-        if !typing && let (Some(m), Some(s)) = (self.mouse_object(), legacy_key_string(code)) {
-            self.fire(m, if down { "KeyDown" } else { "KeyUp" }, s);
+        if mouse_hears && let Some(s) = legacy_key_string(code) {
+            for m in self.mice() {
+                self.fire(m, if down { "KeyDown" } else { "KeyUp" }, s.clone());
+            }
+        }
+        // Measured: the engine drops the held Tool, not the backpack
+        // CoreScript. On the press (Inference).
+        if down && !processed && code == "Backspace" {
+            self.runtime.drop_tools();
         }
         processed
     }
@@ -676,16 +706,19 @@ impl DataModel {
         let event = if down { "InputBegan" } else { "InputEnded" };
         let processed = obj.map_or(gui_took, |obj| self.deliver(event, obj, gui_took));
         let detector = self.refresh_mouse(clicks);
-        if let Some(m) = self.mouse_object()
-            && button <= 2
-        {
-            let event = match (button, down) {
+        if button <= 2 {
+            self.fire_mice(match (button, down) {
                 (1, true) => "Button1Down",
                 (1, false) => "Button1Up",
                 (_, true) => "Button2Down",
                 (_, false) => "Button2Up",
-            };
-            self.fire(m, event, ());
+            });
+        }
+        // Measured: a left click GUI didn't take activates the Tools the
+        // character holds; a right click nothing. After the Mouse's events
+        // (Inference).
+        if button == 1 && !processed {
+            self.runtime.activate_tools(down);
         }
         // A click is a press and release over the same detector
         // (creator-docs ClickDetector.MouseClick); measured, an Active

@@ -226,6 +226,35 @@ fn root_part_rules() {
     assert_eq!(asm.mass(&dom, &Physics::new()), f32::INFINITY);
 }
 
+/// Size counts by the largest face, not the volume, and a character's
+/// root and torso count ten and five times over (measured in Studio
+/// 0.747), so a held tool doesn't drag its holder to it.
+#[test]
+fn root_part_size_is_the_largest_face() {
+    let pair = |a: (&str, Vec3), b: (&str, Vec3)| {
+        let mut dom = Dom::new();
+        let pa = part(&mut dom, Vec3::ZERO, a.1, false);
+        let pb = part(&mut dom, Vec3::new(0.0, 20.0, 0.0), b.1, false);
+        dom.set_name(pa, a.0.to_owned()).unwrap();
+        dom.set_name(pb, b.0.to_owned()).unwrap();
+        weld(&mut dom, pa, pb);
+        let root = assembly::Assembly::of(&dom, pa).unwrap().root();
+        dom.name(root).to_owned()
+    };
+    let v = Vec3::new;
+    assert_eq!(pair(("A", v(1.0, 1.0, 6.0)), ("B", v(2.0, 2.0, 2.0))), "A");
+    assert_eq!(pair(("A", v(1.0, 1.0, 3.0)), ("B", v(2.0, 2.0, 2.0))), "B");
+    assert_eq!(pair(("A", v(2.0, 2.0, 2.0)), ("B", v(0.2, 2.0, 1.9))), "A");
+    let hrp = ("HumanoidRootPart", v(2.0, 2.0, 1.0));
+    assert_eq!(pair(hrp, ("Handle", v(6.2, 6.2, 6.2))), "HumanoidRootPart");
+    assert_eq!(pair(hrp, ("Handle", v(6.4, 6.4, 6.4))), "Handle");
+    let torso = ("Torso", v(2.0, 2.0, 1.0));
+    assert_eq!(pair(torso, ("B", v(4.3, 4.3, 0.1))), "Torso");
+    assert_eq!(pair(torso, ("B", v(4.6, 4.6, 0.1))), "B");
+    let head = ("Head", v(2.0, 2.0, 1.0));
+    assert_eq!(pair(head, ("B", v(2.1, 2.1, 0.1))), "B");
+}
+
 #[test]
 fn anchored_parts_root_their_own_assemblies() {
     // A and B anchored, C unanchored, welded A-B and B-C: A is alone, C

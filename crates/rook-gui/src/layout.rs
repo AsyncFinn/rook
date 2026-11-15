@@ -102,7 +102,7 @@ pub(crate) struct Layout {
     pub(crate) pages: FxHashMap<InstanceId, Vec<InstanceId>>,
     pub(crate) texts: FxHashMap<InstanceId, Laid>,
     pub(crate) scrolls: FxHashMap<InstanceId, Scroll>,
-    pub(crate) world: Vec<(Hung, Vec2)>,
+    pub(crate) world: std::collections::BTreeMap<InstanceId, (Hung, Vec2)>,
 }
 
 /// A text object's text, with what it was laid out from, so an unchanged
@@ -140,7 +140,9 @@ impl Layout {
             .chain(dom.find_service("CoreGui"));
         for holder in holders {
             for root in through_folders(dom, holder, |id| dom.is_a(id, "GuiBase2d")) {
-                pass.root(root);
+                if world.binary_search(&root).is_err() {
+                    pass.root(root);
+                }
             }
         }
         for &root in world {
@@ -157,8 +159,8 @@ impl Layout {
             self.arranged.remove(id);
             self.pages.remove(id);
             self.scrolls.remove(id);
+            self.world.remove(id);
         }
-        self.world.retain(|(h, _)| !ids.contains(&h.gui));
     }
 
     pub(crate) fn contains(&self, id: InstanceId) -> bool {
@@ -169,8 +171,9 @@ impl Layout {
     /// resized, a tree whose properties changed), leaving the rest as it
     /// is. What `tops` hold must be what they held when last laid out.
     pub(crate) fn redo(&mut self, dom: &Dom, tops: &[InstanceId], (fonts, turning): Fonted<'_>) {
-        let redone: FxHashSet<InstanceId> = tops.iter().copied().collect();
-        self.world.retain(|(h, _)| !redone.contains(&h.gui));
+        for top in tops {
+            self.world.remove(top);
+        }
         let previous = Layout::default();
         let mut pass = Pass::new(dom, (&previous, turning), fonts, std::mem::take(self));
         for &top in tops {
@@ -179,15 +182,44 @@ impl Layout {
         *self = pass.out;
     }
 
-    /// `ids` split into the objects that can be placed again on their own
-    /// (laid out, their parent placing them by `Position` and `Size`
-    /// alone, nothing growing to hold them), and the rest, whose trees
-    /// must lay out again.
+    /// What to place again for changes to `ids`: for each, the nearest
+    /// object, itself or a GUI object holding it, that can be placed
+    /// again on its own (laid out, its parent placing it by `Position`
+    /// and `Size` alone, nothing growing to hold it), as browsers lay out
+    /// again from a relayout boundary; and the ids with none, whose trees
+    /// must lay out again. None of the first is inside another.
     pub(crate) fn alone(
         &self,
         dom: &Dom,
         ids: impl IntoIterator<Item = InstanceId>,
     ) -> (Vec<InstanceId>, Vec<InstanceId>) {
+        let mut placed = Vec::new();
+        let mut whole = Vec::new();
+        for id in ids {
+            let mut at = id;
+            loop {
+                if self.free(dom, at) {
+                    placed.push(at);
+                    break;
+                }
+                match gui_parent(dom, at).filter(|&p| dom.is_a(p, "GuiObject")) {
+                    Some(p) => at = p,
+                    None => {
+                        whole.push(id);
+                        break;
+                    }
+                }
+            }
+        }
+        placed.sort_unstable();
+        placed.dedup();
+        let set: FxHashSet<InstanceId> = placed.iter().copied().collect();
+        placed.retain(|&b| !dom.ancestors(b).any(|a| set.contains(&a)));
+        (placed, whole)
+    }
+
+    /// Whether `id` can be placed again on its own (see [`Layout::alone`]).
+    fn free(&self, dom: &Dom, id: InstanceId) -> bool {
         let free = |id: InstanceId| {
             let Some(parent) = gui_parent(dom, id) else {
                 return false;
@@ -220,7 +252,7 @@ impl Layout {
             }
             true
         };
-        ids.into_iter().partition(|&id| free(id))
+        free(id)
     }
 
     /// Place `ids` again, with what they hold, where their parents put
@@ -291,7 +323,11 @@ pub(crate) fn top_along(
 ) -> Option<InstanceId> {
     let mut top = None;
     for i in chain {
-        if dom.is_a(i, "GuiBase2d") {
+        if world::is_world_gui(dom, i) {
+            // Its own tree, even inside a ScreenGui (measured: the prompt
+            // GUI Roblox makes hangs in one).
+            return Some(i);
+        } else if dom.is_a(i, "GuiBase2d") {
             top = Some(i);
         } else if dom.class_name(i) != "Folder" && !dom.is_a(i, "UIComponent") {
             break;
@@ -421,6 +457,17 @@ impl<'a> Pass<'a> {
 
     /// Arrange `kids` (visible, in child order) with `layout` in `inner`.
     fn arrange(&mut self, layout: InstanceId, kids: &[Kid], inner: Vec2) -> Arrangement {
+        self.arrange_spaced(layout, kids, (inner, inner))
+    }
+
+    /// [`Pass::arrange`] with a list's `Padding` scale of `spaced` (an
+    /// automatic size measuring, see [`list::arrange`]).
+    fn arrange_spaced(
+        &mut self,
+        layout: InstanceId,
+        kids: &[Kid],
+        (inner, spaced): (Vec2, Vec2),
+    ) -> Arrangement {
         let dom = self.dom;
         let order = list::sorted(dom, layout, kids);
         let kids: Vec<Kid> = order.iter().map(|&i| kids[i]).collect();
@@ -442,7 +489,7 @@ impl<'a> Pass<'a> {
                 self.out.pages.insert(layout, pages);
                 page::arrange(dom, layout, &kids, inner, at)
             }
-            _ => list::arrange(dom, layout, &kids, inner),
+            _ => list::arrange(dom, layout, &kids, (inner, spaced)),
         };
         // Back to child order.
         let mut slots = vec![Vec2::ZERO; order.len()];
@@ -468,7 +515,7 @@ impl<'a> Pass<'a> {
         let (origin, local) = if world::is_world_gui(dom, top) {
             let hung = Hung::of(dom, top);
             let size = hung.canvas_size(dom, self.eye.as_ref());
-            self.out.world.push((hung, size));
+            self.out.world.insert(top, (hung, size));
             (Vec2::ZERO, size)
         } else {
             self.collector_area(top)
@@ -619,12 +666,22 @@ impl<'a> Pass<'a> {
         };
         let inner = padding::inner(self.dom, id, size);
         let area = (inner.origin, inner.size);
-        let earlier = self.previous.texts.get(&id);
-        let (block, waited) = match earlier.or_else(|| self.out.texts.get(&id)) {
-            Some(old) if old.source == source && old.area == area && !old.waited => {
-                (old.block.clone(), false)
+        let same = |old: &Laid| old.source == source && old.area == area && !old.waited;
+        let recolors = |old: &Laid| old.area == area && !old.waited && old.source.recolors(&source);
+        // Unchanged since it was last laid out, or only its colors: kept.
+        let kept = match self.out.texts.remove(&id) {
+            Some(old) if same(&old) => Some(old.block),
+            Some(mut old) if recolors(&old) => {
+                old.block.recolor(&source.style);
+                Some(old.block)
             }
-            _ => {
+            _ => (self.previous.texts.get(&id))
+                .filter(|old| same(old))
+                .map(|old| old.block.clone()),
+        };
+        let (block, waited) = match kept {
+            Some(block) => (block, false),
+            None => {
                 self.fonts.take_waited();
                 let mut block = text::lay_out(self.fonts, &source, inner.size, None);
                 block.shift(inner.origin);

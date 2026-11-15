@@ -3,7 +3,7 @@
 Checked against Studio 0.745 on 2026-11-04.
 
 Which thread does what in a client frame, and what overlaps. Rook's frame
-follows from this (docs/design/architecture.md#frame-order).
+follows from this (docs/design/architecture/threads-and-frames.md#frame-order).
 
 ## What Roblox documents
 
@@ -73,7 +73,7 @@ Not measured:
 ## Rook's frames, measured
 
 Rook's player on a 6-core (12-thread) machine, in its window at
-1280x720 on a 2018-era place with moving machinery, the build that ran
+1280x720 on a large place with moving machinery, the build that ran
 every frame one stage after another against the pipelined one, back to
 back:
 

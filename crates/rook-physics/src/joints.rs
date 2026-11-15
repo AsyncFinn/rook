@@ -92,7 +92,7 @@ pub fn active_joint(dom: &Dom, id: InstanceId) -> Option<Joint> {
         return None;
     };
     let ws = dom.find_service("Workspace")?;
-    let in_ws = |i| dom.is_ancestor_of(ws, i);
+    let in_ws = |i| crate::shape::in_workspace_world(dom, ws, i);
     if part0 == part1
         || !in_ws(part0)
         || !in_ws(part1)

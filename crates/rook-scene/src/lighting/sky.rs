@@ -116,13 +116,11 @@ impl SceneCache {
             let key = (r, Want::Image);
             match state {
                 FileState::Loaded(hash) => {
-                    let Some(image) = self.scene.images.get(&ImageHash(hash)) else {
+                    let Some(image) = self.images.info(ImageHash(hash)) else {
                         loading = true;
                         continue;
                     };
-                    // The 1 x 1 mip is the image's average.
-                    let px = image.mips.last().expect("mip chain");
-                    averages.push([px[0], px[1], px[2]].map(|c| f32::from(c) / 255.0));
+                    averages.push(image.average);
                     hashes.push(ImageHash(hash));
                 }
                 FileState::Loading => {

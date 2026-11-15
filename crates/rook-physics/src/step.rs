@@ -24,6 +24,11 @@ impl Physics {
         }
         let dt = f64::from(steps) / STEP_HZ;
         let h = self.world.integration_parameters.dt;
+        if !self.simulates_anything() {
+            self.play_only(steps, h);
+            return;
+        }
+        self.playback.only = false;
         self.awake.clear();
         self.awake.extend(self.world.islands.active_bodies());
         self.build_terrain_near_bodies(dt as f32);
@@ -46,20 +51,23 @@ impl Physics {
                 let rb = &self.world.bodies[handle];
                 self.before_step.push((handle, rb.linvel(), rb.angvel()));
             }
-            self.world.step_with_events(&contacts::Mixer, &events);
+            let mixer = contacts::Mixer {
+                flying: &self.flying,
+            };
+            self.world.step_with_events(&mixer, &events);
             self.keep_accelerating_awake(h);
             self.notice_flight(h);
             self.update_humanoids(h);
-        }
-        let far = self.playback.far_ones().next().is_some();
-        if far || self.world.islands.active_bodies().next().is_some() {
-            self.generation += 1;
         }
         // Stepping put every collider in place, but for the far played
         // assemblies', placed after it.
         self.stale.clear();
         self.stale_statics.clear();
         self.place_far_played(h);
+        let far = !self.playback.moved().is_empty();
+        if far || self.world.islands.active_bodies().next().is_some() {
+            self.generation += 1;
+        }
         for m in self.movers.values() {
             if let Some(inside) = movers::rocket_arrived(&self.world, m)
                 && let Some(was) = self.rockets.get_mut(&m.id)
@@ -75,12 +83,51 @@ impl Physics {
             .record(events.take(), &self.colliders, |p| parts.contains_key(&p));
     }
 
+    /// Whether a step has anything to simulate: an unanchored assembly of
+    /// this world's, a server's assembly a client simulates, or a mover
+    /// or push to apply. Played assemblies alone aren't: they go where
+    /// their updates have them.
+    fn simulates_anything(&self) -> bool {
+        let touches_remote = matches!(self.authority, Authority::Except(_));
+        let [local, remote] = self.moving;
+        local > 0
+            || (touches_remote && remote > 0)
+            || !self.movers.is_empty()
+            || !self.forced.is_empty()
+    }
+
+    /// A frame of `steps` steps of `h` seconds with nothing to simulate
+    /// (a client without a character): no Rapier step runs, which would
+    /// cost its fixed share each time for bodies that only play back. The
+    /// playback clock moves on and each played assembly is put where its
+    /// updates have it, as far ones always are. The colliders stay stale
+    /// for queries to place.
+    fn play_only(&mut self, steps: u32, h: f32) {
+        self.playback.only = true;
+        self.awake.clear();
+        // Nothing simulated is near one: every played assembly sleeps.
+        self.find_played_near(f64::from(steps) / STEP_HZ);
+        for i in 0..steps {
+            if i + 1 == steps {
+                self.before_last_step.clear();
+                self.remember_far_played();
+            }
+            self.play_remote(h);
+        }
+        self.place_far_played(h);
+        if !self.playback.moved().is_empty() {
+            self.generation += 1;
+        }
+    }
+
     /// Keep [`Physics::flying`]: the bodies only gravity moved over the step
     /// just taken. A body on anything feels its push too, so one at rest or
     /// driving along costs nothing here, and keeps Rapier's contact reuse.
+    /// A body that stops flying keeps its hooks one step more
+    /// ([`Physics::landed`]).
     fn notice_flight(&mut self, h: f32) {
-        let bodies = &self.world.bodies;
-        self.flying.retain(|&b| bodies.get(b).is_some());
+        self.flying.retain(|&b| self.world.bodies.get(b).is_some());
+        let mut changed = std::mem::take(&mut self.landed);
         let fall = self.world.gravity * h;
         for i in 0..self.before_step.len() {
             let (handle, v, _) = self.before_step[i];
@@ -94,13 +141,19 @@ impl Physics {
             if flying == self.flying.contains(&handle) {
                 continue;
             }
-            let colliders = rb.colliders().to_vec();
             if flying {
                 self.flying.insert(handle);
+                changed.push(handle);
             } else {
                 self.flying.remove(&handle);
+                self.landed.push(handle);
             }
-            for c in colliders {
+        }
+        for handle in changed.into_iter().chain(self.landed.clone()) {
+            let Some(rb) = self.world.bodies.get(handle) else {
+                continue;
+            };
+            for c in rb.colliders().to_vec() {
                 self.set_hooks(c);
             }
         }
@@ -173,7 +226,7 @@ impl Physics {
         self.write_hinge_angles(dom, &props);
         let mut fallen = Vec::new();
         let active = self.world.islands.active_bodies();
-        let far = self.playback.far_ones();
+        let far = self.playback.moved().iter().copied();
         for handle in active.filter(|h| !self.playback.far(*h)).chain(far) {
             let Some(body) = self.bodies.get(&handle) else {
                 continue;

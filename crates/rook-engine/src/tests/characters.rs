@@ -160,6 +160,21 @@ fn teams_assign_players_and_their_spawns() {
     );
 }
 
+/// A player in a place without teams is neutral, with White as its
+/// `TeamColor` (measured in Studio 0.747).
+#[test]
+fn players_start_neutral() {
+    let session = session_with("", &["A"], 1.0 / 60.0, &Options::default());
+    let w = session.server().runtime.world();
+    let players = w.dom.find_service("Players").unwrap();
+    let a = w.dom.find_first_child(players, "A", false).unwrap();
+    assert_eq!(w.dom.bool_property(a, "Neutral"), Some(true));
+    assert_eq!(
+        w.dom.brick_color_property(a, "TeamColor"),
+        rook_types::BrickColor::from_number(1)
+    );
+}
+
 /// A dead character's player respawns `Players.RespawnTime` after Died.
 #[test]
 fn players_respawn_after_dying() {
@@ -274,4 +289,42 @@ fn clients_simulate_their_own_characters() {
     assert_eq!(lines(session.server()), ["touched by A", "owner true"]);
     let moved = position(session.client(0).unwrap(), mine);
     assert!(moved.x == 100.0 && moved.y > 150.0, "{moved}");
+}
+
+/// An anchored part is the server's (creator-docs "Network ownership"): a
+/// pose its client sent before it heard of the anchoring, arriving after
+/// the server moved the anchored character, doesn't undo the move. A lift
+/// that anchors its riders and carries them down otherwise dropped them
+/// back where they boarded once they were let go.
+#[test]
+fn a_late_pose_doesnt_move_an_anchored_character() {
+    use crate::session::host::{ServerHost, ToServer};
+    let mut server = Server::new(&Options::default()).unwrap();
+    use_r6(&server);
+    server.start();
+    let mut host = ServerHost::new(server);
+    let (index, _) = host.join("A", 1).unwrap();
+    for _ in 0..10 {
+        host.step();
+    }
+    let (_, root) = character(host.server(), "A");
+    let boarded = position(host.server(), root);
+    {
+        let mut w = host.server_mut().runtime().world_mut();
+        w.dom
+            .set_property_by_name(root, "Anchored", Value::Bool(true))
+            .unwrap();
+        let below = rook_types::CFrame::from_position(glam::Vec3::new(0.0, -100.0, 0.0));
+        rook_physics::assembly::move_part(&mut w.dom, root, below).unwrap();
+    }
+    host.deliver(
+        index,
+        ToServer::Pose {
+            part: root,
+            cframe: rook_types::CFrame::from_position(boarded),
+            linear: glam::Vec3::ZERO,
+            angular: glam::Vec3::ZERO,
+        },
+    );
+    assert_eq!(position(host.server(), root).y, -100.0);
 }

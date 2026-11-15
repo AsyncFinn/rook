@@ -108,6 +108,9 @@ pub struct InputState {
     pub mouse_delta: (f32, f32),
     /// The local player's Mouse (`Player:GetMouse()`).
     pub mouse_object: Option<InstanceId>,
+    /// The Mice `Equipped` passed for Tools the local character holds, by
+    /// Tool: they act as the PlayerMouse does, and fire before it.
+    pub tool_mice: Vec<(InstanceId, InstanceId)>,
     /// Gamepad1 to Gamepad8.
     pub gamepads: [crate::gamepads::Gamepad; crate::gamepads::GAMEPAD_SLOTS],
     /// What `GetLastInputType` answers; None until the first input, when
@@ -147,7 +150,7 @@ pub enum EffectCall {
 }
 
 /// What scripts did to a Sound that isn't a property (see
-/// `api/methods/sound.rs`).
+/// `api/methods/audio/sound.rs`).
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct SoundControl {
     /// Where `Play` starts: the last `TimePosition` a script set, or 0
@@ -157,7 +160,7 @@ pub struct SoundControl {
     pub loops: u32,
 }
 
-/// The audio API's script state (`api/methods/audio_api.rs`).
+/// The audio API's script state (`api/methods/audio/audio_api.rs`).
 #[derive(Debug, Default)]
 pub struct AudioState {
     /// The graph's instances. Interior mutability, as `Dom`'s defaults
@@ -220,15 +223,19 @@ pub struct World {
     /// Remote calls waiting for the session to deliver them.
     pub outbox: Vec<crate::net::RemoteMessage>,
     /// Tools a client's scripts moved between its player's Backpack and
-    /// character, and where to, for the server to repeat.
-    pub(crate) tool_moves: Vec<(InstanceId, InstanceId)>,
+    /// character, or dropped, for the server to repeat.
+    pub(crate) tool_moves: Vec<crate::api::methods::tools::ToolMove>,
+    /// Tool activations that fired here, for the other side to fire.
+    pub(crate) tool_activations: Vec<crate::api::methods::tools::Activation>,
+    /// ProximityPrompts shown and held here (clients only).
+    pub(crate) prompts: crate::api::methods::prompts::Prompts,
     /// ContentProvider requests waiting for the engine to resolve them.
-    pub content: crate::api::methods::preload::ContentRequests,
-    pub assets: crate::api::methods::assets::AssetRequests,
+    pub content: crate::api::methods::content::preload::ContentRequests,
+    pub assets: crate::api::methods::content::assets::AssetRequests,
     /// Web requests waiting for the engine to send them.
-    pub web: crate::api::methods::web::WebRequests,
+    pub web: crate::api::methods::web::requests::WebRequests,
     /// What each TextFilterResult holds.
-    pub(crate) filter_results: FxHashMap<InstanceId, crate::api::methods::filtering::Filtered>,
+    pub(crate) filter_results: FxHashMap<InstanceId, crate::api::methods::web::filtering::Filtered>,
     /// The physics world. Scripts query it (raycasts, regions), which
     /// brings it up to date with the DOM first, so it lives here with the
     /// DOM. Each side steps what it owns (`characters::ownership`).
@@ -317,7 +324,9 @@ pub struct World {
     pub(crate) movement: crate::api::methods::characters::movement::Movement,
     /// Cameras moving by `Camera:Interpolate`.
     pub(crate) interpolations:
-        FxHashMap<InstanceId, crate::api::methods::camera_moves::Interpolation>,
+        FxHashMap<InstanceId, crate::api::methods::camera::moves::Interpolation>,
+    /// Scriptable cameras' `SetRoll`, in radians, for those a script rolled.
+    pub(crate) camera_rolls: FxHashMap<InstanceId, f32>,
 }
 
 /// SpawnLocation, which the DOM indexes so a respawn needn't walk
@@ -343,6 +352,8 @@ impl World {
             input: InputState::default(),
             outbox: Vec::new(),
             tool_moves: Vec::new(),
+            tool_activations: Vec::new(),
+            prompts: Default::default(),
             content: Default::default(),
             assets: Default::default(),
             web: Default::default(),
@@ -385,6 +396,7 @@ impl World {
             topbar_transparency: FxHashMap::default(),
             movement: Default::default(),
             interpolations: FxHashMap::default(),
+            camera_rolls: FxHashMap::default(),
         }
     }
 
@@ -419,7 +431,13 @@ impl World {
             .chain(self.audio.scheduled.iter().map(|s| s.player))
             .chain(self.local_sounds.iter().copied())
             .chain(self.effect_calls.iter().map(|(id, _)| *id))
-            .chain(self.tool_moves.iter().flat_map(|&(a, b)| [a, b]))
+            .chain(self.input.tool_mice.iter().map(|&(_, mouse)| mouse))
+            .chain(
+                (self.tool_moves.iter())
+                    .flat_map(|m| [Some(m.tool), Some(m.parent), m.grip].into_iter().flatten()),
+            )
+            .chain(self.tool_activations.iter().map(|a| a.tool))
+            .chain(self.prompts.held())
             .chain(self.movement.held())
             .collect()
     }
@@ -427,6 +445,7 @@ impl World {
     /// Drop what the runtime keeps about `id`, which is being freed.
     pub(crate) fn forget(&mut self, id: InstanceId) {
         self.filter_results.remove(&id);
+        self.prompts.forget(id);
         self.modules.results.remove(&id);
         self.modules.loading.remove(&id);
         self.modules.waiting.remove(&id);
@@ -443,9 +462,15 @@ impl World {
         self.client_players.remove(&id);
         self.topbar_transparency.remove(&id);
         self.interpolations.remove(&id);
+        self.camera_rolls.remove(&id);
         self.movement.forget(id);
         self.styles.forget(id);
         self.input.forget(id);
+    }
+
+    /// The roll `camera` is drawn with (`Camera:SetRoll`), in radians.
+    pub fn camera_roll(&self, camera: InstanceId) -> f32 {
+        self.camera_rolls.get(&camera).copied().unwrap_or(0.0)
     }
 
     /// Look at the journal for what StyleSheets must style again, before

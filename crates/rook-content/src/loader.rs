@@ -3,7 +3,7 @@
 //! The engine asks a [`Loader`] for references and collects the results at
 //! a fixed point in its frame ([`Loader::poll`]), so disk, network and
 //! decoding never hold up a frame and completions reach scripts on the
-//! engine thread (docs/design/architecture.md#content-rook-content). Each loader's fetch threads
+//! engine thread (docs/design/architecture/content.md). Each loader's fetch threads
 //! hand decoding to one process-wide pool ([`set_decode_threads`]), both at
 //! below-normal priority and started by the first request. Requests carry a
 //! priority that can change while they wait (the player ranks files by
@@ -76,6 +76,10 @@ pub enum Want {
     /// empty; bytes that aren't a WAV, Ogg or MP3 sound fail with
     /// [`FailureKind::Invalid`].
     Audio,
+    /// A model file (what `require(assetId)` and `InsertService:LoadAsset`
+    /// put in): the worker reads it into [`Fetched::model`]; bytes that
+    /// aren't a place or model file fail with [`FailureKind::Invalid`].
+    Model,
 }
 
 impl Want {
@@ -226,7 +230,7 @@ fn needs_decoding(want: Want, fetched: &Fetched) -> bool {
         Want::Bytes => false,
         // Material textures come decoded.
         Want::Image => fetched.image.is_none(),
-        Want::Mesh | Want::Audio => true,
+        Want::Mesh | Want::Audio | Want::Model => true,
     }
 }
 
@@ -259,6 +263,15 @@ fn decode(want: Want, mut fetched: Fetched) -> Outcome {
             // here rather than on the engine thread, where a place's sounds
             // finishing together would add up to a stalled frame.
             fetched.bytes = Arc::from([]);
+        }
+        Want::Model => {
+            profiling::scope!("decode model");
+            let model = rook_formats::load(&fetched.bytes).map_err(|e| invalid(&e))?;
+            if let Some(compile) = SCRIPT_COMPILER.get() {
+                profiling::scope!("compile model scripts");
+                model.script_sources().for_each(compile);
+            }
+            fetched.model = Some(Arc::new(model));
         }
     }
     Ok(fetched)
@@ -314,6 +327,17 @@ static DECODE_THREADS: AtomicUsize = AtomicUsize::new(1);
 /// (it starts with the first decode).
 pub fn set_decode_threads(threads: usize) {
     DECODE_THREADS.store(threads.max(1), Ordering::Relaxed);
+}
+
+/// What compiles the scripts in the models workers read; nothing until
+/// the engine sets it.
+static SCRIPT_COMPILER: OnceLock<fn(&str)> = OnceLock::new();
+
+/// Have the decode workers hand each script source in the models they
+/// read ([`Want::Model`]) to `compile`, so running those scripts later
+/// compiles nothing on the engine thread. The first call sets it.
+pub fn set_script_compiler(compile: fn(&str)) {
+    _ = SCRIPT_COMPILER.set(compile);
 }
 
 /// Run the calling thread at below-normal priority, so background work

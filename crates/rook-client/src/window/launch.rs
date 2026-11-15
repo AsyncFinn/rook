@@ -102,6 +102,7 @@ impl Launch {
         let (scene, camera) = prepare(&mut game, &self.options.start, &self.setup.content);
         game.free_run();
         let options = &self.options;
+        let flying = game.view().scripted_camera().is_none();
         let mut app = App {
             title: self.title(),
             scene,
@@ -110,7 +111,7 @@ impl Launch {
             camera: FlyCamera::new(camera),
             gfx: None,
             keys: FxHashSet::default(),
-            flying: true,
+            flying,
             looking: false,
             held: MouseLock::Free,
             anchor: None,
@@ -126,6 +127,7 @@ impl Launch {
             frame_clock: Default::default(),
             refresh_read: None,
             loop_ran: false,
+            undrawable: false,
             install: self.install.take().expect("started once"),
             framerate_cap: options.framerate_cap,
             readout: Readout::new(options.frame_times),
@@ -138,6 +140,7 @@ impl Launch {
                     rook_audio::Output::new(device, volume.clamp(0.0, 1.0))
                 },
             ),
+            heard: false,
             player: self.player.clone(),
             #[cfg(feature = "repl")]
             repl: if options.repl {

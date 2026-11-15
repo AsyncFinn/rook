@@ -87,3 +87,15 @@ pub(super) fn add_path(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outco
     }
     lines(lua, this, out)
 }
+
+pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
+    Some(match (owner, name) {
+        ("ParticleEmitter", "Emit") => emit,
+        ("ParticleEmitter" | "Trail" | "WireframeHandleAdornment", "Clear") => clear,
+        ("WireframeHandleAdornment", "AddLine") => add_line,
+        ("WireframeHandleAdornment", "AddLines") => add_lines,
+        ("WireframeHandleAdornment", "AddPath") => add_path,
+        ("Beam", "SetTextureOffset") => set_texture_offset,
+        _ => return None,
+    })
+}

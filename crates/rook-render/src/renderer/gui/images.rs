@@ -21,7 +21,13 @@ pub(crate) enum ImageKey {
     },
     /// A group's texture, by its key.
     Group(u64),
+    /// A ViewportFrame's picture, by the frame's key.
+    Viewport(u64),
 }
+
+/// The sampler of `ImageKey::File::sampling` that takes the nearest texel
+/// and clamps.
+const NEAREST: usize = 1;
 
 impl ImageKey {
     pub(crate) fn of(paint: &ImagePaint) -> Self {
@@ -65,6 +71,8 @@ pub(crate) struct GuiImages {
     groups: FxHashMap<Option<ImageKey>, wgpu::BindGroup>,
     /// The groups' textures now drawn, by group key.
     group_views: FxHashMap<u64, wgpu::TextureView>,
+    /// The ViewportFrames' pictures, by frame key.
+    viewport_views: FxHashMap<u64, wgpu::TextureView>,
 }
 
 impl GuiImages {
@@ -130,7 +138,16 @@ impl GuiImages {
             layout,
             groups: FxHashMap::default(),
             group_views: FxHashMap::default(),
+            viewport_views: FxHashMap::default(),
         }
+    }
+
+    /// The ViewportFrames' pictures from now on, by frame key; bind
+    /// groups of earlier ones go.
+    pub(crate) fn set_viewports(&mut self, views: FxHashMap<u64, wgpu::TextureView>) {
+        self.groups
+            .retain(|key, _| !matches!(key, Some(ImageKey::Viewport(_))));
+        self.viewport_views = views;
     }
 
     /// The groups' textures from now on, by group key; bind groups of
@@ -155,6 +172,10 @@ impl GuiImages {
                 .map(|gpu| (&gpu.linear, &self.samplers[sampling])),
             Some(ImageKey::Group(key)) => {
                 (self.group_views.get(&key)).map(|view| (view, &self.samplers[0]))
+            }
+            // A pixel of the picture for each of the screen's.
+            Some(ImageKey::Viewport(key)) => {
+                (self.viewport_views.get(&key)).map(|view| (view, &self.samplers[NEAREST]))
             }
         }
     }

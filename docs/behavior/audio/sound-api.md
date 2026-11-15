@@ -6,7 +6,7 @@ All observed in a fresh Studio on a playtest server (and its client for
 `PlaybackLoudness`), mostly on the install's 10 s
 `sounds/action_falling.ogg`. The script-visible rules are the conformance
 case `content/sound_api`, recorded twice with the same result. The
-methods are in `rook-lua/src/api/methods/sound.rs`, the rest in
+methods are in `rook-lua/src/api/methods/audio/sound.rs`, the rest in
 `rook-engine`'s `sounds/playback.rs`.
 
 *The methods* (Confirmed):

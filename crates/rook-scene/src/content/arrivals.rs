@@ -6,7 +6,7 @@
 //! queue, nearest the camera first, and each frame draws them until its
 //! budget is spent: the time-sliced streaming that Unreal's
 //! `s.AsyncLoadingTimeLimit` and Unity's `asyncUploadTimeSlice` bound
-//! (docs/design/architecture.md#per-frame-budgets). A part still queued
+//! (docs/design/architecture/threads-and-frames.md#per-frame-budgets). A part still queued
 //! draws what it drew while its file loaded, as if the file had come a
 //! few frames later, which a download can always do.
 

@@ -16,7 +16,7 @@ pub(crate) mod world;
 
 use std::sync::Arc;
 
-use rook_types::{GuiGroup, Paint, WorldCanvas, WorldPlace};
+use rook_types::{GuiGroup, GuiViewport, Paint, WorldCanvas, WorldCanvases, WorldPlace};
 use wesl_core::include_wesl;
 
 use super::*;
@@ -31,8 +31,34 @@ use world::{WorldDraw, WorldGui, WorldRuns};
 /// A list of quads as the shader reads them, each with its image.
 type Packed = Vec<(GpuQuad, Option<ImageKey>)>;
 
-/// The groups a list of quads holds, inner ones first.
-type Held = Vec<Arc<GuiGroup>>;
+/// A screen piece or world canvas given anew, packed and uploaded.
+pub(crate) enum Fresh {
+    Piece(Arc<[GuiQuad]>),
+    Canvas(Arc<WorldCanvas>),
+}
+
+impl Fresh {
+    pub(crate) fn quads(&self) -> &[GuiQuad] {
+        match self {
+            Fresh::Piece(p) => p,
+            Fresh::Canvas(c) => &c.quads,
+        }
+    }
+}
+
+/// What a list of quads shows that's drawn before it: its groups, inner
+/// ones first, and the ViewportFrames in it or its groups.
+#[derive(Debug, Default)]
+pub(super) struct Held {
+    groups: Vec<Arc<GuiGroup>>,
+    viewports: Vec<GuiViewport>,
+}
+
+impl Held {
+    fn is_empty(&self) -> bool {
+        self.groups.is_empty() && self.viewports.is_empty()
+    }
+}
 
 /// The quads' vertex attributes, in [`GpuQuad`]'s order.
 const QUAD_ATTRIBUTES: [wgpu::VertexAttribute; 11] = wgpu::vertex_attr_array![
@@ -56,7 +82,8 @@ pub(super) struct GpuQuad {
     /// The glyph's rectangle in the atlas, or the image's part, 0 to 1.
     uv: [f32; 4],
     /// 0 fills the rectangle, 1 draws through a coverage mask, 2 through a
-    /// distance field, 3 through an image, 4 through a group's texture
+    /// distance field, 3 through an image, 4 through a group's texture, 5
+    /// through a ViewportFrame's picture, 6 and up outlines text
     /// (`shaders/gui_paint.wgsl`).
     mode: f32,
     /// The shape's center and half size (0: none).
@@ -98,7 +125,8 @@ impl GpuQuad {
                 Paint::Glyph(_) => 1.0,
                 Paint::Image(_) => 3.0,
                 Paint::Group(_) => 4.0,
-                Paint::Outline(_, grow) => 5.0 + grow,
+                Paint::Viewport(_) => 5.0,
+                Paint::Outline(_, grow) => 6.0 + grow,
             },
             shape_rect,
             radii,
@@ -140,7 +168,6 @@ impl GpuQuad {
 /// group's texture.
 #[derive(Debug)]
 struct Target {
-    /// The target's size.
     size: wgpu::Buffer,
     group: wgpu::BindGroup,
     /// The quads, and how many there are.
@@ -253,6 +280,10 @@ pub(crate) struct GuiPass {
     /// The screen's pieces last given, and what was made of each.
     screen_pieces: ScreenPieces,
     groups: Groups,
+    /// The ViewportFrames the screen shows (`Held::viewports`), and how
+    /// many times that list changed.
+    viewports: Vec<GuiViewport>,
+    viewports_version: u64,
     world: WorldGui,
     atlas: Atlas,
     ramps: Ramps,
@@ -369,6 +400,8 @@ impl GuiPass {
             cursor,
             screen_pieces: ScreenPieces::default(),
             groups: Groups::default(),
+            viewports: Vec::new(),
+            viewports_version: 0,
             world,
             layout,
             glyphs,
@@ -381,78 +414,139 @@ impl GuiPass {
     }
 
     /// Draw `screen`'s pieces on the screen from now on, bottom first, and
-    /// the world GUI's `canvases`, with the groups they hold. Only pieces
-    /// and canvases not given last time (another `Arc`) are packed and
-    /// uploaded; those are returned.
-    pub(crate) fn set<'a>(
+    /// the world GUI's canvases as `world` says, with the groups they
+    /// hold; `None` keeps what's drawn. Only pieces and canvases not given
+    /// last time (another `Arc`) are packed and uploaded; those are
+    /// returned.
+    pub(crate) fn set(
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        screen: &'a Arc<[Arc<[GuiQuad]>]>,
-        canvases: &'a [Arc<WorldCanvas>],
-    ) -> Vec<&'a [GuiQuad]> {
-        let new_screen = !self.screen_pieces.is(screen);
-        let screen_kept = self.screen_pieces.kept(screen);
-        let fresh_screen: Vec<&[GuiQuad]> = match new_screen {
-            true => (screen.iter().zip(&screen_kept))
+        screen: Option<&Arc<[Arc<[GuiQuad]>]>>,
+        world: Option<&WorldCanvases>,
+    ) -> Vec<Fresh> {
+        let screen = screen.filter(|s| !self.screen_pieces.is(s));
+        let screen_kept = screen.map(|s| self.screen_pieces.kept(s));
+        let mut fresh: Vec<Fresh> = match (screen, &screen_kept) {
+            (Some(s), Some(kept)) => (s.iter().zip(kept))
                 .filter(|(_, k)| k.is_none())
-                .map(|(p, _)| &p[..])
+                .map(|(p, _)| Fresh::Piece(p.clone()))
                 .collect(),
-            false => Vec::new(),
+            _ => Vec::new(),
         };
-        let fresh_pieces = fresh_screen.len();
-        let kept = self.world.kept(canvases);
-        let fresh: Vec<&[GuiQuad]> = (fresh_screen.into_iter())
-            .chain(
-                canvases
-                    .iter()
-                    .zip(&kept)
-                    .filter(|(_, k)| k.is_none())
-                    .map(|(c, _)| &c.quads[..]),
-            )
-            .collect();
-        let fresh_held: Vec<Held> = fresh.iter().map(|q| groups::held(&[q])).collect();
-        // Every group shown, inner ones first, each once.
+        let fresh_pieces = fresh.len();
+        let world_kept = match world {
+            Some(WorldCanvases::List(canvases)) => {
+                let kept = self.world.kept(canvases);
+                let new = (canvases.iter().zip(&kept)).filter(|(_, k)| k.is_none());
+                fresh.extend(new.map(|(c, _)| Fresh::Canvas(c.clone())));
+                Some(kept)
+            }
+            Some(WorldCanvases::Changed { canvases, .. }) => {
+                fresh.extend(canvases.iter().map(|(_, c)| Fresh::Canvas(c.clone())));
+                None
+            }
+            None => None,
+        };
+        let fresh_held: Vec<Held> = fresh.iter().map(|f| groups::held(&[f.quads()])).collect();
+        // Every group shown, inner ones first, each once, and every
+        // ViewportFrame: looked for only where some are drawn or given.
         let mut shown: Vec<Arc<GuiGroup>> = Vec::new();
-        let lists_held = (self.screen_pieces.held(&screen_kept))
-            .chain(self.world.held(&kept))
-            .chain(&fresh_held);
-        for group in lists_held.flatten() {
-            if !shown.iter().any(|g| g.key == group.key) {
-                shown.push(group.clone());
+        let mut viewports: Vec<GuiViewport> = Vec::new();
+        let grouped = !self.groups.is_empty()
+            || !self.viewports.is_empty()
+            || fresh_held.iter().any(|h| !h.is_empty());
+        let replaced: rustc_hash::FxHashSet<usize> = match world {
+            Some(WorldCanvases::Changed { canvases, .. }) if grouped => {
+                canvases.iter().map(|(i, _)| *i).collect()
+            }
+            _ => rustc_hash::FxHashSet::default(),
+        };
+        if grouped {
+            let screen_held: Box<dyn Iterator<Item = &Held>> = match &screen_kept {
+                Some(kept) => Box::new(self.screen_pieces.held(kept)),
+                None => Box::new(self.screen_pieces.all_held()),
+            };
+            let world_held: Box<dyn Iterator<Item = &Held>> = match (world, &world_kept) {
+                (_, Some(kept)) => Box::new(self.world.held(kept)),
+                (Some(WorldCanvases::Changed { len, .. }), None) => {
+                    Box::new(self.world.held_but(&replaced, *len))
+                }
+                _ => Box::new(self.world.held_but(&replaced, usize::MAX)),
+            };
+            for held in screen_held.chain(world_held).chain(&fresh_held) {
+                for group in &held.groups {
+                    if !shown.iter().any(|g| g.key == group.key) {
+                        shown.push(group.clone());
+                    }
+                }
+                viewports.extend(&held.viewports);
             }
         }
         let unpacked: Vec<&Arc<GuiGroup>> = shown.iter().filter(|g| !self.groups.has(g)).collect();
-        let lists: Vec<&[GuiQuad]> = (fresh.iter().copied())
+        let lists: Vec<&[GuiQuad]> = (fresh.iter().map(Fresh::quads))
             .chain(unpacked.iter().map(|g| &g.quads[..]))
             .collect();
         let (packed, reset) = self.pack(queue, &lists);
         // The masks or ramps what was kept points at were written over:
         // place everything again.
-        if reset && lists.len() < screen.len() + canvases.len() + shown.len() {
-            self.screen_pieces.forget();
-            self.world.forget();
-            self.groups.forget();
-            return self.set(device, queue, screen, canvases);
+        if reset {
+            let screen = match screen {
+                Some(s) => s.clone(),
+                None => self.screen_pieces.list(),
+            };
+            let mut canvases = self.world.sources();
+            match world {
+                Some(WorldCanvases::List(list)) => canvases.clone_from(list),
+                Some(WorldCanvases::Changed {
+                    len,
+                    canvases: changed,
+                }) => {
+                    canvases.truncate(*len);
+                    for (i, c) in changed {
+                        match canvases.get_mut(*i) {
+                            Some(slot) => *slot = c.clone(),
+                            None => canvases.push(c.clone()),
+                        }
+                    }
+                }
+                None => {}
+            }
+            let all = screen.len() + canvases.len() + shown.len();
+            if lists.len() < all {
+                self.screen_pieces.forget();
+                self.world.forget();
+                self.groups.forget();
+                let world = WorldCanvases::List(canvases);
+                return self.set(device, queue, Some(&screen), Some(&world));
+            }
         }
         let mut packed = packed.into_iter();
         let mut fresh_held = fresh_held.into_iter();
-        if new_screen {
+        if let (Some(screen), Some(kept)) = (screen, &screen_kept) {
             let pieces: Vec<(Packed, Held)> = (&mut packed)
                 .zip(&mut fresh_held)
                 .take(fresh_pieces)
                 .collect();
-            (self.screen_pieces).set(
-                device,
-                queue,
-                &mut self.screen,
-                screen,
-                &screen_kept,
-                pieces,
-            );
+            (self.screen_pieces).set(device, queue, &mut self.screen, screen, kept, pieces);
         }
-        let world: Vec<(Packed, Held)> = (&mut packed).zip(&mut fresh_held).collect();
-        self.world.set(device, queue, canvases, kept, world);
+        let new: Vec<(Packed, Held)> = (&mut packed).zip(&mut fresh_held).collect();
+        match (world, world_kept) {
+            (Some(WorldCanvases::List(canvases)), Some(kept)) => {
+                self.world.set(device, queue, canvases, kept, new);
+            }
+            (Some(WorldCanvases::Changed { len, canvases }), _) => {
+                self.world.replace(device, queue, *len, canvases, new);
+            }
+            _ => {}
+        }
+        if grouped && self.viewports != viewports {
+            self.viewports = viewports;
+            self.viewports_version += 1;
+        }
+        if shown.is_empty() && self.groups.is_empty() {
+            return fresh;
+        }
         let binds = Binds {
             layout: &self.layout,
             glyphs: &self.glyphs,
@@ -515,6 +609,9 @@ impl GuiPass {
                                 Paint::Group(group) => {
                                     ([0.0, 0.0, 1.0, 1.0], Some(ImageKey::Group(group.key)))
                                 }
+                                Paint::Viewport(viewport) => {
+                                    ([0.0, 0.0, 1.0, 1.0], Some(ImageKey::Viewport(viewport.key)))
+                                }
                             };
                             let ramp = (q.gradient.as_ref()).map(|g| ramps.place(queue, &g.ramp));
                             Some((GpuQuad::new(q, uv, ramp), image))
@@ -554,6 +651,17 @@ impl GuiPass {
         let images = (&self.images, cache);
         self.world
             .upload(device, queue, images, lights, (camera, view), size.1)
+    }
+
+    /// The ViewportFrames shown, with their pictures' sizes, and how many
+    /// times that list changed.
+    pub(crate) fn viewports(&self) -> (&[GuiViewport], u64) {
+        (&self.viewports, self.viewports_version)
+    }
+
+    /// Draw ViewportFrames through these pictures from now on, by frame.
+    pub(crate) fn set_viewports(&mut self, views: FxHashMap<u64, wgpu::TextureView>) {
+        self.images.set_viewports(views);
     }
 
     /// Make the world GUI's pipelines again for the parts' new image

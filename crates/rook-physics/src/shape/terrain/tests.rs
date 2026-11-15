@@ -269,3 +269,92 @@ fn smooth_grid_changes_rebuild_only_changed_chunks() {
     );
     assert!(physics.raycast(&mut dom, slab, down, &all).is_some());
 }
+
+/// Rapier sums the mass of every collider on a body each time one is
+/// added or removed, and a mesh with a density is weighed triangle by
+/// triangle: terrain colliders weighing anything made each chunk built
+/// near a moving part cost as much as weighing every chunk built before.
+#[test]
+fn terrain_colliders_are_weightless() {
+    let (mut dom, _) = world();
+    part(
+        &mut dom,
+        "Part",
+        Vec3::new(102.0, 52.0, 2.0),
+        Vec3::new(2.0, 1.0, 2.0),
+        false,
+    );
+    let mut physics = Physics::new();
+    physics.sync(&mut dom);
+    physics.step(1.0 / 60.0);
+    assert!(!physics.terrain.pieces.is_empty());
+    for collider in physics.terrain.pieces.keys() {
+        assert_eq!(physics.world.colliders[*collider].mass(), 0.0);
+    }
+}
+
+/// The first sync builds the terrain under the place's loose parts, so
+/// their first step doesn't build it all in one frame; terrain no loose
+/// part reaches still waits.
+#[test]
+fn the_first_sync_builds_the_terrain_under_loose_parts() {
+    let (mut dom, _) = world();
+    part(
+        &mut dom,
+        "Part",
+        Vec3::new(102.0, 46.5, 2.0),
+        Vec3::new(2.0, 1.0, 2.0),
+        false,
+    );
+    part(
+        &mut dom,
+        "Part",
+        Vec3::new(202.0, 44.5, 2.0),
+        Vec3::new(2.0, 1.0, 2.0),
+        true,
+    );
+    let mut physics = Physics::new();
+    physics.sync(&mut dom);
+    let built = physics.terrain.pieces.len();
+    assert!(built > 0, "nothing built under the loose part");
+    assert!(!physics.terrain.unbuilt.is_empty(), "built everything");
+    physics.sync(&mut dom);
+    physics.step(1.0 / 60.0);
+    assert_eq!(
+        physics.terrain.pieces.len(),
+        built,
+        "the first step built more"
+    );
+}
+
+/// A ray builds the terrain it passes only up to where it hits: the
+/// chunks beyond wait for a query that reaches them.
+#[test]
+fn a_ray_builds_terrain_only_up_to_its_hit() {
+    let (mut dom, terrain) = world();
+    let mut physics = Physics::new();
+    let all = Filter::legacy_ray(Vec::new(), false);
+    // Along the voxels' row, through the lone voxel, both slabs and the
+    // water, from outside the lone voxel.
+    let hit = physics
+        .raycast(
+            &mut dom,
+            Vec3::new(-20.0, 42.0, 2.0),
+            Vec3::new(400.0, 0.0, 0.0),
+            &all,
+        )
+        .expect("hits the lone voxel");
+    assert_eq!(hit.part, terrain);
+    assert!(hit.position.x < 4.0, "{}", hit.position);
+    // The slabs' and the water's chunks on the ray's row.
+    for c in [IVec3::new(1, 0, 0), IVec3::new(2, 0, 0)] {
+        assert!(
+            physics.terrain.unbuilt.contains(&c),
+            "built {c} past the hit"
+        );
+    }
+    // A ray reaching them builds them.
+    let slab = Vec3::new(202.0, 60.0, 2.0);
+    let down = Vec3::new(0.0, -40.0, 0.0);
+    assert!(physics.raycast(&mut dom, slab, down, &all).is_some());
+}

@@ -1,5 +1,5 @@
 //! How characters look: a player's avatar from the `avatar` web domain
-//! ([`super::super::web`]) when it has an endpoint, else Roblox's classic
+//! ([`crate::api::methods::web::requests`]) when it has an endpoint, else Roblox's classic
 //! default look, and HumanoidDescriptions as far as body colors and
 //! scales.
 
@@ -8,9 +8,9 @@ use rook_dom::{Dom, DomError, InstanceId};
 use rook_types::{CFrame, Color3, Value, Vector3};
 use serde_json::Value as Json;
 
-use super::super::web::{self, WebRequest};
 use super::rigs::RigType;
 use crate::api::instance::push_instance;
+use crate::api::methods::web::requests::{self as web, WebRequest};
 use crate::api::methods::{mutate, ret_instance};
 use crate::ctx::args::Args;
 use crate::ctx::{ApiResult, Outcome, with_world};

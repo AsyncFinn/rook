@@ -134,7 +134,7 @@ to start. M0 to M2 are done, so they aren't listed.
 | ⬜ | [**M10** Networking](m10-networking.md) | Two players on two machines play an archived place together | Steps 2 and 3: M9 step 2 |
 | ⬜ | [**M11** Avatars and animation](m11-avatars-and-animation.md) | Players pick an avatar (no Roblox account) and see each other's, dressed and animated | M9 step 1; steps 1 and 4 (avatars sent, tracks replicated): M10 step 1 |
 | ⬜ | [**M12** Server hosting](m12-server-hosting.md) | Host a place for friends over the internet; its saved data survives a restart | M10 step 1 |
-| ⬜ | [**M13** Lighting and post-processing](m13-lighting-and-post-processing.md) | Screenshots of reference places match Studio's lighting, sky and effects | M7 step 3, M4 step 5 |
+| ⬜ | [**M13** Lighting and post-processing](m13-lighting-and-post-processing.md) | Screenshots of reference places match Studio's lighting, sky and effects at Automatic and at Level21 | M7 step 3, M4 step 5 |
 | ⬜ | [**M14** Scripting completeness](m14-scripting-completeness.md) | 90% of archive places with server scripts run without an error Rook causes | Step 7 (client scripts): M8 and M9 |
 | ⬜ | [**M15** Physics completeness](m15-physics-completeness.md) | Second physics conformance batch passes; MeshParts and unions collide with their real shapes | Step 3 (buoyancy): M6 step 3 |
 | ⬜ | [**M16** Every class the archive uses](m16-every-class.md) | No class in 5 or more archive files is still inert | Nothing |

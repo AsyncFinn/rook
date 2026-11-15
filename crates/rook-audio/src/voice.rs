@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
-use rook_content::decode::audio::Audio;
+use rook_content::decode::audio::{Audio, Reader};
 
 use crate::effects::{Chain, Frame};
 
 #[derive(Debug)]
 pub(crate) struct Voice<K> {
-    pub(crate) audio: Arc<Audio>,
+    pub(crate) reader: Reader,
     /// Position in source frames.
     pub(crate) cursor: f64,
     /// The gains last mixed at, and the ones to reach by the end of the
@@ -26,7 +26,7 @@ pub(crate) struct Voice<K> {
 impl<K> Voice<K> {
     pub(crate) fn new(audio: &Arc<Audio>, position: f64, gains: [f32; 2], rate: u32) -> Self {
         Self {
-            audio: audio.clone(),
+            reader: audio.reader(),
             cursor: position * f64::from(audio.sample_rate.max(1)),
             gains,
             target: gains,
@@ -45,8 +45,10 @@ impl<K> Voice<K> {
     /// the engine's clock falls behind whenever frames are slow, and
     /// jumping back to it would stutter.
     pub(crate) fn follow(&mut self, audio: &Arc<Audio>, position: f64, generation: u32) {
-        if !Arc::ptr_eq(&self.audio, audio) || self.generation != generation {
-            self.audio = audio.clone();
+        if !Arc::ptr_eq(self.reader.audio(), audio) || self.generation != generation {
+            if !Arc::ptr_eq(self.reader.audio(), audio) {
+                self.reader = audio.reader();
+            }
             self.cursor = position * f64::from(audio.sample_rate.max(1));
             self.generation = generation;
             self.ended = false;
@@ -55,7 +57,7 @@ impl<K> Voice<K> {
 
     #[cfg(test)]
     pub(crate) fn seconds(&self) -> f64 {
-        self.cursor / f64::from(self.audio.sample_rate.max(1))
+        self.cursor / f64::from(self.reader.audio().sample_rate.max(1))
     }
 
     /// Fill `out` with the sound at full volume, at `rate` frames per
@@ -75,9 +77,8 @@ impl<K> Voice<K> {
     }
 
     fn read(&mut self, out: &mut [Frame], rate: f64) -> bool {
-        let audio = &*self.audio;
+        let audio = self.reader.audio();
         let frames = audio.frames();
-        let src_channels = usize::from(audio.channels.max(1));
         if frames == 0 {
             return false;
         }
@@ -85,7 +86,6 @@ impl<K> Voice<K> {
         // and fine for the archive's mostly 8-48 kHz effects
         // (Approximation).
         let step = f64::from(audio.sample_rate) * f64::from(self.speed.max(0.0)) / rate;
-        let sample = |frame: usize, ch: usize| f32::from(audio.samples[frame * src_channels + ch]);
         for frame in out.iter_mut() {
             if self.cursor >= frames as f64 {
                 if self.looped && step > 0.0 {
@@ -103,12 +103,11 @@ impl<K> Voice<K> {
                 i
             };
             let t = (self.cursor - i as f64) as f32;
+            // A mono sound goes to both sides.
+            let a = self.reader.frame(i).map(f32::from);
+            let b = self.reader.frame(next).map(f32::from);
             for (c, s) in frame.iter_mut().enumerate() {
-                // A mono sound goes to both sides.
-                let ch = if c < src_channels { c } else { 0 };
-                let a = sample(i, ch);
-                let b = sample(next, ch);
-                *s = (a + (b - a) * t) / 32768.0;
+                *s = (a[c] + (b[c] - a[c]) * t) / 32768.0;
             }
             self.cursor += step;
         }

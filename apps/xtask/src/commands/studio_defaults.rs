@@ -21,21 +21,42 @@ use super::studio::Studio;
 /// A class to probe and the properties it has no database default for.
 pub(crate) struct Gap {
     pub(crate) class: ClassId,
-    /// Read through `GetService` instead of `Instance.new`.
-    pub(crate) service: bool,
+    pub(crate) from: From,
     pub(crate) properties: Vec<PropertyId>,
 }
 
-/// Every creatable class and service, with the scriptable properties the
-/// database gives no default for.
+/// Where the probe gets an instance of a class.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum From {
+    /// `Instance.new`.
+    New,
+    /// `FindService`.
+    Service,
+    /// The playtest's own player: scripts can't create a Player.
+    LocalPlayer,
+}
+
+/// Every creatable class, service and Player, with the scriptable
+/// properties the database gives no default for.
 pub(crate) fn gaps(db: &Database) -> Vec<Gap> {
     let mut out: Vec<Gap> = db
         .classes()
         .iter()
-        .filter(|c| !c.flags.not_creatable || c.flags.service)
-        .map(|c| Gap {
+        .filter_map(|c| {
+            let from = if c.flags.service {
+                From::Service
+            } else if c.name == "Player" {
+                From::LocalPlayer
+            } else if c.flags.not_creatable {
+                return None;
+            } else {
+                From::New
+            };
+            Some((c, from))
+        })
+        .map(|(c, from)| Gap {
             class: c.id,
-            service: c.flags.service,
+            from,
             properties: c
                 .all_properties
                 .iter()

@@ -3,10 +3,11 @@
 //! A [`Runtime`] is one DataModel's Luau VM plus its [`World`] (DOM,
 //! signals, scheduler, output). Scripts see the Roblox API: Instance
 //! userdata, datatypes, `game`, `wait`/`task`, signals and `require`.
-//! See `docs/design/architecture.md#luau-bridge-rook-lua`.
+//! See `docs/design/architecture/scripting.md#luau-bridge-rook-lua`.
 
 mod api;
 pub mod audio_api;
+mod bytecode;
 mod collect;
 mod ctx;
 pub mod gamepads;
@@ -22,16 +23,18 @@ mod world;
 
 use threads::watchdog;
 
-pub use api::methods::assets::AssetFill;
-pub use api::methods::camera::{Lens, viewport_ray};
+pub use api::methods::camera::rays::{Lens, rolled, viewport_ray};
 pub use api::methods::characters::movement::drives as humanoid_drives;
 pub use api::methods::characters::movement::face_camera;
-pub use api::methods::characters::ownership::authority;
+pub use api::methods::characters::ownership::{authority, network_owner};
 pub use api::methods::characters::{
     Avatar, BuildRig, RigSource, RigType, Scales, character_root, humanoid_of_root, humanoid_root,
     root_part,
 };
-pub use api::methods::web::{WebAnswer, WebRequest};
+pub use api::methods::content::assets::AssetModel;
+pub use api::methods::prompts::{Action as PromptAction, ActionKind as PromptActionKind};
+pub use api::methods::tools::{Activation as ToolActivation, ToolMove};
+pub use api::methods::web::requests::{WebAnswer, WebRequest};
 pub use net::{NetValue, RemoteKind, RemoteMessage};
 pub use world::{
     Compiled, EffectCall, Listener, LogEntry, MessageType, SignalBehavior, SoundControl,
@@ -103,6 +106,7 @@ pub struct Runtime {
 impl Runtime {
     pub fn new(dom: Dom, clock: Clock) -> mlua::Result<Self> {
         let lua = Lua::new();
+        rook_content::set_script_compiler(bytecode::precompile);
         let world = Rc::new(RefCell::new(World::new(dom, clock)));
         ctx::Ctx::install(&lua, world.clone())?;
 
@@ -167,6 +171,13 @@ impl Runtime {
         self.world().started.contains_key(&script)
     }
 
+    /// Whether a script runs where it is now, enabled. One that's
+    /// disabled or leaves stops as the change is dispatched.
+    pub fn runs_here(&self, script: InstanceId) -> bool {
+        let w = self.world();
+        api::scripts::runs_here(&w.dom, script, w.is_client)
+    }
+
     /// Run Luau source on a new thread, as a script at `script` if given.
     pub fn run_source(
         &self,
@@ -227,7 +238,7 @@ impl Runtime {
     /// (clients, each frame after RenderStepped).
     pub fn step_cameras(&self) {
         self.guarded(|| {
-            api::methods::camera_moves::step(&self.lua);
+            api::methods::camera::moves::step(&self.lua);
             threads::drain_deferred(&self.lua);
         });
     }
@@ -301,14 +312,16 @@ impl Runtime {
 
     /// Work out the names and health bars over heads for this frame's
     /// drawing, once a frame (they look through the world, so they cost
-    /// a ray each).
+    /// a ray each, all through one filter).
     pub fn sync_overheads(&self) {
         let mut w = self.world_mut();
         let w = &mut *w;
         let physics = &mut w.physics;
-        w.gui.sync_overheads(&mut w.dom, |dom, from, to, ignore| {
-            let filter = rook_physics::Filter::legacy_ray(ignore.to_vec(), false);
-            physics.raycast(dom, from, to - from, &filter).is_some()
+        w.gui.sync_overheads(&mut w.dom, |dom, lines, ignore| {
+            let filter = rook_physics::Filter::legacy_ray(ignore.iter().copied(), false);
+            (lines.iter())
+                .map(|&(from, to)| physics.raycast(dom, from, to - from, &filter).is_some())
+                .collect()
         });
     }
 
@@ -329,7 +342,7 @@ impl Runtime {
     /// Give TextBox `id` focus as clicking it does, its caret before
     /// character `caret` (`None`: at the end), firing what that fires.
     pub fn focus_text_box(&self, id: InstanceId, caret: Option<usize>) {
-        let focused = self.guarded(|| api::methods::textbox::focus(&self.lua, id, caret));
+        let focused = self.guarded(|| api::methods::gui::textbox::focus(&self.lua, id, caret));
         if let Err(e) = focused {
             tracing::warn!("focusing a TextBox failed: {e}");
         }
@@ -344,7 +357,7 @@ impl Runtime {
                 Some(id) => mlua::Value::UserData(api::instance::push_instance(&self.lua, id)?),
                 None => mlua::Value::Nil,
             };
-            api::methods::textbox::release(&self.lua, enter_pressed, cause, false)
+            api::methods::gui::textbox::release(&self.lua, enter_pressed, cause, false)
         });
         if let Err(e) = released {
             tracing::warn!("releasing a TextBox failed: {e}");
@@ -352,7 +365,7 @@ impl Runtime {
     }
 
     pub fn focused_text_box(&self) -> Option<InstanceId> {
-        api::methods::textbox::focused(&self.lua)
+        api::methods::gui::textbox::focused(&self.lua)
     }
 
     /// `Instance:Destroy()` from the engine (fallen parts), firing the
@@ -386,7 +399,7 @@ impl Runtime {
     /// signals it causes.
     pub fn load_character(&self, player: InstanceId) -> Result<InstanceId, ScriptError> {
         self.guarded(|| {
-            let r = api::methods::spawn_character(&self.lua, player);
+            let r = api::methods::characters::spawn_character(&self.lua, player);
             threads::drain_deferred(&self.lua);
             r
         })
@@ -454,16 +467,92 @@ impl Runtime {
         std::mem::take(&mut self.world_mut().outbox)
     }
 
-    /// Tools the client's scripts moved between its player's Backpack and
-    /// character since the last call, with where each went.
-    pub fn take_tool_moves(&self) -> Vec<(InstanceId, InstanceId)> {
+    /// Tools the client's scripts moved or dropped since the last call.
+    pub fn take_tool_moves(&self) -> Vec<ToolMove> {
         std::mem::take(&mut self.world_mut().tool_moves)
     }
 
     /// On the server, repeat a Tool move `player`'s client made, if the
-    /// Tool is that player's.
-    pub fn repeat_tool_move(&self, player: InstanceId, tool: InstanceId, parent: InstanceId) {
-        self.guarded(|| api::methods::tools::repeat_move(&self.lua, player, tool, parent));
+    /// Tool is that player's. Returns the grip weld the server made for
+    /// it.
+    pub fn repeat_tool_move(
+        &self,
+        player: InstanceId,
+        tool: InstanceId,
+        parent: InstanceId,
+    ) -> Option<InstanceId> {
+        self.guarded(|| api::methods::tools::repeat_move(&self.lua, player, tool, parent))
+    }
+
+    /// Tool activations that fired here since the last call, for the other
+    /// side.
+    pub fn take_tool_activations(&self) -> Vec<ToolActivation> {
+        std::mem::take(&mut self.world_mut().tool_activations)
+    }
+
+    /// Fire an activation from the other side: on the server, from
+    /// `player`'s client, only of a Tool its character holds.
+    pub fn deliver_tool_activation(&self, player: Option<InstanceId>, activation: ToolActivation) {
+        self.guarded(|| {
+            api::methods::tools::deliver_activation(&self.lua, player, activation);
+            threads::drain_deferred(&self.lua);
+        });
+    }
+
+    /// The left button went down or up over the world, on a client: the
+    /// Tools the local character holds activate.
+    pub fn activate_tools(&self, down: bool) {
+        self.guarded(|| {
+            api::methods::tools::activate_held(&self.lua, down);
+            threads::drain_deferred(&self.lua);
+        });
+    }
+
+    /// A client's frame for ProximityPrompts: which show, and which holds
+    /// trigger.
+    pub fn update_prompts(&self) {
+        self.guarded(|| {
+            api::methods::prompts::update(&self.lua);
+            threads::drain_deferred(&self.lua);
+        });
+    }
+
+    /// A key (`Enum.KeyCode` value) went down or up on a client, past a
+    /// focused TextBox: the shown prompts on it trigger or are let go.
+    /// Returns whether prompts took it.
+    pub fn prompt_key(&self, key: u32, down: bool) -> bool {
+        self.guarded(|| {
+            let taken = api::methods::prompts::key(&self.lua, key, down);
+            threads::drain_deferred(&self.lua);
+            taken
+        })
+    }
+
+    /// Prompt events that fired here since the last call, for the server.
+    pub fn take_prompt_actions(&self) -> Vec<PromptAction> {
+        self.guarded(|| api::methods::prompts::take_actions(&self.lua))
+    }
+
+    /// Fire a prompt event `player`'s client sent, on the server.
+    pub fn deliver_prompt_action(&self, player: InstanceId, action: PromptAction) {
+        self.guarded(|| {
+            api::methods::prompts::deliver(&self.lua, player, action);
+            threads::drain_deferred(&self.lua);
+        });
+    }
+
+    /// Backspace on a client: the local character drops what it holds.
+    pub fn drop_tools(&self) {
+        self.guarded(|| {
+            api::methods::tools::drop_held(&self.lua);
+            threads::drain_deferred(&self.lua);
+        });
+    }
+
+    /// On the server, `part` began touching `other`: a Tool lying in the
+    /// world may be picked up.
+    pub fn tool_touched(&self, part: InstanceId, other: InstanceId) {
+        self.guarded(|| api::methods::tools::touched(&self.lua, part, other));
     }
 
     /// Deliver a RemoteEvent firing: `OnServerEvent(player, ...)` on a
@@ -596,7 +685,7 @@ impl Runtime {
             return;
         }
         self.guarded(|| {
-            api::methods::preload::deliver(&self.lua, results);
+            api::methods::content::preload::deliver(&self.lua, results);
             threads::drain_deferred(&self.lua);
         });
     }
@@ -607,11 +696,11 @@ impl Runtime {
         std::mem::take(&mut self.world_mut().assets.outbox)
     }
 
-    /// Deliver a fetched asset: `fill` puts its instances in the Model the
-    /// waiting call gets, and the threads waiting for it resume.
-    pub fn deliver_asset(&self, request: u64, fill: AssetFill) {
+    /// Deliver a fetched asset: the waiting call gets `model`, a Model
+    /// holding its instances, and the threads waiting for it resume.
+    pub fn deliver_asset(&self, request: u64, model: AssetModel) {
         self.guarded(|| {
-            api::methods::assets::deliver(&self.lua, request, fill);
+            api::methods::content::assets::deliver(&self.lua, request, model);
             threads::drain_deferred(&self.lua);
         });
     }
@@ -631,7 +720,7 @@ impl Runtime {
     /// Deliver a web request's answer: the member waiting on it returns.
     pub fn deliver_web(&self, request: u64, answer: WebAnswer) {
         self.guarded(|| {
-            api::methods::web::deliver(&self.lua, request, answer);
+            api::methods::web::requests::deliver(&self.lua, request, answer);
             threads::drain_deferred(&self.lua);
         });
     }

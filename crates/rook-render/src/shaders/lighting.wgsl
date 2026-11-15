@@ -118,10 +118,6 @@ fn sky_nearby(world: vec3<f32>, n: vec3<f32>) -> f32 {
     return max(sky_voxel(q), around);
 }
 
-// How far across the surface `voxel_sun_visibility` spreads its samples,
-// in studs (fitted).
-const SUN_SPREAD: f32 = 4.0;
-
 // The sun voxels' share of the sun at `p`, blended trilinearly; all of it
 // outside the volume.
 fn sun_voxel(p: vec3<f32>) -> f32 {
@@ -135,21 +131,17 @@ fn sun_voxel(p: vec3<f32>) -> f32 {
 // How much of the sun reaches a surface at `world` facing `n` (unit)
 // without PrioritizeLightingQuality, where Studio shadows the sun through
 // its light voxels: soft, blocky, and only within the voxels' reach
-// (docs/behavior/lighting/sun.md). The voxels around the point 6 studs out
-// along the normal, as for the sky, averaged over a 3x3 pattern
-// `SUN_SPREAD` apart across the surface.
+// (docs/behavior/lighting/sun.md). The voxels at the point 6 studs out
+// along the normal, as for the sky; their cones already soften the shadow
+// (`sunlit` in `light_volume.wgsl`). Even a full shadow keeps
+// `SUN_SHADOWED` of the sun, as Studio's does.
 fn voxel_sun_visibility(world: vec3<f32>, n: vec3<f32>) -> f32 {
-    let q = world + n * VOXEL_OFFSET;
-    let t = normalize(cross(n, select(vec3(0.0, 1.0, 0.0), vec3(1.0, 0.0, 0.0), abs(n.y) > 0.9)));
-    let b = cross(n, t);
-    var lit = 0.0;
-    for (var j = -1; j <= 1; j++) {
-        for (var i = -1; i <= 1; i++) {
-            lit += sun_voxel(q + (t * f32(i) + b * f32(j)) * SUN_SPREAD);
-        }
-    }
-    return lit / 9.0;
+    return mix(SUN_SHADOWED, 1.0, sun_voxel(world + n * VOXEL_OFFSET));
 }
+
+// How much of the sun the voxels let through where they block it all
+// (fitted to Studio 0.747, docs/behavior/lighting/sun.md).
+const SUN_SHADOWED: f32 = 0.03;
 
 // How much of the sun reaches a point: through the shadow map, 3x3
 // comparison samples (each one filtered 2x2 by the sampler), fading out

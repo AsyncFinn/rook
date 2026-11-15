@@ -108,3 +108,36 @@ fn date_time_and_settings() {
         ],
     );
 }
+
+/// MemStorageService keeps strings by key and calls the callbacks bound
+/// to one when it's set or fired; BindAndFire calls the new callback at
+/// once if the key holds something, and a connection unbinds.
+#[test]
+fn mem_storage_keeps_items_and_calls_bindings() {
+    let lines = run_core(
+        r#"
+        local m = game:GetService("MemStorageService")
+        print(m:GetItem("k", "none"), m:HasItem("k"))
+        local c = m:Bind("k", function(v) print("bound", v) end)
+        m:SetItem("k", "a")
+        m:BindAndFire("k", function(v) print("fired", v) end)
+        m:Fire("k", "b")
+        c:Disconnect()
+        m:SetItem("k", "c")
+        print(m:GetItem("k"), m:RemoveItem("k"), m:HasItem("k"))
+        "#,
+        1,
+    );
+    assert_eq!(
+        lines,
+        [
+            "none false",
+            "bound a",
+            "fired a",
+            "bound b",
+            "fired b",
+            "fired c",
+            "c true false",
+        ]
+    );
+}

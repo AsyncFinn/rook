@@ -1,4 +1,4 @@
-//! The screen's GUI kept per piece (docs/design/architecture.md#redrawing-what-changed):
+//! The screen's GUI kept per piece (docs/design/architecture/gui.md#redrawing-what-changed):
 //! each piece packed once, written to the quad buffer alone when the
 //! pieces around it keep their sizes, and the draw runs joined across
 //! pieces.
@@ -38,6 +38,16 @@ impl ScreenPieces {
             .map(|(i, p)| (p.source.as_ptr(), i))
             .collect();
         list.iter().map(|p| at.get(&p.as_ptr()).copied()).collect()
+    }
+
+    /// The list last given (an empty one before any).
+    pub(super) fn list(&self) -> Arc<[Arc<[GuiQuad]>]> {
+        self.list.clone().unwrap_or_else(|| Arc::from([]))
+    }
+
+    /// The groups every piece holds.
+    pub(super) fn all_held(&self) -> impl Iterator<Item = &Held> {
+        self.pieces.iter().map(|p| &p.held)
     }
 
     /// The groups the kept pieces hold.

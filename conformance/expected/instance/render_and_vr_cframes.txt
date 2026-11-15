@@ -1,0 +1,10 @@
+-- studio 0.747.0.7471481
+-- signals: deferred
+render unparented true
+render false Expected ':' not '.' calling member function GetRenderCFrame
+Head 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1 false
+LeftHand 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1 false
+Floor 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1 false
+by name 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1
+missing false Argument 1 missing or nil
+missing enabled false Argument 1 missing or nil

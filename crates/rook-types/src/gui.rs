@@ -89,6 +89,19 @@ pub enum Paint {
     /// A group of quads drawn apart into a texture of its own, then laid
     /// over the rectangle, tinted by the color (a CanvasGroup).
     Group(Arc<GuiGroup>),
+    /// A ViewportFrame's picture of its world, laid over the rectangle,
+    /// tinted by the color.
+    Viewport(GuiViewport),
+}
+
+/// The picture a [`Paint::Viewport`] shows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GuiViewport {
+    /// The ViewportFrame's key: its world's, among the renderer's scene's
+    /// viewports.
+    pub key: u64,
+    /// The picture's size in pixels.
+    pub size: [u32; 2],
 }
 
 /// Quads a [`Paint::Group`] draws into its texture.
@@ -139,6 +152,20 @@ pub struct WorldCanvas {
     /// world, in its own colors and blended as screen GUI is: no lighting,
     /// tone curve or fog (the names over heads).
     pub untoned: bool,
+}
+
+/// The world GUI's canvases as a frame hands them to a renderer: the
+/// whole list (which GUIs draw changed), or only the canvases drawn anew,
+/// by index, with the list's length now (the list ends with the tags over
+/// heads, so it can grow or shrink; indices past its old end are among
+/// those given).
+#[derive(Debug, Clone)]
+pub enum WorldCanvases {
+    List(Vec<Arc<WorldCanvas>>),
+    Changed {
+        len: usize,
+        canvases: Vec<(usize, Arc<WorldCanvas>)>,
+    },
 }
 
 /// Where a [`WorldCanvas`] is this frame.

@@ -1,4 +1,4 @@
-# ContextActionService
+# Context actions
 
 Checked against Studio 0.747 on 2026-11-10.
 

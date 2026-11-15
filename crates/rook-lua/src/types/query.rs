@@ -85,12 +85,13 @@ impl Default for Params {
 impl Params {
     pub(crate) fn filter(&self) -> Filter {
         Filter {
-            instances: self.instances.clone(),
+            instances: self.instances.iter().copied().collect(),
             include: self.filter_type == INCLUDE,
             group: Some(self.collision_group.clone()),
             respect_can_collide: self.respect_can_collide,
             ignore_water: self.ignore_water,
             skip_invisible_ghosts: false,
+            max_transparency: None,
         }
     }
 

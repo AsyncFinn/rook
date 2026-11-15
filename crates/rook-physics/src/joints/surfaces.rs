@@ -291,10 +291,8 @@ pub fn joins_on_load(dom: &Dom) -> bool {
         return false;
     };
     match dom.property_id(ws, "ExplicitAutoJoints") {
-        Some(p) => match dom.get(ws).and_then(|i| i.properties().get(&p)) {
-            Some(v) => *v == Value::Bool(false),
-            None => true,
-        },
+        Some(p) if dom.is_set(ws, p) => dom.property(ws, p) == Some(Value::Bool(false)),
+        Some(_) => true,
         None => false,
     }
 }

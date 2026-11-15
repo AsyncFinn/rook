@@ -57,6 +57,25 @@ pub(crate) enum Carets {
 }
 
 impl Source {
+    /// Whether text laid out from `self` lays out as `other` does but for
+    /// its glyphs' colors: plain text whose color, transparency or stroke
+    /// alone changed, which [`TextBlock::recolor`] gives it.
+    pub(crate) fn recolors(&self, other: &Source) -> bool {
+        if self.rich || other.rich {
+            return false;
+        }
+        let style = Style {
+            color: other.style.color,
+            transparency: other.style.transparency,
+            stroke: other.style.stroke,
+            ..self.style.clone()
+        };
+        Source {
+            style,
+            ..self.clone()
+        } == *other
+    }
+
     /// A TextLabel's, TextButton's or TextBox's text; `None` for other
     /// objects.
     pub(crate) fn of(dom: &Dom, id: InstanceId) -> Option<Self> {
@@ -417,7 +436,8 @@ impl Shaped {
                     index += 1;
                 }
                 items.extend(
-                    shape::shape(fonts, picked.face, piece, index)
+                    fonts
+                        .shape(picked.face, piece, index)
                         .into_iter()
                         .map(|g| (run, Shape::Glyph(g))),
                 );
@@ -486,6 +506,30 @@ fn set_lines(
     }
 }
 
+/// A glyph's color in `style`, and its outline's color and thickness.
+fn paint(style: &Style) -> ([f32; 4], Option<([f32; 4], f32)>) {
+    let alpha = 1.0 - style.transparency;
+    let color = [style.color[0], style.color[1], style.color[2], alpha];
+    let stroke = style.stroke.map(|s| {
+        // Inference: the outline fades with the text too.
+        let a = (1.0 - s.transparency) * alpha;
+        ([s.color[0], s.color[1], s.color[2], a], s.thickness)
+    });
+    (color, stroke)
+}
+
+impl TextBlock {
+    /// Give every glyph `style`'s colors: plain text's glyphs all take
+    /// its one style (see [`Source::recolors`]).
+    pub(crate) fn recolor(&mut self, style: &Style) {
+        let (color, stroke) = paint(style);
+        for g in &mut self.glyphs {
+            g.color = color;
+            g.stroke = stroke;
+        }
+    }
+}
+
 fn place(block: &mut TextBlock, source: &Source, spans: &[rich::Span], set: &Set, size: Vec2) {
     let top = ((size.y - set.size.y) * source.align.y).round();
     let mut shown = 0;
@@ -499,8 +543,7 @@ fn place(block: &mut TextBlock, source: &Source, spans: &[rich::Span], set: &Set
         };
         for g in &line.glyphs {
             let style = &spans[g.run].style;
-            let alpha = 1.0 - style.transparency;
-            let color = [style.color[0], style.color[1], style.color[2], alpha];
+            let (color, stroke) = paint(style);
             let left = Vec2::new(x, baseline - g.ascent);
             let right = Vec2::new(x + g.advance, baseline + g.descent);
             if let Some((c, t)) = style.mark {
@@ -535,11 +578,7 @@ fn place(block: &mut TextBlock, source: &Source, spans: &[rich::Span], set: &Set
                     px: g.px,
                     pen: Vec2::new(x + g.offset[0], baseline + g.offset[1]),
                     color,
-                    stroke: style.stroke.map(|s| {
-                        // Inference: the outline fades with the text too.
-                        let a = (1.0 - s.transparency) * alpha;
-                        ([s.color[0], s.color[1], s.color[2], a], s.thickness)
-                    }),
+                    stroke,
                 });
             }
             shown += 1;

@@ -8,15 +8,17 @@ and keys sent through the MCP's `user_mouse_input` and
 `user_keyboard_input`, and every event logged by a client script. The
 conformance cases `input/gui_buttons`, `input/gui_overlap`,
 `input/gui_wheel`, `input/textbox` and `input/textbox_removal` hold the
-decisive orders; Rook passes all five.
+decisive orders; Rook passes all five. `input/world_gui_overlap`, the
+screen over a SurfaceGui, was recorded the same way in Studio 0.747 on
+2026-11-13, and Rook passes it too.
 
-Code: hit-testing in `rook-gui` (`hits.rs`, walking `order.rs`, the
-draw order), the wheel and bar drags in `scroll_input.rs`, tints and
+Code: hit-testing in `rook-gui` (`input/hits.rs`, walking `order.rs`, the
+draw order), the wheel and bar drags in `input/scrolling.rs`, tints and
 hover images in `draw/frame.rs` and `draw/image.rs`, the caret in
 `draw/caret.rs`; the events in `rook-engine/src/bridges/input/`
 (`gui.rs`, `textbox.rs`); TextBox focus in
-`rook-lua/src/api/methods/textbox.rs`, lost to a move in
-`rook-lua/src/threads.rs` (`dispatch`).
+`rook-lua/src/api/methods/gui/textbox.rs`, lost to a move in
+`rook-lua/src/threads/firing.rs` (`dispatch`).
 
 ## Coordinates
 
@@ -92,6 +94,14 @@ hover images in `draw/frame.rs` and `draw/image.rs`, the caret in
   not, or a button) don't get the click; behind inactive ones they do.
   Their hover kept going while the cursor was over an Active Frame (no
   `MouseHoverLeave`).
+- **World GUI** behind the screen's GUI takes the mouse by the same
+  rule: a SurfaceGui button under an inactive Frame or TextLabel, or a
+  non-interactable button, got `InputBegan` after the screen object and
+  took the click; under an `Active` Frame (transparent or not), an
+  Active TextLabel or a button with `Active` off, it got nothing. Only a
+  world GUI with its own `Active` on takes the mouse (SurfaceGui's
+  default is on, BillboardGui's off); with it off, the click went to the
+  ClickDetector behind.
 
 ## The wheel
 
@@ -196,7 +206,7 @@ hover images in `draw/frame.rs` and `draw/image.rs`, the caret in
   bigger with its pixels blended (bilinear): rebuilt that way it
   differs from the capture by 9 levels of 255 on average, mostly where
   the capture's background shows through. Rook keeps those cells
-  (`crates/rook-scene/src/cursor/hand.rs`) and draws them the same way.
+  (`crates/rook-scene/src/cursor.rs`) and draws them the same way.
   That it points from the fingertip's top is Inference. How it looks on
   macOS isn't known: no capture of a Mac player over a ClickDetector
   was found.

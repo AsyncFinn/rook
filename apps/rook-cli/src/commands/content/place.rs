@@ -26,7 +26,8 @@ impl Use {
             Want::Mesh => self.mesh,
             Want::Image => self.image,
             Want::Audio => self.audio,
-            Want::Bytes => 0,
+            // No property holds a model scripts load.
+            Want::Bytes | Want::Model => 0,
         }
     }
 }
@@ -147,7 +148,7 @@ fn collect_uses(dom: &rbx_dom_weak::WeakDom) -> BTreeMap<String, Use> {
                 Want::Mesh => u.mesh += 1,
                 Want::Image => u.image += 1,
                 Want::Audio => u.audio += 1,
-                Want::Bytes => {}
+                Want::Bytes | Want::Model => {}
             }
         }
     }

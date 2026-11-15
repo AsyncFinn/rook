@@ -1,4 +1,5 @@
 use super::*;
+use crate::api::methods::tools;
 
 /// Read a property by canonical name, including derived ones.
 pub(crate) fn read_property(lua: &Lua, id: InstanceId, name: &str) -> ApiResult<LuaValue> {
@@ -24,6 +25,10 @@ pub(super) fn read(
     name: &str,
     prop: Option<(PropertyId, Option<EnumId>)>,
 ) -> ApiResult<(LuaValue, bool)> {
+    let inactive = tools::inactive_mouse_error(&c.world.borrow(), id, prop.map(|p| p.0));
+    if let Some(e) = inactive {
+        return Err(ScriptError(e.into()));
+    }
     let laid_out = rook_gui::is_layout_output(name);
     if laid_out {
         let start = {
@@ -49,7 +54,7 @@ pub(super) fn read(
                 Some(v) => (Some(v), false),
                 None => (
                     prop.and_then(|(pid, _)| w.dom.property(id, pid)),
-                    prop.is_some() && !laid_out,
+                    prop.is_some() && !laid_out && !tools::is_tool_mouse(&w.dom, id),
                 ),
             },
         }
@@ -76,7 +81,7 @@ pub(crate) fn set_member(lua: &Lua, id: InstanceId, key: &str, value: LuaValue) 
                     )));
                 }
             };
-            methods::set_callback(lua, id, name, f)?;
+            methods::instances::bindables::set_callback(lua, id, name, f)?;
             return Ok(());
         }
         // Roblox's CoreScripts set members newer than Rook's API snapshot
@@ -141,11 +146,6 @@ pub(crate) fn write_property(
         };
         let parent = r.map(InstanceId::from_ref);
         let result = crate::removal::set_parent(lua, id, parent);
-        if result.is_ok() {
-            with_world(lua, |w| {
-                crate::api::methods::tools::note_move(w, id, parent);
-            });
-        }
         return Ok(result.map_err(ScriptError::from));
     }
     let selection = properties::selection::before(lua, id, name, &converted);
@@ -177,7 +177,10 @@ pub(crate) fn write_property(
                 .set_property(id, target, properties::content_value(url));
         }
         if let Some(r) = properties::set(w, id, name, &converted) {
-            return r;
+            return r.and_then(|()| match name.starts_with("Grip") {
+                true => crate::api::methods::tools::follow_grip(w, id),
+                false => Ok(()),
+            });
         }
         match name {
             "Name" => {
@@ -185,6 +188,10 @@ pub(crate) fn write_property(
                     return Ok(());
                 };
                 w.dom.set_name(id, s)
+            }
+            "Grip" => {
+                w.dom.set_property(id, prop.id, converted)?;
+                crate::api::methods::tools::follow_grip(w, id)
             }
             _ => w.dom.set_property(id, prop.id, converted),
         }

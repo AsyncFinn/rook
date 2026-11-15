@@ -3,10 +3,9 @@
 //!
 //! Every DataModel has a physics world (`rook-physics`, kept in the
 //! scripting world so script queries reach it). Servers simulate; clients
-//! only query theirs. See `docs/design/architecture.md#signals-and-scheduler-rook-luas-signal-and-scheduler` for the frame order.
+//! only query theirs. See `docs/design/architecture/scripting.md#signals-and-scheduler-rook-luas-signal-and-scheduler` for the frame order.
 
 mod bridges;
-pub mod build_config;
 mod chat;
 pub mod console;
 pub mod core_scripts;
@@ -17,7 +16,6 @@ mod rigs;
 mod scripts;
 pub mod session;
 pub mod settings;
-pub mod user_settings;
 
 pub use bridges::camera::{CameraView, MouseLock, SavedCamera};
 pub use bridges::input::{
@@ -157,7 +155,10 @@ pub struct DataModel {
     explosions: explosions::Explosions,
     web: web::Web,
     /// The player's settings, on a client given a file for them.
-    user_settings: Option<user_settings::Kept>,
+    user_settings: Option<settings::user_settings::Kept>,
+    /// Instances a client's trims freed since [`DataModel::take_freed`]:
+    /// copies its scripts destroyed, which replication must forget.
+    freed: Vec<InstanceId>,
 }
 
 /// Content requests from scripts, resolved off the engine thread.
@@ -173,6 +174,14 @@ struct Content {
     assets: FxHashMap<rook_content::Ticket, u64>,
     /// Loader tickets to the GUI's font files by asset id.
     fonts: FxHashMap<rook_content::Ticket, String>,
+    /// Models scripts loaded, going in a slice a frame in the order they
+    /// came (`frame::PLACED_PER_FRAME`): each request id, the Model its
+    /// script gets, and what's left to put in it.
+    placing: Vec<(
+        u64,
+        InstanceId,
+        rook_formats::Placing<Arc<rook_formats::Loaded>>,
+    )>,
     wait_for_sounds: bool,
 }
 
@@ -189,7 +198,7 @@ impl DataModel {
         let mut dm = Self::with_dom(Dom::new(), options, Role::Client)?;
         let mut w = dm.runtime.world_mut();
         if let Some(path) = &options.user_settings {
-            let (root, kept) = user_settings::Kept::install(&mut w.dom, path);
+            let (root, kept) = settings::user_settings::Kept::install(&mut w.dom, path);
             w.user_settings = Some(root);
             dm.user_settings = Some(kept);
         }
@@ -219,6 +228,7 @@ impl DataModel {
         self.render_watch.rescan(end);
         self.render_changes = RenderChanges::everything();
         self.sounds.watch.rescan(end);
+        self.sounds.hearing.get_mut().rescan(end);
         self.explosions.watch.rescan(end);
         if let Some(kept) = &mut self.user_settings {
             kept.rescan(end);
@@ -238,7 +248,15 @@ impl DataModel {
         let end = self.runtime.world().dom.journal().end();
         for id in self.runtime.trim_journal(end) {
             self.input.forget(id);
+            if self.role == Role::Client {
+                self.freed.push(id);
+            }
         }
+    }
+
+    /// The instances freed since the last call (clients only).
+    pub fn take_freed(&mut self) -> Vec<InstanceId> {
+        std::mem::take(&mut self.freed)
     }
 
     /// Every reader of the journal takes what it hasn't seen yet, noting
@@ -391,6 +409,7 @@ impl DataModel {
             explosions: Default::default(),
             web: Default::default(),
             user_settings: None,
+            freed: Vec::new(),
         })
     }
 
@@ -431,11 +450,17 @@ impl DataModel {
         self.runtime.drain_deferred();
     }
 
-    /// Run a Luau file given on the command line (`--script`) as if it were
-    /// a Script in ServerScriptService. Its output names it `RookScript`.
+    /// Run a Luau file given on the command line as if it were a Script in
+    /// ServerScriptService (`--script`) or, on a client, a LocalScript in
+    /// PlayerScripts (`--client-script`). Its output names it `RookScript`.
     pub fn run_extra_script(&self, source: &str) -> Result<(), String> {
+        let name = if self.runtime.world().is_client {
+            "PlayerScripts.RookScript"
+        } else {
+            "ServerScriptService.RookScript"
+        };
         self.runtime
-            .run_source("ServerScriptService.RookScript", source, None)
+            .run_source(name, source, None)
             .map_err(|e| e.to_string())
     }
 

@@ -1,12 +1,13 @@
-use mlua::chunk::Compiler;
 use mlua::{Function, Lua, MultiValue, Table, Value as LuaValue};
-use rook_dom::InstanceId;
+use rook_dom::{Change, Dom, InstanceId};
+use rook_types::RunContext;
 
 use super::instance::{LuaInstance, push_instance};
+use crate::bytecode;
 use crate::ctx::args::Args;
 use crate::ctx::{ApiResult, Outcome, ScriptError, api_fn, api_ret, with_world};
 use crate::threads::spawn;
-use crate::world::{Job, MessageType, WaitKind};
+use crate::world::{Job, MessageType, WaitKind, World};
 
 fn source_of(lua: &Lua, id: InstanceId) -> String {
     with_world(lua, |w| {
@@ -22,27 +23,28 @@ fn environment(lua: &Lua, script: InstanceId) -> mlua::Result<Table> {
     Ok(env)
 }
 
-/// How game code is compiled: optimization level 2, the default in live
-/// games (level 1 is Studio testing's; creator-docs Luau comments). A
-/// script's `--!optimize` comment still sets its own.
-fn compiler() -> Compiler {
-    Compiler::new().set_optimization_level(2)
-}
-
-/// Compile a script's source to run in `env`, or load its bytecode if it
-/// came compiled. Chunk names are full names, so errors read
+/// Compile a script's source to run in `env` (once per source, see
+/// [`bytecode`](crate::bytecode)), or load its bytecode if it came
+/// compiled. Chunk names are full names, so errors read
 /// `Workspace.Script:3: ...` as on Roblox.
 fn compile(lua: &Lua, id: InstanceId, env: Table) -> mlua::Result<Function> {
-    let (name, bytecode) = with_world(lua, |w| (w.dom.full_name(id), w.bytecode.get(&id).cloned()));
-    let chunk = match &bytecode {
-        Some(compiled) => {
-            if compiled.core {
-                core_envs(lua)?.raw_set(env.clone(), true)?;
-            }
-            lua.load(&compiled.code[..])
-                .set_mode(mlua::chunk::ChunkMode::Binary)
-        }
-        None => lua.load(source_of(lua, id)).set_compiler(compiler()),
+    let (name, came_compiled) =
+        with_world(lua, |w| (w.dom.full_name(id), w.bytecode.get(&id).cloned()));
+    if came_compiled.as_ref().is_some_and(|c| c.core) {
+        core_envs(lua)?.raw_set(env.clone(), true)?;
+    }
+    let source = came_compiled.is_none().then(|| source_of(lua, id));
+    let code = match (&came_compiled, &source) {
+        (Some(compiled), _) => Some(compiled.code.clone()),
+        (None, Some(source)) => bytecode::of(source),
+        (None, None) => None,
+    };
+    let chunk = match &code {
+        Some(code) => lua.load(&code[..]).set_mode(mlua::chunk::ChunkMode::Binary),
+        // It doesn't compile: the text reports why.
+        None => lua
+            .load(source.unwrap_or_default())
+            .set_compiler(bytecode::compiler()),
     };
     chunk
         .set_name(format!("={name}"))
@@ -126,6 +128,123 @@ pub(crate) fn stop_script(lua: &Lua, id: InstanceId) -> bool {
     stopped.is_ok()
 }
 
+/// The running scripts `change` stops: ones it disabled, or moved (or
+/// destroyed) out of anywhere they run. They stop at once, so handlers
+/// already queued for them never run; a move between two places a script
+/// runs keeps it running, and one that leaves and comes back in the same
+/// frame starts afresh (Confirmed, Studio 2026-11-11).
+pub(crate) fn stopped_by(w: &World, change: &Change) -> Vec<InstanceId> {
+    if w.started.is_empty() {
+        return Vec::new();
+    }
+    let running = |id: &&InstanceId| w.started.contains_key(*id);
+    match change {
+        Change::Reparented { subtree, .. } => subtree
+            .iter()
+            .filter(running)
+            .filter(|id| !runs_here(&w.dom, **id, w.is_client))
+            .copied()
+            .collect(),
+        Change::Property { id, property }
+            if w.started.contains_key(id)
+                && w.dom.database().property(*property).name == "Disabled"
+                && w.dom.bool_property(*id, "Disabled") == Some(true) =>
+        {
+            vec![*id]
+        }
+        _ => Vec::new(),
+    }
+}
+
+/// Whether a Script or LocalScript runs where it is now, enabled. It
+/// starts when it gets somewhere it runs and stops the moment it leaves
+/// ([`stopped_by`]).
+///
+/// Server: legacy-context Scripts under Workspace or
+/// ServerScriptService (Confirmed: creator-docs Script); Server-context
+/// Scripts anywhere except ServerStorage and the Starter containers
+/// (Inference).
+///
+/// Client: LocalScripts under the player's Backpack, character,
+/// PlayerGui or PlayerScripts, or under ReplicatedFirst (Confirmed:
+/// creator-docs LocalScript); Client-context Scripts anywhere the client
+/// sees except the Starter containers (Inference).
+pub(crate) fn runs_here(dom: &Dom, id: InstanceId, is_client: bool) -> bool {
+    let class = dom.class_name(id);
+    if !matches!(class, "Script" | "LocalScript") {
+        return false;
+    }
+    if dom.bool_property(id, "Disabled") == Some(true) {
+        return false;
+    }
+    let Some(top) = top_level(dom, id) else {
+        return false;
+    };
+    let top_class = dom.class_name(top);
+    if is_client {
+        return client_runs_here(dom, id, class, top_class);
+    }
+    if class != "Script" {
+        return false;
+    }
+    match run_context(dom, id) {
+        Some(RunContext::Server) => !(is_starter(top_class) || top_class == "ServerStorage"),
+        Some(RunContext::Client | RunContext::Plugin) => false,
+        // A player's Backpack too: classic gear's server Scripts hear
+        // their tool's first `Equipped` there (Inference, from gear
+        // like the LinkedSword working on the first equip).
+        Some(RunContext::Legacy) | None => {
+            matches!(top_class, "Workspace" | "ServerScriptService")
+                || dom.ancestors(id).any(|a| {
+                    dom.class_name(a) == "Backpack"
+                        && dom.parent(a).is_some_and(|p| dom.is_a(p, "Player"))
+                })
+        }
+    }
+}
+
+fn client_runs_here(dom: &Dom, id: InstanceId, class: &str, top_class: &str) -> bool {
+    if class == "LocalScript" {
+        if top_class == "ReplicatedFirst" {
+            return true;
+        }
+        let local_player = dom.local_player();
+        let character = local_player.and_then(|p| dom.ref_property(p, "Character"));
+        return dom.ancestors(id).any(|a| {
+            Some(a) == character
+                || (matches!(
+                    dom.class_name(a),
+                    "Backpack" | "PlayerGui" | "PlayerScripts"
+                ) && dom.parent(a) == local_player)
+        });
+    }
+    run_context(dom, id) == Some(RunContext::Client)
+        && !(is_starter(top_class) || matches!(top_class, "ServerStorage" | "ServerScriptService"))
+}
+
+/// Containers whose contents are templates copied to players, so scripts
+/// in them never run in place.
+fn is_starter(class: &str) -> bool {
+    matches!(class, "StarterGui" | "StarterPack" | "StarterPlayer")
+}
+
+/// The child of the DataModel that contains `id`.
+fn top_level(dom: &Dom, id: InstanceId) -> Option<InstanceId> {
+    let root = dom.root();
+    let mut cur = id;
+    loop {
+        let parent = dom.parent(cur)?;
+        if parent == root {
+            return Some(cur);
+        }
+        cur = parent;
+    }
+}
+
+fn run_context(dom: &Dom, id: InstanceId) -> Option<RunContext> {
+    RunContext::from_u32(dom.enum_property(id, "RunContext")?)
+}
+
 /// Whether `env` is the environment of a stopped script.
 pub(crate) fn is_stopped_env(lua: &Lua, env: Table) -> bool {
     lua.named_registry_value::<Table>("rook.stopped_envs")
@@ -186,7 +305,7 @@ fn run_in(lua: &Lua, chunk_name: &str, source: &str, env: Table) -> mlua::Result
     let f = lua
         .load(source)
         .set_name(format!("={chunk_name}"))
-        .set_compiler(compiler())
+        .set_compiler(bytecode::compiler())
         .set_environment(env)
         .into_function()?;
     spawn(lua, f, ())?;
@@ -199,8 +318,10 @@ fn require(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
     let a = Args::new(args, "require");
     let module = match a.get(0) {
         LuaValue::UserData(u) => u.borrow::<LuaInstance>().ok().map(|i| i.0),
-        LuaValue::Integer(n) => return super::methods::assets::require_asset(lua, *n as f64),
-        LuaValue::Number(n) => return super::methods::assets::require_asset(lua, *n),
+        LuaValue::Integer(n) => {
+            return super::methods::content::assets::require_asset(lua, *n as f64);
+        }
+        LuaValue::Number(n) => return super::methods::content::assets::require_asset(lua, *n),
         _ => None,
     }
     .ok_or_else(|| ScriptError("Attempted to call require with invalid argument(s).".into()))?;

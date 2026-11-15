@@ -6,9 +6,8 @@ use rook_audio::effects::{Chain, Effect, Reverb, ordered};
 
 use super::*;
 
-/// The effect a SoundEffect instance is, if Rook plays its class (Chorus,
-/// Compressor, Echo, Flange and Tremolo are left out, see the docs).
-/// Defaults are Studio's.
+/// The effect a SoundEffect instance is, if Rook plays its class. Defaults
+/// are Studio's.
 fn effect(dom: &Dom, id: InstanceId) -> Option<Effect> {
     Some(match dom.class_name(id) {
         "EqualizerSoundEffect" => Effect::Equalizer {
@@ -39,6 +38,9 @@ fn effect(dom: &Dom, id: InstanceId) -> Option<Effect> {
         "PitchShiftSoundEffect" => Effect::PitchShift {
             octave: dom.float_property(id, "Octave").unwrap_or(1.25),
         },
+        // TODO: play ChorusSoundEffect, CompressorSoundEffect,
+        // EchoSoundEffect, FlangeSoundEffect and TremoloSoundEffect
+        // (docs/behavior/audio/soundgroups-and-effects.md).
         _ => return None,
     })
 }
@@ -46,7 +48,7 @@ fn effect(dom: &Dom, id: InstanceId) -> Option<Effect> {
 /// The enabled effects directly under a Sound or SoundGroup, in the order
 /// they run (Confirmed: an effect inside a Folder under the sound does
 /// nothing; one added while it plays applies at once).
-pub(crate) fn effects(dom: &Dom, id: InstanceId) -> Vec<Effect> {
+pub(super) fn effects(dom: &Dom, id: InstanceId) -> Vec<Effect> {
     let children = dom.children(id);
     if children.is_empty() {
         return Vec::new();
@@ -63,14 +65,14 @@ pub(crate) fn effects(dom: &Dom, id: InstanceId) -> Vec<Effect> {
 /// The SoundGroup a Sound plays through: its `SoundGroup` property, when
 /// that is a SoundGroup still in the tree. Parenting a Sound to a group
 /// doesn't put it in the group (creator-docs).
-pub(crate) fn group(dom: &Dom, sound: InstanceId) -> Option<InstanceId> {
+pub(super) fn group(dom: &Dom, sound: InstanceId) -> Option<InstanceId> {
     let g = dom.ref_property(sound, "SoundGroup")?;
     (dom.get(g).is_some() && dom.is_a(g, "SoundGroup")).then_some(g)
 }
 
 /// A group's parent group: groups nest by parenting (creator-docs "mix
 /// tree"; that the volumes multiply down the tree is Inference).
-fn parent_group(dom: &Dom, group: InstanceId) -> Option<InstanceId> {
+pub(super) fn parent_group(dom: &Dom, group: InstanceId) -> Option<InstanceId> {
     dom.parent(group).filter(|&p| dom.is_a(p, "SoundGroup"))
 }
 
@@ -79,21 +81,12 @@ fn parent_group(dom: &Dom, group: InstanceId) -> Option<InstanceId> {
 /// -80 dB read 0, a full distortion 971, a group at Volume 0 or with
 /// effects changed nothing). `chain` keeps the effects' state from frame
 /// to frame.
-pub(super) fn loudness_through(audio: &Audio, from: f64, to: f64, chain: &mut Chain) -> f64 {
-    let rate = f64::from(audio.sample_rate);
-    let channels = usize::from(audio.channels.max(1));
-    let frames = audio.frames();
-    let a = ((from.max(0.0) * rate) as usize).min(frames);
-    let b = ((to.max(0.0) * rate) as usize).clamp(a, frames);
-    if b == a {
+pub(super) fn loudness_through(reader: &Reader, from: f64, to: f64, chain: &mut Chain) -> f64 {
+    let Some((a, b)) = frames_between(reader.audio(), from, to) else {
         return 0.0;
-    }
+    };
     let mut block: Vec<rook_audio::effects::Frame> = (a..b)
-        .map(|i| {
-            let s =
-                |c: usize| f32::from(audio.samples[i * channels + c.min(channels - 1)]) / 32768.0;
-            [s(0), s(1)]
-        })
+        .map(|i| reader.frame(i).map(|s| f32::from(s) / 32768.0))
         .collect();
     chain.process(&mut block);
     let sum: f64 = block
@@ -103,30 +96,21 @@ pub(super) fn loudness_through(audio: &Audio, from: f64, to: f64, chain: &mut Ch
     (sum / (2 * block.len()) as f64).sqrt() * 1000.0
 }
 
+/// The frames from `from` to `to` seconds into `audio`, if any.
+pub(super) fn frames_between(audio: &Audio, from: f64, to: f64) -> Option<(usize, usize)> {
+    let rate = f64::from(audio.sample_rate);
+    let frames = audio.frames();
+    let a = ((from.max(0.0) * rate) as usize).min(frames);
+    let b = ((to.max(0.0) * rate) as usize).clamp(a, frames);
+    (b > a).then_some((a, b))
+}
+
 impl DataModel {
     /// The SoundGroups `sounds` play through, and every group those are
     /// in, for the mixer.
     pub fn sound_groups(&self, sounds: &[PlayingSound]) -> Vec<rook_audio::Group<InstanceId>> {
         let w = self.runtime.world();
-        let dom = &w.dom;
-        let mut out: Vec<rook_audio::Group<InstanceId>> = Vec::new();
-        for s in sounds {
-            let mut next = s.group;
-            while let Some(g) = next {
-                if out.iter().any(|o| o.key == g) {
-                    break;
-                }
-                let parent = parent_group(dom, g);
-                out.push(rook_audio::Group {
-                    key: g,
-                    parent,
-                    volume: dom.float_property(g, "Volume").unwrap_or(0.5),
-                    effects: effects(dom, g),
-                });
-                next = parent;
-            }
-        }
-        out
+        super::hearing::groups(&w.dom, sounds.iter().map(|s| s.group))
     }
 }
 

@@ -12,15 +12,17 @@
 //! hostile bytes is caught and reported the same way, so a file can never
 //! take down a content worker.
 
-use std::io::Cursor;
+mod decoded;
+mod reader;
+mod stream;
 
-use symphonia::core::audio::SampleBuffer;
-use symphonia::core::codecs::{CODEC_TYPE_NULL, DecoderOptions};
-use symphonia::core::errors::Error as SymphoniaError;
-use symphonia::core::formats::FormatOptions;
-use symphonia::core::io::{MediaSourceStream, MediaSourceStreamOptions};
-use symphonia::core::meta::MetadataOptions;
-use symphonia::core::probe::Hint;
+pub use reader::Reader;
+
+use std::sync::{Arc, Mutex, PoisonError, Weak};
+
+use decoded::Decoded;
+
+use stream::{Layout, Stream};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum AudioFormat {
@@ -63,22 +65,84 @@ impl AudioFormat {
     }
 }
 
-/// A decoded sound: 16-bit samples, interleaved, one or two channels (more
-/// are folded down to two). 16 bits keep a long music track at half the
-/// memory of floats, with nothing audible lost.
-#[derive(Debug, Clone, Default, PartialEq)]
+/// A sound ready to mix: 16-bit samples, interleaved, one or two channels
+/// (more are folded down to two). 16 bits keep a long music track at half
+/// the memory of floats, with nothing audible lost.
+///
+/// A short sound is kept decoded. A longer Ogg or MP3 keeps its file's
+/// bytes, a tenth of its samples or less, and its first chunk of samples;
+/// the rest is decoded while something plays it, once for all its voices,
+/// and let go after ([`decoded`]). A place's music and ambience decoded
+/// whole came to gigabytes, though only a few of its sounds play at once.
+/// A WAV is kept decoded whatever its length: its bytes are its samples
+/// already.
+#[derive(Debug, Clone, PartialEq)]
 pub struct Audio {
     pub format: Option<AudioFormat>,
     pub sample_rate: u32,
     /// 1 or 2.
     pub channels: u16,
-    pub samples: Vec<i16>,
+    frames: usize,
+    data: Data,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+enum Data {
+    Pcm(Vec<i16>),
+    Encoded(Encoded),
+}
+
+#[derive(Debug)]
+struct Encoded {
+    file: Arc<[u8]>,
+    /// The first [`CHUNK`] frames, interleaved: a sound starts, and a loop
+    /// starts over, before anything decodes.
+    head: Box<[i16]>,
+    /// The rest while something plays it.
+    decoded: Mutex<Weak<Decoded>>,
+}
+
+impl Clone for Encoded {
+    fn clone(&self) -> Self {
+        Self {
+            file: self.file.clone(),
+            head: self.head.clone(),
+            decoded: Mutex::default(),
+        }
+    }
+}
+
+impl PartialEq for Encoded {
+    fn eq(&self, other: &Self) -> bool {
+        self.file == other.file
+    }
+}
+
+/// Frames in a decoded chunk: about a third of a second at 44.1 kHz, which
+/// the decode thread decodes in a few milliseconds.
+const CHUNK: usize = 1 << 14;
+
+/// The most a sound's samples take for it to be kept decoded. Unity keeps
+/// small sounds decompressed and larger ones compressed; this is about a
+/// second and a half of stereo at 44.1 kHz.
+const PCM_KEPT: usize = 256 << 10;
+
 impl Audio {
+    /// A sound from interleaved samples (`channels` 1 or 2).
+    pub fn from_pcm(sample_rate: u32, channels: u16, samples: Vec<i16>) -> Self {
+        let channels = channels.clamp(1, 2);
+        Self {
+            format: None,
+            sample_rate,
+            channels,
+            frames: samples.len() / usize::from(channels),
+            data: Data::Pcm(samples),
+        }
+    }
+
     /// Frames (one sample per channel).
     pub fn frames(&self) -> usize {
-        self.samples.len() / usize::from(self.channels.max(1))
+        self.frames
     }
 
     /// Length in seconds (`Sound.TimeLength`).
@@ -89,31 +153,104 @@ impl Audio {
         self.frames() as f64 / f64::from(self.sample_rate)
     }
 
+    /// Whether it's kept as its file's bytes, decoded while it plays.
+    pub fn is_encoded(&self) -> bool {
+        matches!(self.data, Data::Encoded(..))
+    }
+
+    /// Bytes its samples or its file take.
+    pub fn byte_len(&self) -> usize {
+        match &self.data {
+            Data::Pcm(samples) => samples.len() * 2,
+            Data::Encoded(e) => e.file.len() + e.head.len() * 2,
+        }
+    }
+
     pub fn decode(bytes: &[u8]) -> Result<Self, AudioError> {
+        let wav = AudioFormat::sniff(bytes) == Some(AudioFormat::Wav);
+        Self::decode_keeping(bytes, if wav { usize::MAX } else { PCM_KEPT })
+    }
+
+    /// [`Audio::decode`], keeping it decoded if its samples take at most
+    /// `kept` bytes.
+    fn decode_keeping(bytes: &[u8], kept: usize) -> Result<Self, AudioError> {
         let format = AudioFormat::sniff(bytes).ok_or(AudioError::NotAudio)?;
-        let owned = bytes.to_vec();
-        let decoded =
-            std::panic::catch_unwind(move || decode_with(format, owned)).unwrap_or_else(|_| {
+        let file: Arc<[u8]> = Arc::from(bytes);
+        let read = file.clone();
+        let decoded = std::panic::catch_unwind(move || read_whole(format, read, kept))
+            .unwrap_or_else(|_| {
                 Err(AudioError::Damaged(
                     format.name(),
                     "decoder panicked".into(),
                 ))
             });
-        let mut audio = decoded?;
-        audio.format = Some(format);
+        let Whole {
+            layout,
+            mut frames,
+            samples,
+            mut head,
+        } = decoded?;
         if format == AudioFormat::Ogg
             && let Some(end) = ogg_end(bytes)
         {
             // The decoder hands out whole blocks; the stream's last granule
             // position says where it really ends (Studio's TimeLength
             // agrees: `docs/behavior/audio/playback.md`).
-            let keep = end.saturating_mul(usize::from(audio.channels));
-            audio.samples.truncate(keep);
+            frames = frames.min(end);
         }
-        if audio.samples.is_empty() {
+        if frames == 0 {
             return Err(AudioError::Damaged(format.name(), "no audio".into()));
         }
-        Ok(audio)
+        let data = match samples {
+            Some(mut samples) => {
+                samples.truncate(frames * usize::from(layout.channels));
+                samples.shrink_to_fit();
+                Data::Pcm(samples)
+            }
+            None => {
+                head.truncate(frames.min(CHUNK) * usize::from(layout.channels));
+                Data::Encoded(Encoded {
+                    file,
+                    head: head.into(),
+                    decoded: Mutex::default(),
+                })
+            }
+        };
+        Ok(Self {
+            format: Some(format),
+            sample_rate: layout.rate,
+            channels: layout.channels,
+            frames,
+            data,
+        })
+    }
+
+    /// A reader of its samples from the start.
+    pub fn reader(self: &Arc<Self>) -> Reader {
+        Reader::new(self.clone())
+    }
+
+    /// An encoded sound's decoded chunks, started decoding unless
+    /// something plays it already.
+    fn decoded(&self) -> Option<Arc<Decoded>> {
+        let Data::Encoded(e) = &self.data else {
+            return None;
+        };
+        let mut slot = e.decoded.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some(decoded) = slot.upgrade() {
+            return Some(decoded);
+        }
+        let decoded = decoded::start(decoded::Source {
+            format: self.format.expect("an encoded sound has a format"),
+            file: e.file.clone(),
+            layout: Layout {
+                rate: self.sample_rate,
+                channels: self.channels,
+            },
+            frames: self.frames,
+        });
+        *slot = Arc::downgrade(&decoded);
+        Some(decoded)
     }
 }
 
@@ -129,78 +266,51 @@ pub enum AudioError {
 /// are damaged headers, not music.
 const MAX_FRAMES: usize = 48_000 * 3600;
 
-fn decode_with(format: AudioFormat, bytes: Vec<u8>) -> Result<Audio, AudioError> {
-    let damaged = |e: &dyn std::fmt::Display| AudioError::Damaged(format.name(), e.to_string());
-    let stream = MediaSourceStream::new(
-        Box::new(Cursor::new(bytes)),
-        MediaSourceStreamOptions::default(),
-    );
-    let mut hint = Hint::new();
-    hint.with_extension(format.extension());
-    let probed = symphonia::default::get_probe()
-        .format(
-            &hint,
-            stream,
-            &FormatOptions::default(),
-            &MetadataOptions::default(),
-        )
-        .map_err(|e| damaged(&e))?;
-    let mut reader = probed.format;
-    let track = reader
-        .tracks()
-        .iter()
-        .find(|t| t.codec_params.codec != CODEC_TYPE_NULL)
-        .ok_or_else(|| damaged(&"no audio track"))?;
-    let track_id = track.id;
-    let mut decoder = symphonia::default::get_codecs()
-        .make(&track.codec_params, &DecoderOptions::default())
-        .map_err(|e| damaged(&e))?;
+/// What decoding all of a file once found.
+struct Whole {
+    layout: Layout,
+    frames: usize,
+    /// Its samples, while they took at most the bytes kept.
+    samples: Option<Vec<i16>>,
+    /// At least its first [`CHUNK`] frames' samples.
+    head: Vec<i16>,
+}
 
-    let mut out = Audio::default();
-    let mut buffer: Option<SampleBuffer<i16>> = None;
-    loop {
-        let packet = match reader.next_packet() {
-            Ok(p) => p,
-            Err(SymphoniaError::IoError(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
-                break;
+fn read_whole(format: AudioFormat, file: Arc<[u8]>, kept: usize) -> Result<Whole, AudioError> {
+    let mut stream = Stream::open(format, file, None)?;
+    let mut samples = Some(Vec::new());
+    let mut head = Vec::new();
+    let mut chunk = Vec::new();
+    let mut frames = 0;
+    while stream.next(&mut chunk)? {
+        let layout = stream.layout.expect("set by the first packet");
+        if frames < CHUNK {
+            head.extend_from_slice(&chunk);
+        }
+        frames += chunk.len() / usize::from(layout.channels);
+        if frames > MAX_FRAMES {
+            return Err(AudioError::Damaged(
+                format.name(),
+                "longer than an hour".into(),
+            ));
+        }
+        if let Some(kept_samples) = &mut samples {
+            if (kept_samples.len() + chunk.len()) * 2 > kept {
+                samples = None;
+            } else {
+                kept_samples.extend_from_slice(&chunk);
             }
-            // A cut-off file keeps what decoded before the cut, as players
-            // do; one that decodes nothing fails below.
-            Err(_) if !out.samples.is_empty() => break,
-            Err(e) => return Err(damaged(&e)),
-        };
-        if packet.track_id() != track_id {
-            continue;
-        }
-        let decoded = match decoder.decode(&packet) {
-            Ok(d) => d,
-            // One bad frame is skipped, as players do.
-            Err(SymphoniaError::DecodeError(_)) => continue,
-            Err(e) => return Err(damaged(&e)),
-        };
-        let spec = *decoded.spec();
-        let channels = spec.channels.count();
-        if channels == 0 || spec.rate == 0 {
-            return Err(damaged(&"no channels"));
-        }
-        if out.sample_rate == 0 {
-            out.sample_rate = spec.rate;
-            out.channels = channels.min(2) as u16;
-        } else if out.sample_rate != spec.rate {
-            // Rare in MP3s; the rest of the file plays at the first rate.
-            continue;
-        }
-        let buf = match &mut buffer {
-            Some(b) if b.capacity() >= decoded.capacity() * channels => b,
-            _ => buffer.insert(SampleBuffer::new(decoded.capacity() as u64, spec)),
-        };
-        buf.copy_interleaved_ref(decoded);
-        push_frames(&mut out, buf.samples(), channels);
-        if out.frames() > MAX_FRAMES {
-            return Err(damaged(&"longer than an hour"));
         }
     }
-    Ok(out)
+    let layout = stream
+        .layout
+        .ok_or_else(|| AudioError::Damaged(format.name(), "no audio".into()))?;
+    Ok(Whole {
+        layout,
+        frames,
+        samples,
+        head,
+    })
 }
 
 /// An Ogg stream's length in frames: the granule position of its last page.
@@ -208,23 +318,6 @@ fn ogg_end(bytes: &[u8]) -> Option<usize> {
     let at = bytes.windows(4).rposition(|w| w == b"OggS")?;
     let granule = i64::from_le_bytes(bytes.get(at + 6..at + 14)?.try_into().ok()?);
     usize::try_from(granule).ok().filter(|&n| n > 0)
-}
-
-/// Append interleaved frames of `channels`, folding more than two channels
-/// into the first two and keeping a mono or stereo layout as it is.
-fn push_frames(out: &mut Audio, samples: &[i16], channels: usize) {
-    let keep = usize::from(out.channels);
-    if channels == keep {
-        out.samples.extend_from_slice(samples);
-        return;
-    }
-    for frame in samples.chunks_exact(channels) {
-        if keep == 1 {
-            out.samples.push(frame[0]);
-        } else {
-            out.samples.extend_from_slice(&frame[..2]);
-        }
-    }
 }
 
 #[cfg(test)]
@@ -260,7 +353,76 @@ pub(crate) mod tests {
         assert_eq!((audio.sample_rate, audio.channels), (22050, 1));
         assert_eq!(audio.frames(), 22050);
         assert!((audio.seconds() - 1.0).abs() < 1e-9);
-        assert_eq!(audio.samples[3], 300);
+        assert!(!audio.is_encoded());
+        assert_eq!(Arc::new(audio).reader().frame(3), [300; 2]);
+    }
+
+    /// `reader`'s sound once its chunks have all decoded.
+    fn decoded(reader: &Reader) -> &Reader {
+        let start = std::time::Instant::now();
+        while !reader.decoded.as_ref().is_none_or(|d| d.is_done()) {
+            assert!(start.elapsed().as_secs() < 10, "the sound never decoded");
+            std::thread::yield_now();
+        }
+        reader
+    }
+
+    /// A sound kept as its file reads the samples it decoded to when it
+    /// loaded, in any order, across a chunk's end, and to its last frame.
+    #[test]
+    fn a_sound_kept_encoded_reads_what_it_decoded_to() {
+        let bytes = wav(8000, 2, CHUNK as u32 + 3_000);
+        let pcm = Arc::new(Audio::decode(&bytes).unwrap());
+        let encoded = Arc::new(Audio::decode_keeping(&bytes, 0).unwrap());
+        assert!(encoded.is_encoded() && !pcm.is_encoded());
+        assert_eq!(encoded.frames(), pcm.frames());
+        let (want, got) = (pcm.reader(), encoded.reader());
+        let got = decoded(&got);
+        for at in 0..=pcm.frames() {
+            assert_eq!(got.frame(at), want.frame(at), "frame {at}");
+        }
+        for at in [CHUNK, 3, CHUNK - 1, 0, CHUNK + 2_999, 7_777] {
+            assert_eq!(got.frame(at), want.frame(at), "frame {at}");
+        }
+    }
+
+    /// Every voice of a sound reads the one decoded copy, which goes once
+    /// nothing reads it.
+    #[test]
+    fn voices_share_a_decode_that_goes_with_them() {
+        let bytes = wav(8000, 1, 3 * CHUNK as u32);
+        let audio = Arc::new(Audio::decode_keeping(&bytes, 0).unwrap());
+        let (a, b) = (audio.reader(), audio.reader());
+        let shared = a.decoded.clone().unwrap();
+        assert!(Arc::ptr_eq(&shared, b.decoded.as_ref().unwrap()));
+        let held = Arc::downgrade(&shared);
+        drop((a, b, shared));
+        let Data::Encoded(e) = &audio.data else {
+            unreachable!()
+        };
+        // The decode thread lets go of it between chunks.
+        let start = std::time::Instant::now();
+        while held.strong_count() > 0 {
+            assert!(start.elapsed().as_secs() < 10, "the decode was kept");
+            std::thread::yield_now();
+        }
+        assert!(e.decoded.lock().unwrap().upgrade().is_none());
+        // Playing again decodes again.
+        let again = audio.reader();
+        let at = 2 * CHUNK + 5;
+        let want = (at % 200) as i16 * 100;
+        assert_eq!(decoded(&again).frame(at), [want; 2]);
+    }
+
+    /// A long Ogg or MP3 keeps its bytes and its head, not its samples.
+    #[test]
+    fn long_sounds_keep_their_file() {
+        let bytes = wav(8000, 1, 1000);
+        let kept = Audio::decode_keeping(&bytes, 1000 * 2).unwrap();
+        let encoded = Audio::decode_keeping(&bytes, 1000 * 2 - 1).unwrap();
+        assert!(!kept.is_encoded() && encoded.is_encoded());
+        assert_eq!(encoded.byte_len(), bytes.len() + 2000);
+        assert_eq!(kept.byte_len(), 2000);
     }
 
     #[test]

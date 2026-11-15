@@ -1,6 +1,6 @@
 //! The two ends of a play session, which only talk through messages: a
 //! [`ServerHost`] owns the server DataModel, a [`ClientHost`] one client's.
-//! Each can run on its own thread (docs/design/architecture.md#engine-systems: a DataModel's Luau, DOM
+//! Each can run on its own thread (docs/design/architecture/threads-and-frames.md#threading-and-data-flow: a DataModel's Luau, DOM
 //! and physics stay on one thread); [`crate::Session`] runs them together
 //! in one, delivering each message as soon as it's sent.
 //!
@@ -12,7 +12,7 @@
 use rustc_hash::FxHashMap;
 
 use rook_dom::InstanceId;
-use rook_lua::{EffectCall, NetValue, RemoteKind, RemoteMessage};
+use rook_lua::{EffectCall, NetValue, RemoteKind, RemoteMessage, ToolActivation, ToolMove};
 use rook_net::{Sink, Snapshot, Source, Update};
 use rook_types::Value;
 
@@ -28,6 +28,9 @@ pub enum ToClient {
     /// Effect methods the server's scripts called (`ParticleEmitter:Emit`
     /// and the like), which show on every client.
     Effects(Vec<(InstanceId, EffectCall)>),
+    /// A server script activated a Tool this client's character holds:
+    /// it fires here too.
+    ActivateTool(ToolActivation),
 }
 
 /// From a client to the server, with the server's instance ids.
@@ -41,12 +44,21 @@ pub enum ToServer {
         event: &'static str,
     },
     /// The client's scripts moved one of its player's Tools between their
-    /// Backpack and character (equipping or unequipping it), which the
-    /// server repeats.
+    /// Backpack and character (equipping or unequipping it), or dropped
+    /// it, which the server repeats.
     MoveTool {
         tool: InstanceId,
         parent: InstanceId,
+        /// The grip the client made, by the client's own id: the server's
+        /// grip replicates as this one.
+        grip: Option<InstanceId>,
     },
+    /// A Tool the player's character holds was activated or deactivated
+    /// here: it fires on the server too.
+    ActivateTool(ToolActivation),
+    /// A ProximityPrompt's hold or trigger event fired here: it fires on
+    /// the server too, with the server's Player.
+    Prompt(rook_lua::PromptAction),
     /// Where the client's simulation put its character: the root part of
     /// the assembly, which the rest of it follows (network ownership).
     Pose {
@@ -291,23 +303,30 @@ impl ServerHost {
             let mut calls = std::mem::take(&mut self.server.render_changes.effect_calls);
             calls.append(&mut self.server.runtime().world_mut().effect_calls);
             if !calls.is_empty() {
-                for i in 0..self.clients.len() {
+                // Copied for each client but the last, which takes them.
+                let last = self.clients.len() - 1;
+                for i in 0..last {
                     out.push((i, ToClient::Effects(calls.clone())));
                 }
+                out.push((last, ToClient::Effects(calls)));
             }
         }
+        // A server script's activation reaches the client whose character
+        // holds the Tool.
+        for activation in self.server.runtime().take_tool_activations() {
+            let w = self.server.runtime().world();
+            let holder = w.dom.parent(activation.tool);
+            let client = self.clients.iter().position(|c| {
+                holder.is_some() && w.dom.ref_property(c.player, "Character") == holder
+            });
+            if let Some(i) = client {
+                out.push((i, ToClient::ActivateTool(activation)));
+            }
+        }
+        let mut sends: Vec<(usize, RemoteKind)> = Vec::new();
         for msg in self.server.runtime().take_outbox() {
             let RemoteMessage { remote, kind, args } = msg;
-            let mut send = |index: usize, kind: RemoteKind| {
-                out.push((
-                    index,
-                    ToClient::Remote(RemoteMessage {
-                        remote,
-                        kind,
-                        args: args.clone(),
-                    }),
-                ));
-            };
+            let mut send = |index: usize, kind: RemoteKind| sends.push((index, kind));
             match kind {
                 RemoteKind::FireClient { player } => {
                     for (i, _) in self
@@ -341,13 +360,29 @@ impl ServerHost {
                 }
                 RemoteKind::FireServer | RemoteKind::InvokeServer { .. } => {}
             }
+            // The arguments are copied for each client but the last, which
+            // takes them.
+            let last = sends.pop();
+            for (index, kind) in sends.drain(..) {
+                let message = RemoteMessage {
+                    remote,
+                    kind,
+                    args: args.clone(),
+                };
+                out.push((index, ToClient::Remote(message)));
+            }
+            if let Some((index, kind)) = last {
+                let message = RemoteMessage { remote, kind, args };
+                out.push((index, ToClient::Remote(message)));
+            }
         }
         out
     }
 
     /// Take client `index`'s simulation of its character: the assembly of
     /// `part` moves there, as a script's move would, if its player's client
-    /// owns it. Other clients see the move; the sender isn't sent its own
+    /// owns it. One the server anchored is the server's: a pose the client
+    /// sent before it heard so would undo the server's moves. Other clients see the move; the sender isn't sent its own
     /// move back (its later changes by the server's scripts do reach it).
     /// Physics writes fire no Changed signals, and neither does this.
     fn apply_pose(
@@ -359,11 +394,7 @@ impl ServerHost {
         [linear, angular]: [glam::Vec3; 2],
     ) {
         let mut w = self.server.runtime().world_mut();
-        let owned = w
-            .dom
-            .ref_property(player, "Character")
-            .is_some_and(|c| w.dom.is_ancestor_of(c, part));
-        if !owned {
+        if rook_lua::network_owner(&w, part) != Some(player) {
             return;
         }
         let start = w.dom.journal().end();
@@ -400,10 +431,17 @@ impl ServerHost {
                     rt.drain_deferred();
                 }
             }
-            ToServer::MoveTool { tool, parent } => {
-                rt.repeat_tool_move(player, tool, parent);
+            ToServer::MoveTool { tool, parent, grip } => {
+                let made = rt.repeat_tool_move(player, tool, parent);
                 rt.drain_deferred();
+                if let (Some(server), Some(client)) = (made, grip) {
+                    self.clients[index].source.adopt(server, client);
+                }
             }
+            ToServer::ActivateTool(activation) => {
+                rt.deliver_tool_activation(Some(player), activation);
+            }
+            ToServer::Prompt(action) => rt.deliver_prompt_action(player, action),
             ToServer::Pose {
                 part,
                 cframe,
@@ -439,7 +477,7 @@ impl ServerHost {
 
 /// StarterPlayer's properties a joining Player copies, as (StarterPlayer
 /// name, Player name).
-const STARTER_PLAYER_COPIES: [(&str, &str); 12] = [
+pub const STARTER_PLAYER_COPIES: [(&str, &str); 12] = [
     ("CameraMaxZoomDistance", "CameraMaxZoomDistance"),
     ("CameraMinZoomDistance", "CameraMinZoomDistance"),
     ("CameraMode", "CameraMode"),
@@ -499,6 +537,7 @@ impl ClientHost {
                 if let Some(pid) = dom.property_id(players, "LocalPlayer") {
                     dom.load_property(players, pid, Value::Ref(Some(local.to_ref())));
                 }
+                crate::chat::set_up_local_player(dom, local);
                 // PlayerScripts exists only on the client.
                 if let Ok(ps) = dom.create_by_name("PlayerScripts") {
                     dom.attach_unchecked(ps, local);
@@ -566,13 +605,23 @@ impl ClientHost {
     /// One frame of the client.
     pub fn step(&mut self) {
         self.client.step();
+        self.forget_freed();
         self.hover();
     }
 
     /// One frame of the client, `dt` seconds long.
     pub fn step_by(&mut self, dt: f64) {
         self.client.step_by(dt);
+        self.forget_freed();
         self.hover();
+    }
+
+    /// Copies the client's scripts destroyed and its trim freed are no
+    /// longer the server's instances' (their slots may be reused).
+    fn forget_freed(&mut self) {
+        for id in self.client.take_freed() {
+            self.sink.forget(id);
+        }
     }
 
     /// The mouse sees what's under it after the frame moved the camera and
@@ -618,6 +667,11 @@ impl ClientHost {
                     rt.fire_event(local, "CharacterAdded", ud);
                     rt.drain_deferred();
                     self.follow_character(character);
+                }
+            }
+            &ToClient::ActivateTool(activation) => {
+                if let Some(tool) = self.sink.client_id(activation.tool) {
+                    rt.deliver_tool_activation(None, ToolActivation { tool, ..activation });
                 }
             }
             ToClient::Effects(calls) => {
@@ -713,11 +767,27 @@ impl ClientHost {
             self.last_pose = Some(pose.clone());
             out.push(pose);
         }
-        for (tool, parent) in self.client.runtime().take_tool_moves() {
+        for ToolMove { tool, parent, grip } in self.client.runtime().take_tool_moves() {
             if let (Some(tool), Some(parent)) =
                 (self.sink.server_id(tool), self.sink.server_id(parent))
             {
-                out.push(ToServer::MoveTool { tool, parent });
+                out.push(ToServer::MoveTool { tool, parent, grip });
+            }
+        }
+        for activation in self.client.runtime().take_tool_activations() {
+            if let Some(tool) = self.sink.server_id(activation.tool) {
+                out.push(ToServer::ActivateTool(ToolActivation {
+                    tool,
+                    ..activation
+                }));
+            }
+        }
+        for action in self.client.runtime().take_prompt_actions() {
+            if let Some(prompt) = self.sink.server_id(action.prompt) {
+                out.push(ToServer::Prompt(rook_lua::PromptAction {
+                    prompt,
+                    ..action
+                }));
             }
         }
         for msg in self.client.runtime().take_outbox() {

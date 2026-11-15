@@ -24,7 +24,6 @@ pub(crate) fn run() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// What the checks found.
 #[derive(Debug, Default)]
 struct Report {
     errors: Vec<String>,

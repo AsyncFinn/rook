@@ -9,7 +9,7 @@ on Studio 0.744's install on 2026-10-23 with a place that sends a message
 and a system message; looks from `rook-player --core-scripts --screenshot`.
 
 Code: setting up in `rook-engine`'s `chat.rs`, messages in `rook-lua`'s
-`api/luau/text_chat.luau` and `api/methods/text_chat.rs`.
+`api/luau/text_chat.luau` and `api/methods/gui/text_chat.rs`.
 
 ## Setting up
 
@@ -32,6 +32,17 @@ Code: setting up in `rook-engine`'s `chat.rs`, messages in `rook-lua`'s
   counts as seen.
 - `CanUserChatAsync` (on TextChatService and the legacy Chat) is true:
   everyone may chat in a local server.
+- Each client's own Player has `ChatAvailabilityStatus` `Enabled`: a
+  local player is never region-locked, age-gated or kept from chat by
+  settings. The property is hidden and not replicated, so the client sets
+  it, and only on its own player. Roblox's chat window shows its input bar
+  and no notice for `Enabled`; with `Ineligible` or the empty default it
+  hides the bar and says "You can only view system messages here.",
+  though `/` still focuses a box that sends (Rook, with Studio
+  0.747's CoreScripts, 2026-11-13). Studio's play mode shows the bar and
+  sends to RBXGeneral on a Baseplate (Studio 0.744); the property itself is
+  RobloxScriptSecurity, which Studio's tools can't read, so `Enabled` is
+  the value that gives the same window (Inference).
 
 ## The legacy chat
 
@@ -70,13 +81,19 @@ on a legacy copy of a Baseplate. Code: `rook-engine`'s `chat/legacy.rs`.
 - `TextChannel:SendAsync(text, metadata)` on a client fires
   `TextChatService.SendingMessage` with a TextChatMessage whose `Status`
   is Sending and returns it; the message goes to the server only when the
-  local player's TextSource in that channel `CanSend`.
+  local player's TextSource in that channel `CanSend`. Before it returns,
+  the message passes `OnIncomingMessage` as a delivered one does, so a
+  game's styling (a colored name) is on it before the chat window shows
+  it (Studio 0.747). The server's copy arrives later as a new
+  TextChatMessage with the same `MessageId`; the returned one stays
+  Sending.
 - The server fires `Player.Chatted`, then delivers it to every client, or
   to those the channel's `ShouldDeliverCallback` doesn't refuse.
 - On each client the message (Status Success, the server's `Timestamp`,
   `PrefixText` the speaker's display name and a colon) passes the
-  channel's `OnIncomingMessage`, then the service's, whose returned
-  TextChatMessageProperties replace its `PrefixText` and `Text`, and fires
+  service's `OnIncomingMessage`, then the channel's, whose returned
+  TextChatMessageProperties replace its `PrefixText` and `Text` (the
+  channel's sees what the service's returned, Studio 0.747), and fires
   `MessageReceived` on the channel and the service.
 - `DisplaySystemMessage` makes a message on that client alone, without a
   TextSource.

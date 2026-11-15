@@ -112,7 +112,6 @@ pub(crate) fn roblox_key(code: KeyCode) -> Option<&'static str> {
 mod tests {
     use winit::keyboard::KeyCode as K;
 
-    /// Every mapped name is a real Enum.KeyCode item.
     #[test]
     fn names_exist_in_the_key_code_enum() {
         let e = rook_reflection::database().enum_by_name("KeyCode").unwrap();

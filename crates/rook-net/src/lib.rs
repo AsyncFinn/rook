@@ -1,5 +1,5 @@
 //! Replication from a server DataModel to a client DataModel
-//! (docs/design/architecture.md#engine-systems). What replicates is in
+//! (docs/design/architecture/threads-and-frames.md#threading-and-data-flow). What replicates is in
 //! `docs/behavior/replication.md`.
 //!
 //! A [`Source`] describes the server's current state of each instance a
@@ -46,6 +46,14 @@ pub enum Update {
     Place {
         parent: InstanceId,
         tree: Node,
+    },
+    /// The client already made its own copy of server instance `server`,
+    /// which stands for it from now on: the `Place` that follows finds
+    /// it there. A client predicts what its own actions make (a Tool's
+    /// grip), so it has it without waiting a round trip.
+    Adopt {
+        server: InstanceId,
+        client: InstanceId,
     },
     /// The instance left what this client sees (parented to nil or to a
     /// server-only container): it disappears on the client.

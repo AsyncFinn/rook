@@ -1,4 +1,4 @@
-use super::err;
+use super::members::{Wording, not_a_member};
 use mlua::{
     AnyUserData, Lua, MetaMethod, UserData, UserDataFields, UserDataMethods, UserDataRef,
     Value as LuaValue,
@@ -130,6 +130,14 @@ impl UserData for LEnumItem {
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
+        m.add_meta_method(MetaMethod::Index, |_, t, key: LuaValue| {
+            let owner = format!(
+                "\"Enum.{}.{}\"",
+                database().enum_info(t.enum_id).name,
+                t.name()
+            );
+            Err::<(), _>(not_a_member(&key, &owner, Wording::Plain))
+        });
         m.add_method("IsA", |_, t, name: String| {
             Ok(database().enum_info(t.enum_id).name == name)
         });
@@ -174,13 +182,17 @@ impl UserData for LEnum {
                 Ok(LuaValue::Nil)
             }
         });
-        m.add_meta_method(MetaMethod::Index, |lua, t, key: String| {
-            match find_item(t.0, &key) {
+        m.add_meta_method(MetaMethod::Index, |lua, t, key: LuaValue| {
+            let found = match &key {
+                LuaValue::String(name) => find_item(t.0, &name.to_string_lossy()),
+                _ => None,
+            };
+            match found {
                 Some(v) => push_item(lua, t.0, v),
-                None => Err(err(format!(
-                    "{key} is not a valid member of \"Enum.{}\"",
-                    database().enum_info(t.0).name
-                ))),
+                None => {
+                    let owner = format!("\"Enum.{}\"", database().enum_info(t.0).name);
+                    Err(not_a_member(&key, &owner, Wording::Plain))
+                }
             }
         });
         m.add_meta_method(MetaMethod::Eq, |_, t, o: UserDataRef<LEnum>| Ok(*t == *o));
@@ -199,10 +211,14 @@ impl UserData for LEnums {
         m.add_method("GetEnums", |lua, _, ()| {
             lua.create_sequence_from(database().enums().iter().map(|e| LEnum(e.id)))
         });
-        m.add_meta_method(MetaMethod::Index, |lua, _, key: String| {
-            match database().enum_by_name(&key) {
+        m.add_meta_method(MetaMethod::Index, |lua, _, key: LuaValue| {
+            let found = match &key {
+                LuaValue::String(name) => database().enum_by_name(&name.to_string_lossy()),
+                _ => None,
+            };
+            match found {
                 Some(e) => lua_enum(lua, e.id),
-                None => Err(err(format!("{key} is not a valid member of \"Enum\""))),
+                None => Err(not_a_member(&key, "\"Enum\"", Wording::Plain)),
             }
         });
         m.add_meta_method(MetaMethod::ToString, |_, _, ()| Ok("Enums"));

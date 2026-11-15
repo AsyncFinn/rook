@@ -1,12 +1,11 @@
 //! What the renderer draws: a snapshot built by the engine side. The
-//! renderer never sees the DOM (docs/design/architecture.md#engine-systems).
+//! renderer never sees the DOM (docs/design/architecture/threads-and-frames.md#threading-and-data-flow).
 
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
 
 use glam::{Mat3, Vec2, Vec3};
 
-use rook_content::decode::image::Image;
 use rook_content::decode::mesh::Mesh;
 use rook_types::{
     Material, MaterialSet, NormalDetail, NormalId, PartShape, SurfacePattern, TilePattern, Tiling,
@@ -23,7 +22,7 @@ pub use emitters::{
 };
 pub use lighting::{LightShape, Lighting, LocalLight, SKYBOX_FACES, Tonemapper};
 pub use ribbons::{Anchor, Beam, FloorWire, RibbonLook, TextureMode, Trail};
-pub use terrain::TerrainLook;
+pub use terrain::{TerrainLook, TerrainVoxels};
 
 /// A mesh file, by the BLAKE3 hash of its bytes: parts that use the same
 /// file share one GPU mesh, however they refer to it.
@@ -332,14 +331,45 @@ pub struct PartInstance {
     /// slot material textures use).
     pub grows: Option<Grow>,
     /// Outlined and filled over the finished frame, as a Highlight on it
-    /// draws.
-    pub highlight: Option<Highlight>,
+    /// draws: the key of its look in [`Scene::highlights`]. Parts with the
+    /// same key share one outline, around all of them.
+    pub highlight: Option<u64>,
     /// Which of its mesh file's levels of detail it may draw.
     pub fidelity: Fidelity,
     /// An image layer's or adornment's part: the scene entry it's drawn
     /// over, whose level of detail its mesh shares so the two stay
     /// together.
     pub drawn_over: Option<usize>,
+    /// Which world it's drawn in.
+    pub space: Space,
+}
+
+/// Which world a scene entry is drawn in: Workspace's, or a
+/// ViewportFrame's own ([`Scene::viewports`]), which nothing of
+/// Workspace's lighting, shadows or effects reaches.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub enum Space {
+    #[default]
+    Workspace,
+    /// The ViewportFrame with this key.
+    Viewport(u64),
+}
+
+/// A ViewportFrame's world as it's drawn into its picture
+/// (docs/behavior/gui/viewport-frames.md).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Viewport {
+    /// Its `CurrentCamera`; without one only the background draws.
+    pub camera: Option<Camera>,
+    /// `Ambient`, sRGB (lit by its square, as the world's Ambient is).
+    pub ambient: [f32; 3],
+    /// `LightColor`, sRGB (lit by its square, with no Brightness).
+    pub light_color: [f32; 3],
+    /// Towards the light: `-LightDirection`, made unit.
+    pub towards_light: Vec3,
+    /// `BackgroundColor3` (sRGB) at its opacity: what the picture starts
+    /// as.
+    pub background: [f32; 4],
 }
 
 /// Which of a mesh file's levels of detail a part may draw, by
@@ -355,12 +385,9 @@ pub enum Fidelity {
     Performance,
 }
 
-/// A Highlight's look on the parts it covers. Parts with the same `key`
-/// share one outline, around all of them.
+/// A Highlight's look on the parts it covers ([`PartInstance::highlight`]).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Highlight {
-    /// Which Highlight it is (any number the scene keeps for it).
-    pub key: u64,
     /// sRGB colors and their opacity (1 - transparency).
     pub fill: [f32; 4],
     pub outline: [f32; 4],
@@ -398,6 +425,7 @@ impl PartInstance {
             highlight: None,
             fidelity: Fidelity::Precise,
             drawn_over: None,
+            space: Space::Workspace,
         }
     }
 }
@@ -419,12 +447,15 @@ pub struct Scene {
     pub floor_wires: Vec<Option<FloorWire>>,
     pub lighting: Lighting,
     pub terrain: TerrainLook,
+    /// The Highlights' looks, by the key parts name them by: changing one
+    /// changes no part.
+    pub highlights: FxHashMap<u64, Highlight>,
     /// The mesh files parts may draw ([`DrawShape::File`]). The renderer
     /// uploads each the first time a part draws it.
     pub meshes: FxHashMap<MeshHash, Arc<Mesh>>,
-    /// The images parts and their layers may draw. The renderer uploads
-    /// each the first time something draws it, a few per frame.
-    pub images: FxHashMap<ImageHash, Arc<Image>>,
+    /// Each ViewportFrame's world, by the key its entries' [`Space`] and
+    /// its GUI quad ([`rook_types::Paint::Viewport`]) name it by.
+    pub viewports: FxHashMap<u64, Viewport>,
 }
 
 /// The effect slots that changed since the renderer last took them

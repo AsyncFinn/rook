@@ -7,6 +7,7 @@ use std::path::Path;
 
 use anyhow::Context;
 use rbx_types::VariantType as T;
+use rook_engine::session::host::STARTER_PLAYER_COPIES;
 use rook_reflection::{Database, PropertyKind, PropertyType, Serialization};
 
 use super::Gap;
@@ -23,6 +24,7 @@ const SESSION: &[&str] = &[
     "AbsoluteWindowSize",
     "ViewportSize",
     "UserId",
+    "userId",
     "JobId",
     "PlaceId",
     "GameId",
@@ -38,6 +40,14 @@ const SESSION: &[&str] = &[
     "SystemLocaleId",
     "ViewportDisplaySize",
     "TopbarInset",
+    "AccountAge",
+    "AgeChecked",
+    "CharacterAppearance",
+    "CharacterAppearanceId",
+    "DisplayName",
+    "LocaleId",
+    "GamepadEnabled",
+    "PreferredInput",
 ];
 
 /// Classes whose unsaved properties are session, place or Studio state:
@@ -59,7 +69,8 @@ const SESSION_CLASSES: &[&str] = &[
 /// size, axes and orientations from a CFrame, legacy names of renamed
 /// properties). A fresh instance's value is wrong once those change, so
 /// they need views (rook-lua's `api::properties`), not defaults. Every
-/// unsaved BrickColor property is such a view of a Color3 one too.
+/// unsaved BrickColor property but [`COLORS`] is such a view of a Color3
+/// one too.
 const VIEWS: &[&str] = &[
     "Mass",
     "AssemblyMass",
@@ -107,6 +118,9 @@ const VIEWS: &[&str] = &[
 /// the opposite of `Disabled`.
 const CLASS_VIEWS: &[(&str, &str)] = &[("Sparkles", "Color"), ("BaseScript", "Enabled")];
 
+/// Unsaved BrickColor properties that are state of their own.
+const COLORS: &[(&str, &str)] = &[("Player", "TeamColor")];
+
 pub(super) fn write(
     db: &Database,
     gaps: &[Gap],
@@ -138,7 +152,11 @@ pub(super) fn write(
                 || SESSION.contains(&prop.name)
                 || VIEWS.contains(&prop.name)
                 || CLASS_VIEWS.contains(&(owner, prop.name))
-                || matches!(prop.ty, PropertyType::Value(T::Ref | T::BrickColor))
+                || matches!(prop.ty, PropertyType::Value(T::Ref))
+                || matches!(prop.ty, PropertyType::Value(T::BrickColor))
+                    && !COLORS.contains(&(owner, prop.name))
+                // A joining Player takes these from the place's StarterPlayer.
+                || class == "Player" && STARTER_PLAYER_COPIES.iter().any(|(_, to)| *to == prop.name)
             {
                 continue;
             }
@@ -287,6 +305,9 @@ fn rust(db: &Database, ty: PropertyType, raw: &Raw) -> Option<String> {
                 "None" => rook_types::Content::none(),
                 _ => return None,
             }),
+            (T::BrickColor, "BrickColor") => {
+                Value::BrickColor(rbx_types::BrickColor::from_number(n(1)? as u16)?)
+            }
             (T::NumberRange, "NumberRange") => {
                 Value::NumberRange(rbx_types::NumberRange::new(f(1)?, f(2)?))
             }
@@ -365,6 +386,10 @@ fn value_source(v: &rook_types::Value) -> String {
             "Value::NumberRange(rbx_types::NumberRange::new({}, {}))",
             f(r.min),
             f(r.max)
+        ),
+        Value::BrickColor(c) => format!(
+            "Value::BrickColor(rbx_types::BrickColor::from_number({})?)",
+            *c as u16
         ),
         Value::Ref(None) => "Value::Ref(None)".to_owned(),
         other => unreachable!("the probe makes no {other:?}"),

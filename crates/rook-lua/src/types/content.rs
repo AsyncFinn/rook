@@ -2,10 +2,6 @@
 //! `MouseIconContent`...) hold, a URI or an object, and the global
 //! `Content` table that makes one. Measured in Studio 0.747: conformance
 //! scripting/content.
-//!
-//! Rook has no `Object` types (EditableImage, EditableMesh), so
-//! `Content.fromObject` refuses everything it is given, as Studio does
-//! for Instances and other values.
 
 use mlua::{
     Lua, MetaMethod, MultiValue, UserData, UserDataFields, UserDataMethods, UserDataRef,
@@ -16,6 +12,7 @@ use rook_types::Content;
 
 use super::enums::enum_item;
 use super::err;
+use super::members::{Wording, not_a_member};
 use crate::ctx::args::{display_value, format_number, number_of, type_name};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -40,7 +37,7 @@ impl LContent {
     }
 
     /// The object this content holds: a file's object referents don't name
-    /// Rook instances, and Rook makes none (see the module note).
+    /// Rook instances, and Rook makes none.
     fn object(&self) -> LuaValue {
         LuaValue::Nil
     }
@@ -70,20 +67,17 @@ impl UserData for LContent {
             })
         });
         m.add_meta_method(MetaMethod::Index, |lua, t, key: LuaValue| {
-            let LuaValue::String(key) = key else {
-                return Err(err(format!(
-                    "invalid argument #2 (string expected, got {})",
-                    type_name(&key)
-                )));
+            let LuaValue::String(name) = &key else {
+                return Err(not_a_member(&key, "Content", Wording::Plain));
             };
-            match &*key.to_str()? {
+            match &*name.to_str()? {
                 "SourceType" => enum_item(lua, "ContentSourceType", t.source_type().0),
                 "Uri" => Ok(match t.0.as_uri() {
                     Some(uri) => LuaValue::String(lua.create_string(uri)?),
                     None => LuaValue::Nil,
                 }),
                 "Object" => Ok(t.object()),
-                other => Err(err(format!("{other} is not a valid member of Content"))),
+                _ => Err(not_a_member(&key, "Content", Wording::Plain)),
             }
         });
         m.add_meta_method(
@@ -169,6 +163,7 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
         "fromObject",
         lua.create_function(|_, args: MultiValue| -> mlua::Result<LContent> {
             let v = one_arg(args)?;
+            // TODO: take EditableImage and EditableMesh once Rook has them.
             Err(match v {
                 LuaValue::Nil => err("Expected Object, got nil."),
                 v => wrong("fromObject", "Object", &v),

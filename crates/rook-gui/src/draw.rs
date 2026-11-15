@@ -1,9 +1,10 @@
-//! What the local player's ScreenGuis draw, in order: each visible GUI
-//! object's background and border (or legacy style), a ScrollingFrame's
-//! bars, then its image or text, cut by its UICorner and colored by its
-//! UIGradient, then its UIStroke; CanvasGroups drawn apart and laid over
-//! as one; and any Hint or Message over it all; what each world GUI's
-//! canvas draws, the same way; and the names and health bars over heads. Order and clipping rules:
+//! What the local player's ScreenGuis draw, in order, over any Hint or
+//! Message: each visible GUI object's background and border (or legacy
+//! style), a ScrollingFrame's bars, then its image or text, cut by its
+//! UICorner and colored by its UIGradient, then its UIStroke; CanvasGroups
+//! drawn apart and laid over as one; what each world GUI's canvas draws,
+//! the same way; and the names and health bars over heads. Order and
+//! clipping rules:
 //! docs/behavior/gui/layout.md#drawing, docs/behavior/gui/modern.md.
 
 mod caret;
@@ -19,7 +20,9 @@ mod scrolling;
 mod stroke;
 mod style;
 mod text;
+mod viewport;
 
+use crate::*;
 use glam::Vec2;
 use rook_dom::{Dom, InstanceId};
 use rook_types::{GuiQuad, WorldCanvas};
@@ -66,7 +69,7 @@ pub(crate) fn world(
             text,
             images: &mut *images,
             out: &mut quads,
-            fields: true,
+            world: true,
             focus,
             canvas: [0.0, 0.0, size.x, size.y],
         }
@@ -90,8 +93,9 @@ struct Draw<'a, 'b> {
     text: &'a mut Text<'b>,
     images: &'a mut Images,
     out: &'a mut Vec<GuiQuad>,
-    /// Text is drawn from distance fields at every size (world GUI).
-    fields: bool,
+    /// On a world GUI's canvas: text is drawn from distance fields at
+    /// every size, and a ViewportFrame draws only its border (observed).
+    world: bool,
     /// The focused TextBox, which shows its caret.
     focus: Option<InstanceId>,
     /// Objects wholly outside this rectangle aren't drawn (observed: on a
@@ -146,7 +150,14 @@ impl Draw<'_, '_> {
         let radii = corner::radii(dom, d.id, d.placed);
         match crate::style::of(dom, d.id) {
             Some(look) => style::emit(dom, d.id, look, d.placed, d.clip, self.images, out),
-            None => frame::emit(dom, d.id, (d.placed, d.clip), radii.is_some(), out),
+            None if viewport::is_viewport(dom, d.id) => {
+                // Its background is in its picture.
+                frame::emit(dom, d.id, (d.placed, d.clip), (radii.is_some(), false), out);
+                if !self.world {
+                    viewport::emit(dom, d.id, d.placed, d.clip, out);
+                }
+            }
+            None => frame::emit(dom, d.id, (d.placed, d.clip), (radii.is_some(), true), out),
         }
         if let Some(scroll) = self.layout.scrolls.get(&d.id) {
             scrolling::emit(dom, d.id, d.placed, scroll, d.clip, self.images, out);
@@ -162,7 +173,7 @@ impl Draw<'_, '_> {
             }
             let outline = stroke::text_outline(dom, d.id, d.placed);
             let at = (d.placed, d.clip);
-            text::emit(&laid.block, at, self.fields, outline, text, out);
+            text::emit(&laid.block, at, self.world, outline, text, out);
             if focused {
                 caret::caret(dom, d.id, &laid.block, d.placed, d.clip, out);
             }
@@ -190,4 +201,70 @@ fn touches(p: Placed, area: [f32; 4]) -> bool {
     let reach = corners[0].max(corners[1]);
     let (lo, hi) = (p.center - reach, p.center + reach);
     lo.x <= area[2] && lo.y <= area[3] && hi.x >= area[0] && hi.y >= area[1]
+}
+
+impl Gui {
+    pub(crate) fn redraw(&mut self, dom: &Dom, tops: &[InstanceId]) {
+        if tops.is_empty() {
+            return;
+        }
+        self.laid_out += 1;
+        for &top in tops {
+            if world::is_world_gui(dom, top) {
+                // How it hangs was read again with its layout.
+                self.canvases.remove(&top);
+                self.world_stale.insert(top);
+                self.world_rehung.insert(top);
+            } else {
+                self.screen.restack(top);
+            }
+        }
+    }
+
+    /// Draw `ids` again, placed again on their own (`placed`, with what
+    /// they hold) or only restyled; a world GUI's whole canvas.
+    pub(crate) fn repaint(&mut self, dom: &Dom, ids: &[InstanceId], placed: bool) {
+        if ids.is_empty() {
+            return;
+        }
+        self.laid_out += 1;
+        for &id in ids {
+            if draw::is_message(dom, id) {
+                self.screen.repaint_messages();
+                continue;
+            }
+            match layout::top_of(dom, id) {
+                Some(top) if world::is_world_gui(dom, top) => {
+                    self.canvases.remove(&top);
+                    self.world_stale.insert(top);
+                    // Its own properties say whether it draws; what it
+                    // holds only what its canvas shows.
+                    if id == top {
+                        self.world_rehung.insert(top);
+                    }
+                }
+                Some(_) if placed => self.screen.placed(id),
+                Some(_) => self.screen.repaint(id),
+                None => {}
+            }
+        }
+    }
+
+    /// What the local player's ScreenGuis draw, bottom first, as of the
+    /// last layout: in pieces, one per object, each the same `Arc` until
+    /// what it draws changes, so a renderer can keep what it made of it.
+    pub fn draw(&mut self, dom: &Dom) -> Arc<[Arc<[GuiQuad]>]> {
+        let mut text = draw::Text {
+            fonts: &mut self.fonts,
+            glyphs: &mut self.glyphs,
+        };
+        let (layout, messages) = (&self.layout, &self.messages);
+        (self.screen).draw(
+            dom,
+            layout,
+            (&mut text, &mut self.images),
+            self.focus,
+            messages,
+        )
+    }
 }

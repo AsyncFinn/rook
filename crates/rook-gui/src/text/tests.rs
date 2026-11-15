@@ -172,6 +172,29 @@ fn scaled_text_shapes_once() {
     assert_eq!(shapings() - before, 1);
 }
 
+/// A run shaped once isn't shaped again, at the same size or another,
+/// and lays out as it did the first time.
+#[test]
+fn runs_are_shaped_once() {
+    let mut f = need_fonts!();
+    let shapings = || shape::SHAPINGS.with(std::cell::Cell::get);
+    let area = Vec2::new(200.0, 50.0);
+    let small = source(
+        "Workspace
+Lighting",
+        "Legacy",
+        14.0,
+    );
+    let big = source("Workspace", "Legacy", 24.0);
+    let before = shapings();
+    let first = lay_out(&mut f, &small, area, None);
+    let once = shapings() - before;
+    assert_eq!(lay_out(&mut f, &small, area, None), first);
+    let kept = lay_out(&mut f, &big, area, None);
+    assert_eq!(shapings() - before, once);
+    assert_eq!(lay_out(&mut need_fonts!(), &big, area, None), kept);
+}
+
 #[test]
 fn rich_text() {
     let mut f = need_fonts!();

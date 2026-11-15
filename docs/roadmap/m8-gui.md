@@ -35,18 +35,62 @@ health bars and leaderboards are GUI.
    [UITableLayout](../behavior/gui/modern.md#uitablelayout) 7. Corners,
    strokes and gradients are parameters of the GUI quad drawn in its
    shader; a CanvasGroup is drawn to a texture of its own.
-8. **ViewportFrame** (251 files) and WorldModel (46).
+8. ✅ [ViewportFrame](../behavior/gui/viewport-frames.md) (251 files) and
+   [WorldModel](../behavior/physics/queries.md#worldmodels) (46).
    - *Scope*: its own Camera (`CurrentCamera`), `Ambient`, `LightColor`,
      `LightDirection`, `ImageColor3` and `ImageTransparency`; WorldModel
-     for queries and animation inside it.
-   - *Studio questions*: how it lights its scene (just ambient and one
-     directional light? shadows? materials and SurfaceAppearance?) and how
-     it scales with screen size. Captures leave ViewportFrames out, on
-     SurfaceGuis too, so the looks come from screenshots the user takes,
-     all views asked for at once.
-   - *How*: the renderer draws more than one scene: the frame's subtree
-     with its camera and light into a target of the frame's size, laid
-     over the frame like an image (as CanvasGroups' textures are).
+     for queries inside it (animation inside it goes with M11 step 4's
+     Animators).
+   - *Evidence*: [ViewportFrame](../behavior/gui/viewport-frames.md),
+     measured in Studio 0.747 through captures of Studio's own window:
+     lit by its own Ambient and LightColor only, through the world's
+     surface shading and without its tone curve, with a fixed fog; the
+     background inside the picture; Highlights, effects, lights and world
+     GUI inside it not drawn; nothing on a SurfaceGui.
+   - *Design* (2026-11-14), the drawing:
+     - Established engines draw such a frame as a second scene rendered
+       off screen into a texture the UI shows: Godot's SubViewport with
+       its own World3D, shown through a ViewportTexture; Unreal's
+       SceneCapture2D with its own FScene into a render target shown in
+       UMG. Each world has its own scenario (its instances, culling and
+       sorting) and shares the GPU's meshes, textures and pipelines.
+     - Scene (`rook-scene`): the one entry list stays; each entry says
+       its space, `Workspace` or the ViewportFrame it's under (the
+       nearest, found up its ancestry when it's placed, which every part
+       entering, leaving or moving in the tree already is). Each frame's
+       look (its camera's place and field of view, its lights,
+       background) is `Scene::viewports`, by the frame's id, read again
+       for `RenderChanges::viewports`: a frame's own properties, or a
+       property of the Camera it names (found through the camera's
+       referrers), or a frame entering or leaving the tree.
+     - Renderer: a world's batches (opaque, layers, transparent parts
+       sorted for its camera, its level-of-detail view) are a `World`,
+       the main one and one per frame, all sharing the mesh pool, images,
+       the image table and the pipelines; an entry's placement names its
+       world. A frame's world draws with the main pass's pipelines into
+       a target of the main frame's format at the frame's size, with its
+       own globals (its camera and lights, no sky, its fixed fog, no
+       shadows) and an empty light volume, cleared to its background. It
+       draws again only when something of it changed: an entry placed or
+       moved, its look, its size, or a file it waited on; otherwise the
+       last picture is shown again.
+     - GUI: the frame draws its border as a Frame does, then a quad
+       painted with its world's picture (`Paint::Viewport`: its id and
+       size), tinted, faded, turned, clipped and cut as an image is. The
+       renderer draws the frames the GUI shows before CanvasGroups (a
+       frame can sit in one), and the GUI pass doubles the picture's
+       values as Studio shows them. On a world canvas it draws only its
+       border.
+     - Cost: with nothing changed, nothing per frame but a check of each
+       shown frame's dirty flag. One part moving in a frame costs its
+       instance's write and that frame's pass, which draws only its own
+       parts. Main-world culling and sorting never see a frame's parts.
+   - *Design*, WorldModel: each is a world of its own, as Studio's is
+     (observed: its queries find only its own parts, Workspace's never
+     do, nothing simulates them). Workspace's physics holds the parts
+     with no WorldModel between them and Workspace; a WorldModel's
+     queries read its parts and shapes, gathered when it's first queried
+     and again only after the journal shows a change inside it.
    - *Done when*: a ViewportFrame's parts draw as in Studio's screenshots
      within step 4's tolerance, and raycasts against a WorldModel's parts
      return what Studio's do.
@@ -68,9 +112,10 @@ health bars and leaderboards are GUI.
      - The engine side they and games share: StyleSheets (started,
        without `@` queries), GuiService's core members, input reaching
        CoreGui, ContextActionService, health, the Backpack and Tools,
-       ProximityPromptService (which prompts show by distance,
-       `RequiresLineOfSight` and `Exclusivity`; the key and
-       `HoldDuration`; `Triggered`; `Style` Custom). Services that ask
+       ProximityPromptService ([done](../behavior/gui/proximity-prompts.md):
+       which prompts show by distance, `RequiresLineOfSight` and
+       `Exclusivity`; the key and `HoldDuration`; `Triggered`; `Style`
+       Custom). Services that ask
        Roblox's website (friends, purchases, analytics, voice) do
        nothing locally.
      - Rook's own CoreGui, in Luau and shipped: each piece laid out,

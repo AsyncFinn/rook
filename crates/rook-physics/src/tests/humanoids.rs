@@ -313,3 +313,52 @@ fn leaving_a_sit_stands_back_up() {
     let height = position(&dom, drive.root).y;
     assert!((height - 3.5).abs() < 0.05, "root at {height}");
 }
+
+/// Where the root of a Humanoid stood up `above` standing height is, over
+/// standing height, after each of `count` 60 Hz frames, under `gravity`.
+fn dropped(above: f32, gravity: f32, count: u32) -> Vec<f32> {
+    let mut dom = Dom::new();
+    let mut physics = Physics::new();
+    let drive = standing(&mut dom, &mut physics);
+    let ws = dom.find_service("Workspace").unwrap();
+    set(&mut dom, ws, "Gravity", Value::Float32(gravity));
+    let at = position(&dom, drive.root) + Vec3::Y * above;
+    set(
+        &mut dom,
+        drive.root,
+        "CFrame",
+        Value::CFrame(CFrame::from_position(at)),
+    );
+    (0..count)
+        .map(|_| {
+            frames(&mut dom, &mut physics, &drive, 1);
+            position(&dom, drive.root).y - 3.5
+        })
+        .collect()
+}
+
+/// Measured stepping 1.5 studs down: it falls at gravity's pace, unbraked,
+/// to standing height in six frames, dips 0.14 below it and comes back up
+/// over about 0.15 s without overshooting.
+#[test]
+fn stepping_down_falls_and_dips() {
+    let ys = dropped(1.5, 196.2, 12);
+    let dip = ys.iter().copied().fold(0.0, f32::min);
+    assert!(ys[4] > 0.0 && ys[5] < 0.0, "{ys:?}");
+    assert!(near(dip, -0.143, 0.03), "{ys:?}");
+    assert!(near(ys[10], -0.018, 0.01), "{ys:?}");
+    assert!(ys.iter().all(|&y| y < 1.5 && y > -0.2), "{ys:?}");
+}
+
+/// Measured with gravity off: the legs pull the root down at a steady
+/// 2.727 times standing height a second (8.2 for R15's 3.0075).
+#[test]
+fn without_gravity_the_legs_pull_down_steadily() {
+    let ys = dropped(1.5, 0.0, 8);
+    let speed = (ys[3] - ys[5]) * 30.0;
+    assert!(near(speed, 2.727 * 3.0, 0.05), "{ys:?}");
+}
+
+fn near(got: f32, want: f32, within: f32) -> bool {
+    (got - want).abs() <= within
+}

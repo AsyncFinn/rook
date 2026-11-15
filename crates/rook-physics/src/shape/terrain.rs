@@ -220,6 +220,11 @@ impl Physics {
             let water = piece.material == TerrainMaterial::Water;
             let surface = materials::of_material(piece.material.material() as u32);
             let collider = ColliderBuilder::new(SharedShape::new(piece.mesh))
+                // Weightless: Rapier sums the mass of every collider on
+                // the terrain's fixed body each time one is added or
+                // removed, and a mesh with a density is weighed triangle
+                // by triangle, so each chunk built would weigh them all.
+                .density(0.0)
                 .position(Pose::from_translation(piece.origin))
                 .friction(surface.friction)
                 .restitution(surface.elasticity)
@@ -264,19 +269,26 @@ impl Physics {
     }
 
     /// Whether `point` is inside solid terrain: the nearest surface above
-    /// it faces up, so the point is under it.
-    pub(crate) fn inside_terrain(&self, point: glam::Vec3) -> bool {
-        let ray = Ray::new(point, Vector::Y);
-        let pipeline = self.world.query_pipeline();
-        let nearest = pipeline
-            .intersect_ray(ray, crate::query::MAX_RAY_LENGTH, false)
-            .filter(|(h, ..)| self.terrain.material(*h).is_some() && !self.terrain.is_water(*h))
-            .min_by(|a, b| a.2.time_of_impact.total_cmp(&b.2.time_of_impact));
-        nearest.is_some_and(|(_, co, hit)| {
-            co.shape()
-                .as_trimesh()
-                .is_some_and(|m| m.triangle(hit.subshape).scaled_normal().y > 0.0)
+    /// it faces up, so the point is under it. The chunks above it are built
+    /// up to that surface.
+    pub(crate) fn inside_terrain(&mut self, point: glam::Vec3) -> bool {
+        let up = (point, glam::Vec3::Y, crate::query::MAX_RAY_LENGTH);
+        self.first_terrain_along(up, |physics, upto| {
+            let ray = Ray::new(point, Vector::Y);
+            let pipeline = physics.world.query_pipeline();
+            let nearest = pipeline
+                .intersect_ray(ray, upto, false)
+                .filter(|(h, ..)| {
+                    physics.terrain.material(*h).is_some() && !physics.terrain.is_water(*h)
+                })
+                .min_by(|a, b| a.2.time_of_impact.total_cmp(&b.2.time_of_impact));
+            nearest.map(|(_, co, hit)| {
+                co.shape()
+                    .as_trimesh()
+                    .is_some_and(|m| m.triangle(hit.subshape).scaled_normal().y > 0.0)
+            })
         })
+        .unwrap_or(false)
     }
 
     /// Whether any voxel (water included) overlaps the box from `min` to

@@ -1,7 +1,8 @@
 use super::*;
 
-/// Moving a SelectionBox to another Adornee redraws both parts: the old
-/// one loses its box, the new one gains it.
+/// Moving a SelectionBox to another Adornee redraws both parts'
+/// adornments: the old one loses its box, the new one gains it. Their own
+/// looks stay.
 #[test]
 fn adornee_changes_redraw_both_parts() {
     let mut s = Server::new(&Options::default()).unwrap();
@@ -25,12 +26,13 @@ fn adornee_changes_redraw_both_parts() {
     let dom = &s.runtime().world().dom;
     let ws = dom.find_service("Workspace").unwrap();
     let part = |name| dom.find_first_child(ws, name, false).unwrap();
-    assert!(changes.parts.contains(&part("A")));
-    assert!(changes.parts.contains(&part("B")));
+    assert!(changes.adorned.contains(&part("A")));
+    assert!(changes.adorned.contains(&part("B")));
+    assert!(changes.parts.is_empty());
 }
 
-/// Changing any adornment kind (here a BoxHandleAdornment) redraws its
-/// Adornee.
+/// Changing any adornment kind (here a BoxHandleAdornment) redraws the
+/// adornments on its Adornee.
 #[test]
 fn handle_adornment_changes_redraw_their_part() {
     let mut s = Server::new(&Options::default()).unwrap();
@@ -54,12 +56,13 @@ fn handle_adornment_changes_redraw_their_part() {
     let ws = dom.find_service("Workspace").unwrap();
     assert!(
         changes
-            .parts
+            .adorned
             .contains(&dom.find_first_child(ws, "A", false).unwrap())
     );
 }
 
-/// A FloorWire draws with its `From` part: changing it redraws that part.
+/// A FloorWire draws with its `From` part: changing it redraws that
+/// part's adornments.
 #[test]
 fn floor_wire_changes_redraw_its_from_part() {
     let mut s = Server::new(&Options::default()).unwrap();
@@ -84,13 +87,13 @@ fn floor_wire_changes_redraw_its_from_part() {
     let ws = dom.find_service("Workspace").unwrap();
     assert!(
         changes
-            .parts
+            .adorned
             .contains(&dom.find_first_child(ws, "A", false).unwrap())
     );
 }
 
-/// A FloorWire's path bends when its `To` part moves: its `From` part is
-/// drawn again, while `To` itself only moves.
+/// A FloorWire's path bends when its `To` part moves: its `From` part's
+/// wire is drawn again, while `To` itself only moves.
 #[test]
 fn floor_wire_redraws_when_to_moves() {
     let mut s = Server::new(&Options::default()).unwrap();
@@ -114,13 +117,14 @@ fn floor_wire_redraws_when_to_moves() {
     let dom = &s.runtime().world().dom;
     let ws = dom.find_service("Workspace").unwrap();
     let part = |name| dom.find_first_child(ws, name, false).unwrap();
-    assert!(changes.parts.contains(&part("A")));
+    assert!(changes.adorned.contains(&part("A")));
     assert!(changes.moved.contains(&part("B")));
 }
 
-/// A Highlight in a Model covers all its parts: changing it redraws each.
+/// A Highlight in a Model covers all its parts, but changing its look
+/// changes the look alone: no part is touched.
 #[test]
-fn highlight_changes_redraw_its_models_parts() {
+fn highlight_look_changes_touch_no_part() {
     let mut s = Server::new(&Options::default()).unwrap();
     add_script(
         &s,
@@ -144,17 +148,13 @@ fn highlight_changes_redraw_its_models_parts() {
     let dom = &s.runtime().world().dom;
     let ws = dom.find_service("Workspace").unwrap();
     let m = dom.find_first_child(ws, "M", false).unwrap();
-    for name in ["A", "B"] {
-        assert!(
-            changes
-                .parts
-                .contains(&dom.find_first_child(m, name, false).unwrap())
-        );
-    }
+    let h = dom.find_first_child(m, "Highlight", false).unwrap();
+    assert!(changes.highlights.contains(&h));
+    assert!(changes.parts.is_empty() && changes.highlighted.is_empty());
 }
 
 /// A SelectionPartLasso draws with its Humanoid's root part: moving
-/// either end redraws that part in full, as the bar bends.
+/// either end redraws that part's adornments, as the bar bends.
 #[test]
 fn lasso_redraws_its_root_part_as_either_end_moves() {
     let mut s = Server::new(&Options::default()).unwrap();
@@ -185,13 +185,13 @@ fn lasso_redraws_its_root_part_as_either_end_moves() {
         dom.find_first_child(m, "HumanoidRootPart", false).unwrap()
     };
     s.run_for(0.5);
-    assert!(s.take_render_changes().parts.contains(&root));
+    assert!(s.take_render_changes().adorned.contains(&root));
     s.run_for(0.5);
-    assert!(s.take_render_changes().parts.contains(&root));
+    assert!(s.take_render_changes().adorned.contains(&root));
 }
 
 /// A Model's own properties draw nothing, so changing them redraws none of
-/// its parts; a Highlight on the Model still redraws them all.
+/// its parts; a Highlight added to the Model changes which covers each.
 #[test]
 fn model_property_changes_redraw_no_parts() {
     let mut s = Server::new(&Options::default()).unwrap();
@@ -224,5 +224,6 @@ fn model_property_changes_redraw_no_parts() {
     );
     s.run_for(0.5);
     let changes = s.take_render_changes();
-    assert_eq!(changes.parts.len(), 3);
+    assert!(changes.parts.is_empty());
+    assert_eq!(changes.highlighted.len(), 3);
 }

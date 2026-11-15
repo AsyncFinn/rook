@@ -1,4 +1,4 @@
-//! Property defaults measured in Studio 0.744.0.7441077 for properties the
+//! Property defaults measured in Studio 0.747.0.7471481 for properties the
 //! reflection database has none for (it lists only ones that save),
 //! where they differ from the zero value. Keyed by class, or by the
 //! declaring class when several classes have it and all agree. See
@@ -8,6 +8,7 @@
 
 use rook_types::Value;
 
+/// Studio's default for `class.property` in a running game.
 pub(super) fn measured(class: &str, property: &str) -> Option<Value> {
     Some(match class {
         "AdGui" => match property {
@@ -82,6 +83,17 @@ pub(super) fn measured(class: &str, property: &str) -> Option<Value> {
             "DevelopmentLanguage" => Value::String("en-us".into()),
             _ => return None,
         },
+        "ParticleEmitter2D" => match property {
+            "TextureContent" => Value::Content(rook_types::Content::from_uri(
+                "rbxasset://textures/particles/sparkles_main.dds",
+            )),
+            _ => return None,
+        },
+        "Player" => match property {
+            "CanLoadCharacterAppearance" | "Neutral" => Value::Bool(true),
+            "TeamColor" => Value::BrickColor(rbx_types::BrickColor::from_number(1)?),
+            _ => return None,
+        },
         "PluginAction" => match property {
             "AllowBinding" => Value::Bool(true),
             _ => return None,
@@ -91,7 +103,7 @@ pub(super) fn measured(class: &str, property: &str) -> Option<Value> {
             _ => return None,
         },
         "TestService" => match property {
-            "Is30FpsThrottleEnabled" => Value::Bool(true),
+            "Enabled" | "Is30FpsThrottleEnabled" => Value::Bool(true),
             _ => return None,
         },
         "TextBox" => match property {

@@ -55,7 +55,7 @@ wall's box. Rook now uses the geometry Studio saved for the union.
 saved in the union (and, in a union asset's `PartOperationAsset`, beside
 its `MeshData`):
 
-| Where | Large 2016 place | Modern large place |
+| Where | Large older place | Modern large place |
 |---|---:|---:|
 | `PhysicalConfigData` in the file (version 7 / 6) | 190 of 190 | 1,555 of 1,802 |
 | `PhysicsData` in the file | 0 | 0 |
@@ -135,14 +135,14 @@ Studio, by script):
 
 *Checked on a large place* (`rook run-headless` with a probe script: for every
 ClickDetector part, rays from 5 studs out along each axis toward it):
-before, 49 of 261 ClickDetectors in a large modern place and 36 of 214 in a large 2016 place were hidden from every direction by
+before, 49 of 261 ClickDetectors in a large modern place and 36 of 214 in a large older place were hidden from every direction by
 a union's box; after, 16 and 20 are, none by a union and none a button (the rest are behind invisible blocker parts the places put there
 on purpose, `RCBlocker`, or other plain parts). The 2016 wall union's
 union (1 × 12 × 12.2 studs, 15 saved hulls) now lets rays through its
 round doorway.
 
 *Performance* (release builds, base = the build before this step, `rook run-headless
---seconds 5`, two runs each): a large 2016 place (no moving unions) 17.1 / 17.2 s
+--seconds 5`, two runs each): a large older place (no moving unions) 17.1 / 17.2 s
 against 17.4 / 17.7 s; a large modern place (86 moving unions, most of them not
 colliding) 14.8 / 14.7 s against 15.6 / 15.8 s, the cost of its
 colliding moving unions (stall doors, elevator railings) touching their

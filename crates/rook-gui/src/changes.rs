@@ -1,6 +1,7 @@
 //! Which journal entries can move or change GUI, and which only change
 //! how it looks.
 
+use crate::*;
 use rook_dom::{Change, Dom, InstanceId};
 use rook_reflection::{ClassId, PropertyId};
 
@@ -11,7 +12,7 @@ pub(crate) struct Watch {
     gui: Option<ClassId>,
     /// UIComponent: layouts, padding, UIScale and the size constraints.
     ui: Option<ClassId>,
-    /// Message, and Hint, its subclass: drawn over the GUI.
+    /// Message, and Hint, its subclass: drawn under the ScreenGuis.
     message: Option<ClassId>,
     /// `Camera.ViewportSize`, the screen's size, and
     /// `Workspace.CurrentCamera`, which camera's it is.
@@ -23,15 +24,27 @@ pub(crate) struct Watch {
     /// AutoButtonColor's tints and a button's hover and pressed images; a
     /// TextBox's caret and selection).
     looks: Vec<PropertyId>,
+    /// Properties neither layout nor drawing reads (what input and
+    /// gamepad selection go by, which they read as they are).
+    inert: Vec<PropertyId>,
     /// Properties that change only how a text object's glyphs are drawn
     /// (colors, transparencies), which the laid-out text carries: its text
     /// is laid out again alone, its size and place kept.
     text_looks: Vec<PropertyId>,
     /// Properties that place the changed object alone: where it goes and
-    /// how big it is in its parent, turned or shown. Its siblings and
+    /// how big it is in its parent, turned, shown or clipping what it
+    /// holds. Its siblings and
     /// parent don't depend on them unless the parent arranges, sizes or
     /// scrolls by its children.
     places: Vec<PropertyId>,
+    /// Properties that change what an object holds in its own box (its
+    /// text and image) or how a parent's UI layout orders it: they lay
+    /// out again from the nearest object whose place doesn't depend on
+    /// them, and draw again.
+    contents: Vec<PropertyId>,
+    /// `Instance.Parent`: a move journals [`Change::Reparented`] as well,
+    /// which says what it left and joined.
+    parent: Option<PropertyId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -43,6 +56,10 @@ pub(crate) enum Touch {
     Text,
     /// Where the changed object and what it holds are.
     Place,
+    /// What the changed object holds or shows, or a UI component's
+    /// property: where things are from the nearest object whose place
+    /// doesn't depend on it, and how it looks.
+    Content,
     /// Where things are in the changed object's tree.
     Layout,
     /// GUI moved in the tree: the trees it left and joined lay out again.
@@ -73,10 +90,18 @@ impl Watch {
                 ("GuiObject", "GuiState"),
                 ("TextBox", "CursorPosition"),
                 ("TextBox", "SelectionStart"),
-                ("ImageLabel", "ImageColor3"),
-                ("ImageButton", "ImageColor3"),
-                ("ImageLabel", "ImageTransparency"),
-                ("ImageButton", "ImageTransparency"),
+                ("GuiObject", "Interactable"),
+                ("GuiButton", "AutoButtonColor"),
+                ("GuiButton", "Selected"),
+                ("ImageButton", "HoverImageContent"),
+                ("ImageButton", "PressedImageContent"),
+                ("ScrollingFrame", "ScrollBarImageColor3"),
+                ("ScrollingFrame", "ScrollBarImageTransparency"),
+                ("ScrollingFrame", "TopImageContent"),
+                ("ScrollingFrame", "MidImageContent"),
+                ("ScrollingFrame", "BottomImageContent"),
+                ("CanvasGroup", "GroupColor3"),
+                ("CanvasGroup", "GroupTransparency"),
                 ("UICorner", "CornerRadius"),
                 ("UIGradient", "Color"),
                 ("UIGradient", "Offset"),
@@ -85,6 +110,37 @@ impl Watch {
                 ("UIStroke", "Color"),
                 ("UIStroke", "Transparency"),
                 ("UIStroke", "Thickness"),
+            ]
+            .into_iter()
+            .chain(["ImageLabel", "ImageButton"].into_iter().flat_map(|owner| {
+                [
+                    "ImageColor3",
+                    "ImageTransparency",
+                    "ImageRectOffset",
+                    "ImageRectSize",
+                    "ResampleMode",
+                    "ScaleType",
+                    "SliceCenter",
+                    "SliceScale",
+                    "TileSize",
+                ]
+                .map(|name| (owner, name))
+            }))
+            .filter_map(|(owner, name)| property(owner, name))
+            .collect(),
+            inert: [
+                ("Instance", "Archivable"),
+                ("GuiObject", "Active"),
+                ("GuiObject", "Draggable"),
+                ("GuiObject", "Selectable"),
+                ("GuiObject", "SelectionImageObject"),
+                ("GuiObject", "SelectionOrder"),
+                ("GuiObject", "NextSelectionUp"),
+                ("GuiObject", "NextSelectionDown"),
+                ("GuiObject", "NextSelectionLeft"),
+                ("GuiObject", "NextSelectionRight"),
+                ("GuiObject", "SelectionGroup"),
+                ("GuiButton", "Modal"),
             ]
             .into_iter()
             .filter_map(|(owner, name)| property(owner, name))
@@ -103,15 +159,63 @@ impl Watch {
                 .chain([property("TextBox", "PlaceholderColor3")])
                 .flatten()
                 .collect(),
-            places: ["AnchorPoint", "Position", "Rotation", "Size", "Visible"]
-                .into_iter()
-                .filter_map(|name| property("GuiObject", name))
-                .collect(),
+            places: [
+                "AnchorPoint",
+                "ClipsDescendants",
+                "Position",
+                "Rotation",
+                "Size",
+                "Visible",
+            ]
+            .into_iter()
+            .filter_map(|name| property("GuiObject", name))
+            .collect(),
+            contents: [
+                ("Instance", "Name"),
+                ("GuiObject", "LayoutOrder"),
+                ("GuiObject", "AutomaticSize"),
+                ("GuiObject", "SizeConstraint"),
+                ("GuiObject", "BorderSizePixel"),
+                ("GuiObject", "BorderMode"),
+                ("Frame", "Style"),
+                ("GuiButton", "Style"),
+                ("ImageLabel", "ImageContent"),
+                ("ImageButton", "ImageContent"),
+                ("TextBox", "PlaceholderText"),
+                ("ScrollingFrame", "CanvasSize"),
+                ("ScrollingFrame", "CanvasPosition"),
+                ("ScrollingFrame", "AutomaticCanvasSize"),
+            ]
+            .into_iter()
+            .chain(
+                ["TextLabel", "TextButton", "TextBox"]
+                    .into_iter()
+                    .flat_map(|owner| {
+                        [
+                            "Text",
+                            "RichText",
+                            "TextScaled",
+                            "TextSize",
+                            "TextWrapped",
+                            "FontFace",
+                            "TextXAlignment",
+                            "TextYAlignment",
+                            "LineHeight",
+                            "MaxVisibleGraphemes",
+                            "TextTruncate",
+                        ]
+                        .map(|name| (owner, name))
+                    }),
+            )
+            .filter_map(|(owner, name)| property(owner, name))
+            .collect(),
+            parent: property("Instance", "Parent"),
         }
     }
 
     pub(crate) fn touches(&self, dom: &Dom, change: &Change) -> Touch {
         match change {
+            Change::Property { property, .. } if self.inert.contains(property) => Touch::Nothing,
             Change::Property { property, .. } if self.looks.contains(property) => Touch::Look,
             Change::Property { property, .. } if self.text_looks.contains(property) => Touch::Text,
             Change::Property { property, .. }
@@ -120,7 +224,11 @@ impl Watch {
                 Touch::All
             }
             Change::Property { property, .. } if self.places.contains(property) => Touch::Place,
-            Change::Property { id, .. } if self.is_gui(dom, *id) => Touch::Layout,
+            Change::Property { property, .. } if Some(*property) == self.parent => Touch::Nothing,
+            Change::Property { id, .. } if !self.is_gui(dom, *id) => Touch::Nothing,
+            Change::Property { property, .. } if self.contents.contains(property) => Touch::Content,
+            Change::Property { id, .. } if self.is_component(dom, *id) => Touch::Content,
+            Change::Property { .. } => Touch::Layout,
             // A Folder or a Player carrying GUI counts, so the whole
             // subtree is looked at.
             Change::Reparented { subtree, .. }
@@ -132,6 +240,15 @@ impl Watch {
         }
     }
 
+    /// A UI component (a layout, padding, UIScale, a size constraint):
+    /// what it changes is its parent GUI object's.
+    fn is_component(&self, dom: &Dom, id: InstanceId) -> bool {
+        let (Some(inst), Some(ui)) = (dom.get(id), self.ui) else {
+            return false;
+        };
+        dom.database().is_a(inst.class, ui)
+    }
+
     fn is_gui(&self, dom: &Dom, id: InstanceId) -> bool {
         let Some(inst) = dom.get(id) else {
             return false;
@@ -141,5 +258,165 @@ impl Watch {
             .into_iter()
             .flatten()
             .any(|c| db.is_a(inst.class, c))
+    }
+}
+
+impl Gui {
+    /// Look at the journal since last time, so it can be trimmed.
+    pub fn note_changes(&mut self, dom: &Dom) {
+        if self.watch.is_none() {
+            self.watch = Some(Watch::new(dom));
+            self.modals.seed(dom);
+            if let Some(ws) = dom.find_service("Workspace") {
+                let found = dom.descendants(ws);
+                (self.overheads).note(dom, found.iter().copied());
+                self.in_world
+                    .extend(found.into_iter().filter(|&id| world::is_world_gui(dom, id)));
+            }
+            let player_gui =
+                (dom.local_player()).and_then(|p| dom.find_first_child_of_class(p, "PlayerGui"));
+            if let Some(pg) = player_gui {
+                let found = dom.descendants(pg).into_iter();
+                self.in_world
+                    .extend(found.filter(|&id| world::is_world_gui(dom, id)));
+            }
+            let holders = (dom.find_service("Workspace").into_iter()).chain(
+                dom.find_service("Players")
+                    .map_or(Vec::new(), |p| dom.children(p).to_vec()),
+            );
+            let held: Vec<InstanceId> = holders.flat_map(|h| dom.children(h).to_vec()).collect();
+            self.messages
+                .extend(held.into_iter().filter(|&id| draw::is_message(dom, id)));
+        }
+        let changes = dom.journal().since(self.cursor);
+        rook_types::count!(JournalReadGui, changes.len());
+        for change in changes {
+            if let Change::Collected(id) = change {
+                self.world_listed += 1;
+                self.forget(*id);
+                continue;
+            }
+            self.modals.note(dom, change);
+            if let Change::Reparented { subtree, .. } = change {
+                // A GUI, or the part one hangs on, may have come or gone.
+                self.world_listed += 1;
+                self.overheads.note(dom, subtree.iter().copied());
+                let messages = subtree
+                    .iter()
+                    .copied()
+                    .filter(|&id| draw::is_message(dom, id));
+                self.messages.extend(messages);
+                let found = subtree.iter().copied();
+                self.in_world
+                    .extend(found.filter(|&id| world::is_world_gui(dom, id)));
+            }
+            if !self.stale {
+                let watch = self.watch.as_ref().expect("made above");
+                let touch = watch.touches(dom, change);
+                match (touch, change) {
+                    (Touch::Nothing, _) => {}
+                    (Touch::Tree, Change::Reparented { subtree, .. }) => {
+                        rook_types::count!(GuiObjectsChanged, subtree.len());
+                    }
+                    _ => rook_types::count!(GuiObjectsChanged, 1),
+                }
+                match (touch, change) {
+                    (Touch::All, _) => self.stale = true,
+                    (
+                        Touch::Tree,
+                        Change::Reparented {
+                            old_parent,
+                            old_ancestors,
+                            subtree,
+                            ..
+                        },
+                    ) => self.moved.push(Moved {
+                        left: *old_parent,
+                        old_top: layout::top_along(dom, old_ancestors.iter().copied()),
+                        subtree: subtree.clone(),
+                    }),
+                    (Touch::Layout, Change::Property { id, .. }) => _ = self.changed.insert(*id),
+                    (Touch::Place, Change::Property { id, .. }) => _ = self.shifted.insert(*id),
+                    (Touch::Content, Change::Property { id, .. }) => {
+                        self.shifted.insert(*id);
+                        self.restyled.insert(*id);
+                    }
+                    (Touch::Look, Change::Property { id, .. }) => _ = self.restyled.insert(*id),
+                    (Touch::Text, Change::Property { id, .. }) => _ = self.retexted.insert(*id),
+                    _ => {}
+                }
+            }
+        }
+        self.cursor = dom.journal().end();
+    }
+
+    /// Take the GUI that moved in the tree out of where it was laid out.
+    /// The objects it left and joined, when laid out, are placed again
+    /// (from the nearest one whose place doesn't depend on what they
+    /// hold, see [`layout::Layout::alone`]) and drawn again; returns the
+    /// trees to lay out again whole: those it left or joined at the top
+    /// that are laid out (a screen's, or a client's world GUI).
+    pub(crate) fn take_moved(&mut self, dom: &Dom) -> Vec<InstanceId> {
+        let moved = std::mem::take(&mut self.moved);
+        if moved.is_empty() {
+            return Vec::new();
+        }
+        // What shows, and what input reaches, may have changed.
+        self.laid_out += 1;
+        self.world_listed += 1;
+        let client = dom.local_player().is_some();
+        let mut trees = FxHashSet::default();
+        for Moved {
+            left,
+            old_top,
+            subtree,
+        } in moved
+        {
+            let ids: FxHashSet<InstanceId> = subtree.iter().copied().collect();
+            self.layout.drop(&ids);
+            for &id in &subtree {
+                // A ScreenGui or world GUI that came or went.
+                if dom.is_a(id, "LayerCollector") {
+                    self.screen.restack(id);
+                }
+                self.canvases.remove(&id);
+                if draw::is_message(dom, id) {
+                    self.screen.repaint_messages();
+                }
+            }
+            self.in_world
+                .retain(|&id| !ids.contains(&id) || world::held_where_drawn(dom, id));
+            self.messages
+                .retain(|&id| !ids.contains(&id) || dom.parent(id).is_some());
+            let placed =
+                |id: InstanceId| self.layout.placed.contains_key(&id) && dom.is_a(id, "GuiObject");
+            // The object it left, or the tree, if that's still laid out.
+            match left.filter(|&p| placed(p)) {
+                Some(p) => _ = self.shifted.insert(p),
+                None => trees.extend(old_top.filter(|top| self.layout.placed.contains_key(top))),
+            }
+            let Some(&root) = subtree.first() else {
+                continue;
+            };
+            match dom.parent(root).filter(|&p| placed(p)) {
+                Some(p) => _ = self.shifted.insert(p),
+                None => trees.extend(layout::top_of(dom, root).filter(|&top| {
+                    layout::on_screen(dom, top) || client && self.in_world.contains(&top)
+                })),
+            }
+            // The objects it left and joined stack again with what they
+            // hold now, placed again above or with their trees, but a
+            // ScreenGui stacking by ZIndex alone spreads what an object
+            // holds through its stack, so it stacks again whole. What it
+            // held drew with it (a UICorner, a UIStroke).
+            for top in old_top.into_iter().chain(layout::top_of(dom, root)) {
+                if !order::by_sibling(dom, top) {
+                    self.screen.restack(top);
+                }
+            }
+            self.restyled
+                .extend(left.into_iter().chain(dom.parent(root)));
+        }
+        trees.into_iter().collect()
     }
 }

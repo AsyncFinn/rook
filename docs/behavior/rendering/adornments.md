@@ -186,15 +186,17 @@ with pairs of parts in one plane seen square on at a 1° field of view
   the two ends are flat.
 - **`Texture`** draws as images on the wire, none by default:
   - Each is `TextureSize` (1, 1 by default) studs, X along the wire and
-    Y across it, centered on it, as **two crossed quads**: both hold the
-    wire, and they're fixed in the world, not turned to the camera. The
-    image's width runs from `From` towards `To`, so on a rising or
-    falling leg it stands on its side; that's the "rotated going up"
-    look.
-  - Across axes, by the leg's direction: up, -X and -Z; down, -X and +Z;
-    +X, -Y and +Z; -Z, -X and -Y. Those are -X and +Z turned by the
-    shortest arc from -Y to the leg (about X when it points up); Rook
-    uses that rule for -X and +Z legs, which weren't seen.
+    Y across it, centered on it. The image's width runs from `From`
+    towards `To`, so on a rising or falling leg it stands on its side;
+    that's the "rotated going up" look.
+  - **One quad, turned about the wire to face the camera** (Measured in
+    0.747, 2026-11-11, an arrow image on a wire's legs from many sides;
+    0.742 drew two crossed quads fixed in the world). Its Y runs to the
+    side of a rest axis, -X on a rising or falling leg and down on a
+    level one, so the image flips over as the camera crosses the plane
+    of the wire and that axis: from +X a hair off a vertical leg to +Z
+    and to -Z, the arrow jumps across the wire. On the floor that sends
+    most of a level leg's images under the floor, from any side.
   - One every `StudsBetweenTextures` (4) studs along the drawn wire,
     counted back from its end at `To` (the first at that end); changing
     `To`'s height moves them all, a bigger `To` part does not. An image

@@ -29,6 +29,9 @@ tracing.workspace = true
 zip.workspace = true
 zstd.workspace = true
 
+[dev-dependencies]
+rook-platform = { workspace = true, features = ["native"] }
+
 [target.'cfg(windows)'.dependencies]
 windows-sys = { workspace = true, features = ["Win32_System_Threading"] }
 

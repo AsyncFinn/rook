@@ -39,9 +39,13 @@ Studio's MCP capture shows Highlights, through walls included.
 
 ## In Rook
 
-The player gives each covered part's entry its Highlight's look
+The player gives each covered part's entry the key of its Highlight,
+whose look is kept once in the scene's Highlight table
 (`crates/rook-scene/src/adornments/highlight.rs`); the nearest
-Highlight wins if several cover a part (Inference). The renderer draws
+Highlight wins if several cover a part (Inference). A change to a
+Highlight's colors or `DepthMode` changes only that table entry; its
+`Adornee`, `Enabled` or parent change which Highlight covers each part,
+and only that is looked up again. The renderer draws
 the covered parts into a mask of Highlight numbers after the main pass,
 tested against its depth for Occluded ones, and the tone pass mixes the
 fill over each covered pixel and the outline over each pixel whose

@@ -22,9 +22,34 @@ fn model_file(items: &[(&str, &str, &str)]) -> Vec<u8> {
     rook_formats::save(&weak, rook_formats::Format::Binary).unwrap()
 }
 
-/// Options whose asset cache holds asset 100 (a MainModule and a Part)
-/// and asset 101 (a Part only), with asset delivery off.
+/// A model file of a Folder of `count` Parts and an ObjectValue pointing
+/// at the first.
+fn parts_file(count: usize) -> Vec<u8> {
+    let mut dom = rook_dom::Dom::new();
+    let folder = dom.create_by_name("Folder").unwrap();
+    dom.set_name(folder, "Parts".into()).unwrap();
+    let parts: Vec<InstanceId> = (0..count)
+        .map(|_| {
+            let part = dom.create_by_name("Part").unwrap();
+            dom.set_parent(part, Some(folder)).unwrap();
+            part
+        })
+        .collect();
+    let link = dom.create_by_name("ObjectValue").unwrap();
+    dom.set_name(link, "Link".into()).unwrap();
+    dom.set_property_by_name(link, "Value", Value::Ref(Some(parts[0].to_ref())))
+        .unwrap();
+    let weak = rook_formats::from_dom(&dom, &[folder, link]);
+    rook_formats::save(&weak, rook_formats::Format::Binary).unwrap()
+}
+
+/// Options whose asset cache holds asset 100 (a MainModule and a Part),
+/// asset 101 (a Part only) and `extra`, with asset delivery off.
 fn asset_options(name: &str) -> Options {
+    asset_options_with(name, Vec::new())
+}
+
+fn asset_options_with(name: &str, extra: Vec<(u64, Vec<u8>)>) -> Options {
     let dir = std::env::temp_dir()
         .join("rook-engine-tests")
         .join(format!("{name}-{}", std::process::id()));
@@ -41,7 +66,7 @@ fn asset_options(name: &str) -> Options {
         ),
         (101, model_file(&[("Part", "Brick", "")])),
     ];
-    for (id, bytes) in assets {
+    for (id, bytes) in assets.into_iter().chain(extra) {
         cache
             .put(&format!("asset-{id}"), &bytes, &format!("test://{id}"))
             .unwrap();
@@ -113,6 +138,25 @@ fn require_and_load_asset() {
             "false InsertService cannot be used to load assets from the client",
         ]
     );
+}
+
+/// A model too big to put in within one frame's budget goes in over
+/// several, and its script gets it whole, references and all.
+#[test]
+fn a_model_too_big_for_a_frame_arrives_whole() {
+    let count = crate::frame::PLACED_PER_FRAME;
+    let options = asset_options_with("big-asset", vec![(103, parts_file(count))]);
+    let mut s = Server::new(&options).unwrap();
+    s.run_extra_script(
+        r#"
+        local m = game:GetService("InsertService"):LoadAsset(103)
+        print(#m.Parts:GetChildren(), m.Link.Value == m.Parts:GetChildren()[1])
+        print("done")
+        "#,
+    )
+    .unwrap();
+    let out = step_until(&mut s, |out| out.iter().any(|l| l == "done"));
+    assert_eq!(out, [format!("{count} true"), "done".into()]);
 }
 
 /// Scripts tell a server from a client by `NetworkServer` and

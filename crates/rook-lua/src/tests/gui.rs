@@ -117,3 +117,19 @@ fn selection_moves_fire_studio_events() {
         .as_str()],
     );
 }
+
+/// A zero LightDirection isn't taken: the frame keeps the one it had
+/// (docs/behavior/gui/viewport-frames.md).
+#[test]
+fn a_viewport_frame_keeps_its_light_direction_over_zero() {
+    expect(
+        r#"
+        local v = Instance.new("ViewportFrame")
+        v.LightDirection = Vector3.new(0, 0, 1)
+        v.LightDirection = Vector3.zero
+        print(v.LightDirection)
+        "#,
+        0,
+        &["0, 0, 1"],
+    );
+}

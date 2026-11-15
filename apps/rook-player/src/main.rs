@@ -71,6 +71,9 @@ struct Args {
     /// Also run this Luau file as a server script.
     #[arg(long)]
     script: Option<PathBuf>,
+    /// Also run this Luau file as a LocalScript of the player.
+    #[arg(long, conflicts_with = "run")]
+    client_script: Option<PathBuf>,
     /// Show the server only, without a player (Studio's Run mode).
     #[arg(long)]
     run: bool,
@@ -215,15 +218,15 @@ fn play(args: &Args) -> anyhow::Result<()> {
     // the setting turns it off.
     let content = Arc::new(Resolver::new(settings::content_config(true)));
     let install = Installed::find(&content);
-    let script = match &args.script {
-        Some(path) => Some(fs_err::read_to_string(path)?),
-        None => None,
-    };
+    let read = |path: &Option<PathBuf>| path.as_ref().map(fs_err::read_to_string).transpose();
+    let script = read(&args.script)?;
+    let client_script = read(&args.client_script)?;
     let core_scripts = settings::core_scripts(args.core_scripts.then_some(true), &content);
     let mut setup = Setup {
         play: !args.run,
         content: content.clone(),
         script,
+        client_script,
         // A recording waits for each sound to load, so it keeps to game
         // time however fast it runs.
         wait_for_sounds: args.record_audio.is_some(),

@@ -38,8 +38,9 @@ pub fn authority(w: &World) -> Authority {
     }
 }
 
-/// The player whose client simulates `part`'s assembly, if any.
-fn owner(w: &World, part: InstanceId) -> Option<InstanceId> {
+/// The player whose client simulates `part`'s assembly, if any: none
+/// for an anchored one, which the server keeps.
+pub fn network_owner(w: &World, part: InstanceId) -> Option<InstanceId> {
     let asm = Assembly::of(&w.dom, part)?;
     if asm.anchored {
         return None;
@@ -77,7 +78,7 @@ fn check(w: &World, part: InstanceId) -> Result<(), ScriptError> {
 /// part, or nil for the server (measured: a character's parts answer its
 /// player).
 pub(super) fn get_network_owner(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
-    let owner = with_world(lua, |w| check(w, this).map(|()| owner(w, this)))?;
+    let owner = with_world(lua, |w| check(w, this).map(|()| network_owner(w, this)))?;
     ret_instance(lua, owner)
 }
 

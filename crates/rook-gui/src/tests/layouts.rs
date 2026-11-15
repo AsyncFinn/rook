@@ -400,6 +400,107 @@ fn nested_automatic_sizes() {
     near(rect(&dom, inner, b), ([5.0, 5.0], [37.0, 29.0]));
 }
 
+/// Measured: in a frame growing on X along a list, a child 1 by 1 by
+/// scale and `RelativeYY` is measured as wide as the others reach down,
+/// though it's drawn as tall as the frame; the frame is never less than
+/// what's drawn, without its right padding (the prompt GUI Roblox makes).
+#[test]
+fn relative_yy_children_measure_against_how_far_the_others_reach() {
+    let (mut dom, b) = boxed();
+    let row = frame(&mut dom, b, udim2(0.0, 0, 0.0, 72));
+    set_enum(&mut dom, row, "AutomaticSize", "X");
+    child(&mut dom, "UIListLayout", row, &[]);
+    let list = dom.find_first_child_of_class(row, "UIListLayout").unwrap();
+    set_enum(&mut dom, list, "FillDirection", "Horizontal");
+    child(
+        &mut dom,
+        "UIPadding",
+        row,
+        &[("PaddingRight", udim(0.0, 15))],
+    );
+    let square = frame(&mut dom, row, udim2(1.0, 0, 1.0, 0));
+    set_enum(&mut dom, square, "SizeConstraint", "RelativeYY");
+    let texts = frame(&mut dom, row, udim2(0.0, 39, 1.0, 0));
+    let low = frame(&mut dom, texts, udim2(0.0, 39, 1.0, 0));
+    set(&mut dom, low, "Position", udim2(0.0, 0, 0.0, 9));
+    let high = frame(&mut dom, texts, udim2(0.0, 27, 1.0, 0));
+    set(&mut dom, high, "Position", udim2(0.0, 0, 0.0, -10));
+    laid_out(&mut dom);
+    near(rect(&dom, row, b), ([0.0, 0.0], [135.0, 72.0]));
+    near(rect(&dom, square, b), ([0.0, 0.0], [72.0, 72.0]));
+    set(&mut dom, low, "Position", udim2(0.0, 0, 0.0, 0));
+    laid_out(&mut dom);
+    near(rect(&dom, row, b), ([0.0, 0.0], [126.0, 72.0]));
+    set(&mut dom, low, "Size", udim2(0.0, 39, 0.0, 50));
+    set(&mut dom, low, "Position", udim2(0.0, 0, 0.0, 9));
+    laid_out(&mut dom);
+    near(rect(&dom, row, b), ([0.0, 0.0], [116.0, 72.0]));
+    dom.destroy(low).unwrap();
+    dom.destroy(high).unwrap();
+    set(&mut dom, texts, "Size", udim2(0.0, 39, 0.0, 50));
+    laid_out(&mut dom);
+    near(rect(&dom, row, b), ([0.0, 0.0], [111.0, 72.0]));
+    dom.destroy(texts).unwrap();
+    laid_out(&mut dom);
+    near(rect(&dom, row, b), ([0.0, 0.0], [72.0, 72.0]));
+}
+
+/// Measured: a list's `Padding` by scale is of the frame's `Size` while
+/// it grows, then the frame grows to what it holds laid out at that size;
+/// a child 1 wide by scale is sized again there.
+#[test]
+fn growing_lists_measure_then_lay_out_again() {
+    let (mut dom, b) = boxed();
+    let row = frame(&mut dom, b, udim2(0.0, 40, 0.0, 50));
+    set_enum(&mut dom, row, "AutomaticSize", "X");
+    let list = child(
+        &mut dom,
+        "UIListLayout",
+        row,
+        &[("Padding", udim(-0.25, 0))],
+    );
+    set_enum(&mut dom, list, "FillDirection", "Horizontal");
+    frame(&mut dom, row, udim2(0.0, 50, 0.0, 50));
+    frame(&mut dom, row, udim2(0.0, 50, 0.0, 50));
+    laid_out(&mut dom);
+    near(rect(&dom, row, b), ([0.0, 0.0], [90.0, 50.0]));
+    set(&mut dom, list, "Padding", udim(0.1, 0));
+    laid_out(&mut dom);
+    near(rect(&dom, row, b), ([0.0, 0.0], [110.4, 50.0]));
+    set(&mut dom, row, "Size", udim2(0.0, 0, 0.0, 50));
+    set(&mut dom, list, "Padding", udim(-0.25, 0));
+    laid_out(&mut dom);
+    near(rect(&dom, row, b), ([0.0, 0.0], [100.0, 50.0]));
+    let padding = child(
+        &mut dom,
+        "UIPadding",
+        row,
+        &[("PaddingRight", udim(0.0, 20))],
+    );
+    laid_out(&mut dom);
+    near(rect(&dom, row, b), ([0.0, 0.0], [120.0, 50.0]));
+    dom.destroy(padding).unwrap();
+
+    // In a box 72 wide, past the middle: the scaled child is measured in
+    // the 36 left beside the 62 wide one, then sized again in the 98.
+    set(&mut dom, b, "Size", udim2(0.0, 72, 0.0, 72));
+    set(&mut dom, row, "Position", udim2(0.5, 0, 0.0, 0));
+    set(&mut dom, list, "Padding", udim(0.0, 0));
+    let first = dom.children(row)[1];
+    set(&mut dom, first, "Size", udim2(1.0, 0, 1.0, 0));
+    let second = dom.children(row)[2];
+    set(&mut dom, second, "Size", udim2(0.0, 62, 0.0, 50));
+    set(&mut dom, second, "LayoutOrder", Value::Int32(1));
+    child(
+        &mut dom,
+        "UIPadding",
+        row,
+        &[("PaddingRight", udim(0.0, 15))],
+    );
+    laid_out(&mut dom);
+    near(rect(&dom, row, b), ([36.0, 0.0], [145.0, 50.0]));
+}
+
 /// Roblox's report rows: an automatic frame around full-size children,
 /// the innermost listing rows, grows to the rows.
 #[test]
@@ -543,6 +644,72 @@ fn a_font_arriving_lays_out_only_the_text_waiting_for_it() {
     gui.sync(&mut dom);
     let laid = take_local()[Counter::GuiNodesLaidOut];
     assert!((1..=2).contains(&laid), "laid out {laid} nodes");
+}
+
+/// A change inside a big ScreenGui lays out again from the nearest
+/// object whose place doesn't depend on it, as browsers do from a
+/// relayout boundary: an image or a name changing, a UI component's
+/// property, or a list item growing lay out the item or its list, never
+/// the whole ScreenGui, and everything ends where a fresh layout puts it.
+#[test]
+fn changes_lay_out_again_from_the_nearest_free_object() {
+    use rook_types::counters::{Counter, take_local};
+    let (mut dom, player_gui) = client();
+    let screen = child(&mut dom, "ScreenGui", player_gui, &[]);
+    for _ in 0..40 {
+        frame(&mut dom, screen, udim2(0.0, 10, 0.0, 10));
+    }
+    let image = child(
+        &mut dom,
+        "ImageLabel",
+        screen,
+        &[("Size", udim2(0.0, 30, 0.0, 30))],
+    );
+    let panel = frame(&mut dom, screen, udim2(0.0, 200, 0.0, 300));
+    let list = child(&mut dom, "UIListLayout", panel, &[]);
+    let items: Vec<InstanceId> = (0..5)
+        .map(|_| frame(&mut dom, panel, udim2(1.0, 0, 0.0, 20)))
+        .collect();
+    let scroller = child(
+        &mut dom,
+        "ScrollingFrame",
+        screen,
+        &[
+            ("Size", udim2(0.0, 100, 0.0, 100)),
+            ("CanvasSize", udim2(0.0, 0, 0.0, 400)),
+        ],
+    );
+    let scrolled = frame(&mut dom, scroller, udim2(1.0, 0, 0.0, 20));
+    let mut gui = laid_out(&mut dom);
+    let read = |dom: &Dom| {
+        (items.iter().chain([&scrolled]))
+            .map(|&id| rect(dom, id, screen))
+            .collect::<Vec<_>>()
+    };
+    let changes: [(InstanceId, &str, Value); 5] = [
+        (
+            image,
+            "ImageContent",
+            Value::Content(rook_types::Content::from_uri("rbxassetid://1")),
+        ),
+        (items[0], "Name", Value::String("Renamed".into())),
+        (list, "Padding", Value::UDim(rook_types::UDim::new(0.0, 4))),
+        (items[1], "Size", udim2(1.0, 0, 0.0, 35)),
+        (scroller, "CanvasPosition", v2(0.0, 50.0)),
+    ];
+    for (id, name, value) in changes {
+        take_local();
+        match value {
+            Value::String(new) if name == "Name" => dom.set_name(id, new).unwrap(),
+            value => set(&mut dom, id, name, value),
+        }
+        gui.sync(&mut dom);
+        let laid = take_local()[Counter::GuiNodesLaidOut];
+        assert!(laid <= 6, "{name}: laid out {laid} nodes");
+        let alone = read(&dom);
+        laid_out(&mut dom);
+        assert_eq!(alone, read(&dom), "{name}");
+    }
 }
 
 /// Measured in Studio: a NaN size reads (0, 0) at the screen's top left,

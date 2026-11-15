@@ -166,18 +166,23 @@ impl LightCache {
         profiling::scope!("LightCache::read");
         for id in stale.difference(&placed) {
             let i = self.lights[id].0;
-            list[i] = light(dom, *id).unwrap_or(DARK);
-            self.changed.push(i);
+            let read = light(dom, *id).unwrap_or(DARK);
+            // A part changed in a way its light doesn't show (its color,
+            // flashing): the light is as it was, with nothing to fill again.
+            if list[i] != read {
+                list[i] = read;
+                self.changed.push(i);
+            }
         }
     }
 
-    /// Read light `id` again, adding it if it's new to Workspace and
-    /// dropping it if it left.
+    /// Read light `id` again, adding it if it's new to Workspace's world
+    /// and dropping it if it left. One in a ViewportFrame lights nothing
+    /// (observed), even a frame in Workspace.
     fn place(&mut self, dom: &Dom, id: InstanceId, list: &mut Vec<LocalLight>) {
-        let ws = dom.find_service("Workspace");
         let here = dom.get(id).is_some()
             && is_light(dom, id)
-            && ws.is_some_and(|ws| dom.is_ancestor_of(ws, id));
+            && crate::viewports::space(dom, id) == Some(rook_render::Space::Workspace);
         if !here {
             self.remove(id, list);
             return;
@@ -269,5 +274,28 @@ mod tests {
         assert_eq!(cache.take_changes(), [0]);
         assert_eq!(list.len(), 2);
         assert_eq!(cache.ids, [lights[2], lights[1]]);
+    }
+
+    /// A light in a ViewportFrame lights nothing, even in a frame in
+    /// Workspace, until it's taken out of the frame.
+    #[test]
+    fn lights_in_a_viewport_frame_light_nothing() {
+        let mut dom = Dom::new();
+        let ws = dom.get_service("Workspace").unwrap();
+        let frame = dom.create_by_name("ViewportFrame").unwrap();
+        dom.set_parent(frame, Some(ws)).unwrap();
+        let part = dom.create_by_name("Part").unwrap();
+        dom.set_parent(part, Some(frame)).unwrap();
+        let light = dom.create_by_name("PointLight").unwrap();
+        dom.set_parent(light, Some(part)).unwrap();
+        let mut cache = LightCache::default();
+        let mut list = Vec::new();
+        cache.build(&dom, &mut list);
+        assert!(list.is_empty());
+        dom.set_parent(part, Some(ws)).unwrap();
+        let mut changes = RenderChanges::default();
+        changes.lights_placed.insert(light);
+        cache.apply(&dom, &changes, &mut list);
+        assert_eq!(list.len(), 1);
     }
 }

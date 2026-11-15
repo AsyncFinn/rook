@@ -77,3 +77,51 @@ fn decodes_sounds_and_frees_the_file() {
     assert!(fetched.bytes.is_empty());
     assert_eq!(fetched.hash, blake3::hash(&wav));
 }
+
+/// Asked for a model, the worker reads the file into its tree, so a
+/// script loading a large one doesn't stall the frame that gets it;
+/// bytes that aren't a model fail as invalid.
+#[test]
+fn reads_models_on_the_workers() {
+    let dir = crate::tests::temp_dir("loader-model");
+    std::fs::create_dir_all(dir.join("content/models")).unwrap();
+    let xml = r#"<roblox version="4"><Item class="Folder" referent="RBX0"><Properties><string name="Name">MainModule</string></Properties></Item></roblox>"#;
+    std::fs::write(dir.join("content/models/kit.rbxmx"), xml).unwrap();
+    std::fs::write(dir.join("content/models/face.png"), b"\x89PNG").unwrap();
+    let mut config = Config::empty();
+    config.install = Install::at(&dir, InstallKind::Custom);
+    let mut loader = Loader::new(Arc::new(Resolver::new(config)));
+    loader.request_as(ContentRef::File("models/kit.rbxmx".into()), Want::Model);
+    loader.request_as(ContentRef::File("models/face.png".into()), Want::Model);
+    let results = loader.wait_all();
+    let model = results[0].1.as_ref().unwrap().model.as_ref().unwrap();
+    let top = model.dom.root().children();
+    assert_eq!(top.len(), 1);
+    assert_eq!(model.dom.get_by_ref(top[0]).unwrap().name, "MainModule");
+    assert_eq!(
+        results[1].1.as_ref().unwrap_err().kind,
+        FailureKind::Invalid
+    );
+}
+
+/// A model's scripts are handed to the script compiler on the worker that
+/// reads it, so requiring them later compiles nothing on the engine thread.
+#[test]
+fn compiles_models_scripts_on_the_workers() {
+    static SEEN: Mutex<Vec<String>> = Mutex::new(Vec::new());
+    set_script_compiler(|source| SEEN.lock().unwrap().push(source.to_owned()));
+    let dir = crate::tests::temp_dir("loader-model-scripts");
+    std::fs::create_dir_all(dir.join("content/models")).unwrap();
+    let xml = r#"<roblox version="4"><Item class="ModuleScript" referent="RBX0"><Properties><string name="Name">MainModule</string><ProtectedString name="Source">return "kit module"</ProtectedString></Properties><Item class="Part" referent="RBX1"><Properties><string name="Name">Handle</string></Properties></Item></Item></roblox>"#;
+    std::fs::write(dir.join("content/models/kit.rbxmx"), xml).unwrap();
+    let mut config = Config::empty();
+    config.install = Install::at(&dir, InstallKind::Custom);
+    let mut loader = Loader::new(Arc::new(Resolver::new(config)));
+    loader.request_as(ContentRef::File("models/kit.rbxmx".into()), Want::Model);
+    assert!(loader.wait_all()[0].1.is_ok());
+    let seen = SEEN.lock().unwrap();
+    assert!(
+        seen.iter().any(|s| s == r#"return "kit module""#),
+        "{seen:?}"
+    );
+}

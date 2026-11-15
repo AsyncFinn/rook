@@ -104,6 +104,7 @@ impl UserData for LRandom {
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
+        super::members::add_unknown(m, "Random", super::members::Wording::Plain);
         m.add_method_mut("NextNumber", |_, t, (a, b): (Option<f64>, Option<f64>)| {
             Ok(t.next_between(a.unwrap_or(0.0), b.unwrap_or(1.0)))
         });

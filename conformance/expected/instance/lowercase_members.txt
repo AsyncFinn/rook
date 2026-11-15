@@ -1,0 +1,27 @@
+-- studio 0.747.0.7471481
+-- signals: deferred
+read anchored true boolean false
+read transparency true number 0
+read size true Vector3 4, 1.2000000476837158, 2
+read name true string Holder
+read cFrame true CFrame 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1
+read aNCHORED false aNCHORED is not a valid member of Part "Holder"
+read foo false foo is not a valid member of Part "Holder"
+read getChildren true function
+read isA true function
+read touched true RBXScriptSignal
+read changed true RBXScriptSignal
+read ancestryChanged true RBXScriptSignal
+call isA true true
+call getFullName true Holder
+write anchored false false
+write name false Holder
+write brickColor true Bright red
+foo with child Foo false foo is not a valid member of Part "Holder"
+child anchored true Instance anchored
+child name true Instance name
+child Anchored true boolean false
+read renderStepped true RBXScriptSignal
+write renderStepped false renderStepped is not a valid member of RunService "Run Service"
+read textSize true number 8
+write textSize false textSize is not a valid member of TextLabel "TextLabel"

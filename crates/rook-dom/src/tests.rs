@@ -23,6 +23,43 @@ fn services_and_full_names() {
     ));
 }
 
+/// `find_service` finds the root's first child of a class as children
+/// come and go, without looking through them.
+#[test]
+fn find_service_follows_the_roots_children() {
+    let mut dom = Dom::new();
+    let root = dom.root();
+    let [a, b] = ["A", "B"].map(|n| {
+        let f = dom.create_by_name("Folder").unwrap();
+        dom.set_name(f, n.to_owned()).unwrap();
+        dom.set_parent(f, Some(root)).unwrap();
+        f
+    });
+    assert_eq!(dom.find_service("Folder"), Some(a));
+    dom.set_parent(a, None).unwrap();
+    assert_eq!(dom.find_service("Folder"), Some(b));
+    dom.set_parent(a, Some(root)).unwrap();
+    assert_eq!(dom.find_service("Folder"), Some(b));
+    dom.set_parent(b, None).unwrap();
+    assert_eq!(dom.find_service("Folder"), Some(a));
+    dom.set_parent(a, None).unwrap();
+    assert_eq!(dom.find_service("Folder"), None);
+}
+
+/// Typed reads give what's set, else the default, as `property` does.
+#[test]
+fn typed_reads_match_property() {
+    let mut dom = Dom::new();
+    let p = part(&mut dom, "P");
+    assert_eq!(dom.str_property(p, "Name").as_deref(), Some("P"));
+    assert_eq!(dom.float_property(p, "Transparency"), Some(0.0));
+    dom.set_property_by_name(p, "Transparency", Value::Float32(0.5))
+        .unwrap();
+    assert_eq!(dom.float_property(p, "Transparency"), Some(0.5));
+    let size = dom.property_by_name(p, "Size").unwrap().as_vector3();
+    assert_eq!(dom.vector3_property(p, "Size"), size);
+}
+
 #[test]
 fn defaults_come_from_the_database() {
     let mut dom = Dom::new();
@@ -38,6 +75,50 @@ fn defaults_come_from_the_database() {
     );
     // `size` is the legacy alias.
     assert_eq!(dom.property_by_name(p, "size"), Some(size));
+}
+
+/// Files save every property, mostly at their class defaults; one kept at
+/// its default holds only its id but still counts as set.
+#[test]
+fn a_property_set_to_its_default_stays_set() {
+    let mut dom = Dom::new();
+    let p = part(&mut dom, "P");
+    let transparency = dom.property_id(p, "Transparency").unwrap();
+    let stored = |dom: &Dom| {
+        let props = dom.get(p).unwrap().properties();
+        (props.get(transparency).cloned(), props.defaulted().to_vec())
+    };
+    dom.load_property(p, transparency, Value::Float32(0.0));
+    assert!(dom.is_set(p, transparency));
+    assert_eq!(stored(&dom), (None, vec![transparency]));
+    assert_eq!(dom.float_property(p, "Transparency"), Some(0.0));
+
+    dom.set_property(p, transparency, Value::Float32(0.5))
+        .unwrap();
+    assert_eq!(stored(&dom), (Some(Value::Float32(0.5)), vec![]));
+    dom.set_property(p, transparency, Value::Float32(0.0))
+        .unwrap();
+    assert!(dom.is_set(p, transparency));
+    assert_eq!(stored(&dom), (None, vec![transparency]));
+
+    // Unsetting it changes nothing a reader sees.
+    let end = dom.journal().end();
+    dom.reset_property(p, transparency).unwrap();
+    assert!(!dom.is_set(p, transparency));
+    assert_eq!(dom.journal().end(), end);
+}
+
+#[test]
+fn a_reference_set_to_nil_lets_go_of_its_target() {
+    let mut dom = Dom::new();
+    let a = part(&mut dom, "A");
+    let weld = dom.create_by_name("Weld").unwrap();
+    let part0 = dom.property_id(weld, "Part0").unwrap();
+    dom.set_property(weld, part0, Value::Ref(Some(a.to_ref())))
+        .unwrap();
+    dom.set_property(weld, part0, Value::Ref(None)).unwrap();
+    assert!(dom.referrers(a).is_empty());
+    assert!(dom.is_set(weld, part0));
 }
 
 #[test]

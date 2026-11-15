@@ -14,5 +14,6 @@ Pants 282, CharacterMesh 168, ShirtGraphic 89, Accessory 42.
 3. Layered clothing (WrapLayer, WrapTarget: 12 files) and dynamic heads
    (FaceControls).
 4. Animation beyond what M9's Animate scripts need: AnimationController
-   on rigs without a Humanoid, IKControl, and tracks replicated between
-   players.
+   on rigs without a Humanoid, IKControl, rigs animated inside a
+   WorldModel (a ViewportFrame's character preview), and tracks
+   replicated between players.

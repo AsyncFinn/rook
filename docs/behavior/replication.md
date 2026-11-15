@@ -96,7 +96,7 @@ The rest sleep in Rapier and are put where playback has them once, after
 the frame's steps, moving at what they covered over its last step, so
 their velocity, where they're drawn between the last two steps and where
 scripts and queries find them after the frame are what moving them at
-every step gives, without the steps nothing feels: on a 2018-era place
+every step gives, without the steps nothing feels: on a place
 with 227 moving server-owned assemblies, each step of the client's had
 been about half a millisecond spent moving them and finding no contact.
 

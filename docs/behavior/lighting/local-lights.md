@@ -95,6 +95,12 @@ Studio, no `Technology`), with a Range 60, Brightness 0.25 PointLight at
   and the fourth (−X, −Z) at about half.
 - **A light inside its own part still shines** (Observed): in a 3-stud
   opaque part, all of its pool; in a 12 × 4 × 12 one, as above.
+- **Terrain doesn't block them** (measured in Studio 0.747 on
+  2026-11-14): behind a one-voxel Rock wall 16 studs tall, full, half or
+  0.3 full, a Range 20 light with `Shadows` 4 studs from it lights the
+  floor 12 studs past the wall as it lights the same spot on its own
+  side (223 to 225 against 226 to 227); a part wall in its place leaves
+  5.
 
 Roblox's patent on its voxel lighting (US9245376) carries light from
 cell to cell away from the light, each cell
@@ -108,8 +114,9 @@ it reaches casts nine parallel rays toward it, from the voxel and from
 the voxels around it across the ray, weighted 1-2-1 each way, and keeps
 the share that no blocked voxel stops. Blocked voxels are those the sky's
 light uses ([materials](../rendering/materials.md#the-skys-diffuse-light)): opaque
-parts casting shadows, as boxes, at least a voxel thick. The part the
-light hangs from doesn't block it. A wall blocks all of it, a one-voxel
+parts casting shadows, as boxes, at least a voxel thick; terrain isn't
+among them, as in Studio. The part the light hangs from doesn't block
+it. A wall blocks all of it, a one-voxel
 post half, as in Studio; the lean isn't reproduced. Against Studio on
 the same scenes, behind the post the darkest strip draws 84 where Studio
 draws 79 to 90; Rook's soft edge reaches a voxel further on the side
@@ -148,8 +155,8 @@ spatial hash (16-stud cubes hashed into buckets, padded 8 studs so that
 lights that move a little don't rebuild it). A compute pass
 (`shaders/light_volume.wgsl`) fills a 256 × 64 × 256 volume of 4-stud
 voxels (Studio's grid, below) centered 236 studs ahead of `Camera.Focus`
-along the view direction with the height dropped, following when that
-center drifts 64 studs, and parts, decals and terrain
+along the view direction with the height dropped, following by whole
+64-stud tiles when that center drifts 64 studs, and parts, decals and terrain
 (water included) sample it as Studio does (`local_light` in
 `shaders/lighting.wgsl`). Surfaces outside it get no local light, as in
 Studio. When a light has `Shadows`, the parts are marked into a bit per
@@ -162,7 +169,7 @@ marks only the slabs it came onto. The marks are laid out in bricks of
 (a clipmap's bricks, as voxel engines keep them), and the bricks a move
 uncovered are marked at once on the host's worker threads, each worker
 writing only its own brick, for about 1 ms a frame; until they are all
-marked the old volume stays drawn. On a 2018-era place turning 3 degrees
+marked the old volume stays drawn. On a large place turning 3 degrees
 a frame the new volume lands within 4 frames (median); marked one piece
 after another it never caught up while turning. The voxels themselves,
 and the sky's light the fill keeps, are kept the same way, and surfaces

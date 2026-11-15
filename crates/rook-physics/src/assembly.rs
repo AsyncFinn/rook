@@ -11,6 +11,9 @@
 //! assembly of one of them, the one whose joint is newest in Studio.
 
 pub(crate) mod bodies;
+mod moves;
+
+pub use moves::{move_part, move_parts, part_velocity, set_velocity};
 
 use std::collections::VecDeque;
 
@@ -129,7 +132,8 @@ impl Clusters {
 }
 
 impl Assembly {
-    /// The assembly `part` belongs to. Parts outside Workspace have none.
+    /// The assembly `part` belongs to. Parts outside Workspace's world
+    /// have none.
     pub fn of(dom: &Dom, part: InstanceId) -> Option<Self> {
         Self::of_with(dom, part, &mut Clusters::default())
     }
@@ -137,7 +141,7 @@ impl Assembly {
     /// [`Assembly::of`], reusing clusters found for earlier parts.
     pub fn of_with(dom: &Dom, part: InstanceId, clusters: &mut Clusters) -> Option<Self> {
         let ws = dom.find_service("Workspace")?;
-        if !is_part(dom, part) || !dom.is_ancestor_of(ws, part) {
+        if !is_part(dom, part) || !crate::shape::in_workspace_world(dom, ws, part) {
             return None;
         }
         let (root, parts) = if is_anchored(dom, part) {
@@ -232,7 +236,7 @@ impl Assembly {
     pub fn place(&self, dom: &mut Dom, root: CFrame) -> Result<(), DomError> {
         for m in &self.members {
             let cf = (root * m.offset).orthonormalize();
-            dom.set_property_by_name(m.part, "CFrame", Value::CFrame(cf))?;
+            write_cframe(dom, m.part, cf)?;
         }
         Ok(())
     }
@@ -257,7 +261,7 @@ impl Assembly {
             } else {
                 (root * m.offset).orthonormalize()
             };
-            dom.set_property_by_name(m.part, "CFrame", Value::CFrame(at))?;
+            write_cframe(dom, m.part, at)?;
         }
         Ok(())
     }
@@ -298,89 +302,20 @@ impl Assembly {
     }
 }
 
-/// The deprecated `BasePart.Velocity`: the assembly's velocity at the
-/// part's position, `AssemblyLinearVelocity + AssemblyAngularVelocity ×
-/// (position − center of mass)` (observed: a part 3.56 studs from the
-/// center of mass of an assembly spinning at 2 rad/s reads 7.11). An
-/// anchored part reads its own AssemblyLinearVelocity, which it keeps.
-pub fn part_velocity(dom: &Dom, physics: &crate::Physics, part: InstanceId) -> glam::Vec3 {
-    let vector = |id, name| dom.vector3_property(id, name).unwrap_or(glam::Vec3::ZERO);
-    let linear = vector(part, "AssemblyLinearVelocity");
-    let angular = vector(part, "AssemblyAngularVelocity");
-    if angular == glam::Vec3::ZERO {
-        return linear;
+/// Set a part's `CFrame`, found by its id: moves write one per part.
+fn write_cframe(dom: &mut Dom, part: InstanceId, cf: CFrame) -> Result<(), DomError> {
+    static CFRAME: std::sync::OnceLock<Option<rook_reflection::PropertyId>> =
+        std::sync::OnceLock::new();
+    let cframe = *CFRAME.get_or_init(|| {
+        let db = dom.database();
+        let part = db.class_by_name("BasePart")?;
+        Some(db.find_canonical_property(part.id, "CFrame")?.id)
+    });
+    match cframe.filter(|_| is_part(dom, part)) {
+        Some(p) => dom.set_property(part, p, Value::CFrame(cf)),
+        // Not a part: whatever a `CFrame` by name does there.
+        None => dom.set_property_by_name(part, "CFrame", Value::CFrame(cf)),
     }
-    let position = |id| {
-        dom.cframe_property(id, "CFrame")
-            .map_or(glam::Vec3::ZERO, |c| c.position)
-    };
-    let com = match Assembly::of(dom, part) {
-        Some(asm) if !asm.anchored => asm.center_of_mass(dom, physics),
-        _ => position(part),
-    };
-    linear + angular.cross(position(part) - com)
-}
-
-/// Set `AssemblyLinearVelocity` or `AssemblyAngularVelocity` (`name`) the
-/// way a script does: it's the whole assembly's, so every member reads it
-/// back at once (observed, also through `Velocity` on a welded part).
-pub fn set_velocity(
-    dom: &mut Dom,
-    part: InstanceId,
-    name: &str,
-    value: glam::Vec3,
-) -> Result<(), DomError> {
-    let members = match Assembly::of(dom, part) {
-        Some(asm) => asm.members.iter().map(|m| m.part).collect(),
-        None => vec![part],
-    };
-    // Observed: a NaN or infinite number anywhere writes zero.
-    let value = if value.is_finite() {
-        value
-    } else {
-        glam::Vec3::ZERO
-    };
-    let value = Value::Vector3(rook_types::Vector3(value));
-    for m in members {
-        dom.set_property_by_name(m, name, value.clone())?;
-    }
-    Ok(())
-}
-
-/// Set a part's CFrame the way a script does: its whole assembly moves
-/// with it (observed, even when another part is anchored).
-pub fn move_part(dom: &mut Dom, part: InstanceId, cf: CFrame) -> Result<(), DomError> {
-    move_parts(dom, [(part, cf)])
-}
-
-/// [`move_part`] for several parts moved together (a model's), each move
-/// given relative to the same starting poses: a part whose assembly an
-/// earlier one already moved is skipped.
-///
-/// A CFrame with a NaN or infinite number in it is [`CFrame::written`]
-/// instead. Parts' CFrames are orthonormalized as they're written, as Roblox's are
-/// (creator-docs CFrame:Orthonormalize). Without that, rounding error in a
-/// rotation grows threefold with each `SetPrimaryPartCFrame(Get.. * r)`,
-/// whose inverse assumes an orthonormal rotation, until parts balloon.
-pub fn move_parts(
-    dom: &mut Dom,
-    moves: impl IntoIterator<Item = (InstanceId, CFrame)>,
-) -> Result<(), DomError> {
-    let mut moved = FxHashSet::default();
-    for (part, cf) in moves {
-        let cf = cf.written();
-        if moved.contains(&part) {
-            continue;
-        }
-        match Assembly::of(dom, part) {
-            Some(asm) if asm.members.len() > 1 => {
-                asm.place_around(dom, part, cf.orthonormalize())?;
-                moved.extend(asm.members.iter().map(|m| m.part));
-            }
-            _ => dom.set_property_by_name(part, "CFrame", Value::CFrame(cf.orthonormalize()))?,
-        }
-    }
-    Ok(())
 }
 
 /// An anchored part and the clusters that join its assembly.
@@ -429,18 +364,14 @@ pub(crate) fn is_massless(dom: &Dom, part: InstanceId) -> bool {
 }
 
 /// The root of an unanchored cluster (creator-docs "Assemblies"; order
-/// observed in Studio): non-Massless parts, then the highest RootPriority,
-/// then the largest part. Equal parts go to the newer one in Studio; Rook
-/// takes the highest id, which is usually the newer part (Approximation).
+/// measured in Studio, docs/behavior/physics/joints.md#the-root-part):
+/// non-Massless parts, then the highest RootPriority, then the largest
+/// [`root_size`]. Equal parts go to the newer one in Studio; Rook takes
+/// the highest id, which is usually the newer part (Approximation).
 fn root_of(dom: &Dom, parts: &[InstanceId]) -> InstanceId {
     let key = |p: InstanceId| {
         let priority = dom.number_property(p, "RootPriority").unwrap_or(0.0) as i32;
-        (
-            !is_massless(dom, p),
-            priority,
-            crate::part_volume(dom, p),
-            p,
-        )
+        (!is_massless(dom, p), priority, root_size(dom, p), p)
     };
     parts
         .iter()
@@ -451,4 +382,21 @@ fn root_of(dom: &Dom, parts: &[InstanceId]) -> InstanceId {
                 .unwrap_or(std::cmp::Ordering::Equal)
         })
         .expect("an assembly has a part")
+}
+
+/// How large `part` counts as when choosing a root (measured): the area of
+/// its largest face, ten times over for a part named `HumanoidRootPart`
+/// and five for `Torso`, so a character stays the root of what it holds.
+fn root_size(dom: &Dom, part: InstanceId) -> f32 {
+    let Some(size) = dom.vector3_property(part, "Size") else {
+        return 0.0;
+    };
+    // The two longest sides.
+    let face = (size.x * size.y).max(size.y * size.z).max(size.z * size.x);
+    let weight = match dom.name(part) {
+        "HumanoidRootPart" => 10.0,
+        "Torso" => 5.0,
+        _ => 1.0,
+    };
+    face * weight
 }

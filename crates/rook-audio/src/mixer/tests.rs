@@ -3,12 +3,11 @@ use super::*;
 /// A stereo file with `samples` on both sides (a mono one plays 3 dB
 /// down; see `mono_is_centered`).
 fn audio(rate: u32, samples: &[i16]) -> Arc<Audio> {
-    Arc::new(Audio {
-        format: None,
-        sample_rate: rate,
-        channels: 2,
-        samples: samples.iter().flat_map(|&s| [s, s]).collect(),
-    })
+    Arc::new(Audio::from_pcm(
+        rate,
+        2,
+        samples.iter().flat_map(|&s| [s, s]).collect(),
+    ))
 }
 
 fn play(audio: &Arc<Audio>, position: f64) -> Play<u32> {
@@ -25,8 +24,15 @@ fn play(audio: &Arc<Audio>, position: f64) -> Play<u32> {
     }
 }
 
+/// A new version each call: every mix the tests give is a change.
+fn version() -> u64 {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+}
+
 fn only(sounds: Vec<Play<u32>>) -> Mix<u32> {
     Mix {
+        version: version(),
         sounds,
         ..Mix::default()
     }
@@ -63,12 +69,7 @@ fn resamples_and_ends() {
 /// its level.
 #[test]
 fn mono_is_centered() {
-    let mono = Arc::new(Audio {
-        format: None,
-        sample_rate: 4,
-        channels: 1,
-        samples: vec![16384; 4],
-    });
+    let mono = Arc::new(Audio::from_pcm(4, 1, vec![16384; 4]));
     let mut m = Mixer::new(4);
     m.sync(&only(vec![play(&mono, 0.0)]));
     let mut out = [0.0; 4];
@@ -170,6 +171,7 @@ fn groups_multiply() {
     let a = audio(4, &[16384; 40]);
     let mut m = Mixer::new(4);
     let mix = Mix {
+        version: version(),
         sounds: vec![Play {
             gains: [0.5, 0.5],
             group: Some(10),
@@ -205,6 +207,7 @@ fn group_effects_and_tails() {
         ..Reverb::default()
     });
     let mix = Mix {
+        version: version(),
         sounds: vec![Play {
             group: Some(10),
             ..play(&a, 0.0)
@@ -244,4 +247,21 @@ fn master_volume_scales_what_is_heard() {
     m.set_master_volume(3.0);
     m.mix(&mut out, 2);
     assert_eq!(out, [0.5, 0.5], "clamped to 1");
+}
+
+/// A mix of the version last synced moves only the gains: the 3D sounds
+/// follow the listener every frame while their voices, effects and groups
+/// stay as they were set.
+#[test]
+fn the_same_version_moves_only_gains() {
+    let a = audio(4, &[16384; 40]);
+    let mut m = Mixer::new(4);
+    let mut mix = only(vec![play(&a, 0.0)]);
+    m.sync(&mix);
+    mix.sounds[0].gains = [0.25, 0.75];
+    // Anything else in the same version isn't looked at.
+    mix.sounds[0].speed = 2.0;
+    m.sync(&mix);
+    assert_eq!(m.voices[&1].target, [0.25, 0.75]);
+    assert_eq!(m.voices[&1].speed, 1.0);
 }

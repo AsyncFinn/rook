@@ -17,7 +17,8 @@ use floor_wire::floor_wire;
 use trail::TrailState;
 
 /// One edge across a strip: where its two sides are, how far along its
-/// image it is, and its color and opacity there.
+/// image it is (on the axis its strip runs along), and its color and
+/// opacity there.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct Edge {
     pub(crate) sides: [Vec3; 2],
@@ -31,6 +32,16 @@ pub(crate) struct Edge {
 pub(crate) struct Strip<'a> {
     pub(crate) look: &'a RibbonLook,
     pub(crate) edges: Vec<Edge>,
+    /// The image axis that runs along the strip; the other runs across
+    /// it, from its first side (0) to its second (1).
+    pub(crate) along: ImageAxis,
+}
+
+/// An image's axis: X across its columns, Y down its rows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ImageAxis {
+    X,
+    Y,
 }
 
 /// The scene's Beams, Trails and FloorWires by their slots, and the
@@ -127,7 +138,7 @@ impl Ribbons {
         let beams = (self.beams.iter().flatten()).filter_map(|b| beam(b, camera, time));
         let trails = (self.trails.iter().zip(&self.states))
             .filter_map(|(t, s)| s.strip(t.as_ref()?, camera));
-        let wires = (self.floor_wires.iter().flatten()).flat_map(|w| floor_wire(w, time));
+        let wires = (self.floor_wires.iter().flatten()).flat_map(|w| floor_wire(w, camera, time));
         beams.chain(trails).chain(wires).collect()
     }
 }

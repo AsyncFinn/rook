@@ -31,6 +31,7 @@ impl SceneCache {
         if t.levels.is_empty() {
             // Level 0 shares the DataModel's voxels until they change.
             t.levels = Arc::new(pyramid(voxels.clone()));
+            t.light = LightChange::Whole;
             t.counts = voxels.counts();
             t.rows = rows(voxels);
         } else {
@@ -39,6 +40,7 @@ impl SceneCache {
                 None => {
                     let changes = levels[0].changes(voxels);
                     levels[0] = voxels.clone();
+                    t.light = LightChange::Whole;
                     t.counts = voxels.counts();
                     t.rows = rows(voxels);
                     changes
@@ -59,12 +61,25 @@ impl SceneCache {
                             t.rows = (t.rows.0.min(c.y - 1), t.rows.1.max(c.y));
                         }
                     }
+                    t.light.add(edits);
                     edits.to_vec()
                 }
             };
-            reached = update_pyramid(levels, &changes)
-                .into_iter()
-                .map(|level| level.iter().flat_map(|b| b.chunks(MESH_REACH)).collect())
+            let changed = update_pyramid(levels, &changes);
+            // A chunk closes its sides against the next level's surface
+            // within its mesh reach, so a change there reaches it too.
+            reached = (0..changed.len())
+                .map(|k| {
+                    let own = changed[k].iter().flat_map(|b| b.chunks(MESH_REACH));
+                    let next = changed.get(k + 1).into_iter().flatten().flat_map(|b| {
+                        let fine = Bounds {
+                            min: b.min * 2,
+                            max: b.max * 2 + IVec3::ONE,
+                        };
+                        fine.chunks(2 * MESH_REACH)
+                    });
+                    own.chain(next).collect()
+                })
                 .collect();
         }
         let counts = t.counts;
@@ -94,11 +109,7 @@ impl SceneCache {
         let origin = chunk.origin();
         let mut surfaces = Vec::new();
         for draw in chunk.draws {
-            self.terrain.serial += 1;
-            let mut key = blake3::Hasher::new();
-            key.update(b"terrain");
-            key.update(&self.terrain.serial.to_le_bytes());
-            let mesh = MeshHash(*key.finalize().as_bytes());
+            let mesh = self.terrain.new_mesh(b"terrain");
             let count = draw.positions.len();
             let material = draw.layer.material;
             let terrain_corners = draw
@@ -137,6 +148,7 @@ impl SceneCache {
             });
         }
         MeshedChunk {
+            seams: chunk.seams,
             surfaces,
             entries: Vec::new(),
         }
