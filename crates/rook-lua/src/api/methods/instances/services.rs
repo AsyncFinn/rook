@@ -138,6 +138,10 @@ pub(super) fn set_minutes_after_midnight(
     Outcome::ret(lua, ())
 }
 
+#[expect(
+    clippy::match_same_arms,
+    reason = "a row per member: members that behave alike stay listed apart"
+)]
 pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
     Some(match (owner, name) {
         ("ServiceProvider", "GetService" | "service") => get_service,
