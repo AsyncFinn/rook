@@ -9,12 +9,12 @@ use rook_dom::InstanceId;
 use rook_physics::contacts::groups;
 use rook_physics::{Filter, Hit};
 
-use super::enums::{LEnumItem, enum_item};
-use super::fmt_f32;
 use crate::api::instance::{LuaInstance, push_instance};
 use crate::runtime::ctx::args::number_of;
 use crate::runtime::ctx::convert::vector3_to_lua;
 use crate::runtime::ctx::{ApiResult, ScriptError, api_ret, with_world};
+use crate::types::enums::{LEnumItem, enum_item};
+use crate::types::fmt_f32;
 
 /// A metatable function that runs `f` on the userdata it's called on.
 /// It goes through the engine function shim, so errors reach `pcall` as

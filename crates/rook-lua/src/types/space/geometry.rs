@@ -5,8 +5,8 @@ use mlua::{
 use rbx_types::{Ray, Rect, Region3, Region3int16, Vector3int16};
 use rook_types::{CFrame, Vector2, Vector3};
 
-use super::{LCFrame, LVector2, LVector3int16, fmt_f32};
 use crate::runtime::ctx::args::{borrow_clone, number_of};
+use crate::types::{LCFrame, LVector2, LVector3int16, fmt_f32};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct LRay(pub Ray);
@@ -50,7 +50,7 @@ impl UserData for LRay {
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
-        super::members::add_unknown(m, "Ray", super::members::Wording::Plain);
+        crate::types::members::add_unknown(m, "Ray", crate::types::members::Wording::Plain);
         m.add_method("ClosestPoint", |_, t, p: Vector| {
             Ok(lv(t.closest_point(from_lv(p))))
         });
@@ -79,7 +79,7 @@ impl UserData for LRect {
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
-        super::members::add_unknown(m, "Rect", super::members::Wording::Quoted);
+        crate::types::members::add_unknown(m, "Rect", crate::types::members::Wording::Quoted);
         m.add_meta_method(MetaMethod::Eq, |_, t, o: UserDataRef<LRect>| Ok(t.0 == o.0));
         m.add_meta_method(MetaMethod::ToString, |_, t, ()| {
             Ok(format!(
@@ -104,7 +104,7 @@ impl UserData for LRegion3 {
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
-        super::members::add_unknown(m, "Region3", super::members::Wording::Plain);
+        crate::types::members::add_unknown(m, "Region3", crate::types::members::Wording::Plain);
         m.add_method("ExpandToGrid", |_, t, res: f32| {
             let snap = |v: Vector3, f: fn(f32) -> f32| {
                 Vector3::new(
@@ -137,7 +137,11 @@ impl UserData for LRegion3int16 {
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
-        super::members::add_unknown(m, "Region3int16", super::members::Wording::Quoted);
+        crate::types::members::add_unknown(
+            m,
+            "Region3int16",
+            crate::types::members::Wording::Quoted,
+        );
         m.add_meta_method(MetaMethod::Eq, |_, t, o: UserDataRef<LRegion3int16>| {
             Ok(t.0 == o.0)
         });

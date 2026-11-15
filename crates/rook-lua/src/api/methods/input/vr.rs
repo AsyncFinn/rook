@@ -6,8 +6,8 @@ use rook_types::CFrame;
 
 use crate::runtime::ctx::args::Args;
 use crate::runtime::ctx::{ApiResult, Outcome};
-use crate::types::cframe::LCFrame;
 use crate::types::enums::item_value;
+use crate::types::space::cframe::LCFrame;
 
 /// Rook has no VR headset, so every tracked point sits at the origin and
 /// none is tracked (Observed: Studio 0.747 without a headset gives the

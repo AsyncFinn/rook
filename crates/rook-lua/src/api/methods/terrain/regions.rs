@@ -1,4 +1,21 @@
-use super::*;
+use glam::IVec3;
+use mlua::Lua;
+use rbx_types::Vector3int16;
+use rook_dom::{DomError, InstanceId};
+use rook_terrain::Grid;
+use rook_terrain::grid::edit::Bounds;
+use rook_types::Value;
+
+use crate::api::methods::ret_instance;
+use crate::api::methods::terrain::decoded;
+use crate::api::methods::terrain::edit;
+use crate::api::methods::terrain::read;
+use crate::api::methods::terrain::region16_arg;
+use crate::api::methods::terrain::region16_bounds;
+use crate::api::methods::terrain::v16;
+use crate::runtime::ctx::args::Args;
+use crate::runtime::ctx::{ApiResult, Outcome, ScriptError, with_world};
+use crate::types::LVector3int16;
 
 /// A TerrainRegion holding the region's voxels, in its `SmoothGrid` from
 /// voxel 0, with its size in `ExtentsMax` (observed: the corners are both

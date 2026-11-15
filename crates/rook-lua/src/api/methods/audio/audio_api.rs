@@ -5,8 +5,13 @@
 
 use mlua::Table;
 
-use super::*;
+use mlua::{Lua, Value as LuaValue};
+use rook_dom::InstanceId;
+
+use crate::api::methods::{RawMethod, mutate, ret_instances};
 use crate::audio_api;
+use crate::runtime::ctx::args::Args;
+use crate::runtime::ctx::{ApiResult, Outcome, ScriptError, with_world};
 use crate::runtime::world::Scheduled;
 
 /// `Play(atTime)` and `Stop(atTime)`: at once without a time, from where

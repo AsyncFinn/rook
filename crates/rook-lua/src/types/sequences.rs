@@ -1,4 +1,4 @@
-use super::err;
+use crate::types::err;
 use mlua::{
     Lua, MetaMethod, MultiValue, UserData, UserDataFields, UserDataMethods, UserDataRef,
     Value as LuaValue,
@@ -8,8 +8,8 @@ use rbx_types::{
 };
 use rook_types::Color3;
 
-use super::{LColor3, fmt_f32};
 use crate::runtime::ctx::args::{borrow_clone, number_of};
+use crate::types::{LColor3, fmt_f32};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct LNumberRange(pub NumberRange);
@@ -34,7 +34,11 @@ impl UserData for LNumberRange {
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
-        super::members::add_unknown(m, "NumberRange", super::members::Wording::Quoted);
+        crate::types::members::add_unknown(
+            m,
+            "NumberRange",
+            crate::types::members::Wording::Quoted,
+        );
         m.add_meta_method(MetaMethod::Eq, |_, t, o: UserDataRef<LNumberRange>| {
             Ok(t.0 == o.0)
         });
@@ -53,7 +57,11 @@ impl UserData for LNumberSequenceKeypoint {
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
-        super::members::add_unknown(m, "NumberSequenceKeypoint", super::members::Wording::Quoted);
+        crate::types::members::add_unknown(
+            m,
+            "NumberSequenceKeypoint",
+            crate::types::members::Wording::Quoted,
+        );
         m.add_meta_method(MetaMethod::Eq, |_, t, o: UserDataRef<Self>| Ok(t.0 == o.0));
         m.add_meta_method(MetaMethod::ToString, |_, t, ()| {
             Ok(number_keypoint_string(&t.0))
@@ -81,7 +89,11 @@ impl UserData for LNumberSequence {
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
-        super::members::add_unknown(m, "NumberSequence", super::members::Wording::Quoted);
+        crate::types::members::add_unknown(
+            m,
+            "NumberSequence",
+            crate::types::members::Wording::Quoted,
+        );
         m.add_meta_method(MetaMethod::Eq, |_, t, o: UserDataRef<Self>| Ok(t.0 == o.0));
         m.add_meta_method(MetaMethod::ToString, |_, t, ()| {
             Ok(t.0
@@ -101,7 +113,11 @@ impl UserData for LColorSequenceKeypoint {
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
-        super::members::add_unknown(m, "ColorSequenceKeypoint", super::members::Wording::Quoted);
+        crate::types::members::add_unknown(
+            m,
+            "ColorSequenceKeypoint",
+            crate::types::members::Wording::Quoted,
+        );
         m.add_meta_method(MetaMethod::Eq, |_, t, o: UserDataRef<Self>| Ok(t.0 == o.0));
     }
 }
@@ -115,7 +131,11 @@ impl UserData for LColorSequence {
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
-        super::members::add_unknown(m, "ColorSequence", super::members::Wording::Quoted);
+        crate::types::members::add_unknown(
+            m,
+            "ColorSequence",
+            crate::types::members::Wording::Quoted,
+        );
         m.add_meta_method(MetaMethod::Eq, |_, t, o: UserDataRef<Self>| Ok(t.0 == o.0));
         m.add_meta_method(MetaMethod::ToString, |_, t, ()| {
             Ok(t.0

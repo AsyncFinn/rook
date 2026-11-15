@@ -9,8 +9,8 @@ use rook_dom::InstanceId;
 use serde_json::{Value as Json, json};
 
 use super::RawMethod;
-use super::characters::players_of;
 use super::requests::{self as web, WebAnswer, WebRequest};
+use crate::api::methods::characters::players_of;
 use crate::runtime::ctx::args::Args;
 use crate::runtime::ctx::{ApiResult, Outcome, ScriptError, with_world};
 

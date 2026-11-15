@@ -7,8 +7,8 @@ use mlua::{
 };
 use rook_types::{UDim, UDim2};
 
-use super::fmt_f32;
 use crate::runtime::ctx::args::{Num, borrow_clone, number_of};
+use crate::types::fmt_f32;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct LUDim(pub UDim);
@@ -35,7 +35,11 @@ impl UserData for LPath2DControlPoint {
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
-        super::members::add_unknown(m, "Path2DControlPoint", super::members::Wording::Quoted);
+        crate::types::members::add_unknown(
+            m,
+            "Path2DControlPoint",
+            crate::types::members::Wording::Quoted,
+        );
         m.add_meta_method(MetaMethod::Eq, |_, t, o: UserDataRef<Self>| Ok(*t == *o));
     }
 }
@@ -64,7 +68,7 @@ impl UserData for LUDim {
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
-        super::members::add_unknown(m, "UDim", super::members::Wording::Quoted);
+        crate::types::members::add_unknown(m, "UDim", crate::types::members::Wording::Quoted);
         m.add_meta_method(MetaMethod::Add, |_, t, o: UserDataRef<LUDim>| {
             Ok(LUDim(t.0 + o.0))
         });
@@ -91,7 +95,7 @@ impl UserData for LUDim2 {
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
-        super::members::add_unknown(m, "UDim2", super::members::Wording::Plain);
+        crate::types::members::add_unknown(m, "UDim2", crate::types::members::Wording::Plain);
         // Observed: Roblox's own CoreScripts call the lowercase spelling.
         for name in ["Lerp", "lerp"] {
             m.add_method(name, |_, t, (o, a): (UserDataRef<LUDim2>, f32)| {

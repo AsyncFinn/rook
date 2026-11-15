@@ -1,6 +1,6 @@
 //! Parts in the physics world: joints and assemblies, models' pivots and bounds, collision groups, and scene queries.
 
-use super::*;
+use crate::api::methods::{RawMethod, first, mutate};
 
 mod assemblies;
 mod collision_groups;

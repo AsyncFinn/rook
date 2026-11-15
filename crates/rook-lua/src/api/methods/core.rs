@@ -1,6 +1,6 @@
 //! What Roblox's own CoreScripts call: fast flags and engine features, StarterGui's handles on the GUI they draw (docs/behavior/gui/core-scripts.md), and MemStorageService.
 
-use super::*;
+use crate::api::methods::{RawMethod, first, mutate};
 
 mod core_gui;
 pub(crate) mod flags;

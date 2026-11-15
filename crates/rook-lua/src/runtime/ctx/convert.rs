@@ -67,7 +67,7 @@ pub(crate) fn to_lua(lua: &Lua, value: &Value, enum_id: Option<EnumId>) -> mlua:
             }
         }
         Value::Ref(Some(r)) => LuaValue::UserData(push_instance(lua, InstanceId::from_ref(*r))?),
-        other => crate::types::misc::opaque(lua, other.clone())?,
+        other => crate::types::opaque::opaque(lua, other.clone())?,
     })
 }
 

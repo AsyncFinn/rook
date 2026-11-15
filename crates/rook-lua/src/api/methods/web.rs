@@ -1,6 +1,6 @@
 //! Members Roblox answers from its servers: HttpService, users, text filtering and DataStores, through [`requests`] where Rook has an endpoint.
 
-use super::*;
+use crate::api::methods::{RawMethod, first};
 
 pub(crate) mod data_stores;
 pub(crate) mod filtering;

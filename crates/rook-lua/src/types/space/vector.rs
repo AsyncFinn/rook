@@ -1,12 +1,12 @@
-use super::err;
+use crate::types::err;
 use mlua::{
     Lua, MetaMethod, UserData, UserDataFields, UserDataMethods, UserDataRef, Value as LuaValue,
     Vector,
 };
 use rook_types::{Vector2, Vector3};
 
-use super::fmt_f32;
 use crate::runtime::ctx::args::{Num, number_of};
+use crate::types::fmt_f32;
 
 use crate::runtime::ctx::convert::{from_lua_vector as v3, lua_vector as lua_v3};
 
@@ -139,7 +139,7 @@ fn install_vector3(lua: &Lua) -> mlua::Result<()> {
     ctor.set(
         "FromNormalId",
         lua.create_function(|lua, item: LuaValue| {
-            let v = super::enums::item_value(lua, &item, "NormalId")
+            let v = crate::types::enums::item_value(lua, &item, "NormalId")
                 .ok_or_else(|| err("Unable to cast to NormalId"))?;
             Ok(normal_id_vector(v))
         })?,
@@ -147,7 +147,7 @@ fn install_vector3(lua: &Lua) -> mlua::Result<()> {
     ctor.set(
         "FromAxis",
         lua.create_function(|lua, item: LuaValue| {
-            let v = super::enums::item_value(lua, &item, "Axis")
+            let v = crate::types::enums::item_value(lua, &item, "Axis")
                 .ok_or_else(|| err("Unable to cast to Axis"))?;
             Ok(match v {
                 0 => Vector::new(1.0, 0.0, 0.0),
@@ -208,7 +208,7 @@ impl UserData for LVector2 {
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
-        super::members::add_unknown(m, "Vector2", super::members::Wording::Plain);
+        crate::types::members::add_unknown(m, "Vector2", crate::types::members::Wording::Plain);
         m.add_method("Dot", |_, t, o: UserDataRef<LVector2>| Ok(t.0.dot(o.0)));
         m.add_method("Cross", |_, t, o: UserDataRef<LVector2>| Ok(t.0.cross(o.0)));
         for name in ["Lerp", "lerp"] {
@@ -305,7 +305,11 @@ impl UserData for LVector3int16 {
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
-        super::members::add_unknown(m, "Vector3int16", super::members::Wording::Quoted);
+        crate::types::members::add_unknown(
+            m,
+            "Vector3int16",
+            crate::types::members::Wording::Quoted,
+        );
         let op = |f: fn(i16, i16) -> i16| {
             move |_: &Lua, t: &LVector3int16, o: UserDataRef<LVector3int16>| {
                 Ok(LVector3int16(rbx_types::Vector3int16::new(
@@ -342,7 +346,11 @@ impl UserData for LVector2int16 {
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
-        super::members::add_unknown(m, "Vector2int16", super::members::Wording::Quoted);
+        crate::types::members::add_unknown(
+            m,
+            "Vector2int16",
+            crate::types::members::Wording::Quoted,
+        );
         let op = |f: fn(i16, i16) -> i16| {
             move |_: &Lua, t: &LVector2int16, o: UserDataRef<LVector2int16>| {
                 Ok(LVector2int16(rbx_types::Vector2int16::new(

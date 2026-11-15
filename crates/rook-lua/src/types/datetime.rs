@@ -5,7 +5,7 @@
 use chrono::{DateTime, Datelike, Local, LocalResult, NaiveDate, TimeZone, Timelike, Utc};
 use mlua::{Lua, MetaMethod, UserData, UserDataFields, UserDataMethods, UserDataRef};
 
-use super::err;
+use crate::types::err;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct LDateTime {
@@ -180,7 +180,7 @@ impl UserData for LDateTime {
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
-        super::members::add_unknown(m, "DateTime", super::members::Wording::Plain);
+        crate::types::members::add_unknown(m, "DateTime", crate::types::members::Wording::Plain);
         m.add_method("ToUniversalTime", |lua, t, ()| parts(lua, &t.utc()));
         m.add_method("ToLocalTime", |lua, t, ()| parts(lua, &t.local()));
         m.add_method("ToIsoDate", |_, t, ()| {

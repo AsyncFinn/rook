@@ -25,7 +25,7 @@ use crate::runtime::ctx::args::{Args, borrow_clone, type_name};
 use crate::runtime::ctx::convert::vector3_to_lua;
 use crate::runtime::ctx::{ApiResult, Outcome, ScriptError, with_world};
 use crate::types::enums::enum_item;
-use crate::types::query::{LOverlapParams, LRaycastParams, LRaycastResult, Params};
+use crate::types::space::query::{LOverlapParams, LRaycastParams, LRaycastResult, Params};
 use crate::types::{LCFrame, LRay, LRegion3};
 
 /// FindPartsInRegion3's default `maxParts` (observed: 20 of 40 parts).

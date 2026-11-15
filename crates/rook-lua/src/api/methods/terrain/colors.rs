@@ -1,4 +1,14 @@
-use super::*;
+use mlua::Lua;
+use rook_dom::InstanceId;
+use rook_terrain::TerrainMaterial;
+use rook_types::Value;
+use rook_types::{MaterialSet, TerrainMaterials};
+
+use crate::api::methods::mutate;
+use crate::api::methods::terrain::material_arg;
+use crate::runtime::ctx::args::Args;
+use crate::runtime::ctx::{ApiResult, Outcome, ScriptError, with_world};
+use crate::types::LColor3;
 
 /// The `MaterialColors` key of a material argument, with Studio's errors.
 fn color_key(lua: &Lua, a: &Args) -> ApiResult<(TerrainMaterial, TerrainMaterials)> {

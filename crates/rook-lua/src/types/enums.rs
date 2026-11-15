@@ -1,4 +1,4 @@
-use super::members::{Wording, not_a_member};
+use crate::types::members::{Wording, not_a_member};
 use mlua::{
     AnyUserData, Lua, MetaMethod, UserData, UserDataFields, UserDataMethods, UserDataRef,
     Value as LuaValue,

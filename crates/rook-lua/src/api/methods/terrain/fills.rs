@@ -1,4 +1,18 @@
-use super::*;
+use mlua::Lua;
+use rook_dom::InstanceId;
+use rook_terrain::grid::edit::Bounds;
+use rook_terrain::grid::edit::Shape;
+use rook_types::Material;
+
+use crate::api::methods::terrain::edit;
+use crate::api::methods::terrain::glam_vec;
+use crate::api::methods::terrain::material_arg;
+use crate::api::methods::terrain::pose;
+use crate::api::methods::terrain::region_arg;
+use crate::api::methods::terrain::voxel_material;
+use crate::runtime::ctx::args::Args;
+use crate::runtime::ctx::{ApiResult, Outcome, ScriptError};
+use crate::types::LCFrame;
 
 fn empty_extents() -> ScriptError {
     ScriptError("Extents cannot be empty".into())

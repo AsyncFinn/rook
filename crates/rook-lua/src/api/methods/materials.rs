@@ -1,7 +1,14 @@
 //! MaterialService: which MaterialVariant stands in for each material
 //! (`docs/behavior/rendering/materials.md`).
 
-use super::*;
+use mlua::Lua;
+use rook_dom::InstanceId;
+use rook_reflection::database;
+use rook_types::Value;
+
+use crate::api::methods::{RawMethod, mutate, ret_instance};
+use crate::runtime::ctx::args::Args;
+use crate::runtime::ctx::{ApiResult, Outcome, ScriptError, with_world};
 use rook_types::Material;
 
 /// A `Material` argument, by EnumItem, number or name.

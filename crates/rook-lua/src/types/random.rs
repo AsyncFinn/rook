@@ -104,7 +104,7 @@ impl UserData for LRandom {
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
-        super::members::add_unknown(m, "Random", super::members::Wording::Plain);
+        crate::types::members::add_unknown(m, "Random", crate::types::members::Wording::Plain);
         m.add_method_mut("NextNumber", |_, t, (a, b): (Option<f64>, Option<f64>)| {
             Ok(t.next_between(a.unwrap_or(0.0), b.unwrap_or(1.0)))
         });
@@ -190,4 +190,10 @@ mod tests {
         assert_eq!(r.next_integer(0.0, 0.0), 0.0);
         assert_ne!(r, LRandom::new(3));
     }
+}
+
+pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
+    let random = lua.create_table()?;
+    random.set("new", lua.create_function(random_new)?)?;
+    lua.globals().set("Random", random)
 }

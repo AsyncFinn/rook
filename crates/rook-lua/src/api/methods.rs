@@ -7,25 +7,15 @@
 //! effect only matters to systems Rook doesn't have, do nothing, return
 //! nil and are counted separately, so scripts keep running.
 
-use crate::runtime::scheduler::Queue;
-use crate::runtime::signal::{SignalKey, SignalKind};
-use mlua::{Function, Lua, MultiValue, Value as LuaValue};
+use mlua::{Lua, Value as LuaValue};
 use rook_dom::{DomError, InstanceId};
-use rook_reflection::database;
-use rook_types::{CFrame, Value, Vector3};
 
-use super::instance::{push_instance, settle_joints, settle_joints_within};
-use rook_physics::assembly::{self, Assembly};
-use rook_physics::joints;
+use super::instance::push_instance;
 
-use super::properties::{cframe, part_cframe, part_ids, set_cframe};
-use super::signal::LSignal;
 use crate::runtime::ctx::args::Args;
-use crate::runtime::ctx::convert::{to_lua, vector3_to_lua};
 use crate::runtime::ctx::{ApiResult, Outcome, ScriptError, with_world};
-use crate::runtime::threads::{dispatch, fire, fire_with};
-use crate::runtime::world::{Job, World};
-use crate::types::LCFrame;
+use crate::runtime::threads::dispatch;
+use crate::runtime::world::World;
 
 pub(crate) mod audio;
 pub(crate) mod camera;

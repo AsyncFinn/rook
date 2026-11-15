@@ -5,7 +5,17 @@ pub(crate) mod ownership;
 mod rigs;
 pub(crate) mod spawning;
 
-use super::*;
+use mlua::{Lua, Value as LuaValue};
+use rook_dom::{DomError, InstanceId};
+use rook_types::Value;
+
+use crate::api::instance::push_instance;
+use crate::api::methods::{RawMethod, mutate, ret_instance, ret_instances};
+use crate::runtime::ctx::args::Args;
+use crate::runtime::ctx::{ApiResult, Outcome, ScriptError, with_world};
+use crate::runtime::signal::SignalKey;
+use crate::runtime::threads::fire;
+use crate::runtime::world::World;
 
 pub(crate) use appearance::request as request_avatar;
 pub use appearance::{Avatar, Scales};

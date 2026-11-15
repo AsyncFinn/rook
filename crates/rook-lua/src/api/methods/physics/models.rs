@@ -1,4 +1,16 @@
-use super::*;
+use mlua::Lua;
+use rook_dom::{DomError, InstanceId};
+use rook_physics::assembly::{self};
+use rook_types::{CFrame, Value, Vector3};
+
+use crate::api::instance::{settle_joints, settle_joints_within};
+use crate::api::methods::{RawMethod, mutate};
+use crate::api::properties::{cframe, part_cframe, part_ids, set_cframe};
+use crate::runtime::ctx::args::Args;
+use crate::runtime::ctx::convert::vector3_to_lua;
+use crate::runtime::ctx::{ApiResult, Outcome, ScriptError, with_world};
+use crate::runtime::world::World;
+use crate::types::LCFrame;
 
 pub(super) fn parts_of(w: &World, model: InstanceId) -> Vec<InstanceId> {
     w.dom

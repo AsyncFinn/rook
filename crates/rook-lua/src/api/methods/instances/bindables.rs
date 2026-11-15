@@ -7,8 +7,15 @@ use std::ffi::c_void;
 
 use mlua::Table;
 
-use super::*;
+use mlua::{Function, Lua, MultiValue, Value as LuaValue};
+use rook_dom::InstanceId;
+
+use crate::api::methods::RawMethod;
+use crate::runtime::ctx::args::Args;
 use crate::runtime::ctx::args::{display_value, type_name};
+use crate::runtime::ctx::{ApiResult, Outcome, ScriptError};
+use crate::runtime::signal::SignalKey;
+use crate::runtime::threads::fire_with;
 
 /// Each listener gets its own copy, made now, not when it runs.
 pub(super) fn bindable_fire(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {

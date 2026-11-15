@@ -1,4 +1,19 @@
-use super::*;
+use glam::IVec3;
+use mlua::{Lua, Value as LuaValue};
+use rook_dom::InstanceId;
+use rook_terrain::grid::edit::Bounds;
+use rook_terrain::{Grid, TerrainMaterial, Voxel};
+use rook_types::Material;
+
+use crate::api::methods::terrain::checked_size;
+use crate::api::methods::terrain::edit;
+use crate::api::methods::terrain::enum_id;
+use crate::api::methods::terrain::read;
+use crate::api::methods::terrain::region_arg;
+use crate::api::methods::terrain::voxel_material;
+use crate::runtime::ctx::args::Args;
+use crate::runtime::ctx::{ApiResult, Outcome, ScriptError};
+use crate::types::enums;
 
 /// `ReadVoxels`: materials and occupancies as `[x][y][z]` arrays with a
 /// `Size` field; an air voxel's occupancy is 0, any other's

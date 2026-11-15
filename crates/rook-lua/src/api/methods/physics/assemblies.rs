@@ -1,7 +1,16 @@
 //! Joints and assemblies (observed in Studio 0.741).
 
 use super::models::parts_of;
-use super::*;
+use mlua::Lua;
+use rook_dom::InstanceId;
+use rook_physics::assembly::{self, Assembly};
+use rook_physics::joints;
+use rook_types::Value;
+
+use crate::api::methods::{RawMethod, mutate, ret_instance, ret_instances};
+use crate::runtime::ctx::args::Args;
+use crate::runtime::ctx::{ApiResult, Outcome, with_world};
+use crate::runtime::world::World;
 
 /// Active JointInstances and WeldConstraints attached to the part.
 pub(super) fn get_joints(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {

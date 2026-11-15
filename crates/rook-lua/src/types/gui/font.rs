@@ -7,8 +7,8 @@ use mlua::{
 };
 use rook_types::{FAMILY_FOLDER, Font, FontStyle, FontWeight, font_from_enum};
 
-use super::enums::{enum_item, item_name, item_value};
-use super::err;
+use crate::types::enums::{enum_item, item_name, item_value};
+use crate::types::err;
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct LFont(pub Font);
@@ -39,7 +39,7 @@ impl UserData for LFont {
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
-        super::members::add_unknown(m, "Font", super::members::Wording::Quoted);
+        crate::types::members::add_unknown(m, "Font", crate::types::members::Wording::Quoted);
         m.add_meta_method(MetaMethod::Eq, |_, t, o: UserDataRef<LFont>| {
             let key = |f: &Font| (f.family.clone(), f.weight, f.style);
             Ok(key(&t.0) == key(&o.0))

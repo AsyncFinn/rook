@@ -10,10 +10,10 @@ use mlua::{
 use rbx_types::ContentType;
 use rook_types::Content;
 
-use super::enums::enum_item;
-use super::err;
-use super::members::{Wording, not_a_member};
 use crate::runtime::ctx::args::{display_value, format_number, number_of, type_name};
+use crate::types::enums::enum_item;
+use crate::types::err;
+use crate::types::members::{Wording, not_a_member};
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct LContent(pub Content);

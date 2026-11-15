@@ -1,7 +1,23 @@
 //! The legacy cell API (`GetCell`, `SetCell`, `WorldToCell` and the
 //! rest), on the same voxels.
 
-use super::*;
+use glam::{IVec3, Vec3};
+use mlua::Lua;
+use rook_dom::InstanceId;
+use rook_terrain::grid::cells;
+use rook_terrain::grid::edit::Bounds;
+use rook_terrain::{TerrainMaterial, Voxel};
+
+use crate::api::methods::terrain::edit;
+use crate::api::methods::terrain::enum_name;
+use crate::api::methods::terrain::glam_vec;
+use crate::api::methods::terrain::push_named;
+use crate::api::methods::terrain::read;
+use crate::api::methods::terrain::region16_arg;
+use crate::api::methods::terrain::region16_bounds;
+use crate::runtime::ctx::args::Args;
+use crate::runtime::ctx::convert::vector3_to_lua;
+use crate::runtime::ctx::{ApiResult, Outcome};
 
 fn cell_args(a: &Args, i: usize) -> ApiResult<IVec3> {
     Ok(IVec3::new(

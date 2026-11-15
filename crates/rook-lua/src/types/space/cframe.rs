@@ -1,4 +1,4 @@
-use super::err;
+use crate::types::err;
 use glam::{EulerRot, Mat3, Quat, Vec3};
 use mlua::{
     Lua, MetaMethod, MultiValue, UserData, UserDataFields, UserDataMethods, UserDataRef,
@@ -6,8 +6,8 @@ use mlua::{
 };
 use rook_types::{CFrame, Vector3};
 
-use super::fmt_f32;
 use crate::runtime::ctx::args::{number_of, type_name};
+use crate::types::fmt_f32;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct LCFrame(pub CFrame);
@@ -174,7 +174,7 @@ impl UserData for LCFrame {
     }
 
     fn add_methods<M: UserDataMethods<Self>>(m: &mut M) {
-        super::members::add_unknown(m, "CFrame", super::members::Wording::Plain);
+        crate::types::members::add_unknown(m, "CFrame", crate::types::members::Wording::Plain);
         for name in ["Inverse", "inverse"] {
             m.add_method(name, |_, t, ()| Ok(LCFrame(t.0.inverse())));
         }
@@ -314,7 +314,7 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
             |lua, (x, y, z, order): (Option<f32>, Option<f32>, Option<f32>, Option<LuaValue>)| {
                 // Enum.RotationOrder: XYZ 0, XZY 1, YZX 2, YXZ 3, ZXY 4, ZYX 5.
                 let order = order
-                    .and_then(|o| super::enums::item_value(lua, &o, "RotationOrder"))
+                    .and_then(|o| crate::types::enums::item_value(lua, &o, "RotationOrder"))
                     .unwrap_or(0);
                 let (x, y, z) = (x.unwrap_or(0.0), y.unwrap_or(0.0), z.unwrap_or(0.0));
                 let (rot, a, b, c) = match order {

@@ -1,6 +1,6 @@
 //! GUI's methods: GuiService and PlayerGui, StyleRules, text sizes, TextBox focus and TextChatService.
 
-use super::*;
+use crate::api::methods::{RawMethod, first, mutate, ret_instances, true_};
 
 pub(crate) mod screen;
 mod styles;

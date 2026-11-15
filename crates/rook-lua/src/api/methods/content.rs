@@ -1,6 +1,6 @@
 //! Loading content from scripts: published models (`require`, `InsertService`) and `ContentProvider`'s preloads.
 
-use super::*;
+use crate::api::methods::{RawMethod, first};
 
 pub(crate) mod assets;
 pub(crate) mod preload;

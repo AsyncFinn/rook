@@ -4,7 +4,12 @@
 //! texture scrolling (docs/behavior/effects/fire-smoke-and-sparkles.md) and wireframe
 //! lines (docs/behavior/rendering/adornments.md).
 
-use super::*;
+use mlua::{Lua, Value as LuaValue};
+use rook_dom::InstanceId;
+
+use crate::api::methods::RawMethod;
+use crate::runtime::ctx::args::Args;
+use crate::runtime::ctx::{ApiResult, Outcome, with_world};
 use crate::runtime::world::EffectCall;
 
 fn call(lua: &Lua, this: InstanceId, call: EffectCall) -> ApiResult<Outcome> {

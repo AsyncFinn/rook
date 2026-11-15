@@ -1,6 +1,6 @@
 //! Sound's methods, and the audio API's: players, emitters, listeners, wires and analyzers.
 
-use super::*;
+use crate::api::methods::{RawMethod, first};
 
 mod audio_api;
 pub(crate) mod sound;

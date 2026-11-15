@@ -1,6 +1,6 @@
 //! Every Instance's own methods: the tree, attributes and tags, services, and bindables.
 
-use super::*;
+use crate::api::methods::{RawMethod, first};
 
 mod attributes;
 pub(crate) mod bindables;

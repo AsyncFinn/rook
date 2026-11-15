@@ -5,8 +5,8 @@
 
 use mlua::{MetaMethod, UserData, UserDataMethods, Value as LuaValue};
 
-use super::err;
 use crate::runtime::ctx::args::type_name;
+use crate::types::err;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Wording {

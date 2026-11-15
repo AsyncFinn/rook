@@ -3,30 +3,29 @@
 //! The rest are userdata. Member lists and constructors follow the
 //! creator-docs datatype pages.
 
-pub(crate) mod cframe;
 pub(crate) mod color;
 pub(crate) mod content;
 pub(crate) mod datetime;
 pub(crate) mod enums;
-pub(crate) mod font;
-pub(crate) mod geometry;
+pub(crate) mod format;
+pub(crate) mod gui;
 pub(crate) mod members;
-pub(crate) mod misc;
-pub(crate) mod query;
+pub(crate) mod opaque;
 pub(crate) mod random;
 pub(crate) mod sequences;
-pub(crate) mod udim;
-pub(crate) mod vector;
+pub(crate) mod space;
+pub(crate) mod tween_info;
 
-pub(crate) use cframe::LCFrame;
 pub(crate) use color::{LBrickColor, LColor3};
 pub(crate) use content::LContent;
-pub(crate) use font::LFont;
-pub(crate) use geometry::{LRay, LRect, LRegion3, LRegion3int16};
-pub(crate) use misc::{LAxes, LFaces, LOther, LPhysicalProperties};
+pub(crate) use format::{fmt_f32, fmt_g};
+pub(crate) use gui::font::LFont;
+pub(crate) use gui::udim::{LUDim, LUDim2};
+pub(crate) use opaque::{LAxes, LFaces, LOther, LPhysicalProperties};
 pub(crate) use sequences::{LColorSequence, LNumberRange, LNumberSequence};
-pub(crate) use udim::{LUDim, LUDim2};
-pub(crate) use vector::{LVector2, LVector2int16, LVector3int16};
+pub(crate) use space::cframe::LCFrame;
+pub(crate) use space::geometry::{LRay, LRect, LRegion3, LRegion3int16};
+pub(crate) use space::vector::{LVector2, LVector2int16, LVector3int16};
 
 use mlua::Lua;
 
@@ -36,63 +35,21 @@ pub(crate) fn err(msg: impl Into<String>) -> mlua::Error {
 }
 
 pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
-    vector::install(lua)?;
-    cframe::install(lua)?;
+    space::vector::install(lua)?;
+    space::cframe::install(lua)?;
     color::install(lua)?;
-    udim::install(lua)?;
+    gui::udim::install(lua)?;
     sequences::install(lua)?;
-    geometry::install(lua)?;
+    space::geometry::install(lua)?;
     enums::install(lua)?;
-    font::install(lua)?;
+    gui::font::install(lua)?;
     content::install(lua)?;
-    misc::install(lua)?;
-    query::install(lua)?;
+    opaque::install(lua)?;
+    tween_info::install(lua)?;
+    random::install(lua)?;
+    space::query::install(lua)?;
     datetime::install(lua)?;
     Ok(())
-}
-
-/// Format like C's `%.9g`, which is how Roblox prints datatype components
-/// (32-bit floats shown with 9 significant digits).
-pub(crate) fn fmt_g(x: f64, precision: usize) -> String {
-    if x.is_nan() {
-        return "nan".into();
-    }
-    if x.is_infinite() {
-        return if x > 0.0 { "inf".into() } else { "-inf".into() };
-    }
-    if x == 0.0 {
-        return if x.is_sign_negative() {
-            "-0".into()
-        } else {
-            "0".into()
-        };
-    }
-    let exp = x.abs().log10().floor() as i32;
-    let precision = precision.max(1);
-    let p = precision as i32;
-    if exp < -4 || exp >= p {
-        let s = format!("{:.*e}", precision - 1, x);
-        let (mantissa, e) = s.split_once('e').expect("exponent form");
-        let mantissa = strip_zeros(mantissa);
-        let e: i32 = e.parse().expect("exponent");
-        let sign = if e < 0 { '-' } else { '+' };
-        format!("{mantissa}e{sign}{:02}", e.abs())
-    } else {
-        let decimals = (p - 1 - exp).max(0) as usize;
-        strip_zeros(&format!("{x:.decimals$}")).to_owned()
-    }
-}
-
-fn strip_zeros(s: &str) -> &str {
-    if s.contains('.') {
-        s.trim_end_matches('0').trim_end_matches('.')
-    } else {
-        s
-    }
-}
-
-pub(crate) fn fmt_f32(x: f32) -> String {
-    fmt_g(f64::from(x), 9)
 }
 
 #[cfg(test)]
