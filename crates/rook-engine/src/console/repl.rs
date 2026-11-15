@@ -31,13 +31,13 @@ pub enum Side {
 
 const HELP: &str = "Type Luau to run it; an expression prints its value. \
                     :server and :client choose where commands run (server by default), \
-                    :help shows this. Ctrl+C clears the line; on an empty line it, or Ctrl+D, ends input.";
+                    :help shows this. Ctrl+C clears the line; Ctrl+D on an empty line ends input.";
 
 #[derive(Debug)]
 pub struct Repl {
     chunks: Receiver<String>,
     side: Side,
-    /// Input ended (Ctrl+C on an empty line, or Ctrl+D).
+    /// Input ended (Ctrl+D on an empty line, or the terminal's input closed).
     closed: bool,
 }
 
@@ -122,7 +122,20 @@ fn read(tx: &Sender<String>) {
     {
         tracing::debug!(target: "rook", "couldn't read {}: {e}", path.display());
     }
-    while let Ok(chunk) = editor.readline("> ") {
+    loop {
+        let chunk = match editor.readline("> ") {
+            Ok(chunk) => chunk,
+            Err(ReadlineError::Eof) => break,
+            // Not from a key (Ctrl+C on an empty prompt does nothing).
+            Err(ReadlineError::Interrupted) => continue,
+            Err(e) => {
+                print_message(
+                    MessageType::Warning,
+                    &format!("The command bar stopped reading the terminal: {e}"),
+                );
+                break;
+            }
+        };
         if !chunk.trim().is_empty()
             && editor.add_history_entry(chunk.as_str()).unwrap_or(false)
             && let Some(path) = &history
