@@ -103,10 +103,22 @@ pub(super) fn set_listener(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outc
         .enum_by_name("ListenerType")
         .expect("ListenerType enum");
     let kind = crate::types::enums::coerce(lua, a.get(0), e.id).map_err(ScriptError)?;
+    // The listener is a Tuple, not an Object: missing, nil and other values
+    // each have their own message (measured).
+    let object = || -> ApiResult<InstanceId> {
+        if a.len() < 2 {
+            return Err(ScriptError(
+                "SoundService:SetListener called with an incorrect argument.".into(),
+            ));
+        }
+        a.opt_instance(1).ok().flatten().ok_or_else(|| {
+            ScriptError("SoundService:SetListener value given is not a valid instance".into())
+        })
+    };
     let listener = match e.item_name(kind) {
         Some("CFrame") => Listener::CFrame(a.userdata::<LCFrame>(1, "CFrame")?.0),
-        Some("ObjectPosition") => Listener::ObjectPosition(a.instance(1)?),
-        Some("ObjectCFrame") => Listener::ObjectCFrame(a.instance(1)?),
+        Some("ObjectPosition") => Listener::ObjectPosition(object()?),
+        Some("ObjectCFrame") => Listener::ObjectCFrame(object()?),
         _ => Listener::Camera,
     };
     with_world(lua, |w| w.listener = listener);

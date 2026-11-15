@@ -1,11 +1,12 @@
-//! Camera rays and projection: `ViewportPointToRay`, `ScreenPointToRay`,
-//! `WorldToViewportPoint` and `WorldToScreenPoint`. The engine's mouse uses
-//! [`viewport_ray`] too, so Mouse.Hit and scripts' rays agree.
+//! Camera rays and projection (`ViewportPointToRay`, `ScreenPointToRay`,
+//! `WorldToViewportPoint`, `WorldToScreenPoint`), the near plane, and the
+//! roll a view is drawn with (`SetRoll`, `GetRoll`, `GetRenderCFrame`).
+//! The engine's mouse uses [`viewport_ray`] too, so Mouse.Hit and scripts'
+//! rays agree.
 //!
 //! Behavior observed in Studio 0.742: `FieldOfView` is vertical; a ray
-//! starts on the near plane (0.5 studs in front of the camera), moved
-//! `depth` studs further along its unit direction; a server's camera has
-//! a 1 × 1 viewport.
+//! starts 0.5 studs in front of the camera, moved `depth` studs further
+//! along its unit direction; a server's camera has a 1 × 1 viewport.
 
 use glam::{Vec2, Vec3};
 use mlua::Lua;
@@ -16,10 +17,12 @@ use super::RawMethod;
 use crate::ctx::args::Args;
 use crate::ctx::convert::vector3_to_lua;
 use crate::ctx::{ApiResult, Outcome, with_world};
-use crate::types::LRay;
+use crate::types::{LCFrame, LRay};
+use crate::world::World;
 
-/// Camera.NearPlaneZ, which Roblox doesn't let scripts change.
-const NEAR_PLANE: f32 = 0.5;
+/// How far in front of the camera its rays start, on a server and a
+/// client alike: not `NearPlaneZ`.
+const RAY_START: f32 = 0.5;
 
 pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
     Some(match (owner, name) {
@@ -27,8 +30,28 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("Camera", "ScreenPointToRay") => screen_point_to_ray,
         ("Camera", "WorldToViewportPoint") => world_to_viewport_point,
         ("Camera", "WorldToScreenPoint") => world_to_screen_point,
+        ("Camera", "SetRoll") => set_roll,
+        ("Camera", "GetRoll") => get_roll,
+        ("Camera", "GetRenderCFrame") => get_render_cframe,
         _ => return None,
     })
+}
+
+/// How far in front of `camera` its near plane is (`-NearPlaneZ`):
+/// 0.1 studs for a client's current camera, 0.5 for any other (Observed
+/// in Studio 0.747, on a playtest's client and server).
+pub(crate) fn near_plane(w: &World, camera: InstanceId) -> f32 {
+    if w.is_client && is_current(&w.dom, camera) {
+        0.1
+    } else {
+        0.5
+    }
+}
+
+fn is_current(dom: &Dom, camera: InstanceId) -> bool {
+    dom.find_service("Workspace")
+        .and_then(|ws| dom.ref_property(ws, "CurrentCamera"))
+        == Some(camera)
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -73,7 +96,7 @@ pub fn viewport_ray(lens: &Lens, x: f32, y: f32) -> (Vec3, Vec3) {
     let t = ndc * lens.tan();
     let local = Vec3::new(t.x, t.y, -1.0);
     let rot = lens.cframe.rotation;
-    let origin = lens.cframe.position + rot * (local * NEAR_PLANE);
+    let origin = lens.cframe.position + rot * (local * RAY_START);
     (origin, (rot * local).normalize())
 }
 
@@ -122,6 +145,56 @@ fn world_to_viewport_point(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<O
 
 fn world_to_screen_point(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     world_to_point(lua, this, a, super::gui::gui_inset(lua))
+}
+
+// Roll
+
+/// `Camera:SetRoll(angle)`: a Scriptable camera keeps the roll, in
+/// radians as given, until its CameraType changes; any other camera
+/// ignores it (Observed in Studio 0.747).
+fn set_roll(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
+    let roll = a.number(0)? as f32;
+    with_world(lua, |w| {
+        if w.dom.enum_item_property(this, "CameraType") == Some("Scriptable") {
+            w.camera_rolls.insert(this, roll);
+        }
+    });
+    Outcome::ret(lua, ())
+}
+
+/// `Camera:GetRoll()`: the roll `SetRoll` gave, not the CFrame's own
+/// (Observed: 0 for a CFrame rolled by 0.2).
+fn get_roll(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
+    let roll = with_world(lua, |w| w.camera_roll(this));
+    Outcome::ret(lua, f64::from(roll))
+}
+
+/// `Camera:GetRenderCFrame()`: the CFrame turned by the roll about its
+/// look vector, clockwise as seen from behind (Observed: a roll of 0.5
+/// on an unturned CFrame gives `CFrame.Angles(0, 0, -0.5)`).
+fn get_render_cframe(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {
+    let cframe = with_world(lua, |w| render_cframe(w, this));
+    Outcome::ret(lua, LCFrame(cframe))
+}
+
+/// Where `camera` looks from as drawn: its CFrame with its roll.
+fn render_cframe(w: &World, camera: InstanceId) -> CFrame {
+    let cframe = w
+        .dom
+        .cframe_property(camera, "CFrame")
+        .unwrap_or(CFrame::IDENTITY);
+    rolled(cframe, w.camera_roll(camera))
+}
+
+/// `cframe` rolled by `roll` radians, as a camera draws it.
+pub fn rolled(cframe: CFrame, roll: f32) -> CFrame {
+    if roll == 0.0 {
+        return cframe;
+    }
+    CFrame {
+        position: cframe.position,
+        rotation: cframe.rotation * glam::Mat3::from_rotation_z(-roll),
+    }
 }
 
 #[cfg(test)]

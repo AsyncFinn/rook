@@ -53,7 +53,7 @@
     - [GUI input](behavior/gui/input.md): what takes a click, buttons, the wheel, TextBox focus and typing
     - [GUI legacy styles](behavior/gui/styles.md): Frame and GuiButton `Style`, their textures, states and insets
     - [GUI modern UI objects](behavior/gui/modern.md): UICorner, UIStroke, UIGradient, flex, UITableLayout, UIPageLayout, CanvasGroup
-    - [ViewportFrame](behavior/gui/viewport-frames.md): its picture, its own light and fog, what draws in it
+    - [Viewport frames](behavior/gui/viewport-frames.md): its picture, its own light and fog, what draws in it
     - [Roblox's core scripts](behavior/gui/core-scripts.md): where Studio keeps them, running them as Roblox's own code, StyleSheets, what Rook lacks
     - [Chat](behavior/gui/chat.md): TextChatService's setup, sending and delivering messages
     - [Proximity prompts](behavior/gui/proximity-prompts.md): which show, keys and holds, the events on both sides, Roblox's prompt GUI
@@ -84,6 +84,7 @@
     - [Datatype errors](behavior/scripting/datatype-errors.md): their messages in `pcall`
     - [Faces, Axes and PhysicalProperties](behavior/scripting/faces-and-axes.md): their `typeof` and printing
     - [Member lookup](behavior/scripting/member-lookup.md): lowercase first letters, and what a child of that name beats
+    - [Nil Instance arguments](behavior/scripting/nil-arguments.md): what each method does with the null object
     - [Random](behavior/scripting/random.md): Luau's generator and each method's draws
     - [Running scripts](behavior/scripting/running-scripts.md): scripts stop the moment they're removed from where they run or disabled
     - [Tags and locked members](behavior/scripting/tags.md): tag signals, and which members a child of the same name beats.

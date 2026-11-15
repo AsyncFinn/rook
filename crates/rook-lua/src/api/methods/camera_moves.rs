@@ -1,13 +1,14 @@
-//! `Camera:Interpolate`, and the Focus a Scriptable camera keeps
-//! (docs/behavior/characters/camera.md#scripted-cameras).
+//! What moves a camera from a script: `Interpolate`, the legacy orbit
+//! steps (`PanUnits`, `TiltUnits`), `ZoomToExtents`, and the Focus a
+//! Scriptable camera keeps (docs/behavior/characters/camera.md#scripted-cameras).
 
-use glam::Vec3;
+use glam::{Vec2, Vec3};
 use mlua::Lua;
 use rook_dom::InstanceId;
 use rook_types::{CFrame, Value};
 
 use super::{RawMethod, mutate};
-use crate::ctx::args::Args;
+use crate::ctx::args::{Args, type_name};
 use crate::ctx::{ApiResult, Outcome, ScriptError, with_world};
 use crate::signal::SignalKey;
 use crate::threads::fire;
@@ -17,9 +18,25 @@ use crate::world::World;
 /// How far in front of a Scriptable camera its Focus sits (Observed).
 const FOCUS_AHEAD: f32 = 20.0;
 
+/// `PanUnits` turns by this many degrees a unit, from a heading rounded
+/// to a whole number of them (Observed).
+const PAN_STEP: f32 = 45.0;
+/// `TiltUnits` tilts by this many degrees a unit, from a pitch rounded to
+/// a whole number of them, to at most [`MAX_TILT`] up or down (Observed).
+const TILT_STEP: f32 = 10.0;
+const MAX_TILT: f32 = 81.0;
+/// `ZoomToExtents` fits a box at least this many studs in radius
+/// (Observed: a box of no size).
+const MIN_EXTENT: f32 = 0.5;
+
 pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
     Some(match (owner, name) {
         ("Camera", "Interpolate") => interpolate,
+        ("Camera", "PanUnits") => pan_units,
+        ("Camera", "TiltUnits") => tilt_units,
+        ("Camera", "ZoomToExtents") => zoom_to_extents,
+        // Deprecated: both read 0 whatever the camera does (Observed).
+        ("Camera", "GetPanSpeed" | "GetTiltSpeed") => |lua, _, _| Outcome::ret(lua, 0.0),
         _ => return None,
     })
 }
@@ -86,6 +103,139 @@ fn interpolate(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
             },
         );
     });
+    Outcome::ret(lua, ())
+}
+
+// Orbiting the Focus
+
+/// An `int` argument: a number rounded to the nearest whole one, halves
+/// away from zero (Observed: 1.7 and 1.5 count as 2).
+fn int(a: &Args, i: usize) -> ApiResult<i64> {
+    match a.get(i) {
+        mlua::Value::Nil => Err(a.missing(i)),
+        v => crate::ctx::args::number_of(v)
+            .map(|n| n.round() as i64)
+            .ok_or_else(|| ScriptError(format!("Unable to cast {} to int", type_name(v)))),
+    }
+}
+
+/// Where a camera is around its Focus: its look vector and its distance
+/// from the Focus.
+struct Orbit {
+    focus: Vec3,
+    look: Vec3,
+    distance: f32,
+}
+
+impl Orbit {
+    fn of(w: &World, camera: InstanceId) -> Self {
+        let cf = w
+            .dom
+            .cframe_property(camera, "CFrame")
+            .unwrap_or(CFrame::IDENTITY);
+        let focus = w
+            .dom
+            .cframe_property(camera, "Focus")
+            .map_or(Vec3::ZERO, |f| f.position);
+        Self {
+            focus,
+            look: -cf.rotation.z_axis,
+            distance: (cf.position - focus).length(),
+        }
+    }
+
+    /// The look's heading in degrees, clockwise from -Z seen from above.
+    fn heading(&self) -> f32 {
+        (-self.look.x).atan2(-self.look.z).to_degrees()
+    }
+
+    fn pitch(&self) -> f32 {
+        self.look.y.clamp(-1.0, 1.0).asin().to_degrees()
+    }
+
+    /// The camera looking along `look` at the Focus from its distance, as
+    /// `CFrame.lookAt` turns it: no roll. One on its Focus goes a stud out
+    /// (Observed).
+    fn cframe(&self, look: Vec3) -> CFrame {
+        let distance = if self.distance > 0.0 {
+            self.distance
+        } else {
+            1.0
+        };
+        CFrame::look_at(self.focus - look * distance, self.focus, Vec3::Y)
+    }
+}
+
+/// A look `degrees` clockwise from -Z seen from above, `across` long
+/// level and `up` high.
+fn heading_look(degrees: f32, across: f32, up: f32) -> Vec3 {
+    let (sin, cos) = degrees.to_radians().sin_cos();
+    Vec3::new(-sin * across, up, -cos * across)
+}
+
+fn set_cframe(lua: &Lua, camera: InstanceId, cf: CFrame) -> ApiResult<()> {
+    mutate(lua, |w| {
+        w.dom
+            .set_property_by_name(camera, "CFrame", Value::CFrame(cf))
+    })
+}
+
+/// `Camera:PanUnits(units)`: orbits the Focus, the look's heading rounded
+/// to a multiple of 45° then turned 45° clockwise (seen from above) a
+/// unit, its pitch and the distance kept, then aimed at the Focus by
+/// `CFrame.lookAt`, so the roll goes and a camera looking straight down
+/// comes out as `lookAt` turns one (all observed).
+fn pan_units(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
+    let units = int(a, 0)?;
+    let orbit = with_world(lua, |w| Orbit::of(w, this));
+    let heading = (orbit.heading() / PAN_STEP).round() * PAN_STEP - PAN_STEP * units as f32;
+    let level = Vec2::new(orbit.look.x, orbit.look.z).length();
+    let look = heading_look(heading, level, orbit.look.y);
+    set_cframe(lua, this, orbit.cframe(look))?;
+    Outcome::ret(lua, ())
+}
+
+/// `Camera:TiltUnits(units)`: orbits the Focus, the look's pitch rounded
+/// to a multiple of 10° then raised 10° a unit and kept within 81° of
+/// level, its heading and the distance kept, aimed by `CFrame.lookAt`.
+/// True unless the pitch asked for is the one it had (all observed:
+/// false only for 0 units on a whole multiple of 10°, true at the limit).
+fn tilt_units(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
+    let units = int(a, 0)?;
+    let orbit = with_world(lua, |w| Orbit::of(w, this));
+    let pitch = orbit.pitch();
+    let target = (pitch / TILT_STEP).round() * TILT_STEP + TILT_STEP * units as f32;
+    let (up, across) = target.clamp(-MAX_TILT, MAX_TILT).to_radians().sin_cos();
+    let look = heading_look(orbit.heading(), across, up);
+    set_cframe(lua, this, orbit.cframe(look))?;
+    Outcome::ret(lua, target != pitch)
+}
+
+/// `Camera:ZoomToExtents(boxCFrame, boxSize)`: Focus goes to the box's
+/// center (unturned) and the camera, turned as it was, backs off it until
+/// the sphere around the box's world-axis box fills the narrower of the
+/// field of view's two half angles (all observed).
+fn zoom_to_extents(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
+    let at = a.userdata::<LCFrame>(0, "CFrame")?.0;
+    let size = a.vector3(1)?.0.abs();
+    let lens = with_world(lua, |w| super::camera::Lens::of(&w.dom, this));
+    let radius = at.box_reach(size).length().max(MIN_EXTENT);
+    let tan = (lens.fov.to_radians() * 0.5).tan();
+    let half = tan.min(tan * lens.viewport.x / lens.viewport.y).atan();
+    let distance = radius / half.sin();
+    let cf = CFrame {
+        position: at.position + lens.cframe.rotation.z_axis * distance,
+        rotation: lens.cframe.rotation,
+    };
+    mutate(lua, |w| {
+        w.dom.set_property_by_name(
+            this,
+            "Focus",
+            Value::CFrame(CFrame::from_position(at.position)),
+        )?;
+        w.dom
+            .set_property_by_name(this, "CFrame", Value::CFrame(cf))
+    })?;
     Outcome::ret(lua, ())
 }
 

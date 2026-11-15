@@ -37,6 +37,7 @@ mod audio_api;
 mod bindables;
 pub(crate) mod camera;
 pub(crate) mod camera_moves;
+pub(crate) mod camera_occlusion;
 pub(crate) mod characters;
 mod context_actions;
 pub(crate) mod core;
@@ -104,6 +105,8 @@ const INERT: &[(&str, &str)] = &[
     ("FunctionalTest", "Warn"),
     // Rook draws no default loading screen, so there is none to remove.
     ("ReplicatedFirst", "RemoveDefaultLoadingScreen"),
+    // The legacy camera's pan mode: nothing a script sees changes.
+    ("Camera", "SetCameraPanMode"),
 ];
 
 #[expect(
@@ -142,10 +145,16 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
         ("Instance", "HasTag") => has_tag,
         ("Instance", "GetTags") => get_tags,
         ("Instance", "GetActor") => nil,
-        ("CollectionService", "AddTag") => |l, t, a| collection_tag(l, t, a, add_tag),
-        ("CollectionService", "RemoveTag") => |l, t, a| collection_tag(l, t, a, remove_tag),
-        ("CollectionService", "HasTag") => |l, t, a| collection_tag(l, t, a, has_tag),
-        ("CollectionService", "GetTags") => |l, t, a| collection_tag(l, t, a, get_tags),
+        ("CollectionService", "AddTag") => {
+            |l, _, a| collection_tag(l, a, add_tag, NullTags::Nothing)
+        }
+        ("CollectionService", "RemoveTag") => {
+            |l, _, a| collection_tag(l, a, remove_tag, NullTags::Nothing)
+        }
+        ("CollectionService", "HasTag") => |l, _, a| collection_tag(l, a, has_tag, NullTags::False),
+        ("CollectionService", "GetTags") => {
+            |l, _, a| collection_tag(l, a, get_tags, NullTags::Empty)
+        }
         ("CollectionService", "GetTagged") => get_tagged,
         ("CollectionService", "GetAllTags") => get_all_tags,
         ("CollectionService", "GetInstanceAddedSignal") => |l, _, a| tag_signal(l, a, true),
@@ -271,6 +280,7 @@ pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
                 queries::native,
                 camera::native,
                 camera_moves::native,
+                camera_occlusion::native,
                 gui::native,
                 textbox::native,
                 core::native,

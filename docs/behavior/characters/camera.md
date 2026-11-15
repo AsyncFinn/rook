@@ -141,6 +141,58 @@ Studio, which Rook's run matches.
   frame, even right after a script set Focus (Observed), and so during an
   interpolation too.
 
+## Camera methods
+
+Observed in Studio 0.747 on 2026-11-14, on the playtest server and
+client; the server's half is the conformance case `physics/camera`. Code
+in `rook-lua`'s `api/methods/camera.rs` (roll, near plane),
+`camera_moves.rs` (orbit steps, ZoomToExtents) and
+`camera_occlusion.rs`.
+
+- `NearPlaneZ` is -0.1 for a client's current camera and -0.5 for every
+  other camera, a server's current one included.
+- `SetRoll(angle)` keeps the angle as given (7 stays 7) on a Scriptable
+  camera, until its CameraType changes; any other camera ignores it.
+  `GetRoll` reads that roll, never the CFrame's own. `GetRenderCFrame`
+  is `CFrame * CFrame.Angles(0, 0, -roll)`, and the window draws a
+  Scriptable current camera with it.
+- `PanUnits(n)` and `TiltUnits(n)` orbit the Focus at the camera's
+  distance from it (a camera on its Focus goes a stud out), heading and
+  pitch taken from the look vector, then aim it with
+  `CFrame.lookAt(position, Focus)`, which drops the roll. Pan rounds the
+  heading to a multiple of 45° and turns 45° clockwise (from above) a
+  unit, keeping the look's height, so a camera `lookAt` aimed straight
+  down stays exactly as it was. Tilt rounds
+  the pitch to a multiple of 10°, raises it 10° a unit, keeps it within
+  81° of level, and returns false only when the pitch asked for is the
+  one it had. `n` is rounded half away from zero (1.5 is 2).
+- `ZoomToExtents(cframe, size)` moves Focus to the box's center
+  (unturned) and backs the camera, turned as it was, off it until the
+  sphere around the box's world-axis box (radius at least 0.5) fills the
+  narrower half of the field of view: vertical, or horizontal in a
+  viewport taller than wide.
+- `GetPanSpeed` and `GetTiltSpeed` read 0.
+- `GetPartsObscuringTarget(points, ignore)` casts from the camera to each
+  point in turn, listing each ray's parts nearest first and each part
+  once. A part the ray starts in or only reaches at its end is left out,
+  one holding the point is in; CanCollide and Transparency don't matter,
+  CanQuery does as for any ray, collision groups act as Default, Terrain
+  is never listed, there's no length limit, and entries that aren't
+  Vector3s are skipped.
+- `GetLargestCutoffDistance(ignore)` is how far in the camera must move
+  to see past what's between it and its Focus. Five rays run parallel to
+  the Focus-to-camera line, through the near plane's center and corners
+  (by the field of view and the viewport, along the camera's axes): each
+  from that offset off the Focus to that point on the near plane. A ray
+  that hits something (from the Focus side, skipping a part it starts
+  in) cuts off the stretch from there to the near plane; the longest
+  wins, 0 if none hit. It passes through parts with CanCollide off or
+  more than 0.95 transparent and groups that don't collide with Default,
+  and stops at Terrain.
+- Both find nothing for a camera outside Workspace.
+- Studio's two occlusion queries don't see a part created since the
+  last physics step (its other queries do); Rook's see it at once.
+
 ## In Rook
 
 - What the PlayerModule calls that Rook lacked, from running it in a

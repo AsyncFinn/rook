@@ -140,16 +140,33 @@ pub(super) fn get_tags(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outco
     Outcome::ret(lua, lua.create_sequence_from(tags)?)
 }
 
+/// What a CollectionService tag method gives for a nil instance, which
+/// has no tags: AddTag and RemoveTag do nothing and HasTag is false, the
+/// tag still required but not checked; GetTags is empty (measured).
+#[derive(Clone, Copy)]
+pub(super) enum NullTags {
+    Nothing,
+    False,
+    Empty,
+}
+
 /// CollectionService's forms of the tag methods, which take the instance
 /// first (creator-docs CollectionService).
 pub(super) fn collection_tag(
     lua: &Lua,
-    _: InstanceId,
     a: &Args,
     method: fn(&Lua, InstanceId, &Args) -> ApiResult<Outcome>,
+    null: NullTags,
 ) -> ApiResult<Outcome> {
-    let instance = a.instance(0)?;
-    let rest = Args::new(a.rest(1).into_iter().collect(), "CollectionService");
+    let rest = a.shifted(1);
+    let Some(instance) = a.object(0)? else {
+        return match null {
+            NullTags::Empty => Outcome::ret(lua, lua.create_table()?),
+            _ if rest.len() == 0 => Err(rest.missing(0)),
+            NullTags::False => Outcome::ret(lua, false),
+            NullTags::Nothing => Outcome::ret(lua, ()),
+        };
+    };
     method(lua, instance, &rest)
 }
 

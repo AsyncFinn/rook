@@ -8,7 +8,7 @@
 
 local std = ...
 local set_internal, fire, new_instance = std.set_internal, std.fire, std.new_instance
-local error, typeof, type, pairs, setmetatable, math = std.error, std.typeof, std.type, std.pairs, std.setmetatable, std.math
+local error, typeof, type, pairs, next, setmetatable, math = std.error, std.typeof, std.type, std.pairs, std.next, std.setmetatable, std.math
 local heartbeat = std.heartbeat
 
 local PI = math.pi
@@ -174,14 +174,17 @@ local function play(s)
 		end
 		s.elapsed, s.repeats, s.reversing = 0, 0, false
 	end
-	local byProp = owners[s.target] or {}
-	owners[s.target] = byProp
-	for name in s.goals do
-		local other = byProp[name]
-		if other and other ~= s then
-			finish(other, PlaybackState.Cancelled)
+	-- A null tween has no target and no goals to own.
+	if s.target ~= nil then
+		local byProp = owners[s.target] or {}
+		owners[s.target] = byProp
+		for name in s.goals do
+			local other = byProp[name]
+			if other and other ~= s then
+				finish(other, PlaybackState.Cancelled)
+			end
+			byProp[name] = s
 		end
-		byProp[name] = s
 	end
 	setState(s, if s.info.DelayTime > 0 and s.elapsed == 0 and s.state ~= PlaybackState.Paused
 		then PlaybackState.Delayed
@@ -193,15 +196,24 @@ end
 
 local tween = {}
 
-function tween.create(instance, info, goals)
-	if typeof(instance) ~= "Instance" then
+-- `count` is how many arguments the script passed: a nil instance is the
+-- null object, whose tween plays and finishes with nothing to change, and
+-- only a missing one is an error (measured).
+function tween.create(count, instance, info, goals)
+	if count < 1 then
 		error("Argument 1 missing or nil", 0)
+	end
+	if instance ~= nil and typeof(instance) ~= "Instance" then
+		error("Unable to cast value to Object", 0)
 	end
 	if typeof(info) ~= "TweenInfo" then
 		error("Argument 2 missing or nil", 0)
 	end
 	if type(goals) ~= "table" then
 		error("Argument 3 missing or nil", 0)
+	end
+	if instance == nil and next(goals) ~= nil then
+		error("TweenService:Create failed because Instance is null", 0)
 	end
 	local copy = {}
 	for name, goal in pairs(goals) do

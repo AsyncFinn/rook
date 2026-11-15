@@ -163,14 +163,22 @@ pub(super) fn get_descendants(lua: &Lua, this: InstanceId, _: &Args) -> ApiResul
     ret_instances(lua, &with_world(lua, |w| w.dom.descendants(this)))
 }
 
+/// Everything descends from nil: `IsDescendantOf(nil)` is true and
+/// `IsAncestorOf(nil)` false (measured).
 pub(super) fn is_descendant_of(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    let other = a.instance(0)?;
-    Outcome::ret(lua, with_world(lua, |w| w.dom.is_ancestor_of(other, this)))
+    let result = match a.object(0)? {
+        Some(other) => with_world(lua, |w| w.dom.is_ancestor_of(other, this)),
+        None => true,
+    };
+    Outcome::ret(lua, result)
 }
 
 pub(super) fn is_ancestor_of(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    let other = a.instance(0)?;
-    Outcome::ret(lua, with_world(lua, |w| w.dom.is_ancestor_of(this, other)))
+    let result = match a.object(0)? {
+        Some(other) => with_world(lua, |w| w.dom.is_ancestor_of(this, other)),
+        None => false,
+    };
+    Outcome::ret(lua, result)
 }
 
 pub(super) fn destroy(lua: &Lua, this: InstanceId, _: &Args) -> ApiResult<Outcome> {

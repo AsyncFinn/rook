@@ -105,10 +105,25 @@ impl CFrame {
         (rx, ry, rz)
     }
 
-    /// `CFrame.lookAt(at, target, up)`.
+    /// `CFrame.lookAt(at, target, up)`. A look along `up` (within 5e-7 of
+    /// it) turns by a fixed rule instead: right is `look × Y` when the look
+    /// leans more along X than Y, else `look × X` (Observed in Studio 0.747:
+    /// straight down gives right +Z and up +X, at 4.9e-7 off vertical too,
+    /// at 5e-7 the usual rule). A zero `up` or `target` at `at` gives NaN, as
+    /// Studio's does.
     pub fn look_at(at: Vec3, target: Vec3, up: Vec3) -> Self {
+        const PARALLEL: f32 = 5e-7;
         let look = (target - at).normalize();
-        let right = look.cross(up).normalize();
+        let across = look.cross(up.normalize());
+        let right = if across.length() < PARALLEL {
+            if look.x.abs() > look.y.abs() {
+                look.cross(Vec3::Y)
+            } else {
+                look.cross(Vec3::X)
+            }
+        } else {
+            across.normalize()
+        };
         let up = right.cross(look);
         Self {
             position: at,
@@ -332,6 +347,30 @@ mod tests {
         assert!(cf.fuzzy_eq(&CFrame::IDENTITY, EPS));
         let cf = CFrame::look_at(Vec3::new(1.0, 2.0, 3.0), Vec3::new(4.0, 2.0, 3.0), Vec3::Y);
         assert!(cf.look_vector().fuzzy_eq(Vector3::X_AXIS, EPS));
+    }
+
+    /// Studio 0.747's components for looks along `up`.
+    #[test]
+    fn look_at_along_up_falls_back() {
+        let at = |at: Vec3, target: Vec3, up: Vec3| CFrame::look_at(at, target, up).components();
+        let down = at(Vec3::new(0.0, 10.0, 0.0), Vec3::ZERO, Vec3::Y);
+        assert_eq!(down, [0., 10., 0., 0., 1., 0., 0., 0., 1., 1., 0., 0.]);
+        let up = at(Vec3::ZERO, Vec3::new(0.0, 10.0, 0.0), Vec3::Y);
+        assert_eq!(up, [0., 0., 0., 0., 1., 0., 0., 0., -1., -1., 0., 0.]);
+        let along_x = at(Vec3::ZERO, Vec3::new(5.0, 0.0, 0.0), Vec3::X);
+        assert_eq!(along_x, [0., 0., 0., 0., 0., -1., 0., 1., 0., 1., 0., 0.]);
+        let along_z = at(Vec3::ZERO, Vec3::new(0.0, 0.0, 5.0), Vec3::Z);
+        assert_eq!(along_z, [0., 0., 0., 0., 1., 0., 1., 0., 0., 0., 0., -1.]);
+        // Within 5e-7 of vertical it falls back; at 5e-7 it doesn't.
+        let right = |off: f32| {
+            CFrame::look_at(Vec3::Y, Vec3::new(0.0, 0.0, off), Vec3::Y)
+                .rotation
+                .x_axis
+        };
+        assert!((right(4.9e-7) - Vec3::Z).length() < 1e-6);
+        assert!((right(5e-7) + Vec3::X).length() < 1e-6);
+        // A zero up gives NaN, as Studio's does.
+        assert!(at(Vec3::ZERO, Vec3::NEG_Z, Vec3::ZERO)[3].is_nan());
     }
 
     #[test]

@@ -270,6 +270,7 @@ fn install_engine_helpers(lua: &Lua) -> mlua::Result<()> {
         "typeof",
         "pairs",
         "ipairs",
+        "next",
         "setmetatable",
         "math",
         "string",

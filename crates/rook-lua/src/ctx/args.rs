@@ -15,6 +15,9 @@ pub(crate) struct Args {
     vals: Vec<LuaValue>,
     /// Name used in messages, for example `new` or `FindFirstChild`.
     name: &'static str,
+    /// How many of the call's arguments come before `vals[0]`, so messages
+    /// number arguments as the script passed them.
+    offset: usize,
 }
 
 /// The type name scripts would see from `typeof`.
@@ -79,6 +82,18 @@ impl Args {
         Self {
             vals: args.into_vec(),
             name,
+            offset: 0,
+        }
+    }
+
+    /// The arguments from `from` on, still numbered as in the whole call
+    /// (`CollectionService:AddTag(nil)` is `Argument 2 missing or nil`,
+    /// measured).
+    pub(crate) fn shifted(&self, from: usize) -> Self {
+        Self {
+            vals: self.rest(from),
+            name: self.name,
+            offset: self.offset + from,
         }
     }
 
@@ -95,11 +110,23 @@ impl Args {
             )));
         };
         vals.remove(0);
-        Ok((this, Self { vals, name }))
+        Ok((
+            this,
+            Self {
+                vals,
+                name,
+                offset: 0,
+            },
+        ))
     }
 
     pub(crate) fn get(&self, i: usize) -> &LuaValue {
         self.vals.get(i).unwrap_or(&LuaValue::Nil)
+    }
+
+    /// How many arguments were passed, explicit nils included.
+    pub(crate) fn len(&self) -> usize {
+        self.vals.len()
     }
 
     pub(crate) fn rest(&self, from: usize) -> Vec<LuaValue> {
@@ -107,13 +134,13 @@ impl Args {
     }
 
     pub(crate) fn missing(&self, i: usize) -> ScriptError {
-        ScriptError(format!("Argument {} missing or nil", i + 1))
+        ScriptError(format!("Argument {} missing or nil", self.offset + i + 1))
     }
 
     pub(crate) fn wrong(&self, i: usize, expected: &str) -> ScriptError {
         ScriptError(format!(
             "invalid argument #{} to '{}' ({expected} expected, got {})",
-            i + 1,
+            self.offset + i + 1,
             self.name,
             type_name(self.get(i))
         ))
@@ -158,23 +185,48 @@ impl Args {
         !matches!(self.get(i), LuaValue::Nil | LuaValue::Boolean(false))
     }
 
-    pub(crate) fn instance(&self, i: usize) -> ApiResult<InstanceId> {
-        match self.get(i) {
-            LuaValue::Nil => Err(self.missing(i)),
-            _ => self
-                .opt_instance(i)?
-                .ok_or_else(|| ScriptError("Unable to cast value to Object".into())),
+    /// An `Object` parameter as Roblox casts it: a missing argument errors,
+    /// an explicit `nil` is the null object (`None`), anything but an
+    /// Instance doesn't cast. Measured: `Debris:AddItem(nil)` and
+    /// `workspace:IsDescendantOf(nil)` run, `Debris:AddItem()` is
+    /// `Argument 1 missing or nil`. What null means is each method's own.
+    pub(crate) fn object(&self, i: usize) -> ApiResult<Option<InstanceId>> {
+        if i >= self.len() {
+            return Err(self.missing(i));
         }
+        self.opt_instance(i)
     }
 
+    /// An `Object` parameter the method then checks is a `class`: null and
+    /// other classes are both `None`, as Roblox gives them the same
+    /// message (`Parameter 1 must be BasePart in SetPartCollisionGroup.`).
+    pub(crate) fn object_of(
+        &self,
+        lua: &Lua,
+        i: usize,
+        class: &str,
+    ) -> ApiResult<Option<InstanceId>> {
+        Ok(self
+            .object(i)?
+            .filter(|&id| crate::ctx::with_world(lua, |w| w.dom.is_a(id, class))))
+    }
+
+    /// An instance the method requires, for methods whose own check turns
+    /// null away as missing (`Humanoid:ApplyDescription(nil)` is
+    /// `Argument 1 missing or nil`, measured).
+    pub(crate) fn instance(&self, i: usize) -> ApiResult<InstanceId> {
+        self.opt_instance(i)?.ok_or_else(|| self.missing(i))
+    }
+
+    /// An optional instance: missing and `nil` are both `None`.
     pub(crate) fn opt_instance(&self, i: usize) -> ApiResult<Option<InstanceId>> {
         match self.get(i) {
             LuaValue::Nil => Ok(None),
             LuaValue::UserData(ud) => match ud.borrow::<LuaInstance>() {
                 Ok(inst) => Ok(Some(inst.0)),
-                Err(_) => Err(ScriptError("Unable to cast value to Object".into())),
+                Err(_) => Err(cast_to_object()),
             },
-            _ => Err(ScriptError("Unable to cast value to Object".into())),
+            _ => Err(cast_to_object()),
         }
     }
 
@@ -188,8 +240,8 @@ impl Args {
                 LuaValue::UserData(ud) => ud
                     .borrow::<LuaInstance>()
                     .map(|inst| inst.0)
-                    .map_err(|_| ScriptError("Unable to cast value to Object".into())),
-                _ => Err(ScriptError("Unable to cast value to Object".into())),
+                    .map_err(|_| cast_to_object()),
+                _ => Err(cast_to_object()),
             })
             .collect()
     }
@@ -232,6 +284,10 @@ impl Args {
             _ => Err(self.wrong(i, "Vector3")),
         }
     }
+}
+
+fn cast_to_object() -> ScriptError {
+    ScriptError("Unable to cast value to Object".into())
 }
 
 pub(crate) fn borrow_clone<T: UserData + Clone + 'static>(ud: &AnyUserData) -> Option<T> {

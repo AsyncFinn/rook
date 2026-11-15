@@ -95,9 +95,13 @@ pub(super) fn bind_to_close(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Out
 }
 
 pub(super) fn debris_add_item(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    let item = a.instance(0)?;
+    let item = a.object(0)?;
     // Default lifetime 10 seconds (creator-docs Debris:AddItem).
     let lifetime = a.number_or(1, 10.0)?;
+    // A nil item is accepted and nothing happens (measured).
+    let Some(item) = item else {
+        return Outcome::ret(lua, ());
+    };
     with_world(lua, |w| {
         w.scheduler
             .schedule(Queue::Task, lifetime, Job::Destroy(item));

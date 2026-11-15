@@ -171,7 +171,10 @@ pub(super) fn get_angle_attenuation(lua: &Lua, this: InstanceId, _: &Args) -> Ap
 /// `AudioEmitter:GetAudibilityFor(listener)` and
 /// `AudioListener:GetAudibilityFor(emitter)`.
 pub(super) fn get_audibility_for(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    let other = a.instance(0)?;
+    // Nil is heard at 0, as an unconnected one is (measured).
+    let Some(other) = a.object(0)? else {
+        return Outcome::ret(lua, 0.0);
+    };
     let level = with_world(lua, |w| {
         if w.dom.is_a(this, "AudioEmitter") {
             audio_api::audibility(w, this, other)

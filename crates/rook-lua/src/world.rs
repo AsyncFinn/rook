@@ -297,6 +297,8 @@ pub struct World {
     /// Cameras moving by `Camera:Interpolate`.
     pub(crate) interpolations:
         FxHashMap<InstanceId, crate::api::methods::camera_moves::Interpolation>,
+    /// Scriptable cameras' `SetRoll`, in radians, for those a script rolled.
+    pub(crate) camera_rolls: FxHashMap<InstanceId, f32>,
 }
 
 /// SpawnLocation, which the DOM indexes so a respawn needn't walk
@@ -364,6 +366,7 @@ impl World {
             topbar_transparency: FxHashMap::default(),
             movement: Default::default(),
             interpolations: FxHashMap::default(),
+            camera_rolls: FxHashMap::default(),
         }
     }
 
@@ -429,8 +432,14 @@ impl World {
         self.client_players.remove(&id);
         self.topbar_transparency.remove(&id);
         self.interpolations.remove(&id);
+        self.camera_rolls.remove(&id);
         self.movement.forget(id);
         self.styles.forget(id);
+    }
+
+    /// The roll `camera` is drawn with (`Camera:SetRoll`), in radians.
+    pub fn camera_roll(&self, camera: InstanceId) -> f32 {
+        self.camera_rolls.get(&camera).copied().unwrap_or(0.0)
     }
 
     /// Look at the journal for what StyleSheets must style again, before

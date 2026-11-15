@@ -371,10 +371,9 @@ fn part_bounds_in_radius(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Out
 }
 
 fn parts_in_part(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
-    let part = a.instance(0)?;
-    if !with_world(lua, |w| w.dom.is_a(part, "BasePart")) {
-        return Err(ScriptError("Part parameter must be BasePart".into()));
-    }
+    let part = a
+        .object_of(lua, 0, "BasePart")?
+        .ok_or_else(|| ScriptError("Part parameter must be BasePart".into()))?;
     let params = overlap_params(a, 1)?;
     let filter = params.filter();
     let (model, max) = (model(lua, this), params.max());

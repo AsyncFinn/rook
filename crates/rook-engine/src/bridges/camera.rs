@@ -91,7 +91,8 @@ impl DataModel {
                 && (has("PlayerModule") || has("CameraScript"))
         });
         (scriptable || followed).then(|| {
-            let cframe = dom.drawn_cframe(camera).unwrap_or(CFrame::IDENTITY);
+            let drawn = dom.drawn_cframe(camera).unwrap_or(CFrame::IDENTITY);
+            let cframe = rook_lua::rolled(drawn, w.camera_roll(camera));
             // Drawn moved with its subject, Focus with it.
             let shift =
                 cframe_of(ids.cframe).map_or(Vec3::ZERO, |cf| cframe.position - cf.position);
