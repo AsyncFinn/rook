@@ -5,7 +5,7 @@
 //! lines (docs/behavior/rendering/adornments.md).
 
 use super::*;
-use crate::world::EffectCall;
+use crate::runtime::world::EffectCall;
 
 fn call(lua: &Lua, this: InstanceId, call: EffectCall) -> ApiResult<Outcome> {
     with_world(lua, |w| w.effect_calls.push((this, call)));
@@ -46,7 +46,7 @@ fn points(a: &Args, i: usize) -> ApiResult<Vec<glam::Vec3>> {
     let mut out = Vec::new();
     for value in list.sequence_values::<LuaValue>() {
         match value? {
-            LuaValue::Vector(v) => out.push(crate::ctx::convert::from_lua_vector(v).0),
+            LuaValue::Vector(v) => out.push(crate::runtime::ctx::convert::from_lua_vector(v).0),
             _ => return Err(a.wrong(i, "Array of Vector3")),
         }
     }

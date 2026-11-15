@@ -8,7 +8,7 @@ use std::ffi::c_void;
 use mlua::Table;
 
 use super::*;
-use crate::ctx::args::{display_value, type_name};
+use crate::runtime::ctx::args::{display_value, type_name};
 
 /// Each listener gets its own copy, made now, not when it runs.
 pub(super) fn bindable_fire(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
@@ -23,7 +23,7 @@ pub(super) fn bindable_fire(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<
 pub(crate) fn install(lua: &Lua, std: &mlua::Table) -> mlua::Result<()> {
     std.set(
         "copy_bindable",
-        crate::ctx::api_fn(lua, |lua, args| {
+        crate::runtime::ctx::api_fn(lua, |lua, args| {
             let copied = copy_values(lua, &args.into_vec())?;
             Ok(Outcome::Return(MultiValue::from_vec(copied)))
         })?,
@@ -137,7 +137,7 @@ fn copy_table(
     table: &Table,
     within: &mut Vec<*const c_void>,
 ) -> Result<Table, ScriptError> {
-    let cast = |e: mlua::Error| ScriptError(crate::ctx::lua_error_message(&e));
+    let cast = |e: mlua::Error| ScriptError(crate::runtime::ctx::lua_error_message(&e));
     let address = table.to_pointer();
     if within.contains(&address) {
         return Err(ScriptError("tables cannot be cyclic".into()));
@@ -175,7 +175,7 @@ fn dictionary_key(lua: &Lua, key: &LuaValue) -> Result<LuaValue, ScriptError> {
     };
     lua.create_string(text)
         .map(LuaValue::String)
-        .map_err(|e| ScriptError(crate::ctx::lua_error_message(&e)))
+        .map_err(|e| ScriptError(crate::runtime::ctx::lua_error_message(&e)))
 }
 
 /// A number's whole part as a 64-bit integer, what x86's conversion makes of

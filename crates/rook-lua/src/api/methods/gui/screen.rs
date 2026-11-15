@@ -4,10 +4,10 @@ use rook_types::Vector2;
 
 use super::RawMethod;
 use super::ret_instances;
-use crate::ctx::args::Args;
-use crate::ctx::{ApiResult, Outcome, with_world};
-use crate::signal::SignalKey;
-use crate::threads::fire;
+use crate::runtime::ctx::args::Args;
+use crate::runtime::ctx::{ApiResult, Outcome, with_world};
+use crate::runtime::signal::SignalKey;
+use crate::runtime::threads::fire;
 use crate::types::LVector2;
 
 pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
@@ -108,7 +108,7 @@ fn select(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
         };
         let object = mlua::Value::UserData(crate::api::instance::push_instance(lua, picked)?);
         crate::api::instance::write_property(lua, this, name, &object)
-            .map_err(crate::ctx::ScriptError)??;
+            .map_err(crate::runtime::ctx::ScriptError)??;
     }
     Outcome::ret(lua, ())
 }

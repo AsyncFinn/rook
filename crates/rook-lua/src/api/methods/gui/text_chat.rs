@@ -6,9 +6,9 @@
 use mlua::{Lua, MultiValue, Table, Value as LuaValue};
 
 use super::RawMethod;
-use crate::ctx::args::Args;
-use crate::ctx::{ApiResult, Outcome, api_fn, with_world};
 use crate::net::{RemoteKind, RemoteMessage, to_net};
+use crate::runtime::ctx::args::Args;
+use crate::runtime::ctx::{ApiResult, Outcome, api_fn, with_world};
 
 pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
     Some(match (owner, name) {

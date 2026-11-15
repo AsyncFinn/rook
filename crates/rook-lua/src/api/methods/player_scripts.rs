@@ -6,10 +6,10 @@ use mlua::Lua;
 use rook_dom::InstanceId;
 
 use super::RawMethod;
-use crate::ctx::args::Args;
-use crate::ctx::{ApiResult, Outcome, with_world};
-use crate::signal::SignalKey;
-use crate::threads::fire;
+use crate::runtime::ctx::args::Args;
+use crate::runtime::ctx::{ApiResult, Outcome, with_world};
+use crate::runtime::signal::SignalKey;
+use crate::runtime::threads::fire;
 use crate::types::enums::{enum_item, item_value};
 
 /// The four kinds: the enum each holds, and the event registering fires.

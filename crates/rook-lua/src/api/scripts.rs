@@ -3,11 +3,11 @@ use rook_dom::{Change, Dom, InstanceId};
 use rook_types::RunContext;
 
 use super::instance::{LuaInstance, push_instance};
-use crate::bytecode;
-use crate::ctx::args::Args;
-use crate::ctx::{ApiResult, Outcome, ScriptError, api_fn, api_ret, with_world};
-use crate::threads::spawn;
-use crate::world::{Job, MessageType, WaitKind, World};
+use crate::runtime::bytecode;
+use crate::runtime::ctx::args::Args;
+use crate::runtime::ctx::{ApiResult, Outcome, ScriptError, api_fn, api_ret, with_world};
+use crate::runtime::threads::spawn;
+use crate::runtime::world::{Job, MessageType, WaitKind, World};
 
 fn source_of(lua: &Lua, id: InstanceId) -> String {
     with_world(lua, |w| {
@@ -24,7 +24,7 @@ fn environment(lua: &Lua, script: InstanceId) -> mlua::Result<Table> {
 }
 
 /// Compile a script's source to run in `env` (once per source, see
-/// [`bytecode`](crate::bytecode)), or load its bytecode if it came
+/// [`bytecode`](crate::runtime::bytecode)), or load its bytecode if it came
 /// compiled. Chunk names are full names, so errors read
 /// `Workspace.Script:3: ...` as on Roblox.
 fn compile(lua: &Lua, id: InstanceId, env: Table) -> mlua::Result<Function> {
@@ -96,7 +96,10 @@ pub(crate) fn run_script(lua: &Lua, id: InstanceId) -> bool {
         Err(e) => {
             with_world(lua, |w| {
                 w.errors += 1;
-                w.push_log(MessageType::Error, crate::ctx::lua_error_message(&e));
+                w.push_log(
+                    MessageType::Error,
+                    crate::runtime::ctx::lua_error_message(&e),
+                );
             });
             return false;
         }
@@ -104,7 +107,7 @@ pub(crate) fn run_script(lua: &Lua, id: InstanceId) -> bool {
     match lua.create_thread(func) {
         Ok(thread) => {
             with_world(lua, |w| w.started.insert(id, env));
-            crate::threads::resume(lua, &thread, ());
+            crate::runtime::threads::resume(lua, &thread, ());
             true
         }
         Err(_) => false,
@@ -359,7 +362,10 @@ fn require(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
     let func = compile(lua, module, environment(lua, module)?).map_err(|e| {
         with_world(lua, |w| {
             w.errors += 1;
-            w.push_log(MessageType::Error, crate::ctx::lua_error_message(&e));
+            w.push_log(
+                MessageType::Error,
+                crate::runtime::ctx::lua_error_message(&e),
+            );
         });
         ScriptError("Requested module experienced an error while loading".into())
     })?;
@@ -403,7 +409,7 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
             let key = lua.create_registry_value(value.clone())?;
             with_world(lua, |w| w.modules.results.insert(module, key));
         } else {
-            let msg = crate::ctx::args::display_value(lua, &value);
+            let msg = crate::runtime::ctx::args::display_value(lua, &value);
             with_world(lua, |w| {
                 w.errors += 1;
                 w.push_log(MessageType::Error, msg);

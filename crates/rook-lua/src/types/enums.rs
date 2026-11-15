@@ -5,7 +5,7 @@ use mlua::{
 };
 use rook_reflection::{EnumId, database};
 
-use crate::ctx::ctx;
+use crate::runtime::ctx::ctx;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct LEnums;
@@ -74,7 +74,7 @@ pub(crate) fn coerce(_lua: &Lua, v: &LuaValue, enum_id: EnumId) -> Result<u32, S
             )),
             Err(_) => Err(format!(
                 "EnumItem expected, got {}",
-                crate::ctx::args::type_name(v)
+                crate::runtime::ctx::args::type_name(v)
             )),
         },
         LuaValue::String(s) => {
@@ -83,7 +83,7 @@ pub(crate) fn coerce(_lua: &Lua, v: &LuaValue, enum_id: EnumId) -> Result<u32, S
                 .ok_or_else(|| format!("Invalid value \"{s}\" for enum {enum_name}"))
         }
         LuaValue::Integer(_) | LuaValue::Number(_) => {
-            let n = crate::ctx::args::number_of(v).unwrap_or(-1.0);
+            let n = crate::runtime::ctx::args::number_of(v).unwrap_or(-1.0);
             let value = n as u32;
             if n >= 0.0 && has_value(enum_id, value) {
                 Ok(value)
@@ -93,7 +93,7 @@ pub(crate) fn coerce(_lua: &Lua, v: &LuaValue, enum_id: EnumId) -> Result<u32, S
         }
         _ => Err(format!(
             "EnumItem expected, got {}",
-            crate::ctx::args::type_name(v)
+            crate::runtime::ctx::args::type_name(v)
         )),
     }
 }

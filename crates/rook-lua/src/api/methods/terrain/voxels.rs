@@ -38,7 +38,7 @@ pub(in crate::api::methods) fn read_voxels(
         materials.raw_set(x + 1, mx)?;
         occupancies.raw_set(x + 1, ox)?;
     }
-    let size_value = crate::ctx::convert::vector3_to_lua(rook_types::Vector3::new(
+    let size_value = crate::runtime::ctx::convert::vector3_to_lua(rook_types::Vector3::new(
         size.x as f32,
         size.y as f32,
         size.z as f32,
@@ -100,7 +100,7 @@ fn voxel_array<T>(
                         x + 1,
                         y + 1,
                         z + 1,
-                        crate::ctx::args::type_name(&v)
+                        crate::runtime::ctx::args::type_name(&v)
                     ))
                 })?;
                 out.push(value);
@@ -140,7 +140,7 @@ pub(in crate::api::methods) fn write_voxels(
         3,
         "occupancies",
         size,
-        crate::ctx::args::number_of,
+        crate::runtime::ctx::args::number_of,
         "number",
     )?;
     let Some(bounds) = Bounds::of_block(min, size) else {

@@ -20,7 +20,7 @@ use std::collections::BTreeSet;
 use rook_dom::{Change, Dom, InstanceId};
 use rook_types::{CFrame, RollOffMode, Value};
 
-use crate::world::World;
+use crate::runtime::world::World;
 
 /// The pins of a class Rook wires: its inputs (what a Wire's
 /// `TargetName` may name) and outputs (`SourceName`), as Studio's

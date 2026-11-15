@@ -7,9 +7,9 @@ use mlua::Lua;
 use rook_dom::{DomError, InstanceId};
 
 use crate::api::methods::{prompts, tools};
-use crate::ctx::with_world;
-use crate::signal::SignalKey;
-use crate::threads::dispatch;
+use crate::runtime::ctx::with_world;
+use crate::runtime::signal::SignalKey;
+use crate::runtime::threads::dispatch;
 
 /// Run `f` on the world and fire the signals it recorded.
 fn step<R>(lua: &Lua, f: impl FnOnce(&mut rook_dom::Dom) -> R) -> R {

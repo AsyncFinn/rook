@@ -40,7 +40,7 @@ fn error_source(text: &str) -> Option<String> {
         && let Some((chunk, line)) = loc.rsplit_once(':')
         && let Ok(line) = line.parse()
     {
-        return Some(crate::world::short_source(chunk, line));
+        return Some(crate::runtime::world::short_source(chunk, line));
     }
     let frame = text.lines().find(|l| l.starts_with("Script '"))?;
     let chunk = frame.strip_prefix("Script '")?.split('\'').next()?;
@@ -51,7 +51,7 @@ fn error_source(text: &str) -> Option<String> {
         .next()?
         .parse()
         .ok()?;
-    Some(crate::world::short_source(chunk, line))
+    Some(crate::runtime::world::short_source(chunk, line))
 }
 
 /// The traceback mlua attached to an error, if any.

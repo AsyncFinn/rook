@@ -6,7 +6,7 @@ use rbx_types::NumberRange;
 use rook_dom::{DomError, InstanceId};
 use rook_types::Value;
 
-use crate::world::World;
+use crate::runtime::world::World;
 
 /// (class, property, lowest, highest).
 const RANGES: &[(&str, &str, f64, f64)] = &[

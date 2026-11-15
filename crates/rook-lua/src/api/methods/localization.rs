@@ -13,8 +13,8 @@ use serde::{Deserialize, Serialize};
 
 use super::{RawMethod, mutate, ret_instances};
 use crate::api::instance::push_instance;
-use crate::ctx::args::Args;
-use crate::ctx::{ApiResult, Outcome, ScriptError, with_world};
+use crate::runtime::ctx::args::Args;
+use crate::runtime::ctx::{ApiResult, Outcome, ScriptError, with_world};
 
 /// The locale Rook runs in: Roblox's `en-us`.
 pub(crate) const LOCALE: &str = "en-us";
@@ -258,7 +258,7 @@ fn substitute(text: &str, args: Option<&Table>) -> mlua::Result<String> {
             LuaValue::Nil => out.push_str(&rest[open..=open + close]),
             LuaValue::String(s) => out.push_str(&s.to_string_lossy()),
             LuaValue::Integer(n) => out.push_str(&n.to_string()),
-            LuaValue::Number(n) => out.push_str(&crate::ctx::args::format_number(n)),
+            LuaValue::Number(n) => out.push_str(&crate::runtime::ctx::args::format_number(n)),
             other => out.push_str(&format!("{other:?}")),
         }
         rest = &rest[open + close + 1..];

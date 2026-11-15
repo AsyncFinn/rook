@@ -14,7 +14,7 @@ use rook_dom::{Dom, InstanceId};
 use rustc_hash::FxHashSet;
 
 use crate::api::methods::camera::rays::{Lens, project};
-use crate::world::World;
+use crate::runtime::world::World;
 
 /// A prompt near enough to show it or its indicator.
 #[derive(Debug, Clone, Copy)]

@@ -11,9 +11,9 @@ use rustc_hash::FxHashSet;
 
 use super::RawMethod;
 use super::rays::{Lens, near_plane};
-use crate::ctx::args::{Args, type_name};
-use crate::ctx::convert::from_lua_vector;
-use crate::ctx::{ApiResult, Outcome, ScriptError, with_world};
+use crate::runtime::ctx::args::{Args, type_name};
+use crate::runtime::ctx::convert::from_lua_vector;
+use crate::runtime::ctx::{ApiResult, Outcome, ScriptError, with_world};
 
 /// Parts more transparent than this don't cut the view off (Observed:
 /// 0.95 does, 0.951 doesn't).

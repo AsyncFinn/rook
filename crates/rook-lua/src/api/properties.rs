@@ -1,13 +1,9 @@
 //! Derived properties: values computed from other properties rather than
 //! stored. `get` and `set` return `None` for properties stored normally.
 
-use std::sync::LazyLock;
-
-use rbx_types::VariantType;
-use rook_dom::{Dom, DomError, InstanceId};
-use rook_physics::assembly::{self, Assembly};
+use rook_dom::{DomError, InstanceId};
+use rook_physics::assembly::Assembly;
 use rook_physics::joints;
-use rook_reflection::{PropertyId, PropertyKind, PropertyType, Serialization};
 use rook_types::{CFrame, Color3, Value, Vector3};
 
 use crate::api::methods::characters::spawning;
@@ -16,218 +12,28 @@ use crate::types::color::closest_brick_color;
 mod attachment;
 mod grip;
 mod mouse;
+mod part;
 pub(crate) mod selection;
+mod sound;
 mod text;
+mod views;
 
-use crate::world::World;
+use crate::runtime::world::World;
 pub(crate) use mouse::copy_icon;
+pub(crate) use part::{cframe, part_cframe, part_ids, set_cframe};
+use part::{orientation, rotation, saved_fidelity, set_cframe_alone};
+use sound::set_sound;
+use views::{BRICK_COLOR_OF, SAME_AS, is_text_object, view};
+pub(crate) use views::{
+    changed_name, content_value, content_view, stored_property, wrong_ref_class,
+};
 
-pub(crate) fn cframe(w: &World, id: InstanceId) -> CFrame {
-    w.dom
-        .cframe_property(id, "CFrame")
-        .unwrap_or(CFrame::IDENTITY)
-}
-
-/// [`cframe`] of a BasePart, by id.
-pub(crate) fn part_cframe(w: &World, part: InstanceId) -> CFrame {
-    (w.dom)
-        .read_property(part, part_ids().cframe, Value::as_cframe)
-        .unwrap_or(CFrame::IDENTITY)
-}
-
-/// BasePart's class and the properties model moves read of every part,
-/// resolved once: those walk every part of a model, often every frame.
-pub(crate) struct PartIds {
-    pub(crate) class: rook_reflection::ClassId,
-    pub(crate) cframe: PropertyId,
-    pub(crate) size: PropertyId,
-}
-
-pub(crate) fn part_ids() -> &'static PartIds {
-    static IDS: LazyLock<PartIds> = LazyLock::new(|| {
-        let db = rook_reflection::database();
-        let class = db.class_by_name("BasePart").expect("BasePart").id;
-        let id = |name| db.find_canonical_property(class, name).expect(name).id;
-        PartIds {
-            class,
-            cframe: id("CFrame"),
-            size: id("Size"),
-        }
-    });
-    &IDS
-}
-
-/// `CollisionFidelity`: Studio works it out from the saved geometry, and a
-/// value in the file means nothing (observed in Studio 0.746).
-fn saved_fidelity(dom: &Dom, id: InstanceId) -> u32 {
-    const BOX: u32 = 1;
-    rook_physics::saved_blob(dom, id)
-        .and_then(|bytes| rook_content::decode::mesh::union::physics::fidelity(&bytes).ok())
-        .unwrap_or(BOX)
-}
-
-/// Set a part's CFrame as a script does: its assembly moves with it.
-pub(crate) fn set_cframe(w: &mut World, id: InstanceId, c: CFrame) -> Result<(), DomError> {
-    assembly::move_part(&mut w.dom, id, c)
-}
-
-/// Move one part on its own, as setting Position, Orientation or Rotation
-/// does: its joints are rewritten to hold it where it now is (observed).
-fn set_cframe_alone(w: &mut World, id: InstanceId, c: CFrame) -> Result<(), DomError> {
-    let pid = w.dom.property_id(id, "CFrame").ok_or(DomError::Stale)?;
-    w.dom
-        .set_property(id, pid, Value::CFrame(c.written().orthonormalize()))?;
-    joints::reseat(&mut w.dom, id)
-}
-
-/// In degrees, with no negative zeros: a new part's `Orientation` and
-/// `Rotation` read `0, 0, 0` where `CFrame:ToOrientation()` gives `-0`
-/// (observed, Studio 0.744).
-fn degrees(v: (f32, f32, f32)) -> Vector3 {
-    let d = |a: f32| a.to_degrees() + 0.0;
-    Vector3::new(d(v.0), d(v.1), d(v.2))
-}
-
-/// `Orientation`: degrees, applied in Y, X, Z order (Confirmed: creator-docs
-/// BasePart.Orientation).
-fn orientation(c: &CFrame) -> Vector3 {
-    degrees(c.to_orientation())
-}
-
-/// `Rotation`: degrees, the XYZ Euler angles (Confirmed: creator-docs
-/// BasePart.Rotation).
-fn rotation(c: &CFrame) -> Vector3 {
-    degrees(c.to_euler_angles_xyz())
-}
-
-/// Unserialized properties that read and write another property of the
-/// same object, found by comparing the database's serialization data.
-const SAME_AS: &[(&str, &str, &str)] = &[
-    ("Humanoid", "Health", "Health_XML"),
-    ("IntConstrainedValue", "Value", "ConstrainedValue"),
-    ("DoubleConstrainedValue", "Value", "ConstrainedValue"),
-    ("Sound", "Pitch", "PlaybackSpeed"),
-    // Observed: the deprecated MaxDistance reads and sets
-    // RollOffMaxDistance (EmitterSize is RollOffMinDistance's alias in the
-    // database already).
-    ("Sound", "MaxDistance", "RollOffMaxDistance"),
-    ("GuiObject", "Transparency", "BackgroundTransparency"),
-    ("GuiBase2d", "Localize", "AutoLocalize"),
-    (
-        "BallSocketConstraint",
-        "MaxFrictionTorque",
-        "MaxFrictionTorqueXml",
-    ),
-    // Read-only for scripts. Observed in Studio 0.742: a MeshPart saved
-    // with InitialSize reads it as MeshSize, and one saved without reads
-    // (0, 0, 0) even after its mesh loads.
-    ("MeshPart", "MeshSize", "InitialSize"),
-    // Unions too (observed: a small place's unions read their InitialSize).
-    ("PartOperation", "MeshSize", "InitialSize"),
-    // Files save a truss's Style as `style`, a property of its own in the
-    // database (a large older place's NoSupports trusses read back the default).
-    ("TrussPart", "Style", "style"),
-];
-
-/// BrickColor views of Color3 properties: reads give the nearest
-/// BrickColor, writes store the BrickColor's color.
-const BRICK_COLOR_OF: &[(&str, &str, &str)] = &[
-    ("BasePart", "BrickColor", "Color"),
-    ("BodyColors", "HeadColor", "HeadColor3"),
-    ("BodyColors", "LeftArmColor", "LeftArmColor3"),
-    ("BodyColors", "LeftLegColor", "LeftLegColor3"),
-    ("BodyColors", "RightArmColor", "RightArmColor3"),
-    ("BodyColors", "RightLegColor", "RightLegColor3"),
-    ("BodyColors", "TorsoColor", "TorsoColor3"),
-    ("GuiObject", "BackgroundColor", "BackgroundColor3"),
-    ("GuiObject", "BorderColor", "BorderColor3"),
-    ("GuiBase3d", "Color", "Color3"),
-];
-
-/// The `Content` property a legacy string content property is a view of:
-/// `MeshId` of `MeshContent`, `Texture` of `TextureContent`, `SoundId` of
-/// `AudioContent` and so on. Files store only the `Content` one (the
-/// database marks each legacy property as migrating to it), and in Studio
-/// both read the same value. A table by property id, so the check costs
-/// one lookup per read.
-pub(crate) fn content_view(property: PropertyId) -> Option<PropertyId> {
-    static VIEWS: LazyLock<Vec<Option<PropertyId>>> = LazyLock::new(|| {
-        let db = rook_reflection::database();
-        (0..db.property_count())
-            .map(|i| {
-                let p = db.property(PropertyId(i as u32));
-                let PropertyKind::Canonical(Serialization::Migrate { to }) = &p.kind else {
-                    return None;
-                };
-                let [target] = to.as_slice() else {
-                    return None;
-                };
-                let target = db.find_canonical_property(p.owner, target)?;
-                let content = PropertyType::Value(VariantType::Content);
-                (p.ty == PropertyType::Value(VariantType::ContentId) && target.ty == content)
-                    .then_some(target.id)
-            })
-            .collect()
-    });
-    VIEWS.get(property.0 as usize).copied().flatten()
-}
-
-/// What setting a legacy content property stores: backslashes in an
-/// `rbxasset://` path become slashes (observed in Studio 0.742 for every
-/// content property tried: `rbxasset://Textures\Face.PNG` reads back as
-/// `rbxasset://Textures/Face.PNG`), and an empty string is no content.
-pub(crate) fn content_value(url: &str) -> Value {
-    if url.is_empty() {
-        return Value::Content(rook_types::Content::none());
-    }
-    let url = match url.strip_prefix("rbxasset://") {
-        Some(path) => format!("rbxasset://{}", path.replace('\\', "/")),
-        None => url.to_owned(),
-    };
-    Value::Content(rook_types::Content::from_uri(url))
-}
-
-fn is_text_object(w: &World, id: InstanceId) -> bool {
-    matches!(w.dom.class_name(id), "TextLabel" | "TextButton" | "TextBox")
-}
-
-fn view<'a>(
-    w: &World,
+pub(super) fn set_named(
+    w: &mut World,
     id: InstanceId,
     name: &str,
-    table: &'a [(&str, &str, &str)],
-) -> Option<&'a str> {
-    table
-        .iter()
-        .find(|(class, prop, _)| *prop == name && w.dom.is_a(id, class))
-        .map(|(_, _, target)| *target)
-}
-
-/// The stored property whose changes a property's changed signal hears:
-/// the one a view reads (`Health_XML` for `Health`, `AudioContent` for
-/// `SoundId`), else the property itself.
-pub(crate) fn stored_property(w: &World, id: InstanceId, name: &str) -> Option<PropertyId> {
-    let pid = w
-        .dom
-        .property_id(id, view(w, id, name, SAME_AS).unwrap_or(name))?;
-    Some(content_view(pid).unwrap_or(pid))
-}
-
-/// The name `Changed` gives a stored property scripts can't see
-/// (`Health_XML` changes as `Health`).
-pub(crate) fn changed_name(w: &World, id: InstanceId, stored: &'static str) -> &'static str {
-    SAME_AS
-        .iter()
-        .find(|(class, _, target)| *target == stored && w.dom.is_a(id, class))
-        .filter(|_| {
-            w.dom.property_id(id, stored).is_some_and(|p| {
-                w.dom.database().property(p).scriptability == rook_reflection::Scriptability::None
-            })
-        })
-        .map_or(stored, |(_, view, _)| *view)
-}
-
-fn set_named(w: &mut World, id: InstanceId, name: &str, value: Value) -> Result<(), DomError> {
+    value: Value,
+) -> Result<(), DomError> {
     w.dom.set_property_by_name(id, name, value)
 }
 
@@ -404,35 +210,6 @@ pub(crate) fn get(w: &World, id: InstanceId, name: &str) -> Option<Value> {
     }
 }
 
-/// Reference properties that take one class only, with that class. Rook
-/// checks just these: the database doesn't say which class the others
-/// take.
-const REF_CLASSES: &[(&str, &str, &str)] = &[("Sound", "SoundGroup", "SoundGroup")];
-
-/// Studio's error for an instance of the wrong class given to one of
-/// [`REF_CLASSES`] (observed for `Sound.SoundGroup`: "Expected SoundGroup
-/// got Part for Sound.SoundGroup.").
-pub(crate) fn wrong_ref_class(
-    w: &World,
-    id: InstanceId,
-    name: &str,
-    value: &Value,
-) -> Option<String> {
-    let Value::Ref(Some(r)) = value else {
-        return None;
-    };
-    let target = InstanceId::from_ref(*r);
-    let &(owner, _, class) = REF_CLASSES
-        .iter()
-        .find(|(owner, p, _)| *p == name && w.dom.is_a(id, owner))?;
-    (!w.dom.is_a(target, class)).then(|| {
-        format!(
-            "Expected {class} got {} for {owner}.{name}.",
-            w.dom.class_name(target)
-        )
-    })
-}
-
 pub(crate) fn set(
     w: &mut World,
     id: InstanceId,
@@ -594,48 +371,5 @@ pub(crate) fn set(
             Some(w.dom.set_property(id, pid, Value::OptionalCFrame(Some(*c))))
         }
         _ => None,
-    }
-}
-
-/// Sound properties with rules of their own (observed in Studio 0.743):
-/// `Volume` is kept within 0 to 10 and `PlaybackSpeed` (and `Pitch`) within
-/// 0 to 20, the roll-off distances at 0 or more; a `TimePosition` a script
-/// sets is where the next `Play` starts.
-fn set_sound(
-    w: &mut World,
-    id: InstanceId,
-    name: &str,
-    value: &Value,
-) -> Option<Result<(), DomError>> {
-    let n = value.as_number();
-    match (name, n) {
-        ("Volume", Some(v)) => Some(set_named(
-            w,
-            id,
-            "Volume",
-            Value::Float32(v.clamp(0.0, 10.0) as f32),
-        )),
-        ("PlaybackSpeed" | "Pitch", Some(v)) => Some(set_named(
-            w,
-            id,
-            "PlaybackSpeed",
-            Value::Float32(v.clamp(0.0, 20.0) as f32),
-        )),
-        // Observed: a negative RollOffMinDistance reads 0; a minimum past
-        // the maximum is kept as it is. A negative maximum is taken to be
-        // 0 the same way (Inference).
-        ("RollOffMinDistance" | "EmitterSize" | "RollOffMaxDistance" | "MaxDistance", Some(v)) => {
-            let target = if name.contains("Max") {
-                "RollOffMaxDistance"
-            } else {
-                "RollOffMinDistance"
-            };
-            Some(set_named(w, id, target, Value::Float32(v.max(0.0) as f32)))
-        }
-        ("TimePosition", Some(t)) => {
-            w.sounds.entry(id).or_default().start = t;
-            Some(set_named(w, id, "TimePosition", Value::Float64(t)))
-        }
-        _ => view(w, id, name, SAME_AS).map(|target| set_named(w, id, target, value.clone())),
     }
 }

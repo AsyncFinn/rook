@@ -15,7 +15,7 @@ use rook_reflection::{ClassId, EnumId, PropertyId};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::api::instance::MemberTable;
-use crate::world::World;
+use crate::runtime::world::World;
 
 /// A plain stored property read: the property and its enum, if any.
 pub(crate) type FastRead = (PropertyId, Option<EnumId>);

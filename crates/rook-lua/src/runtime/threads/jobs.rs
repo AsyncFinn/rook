@@ -84,7 +84,7 @@ pub(crate) fn run_job(lua: &Lua, job: Job) {
         }
         Job::Destroy(id) => {
             // Debris may outlive what it was given; destroyed is destroyed.
-            let _ = crate::removal::destroy(lua, id);
+            let _ = crate::runtime::removal::destroy(lua, id);
         }
         Job::Fire { handler, args, .. } => run_handler(lua, handler, args),
     }

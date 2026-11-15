@@ -1,4 +1,5 @@
 use super::*;
+use crate::runtime::scheduler::Queue;
 
 /// Run `source` as a script, step `frames` 60 Hz frames, and return the
 /// output lines (errors prefixed with `ERR `, warnings with `WARN `).

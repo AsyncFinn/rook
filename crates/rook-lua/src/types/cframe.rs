@@ -7,12 +7,12 @@ use mlua::{
 use rook_types::{CFrame, Vector3};
 
 use super::fmt_f32;
-use crate::ctx::args::{number_of, type_name};
+use crate::runtime::ctx::args::{number_of, type_name};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct LCFrame(pub CFrame);
 
-use crate::ctx::convert::{from_lua_vector as v3, lua_vector as lv3};
+use crate::runtime::ctx::convert::{from_lua_vector as v3, lua_vector as lv3};
 
 /// `CFrame.new`'s error for an argument that isn't a Vector3.
 fn new_argument(pos: usize, value: &LuaValue) -> mlua::Error {

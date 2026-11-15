@@ -14,8 +14,8 @@ use rook_dom::InstanceId;
 
 use super::RawMethod;
 use crate::api::instance::push_instance;
-use crate::ctx::args::{Args, number_of, type_name};
-use crate::ctx::{ApiResult, Outcome, ScriptError, api_fn, with_world};
+use crate::runtime::ctx::args::{Args, number_of, type_name};
+use crate::runtime::ctx::{ApiResult, Outcome, ScriptError, api_fn, with_world};
 
 /// A Model holding the asset's instances, with no parent and nothing
 /// holding it yet, or why the asset didn't load.
@@ -152,7 +152,7 @@ pub(crate) fn deliver(lua: &Lua, request: u64, result: AssetModel) {
             Ok(model) => {
                 name_model(lua, model, "Model".into());
                 if let Ok(m) = push_instance(lua, model) {
-                    crate::threads::resume(lua, &thread, m);
+                    crate::runtime::threads::resume(lua, &thread, m);
                 }
             }
             Err(kind) => {
@@ -160,7 +160,7 @@ pub(crate) fn deliver(lua: &Lua, request: u64, result: AssetModel) {
                     FailureKind::Forbidden => "User is not authorized to access Asset.",
                     _ => "Request asset was not found",
                 };
-                crate::threads::resume(lua, &thread, (LuaValue::Nil, msg));
+                crate::runtime::threads::resume(lua, &thread, (LuaValue::Nil, msg));
             }
         },
         Waiter::Require(id) => {
@@ -193,10 +193,12 @@ pub(crate) fn deliver(lua: &Lua, request: u64, result: AssetModel) {
                 match &found {
                     Ok(module) => {
                         if let Ok(m) = push_instance(lua, *module) {
-                            crate::threads::resume(lua, &thread, m);
+                            crate::runtime::threads::resume(lua, &thread, m);
                         }
                     }
-                    Err(msg) => crate::threads::resume(lua, &thread, (LuaValue::Nil, msg.clone())),
+                    Err(msg) => {
+                        crate::runtime::threads::resume(lua, &thread, (LuaValue::Nil, msg.clone()))
+                    }
                 }
             }
         }

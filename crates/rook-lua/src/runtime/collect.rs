@@ -7,7 +7,7 @@ use mlua::Value as LuaValue;
 
 use crate::Runtime;
 use crate::api::instance::key_of;
-use crate::ctx::ctx;
+use crate::runtime::ctx::ctx;
 
 impl Runtime {
     /// Drop the journal's entries before `cursor`, which every reader has

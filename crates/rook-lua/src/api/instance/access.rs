@@ -77,7 +77,7 @@ pub(crate) fn set_member(lua: &Lua, id: InstanceId, key: &str, value: LuaValue) 
                 _ => {
                     return Err(ScriptError(format!(
                         "Unable to assign property {key}. Function expected, got {}",
-                        crate::ctx::args::type_name(&value)
+                        crate::runtime::ctx::args::type_name(&value)
                     )));
                 }
             };
@@ -145,7 +145,7 @@ pub(crate) fn write_property(
             return Ok(Ok(()));
         };
         let parent = r.map(InstanceId::from_ref);
-        let result = crate::removal::set_parent(lua, id, parent);
+        let result = crate::runtime::removal::set_parent(lua, id, parent);
         return Ok(result.map_err(ScriptError::from));
     }
     let selection = properties::selection::before(lua, id, name, &converted);

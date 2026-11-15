@@ -236,10 +236,12 @@ fn hopper_bins_only_toggle_active() {
         let ws = w.dom.get_service("Workspace").unwrap();
         let script = w.dom.create_by_name("Script").unwrap();
         w.dom.set_parent(script, Some(ws)).unwrap();
-        let code = crate::bytecode::compiler().compile(source).unwrap();
+        let code = crate::runtime::bytecode::compiler()
+            .compile(source)
+            .unwrap();
         w.bytecode.insert(
             script,
-            crate::world::Compiled {
+            crate::runtime::world::Compiled {
                 code: code.into(),
                 core: true,
             },

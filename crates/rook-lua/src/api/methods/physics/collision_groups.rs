@@ -10,8 +10,8 @@ use rook_physics::contacts::groups::{self, CollisionGroups, GroupError, MAX_GROU
 use rook_types::Value;
 
 use super::{RawMethod, mutate};
-use crate::ctx::args::Args;
-use crate::ctx::{ApiResult, Outcome, ScriptError, with_world};
+use crate::runtime::ctx::args::Args;
+use crate::runtime::ctx::{ApiResult, Outcome, ScriptError, with_world};
 
 pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
     Some(match (owner, name) {

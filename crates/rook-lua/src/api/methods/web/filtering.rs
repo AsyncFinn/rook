@@ -12,8 +12,8 @@ use serde_json::json;
 use super::RawMethod;
 use super::requests::{self as web, WebRequest};
 use crate::api::instance::push_instance;
-use crate::ctx::args::Args;
-use crate::ctx::{ApiResult, Outcome, with_world};
+use crate::runtime::ctx::args::Args;
+use crate::runtime::ctx::{ApiResult, Outcome, with_world};
 
 /// A text as filtered for chat between users, and for everyone.
 #[derive(Debug, Clone, PartialEq, Eq)]

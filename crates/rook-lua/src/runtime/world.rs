@@ -1,8 +1,8 @@
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::BTreeMap;
 
-use crate::scheduler::{Clock, Scheduler};
-use crate::signal::{ConnectionId, Signals};
+use crate::runtime::scheduler::{Clock, Scheduler};
+use crate::runtime::signal::{ConnectionId, Signals};
 use mlua::{Function, Table, Thread, Value as LuaValue};
 use rook_dom::{Dom, InstanceId};
 

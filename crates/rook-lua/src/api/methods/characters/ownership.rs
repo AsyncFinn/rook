@@ -9,9 +9,9 @@ use rook_physics::Authority;
 use rook_physics::assembly::Assembly;
 
 use crate::api::methods::ret_instance;
-use crate::ctx::args::Args;
-use crate::ctx::{ApiResult, Outcome, ScriptError, with_world};
-use crate::world::World;
+use crate::runtime::ctx::args::Args;
+use crate::runtime::ctx::{ApiResult, Outcome, ScriptError, with_world};
+use crate::runtime::world::World;
 
 /// The characters of players whose clients simulate them.
 fn client_characters(w: &World) -> Vec<(InstanceId, InstanceId)> {

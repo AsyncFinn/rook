@@ -29,7 +29,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use rook_dom::{Change, Dom, InstanceId};
-use rook_lua::scheduler::{Clock, Queue};
+use rook_lua::runtime::scheduler::{Clock, Queue};
 use rook_lua::{LogEntry, MessageType, Runtime};
 use rook_types::Value;
 

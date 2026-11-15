@@ -12,7 +12,7 @@
 
 use mlua::{Function, Lua, Table, Value as LuaValue};
 
-use crate::ctx::args::type_name;
+use crate::runtime::ctx::args::type_name;
 
 /// What chunk names of Rook's own Luau start with.
 const ENGINE_CHUNK: &str = "[rook]";

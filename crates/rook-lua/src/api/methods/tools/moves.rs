@@ -13,9 +13,9 @@ use mlua::Lua;
 use rook_dom::{Dom, InstanceId};
 
 use super::{grip, held_tools, holder};
-use crate::ctx::args::Args;
-use crate::ctx::{ApiResult, Outcome, ScriptError, with_world};
-use crate::world::World;
+use crate::runtime::ctx::args::Args;
+use crate::runtime::ctx::{ApiResult, Outcome, ScriptError, with_world};
+use crate::runtime::world::World;
 
 /// A Tool move a client's scripts made, for the server to repeat.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -144,7 +144,7 @@ pub(crate) fn repeat_move(
     if !allowed {
         return None;
     }
-    if let Err(e) = crate::removal::set_parent(lua, tool, Some(parent)) {
+    if let Err(e) = crate::runtime::removal::set_parent(lua, tool, Some(parent)) {
         tracing::debug!("a client's tool move failed on the server: {e}");
         return None;
     }
@@ -153,7 +153,7 @@ pub(crate) fn repeat_move(
 
 /// Move `tool` under `parent` as a script's Parent write does.
 fn move_tool(lua: &Lua, tool: InstanceId, parent: Option<InstanceId>) -> ApiResult<()> {
-    crate::removal::set_parent(lua, tool, parent).map_err(ScriptError::from)
+    crate::runtime::removal::set_parent(lua, tool, parent).map_err(ScriptError::from)
 }
 
 /// `character` puts down the Tools it holds and takes `tool`, as

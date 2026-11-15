@@ -17,9 +17,9 @@ use rustc_hash::FxHashSet;
 
 use super::RawMethod;
 use crate::api::instance::push_instance;
-use crate::ctx::with_world;
-use crate::signal::SignalKey;
-use crate::threads::fire;
+use crate::runtime::ctx::with_world;
+use crate::runtime::signal::SignalKey;
+use crate::runtime::threads::fire;
 use crate::types::enums::enum_item;
 
 pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
@@ -195,7 +195,7 @@ fn unindicate(lua: &Lua, prompt: InstanceId) {
 /// connected (measured: a prompt's own `PromptHidden` fires when its part
 /// is destroyed). Replicated removals wait for the next [`update`].
 pub(crate) fn leaving(lua: &Lua, root: InstanceId, destroying: bool) {
-    let gone = |w: &crate::world::World, list: &[InstanceId]| -> Vec<InstanceId> {
+    let gone = |w: &crate::runtime::world::World, list: &[InstanceId]| -> Vec<InstanceId> {
         let dom = &w.dom;
         (list.iter().copied())
             .filter(|&p| p == root || dom.is_ancestor_of(root, p))

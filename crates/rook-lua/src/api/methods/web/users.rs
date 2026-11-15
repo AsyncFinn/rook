@@ -11,8 +11,8 @@ use serde_json::{Value as Json, json};
 use super::RawMethod;
 use super::characters::players_of;
 use super::requests::{self as web, WebAnswer, WebRequest};
-use crate::ctx::args::Args;
-use crate::ctx::{ApiResult, Outcome, ScriptError, with_world};
+use crate::runtime::ctx::args::Args;
+use crate::runtime::ctx::{ApiResult, Outcome, ScriptError, with_world};
 
 pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
     Some(match (owner, name) {

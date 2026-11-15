@@ -9,7 +9,7 @@ use rook_types::{CFrame, Color3, Value, Vector3};
 
 use super::appearance::{self, Avatar};
 use crate::api::properties::content_value;
-use crate::world::World;
+use crate::runtime::world::World;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RigType {

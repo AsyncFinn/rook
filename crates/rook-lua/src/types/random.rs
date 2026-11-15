@@ -3,7 +3,7 @@
 
 use mlua::{Lua, MetaMethod, UserData, UserDataFields, UserDataMethods, Value as LuaValue, Vector};
 
-use crate::ctx::args::type_name;
+use crate::runtime::ctx::args::type_name;
 
 const MULTIPLIER: u64 = 6_364_136_223_846_793_005;
 const INCREMENT: u64 = 105;

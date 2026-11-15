@@ -20,15 +20,17 @@ fn valid_attribute_name(name: &str) -> bool {
 }
 
 fn attribute_value(v: &LuaValue) -> ApiResult<Option<Value>> {
-    use crate::ctx::convert::datatype_value;
+    use crate::runtime::ctx::convert::datatype_value;
     Ok(match v {
         LuaValue::Nil => None,
         LuaValue::Boolean(b) => Some(Value::Bool(*b)),
         LuaValue::Integer(_) | LuaValue::Number(_) => Some(Value::Float64(
-            crate::ctx::args::number_of(v).unwrap_or(0.0),
+            crate::runtime::ctx::args::number_of(v).unwrap_or(0.0),
         )),
         LuaValue::String(s) => Some(Value::String(s.to_string_lossy())),
-        LuaValue::Vector(v) => Some(Value::Vector3(crate::ctx::convert::from_lua_vector(*v))),
+        LuaValue::Vector(v) => Some(Value::Vector3(
+            crate::runtime::ctx::convert::from_lua_vector(*v),
+        )),
         LuaValue::UserData(u) => {
             if let Ok(item) = u.borrow::<crate::types::enums::LEnumItem>() {
                 return Ok(Some(Value::EnumItem {
@@ -53,7 +55,7 @@ fn attribute_value(v: &LuaValue) -> ApiResult<Option<Value>> {
                 _ => {
                     return Err(ScriptError(format!(
                         "{} is not a supported attribute type",
-                        crate::ctx::args::type_name(&LuaValue::UserData(u.clone()))
+                        crate::runtime::ctx::args::type_name(&LuaValue::UserData(u.clone()))
                     )));
                 }
             }
@@ -61,7 +63,7 @@ fn attribute_value(v: &LuaValue) -> ApiResult<Option<Value>> {
         other => {
             return Err(ScriptError(format!(
                 "{} is not a supported attribute type",
-                crate::ctx::args::type_name(other)
+                crate::runtime::ctx::args::type_name(other)
             )));
         }
     })

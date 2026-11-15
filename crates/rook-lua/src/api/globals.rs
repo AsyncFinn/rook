@@ -4,7 +4,7 @@
 //! The list follows creator-docs "Roblox globals" and the `task` library
 //! page.
 
-use crate::scheduler::{LEGACY_MIN_WAIT, Queue};
+use crate::runtime::scheduler::{LEGACY_MIN_WAIT, Queue};
 use mlua::{Function, Lua, MultiValue, Table, Thread, Value as LuaValue};
 use unicode_normalization::UnicodeNormalization;
 
@@ -20,10 +20,10 @@ use output::*;
 use scheduling::*;
 
 use super::instance::push_instance;
-use crate::ctx::args::{Args, display_value};
-use crate::ctx::{ApiResult, Outcome, ScriptError, api_fn, api_ret, with_world};
-use crate::threads::resume;
-use crate::world::{Job, MessageType, WaitKind};
+use crate::runtime::ctx::args::{Args, display_value};
+use crate::runtime::ctx::{ApiResult, Outcome, ScriptError, api_fn, api_ret, with_world};
+use crate::runtime::threads::resume;
+use crate::runtime::world::{Job, MessageType, WaitKind};
 
 /// `utf8.nfcnormalize` and `utf8.nfdnormalize` (creator-docs utf8).
 fn normalized(args: MultiValue, form: fn(&str) -> String) -> ApiResult<String> {
@@ -212,7 +212,7 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
 fn protected_calls(lua: &Lua) -> mlua::Result<()> {
     let text = lua.create_function(|lua, e: LuaValue| match e {
         LuaValue::Error(e) => lua
-            .create_string(crate::ctx::lua_error_message(&e))
+            .create_string(crate::runtime::ctx::lua_error_message(&e))
             .map(LuaValue::String),
         other => Ok(other),
     })?;
@@ -293,7 +293,7 @@ fn install_engine_helpers(lua: &Lua) -> mlua::Result<()> {
                     )
                 {
                     let all = super::instance::runtime_properties(lua)?;
-                    crate::ctx::ctx(lua)
+                    crate::runtime::ctx::ctx(lua)
                         .runtime_prop_ids
                         .borrow_mut()
                         .insert(id);
@@ -330,9 +330,9 @@ fn install_engine_helpers(lua: &Lua) -> mlua::Result<()> {
                         )));
                     }
                 };
-                crate::threads::fire(
+                crate::runtime::threads::fire(
                     lua,
-                    &crate::signal::SignalKey::event(id, event),
+                    &crate::runtime::signal::SignalKey::event(id, event),
                     &args.into_iter().collect::<Vec<_>>(),
                 );
                 Ok(())

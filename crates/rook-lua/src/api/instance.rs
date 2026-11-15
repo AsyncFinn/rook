@@ -6,7 +6,7 @@
 
 use std::ffi::c_void;
 
-use crate::signal::SignalKind;
+use crate::runtime::signal::SignalKind;
 use mlua::{
     AnyUserData, Function, LightUserData, Lua, MultiValue, UserData, UserDataFields,
     Value as LuaValue,
@@ -20,10 +20,10 @@ use rook_types::{InstanceRef, Value};
 use rustc_hash::FxHashMap;
 
 use super::{methods, properties, signal::LSignal};
-use crate::ctx::args::{Args, display_value};
-use crate::ctx::convert::{from_lua, to_lua};
-use crate::ctx::{ApiResult, Ctx, Outcome, ScriptError, api_fn, ctx, with_world};
-use crate::threads::dispatch;
+use crate::runtime::ctx::args::{Args, display_value};
+use crate::runtime::ctx::convert::{from_lua, to_lua};
+use crate::runtime::ctx::{ApiResult, Ctx, Outcome, ScriptError, api_fn, ctx, with_world};
+use crate::runtime::threads::dispatch;
 
 mod access;
 mod calls;
@@ -167,7 +167,7 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
             lua.create_table()?,
             ctx(lua).instances.clone(),
             create.clone(),
-            crate::ctx::weak_table(lua, "k")?,
+            crate::runtime::ctx::weak_table(lua, "k")?,
             ctx(lua).names.clone(),
             cfg!(debug_assertions),
         ))?;

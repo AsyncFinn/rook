@@ -214,7 +214,7 @@ fn style_one(
     });
     for (class, child) in stale {
         with_world(lua, |w| w.styles.pseudo.remove(&(id, class)));
-        crate::removal::destroy(lua, child).ok();
+        crate::runtime::removal::destroy(lua, child).ok();
     }
     for (class, rule_ids) in wanted {
         let existing = with_world(lua, |w| w.styles.pseudo.get(&(id, class.clone())).copied());
@@ -290,7 +290,7 @@ fn resolve(lua: &Lua, sheets: &[InstanceId], value: LuaValue) -> mlua::Result<Op
         })
     });
     found
-        .map(|v| crate::ctx::convert::to_lua(lua, &v, None))
+        .map(|v| crate::runtime::ctx::convert::to_lua(lua, &v, None))
         .transpose()
 }
 

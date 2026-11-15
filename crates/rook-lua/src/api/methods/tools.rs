@@ -27,8 +27,8 @@ pub(crate) use moves::{after, before, drop_held, repeat_move};
 pub(crate) use pickup::touched;
 
 use super::RawMethod;
-use crate::ctx::args::Args;
-use crate::ctx::{ApiResult, Outcome, with_world};
+use crate::runtime::ctx::args::Args;
+use crate::runtime::ctx::{ApiResult, Outcome, with_world};
 
 pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
     Some(match (owner, name) {

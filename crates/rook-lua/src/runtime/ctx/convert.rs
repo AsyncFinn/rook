@@ -5,7 +5,7 @@ use rook_reflection::{EnumId, PropertyType};
 use rook_types::{Color3, Value};
 
 use crate::api::instance::{LuaInstance, push_instance};
-use crate::ctx::args::{borrow_clone, number_of, type_name};
+use crate::runtime::ctx::args::{borrow_clone, number_of, type_name};
 use crate::types::{
     LAxes, LBrickColor, LCFrame, LColor3, LColorSequence, LContent, LFaces, LFont, LNumberRange,
     LNumberSequence, LOther, LPhysicalProperties, LRay, LRect, LRegion3, LRegion3int16, LUDim,
@@ -159,7 +159,7 @@ fn lua_string(v: &LuaValue) -> Option<String> {
     match v {
         LuaValue::String(s) => Some(s.to_string_lossy()),
         LuaValue::Integer(_) | LuaValue::Number(_) => {
-            number_of(v).map(crate::ctx::args::format_number)
+            number_of(v).map(crate::runtime::ctx::args::format_number)
         }
         _ => None,
     }

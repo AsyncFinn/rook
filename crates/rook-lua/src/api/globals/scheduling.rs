@@ -80,7 +80,7 @@ pub(super) fn legacy_spawn(lua: &Lua, args: MultiValue) -> ApiResult<Outcome> {
 /// `task.*` accepts a function or a thread.
 pub(super) fn thread_arg(lua: &Lua, a: &Args, i: usize) -> ApiResult<Thread> {
     match a.get(i) {
-        LuaValue::Function(f) => Ok(crate::threads::thread_for(lua, f.clone())?),
+        LuaValue::Function(f) => Ok(crate::runtime::threads::thread_for(lua, f.clone())?),
         LuaValue::Thread(t) => Ok(t.clone()),
         _ => Err(a.wrong(i, "function or thread")),
     }

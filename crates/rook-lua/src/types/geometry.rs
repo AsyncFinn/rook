@@ -6,7 +6,7 @@ use rbx_types::{Ray, Rect, Region3, Region3int16, Vector3int16};
 use rook_types::{CFrame, Vector2, Vector3};
 
 use super::{LCFrame, LVector2, LVector3int16, fmt_f32};
-use crate::ctx::args::{borrow_clone, number_of};
+use crate::runtime::ctx::args::{borrow_clone, number_of};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct LRay(pub Ray);
@@ -24,7 +24,7 @@ fn r3(v: rbx_types::Vector3) -> Vector3 {
     v.into()
 }
 
-use crate::ctx::convert::{from_lua_vector as from_lv, lua_vector as lv};
+use crate::runtime::ctx::convert::{from_lua_vector as from_lv, lua_vector as lv};
 
 fn fmt_v3(v: Vector3) -> String {
     format!("{}, {}, {}", fmt_f32(v.x()), fmt_f32(v.y()), fmt_f32(v.z()))

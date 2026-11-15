@@ -24,7 +24,7 @@ pub(super) fn caller(lua: &Lua) -> Option<String> {
         if let (Some(src), Some(line)) = found
             && !src.starts_with('[')
         {
-            return Some(crate::world::short_source(&src, line));
+            return Some(crate::runtime::world::short_source(&src, line));
         }
     }
     None

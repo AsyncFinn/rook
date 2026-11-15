@@ -11,7 +11,7 @@ use rook_dom::InstanceId;
 
 use super::RawMethod;
 use crate::api::instance::push_instance;
-use crate::ctx::{ApiResult, Outcome};
+use crate::runtime::ctx::{ApiResult, Outcome};
 
 pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
     use gamepads::*;
@@ -56,7 +56,7 @@ fn sequence(lua: &Lua, ids: Vec<InstanceId>) -> ApiResult<Outcome> {
 
 /// Rook runs on desktops; scripts tell them apart only for platform
 /// features Rook doesn't have.
-fn platform(lua: &Lua, _: InstanceId, _: &crate::ctx::args::Args) -> ApiResult<Outcome> {
+fn platform(lua: &Lua, _: InstanceId, _: &crate::runtime::ctx::args::Args) -> ApiResult<Outcome> {
     let name = if cfg!(target_os = "macos") {
         "OSX"
     } else {

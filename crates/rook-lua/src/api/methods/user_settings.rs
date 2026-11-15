@@ -6,10 +6,10 @@ use rook_dom::InstanceId;
 use rook_types::Value;
 
 use super::{RawMethod, mutate};
-use crate::ctx::args::Args;
-use crate::ctx::{ApiResult, Outcome, with_world};
-use crate::signal::SignalKey;
-use crate::threads::fire;
+use crate::runtime::ctx::args::Args;
+use crate::runtime::ctx::{ApiResult, Outcome, with_world};
+use crate::runtime::signal::SignalKey;
+use crate::runtime::threads::fire;
 
 pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
     Some(match (owner, name) {

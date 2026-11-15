@@ -10,8 +10,8 @@ use mlua::Lua;
 use rook_dom::{Dom, InstanceId};
 
 use super::holder;
-use crate::ctx::with_world;
-use crate::world::World;
+use crate::runtime::ctx::with_world;
+use crate::runtime::world::World;
 
 /// What the PlayerMouse knows of the cursor, which a new tool Mouse starts
 /// with.

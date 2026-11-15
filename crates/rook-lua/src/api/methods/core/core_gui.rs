@@ -7,10 +7,10 @@ use mlua::{Function, Lua, MultiValue, Table, Value as LuaValue};
 use rook_dom::InstanceId;
 
 use super::RawMethod;
-use crate::ctx::args::Args;
-use crate::ctx::{ApiResult, Outcome, ScriptError, with_world};
-use crate::signal::SignalKey;
-use crate::threads::fire;
+use crate::runtime::ctx::args::Args;
+use crate::runtime::ctx::{ApiResult, Outcome, ScriptError, with_world};
+use crate::runtime::signal::SignalKey;
+use crate::runtime::threads::fire;
 use crate::types::enums::{enum_item, item_name};
 
 pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {

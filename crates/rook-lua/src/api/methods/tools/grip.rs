@@ -19,8 +19,8 @@ use super::{handle, holder};
 use crate::api::methods::characters::root_part;
 use crate::api::methods::mutate;
 use crate::api::properties;
-use crate::ctx::with_world;
-use crate::world::World;
+use crate::runtime::ctx::with_world;
+use crate::runtime::world::World;
 
 const NAME: &str = "RightGrip";
 
@@ -113,7 +113,7 @@ pub(super) fn hold(lua: &Lua, tool: InstanceId, character: InstanceId) {
 /// of the root part, keeping its rotation.
 pub(super) fn release(lua: &Lua, tool: InstanceId, character: InstanceId) {
     if let Some(weld) = with_world(lua, |w| find(&w.dom, tool))
-        && let Err(e) = crate::removal::destroy(lua, weld)
+        && let Err(e) = crate::runtime::removal::destroy(lua, weld)
     {
         tracing::debug!("removing a tool's grip failed: {e}");
     }

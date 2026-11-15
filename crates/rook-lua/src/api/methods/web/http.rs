@@ -9,8 +9,8 @@ use rook_dom::InstanceId;
 
 use super::RawMethod;
 use super::requests::{self as web, WebAnswer, WebRequest};
-use crate::ctx::args::Args;
-use crate::ctx::{ApiResult, Outcome, ScriptError, api_fn};
+use crate::runtime::ctx::args::Args;
+use crate::runtime::ctx::{ApiResult, Outcome, ScriptError, api_fn};
 
 pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
     Some(match (owner, name) {
@@ -215,7 +215,7 @@ fn to_json(v: &LuaValue, depth: usize) -> ApiResult<serde_json::Value> {
     Ok(match v {
         LuaValue::Boolean(b) => J::Bool(*b),
         LuaValue::Integer(_) | LuaValue::Number(_) => {
-            let n = crate::ctx::args::number_of(v).unwrap_or(0.0);
+            let n = crate::runtime::ctx::args::number_of(v).unwrap_or(0.0);
             if n.fract() == 0.0 && n.abs() < 9.0e15 {
                 J::Number((n as i64).into())
             } else {
@@ -239,8 +239,8 @@ fn to_json(v: &LuaValue, depth: usize) -> ApiResult<serde_json::Value> {
                     let key = match &k {
                         LuaValue::String(s) => s.to_string_lossy(),
                         LuaValue::Integer(_) | LuaValue::Number(_) => {
-                            crate::ctx::args::format_number(
-                                crate::ctx::args::number_of(&k).unwrap_or(0.0),
+                            crate::runtime::ctx::args::format_number(
+                                crate::runtime::ctx::args::number_of(&k).unwrap_or(0.0),
                             )
                         }
                         _ => return Err(ScriptError("Can't convert to JSON".into())),

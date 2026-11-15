@@ -16,9 +16,9 @@ use rook_reflection::{PropertyType, database};
 
 use super::RawMethod;
 use crate::api::properties::content_view;
-use crate::ctx::args::{Args, type_name};
-use crate::ctx::{ApiResult, Outcome, ScriptError, with_world};
-use crate::world::World;
+use crate::runtime::ctx::args::{Args, type_name};
+use crate::runtime::ctx::{ApiResult, Outcome, ScriptError, with_world};
+use crate::runtime::world::World;
 
 #[derive(Debug, Default)]
 pub struct ContentRequests {
@@ -214,10 +214,10 @@ pub(crate) fn deliver(lua: &Lua, results: &[(u64, bool)]) {
         };
         if let Some(f) = callback {
             // The callback's thread reports its own errors.
-            let _ = crate::threads::spawn(lua, f, (text, status(ok)));
+            let _ = crate::runtime::threads::spawn(lua, f, (text, status(ok)));
         }
         if let Some(thread) = done {
-            crate::threads::resume(lua, &thread, ());
+            crate::runtime::threads::resume(lua, &thread, ());
         }
     }
 }

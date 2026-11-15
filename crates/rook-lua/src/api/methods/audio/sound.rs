@@ -6,7 +6,7 @@
 //! change state and fire the events a call fires.
 
 use super::*;
-use crate::world::Listener;
+use crate::runtime::world::Listener;
 
 /// The `soundId` the Sound events pass: the `SoundId` string.
 pub(crate) fn sound_id(w: &World, id: InstanceId) -> String {

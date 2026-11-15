@@ -58,10 +58,10 @@ fn require_modules() {
 #[test]
 fn scripts_run_the_bytecode_kept_for_their_source() {
     let kept = "return 'compiled when it ran'";
-    let other = crate::bytecode::compiler()
+    let other = crate::runtime::bytecode::compiler()
         .compile("return 'kept for it'")
         .unwrap();
-    crate::bytecode::keep(kept, other);
+    crate::runtime::bytecode::keep(kept, other);
     let rt = Runtime::new(Dom::new(), Clock::Fixed { step: 1.0 / 60.0 }).unwrap();
     {
         let mut w = rt.world_mut();

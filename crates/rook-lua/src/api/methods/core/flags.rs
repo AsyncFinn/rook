@@ -6,8 +6,8 @@ use mlua::{Lua, Value as LuaValue};
 use rook_dom::InstanceId;
 
 use super::{RawMethod, mutate};
-use crate::ctx::args::Args;
-use crate::ctx::{ApiResult, Outcome, ScriptError, with_world};
+use crate::runtime::ctx::args::Args;
+use crate::runtime::ctx::{ApiResult, Outcome, ScriptError, with_world};
 
 #[expect(
     clippy::match_same_arms,
@@ -134,7 +134,7 @@ fn flag(lua: &Lua, prefixes: [&str; 2], a: &Args) -> ApiResult<Option<String>> {
     let default = match a.get(1) {
         LuaValue::Nil => return Ok(None),
         LuaValue::Boolean(b) => b.to_string(),
-        other => crate::ctx::args::display_value(lua, other),
+        other => crate::runtime::ctx::args::display_value(lua, other),
     };
     with_world(lua, |w| {
         w.defined_flags

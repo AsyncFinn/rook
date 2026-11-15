@@ -16,8 +16,8 @@ use mlua::{Function, Lua, MultiValue, Table, Thread, Value as LuaValue};
 use rook_platform::endpoints::Endpoints;
 use rook_platform::network::Response;
 
-use crate::ctx::args::Args;
-use crate::ctx::{ApiResult, Outcome, api_fn, with_world};
+use crate::runtime::ctx::args::Args;
+use crate::runtime::ctx::{ApiResult, Outcome, api_fn, with_world};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WebRequest {
@@ -159,8 +159,8 @@ pub(crate) fn deliver(lua: &Lua, request: u64, answer: WebAnswer) {
         pack().map_err(|e| e.to_string())
     });
     match packed {
-        Ok(t) => crate::threads::resume(lua, &thread, (true, t)),
-        Err(msg) => crate::threads::resume(lua, &thread, (false, msg)),
+        Ok(t) => crate::runtime::threads::resume(lua, &thread, (true, t)),
+        Err(msg) => crate::runtime::threads::resume(lua, &thread, (false, msg)),
     }
 }
 

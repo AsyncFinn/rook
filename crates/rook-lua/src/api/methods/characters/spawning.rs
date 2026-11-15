@@ -6,8 +6,8 @@ use rook_dom::{Dom, DomError, InstanceId};
 use rook_physics::{Filter, Region};
 use rook_types::{BrickColor, CFrame, Value};
 
-use crate::scheduler::Queue;
-use crate::world::{Job, World};
+use crate::runtime::scheduler::Queue;
+use crate::runtime::world::{Job, World};
 
 /// Feet land this far above the spawn's top (measured in Studio 0.744:
 /// the root part appears 0.01 above where it then stands).
@@ -28,7 +28,7 @@ fn spawns_for(dom: &Dom, player: InstanceId) -> Vec<InstanceId> {
     let team_color = (dom.bool_property(player, "Neutral") == Some(false))
         .then(|| dom.brick_color_property(player, "TeamColor"))
         .flatten();
-    let spawns = dom.instances_of(crate::world::spawn_class());
+    let spawns = dom.instances_of(crate::runtime::world::spawn_class());
     (spawns.expect("World::new tracks them").into_iter())
         .filter(|&s| dom.is_ancestor_of(ws, s))
         .filter(|&s| dom.bool_property(s, "Enabled") != Some(false))

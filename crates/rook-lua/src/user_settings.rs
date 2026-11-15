@@ -123,7 +123,7 @@ pub fn game_settings(dom: &Dom, root: InstanceId) -> Option<InstanceId> {
 
 /// `UserSettings()` and its `GameSettings`, made on first use when the
 /// engine gave none.
-pub(crate) fn ensure(w: &mut crate::world::World) -> (InstanceId, InstanceId) {
+pub(crate) fn ensure(w: &mut crate::runtime::world::World) -> (InstanceId, InstanceId) {
     let root = *w.user_settings.get_or_insert_with(|| root(&mut w.dom));
     (root, complete(&mut w.dom, root))
 }
@@ -148,7 +148,7 @@ pub fn output_device(dom: &Dom, game: InstanceId) -> Option<String> {
 
 /// Choose the output device by name (`None` for the system's default),
 /// for the engine to save and the window to play through.
-pub(crate) fn set_output_device(w: &mut crate::world::World, device: Option<String>) {
+pub(crate) fn set_output_device(w: &mut crate::runtime::world::World, device: Option<String>) {
     let (_, game) = ensure(w);
     if output_device(&w.dom, game) == device {
         return;

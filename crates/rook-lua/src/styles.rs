@@ -22,7 +22,7 @@ use mlua::{Lua, RegistryKey, Table, Value as LuaValue};
 use rook_dom::{Change, Dom, InstanceId};
 use rook_reflection::ClassId;
 
-use crate::ctx::with_world;
+use crate::runtime::ctx::with_world;
 use selector::Chain;
 
 /// The classes whose changes restyle every linked tree, resolved once:

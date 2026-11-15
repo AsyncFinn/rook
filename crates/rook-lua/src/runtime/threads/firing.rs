@@ -78,7 +78,7 @@ pub(crate) fn dispatch(lua: &Lua, start: u64) {
             if w.signals.is_empty() {
                 return None;
             }
-            Some(crate::signal::expand(change, &w.signals, &w.dom))
+            Some(crate::runtime::signal::expand(change, &w.signals, &w.dom))
         });
         if let Some(id) = moved {
             with_world(lua, |w| crate::api::methods::tools::retire_mice(w, id));

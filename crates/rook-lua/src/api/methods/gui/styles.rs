@@ -4,8 +4,8 @@ use mlua::{Lua, Table, Value as LuaValue};
 use rook_dom::InstanceId;
 
 use super::RawMethod;
-use crate::ctx::args::Args;
-use crate::ctx::{ApiResult, Outcome, with_world};
+use crate::runtime::ctx::args::Args;
+use crate::runtime::ctx::{ApiResult, Outcome, with_world};
 
 pub(crate) fn native(owner: &str, name: &str) -> Option<RawMethod> {
     Some(match (owner, name) {

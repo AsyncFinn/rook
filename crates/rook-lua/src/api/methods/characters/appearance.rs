@@ -12,8 +12,8 @@ use super::rigs::RigType;
 use crate::api::instance::push_instance;
 use crate::api::methods::web::requests::{self as web, WebRequest};
 use crate::api::methods::{mutate, ret_instance};
-use crate::ctx::args::Args;
-use crate::ctx::{ApiResult, Outcome, with_world};
+use crate::runtime::ctx::args::Args;
+use crate::runtime::ctx::{ApiResult, Outcome, with_world};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Avatar {
@@ -494,7 +494,7 @@ pub(super) fn description_from_user_id(lua: &Lua, _: InstanceId, a: &Args) -> Ap
         Ok(MultiValue::from_vec(vec![mlua::Value::UserData(ud)]))
     };
     let Some(url) = web::url(lua, "avatar", &format!("/v1/users/{user}/avatar")) else {
-        let values = make(lua, &Avatar::default()).map_err(crate::ctx::ScriptError)?;
+        let values = make(lua, &Avatar::default()).map_err(crate::runtime::ctx::ScriptError)?;
         return Ok(Outcome::Return(values));
     };
     web::call(

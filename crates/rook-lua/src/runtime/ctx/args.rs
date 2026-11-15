@@ -9,7 +9,7 @@ use mlua::{AnyUserData, Function, Lua, MultiValue, UserData, Value as LuaValue};
 use rook_dom::InstanceId;
 
 use crate::api::instance::LuaInstance;
-use crate::ctx::{ApiResult, ScriptError};
+use crate::runtime::ctx::{ApiResult, ScriptError};
 
 pub(crate) struct Args {
     vals: Vec<LuaValue>,
@@ -208,7 +208,7 @@ impl Args {
     ) -> ApiResult<Option<InstanceId>> {
         Ok(self
             .object(i)?
-            .filter(|&id| crate::ctx::with_world(lua, |w| w.dom.is_a(id, class))))
+            .filter(|&id| crate::runtime::ctx::with_world(lua, |w| w.dom.is_a(id, class))))
     }
 
     /// An instance the method requires, for methods whose own check turns
@@ -279,7 +279,7 @@ impl Args {
 
     pub(crate) fn vector3(&self, i: usize) -> ApiResult<rook_types::Vector3> {
         match self.get(i) {
-            LuaValue::Vector(v) => Ok(crate::ctx::convert::from_lua_vector(*v)),
+            LuaValue::Vector(v) => Ok(crate::runtime::ctx::convert::from_lua_vector(*v)),
             LuaValue::Nil => Err(self.missing(i)),
             _ => Err(self.wrong(i, "Vector3")),
         }
