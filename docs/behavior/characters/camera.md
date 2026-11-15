@@ -188,7 +188,7 @@ in `rook-lua`'s `api/methods/camera/rays.rs` (roll, near plane),
   in) cuts off the stretch from there to the near plane; the longest
   wins, 0 if none hit. It passes through parts with CanCollide off or
   more than 0.95 transparent and groups that don't collide with Default,
-  and stops at Terrain.
+  and stops at Terrain, though not at its water.
 - Both find nothing for a camera outside Workspace.
 - Studio's two occlusion queries don't see a part created since the
   last physics step (its other queries do); Rook's see it at once.

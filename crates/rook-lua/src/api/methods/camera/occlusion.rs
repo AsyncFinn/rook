@@ -56,11 +56,13 @@ fn ignore_list(a: &Args, i: usize) -> ApiResult<Vec<InstanceId>> {
 /// part cuts off the stretch from there to the near plane; the longest
 /// is returned, 0 if none hit (all observed). Parts with CanCollide off
 /// or more than 0.95 transparent are passed through, as are those in
-/// groups that don't collide with Default; Terrain cuts off too.
+/// groups that don't collide with Default; Terrain cuts off too, but not
+/// its water.
 fn largest_cutoff_distance(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let filter = Filter {
         respect_can_collide: true,
         max_transparency: Some(SEE_THROUGH),
+        ignore_water: true,
         ..Filter::legacy_ray(ignore_list(a, 0)?, false)
     };
     let cutoff = with_world(lua, |w| {

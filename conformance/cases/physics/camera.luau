@@ -113,6 +113,17 @@ end)
 try("cutoff number", function()
     return cam:GetLargestCutoffDistance(5)
 end)
+-- Whether a terrain wall cuts the view off, not by how much: where its
+-- smoothed surface lies isn't this case's to check. Terrain's collision
+-- is built a moment after it is filled.
+for _, mat in ipairs({ Enum.Material.Water, Enum.Material.Rock }) do
+    workspace.Terrain:FillBlock(CFrame.new(O + Vector3.new(0, 0, 10)), Vector3.new(40, 40, 4), mat)
+    task.wait(1)
+    cam.CFrame = CFrame.new(O + Vector3.new(0, 0, 20))
+    cam.Focus = CFrame.new(O)
+    log("cutoff terrain " .. mat.Name, cam:GetLargestCutoffDistance({}) > 0)
+    workspace.Terrain:FillBlock(CFrame.new(O + Vector3.new(0, 0, 10)), Vector3.new(40, 40, 4), Enum.Material.Air)
+end
 
 -- GetPartsObscuringTarget
 cam.CFrame = CFrame.new(O + Vector3.new(0, 0, 20))
