@@ -14,7 +14,7 @@ children's `AbsolutePosition`. The conformance case `gui/styles` holds the
 insets.
 
 Code: the table of styles in `rook-gui`'s `style.rs`, the inset in
-`layout/padding.rs`, the drawing in `draw/style.rs`.
+`layout/padding.rs`, the drawing in `draw/objects/style.rs`.
 
 ## Textures
 

@@ -3,7 +3,7 @@
 //! sky's diffuse light (`EnvironmentDiffuseScale`) down around them, keep
 //! lights with `Shadows` out from behind them and shadow the sun; and
 //! beside them the terrain, how full of it each voxel is (`terrain.rs`)
-//! (`shaders/light_volume.wgsl`; docs/behavior/rendering/materials.md, "The sky's
+//! (`shaders/voxels/light_volume.wgsl`; docs/behavior/rendering/materials.md, "The sky's
 //! diffuse light"; docs/behavior/lighting/local-lights.md, "Shadows";
 //! docs/behavior/lighting/sun.md).
 

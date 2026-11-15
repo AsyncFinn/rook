@@ -60,7 +60,7 @@ impl Reach {
     /// span's columns down to the bottom (whether a voxel there is open to
     /// the sky may change), and in every layer below the span, two voxels
     /// wider each way per layer down (`sky_at` in
-    /// `shaders/light_volume.wgsl` takes the five by five above), the
+    /// `shaders/voxels/light_volume.wgsl` takes the five by five above), the
     /// tiles with a blocked voxel above that layer: only a voxel with one
     /// above it takes its neighbors' light, the rest are open to all of
     /// the sky whatever changed; with the sun, every voxel whose way to
@@ -128,7 +128,7 @@ pub(super) struct Shadowed {
 
 impl Shadowed {
     /// How far aside of the line to the light `unblocked` in
-    /// `shaders/light_volume.wgsl` casts its rays, in voxels (up to one
+    /// `shaders/voxels/light_volume.wgsl` casts its rays, in voxels (up to one
     /// voxel along two axes across it: sqrt 2), rounded up.
     pub(super) const SPREAD: f32 = 2.0;
 

@@ -1,4 +1,4 @@
-// Builds the sun cover (`renderer/lighting/local/cover.rs`): how much of
+// Builds the sun cover (`lighting/local/cover.rs`): how much of
 // the sun each light voxel stops, all of it where a part blocks the voxel
 // and terrain's share (`SOIL_SUN`) elsewhere; four layers to a texel (array
 // layer g holds layers 4g to 4g + 3 in red, green, blue and alpha), at the
@@ -25,7 +25,7 @@ const TILE: u32 = 16u;
 // One bit per voxel, at `slot_of`: a part blocks it.
 @group(0) @binding(1) var<storage, read> solid: array<u32>;
 // A byte per voxel, four to a word at `slot_of`: how full of solid
-// terrain it is (`renderer/lighting/local/terrain.rs`).
+// terrain it is (`lighting/local/terrain.rs`).
 @group(0) @binding(2) var<storage, read> soils: array<u32>;
 // The level below the one made (`down`).
 @group(0) @binding(3) var below: texture_2d_array<f32>;

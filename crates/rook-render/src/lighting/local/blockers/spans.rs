@@ -47,7 +47,7 @@ pub(super) struct Slot {
 /// in the brick of its piece, each brick [`PIECE`] across, the volume's
 /// height and contiguous, laid out x + 16 * (z + 16 * y) within, as
 /// voxel engines store bricks, so a piece is marked and sent up whole.
-/// `shaders/light_volume.wgsl` (`slot`) keeps them the same way.
+/// `shaders/voxels/light_volume.wgsl` (`slot`) keeps them the same way.
 pub(super) fn slot_of(dims: IVec3, r: IVec3) -> usize {
     let brick = r.x / PIECE + dims.x / PIECE * (r.z / PIECE);
     let within = r.x % PIECE + PIECE * (r.z % PIECE + PIECE * r.y);

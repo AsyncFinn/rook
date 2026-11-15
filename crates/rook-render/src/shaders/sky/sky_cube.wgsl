@@ -1,4 +1,4 @@
-// The sky's reflection cube (`renderer/lighting/sky.rs`), built as Studio
+// The sky's reflection cube (`lighting/sky.rs`), built as Studio
 // builds its prefiltered environment map (`shaders_glsl3.pack`, 0.743):
 // the sky drawn onto a cube in light units, box mips of it, and the
 // reflection cube's level m (1 to 5) the sky seen through Studio's

@@ -11,7 +11,7 @@ const MAX_RANGE: f32 = 120.0;
 const MAX_ENTRIES: usize = 1 << 21;
 /// The smallest cube the hash cuts the world into, in studs.
 const MIN_CELL: f32 = 16.0;
-/// One light as the shaders read it (`Light` in `shaders/lights.wgsl`):
+/// One light as the shaders read it (`Light` in `shaders/voxels/lights.wgsl`):
 /// what Studio's voxel lighting writes into each voxel it reaches.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Pod, Zeroable)]
@@ -114,7 +114,7 @@ impl GpuLight {
     }
 }
 
-/// The bucket a cube hashes to (`bucket` in `shaders/light_volume.wgsl`).
+/// The bucket a cube hashes to (`bucket` in `shaders/voxels/light_volume.wgsl`).
 fn bucket(cube: [i32; 3], mask: u32) -> usize {
     let h = (cube[0] as u32).wrapping_mul(73_856_093)
         ^ (cube[1] as u32).wrapping_mul(19_349_663)

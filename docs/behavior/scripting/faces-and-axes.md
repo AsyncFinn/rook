@@ -3,7 +3,7 @@
 Checked against Studio 0.747 on 2026-11-11.
 
 Rook keeps these three as values with no Lua datatype of their own
-(`Opaque` in `crates/rook-lua/src/types/misc.rs`), one userdata type
+(`Opaque` in `crates/rook-lua/src/types/opaque.rs`), one userdata type
 per kind, so each acts as its Roblox datatype:
 
 - `typeof` gives `Faces`, `Axes` or `PhysicalProperties`.

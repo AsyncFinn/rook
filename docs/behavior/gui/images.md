@@ -12,10 +12,10 @@ regions (corners 16 pixels, an orientation mark in the middle, the bottom
 edge half transparent) and a 100 × 40 one striped every 5 pixels. Rook's
 screenshots of the same scene differ only along edges (JPEG and rounding).
 
-Code: `rook-gui`'s `draw/image.rs` (the pieces each `ScaleType` makes) and
+Code: `rook-gui`'s `draw/objects/image.rs` (the pieces each `ScaleType` makes) and
 `images.rs` (which images are loaded); `rook-scene`'s `gui.rs` loads them
 with the scene's other files; the renderer draws them through
-`renderer/gui/images.rs` and `shaders/gui_paint.wgsl`.
+`renderer/gui/images.rs` and `shaders/gui/gui_paint.wgsl`.
 
 ## Loading
 

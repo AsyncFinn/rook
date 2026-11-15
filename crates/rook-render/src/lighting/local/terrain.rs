@@ -1,7 +1,7 @@
 //! Terrain in the light voxels: a byte per voxel, how full of solid terrain
 //! it is, marked beside the parts (`blockers.rs`) for the fill pass to dim
 //! the sun and the sky's light by (`soil_sun` and `soil_sky` in
-//! `shaders/light_volume.wgsl`). Local lights pass through it, as in
+//! `shaders/voxels/light_volume.wgsl`). Local lights pass through it, as in
 //! Studio. Light voxel `k` is terrain voxel `k`: both span `4k` to `4k + 4`.
 //! What Studio does is in docs/behavior/lighting/sun.md and
 //! docs/behavior/rendering/materials.md ("The sky's diffuse light").

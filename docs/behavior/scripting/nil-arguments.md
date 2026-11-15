@@ -43,7 +43,7 @@ CollectionService's forms number their arguments from the instance, so
 
 ## How Rook does it
 
-`Args::object` in `rook_lua::ctx::args` reads an `Object` parameter as
+`Args::object` in `rook_lua::runtime::ctx::args` reads an `Object` parameter as
 Roblox casts it: it tells a missing argument from an explicit nil by how many
 the call passed. `Args::object_of` adds the class check, so null and other
 classes fall through to the method's one message. `Args::instance` is kept

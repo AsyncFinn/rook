@@ -50,7 +50,7 @@ the covered parts into a mask of Highlight numbers after the main pass,
 tested against its depth for Occluded ones, and the tone pass mixes the
 fill over each covered pixel and the outline over each pixel whose
 neighbor across or up and down belongs elsewhere
-(`crates/rook-render/src/renderer/highlights.rs`,
+(`crates/rook-render/src/renderer/passes/highlights.rs`,
 `shaders/tonemap.wgsl`). The same scene in `rook-player --screenshot`
 puts the outlines on Studio's pixels, and the fill at (190, 72, 78) to
 Studio's (193, 72, 81) over the cube (the cube's own light differs,

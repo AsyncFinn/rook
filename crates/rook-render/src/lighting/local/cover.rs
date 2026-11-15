@@ -1,7 +1,7 @@
 //! The sun cover: how much of the sun each light voxel stops, with mips
 //! averaging each layer across x and z, which the fill pass traces the
-//! sun's cones through (`sunlit` in `shaders/light_volume.wgsl`; built by
-//! `shaders/sun_cover.wgsl`). Studio's voxel sun shadows soften with the
+//! sun's cones through (`sunlit` in `shaders/voxels/light_volume.wgsl`; built by
+//! `shaders/voxels/sun_cover.wgsl`). Studio's voxel sun shadows soften with the
 //! distance from what casts them (docs/behavior/lighting/sun.md), as voxel
 //! cone tracing's do (Crassin et al., "Interactive Indirect Illumination
 //! Using Voxel Cone Tracing", 2011): a cone sampling a mipmapped volume at
@@ -43,7 +43,7 @@ pub(super) fn footprint_reach(r: f32) -> f32 {
     1.5 * lod.ceil().exp2() + 1.0
 }
 
-/// What one level's dispatch builds (`Job` in `shaders/sun_cover.wgsl`).
+/// What one level's dispatch builds (`Job` in `shaders/voxels/sun_cover.wgsl`).
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 struct Job {

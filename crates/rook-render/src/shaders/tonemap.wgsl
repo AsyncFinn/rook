@@ -9,7 +9,7 @@ struct Tone {
     // Highlights; z: 1 when the GUI layer holds GUI.
     curve: vec4<f32>,
     // Each Highlight's fill and outline (sRGB, and their opacity), by its
-    // number - 1 (`renderer/highlights.rs`).
+    // number - 1 (`renderer/passes/highlights.rs`).
     looks: array<vec4<f32>, 62>,
 };
 

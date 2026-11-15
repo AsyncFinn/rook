@@ -1,4 +1,4 @@
-//! The sky's reflection cube (`shaders/sky_cube.wgsl`): what reflective
+//! The sky's reflection cube (`shaders/sky/sky_cube.wgsl`): what reflective
 //! surfaces show, built again whenever the sky changes. Studio reads it at
 //! level 5 × a surface's remapped roughness, and Reflectance at level 0.
 
@@ -17,7 +17,7 @@ const CUBE_LEVELS: u32 = 6;
 /// images squared stay at most 1, but plain skies and later the sun don't).
 const CUBE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 
-/// What the sky shader reads (`Params` in `shaders/sky_cube.wgsl`).
+/// What the sky shader reads (`Params` in `shaders/sky/sky_cube.wgsl`).
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 struct Params {

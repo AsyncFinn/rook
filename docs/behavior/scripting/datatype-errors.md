@@ -63,7 +63,7 @@ black, `Vector3.new(true, 2, 3)` is (0, 2, 3), and `CFrame.new(1, 2, 3, 'a',
 0, 0, 1)` is a plain position. That holds for `Color3.new`, `fromRGB` and
 `fromHSV`; `Vector2`, `Vector3`, `Vector2int16` and `Vector3int16`; `UDim`;
 `UDim2.new`, `fromScale` and `fromOffset`; `Rect.new`; and `CFrame.new`'s
-3, 7 and 12 number forms (`rook_lua::ctx::args::Num`). Methods and other
+3, 7 and 12 number forms (`rook_lua::runtime::ctx::args::Num`). Methods and other
 functions still check: `CFrame.Angles('a')`, `fromEulerAnglesXYZ`,
 `fromAxisAngle` and `Color3:Lerp(c, 'a')` fail with `Unable to cast string
 to float`, `NumberRange.new('a')` with `invalid argument #1 to 'new'

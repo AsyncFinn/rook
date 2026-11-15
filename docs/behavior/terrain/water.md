@@ -221,7 +221,7 @@ install's `shaders/shaders_glsl3.pack`, version-5a21b87bbc2641cf, read
 - **Only the nearest water surface** shows: through see-through water,
   water farther back (a pool's far side, a chunk behind) never adds to it.
   Rook draws all its water's depth first, then its color only where it is
-  nearest (`Pass::WaterDepth` in `renderer/transparent.rs`); before, water
+  nearest (`Pass::WaterDepth` in `renderer/passes/transparent.rs`); before, water
   seen through water stacked into a bright band at a pool's far end and
   jagged edges where chunks overlapped.
 - **The glint** is a GGX highlight off the full ripples, the frames' red
@@ -358,7 +358,7 @@ So water is drawn after opaque parts and their images, before the other
 see-through surfaces, and hides those under it. Rook draws its water
 first among the transparent parts, writing depth, and sorts images on
 parts of Transparency 1 with the transparent parts
-(`renderer/transparent.rs`). Before, water chunks were sorted with the
+(`renderer/passes/transparent.rs`). Before, water chunks were sorted with the
 parts by their corners (one point for 128 studs of water), so water drew
 over a grate above it wherever only water lay behind the grate.
 

@@ -1,6 +1,6 @@
 // Fills the light voxels ahead of the camera (`lighting.wgsl` samples them),
 // one layer per dispatch from the top, only the tiles of it marked
-// (`renderer/lighting/local/tiles.rs`): each voxel sums what every light
+// (`lighting/local/tiles.rs`): each voxel sums what every light
 // listed in its cube's bucket of the lights' spatial hash writes into it
 // (less what parts block, for lights with `Shadows`), and takes the sky's
 // diffuse light (in alpha) from the layer above; and, when the sun shadows
@@ -24,7 +24,7 @@ struct Params {
     flags: vec4<u32>,
     // xyz: towards the sun (unit).
     sun: vec4<f32>,
-    // The sun's cone (`renderer/lighting/local/cover.rs`): x: its radius
+    // The sun's cone (`lighting/local/cover.rs`): x: its radius
     // where it starts, in voxels; y: how much wider it gets per voxel it
     // runs; z: the cover's last level.
     cone: vec4<f32>,
@@ -62,7 +62,7 @@ const TILE: u32 = 16u;
 // averaging each layer across x and z (`sun_cover.wgsl`).
 @group(0) @binding(9) var cover: texture_2d_array<f32>;
 // A byte per voxel, four to a word at `slot`: how full of solid terrain it
-// is (255 full; `renderer/lighting/local/terrain.rs`).
+// is (255 full; `lighting/local/terrain.rs`).
 @group(0) @binding(10) var<storage, read> soils: array<u32>;
 // The cover's, wrapping around as the voxels do.
 @group(0) @binding(11) var cover_sampler: sampler;

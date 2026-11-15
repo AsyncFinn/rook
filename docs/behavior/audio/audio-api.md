@@ -162,7 +162,7 @@ AudioReverb, AudioEcho, AudioChorus, AudioFlanger, AudioCompressor,
 AudioFilter and AudioLimiter are in `rook-lua`'s `audio/ranges.rs`.
 
 The script-visible rules are the conformance case `content/audio_api`
-(recorded in Studio). The engine test `tests/audio_api.rs` checks
+(recorded in Studio). The engine test `tests/audio/audio_api.rs` checks
 playback, the default listener, scheduled calls and analyzers on a
 client.
 

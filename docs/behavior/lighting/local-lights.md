@@ -153,7 +153,7 @@ read again).
 The renderer (`renderer/lighting/local.rs`) keeps the lights in a buffer and a
 spatial hash (16-stud cubes hashed into buckets, padded 8 studs so that
 lights that move a little don't rebuild it). A compute pass
-(`shaders/light_volume.wgsl`) fills a 256 × 64 × 256 volume of 4-stud
+(`shaders/voxels/light_volume.wgsl`) fills a 256 × 64 × 256 volume of 4-stud
 voxels (Studio's grid, below) centered 236 studs ahead of `Camera.Focus`
 along the view direction with the height dropped, following by whole
 64-stud tiles when that center drifts 64 studs, and parts, decals and terrain
@@ -183,7 +183,7 @@ first volume is marked and filled whole at once.
 Otherwise the volume is filled again each frame only where something
 changed, as voxel lighting engines update their grids in chunks: each
 layer is cut
-into 16-voxel (64-stud) tiles (`renderer/lighting/local/tiles.rs`), and
+into 16-voxel (64-stud) tiles (`lighting/local/tiles.rs`), and
 the fill pass runs only over marked tiles. A light that changes marks
 what it lit before and lights now. A dark light (black, Brightness 0 or
 disabled) lights nothing, so it marks nothing and isn't in the hash: off
@@ -191,7 +191,7 @@ lamps on parts that creep cost nothing. Studio shows nothing of them
 either: 40 off lights with `Shadows` (half black, half Brightness 0)
 packed around a lit PointLight leave its capture identical to the byte
 (2026-11-05). A part that moves less than its slack
-changes nothing at all (`renderer/lighting/local/slack.rs`): once a part
+changes nothing at all (`lighting/local/slack.rs`): once a part
 moves, how far it may go before any voxel center it holds or nearly holds
 crosses its faces, or any voxel's fill rounds to another byte, is worked
 out, and it stays marked at that pose until it goes further, as a physics

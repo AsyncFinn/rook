@@ -18,9 +18,9 @@ to grey frames of known colors; Rook's screenshots of the same boards
 ViewportFrames don't appear in captures at all, background included, so
 CanvasGroup was looked at in screenshots the user took.
 
-Code: drawing in `rook-gui`'s `draw/corner.rs`, `draw/stroke.rs`,
-`draw/gradient.rs` and `draw/group.rs`, applied in `draw.rs`; shapes and
-gradients in `rook-render`'s `shaders/gui_paint.wgsl`, ramps in
+Code: drawing in `rook-gui`'s `draw/modifiers/corner.rs`, `draw/modifiers/stroke.rs`,
+`draw/modifiers/gradient.rs` and `draw/objects/group.rs`, applied in `draw.rs`; shapes and
+gradients in `rook-render`'s `shaders/gui/gui_paint.wgsl`, ramps in
 `renderer/gui/ramps.rs`, groups' textures in `renderer/gui/groups.rs`;
 layouts in `rook-gui`'s `layout/list.rs`, `layout/table.rs` and
 `layout/page.rs`; UIPageLayout's methods in `rook-lua`'s

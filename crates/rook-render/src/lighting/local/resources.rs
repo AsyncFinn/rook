@@ -8,7 +8,7 @@ use super::*;
 pub(super) const LAYER_STRIDE: u64 = 256;
 
 /// What one dispatch of the fill pass fills (`Layer` in
-/// `shaders/light_volume.wgsl`).
+/// `shaders/voxels/light_volume.wgsl`).
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub(super) struct LayerUniform {
@@ -20,7 +20,7 @@ pub(super) struct LayerUniform {
 
 pub(super) const LAYER_SIZE: u64 = std::mem::size_of::<LayerUniform>() as u64;
 
-/// What the fill pass reads (`Params` in `shaders/light_volume.wgsl`).
+/// What the fill pass reads (`Params` in `shaders/voxels/light_volume.wgsl`).
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub(super) struct FillParams {

@@ -13,10 +13,10 @@ field of view of 1 or 2 degrees (one color a frame), under one
 `Ambient`, `LightColor` and `LightDirection` each, about 150 frames in all;
 the rest from frames holding a few parts, read pixel by pixel.
 
-Code: the frame's quad in `rook-gui`'s `draw/viewport.rs`; its scene in
+Code: the frame's quad in `rook-gui`'s `draw/objects/viewport.rs`; its scene in
 `rook-scene`'s `viewports.rs`; its world, target and pass in
-`rook-render`'s `renderer/viewports.rs`, laid over the GUI by
-`shaders/gui_paint.wgsl`.
+`rook-render`'s `renderer/passes/viewports.rs`, laid over the GUI by
+`shaders/gui/gui_paint.wgsl`.
 
 ## The picture
 

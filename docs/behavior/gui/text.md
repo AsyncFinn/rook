@@ -9,9 +9,9 @@ of TextLabels in a ScreenGui under StarterGui. The conformance case
 `gui/text` holds the decisive values; Rook passes it.
 
 Code: `rook-gui`'s `text` module (fonts, shaping, lines, rich text,
-glyph masks and distance fields) and `draw/text.rs`; the glyph atlas in
+glyph masks and distance fields) and `draw/objects/text.rs`; the glyph atlas in
 `rook-render/src/renderer/gui/atlas.rs`; `Font` in Luau in
-`rook-lua/src/types/font.rs`; the `Font` and `FontSize` views in
+`rook-lua/src/types/gui/font.rs`; the `Font` and `FontSize` views in
 `rook-lua/src/api/properties/text.rs`.
 
 ## Fonts

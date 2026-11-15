@@ -14,11 +14,11 @@ screen over a SurfaceGui, was recorded the same way in Studio 0.747 on
 
 Code: hit-testing in `rook-gui` (`input/hits.rs`, walking `order.rs`, the
 draw order), the wheel and bar drags in `input/scrolling.rs`, tints and
-hover images in `draw/frame.rs` and `draw/image.rs`, the caret in
-`draw/caret.rs`; the events in `rook-engine/src/bridges/input/`
+hover images in `draw/objects/frame.rs` and `draw/objects/image.rs`, the caret in
+`draw/objects/caret.rs`; the events in `rook-engine/src/bridges/input/`
 (`gui.rs`, `textbox.rs`); TextBox focus in
 `rook-lua/src/api/methods/gui/textbox.rs`, lost to a move in
-`rook-lua/src/threads/firing.rs` (`dispatch`).
+`rook-lua/src/runtime/threads/firing.rs` (`dispatch`).
 
 ## Coordinates
 

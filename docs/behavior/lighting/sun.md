@@ -122,14 +122,14 @@ the hidden property).
   no ring and no shadow from the deck until they turned it on). Studio's
   Baseplate template saves it on.
 
-**Rook** (`sunlit` in `shaders/light_volume.wgsl`, `voxel_sun_visibility`
+**Rook** (`sunlit` in `shaders/voxels/light_volume.wgsl`, `voxel_sun_visibility`
 in `shaders/lighting.wgsl`; Approximation, fitted): with
 `PrioritizeLightingQuality` on, the shadow map as before, one 2048²
 cascade out to 300 studs, fading over the last 60. With it off, no
 shadow pass: the light volume also holds how much of the sun reaches
 each voxel, through a cone towards the sun (voxel cone tracing, as in
 Crassin's 2011 global illumination). The sun cover
-(`renderer/lighting/local/cover.rs`, built by `shaders/sun_cover.wgsl`)
+(`lighting/local/cover.rs`, built by `shaders/voxels/sun_cover.wgsl`)
 holds how much of the sun each voxel stops, all of it in a voxel any
 opaque `CastShadow` part touches, with mips that average each layer over
 2 to 16 voxels across. Each voxel's cone runs up a layer at a time,
@@ -145,7 +145,7 @@ The voxels take the sun again when it turns more than about half a
 degree. The volume moves by whole 64-stud tiles, so the mips' texels
 stay put in the world.
 Terrain is marked into the same voxels
-(`renderer/lighting/local/terrain.rs`), each voxel by how full of solid
+(`lighting/local/terrain.rs`), each voxel by how full of solid
 terrain it is (air and water count as empty), and stops a share of the
 sun by it, fitted to the terrain slabs above (`SOIL_SUN`: all of it from
 0.35 up, 0.54, 0.23, 0.15 and 0.06 of it at 0.25, 0.15, 0.1 and 0.05), so

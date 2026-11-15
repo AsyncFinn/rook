@@ -56,7 +56,7 @@ pub(in crate::renderer) struct GpuQuad {
     /// 0 fills the rectangle, 1 draws through a coverage mask, 2 through a
     /// distance field, 3 through an image, 4 through a group's texture, 5
     /// through a ViewportFrame's picture, 6 and up outlines text
-    /// (`shaders/gui_paint.wgsl`).
+    /// (`shaders/gui/gui_paint.wgsl`).
     pub(super) mode: f32,
     /// The shape's center and half size (0: none).
     pub(super) shape_rect: [f32; 4],

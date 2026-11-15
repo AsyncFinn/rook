@@ -14,7 +14,7 @@ Code: which world GUIs show, their canvas sizes and places in
 `rook-gui`'s `world` module; their contents lay out and draw as a
 ScreenGui's do ([GUI](layout.md)), text from distance fields
 (`rook-gui/src/text/distance.rs`); the world pass in
-`rook-render/src/renderer/gui/world.rs` and `shaders/world_gui.wgsl`.
+`rook-render/src/renderer/gui/world.rs` and `shaders/gui/world_gui.wgsl`.
 
 ## Which show
 
@@ -100,7 +100,7 @@ inf.
   the screen's GUI. That order is kept only against the parts a canvas
   overlaps on the screen, where it shows, so canvases are drawn together
   between fewer parts and the frame comes out the same
-  (`renderer/cuts.rs`); canvases wholly out of view aren't drawn. Inference: SurfaceGui `ZOffset` isn't used yet.
+  (`renderer/passes/cuts.rs`); canvases wholly out of view aren't drawn. Inference: SurfaceGui `ZOffset` isn't used yet.
   Rook's canvases share the parts' bind groups 0 to 2 (the image table
   among them) and bind only their own group 3, which holds the light
   group's bindings and then theirs (`renderer/gui/world.rs`), so drawing

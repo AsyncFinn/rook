@@ -53,7 +53,7 @@ struct Globals {
 @group(1) @binding(3) var image_sampler: sampler;
 // Water's normal frames, one per layer (X in alpha, Y in green).
 @group(1) @binding(4) var water_normals: texture_2d_array<f32>;
-// The sky's reflection cube, in light units (`renderer/lighting/sky.rs`).
+// The sky's reflection cube, in light units (`lighting/sky.rs`).
 @group(1) @binding(5) var sky_cube: texture_cube<f32>;
 // Studio's split-sum table of the sky's reflection (the install's
 // `brdfLUT.dds`, or Rook's fit of it): A and B by remapped roughness

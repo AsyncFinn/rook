@@ -11,7 +11,7 @@ decisive values; Rook passes it, and its shots of the same scene differ
 only along edges.
 
 Code: `rook-gui`'s `layout/scrolling.rs` (canvas, window, bars, position)
-and `draw/scrolling.rs` (the bars); scripts' `CanvasPosition` writes go
+and `draw/objects/scrolling.rs` (the bars); scripts' `CanvasPosition` writes go
 through `Gui::set_canvas_position`.
 
 Defaults from `Instance.new`: `CanvasSize` {0, 0}, {2, 0},

@@ -151,7 +151,7 @@ stopped. Rook sends `TimePosition` only when it is set (time passing
 isn't journaled), so a slow server never pulls a client back. Until 0.4.4 the player heard nothing in Play mode, and
 then everything at speed 1. A recording of `rook-player`'s output now has
 the test tone at full level for exactly as long as the script played it.
-Engine tests (`tests/sounds.rs`) check that the client gets every
+Engine tests (`tests/audio/sounds.rs`) check that the client gets every
 property it plays by. The rule covers every property replicated this way,
 not only sounds (`rook-net`'s `replicated_by_twin`).
 

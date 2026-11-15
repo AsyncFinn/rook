@@ -149,7 +149,7 @@ the exposure.
 
 ## How Rook does it
 
-The main pass draws into a frame (`renderer/tonemap.rs`, Rgba16Float to
+The main pass draws into a frame (`renderer/passes/tonemap.rs`, Rgba16Float to
 avoid the 8-bit frame's banding) holding Studio's encoding, `frame` in
 `shaders/tone.wgsl`, and every pipeline blends there as before. The tone
 pass then decodes it and applies the default curve or Retro's, from the

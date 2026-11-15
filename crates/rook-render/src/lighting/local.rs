@@ -2,7 +2,7 @@
 //! every light in one buffer, a spatial hash saying which lights reach each
 //! place (reaches padded by [`SLACK`], so lights that move a little don't
 //! rebuild it), and a volume of 4-stud voxels ahead of the camera that a
-//! compute pass fills (`shaders/light_volume.wgsl`) and surfaces sample
+//! compute pass fills (`shaders/voxels/light_volume.wgsl`) and surfaces sample
 //! (`shaders/lighting.wgsl`). The voxels are filled again only where a
 //! light or a part changed (`tiles.rs`), and, when the camera leaves the
 //! volume's middle and it follows, only what it came onto and what that
