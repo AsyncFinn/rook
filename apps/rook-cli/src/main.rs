@@ -6,7 +6,7 @@
 
 mod commands;
 
-use commands::{content, dump, key, logs, play, roundtrip, run};
+use commands::{cache, content, dump, key, logs, play, roundtrip, run};
 use std::ffi::OsString;
 use std::path::PathBuf;
 
@@ -244,11 +244,11 @@ fn command(command: Command) -> anyhow::Result<()> {
             KeyAction::Set => key::set(),
             KeyAction::Clear => key::clear(),
         },
-        Command::Cache { action } => content::cache(match action {
-            None => content::CacheCommand::Show,
-            Some(CacheAction::Prune { older_than }) => content::CacheCommand::Prune(older_than),
-            Some(CacheAction::Trim) => content::CacheCommand::Trim,
-            Some(CacheAction::Clear) => content::CacheCommand::Clear,
+        Command::Cache { action } => cache::cache(match action {
+            None => cache::CacheCommand::Show,
+            Some(CacheAction::Prune { older_than }) => cache::CacheCommand::Prune(older_than),
+            Some(CacheAction::Trim) => cache::CacheCommand::Trim,
+            Some(CacheAction::Clear) => cache::CacheCommand::Clear,
         }),
         Command::RunHeadless {
             file,

@@ -1,3 +1,4 @@
+pub(crate) mod cache;
 pub(crate) mod content;
 pub(crate) mod dump;
 pub(crate) mod key;
