@@ -6,8 +6,8 @@
 // diffuse light (in alpha) from the layer above; and, when the sun shadows
 // through the voxels, how much of the sun reaches each one.
 
-import package::lights::{Light, VOXEL, light_at_voxel};
-import package::voxel_marks::{slot_of, byte_of, by_soil, SOIL_SKY};
+import package::voxels::lights::{Light, VOXEL, light_at_voxel};
+import package::voxels::voxel_marks::{slot_of, byte_of, by_soil, SOIL_SKY};
 
 struct Params {
     // xyz: the center of voxel (0, 0, 0); w: studs per hash cube.

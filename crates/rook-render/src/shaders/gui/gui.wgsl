@@ -5,7 +5,7 @@
 // finished frame in sRGB (`tonemap.wgsl`). A group's quads are drawn the
 // same way into its texture first.
 
-import package::gui_paint::{gui_gradient, gui_paint, gui_shape, ramp_uv};
+import package::gui::gui_paint::{gui_gradient, gui_paint, gui_shape, ramp_uv};
 
 struct Screen {
     // xy: the target's size in pixels.

@@ -10,7 +10,7 @@
 // it as a surface facing the camera's side of it, as particles are lit.
 
 import package::common::{g, image_sampler};
-import package::gui_paint::{gui_gradient, gui_paint, gui_shape, ramp_uv};
+import package::gui::gui_paint::{gui_gradient, gui_paint, gui_shape, ramp_uv};
 import package::tone::frame;
 import package::lighting::{diffuse_light, fog_amount, fog_light, sun_light};
 

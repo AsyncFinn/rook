@@ -7,20 +7,22 @@ use std::error::Error;
 use std::ops::Range;
 
 use wesl::sourcemap::{BasicSourceMap, SourceMap};
+use wesl::syntax::{ModulePath, PathOrigin};
 use wesl::{CompileOptions, CompileResult, Compiler};
 
-/// The entry modules: one shader module each.
+/// The entry modules, by path under src/shaders: one shader module each,
+/// named by its file.
 const ENTRIES: [&str; 10] = [
     "parts",
     "scatter",
-    "sky",
-    "sky_cube",
-    "light_volume",
-    "sun_cover",
+    "sky/sky",
+    "sky/sky_cube",
+    "voxels/light_volume",
+    "voxels/sun_cover",
     "particles",
     "tonemap",
-    "gui",
-    "world_gui",
+    "gui/gui",
+    "gui/world_gui",
 ];
 
 fn main() {
@@ -32,14 +34,21 @@ fn main() {
         for table in [false, true] {
             let mut options = CompileOptions::default();
             options.features.set("image_table", table);
+            // The package is all of src/shaders, whichever folder the
+            // entry is in, so package:: imports mean the same everywhere.
+            let module = ModulePath::new(
+                PathOrigin::Absolute,
+                entry.split('/').map(str::to_owned).collect(),
+            );
             let result = Compiler::new(options)
-                .compile(format!("src/shaders/{entry}.wgsl"))
+                .compile_module("src/shaders", &module)
                 .unwrap_or_else(|e| panic!("{e}"));
             check(&result, entry);
+            let name = entry.rsplit('/').next().unwrap_or(entry);
             let artifact = if table {
-                format!("{entry}_table")
+                format!("{name}_table")
             } else {
-                entry.to_string()
+                name.to_string()
             };
             result.write_artifact(&artifact);
         }

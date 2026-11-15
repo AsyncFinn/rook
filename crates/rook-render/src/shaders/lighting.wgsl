@@ -6,7 +6,7 @@
 
 import package::common::{g, sky_cube, brdf_table, image_sampler};
 
-import package::lights::VOXEL;
+import package::voxels::lights::VOXEL;
 
 @group(1) @binding(0) var shadow_map: texture_depth_2d;
 @group(1) @binding(1) var shadow_sampler: sampler_comparison;

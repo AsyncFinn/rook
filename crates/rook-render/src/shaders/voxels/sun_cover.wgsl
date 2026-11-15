@@ -7,7 +7,7 @@
 // `light_volume.wgsl`). One dispatch per level, over the tiles that
 // changed.
 
-import package::voxel_marks::{slot_of, byte_of, by_soil, SOIL_SUN};
+import package::voxels::voxel_marks::{slot_of, byte_of, by_soil, SOIL_SUN};
 
 struct Job {
     // xyz: voxels along each axis of the volume; w: the level made.
