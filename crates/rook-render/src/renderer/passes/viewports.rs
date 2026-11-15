@@ -7,8 +7,8 @@
 //! SubViewport set to update when changed.
 
 use super::*;
-use detail::DetailView;
-use runs::Runs;
+use crate::renderer::draws::detail::DetailView;
+use crate::renderer::draws::runs::Runs;
 
 /// A ViewportFrame's fog: from 0 to 100,000 studs, of 0.75 light units,
 /// whatever Lighting says (measured: black parts at 10 to 99,000 studs fit

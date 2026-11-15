@@ -7,8 +7,8 @@
 use wesl_core::include_wesl;
 
 use super::gui::GUI_FORMAT;
-use super::highlights::{HIGHLIGHT_LIMIT, Looks, MASK_FORMAT};
 use super::*;
+use crate::renderer::passes::highlights::{HIGHLIGHT_LIMIT, Looks, MASK_FORMAT};
 
 /// What the tone pass reads besides the frame and the mask.
 #[repr(C)]

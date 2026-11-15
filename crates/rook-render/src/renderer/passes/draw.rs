@@ -2,13 +2,13 @@
 
 use super::effects::particles::ParticleRun;
 use super::effects::ribbons::RibbonRun;
-use super::highlights::HighlightRun;
 use super::*;
 use crate::batch::CULL_SLOTS;
 use crate::batch::cull::seen_runs;
-use detail::DetailView;
-use runs::{Pipe, Runs, Source};
-use transparent::TransparentRun;
+use crate::renderer::draws::detail::DetailView;
+use crate::renderer::draws::runs::{Pipe, Runs, Source};
+use crate::renderer::passes::highlights::HighlightRun;
+use crate::renderer::passes::transparent::TransparentRun;
 
 impl Renderer {
     /// Upload the instances changed since the last frame (scattered into
@@ -241,7 +241,7 @@ impl Renderer {
                 l.fog_start,
                 l.fog_end,
                 l.exposure,
-                viewports::pixel_studs(camera, height),
+                crate::renderer::passes::viewports::pixel_studs(camera, height),
             ],
             shadow_view_proj: shadow
                 .map_or(glam::Mat4::IDENTITY, |s| s.view_proj)
@@ -434,7 +434,12 @@ impl Renderer {
         let nearest = distances.last().copied().unwrap_or(f32::INFINITY);
         let among = (world_gui.iter())
             .take_while(|d| !d.on_top && d.distance.powi(2) > nearest)
-            .map(|d| (cuts::Rect::of(view_proj, d.corners), d.distance.powi(2)))
+            .map(|d| {
+                (
+                    crate::renderer::passes::cuts::Rect::of(view_proj, d.corners),
+                    d.distance.powi(2),
+                )
+            })
             .collect::<Vec<_>>();
         let instances =
             (world.transparent.picks().iter().zip(distances)).map(|(&(_, w), &d)| (w, d));
@@ -490,7 +495,7 @@ impl Renderer {
             let Some(mesh) = self.meshes.get(&key.shape) else {
                 continue;
             };
-            let pipe = if z == placement::OVER_Z {
+            let pipe = if z == crate::renderer::draws::placement::OVER_Z {
                 Pipe::Over
             } else {
                 Pipe::Layer

@@ -212,7 +212,14 @@ impl Pipelines {
             })
         };
         let highlight = |on_top, cull| {
-            super::highlights::pipeline(device, layouts.globals, &shader, &buffers, on_top, cull)
+            crate::renderer::passes::highlights::pipeline(
+                device,
+                layouts.globals,
+                &shader,
+                &buffers,
+                on_top,
+                cull,
+            )
         };
         let make = |label, fragment, blend, depth_write, compare, bias, stencil| {
             make_faces(

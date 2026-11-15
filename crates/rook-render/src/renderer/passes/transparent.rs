@@ -6,7 +6,7 @@
 use std::ops::Range;
 
 use super::*;
-use runs::Pipe;
+use crate::renderer::draws::runs::Pipe;
 
 /// How a run of transparent instances is drawn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

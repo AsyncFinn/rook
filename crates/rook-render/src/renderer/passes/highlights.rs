@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use std::ops::Range;
 
 use super::*;
-use runs::Runs;
+use crate::renderer::draws::runs::Runs;
 
 /// The most Highlights drawn at once: Roblox draws no more than 31
 /// (creator docs, Highlight). The mask holds 1 + their index, 0 for none.

@@ -1,9 +1,9 @@
 //! Which batch or slot each scene entry is drawn in, and the uploads it
 //! waits on.
 
-use super::waiting::File;
 use super::*;
 use crate::gpu::cache::Upload;
+use crate::renderer::draws::waiting::File;
 
 /// How a scene entry should be drawn now.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -370,7 +370,7 @@ impl Renderer {
 
     /// Whether `hash`'s image is up, or going up (queued now if it was
     /// handed over and parked); missing if it never was.
-    pub(super) fn image_readiness(&mut self, hash: ImageHash) -> Readiness {
+    pub(in crate::renderer) fn image_readiness(&mut self, hash: ImageHash) -> Readiness {
         if self.images.contains(&hash) {
             Readiness::Ready
         } else if self.images.claim(hash) {

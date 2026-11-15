@@ -7,7 +7,7 @@
 use std::ops::Range;
 
 use super::*;
-use detail::DetailView;
+use crate::renderer::draws::detail::DetailView;
 
 /// One instanced draw's arguments, laid out as indirect draws read them.
 #[repr(C)]
