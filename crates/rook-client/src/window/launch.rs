@@ -149,8 +149,10 @@ impl Launch {
                 None
             },
         };
-        // TODO: list them again when the system's devices change, and fire
-        // SoundService.DeviceListChanged, which the open menu refreshes on.
+        // Listed again each time the system's devices change (the frame
+        // step asks the output).
+        // TODO: fire SoundService.DeviceListChanged then too, which the
+        // open menu refreshes on.
         if app.audio.is_some() {
             app.game
                 .view_mut()
