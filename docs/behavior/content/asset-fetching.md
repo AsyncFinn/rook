@@ -238,5 +238,7 @@ and checks face indices. `rook content` decodes meshes it shows: `fonts/sword.me
 is 198 triangles, 1.15 x 0.34 x 4.37 studs; version 1 of asset 12221462
 (1.00) is 56 x 40 x 45 studs, the giant mesh Studio drew for it.
 
-*Not done yet:* thumbnails (`rbxthumb://`), the old paths outside
+Thumbnails, `rbxthumb://` and the old `thumbs/`, `ThumbnailAsset.ashx` and `*-thumbnail/image` URLs, are in [thumbnails](thumbnails.md).
+
+*Not done yet:* the old paths outside
 Rook's table, Decal's URL rewrite, and assets that need an account.

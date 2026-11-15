@@ -85,8 +85,8 @@ renderer draws all of these as their part's plain box.
        orientation checked.
      - Unions: geometry saved in the file; `MeshData` 4 and 5 checked;
        the NegateOperation color; material tiling.
-     - Content: assets that need an account, `rbxthumb://` and version
-       ids, old `rbxasset://` paths; `PreloadAsync`'s `Loading`,
+     - Content: assets that need an account and the thumbnails that
+       do, version ids, old `rbxasset://` paths; `PreloadAsync`'s `Loading`,
        `TimedOut` and timing; `RequestQueueSize`; the other
        ContentProvider members; `Changed` firing for the legacy content
        names.

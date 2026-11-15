@@ -77,7 +77,7 @@ After loading, `rook-player` prints one summary of what didn't load, grouped by 
 
 Every web request Rook makes, and every scripting API Roblox answers from its servers (user lookups, friends, groups, badges, text filtering, the CoreScripts' requests), goes through one build setting, `webBase` in `rook-build.toml` (and the `webBase` setting over it, in builds with developer overrides), so whoever builds Rook chooses where they go:
 
-- **Left out** (the default): asset delivery uses Roblox, and everything else answers on your machine. Text passes through unfiltered, the session's players are the only users, and nobody is in a group or owns a badge.
+- **Left out** (the default): asset delivery and thumbnails use Roblox, and everything else answers on your machine. Text passes through unfiltered, the session's players are the only users, and nobody is in a group or owns a badge.
 - **Offline**: `webBase = "off"` sends nothing anywhere; assets and Roblox's files come only from your install, content folders, cache and the packages already downloaded.
 - **A mirror or your own server**: `webBase = "example.com"` sends `users.roblox.com`'s requests to `users.example.com`, and so on for every domain. `webBase = "http://127.0.0.1:8080"` sends them all to one server, under `/users`, `/assetdelivery`, ...
 - **Per domain**: under `[webDomains]`, `users = "https://users.example.com"` or `badges = "off"` overrides `webBase` for that domain only.

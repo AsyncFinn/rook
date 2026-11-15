@@ -1,8 +1,9 @@
-//! Who users are: names and ids (`users`), friendships (`friends`) and
-//! group roles (`groups`), and what they own: badges (`badges`), passes
-//! and assets (`inventory`). With no endpoint ([`super::requests`]), the
-//! session is all there is: its players are the only users, none are
-//! friends or in a group, and nobody owns anything.
+//! Who users are: names and ids (`users`), friendships (`friends`),
+//! group roles (`groups`) and avatar thumbnails (`thumbnails`), and what
+//! they own: badges (`badges`), passes and assets (`inventory`). With no
+//! endpoint ([`super::requests`]), the session is all there is: its
+//! players are the only users, none are friends or in a group, nobody
+//! owns anything, and no thumbnail is ready.
 
 use mlua::{Lua, MultiValue, Value as LuaValue};
 use rook_dom::InstanceId;
@@ -18,6 +19,7 @@ pub(super) fn native(owner: &str, name: &str) -> Option<RawMethod> {
     Some(match (owner, name) {
         ("Players", "GetUserIdFromNameAsync") => user_id_from_name,
         ("Players", "GetNameFromUserIdAsync") => name_from_user_id,
+        ("Players", "GetUserThumbnailAsync") => user_thumbnail,
         ("UserService", "GetUserInfosByUserIdsAsync") => user_infos,
         ("Player", "IsFriendsWith") => is_friends_with,
         ("Player", "GetRankInGroup") => rank_in_group,
@@ -107,6 +109,58 @@ fn name_from_user_id(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
         Box::new(move |lua, answer| {
             let json = web::json(answer).map_err(|_| failed())?;
             values(lua, json["name"].as_str().ok_or_else(failed)?.to_owned())
+        }),
+    )
+}
+
+/// `rbxthumb://` for the user's avatar thumbnail, and whether the
+/// thumbnails service has it ready (`POST thumbnails/v1/batch`, ready when
+/// `Completed`). Measured in Studio 0.747: the string is built whatever
+/// the id (`id=-1`, a fractional id cut to a whole one), and an id of 0 or
+/// less, or a user who doesn't exist, isn't ready
+/// (`docs/behavior/content/thumbnails.md`).
+fn user_thumbnail(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
+    use rook_content::resolver::thumbnails::{BATCH_PATH, batch_body, batch_state};
+    use rook_content::{Target, Thumbnail, ThumbnailKind};
+    let id = id(a, 0)?;
+    let kind = match a.enum_value(lua, 1, "ThumbnailType")? {
+        0 => ThumbnailKind::AvatarHeadShot,
+        1 => ThumbnailKind::AvatarBust,
+        _ => ThumbnailKind::Avatar,
+    };
+    let size = match a.enum_value(lua, 2, "ThumbnailSize")? {
+        0 => 48,
+        1 => 180,
+        2 => 420,
+        3 => 60,
+        4 => 100,
+        5 => 150,
+        _ => 352,
+    };
+    let content = format!("rbxthumb://type={}&id={id}&w={size}&h={size}", kind.name());
+    let url = web::url(lua, "thumbnails", BATCH_PATH);
+    let (Some(url), Ok(user)) = (url, u64::try_from(id)) else {
+        return Outcome::ret(lua, (content, false));
+    };
+    if user == 0 {
+        return Outcome::ret(lua, (content, false));
+    }
+    let thumbnail = Thumbnail {
+        kind,
+        target: Target::Id(user),
+        width: size,
+        height: size,
+        circular: false,
+    };
+    web::call(
+        lua,
+        WebRequest::post_json(url, &batch_body(&thumbnail, user)),
+        Box::new(move |lua, answer| {
+            // A failed request isn't ready either (Inference: not checked
+            // against a Studio that can't reach the service).
+            let ready =
+                web::json(answer).is_ok_and(|json| batch_state(&json).0 == Some("Completed"));
+            values(lua, (content, ready))
         }),
     )
 }

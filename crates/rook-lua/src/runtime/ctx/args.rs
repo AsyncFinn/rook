@@ -166,6 +166,28 @@ impl Args {
         Ok(self.opt_number(i)?.unwrap_or(default))
     }
 
+    /// An item of the enum called `enum_name`, as an EnumItem, its number
+    /// or its name, giving its value. Measured on
+    /// `Players:GetUserThumbnailAsync`: a number that is no item is
+    /// `Unable to cast double to ThumbnailSize`, another enum's item
+    /// `Unable to cast Material to ThumbnailType`.
+    pub(crate) fn enum_value(&self, lua: &Lua, i: usize, enum_name: &str) -> ApiResult<u32> {
+        let v = self.get(i);
+        if v.is_nil() {
+            return Err(self.missing(i));
+        }
+        crate::types::enums::item_value(lua, v, enum_name).ok_or_else(|| {
+            let from = match v {
+                LuaValue::Integer(_) | LuaValue::Number(_) => "double".to_owned(),
+                LuaValue::UserData(u) => u
+                    .borrow::<crate::types::enums::LEnumItem>()
+                    .map_or_else(|_| type_name(v), |item| item.enum_name().to_owned()),
+                v => type_name(v),
+            };
+            ScriptError(format!("Unable to cast {from} to {enum_name}"))
+        })
+    }
+
     pub(crate) fn string(&self, i: usize) -> ApiResult<String> {
         self.opt_string(i)?.ok_or_else(|| self.missing(i))
     }

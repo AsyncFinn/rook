@@ -20,6 +20,11 @@ pub(crate) struct LEnumItem {
 }
 
 impl LEnumItem {
+    /// The name of the enum it belongs to (`Material`).
+    pub(crate) fn enum_name(&self) -> &'static str {
+        database().enum_info(self.enum_id).name
+    }
+
     fn name(&self) -> &'static str {
         database()
             .enum_info(self.enum_id)

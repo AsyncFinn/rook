@@ -8,7 +8,7 @@ Roblox's web API is split across domains named `<domain>.roblox.com` (`users`, `
 
 - A domain listed in `webDomains` goes to the URL given there, or nowhere for `"off"`.
 - Otherwise `webBase` decides: `"off"` sends nothing anywhere; a domain such as `example.com` sends `users.roblox.com`'s requests to `https://users.example.com`; a URL such as `http://127.0.0.1:8080` sends them to `http://127.0.0.1:8080/users`, so one server can answer every domain.
-- With neither set, `assetdelivery` goes to Roblox, as Rook always did, and so do `clientsettings` and `setup` (Roblox's client packages); every other domain answers locally.
+- With neither set, the content places draw goes to Roblox (`assetdelivery`, as Rook always did, and `thumbnails`), and so do `clientsettings` and `setup` (Roblox's client packages); every other domain answers locally.
 
 A request's path and query are kept as they are: `https://users.roblox.com/v1/users/1` becomes `<users endpoint>/v1/users/1`. Scripts still see Roblox's URLs (`ContentProvider.BaseUrl` stays `https://www.roblox.com/`); Rook rewrites them as they are sent. `roblox.com` with no domain is the `www` domain. URLs that aren't on a Roblox web domain are never sent this way.
 
@@ -22,7 +22,8 @@ Requests go out from the engine on a thread each, and the script that asked wait
 | Roblox's live client version, for its packages | `clientsettings` | `GET /v2/client-version/WindowsStudio64`, reading `clientVersionUpload` | Packages already downloaded answer, then the install |
 | Roblox's client packages (`rbxasset://` files, the CoreScripts model) | `setup` (Roblox's is `https://setup.rbxcdn.com`, not a `roblox.com` domain) | `GET /{version}-rbxPkgManifest.txt`, then `GET /{version}-{package}.zip` for each package a path needs ([client packages](../behavior/content/client-packages.md)) | Packages already downloaded answer, then the install |
 | Assets refused anonymously, with an Open Cloud key | none | `GET https://apis.roblox.com/asset-delivery-api/v1/assetId/{id}` with the key in `x-api-key` | The key is a Roblox credential, so it goes only to Roblox, and only while `assetdelivery` goes to Roblox; a mirror's refusals stand |
-| `rbxthumb://` thumbnails | `thumbnails` | Not fetched yet | Fail as unsupported |
+| Thumbnails (`rbxthumb://` and the old thumbnail URLs, [thumbnails](../behavior/content/thumbnails.md)) | `thumbnails` | `POST /v1/batch` `[{"requestId", "targetId", "type", "size": "<w>x<h>", "format": "png", "isCircular"}]`, answering `{"data": [{"state", "imageUrl"}]}`, asked again while `Pending`; then a `GET` of `imageUrl` | Only the cache answers |
+| Thumbnails by username (the old avatar URLs' `username=`) | `users` | `POST /v1/usernames/users` `{"usernames": [name], "excludeBannedUsers": false}`, reading `data[1].id` | Fail as offline |
 | `HttpService:GetAsync`, `PostAsync`, `RequestAsync` (game scripts) | none | Refused, as with `HttpEnabled` off; these reach any site, not Roblox's web API | Refused |
 
 What asset delivery answers and how Rook caches it is in [asset fetching](../behavior/content/asset-fetching.md).
@@ -40,6 +41,7 @@ Members with an endpoint path send the request shown and return what Roblox woul
 | `Player:GetRankInGroup`, `GetRoleInGroup`, `IsInGroup` | `groups` | `GET /v2/users/{player}/groups/roles`, reading the entry whose `group.id` matches (`role.rank`, `role.name`) | `0`, `"Guest"`, `false` |
 | `BadgeService:UserHasBadgeAsync(user, badge)` | `badges` | `GET /v1/users/{user}/badges/awarded-dates?badgeIds={badge}`, true when `data` isn't empty | `false` |
 | `MarketplaceService:UserOwnsGamePassAsync(user, pass)` | `inventory` | `GET /v1/users/{user}/items/GamePass/{pass}`, true when `data` isn't empty | `false` |
+| `Players:GetUserThumbnailAsync(id, type, size)` | `thumbnails` | The batch request above for the `rbxthumb://` it returns, ready when the state is `Completed` ([thumbnails](../behavior/content/thumbnails.md#playersgetuserthumbnailasync)) | The `rbxthumb://` URL, not ready |
 | `MarketplaceService:PlayerOwnsAsset(player, asset)` | `inventory` | `GET /v1/users/{player}/items/Asset/{asset}`, true when `data` isn't empty | `false` |
 | A player's look, for its characters; `Players:GetHumanoidDescriptionFromUserId(id)` | `avatar` | `GET /v1/users/{id}/avatar`, reading `playerAvatarType`, `bodyColors` (`headColorId`, `torsoColorId`, `leftArmColorId`, `rightArmColorId`, `leftLegColorId`, `rightLegColorId`, BrickColor numbers) and `scales` (`height`, `width`, `depth`, `head`); a player's first character waits for it ([rigs and looks](../behavior/characters/rigs.md)) | Roblox's classic default look |
 | `TextService:FilterStringAsync(text, user, context)`, its TextFilterResult's `GetChatForUserAsync`, `GetNonChatStringForUserAsync`, `GetNonChatStringForBroadcastAsync`; `Chat:FilterStringAsync`, `Chat:FilterStringForBroadcast` | `textfilter` | `POST /v1/filter-text` `{"text", "userId", "context"}` (`PrivateChat` or `PublicChat`), answering `{"chat": "...", "broadcast": "..."}`. Roblox filters through a service of its own with no public API, so this request is Rook's | The text unchanged: a local session has no one to filter for |
@@ -56,7 +58,7 @@ These answer locally only, with no endpoint path yet:
 | `LocalizationService:GetTranslatorForPlayerAsync` and cloud tables | `localizationtables` | The place's own LocalizationTables |
 | TextChatService messages | `textfilter` | Delivered unfiltered |
 
-These aren't implemented yet and raise "not implemented in Rook yet" (Roblox's CoreScripts get nil): `Players:GetUserThumbnailAsync` (`thumbnails`), `Players:GetFriendsAsync` (`friends`), `Players:GetCharacterAppearanceInfoAsync` and AvatarEditorService (`avatar`), GroupService (`groups`), `BadgeService:GetBadgeInfoAsync` and `AwardBadge` (`badges`), `MarketplaceService:GetProductInfo` (`economy`), AssetService (`games`, `develop`), MessagingService and MemoryStoreService (Roblox's game servers). Each gets a local answer and an endpoint path when it's implemented, listed here.
+These aren't implemented yet and raise "not implemented in Rook yet" (Roblox's CoreScripts get nil): `Players:GetFriendsAsync` (`friends`), `Players:GetCharacterAppearanceInfoAsync` and AvatarEditorService (`avatar`), GroupService (`groups`), `BadgeService:GetBadgeInfoAsync` and `AwardBadge` (`badges`), `MarketplaceService:GetProductInfo` (`economy`), AssetService (`games`, `develop`), MessagingService and MemoryStoreService (Roblox's game servers). Each gets a local answer and an endpoint path when it's implemented, listed here.
 
 ## What a server of your own needs
 

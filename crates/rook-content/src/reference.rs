@@ -2,11 +2,15 @@
 //! `SoundId` and the other content properties, parsed once into
 //! [`ContentRef`] by the rules of what Studio loads
 //! (`docs/behavior/content/asset-fetching.md`, "Which forms Studio loads"; each form is a
-//! test here).
+//! test here). Thumbnails have their own module.
+
+mod thumbnail;
 
 use std::fmt;
 
 use rook_types::{Material, MaterialSet};
+
+pub use thumbnail::{Target, Thumbnail, ThumbnailKind};
 
 /// What a content string refers to. An empty string, or anything that
 /// isn't one of these forms, is no content at all ([`ContentRef::parse`]
@@ -26,8 +30,9 @@ pub enum ContentRef {
     /// A legacy URL naming one asset version (`asset/?assetversionid=`).
     /// Asset delivery no longer looks these up.
     AssetVersion(u64),
-    /// `rbxthumb://type=<type>&id=<id>&w=<w>&h=<h>`: a thumbnail Roblox
-    /// renders.
+    /// A thumbnail Roblox renders: `rbxthumb://type=<type>&id=<id>&w=<w>&h=<h>`,
+    /// or one of the old web URLs Studio turns into one
+    /// (`Game/Tools/ThumbnailAsset.ashx?aid=`, `headshot-thumbnail/image?userId=`, ...).
     Thumbnail(Thumbnail),
     /// One of a built-in material's textures in one of the two sets: no
     /// string names it, but every part of that material draws it. It comes
@@ -67,18 +72,6 @@ impl MaterialMap {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct Thumbnail {
-    /// `Asset`, `Avatar`, `AvatarHeadShot`, `BadgeIcon`, `BundleThumbnail`,
-    /// `GameIcon`, `GamePass`, `GroupIcon`, `Outfit`...
-    pub kind: String,
-    pub id: u64,
-    pub width: u32,
-    pub height: u32,
-    /// `filters=` (e.g. `circular`), if any.
-    pub filters: Option<String>,
-}
-
 impl ContentRef {
     /// Parse a content string. `None` means no content.
     pub fn parse(text: &str) -> Option<Self> {
@@ -91,22 +84,29 @@ impl ContentRef {
             return asset_query(&format!("id={rest}"));
         }
         if let Some(rest) = text.strip_prefix("rbxthumb://") {
-            return thumbnail(rest).map(Self::Thumbnail);
+            return Thumbnail::from_rbxthumb(rest).map(Self::Thumbnail);
+        }
+        // `rbxhttp://` is the web base: only the old thumbnail URLs load
+        // through it.
+        if let Some(rest) = text.strip_prefix("rbxhttp://") {
+            return Thumbnail::from_web(rest).map(Self::Thumbnail);
         }
         let (scheme, rest) = text.trim_start().split_once("://")?;
         if scheme.eq_ignore_ascii_case("http") || scheme.eq_ignore_ascii_case("https") {
-            let (location, query) = rest.split_once('?')?;
-            let (_host, path) = location.split_once('/')?;
+            let (_host, path_and_query) = rest.split_once('/')?;
+            let (path, query) = path_and_query.split_once('?')?;
             let last_segment = path.trim_end_matches('/').rsplit('/').next();
             if last_segment.is_some_and(|p| p.eq_ignore_ascii_case("asset")) {
                 return asset_query(query);
             }
+            return Thumbnail::from_web(path_and_query).map(Self::Thumbnail);
         }
         None
     }
 
     /// The key this reference is cached under (`asset-12`, `asset-12-v3`,
-    /// `assetversion-7`), for references that are downloaded.
+    /// `assetversion-7`, `thumb-Asset-12-150x150`), for references that are
+    /// downloaded.
     pub fn cache_key(&self) -> Option<String> {
         match self {
             Self::Asset { id, version: None } => Some(format!("asset-{id}")),
@@ -115,7 +115,8 @@ impl ContentRef {
                 version: Some(v),
             } => Some(format!("asset-{id}-v{v}")),
             Self::AssetVersion(id) => Some(format!("assetversion-{id}")),
-            Self::File(_) | Self::Thumbnail(_) | Self::Material(..) | Self::TexturePack(..) => None,
+            Self::Thumbnail(t) => Some(t.cache_key()),
+            Self::File(_) | Self::Material(..) | Self::TexturePack(..) => None,
         }
     }
 }
@@ -147,17 +148,7 @@ impl fmt::Display for ContentRef {
             Self::AssetVersion(id) => {
                 write!(f, "https://www.roblox.com/asset/?assetversionid={id}")
             }
-            Self::Thumbnail(t) => {
-                write!(
-                    f,
-                    "rbxthumb://type={}&id={}&w={}&h={}",
-                    t.kind, t.id, t.width, t.height
-                )?;
-                if let Some(filters) = &t.filters {
-                    write!(f, "&filters={filters}")?;
-                }
-                Ok(())
-            }
+            Self::Thumbnail(t) => t.fmt(f),
         }
     }
 }
@@ -223,18 +214,6 @@ fn asset_query(query: &str) -> Option<ContentRef> {
             .and_then(id_value)
             .map(ContentRef::AssetVersion),
     }
-}
-
-fn thumbnail(rest: &str) -> Option<Thumbnail> {
-    let number = |key| last(rest, key).and_then(id_value);
-    let t = Thumbnail {
-        kind: last(rest, "type")?.trim().to_owned(),
-        id: number("id")?,
-        width: u32::try_from(number("w").unwrap_or(0)).ok()?,
-        height: u32::try_from(number("h").unwrap_or(0)).ok()?,
-        filters: last(rest, "filters").map(|f| f.trim().to_owned()),
-    };
-    (!t.kind.is_empty()).then_some(t)
 }
 
 #[cfg(test)]
@@ -373,22 +352,6 @@ mod tests {
             ContentRef::parse("http://www.roblox.com/asset/?assetversionid=77"),
             Some(ContentRef::AssetVersion(77))
         );
-    }
-
-    #[test]
-    fn thumbnails() {
-        let t = ContentRef::parse("rbxthumb://type=Asset&id=12&w=150&h=150").unwrap();
-        assert_eq!(
-            t,
-            ContentRef::Thumbnail(Thumbnail {
-                kind: "Asset".into(),
-                id: 12,
-                width: 150,
-                height: 150,
-                filters: None
-            })
-        );
-        assert_eq!(t.to_string(), "rbxthumb://type=Asset&id=12&w=150&h=150");
     }
 
     #[test]

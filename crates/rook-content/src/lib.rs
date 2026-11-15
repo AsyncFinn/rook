@@ -12,7 +12,7 @@ pub mod resolver;
 use decode::{audio, image, mesh};
 
 pub use loader::{Loader, Ticket, Want, idle_since, set_decode_threads, set_script_compiler};
-pub use reference::{ContentRef, MaterialMap, image_url_rewrite};
+pub use reference::{ContentRef, MaterialMap, Target, Thumbnail, ThumbnailKind, image_url_rewrite};
 pub use resolver::{Config, ProviderKind, Resolver};
 
 use std::fmt;
@@ -38,6 +38,8 @@ pub enum SourceKind {
     Cache,
     /// Downloaded from Roblox's asset delivery just now.
     Delivery,
+    /// Rendered by Roblox's thumbnails service, downloaded just now.
+    Thumbnails,
 }
 
 impl SourceKind {
@@ -51,6 +53,7 @@ impl SourceKind {
             Self::Kept => "kept content",
             Self::Cache => "cache",
             Self::Delivery => "asset delivery",
+            Self::Thumbnails => "thumbnails",
         }
     }
 }
@@ -107,7 +110,7 @@ pub enum FailureKind {
     NotFound,
     /// Asset delivery refuses it (not public, or needs an account).
     Forbidden,
-    /// A form Rook doesn't resolve (thumbnails, asset version ids).
+    /// A form Rook doesn't resolve (asset version ids).
     Unsupported,
     /// It needs the network, and asset delivery is off.
     Offline,

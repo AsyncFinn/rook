@@ -214,3 +214,188 @@ fn asset_delivery_goes_to_the_configured_host() {
         ["GET /v2/assetId/7 ", "GET /cdn/7 "]
     );
 }
+
+/// A resolver whose only provider is the network, with these endpoints.
+fn network_resolver(endpoints: Endpoints) -> rook_content::Resolver {
+    let mut config = rook_content::Config::empty();
+    config.order = vec![rook_content::ProviderKind::Delivery];
+    config.network = true;
+    config.endpoints = endpoints;
+    rook_content::Resolver::new(config)
+}
+
+/// The thumbnails host answering one batch request with an image on its
+/// own "CDN".
+fn thumbnail_host(base: &str, path: &str) -> Vec<u8> {
+    match path {
+        "/cdn/thumb" => b"png bytes".to_vec(),
+        "/users/v1/usernames/users" => br#"{"data":[{"id":156,"name":"builderman"}]}"#.to_vec(),
+        _ => format!(
+            r#"{{"data":[{{"requestId":"0","state":"Completed","imageUrl":"{base}/cdn/thumb"}}]}}"#
+        )
+        .into_bytes(),
+    }
+}
+
+/// An old asset thumbnail URL asks the thumbnails host for the asset at
+/// the size it snaps to, then downloads the image it names, as Studio
+/// draws it.
+#[test]
+fn old_thumbnail_urls_load_from_the_thumbnails_host() {
+    let (base, requests) = serve(thumbnail_host);
+    let resolver = network_resolver(Endpoints::new(Some(&base), []));
+    let url = "http://www.roblox.com/Game/Tools/ThumbnailAsset.ashx?fmt=png&wd=110&ht=110&aid=7";
+    let r = rook_content::ContentRef::parse(url).unwrap();
+    let fetched = resolver.resolve(&r).unwrap();
+    assert_eq!(&*fetched.bytes, b"png bytes");
+    assert_eq!(fetched.source.kind, rook_content::SourceKind::Thumbnails);
+    assert_eq!(
+        requests.try_iter().collect::<Vec<_>>(),
+        [
+            r#"POST /thumbnails/v1/batch [{"format":"png","isCircular":false,"requestId":"0","size":"150x150","targetId":7,"type":"Asset"}]"#,
+            "GET /cdn/thumb ",
+        ]
+    );
+}
+
+/// `rbxthumb://` goes to the host as it is, a circular filter and all; a
+/// username is looked up on the `users` domain first.
+#[test]
+fn rbxthumb_and_usernames_load_from_their_hosts() {
+    let (base, requests) = serve(thumbnail_host);
+    let resolver = network_resolver(Endpoints::new(Some(&base), []));
+    for url in [
+        "rbxthumb://type=AvatarHeadShot&id=156&w=48&h=48&filters=circular",
+        "http://www.roblox.com/Thumbs/Avatar.ashx?x=100&y=100&username=BuilderMan",
+    ] {
+        let r = rook_content::ContentRef::parse(url).unwrap();
+        assert_eq!(&*resolver.resolve(&r).unwrap().bytes, b"png bytes", "{url}");
+    }
+    assert_eq!(
+        requests.try_iter().collect::<Vec<_>>(),
+        [
+            r#"POST /thumbnails/v1/batch [{"format":"png","isCircular":true,"requestId":"0","size":"48x48","targetId":156,"type":"AvatarHeadShot"}]"#,
+            "GET /cdn/thumb ",
+            r#"POST /users/v1/usernames/users {"excludeBannedUsers":false,"usernames":["BuilderMan"]}"#,
+            r#"POST /thumbnails/v1/batch [{"format":"png","isCircular":false,"requestId":"0","size":"100x100","targetId":156,"type":"Avatar"}]"#,
+            "GET /cdn/thumb ",
+        ]
+    );
+}
+
+/// A thumbnail still rendering is asked for again until it's done; one
+/// the service has nothing for fails without a download.
+#[test]
+fn pending_thumbnails_are_waited_for_and_errors_fail() {
+    use std::sync::atomic::{AtomicU32, Ordering};
+    static ASKED: AtomicU32 = AtomicU32::new(0);
+    let (base, requests) = serve(|base, path| match path {
+        "/cdn/thumb" => b"png bytes".to_vec(),
+        _ if ASKED.fetch_add(1, Ordering::SeqCst) < 2 => {
+            br#"{"data":[{"requestId":"0","state":"Pending","imageUrl":null}]}"#.to_vec()
+        }
+        _ => thumbnail_host(base, path),
+    });
+    let resolver = network_resolver(Endpoints::new(Some(&base), []));
+    let r = rook_content::ContentRef::parse("rbxthumb://type=Asset&id=7&w=420&h=420").unwrap();
+    assert_eq!(&*resolver.resolve(&r).unwrap().bytes, b"png bytes");
+    let seen: Vec<String> = requests.try_iter().collect();
+    assert_eq!(seen.len(), 4, "{seen:?}");
+
+    let (base, requests) = serve(|_, _| {
+        br#"{"data":[{"requestId":"0","state":"Error","errorMessage":"","imageUrl":"x"}]}"#.to_vec()
+    });
+    let resolver = network_resolver(Endpoints::new(Some(&base), []));
+    let r = rook_content::ContentRef::parse("rbxthumb://type=Asset&id=1&w=150&h=150").unwrap();
+    assert_eq!(
+        resolver.resolve(&r).unwrap_err().kind,
+        rook_content::FailureKind::NotFound
+    );
+    assert_eq!(requests.try_iter().count(), 1);
+}
+
+const THUMBNAIL_SCRIPT: &str = r#"
+    local Players = game:GetService("Players")
+    print(Players:GetUserThumbnailAsync(156, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size420x420))
+    print(Players:GetUserThumbnailAsync(156.7, "AvatarBust", 0))
+    print(Players:GetUserThumbnailAsync(-1, Enum.ThumbnailType.AvatarThumbnail, Enum.ThumbnailSize.Size352x352))
+    print(pcall(Players.GetUserThumbnailAsync, Players, 156, 1, 7))
+    print(pcall(Players.GetUserThumbnailAsync, Players, 156, Enum.Material.Plastic, 0))
+    print(pcall(Players.GetUserThumbnailAsync, Players, 156, Enum.ThumbnailType.HeadShot))
+    print("done")
+"#;
+
+/// `GetUserThumbnailAsync` gives `rbxthumb://` and asks the thumbnails
+/// host whether it's ready; with no host nothing is.
+#[test]
+fn user_thumbnails_are_ready_when_the_host_has_them() {
+    let errors = [
+        "false Unable to cast double to ThumbnailSize",
+        "false Unable to cast Material to ThumbnailType",
+        "false Argument 3 missing or nil",
+        "done",
+    ];
+    let (base, requests) = serve(thumbnail_host);
+    let mut s = with_ann(Endpoints::new(Some(&base), []));
+    s.run_extra_script(THUMBNAIL_SCRIPT).unwrap();
+    let out = step_until(&mut s, |out| out.iter().any(|l| l == "done"));
+    let mut want = vec![
+        "rbxthumb://type=AvatarHeadShot&id=156&w=420&h=420 true",
+        "rbxthumb://type=AvatarBust&id=156&w=48&h=48 true",
+        "rbxthumb://type=Avatar&id=-1&w=352&h=352 false",
+    ];
+    want.extend(errors);
+    assert_eq!(out, want);
+    assert_eq!(
+        requests.try_iter().collect::<Vec<_>>(),
+        [
+            r#"POST /thumbnails/v1/batch [{"format":"png","isCircular":false,"requestId":"0","size":"420x420","targetId":156,"type":"AvatarHeadShot"}]"#,
+            r#"POST /thumbnails/v1/batch [{"format":"png","isCircular":false,"requestId":"0","size":"48x48","targetId":156,"type":"AvatarBust"}]"#,
+        ]
+    );
+
+    let mut s = with_ann(Endpoints::offline());
+    s.run_extra_script(THUMBNAIL_SCRIPT).unwrap();
+    let out = step_until(&mut s, |out| out.iter().any(|l| l == "done"));
+    let mut want = vec![
+        "rbxthumb://type=AvatarHeadShot&id=156&w=420&h=420 false",
+        "rbxthumb://type=AvatarBust&id=156&w=48&h=48 false",
+        "rbxthumb://type=Avatar&id=-1&w=352&h=352 false",
+    ];
+    want.extend(errors);
+    assert_eq!(out, want);
+}
+
+/// A thumbnail stored today answers without asking; one stored two days
+/// ago is asked for again and replaced.
+#[test]
+fn stored_thumbnails_are_asked_for_again_once_stale() {
+    let (base, requests) = serve(thumbnail_host);
+    let dir = std::env::temp_dir().join(format!("rook-thumbnail-stale-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let r = rook_content::ContentRef::parse("rbxthumb://type=GroupIcon&id=9&w=150&h=150").unwrap();
+    let key = r.cache_key().unwrap();
+    let cache = rook_content::resolver::cache::Cache::open(dir.join("cache")).unwrap();
+    cache.put(&key, b"old icon", "https://cdn/old").unwrap();
+    let resolver = || {
+        let mut config = rook_content::Config::empty();
+        config.order = vec![rook_content::ProviderKind::Delivery];
+        config.network = true;
+        config.cache_dir = Some(dir.join("cache"));
+        config.endpoints = Endpoints::new(Some(&base), []);
+        rook_content::Resolver::new(config)
+    };
+    assert_eq!(&*resolver().resolve(&r).unwrap().bytes, b"old icon");
+    assert_eq!(requests.try_iter().count(), 0);
+
+    let refs = dir.join("cache/refs").join(&key);
+    let line = std::fs::read_to_string(&refs).unwrap();
+    let mut parts: Vec<String> = line.trim_end().splitn(5, ' ').map(str::to_owned).collect();
+    parts[3] = (parts[3].parse::<u64>().unwrap() - 2 * 86_400).to_string();
+    std::fs::write(&refs, format!("{}\n", parts.join(" "))).unwrap();
+    assert_eq!(&*resolver().resolve(&r).unwrap().bytes, b"png bytes");
+    assert_eq!(requests.try_iter().count(), 2);
+    assert_eq!(&*resolver().resolve(&r).unwrap().bytes, b"png bytes");
+    assert_eq!(requests.try_iter().count(), 0);
+    let _ = std::fs::remove_dir_all(&dir);
+}

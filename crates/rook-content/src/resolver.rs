@@ -27,6 +27,8 @@ mod overrides;
     reason = "the content cache, install lookup and decode workers are rook-platform's known exception (docs/design/architecture.md#crate-layout)"
 )]
 pub mod packages;
+pub mod thumbnails;
+mod web;
 
 use rustc_hash::FxHashMap;
 use std::path::{Path, PathBuf};
@@ -38,6 +40,7 @@ use cache::{Cache, Cached};
 use delivery::Delivery;
 use install::Install;
 use packages::Packages;
+use thumbnails::Thumbnails;
 
 pub use config::{ApiKey, Config, ProviderKind, parse_switch};
 
@@ -54,6 +57,7 @@ pub struct Resolver {
     /// The user's file for each asset id they replace ([`overrides`]).
     overrides: FxHashMap<u64, PathBuf>,
     delivery: Option<Delivery>,
+    thumbnails: Option<Thumbnails>,
     cache: Option<Cache>,
     kept: Option<Cache>,
     /// Failures this run that the disk cache doesn't keep (network errors,
@@ -78,6 +82,10 @@ impl Resolver {
             delivery: config
                 .network
                 .then(|| Delivery::new(config.api_key, &config.endpoints))
+                .flatten(),
+            thumbnails: config
+                .network
+                .then(|| Thumbnails::new(&config.endpoints))
                 .flatten(),
             cache: config.cache_dir.and_then(|dir| {
                 let cache = open_store(&dir)?;
@@ -212,11 +220,14 @@ impl Resolver {
                 return self.texture_pack(pack, *map);
             }
             ContentRef::TexturePack(pack, map) => return self.texture_pack(*pack, *map),
-            ContentRef::Thumbnail(_) => {
-                return Err(Failure::new(
-                    FailureKind::Unsupported,
-                    "rbxthumb thumbnails aren't resolved yet",
-                ));
+            ContentRef::Thumbnail(t) => {
+                if !self.order.contains(&ProviderKind::Delivery) {
+                    return Err(Failure::new(
+                        FailureKind::Offline,
+                        "asset delivery isn't in the provider order",
+                    ));
+                }
+                return self.thumbnail(t);
             }
             ContentRef::File(path) => {
                 if let Some(found) = self.resolve_local(r) {

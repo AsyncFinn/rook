@@ -1,7 +1,18 @@
-//! Content fetched over the network: assets from the asset delivery API
-//! and texture packs, kept in the cache once read.
+//! Content fetched over the network: assets from the asset delivery API,
+//! texture packs and thumbnails, kept in the cache once read.
+
+use std::time::{Duration, SystemTime};
 
 use super::*;
+use crate::Thumbnail;
+
+/// How long a stored thumbnail is used before the service is asked again:
+/// avatars and icons change, and Studio asks every session. A stale one
+/// still answers when the service can't be reached.
+const THUMBNAIL_TTL: Duration = Duration::from_secs(24 * 60 * 60);
+/// Larger thumbnails are refused (the largest Roblox renders are a few
+/// hundred kilobytes).
+const MAX_THUMBNAIL_BYTES: u64 = 16 << 20;
 
 impl Resolver {
     /// One map of a TexturePack asset (a material's, [`materials`], or
@@ -131,6 +142,70 @@ impl Resolver {
                     && let Err(e) = cache.put_failure(&key, &f)
                 {
                     tracing::debug!(target: "content", "couldn't remember why {r} failed: {e}");
+                }
+                Err(f)
+            }
+        }
+    }
+
+    /// A thumbnail: from the cache while fresh ([`THUMBNAIL_TTL`]), else
+    /// from the thumbnails service and its CDN, like an asset.
+    pub(super) fn thumbnail(&self, t: &Thumbnail) -> Result<Fetched, Failure> {
+        let key = t.cache_key();
+        let stale = match self.cache.as_ref().map(|c| c.get(&key)) {
+            Some(Cached::Hit {
+                bytes,
+                path,
+                url,
+                stored,
+                ..
+            }) => {
+                let fetched = Fetched::new(
+                    bytes,
+                    SourceKind::Cache,
+                    format!("{} {url}", path.display()),
+                );
+                let fresh = SystemTime::now()
+                    .duration_since(stored)
+                    .is_ok_and(|age| age < THUMBNAIL_TTL);
+                if fresh {
+                    return Ok(fetched);
+                }
+                Some(fetched)
+            }
+            Some(Cached::Failed(f)) => return Err(f),
+            Some(Cached::Miss) | None => None,
+        };
+        let Some(service) = &self.thumbnails else {
+            return stale.ok_or_else(|| {
+                Failure::new(FailureKind::Offline, "not cached, and thumbnails are off")
+            });
+        };
+        let fetched = service.locate(t).and_then(|url| {
+            let bytes = web::download(&url, MAX_THUMBNAIL_BYTES)?;
+            Ok((url, bytes))
+        });
+        match fetched {
+            Ok((url, bytes)) => {
+                let location = match &self.cache {
+                    Some(cache) => match cache.put(&key, &bytes, &url) {
+                        Ok(path) => format!("{url} -> {}", path.display()),
+                        Err(e) => {
+                            tracing::warn!(target: "content", "couldn't save {t} in {}: {e}", cache.dir().display());
+                            url
+                        }
+                    },
+                    None => url,
+                };
+                Ok(Fetched::new(bytes, SourceKind::Thumbnails, location))
+            }
+            // The last image, when the service can't be reached.
+            Err(f) if !f.kind.is_lasting() => stale.ok_or(f),
+            Err(f) => {
+                if let Some(cache) = &self.cache
+                    && let Err(e) = cache.put_failure(&key, &f)
+                {
+                    tracing::debug!(target: "content", "couldn't remember why {t} failed: {e}");
                 }
                 Err(f)
             }

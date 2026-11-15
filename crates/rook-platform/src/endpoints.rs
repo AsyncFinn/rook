@@ -6,11 +6,12 @@
 
 use rustc_hash::FxHashMap;
 
-/// The domains Rook sends to Roblox's own hosts when nothing is set: asset
-/// delivery and the two Roblox's client packages come from (the live
-/// version, then the packages). Every other domain has no endpoint by
-/// default, and its APIs answer locally.
-const ROBLOX_BY_DEFAULT: &[&str] = &["assetdelivery", "clientsettings", "setup"];
+/// The domains Rook sends to Roblox's own hosts when nothing is set: the
+/// content places draw (asset delivery and thumbnails) and the two
+/// Roblox's client packages come from (the live version, then the
+/// packages). Every other domain has no endpoint by default, and its APIs
+/// answer locally.
+const ROBLOX_BY_DEFAULT: &[&str] = &["assetdelivery", "thumbnails", "clientsettings", "setup"];
 
 /// Roblox's deployment CDN, the `setup` domain: the one Roblox host Rook
 /// calls that isn't a `<name>.roblox.com`.

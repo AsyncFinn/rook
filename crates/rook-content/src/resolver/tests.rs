@@ -1,5 +1,6 @@
 use super::*;
 use crate::resolver::install::InstallKind;
+use rook_platform::endpoints::Endpoints;
 
 fn resolver_with_install(name: &str) -> (Resolver, PathBuf) {
     let dir = crate::tests::temp_dir(name);
@@ -179,4 +180,56 @@ fn assets_come_from_the_cache_offline() {
         .resolve(&ContentRef::parse("rbxasset://fonts/head.mesh").unwrap())
         .unwrap();
     assert_eq!(&*head.bytes, b"head");
+}
+
+/// A stored thumbnail answers for a day; after that the service is asked
+/// again, and the stored one answers only when the service can't be
+/// reached.
+#[test]
+fn stored_thumbnails_answer_while_fresh_or_the_service_is_down() {
+    let dir = crate::tests::temp_dir("thumbnail-cache");
+    let thumb = ContentRef::parse("rbxthumb://type=AvatarHeadShot&id=156&w=48&h=48").unwrap();
+    let key = thumb.cache_key().unwrap();
+    let cache = Cache::open(dir.join("cache")).unwrap();
+    cache.put(&key, b"headshot", "https://cdn/h").unwrap();
+    let resolver = |network: bool, endpoints: Endpoints| {
+        let mut config = Config::empty();
+        config.cache_dir = Some(dir.join("cache"));
+        config.network = network;
+        config.endpoints = endpoints;
+        Resolver::new(config)
+    };
+    // Nothing listens on port 1: the service can't be reached.
+    let down = || Endpoints::new(Some("off"), [("thumbnails", "http://127.0.0.1:1")]);
+    let fresh = resolver(true, down()).resolve(&thumb).unwrap();
+    assert_eq!(&*fresh.bytes, b"headshot");
+    assert_eq!(fresh.source.kind, SourceKind::Cache);
+
+    // Stored two days ago.
+    let refs = dir.join("cache/refs").join(&key);
+    let line = std::fs::read_to_string(&refs).unwrap();
+    let mut parts: Vec<&str> = line.trim_end().splitn(5, ' ').collect();
+    let old = (std::time::SystemTime::now() - std::time::Duration::from_secs(2 * 86_400))
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+        .to_string();
+    parts[3] = &old;
+    std::fs::write(&refs, format!("{}\n", parts.join(" "))).unwrap();
+    let stale = resolver(true, down()).resolve(&thumb).unwrap();
+    assert_eq!(&*stale.bytes, b"headshot");
+    // With the service off, the stored one is all there is.
+    let off = resolver(false, Endpoints::offline())
+        .resolve(&thumb)
+        .unwrap();
+    assert_eq!(&*off.bytes, b"headshot");
+
+    let unknown = ContentRef::parse("rbxthumb://type=Asset&id=7&w=150&h=150").unwrap();
+    assert_eq!(
+        resolver(false, Endpoints::offline())
+            .resolve(&unknown)
+            .unwrap_err()
+            .kind,
+        FailureKind::Offline
+    );
 }

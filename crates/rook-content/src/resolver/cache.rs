@@ -34,6 +34,9 @@ pub enum Cached {
         hash: blake3::Hash,
         path: PathBuf,
         url: String,
+        /// When it was stored, for content that goes stale
+        /// (thumbnails).
+        stored: SystemTime,
     },
     /// A remembered failure, still within [`NEGATIVE_TTL`].
     Failed(Failure),
@@ -233,7 +236,7 @@ impl Cache {
         let mut parts = text.trim_end().splitn(5, ' ');
         match parts.next() {
             Some("ok") => {
-                let (Some(hash), Some(size), Some(_time)) =
+                let (Some(hash), Some(size), Some(time)) =
                     (parts.next(), parts.next(), parts.next())
                 else {
                     return Cached::Miss;
@@ -252,6 +255,7 @@ impl Cache {
                             hash,
                             path,
                             url,
+                            stored: UNIX_EPOCH + Duration::from_secs(time.parse().unwrap_or(0)),
                         }
                     }
                     Ok(_) => {

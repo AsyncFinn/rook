@@ -188,5 +188,4 @@ FPS), no frame over 16.7 ms in any.
 patterns that follow round and sloped surfaces, and the Hinge and Motor
 pins; the sky's sun, moon and stars (skyboxes are drawn: 920 files have a Sky, each image placed as Studio places it, measured with six labeled images; Left is at +X and Right at -X, Up's top towards +X, Down's towards -X);
 CharacterMesh textures
-(with avatars, M11); the order of decals with equal `ZIndex`;
-`rbxthumb://` images.
+(with avatars, M11); the order of decals with equal `ZIndex`.

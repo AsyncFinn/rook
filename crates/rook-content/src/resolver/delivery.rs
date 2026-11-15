@@ -7,15 +7,15 @@
 //! ever sees the key.
 //! Rook never reads browser cookies or any other credential. What the
 //! endpoints answer is in `docs/behavior/content/asset-fetching.md`. Requests go
-//! through the host's network (`rook_platform::network`).
+//! through [`super::web`].
 
 use std::sync::OnceLock;
-use std::time::Duration;
 
 use rook_platform::endpoints::Endpoints;
 use rook_platform::network::Request;
 
 use super::config::ApiKey;
+use super::web::{self, failure_kind};
 use crate::{Failure, FailureKind};
 
 const ANONYMOUS: &str = "/v2/assetId";
@@ -23,8 +23,6 @@ const ANONYMOUS: &str = "/v2/assetId";
 const OPEN_CLOUD: &str = "https://apis.roblox.com/asset-delivery-api/v1/assetId";
 /// Larger answers are refused (Roblox's own limits are far below this).
 const MAX_BYTES: u64 = 256 << 20;
-/// Tries per request when Roblox says to slow down (HTTP 429).
-const TRIES: u32 = 4;
 
 #[derive(Debug)]
 pub struct Delivery {
@@ -72,7 +70,7 @@ impl Delivery {
             },
             result => result?,
         };
-        let bytes = self.download(&location)?;
+        let bytes = web::download(&location, MAX_BYTES)?;
         let url = location.split('?').next().unwrap_or("").to_owned();
         Ok(Asset {
             bytes,
@@ -120,18 +118,6 @@ impl Delivery {
         Err(Failure::new(failure_kind(code, status), message))
     }
 
-    fn download(&self, url: &str) -> Result<Vec<u8>, Failure> {
-        let (status, body, _) = self.get(url, None)?;
-        if status == 200 {
-            Ok(body)
-        } else {
-            Err(Failure::new(
-                failure_kind(u64::from(status), status),
-                format!("HTTP {status} from the CDN"),
-            ))
-        }
-    }
-
     /// GET with retries on HTTP 429; the body is decompressed. Returns the
     /// status, the body and the asset version header.
     fn get(&self, url: &str, key: Option<&str>) -> Result<(u16, Vec<u8>, Option<u32>), Failure> {
@@ -140,37 +126,17 @@ impl Delivery {
             Some(h) => h,
             None => &[],
         };
-        let request = Request {
+        let response = web::send(&Request {
             method: "GET",
             url,
             headers,
             body: &[],
             max_bytes: MAX_BYTES,
-        };
-        for attempt in 1..=TRIES {
-            let response = rook_platform::get()
-                .network
-                .send(&request)
-                .map_err(|e| Failure::new(FailureKind::Network, e))?;
-            let status = response.status;
-            if status == 429 && attempt < TRIES {
-                let wait = response
-                    .header("retry-after")
-                    .and_then(|v| v.parse::<u64>().ok())
-                    .unwrap_or(1 << attempt)
-                    .min(30);
-                std::thread::sleep(Duration::from_secs(wait));
-                continue;
-            }
-            let version = response
-                .header("roblox-assetversionnumber")
-                .and_then(|v| v.parse().ok());
-            return Ok((status, response.body, version));
-        }
-        Err(Failure::new(
-            FailureKind::Network,
-            "rate limited (HTTP 429)",
-        ))
+        })?;
+        let version = response
+            .header("roblox-assetversionnumber")
+            .and_then(|v| v.parse().ok());
+        Ok((response.status, response.body, version))
     }
 }
 
@@ -181,17 +147,6 @@ pub struct Asset {
     pub url: String,
     /// Which version asset delivery says it is.
     pub version: Option<u32>,
-}
-
-fn failure_kind(code: u64, status: u16) -> FailureKind {
-    match code {
-        404 | 410 => FailureKind::NotFound,
-        401 | 403 | 409 => FailureKind::Forbidden,
-        // "Get Assets by AssetVersionId is deprecated" comes as code 0 with
-        // HTTP 400.
-        _ if status == 400 => FailureKind::Unsupported,
-        _ => FailureKind::Network,
-    }
 }
 
 #[cfg(test)]
