@@ -3,6 +3,10 @@
 //! `GetTouchingParts`. The rules are `rook_physics::query`'s; this file
 //! reads arguments and builds results. Messages observed in Studio 0.742.
 //!
+//! Called on a WorldModel, each query looks only in its own world: its
+//! parts, not Workspace's or a WorldModel's inside it, and no Terrain
+//! (`rook_physics::query::world_models`).
+//!
 //! Rays and casts hit Terrain (`rook_physics::terrain`); `ignoreWater`
 //! and `RaycastParams.IgnoreWater` pass through its water. The legacy
 //! rays' `terrainCellsAreCubes` changes nothing (observed: a ray hits the
@@ -88,6 +92,22 @@ fn instance_list(a: &Args, i: usize) -> ApiResult<Vec<InstanceId>> {
     a.instances(i)
 }
 
+/// The WorldModel a query called on `this` looks in; `None` for
+/// Workspace.
+fn model(lua: &Lua, this: InstanceId) -> Option<InstanceId> {
+    with_world(lua, |w| rook_physics::is_world_model(&w.dom, this)).then_some(this)
+}
+
+/// The first part along a ray from `origin` covering `dir`, in the world
+/// of the WorldRoot `this`.
+fn ray(lua: &Lua, this: InstanceId, origin: Vec3, dir: Vec3, filter: &Filter) -> Option<Hit> {
+    let model = model(lua, this);
+    with_world(lua, |w| match model {
+        Some(m) => w.physics.model_raycast(&mut w.dom, m, origin, dir, filter),
+        None => w.physics.raycast(&mut w.dom, origin, dir, filter),
+    })
+}
+
 // Legacy rays
 
 /// `Enum.Material.Air`, which a missed legacy ray reports.
@@ -101,11 +121,11 @@ fn air() -> u32 {
 /// The legacy ray's four results: the part (or nil), where the ray hit or
 /// ended, the surface normal (zero on a miss) and the material (Air on a
 /// miss), all observed.
-fn ray_results(lua: &Lua, a: &Args, filter: &Filter) -> ApiResult<Outcome> {
-    let ray = datatype::<LRay>(a, 0, "Ray")?.0;
-    let origin = Vector3::from(ray.origin).0;
-    let dir = Vector3::from(ray.direction).0;
-    let hit = with_world(lua, |w| w.physics.raycast(&mut w.dom, origin, dir, filter));
+fn ray_results(lua: &Lua, this: InstanceId, a: &Args, filter: &Filter) -> ApiResult<Outcome> {
+    let r = datatype::<LRay>(a, 0, "Ray")?.0;
+    let origin = Vector3::from(r.origin).0;
+    let dir = Vector3::from(r.direction).0;
+    let hit = ray(lua, this, origin, dir, filter);
     let (part, position, normal, material) = match hit {
         Some(h) => (
             LuaValue::UserData(crate::api::instance::push_instance(lua, h.part)?),
@@ -134,34 +154,48 @@ fn legacy_ray(a: &Args, instances: Vec<InstanceId>, include: bool, water: usize)
     }
 }
 
-fn find_part_on_ray(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
+fn find_part_on_ray(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let ignore = a.opt_instance(1)?.into_iter().collect();
-    ray_results(lua, a, &legacy_ray(a, ignore, false, 3))
+    ray_results(lua, this, a, &legacy_ray(a, ignore, false, 3))
 }
 
-fn find_part_on_ray_ignore(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
+fn find_part_on_ray_ignore(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     datatype::<LRay>(a, 0, "Ray")?;
     let ignore = instance_list(a, 1)?;
-    ray_results(lua, a, &legacy_ray(a, ignore, false, 3))
+    ray_results(lua, this, a, &legacy_ray(a, ignore, false, 3))
 }
 
-fn find_part_on_ray_whitelist(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
+fn find_part_on_ray_whitelist(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     datatype::<LRay>(a, 0, "Ray")?;
     let only = instance_list(a, 1)?;
-    ray_results(lua, a, &legacy_ray(a, only, true, 2))
+    ray_results(lua, this, a, &legacy_ray(a, only, true, 2))
 }
 
 // Regions
 
-fn in_bounds(lua: &Lua, region: Region, filter: &Filter, max: usize) -> Vec<InstanceId> {
-    with_world(lua, |w| {
-        w.physics.parts_in_bounds(&mut w.dom, region, filter, max)
+fn in_bounds(
+    lua: &Lua,
+    this: InstanceId,
+    region: Region,
+    filter: &Filter,
+    max: usize,
+) -> Vec<InstanceId> {
+    let model = model(lua, this);
+    with_world(lua, |w| match model {
+        Some(m) => (w.physics).model_parts_in_bounds(&mut w.dom, m, region, filter, max),
+        None => w.physics.parts_in_bounds(&mut w.dom, region, filter, max),
     })
 }
 
 /// Parts in a Region3, at most `max` (0 or less: all; observed). An
 /// inverted region finds nothing (observed).
-fn region_parts(lua: &Lua, a: &Args, filter: &Filter, max: f64) -> ApiResult<Vec<InstanceId>> {
+fn region_parts(
+    lua: &Lua,
+    this: InstanceId,
+    a: &Args,
+    filter: &Filter,
+    max: f64,
+) -> ApiResult<Vec<InstanceId>> {
     let region = datatype::<LRegion3>(a, 0, "Region3")?.0;
     let (min, max_corner) = (Vector3::from(region.min).0, Vector3::from(region.max).0);
     if min.cmpgt(max_corner).any() {
@@ -172,62 +206,69 @@ fn region_parts(lua: &Lua, a: &Args, filter: &Filter, max: f64) -> ApiResult<Vec
         size: max_corner - min,
     };
     let limit = if max > 0.0 { max as usize } else { 0 };
-    Ok(in_bounds(lua, region, filter, limit))
+    Ok(in_bounds(lua, this, region, filter, limit))
 }
 
 fn ret_parts(lua: &Lua, parts: &[InstanceId]) -> ApiResult<Outcome> {
     crate::api::instance::ret_instance_array(lua, parts)
 }
 
-fn find_parts_in_region(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
+fn find_parts_in_region(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let ignore = a.opt_instance(1)?;
     let max = a.number_or(2, REGION_MAX_PARTS)?;
     ret_parts(
         lua,
-        &region_parts(lua, a, &Filter::legacy_region(ignore, false), max)?,
+        &region_parts(lua, this, a, &Filter::legacy_region(ignore, false), max)?,
     )
 }
 
-fn find_parts_in_region_ignore(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
+fn find_parts_in_region_ignore(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     datatype::<LRegion3>(a, 0, "Region3")?;
     let ignore = instance_list(a, 1)?;
     let max = a.number_or(2, REGION_MAX_PARTS)?;
     ret_parts(
         lua,
-        &region_parts(lua, a, &Filter::legacy_region(ignore, false), max)?,
+        &region_parts(lua, this, a, &Filter::legacy_region(ignore, false), max)?,
     )
 }
 
-fn find_parts_in_region_whitelist(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
+fn find_parts_in_region_whitelist(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     datatype::<LRegion3>(a, 0, "Region3")?;
     let only = instance_list(a, 1)?;
     let max = a.number_or(2, REGION_MAX_PARTS)?;
     ret_parts(
         lua,
-        &region_parts(lua, a, &Filter::legacy_region(only, true), max)?,
+        &region_parts(lua, this, a, &Filter::legacy_region(only, true), max)?,
     )
 }
 
 /// Whether a Region3 holds no part outside `ignore` and no terrain voxel
 /// (observed: terrain counts even when ignored).
-fn region_empty(lua: &Lua, a: &Args, ignore: Vec<InstanceId>) -> ApiResult<Outcome> {
-    let parts = region_parts(lua, a, &Filter::legacy_region(ignore, false), 1.0)?;
+fn region_empty(
+    lua: &Lua,
+    this: InstanceId,
+    a: &Args,
+    ignore: Vec<InstanceId>,
+) -> ApiResult<Outcome> {
+    let parts = region_parts(lua, this, a, &Filter::legacy_region(ignore, false), 1.0)?;
     let region = datatype::<LRegion3>(a, 0, "Region3")?.0;
     let (min, max) = (Vector3::from(region.min).0, Vector3::from(region.max).0);
-    let empty =
-        parts.is_empty() && !with_world(lua, |w| w.physics.terrain_voxels_in(&mut w.dom, min, max));
+    // A WorldModel has no Terrain.
+    let terrain = model(lua, this).is_none()
+        && with_world(lua, |w| w.physics.terrain_voxels_in(&mut w.dom, min, max));
+    let empty = parts.is_empty() && !terrain;
     Outcome::ret(lua, empty)
 }
 
-fn is_region_empty(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
+fn is_region_empty(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let ignore = a.opt_instance(1)?.into_iter().collect();
-    region_empty(lua, a, ignore)
+    region_empty(lua, this, a, ignore)
 }
 
-fn is_region_empty_ignore(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
+fn is_region_empty_ignore(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     datatype::<LRegion3>(a, 0, "Region3")?;
     let ignore = instance_list(a, 1)?;
-    region_empty(lua, a, ignore)
+    region_empty(lua, this, a, ignore)
 }
 
 // Raycast and shape casts
@@ -253,14 +294,18 @@ fn ret_hit(lua: &Lua, hit: Option<Hit>) -> ApiResult<Outcome> {
     }
 }
 
-fn raycast(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
+fn raycast(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let (origin, dir) = (vector(a, 0)?, vector(a, 1)?);
     let filter = raycast_params(a, 2)?.filter();
-    let hit = with_world(lua, |w| w.physics.raycast(&mut w.dom, origin, dir, &filter));
-    ret_hit(lua, hit)
+    ret_hit(lua, ray(lua, this, origin, dir, &filter))
 }
 
-fn cast(lua: &Lua, shape: CastShape, cf: CFrame, dir: Vec3, params: &Params) -> ApiResult<Outcome> {
+fn cast(
+    lua: &Lua,
+    this: InstanceId,
+    (shape, cf, dir): (CastShape, CFrame, Vec3),
+    params: &Params,
+) -> ApiResult<Outcome> {
     let distance = dir.length();
     if distance > MAX_CAST_DISTANCE {
         return Err(ScriptError(format!(
@@ -268,13 +313,15 @@ fn cast(lua: &Lua, shape: CastShape, cf: CFrame, dir: Vec3, params: &Params) -> 
         )));
     }
     let filter = params.filter();
-    let hit = with_world(lua, |w| {
-        w.physics.shapecast(&mut w.dom, shape, cf, dir, &filter)
+    let model = model(lua, this);
+    let hit = with_world(lua, |w| match model {
+        Some(m) => (w.physics).model_shapecast(&mut w.dom, m, shape, cf, dir, &filter),
+        None => w.physics.shapecast(&mut w.dom, shape, cf, dir, &filter),
     });
     ret_hit(lua, hit)
 }
 
-fn blockcast(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
+fn blockcast(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let (cf, size, dir) = (cframe(a, 0)?, vector(a, 1)?, vector(a, 2)?);
     let params = raycast_params(a, 3)?;
     let side = size.abs().max_element();
@@ -283,10 +330,10 @@ fn blockcast(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
             "Attempt to blockcast with side length {side:.6}. The maximum side length is {MAX_CAST_SIDE:.6}."
         )));
     }
-    cast(lua, CastShape::Block(size.abs()), cf, dir, &params)
+    cast(lua, this, (CastShape::Block(size.abs()), cf, dir), &params)
 }
 
-fn spherecast(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
+fn spherecast(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let (position, radius, dir) = (vector(a, 0)?, a.number(1)? as f32, vector(a, 2)?);
     let params = raycast_params(a, 3)?;
     if radius > MAX_CAST_RADIUS {
@@ -295,20 +342,20 @@ fn spherecast(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
         )));
     }
     let cf = CFrame::from_position(position);
-    cast(lua, CastShape::Sphere(radius), cf, dir, &params)
+    cast(lua, this, (CastShape::Sphere(radius), cf, dir), &params)
 }
 
 // Overlaps
 
-fn part_bounds_in_box(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
+fn part_bounds_in_box(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let (cf, size) = (cframe(a, 0)?, vector(a, 1)?);
     let params = overlap_params(a, 2)?;
     let region = Region::Box { cframe: cf, size };
-    let parts = in_bounds(lua, region, &params.filter(), params.max());
+    let parts = in_bounds(lua, this, region, &params.filter(), params.max());
     ret_parts(lua, &parts)
 }
 
-fn part_bounds_in_radius(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
+fn part_bounds_in_radius(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let (position, radius) = (vector(a, 0)?, a.number(1)? as f32);
     let params = overlap_params(a, 2)?;
     // Observed: a negative radius finds nothing.
@@ -319,20 +366,21 @@ fn part_bounds_in_radius(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcom
         center: position,
         radius,
     };
-    let parts = in_bounds(lua, region, &params.filter(), params.max());
+    let parts = in_bounds(lua, this, region, &params.filter(), params.max());
     ret_parts(lua, &parts)
 }
 
-fn parts_in_part(lua: &Lua, _: InstanceId, a: &Args) -> ApiResult<Outcome> {
+fn parts_in_part(lua: &Lua, this: InstanceId, a: &Args) -> ApiResult<Outcome> {
     let part = a.instance(0)?;
     if !with_world(lua, |w| w.dom.is_a(part, "BasePart")) {
         return Err(ScriptError("Part parameter must be BasePart".into()));
     }
     let params = overlap_params(a, 1)?;
     let filter = params.filter();
-    let parts = with_world(lua, |w| {
-        w.physics
-            .parts_in_part(&mut w.dom, part, &filter, params.max())
+    let (model, max) = (model(lua, this), params.max());
+    let parts = with_world(lua, |w| match model {
+        Some(m) => (w.physics).model_parts_in_part(&mut w.dom, m, part, &filter, max),
+        None => w.physics.parts_in_part(&mut w.dom, part, &filter, max),
     });
     ret_parts(lua, &parts)
 }

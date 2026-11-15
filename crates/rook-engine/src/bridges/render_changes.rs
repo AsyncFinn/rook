@@ -48,6 +48,10 @@ pub struct RenderChanges {
     pub highlighted: rustc_hash::FxHashSet<InstanceId>,
     /// Highlights whose look changed.
     pub highlights: rustc_hash::FxHashSet<InstanceId>,
+    /// ViewportFrames whose look may have changed: one of their own
+    /// properties it's read from, a property of the Camera they show
+    /// (`CurrentCamera`), or the frame entering or leaving the tree.
+    pub viewports: rustc_hash::FxHashSet<InstanceId>,
     pub collected: rustc_hash::FxHashSet<InstanceId>,
 }
 
@@ -77,6 +81,7 @@ impl RenderChanges {
             && self.adorned.is_empty()
             && self.highlighted.is_empty()
             && self.highlights.is_empty()
+            && self.viewports.is_empty()
             && self.collected.is_empty()
     }
 
@@ -108,6 +113,7 @@ impl RenderChanges {
         self.adorned.remove(&id);
         self.highlighted.remove(&id);
         self.highlights.remove(&id);
+        self.viewports.remove(&id);
         self.collected.insert(id);
     }
 }
@@ -269,6 +275,10 @@ pub(crate) struct RenderIds {
     highlight_cover: [PropertyId; 2],
     /// What a Highlight looks like.
     highlight_look: [PropertyId; 5],
+    viewport_frame: ClassId,
+    /// What a ViewportFrame's look is read from (`rook-scene`).
+    viewport_look: [PropertyId; 6],
+    camera: ClassId,
 }
 
 impl RenderIds {
@@ -318,6 +328,21 @@ impl RenderIds {
                     "DepthMode",
                 ]
                 .map(|name| db.find_property(class("Highlight"), name).expect(name).id),
+                viewport_frame: class("ViewportFrame"),
+                viewport_look: [
+                    "CurrentCamera",
+                    "Ambient",
+                    "LightColor",
+                    "LightDirection",
+                    "BackgroundColor3",
+                    "BackgroundTransparency",
+                ]
+                .map(|name| {
+                    (db.find_property(class("ViewportFrame"), name))
+                        .expect(name)
+                        .id
+                }),
+                camera: class("Camera"),
             }
         });
         &IDS
@@ -408,6 +433,17 @@ impl DataModel {
                     // part's CFrame each frame. Terrain is a BasePart too.
                     if ids.velocities.contains(property) {
                         // Nothing draws them.
+                    } else if dom.is_a_class(*id, ids.viewport_frame) {
+                        if ids.viewport_look.contains(property) {
+                            changes.viewports.insert(*id);
+                        }
+                    } else if dom.is_a_class(*id, ids.camera) {
+                        // The frames showing it; Workspace's camera is
+                        // read every frame anyway.
+                        let frames = (dom.referrers(*id).iter())
+                            .filter(|&&(_, p)| p == ids.viewport_look[0])
+                            .map(|&(r, _)| r);
+                        changes.viewports.extend(frames);
                     } else if *property == ids.cframe && !dom.is_a_class(*id, ids.terrain) {
                         part_moved(dom, changes, *id);
                         // Physics journals only an assembly's root when it
@@ -479,6 +515,10 @@ impl DataModel {
                     for &i in subtree.iter().filter(|i| adornment(**i)) {
                         adorn(changes, adorned, i, false, None);
                     }
+                    let frame = |i: InstanceId| dom.is_a_class(i, ids.viewport_frame);
+                    changes
+                        .viewports
+                        .extend(subtree.iter().filter(|&&i| frame(i)));
                     let parts = subtree
                         .iter()
                         .filter(|&&i| dom.is_a_class(i, ids.base_part));
@@ -499,6 +539,9 @@ impl DataModel {
                 }
                 Change::Destroying(id) if dom.is_a_class(*id, ids.base_part) => {
                     changes.placed.insert(*id);
+                }
+                Change::Destroying(id) if dom.is_a_class(*id, ids.viewport_frame) => {
+                    changes.viewports.insert(*id);
                 }
                 Change::Destroying(id) if light(*id) => {
                     changes.lights_placed.insert(*id);
@@ -526,6 +569,7 @@ impl DataModel {
             changes.adorned.clear();
             changes.highlighted.clear();
             changes.highlights.clear();
+            changes.viewports.clear();
         } else {
             // A part redrawn in full is drawn where it is now anyway, with
             // its adornments and covering.

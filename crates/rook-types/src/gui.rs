@@ -89,6 +89,19 @@ pub enum Paint {
     /// A group of quads drawn apart into a texture of its own, then laid
     /// over the rectangle, tinted by the color (a CanvasGroup).
     Group(Arc<GuiGroup>),
+    /// A ViewportFrame's picture of its world, laid over the rectangle,
+    /// tinted by the color.
+    Viewport(GuiViewport),
+}
+
+/// The picture a [`Paint::Viewport`] shows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GuiViewport {
+    /// The ViewportFrame's key: its world's, among the renderer's scene's
+    /// viewports.
+    pub key: u64,
+    /// The picture's size in pixels.
+    pub size: [u32; 2],
 }
 
 /// Quads a [`Paint::Group`] draws into its texture.

@@ -20,6 +20,7 @@ mod scrolling;
 mod stroke;
 mod style;
 mod text;
+mod viewport;
 
 use glam::Vec2;
 use rook_dom::{Dom, InstanceId};
@@ -67,7 +68,7 @@ pub(crate) fn world(
             text,
             images: &mut *images,
             out: &mut quads,
-            fields: true,
+            world: true,
             focus,
             canvas: [0.0, 0.0, size.x, size.y],
         }
@@ -91,8 +92,9 @@ struct Draw<'a, 'b> {
     text: &'a mut Text<'b>,
     images: &'a mut Images,
     out: &'a mut Vec<GuiQuad>,
-    /// Text is drawn from distance fields at every size (world GUI).
-    fields: bool,
+    /// On a world GUI's canvas: text is drawn from distance fields at
+    /// every size, and a ViewportFrame draws only its border (observed).
+    world: bool,
     /// The focused TextBox, which shows its caret.
     focus: Option<InstanceId>,
     /// Objects wholly outside this rectangle aren't drawn (observed: on a
@@ -147,7 +149,14 @@ impl Draw<'_, '_> {
         let radii = corner::radii(dom, d.id, d.placed);
         match crate::style::of(dom, d.id) {
             Some(look) => style::emit(dom, d.id, look, d.placed, d.clip, self.images, out),
-            None => frame::emit(dom, d.id, (d.placed, d.clip), radii.is_some(), out),
+            None if viewport::is_viewport(dom, d.id) => {
+                // Its background is in its picture.
+                frame::emit(dom, d.id, (d.placed, d.clip), (radii.is_some(), false), out);
+                if !self.world {
+                    viewport::emit(dom, d.id, d.placed, d.clip, out);
+                }
+            }
+            None => frame::emit(dom, d.id, (d.placed, d.clip), (radii.is_some(), true), out),
         }
         if let Some(scroll) = self.layout.scrolls.get(&d.id) {
             scrolling::emit(dom, d.id, d.placed, scroll, d.clip, self.images, out);
@@ -163,7 +172,7 @@ impl Draw<'_, '_> {
             }
             let outline = stroke::text_outline(dom, d.id, d.placed);
             let at = (d.placed, d.clip);
-            text::emit(&laid.block, at, self.fields, outline, text, out);
+            text::emit(&laid.block, at, self.world, outline, text, out);
             if focused {
                 caret::caret(dom, d.id, &laid.block, d.placed, d.clip, out);
             }

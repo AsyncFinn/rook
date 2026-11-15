@@ -4,14 +4,15 @@ use rook_types::{GuiQuad, Paint};
 
 use crate::layout::{Placed, turn};
 
-/// Inference: the border takes the background's transparency and doesn't
-/// overlap it, and UIScales thicken it. Measured: an object with a
-/// UICorner draws no border (`rounded`).
+/// The border, and the background when `background`. Inference: the
+/// border takes the background's transparency and doesn't overlap it, and
+/// UIScales thicken it. Measured: an object with a UICorner draws no
+/// border (`rounded`).
 pub(super) fn emit(
     dom: &Dom,
     id: InstanceId,
     (p, clip): (Placed, [f32; 4]),
-    rounded: bool,
+    (rounded, background): (bool, bool),
     out: &mut Vec<GuiQuad>,
 ) {
     let alpha = 1.0
@@ -68,7 +69,7 @@ pub(super) fn emit(
         }
     }
     let inner = size.abs() - Vec2::splat(2.0 * inset);
-    if inner.x > 0.0 && inner.y > 0.0 {
+    if background && inner.x > 0.0 && inner.y > 0.0 {
         let color = dom
             .color3_property(id, "BackgroundColor3")
             .map_or([1.0; 3], |c| [c.r, c.g, c.b]);

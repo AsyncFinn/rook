@@ -33,11 +33,35 @@ pub(crate) struct Detail {
     /// Each entry's last level. Atomic so passes can pick while sharing the
     /// renderer; a level is only ever set to what the same inputs give.
     levels: Vec<AtomicU8>,
+}
+
+/// A camera levels are picked for: a world's camera this frame (an entry
+/// is in one world, so its level is only ever picked from one camera).
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct DetailView {
     eye: Vec3,
     /// Squared distances from a box where each threshold and its margin
-    /// fall in this frame's view.
+    /// fall in this view.
     coarser: [f32; THRESHOLDS.len()],
     finer: [f32; THRESHOLDS.len()],
+}
+
+impl DetailView {
+    /// Picks for `camera`'s view: a narrower view brings the thresholds
+    /// nearer, as it does in Studio.
+    pub(crate) fn of(camera: &Camera) -> Self {
+        let scale = (camera.fov_y.to_radians() * 0.5).tan() / 35f32.to_radians().tan();
+        let mut view = Self {
+            eye: camera.position,
+            ..Self::default()
+        };
+        for (i, t) in THRESHOLDS.iter().enumerate() {
+            let at = t / scale.max(1e-6);
+            view.coarser[i] = at * at;
+            view.finer[i] = (at * (1.0 - MARGIN)).powi(2);
+        }
+        view
+    }
 }
 
 impl Detail {
@@ -61,21 +85,16 @@ impl Detail {
         self.fidelity[i] = part.fidelity;
     }
 
-    /// Picks from here on are for `camera`'s view: a narrower view brings
-    /// the thresholds nearer, as it does in Studio.
-    pub(crate) fn view(&mut self, camera: &Camera) {
-        self.eye = camera.position;
-        let scale = (camera.fov_y.to_radians() * 0.5).tan() / 35f32.to_radians().tan();
-        for (i, t) in THRESHOLDS.iter().enumerate() {
-            let at = t / scale.max(1e-6);
-            self.coarser[i] = at * at;
-            self.finer[i] = (at * (1.0 - MARGIN)).powi(2);
-        }
-    }
-
-    /// The level entry `i` draws `mesh` at, its box in the world `world`
-    /// (`None` for an empty box, which draws nothing at any level).
-    pub(crate) fn pick(&self, i: u32, mesh: &GpuMesh, world: Aabb) -> Option<usize> {
+    /// The level entry `i` draws `mesh` at seen from `view`, its box in
+    /// the world `world` (`None` for an empty box, which draws nothing at
+    /// any level).
+    pub(crate) fn pick(
+        &self,
+        view: &DetailView,
+        i: u32,
+        mesh: &GpuMesh,
+        world: Aabb,
+    ) -> Option<usize> {
         if world.is_empty() {
             return None;
         }
@@ -89,11 +108,11 @@ impl Detail {
         if allowed == 1 {
             return Some(0);
         }
-        let d2 = (self.eye.clamp(world.min, world.max) - self.eye).length_squared();
+        let d2 = (view.eye.clamp(world.min, world.max) - view.eye).length_squared();
         let reached = |limits: &[f32]| limits[..allowed - 1].iter().filter(|&&l| d2 >= l).count();
         // Coarser as soon as a threshold is passed; finer only once the
         // camera is a margin nearer than it.
-        let (least, most) = (reached(&self.coarser), reached(&self.finer));
+        let (least, most) = (reached(&view.coarser), reached(&view.finer));
         let last = self.levels[owner].load(Ordering::Relaxed);
         let level = match last {
             UNSET => least,
@@ -119,15 +138,16 @@ mod tests {
         }
     }
 
-    /// A 2-stud box at the origin; the camera `d` studs from its face.
-    fn at(detail: &mut Detail, d: f32, fov: f32) -> Aabb {
+    /// A 2-stud box at the origin, and the view from `d` studs from its
+    /// face.
+    fn at(d: f32, fov: f32) -> (DetailView, Aabb) {
         let mut camera = Camera::look_at(Vec3::new(0.0, 0.0, 1.0 + d), Vec3::ZERO);
         camera.fov_y = fov;
-        detail.view(&camera);
-        Aabb {
+        let b = Aabb {
             min: Vec3::splat(-1.0),
             max: Vec3::splat(1.0),
-        }
+        };
+        (DetailView::of(&camera), b)
     }
 
     fn entry(fidelity: Fidelity) -> Detail {
@@ -147,9 +167,9 @@ mod tests {
         let m = mesh(5, 2);
         let mut d = entry(Fidelity::Performance);
         let level = |d: &mut Detail, studs, fov| {
-            let b = at(d, studs, fov);
+            let (v, b) = at(studs, fov);
             d.levels[0].store(UNSET, Ordering::Relaxed);
-            d.pick(0, &m, b)
+            d.pick(&v, 0, &m, b)
         };
         let seen: Vec<_> = [249.0, 251.0, 501.0, 2001.0, 3001.0, 9000.0]
             .map(|s| level(&mut d, s, 70.0).unwrap())
@@ -169,10 +189,10 @@ mod tests {
     #[test]
     fn a_level_holds_within_the_margin() {
         let m = mesh(5, 5);
-        let mut d = entry(Fidelity::Automatic);
-        let mut level = |studs| {
-            let b = at(&mut d, studs, 70.0);
-            d.pick(0, &m, b).unwrap()
+        let d = entry(Fidelity::Automatic);
+        let level = |studs| {
+            let (v, b) = at(studs, 70.0);
+            d.pick(&v, 0, &m, b).unwrap()
         };
         assert_eq!(level(240.0), 0);
         assert_eq!(level(251.0), 1);
@@ -193,10 +213,10 @@ mod tests {
             ..PartInstance::plain(DrawShape::Head, Vec3::ZERO, glam::Mat3::IDENTITY, Vec3::ONE)
         };
         d.set(1, &layer);
-        let b = at(&mut d, 251.0, 70.0);
-        assert_eq!(d.pick(0, &m, b), Some(1));
-        let b = at(&mut d, 245.0, 70.0);
-        assert_eq!(d.pick(1, &m, b), Some(1));
-        assert_eq!(d.pick(1, &m, Aabb::EMPTY), None);
+        let (v, b) = at(251.0, 70.0);
+        assert_eq!(d.pick(&v, 0, &m, b), Some(1));
+        let (v, b) = at(245.0, 70.0);
+        assert_eq!(d.pick(&v, 1, &m, b), Some(1));
+        assert_eq!(d.pick(&v, 1, &m, Aabb::EMPTY), None);
     }
 }

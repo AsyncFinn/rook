@@ -290,6 +290,6 @@ impl Renderer {
             multiview_mask: None,
         });
         pass.set_bind_group(0, &self.bind_group, &[]);
-        self.record(&mut pass, runs, start, |_, _| {});
+        self.record(&self.world, &mut pass, runs, start, |_, _| {});
     }
 }

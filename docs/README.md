@@ -53,6 +53,7 @@
     - [GUI input](behavior/gui/input.md): what takes a click, buttons, the wheel, TextBox focus and typing
     - [GUI legacy styles](behavior/gui/styles.md): Frame and GuiButton `Style`, their textures, states and insets
     - [GUI modern UI objects](behavior/gui/modern.md): UICorner, UIStroke, UIGradient, flex, UITableLayout, UIPageLayout, CanvasGroup
+    - [ViewportFrame](behavior/gui/viewport-frames.md): its picture, its own light and fog, what draws in it
     - [Roblox's core scripts](behavior/gui/core-scripts.md): where Studio keeps them, running them as Roblox's own code, StyleSheets, what Rook lacks
     - [Chat](behavior/gui/chat.md): TextChatService's setup, sending and delivering messages
     - [Proximity prompts](behavior/gui/proximity-prompts.md): which show, keys and holds, the events on both sides, Roblox's prompt GUI

@@ -129,7 +129,8 @@ impl Clusters {
 }
 
 impl Assembly {
-    /// The assembly `part` belongs to. Parts outside Workspace have none.
+    /// The assembly `part` belongs to. Parts outside Workspace's world
+    /// have none.
     pub fn of(dom: &Dom, part: InstanceId) -> Option<Self> {
         Self::of_with(dom, part, &mut Clusters::default())
     }
@@ -137,7 +138,7 @@ impl Assembly {
     /// [`Assembly::of`], reusing clusters found for earlier parts.
     pub fn of_with(dom: &Dom, part: InstanceId, clusters: &mut Clusters) -> Option<Self> {
         let ws = dom.find_service("Workspace")?;
-        if !is_part(dom, part) || !dom.is_ancestor_of(ws, part) {
+        if !is_part(dom, part) || !crate::shape::in_workspace_world(dom, ws, part) {
             return None;
         }
         let (root, parts) = if is_anchored(dom, part) {

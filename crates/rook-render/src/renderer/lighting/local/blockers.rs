@@ -926,7 +926,12 @@ impl Blockers {
     /// tenth or so), as boxes; wedges, balls, cylinders and unions block
     /// their whole box (Approximation).
     fn blocker(&mut self, part: &PartInstance, scene: &Scene) -> Option<Blocker> {
-        if !part.cast_shadow || part.over || part.transparency >= 0.5 {
+        // A ViewportFrame's parts are in a world of their own.
+        if part.space != Space::Workspace
+            || !part.cast_shadow
+            || part.over
+            || part.transparency >= 0.5
+        {
             return None;
         }
         if !matches!(part.layer, Layer::Base) {

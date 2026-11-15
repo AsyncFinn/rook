@@ -18,6 +18,7 @@ use crate::{Physics, shape};
 
 pub(crate) mod bounds;
 mod filter;
+pub(crate) mod world_models;
 
 use filter::Accepting;
 pub use filter::Filter;
@@ -84,6 +85,18 @@ impl Region {
 pub enum CastShape {
     Sphere(f32),
     Block(Vec3),
+}
+
+impl CastShape {
+    fn shape(self) -> SharedShape {
+        match self {
+            CastShape::Sphere(r) => SharedShape::ball(r.max(shape::MIN_PART_SIZE)),
+            CastShape::Block(size) => {
+                let h = size.max(Vec3::splat(shape::MIN_PART_SIZE)) * 0.5;
+                SharedShape::cuboid(h.x, h.y, h.z)
+            }
+        }
+    }
 }
 
 impl Physics {
@@ -279,13 +292,7 @@ impl Physics {
         if !length.is_finite() || length <= 0.0 {
             return None;
         }
-        let cast: SharedShape = match shape {
-            CastShape::Sphere(r) => SharedShape::ball(r.max(shape::MIN_PART_SIZE)),
-            CastShape::Block(size) => {
-                let h = size.max(Vec3::splat(shape::MIN_PART_SIZE)) * 0.5;
-                SharedShape::cuboid(h.x, h.y, h.z)
-            }
-        };
+        let cast = shape.shape();
         let start = pose_of(&cframe);
         let from = cast.compute_aabb(&start);
         let to = cast.compute_aabb(&(Pose::from_translation(direction) * start));

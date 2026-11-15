@@ -217,8 +217,9 @@ impl EffectCache {
         }
     }
 
-    /// Read effect `id` again, adding it if it's new to Workspace and
-    /// dropping it if it left.
+    /// Read effect `id` again, adding it if it's new to Workspace's world
+    /// and dropping it if it left. One in a ViewportFrame draws nothing
+    /// (observed), even a frame in Workspace.
     fn place(
         &mut self,
         dom: &Dom,
@@ -228,7 +229,7 @@ impl EffectCache {
     ) {
         let here = dom.get(id).is_some()
             && is_effect(dom, id)
-            && (dom.find_service("Workspace")).is_some_and(|ws| dom.is_ancestor_of(ws, id));
+            && crate::viewports::space(dom, id) == Some(rook_render::Space::Workspace);
         if !here {
             self.remove(id, drawn);
             return;

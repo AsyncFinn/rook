@@ -51,13 +51,14 @@ impl Renderer {
     /// transparent parts are kept for per-frame sorting.
     pub fn set_scene(&mut self, scene: &Scene) {
         profiling::scope!("Renderer::set_scene");
-        self.opaque.clear();
-        self.layers.clear();
+        self.world.clear();
+        self.viewports.clear();
         self.placements.clear();
         self.detail.clear();
         self.waiting.clear();
-        self.transparent.clear();
         self.highlights.clear();
+        let keys: Vec<u64> = scene.viewports.keys().copied().collect();
+        self.update_viewports(scene, &keys);
         self.update_highlights(scene);
         self.lights.clear_blockers();
         self.update_lighting(scene);
@@ -135,7 +136,7 @@ impl Renderer {
         rook_types::count!(RenderEntriesChanged, changed.len());
         self.lights.update_blockers(scene, changed);
         if self.placements.len() < scene.parts.len() {
-            self.placements.resize(scene.parts.len(), Placement::Hidden);
+            (self.placements).resize(scene.parts.len(), (Space::Workspace, Placement::Hidden));
         }
         // Near entries take near slots, so culling skips more.
         let mut changed = changed.to_vec();
@@ -161,15 +162,19 @@ impl Renderer {
         for &i in moved {
             let part = &scene.parts[i];
             self.highlights.moved(i, part);
-            match self.placements[i] {
-                Placement::Opaque { batch, slot } => self.opaque.moved(batch, slot, part),
-                Placement::Layer { batch, slot } => self.layers.moved(batch, slot, part),
-                Placement::Transparent(t) => self.transparent.moved(t, part),
-                Placement::Hidden => {
-                    if let Some(waiting) = self.waiting.get_mut(i) {
-                        *waiting = *part;
-                    }
+            let (space, placement) = self.placements[i];
+            if placement == Placement::Hidden {
+                if let Some(waiting) = self.waiting.get_mut(i) {
+                    *waiting = *part;
                 }
+                continue;
+            }
+            let world = self.world_mut(space);
+            match placement {
+                Placement::Opaque { batch, slot } => world.opaque.moved(batch, slot, part),
+                Placement::Layer { batch, slot } => world.layers.moved(batch, slot, part),
+                Placement::Transparent(t) => world.transparent.moved(t, part),
+                Placement::Hidden => {}
             }
         }
     }
@@ -223,33 +228,38 @@ impl Renderer {
         let masked = (drawn && part.layer == Layer::Base && part.highlight.is_some())
             .then(|| self.instance(part));
         self.highlights.set(i, part, masked);
-        match (self.placements[i], target) {
-            (Placement::Hidden, Target::Hidden) => {}
-            (Placement::Transparent(t), Target::Transparent) => {
-                let instance = self.instance(part);
-                self.transparent.set(t, i as u32, part, instance);
-            }
-            (Placement::Opaque { batch, slot }, Target::Opaque(key))
-                if self.opaque.list[batch].key == key =>
-            {
-                let instance = self.instance(part);
-                self.opaque.set(batch, slot, instance);
-            }
-            (Placement::Layer { batch, slot }, Target::Layer(z, key))
-                if self.layers.list[batch].key == key && self.layers.z[batch] == z =>
-            {
-                let instance = self.instance(part);
-                self.layers.set(batch, slot, instance);
-            }
-            (old, _) => {
-                self.vacate(old);
-                if target == Target::Waiting {
-                    let files = self.queued_files(part);
-                    self.waiting.insert(i, *part, &files);
+        let (space, old) = self.placements[i];
+        // Drawn as before, in the same world and batch: only its instance
+        // changes.
+        let kept = space == part.space
+            && match (old, target) {
+                (Placement::Hidden, Target::Hidden) => return,
+                (Placement::Transparent(_), Target::Transparent) => true,
+                (Placement::Opaque { batch, .. }, Target::Opaque(key)) => {
+                    (self.world(space)).is_some_and(|w| w.opaque.list[batch].key == key)
                 }
-                self.placements[i] = self.occupy(i, part, target);
+                (Placement::Layer { batch, .. }, Target::Layer(z, key)) => self
+                    .world(space)
+                    .is_some_and(|w| w.layers.list[batch].key == key && w.layers.z[batch] == z),
+                _ => false,
+            };
+        if kept {
+            let instance = self.instance(part);
+            let world = self.world_mut(space);
+            match old {
+                Placement::Transparent(t) => world.transparent.set(t, i as u32, part, instance),
+                Placement::Opaque { batch, slot } => world.opaque.set(batch, slot, instance),
+                Placement::Layer { batch, slot } => world.layers.set(batch, slot, instance),
+                Placement::Hidden => {}
             }
+            return;
         }
+        self.vacate(space, old);
+        if target == Target::Waiting {
+            let files = self.queued_files(part);
+            self.waiting.insert(i, *part, &files);
+        }
+        self.placements[i] = (part.space, self.occupy(i, part, target));
     }
 
     /// The bounds of a shape's mesh, in its own units.
@@ -379,31 +389,41 @@ impl Renderer {
         mesh.into_iter().chain(images).collect()
     }
 
-    /// Free the slot an entry was drawn in.
-    pub(crate) fn vacate(&mut self, placement: Placement) {
+    /// Free the slot an entry was drawn in, in `space`'s world.
+    pub(crate) fn vacate(&mut self, space: Space, placement: Placement) {
+        if placement == Placement::Hidden {
+            return;
+        }
+        let world = self.world_mut(space);
+        world.entries -= 1;
         match placement {
             Placement::Hidden => {}
-            Placement::Opaque { batch, slot } => self.opaque.vacate(batch, slot),
-            Placement::Layer { batch, slot } => self.layers.vacate(batch, slot),
-            Placement::Transparent(t) => self.transparent.vacate(t),
+            Placement::Opaque { batch, slot } => world.opaque.vacate(batch, slot),
+            Placement::Layer { batch, slot } => world.layers.vacate(batch, slot),
+            Placement::Transparent(t) => world.transparent.vacate(t),
         }
     }
 
-    /// Take a slot to draw entry `i` in.
+    /// Take a slot to draw entry `i` in, in its space's world.
     pub(crate) fn occupy(&mut self, i: usize, part: &PartInstance, target: Target) -> Placement {
+        if matches!(target, Target::Hidden | Target::Waiting) {
+            return Placement::Hidden;
+        }
         let instance = self.instance(part);
         let entry = i as u32;
+        let world = self.world_mut(part.space);
+        world.entries += 1;
         match target {
             Target::Hidden | Target::Waiting => Placement::Hidden,
             Target::Transparent => {
-                Placement::Transparent(self.transparent.occupy(entry, part, instance))
+                Placement::Transparent(world.transparent.occupy(entry, part, instance))
             }
             Target::Opaque(key) => {
-                let (batch, slot) = self.opaque.occupy(0, key, entry, instance);
+                let (batch, slot) = world.opaque.occupy(0, key, entry, instance);
                 Placement::Opaque { batch, slot }
             }
             Target::Layer(z, key) => {
-                let (batch, slot) = self.layers.occupy(z, key, entry, instance);
+                let (batch, slot) = world.layers.occupy(z, key, entry, instance);
                 Placement::Layer { batch, slot }
             }
         }

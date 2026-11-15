@@ -37,3 +37,27 @@ fn nan_writes_read_back_as_studio_has_them() {
         ],
     );
 }
+
+/// A WorldModel's queries find its own parts and Workspace's don't
+/// (docs/behavior/physics/queries.md#worldmodels).
+#[test]
+fn a_world_models_raycast_finds_its_own_parts() {
+    expect(
+        r#"
+        local wm = Instance.new("WorldModel")
+        wm.Parent = game:GetService("ReplicatedStorage")
+        local p = Instance.new("Part")
+        p.Anchored = true
+        p.Size = Vector3.new(4, 4, 4)
+        p.Position = Vector3.new(0, 500, 0)
+        p.Parent = wm
+        local down = Vector3.new(0, -20, 0)
+        local hit = wm:Raycast(Vector3.new(0, 510, 0), down)
+        print(hit and hit.Instance == p, hit and hit.Position)
+        print(workspace:Raycast(Vector3.new(0, 510, 0), down))
+        print(#wm:GetPartBoundsInBox(CFrame.new(0, 500, 0), Vector3.one * 10))
+        "#,
+        0,
+        &["true 0, 502, 0", "nil", "1"],
+    );
+}

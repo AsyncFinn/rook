@@ -23,7 +23,9 @@ use rook_dom::{Change, Dom, InstanceId};
 use rook_reflection::PropertyId;
 use rook_types::{CFrame, Value, Vector3};
 
-pub use shape::{is_part, part_box, part_shape, workspace_parts};
+pub use shape::{
+    in_workspace_world, is_part, is_world_model, part_box, part_shape, workspace_parts,
+};
 
 pub use explosion::Blast;
 pub use query::{CastShape, Filter, Hit, Region};
@@ -225,6 +227,8 @@ pub struct Physics {
     stale_statics: FxHashSet<InstanceId>,
     /// Every part's `Size` box, for the queries that find parts by it.
     bounds: query::bounds::PartBounds,
+    /// The WorldModels queried, each a world of its own.
+    world_models: query::world_models::WorldModels,
     authority: Authority,
     /// Parts whose assemblies change hands at the next sync.
     handed_over: Vec<InstanceId>,
@@ -315,6 +319,7 @@ impl Physics {
             stale: FxHashSet::default(),
             stale_statics: FxHashSet::default(),
             bounds: query::bounds::PartBounds::default(),
+            world_models: Default::default(),
             authority: Authority::default(),
             handed_over: Vec::new(),
             saved: saved::SavedShapes::default(),

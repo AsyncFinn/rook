@@ -144,6 +144,9 @@ struct VolumeUniform {
 pub(crate) struct GpuLights {
     pub(crate) layout: wgpu::BindGroupLayout,
     pub(crate) bind_group: wgpu::BindGroup,
+    /// No volume at all: no local lights, sky or sun voxels, for worlds
+    /// none of Workspace's lights reach (ViewportFrames').
+    pub(crate) unlit: wgpu::BindGroup,
     lights: Vec<GpuLight>,
     /// How many of `lights` have `Shadows`.
     shadowed: usize,
@@ -365,6 +368,13 @@ impl GpuLights {
             layout: &layout,
             entries: &group_entries(&volume, [&voxels, &sun_voxels], &sampler),
         });
+        // Zeroed: `origin.w`, `size.w` and `sun.x` 0 say there's no volume.
+        let no_volume = uniform("rook no light volume", std::mem::size_of::<VolumeUniform>());
+        let unlit = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("rook no light volume"),
+            layout: &layout,
+            entries: &group_entries(&no_volume, [&voxels, &sun_voxels], &sampler),
+        });
         let hash = LightHash::build(&[]);
         let (light_buffer, bucket_buffer, entry_buffer) = buffers(device, &[], &hash);
         let sky_buffers = SkyBuffers::new(device);
@@ -379,6 +389,7 @@ impl GpuLights {
         Self {
             layout,
             bind_group,
+            unlit,
             lights: Vec::new(),
             shadowed: 0,
             hashed_at: Vec::new(),

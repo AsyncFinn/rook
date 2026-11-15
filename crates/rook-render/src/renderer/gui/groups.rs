@@ -7,22 +7,24 @@ use std::sync::Arc;
 use rook_types::{GuiGroup, GuiQuad, Paint};
 
 use super::super::*;
-use super::{GUI_FORMAT, Packed, Target};
+use super::{GUI_FORMAT, Held, Packed, Target};
 
 /// The groups `lists` hold, nested ones before the groups holding them,
-/// each once.
-pub(super) fn held(lists: &[&[GuiQuad]]) -> Vec<Arc<GuiGroup>> {
-    fn walk(quads: &[GuiQuad], out: &mut Vec<Arc<GuiGroup>>) {
+/// each once, and the ViewportFrames in them.
+pub(super) fn held(lists: &[&[GuiQuad]]) -> Held {
+    fn walk(quads: &[GuiQuad], out: &mut Held) {
         for q in quads {
-            if let Paint::Group(group) = &q.paint
-                && !out.iter().any(|g| g.key == group.key)
-            {
-                walk(&group.quads, out);
-                out.push(group.clone());
+            match &q.paint {
+                Paint::Group(group) if !out.groups.iter().any(|g| g.key == group.key) => {
+                    walk(&group.quads, out);
+                    out.groups.push(group.clone());
+                }
+                Paint::Viewport(viewport) => out.viewports.push(*viewport),
+                _ => {}
             }
         }
     }
-    let mut out = Vec::new();
+    let mut out = Held::default();
     for quads in lists {
         walk(quads, &mut out);
     }

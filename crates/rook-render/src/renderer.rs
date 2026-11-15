@@ -13,7 +13,9 @@ mod runs;
 mod timing;
 mod tonemap;
 mod transparent;
+mod viewports;
 mod waiting;
+mod worlds;
 
 use std::sync::Arc;
 
@@ -34,6 +36,8 @@ use timing::GpuTimer;
 
 use tonemap::{FRAME_FORMAT, Tonemap};
 use transparent::TransparentParts;
+use viewports::Viewports;
+use worlds::World;
 
 /// Water's phase wraps here: a whole number of its 25 normal frames'
 /// cycles (20 units each) and of both waves' periods (40 and 25,
@@ -87,18 +91,19 @@ pub struct Renderer {
     cuts: cuts::Cuts,
     /// Each image something has drawn, by content hash.
     images: GpuCache<ImageHash, Image>,
-    opaque: Batches,
-    layers: Batches,
+    /// Workspace's world.
+    world: World,
+    /// Each ViewportFrame's world, and its picture.
+    viewports: Viewports,
     /// Uploads the instances that changed to their slots.
     scatter: crate::batch::scatter::Scatter,
-    /// How each entry of the scene is drawn, by its index in the scene.
-    placements: Vec<Placement>,
+    /// Which world each entry of the scene is drawn in, and how, by its
+    /// index in the scene.
+    placements: Vec<(Space, Placement)>,
     /// Which level of detail each entry's mesh draws at.
     detail: detail::Detail,
     /// Entries waiting for an upload, placed once it's done.
     waiting: waiting::Waiting,
-    /// Transparent parts, sorted back to front as the view changes.
-    transparent: TransparentParts,
     /// The parts Highlights cover, drawn into their mask.
     highlights: HighlightParts,
     lighting: Lighting,
@@ -325,13 +330,12 @@ impl Renderer {
             indirect: None,
             cuts: cuts::Cuts::default(),
             images: GpuCache::new(),
-            opaque: Batches::default(),
-            layers: Batches::default(),
+            world: World::default(),
+            viewports: Viewports::default(),
             scatter,
             placements: Vec::new(),
             detail: detail::Detail::default(),
             waiting: waiting::Waiting::default(),
-            transparent: TransparentParts::default(),
             highlights: HighlightParts::default(),
             lighting: Lighting::default(),
             lights,

@@ -340,6 +340,36 @@ pub struct PartInstance {
     /// over, whose level of detail its mesh shares so the two stay
     /// together.
     pub drawn_over: Option<usize>,
+    /// Which world it's drawn in.
+    pub space: Space,
+}
+
+/// Which world a scene entry is drawn in: Workspace's, or a
+/// ViewportFrame's own ([`Scene::viewports`]), which nothing of
+/// Workspace's lighting, shadows or effects reaches.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub enum Space {
+    #[default]
+    Workspace,
+    /// The ViewportFrame with this key.
+    Viewport(u64),
+}
+
+/// A ViewportFrame's world as it's drawn into its picture
+/// (docs/behavior/gui/viewport-frames.md).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Viewport {
+    /// Its `CurrentCamera`; without one only the background draws.
+    pub camera: Option<Camera>,
+    /// `Ambient`, sRGB (lit by its square, as the world's Ambient is).
+    pub ambient: [f32; 3],
+    /// `LightColor`, sRGB (lit by its square, with no Brightness).
+    pub light_color: [f32; 3],
+    /// Towards the light: `-LightDirection`, made unit.
+    pub towards_light: Vec3,
+    /// `BackgroundColor3` (sRGB) at its opacity: what the picture starts
+    /// as.
+    pub background: [f32; 4],
 }
 
 /// Which of a mesh file's levels of detail a part may draw, by
@@ -395,6 +425,7 @@ impl PartInstance {
             highlight: None,
             fidelity: Fidelity::Precise,
             drawn_over: None,
+            space: Space::Workspace,
         }
     }
 }
@@ -422,6 +453,9 @@ pub struct Scene {
     /// The mesh files parts may draw ([`DrawShape::File`]). The renderer
     /// uploads each the first time a part draws it.
     pub meshes: FxHashMap<MeshHash, Arc<Mesh>>,
+    /// Each ViewportFrame's world, by the key its entries' [`Space`] and
+    /// its GUI quad ([`rook_types::Paint::Viewport`]) name it by.
+    pub viewports: FxHashMap<u64, Viewport>,
 }
 
 /// The effect slots that changed since the renderer last took them

@@ -16,7 +16,7 @@ pub(crate) mod world;
 
 use std::sync::Arc;
 
-use rook_types::{GuiGroup, Paint, WorldCanvas, WorldCanvases, WorldPlace};
+use rook_types::{GuiGroup, GuiViewport, Paint, WorldCanvas, WorldCanvases, WorldPlace};
 use wesl_core::include_wesl;
 
 use super::*;
@@ -46,8 +46,19 @@ impl Fresh {
     }
 }
 
-/// The groups a list of quads holds, inner ones first.
-type Held = Vec<Arc<GuiGroup>>;
+/// What a list of quads shows that's drawn before it: its groups, inner
+/// ones first, and the ViewportFrames in it or its groups.
+#[derive(Debug, Default)]
+pub(super) struct Held {
+    groups: Vec<Arc<GuiGroup>>,
+    viewports: Vec<GuiViewport>,
+}
+
+impl Held {
+    fn is_empty(&self) -> bool {
+        self.groups.is_empty() && self.viewports.is_empty()
+    }
+}
 
 /// The quads' vertex attributes, in [`GpuQuad`]'s order.
 const QUAD_ATTRIBUTES: [wgpu::VertexAttribute; 11] = wgpu::vertex_attr_array![
@@ -71,7 +82,8 @@ pub(super) struct GpuQuad {
     /// The glyph's rectangle in the atlas, or the image's part, 0 to 1.
     uv: [f32; 4],
     /// 0 fills the rectangle, 1 draws through a coverage mask, 2 through a
-    /// distance field, 3 through an image, 4 through a group's texture
+    /// distance field, 3 through an image, 4 through a group's texture, 5
+    /// through a ViewportFrame's picture, 6 and up outlines text
     /// (`shaders/gui_paint.wgsl`).
     mode: f32,
     /// The shape's center and half size (0: none).
@@ -113,7 +125,8 @@ impl GpuQuad {
                 Paint::Glyph(_) => 1.0,
                 Paint::Image(_) => 3.0,
                 Paint::Group(_) => 4.0,
-                Paint::Outline(_, grow) => 5.0 + grow,
+                Paint::Viewport(_) => 5.0,
+                Paint::Outline(_, grow) => 6.0 + grow,
             },
             shape_rect,
             radii,
@@ -267,6 +280,10 @@ pub(crate) struct GuiPass {
     /// The screen's pieces last given, and what was made of each.
     screen_pieces: ScreenPieces,
     groups: Groups,
+    /// The ViewportFrames the screen shows (`Held::viewports`), and how
+    /// many times that list changed.
+    viewports: Vec<GuiViewport>,
+    viewports_version: u64,
     world: WorldGui,
     atlas: Atlas,
     ramps: Ramps,
@@ -383,6 +400,8 @@ impl GuiPass {
             cursor,
             screen_pieces: ScreenPieces::default(),
             groups: Groups::default(),
+            viewports: Vec::new(),
+            viewports_version: 0,
             world,
             layout,
             glyphs,
@@ -430,10 +449,13 @@ impl GuiPass {
             None => None,
         };
         let fresh_held: Vec<Held> = fresh.iter().map(|f| groups::held(&[f.quads()])).collect();
-        // Every group shown, inner ones first, each once: looked for only
-        // where groups are drawn or given.
+        // Every group shown, inner ones first, each once, and every
+        // ViewportFrame: looked for only where some are drawn or given.
         let mut shown: Vec<Arc<GuiGroup>> = Vec::new();
-        let grouped = !self.groups.is_empty() || fresh_held.iter().any(|h| !h.is_empty());
+        let mut viewports: Vec<GuiViewport> = Vec::new();
+        let grouped = !self.groups.is_empty()
+            || !self.viewports.is_empty()
+            || fresh_held.iter().any(|h| !h.is_empty());
         let replaced: rustc_hash::FxHashSet<usize> = match world {
             Some(WorldCanvases::Changed { canvases, .. }) if grouped => {
                 canvases.iter().map(|(i, _)| *i).collect()
@@ -452,10 +474,13 @@ impl GuiPass {
                 }
                 _ => Box::new(self.world.held_but(&replaced, usize::MAX)),
             };
-            for group in screen_held.chain(world_held).chain(&fresh_held).flatten() {
-                if !shown.iter().any(|g| g.key == group.key) {
-                    shown.push(group.clone());
+            for held in screen_held.chain(world_held).chain(&fresh_held) {
+                for group in &held.groups {
+                    if !shown.iter().any(|g| g.key == group.key) {
+                        shown.push(group.clone());
+                    }
                 }
+                viewports.extend(&held.viewports);
             }
         }
         let unpacked: Vec<&Arc<GuiGroup>> = shown.iter().filter(|g| !self.groups.has(g)).collect();
@@ -514,6 +539,10 @@ impl GuiPass {
                 self.world.replace(device, queue, *len, canvases, new);
             }
             _ => {}
+        }
+        if grouped && self.viewports != viewports {
+            self.viewports = viewports;
+            self.viewports_version += 1;
         }
         if shown.is_empty() && self.groups.is_empty() {
             return fresh;
@@ -580,6 +609,9 @@ impl GuiPass {
                                 Paint::Group(group) => {
                                     ([0.0, 0.0, 1.0, 1.0], Some(ImageKey::Group(group.key)))
                                 }
+                                Paint::Viewport(viewport) => {
+                                    ([0.0, 0.0, 1.0, 1.0], Some(ImageKey::Viewport(viewport.key)))
+                                }
                             };
                             let ramp = (q.gradient.as_ref()).map(|g| ramps.place(queue, &g.ramp));
                             Some((GpuQuad::new(q, uv, ramp), image))
@@ -619,6 +651,17 @@ impl GuiPass {
         let images = (&self.images, cache);
         self.world
             .upload(device, queue, images, lights, (camera, view), size.1)
+    }
+
+    /// The ViewportFrames shown, with their pictures' sizes, and how many
+    /// times that list changed.
+    pub(crate) fn viewports(&self) -> (&[GuiViewport], u64) {
+        (&self.viewports, self.viewports_version)
+    }
+
+    /// Draw ViewportFrames through these pictures from now on, by frame.
+    pub(crate) fn set_viewports(&mut self, views: FxHashMap<u64, wgpu::TextureView>) {
+        self.images.set_viewports(views);
     }
 
     /// Make the world GUI's pipelines again for the parts' new image

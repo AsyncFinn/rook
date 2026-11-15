@@ -52,8 +52,10 @@ impl SceneCache {
     /// draws nothing leaves the part fully transparent, so it stays in the
     /// scene for a script to change back.
     pub(super) fn part(&mut self, dom: &Dom, id: InstanceId) -> Option<Drawn> {
+        let space = crate::viewports::space(dom, id)?;
         let mut pose = Pose::default();
         let (mut part, decals) = self.look(dom, id, &mut pose)?;
+        part.space = space;
         self.material_maps(dom, id, &mut part);
         let images: Vec<(PartInstance, Pose)> = match decals {
             Decals::None => Vec::new(),
@@ -63,6 +65,17 @@ impl SceneCache {
                 .map(|layer| (layer, pose))
                 .collect(),
         };
+        if space != Space::Workspace {
+            // A ViewportFrame has no sky to reflect, and draws no
+            // adornments or Highlights (observed).
+            part.reflectance = 0.0;
+            return Some(Drawn {
+                part,
+                pose,
+                images,
+                adornments: Vec::new(),
+            });
+        }
         let adornments = self.adornments(dom, id);
         part.highlight = self.highlight(dom, id);
         Some(Drawn {

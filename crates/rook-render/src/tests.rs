@@ -149,6 +149,43 @@ fn moved_parts_draw_where_they_moved() {
     );
 }
 
+/// A part in a ViewportFrame's world is drawn only in that frame's
+/// picture, never in Workspace's view, whether it starts there or moves
+/// there (opaque and transparent alike).
+#[test]
+fn parts_in_a_frames_world_stay_out_of_workspaces_view() {
+    let (Ok(mut moved), Ok(mut fresh)) = (Renderer::headless(), Renderer::headless()) else {
+        return;
+    };
+    let framed = |mut p: PartInstance| {
+        p.space = Space::Viewport(1);
+        p
+    };
+    let mut scene = Scene {
+        parts: vec![
+            part(PartShape::Block, -2.0, [1.0, 0.0, 0.0], 0.0),
+            part(PartShape::Block, 2.0, [0.0, 1.0, 0.0], 0.5),
+            framed(part(PartShape::Ball, 0.0, [0.0, 0.0, 1.0], 0.0)),
+        ],
+        ..Scene::default()
+    };
+    let camera = Camera::look_at(Vec3::new(0.0, 3.0, 12.0), Vec3::ZERO);
+    let empty = fresh.render_to_image(32, 16, &camera).unwrap();
+    fresh.set_scene(&scene);
+    assert_eq!(fresh.render_to_image(32, 16, &camera).unwrap(), {
+        let mut only = scene.clone();
+        only.parts.truncate(2);
+        moved.set_scene(&only);
+        moved.render_to_image(32, 16, &camera).unwrap()
+    });
+    moved.set_scene(&scene);
+    moved.render_to_image(32, 16, &camera).unwrap();
+    scene.parts[0] = framed(scene.parts[0]);
+    scene.parts[1] = framed(scene.parts[1]);
+    moved.update_parts(&scene, &[0, 1]);
+    assert_eq!(moved.render_to_image(32, 16, &camera).unwrap(), empty);
+}
+
 /// Terrain's meshes are drawn the frame they're placed, never waiting on
 /// the upload budget behind other files: they replace chunks the scene
 /// stopped drawing that same frame, so a wait left a hole.

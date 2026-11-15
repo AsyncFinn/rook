@@ -146,7 +146,7 @@ impl Screen {
             text,
             images,
             out: &mut Vec::new(),
-            fields: false,
+            world: false,
             focus,
             canvas: GuiQuad::NO_CLIP,
         };

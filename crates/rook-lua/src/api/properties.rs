@@ -504,6 +504,13 @@ pub(crate) fn set(
             Some(set_named(w, id, "ScreenInsets", Value::Enum(value)))
         }
         ("CFrame", Value::CFrame(c)) if w.dom.is_a(id, "BasePart") => Some(set_cframe(w, id, *c)),
+        // Observed in Studio 0.747: a zero direction isn't taken, the old
+        // one stays.
+        ("LightDirection", Value::Vector3(v))
+            if w.dom.class_name(id) == "ViewportFrame" && v.0 == glam::Vec3::ZERO =>
+        {
+            Some(Ok(()))
+        }
         // Measured: kept within the canvas as laid out now.
         ("CanvasPosition", Value::Vector2(v)) if w.dom.class_name(id) == "ScrollingFrame" => {
             Some(w.gui.set_canvas_position(&mut w.dom, id, v.0))

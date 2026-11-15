@@ -20,7 +20,7 @@ use rook_engine::RenderChanges;
 use rook_physics::{is_part, part_shape, workspace_parts};
 use rook_render::{
     Curve, DrawShape, Fidelity, ImageHash, ImagePlacement, Layer, Lighting, MapAlpha, MaterialMaps,
-    MeshHash, PartInstance, Scene, Sequence,
+    MeshHash, PartInstance, Scene, Sequence, Space,
 };
 use rook_types::{
     CFrame, Color3, Material, MaterialSet, MeshHost, MeshKind, MeshLook, MeshType, NormalId,
@@ -35,6 +35,7 @@ mod lighting;
 mod look;
 mod props;
 mod terrain;
+mod viewports;
 
 pub use camera::initial_camera;
 pub use content::installed::Installed;
@@ -131,6 +132,9 @@ pub struct SceneCache {
     model_highlights: adornments::highlight::ModelHighlights,
     /// `scene.highlights` changed since the renderer last took it.
     highlights_changed: bool,
+    /// The ViewportFrames whose looks changed since the renderer last
+    /// took them (`scene.viewports`' keys).
+    viewports_changed: Vec<u64>,
     report: Report,
     /// The GUI layout the renderer was last given.
     gui_generation: Option<u64>,
@@ -174,6 +178,7 @@ impl SceneCache {
             floors,
             model_highlights: Default::default(),
             highlights_changed: false,
+            viewports_changed: Vec::new(),
             report: Report::default(),
             gui_generation: None,
             gui_waiting: FxHashMap::default(),
@@ -196,7 +201,21 @@ impl SceneCache {
         self.index.clear();
         self.layers.clear();
         self.adornment_layers.clear();
-        for id in workspace_parts(dom) {
+        // Workspace's parts, then each ViewportFrame's (those of a frame
+        // inside another frame are found from both).
+        let frames = self.build_viewports(dom);
+        let mut parts = workspace_parts(dom);
+        for frame in frames {
+            parts.extend(
+                dom.descendants(frame)
+                    .into_iter()
+                    .filter(|&p| is_part(dom, p)),
+            );
+        }
+        for id in parts {
+            if self.index.contains_key(&id) {
+                continue;
+            }
             if let Some(drawn) = self.part(dom, id) {
                 let base = self.take_index(drawn.part, drawn.pose);
                 self.index.insert(id, base);
@@ -231,6 +250,7 @@ impl SceneCache {
             self.wire_lines.remove(&id);
             self.highlights_changed |= self.scene.highlights.remove(&id.to_ref().0).is_some();
         }
+        self.drop_viewports(changes.collected.iter().copied());
         if !changes.collected.is_empty() {
             for parts in self.waiting.values_mut() {
                 parts.retain(|p| !changes.collected.contains(p));
@@ -250,11 +270,10 @@ impl SceneCache {
         if changes.terrain || !changes.terrain_edits.is_empty() {
             changed.extend(self.terrain_changed(dom, changes.terrain));
         }
-        let workspace = dom.find_service("Workspace");
+        self.update_viewports(dom, changes.viewports.iter().copied());
         for id in &changes.placed {
-            // Only parts in Workspace are drawn.
-            let drawn =
-                workspace.is_some_and(|ws| is_part(dom, *id) && dom.is_ancestor_of(ws, *id));
+            // Only parts in Workspace or a ViewportFrame are drawn.
+            let drawn = is_part(dom, *id) && viewports::space(dom, *id).is_some();
             self.place(dom, *id, drawn, &mut changed);
         }
         for id in changes.parts.iter().chain(&wired) {
@@ -263,8 +282,12 @@ impl SceneCache {
             }
         }
         // Adornments and Highlights alone: the parts' own looks stay.
+        // Nothing adorns or covers a part in a ViewportFrame (observed).
+        let in_workspace = |cache: &Self, i: usize| cache.scene.parts[i].space == Space::Workspace;
         for id in &changes.adorned {
-            if let Some(&base) = self.index.get(id) {
+            if let Some(&base) = self.index.get(id)
+                && in_workspace(self, base)
+            {
                 let old = self.adornment_layers.remove(id).unwrap_or_default();
                 let new = self.adornments(dom, *id);
                 let kept = self.set_layers(base, old, new, Some(&mut changed));
@@ -274,7 +297,9 @@ impl SceneCache {
             }
         }
         for id in &changes.highlighted {
-            if let Some(&i) = self.index.get(id) {
+            if let Some(&i) = self.index.get(id)
+                && in_workspace(self, i)
+            {
                 let covering = self.highlight(dom, *id);
                 if self.scene.parts[i].highlight != covering {
                     self.scene.parts[i].highlight = covering;
@@ -404,6 +429,7 @@ impl SceneCache {
         for (layer, pose) in layers {
             let layer = PartInstance {
                 drawn_over: Some(base),
+                space: self.scene.parts[base].space,
                 ..layer
             };
             let i = match old.next() {

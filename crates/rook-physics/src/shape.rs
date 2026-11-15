@@ -17,14 +17,46 @@ pub fn is_part(dom: &Dom, id: InstanceId) -> bool {
     dom.is_a(id, "BasePart") && dom.class_name(id) != "Terrain"
 }
 
-/// Every part in Workspace, in tree order.
+/// Every part in Workspace's world, in tree order: none under a
+/// WorldModel ([`in_workspace_world`]).
 pub fn workspace_parts(dom: &Dom) -> Vec<InstanceId> {
     let Some(ws) = dom.find_service("Workspace") else {
         return Vec::new();
     };
-    let mut parts = dom.descendants(ws);
-    parts.retain(|id| is_part(dom, *id));
+    let mut parts = Vec::new();
+    let mut stack: Vec<InstanceId> = dom.children(ws).iter().rev().copied().collect();
+    while let Some(id) = stack.pop() {
+        if is_world_model(dom, id) {
+            continue;
+        }
+        if is_part(dom, id) {
+            parts.push(id);
+        }
+        stack.extend(dom.children(id).iter().rev());
+    }
     parts
+}
+
+/// Whether `id` is a WorldModel: a world of its own, whose parts only its
+/// own queries find and nothing simulates.
+pub fn is_world_model(dom: &Dom, id: InstanceId) -> bool {
+    dom.class_name(id) == "WorldModel"
+}
+
+/// Whether `id` is in Workspace's world: under Workspace `ws` with no
+/// WorldModel between. Observed in Studio 0.747: an unanchored part in a
+/// WorldModel in Workspace doesn't fall, a part on its floor doesn't touch
+/// it, and Workspace's rays pass through them.
+pub fn in_workspace_world(dom: &Dom, ws: InstanceId, id: InstanceId) -> bool {
+    for a in dom.ancestors(id) {
+        if a == ws {
+            return true;
+        }
+        if is_world_model(dom, a) {
+            return false;
+        }
+    }
+    false
 }
 
 pub fn part_shape(dom: &Dom, id: InstanceId) -> PartShape {

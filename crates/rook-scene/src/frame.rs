@@ -125,6 +125,7 @@ impl SceneCache {
             gui,
             change,
             lights: self.lights.take_changes(),
+            viewports: self.take_viewport_changes(),
             terrain: self.take_light_voxels(),
             effects: self.effects.take_changes(),
             dropped: self.take_dropped_meshes(),
@@ -173,6 +174,8 @@ pub struct ToRender {
     gui: GuiUpdate,
     change: SceneChange,
     lights: Vec<usize>,
+    /// The ViewportFrames whose looks changed (`Scene::viewports`' keys).
+    viewports: Vec<u64>,
     /// What changed of the terrain's voxels, for the light voxels.
     terrain: Option<TerrainVoxels>,
     effects: EffectSlots,
@@ -187,6 +190,7 @@ impl ToRender {
         self.gui.laid_out()
             || !matches!(self.change, SceneChange::None)
             || !self.lights.is_empty()
+            || !self.viewports.is_empty()
             || self.terrain.is_some()
             || !self.effects.is_empty()
     }
@@ -227,6 +231,11 @@ impl ToRender {
             }
             if !self.effects.is_empty() {
                 renderer.update_effects(scene, &self.effects);
+            }
+            // After the parts: a frame gone keeps its world while any
+            // entry is drawn in it.
+            if !self.viewports.is_empty() {
+                renderer.update_viewports(scene, &self.viewports);
             }
         }
         // A new scene keeps the terrain's voxels the renderer has.
